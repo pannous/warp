@@ -1227,7 +1227,10 @@ def check_examples(names, page_url=None, site=None):
 # only the fields the verdict reads: a sample's whole report holds its pictures too, and a full-HD frame (samples/gpu/
 # ringed_planet.warp) as JSON took this process past the dry run's memory cap
 REPORT_FIELDS = ["error", "errors", "message", "value", "html", "printed", "printedWhole", "text", "stream", "paintings", "width", "height"]
-START_SAMPLE = """window.sampleReport = undefined; playground.evaluate(%s, %s).then(report => window.sampleReport = JSON.stringify(report, """ + json.dumps(REPORT_FIELDS) + """),
+# a sample's timers run this long before its output is taken, as scripts/samples.sh's WARP_EVENTS_FOR has them run
+# natively (milliseconds)
+SAMPLE_EVENTS_MS = 3500
+START_SAMPLE = """window.sampleReport = undefined; playground.evaluate(%s, %s, { eventsFor: """ + str(SAMPLE_EVENTS_MS) + """ }).then(report => window.sampleReport = JSON.stringify(report, """ + json.dumps(REPORT_FIELDS) + """),
 	failure => window.sampleReport = JSON.stringify({ error: true, value: String(failure) })); "started";"""
 SAMPLE_POLL_SECONDS = 0.5
 # a window sample (WIN) still animating this long after it started (a raylib window's loop, natively until Escape) is

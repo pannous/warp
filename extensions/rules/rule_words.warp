@@ -165,12 +165,14 @@ tests_ended(program: Node): any := ending_appended(program, mentions(program, te
 page_valued(program: Node): any := {
 	statements = level_statements(program)
 	# (the sugar reads the program before its `on click {…}` became a listen call)
-	listens = statement => nodes_in(statement).any(n => listening_words.any(word => is_call_named(n, word)) or is_group(n) and #n > 1 and n#1 in event_heads)
+	calls_any = (statement, words) => nodes_in(statement).any(n => words.any(word => is_call_named(n, word)))
+	listens = statement => calls_any(statement, listening_words) or nodes_in(statement).any(n => is_group(n) and #n > 1 and n#1 in event_heads)
 	ending = (0 ..< #statements).filter(i => use_target(statements[i]) == ø)
 	if #ending == 0 or not statements.any(listens) or nodes_in(program).any(n => n == symbol(page_value_word)) { return ø }
 	last = statements[ending.last()]
-	# (a write, `x = 3` once signaled notifies its listeners, is no value to read again: run again it would write anew)
-	if is_declaration(last) or listens(last) or is_test_line(last) or nodes_in(last).any(writes) { return ø }
+	# (a write, `x = 3` once signaled notifies its listeners, or an output, `print "done"`, is no value to read again:
+	# run again it would write or print anew)
+	if is_declaration(last) or listens(last) or is_test_line(last) or nodes_in(last).any(writes) or calls_any(last, OUTPUT_WORDS) { return ø }
 	separated(bracketed(statements + [Key(call_of(page_value_word, []), Op.Define, last)], ""), ";")
 }
 # the program ended by a call of the ending word, when a statement of it calls the starting word and none calls the

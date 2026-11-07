@@ -2298,6 +2298,8 @@ failed_call(message: text): nothing := {
 # the call of a C function with the module's values: numbers as they are, a text NUL-terminated, bytes copied and their
 # count the length after them, a handle id its C pointer, the first out-pointer a slot that becomes the result; its
 # result crossed back the same way
+# 1 for a parameter the program passes a value for, 0 for the out pointer and the length the call adds itself
+program_argument(kind: i32): i32 := if kind == PARAMETER_OUT or kind == PARAMETER_LENGTH then 0 else 1
 c_called(c: Foreign, caller: handle, context: handle, given: pointer, results: pointer, results_count: i64): nothing := {
 	if c.wasm != 0 { wasm_called(c, caller, context, given, results, results_count) } else { library_called(c, caller, context, given, results, results_count) }
 }
@@ -2325,7 +2327,7 @@ library_called(c: Foreign, caller: handle, context: handle, given: pointer, resu
 		}
 		if kind == PARAMETER_BYTES { bytes_length = c_bytes_length(caller, context, value - VALUE_OFFSET) }
 		if kind == PARAMETER_OUT { outs = outs + 1 }
-		if kind != PARAMETER_OUT and kind != PARAMETER_LENGTH { passed = passed + 1 }
+		passed = passed + program_argument(kind)
 	}
 	returned = native_call(c.function, integers, floats, if c.register == REGISTER_F32 or c.register == REGISTER_F64 then 1 else 0)
 	c_finished(c, caller, context, returned, long_at(out).value, results, results_count)
@@ -2438,7 +2440,7 @@ wasm_called(c: Foreign, caller: handle, context: handle, given: pointer, results
 			byte_at(argument).value = if kind == PARAMETER_I32 then KIND_I32 else if kind == PARAMETER_I64 then KIND_I64 else if kind == PARAMETER_F32 then KIND_F32 else KIND_F64
 			long_at(argument + VALUE_OFFSET).value = long_at(value).value
 		}
-		if kind != PARAMETER_OUT and kind != PARAMETER_LENGTH { passed = passed + 1 }
+		passed = passed + program_argument(kind)
 	}
 	returned = wasm_function_called(context, c.wasm, WASM_FUNCTION, arguments, c.count as i64)
 	pointed = if out == 0 then 0 else (native_long(wasm_memory(context, c.wasm) + out) % 4294967296 + 4294967296) % 4294967296
