@@ -1,0 +1,24 @@
+#!/usr/bin/env warp
+# Which shops are open at a fixed reference instant: opening windows are durations since midnight (9h, 17h), and an
+# Instant compared with a duration compares its time of day (time, units, tables)
+use time
+use units
+use tables
+
+ref = Instant(parse_date("2026-11-05T14:00:00Z"))
+shops = [
+	{name: "Bakery", open: 6h, close: 13h},
+	{name: "Post office", open: 9h, close: 17h},
+	{name: "Supermarket", open: 8h, close: 22h},
+	{name: "Night club", open: 22h, close: 24h}]
+
+rows = []
+open = 0
+for s in shops {
+	state = "closed"
+	if ref >= s["open"] and ref < s["close"] { state = "open"; open = open + 1 }
+	rows = rows + [[s["name"], str(s["open"]) + " - " + str(s["close"]), state]]
+}
+print("as of " + ref.text() + " (year " + str(ref.year) + ", hour " + str(ref.hour) + "): " + str(open) + " of " + str(count(shops)) + " shops open")
+print("")
+print(table_text(rows, {headers: ["shop", "hours", "status"]}))
