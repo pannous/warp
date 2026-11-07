@@ -80,3 +80,13 @@ prebuilt_signature(module: text): ModuleSignature? := {
 	}
 	prebuilt_signatures[module]
 }
+# the words the program's own modules define (`warp build --module shapes.warp` beside it), by their signatures: its
+# own words too, never a standard module's (shapes' width is no native_window's)
+own_module_words(): list := {
+	words = []
+	for module in own_module_wasm.keys {
+		signature = module_signature(module, bytes_if_there(own_module_wasm[module]))
+		if signature != ø { words += signature.slices.map(slice => slice#1) }
+	}
+	words
+}
