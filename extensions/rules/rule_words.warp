@@ -675,10 +675,19 @@ function_parameters_written(definition: Node): list := {
 # has; ø when the program defines no such function or no kind is known of its result
 signature_text(name: Node, program: Node): any := {
 	definition = function_definition(name, program)
-	if definition == ø { return builtin_shown(name, program, "") }
+	if definition == ø { return builtin_shown(name, program, "") ?? foreign_shown(spelled(name)) }
 	returned = function_result_kind(name, definition)
 	if returned == ø { return ø }
 	"(" + function_parameters_written(definition).map(parameter_shown).join(", ") + ") -> " + returned
+}
+# a C function or a wasm module's export the program calls, as its foreign line declares it (extensions/c_imports
+# imports.warp declared_c_functions): `fib.signature` of rust_demo.wasm is "(p1: i64) -> i64"; ø for any other name
+foreign_shown(name: text): any := {
+	d = declared_c_functions.find(d => d#1 == name)
+	if d == ø { return ø }
+	types = d#3
+	names = d#4
+	"(" + range_list(#types).map(i => names[i] + ": " + types[i]).join(", ") + ") -> " + d#5
 }
 # `type(sqrt)` of a library word the program neither defines nor binds: "builtin: (x:number) -> number", its first typed
 # line (`sqrt(x: number): number from warp`, lib/math.warp); ø for any other name (card function-signatures)
