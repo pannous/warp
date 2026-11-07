@@ -47,11 +47,10 @@ def conditional(body: Body, test: Node, yes_branch: Node, no_branch: Node, has_e
 # a branch that leaves its function: its last statement a return, or an if/else each branch of which leaves it
 def leaves(branch: Node): bool {
 	if is_return(branch) { return yes }
+	# `else if …`: the nested if/else itself
+	if is_key(branch, Op.Else) and is_key(key_of(branch), Op.Then) and is_key(key_of(key_of(branch)), Op.If) { return leaves(value_of(key_of(branch))) and leaves(value_of(branch)) }
 	parts = block_statements(statements_block(branch))
-	if #parts == 0 or (#parts == 1 and parts#1 == branch) { return no }
-	final_statement = parts.last
-	if is_return(final_statement) { return yes }
-	is_key(final_statement, Op.Else) and is_key(key_of(final_statement), Op.Then) and is_key(key_of(key_of(final_statement)), Op.If) and leaves(value_of(key_of(final_statement))) and leaves(value_of(final_statement))
+	#parts > 0 and parts.last != branch and leaves(parts.last)
 }
 is_return(n: Node): bool := n == symbol("return") or (is_group(n) and bracket_of(n) == "" and #n == 2 and n#1 == symbol("return"))
 # `if c then a` without else: a, or when c fails the 0 of a number or yes/no, else ø
