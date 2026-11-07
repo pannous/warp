@@ -151,7 +151,7 @@ const newGuestInts = (program, numbers) => newGuestCells(program, BigInt64Array.
 // a map of the module's: its entries `name: value`, in curly brackets
 function newGuestMap(program, entries) {
 	const keys = entries.map(([name, value]) => program.new_spelled_key(newGuestBytes(program, name, "new_symbol"), newGuestText(program, ":"), value));
-	return program.new_spelled_list(newGuestList(program, keys), newGuestText(program, "{"), newGuestText(program, ","));
+	return program.new_map(keys.length === 0 ? null : newGuestList(program, keys));
 }
 // a plain JavaScript value as the module's: ø, yes/no, Int (a whole number, also a foreign runtime's `{$int: digits}`),
 // Float, a codepoint `{$char}`, text, list, map (an object); an object of the page without a plain form (a Date, a
