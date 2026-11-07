@@ -12,6 +12,8 @@ use "big_numbers/exact_rounding.warp"
 use "../compiler/runtime/intrinsics.warp"
 use "../compiler/analysis/kinds.warp"
 use "../compiler/runtime/instructions.warp"
+use "../compiler/runtime/nodes.warp"
+use "../compiler/runtime/conversions.warp"
 # each case compiled in only when the program makes values of its kind
 extended_number_text(n: Node): text := {
 	made_case(Made.Ratio, exact_text(n))
@@ -27,7 +29,8 @@ extended_quotient(a: Node, b: Node): Node := exact_div(a, b)
 extended_modulo(a: Node, b: Node): Node := exact_mod(a, b)
 extended_remainder(a: Node, b: Node): Node := exact_rem(a, b)
 extended_floor(n: Node): Node := exact_floor(n)
-extended_power(base: Node, exponent: Node): Node := exact_pow(base, exponent)
+# (2/3)^2 is 4/9 (decision exact-power); a ratio exponent has no exact power, (2/3)^(1/2) is the float one
+extended_power(base: Node, exponent: Node): Node := if is_ratio(exponent) then held(float_pow(float_of_node(base), float_of_node(exponent))) else exact_pow(base, exponent)
 extended_exact_float(x: float): Node := float_as_exact(x)
 extended_big_literal(digits: text): Node := big_int_of_digits(digits)
 extended_decimal(digits: text, places: int): Node := decimal_ratio(digits, places)
