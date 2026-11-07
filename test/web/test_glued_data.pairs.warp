@@ -1,0 +1,7 @@
+# Glued data{…} is the quote data {…} (decisions data-tag-words, spaced-tag, card glued-data); a block's entry named
+# data stays a pair
+
+'src = 1; data{type: "image", src} == data {type: "image", src}'	yes
+'type(data{a: 1}) == type(data {a: 1})'	yes
+'x = data{a: 1}; x is pair'	no
+'m = {data: {a: 1}}; m.data.a'	1

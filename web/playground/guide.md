@@ -781,7 +781,7 @@ The function may call other functions; `shader_of(stripes)` shows the shader cod
 You can also write the shader yourself in WGSL, the web's shader language, inside `shader { … }`. In there `$name` reads the warp variable `name`.
 `use compute_toys` runs shaders from [compute.toys](https://compute.toys) as they are: `compute_toy(shader { … })`.
 
-Examples: shader, "shader mouse"; samples: warp_compiled_wgsl_shader, julia, voronoi, domain_warp, sdf_scene, ocean, scene_3d, kaleidoscope, yohei_tweet_glsl, lava_lamp, northern_lights, ringed_planet, manual_3d_object_viewer, gpu_visualizer, fluid_smear, fluid_smear_dsl, watercolor
+Examples: shader, "shader mouse"; samples: warp_compiled_wgsl_shader, julia, voronoi, sdf_scene, ocean, scene_3d, kaleidoscope, lava_lamp, northern_lights, ringed_planet, manual_3d_object_viewer, gpu_visualizer
 
 ## Acceleration
 

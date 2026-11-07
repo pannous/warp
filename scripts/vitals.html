@@ -95,6 +95,12 @@ footer { color: var(--ink-3); font-size: 12px; }
   </section>
 
   <section>
+    <h2>Hello, compiled and run</h2>
+    <p class="section-note">What <code>warp samples/hello/hello.warp</code> costs on each installed main tip: instructions retired and wall time by /usr/bin/time -l, the cheapest of 3 runs. Hollow dots are earlier measurements by hand, the releases among them. Hover a dot for its commit, click it to open the commit.</p>
+    <div class="tiers" id="hello"></div>
+  </section>
+
+  <section>
     <h2>Tests passing</h2>
     <p class="section-note">Each committed results file, one panel per lane, on one shared scale from 50% to 100%. A dot is one run; click it to open the commit that saved it.</p>
     <div class="tiers" id="tiers"></div>
@@ -222,6 +228,40 @@ const commitLink = sha => `<a href="${COMMIT_URL}${sha}" target="_blank" rel="no
 const escape = text => text.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
 const head = row => `<div class="tip-row"><span>${row.sha}</span><span>${row.date.slice(5)}</span></div>`;
 
+// hello per main tip, one panel per measure on its own time axis: the hand-measured references reach back before
+// self-hosting (1.4.1), so they don't share the commit rows' axis
+(function hello() {
+  const { series, references } = DATA.hello, holder = document.getElementById("hello");
+  const all = [...references, ...series], time = date => new Date(date.replace(" ", "T")).getTime();
+  if (!all.length) { holder.innerHTML = `<div class="tier"><div class="empty">no measurement yet</div></div>`; return; }
+  const start = Math.min(...all.map(p => time(p[0]))), end = Math.max(...all.map(p => time(p[0])));
+  const W = 300, H = 110, L = 34, R = 8, T = 6, B = 18, INSTRUCTIONS = 2, SECONDS = 3;
+  const x = date => L + (time(date) - start) / Math.max(1, end - start) * (W - L - R);
+  const describe = p => `${p[0]} · ${p[4] ? p[4] + " · " : ""}${p[1]} · ${p[INSTRUCTIONS]} G instructions · ${p[SECONDS]} s`;
+  [[INSTRUCTIONS, "G instructions", "instructions retired"], [SECONDS, "s", "wall time"]].forEach(([index, unit, name]) => {
+    const top = Math.max(...all.map(p => p[index])) * 1.1, y = v => T + (1 - v / top) * (H - T - B);
+    const latest = series.length ? series[series.length - 1] : references[references.length - 1];
+    const card = document.createElement("div"); card.className = "tier";
+    card.innerHTML = `<div class="label">hello: ${name}</div><div class="value">${latest[index]} ${unit}</div>` +
+      `<div class="change">${latest[1]} · ${latest[0]} · ${series.length} installs measured</div>`;
+    const svg = element("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `hello ${name} per main tip` }, card);
+    [0, top / 2, top].forEach(v => {
+      element("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: "var(--rule)", "stroke-width": 0.6 }, svg);
+      element("text", { x: L - 4, y: y(v) + 3, "text-anchor": "end" }, svg).textContent = +v.toFixed(2);
+    });
+    [start, end].forEach((t, i) => element("text", { x: i ? W - R : L, y: H - 4, "text-anchor": i ? "end" : "start" }, svg).textContent = shortDay(new Date(t).toISOString().slice(0, 10)));
+    if (series.length > 1) element("polyline", { points: series.map(p => `${x(p[0])},${y(p[index])}`).join(" "), fill: "none", stroke: "var(--s3)", "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+    all.forEach(p => {
+      const measuredByHand = Boolean(p[4]);
+      const dot = element("circle", { cx: x(p[0]), cy: y(p[index]), r: 3, fill: measuredByHand ? "var(--panel)" : "var(--s3)", stroke: "var(--s3)", "stroke-width": 1.5, style: "cursor:pointer" }, svg);
+      element("title", {}, dot).textContent = describe(p);
+      dot.addEventListener("click", () => window.open(COMMIT_URL + p[1], "_blank", "noopener"));
+      if (measuredByHand && p[4].match(/^\d/)) element("text", { x: x(p[0]), y: y(p[index]) - 6, "text-anchor": "middle" }, svg).textContent = p[4];
+    });
+    holder.appendChild(card);
+  });
+})();
+
 (function tiers() {
   const all = DATA.tiers.flatMap(([, , points]) => points.map(p => p[0]));
   const time = date => new Date(date.replace(" ", "T")).getTime();
@@ -265,7 +305,7 @@ const head = row => `<div class="tip-row"><span>${row.sha}</span><span>${row.dat
 function columnLines(snapshots, columns, container) {
   container.replaceChildren();
   const WIDTH = container.clientWidth || 940;
-  const height = 240, right = 100, colors = { Now: "--s2", Next: "--s4", Soon: "--s1", Later: "--s7", Done: "--s3", Roadmaps: "--s5" };
+  const height = 240, right = 100, colors = { Open: "--ink", Now: "--s2", Next: "--s4", Soon: "--s1", Later: "--s7", Done: "--s3", Roadmaps: "--s5" };
   const times = snapshots.map(s => new Date(s.time).getTime()), start = times[0], end = times[times.length - 1];
   const top = 10 ** Math.ceil(Math.log10(Math.max(...snapshots.flatMap(s => Object.values(s.columns)))));
   const plotWidth = WIDTH - PAD.left - right, plotHeight = height - PAD.top - PAD.bottom;
@@ -292,12 +332,14 @@ function columnLines(snapshots, columns, container) {
 }
 
 (function cards() {
-  const snapshots = DATA.cards;
+  // Open: every card not Done, the curve of the work still ahead
+  const open = columns => Object.entries(columns).reduce((sum, [column, count]) => column === "Done" ? sum : sum + count, 0);
+  const snapshots = DATA.cards.map(s => ({ ...s, columns: { ...s.columns, Open: open(s.columns) } }));
   if (!snapshots.length) { document.getElementById("cards-note").textContent = "No snapshot of the board yet."; return; }
   const latest = snapshots[snapshots.length - 1], oldest = snapshots[0];
-  const columns = ["Now", "Next", "Soon", "Later", "Done", "Roadmaps"].filter(c => c in latest.columns || c in oldest.columns);
+  const columns = ["Open", "Now", "Next", "Soon", "Later", "Done", "Roadmaps"].filter(c => c in latest.columns || c in oldest.columns);
   const since = new Date(oldest.time).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-  document.getElementById("cards-note").textContent = `Cards per column of the project board since ${since}, last counted ${latest.time.replace("T", " ")}, on a log scale. Done holds only the last day's cards: older ones are archived. Hover a line for its counts.`;
+  document.getElementById("cards-note").textContent = `Cards per column of the project board since ${since}, last counted ${latest.time.replace("T", " ")}, on a log scale; Open is every card not Done. Done holds only the last day's cards: older ones are archived. Hover a line for its counts.`;
   const chart = document.getElementById("cards-chart"), draw = () => columnLines(snapshots, columns, chart);
   draw();
   addEventListener("resize", draw);
