@@ -1100,6 +1100,16 @@ used_module_sources(statements: any, folder: text, seen: any, within_module: boo
 }
 # whether a file the folder holds takes the use (uses.warp file_used): of the program's own uses any file, of a standard
 # module's uses only the module's own file (a module built in lib/ uses its neighbours so)
+# the standard modules the statements use and those these use in turn, by name, as used_module_sources sees them
+# but by their signatures, no text read (a file beside the program taking a use is the program's own)
+used_module_names(statements: list, folder: text): list := {
+	seen = []
+	for statement in statements {
+		used = use_target(statement)
+		if used is symbol and not taken_as_file(statement, folder, no) { seen = modules_used_by(name_of(used), seen) }
+	}
+	seen
+}
 taken_as_file(statement: Node, folder: text, within_module: bool): bool := {
 	file = file_used(statement, folder)
 	file != ø and (not within_module or without_steps_up(file) == without_steps_up(std_module_path(name_of(use_target(statement)))))
