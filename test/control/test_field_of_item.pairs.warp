@@ -1,0 +1,4 @@
+# `name of xs#3`: the field of the third item, a selection belongs to the object of `of` as to its dots (card hGpjl4)
+'e = [{name: "Bob"}, {name: "Dave"}]; name of e#2'	'Dave'
+'company = {employees: [{name: "Bob"}, {name: "Carol"}, {name: "Dave"}]}; name of company.employees#3'	'Dave'
+'p = {age: 3}; age of p + 1'	4
