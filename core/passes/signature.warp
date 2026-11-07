@@ -6,7 +6,7 @@
 # ~0.3 s). The first section behind the header, so a reader reads its bytes first. `warp signature <m>` shows it as
 # warp text
 SIGNATURE_SECTION = "warp.signature"
-class ModuleSignature { source: text; uses: list; slices: list; rules: list; foreign: map; aliases: map; words: list; globals: list; classes: list; builders: list; runtime: list }
+class ModuleSignature { source: text; uses: list; slices: list; rules: list; foreign: map; aliases: map; words: list; globals: list; classes: list; builders: list; runtime: list; patterns: list }
 
 # the signature of the standard module `name` as lib/ lies now, a node; with the fields of its image (prebuilt.warp
 # image_fields) when its compile wrote them
@@ -21,7 +21,8 @@ module_signature_node(name: text, image: list): Node := {
 		field_node("slices", square_list(slices)),
 		field_node("rules", square_list(module_rules_of(path, name).map(rule_node))),
 		field_node("foreign", texts_node(foreign_types(source))),
-		field_node("aliases", texts_node(module_aliases(source)))] + image)
+		field_node("aliases", texts_node(module_aliases(source))),
+		field_node("patterns", square_list(rule_patterns(source).map(pattern => Text(pattern))))] + image)
 }
 # the module's bytes with its signature as their first section
 with_signature(wasm: list, name: text, image: list): list := wasm_header + section(section_ids.custom, name_bytes(SIGNATURE_SECTION) + pack(module_signature_node(name, image)).bytes) + wasm[#wasm_header ..]
@@ -33,15 +34,14 @@ module_signature(name: text, wasm: list): ModuleSignature? := {
 	fields = {}
 	for entry in items_of(unpack(utf8_text(wasm[place#1 ..< place#2]))) { fields[name_of(key_of(entry))] = value_of(entry) }
 	module_name = name
-	ModuleSignature(source: "${fields["source"]}", uses: items_of(fields["uses"]).map(module => "${module}"), slices: items_of(fields["slices"]).map(slice => ["${slice#1}", "${slice#2}", "${slice#3}", module_name]), rules: items_of(fields["rules"]).map(rule => unpacked_rule(rule, module_name)), foreign: texts_read(fields.get("foreign")), aliases: texts_read(fields.get("aliases")), words: listed(fields, "words"), globals: listed(fields, "globals"), classes: listed(fields, "classes"), builders: listed(fields, "builders"), runtime: listed(fields, "runtime"))
+	ModuleSignature(source: "${fields["source"]}", uses: items_of(fields["uses"]).map(module => "${module}"), slices: items_of(fields["slices"]).map(slice => ["${slice#1}", "${slice#2}", "${slice#3}", module_name]), rules: items_of(fields["rules"]).map(rule => unpacked_rule(rule, module_name)), foreign: texts_read(fields.get("foreign")), aliases: texts_read(fields.get("aliases")), words: listed(fields, "words"), globals: listed(fields, "globals"), classes: listed(fields, "classes"), builders: listed(fields, "builders"), runtime: listed(fields, "runtime"), patterns: listed(fields, "patterns").map(pattern => "${pattern}"))
 }
 # a signature field's items, none for one an older build left out
 listed(fields: map, field: text): list := if fields.get(field) == ø then [] else items_of(fields[field])
 # `warp signature <m>`: the prebuilt module's signature as warp text, a definition's head line a line, as its file
 # writes it (the parses behind them are the signature's, `warp parse` shows one)
 show_signature(name: text) := {
-	wasm = try read_bytes(folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + name + ".wasm") else []
-	signature = if #wasm > 0 then module_signature(name, wasm) else ø
+	signature = prebuilt_signature(name)
 	if signature == ø { raise name + ": no prebuilt module with a " + SIGNATURE_SECTION + " section" }
 	print "# " + name + ".wasm, built of lib/" + name + module_extension + " " + signature.source + ", using " + (if #signature.uses == 0 then "no module" else signature.uses.join(", ")) + "; ${#signature.rules} rewrite rules, ${#signature.words} words linked"
 	for slice in signature.slices { print slice#2 }
@@ -62,3 +62,18 @@ first_line(written: text): text := written.split("\n")#1
 # the signatures of the modules linked to this compile, by module name
 global linked_signatures = {}
 linked_signature(module: text): ModuleSignature? := linked_signatures.get(module)
+# a standard module's signature, linked to this compile or not: its prebuilt modules/<m>.wasm's, read once a compile,
+# which is all a compile knows of a module it doesn't link (decision no-lib-reads: never its text); ø for a program's
+# own module or one not prebuilt
+global prebuilt_signatures = {}
+prebuilt_signature(module: text): ModuleSignature? := {
+	if linked_signature(module) != ø { return linked_signature(module) }
+	if own_module_files.has(module) { return ø }
+	if not prebuilt_signatures.has(module) {
+		path = folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + module + ".wasm"
+		# (asked first: the page's read_bytes of a missing file ends the compile)
+		wasm = if exists(path) then (try read_bytes(path) else []) else []
+		prebuilt_signatures[module] = if #wasm > 0 then module_signature(module, wasm) else ø
+	}
+	prebuilt_signatures[module]
+}
