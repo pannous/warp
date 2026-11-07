@@ -1,0 +1,11 @@
+# `name := fetch url` does not wait (card fetch-users-async, extensions/fetch_signals.warp): the page sets it when the
+# answer comes, the native warp at once; a failed fetch leaves it ø and says why in name.error
+
+is! 'config := fetch "://warp.pannous.com/assistant.json"
+[config.loading, config.error, config.about.starts_with("What the assistant")]' [no, ø, yes]
+
+is! 'missing := fetch "://warp.pannous.com/no-such-file.json"
+[missing, missing.loading, missing.error.contains("404")]' [ø, no, yes]
+
+is! 'people := fetch "://warp.pannous.com/assistant.json"
+to_html(p{ if people.loading then "Loading…" else "loaded" })' '<p aria-live="polite">loaded</p>'
