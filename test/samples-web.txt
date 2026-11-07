@@ -85,9 +85,6 @@ ok   samples/golf/rot13.short.warp
 ok   samples/golf/rot13.warp
 ok   samples/golf/sierpiński-triangle.short.warp
 ok   samples/golf/sierpiński-triangle.warp
-ok   samples/gpu/domain_warp.warp
-ok   samples/gpu/fluid_smear.warp
-ok   samples/gpu/fluid_smear_dsl.warp
 ok   samples/gpu/gpu_arrays.warp
 ok   samples/gpu/gpu_map.warp
 ok   samples/gpu/gpu_million.warp
@@ -103,8 +100,6 @@ ok   samples/gpu/scene_3d.warp
 ok   samples/gpu/sdf_scene.warp
 ok   samples/gpu/voronoi.warp
 ok   samples/gpu/warp_compiled_wgsl_shader.warp
-ok   samples/gpu/watercolor.warp
-ok   samples/gpu/yohei_tweet_glsl.warp
 FAIL samples/graphics/finger_paint.warp
 ok   samples/graphics/paint_function.warp
 FAIL samples/graphics/paint_text.warp
