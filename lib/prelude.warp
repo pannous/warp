@@ -73,6 +73,10 @@ remove(m: map, key) from emitter
 pop(xs: list): any := list_pop(xs)
 // Python's xs.clear() and m.clear(): x emptied in place, so every alias sees it
 clear(x: any): any := { if x is map { for k in keys(x) { x.remove(k) } } else { while count(x) > 0 { x.pop() } }; x }
+// clear() the screen: the terminal clear and the cursor home, in the playground a text frame's start, the text shown
+// anew (decision page-text-frames: `loop { clear(); draw_board(); sleep 50ms }`)
+TERMINAL_CLEAR = "\e[2J\e[H"
+clear() := print TERMINAL_CLEAR
 // Python's xs.pop(i) and m.pop(k): the item at the 0-based position i (-1 the last) or the value of the key k, removed
 // from x in place, so every alias sees it
 pop(x: any, k: any): any := {
@@ -471,7 +475,7 @@ paint_each(f, width, height) := {
 }
 // paint(pixels, width, height) of a list of pixels, row by row, as the host paints them; of a WGSL shader text, as the
 // host renders it; of a function, f(column, row) of each pixel on the CPU (paint_each)
-paint(picture, width, height) := if picture is list or picture is text then paint(picture, width, height, ø) else paint_each(picture, width, height)
+paint(picture, width, height) := if picture is list or picture is text then paint(shader_words(picture), width, height, ø) else paint_each(picture, width, height)
 // the program values a shader reads as the plain floats it takes: a quantity by its amount in SI base units, an angle in
 // radians, each item of a vector (decision no-units-in-shaders: a shader ignores units)
 shader_values(values) := {
@@ -481,8 +485,20 @@ shader_values(values) := {
 	plain
 }
 shader_value(value) := if value is list then value.map(shader_value) else float(value)
+// the words warp gives every shader, as WGSL: hash(cell), a number 0 ..< 1 that stays the same for a cell (decision
+// shader-hash); the cell taken modulo 289 keeps the sine's argument small enough for f32
+SHADER_WORDS_WGSL = {hash: "fn hash(cell: vec2f) -> f32 {\n\tlet wrapped = cell - 289.0 * floor(cell / 289.0);\n\treturn fract(sin(dot(wrapped, vec2f(127.1, 311.7))) * 43758.5453);\n}"}
+// a WGSL shader text with each of those words it calls but does not define added after it; anything else as it is
+shader_words(shader) := {
+	if not (shader is text) { return shader }
+	added = shader
+	for word in keys(SHADER_WORDS_WGSL) {
+		if shader.contains(word + "(") and not shader.contains("fn " + word + "(") { added += "\n" + SHADER_WORDS_WGSL[word] + "\n" }
+	}
+	added
+}
 // paint(shader) of a WGSL shader text, at the size of where it shows (wiki/graphics.md)
-paint(shader: text) := paint(shader, shown_width(), shown_height(), ø)
+paint(shader: text) := paint(shader_words(shader), shown_width(), shown_height(), ø)
 // where a painting without a size shows: the window, in its frames or once it is open (natively its points, the pointer
 // told in them; headless the frame's small window, decision on-frame-headless), else the view (the playground's pane)
 painting_in_window() := painting_headless_frame or window_open()
