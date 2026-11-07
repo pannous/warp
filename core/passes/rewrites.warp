@@ -393,9 +393,12 @@ rules_reaching(rules: list, needs: list, results: list, statement: Node): list :
 # what code must hold for the rule to fire in it (tokens_within): its pattern's words outside holes, and the operator
 # of the key its pattern is (`$a ?? $b` fires only where code has a `??`)
 needed_tokens(rule: Rule): list := required_words(rule.pattern) + (if rule.pattern is key and rule.head != "" then [rule.head] else [])
+# a hole of any form: `$x`, `$body: block`, `$xs...` or an affixed one; its words (a typed hole's kind) are no words of
+# the code it matches
+is_hole(pattern: Node): bool := rule_hole(pattern) != ø or typed_hole(pattern) != ø or rest_hole_name(pattern) != ø or affixed_hole(pattern) != ø
 # the words code must hold for the pattern to match it (rule_matches): its words outside holes
 required_words(pattern: Node): list := {
-	if rule_hole(pattern) != ø or typed_hole(pattern) != ø or rest_hole_name(pattern) != ø or affixed_hole(pattern) != ø { return [] }
+	if is_hole(pattern) { return [] }
 	if pattern is symbol { return [name_of(pattern)] }
 	if pattern is key { return required_words(key_of(pattern)) + required_words(value_of(pattern)) }
 	if is_group(pattern) then items_of(pattern).flat_map(item => required_words(item)) else []
@@ -1794,7 +1797,8 @@ is_braced_map(code: Node): bool := #code > 0 and items_of(code).all(item => is_k
 literal_words(pattern: Node): list := mentioned_names(pattern, []).filter(name => not name.starts_with(rule_hole_mark))
 
 first_word_of(pattern: Node): text? := {
-	if pattern is symbol { return if rule_hole(pattern) == ø then name_of(pattern) else ø }
+	if is_hole(pattern) { return ø }
+	if pattern is symbol { return name_of(pattern) }
 	for part in parts_of(pattern) {
 		word = first_word_of(part)
 		if word != ø { return word }

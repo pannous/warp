@@ -49,7 +49,8 @@ implicit_modules(source: text, folder: text = "."): list := {
 	names = names_mentioned(code)
 	candidates = index.keys.filter(word => mentions_indexed(code, names, word))
 	if #candidates == 0 { return [] }
-	program = interpolation(plain_node(parsed(source)))
+	# (a `format Flag f as text` definition defines no format: lib/text's stays callable)
+	program = formatted_definitions(interpolation(plain_node(parsed(source))))
 	own = own_heads(program)
 	bound = names_bound_in(program)
 	prelude_names = prelude_definitions()

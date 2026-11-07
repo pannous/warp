@@ -125,6 +125,11 @@ list_of_node(n: Node): list := {
 	if kind_code(n) != Kind.List { fail() }
 	unboxed_list(n)
 }
+# a boxed time where a time is needed, `g(t)` of a `t: time or Instant` (both a $Node): any other value traps
+time_of_node(n: Node): Node := {
+	if is_null(n) or kind_code(n) != Kind.Time { fail() }
+	n
+}
 # `x as bool` of a value known only at run time: a text spelling a falsy word in any case ("No",
 # "false") is no, another value as a condition (card yes-print)
 bool_cast(n: Node): bool := {
