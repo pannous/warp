@@ -105,7 +105,10 @@ $said"; return 1; }
 # inputs (REBUILD NEEDED) runs stage 2 every time, its outcome only in the tree's data/self-check/ (a lib/ without
 # warp.wasm.inputs was answered "stage 2 of unhashed passed before" for every such tree, card scripts-self)
 stage_two() {
-  local stage=$scratch/lib native=$warp  # the checked native warp: WARP_LIB first, nothing beside it wins
+  # the checked native warp: WARP_LIB first. The stage is no lib/ beside it: the native takes a lib/ beside itself as
+  # its installed one, whose runtime.wasm and modules canonical_text links (driver.warp installed_library), and the
+  # stage has no runtime.wasm while it builds one
+  local stage=$scratch/stage native=$warp
   local hash=${pair_hash:-unkept}
   local record=${${pair_hash:+$store/$hash}:-$worktree/data/self-check}/stage-two log=$scratch/stage-two.log measured=$scratch/stage-two.record
   if [[ -z $rebuild && -n $pair_hash && -f $record.passed ]]; then verdict="SELF CHECK ok: stage 2 of $hash passed before ($record.passed)"; return 0; fi
