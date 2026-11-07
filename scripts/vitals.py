@@ -233,7 +233,10 @@ def build_history(record, by_seed, landed):
             seed = (record_field(os.path.join(folder, "inputs.txt"), "seed") or [None, None])[1]
             with open(os.path.join(folder, "build.log")) as log:
                 text = log.read()
-                if commit not in landed or "rebak" in text or "rebuild step seed" not in text:
+                # only a seed build has steps; warp-self's log (warp.wasm compiling itself) has none, and the step test
+                # dropped every self-compile record since b9af7cea67
+                lib_only = by_seed and "rebuild step seed" not in text
+                if commit not in landed or "rebak" in text or lib_only:
                     continue
             timing = os.path.join(folder, "time")
             instructions = int(record_field(timing, "instructions")[0])
