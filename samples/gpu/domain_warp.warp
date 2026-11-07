@@ -4,7 +4,6 @@
 use math
 width = 320
 height = 180
-hash(p) := fract(sine(dot(p, [127.1, 311.7])) * 43758.5453)
 noise(p) := {
 	i = floor(p)
 	f = fract(p)
