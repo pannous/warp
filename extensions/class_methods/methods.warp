@@ -102,7 +102,7 @@ function_word(n: Node): text? := match n {
 
 # what routing a call `x.m(…)` knows: the classes, the lifted ones, the routed methods, and the type each name
 # statically holds (`self` its method's class, `c = Counter()` Counter, `xs = []` list)
-class Routing { classes: map; names: list; methods: list; known: map; results: map }
+class Routing { classes: map; names: list; methods: list; known: map; results: map; operators: map = {} }
 
 # whether a module's class routes the method, decided by what holds whatever else a compile reaches: a word of the
 # library (its index, the runtime, a typed line), an operator, a word of the syntax, a position word. A module being
@@ -128,8 +128,13 @@ methods_lifted(program: Node): Node := {
 		owner = classes[operated_class(definition, classes, operator_table)]
 		owner.methods = owner.methods + [as_operator_method(definition)]
 	}
-	top_statements = top_statements.filter(top_statement => operated_class(top_statement, classes, operator_table) == ø)
-	for name in classes.keys { classes[name].methods = aliases_derived(equality_derived(name, positions_derived(classes[name].methods, operator_table), operator_table)) }
+	reflected = top_statements.filter(top_statement => operated_class(top_statement, classes, operator_table) == ø and reflected_class(top_statement, classes, operator_table) != ø)
+	for definition in reflected {
+		owner = classes[reflected_class(definition, classes, operator_table)]
+		owner.methods = owner.methods + [as_reflected_method(definition, operator_table)]
+	}
+	top_statements = top_statements.filter(top_statement => operated_class(top_statement, classes, operator_table) == ø and top_statement not in reflected)
+	for name in classes.keys { classes[name].methods = aliases_derived(equality_derived(name, rows_merged(name, positions_derived(classes[name].methods, operator_table), operator_table, classes), operator_table)) }
 	promotions = promotions_of(top_statements, classes, scope_of(program))
 	liftable = classes.keys.filter(name => lifts(classes, name, top_statements))
 	if #liftable == 0 { return program }
@@ -162,7 +167,8 @@ methods_lifted(program: Node): Node := {
 		for name in methods { for owning_class in owners_of(classes, liftable, name) { self_types[lifted_name(classes, liftable, name, owning_class, routes)] = owning_class } }
 		results = result_classes(rewritten, classes)
 		program_types = assigned_types(rewritten, classes, results)
-		rewritten = rewritten.map(top_statement => routed(top_statement, Routing(classes, liftable, routes, statement_types(top_statement, program_types, self_types, classes), results)))
+		operators = operator_functions(classes, liftable, methods, operator_table, routes)
+		rewritten = rewritten.map(top_statement => routed(top_statement, Routing(classes, liftable, routes, statement_types(top_statement, program_types, self_types, classes), results, operators)))
 	}
 	floaters = float_converters(classes, liftable, routes)
 	dispatchers = []
@@ -203,7 +209,15 @@ methods_lifted(program: Node): Node := {
 			spelled_ordering[operator#2] = named
 			continue
 		}
-		dispatchers += [method_dispatcher(classes, owners, owned_spellings, operator_dispatcher(operator#2), yes, no, operator, promotions, floaters)]
+		dispatchers += [method_dispatcher(classes, owners, owned_spellings, operator_dispatcher(operator#2), yes, no, operator, promotions, floaters, owners_of(classes, liftable, reflected_name(operator#2)))]
+	}
+	# an operator only reflected methods give, `*(k: number, v: V)` of a class with no `*` of its own
+	operated_glyphs = operator_methods.map(method => spelled_operator(operator_table, method)#2)
+	for method in methods.filter(method => method.ends_with(REFLECTED_MARK) and method.remove_suffix(REFLECTED_MARK) not in operated_glyphs) {
+		glyph = method.remove_suffix(REFLECTED_MARK)
+		operands = [self_node, symbol("other")]
+		builtin = promoted(Key(operands#1, glyph as Op, operands#2), promotions, operator_dispatcher(glyph))
+		dispatchers += [Key(call_of(operator_dispatcher(glyph), operands.map(operand => Key(operand, Op.Colon, symbol(ANY_TYPE)))), Op.Define, reflected_dispatch(classes, owners_of(classes, liftable, method), glyph, operands, builtin))]
 	}
 	for name in constructed.keys { rewritten += constructor_functions(classes, liftable, name, routes) }
 	dispatchers += derived_dispatchers(classes, liftable, routes, promotions, spelled_ordering, operator_table)
@@ -214,20 +228,63 @@ methods_lifted(program: Node): Node := {
 }
 # `+(a: Vec, b: Vec) := …` (also `infix operator +(…)`, `plus(…)`) outside a class: an operator its first parameter's
 # class gives its instances, as if the class declared it (as_operator_method); the class's name, else ø
-operated_class(n: Node, classes: map, operator_table: map): text? := {
+operated_class(n: Node, classes: map, operator_table: map): text? := operand_class(n, 1, classes, operator_table)
+# the class the operator definition's operand at that place (1 or 2) declares, else ø
+operand_class(n: Node, place: int, classes: map, operator_table: map): text? := {
 	word = defined_word(n)
 	if word == ø or spelled_operator(operator_table, word) == ø { return ø }
 	parameters = method_parameters(n)
-	if #parameters != 2 or not is_key(parameters#1, Op.Colon) or not (value_of(parameters#1) is symbol) { return ø }
-	owner = name_of(value_of(parameters#1))
+	if #parameters != 2 or not is_key(parameters#place, Op.Colon) or not (value_of(parameters#place) is symbol) { return ø }
+	owner = name_of(value_of(parameters#place))
 	if owner in classes then owner else ø
 }
+# `*(k: number, v: V) := …` outside a class, its first parameter no class's: the operator with an instance on the right,
+# the class's method `*·reflected(k)` (decision operators-are-functions): `4 * v` calls it before any swap or the builtin
+reflected_class(n: Node, classes: map, operator_table: map): text? := operand_class(n, 2, classes, operator_table)
+as_reflected_method(n: Node, operator_table: map): Node := {
+	parameters = method_parameters(n)
+	instance = key_of(parameters#2)
+	Key(call_of(reflected_name(spelled_operator(operator_table, defined_word(n))#2), [parameters#1]), Op.Define, bottom_up(value_of(n), part => if part == instance then self_node else part))
+}
+reflected_name(glyph: text): text := glyph + REFLECTED_MARK
+REFLECTED_MARK = "·reflected"
 # that definition as its class's method, its first parameter the instance
 as_operator_method(n: Node): Node := {
 	parameters = method_parameters(n)
 	instance = key_of(parameters#1)
 	Key(call_of(defined_word(n), parameters[1..]), Op.Define, bottom_up(value_of(n), part => if part == instance then self_node else part))
 }
+# Several methods of one operator in a class, told apart by their parameter's type (decision operators-are-functions,
+# notes/numeric_dispatch.md): `*(o: V)` and `*(k: number)` each a method of its own, `*·by·V` and `*·by·number`, and
+# the operator the one choosing between them by its operand's type, the most specific first: a class before the class
+# it extends, a class before a builtin type, number after int and float, an untyped parameter last
+rows_merged(class_name: text, methods: list, operator_table: map, classes: map): list := {
+	merged = methods
+	glyphs = operator_table.values.map(entry => entry#2).unique()
+	for glyph in glyphs + glyphs.map(reflected_name) {
+		rows = methods.filter(method => #method_parameters(method) == 1 and (spells_operator(defined_word(method), glyph, operator_table) or defined_word(method) == glyph))
+		types = rows.map(row_type)
+		# (untyped namesakes, Set's add(x) beside its +(other), stay as they were: the first is the operator)
+		if #types.filter(type => type != ANY_TYPE) == 0 { continue }
+		for type in types { if type != ANY_TYPE and #types.filter(other => other == type) > 1 { throw "two methods " + glyph + " of " + class_name + " for " + type + ": one operator takes each type once" } }
+		if #types.filter(type => type == ANY_TYPE) > 1 or #rows < 2 { continue }
+		ordered = deepest_first(classes, types.filter(type => type in classes)) + types.filter(type => type not in classes and type not in [NUMBER_TYPE, ANY_TYPE]) + types.filter(type => type == NUMBER_TYPE) + types.filter(type => type == ANY_TYPE)
+		operand = fresh_name("operand", fresh_number())
+		chain = if ANY_TYPE in ordered then call_of(row_name(glyph, ANY_TYPE), [operand]) else call_of(raise_word, ["no method " + glyph + " of " + class_name + " takes that operand"])
+		for type in ordered.filter(type => type != ANY_TYPE).reverse() { chain = chosen(Key(operand, Op.Is, symbol(type)), call_of(row_name(glyph, type), [operand]), chain) }
+		helpers = rows.map(row => Key(call_of(row_name(glyph, row_type(row)), method_parameters(row)), Op.Define, value_of(row)))
+		merged = merged.filter(method => method not in rows) + helpers + [Key(call_of(glyph, [operand]), Op.Define, chain)]
+	}
+	merged
+}
+# the type a method's one parameter declares, any where it declares none
+row_type(method: Node): text := {
+	parameter = method_parameters(method)#1
+	if is_key(parameter, Op.Colon) and value_of(parameter) is symbol then name_of(value_of(parameter)) else ANY_TYPE
+}
+row_name(glyph: text, type: text): text := glyph + "·by·" + type
+NUMBER_TYPE = "number"
+ANY_TYPE = "any"
 # the constructions of the classes with a constructor (`constructed`: whether it takes parameters) through it: a call
 # C(…) as C·new(…) when it takes parameters, else C·made(C(…)), a literal C{…} as C·made(C{…})
 constructions(n: Node, constructed: map): Node := {
@@ -485,7 +542,7 @@ assigns_name(body: Node, name: text): bool := #assigned_values(body, name) > 0
 operator_dispatcher(spelled: text): text := spelled + OPERATOR_DISPATCHER_MARK
 OPERATOR_DISPATCHER_MARK = "·operator"
 is_operator_dispatcher(name: text): bool := name.ends_with(OPERATOR_DISPATCHER_MARK)
-method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls_back: bool, reads_field: bool, operator: list?, promotions: list, floaters: list): Node := {
+method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls_back: bool, reads_field: bool, operator: list?, promotions: list, floaters: list, reflected_owners: list = []): Node := {
 	parameters = method_parameters(method_in(classes[owners#1], spellings#1))
 	call_arguments = [self_node] + parameters.map(method_parameter => symbol(parameter_name(method_parameter)))
 	called = {}
@@ -494,7 +551,10 @@ method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls
 	operated = falls_back and operator != ø and #call_arguments == 2 and spellings#1 not in position_words
 	builtin = if operated then promoted(Key(call_arguments#1, operator#2 as Op, call_arguments#2), promotions, name) else ø
 	# a commutative operator of a value and an instance, `5 * q`, is the instance's method with the value, q * 5
-	reflected = if operated and operator#2 in commutative_operators then class_dispatch(deepest_first(classes, owners), called, call_arguments.reverse(), builtin, call_arguments#2) else builtin
+	swapped = if operated and operator#2 in commutative_operators then class_dispatch(deepest_first(classes, owners), called, call_arguments.reverse(), builtin, call_arguments#2) else builtin
+	# an instance on the right whose class declares the operator with a value on its left, `*(k: number, v: V)`: that,
+	# before the swap
+	reflected = if operated and #reflected_owners > 0 then reflected_dispatch(classes, reflected_owners, operator#2, call_arguments, swapped) else swapped
 	# (a method call `xs.add(o)` appends to a list in place; the operator itself, `xs + [o]` and `xs += [o]`, is the builtin's)
 	fallback = if not falls_back then ø else if operated and not is_operator_dispatcher(name) then listed_in_place(spellings#1, call_arguments, reflected) else if operated then reflected else if reads_field then Key(self_node, Op.Dot, symbol(spellings#1)) else keyed_first(spellings#1, call_arguments, builtin_call(spellings#1, call_arguments))
 	# a dispatcher with a fallback takes any values in every place: a number reaches the builtin, an instance its class's
@@ -507,6 +567,12 @@ method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls
 	# float): contagion only for the classes that leave the operator to the builtin
 	contagious = floaters.filter(floater => not lineage(classes, floater#1).any(ancestor => ancestor in owners))
 	Key(call_of(name, head), Op.Define, if operated then float_contagion(Key(call_arguments#1, operator#2 as Op, call_arguments#2), contagious, dispatched) else dispatched)
+}
+# the reflected method of the right operand's class, `*·reflected(v, k)` of `k * v`, else the otherwise
+reflected_dispatch(classes: map, owners: list, glyph: text, operands: list, otherwise: Node): Node := {
+	called = {}
+	for owning_class in owners { called[owning_class] = reflected_name(glyph) }
+	class_dispatch(deepest_first(classes, owners), called, operands.reverse(), otherwise, operands#2)
 }
 # [class, its lifted float()] of each class converting itself to a float, a float() taking nothing
 float_converters(classes: map, names: list, routes: list): list := owners_of(classes, names, float_method).filter(owning_class => #method_parameters(method_in(classes[owning_class], float_method)) == 0).map(owning_class => [owning_class, lifted_name(classes, names, float_method, owning_class, routes)])
@@ -664,7 +730,56 @@ method_routed(n: Node, routing: Routing): Node := match n {
 	}
 	# `zoned(now, "UTC")` the same as `now.zoned("UTC")` where the first argument is statically an instance of a class
 	# declaring the routed method (decision zone-word); on any other value the function as written
-	_: if is_instance_call(n, routing) then method_routed(Key(n#2, Op.Dot, call_of(name_of(n#1), items_of(n)[2..])), routing) else children(n, part => routed(part, routing))
+	_: if operator_direct(n, routing) != ø then operator_direct(n, routing) else if is_instance_call(n, routing) then method_routed(Key(n#2, Op.Dot, call_of(name_of(n#1), items_of(n)[2..])), routing) else children(n, part => routed(part, routing))
+}
+# glyph → [the classes' functions of the operator, owner → function; those of its reflected methods]
+operator_functions(classes: map, names: list, methods: list, operator_table: map, routes: list): map := {
+	own = {}
+	reflected = {}
+	for method in methods {
+		spelled = spelled_operator(operator_table, method)
+		is_reflected = method.ends_with(REFLECTED_MARK)
+		glyph = if is_reflected then method.remove_suffix(REFLECTED_MARK) else if spelled != ø then spelled#2 else ""
+		if glyph == "" { continue }
+		if glyph not in own { own[glyph] = {} }
+		if glyph not in reflected { reflected[glyph] = {} }
+		functions = if is_reflected then reflected[glyph] else own[glyph]
+		for owning_class in owners_taking(classes, names, method, 1) { functions[owning_class] = if is_reflected then lifted_name(classes, names, method, owning_class, routes) else owned_name(method, owning_class) }
+	}
+	found = {}
+	for glyph in own.keys { found[glyph] = [own[glyph], reflected[glyph]] }
+	found
+}
+# `a * b` of operands whose types are both known as the program is compiled: the method itself, no dispatcher
+# (condition of decision operators-are-functions): the left class's row for the right type, else its operator, else the
+# right class's reflected row; ø where a subclass may answer otherwise, or no class has it
+operator_direct(n: Node, routing: Routing): Node? := {
+	if not (n is key) or key_of(n) == ø or value_of(n) == ø { return ø }
+	for glyph in routing.operators.keys {
+		if glyph as Op != op_of(n) { continue }
+		left = static_type(key_of(n), routing)
+		right = static_type(value_of(n), routing)
+		if left == ø or right == ø { return ø }
+		operands = [routed(key_of(n), routing), routed(value_of(n), routing)]
+		own = static_function(routing, routing.operators[glyph]#1, left, glyph, right)
+		if own != ø { return call_of(own, operands) }
+		if left in routing.classes { return ø }
+		reflected = static_function(routing, routing.operators[glyph]#2, right, reflected_name(glyph), left)
+		return if reflected != ø then call_of(reflected, operands.reverse()) else ø
+	}
+	ø
+}
+# the function of a class's operator (or reflected) method for an operand of type `other`: its row for that type when it
+# has rows, ø where a class extending it declares its own or a row is not known
+static_function(routing: Routing, functions: map, type: text, glyph: text, other: text): text? := {
+	if type not in routing.classes or functions.keys.any(owner => owner != type and type in lineage(routing.classes, owner)) { return ø }
+	owners = lineage(routing.classes, type).filter(ancestor => ancestor in functions)
+	if #owners == 0 { return ø }
+	rows = routing.classes[owners#1].methods.map(defined_word).filter(word => word.starts_with(row_name(glyph, "")))
+	if #rows == 0 { return functions[owners#1] }
+	candidates = (if other in routing.classes then lineage(routing.classes, other) else [other]) + (if other in ["int", "float", "ratio"] then [NUMBER_TYPE] else []) + [ANY_TYPE]
+	for candidate in candidates { if row_name(glyph, candidate) in rows { return lifted_name(routing.classes, routing.names, row_name(glyph, candidate), owners#1, routing.methods) } }
+	ø
 }
 is_instance_call(n: Node, routing: Routing): bool := {
 	if not is_called_name(n) or #n < 2 or name_of(n#1) not in routing.methods { return no }

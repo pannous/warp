@@ -1,0 +1,6 @@
+# operators are functions chosen by both operands' types (decision operators-are-functions, card numeric-dispatch-julia)
+'class V { x: float; *(o: V) := V(x * o.x); *(k: number) := V(x * k) }; [(V(2) * V(3)).x, (V(2) * 4).x]'	[6, 8]
+'class V { x: float; *(o: V) := V(x * o.x); *(k: number) := V(x * k) }; xs = [V(2), 3, V(5)]; [(xs[0] * xs[1]).x, (xs[0] * xs[2]).x]'	[6, 10]
+'class V { x: float }; *(k: number, v: V) := V(k * v.x + 1); (4 * V(2)).x'	9
+'class V { x: float; *(k: number) := V(x * k) }; *(k: number, v: V) := V(k * v.x + 1); (4 * V(2)).x'	9
+'class V { x: float; *(k: number) := 1; *(j: number) := 2 }; V(1) * 2'	error	two methods * of V for number: one operator takes each type once
