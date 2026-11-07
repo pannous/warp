@@ -751,11 +751,14 @@ tag_modules(program: Node, used: list): list := {
 # nothing to, each once
 global_word_modules(program: Node, own: any, used: list): list := {
 	bound = names_bound_in(program)
+	# the functions a module or C library the program imports gives it are its own too: import shapes' width (not
+	# libc's and libm's catalog, which every program has)
+	foreign = declared_c_functions.filter(d => d#2 not in c_and_m).map(d => d#1)
 	words = global_words()
 	modules = []
 	for word in symbol_words(program) + sugar_words_of(program) {
 		module = words.get(word)
-		if module != ø and word not in own and word not in bound and word not in used and module not in used and module not in modules { modules += [module] }
+		if module != ø and word not in own and word not in bound and word not in foreign and word not in used and module not in used and module not in modules { modules += [module] }
 	}
 	modules
 }
@@ -967,6 +970,12 @@ names_bound_in(n: Node): any := {
 			waiting += if is_key(part, Op.Question) and is_key(branches, Op.Colon) then [key_of(part), key_of(branches), value_of(branches)] else [key_of(part), branches]
 		} else if is_group(part) {
 			for name in iteration_variables(items_of(part)) { found[name] = yes }
+			# `def r(width, height) {…}` (fun, fn … as the sugar reads them): its name and parameters, never
+			# native_window's width
+			if #part >= 2 and part#1 is symbol and name_of(part#1) in function_keywords {
+				head = if is_group(part#2) and #part#2 > 0 and is_group(part#2#1) then part#2#1 else part#2
+				if is_group(head) { for item in head { found[name_of(leftmost_symbol(item))] = yes } }
+			}
 			# a named pattern, `pattern Definition = Key(head, Op.Define, body)`: head and body, never shell's head
 			if is_pattern_definition(part) { for name in case_pattern_names(value_of(part#2)) { found[name] = yes } }
 			# an enum and its cases, `enum K { B, D }`: B is the program's, never sound's note
