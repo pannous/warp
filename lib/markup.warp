@@ -56,8 +56,15 @@ export page_render(value: any) := {
 	component_current = ø
 	let html = to_html(value)
 	component_moments_run()
+	if page_in_js { foreign_call("js", "globalThis", JS_PAGE_SHOWN, 1, [html]) }
 	html
 }
+// a program reaching the page's js (`who.focus()`, `document.title`, extensions/js_globals.warp) has its page in the js
+// runtime's document after each render: natively the hidden web view's (crates/warp-webview/bridge.js), the page
+// shows it itself (web/playground/host-foreign.js). Other programs never start the js runtime
+JS_PAGE_SHOWN = "warpShowPage"
+global page_in_js = no
+page_shown_in_js() := { page_in_js = yes }
 // handler n of the last page_render run with the event's detail (value, checked, fields, key …) as `event`
 // a program's value as the page it is, its HTML, when it is markup, else ø: how `warp` prints a program ending in
 // markup (decision html-render-mode; the emitter's _start)
