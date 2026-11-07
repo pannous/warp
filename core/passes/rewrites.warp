@@ -278,10 +278,7 @@ stored(n: Node): Node := if mentions(n, store_word) then bottom_up(n, part => if
 is_store(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(store_word)
 
 # the standard modules a module uses: a linked one's signature says them, any other's `use` lines
-modules_used_by(module: text): list := {
-	signature = linked_signature(module)
-	if signature != ø then signature.uses else used_module_text(module).split("\n").filter(line => line.starts_with(use_line_start)).map(line => line[#use_line_start ..].trim())
-}
+modules_used_by(module: text): list := module_uses(module)
 # the program rewritten by the rules of its whole, `where program`, each once, after the rules inside it fired
 # (`$program` their program): lib/web.warp's ending of a program with routes
 with_program_rules(program: Node, rules: list, origins: list): Node := {
@@ -629,7 +626,7 @@ module_rule_paths(module: text): list := [std_module_path(module), run_library()
 COMPILE_TIME_RULES = "/extensions/rules/modules/"
 # (a linked module's own rules are its signature's, signature.warp)
 rules_of_module(module: text): list := {
-	linked = linked_signature(module)
+	linked = prebuilt_signature(module)
 	if linked == ø then module_rule_paths(module).flat_map(path => module_rules_of(path, module)) else linked.rules + module_rules_of(module_rule_paths(module)#2, module)
 }
 # the rules of the module at `path`, read once a compile: the sugar's baked ones while its file is the text they were
