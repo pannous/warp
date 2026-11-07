@@ -277,7 +277,8 @@ derived_dispatchers(classes: map, names: list, routes: list, promotions: list, s
 			spelled = spelled_ordering.get(glyph) ?? {}
 			for owning_class in spelled.keys { ordered[owning_class] = call_of(spelled[owning_class], [self_node, other]) }
 			head = [Key(self_node, Op.Colon, symbol("any")), Key(other, Op.Colon, symbol("any"))]
-			made += [Key(call_of(operator_dispatcher(glyph), head), Op.Define, value_dispatch(deepest_first(classes, ordered.keys), ordered, promoted(Key(self_node, glyph as Op, other), promotions, operator_dispatcher(glyph))))]
+			builtin = Key(self_node, glyph as Op, other)
+			made += [Key(call_of(operator_dispatcher(glyph), head), Op.Define, numbers_first(builtin, value_dispatch(deepest_first(classes, ordered.keys), ordered, promoted(builtin, promotions, operator_dispatcher(glyph)))))]
 		}
 	}
 	for conversion in conversion_methods {
@@ -506,7 +507,14 @@ method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls
 	# a class with its own method of the operator takes a float itself (`q * sin(x)` keeps q's unit, π's `*` gives the
 	# float): contagion only for the classes that leave the operator to the builtin
 	contagious = floaters.filter(floater => not lineage(classes, floater#1).any(ancestor => ancestor in owners))
-	Key(call_of(name, head), Op.Define, if operated then float_contagion(Key(call_arguments#1, operator#2 as Op, call_arguments#2), contagious, dispatched) else dispatched)
+	Key(call_of(name, head), Op.Define, if operated then numbers_first(Key(call_arguments#1, operator#2 as Op, call_arguments#2), float_contagion(Key(call_arguments#1, operator#2 as Op, call_arguments#2), contagious, dispatched)) else dispatched)
+}
+# two numbers operate as numbers, before any class is asked: `x is real` holds of every number (lib/reals), so a boxed
+# `0.5 * 0.4` of a program using reals went through real's `*` and back, ~9× the builtin in lib/sound's per-sample
+# loops (card sound-start-speed)
+numbers_first(operation: Node, dispatched: Node): Node := {
+	both_numbers = Key(Key(key_of(operation), Op.Is, symbol("number")), Op.And, Key(value_of(operation), Op.Is, symbol("number")))
+	Key(Key(Key(ø, Op.If, both_numbers), Op.Then, operation), Op.Else, dispatched)
 }
 # [class, its lifted float()] of each class converting itself to a float, a float() taking nothing
 float_converters(classes: map, names: list, routes: list): list := owners_of(classes, names, float_method).filter(owning_class => #method_parameters(method_in(classes[owning_class], float_method)) == 0).map(owning_class => [owning_class, lifted_name(classes, names, float_method, owning_class, routes)])
