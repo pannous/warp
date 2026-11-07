@@ -51,6 +51,7 @@ use "fetch_signals.warp"
 use "js_globals.warp"
 use "dir_hints.warp"
 use "block_definitions.warp"
+use "local_shadows.warp"
 use "effects.warp"
 use "optional_unwraps.warp"
 use "object_functions.warp"
@@ -111,6 +112,7 @@ EXTENSIONS = [
 	js_globals_extension
 	dir_hints_extension
 	block_definitions_extension
+	local_shadows_extension
 	effects_extension
 	optional_unwraps_extension
 	object_functions_extension
