@@ -17,13 +17,14 @@ kin read, then write. A program binding the object or word keeps its own (`canva
 `for width in …`); field names (`{width: 5}`, `p.width`, named arguments) are never reads. The window's getters are
 system values, so `whenever window.width > 800 {…}` listens like `battery`.
 
-Native (crates/warp-runtime/src/system_values.rs `write`): the window size is kept in points, as last reported by the
-viewer (`size w h` line on its stdout at open and on each resize) or written by the program, else the view's 640×480.
-A write calls the warp binary's resizer (src/graphics/paint.rs allow_windows → paint_window::resize): before a viewer
-runs the size waits and goes first to the viewer as it starts; a running one gets `[RESIZE_MARK][w][h]`. The viewer
-opens at the asked size and keeps it: frames of another size then scale into it instead of resizing the window.
-Headless (WARP_NO_WINDOW, tests) there is no resizer: the written size is only read back. display: CoreGraphics main
-display on macOS (points), `xrandr --current` elsewhere.
+Native (crates/warp-window over SDL3, crates/warp-gpu over wgpu): a window the program gave no size opens at the
+largest whole multiple of its first painting that fits 70% of the screen (a 320×200 painting no longer opens tiny). It
+resizes freely and goes full screen; libwarp_gpu configures its surface at the Metal layer's drawableSize (SDL keeps
+that at the window's pixels) and draws each painting at its own size, then scales it in whole, aspect kept, centered
+(nearest pixel, black bars). The pointer is mapped through the same letterbox. Pitfall: a surface configured at the
+painting's size while SDL resizes the drawable shows the painting 1:1 in the corner with smeared edge pixels; forcing
+the drawable back to the painting's size instead lets Core Animation stretch it (distorted in full screen).
+display: CoreGraphics main display on macOS (points), `xrandr --current` elsewhere.
 
 Playground (web/playground/host.js `set_system_value`): the window is the frame the run's paintings show in, in CSS
 pixels, the view's size (output pane) until the run sets it; the page sizes the shown paintings and those to come
