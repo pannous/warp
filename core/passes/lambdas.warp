@@ -526,7 +526,7 @@ value_given(part: Node, name: text): any := {
 }
 declares_typed(part: Node, name: text): bool := is_key(part, Op.Assign) and is_key(key_of(part), Op.Colon) and key_of(key_of(part)) == symbol(name)
 # the type the statements first declare the name with, `guests: int = 2`, else ø
-declared_type(statements: list, name: text): any := {
+type_declared(statements: list, name: text): any := {
 	for part in statements.flat_map(nodes_in) { if declares_typed(part, name) { return value_of(key_of(part)) } }
 	ø
 }
@@ -544,7 +544,7 @@ celled_scope(statements: list, parameters: list, positions: map, read_elsewhere:
 	statements = made_global.fold(statements, with_global_declaration)
 	shared = shared.filter(name => name not in made_global)
 	types = {}
-	for name in shared { types[name] = declared_type(statements, name) }
+	for name in shared { types[name] = type_declared(statements, name) }
 	celled = statements.map(statement => shared.fold(statement, (part, name) => renamed(typed_through_local(part, name, types[name]), name, cell_of(name))))
 	shared.map(name => set_to(symbol(name + cell_suffix), call_node(symbol(cell_class), [if name in parameters then symbol(name) else ø]))) + celled
 }
