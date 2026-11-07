@@ -89,9 +89,10 @@ catalog_lines(catalog: list, name: text, library: text): list := {
 	if #found == 0 and library in c_and_m { found = catalog.filter(d => d#1 == name and d#2 in c_and_m) }
 	found
 }
-# a standard module's text with its parts, the files it uses by path (lib/native_host.warp's
-# `use "native_host/window.warp"`), whose foreign lines and calls are the module's
-module_with_parts(content: text): text := ([content] + c_statements(content).map(module_part).filter(path => path != ø).map(path => file_source(run_library() + "/" + path) ?? "")).join("\n")
+# a module's or program's text with its parts, the files it uses by path from `folder` (lib/native_host.warp's
+# `use "native_host/window.warp"`), whose foreign lines, imports and calls are its own
+module_with_parts(content: text, folder: text): text := ([content] + c_statements(content).map(module_part).filter(path => path != ø).map(path => file_source(folder + "/" + path) ?? "")).join("\n")
+library_module_with_parts(content: text): text := module_with_parts(content, run_library())
 module_part(statement: text): any := if statement.starts_with("use \"") and statement.ends_with(".warp\"") then statement.remove_prefix("use \"").remove_suffix("\"") else ø
 # the C functions a used module's text declares: its foreign lines and the catalog's lines its imports name
 # (`import (calloc, field_u32) from 'c'`), as a program's own are (c_functions_of)
@@ -318,13 +319,13 @@ c_functions_of(written: text, library_folder: text, folder: text = "."): list :=
 	# libm's functions warp has no pure code for (all but c_emitted_words: sin, cos, exp…), called without an import as
 	# Rust's lane calls them, by the program or a standard module it uses (`use sound`'s log2)
 	reached = reached_within(source)
-	reached_sources = module_sources(reached).map(module_with_parts)
-	calling = ([source] + reached_sources).join("\n")
+	with_parts = module_with_parts(source, folder)
+	calling = ([with_parts] + module_sources(reached).map(library_module_with_parts)).join("\n")
 	for d in catalog { if d#2 == "m" and not functions.has(d#1) and not c_warps(own, d#1, "m") and calling.contains(d#1 + "(") { functions[d#1] = d } }
-	# the foreign lines and C imports of the standard modules it uses, each it calls (lib/sound.warp's kill, unlink, mkdir;
-	# lib/native_host/window.warp's `import calloc from 'c'`); the catalog's own files (c.warp, math.warp) only as its rules
-	# above take them
-	for d in module_sources(reached.filter(name => name + ".warp" not in c_catalog_files)).map(module_with_parts).flat_map(text => c_declarations_used(text, catalog)) {
+	# the foreign lines and C imports of the files it uses by path and of the standard modules it uses, each it calls
+	# (lib/sound.warp's kill, unlink, mkdir; lib/native_host/window.warp's `import calloc from 'c'`); the catalog's own
+	# files (c.warp, math.warp) only as its rules above take them
+	for d in ([with_parts] + module_sources(reached.filter(name => name + ".warp" not in c_catalog_files)).map(library_module_with_parts)).flat_map(text => c_declarations_used(text, catalog)) {
 		if not functions.has(d#1) and calling.contains(d#1 + "(") { functions[d#1] = d }
 	}
 	replaced = {}
