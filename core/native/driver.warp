@@ -2664,9 +2664,9 @@ register_kind(register: i32): u8 := if register == REGISTER_I64 then KIND_I64 el
 # module_text take them in a native build
 PAIR_BYTES = 8
 PRIMITIVE_ARENA_ALIGNMENT = 8
-# the module's text at `pair` as a NUL-terminated copy, the null address NULL
+# the module's text at `pair` as a NUL-terminated copy (the null address too, whose pair a module's memory holds empty,
+# as foreign.c native_text reads it)
 pair_c_text(caller: handle, context: handle, pair: i64): i64 := {
-	if pair == 0 { return 0 }
 	memory = guest_memory(caller, context)
 	cell = native_long(memory + pair)
 	address = cell % 4294967296
