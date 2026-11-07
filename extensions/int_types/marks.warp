@@ -30,7 +30,7 @@ shower_renamed(statement: Node): Node := {
 	head = key_of(statement)
 	Key(group_like(head, [symbol(shower_word(shower_of(statement)))] + items_of(head)[1 ..]), Op.Define, value_of(statement))
 }
-shower_word(type_name: text): text := showing_word + name_joiner + type_name
+shower_word(type_name: text): text := form_method + name_joiner + type_name
 # the program's text·shown, the classes' if it has one: a value of an int type first shown by its type's format … as text
 with_int_types_shown(statements: list, showers: list, kinds: map): list := {
 	head = call_of(showing_dispatcher, [Key(shown_parameter, Op.Colon, symbol("any"))])

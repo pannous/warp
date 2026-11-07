@@ -55,7 +55,7 @@ if [ "$(cat "$wasmtime_stamp" 2>/dev/null)" != "$wasmtime_inputs" ] || ! ls "$CA
   echo "$wasmtime_inputs" >"$wasmtime_stamp"
 fi
 case $(uname -s) in
-  Darwin) suffix=dylib; prefix=lib; system_libraries=""; window_libraries="-framework CoreFoundation"
+  Darwin) suffix=dylib; prefix=lib; system_libraries=""; window_libraries="-framework CoreFoundation -lobjc"
     sound_libraries="-framework CoreMIDI -framework CoreFoundation"
     gpu_libraries="-framework Metal -framework QuartzCore -framework Foundation -framework CoreGraphics -framework IOKit -framework IOSurface -lobjc" ;;
   Linux) suffix=so; prefix=lib; system_libraries="-ldl -lpthread -lm"; gpu_libraries="$system_libraries"; window_libraries=""
