@@ -29,7 +29,7 @@
 '1/3*3==1'	true
 
 # test_sum_of_quotients_is_not_truncated
-'1/4+1/4'	0.5
+'1/4+1/4'	1/2
 
 # test_integer_overflow_does_not_wrap
 'abs(-2^63) > 0'	true
@@ -314,7 +314,7 @@
 
 # test_exact_rationals_stay_exact
 'x=0.1;x*3'	0.3
-'x=1/10;x*3'	0.3
+'x=1/10;x*3'	3/10
 '2^-2'	0.25
 '1/3 < 0.34'	true
 
