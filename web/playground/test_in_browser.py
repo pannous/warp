@@ -184,7 +184,7 @@ NAMED_ARRAYS = """shader = "@group(0) @binding(0) var<storage, read_write> xs: a
 	if (id.x < arrayLength(&xs)) { xs[id.x] = xs[id.x] + 10.0; ns[id.x] = ns[id.x] - 1; }
 }"
 gpu_compute(shader, {xs: [1.5 2 3], ns: [7 8 9]}, 1)"""
-NAMED_ARRAYS_SHOWN = ["11.5", "6 7 8"]
+NAMED_ARRAYS_SHOWN = ["11.5", "6, 7, 8"]
 RED_SHADER = 'paint("@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }", 8, 8)'
 # card wgsl-error: a WGSL error of a shader block names its line and column in the program, whose word there is marked
 SHADER_ERROR = "(a WGSL error at its place in the program)"
@@ -425,6 +425,18 @@ def browser(*arguments):
 # shows an example or sample (%s: its name as JSON) and waits until its run finished
 RUN_EXAMPLE = """await playground.chooseExample(%s);
 		while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));"""
+# a window sample (WIN) still animating this long after it started (a raylib window's loop, natively until Escape) is
+# stopped and judged by the frames it showed (playground.js stopAnimation); other samples run to their end
+WINDOW_ANIMATION_SECONDS = 5
+SAMPLE_POLL_SECONDS = 0.5
+# a tour's sample started, then asked after in short evals (one eval waiting out a window's frames outlasted the
+# browser daemon's answer); its animation, which runs until the next run (playground.js startsFrame), is stopped after
+# WINDOW_ANIMATION_SECONDS: {running, failed}
+CHOOSE_SAMPLE = """window.sampleChosen = false; playground.chooseExample(%s).then(() => window.sampleChosen = true); "started";"""
+SAMPLE_STATUS = """(() => { const status = document.getElementById("status");
+	const running = !window.sampleChosen || status.textContent === "running…";
+	if (running && %s) playground.stopAnimation();
+	return JSON.stringify({ running, failed: !running && status.classList.contains("failed") ? status.textContent : "" }); })()"""
 
 
 # the sample shown anew (%s: its name), each step done on its rendered page as lib/markup.warp's click and type_into
@@ -468,11 +480,17 @@ def checks_wrong(name, source):
 def run_sample(name):
 	"""what is wrong with the sample's run: its failed status (`cannot open mozart.mp3`, card open-mozart), as the console
 	shows no error for it"""
-	answer = browser("eval", f"""(async () => {{ {RUN_EXAMPLE % json.dumps(name)}
-		const status = document.getElementById("status");
-		return JSON.stringify(status.classList.contains("failed") ? status.textContent : ""); }})()""")
-	failed = json.loads(json.loads(answer)) if answer.startswith('"') else f"(page gave no answer: {answer or browser_complaint})"
-	return [f"status: {failed}"] if failed else []
+	browser("eval", CHOOSE_SAMPLE % json.dumps(name))
+	started_at = time.time()
+	while time.time() < started_at + SAMPLE_ANSWER_SECONDS:
+		time.sleep(SAMPLE_POLL_SECONDS)
+		answer = browser("eval", SAMPLE_STATUS % json.dumps(time.time() - started_at > WINDOW_ANIMATION_SECONDS))
+		if not answer.startswith('"'):
+			return [f"status: (page gave no answer: {answer or browser_complaint})"]
+		shown = json.loads(json.loads(answer))
+		if not shown["running"]:
+			return [f"status: {shown['failed']}"] if shown["failed"] else []
+	return [f"status: still running after {SAMPLE_ANSWER_SECONDS} s"]
 
 
 def reported(message):
@@ -1233,10 +1251,6 @@ REPORT_FIELDS = ["error", "errors", "message", "value", "html", "printed", "prin
 SAMPLE_EVENTS_MS = 3500
 START_SAMPLE = """window.sampleReport = undefined; playground.evaluate(%s, %s, { eventsFor: """ + str(SAMPLE_EVENTS_MS) + """ }).then(playground.settled).then(report => window.sampleReport = JSON.stringify(report, """ + json.dumps(REPORT_FIELDS) + """),
 	failure => window.sampleReport = JSON.stringify({ error: true, value: String(failure) })); "started";"""
-SAMPLE_POLL_SECONDS = 0.5
-# a window sample (WIN) still animating this long after it started (a raylib window's loop, natively until Escape) is
-# stopped and judged by the frames it showed (playground.js stopAnimation); other samples run to their end
-WINDOW_ANIMATION_SECONDS = 5
 
 
 def page_output(report):
