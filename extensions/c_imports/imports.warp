@@ -329,8 +329,8 @@ c_functions_of(written: text, library_folder: text, folder: text = "."): list :=
 	}
 	# libm's functions warp has no pure code for (all but c_emitted_words: sin, cos, exp…), called without an import as
 	# Rust's lane calls them, by the program or a standard module it uses (`use sound`'s log2)
-	reached = reached_within(source)
 	with_parts = module_with_parts(source, folder)
+	reached = reached_within(with_parts)
 	calling = ([with_parts] + module_sources(reached).map(library_module_with_parts)).join("\n")
 	for d in catalog { if d#2 == "m" and not functions.has(d#1) and not c_warps(own, d#1, "m") and calling.contains(d#1 + "(") { functions[d#1] = d } }
 	# the foreign lines and C imports of the files it uses by path and of the standard modules it uses, each it calls
@@ -353,7 +353,7 @@ reached_within(source: text): list := {
 	reached = reached_modules(source)
 	at = 1
 	while at <= #reached {
-		for module in used_modules(file_source(run_library() + "/" + reached#at + ".warp") ?? "") { if module not in reached { reached += [module] } }
+		for module in used_modules(library_module_with_parts(file_source(run_library() + "/" + reached#at + ".warp") ?? "")) { if module not in reached { reached += [module] } }
 		at += 1
 	}
 	reached
