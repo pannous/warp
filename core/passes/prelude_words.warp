@@ -704,8 +704,8 @@ with_type_module_uses(program: Node): Node := {
 	used = flat_statements(program).map(use_target).filter(target => target is symbol).map(name_of)
 	providers = type_module_providers()
 	wanted = {}
-	# a function taking nothing is called bare too: `now` as `now()`
-	for word in called_words(program) + bare_calls(program, providers) + named_types(program) + root_words(program) {
+	# a function taking nothing is called bare too: `now` as `now()`, one of one value read as its member, `t.words`
+	for word in called_words(program) + bare_calls(program, providers) + member_reads(program) + named_types(program) + root_words(program) {
 		if word in providers and word not in own and not is_declared_word(word) { wanted[providers[word]] = yes }
 	}
 	# in the order of type_modules, sorted
@@ -878,6 +878,20 @@ bare_calls(program: Node, providers: map): list := {
 	}
 	bound = names_bound_in(program)
 	symbol_words(program).filter(word => word in nullary and providers[word] != "" and word not in bound)
+}
+# `t.words`: the names read as a member, each a type module's function of one value (words(t)), called so as t.words()
+member_reads(program: Node): list := {
+	unary = {}
+	for module in type_modules {
+		for slice in definition_slices(file_text(std_module_path(module)) ?? "") { if takes_one_value(without_keyword(slice#2), slice#1) { unary[slice#1] = yes } }
+	}
+	nodes_in(program).filter(n => is_key(n, Op.Dot) and value_of(n) is symbol and name_of(value_of(n)) in unary).map(n => name_of(value_of(n)))
+}
+# `words(t): list := …`: a definition's head of one parameter
+takes_one_value(written: text, name: text): bool := {
+	if not written.starts_with(name + "(") { return no }
+	parameters = written[#name + 1 ..].split(")")#1
+	parameters.trim() != "" and not parameters.contains(",")
 }
 # a definition's text after the keyword declaring it: `π() := …` of `const π() := …`
 without_keyword(written: text): text := if leading_name(written) in defining_keywords then written[#leading_name(written) ..].trim() else written
