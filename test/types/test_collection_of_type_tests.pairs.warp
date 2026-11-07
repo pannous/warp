@@ -1,0 +1,7 @@
+# a test of a collection of a type: every item (a map's every value) of that type (card map-of-type-test)
+'xs = [1, 2]; xs is list of int'	true
+'xs = [1, "a"]; xs is list of int'	false
+'xs = ["a", "b"]; xs is list of text'	true
+'m = {a: "x", b: "y"}; m is map of text'	true
+'xs = [1, 2]; xs is map of int'	false
+'x = 3; x is list of int'	false
