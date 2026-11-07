@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+# the sine function computed by hand from its Taylor series
 float sine(float x){
 	if(x < 0) return - sine(-x)
 	# magical taylor constants
