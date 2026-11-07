@@ -1,4 +1,4 @@
-# 8c5b3004af 2026-11-07 15:06 250/263 95.1%
+# 75b2a5ef1f 2026-11-07 19:17 247/263 93.9%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_map.warp
 ok   samples/acceleration/gpu_million.warp
@@ -104,7 +104,6 @@ ok   samples/gpu/warp_compiled_wgsl_shader.warp
 ok   samples/graphics/finger_paint.warp
 ok   samples/graphics/paint_function.warp
 ok   samples/graphics/paint_text.warp
-ok   samples/graphics/shader_brush.warp
 ok   samples/graphics/shader_trails.warp
 ok   samples/graphics/shader.warp
 ok   samples/graphics/webgpu.warp
@@ -115,7 +114,6 @@ ok   samples/hello/natural.warp
 ok   samples/hello/phrases.warp
 ok   samples/hello/sample.warp
 ok   samples/laws/basic_laws.warp
-ok   samples/laws/kitchensink.warp
 ok   samples/laws/project_laws.warp
 ok   samples/lists/dot.warp
 ok   samples/lists/primes.warp
@@ -129,7 +127,6 @@ ok   samples/loops/game_of_life.warp
 ok   samples/loops/iterators.warp
 ok   samples/loops/life_idiomatic.warp
 ok   samples/loops/life_kotlin_ranges.warp
-ok   samples/loops/mandelbrot.warp
 ok   samples/matching/code_templates.warp
 ok   samples/matching/matching.warp
 ok   samples/matching/pattern_clauses.warp
@@ -227,7 +224,6 @@ ok   samples/types/return_polymorphism.warp
 ok   samples/types/return_polymorphism2.warp
 ok   samples/types/types.warp
 ok   samples/wasm/component_reflection.warp
-ok   samples/wasm/import_compiled.warp
 ok   samples/wasm/wasm_interop.warp
 ok   samples/web/component_binding.warp
 ok   samples/web/component_totals.warp
@@ -236,6 +232,7 @@ ok   samples/web/counter.warp
 ok   samples/web/form_submit.warp
 ok   samples/web/hello_div.warp
 ok   samples/web/html_dsl.warp
+ok   samples/web/html.warp
 ok   samples/web/keyed_counters.warp
 ok   samples/web/keyframes.warp
 ok   samples/web/leaving_list.warp
@@ -244,7 +241,7 @@ ok   samples/web/page_custom_event.warp
 ok   samples/web/page_elements.warp
 ok   samples/web/select_binding.warp
 ok   samples/web/typed_form.warp
-EXP  samples/errors/errors.warp: spelling code
+EXP  samples/errors/errors.warp: `]` closes the group opened at 5:9, which needs `}`
 WIN  samples/graphics/raylib_circle_forever.warp
 WIN  samples/graphics/raylib_circle.warp
 WIN  samples/graphics/raylib_debug.warp
@@ -261,4 +258,7 @@ SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 EXP  samples/storage/netbase.warp: samples/storage/netbase.warp:4:1 outside the core: the unknown name load
 SRV  samples/storage/todo_app.warp
-FAIL samples/web/html.warp: spelling code
+FAIL samples/graphics/shader_brush.warp: hint: click is markup's fix: use markup
+FAIL samples/laws/kitchensink.warp: hint: operator_≈ is math's; fix: use math
+FAIL samples/loops/mandelbrot.warp: hint: width is native_window's fix: use native_window
+FAIL samples/wasm/import_compiled.warp: samples/wasm/import_compiled.warp:1:8 outside the core: the declaration global `… = …`

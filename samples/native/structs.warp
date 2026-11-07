@@ -15,6 +15,5 @@ squares(n: u32): Header := {
 }
 h = squares(10)
 h.total + h.tag
-# todo works ONLY with warp build:
-# outside the core: a parameter of kind u32 at structs.warp:16:13 (no owner) 
+# DONE works ONLY with warp build: runs as `warp structs.warp` too
 # h
