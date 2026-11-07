@@ -1015,8 +1015,10 @@ said(line) := {
 }
 
 global beep() := play(880, 0.15, "square")
-// the words play had before it took every sound (decision play-one-word): tone(440Hz, 0.5s), tune { c4 e4 }
+// the words play had before it took every sound (decision play-one-word): tone(440Hz, 0.5s), melody([C4 E4 G4]),
+// tune { c4 e4 }
 alias tone => play
+alias melody => play
 alias tune => play
 // a frequency, or a list of them sounding together (a chord)
 pitches_of(x) := if x is list then [hertz_of(pitch) for pitch in x] else if x is Chord then pitches_of(x.notes) else [hertz_of(x)]
@@ -1029,11 +1031,12 @@ public plain_hertz(pitch) := {
 	if pitch is text and is_note_name(pitch) { return note_hertz(pitch) }
 	raise "not a pitch: " + str(pitch)
 }
-// one word plays every sound (decision play-one-word; tone and tune are its aliases), `duration` long in `shape`: a
-// note, a frequency or a note name one tone, `play(440Hz, 0.5s, "square")`; a list or a Chord together, a chord,
-// `play([C4 E4 G4], 1s)`, `play(C4+E4+G4, 1s)`; a score written as data one after another, `play { c4 e4 [c4 g4] }`;
-// a signal function, `play(hum, 2s)`, or a pair of them [left, right] the signal (user 2026-10-12: no snake case for
-// signals); a Sample the clip; any other text a sound file's path. One after another is melody's
+// one word plays every sound (decision play-one-word; tone, melody and tune are its aliases), in `shape`: a note, a
+// frequency or a note name one tone `duration` long, `play(440Hz, 0.5s, "square")`; a Chord together,
+// `play(C4+E4+G4, 1s)`; a list one item after another, each `duration` long, an item a chord or a list in it
+// sounding together, `play([C4+E4 G4], 250ms)`, `play([[C4 E4] G4], 250ms)`; a score written as data so,
+// `play { c4 e4 [c4 g4] }`; a signal function, `play(hum, 2s)`, or a pair of them [left, right] the signal (user
+// 2026-10-12: no snake case for signals); a Sample the clip; any other text a sound file's path
 global play(music) := play(music, note_seconds)
 play(music, for duration) := music_played(music, duration, wave_shape)
 play(music, for duration, shape: text) := music_played(music, duration, shape)
@@ -1042,6 +1045,7 @@ music_played(music, duration, shape) := {
 	if is_signal(music) { return play_signal(music, duration) }
 	if music is Sample { return play_sample(music, 1) }
 	if music is text and not is_note_name(music) { return play_file(music) }
+	if music is list { return sound(melody_samples(music, si_amount(duration), shape)) }
 	sound(chord_samples(pitches_of(music), si_amount(duration), shape))
 }
 // block-wise (decision music-plain-details): hum(block: samples, t) := for i in 1 to #block { block#i = 0.3 * sin(2 * pi *
@@ -1244,10 +1248,6 @@ public melody_samples(notes, seconds, shape = wave_shape) := {
 	for pitch in notes { samples = samples + chord_samples(pitches_of(pitch), seconds, shape) }
 	samples
 }
-// one note (or chord) after another: melody([C4 E4 G4]), melody([C4 E4 G4], 250ms), melody([C4 E4], 250ms, "square")
-public melody(notes, each duration, shape: text) := sound(melody_samples(notes, si_amount(duration), shape))
-public melody(notes, each duration) := sound(melody_samples(notes, si_amount(duration)))
-public melody(notes) := melody(notes, note_seconds)
 // music as plain data, no parser syntax (card music-data-dsl, decision self-parser-drops): tune({ C4 E4 [C4 G4] }) is
 // the melody of its notes, a group of them a chord; a note name written in small letters (c4, eb4) reads as C4, Eb4
 // (a rule: a parameter typed data beside play's untyped one is no overload the dispatch tells apart yet)
@@ -1255,7 +1255,7 @@ rewrite play {$score...} => score_played({$score...})
 rewrite play({$score...}) => score_played({$score...})
 rewrite tune {$score...} => score_played({$score...})
 rewrite tune({$score...}) => score_played({$score...})
-score_played(score: data) := melody([score_pitch(item) for item in score])
+score_played(score: data) := play([score_pitch(item) for item in score])
 score_pitch(item) := if item is list then [score_pitch(pitch) for pitch in item] else if item is symbol then note_capitalized(str(item)) else item
 // capitalize is text.warp's; letter-range uses range_index so it does not meet this module's at(time, block)
 note_capitalized(name: text) := upper(name[0]) + name[1..]
