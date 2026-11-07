@@ -123,8 +123,11 @@ made_case kind made, since no program decides any more what it makes.
   list, text, shell and matrix link. test/modules gives the same
   results linked and from source. Measured: `use units; 3m + 2m` 0.64 s -> 0.56 s: the program still lowers the
   module's reached definitions (checked_program, 70 of 84 samples); declared: 0.36 s, 46 samples.
-- Open: the module's prelude words are its own copy
-  (they should be the prelude module's, space 2+k); classes from warp.declarations into module.classes before late_code;
+- Since 2026-11-07 (card prelude-listener-globals) every module written links the prelude as a program does: its
+  prelude words and globals are warp/prelude's, one instance per run (signals' listen and the program's unlisten edit
+  one event_listeners). A with_reached pass applies only the aliases of the modules whose slices it brings, so the
+  prelude's pass leaves math's `alias log2 => binary_log` off math's own text, whose log2 is C's.
+- Open: classes from warp.declarations into module.classes before late_code;
   late_code once all modules are bound.
 
 - Load-time linking (2026-11-05, L5c, card wasm-module-linking): a program whose uses link runs as its own module

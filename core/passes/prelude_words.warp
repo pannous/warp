@@ -342,8 +342,10 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	# (a linked module's aliases from its signature, its text being none)
 	written_aliases = module_aliases(module)
 	owners = {}
+	# (only the modules whose slices are given: the prelude's pass never applies math's `alias log2 => binary_log` to
+	# math's own text a module build reads, whose log2 is C's)
 	if #linked > 0 {
-		for module_name in linked_signatures.keys {
+		for module_name in linked_signatures.keys.filter(name => linked.any(slice => slice#4 == name)) {
 			signature = linked_signatures[module_name]
 			for name in signature.aliases.keys {
 				written_aliases[name] = signature.aliases[name]
@@ -357,7 +359,11 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	# numbers' ↑), a program's assignment to a module's global sets it (`tuning = 442` retunes sound's notes), any other
 	# definition replaces the module's
 	assigned = statements_in(program).filter(statement => is_key(statement, Op.Assign) and key_of(statement) is symbol).map(declared_name)
-	kept = slice => slice#1 not in own_names or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX) or (slice#2.starts_with("global ") and slice#1 in assigned)
+	# a class of the program sets aside a module's word of its name too, `class square {…}` the prelude's square(x), so
+	# square(4) constructs (card field-side); a module's own class, brought in front, is no such word
+	own_classes = statements_in(program).filter(is_type_declaration).map(statement => declared_type_name(value_of(statement)#2))
+	replaced = slice => slice#1 in own_names or (slice#1 in own_classes and leading_name(slice#2) not in defining_keywords)
+	kept = slice => not replaced(slice) or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX) or (slice#2.starts_with("global ") and slice#1 in assigned)
 	# the program's globals, `global hue = 10`, which every function of its own shares, are no module's: hsv's `hue`
 	# stays its local
 	program_globals = statements_in(program).filter(is_global_declaration).map(declared_name).filter(name => name != ø and name not in module_names)
@@ -913,6 +919,8 @@ names_bound_in(n: Node): any := {
 			waiting += if is_key(part, Op.Question) and is_key(branches, Op.Colon) then [key_of(part), key_of(branches), value_of(branches)] else [key_of(part), branches]
 		} else if is_group(part) {
 			for name in iteration_variables(items_of(part)) { found[name] = yes }
+			# a named pattern, `pattern Definition = Key(head, Op.Define, body)`: head and body, never shell's head
+			if is_pattern_definition(part) { for name in case_pattern_names(value_of(part#2)) { found[name] = yes } }
 			# an enum and its cases, `enum K { B, D }`: B is the program's, never sound's note
 			enum = declared_enum(part)
 			if enum != ø { for name in [enum#1] + enum#2 { found[name] = yes } }
@@ -943,6 +951,8 @@ pattern_names(pattern: Node): list := match pattern {
 	Key(head, op, fields): if rest_name(pattern) != ø then [rest_name(pattern)] else if is_group(fields) then pattern_names(fields) else []
 	_: if is_group(pattern) then items_of(pattern).flat_map(pattern_names) else []
 }
+# the names a case's pattern binds, `Key(head, Op.Define, body)` its parts', the case itself none
+case_pattern_names(pattern: Node): list := if is_round(pattern) and #pattern > 0 and pattern#1 is symbol then items_of(pattern)[1 ..].flat_map(pattern_names) else pattern_names(pattern)
 # a text pattern goes on after a hole's type, `id: int + "/posts/" + post: int` parsing as `id: (int + "/posts/" + post)`
 names_after_type(type: Node): list := match type {
 	Key(left, Op.Add, right): names_after_type(left) + pattern_names(right)
