@@ -312,7 +312,7 @@ cells_made() := {
 	}
 }
 // the coverage list of a width × height bitmap whose pixel i `covered(i)` gives
-coverage_list(width: int, height: int, covered: int -> int): list := [width, height] + [covered(i) for i in 0 ..< width * height]
+coverage_list(width: int, height: int, coverage: list): list := [width, height] + coverage
 core_text_coverage(words: text, size: int): list := {
 	cells_made()
 	string = CFStringCreateWithCString(0, words, CF_UTF8)
@@ -330,7 +330,7 @@ core_text_coverage(words: text, size: int): list := {
 	CGContextSetTextPosition(bitmap, 0, descent)
 	CTLineDraw(line, bitmap)
 	data = CGBitmapContextGetData(bitmap)
-	covered = coverage_list(width, height, i => field_u8(data, i))
+	covered = coverage_list(width, height, [field_u8(data, i) for i in 0 ..< width * height])
 	for made in [bitmap, line, font, attributed, string] { CFRelease(made) }
 	covered
 }
@@ -412,5 +412,5 @@ free_type_coverage(words: text, size: int): list := {
 			if column >= 0 and column < width and row >= 0 and row < height { cells[row * width + column] = min(cells[row * width + column] + g[4][k], 255) }
 		}
 	}
-	coverage_list(width, height, i => cells[i])
+	coverage_list(width, height, [cells[i] for i in 0 ..< width * height])
 }
