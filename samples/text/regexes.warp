@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+# does a text match a regular expression?
 use regex
 print "abc" matches "a.c"
 print "abd" matches "a.c$"

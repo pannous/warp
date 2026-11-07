@@ -169,7 +169,8 @@ def field_or_word(body: Body, value: TypedCode, name: text, word: function): Typ
 # file's, which the place would give the program's name, so an error in it names the program's calling line (card
 # wasm-trap: arrangement.warp:34:56 was a line of lib/timers.warp)
 def position_code(body: Body, n: Node): list {
-	if stores_constant_data(n) { return [] }
+	# `x = 2.5` to a declared int converts, so it can fail and names itself (card int-reports)
+	if stores_constant_data(n) and name_of(key_of(n)) not in body.declared { return [] }
 	at = if body.intrinsics or defined_origins.has(body.function.name) then ø else written_at(n)
 	if not at { return [] }
 	line: int = at#1

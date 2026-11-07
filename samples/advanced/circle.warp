@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+# paints a filled circle into a 400×400 pixel surface
 y = 0
 x = 0
 radius = 50
