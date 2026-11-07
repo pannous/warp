@@ -1,6 +1,6 @@
 # `use js Name` (card js-webidl-bindings, decision js-webidl-bindings): a JavaScript global of the page, its members
-# reached through the host word foreign_call (web/playground/host-foreign.js: the playground only, the native warp
-# has no JavaScript), checked and typed by the standard WebIDL in lib/web.webidl. A member its interface lacks is a
+# reached through the host word foreign_call (web/playground/host-foreign.js in the page; natively libwarp_webview's
+# hidden web view, decision native-js-webview, notes/webview.md), checked and typed by the standard WebIDL in lib/web.webidl. A member its interface lacks is a
 # compile error; a value of an interface keeps its type (`u = URL(…)`, `u.pathname`); a text or a number comes back
 # as warp's own, with warp's members (`crypto.randomUUID().upper()`).
 #   Name.member(a, b)  foreign_call("js", "Name", "member", 1, [a, b])
