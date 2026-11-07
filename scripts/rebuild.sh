@@ -297,7 +297,7 @@ one() {
 	fi
 	local lane=(pure) from log=$store/$hash/$name.building/log record=$store/$hash/$name.building/record
 	recorded_inputs "$record"
-	"$scripts/borrow-bootstrap.sh" "$(dirname "$warp")/lib" "$lib"
+	"$scripts/seed-bootstrap.sh" "$warp" "${WARP_SEED:-$(seed_beside)}" "$lib"
 	if [ -z "$force" ] && [ "$name" = warp ]; then
 		reused_stored "$log"
 		status=$?
