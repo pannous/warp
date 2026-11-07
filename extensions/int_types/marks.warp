@@ -11,20 +11,38 @@ shown_parameter = symbol("self")
 int_types(program: Node): Node := {
 	kinds = int_type_kinds(statements_in(program))
 	if #kinds == 0 { return program }
-	marked = bottom_up(program, n => int_type_used(n, kinds))
+	statements = statements_in(program)
+	# (a module's own `as Color` only marks: with_alpha(c, 0) stays invisible; its users convert)
+	converters = if module_written != "" then [] else statements.map(statement => converted_type(statement, kinds)).filter(name => name != ø)
+	marked = group_like(program, statements.map(statement => if converted_type(statement, kinds) != ø then converter_defined(statement, kinds) else bottom_up(statement, n => int_type_used(n, kinds, converters))))
 	showers = kinds.keys.filter(name => statements_in(marked).any(statement => shower_of(statement) == name))
 	if #showers == 0 { return marked }
 	statements = statements_in(marked).map(statement => if shower_of(statement) in showers then shower_renamed(statement) else statement)
 	group_like(marked, with_int_types_shown(statements, showers, kinds))
 }
-# `x as Color` marks x, `x is Color` tests its mark
-int_type_used(n: Node, kinds: map): Node := {
+# `x as Color` marks x, or calls the type's conversion where it has one; `x is Color` tests its mark
+int_type_used(n: Node, kinds: map, converters: list = []): Node := {
 	if not (n is key and value_of(n) is symbol and name_of(value_of(n)) in kinds) { return n }
-	kind = kinds[name_of(value_of(n))]
-	if is_key(n, Op.As) { return call_of("int_marked", [key_of(n), kind]) }
+	name = name_of(value_of(n))
+	kind = kinds[name]
+	if is_key(n, Op.As) { return if name in converters then call_of(converter_word(name), [key_of(n)]) else call_of("int_marked", [key_of(n), kind]) }
 	if is_key(n, Op.Is) { return Key(call_of("int_mark_of", [key_of(n)]), Op.Eq, kind) }
 	n
 }
+# `n: int as Color := body`, how a value becomes a Color (lib/color: 0xRRGGBB is opaque): the type's name, else ø
+converted_type(statement: Node, kinds: map): text? := {
+	if not (is_key(statement, Op.Define) and is_key(key_of(statement), Op.Colon) and key_of(key_of(statement)) is symbol) { return ø }
+	types = value_of(key_of(statement))
+	if is_key(types, Op.As) and value_of(types) is symbol and name_of(value_of(types)) in kinds then name_of(value_of(types)) else ø
+}
+# the conversion as the function every other `x as Color` calls, `as·Color(n: int) := body`; its own body's `as Color`
+# only marks
+converter_defined(statement: Node, kinds: map): Node := {
+	types = value_of(key_of(statement))
+	head = call_of(converter_word(name_of(value_of(types))), [Key(key_of(key_of(statement)), Op.Colon, key_of(types))])
+	Key(head, Op.Define, bottom_up(value_of(statement), n => int_type_used(n, kinds)))
+}
+converter_word(type_name: text): text := "as" + name_joiner + type_name
 # a type's `format … as text` under its own name, format·text·Color, so that every int type has one
 shower_renamed(statement: Node): Node := {
 	head = key_of(statement)

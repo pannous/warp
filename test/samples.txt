@@ -1,4 +1,4 @@
-# 75b2a5ef1f 2026-11-07 19:17 247/263 93.9%
+# 4bcb12ca50 2026-11-07 19:40 245/261 93.9%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_map.warp
 ok   samples/acceleration/gpu_million.warp
@@ -104,6 +104,7 @@ ok   samples/gpu/warp_compiled_wgsl_shader.warp
 ok   samples/graphics/finger_paint.warp
 ok   samples/graphics/paint_function.warp
 ok   samples/graphics/paint_text.warp
+ok   samples/graphics/paint_text_gpu.warp
 ok   samples/graphics/shader_trails.warp
 ok   samples/graphics/shader.warp
 ok   samples/graphics/webgpu.warp
@@ -118,7 +119,6 @@ ok   samples/laws/project_laws.warp
 ok   samples/lists/dot.warp
 ok   samples/lists/primes.warp
 ok   samples/lists/quicksort.warp
-ok   samples/lists/sieve_idiomatic.warp
 ok   samples/lists/sieve.warp
 ok   samples/lists/sorting_idiomatic.warp
 ok   samples/lists/sorting.warp
@@ -170,7 +170,6 @@ ok   samples/numbers/sum.warp
 ok   samples/numbers/units_dynamic.warp
 ok   samples/objects/binary_tree.warp
 ok   samples/objects/data_structures.warp
-ok   samples/objects/dijkstra_idiomatic.warp
 ok   samples/objects/dijkstra.warp
 ok   samples/objects/json_parser.warp
 ok   samples/objects/references.warp
@@ -258,7 +257,7 @@ SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 EXP  samples/storage/netbase.warp: samples/storage/netbase.warp:4:1 outside the core: the unknown name load
 SRV  samples/storage/todo_app.warp
-FAIL samples/graphics/shader_brush.warp: hint: click is markup's fix: use markup
-FAIL samples/laws/kitchensink.warp: hint: operator_≈ is math's; fix: use math
-FAIL samples/loops/mandelbrot.warp: hint: width is native_window's fix: use native_window
+FAIL samples/graphics/shader_brush.warp: SDL_CreateWindow from SDL3 opens a window: refused under WARP_NO_WINDOW or CI
+FAIL samples/laws/kitchensink.warp: SDL_CreateWindow from SDL3 opens a window: refused under WARP_NO_WINDOW or CI
+FAIL samples/loops/mandelbrot.warp: SDL_CreateWindow from SDL3 opens a window: refused under WARP_NO_WINDOW or CI
 FAIL samples/wasm/import_compiled.warp: samples/wasm/import_compiled.warp:1:8 outside the core: the declaration global `… = …`
