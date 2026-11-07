@@ -19,6 +19,8 @@ rewrite json.parse($t) => parse_json($t)
 
 # `x in xs` (a list's item, a map's key, a text's part) is the runtime word collection_contains(xs, x); `xs contains x`,
 # `xs has x`, `xs includes x` the same written the other way round. Rust twin: library_words.rs membership
+# `t in "Europe/Berlin"`: a time placed in a zone (lib/time.warp zoned), a text written as a zone's name
+rewrite ($t in $z) => zoned($t, $z) where zone_written($z)
 rewrite ($x in $xs) => collection_contains($xs, $x)
 rewrite ($xs contains $x) => collection_contains($xs, $x)
 rewrite ($xs has $x) => collection_contains($xs, $x)
