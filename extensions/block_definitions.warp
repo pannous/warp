@@ -3,12 +3,12 @@
 # core/analysis/errors.data. A function's own body, a lambda's and a class's define as before
 
 block_definition(n: Node, program: Node) := {
-	defined = block_statements(without_mark(n)).find(statement => defined_function_name(statement) != ø)
+	defined = controlled_statements(without_mark(n)).find(statement => defined_function_name(statement) != ø)
 	if defined == ø { return ø }
 	diagnose(call_of("block_definition", [defined_function_name(defined)]), defined)
 }
 # the statements of the block an if, else, while or for runs, [] of other code
-block_statements(n: Node): list := {
+controlled_statements(n: Node): list := {
 	block = if is_key(n, Op.Then) or is_key(n, Op.Else) or is_key(n, Op.Do) then value_of(n) else if is_loop(n) then n#(#n) else ø
 	if block == ø { return [] }
 	if is_curly_group(block) then items_of(block) else [block]
