@@ -777,6 +777,9 @@ used_module_text(module: text): text := {
 	}
 	used_module_texts[module]
 }
+# whether a module of the name is there to use: a standard module's file (asked of the disk, not read), else a C
+# library's lines
+is_module_name(name: text): bool := exists(std_module_path(name)) or used_module_text(name) != ""
 # what a module says, by its prebuilt signature (signature.warp prebuilt_signature), else, a program's own module or
 # one not prebuilt, by its text: the modules it uses, its rule patterns (after `rewrite `), whether it defines the
 # word (a definition or an alias), the parses of its definitions of the word

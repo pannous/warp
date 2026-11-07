@@ -14,7 +14,7 @@ local_shadows(source: text, folder: text): list := {
 }
 # the file or folder beside the program a standard module's name also names, ø for none or no such standard module
 local_shadow(name: text, folder: text): text? := {
-	if used_module_text(name) == "" { return ø }
+	if not is_module_name(name) { return ø }
 	[path_in(folder, name + module_extension), path_in(folder, name)].find(path => exists(path))
 }
 
