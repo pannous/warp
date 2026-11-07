@@ -886,7 +886,7 @@ with_expected_type_uses(program: Node, prelude: text): Node := {
 		for i in 0 ..< #arguments {
 			words = symbol_words(arguments[i]).filter(is_unknown)
 			if #words == 0 { continue }
-			if not heads.has(name) { heads[name] = definitions_of(name, prelude_slices).map(definition_text_head) }
+			if not heads.has(name) { heads[name] = definitions_of(name, prelude_slices).map(definition_parse_head) }
 			for type in parameter_types(heads[name], i) {
 				module = classes.get(type) ?? ""
 				defines = word => module in defining_modules(word)
@@ -903,10 +903,11 @@ module_hint(word: text): text := {
 	definers = defining_modules(word)
 	if #definers == 1 then ": `use " + definers#1 + "` defines it" else ""
 }
-# the texts of the word's definitions, the prelude's first, then those of each module defining it (library index)
-definitions_of(word: text, prelude_slices: list): list := (prelude_slices + defining_modules(word).flat_map(module => definition_slices(file_text(std_module_path(module)) ?? ""))).filter(slice => slice#1 == word).map(slice => slice#2)
-# the head of a definition's text, `sleep(duration: Time)` of `sleep(duration: Time) := …`
-definition_text_head(definition: text): Node? := definition_head_of(statements_in(plain_node(parsed(definition)))#1)
+# the parses of the word's definitions, the prelude's first, then those of each module defining it (library index),
+# a prebuilt module's from its signature (module_definitions), no text read
+definitions_of(word: text, prelude_slices: list): list := prelude_slices.filter(slice => slice#1 == word).map(slice => plain_node(parsed(slice#2))) + defining_modules(word).flat_map(module => module_definitions(module, word))
+# the head of a definition's parse, `sleep(duration: Time)` of `sleep(duration: Time) := …`
+definition_parse_head(definition: Node): Node? := definition_head_of(statements_in(definition)#1)
 # the types written for parameter `at` (from 0) of each definition head, `[Time]` of `sleep(duration: Time)`
 parameter_types(heads: list, at: int): list := {
 	types = []
