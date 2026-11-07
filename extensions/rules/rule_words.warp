@@ -1148,6 +1148,7 @@ rule_words = {
 	return_kind: return_kind,
 	route_bindings: route_bindings,
 	route_verb: route_verb,
+	path_parameters: path_parameters,
 	served: served,
 	shader_values: shader_values,
 	shader_values_of: shader_values_of,

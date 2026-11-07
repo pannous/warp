@@ -251,11 +251,18 @@ function_value(name: text, n: Node, locals: list, lowering: Lowering): Node := {
 }
 
 # an argument as passed: a function without parameters given for a parameter declared a function, `g(d)` of
-# `g(c: function)`, is its closure, not its call
+# `g(c: function)`, is its closure, not its call; so is the parameterless variant of a name defined with several
+# parameter counts (arity_overloads: `low() := …` beside a used module's `low(g: Gaussian)`), where its bare name is
+# that variant's call
 passed_value(argument: Node, at: int, callee: Node, locals: list, lowering: Lowering): Node := {
 	takes_function = callee is symbol and function_named_at(lowering.function_positions, name_of(callee), at) != ""
-	parameterless = argument is symbol and name_of(argument) not in locals and lowering.arities.has(name_of(argument)) and lowering.arities[name_of(argument)] == 0
-	if takes_function and parameterless then call_node(symbol("closure_new"), [argument]) else lowered_lambdas(argument, locals, lowering)
+	target = if argument is symbol and name_of(argument) not in locals then parameterless_function(name_of(argument), lowering) else ""
+	if takes_function and target != "" then call_node(symbol("closure_new"), [symbol(target)]) else lowered_lambdas(argument, locals, lowering)
+}
+# the function a bare name calls without arguments: its own, or its parameterless variant; "" for none
+parameterless_function(name: text, lowering: Lowering): text := {
+	variant = overload_variant_name(name, 0)
+	if lowering.arities.get(name) == 0 then name else if lowering.arities.get(variant) == 0 then variant else ""
 }
 # `f(a, b)`: a call of a variable is a call of the function value it holds, a function's call keeps its name; a call
 # of any other expression calls the function value it gives: `(x => x*2)(5)`, `adder(5)(1)`, `fs[0](3)`

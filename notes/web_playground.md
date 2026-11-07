@@ -102,7 +102,7 @@ newGuestMap by new_spelled_key/new_spelled_list, newGuestFloats, newGuestError, 
 Every host word reads and builds so (reader.js and exact.js, the Rust-era tree reading, went with card
 drop-readnode-branch). Ported: std.js stdCall (every std adapter), paint, save_picture, text_coverage,
 sound_samples, gpu_*. Known cost: newGuestList is O(n²) (built_list copies its rest) and floats are read by shown
-text, so a million-item GPU list stops the run (samples/gpu/gpu_million; bulk exports asked of core).
+text, so a million-item GPU list stops the run (samples/acceleration/gpu_million; bulk exports asked of core).
 libwarp_sound is a page library: lib/sound.warp's `from 'warp_sound'` words (host-sound.js soundLibrary: play
 samples on the run's voice, play a file, decode/resample) and c.dlopen of @executable_path/libwarp_<name> answers a
 handle when self.PAGE_LIBRARIES has it (host-foreign.js pageStdio).

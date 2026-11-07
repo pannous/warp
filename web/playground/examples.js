@@ -211,6 +211,9 @@ for frame in 0..300 {
   sleep(30ms)
 }
 "done"` },
+	"gpu map": { value: "14", code: `// @gpu asks for the graphics card: from about 30 000 numbers the map runs there
+xs = [1.0, 2.0, 3.0]
+sum(xs.map(x => x * x) @gpu)` },
 	"game of life": { value: "15", wait: 1200, code: `// Conway's Game of Life, a step every half second
 width = 24
 height = 12

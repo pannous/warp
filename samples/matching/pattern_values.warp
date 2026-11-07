@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# Pattern values: find/replace with patterns as values (card pattern-parameters, notes/pattern_values.md).
+# Pattern values: find/replace with patterns as values.
 # A pattern held unevaluated, `data {…}` or the infix `find`'s right side, so bare names bind.
 
 page = {top: {logo: {type: "image", src: "logo.png"}}, body: [{type: "text"}, {type: "image", src: "cat.jpg"}]}

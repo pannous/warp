@@ -28,7 +28,7 @@ def closure_value(body: Body, target: Node, captured: list): TypedCode {
 	entry = closure_entry(name, #captured, arity)
 	held = [op.i64_const] + sleb(Kind.Data) + [ref_null, any_reference, ref_null, gc_type(gc.node), op.ref_func] + relocatable(relocated.calls, entry#3.index) + text_bytes(entry#4) + gc_code(gc_ops.struct_new, [gc_type(gc.closure)])
 	items = [held] + captured.map(c => boxed(expression_code(body, c)))
-	TypedCode(ValueKind.Node, key_code(Kind.Function, vector_code(items), name_node(symbol(written_word(name)))))
+	TypedCode(ValueKind.Node, key_code(Kind.Function, vector_code(items), name_node(symbol(without_arity(written_word(name))))))
 }
 # the closure entry of a target, the first of its captured values those given: [target, captured count, the entry,
 # the text the closure shows]
@@ -119,11 +119,17 @@ closure_shown(name: text, captured: int): text := {
 # the name a function value shows, as written (`twice` of the program's own `twice·own`): `len` of a class's
 # method that became the witness `len·Point`, the last part of a nested `outer·inner`
 function_name(target: text): text := {
-	written = written_word(target)
+	written = without_arity(written_word(target))
 	parts = written.split(name_joiner)
 	if #parts == 1 { return written }
 	last = parts.last
 	if last in module.classes then parts[0..<(#parts - 1)].join(name_joiner) else last
+}
+# a variant of a name defined with several parameter counts as written: `low` of low·0 (passes/walk.warp
+# overload_variant_name)
+without_arity(name: text): text := {
+	parts = name.split(name_joiner)
+	if #parts > 1 and (is_digits(parts.last) or parts.last == "more") then parts[0..<(#parts - 1)].join(name_joiner) else name
 }
 # the code of a function made late (made_late), once the program's closures and classes are known
 late_code(f: Function): int := {

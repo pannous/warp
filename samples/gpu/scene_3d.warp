@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# A 3d scene declared as the things in it (wiki/3d.md, card scene-3d): `use scene` assumes the rest, each thing's size
+# A 3d scene declared as the things in it (wiki/3d.md): `use scene` assumes the rest, each thing's size
 # in meters, where it stands, which tree a tree is, the camera that sees them all. The shader casts a ray through every
 # pixel against the scene's triangles; the nearest one hit is lit by the sun in its thing's color
 use graphics

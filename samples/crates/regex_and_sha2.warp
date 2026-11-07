@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-// Rust crates from warp (notes/crate_adapter.md): build the shims once with
+// Rust crates from warp: build the shims once with
 //   scripts/warp-crate build lib/crates/regex.warp lib/crates/sha2.warp
 // then run it under warp-host, which finds them in ~/.cache/warp/crates
 use crate "regex@1"

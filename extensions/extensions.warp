@@ -44,6 +44,7 @@ use "block_inlining.warp"
 use "of_lookups.warp"
 use "match_phrases.warp"
 use "checked_tries.warp"
+use "key_bindings.warp"
 use "text_lints.warp"
 use "page_values.warp"
 use "fetch_signals.warp"
@@ -99,6 +100,7 @@ EXTENSIONS = [
 	last_results_extension
 	Extension{name: "parse_words", passes_before: {"tries": parse_words}}
 	checked_tries_extension
+	key_bindings_extension
 	iteration_inlining_extension
 	block_inlining_extension
 	of_lookups_extension

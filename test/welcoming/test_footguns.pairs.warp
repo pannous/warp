@@ -259,8 +259,8 @@
 't=2030-10-27T02:30+02:00[Europe/Berlin]; t.offset'	7200
 
 # test_calendar_day_is_not_24_hours
-'t=2030-03-30T12:00[Europe/Berlin] + 1 day; t.hour'	12
-'t=2030-03-30T12:00[Europe/Berlin] + 24 hours; t.hour'	13
+'t=(2030-03-30T12:00 in "Europe/Berlin") + 1 day; t.hour'	12
+'t=(2030-03-30T12:00 in "Europe/Berlin") + 24 hours; t.hour'	13
 '1 hour == 60 minutes'	true
 '1 day == 2 days'	false
 

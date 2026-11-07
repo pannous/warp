@@ -1,0 +1,4 @@
+# a name defined with several parameter counts, given for a parameter declared a function, is its parameterless variant itself, not its call (card program-function)
+'low(x: int) := x; low() := 7; g(c: function) := c(); g(low)'	7
+'low(x: int) := x; low() := 7; g(c: function) := c.name; g(low)'	"low"
+'use uncertain; low() := 7; g(c: function) := c.name; g(low)'	"low"
