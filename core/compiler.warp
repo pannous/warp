@@ -145,10 +145,11 @@ linked_libraries(source: text): list := {
 	while at < #names {
 		name = names[at]
 		at += 1
-		wasm = try read_bytes(own_module_wasm.get(name) ?? folder + name + ".wasm") else ø
-		# (a module not prebuilt was said by the rebuild, its file left empty; one prebuilt that won't link is the
-		# compile's error, never compiled from its source instead: decision module-link-hard-error)
-		if wasm == ø or #wasm == 0 { continue }
+		wasm = bytes_if_there(own_module_wasm.get(name) ?? folder + name + ".wasm")
+		# (a module not prebuilt was said by the rebuild, its file left empty or never written: markup's html, compiled
+		# into markup; one prebuilt that won't link is the compile's error, never compiled from its source instead:
+		# decision module-link-hard-error)
+		if #wasm == 0 { continue }
 		signature = module_signature(name, wasm)
 		if signature == ø { throw name + ".wasm won't link: no " + SIGNATURE_SECTION + " section, built by a compiler older than this one; warp rebuild builds it anew" }
 		image = library_image_of(name, signature)
@@ -163,9 +164,7 @@ linked_libraries(source: text): list := {
 # module is, imported by its path (decision samples-modules-wasm); its text, where beside it, is shapes.warp
 own_module_beside(name: text, program_folder: text) := {
 	wasm = path_in(absolute_folder(program_folder), name + ".wasm")
-	# (asked first: the page's read_bytes of a missing file ends the compile, no try catches it, card playground-host-word)
-	if not exists(wasm) { return ø }
-	bytes = try read_bytes(wasm) else []
+	bytes = bytes_if_there(wasm)
 	if #bytes > 0 and section_place(bytes, section_ids.custom, SIGNATURE_SECTION) != ø { own_module(name, wasm.remove_suffix(".wasm") + module_extension, wasm) }
 }
 # the images, each behind those of the modules it uses

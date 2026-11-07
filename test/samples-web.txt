@@ -129,7 +129,6 @@ ok   samples/lists/dot.warp
 ok   samples/lists/primes.warp
 ok   samples/lists/quicksort.warp
 ok   samples/lists/sieve.warp
-ok   samples/lists/sieve_idiomatic.warp
 ok   samples/lists/sorting.warp
 ok   samples/lists/sorting_idiomatic.warp
 ok   samples/lists/typed_lists.warp
@@ -183,7 +182,6 @@ ok   samples/numbers/units_dynamic.warp
 ok   samples/objects/binary_tree.warp
 FAIL samples/objects/data_structures.warp
 ok   samples/objects/dijkstra.warp
-ok   samples/objects/dijkstra_idiomatic.warp
 ok   samples/objects/json_parser.warp
 ok   samples/objects/references.warp
 ok   samples/python/numpy_matrix.warp

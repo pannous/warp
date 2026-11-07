@@ -261,7 +261,8 @@ watch() {
 	# stage one: the native warp at once, when the tip's compilers are not in the store yet
 	local early=
 	"$scripts/rebuild.sh" --check pure "$TREE" >/dev/null || { install_native early && early=1; }
-	built=$("$scripts/rebuild.sh" both "$TREE" 2>&1)
+	# main's compiler first in the build line: the branches merging this main reuse it (scripts/build-slot.sh)
+	built=$(WARP_BUILD_FIRST=1 "$scripts/rebuild.sh" both "$TREE" 2>&1)
 	status=$?
 	echo "$built"
 	# the card names the failed step and its log in the store (rebuild.sh), so nobody builds the hash again to read it

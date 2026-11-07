@@ -198,6 +198,8 @@ appended(body: Body, target_name: Node, addition: Node): TypedCode? := {
 	# `for w in words { xs += w }`: an addition known only at run time is its items or one item (runtime appended_items)
 	if target.kind == ValueKind.List and added.kind == ValueKind.Node { added = runtime_call("appended_items", [added]) }
 	if target.kind == ValueKind.List { return runtime_call("list_append", [target, added]) }
+	# `3.add(2)`, `n += [2]` of a number: no list takes the items, said at run time where a try catches it (runtime no_sum)
+	if added.kind == ValueKind.List and target.kind in [ValueKind.Int, ValueKind.Float, ValueKind.Bool] { return runtime_call("node_append", [target, added]) }
 	# an instance whose class defines `+` adds by it, `total += run.distance` (the compound operators' arithmetic)
 	# beside a class's `+` a list held as a node still grows in place, so `xs += [o]` reaches the caller's list: decided
 	# by the value at run time, any other value added by the class's `+`

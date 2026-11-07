@@ -1160,6 +1160,8 @@ rule_words = {
 	served: served,
 	shader_values: shader_values,
 	shader_values_of: shader_values_of,
+	shader_words_of: shader_words_of,
+	shader_place_of: shader_place_of,
 	shorthand_closure: shorthand_closure,
 	signaled: signaled,
 	signature_text: signature_text,
