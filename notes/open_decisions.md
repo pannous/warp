@@ -8,7 +8,6 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 (zero-bake hold, user via Supervisor 2026-11-05: only questions serving the library zero-bake plan are asked; others queue here.)
 
 ## To confirm (decided on the user's behalf; built as described, keep or undo)
-- fraction-written-form detail: only written `1/3` literals are marked; `a = 1; b = 4; a / b` shows 0.25, not 1/4.
 - data-tag-words: in data, glued `head{…}` / `first{…}` (prelude words) stay tags; only program-defined or used words call. Spaced `first {…}` stays the prelude call (spaced-tag keeps prelude words; only head is a tag via the library index). Keep, or make spaced prelude words tags too? (decisions.md)
 
 ## Parked
