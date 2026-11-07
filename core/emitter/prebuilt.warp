@@ -465,6 +465,14 @@ def behind_libraries() {
 # the module's class structs the program's of their names, which it declares alike (its classes from the module's
 # text), else the program compiles the module from its source
 def bind_library_words() {
+	shared = {}
+	for name in module.functions.keys {
+		f = module.functions[name]
+		if f.kinds == ø and is_linked_word(f) {
+			owners = dispatching_owners(name, #f.signature.parameters)
+			if #owners > 1 { shared[name] = owners }
+		}
+	}
 	# (in link_libraries' order: two variants alike, the prelude's clear(x) and draw's clear(color), compare equal)
 	for image in by_precedence(module.linked_images) {
 		for entry in image.classes {
@@ -476,13 +484,44 @@ def bind_library_words() {
 		for k in 0..<#image.functions {
 			word = image.functions[k]
 			f = module.functions.get(word.name)
-			if f != ø and f.kinds == ø and linkable(image, word) and linked_variant(word.name, #f.signature.parameters) == word { bound_to(f, image, k) }
+			if f != ø and f.kinds == ø and not shared.has(word.name) and linkable(image, word) and linked_variant(word.name, #f.signature.parameters) == word { bound_to(f, image, k) }
 			# (a word two modules write: the program's typed variant of it, arity_overloads' milliseconds_of·Quantity)
 			variant = if linked_extended.has(word.name) then module.functions.get(typed_variant_written(image.name, word)) else ø
 			if variant != ø and variant.kinds == ø { bound_to(variant, image, k) }
 		}
 		bind_written_variants(image)
 	}
+	for name in shared.keys { dispatched_over_modules(module.functions[name], shared[name]) }
+}
+# A word several linked modules made of as many values, each its own dispatcher over its own classes (>·operator,
+# compare, text·shown of units beside time): the program's is one over all of them, a value of a module's class in any
+# place by that module's word, any other value by the first module's (card linked-dynamic-method)
+# the modules making the word, each [image, index], by precedence; none when one of them writes it (a word two modules
+# write is told apart by its typed variants, linked_extended) or it takes other values than nodes
+def dispatching_owners(name: text, count: int): list {
+	owners = []
+	for image in by_precedence(module.linked_images) {
+		for k in 0..<#image.functions {
+			word = image.functions[k]
+			if word.name == name and #word.kinds == count and linkable(image, word) {
+				if written_words(image.name).has(name) or count == 0 or word.kinds.any(kind => kind != ValueKind.Node) or word.result != ValueKind.Node { return [] }
+				owners += [[image, k]]
+			}
+		}
+	}
+	owners
+}
+def dispatched_over_modules(f: Function, owners: list) {
+	first = owners#1
+	placed(f)
+	f.kinds = first#1.functions[first#2].kinds
+	f.result = ValueKind.Node
+	f.locals = []
+	f.local_names = range_list(#f.kinds).map(dispatcher_argument)
+	arguments = parameters_code(#f.kinds)
+	cases = []
+	for at in 0..<#f.kinds { for owner in owners { for entry in owner#1.classes { cases += [op.local_get] + uleb(at) + gc_code(gc_ops.ref_test, [gc_type(entry#1)]) + [op.if, no_value] + arguments + call_code(linked_index(owner#1, owner#2)) + [op.return, op.end] } } }
+	f.code = cases + arguments + call_code(linked_index(first#1, first#2))
 }
 # the program's variants of a module's words, its definitions of one name told apart by count or types
 # (arity_overloads: the prelude's sum(xs) beside a linked class's method sum() are sum·1·list_or_number and
