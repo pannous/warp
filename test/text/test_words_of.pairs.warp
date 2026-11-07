@@ -1,0 +1,5 @@
+# a text's words, split on white space: t.words, words of t, counted (decision 4de73dde04, card hFWLEQ)
+'t = "the quick  brown\tfox"; t.words'	["the", "quick", "brown", "fox"]
+'words of "the quick brown fox"'	["the", "quick", "brown", "fox"]
+'count words of "the quick brown fox"'	4
+'count words in "the quick brown fox"'	error	count words in "the quick brown fox" counts a yes/no question: did you mean count words of "the quick brown fox"?
