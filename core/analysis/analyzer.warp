@@ -125,6 +125,14 @@ choice_kind(then: Node, otherwise: Node, scope: Scope): ValueKind := {
 	if raises_error(otherwise) and not raises_error(then) { return error_or(branch_kind(then, scope)) }
 	branches_kind(branch_kind(then, scope), branch_kind(otherwise, scope))
 }
+# `try x else y`'s choice (passes/tries.warp: `{try·value·N}` its first branch): x's value or what the try gives
+# instead, the caught Error or y, which the run decides; a text beside another kind is no text there (a module word's
+# `try click("-1")` is its Error, card try-linked)
+is_try_value(branch: Node): bool := is_curly_group(branch) and #branch == 1 and branch#1 is symbol and name_of(branch#1).starts_with("try·value·")
+try_kind(value: ValueKind, instead: ValueKind): ValueKind := {
+	kind = branches_kind(value, instead)
+	if kind == ValueKind.Text and value != instead then ValueKind.Data else kind
+}
 # the kind of a node as written, not run (a block is a list)
 written_kind(n: Node): ValueKind := match n {
 	Key(_, _, _): ValueKind.Key
@@ -203,6 +211,7 @@ kind_of_key(n: Node, scope: Scope): ValueKind := {
 	if op in comparison_ops { return ValueKind.Int }
 	if is_empty(key_of(n)) and op != "#" and op != "if" and op != "while" { return inferred_kind(value_of(n), scope) }
 	if op == "?" and is_key(value_of(n), Op.Colon) { return choice_kind(key_of(value_of(n)), value_of(value_of(n)), scope) }
+	if op == "else" and is_key(key_of(n), Op.Then) and is_try_value(value_of(key_of(n))) { return try_kind(branch_kind(value_of(key_of(n)), scope), branch_kind(value_of(n), scope)) }
 	if op == "else" and is_key(key_of(n), Op.Then) { return choice_kind(value_of(key_of(n)), value_of(n), scope) }
 	if op == "then" and is_key(key_of(n), Op.If) { return branches_kind(branch_kind(value_of(n), scope), ValueKind.Int) }
 	if op == "#" and not is_empty(key_of(n)) { return subscript_kind(key_of(n), value_of(n), scope) }
