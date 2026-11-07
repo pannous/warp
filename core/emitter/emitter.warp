@@ -728,6 +728,8 @@ global_key(body: Body, name: text): text := if body.intrinsics then name else pr
 is_global(body: Body, name: text): bool := name not in body.names and global_key(body, name) in module.globals
 # a built-in type's name, `type` or a declared class's
 names_a_type_value(name: text): bool := is_tested_type_word(name) or name == "type" or name in module.classes
+# a name with its first letter capitalized, `later` → Later, the case a lowercase bare name may mean
+folded_case(name: text): text := if name == "" then name else name[0 ..< 1].upper() + name[1 ..]
 def local_value(body: Body, n: Node): TypedCode {
 	name = name_of(n)
 	# a main-level value read by a function compiled before main's assignment declares it, one an earlier value's
@@ -743,7 +745,9 @@ def local_value(body: Body, n: Node): TypedCode {
 	nullary = if name in module.functions then name else name + "·0"
 	if name not in body.names and nullary in module.functions and #module.functions[nullary].signature.parameters == 0 { return call(body, module.functions[nullary], []) }
 	# a bare enum case is its name, a symbol, at run time, made once: the very case is the one node (decision
-	# enum-identity)
+	# enum-identity); its first letter lowercase names it too, `disambiguation: later` the case Later (decision
+	# lowercase-key-comparisons)
+	if name not in body.names and name not in module.variants and folded_case(name) in module.variants { name = folded_case(name) }
 	if name not in body.names and name in module.variants { return if #module.variants[name] == 1 then case_value(module.variants[name]#1, name) else interned_symbol(body, name) }
 	# a type's name, unbound, is the type value: `k = int`
 	if name not in body.names and names_a_type_value(name) { return TypedCode(ValueKind.Node, type_value_code(name)) }
