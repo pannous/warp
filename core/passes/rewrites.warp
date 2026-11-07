@@ -105,7 +105,7 @@ one_word = "one"
 sugar_folder = "extensions/sugar/"
 sugar_files(names: list): list := names.map(name => sugar_folder + name)
 # tuples and safe navigation first: data_items reads the names in `[a, b]` before the later sugar steps could see them
-first_sugar_module_names = sugar_files(["tuples", "safe_navigation", "lists", "arms", "heads", "test_words"])
+first_sugar_module_names = sugar_files(["tuples", "safe_navigation", "lists", "arms", "tree_patterns", "heads", "test_words"])
 # every other file of extensions/sugar/ is sugar applied where the sugar pass stands: a new rule file needs no line here
 placed_sugar_modules(): list := first_sugar_module_names + iteration_sugar_module_names + late_sugar_module_names + comprehension_sugar_module_names + declaration_sugar_module_names + early_sugar_module_names
 sugar_module_names(): list := {
@@ -124,7 +124,7 @@ std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", 
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # the declarations sugar strips it, and the function keyword's rule rewrites the rest)
-early_sugar_module_names = sugar_files(["functions", "declarations", "events", "defaults", "articles"])
+early_sugar_module_names = sugar_files(["functions", "declarations", "events", "defaults", "articles", "tree_patterns"])
 
 # a rule: `where $hole = shape` its origin (ø both without one), `conditions` the other `where` conditions, `place`
 # the one Place it rewrites only, else Anywhere, `module` the standard module declaring it, else ""; `whole` for a

@@ -30,7 +30,7 @@ runs every sample not listed in web/playground/excluded_samples.txt, which gives
 ## Folders
 - samples/ has one folder per chapter of the playground guide, the groups of its example menu (web/playground/guide.js
   groupExamplesByChapter): hello numbers text signals conditions matching lists objects loops functions types storage
-  errors modules events tasks web servers graphics gpu sound wasm laws advanced; plus system (crontab, unix_commands:
+  errors modules events tasks web servers graphics gpu (Shaders) acceleration sound wasm laws advanced; plus system (crontab, unix_commands:
   native-only processes), golf/ and wit/. A sample sits in the folder of the first chapter whose `Examples: …;
   samples:` line names it; samples no chapter can name (raylib, SDL, errors…) sit by topic.
 - tests/web/test_guide.rs every_chapter_has_its_own_sample_folder keeps the two in step: a chapter's samples in one

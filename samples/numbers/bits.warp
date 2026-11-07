@@ -11,4 +11,4 @@ print yes xor no       # yes
 print 7 modulo 3       # 1
 print 3 is not 4       // yes
 print 3 >= 3           # yes
-# print 3 is at least 3  (an esoteric phrase, decision esoteric-phrases-commented)
+# print 3 is at least 3  (an esoteric phrase)

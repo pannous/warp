@@ -25,6 +25,21 @@ function textCoverage(words, size) {
 // the first `room` items of a list of Ints (paint's pixels, sound's samples), their magnitudes as the low and high 32
 // bits of each (Int32Array); undefined for a text, which the caller reads as a shader
 const intHalvesOfList = (program, list, room) => isGuestText(program, list) ? undefined : halvesOf(guestInts(program, list, Math.min(room, guestCount(program, list))));
+// a picture's pixels as intHalvesOfList gives them, read a chunk at a time by the module's pixels_at (4 bytes a pixel in
+// its memory), as the native warp reads them: one call a pixel took 120 to 280 ms a frame of 1280×800 (finger_paint)
+const PIXEL_CHUNK = 16372; // core/runtime/show.warp pixel_chunk(), as core/native/driver.warp PIXEL_CHUNK
+function pictureHalves(program, picture, room) {
+	if (!program.pixels_at || isGuestText(program, picture)) return intHalvesOfList(program, picture, room);
+	const count = Math.min(room, guestCount(program, picture));
+	const halves = new Int32Array(2 * count);
+	for (let from = 0; from < count; from += PIXEL_CHUNK) {
+		const chunk = Math.min(PIXEL_CHUNK, count - from);
+		const address = Number(program.pixels_at(picture, BigInt(from + 1), BigInt(chunk)));
+		const words = new Int32Array(program.memory.buffer.slice(address, address + 4 * chunk));
+		for (let at = 0; at < chunk; at++) halves[2 * (from + at)] = words[at];
+	}
+	return halves;
+}
 const intsOfList = (program, list, room) => {
 	const halves = intHalvesOfList(program, list, room);
 	return halves && Array.from(new BigInt64Array(halves.buffer, halves.byteOffset, halves.length / 2), Number);
@@ -101,7 +116,7 @@ addHostPart({
 		paint: (pixels, width, height, values) => {
 			if (!hooks.paint) throw new Error("paint: no canvas here; it draws in the playground page");
 			[width, height] = [Number(width), Number(height)];
-			const halves = intHalvesOfList(program(), pixels, width * height);
+			const halves = pictureHalves(program(), pixels, width * height);
 			const painted = halves ?? guestPlain(program(), pixels);
 			if (typeof painted === "string") {
 				if (!holder.gpuRendered) throw new Error("paint: a shader needs WebGPU (host-gpu.js), which this page has not");
@@ -117,7 +132,7 @@ addHostPart({
 		save_picture: (pixels, width, height, file) => {
 			if (!hooks.savePicture) throw new Error("save: no page here to download the picture to");
 			[width, height] = [Number(width), Number(height)];
-			const halves = intHalvesOfList(program(), pixels, width * height) ?? halvesOf(guestPlain(program(), pixels));
+			const halves = pictureHalves(program(), pixels, width * height) ?? halvesOf(guestPlain(program(), pixels));
 			hooks.savePicture(String(guestPlain(program(), file)), shadedWords(halves, width * height), width, height);
 		},
 	}),

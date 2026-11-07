@@ -44,11 +44,13 @@ use "block_inlining.warp"
 use "of_lookups.warp"
 use "match_phrases.warp"
 use "checked_tries.warp"
+use "key_bindings.warp"
 use "text_lints.warp"
 use "page_values.warp"
 use "fetch_signals.warp"
 use "js_globals.warp"
 use "dir_hints.warp"
+use "block_definitions.warp"
 use "effects.warp"
 use "optional_unwraps.warp"
 use "object_functions.warp"
@@ -98,6 +100,7 @@ EXTENSIONS = [
 	last_results_extension
 	Extension{name: "parse_words", passes_before: {"tries": parse_words}}
 	checked_tries_extension
+	key_bindings_extension
 	iteration_inlining_extension
 	block_inlining_extension
 	of_lookups_extension
@@ -107,6 +110,7 @@ EXTENSIONS = [
 	fetch_signals_extension
 	js_globals_extension
 	dir_hints_extension
+	block_definitions_extension
 	effects_extension
 	optional_unwraps_extension
 	object_functions_extension

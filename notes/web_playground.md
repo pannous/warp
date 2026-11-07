@@ -91,6 +91,12 @@ Markup values show as warp data there (`p{class:"note" "hello"}`), not as HTML l
 - The first markup program a worker compiles pays a one-time cost (lib/markup.warp's to_html): after a run is shown
   the page asks its worker once to warm up (playground.js warmWorker → worker.js warmUp: `p{ "" }` evaluated with the
   worker's messages silenced, skipped over a live run).
+  It waits for 5 s without a key or click (WARM_UP_QUIET_MS): sent right after the first run, it held the worker for
+  1–4 s and a Hello clicked meanwhile waited behind it (card compiler-cache-compiled).
+- The compiler's machine code is cached by the browser, not by the page: compileStreaming of the versioned warp.wasm
+  (?build=, host.js ofThisBuild) keeps it with the HTTP-cached response. IndexedDB cannot hold a WebAssembly.Module
+  (Chrome and Firefox removed its serialization). Measured on the live site, headless Chrome: Hello at 7.5 s on a
+  first visit, 2.3 s after (1.1 s with the quiet warm-up); playground.state().stages shows where a start's time goes.
 
 ## Values of self-hosted modules (values.js, 2026-11-01)
 A module of the self-hosted compiler has no reflect_* exports: a host word reads its value arguments as driver.warp
@@ -102,7 +108,7 @@ newGuestMap by new_spelled_key/new_spelled_list, newGuestFloats, newGuestError, 
 Every host word reads and builds so (reader.js and exact.js, the Rust-era tree reading, went with card
 drop-readnode-branch). Ported: std.js stdCall (every std adapter), paint, save_picture, text_coverage,
 sound_samples, gpu_*. Known cost: newGuestList is O(n²) (built_list copies its rest) and floats are read by shown
-text, so a million-item GPU list stops the run (samples/gpu/gpu_million; bulk exports asked of core).
+text, so a million-item GPU list stops the run (samples/acceleration/gpu_million; bulk exports asked of core).
 libwarp_sound is a page library: lib/sound.warp's `from 'warp_sound'` words (host-sound.js soundLibrary: play
 samples on the run's voice, play a file, decode/resample) and c.dlopen of @executable_path/libwarp_<name> answers a
 handle when self.PAGE_LIBRARIES has it (host-foreign.js pageStdio).

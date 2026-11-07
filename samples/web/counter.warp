@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# A counter (wiki/html.md, decision markup-keeps): `on click {…}` among a button's items is its handler, and the text
+# A counter (wiki/html.md): `on click {…}` among a button's items is its handler, and the text
 # reading count is live, shown anew after each click. Run it in the playground; natively it prints the page as data.
 # check: click "+1", click "+1" → count: 2
 # check: click "+1", click "reset" → count: 0

@@ -1,1 +1,1 @@
-outside the core: the call zork(…) at test/gate/refused_call.warp:2:6 (no owner)
+test/gate/refused_call.warp:2:6: outside the core: the call zork(…) (no owner)

@@ -216,7 +216,13 @@ Routes answer requests; `warp serve` serves them, `warp deploy` deploys them (Cl
 
 ## Pictures
 
-`use draw` keeps a pixel canvas that `show()` paints; WGSL shaders color every pixel on the GPU (WebGPU in the page).
+`use draw` keeps a pixel canvas that `show()` paints.
+
+## Shaders
+
+`paint(f, width, height)` compiles a warp function of (x, y) returning [r, g, b] to a WGSL fragment shader
+(`shader_of(f)` shows it); `shader { … }` is WGSL written in place, `$name` a warp variable read at each paint;
+`compute_toy(shader { … })` of `use compute_toys` runs a compute.toys kernel. WebGPU in the page.
 
 ## Acceleration
 

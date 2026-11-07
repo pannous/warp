@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# An emit the program has no handler for reaches its page as a DOM CustomEvent (card page-custom-event): its name,
+# An emit the program has no handler for reaches its page as a DOM CustomEvent: its name,
 # the data as event.detail. The page's own script listens; build it with `warp build --site` or run it in the
 # playground, click Save and watch the tab's title (and the console).
 saves = 0

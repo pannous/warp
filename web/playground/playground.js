@@ -103,6 +103,8 @@ function element(tag, properties = {}, ...children) {
 let worker;
 let workerReady;
 let workerStage = "not started"; // the worker's last stage (worker.js stage), for playground.state
+const workerStages = []; // the worker's stages so far, each with the page's milliseconds it began at, for playground.state: where a start's time goes
+const stageBegan = stage => workerStages.push({ stage: workerStage = stage, at: Math.round(performance.now()) });
 let workerSettled = "starting"; // workerReady's outcome
 let workerWarmed; // the worker was asked to compile the markup renderer ahead of the first markup run (worker.js warmUp)
 let nextRunId = 0;
@@ -204,6 +206,7 @@ function restartStalledWorker(stalledWorker, restarts, resolve, reject) {
 
 function startWorker(restarts = 0) {
 	workerWarmed = false;
+	workerStages.length = 0;
 	const options = new URLSearchParams();
 	if (debugBuild) options.set("compiler", DEBUG_COMPILER);
 	// test_in_browser.py --examples: a worker that starts as late as on a slow CI runner
@@ -239,13 +242,13 @@ function startWorker(restarts = 0) {
 			if (data.type === "dispatch") return dispatchToPage(data.event); // markup.js, card page-custom-event
 			if (!data) return;
 			if (stalled) watchStart();
-			if (data.type === "stage") return workerStage = data.stage;
+			if (data.type === "stage") return stageBegan(data.stage);
 			if (data.type === "loading") {
 				workerStage = `downloading the compiler: ${megabytes(data.loaded)} MB so far`; // a stalled download says how far
 				return showLoading(`loading the compiler: ${megabytes(data.loaded)}${data.total ? ` of ${megabytes(data.total)}` : ""} MB`);
 			}
-			if (data.type === "compiling") return stopLoading();
-			if (data.type === "ready") return ready();
+			if (data.type === "compiling") return stageBegan("compiling") && stopLoading();
+			if (data.type === "ready") return stageBegan("ready") && ready();
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
 			if (data.type === "clipboard") return copyText(data.text);
 			if (data.type === "clipboard read") return pasteInto(data.shared);
@@ -1103,12 +1106,24 @@ async function show(code) {
 	warmWorker();
 }
 
-// once per worker, after a run is shown: the page is idle, the worker free
+// once per worker, after a run is shown and the person did nothing for WARM_UP_QUIET_MS: the warm-up takes the
+// worker for 0.5–4 s, and a run asked meanwhile waited for it, so a Hello clicked right after the page loaded took
+// seconds (card compiler-cache-compiled). A key or a click restarts the wait
+const WARM_UP_QUIET_MS = 5000;
+let warmUpWait;
 function warmWorker() {
 	if (workerWarmed) return;
+	clearTimeout(warmUpWait);
+	warmUpWait = setTimeout(warmNow, WARM_UP_QUIET_MS);
+}
+function warmNow() {
+	warmUpWait = undefined;
+	if (workerWarmed || pending || showing) return;
 	workerWarmed = true;
 	worker.postMessage({ warm: true });
 }
+const quietAgain = () => warmUpWait && warmWorker();
+["keydown", "pointerdown"].forEach(input => addEventListener(input, quietAgain, true));
 
 // a link to the same page with the other compiler build
 function showBuildSwitch() {
@@ -1385,7 +1400,7 @@ window.playground = { evaluate, settled, applyFix, chooseExample, runCode, repor
 	// the next run would end it (test_in_browser.py sample_answer); yes when one ran
 	stopAnimation: () => Boolean(pending?.animating && (stopRun(pending, ANIMATION_STOPPED), true)),
 	// what a run waits for, for the Firefox driver's timeout report (card firefox-hello-again)
-	state: () => ({ worker: workerStage, ready: workerSettled, pending: pending?.id, queued: queued !== undefined, showing }) };
+	state: () => ({ worker: workerStage, stages: workerStages, ready: workerSettled, pending: pending?.id, queued: queued !== undefined, showing }) };
 
 reportBareErrors(self, "page"); // task-workers.js
 addEventListener("unhandledrejection", event => {
