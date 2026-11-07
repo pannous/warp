@@ -1,0 +1,2 @@
+# a prelude function before a block in data is the tag, not its call (decision data-tag-words)
+'use markup; d = div{ first { p{"a"} } }; str(d)'	"div: {first: {p: 'a'}}"
