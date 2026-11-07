@@ -359,7 +359,11 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	# numbers' ↑), a program's assignment to a module's global sets it (`tuning = 442` retunes sound's notes), any other
 	# definition replaces the module's
 	assigned = statements_in(program).filter(statement => is_key(statement, Op.Assign) and key_of(statement) is symbol).map(declared_name)
-	kept = slice => slice#1 not in own_names or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX) or (slice#2.starts_with("global ") and slice#1 in assigned)
+	# a class of the program sets aside a module's word of its name too, `class square {…}` the prelude's square(x), so
+	# square(4) constructs (card field-side); a module's own class, brought in front, is no such word
+	own_classes = statements_in(program).filter(is_type_declaration).map(statement => declared_type_name(value_of(statement)#2))
+	replaced = slice => slice#1 in own_names or (slice#1 in own_classes and leading_name(slice#2) not in defining_keywords)
+	kept = slice => not replaced(slice) or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX) or (slice#2.starts_with("global ") and slice#1 in assigned)
 	# the program's globals, `global hue = 10`, which every function of its own shares, are no module's: hsv's `hue`
 	# stays its local
 	program_globals = statements_in(program).filter(is_global_declaration).map(declared_name).filter(name => name != ø and name not in module_names)
