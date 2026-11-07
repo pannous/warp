@@ -2039,9 +2039,13 @@ with_rightmost(n: Node, words: list): Node := {
 	rule_phrase([n] + words)
 }
 
+# `data e`, quoted code as written, which no rule rewrites as no pass does (walk.warp is_quote), but one about quotes:
+# `data twice` is no call twice(data), `data g` no grams
+is_written_code(n: Node): bool := is_quote(n) or is_spliced_quote(n)
 # the rule's template for the node; a block of a statement the pattern matches keeps its block
 rule_applied(rule: Rule, origin: map, n: Node): Node := {
 	if rule_defining != "" and first_word_of(rule.template) == rule_defining { return ø }
+	if is_written_code(n) and not is_written_code(rule.pattern) { return ø }
 	bound = {}
 	if rule_matches(rule.pattern, n, bound) and conditions_hold_at(rule, origin, bound, n) { return fired(rule, rule_spliced(rule.template, bound, n)) }
 	if not (is_group(rule.pattern) and bracket_of(rule.pattern) == "" and is_curly_group(n)) { return ø }

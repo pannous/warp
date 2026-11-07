@@ -10,6 +10,8 @@ block_definition($name)	"{name} is defined inside a block: functions are not sco
 constant_assignment($name)	"{name} is a constant: declared with let or const, it binds once; declare it `var {name} = …` for a variable"	"var {name}"
 # decision library-constant-refused: a library constant assigned at the top level, `pi = 4` (source_checks.warp)
 library_constant($name)	"{name} is a constant"	"another name"
+# decision literal-targets: a value assigned or counted, `1 = 2`, `1++` (source_checks.warp)
+literal_target($value, $op, $fix)	"{value} is a value, not a variable: {op} changes a variable"	"{fix}"
 # decision path-after-operand: `width /height` with height a variable reads /height as a path (source_checks.warp)
 division_path($before, $name)	"{before} /{name} gives {before} the path /{name}: write {before} / {name} for division"	"{before} / {name}"
 # a function changing a main-level variable not declared global (main_globals.warp)

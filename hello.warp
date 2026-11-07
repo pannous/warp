@@ -1,3 +1,2 @@
 #!/usr/bin/env warp
 "hi"
-1 ++ 3
