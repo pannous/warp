@@ -12,3 +12,18 @@ public post(url: any, body: any, headers: any) := std_io("net", "post", [url, bo
 global fetch(url: text) := fetched_value(std_io("net", "get", [url]))
 fetched_value(answer) := if answer is text and is_json_shaped(answer) then json(answer) else answer
 is_json_shaped(answer: text): bool := trim(answer).starts_with("[") or trim(answer).starts_with("{")
+
+// `users := fetch url` at the main level (extensions/fetch_signals.warp, card fetch-users-async): the answer given to
+// reply once it is in. The page starts the request and goes on (std_io's net.start answers ø), rendering the page anew
+// when the answer arrives by fetch_answered (web/playground/host-timers.js); the native warp answers at once
+global fetch_replies = []
+global fetch_later(url: text, reply: function) := {
+	fetch_replies.add(reply)
+	answer = std_io("net", "start", [url, count(fetch_replies)])
+	if answer != ø { reply(fetched_value(answer)) }
+}
+// the reply named before its call: `fetch_replies#id(answer)` calls no function (lib/timers.warp timer_fired)
+export fetch_answered(id: int, answer: any) := {
+	reply = fetch_replies#id
+	reply(fetched_value(answer))
+}
