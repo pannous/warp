@@ -904,7 +904,9 @@ def brush_wrong():
 	`while window_open` loop runs only once the page was clicked (playground.js tellSystemValues), so a real click first;
 	the sample then runs until stopped, so it is started, not waited for, and checked last (a check after it found
 	the page still busy with it)"""
-	if not webdriver:  # Firefox has no WebGPU here: the sample's error is the skip below
+	# Firefox's driver clicks for real too, now that its WebGPU paints the brush; Safari's has no click: without WebGPU
+	# the sample's error is the skip below
+	if not isinstance(webdriver, SafariDriver):
 		browser("click", "#output")
 	browser("eval", f"void playground.chooseExample({json.dumps(BRUSH_SAMPLE)})")
 	shown = browser("eval", f"""(async () => {{
