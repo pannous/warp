@@ -94,8 +94,9 @@ shown_big_int(n: Node): text := {
 	made_case(Made.BigInt, big_int_text(n))
 	fail()
 }
-# an exact rational as Rust shows it: a terminating one (its denominator 2^a·5^b) as decimal digits, 7/2 as 3.5,
-# any other as n/d
+# an exact rational as it shows: a written fraction (is_fraction) as n/d, 1/3; any other, a quotient of values
+# (decision fraction-written-form), as decimal digits, exactly where it terminates (its denominator 2^a·5^b, 7/2 as
+# 3.5), else a float's shortest ones, `a / 6` of 37 as 6.166666666666667
 exact_text(n: Node): text := {
 	made_case(Made.BigInt, big_exact_text(n))
 	# an Int that is no ratio: a plain int, else a big int, whose text a program without one never compiles (shown_big_int)
@@ -105,7 +106,8 @@ exact_text(n: Node): text := {
 	twos = factor_count(denominator, 2)
 	fives = factor_count(denominator, 5)
 	fraction = is_fraction(n) and denominator < fraction_shown_denominator()
-	if fraction or denominator != int_pow(2, twos) * int_pow(5, fives) { return int_text(numerator) + "/" + int_text(denominator) }
+	if fraction { return int_text(numerator) + "/" + int_text(denominator) }
+	if denominator != int_pow(2, twos) * int_pow(5, fives) { return float_text(float(numerator) / float(denominator)) }
 	digits = max_int(twos, fives)
 	# numerator · 10^digits / denominator without the product beyond 64 bits: the denominator's missing twos and fives
 	scaled = numerator * power(2, digits - twos) * power(5, digits - fives)
