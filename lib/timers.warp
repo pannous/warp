@@ -25,34 +25,53 @@ rewrite on every $count $unit {} => timer_every($count $unit, () => ø)
 global timer_handlers = []
 timer_started(kind: int, argument: int, handler: function): int := {
 	timer_handlers.add(handler)
-	timer_periods.add(if kind == TIMER_EVERY then argument else 0)
+	timer_kinds.add(kind)
+	timer_arguments.add(argument)
 	timer_dues.add(0)
 	id = count(timer_handlers)
-	if id == 1 { listen(TIMER_TICK, now => timers_ticked(now), no) }
+	if id == 1 { listen(TIMER_TICK, wall => timers_ticked(wall), no) }
 	signal_listen(kind, id, argument)
 	id
 }
-// A page's window (`warp app`, lib/markup.warp page_window_run) runs the `every` timers itself, as its loop never returns
-// to the host's: each of its ticks, now in milliseconds since 1970, fires those due; the milliseconds till the next is
-// due back, -1 for none (a clock timer, `at 9:30`, runs only in the playground's page and after a native main yet)
+// A page's window (`warp app`, lib/markup.warp page_window_run) runs the timers itself, as its loop never returns to
+// the host's: each of its ticks, the local wall clock in milliseconds since 1970, fires those due; the milliseconds
+// till the next is due back, -1 for none. Each timer's due time on that clock: 0 not yet known, -1 a once timer done
 TIMER_TICK = "tick"
-global timer_periods = []
+DAY_MILLISECONDS = 86400000
+MINUTE_MILLISECONDS = 60000
+// 1970-01-01 was a Thursday, weekday 4 (bit 0 Sunday)
+FIRST_WEEKDAY = 4
+FIRED = -1
+global timer_kinds = []
+global timer_arguments = []
 global timer_dues = []
-timers_ticked(now: int): int := {
+timers_ticked(wall: int): int := {
 	wait = -1
 	for at in 0 ..< count(timer_handlers) {
-		period = timer_periods[at]
-		if period > 0 {
-			if timer_dues[at] == 0 { timer_dues[at] = now + period }
-			if now >= timer_dues[at] {
-				timer_dues[at] = max(timer_dues[at] + period, now)
-				timer_fired(at + 1)
-			}
-			left = timer_dues[at] - now
-			if wait < 0 or left < wait { wait = left }
+		if timer_dues[at] == 0 { timer_dues[at] = timer_due(at, wall) }
+		if timer_dues[at] != FIRED and wall >= timer_dues[at] {
+			// (an `every` timer keeps its beat; one fallen behind by more than its period goes on from now)
+			beat = timer_due(at, timer_dues[at])
+			timer_dues[at] = if timer_once(at) then FIRED else if beat > wall then beat else timer_due(at, wall)
+			timer_fired(at + 1)
 		}
+		if timer_dues[at] != FIRED and (wait < 0 or timer_dues[at] - wall < wait) { wait = timer_dues[at] - wall }
 	}
 	wait
+}
+timer_once(at: int): bool := timer_kinds[at] == TIMER_CLOCK and timer_arguments[at] /! WEEKDAYS_SHIFT == ONCE
+// when timer at is next due after the wall clock's after: its period on, or its minute of the next day it runs on
+timer_due(at: int, after: int): int := {
+	if timer_kinds[at] == TIMER_EVERY { return after + timer_arguments[at] }
+	weekdays = timer_arguments[at] /! WEEKDAYS_SHIFT
+	days = if weekdays == ONCE then EVERY_DAY else weekdays
+	midnight = after - after % DAY_MILLISECONDS
+	for ahead in 0 ..< 8 {
+		due = midnight + ahead * DAY_MILLISECONDS + timer_arguments[at] % WEEKDAYS_SHIFT * MINUTE_MILLISECONDS
+		weekday = (midnight /! DAY_MILLISECONDS + ahead + FIRST_WEEKDAY) % 7
+		if due > after and (days >> weekday) % 2 == 1 { return due }
+	}
+	after + 7 * DAY_MILLISECONDS
 }
 timer_every(period: any, handler: function): int := timer_started(TIMER_EVERY, floor(period / 1ms) as int, handler)
 // `9:30`, the pair of an hour and its minutes

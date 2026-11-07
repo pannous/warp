@@ -179,8 +179,8 @@ static BOOL pumped(BOOL (^done)(void), NSTimeInterval seconds) {
 	return done();
 }
 // `warpWindow.show(title)`: the run's view in a window; `warpWindow.next(milliseconds)`: the page's next event,
-// {event, detail, now} as JSON, else {event: "tick", now} once the milliseconds are over (none or -1: wait for an
-// event), now the milliseconds since 1970; nil once the window is closed. *failure says why it can't
+// {event, detail, wall} as JSON, else {event: "tick", wall} once the milliseconds are over (none or -1: wait for an
+// event), wall the local wall clock's milliseconds since 1970 (lib/timers.warp); nil once the window is closed. *failure says why it can't
 static NSString* window_answered(NSString* member, NSString* title, NSString* request, NSString** failure) {
 	if ([member isEqualToString:@"show"]) {
 		if (windows_refused()) *failure = @"no window under WARP_NO_WINDOW or CI";
@@ -212,7 +212,7 @@ static NSString* window_answered(NSString* member, NSString* title, NSString* re
 		[happened setDictionary:[NSJSONSerialization JSONObjectWithData:[page_events.firstObject dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil]];
 		[page_events removeObjectAtIndex:0];
 	}
-	happened[@"now"] = @((long long)(NSDate.date.timeIntervalSince1970 * 1000));
+	happened[@"wall"] = @((long long)((NSDate.date.timeIntervalSince1970 + NSTimeZone.localTimeZone.secondsFromGMT) * 1000));
 	return [[NSString alloc] initWithData:[NSJSONSerialization dataWithJSONObject:happened options:0 error:nil] encoding:NSUTF8StringEncoding];
 }
 
