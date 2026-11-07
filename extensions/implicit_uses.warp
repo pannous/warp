@@ -41,6 +41,7 @@ uncommented(source: text): text := {
 implicit_modules(source: text, folder: text = "."): list := {
 	index = library_index_section("word")
 	# a foreign line, `posix_spawnp(pid: out, …): i32 from 'c'`, names C's words: its function the program's own
+	foreign = source.split("\n").map(c_declaration).filter(d => d != ø).map(d => d#1)
 	source = source.split("\n").map(line => if c_declaration(line) != ø then "" else line).join("\n")
 	# (the texts read too, for the words in their holes, `"a ${clamp(x, 0, 3)}"`; one only in a text isn't free)
 	code = uncommented(source)
@@ -58,6 +59,8 @@ implicit_modules(source: text, folder: text = "."): list := {
 	for file in flat_statements(program).map(s => file_used(s, folder)).filter(file => file != ø) {
 		for slice in definition_slices(file_text(file) ?? "") { known[slice#1] = yes }
 	}
+	# and so do its foreign lines and a wasm module it uses: zlib's crc32(crc, buf, len) is no use of hash's crc32
+	for word in foreign + wasm_module_words(source, folder) { known[word] = yes }
 	globals = global_words()
 	providers = type_module_providers()
 	free = free_words(program)
@@ -82,7 +85,9 @@ implicit_modules(source: text, folder: text = "."): list := {
 }
 # whether only the modules' rules know the word, no definition: it names them where it leads a statement, never in
 # quoted code (`data(set width of p to 12)` brings no english)
-only_rules_lead(word: text, modules: list): bool := modules.all(module => not definition_slices(used_module_text(module)).any(slice => slice#1 == word))
+only_rules_lead(word: text, modules: list): bool := modules.all(module => not defines_word(used_module_text(module), word))
+# a definition of the word in the module's source, or its `alias ln => natural_log`
+defines_word(source: text, word: text): bool := definition_slices(source).any(slice => slice#1 == word) or module_aliases(source).has(word)
 # a statement led by a word a module's rule starts with: `stored users: [User]`, whose `stored` declares (sound's
 # `pattern` function never takes `pattern Pair = [_, _]`)
 leads_statement(program: Node, word: text, modules: list): bool := flat_statements(program).any(n => is_group(n) and #n > 0 and n#1 == symbol(word)) and modules.any(module => word in module_rule_heads(module))

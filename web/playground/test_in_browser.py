@@ -50,8 +50,8 @@ STOPPED = "stopped after"  # playground.js: the report of a run the page stopped
 # a section of a test file the browser cannot run (a C window library, a shell command) says why in its heading,
 # `# raylib_calls — native only: raylib, a C library the browser has not`: EXP instead of PAGE for the cases below it, up
 # to the next blank line (night decision N20, as the samples' EXPECTED_FAILURE; in the heading, as a line of its own
-# would move the cases' lines the native verdicts are stored by)
-NATIVE_ONLY = re.compile(r"^#.* native only: ")
+# would move the cases' lines the native verdicts are stored by); a sample with such a line is EXP instead of FAIL
+NATIVE_ONLY = re.compile(r"^#.* native only: ", re.M)
 CASE_PLACE = re.compile(r"^(\S+):(\d+) ")
 PAGE_LOST = "playground is not defined"  # a report of a page that lost its API mid-batch: no verdict, the case runs again
 # a test-verdicts line: its mark, then the case; a failure's ends in what it got (scripts/baseline.sh case_of)
@@ -1184,17 +1184,21 @@ def check_examples(names, page_url=None, site=None):
 # closed" for gpu_visualizer under load)
 # only the fields the verdict reads: a sample's whole report holds its pictures too, and a full-HD frame (samples/gpu/
 # ringed_planet.warp) as JSON took this process past the dry run's memory cap
-REPORT_FIELDS = ["error", "errors", "message", "value", "printed", "printedWhole", "text", "stream"]
+REPORT_FIELDS = ["error", "errors", "message", "value", "html", "printed", "printedWhole", "text", "stream", "paintings", "width", "height"]
 START_SAMPLE = """window.sampleReport = undefined; playground.evaluate(%s, %s).then(report => window.sampleReport = JSON.stringify(report, """ + json.dumps(REPORT_FIELDS) + """),
 	failure => window.sampleReport = JSON.stringify({ error: true, value: String(failure) })); "started";"""
 SAMPLE_POLL_SECONDS = 0.5
+# a window sample (WIN) still animating this long after it started (a raylib window's loop, natively until Escape) is
+# stopped and judged by the frames it showed (playground.js stopAnimation); other samples run to their end
+WINDOW_ANIMATION_SECONDS = 5
 
 
 def page_output(report):
-	"""what the page shows as the native warp prints it: the program's stdout, then its value unless that is ø"""
+	"""what the page shows as the native warp prints it: the program's stdout, then its value unless that is ø; a page of
+	markup its HTML (driver.js pageHtml), as the native warp prints page_render's"""
 	# printedWhole: every frame's output (playground.js shows only an animation's last frame, its `printed`)
 	printed = "".join(part["text"] for part in report.get("printedWhole", report.get("printed", [])) if part.get("stream", 1) == 1)
-	value = report.get("value") or ""
+	value = report.get("html") or report.get("value") or ""
 	if value in ("ø", "") or report.get("error"):
 		return printed
 	return printed + value + "\n"  # as the native warp shows it, a text in its quotes
@@ -1216,27 +1220,43 @@ def sample_verdict(report, native_output):
 	return "DIFF", f"page: {shown[:SHOWN_DIFFERENCE]!r}\n     native: {native_output[:SHOWN_DIFFERENCE]!r}"
 
 
-def page_report(source, path, page_url):
+def window_verdict(report):
+	"""(status, detail) of a sample opening a C library's window (raylib, SDL), which natively has no output to compare
+	(scripts/samples.sh WIN): drew when the page ran it and showed its frames (host-media.js windowShown)"""
+	status, detail = sample_verdict(report, "")
+	if status in ("FAIL", "TIME"):
+		return status, detail
+	paintings = report.get("paintings") or []
+	if not paintings:
+		return "FAIL", "it drew nothing in the page"
+	return "drew", f"{paintings[-1].get('width')}×{paintings[-1].get('height')}"
+
+
+def page_report(source, path, page_url, animation_seconds=None):
 	"""the page's report of the sample; a page that gave none (its renderer crashed, now and then after many runs) is
 	opened anew and asked once more, so only a sample that fails twice in a fresh page counts as stuck"""
 	for attempt in range(2):
-		report = sample_answer(source, path)
+		report = sample_answer(source, path, animation_seconds)
 		if "stuck" not in report:
 			return report
 		open_samples_page(page_url)
 	return report
 
 
-def sample_answer(source, path):
-	"""the report of the sample started in the page, {stuck} when none came in SAMPLE_ANSWER_SECONDS"""
+def sample_answer(source, path, animation_seconds=None):
+	"""the report of the sample started in the page, {stuck} when none came in SAMPLE_ANSWER_SECONDS; an animation
+	stopped after `animation_seconds`, when given"""
 	started = browser("eval", START_SAMPLE % (json.dumps(source), json.dumps(path)))
 	if started != '"started"' and wait_for_playground():  # the page was still (re)loading: its API came since
 		started = browser("eval", START_SAMPLE % (json.dumps(source), json.dumps(path)))
 	if started != '"started"':
 		return {"error": True, "stuck": None, "value": f"(the page did not start it: {(started or browser_complaint)[:200]})"}
-	deadline = time.time() + SAMPLE_ANSWER_SECONDS
+	started_at = time.time()
+	deadline = started_at + SAMPLE_ANSWER_SECONDS
 	while time.time() < deadline:
 		time.sleep(SAMPLE_POLL_SECONDS)
+		if animation_seconds is not None and time.time() - started_at > animation_seconds:
+			browser("eval", "playground.stopAnimation()")
 		answer = browser("eval", "window.sampleReport ?? null")
 		if answer not in ("null", ""):
 			try:
@@ -1268,8 +1288,12 @@ def wait_for_playground():
 def check_samples(paths, tree):
 	"""every sample (or the given ones) in the page served from `tree`, its output against the native run's"""
 	native = dict(line.split(None, 1)[::-1] for line in open(os.path.join(tree, NATIVE_RESULTS), encoding="utf-8").read().split("\n") if line.strip() and not line.startswith("#"))
-	native = {path.strip(): status for path, status in native.items()}
-	paths = paths or sorted(native)
+	# a failure's line names its reason after the path (scripts/samples.sh): `FAIL samples/x.warp: <reason>`
+	native = {path.split(":", 1)[0].strip(): status for path, status in native.items()}
+	# a run of some samples leaves the tracked results alone
+	written = not paths
+	# a sample removed since the native run is not in the tree any more
+	paths = paths or sorted(path for path in native if os.path.isfile(os.path.join(tree, path)))
 	data = os.path.join(tree, SAMPLES_WEB_DATA)
 	os.makedirs(os.path.join(data, "out"), exist_ok=True)
 	server = serve(tree)
@@ -1278,30 +1302,30 @@ def check_samples(paths, tree):
 	lines, details = [], []
 	for path in paths:
 		output_name = path.replace("/", "_") + ".txt"
-		if native.get(path) == "WIN":
-			status, detail = "WIN", "needs a C window library"
+		source = open(os.path.join(tree, path), encoding="utf-8").read()
+		window = native.get(path) == "WIN"
+		report = page_report(source, path, page_url, WINDOW_ANIMATION_SECONDS if window else None)
+		if window:
+			status, detail = window_verdict(report)
 		else:
-			source = open(os.path.join(tree, path), encoding="utf-8").read()
-			report = page_report(source, path, page_url)
 			native_file = os.path.join(tree, NATIVE_OUTPUTS, output_name)
 			compared = native.get(path) == "ok" and os.path.isfile(native_file)
 			native_output = open(native_file, encoding="utf-8", errors="replace").read() if compared else None
 			status, detail = sample_verdict(report, native_output)
-			if status == "FAIL" and EXPECTED_FAILURE.search(source):
-				status = "EXP"
-			with open(os.path.join(data, "out", output_name), "w", encoding="utf-8") as shown:
-				shown.write(page_output(report) if not report.get("error") else str(report.get("value")))
+		if status == "FAIL" and (EXPECTED_FAILURE.search(source) or NATIVE_ONLY.search(source)):
+			status = "EXP"
+		with open(os.path.join(data, "out", output_name), "w", encoding="utf-8") as shown:
+			shown.write(page_output(report) if not report.get("error") else str(report.get("value")))
 		print(f"{status:<4} {path}" + (f": {detail}" if detail and status != "ok" else ""))
 		lines.append(f"{status:<4} {path}")
 		details.append(f"{status:<4} {path}" + (f"\n     {detail}" if detail else ""))
 	browser("close")
 	server.shutdown()
-	written = len(paths) == len(native)  # a run of some samples leaves the tracked results alone
 	if written:
 		open(os.path.join(tree, SAMPLES_WEB_RESULTS), "w", encoding="utf-8").write("\n".join(lines) + "\n")
 	# a run of some samples keeps the whole run's report too
 	open(os.path.join(data, "report.txt" if written else "report-some.txt"), "w", encoding="utf-8").write("\n".join(details) + "\n")
-	counts = {status: sum(line.startswith(status) for line in lines) for status in ("ok", "DIFF", "FAIL", "EXP", "TIME", "ran", "WIN")}
+	counts = {status: sum(line.startswith(status) for line in lines) for status in ("ok", "drew", "DIFF", "FAIL", "EXP", "TIME", "ran", "WIN")}
 	print(f"samples in the page: {counts['ok']} of {len(lines)} print what the native warp prints; " + ", ".join(f"{count} {status}" for status, count in counts.items() if count and status != "ok") + (f" -> {os.path.join(tree, SAMPLES_WEB_RESULTS)}" if written else ""))
 
 

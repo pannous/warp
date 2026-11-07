@@ -30,7 +30,7 @@ collection_position(t: text, part): int from warp
 slice(xs: list, start, end = ø): list from warp
 slice(t: text, start, end = ø): text from warp
 field_with(object, name, value): same as object from warp
-instance_copy(x, shallow): same as x from warp
+instance_copy(x): same as x from warp
 wasi_environment(): text from warp
 
 // The builtins the emitter expands in place, without a runtime function (card typed-builtins): their signatures and
@@ -41,10 +41,6 @@ count(m: map): int from emitter
 byte_size(x): int from emitter
 type(x): symbol from emitter
 print(values...): nothing from emitter
-// fetch(url): the text a GET of the url answers, through the adapter std_io as lib/net.warp's post (the page answers
-// it with a request; the native warp has no HTTP client yet and says so: no declared result, so that error comes through
-// as itself, not as a failed cast to text)
-fetch(url: text) := std_io("net", "get", [url])
 // the builtin methods of lists, texts and maps (members.rs), each a function value like the others (card dir-lists)
 // over a text they take its characters; a map has no overload (`map(m, f)` would see its entries)
 map(xs: list, f: (any) -> any): list from emitter
@@ -184,6 +180,8 @@ alias size => count
 alias len => count
 alias length => count
 alias sorted => sort
+alias squared => square
+alias cubed => cube
 alias clone => copy
 alias ordinal => ord
 alias codepoint => ord
@@ -250,7 +248,9 @@ operator_laws = {"+": {associative: yes, identity: 0}, "*": {associative: yes, i
 // own sum: rust-harness:src/lowering/words/library_words.rs)
 // `list or number`, not `list`: a list parameter gets the items as a $list, so a range would make all of them first;
 // not `any`, which takes a yes/no: `sum xs == 3` would be sum(xs == 3) (card xs-sum). Of one number that number, as max
-sum(xs: list or number) := if is_range(xs) then range_sum(xs) else if xs is number then xs else fold(xs, 0, +)
+// A list sums from its first item, so a class's own + adds its items (decision class-operators-generic):
+// `sum([5km, 1500m])` is 6.5km; an empty list sums to 0
+sum(xs: list or number) := if is_range(xs) then range_sum(xs) else if xs is number then xs else if count(xs) == 0 then 0 else fold(xs[1 ..], xs#1, +)
 // `sum 1 2 3`, `sum(1, 2, 3)`: the numbers given, as max takes them (lib/extrema.warp)
 sum(a: number, b: number, more...): number := fold([a, b] + more, 0, +)
 // dir(v) of a value only the run knows (extensions/sugar/reflection.warp gives the words of a list, a text and a map): a map's
@@ -279,12 +279,25 @@ rewrite ($xs: [u32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(u32, 
 mean(xs) := if count(xs) == 0 then raise "mean of an empty list" else sum(xs) / count(xs)
 // the UTF-8 bytes of a text, `t.bytes` (decision text-unit-plurals)
 bytes(t: text) := (0..byte_size(t)).map(at => byte_at(t, at))
+// `for byte in t` (decision loop-variable): the value walked by that unit when its type has one, a text's bytes,
+// chars or code points, a map's [key, value] pairs; else by its own items, a map's keys, a list's items (a list of bytes
+// stays one), so the loop needs no type at the sugar
+walked_by(value: any, unit: text): list := {
+	if value is text { return if unit == "bytes" then bytes(value) else if unit == "codepoints" then code_point_list(value) else chars(value) }
+	if value is map { return if unit == "pairs" then map_keys(value).map(key => [key, value[key]]) else map_keys(value) }
+	value
+}
 // x↑n, Knuth's up arrow, is the power and x↓b the log of x to base b (card easy-add): operators of numbers only, so
 // another type declares its own `infix operator ↑(v: V, n: int) := …`
 infix operator ↑(x: number, n: number) := x ^ n
 infix operator ↓(x: number, b: number) := log(x, b)
 // the logarithm of x to the base: log(100, 10) is 2
 log(x: number, base: number): float := log(x) / log(base)
+// the natural logarithm, a standard word without `use math`, as sin is (math's alias ln => natural_log maps it over lists)
+ln(x: number): float := log(x)
+// `3 squared`, `2 cubed` (suffix words, decision postfix-words)
+square(x: number): number := x * x
+cube(x: number): number := x * x * x
 // ∜x (lib/math.warp prefix operator)
 fourth_root(x) := sqrt(sqrt(x))
 fourth_root(x: float): float := sqrt(sqrt(x))
@@ -413,6 +426,17 @@ nearest(x, kind, limit = 1000000, within = 0) := {
 }
 // Python's dict(pairs) (card python-stdlib): a map of [key value] pairs
 dict(pairs) := { out = {}; for pair in pairs { out[pair#1] = pair#2 }; out }
+// copy(x), clone(x): a value of its own that a change to x no longer reaches (decisions P205-P207): deep, each
+// field, item and entry copied too; copy(x, shallow: yes) is a new one sharing what x holds. A copy keeps its class
+copy(x, shallow: bool = no) := {
+	if x is list { return x.map(item => copy_item(item, shallow)) }
+	made = if x is map then {} else instance_copy(x)
+	# (neither a map nor an instance: a number, a text, … is a value of its own)
+	if made === x { return x }
+	for name in keys(x) { made[name] = copy_item(x[name], shallow) }
+	made
+}
+copy_item(item, shallow: bool) := if shallow then item else copy(item)
 // Python's dict.fromkeys(ks, value) (card python-aliases): a map of each key with the one value
 fromkeys(ks, value) := { out = {}; for k in ks { out[k] = value }; out }
 // Python's xs.pop(i) and m.pop(k) (card python-aliases, declaration_lowering removed_key): the element at the 0-based
@@ -448,9 +472,6 @@ paint_each(f, width, height) := {
 // paint(pixels, width, height) of a list of pixels, row by row, as the host paints them; of a WGSL shader text, as the
 // host renders it; of a function, f(column, row) of each pixel on the CPU (paint_each)
 paint(picture, width, height) := if picture is list or picture is text then paint(picture, width, height, ø) else paint_each(picture, width, height)
-// paint(f, width, height) of a program function: its shader on the GPU, else f of each pixel on the CPU (the rules
-// at the sum rules above)
-paint_shader(painting: map, width, height, f) := if gpu_paints() then paint(painting.shader as text, width, height, shader_values(painting.uniform)) else paint_each(f, width, height)
 // the program values a shader reads as the plain floats it takes: a quantity by its amount in SI base units, an angle in
 // radians, each item of a vector (decision no-units-in-shaders: a shader ignores units)
 shader_values(values) := {
@@ -514,6 +535,10 @@ dark_mode() := system_value("dark mode") != 0
 mouse_x() := system_value("mouse_x") as float
 mouse_y() := system_value("mouse_y") as float
 mouse_down() := system_value("mouse_down") != 0
+// where the button went down, while it is down: a stroke starts there, though a frame polling mouse_x saw the pointer
+// move on first; while it is up (and without a window), where the pointer is
+mouse_down_x() := if mouse_down then system_value("mouse_down_x") as float else mouse_x
+mouse_down_y() := if mouse_down then system_value("mouse_down_y") as float else mouse_y
 mouse_wheel() := system_value("mouse_wheel")
 key_down() := system_value("key_down") != 0
 window_open() := system_value("window_open") != 0
@@ -620,6 +645,58 @@ is!(warp: text, expected: any) := {
 	passed = got == expected or (not got and not expected)
 	if not passed then print("✗ is! \"" + warp + "\" " + text(expected) + ": got " + text(got))
 	passed
+}
+
+// `300 as! byte` is 44: the low 8 bits, in 0..255 (decision checked-forced-conversions). A text is not a byte:
+// parsing has no forced rule, so "200" as! byte refuses
+byte_wrapped(n) := {
+	if n is text or n is list or n is map { raise "no forced conversion to byte of that value" }
+	whole = n as! int
+	rest = whole % 256
+	if rest < 0 then rest + 256 else rest
+}
+
+// bytes as! text: invalid UTF-8 becomes U+FFFD, one replacement per bad byte. from_utf8 stays strict
+lossy_utf8(bytes) := {
+	if not (bytes is list) { raise "no forced conversion to text of that value" }
+	out = ""
+	i = 0
+	total = count(bytes)
+	while i < total {
+		b = bytes[i]
+		length = if not (b is int) or b < 0 or b > 255 then 0 else if b < 128 then 1 else if b >= 194 and b < 224 then 2 else if b >= 224 and b < 240 then 3 else if b >= 240 and b < 245 then 4 else 0
+		if length == 0 or i + length > total {
+			out = out + chr(65533)
+			i = i + 1
+		} else {
+			n = if length == 1 then b else if length == 2 then b % 32 else if length == 3 then b % 16 else b % 8
+			ok = yes
+			if length > 1 {
+				for k in 1 to length - 1 {
+					c = bytes[i + k]
+					if not (c is int) or c < 128 or c > 191 { ok = no } else { n = n * 64 + c % 64 }
+				}
+			}
+			if not ok or (length == 3 and n < 2048) or (length == 4 and (n < 65536 or n > 1114111)) or (n >= 55296 and n <= 57343) {
+				out = out + chr(65533)
+				i = i + 1
+			} else {
+				out = out + chr(n)
+				i = i + length
+			}
+		}
+	}
+	out
+}
+// `x as! T` is convert!(x, to: T), the target a value (decision checked-forced-conversions, convert-bang): one
+// definition for every target the prelude forces, as typed parameters cannot tell targets apart; T a type or its
+// symbol (`as!` passes symbol("byte")), named alike
+byte_names = ["byte", "u8", "uint8"]
+convert!(value, to) := {
+	target = to.name
+	if byte_names.contains(target) { return byte_wrapped(value) }
+	if target == "text" { return lossy_utf8(value) }
+	raise "no forced conversion to " + target + " of that value"
 }
 
 // The class of every error (decision error-classes): `class ParseError: Error` declares one, `except Error` catches all
@@ -823,14 +900,15 @@ find_matches(value: any, pattern: any): list := {
 	}
 	found
 }
-// `value replace pattern with template`: the items and fields replaced first, then the value itself where it fits,
-// the template's names its bindings
+// `value replace pattern with template`: the items, fields and code parts replaced first (`n * 1 + k * 1`'s two
+// products), then the value itself where it fits, the template's names its bindings
 replace_matches(value: any, pattern: any, template: any): any := {
 	inner = value
-	if is_type(value, "list") { inner = value.map(item => replace_matches(item, pattern, template)) }
+	if is_type(value, "key") { inner = key(replace_matches(key_of(value), pattern, template), op_of(value), replace_matches(value_of(value), pattern, template)) }
+	else if is_type(value, "list") { inner = value.map(item => replace_matches(item, pattern, template)) }
 	else if is_type(value, "map") {
 		inner = {}
-		for key in value.keys { inner[key] = replace_matches(value[key], pattern, template) }
+		for field in value.keys { inner[field] = replace_matches(value[field], pattern, template) }
 	}
 	bound = pattern_bindings(inner, pattern)
 	if bound == ø then inner else instantiated(template, bound)
@@ -853,6 +931,19 @@ converted_to_pattern(value: any, pattern: any): any := {
 	}
 	if pattern_bindings(value, pattern) == ø { raise "the value does not fit the pattern it converts to" }
 	value
+}
+// `{port: "80", extra: 1} as! Config`: the fields the pattern does not name are dropped, then it converts as `as` does
+kept_pattern(value, pattern) := {
+	if bracket_of(pattern) == "{" and is_type(value, "map") {
+		kept = {}
+		for i in 0..<#pattern {
+			field = pattern#(i + 1)
+			name = if is_type(field, "symbol") then name_of(field) else if is_optional_field(field) then name_of(field#1) else if is_type(field, "key") then field_key(field) else ø
+			if name != ø and name in value { kept[name] = value[name] }
+		}
+		return converted_to_pattern(kept, pattern)
+	}
+	converted_to_pattern(value, pattern)
 }
 // a map pattern's field name: `port` of `port: int`
 field_key(field: any): any := if is_type(key_of(field), "symbol") then name_of(key_of(field)) else key_of(field)

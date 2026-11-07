@@ -13,6 +13,11 @@ wall_clock_ms(): int := {
 	nanos /! nanos_per_milli
 }
 
+// a span of time in milliseconds, which moves an Instant: a plain number is one (`Instant(0) + 2`), lib/units converts
+// its quantities of time (`Instant(0) + 2 seconds`), one of another dimension a DimensionError (card instant-typed-duration)
+class Duration { ms: number }
+n: number as Duration := Duration(n)
+
 // a point in time: milliseconds since 1970-01-01T00:00:00Z. Everything on it is plain warp: ordering through
 // compare (<, <=, >, >=), equality structural, the difference of two instants in milliseconds, a duration in
 // milliseconds added or taken away, and its text in RFC 3339 (print, `"at " + now`)
@@ -20,7 +25,7 @@ class Instant {
 	ms: int
 	// another Instant: the earlier first. A duration (`now > 9.hours`, `now > 17h`) compares the matching part
 	// (decision time-word, Interviewer REVISION 2026-11-05): under a day the time of day, else the day of the month
-	compare(other) := if other is Instant then ms - other.ms else instant_part_compare(ms, other)
+	compare(other: Instant or number or Duration) := if other is Instant then ms - other.ms else if other is number then bare_number_refused(other) else instant_part_compare(ms, other)
 	// its calendar fields, UTC: now.year, now.month, now.day, now.hour, now.minute, now.second
 	year() := date_of(ms).year
 	month() := date_of(ms).month
@@ -28,22 +33,19 @@ class Instant {
 	hour(): int := ms % 86400000 /! 3600000
 	minute(): int := ms % 3600000 /! 60000
 	second(): int := ms % 60000 /! 1000
-	minus(other) := if other is Instant then ms - other.ms else Instant(ms - milliseconds_of(other))
-	plus(duration) := Instant(ms + milliseconds_of(duration))
+	minus(other: Instant or Duration) := if other is Instant then ms - other.ms else Instant(ms - other.ms)
+	plus(duration: Duration) := Instant(ms + duration.ms)
 	// RFC 3339 in UTC, the milliseconds without trailing zeros: 2026-10-25T11:43:40.692Z, 2026-10-25T11:43:40.5Z
 	text() := format_date(ms) + "T" + format_time(ms) + millis_fraction(ms % 1000) + "Z"
 }
-// a duration as milliseconds: a plain number is one already; lib/units overloads it for its quantities, `2 seconds`
-// and `1h` counted in ms, one of another dimension a DimensionError
-milliseconds_of(duration: any) := duration
-// a duration (`now > 9.hours`) compared with the matching part, with a warning: a bare duration is mostly a clock
-// time meant; a plain number is milliseconds since 1970
-instant_part_compare(ms: int, other: any): int := {
-	if other is number { return ms - other }
-	// a lib/units duration quantity, counted in whole milliseconds
-	d = int(milliseconds_of(other))
-	if d < 86400000 { warning("comparing an Instant with the duration " + other + " compares the time of day: did you mean " + clock_words(d) + "?") }
-	else { warning("comparing an Instant with the duration " + other + " compares the day of the month") }
+// a bare number beside an Instant names no unit (decision instant-bare-number): `t > 5` is refused
+bare_number_refused(n: number) := raise "" + n + " what? write t > " + n + " h, or " + n + " AM"
+// a duration (`now > 9.hours`, `now > 17h`) compared with the matching part, with a warning: a bare duration is
+// mostly a clock time meant
+instant_part_compare(ms: int, other: Duration) := {
+	d = int(other.ms)
+	if d < 86400000 { warning("comparing an Instant with the duration " + format_duration(d) + " compares the time of day: did you mean " + clock_words(d) + "?") }
+	else { warning("comparing an Instant with the duration " + format_duration(d) + " compares the day of the month") }
 	instant_part(ms, d) - d
 }
 // the matching part of an Instant's milliseconds for a duration of d ms: the time of day under a day, else the day of
@@ -65,13 +67,13 @@ millis_fraction(millis): text := {
 	"." + two_digits(millis /! 10) + millis % 10
 }
 
-day_number(ms): int := ms /! 86400000
+day_number(ms: int): int := ms /! 86400000
 // the date of milliseconds as {year, month, day} (lib/prelude.warp civil_from_days)
-date_of(ms) := civil_from_days(day_number(ms))
+public date_of(ms: int) := civil_from_days(day_number(ms))
 // ISO weekday: Monday 1 … Sunday 7
-weekday(ms): int := (day_number(ms) + 3) % 7 + 1
-today() := date_of(clock())
-add_days(ms, n) := ms + n * 86400000
+weekday(ms: int): int := (day_number(ms) + 3) % 7 + 1
+public today() := date_of(clock())
+public add_days(ms, n) := ms + n * 86400000
 days_between(from, to): int := day_number(to) - day_number(from)
 two_digits(n): text := if n < 0 then "-" + two_digits(0 - n) else if n < 10 then "0" + n else "" + n
 // ISO 8601: 2026-10-07

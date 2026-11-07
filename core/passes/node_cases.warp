@@ -119,7 +119,7 @@ spelled_equality(left: Node, op: Node, right: Node, n: Node, declared: map): Nod
 	if not is_name(other_side) { return Key(spelled_text(enum_name, left, declared), op, spelled_text(enum_name, right, declared)) }
 	# a case is made once (emitter local_value), so the very case is the one node: no call of Op·is, no bytes compared
 	# (decision enum-identity, card enum-cases)
-	tested = Key(call_of("same_node", [other_side, case_side]), Op.Or, Key(other_side, Op.Eq, spelled_text(enum_name, case_side, declared)))
+	tested = Key(call_of("same", [other_side, case_side]), Op.Or, Key(other_side, Op.Eq, spelled_text(enum_name, case_side, declared)))
 	if op == Op.Ne then Key(ø, Op.Not, tested) else tested
 }
 
@@ -190,7 +190,7 @@ spelling_functions(enum_name: text): list := {
 	compared = matched(value, cases.map(case => Key(qualified_case(enum_name, case), Op.Colon, spelling(enum_name, case))) + [other], ø, cases)
 	# a case is made once (decision enum-identity): the very node is found by ref.eq, the match comparing each in turn
 	# only after that (node_equal per arm was 15% of a rebuild)
-	to_text = cases.reverse().fold(compared, (rest, case) => chosen(call_of("same_node", [value, qualified_case(enum_name, case)]), spelling(enum_name, case), rest))
+	to_text = cases.reverse().fold(compared, (rest, case) => chosen(call_of("same", [value, qualified_case(enum_name, case)]), spelling(enum_name, case), rest))
 	is_spelling = Key(type_test(value, "text"), Op.Or, type_test(value, "codepoint"))
 	cases_by_spelling = symbol(spelled_function(enum_name, "cases"))
 	every_case = List(cases.map(case => Key(spelling(enum_name, case), Op.Colon, qualified_case(enum_name, case))), Bracket.Curly, Separator.Comma)
@@ -220,9 +220,9 @@ comparing_functions(enum_name: text): list := {
 	spelled_of = side => chosen(type_test(side, "symbol"), applied(text_of, side), side)
 	is_case = chosen(type_test(value, "symbol"), Key(value, Op.Eq, case_written), Key(value, Op.Eq, symbol("case_spelled")))
 	both_cases = Key(type_test(value, "symbol"), Op.And, type_test(other, "symbol"))
-	same = chosen(both_cases, Key(value, Op.Eq, other), Key(spelled_of(value), Op.Eq, spelled_of(other)))
+	compared = chosen(both_cases, Key(value, Op.Eq, other), Key(spelled_of(value), Op.Eq, spelled_of(other)))
 	[Key(call_of(spelled_function(enum_name, "is"), [value, case_written, symbol("case_spelled")]), Op.Define, is_case),
-		Key(call_of(spelled_function(enum_name, "same"), [value, other]), Op.Define, same)]
+		Key(call_of(spelled_function(enum_name, "same"), [value, other]), Op.Define, compared)]
 }
 
 # whether the enum, `op: Op`, a case of it, `Op.Add`, or a spelling function, `Op·text(x)`, occurs anywhere in n

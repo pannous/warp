@@ -66,13 +66,13 @@ global file_texts = {}
 
 # modules/index.tsv: what a compile has to know of the standard library before a program's uses are resolved, a cache
 # derived from lib/ by `warp rebuild` beside the modules it prebuilt (notes/library_zero_bake.md L2): the words taking
-# a block last, the global words, classes, tags and constants of the top modules, the words each module defines (implicit uses),
+# a block last, the global words, classes, tags, constants and class-typed constants of the top modules, the words each module defines (implicit uses),
 # the words each module's rules need, the host lines, each module's source hash, lib/aliases.warp's entries, the
 # sugar's files and the cuts of the modules every compile reads (prelude_words.warp slices_of). A line `<section>\t<key>\t<value>`,
 # read once a compile (scanning the modules' texts was the compiler's baked tables, or ~5 ms of a small compile).
 # Without one (the seed's build, a fresh lib/) a section is scanned off lib/ where it runs
 LIBRARY_INDEX = "index.tsv"
-INDEX_SECTIONS = ["block", "global", "class", "tag", "const", "word", "needs", "host", "hash", "alias", "sugar", "slice"]
+INDEX_SECTIONS = ["block", "global", "class", "tag", "const", "typed", "word", "needs", "host", "hash", "alias", "sugar", "slice"]
 # the modules beside the runtime a compile runs behind, as the modules it links (compiler.warp linked_libraries)
 index_file(): text := modules_file(LIBRARY_INDEX)
 modules_file(name: text): text := folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + name
@@ -100,6 +100,7 @@ index_section_scanned(section: text): map := match section {
 	"class": declarations_scanned(library_on_disk())["classes"]
 	"tag": declarations_scanned(library_on_disk())["tags"]
 	"const": declarations_scanned(library_on_disk())["constants"]
+	"typed": declarations_scanned(library_on_disk())["typed"]
 	"word": module_word_definers()
 	"needs": scanned_rule_needs()
 	"host": host_lines_in(library_on_disk())
@@ -135,6 +136,19 @@ module_hashes(): map := {
 # a text's length and the host's sha256 of its bytes (djb2 in warp, ~1.3 K instructions a byte, was 5 % of a compile
 # under WARP_LIB, card signature-sha256)
 source_hash(source: text): text := "${#source}-" + std_pure("hash", "sha256", [source])
+# what a prebuilt module is built of: its own text, then those of the modules it uses, transitively, each once; so an
+# edit of lib/reals.warp makes units.wasm, which compiled reals in, stale as an edit of units.warp does
+built_of_texts(module: text): text := {
+	texts = []
+	for reached in modules_reached(module, []) { texts += [file_text(std_module_path(reached)) ?? ""] }
+	texts.join("\n")
+}
+modules_reached(module: text, seen: list): list := {
+	if module in seen { return seen }
+	seen += [module]
+	for used in used_modules(file_text(std_module_path(module)) ?? "") { seen = modules_reached(used, seen) }
+	seen
+}
 # the index and the sugar's rules packed as lib/ lies now, written into the modules folder; this run goes on with
 # them, the host words made anew
 write_library_index(folder: text) := {

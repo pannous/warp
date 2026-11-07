@@ -5,6 +5,3 @@ is! 'class friend{n:int}; class foe{n:int}; xs=[friend(1), foe(2), friend(3)]; s
 is! 'class friend{n:int}; class foe{n:int}; xs=[friend(1), foe(2), friend(3)]; c=0; for friend in xs: c += 1
 c' 2
 
-# test_a_condition_loop_visits_only_matching_items
-# triage-held 2026-11-06: desk-invented loop heads (for (it%2==0) in xs:, all xs > 2: …) :: is! 's=0; for (it%2==0) in [1,2,3,4]: s += it
-# :: s' 6

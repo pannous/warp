@@ -1,0 +1,5 @@
+# a style sheet and an inline style are data: a selector stays a word, a style reading a changed variable is live (card tour-style-selectors)
+'use web; done = no; page = style{ .done{ color: "green" } }; render page'	'<style>.done { color: green }</style>'
+'use web; done = no; page = style{ .done { color: "green" } }; render page'	'<style>.done { color: green }</style>'
+'use web; d = no; page = div{ button{ on click { d = yes }, "x" } p{ style: { color: (if d then "white" else "black") } "a" } }; render page; click "x"'	'<div><button data-warp-click="1">x</button><p style="color: white">a</p></div>'
+'use web; dark = no; page = div{ style{ ".card": { padding: 8 } } button{ on click { dark = not dark }, "dark" } p{ class: "card" "a" } }; render page'	'<div><style>.card { padding: 8px }</style><button data-warp-click="1">dark</button><p class="card">a</p></div>'

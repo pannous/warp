@@ -109,7 +109,7 @@ answer_header(name: any, value: any): any := {
 	else if field == "content-type" { answer_content_type = str(value) }
 	else { answer_header_lines = answer_header_lines + "\n" + str(name) + ": " + str(value) }
 }
-answer_reset(): any := {
+public answer_reset(): any := {
 	answer_status = 200
 	answer_content_type = ""
 	answer_header_lines = ""
@@ -124,7 +124,7 @@ route_add(method: text, path: any, answer: function): any := {
 	route_table += [{method: method, path: path, answer: answer}]
 	ø
 }
-route_answer(request: any): any := {
+public route_answer(request: any): any := {
 	for route in route_table {
 		if route.method == request.method and route.path == request.path { return route.answer(request) }
 	}

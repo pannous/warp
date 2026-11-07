@@ -1,0 +1,7 @@
+# lib/shaders.warp's rules that run code at compile time, a rule word of extensions/rules/rule_words.warp: the compiler
+# keeps them, taken with the module's own (rewrites.warp module_rule_paths; decision library-zero-bake-plan 1b)
+// paint(f, width, height) and shader_of(f) of a program function f(x, y) (card warp-to-shaders, decision
+// shaders-in-lib): f quoted with the functions it calls and the program values it reads (definitions_reached), whose
+// WGSL lib/shaders.warp makes at run time; a function the program defines no f of (a parameter) stays as it is
+rewrite paint($f, $w, $h) => paint_function($reached, $w, $h, $f) where $f is symbol and $f is function and $reached = definitions_reached($f, $program)
+rewrite shader_of($f) => shader_of($reached) where $f is symbol and $f is function and $reached = definitions_reached($f, $program)

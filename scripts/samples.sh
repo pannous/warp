@@ -36,6 +36,10 @@ mkdir -p "$results/out"
 # the tree's own compilers, else a count names the tree's commit but measures whichever compiler is installed (128 to
 # 122 at 08:12 was the installed one's, the trees' own went 131 to 132)
 [ -f "$tree/lib/warp.wasm" ] && export WARP_LIB=${WARP_LIB:-$tree/lib}
+# the registry's packages the package samples use by path (modules/packages, text/uniscript_text), as full-suite.sh links them
+"$tree/scripts/link-packages.sh" "$tree" >/dev/null || echo "samples: no packages linked: the package samples fail" >&2
+# the compiled module wasm/import_compiled links (samples/wasm/shapes.wasm, a link to it), built behind this runtime.wasm
+(cd "$tree" && "$WARP" build --module test/fixtures/compiled/shapes.warp >/dev/null) || echo "samples: no test/fixtures/compiled/shapes.wasm: wasm/import_compiled fails" >&2
 
 wall_seconds() {
 	local load cores
@@ -48,6 +52,9 @@ one() {
 	local out=$results/out/$(echo "$1" | tr / _) wall
 	grep -qE "$WINDOW_LIBRARIES" "$tree/$1" && { echo "WIN  $1"; return; }
 	wall=$(wall_seconds)
+	# what a sample keeps (lib/storage.warp, <sample>.database.sqlite beside it) starts anew each run, as the page's
+	# storage does: a counter prints its first run's value, not the sweep count's
+	rm -f "$tree/${1%.warp}.database.sqlite"
 	(cd "$tree" && ulimit -t "$CPU_SECONDS" && WARP_NO_WINDOW=1 WARP_PORT=$SERVER_PORT timeout "$wall" "$WARP" "$1" </dev/null >"$out.txt" 2>"$out.err")
 	local status=$? first verdict=FAIL
 	[ $status -eq 124 ] && grep -aq "$SERVING" "$out.txt" && { echo "SRV  $1"; return; }

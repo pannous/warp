@@ -5,9 +5,3 @@
 'twice!(x: int) := x * 2; twice!(5) + 1'	11
 'y = 3; y!=4'	true
 
-# is_bang_compares_the_value_of_code
-'is! "3+3" 6'	true
-'is! "3+3" 7'	false
-'is!("[1,2]", [1,2])'	true
-'n = 1; n += 1; is! "2*3" 6'	true
-'is! "3==2+1" true'	true

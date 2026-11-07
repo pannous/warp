@@ -54,6 +54,8 @@ def money_ratio(x: any): list {
 	if kind == "rational" { return [x.numerator, x.denominator] }
 	raise "money: " + str(x) + " is a " + kind + ", not an exact number: write it as an int or a fraction (0.1, 1/3)"
 }
+// an amount as [numerator, denominator]: a decimal text or an exact number
+money_amount_ratio(amount: any): list := if amount is text then money_text_ratio(amount) else money_ratio(amount)
 
 class Money {
 	minor: int
@@ -70,8 +72,8 @@ def money_same(currency: text, o: any, operation: text) {
 	if o.currency != currency { raise "money: " + currency + " " + operation + " " + o.currency + " mixes currencies; convert one first" }
 	o
 }
-money_add(a: any, b: any) := a + b
-money_sub(a: any, b: any) := a - b
+public money_add(a: any, b: any) := a + b
+public money_sub(a: any, b: any) := a - b
 money_negate(m: any) := Money(-m.minor, m.currency)
 // m times an int or a fraction, rounded to minor units by the mode
 def money_times(m: any, k: any, mode: text) {
@@ -84,12 +86,12 @@ money_mul(m: any, k: any) := money_times(m, k, "half_even")
 // minor unit raises unless a rounding mode is given
 def money_of(amount: any, code: text, mode: text) {
 	minor = currency_minor_units(code)
-	r = if amount is text then money_text_ratio(amount) else money_ratio(amount)
+	r = money_amount_ratio(amount)
 	Money(money_divide(money_product(r[0], money_ten(minor)), r[1], mode), upper(code))
 }
 def money_of(amount: any, code: text) {
 	minor = currency_minor_units(code)
-	r = if amount is text then money_text_ratio(amount) else money_ratio(amount)
+	r = money_amount_ratio(amount)
 	scaled = money_product(r[0], money_ten(minor))
 	if scaled % r[1] != 0 { raise "money: " + str(amount) + " is finer than " + upper(code) + "'s " + str(minor) + " decimals; pass a rounding mode" }
 	Money(scaled /! r[1], upper(code))

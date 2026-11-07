@@ -29,10 +29,16 @@ variable_listen(names: list, changes_only: bool, listener: function): int := {
 	for name in names { number = listen(if name is Signal then name.name else name, written => if not changes_only or written#1 != written#2 { listener(written#1, written#2) }, no) }
 	number
 }
-// the listeners of the name told of its write, from old to value, as its event with [value, old]; the value
+// the listeners of the name told of its write, from old to value, as its event with [value, old]; the value. A
+// listener writing what it watches (`on change x { x = x + 1 }`) writes it without telling the listeners again, so a
+// write never loops
+global signals_notifying = []
 signal_notify(name: text, value: any, old: any): any := {
 	signal_values[name] = value
+	if name in signals_notifying { return value }
+	signals_notifying = signals_notifying + [name]
 	emitted(name, [value, old])
+	signals_notifying = signals_notifying.filter(notifying => notifying != name)
 	value
 }
 
@@ -40,7 +46,7 @@ signal_notify(name: text, value: any, old: any): any := {
 // signals"): the variable itself, its name and its value as last written, which a bare read of the loop variable gives
 class Signal { name: text; value: any }
 global signal_values = {}
-signal_value(item: any): any := if item is Signal then signal_values.get(item.name) ?? item.value else item
+public signal_value(item: any): any := if item is Signal then signal_values.get(item.name) ?? item.value else item
 
 // each polled word's last value, a listener's at its position
 global polled_values = []

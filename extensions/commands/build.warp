@@ -8,8 +8,11 @@ use "separate_module.warp"
 NATIVE_WORD = "native"
 WASM2C_MODULE = "program"
 C_COMPILER = "cc -O2"
-# wasm2c's runtime and headers, in these folders of the wabt whose wasm2c is on the PATH
+# wasm2c's runtime and headers, in these folders of the wabt whose wasm2c runs
 WASM2C_RUNTIME = "/share/wabt/wasm2c"
+# the oldest wasm2c writing the w2c_ names and taking -n (an old /usr/local/bin/wasm2c 1.0.13 before Homebrew's 1.0.42
+# failed on -n, card native-build-wasm2c); CI pins 1.0.42 (scripts/ci-compilers.sh)
+WASM2C_OLDEST = [1, 0, 33]
 WABT_HEADERS = "/include"
 build_native(source_file: text, library: text) := {
 	source = read(source_file)
@@ -21,13 +24,30 @@ build_native(source_file: text, library: text) := {
 	write_bytes(stem + ".wasm", compile(source, source_folder(source_file)))
 	header = stem.split("/").last() + ".h"
 	write(stem + ".main.c", native_main(header, library))
-	wabt = folder_of(folder_of(shell("command -v wasm2c").trim()))
+	wasm2c = supported_wasm2c()
+	wabt = folder_of(folder_of(wasm2c))
 	runtime = wabt + WASM2C_RUNTIME
-	shell("wasm2c " + quoted_path(stem + ".wasm") + " -n " + WASM2C_MODULE + " -o " + quoted_path(stem + ".c"))
+	shell(quoted_path(wasm2c) + " " + quoted_path(stem + ".wasm") + " -n " + WASM2C_MODULE + " -o " + quoted_path(stem + ".c"))
 	files = [stem + ".c", stem + ".main.c", runtime + "/wasm-rt-impl.c", runtime + "/wasm-rt-mem-impl.c"].map(quoted_path).join(" ")
 	shell(C_COMPILER + " -I" + quoted_path(runtime) + " -I" + quoted_path(wabt + WABT_HEADERS) + " -o " + quoted_path(executable) + " " + files + " -lm" + exported_symbols() + native_links(wabt, library))
 	shell("rm -f " + [".wasm", ".c", ".h", ".main.c"].map(suffix => quoted_path(stem + suffix)).join(" "))
 	print "built " + executable
+}
+# the first wasm2c on the PATH at least WASM2C_OLDEST, loudly none
+supported_wasm2c(): text := {
+	# (a PATH entry ending in / lists /opt/homebrew/bin//wasm2c: its wabt folder is found from the path without it)
+	found = shell("which -a wasm2c").trim().split("\n").filter(path => path != "").map(path => path.replace("//", "/"))
+	for path in found { if version_at_least(shell(quoted_path(path) + " --version").trim(), WASM2C_OLDEST) { return path } }
+	raise "warp build native needs wasm2c " + WASM2C_OLDEST.join(".") + " or newer (wabt), found " + (if #found == 0 then "none" else found.map(path => path + " " + shell(quoted_path(path) + " --version").trim()).join(", "))
+}
+# whether a dotted version, "1.0.42", is at least the oldest, [1, 0, 33]
+version_at_least(version: text, oldest: list): bool := {
+	parts = version.split(".").map(part => int(part) ?? 0)
+	for i in 1 to #oldest {
+		have = if i <= #parts then parts#i else 0
+		if have != oldest#i { return have > oldest#i }
+	}
+	yes
 }
 # -l of each C library the program imports beside libc and libm, found in warp's library folder first (warp's own
 # libraries, libwarp_wasmtime: card wasmtime-bundled), then among the libraries of the wabt's prefix (/opt/homebrew/lib)
@@ -87,6 +107,7 @@ build(words: list) := {
 	source = if is_file then read(target) else target
 	stem = if is_file then target.remove_suffix(".warp") else INLINE_STEM
 	if is_file { emitting_file(working_relative(target)) }
+	if MODULE_ONLY in options { return own_module_built(target, stem) }
 	if is_file and is_primitive_file(source) { return if WASM_ONLY in options then compile_written(source, stem + ".wasm", source_folder(target)) else build_native(target, library_folder) }
 	given_runtime = option_of(options, "runtime")
 	if given_runtime != ø { runtime_held = read_bytes(given_runtime) }
@@ -102,6 +123,17 @@ build(words: list) := {
 	if EXE_ONLY in options { shell("rm -f " + modules.map(quoted_path).join(" ")) } else {
 		for written in modules { print "compiled " + size_of(written) + " bytes to " + written }
 	}
+	ø
+}
+# `warp build --module shapes.warp`: shapes.wasm, the file compiled as a standard module is, behind runtime.wasm with its
+# warp.signature, which `import shapes` of a program beside it links (decision samples-modules-wasm; notes/import_compiled.md)
+MODULE_ONLY = "--module"
+own_module_built(file: text, stem: text) := {
+	if not exists(file) { raise "warp build --module: no file " + file }
+	name = stem.split("/").last()
+	own_module(name, path_in(absolute_folder("."), file), path_in(absolute_folder("."), stem + ".wasm"))
+	write_module(name, runtime_path(), stem + ".wasm")
+	print "compiled " + size_of(stem + ".wasm") + " bytes to " + stem + ".wasm"
 	ø
 }
 # a WAGI build keeps app.wasm, which a WAGI host runs once a request (Spin's wagi executor: REQUEST_METHOD, PATH_INFO

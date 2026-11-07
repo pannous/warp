@@ -25,6 +25,9 @@ class Interval {
 	// the ± part: how far the interval reaches from the value, on its farther side
 	uncertainty(): float := max(high - value, value - low)
 	scaled(factor: float): Interval := Interval(value * factor, low * factor, high * factor)
+	// √, as lib/reals.warp exact_root calls a value's own root(): it rises, so it maps the bounds, √(2.0 ± 0.01) spans
+	// √1.99 … √2.01
+	root(): Interval := Interval(sqrt(value), sqrt(low), sqrt(high))
 	text(): text := uncertain_text(value, uncertainty(), 0)
 }
 
@@ -52,7 +55,9 @@ class Gaussian {
 	uncertainty(): float := deviation()
 	low(): float := value - deviation()
 	high(): float := value + deviation()
-	scaled(factor: float): Gaussian := gaussian_combined(value * factor, this, factor, exact_gaussian(0.0), 0.0)
+	scaled(factor: float): Gaussian := scaled_by_slope(value * factor, this, factor)
+	// linear propagation: d√x = dx / (2√x)
+	root(): Gaussian := scaled_by_slope(sqrt(value), this, 0.5 / sqrt(value))
 	text(): text := uncertain_text(value, deviation(), 1)
 }
 
@@ -85,6 +90,9 @@ as_gaussian(o: any): Gaussian := {
 	if o is Interval { raise "an interval and a gaussian do not mix" }
 	exact_gaussian(o as float)
 }
+
+// the Gaussian `value` of a function of g with that slope at g's value
+scaled_by_slope(value: float, g: Gaussian, slope: float): Gaussian := gaussian_combined(value, g, slope, exact_gaussian(0.0), 0.0)
 
 // a number as a Gaussian without contributions
 exact_gaussian(value: float): Gaussian := Gaussian(value, [])
@@ -132,3 +140,22 @@ place_text(x: float, scale: float, decimals: int) := {
 }
 // neither ∞ nor NaN: ∞ - ∞ is NaN
 is_finite(x: float): bool := x - x == 0.0
+
+// `area certainly > 10m²`: the whole interval beyond (P224b), as `>` of a tolerance answers; `area possibly > 14m²`:
+// some of it beyond
+rewrite $a certainly > $b => $a > $b
+rewrite $a certainly < $b => $a < $b
+rewrite $a possibly > $b => $a.possibly_greater($b)
+rewrite $a possibly < $b => $a.possibly_less($b)
+# the same within an expression, `big = area certainly > 10m²`, where `area certainly` reads as one group
+rewrite $a certainly => $a
+rewrite $g > $b => $a.possibly_greater($b) where $a = qualified($g, possibly)
+rewrite $g < $b => $a.possibly_less($b) where $a = qualified($g, possibly)
+
+// `6.0 ± 0.3σ`: a spread counted in standard deviations makes a Gaussian (P217); σ is one of them, `0.3σ` 0.3
+class Deviation {
+	amount: float
+	*(other) := Deviation(amount * other)
+}
+σ = Deviation(1.0)
+infix operator ±(value: number, spread: Deviation) := gaussian(value, spread.amount)

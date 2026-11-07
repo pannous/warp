@@ -8,8 +8,8 @@ text_join(a: text, b: text): text := {
 	copy_text(out, 0, a, 0, byte_count(a))
 	copy_text(out, byte_count(a), b, 0, byte_count(b))
 	# a walk over a stays good on out, which starts with a's bytes: `t += …` keeps t's cursor
-	if same_text(a, walked_text) { walked_text = out }
-	if same_text(a, other_text) { other_text = out }
+	if same(a, walked_text) { walked_text = out }
+	if same(a, other_text) { other_text = out }
 	out
 }
 # the texts joined, `between` between each two: one text made and each byte copied once, where `+=` in a loop copies
@@ -38,7 +38,7 @@ global other_before = -1
 # source's count (card text-cache-lru)
 text_count(t: text): int := {
 	if byte_count(t) < short_text() { return characters_counted(t) }
-	if same_text(t, counted_text) and byte_count(t) == counted_bytes { return counted }
+	if same(t, counted_text) and byte_count(t) == counted_bytes { return counted }
 	count = characters_counted(t)
 	counted_text = t
 	counted_bytes = byte_count(t)
@@ -108,7 +108,7 @@ text_order(a: text, b: text): int := {
 # whether a and b have the same bytes: the one text, or texts of other lengths, without looking at a byte (a map's
 # names are mostly the very texts looked up)
 same_bytes(a: text, b: text): bool := {
-	if same_text(a, b) == 1 { return yes }
+	if same(a, b) { return yes }
 	if byte_count(a) != byte_count(b) { return no }
 	i = 0
 	while i < byte_count(a) {
@@ -117,6 +117,20 @@ same_bytes(a: text, b: text): bool := {
 	}
 	yes
 }
+# `a == b` of texts (decisions nfc-tables, nfc-slot; notes/text_equality_nfc.md): equal bytes, else equal NFC forms. A
+# text of code points below U+0300 only (no byte from 0xCC on) is its own NFC, so only one with such a byte asks the host
+equal_texts(a: text, b: text): bool := same_bytes(a, b) or ((maybe_decomposed(a) or maybe_decomposed(b)) and same_bytes(canonical(a), canonical(b)))
+maybe_decomposed(t: text): bool := {
+	i = 0
+	while i < byte_count(t) {
+		if byte_at(t, i) >= 204 { return yes }
+		i += 1
+	}
+	no
+}
+canonical(t: text): text := unboxed_text(canonical_text(t))
+# a text's NFC form, by lib/unicode.warp's canonical_text, which the host links on its first call
+canonical_text(t: Node): Node from runtime
 # where the bytes of part first start in t, -1 when nowhere
 text_index(t: text, part: text): int := {
 	for start in 0..(byte_count(t) - byte_count(part) + 1) {

@@ -6,6 +6,7 @@
 const LIBM = { fabs: Math.abs, fmin: Math.min, fmax: Math.max, fmod: (a, b) => a % b, ceil: Math.ceil, floor: Math.floor };
 const LIBC_URL = new URL("lib/libc.wasm", self.location.href).href; // libc for `use c` (lib/build_libc.sh, P147)
 const LIBC_LIST = "web/playground/lib/build_libc.sh lists libc.wasm's functions";
+const C_FAILED = -1; // a C file call's answer when it failed (unlink, rename, rmdir)
 const MODULE_PATH = /\.(wasm|wat)$/; // src/modules/wasm_modules.rs MODULE_EXTENSIONS
 const SETTER_PREFIX = "set "; // src/modules/wasm_modules.rs SETTER_PREFIX: the import that sets a mutable global
 // the C functions a module calls, one line each: import module, library, name, parameter kinds (comma-separated),
@@ -162,10 +163,11 @@ function callC(holder, exports, member, call, values, what) {
 }
 
 // a C function's result as the program takes it (driver.warp c_result): a text (NULL is ø, textOf reads it), a
-// handle's id, a yes/no, an i64 or an i32
+// handle's id, a yes/no, an i32, an unsigned u32 as the i64 it means, or an i64
 function crossedResult(program, call, returned, textOf) {
 	if (call?.crossing === "text" || call?.crossing === "owned_text") return !returned ? program.new_empty() : newGuestText(program, textOf(returned));
 	if (call?.crossing === "handle" || call?.register === "i32") return Number(returned ?? 0) | 0;
+	if (call?.crossing === "u32") return BigInt(Number(returned ?? 0) >>> 0);
 	if (call?.register === "bool") return Number(returned) & 0xff ? 1 : 0;
 	if (call?.register === "i64") return BigInt(returned ?? 0);
 	return returned;
@@ -194,14 +196,27 @@ const OWN_LIBRARY = /\blib(warp_\w+)\.(dylib|so)$/;
 const PAGE_LIBRARY_HANDLE = 1;
 
 // the C functions of stdio a program reaches without a file (lib/sound.warp said: fdopen(2, "w"), fputs, fflush): a
-// FILE * is its descriptor, what it puts goes to the run's output; dlopen of warp's own libraries; getenv of the run's
-// environment (driver.js programEnvironment), NULL for a name it lacks
+// FILE * is its descriptor, what it puts goes to the run's output; dlopen of warp's own libraries; getenv/setenv/unsetenv of
+// the run's environment (driver.js programEnvironment), NULL for a name it lacks; getpid/getppid and strerror
+const withoutVariable = (environment, name) => environment.filter(entry => !entry.startsWith(`${name}=`));
 const pageStdio = (holder, hooks) => ({
 	getenv: name => environmentValue(holder.environment ?? ENVIRONMENT, name),
+	setenv: (name, value, overwrite) => { const environment = holder.environment ?? ENVIRONMENT; if (environmentValue(environment, name) !== null && !overwrite) return 0; holder.environment = [...withoutVariable(environment, name), `${name}=${value}`]; return 0; },
+	unsetenv: name => (holder.environment = withoutVariable(holder.environment ?? ENVIRONMENT, name), 0),
+	// process ids: positive and distinct, as natively; samples/system/c_lines will print run-stable facts (decision c-lines-stable)
+	getpid: () => 1,
+	getppid: () => 2,
+	strerror: code => ({ 2: "No such file or directory" }[code] ?? `Unknown error ${code}`),
 	fdopen: descriptor => descriptor,
 	fputs: (text, descriptor) => (hooks.print(text, descriptor), 0),
 	fflush: () => 0,
 	dlopen: path => self.PAGE_LIBRARIES?.has(path.match(OWN_LIBRARY)?.[1]) ? PAGE_LIBRARY_HANDLE : 0,
+	// lib/file.warp's file words over the page's written files (host-files.js), as C answers: 0 done, -1 failed; folders
+	// exist by the files in them
+	unlink: path => writtenFiles.has(filePath(path)) ? (forgetWritten(path), 0) : C_FAILED,
+	rename: (from, to) => writtenFiles.has(filePath(from)) ? (keepWritten(to, writtenFiles.get(filePath(from))), forgetWritten(from), 0) : C_FAILED,
+	mkdir: () => 0,
+	rmdir: folder => isWrittenFolder(folder) ? C_FAILED : 0,
 });
 
 // `use python` (lib/native/python.warp: the Python C API, natively libpython's) answered by Pyodide's Python
@@ -250,6 +265,22 @@ function wasmLibraryImports(holder, library, exportsOf, missing = "") {
 	});
 }
 
+// a package's C library the page has as lib/<name>.wasm (build.sh pack_package_libraries; natively lib<name> beside
+// warp, scripts/link-packages.sh): instantiated once per worker at its first call, else undefined
+const packedLibraries = new Map();
+function packedLibraryImports(holder, name) {
+	const file = `${PAGE_PREFIX}lib/${name}.wasm`;
+	if (!/^\w+$/.test(name) || !servedFileExists(file)) return undefined;
+	const exportsOf = () => {
+		if (!packedLibraries.has(name)) {
+			const bytes = new Uint8Array(getSync(fileUrl(file), 0, true));
+			packedLibraries.set(name, typedExports(bytes, new WebAssembly.Instance(new WebAssembly.Module(bytes), {}).exports));
+		}
+		return packedLibraries.get(name);
+	};
+	return wasmLibraryImports(holder, name, exportsOf);
+}
+
 // the exported functions of a module's bytes, each taking its arguments as its parameters' types are: a C library's
 // pointer is an i32 in wasm32 where the program declares it an i64 (sqlite3_bind_text's destructor), an i64 a BigInt
 const WASM_ARGUMENT = { 0x7f: value => Number(BigInt.asIntN(32, BigInt(value))), 0x7e: value => BigInt(value), 0x7d: Number, 0x7c: Number };
@@ -294,10 +325,16 @@ function exportedParameters(bytes) {
 // the exports of a WebAssembly module the program imports by path (src/modules/wasm_modules.rs link): instantiated once per
 // run at the first call, with its own imports linked like the program's; a global reads through a getter and is set
 // through `set g`
+// one file however the path is spelled; a path in the compiler's repository folder (a `use cargo` crate in
+// /warp/web/playground/warp-lib/crates) is that file of the served repository
+function servedModuleUrl(path) {
+	const served = path.startsWith(REPOSITORY_DIRECTORY + "/") ? path.slice(REPOSITORY_DIRECTORY.length + 1) : path;
+	return new URL(served, FILE_ROOT).href;
+}
 function moduleImports(holder, hooks, path) {
 	const instance = () => {
 		const modules = holder.run.wasmModules ??= new Map();
-		const file = new URL(path, FILE_ROOT).href; // one instance however the path is spelled
+		const file = servedModuleUrl(path);
 		if (!modules.has(file)) {
 			if (file.endsWith(".wat")) throw new Error(`${path}: a module in WAT text needs the native build`);
 			const moduleHolder = { warnings: holder.warnings, run: holder.run };
@@ -357,5 +394,5 @@ addHostPart({
 			get table() { return new WebAssembly.Table({ initial: 0, element: "anyfunc" }); },
 		},
 	}),
-	importModule: (holder, hooks, name) => MODULE_PATH.test(name) ? moduleImports(holder, hooks, name) : undefined,
+	importModule: (holder, hooks, name) => MODULE_PATH.test(name) ? moduleImports(holder, hooks, name) : packedLibraryImports(holder, name),
 });

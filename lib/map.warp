@@ -1,34 +1,34 @@
 // The standard library module map (notes/stdlib.md): standard functions of every program, `merge(a, b)` or `a.merge(b)`, no `use` needed (`use map` only for the qualified `map.merge(a, b)`)
 
 // a new map: a's entries, then b's (b wins); neither a nor b changes
-merge(a: any, b: any): any := { out = {}; for k in keys(a) { out[k] = a.get(k) }; for k in keys(b) { out[k] = b.get(k) }; out }
+public merge(a: any, b: any): any := { out = {}; for k in keys(a) { out[k] = a.get(k) }; for k in keys(b) { out[k] = b.get(k) }; out }
 map_values(m: any, f: any): any := { out = {}; ks = keys(m); for k in ks { out[k] = f(m.get(k)) }; out }
 // {a:1 b:2} → {1:"a" 2:"b"}: the values become the keys
-invert(m: any): any := { out = {}; ks = keys(m); for k in ks { out["" + m.get(k)] = k }; out }
+public invert(m: any): any := { out = {}; ks = keys(m); for k in ks { out["" + m.get(k)] = k }; out }
 // only the entries of the given keys that m has
-pick(m: any, wanted: any): any := { out = {}; for k in wanted { if m.has(k) { out[k] = m.get(k) } }; out }
+public pick(m: any, wanted: any): any := { out = {}; for k in wanted { if m.has(k) { out[k] = m.get(k) } }; out }
 // [["a", 1] ["b", 2]] → {a:1 b:2}
-from_pairs(pairs: any): any := { out = {}; for pair in pairs { out[pair#1] = pair#2 }; out }
+public from_pairs(pairs: any): any := { out = {}; for pair in pairs { out[pair#1] = pair#2 }; out }
 // the entries of m without the given keys
-omit(m: any, unwanted: any): any := { out = {}; ks = keys(m); for k in ks { if not (k in unwanted) { out[k] = m.get(k) } }; out }
+public omit(m: any, unwanted: any): any := { out = {}; ks = keys(m); for k in ks { if not (k in unwanted) { out[k] = m.get(k) } }; out }
 // the entries whose value f holds for
-filter_values(m: any, f: any): any := { out = {}; ks = keys(m); for k in ks { if f(m.get(k)) { out[k] = m.get(k) } }; out }
+public filter_values(m: any, f: any): any := { out = {}; ks = keys(m); for k in ks { if f(m.get(k)) { out[k] = m.get(k) } }; out }
 // {a:1 b:2} → [["a", 1] ["b", 2]], the opposite of from_pairs
 entries(m: any): list := { out = []; ks = keys(m); for k in ks { out = out + [[k, m.get(k)]] }; out }
 // the value of key, or fallback when m has none
-get_or(m: any, key: any, fallback: any): any := if m.has(key) then m.get(key) else fallback
+public get_or(m: any, key: any, fallback: any): any := if m.has(key) then m.get(key) else fallback
 // the first key whose value f holds for, ø when none
-find_key(m: any, f: any): any := { ks = keys(m); for k in ks { if f(m.get(k)) { return k } }; ø }
+public find_key(m: any, f: any): any := { ks = keys(m); for k in ks { if f(m.get(k)) { return k } }; ø }
 // Python's dict methods (card python-stdlib): update merges in place, items are the entries, setdefault keeps the
 // default for a missing key and gives the key's value
-update(m: any, other: any): any := { for k in keys(other) { m[k] = other.get(k) }; m }
+public update(m: any, other: any): any := { for k in keys(other) { m[k] = other.get(k) }; m }
 items(m: any): list := entries(m)
-setdefault(m: any, key: any, fallback: any): any := { if not m.has(key) { m[key] = fallback }; m.get(key) }
+public setdefault(m: any, key: any, fallback: any): any := { if not m.has(key) { m[key] = fallback }; m.get(key) }
 // the last entry as [key value], removed from m in place (Python's dict.popitem)
 popitem(m: any): list := { k = last(keys(m)); v = m.get(k); m.remove(k); [k, v] }
 // maps inside maps merged key by key, b's value winning anywhere else (a list or a plain value replaces); a new map,
 // a and b unchanged: deep_merge({a:{x:1 y:2}}, {a:{y:3}}) is {a:{x:1 y:3}}
-deep_merge(a: any, b: any): any := {
+public deep_merge(a: any, b: any): any := {
 	out = merge({}, a)
 	for k in keys(b) { out[k] = if out.has(k) and is_map(out.get(k)) and is_map(b.get(k)) then deep_merge(out.get(k), b.get(k)) else b.get(k) }
 	out
