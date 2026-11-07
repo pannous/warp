@@ -104,10 +104,12 @@ function cText(memory, address) {
 	return bytes.slice(0, end < 0 ? bytes.length : end);
 }
 
-// the program's C functions by "module\tname" (C_FUNCTIONS_SECTION)
+// the C functions by "module\tname" (C_FUNCTIONS_SECTION) of the program and of the modules it links (a prebuilt
+// sound.wasm calls C too: host.js compiledLibraries), as driver.warp reads each instance's section
 function cCalls(run) {
 	if (!run.cCalls) {
-		const lines = WebAssembly.Module.customSections(run.module, C_FUNCTIONS_SECTION).flatMap(section => decode(new Uint8Array(section)).split("\n"));
+		const modules = [run.module, ...[...compiledLibraries.values()].map(library => library.module)];
+		const lines = modules.flatMap(module => WebAssembly.Module.customSections(module, C_FUNCTIONS_SECTION)).flatMap(section => decode(new Uint8Array(section)).split("\n"));
 		run.cCalls = new Map(lines.filter(Boolean).map(line => line.split("\t")).map(([module, , name, parameters, register, crossing, pointee, , failure]) =>
 			[`${module}\t${name}`, { parameters: parameters ? parameters.split(",") : [], register, crossing, pointee, failure }]));
 	}

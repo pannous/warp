@@ -176,7 +176,9 @@ methods_lifted(program: Node): Node := {
 			# of the classes reads its field, a map's `d.day` beside Instant's day() and units' day())
 			reached = is_library_word(name) or name in functions or (not names_syntax(name) and module_routing(classes, liftable, name, operator_methods) == ø)
 			reads_field = not reached and count == 0 and not names_syntax(name) and name not in position_words
-			falls_back = name in routes and (reached or reads_field) and written_call_fits(top_statements.filter(statement => statement not in hooks), name, count + 1)
+			# (an element, `b#p` and `b[i]`, falls back to the builtin's of any other value, in a module being built too, which
+			# routes position words: sound's samples class made every `xs[i]` of the module its float cell)
+			falls_back = name in routes and (name in position_words or ((reached or reads_field) and written_call_fits(top_statements.filter(statement => statement not in hooks), name, count + 1)))
 			dispatchers += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), falls_back, reads_field, spelled_operator(operator_table, name), promotions, floaters)]
 		}
 	}
