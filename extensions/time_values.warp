@@ -139,17 +139,25 @@ time_operators = {"+": 0, "-": 1, "*": 2}
 operand_parts = ["operand_form", "operand_position", "duration_months", "duration_days"]
 # the kinds a time's operand may be: a time, a whole number, a node holding either or a quantity (time_operand)
 time_operand_kinds = [ValueKind.Time, ValueKind.Int, ValueKind.Node]
-# each operand held in a local, read four times; a node as time_operand gives it, lib/units' quantity a duration
+# each operand held in a local, read four times; a node as time_operand gives it, lib/units' quantity a duration.
+# `1 day + 2 hours` mixes two duration kinds (times/runtime.warp one_duration_kind); `2024-01-31T10:00 + 24 h` moves the time
 def time_operation_call(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
 	stored = []
-	parts = []
+	held = []
 	for operand in [a, b] {
 		if operand.kind not in time_operand_kinds { return refuse("a time moved by a " + kind_spelling(operand.kind) + ": a time takes + or - a duration") }
+		place = fresh_local(body, ValueKind.Node)
+		stored += boxed(operand) + [op.local_set] + uleb(place)
+		held += [TypedCode(operand.kind, [op.local_get] + uleb(place))]
+	}
+	parts = []
+	for at in 1 to 2 {
+		operand = held#at
+		if operand.kind == ValueKind.Node { operand = runtime_call("one_duration_kind", [operand, held#(3 - at)]) }
 		if operand.kind == ValueKind.Node and module.functions.has(time_operand_word) { operand = call_values(module.functions[time_operand_word], [operand]) }
 		place = fresh_local(body, ValueKind.Node)
 		stored += boxed(operand) + [op.local_set] + uleb(place)
-		held = TypedCode(ValueKind.Node, [op.local_get] + uleb(place))
-		parts += operand_parts.map(word => runtime_call(word, [held]))
+		parts += operand_parts.map(word => runtime_call(word, [TypedCode(ValueKind.Node, [op.local_get] + uleb(place))]))
 	}
 	result = call_values(module.functions[time_operation_word], parts + [number_value(time_operators[symbol])])
 	TypedCode(result.kind, stored + result.code)

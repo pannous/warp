@@ -59,7 +59,9 @@ def library_texts(library: text, within: text): map {
 }
 # a source file's text, read once a compile; ø for none
 def file_source(path: text): text? {
-	if not file_texts.has(path) { file_texts[path] = try read(path) else ø }
+	# (one not there is none, asked first: the page's read of a missing file ends the compile, card playground-host-word;
+	# any other failure to read stays loud)
+	if not file_texts.has(path) { file_texts[path] = if exists(path) then (try read(path) else ø) else ø }
 	file_texts[path]
 }
 global file_texts = {}
@@ -136,6 +138,32 @@ module_hashes(): map := {
 # a text's length and the host's sha256 of its bytes (djb2 in warp, ~1.3 K instructions a byte, was 5 % of a compile
 # under WARP_LIB, card signature-sha256)
 source_hash(source: text): text := "${#source}-" + std_pure("hash", "sha256", [source])
+# what a prebuilt module is built of: its own text, then those of the modules it uses, transitively, each once; so an
+# edit of lib/reals.warp makes units.wasm, which compiled reals in, stale as an edit of units.warp does
+built_of_texts(module: text): list := {
+	texts = []
+	for reached in modules_reached(module, []) { texts += [file_text(std_module_path(reached)) ?? ""] }
+	texts
+}
+# their length, then the hash of the one text, or of each text's hash (so no host word is given more than one module's
+# text, which a page's slim compiler shows at most 64 KB of)
+texts_length(texts: list): int := {
+	length = 0
+	for t in texts { length += #t }
+	length
+}
+texts_hash(texts: list): text := {
+	if #texts == 1 { return source_hash(texts#1) }
+	hashes = []
+	for t in texts { hashes += [source_hash(t)] }
+	"${texts_length(texts)}-" + std_pure("hash", "sha256", [hashes.join("\n")])
+}
+modules_reached(module: text, seen: list): list := {
+	if module in seen { return seen }
+	seen += [module]
+	for used in used_modules(file_text(std_module_path(module)) ?? "") { seen = modules_reached(used, seen) }
+	seen
+}
 # the index and the sugar's rules packed as lib/ lies now, written into the modules folder; this run goes on with
 # them, the host words made anew
 write_library_index(folder: text) := {

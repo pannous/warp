@@ -55,7 +55,8 @@ wasm_use_written(statement: text): text? := {
 # from another folder (`warp samples/wasm/x.warp` from the root) read samples/wasm/samples/wasm/…
 wasm_file(name: text, folder: text): text := rooted(name, folder)
 # a file's bytes, none for a file that isn't there
-wasm_bytes(path: text): list := try read_bytes(path) else []
+# (asked first: the page's read_bytes of a missing file ends the compile, no try catches it, card playground-host-word)
+wasm_bytes(path: text): list := if exists(path) then (try read_bytes(path) else []) else []
 is_core_wasm(bytes: list): bool := #bytes >= #wasm_header and bytes[0 ..< #wasm_header] == wasm_header
 
 # what the module gives the program: [the declarations of its exported functions (c_declaration's form, the module's
