@@ -148,8 +148,12 @@ linked_libraries(source: text): list := {
 		wasm = wasm_if_there(own_module_wasm.get(name) ?? folder + name + ".wasm")
 		# (a module not prebuilt was said by the rebuild, its file left empty or never written: markup's html, compiled
 		# into markup; one prebuilt that won't link is the compile's error, never compiled from its source instead:
-		# decision module-link-hard-error)
-		if byte_size(wasm) == 0 { continue }
+		# decision module-link-hard-error. The modules one compiled from its source uses are linked in turn, reals'
+		# math, never compiled from their sources beside it)
+		if byte_size(wasm) == 0 {
+			for inner in used_modules(used_module_text(name)) { if inner not in names { names += [inner] } }
+			continue
+		}
 		signature = module_signature(name, wasm)
 		if signature == ø { throw name + ".wasm won't link: no " + SIGNATURE_SECTION + " section, built by a compiler older than this one; warp rebuild builds it anew" }
 		image = library_image_of(name, signature)
