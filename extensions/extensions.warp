@@ -46,6 +46,7 @@ use "match_phrases.warp"
 use "checked_tries.warp"
 use "key_bindings.warp"
 use "text_lints.warp"
+use "int_misfits.warp"
 use "page_values.warp"
 use "fetch_signals.warp"
 use "js_globals.warp"
@@ -109,6 +110,7 @@ EXTENSIONS = [
 	of_lookups_extension
 	match_phrases_extension
 	text_lints_extension
+	int_misfits_extension
 	page_values_extension
 	fetch_signals_extension
 	js_globals_extension
