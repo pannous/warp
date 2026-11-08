@@ -24,6 +24,50 @@ host_takes(name: text, count: int): bool := {
 	parameters = module.host[name]#1
 	count <= #parameters and count + #(host_defaults.get(name) ?? []) >= #parameters
 }
+# A typed host word beside a library word of its name and count, untyped there (web's C write(fd, data) beside the
+# prelude's write(path, text), card web-write-call), is one overload set picked by the arguments' types: decided
+# when the call is compiled where their kinds are known (a literal, a local), else at run time by their values, each
+# argument computed once (decision static-dispatch)
+def host_beside_function(body: Body, name: text, arguments: list): bool {
+	name in module.host and host_takes(name, #arguments) and #arguments == #module.host[name]#1 and is_program_call(body, name, arguments) and not arguments.any(argument => is_named_argument(argument, module.functions[name].signature.parameters.map(p => p.name)))
+}
+def host_or_function(body: Body, name: text, arguments: list): TypedCode {
+	wanted = module.host[name]#1
+	known = range_list(#arguments).map(i => host_fit(written_kind(body, arguments[i]), wanted[i]))
+	if known.all(fit => fit == yes) { return host_call(body, name, arguments) }
+	if known.any(fit => fit == no) { return call(body, module.functions[name], arguments) }
+	held = arguments.map(argument => fresh_name("argument", fresh_number()))
+	setting = effects(body, range_list(#held).map(i => Key(held[i], Op.Assign, arguments[i])))
+	test = range_list(#held).map(i => host_kind_test(held[i], wanted[i])).reduce((a, b) => Key(a, Op.And, b))
+	a = host_call(body, name, held)
+	b = call(body, module.functions[name], held)
+	kind = joint_kind(a.kind, b.kind)
+	chosen = if kind == no_kind or kind == ValueKind.Mixed then [op.if, no_value] + dropped(a) + [op.else] + dropped(b) + [op.end] else if_else_code(kind, a, b)
+	TypedCode(if kind == ValueKind.Mixed then no_kind else kind, setting + condition_of(body, test, 0) + chosen)
+}
+# the kind a call's argument is known to have before it is compiled: a literal's, a local's; Unknown for any other
+def written_kind(body: Body, n: Node): ValueKind {
+	if n is text { return ValueKind.Text }
+	if n is number { return if n is int then ValueKind.Int else ValueKind.Float }
+	if n is symbol and name_of(n) in body.names { return body.kinds[body.names[name_of(n)]] }
+	ValueKind.Unknown
+}
+# whether a value of kind `known` is one a host parameter of kind `wanted` takes: a number a number, a text or list a
+# node; ø when the kind is not known
+host_numbers = [ValueKind.Int, ValueKind.I32]
+host_floats = [ValueKind.Float, ValueKind.F32]
+host_fit(known: ValueKind, wanted: ValueKind): any := {
+	if known == ValueKind.Unknown or known == ValueKind.Node or known == pending { return ø }
+	if wanted in host_numbers { return known in host_numbers }
+	if wanted in host_floats { return known in host_floats }
+	wanted == ValueKind.Node and (known == ValueKind.Text or known == ValueKind.List)
+}
+# the test, at run time, that a value is of a kind a host parameter takes
+host_kind_test(value: Node, wanted: ValueKind): Node := {
+	if wanted in host_numbers { return call_of("is_type", [value, "int"]) }
+	if wanted in host_floats { return call_of("is_type", [value, "float"]) }
+	Key(call_of("is_type", [value, "text"]), Op.Or, call_of("is_type", [value, "list"]))
+}
 # `clock`, `sleep(ms)`: a call of the imported host word, its arguments in the kinds it takes; a host word taking or
 # giving a node builds and reads nodes through the constructors the module exports for it (host_builders)
 def host_call(body: Body, name: text, arguments: list): TypedCode {
