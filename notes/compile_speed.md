@@ -248,3 +248,20 @@ generated programs of 100/1000/2000 lines (four statement shapes, each using the
   statement is the usual quadratic. A map (`word_set`) of the names, made once outside the loop.
 - Left: two parses of the program (implicit uses, then checked_program's of the source with its uses appended); the
   sugar pass (rules_reaching per statement) and emit grow a bit faster than linear; GC copying grows with the heap.
+
+## Linked classes (card linked-module)
+
+`use sound; 1` (warp-sprint-web, card sound-start-speed): linked_needs brings each linked module's classes (30
+behind sound), and the classes pass lifted all their methods: 303 statements after it against 69 before, 61 of them
+the program's dispatchers over the linked classes (~70 % of the code), which every later pass walked.
+- L1: a linked class gives the program only the methods it may call (extensions/class_methods/methods.warp
+  linked_methods_called): those the program's statements name, those of the operators they write (compare for an
+  ordering glyph, equal for == and !=), the position words, the constructor once the class is named, and what the
+  kept ones call in turn. Its instances show, convert and operate (+ - * /) through the descriptor its module made.
+  `use sound; 1` 26.2 G -> 17.1 G (159 statements), harmony.warp and music.warp -18 % / -21 %; the 112 units/sound
+  test files fail as before (45 of 554, all present on main too). A module being built still lifts every class.
+- Pitfall: `Op.Mul as text` in a key head is "Mul", not the glyph: compare heads by key_head(Key(ø, glyph as Op, ø)).
+- Pitfall: the operators must count. Without the `*`/`^` dispatchers `4 m²` multiplied a Unit as a float (cast
+  failure in float_of_node), and position words come from `b#i` only after later passes (samples' new_samples).
+- Left: the said words include the bodies of reached helpers the sugar may call (walked_by, task_value), which
+  keep +, ==, text and compare; a narrower reach would need the dispatchers kept out of the passes until called.
