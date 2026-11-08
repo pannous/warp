@@ -23,6 +23,14 @@ const FULL_IMAGE_VERTICES = `
 }`;
 const VERTEX_ENTRY_POINT = "warp_full_image";
 const TRIANGLE_CORNERS = 3;
+// a shader with a vertex stage of its own (card gpu-instanced-blend) draws `values.instances` quads, each its 4 corners
+// (vertex_index 0 to 3) as a triangle strip, blended over what the quads before drew (instance_index 0 first), as
+// crates/warp-gpu/warp_gpu.c draws them
+const OWN_VERTEX_STAGE = /@vertex\s+fn\s+(\w+)/;
+const QUAD_CORNERS = 4;
+const INSTANCES_NAME = "instances";
+// a quad's color over the ones drawn before it: source alpha, as `vec4f(color, alpha)` says
+const OVER = { color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha" }, alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha" } };
 const PIXEL_BYTES = 4;
 const ROW_ALIGNMENT = 256; // a copied row is padded to 256 bytes
 const OPAQUE = 0xFF000000;
@@ -196,10 +204,12 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 	const painted = paintCanvases.get(canvas);
 	if (canvas !== undefined && !painted) throw new Error(CANVAS_MISSING);
 	const { declarations, bytes: valueBytes } = uniformLayout(values);
+	const ownVertexStage = shader.match(OWN_VERTEX_STAGE)?.[1];
+	const vertices = ownVertexStage ? "" : FULL_IMAGE_VERTICES;
 	const readsPrevious = new RegExp(`\\b${VALUES_NAME}\\.${PREVIOUS_HOLE}\\b`).test(shader);
 	const code = readsPrevious
-		? shader.replaceAll(`${VALUES_NAME}.${PREVIOUS_HOLE}`, PREVIOUS_FUNCTION) + FULL_IMAGE_VERTICES + declarations + PREVIOUS_FRAME
-		: shader + FULL_IMAGE_VERTICES + declarations;
+		? shader.replaceAll(`${VALUES_NAME}.${PREVIOUS_HOLE}`, PREVIOUS_FUNCTION) + vertices + declarations + PREVIOUS_FRAME
+		: shader + vertices + declarations;
 	const module = await gpuModule(device, code);
 	const format = painted?.format ?? "rgba8unorm";
 	const usage = GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC | (readsPrevious ? GPUTextureUsage.TEXTURE_BINDING : 0);
@@ -211,8 +221,9 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 		const layout = groupLayout ? device.createPipelineLayout({ bindGroupLayouts: [groupLayout] }) : "auto";
 		const pipeline = device.createRenderPipeline({
 			layout,
-			vertex: { module, entryPoint: VERTEX_ENTRY_POINT },
-			fragment: { module, entryPoint: GPU_ENTRY_POINT, targets: [{ format }] },
+			vertex: { module, entryPoint: ownVertexStage ?? VERTEX_ENTRY_POINT },
+			fragment: { module, entryPoint: GPU_ENTRY_POINT, targets: [ownVertexStage ? { format, blend: OVER } : { format }] },
+			...ownVertexStage ? { primitive: { topology: "triangle-strip" } } : {},
 		});
 		return { pipeline, groupLayout };
 	});
@@ -222,7 +233,8 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 	const pass = encoder.beginRenderPass({ colorAttachments: [paperAttachment(image)] });
 	pass.setPipeline(pipeline);
 	if (uniform) pass.setBindGroup(0, uniform.bindings);
-	pass.draw(TRIANGLE_CORNERS);
+	if (ownVertexStage) pass.draw(QUAD_CORNERS, Math.max(0, Math.trunc(values?.[INSTANCES_NAME] ?? 1)));
+	else pass.draw(TRIANGLE_CORNERS);
 	pass.end();
 	if (canvasImage && image !== canvasImage)
 		encoder.copyTextureToTexture({ texture: image }, { texture: canvasImage }, [Math.min(width, canvasImage.width), Math.min(height, canvasImage.height)]);
@@ -268,7 +280,7 @@ function uniformLayout(values) {
 
 // an explicit layout holding the uniform and the previous frame, so a shader that leaves `values` unread still binds them
 const bindingsGroupLayout = (device, takesValues, readsPrevious) => device.createBindGroupLayout({ entries: [
-	...takesValues ? [{ binding: VALUES_BINDING, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } }] : [],
+	...takesValues ? [{ binding: VALUES_BINDING, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } }] : [],
 	...readsPrevious ? [{ binding: PREVIOUS_FRAME_BINDING, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "unfilterable-float" } }] : [],
 ] });
 

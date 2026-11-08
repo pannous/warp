@@ -15,10 +15,15 @@
 	"\treturn vec4f(f32(corner / 2u) * 4.0 - 1.0, f32(corner % 2u) * 4.0 - 1.0, 0.0, 1.0);\n}"
 #define VERTEX_ENTRY_POINT "warp_full_image"
 #define FRAGMENT_ENTRY_POINT "main"
+// a shader with a vertex stage of its own (card gpu-instanced-blend) draws `values.instances` quads, each its 4 corners
+// (vertex_index 0 to 3) as a triangle strip, blended over what the quads before drew (instance_index 0 first), as
+// web/playground/host-gpu.js draws them
+#define OWN_VERTEX_STAGE "@vertex"
+#define INSTANCES_NAME "instances"
 #define VALUES_NAME "values"
 // MOST_FLOATS: 64 KB, the uniform every WebGPU device binds (maxUniformBufferBindingSize), as the playground's
 enum { VALUES_BINDING = 0, TRIANGLE_CORNERS = 3, PIXEL_BYTES = 4, ROW_ALIGNMENT = 256, UNIFORM_ALIGNMENT = 16,
-	VECTOR_FLOATS = 4, MOST_FLOATS = 16384, MOST_DECLARATIONS = 16384, NAME_BYTES = 64 };
+	VECTOR_FLOATS = 4, QUAD_CORNERS = 4, MOST_FLOATS = 16384, MOST_DECLARATIONS = 16384, NAME_BYTES = 64 };
 static const uint32_t OPAQUE = 0xFF000000u;
 static const char* VALUE_TYPES[] = {0, "f32", "vec2f", "vec3f", "vec4f"};
 static const int VALUE_ALIGNMENTS[] = {0, 4, 8, 16, 16};
@@ -79,8 +84,9 @@ static int device_ready(void) {
 
 // --- the values: `{name: number, name: [numbers], name: [[numbers], …]}` as warp shows them, laid out as WGSL aligns
 // a uniform struct's members (host-gpu.js uniformLayout)
-typedef struct { float floats[MOST_FLOATS]; int count; char declarations[MOST_DECLARATIONS]; int members; } Layout;
+typedef struct { float floats[MOST_FLOATS]; int count; char declarations[MOST_DECLARATIONS]; int members; int instances; } Layout;
 
+static int name_char(char c) { return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'); }
 static const char* spaces_skipped(const char* at) { while (*at == ' ' || *at == '\n' || *at == '\t') at++; return at; }
 // a number as warp shows it: a decimal, or an exact fraction `a/b`
 static const char* number_read(const char* at, float* number) {
@@ -109,6 +115,7 @@ static int member_laid_out(Layout* layout, const char* name, float* numbers, int
 	padded(layout, array ? UNIFORM_ALIGNMENT : VALUE_ALIGNMENTS[count]);
 	memcpy(layout->floats + layout->count, numbers, count * sizeof(float));
 	layout->count += count;
+	if (!array && count == 1 && !strcmp(name, INSTANCES_NAME)) layout->instances = (int)numbers[0];
 	if (array) padded(layout, UNIFORM_ALIGNMENT);
 	size_t used = strlen(layout->declarations);
 	snprintf(layout->declarations + used, MOST_DECLARATIONS - used, "%s%s: %s", layout->members++ ? ", " : "", name, array ? type : VALUE_TYPES[count]);
@@ -188,6 +195,18 @@ static int scope_clean(void) {
 	waited(&scope.done);
 	return !scope.failed;
 }
+// the name of the shader's own vertex stage, `@vertex fn <name>(…`, into `name` (NAME_BYTES); 0 where it has none
+static int own_vertex_stage(const char* shader, char* name) {
+	const char* at = strstr(shader, OWN_VERTEX_STAGE);
+	if (!at) return 0;
+	at = strstr(at, "fn");
+	if (!at) return 0;
+	at = spaces_skipped(at + 2);
+	int length = 0;
+	while (name_char(at[length]) && length < NAME_BYTES - 1) { name[length] = at[length]; length++; }
+	name[length] = 0;
+	return length > 0;
+}
 // the code's pipeline drawing into the format, compiled anew; NULL and the failure told where it does not compile
 static WGPURenderPipeline pipeline_compiled(const char* code, WGPUTextureFormat format) {
 	wgpuDevicePushErrorScope(device, WGPUErrorFilter_Validation);
@@ -198,6 +217,13 @@ static WGPURenderPipeline pipeline_compiled(const char* code, WGPUTextureFormat 
 	WGPUShaderModule module = wgpuDeviceCreateShaderModule(device, &module_descriptor);
 	WGPUColorTargetState target = WGPU_COLOR_TARGET_STATE_INIT;
 	target.format = format;
+	char vertex[NAME_BYTES];
+	int quads = own_vertex_stage(code, vertex);
+	// a quad's color over the ones drawn before it: source alpha, as `vec4f(color, alpha)` says
+	WGPUBlendState over = {
+		.color = {.operation = WGPUBlendOperation_Add, .srcFactor = WGPUBlendFactor_SrcAlpha, .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha},
+		.alpha = {.operation = WGPUBlendOperation_Add, .srcFactor = WGPUBlendFactor_One, .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha}};
+	if (quads) target.blend = &over;
 	WGPUFragmentState fragment = WGPU_FRAGMENT_STATE_INIT;
 	fragment.module = module;
 	fragment.entryPoint = view_of(FRAGMENT_ENTRY_POINT);
@@ -205,7 +231,8 @@ static WGPURenderPipeline pipeline_compiled(const char* code, WGPUTextureFormat 
 	fragment.targets = &target;
 	WGPURenderPipelineDescriptor descriptor = WGPU_RENDER_PIPELINE_DESCRIPTOR_INIT;
 	descriptor.vertex.module = module;
-	descriptor.vertex.entryPoint = view_of(VERTEX_ENTRY_POINT);
+	descriptor.vertex.entryPoint = view_of(quads ? vertex : VERTEX_ENTRY_POINT);
+	if (quads) descriptor.primitive.topology = WGPUPrimitiveTopology_TriangleStrip;
 	descriptor.fragment = &fragment;
 	WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline(device, &descriptor);
 	wgpuShaderModuleRelease(module);
@@ -265,7 +292,6 @@ enum { PREVIOUS_FRAME_BINDING = 1 };
 static char* previous_code;
 static WGPUTexture previous_image;
 static int32_t previous_width, previous_height;
-static int name_char(char c) { return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'); }
 static int reads_previous(const char* shader) {
 	for (const char* at = strstr(shader, PREVIOUS_HOLE); at; at = strstr(at + 1, PREVIOUS_HOLE))
 		if (!name_char(at[strlen(PREVIOUS_HOLE)])) return 1;
@@ -301,7 +327,8 @@ static void previous_kept(WGPUTexture image) {
 }
 
 // --- a drawing: the shader's pipeline for a target format, its values' uniform and its previous frame bound
-typedef struct { WGPURenderPipeline pipeline; WGPUBuffer uniform; WGPUBindGroup bindings; WGPUTextureView previous; int reads_previous; } Drawing;
+// corners and instances: a full image's triangle once, or the quads of a shader with its own vertex stage
+typedef struct { WGPURenderPipeline pipeline; WGPUBuffer uniform; WGPUBindGroup bindings; WGPUTextureView previous; int reads_previous; int corners; int instances; } Drawing;
 static int drawing_made(const char* shader, const char* values, WGPUTextureFormat format, int32_t width, int32_t height, Drawing* drawing) {
 	*drawing = (Drawing){0};
 	failure[0] = 0;
@@ -310,12 +337,17 @@ static int drawing_made(const char* shader, const char* values, WGPUTextureForma
 	layout.count = 0;
 	layout.members = 0;
 	layout.declarations[0] = 0;
+	layout.instances = 1;
 	if (!values_laid_out(values, &layout)) return 0;
+	char vertex[NAME_BYTES];
+	int quads = own_vertex_stage(shader, vertex);
+	drawing->corners = quads ? QUAD_CORNERS : TRIANGLE_CORNERS;
+	drawing->instances = quads ? layout.instances : 1;
 	drawing->reads_previous = reads_previous(shader);
 	char* body = drawing->reads_previous ? previous_called(shader) : strdup(shader);
 	size_t code_size = strlen(body) + sizeof FULL_IMAGE_VERTICES + sizeof PREVIOUS_FRAME + MOST_DECLARATIONS + 128;
 	char* code = malloc(code_size);
-	snprintf(code, code_size, "%s%s", body, FULL_IMAGE_VERTICES);
+	snprintf(code, code_size, "%s%s", body, quads ? "" : FULL_IMAGE_VERTICES);
 	free(body);
 	if (layout.members) {
 		size_t used = strlen(code);
@@ -366,7 +398,7 @@ static void drawn_into(WGPUCommandEncoder encoder, WGPUTextureView view, const D
 	wgpuRenderPassEncoderSetPipeline(pass, drawing->pipeline);
 	if (viewport) wgpuRenderPassEncoderSetViewport(pass, viewport->x, viewport->y, viewport->width, viewport->height, 0, 1);
 	if (drawing->bindings) wgpuRenderPassEncoderSetBindGroup(pass, 0, drawing->bindings, 0, NULL);
-	wgpuRenderPassEncoderDraw(pass, TRIANGLE_CORNERS, 1, 0, 0);
+	if (drawing->instances > 0) wgpuRenderPassEncoderDraw(pass, drawing->corners, drawing->instances, 0, 0);
 	wgpuRenderPassEncoderEnd(pass);
 	wgpuRenderPassEncoderRelease(pass);
 }
