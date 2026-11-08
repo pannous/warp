@@ -1,0 +1,168 @@
+#!/usr/bin/env warp
+# One million trees on a 4 km square. The opening value is
+# [total, candidate, submitted, scenery] for the camera below.
+# Drag the pointer to look. W A S D and the arrows walk. Each frame prints those four counts.
+# Near trees are drawn one each, farther chunks as a few of their own trees, never as one stand-in picture.
+# Headless, or with no window, the frame still selects that view and does not paint:
+# a paint with no GPU faults. A window paints the trees.
+use forest
+use keys
+
+global cam_x = 80.0
+global cam_z = -12.0
+global yaw = 0.15
+global pitch = -0.18
+global last_x = 0.0
+global last_y = 0.0
+global instances = 1
+global sprites = [[0.0, 0.0, 0.0, 0.0]]
+global eye = [80.0, 1.7, -12.0]
+global right = [1.0, 0.0, 0.0]
+global up = [0.0, 1.0, 0.0]
+global forward = [0.0, 0.0, 1.0]
+global focal = 100.0
+global centre = [120.0, 67.5]
+EYE_Y = 1.7
+WALK = 2.4
+
+opening(wide, high) := Glance(cam_x, EYE_Y, cam_z, yaw, pitch, FOREST_FOV, wide / high, FOREST_NEAR, FOREST_FAR)
+
+woods = shader {
+struct Corner {
+	@builtin(position) at: vec4f,
+	@location(0) spot: vec2f,
+	@location(1) rgb: vec3f,
+	@location(2) mark: vec3f,
+	@location(3) haze: f32,
+}
+
+fn project(p: vec3f) -> vec4f {
+	let d = p - $eye;
+	let z = dot(d, $forward);
+	if (z < 0.2) {
+		return vec4f(0.0, 2.0, 0.0, 1.0);
+	}
+	let px = $centre.x + dot(d, $right) / z * $focal;
+	let py = $centre.y - dot(d, $up) / z * $focal;
+	return vec4f(px / $width * 2.0 - 1.0, 1.0 - py / $height * 2.0, 0.0, 1.0);
+}
+
+@vertex fn forest_quad(@builtin(vertex_index) corner: u32, @builtin(instance_index) drawn: u32) -> Corner {
+	let s = $sprites[drawn];
+	let flags = u32(s.w);
+	let part = flags / 16u;
+	let kind = flags % 4u;
+	let detail = (flags / 4u) % 4u;
+	let uv = vec2f(f32(corner & 1u), f32((corner >> 1u) & 1u));
+	let side = uv * 2.0 - 1.0;
+	var out: Corner;
+	out.spot = uv;
+	out.mark = vec3f(f32(part), f32(kind), f32(detail));
+	out.haze = 0.0;
+	if (drawn >= u32($instances)) {
+		out.at = vec4f(0.0, 2.0, 0.0, 1.0);
+		return out;
+	}
+	if (part == 0u) {
+		out.at = vec4f(side, 0.0, 1.0);
+		out.rgb = vec3f(0.53, 0.70, 0.90);
+		return out;
+	}
+	if (part == 1u) {
+		let half = s.z;
+		let p = vec3f(s.x + side.x * half, 0.0, s.y + side.y * half);
+		out.at = project(p);
+		out.haze = clamp(dot(p - $eye, $forward) / 340.0, 0.0, 1.0);
+		let tilt = 0.16 + f32(kind) * 0.03;
+		out.rgb = vec3f(0.18 + tilt, 0.32, 0.13);
+		return out;
+	}
+	let tall = s.z * select(1.0, 0.62, detail > 1u);
+	let wide = tall * select(0.40, 0.26, detail > 1u);
+	let p = vec3f(s.x, uv.y * tall, s.y) + $right * side.x * wide;
+	out.at = project(p);
+	out.haze = clamp(dot(vec3f(s.x, tall * 0.5, s.y) - $eye, $forward) / 340.0, 0.0, 1.0);
+	var ink = vec3f(0.62, 0.30, 0.08);
+	if (kind == 0u) { ink = vec3f(0.08, 0.30, 0.13); }
+	if (kind == 1u) { ink = vec3f(0.16, 0.40, 0.12); }
+	if (kind == 2u) { ink = vec3f(0.42, 0.52, 0.34); }
+	out.rgb = ink;
+	return out;
+}
+
+@fragment fn main(here: Corner) -> @location(0) vec4f {
+	if (here.mark.x < 0.5) {
+		let sky = mix(vec3f(0.36, 0.52, 0.78), vec3f(0.76, 0.84, 0.92), here.spot.y);
+		return vec4f(sky, 1.0);
+	}
+	let fog = mix(here.rgb, vec3f(0.62, 0.70, 0.78), clamp(here.haze, 0.0, 0.72));
+	if (here.mark.x < 1.5) {
+		let band = fract(here.spot.x * 5.0 + here.spot.y * 3.0);
+		return vec4f(mix(fog * 0.82, fog, band), 1.0);
+	}
+	let u = here.spot.x - 0.5;
+	let v = here.spot.y;
+	var trunk = abs(u) < 0.07 && v < 0.42;
+	let cy = (v - 0.66) / 0.58;
+	let round = (u * u) / 0.14 + cy * cy < 1.0 && v > 0.30;
+	let conifer = abs(u) < 0.42 * max(v - 0.30, 0.0) && v > 0.32;
+	let blob = (u * u) / 0.10 + ((v - 0.55) * (v - 0.55)) / 0.18 < 1.0;
+	var body = round;
+	if (here.mark.y < 0.5) { body = conifer; }
+	if (here.mark.z > 1.5) { body = blob; trunk = false; }
+	if (!trunk && !body) { discard; }
+	var ink = fog;
+	if (trunk) {
+		ink = vec3f(0.30, 0.17, 0.08);
+		if (here.mark.y > 1.5 && here.mark.y < 2.5) { ink = vec3f(0.86, 0.87, 0.82); }
+	}
+	return vec4f(ink, 1.0);
+}
+}
+
+show(wide, high) := {
+	view = forest_view(opening(wide, high))
+	instances = count(view.sprites)
+	sprites = view.sprites
+	eye = view.eye
+	right = view.right
+	up = view.up
+	forward = view.forward
+	focal = picture_focal(high)
+	centre = [wide / 2.0, high / 2.0]
+	view
+}
+
+walk(ahead, side) := {
+	cam_x = cam_x + forward#1 * ahead + right#1 * side
+	cam_z = cam_z + forward#3 * ahead + right#3 * side
+}
+
+on key {
+	if key == Key.escape { exit() }
+}
+
+on frame {
+	if mouse_down {
+		yaw = yaw - (mouse_x - last_x) * 0.006
+		pitch = clamp(pitch + (mouse_y - last_y) * 0.006, -0.55, 0.35)
+	}
+	last_x = mouse_x
+	last_y = mouse_y
+	held = held_key()
+	ahead = 0.0
+	side = 0.0
+	if held == Key.w or held == Key.up { ahead = WALK }
+	if held == Key.s or held == Key.down { ahead = -WALK }
+	if held == Key.d or held == Key.right { side = WALK }
+	if held == Key.a or held == Key.left { side = -WALK }
+	walk(ahead, side)
+	wide = shown_width()
+	high = shown_height()
+	view = show(wide, high)
+	print([view.total, view.candidate, view.submitted, view.scenery])
+	if window_possible() { paint(woods) }
+}
+
+first = show(240.0, 135.0)
+[first.total, first.candidate, first.submitted, first.scenery]
