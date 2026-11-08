@@ -1,0 +1,7 @@
+# a method declared outside its type (decisions class-extensions, one-receiver-name): `T.f(p) := …` and `extend T {…}`,
+# the receiver named self or this, a class's fields read bare as in its body
+'class P { v: int }; P.twice() := v * 2; P(3).twice()'	6
+'class P { v: int }; P.scaled(k) := self.v * k; P(3).scaled(4)'	12
+'class P { v: int }; extend P { twice() := v * 2; half() := this.v / 2 }; [P(4).twice(), P(4).half()]'	[8, 2]
+'text.shout() := upper(self) + "!"; "ab".shout()'	"AB!"
+'extend text { shout() := upper(self) + "!"; whisper() := lower(this) }; ["AB".whisper(), "ab".shout()]'	["ab", "AB!"]
