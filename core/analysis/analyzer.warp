@@ -223,6 +223,9 @@ kind_of_key(n: Node, scope: Scope): ValueKind := {
 
 compound_kind(left: ValueKind, op: text, right: ValueKind): ValueKind := {
 	if left == ValueKind.Unknown or right == ValueKind.Unknown { return ValueKind.Unknown }
+	# a field `self.items += [x]` holds what its class gives it, known when it runs, as with arithmetic_kind (no int:
+	# collections' Set.add gave an i64 of its list)
+	if is_held_value(left) or is_held_value(right) { return ValueKind.Data }
 	if op == "+" and (left == ValueKind.List or right == ValueKind.List) and left != ValueKind.Text and right != ValueKind.Text { return ValueKind.List }
 	if op == "+" and (left == ValueKind.Text or right == ValueKind.Text) { return ValueKind.Text }
 	if left == ValueKind.Empty { return ValueKind.Empty }
