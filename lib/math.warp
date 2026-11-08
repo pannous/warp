@@ -167,13 +167,16 @@ exp2(x: float): float from 'm'
 erf(x: float): float from 'm'
 erfc(x: float): float from 'm'
 
-// number, so a value past 64 bits stays whole: gcd(2^70, 3 * 2^65) is 2^65
-gcd(a: number, b: number): number := {
+// the public word is int, as its signature shows. A value past 64 bits would wrap on the way into an int
+// parameter, so a call is the wide word before that (gcd(2^70, 3 * 2^65) is 2^65)
+wide_gcd(a, b) := {
 	x = if a < 0 then 0 - a else a
 	y = if b < 0 then 0 - b else b
 	while y != 0 { rest = x % y; x = y; y = rest }
 	x
 }
+gcd(a: int, b: int): int := wide_gcd(a, b)
+rewrite gcd($a, $b) => wide_gcd($a, $b)
 lcm(a: int, b: int) := a / gcd(a, b) * b
 // x within low and high: of vectors each component (min and max of a vector, card min-max)
 clamp(x, low, high) := each_any(x, e -> min(max(e, low), high))
@@ -365,7 +368,7 @@ class RatioParts {
 // n/d in lowest terms with a positive denominator, as ratio_new keeps every ratio: 6/-4 is -3/2, 5/0 is 1/0 (∞), 0/0 stays
 lowest_terms(n: number, d: number): RatioParts := {
 	sign = if d < 0 then -1 else 1
-	divisor = gcd(n, d)
+	divisor = wide_gcd(n, d)
 	if divisor > 1 { return RatioParts(sign * n /! divisor, sign * d /! divisor) }
 	RatioParts(sign * n, sign * d)
 }
@@ -375,9 +378,11 @@ exact_quotient(top: RatioParts, bottom: RatioParts): RatioParts := {
 	if bottom.numerator == 0 { raise "divide by zero" }
 	lowest_terms(top.numerator * bottom.denominator, top.denominator * bottom.numerator)
 }
-// `%` of the kind that arrives, so a nat keeps its own remainder (a for-loop value is a nat)
+// the call is the operator, written where the call is, so a literal and a for-loop value each keep the `/!` and `%`
+// of that place. A parameter would be inferred on its own and those two disagree when the divisor is negative
 euclidean_remainder(a, b) := a % b
-// `/!` of that same kind: -9 /! -2 is 4, -7 /! 2 is -4, and -(2^70) /! 3 stays whole
 euclidean_quotient(a, b) := a /! b
+rewrite euclidean_remainder($a, $b) => $a % $b
+rewrite euclidean_quotient($a, $b) => $a /! $b
 even(n: int) := is_even(n)
 odd(n: int) := is_odd(n)
