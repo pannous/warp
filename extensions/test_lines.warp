@@ -8,5 +8,5 @@ is_test_line_text(line: text): bool := {
 	# (`test = []`, `test := …` assign a variable named test)
 	rest.starts_with(TEST_LINE_START) and not [":", "="].any(sign => rest.remove_prefix(TEST_LINE_START).trim().starts_with(sign))
 }
-tests_module_used(source: text, folder: text = "."): list := if source.split("\n").any(is_test_line_text) then [TESTS_MODULE] else []
+tests_module_used(source: text, tree: Node, folder: text = "."): list := if source.split("\n").any(is_test_line_text) then [TESTS_MODULE] else []
 test_lines_extension = Extension{name: "test_lines", implicit_uses: [tests_module_used]}

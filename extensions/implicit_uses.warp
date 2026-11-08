@@ -39,7 +39,7 @@ uncommented(source: text): text := {
 	}
 	(kept + [source[from ..< source.length]]).join("")
 }
-implicit_modules(source: text, folder: text = "."): list := {
+implicit_modules(source: text, tree: Node, folder: text = "."): list := {
 	index = library_index_section("word")
 	# a foreign line, `posix_spawnp(pid: out, …): i32 from 'c'`, names C's words: its function the program's own
 	foreign = source.split("\n").map(c_declaration).filter(d => d != ø).map(d => d#1)
@@ -50,7 +50,7 @@ implicit_modules(source: text, folder: text = "."): list := {
 	candidates = index.keys.filter(word => mentions_indexed(code, names, word))
 	if #candidates == 0 { return [] }
 	# (a `format Flag f as text` definition defines no format: lib/text's stays callable)
-	program = formatted_definitions(interpolation(plain_node(parsed(source))))
+	program = formatted_definitions(interpolation(plain_node(if #foreign == 0 then tree else parsed(source))))
 	own = own_heads(program)
 	bound = names_bound_in(program)
 	prelude_names = prelude_definitions()
