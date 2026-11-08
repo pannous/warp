@@ -901,7 +901,7 @@ instance_members(variable: Node, part: Node, source: text): any := {
 }
 # the names as a list of texts, parsed: a one-letter name in List(…) would be a character, and the compiler compiling
 # itself has no node constructors
-texts_list(names: list): Node := plain_node(parsed("[" + names.map(name => "\"" + name + "\"").join(", ") + "]"))
+texts_list(names: list): Node := if #names == 0 then List([], Bracket.Square, Separator.Comma) else plain_node(parsed("[" + names.map(name => "\"" + name + "\"").join(", ") + "]"))
 # the class every assignment of the variable makes, `Point` of `p = Point(3, 4)`; ø when one makes something else
 class_made_as(variable: text, source: text): any := {
 	classes = class_names(source)

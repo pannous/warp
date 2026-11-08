@@ -3,7 +3,8 @@
 Every `samples/<chapter>/*.warp` runs, ideally by fixing the language rather than the sample. Fixed samples get an
 `is!("samples/<chapter>/x.warp", …)` line in tests/programs/test_samples.rs; tests/programs/test_playground_samples.rs
 runs every sample but those whose `# host: native` (or `none`) line says why they don't run in a browser; `# host: page`
-runs in the page only, `# host: none` in neither sweep (netbase needs its server).
+runs in the page only, `# host: none` in neither sweep. A program that needs an outside server is no sample but its
+library's example (lib/extra/examples/netbase.warp).
 
 ## How to sweep
 - Build a private CLI copy: `WARP=$(scripts/own-warp.sh)` then run `"$WARP" …`. The shared `debug/warp` is

@@ -111,10 +111,49 @@ class Routing { classes: map; names: list; methods: list; known: map; results: m
 # built and a program linking it lift its classes alike, so both name a method the same (`union·Set`); ø for a
 # method a class of the program's own declares too, routed by all the program reaches
 module_routing(classes: map, names: list, method: text, operator_methods: list): bool? := {
-	linked = concatenated(linked_signatures.values.map(signature => signature.classes.map(entry => "${entry#1}".remove_prefix(instance_struct_prefix))))
+	linked = linked_class_names()
 	owners = owners_of(classes, names, method)
 	if #owners == 0 or not (module.relocating or owners.all(owner => owner in linked)) { return ø }
 	is_library_word(method) or library_index_section("word").has(method) or method in operator_methods or names_syntax(method) or method in position_words
+}
+# the classes of the linked modules, by name
+linked_class_names(): list := concatenated(linked_signatures.values.map(signature => signature.classes.map(entry => "${entry#1}".remove_prefix(instance_struct_prefix))))
+# A linked module's class gives the program only the methods it may call (card linked-module): those it names, those
+# of the operators it writes (compare for `<`, equal for `==`) and its constructor once it names the class. Its
+# instances show, convert and operate (+ - * /) through the descriptor its module made (notes/runtime_linking.md), so
+# lifting all the methods of every linked class (~230 statements behind `use sound`, most of them dispatchers) only
+# had each pass walk them. The words and operators the program says, and those the kept methods say in turn
+# (toString·real calls text·method)
+def linked_methods_called(classes: map, linked: list, top_statements: list, operator_table: map) {
+	said = word_set(top_statements.filter(statement => not is_linked_class(statement, linked)).flat_map(tokens_within))
+	kept = {}
+	grew = yes
+	while grew {
+		grew = no
+		for name in linked {
+			for method in classes[name].methods {
+				key = method_key(name, method)
+				if not kept.has(key) and (method_said(defined_word(method), said, operator_table) or (defined_word(method) == constructor_method and said.has(name))) {
+					kept[key] = yes
+					grew = yes
+					for word in tokens_within(method) { said[word] = yes }
+				}
+			}
+		}
+	}
+	for name in linked { classes[name].methods = classes[name].methods.filter(method => kept.has(method_key(name, method))) }
+}
+method_key(class_name: text, method: Node): text := class_name + " " + defined_word(method) + " " + #method_parameters(method)
+# whether code saying these words and operators may call a method of that name: by it, by its operator, `<` by
+# compare, `==` by equal; a position word by any `b#i`, `b[i]` or `#b`, which the passes after write as its call
+method_said(word: text, said: map, operator_table: map): bool := {
+	spelled = spelled_operator(operator_table, word)
+	operated = glyph => said.has(key_head(Key(ø, glyph as Op, ø)))
+	said.has(word) or word in position_words or (spelled != ø and operated(spelled#2)) or (word == ordering_method and ordering_operators.any(operated)) or (word == equality_method and (operated("==") or operated("!=")))
+}
+is_linked_class(statement: Node, linked: list): bool := {
+	view = class_view(statement)
+	view != ø and declared_type_name(view#2) in linked
 }
 # the program with the methods of its classes lifted out as functions
 methods_lifted(program: Node): Node := {
@@ -132,14 +171,17 @@ methods_lifted(program: Node): Node := {
 	}
 	top_statements = top_statements.filter(top_statement => operated_class(top_statement, classes, operator_table) == ø)
 	for name in classes.keys { classes[name].methods = aliases_derived(equality_derived(name, positions_derived(classes[name].methods, operator_table), operator_table)) }
+	linked_names = if module.relocating then [] else linked_class_names()
+	linked = classes.keys.filter(name => name in linked_names)
+	if #linked > 0 { linked_methods_called(classes, linked, top_statements, operator_table) }
 	promotions = promotions_of(top_statements, classes, scope_of(program))
 	liftable = classes.keys.filter(name => lifts(classes, name, top_statements))
-	if #liftable == 0 { return program }
+	if #liftable == 0 and #linked == 0 { return program }
 	rewritten = []
 	for top_statement in top_statements {
 		view = class_view(top_statement)
 		name = if view == ø then "" else declared_type_name(view#2)
-		rewritten += [if name in liftable then without_methods(top_statement, view) else top_statement]
+		rewritten += [if name in liftable or name in linked then without_methods(top_statement, view) else top_statement]
 	}
 	# an int type's `format Color c as text` is a hook extensions/int_types/marks.warp renames format·text·Color, no function to route to
 	hooks = int_type_showers(top_statements)
