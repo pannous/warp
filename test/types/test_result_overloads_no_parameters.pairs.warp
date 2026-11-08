@@ -1,0 +1,5 @@
+# definitions without parameters told apart by their result type, the call's expected type picking one (card sample-return-polymorphism)
+'sample() as int := 7; sample() as text := "seven"; x: int = sample(); y: text = sample(); [x, y]'	[7, "seven"]
+'sample(): int := 7; sample(): text := "seven"; sample() as text'	"seven"
+'sample() as int := 7; sample() as text := "seven"; twice(n: int) := n * 2; twice(sample())'	14
+'sample() as int := 7; sample() as text := "seven"; y = sample(); y'	error	decision ambiguous-result-error: no expected type tells the results apart
