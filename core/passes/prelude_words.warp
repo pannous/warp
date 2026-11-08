@@ -995,6 +995,9 @@ names_bound_in_kept(program: Node): any := {
 	}
 	bound_names_found
 }
+# `math` of `math.gcd(4, 6)`: a standard module's name (`Math` math's), or a program's own linked one (`shapes`, its
+# text maybe not beside it), which the program doesn't bind
+qualifies_by_module(name: text, program: Node): bool := name not in names_bound_in_kept(program) and (is_module_name(name.lower()) or own_module_wasm.has(name))
 # the names in a view, `["attribute", "variants", ["list", ["symbol", "red"]], ["symbol", "Color"]]`'s red and Color
 view_symbols(view: any): list := if kind_of(view) == "symbol" then [view#2] else if view is list then view.flat_map(view_symbols) else []
 # the names a pattern binds: `x`, `(a, b)`, `x: int`, `[first, rest...]`, `Point{x, y}` (its x and y, not Point), the

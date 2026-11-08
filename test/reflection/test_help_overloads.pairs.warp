@@ -1,0 +1,7 @@
+# help of a word defined more than once lists each definition as written, the program's or a used module's; the
+# name used as a value is refused naming those definitions (card help-shows-overloads)
+'use sound; help(bandpass)'	"bandpass(signal, frequency, q = 0.707)\nbandpass(b: Bus, frequency, q = 0.707)"
+'f(x) := x\nf(x, y) := y\nhelp(f)'	"f(x)\nf(x, y)"
+'f(a: int) := 1\nf(a: text) := 2\nhelp(f)'	"f(a: int)\nf(a: text)"
+'f(x) := x; f(x, y) := y; g = f'	error	f is defined 2 times: f(x) and f(x, y); pass a lambda that calls the one you mean
+'f(a: int) := 1; f(a: text) := 2; g = f'	error	f is defined 2 times: f(a: int) and f(a: text)

@@ -57,9 +57,10 @@ coverage list (width, height, rows) through `coverage_list`.
 crates/warp-gpu/warp_gpu.c (800 lines over wgpu-native's webgpu.h) could follow, as a third part, once three
 general FFI mechanisms exist; its WGSL text work (uniform layout, previous-frame detection) and the gpu_compute host
 word's reading and building of warp lists (warp_node.h over wasmtime) become plain warp, simpler than in C:
-1. Callbacks (card ffi-callbacks): wgpu answers adapter and device requests, buffer maps and error scopes through C
-   function pointers (WGPUCallbackMode_AllowProcessEvents, polled by wgpuInstanceProcessEvents); a warp function, or a
-   small set of foreign.c trampolines that record "done" in memory a program reads, must be passable as a pointer.
+1. Callbacks (card ffi-callbacks): done, lib/callbacks.warp `c_callback(f, ["handle", "i64"])` hands C one of 16
+   foreign.c trampolines (six integer registers each), which calls the driver's c_callback_answered, which calls the
+   module's export c_callback_fired(slot, …) during the C call; a "handle" argument arrives as a handle. Float
+   arguments and more than 16 callbacks a run are refused; wgpu's callbacks take pointers and integers only.
 2. Structs passed by value: wgpuInstanceRequestAdapter, wgpuBufferMapAsync … take a WGPU*CallbackInfo (5 pointers,
    40 bytes) by value; foreign.c's calls pass only registers of scalars. ARM64 passes such a struct by reference to a
    copy, x86-64 SysV on the stack: a `struct(bytes)` parameter kind in the driver's C call.

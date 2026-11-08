@@ -1027,9 +1027,9 @@ public plain_hertz(pitch) := {
 // sounding together, `play([C4+E4 G4], 250ms)`, `play([[C4 E4] G4], 250ms)`; a score written as data so,
 // `play { c4 e4 [c4 g4] }`; a signal function, `play(hum, 2s)`, or a pair of them [left, right] the signal (user
 // 2026-10-12: no snake case for signals); a Sample the clip; any other text a sound file's path
-global play(music) := play(music, note_seconds)
-play(music, for duration) := music_played(music, duration, wave_shape)
-play(music, for duration, shape: text) := music_played(music, duration, shape)
+global play(tone) := play(tone, note_seconds)
+play(tone, for duration) := music_played(tone, duration, wave_shape)
+play(tone, for duration, shape: text) := music_played(tone, duration, shape)
 // the overloads call it by this name, an untyped music would take play(fill: …) (card overload-untyped-function)
 music_played(music, duration, shape) := {
 	if is_signal(music) { return play_signal(music, duration) }
@@ -1085,7 +1085,7 @@ new_samples(n: int): samples := {
 }
 is_signal(tone) := tone is function or tone is list and count(tone) == 2 and tone[0] is function
 // the note played through a bus (card shared-buses stage 2): play(C4, 1s, bus: room)
-play(music, for duration, bus: Bus) := sent_back(sent_to(bus), music_played(music, duration, wave_shape))
+play(tone, for duration, bus: Bus) := sent_back(sent_to(bus), music_played(tone, duration, wave_shape))
 // a music file in the background (wav, mp3, ogg, flac, aiff, m4a): play "song.mp3", through the system's player as
 // it is, its line on stderr `sound file: song.mp3`
 public play_file(path) := {

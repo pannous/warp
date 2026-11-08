@@ -1,6 +1,7 @@
 // The C functions a primitive program imports (`import getenv from "c"`), in a native build: each import wasm2c calls
 // is written by extensions/primitive.warp c_function_glue, which finds the function by name in the process and
 // passes the module's values over with these. Included behind lib/native/wasi.c.
+#include <errno.h>
 #include <arpa/inet.h>
 #include <dlfcn.h>
 #include <netinet/in.h>
@@ -32,8 +33,33 @@ static uint32_t module_address(struct w2c_wasi__snapshot__preview1* wasi, void* 
 // an address of the module's memory as the C pointer it is, for a program to hold as a handle (`native_pointer(address:
 // pointer): handle from "c"`): the glue made it the pointer already
 void* native_pointer(void* address) { return address; }
+// a pointer C passed to a callback (lib/callbacks.warp), returned as a handle, which the driver makes its id
+void* pointer_handle(int64_t address) { return (void*)(intptr_t)address; }
+// The C functions a warp function behind lib/callbacks.warp c_callback is passed to C as, one a slot: each calls the
+// driver's c_callback_answered(slot, its six integer arguments), which calls the program's c_callback_fired; float
+// arguments never reach one (they come in other registers)
+typedef uint64_t (*callback_answer_t)(w2c_program*, u64, u64, u64, u64, u64, u64, u64);
+static uint64_t callback_answered(uint64_t slot, uint64_t a, uint64_t b, uint64_t c, uint64_t d, uint64_t e, uint64_t f) {
+	static callback_answer_t answer;
+	if (!answer) answer = (callback_answer_t)native_function("w2c_program_c_callback_answered");
+	return answer(running_wasi->program, slot, a, b, c, d, e, f);
+}
+#define TRAMPOLINE(n) static uint64_t trampoline_##n(uint64_t a, uint64_t b, uint64_t c, uint64_t d, uint64_t e, uint64_t f) { return callback_answered(n, a, b, c, d, e, f); }
+TRAMPOLINE(0) TRAMPOLINE(1) TRAMPOLINE(2) TRAMPOLINE(3) TRAMPOLINE(4) TRAMPOLINE(5) TRAMPOLINE(6) TRAMPOLINE(7)
+TRAMPOLINE(8) TRAMPOLINE(9) TRAMPOLINE(10) TRAMPOLINE(11) TRAMPOLINE(12) TRAMPOLINE(13) TRAMPOLINE(14) TRAMPOLINE(15)
+static void* trampolines[] = {trampoline_0, trampoline_1, trampoline_2, trampoline_3, trampoline_4, trampoline_5, trampoline_6, trampoline_7,
+	trampoline_8, trampoline_9, trampoline_10, trampoline_11, trampoline_12, trampoline_13, trampoline_14, trampoline_15};
+void* c_callback_pointer(int64_t slot) {
+	if (slot < 0 || slot >= (int64_t)(sizeof trampolines / sizeof *trampolines)) {
+		fprintf(stderr, "c_callback: at most %zu callbacks a run\n", sizeof trampolines / sizeof *trampolines);
+		exit(1);
+	}
+	return trampolines[slot];
+}
 // paint's count in this run, from 1: its PNG's number (core/native/driver.warp painted)
 int32_t next_painting(void) { static int32_t painted; return ++painted; }
+// the error number of the C call that failed last (core/native/driver.warp os_failure)
+int32_t last_error(void) { return errno; }
 void* library_function(char* library, char* name);
 // libwarp_gpu beside warp (crates/warp-gpu, card gpu-functions), found at the first question: a shader paints on the
 // GPU, else (none, or WARP_GPU=off) its function on the CPU (lib/prelude.warp paint_shader)
@@ -68,7 +94,8 @@ static int64_t library_value(const char* name) {
 // the holes every shader has, filled where the shader reads them and the program gave none, as the playground fills
 // them (web/playground/host-gpu.js builtinValues): the image's size, seconds since the first painting, the paintings
 // before, the pointer and key over the window (0 without one)
-enum { MOST_VALUES_TEXT = 65536 };
+// room for the built-in holes written after the program's values, the longest each ("size: [w, h]", ", ") well inside
+enum { HOLE_TEXT = 64 };
 static const char* BUILTIN_HOLES[] = {"width", "height", "size", "time", "frame", "mouse", "mouse_down", "mouse_wheel", "key"};
 static int32_t reads_hole(const char* text, const char* name) {
 	size_t length = strlen(name);
@@ -94,7 +121,7 @@ static double seconds_now(void) {
 static void hole_written(char* into, const char* name, int64_t width, int64_t height, double time, int64_t frame) {
 	size_t used = strlen(into);
 	char* at = into + used;
-	size_t room = MOST_VALUES_TEXT - used;
+	size_t room = HOLE_TEXT;
 	if (!strcmp(name, "width")) snprintf(at, room, "width: %lld", (long long)width);
 	else if (!strcmp(name, "height")) snprintf(at, room, "height: %lld", (long long)height);
 	else if (!strcmp(name, "size")) snprintf(at, room, "size: [%lld, %lld]", (long long)width, (long long)height);
@@ -109,17 +136,18 @@ static char* values_filled(const char* shader, const char* values, int64_t width
 	static double first_painting;
 	static int64_t paintings;
 	if (!first_painting) first_painting = seconds_now();
-	char* filled = calloc(MOST_VALUES_TEXT, 1);
 	const char* given = values[0] == '{' ? values : "{}";
 	size_t given_length = strlen(given);
-	snprintf(filled, MOST_VALUES_TEXT, "%.*s", (int)(given_length - 1), given);
+	size_t size = given_length + HOLE_TEXT * (sizeof BUILTIN_HOLES / sizeof *BUILTIN_HOLES + 1);
+	char* filled = calloc(size, 1);
+	snprintf(filled, size, "%.*s", (int)(given_length - 1), given);
 	int members = strcmp(given, "{}") != 0;
 	for (size_t i = 0; i < sizeof BUILTIN_HOLES / sizeof *BUILTIN_HOLES; i++) {
 		if (!reads_hole(shader, BUILTIN_HOLES[i]) || given_hole(given, BUILTIN_HOLES[i])) continue;
-		if (members++) strncat(filled, ", ", MOST_VALUES_TEXT - strlen(filled) - 1);
+		if (members++) strcat(filled, ", ");
 		hole_written(filled, BUILTIN_HOLES[i], width, height, seconds_now() - first_painting, paintings);
 	}
-	strncat(filled, "}", MOST_VALUES_TEXT - strlen(filled) - 1);
+	strcat(filled, "}");
 	paintings++;
 	return filled;
 }

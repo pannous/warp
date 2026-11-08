@@ -12,7 +12,7 @@ round(note("C#4").hertz() * 100)' 27718
 is! 'use sound
 round(note("Eb5").hertz())' 622
 is! 'use sound
-C4' 261.63
+C4' C4
 
 # notes_are_named_in_a_program_with_units
 is! 'use sound
