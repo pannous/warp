@@ -45,6 +45,8 @@ wasi_stderr(): int := 2
 wasi_first_preopen(): int := 3
 wasi_no_entry(): int := 44
 wasi_not_a_folder(): int := 54
+# EPERM: the engine refused the path, a link on its way leading nowhere it may go (a dangling absolute link)
+wasi_not_permitted(): int := 63
 wasi_is_a_folder(): int := 31
 # path_open's flag for a folder, and the right to read its entries
 wasi_directory(): int := 2
@@ -150,12 +152,13 @@ std_file_read_bytes(path: Node): Node := {
 	content = read_file(path)
 	if kind_code(content) == Kind.Error then content else text_byte_list(unboxed_text(content))
 }
-# `use file; exists(path)`: whether there is a file or folder at path, which a failure but "no such entry" or "not a
-# folder" on the way also says (a folder opened as a file, a file not to be read)
+# `use file; exists(path)`: whether there is a file or folder at path, which a failure but "no such entry", "not a
+# folder" or "not permitted" on the way also says (a folder opened as a file, a file not to be read); a path through a
+# dangling link is none: which("x") over a PATH folder behind one (card which-missing-result)
 std_file_exists(path: Node): bool := {
 	fd = opened_file(text_of_textual(path), 0)
 	if fd >= 0 { fd_close(fd) }
-	fd >= 0 or (0 - fd != wasi_no_entry() and 0 - fd != wasi_not_a_folder())
+	fd >= 0 or (0 - fd != wasi_no_entry() and 0 - fd != wasi_not_a_folder() and 0 - fd != wasi_not_permitted())
 }
 # whether the path opens as a folder
 opens_as_folder(path: text): bool := {

@@ -918,6 +918,8 @@ full_definition(name: Node, program: Node, source: text): any := {
 function_help(name: Node, program: Node, source: text): any := {
 	# a used module's word, not the program's: its head and comment as the module writes them (module_word_help)
 	if definition_start(source, spelled(name)) == ø and used_word_help(spelled(name), source) != ø { return ø }
+	# defined more than once, `f(x)` and `f(x, y)`: each definition's head as written (card help-shows-overloads)
+	if #definition_slices(source).filter(cut => cut#1 == spelled(name)) > 1 and not owns_word("help", program) { return word_help_in(source, spelled(name)) }
 	signature = if owns_word("help", program) then ø else signature_text(name, program)
 	if signature == ø { return ø }
 	doc = doc_of(name, program, source)
@@ -940,10 +942,18 @@ used_word_help(word: text, source: text): any := {
 	ø
 }
 word_help_in(module_text: text, word: text): any := {
-	heads = definition_slices(module_text).filter(cut => cut#1 == word).map(cut => written_head(cut#2))
-	if #heads == 0 { return ø }
-	doc = comment_above(module_text, word)
+	spans = spans_of(module_text).filter(span => span#1 == word)
+	if #spans == 0 { return ø }
+	heads = spans.map(span => written_head(module_text[span#2 ..< span#3]))
+	doc = comment_before(module_text, spans#1#2)
 	heads.join("\n") + (if doc == "" then "" else "\n" + doc)
+}
+# the comment lines right above the line starting at `start`, a value's as a function's (card module-export-attributes)
+comment_before(source: text, start: int): text := {
+	lines = source[0 ..< start].split("\n")
+	first = #lines
+	while first > 1 and is_comment_line(lines#(first - 1).trim()) { first -= 1 }
+	lines[first - 1 ..< #lines - 1].map(line => comment_text(line.trim())).join("\n")
 }
 # `midi(pitch)` of `midi(pitch) := …`: a definition's first line up to its `:=`
 written_head(definition: text): text := definition.split("\n")#1.split(":=")#1.trim()

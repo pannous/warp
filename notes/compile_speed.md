@@ -206,3 +206,13 @@ marks are printed where a phase *starts*, so the time after `pass sugar` is suga
 - Pitfall: a function named `operator_<x>` declares the operator <x> (lib/aliases.warp's operator_·): helpers
   operator_written/operator_read broke the index scan (cast failure in key_left under alias_fields, found with
   WARP_BACKTRACE=1); they are written_operator/read_operator.
+- P6 (cbd32c5972): a called word's definitions (definitions_of: data_positions_called, the definition heads) are
+  parses from the prebuilt signature, no longer the defining module's text cut once a word; and a module's signature
+  is cut out of its wasm read as text (byte_slice) instead of decoded a code point at a time (utf8_text, ~15 % of a
+  `use json` compile). hello 1.84 G -> 1.42 G instructions (0.11 s), fizzbuzz 2.0 G -> 1.53 G, `use json` 8.6 G ->
+  7.0 G. Pitfall: a text holding wasm bytes is asked for its byte_size, never compared (`== ""`): text equality
+  normalizes (NFC) and trapped on the bytes.
+- Left: `use json` still lowers the reached module definitions with the program (lowered_reached: sugar and walks,
+  ~80 %; card sound-start-speed, warp-sprint-web); imports.warp's reached_within and the libm/foreign line scan read
+  each reached module's text (next: from the signature); prebuilding the 9 modules prebuilt ones link waits for
+  numeric-dispatch phase 2 (warp-sprint-units-time).
