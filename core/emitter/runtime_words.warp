@@ -227,7 +227,9 @@ descends(name: text, ancestor: text): bool := name == ancestor or (name in modul
 def class_test_code(body: Body, subject: Node, spec: text, word: text): TypedCode {
 	runtime_call(word, [TypedCode(ValueKind.Node, boxed(expression_code(body, subject))), list_value(body, module.classes.keys.filter(name => descends(name, spec)))])
 }
-def type_test_code(body: Body, subject: Node, spec: text): TypedCode {
+def type_test_code(body: Body, subject: Node, written: text): TypedCode {
+	# `x is Q` of `type Q = P` tests a P
+	spec = aliased_type(written)
 	if spec in module.sum_types and module.sum_types[spec] == "cases" { return refuse("a test of the type " + spec + ", which has cases") }
 	# `x is real` (REAL_CLASS) also of any number (decision real-canonical)
 	# an instance of the class or of one extending it, whatever the subject: `(5ms) is Quantity` of a Time

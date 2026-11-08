@@ -1,0 +1,3 @@
+# `x is Q` of a type alias tests the type it names
+'class P { v: int }; type Q = P; x = P(3); x is Q'	yes
+'use units; 5px is pixels'	yes

@@ -25,7 +25,7 @@ const VERTEX_ENTRY_POINT = "warp_full_image";
 const TRIANGLE_CORNERS = 3;
 // a shader with a vertex stage of its own (card gpu-instanced-blend) draws `values.instances` quads, each its 4 corners
 // (vertex_index 0 to 3) as a triangle strip, blended over what the quads before drew (instance_index 0 first), as
-// crates/warp-gpu/warp_gpu.c draws them
+// lib/host/native_host/gpu.warp draws them
 const OWN_VERTEX_STAGE = /@vertex\s+fn\s+(\w+)/;
 const QUAD_CORNERS = 4;
 const INSTANCES_NAME = "instances";
@@ -46,7 +46,7 @@ const PREVIOUS_FUNCTION = "warp_previous";
 const PREVIOUS_FRAME_BINDING = 1;
 // paint's lists of more than 4 numbers or of vectors: each a read-only storage array of its own from this binding on, as
 // long as it is (card paint-values-storage), `values.mesh` in the shader the array warp_values_mesh
-// (crates/warp-gpu/warp_gpu.c STORAGE_BINDING)
+// (lib/host/native_host/gpu.warp STORAGE_BINDING)
 const STORAGE_BINDING = 2;
 const STORAGE_PREFIX = "warp_values_";
 const PREVIOUS_FRAME = `
@@ -262,7 +262,7 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 }
 
 // the WGSL declaring `values` (appended, so the shader's line numbers stay the user's) and the uniform's bytes, laid out
-// as WGSL aligns its members (crates/warp-gpu/warp_gpu.c values_laid_out); its lists of more than 4 numbers or of
+// as WGSL aligns its members (lib/host/native_host/gpu.warp values_laid_out); its lists of more than 4 numbers or of
 // vectors as storage arrays [{name, numbers}], 4 numbers a vec4f
 function valuesLayout(values) {
 	const members = [], floats = [], arrays = [];
@@ -377,7 +377,7 @@ async function forgetDeviceIfLost() {
 const gpuModule = (device, shader) => compiledOnce(compiledModules, shader, () => checkedModule(device, shader));
 
 // the shader's module; one that does not compile throws why and where, `why at line:column`: a shader block's place in
-// the program, as the program placed its text (lib/prelude.warp shader_words), as natively (warp_gpu.c shader_failed)
+// the program, as the program placed its text (lib/prelude.warp shader_words), as natively (lib/host/native_host/gpu.warp shader_failure)
 async function checkedModule(device, shader) {
 	const module = device.createShaderModule({ code: shader });
 	const problems = (await answeredWithin(module.getCompilationInfo(), "compilation report", GPU_WORK_WAIT_MS)).messages.filter(message => message.type === "error");
@@ -671,7 +671,7 @@ addHostPart({
 			if (entries?.some(([, value]) => gpuCells(value))) return computedInPlace(plain(shader), entries, workgroups);
 			const cells = gpuCells(numbers);
 			if (cells) {
-				// changed in place, as natively (lib/native/warp_node.h warp_floats): the list itself is the value
+				// changed in place, as natively (lib/host/native_host/gpu.warp array_left): the list itself is the value
 				const code = plain(shader), copy = cells.slice();
 				const left = gpuJob("gpu_kernel", { shader: code, numbers: copy, workgroups: Number(workgroups) }, [copy.buffer], gpuElements(code));
 				gpuCells(numbers).set(left.subarray(0, cells.length)); // the module's memory may have grown meanwhile

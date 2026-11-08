@@ -3,3 +3,7 @@
 'class P { name: text }; P as text := it.name; p = P("ada"); p as text'	"ada"
 'class P { name: text }; P as text := "P " + it.name; str(P("ada"))'	"P ada"
 'use units; Length as text := "L"; str(3m)'	"L"
+'class P { v: int }; type Q = P; n: int as P := P(n); (3 as Q).v'	3
+'class A { v: int }; class B { v: int }; type a = A; type b = B; a as b := B(it.v * 2); (A(3) as B).v'	6
+'class P { v: int }; x = P(3); (x as P).v'	3
+'class P { v: int }; class R { v: int }; try { R(1) as P } catch e { "" + e }'	"no conversion to P of that value"

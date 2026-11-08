@@ -2,7 +2,6 @@
 // paint (the playground's canvas, natively a PNG). A color is a number 0xAARRGGBB: the color module's (rgb, hsv, the named colors, with_alpha)
 use math
 use color
-use os
 // the canvas until canvas(width, height) sizes it: show() alone paints this one, the size of the playground's output pane,
 // natively 640×480 
 global canvas_width: int = view_width
@@ -64,12 +63,13 @@ def canvas(width, height) {
 	window.width = width
 	window.height = height
 }
-// a window sized apart from the canvas (`window.width = 800` after canvas(200, 100)) shows it scaled: said once
+// a window sized apart from the canvas (`window.width = 800` after canvas(200, 100)) shows it scaled: said once, a hint
+// (on standard error as the page has it too: os's eprint is C's stdio, which no page has)
 global size_difference_said = no
 size_difference_told() := {
 	if size_difference_said or (window.width == canvas_width and window.height == canvas_height) { return ø }
 	size_difference_said = yes
-	eprint("the canvas is ${canvas_width}×${canvas_height}, the window ${window.width}×${window.height}: the canvas is shown scaled; canvas(w, h) sizes both")
+	hint "the canvas is ${canvas_width}×${canvas_height}, the window ${window.width}×${window.height}: the canvas is shown scaled; canvas(w, h) sizes both"
 }
 // the canvas's size as properties (decision property-accessors): written, it is a new blank canvas, as an HTML canvas is
 canvas.width := canvas_width

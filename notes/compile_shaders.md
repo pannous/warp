@@ -72,11 +72,11 @@ The translator runs inside the compiler as rule words, which the seed compiles; 
   stay in WGSL_WORDS.
 - A program list (comprehension, more than four numbers, list of lists) is a uniform array; its translated width is
   negative (-item width), and `levels#b` reads values.levels[i / 4][i % 4], numbers packed four to a vec4f as
-  warp_gpu.c member_laid_out lays them. A comprehension giving four numbers or fewer is laid out as a vector:
+  gpu.warp member_laid_out lays them. A comprehension giving four numbers or fewer is laid out as a vector:
   mismatch, loud at validation.
 - `$name` holes: plain_node strips the parser's shader_hole_names attribute before rules, so shader_values reads the
   holes from the text's values.name. A new rule word must also join the `rule_words` map at the end of
   rule_words.warp (lib/wgsl.warp's words too), otherwise "not in this compiler (an older seed)". Do not name a rule word like a core word
   (assigned_value clashed with the analyzer's).
 - Natively, built-in holes (time, mouse, size …) are filled in lib/native/foreign.c values_filled, and $previous in
-  warp_gpu.c. The first painting opens libwarp_window's window; a still picture stays shown until closed.
+  gpu.warp. The first painting opens the native host's window; a still picture stays shown until closed.

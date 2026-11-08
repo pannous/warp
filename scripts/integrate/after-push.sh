@@ -82,17 +82,24 @@ rerun_if_changed() {
 red() {
 	local key text="main ${tip:0:10}: $1 (pushed since ${since:0:10}: $pushed)"
 	key=after-push-$(echo "${1%%:*}" | tr 'A-Z ' 'a-z-' | tr -cd 'a-z0-9-')-$(date +%m%d)
-	if todo show "$key" 2>/dev/null | head -1 | grep -qv '^\[Done\]\|Archived'; then
-		todo note "$key" "$text" >/dev/null
-	else
+	local column
+	column=$(todo show "$key" 2>/dev/null | head -1)
+	if [ -z "$column" ]; then
 		todo add Now "$text" --key "$key" "${@:2}" >/dev/null
+	else
+		# a closed card of the same kind and day reopens: adding its key again failed silently and lost the RED
+		# (2026-11-08, tier 2's time_command lines after after-push-tiers-1-2-1108 was Done)
+		[[ $column == "[Done]"* || $column == *Archived* ]] && { todo move "$key" Now >/dev/null || say "card $key did not reopen"; }
+		todo note "$key" "$text" >/dev/null
 	fi
 	say "RED $1 (card $key)"
 }
 
-# cost_watched <record>: the instructions the tip's build of <record> (warp.record, warp-self.record) retired against the
-# last landing's; more than COST_JUMP_PERCENT up is an urgent card for the Supervisor (user 2026-11-07: input-bind
-# took the self-compile from 1.8 T to 13 T and nobody noticed for hours). A reused compiler has no record of its own
+# cost_watched <record>: the instructions the tip's build of <record> retired against the last landing's; more than
+# COST_JUMP_PERCENT up is an urgent card for the Supervisor (user 2026-11-07: input-bind took the self-compile from
+# 1.8 T to 13 T and nobody noticed for hours). A reused compiler has no record of its own. Only warp-self.record:
+# warp.record swings ±20% by what the seed build reuses (one commit measured 3.43 and 3.85 T, 2026-11-08), so it
+# false-alarmed; the self-compile is one compiler run, steady to ~1%
 COST_JUMP_PERCENT=10
 cost_watched() {
 	local record=$1 hash timing now last last_tip
@@ -289,7 +296,6 @@ watch() {
 	[ $status = 0 ] || { red "rebuild pure failed: $(echo "$built" | tail -1)" --urgent; return 1; }
 	got=$(cd "$TREE" && WARP_NO_WINDOW=1 WARP_LIB=$TREE/lib timeout 300 "$MAIN_WARP" pure samples/hello/hello.warp 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { red "smoke test: pure hello got ${got:0:120}" --urgent; return 1; }
-	cost_watched warp.record
 	# stage two: its compilers beside it, else the whole native warp
 	{ if [ -n "$early" ]; then install_compilers; else install_native; fi; } && { installed_compilers_are_trees || red "the installed warp.wasm is not the one built from ${tip:0:10}" --urgent; }
 	up_to_date_main "$MAIN_CHECKOUT" || say "the user's checkout did not pull: look at it"
