@@ -12,20 +12,21 @@ int_types(program: Node): Node := {
 	kinds = int_type_kinds(statements_in(program))
 	if #kinds == 0 { return program }
 	statements = statements_in(program)
-	# (a module's own `as Color` only marks: with_alpha(c, 0) stays invisible; its users convert)
-	converters = if module_written != "" then [] else statements.map(statement => converted_type(statement, kinds)).filter(name => name != ø)
+	converters = statements.map(statement => converted_type(statement, kinds)).filter(name => name != ø)
 	marked = group_like(program, statements.map(statement => if converted_type(statement, kinds) != ø then converter_defined(statement, kinds) else bottom_up(statement, n => int_type_used(n, kinds, converters))))
 	showers = kinds.keys.filter(name => statements_in(marked).any(statement => shower_of(statement) == name))
 	if #showers == 0 { return marked }
 	statements = statements_in(marked).map(statement => if shower_of(statement) in showers then shower_renamed(statement) else statement)
 	group_like(marked, with_int_types_shown(statements, showers, kinds))
 }
-# `x as Color` marks x, or calls the type's conversion where it has one; `x is Color` tests its mark
+# `x as Color` marks x, or calls the type's conversion of a written number where it has one; `x is Color` tests its mark
 int_type_used(n: Node, kinds: map, converters: list = []): Node := {
 	if not (n is key and value_of(n) is symbol and name_of(value_of(n)) in kinds) { return n }
 	name = name_of(value_of(n))
 	kind = kinds[name]
-	if is_key(n, Op.As) { return if name in converters then call_of(converter_word(name), [key_of(n)]) else call_of("int_marked", [key_of(n), kind]) }
+	# (a number written so, `0xFF8000 as Color`, is converted; a value computed, `(alpha * 16777216 + rgb) as Color`, is
+	# already the type's number and only marked: with_alpha(c, 0) stays invisible)
+	if is_key(n, Op.As) { return if name in converters and key_of(n) is int then call_of(converter_word(name), [key_of(n)]) else call_of("int_marked", [key_of(n), kind]) }
 	if is_key(n, Op.Is) { return Key(call_of("int_mark_of", [key_of(n)]), Op.Eq, kind) }
 	n
 }
