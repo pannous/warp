@@ -1,4 +1,4 @@
-// The native warp's window (decision window-in-warp, card window-ffi-replace), a part of lib/native_host.warp: what the
+// The native warp's window (decision window-in-warp, card window-ffi-replace), a part of lib/host/native_host.warp: what the
 // playground's canvas answers in JavaScript (web/playground/canvas.js), natively over SDL3 by plain FFI: host_owns /
 // host_value (the window's system values), host_value_set, host_window_layer (a painting's Metal layer, which
 // libwarp_gpu shows it in) and window_run_ended.

@@ -506,10 +506,19 @@ function showSounded(seconds) {
 	$("sounded").hidden = !seconds;
 	if (seconds) $("sounded").textContent = `♪ ${seconds.toFixed(1)} s of sound` + (beforeUserActivation() ? `, ${SILENT_BEFORE_ACTIVATION}` : "");
 }
-function playSound({ samples, rate, channels, at, handle, loop }, from) {
-	if (beforeUserActivation()) return;
+// the page's AudioContext, made and started by the first click, touch or key press itself: iOS Safari starts one only
+// inside a gesture's own handler, never when a run's sound arrives later from its Worker, and mutes WebAudio with the
+// ring switch unless the page's audio session plays (card rust-example-ipad)
+function startedAudio() {
 	audio ??= new AudioContext();
 	audio.resume();
+	if (navigator.audioSession) navigator.audioSession.type = "playback";
+	return audio;
+}
+for (const gesture of ["pointerdown", "touchend", "keydown"]) addEventListener(gesture, startedAudio, { capture: true, once: true });
+function playSound({ samples, rate, channels, at, handle, loop }, from) {
+	if (beforeUserActivation()) return;
+	startedAudio();
 	const frames = Math.max(Math.ceil(samples.length / channels), 1);
 	const buffer = audio.createBuffer(channels, frames, rate);
 	for (let channel = 0; channel < channels; channel++)

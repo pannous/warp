@@ -8,7 +8,7 @@ const PAINT_SHOWN_SIDE = 288; // a small painting is shown this wide (or high), 
 const KEYS_HELD_KEPT = 8;
 // mouse_wheel: the wheel steps turned over a canvas, up adding (crates/warp-runtime host_words.rs MOUSE_WHEEL)
 // "keys pressed", "key code pressed": the keys that went down so far and the last of them, as natively
-// (lib/native_host/window.warp): `on key {…}` runs for a press let go before the program's frame looks (lib/keys.warp)
+// (lib/host/native_host/window.warp): `on key {…}` runs for a press let go before the program's frame looks (lib/keys.warp)
 // view_width, view_height: the room the paintings show in, the screen's in full screen (playground.js viewSize), shared
 // so a running animation's paint(shader) follows a resize or full screen at once (card shader-examples)
 const VIEW_NAMES = ["view_width", "view_height"];
