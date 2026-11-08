@@ -2,11 +2,9 @@
 # fixtures: test/fixtures/unix (poem.txt, configs/ with a.json, sub/b.json, .hidden/c.json, notes.txt)
 
 # ~ is the home folder wherever a path is used
-# — native only: a page has no home folder (decision page-host-lines)
 'use script; exists(~/)'	true
 'use script; ls(~/) == ls(env("HOME"))'	true
 'use script; exists("~/surely-no-such-file.txt")'	false
-
 # which: the program's path from the PATH, ø when none has it
 # — native only: a page runs no process or shell (decision page-host-lines)
 'use script; which("sh").ends_with("/sh")'	true
