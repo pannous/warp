@@ -330,15 +330,13 @@ c_functions_of(written: text, library_folder: text, folder: text = "."): list :=
 	}
 	# libm's functions warp has no pure code for (all but c_emitted_words: sin, cos, exp…), called without an import as
 	# Rust's lane calls them, by the program or a standard module it uses (`use sound`'s log2)
-	with_parts = module_with_parts(source, folder)
-	reached = reached_within(with_parts)
-	calling = ([with_parts] + module_sources(reached).map(library_module_with_parts)).join("\n")
-	for d in catalog { if d#2 == "m" and not functions.has(d#1) and not c_warps(own, d#1, "m") and calling.contains(d#1 + "(") { functions[d#1] = d } }
 	# the foreign lines and C imports of the files it uses by path and of the standard modules it uses, each it calls
-	# (lib/sound.warp's kill, unlink, mkdir; lib/native_host/window.warp's `import calloc from 'c'`); the catalog's own
-	# files (c.warp, math.warp) only as its rules above take them
-	for d in ([with_parts] + module_sources(reached.filter(name => name + ".warp" not in c_catalog_files)).map(library_module_with_parts)).flat_map(text => c_declarations_used(text, catalog)) {
-		if not functions.has(d#1) and calling.contains(d#1 + "(") { functions[d#1] = d }
+	# (lib/sound.warp's kill, unlink, mkdir; lib/native_host/window.warp's `import calloc from 'c'`): a standard
+	# module's from its signature (module_c_functions)
+	with_parts = module_with_parts(source, folder)
+	for d in c_functions_called(with_parts, no, catalog) { if not functions.has(d#1) and not c_warps(own, d#1, d#2) { functions[d#1] = d } }
+	for module in reached_within(with_parts) {
+		for d in module_c_functions(module) { if not functions.has(d#1) and not c_warps(own, d#1, d#2) { functions[d#1] = d } }
 	}
 	replaced = {}
 	for statement in wasm_uses.keys {
@@ -349,15 +347,43 @@ c_functions_of(written: text, library_folder: text, folder: text = "."): list :=
 	lines_out = c_without(kept, resolved, replaced).map(line => with_wasm_module_words(line, wasm_uses))
 	[lines_out.join("\n"), functions, missing]
 }
-# the standard modules a source reaches, those they use in turn too (matrix's math uses reals, whose sin is libm's)
+# the standard modules a source reaches, those they and their parts use in turn too (matrix's math uses reals, whose sin
+# is libm's)
 reached_within(source: text): list := {
 	reached = reached_modules(source)
 	at = 1
 	while at <= #reached {
-		for module in used_modules(library_module_with_parts(file_source(run_library() + "/" + reached#at + ".warp") ?? "")) { if module not in reached { reached += [module] } }
+		for module in module_c_uses(reached#at) { if module not in reached { reached += [module] } }
 		at += 1
 	}
 	reached
+}
+# the C functions a text with its parts calls (`name(`): libm's, which it calls without importing them (`use sound`'s
+# log2), and, but in the catalog's own files (c.warp, math.warp, whose lines its rules take), those it declares by a
+# foreign line or imports
+c_functions_called(content: text, catalog_file: bool, catalog: list): list := {
+	declared = if catalog_file then [] else c_declarations_used(content, catalog)
+	(catalog.filter(d => d#2 == "m") + declared).filter(d => content.contains(d#1 + "("))
+}
+# a standard module's C functions and the modules it and its parts use, by its prebuilt signature (signature.warp:
+# c_lines, c_uses), else by its text with its parts
+module_c_functions(module: text): list := {
+	signature = prebuilt_signature(module)
+	if signature != ø then signature.c_lines.map(c_declaration) else c_functions_called(library_module_with_parts(used_module_text(module)), module + module_extension in c_catalog_files, c_catalog([]))
+}
+module_c_uses(module: text): list := {
+	signature = prebuilt_signature(module)
+	if signature != ø then signature.c_uses else used_modules(library_module_with_parts(used_module_text(module)))
+}
+# what a signature holds of a module's C: its C functions as foreign lines (c_line_written, read back by
+# c_declaration), the modules it and its parts use
+module_c_lines(name: text, source: text): list := c_functions_called(library_module_with_parts(source), name + module_extension in c_catalog_files, c_catalog([])).map(c_line_written)
+module_c_used(source: text): list := used_modules(library_module_with_parts(source))
+# a C declaration as a foreign line, `strlen(s: text): i64 from 'c'`
+c_line_written(d: list): text := {
+	types = d#3
+	names = d#4
+	d#1 + "(" + (0 ..< #types).map(at => names[at] + ": " + types[at]).join(", ") + "): " + d#5 + " from '" + d#2 + "'"
 }
 # the lines without the statements of `statements` and with those `replaced` names replaced, the other statements of a
 # line kept (a line left empty stays)
