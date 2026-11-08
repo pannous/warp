@@ -18,6 +18,8 @@ time_operation_word = "time_operation"
 # what an operand of those is before its parts are read: a time, or a quantity lib/units moves it by (`t + 1 h`)
 time_operand_word = "time_operand"
 time_arithmetic_module = "time_arithmetic"
+# `x is time`, `x is duration`: lib/time.warp's word the emitter tests with (runtime_words.warp time_test_code)
+time_test_word = "time_valued"
 time_operator_symbols = ["+", "-", "*"]
 
 # the arm of a match any value takes, `_: …`

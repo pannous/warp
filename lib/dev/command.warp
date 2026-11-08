@@ -36,7 +36,7 @@ global stamp = ""
 # the program built anew into the next version's folder; its failure, the compiler's words, kept for the page instead
 rebuilt() := {
 	folder = builds + "/" + (version + 1)
-	said = command(quoted(warp_executable()) + " build --site=" + quoted(folder) + " " + quoted(source) + " 2>&1; echo \"exit $?\"").trim().split("\n")
+	said = command(quoted(warp_executable()) + " build --dev --site=" + quoted(folder) + " " + quoted(source) + " 2>&1; echo \"exit $?\"").trim().split("\n")
 	command("touch " + quoted(stamp))
 	if said.last() == "exit 0" and exists(folder + INDEX) {
 		version += 1

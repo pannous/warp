@@ -223,3 +223,9 @@ marks are printed where a phase *starts*, so the time after `pass sugar` is suga
 - Pitfall: while `warp rebuild` writes modules/ anew, the prebuilt signatures on disk are the old ones; they ordered
   native_host before the callbacks it had come to use. The modules step reads no prebuilt signature
   (signature.warp modules_rewritten), its sources say it all.
+- Sample audit at P7 (data/reads.sh): 111 of 274 samples compile without a lib/ source read (52 of 263 at P4). The
+  most read: reals 100 (not prebuilt), then math, case_table(s) ~50: modules a module compiled from its source uses
+  were compiled from their sources beside it.
+- P8 (8ed01fdcda): those are linked prebuilt (compiler.warp linked_libraries follows the uses of a module whose file
+  is empty, never the module being written itself). 25 of the ~100 reals samples print differently from main, all
+  noise (pids in file names, timings, stateful storage samples, a module main gained meanwhile).

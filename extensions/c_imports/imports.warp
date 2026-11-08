@@ -15,7 +15,10 @@
 #   out      an out-pointer the call fills: no argument; the first one's pointer is the result of a handle result
 #   bytes    a warp text's bytes or a list of 0 to 255 as a pointer, NULs and all; the length a `length` parameter after it
 #            gets: `crc32(start: i64, data: bytes, size: length): i64 from 'z'` is called crc32(0, [97, 0, 98])
-#   length   the byte count of the bytes parameter before it: no argument
+#            as a result: a pointer to {i64 length, its bytes} the callee malloc'd, read back as a text, then freed
+#   f32s     a list of numbers as a C array of floats (f32), i32s of whole numbers as one of int32s: a GPU's buffer
+#            written from a list at once, `wgpuQueueWriteBuffer(queue: handle, buffer: handle, at: i64, data: f32s, size: length)`
+#   length   the byte count of the bytes, f32s or i32s parameter before it: no argument
 #   texts    a list of warp texts as a NULL-terminated `char *[]` of their copies (argv: posix_spawn, execv)
 #   void     no result
 
@@ -33,16 +36,16 @@ c_quotes = ["'", "\""]
 # a type word of a foreign line → the type it crosses as
 c_type_words = {i32: "i32", int: "i32", int32: "i32", bool: "bool", char: "i32", i64: "i64", int64: "i64", long: "i64", size_t: "i64", u32: "u32", uint32: "u32",
 	f64: "f64", float: "f64", double: "f64", number: "f64", f32: "f32", float32: "f32", text: "text", string: "text", owned_text: "owned_text", handle: "handle", pointer: "handle",
-	out: "out", bytes: "bytes", length: "length", texts: "texts", void: "void", nothing: "void"}
+	out: "out", bytes: "bytes", f32s: "f32s", i32s: "i32s", length: "length", texts: "texts", void: "void", nothing: "void"}
 # the kind the emitter passes a type as (host_words.warp's), and the c_signatures.rs name of the parameter
-c_parameter_kinds = {bool: ValueKind.I32, i32: ValueKind.I32, u32: ValueKind.I32, i64: ValueKind.Int, f64: ValueKind.Float, f32: ValueKind.F32, text: ValueKind.Node, bytes: ValueKind.Node, texts: ValueKind.Node, handle: ValueKind.I32}
-c_parameter_names = {bool: "i32", i32: "i32", u32: "i32", i64: "i64", f64: "f64", f32: "f32", text: "ptr", bytes: "bytes", length: "length",
+c_parameter_kinds = {bool: ValueKind.I32, i32: ValueKind.I32, u32: ValueKind.I32, i64: ValueKind.Int, f64: ValueKind.Float, f32: ValueKind.F32, text: ValueKind.Node, bytes: ValueKind.Node, f32s: ValueKind.Node, i32s: ValueKind.Node, texts: ValueKind.Node, handle: ValueKind.I32}
+c_parameter_names = {bool: "i32", i32: "i32", u32: "i32", i64: "i64", f64: "f64", f32: "f32", text: "ptr", bytes: "bytes", f32s: "f32s", i32s: "i32s", length: "length",
 	handle: "handle", out: "out", texts: "texts"}
 # the parameters the host fills, which take no argument
 c_filled_types = ["out", "length"]
 UNSIGNED_TYPE = "u32"
 # the types only a parameter has
-c_parameter_only_types = ["out", "bytes", "length", "texts"]
+c_parameter_only_types = ["out", "length", "texts", "f32s", "i32s"]
 
 # a library as written, `'m'`, `"c"`, `sqlite3`, `libm` → its name; ø for none or a library of warp's
 c_library_of(written: text, quoted: bool): any := {
@@ -418,7 +421,7 @@ c_host_word(declaration: list): any := {
 	result = declaration#5
 	if "?" in types or "owned_text" in types or result == "?" or result in c_parameter_only_types { return ø }
 	kinds = types.filter(t => t not in c_filled_types).map(t => c_parameter_kinds[t])
-	gives_text = result == "text" or result == "owned_text"
+	gives_text = result in ["text", "owned_text", "bytes"]
 	# (an unsigned 32-bit result crosses as the int it means, 3400449319 never -894517977: zlib's crc32)
 	unsigned = result == UNSIGNED_TYPE
 	results = if result == "void" then [] else if gives_text then [ValueKind.Node] else if unsigned then [ValueKind.Int] else [c_parameter_kinds[result]]

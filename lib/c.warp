@@ -70,6 +70,9 @@ field_f32(struct: handle, offset: i64): f64 from 'c'
 field_f64(struct: handle, offset: i64): f64 from 'c'
 field_pointer(struct: handle, offset: i64): handle from 'c'
 field_text(struct: handle, offset: i64): text from 'c'
+// count bytes at once, as a text (byte_at reads one), and a text's bytes written there
+field_bytes(struct: handle, offset: i64, count: i64): bytes from 'c'
+set_field_bytes(struct: handle, offset: i64, data: bytes, size: length): void from 'c'
 // a field written so (u32 fields by set_field_i32, which keeps the low 32 bits)
 set_field_i32(struct: handle, offset: i64, value: i64): void from 'c'
 set_field_i64(struct: handle, offset: i64, value: i64): void from 'c'
