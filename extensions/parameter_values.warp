@@ -6,8 +6,10 @@ parameter_value(n: Node, program: Node) := {
 	if parts == ø { return ø }
 	valued = parts.parameters.find(parameter => is_key(parameter, Op.Colon) and key_of(parameter) is symbol and is_literal_value(value_of(parameter)))
 	if valued == ø { return ø }
-	diagnose(call_of("parameter_value", [name_of(key_of(valued)), value_of(valued)]), valued)
+	diagnose(call_of("parameter_value", [name_of(key_of(valued)), written_value(value_of(valued))]), valued)
 }
 is_literal_value(n: Node): bool := n is number or n is text
+# the value as code, a text in its quotes: `as = "x"`
+written_value(n: Node): text := if n is text then "\"${n}\"" else "${n}"
 
 parameter_values_extension = Extension{name: "parameter_values", lints: [parameter_value]}
