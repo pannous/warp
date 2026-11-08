@@ -367,7 +367,7 @@ wgsl_item(n: Node, scope: WgslScope): list := {
 	if vec#2 < 0 { return wgsl_array_item(vec#1, -vec#2, "(i32(" + at#1 + ") - 1)") }
 	return [vec#1 + "[i32(" + at#1 + ") - 1]", 1]
 }
-# an item of an array value, from 0: as libwarp_gpu and host-gpu.js lay one out in the uniform, numbers four to a
+# an item of an array value, from 0: as lib/host/native_host/gpu.warp and host-gpu.js lay one out in the uniform, numbers four to a
 # vec4f, a vector one vec4f each
 wgsl_array_item(array: text, item_width: int, at: text): list := {
 	if item_width == 1 { return [array + "[" + at + " / 4][" + at + " % 4]", 1] }
