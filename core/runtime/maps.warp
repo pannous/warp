@@ -129,6 +129,8 @@ extra_value_at(extra: Node, at: int, count: int): Node := {
 value_at(m: Node, at: int): Node := if is_class_instance(m) then instance_field_at(m, at) else key_value(unboxed_list(fields_of(m))#at)
 # `m.name`: the value of m's entry `name`; a value without it fails as "no field name"
 map_get(m: Node, name: text): Node := {
+	# `p: Person? = ø; p.name`: a catchable error naming the field, not a trap
+	if is_null(m) { raised(failure_of("ø has no field " + name + ": give it a value first, or test it (if p { p." + name + " })")) }
 	if is_position_part(m, name) { return position_part(m, name) }
 	if is_list_part(m, name) { return list_part(m, name) }
 	# a symbol's name, a type value's too: `type(3).name` is int, as written without its `class `
