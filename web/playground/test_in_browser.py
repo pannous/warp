@@ -283,6 +283,12 @@ gpu_render(s, 2, 2)
 gpu_render(s, 2, 2)
 gpu_render(s, 2, 2)#2"""
 PREVIOUS_FRAME_SHOWN = str(0xFFC0_0000)
+# card playground-stale-value: a run started without the Run button (an example chosen, auto-run, runCode) clears the
+# last run's value as Run does: an animation running long showed the value before it above itself
+STALE_VALUE = "(a run started without Run leaves no old value above an animation)"
+STALE_VALUE_CODE = "use draw\ncanvas(40, 40)\nloop {\n\tclear(paper)\n\tshow()\n\tsleep(16ms)\n}"
+STALE_VALUE_FIRST = "4242"
+STALE_VALUE_WAIT_MS = 3000
 # each GET the server began and finished, (seconds since it started, path, finished): shown after a failed tour, which
 # then says whether the browser asked for a stalled worker's scripts at all (card tour-firefox)
 served = []
@@ -847,6 +853,19 @@ def shader_error_wrong():
 	return wrong + ([] if ":" in marked else [f"shader error marks {marked!r}, expected the colon"])
 
 
+def stale_value_wrong():
+	"""a value shown, then an animation started by runCode: while it runs, the value line no longer shows that value"""
+	run_code(STALE_VALUE_FIRST)
+	shown = browser("eval", f"""(async () => {{
+		playground.runCode({json.dumps(STALE_VALUE_CODE)});
+		await new Promise(done => setTimeout(done, {STALE_VALUE_WAIT_MS}));
+		const line = document.getElementById("value");
+		const value = line.parentElement.hidden ? "" : line.textContent;
+		return value;
+	}})()""")
+	return [f"while the animation runs the value line shows {shown}, the last run's"] if STALE_VALUE_FIRST in shown else []
+
+
 def previous_frame_wrong():
 	"""a shader reading $previous adds to what its last render left; skipped loudly without WebGPU"""
 	rendered = run_code(PREVIOUS_FRAME_CODE)
@@ -1227,7 +1246,7 @@ def check_examples(names, page_url=None, site=None):
 	snippets = guide_snippets() if GUIDE in names else []
 	for line, code, value, printed in snippets:
 		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), *([(BUILT_SITE, built_site_wrong)] if serves_repository else [])) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), *([(BUILT_SITE, built_site_wrong)] if serves_repository else [])) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()

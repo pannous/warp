@@ -1169,6 +1169,18 @@ function showEventOutput(data) {
 	if (data.html !== undefined) showRendered(data.html);
 }
 
+// a run starting, however it was started (Run, auto-run, an example chosen, a queued run): the old value gives way to
+// "…", and the old errors, warnings, underlines and printed text go, so none is taken for the new run's, nor stays
+// above an animation as long as it runs (cards g_oc54, playground-stale-value)
+function clearPreviousRun() {
+	showValue(PENDING_VALUE);
+	$("value").classList.remove("located");
+	$("value").onclick = null;
+	$("diagnostics").replaceChildren();
+	markPositions({});
+	showPrinted([]);
+}
+
 async function show(code) {
 	if (showing) {
 		queued = code; // only the newest code is worth running next
@@ -1177,6 +1189,7 @@ async function show(code) {
 		return;
 	}
 	showing = true;
+	clearPreviousRun();
 	setStatus("running…");
 	try {
 		showReport(await evaluate(code));
@@ -1370,17 +1383,10 @@ function runChanged() {
 	return runNow();
 }
 
-// Run pressed (the button, Ctrl/Cmd-Enter): the old value gives way to "…" at once, and the old errors, warnings,
-// underlines and printed text go, so none is taken for the new run's (card g_oc54)
-// Ctrl/Cmd-Enter while live loops play runs the code again, handing them over (card playground-live); the button stops
+// Run pressed (the button, Ctrl/Cmd-Enter); Ctrl/Cmd-Enter while live loops play runs the code again, handing them
+// over (card playground-live); the button stops
 function runPressed(fromKeys = false) {
 	if (showsStop() && !(fromKeys && playsLive(pending))) return stopPressed();
-	showValue(PENDING_VALUE);
-	$("value").classList.remove("located");
-	$("value").onclick = null;
-	$("diagnostics").replaceChildren();
-	markPositions({});
-	showPrinted([]);
 	return runNow();
 }
 
