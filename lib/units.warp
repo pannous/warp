@@ -258,7 +258,10 @@ rewrite $a ^ $b => $converted where raw and $u = converted_unit($a) and $u is Un
 rewrite $e $u is $t => ($e $u) is $t where $e is number and unit_led($u) and $t in [length, area, volume, mass, duration, time, temperature, speed, frequency, force, density, Quantity, Length, Mass, Time, Temperature, Pixels, Area, Volume, Speed, Frequency, Force, Density]
 // `3 cm is length`, `2 km/h is speed`: a quantity measures a named dimension, after its unit went with its amount (no
 // `cm is length` alone); a program's own `length` stays its own
-rewrite $q is $d => measures($q, $name) where $d is symbol and $d in [length, area, volume, mass, duration, time, temperature, speed, frequency, force, density] and not unit_led($q) and $name = spelled($d)
+rewrite $q is $d => measures($q, $name) where $d is symbol and $d in [length, area, volume, mass, temperature, speed, frequency, force, density] and not unit_led($q) and $name = spelled($d)
+// `x is time`, `x is duration`: a quantity of time, or one of lib/time's values, an instant a time, a Duration both
+// (decision time-word: instant, date, duration are times)
+rewrite $q is $d => (measures($q, $name) or time_valued($q, $name)) where $d is symbol and $d in [duration, time] and not unit_led($q) and $name = spelled($d)
 named_dimensions() := {"length": length_dimension, "area": area_dimension, "volume": volume_dimension, "mass": mass_dimension, "duration": duration_dimension, "time": duration_dimension, "temperature": temperature_dimension, "speed": speed_dimension, "frequency": frequency_dimension, "force": force_dimension, "density": density_dimension}
 measures(q: any, dimension: text) := q is Quantity and q.dims == named_dimensions()[dimension]
 // `unit furlong := 201.168m`: a program's own unit, the quantity of one of it shown by its name (`1km as furlong` waits
@@ -368,18 +371,6 @@ exact_decimal(t: text) := {
 // a duration sleeps that long, `sleep(300ms)`; a plain number its seconds, as the prelude's sleep (one word: a module's
 // sleep(d: Time) beside the prelude's sleep(x) would replace it, card typed-overload-replace)
 sleep(duration) := slept((if duration is Time then duration.amount else duration) * 1000)
-
-// `time 6`, `time 3+3`: a number as a Time, its seconds (6s); `time { … }` measures as the shell's time does: runs the
-// block, prints how long it took and gives the block's value (decision time-command). A block reads as data, which no
-// typed overload tells apart from a number, so a rule turns it into the run measured
-time(n: number) := n * seconds
-rewrite time {$body...} => timed(() => {$body...})
-timed(run) := {
-	started = clock()
-	value = run()
-	print "time: " + (clock() - started) / 1000 * seconds
-	value
-}
 
 // `6.0m ± 0.3`: a tolerance of a quantity, its amount an interval; a plain spread counts in the value's unit, a
 // quantity's converts to it: `5m ± 1cm` is 5.00 ± 0.01 m (notes/plus_minus.md P220)
