@@ -289,6 +289,10 @@ STALE_VALUE = "(a run started without Run leaves no old value above an animation
 STALE_VALUE_CODE = "use draw\ncanvas(40, 40)\nloop {\n\tclear(paper)\n\tshow()\n\tsleep(16ms)\n}"
 STALE_VALUE_FIRST = "4242"
 STALE_VALUE_WAIT_MS = 3000
+# card run-during-load-feedback: while the worker still loads (?slow_start; 7.5 s on the user's iPad), the page's run is
+# pending as any run is: Run becomes Stop after the grace, and Stop cancels the run before it starts
+STOP_WHILE_LOADING = "(Stop shows while the compiler loads, and cancels the run)"
+STOP_WHILE_LOADING_WAIT_MS = 1500  # past STOP_GRACE_MS, before SLOW_START_MS lets the worker start the run
 # each GET the server began and finished, (seconds since it started, path, finished): shown after a failed tour, which
 # then says whether the browser asked for a stalled worker's scripts at all (card tour-firefox)
 served = []
@@ -863,6 +867,25 @@ def shader_error_wrong():
 	return wrong + ([] if ":" in marked else [f"shader error marks {marked!r}, expected the colon"])
 
 
+def stop_while_loading_wrong(page_url):
+	"""the page loaded anew: before its worker is ready the Run button says Stop, and pressing it ends the run as stopped"""
+	open_page(page_url)
+	wait_for_isolation()
+	shown = browser("eval", f"""(async () => {{
+		const pause = milliseconds => new Promise(done => setTimeout(done, milliseconds));
+		const button = document.getElementById("run");
+		for (let waited = 0; waited < {STOP_WHILE_LOADING_WAIT_MS} && !button.classList.contains("stop"); waited += 50) await pause(50);
+		const loading = button.textContent;
+		button.click();
+		await pause(300);
+		return JSON.stringify({{ loading, after: button.textContent, value: document.getElementById("value").textContent }});
+	}})()""")
+	wait_for_first_run()
+	shown = json.loads(json.loads(shown)) if shown.startswith('"') else {"loading": f"(page gave no answer: {shown or browser_complaint})"}
+	expected = {"loading": "Stop ■", "after": "Run ▶", "value": "stopped"}
+	return [f"{part}: {shown.get(part)!r}, expected {value!r}" for part, value in expected.items() if shown.get(part) != value]
+
+
 def stale_value_wrong():
 	"""a value shown, then an animation started by runCode: while it runs, the value line no longer shows that value"""
 	run_code(STALE_VALUE_FIRST)
@@ -1257,7 +1280,7 @@ def check_examples(names, page_url=None, site=None):
 	snippets = guide_snippets() if GUIDE in names else []
 	for line, code, value, printed in snippets:
 		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), *([(BUILT_SITE, built_site_wrong)] if serves_repository else [])) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), *([(BUILT_SITE, built_site_wrong)] if serves_repository else [])) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
