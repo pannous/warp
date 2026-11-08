@@ -972,7 +972,10 @@ function showRendered(html) {
 	morphChildren(host.shadowRoot ?? renderedRoot(host), parsedHtml(html ?? ""));
 }
 
-self.programElements = () => $("rendered").shadowRoot ?? document; // task-workers.js ownerOnPage: `who`, `$who`
+// task-workers.js ownerOnPage: `who`, `$who`, document.getElementById("who"): an element of the program's markup, else
+// one of the page itself, "paintings" the frame its paintings show in (card paintings-document)
+const programElement = id => $("rendered").shadowRoot?.getElementById(id) ?? document.getElementById(id);
+self.programElements = () => ({ getElementById: programElement });
 
 // a form's submit stays inside the shadow root (it is not composed): listened to there
 function renderedRoot(host) {
