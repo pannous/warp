@@ -1501,7 +1501,7 @@ TAKE_REPORTS = "JSON.stringify((window.caseReports ?? []).splice(0))"
 
 def compiler_said(tree, *words):
 	"""what the page's compiler printed for a command of extensions/commands/tests.warp, run natively in `tree`"""
-	ran = subprocess.run(["warp", os.path.join(tree, PAGE_COMPILER), *words], cwd=tree, capture_output=True, text=True)
+	ran = subprocess.run(["warp", os.path.join(tree, PAGE_COMPILER), *words], cwd=tree, capture_output=True, text=True, errors="replace")
 	if ran.returncode not in (0, 1):
 		sys.exit(f"error: warp {PAGE_COMPILER} {words[0]} failed ({ran.returncode}): {ran.stderr[-500:]}")
 	return ran.stdout
@@ -1518,13 +1518,23 @@ def case_written(work, run, report, milliseconds):
 		open(os.path.join(work, f"{run}.{extension}"), "w", encoding="utf-8", newline="").write(content)
 
 
-def cases_ran(work, runs, page_url):
+def case_run(tree, code, folder):
+	"""what the page evaluates for a case, and as which file: a case naming a program file of the tree (`'../fixtures/
+	program_file/fast_sine.warp'`) runs that file, as `warp <file>` does natively (core/native/warp.warp is_warp_file);
+	any other runs as a file of its test file's folder, so its uses resolve beside it"""
+	path = os.path.normpath(os.path.join(folder, code))
+	if code.endswith(".warp") and not any(blank in code for blank in " \t\n") and os.path.isfile(os.path.join(tree, path)):
+		return [open(os.path.join(tree, path), encoding="utf-8", newline="").read(), path]
+	return [code, f"{folder}/{CASE_FILE}"]
+
+
+def cases_ran(work, runs, page_url, tree):
 	"""each run of the work folder run in the page, CASE_BATCH at a time; a page that ends no run in CASE_ANSWER_SECONDS
 	is opened anew, the run it stuck on written as timed out"""
 	done, lost_at = 0, None
 	while done < len(runs):
 		batch = runs[done:done + CASE_BATCH]
-		cases = [[open(os.path.join(work, f"{run}.code"), encoding="utf-8", newline="").read(), f"{folder}/{CASE_FILE}"] for run, folder in batch]
+		cases = [case_run(tree, open(os.path.join(work, f"{run}.code"), encoding="utf-8", newline="").read(), folder) for run, folder in batch]
 		if browser("eval", RUN_CASES % (PAGE_LOST, json.dumps(cases))) != '"started"':
 			page_opened(page_url)
 			continue
@@ -1604,14 +1614,22 @@ def check_tests(paths, tree):
 	server = serve(tree)
 	page_url = f"http://127.0.0.1:{PORT}/web/playground/?run_seconds={CASE_RUN_SECONDS}"
 	open_samples_page(page_url)
-	cases_ran(work, runs, page_url)
+	cases_ran(work, runs, page_url, tree)
 	browser("close")
 	server.shutdown()
+	return tests_judged(paths, tree)
+
+
+def tests_judged(paths, tree):
+	"""the verdicts of the runs the page wrote into the work folder (check_tests), written as check_tests writes them:
+	`--tests-judged` judges a kept work folder again without running the page"""
+	data = os.path.join(tree, TESTS_WEB_DATA)
+	work = os.path.join(data, "work")
 	said = compiler_said(tree, "test-verdicts", work, "--each", *paths)
 	page = verdicts_of(said.split("\n"))
 	if not page:
 		sys.exit(f"error: test-verdicts gave no verdicts (the runs are kept in {work}): {said[-500:]}")
-	baseline = subprocess.run([os.path.join(tree, "scripts", "baseline.sh"), *(paths or ["test"])], cwd=tree, capture_output=True, text=True)
+	baseline = subprocess.run([os.path.join(tree, "scripts", "baseline.sh"), *(paths or ["test"])], cwd=tree, capture_output=True, text=True, errors="replace")  # a case may print bytes
 	native = verdicts_of(baseline.stdout.split("\n"))
 	status_of = lambda case: "ok" if page[case] == "✓" else "EXP" if native.get(case) == "✓" and native_only(tree, case) else {"✓": "PAGE", "✗": "BOTH"}.get(native.get(case), "NONE")
 	lines = [f"{status_of(case):<4} {case}" for case in page]
@@ -1631,7 +1649,7 @@ def chrome_allowed():
 	--firefox runs Firefox, --safari Safari; --samples runs headless Chrome (user 2026-11-01, notes/playground_plan.md),
 	and so does --tests, its twin for test/ (night decision N6, notes/night_2026-11-02.md), and --examples, the tour and
 	the guide, in headless Chromium, Chrome for Testing (user 2026-11-02)"""
-	return bool(os.environ.get("CI")) or sys.argv[1:2] in (["--serve"], ["--samples"], ["--tests"], ["--examples"]) or any(name in sys.argv[2:] for name in WEBDRIVERS)
+	return bool(os.environ.get("CI")) or sys.argv[1:2] in (["--serve"], ["--samples"], ["--tests"], ["--tests-judged"], ["--examples"]) or any(name in sys.argv[2:] for name in WEBDRIVERS)
 
 
 def live_differences(url, site):
@@ -1678,6 +1696,8 @@ def main():
 		return check_samples(sys.argv[2:], REPOSITORY)
 	if sys.argv[1:2] == ["--tests"]:
 		return check_tests(sys.argv[2:], REPOSITORY)
+	if sys.argv[1:2] == ["--tests-judged"]:
+		return tests_judged(sys.argv[2:], REPOSITORY)
 	if sys.argv[1:2] == ["--serve"]:
 		serve()
 		print(f"serving {REPOSITORY}\n  playground: http://127.0.0.1:{PORT}/web/playground/")

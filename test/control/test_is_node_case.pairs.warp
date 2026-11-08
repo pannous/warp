@@ -1,0 +1,5 @@
+# `n is Key(h, Op.Define, b)`: a node case tests the kind and parts and binds the parts it names, as a match arm does
+'parse("g := 1") is Key(h, Op.Define, b)'	yes
+'parse("g = 1") is Key(h, Op.Define, b)'	no
+'n = parse("g := 1"); if n is Key(h, Op.Define, b) then str(h) else "no"'	"g"
+'parse("3") is Key(h, op, b)'	no

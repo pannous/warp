@@ -40,8 +40,16 @@ shape_test(subject: Node, p: Node, scope: map): Node := {
 	Key(structural_test(subject, p), Op.And, List(bound + [yes], Bracket.Round, Separator.Semicolon))
 }
 
+# `n is Key(h, Op.Define, b)`: a node case tests the subject's kind and parts and binds the parts it names, as a match
+# arm does (node_matches.warp arm_test, part_bindings); a subject other than a name is evaluated once
+case_test(subject: Node, pattern: list): Node := {
+	held = if is_name(subject) then subject else symbol(subject_name)
+	test = Key(arm_test(pattern, held), Op.And, List(part_bindings(pattern, held) + [yes], Bracket.Round, Separator.Semicolon))
+	if held == subject then test else List([Key(held, Op.Assign, subject), test], Bracket.Round, Separator.Semicolon)
+}
+
 type_test_node(n: Node, scope: map): Node := match n {
-	Key(subject, Op.Is, type): if binds_new_names(type, scope) then shape_test(subject, type, scope) else tested_type_call(subject, type, scope)
+	Key(subject, Op.Is, type): if case_pattern(type) != ø then case_test(subject, case_pattern(type)) else if binds_new_names(type, scope) then shape_test(subject, type, scope) else tested_type_call(subject, type, scope)
 	_: n
 }
 
