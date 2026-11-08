@@ -442,7 +442,8 @@ function joinedWords(arrays) {
 }
 
 // a GPU list's cells by gpu_list_cell (extensions/gpu_lists/runtime.warp GpuCell): f32, i32, u32, f16 (as raw bits)
-const GPU_LIST_CELLS = [Float32Array, Int32Array, Uint32Array, Uint16Array];
+const GPU_LIST_CELLS = [Float32Array, Int32Array, Uint32Array, Uint16Array, Uint16Array];
+const GPU_CELL_NAMES = ["f32", "i32", "u32", "f16", "bf16"];
 const plainArrays = arrays => Object.fromEntries(Object.entries(arrays).map(([name, array]) => [name, Array.from(array)]));
 // gpu_compute's {values} as a list; a kernel's floats and an image's pixels as {words}, given back as raw bytes
 // (writeSharedWords), not as JSON
@@ -615,19 +616,25 @@ addHostPart({
 		};
 		// an array<f16> takes only a GPU list [f16], whose cells it binds as they are, and a GPU list [f16] only one
 		// (natively gpu.warp halves_unmatched)
-		const halvesChecked = (code, entries) => {
+		// a GPU list's cell type by name, undefined for any other value
+		const gpuCellName = value => gpuCells(value) && GPU_CELL_NAMES[Number(program().gpu_list_cell(value))];
+		// why an array cannot bind what it is given (natively gpu.warp cells_unfit): an array<f16> takes only a GPU list
+		// [f16], whose cells it binds as they are, and a GPU list [f16] only one; a GPU list [bf16] has no WGSL array
+		// type yet (card gpu-lists)
+		const cellsChecked = (code, entries) => {
 			const declared = storageArrays(code);
 			for (const [name, value] of entries) {
-				const array = declared.find(array => array.name === name);
-				const halves = array?.element === "f16";
-				if (!array || halves === gpuCells(value) instanceof Uint16Array) continue;
-				throw new Error(halves ? `the shader's array<f16> ${name} takes a GPU list [f16]: make it as ${name}: [f16] = …` : `the GPU list [f16] ${name} needs the shader's array<f16>, not array<${array.element}>`);
+				const array = declared.find(array => array.name === name), cell = gpuCellName(value);
+				if (!array) continue;
+				if (cell === "bf16") throw new Error(`the GPU list [bf16] ${name} has no WGSL array type to bind as yet`);
+				if ((array.element === "f16") === (cell === "f16")) continue;
+				throw new Error(array.element === "f16" ? `the shader's array<f16> ${name} takes a GPU list [f16]: make it as ${name}: [f16] = …` : `the GPU list [f16] ${name} needs the shader's array<f16>, not array<${array.element}>`);
 			}
 		};
 		const computed = (shader, numbers, workgroups) => {
 			const entries = guestEntries(program(), numbers);
 			const code = plain(shader);
-			halvesChecked(code, entries ?? [[storageArrays(code).find(array => array.binding === GPU_BINDING)?.name, numbers]]);
+			cellsChecked(code, entries ?? [[storageArrays(code).find(array => array.binding === GPU_BINDING)?.name, numbers]]);
 			if (entries?.some(([, value]) => gpuCells(value))) return computedInPlace(code, entries, workgroups);
 			const cells = gpuCells(numbers);
 			if (cells) {
