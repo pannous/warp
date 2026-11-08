@@ -131,6 +131,10 @@ checked_facts(known: int): list := {
 # when its signature's source hash is its file's (signature.warp); one built of another text or that won't link is the
 # compile's error, never compiled from its source; a module that calls C is not prebuilt, its file left empty
 MODULES_FOLDER = "modules"
+# where a module's prebuilt image is: the program's own module's, a standard module's in the folder; "" for a module
+# the rebuild no longer prebuilds, whose file may linger there (reals.wasm after 827309223b: math linked it and was
+# refused, card stale-module-wasm), so it is compiled from its source
+prebuilt_path(name: text, folder: text): text := own_module_wasm.get(name) ?? (if name in std_module_names then folder + name + ".wasm" else "")
 linked_libraries(source: text): list := {
 	linked_signatures = {}
 	folder = linked_modules_folder()
@@ -145,7 +149,7 @@ linked_libraries(source: text): list := {
 	while at < #names {
 		name = names[at]
 		at += 1
-		wasm = wasm_if_there(own_module_wasm.get(name) ?? folder + name + ".wasm")
+		wasm = wasm_if_there(prebuilt_path(name, folder))
 		# (a module not prebuilt was said by the rebuild, its file left empty or never written: markup's html, compiled
 		# into markup; one prebuilt that won't link is the compile's error, never compiled from its source instead:
 		# decision module-link-hard-error. The modules one compiled from its source uses are linked in turn, reals'
