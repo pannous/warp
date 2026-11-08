@@ -36,7 +36,7 @@ is_text_cut_pattern(p: Node): bool := (is_key(p, Op.Add) and nodes_in(p).any(par
 new_pattern_names(p: Node, scope: map): list := structural_names(p, no).filter(name => not binds_own_value(scope, name))
 # a value the program binds itself, not a global only a used module brought (units' s, m, px), which a pattern's name
 # shadows as a match arm's does: `r is {status: s}` binds s
-binds_own_value(scope: map, name: text): bool := binds_value(scope, name) and not brought_names.has(name)
+binds_own_value(scope: map, name: text): bool := binds_value(scope, name) and not brought_names.has(name) and not brought_value_names.has(name)
 binds_new_names(p: Node, scope: map): bool := is_shape_pattern(p) and (#new_pattern_names(p, scope) > 0 or nodes_in(p).any(part => part == symbol(other_arm)))
 shape_test(subject: Node, p: Node, scope: map): Node := {
 	bound = new_pattern_names(p, scope).map(name => Key(symbol(name), Op.Assign, subscript(symbol(match_bound), name)))
