@@ -32,6 +32,6 @@ Worth building as a library when a program asks for sorted keys or ranges; a sam
 the top 10, scores between 100 and 200) shows where it beats `keys.sort()`. Not as the default map type. A
 follow-up card: sorted-map-library.
 
-Built as `lib/sorted.warp` (`SortedMap`, `SortedSet`; sample `samples/objects/sorted_leaderboard.warp`). Union,
-intersection and difference walk one set and insert or filter. The split-join algebra (O(m log(n/m + 1))) is still
-open.
+Built as `lib/sorted.warp` (`SortedMap`, `SortedSet`; sample `samples/objects/sorted_leaderboard.warp`). Union
+inserts. Intersection and difference keep the surviving keys and build a complete tree, so a one-sided cut cannot
+leave a node overweight. The split-join algebra (O(m log(n/m + 1))) is still open.

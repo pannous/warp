@@ -2,6 +2,7 @@
 // `use sorted`. Keys order by `<` (numbers, texts). set, add and remove return a new collection; the receiver stays.
 // A missing get is ø. rank is the 1-based position, 0 when the key is absent. at(i) is the i-th smallest key.
 // Balance is Adams' (delta 3, ratio 2): one child outweighs the other only while both are still tiny.
+// Insert and delete use one rotation. Intersection and difference build a complete tree instead.
 
 alias TreeMap => SortedMap
 alias BTreeMap => SortedMap
@@ -159,12 +160,26 @@ sorted_between(t, lo, hi) := {
 
 sorted_height(t) := if t == ø then 0 else 1 + max(sorted_height(t.left), sorted_height(t.right))
 
-// keep a key when `other` holds it and `keep` is yes, or when it does not and `keep` is no
-sorted_filter(t, other, keep) := {
-	if t == ø { return ø }
-	l = sorted_filter(t.left, other, keep)
-	r = sorted_filter(t.right, other, keep)
-	if (other.has(t.key)) == keep { sorted_balance(t.key, yes, l, r) } else { sorted_glue(l, r) }
+# One rotation restores the weight bound only after a single insert or delete. Intersection and
+# difference throw away whole subtrees, so the survivors are placed again as a complete tree:
+# sibling sizes then differ by at most one. `keep` yes is intersection, no is difference.
+sorted_filter(t, other, keep) := sorted_from_entries(sorted_kept(sorted_entries(t), other, keep))
+
+sorted_kept(entries, other, keep) := {
+	kept = []
+	for e in entries {
+		if (other.has(e#1)) == keep { kept.add(e) }
+	}
+	kept
+}
+
+sorted_from_entries(entries) := sorted_build(entries, 1, count(entries))
+
+sorted_build(entries, lo, hi) := {
+	if lo > hi { return ø }
+	mid = (lo + hi) /! 2
+	e = entries#mid
+	sorted_node(e#1, e#2, sorted_build(entries, lo, mid - 1), sorted_build(entries, mid + 1, hi))
 }
 
 sorted_within(t, other) := {
