@@ -85,7 +85,6 @@ passed(n: Node): Node := {
 	for pass in lowering_passes {
 		timed("pass " + "${pass}")
 		n = pass(n)
-		if (env("WARP_DUMP_AFTER") ?? "") == "${pass}" { for statement in statements_in(n) { print "§S " + "${statement}".split("\n").join(" ") } }
 	}
 	timed("called_only, checks")
 	n
@@ -106,9 +105,8 @@ with_called_deferred(program: Node): Node := {
 	called = word_set(tokens_within(program))
 	reached = []
 	while yes {
-		due = if (env("DEBUG_DEFER") ?? "") == "one" then waiting.keys else waiting.keys.filter(name => called.has(name) or (deferred_triggers.get(name) ?? []).any(token => called.has(token)))
+		due = waiting.keys.filter(name => called.has(name) or (deferred_triggers.get(name) ?? []).any(token => called.has(token)))
 		if #due == 0 { break }
-		timed("DEBUG deferred " + "${#due} of ${#waiting}: " + due.join(" "))
 		lowered = statements_in(passed(separated(bracketed(due.flat_map(name => waiting[name]), ""), ";")))
 		waiting = map_without_all(waiting, due)
 		reached += lowered

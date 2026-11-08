@@ -205,7 +205,7 @@ methods_lifted(program: Node): Node := {
 	routes = methods.filter(method => module_routing(classes, liftable, method, operator_methods) ?? (is_library_word(method) or method in functions or method in operator_methods or names_syntax(method) or method in position_words))
 	# (a method only linked classes have, of one parameter count and no word of the program's own: its functions and
 	# dispatcher lowered once the lowered program calls them, passes.warp deferred_definitions)
-	deferred = methods.filter(method => (env("DEBUG_DEFER") ?? "") != "none" and #linked > 0 and owners_of(classes, liftable, method).all(owner => owner in linked) and #taken_counts(classes, liftable, method) == 1 and method not in functions and called_name(method, routes) not in functions)
+	deferred = methods.filter(method => #linked > 0 and owners_of(classes, liftable, method).all(owner => owner in linked) and #taken_counts(classes, liftable, method) == 1 and method not in functions and called_name(method, routes) not in functions)
 	program_words = word_set(repeated_words(functions).keys + classes.keys)
 	for name in methods {
 		made = functions_of(classes, liftable, name, routes)
@@ -279,12 +279,11 @@ methods_lifted(program: Node): Node := {
 	# a dispatcher is the program's own over all its classes, a linked module's among them: the module's of that name
 	# knows its own classes only (card bind-linked)
 	# (the operator dispatchers of linked classes only wait for their operator: `use sound; 1` writes none)
-	if (env("DEBUG_DEFER") ?? "") != "none" and liftable.all(name => name in linked) {
+	if liftable.all(name => name in linked) {
 		operating = dispatchers.filter(dispatcher => is_operator_dispatcher(defined_word(dispatcher) ?? "") and is_deferrable(dispatcher, program_words))
 		for dispatcher in operating { deferred_triggers[defined_word(dispatcher)] = operator_tokens(defined_word(dispatcher)) }
 		dispatchers = dispatchers.filter(dispatcher => dispatcher not in operating)
-		dropped = if (env("DEBUG_DEFER") ?? "") == "drop" then operating.filter(dispatcher => (defined_word(dispatcher) ?? "").split(OPERATOR_DISPATCHER_MARK)#1 in operated_glyphs) else []
-		deferred_dispatchers += operating.filter(dispatcher => dispatcher not in dropped)
+		deferred_dispatchers += operating
 	}
 	own_words_unlinked((dispatchers + deferred_dispatchers).map(defined_word))
 	deferred_definitions += deferred_dispatchers
