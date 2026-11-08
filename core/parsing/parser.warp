@@ -306,8 +306,9 @@ def add_alias_entry(tables: Spellings, word: text, fields: map) {
 	power = if fields.has("power") then fields["power"].map(level => int(level)) else ø
 	if power != ø {
 		tables.powers[target] = power
-		# an operator row named by its symbol spells it (an extension's `"±" { power: … }`)
-		if not is_name_start(word#1) and spelled_by(tables.operator_symbols, word) == ø { tables.operator_symbols += [[word, target]] }
+		# an operator row spells its symbol, named by its English word (`similar { operator: "~" … }`, decision
+		# operators-named) or by the symbol itself (an extension's `"±" { power: … }`)
+		if not is_name_start(target#1) and spelled_by(tables.operator_symbols, target) == ø { tables.operator_symbols += [[target, target]] }
 	}
 	for spelling in fields.get("aliases") ?? [] {
 		tables.canonical[spelling] = word
@@ -315,6 +316,9 @@ def add_alias_entry(tables: Spellings, word: text, fields: map) {
 		else if spelled_infix(infix, spelling) { add_infix_word(tables, spelling, target) }
 		if word in tables.forms { tables.forms[spelling] = tables.forms[word] }
 	}
+	# the Unicode names of its symbols, generated (scripts/unicode-operator-names.py, decision operator-unicode-aliases):
+	# the word's fallback spellings, never infix words
+	for name in fields.get("names") ?? [] { tables.canonical[name] = word }
 }
 def spelled_infix(infix: any, spelling: text): bool := if infix is list then infix.contains(spelling) else infix == "yes"
 def add_infix_word(tables: Spellings, word: text, target: text) {
