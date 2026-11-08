@@ -372,12 +372,17 @@ invoked_path(): text := {
 	named = arg(0)
 	if starts_with(named, "/") { return named }
 	if contains_byte(named, SLASH) { return joined(joined(current_folder(), "/"), named) }
+	found = path_found(named)
+	if found.length > 0 then found else executable_path()
+}
+# the first of $PATH's folders' executables named so, else the empty text
+path_found(named: text): text := {
 	folders = getenv("PATH")
 	for i in 0..field_count(folders, COLON) {
 		candidate = joined(joined(field(folders, i, COLON), "/"), named)
 		if access(c_string(candidate), EXECUTABLE) == 0 { return candidate }
 	}
-	executable_path()
+	""
 }
 contains_byte(t: text, byte: int): bool := field_count(t, byte) > 1
 current_folder(): text := {

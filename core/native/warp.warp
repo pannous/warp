@@ -226,10 +226,24 @@ rebuild_command(at: int): nothing := {
 }
 # the step named at `at`, the first one when none is
 step_given(at: int): text := if arg_count() > at then arg(at) else ""
-# the seed, the compiler that compiles compiler.warp: $WARP_SEED, else warp-seed.wasm beside this executable
+# the seed, the compiler that compiles compiler.warp: $WARP_SEED, else warp-seed.wasm beside this executable (as invoked,
+# then where its links lead), else beside the installed warp, the first on $PATH: a tree's core/native/warp has none
+# beside it (card tree-seed-lookup); none found names the one beside this executable
 seed_path(): text := {
 	given = getenv("WARP_SEED")
-	if given.length > 0 then given else joined(folder_of(executable_path()), "/warp-seed.wasm")
+	if given.length > 0 { return given }
+	own = seed_beside(invoked_path())
+	if own.length > 0 { return own }
+	installed = path_found("warp")
+	found = if installed.length > 0 then seed_beside(installed) else ""
+	if found.length > 0 then found else joined(folder_of(executable_path()), "/warp-seed.wasm")
+}
+# warp-seed.wasm beside an executable as named, else beside the one its links lead to; empty for neither
+seed_beside(executable: text): text := {
+	named = joined(folder_of(executable), "/warp-seed.wasm")
+	if access(c_string(named), READABLE) == 0 { return named }
+	linked = joined(folder_of(resolved_path(executable)), "/warp-seed.wasm")
+	if access(c_string(linked), READABLE) == 0 then linked else ""
 }
 # a module's arguments: its path, then the words that are not empty
 words(module: text, a: text, b: text, c: text, d: text, e: text): Arguments := {
