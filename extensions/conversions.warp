@@ -67,12 +67,21 @@ conversion_functions(target: text, written: list, targets: map, scope: map): lis
 	functions = []
 	for conversion in class_first(written).reverse() {
 		name = conversion_name(target) + "·" + conversion#1
-		body = converting_uses(renamed(conversion#3, conversion#4, it), targets)
+		written_body = renamed(conversion#3, conversion#4, it)
+		body = converting_uses(if binds_as(scope, target, Meaning.Type) and not is_tested_type_word(target) then amount_kept(written_body, target) else written_body, targets)
 		functions += [Key(call_of(name, [Key(it, Op.Colon, symbol(conversion#1))]), Op.Define, body)]
 		tried = chosen(Key(it, Op.Is, symbol(conversion#1)), call_of(name, [it]), tried)
 	}
 	functions + [Key(call_of(conversion_name(target), [Key(it, Op.Colon, symbol(any_word))]), Op.Define, tried)]
 }
+# a conversion's body giving a number gives the target's amount (night decision length-pixels): `length as pixels :=
+# it.amount * 2` makes 3m 6px, the number as the target class as any number is (lib/units counts its base unit); any
+# other value, and every value of a built-in target (`P as text := it.age`), as the body gives it
+amount_kept(body: Node, target: text): Node := {
+	given = symbol(given_amount)
+	block_of([Key(given, Op.Assign, body), chosen(Key(given, Op.Is, symbol("number")), Key(given, Op.As, symbol(target)), given)])
+}
+given_amount = "amount·given"
 
 # Typed parameters convert (decision as-promotes, card argument-parameter-conversion): a call's argument meeting a
 # parameter typed T the program converts to goes through `passed·T`, so `f(2)` of `f(q: Quantity)` passes 2 as Quantity,
