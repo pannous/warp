@@ -26,13 +26,20 @@ definition_call(n: Node): Node := match n {
 	_: ø
 }
 
-# [how many arguments a call must pass, how many it may, -1 for any more]: `b = 1` may be left out, `more...` hold none
+# [how many arguments a call must pass, how many it may, -1 for any more, whether more gather into a last list-typed
+# parameter]: `b = 1` may be left out, `more...` hold none, `xs: [Note]` gathers (decision gathering)
 arity_of(call: Node): list := {
 	signature = signature_of(items_of(call))
 	span = arity(signature)
-	if signature.parameters.any(parameter => parameter.rest) then [span#1 - 1, -1] else span
+	may = if signature.parameters.any(parameter => parameter.rest) then [span#1 - 1, -1] else span
+	may + [gathers(signature, #signature.parameters + 1)]
 }
 span_takes(span: list, count: int): bool := span#1 <= count and (span#2 < 0 or count <= span#2)
+# the variants a call of `count` arguments fits: those taking that many, else those gathering the extra ones
+fitting_spans(spans: list, count: int): list := {
+	exact = spans.filter(span => span_takes(span, count))
+	if #exact > 0 then exact else spans.filter(span => span#3 and count > span#2)
+}
 
 # name → its arities, for each name defined with several parameter counts, no two of them the same
 overloaded_arities(program: Node): map := {
@@ -70,7 +77,7 @@ variant_call(n: Node, overloaded: map, receivers: int): Node := {
 	name = name_of(n#1)
 	if name not in overloaded { return n }
 	count = #n - 1 + receivers
-	fitting = overloaded[name].filter(span => span_takes(span, count))
+	fitting = fitting_spans(overloaded[name], count)
 	if #fitting != 1 { return n }
 	group_like(n, [symbol(overload_variant_name(name, fitting#1#2))] + items_of(n)[1 ..])
 }
