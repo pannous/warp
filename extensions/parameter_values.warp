@@ -17,8 +17,10 @@ written_value(n: Node): text := if n is text then "\"${n}\"" else "${n}"
 head_body(n: Node, program: Node) := {
 	plain = without_mark(n)
 	if not (is_key(plain, Op.Colon) and is_call(key_of(plain)) and is_body_value(value_of(plain))) { return ø }
-	diagnose(call_of("head_body", ["${key_of(plain)}", written_value(value_of(plain))]), plain)
+	diagnose(call_of("head_body", [head_code(key_of(plain)), written_value(value_of(plain))]), plain)
 }
+# a definition's head as written: `f(x, y)`
+head_code(head: Node): text := "${head#1}(" + items_of(head)[1 ..].map(parameter => "${parameter}").join(", ") + ")"
 # code no type is written as: a literal or an operation, `x * 2`, `n > 0`
 BODY_OPERATORS = [Op.Add, Op.Sub, Op.Mul, Op.Div, Op.Mod, Op.Pow, Op.Eq, Op.Ne, Op.Lt, Op.Gt, Op.Le, Op.Ge]
 is_body_value(n: Node): bool := is_literal_value(n) or BODY_OPERATORS.any(op => is_key(n, op))
