@@ -1,7 +1,8 @@
 // The standard library module os (notes/stdlib.md section 7): `use os`, through the adapter std_io; 
 # todo the browser has no environment (env gives ø) (use local storage?)
 # and no command line (args gives [], or a playground sample's <name>.args)
-env(name: any) := std_io("os", "env", [name])
+// `env("HOME")`: the variable as the program set it (set_env), else as its environment started with it
+env(name: any) := variables_set.get(str(name)) ?? std_io("os", "env", [name])
 // the command line arguments after the program file: `warp run prog.warp a b` gives ["a" "b"]
 args = std_io("os", "args", [])
 // `exec sh "crontab -l"`: the command (a sh template, its argument vector) run without a shell, what it printed; natively
@@ -33,9 +34,14 @@ input(prompt: any) := std_io("os", "input", [prompt])
 // all of standard input as one text: `cat notes.txt | warp count.warp`
 stdin() := std_io("os", "stdin", [])
 // `set_env("MODE", "fast")`: the variable set for the commands the program runs, yes when it was; natively C's
-// setenv through the 'c' library (lib/c.warp), so a page has none. env reads the environment the program started with
+// setenv through the 'c' library (lib/c.warp), so a page has none. env reads it at once: WASI's environment is the
+// one the program started with
 setenv(name: text, value: text, overwrite: i32): i32 from 'c'
-set_env(name: any, value: any): bool := setenv(str(name), str(value), 1) == 0
+global variables_set = {}
+set_env(name: any, value: any): bool := {
+	variables_set[str(name)] = str(value)
+	setenv(str(name), str(value), 1) == 0
+}
 // `eprint "no such file"`: the value on standard error, a line of its own, through WASI natively and in the page
 eprint(value: any) := said_on_stderr(str(value))
 // `temp_file()`, `temp_dir()`: the path of a new empty file, folder, which mktemp made
