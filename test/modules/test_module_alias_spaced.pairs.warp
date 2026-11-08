@@ -1,0 +1,4 @@
+# a used module's alias names its word in a spaced call too, as in a call with parentheses: math's
+# alias log2 => binary_log, sound's alias melody => play
+'use math; log2 [1, 8]'	[0, 3]
+'use sound; melody [C4 E4]; "played"'	"played"

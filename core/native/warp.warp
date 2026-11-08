@@ -428,6 +428,7 @@ dispatched(compiler: text, prefixed: bool, first: int): nothing := {
 		if same_text(word, "beautify") or same_text(word, "fix") or same_text(word, "format") or same_text(word, "lint") { return compiled_and_run(compiler, joined(library_folder(), "/fix/command.warp"), 1) }
 		if same_text(word, "docs") or same_text(word, "wiki") or same_text(word, "home") { return documentation_opened() }
 		if same_text(word, "app") { return compiled_and_run(compiler, joined(library_folder(), "/app/command.warp"), 1) }
+		if same_text(word, "dev") { return compiled_and_run(compiler, joined(library_folder(), "/dev/command.warp"), 1) }
 	}
 	# `warp test`, and `warp self test` as `warp test --self`: the native warp runs the cases, each by the compiler named
 	if same_text(word, "test") and (not prefixed or self_named(compiler)) { return tests_run(compiler, flagged("--self") or self_named(compiler), first) }

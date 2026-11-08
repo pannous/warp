@@ -82,10 +82,15 @@ rerun_if_changed() {
 red() {
 	local key text="main ${tip:0:10}: $1 (pushed since ${since:0:10}: $pushed)"
 	key=after-push-$(echo "${1%%:*}" | tr 'A-Z ' 'a-z-' | tr -cd 'a-z0-9-')-$(date +%m%d)
-	if todo show "$key" 2>/dev/null | head -1 | grep -qv '^\[Done\]\|Archived'; then
-		todo note "$key" "$text" >/dev/null
-	else
+	local column
+	column=$(todo show "$key" 2>/dev/null | head -1)
+	if [ -z "$column" ]; then
 		todo add Now "$text" --key "$key" "${@:2}" >/dev/null
+	else
+		# a closed card of the same kind and day reopens: adding its key again failed silently and lost the RED
+		# (2026-11-08, tier 2's time_command lines after after-push-tiers-1-2-1108 was Done)
+		[[ $column == "[Done]"* || $column == *Archived* ]] && { todo move "$key" Now >/dev/null || say "card $key did not reopen"; }
+		todo note "$key" "$text" >/dev/null
 	fi
 	say "RED $1 (card $key)"
 }

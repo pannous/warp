@@ -1,0 +1,100 @@
+# `warp dev page.warp [port]` (card dev-page; notes/web_framework.md "Step 13"): the program's site, as `warp build
+# --site` writes it, served at http://localhost:<port> (8008), built anew when a request finds a .warp file of the
+# program's folder changed since the last build. The page asks /warp-dev/state ({version, error}) every 300 ms
+# (web/playground/dev.js, put into its index.html): a new version reloads it, a failure shows as an overlay over the
+# last good build, which serves on until the program builds again. It opens no browser
+use os
+use web
+
+usage = "warp dev <page.warp> [port]  the page served at http://localhost:8008, rebuilt and reloaded when it changes"
+DEV_PORT = 8008
+STATE_PATH = "/warp-dev/state"
+DEV_SCRIPT = "dev.js"
+# where dev.js is: lib/site in an installed warp (scripts/lib/site-scripts.sh), web/playground beside lib/ in a checkout
+SCRIPT_FOLDERS = ["/site", "/../web/playground"]
+PAGE_END = "</body>"
+INDEX = "/index.html"
+CONTENT_TYPES = {html: "text/html; charset=utf-8", js: "text/javascript", wasm: "application/wasm", json: "application/json", css: "text/css", txt: "text/plain; charset=utf-8", svg: "image/svg+xml", png: "image/png"}
+OTHER_CONTENT = "application/octet-stream"
+# the page's Workers share memory only cross-origin isolated; and a reloaded page asks anew, never a cached build
+DEV_HEADERS = ["Cross-Origin-Opener-Policy: same-origin", "Cross-Origin-Embedder-Policy: require-corp", "Cache-Control: no-store"]
+
+# an answer sent to the client: web's C write(fd, data) loses to the prelude's write(path, content) in a program that
+# uses web (card web-write-call); send is the socket's own word
+send(fd: i32, data: bytes, size: length, flags: i32): i64 from 'c'
+quoted(path: text): text := "'" + path.replace("'", "'\\''") + "'"
+warp_executable(): text := env("WARP_EXECUTABLE") ?? "warp"
+
+# the build folders live under one fresh folder, one a version: a failed build leaves the last good one serving
+global builds = ""
+global version = 0
+global failure = ""
+global serving = ""
+global source = ""
+global stamp = ""
+
+# the program built anew into the next version's folder; its failure, the compiler's words, kept for the page instead
+rebuilt() := {
+	folder = builds + "/" + (version + 1)
+	said = command(quoted(warp_executable()) + " build --dev --site=" + quoted(folder) + " " + quoted(source) + " 2>&1; echo \"exit $?\"").trim().split("\n")
+	command("touch " + quoted(stamp))
+	if said.last() == "exit 0" and exists(folder + INDEX) {
+		version += 1
+		serving = folder
+		failure = ""
+		print "warp dev: version " + version + " built"
+	} else {
+		failure = said[0 ..< #said - 1].join("\n")
+		print "warp dev: the build failed, the last good one serves on:\n" + failure
+	}
+}
+# whether a .warp file of the program's folder changed since the last build
+changed(): bool := command("find " + quoted(folder_of_source()) + " -maxdepth 2 -name '*.warp' -newer " + quoted(stamp)).trim() != ""
+folder_of_source(): text := {
+	parts = source.split("/")
+	if #parts > 1 then parts[0 ..< #parts - 1].join("/") else "."
+}
+
+dev_script(): text := {
+	library = env("WARP_LIB") ?? ""
+	for folder in SCRIPT_FOLDERS { if exists(library + folder + "/" + DEV_SCRIPT) { return read(library + folder + "/" + DEV_SCRIPT) } }
+	raise "warp dev: no " + DEV_SCRIPT + " in " + library + "/site or a checkout's web/playground beside lib/"
+}
+
+# the answer to a request's path: the state, the page with dev.js, a file of the build, else 404
+answered(path: text): text := {
+	if path == STATE_PATH or path == "/" or path == INDEX { if changed() { rebuilt() } }
+	if path == STATE_PATH { return http(200, CONTENT_TYPES["json"], to_json({version: version, error: failure})) }
+	file = serving + (if path == "/" then INDEX else path)
+	if serving == "" or path.contains("..") or not exists(file) { return http(404, CONTENT_TYPES["txt"], "warp dev: no " + path) }
+	body = read(file)
+	if path == "/" or path == INDEX { body = body.replace(PAGE_END, "<script>\n" + dev_script() + "\n</script>\n" + PAGE_END) }
+	http(200, content_type(file), body)
+}
+content_type(file: text): text := CONTENT_TYPES.get(file.split(".").last()) ?? OTHER_CONTENT
+# (the dev server answers 200 and 404 only)
+http(status: int, content: text, body: text): text := "HTTP/1.1 " + (if status == 200 then "200 OK" else "404 Not Found") + LINE_END + "Content-Type: " + content + LINE_END + DEV_HEADERS.join(LINE_END) + LINE_END + "Content-Length: " + byte_size(body) + LINE_END + "Connection: close" + HEAD_END + body
+
+dev_command(arguments: list): int := {
+	if #arguments == 0 or not arguments[0].ends_with(".warp") or not exists(arguments[0]) {
+		print usage
+		return 1
+	}
+	source = arguments[0]
+	port = if #arguments > 1 then int(arguments[1]) else DEV_PORT
+	builds = command("mktemp -d").trim()
+	stamp = builds + "/built"
+	rebuilt()
+	fd = listening(port)
+	print "warp dev: serving " + source + " at http://localhost:" + bound_port(fd) + " (Ctrl-C stops)"
+	while true {
+		client = accept(fd, 0, 0)
+		if client >= 0 {
+			send(client, answered(request_of(received(client)).path), 0)
+			close(client)
+		}
+	}
+	0
+}
+
+exit(dev_command(args[1 ..]))

@@ -2149,6 +2149,8 @@ def prefixed(p: Parser): Node := {
 	form = keyword_form(word)
 	if form == "return" { return returned(p) }
 	if form == "condition" {
+		// `until = now + 20` would read as `until (= now + 20)`, a loop and its condition, and miscompile silently
+		if assigned_at(p, p.at + word.length) { raise "`" + word + "` is a keyword, it names no variable (at " + line_and_column(p.code, p.at) + ")" }
 		p.at += word.length
 		skip_spaces(p)
 		return conditioned(CONTROL_WORDS[word], control_condition(word, condition_expression(p)), p)
