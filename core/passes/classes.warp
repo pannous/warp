@@ -26,6 +26,8 @@ showing_dispatcher = HiddenWord.TextShown as text
 form_method = "format·text"
 # the method counting an instance's elements, which `#b` calls (card class-position-index)
 counting_method = "count"
+# the words warp asks an instance for, by the parameters each takes: `size(x)` is a method of its own, no count()
+asked_words = {showing_method: 0, form_method: 0, ordering_method: 1, counting_method: 0}
 # the classes of the program, by name: [statement, parent name or "", field names, methods, the type each field is
 # declared or given (`names = []`: list, `at: Point`: Point)]
 class Declared { top_statement: Node; parent: text; fields: list; methods: list; field_types: map }
@@ -99,7 +101,7 @@ member_node_read(member: Node): Node := special_named(brace_method(colon_method(
 special_named(member: Node): Node := match member {
 	Key(head, Op.Define, body): {
 		if is_format_head(head) { return Key(call_of(form_method, []), Op.Define, body) }
-		word = canonical_word(defined_word(member) ?? ""); if word in [showing_method, form_method, ordering_method, counting_method] and is_called_name(head) then Key(call_of(word, items_of(head)[1..]), Op.Define, body) else member }
+		word = canonical_word(defined_word(member) ?? ""); if is_called_name(head) and asked_words.get(word ?? "") == #head - 1 then Key(call_of(word, items_of(head)[1..]), Op.Define, body) else member }
 	_: member
 }
 # `format as text`, the head of a class's shown form
