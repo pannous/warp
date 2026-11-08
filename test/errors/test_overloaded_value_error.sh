@@ -17,7 +17,7 @@ says() {
 says 'quoted(t: text) := "<" + t + ">"; quoted(n: int) := n * 10; [1, 2].map(quoted)' '[10, 20]'
 says 'quoted(t: text) := "<" + t + ">"; quoted(n: int) := n * 10; g = quoted; g(2)' 'quoted is defined 2 times'
 says 'scaled(x) := x * 2; scaled(x, y) := x * y; g = scaled; g(3)' \
-	'scaled is defined 2 times, with 1 and 2 parameters; pass a lambda that calls the one you mean, e.g. x => scaled(x)'
+	'scaled is defined 2 times: scaled(x) and scaled(x, y); pass a lambda that calls the one you mean, e.g. x => scaled(x)'
 # a module a `use` names is no value, though a function of the same name is overloaded (lib/sound.warp's sound)
 works() {
 	local code=$1 said

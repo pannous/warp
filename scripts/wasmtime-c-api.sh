@@ -1,18 +1,15 @@
 #!/usr/bin/env bash
 # scripts/wasmtime-c-api.sh [<folder>…]: warp's native libraries built for this machine into /opt/cargo (a no-op when
 # current), and copied into each folder, default the one beside the warp binary on PATH: warp's wasmtime C API
-# (crates/wasmtime-capi, card wasmtime-bundled) libwarp_sound (crates/warp-sound, miniaudio, decision sound-plays) and libwarp_gpu (crates/warp-gpu, wgpu-native,
-# card gpu-functions) and libwarp_webview (crates/warp-webview, the system's web view, card app-webview; macOS's
-# WKWebView for now). The window is warp's own (lib/native_window.warp, SDL3 over FFI).
+# (crates/wasmtime-capi, card wasmtime-bundled), libwarp_gpu (crates/warp-gpu, wgpu-native, card gpu-functions) and
+# libwarp_webview (crates/warp-webview, the system's web view, card app-webview; macOS's WKWebView for now). The window
+# and the sound are warp's own (lib/native_host.warp, SDL3 and the system's libraries over FFI).
 # after-push.sh installs them beside warp and into the main checkout's lib/, rebuild.sh into a tree's lib/, the library
 # folder a native build links from and its executables find them in (rpath); the release workflow runs it for lib/
 set -eu -o pipefail
 checkout=$(cd "$(dirname "$0")/.." && pwd)
 [ $# -gt 0 ] || set -- "$(dirname "$(readlink -f "$(command -v warp)")")"
-MINIAUDIO_VERSION=0.11.21
-MINIAUDIO_SHA256=6b2029714f8634c4d7c70cc042f45074e0565766113fc064f20cd27c986be9c9
 export CARGO_TARGET_DIR=${WARP_WASMTIME_TARGET:-/opt/cargo/warp-wasmtime}
-sound_build=${WARP_SOUND_TARGET:-/opt/cargo/warp-sound}
 WGPU_VERSION=29.0.1.1
 gpu_build=${WARP_GPU_TARGET:-/opt/cargo/warp-gpu}
 webview_build=${WARP_WEBVIEW_TARGET:-/opt/cargo/warp-webview}
@@ -53,14 +50,11 @@ if [ "$(cat "$wasmtime_stamp" 2>/dev/null)" != "$wasmtime_inputs" ] || ! ls "$CA
 fi
 case $(uname -s) in
   Darwin) suffix=dylib; prefix=lib; system_libraries=""
-    sound_libraries="-framework CoreMIDI -framework CoreFoundation"
     gpu_libraries="-framework Metal -framework QuartzCore -framework Foundation -framework CoreGraphics -framework IOKit -framework IOSurface -lobjc" ;;
-  Linux) suffix=so; prefix=lib; system_libraries="-ldl -lpthread -lm"; gpu_libraries="$system_libraries"
-    sound_libraries="$system_libraries" ;;
-  *) suffix=dll; prefix=""; system_libraries=""; gpu_libraries=""; sound_libraries="" ;;
+  Linux) suffix=so; prefix=lib; system_libraries="-ldl -lpthread -lm"; gpu_libraries="$system_libraries" ;;
+  *) suffix=dll; prefix=""; system_libraries=""; gpu_libraries="" ;;
 esac
 wasmtime_library=${prefix}warp_wasmtime.$suffix
-sound_library=${prefix}warp_sound.$suffix
 gpu_library=${prefix}warp_gpu.$suffix
 webview_library=${prefix}warp_webview.$suffix
 
@@ -85,20 +79,6 @@ if command -v warp >/dev/null; then
 fi
 # a library is current when newer than each of its sources
 current() { local target=$1 each; shift; for each in "$@"; do [ "$target" -nt "$each" ] || return 1; done; }
-
-# miniaudio's one header, fetched once at its pinned version and checked
-sound_library_built() {
-  mkdir -p "$sound_build"
-  header=$sound_build/miniaudio-$MINIAUDIO_VERSION/miniaudio.h
-  fetched "$header" "https://raw.githubusercontent.com/mackron/miniaudio/$MINIAUDIO_VERSION/miniaudio.h" "$MINIAUDIO_SHA256"
-  source=$checkout/crates/warp-sound/warp_sound.c
-  built=$sound_build/$sound_library
-  [ "$built" -nt "$source" ] && [ "$built" -nt "$header" ] && return
-  # shellcheck disable=SC2086 # the system libraries are words
-  nice -n 19 cc -O2 -shared -fPIC -I "$(dirname "$header")" -o "$built.new" "$source" $sound_libraries
-  mv -f "$built.new" "$built"
-}
-sound_library_built
 
 # wgpu-native's release for this machine, fetched once at its pinned version and checked, linked in whole
 wgpu_release_sha256() {
@@ -152,7 +132,6 @@ installed() {
 }
 for folder in "$@"; do
   installed "$CARGO_TARGET_DIR/release/$wasmtime_library" "$folder"
-  installed "$sound_build/$sound_library" "$folder"
   # (a platform wgpu-native ships no release for gets none: its programs paint on the CPU)
   if [ -f "$gpu_build/$gpu_library" ]; then installed "$gpu_build/$gpu_library" "$folder"; fi
   if [ -f "$webview_build/$webview_library" ]; then installed "$webview_build/$webview_library" "$folder"; fi

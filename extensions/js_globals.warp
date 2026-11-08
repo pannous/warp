@@ -35,10 +35,12 @@ js_globals(program: Node): Node := {
 	markup = nodes_in(program).any(is_markup_element)
 	if markup { names += page_globals_read(program, names) }
 	ids = if markup then page_ids(program) else []
-	if #names == 0 and #ids == 0 { return program }
+	elements = page_elements(program, ids)
+	if #names == 0 and #ids == 0 and #elements == 0 { return program }
 	scope = JsScope()
 	for name in names { scope.globals[name] = js_global_type(name) }
 	for id in ids { scope.elements[id] = yes }
+	for id in elements { scope.dollar_elements[PAGE_MARK + id] = id }
 	lowered = bottom_up(program, n => js_lowered(n, scope))
 	if markup then page_shown_first(lowered) else lowered
 }
@@ -79,6 +81,26 @@ page_ids(program: Node): list := {
 	}
 	found.keys
 }
+# `$paintings.className` (decision dollar-any-element): a member of any element of the page by its id; an id of the
+# program's markup and a bare `$who` stay the value typed into its field (page_values.warp), and a rewrite rule's
+# `$holes` are its own
+page_elements(program: Node, ids: list): list := {
+	found = {}
+	for statement in flat_statements(program).filter(statement => not is_rewrite_rule(statement)) {
+		for n in nodes_in(statement) {
+			id = page_id(n)
+			if id != "" and id not in ids { found[id] = yes }
+		}
+	}
+	found.keys
+}
+is_rewrite_rule(statement: Node): bool := is_group(statement) and #statement > 0 and statement#1 == symbol(rewrite_word)
+# document.getElementById(id), an element of the page
+page_element(id: text, scope: JsScope): Node := {
+	call = js_call([PAGE_DOCUMENT, js_global_type(PAGE_DOCUMENT)], ELEMENT_LOOKUP, 1, [Text(id)], scope)
+	scope.calls["${call}"] = PAGE_ELEMENT_TYPE
+	call
+}
 written_id(item: Node): text := match item {
 	Key(Symbol(name), Op.Colon, Text(id)): if name == ID_ATTRIBUTE and id != "" and not id.contains("-") then id else ""
 	_: ""
@@ -90,6 +112,7 @@ class JsScope {
 	variables: map = {}
 	calls: map = {}
 	elements: map = {}
+	dollar_elements: map = {}
 }
 # `use js Math`, `use js "path"`
 is_js_use(statement: Node): bool := is_group(statement) and #statement == 3 and statement#1 == symbol(USE_WORD) and statement#2 == symbol(JS_RUNTIME)
@@ -121,7 +144,8 @@ js_global_called(n: Node, scope: JsScope): Node := {
 # [the receiver as foreign_call takes it, its interface] of a js value, ø where the node is none
 js_receiver(n: Node, scope: JsScope): list? := {
 	if n is symbol and scope.globals.has(name_of(n)) { return [name_of(n), scope.globals[name_of(n)]] }
-	if n is symbol and scope.elements.has(name_of(n)) { return [js_call([PAGE_DOCUMENT, js_global_type(PAGE_DOCUMENT)], ELEMENT_LOOKUP, 1, [Text(name_of(n))], scope), PAGE_ELEMENT_TYPE] }
+	if n is symbol and scope.elements.has(name_of(n)) { return [page_element(name_of(n), scope), PAGE_ELEMENT_TYPE] }
+	if n is symbol and scope.dollar_elements.has(name_of(n)) { return [page_element(scope.dollar_elements[name_of(n)], scope), PAGE_ELEMENT_TYPE] }
 	if n is symbol and scope.variables.has(name_of(n)) { return [n, scope.variables[name_of(n)]] }
 	written = "${n}"
 	if scope.calls.has(written) then [n, scope.calls[written]] else ø

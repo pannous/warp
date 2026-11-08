@@ -2,7 +2,7 @@
 # paint without the GPU: use draw keeps a canvas of colored pixels, and show() paints it, natively in a window (a PNG
 # without one) and in the playground on its canvas. label sets words in the system's sans-serif font, any size
 use draw
-width=200 # todo set same for window!  todo warn if canvas≠window size (card window-canvas-size; on the GPU: paint_text_gpu.warp)
+width=300
 height=100
 canvas(width, height)
 clear(paper)
@@ -10,4 +10,9 @@ rect(10, 56, 60, 34, blue)
 circle(120, 72, 20, color(0xFFD700))
 line(156, 90, 190, 54, green)
 label(10, 6, "hello", red, size=48) 
-show() # todo Escape works great, but Control C only works when switching back to the window, Or takes some seconds (card window-ctrl-c)
+show() 
+# save("painting.png") # DONE Works in browser, but we want a different signature which is not conflicting with other potential variants of this very common name. Ideally typed with picture or whatever the canvas object (card save-picture-word): save canvas as: "painting.png"
+# save(canvas,"hello.png") DONE the host word save_picture is not in warp yet (card save-picture-host)
+# help(draw.save) # DONE outside the core: the unknown name draw (no owner) (card help-module-word)
+# help(save)  gives save(made: Picture, as file)
+# DONE save is defined 2 times ... AND? Please show the two different definitions instead of the useless explanation (card help-shows-overloads)
