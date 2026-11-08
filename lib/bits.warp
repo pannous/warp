@@ -89,3 +89,5 @@ float_bytes(x: float): list := float_bytes(x, 64, "big")
 // 4 or 8 bytes back to their float
 bytes_float(bytes: list, order: text): float := { n = bytes_int(bytes, order); if count(bytes) == 4 then f32_float(n) else bits_float(n) }
 bytes_float(bytes: list): float := bytes_float(bytes, "big")
+// the f32 at byte `at` of a file's bytes (read_bytes), little-endian as binary files mostly keep it, read in place
+f32_at(bytes: list, at: int): float := f32_float(bytes[at] + (bytes[at + 1] << 8) + (bytes[at + 2] << 16) + (bytes[at + 3] << 24))
