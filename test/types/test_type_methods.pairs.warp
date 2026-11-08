@@ -1,0 +1,8 @@
+# a type's methods (decision methods-declared, both ways; functions a synonym): `T.methods`, `x.methods`, the ones its
+# body declares, the ones declared outside it, `T.f() := …`, and every function taking the type first
+'class P { v: int; twice() := v * 2 }; P.scaled(k) := v * k; #P.methods'	2
+'class P { v: int; twice() := v * 2 }; p = P(1); p.functions'	["twice"]
+'class P { v: int; twice() := v * 2 }; #P.functions'	1
+'text.shout() := upper(self); ["shout" in text.methods, "repeat" in text.methods]'	[true, true]
+'shout(s: text) := upper(s); "shout" in text.functions'	true
+'type Name = text; greet(n: Name) := "hi " + n; Name.methods'	["greet"]

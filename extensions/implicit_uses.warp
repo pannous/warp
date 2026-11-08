@@ -87,7 +87,7 @@ implicit_modules(source: text, tree: Node, folder: text = "."): list := {
 	}
 	for module in rule_named.keys.filter(module => module not in modules and module not in used) {
 		# (a definition of its own carries its head, an assignment yes: `local["name"] = "Ada"` defines no local)
-		word = rule_named[module].find(word => not (own.has(word) and own[word] != yes) and not assigned_whole(program, word))
+		word = rule_named[module].find(word => not (own.has(word) and own[word] != yes) and not known.has(word) and not assigned_whole(program, word))
 		if word != ø {
 			modules += [module]
 			diagnose(call_of("implicit_use", [symbol(word), symbol(module)]), nodes_in(program).find(n => n == symbol(word)) ?? program)
@@ -97,19 +97,34 @@ implicit_modules(source: text, tree: Node, folder: text = "."): list := {
 }
 # whether the program assigns the name itself, `local = 3`, not one of its keys or fields, `local["name"] = "Ada"`
 assigned_whole(program: Node, word: text): bool := nodes_in(program).any(n => is_key(n, Op.Assign) and key_of(n) == symbol(word))
-# the words only a module's rules name, by module, that the source mentions: no rule starts with one and nothing
-# defines it, `local["name"]` of storage's `$store[$key] where $store in [database, local]`. The module comes as a use
-# before the program links its modules, so its prebuilt module links instead of its source compiling with the program
-# after the rule fired (card ipad-storage-bug: 5 s a run, and WebKit's Worker ran out of stack)
+# the words only a module's rules name, by module, that the source mentions: the words a rule's hole takes from its
+# list, nothing defining them, `local["name"]` of storage's `$store[$key] where $store in [database, local]` (never a
+# rule word a condition calls, shaders' `shader_values`). The module comes as a use before the program links its
+# modules, so its prebuilt module links instead of its source compiling with the program after the rule fired (card
+# ipad-storage-bug: 5 s a run, and WebKit's Worker ran out of stack)
 rule_named_modules(names: map): map := {
 	found = {}
 	needs = rule_needs_by_module()
 	# (the prelude's rules are always in effect: `xs: [f16] = …` names its f16 and needs no `use prelude`)
 	for module in needs.keys.filter(module => module != "prelude") {
-		words = needs[module].split(" ").filter(word => names.has(word) and not has_meaning(word) and word not in prelude_definitions() and defining_modules(word) == [] and word not in module_rule_heads(module))
+		mentioned = needs[module].split(" ").filter(word => names.has(word) and not has_meaning(word) and word not in prelude_definitions() and defining_modules(word) == [])
+		words = if #mentioned == 0 then [] else mentioned.filter(word => word in rule_listed_words(module))
 		if #words > 0 { found[module] = words }
 	}
 	found
+}
+# the words the conditions of a module's rules list for a hole, `$store in [database, local]`, read once a module
+global rule_listed_by_module = {}
+rule_listed_words(module: text): list := {
+	if not rule_listed_by_module.has(module) {
+		listed = []
+		rules = rules_of_module(module)
+		for index in 0 ..< #rules {
+			for condition in rules[index].conditions { listed += nodes_in(condition).filter(n => is_group(n) and bracket_of(n) == "[").flat_map(n => items_of(n).filter(item => item is symbol).map(name_of)) }
+		}
+		rule_listed_by_module[module] = listed
+	}
+	rule_listed_by_module[module]
 }
 # whether only the modules' rules know the word, no definition: it names them where it leads a statement, never in
 # quoted code (`data(set width of p to 12)` brings no english)
