@@ -46,7 +46,7 @@ not_equal { operator: "!=", symbol: Op.Ne, aliases: ["≠"], power: [115, 116] }
 "is" { power: [115, 116] }
 identical { operator: "===", power: [115, 116] }
 not_identical { operator: "!==", power: [115, 116] }
-approximately { operator: "≈", power: [115, 116] }
+approximately { operator: "≈", declared: yes, power: [115, 116] }
 similar { operator: "~", declared: yes, aliases: ["~~", circa], power: [115, 116] }
 "and" { symbol: Op.And, aliases: ["&&", "&"], power: [100, 101] }
 "xor" { symbol: Op.Xor, aliases: ["^^"], power: [95, 96] }
