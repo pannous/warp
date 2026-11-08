@@ -942,10 +942,18 @@ used_word_help(word: text, source: text): any := {
 	ø
 }
 word_help_in(module_text: text, word: text): any := {
-	heads = definition_slices(module_text).filter(cut => cut#1 == word).map(cut => written_head(cut#2))
-	if #heads == 0 { return ø }
-	doc = comment_above(module_text, word)
+	spans = spans_of(module_text).filter(span => span#1 == word)
+	if #spans == 0 { return ø }
+	heads = spans.map(span => written_head(module_text[span#2 ..< span#3]))
+	doc = comment_before(module_text, spans#1#2)
 	heads.join("\n") + (if doc == "" then "" else "\n" + doc)
+}
+# the comment lines right above the line starting at `start`, a value's as a function's (card module-export-attributes)
+comment_before(source: text, start: int): text := {
+	lines = source[0 ..< start].split("\n")
+	first = #lines
+	while first > 1 and is_comment_line(lines#(first - 1).trim()) { first -= 1 }
+	lines[first - 1 ..< #lines - 1].map(line => comment_text(line.trim())).join("\n")
 }
 # `midi(pitch)` of `midi(pitch) := …`: a definition's first line up to its `:=`
 written_head(definition: text): text := definition.split("\n")#1.split(":=")#1.trim()
