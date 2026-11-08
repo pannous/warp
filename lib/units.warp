@@ -23,11 +23,10 @@ class Quantity {
 		}
 		measured(amount + summand(this, other, "add").amount - unit_zero(unit), dims, unit, scale)
 	}
-	# number - Quantity via as-promotes (dims 0, empty unit): a span in the quantitys unit, `1900 - 2000 cm`
+	# 0 - Quantity, the negation `-40°F` and `-x` are (0 as-promoted: dims 0, no unit), counts the 0 in its unit, as
+	# summand's plain 0 does; a written span `1900 - 2000 cm` is the rule below
 	-(other) := {
-		if dims == 0 and unit is empty and (other is Quantity) and other.dims != 0 {
-			return number_quantity_span(amount, other)
-		}
+		if dims == 0 and unit is empty and amount == 0 and (other is Quantity) { return quantity(0 - other.shown(), other.unit) }
 		measured(amount - summand(this, other, "subtract").amount + unit_zero(unit), dims, unit, scale)
 	}
 	*(other) := if other is Unit then times_unit(this, other.unit) else if other is Quantity then measured(amount * other.amount, dims + other.dims, unit_combined(unit, other.unit, 1), scale * other.scale) else measured(amount * other, dims, unit, scale)
@@ -247,6 +246,8 @@ rewrite $xs $u => $xs.map(item => item * $u) where $u is Unit and list_valued($x
 // `sleep 5 ms`, `x = 3 kg`, `1 minute`: a number and a unit spaced is their product, as glued `5ms` is; a unit
 // after an expression belongs to its last amount, through comparisons, sums and assignments: `x > 1500 m` is
 // x > 1500m (wiki/unit.md, extensions/rules/rule_words.warp unit_bound). A unit is a word, never the char 's' of `f(at + 1, 's')`
+// `1900 - 2000 cm`: written so, the closed span of two numbers in that unit (number_quantity_span)
+rewrite $a - $e $u => number_quantity_span($a, $e * $u) where $a is number and $e is number and $u is Unit
 rewrite $e $u => $bound where $u is Unit and $bound = unit_bound($e, $u)
 // `60 °`, the angle (no unit: an Angle, a number of radians)
 rewrite $e $d => $bound where $d in [°] and $bound = unit_bound($e, $d)
