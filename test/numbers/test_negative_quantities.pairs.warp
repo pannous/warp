@@ -1,0 +1,5 @@
+# a negated quantity is the quantity of the negated amount, glued or of a name, never a span from 0 (card negative-temperature-read)
+'use units; str(-40°F as °C)'	"-40°C"
+'use units; -40°C'	-40°C
+'use units; x = 40m; -x'	-40m
+'use units; x = 3km; x + -x'	0km
