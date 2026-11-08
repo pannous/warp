@@ -115,7 +115,7 @@ sound_samples, gpu_*. Known cost: newGuestList is O(n²) (built_list copies its 
 text, so a million-item GPU list stops the run (samples/acceleration/gpu_million; bulk exports asked of core).
 lib/sound.warp's device words are host words (sound_played, sound_file_played, sound_file_decoded, midi_sent,
 midi_ports): host-sound.js soundWords plays samples on the run's voice, plays a file, decodes and resamples; natively
-lib/native_host/sound.warp answers them.
+lib/host/native_host/sound.warp answers them.
 Sweep caveats: samples that print a measured duration as "N ms" compare masked; gpu/gpu_visualizer and
 gpu/warp_compiled_wgsl_shader end with a while loop whose printed value is a measured time (5.001 vs 5.123): DIFF.
 

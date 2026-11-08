@@ -54,5 +54,5 @@ archive you write answers to; workers get decisions as your messages, not by rea
   opinion) instead of relaying a half-answer: record it in decisions.md and list it under "## To present" in
   open_decisions.md; present them in one keep-or-change batch next time.
 - Notes-only commits go straight to main from a temporary worktree (`cowtree add --detach <path> origin/main`,
-  commit, pull --rebase, push HEAD:main, remove).
+  commit, `git fetch origin main && git rebase --autostash --rebase-merges origin/main`, push HEAD:main, remove).
 Start: tidy the queue, then tell the Supervisor "interviewer ready, <n> pending".

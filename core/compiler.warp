@@ -238,8 +238,8 @@ write_module(name: text, runtime_file: text, file: text) := {
 	module_written = name
 	module_written_folder = folder_of(file) + "/"
 	made = ø
-	# (its `use` brings its file whole, found in the folder it is in: lib/, or a program's own module's)
-	folder = if own_module_files.has(name) then folder_of(own_module_files[name]) else library_folder
+	# (its `use` brings its file whole, found in the folder it is in: lib/, lib/host/, or a program's own module's)
+	folder = folder_of(std_module_path(name))
 	try { made = compile(module_source(name), folder, read_bytes(runtime_file), yes) } catch refusal { made = refusal }
 	module_written = ""
 	if made is text { throw made }
@@ -257,7 +257,7 @@ write_modules(folder: text, runtime_file: text) := {
 		file = folder + "/" + name + ".wasm"
 		try { write_module(name, runtime_file, file) } catch refusal {
 			write_bytes(file, [])
-			calls_c = #c_declarations_in(library_text(name + module_extension)) > 0
+			calls_c = #c_declarations_in(std_module_text(name)) > 0
 			if calls_c { print name + ".wasm not prebuilt (it calls C, compiled with the program): " + refusal } else { refused += [name + ".wasm: " + refusal] }
 		}
 	}
