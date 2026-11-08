@@ -255,6 +255,7 @@ MODULE_START = "warp/start"
 # rebuild, naming the module and why (decision prebuild-fails-loudly): one that won't link the modules it uses, and
 # any of lib/host/, which the native driver links itself and no program compiles
 write_modules(folder: text, runtime_file: text) := {
+	modules_rewritten = yes
 	write_library_index(folder)
 	runtime = read_bytes(runtime_file)
 	refused = []
