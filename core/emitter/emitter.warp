@@ -124,7 +124,7 @@ gc = {text: "text", items: "items", list: "list", node: "Node", int_box: "i64box
 # anyref, as the host holds a node
 any_reference = 110
 # a time, a $Node of Kind time like a node, is its own kind so that only what handles times takes one
-references = {text: [99, gc.text], list: [99, gc.list], node: [99, gc.node], time: [99, gc.node]}
+references = {text: [99, gc.text], list: [99, gc.list], node: [99, gc.node]}
 node_fields = [126, 0, any_reference, 0, 99, gc.node, 0]
 gc_types = [[94, 120, 1], [94, 99, gc.node, 1], [95, 2, 127, 1, 100, gc.items, 1], [80, 0, 95, 3] + node_fields, [95, 1, 126, 0], [95, 1, 124, 0], [95, 2, 110, 0, 110, 0],
 	[79, 1, gc.node, 95, 7] + node_fields + [126, 0, 126, 0, 99, gc.node, 0, 99, gc.node, 0], [94, 127, 1], [95, 2, 127, 0, 99, gc.limbs, 0],
@@ -151,7 +151,7 @@ reference_of(kind: ValueKind): list? := match kind {
 	ValueKind.Text: references.text
 	ValueKind.List: references.list
 	ValueKind.Node: references.node
-	ValueKind.Time: references.time
+	ValueKind.Time: references.node
 	_: ø
 }
 is_reference(kind: ValueKind): bool := reference_of(kind) != ø

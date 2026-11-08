@@ -1,0 +1,9 @@
+# a foreign line's parameter or result typed by an enum the program declares crosses as the case's int (card
+# enum-parameters): a plain enum's index, a valued enum's number; raylib's KeyboardKey as its header numbers it
+'enum Level { Low, Mid, High }; abs(x: Level): Level from "c"; "" + abs(Level.High)'	"High"
+'enum Level { Low, Mid, High }; abs(x: Level): i32 from "c"; abs(Level.Mid)'	1
+'enum Level { Low, Mid, High }; abs(x: i32): Level from "c"; "" + abs(-2)'	"High"
+'enum KeyboardKey { KEY_NULL = 0, KEY_APOSTROPHE = 39, KEY_A = 65 }; abs(x: KeyboardKey): i32 from "c"; abs(KeyboardKey.KEY_A)'	65
+'enum KeyboardKey { KEY_NULL = 0, KEY_APOSTROPHE = 39, KEY_A = 65 }; abs(x: i32): KeyboardKey from "c"; "" + abs(-39)'	"KEY_APOSTROPHE"
+'enum KeyboardKey { KEY_NULL = 0, KEY_A = 65 }; IsKeyPressed(key: KeyboardKey): bool from "raylib"; IsKeyPressed(KeyboardKey.KEY_A)'	no
+'enum KeyboardKey { KEY_NULL = 0, KEY_A = 65 }; GetKeyPressed(): KeyboardKey from "raylib"; "" + GetKeyPressed()'	"KEY_NULL"
