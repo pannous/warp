@@ -1,0 +1,26 @@
+# C enums (card enum-parameters, the Interviewer's default): a foreign line's parameter or result typed by an enum the
+# program declares crosses as the case's int, which c_imports reads as an i32, so of
+#   enum Level { Low, Mid, High }; abs(x: Level): Level from 'c'
+# `abs(Level.High)` is `abs(Level.High as int) as Level`, High; a valued enum's case crosses as the number it declares
+# (`enum KeyboardKey { KEY_A = 65 }`). Runs after conversions, so its `as` reach plain_enums and the enum rules.
+
+case_number_type = "int"
+
+c_enum_crossings(program: Node): Node := {
+	crossing = declared_c_functions.filter(d => #d > 5 and (d#6.any(word => word != "") or d#7 != ""))
+	if #crossing == 0 then program else bottom_up(program, n => enum_crossing(n, crossing))
+}
+enum_crossing(n: Node, crossing: list): Node := {
+	for d in crossing { if is_call_named(n, d#1) { return crossed_call(n, d) } }
+	n
+}
+# (an argument for each parameter the host doesn't fill, c_filled_types)
+crossed_call(call: Node, d: list): Node := {
+	enums = (0 ..< #d#3).filter(at => d#3[at] not in c_filled_types).map(at => d#6[at])
+	arguments = items_of(call)[1 ..]
+	passed = (0 ..< #arguments).map(at => if at < #enums and enums[at] != "" then Key(arguments[at], Op.As, symbol(case_number_type)) else arguments[at])
+	made = call_of(d#1, passed)
+	if d#7 == "" then made else Key(made, Op.As, symbol(d#7))
+}
+
+c_enums_extension = Extension{name: "c_enums", passes: {"definition_heads": c_enum_crossings}}
