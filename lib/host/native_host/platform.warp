@@ -1,4 +1,4 @@
-// The native host module's platform words (lib/native_host.warp): SDL's start, a quiet run, macOS and its
+// The native host module's platform words (lib/host/native_host.warp): SDL's start, a quiet run, macOS and its
 // CoreFoundation strings, shared by its window and sound parts. In a part, not the module's root, so that no program
 // implicitly uses the module by naming one of them (the library index reads a module's root only)
 

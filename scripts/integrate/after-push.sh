@@ -14,6 +14,8 @@
 set -uo pipefail
 source "$(dirname "$0")/../lib/platform.sh"
 source "$(dirname "$0")/../lib/hello-footprint.sh"
+source "$(dirname "$0")/../lib/site-scripts.sh"
+source "$(dirname "$0")/../lib/sync-main.sh"
 # git acts on the trees named by -C, never on a caller's repository (a hook's GIT_DIR, on-push.sh)
 unset $(git rev-parse --local-env-vars)
 MAIN_WARP=$HOME/dev/bin/warp  # the native warp (core/native/warp.warp), in a folder of its own (install_native)
@@ -152,7 +154,7 @@ install_compilers() {
 	folder=$(installed_folder) || return 1
 	copy_compilers "$TREE/lib" "$folder" &&
 		rsync -aL --exclude /data --exclude /warp --exclude '/*.wasm*' --exclude /modules --exclude '/*.kept' \
-			"$TREE/lib/" "$folder/" || red "compilers of ${tip:0:10}: the copy into $folder failed" --urgent
+			"$TREE/lib/" "$folder/" && site_scripts_copied "$TREE" "$folder" || red "compilers of ${tip:0:10}: the copy into $folder failed" --urgent
 	for lane in pure self; do
 		[ $lane = self ] && [ ! -f "$folder/warp-self.wasm" ] && continue
 		got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 footprint_run "$TREE/data/hello-footprint" 300 "$MAIN_WARP" $lane samples/hello/hello.warp 2>&1 | tail -1)
@@ -290,7 +292,7 @@ watch() {
 	cost_watched warp.record
 	# stage two: its compilers beside it, else the whole native warp
 	{ if [ -n "$early" ]; then install_compilers; else install_native; fi; } && { installed_compilers_are_trees || red "the installed warp.wasm is not the one built from ${tip:0:10}" --urgent; }
-	git -C "$MAIN_CHECKOUT" pull -q --rebase --autostash || say "the user's checkout did not pull: look at it"
+	up_to_date_main "$MAIN_CHECKOUT" || say "the user's checkout did not pull: look at it"
 	# a new native folder lacks the package libraries (libuniscript_c beside warp): linked again, as samples.sh does
 	"$scripts/link-packages.sh" "$MAIN_CHECKOUT" >/dev/null || say "packages not linked beside the new warp: the package samples fail"
 	playground_refreshed
@@ -335,7 +337,7 @@ samples_committed() {
 	git -C "$TREE" checkout -q HEAD -- "$report" 2>/dev/null || rm -f "$TREE/$report"
 	git -C "$MAIN_CHECKOUT" add -- "$report" && git -C "$MAIN_CHECKOUT" diff --cached --quiet -- "$report" && return
 	git -C "$MAIN_CHECKOUT" commit -q -m "chore: samples $count at ${1:0:10}" -- "$report" &&
-		git -C "$MAIN_CHECKOUT" pull -q --rebase --autostash && git -C "$MAIN_CHECKOUT" push -q ||
+		up_to_date_main "$MAIN_CHECKOUT" && git -C "$MAIN_CHECKOUT" push -q ||
 		say "samples of ${1:0:10} not committed: look at the user's checkout"
 }
 # slow_tiers <commit>: promote-self.sh and tiers 1-2 of what changed since the last commit they ran on

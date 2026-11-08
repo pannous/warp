@@ -386,7 +386,16 @@ scale_intervals = {major: [0, 2, 4, 5, 7, 9, 11, 12], minor: [0, 2, 3, 5, 7, 8, 
 // chord(C4, major) the Chord of that kind on C4; chord([C4 E4 G4], 3000ms) the notes sounding together for the duration
 // (cards rename-play, play-c4), as play(C4+E4+G4, 3000ms) does. One definition: an enum-typed parameter beside a list one is no overload the
 // dispatch tells apart yet (card enum-overload-dispatch)
-chord(root, kind) := if root is list then play(Chord(root), kind) else Chord(transpose_each(root, chord_intervals[kind]))
+chord(root, kind) := if root is list then play(Chord(root), kind) else if kind is Note then hinted_chord([root, kind]) else Chord(transpose_each(root, chord_intervals[kind]))
+// chord([C4 E4 G4]), chord(C4, E4, G4), `chord C4 E4 G4`: the Chord of those notes, with a note that the word isn't
+// needed (decision chord-word-hint): C4+E4+G4 is that Chord
+chord(notes) := hinted_chord(notes)
+chord(a, b, c) := hinted_chord([a, b, c])
+chord(a, b, c, d) := hinted_chord([a, b, c, d])
+hinted_chord(notes) := {
+	warning("chord isn't needed: write " + notes.map(note => "" + note).join("+"))
+	Chord(notes)
+}
 scale(root, kind: Scale) := transpose_each(root, scale_intervals[kind])
 transpose_each(root, intervals) := [transpose(root, i) for i in intervals]
 // the gain factor of decibels: loudness = dB(-6) is about half
@@ -872,7 +881,7 @@ def waited_till(start) {
 }
 
 // Playing (decision sound-system-player): a sound starts when its voice reaches it (the clock paces the program till
-// then). The host plays it in the process (decision sound-plays: natively lib/native_host/sound.warp over SDL3, in the
+// then). The host plays it in the process (decision sound-plays: natively lib/host/native_host/sound.warp over SDL3, in the
 // playground web/playground/host-sound.js), the run waiting at its end till its sounds are heard out; under
 // WARP_NO_WINDOW or CI nothing sounds. Without an audio device, or with WARP_SOUND_PLAYER set, the WAV goes to that
 // player, else the first of afplay (macOS), paplay, aplay (Linux) that starts. Under WARP_NO_WINDOW or CI only an
@@ -1175,7 +1184,7 @@ sample(path: text) := {
 	decoded = decoded_sound(path, 0, 0)
 	Sample(decoded[0], decoded[1], [decoded[at] + sample_offset for at in DECODED_VALUES_AT..count(decoded)])
 }
-// Audio files decoded by the host (natively AudioToolbox on macOS, else SDL3 and libmpg123: lib/native_host/sound.warp;
+// Audio files decoded by the host (natively AudioToolbox on macOS, else SDL3 and libmpg123: lib/host/native_host/sound.warp;
 // the page's decoder), each once a run at a rate and channel count (0: the file's own): [rate, channels, then its 16-bit
 // values, the channels interleaved], else the host's reason, a text
 sound_file_decoded(path: node, rate: int, channels: int): node from host
@@ -1351,7 +1360,7 @@ pattern(text) := pattern(text, bar_seconds(1))
 // MIDI (card midi-out): midi_on C4, midi_off C4, midi_send(144, 60, 100) to the first output device (or the browser's
 // Web MIDI output), midi_outputs() their names; channels count from 1, velocity 1 to 127. The native warp sends over
 // CoreMIDI, to warp's own virtual source "warp" when there is no output (decision midi-native); the page to its Web MIDI
-// the host's MIDI (natively CoreMIDI, lib/native_host/sound.warp; the page's Web MIDI): a message's bytes sent, 0 or
+// the host's MIDI (natively CoreMIDI, lib/host/native_host/sound.warp; the page's Web MIDI): a message's bytes sent, 0 or
 // what failed; the inputs' (inputs: 1) or the outputs' names, one a line, ø where no MIDI is built in
 midi_sent(port: node, message: node): int from host
 midi_ports(inputs: int): node from host

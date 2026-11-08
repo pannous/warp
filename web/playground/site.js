@@ -1,4 +1,4 @@
-// The page of a built site (scripts/build-site.sh): app.wasm runs in site-worker.js as the playground runs a program,
+// The page of a built site (`warp build --site`, extensions/commands/site.warp): app.wasm runs in site-worker.js as the playground runs a program,
 // and this page keeps the DOM. It morphs in the markup the program renders (lib/markup.warp page_render) after main,
 // each element event (markup.js elementEvent: the handler page_event runs) and each timer. A program serving requests
 // (lib/web.warp page_serve) gets the page's: its address first, then each link followed, the back button and each form,

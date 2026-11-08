@@ -180,7 +180,7 @@ function pageDecoded(name) {
 	return { rate, amplitudes: Float32Array.from(amplitudes) };
 }
 
-// lib/sound.warp's host words in the page (natively lib/native_host/sound.warp; card sound-direct): samples go to the
+// lib/sound.warp's host words in the page (natively lib/host/native_host/sound.warp; card sound-direct): samples go to the
 // run's voice as sound_samples' do, a file plays on the page as play_file's, a decoded file's 16-bit values come from
 // wavFrames or the page's decoder, at the rate and channel count asked (0: the file's), linearly resampled. A sound
 // played answers 0 as natively; MIDI goes to the page's Web MIDI on the voice's clock, the device lists stay the page's
