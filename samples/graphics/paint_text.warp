@@ -14,5 +14,5 @@ show()
 # save("painting.png") # DONE Works in browser, but we want a different signature which is not conflicting with other potential variants of this very common name. Ideally typed with picture or whatever the canvas object (card save-picture-word): save canvas as: "painting.png"
 # save(canvas,"hello.png") DONE the host word save_picture is not in warp yet (card save-picture-host)
 # help(draw.save) # DONE outside the core: the unknown name draw (no owner) (card help-module-word)
-# help(save)  save is defined 2 times, with 1 and 2 parameters; pass a lambda that calls the one you mean, e.g. x => save(x) at 17:6
-# TODO save is defined 2 times ... AND? Please show the two different definitions instead of the useless explanation (card help-shows-overloads)
+# help(save)  gives save(made: Picture, as file)
+# DONE save is defined 2 times ... AND? Please show the two different definitions instead of the useless explanation (card help-shows-overloads)

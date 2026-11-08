@@ -39,12 +39,11 @@ data/
 # warp's wasmtime C API and native libraries, copied in by scripts/wasmtime-c-api.sh (card wasmtime-bundled)
 /lib/libwarp_wasmtime.*
 /lib/libwarp_gpu.*
-/lib/libwarp_webview.*
 /lib/compiler.wasm*
 /lib/compiler-self.wasm*
 
-# packages fetched by `use <name>`, see packages.warp
-/packages/
+# packages fetched by `use <name>`, see packages.warp; a worktree links the main checkout's (rebuild.sh), so no trailing slash
+/packages
 
 # test fixtures may be prebuilt modules and components (tests/fixtures/components/*/build.sh rebuilds them)
 !tests/fixtures/**/*.wasm

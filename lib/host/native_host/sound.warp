@@ -1,4 +1,4 @@
-// The native warp's sound (card warp-sound-c, decision sound-plays), a part of lib/native_host.warp: lib/sound.warp's
+// The native warp's sound (card warp-sound-c, decision sound-plays), a part of lib/host/native_host.warp: lib/sound.warp's
 // host words, which the playground answers in web/playground/host-sound.js, natively over SDL3's audio, the system's
 // decoders and CoreMIDI by plain FFI.
 // Each sound plays on a stream of its own to the default device, SDL mixing it over the ones still playing; the run's

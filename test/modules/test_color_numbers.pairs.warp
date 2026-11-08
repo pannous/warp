@@ -1,6 +1,9 @@
-# a color written as its number (decision rgb-color-literal): six hex digits are opaque, eight carry their own alpha
+# a color written as its number (decision rgb-color-literal): six hex digits are opaque, eight end in their alpha as
+# CSS reads them (decision color-text-css)
 'use color; color(0xFF8000) == rgb(255, 128, 0)'	yes
 'use color; rgb(0xFF8000) == rgb(255, 128, 0)'	yes
-'use color; alpha_of(color(0x80FF8000))'	128
+'use color; alpha_of(color(0xFF800080))'	128
 'use color; color(0xFFD700) == yellow'	yes
 'use color; (0xFF8000 as Color) == rgb(255, 128, 0)'	yes
+'use color; hex_text(color(0xFF000080))'	"#FF000080"
+'use color; hex_text(255)'	"0xFF"

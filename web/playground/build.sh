@@ -257,16 +257,17 @@ WARP_LIB="$INSTALLED_LIBRARY" warp build --module test/fixtures/compiled/shapes.
 write_repository_served_files
 
 # a folder per guide chapter (notes/samples.md); golf/ and wit/ hold no menu samples, native/ only natively built ones
-python3 - "$page/samples.js" "$page/excluded_samples.txt" $(ls samples/*/*.warp | grep -v '^samples/\(golf\|wit\|native\)/') <<'PYTHON'
-import collections, json, os, sys
-# the samples the page cannot run yet stay out of the menu, each named with its error in excluded_samples.txt
-excluded = {line.split()[0] for line in open(sys.argv[2], encoding="utf-8") if line.strip() and not line.startswith("#")}
+python3 - "$page/samples.js" $(ls samples/*/*.warp | grep -v '^samples/\(golf\|wit\|native\)/') <<'PYTHON'
+import collections, json, os, re, sys
+# a sample a browser cannot run says so on a line of its own, `# host: native: <why>` (or none), and stays out of the
+# menu (test_in_browser.py HOST_LINE)
+NOT_IN_PAGE = re.compile(r"^# host: (native|none)\b", re.M)
 files = collections.defaultdict(list)
-for path in sys.argv[3:]: files[os.path.basename(path)[:-len(".warp")]].append(path)
+for path in sys.argv[2:]: files[os.path.basename(path)[:-len(".warp")]].append(path)
 # the menu and the address (#fizzbuzz) name a sample by its file name: one name, one file
 twins = {name: paths for name, paths in files.items() if len(paths) > 1}
 if twins: sys.exit(f"samples sharing a name: {twins}")
-names = {name: paths[0] for name, paths in sorted(files.items()) if name not in excluded}
+names = {name: paths[0] for name, paths in sorted(files.items()) if not NOT_IN_PAGE.search(open(paths[0], encoding="utf-8").read())}
 samples = {name: open(path, encoding="utf-8").read() for name, path in names.items()}
 with open(sys.argv[1], "w", encoding="utf-8") as script:
 	script.write("// made by build.sh from samples/<chapter>/*.warp\nconst SAMPLES = " + json.dumps(samples, ensure_ascii=False, indent="\t") + ";\n")

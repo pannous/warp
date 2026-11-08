@@ -1,7 +1,0 @@
-# samples/<chapter>/*.warp left out of the playground menu (build.sh): only those that cannot run in a browser, each
-# with why (notes/playground_plan.md); scripts/samples-web.sh runs every other sample in the page against its native
-# output (test/samples-web.txt). A sample failing natively too is a sample to fix, not a line here.
-# runs processes: native only
-crontab	os.exec: no such word in the browser (exec runs a process; card read-chron)
-rust_crates	use cargo strsim builds the crate with cargo: only the native warp can (card use-cargo-playground)
-unix_commands	cd, which and rm on folders run natively only (card unix-words)

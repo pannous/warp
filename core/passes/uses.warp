@@ -213,8 +213,12 @@ call_head(n: Node): any := {
 # lib/<name>.warp, a standard module's file (the std modules are the files of lib/, the folder above this one), or
 # extensions/rules/<name>.warp, a module only the compiler uses: its rule words, run at compile time (decision
 # library-zero-bake-plan 1b). It stays a module: brought in as its own file, its words reached, as from lib/ (an
-# include of it as the compiler's own code typed the emitter's values anew: shown_text refused)
-std_module_path(name: text): text := own_module_files.get(name) ?? run_library() + (if compiler_modules().has(name) then COMPILER_MODULES else "/") + name + module_extension
+# include of it as the compiler's own code typed the emitter's values anew: shown_text refused), or lib/host/<name>.warp,
+# a module the native driver links itself (decision host-folder)
+std_module_path(name: text): text := own_module_files.get(name) ?? run_library() + module_folder(name) + name + module_extension
+module_folder(name: text): text := if modules_in(COMPILER_MODULES).has(name) then COMPILER_MODULES else if is_host_module(name) then HOST_MODULES else "/"
+# a module of lib/host/: no program uses it, so none of its words brings it in (prelude_words.warp module_word_definers)
+is_host_module(name: text): bool := modules_in(HOST_MODULES).has(name)
 # A program's own module, compiled as a standard module is and linked like one (decision samples-modules-wasm:
 # `import shapes` of a shapes.wasm with its warp.signature beside the program, which `warp build --module shapes.warp`
 # writes): name → its .warp file, and name → its .wasm, which a program imports by that path (driver instance_path)
@@ -225,14 +229,17 @@ own_module(name: text, file: text, wasm: text) := {
 	own_module_wasm[name] = wasm
 }
 COMPILER_MODULES = "/extensions/rules/"
-global compiler_module_names = ø
-compiler_modules(): map := {
-	if compiler_module_names == ø {
-		compiler_module_names = {}
-		listed = try list_files(run_library() + COMPILER_MODULES) else []
-		if type(listed) is list { for file in listed { if file.ends_with(module_extension) { compiler_module_names[file[0 ..< #file - #module_extension]] = yes } } }
+HOST_MODULES = "/host/"
+# the modules each such folder holds, by name, listed once
+global modules_by_folder = {}
+modules_in(folder: text): map := {
+	if not modules_by_folder.has(folder) {
+		names = {}
+		listed = try list_files(run_library() + folder) else []
+		if type(listed) is list { for file in listed { if file.ends_with(module_extension) { names[file[0 ..< #file - #module_extension]] = yes } } }
+		modules_by_folder[folder] = names
 	}
-	compiler_module_names
+	modules_by_folder[folder]
 }
 
 # what a `use` statement names, ø for another statement

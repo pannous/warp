@@ -110,17 +110,17 @@ word, not a flag (decision build-kinds-detected). The page's app in the web view
 
 State of the page kinds in the warp compiler (2026-11-06, cloud sprint 07; decision build-kinds-detected: detected,
 no flag, Later). The Rust page stub (wry) went with the Rust harness; `warp build --page|--site` is refused
-(extensions/commands/build.warp UNBUILT_OPTIONS) and scripts/build-site.sh builds a static site from the whole module.
+(extensions/commands/build.warp UNBUILT_OPTIONS) and `warp build --site` (extensions/commands/site.warp) builds a static site from the whole module.
 - Detection: a page is a program whose module exports `page_render` (lib/markup.warp's export, kept whenever markup is
   used; web/playground/driver.js renders by it). With load-time linking that export sits in modules/markup.wasm, so
   `warp build` asks the program's imports (`warp/markup`) instead.
 - page-wasm-build: the browser host already links at load time (web/playground/host.js libraryFile/libraryUrl): a
   deployed page finds runtime.wasm and modules/<m>.wasm beside itself. So the build is: compile linked (`warp build`
   sets modules_linked = no, a page build keeps it yes), then copy runtime.wasm and each `warp/<m>` the program and its
-  modules import from the library folder, plus the page scripts. Open: an installed lib/ has no web/playground scripts
-  (build-site.sh copies them from the checkout), and x.mod.wasm (linked_bytes) carries exact references only wasmtime
-  loads (build-site.sh), so the linked compile must be the ordinary one, checked in Chromium (scripts/tests-web.sh).
-- page-app-build: the page in the system's web view: libwarp_webview (crates/warp-webview, card app-webview) is there
+  modules import from the library folder, plus the page scripts. An installed lib/ and a release carry the page scripts in lib/site
+  (scripts/lib/site-scripts.sh), and x.mod.wasm (linked_bytes) carries exact references only wasmtime
+  loads (`warp build --site` ships the whole module), so the linked compile must be the ordinary one, checked in Chromium (scripts/tests-web.sh).
+- page-app-build: the page in the system's web view: the native host module's web view (lib/host/native_host/webview.warp, card app-webview) is there
   on macOS (WKWebView; WebKitGTK on Linux is open) and `warp app` shows a program's static page in it
   (notes/webview.md); open is loading the page build above from the executable, its handlers live.
 

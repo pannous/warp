@@ -32,7 +32,7 @@ def stroke(x1, y1, x2, y2) {
 on key {
 	if key == ESC: exit()
 	if key == SPACE: clear(white)
-	if key == "s": save canvas as: "painting.png"
+	if key == "s": save(canvas, "painting.png")
 	show()
 }
 
