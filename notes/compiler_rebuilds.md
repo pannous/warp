@@ -41,7 +41,8 @@ the investigation of 2026-10-23 is in /workspace/cow/compiler-rebuilds.md on the
 ## Failed builds (card build-failed-store, user 2026-10-30)
 
 Every build of a hash happens once, whether it succeeds or fails. `warp rebuild` says each step before it runs
-(`rebuild step seed|optimize|runtime|modules`); when one fails, rebuild.sh keeps the failure in
+(`rebuild step seed|optimize|runtime|modules`, and a bare `warp rebuild` then `native`: the native warp built anew
+by the new warp.wasm; rebuild.sh runs `warp rebuild pure`, the compilers alone); when one fails, rebuild.sh keeps the failure in
 <store>/<hash>/<compiler>.failed/: build.log (the whole output), step, message (what is printed) and, for a step after
 the seed, the half-built warp.wasm.new and runtime.wasm. It prints the header, the failing step's output (its last 60
 lines) and, last, `rebuild.sh: warp build-failed at step <step>, log <path> …`, the line smoke.sh, gate.sh,
