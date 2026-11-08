@@ -117,6 +117,9 @@ CONSOLE_SETTLE_SECONDS = 0.3  # a shown example's last messages reach the watche
 BROWSER_OWN_WARNINGS = {"No available adapters.", "A valid external Instance reference no longer exists."}
 # an example on the GPU (paint of a shader) in a browser without WebGPU (the runner's Firefox): skipped, loudly
 NO_GPU = "offers no WebGPU adapter"
+# a sample needing a GPU feature this browser's GPU lacks (host-gpu.js NO_HALVES: the server's headless Chrome has no
+# shader-f16): it ran and said so, loudly, nothing to compare
+NO_GPU_FEATURE = "this GPU offers no "
 PAGE_LOAD = "(loading the page)"
 # `--examples --guide`: every guide.md snippet's `=> value` and ```printed lines in the page (guide.js SNIPPET_FENCE)
 GUIDE = "--guide"
@@ -1350,6 +1353,8 @@ def sample_verdict(report, native_output):
 	if report.get("error"):
 		first = (report.get("errors") or [report.get("value")])[0]
 		first = first.get("message", first) if isinstance(first, dict) else first
+		if NO_GPU_FEATURE in str(first):
+			return "ran", str(first)[:200].replace("\n", " ")
 		return "FAIL", str(first)[:200].replace("\n", " ")
 	shown = page_output(report)
 	if native_output is None:

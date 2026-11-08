@@ -12,13 +12,13 @@ const folder = dirname(fileURLToPath(import.meta.url));
 const sandbox = {
 	console, TextEncoder, TextDecoder, URL, WebAssembly, Proxy, Map, Set, Object, Array, BigInt, Number, String,
 	Boolean, Error, TypeError, RangeError, Math, Date, JSON, Uint8Array, DataView, Atomics, Reflect, Symbol,
-	Infinity, NaN, undefined,
+	Infinity, NaN, undefined, URLSearchParams, location: { search: "" },
 };
 sandbox.self = sandbox;
 sandbox.globalThis = sandbox;
 sandbox.utf8Decoder = new TextDecoder();
-vm.runInNewContext(readFileSync(join(folder, "reader.js"), "utf8"), sandbox);
-vm.runInNewContext(readFileSync(join(folder, "host.js"), "utf8"), sandbox);
+// the scripts worker.js imports before the host's parts, in its order
+for (const file of ["imports.js", "js-members.js", "std.js", "host.js"]) vm.runInNewContext(readFileSync(join(folder, file), "utf8"), sandbox);
 
 const { runHolder } = sandbox;
 assert.equal(typeof runHolder, "function");

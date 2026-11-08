@@ -1,0 +1,9 @@
+#!/usr/bin/env warp
+# floats in half the bytes: a GPU list [f16] holds two-byte floats, which a shader reads and writes as array<f16>
+# after `enable f16` (a GPU that offers f16; f16 reaches only 65504, three decimal digits)
+doubling = "enable f16;
+@group(0) @binding(0) var<storage, read_write> xs: array<f16>;
+@compute @workgroup_size(64) fn main(@builtin(global_invocation_id) id: vec3<u32>) { if (id.x < arrayLength(&xs)) { xs[id.x] = xs[id.x] * 2.0h; } }"
+halves: [f16] = [0.25, 1.5, 1000, 0.1]
+gpu_compute(doubling, halves, 1)
+print("in f16: ${halves}")
