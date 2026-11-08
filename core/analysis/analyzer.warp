@@ -764,6 +764,12 @@ declare(name: Name, type_node: Node, context: Name) := {
 		scope.pinned[name] = yes
 	}
 	if type_node is symbol { scope.types[name] = name_of(type_node) }
+	# `ps: [P]`, `xs: [int]`: a list of those elements (a class's held as nodes), never a name read as a text
+	if is_list_literal(type_node) {
+		scope.kinds[name] = ValueKind.List
+		scope.pinned[name] = yes
+		scope.types[name] = if #type_node == 1 and type_node#1 is symbol then "list of " + name_of(type_node#1) else "list of node"
+	}
 }
 
 # the scope a variable of `context` lives in: its own, the main scope for a global or a main variable a body reads
