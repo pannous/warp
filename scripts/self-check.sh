@@ -77,9 +77,8 @@ copied_from_first() {
 # its wasmtime where its rpath looks, the build folder the launcher links to first
 copied_from_first 'libwarp_wasmtime.*' ${main_warp:A:h} ${main_warp:h} ${installed_warp:A:h} ${installed_warp:h}
 libraries_beside $scratch
-# the seed lies beside the launcher; the pair in the build folder the launcher links to (warp-builds/<tip>). Its
-# runtime is no file: each rebuild compiles it from the sources being built (card seed-compiles)
-copied_from_first warp-seed.wasm ${main_warp:h} ${main_warp:A:h} ${installed_warp:h} ${installed_warp:A:h}
+# no seed beside the copy: the native warp finds the installed warp's (core/native/warp.warp seed_path, card
+# tree-seed-lookup); its runtime is no file: each rebuild compiles it from the sources being built (card seed-compiles)
 # the pair for these inputs: lib/'s, else the store's; built by the copy only with --rebuild
 if [[ -n $rebuild ]]; then
   pair=$(WARP_BINARY=$warp $worktree/scripts/rebuild.sh both $worktree 2>&1)
