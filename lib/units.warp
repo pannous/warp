@@ -105,6 +105,18 @@ measured(amount: number, dims: int, unit: text, scale: number) := {
 // a plain number as the dimensionless quantity it is: an operator meeting a number and a quantity promotes the number
 // (decision as-promotes), so `2.0 / 4m` is 0.5/m; `1.0 - 4m` is a span (card gap-span-units-compare), never a plain number
 n: number as Quantity := measured(n, 0, "", 1)
+// a plain number as a dimension counts its base unit: `5 as Pixels` is 5px, `2 as Length` 2m (night decision length-pixels; a Time is `time 6`);
+// so a conversion body giving a number, `length as pixels := it.amount * 2`, gives the target's amount
+n: number as Length := quantity(n, "m")
+n: number as Mass := quantity(n, "kg")
+n: number as Temperature := quantity(n, "K")
+n: number as Pixels := quantity(n, "px")
+n: number as Area := quantity(n, "m²")
+n: number as Volume := quantity(n, "m³")
+n: number as Speed := quantity(n, "m/s")
+n: number as Frequency := quantity(n, "Hz")
+n: number as Force := quantity(n, "N")
+n: number as Density := quantity(n, "dpi")
 // `6km / 2000m` of one dimension is the plain number 3; `90km / h` a speed
 quotient(above: Quantity, below: Quantity) := if above.dims == below.dims then above.amount / below.amount else measured(above.amount / below.amount, above.dims - below.dims, unit_combined(above.unit, below.unit, -1), above.scale / below.scale)
 
@@ -322,6 +334,18 @@ type ml = Volume
 type ha = Area
 type dpi = Density
 type ppi = Density
+// the dimensions in lower case (quantity-naming, night decision length-pixels): `length as pixels := it.amount * 2`; at a
+// definition head `length` is the type, elsewhere `length xs` stays count's alias; time is lib/time's word
+type length = Length
+type mass = Mass
+type temperature = Temperature
+type pixels = Pixels
+type area = Area
+type volume = Volume
+type speed = Speed
+type frequency = Frequency
+type force = Force
+type density = Density
 
 // a unit as written, `km`, `km/h`, `m²`, `kg·m/s²`: the quantity of one of it
 unit_named(u: text) := {
@@ -368,18 +392,6 @@ exact_decimal(t: text) := {
 // a duration sleeps that long, `sleep(300ms)`; a plain number its seconds, as the prelude's sleep (one word: a module's
 // sleep(d: Time) beside the prelude's sleep(x) would replace it, card typed-overload-replace)
 sleep(duration) := slept((if duration is Time then duration.amount else duration) * 1000)
-
-// `time 6`, `time 3+3`: a number as a Time, its seconds (6s); `time { … }` measures as the shell's time does: runs the
-// block, prints how long it took and gives the block's value (decision time-command). A block reads as data, which no
-// typed overload tells apart from a number, so a rule turns it into the run measured
-time(n: number) := n * seconds
-rewrite time {$body...} => timed(() => {$body...})
-timed(run) := {
-	started = clock()
-	value = run()
-	print "time: " + (clock() - started) / 1000 * seconds
-	value
-}
 
 // `6.0m ± 0.3`: a tolerance of a quantity, its amount an interval; a plain spread counts in the value's unit, a
 // quantity's converts to it: `5m ± 1cm` is 5.00 ± 0.01 m (notes/plus_minus.md P220)
