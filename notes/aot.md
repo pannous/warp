@@ -120,7 +120,7 @@ no flag, Later). The Rust page stub (wry) went with the Rust harness; `warp buil
   modules import from the library folder, plus the page scripts. An installed lib/ and a release carry the page scripts in lib/site
   (scripts/lib/site-scripts.sh), and x.mod.wasm (linked_bytes) carries exact references only wasmtime
   loads (`warp build --site` ships the whole module), so the linked compile must be the ordinary one, checked in Chromium (scripts/tests-web.sh).
-- page-app-build: the page in the system's web view: libwarp_webview (crates/warp-webview, card app-webview) is there
+- page-app-build: the page in the system's web view: the native host module's web view (lib/host/native_host/webview.warp, card app-webview) is there
   on macOS (WKWebView; WebKitGTK on Linux is open) and `warp app` shows a program's static page in it
   (notes/webview.md); open is loading the page build above from the executable, its handlers live.
 
