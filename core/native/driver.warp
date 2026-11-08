@@ -85,6 +85,8 @@ DISPLAY_DPI_SLOT = 2
 RUN_SLOT = 3
 # the run's timers (signal_listen): a table the run allocates, since a host word's own allocations end with it (events)
 TIMERS_SLOT = 4
+# where the memory of the program a host word of the native host module serves starts (a GPU list's cells are there)
+PROGRAM_MEMORY_SLOT = 5
 # whether the run linked unicode (canonical_text), the native host module (host_export), at these places of its block
 UNICODE_LINKED_AT = 32
 HOST_LINKED_AT = 40
@@ -175,11 +177,7 @@ next_painting(): i32 from "c"
 last_error(): i32 from "c"
 strerror(code: i32): handle from "c"
 gpu_paints(): i32 from "c"
-gpu_painted(shader: pointer, values: pointer, width: i64, height: i64, pixels: pointer): i32 from "c"
 arena_kept(): nothing from "c"
-shader_shown(shader: pointer, values: pointer, layer: handle, width: i64, height: i64): i32 from "c"
-pixels_shown(pixels: pointer, layer: handle, width: i64, height: i64): i32 from "c"
-lazy_library_word(name: pointer, engine: handle, unanswered: i64): handle from "c"
 mkdir(path: pointer, mode: i32): i32 from "c"
 atoll(digits: text): i64 from "c"
 atof(digits: pointer): f64 from "c"
@@ -642,7 +640,7 @@ host_words_defined(linker: handle, engine: handle, context: handle, compiled: ha
 			word_defined(linker, import, foreign_of(line, 0), trap)
 		}
 		if line.length > 0 and is_wasm_path(from) and crosses_memory(line) { word_defined(linker, import, foreign_of(line, wasm_exports_of(linker, context, from, name)), trap) }
-		if same_text(from, "host") { host_word_defined(linker, engine, import, name, trap) }
+		if same_text(from, "host") { word_defined(linker, import, answered_word(name), trap) }
 	}
 }
 # the lines of the C functions a module calls: a GC module's, else a primitive one's, whose values are numbers, texts
@@ -695,12 +693,13 @@ unanswered_word(name: text): i64 := {
 	word_at(cell + 4).value = name.length
 	0 - (cell as i64)
 }
-# a host word neither the driver nor a library beside warp answers, answered by the native host module's
+# a host word the driver doesn't answer, answered by the native host module's
 # host_<word> (host_text_coverage) with the values as they are; one it lacks ends the run naming it
 host_word_answered(caller: handle, name: text, given: pointer, count: i64, results: pointer, results_count: i64): nothing := {
 	context = wasmtime_caller_context(caller)
 	function = allocate(EXTERN_BYTES)
 	if not host_export(context, joined("host_", name), function) { return unanswered(name) }
+	keep_value(PROGRAM_MEMORY_SLOT, guest_memory(caller, context))
 	trap = allocate(8)
 	long_at(trap).value = 0
 	checked(wasmtime_func_call(context, function + 8, given, count, results, results_count, trap), trap)
@@ -710,17 +709,8 @@ unanswered(name: text): nothing := {
 	complain(joined(joined("the host word ", name), " is not in warp yet"))
 	exit(1)
 }
-# a host word the driver answers, else one a library beside warp owns, bound to that library's callback
-# warp_word_<name> (lib/native/foreign.c library_word) with the engine as its data: it reads and builds the module's
-# values in place (lib/native/warp_node.h, decision library-direct-refs); else a word naming it when called
-host_word_defined(linker: handle, engine: handle, import: handle, name: text, trap: pointer): nothing := {
-	word = answered_word(name)
-	if word >= 0 { return word_defined(linker, import, word, trap) }
-	# (its library looked for at its first call, lib/native/foreign.c warp_lazy_host_callback: a module importing it
-	# whose program never calls it opens none)
-	type = wasm_externtype_as_functype_const(wasm_importtype_type(import))
-	checked(wasmtime_linker_define_func(linker, "host", 4, name, name.length, type, c_function("warp_lazy_host_callback"), lazy_library_word(c_string(name), engine, word), 0), trap)
-}
+# a host word the driver answers, else a word naming it when called, which the native host module answers
+# (host_word_answered)
 # the import defined as warp_host_callback, `word` its data
 word_defined(linker: handle, import: handle, word: i64, trap: pointer): nothing := {
 	from = native_vector_text(wasm_importtype_module(import))
@@ -1528,6 +1518,7 @@ system_value(name: text): i64 := {
 	if same_text(name, "display_height") { return display_side(1, "display.height") }
 	if same_text(name, "online") { return route_online() as i64 }
 	if same_text(name, "gpu_paints") { return gpu_paints() as i64 }
+	if same_text(name, "program memory") { return kept_value(PROGRAM_MEMORY_SLOT) }
 	# (an open window tells its size as its user made it; before, the size the program set, else the view's)
 	if host_asked("host_owns", name) != 0 { return host_asked("host_value", name) }
 	if same_text(name, "window_width") { return kept_or(WINDOW_WIDTH_SLOT, NATIVE_VIEW_WIDTH) }
@@ -1791,6 +1782,8 @@ guest_text_of(caller: handle, context: handle, t: text, result: pointer): nothin
 ## an alpha byte its color, any other ink. A shader paints on the GPU, which the native warp has not yet
 PAPER = 250
 INK = 29
+OPAQUE = 4278190080
+PIXEL_BYTES = 4
 COLOR_FROM = 16777216
 STORED_MOST = 65535
 ADLER_MODULUS = 65521
@@ -1828,17 +1821,26 @@ picture_saved(caller: handle, context: handle, given: pointer): text := {
 	height = picture_height(given)
 	png_written(pixels_of(caller, context, given, width * height), width, height, shown(caller, context, given + 3 * VALUE_BYTES))
 }
-# the picture's pixels: a WGSL shader's, its values the uniform, from the GPU (lib/native/foreign.c, libwarp_gpu),
-# else the list's; 0 when a library showed them in its open window (foreign.c shader_shown, pixels_shown)
+# the picture's pixels: a WGSL shader's, its values the uniform, from the GPU (the native host module's gpu part,
+# lib/host/native_host/gpu.warp, over libwgpu_native), else the list's; 0 when that module showed them in its open window
 painted_pixels(caller: handle, context: handle, given: pointer, width: i64, height: i64): pointer := {
 	if guest_flag(caller, context, "is_textual", given) {
-		shader = shown(caller, context, given)
-		values = shown(caller, context, given + 3 * VALUE_BYTES)
-		in_window = shader_shown(c_string(shader), c_string(values), window_layer(width, height), width, height)
-		if in_window < 0 { exit(1) }
-		if in_window > 0 { return 0 }
+		if gpu_paints() == 0 {
+			complain("paint of a shader: libwgpu_native is not beside warp")
+			exit(1)
+		}
+		# (the picture's values as they are: shader, width, height, values)
+		if in_window(gpu_answered("host_shader_shown", given, 4)) { return 0 }
+		colors = allocate((width * height * PIXEL_BYTES) as i32)
+		painting = allocate(5 * VALUE_BYTES)
+		memcpy(painting, native_pointer(given), 4 * VALUE_BYTES)
+		int_result(handle_id(native_pointer(colors)) as i64, painting + 4 * VALUE_BYTES)
+		if gpu_answered("host_shader_painted", painting, 5) != 0 { exit(1) }
 		pixels = allocate((width * height * 8) as i32)
-		if gpu_painted(c_string(shader), c_string(values), width, height, pixels) != 0 { exit(1) }
+		for i in 0..width * height {
+			at = colors + i * PIXEL_BYTES
+			long_at(pixels + i * 8).value = OPAQUE + (byte_at(at).value as i64) * 65536 + (byte_at(at + 1).value as i64) * 256 + byte_at(at + 2).value as i64
+		}
 		pixels
 	} else {
 		count = guest_number(caller, context, "item_count", given)
@@ -1847,21 +1849,37 @@ painted_pixels(caller: handle, context: handle, given: pointer, width: i64, heig
 			exit(1)
 		}
 		pixels = pixels_of(caller, context, given, width * height)
-		in_window = pixels_shown(pixels, window_layer(width, height), width, height)
-		if in_window < 0 { exit(1) }
-		if in_window > 0 then 0 else pixels
+		if gpu_paints() == 0 { return pixels }
+		shown = allocate(3 * VALUE_BYTES)
+		int_result(handle_id(native_pointer(shaded(pixels, width * height))) as i64, shown)
+		int_result(width, shown + VALUE_BYTES)
+		int_result(height, shown + 2 * VALUE_BYTES)
+		if in_window(gpu_answered("host_pixels_shown", shown, 3)) then 0 else pixels
 	}
 }
-# the layer of the native host module's window for a painting of width × height, the window opened by the first; 0
-# where none shows it: no window, or no GPU to show it with (libwarp_gpu)
-window_layer(width: i64, height: i64): handle := {
-	if gpu_paints() == 0 { return 0 }
-	sides = allocate(2 * VALUE_BYTES)
-	int_result(width, sides)
-	int_result(height, sides + VALUE_BYTES)
-	layer = allocate(VALUE_BYTES)
-	guest_call(0, run_context(), "host_window_layer", sides, 2, layer)
-	handle_pointer(value_number(layer) as i32)
+# a painting the native host module answered for: 1 shown in its window, 0 not (no window open), -1 failed (it said why)
+in_window(answer: i64): bool := {
+	if answer < 0 { exit(1) }
+	answer > 0
+}
+gpu_answered(name: text, values: pointer, count: i64): i64 := {
+	result = allocate(VALUE_BYTES)
+	guest_call(0, run_context(), name, values, count, result)
+	value_number(result)
+}
+# the pixels as RGBA bytes, as png_written shades them: 0 paper, a value with an alpha byte its color, any other ink
+shaded(pixels: pointer, count: i64): pointer := {
+	bytes = allocate((count * PIXEL_BYTES) as i32)
+	for i in 0..count {
+		value = long_at(pixels + i * 8).value
+		shade = if value == 0 then PAPER else INK
+		at = bytes + i * PIXEL_BYTES
+		byte_at(at).value = (if value >= COLOR_FROM then value / 65536 % 256 else shade) as u8
+		byte_at(at + 1).value = (if value >= COLOR_FROM then value / 256 % 256 else shade) as u8
+		byte_at(at + 2).value = (if value >= COLOR_FROM then value % 256 else shade) as u8
+		byte_at(at + 3).value = 255 as u8
+	}
+	bytes
 }
 # the first n pixels of the picture, as ints, a chunk of PIXEL_CHUNK at a time by the module's pixels_at (4 bytes each
 # in its memory): one call a chunk, not one a pixel (card native-show-paint: 1280×800 took 360 ms)
@@ -2411,6 +2429,10 @@ PARAMETER_LENGTH = 10
 # a primitive module's text, the address of its (address, length) pair, and its pointer, an address of its memory
 PARAMETER_PAIR = 11
 PARAMETER_ADDRESS = 12
+# a list of numbers as a C array of f32 or of int32 cells, its byte count the length after it
+PARAMETER_F32S = 13
+PARAMETER_I32S = 14
+CELL_BYTES = 4
 REGISTER_I32 = 1
 REGISTER_I64 = 2
 REGISTER_F32 = 3
@@ -2424,6 +2446,7 @@ CROSSING_HANDLE = 4
 CROSSING_U32 = 5
 CROSSING_PAIR = 6
 CROSSING_ADDRESS = 7
+CROSSING_BYTES = 8
 FAILURE_NONE = 1
 FAILURE_NOT_NULL = 2
 FAILURE_FALSE = 3
@@ -2440,6 +2463,8 @@ parameter_kind(name: text): i32 := {
 	if same_text(name, "length") { return PARAMETER_LENGTH }
 	if same_text(name, "pair") { return PARAMETER_PAIR }
 	if same_text(name, "address") { return PARAMETER_ADDRESS }
+	if same_text(name, "f32s") { return PARAMETER_F32S }
+	if same_text(name, "i32s") { return PARAMETER_I32S }
 	0
 }
 register_of(name: text): i32 := {
@@ -2459,6 +2484,7 @@ crossing_of(name: text): i32 := {
 	if same_text(name, "u32") { return CROSSING_U32 }
 	if same_text(name, "pair") { return CROSSING_PAIR }
 	if same_text(name, "address") { return CROSSING_ADDRESS }
+	if same_text(name, "bytes") { return CROSSING_BYTES }
 	0
 }
 failure_of(name: text): i32 := {
@@ -2531,7 +2557,7 @@ library_called(c: Foreign, caller: handle, context: handle, given: pointer, resu
 			long_at(integers + integer_count * 8).value = if kind == PARAMETER_LENGTH then bytes_length else c_argument(caller, context, name, kind, value, if outs == 0 then out else 0)
 			integer_count = integer_count + 1
 		}
-		if kind == PARAMETER_BYTES { bytes_length = c_bytes_length(caller, context, value - VALUE_OFFSET) }
+		if is_array(kind) { bytes_length = c_array_length(caller, context, kind, value - VALUE_OFFSET) }
 		if kind == PARAMETER_OUT { outs = outs + 1 }
 		passed = passed + program_argument(kind)
 	}
@@ -2623,15 +2649,15 @@ wasm_called(c: Foreign, caller: handle, context: handle, given: pointer, results
 		value = given + passed * VALUE_BYTES + VALUE_OFFSET
 		argument = arguments + p * VALUE_BYTES
 		if kind == PARAMETER_HANDLE or kind == PARAMETER_TEXTS { failed_call(joined(name, ": a handle or a list of texts into a wasm module, not in the native driver yet")) }
-		if kind == PARAMETER_TEXT or kind == PARAMETER_BYTES or kind == PARAMETER_OUT {
+		if kind == PARAMETER_TEXT or is_array(kind) or kind == PARAMETER_OUT {
 			# (a later out-pointer is NULL, as for a C library)
 			block = 0 as i64
 			if kind == PARAMETER_TEXT {
 				host = c_argument(caller, context, name, kind, value, 0)
 				block = wasm_block(c, context, host, strlen(host) + 1)
 			}
-			if kind == PARAMETER_BYTES {
-				bytes_length = c_bytes_length(caller, context, value - VALUE_OFFSET)
+			if is_array(kind) {
+				bytes_length = c_array_length(caller, context, kind, value - VALUE_OFFSET)
 				block = wasm_block(c, context, c_argument(caller, context, name, kind, value, 0), bytes_length)
 			}
 			if kind == PARAMETER_OUT and out == 0 {
@@ -2651,10 +2677,10 @@ wasm_called(c: Foreign, caller: handle, context: handle, given: pointer, results
 	}
 	returned = wasm_function_called(context, c.wasm, WASM_FUNCTION, arguments, c.count as i64)
 	pointed = if out == 0 then 0 else (native_long(wasm_memory(context, c.wasm) + out) % 4294967296 + 4294967296) % 4294967296
-	gives_text = c.crossing == CROSSING_TEXT or c.crossing == CROSSING_OWNED_TEXT
+	gives_text = c.crossing == CROSSING_TEXT or c.crossing == CROSSING_OWNED_TEXT or c.crossing == CROSSING_BYTES
 	# (a text result read where it is in the module's memory)
 	c_finished(c, caller, context, if gives_text and returned != 0 then wasm_memory(context, c.wasm) + returned else returned, pointed, results, results_count)
-	if c.crossing == CROSSING_OWNED_TEXT { wasm_freed(c, context, returned) }
+	if c.crossing == CROSSING_OWNED_TEXT or c.crossing == CROSSING_BYTES { wasm_freed(c, context, returned) }
 	for i in 0..block_count { wasm_freed(c, context, long_at(blocks + i * 8).value) }
 }
 # a C call's result checked as its line says how a failure shows, then crossed back: the first out-pointer's value
@@ -2673,6 +2699,7 @@ c_argument(caller: handle, context: handle, name: text, kind: i32, value: pointe
 	if kind == PARAMETER_OUT { return if out == 0 then 0 else native_pointer(out) }
 	if kind == PARAMETER_TEXTS { return native_pointer(c_strings(caller, context, value - VALUE_OFFSET)) }
 	if kind == PARAMETER_BYTES { return native_pointer(c_bytes(caller, context, value - VALUE_OFFSET)) }
+	if kind == PARAMETER_F32S or kind == PARAMETER_I32S { return native_pointer(c_cells(caller, context, kind, value - VALUE_OFFSET)) }
 	if kind == PARAMETER_PAIR { return pair_c_text(caller, context, word_at(value).value as i64) }
 	if kind == PARAMETER_ADDRESS { return if word_at(value).value == 0 then 0 else guest_memory(caller, context) + word_at(value).value as i64 }
 	id = word_at(value).value as i32
@@ -2688,6 +2715,25 @@ c_bytes(caller: handle, context: handle, given: pointer): pointer := {
 	bytes
 }
 c_bytes_length(caller: handle, context: handle, given: pointer): i64 := if guest_flag(caller, context, "is_textual", given) then shown(caller, context, given).length as i64 else guest_number(caller, context, "item_count", given)
+# a parameter of many values in one block: bytes, f32 or int32 cells, and that block's byte count
+is_array(kind: i32): bool := kind == PARAMETER_BYTES or kind == PARAMETER_F32S or kind == PARAMETER_I32S
+c_array_length(caller: handle, context: handle, kind: i32, given: pointer): i64 := if kind == PARAMETER_BYTES then c_bytes_length(caller, context, given) else guest_number(caller, context, "item_count", given) * CELL_BYTES
+# a list of numbers of the module as f32 or int32 cells in the arena, each read by its export float_item_at or
+# int_item_at (one value block reused: a vertex array has many)
+c_cells(caller: handle, context: handle, kind: i32, given: pointer): pointer := {
+	count = guest_number(caller, context, "item_count", given)
+	cells = allocate((count * CELL_BYTES) as i32)
+	values = allocate(2 * VALUE_BYTES)
+	memcpy(values, native_pointer(given), VALUE_BYTES)
+	byte_at(values + VALUE_BYTES).value = KIND_I64
+	item = allocate(VALUE_BYTES)
+	for i in 0..count {
+		long_at(values + VALUE_BYTES + VALUE_OFFSET).value = i + 1
+		guest_call(caller, context, if kind == PARAMETER_F32S then "float_item_at" else "int_item_at", values, 2, item)
+		if kind == PARAMETER_F32S { single_at(cells + i * CELL_BYTES).value = float_at(item + VALUE_OFFSET).value as f32 } else { word_at(cells + i * CELL_BYTES).value = long_at(item + VALUE_OFFSET).value as u32 }
+	}
+	cells
+}
 # a list of texts of the module as a NULL-terminated array of C strings (argv), the strings and it in the arena
 c_strings(caller: handle, context: handle, list: pointer): pointer := {
 	counted = allocate(VALUE_BYTES)
@@ -2703,6 +2749,10 @@ c_result(caller: handle, context: handle, c: Foreign, returned: i64, result: poi
 	if c.crossing == CROSSING_PAIR or c.crossing == CROSSING_ADDRESS {
 		byte_at(result).value = KIND_I32
 		word_at(value).value = (if returned == 0 then 0 else if c.crossing == CROSSING_PAIR then guest_pair(caller, context, returned) else returned - guest_memory(caller, context)) as u32
+	} else if c.crossing == CROSSING_BYTES {
+		# ({i64 length, the bytes}, the callee's malloc: freed here, a wasm module's by its free)
+		if returned == 0 { guest_call(caller, context, "new_empty", 0, 0, result) } else { guest_text(caller, context, returned + 8, native_long(returned), result) }
+		if returned != 0 and c.wasm == 0 { free(returned) }
 	} else if c.crossing == CROSSING_TEXT or c.crossing == CROSSING_OWNED_TEXT {
 		if returned == 0 { guest_call(caller, context, "new_empty", 0, 0, result) } else { guest_text(caller, context, returned, strlen(returned), result) }
 		# (a wasm module's own text is freed by its free, wasm_called)

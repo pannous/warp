@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # scripts/wasmtime-c-api.sh [<folder>…]: warp's native libraries built for this machine into /opt/cargo (a no-op when
 # current), and copied into each folder, default the one beside the warp binary on PATH: warp's wasmtime C API
-# (crates/wasmtime-capi, card wasmtime-bundled) and libwarp_gpu (crates/warp-gpu, wgpu-native, card gpu-functions). The
-# window, the sound and the web view are warp's own (lib/host/native_host.warp, SDL3, WebKit and the system's libraries
-# over FFI).
+# (crates/wasmtime-capi, card wasmtime-bundled) and wgpu-native's release (libwgpu_native, card gpu-functions). The
+# window, the sound, the web view and the GPU are warp's own (lib/host/native_host.warp, over SDL3, WebKit, wgpu-native and
+# the system's libraries by FFI).
 # after-push.sh installs them beside warp and into the main checkout's lib/, rebuild.sh into a tree's lib/, the library
 # folder a native build links from and its executables find them in (rpath); the release workflow runs it for lib/
 set -eu -o pipefail
@@ -48,37 +48,15 @@ if [ "$(cat "$wasmtime_stamp" 2>/dev/null)" != "$wasmtime_inputs" ] || ! ls "$CA
   echo "$wasmtime_inputs" >"$wasmtime_stamp"
 fi
 case $(uname -s) in
-  Darwin) suffix=dylib; prefix=lib; system_libraries=""
-    gpu_libraries="-framework Metal -framework QuartzCore -framework Foundation -framework CoreGraphics -framework IOKit -framework IOSurface -lobjc" ;;
-  Linux) suffix=so; prefix=lib; system_libraries="-ldl -lpthread -lm"; gpu_libraries="$system_libraries" ;;
-  *) suffix=dll; prefix=""; system_libraries=""; gpu_libraries="" ;;
+  Darwin) suffix=dylib; prefix=lib ;;
+  Linux) suffix=so; prefix=lib ;;
+  *) suffix=dll; prefix="" ;;
 esac
 wasmtime_library=${prefix}warp_wasmtime.$suffix
-gpu_library=${prefix}warp_gpu.$suffix
+gpu_library=${prefix}wgpu_native.$suffix
 
-# a library owning host words reads and builds warp values in place (lib/native/warp_node.h) through warp's wasmtime:
-# its headers, it linked, and the value layout as the compiler has it (scripts/node_layout.warp), checked when a warp
-# is at hand: the committed header differing fails the build
-# (cargo's build folder of the C API, <package>-<hash>/out or, newer, <package>/<hash>/out)
-wasmtime_include=$(find "$CARGO_TARGET_DIR/release/build" -path '*wasmtime-c-api-impl*/out/include' -type d -print -quit)
-[ -n "$wasmtime_include" ] || { echo "wasmtime-c-api.sh: no wasmtime C API headers under $CARGO_TARGET_DIR/release/build" >&2; exit 1; }
-case $(uname -s) in
-  Darwin) loader_path=@loader_path ;;
-  *) loader_path='$ORIGIN' ;;
-esac
-value_libraries="-I $checkout/lib/native -I $wasmtime_include -L $CARGO_TARGET_DIR/release -lwarp_wasmtime -Wl,-rpath,$loader_path"
-value_headers="$checkout/lib/native/warp_node.h $checkout/lib/native/warp_layout.h"
-if command -v warp >/dev/null; then
-  layout=$(cd "$checkout" && WARP_NO_WINDOW=1 warp scripts/node_layout.warp)
-  if [ "$layout" != "$(cat "$checkout/lib/native/warp_layout.h")" ]; then
-    echo "wasmtime-c-api: the value layout changed: warp scripts/node_layout.warp > lib/native/warp_layout.h, and commit it" >&2
-    exit 1
-  fi
-fi
-# a library is current when newer than each of its sources
-current() { local target=$1 each; shift; for each in "$@"; do [ "$target" -nt "$each" ] || return 1; done; }
-
-# wgpu-native's release for this machine, fetched once at its pinned version and checked, linked in whole
+# wgpu-native's release for this machine, fetched once at its pinned version and checked: its shared library is what
+# lib/host/native_host/gpu.warp calls
 wgpu_release_sha256() {
   case $1 in
     macos-aarch64) echo a5797a37b1adf720bcd5dcffb291edbbd5b7b14be0a3874c28e6393a655a7a3e ;;
@@ -87,25 +65,18 @@ wgpu_release_sha256() {
     linux-x86_64) echo 95a4d90c071005a98d03eab348beaa6b07e16eb00d1dcdb9f8348f75eb97ec5a ;;
   esac
 }
-gpu_library_built() {
+gpu_release() {
   platform=$(uname -s | sed 's/Darwin/macos/;s/Linux/linux/')-$(uname -m | sed 's/arm64/aarch64/')
   sha256=$(wgpu_release_sha256 "$platform")
   [ -n "$sha256" ] || return 0
   release=$gpu_build/wgpu-$WGPU_VERSION
-  archive=$release/lib/libwgpu_native.a
-  if [ ! -f "$archive" ]; then
+  if [ ! -f "$release/lib/$gpu_library" ]; then
     fetched "$release.zip" "https://github.com/gfx-rs/wgpu-native/releases/download/v$WGPU_VERSION/wgpu-$platform-release.zip" "$sha256"
     mkdir -p "$release" && (cd "$release" && unzip -oq "$release.zip") && rm "$release.zip"
   fi
-  source=$checkout/crates/warp-gpu/warp_gpu.c
-  built=$gpu_build/$gpu_library
-  # shellcheck disable=SC2086 # the headers are words
-  current "$built" "$source" "$archive" $value_headers && return
-  # shellcheck disable=SC2086 # the system libraries are words
-  nice -n 19 cc -O2 -shared -fPIC -I "$release/include" -o "$built.new" "$source" "$archive" $gpu_libraries $value_libraries
-  mv -f "$built.new" "$built"
+  echo "$release/lib/$gpu_library"
 }
-gpu_library_built
+gpu_built=$(gpu_release)
 
 # each library moved into place whole: a run loading it meanwhile meets the old one or the new one
 installed() {
@@ -117,5 +88,5 @@ installed() {
 for folder in "$@"; do
   installed "$CARGO_TARGET_DIR/release/$wasmtime_library" "$folder"
   # (a platform wgpu-native ships no release for gets none: its programs paint on the CPU)
-  if [ -f "$gpu_build/$gpu_library" ]; then installed "$gpu_build/$gpu_library" "$folder"; fi
+  if [ -n "$gpu_built" ]; then installed "$gpu_built" "$folder"; fi
 done

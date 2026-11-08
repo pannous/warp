@@ -4,8 +4,9 @@
 # page_render, its handlers run by page_event, a serving program's routes answering the page's links and forms
 # (notes/web_framework.md "Built sites"). The folder mirrors the repository's layout, web/playground/ holding the
 # scripts, so the program's file reads resolve against the site's root as they do against the repository in the
-# playground
+# playground. `--dev` (warp dev) keeps the values the program writes across the page's reloads (dev_values.warp)
 SITE_OPTION = "site"
+DEV_OPTION = "--dev"
 SITE_FOLDER = "site"
 SITE_MODULE = "app.wasm"
 SCRIPT_FOLDER = "web/playground"
@@ -35,6 +36,7 @@ site_built(target: text, options: list) := {
 	scripts = site_scripts()
 	shell("mkdir -p " + quoted_path(folder + "/" + SCRIPT_FOLDER + "/lib"))
 	emitting_file(working_relative(target))
+	dev_build = DEV_OPTION in options
 	compile_written(read(target), folder + "/" + SITE_MODULE, source_folder(target))
 	for file in site_files() {
 		copied_to = if file == ISOLATION_SCRIPT then folder + "/" + file else folder + "/" + SCRIPT_FOLDER + "/" + file

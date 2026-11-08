@@ -90,7 +90,7 @@ runtime_space = 0
 own_space = 1
 # the closure arities runtime.wasm holds a closure·call hook for, 0 to these, each of a fixed function type
 hook_arities = 8
-# (gc_names lists them by name, closure_call_type_0 to _8: a literal, as scripts/node_layout.warp reads it)
+# (gc_names lists them by name, closure_call_type_0 to _8: a literal)
 closure_call_type_prefix = "closure_call_type_"
 # `try`: while one runs (try_depth above 0) a runtime error throws the
 # tag warp_error(i32), which the try's try_table catches; otherwise it traps as before

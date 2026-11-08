@@ -202,7 +202,7 @@ mentioned_names(n: Node, found: list): list := {
 }
 
 # What the walk knows: the program's functions with their parameter counts, the lifted lambdas so far
-class Lowering { arities: map; lambdas_lifted: list; callable_fields: map = {}; function_values: map = {}; globals: map = {}; function_positions: map = {} }
+class Lowering { arities: map; lambdas_lifted: list; callable_fields: map = {}; function_values: map = {}; globals: map = {}; main_globals: map = {}; function_positions: map = {} }
 
 ## the walk
 
@@ -605,7 +605,9 @@ local_function(statement: Node): Node := {
 lowered_statement(statement: Node, top_locals: list, lowering: Lowering): Node := {
 	parts = definition_of(statement)
 	if parts == ø { return lowered_lambdas(statement, top_locals, lowering) }
-	locals = parts.parameters.map(parameter_name) + names_bound(parts.body, []) + top_locals.filter(name => name not in lowering.arities)
+	# (a main-level global the body assigns stays the global: `flag = no; turned(() => flag)` reads it, never a copy
+	# of then)
+	locals = parts.parameters.map(parameter_name) + names_bound(parts.body, []).filter(name => name not in lowering.main_globals) + top_locals.filter(name => name not in lowering.arities)
 	match statement {
 		Key(signature, Op.Define, body): Key(signature, Op.Define, lowered_lambdas(body, locals, lowering))
 		_: statement
@@ -730,6 +732,8 @@ lambdas(program: Node): Node := {
 	# a global is no lambda's capture: it reads and changes the one global, as a function does
 	globals = global_variables(block_of(written))
 	lowering.globals = globals
+	# (those the main level declares: a `global results` within a function is that function's alone)
+	lowering.main_globals = global_variables(block_of(written.filter(statement => definition_of(statement) == ø)))
 	top_locals = []
 	for statement in written {
 		if definition_of(statement) == ø { top_locals = names_bound(statement, top_locals) }
