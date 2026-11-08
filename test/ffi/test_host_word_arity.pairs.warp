@@ -1,0 +1,3 @@
+# a C word takes only calls of its own arity: web's read(fd, buffer, size) beside the prelude's read(path), a call of
+# another count is the builtin's (decision host-call-by-arity, card dev-page)
+'read(fd: i32, buffer: handle, size: i64): i64 from "c"; write("host_word_arity.txt", "hi"); read("host_word_arity.txt")'	'hi'

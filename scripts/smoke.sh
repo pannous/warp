@@ -24,7 +24,10 @@ installed=$(dirname "$(readlink -f "$INSTALLED")")
 base=$(git -C "$tree" merge-base origin/main HEAD) || exit 2
 # a change writing code a second time in one file is refused before any build (card repeated-code-check)
 "$scripts/repeated-code.sh" "$tree" || exit 1
-baked=$({ git -C "$tree" diff --name-only "$base" HEAD; git -C "$tree" diff --name-only HEAD; } | sort -u | grep -E "$BAKED" | grep -v '^core/native/')  # the native warp is no compiler input (compiler-inputs.sh)
+changed=$({ git -C "$tree" diff --name-only "$base" HEAD; git -C "$tree" diff --name-only HEAD; } | sort -u)
+baked=$(echo "$changed" | grep -E "$BAKED" | grep -v '^core/native/')  # the native warp is no compiler input (compiler-inputs.sh)
+# the names of the lib/ files it changes, `units` of lib/units.warp
+changed_lib_stems() { echo "$changed" | sed -nE 's#^lib/(host/)?([A-Za-z_0-9]+)\.warp$#\2#p'; }
 if [ -n "$baked" ]; then
 	echo "smoke: REBUILDING, the compiler bakes in what this branch changed: $(echo $baked)"
 else
@@ -39,9 +42,26 @@ fi
 # a failed build prints its step, the step's output and the log's path in the store (and so does a hash failed before)
 built=$("$scripts/rebuild.sh" pure "$tree" 2>&1) || { echo "smoke: rebuild failed:" >&2; echo "$built" >&2; exit 1; }
 way=$(echo "$built" | tail -1)
+# a lib/ change the compiler doesn't bake keeps the installed prebuilt modules, built of main's lib/: the standard
+# modules are built anew of this lib/ and taken, so a change that breaks a module's prebuild fails here (card
+# smoke-misses-prebuild: units.warp broke time.wasm past every smoke). All of them, in one run: a module reaches
+# others by their words too (time reaches units in no use line and no signature), and one run is cheaper than a run
+# per module, whose start dominates
+if [ -z "$baked" ] && [ -n "$(changed_lib_stems)" ]; then
+	fresh=$tree/data/smoke-modules
+	rm -rf "$fresh" && mkdir -p "$fresh" || exit 1
+	made=$(cd "$tree" && WARP_LIB=$tree/lib WARP_NO_WINDOW=1 "$INSTALLED" "$tree/lib/warp.wasm" modules "$fresh" "$tree/lib/runtime.wasm" 2>&1) ||
+		{ echo "smoke: the standard modules don't prebuild of this lib/:" >&2; echo "$made" | grep -v '^warning: ' | tail -5 >&2; exit 1; }
+	for built in "$fresh"/*; do rm -f "$tree/lib/modules/${built##*/}" && cp "$built" "$tree/lib/modules/" || exit 1; done
+	way="$way; modules prebuilt of this lib/"
+fi
 peak=$tree/data/smoke-hello-footprint
 mkdir -p "$tree/data"
 got=$(cd "$tree" && WARP_LIB=$tree/lib WARP_NO_WINDOW=1 footprint_run "$peak" 120 "$INSTALLED" samples/hello/hello.warp 2>&1 | without_runtime_noise | tail -1)
 [[ $got == *$EXPECTED* ]] || { echo "smoke: hello got ${got:0:160}" >&2; exit 1; }
 footprint_checked "$(cat "$peak" 2>/dev/null)" "this branch's hello"
+# the native host module, which the driver links itself: an empty native_host.wasm failed every window, paint and
+# sound run while hello passed (card empty-native-host)
+host=$(cd "$tree" && WARP_LIB=$tree/lib WARP_NO_WINDOW=1 "$INSTALLED" 'window_possible()' 2>&1 | without_runtime_noise | tail -1)
+[[ $host == no ]] || { echo "smoke: the native host module did not answer window_possible(): ${host:0:160}" >&2; exit 1; }
 echo "smoke: $got ($way, WARP_LIB=$tree/lib)"
