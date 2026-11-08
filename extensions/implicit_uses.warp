@@ -105,7 +105,8 @@ assigned_whole(program: Node, word: text): bool := nodes_in(program).any(n => is
 rule_named_modules(names: map): map := {
 	found = {}
 	needs = rule_needs_by_module()
-	for module in needs.keys {
+	# (the prelude's rules are always in effect: `xs: [f16] = …` names its f16 and needs no `use prelude`)
+	for module in needs.keys.filter(module => module != "prelude") {
 		mentioned = needs[module].split(" ").filter(word => names.has(word) and not has_meaning(word) and word not in prelude_definitions() and defining_modules(word) == [])
 		words = if #mentioned == 0 then [] else mentioned.filter(word => word in rule_listed_words(module))
 		if #words > 0 { found[module] = words }

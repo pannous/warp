@@ -15,12 +15,14 @@ use "../../compiler/runtime/lists.warp"
 page_bytes(): int := 65536
 word_bytes(): int := 4
 # the bytes of a cell of that type
-cell_bytes(cell: int): int := if cell == half_cell() then 2 else word_bytes()
-# an f16's cell type, gpu_lists.warp GpuCell.F16 (a number, as list_kind_unit says why: the seed's tables may lack it),
-# and its exponent and fraction bits (IEEE 754 binary16)
+cell_bytes(cell: int): int := if is_narrow_cell(cell) then 2 else word_bytes()
+# the two-byte float cells, gpu_lists.warp GpuCell.F16 and GpuCell.BF16 (numbers, as list_kind_unit says why: the
+# seed's tables may lack them): IEEE 754 binary16, and bfloat16 (an f32's exponent, 7 fraction bits)
 half_cell(): int := 3
-half_exponent_bits(): int := 5
-half_fraction_bits(): int := 10
+brain_cell(): int := 4
+is_narrow_cell(cell: int): bool := cell == half_cell() or cell == brain_cell()
+narrow_exponent_bits(cell: int): int := if cell == brain_cell() then 8 else 5
+narrow_fraction_bits(cell: int): int := if cell == brain_cell() then 7 else 10
 address_unit(): int := 4294967296
 # its row in a list's kind field, gpu_lists.warp GpuListKind.Row (a number, as list_kind_unit says why)
 gpu_list_row(): int := 2
@@ -29,9 +31,9 @@ is_gpu_list(n: Node): bool := list_kind(n) == gpu_list_row()
 gpu_list_address(n: Node): int := shifted_right(unboxed_int(n), 32)
 gpu_list_count(n: Node): int := bits_and(unboxed_int(n), address_unit() - 1)
 # its cell type, a GpuCell
-gpu_list_cell(n: Node): int := int_remainder(int_quotient(marked_kind(n), list_cell_unit()), 4)
-gpu_cell_name(cell: int): text := if cell == GpuCell.I32 then "i32" else if cell == GpuCell.U32 then "u32" else if cell == half_cell() then "f16" else "f32"
-is_float_cell(cell: int): bool := cell == GpuCell.F32 or cell == half_cell()
+gpu_list_cell(n: Node): int := int_remainder(int_quotient(marked_kind(n), list_cell_unit()), 8)
+gpu_cell_name(cell: int): text := if cell == GpuCell.I32 then "i32" else if cell == GpuCell.U32 then "u32" else if cell == half_cell() then "f16" else if cell == brain_cell() then "bf16" else "f32"
+is_float_cell(cell: int): bool := cell == GpuCell.F32 or is_narrow_cell(cell)
 # where a host finds a GPU list's cells: (address << 32) + count, -1 for any other value (exported for a host,
 # gpu_lists.warp host_exports)
 gpu_list_place(n: Node): int := if is_gpu_list(n) then unboxed_int(n) else -1
@@ -64,7 +66,7 @@ cell_address(n: Node, index: int): int := {
 gpu_list_at(n: Node, index: int): Node := {
 	cell = gpu_list_cell(n)
 	address = cell_address(n, index)
-	if cell == half_cell() { return narrow_float(half_at(address), half_exponent_bits(), half_fraction_bits()) }
+	if is_narrow_cell(cell) { return narrow_float(half_at(address), narrow_exponent_bits(cell), narrow_fraction_bits(cell)) }
 	if cell == GpuCell.I32 { return memory_i32(address) }
 	if cell == GpuCell.U32 { return memory_u32(address) }
 	memory_f32(address)
@@ -74,7 +76,7 @@ gpu_list_set(n: Node, index: int, value: Node): Node := {
 	address = cell_address(n, index)
 	if is_float_cell(cell) {
 		if kind_code(value) != Kind.Int and kind_code(value) != Kind.Float { gpu_list_refused("a GPU list [" + gpu_cell_name(cell) + "] holds numbers only") }
-		if cell == half_cell() { half_set(address, narrow_bits(float_of_node(value), half_exponent_bits(), half_fraction_bits())) } else { memory_set_f32(address, float_of_node(value)) }
+		if is_narrow_cell(cell) { half_set(address, narrow_bits(float_of_node(value), narrow_exponent_bits(cell), narrow_fraction_bits(cell))) } else { memory_set_f32(address, float_of_node(value)) }
 		return value
 	}
 	if kind_code(value) != Kind.Int { gpu_list_refused("a GPU list [" + gpu_cell_name(cell) + "] holds ints only") }

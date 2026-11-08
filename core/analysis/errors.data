@@ -16,6 +16,10 @@ constant_assignment($name)	"{name} is a constant: declared with let or const, it
 library_constant($name)	"{name} is a constant"	"another name"
 # decision literal-targets: a value assigned or counted, `1 = 2`, `1++` (source_checks.warp)
 literal_target($value, $op, $fix)	"{value} is a value, not a variable: {op} changes a variable"	"{fix}"
+# decision ambiguous-result-error: a call of a function overloaded by result type that no expected type tells apart,
+# assigned to a variable or not (arity_overloads.warp)
+ambiguous_result($name, $results, $first, $target, $written)	"{name} has several results ({results}): write {target}: {first} = {written}"	"{target}: {first} = {written}"
+ambiguous_result($name, $results, $first, $written)	"{name} has several results ({results}): write ({written}) as {first}"	"({written}) as {first}"
 # decision path-after-operand: `width /height` with height a variable reads /height as a path (source_checks.warp)
 division_path($before, $name)	"{before} /{name} gives {before} the path /{name}: write {before} / {name} for division"	"{before} / {name}"
 # decision glued-binds-tighter: `[a + b c]` with b a value reads neither way silently (source_checks.warp spaced_operand)

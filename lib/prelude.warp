@@ -282,6 +282,7 @@ rewrite ($xs: [f32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(f32, 
 rewrite ($xs: [i32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(i32, $v)
 rewrite ($xs: [u32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(u32, $v)
 rewrite ($xs: [f16] = $v) => ($xs = $packed) where $packed = gpu_packed_as(f16, $v)
+rewrite ($xs: [bf16] = $v) => ($xs = $packed) where $packed = gpu_packed_as(bf16, $v)
 // the arithmetic mean, also spelled average
 mean(xs) := if count(xs) == 0 then raise "mean of an empty list" else sum(xs) / count(xs)
 // the UTF-8 bytes of a text, `t.bytes` (decision text-unit-plurals)
@@ -463,7 +464,7 @@ paint_each(f, width, height) := {
 paint(picture, width, height) := if picture is list or picture is text then paint(shader_words(picture), width, height, ø) else paint_each(picture, width, height)
 // the program values a shader reads as the plain floats it takes: a quantity by its amount in SI base units, an angle in
 // radians, each item of a vector (decision no-units-in-shaders: a shader ignores units)
-shader_values(values) := {
+shader_floats(values) := {
 	if values == ø { return ø }
 	plain = {}
 	for name in values.keys { plain[name] = shader_value(values[name]) }

@@ -13,11 +13,15 @@ is_literal_value(n: Node): bool := n is number or n is text
 written_value(n: Node): text := if n is text then "\"${n}\"" else "${n}"
 
 # A body after a definition's head colon, `def f(x): x * 2`, is refused with its fix `def f(x) := x * 2`: the colon
-# names the result type, `def f(x): int := x * 2` (decision def-colon-body)
+# names the result type, `def f(x): int := x * 2` (decision def-colon-body). Only after `def`: `f(x): x * 2` without it is
+# a key, a match arm `Square(a): a*a` or the golf form `h(n): n<2 …`
+DEF_WORD = "def"
 head_body(n: Node, program: Node) := {
 	plain = without_mark(n)
-	if not (is_key(plain, Op.Colon) and is_call(key_of(plain)) and is_body_value(value_of(plain))) { return ø }
-	diagnose(call_of("head_body", [head_code(key_of(plain)), written_value(value_of(plain))]), plain)
+	if not (is_group(plain) and #plain == 2 and plain#1 == symbol(DEF_WORD)) { return ø }
+	defined = plain#2
+	if not (is_key(defined, Op.Colon) and is_call(key_of(defined)) and is_body_value(value_of(defined))) { return ø }
+	diagnose(call_of("head_body", [head_code(key_of(defined)), written_value(value_of(defined))]), defined)
 }
 # a definition's head as written: `f(x, y)`
 head_code(head: Node): text := "${head#1}(" + items_of(head)[1 ..].map(parameter => "${parameter}").join(", ") + ")"
