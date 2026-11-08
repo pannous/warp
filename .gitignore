@@ -39,7 +39,6 @@ data/
 # warp's wasmtime C API and native libraries, copied in by scripts/wasmtime-c-api.sh (card wasmtime-bundled)
 /lib/libwarp_wasmtime.*
 /lib/libwarp_gpu.*
-/lib/libwarp_webview.*
 /lib/compiler.wasm*
 /lib/compiler-self.wasm*
 

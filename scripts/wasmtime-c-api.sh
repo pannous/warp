@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # scripts/wasmtime-c-api.sh [<folder>…]: warp's native libraries built for this machine into /opt/cargo (a no-op when
 # current), and copied into each folder, default the one beside the warp binary on PATH: warp's wasmtime C API
-# (crates/wasmtime-capi, card wasmtime-bundled), libwarp_gpu (crates/warp-gpu, wgpu-native, card gpu-functions) and
-# libwarp_webview (crates/warp-webview, the system's web view, card app-webview; macOS's WKWebView for now). The window
-# and the sound are warp's own (lib/native_host.warp, SDL3 and the system's libraries over FFI).
+# (crates/wasmtime-capi, card wasmtime-bundled) and libwarp_gpu (crates/warp-gpu, wgpu-native, card gpu-functions). The
+# window, the sound and the web view are warp's own (lib/native_host.warp, SDL3, WebKit and the system's libraries over
+# FFI).
 # after-push.sh installs them beside warp and into the main checkout's lib/, rebuild.sh into a tree's lib/, the library
 # folder a native build links from and its executables find them in (rpath); the release workflow runs it for lib/
 set -eu -o pipefail
@@ -12,7 +12,6 @@ checkout=$(cd "$(dirname "$0")/.." && pwd)
 export CARGO_TARGET_DIR=${WARP_WASMTIME_TARGET:-/opt/cargo/warp-wasmtime}
 WGPU_VERSION=29.0.1.1
 gpu_build=${WARP_GPU_TARGET:-/opt/cargo/warp-gpu}
-webview_build=${WARP_WEBVIEW_TARGET:-/opt/cargo/warp-webview}
 WASMTIME_VERSION=50.0.0
 WASMTIME_SHA256=2d93539aae382faee7b19650fd966f1f8185599b9cc4adc0a5a8b8f768c11ba9
 
@@ -56,7 +55,6 @@ case $(uname -s) in
 esac
 wasmtime_library=${prefix}warp_wasmtime.$suffix
 gpu_library=${prefix}warp_gpu.$suffix
-webview_library=${prefix}warp_webview.$suffix
 
 # a library owning host words reads and builds warp values in place (lib/native/warp_node.h) through warp's wasmtime:
 # its headers, it linked, and the value layout as the compiler has it (scripts/node_layout.warp), checked when a warp
@@ -109,20 +107,6 @@ gpu_library_built() {
 }
 gpu_library_built
 
-# the system's web view: WKWebView on macOS (WebKitGTK on Linux is a card of its own); its JS bridge embedded (#embed)
-webview_library_built() {
-  [ "$(uname -s)" = Darwin ] || return 0
-  mkdir -p "$webview_build"
-  folder=$checkout/crates/warp-webview
-  built=$webview_build/$webview_library
-  # shellcheck disable=SC2086 # the headers are words
-  current "$built" "$folder"/* "$checkout/web/playground/js-members.js" "$checkout/web/playground/markup.js" "$checkout/web/playground/markup-forms.js" $value_headers && return
-  # shellcheck disable=SC2086 # the flags are words
-  nice -n 19 cc -O2 -std=gnu23 -fobjc-arc -shared -fPIC -o "$built.new" "$folder/warp_webview.m" -framework Cocoa -framework WebKit $value_libraries
-  mv -f "$built.new" "$built"
-}
-webview_library_built
-
 # each library moved into place whole: a run loading it meanwhile meets the old one or the new one
 installed() {
   built=$1 folder=$2 name=$(basename "$1")
@@ -134,5 +118,4 @@ for folder in "$@"; do
   installed "$CARGO_TARGET_DIR/release/$wasmtime_library" "$folder"
   # (a platform wgpu-native ships no release for gets none: its programs paint on the CPU)
   if [ -f "$gpu_build/$gpu_library" ]; then installed "$gpu_build/$gpu_library" "$folder"; fi
-  if [ -f "$webview_build/$webview_library" ]; then installed "$webview_build/$webview_library" "$folder"; fi
 done

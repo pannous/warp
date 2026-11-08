@@ -1,5 +1,5 @@
-// The system's web view (libwarp_webview beside warp, crates/warp-webview, card app-webview; macOS's WKWebView):
-// `webview_page_text(html)` is the text the page shows, read in a hidden web view. `use js` runs in that hidden view
-// too (lib/native/foreign.c binds the host word foreign_call to libwarp_webview), and `warp app` shows it in a window
-// (lib/markup.warp page_window_run)
-webview_page_text(html: text): text from 'warp_webview'
+// The system's web view (card app-webview; macOS's WKWebView, lib/native_host/webview.warp): `webview_page_text(html)`
+// is the text the page shows, read in a hidden web view. `use js` runs in that hidden view too (the host word
+// foreign_call, answered by the native host module), and `warp app` shows it in a window (lib/markup.warp
+// page_window_run)
+webview_page_text(html: node): node from host

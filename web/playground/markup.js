@@ -100,7 +100,7 @@ function inputDetail(field) {
 
 // each event of a page its program hears, to `handle`: its element's {event, detail} (elementEvent) or nothing, and the
 // DOM event; a key pressed anywhere but in a text field is the program's `on key` (lib/keys.warp). A built site
-// (site.js) and the native warp's app window (crates/warp-webview/bridge.js) listen so; markup-forms.js adds submit
+// (site.js) and the native warp's app window (lib/native_host/webview_bridge.js) listen so; markup-forms.js adds submit
 const KEY_EVENT = "key";
 const fieldDetail = happened => inputDetail(happened.composedPath()[0]);
 function listenToElements(root, handle) {
