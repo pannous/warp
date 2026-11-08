@@ -163,7 +163,7 @@ methods_lifted(program: Node): Node := {
 		view = class_view(top_statement)
 		if view != ø { classes[declared_type_name(view#2)] = class_declared(top_statement, view) }
 	}
-	operator_table = operator_spellings()
+	operator_table = core_operators(operator_spellings())
 	outside = top_statements.filter(top_statement => operated_class(top_statement, classes, operator_table) != ø)
 	for definition in outside {
 		owner = classes[operated_class(definition, classes, operator_table)]
@@ -567,6 +567,15 @@ foreign_first(method: text, call_arguments: list, fallback: Node?, operated: boo
 foreign_method_word = "instance·method"
 instance_test_word = "instance·tested"
 foreign_instance_words = {"instance·method": "instance_method", "instance·tested": "is_class_instance"}
+# the operators a class's method may define by its English name, without those only a declaration gives a meaning
+# (lib/aliases.warp `declared`: lib/math.warp's `≈`, `~`, `↑`): the core computes none of them for the two numbers a
+# dispatcher falls back to (uncertain's approximately(o) stays a method, card class-declared-operators)
+core_operators(table: map): map := {
+	declared = alias_spellings().declared
+	kept = {}
+	for spelling in table.keys { if table[spelling]#2 not in declared { kept[spelling] = table[spelling] } }
+	kept
+}
 # two numbers operate as numbers, before any class is asked: `x is real` holds of every number (lib/reals), so a boxed
 # `0.5 * 0.4` of a program using reals went through real's `*` and back, ~9× the builtin in lib/sound's per-sample
 # loops (card sound-start-speed)
@@ -786,11 +795,12 @@ field_type(classes: map, owning_class: text, field: text): text? := {
 	ø
 }
 # whether a call of that many arguments fits a definition the word has, the program's or a typed line of the
-# library's; a word of none (a sugar rule's, the emitter's) is taken as fitting
+# library's; a word of none (a sugar rule's, the emitter's) is taken as fitting. The arguments are passed as they are:
+# no gathering into a list parameter, so count(xs) takes no count(self, x) of a class's count(x), alias size(x)
 written_call_fits(statements: list, word: text, count: int): bool := {
 	defined = statements.map(defined_call_head).filter(head => head != ø and name_of(head#1) == word)
 	signatures = defined.map(head => signature_of(items_of(head))) + (lines_of(typed_lines, word) + (if word_lines().has(word) then word_lines()[word] else [])).map(line => line.signature)
-	#signatures == 0 or signatures.any(signature => takes(signature, count))
+	#signatures == 0 or signatures.any(signature => takes(signature, count) and (count <= #signature.parameters or signature.parameters.last.rest))
 }
 # the head `f(x)` of a definition `f(x) := …`, or of `def f(x) {…}` before extensions/sugar/declarations.warp makes it one
 # (draw's `def show()`), else ø

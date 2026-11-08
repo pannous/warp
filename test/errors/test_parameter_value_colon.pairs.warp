@@ -4,3 +4,8 @@
 'f(a, as: "x") := a; f(2)'	error
 'f(a, b = 0) := a + b; f(2, b: 3)'	5
 'f(a, b: int = 0) := a + b; f(2)'	2
+# a body after a definition's head colon, `def f(x): x * 2`, is refused with its fix `def f(x) := x * 2` (decision
+# def-colon-body): after a head `:` names the type
+'def f(x): x * 2; f(3)'	error
+'def f(x): int := x * 2; f(3)'	6
+'def two: 1+1; two() * two()'	4

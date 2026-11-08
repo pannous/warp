@@ -1,0 +1,61 @@
+# Methods declared outside their type (decisions declared-belonging, class-extensions, one-receiver-name):
+# `P.twice() := v * 2` declares one method, `extend P { twice() := …; half() := … }` several. The receiver has one name
+# everywhere, as in a class body: self (this too). A class the program declares takes them as members of its body, so
+# its fields read bare and its methods dispatch as its own do (class_methods.warp); any other type, a type word or
+# alias `text.shout() := upper(self)`, takes the function `shout(self: text) := …`, callable as "ab".shout()
+
+EXTEND_WORD = "extend"
+
+# [type name, member definitions] of `T.f(p) := body` and `extend T {…}`, else ø
+extension_of(statement: Node): list? := {
+	plain = without_mark(statement)
+	if is_key(plain, Op.Define) and is_key(key_of(plain), Op.Dot) and key_of(key_of(plain)) is symbol and is_call(value_of(key_of(plain))) {
+		return [name_of(key_of(key_of(plain))), [Key(value_of(key_of(plain)), Op.Define, value_of(plain))]]
+	}
+	if is_group(plain) and #plain == 3 and plain#1 == symbol(EXTEND_WORD) and plain#2 is symbol and is_curly_group(plain#3) {
+		return [name_of(plain#2), items_of(plain#3)]
+	}
+	ø
+}
+
+# the program with each extension's members in its class's body, or as functions of the receiver's type
+class_extensions(program: Node): Node := {
+	# flat: a line of statements, `extend text {…}; "ab".shout()`, is a sequence of its own
+	statements = flat_statements(program)
+	written = statements.map(extension_of)
+	if written.all(extension => extension == ø) { return program }
+	classes = statements.map(class_view).filter(view => view != ø).map(view => declared_type_name(view#2))
+	scope = scope_of(program)
+	extensions = written.map(extension => if extension != ø and names_type(extension#1, classes, scope) then extension else ø)
+	added = {}
+	kept = []
+	for at in 0 ..< #statements {
+		extension = extensions[at]
+		if extension == ø { kept += [statements[at]] }
+		else if extension#1 in classes { added[extension#1] = (added.get(extension#1) ?? []) + extension#2 }
+		else { kept += extension#2.map(member => receiver_function(extension#1, member)) }
+	}
+	separated(bracketed(kept.map(statement => with_added_members(statement, added)), ""), ";")
+}
+
+# a receiver naming a type: a class, a type word or alias; any other, `window.width(w) := …`, is an object's property
+# (property_accessors.warp)
+names_type(name: text, classes: list, scope: map): bool := name in classes or is_tested_type_word(name) or binds_as(scope, name, Meaning.Type)
+
+# `shout() := upper(this)` of text: `shout(self: text) := upper(self)`
+receiver_function(type: text, member: Node): Node := {
+	head = key_of(member)
+	Key(group_like(head, [head#1, Key(self_node, Op.Colon, symbol(type))] + items_of(head)[1 ..]), Op.Define, renamed(value_of(member), "this", self_node))
+}
+
+# the class declaration with the members an extension adds to it appended to its body, any other statement as it is
+with_added_members(statement: Node, added: map): Node := {
+	view = class_view(statement)
+	if view == ø or not added.has(declared_type_name(view#2)) { return statement }
+	match statement {
+		Key(left, key_op, right): Key(left, key_op, [view#1, view#2, view#3 + added[declared_type_name(view#2)].map(view_of)])
+		_: statement
+	}
+}
+
+class_extensions_extension = Extension{name: "class_extensions", passes_before: {"with_type_module_uses": class_extensions}}
