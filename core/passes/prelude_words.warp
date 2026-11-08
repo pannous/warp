@@ -283,6 +283,8 @@ time_module = "time"
 
 # the names of the functions with_reached brought from the prelude and the modules, of the compile at hand
 global brought_names = {}
+# the names of the values it brought, `m = Unit("m")` of lib/units, which go in front of the program
+global brought_value_names = {}
 # those of them a library exports, which called_only keeps uncalled
 global exported_names = {}
 # the reach's last step, once the passes ran (passes.warp lowered_reached): the program without the brought functions
@@ -362,7 +364,8 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	# a used module's definition of the name replaces the slice only when it takes the same parameter types; any other
 	# joins it as an overload, chosen by the arguments (decision cross-module-overload: shell's find(folder: Path,
 	# pattern: text) beside the prelude's find(t: text, part: text))
-	replaced = slice => (slice#1 in own_names and not overloads_brought(slice, program)) or (slice#1 in own_classes and leading_name(slice#2) not in defining_keywords)
+	own_name_set = word_set(own_names)
+	replaced = slice => (own_name_set.has(slice#1) and not overloads_brought(slice, program)) or (slice#1 in own_classes and leading_name(slice#2) not in defining_keywords)
 	kept = slice => not replaced(slice) or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX) or (slice#2.starts_with("global ") and slice#1 in assigned)
 	# the program's globals, `global hue = 10`, which every function of its own shares, are no module's: hsv's `hue`
 	# stays its local
@@ -384,11 +387,14 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	wanted = exported + program_words + program_words.filter(word => written_aliases.has(word)).map(word => written_aliases[word]) + variant_words(program_words) + lowering_words(program) + sugar_words_of(program) + linked_needs() + (if callable_word in module_names and calls_a_value(program) then [callable_word] else []) + extension_value_settlers().values.filter(word => word in module_names)
 	uses = ø
 	origins = {}
-	while #wanted > 0 {
-		word = wanted#1
-		wanted = wanted[1 ..]
-		for slice in slices {
-			if slice#1 == word and slice#5 not in reached {
+	# (the slices by name, made once: each wanted word compared with every slice's name was most of hello's reaching)
+	named = slices_by_name(slices)
+	at = 0
+	while at < #wanted {
+		word = wanted[at]
+		at += 1
+		for slice in named.get(word) ?? [] {
+			if slice#5 not in reached {
 				if slice#4 == ø and uses == ø { uses = use_lines(module) }
 				# (a linked one's parse packed alone in its signature, unpacked once reached)
 				slice_node = early_sugared(if slice#4 != ø then unpack(slice#4) else plain_node(parsed(slice#2, uses)))
@@ -413,6 +419,10 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	# function goes where the module wants its definitions (card prelude-definition-reachability)
 	values = brought.filter(goes_in_front)
 	functions = brought.filter(statement => not goes_in_front(statement))
+	for statement in values {
+		name = declared_name(statement)
+		if name != ø { brought_value_names[name] = yes }
+	}
 	for statement in functions {
 		name = declared_name(statement)
 		if name != ø { brought_names[name] = yes }
@@ -420,6 +430,12 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	own_statements = statements_in(program)
 	parts = if in_front then values + functions + own_statements else values + own_statements + functions
 	separated(bracketed(parts, ""), ";")
+}
+# each name → its slices, in their order
+slices_by_name(slices: list): map := {
+	named = {}
+	for slice in slices { named[slice#1] = (named.get(slice#1) ?? []) + [slice] }
+	named
 }
 # whether a slice's definition overloads the definitions of its name a used module brought, rather than being replaced
 # by them: brought (never the program's own, decision library-words-lexical) and told apart from each by the dispatch

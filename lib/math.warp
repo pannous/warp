@@ -15,7 +15,7 @@ operator ≤ := <=
 operator ≥ := >=
 operator ≠ := !=
 operator ≟ := ==
-operator ≡ := ==
+operator ≡ := ===
 operator ﹦ := ==
 // `a ≈ b` within tolerance 1e-9 (alike below); `a ~ b` (also `a ~~ b`) the looser, within rough_tolerance 0.01; a
 // program sets either: `tolerance = 0.1; 1 ≈ 1.05` holds (decision approx-zero)

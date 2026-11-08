@@ -306,8 +306,9 @@ def add_alias_entry(tables: Spellings, word: text, fields: map) {
 	power = if fields.has("power") then fields["power"].map(level => int(level)) else ø
 	if power != ø {
 		tables.powers[target] = power
-		# an operator row named by its symbol spells it (an extension's `"±" { power: … }`)
-		if not is_name_start(word#1) and spelled_by(tables.operator_symbols, word) == ø { tables.operator_symbols += [[word, target]] }
+		# an operator row spells its symbol, named by its English word (`similar { operator: "~" … }`, decision
+		# operators-named) or by the symbol itself (an extension's `"±" { power: … }`)
+		if not is_name_start(target#1) and spelled_by(tables.operator_symbols, target) == ø { tables.operator_symbols += [[target, target]] }
 	}
 	for spelling in fields.get("aliases") ?? [] {
 		tables.canonical[spelling] = word
@@ -315,6 +316,9 @@ def add_alias_entry(tables: Spellings, word: text, fields: map) {
 		else if spelled_infix(infix, spelling) { add_infix_word(tables, spelling, target) }
 		if word in tables.forms { tables.forms[spelling] = tables.forms[word] }
 	}
+	# the Unicode names of its symbols, generated (scripts/unicode-operator-names.py, decision operator-unicode-aliases):
+	# the word's fallback spellings, never infix words
+	for name in fields.get("names") ?? [] { tables.canonical[name] = word }
 }
 def spelled_infix(infix: any, spelling: text): bool := if infix is list then infix.contains(spelling) else infix == "yes"
 def add_infix_word(tables: Spellings, word: text, target: text) {
@@ -1949,8 +1953,9 @@ def group_items(declared: Node): list {
 	if parts != ø and parts#1 == "(" then parts#3 else [declared]
 }
 
-// The operators a class defines as methods by their glyph: `+(o) := …` is its plus, `#(n) := …` its index
-METHOD_OPERATORS = ["+", "-", "*", "/", "%", "<", ">", "≈", "~", "#"]
+// The operators a class defines as methods by their glyph: `+(o) := …` is its plus, `#(n) := …` its index, `==(o)` its
+// equality (lib/aliases.warp names == equal)
+METHOD_OPERATORS = ["+", "-", "*", "/", "%", "<", ">", "==", "≈", "~", "#"]
 
 // `+(o) := …` defines a class's method of an operator by its glyph (its plus): the head is the call `+(o)`, no unary
 // plus, no count `#`; ø where no `:=` follows the parentheses. After the keyword (`infix operator |(x: any, g:
@@ -1965,6 +1970,20 @@ def operator_method_head(p: Parser, declared: bool = false): Node {
 	p.at = open
 	parameters = group_items(expression(p, binding_powers(":=")#1 + 1))
 	call_of([symbol(if METHOD_OPERATORS.contains(op#2) then op#2 else OPERATOR_FUNCTION_PREFIX + op#1)] + parameters)
+}
+
+// `def ==(o) := …`: def defines no operator, its English name does, `equal(o) := …` (decision operator-english-names;
+// `==(o) :=` and `operator ==(o) :=` are its quiet synonyms)
+def refuse_defined_glyph(p: Parser, word: text) {
+	start = p.at
+	p.at = blank_end(p, p.at + word.length)
+	glyph = operator_at(p)
+	glued = glyph.length > 0 and char_at(p, p.at + glyph#1.length) == '('
+	p.at = start
+	if not glued { return }
+	named = alias_rows().filter(row => row#2.get("operator") == glyph#2)
+	english = if named.length > 0 then named#1#1 else "its name"
+	raise word + " " + glyph#1 + "(…): an operator is defined by its English name, write " + english + "(o) := …"
 }
 
 // `operator #(n) := …`, `infix operator +(a: V, b: V) := …`: the method of a built-in operator, its keywords
@@ -2167,6 +2186,7 @@ def prefixed(p: Parser): Node := {
 	phrase = if keyword_reader == ø then ø else keyword_reader(p, word)
 	// a reader that moved on read its statement, if only to nothing (a declaration a prescan applied)
 	if phrase != ø or p.at != word_start { return phrase }
+	if word in function_keywords { refuse_defined_glyph(p, word) }
 	spaced = spaced_definition(p)
 	if spaced != ø { return spaced }
 	if word in FIXITY_WORDS {

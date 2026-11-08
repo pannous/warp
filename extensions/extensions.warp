@@ -55,6 +55,7 @@ use "dir_hints.warp"
 use "from_imports.warp"
 use "collection_type_tests.warp"
 use "block_definitions.warp"
+use "class_extensions.warp"
 use "parameter_values.warp"
 use "local_shadows.warp"
 use "effects.warp"
@@ -69,6 +70,8 @@ EXTENSIONS = [
 	pipe_lambdas_extension
 	circumfixes_extension
 	index_positions_extension
+	# before property_accessors, which would read `P.scaled(k) := …` as a property setter
+	class_extensions_extension
 	property_accessors_extension
 	attributes_extension
 	sum_types_extension

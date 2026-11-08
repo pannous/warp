@@ -4,8 +4,8 @@
 
 # `use name` of each statement naming a standard module that a file or folder beside the program shares its name with,
 # read off the source before its uses are taken (a used file beside it is gone by the passes); it adds no module
-local_shadows(source: text, folder: text): list := {
-	for statement in flat_statements(parsed(source)) {
+local_shadows(source: text, tree: Node, folder: text): list := {
+	for statement in flat_statements(tree) {
 		used = use_target(without_mark(statement))
 		local = if used is symbol then local_shadow(name_of(used), folder) else ø
 		if local != ø { diagnose(call_of("local_shadow", [local, name_of(used), working_relative(std_module_path(name_of(used)))]), statement) }

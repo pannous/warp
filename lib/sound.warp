@@ -1145,7 +1145,11 @@ public sound_queued() := max(0, voice_end - clock()) / 1000
 global wait_sound() := if count(sound_players()) > 0 and voice_end > clock() then sleep_ms(voice_end - clock())
 // the sounds since the last save (or the start), which `save sound as: "song.wav"` (or `save(sound, "song.wav")`)
 // writes one after another in one WAV file, offline (also without speakers), giving its seconds (card save-sound)
-class Recording {}
+// `sound.seconds` how long they last, the seconds of the voice's clock since the last save: [C4 E4 G4] of 100 ms each
+// is 0.3, whenever the program asks
+class Recording {
+	seconds() := voice_place - rendered_until
+}
 // the sounds made so far (decision saved-words): sound() beside sound(samples), so the bare word sound, its call, is a
 // Recording
 sound() := Recording()

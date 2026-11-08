@@ -155,7 +155,9 @@ first_kind_change(n: Node, kinds: map, results: map, global_names: map): any := 
 		for outer_name in body_kinds.keys() { if outer_name in global_names or outer_name in nonlocals { kinds[outer_name] = body_kinds[outer_name] } }
 		return change
 	}
-	if is_operator(n, "->") or is_operator(n, "=>") { return ø }
+	# a lambda and a class body are scopes of their own: a field `items = []` is no program variable, and no word
+	# `items` of lib/map.warp the program reaches
+	if is_operator(n, "->") or is_operator(n, "=>") or is_type_view(n) { return ø }
 	if is_operator(n, "=") {
 		change = first_kind_change(value_of(n), kinds, results, global_names)
 		if change != ø { return change }

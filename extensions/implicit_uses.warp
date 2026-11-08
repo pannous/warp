@@ -39,7 +39,7 @@ uncommented(source: text): text := {
 	}
 	(kept + [source[from ..< source.length]]).join("")
 }
-implicit_modules(source: text, folder: text = "."): list := {
+implicit_modules(source: text, tree: Node, folder: text = "."): list := {
 	index = library_index_section("word")
 	# a foreign line, `posix_spawnp(pid: out, …): i32 from 'c'`, names C's words: its function the program's own
 	foreign = source.split("\n").map(c_declaration).filter(d => d != ø).map(d => d#1)
@@ -48,9 +48,10 @@ implicit_modules(source: text, folder: text = "."): list := {
 	code = uncommented(source)
 	names = names_mentioned(code)
 	candidates = index.keys.filter(word => mentions_indexed(code, names, word))
-	if #candidates == 0 { return [] }
+	rule_named = rule_named_modules(names)
+	if #candidates == 0 and #rule_named == 0 { return [] }
 	# (a `format Flag f as text` definition defines no format: lib/text's stays callable)
-	program = formatted_definitions(interpolation(plain_node(parsed(source))))
+	program = formatted_definitions(interpolation(plain_node(if #foreign == 0 then tree else parsed(source))))
 	own = own_heads(program)
 	bound = names_bound_in(program)
 	prelude_names = prelude_definitions()
@@ -84,7 +85,45 @@ implicit_modules(source: text, folder: text = "."): list := {
 			diagnose(call_of("implicit_use", [symbol(word), symbol(definers#1)]), nodes_in(program).find(n => n == symbol(word)) ?? program)
 		}
 	}
+	for module in rule_named.keys.filter(module => module not in modules and module not in used) {
+		# (a definition of its own carries its head, an assignment yes: `local["name"] = "Ada"` defines no local)
+		word = rule_named[module].find(word => not (own.has(word) and own[word] != yes) and not known.has(word) and not assigned_whole(program, word))
+		if word != ø {
+			modules += [module]
+			diagnose(call_of("implicit_use", [symbol(word), symbol(module)]), nodes_in(program).find(n => n == symbol(word)) ?? program)
+		}
+	}
 	modules
+}
+# whether the program assigns the name itself, `local = 3`, not one of its keys or fields, `local["name"] = "Ada"`
+assigned_whole(program: Node, word: text): bool := nodes_in(program).any(n => is_key(n, Op.Assign) and key_of(n) == symbol(word))
+# the words only a module's rules name, by module, that the source mentions: the words a rule's hole takes from its
+# list, nothing defining them, `local["name"]` of storage's `$store[$key] where $store in [database, local]` (never a
+# rule word a condition calls, shaders' `shader_values`). The module comes as a use before the program links its
+# modules, so its prebuilt module links instead of its source compiling with the program after the rule fired (card
+# ipad-storage-bug: 5 s a run, and WebKit's Worker ran out of stack)
+rule_named_modules(names: map): map := {
+	found = {}
+	needs = rule_needs_by_module()
+	for module in needs.keys {
+		mentioned = needs[module].split(" ").filter(word => names.has(word) and not has_meaning(word) and word not in prelude_definitions() and defining_modules(word) == [])
+		words = if #mentioned == 0 then [] else mentioned.filter(word => word in rule_listed_words(module))
+		if #words > 0 { found[module] = words }
+	}
+	found
+}
+# the words the conditions of a module's rules list for a hole, `$store in [database, local]`, read once a module
+global rule_listed_by_module = {}
+rule_listed_words(module: text): list := {
+	if not rule_listed_by_module.has(module) {
+		listed = []
+		rules = rules_of_module(module)
+		for index in 0 ..< #rules {
+			for condition in rules[index].conditions { listed += nodes_in(condition).filter(n => is_group(n) and bracket_of(n) == "[").flat_map(n => items_of(n).filter(item => item is symbol).map(name_of)) }
+		}
+		rule_listed_by_module[module] = listed
+	}
+	rule_listed_by_module[module]
 }
 # whether only the modules' rules know the word, no definition: it names them where it leads a statement, never in
 # quoted code (`data(set width of p to 12)` brings no english)

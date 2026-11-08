@@ -16,14 +16,17 @@ const TEMPORARY_DIRECTORY = "/tmp";
 // the served repository again at an absolute path, as natively a path names warp's lib/ from anywhere (driver.js)
 const REPOSITORY_FD = 6;
 const REPOSITORY_DIRECTORY = "/warp";
-const PREOPENS = new Map([[ROOT_FD, "."], [INCLUDE_FD, INCLUDE_DIRECTORY], [TEMPORARY_FD, TEMPORARY_DIRECTORY], [REPOSITORY_FD, REPOSITORY_DIRECTORY]]);
+// "~", $HOME: the page's own files, a directory of the overlay, which the page keeps (IndexedDB) as the files it wrote
+const HOME_FD = 7;
+const HOME_DIRECTORY = "/home";
+const PREOPENS = new Map([[ROOT_FD, "."], [INCLUDE_FD, INCLUDE_DIRECTORY], [TEMPORARY_FD, TEMPORARY_DIRECTORY], [REPOSITORY_FD, REPOSITORY_DIRECTORY], [HOME_FD, HOME_DIRECTORY]]);
 const isRepository = fd => fd === ROOT_FD || fd === REPOSITORY_FD;
 const INCLUDE_URL = new URL("/__include__/", self.location.href).href;
 // WARP_INCLUDE replaces the compiler's include directories (src/formats/ffi_parser.rs), so it looks in exactly one place;
-// WARP_HTTP_STUB is test_in_browser.py's stub answering any status and body (tests/common serve); TMPDIR the scratch;
+// WARP_HTTP_STUB is test_in_browser.py's stub answering any status and body (tests/common serve); TMPDIR the scratch; HOME the page's own files;
 // TZ the browser's time zone, the run's zone `now` reads (lib/time.warp local_zone_name, decision local-now)
 const ENVIRONMENT = [`WARP_INCLUDE=${INCLUDE_DIRECTORY}`, `WARP_HTTP_STUB=${new URL("/__stub__", self.location.href).href}`,
-	`TMPDIR=${TEMPORARY_DIRECTORY}`, `TZ=${Intl.DateTimeFormat().resolvedOptions().timeZone}`];
+	`TMPDIR=${TEMPORARY_DIRECTORY}`, `HOME=${HOME_DIRECTORY}`, `TZ=${Intl.DateTimeFormat().resolvedOptions().timeZone}`];
 const ALL_RIGHTS = 0xffffffffffffffffn;
 const RANDOM_CHUNK = 65536; // crypto.getRandomValues limit per call
 const DIRENT_HEADER = 24;
@@ -127,7 +130,7 @@ function served(path) {
 		if (!headers.has(url)) headers.set(url, requestSync("HEAD", url) ? lazyFile(url) : null);
 		return headers.get(url);
 	}
-	if (path === TEMPORARY_DIRECTORY) return { entries: new Set() };
+	if (path === TEMPORARY_DIRECTORY || path === HOME_DIRECTORY) return { entries: new Set() };
 	if (path.startsWith("/")) return null; // the machine has nothing else; the overlay may
 	if (path === "") return { entries: new Set(listing("").keys()) };
 	if (preloaded.has(path)) return preloaded.get(path);
@@ -146,8 +149,10 @@ const newOverlay = () => ({ written: new Map(), made: new Set(), removed: new Se
 const contentBytes = content => typeof content === "string" ? utf8.encode(content) : content;
 
 // args: the program's argument list (argv[0] first); output(text, fd) receives stdout (1) and stderr (2); overlay: the
-// changes over the served files, the instance's own unless given; environment: its variables, NAME=value each
-function wasiImports(memory, args, output, overlay = newOverlay(), environment = ENVIRONMENT) {
+// changes over the served files, the instance's own unless given; environment: its variables, NAME=value each; folder:
+// the program file's folder, where a relative path names its neighbour when that is there, else the repository's (as
+// natively a test's `../fixtures/unix/poem.txt` reads from its folder; host-files.js besideProgram)
+function wasiImports(memory, args, output, overlay = newOverlay(), environment = ENVIRONMENT, folder = "") {
 	const { written, made, removed, kept = () => {}, forgotten = () => {} } = overlay;
 	const descriptors = new Map(); // fd → {path, bytes, position, append} of a file or {path, entries} of a directory
 	let nextFd = ROOT_FD + PREOPENS.size;
@@ -169,8 +174,11 @@ function wasiImports(memory, args, output, overlay = newOverlay(), environment =
 	const resolve = (dirFd, pointer, length) => {
 		const base = isRepository(dirFd) ? "" : PREOPENS.get(dirFd) ?? descriptors.get(dirFd)?.path;
 		if (base === undefined) return undefined;
-		const path = normalPath(`${base}/${textAt(pointer, length)}`);
-		return base.startsWith("/") ? `/${path}` : path;
+		const given = textAt(pointer, length);
+		const path = normalPath(`${base}/${given}`);
+		if (base.startsWith("/")) return `/${path}`;
+		const beside = folder && dirFd === ROOT_FD ? normalPath(`${folder}/${given}`) : path;
+		return beside !== path && lookup(beside) ? beside : path;
 	};
 	// a new descriptor of the entry, written at `opened`
 	const open = (entry, opened) => {

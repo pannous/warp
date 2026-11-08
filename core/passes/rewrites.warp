@@ -1435,7 +1435,11 @@ varying_of(statements: list): map := {
 		}
 	}
 	assigned = {}
-	for n in nodes_in(rule_program) { if is_key(n, Op.Assign) and key_of(n) is symbol { assigned[name_of(key_of(n))] = yes } }
+	# (the program's own writes: a function's local of the same name, `var total = 0` in lib/math.warp's norm that
+	# `use math` brings, is no write of the program's `total := …`, card reactive-ports-test)
+	for statement in flat_statements(rule_program).filter(statement => definition_of(statement) == ø) {
+		for n in nodes_in(statement) { if is_key(n, Op.Assign) and key_of(n) is symbol { assigned[name_of(key_of(n))] = yes } }
+	}
 	values = {}
 	for statement in statements {
 		if is_charged_value(statement) and varying.has(name_of(key_of(statement))) and not assigned.has(name_of(key_of(statement))) { values[name_of(key_of(statement))] = yes }
@@ -1454,6 +1458,8 @@ read_now(code: Node): list := {
 	if is_lambda(code) or is_curly_group(code) { return [] }
 	# `style: { color: c }`: a word's data block is read as it is made, no code run later
 	if is_data_block(code) { return items_of(value_of(code)).flat_map(read_now) }
+	# `alarm{level: 3}`: a pair's key names a field, no variable read (`level` written later made the item live)
+	if is_key(code, Op.Colon) { return read_now(value_of(code)) }
 	parts_of(code).flat_map(read_now)
 }
 # [name, the names it mentions] of a function or value definition, else ø
