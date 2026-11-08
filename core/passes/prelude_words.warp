@@ -464,12 +464,16 @@ declared_only(n: Node): Node := {
 	if is_group(n) { return children(n, declared_only) }
 	if class_view(n) != ø { return with_members(n, declared_only) }
 	head = if n is key then key_of(n) else ø
-	if is_group(head) and bracket_of(head) == "(" {
+	# (a head with its result type, `now(): Instant := …`, is declared by its call as a bare one is: with its body every
+	# typed word a linked module's reached word called came along, compiled anew, lib/time's calendar behind `use time`;
+	# its result type would make the empty body a function of the program's answering ø)
+	call = if is_key(head, Op.Colon) and (env("DEBUG_TYPED") ?? "") != "old" then key_of(head) else head
+	if is_group(call) and bracket_of(call) == "(" {
 		# (a word taking a block keeps its body: extensions/block_inlining.warp runs a literal block in it in place,
 		# `3 times {…}` a loop of the caller's own, card times-infix-operator)
-		if takes_block(head) { return n }
-		if is_key(n, Op.Define) { return Key(head, Op.Define, Node.Empty) }
-		if is_key(n, Op.Assign) { return Key(head, Op.Assign, Node.Empty) }
+		if takes_block(call) { return n }
+		if is_key(n, Op.Define) { return Key(call, Op.Define, Node.Empty) }
+		if is_key(n, Op.Assign) { return Key(call, Op.Assign, Node.Empty) }
 	}
 	# `A4 := midi_hertz(69)`, a value the module made a function of (charged, P71): its head, called at each use
 	if is_key(n, Op.Define) and head is symbol and name_of(head) in module.linked_words { return Key(call_of(name_of(head), []), Op.Define, Node.Empty) }
