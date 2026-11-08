@@ -731,6 +731,7 @@ const showsStop = () => $("run").classList.contains("stop");
 
 // Stop pressed: a run going on ends as stopped; a program left listening to its timers stops listening
 function stopPressed() {
+	queued = undefined; // a run asked meanwhile goes too
 	retiredWorkers.forEach(retire);
 	silence();
 	if (pending) return stopRun(pending, STOPPED, false);
@@ -793,26 +794,38 @@ async function settled(report) {
 	return { ...report, value: lastAnswered.value ?? report.value, html: lastAnswered.html ?? report.html, error: lastAnswered.error };
 }
 
-async function runInWorker(code, file, asData, eventsFor) {
+function runInWorker(code, file, asData, eventsFor) {
 	lastAnswered = undefined;
 	// a program serving requests waits for them (lib/web.warp page_serve): the next run starts in a fresh Worker
 	if (worker.serving) {
 		worker.terminate();
 		startWorker();
 	}
-	await workerReady;
-	return new Promise(resolve => {
-		const run = { id: ++nextRunId, resolve, printed: [], paintings: [], frame: 0, framesShown: {}, eventsFor };
-		stopAfterTimeout(run);
-		run.stopTimer = setTimeout(() => pending === run && showStop(true), STOP_GRACE_MS);
-		pending = run;
-		silence(false);
-		Object.assign(worker, { runId: run.id, liveLoops: new Map() });
-		paintingWindow = undefined; // canvas.js: each run's paintings at their own size until it sets window.width
-		tellSystemValues();
-		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file, arguments: programArguments(), liveHandover, asData });
-		liveHandover = {};
+	// the run is pending, its Stop shown after the grace, while the worker still loads: a Run pressed on a slow first
+	// load (7.5 s on an iPad) reacts as any run does, and Stop cancels it (card run-during-load-feedback). Its report
+	// never waits on the loading worker itself: a stopped worker's ready never settles. Its time limit counts from the
+	// worker's start of it
+	const run = { id: ++nextRunId, printed: [], paintings: [], frame: 0, framesShown: {}, eventsFor };
+	const reported = new Promise((resolve, reject) => Object.assign(run, { resolve, reject }));
+	run.stopTimer = setTimeout(() => pending === run && showStop(true), STOP_GRACE_MS);
+	pending = run;
+	workerReady.then(() => pending === run && startInWorker(run, code, file, asData), failure => {
+		clearTimeout(run.stopTimer);
+		if (pending === run) pending = undefined;
+		showStop(false);
+		run.reject(failure);
 	});
+	return reported;
+}
+
+function startInWorker(run, code, file, asData) {
+	stopAfterTimeout(run);
+	silence(false);
+	Object.assign(worker, { runId: run.id, liveLoops: new Map() });
+	paintingWindow = undefined; // canvas.js: each run's paintings at their own size until it sets window.width
+	tellSystemValues();
+	worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file, arguments: programArguments(), liveHandover, asData });
+	liveHandover = {};
 }
 
 // ---- showing a report ---------------------------------------------------------------------------------------
