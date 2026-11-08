@@ -232,7 +232,7 @@ def type_test_code(body: Body, subject: Node, spec: text): TypedCode {
 	# `x is real` (REAL_CLASS) also of any number (decision real-canonical)
 	# an instance of the class or of one extending it, whatever the subject: `(5ms) is Quantity` of a Time
 	if spec in module.classes { return class_test_code(body, subject, spec, if spec == REAL_CLASS then "real_among" else "instance_among") }
-	if spec == "time" { return time_test_code(body, subject) }
+	if spec in time_test_specs { return time_test_code(body, subject, spec) }
 	if spec not in core_type_words { return refuse("a test of the type " + spec) }
 	type = core_type_words[spec]
 	value = expression_code(body, subject)
@@ -241,10 +241,14 @@ def type_test_code(body: Body, subject: Node, spec: text): TypedCode {
 	if value.kind == ValueKind.Node { return node_type_test(body, value, type) }
 	TypedCode(ValueKind.Bool, [op.i32_const, if covered_kinds[type].any(kind => same_kind(kind, value.kind)) then 1 else 0])
 }
-# `x is time` of the core's times, a time of day, a date, a duration (decision time-word; lib/time's classes answer in
-# lib/time.warp time_valued): a value known only at run time asks holds_time, once the program makes times at all
-def time_test_code(body: Body, subject: Node): TypedCode {
+# `x is time`, `x is duration` (decision time-word: an instant, a date, a time of day, a duration are times): lib/time's
+# time_valued answers where the program has it (prelude_words.warp time_test_words brings it), else, and in its own
+# body, the core's times answer `is time`: a value known only at run time asks holds_time once the program makes times
+time_test_specs = ["time", "duration"]
+def time_test_code(body: Body, subject: Node, spec: text): TypedCode {
 	value = expression_code(body, subject)
+	if module.functions.has(time_test_word) and body.function.name != time_test_word { return call_values(module.functions[time_test_word], [TypedCode(ValueKind.Node, boxed(value)), text_value(spec)]) }
+	if spec != "time" { return refuse("a test of the type " + spec) }
 	if value.kind == ValueKind.Node and "Time" in module.made { return runtime_call(made_tests.Time, [value]) }
 	TypedCode(ValueKind.Bool, [op.i32_const, if value.kind == ValueKind.Time then 1 else 0])
 }
