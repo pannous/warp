@@ -9,14 +9,14 @@ threshold, on the CPU below it and without an adapter; tests compare GPU and CPU
 gpu_compute / gpu_render plumbing (src/graphics/gpu.rs, web/playground/host-gpu.js, notes/web_framework.md "web-apis: WebGPU").
 
 ## In warp now (the Rust paths below are the snapshot on branch rust-bootstrap)
-- gpu_compute(shader, arrays, workgroups) is a host word libwarp_gpu answers directly (crates/warp-gpu/warp_gpu.c
-  warp_word_gpu_compute, decision library-direct-refs), reading and building warp values through lib/native/warp_node.h.
+- gpu_compute(shader, arrays, workgroups) is a host word the native host module answers
+  (lib/host/native_host/gpu.warp host_gpu_compute over libwgpu_native by FFI, notes/native_host.md "The GPU").
 - GPU lists `[f32]` (decision gpu-bound-floats, extensions/gpu_lists/runtime.warp): f32 cells in linear memory from their
   creation, a square List $Node marked KindUnit.GpuList whose Int is (address << 32) + count. `xs: [f32] = …` asks for
   one; a list the program makes once (literal, comprehension, `float[n]`) at its main level and uses only by #, xs#i,
   xs#i = v, for, print and gpu_compute is one by itself (lib/rule_words.warp gpu_lists_packed, lib/wgsl.warp
-  gpu_bound), as is a creating form written in a gpu_compute call. libwarp_gpu binds the cells as the storage buffer
-  and writes results back into them (warp_node.h warp_floats): samples/acceleration/gpu_million.warp went 852 + 1686 ms → 138 +
+  gpu_bound), as is a creating form written in a gpu_compute call. gpu.warp binds the cells as the storage buffer
+  and writes results back into them (array_left): samples/acceleration/gpu_million.warp went 852 + 1686 ms → 138 +
   20 ms. Other list words refuse a `[f32]` list today; card f32-gpu gives reads a boxed copy (one function, which
   xs-map-gpu replaces by a kernel) and growth (a [count, capacity, cells] header, vector doubling). Linear memory is
   never freed yet (card packed-f32-memory).
@@ -245,7 +245,7 @@ the columns before that line and before each later one, which the dedent took of
 of a name the program assigns a shader block passes shader_words(s, place) (rules in extensions/rules/modules/
 prelude.warp, rule word shader_words_of): the GPU compiles the text placed as written, blank lines and spaces before
 it, so its own line:column is the program's. Both hosts then say `why at line:column` (host-gpu.js checkedModule,
-warp_gpu.c shader_failed out of naga's report), the runtime adds no call site (error_sentences names_place) and the
+gpu.warp shader_failure out of naga's report), the runtime adds no call site (error_sentences names_place) and the
 playground marks the place (driver.js placeNamed, report.error_at). Columns after a `$name` hole on the same line count
 it as `values.name`. Not placed: a shader block given inline (`paint(shader {…})`), shaders from imported modules,
 shaders given as quoted text: their place stays the shader's own.
@@ -345,8 +345,8 @@ Shadertoy view URL) out of samples/ and lib/. The old files remain in git histor
 wgpu's Metal surface answers Occluded while NSWindow.occlusionState lacks "visible" (wgpu-hal metal/surface.rs,
 workaround for gfx-rs/wgpu#8309), and presented() then skips the frame. A native window opens behind the app in front
 (a run from a terminal or an agent is not activated), so a still picture's only present was dropped: black until
-closed. libwarp_gpu keeps the painting it could not show (unshown_kept) and warp_gpu_shown_again shows it;
-libwarp_window's held_open calls that on SDL_EVENT_WINDOW_EXPOSED (foreign.c window_layer connects the two). An
+closed. gpu.warp keeps the painting it could not show (shown_kept) and shown_again shows it; window.warp's event
+loop calls that on SDL_EVENT_WINDOW_EXPOSED. An
 animation needs nothing: its next frame shows. SDL_RaiseWindow/SyncWindow don't help (SDL's OCCLUDED flag lags).
 Checking a window by eye: capture it by window id (Quartz CGWindowList by the run's pid, screencapture -l), bring it
 to the front with System Events `set frontmost of (first process whose unix id is <pid>)`; SIGTERM does not end a

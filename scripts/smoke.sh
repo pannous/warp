@@ -41,7 +41,7 @@ else
 		[[ $part == *.cwasm* && ! -e $installed/$part ]] && continue
 		rm -rf "${tree:?}/lib/$part" && clone -R "$installed/$part" "$tree/lib/$part" || exit 1
 	done
-	for library in "$installed"/lib*warp_*.*; do clone "$library" "$tree/lib/" 2>/dev/null; done
+	for library in "$installed"/lib*warp_*.* "$installed"/libwgpu_native.*; do clone "$library" "$tree/lib/" 2>/dev/null; done
 fi
 # a failed build prints its step, the step's output and the log's path in the store (and so does a hash failed before)
 built=$("$scripts/rebuild.sh" pure "$tree" 2>&1) || { echo "smoke: rebuild failed:" >&2; echo "$built" >&2; exit 1; }

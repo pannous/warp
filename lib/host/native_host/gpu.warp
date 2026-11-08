@@ -1,0 +1,922 @@
+// The GPU natively (card warp-gpu-source, decision shaders-in-lib), a part of lib/host/native_host.warp: a WGSL
+// shader painted, shown in the window and computed through wgpu-native (libwgpu_native beside warp) by plain FFI, as
+// web/playground/host-gpu.js does it in a page. paint(shader, width, height, values): the same full image triangle (or
+// a shader's own vertex stage drawing values.instances quads), the values a uniform struct appended, each long list a
+// storage array of its own, `values.previous(at)` the frame the shader drew before; the pixels read back row by row,
+// or shown in the window's Metal layer and kept on the GPU. gpu_compute(shader, arrays, workgroups) runs a compute
+// shader over storage arrays. The descriptors are C structs laid out below at their offsets in wgpu-native's
+// webgpu.h (v29, any 64-bit machine); a callback is a warp function (lib/callbacks.warp)
+
+FULL_IMAGE_VERTICES = "\n@vertex fn warp_full_image(@builtin(vertex_index) corner: u32) -> @builtin(position) vec4f {\n\treturn vec4f(f32(corner / 2u) * 4.0 - 1.0, f32(corner % 2u) * 4.0 - 1.0, 0.0, 1.0);\n}"
+VERTEX_ENTRY_POINT = "warp_full_image"
+FRAGMENT_ENTRY_POINT = "main"
+COMPUTE_ENTRY_POINT = "main"
+// a shader with a vertex stage of its own (card gpu-instanced-blend) draws `values.instances` quads, each its 4 corners
+// as a triangle strip, blended over the quads before
+OWN_VERTEX_STAGE = "@vertex"
+INSTANCES_NAME = "instances"
+VALUES_NAME = "values"
+VALUES_BINDING = 0
+PREVIOUS_FRAME_BINDING = 1
+STORAGE_BINDING = 2
+TRIANGLE_CORNERS = 3
+QUAD_CORNERS = 4
+PIXEL_BYTES = 4
+ROW_ALIGNMENT = 256
+VECTOR_FLOATS = 4
+// 64 KB, the uniform every WebGPU device binds (maxUniformBufferBindingSize), as the playground's
+MOST_FLOATS = 16384
+MOST_STORAGE_ARRAYS = 6
+MOST_COMPUTE_ARRAYS = 8
+VALUE_TYPES = ["f32", "vec2f", "vec3f", "vec4f"]
+VALUE_ALIGNMENTS = [1, 2, 4, 4]
+// a GPU list's cell types, by extensions/gpu_lists GpuCell
+GPU_CELLS = ["f32", "i32", "u32"]
+// paint's values.mesh, read in the shader as the storage array warp_values_mesh
+STORAGE_PREFIX = "warp_values_"
+// `values.previous(at)` (card shader-read): the color the shader left at pixel `at` in its previous frame of this size
+PREVIOUS_HOLE = "values.previous"
+PREVIOUS_FUNCTION = "warp_previous"
+PREVIOUS_FRAME = "\n@group(0) @binding(1) var warp_previous_frame: texture_2d<f32>;\nfn warp_previous(at: vec2f) -> vec4f {\n\tlet last = vec2i(textureDimensions(warp_previous_frame)) - vec2i(1);\n\treturn textureLoad(warp_previous_frame, clamp(vec2i(at), vec2i(0), last), 0);\n}"
+// the picture spread over the viewport it is drawn in, each window pixel the picture's pixel under it
+PICTURE_SHADER = "@group(0) @binding(0) var picture: texture_2d<f32>;\nstruct Corner { @builtin(position) position: vec4f, @location(0) across: vec2f }\n@vertex fn warp_full_image(@builtin(vertex_index) corner: u32) -> Corner {\n\tlet at = vec2f(f32(corner / 2u) * 4.0 - 1.0, f32(corner % 2u) * 4.0 - 1.0);\n\treturn Corner(vec4f(at, 0.0, 1.0), vec2f(at.x + 1.0, 1.0 - at.y) * 0.5);\n}\n@fragment fn main(corner: Corner) -> @location(0) vec4f {\n\tlet size = vec2i(textureDimensions(picture));\n\treturn textureLoad(picture, clamp(vec2i(corner.across * vec2f(size)), vec2i(0), size - vec2i(1)), 0);\n}\n"
+// the holes every shader has, filled where it reads them and the program gave none (host-gpu.js builtinValues)
+BUILTIN_HOLES = ["width", "height", "size", "time", "frame", "mouse", "mouse_down", "mouse_wheel", "key"]
+// naga's report "Shader '' parsing error: why … ┌─ wgsl:4:1 …" said as `the shader: why at 4:1`
+NAGA_CAUSE = "error: "
+NAGA_PLACE = "wgsl:"
+NAME_BYTES = "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+// webgpu.h's numbers
+STRLEN = -1
+CALLBACK_ALLOW_PROCESS_EVENTS = 2
+SUCCESS = 1
+ERROR_NONE = 1
+ERROR_FILTER_VALIDATION = 1
+STYPE_WGSL = 2
+STYPE_METAL_LAYER = 4
+FORMAT_RGBA8 = 22
+FORMAT_BGRA8 = 27
+BUFFER_MAP_READ = 1
+BUFFER_COPY_SRC = 4
+BUFFER_COPY_DST = 8
+BUFFER_UNIFORM = 64
+BUFFER_STORAGE = 128
+TEXTURE_COPY_SRC = 1
+TEXTURE_COPY_DST = 2
+TEXTURE_BINDING = 4
+TEXTURE_RENDER_ATTACHMENT = 16
+TEXTURE_2D = 2
+TOPOLOGY_LIST = 4
+TOPOLOGY_STRIP = 5
+FRONT_CCW = 1
+CULL_NONE = 1
+WRITE_ALL = 15
+BLEND_ADD = 1
+BLEND_ONE = 2
+BLEND_SRC_ALPHA = 5
+BLEND_ONE_MINUS_SRC_ALPHA = 6
+LOAD_CLEAR = 2
+STORE_STORE = 1
+ASPECT_ALL = 1
+DEPTH_SLICE_UNDEFINED = 4294967295
+PRESENT_FIFO = 1
+SURFACE_OPTIMAL = 1
+SURFACE_SUBOPTIMAL = 2
+SURFACE_OCCLUDED = 196609
+// the structs: their sizes, and the offsets of the fields set
+CALLBACK_INFO = 40
+STRING_VIEW = 16
+WGSL_SOURCE = 32
+SHADER_MODULE = 24
+COLOR_TARGET = 32
+BLEND_STATE = 24
+FRAGMENT_STATE = 64
+RENDER_PIPELINE = 168
+COMPUTE_PIPELINE = 80
+BUFFER_DESCRIPTOR = 48
+BIND_ENTRY = 56
+BIND_GROUP = 48
+TEXTURE_DESCRIPTOR = 80
+COLOR_ATTACHMENT = 72
+RENDER_PASS = 64
+COPY_TEXTURE = 32
+COPY_BUFFER = 24
+COPY_LAYOUT = 16
+EXTENT = 12
+METAL_SOURCE = 24
+SURFACE_DESCRIPTOR = 24
+SURFACE_CONFIGURATION = 64
+SURFACE_TEXTURE = 24
+
+// wgpu-native's functions, and C's copies: memcpy of a list's int32 cells, memmove of C memory
+wgpuCreateInstance(descriptor: handle): handle from 'wgpu_native'
+wgpuInstanceRequestAdapter(instance: handle, options: handle, info: handle): i64 from 'wgpu_native'
+wgpuInstanceProcessEvents(instance: handle): void from 'wgpu_native'
+wgpuInstanceCreateSurface(instance: handle, descriptor: handle): handle from 'wgpu_native'
+wgpuAdapterRequestDevice(adapter: handle, descriptor: handle, info: handle): i64 from 'wgpu_native'
+wgpuDeviceGetQueue(device: handle): handle from 'wgpu_native'
+wgpuDevicePoll(device: handle, wait: i32, index: handle): i32 from 'wgpu_native'
+wgpuDevicePushErrorScope(device: handle, filter: i32): void from 'wgpu_native'
+wgpuDevicePopErrorScope(device: handle, info: handle): i64 from 'wgpu_native'
+wgpuDeviceCreateShaderModule(device: handle, descriptor: handle): handle from 'wgpu_native'
+wgpuDeviceCreateRenderPipeline(device: handle, descriptor: handle): handle from 'wgpu_native'
+wgpuDeviceCreateComputePipeline(device: handle, descriptor: handle): handle from 'wgpu_native'
+wgpuDeviceCreateBindGroup(device: handle, descriptor: handle): handle from 'wgpu_native'
+wgpuDeviceCreateBuffer(device: handle, descriptor: handle): handle from 'wgpu_native'
+wgpuDeviceCreateTexture(device: handle, descriptor: handle): handle from 'wgpu_native'
+wgpuDeviceCreateCommandEncoder(device: handle, descriptor: handle): handle from 'wgpu_native'
+wgpuShaderModuleRelease(module: handle): void from 'wgpu_native'
+wgpuRenderPipelineRelease(pipeline: handle): void from 'wgpu_native'
+wgpuRenderPipelineGetBindGroupLayout(pipeline: handle, group: i32): handle from 'wgpu_native'
+wgpuComputePipelineRelease(pipeline: handle): void from 'wgpu_native'
+wgpuComputePipelineGetBindGroupLayout(pipeline: handle, group: i32): handle from 'wgpu_native'
+wgpuBindGroupLayoutRelease(layout: handle): void from 'wgpu_native'
+wgpuBindGroupRelease(group: handle): void from 'wgpu_native'
+wgpuBufferRelease(buffer: handle): void from 'wgpu_native'
+wgpuBufferMapAsync(buffer: handle, mode: i64, offset: i64, size: i64, info: handle): i64 from 'wgpu_native'
+wgpuBufferGetConstMappedRange(buffer: handle, offset: i64, size: i64): handle from 'wgpu_native'
+wgpuBufferUnmap(buffer: handle): void from 'wgpu_native'
+wgpuQueueWriteBuffer(queue: handle, buffer: handle, offset: i64, data: handle, size: i64): void from 'wgpu_native'
+wgpuQueueWriteTexture(queue: handle, into: handle, data: handle, size: i64, layout: handle, extent: handle): void from 'wgpu_native'
+wgpuQueueSubmit(queue: handle, count: i64, commands: handle): void from 'wgpu_native'
+wgpuTextureCreateView(texture: handle, descriptor: handle): handle from 'wgpu_native'
+wgpuTextureAddRef(texture: handle): void from 'wgpu_native'
+wgpuTextureRelease(texture: handle): void from 'wgpu_native'
+wgpuTextureViewRelease(view: handle): void from 'wgpu_native'
+wgpuCommandEncoderBeginRenderPass(encoder: handle, descriptor: handle): handle from 'wgpu_native'
+wgpuCommandEncoderBeginComputePass(encoder: handle, descriptor: handle): handle from 'wgpu_native'
+wgpuCommandEncoderCopyTextureToBuffer(encoder: handle, from: handle, into: handle, extent: handle): void from 'wgpu_native'
+wgpuCommandEncoderCopyBufferToBuffer(encoder: handle, from: handle, from_offset: i64, into: handle, into_offset: i64, size: i64): void from 'wgpu_native'
+wgpuCommandEncoderFinish(encoder: handle, descriptor: handle): handle from 'wgpu_native'
+wgpuCommandEncoderRelease(encoder: handle): void from 'wgpu_native'
+wgpuCommandBufferRelease(commands: handle): void from 'wgpu_native'
+wgpuRenderPassEncoderSetPipeline(pass: handle, pipeline: handle): void from 'wgpu_native'
+wgpuRenderPassEncoderSetViewport(pass: handle, x: f32, y: f32, width: f32, height: f32, nearest: f32, farthest: f32): void from 'wgpu_native'
+wgpuRenderPassEncoderSetBindGroup(pass: handle, index: i32, group: handle, offset_count: i64, offsets: handle): void from 'wgpu_native'
+wgpuRenderPassEncoderDraw(pass: handle, vertices: i32, instances: i32, first_vertex: i32, first_instance: i32): void from 'wgpu_native'
+wgpuRenderPassEncoderEnd(pass: handle): void from 'wgpu_native'
+wgpuRenderPassEncoderRelease(pass: handle): void from 'wgpu_native'
+wgpuComputePassEncoderSetPipeline(pass: handle, pipeline: handle): void from 'wgpu_native'
+wgpuComputePassEncoderSetBindGroup(pass: handle, index: i32, group: handle, offset_count: i64, offsets: handle): void from 'wgpu_native'
+wgpuComputePassEncoderDispatchWorkgroups(pass: handle, x: i32, y: i32, z: i32): void from 'wgpu_native'
+wgpuComputePassEncoderEnd(pass: handle): void from 'wgpu_native'
+wgpuComputePassEncoderRelease(pass: handle): void from 'wgpu_native'
+wgpuSurfaceConfigure(surface: handle, configuration: handle): void from 'wgpu_native'
+wgpuSurfaceGetCurrentTexture(surface: handle, texture: handle): void from 'wgpu_native'
+wgpuSurfacePresent(surface: handle): i32 from 'wgpu_native'
+wgpuSurfaceRelease(surface: handle): void from 'wgpu_native'
+memcpy(into: handle, from: i32s, size: length): handle from 'c'
+memmove(into: handle, from: handle, size: i64): handle from 'c'
+
+global instance = 0
+global adapter = 0
+global device = 0
+global queue = 0
+global gpu_failure = ""
+// what the last callback answered: done, its status, the object it gave, its message
+global answer_done = no
+global answer_status = 0
+global answer_object = 0
+global answer_message = ""
+global answer_callbacks = ø
+// the last shader's pipeline, so a frame loop compiles once
+global compiled_code = ""
+global compiled_format = 0
+global compiled_pipeline = 0
+global picture_pipeline = 0
+// the frame a shader reading values.previous drew last, at its size
+global previous_code = ""
+global previous_image = 0
+global previous_width = 0
+global previous_height = 0
+// the window's surface, configured at its layer's pixel size
+global surface = 0
+global surface_layer = 0
+global surface_width = 0
+global surface_height = 0
+// the last picture shown, shown again as the window comes into sight or changes size
+global shown_picture = 0
+global shown_layer = 0
+global shown_width = 0
+global shown_height = 0
+global first_painting_ms = 0
+global paintings = 0
+
+// --- memory for C
+struct_of(size: int): int := calloc(1, size)
+// a WGSL text, an entry point's name, a label: a C string kept for the run, its length "to its NUL"
+string_set(at: int, offset: int, t: text) := {
+	set_field_pointer(at, offset, strdup(t))
+	set_field_i64(at, offset + 8, STRLEN)
+}
+// a callback's info: WGPUCallbackMode_AllowProcessEvents and the function
+callback_info(callback: int): int := {
+	info = struct_of(CALLBACK_INFO)
+	set_field_i32(info, 8, CALLBACK_ALLOW_PROCESS_EVENTS)
+	set_field_pointer(info, 16, callback)
+	info
+}
+// a message C gave by its WGPUStringView: its text, to the NUL where its length says so
+message_of(data: int, length: int): text := if data == 0 then "" else if length < 0 then field_text(data, 0) else field_bytes(data, 0, length)
+
+// --- answers: each asynchronous call's callback writes its answer, the call waits for it, processing the events
+answered(status: int, made: int, message: text): int := {
+	answer_status = status
+	answer_object = made
+	answer_message = message
+	answer_done = yes
+	0
+}
+callbacks_made() := {
+	if answer_callbacks != ø { return }
+	// (status, object, message data and length, two user data): an adapter's, a device's
+	gave = c_callback((status, made, data, length, one, two) => answered(status, made, message_of(data, length)), ["i32", "handle", "handle", "i64", "i64", "i64"])
+	// (status, error type, message): an error scope's; its error type as its status
+	scoped = c_callback((status, kind, data, length, one, two) => answered(kind, 0, message_of(data, length)), ["i32", "i32", "handle", "i64", "i64", "i64"])
+	// (status, message): a buffer's mapping
+	mapped = c_callback((status, data, length, one, two) => answered(status, 0, message_of(data, length)), ["i32", "handle", "i64", "i64", "i64"])
+	answer_callbacks = {gave: gave, scoped: scoped, mapped: mapped}
+}
+answer_awaited() := {
+	while not answer_done {
+		if device != 0 { wgpuDevicePoll(device, 1, 0) }
+		wgpuInstanceProcessEvents(instance)
+	}
+}
+asked(callback: text): int := {
+	callbacks_made()
+	answer_done = no
+	answer_message = ""
+	callback_info(answer_callbacks[callback])
+}
+
+// the run's one device, asked for at its first painting; no when there is none, gpu_failure saying why
+device_ready(): bool := {
+	if device != 0 { return yes }
+	if instance == 0 { instance = wgpuCreateInstance(0) }
+	if instance == 0 { return failed("no WebGPU instance") }
+	wgpuInstanceRequestAdapter(instance, 0, asked("gave"))
+	answer_awaited()
+	if answer_status != SUCCESS { return failed("no GPU adapter: " + answer_message) }
+	adapter = answer_object
+	wgpuAdapterRequestDevice(adapter, 0, asked("gave"))
+	answer_awaited()
+	if answer_status != SUCCESS { return failed("no GPU device: " + answer_message) }
+	device = answer_object
+	queue = wgpuDeviceGetQueue(device)
+	yes
+}
+failed(why: text): bool := {
+	gpu_failure = why
+	no
+}
+// whether the device reported no error since the scope was pushed; the shader's error said where it is not
+scope_clean(): bool := {
+	wgpuDevicePopErrorScope(device, asked("scoped"))
+	answer_awaited()
+	if answer_status == ERROR_NONE { return yes }
+	failed(shader_failure(answer_message))
+}
+// `the shader: expected `;`, found "}" at 4:1` out of naga's report, its whole report where it says neither
+shader_failure(report: text): text := {
+	if not report.contains(NAGA_CAUSE) or not report.contains(NAGA_PLACE) { return "the shader: " + report }
+	why = report.split(NAGA_CAUSE)#2.split("\n")#1
+	place = leading(report.split(NAGA_PLACE)#2, "0123456789:")
+	"the shader: " + why + " at " + place
+}
+// the start of a text made of those characters
+leading(t: text, allowed: text): text := {
+	start = ""
+	for c in chars(t) {
+		if not allowed.contains(c) { break }
+		start += c
+	}
+	start
+}
+
+// --- the values: `{name: number, name: [numbers], name: [[numbers], …]}`, laid out as WGSL aligns them (host-gpu.js
+// valuesLayout): numbers and short vectors a uniform struct's members, each list of more (of vectors, one vec4f an
+// item, or of more than 4 numbers) a read-only storage array of its own, as long as it is
+class Layout { floats: list, declarations: list, instances: int, arrays: list }
+values_laid_out(values: map): any := {
+	layout = Layout([], [], 1, [])
+	for name in values.keys {
+		value = values[name]
+		why = member_laid_out(layout, name, value)
+		if why != "" { return failed(VALUES_NAME + "." + name + " " + why) }
+	}
+	padded(layout.floats, VECTOR_FLOATS)
+	layout
+}
+member_laid_out(layout: Layout, name: text, value: any): text := {
+	if value is list {
+		vectors = value.any(item => item is list)
+		if vectors or #value > VECTOR_FLOATS {
+			if #layout.arrays == MOST_STORAGE_ARRAYS { return "is one list too many: paint's values hold at most 6" }
+			numbers = if vectors then [if i < #item then float(item[i]) else 0.0 for item in value for i in 0 ..< VECTOR_FLOATS] else [float(x) for x in value]
+			padded(numbers, VECTOR_FLOATS)
+			if #numbers == 0 { numbers = [0.0, 0.0, 0.0, 0.0] }
+			layout.arrays.add([name, numbers])
+			return ""
+		}
+		if #value < 1 { return "is one number or a list of two to four" }
+		return uniform_member(layout, name, [float(x) for x in value])
+	}
+	if not (value is number) { return "is a number or a list of numbers" }
+	if name == INSTANCES_NAME { layout.instances = int(value) }
+	uniform_member(layout, name, [float(value)])
+}
+uniform_member(layout: Layout, name: text, numbers: list): text := {
+	count = #numbers
+	if #layout.floats + count + VECTOR_FLOATS > MOST_FLOATS { return "has more numbers than a uniform holds here" }
+	padded(layout.floats, VALUE_ALIGNMENTS[count - 1])
+	for x in numbers { layout.floats.add(x) }
+	layout.declarations.add(name + ": " + VALUE_TYPES[count - 1])
+	""
+}
+padded(numbers: list, alignment: int) := { while #numbers % alignment != 0 { numbers.add(0.0) } }
+// the program's values with the built-in holes its shader reads and it gave none
+values_filled(shader: text, given: any, width: int, height: int): map := {
+	values = {}
+	if given is map { for name in given.keys { values[name] = given[name] } }
+	if first_painting_ms == 0 { first_painting_ms = wall_clock_ms() }
+	for hole in BUILTIN_HOLES {
+		if not names(shader, VALUES_NAME + "." + hole) or values.has(hole) { continue }
+		values[hole] = hole_value(hole, width, height)
+	}
+	paintings += 1
+	values
+}
+hole_value(hole: text, width: int, height: int): any := {
+	if hole == "width" { return width }
+	if hole == "height" { return height }
+	if hole == "size" { return [width, height] }
+	if hole == "time" { return (wall_clock_ms() - first_painting_ms) / 1000.0 }
+	if hole == "frame" { return paintings }
+	if hole == "mouse" { return [value_of("mouse_x"), value_of("mouse_y")] }
+	if hole == "key" { return value_of("key code held") }
+	value_of(hole)
+}
+
+// --- the shader's text: whole names in it, renamed
+is_name_char(c: text): bool := NAME_BYTES.contains(c)
+// whether the shader names `name` whole, not as the start or end of a longer name
+names(shader: text, name: text): bool := {
+	parts = shader.split(name)
+	for i in 1 ..< #parts { if whole_between(parts[i - 1], parts[i]) { return yes } }
+	no
+}
+whole_between(before: text, after: text): bool := (before == "" or not is_name_char(before.last())) and (after == "" or not is_name_char(after[0]))
+// the shader with each whole `from` written `to`
+renamed(shader: text, from: text, to: text): text := {
+	parts = shader.split(from)
+	written = parts[0]
+	for i in 1 ..< #parts { written += (if whole_between(parts[i - 1], parts[i]) then to else from) + parts[i] }
+	written
+}
+// the name of the shader's own vertex stage, `@vertex fn <name>(…`; "" where it has none
+own_vertex_stage(shader: text): text := {
+	if not shader.contains(OWN_VERTEX_STAGE) { return "" }
+	after = shader.split(OWN_VERTEX_STAGE)#2
+	if not after.contains("fn") { return "" }
+	leading(after.split("fn")#2.trim(), NAME_BYTES)
+}
+
+// --- the pipeline
+shader_module(code: text): int := {
+	source = struct_of(WGSL_SOURCE)
+	set_field_i32(source, 8, STYPE_WGSL)
+	string_set(source, 16, code)
+	descriptor = struct_of(SHADER_MODULE)
+	set_field_pointer(descriptor, 0, source)
+	wgpuDeviceCreateShaderModule(device, descriptor)
+}
+// the code's pipeline drawing into the format, compiled anew; 0 and gpu_failure where it does not compile
+pipeline_compiled(code: text, format: int): int := {
+	wgpuDevicePushErrorScope(device, ERROR_FILTER_VALIDATION)
+	compiled = shader_module(code)
+	vertex = own_vertex_stage(code)
+	quads = vertex != ""
+	target = struct_of(COLOR_TARGET)
+	set_field_i32(target, 8, format)
+	set_field_i64(target, 24, WRITE_ALL)
+	// a quad's color over the ones drawn before it: source alpha, as `vec4f(color, alpha)` says
+	if quads {
+		over = struct_of(BLEND_STATE)
+		for at in [0, 12] { set_field_i32(over, at, BLEND_ADD) }
+		set_field_i32(over, 4, BLEND_SRC_ALPHA)
+		set_field_i32(over, 8, BLEND_ONE_MINUS_SRC_ALPHA)
+		set_field_i32(over, 16, BLEND_ONE)
+		set_field_i32(over, 20, BLEND_ONE_MINUS_SRC_ALPHA)
+		set_field_pointer(target, 16, over)
+	}
+	fragment = struct_of(FRAGMENT_STATE)
+	set_field_pointer(fragment, 8, compiled)
+	string_set(fragment, 16, FRAGMENT_ENTRY_POINT)
+	set_field_i64(fragment, 48, 1)
+	set_field_pointer(fragment, 56, target)
+	descriptor = struct_of(RENDER_PIPELINE)
+	set_field_pointer(descriptor, 40, compiled)
+	string_set(descriptor, 48, if quads then vertex else VERTEX_ENTRY_POINT)
+	set_field_i32(descriptor, 104, if quads then TOPOLOGY_STRIP else TOPOLOGY_LIST)
+	set_field_i32(descriptor, 112, FRONT_CCW)
+	set_field_i32(descriptor, 116, CULL_NONE)
+	set_field_i32(descriptor, 144, 1)
+	set_field_i32(descriptor, 148, -1)
+	set_field_pointer(descriptor, 160, fragment)
+	pipeline = wgpuDeviceCreateRenderPipeline(device, descriptor)
+	wgpuShaderModuleRelease(compiled)
+	if scope_clean() { return pipeline }
+	if pipeline != 0 { wgpuRenderPipelineRelease(pipeline) }
+	0
+}
+pipeline_of(code: text, format: int): int := {
+	if compiled_pipeline != 0 and compiled_format == format and compiled_code == code { return compiled_pipeline }
+	pipeline = pipeline_compiled(code, format)
+	if pipeline == 0 { return 0 }
+	if compiled_pipeline != 0 { wgpuRenderPipelineRelease(compiled_pipeline) }
+	compiled_code = code
+	compiled_format = format
+	compiled_pipeline = pipeline
+	pipeline
+}
+buffer_of(size: int, usage: int): int := {
+	descriptor = struct_of(BUFFER_DESCRIPTOR)
+	set_field_i64(descriptor, 24, usage)
+	set_field_i64(descriptor, 32, size)
+	wgpuDeviceCreateBuffer(device, descriptor)
+}
+// a buffer holding the cells (a GPU list's place, else numbers as f32 bits or int32s), bound so
+cells_buffer(cells: list, usage: int): int := {
+	size = #cells * 4
+	buffer = buffer_of(size, usage + BUFFER_COPY_DST)
+	staged = calloc(1, size)
+	memcpy(staged, cells)
+	wgpuQueueWriteBuffer(queue, buffer, 0, staged, size)
+	free(staged)
+	buffer
+}
+f32_cells(numbers: list): list := [f32_bits(x) for x in numbers]
+// bind group entries, each [binding, buffer or 0, its size, texture view or 0]
+bindings_of(layout: int, entries: list): int := {
+	array = calloc(#entries, BIND_ENTRY)
+	for i in 0 ..< #entries {
+		entry = entries[i]
+		at = i * BIND_ENTRY
+		set_field_i32(array, at + 8, entry[0])
+		set_field_pointer(array, at + 16, entry[1])
+		set_field_i64(array, at + 32, entry[2])
+		set_field_pointer(array, at + 48, entry[3])
+	}
+	descriptor = struct_of(BIND_GROUP)
+	set_field_pointer(descriptor, 24, layout)
+	set_field_i64(descriptor, 32, #entries)
+	set_field_pointer(descriptor, 40, array)
+	bindings = wgpuDeviceCreateBindGroup(device, descriptor)
+	wgpuBindGroupLayoutRelease(layout)
+	free(array)
+	free(descriptor)
+	bindings
+}
+texture_of(width: int, height: int, usage: int): int := {
+	descriptor = struct_of(TEXTURE_DESCRIPTOR)
+	set_field_i64(descriptor, 24, usage)
+	set_field_i32(descriptor, 32, TEXTURE_2D)
+	set_field_i32(descriptor, 36, width)
+	set_field_i32(descriptor, 40, height)
+	set_field_i32(descriptor, 44, 1)
+	set_field_i32(descriptor, 48, FORMAT_RGBA8)
+	set_field_i32(descriptor, 52, 1)
+	set_field_i32(descriptor, 56, 1)
+	texture = wgpuDeviceCreateTexture(device, descriptor)
+	free(descriptor)
+	texture
+}
+// the frame this shader drew last at this size, else a black one
+previous_frame(code: text, width: int, height: int): int := {
+	if previous_image != 0 and previous_width == width and previous_height == height and previous_code == code { return previous_image }
+	previous_code = code
+	previous_width = width
+	previous_height = height
+	previous_kept(texture_of(width, height, TEXTURE_BINDING))
+	previous_image
+}
+// the image now the previous frame, the one before let go
+previous_kept(image: int) := {
+	if previous_image != 0 { wgpuTextureRelease(previous_image) }
+	previous_image = image
+}
+
+// --- a drawing: the shader's pipeline for a target format, its values bound; corners and instances: a full image's
+// triangle once, or the quads of a shader with its own vertex stage
+class Drawing { pipeline: int, bindings: int, buffers: list, previous: int, reads_previous: bool, corners: int, instances: int }
+drawing_made(shader: text, values: map, width: int, height: int): any := {
+	gpu_failure = ""
+	if not device_ready() { return ø }
+	layout = values_laid_out(values)
+	if layout is bool { return ø }
+	quads = own_vertex_stage(shader) != ""
+	drawing = Drawing(0, 0, [], 0, names(shader, PREVIOUS_HOLE), if quads then QUAD_CORNERS else TRIANGLE_CORNERS, if quads then layout.instances else 1)
+	body = if drawing.reads_previous then renamed(shader, PREVIOUS_HOLE, PREVIOUS_FUNCTION) else shader
+	// each storage array the shader reads: `values.mesh` its own array warp_values_mesh
+	read_arrays = []
+	for array in layout.arrays {
+		hole = VALUES_NAME + "." + array[0]
+		if not names(body, hole) { continue }
+		body = renamed(body, hole, STORAGE_PREFIX + array[0])
+		read_arrays.add(array)
+	}
+	code = body + (if quads then "" else FULL_IMAGE_VERTICES)
+	if #layout.declarations > 0 { code += "\nstruct WarpValues { " + layout.declarations.join(", ") + " }\n@group(0) @binding(" + VALUES_BINDING + ") var<uniform> " + VALUES_NAME + ": WarpValues;" }
+	for i in 0 ..< #read_arrays { code += "\n@group(0) @binding(" + (STORAGE_BINDING + i) + ") var<storage, read> " + STORAGE_PREFIX + read_arrays[i][0] + ": array<vec4f>;" }
+	if drawing.reads_previous { code += PREVIOUS_FRAME }
+	drawing.pipeline = pipeline_of(code, FORMAT_RGBA8)
+	if drawing.pipeline == 0 { return ø }
+	entries = []
+	if #layout.declarations > 0 {
+		uniform = cells_buffer(f32_cells(layout.floats), BUFFER_UNIFORM)
+		drawing.buffers.add(uniform)
+		entries.add([VALUES_BINDING, uniform, #layout.floats * 4, 0])
+	}
+	if drawing.reads_previous {
+		drawing.previous = wgpuTextureCreateView(previous_frame(code, width, height), 0)
+		entries.add([PREVIOUS_FRAME_BINDING, 0, 0, drawing.previous])
+	}
+	for i in 0 ..< #read_arrays {
+		storage = cells_buffer(f32_cells(read_arrays[i][1]), BUFFER_STORAGE)
+		drawing.buffers.add(storage)
+		entries.add([STORAGE_BINDING + i, storage, #read_arrays[i][1] * 4, 0])
+	}
+	if #entries > 0 { drawing.bindings = bindings_of(wgpuRenderPipelineGetBindGroupLayout(drawing.pipeline, 0), entries) }
+	drawing
+}
+drawing_released(drawing: Drawing) := {
+	if drawing.bindings != 0 { wgpuBindGroupRelease(drawing.bindings) }
+	for buffer in drawing.buffers { wgpuBufferRelease(buffer) }
+	if drawing.previous != 0 { wgpuTextureViewRelease(drawing.previous) }
+}
+// the drawing drawn into the view by the encoder, onto the whole view or the viewport [x, y, width, height] given
+drawn_into(encoder: int, view: int, drawing: Drawing, viewport: list) := {
+	attachment = struct_of(COLOR_ATTACHMENT)
+	set_field_pointer(attachment, 8, view)
+	set_field_i32(attachment, 16, DEPTH_SLICE_UNDEFINED)
+	set_field_i32(attachment, 32, LOAD_CLEAR)
+	set_field_i32(attachment, 36, STORE_STORE)
+	descriptor = struct_of(RENDER_PASS)
+	set_field_i64(descriptor, 24, 1)
+	set_field_pointer(descriptor, 32, attachment)
+	pass = wgpuCommandEncoderBeginRenderPass(encoder, descriptor)
+	wgpuRenderPassEncoderSetPipeline(pass, drawing.pipeline)
+	if #viewport == 4 { wgpuRenderPassEncoderSetViewport(pass, viewport[0], viewport[1], viewport[2], viewport[3], 0.0, 1.0) }
+	if drawing.bindings != 0 { wgpuRenderPassEncoderSetBindGroup(pass, 0, drawing.bindings, 0, 0) }
+	if drawing.instances > 0 { wgpuRenderPassEncoderDraw(pass, drawing.corners, drawing.instances, 0, 0) }
+	wgpuRenderPassEncoderEnd(pass)
+	wgpuRenderPassEncoderRelease(pass)
+	free(attachment)
+	free(descriptor)
+}
+submitted(encoder: int) := {
+	commands = wgpuCommandEncoderFinish(encoder, 0)
+	submitted_commands = struct_of(8)
+	set_field_pointer(submitted_commands, 0, commands)
+	wgpuQueueSubmit(queue, 1, submitted_commands)
+	free(submitted_commands)
+	wgpuCommandBufferRelease(commands)
+	wgpuCommandEncoderRelease(encoder)
+}
+// the drawing drawn into an image of its own (RGBA8) by the encoder; one a later frame reads as previous can be bound
+image_drawn(encoder: int, drawing: Drawing, width: int, height: int): int := {
+	image = texture_of(width, height, TEXTURE_RENDER_ATTACHMENT + TEXTURE_COPY_SRC + TEXTURE_BINDING)
+	view = wgpuTextureCreateView(image, 0)
+	drawn_into(encoder, view, drawing, [])
+	wgpuTextureViewRelease(view)
+	image
+}
+drawing_of(shader: text, values: any, width: int, height: int) := drawing_made(shader, values_filled(shader, values, width, height), width, height)
+// the image kept as the drawing's previous frame, else let go
+image_done(drawing: Drawing, image: int) := {
+	if not drawing.reads_previous {
+		wgpuTextureRelease(image)
+		return
+	}
+	previous_kept(image)
+}
+extent_of(width: int, height: int): int := {
+	extent = struct_of(EXTENT)
+	set_field_i32(extent, 0, width)
+	set_field_i32(extent, 4, height)
+	set_field_i32(extent, 8, 1)
+	extent
+}
+// the buffer's first `size` bytes mapped for reading: their address, 0 and gpu_failure where it fails
+buffer_mapped(buffer: int, size: int): int := {
+	wgpuBufferMapAsync(buffer, BUFFER_MAP_READ, 0, size, asked("mapped"))
+	answer_awaited()
+	if answer_status != SUCCESS {
+		failed("reading back: " + answer_message)
+		return 0
+	}
+	wgpuBufferGetConstMappedRange(buffer, 0, size)
+}
+
+// host_shader_painted(shader, width, height, values, pixels): the shader painted on the GPU, its pixels RGBA, a byte
+// each, row by row into `pixels` (the driver's, width × height × 4 bytes); 0, else -1 and why on standard error
+host_shader_painted(given_shader, width: int, height: int, values: any, pixels: int): int := {
+	shader = str(given_shader)
+	drawing = drawing_of(shader, values, width, height)
+	if drawing == ø { return said_failed("paint of a shader") }
+	encoder = wgpuDeviceCreateCommandEncoder(device, 0)
+	image = image_drawn(encoder, drawing, width, height)
+	row_bytes = (width * PIXEL_BYTES + ROW_ALIGNMENT - 1) /! ROW_ALIGNMENT * ROW_ALIGNMENT
+	readback = buffer_of(row_bytes * height, BUFFER_MAP_READ + BUFFER_COPY_DST)
+	copied_from = struct_of(COPY_TEXTURE)
+	set_field_pointer(copied_from, 0, image)
+	set_field_i32(copied_from, 24, ASPECT_ALL)
+	copied_into = struct_of(COPY_BUFFER)
+	set_field_i32(copied_into, 8, row_bytes)
+	set_field_i32(copied_into, 12, height)
+	set_field_pointer(copied_into, 16, readback)
+	wgpuCommandEncoderCopyTextureToBuffer(encoder, copied_from, copied_into, extent_of(width, height))
+	submitted(encoder)
+	mapped = buffer_mapped(readback, row_bytes * height)
+	if mapped != 0 {
+		for row in 0 ..< height { memmove(pointer_moved(pixels, row * width * PIXEL_BYTES), pointer_moved(mapped, row * row_bytes), width * PIXEL_BYTES) }
+		wgpuBufferUnmap(readback)
+	}
+	wgpuBufferRelease(readback)
+	drawing_released(drawing)
+	image_done(drawing, image)
+	if mapped == 0 then said_failed("paint of a shader") else 0
+}
+said_failed(what: text): int := {
+	eprint(what + ": " + gpu_failure)
+	-1
+}
+
+// --- the window's surface (window.warp's Metal layer): what is shown there stays on the GPU. As big as the window's
+// pixels; the painting, drawn at its own size, scaled into it whole, its aspect kept, the rest black. A format
+// without sRGB, so the window shows the colors a PNG of the same painting holds
+surface_ready(layer: int): bool := {
+	if not device_ready() { return no }
+	sides = window_pixels()
+	if surface != 0 and surface_layer != layer {
+		wgpuSurfaceRelease(surface)
+		surface = 0
+	}
+	if surface == 0 {
+		source = struct_of(METAL_SOURCE)
+		set_field_i32(source, 8, STYPE_METAL_LAYER)
+		set_field_pointer(source, 16, layer)
+		descriptor = struct_of(SURFACE_DESCRIPTOR)
+		set_field_pointer(descriptor, 0, source)
+		surface = wgpuInstanceCreateSurface(instance, descriptor)
+		if surface == 0 { return failed("the window offers no surface to show on") }
+		surface_layer = layer
+		surface_width = 0
+		surface_height = 0
+	}
+	if surface_width != sides[0] or surface_height != sides[1] {
+		surface_width = sides[0]
+		surface_height = sides[1]
+		configuration = struct_of(SURFACE_CONFIGURATION)
+		set_field_pointer(configuration, 8, device)
+		set_field_i32(configuration, 16, FORMAT_BGRA8)
+		set_field_i64(configuration, 24, TEXTURE_RENDER_ATTACHMENT)
+		set_field_i32(configuration, 32, surface_width)
+		set_field_i32(configuration, 36, surface_height)
+		set_field_i32(configuration, 60, PRESENT_FIFO)
+		wgpuSurfaceConfigure(surface, configuration)
+		free(configuration)
+	}
+	yes
+}
+// the drawing shown in the window's surface, waiting for the display's next refresh; a window out of sight shows
+// nothing and is no failure
+presented(encoder: int, drawing: Drawing, viewport: list): bool := {
+	current = struct_of(SURFACE_TEXTURE)
+	wgpuSurfaceGetCurrentTexture(surface, current)
+	status = field_i32(current, 16)
+	if status == SURFACE_OCCLUDED {
+		submitted(encoder)
+		return yes
+	}
+	if status != SURFACE_OPTIMAL and status != SURFACE_SUBOPTIMAL {
+		surface_width = 0
+		submitted(encoder)
+		return failed("the window's surface gave no image to draw (status " + status + ")")
+	}
+	texture = field_pointer(current, 8)
+	view = wgpuTextureCreateView(texture, 0)
+	drawn_into(encoder, view, drawing, viewport)
+	submitted(encoder)
+	wgpuSurfacePresent(surface)
+	wgpuTextureViewRelease(view)
+	wgpuTextureRelease(texture)
+	free(current)
+	yes
+}
+// the painting's place in the surface: as large as fits whole, centered
+letterboxed(width: int, height: int): list := {
+	scale = min(surface_width / width, surface_height / height) as float
+	wide = width * scale
+	high = height * scale
+	[(surface_width - wide) / 2, (surface_height - high) / 2, wide, high].map(x => float(x))
+}
+// the picture (an RGBA8 texture) shown in the window's surface, scaled to it, after what the encoder holds, and kept
+picture_presented(encoder: int, picture: int, layer: int, width: int, height: int): bool := {
+	shown_kept(picture, layer, width, height)
+	if picture_pipeline == 0 { picture_pipeline = pipeline_compiled(PICTURE_SHADER, FORMAT_BGRA8) }
+	if picture_pipeline == 0 {
+		submitted(encoder)
+		return no
+	}
+	view = wgpuTextureCreateView(picture, 0)
+	drawing = Drawing(picture_pipeline, bindings_of(wgpuRenderPipelineGetBindGroupLayout(picture_pipeline, 0), [[0, 0, 0, view]]), [], 0, no, TRIANGLE_CORNERS, 1)
+	shown = presented(encoder, drawing, letterboxed(width, height))
+	wgpuBindGroupRelease(drawing.bindings)
+	wgpuTextureViewRelease(view)
+	shown
+}
+shown_kept(picture: int, layer: int, width: int, height: int) := {
+	if picture == shown_picture { return }
+	wgpuTextureAddRef(picture)
+	if shown_picture != 0 { wgpuTextureRelease(shown_picture) }
+	shown_picture = picture
+	shown_layer = layer
+	shown_width = width
+	shown_height = height
+}
+// the window's layer for a painting of width × height, the window opened by the first; 0 where none shows it
+painting_layer(width: int, height: int): int := if device_ready() then host_window_layer(width, height) else 0
+
+// host_shader_shown(shader, width, height, values): the shader shown in the window: 1, 0 with no window open (the
+// driver paints its PNG), -1 failed, why on standard error. It draws into an image of the painting's size first (kept
+// for the next frame by a shader reading its previous one), then shown scaled
+host_shader_shown(given_shader, width: int, height: int, values: any): int := {
+	shader = str(given_shader)
+	layer = painting_layer(width, height)
+	if layer == 0 { return 0 }
+	drawing = drawing_of(shader, values, width, height)
+	if drawing == ø or not surface_ready(layer) { return said_failed("paint into the window") }
+	encoder = wgpuDeviceCreateCommandEncoder(device, 0)
+	image = image_drawn(encoder, drawing, width, height)
+	shown = picture_presented(encoder, image, layer, width, height)
+	image_done(drawing, image)
+	drawing_released(drawing)
+	if shown then 1 else said_failed("paint into the window")
+}
+// host_pixels_shown(pixels, width, height): pixels (RGBA, a byte each, row by row, the driver's) shown in the
+// window: 1, 0 with no window open, -1 failed
+host_pixels_shown(pixels: int, width: int, height: int): int := {
+	layer = painting_layer(width, height)
+	if layer == 0 { return 0 }
+	if not surface_ready(layer) { return said_failed("paint into the window") }
+	picture = texture_of(width, height, TEXTURE_BINDING + TEXTURE_COPY_DST)
+	copied_into = struct_of(COPY_TEXTURE)
+	set_field_pointer(copied_into, 0, picture)
+	set_field_i32(copied_into, 24, ASPECT_ALL)
+	rows = struct_of(COPY_LAYOUT)
+	set_field_i32(rows, 8, width * PIXEL_BYTES)
+	set_field_i32(rows, 12, height)
+	wgpuQueueWriteTexture(queue, copied_into, pixels, width * height * PIXEL_BYTES, rows, extent_of(width, height))
+	shown = picture_presented(wgpuDeviceCreateCommandEncoder(device, 0), picture, layer, width, height)
+	wgpuTextureRelease(picture)
+	if shown then 1 else said_failed("paint into the window")
+}
+// the last painting shown again, at the window's size now, as the window comes into sight or changes size
+shown_again() := {
+	if shown_picture == 0 or not surface_ready(shown_layer) { return }
+	picture_presented(wgpuDeviceCreateCommandEncoder(device, 0), shown_picture, shown_layer, shown_width, shown_height)
+}
+
+// --- gpu_compute(shader, arrays, workgroups) (card host-word): a WGSL compute shader, its entry point `main`, run over
+// storage arrays as host-gpu.js gpuComputedArrays runs it. `arrays` a map of named lists, each bound where the shader
+// declares the storage array of that name, f32 unless array<i32> or array<u32>; the arrays it left come back as a map,
+// in the order given. `arrays` a list: the numbers at @binding(0), they come back as a list. A GPU list's cells
+// (extensions/gpu_lists) are the program's memory, read and written where they are
+class StorageArray { name: text, binding: int, element: text, given: any, place: int, cell: text }
+// the storage arrays the shader declares: `@binding(1) var<storage, read_write> counts: array<i32>`
+storage_arrays(shader: text): list := {
+	declared = []
+	parts = shader.split("var<storage")
+	for i in 1 ..< #parts {
+		before = parts[i - 1]
+		if not before.contains("@binding(") { continue }
+		binding = int(leading(before.split("@binding(").last(), "0123456789"))
+		if not parts[i].contains(">") { continue }
+		declaration = parts[i].split(">")[1 ..].join(">").trim()
+		name = leading(declaration, NAME_BYTES)
+		element = "f32"
+		for cell in ["i32", "u32"] { if declaration.contains("array<" + cell) { element = cell } }
+		declared.add(StorageArray(name, binding, element, ø, -1, ""))
+	}
+	declared
+}
+// the given arrays put into the declared ones, in the order given; a text saying why where they do not fit
+arrays_given(given: any, declared: list): any := {
+	if not (given is map) {
+		if not (given is list) { return "gpu_compute takes a list of numbers or a map of named lists" }
+		first = declared.filter(array => array.binding == 0)
+		if #first == 0 { return "gpu_compute of a list: the shader declares no storage array at @binding(0)" }
+		array_given(first[0], given)
+		return [first[0]]
+	}
+	if #given.keys > MOST_COMPUTE_ARRAYS { return "gpu_compute binds at most 8 arrays" }
+	order = []
+	for name in given.keys {
+		named = declared.filter(array => array.name == name)
+		if #named == 0 { return "the shader declares no storage array " + name }
+		if #given[name] == 0 { return name + " is empty: a storage array holds at least one number" }
+		array_given(named[0], given[name])
+		order.add(named[0])
+	}
+	for array in declared { if array.given == ø { return "the shader's array " + array.name + " has no numbers" } }
+	order
+}
+array_given(array: StorageArray, numbers: any) := {
+	array.given = numbers
+	array.place = gpu_list_place(numbers)
+	array.cell = if array.place < 0 then "" else GPU_CELLS[gpu_list_cell(numbers)]
+}
+// a GPU list's cells: their address in the program's memory, as C sees it
+cells_address(array: StorageArray): int := pointer_handle(system_value("program memory") + shift_right(array.place, 32))
+// a C pointer `by` bytes on
+pointer_moved(pointer: int, by: int): int := pointer_handle(handle_pointer(pointer) + by)
+// an array's cells as the shader reads them: a GPU list of its type where it is, else the numbers as its type's bits
+array_buffer(array: StorageArray): int := {
+	usage = BUFFER_STORAGE + BUFFER_COPY_SRC
+	if array.cell == array.element {
+		size = #array.given * 4
+		buffer = buffer_of(size, usage + BUFFER_COPY_DST)
+		wgpuQueueWriteBuffer(queue, buffer, 0, cells_address(array), size)
+		return buffer
+	}
+	cells_buffer([cell_bits(array.element, x) for x in array.given], usage)
+}
+cell_bits(element: text, x: any): int := if element == "f32" then f32_bits(float(x)) else low_bits(int(x), 32)
+cell_number(element: text, bits: int): any := if element == "f32" then f32_float(bits) else if element == "i32" and bits >= 1 << 31 then bits - (1 << 32) else bits
+// the shader run over the arrays: what each left, read back as numbers (a GPU list's cells written back in place)
+arrays_computed(shader: text, order: list, workgroups: int): any := {
+	wgpuDevicePushErrorScope(device, ERROR_FILTER_VALIDATION)
+	compiled = shader_module(shader)
+	descriptor = struct_of(COMPUTE_PIPELINE)
+	set_field_pointer(descriptor, 40, compiled)
+	string_set(descriptor, 48, COMPUTE_ENTRY_POINT)
+	pipeline = wgpuDeviceCreateComputePipeline(device, descriptor)
+	wgpuShaderModuleRelease(compiled)
+	if not scope_clean() {
+		if pipeline != 0 { wgpuComputePipelineRelease(pipeline) }
+		return ø
+	}
+	storages = order.map(array => array_buffer(array))
+	sizes = order.map(array => #array.given * 4)
+	readbacks = sizes.map(size => buffer_of(size, BUFFER_MAP_READ + BUFFER_COPY_DST))
+	bindings = bindings_of(wgpuComputePipelineGetBindGroupLayout(pipeline, 0), [[order[a].binding, storages[a], sizes[a], 0] for a in 0 ..< #order])
+	encoder = wgpuDeviceCreateCommandEncoder(device, 0)
+	pass = wgpuCommandEncoderBeginComputePass(encoder, 0)
+	wgpuComputePassEncoderSetPipeline(pass, pipeline)
+	wgpuComputePassEncoderSetBindGroup(pass, 0, bindings, 0, 0)
+	wgpuComputePassEncoderDispatchWorkgroups(pass, workgroups, 1, 1)
+	wgpuComputePassEncoderEnd(pass)
+	wgpuComputePassEncoderRelease(pass)
+	for a in 0 ..< #order { wgpuCommandEncoderCopyBufferToBuffer(encoder, storages[a], 0, readbacks[a], 0, sizes[a]) }
+	submitted(encoder)
+	left = []
+	for a in 0 ..< #order {
+		mapped = buffer_mapped(readbacks[a], sizes[a])
+		if mapped == 0 { return ø }
+		left.add(array_left(order[a], mapped))
+		wgpuBufferUnmap(readbacks[a])
+	}
+	for buffer in storages + readbacks { wgpuBufferRelease(buffer) }
+	wgpuBindGroupRelease(bindings)
+	wgpuComputePipelineRelease(pipeline)
+	left
+}
+// what the shader left in an array: a GPU list's cells written where they are (the list itself), else a list of numbers
+array_left(array: StorageArray, mapped: int): any := {
+	if array.cell == array.element {
+		memmove(cells_address(array), mapped, #array.given * 4)
+		return array.given
+	}
+	cells = field_bytes(mapped, 0, #array.given * 4)
+	numbers = [cell_number(array.element, bytes_int([byte_at(cells, 4 * i + k) for k in 0 ..< 4], "little")) for i in 0 ..< #array.given]
+	if array.place < 0 { return numbers }
+	// (a GPU list of another cell type takes the numbers into its own cells)
+	memcpy(cells_address(array), [cell_bits(array.cell, x) for x in numbers])
+	array.given
+}
+host_gpu_compute(given_shader, arrays: any, workgroups: int): any? := {
+	shader = str(given_shader)
+	gpu_failure = ""
+	order = arrays_given(arrays, storage_arrays(shader))
+	if order is text { return error(order) }
+	if not device_ready() { return error(gpu_failure) }
+	left = arrays_computed(shader, order, workgroups)
+	if left == ø { return error(gpu_failure) }
+	if not (arrays is map) { return left[0] }
+	answer = {}
+	for a in 0 ..< #order { answer[order[a].name] = left[a] }
+	answer
+}

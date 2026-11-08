@@ -45,11 +45,109 @@ use_of(module: Node): Node := plain_node(parsed("use " + (if module is text then
 # `read(module_directory + "/data/x")`: module_directory is the folder of the file it is written in
 with_module_directory(n: Node, folder: text): Node := bottom_up(n, x => if x == symbol(module_directory_word) then folder else x)
 used_in(program: Node, folder: text): any := {
-	statements = flat_statements(program)
+	written = flat_statements(program)
+	statements = with_scope_declarations(written, folder)
 	brought = declarations_used(statements, folder, [], {})
-	if #brought#1 == 0 { return program }
+	if #brought#1 == 0 and not written.any(s => scope_used(s) != ø) { return program }
 	kept = statements.filter(s => file_used(s, folder) == ø)
 	separated(bracketed(brought#1 + kept, ""), ";")
+}
+
+# `use folder`, `use package`, `use project` (decision D15, wiki/use.md): a name the program binds nowhere itself comes
+# from the files of that scope, together with the definitions it needs and its file's uses; a file is parsed only when
+# its text holds a needed name. A needed name two files declare differently is the error naming both
+SCOPE_WORDS = ["folder", "package", "project"]
+# folders below a scope that stay outside it, besides hidden ones and nested repositories
+OUTSIDE_SCOPES = ["packages", "target"]
+# the scope a `use folder|package|project` names, ø for another statement
+scope_used(statement: Node): any := {
+	target = use_target(statement)
+	if target is symbol and name_of(target) in SCOPE_WORDS then name_of(target) else ø
+}
+with_scope_declarations(statements: list, folder: text): list := {
+	scopes = statements.map(scope_used).filter(scope => scope != ø)
+	if #scopes == 0 { return statements }
+	files = []
+	for scope in scopes { files += files_below(scope_root(scope, folder), scope != "folder") }
+	own = statements.filter(s => scope_used(s) == ø)
+	bound = {}
+	for name in own.map(declared_name).filter(name => name != ø) { bound[name] = yes }
+	pending = own.flat_map(names_in)
+	brought = []
+	parses = {}
+	taken = {}
+	while #pending > 0 {
+		name = pending#1
+		pending = pending[1 ..< #pending]
+		if not bound.has(name) {
+			bound[name] = yes
+			more = scope_brought(name, files, parses, taken)
+			brought += more
+			pending += more.flat_map(names_in)
+		}
+	}
+	brought + own
+}
+# the declarations of `name` in one file of the scope, after that file's uses when it is the first file taken (noted in
+# `taken`); a needed name two files declare differently is refused
+scope_brought(name: text, files: list, parses: map, taken: map): list := {
+	found = scope_declarations(name, files, parses)
+	if #found == 0 { return [] }
+	file = found#1#1
+	clash = found.filter(pair => pair#1 != file and "${pair#2}" != "${found#1#2}")
+	if #clash > 0 { raise name + " is declared in both " + working_relative(file) + " and " + working_relative(clash#1#1) + ": rename one, or keep one of them" }
+	declarations = found.filter(pair => pair#1 == file).map(pair => pair#2)
+	if taken.has(file) { return declarations }
+	taken[file] = yes
+	parses[file].filter(s => use_target(s) != ø).map(s => if file_used(s, folder_of(file)) == ø then s else use_of(file_used(s, folder_of(file)))) + declarations
+}
+# the names a node reads and binds nowhere itself: a parameter, a local or a loop variable is its own
+names_in(n: Node): list := {
+	own = names_bound_in(n)
+	nodes_in(n).filter(x => x is symbol and not own.has(name_of(x))).map(name_of)
+}
+# [file, declaration] of each declaration of `name` in the files, each file parsed once, kept in `parses`; only a file
+# with a line starting with the name, or with a keyword and the name, is parsed (a parameter `x` is in nearly every file)
+scope_declarations(name: text, files: list, parses: map): list := {
+	found = []
+	heads = (["", "class ", "enum ", "type "] + function_keywords.map(word => word + " ") + declaration_keywords.map(word => word + " ")).map(word => "\n" + word + name)
+	for file in files {
+		lines = "\n" + file_text(file)
+		if not heads.any(head => lines.contains(head)) { continue }
+		if not parses.has(file) { parses[file] = flat_statements(with_module_directory(file_parsed(file), folder_of(file))) }
+		for statement in parses[file] { if is_declaration(statement) and declared_name(statement) == name { found += [[file, statement]] } }
+	}
+	found
+}
+# the folder a scope covers: the program's own, the nearest above holding <its name>.warp, or the one holding .git
+scope_root(scope: text, folder: text): text := {
+	at = without_steps_up(absolute_folder(folder))
+	root = if scope == "folder" then at else if scope == "project" then project_root(at) else package_root(at)
+	if root == ø { raise "use " + scope + ": no folder above " + working_relative(at) + (if scope == "project" then " holds .git" else " holds a package file, <folder>/<folder>.warp") }
+	root
+}
+package_root(at: text): any := {
+	while at != "" and at != "/" {
+		parts = at.split("/")
+		if file_text(at + "/" + parts#(#parts) + module_extension) != ø { return at }
+		at = without_steps_up(at + "/..")
+	}
+	ø
+}
+# the module files in a folder, and with `deep` those of its folders, nested repositories left out
+files_below(root: text, deep: bool): list := {
+	listed = try list_files(root) else []
+	if not (type(listed) is list) { return [] }
+	files = []
+	for name in listed.sort() {
+		path = root + "/" + name
+		if name.ends_with(module_extension) {
+			files += [path]
+		} else if deep and not name.contains(".") and name not in OUTSIDE_SCOPES and file_text(path + "/.git") == ø and file_text(path + "/.git/HEAD") == ø {
+			files += files_below(path, yes)
+		}
+	}
+	files
 }
 
 # `alias deque => Deque` (wiki/alias.md): the program's alias lines taken out, each alias naming its word wherever the

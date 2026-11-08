@@ -1,7 +1,7 @@
 # GPU lists `[f32]`, `[i32]`, `[u32]` (decision gpu-bound-floats), the runtime of the gpu_lists extension
 # (gpu_lists.warp registers it): the numbers a program hands the GPU, packed as four-byte cells in linear memory from
 # their creation (extensions/rules/gpu_packing.warp gpu_packed chooses them), so the GPU's library reads and writes them where they are
-# (lib/native/warp_node.h warp_cells). A List $Node of the square bracket of list kind gpu_list_row() and its cell
+# (lib/host/native_host/gpu.warp cells_address). A List $Node of the square bracket of list kind gpu_list_row() and its cell
 # type (GpuCell) in KindUnit.ListCell, its data an Int of (address << 32) + count. It reads, shows and compares as a
 # list (the core's list words reach it through runtime/bridge.warp's list hooks); a list word that would change one
 # refuses (gpu_list_refused), as a boxed copy would lose the change
