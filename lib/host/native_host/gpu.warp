@@ -496,12 +496,16 @@ texture_of(width: int, height: int, usage: int): int := {
 // the frame this shader drew last at this size, else a black one
 previous_frame(code: text, width: int, height: int): int := {
 	if previous_image != 0 and previous_width == width and previous_height == height and previous_code == code { return previous_image }
-	if previous_image != 0 { wgpuTextureRelease(previous_image) }
 	previous_code = code
 	previous_width = width
 	previous_height = height
-	previous_image = texture_of(width, height, TEXTURE_BINDING)
+	previous_kept(texture_of(width, height, TEXTURE_BINDING))
 	previous_image
+}
+// the image now the previous frame, the one before let go
+previous_kept(image: int) := {
+	if previous_image != 0 { wgpuTextureRelease(previous_image) }
+	previous_image = image
 }
 
 // --- a drawing: the shader's pipeline for a target format, its values bound; corners and instances: a full image's
@@ -589,14 +593,14 @@ image_drawn(encoder: int, drawing: Drawing, width: int, height: int): int := {
 	wgpuTextureViewRelease(view)
 	image
 }
+drawing_of(shader: text, values: any, width: int, height: int) := drawing_made(shader, values_filled(shader, values, width, height), width, height)
 // the image kept as the drawing's previous frame, else let go
 image_done(drawing: Drawing, image: int) := {
 	if not drawing.reads_previous {
 		wgpuTextureRelease(image)
 		return
 	}
-	if previous_image != 0 { wgpuTextureRelease(previous_image) }
-	previous_image = image
+	previous_kept(image)
 }
 extent_of(width: int, height: int): int := {
 	extent = struct_of(EXTENT)
@@ -620,7 +624,7 @@ buffer_mapped(buffer: int, size: int): int := {
 // each, row by row into `pixels` (the driver's, width × height × 4 bytes); 0, else -1 and why on standard error
 host_shader_painted(given_shader, width: int, height: int, values: any, pixels: int): int := {
 	shader = str(given_shader)
-	drawing = drawing_made(shader, values_filled(shader, values, width, height), width, height)
+	drawing = drawing_of(shader, values, width, height)
 	if drawing == ø { return said_failed("paint of a shader") }
 	encoder = wgpuDeviceCreateCommandEncoder(device, 0)
 	image = image_drawn(encoder, drawing, width, height)
@@ -753,7 +757,7 @@ host_shader_shown(given_shader, width: int, height: int, values: any): int := {
 	shader = str(given_shader)
 	layer = painting_layer(width, height)
 	if layer == 0 { return 0 }
-	drawing = drawing_made(shader, values_filled(shader, values, width, height), width, height)
+	drawing = drawing_of(shader, values, width, height)
 	if drawing == ø or not surface_ready(layer) { return said_failed("paint into the window") }
 	encoder = wgpuDeviceCreateCommandEncoder(device, 0)
 	image = image_drawn(encoder, drawing, width, height)
