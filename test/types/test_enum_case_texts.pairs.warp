@@ -1,0 +1,3 @@
+# a case's text and the case of a text, through one lookup each however many cases an enum has (card stack-overflow-crash)
+'use keys; [Key.escape as text, Key.up as text, "ArrowDown" as Key == Key.down]'	["Escape", "ArrowUp", true]
+'enum Color { Red, Green }; [Color.Green as text, "" + Color.Red, "Green" as Color == Color.Green]'	["Green", "Red", true]

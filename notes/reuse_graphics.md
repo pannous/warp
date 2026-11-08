@@ -11,10 +11,10 @@ the way lib/ binds C (`from 'library'` lines, a small wrapper where the API is s
 
 | Need | Take | Binding | License | We stop building |
 |---|---|---|---|---|
-| Window, input, events, high-DPI, clipboard, frame pacing | **SDL3** | C ABI, called from warp: lib/native_host/window.warp over lib/native/SDL3.warp, the event union read by field offsets (notes/native_host.md) | zlib | the paint-window process, winit's event loop, our key-code table (SDL scancodes → lib/keys.warp `Key` cases) |
+| Window, input, events, high-DPI, clipboard, frame pacing | **SDL3** | C ABI, called from warp: lib/host/native_host/window.warp over lib/native/SDL3.warp, the event union read by field offsets (notes/native_host.md) | zlib | the paint-window process, winit's event loop, our key-code table (SDL scancodes → lib/keys.warp `Key` cases) |
 | Showing pixels (`paint`, the CPU canvas of `use draw`) | SDL3's `SDL_Renderer`: one streaming texture updated from the pixel list per frame | same wrapper | zlib | the window blit of paint_window.rs |
 | GPU: WGSL shaders, `gpu_compute`, `gpu_render`, shader `paint`, the GPU canvas of `use draw` | **wgpu-native** (webgpu.h, the C API of the wgpu the Rust harness used) | C ABI with callbacks and descriptor structs, so a wrapper (libwarp_gpu) offering a few calls: compute(wgsl, buffers) → buffers, render(wgsl, w, h, values) → pixels or onto the SDL3 window's surface (a CAMetalLayer / X11 / Wayland handle) | MIT or Apache-2.0 | nothing of ours is lost: WGSL stays the shader language on both sides, the same as WebGPU in the playground |
-| Text (`label`, `text_coverage`) | CoreText on macOS, **FreeType** on Linux, over FFI (decision window-in-warp) | lib/native_host/window.warp | public domain / MIT | ab_glyph; the coverage API stays as it is (width, height, coverage rows), the font lookup (Helvetica, DejaVu Sans, Arial, WARP_FONT) stays ours |
+| Text (`label`, `text_coverage`) | CoreText on macOS, **FreeType** on Linux, over FFI (decision window-in-warp) | lib/host/native_host/window.warp | public domain / MIT | ab_glyph; the coverage API stays as it is (width, height, coverage rows), the font lookup (Helvetica, DejaVu Sans, Arial, WARP_FONT) stays ours |
 | Reading images (`image(path)`: PNG, JPEG, GIF, BMP) | **stb_image** | same wrapper or its own tiny one | public domain / MIT | any decoder of ours |
 | Writing PNG | keep ours (driver.warp already writes it, headless, no dependency); stb_image_write if the driver should lose it | — | — | — |
 

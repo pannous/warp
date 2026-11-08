@@ -22,12 +22,26 @@ module_directory_word = "module_directory"
 # the program with the declarations of the files its uses name, read from `folder`, in front of it, and each
 # `module_source("prelude")` the text of that standard module
 with_uses(program: Node, folder: text): Node := {
-	directed = with_own_aliases(with_module_directory(program, folder))
+	directed = with_own_aliases(with_module_directory(with_imports_as_uses(program), folder))
 	timed("uses: used files")
 	brought = used_in(directed, folder)
 	timed("uses: module texts")
 	bottom_up(brought, module_text)
 }
+# `from shapes import box`, `from palette import bright, dim` (decision modules-triage): Python's import of named words
+# is warp's `use shapes`, every word of the module visible (extensions/from_imports.warp hints so); a used file's too
+with_imports_as_uses(program: Node): Node := {
+	statements = flat_statements(program)
+	if not statements.any(statement => from_import(statement) != ø) { return program }
+	separated(bracketed(statements.map(statement => if from_import(statement) == ø then statement else use_of(from_import(statement))), ""), ";")
+}
+# the module of `from shapes import box` (the comma statement `from palette import bright, dim` leads with it), else ø
+from_import(statement: Node): any := {
+	line = without_mark(statement)
+	from_line(if is_group(line) and separator_of(line) == "," and #line > 0 then without_mark(line#1) else line)
+}
+from_line(n: Node): any := if is_group(n) and #n >= 4 and n#1 == symbol("from") and n#3 == symbol("import") then n#2 else ø
+use_of(module: Node): Node := plain_node(parsed("use " + (if module is text then "\"" + module + "\"" else name_of(module))))
 # `read(module_directory + "/data/x")`: module_directory is the folder of the file it is written in
 with_module_directory(n: Node, folder: text): Node := bottom_up(n, x => if x == symbol(module_directory_word) then folder else x)
 used_in(program: Node, folder: text): any := {
@@ -109,8 +123,10 @@ declarations_used(statements: list, folder: text, seen: list, claimed: map): lis
 	declarations = []
 	for statement in statements {
 		file = file_used(statement, folder)
-		if file != ø and file not in seen {
-			seen += [file]
+		# (by its absolute path: svg's `from colors` takes the very packages/colors/colors.warp a program's
+		# `use "../../packages/colors/colors.warp"` names)
+		if file != ø and without_steps_up(absolute_folder(file)) not in seen {
+			seen += [without_steps_up(absolute_folder(file))]
 			used = flat_statements(with_module_directory(file_parsed(file), folder_of(file)))
 			note_file_origins(file, file_text(file))
 			inner = declarations_used(used, folder_of(file), seen, claimed)
@@ -129,7 +145,7 @@ declarations_used(statements: list, folder: text, seen: list, claimed: map): lis
 file_parsed(file: text): Node := {
 	source = file_text(file)
 	if source is ø { raise working_relative(file) + ": no such file to use" }
-	checked_parse(file, without_primitive_mark(source))
+	with_imports_as_uses(checked_parse(file, without_primitive_mark(source)))
 }
 # a used file's tree; one that does not parse is the error naming the file, never a file of no declarations (card
 # unclosed-core: an unclosed ( in a core file hid its later definitions)
@@ -197,8 +213,12 @@ call_head(n: Node): any := {
 # lib/<name>.warp, a standard module's file (the std modules are the files of lib/, the folder above this one), or
 # extensions/rules/<name>.warp, a module only the compiler uses: its rule words, run at compile time (decision
 # library-zero-bake-plan 1b). It stays a module: brought in as its own file, its words reached, as from lib/ (an
-# include of it as the compiler's own code typed the emitter's values anew: shown_text refused)
-std_module_path(name: text): text := own_module_files.get(name) ?? run_library() + (if compiler_modules().has(name) then COMPILER_MODULES else "/") + name + module_extension
+# include of it as the compiler's own code typed the emitter's values anew: shown_text refused), or lib/host/<name>.warp,
+# a module the native driver links itself (decision host-folder)
+std_module_path(name: text): text := own_module_files.get(name) ?? run_library() + module_folder(name) + name + module_extension
+module_folder(name: text): text := if modules_in(COMPILER_MODULES).has(name) then COMPILER_MODULES else if is_host_module(name) then HOST_MODULES else "/"
+# a module of lib/host/: no program uses it, so none of its words brings it in (prelude_words.warp module_word_definers)
+is_host_module(name: text): bool := modules_in(HOST_MODULES).has(name)
 # A program's own module, compiled as a standard module is and linked like one (decision samples-modules-wasm:
 # `import shapes` of a shapes.wasm with its warp.signature beside the program, which `warp build --module shapes.warp`
 # writes): name → its .warp file, and name → its .wasm, which a program imports by that path (driver instance_path)
@@ -209,14 +229,17 @@ own_module(name: text, file: text, wasm: text) := {
 	own_module_wasm[name] = wasm
 }
 COMPILER_MODULES = "/extensions/rules/"
-global compiler_module_names = ø
-compiler_modules(): map := {
-	if compiler_module_names == ø {
-		compiler_module_names = {}
-		listed = try list_files(run_library() + COMPILER_MODULES) else []
-		if type(listed) is list { for file in listed { if file.ends_with(module_extension) { compiler_module_names[file[0 ..< #file - #module_extension]] = yes } } }
+HOST_MODULES = "/host/"
+# the modules each such folder holds, by name, listed once
+global modules_by_folder = {}
+modules_in(folder: text): map := {
+	if not modules_by_folder.has(folder) {
+		names = {}
+		listed = try list_files(run_library() + folder) else []
+		if type(listed) is list { for file in listed { if file.ends_with(module_extension) { names[file[0 ..< #file - #module_extension]] = yes } } }
+		modules_by_folder[folder] = names
 	}
-	compiler_module_names
+	modules_by_folder[folder]
 }
 
 # what a `use` statement names, ø for another statement
@@ -233,7 +256,18 @@ file_used(statement: Node, folder: text): any := {
 	if module is text { return path_in(folder, rooted(module, folder)) }
 	if not (module is symbol) or name_of(module) in implicitly_used { return ø }
 	path = path_in(folder, name_of(module) + module_extension)
-	if file_text(path) == ø then ø else path
+	if file_text(path) != ø then path else package_file(name_of(module), folder)
+}
+# `use colors` naming no file beside and no standard module (decision packages-by-name): the main file of the package
+# of that name in the project's packages/ (scripts/link-packages.sh links the registry's there), else in the registry's
+# clone; its own files are then beside it (svg's shapes.warp)
+REGISTRY_CLONE = "/.cache/warp/packages/.registry/"
+package_file(name: text, folder: text): any := {
+	if is_module_name(name) or names_no_module(name) { return ø }
+	root = project_root(folder)
+	places = (if root == ø then [] else [root + "/packages/"]) + [(env("HOME") ?? "") + REGISTRY_CLONE]
+	found = places.map(place => place + name + "/" + name + module_extension).filter(file => file_text(file) != ø)
+	if #found > 0 then found#1 else ø
 }
 # a file as messages name it: below the working folder relative to it, else as found
 working_relative(file: text): text := {
@@ -307,10 +341,13 @@ declared_name(statement: Node): any := match statement {
 # is its own (card conversion-name-declare); else ø
 declared_conversion(statement: Node): any := {
 	if not is_key(statement, Op.Define) { return ø }
-	left = key_of(statement)
+	left = as_phrase_read(key_of(statement))
 	conversion = if is_key(left, Op.Colon) and key_of(left) is symbol then value_of(left) else left
 	if is_key(conversion, Op.As) and key_of(conversion) is symbol and value_of(conversion) is symbol then conversion else ø
 }
+# `Person as text` heading a definition, which the parser reads as a phrase of three words (`fib i as int := …` names a
+# result so), as the conversion `Person as text`; any other head as it is
+as_phrase_read(head: Node): Node := if is_group(head) and #head == 3 and head#2 == symbol("as") then Key(head#1, Op.As, head#3) else head
 # `sqrt(x: f64): f64 from "c"`: a foreign line, whose word is the program's own (a library's sqrt is not the one called)
 is_foreign_line(n: Node): bool := is_group(n) and bracket_of(n) == "" and #n == 3 and n#2 == symbol("from")
 # `type View = list or int`: the alias's name, View (its left side is the opaque view ["type", name, ø]), else ø
