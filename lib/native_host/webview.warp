@@ -51,8 +51,10 @@ BLOCK_DESCRIPTOR_AT = 24
 OBJC = "objc"
 objc_getClass(name: text): i64 from 'objc'
 sel_registerName(name: text): i64 from 'objc'
-objc_allocateClassPair(superclass: i64, name: text, extra: i64): i64 from 'objc'
-class_addMethod(made: i64, selector: i64, implementation: handle, types: text): bool from 'objc'
+objc_allocateClassPair(superclass: i64, name: handle, extra: i64): i64 from 'objc'
+class_addMethod(made: i64, selector: i64, implementation: handle, types: handle): bool from 'objc'
+// a C string that stays: the runtime keeps a class's name and its methods' types where they are given
+strdup(t: text): handle from 'c'
 objc_registerClassPair(made: i64): void from 'objc'
 objc_autoreleasePoolPush(): i64 from 'objc'
 objc_autoreleasePoolPop(pool: i64): void from 'objc'
@@ -103,10 +105,11 @@ is_kind(object: int, class_name: text): bool := object != 0 and sent(object, "is
 // a class of NSObject made at run time, its methods warp functions: [selector, Objective-C types, function], each
 // taking the receiver, the selector and the selector's arguments as numbers
 class_made(name: text, methods: list) := {
-	made = objc_allocateClassPair(class_named("NSObject"), name, 0)
+	made = objc_allocateClassPair(class_named("NSObject"), strdup(name), 0)
+	if made == 0 { raise "the Objective-C class " + name + " is there already" }
 	for method in methods {
 		count = #method#2 - 1
-		class_addMethod(made, sel_registerName(method#1), c_callback(method#3, ["i64" for i in 1 to count]), method#2)
+		class_addMethod(made, sel_registerName(method#1), c_callback(method#3, ["i64" for i in 1 to count]), strdup(method#2))
 	}
 	objc_registerClassPair(made)
 	made
@@ -134,6 +137,8 @@ application_made(policy: int) := {
 // a page's loading: the navigation delegate's two answers end it
 global page_loading_ended = no
 global page_loading = 0
+// (read through a word: a lambda reading the global would keep its value of when it was made, card prebuilt-module)
+loading_over(): bool := page_loading_ended
 loading_ended(receiver, selector, web_view, navigation) := { page_loading_ended = yes }
 loading_failed(receiver, selector, web_view, navigation, error) := { page_loading_ended = yes }
 // the page's events not yet given to the program, each its {event, detail} as JSON
@@ -148,17 +153,17 @@ view_made(width: float, height: float) := {
 	contents = told(configuration, "userContentController")
 	bridge = sent(told(class_named("WKUserScript"), "alloc"), "initWithSource:injectionTime:forMainFrameOnly:", [ns_string(PAGE_BRIDGE), DOCUMENT_START, 1])
 	sent(contents, "addUserScript:", [bridge])
-	messages = instance_of(class_made("WarpEvents", [["userContentController:didReceiveScriptMessage:", "v@:@@", page_message]]))
+	messages = instance_of(class_made("WarpHostEvents", [["userContentController:didReceiveScriptMessage:", "v@:@@", page_message]]))
 	sent(contents, "addScriptMessageHandler:name:", [messages, ns_string(EVENT_MESSAGE)])
 	sent_with_floats(told(class_named("WKWebView"), "alloc"), "initWithFrame:configuration:", [configuration], [0.0, 0.0, width, height])
 }
 // the HTML shown in the view, waited for: no when it did not load in time
 page_loaded(shown_in: int, html: text): bool := {
-	if page_loading == 0 { page_loading = instance_of(class_made("WarpLoading", [["webView:didFinishNavigation:", "v@:@@", loading_ended], ["webView:didFailNavigation:withError:", "v@:@@@", loading_failed]])) }
+	if page_loading == 0 { page_loading = instance_of(class_made("WarpHostLoading", [["webView:didFinishNavigation:", "v@:@@", loading_ended], ["webView:didFailNavigation:withError:", "v@:@@@", loading_failed]])) }
 	page_loading_ended = no
 	sent(shown_in, "setNavigationDelegate:", [page_loading])
 	sent(shown_in, "loadHTMLString:baseURL:", [ns_string(html), sent(class_named("NSURL"), "URLWithString:", [ns_string(PAGE_ORIGIN)])])
-	loaded = spun(() => page_loading_ended, ANSWER_MS)
+	loaded = spun(() => loading_over(), ANSWER_MS)
 	sent(shown_in, "setNavigationDelegate:", [0])
 	loaded
 }
@@ -176,6 +181,7 @@ global answer_block = 0
 global answer_heard = no
 global answer_value = 0
 global answer_error = 0
+answer_over(): bool := answer_heard
 answer_given(block, result, error) := {
 	answer_value = if result == 0 then 0 else told(result, "retain")
 	answer_error = if error == 0 then 0 else told(error, "retain")
@@ -200,7 +206,7 @@ answered(shown_in: int, body: text, name: text, value: text): list := {
 	given = if name == "" then told(class_named("NSDictionary"), "dictionary") else sent(class_named("NSDictionary"), "dictionaryWithObject:forKey:", [ns_string(value), ns_string(name)])
 	world = told(class_named("WKContentWorld"), "pageWorld")
 	sent(shown_in, "callAsyncJavaScript:arguments:inFrame:inContentWorld:completionHandler:", [ns_string(body), given, 0, world, answering_block()])
-	if not spun(() => answer_heard, ANSWER_MS) { return [ø, "no answer in " + (ANSWER_MS / 1000) + " s (a promise that never settles?)"] }
+	if not spun(() => answer_over(), ANSWER_MS) { return [ø, "no answer in " + (ANSWER_MS / 1000) + " s (a promise that never settles?)"] }
 	if answer_error != 0 {
 		said = sent(told(answer_error, "userInfo"), "objectForKey:", [ns_string("WKJavaScriptExceptionMessage")])
 		failure = ns_text(if said != 0 then said else told(answer_error, "localizedDescription"))
@@ -228,11 +234,13 @@ failure_said(called: text, failure: text): text := {
 global app_window = 0
 global app_window_open = no
 window_closing(receiver, selector, notification) := { app_window_open = no }
+// (each state a lambda waits for read through a word: a lambda reading a global keeps its value of when it was made, card prebuilt-module)
+window_event_over(): bool := #page_events > 0 or not app_window_open
 app_window_made(title: text) := {
 	made = sent_with_floats(told(class_named("NSWindow"), "alloc"), "initWithContentRect:styleMask:backing:defer:", [WINDOW_STYLE, BUFFERED, 0], [0.0, 0.0, APP_WINDOW_WIDTH, APP_WINDOW_HEIGHT])
 	sent(made, "setReleasedWhenClosed:", [0])
 	sent(made, "setTitle:", [ns_string(title)])
-	sent(made, "setDelegate:", [instance_of(class_made("WarpAppWindowClosing", [["windowWillClose:", "v@:@", window_closing]]))])
+	sent(made, "setDelegate:", [instance_of(class_made("WarpHostAppWindowClosing", [["windowWillClose:", "v@:@", window_closing]]))])
 	made
 }
 window_shown(shown: int, shown_view: int) := {
@@ -262,7 +270,7 @@ window_answered(called: text, member: text, arguments: any): any := {
 	if member != "next" { raise called + ": the window has no " + member + ": show or next" }
 	if app_window == 0 { raise called + ": no window shown: warpWindow.show(title) first" }
 	waited = if arguments is list and #arguments > 0 and arguments#1 is int then arguments#1 else -1
-	pumped(() => #page_events > 0 or not app_window_open, if waited >= 0 then waited else FOREVER_MS)
+	pumped(() => window_event_over(), if waited >= 0 then waited else FOREVER_MS)
 	if not app_window_open { return ø }
 	happened = {event: TICK_EVENT}
 	if #page_events > 0 {
@@ -297,7 +305,7 @@ foreign_answered(runtime: text, module: any, member: text, call: bool, arguments
 }
 
 // `warp app check`: the text the page shows, read in the hidden web view
-host_webview_page_text(html): text := {
+host_webview_page_text(html): any := {
 	pool = objc_autoreleasePoolPush()
 	shown_in = hidden_view()
 	answer = if page_loaded(shown_in, str(html)) then answered(shown_in, "return document.body?.innerText ?? ''", "", "") else [ø, ""]
