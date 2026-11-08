@@ -1,0 +1,30 @@
+#!/usr/bin/env warp
+# One full-height band per named color (lib/color.warp named_colors), left to right.
+# band_at and band_color are the only selection; the check below and ink both call them.
+use color
+
+swatch_width = 40
+swatch_height = 48
+band_count = #named_colors
+width = band_count * swatch_width
+
+# column 0 ..< width; a column on the boundary belongs to the band that starts there, and one past the strip stays on the last color
+band_at(column) := min(column /! swatch_width, band_count - 1)
+band_color(column) := named_colors[band_at(column)][0]
+
+bands_hold() := {
+	held = yes
+	for i in 0..<band_count {
+		start = i * swatch_width
+		last = start + swatch_width - 1
+		if band_at(start) != i or band_at(last) != i { held = no }
+		if band_color(start) != named_colors[i][0] or band_color(last) != named_colors[i][0] { held = no }
+		if i > 0 and band_color(start - 1) == band_color(start) { held = no }
+	}
+	held and band_count == 9 and named_colors[0][0] == black and named_colors[band_count - 1][0] == purple and band_at(width) == band_count - 1
+}
+test bands_hold()
+
+# every row of a column is that band
+ink(column, row) := band_color(column)
+paint(ink, width, swatch_height)
