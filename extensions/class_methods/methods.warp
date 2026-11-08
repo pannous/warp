@@ -184,7 +184,7 @@ methods_lifted(program: Node): Node := {
 		owner.methods = owner.methods + [as_operator_method(definition)]
 	}
 	top_statements = top_statements.filter(top_statement => operated_class(top_statement, classes, operator_table) == ø)
-	for name in classes.keys { classes[name].methods = aliases_derived(equality_derived(name, positions_derived(classes[name].methods, operator_table), operator_table)) }
+	for name in classes.keys { classes[name].methods = aliases_derived(stand_ins_derived(equality_derived(name, positions_derived(classes[name].methods, operator_table), operator_table))) }
 	linked_names = if module.relocating then [] else linked_class_names()
 	linked = classes.keys.filter(name => name in linked_names)
 	if #linked > 0 { linked_methods_called(classes, linked, top_statements, operator_table) }
@@ -467,6 +467,17 @@ equality_derived(class_name: text, methods: list, operator_table: map): list := 
 	compared = Key(Key(self_node, Op.Dot, call_of(ordering_method, [other])), Op.Eq, 0)
 	methods + [Key(call_of(equality_method, [other]), Op.Define, Key(instance_test(other, class_name), Op.And, compared))]
 }
+# a class giving only one of two methods that may answer for each other, approximately(o) or similar(o), answers both
+# operators by it: `similar(o) := approximately(o)` (test_rough_similarity: a class method serves ≈ and ~)
+stand_ins = {"approximately": "similar", "similar": "approximately"}
+stand_ins_derived(methods: list): list := {
+	words = methods.map(defined_word)
+	derived = []
+	for method in methods.filter(method => stand_ins.has(defined_word(method) ?? "") and stand_ins[defined_word(method)] not in words) {
+		derived += [forwarding(stand_ins[defined_word(method)], method)]
+	}
+	methods + derived
+}
 # The alias network (card alias-network, notes/aliases.md): a class's method answers every word spelling of its
 # lib/aliases.warp entry the class does not declare itself, so a class giving add(o) answers `a.plus(b)` and one giving
 # plus(o) answers `a.add(b)`: each other spelling is a method calling the declared one, `plus(o) := add(o)`.
@@ -481,11 +492,15 @@ aliases_derived(methods: list): list := {
 		for spelling in alias_words(word) {
 			if spelling in words { continue }
 			words += [spelling]
-			arguments = method_parameters(method).map(parameter => if parameter is symbol then parameter else key_of(parameter))
-			derived += [Key(call_of(spelling, method_parameters(method)), Op.Define, call_of(word, arguments))]
+			derived += [forwarding(spelling, method)]
 		}
 	}
 	methods + derived
+}
+# a method of another name calling this one with its parameters, `plus(o) := add(o)`
+forwarding(name: text, method: Node): Node := {
+	arguments = method_parameters(method).map(parameter => if parameter is symbol then parameter else key_of(parameter))
+	Key(call_of(name, method_parameters(method)), Op.Define, call_of(defined_word(method), arguments))
 }
 # the word spellings of a word's alias entry, the canonical word first, the word itself among them; [word] when no
 # entry names it
