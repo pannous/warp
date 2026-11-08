@@ -72,7 +72,7 @@ and one outcome test of the new spelling. Existing tests stay as they are and pa
 | remove_prefix, remove_suffix | open: see question 4 |
 | copy_text, new_list | copy(t), list() |
 
-## Open questions (for the Interviewer, before step 2)
+## Open questions: ANSWERED by the user 2026-11-08 (notes/decisions.md single-verbs questions): 1 yes as recommended, 2 as recommended, 3 surface now and helpers later as an optional card, 4 remove_prefix/remove_suffix stay, 5 size
 1. **Does text still name a file?** Recommendation: yes for `read`, `write`, `exists` and `delete`, as today, where
    text has no other meaning. Words where text already means something else (`lines`, `size`, `append`, `find`,
    `sort`) need a `File`.
