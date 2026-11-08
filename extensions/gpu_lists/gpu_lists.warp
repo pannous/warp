@@ -5,5 +5,5 @@
 GpuCell = {F32: 0, I32: 1, U32: 2}
 # its row in a list's kind field (core/analysis/kinds.warp ListKind; runtime.warp gpu_list_row, scripts/node_layout.warp)
 GpuListKind = {Row: 2}
-gpu_lists_extension = Extension{name: "gpu_lists", library_words: {gpu_zeros: "gpu_zeros", gpu_put: "gpu_put", gpu_list_of: "gpu_list_of"},
+gpu_lists_extension = Extension{name: "gpu_lists", library_words: {gpu_zeros: "gpu_zeros", gpu_put: "gpu_put", gpu_list_of: "gpu_list_of", gpu_list_place: "gpu_list_place", gpu_list_cell: "gpu_list_cell"},
 	host_exports: ["gpu_list_place", "gpu_list_cell"], constant_tables: {GpuCell: GpuCell}}
