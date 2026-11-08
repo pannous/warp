@@ -28,6 +28,13 @@ SAMPLES_WEB_RESULTS = "test/samples-web.txt"  # tracked: status and sample, one 
 # instead of FAIL in either sweep (scripts/samples.sh EXPECTED_FAILURE); in the page ok when it fails with the native
 # run's error, it gives what the native run gives (decision exp-counts)
 EXPECTED_FAILURE = re.compile(r"^# expected failure: ", re.M)
+# where a sample runs, a line of its own: `# host: native` or `# host: none` stay out of the page's sweep and menu
+# (build.sh), `# host: page` runs here with no native output to compare (scripts/samples.sh HOST_LINE)
+HOST_LINE = re.compile(r"^# host: ([a-z]+)", re.M)
+def sample_host(source):
+	"""where a sample says it runs (HOST_LINE): native, page, none, or both when it says nothing"""
+	host = HOST_LINE.search(source)
+	return host.group(1) if host else "both"
 # a sample's interactions (card scripts-samples, decision sample-checks): `# check: click "+1", type "name" "Ann" → text`,
 # each from a fresh run, its steps done on the page, its text then holding the text after → (natively `warp app check`)
 CHECK_LINE = re.compile(r"^# check: (.*) → (.*)$", re.M)
@@ -1434,6 +1441,8 @@ def check_samples(paths, tree):
 	for path in paths:
 		output_name = path.replace("/", "_") + ".txt"
 		source = open(os.path.join(tree, path), encoding="utf-8").read()
+		if sample_host(source) in ("native", "none"):
+			continue
 		window = native.get(path) == "WIN"
 		report = page_report(source, path, page_url, WINDOW_ANIMATION_SECONDS if window else None)
 		if window:

@@ -19,7 +19,7 @@ This supersedes decision playground-after-parity (the user: "the bigger local is
 3. Fix the gaps by host area, lib/ and web/playground/ first:
    - warp-web-host: compiler hosting, files, modules, tasks, timers, events, storage, servers, foreign/python.
    - warp-web-samples: the sweep, then graphics (canvas, gpu), sound, media, markup.
-   excluded_samples.txt keeps only samples that can't run in a browser (raylib/SDL windows, processes), each with why.
+   a sample that can't run in a browser (processes, C calls) says `# host: native: <why>`, which keeps it out of the menu and the page sweep.
 
 ## Host areas, state (warp-web-host, 2026-11-01)
 - Step 1 done: web/playground/driver.js is driver.warp's twin (warp.wasm over wasi.js; the compiler reads the
