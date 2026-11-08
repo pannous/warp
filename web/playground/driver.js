@@ -283,7 +283,7 @@ function compiledProgram(file, print) {
 // the compiled program run with the page's host words: { status, said }
 function programRan(bytes, file, hooks) {
 	const holder = runHolder({ warnings: [], pagePath: hooks.pagePath?.(), hooks, environment: programEnvironment(file) });
-	const wasi = wasiImports(() => holder.exports.memory, [file, ...(self.programArguments ?? [])], hooks.print, programFiles, holder.environment);
+	const wasi = wasiImports(() => holder.exports.memory, [file, ...(self.programArguments ?? [])], hooks.print, programFiles, holder.environment, parentOf(file ?? ""));
 	try {
 		const module = new WebAssembly.Module(bytes);
 		holder.run = { module, bytes };
