@@ -1,0 +1,6 @@
+# a parameter given a value with a colon, `b: 0`, is refused with its fix: a default is written `b = 0` (night decision
+# parameter-named-fails); `:` in a head gives a type
+'f(a, b: 0) := a + b; f(2, b: 3)'	error
+'f(a, as: "x") := a; f(2)'	error
+'f(a, b = 0) := a + b; f(2, b: 3)'	5
+'f(a, b: int = 0) := a + b; f(2)'	2
