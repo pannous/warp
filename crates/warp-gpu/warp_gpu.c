@@ -102,18 +102,33 @@ static void pushed(Floats* floats, float number) {
 }
 static int name_char(char c) { return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'); }
 static const char* spaces_skipped(const char* at) { while (*at == ' ' || *at == '\n' || *at == '\t') at++; return at; }
-// a number as warp shows it: a decimal, or an exact fraction `a/b`
+// a number as warp shows it: a decimal, its repeating digits each marked by a combining overline (`0.16̅`, `0.1̅4̅2̅`),
+// or an exact fraction `a/b`
+#define OVERLINE "\xCC\x85"
+enum { NUMBER_TEXT = 64, REPEATED_DIGITS = 24 };
 static const char* number_read(const char* at, float* number) {
+	char text[NUMBER_TEXT + REPEATED_DIGITS + 1];
+	int length = 0, repeating_from = -1;
+	for (; length < NUMBER_TEXT; at++) {
+		if (!strncmp(at, OVERLINE, 2)) {
+			if (repeating_from < 0) repeating_from = length - 1;
+			at++;
+		} else if (*at && strchr("+-.0123456789eE", *at)) text[length++] = *at;
+		else break;
+	}
+	int group = length - repeating_from;
+	for (int k = 0; repeating_from >= 0 && length < NUMBER_TEXT + REPEATED_DIGITS; k++) text[length++] = text[repeating_from + k % group];
+	text[length] = 0;
 	char* end;
-	double value = strtod(at, &end);
-	if (end == at) return NULL;
-	if (*end == '/') {
+	double value = strtod(text, &end);
+	if (end == text) return NULL;
+	if (*at == '/') {
 		char* below_end;
-		double below = strtod(end + 1, &below_end);
-		if (below_end != end + 1) { value /= below; end = below_end; }
+		double below = strtod(at + 1, &below_end);
+		if (below_end != at + 1) { value /= below; at = below_end; }
 	}
 	*number = (float)value;
-	return end;
+	return at;
 }
 static void padded(Layout* layout, int alignment) { while (layout->count % (alignment / 4)) layout->floats[layout->count++] = 0; }
 static int layout_failed(const char* name, const char* why) {
