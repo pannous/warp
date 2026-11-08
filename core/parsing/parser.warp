@@ -316,6 +316,9 @@ def add_alias_entry(tables: Spellings, word: text, fields: map) {
 		else if spelled_infix(infix, spelling) { add_infix_word(tables, spelling, target) }
 		if word in tables.forms { tables.forms[spelling] = tables.forms[word] }
 	}
+	# the Unicode names of its symbols, generated (scripts/unicode-operator-names.py, decision operator-unicode-aliases):
+	# the word's fallback spellings, never infix words
+	for name in fields.get("names") ?? [] { tables.canonical[name] = word }
 }
 def spelled_infix(infix: any, spelling: text): bool := if infix is list then infix.contains(spelling) else infix == "yes"
 def add_infix_word(tables: Spellings, word: text, target: text) {
