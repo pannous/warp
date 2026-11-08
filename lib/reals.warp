@@ -13,11 +13,12 @@ class real {
 	# (a float's operation with it takes this at once, decision float-contagion: no root of 1 nor power of 1 taken; so
 	# does any other value's, an interval's: `2π * (2.0 ± 0.01)` is 12.57 ± 0.063)
 	float() := coefficient * (if radicand == 1 then 1.0 else √(radicand as float)) * (if pi_power == 1 then float_pi else float_pi ^ pi_power)
-	*(other) := if exact_real(other) then real_of(coefficient * other.coefficient, pi_power + other.pi_power, radicand * other.radicand) else if other is number and not (other is float) then real_of(coefficient * other, pi_power, radicand) else float() * other
+	*(other) := if exact_real(other) then real_of(coefficient * other.coefficient, pi_power + other.pi_power, radicand * other.radicand) else if other is number and not (other is float) then real_of(coefficient * other, pi_power, radicand) else if other is real_sum then other * this else float() * other
 	# a / (c√r) is a√r / (c·r): the root rises above the fraction line
 	/(other) := if exact_real(other) then real_of(coefficient / (other.coefficient * other.radicand), pi_power - other.pi_power, radicand * other.radicand) else if other is number and not (other is float) then real_of(coefficient / other, pi_power, radicand) else float() / other
-	+(other) := if alike(other) then real_of(coefficient + other.coefficient, pi_power, radicand) else float() + real_float(other)
-	-(other) := if alike(other) then real_of(coefficient - other.coefficient, pi_power, radicand) else float() - real_float(other)
+	# an unlike exact one makes their sum, kept exact (decision exact-sums): 2 + 2π, √2 - π
+	+(other) := if alike(other) then real_of(coefficient + other.coefficient, pi_power, radicand) else if exact_value_is(other) then real_sum_of([this, other]) else float() + real_float(other)
+	-(other) := if alike(other) then real_of(coefficient - other.coefficient, pi_power, radicand) else if exact_value_is(other) then real_sum_of([this] + negated_terms(other)) else float() - real_float(other)
 	alike(other) := exact_real(other) and other.pi_power == pi_power and other.radicand == radicand
 	compare(other) := float() - real_float(other)
 	# √(c·π^p) of a rational c = n/d is √(n·d)/d · π^(p/2); of a root under it, a fourth root, a float or a fraction of
@@ -30,6 +31,130 @@ class real {
 	}
 	text() := real_text(coefficient, pi_power, radicand)
 	format as text := real_text(coefficient, pi_power, radicand)
+	# its first count digits, exact: π.digits(30) is 3.14159265358979323846264338328
+	digits(count: int) := decimal_digits(this, count)
+}
+
+# a sum of unlike exact reals and a rational, kept exact and shown as written, the rational first (`2π + 2` reaches + as `2 + 2π` does), the others in their order: 2 + 2π, √2 - π/2
+# (decision exact-sums); a float meeting it makes the float's. Its terms are each the simplest real, no two alike
+class real_sum {
+	terms: list
+	float() := terms.map(term => real_float(term) as float).sum()
+	+(other) := if exact_value_is(other) then real_sum_of(terms + terms_of(other)) else float() + real_float(other)
+	-(other) := if exact_value_is(other) then real_sum_of(terms + negated_terms(other)) else float() - real_float(other)
+	# a rational or a single real multiplies each term; anything else the float's
+	*(other) := if exact_value_is(other) and not (other is real_sum) then real_sum_of(terms.map(term => term * other)) else float() * real_float(other)
+	/(other) := if exact_value_is(other) and not (other is real_sum) then real_sum_of(terms.map(term => term / other)) else float() / real_float(other)
+	compare(other) := float() - real_float(other)
+	# equal to an exact value of no difference, 1 + π == π + 1, or to a float by its value, as 1/3 == 0.3333333333333333
+	equal(other) := if other is float then float() == other else exact_value_is(other) and this - other == 0
+	root() := √float()
+	text() := sum_text(terms)
+	format as text := sum_text(terms)
+	digits(count: int) := decimal_digits(this, count)
+}
+# whether x is a value kept exact: a whole number or a fraction, a real, a sum of them; never a float
+exact_value_is(x: any): bool := (x is number and not (x is float)) or exact_real(x) or x is real_sum
+# `e as exact`, `exact e`, `precise e` (decision exact-sums, the rules below): an exact value as it
+# is; a float has none
+exact_value(x: any) := if exact_value_is(x) then x else raise "a float has no exact value: write it exact, 0.1 or 1/3, not 0.1 * 1.0"
+# (`exact x = 1/3` declares x, as `x: exact = 1/3` does)
+rewrite $x as exact => exact_value($x)
+rewrite $x as precise => exact_value($x)
+rewrite exact $x => exact_value($x) where $x is not assignment
+rewrite precise $x => exact_value($x) where $x is not assignment
+terms_of(x: any): list := if x is real_sum then x.terms else [x]
+negated_terms(x: any): list := terms_of(x).map(term => term * -1)
+# the terms summed: alike ones merged, zeros dropped; a single term is itself, none 0
+real_sum_of(terms: list) := {
+	kept = []
+	spread = []
+	for each in terms { spread += terms_of(each) }
+	for term in spread.map(simplest_term) {
+		merged = no
+		for at in 0 ..< #kept {
+			if not merged and alike_terms(kept[at], term) {
+				kept[at] = kept[at] + term
+				merged = yes
+			}
+		}
+		if not merged { kept += [term] }
+	}
+	left = kept.filter(term => term != 0 and not exact_real(term)) + kept.filter(term => exact_real(term))
+	if #left == 0 then 0 else if #left == 1 then left#1 else real_sum(left)
+}
+simplest_term(term: any) := if exact_real(term) then real_of(term.coefficient, term.pi_power, term.radicand) else term
+alike_terms(a: any, b: any): bool := if exact_real(a) then a.alike(b) else not exact_real(b)
+# 2 + 2π, √2 - π/2: a negative term after the first written with a minus
+sum_text(terms: list): text := {
+	shown = str(terms#1)
+	for term in terms[1 ..] { shown += if term < 0 then " - " + str(term * -1) else " + " + str(term) }
+	shown
+}
+
+# the first count significant digits of an exact value, rounded: π, √2 and their sums in exact whole-number arithmetic
+# at a scale of guard digits beyond them, π by Machin's formula (π = 16·atan(1/5) - 4·atan(1/239))
+guard_digits = 20
+decimal_digits(x: any, count: int): text := {
+	approximate = real_float(x) as float
+	if approximate == 0.0 { return "0" }
+	magnitude = decimal_magnitude(abs(approximate))
+	scale_digits = max(count - magnitude, 0) + guard_digits
+	scale = 10 ^ scale_digits
+	pi_scaled = 16 * atan_scaled(5, scale) - 4 * atan_scaled(239, scale)
+	total = terms_of(x).map(term => term_scaled(term, scale, pi_scaled)).sum()
+	decimals = count - 1 - magnitude
+	sign = if total < 0 then "-" else ""
+	shown = rounded_shifted(abs(total), scale_digits - decimals)
+	sign + (if decimals > 0 then point_placed(shown, decimals) else str(shown * 10 ^ (-decimals)))
+}
+# the power of ten of a positive float's leading digit: 8.28 is 0, 0.05 is -2, 314.1 is 2
+decimal_magnitude(f: float): int := {
+	power = 0
+	while f >= 10.0 { f = f / 10.0; power += 1 }
+	while f < 1.0 { f = f * 10.0; power -= 1 }
+	power
+}
+# atan(1/inverse) times the scale, in whole numbers: the series 1/x - 1/(3x³) + 1/(5x⁵) - …
+atan_scaled(inverse: int, scale: number): number := {
+	power = scale /! inverse
+	total = power
+	n = 1
+	while power != 0 {
+		power = power /! (inverse * inverse)
+		total += (if n % 2 == 1 then -1 else 1) * (power /! (2 * n + 1))
+		n += 1
+	}
+	total
+}
+# a term times the scale: its coefficient, root and power of π each in whole numbers at that scale
+term_scaled(term: any, scale: number, pi_scaled: number): number := {
+	if not exact_real(term) { return term_times(term, scale) }
+	root = whole_root(term.radicand * scale * scale)
+	whole_power = floor(term.pi_power) as int
+	powered = scale
+	for i in 1 to abs(whole_power) { powered = if whole_power > 0 then powered * pi_scaled /! scale else powered * scale /! pi_scaled }
+	if not (term.pi_power is int) { powered = powered * whole_root(pi_scaled * scale) /! scale }
+	term_times(term.coefficient, root * powered /! scale)
+}
+# a rational times a whole number, rounded down
+term_times(rational: number, whole: number): number := numerator(rational) * whole /! denominator(rational)
+# ⌊√n⌋ of a whole number, by Newton's steps from above
+whole_root(n: number): number := {
+	if n < 2 { return n }
+	guess = 10 ^ ((#str(n) + 1) /! 2)
+	next = newton_step(guess, n)
+	while next < guess { guess = next; next = newton_step(guess, n) }
+	guess
+}
+newton_step(guess: number, n: number): number := (guess + n /! guess) /! 2
+# n / 10^shift rounded half up, a whole number
+rounded_shifted(n: number, shift: int): number := if shift <= 0 then n * 10 ^ (-shift) else (n + 5 * 10 ^ (shift - 1)) /! 10 ^ shift
+# the digits of n with a decimal point before its last `decimals`: 828318 with 5 is 8.28318
+point_placed(n: number, decimals: int): text := {
+	written = str(n)
+	while #written <= decimals { written = "0" + written }
+	written[0 ..< #written - decimals] + "." + written[#written - decimals ..]
 }
 
 # a number as an exact real, π to the power 0: `3 as real`, and a number meeting a real under any operator becomes one
@@ -46,7 +171,7 @@ real_of(coefficient: number, pi_power: number, radicand: number) := {
 	simplest = real(coefficient, pi_power, parts#2)
 	if coefficient is float then simplest.float() else simplest
 }
-real_float(x) := if exact_real(x) then x.float() else x
+real_float(x) := if exact_real(x) or x is real_sum then x.float() else x
 # an instance of the class: `x is real` holds of every real number, an int and a float too (decision real-canonical)
 exact_real(x) := x is real and not (x is number)
 # a root under it past this, a whole number beyond an int, is the float's
