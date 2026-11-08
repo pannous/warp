@@ -72,8 +72,15 @@ pure_passes = [tries, components, definition_heads, definitions, number_words_pa
 
 # the pure passes with the extensions' between them (core/extension.warp with_extension_passes), made once
 global lowering_passes = ø
-# a node after every pure pass, in order
+# a node after every pure pass, in order, with the deferred definitions it calls
 lowered_node(n: Node): Node := {
+	deferred_definitions = []
+	deferred_triggers = {}
+	lowered = passed(n)
+	timed("deferred definitions")
+	with_called_deferred(lowered)
+}
+passed(n: Node): Node := {
 	if lowering_passes == ø { lowering_passes = with_extension_passes(pure_passes, every_pass) }
 	for pass in lowering_passes {
 		timed("pass " + "${pass}")
@@ -81,6 +88,37 @@ lowered_node(n: Node): Node := {
 	}
 	timed("called_only, checks")
 	n
+}
+# Definitions a pass makes that the program may never call, a linked class's method dispatchers
+# (extensions/class_methods/methods.warp, card linked-module): set aside, they go through the passes only once the
+# lowered program, or a deferred definition it reached, calls them; the others are never lowered (walking ~100 of them
+# behind `use sound` was most of what its classes cost a compile)
+global deferred_definitions = []
+# the tokens beside its name that call a deferred definition, by name: the operator keys whose emitted code calls an
+# operator dispatcher, `a < b` <·operator (tokens_within)
+global deferred_triggers = {}
+with_called_deferred(program: Node): Node := {
+	waiting = {}
+	for definition in deferred_definitions { waiting[declared_name(definition)] = (waiting.get(declared_name(definition)) ?? []) + [definition] }
+	deferred_definitions = []
+	if #waiting == 0 { return program }
+	called = word_set(tokens_within(program))
+	reached = []
+	while yes {
+		due = waiting.keys.filter(name => called.has(name) or (deferred_triggers.get(name) ?? []).any(token => called.has(token)))
+		if #due == 0 { break }
+		lowered = statements_in(passed(separated(bracketed(due.flat_map(name => waiting[name]), ""), ";")))
+		waiting = map_without_all(waiting, due)
+		reached += lowered
+		for statement in lowered { for token in tokens_within(statement) { called[token] = yes } }
+	}
+	if #reached == 0 { return program }
+	separated(bracketed(statements_in(program) + reached, ""), ";")
+}
+map_without_all(m: map, names: list): map := {
+	kept = {}
+	for name in m.keys.filter(name => name not in names) { kept[name] = m[name] }
+	kept
 }
 # WARP_TIMES set: `§T <milliseconds> <label>` printed where a phase of the compile starts, so a build's log (its
 # record's build.log) holds its phases; scripts/phase-times.py sums the spans (notes/compile_speed.md). Silent unset
