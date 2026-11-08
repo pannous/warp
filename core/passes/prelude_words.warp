@@ -284,6 +284,8 @@ time_module = "time"
 
 # the names of the functions with_reached brought from the prelude and the modules, of the compile at hand
 global brought_names = {}
+# the names of the values it brought, `m = Unit("m")` of lib/units, which go in front of the program
+global brought_value_names = {}
 # those of them a library exports, which called_only keeps uncalled
 global exported_names = {}
 # the reach's last step, once the passes ran (passes.warp lowered_reached): the program without the brought functions
@@ -418,6 +420,10 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	# function goes where the module wants its definitions (card prelude-definition-reachability)
 	values = brought.filter(goes_in_front)
 	functions = brought.filter(statement => not goes_in_front(statement))
+	for statement in values {
+		name = declared_name(statement)
+		if name != ø { brought_value_names[name] = yes }
+	}
 	for statement in functions {
 		name = declared_name(statement)
 		if name != ø { brought_names[name] = yes }
