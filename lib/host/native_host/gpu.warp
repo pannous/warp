@@ -31,9 +31,10 @@ MOST_COMPUTE_ARRAYS = 8
 VALUE_TYPES = ["f32", "vec2f", "vec3f", "vec4f"]
 VALUE_ALIGNMENTS = [1, 2, 4, 4]
 // a GPU list's cell types, by extensions/gpu_lists GpuCell
-GPU_CELLS = ["f32", "i32", "u32", "f16"]
+GPU_CELLS = ["f32", "i32", "u32", "f16", "bf16"]
 // WGSL's 16-bit float, a device feature (webgpu.h WGPUFeatureName_ShaderF16): an array<f16> holds two to a word
 HALF = "f16"
+BRAIN = "bf16"
 FEATURE_SHADER_F16 = 11
 HALVES_ENABLED = "enable f16"
 // said where the GPU lacks it, as host-gpu.js NO_HALVES
@@ -891,9 +892,14 @@ array_buffer(array: StorageArray): int := {
 	}
 	cells_buffer([cell_bits(array.element, x) for x in array.given], usage)
 }
-// an array<f16> takes only a GPU list [f16], whose cells it binds as they are, and a GPU list [f16] only one (as
-// host-gpu.js halvesUnmatched says it)
-halves_unmatched(name: text, element: text): text := if element == HALF then "the shader's array<f16> " + name + " takes a GPU list [f16]: make it as " + name + ": [f16] = …" else "the GPU list [f16] " + name + " needs the shader's array<f16>, not array<" + element + ">"
+// why an array cannot bind what it is given, ø where it can (as host-gpu.js cellsUnfit says it): an array<f16> takes
+// only a GPU list [f16], whose cells it binds as they are, and a GPU list [f16] only one; a GPU list [bf16] has no
+// WGSL array type yet (card gpu-lists)
+cells_unfit(array: StorageArray): text? := {
+	if array.cell == BRAIN { return "the GPU list [bf16] " + array.name + " has no WGSL array type to bind as yet" }
+	if (array.element == HALF) == (array.cell == HALF) { return ø }
+	if array.element == HALF then "the shader's array<f16> " + array.name + " takes a GPU list [f16]: make it as " + array.name + ": [f16] = …" else "the GPU list [f16] " + array.name + " needs the shader's array<f16>, not array<" + array.element + ">"
+}
 // an array's bytes: its cells' (two each of an f16), whole words, as WebGPU copies and binds a buffer
 cells_bytes(array: StorageArray): int := #array.given * (if array.element == HALF then 2 else WORD_BYTES)
 buffer_bytes(array: StorageArray): int := (cells_bytes(array) + WORD_BYTES - 1) /! WORD_BYTES * WORD_BYTES
@@ -955,7 +961,8 @@ host_gpu_computed(given_shader, arrays: any, workgroups: int): any? := {
 	gpu_failure = ""
 	order = arrays_given(arrays, storage_arrays(shader))
 	if order is text { return error(order) }
-	for array in order { if (array.element == HALF) != (array.cell == HALF) { return error(halves_unmatched(array.name, array.element)) } }
+	unfit = order.map(array => cells_unfit(array)).filter(why => why != ø)
+	if #unfit > 0 { return error(unfit#1) }
 	if not device_ready() { return error(gpu_failure) }
 	if shader.contains(HALVES_ENABLED) and not halves_offered { return error(NO_HALVES) }
 	left = arrays_computed(shader, order, workgroups)

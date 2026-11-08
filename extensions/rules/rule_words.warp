@@ -836,7 +836,7 @@ class_help(name: Node, program: Node, source: text): any := {
 # [fields, methods] of the class as written, ø when the program declares none of that name: the class methods pass
 # has lifted its methods out of the program's view by now
 class_members(class_name: text, source: text): any := {
-	statement = declared_class(class_name, plain_node(parsed(source)))
+	statement = declared_class(class_name, written_program(source))
 	if statement == ø { return ø }
 	view = class_view(statement)
 	# a method by the name it is written with, `length` (read, it is its alias's word, count)
@@ -1007,6 +1007,21 @@ type_alternatives(written: text): list := written.split(" or ").map(part => part
 # a module's word dir lists: a function or value, never a class (`Cursor`) or an operator's function
 is_listed_word(word: text): bool := not is_capitalized(word) and word.chars().all(c => is_name_char(c))
 
+# the source parsed, its methods declared outside their types moved in (extensions/class_extensions.warp)
+written_program(source: text): Node := class_extensions(plain_node(parsed(source)))
+# `text.methods`, `Name.methods` (decision methods-declared, both ways; `functions` a synonym): the words of a type
+# word's module, as text.functions lists them, and the program's functions taking the type first, `shout(self: text)`
+# of `text.shout() := …`, `greet(n: Name)` of an alias; ø where the program has its own word or nothing names the type
+type_methods(name: Node, program: Node, source: text): any := {
+	if owns_word("methods", program) or owns_word("functions", program) { return ø }
+	listed = module_view(name, symbol("functions"), program)
+	words = if listed == ø then [] else items_of(listed).map(word => "${word}")
+	firsts = typed_first_parameters(written_program(source))
+	own = firsts.keys.filter(function => firsts[function] == "${name}" and not words.contains(function))
+	if listed == ø and #own == 0 { return ø }
+	texts_list(words + own)
+}
+
 # The views of a module's words (card dir-filters): `time.functions`, `time.attributes` (its values, `day_seconds`),
 # `time.classes` and `list.operators`, the operators it declares (`∪` of `infix operator ∪(a, b) := …`), which dir
 # leaves out; ø of a name the program binds, of a view the module or program defines itself, and of no module
@@ -1164,6 +1179,7 @@ rule_words = {
 	module_help: module_help,
 	module_named: module_named,
 	module_view: module_view,
+	type_methods: type_methods,
 	module_word_help: module_word_help,
 	qualified_word_help: qualified_word_help,
 	once_listens: once_listens,
