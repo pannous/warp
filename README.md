@@ -15,7 +15,7 @@ Worker.
 ## Why Warp
 Even when 99% of code is written by AI, we can aim for the perfect programming language: ideal for humans and AI
 alike, type safe but not verbose, universal and fast (compiled ahead of time to WebAssembly), highly structured and
-expressive.
+expressive. Agents benefit from clean abstractions too.  
 - **Data is code.** Like Lisp, but with blocks, lists, key-value pairs and tags instead of s-expressions.
   JSON-like, but no quotes around keys or symbols. Reads and writes JSON, XML and YAML.
 - **Wasm GC first.** A `class Person{name:String age:i64}` becomes a real `(struct …)` type, and the module carries
@@ -116,17 +116,21 @@ the `Node` enum (`Text`, `Symbol`, `Number`, `Char`, `Key`, `List`, `Type`, `Met
 
 ## Status
 
-Proven to be (almost) **production ready** by being able to compile the whole language written in warp [itself](https://en.wikipedia.org/wiki/Self-hosting_(compilers))! Experimental and moving fast. Tests live in test/: Warp files run by `warp test` through the Warp-written compiler. The language spec lives in the
-[wiki](https://github.com/pannous/warp/wiki), and parts of it are not implemented yet. Warp began as a Rust rewrite of
-[Wasp](https://github.com/pannous/wasp) (C++), which follows the Python experiments
-[Angle](https://github.com/pannous/angle) and [english-script](https://github.com/pannous/english-script); its compiler is now written in Warp itself ([core](core)), and so is the native `warp` command, which runs programs through wasmtime's C API ([core/native](core/native)). The old Rust compiler is preserved on the branch [rust-bootstrap](https://github.com/pannous/warp/tree/rust-bootstrap).
+Proven to be (almost) **production ready** by being able to compile the whole language written in warp [itself](https://en.wikipedia.org/wiki/Self-hosting_(compilers))! Experimental and moving fast. Tests 100% samples passing, general progress viewable in this [dashboard](https://claude.ai/artifact/PupNqVoBxQGvBjVxkqxGuq)  
+
+The language spec lives in the
+[wiki](https://github.com/pannous/warp/wiki), and parts of it are not implemented yet. Warp began as a Rust rewrite of  
+[Wasp](https://github.com/pannous/wasp) (C++), which followed the Python experiments  
+[Angle](https://github.com/pannous/angle) and [english-script](https://github.com/pannous/english-script);  
+its compiler is now written in Warp itself ([core](core)), and so is the native `warp` command, which runs programs through wasmtime's C API ([core/native](core/native)). The old Rust compiler is preserved on the branch [rust-bootstrap](https://github.com/pannous/warp/tree/rust-bootstrap).
 
 The compiler has three layers:
 - **core**: just enough for warp to compile itself
 - **extensions**: every other language feature
 - **libraries**: modules programs import
 
-Feedback, issues and especially "this surprised me" reports are welcome.
+**[Try it in your browser](https://warp.pannous.com/)**: 
+Feedback and issue reports are welcome.
 
 ## License
 The compiler is licensed under the [GNU AGPL v3 or later](LICENSE); the runtime `crates/warp-runtime`, which goes into every program built with warp, under the [MIT license](crates/warp-runtime/LICENSE), so your programs are yours. Commercial licenses of the compiler: info@pannous.com. Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).

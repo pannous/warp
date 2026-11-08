@@ -614,7 +614,7 @@ addHostPart({
 		};
 		// a WGSL error inside a `try` is the program's to catch, as every host word's failure (host.js raisedInProgram)
 		return {
-			gpu_compute: computed,
+			gpu_computed: computed,
 			gpu_render: rendered,
 			// use draw on the GPU (src/graphics/gpu_canvas.rs) is native only: lib/draw.warp asks gpu_drawing first
 			draw_shape: () => { throw new Error(NO_GPU_DRAWING); },
