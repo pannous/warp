@@ -61,11 +61,21 @@ word's reading and building of warp lists (warp_node.h over wasmtime) become pla
    foreign.c trampolines (six integer registers each), which calls the driver's c_callback_answered, which calls the
    module's export c_callback_fired(slot, …) during the C call; a "handle" argument arrives as a handle. Float
    arguments and more than 16 callbacks a run are refused; wgpu's callbacks take pointers and integers only.
-2. Structs passed by value: wgpuInstanceRequestAdapter, wgpuBufferMapAsync … take a WGPU*CallbackInfo (5 pointers,
-   40 bytes) by value; foreign.c's calls pass only registers of scalars. ARM64 passes such a struct by reference to a
-   copy, x86-64 SysV on the stack: a `struct(bytes)` parameter kind in the driver's C call.
-3. Bulk copies between C memory and warp lists: a frame's pixels (width × height × 4 bytes read back) and compute
-   buffers both ways; one FFI call a value (as the sound decoder reads now) is ~a million calls a 640×480 frame. A
-   `copied(memory, count, type): list` and its reverse in foreign.c would serve the decoder too.
+2. Structs passed by value (designed 2026-11-08): no new parameter kind on the Macs. ARM64 (AAPCS64, macOS and
+   Linux) passes a composite over 16 bytes as a pointer to a caller's copy, so a WGPU*CallbackInfo (40 bytes) is a
+   `handle` to calloc'd memory filled by set_field_*; one of up to 16 bytes goes in consecutive integer registers, so a
+   WGPUStringView {data, length} is two i64 parameters (and two callback arguments: wgpu's callbacks stay within the
+   trampolines' six registers), an all-float one (CGRect, an HFA) consecutive float registers (webview.warp
+   sent_with_floats). Only x86-64 SysV puts a struct over 16 bytes on the stack, which native_call cannot: Linux on
+   x86-64 keeps libwarp_gpu until a `struct` parameter kind copies it there.
+3. Bulk copies between C memory and warp (designed 2026-11-08): two foreign.c words over one new result crossing,
+   `bytes` (a C function returning a {length, bytes} record the driver copies into a warp Text of those bytes and
+   frees, c_result): `memory_bytes(memory: handle, offset: i64, count: i64): bytes from 'c'` reads, and the existing
+   `bytes` parameter kind writes (`memory_written(memory: handle, offset: i64, data: bytes, size: length)`). Numbers
+   of 8, 16, 32 and 64 bits and floats are then read out of the Text in warp (lib/bits), one host crossing a buffer
+   instead of one a value: a 640×480 frame's pixels, a compute buffer, a decoded sound (sound.warp values_at).
+4. Then the port itself, as a fourth part lib/host/native_host/gpu.warp: device and adapter by callbacks, polled by
+   wgpuInstanceProcessEvents; the WGSL text work (uniform layout, previous-frame) in warp; the driver's painting words
+   (foreign.c gpu_painted, shader_shown, pixels_shown) become host words the native host module answers.
 Descriptors themselves (nested structs, WGPUStringView fields, chained structs) are calloc + set_field_* as far as
 they are written into memory, verbose but fine.
