@@ -41,6 +41,7 @@ tree=$(cd "${tree:-$(git rev-parse --show-toplevel)}" && pwd) || exit 1
 scripts=$(cd "$(dirname "$0")" && pwd)
 lib=$tree/lib compilers=$tree/lib
 source "$scripts/lib/platform.sh"
+packages_linked "$tree"
 store=$warp_store main_warp=$warp_binary
 warp=${WARP_BINARY:-$main_warp}
 [ -x "$warp" ] || { echo "rebuild.sh: no warp binary at $warp (WARP_BINARY names one)" >&2; exit 1; }

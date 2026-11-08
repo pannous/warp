@@ -440,13 +440,15 @@ document.addEventListener("fullscreenchange", () => worker && tellSystemValues()
 // view taller each frame, until Safari ran out of memory (card webgpu-safari). What follows the paintings down to the
 // page's end is left free: a view-sized painting that overflowed the window brought a scrollbar, which narrowed the
 // next view (card tour-firefox). Measured again as each run starts: the text above the paintings moves without
-// resizing the pane, which is all the ResizeObserver sees. In full screen (⛶) the view is the screen, so a shader
+// resizing the pane, which is all the ResizeObserver sees. Measured on the page, not the window: scrolled down, a
+// painting filling the window kept the page scrolled and its scrollbar, the view a pixel shorter each run (card
+// firefox-tour-resize). In full screen (⛶) the view is the screen, so a shader
 // painted at the view's size renders at the screen's (card full-screen)
 function viewSize() {
 	if (document.fullscreenElement === $("painted")) return { view_width: innerWidth, view_height: innerHeight };
 	const pane = $("output"), style = getComputedStyle(pane), painted = $("painted").getBoundingClientRect();
 	const width = Math.floor(pane.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - PAINTING_BORDERS);
-	const room = innerHeight - Math.max(painted.top, 0) - PAINTING_MARGIN - PAINTING_BORDERS - roomBelowPaintings(style);
+	const room = innerHeight - (painted.top + scrollY) - PAINTING_MARGIN - PAINTING_BORDERS - roomBelowPaintings(style);
 	return width > 0 ? { view_width: width, view_height: Math.floor(Math.max(room, MIN_VIEW_HEIGHT)) } : {};
 }
 
@@ -729,6 +731,7 @@ const showsStop = () => $("run").classList.contains("stop");
 
 // Stop pressed: a run going on ends as stopped; a program left listening to its timers stops listening
 function stopPressed() {
+	queued = undefined; // a run asked meanwhile goes too
 	retiredWorkers.forEach(retire);
 	silence();
 	if (pending) return stopRun(pending, STOPPED, false);
@@ -791,26 +794,38 @@ async function settled(report) {
 	return { ...report, value: lastAnswered.value ?? report.value, html: lastAnswered.html ?? report.html, error: lastAnswered.error };
 }
 
-async function runInWorker(code, file, asData, eventsFor) {
+function runInWorker(code, file, asData, eventsFor) {
 	lastAnswered = undefined;
 	// a program serving requests waits for them (lib/web.warp page_serve): the next run starts in a fresh Worker
 	if (worker.serving) {
 		worker.terminate();
 		startWorker();
 	}
-	await workerReady;
-	return new Promise(resolve => {
-		const run = { id: ++nextRunId, resolve, printed: [], paintings: [], frame: 0, framesShown: {}, eventsFor };
-		stopAfterTimeout(run);
-		run.stopTimer = setTimeout(() => pending === run && showStop(true), STOP_GRACE_MS);
-		pending = run;
-		silence(false);
-		Object.assign(worker, { runId: run.id, liveLoops: new Map() });
-		paintingWindow = undefined; // canvas.js: each run's paintings at their own size until it sets window.width
-		tellSystemValues();
-		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file, arguments: programArguments(), liveHandover, asData });
-		liveHandover = {};
+	// the run is pending, its Stop shown after the grace, while the worker still loads: a Run pressed on a slow first
+	// load (7.5 s on an iPad) reacts as any run does, and Stop cancels it (card run-during-load-feedback). Its report
+	// never waits on the loading worker itself: a stopped worker's ready never settles. Its time limit counts from the
+	// worker's start of it
+	const run = { id: ++nextRunId, printed: [], paintings: [], frame: 0, framesShown: {}, eventsFor };
+	const reported = new Promise((resolve, reject) => Object.assign(run, { resolve, reject }));
+	run.stopTimer = setTimeout(() => pending === run && showStop(true), STOP_GRACE_MS);
+	pending = run;
+	workerReady.then(() => pending === run && startInWorker(run, code, file, asData), failure => {
+		clearTimeout(run.stopTimer);
+		if (pending === run) pending = undefined;
+		showStop(false);
+		run.reject(failure);
 	});
+	return reported;
+}
+
+function startInWorker(run, code, file, asData) {
+	stopAfterTimeout(run);
+	silence(false);
+	Object.assign(worker, { runId: run.id, liveLoops: new Map() });
+	paintingWindow = undefined; // canvas.js: each run's paintings at their own size until it sets window.width
+	tellSystemValues();
+	worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file, arguments: programArguments(), liveHandover, asData });
+	liveHandover = {};
 }
 
 // ---- showing a report ---------------------------------------------------------------------------------------
@@ -1167,6 +1182,18 @@ function showEventOutput(data) {
 	if (data.html !== undefined) showRendered(data.html);
 }
 
+// a run starting, however it was started (Run, auto-run, an example chosen, a queued run): the old value gives way to
+// "…", and the old errors, warnings, underlines and printed text go, so none is taken for the new run's, nor stays
+// above an animation as long as it runs (cards g_oc54, playground-stale-value)
+function clearPreviousRun() {
+	showValue(PENDING_VALUE);
+	$("value").classList.remove("located");
+	$("value").onclick = null;
+	$("diagnostics").replaceChildren();
+	markPositions({});
+	showPrinted([]);
+}
+
 async function show(code) {
 	if (showing) {
 		queued = code; // only the newest code is worth running next
@@ -1175,6 +1202,7 @@ async function show(code) {
 		return;
 	}
 	showing = true;
+	clearPreviousRun();
 	setStatus("running…");
 	try {
 		showReport(await evaluate(code));
@@ -1368,17 +1396,10 @@ function runChanged() {
 	return runNow();
 }
 
-// Run pressed (the button, Ctrl/Cmd-Enter): the old value gives way to "…" at once, and the old errors, warnings,
-// underlines and printed text go, so none is taken for the new run's (card g_oc54)
-// Ctrl/Cmd-Enter while live loops play runs the code again, handing them over (card playground-live); the button stops
+// Run pressed (the button, Ctrl/Cmd-Enter); Ctrl/Cmd-Enter while live loops play runs the code again, handing them
+// over (card playground-live); the button stops
 function runPressed(fromKeys = false) {
 	if (showsStop() && !(fromKeys && playsLive(pending))) return stopPressed();
-	showValue(PENDING_VALUE);
-	$("value").classList.remove("located");
-	$("value").onclick = null;
-	$("diagnostics").replaceChildren();
-	markPositions({});
-	showPrinted([]);
 	return runNow();
 }
 
