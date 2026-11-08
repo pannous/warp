@@ -1224,6 +1224,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	listed = given + 2 * VALUE_BYTES
 	if same_text(module, "os") and same_text(member, "command") { return os_command(caller, context, listed, results) }
 	if same_text(module, "os") and same_text(member, "exec") { return os_exec(caller, context, listed, results) }
+	if same_text(module, "os") and same_text(member, "run") { return os_run(caller, context, listed, results) }
 	# net.start (lib/net.warp fetch_later): the page answers later, the native warp at once, as net.get
 	if same_text(module, "net") and (same_text(member, "get") or same_text(member, "start")) { return url_got(caller, context, shown(caller, context, item_of(caller, context, listed, 1)), results) }
 	if same_text(module, "regex") { return regex_answered(caller, context, member, listed, results) }
@@ -1274,14 +1275,45 @@ os_command(caller: handle, context: handle, listed: pointer, result: pointer): n
 # os.exec(words): the argument vector (`exec sh "crontab -l"`, lib/os.warp) run as that command, each word a word of
 # its own however it reads (quoted for sh, no expansion), what it printed; else the Error naming the command (card
 # crontab-sample-error)
-os_exec(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
-	words = item_of(caller, context, listed, 1)
-	# (a command of one word, `sh "date"`, is that word)
-	if guest_flag(caller, context, "is_textual", words) { return line_run(caller, context, sh_quoted(shown(caller, context, words)), result) }
+os_exec(caller: handle, context: handle, listed: pointer, result: pointer): nothing := line_run(caller, context, words_line(caller, context, item_of(caller, context, listed, 1)), result)
+# an argument vector as the sh line running it, each word quoted; a command of one word, `sh "date"`, is that word
+words_line(caller: handle, context: handle, words: pointer): text := {
+	if guest_flag(caller, context, "is_textual", words) { return sh_quoted(shown(caller, context, words)) }
 	count = guest_number(caller, context, "item_count", words)
 	line = ""
 	for i in 1..(count + 1) { line = joined(joined(line, " "), sh_quoted(shown(caller, context, item_of(caller, context, words, i)))) }
-	line_run(caller, context, line, result)
+	line
+}
+# os.run(words): the argument vector run as os.exec runs it, its {status, out, err} (trailing newlines dropped); a
+# failing command is no error, its status says so, killed by a signal 128 + the signal
+os_run(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
+	line = words_line(caller, context, item_of(caller, context, listed, 1))
+	said = joined(compiled_path(), ".stderr")
+	pipe = line_piped(line, said)
+	if pipe == 0 { return guest_error(caller, context, joined("cannot run sh for ", line), result) }
+	printed = piped(pipe)
+	waited = pclose(pipe)
+	status = if waited % 256 == 0 then waited / 256 else 128 + waited % 128
+	fields = allocate(3 * VALUE_BYTES)
+	value = allocate(VALUE_BYTES)
+	guest_int(caller, context, "new_int", status as i64, value)
+	field_built(caller, context, "status", value, fields)
+	guest_text(caller, context, printed.at, trimmed_size(printed), value)
+	field_built(caller, context, "out", value, fields + VALUE_BYTES)
+	guest_text_of(caller, context, trimmed_end(read_file(said)), value)
+	field_built(caller, context, "err", value, fields + 2 * VALUE_BYTES)
+	unlink(said)
+	free(printed.at)
+	square_list_built(caller, context, fields, 3, value)
+	guest_call(caller, context, "new_map", value, 1, result)
+}
+# the key `name: value` built in the module
+field_built(caller: handle, context: handle, name: text, value: pointer, result: pointer): nothing := {
+	parts = allocate(3 * VALUE_BYTES)
+	guest_bytes_built(caller, context, native_pointer(name.address), name.length as i64, "new_symbol", parts)
+	guest_text_of(caller, context, ":", parts + VALUE_BYTES)
+	memcpy(parts + 2 * VALUE_BYTES, native_pointer(value), VALUE_BYTES)
+	guest_call(caller, context, "new_spelled_key", parts, 3, result)
 }
 # a text as one sh word: in single quotes, each ' in it as '\''
 sh_quoted(t: text): text := {
@@ -1342,17 +1374,23 @@ words_run(caller: handle, context: handle, command: text, words: Arguments, resu
 }
 line_run(caller: handle, context: handle, line: text, result: pointer): nothing := {
 	said = joined(compiled_path(), ".stderr")
-	pipe = popen(c_string(joined(joined(joined("{ ", line), "\n} 2>"), said)), c_string("r"))
+	pipe = line_piped(line, said)
 	if pipe == 0 { return guest_error(caller, context, joined("cannot run sh for ", line), result) }
 	printed = piped(pipe)
 	answered(caller, context, joined("sh -c ", line), printed, pclose(pipe) / 256, said, result)
 }
+# the sh line run, what it prints read from the pipe, what it says on stderr written to the file `said`
+line_piped(line: text, said: text): handle := popen(c_string(joined(joined(joined("{ ", line), "\n} 2>"), said)), c_string("r"))
+# the size of what a command printed, its trailing newlines left off
+trimmed_size(printed: Printed): i64 := {
+	size = printed.size
+	while size > 0 and native_byte(printed.at + size - 1) == NEWLINE { size = size - 1 }
+	size
+}
 # what a command printed, its trailing newlines left off, else (exit status not 0) the Error naming the status and
 # what it said on stderr
 answered(caller: handle, context: handle, command: text, printed: Printed, exit_status: i32, said: text, result: pointer): nothing := {
-	size = printed.size
-	while size > 0 and native_byte(printed.at + size - 1) == NEWLINE { size = size - 1 }
-	if exit_status == 0 { guest_text(caller, context, printed.at, size, result) } else {
+	if exit_status == 0 { guest_text(caller, context, printed.at, trimmed_size(printed), result) } else {
 		guest_error(caller, context, joined(joined(joined(joined(command, " failed (exit status: "), text_of(exit_status)), "): "), trimmed_end(read_file(said))), result)
 	}
 	unlink(said)
@@ -1635,6 +1673,11 @@ code_list_built(caller: handle, context: handle, encoding: text, at: pointer, co
 	guest_text_of(caller, context, encoded_field(encoding, at), parts + 2 * VALUE_BYTES)
 	items = allocate((count as i32 + 1) * VALUE_BYTES)
 	for i in 0..count { code_built(caller, context, encoding, at, items + (i as i32) * VALUE_BYTES) }
+	square_list_built(caller, context, items, count, parts)
+	guest_call(caller, context, "new_spelled_list", parts, 3, result)
+}
+# a square list of the `count` values at `items`, built from the last one on, a cell at a time (new_list), into `result`
+square_list_built(caller: handle, context: handle, items: pointer, count: i64, result: pointer): nothing := {
 	cell = allocate(3 * VALUE_BYTES)
 	byte_at(cell + VALUE_BYTES).value = ANYREF
 	long_at(cell + VALUE_BYTES + VALUE_OFFSET).value = 0
@@ -1646,8 +1689,7 @@ code_list_built(caller: handle, context: handle, encoding: text, at: pointer, co
 		guest_call(caller, context, "new_list", cell, 3, cell + VALUE_BYTES)
 		i = i - 1
 	}
-	memcpy(parts, native_pointer(cell + VALUE_BYTES), VALUE_BYTES)
-	guest_call(caller, context, "new_spelled_list", parts, 3, result)
+	memcpy(result, native_pointer(cell + VALUE_BYTES), VALUE_BYTES)
 }
 # the field at `at`, up to its FIELD_END, `at` advanced past that
 encoded_field(encoding: text, at: pointer): text := {
