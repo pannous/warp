@@ -1,0 +1,5 @@
+# a charged value follows what it reads though a used module's function has a local of its name (lib/math.warp's
+# norm: `var total = 0`), card reactive-ports-test
+'use math; c = 2; total := c * 3; c = 5; total'	15
+'use timers; count = 2; total := count * 3; count = 5; total'	15
+'use math; price = 3; count = 2; total := price * count; whenever total > 10 { print "big" }; count = 5; total'	15

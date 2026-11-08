@@ -306,7 +306,9 @@ function newWorker(restarts = 0) {
 		const [ready, failed] = [settled(resolve), settled(reject)];
 		watchStart();
 		// worker.js or a script it imports failed to load: without this the first run waits for "ready" forever (card firefox-hello-hang)
-		starting.onerror = event => failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
+		// once ready, an error event is the worker ending under a run: the browser's word for it, else what a bare one
+		// means (iPad Safari ends a Worker so when it runs out of memory or stack, card ipad-storage-bug)
+		starting.onerror = event => starting.isReady ? workerEnded(starting, event.message || WORKER_ENDED) : failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
 		starting.onmessage = ({ data }) => {
 			starting.heard = { type: data?.type, at: Math.round(performance.now()) }; // playground.js hungWhere
 			if (!FREQUENT_WORKER_MESSAGES.has(data?.type)) keepConsoleEntry("worker", [data?.type ?? String(data), ...(data?.stage ? [data.stage] : data?.message ? [data.message] : [])]);
@@ -736,6 +738,14 @@ const slept = (run, milliseconds) => stopAfterTimeout(run, run.deadline - Date.n
 
 // a program that does not stop blocks the worker: replace it
 const ANIMATION_STOPPED = "animation stopped";
+const WORKER_ENDED = "the browser ended it without a message (out of memory or stack?)";
+// the shown worker ended under the pending run: the run fails saying so, a fresh worker takes the next
+function workerEnded(ended, why) {
+	if (ended !== worker) return;
+	if (pending) return stopRun(pending, `the compiler's worker stopped: ${why}`, true, [hungWhere()]);
+	worker.terminate();
+	startWorker();
+}
 function stopRun(run, message, failed = !run.animating, said = [], timedOut = false) {
 	worker.terminate();
 	startWorker();
@@ -1542,4 +1552,21 @@ addEventListener("unhandledrejection", event => {
 	console.error("warp page: a promise failed without a reason", event.promise, new Error("seen here").stack);
 });
 
-(window.pageStarts ?? Promise.resolve()).then(initialize); // index.html: not before its reload for isolation
+// a page the browser kept from the build before (GitHub Pages lets it keep index.html 10 minutes) asks the new build's
+// files for its workers, `worker.js?build=<old>`, and runs an old page beside a new compiler: its build asked anew,
+// a newer one reloads the page once, which asks index.html anew (card start-slow-browser, "bad files in the cache")
+const STALE_RELOAD = "warp stale reload";
+async function reloadWhenStale() {
+	if (!PLAYGROUND_VERSION) return;
+	try {
+		const served = await (await fetch("version.js", { cache: "no-store" })).text();
+		if (served.includes(PLAYGROUND_VERSION.built)) return sessionStorage.removeItem(STALE_RELOAD);
+		if (sessionStorage.getItem(STALE_RELOAD) === PLAYGROUND_VERSION.built) return console.error(`warp page: built ${PLAYGROUND_VERSION.built}, the server has a newer build, and a reload kept this page`);
+		sessionStorage.setItem(STALE_RELOAD, PLAYGROUND_VERSION.built);
+		location.reload();
+	} catch (failure) {
+		console.warn("warp page: its build could not be compared with the server's:", failure);
+	}
+}
+
+(window.pageStarts ?? Promise.resolve()).then(() => { initialize(); reloadWhenStale(); }); // index.html: not before its reload for isolation
