@@ -80,9 +80,12 @@ linked_signature(module: text): ModuleSignature? := linked_signatures.get(module
 # which is all a compile knows of a module it doesn't link (decision no-lib-reads: never its text); ø for a program's
 # own module or one not prebuilt
 global prebuilt_signatures = {}
+# while the build writes the modules anew (compiler.warp write_modules) the ones on disk are those it replaces: what a
+# module says is read off its source then, never their signatures (a module's dependencies order the build)
+global modules_rewritten = no
 prebuilt_signature(module: text): ModuleSignature? := {
 	if linked_signature(module) != ø { return linked_signature(module) }
-	if own_module_files.has(module) { return ø }
+	if own_module_files.has(module) or modules_rewritten { return ø }
 	if not prebuilt_signatures.has(module) {
 		wasm = wasm_if_there(folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + module + ".wasm")
 		prebuilt_signatures[module] = if byte_size(wasm) > 0 then module_signature(module, wasm) else ø
