@@ -151,7 +151,7 @@ linked_libraries(source: text): list := {
 		# decision module-link-hard-error. The modules one compiled from its source uses are linked in turn, reals'
 		# math, never compiled from their sources beside it)
 		if byte_size(wasm) == 0 {
-			for inner in used_modules(used_module_text(name)) { if inner not in names { names += [inner] } }
+			for inner in used_modules(used_module_text(name)) { if inner not in names and inner != module_written { names += [inner] } }
 			continue
 		}
 		signature = module_signature(name, wasm)
