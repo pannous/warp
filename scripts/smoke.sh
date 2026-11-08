@@ -60,4 +60,8 @@ mkdir -p "$tree/data"
 got=$(cd "$tree" && WARP_LIB=$tree/lib WARP_NO_WINDOW=1 footprint_run "$peak" 120 "$INSTALLED" samples/hello/hello.warp 2>&1 | without_runtime_noise | tail -1)
 [[ $got == *$EXPECTED* ]] || { echo "smoke: hello got ${got:0:160}" >&2; exit 1; }
 footprint_checked "$(cat "$peak" 2>/dev/null)" "this branch's hello"
+# the native host module, which the driver links itself: an empty native_host.wasm failed every window, paint and
+# sound run while hello passed (card empty-native-host)
+host=$(cd "$tree" && WARP_LIB=$tree/lib WARP_NO_WINDOW=1 "$INSTALLED" 'window_possible()' 2>&1 | without_runtime_noise | tail -1)
+[[ $host == no ]] || { echo "smoke: the native host module did not answer window_possible(): ${host:0:160}" >&2; exit 1; }
 echo "smoke: $got ($way, WARP_LIB=$tree/lib)"
