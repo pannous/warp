@@ -105,23 +105,43 @@ argument_conversion(type: text, targets: map): Node := {
 	passes = members.map(member => [member, it])
 	conversions = members.filter(member => targets.has(member)).flat_map(member => targets[member].map(conversion => [conversion#1, call_of(conversion_name(member) + "·" + conversion#1, [it])]))
 	steps = class_first(passes + conversions)
-	passed = it
+	passed = mismatch_refused(it, members)
 	for step in steps.reverse() { passed = chosen(Key(it, Op.Is, symbol(step#1)), step#2, passed) }
 	Key(call_of(argument_conversion_name(type), [Key(it, Op.Colon, symbol(any_word))]), Op.Define, passed)
+}
+# what a parameter typed by classes gives a value none of them takes: an instance of another class refused, run-time
+# half of card quantity-dimension-types (5s where a Length is needed); any other value as it is, the parameter's own
+# check says what it takes
+mismatch_refused(it: Node, members: list): Node := {
+	classes = members.filter(is_capitalized)
+	if not classes { return it }
+	needed = "a " + classes.join(" or ") + " is needed, not "
+	chosen(call_of(instance_test_word, [it]), call_of("raise", [Key(Text(needed), Op.Add, call_of("str", [it]))]), it)
 }
 # conversions (or [type, …] steps) from a class first, then from a type word, each in the order written
 class_first(steps: list): list := steps.filter(step => is_capitalized(step#1)) + steps.filter(step => not is_capitalized(step#1))
 # name → the parameter types of a function defined once, for each one taking a type the program converts to
-typed_parameters(statements: list, targets: map): map := {
+typed_parameters(statements: list, targets: map, aliases: map): map := {
 	found = {}
 	for statement in statements {
 		call = definition_call(statement)
 		if call != ø and call#1 is symbol {
 			name = name_of(call#1)
-			found[name] = if found.has(name) then ø else parameter_types(call)
+			# (a type's alias as the type it names, units' length as Length)
+			found[name] = if found.has(name) then ø else parameter_types(call).map(type => if type is text then alias_resolved(type, aliases) else type)
 		}
 	}
 	without_keys(found, found.keys.filter(name => found[name] == ø or not found[name].any(type => converts_to(type, targets)) or has_builtin_variant(name)))
+}
+alias_resolved(type: text, aliases: map): text := {
+	resolved = type
+	steps = 0
+	# (bounded: two aliases naming each other end the walk)
+	while aliases.has(resolved) and steps < #aliases {
+		resolved = aliases[resolved]
+		steps += 1
+	}
+	resolved
 }
 # a word the runtime or C also takes, `exp(x: real)` beside math's `exp(x: float)`: the overload passes choose among
 # them by the argument as written, so it stays unconverted
@@ -172,7 +192,7 @@ conversions(program: Node): Node := {
 		if #kept == #statements_in(program) then program else List(kept, Bracket.None, Separator.Newline)
 	} else {
 		functions = order.map(target => conversion_functions(target, targets[target], targets, scope)).flatten()
-		typed = typed_parameters(kept, targets)
+		typed = typed_parameters(kept, targets, aliases)
 		converting = {}
 		for type in typed.values.flatten() { if converts_to(type, targets) { converting[type] = yes } }
 		functions += converting.keys.map(type => argument_conversion(type, targets))

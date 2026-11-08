@@ -1,0 +1,10 @@
+# A parameter typed by a dimension takes a quantity of that dimension (card quantity-dimension-types): another one is
+# refused, a plain number converts as the dimension counts it, its base unit
+'use units; f(d: length) := d; f(5s)'	error	needed
+'use units; f(d: Length) := d; f(5 kg)'	error	needed
+'use units; f(d: length) := d; x: any = 5s; f(x)'	error	needed
+'use units; f(d: length) := d; f(5m)'	5m
+'use units; f(d: length) := d; f(3 km)'	3km
+'use units; f(d: Length) := d; f(5)'	5m
+'use units; f(t: Time) := t; f(2 min)'	2min
+'use units; f(t: Time) := t; f(2 m)'	error	needed
