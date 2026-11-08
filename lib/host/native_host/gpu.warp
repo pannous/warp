@@ -35,6 +35,9 @@ GPU_CELLS = ["f32", "i32", "u32", "f16"]
 // WGSL's 16-bit float, a device feature (webgpu.h WGPUFeatureName_ShaderF16): an array<f16> holds two to a word
 HALF = "f16"
 FEATURE_SHADER_F16 = 11
+HALVES_ENABLED = "enable f16"
+// said where the GPU lacks it, as host-gpu.js NO_HALVES
+NO_HALVES = "this GPU offers no f16 (WebGPU's shader-f16), which the shader's enable f16 needs"
 WORD_BYTES = 4
 // paint's values.mesh, read in the shader as the storage array warp_values_mesh
 STORAGE_PREFIX = "warp_values_"
@@ -180,6 +183,8 @@ global adapter = 0
 global device = 0
 global queue = 0
 global gpu_failure = ""
+// whether the device took shader-f16, which a shader's `enable f16` needs
+global halves_offered = no
 // what the last callback answered: done, its status, the object it gave, its message
 global answer_done = no
 global answer_status = 0
@@ -276,7 +281,8 @@ device_ready(): bool := {
 // the device asked for: f16 shaders where the adapter has them (requiredFeatureCount at 24, requiredFeatures at 32)
 device_descriptor(adapter: int): int := {
 	descriptor = struct_of(DEVICE_DESCRIPTOR)
-	if wgpuAdapterHasFeature(adapter, FEATURE_SHADER_F16) != 0 {
+	halves_offered = wgpuAdapterHasFeature(adapter, FEATURE_SHADER_F16) != 0
+	if halves_offered {
 		features = struct_of(WORD_BYTES)
 		set_field_i32(features, 0, FEATURE_SHADER_F16)
 		set_field_i64(descriptor, 24, 1)
@@ -951,6 +957,7 @@ host_gpu_computed(given_shader, arrays: any, workgroups: int): any? := {
 	if order is text { return error(order) }
 	for array in order { if (array.element == HALF) != (array.cell == HALF) { return error(halves_unmatched(array.name, array.element)) } }
 	if not device_ready() { return error(gpu_failure) }
+	if shader.contains(HALVES_ENABLED) and not halves_offered { return error(NO_HALVES) }
 	left = arrays_computed(shader, order, workgroups)
 	if left == ø { return error(gpu_failure) }
 	if not (arrays is map) { return left[0] }

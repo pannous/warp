@@ -8,7 +8,3 @@ xs = [float(i) for i in 0..n]
 made = clock()
 big = gpu_compute(doubling, xs, n / 64 + 1)
 print("list made in ${made - started} ms, 1M floats through the GPU in ${clock() - made} ms, last ${big#n}")
-# the same doubling in f16, two bytes a number (`enable f16`, a GPU list [f16]; f16 reaches only 65504)
-halves: [f16] = [0.25, 1.5, 1000]
-gpu_compute("enable f16;\n" + doubling.replace("f32", "f16").replace("2.0", "2.0h"), halves, 1)
-print("in f16: ${halves}")

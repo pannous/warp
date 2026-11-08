@@ -18,6 +18,9 @@ const STORAGE_ARRAY = /@binding\((\d+)\)(?:\s*@group\(\d+\))?\s*var(?:<[^>]*>)?\
 // an array<f16>'s cells as their raw bits: it takes only a GPU list [f16], whose cells are bound as they are
 const ELEMENT_ARRAYS = { i32: Int32Array, u32: Uint32Array, f16: Uint16Array };
 const HALF_FEATURE = "shader-f16";
+const HALVES_ENABLED = "enable f16";
+// said where the GPU lacks it, as natively (lib/host/native_host/gpu.warp NO_HALVES)
+const NO_HALVES = "this GPU offers no f16 (WebGPU's shader-f16), which the shader's enable f16 needs";
 const WORD_BYTES = 4; // WebGPU writes, copies and binds buffers in whole 4-byte words
 // appended to gpu_render's shader (after it, so its line numbers stay the user's): one triangle covering the image
 const FULL_IMAGE_VERTICES = `
@@ -120,6 +123,7 @@ const readbackBuffer = (device, size) => device.createBuffer({ size, usage: GPUB
 // one pass of the compute shader over the buffers bound as [{binding, buffer}], after `before(encoder)`'s copies;
 // the encoder, for the copies that read the results back
 async function encodedComputePass(device, shader, workgroups, bound, before = () => {}) {
+	if (shader.includes(HALVES_ENABLED) && !device.features.has(HALF_FEATURE)) throw new Error(NO_HALVES);
 	const module = await gpuModule(device, shader);
 	device.pushErrorScope("validation");
 	const pipeline = compiledOnce(compiledPipelines, shader, () => device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: GPU_ENTRY_POINT } }));
