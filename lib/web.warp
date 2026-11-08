@@ -42,7 +42,10 @@ INTERNET = 2
 STREAM = 1
 SOCKET_LEVEL = {Darwin: 65535, Linux: 1}
 REUSE_ADDRESS = {Darwin: 4, Linux: 2}
-// struct utsname: its first field, the system's name
+// struct utsname whole, its first field the system's name: uname writes all of it, 5 fields of 256 bytes on macOS (6 of
+// 65 on Linux); a buffer of the first field alone took 1024 bytes of the heap beyond it, and a server crashed in a later
+// free now and then (card server-samples)
+UTSNAME_BYTES = 1280
 SYSTEM_NAME_BYTES = 256
 // struct sockaddr_in: its bytes 3 and 4 the port, the high byte first
 SOCKET_ADDRESS_BYTES = 16
@@ -67,7 +70,7 @@ fclose(file: handle): i32 from 'c'
 
 // the system's name, Darwin or Linux
 system_name() := {
-	buffer = calloc(1, SYSTEM_NAME_BYTES)
+	buffer = calloc(1, UTSNAME_BYTES)
 	uname(buffer)
 	name = strndup(buffer, SYSTEM_NAME_BYTES)
 	free(buffer)

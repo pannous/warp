@@ -1140,10 +1140,7 @@ kept_listeners(key: text, keep: function): any := {
 // Python's range: `range(4)` is [0, 1, 2, 3], `range(1, 4)` [1, 2, 3]
 range(stop: int): list := 0 ..< stop
 range(start: int, stop: int): list := start ..< stop
-// the GPU host words, which the host answers (natively core/native/driver.warp, the playground its JS); the shaders
-// they run are written at compile time by extensions/rules/wgsl.warp
+// the GPU host words, which a library answers (natively lib/host/native_host/gpu.warp over wgpu-native, the
+// playground's host-gpu.js over WebGPU); the shaders they run are written at compile time by extensions/rules/wgsl.warp
 gpu_compute(shader: node, values: node, count: int): node from host
 gpu_render(shader: node, width: int, height: int, values: node): node from host
-gpu_compute_linear(shader: node, address: int, count: int): int from host
-gpu_map_linear(shader: node, address: int, values: node, count: int, width: int, result: int): int from host
-gpu_reduce_linear(shader: node, address: int, values: node, count: int, width: int, result: int): int from host

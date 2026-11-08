@@ -2,16 +2,22 @@
 // throws, quoting reaches sh unchanged, which() on missing programs, file_lines on blank lines, the Path overloads
 # command_failures_throw
 'use os; try { command("exit 3") } catch e { "caught" }'	"caught"
+# — native only: a page runs no process or shell (decision page-host-lines)
 'use os; try { command("exit 3") } catch e { str(e).contains("exit status: 3") }'	yes
 'use os; try { command("") } catch e { "caught" }'	"caught"
 'use os; command("true")'	""
+
 # quoting_reaches_sh
+# — native only: a page runs no process or shell (decision page-host-lines)
 'use os; q = chr(34); command("echo " + q + "a  b" + q)'	"a  b"
 'use os; q = chr(34); command("printf " + q + "<%s>" + q + " " + q + "x y" + q + " z")'	"<x y><z>"
 'use os; command("printf a; echo; echo")'	"a"
+
 # which
 'use shell; which("warp_she_no_such_program") == ø'	yes
+# — native only: a page runs no process or shell (decision page-host-lines)
 'use shell; which("/bin/sh")'	"/bin/sh"
+
 'use shell; which("/warp_she_nowhere/sh") == ø'	yes
 # file_lines_blank_lines: one final newline goes, an empty line before it stays
 'use file; use shell; p = temp_folder() + "/warp_she_blank.txt"; write(p, "a\n\n"); r = file_lines(p); delete_file(p); r'	["a", ""]
