@@ -265,3 +265,16 @@ the program's dispatchers over the linked classes (~70 % of the code), which eve
   failure in float_of_node), and position words come from `b#i` only after later passes (samples' new_samples).
 - Left: the said words include the bodies of reached helpers the sugar may call (walked_by, task_value), which
   keep +, ==, text and compare; a narrower reach would need the dispatchers kept out of the passes until called.
+- L2: the dispatchers and lifted functions of methods only linked classes have wait outside the pure passes
+  (core/passes/passes.warp deferred_definitions): lowered_node runs the passes on the program, then lowers in batches
+  the deferred ones its tokens call (an operator dispatcher also by its operator's keys, `a < b`, `x += y`, `-x`:
+  the emitter calls it there, deferred_triggers), until none is newly called. Only definitions of `·` names that call
+  no word the program defines twice wait: an overloaded word (`sum` of the prelude's) is told apart by the whole
+  program's arity_overloads, so lowered on its own its call stayed unresolved ("the call sum(…) (no owner)"). Operator
+  dispatchers wait only while every lifted class is linked. Lifted functions of linked classes are declarations of the
+  module's words: only the dispatchers are unlinked as the program's own (unlinking all printed ø for every quantity).
+  Instructions, main 77b85f582c -> L2: `use sound; 1` 33.2 G -> 30.9 G, `use matrix; 1` 14.6 -> 14.3 G, `use tasks; 1`
+  2.52 -> 2.41 G, `use uncertain; 1` 1.98 -> 1.95 G.
+- Left: reals is compiled from source again (card reals-prebuilt), its classes the program's own, so behind `use
+  sound` the operator dispatchers stay in the passes (their reals keys call them anyway); once reals links again they
+  wait too.
