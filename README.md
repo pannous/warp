@@ -15,7 +15,7 @@ Worker.
 ## Why Warp
 Even when 99% of code is written by AI, we can aim for the perfect programming language: ideal for humans and AI
 alike, type safe but not verbose, universal and fast (compiled ahead of time to WebAssembly), highly structured and
-expressive.
+expressive. Agents benefit from clean abstractions too.  
 - **Data is code.** Like Lisp, but with blocks, lists, key-value pairs and tags instead of s-expressions.
   JSON-like, but no quotes around keys or symbols. Reads and writes JSON, XML and YAML.
 - **Wasm GC first.** A `class Person{name:String age:i64}` becomes a real `(struct …)` type, and the module carries

@@ -127,10 +127,9 @@ scope_root(scope: text, folder: text): text := {
 	root
 }
 package_root(at: text): any := {
-	while at != "" and at != "/" {
-		parts = at.split("/")
-		if file_text(at + "/" + parts#(#parts) + module_extension) != ø { return at }
-		at = without_steps_up(at + "/..")
+	for folder in folders_upward(at) {
+		parts = folder.split("/")
+		if file_text(folder + "/" + parts#(#parts) + module_extension) != ø { return folder }
 	}
 	ø
 }
@@ -385,12 +384,20 @@ rooted(name: text, folder: text): text := {
 project_root(folder: text): any := {
 	# from the absolute folder: a relative one (`samples/wasm` of `warp samples/wasm/x.warp`) ran out before the
 	# working folder that holds .git
-	at = without_steps_up(absolute_folder(folder))
-	while at != "" and at != "/" {
+	for at in folders_upward(without_steps_up(absolute_folder(folder))) {
 		if file_text(at + "/.git") != ø or file_text(at + "/.git/HEAD") != ø { return at }
-		at = without_steps_up(at + "/..")
 	}
 	ø
+}
+# the folder and each above it: an absolute one up to /, a relative one up to its top, as the page's working folder
+# is `.` (`./samples/wasm`, `./samples`), never on past it into `./..`
+folders_upward(at: text): list := {
+	folders = []
+	while at != "" and at != "/" and at != "." and not at.ends_with("..") {
+		folders += [at]
+		at = without_steps_up(at + "/..")
+	}
+	folders
 }
 absolute_folder(folder: text): text := if folder.starts_with("/") then folder else cwd + "/" + folder
 path_in(folder: text, name: text): text := without_steps_up(if name.starts_with("/") then name else folder + "/" + name)
