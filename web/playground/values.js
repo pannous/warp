@@ -66,7 +66,15 @@ function guestPlain(program, value) {
 	return entries ? Object.fromEntries(entries.map(([name, item]) => [name, guestPlain(program, item)])) : guestItems(program, value).map(item => guestPlain(program, item));
 }
 const SHOWN_WORDS = { yes: true, no: false, "ø": null };
-const SHOWN_NUMBER = /^-?(\d+(\.\d*)?|\.\d+)([eE][-+]?\d+)?(\/\d+)?/;
+// a number as warp shows it: its repeating digits each marked by a combining overline (`0.16̅`, `0.1̅4̅2̅`), a fraction `a/b`
+const SHOWN_NUMBER = /^-?(\d+(\.(\d\u0305?)*)?|\.(\d\u0305?)+)([eE][-+]?\d+)?(\/\d+)?/;
+const REPEATING_DIGIT = /\d\u0305/g;
+const REPEATED_DIGITS = 17; // the repeating digits written out this far: a double's precision
+// the decimal's value, its repeating digits written out
+const shownDecimal = text => {
+	const repeating = (text.match(REPEATING_DIGIT) ?? []).map(digit => digit[0]).join("");
+	return Number(text.replaceAll("\u0305", "") + repeating.repeat(Math.ceil(REPEATED_DIGITS / Math.max(repeating.length, 1))));
+};
 const SHOWN_NAME = /^[^\s,:{}\[\]()"']+/u;
 function plainOfShown(shown) {
 	let at = 0;
@@ -101,7 +109,7 @@ function plainOfShown(shown) {
 		if (number) {
 			at += number[0].length;
 			const [numerator, denominator] = number[0].split("/");
-			return denominator ? Number(numerator) / Number(denominator) : Number(numerator);
+			return denominator ? shownDecimal(numerator) / Number(denominator) : shownDecimal(numerator);
 		}
 		const name = shown.slice(at).match(SHOWN_NAME) ?? fail();
 		at += name[0].length;
