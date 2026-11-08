@@ -172,6 +172,8 @@ node_truthy(n: Node): bool := {
 truncated_int(n: Node): int := {
 	if textual_node(n) { return text_as_int(text_of_node(n)) }
 	if not is_null(n) and kind_code(n) == Kind.Float { return truncated(unboxed_float(n)) }
+	# an instance with its own float, an exact real 2π
+	if converts_to_float(n) { return truncated(float_of_node(n)) }
 	if is_null(n) or kind_code(n) != Kind.Int { fail() }
 	if is_ratio(n) then extended_truncated(n) else fitting_int(n)
 }
