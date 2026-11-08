@@ -605,7 +605,8 @@ local_function(statement: Node): Node := {
 lowered_statement(statement: Node, top_locals: list, lowering: Lowering): Node := {
 	parts = definition_of(statement)
 	if parts == ø { return lowered_lambdas(statement, top_locals, lowering) }
-	locals = parts.parameters.map(parameter_name) + names_bound(parts.body, []) + top_locals.filter(name => name not in lowering.arities)
+	# (a global the body assigns stays the global: `flag = no; turned(() => flag)` reads it, never a copy of then)
+	locals = parts.parameters.map(parameter_name) + names_bound(parts.body, []).filter(name => name not in lowering.globals) + top_locals.filter(name => name not in lowering.arities)
 	match statement {
 		Key(signature, Op.Define, body): Key(signature, Op.Define, lowered_lambdas(body, locals, lowering))
 		_: statement
