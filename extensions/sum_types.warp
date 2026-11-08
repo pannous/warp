@@ -115,7 +115,7 @@ enum_with_values(p: Parser): Node := {
 	sum_type_of(name, bare, classes)
 }
 # The words of the built-in types a variant's payload names: `rgb(int, int, int)` gives types, `rgb(r, g, b)` fields
-BUILTIN_TYPE_WORDS = DECLARED_TYPE_WORDS + ["list", "map", "any", "real", "rational", "exact", "long", "double", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"]
+BUILTIN_TYPE_WORDS = DECLARED_TYPE_WORDS + ["list", "map", "any", "real", "rational", "exact", "precise", "long", "double", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"]
 # A variant with a payload: the class extending the sum type, its fields in order (an unnamed one is `value`, several
 # `value1`, `value2`…, a lowercase name that is no type a field of any value)
 variant_class(type_name: Node, variant: text, payload: list, parameters: list): Node := {

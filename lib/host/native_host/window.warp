@@ -1,4 +1,4 @@
-// The native warp's window (decision window-in-warp, card window-ffi-replace), a part of lib/native_host.warp: what the
+// The native warp's window (decision window-in-warp, card window-ffi-replace), a part of lib/host/native_host.warp: what the
 // playground's canvas answers in JavaScript (web/playground/canvas.js), natively over SDL3 by plain FFI: host_owns /
 // host_value (the window's system values), host_value_set, host_window_layer (a painting's Metal layer, which
 // libwarp_gpu shows it in) and window_run_ended.
@@ -24,7 +24,7 @@ POINTER_VALUES = ["mouse_x", "mouse_y", "mouse_down_x", "mouse_down_y"]
 SIDES = ["window_width", "window_height"]
 OWNED_VALUES = ["window_open", "window_possible", "window_fullscreen", "key_down", "key code held", "keys pressed", "key code pressed", "mouse_down", "mouse_wheel", "gpu_drawing", "dark mode"] + POINTER_VALUES
 
-global window = 0
+global sdl_window = 0
 global view = 0
 global open_now = no
 global sized_by_program = no
@@ -85,17 +85,17 @@ window_opened() := {
 	points_wide = calloc(1, 4)
 	points_high = calloc(1, 4)
 	times = enlarged()
-	window = SDL_CreateWindow(WINDOW_TITLE, width * times, height * times, SDL_WINDOW_METAL + SDL_WINDOW_RESIZABLE)
-	if window == 0 { return eprint("window: " + SDL_GetError()) }
-	view = SDL_Metal_CreateView(window)
+	sdl_window = SDL_CreateWindow(WINDOW_TITLE, width * times, height * times, SDL_WINDOW_METAL + SDL_WINDOW_RESIZABLE)
+	if sdl_window == 0 { return eprint("window: " + SDL_GetError()) }
+	view = SDL_Metal_CreateView(sdl_window)
 	open_now = yes
 	title_ns = SDL_GetTicksNS()
 }
 window_closed() := {
 	if view != 0 { SDL_Metal_DestroyView(view) }
-	if window != 0 { SDL_DestroyWindow(window) }
+	if sdl_window != 0 { SDL_DestroyWindow(sdl_window) }
 	view = 0
-	window = 0
+	sdl_window = 0
 	open_now = no
 }
 // the frame times in the title, every half second: the mean of the frames since
@@ -105,7 +105,7 @@ frame_timed() := {
 	frames_since_title += 1
 	if now - title_ns < TITLE_EVERY_NS { return ø }
 	milliseconds = (now - title_ns) / 1000000.0 / frames_since_title
-	SDL_SetWindowTitle(window, WINDOW_TITLE + " — " + tenths(milliseconds) + " ms a frame, " + round(1000 / milliseconds) + " fps")
+	SDL_SetWindowTitle(sdl_window, WINDOW_TITLE + " — " + tenths(milliseconds) + " ms a frame, " + round(1000 / milliseconds) + " fps")
 	title_ns = now
 	frames_since_title = 0
 }
@@ -119,7 +119,7 @@ events_taken() := {
 	while open_now and SDL_PollEvent(event) { event_taken(field_u32(event, SDL_EVENT_TYPE_AT)) }
 	// a window out of sight has no refresh to wait for: its frames idle instead of spinning
 	out_of_sight = SDL_WINDOW_HIDDEN + SDL_WINDOW_MINIMIZED + SDL_WINDOW_OCCLUDED
-	if open_now and both_bits(SDL_GetWindowFlags(window), out_of_sight) != 0 { SDL_Delay(OUT_OF_SIGHT_MS) }
+	if open_now and both_bits(SDL_GetWindowFlags(sdl_window), out_of_sight) != 0 { SDL_Delay(OUT_OF_SIGHT_MS) }
 }
 event_taken(type: int) := {
 	if type == SDL_EVENT_QUIT or type == SDL_EVENT_WINDOW_CLOSE_REQUESTED {
@@ -143,7 +143,7 @@ event_taken(type: int) := {
 
 // the window's width (across), else its height, in points
 window_side(across: bool): int := {
-	SDL_GetWindowSize(window, points_wide, points_high)
+	SDL_GetWindowSize(sdl_window, points_wide, points_high)
 	field_i32(if across then points_wide else points_high, 0)
 }
 // a pointer position in the window's points as a pixel of the painting the window shows as large as fits, centered
@@ -162,7 +162,7 @@ pointer_value(name: text): int := {
 	pressed = name == "mouse_down_x" or name == "mouse_down_y"
 	in_painting(if across then (if pressed then down_x else mouse_x) else (if pressed then down_y else mouse_y), across)
 }
-full_screen() := open_now and both_bits(SDL_GetWindowFlags(window), SDL_WINDOW_FULLSCREEN) != 0
+full_screen() := open_now and both_bits(SDL_GetWindowFlags(sdl_window), SDL_WINDOW_FULLSCREEN) != 0
 // whether the system shows dark mode, asked without a window (SDL's theme needs its video started): macOS keeps it as
 // the global preference AppleInterfaceStyle "Dark"; elsewhere not known, light
 CFPreferencesCopyAppValue(key: handle, application: handle): handle from 'CoreFoundation'
@@ -209,13 +209,13 @@ value_set(name: text, value: int): bool := {
 		return yes
 	}
 	if name == "window_fullscreen" {
-		if open_now { SDL_SetWindowFullscreen(window, value != 0) }
+		if open_now { SDL_SetWindowFullscreen(sdl_window, value != 0) }
 		return yes
 	}
 	if name == "window_width" or name == "window_height" {
 		if name == "window_width" then width = value else height = value
 		sized_by_program = yes
-		if open_now { SDL_SetWindowSize(window, width, height) }
+		if open_now { SDL_SetWindowSize(sdl_window, width, height) }
 	}
 	no
 }
@@ -240,7 +240,7 @@ host_window_layer(painting_width: int, painting_height: int): int := {
 		width = painting_width
 		height = painting_height
 		times = enlarged()
-		SDL_SetWindowSize(window, width * times, height * times)
+		SDL_SetWindowSize(sdl_window, width * times, height * times)
 	}
 	SDL_Metal_GetLayer(view)
 }

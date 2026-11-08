@@ -1,4 +1,4 @@
-# 4c64a9e640 2026-11-07 23:54 244/262 93.1%
+# 8252b502ea 2026-11-08 04:18 246/262 93.9%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_map.warp
 ok   samples/acceleration/gpu_million.warp
@@ -89,7 +89,7 @@ ok   samples/golf/rot13.short.warp
 ok   samples/golf/rot13.warp
 ok   samples/golf/sierpiński-triangle.short.warp
 ok   samples/golf/sierpiński-triangle.warp
-ok   samples/gpu/gpu_visualizer.warp
+ok   samples/gpu/julia.warp
 ok   samples/gpu/kaleidoscope.warp
 ok   samples/gpu/lava_lamp.warp
 ok   samples/gpu/manual_3d_object_viewer.warp
@@ -97,8 +97,11 @@ ok   samples/gpu/northern_lights.warp
 ok   samples/gpu/ocean.warp
 ok   samples/gpu/ringed_planet.warp
 ok   samples/gpu/scene_3d.warp
+ok   samples/gpu/sdf_scene.warp
+ok   samples/gpu/voronoi.warp
 ok   samples/gpu/warp_compiled_wgsl_shader.warp
 ok   samples/graphics/finger_paint.warp
+ok   samples/graphics/gaussian_splats.warp
 ok   samples/graphics/paint_function.warp
 ok   samples/graphics/paint_text_gpu.warp
 ok   samples/graphics/paint_text.warp
@@ -137,10 +140,10 @@ ok   samples/modules/ask_claude.warp
 ok   samples/modules/config_patch.warp
 ok   samples/modules/csv_report.warp
 ok   samples/modules/free_slots.warp
-ok   samples/modules/javascript.warp
 ok   samples/modules/lib.warp
 ok   samples/modules/main.warp
 ok   samples/modules/modules.warp
+ok   samples/modules/packages.warp
 ok   samples/modules/rust_crates.warp
 ok   samples/modules/slug_paths.warp
 ok   samples/modules/square.warp
@@ -148,6 +151,7 @@ ok   samples/modules/test_ffi_comprehensive.warp
 ok   samples/modules/test_ffi_extended.warp
 ok   samples/modules/test_ffi.warp
 ok   samples/native/arguments.warp
+ok   samples/native/c_calls.warp
 ok   samples/native/doubling.warp
 ok   samples/native/fib.warp
 ok   samples/native/files.warp
@@ -177,6 +181,7 @@ ok   samples/python/python_modules.warp
 ok   samples/signals/signal_fields.warp
 ok   samples/sound/arrangement.warp
 ok   samples/sound/filters.warp
+ok   samples/sound/gpu_visualizer_warp.warp
 ok   samples/sound/harmony.warp
 ok   samples/sound/hum_blocks.warp
 ok   samples/sound/midi.warp
@@ -235,7 +240,6 @@ ok   samples/web/keyframes.warp
 ok   samples/web/leaving_list.warp
 ok   samples/web/live_region.warp
 ok   samples/web/page_custom_event.warp
-ok   samples/web/page_elements.warp
 ok   samples/web/select_binding.warp
 ok   samples/web/typed_form.warp
 EXP  samples/errors/errors.warp: `]` closes the group opened at 5:9, which needs `}`
@@ -248,16 +252,12 @@ WIN  samples/graphics/raylib_simple_use.warp
 WIN  samples/graphics/raylib_simple.warp
 WIN  samples/graphics/raylib_sleep.warp
 WIN  samples/graphics/sdl_red_square.warp
-EXP  samples/native/c_calls.warp: samples/native/c_calls.warp:6:1 primitive mode cannot emit getenv from 'c' but in a native build: a primitive file's C calls run by `warp build native`
-SRV  samples/servers/hosting.warp
-SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
-EXP  samples/storage/netbase.warp: samples/storage/netbase.warp:4:1 netbase: no server answers at http://localhost:8181 to load wikidata: run ./netbase :import wikidata and ./netbase :server, or set NETBASE
 SRV  samples/storage/todo_app.warp
-FAIL samples/gpu/julia.warp: samples/gpu/julia.warp:1:26 wasm trap: call stack exhausted
-FAIL samples/gpu/sdf_scene.warp: samples/gpu/sdf_scene.warp:1:26 wasm trap: call stack exhausted
-FAIL samples/gpu/voronoi.warp: samples/gpu/voronoi.warp:1:26 wasm trap: call stack exhausted
-FAIL samples/modules/packages.warp: samples/modules/packages.warp:1:26 wasm trap: call stack exhausted
-FAIL samples/sound/gpu_visualizer_warp.warp: samples/sound/gpu_visualizer_warp.warp:1:26 wasm trap: call stack exhausted
+FAIL samples/gpu/gpu_visualizer.warp: sound 5.00 s: /var/folders/x3/8vyvmvd936j2pzv4dc9yw68c0000gn/T/warp-sound/sound-69896.wav
+FAIL samples/modules/javascript.warp: the host word foreign_call is not in warp yet
+FAIL samples/servers/hosting.warp: exit 137, nothing on stderr
+FAIL samples/servers/route_headers.warp: exit 137, nothing on stderr
 FAIL samples/sound/music.warp: samples/sound/music.warp:11:1 outside the core: the unknown name melody: `use sound` defines it
+FAIL samples/web/page_elements.warp: the host word foreign_call is not in warp yet

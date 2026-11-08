@@ -164,10 +164,10 @@ int32_t gpu_painted(char* shader, char* given_values, int64_t width, int64_t hei
 	return failed;
 }
 // The host words the driver does not answer, bound to the libraries beside warp that own some (libwarp_gpu's
-// gpu_compute, libwarp_webview's foreign_call; decision library-direct-refs): the wasmtime_func_callback_t
+// gpu_compute; decision library-direct-refs): the wasmtime_func_callback_t
 // `warp_word_<name>` a library exports, reading and building the module's values in place (lib/native/warp_node.h);
 // NULL when none owns it. Two owning one name end the run naming both
-static const char* HOST_WORD_LIBRARIES[] = {"warp_gpu", "warp_webview"};
+static const char* HOST_WORD_LIBRARIES[] = {"warp_gpu"};
 enum { HOST_WORD_COUNT = sizeof HOST_WORD_LIBRARIES / sizeof *HOST_WORD_LIBRARIES, WORD_SYMBOL_ROOM = 256 };
 void* library_word(char* name) {
 	char symbol[WORD_SYMBOL_ROOM];

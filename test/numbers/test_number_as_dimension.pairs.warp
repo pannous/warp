@@ -1,0 +1,9 @@
+# a plain number as a dimension counts its base unit; the dimensions in lower case are their types (lib/units.warp,
+# night decision length-pixels)
+'use units; 5 as Pixels'	5px
+'use units; 2 as Length'	2m
+'use units; 3 as Mass'	3kg
+'use units; 20 as Temperature'	20K
+'f(x: length) := x * 2; f(3m)'	6m
+'x: pixels = 5px; x'	5px
+'length [1, 2, 3]'	3
