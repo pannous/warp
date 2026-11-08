@@ -21,9 +21,11 @@ extension_of(statement: Node): list? := {
 # the program with each extension's members in its class's body, or as functions of the receiver's type
 class_extensions(program: Node): Node := {
 	statements = statements_in(program)
-	extensions = statements.map(extension_of)
-	if extensions.all(extension => extension == ø) { return program }
+	written = statements.map(extension_of)
+	if written.all(extension => extension == ø) { return program }
 	classes = statements.map(class_view).filter(view => view != ø).map(view => declared_type_name(view#2))
+	scope = scope_of(program)
+	extensions = written.map(extension => if extension != ø and names_type(extension#1, classes, scope) then extension else ø)
 	added = {}
 	kept = []
 	for at in 0 ..< #statements {
@@ -34,6 +36,10 @@ class_extensions(program: Node): Node := {
 	}
 	group_like(program, kept.map(statement => with_added_members(statement, added)))
 }
+
+# a receiver naming a type: a class, a type word or alias; any other, `window.width(w) := …`, is an object's property
+# (property_accessors.warp)
+names_type(name: text, classes: list, scope: map): bool := name in classes or is_tested_type_word(name) or binds_as(scope, name, Meaning.Type)
 
 # `shout() := upper(this)` of text: `shout(self: text) := upper(self)`
 receiver_function(type: text, member: Node): Node := {
@@ -51,4 +57,4 @@ with_added_members(statement: Node, added: map): Node := {
 	}
 }
 
-class_extensions_extension = Extension{name: "class_extensions", passes_before: {"definition_heads": class_extensions}}
+class_extensions_extension = Extension{name: "class_extensions", passes_before: {"with_type_module_uses": class_extensions}}

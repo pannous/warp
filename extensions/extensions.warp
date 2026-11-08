@@ -70,6 +70,8 @@ EXTENSIONS = [
 	pipe_lambdas_extension
 	circumfixes_extension
 	index_positions_extension
+	# before property_accessors, which would read `P.scaled(k) := …` as a property setter
+	class_extensions_extension
 	property_accessors_extension
 	attributes_extension
 	sum_types_extension
@@ -122,7 +124,6 @@ EXTENSIONS = [
 	from_imports_extension
 	collection_type_tests_extension
 	block_definitions_extension
-	class_extensions_extension
 	parameter_values_extension
 	local_shadows_extension
 	effects_extension
