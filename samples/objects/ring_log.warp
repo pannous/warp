@@ -1,0 +1,10 @@
+#!/usr/bin/env warp
+# The last three readings. A fourth drops the oldest. 90 is 20 + 30 + 40.
+use ring
+
+log = Ring(3)
+log.push(10)
+log.push(20)
+log.push(30)
+log.push(40)
+sum(log.to_list())
