@@ -103,7 +103,7 @@ Card remove-rust (verified by `test_in_browser.py --examples --firefox`): the Ru
 host.js page·value/page·render/page·hole(s)/on·<event>·node (renderedHtml, pageHoles, holePatches, pageEvents,
 runPageEvent, listeningRun), worker.js PAGE_VALUE and showHoles, host-compiler.js page_event, markup.js
 data-warp-instance (done c76e12a0e0). Then blockcompiler-entries: the block compiler, effects/spectrum entries and the
-Rust test binary's runner gone; built sites on driver.js (scripts/build-site.sh, notes/web_framework.md "Built sites").
+Rust test binary's runner gone; built sites on driver.js (`warp build --site`, notes/web_framework.md "Built sites").
 Still open: lists (`[#fruits, fruits#1]` writes a comma, so native's `[3, "apple"]` may be
 right) and welcoming errors (native's new sentence carries no position).
 
