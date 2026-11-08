@@ -840,14 +840,19 @@ result_resolved(n: Node, overloaded: map, parameters: map): Node := {
 	}
 	n = for_parameters(n, overloaded, parameters)
 	# `y = render "f"`: the fix names the variable
-	if is_key(n, Op.Assign) and key_of(n) is symbol and overloaded_call(value_of(n), overloaded) == value_of(n) {
+	if is_key(n, Op.Assign) and key_of(n) is symbol and is_untold(value_of(n), overloaded) {
 		n = Key(key_of(n), Op.Assign, result_untold(value_of(n), overloaded, [name_of(key_of(n))]))
-	} else if overloaded_call(n, overloaded) == n {
+	} else if is_untold(n, overloaded) {
 		n = result_untold(n, overloaded, [])
 	}
 	children(n, x => result_resolved(x, overloaded, parameters))
 }
 
+# whether n is itself a call of an overloaded word, which nothing around it gave an expected type
+is_untold(n: Node, overloaded: map): bool := {
+	call = overloaded_call(n, overloaded)
+	call != ø and call == n
+}
 # a call no expected type tells apart refused, its fix naming the first variant (decision ambiguous-result-error); the
 # first variant's call stands in, so the compile goes on to say what else it finds
 result_untold(call: Node, overloaded: map, target: list): Node := {
