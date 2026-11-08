@@ -1286,13 +1286,9 @@ words_line(caller: handle, context: handle, words: pointer): text := {
 }
 # os.run(words): the argument vector run as os.exec runs it, its {status, out, err} (trailing newlines dropped); a
 # failing command is no error, its status says so, killed by a signal 128 + the signal
-os_run(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
-	line = words_line(caller, context, item_of(caller, context, listed, 1))
-	said = joined(compiled_path(), ".stderr")
-	pipe = line_piped(line, said)
-	if pipe == 0 { return guest_error(caller, context, joined("cannot run sh for ", line), result) }
-	printed = piped(pipe)
-	waited = pclose(pipe)
+os_run(caller: handle, context: handle, listed: pointer, result: pointer): nothing := line_ran(caller, context, words_line(caller, context, item_of(caller, context, listed, 1)), true, result)
+# a command's {status, out, err}, of pclose's wait status
+run_recorded(caller: handle, context: handle, printed: Printed, waited: i32, said: text, result: pointer): nothing := {
 	status = if waited % 256 == 0 then waited / 256 else 128 + waited % 128
 	fields = allocate(3 * VALUE_BYTES)
 	value = allocate(VALUE_BYTES)
@@ -1372,15 +1368,17 @@ words_run(caller: handle, context: handle, command: text, words: Arguments, resu
 	}
 	answered(caller, context, command, printed, exit_status, said, result)
 }
-line_run(caller: handle, context: handle, line: text, result: pointer): nothing := {
+line_run(caller: handle, context: handle, line: text, result: pointer): nothing := line_ran(caller, context, line, false, result)
+# the sh line run, what it said on stderr kept in a file: recorded its {status, out, err}, else what it printed
+line_ran(caller: handle, context: handle, line: text, recorded: bool, result: pointer): nothing := {
 	said = joined(compiled_path(), ".stderr")
-	pipe = line_piped(line, said)
+	pipe = popen(c_string(joined(joined(joined("{ ", line), "\n} 2>"), said)), c_string("r"))
 	if pipe == 0 { return guest_error(caller, context, joined("cannot run sh for ", line), result) }
 	printed = piped(pipe)
-	answered(caller, context, joined("sh -c ", line), printed, pclose(pipe) / 256, said, result)
+	waited = pclose(pipe)
+	if recorded { return run_recorded(caller, context, printed, waited, said, result) }
+	answered(caller, context, joined("sh -c ", line), printed, waited / 256, said, result)
 }
-# the sh line run, what it prints read from the pipe, what it says on stderr written to the file `said`
-line_piped(line: text, said: text): handle := popen(c_string(joined(joined(joined("{ ", line), "\n} 2>"), said)), c_string("r"))
 # the size of what a command printed, its trailing newlines left off
 trimmed_size(printed: Printed): i64 := {
 	size = printed.size
