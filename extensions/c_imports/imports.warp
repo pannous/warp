@@ -85,7 +85,13 @@ c_type_of(word: text): text := {
 }
 
 # the foreign lines of `text`
-c_declarations_in(content: text): list := content.split("\n").map(line => c_declaration(line)).filter(d => d != ø)
+c_declarations_in(content: text): list := c_statements(content).map(statement => c_declaration(statement)).filter(d => d != ø)
+# spaces as many as the text's characters
+blank_of(t: text): text := {
+	blank = ""
+	for k in 0 ..< #t { blank += " " }
+	blank
+}
 # the catalog's lines of `name` from `library`; libc and libm are one library on macOS: `import sqrtf from "c"` takes libm's line
 catalog_lines(catalog: list, name: text, library: text): list := {
 	found = catalog.filter(d => d#1 == name and d#2 == library)
@@ -301,12 +307,16 @@ c_functions_of(written: text, library_folder: text, folder: text = "."): list :=
 	quoted = quoted_lines(source)
 	lines = source.split("\n")
 	for i in 0 ..< #lines {
-		line = lines[i]
-		declaration = if i + 1 in quoted then ø else c_declaration(line)
-		if declaration == ø { kept += [native_uses(line, native)] } else {
-			kept += [""]
-			functions[declaration#1] = declaration
+		# each statement of the line, `;` between them: a declaration among them blanked, the others' columns kept
+		statements_kept = []
+		for part in lines[i].split(";") {
+			declaration = if i + 1 in quoted then ø else c_declaration(part)
+			if declaration == ø { statements_kept += [part] } else {
+				functions[declaration#1] = declaration
+				statements_kept += [blank_of(part)]
+			}
 		}
+		kept += [native_uses(statements_kept.join(";"), native)]
 	}
 	catalog = c_catalog(native.map(n => n#2))
 	# warp's own floor stays warp's when libm is imported or used (c_warps)
