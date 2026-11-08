@@ -180,6 +180,11 @@ BUILT_SITE_CODE = 'use web\ncount = 0\ndiv{ h1{ "Count " + count } button{ on cl
 BUILT_SITE_FOLDER = "data/site-check"
 BUILT_SITE_SHOWN = ["Count 0", "Count 1"]  # the heading after main, after the click
 BUILT_SITE_WAIT_MS = 20000
+# card dev-build: a value the program wrote stays across the page's reload in a dev build (warp dev, --dev), a value
+# never written again would take the edited source's
+DEV_VALUES = "(a dev build keeps the values the program wrote across a reload)"
+DEV_VALUES_FOLDER = "data/dev-values-check"
+DEV_VALUES_SHOWN = ["Count 0", "Count 1", "Count 1"]  # after main, after the click, after the reload
 CLIPBOARD_READ = "(a program reads the clipboard)"  # card web-apis-rest: host.js clipboard_text asks the page
 CLIPBOARD_TEXT = "copied by the page"
 # card web-apis-rest: gpu_compute over named arrays, and paint of a shader drawn straight into the page's canvas
@@ -784,29 +789,41 @@ def page_elements_wrong():
 	return [] if shown == PAGE_ELEMENTS_SHOWN else [f"typed {PAGE_ELEMENTS_NAME!r} and clicked: shown {shown!r}, expected {PAGE_ELEMENTS_SHOWN!r}"]
 
 
-def built_site_wrong():
-	"""the site's heading after main and after a click on its button"""
-	program = os.path.join(REPOSITORY, BUILT_SITE_FOLDER, "app.warp")
+def built_site_wrong(folder=BUILT_SITE_FOLDER, options=(), reloads=False, expected=BUILT_SITE_SHOWN):
+	"""the site's heading after main and after a click on its button (and after a reload of the page)"""
+	program = os.path.join(REPOSITORY, folder, "app.warp")
 	os.makedirs(os.path.dirname(program), exist_ok=True)
 	with open(program, "w") as file:
 		file.write(BUILT_SITE_CODE)
-	built = subprocess.run(["warp", "build", "--site", program], capture_output=True, text=True, env={**os.environ, "WARP_NO_WINDOW": "1"})
+	built = subprocess.run(["warp", "build", "--site", *options, program], capture_output=True, text=True, env={**os.environ, "WARP_NO_WINDOW": "1"})
 	if built.returncode:
 		return [f"warp build --site failed: {(built.stderr or built.stdout).strip()[-300:]}"]
-	browser("open", f"http://127.0.0.1:{PORT}/{BUILT_SITE_FOLDER}/site/index.html")
+	browser("open", f"http://127.0.0.1:{PORT}/{folder}/site/index.html")
 	shown = browser("eval", f"""(async () => {{
-		const heading = async before => {{
-			const deadline = Date.now() + {BUILT_SITE_WAIT_MS};
-			const text = () => document.querySelector("#warp-root h1")?.textContent;
-			while (text() === before && Date.now() < deadline) await new Promise(done => setTimeout(done, 100));
-			return text() ?? null;
-		}};
+		{SITE_HEADING}
 		const first = await heading(undefined);
 		document.querySelector("#warp-root button")?.click();
 		return JSON.stringify([first, await heading(first)]);
 	}})()""")
 	shown = json.loads(json.loads(shown)) if shown.startswith('"') else f"(page gave no answer: {shown or browser_complaint})"
-	return [] if shown == BUILT_SITE_SHOWN else [f"headings {shown!r}, expected {BUILT_SITE_SHOWN!r}"]
+	if reloads and isinstance(shown, list):
+		browser("eval", "location.reload()")
+		# the prerendered heading first, then the run's: the kept value once main ran
+		again = browser("eval", f"""(async () => {{
+			{SITE_HEADING}
+			await new Promise(done => setTimeout(done, 500));
+			return JSON.stringify(await heading({json.dumps(shown[0])}));
+		}})()""")
+		shown.append(json.loads(json.loads(again)) if again.startswith('"') else f"(page gave no answer: {again or browser_complaint})")
+	return [] if shown == expected else [f"headings {shown!r}, expected {expected!r}"]
+
+
+SITE_HEADING = f"""const heading = async before => {{
+			const deadline = Date.now() + {BUILT_SITE_WAIT_MS};
+			const text = () => document.querySelector("#warp-root h1")?.textContent;
+			while (text() === before && Date.now() < deadline) await new Promise(done => setTimeout(done, 100));
+			return text() ?? null;
+		}};"""
 
 
 def clipboard_read_wrong():
@@ -1287,7 +1304,7 @@ def check_examples(names, page_url=None, site=None):
 	snippets = guide_snippets() if GUIDE in names else []
 	for line, code, value, printed in snippets:
 		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), *([(BUILT_SITE, built_site_wrong)] if serves_repository else [])) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()

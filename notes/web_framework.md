@@ -551,11 +551,13 @@ Each step is useful on its own and is what the next ones stand on.
   last build builds anew. Answers go out by C's send: web's write loses to the prelude's (card web-write-call). dev.js polls /warp-dev/state ({version, error}) every 300 ms: a new version
   reloads the page; a failure shows as an overlay (message, `line | source`, caret, fix) while the last good build
   serves on, and the next good build reloads.
-- State across reloads: a dev build (pipeline::for_dev) keeps each main-level variable the program changes later
-  (assigned again or `+=`, stored_values.rs dev_kept) as `stored` keeps it, in the store DEV_STORE: the page's
-  sessionStorage (`warp dev <name>`), in memory natively. Only a changed value is saved, so a variable never changed
-  takes its new initial value from the edited source; one changed keeps its value (as React Fast Refresh does).
-  site.js hydrate loads the kept values and shows what main left (page·html).
+- State across reloads (card dev-build): `warp dev` builds with `--dev`, and the extension dev_values
+  (extensions/dev_values.warp, before the rules) keeps each main-level variable the program writes again later
+  (`x = …` again, `x += …`, in a handler too): its first assignment reads the dev store, `std_io("store", "load", [name,
+  initial, "warp-dev"])`, and an added `on set x {…}` saves each later write there. The dev store is the page's
+  sessionStorage (markup.js DEV_STORE, prefix "warp dev "), which a reload keeps. Only a written value is saved, so a
+  variable never written takes its new initial value from the edited source; a written one keeps its value (as React
+  Fast Refresh does). Check: test_in_browser.py DEV_VALUES (click, reload, the count kept).
   Component instance state too (card web-dev-instances): in a dev build component_state.rs declares each state list
   (`Counter·count`, and a keyed component's keys) from the dev store and saves it after every render, so each instance
   keeps its state across a reload (instances are found by call order or key, as within one run).
