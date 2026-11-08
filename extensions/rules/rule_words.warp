@@ -571,8 +571,11 @@ end_refused(task: Node): Node := {
 	throw "end ${as_code(task)}: did you mean finish ${as_code(task)} (let it run to its end) or cancel ${as_code(task)} (end it now)?"
 }
 # a value as code to paste: a text in its quotes, no attribute of the parser's (`float[n * m]`'s marked `+ 1` would
-# read back as `view·attribute: …`)
-as_code(n: Node): text := if n is text then "\"${n}\"" else "${plain_node(n)}"
+# read back as `view·attribute: …`), a number past int64 its digits again (the parser's `view·opaque: ["number", …]`
+# would read back as a product: `xs: [f32] = [1e38]`, card exponent-literal-reparse)
+as_code(n: Node): text := if n is text then "\"${n}\"" else code_written(plain_node(bottom_up(n, big_number_written)))
+code_written(n: Node): text := "${n}"
+big_number_written(n: Node): Node := if is_big_number_view(n) then symbol("${value_of(n)#2}") else n
 
 # `people where age > 18` (decision P223, extensions/sugar/lists.warp): a name the program binds nothing to that a class of it
 # declares as a field reads the item's field, `it.age`; a name the program binds keeps its value
