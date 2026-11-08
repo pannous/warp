@@ -19,9 +19,6 @@ OTHER_CONTENT = "application/octet-stream"
 # the page's Workers share memory only cross-origin isolated; and a reloaded page asks anew, never a cached build
 DEV_HEADERS = ["Cross-Origin-Opener-Policy: same-origin", "Cross-Origin-Embedder-Policy: require-corp", "Cache-Control: no-store"]
 
-# an answer sent to the client: web's C write(fd, data) loses to the prelude's write(path, content) in a program that
-# uses web (card web-write-call); send is the socket's own word
-send(fd: i32, data: bytes, size: length, flags: i32): i64 from 'c'
 quoted(path: text): text := "'" + path.replace("'", "'\\''") + "'"
 warp_executable(): text := env("WARP_EXECUTABLE") ?? "warp"
 
@@ -90,7 +87,7 @@ dev_command(arguments: list): int := {
 	while true {
 		client = accept(fd, 0, 0)
 		if client >= 0 {
-			send(client, answered(request_of(received(client)).path), 0)
+			write(client, answered(request_of(received(client)).path))
 			close(client)
 		}
 	}
