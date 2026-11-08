@@ -735,6 +735,7 @@ field_type(classes: map, owning_class: text, field: text): text? := {
 written_call_fits(statements: list, word: text, count: int): bool := {
 	defined = statements.map(defined_call_head).filter(head => head != ø and name_of(head#1) == word)
 	signatures = defined.map(head => signature_of(items_of(head))) + (lines_of(typed_lines, word) + (if word_lines().has(word) then word_lines()[word] else [])).map(line => line.signature)
+	if word == "count" or word == "reverse" { raise("TRACE fits " + word + " " + count + " defined " + #defined + " typed " + #lines_of(typed_lines, word) + " word_lines " + (if word_lines().has(word) then #word_lines()[word] else 0) + " params " + signatures.map(signature => #signature.parameters)) }
 	#signatures == 0 or signatures.any(signature => takes(signature, count))
 }
 # the head `f(x)` of a definition `f(x) := …`, or of `def f(x) {…}` before extensions/sugar/declarations.warp makes it one
