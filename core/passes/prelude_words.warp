@@ -1108,7 +1108,7 @@ used_module_sources(statements: any, folder: text, seen: any, within_module: boo
 				seen = inner#2
 				linked += inner#3
 			} else if not names_no_module(name_of(used)) and not own_module_wasm.has(name_of(used)) {
-				raise "no module, library or package named " + name_of(used) + ": no " + name_of(used) + ".warp beside the program or in lib/; a package is used by its path, use \"packages/" + name_of(used) + "/" + name_of(used) + ".warp\""
+				raise "no module, library or package named " + name_of(used) + ": no " + name_of(used) + ".warp beside the program, in lib/ or as packages/" + name_of(used) + "/" + name_of(used) + ".warp of the project or of warp's registry (scripts/link-packages.sh)"
 			}
 		}
 	}
