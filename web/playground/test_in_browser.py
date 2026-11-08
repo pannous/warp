@@ -609,11 +609,21 @@ class ConsoleWatch:
 		self.process.terminate()
 
 
+# a page script's wait until the run going on is shown
+SHOWN_WAIT = 'while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));'
+
+
+def wait_for_first_run():
+	"""the page runs its example as it loads: a check run first otherwise met that run, its own queued behind it (card
+	stop-button-check-red: Run never became Stop within the check's wait, the worker started ?slow_start late)"""
+	browser("eval", f"(async () => {{ {SHOWN_WAIT} return true; }})()")
+
+
 def run_code(code):
 	"""the playground's value once it ran `code`"""
 	script = f"""(async () => {{
 		await playground.runCode({json.dumps(code)});
-		while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));
+		{SHOWN_WAIT}
 		return document.getElementById("value").textContent;
 	}})()"""
 	shown = browser("eval", script)
@@ -1212,6 +1222,7 @@ def check_examples(names, page_url=None, site=None):
 	page_url = f"{page_url}{'&' if '?' in page_url else '?'}slow_start={SLOW_START_MS}"
 	open_page(page_url)
 	wait_for_isolation()
+	wait_for_first_run()
 	examples = json.loads(json.loads(browser("eval", "JSON.stringify(EXAMPLES)")))
 	samples = json.loads(json.loads(browser("eval", "JSON.stringify(Object.keys(SAMPLES).sort())")))
 	failures = []
