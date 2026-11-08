@@ -1,0 +1,8 @@
+# `all xs in t`, `are xs in t`: every item of xs is in t; `any xs in t`: some item is (decision all-any-in)
+'xs = [1, 2]; t = [1, 2, 3]; all xs in t'	yes
+'xs = [1, 5]; t = [1, 2, 3]; all xs in t'	no
+'xs = [1, 5]; t = [1, 2, 3]; any xs in t'	yes
+'xs = [4, 5]; t = [1, 2, 3]; any xs in t'	no
+'xs = [1, 2]; are xs in [3, 2, 1]'	yes
+'words = ["ab", "cd"]; all words in "abcd"'	yes
+'total = 0; for x in [1, 2] { total += x }; total'	3

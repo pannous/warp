@@ -1,4 +1,4 @@
-# 8252b502ea 2026-11-08 04:18 246/262 93.9%
+# ba03c24230 2026-11-08 08:27 251/262 95.8%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_map.warp
 ok   samples/acceleration/gpu_million.warp
@@ -89,6 +89,7 @@ ok   samples/golf/rot13.short.warp
 ok   samples/golf/rot13.warp
 ok   samples/golf/sierpiński-triangle.short.warp
 ok   samples/golf/sierpiński-triangle.warp
+ok   samples/gpu/gpu_visualizer.warp
 ok   samples/gpu/julia.warp
 ok   samples/gpu/kaleidoscope.warp
 ok   samples/gpu/lava_lamp.warp
@@ -140,6 +141,7 @@ ok   samples/modules/ask_claude.warp
 ok   samples/modules/config_patch.warp
 ok   samples/modules/csv_report.warp
 ok   samples/modules/free_slots.warp
+ok   samples/modules/javascript.warp
 ok   samples/modules/lib.warp
 ok   samples/modules/main.warp
 ok   samples/modules/modules.warp
@@ -185,6 +187,7 @@ ok   samples/sound/gpu_visualizer_warp.warp
 ok   samples/sound/harmony.warp
 ok   samples/sound/hum_blocks.warp
 ok   samples/sound/midi.warp
+ok   samples/sound/music.warp
 ok   samples/sound/play_mp3.warp
 ok   samples/sound/rhythm.warp
 ok   samples/sound/signal_graph.warp
@@ -240,6 +243,7 @@ ok   samples/web/keyframes.warp
 ok   samples/web/leaving_list.warp
 ok   samples/web/live_region.warp
 ok   samples/web/page_custom_event.warp
+ok   samples/web/page_elements.warp
 ok   samples/web/select_binding.warp
 ok   samples/web/typed_form.warp
 EXP  samples/errors/errors.warp: `]` closes the group opened at 5:9, which needs `}`
@@ -252,12 +256,8 @@ WIN  samples/graphics/raylib_simple_use.warp
 WIN  samples/graphics/raylib_simple.warp
 WIN  samples/graphics/raylib_sleep.warp
 WIN  samples/graphics/sdl_red_square.warp
+SRV  samples/servers/hosting.warp
+SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
-SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
-FAIL samples/gpu/gpu_visualizer.warp: sound 5.00 s: /var/folders/x3/8vyvmvd936j2pzv4dc9yw68c0000gn/T/warp-sound/sound-69896.wav
-FAIL samples/modules/javascript.warp: the host word foreign_call is not in warp yet
-FAIL samples/servers/hosting.warp: exit 137, nothing on stderr
-FAIL samples/servers/route_headers.warp: exit 137, nothing on stderr
-FAIL samples/sound/music.warp: samples/sound/music.warp:11:1 outside the core: the unknown name melody: `use sound` defines it
-FAIL samples/web/page_elements.warp: the host word foreign_call is not in warp yet
+FAIL samples/servers/worker.warp: exit 137, nothing on stderr

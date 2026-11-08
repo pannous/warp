@@ -55,6 +55,7 @@ use "dir_hints.warp"
 use "from_imports.warp"
 use "collection_type_tests.warp"
 use "block_definitions.warp"
+use "parameter_values.warp"
 use "local_shadows.warp"
 use "effects.warp"
 use "optional_unwraps.warp"
@@ -120,6 +121,7 @@ EXTENSIONS = [
 	from_imports_extension
 	collection_type_tests_extension
 	block_definitions_extension
+	parameter_values_extension
 	local_shadows_extension
 	effects_extension
 	optional_unwraps_extension

@@ -622,10 +622,24 @@ buffer_mapped(buffer: int, size: int): int := {
 
 // host_shader_painted(shader, width, height, values, pixels): the shader painted on the GPU, its pixels RGBA, a byte
 // each, row by row into `pixels` (the driver's, width × height × 4 bytes); 0, else -1 and why on standard error
-host_shader_painted(given_shader, width: int, height: int, values: any, pixels: int): int := {
-	shader = str(given_shader)
+host_shader_painted(given_shader, width: int, height: int, values: any, pixels: int): int :=
+	if shader_painted(str(given_shader), width, height, values, pixels) then 0 else said_failed("paint of a shader")
+// gpu_render(shader, width, height, values): the shader's pixels, each an int of its RGBA bytes, red the lowest (as the
+// page's Uint32Array of them reads); a shader that fails raises with why
+host_gpu_render(given_shader, width: int, height: int, values: any): any? := {
+	gpu_failure = ""
+	size = width * height * PIXEL_BYTES
+	pixels = struct_of(size)
+	painted = shader_painted(str(given_shader), width, height, values, pixels)
+	bytes = field_bytes(pixels, 0, size)
+	free(pixels)
+	if not painted { return error(gpu_failure) }
+	[bytes_int([byte_at(bytes, PIXEL_BYTES * i + k) for k in 0 ..< PIXEL_BYTES], "little") for i in 0 ..< width * height]
+}
+// the shader painted into `pixels` as host_shader_painted says; no and gpu_failure where it fails
+shader_painted(shader: text, width: int, height: int, values: any, pixels: int): bool := {
 	drawing = drawing_of(shader, values, width, height)
-	if drawing == ø { return said_failed("paint of a shader") }
+	if drawing == ø { return no }
 	encoder = wgpuDeviceCreateCommandEncoder(device, 0)
 	image = image_drawn(encoder, drawing, width, height)
 	row_bytes = (width * PIXEL_BYTES + ROW_ALIGNMENT - 1) /! ROW_ALIGNMENT * ROW_ALIGNMENT
@@ -647,7 +661,7 @@ host_shader_painted(given_shader, width: int, height: int, values: any, pixels: 
 	wgpuBufferRelease(readback)
 	drawing_released(drawing)
 	image_done(drawing, image)
-	if mapped == 0 then said_failed("paint of a shader") else 0
+	mapped != 0
 }
 said_failed(what: text): int := {
 	eprint(what + ": " + gpu_failure)
