@@ -377,7 +377,9 @@ reached_within(source: text): list := {
 # foreign line or imports
 c_functions_called(content: text, catalog_file: bool, catalog: list): list := {
 	declared = if catalog_file then [] else c_declarations_used(content, catalog)
-	(catalog.filter(d => d#2 == "m") + declared).filter(d => content.contains(d#1 + "("))
+	# (`⌈x⌉` calls math's circumfix function, ceil, as `ceil(x)` does)
+	glyph_called = circumfixed_functions(content)
+	(catalog.filter(d => d#2 == "m") + declared).filter(d => content.contains(d#1 + "(") or d#1 in glyph_called)
 }
 # a standard module's C functions and the modules it and its parts use, by its prebuilt signature (signature.warp:
 # c_lines, c_uses), else (one not prebuilt, or prebuilt by an older build) by its text with its parts
