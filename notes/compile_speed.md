@@ -216,3 +216,10 @@ marks are printed where a phase *starts*, so the time after `pass sugar` is suga
   ~80 %; card sound-start-speed, warp-sprint-web); imports.warp's reached_within and the libm/foreign line scan read
   each reached module's text (next: from the signature); prebuilding the 9 modules prebuilt ones link waits for
   numeric-dispatch phase 2 (warp-sprint-units-time).
+- P7 (281ae7b68a): a standard module's C functions (libm's it calls, its foreign lines and C imports, its parts' too)
+  and the modules it and its parts use come from its signature (fields c_lines, a foreign line each, and c_uses):
+  c_imports reads no reached module's text, and a `use json` compile reads no lib/ source at all. Modules that call C
+  are compiled with the program (not prebuilt), so `use sound` still reads sound and what it uses.
+- Pitfall: while `warp rebuild` writes modules/ anew, the prebuilt signatures on disk are the old ones; they ordered
+  native_host before the callbacks it had come to use. The modules step reads no prebuilt signature
+  (signature.warp modules_rewritten), its sources say it all.

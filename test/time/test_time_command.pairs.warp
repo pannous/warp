@@ -1,0 +1,5 @@
+# decision time-command: time of a number is that many seconds, time of a block measures it as the shell's time does
+'time 3+3'	6s
+'time 6 == 6s'	yes
+'x = time { sleep(0.05); 7 }; x'	7
+'time = 5; time + 1'	6
