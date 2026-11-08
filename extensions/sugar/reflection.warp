@@ -50,9 +50,10 @@ rewrite $m.attributes => [$names...] where $m is symbol and $names = module_view
 rewrite $m.classes => [$names...] where $m is symbol and $names = module_view($m, classes, $program)
 rewrite $m.operators => [$names...] where $m is symbol and $names = module_view($m, operators, $program)
 
-# `help(Point)`, `help(area)`, `help(sound)`: what a class, a function or a module is, as text (extensions/rules/rule_words.warp
+# `help(Point)`, `help(area)`, `help(sound)`, `help(draw.save)`: what a class, a function or a module is, as text (extensions/rules/rule_words.warp
 # class_help, function_help, module_help, module_word_help; wiki/reflection.md); a program's own help wins
 rewrite help $x => help($x)
+rewrite help($m.$w) => $t where $m is symbol and $w is symbol and $t = qualified_word_help($m, $w, $program)
 rewrite help($c) => $t where $c is symbol and $t = class_help($c, $program, $source)
 rewrite help($f) => $t where $f is symbol and $t = function_help($f, $program, $source)
 rewrite help($m) => $t where $m is symbol and $t = module_help($m, $program)
