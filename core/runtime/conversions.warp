@@ -49,6 +49,13 @@ number_node(n: Node): Node := {
 marked_int(value: Node, kind: int): Node := with_kind(value, kind)
 # the kind field telling a value's int type, `x is Color`; 0 for ø
 int_mark(n: Node): int := if is_null(n) then 0 else marked_kind(n)
+# a number of a program's int type, lib/color's red: its type's mark above the number's Kind, the info bits below the
+# held ones (no yes/no, nor a rational's held bit)
+type_marked(n: Node): bool := {
+	mark = int_mark(n)
+	kind = mark % KindUnit.Info
+	(kind == Kind.Int or kind == Kind.Float) and mark != Marked.Bool and mark / KindUnit.Info % 16777216 != 0
+}
 # an Int node's int, a big one's low 64 bits
 whole_int(n: Node): int := if is_plain_int(n) then unboxed_int(n) else extended_wrapped(n)
 int_of_node(n: Node): int := {
