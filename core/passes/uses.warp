@@ -341,10 +341,13 @@ declared_name(statement: Node): any := match statement {
 # is its own (card conversion-name-declare); else ø
 declared_conversion(statement: Node): any := {
 	if not is_key(statement, Op.Define) { return ø }
-	left = key_of(statement)
+	left = as_phrase_read(key_of(statement))
 	conversion = if is_key(left, Op.Colon) and key_of(left) is symbol then value_of(left) else left
 	if is_key(conversion, Op.As) and key_of(conversion) is symbol and value_of(conversion) is symbol then conversion else ø
 }
+# `Person as text` heading a definition, which the parser reads as a phrase of three words (`fib i as int := …` names a
+# result so), as the conversion `Person as text`; any other head as it is
+as_phrase_read(head: Node): Node := if is_group(head) and #head == 3 and head#2 == symbol("as") then Key(head#1, Op.As, head#3) else head
 # `sqrt(x: f64): f64 from "c"`: a foreign line, whose word is the program's own (a library's sqrt is not the one called)
 is_foreign_line(n: Node): bool := is_group(n) and bracket_of(n) == "" and #n == 3 and n#2 == symbol("from")
 # `type View = list or int`: the alias's name, View (its left side is the opaque view ["type", name, ø]), else ø
