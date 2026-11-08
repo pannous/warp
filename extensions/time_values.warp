@@ -176,5 +176,8 @@ def time_operation_call(body: Body, symbol: text, a: TypedCode, b: TypedCode): T
 		parts += operand_parts.map(word => runtime_call(word, [TypedCode(ValueKind.Node, [op.local_get] + uleb(place))]))
 	}
 	result = call_values(module.functions[time_operation_word], parts + [number_value(time_operators[symbol])])
-	TypedCode(result.kind, stored + result.code)
+	TypedCode(if moves_a_time(symbol, a, b) then ValueKind.Time else result.kind, stored + result.code)
 }
+# a time + or * anything, or a time - a whole number, is a time (`(2024-01-31T23:30 + 1 hour).day` reads its own
+# field); only date - date may count days
+moves_a_time(symbol: text, a: TypedCode, b: TypedCode): bool := symbol != "-" or a.kind == ValueKind.Int or b.kind == ValueKind.Int
