@@ -1,9 +1,10 @@
 # The native host module in warp (decision window-in-warp; cards window-ffi-replace, warp-sound-c)
 
 What the playground answers in JavaScript beyond the driver's own words, the native warp answers in warp:
-lib/host/native_host.warp, one module of two parts, native_host/window.warp (SDL3's window, CoreText/FreeType text) and
-native_host/sound.warp (SDL3's audio, AudioToolbox / libmpg123 decoding, CoreMIDI), over C libraries by plain FFI.
-No C wrappers: crates/warp-window/warp_window.c and crates/warp-sound/warp_sound.c (miniaudio) are gone.
+lib/host/native_host.warp, one module of its parts, native_host/window.warp (SDL3's window, CoreText/FreeType text),
+native_host/sound.warp (SDL3's audio, AudioToolbox / libmpg123 decoding, CoreMIDI), native_host/webview.warp (WKWebView)
+and native_host/gpu.warp (wgpu-native), over C libraries by plain FFI. No C wrappers: crates/warp-window,
+crates/warp-sound, crates/warp-webview and crates/warp-gpu are gone.
 
 ## How the driver reaches it
 - modules/native_host.wasm is built by the rebuild (scripts/rebuild.sh) like every standard module (it is in
@@ -13,7 +14,7 @@ No C wrappers: crates/warp-window/warp_window.c and crates/warp-sound/warp_sound
   canonical_text), so a program that never asks about the window or sound never loads it, SDL3 nor a decoder.
 - Its exports are the hook: `host_owns(name)` / `host_value(name)` / `host_value_set(name, value)` for system values
   (window_open, pointer, keys, mouse, dark mode, window size while open), `host_window_layer(w, h)` opens the window
-  and hands libwarp_gpu its CAMetalLayer, `host_run_ended()` holds a still picture open and waits till the sounds are
+  and hands gpu.warp its CAMetalLayer, `host_run_ended()` holds a still picture open and waits till the sounds are
   heard out. A host word `name` the driver doesn't know is answered by an export `host_<name>`: text_coverage,
   sound_played, sound_file_played, sound_file_decoded, midi_sent, midi_ports.
 - The driver's headless guard (headless_checked: a program's window-opening C import refused under WARP_NO_WINDOW) is
@@ -53,29 +54,32 @@ coverage list (width, height, rows) through `coverage_list`.
   names by kMIDIPropertyDisplayName, a CFString global read through library_function + field_pointer. Linux: not yet.
 - The page answers the same host words in web/playground/host-sound.js soundWords.
 
-## warp_gpu.c next? (assessed 2026-11-07)
-crates/warp-gpu/warp_gpu.c (800 lines over wgpu-native's webgpu.h) could follow, as a third part, once three
-general FFI mechanisms exist; its WGSL text work (uniform layout, previous-frame detection) and the gpu_compute host
-word's reading and building of warp lists (warp_node.h over wasmtime) become plain warp, simpler than in C:
-1. Callbacks (card ffi-callbacks): done, lib/callbacks.warp `c_callback(f, ["handle", "i64"])` hands C one of 16
-   foreign.c trampolines (six integer registers each), which calls the driver's c_callback_answered, which calls the
-   module's export c_callback_fired(slot, …) during the C call; a "handle" argument arrives as a handle. Float
-   arguments and more than 16 callbacks a run are refused; wgpu's callbacks take pointers and integers only.
-2. Structs passed by value (designed 2026-11-08): no new parameter kind on the Macs. ARM64 (AAPCS64, macOS and
-   Linux) passes a composite over 16 bytes as a pointer to a caller's copy, so a WGPU*CallbackInfo (40 bytes) is a
-   `handle` to calloc'd memory filled by set_field_*; one of up to 16 bytes goes in consecutive integer registers, so a
-   WGPUStringView {data, length} is two i64 parameters (and two callback arguments: wgpu's callbacks stay within the
-   trampolines' six registers), an all-float one (CGRect, an HFA) consecutive float registers (webview.warp
-   sent_with_floats). Only x86-64 SysV puts a struct over 16 bytes on the stack, which native_call cannot: Linux on
-   x86-64 keeps libwarp_gpu until a `struct` parameter kind copies it there.
-3. Bulk copies between C memory and warp (designed 2026-11-08): two foreign.c words over one new result crossing,
-   `bytes` (a C function returning a {length, bytes} record the driver copies into a warp Text of those bytes and
-   frees, c_result): `memory_bytes(memory: handle, offset: i64, count: i64): bytes from 'c'` reads, and the existing
-   `bytes` parameter kind writes (`memory_written(memory: handle, offset: i64, data: bytes, size: length)`). Numbers
-   of 8, 16, 32 and 64 bits and floats are then read out of the Text in warp (lib/bits), one host crossing a buffer
-   instead of one a value: a 640×480 frame's pixels, a compute buffer, a decoded sound (sound.warp values_at).
-4. Then the port itself, as a fourth part lib/host/native_host/gpu.warp: device and adapter by callbacks, polled by
-   wgpuInstanceProcessEvents; the WGSL text work (uniform layout, previous-frame) in warp; the driver's painting words
-   (foreign.c gpu_painted, shader_shown, pixels_shown) become host words the native host module answers.
-Descriptors themselves (nested structs, WGPUStringView fields, chained structs) are calloc + set_field_* as far as
-they are written into memory, verbose but fine.
+## The GPU (gpu.warp, card warp-gpu-source, 2026-11-08)
+crates/warp-gpu/warp_gpu.c (918 lines over wgpu-native's webgpu.h, statically linked into libwarp_gpu) became the part
+native_host/gpu.warp over libwgpu_native, the wgpu-native release's shared library, which scripts/wasmtime-c-api.sh
+installs beside warp. Its mechanisms:
+1. Callbacks (card ffi-callbacks): lib/callbacks.warp `c_callback(f, types)` hands C one of 16 foreign.c trampolines
+   (six integer registers each). gpu.warp makes three once (an adapter's or device's answer, an error scope's, a
+   buffer's mapping); each writes the answer into globals, and the call polls wgpuInstanceProcessEvents (and
+   wgpuDevicePoll) till it is there.
+2. Structs by value: no new parameter kind on ARM64 (AAPCS64, macOS and Linux): a composite over 16 bytes goes as a
+   pointer to a caller's copy, so a WGPU*CallbackInfo (40 bytes) is a `handle` to calloc'd memory; a WGPUStringView
+   argument of a callback is two integers (data, length). Every descriptor is calloc + set_field_* at the offsets of
+   webgpu.h v29 (the constants on top of gpu.warp; any 64-bit machine). x86-64 SysV puts a struct over 16 bytes on
+   the stack, which native_call cannot: there the callback infos would need a `struct` parameter kind.
+3. Bulk copies: a `bytes` result (a C function's malloc'd {i64 length, bytes} read back as a text and freed, driver
+   c_result) with lib/c.warp field_bytes / set_field_bytes; `f32s` and `i32s` parameters (a list of numbers as one C
+   array of floats or int32s, its byte count the `length` after it). gpu.warp stages a buffer by
+   `memcpy(into: handle, from: i32s, size: length)` (floats as their f32_bits) and reads one back by field_bytes.
+4. The host words: the driver's paint (driver.warp painted_pixels) calls the module's host_shader_shown (1 shown in
+   the window, 0 none open, -1 failed) and else host_shader_painted, which copies the RGBA rows into the driver's
+   buffer (a handle id of it); a list of pixels goes to host_pixels_shown as RGBA bytes. gpu_compute is
+   host_gpu_compute like any host word the driver doesn't answer. A GPU list's cells (extensions/gpu_lists) are in
+   the program's memory: gpu_list_place and gpu_list_cell (library words) find them, the system value
+   "program memory" (driver.warp, kept at each host word it hands the module) says where that memory starts.
+5. The values: paint's values map is laid out in warp (values_laid_out, as host-gpu.js valuesLayout), its built-in
+   holes (width, time, mouse …) filled from the module's own window state (value_of); no text round trip.
+Gone with it: foreign.c's gpu_painted, values_filled, shader_shown, pixels_shown and the library-word mechanism
+(HOST_WORD_LIBRARIES, warp_lazy_host_callback), lib/native/warp_node.h and warp_layout.h, scripts/node_layout.warp.
+Checked headless: test/gpu (11), test_gpu_matches_cpu.sh, test_paint_sizes.sh, the samples that paint (gaussian splats
+and shader trails byte-identical PNGs). Not checked here: a shader shown in a visible window (host_shader_shown).
