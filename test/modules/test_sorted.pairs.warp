@@ -1,0 +1,32 @@
+# SortedMap and SortedSet (lib/sorted.warp, card sorted-map-library, notes/bb_trees.md)
+
+# insertion order, including the reverse order that forces rotations; height stays logarithmic
+'use sorted; m = SortedMap(); for i in 1 to 31 { m = m.set(32 - i, i) }; m.keys() == [i for i in 1 to 31] and m.size() == 31 and m.height() <= 12'	yes
+'use sorted; m = SortedMap(); for i in 1 to 31 { m = m.set(i, i * 10) }; odds = m; for i in 1 to 15 { odds = odds.remove(i * 2) }; odds.keys() == [i * 2 - 1 for i in 1 to 16] and odds.get(3) == 30 and odds.height() <= 12'	yes
+
+# rank, select, ends
+'use sorted; m = SortedMap([[5, "e"], [1, "a"], [3, "c"]]); [m.min(), m.max(), m.rank(3), m.rank(4), m.at(2), m.get(5), m.has(2)]'	[1, 5, 2, 0, 3, "e", no]
+
+# text keys, an inclusive band, an inverted band
+'use sorted; m = SortedMap([["b", 1], ["a", 2], ["c", 3]]); [m.keys(), m.between("a", "b"), m.between("c", "a")]'	[["a", "b", "c"], [["a", 2], ["b", 1]], []]
+
+# a map's entries, in key order
+'use sorted; SortedMap({c: 3, a: 1, b: 2}).keys()'	["a", "b", "c"]
+
+# set and remove return a new map; the receiver stays. a repeated key replaces the value
+'use sorted; m = SortedMap([[1, "a"]]); m2 = m.set(2, "b"); [m.keys(), m2.keys(), m2.remove(2).keys(), m.set(1, "z").get(1), m.set(1, "z").size()]'	[[1], [1, 2], [1], "z", 1]
+'use sorted; m = SortedMap([[1, "a"], [2, "b"]]); [m.remove(9).entries(), m.between(2, 2), m.remove(1).remove(2).is_empty(), SortedMap().height(), SortedMap().is_empty()]'	[[[1, "a"], [2, "b"]], [[2, "b"]], yes, 0, yes]
+
+'use sorted; SortedMap().min()'	error	min of an empty sorted map
+'use sorted; SortedMap().at(0)'	error	at: rank 0 is outside 1..0
+'use sorted; SortedSet().max()'	error	max of an empty sorted set
+
+# sets keep one of each value; algebra returns new sets
+'use sorted; a = SortedSet([1, 2, 2, 3, 4]); b = SortedSet([3, 4, 5]); [a.values(), a.union(b).values(), a.intersection(b).values(), a.difference(b).values(), len(a)]'	[[1, 2, 3, 4], [1, 2, 3, 4, 5], [3, 4], [1, 2], 4]
+'use sorted; a = SortedSet([1, 2, 3]); [a.equals(SortedSet([3, 1, 2])), SortedSet([1]).is_subset(a), a.is_subset(SortedSet([1])), a.intersection(a).equals(a), a.difference(a).is_empty(), SortedSet().union(SortedSet([2, 2])).values()]'	[yes, yes, no, yes, yes, [2]]
+
+# the other languages' names
+'use sorted; [TreeMap([[2, "z"], [1, "y"]]).keys(), BTreeMap([[1, "a"]]).get(1), BTreeSet([3, 1]).at(2)]'	[[1, 2], "a", 3]
+
+# the leaderboard sample: place of the top score, the band, the gap between first and third, the lowest score
+'samples/objects/sorted_leaderboard.warp'	1940

@@ -1,0 +1,227 @@
+// Sorted maps and sets (card sorted-map-library, notes/bb_trees.md): a weight-balanced tree, not the default map.
+// `use sorted`. Keys order by `<` (numbers, texts). set, add and remove return a new collection; the receiver stays.
+// A missing get is ø. rank is the 1-based position, 0 when the key is absent. at(i) is the i-th smallest key.
+// Balance is Adams' (delta 3, ratio 2): one child outweighs the other only while both are still tiny.
+
+alias TreeMap => SortedMap
+alias BTreeMap => SortedMap
+
+class SortedNode { key = ø; value = ø; size = 1; left = ø; right = ø }
+
+sorted_size(t) := if t == ø then 0 else t.size
+
+sorted_node(k, v, l, r) := {
+	n = SortedNode()
+	n.key = k
+	n.value = v
+	n.left = l
+	n.right = r
+	n.size = sorted_size(l) + sorted_size(r) + 1
+	n
+}
+
+// neither side may outweigh the other by more than 3 once the node holds more than two keys
+sorted_balance(k, v, l, r) := {
+	sl = sorted_size(l)
+	sr = sorted_size(r)
+	if sl + sr <= 1 { return sorted_node(k, v, l, r) }
+	if sr > 3 * sl { return sorted_rotate_left(k, v, l, r) }
+	if sl > 3 * sr { return sorted_rotate_right(k, v, l, r) }
+	sorted_node(k, v, l, r)
+}
+
+sorted_rotate_left(k, v, l, r) := {
+	if r == ø { raise "sorted: rotate of an empty side" }
+	rl = r.left
+	rr = r.right
+	if sorted_size(rl) < 2 * sorted_size(rr) {
+		sorted_node(r.key, r.value, sorted_node(k, v, l, rl), rr)
+	} else {
+		if rl == ø { raise "sorted: double rotate of an empty child" }
+		sorted_node(rl.key, rl.value, sorted_node(k, v, l, rl.left), sorted_node(r.key, r.value, rl.right, rr))
+	}
+}
+
+sorted_rotate_right(k, v, l, r) := {
+	if l == ø { raise "sorted: rotate of an empty side" }
+	ll = l.left
+	lr = l.right
+	if sorted_size(lr) < 2 * sorted_size(ll) {
+		sorted_node(l.key, l.value, ll, sorted_node(k, v, lr, r))
+	} else {
+		if lr == ø { raise "sorted: double rotate of an empty child" }
+		sorted_node(lr.key, lr.value, sorted_node(l.key, l.value, ll, lr.left), sorted_node(k, v, lr.right, r))
+	}
+}
+
+sorted_put(t, k, v) := {
+	if t == ø { return sorted_node(k, v, ø, ø) }
+	if k < t.key { return sorted_balance(t.key, t.value, sorted_put(t.left, k, v), t.right) }
+	if t.key < k { return sorted_balance(t.key, t.value, t.left, sorted_put(t.right, k, v)) }
+	sorted_node(k, v, t.left, t.right)
+}
+
+sorted_pop_min(t) := {
+	if t.left == ø { return [t.key, t.value, t.right] }
+	view = sorted_pop_min(t.left)
+	[view#1, view#2, sorted_balance(t.key, t.value, view#3, t.right)]
+}
+
+sorted_pop_max(t) := {
+	if t.right == ø { return [t.key, t.value, t.left] }
+	view = sorted_pop_max(t.right)
+	[view#1, view#2, sorted_balance(t.key, t.value, t.left, view#3)]
+}
+
+// join two trees whose keys are already apart: every key of l is less than every key of r
+sorted_glue(l, r) := {
+	if l == ø { return r }
+	if r == ø { return l }
+	if l.size > r.size {
+		view = sorted_pop_max(l)
+		sorted_balance(view#1, view#2, view#3, r)
+	} else {
+		view = sorted_pop_min(r)
+		sorted_balance(view#1, view#2, l, view#3)
+	}
+}
+
+sorted_remove(t, k) := {
+	if t == ø { return ø }
+	if k < t.key { return sorted_balance(t.key, t.value, sorted_remove(t.left, k), t.right) }
+	if t.key < k { return sorted_balance(t.key, t.value, t.left, sorted_remove(t.right, k)) }
+	sorted_glue(t.left, t.right)
+}
+
+sorted_find(t, k) := {
+	n = t
+	while n != ø {
+		if k < n.key { n = n.left }
+		else if n.key < k { n = n.right }
+		else { return n }
+	}
+	ø
+}
+
+sorted_min_key(t, what) := {
+	if t == ø { raise "min of an empty " + what }
+	n = t
+	while n.left != ø { n = n.left }
+	n.key
+}
+
+sorted_max_key(t, what) := {
+	if t == ø { raise "max of an empty " + what }
+	n = t
+	while n.right != ø { n = n.right }
+	n.key
+}
+
+# keys strictly below k: the 0-based slot k would take
+sorted_below(t, k) := {
+	if t == ø { return 0 }
+	if t.key < k { return sorted_size(t.left) + 1 + sorted_below(t.right, k) }
+	sorted_below(t.left, k)
+}
+
+# 1-based position of a key that is present, else 0 (as index_of)
+sorted_rank(t, k) := if sorted_find(t, k) == ø then 0 else sorted_below(t, k) + 1
+
+sorted_select(t, i) := {
+	left = sorted_size(t.left)
+	if i == left + 1 { return t.key }
+	if i <= left { return sorted_select(t.left, i) }
+	sorted_select(t.right, i - left - 1)
+}
+
+sorted_at(t, i) := {
+	n = sorted_size(t)
+	if i < 1 or i > n { raise "at: rank " + str(i) + " is outside 1.." + str(n) }
+	sorted_select(t, i)
+}
+
+sorted_collect(t, out) := {
+	if t == ø { return out }
+	sorted_collect(t.left, out)
+	out.add([t.key, t.value])
+	sorted_collect(t.right, out)
+	out
+}
+
+sorted_entries(t) := sorted_collect(t, [])
+
+sorted_between(t, lo, hi) := {
+	if t == ø { return [] }
+	if t.key < lo { return sorted_between(t.right, lo, hi) }
+	if hi < t.key { return sorted_between(t.left, lo, hi) }
+	sorted_between(t.left, lo, hi) + [[t.key, t.value]] + sorted_between(t.right, lo, hi)
+}
+
+sorted_height(t) := if t == ø then 0 else 1 + max(sorted_height(t.left), sorted_height(t.right))
+
+// keep a key when `other` holds it and `keep` is yes, or when it does not and `keep` is no
+sorted_filter(t, other, keep) := {
+	if t == ø { return ø }
+	l = sorted_filter(t.left, other, keep)
+	r = sorted_filter(t.right, other, keep)
+	if (other.has(t.key)) == keep { sorted_balance(t.key, yes, l, r) } else { sorted_glue(l, r) }
+}
+
+sorted_within(t, other) := {
+	if t == ø { return yes }
+	if not other.has(t.key) { return no }
+	sorted_within(t.left, other) and sorted_within(t.right, other)
+}
+
+class SortedMap { root = ø
+	init(source = []) := {
+		if source is map {
+			for k in keys(source) { root = sorted_put(root, k, source.get(k)) }
+		} else {
+			for pair in source { root = sorted_put(root, pair#1, pair#2) }
+		}
+	}
+	get(k) := { n = sorted_find(root, k); if n == ø then ø else n.value }
+	has(k) := sorted_find(root, k) != ø
+	set(k, v) := sorted_map_of(sorted_put(root, k, v))
+	remove(k) := sorted_map_of(sorted_remove(root, k))
+	size() := sorted_size(root)
+	is_empty() := root == ø
+	min() := sorted_min_key(root, "sorted map")
+	max() := sorted_max_key(root, "sorted map")
+	rank(k) := sorted_rank(root, k)
+	at(i) := sorted_at(root, i)
+	keys() := [e#1 for e in sorted_entries(root)]
+	entries() := sorted_entries(root)
+	between(lo, hi) := if hi < lo then [] else sorted_between(root, lo, hi)
+	height() := sorted_height(root)
+}
+
+sorted_map_of(r) := { m = SortedMap(); m.root = r; m }
+
+alias BTreeSet => SortedSet
+
+class SortedSet { root = ø
+	init(xs = []) := { for x in xs { root = sorted_put(root, x, yes) } }
+	has(x) := sorted_find(root, x) != ø
+	add(x) := sorted_set_of(sorted_put(root, x, yes))
+	remove(x) := sorted_set_of(sorted_remove(root, x))
+	size() := sorted_size(root)
+	is_empty() := root == ø
+	min() := sorted_min_key(root, "sorted set")
+	max() := sorted_max_key(root, "sorted set")
+	at(i) := sorted_at(root, i)
+	values() := [e#1 for e in sorted_entries(root)]
+	union(other) := {
+		r = root
+		for x in other.values() { r = sorted_put(r, x, yes) }
+		sorted_set_of(r)
+	}
+	intersection(other) := sorted_set_of(sorted_filter(root, other, yes))
+	difference(other) := sorted_set_of(sorted_filter(root, other, no))
+	is_subset(other) := sorted_within(root, other)
+	equals(other) := sorted_size(root) == other.size() and sorted_within(root, other)
+	height() := sorted_height(root)
+}
+
+sorted_set_of(r) := { s = SortedSet(); s.root = r; s }
