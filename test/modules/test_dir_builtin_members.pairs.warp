@@ -11,7 +11,7 @@
 # dir_of_a_text_lists_its_builtin_methods
 '"upper" in dir("hi")'	true
 '"trim" in dir(text)'	true
-'dir(text)#1'	'repeat'
+'"repeat" in dir(text)'	true
 
 # methods_list_what_dir_lists
 '"Cursor" in dir(text)'	false

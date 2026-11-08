@@ -118,14 +118,22 @@ merged_function(name: text, clauses: list): Node := {
 	Key(head, Op.Define, tried(name, clauses, 1))
 }
 
-# the places of the definitions named `name`
-places_named(owners: list, name: text): list := (1 to #owners).filter(j => owners#j == name)
+# each definition's name → the places of the definitions so named (one pass: a scan per definition grew a long
+# program's clauses pass with the square of its length)
+places_by_name(owners: list): map := {
+	places = {}
+	for j in 1 to #owners {
+		if count(owners#j) > 0 { places[owners#j] = (if places.has(owners#j) then places[owners#j] else []) + [j] }
+	}
+	places
+}
 
 merged(parts: list): list := {
 	owners = parts.map(definition_name)
-	single = i => count(owners#i) == 0 or #places_named(owners, owners#i) == 1
-	kept = (1 to #parts).filter(i => single(i) or places_named(owners, owners#i)#1 == i)
-	kept.map(i => if single(i) then parts#i else merged_function(owners#i, places_named(owners, owners#i).map(j => clause_of(parts#j))))
+	places = places_by_name(owners)
+	single = i => count(owners#i) == 0 or places[owners#i].length == 1
+	kept = (1 to #parts).filter(i => single(i) or places[owners#i]#1 == i)
+	kept.map(i => if single(i) then parts#i else merged_function(owners#i, places[owners#i].map(j => clause_of(parts#j))))
 }
 
 clauses(program: Node): Node := match program {

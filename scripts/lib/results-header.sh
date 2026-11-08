@@ -3,6 +3,10 @@
 #   # <commit> <date> <time> <passed>/<total> <percent>%
 # Readers of these files skip lines starting with "#".
 RESULTS_HEADER_MARK='# '
+# sample statuses that count as passing: ran as planned, a window (WIN natively, drew in the page), a server (SRV / ran),
+# a failure on purpose or a sample of another host (EXP); only FAIL, DIFF, TIME and PAGE count against the rate
+SAMPLES_PASSING='ok|SRV|WIN|EXP'
+SAMPLES_WEB_PASSING='ok|drew|ran|EXP'
 
 # results_header <file> <commit> <passing status regex>: (re)writes the file's header from its status lines
 results_header() {

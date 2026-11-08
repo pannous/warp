@@ -9,8 +9,12 @@ threshold, on the CPU below it and without an adapter; tests compare GPU and CPU
 gpu_compute / gpu_render plumbing (src/graphics/gpu.rs, web/playground/host-gpu.js, notes/web_framework.md "web-apis: WebGPU").
 
 ## In warp now (the Rust paths below are the snapshot on branch rust-bootstrap)
-- gpu_compute(shader, arrays, workgroups) is a host word the native host module answers
-  (lib/host/native_host/gpu.warp host_gpu_compute over libwgpu_native by FFI, notes/native_host.md "The GPU").
+- gpu_compute(shader, arrays, workgroups) and gpu_render(shader, width, height, values) are host words a library
+  answers: natively the native host module (lib/host/native_host/gpu.warp host_gpu_compute, host_gpu_render over
+  libwgpu_native by FFI, notes/native_host.md "The GPU"), in the page web/playground/host-gpu.js over WebGPU. They are
+  the only GPU words: the Rust harness's gpu_compute_linear / gpu_map_linear / gpu_reduce_linear are gone (card
+  gpu-native-library); gpu_compute over a GPU list does what gpu_compute_linear did, and `@gpu` maps are to go
+  through gpu_compute (card xs-map-gpu).
 - GPU lists `[f32]` (decision gpu-bound-floats, extensions/gpu_lists/runtime.warp): f32 cells in linear memory from their
   creation, a square List $Node marked KindUnit.GpuList whose Int is (address << 32) + count. `xs: [f32] = …` asks for
   one; a list the program makes once (literal, comprehension, `float[n]`) at its main level and uses only by #, xs#i,
@@ -79,8 +83,8 @@ WGSL has no f64 and no i64 (the shader-f64 feature is native-only and missing on
 ## What pays on the GPU (measured, release, M-series)
 - The round trip through a linear block (f64 → f32, upload, readback, back) costs ~11 ns an item + ~1–2 ms fixed;
   going through Nodes (gpu_compute of a GC list) costs ~1 µs an item and never pays. `gpu_compute(shader, xs, w)` of
-  a `linear xs = float[n]` lowers to the host word gpu_compute_linear (shared_arrays.rs; host.rs natively,
-  host-gpu.js in the browser), which runs the shader over the block's cells as f32 in place.
+  a GPU list `[f32]` runs the shader over its cells as they are, in place (in Rust: a `linear` block and the host word
+  gpu_compute_linear, both gone).
 - A fused CPU reduction (broadcasting.rs fused_sum: `sum(xs .op k)`, `sum(xs .op ys)` and `dot` are one loop, no list
   built; 3–15 ns an item) beats the GPU at every size, so Int reductions and element-wise ops are never offloaded.
   The GPU wins only on heavy per-item work (sin/exp/pow, long fused chains) or data that stays on the GPU.

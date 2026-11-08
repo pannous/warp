@@ -131,6 +131,10 @@ checked_facts(known: int): list := {
 # when its signature's source hash is its file's (signature.warp); one built of another text or that won't link is the
 # compile's error, never compiled from its source; a module that calls C is not prebuilt, its file left empty
 MODULES_FOLDER = "modules"
+# where a module's prebuilt image is: the program's own module's, a standard module's in the folder; "" for a module
+# the rebuild no longer prebuilds, whose file may linger there (reals.wasm after 827309223b: math linked it and was
+# refused, card stale-module-wasm), so it is compiled from its source
+prebuilt_path(name: text, folder: text): text := own_module_wasm.get(name) ?? (if name in std_module_names then folder + name + ".wasm" else "")
 linked_libraries(source: text): list := {
 	linked_signatures = {}
 	folder = linked_modules_folder()
@@ -145,7 +149,7 @@ linked_libraries(source: text): list := {
 	while at < #names {
 		name = names[at]
 		at += 1
-		wasm = wasm_if_there(own_module_wasm.get(name) ?? folder + name + ".wasm")
+		wasm = wasm_if_there(prebuilt_path(name, folder))
 		# (a module not prebuilt was said by the rebuild, its file left empty or never written: markup's html, compiled
 		# into markup; one prebuilt that won't link is the compile's error, never compiled from its source instead:
 		# decision module-link-hard-error. The modules one compiled from its source uses are linked in turn, reals'
@@ -242,12 +246,13 @@ write_module(name: text, runtime_file: text, file: text) := module_written_behin
 module_written_behind(name: text, runtime, file: text) := {
 	module_written = name
 	module_written_folder = folder_of(file) + "/"
-	made = ø
+	refused = ""
 	# (its `use` brings its file whole, found in the folder it is in: lib/, lib/host/, or a program's own module's)
 	folder = folder_of(std_module_path(name))
-	try { made = compile(module_source(name), folder, runtime, yes) } catch refusal { made = refusal }
+	try { compile(module_source(name), folder, runtime, yes) } catch refusal { refused = refusal_said(refusal) }
 	module_written = ""
-	if made is text { throw made }
+	# a trap under the compile too (a runtime word's fail(), decision #34): never a half-built module written
+	if refused != "" { throw refused }
 	write_bytes(file, with_signature(linked_bytes(module.order, MODULE_START), name, image_fields(module.order)))
 }
 MODULE_START = "warp/start"
@@ -267,11 +272,18 @@ write_modules(folder: text, runtime_file: text) := {
 		file = folder + "/" + name + ".wasm"
 		try { module_written_behind(name, runtime, file) } catch refusal {
 			write_bytes(file, [])
-			compiled_with_program = #c_declarations_in(std_module_text(name)) > 0 and not is_host_module(name) and not refusal.contains(" won't link: ")
-			if compiled_with_program { print name + ".wasm not prebuilt (it calls C, compiled with the program): " + refusal } else { refused += [name + ".wasm: " + refusal] }
+			said = refusal_said(refusal)
+			compiled_with_program = #c_declarations_in(std_module_text(name)) > 0 and not is_host_module(name) and not said.contains(" won't link: ")
+			if compiled_with_program { print name + ".wasm not prebuilt (it calls C, compiled with the program): " + said } else { refused += [name + ".wasm: " + said] }
 		}
 	}
 	if #refused > 0 { raise "standard modules that don't prebuild: " + refused.join("; ") }
+}
+# what a caught refusal says: a text raised, else the message of the error caught (a trap under the try)
+refusal_said(refusal: any): text := {
+	if refusal is text { return refusal }
+	said = "" + refusal.message
+	if said == "" then "an error without a message" else said
 }
 # where the native warp (core/native/warp.warp) wants the module of words that are neither a command nor a file:
 # they are code, compiled there for it to run; no other harness sets it
