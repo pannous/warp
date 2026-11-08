@@ -334,7 +334,7 @@ one() {
 	done
 	[ "$name" = warp-self ] && lane=(self)
 	from=$(resumed_step "$name")
-	[ -n "$from" ] && lane=(from "$from")
+	[ -n "$from" ] && lane=(pure from "$from")  # the compilers alone: a bare `warp rebuild` goes on to the native warp
 	logged "$name" "miss-building${from:+-from-$from}"
 	[ "$name" = warp-self ] && compiler_warmed
 	: >"$log"
