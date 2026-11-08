@@ -4,3 +4,6 @@
 'match [2, 1] { [1, x] | [x, 1] => x; _ => 0 }'	2
 'match [1, 5] { [1, x] | [x, 1] => x; _ => 0 }'	5
 'match {b: 4} { {a: x} | {b: x} => x; _ => 0 }'	4
+# a failed alternative binds nothing: data($x * 2) fails on 2 * y after taking x = 2, and data(2 * $x) binds x = y
+'f(n) := match n { data($x * 2) | data(2 * $x) => x; _ => 0 }; str(f(data(2 * y)))'	"y"
+'f(n) := match n { data($x * 1) | data(1 * $x) => x; _ => 0 }; [f(data(y * 1)), f(data(1 * y)), f(data(y * 3))].map(str)'	["y", "y", "0"]
