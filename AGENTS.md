@@ -108,8 +108,7 @@ The full suite runs only at rare intervals, never per branch or batch.
 The `warp` binary is the native warp, built by warp itself; the compiler it runs by `warp rebuild`.
 After each push scripts/integrate/after-push.sh installs both beside ~/dev/bin/warp:
 ```bash
-warp build native core/native/warp.warp   # the native warp
-warp rebuild                              # warp.wasm from lib/ by the seed
+warp rebuild                              # warp.wasm from lib/ by the seed, then the native warp; `warp rebuild pure`: the compilers alone
 scripts/promote-self.sh                   # warp.wasm -> warp-self.wasm once it compiles itself; never fails
 ```
 

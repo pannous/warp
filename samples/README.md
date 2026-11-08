@@ -51,7 +51,7 @@ These samples need specific features to be implemented:
 - **html_dsl.warp** - DSL demonstrations
 
 ### Graphics & External Libraries  
-- **raylib_*.warp** (8 files) - Raylib FFI examples
+- **raylib_*.warp** (3 files) - Raylib FFI examples
 - **webgpu.warp** - WebGPU integration
 - **visualizer.warp** - Winamp-style spectrum bars while a tune plays
 - **gpu_visualizer.warp** - the same spectrum driving a raymarched WGSL tunnel with a pulsing gem (WebGPU)
