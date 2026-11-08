@@ -1,13 +1,18 @@
-# The swatch paint must compile to a shader. Source: lib/shaders.warp wgsl_program_value,
-# samples/graphics/color_swatches.warp. named_colors is a module list, so the painted functions read swatches,
-# the named colors' channels as one program value, and band_at. Same selection as the sample.
+# The swatch paint must compile to a shader. Source: lib/shaders.warp, samples/graphics/color_swatches.warp,
+# and the list read test/web/test_shader_of.pairs.warp pins (`levels#(x + 1)`). xs[i] is not that read: its
+# subscript_offset mark is quoted as `view·attribute`, and WGSL has no operator `:`. The palette is still one
+# program value, the named colors' channels. The strings below are that capture, not a looser "it returned text".
 
 is! 'use color
 swatch_width = 40
 band_count = #named_colors
-swatches = named_colors.map(pair => channels(pair[0]))
+swatches = []
+for pair in named_colors { swatches = swatches + channels(pair[0]) }
 band_at(column) := min(column /! swatch_width, band_count - 1)
-band_color(column) := swatches[band_at(column)]
+band_color(column) := {
+	at = band_at(column) * 3
+	[swatches#(at + 1), swatches#(at + 2), swatches#(at + 3)]
+}
 ink(column, row) := band_color(column)
 made = shader_of(ink)
 made.contains("fn ink") and made.contains("fn band_at") and made.contains("fn band_color") and made.contains("values.swatches")' yes
