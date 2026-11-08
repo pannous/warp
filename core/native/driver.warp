@@ -2408,6 +2408,10 @@ PARAMETER_LENGTH = 10
 # a primitive module's text, the address of its (address, length) pair, and its pointer, an address of its memory
 PARAMETER_PAIR = 11
 PARAMETER_ADDRESS = 12
+# a list of numbers as a C array of f32 or of int32 cells, its byte count the length after it
+PARAMETER_F32S = 13
+PARAMETER_I32S = 14
+CELL_BYTES = 4
 REGISTER_I32 = 1
 REGISTER_I64 = 2
 REGISTER_F32 = 3
@@ -2438,6 +2442,8 @@ parameter_kind(name: text): i32 := {
 	if same_text(name, "length") { return PARAMETER_LENGTH }
 	if same_text(name, "pair") { return PARAMETER_PAIR }
 	if same_text(name, "address") { return PARAMETER_ADDRESS }
+	if same_text(name, "f32s") { return PARAMETER_F32S }
+	if same_text(name, "i32s") { return PARAMETER_I32S }
 	0
 }
 register_of(name: text): i32 := {
@@ -2530,7 +2536,7 @@ library_called(c: Foreign, caller: handle, context: handle, given: pointer, resu
 			long_at(integers + integer_count * 8).value = if kind == PARAMETER_LENGTH then bytes_length else c_argument(caller, context, name, kind, value, if outs == 0 then out else 0)
 			integer_count = integer_count + 1
 		}
-		if kind == PARAMETER_BYTES { bytes_length = c_bytes_length(caller, context, value - VALUE_OFFSET) }
+		if is_array(kind) { bytes_length = c_array_length(caller, context, kind, value - VALUE_OFFSET) }
 		if kind == PARAMETER_OUT { outs = outs + 1 }
 		passed = passed + program_argument(kind)
 	}
@@ -2622,15 +2628,15 @@ wasm_called(c: Foreign, caller: handle, context: handle, given: pointer, results
 		value = given + passed * VALUE_BYTES + VALUE_OFFSET
 		argument = arguments + p * VALUE_BYTES
 		if kind == PARAMETER_HANDLE or kind == PARAMETER_TEXTS { failed_call(joined(name, ": a handle or a list of texts into a wasm module, not in the native driver yet")) }
-		if kind == PARAMETER_TEXT or kind == PARAMETER_BYTES or kind == PARAMETER_OUT {
+		if kind == PARAMETER_TEXT or is_array(kind) or kind == PARAMETER_OUT {
 			# (a later out-pointer is NULL, as for a C library)
 			block = 0 as i64
 			if kind == PARAMETER_TEXT {
 				host = c_argument(caller, context, name, kind, value, 0)
 				block = wasm_block(c, context, host, strlen(host) + 1)
 			}
-			if kind == PARAMETER_BYTES {
-				bytes_length = c_bytes_length(caller, context, value - VALUE_OFFSET)
+			if is_array(kind) {
+				bytes_length = c_array_length(caller, context, kind, value - VALUE_OFFSET)
 				block = wasm_block(c, context, c_argument(caller, context, name, kind, value, 0), bytes_length)
 			}
 			if kind == PARAMETER_OUT and out == 0 {
@@ -2672,6 +2678,7 @@ c_argument(caller: handle, context: handle, name: text, kind: i32, value: pointe
 	if kind == PARAMETER_OUT { return if out == 0 then 0 else native_pointer(out) }
 	if kind == PARAMETER_TEXTS { return native_pointer(c_strings(caller, context, value - VALUE_OFFSET)) }
 	if kind == PARAMETER_BYTES { return native_pointer(c_bytes(caller, context, value - VALUE_OFFSET)) }
+	if kind == PARAMETER_F32S or kind == PARAMETER_I32S { return native_pointer(c_cells(caller, context, kind, value - VALUE_OFFSET)) }
 	if kind == PARAMETER_PAIR { return pair_c_text(caller, context, word_at(value).value as i64) }
 	if kind == PARAMETER_ADDRESS { return if word_at(value).value == 0 then 0 else guest_memory(caller, context) + word_at(value).value as i64 }
 	id = word_at(value).value as i32
@@ -2687,6 +2694,25 @@ c_bytes(caller: handle, context: handle, given: pointer): pointer := {
 	bytes
 }
 c_bytes_length(caller: handle, context: handle, given: pointer): i64 := if guest_flag(caller, context, "is_textual", given) then shown(caller, context, given).length as i64 else guest_number(caller, context, "item_count", given)
+# a parameter of many values in one block: bytes, f32 or int32 cells, and that block's byte count
+is_array(kind: i32): bool := kind == PARAMETER_BYTES or kind == PARAMETER_F32S or kind == PARAMETER_I32S
+c_array_length(caller: handle, context: handle, kind: i32, given: pointer): i64 := if kind == PARAMETER_BYTES then c_bytes_length(caller, context, given) else guest_number(caller, context, "item_count", given) * CELL_BYTES
+# a list of numbers of the module as f32 or int32 cells in the arena, each read by its export float_item_at or
+# int_item_at (one value block reused: a vertex array has many)
+c_cells(caller: handle, context: handle, kind: i32, given: pointer): pointer := {
+	count = guest_number(caller, context, "item_count", given)
+	cells = allocate((count * CELL_BYTES) as i32)
+	values = allocate(2 * VALUE_BYTES)
+	memcpy(values, native_pointer(given), VALUE_BYTES)
+	byte_at(values + VALUE_BYTES).value = KIND_I64
+	item = allocate(VALUE_BYTES)
+	for i in 0..count {
+		long_at(values + VALUE_BYTES + VALUE_OFFSET).value = i + 1
+		guest_call(caller, context, if kind == PARAMETER_F32S then "float_item_at" else "int_item_at", values, 2, item)
+		if kind == PARAMETER_F32S { single_at(cells + i * CELL_BYTES).value = float_at(item + VALUE_OFFSET).value as f32 } else { word_at(cells + i * CELL_BYTES).value = long_at(item + VALUE_OFFSET).value as u32 }
+	}
+	cells
+}
 # a list of texts of the module as a NULL-terminated array of C strings (argv), the strings and it in the arena
 c_strings(caller: handle, context: handle, list: pointer): pointer := {
 	counted = allocate(VALUE_BYTES)

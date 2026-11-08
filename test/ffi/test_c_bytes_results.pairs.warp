@@ -3,3 +3,5 @@
 
 'import (calloc, field_bytes, set_field_bytes) from "c"\nm = calloc(1, 8)\nset_field_bytes(m, 2, "warp")\nfield_bytes(m, 2, 4)'	"warp"
 'import (calloc, field_bytes, set_field_i32) from "c"\nm = calloc(1, 8)\nset_field_i32(m, 0, 258)\nt = field_bytes(m, 0, 3)\n[byte_at(t, i) for i in 0 ..< 3]'	[2, 1, 0]
+'memcpy(into: handle, from: f32s, size: length): handle from "c"\nimport (calloc, field_f32) from "c"\nm = calloc(4, 4)\nmemcpy(m, [1.5, -2, 0.25])\n[field_f32(m, 4 * i) for i in 0 ..< 4]'	[1.5, -2, 0.25, 0]
+'memcpy(into: handle, from: i32s, size: length): handle from "c"\nimport (calloc, field_i32) from "c"\nm = calloc(2, 4)\nmemcpy(m, [7, -9])\n[field_i32(m, 0), field_i32(m, 4)]'	[7, -9]
