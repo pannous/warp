@@ -31,6 +31,8 @@ spelled(name: Node): text := "${name}".remove_suffix(own_mark)
 # word, the tail of an amount split off before it (`2 L == 2000 cm` parses as 2, L == 2000, cm: card spaced-unit-comparison)
 unit_bound(amounted: Node, unit: Node): any := {
 	if is_amount(amounted) { return Key(amounted, Op.Mul, unit) }
+	# `1900 - 2000 cm`, two written numbers: the closed span between them in that unit (lib/units.warp number_quantity_span)
+	if is_key(amounted, Op.Sub) and is_number_literal(key_of(amounted)) and is_number_literal(value_of(amounted)) { return call_of("number_quantity_span", [key_of(amounted), Key(value_of(amounted), Op.Mul, unit)]) }
 	if amounted is key and op_of(amounted) in unit_ambiguous_ops { throw unit_ambiguous(amounted, unit) }
 	if not (amounted is key and op_of(amounted) in unit_binding_ops) or starts_with_unit(amounted) { return ø }
 	right = unit_bound(value_of(amounted), unit)
@@ -571,8 +573,11 @@ end_refused(task: Node): Node := {
 	throw "end ${as_code(task)}: did you mean finish ${as_code(task)} (let it run to its end) or cancel ${as_code(task)} (end it now)?"
 }
 # a value as code to paste: a text in its quotes, no attribute of the parser's (`float[n * m]`'s marked `+ 1` would
-# read back as `view·attribute: …`)
-as_code(n: Node): text := if n is text then "\"${n}\"" else "${plain_node(n)}"
+# read back as `view·attribute: …`), a number past int64 its digits again (the parser's `view·opaque: ["number", …]`
+# would read back as a product: `xs: [f32] = [1e38]`, card exponent-literal-reparse)
+as_code(n: Node): text := if n is text then "\"${n}\"" else code_written(plain_node(bottom_up(n, big_number_written)))
+code_written(n: Node): text := "${n}"
+big_number_written(n: Node): Node := if is_big_number_view(n) then symbol("${value_of(n)#2}") else n
 
 # `people where age > 18` (decision P223, extensions/sugar/lists.warp): a name the program binds nothing to that a class of it
 # declares as a field reads the item's field, `it.age`; a name the program binds keeps its value

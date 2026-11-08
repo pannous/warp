@@ -588,12 +588,25 @@ method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls
 	# class's position(p, v), whose `p` would be a text); so a list `[3, 1].sort()` passes none of the owners' methods
 	# its kind (their `self.n`)
 	head = if falls_back then call_arguments.map(argument => Key(argument, Op.Colon, symbol("any"))) else [self_node] + parameters
-	dispatched = class_dispatch(deepest_first(classes, owners), called, call_arguments, fallback)
+	dispatched = class_dispatch(deepest_first(classes, owners), called, call_arguments, foreign_first(spellings#1, call_arguments, fallback, operated))
 	# a class with its own method of the operator takes a float itself (`q * sin(x)` keeps q's unit, π's `*` gives the
 	# float): contagion only for the classes that leave the operator to the builtin
 	contagious = floaters.filter(floater => not lineage(classes, floater#1).any(ancestor => ancestor in owners))
 	Key(call_of(name, head), Op.Define, if operated then numbers_first(Key(call_arguments#1, operator#2 as Op, call_arguments#2), float_contagion(Key(call_arguments#1, operator#2 as Op, call_arguments#2), contagious, dispatched)) else dispatched)
 }
+# a module's dispatcher meeting an instance of a class it never saw (a linked module's only know their own, card
+# bind-linked): the method of that name of the instance's own module (its descriptor's method word), so reals' √ of
+# uncertain's interval calls the interval's root(); an operator's builtin asks the instance's class itself (by_class)
+foreign_first(method: text, call_arguments: list, fallback: Node?, operated: bool): Node? := {
+	if module_written == "" or operated { return fallback }
+	foreign = call_of(foreign_method_word, [call_arguments#1, Text(method), List(call_arguments[1..], Bracket.Square, Separator.Comma)])
+	if fallback == ø { return foreign }
+	Key(Key(Key(ø, Op.If, call_of(instance_test_word, [call_arguments#1])), Op.Then, foreign), Op.Else, fallback)
+}
+# the runtime's words a dispatcher calls so, by names no program spells
+foreign_method_word = "instance·method"
+instance_test_word = "instance·tested"
+foreign_instance_words = {"instance·method": "instance_method", "instance·tested": "is_class_instance"}
 # the operators a class's method may define by its English name, without those only a declaration gives a meaning
 # (lib/aliases.warp `declared`: lib/math.warp's `≈`, `~`, `↑`): the core computes none of them for the two numbers a
 # dispatcher falls back to (uncertain's approximately(o) stays a method, card class-declared-operators)

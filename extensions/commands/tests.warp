@@ -103,8 +103,10 @@ case_failure(case: TestCase, got: any, expected_run: text): text := {
 	expected = case.expected
 	if expects_error(expected) { return if failed then "" else "got " + serialize(got) }
 	if needs_run(expected) {
-		expected = run_result(expected_run, "")
-		if expected is text { expected = ["error", ["text", expected]] }
+		ran = run_result(expected_run, "")
+		# (a bare name no program of its own binds, `High` of the case's own enum, is that name)
+		unbound = kind(expected) == "symbol" and (ran is text or kind(ran) == "error")
+		expected = if unbound then expected else if ran is text then ["error", ["text", ran]] else ran
 	}
 	if not failed and (same_value(got, expected) or as_is_compares(got, expected) or (is_falsy_view(got) and is_falsy_view(expected))) { return "" }
 	"got " + serialize(got)
