@@ -2421,6 +2421,7 @@ CROSSING_HANDLE = 4
 CROSSING_U32 = 5
 CROSSING_PAIR = 6
 CROSSING_ADDRESS = 7
+CROSSING_BYTES = 8
 FAILURE_NONE = 1
 FAILURE_NOT_NULL = 2
 FAILURE_FALSE = 3
@@ -2456,6 +2457,7 @@ crossing_of(name: text): i32 := {
 	if same_text(name, "u32") { return CROSSING_U32 }
 	if same_text(name, "pair") { return CROSSING_PAIR }
 	if same_text(name, "address") { return CROSSING_ADDRESS }
+	if same_text(name, "bytes") { return CROSSING_BYTES }
 	0
 }
 failure_of(name: text): i32 := {
@@ -2648,10 +2650,10 @@ wasm_called(c: Foreign, caller: handle, context: handle, given: pointer, results
 	}
 	returned = wasm_function_called(context, c.wasm, WASM_FUNCTION, arguments, c.count as i64)
 	pointed = if out == 0 then 0 else (native_long(wasm_memory(context, c.wasm) + out) % 4294967296 + 4294967296) % 4294967296
-	gives_text = c.crossing == CROSSING_TEXT or c.crossing == CROSSING_OWNED_TEXT
+	gives_text = c.crossing == CROSSING_TEXT or c.crossing == CROSSING_OWNED_TEXT or c.crossing == CROSSING_BYTES
 	# (a text result read where it is in the module's memory)
 	c_finished(c, caller, context, if gives_text and returned != 0 then wasm_memory(context, c.wasm) + returned else returned, pointed, results, results_count)
-	if c.crossing == CROSSING_OWNED_TEXT { wasm_freed(c, context, returned) }
+	if c.crossing == CROSSING_OWNED_TEXT or c.crossing == CROSSING_BYTES { wasm_freed(c, context, returned) }
 	for i in 0..block_count { wasm_freed(c, context, long_at(blocks + i * 8).value) }
 }
 # a C call's result checked as its line says how a failure shows, then crossed back: the first out-pointer's value
@@ -2700,6 +2702,10 @@ c_result(caller: handle, context: handle, c: Foreign, returned: i64, result: poi
 	if c.crossing == CROSSING_PAIR or c.crossing == CROSSING_ADDRESS {
 		byte_at(result).value = KIND_I32
 		word_at(value).value = (if returned == 0 then 0 else if c.crossing == CROSSING_PAIR then guest_pair(caller, context, returned) else returned - guest_memory(caller, context)) as u32
+	} else if c.crossing == CROSSING_BYTES {
+		# ({i64 length, the bytes}, the callee's malloc: freed here, a wasm module's by its free)
+		if returned == 0 { guest_call(caller, context, "new_empty", 0, 0, result) } else { guest_text(caller, context, returned + 8, long_at(returned).value, result) }
+		if returned != 0 and c.wasm == 0 { free(returned) }
 	} else if c.crossing == CROSSING_TEXT or c.crossing == CROSSING_OWNED_TEXT {
 		if returned == 0 { guest_call(caller, context, "new_empty", 0, 0, result) } else { guest_text(caller, context, returned, strlen(returned), result) }
 		# (a wasm module's own text is freed by its free, wasm_called)

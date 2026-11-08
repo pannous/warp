@@ -1,0 +1,5 @@
+# many bytes of C memory at once, a `bytes` result read back as a text, and a text's bytes written there (lib/c.warp
+# field_bytes, set_field_bytes; card warp-gpu-source)
+
+'import (calloc, field_bytes, set_field_bytes) from "c"\nm = calloc(1, 8)\nset_field_bytes(m, 2, "warp")\nfield_bytes(m, 2, 4)'	"warp"
+'import (calloc, field_bytes, set_field_i32) from "c"\nm = calloc(1, 8)\nset_field_i32(m, 0, 258)\nt = field_bytes(m, 0, 3)\n[byte_at(t, i) for i in 0 ..< 3]'	[2, 1, 0]

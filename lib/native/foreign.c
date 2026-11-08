@@ -375,6 +375,16 @@ FIELD_READER(field_f32, float, double)
 FIELD_READER(field_f64, double, double)
 FIELD_READER(field_pointer, void*, void*)
 const char* field_text(const uint8_t* address, int64_t offset) { return (const char*)(address + offset); }
+// count bytes of a struct or buffer at once, a `bytes` result: {length, bytes} in memory the driver copies into a text
+// and frees; set_field_bytes writes a text's bytes there (a mapped GPU buffer read back, a vertex array filled)
+struct bytes_result { int64_t length; uint8_t bytes[]; };
+struct bytes_result* field_bytes(const uint8_t* address, int64_t offset, int64_t count) {
+	struct bytes_result* result = malloc(sizeof *result + (size_t)count);
+	result->length = count;
+	memcpy(result->bytes, address + offset, (size_t)count);
+	return result;
+}
+void set_field_bytes(uint8_t* address, int64_t offset, const uint8_t* data, int64_t size) { memcpy(address + offset, data, (size_t)size); }
 // a C function called with up to 8 integers and pointers and up to 8 floats in their registers (the ARM64 and x86-64
 // conventions keep the two apart, `ldexp(double, int)` takes d0 and x0): it reads only the ones its parameters name.
 // Its result is the integer register, or the bits of the float register
