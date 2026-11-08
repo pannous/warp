@@ -3,3 +3,10 @@
 'time 6 == 6s'	yes
 'x = time { sleep(0.05); 7 }; x'	7
 'time = 5; time + 1'	6
+# a Duration shows in seconds and meets units' quantities of time both ways (decision one-duration)
+'time 0.25'	0.25s
+'6s == time 6'	yes
+'d = time 6; d + 1s'	7s
+'d = time 6; 1s + d'	7s
+'d = time 6; d - 1s'	5s
+'d = time 6; d + time 2'	8s

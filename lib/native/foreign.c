@@ -16,9 +16,17 @@
 
 enum { ARENA_ALIGNMENT = 8, TEXT_RECORD = 8, PAGE_BYTES = 65536 }; // primitive.warp ARENA_ALIGNMENT, text_layout's size
 
+// a symbol of the process: the executable's, a library's it links or one opened RTLD_GLOBAL. POSIX's dlopen(NULL)
+// handle, not RTLD_DEFAULT, which glibc declares only under _GNU_SOURCE, and this file comes behind the header wasm2c
+// writes, too late to define it (the v1.8.0 Linux release jobs, card release-linux-bootstrap)
+static void* process_symbol(const char* name) {
+	static void* process;
+	if (!process) process = dlopen(NULL, RTLD_LAZY);
+	return dlsym(process, name);
+}
 // the C function of that name the executable or a library it links has; a program calling one it lacks stops here
 static void* native_function(const char* name) {
-	void* found = dlsym(RTLD_DEFAULT, name);
+	void* found = process_symbol(name);
 	if (!found) {
 		fprintf(stderr, "no C function %s in this executable or the libraries it links\n", name);
 		exit(1);
@@ -175,7 +183,7 @@ static const char* PROCESS_LIBRARIES[] = {"c", "m", "libc", "libm"};
 // a library's function, NULL when the library has none of that name: never another library's
 void* library_function(char* library, char* name) {
 	for (size_t i = 0; i < sizeof PROCESS_LIBRARIES / sizeof *PROCESS_LIBRARIES; i++)
-		if (!strcmp(library, PROCESS_LIBRARIES[i])) return dlsym(RTLD_DEFAULT, name);
+		if (!strcmp(library, PROCESS_LIBRARIES[i])) return process_symbol(name);
 	// global: a library's own plugins (python's extension modules) find its symbols; dlsym on the handle still answers
 	// from this library alone
 	int flags = RTLD_NOW | RTLD_GLOBAL;

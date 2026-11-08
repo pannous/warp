@@ -47,6 +47,10 @@ formula and release build set CARGO_NET_OFFLINE=false.
 
 ## At a release
 1. Bump `version` in Cargo.toml, commit, push main.
+   Then a dry run of that commit, green before the tag: `gh workflow run release.yml -f tag=<sha> -f dry=true`. It alone
+   compiles lib/native's C on the release's own runners (ubuntu-22.04 x64 and arm, the old glibc and gcc the tarballs
+   must run on); pages.yml's bootstrap compiles it only on ubuntu-latest (v1.8.0's Linux jobs failed on what 24.04
+   accepted: RTLD_DEFAULT undeclared, card release-linux-bootstrap).
 2. `git tag v<version> && git push origin v<version>`: the Release workflow (.github/workflows/release.yml) makes a
    draft release, builds the compilers from the tag's lib/ by the newest seed (job `compilers`), then one tarball per
    platform (job `native`: the native warp, the compilers and lib/ side by side), then the .deb and .rpm. Each job's
