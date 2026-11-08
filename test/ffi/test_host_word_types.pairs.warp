@@ -1,0 +1,6 @@
+# a typed C word beside a library word of its name and count picks by the arguments' types (card web-write-call):
+# web's write(fd, data) beside the prelude's write(path, text); known kinds decide when compiled, others at run time
+'use web; write(2, "")'	0
+'use web; write("host_word_types.txt", "hi"); read("host_word_types.txt")'	"hi"
+'use web; fd = [2]#1; write(fd, "")'	0
+'use web; p = ["host_word_types_2.txt"]#1; write(p, "ok"); read(p)'	"ok"
