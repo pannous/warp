@@ -74,6 +74,8 @@ arithmetic_kind(left: ValueKind, op: text, right: ValueKind): ValueKind := {
 	ValueKind.Int
 }
 
+# an `if` with no else: its branch's value joined with the else's int, unless the branch's kind isn't known yet
+if_then_kind(branch: ValueKind): ValueKind := if branch == ValueKind.Unknown then branch else branches_kind(branch, ValueKind.Int)
 # either branch's value: one kind stays, numbers widen, any other mix is a node
 branches_kind(a: ValueKind, b: ValueKind): ValueKind := {
 	if a == ValueKind.Unknown { return b }
@@ -213,7 +215,9 @@ kind_of_key(n: Node, scope: Scope): ValueKind := {
 	if op == "?" and is_key(value_of(n), Op.Colon) { return choice_kind(key_of(value_of(n)), value_of(value_of(n)), scope) }
 	if op == "else" and is_key(key_of(n), Op.Then) and is_try_value(value_of(key_of(n))) { return try_kind(branch_kind(value_of(key_of(n)), scope), branch_kind(value_of(n), scope)) }
 	if op == "else" and is_key(key_of(n), Op.Then) { return choice_kind(value_of(key_of(n)), value_of(n), scope) }
-	if op == "then" and is_key(key_of(n), Op.If) { return branches_kind(branch_kind(value_of(n), scope), ValueKind.Int) }
+	# (a branch of a kind not known yet stays so: no int of a missing else, which collections' Set.add, its
+	# `if … { items.add(x) }` last, gave as an i64 of its list)
+	if op == "then" and is_key(key_of(n), Op.If) { return if_then_kind(branch_kind(value_of(n), scope)) }
 	if op == "#" and not is_empty(key_of(n)) { return subscript_kind(key_of(n), value_of(n), scope) }
 	if op == "do" and is_key(key_of(n), Op.While) { return loop_kind(value_of(n), scope) }
 	# `Point{x: 1}` as the pure lane leaves it, the class name before its fields: an instance, a node
@@ -223,9 +227,6 @@ kind_of_key(n: Node, scope: Scope): ValueKind := {
 
 compound_kind(left: ValueKind, op: text, right: ValueKind): ValueKind := {
 	if left == ValueKind.Unknown or right == ValueKind.Unknown { return ValueKind.Unknown }
-	# a field `self.items += [x]` holds what its class gives it, known when it runs, as with arithmetic_kind (no int:
-	# collections' Set.add gave an i64 of its list)
-	if is_held_value(left) or is_held_value(right) { return ValueKind.Data }
 	if op == "+" and (left == ValueKind.List or right == ValueKind.List) and left != ValueKind.Text and right != ValueKind.Text { return ValueKind.List }
 	if op == "+" and (left == ValueKind.Text or right == ValueKind.Text) { return ValueKind.Text }
 	if left == ValueKind.Empty { return ValueKind.Empty }
