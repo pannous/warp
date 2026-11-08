@@ -23,10 +23,11 @@ class Quantity {
 		}
 		measured(amount + summand(this, other, "add").amount - unit_zero(unit), dims, unit, scale)
 	}
-	# number - Quantity via as-promotes (dims 0, empty unit): a span in the quantitys unit, `1900 - 2000 cm`
+	# number - Quantity via as-promotes (dims 0, empty unit): a span in the quantitys unit, `1900 - 2000 cm`; 0 - q
+	# is its negation, as `-y` reaches it (card uncertainty-negation-print)
 	-(other) := {
 		if dims == 0 and unit is empty and (other is Quantity) and other.dims != 0 {
-			return number_quantity_span(amount, other)
+			return if amount == 0 then other * -1 else number_quantity_span(amount, other)
 		}
 		measured(amount - summand(this, other, "subtract").amount + unit_zero(unit), dims, unit, scale)
 	}
