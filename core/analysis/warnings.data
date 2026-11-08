@@ -1,5 +1,8 @@
 # The warnings of the warp compiler (core/diagnostics.warp): pattern TAB message, the first match wins
 
+# a whole number known when compiling that misfits an int, i64, which wraps it (extensions/int_misfits.warp,
+# night decision int-wrap-declarations)
+int_misfit($code)	"`{code}` does not fit an int (i64): it wraps"	"declare nat or number to keep it"
 # a text spelling a number added to a number (extensions/text_lints.warp, card print-oldest)
 spelled_number_join($written, $spelled, $as_sum, $as_text)	"{written} joins the texts; {spelled} spells a number"	"{as_sum} or {as_text}"
 # a file or folder beside the program named as a standard module it uses (extensions/local_shadows.warp, decision
