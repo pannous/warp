@@ -795,8 +795,10 @@ overloaded_results(program: Node): map := {
 
 result_variant(name: text, type: text): text := name + "·" + type
 
-# the call `(f x)` or `f x` of an overloaded f, ø of another node
+# the call `(f x)` or `f x` of an overloaded f, ø of another node; `f()`, which the parser holds as `(f)`, is the call
+# without arguments
 overloaded_call(n: Node, overloaded: map): Node? := {
+	if is_round(n) and #n == 1 and n#1 is symbol and name_of(n#1) in overloaded { return n }
 	call = if is_round(n) and #n == 1 then n#1 else if is_round(n) and separator_of(n) == " " then List(items_of(n), Bracket.None, Separator.Space) else n
 	if is_call_form(call) and #call > 0 and call#1 is symbol and name_of(call#1) in overloaded then call else ø
 }
