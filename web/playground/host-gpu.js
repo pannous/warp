@@ -44,6 +44,11 @@ const VALUES_BINDING = 0;
 const PREVIOUS_HOLE = "previous";
 const PREVIOUS_FUNCTION = "warp_previous";
 const PREVIOUS_FRAME_BINDING = 1;
+// paint's lists of more than 4 numbers or of vectors: each a read-only storage array of its own from this binding on, as
+// long as it is (card paint-values-storage), `values.mesh` in the shader the array warp_values_mesh
+// (crates/warp-gpu/warp_gpu.c STORAGE_BINDING)
+const STORAGE_BINDING = 2;
+const STORAGE_PREFIX = "warp_values_";
 const PREVIOUS_FRAME = `
 @group(0) @binding(${PREVIOUS_FRAME_BINDING}) var warp_previous_frame: texture_2d<f32>;
 fn ${PREVIOUS_FUNCTION}(at: vec2f) -> vec4f {
@@ -203,13 +208,16 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 	const device = await theGpuDevice();
 	const painted = paintCanvases.get(canvas);
 	if (canvas !== undefined && !painted) throw new Error(CANVAS_MISSING);
-	const { declarations, bytes: valueBytes } = uniformLayout(values);
+	const { declarations, bytes: valueBytes, arrays } = valuesLayout(values);
+	const read = arrays.filter(({ name }) => holeRead(shader, name));
+	shader = read.reduce((code, { name }) => code.replace(holePattern(name), STORAGE_PREFIX + name), shader);
+	const storages = read.map(({ name }, at) => `\n@group(0) @binding(${STORAGE_BINDING + at}) var<storage, read> ${STORAGE_PREFIX}${name}: array<vec4f>;`).join("");
 	const ownVertexStage = shader.match(OWN_VERTEX_STAGE)?.[1];
 	const vertices = ownVertexStage ? "" : FULL_IMAGE_VERTICES;
 	const readsPrevious = new RegExp(`\\b${VALUES_NAME}\\.${PREVIOUS_HOLE}\\b`).test(shader);
 	const code = readsPrevious
-		? shader.replaceAll(`${VALUES_NAME}.${PREVIOUS_HOLE}`, PREVIOUS_FUNCTION) + vertices + declarations + PREVIOUS_FRAME
-		: shader + vertices + declarations;
+		? shader.replaceAll(`${VALUES_NAME}.${PREVIOUS_HOLE}`, PREVIOUS_FUNCTION) + vertices + declarations + storages + PREVIOUS_FRAME
+		: shader + vertices + declarations + storages;
 	const module = await gpuModule(device, code);
 	const format = painted?.format ?? "rgba8unorm";
 	const usage = GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC | (readsPrevious ? GPUTextureUsage.TEXTURE_BINDING : 0);
@@ -217,7 +225,7 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 	const image = canvasImage && !readsPrevious ? canvasImage : device.createTexture({ size: [width, height], format, usage });
 	device.pushErrorScope("validation");
 	const { pipeline, groupLayout } = compiledOnce(compiledPipelines, `${format}\n${code}`, () => {
-		const groupLayout = declarations || readsPrevious ? bindingsGroupLayout(device, !!declarations, readsPrevious) : undefined;
+		const groupLayout = declarations || readsPrevious || read.length ? bindingsGroupLayout(device, !!declarations, readsPrevious, read.length) : undefined;
 		const layout = groupLayout ? device.createPipelineLayout({ bindGroupLayouts: [groupLayout] }) : "auto";
 		const pipeline = device.createRenderPipeline({
 			layout,
@@ -228,7 +236,8 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 		return { pipeline, groupLayout };
 	});
 	const previous = readsPrevious ? previousFrame(device, `${format}\n${shader}`, image) : undefined;
-	const uniform = groupLayout ? uniformBinding(device, groupLayout, declarations ? valueBytes : undefined, previous) : undefined;
+	const uniform = groupLayout ? uniformBinding(device, groupLayout, declarations ? valueBytes : undefined, previous, read) : undefined;
+	const released = () => uniform?.buffers.forEach(buffer => buffer.destroy());
 	const encoder = device.createCommandEncoder();
 	const pass = encoder.beginRenderPass({ colorAttachments: [paperAttachment(image)] });
 	pass.setPipeline(pipeline);
@@ -238,13 +247,13 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 	pass.end();
 	if (canvasImage && image !== canvasImage)
 		encoder.copyTextureToTexture({ texture: image }, { texture: canvasImage }, [Math.min(width, canvasImage.width), Math.min(height, canvasImage.height)]);
-	if (painted) return gpuSubmitted(device, encoder).finally(() => uniform?.buffer?.destroy());
+	if (painted) return gpuSubmitted(device, encoder).finally(released);
 	const rowBytes = Math.ceil(width * PIXEL_BYTES / ROW_ALIGNMENT) * ROW_ALIGNMENT;
 	const readback = readbackBuffer(device, rowBytes * height);
 	encoder.copyTextureToBuffer({ texture: image }, { buffer: readback, bytesPerRow: rowBytes, rowsPerImage: height }, [width, height]);
 	const bytes = new Uint8Array(await gpuReadBack(device, encoder, readback));
 	if (!readsPrevious) image.destroy();
-	uniform?.buffer?.destroy();
+	released();
 	const pixels = new Uint32Array(width * height);
 	for (let row = 0, pixel = 0; row < height; row++)
 		for (let at = row * rowBytes; at < row * rowBytes + width * PIXEL_BYTES; at += PIXEL_BYTES)
@@ -253,47 +262,61 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 }
 
 // the WGSL declaring `values` (appended, so the shader's line numbers stay the user's) and the uniform's bytes, laid out
-// as WGSL aligns its members (src/graphics/gpu.rs uniform_layout)
-function uniformLayout(values) {
-	const entries = Object.entries(values ?? {});
-	if (!entries.length) return { declarations: "", bytes: new ArrayBuffer(0) };
-	const members = [], floats = [];
-	const padded = alignment => { while (floats.length % (alignment / 4)) floats.push(0); };
-	for (const [name, value] of entries) {
+// as WGSL aligns its members (crates/warp-gpu/warp_gpu.c values_laid_out); its lists of more than 4 numbers or of
+// vectors as storage arrays [{name, numbers}], 4 numbers a vec4f
+function valuesLayout(values) {
+	const members = [], floats = [], arrays = [];
+	const padded = (numbers, alignment) => { while (numbers.length % (alignment / 4)) numbers.push(0); };
+	for (const [name, value] of Object.entries(values ?? {})) {
 		// a list of lists: one vec4f per item, its missing coordinates 0
 		const vectors = Array.isArray(value) && value.some(Array.isArray);
 		if (vectors && value.some(item => [item].flat().length > VECTOR_FLOATS)) throw new Error(`${VALUES_NAME}.${name} is a list of vectors of up to four numbers, got ${JSON.stringify(value)}`);
 		const numbers = vectors ? value.flatMap(item => [...[item].flat(), 0, 0, 0, 0].slice(0, VECTOR_FLOATS)) : [value].flat();
 		if (!numbers.every(number => typeof number === "number")) throw new Error(`${VALUES_NAME}.${name} is a number or a list of numbers, got ${JSON.stringify(value)}${PREVIOUS_WORDS.includes(name) ? "; the shader's own previous frame is $previous(at)" : ""}`);
-		const array = vectors || numbers.length > VECTOR_FLOATS;
-		const [type, alignment] = array ? [`array<vec4f, ${Math.max(1, Math.ceil(numbers.length / VECTOR_FLOATS))}>`, UNIFORM_ALIGNMENT] : VALUE_TYPES[numbers.length] ?? [];
+		if (vectors || numbers.length > VECTOR_FLOATS) {
+			padded(numbers, UNIFORM_ALIGNMENT);
+			arrays.push({ name, numbers: new Float32Array(numbers.length ? numbers : [0, 0, 0, 0]) });
+			continue;
+		}
+		const [type, alignment] = VALUE_TYPES[numbers.length] ?? [];
 		if (!type) throw new Error(`${VALUES_NAME}.${name} is one number or a list of two to four, got ${numbers.length}`);
-		padded(alignment);
+		padded(floats, alignment);
 		floats.push(...numbers);
-		if (array) padded(UNIFORM_ALIGNMENT);
 		members.push(`${name}: ${type}`);
 	}
-	padded(UNIFORM_ALIGNMENT);
+	if (!members.length) return { declarations: "", bytes: new ArrayBuffer(0), arrays };
+	padded(floats, UNIFORM_ALIGNMENT);
 	const declarations = `\nstruct WarpValues { ${members.join(", ")} }\n@group(0) @binding(${VALUES_BINDING}) var<uniform> ${VALUES_NAME}: WarpValues;`;
-	return { declarations, bytes: new Float32Array(floats).buffer };
+	return { declarations, bytes: new Float32Array(floats).buffer, arrays };
 }
+// `values.name` in a shader, whole
+const holePattern = name => new RegExp(`\\b${VALUES_NAME}\\.${name}\\b`, "g");
+const holeRead = (shader, name) => holePattern(name).test(shader);
 
 // an explicit layout holding the uniform and the previous frame, so a shader that leaves `values` unread still binds them
-const bindingsGroupLayout = (device, takesValues, readsPrevious) => device.createBindGroupLayout({ entries: [
-	...takesValues ? [{ binding: VALUES_BINDING, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } }] : [],
+const SHADER_STAGES = GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT;
+const bindingsGroupLayout = (device, takesValues, readsPrevious, arrayCount) => device.createBindGroupLayout({ entries: [
+	...takesValues ? [{ binding: VALUES_BINDING, visibility: SHADER_STAGES, buffer: { type: "uniform" } }] : [],
+	...Array.from({ length: arrayCount }, (_, at) => ({ binding: STORAGE_BINDING + at, visibility: SHADER_STAGES, buffer: { type: "read-only-storage" } })),
 	...readsPrevious ? [{ binding: PREVIOUS_FRAME_BINDING, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "unfilterable-float" } }] : [],
 ] });
 
-// this frame's values in a uniform buffer (no bytes: none) and the previous frame, bound as the layout says; the buffer
-// is destroyed once the frame is read
-function uniformBinding(device, groupLayout, bytes, previous) {
-	const buffer = bytes && device.createBuffer({ size: bytes.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-	if (buffer) device.queue.writeBuffer(buffer, 0, bytes);
+// this frame's values in a uniform buffer (no bytes: none), its storage arrays and the previous frame, bound as the
+// layout says; the buffers are destroyed once the frame is read
+function uniformBinding(device, groupLayout, bytes, previous, arrays) {
+	const filled = (data, usage) => {
+		const buffer = device.createBuffer({ size: data.byteLength, usage: usage | GPUBufferUsage.COPY_DST });
+		device.queue.writeBuffer(buffer, 0, data);
+		return buffer;
+	};
+	const buffer = bytes && filled(bytes, GPUBufferUsage.UNIFORM);
+	const storages = arrays.map(({ numbers }) => filled(numbers, GPUBufferUsage.STORAGE));
 	const entries = [
 		...buffer ? [{ binding: VALUES_BINDING, resource: { buffer } }] : [],
+		...storages.map((storage, at) => ({ binding: STORAGE_BINDING + at, resource: { buffer: storage } })),
 		...previous ? [{ binding: PREVIOUS_FRAME_BINDING, resource: previous.createView() }] : [],
 	];
-	return { buffer, bindings: device.createBindGroup({ layout: groupLayout, entries }) };
+	return { buffers: [...buffer ? [buffer] : [], ...storages], bindings: device.createBindGroup({ layout: groupLayout, entries }) };
 }
 
 // the frame `shader` drew last when it has the size of `image` (a black one otherwise), and `image` kept as the next

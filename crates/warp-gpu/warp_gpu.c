@@ -83,9 +83,23 @@ static int device_ready(void) {
 }
 
 // --- the values: `{name: number, name: [numbers], name: [[numbers], …]}` as warp shows them, laid out as WGSL aligns
-// a uniform struct's members (host-gpu.js uniformLayout)
-typedef struct { float floats[MOST_FLOATS]; int count; char declarations[MOST_DECLARATIONS]; int members; int instances; } Layout;
+// paint's values (host-gpu.js valuesLayout): its numbers and short vectors a uniform struct's members, each list of
+// more (a list of vectors, one vec4f an item, or of more than 4 numbers, 4 a vec4f) a read-only storage array of its
+// own (card paint-values-storage), as long as it is: `values.mesh` in the shader is the array warp_values_mesh
+#define STORAGE_PREFIX "warp_values_"
+enum { STORAGE_BINDING = 2, MOST_STORAGE_ARRAYS = 6 };
+typedef struct { float* items; int count, room; } Floats;
+typedef struct { char name[NAME_BYTES]; Floats numbers; } StorageValues;
+typedef struct { float floats[MOST_FLOATS]; int count; char declarations[MOST_DECLARATIONS]; int members; int instances;
+	StorageValues arrays[MOST_STORAGE_ARRAYS]; int array_count; } Layout;
 
+static void pushed(Floats* floats, float number) {
+	if (floats->count == floats->room) {
+		floats->room = floats->room ? 2 * floats->room : 1024;
+		floats->items = realloc(floats->items, floats->room * sizeof(float));
+	}
+	floats->items[floats->count++] = number;
+}
 static int name_char(char c) { return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'); }
 static const char* spaces_skipped(const char* at) { while (*at == ' ' || *at == '\n' || *at == '\t') at++; return at; }
 // a number as warp shows it: a decimal, or an exact fraction `a/b`
@@ -105,44 +119,63 @@ static void padded(Layout* layout, int alignment) { while (layout->count % (alig
 static int layout_failed(const char* name, const char* why) {
 	return snprintf(failure, sizeof failure, VALUES_NAME ".%s %s", name, why), 0;
 }
-// one member: its numbers (vectors: each a vec4f) after the layout's, then its declaration
-static int member_laid_out(Layout* layout, const char* name, float* numbers, int count, int vectors) {
-	int array = vectors || count > VECTOR_FLOATS;
-	if (!array && count < 1) return layout_failed(name, "is one number or a list of two to four");
-	if (layout->count + count + 2 * VECTOR_FLOATS > MOST_FLOATS) return layout_failed(name, "has more numbers than a uniform holds here");
-	char type[32];
-	if (array) snprintf(type, sizeof type, "array<vec4f, %d>", count / VECTOR_FLOATS + (count % VECTOR_FLOATS != 0) + (count == 0));
-	padded(layout, array ? UNIFORM_ALIGNMENT : VALUE_ALIGNMENTS[count]);
-	memcpy(layout->floats + layout->count, numbers, count * sizeof(float));
+// one member: a list of more than 4 numbers or of vectors a storage array, else a uniform member after the others
+static int member_laid_out(Layout* layout, const char* name, Floats* numbers, int vectors) {
+	int count = numbers->count;
+	if (vectors || count > VECTOR_FLOATS) {
+		if (layout->array_count == MOST_STORAGE_ARRAYS) return layout_failed(name, "is one list too many: paint's values hold at most 6");
+		while (numbers->count % VECTOR_FLOATS || numbers->count == 0) pushed(numbers, 0);
+		StorageValues* array = &layout->arrays[layout->array_count++];
+		snprintf(array->name, NAME_BYTES, "%s", name);
+		array->numbers = *numbers;
+		*numbers = (Floats){0};
+		return 1;
+	}
+	if (count < 1) return layout_failed(name, "is one number or a list of two to four");
+	if (layout->count + count + VECTOR_FLOATS > MOST_FLOATS) return layout_failed(name, "has more numbers than a uniform holds here");
+	padded(layout, VALUE_ALIGNMENTS[count]);
+	memcpy(layout->floats + layout->count, numbers->items, count * sizeof(float));
 	layout->count += count;
-	if (!array && count == 1 && !strcmp(name, INSTANCES_NAME)) layout->instances = (int)numbers[0];
-	if (array) padded(layout, UNIFORM_ALIGNMENT);
+	if (count == 1 && !strcmp(name, INSTANCES_NAME)) layout->instances = (int)numbers->items[0];
 	size_t used = strlen(layout->declarations);
-	snprintf(layout->declarations + used, MOST_DECLARATIONS - used, "%s%s: %s", layout->members++ ? ", " : "", name, array ? type : VALUE_TYPES[count]);
+	snprintf(layout->declarations + used, MOST_DECLARATIONS - used, "%s%s: %s", layout->members++ ? ", " : "", name, VALUE_TYPES[count]);
+	numbers->count = 0;
 	return 1;
 }
 // the numbers of a list, `[1, 2]` or `[[1, 2], [3]]` (each inner one padded to a vec4f), after `[`
-static const char* list_read(const char* at, float* numbers, int* count, int* vectors) {
+static const char* list_read(const char* at, Floats* numbers, int* vectors) {
 	for (at = spaces_skipped(at); *at != ']'; at = spaces_skipped(at)) {
 		if (*at == '[') {
 			*vectors = 1;
-			int inner = 0, nested = 0;
-			float items[VECTOR_FLOATS + 1];
-			at = list_read(at + 1, items, &inner, &nested);
-			if (!at || nested || inner > VECTOR_FLOATS || *count + VECTOR_FLOATS > MOST_FLOATS) return NULL;
-			for (int i = 0; i < VECTOR_FLOATS; i++) numbers[(*count)++] = i < inner ? items[i] : 0;
+			int inner = 0;
+			float items[VECTOR_FLOATS];
+			for (at = spaces_skipped(at + 1); *at != ']'; at = spaces_skipped(at)) {
+				if (inner == VECTOR_FLOATS || !(at = number_read(at, &items[inner++]))) return NULL;
+				at = spaces_skipped(at);
+				if (*at == ',') at++;
+			}
+			at++;
+			for (int i = 0; i < VECTOR_FLOATS; i++) pushed(numbers, i < inner ? items[i] : 0);
 		} else {
-			if (*count >= MOST_FLOATS) return NULL;
-			at = number_read(at, &numbers[(*count)++]);
-			if (!at) return NULL;
+			float number;
+			if (!(at = number_read(at, &number))) return NULL;
+			pushed(numbers, number);
 		}
 		at = spaces_skipped(at);
 		if (*at == ',') at++;
 	}
 	return at + 1;
 }
+static void layout_cleared(Layout* layout) {
+	for (int i = 0; i < layout->array_count; i++) free(layout->arrays[i].numbers.items);
+	layout->array_count = 0;
+	layout->count = 0;
+	layout->members = 0;
+	layout->declarations[0] = 0;
+	layout->instances = 1;
+}
 static int values_laid_out(const char* values, Layout* layout) {
-	static float numbers[MOST_FLOATS];
+	static Floats numbers;
 	const char* at = spaces_skipped(values);
 	if (*at != '{') return 1;
 	for (at = spaces_skipped(at + 1); *at && *at != '}'; at = spaces_skipped(at)) {
@@ -152,10 +185,15 @@ static int values_laid_out(const char* values, Layout* layout) {
 		name[length] = 0;
 		if (*at != ':') return snprintf(failure, sizeof failure, "paint's values are a map of numbers"), 0;
 		at = spaces_skipped(at + 1);
-		int count = 0, vectors = 0;
-		at = *at == '[' ? list_read(at + 1, numbers, &count, &vectors) : number_read(at, &numbers[count++]);
+		int vectors = 0;
+		numbers.count = 0;
+		if (*at == '[') at = list_read(at + 1, &numbers, &vectors);
+		else {
+			float number;
+			if ((at = number_read(at, &number))) pushed(&numbers, number);
+		}
 		if (!at) return layout_failed(name, "is a number or a list of numbers");
-		if (!member_laid_out(layout, name, numbers, count, vectors)) return 0;
+		if (!member_laid_out(layout, name, &numbers, vectors)) return 0;
 		at = spaces_skipped(at);
 		if (*at == ',') at++;
 	}
@@ -292,19 +330,24 @@ enum { PREVIOUS_FRAME_BINDING = 1 };
 static char* previous_code;
 static WGPUTexture previous_image;
 static int32_t previous_width, previous_height;
-static int reads_previous(const char* shader) {
-	for (const char* at = strstr(shader, PREVIOUS_HOLE); at; at = strstr(at + 1, PREVIOUS_HOLE))
-		if (!name_char(at[strlen(PREVIOUS_HOLE)])) return 1;
+// whether the shader names `name` whole (not as the start of a longer name)
+static int names(const char* shader, const char* name) {
+	for (const char* at = strstr(shader, name); at; at = strstr(at + 1, name))
+		if ((at == shader || !name_char(at[-1])) && !name_char(at[strlen(name)])) return 1;
 	return 0;
 }
-// the shader with each values.previous a call of warp_previous
-static char* previous_called(const char* shader) {
-	char* code = malloc(strlen(shader) + 1);
+static int reads_previous(const char* shader) { return names(shader, PREVIOUS_HOLE); }
+// the shader with each whole `from` written `to`; the caller frees it
+static char* renamed(const char* shader, const char* from, const char* to) {
+	size_t from_length = strlen(from), to_length = strlen(to), uses = 0;
+	for (const char* at = strstr(shader, from); at; at = strstr(at + 1, from)) uses++;
+	char* code = malloc(strlen(shader) + uses * (to_length > from_length ? to_length - from_length : 0) + 1);
 	char* into = code;
 	for (const char* at = shader; *at;) {
-		if (!strncmp(at, PREVIOUS_HOLE, strlen(PREVIOUS_HOLE)) && !name_char(at[strlen(PREVIOUS_HOLE)])) {
-			into += sprintf(into, PREVIOUS_FUNCTION);
-			at += strlen(PREVIOUS_HOLE);
+		if (!strncmp(at, from, from_length) && !name_char(at[from_length]) && (at == shader || !name_char(at[-1]))) {
+			memcpy(into, to, to_length);
+			into += to_length;
+			at += from_length;
 		} else *into++ = *at++;
 	}
 	*into = 0;
@@ -328,24 +371,35 @@ static void previous_kept(WGPUTexture image) {
 
 // --- a drawing: the shader's pipeline for a target format, its values' uniform and its previous frame bound
 // corners and instances: a full image's triangle once, or the quads of a shader with its own vertex stage
-typedef struct { WGPURenderPipeline pipeline; WGPUBuffer uniform; WGPUBindGroup bindings; WGPUTextureView previous; int reads_previous; int corners; int instances; } Drawing;
+typedef struct { WGPURenderPipeline pipeline; WGPUBuffer uniform; WGPUBindGroup bindings; WGPUTextureView previous; int reads_previous; int corners; int instances;
+	WGPUBuffer storages[MOST_STORAGE_ARRAYS]; int storage_count; } Drawing;
 static int drawing_made(const char* shader, const char* values, WGPUTextureFormat format, int32_t width, int32_t height, Drawing* drawing) {
 	*drawing = (Drawing){0};
 	failure[0] = 0;
 	if (!device_ready()) return 0;
 	static Layout layout;
-	layout.count = 0;
-	layout.members = 0;
-	layout.declarations[0] = 0;
-	layout.instances = 1;
+	layout_cleared(&layout);
 	if (!values_laid_out(values, &layout)) return 0;
 	char vertex[NAME_BYTES];
 	int quads = own_vertex_stage(shader, vertex);
 	drawing->corners = quads ? QUAD_CORNERS : TRIANGLE_CORNERS;
 	drawing->instances = quads ? layout.instances : 1;
 	drawing->reads_previous = reads_previous(shader);
-	char* body = drawing->reads_previous ? previous_called(shader) : strdup(shader);
-	size_t code_size = strlen(body) + sizeof FULL_IMAGE_VERTICES + sizeof PREVIOUS_FRAME + MOST_DECLARATIONS + 128;
+	char* body = drawing->reads_previous ? renamed(shader, PREVIOUS_HOLE, PREVIOUS_FUNCTION) : strdup(shader);
+	// each storage array the shader reads: `values.mesh` its own array warp_values_mesh
+	char storage_names[MOST_STORAGE_ARRAYS][NAME_BYTES + sizeof STORAGE_PREFIX];
+	int read[MOST_STORAGE_ARRAYS], read_count = 0;
+	for (int i = 0; i < layout.array_count; i++) {
+		char hole[NAME_BYTES + sizeof VALUES_NAME + 1];
+		snprintf(hole, sizeof hole, VALUES_NAME ".%s", layout.arrays[i].name);
+		if (!names(body, hole)) continue;
+		snprintf(storage_names[read_count], sizeof storage_names[0], STORAGE_PREFIX "%s", layout.arrays[i].name);
+		char* named = renamed(body, hole, storage_names[read_count]);
+		free(body);
+		body = named;
+		read[read_count++] = i;
+	}
+	size_t code_size = strlen(body) + sizeof FULL_IMAGE_VERTICES + sizeof PREVIOUS_FRAME + MOST_DECLARATIONS + 128 * (1 + read_count);
 	char* code = malloc(code_size);
 	snprintf(code, code_size, "%s%s", body, quads ? "" : FULL_IMAGE_VERTICES);
 	free(body);
@@ -354,9 +408,13 @@ static int drawing_made(const char* shader, const char* values, WGPUTextureForma
 		snprintf(code + used, code_size - used, "\nstruct WarpValues { %s }\n@group(0) @binding(%d) var<uniform> " VALUES_NAME ": WarpValues;",
 			layout.declarations, VALUES_BINDING);
 	}
+	for (int i = 0; i < read_count; i++) {
+		size_t used = strlen(code);
+		snprintf(code + used, code_size - used, "\n@group(0) @binding(%d) var<storage, read> %s: array<vec4f>;", STORAGE_BINDING + i, storage_names[i]);
+	}
 	if (drawing->reads_previous) strcat(code, PREVIOUS_FRAME);
 	drawing->pipeline = pipeline_of(code, format);
-	WGPUBindGroupEntry entries[2];
+	WGPUBindGroupEntry entries[2 + MOST_STORAGE_ARRAYS];
 	size_t count = 0;
 	if (drawing->pipeline && layout.members) {
 		uint64_t size = layout.count * sizeof(float);
@@ -373,6 +431,16 @@ static int drawing_made(const char* shader, const char* values, WGPUTextureForma
 		entries[count].binding = PREVIOUS_FRAME_BINDING;
 		entries[count++].textureView = drawing->previous;
 	}
+	for (int i = 0; drawing->pipeline && i < read_count; i++) {
+		Floats* numbers = &layout.arrays[read[i]].numbers;
+		uint64_t size = numbers->count * sizeof(float);
+		WGPUBuffer storage = drawing->storages[drawing->storage_count++] = buffer_of(size, WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst);
+		wgpuQueueWriteBuffer(queue, storage, 0, numbers->items, size);
+		entries[count] = (WGPUBindGroupEntry)WGPU_BIND_GROUP_ENTRY_INIT;
+		entries[count].binding = STORAGE_BINDING + i;
+		entries[count].buffer = storage;
+		entries[count++].size = size;
+	}
 	free(code);
 	if (!drawing->pipeline) return 0;
 	if (count) drawing->bindings = bindings_of(drawing->pipeline, entries, count);
@@ -381,6 +449,7 @@ static int drawing_made(const char* shader, const char* values, WGPUTextureForma
 static void drawing_released(Drawing* drawing) {
 	if (drawing->bindings) wgpuBindGroupRelease(drawing->bindings);
 	if (drawing->uniform) wgpuBufferRelease(drawing->uniform);
+	for (int i = 0; i < drawing->storage_count; i++) wgpuBufferRelease(drawing->storages[i]);
 	if (drawing->previous) wgpuTextureViewRelease(drawing->previous);
 }
 // where in a target a drawing lands: x, y, width, height in the target's pixels
