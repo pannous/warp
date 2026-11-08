@@ -31,7 +31,14 @@ MOST_COMPUTE_ARRAYS = 8
 VALUE_TYPES = ["f32", "vec2f", "vec3f", "vec4f"]
 VALUE_ALIGNMENTS = [1, 2, 4, 4]
 // a GPU list's cell types, by extensions/gpu_lists GpuCell
-GPU_CELLS = ["f32", "i32", "u32"]
+GPU_CELLS = ["f32", "i32", "u32", "f16"]
+// WGSL's 16-bit float, a device feature (webgpu.h WGPUFeatureName_ShaderF16): an array<f16> holds two to a word
+HALF = "f16"
+FEATURE_SHADER_F16 = 11
+HALVES_ENABLED = "enable f16"
+// said where the GPU lacks it, as host-gpu.js NO_HALVES
+NO_HALVES = "this GPU offers no f16 (WebGPU's shader-f16), which the shader's enable f16 needs"
+WORD_BYTES = 4
 // paint's values.mesh, read in the shader as the storage array warp_values_mesh
 STORAGE_PREFIX = "warp_values_"
 // `values.previous(at)` (card shader-read): the color the shader left at pixel `at` in its previous frame of this size
@@ -108,6 +115,7 @@ METAL_SOURCE = 24
 SURFACE_DESCRIPTOR = 24
 SURFACE_CONFIGURATION = 64
 SURFACE_TEXTURE = 24
+DEVICE_DESCRIPTOR = 144
 
 // wgpu-native's functions, and C's copies: memcpy of a list's int32 cells, memmove of C memory
 wgpuCreateInstance(descriptor: handle): handle from 'wgpu_native'
@@ -115,6 +123,7 @@ wgpuInstanceRequestAdapter(instance: handle, options: handle, info: handle): i64
 wgpuInstanceProcessEvents(instance: handle): void from 'wgpu_native'
 wgpuInstanceCreateSurface(instance: handle, descriptor: handle): handle from 'wgpu_native'
 wgpuAdapterRequestDevice(adapter: handle, descriptor: handle, info: handle): i64 from 'wgpu_native'
+wgpuAdapterHasFeature(adapter: handle, feature: i32): i32 from 'wgpu_native'
 wgpuDeviceGetQueue(device: handle): handle from 'wgpu_native'
 wgpuDevicePoll(device: handle, wait: i32, index: handle): i32 from 'wgpu_native'
 wgpuDevicePushErrorScope(device: handle, filter: i32): void from 'wgpu_native'
@@ -174,6 +183,8 @@ global adapter = 0
 global device = 0
 global queue = 0
 global gpu_failure = ""
+// whether the device took shader-f16, which a shader's `enable f16` needs
+global halves_offered = no
 // what the last callback answered: done, its status, the object it gave, its message
 global answer_done = no
 global answer_status = 0
@@ -260,12 +271,24 @@ device_ready(): bool := {
 	answer_awaited()
 	if answer_status != SUCCESS { return failed("no GPU adapter: " + answer_message) }
 	adapter = answer_object
-	wgpuAdapterRequestDevice(adapter, 0, asked("gave"))
+	wgpuAdapterRequestDevice(adapter, device_descriptor(adapter), asked("gave"))
 	answer_awaited()
 	if answer_status != SUCCESS { return failed("no GPU device: " + answer_message) }
 	device = answer_object
 	queue = wgpuDeviceGetQueue(device)
 	yes
+}
+// the device asked for: f16 shaders where the adapter has them (requiredFeatureCount at 24, requiredFeatures at 32)
+device_descriptor(adapter: int): int := {
+	descriptor = struct_of(DEVICE_DESCRIPTOR)
+	halves_offered = wgpuAdapterHasFeature(adapter, FEATURE_SHADER_F16) != 0
+	if halves_offered {
+		features = struct_of(WORD_BYTES)
+		set_field_i32(features, 0, FEATURE_SHADER_F16)
+		set_field_i64(descriptor, 24, 1)
+		set_field_pointer(descriptor, 32, features)
+	}
+	descriptor
 }
 failed(why: text): bool := {
 	gpu_failure = why
@@ -822,7 +845,7 @@ storage_arrays(shader: text): list := {
 		declaration = parts[i].split(">")[1 ..].join(">").trim()
 		name = leading(declaration, NAME_BYTES)
 		element = "f32"
-		for cell in ["i32", "u32"] { if declaration.contains("array<" + cell) { element = cell } }
+		for cell in ["i32", "u32", HALF] { if declaration.contains("array<" + cell) { element = cell } }
 		declared.add(StorageArray(name, binding, element, ø, -1, ""))
 	}
 	declared
@@ -861,13 +884,19 @@ pointer_moved(pointer: int, by: int): int := pointer_handle(handle_pointer(point
 array_buffer(array: StorageArray): int := {
 	usage = BUFFER_STORAGE + BUFFER_COPY_SRC
 	if array.cell == array.element {
-		size = #array.given * 4
+		size = buffer_bytes(array)
 		buffer = buffer_of(size, usage + BUFFER_COPY_DST)
 		wgpuQueueWriteBuffer(queue, buffer, 0, cells_address(array), size)
 		return buffer
 	}
 	cells_buffer([cell_bits(array.element, x) for x in array.given], usage)
 }
+// an array<f16> takes only a GPU list [f16], whose cells it binds as they are, and a GPU list [f16] only one (as
+// host-gpu.js halvesUnmatched says it)
+halves_unmatched(name: text, element: text): text := if element == HALF then "the shader's array<f16> " + name + " takes a GPU list [f16]: make it as " + name + ": [f16] = …" else "the GPU list [f16] " + name + " needs the shader's array<f16>, not array<" + element + ">"
+// an array's bytes: its cells' (two each of an f16), whole words, as WebGPU copies and binds a buffer
+cells_bytes(array: StorageArray): int := #array.given * (if array.element == HALF then 2 else WORD_BYTES)
+buffer_bytes(array: StorageArray): int := (cells_bytes(array) + WORD_BYTES - 1) /! WORD_BYTES * WORD_BYTES
 cell_bits(element: text, x: any): int := if element == "f32" then f32_bits(float(x)) else low_bits(int(x), 32)
 cell_number(element: text, bits: int): any := if element == "f32" then f32_float(bits) else if element == "i32" and bits >= 1 << 31 then bits - (1 << 32) else bits
 // the shader run over the arrays: what each left, read back as numbers (a GPU list's cells written back in place)
@@ -884,7 +913,7 @@ arrays_computed(shader: text, order: list, workgroups: int): any := {
 		return ø
 	}
 	storages = order.map(array => array_buffer(array))
-	sizes = order.map(array => #array.given * 4)
+	sizes = order.map(array => buffer_bytes(array))
 	readbacks = sizes.map(size => buffer_of(size, BUFFER_MAP_READ + BUFFER_COPY_DST))
 	bindings = bindings_of(wgpuComputePipelineGetBindGroupLayout(pipeline, 0), [[order[a].binding, storages[a], sizes[a], 0] for a in 0 ..< #order])
 	encoder = wgpuDeviceCreateCommandEncoder(device, 0)
@@ -911,7 +940,7 @@ arrays_computed(shader: text, order: list, workgroups: int): any := {
 // what the shader left in an array: a GPU list's cells written where they are (the list itself), else a list of numbers
 array_left(array: StorageArray, mapped: int): any := {
 	if array.cell == array.element {
-		memmove(cells_address(array), mapped, #array.given * 4)
+		memmove(cells_address(array), mapped, cells_bytes(array))
 		return array.given
 	}
 	cells = field_bytes(mapped, 0, #array.given * 4)
@@ -926,7 +955,9 @@ host_gpu_computed(given_shader, arrays: any, workgroups: int): any? := {
 	gpu_failure = ""
 	order = arrays_given(arrays, storage_arrays(shader))
 	if order is text { return error(order) }
+	for array in order { if (array.element == HALF) != (array.cell == HALF) { return error(halves_unmatched(array.name, array.element)) } }
 	if not device_ready() { return error(gpu_failure) }
+	if shader.contains(HALVES_ENABLED) and not halves_offered { return error(NO_HALVES) }
 	left = arrays_computed(shader, order, workgroups)
 	if left == ø { return error(gpu_failure) }
 	if not (arrays is map) { return left[0] }

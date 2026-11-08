@@ -1,0 +1,8 @@
+# every operator has its English name, the word a class defines it by; its Unicode names are fallbacks; ≡ is
+# identical (decisions operators-named, operator-english-names, operator-unicode-aliases, identical-glyph)
+'class S{n: int; less_or_equal(o) := n <= o.n}; [S(1) <= S(2), S(3) <= S(2)]'	[yes, no]
+'class S{n: int; not_equal(o) := n != o.n}; [S(1) != S(1), S(1) != S(2)]'	[no, yes]
+'class W{n: int; less_than_sign(o) := n < o.n}; W(1) < W(2)'	yes
+'division_sign = 3; division_sign'	3
+'[1 ≡ 1, [1, 2] ≡ [1, 2]]'	[yes, no]
+'[1 ~ 1.001, 2 ≈ 2.0000000001, 7 rem 3, 1 << 3]'	[yes, yes, 1, 8]

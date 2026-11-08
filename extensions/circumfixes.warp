@@ -37,6 +37,8 @@ circumfixed(p: Parser, circumfix: Circumfix): Node := {
 }
 # the circumfixes a source and lib/math.warp declare, scanned once a parse
 scanned_circumfixes(source: text): list := circumfixes_among(source_operator_statements(source)) + circumfixes_among(math_operator_statements())
+# the functions of the circumfixes whose opening glyph the source writes: ceil of `⌈x⌉`
+circumfixed_functions(source: text): list := scanned_circumfixes(source).filter(circumfix => source.contains(circumfix.opening)).map(circumfix => circumfix.function)
 circumfixes_in(p: Parser): list := p.scans.get("circumfixes") ?? []
 read_circumfix(p: Parser): Node := {
 	circumfix = circumfix_at(p)
