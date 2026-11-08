@@ -375,17 +375,9 @@ exact_quotient(top: RatioParts, bottom: RatioParts): RatioParts := {
 	if bottom.numerator == 0 { raise "divide by zero" }
 	lowest_terms(top.numerator * bottom.denominator, top.denominator * bottom.numerator)
 }
-// a % b as int_mod takes it: never below 0, the truncated remainder `rem` plus |b| when it is negative
-euclidean_remainder(a: number, b: number): number := {
-	rest = a rem b
-	if rest >= 0 then rest else if b < 0 then rest - b else rest + b
-}
-// a /! b as int_euclid_div takes it, the quotient that goes with `%` (a = q·b + r, 0 ≤ r < |b|): -7 /! 2 is -4;
-// a - rest is a multiple of b, so its `/!` is the truncated quotient
-euclidean_quotient(a: number, b: number): number := {
-	rest = a rem b
-	truncated = (a - rest) /! b
-	if rest >= 0 then truncated else if b < 0 then truncated + 1 else truncated - 1
-}
+// `%` of the kind that arrives, so a nat keeps its own remainder (a for-loop value is a nat)
+euclidean_remainder(a, b) := a % b
+// `/!` of that same kind: -9 /! -2 is 4, -7 /! 2 is -4, and -(2^70) /! 3 stays whole
+euclidean_quotient(a, b) := a /! b
 even(n: int) := is_even(n)
 odd(n: int) := is_odd(n)
