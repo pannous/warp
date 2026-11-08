@@ -68,8 +68,9 @@ inputs_line() { echo "$hash commit=$(built_commit --short) built=$(date '+%Y-%m-
 publish() {
 	local file=$1 name=${2:-$(basename "$1")}
 	mkdir -p "$(dirname "$store/$hash/$name")"
-	[ -f "$store/$hash/$name" ] && return
-	copied "$file" "$store/$hash/$name.new-$$" && mv -n "$store/$hash/$name.new-$$" "$store/$hash/$name"
+	# (an empty one is taken over: a module a poisoned build left empty, modules_whole)
+	[ -s "$store/$hash/$name" ] && return
+	copied "$file" "$store/$hash/$name.new-$$" && mv -f "$store/$hash/$name.new-$$" "$store/$hash/$name"
 	rm -f "$store/$hash/$name.new-$$"
 	inputs_line >"$store/$hash/$name.inputs"
 }
@@ -228,6 +229,17 @@ lock_waited() {
 	logged "$2" "waiting-for-$holder"
 	while [ -d "$1" ] && kill -0 "$holder" 2>/dev/null; do sleep 10; done
 }
+# modules_whole <name> <folder>: warp.wasm's modules there hold each the native driver links itself (lib/host/'s),
+# never one left empty (card empty-native-host: overlapping rebuilds stored 0-byte native_host.wasm files); a folder
+# lacking one is no hit, its runtime and modules are built anew and the store's empty files replaced (publish)
+modules_whole() {
+	local name=$1 folder=$2 module
+	[ "$name" = warp ] && [ -d "$folder/modules" ] || return 0
+	for module in "$lib"/host/*.warp; do
+		module=$(basename "$module" .warp)
+		[ -s "$folder/modules/$module.wasm" ] || { echo "rebuild.sh: $folder/modules/$module.wasm is empty: its modules are built anew" >&2; return 1; }
+	done
+}
 # the build lock of a compiler of this hash
 build_lock() { echo "$store/$hash/$1.building"; }
 building() { lock_taken "$(build_lock "$1")"; }
@@ -283,14 +295,14 @@ one() {
 	if [ -z "$force" ] && [ ! -f "$file" ] && [ -f "$old" ] && [ "$(cut -d' ' -f1 "$old.inputs" 2>/dev/null)" = "$hash" ]; then
 		copied "$old" "$file" && cp "$old.inputs" "$file.inputs" && logged "$name" hit-lib-old-name
 	fi
-	if [ -z "$force" ] && [ -f "$file" ] && [ "$(cut -d' ' -f1 "$file.inputs" 2>/dev/null)" = "$hash" ]; then logged "$name" hit-lib; return 0; fi
+	if [ -z "$force" ] && [ -f "$file" ] && [ "$(cut -d' ' -f1 "$file.inputs" 2>/dev/null)" = "$hash" ] && modules_whole "$name" "$compilers"; then logged "$name" hit-lib; return 0; fi
 	# a build another machine published for these inputs (scripts/publish-build.sh), into the store first; also into a
 	# partial entry, a warp.wasm without its runtime.wasm (fetch-build.sh fills in only what it lacks)
 	[ -z "$force" ] && { [ ! -f "$store/$hash/$name.wasm" ] || { [ "$name" = warp ] && [ ! -f "$store/$hash/runtime.wasm" ]; }; } && [ "${WARP_FETCH_BUILDS:-1}" = 1 ] &&
 		"$scripts/fetch-build.sh" "$hash" "$store" "$name.wasm" >/dev/null 2>&1 && [ -f "$store/$hash/$name.wasm" ] && logged "$name" fetched
 	local stored=$store/$hash/$name.wasm
 	[ -f "$stored" ] || stored=$store/$hash/$(legacy "$name").wasm
-	if [ -z "$force" ] && [ -f "$stored" ]; then
+	if [ -z "$force" ] && [ -f "$stored" ] && modules_whole "$name" "$store/$hash"; then
 		copied "$stored" "$file.new-$$" && mv "$file.new-$$" "$file" && inputs_line >"$file.inputs"
 		[ "$name" = warp ] && words_kept
 		for companion in $(companions "$name" "$store/$hash"); do mkdir -p "$(dirname "$compilers/$companion")" && copied "$store/$hash/$companion" "$compilers/$companion"; done
