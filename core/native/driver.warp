@@ -1680,7 +1680,7 @@ system_value_set(name: text, value: i64): nothing := {
 	if host_told("host_value_set", name, value, 1) == 0 { slot_set(name, value) }
 }
 ## the native host module (decision window-in-warp): what the playground's JavaScript answers beyond the driver's own
-## words, natively in warp, lib/native_host.warp (its window over SDL3 and the system's fonts, its sound over SDL3's audio
+## words, natively in warp, lib/host/native_host.warp (its window over SDL3 and the system's fonts, its sound over SDL3's audio
 ## and the system's decoders): its system values, the layer a painting shows in, the host words it answers as
 ## host_<word>, the run's end (a still picture held open, the sounds heard out)
 # (primitive mode has no text constants: its name `warp/native_host` and the prefix `host_` are written where read)
@@ -2471,7 +2471,7 @@ known(kind: i32, name: text, what: text, word: text): i32 := {
 }
 # the C function of a line, found in its library; one the driver can't call stops the run naming it. One its library
 # lacks, or a library not found, stops the run only when called: a program may ask for an optional library first
-# (lib/native_host.warp's SDL3 and mpg123: a machine without them stays windowless and silent)
+# (lib/host/native_host.warp's SDL3 and mpg123: a machine without them stays windowless and silent)
 foreign_of(line: text, wasm: pointer): i64 := {
 	library = field(line, 1, TAB)
 	name = field(line, 2, TAB)
