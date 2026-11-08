@@ -840,14 +840,22 @@ result_resolved(n: Node, overloaded: map, parameters: map): Node := {
 		n = group_like(n, [n#1, Key(key_of(n#2), Op.Assign, returning(value_of(n#2), n#1, overloaded))])
 	}
 	n = for_parameters(n, overloaded, parameters)
-	untold = overloaded_call(n, overloaded)
-	if untold != ø and untold == n {
-		name = name_of(n#1)
-		taken = overloaded[name]#1
-		diagnose(call_of("result_variant_taken", [name, overloaded[name].join(", "), taken, "${n}"]), n)
-		n = returning(n, symbol(taken), overloaded)
+	# `y = render "f"`: the fix names the variable
+	if is_key(n, Op.Assign) and key_of(n) is symbol and overloaded_call(value_of(n), overloaded) == value_of(n) {
+		n = Key(key_of(n), Op.Assign, result_untold(value_of(n), overloaded, [name_of(key_of(n))]))
+	} else if overloaded_call(n, overloaded) == n {
+		n = result_untold(n, overloaded, [])
 	}
 	children(n, x => result_resolved(x, overloaded, parameters))
+}
+
+# a call no expected type tells apart refused, its fix naming the first variant (decision ambiguous-result-error); the
+# first variant's call stands in, so the compile goes on to say what else it finds
+result_untold(call: Node, overloaded: map, target: list): Node := {
+	name = name_of(overloaded_call(call, overloaded)#1)
+	first = overloaded[name]#1
+	diagnose(call_of("ambiguous_result", [name, overloaded[name].join(", "), first] + target + ["${call}"]), call)
+	returning(call, symbol(first), overloaded)
 }
 
 result_overloads(program: Node): Node := {

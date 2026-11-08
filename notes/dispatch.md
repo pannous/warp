@@ -49,7 +49,9 @@ Open: card parameter-unit (`f(x) := x as ms` loses the conversion at run time).
 # Dispatch on return type (D10, P17)
 
 `(render "hello") as pdf` and `docx example = render "x"` pick the overload of `render` by the expected result type;
-when it picks no single overload, the first-declared one is taken with a got-it warning naming the explicit form.
+a call no expected type tells apart is refused naming the explicit form (decision ambiguous-result-error, 2026-11-08,
+which replaced the first-declared pick). Definitions without parameters too: `sample() as int := 7` beside
+`sample() as text := "seven"`, `x:int = sample()`.
 
 ## Overloads
 Two or more definitions of one name whose result types differ are overloads, in declaration order:
@@ -73,8 +75,9 @@ Definitions of one name whose result types are not all known stay what they were
 
 A function defined once with a known result type takes `(render "x") as pdf` as naming that result, not as converting.
 The ungrouped `render "x" as pdf` casts the argument (call-as-grouping). A call whose expected type one overload
-returns calls it (`render·pdf("x")`); otherwise the first-declared overload with the got-it warning (topic
-`return-type`): `render has variants returning pdf, docx: which does render "x" mean? (taking pdf); fix: (render "x") as pdf`.
+returns calls it (`render·pdf("x")`); any other call is an error naming the fix, the variable when it is assigned:
+`y = render "x"` says `render has several results (pdf, docx): write y: pdf = render "x"`, a bare call
+`(render "x") as pdf` (core/analysis/errors.data ambiguous_result).
 
 ## Companions
 A function f without overloads but with a companion `f_as(…, type:text)` gets its expected type at run time:

@@ -4,6 +4,6 @@
 'class pdf { body: text }; class docx { body: text }; render(t) as pdf := pdf("P" + t); render(t) as docx := docx("D" + t); x: docx = render "b"; x.body'	"Db"
 'class pdf { body: text }; class docx { body: text }; render(t) as pdf := pdf("P" + t); render(t) as docx := docx("D" + t); docx x = render "c"; x.body'	"Dc"
 'class pdf { body: text }; class docx { body: text }; render(t) as pdf := pdf("P" + t); render(t) as docx := docx("D" + t); save(d: docx) := d.body; save(render("e"))'	"De"
-'class pdf { body: text }; class docx { body: text }; render(t) as pdf := pdf("P" + t); render(t) as docx := docx("D" + t); y = render "f"; y.body'	"Pf"
+'class pdf { body: text }; class docx { body: text }; render(t) as pdf := pdf("P" + t); render(t) as docx := docx("D" + t); y = render "f"; y.body'	error	decision ambiguous-result-error: render has several results (pdf, docx): write y: pdf = render "f"
 'class pdf { body: text }; f(x) as pdf := pdf(x); f("g").body'	"g"
 'f(x) as int := x * 2; f 4'	8
