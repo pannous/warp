@@ -1142,5 +1142,21 @@ range(stop: int): list := 0 ..< stop
 range(start: int, stop: int): list := start ..< stop
 // the GPU host words, which a library answers (natively lib/host/native_host/gpu.warp over wgpu-native, the
 // playground's host-gpu.js over WebGPU); the shaders they run are written at compile time by extensions/rules/wgsl.warp
-gpu_compute(shader: node, values: node, count: int): node from host
+gpu_computed(shader: node, values: node, count: int): node from host
 gpu_render(shader: node, width: int, height: int, values: node): node from host
+// gpu_compute(shader, values, workgroups): the compute shader run over the numbers given (a list, or a map of named
+// lists), which it changes where they are, as any word writing into a list does: the lists given, the shader's
+// numbers in them, whether or not the program made them GPU lists (card xs-float-xs); a GPU list's cells the host
+// changes itself
+gpu_compute(shader: text, values: any, count: int): any := written_back(gpu_computed(shader, values, count), values)
+written_back(left: any, given: any): any := {
+	if is_error(left) { raise left }
+	if not (given is map) { return items_written(left, given) }
+	for name in given.keys { items_written(left[name], given[name]) }
+	given
+}
+items_written(left: any, given: any): any := {
+	if same(left, given) { return given }
+	for i in 1 to #given { given#i = left#i }
+	given
+}

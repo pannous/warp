@@ -921,7 +921,7 @@ array_left(array: StorageArray, mapped: int): any := {
 	memcpy(cells_address(array), [cell_bits(array.cell, x) for x in numbers])
 	array.given
 }
-host_gpu_compute(given_shader, arrays: any, workgroups: int): any? := {
+host_gpu_computed(given_shader, arrays: any, workgroups: int): any? := {
 	shader = str(given_shader)
 	gpu_failure = ""
 	order = arrays_given(arrays, storage_arrays(shader))
