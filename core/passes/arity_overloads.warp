@@ -707,8 +707,11 @@ typed_call(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	call_of(typed_variant(name, chosen#1), arguments)
 }
 
-# whether a class of the program has a field of the name, `p.name`
-names_a_field(name: text, program: Node): bool := statements_in(program).any(statement => class_view(statement) != ø and class_declared(statement, class_view(statement)).fields.any(field => field == name))
+# whether `p.name` may read a field: a class of the program has one of the name, or a key is written so, `{once: …}`
+names_a_field(name: text, program: Node): bool := {
+	if statements_in(program).any(statement => class_view(statement) != ø and class_declared(statement, class_view(statement)).fields.any(field => field == name)) { return yes }
+	nodes_in(program).any(n => is_key(n, Op.Colon) and key_of(n) == symbol(name))
+}
 # top-down, so a definition is renamed by its own parameter types
 typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	call = definition_call(n)

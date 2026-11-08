@@ -1,0 +1,9 @@
+# an operator outside Op's named cases is Op.Other, its spelling its own (card enum-op-should)
+'key(1, "⊕", 2) as text'	"1⊕2"
+'op_of(key(1, "⊕", 2)) as text'	"⊕"
+'op_of(key(1, "⊕", 2)) == Op.Other'	yes
+'op_of(key(1, "⊕", 2)) != Op.Other'	no
+'op_of(key(1, "+", 2)) == Op.Other'	no
+'op_of(key(1, "⊕", 2)) == op_of(key(1, "⊗", 2))'	no
+'key(1, "⊕", 2).json'	'{"⊕":[1,2]}'
+'match key(1, "⊕", 2) { Key(l, op, r): [op as text, op == Op.Other], _: 0 }'	['⊕', yes]

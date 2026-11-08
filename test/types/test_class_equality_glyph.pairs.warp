@@ -1,0 +1,3 @@
+'class V{x:int; ==(o) := x == o.x}; V(1) == V(1)'	yes
+'class V{x:int; ==(o) := x == o.x}; V(1) == V(2)'	no
+'class V{x:int; ==(o) := yes}; V(1) == V(2)'	yes
