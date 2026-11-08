@@ -1,24 +1,28 @@
 #!/usr/bin/env warp
 # One full-height band per named color (lib/color.warp named_colors), left to right.
-# band_at and band_color are the only selection; the check below and ink both call them.
+# paint compiles ink to a shader (lib/shaders.warp). A shader may read a program value or a named color such as red;
+# a module list is neither, so the bands are one program value: each named color's channels, in named_colors order.
+# band_at is the only column selection; the check and ink both take the color through band_color.
 use color
 
 swatch_width = 40
 swatch_height = 48
 band_count = #named_colors
 width = band_count * swatch_width
+swatches = named_colors.map(pair => channels(pair[0]))
 
 # column 0 ..< width; a column on the boundary belongs to the band that starts there, and one past the strip stays on the last color
 band_at(column) := min(column /! swatch_width, band_count - 1)
-band_color(column) := named_colors[band_at(column)][0]
+band_color(column) := swatches[band_at(column)]
 
 bands_hold() := {
 	held = yes
 	for i in 0..<band_count {
 		start = i * swatch_width
 		last = start + swatch_width - 1
+		painted = channels(named_colors[i][0])
 		if band_at(start) != i or band_at(last) != i { held = no }
-		if band_color(start) != named_colors[i][0] or band_color(last) != named_colors[i][0] { held = no }
+		if band_color(start) != painted or band_color(last) != painted { held = no }
 		if i > 0 and band_color(start - 1) == band_color(start) { held = no }
 	}
 	held and band_count == 9 and named_colors[0][0] == black and named_colors[band_count - 1][0] == purple and band_at(width) == band_count - 1

@@ -1,0 +1,13 @@
+# The swatch paint must compile to a shader. Source: lib/shaders.warp wgsl_program_value,
+# samples/graphics/color_swatches.warp. named_colors is a module list, so the painted functions read swatches,
+# the named colors' channels as one program value, and band_at. Same selection as the sample.
+
+is! 'use color
+swatch_width = 40
+band_count = #named_colors
+swatches = named_colors.map(pair => channels(pair[0]))
+band_at(column) := min(column /! swatch_width, band_count - 1)
+band_color(column) := swatches[band_at(column)]
+ink(column, row) := band_color(column)
+made = shader_of(ink)
+made.contains("fn ink") and made.contains("fn band_at") and made.contains("fn band_color") and made.contains("values.swatches")' yes
