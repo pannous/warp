@@ -2730,7 +2730,7 @@ c_result(caller: handle, context: handle, c: Foreign, returned: i64, result: poi
 		word_at(value).value = (if returned == 0 then 0 else if c.crossing == CROSSING_PAIR then guest_pair(caller, context, returned) else returned - guest_memory(caller, context)) as u32
 	} else if c.crossing == CROSSING_BYTES {
 		# ({i64 length, the bytes}, the callee's malloc: freed here, a wasm module's by its free)
-		if returned == 0 { guest_call(caller, context, "new_empty", 0, 0, result) } else { guest_text(caller, context, returned + 8, long_at(returned).value, result) }
+		if returned == 0 { guest_call(caller, context, "new_empty", 0, 0, result) } else { guest_text(caller, context, returned + 8, long_at(returned as pointer).value, result) }
 		if returned != 0 and c.wasm == 0 { free(returned) }
 	} else if c.crossing == CROSSING_TEXT or c.crossing == CROSSING_OWNED_TEXT {
 		if returned == 0 { guest_call(caller, context, "new_empty", 0, 0, result) } else { guest_text(caller, context, returned, strlen(returned), result) }
