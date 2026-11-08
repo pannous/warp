@@ -6,6 +6,8 @@ kind_change($name, $was, $now)	"{name} was {a was}, is given {a now}: use anothe
 charged_assignment($name)	"{name} is defined with `:=`, charged: evaluated at each use, it takes no assignment; define it with `{name} = …` for a variable"	"{name} = …"
 # decision block-definitions: a function defined inside an if, while or for block (extensions/block_definitions.warp)
 block_definition($name)	"{name} is defined inside a block: functions are not scoped to blocks yet; define {name} outside the block, or write {name} = y => …"	"{name} = y => …"
+# night decision parameter-named-fails: a parameter given a value with a colon, `f(a, b: 0)` (extensions/parameter_values.warp)
+parameter_value($name, $value)	"{name}: {value} gives {name} a value, not a type: a default is written {name} = {value}"	"{name} = {value}"
 # decisions let-reassign, const-deep: a `let`/`const` name assigned again (source_checks.warp)
 constant_assignment($name)	"{name} is a constant: declared with let or const, it binds once; declare it `var {name} = …` for a variable"	"var {name}"
 # decision library-constant-refused: a library constant assigned at the top level, `pi = 4` (source_checks.warp)
