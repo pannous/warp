@@ -8,6 +8,7 @@ const PAGE_PREFIX = "page:"; // src/web/mod.rs PAGE_PREFIX: a file of the page i
 const HTTP_NOT_FOUND = "HTTP status 404";
 const FILE_NOT_FOUND = "No such file or directory (os error 2)";
 const NO_PROCESSES = "not in the browser: a page runs no process or shell, natively only";
+const PROGRAM_VARIABLE = "WARP_PROGRAM"; // the program's file, as the native warp sets it (lib/file.warp program_file)
 
 // the files std's file module wrote (texts) and save sound rendered (bytes, a Uint8Array): read and the file words see
 // them before the served ones. A page keeps them in IndexedDB (keepWrittenFile), so they are still there after a reload
@@ -468,7 +469,8 @@ addHostPart({
 		// a page has no command line, no input and runs no process; its environment is what the page sets (the stand-in of
 		// the playground's key), its folder the served root that relative paths start from
 		os: {
-			env: name => self.pageEnvironment?.[name] ?? null,
+			// WARP_PROGRAM is the chosen sample's file, so program.folder names its folder as natively
+			env(name) { return (name === PROGRAM_VARIABLE ? programFileOf(this.holder.run) : self.pageEnvironment?.[name]) ?? null; },
 			args: () => self.programArguments ?? [], // a sample's <name>.args (playground.js programArguments)
 			cwd: () => ".",
 			stdin: () => "",

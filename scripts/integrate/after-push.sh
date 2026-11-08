@@ -90,9 +90,11 @@ red() {
 	say "RED $1 (card $key)"
 }
 
-# cost_watched <record>: the instructions the tip's build of <record> (warp.record, warp-self.record) retired against the
-# last landing's; more than COST_JUMP_PERCENT up is an urgent card for the Supervisor (user 2026-11-07: input-bind
-# took the self-compile from 1.8 T to 13 T and nobody noticed for hours). A reused compiler has no record of its own
+# cost_watched <record>: the instructions the tip's build of <record> retired against the last landing's; more than
+# COST_JUMP_PERCENT up is an urgent card for the Supervisor (user 2026-11-07: input-bind took the self-compile from
+# 1.8 T to 13 T and nobody noticed for hours). A reused compiler has no record of its own. Only warp-self.record:
+# warp.record swings ±20% by what the seed build reuses (one commit measured 3.43 and 3.85 T, 2026-11-08), so it
+# false-alarmed; the self-compile is one compiler run, steady to ~1%
 COST_JUMP_PERCENT=10
 cost_watched() {
 	local record=$1 hash timing now last last_tip
@@ -289,7 +291,6 @@ watch() {
 	[ $status = 0 ] || { red "rebuild pure failed: $(echo "$built" | tail -1)" --urgent; return 1; }
 	got=$(cd "$TREE" && WARP_NO_WINDOW=1 WARP_LIB=$TREE/lib timeout 300 "$MAIN_WARP" pure samples/hello/hello.warp 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { red "smoke test: pure hello got ${got:0:120}" --urgent; return 1; }
-	cost_watched warp.record
 	# stage two: its compilers beside it, else the whole native warp
 	{ if [ -n "$early" ]; then install_compilers; else install_native; fi; } && { installed_compilers_are_trees || red "the installed warp.wasm is not the one built from ${tip:0:10}" --urgent; }
 	up_to_date_main "$MAIN_CHECKOUT" || say "the user's checkout did not pull: look at it"

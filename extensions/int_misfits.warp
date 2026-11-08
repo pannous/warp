@@ -1,0 +1,84 @@
+# An int is wasm's i64 and wraps silently at run time (decision nat-and-int); a whole number known when compiling that
+# misfits one earns a warning where it enters an int place (night decision int-wrap-declarations): `x: int = 10^30`,
+# `int x = 2^63`, `f(10^30)` of `f(n: int)`, `f(): int := 10^30`. Values known only at run time stay silent; the
+# constant is folded in i64 itself, as the compiler holds no big numbers
+
+int_word = "int"
+# a wrapped result is off by a multiple of 2^64, its float estimate by far less than this
+wrap_gap = 4611686018427387904.0
+# a power of a base past ±1 misfits an int before this exponent
+largest_exponent = 64
+
+int_misfit(n: Node, program: Node) := {
+	plain = without_mark(n)
+	for given in int_places(plain, program) {
+		if constant_misfits(given) { diagnose(call_of("int_misfit", [written_constant(given)]), given) }
+	}
+	ø
+}
+# the code n puts into an int place: a declared int's value, the arguments of a call a program's function takes as ints,
+# the body of a function declaring an int result
+int_places(n: Node, program: Node): list := {
+	if is_key(n, Op.Assign) and declares_int(key_of(n)) { return [value_of(n)] }
+	if is_group(n) and #n == 2 and n#1 == symbol(int_word) and is_key(n#2, Op.Assign) { return [value_of(n#2)] }
+	if is_key(n, Op.Define) and declares_int(key_of(n)) { return [value_of(n)] }
+	if is_group(n) and bracket_of(n) == "(" and #n >= 2 and n#1 is symbol and arguments_of(items_of(n)).any(constant_misfits) { return int_arguments(n, program) }
+	[]
+}
+declares_int(target: Node): bool := is_key(target, Op.Colon) and value_of(target) == symbol(int_word)
+# the arguments of the call the program's function of that name and arity declares int
+int_arguments(call: Node, program: Node): list := {
+	arguments = arguments_of(items_of(call))
+	for m in nodes_in(program) {
+		head = definition_call(m)
+		if head != ø and head#1 == call#1 and #head == #call {
+			types = signature_of(items_of(head)).parameters.map(parameter => parameter.type_name)
+			return (1 to #arguments).filter(at => types#at == int_word).map(at => arguments#at)
+		}
+	}
+	[]
+}
+# whether code of literals alone, `10^30`, `2^63 + 1`, a long numeral, makes a whole number past an int. The code is
+# folded in i64, which is exact modulo 2^64, beside a float estimate of its true value: a fitting result is the true one
+# (`2^63 - 1` wraps on the way and back), a misfit lies a multiple of 2^64 from the estimate
+constant_misfits(code: Node): bool := {
+	written = unparenthesized(without_mark(code))
+	if is_big_number_view(written) { return not "${value_of(written)#2}".contains(".") }
+	fold = folded(written)
+	fold != ø and abs((fold#1 as float) - fold#2) > wrap_gap
+}
+# [code's value in i64, a float estimate of it] of a whole literal or literals joined by + - * ^, else ø
+folded(code: Node): list? := {
+	written = unparenthesized(without_mark(code))
+	if written is int { return [number_of(written) as int, number_of(written) as float] }
+	if not (is_key(written, Op.Add) or is_key(written, Op.Sub) or is_key(written, Op.Mul) or is_key(written, Op.Pow)) or key_of(written) == ø { return ø }
+	left = folded(key_of(written))
+	right = folded(value_of(written))
+	if left == ø or right == ø { return ø }
+	a: int = left#1
+	b: int = right#1
+	if is_key(written, Op.Add) { return [a + b, left#2 + right#2] }
+	if is_key(written, Op.Sub) { return [a - b, left#2 - right#2] }
+	if is_key(written, Op.Mul) { return [a * b, left#2 * right#2] }
+	if b < 0 { return ø }
+	power: int = 1
+	estimate = 1.0
+	for step in 1 to min(b, largest_exponent) {
+		power = power * a
+		estimate = estimate * left#2
+	}
+	# (past 64 steps a base beyond ±1 misfits whatever follows: its estimate is made to say so)
+	if b > largest_exponent and (a > 1 or a < -1) { estimate = estimate * wrap_gap * wrap_gap }
+	[power, estimate]
+}
+# the constant as written: `10^30`, `2^63 + 1`, `(2 + 3)^40`, a long numeral's digits
+written_constant(code: Node): text := {
+	plain = without_mark(code)
+	if is_group(plain) and bracket_of(plain) == "(" and #plain == 1 { return "(" + written_constant(plain#1) + ")" }
+	if is_big_number_view(plain) { return "${value_of(plain)#2}" }
+	if plain is key and key_of(plain) != ø { return written_constant(key_of(plain)) + spaced_operator(op_of(plain)) + written_constant(value_of(plain)) }
+	"${plain}"
+}
+spaced_operator(op: Op): text := if op == Op.Pow then "^" else " " + (op as text) + " "
+
+int_misfits_extension = Extension{name: "int_misfits", lints: [int_misfit]}
