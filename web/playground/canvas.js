@@ -9,7 +9,10 @@ const KEYS_HELD_KEPT = 8;
 // mouse_wheel: the wheel steps turned over a canvas, up adding (crates/warp-runtime host_words.rs MOUSE_WHEEL)
 // "keys pressed", "key code pressed": the keys that went down so far and the last of them, as natively
 // (lib/host/native_host/window.warp): `on key {…}` runs for a press let go before the program's frame looks (lib/keys.warp)
-const POINTER_NAMES = ["mouse_x", "mouse_y", "mouse_down", "mouse_down_x", "mouse_down_y", "mouse_wheel", "key", ...Array.from({ length: KEYS_HELD_KEPT }, (_, at) => `held ${at}`), "keys pressed", "key code pressed"];
+// view_width, view_height: the room the paintings show in, the screen's in full screen (playground.js viewSize), shared
+// so a running animation's paint(shader) follows a resize or full screen at once (card shader-examples)
+const VIEW_NAMES = ["view_width", "view_height"];
+const POINTER_NAMES = ["mouse_x", "mouse_y", "mouse_down", "mouse_down_x", "mouse_down_y", "mouse_wheel", "key", ...Array.from({ length: KEYS_HELD_KEPT }, (_, at) => `held ${at}`), "keys pressed", "key code pressed", ...VIEW_NAMES];
 // a shader's $key (host-gpu.js builtinValues): the held key's code point, the arrows as a Mac's function keys
 // the held key's code for key_down and held_key, as the native window gives it (src/graphics/paint_window.rs key_code)
 const KEY_CODES = { ArrowUp: 0xF700, ArrowDown: 0xF701, ArrowLeft: 0xF702, ArrowRight: 0xF703, Enter: 13, Escape: 27, Backspace: 8, Tab: 9, Shift: 0xF750, Control: 0xF751, Alt: 0xF752, Meta: 0xF753 };
@@ -103,6 +106,8 @@ function drawnWhole(canvas, painting) {
 }
 
 // the pointer message for the program's worker (worker.js, site-worker.js: self.pagePointer)
+// the view's size into the shared memory, `{view_width, view_height}` (none told: unchanged)
+const shareView = size => pointer && VIEW_NAMES.forEach(name => size[name] && Atomics.store(pointer, POINTER_NAMES.indexOf(name), size[name]));
 const pointerMessage = () => pointer && { pointer: { buffer: pointer.buffer, names: POINTER_NAMES } };
 
 const laterFinger = event => event.pointerType === "touch" && !event.isPrimary;

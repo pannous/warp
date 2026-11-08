@@ -19,6 +19,10 @@ const OLD_ANSWERS_KEY = "warp-playground-answers"; // the Ask era kept {topic: f
 // ?run_seconds=<s>: runs stop that much later (scripts/samples-web.sh, whose samples compile on a loaded machine)
 const RUN_SECONDS_PARAMETER = "run_seconds";
 const RUN_TIMEOUT_MS = 1000 * Number(new URLSearchParams(location.search).get(RUN_SECONDS_PARAMETER) ?? 10);
+// a run the limit stopped offers to run again with it this many times longer, for the page's later runs too (card
+// timeout-hang: #ocean's first frame takes longer than 10 s on a slow GPU)
+const LONGER_RUNS = 6;
+let runLimitMs = RUN_TIMEOUT_MS;
 // a run going on longer than this, or a program left running (timers, an animation), turns Run into Stop (card
 // playground-turn); a quick run never flickers
 const STOP_GRACE_MS = 500;
@@ -427,7 +431,11 @@ function notification(text) {
 // paces sound by it): the page was clicked or typed in, as a browser plays sound only then
 const darkMode = matchMedia(DARK_MODE_QUERY);
 const windowOpen = () => (navigator.webdriver ? !beforeUserActivation() : document.visibilityState === "visible");
-const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(windowOpen()), window_fullscreen: Number(document.fullscreenElement === $("painted")), heard: Number(!beforeUserActivation()), ...displayValues(), ...viewSize() } });
+function tellSystemValues() {
+	const view = viewSize();
+	shareView(view);
+	worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(windowOpen()), window_fullscreen: Number(document.fullscreenElement === $("painted")), heard: Number(!beforeUserActivation()), ...displayValues(), ...view } });
+}
 darkMode.addEventListener("change", tellSystemValues);
 document.addEventListener("visibilitychange", () => worker && tellSystemValues());
 ["pointerdown", "keydown"].forEach(type => addEventListener(type, () => { if (!worker) return; tellSystemValues(); tellEnvironment(); }, { once: true, capture: true }));
@@ -694,11 +702,18 @@ function printedChunk(run, chunk) {
 }
 
 // the runaway limit counts running time only: a sleep moves the deadline on by its milliseconds (card sleep-run-limit)
-function stopAfterTimeout(run, milliseconds = RUN_TIMEOUT_MS) {
+function stopAfterTimeout(run, milliseconds = runLimitMs) {
 	clearTimeout(run.timer);
 	run.deadline = Date.now() + milliseconds;
-	run.timer = setTimeout(() => stopRun(run, `stopped after ${RUN_TIMEOUT_MS / 1000} s: the program may not terminate`, !run.animating, [hungWhere()]), milliseconds);
+	run.timer = setTimeout(() => stopRun(run, `stopped after ${runLimitMs / 1000} s: the program may not terminate`, !run.animating, [hungWhere()], true), milliseconds);
 }
+// the run again, the limit LONGER_RUNS times longer
+function runLonger() {
+	runLimitMs *= LONGER_RUNS;
+	runChanged();
+}
+const longerButton = () => element("button", { className: "apply-fix", title: "run it again, letting it run longer before it is stopped", onclick: runLonger },
+	`run for ${runLimitMs * LONGER_RUNS / 1000} s`);
 const HUNG_STAGES_SHOWN = 8;
 // where a run stopped by the limit hung, said beside it (card safari-hello-timeout: Hello stopped on the iPad only): the
 // worker's start, whether it was the standby, its stages and the last message it sent
@@ -712,10 +727,10 @@ const slept = (run, milliseconds) => stopAfterTimeout(run, run.deadline - Date.n
 
 // a program that does not stop blocks the worker: replace it
 const ANIMATION_STOPPED = "animation stopped";
-function stopRun(run, message, failed = !run.animating, said = []) {
+function stopRun(run, message, failed = !run.animating, said = [], timedOut = false) {
 	worker.terminate();
 	startWorker();
-	finish(run, stoppedReport(run, message, failed, said));
+	finish(run, { ...stoppedReport(run, message, failed, said), timedOut });
 }
 
 const stoppedReport = (run, message, failed, said = []) => ({ value: message, error: failed, sounded: run.sounded, printed: run.printed, paintings: run.paintings,
@@ -938,6 +953,7 @@ function showReport(report) {
 			element("span", { className: "reason" }, hint.reason), fixButtons(hint.fixes))),
 		...notes.filter(topic => !inline.has(topic) && isShown("hint")).map(topic => diagnostic("note", "", `the ${topic} note above shows until you say `, gotIt(topic, expressionOf(topic)))),
 	];
+	if (report.timedOut) items.unshift(diagnostic("note", "", "a program that takes long to start may only need more time: ", longerButton()));
 	$("diagnostics").replaceChildren(...items);
 	// the level select shows where there is something it filters, shown or not
 	const filtered = [report.warnings, report.runtime_warnings, report.hints, notes].some(list => list?.length);
