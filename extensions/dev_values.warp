@@ -1,0 +1,34 @@
+# `warp dev` (card dev-build; notes/web_framework.md Step 13 "State across reloads"): a dev build, `warp build --site
+# --dev`, keeps each main-level variable the program writes again later across the page's reloads, as React Fast
+# Refresh does. Its first assignment reads the dev store, `count = 0` as `count = std_io("store", "load", ["count", 0,
+# "warp-dev"])`, and a listener keeps each later write, `on set count { std_io("store", "save", ["count", value,
+# "warp-dev"]) }`: only a written value is kept, so a variable never written again takes the edited source's value.
+# The dev store is the page's sessionStorage (web/playground/markup.js DEV_STORE). Before the rules, so that
+# lib/signals.warp's rules make the listener
+dev_values_extension = Extension{name: "dev_values", passes_before: {"rules_rewritten": dev_values_kept}}
+
+global dev_build = no
+DEV_STORE = "warp-dev"
+
+dev_values_kept(program: Node): Node := {
+	if not dev_build { return program }
+	statements = statements_in(program)
+	out = []
+	assigned = []
+	for statement in statements {
+		name = main_assigned(statement)
+		if name != "" and name not in assigned and statements.any(other => other != statement and writes_name(other, name)) {
+			out += [Key(key_of(statement), Op.Assign, dev_store_call("load", [Text(name), value_of(statement)])), kept_writes(name)]
+		} else {
+			out += [statement]
+		}
+		if name != "" { assigned += [name] }
+	}
+	if #out == #statements then program else separated(bracketed(out, ""), ";")
+}
+# the name a main-level `x = v` assigns, else ""
+main_assigned(statement: Node): text := if is_key(statement, Op.Assign) and key_of(statement) is symbol then name_of(key_of(statement)) else ""
+# whether the code writes the name: `x = 1`, `x += 1`, `x++` (rule_words.warp writes)
+writes_name(n: Node, name: text): bool := nodes_in(n).any(part => writes(part) and key_of(part) == symbol(name))
+dev_store_call(action: text, items: list): Node := call_of("std_io", [Text("store"), Text(action), List(items + [Text(DEV_STORE)], Bracket.Square, Separator.Comma)])
+kept_writes(name: text): Node := plain_node(parsed("on set " + name + " { std_io(\"store\", \"save\", [\"" + name + "\", value, \"" + DEV_STORE + "\"]) }"))

@@ -12,6 +12,9 @@ prepareTaskPool(); // host-tasks.js
 
 const SITE_PROGRAM = "app.warp"; // the program's name, as `warp app.warp` names it (WARP_PROGRAM)
 let site; // the program's run (driver.js programRan's holder)
+// main has run (start): an element event before that, a click on the prerendered page, waits for it, never lost
+let mainRan;
+const ranMain = new Promise(resolve => mainRan = resolve);
 
 const post = (message, transfer) => self.postMessage(message, transfer);
 self.keepStored = (name, value, file) => post({ stored: { name, value, file } }); // host-files.js STD_ADAPTERS.store
@@ -46,6 +49,7 @@ async function start({ module, stored, session }) {
 	if (status !== 0) return post({ failure: said || `app.wasm ended with status ${status}` });
 	site = holder;
 	post({ html: pageHtml(holder) });
+	mainRan();
 	if (holder.timers?.length) hooks.listen(holder);
 }
 
@@ -59,5 +63,5 @@ function handleEvent({ event, detail }) {
 self.onmessage = ({ data }) => {
 	if (data.pointer) return self.pagePointer = sharedPointer(data.pointer); // host.js system_value
 	if (data.start) return start(data.start).catch(failure => post({ failure: String(failure.message ?? failure) }));
-	if (data.event) handleEvent(data);
+	if (data.event) ranMain.then(() => handleEvent(data));
 };
