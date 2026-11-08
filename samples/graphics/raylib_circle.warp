@@ -1,17 +1,32 @@
 #!/usr/bin/env warp
-# Raylib FFI Example - Draw a circle in a window for five seconds
-# A window shows what is drawn only while its frames are drawn: on the Mac a window whose program sleeps instead never
-# appears, so the frame is drawn again until the time is up or the window is closed (Escape closes it too)
+# Raylib FFI: a window with a circle and colorful shapes for five seconds
+# `import raylib` offers all of raylib's functions and colors. A window shows what is drawn only while its frames are
+# drawn: on the Mac a window whose program sleeps or waits never appears, so the frame is drawn again until the time is
+# up or the window is closed (Escape closes it too)
 import raylib
-seconds_shown = 5
-InitWindow(800, 600, "Warp Raylib - Circle Demo")
-SetTargetFPS(60)
-while not WindowShouldClose() and GetTime() < seconds_shown {
+
+WIDTH = 800
+HEIGHT = 600
+SECONDS_SHOWN = 5
+# a color of your own is packed RGBA, little endian 0xAABBGGRR: MAROON is 0xFF2E1990
+DEEP_PURPLE = 0xFF802040
+
+def shapes_drawn() {
 	BeginDrawing()
 	ClearBackground(RAYWHITE)
 	DrawText("Warp Raylib FFI Demo", 250, 20, 30, DARKGRAY)
+	DrawText("Press Escape to close", 260, 560, 20, DARKGRAY)
 	DrawCircle(400, 300, 80.0, MAROON)
+	DrawCircle(100, 100, 30.0, DARKBLUE)
+	DrawCircle(700, 100, 30.0, GOLD)
+	DrawCircle(100, 500, 30.0, GREEN)
+	DrawCircle(700, 500, 30.0, DEEP_PURPLE)
+	DrawRectangle(200, 200, 50, 30, GREEN)
+	DrawRectangle(200, 350, 30, 50, RED)
 	EndDrawing()
 }
+
+InitWindow(WIDTH, HEIGHT, "Warp Raylib - Circle and Shapes")
+SetTargetFPS(60)
+while not WindowShouldClose() and GetTime() < SECONDS_SHOWN { shapes_drawn() }
 CloseWindow()
-# DONE The window closes immediately on the Mac  ./samples/graphics/raylib_circle_forever.warp Works fine. Maybe this test is only meant as a probe Not for end-users? (card raylib-window: the frame is drawn again until the time is up)

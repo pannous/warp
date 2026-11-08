@@ -87,6 +87,7 @@ report=$results/report.txt
 (cd "$tree" && find samples -name '*.warp' | sort) | xargs -P"$PARALLEL" -I{} bash -c 'one "$@"' _ {} | sort -k2 >"$report"
 # a reason without its position and quoted texts: one cause reads alike in every sample and from run to run
 sed 's/"[^"]*"/"…"/g; s/ ([0-9]*)//g; s/ at samples\/[^ ]*//; s/ (no owner)//' "$report" >"$tree/test/samples.txt"
-results_header "$tree/test/samples.txt" "$(git -C "$tree" rev-parse --short=10 HEAD)" 'ok|SRV'
-echo "samples: $(grep -c '^ok\|^SRV' "$report") of $(wc -l <"$report" | tr -d ' ') run, $(grep -c '^WIN' "$report") need a window, $(grep -c '^SRV' "$report") serve, $(grep -c '^EXP' "$report") fail on purpose, $(grep -c '^PAGE' "$report") run in the page only, $(grep -c '^TIME' "$report") hit a limit ($WARP, $(git -C "$tree" rev-parse --short=10 HEAD)) -> $tree/test/samples.txt"
+# a window, a server or a failure on purpose is an outcome as planned, no failure (user 11-08)
+results_header "$tree/test/samples.txt" "$(git -C "$tree" rev-parse --short=10 HEAD)" "$SAMPLES_PASSING"
+echo "samples: $(grep -cE "^($SAMPLES_PASSING) " "$report") pass of $(wc -l <"$report" | tr -d ' ') run, $(grep -c '^WIN' "$report") need a window, $(grep -c '^SRV' "$report") serve, $(grep -c '^EXP' "$report") fail on purpose, $(grep -c '^PAGE' "$report") run in the page only, $(grep -c '^TIME' "$report") hit a limit ($WARP, $(git -C "$tree" rev-parse --short=10 HEAD)) -> $tree/test/samples.txt"
 grep -aE '^(FAIL|TIME)' "$tree/test/samples.txt" | sed 's/^[A-Z]* *[^:]*: //' | sort | uniq -c | sort -rn
