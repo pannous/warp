@@ -464,7 +464,7 @@ paint_each(f, width, height) := {
 paint(picture, width, height) := if picture is list or picture is text then paint(shader_words(picture), width, height, ø) else paint_each(picture, width, height)
 // the program values a shader reads as the plain floats it takes: a quantity by its amount in SI base units, an angle in
 // radians, each item of a vector (decision no-units-in-shaders: a shader ignores units)
-shader_values(values) := {
+shader_floats(values) := {
 	if values == ø { return ø }
 	plain = {}
 	for name in values.keys { plain[name] = shader_value(values[name]) }

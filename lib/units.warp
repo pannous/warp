@@ -8,6 +8,7 @@
 use unit_names
 use uncertain
 use reals
+use time
 
 class Quantity {
 	amount: number
@@ -32,7 +33,7 @@ class Quantity {
 	*(other) := if other is Unit then times_unit(this, other.unit) else if other is Quantity then measured(amount * other.amount, dims + other.dims, unit_combined(unit, other.unit, 1), scale * other.scale) else measured(amount * other, dims, unit, scale)
 	/(other) := if other is Unit then quotient(this, other.one()) else if other is Quantity then quotient(this, other) else measured(amount / other, dims, unit, scale)
 	power(exponent) := measured(amount ^ exponent, dims * exponent, unit_raised(unit, exponent), scale ^ exponent)
-	equal(other) := other is Quantity and dims == other.dims and amount == other.amount
+	equal(other) := { o = time_quantity(other); o is Quantity and dims == o.dims and amount == o.amount }
 	compare(other) := amount - compared_amount(this, other)
 	// `<` and `>` of the amounts, an amount with a tolerance as an interval: `area > 10m²` holds when all of it is
 	// above (P224b, `certainly`), `possibly_greater` when some of it is (lib/uncertain.warp)
@@ -82,6 +83,9 @@ class Density extends Quantity {}
 // a quantity moving lib/time's Instant (`now + 1h`) as the Duration it lasts, a DimensionError of any other dimension
 // than time; a program without lib/time has no Duration and leaves it out (card instant-typed-duration)
 q: Quantity as Duration := Duration(q.in("ms"))
+d: Duration as Quantity := quantity(d.ms / 1000, "s")
+// lib/time's Duration as the quantity of time it is, so `6s == time 6` and `1s + time 6` (decision one-duration)
+time_quantity(x) := if x is Duration then x as Quantity else x
 
 // `5 * km`, the plain number promoted (as Quantity below): the quantity counted from the unit's zero, `20 * °C` the
 // temperature 20 on its scale; a quantity times a unit, `3 m * m`, their product
@@ -121,7 +125,8 @@ n: number as Density := quantity(n, "dpi")
 quotient(above: Quantity, below: Quantity) := if above.dims == below.dims then above.amount / below.amount else measured(above.amount / below.amount, above.dims - below.dims, unit_combined(above.unit, below.unit, -1), above.scale / below.scale)
 
 // other when it measures what q measures, else the loud DimensionError
-same_quantity(q: Quantity, other: any, action: text) := {
+same_quantity(q: Quantity, given: any, action: text) := {
+	other = time_quantity(given)
 	if not (other is Quantity) { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and the plain number " + str(other) }
 	if q.dims != other.dims { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and " + quantity_text(other) }
 	other
@@ -133,7 +138,7 @@ compared_amount(q: Quantity, other: any) := same_quantity(q, other, "compare").a
 summand(q: Quantity, other: any, action: text) := {
 	# a plain 0 adds as nothing, the start of a sum: `sum(distances)`, `average(runs.map(r => r.distance))`
 	if other == 0 and not (other is Quantity) { return measured(unit_zero(q.unit), q.dims, q.unit, q.scale) }
-	same_quantity(q, other, action)
+	other = same_quantity(q, other, action)
 	if unit_zero(q.unit) != unit_zero(other.unit) { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and " + quantity_text(other) + ", temperatures of two scales: convert one first (`" + quantity_text(other) + " as " + q.unit + "`)" }
 	other
 }

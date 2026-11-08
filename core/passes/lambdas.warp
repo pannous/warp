@@ -154,6 +154,10 @@ definition_of(n: Node): Definition? := match n {
 	Key(signature, Op.Define, body): defined_head(signature, body)
 	_: ø
 }
+# the writes among the statements outside the definitions among them, `x = 1`, `x += 1`: a function's local of the
+# same name (lib/math.warp norm's `var total` that `use math` brings) is no write of the program's own `total`
+# (cards reactive-ports-test, core-analysis)
+own_writes(statements: list): list := statements.filter(statement => definition_of(plain_node(statement)) == ø).flat_map(nodes_in).filter(n => n is key and op_of(n) in assigning_operators)
 defined_head(signature: Node, body: Node): Definition? := match signature {
 	List(call, Bracket.Round, Separator.None): { if #call >= 1 and call#1 is symbol then Definition(name_of(call#1), arguments_of(call), body) else ø }
 	Key(call, Op.Colon, type): defined_head(call, body)
