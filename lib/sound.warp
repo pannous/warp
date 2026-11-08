@@ -386,7 +386,16 @@ scale_intervals = {major: [0, 2, 4, 5, 7, 9, 11, 12], minor: [0, 2, 3, 5, 7, 8, 
 // chord(C4, major) the Chord of that kind on C4; chord([C4 E4 G4], 3000ms) the notes sounding together for the duration
 // (cards rename-play, play-c4), as play(C4+E4+G4, 3000ms) does. One definition: an enum-typed parameter beside a list one is no overload the
 // dispatch tells apart yet (card enum-overload-dispatch)
-chord(root, kind) := if root is list then play(Chord(root), kind) else Chord(transpose_each(root, chord_intervals[kind]))
+chord(root, kind) := if root is list then play(Chord(root), kind) else if kind is Note then hinted_chord([root, kind]) else Chord(transpose_each(root, chord_intervals[kind]))
+// chord([C4 E4 G4]), chord(C4, E4, G4), `chord C4 E4 G4`: the Chord of those notes, with a note that the word isn't
+// needed (decision chord-word-hint): C4+E4+G4 is that Chord
+chord(notes) := hinted_chord(notes)
+chord(a, b, c) := hinted_chord([a, b, c])
+chord(a, b, c, d) := hinted_chord([a, b, c, d])
+hinted_chord(notes) := {
+	warning("chord isn't needed: write " + notes.map(note => "" + note).join("+"))
+	Chord(notes)
+}
 scale(root, kind: Scale) := transpose_each(root, scale_intervals[kind])
 transpose_each(root, intervals) := [transpose(root, i) for i in intervals]
 // the gain factor of decibels: loudness = dB(-6) is about half
