@@ -16,6 +16,7 @@ source "$(dirname "$0")/../lib/platform.sh"
 source "$(dirname "$0")/../lib/hello-footprint.sh"
 source "$(dirname "$0")/../lib/site-scripts.sh"
 source "$(dirname "$0")/../lib/sync-main.sh"
+source "$(dirname "$0")/../lib/modules.sh"
 # git acts on the trees named by -C, never on a caller's repository (a hook's GIT_DIR, on-push.sh)
 unset $(git rev-parse --local-env-vars)
 MAIN_WARP=$HOME/dev/bin/warp  # the native warp (core/native/warp.warp), in a folder of its own (install_native)
@@ -140,6 +141,7 @@ copy_compilers() {
 		name=modules/$(basename "$part")
 		cp "$part" "$folder/$name.new" && mv "$folder/$name.new" "$folder/$name" || return 1
 	done
+	ls "$from/modules" | modules_kept_only "$folder/modules"
 }
 
 # installed_folder: the installed native warp's folder, one of $BUILDS with its warp, else the reason on stderr. A

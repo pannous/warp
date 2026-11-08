@@ -41,6 +41,7 @@ tree=$(cd "${tree:-$(git rev-parse --show-toplevel)}" && pwd) || exit 1
 scripts=$(cd "$(dirname "$0")" && pwd)
 lib=$tree/lib compilers=$tree/lib
 source "$scripts/lib/platform.sh"
+source "$scripts/lib/modules.sh"
 packages_linked "$tree"
 store=$warp_store main_warp=$warp_binary
 warp=${WARP_BINARY:-$main_warp}
@@ -253,6 +254,20 @@ code_lock() { echo "$store/code/$baked.building"; }
 # <store>/code/<baked> links the hash of a compiler of that code, so a lib/-only change takes that compiler as it is
 # and makes its runtime, modules and library index anew instead of compiling compiler.warp (decision lib-hash-rebake)
 code_kept() { mkdir -p "$store/code" && ln -sfn "../$hash" "$store/code/$baked"; }
+# lib/modules holds only the standard modules (card stale-modules-kept): a stale one left there broke the build's
+# runtime step itself ("extended list unlisted", main 2026-11-08 06:34-07:29). Before the steps it keeps those of the
+# newest known set, <entry> (the reused compiler's, else main's); the modules step writes every standard module, the
+# library index and the sugar's rules anew, and after it lib/modules keeps only what it wrote, before publishing
+modules_marked() { echo "$compilers/modules-step-$$"; }
+modules_step_starts() {
+	mkdir -p "$compilers/modules"
+	[ -d "$1/modules" ] && ls "$1/modules" | modules_kept_only "$compilers/modules"
+	touch "$(modules_marked)"
+}
+modules_step_kept() {
+	(cd "$compilers/modules" && find . -maxdepth 1 -type f -newer "$(modules_marked)" | sed 's|^\./||') | modules_kept_only "$compilers/modules"
+	rm -f "$(modules_marked)"
+}
 # reused_stored <log>: 0 reused, 1 no stored compiler of this code, 2 failed (its output in the log, step runtime)
 reused_stored() {
 	local log=$1 stored=$store/code/$baked/warp.wasm new=$compilers/reusing-$$.wasm
@@ -260,11 +275,13 @@ reused_stored() {
 	logged warp "miss-reusing-$(basename "$(readlink "$store/code/$baked")")"
 	copied "$stored" "$new" || return 1
 	echo "rebuild step runtime" >"$log"
+	modules_step_starts "$store/code/$baked"
 	if ! (cd "$tree" && export WARP_LIB=$lib && rm -f "$compilers/runtime.wasm.cwasm" && "$warp" "$new" runtime "$compilers/runtime.wasm" &&
-		mkdir -p "$compilers/modules" && "$warp" "$new" modules "$compilers/modules" "$compilers/runtime.wasm") >>"$log" 2>&1; then
-		rm -f "$new" "$new".*
+		"$warp" "$new" modules "$compilers/modules" "$compilers/runtime.wasm") >>"$log" 2>&1; then
+		rm -f "$new" "$new".* "$(modules_marked)"
 		return 2
 	fi
+	modules_step_kept
 	local part
 	for part in "" .driver.cwasm .driver.cwasm.key .driver.build.cwasm .driver.build.cwasm.key; do
 		[ -f "$new$part" ] && mv -f "$new$part" "$file$part"
@@ -306,6 +323,7 @@ one() {
 		copied "$stored" "$file.new-$$" && mv "$file.new-$$" "$file" && inputs_line >"$file.inputs"
 		[ "$name" = warp ] && words_kept
 		for companion in $(companions "$name" "$store/$hash"); do mkdir -p "$(dirname "$compilers/$companion")" && copied "$store/$hash/$companion" "$compilers/$companion"; done
+		[ "$name" = warp ] && ls "$store/$hash/modules" | modules_kept_only "$compilers/modules"
 		logged "$name" hit-store
 		return 0
 	fi
@@ -338,9 +356,11 @@ one() {
 	logged "$name" "miss-building${from:+-from-$from}"
 	[ "$name" = warp-self ] && compiler_warmed
 	: >"$log"
+	[ "$name" = warp ] && modules_step_starts "$store/main"
 	(cd "$tree" && WARP_LIB=$lib WARP_INPUTS_HASH=$hash WARP_COMPILER_STORE=$store WARP_BUILD_RECORD=$record "$scripts/build-slot.sh" "$log" "$warp" rebuild "${lane[@]}")
 	status=$?
-	[ $status != 0 ] && { build_failed "$name" "$log" $status; return 1; }
+	[ $status != 0 ] && { rm -f "$(modules_marked)"; build_failed "$name" "$log" $status; return 1; }
+	[ "$name" = warp ] && modules_step_kept
 	[ -f "$file" ] || { cat "$log" >&2; released "$name"; echo "rebuild.sh: warp rebuild wrote no $file" >&2; return 1; }
 	inputs_line >"$file.inputs"
 	published "$name"
