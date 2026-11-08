@@ -26,8 +26,12 @@ base=$(git -C "$tree" merge-base origin/main HEAD) || exit 2
 "$scripts/repeated-code.sh" "$tree" || exit 1
 changed=$({ git -C "$tree" diff --name-only "$base" HEAD; git -C "$tree" diff --name-only HEAD; } | sort -u)
 baked=$(echo "$changed" | grep -E "$BAKED" | grep -v '^core/native/')  # the native warp is no compiler input (compiler-inputs.sh)
-# the names of the lib/ files it changes, `units` of lib/units.warp
-changed_lib_stems() { echo "$changed" | sed -nE 's#^lib/(host/)?([A-Za-z_0-9]+)\.warp$#\2#p'; }
+# whether it changes a top-level line of a lib/ module, one that may add, drop or rename a word other modules reach: a
+# changed line at column 0 that is no comment (a body line is indented; a comment, sample or test edit changes none)
+changes_module_words() {
+	local modules=$(echo "$changed" | grep -E '^lib/(host/)?[A-Za-z_0-9]+\.warp$')
+	[ -n "$modules" ] && git -C "$tree" diff -U0 "$base" -- $modules | grep -vE '^(\+\+\+|---) ' | grep -qE '^[-+][^[:space:]#]'
+}
 if [ -n "$baked" ]; then
 	echo "smoke: REBUILDING, the compiler bakes in what this branch changed: $(echo $baked)"
 else
@@ -46,8 +50,10 @@ way=$(echo "$built" | tail -1)
 # modules are built anew of this lib/ and taken, so a change that breaks a module's prebuild fails here (card
 # smoke-misses-prebuild: units.warp broke time.wasm past every smoke). All of them, in one run: a module reaches
 # others by their words too (time reaches units in no use line and no signature), and one run is cheaper than a run
-# per module, whose start dominates
-if [ -z "$baked" ] && [ -n "$(changed_lib_stems)" ]; then
+# per module, whose start dominates. Only for a change of a module's top-level lines (night decision
+# smoke-prebuilds-modules: about 2.5-5.5 min more under load; a changed body still breaks only its own module's prebuild,
+# which the smoke then misses)
+if [ -z "$baked" ] && changes_module_words; then
 	fresh=$tree/data/smoke-modules
 	rm -rf "$fresh" && mkdir -p "$fresh" || exit 1
 	made=$(cd "$tree" && WARP_LIB=$tree/lib WARP_NO_WINDOW=1 "$INSTALLED" "$tree/lib/warp.wasm" modules "$fresh" "$tree/lib/runtime.wasm" 2>&1) ||
