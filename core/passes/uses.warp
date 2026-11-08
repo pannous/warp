@@ -22,12 +22,26 @@ module_directory_word = "module_directory"
 # the program with the declarations of the files its uses name, read from `folder`, in front of it, and each
 # `module_source("prelude")` the text of that standard module
 with_uses(program: Node, folder: text): Node := {
-	directed = with_own_aliases(with_module_directory(program, folder))
+	directed = with_own_aliases(with_module_directory(with_imports_as_uses(program), folder))
 	timed("uses: used files")
 	brought = used_in(directed, folder)
 	timed("uses: module texts")
 	bottom_up(brought, module_text)
 }
+# `from shapes import box`, `from palette import bright, dim` (decision modules-triage): Python's import of named words
+# is warp's `use shapes`, every word of the module visible (extensions/from_imports.warp hints so); a used file's too
+with_imports_as_uses(program: Node): Node := {
+	statements = flat_statements(program)
+	if not statements.any(statement => from_import(statement) != ø) { return program }
+	separated(bracketed(statements.map(statement => if from_import(statement) == ø then statement else use_of(from_import(statement))), ""), ";")
+}
+# the module of `from shapes import box` (the comma statement `from palette import bright, dim` leads with it), else ø
+from_import(statement: Node): any := {
+	line = without_mark(statement)
+	from_line(if is_group(line) and separator_of(line) == "," and #line > 0 then without_mark(line#1) else line)
+}
+from_line(n: Node): any := if is_group(n) and #n >= 4 and n#1 == symbol("from") and n#3 == symbol("import") then n#2 else ø
+use_of(module: Node): Node := plain_node(parsed("use " + (if module is text then "\"" + module + "\"" else name_of(module))))
 # `read(module_directory + "/data/x")`: module_directory is the folder of the file it is written in
 with_module_directory(n: Node, folder: text): Node := bottom_up(n, x => if x == symbol(module_directory_word) then folder else x)
 used_in(program: Node, folder: text): any := {
@@ -109,8 +123,10 @@ declarations_used(statements: list, folder: text, seen: list, claimed: map): lis
 	declarations = []
 	for statement in statements {
 		file = file_used(statement, folder)
-		if file != ø and file not in seen {
-			seen += [file]
+		# (by its absolute path: svg's `from colors` takes the very packages/colors/colors.warp a program's
+		# `use "../../packages/colors/colors.warp"` names)
+		if file != ø and without_steps_up(absolute_folder(file)) not in seen {
+			seen += [without_steps_up(absolute_folder(file))]
 			used = flat_statements(with_module_directory(file_parsed(file), folder_of(file)))
 			note_file_origins(file, file_text(file))
 			inner = declarations_used(used, folder_of(file), seen, claimed)
@@ -129,7 +145,7 @@ declarations_used(statements: list, folder: text, seen: list, claimed: map): lis
 file_parsed(file: text): Node := {
 	source = file_text(file)
 	if source is ø { raise working_relative(file) + ": no such file to use" }
-	checked_parse(file, without_primitive_mark(source))
+	with_imports_as_uses(checked_parse(file, without_primitive_mark(source)))
 }
 # a used file's tree; one that does not parse is the error naming the file, never a file of no declarations (card
 # unclosed-core: an unclosed ( in a core file hid its later definitions)
@@ -240,7 +256,18 @@ file_used(statement: Node, folder: text): any := {
 	if module is text { return path_in(folder, rooted(module, folder)) }
 	if not (module is symbol) or name_of(module) in implicitly_used { return ø }
 	path = path_in(folder, name_of(module) + module_extension)
-	if file_text(path) == ø then ø else path
+	if file_text(path) != ø then path else package_file(name_of(module), folder)
+}
+# `use colors` naming no file beside and no standard module (decision packages-by-name): the main file of the package
+# of that name in the project's packages/ (scripts/link-packages.sh links the registry's there), else in the registry's
+# clone; its own files are then beside it (svg's shapes.warp)
+REGISTRY_CLONE = "/.cache/warp/packages/.registry/"
+package_file(name: text, folder: text): any := {
+	if is_module_name(name) or names_no_module(name) { return ø }
+	root = project_root(folder)
+	places = (if root == ø then [] else [root + "/packages/"]) + [(env("HOME") ?? "") + REGISTRY_CLONE]
+	found = places.map(place => place + name + "/" + name + module_extension).filter(file => file_text(file) != ø)
+	if #found > 0 then found#1 else ø
 }
 # a file as messages name it: below the working folder relative to it, else as found
 working_relative(file: text): text := {

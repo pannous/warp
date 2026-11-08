@@ -369,18 +369,6 @@ exact_decimal(t: text) := {
 // sleep(d: Time) beside the prelude's sleep(x) would replace it, card typed-overload-replace)
 sleep(duration) := slept((if duration is Time then duration.amount else duration) * 1000)
 
-// `time 6`, `time 3+3`: a number as a Time, its seconds (6s); `time { … }` measures as the shell's time does: runs the
-// block, prints how long it took and gives the block's value (decision time-command). A block reads as data, which no
-// typed overload tells apart from a number, so a rule turns it into the run measured
-time(n: number) := n * seconds
-rewrite time {$body...} => timed(() => {$body...})
-timed(run) := {
-	started = clock()
-	value = run()
-	print "time: " + (clock() - started) / 1000 * seconds
-	value
-}
-
 // `6.0m ± 0.3`: a tolerance of a quantity, its amount an interval; a plain spread counts in the value's unit, a
 // quantity's converts to it: `5m ± 1cm` is 5.00 ± 0.01 m (notes/plus_minus.md P220)
 infix operator ±(q: Quantity, spread: number) := measured(plus_minus(q.amount, spread * q.scale), q.dims, q.unit, q.scale)

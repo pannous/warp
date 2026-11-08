@@ -39,8 +39,16 @@ def shown_text(value: TypedCode): TypedCode {
 def shown_code(value: TypedCode): TypedCode {
 	kind = value.kind
 	if kind == ValueKind.Text { return runtime_call("text_code", [value]) }
+	if kind == ValueKind.Node and instance_text_word in module.functions { return marked_or_code(value) }
 	if kind == ValueKind.Node or kind == ValueKind.Char or kind == ValueKind.Time { return runtime_call("value_code", [TypedCode(ValueKind.Node, boxed(value))]) }
 	shown_text(value)
+}
+# a number of an int type shown as print writes it, by its type's `format … as text` (`warp 'use color; red'`: red),
+# any other value as warp code; the value, main's result in a local, is read twice
+def marked_or_code(value: TypedCode): TypedCode {
+	marked = runtime_call("type_marked", [value]).code
+	as_text = converted(call_values(module.functions[instance_text_word], [value]), ValueKind.Text)
+	TypedCode(ValueKind.Text, marked + [op.if] + gc_bytes(references.text) + as_text + [op.else] + runtime_call("value_code", [value]).code + [op.end])
 }
 # what `print` writes: `print a 3` each value as a list shows it, a space between; `print "x is " x "!"`, a text
 # first, the values' texts joined without one (a one-character text is a character)

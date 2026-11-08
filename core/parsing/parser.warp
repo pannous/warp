@@ -1883,13 +1883,16 @@ def used_modules(source: text): list {
 	modules = []
 	for statement in code_statements(use_candidates(source)) {
 		words = blank_words(statement)
-		if words.length == 2 and USE_KEYWORDS.contains(words#1) and not modules.contains(words#2) { modules += [words#2] }
+		module = if words.length == 2 and USE_KEYWORDS.contains(words#1) then words#2 else if words.length >= 4 and words#1 == FROM_WORD and words#3 == "import" then words#2 else ""
+		if module != "" and not modules.contains(module) { modules += [module] }
 	}
 	modules
 }
+// `from list import zip` uses list as `use list` does (core/passes/uses.warp with_imports_as_uses)
+FROM_WORD = "from"
 // the lines of a source a use statement may start or stand in: one leads a line, unindented, or follows a `;` (the
 // statements of all the prelude were ~20 ms a compile)
-def use_candidates(source: text): text := source.split("\n").filter(line => USE_KEYWORDS.any(keyword => line.starts_with(keyword + " ") or line.contains("; " + keyword + " "))).join("\n")
+def use_candidates(source: text): text := source.split("\n").filter(line => (USE_KEYWORDS + [FROM_WORD]).any(keyword => line.starts_with(keyword + " ") or line.contains("; " + keyword + " "))).join("\n")
 // the use lines of a source, as a slice of it reads them (written_tree's `uses`)
 def use_lines(source: text): text := used_modules(source).map(module => "\nuse " + module).join("")
 // the names the code says, found in one walk (a caller asking of many words asks this once), each as a whole name:
