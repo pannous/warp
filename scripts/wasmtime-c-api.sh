@@ -2,8 +2,8 @@
 # scripts/wasmtime-c-api.sh [<folder>…]: warp's native libraries built for this machine into /opt/cargo (a no-op when
 # current), and copied into each folder, default the one beside the warp binary on PATH: warp's wasmtime C API
 # (crates/wasmtime-capi, card wasmtime-bundled) and libwarp_gpu (crates/warp-gpu, wgpu-native, card gpu-functions). The
-# window, the sound and the web view are warp's own (lib/native_host.warp, SDL3, WebKit and the system's libraries over
-# FFI).
+# window, the sound and the web view are warp's own (lib/host/native_host.warp, SDL3, WebKit and the system's libraries
+# over FFI).
 # after-push.sh installs them beside warp and into the main checkout's lib/, rebuild.sh into a tree's lib/, the library
 # folder a native build links from and its executables find them in (rpath); the release workflow runs it for lib/
 set -eu -o pipefail

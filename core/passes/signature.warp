@@ -29,11 +29,13 @@ module_signature_node(name: text, image: list): Node := {
 with_signature(wasm: list, name: text, image: list): list := wasm_header + section(section_ids.custom, name_bytes(SIGNATURE_SECTION) + pack(module_signature_node(name, image)).bytes) + wasm[#wasm_header ..]
 
 # a module's signature read back, ø for a module built without one
-module_signature(name: text, wasm: list): ModuleSignature? := {
-	place = section_place(wasm, section_ids.custom, SIGNATURE_SECTION)
+# (the section cut out of the module's text as it is: decoding its bytes a code point at a time was ~15 % of a
+# `use json` compile)
+module_signature(name: text, wasm: text): ModuleSignature? := {
+	place = section_place(wasm.bytes, section_ids.custom, SIGNATURE_SECTION)
 	if place == ø { return ø }
 	fields = {}
-	for entry in items_of(unpack(utf8_text(wasm[place#1 ..< place#2]))) { fields[name_of(key_of(entry))] = value_of(entry) }
+	for entry in items_of(unpack(byte_slice(wasm, place#1, place#2))) { fields[name_of(key_of(entry))] = value_of(entry) }
 	module_name = name
 	ModuleSignature(source: "${fields["source"]}", uses: items_of(fields["uses"]).map(module => "${module}"), slices: items_of(fields["slices"]).map(slice => ["${slice#1}", "${slice#2}", "${slice#3}", module_name]), rules: items_of(fields["rules"]).map(rule => unpacked_rule(rule, module_name)), foreign: texts_read(fields.get("foreign")), aliases: texts_read(fields.get("aliases")), words: listed(fields, "words"), globals: listed(fields, "globals"), classes: listed(fields, "classes"), builders: listed(fields, "builders"), runtime: listed(fields, "runtime"), patterns: listed(fields, "patterns").map(pattern => "${pattern}"), operators: listed(fields, "operators").map(operator => "${operator}"))
 }
@@ -63,6 +65,9 @@ first_line(written: text): text := written.split("\n")#1
 # a file's bytes, [] when it isn't there (asked first: the page's read_bytes of a missing file ends the compile, no try
 # catches it, card playground-host-word)
 bytes_if_there(path: text): list := if exists(path) then (try read_bytes(path) else []) else []
+# a file's bytes as a text, a wasm module's too (a text holds its bytes as they are), "" when it isn't there: asked
+# for its byte_size, never compared, as text equality normalizes (NFC) what it compares
+wasm_if_there(path: text): text := if exists(path) then (try read(path) else "") else ""
 
 # the signatures of the modules linked to this compile, by module name
 global linked_signatures = {}
@@ -75,8 +80,8 @@ prebuilt_signature(module: text): ModuleSignature? := {
 	if linked_signature(module) != ø { return linked_signature(module) }
 	if own_module_files.has(module) { return ø }
 	if not prebuilt_signatures.has(module) {
-		wasm = bytes_if_there(folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + module + ".wasm")
-		prebuilt_signatures[module] = if #wasm > 0 then module_signature(module, wasm) else ø
+		wasm = wasm_if_there(folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + module + ".wasm")
+		prebuilt_signatures[module] = if byte_size(wasm) > 0 then module_signature(module, wasm) else ø
 	}
 	prebuilt_signatures[module]
 }

@@ -60,7 +60,7 @@ export page_render(value: any) := {
 	html
 }
 // a program reaching the page's js (`who.focus()`, `document.title`, extensions/js_globals.warp) has its page in the js
-// runtime's document after each render: natively the hidden web view's (lib/native_host/webview_bridge.js), the page
+// runtime's document after each render: natively the hidden web view's (lib/host/native_host/webview_bridge.js), the page
 // shows it itself (web/playground/host-foreign.js). Other programs never start the js runtime
 JS_PAGE_SHOWN = "warpShowPage"
 global page_in_js = no
@@ -82,7 +82,7 @@ page_after_steps(value: any): text := {
 // `warp app` (lib/app/command.warp) runs the program so, natively: its page in a window of the system's web view, as
 // the page's site.js runs it: each event of the page runs its handler (page_event), a key pressed the program's `on
 // key` (lib/keys.warp), its timers fire when due (lib/timers.warp hears each tick), and the page is rendered anew after
-// each; closing the window ends the run, the HTML shown last its output (lib/native_host/webview.warp warpWindow)
+// each; closing the window ends the run, the HTML shown last its output (lib/host/native_host/webview.warp warpWindow)
 APP_WINDOW_VARIABLE = "WARP_APP_WINDOW"
 APP_WINDOW = "warpWindow"
 EVENT_JOINER = "·"

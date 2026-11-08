@@ -193,8 +193,8 @@ Principles and Talking live only in common.md.
 ## Done
 - Samples: every major or semi-major feature (a new syntax form, library area, server/ORM/GPU capability, playground
   ability) ships with a sample in samples/<topic>.warp that shows it the way a user would write it, in the same
-  branch, `chmod +x`. A sample that cannot run in the browser goes in
-  web/playground/excluded_samples.txt. Name the sample in a `todo note` on the card.
+  branch, `chmod +x`. A sample that cannot run in the browser says so in a line of
+  its own, `# host: native: <why>` (`# host: page`, `# host: none` likewise; scripts/samples.sh HOST_LINE). Name the sample in a `todo note` on the card.
 - Docs are part of done: a card that changes what users write or see (syntax, words, flags, messages, defaults)
   updates the wiki page of that concept in the same task: a minimal example and one sentence, one idea per snippet,
   simplest form first, plain words. Say "docs: <page>" or "docs: none (internal)" in a `todo note`. A feature the

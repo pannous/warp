@@ -1,4 +1,4 @@
-// The system's web view natively (decision native-js-webview, card warp-webview-removal), a part of lib/native_host.warp:
+// The system's web view natively (decision native-js-webview, card warp-webview-removal), a part of lib/host/native_host.warp:
 // macOS's WKWebView over the Objective-C runtime by plain FFI, as libwarp_webview (crates/warp-webview) answered it
 // in Objective-C. It answers the host word foreign_call for `use js` in one hidden web view a run, made at the first
 // call: never shown, never activating the app, no Dock icon; `warp app` shows that view in a window, the program's
@@ -20,7 +20,7 @@ APP_WINDOW_VARIABLE = "WARP_APP_WINDOW"
 // web/playground/js-members.js (jsMember), markup.js (listenToElements, morphChildren) and markup-forms.js (submit),
 // shared with the page, and webview_bridge.js (warpForeignCall, the page's events), put into each page; read when the
 // module is built
-PAGE_BRIDGE = [module_source("../web/playground/js-members.js"), module_source("../web/playground/markup.js"), module_source("../web/playground/markup-forms.js"), module_source("native_host/webview_bridge.js")].join("\n")
+PAGE_BRIDGE = [module_source("../web/playground/js-members.js"), module_source("../web/playground/markup.js"), module_source("../web/playground/markup-forms.js"), module_source("host/native_host/webview_bridge.js")].join("\n")
 // the module `use js` calls answered here, not in the page: the run's window, `show` it, the `next` event of its page
 APP_WINDOW = "warpWindow"
 // what warpWindow.next answers once its time is over without an event (lib/markup.warp page_window_run)

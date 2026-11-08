@@ -265,9 +265,9 @@ Each step is useful on its own and is what the next ones stand on.
   component's elements still match).
 - The parser bits (`.card { … }` without quotes, `8px` as a length) are done: step 7 above.
 
-## Built sites (scripts/build-site.sh, card blockcompiler-entries)
-- `scripts/build-site.sh app.warp [folder]` writes site/ beside the program (until `warp build --site`, core's
-  UNBUILT_OPTIONS): app.wasm is `warp build --wasm`'s module, index.html an empty root and the page's scripts, the
+## Built sites (`warp build --site`, extensions/commands/site.warp, cards blockcompiler-entries, build-site)
+- `warp build --site app.warp` (`--site=<folder>`) writes site/ beside the program: app.wasm is the program's whole
+  module, index.html its first markup prerendered (`warp run` by the same warp, WARP_EXECUTABLE) and the page's scripts, the
   folder mirrors the repository (web/playground/ holds the scripts) so file reads resolve against the site's root, and
   served-files.js lists the site's files. Any static host serves it; coi-serviceworker.js gives the isolation.
 - One path with the playground: site-worker.js runs app.wasm through driver.js programRan, renders it with
