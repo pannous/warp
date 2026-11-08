@@ -431,7 +431,11 @@ function notification(text) {
 // paces sound by it): the page was clicked or typed in, as a browser plays sound only then
 const darkMode = matchMedia(DARK_MODE_QUERY);
 const windowOpen = () => (navigator.webdriver ? !beforeUserActivation() : document.visibilityState === "visible");
-const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(windowOpen()), window_fullscreen: Number(document.fullscreenElement === $("painted")), heard: Number(!beforeUserActivation()), ...displayValues(), ...viewSize() } });
+function tellSystemValues() {
+	const view = viewSize();
+	shareView(view);
+	worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(windowOpen()), window_fullscreen: Number(document.fullscreenElement === $("painted")), heard: Number(!beforeUserActivation()), ...displayValues(), ...view } });
+}
 darkMode.addEventListener("change", tellSystemValues);
 document.addEventListener("visibilitychange", () => worker && tellSystemValues());
 ["pointerdown", "keydown"].forEach(type => addEventListener(type, () => { if (!worker) return; tellSystemValues(); tellEnvironment(); }, { once: true, capture: true }));
