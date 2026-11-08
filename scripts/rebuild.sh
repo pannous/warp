@@ -240,13 +240,6 @@ modules_whole() {
 		[ -s "$folder/modules/$module.wasm" ] || { echo "rebuild.sh: $folder/modules/$module.wasm is empty: its modules are built anew" >&2; return 1; }
 	done
 }
-# one rebuild of a tree at a time: a second, of another hash, would write lib/runtime.wasm and lib/modules/ while the
-# first builds its modules behind them (card empty-native-host); held till this run ends
-tree_locked() {
-	local lock=$store/trees/$(echo "$tree" | tr / _).building
-	[ "$(lock_holder "$lock")" = $$ ] && return
-	until lock_taken "$lock"; do lock_waited "$lock" tree; done
-}
 # the build lock of a compiler of this hash
 build_lock() { echo "$store/$hash/$1.building"; }
 building() { lock_taken "$(build_lock "$1")"; }
@@ -298,7 +291,6 @@ build_failed() {
 one() {
 	local name=$1 file=$compilers/$1.wasm built status old
 	local check=${2:-$check}
-	tree_locked
 	old=$compilers/$(legacy "$name").wasm
 	if [ -z "$force" ] && [ ! -f "$file" ] && [ -f "$old" ] && [ "$(cut -d' ' -f1 "$old.inputs" 2>/dev/null)" = "$hash" ]; then
 		copied "$old" "$file" && cp "$old.inputs" "$file.inputs" && logged "$name" hit-lib-old-name
