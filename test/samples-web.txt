@@ -1,4 +1,4 @@
-# 4bcb12ca50 2026-11-07 19:48 248/261 95.0%
+# 16d63e4bed 2026-11-08 03:59 250/263 95.1%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_map.warp
 ok   samples/acceleration/gpu_million.warp
@@ -38,7 +38,7 @@ ok   samples/errors/raise_error.warp
 ok   samples/errors/try_catch.warp
 ok   samples/errors/try_else.warp
 ok   samples/errors/try_failed_json.warp
-ok   samples/events/arrow_keys.warp
+FAIL samples/events/arrow_keys.warp
 ok   samples/events/effects.warp
 ok   samples/events/ticks.warp
 ok   samples/functions/ackermann.warp
@@ -103,6 +103,7 @@ ok   samples/gpu/sdf_scene.warp
 ok   samples/gpu/voronoi.warp
 ok   samples/gpu/warp_compiled_wgsl_shader.warp
 ok   samples/graphics/finger_paint.warp
+ok   samples/graphics/gaussian_splats.warp
 ok   samples/graphics/paint_function.warp
 ok   samples/graphics/paint_text.warp
 ok   samples/graphics/paint_text_gpu.warp
@@ -116,17 +117,17 @@ drew samples/graphics/raylib_simple_use.warp
 drew samples/graphics/raylib_sleep.warp
 drew samples/graphics/sdl_red_square.warp
 ok   samples/graphics/shader.warp
-ran  samples/graphics/shader_brush.warp
+ok   samples/graphics/shader_brush.warp
 ok   samples/graphics/shader_trails.warp
 ok   samples/graphics/webgpu.warp
-ok   samples/graphics/window_size.warp
+FAIL samples/graphics/window_size.warp
 ok   samples/hello/comments.warp
 ok   samples/hello/hello.warp
 ok   samples/hello/natural.warp
 ok   samples/hello/phrases.warp
 ok   samples/hello/sample.warp
 ok   samples/laws/basic_laws.warp
-ran  samples/laws/kitchensink.warp
+FAIL samples/laws/kitchensink.warp
 ok   samples/laws/project_laws.warp
 ok   samples/lists/dot.warp
 ok   samples/lists/primes.warp
@@ -139,7 +140,7 @@ ok   samples/loops/game_of_life.warp
 ok   samples/loops/iterators.warp
 ok   samples/loops/life_idiomatic.warp
 ok   samples/loops/life_kotlin_ranges.warp
-ran  samples/loops/mandelbrot.warp
+ok   samples/loops/mandelbrot.warp
 ok   samples/matching/code_templates.warp
 ok   samples/matching/matching.warp
 ok   samples/matching/pattern_clauses.warp
@@ -162,7 +163,7 @@ ok   samples/modules/test_ffi.warp
 ok   samples/modules/test_ffi_comprehensive.warp
 ok   samples/modules/test_ffi_extended.warp
 ok   samples/native/arguments.warp
-EXP  samples/native/c_calls.warp
+ok   samples/native/c_calls.warp
 ok   samples/native/doubling.warp
 ok   samples/native/fib.warp
 ok   samples/native/files.warp
@@ -171,7 +172,7 @@ ok   samples/native/structs.warp
 ok   samples/native/uses.warp
 ok   samples/numbers/bits.warp
 ok   samples/numbers/collatz.warp
-ok   samples/numbers/dates.warp
+FAIL samples/numbers/dates.warp
 ok   samples/numbers/factorial.warp
 ok   samples/numbers/gcd.warp
 ok   samples/numbers/measurements.warp
@@ -200,7 +201,7 @@ ok   samples/sound/gpu_visualizer_warp.warp
 ok   samples/sound/harmony.warp
 ok   samples/sound/hum_blocks.warp
 ok   samples/sound/midi.warp
-ok   samples/sound/music.warp
+FAIL samples/sound/music.warp
 ok   samples/sound/play_mp3.warp
 ok   samples/sound/rhythm.warp
 ok   samples/sound/signal_graph.warp
@@ -243,7 +244,7 @@ ok   samples/types/return_polymorphism.warp
 ok   samples/types/return_polymorphism2.warp
 ok   samples/types/types.warp
 ok   samples/wasm/component_reflection.warp
-FAIL samples/wasm/import_compiled.warp
+ok   samples/wasm/import_compiled.warp
 ok   samples/wasm/wasm_interop.warp
 ok   samples/web/component_binding.warp
 ok   samples/web/component_totals.warp
