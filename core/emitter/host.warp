@@ -75,9 +75,7 @@ def host_call(body: Body, name: text, arguments: list): TypedCode {
 	if (ValueKind.Node in signature#1 or ValueKind.Node in signature#2) and not module.prebuilding { exported_builders() }
 	arguments = arguments + left_out(name, #signature#1 - #arguments)
 	if #arguments != #signature#1 { return refuse("a call of " + name + " with " + #arguments + " arguments") }
-	code = []
-	for i in 0..<#arguments { code += host_argument(expression_code(body, arguments[i]), signature#1[i]) }
-	code += call_code(import_index(host_import(name)))
+	code = host_arguments(body, arguments, signature#1) + call_code(import_index(host_import(name)))
 	if #signature#2 == 0 { return TypedCode(no_kind, code) }
 	result = signature#2#1
 	if result == ValueKind.I32 { return TypedCode(ValueKind.Int, code + [op.i64_extend_i32_s]) }
@@ -187,6 +185,22 @@ def exported_node_word(name: text) {
 	nodes = range_list(#word.kinds).map(i => TypedCode(ValueKind.Node, [op.local_get] + uleb(i)))
 	f = exported_function(name, nodes.map(node => ValueKind.Node), ValueKind.Node)
 	f.code = boxed(runtime_call(name, nodes))
+}
+# the arguments in the kinds the host word takes. A C text has one place in linear memory (c_text), so when an
+# argument follows it, whose work may write a text of its own there, `set_system_value("window_height",
+# system_value("window_height") + 10)`, every value is worked out first and converted only right before the call
+def host_arguments(body: Body, arguments: list, kinds: list): list {
+	values = arguments.map(argument => expression_code(body, argument))
+	code = []
+	if range_list(#kinds - 1).any(i => kinds[i] == ValueKind.CText) {
+		for i in 0..<#values {
+			held = fresh_local(body, values[i].kind)
+			code += values[i].code + [op.local_set] + uleb(held)
+			values[i] = TypedCode(values[i].kind, [op.local_get] + uleb(held))
+		}
+	}
+	for i in 0..<#values { code += host_argument(values[i], kinds[i]) }
+	code
 }
 def host_argument(value: TypedCode, kind: ValueKind): list {
 	if kind == ValueKind.I32 { return host_int(value) + [op.i32_wrap_i64] }

@@ -2,3 +2,8 @@
 'if "v12" is "v" + n then "version " + n else "?"'	'version 12'
 'f(xs) := if xs is [first, ...rest] then first + #rest else 0; [f([5, 6, 7]), f([])]'	[7, 0]
 'r = {status: 404}; if r is {status: s} then s else 0'	404
+# a module's global (units' s, m, px) is no known value of the program: the pattern binds the name, as a match arm does;
+# a value the program binds itself still compares
+'use units; r = {v: 4}; if r is {v: m} then m else 0'	4
+'a = 1; b = 2; [1, 2] is [a, b]'	yes
+'a = 1; b = 3; [1, 2] is [a, b]'	no

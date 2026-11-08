@@ -47,3 +47,18 @@ The full `warp rebuild` by the native warp (core/native/warp.warp built on that 
 error in the seed's compile after 178 s (load 61 on 10 cores); the driver prints no raised message, so its cause is
 unknown, and an untested DRC run of the same takes 16+ min. Next: make the driver print a raised error's text, then
 rerun at normal load.
+
+## Upstream (prepared 2026-11-08, waiting on the user's confirmation)
+Two wasmtime PRs that would let crates/wasmtime-capi go, prepared in data/upstream/ (README.md: titles, bodies,
+test results; submit.sh --confirm forks, pushes, opens them; dry run without). wasmtime main (52.0.0-dev) still lacks both.
+- A `c-api-gc-config`: wasmtime_config_collector_set (wasmtime_collector_t AUTO/DRC/NULL/COPYING) and
+  wasmtime_config_gc_heap_initial_size_set, C++ wrappers, and gc-copying in the C API's WASMTIME_FEATURE_LIST
+  (on by default, so a default C API build's Collector::Auto is copying: the setter is then not even needed).
+- B `gc-growth-usable-capacity`: GcHeap::usable_capacity (the active semi-space for copying) in should_collect_first
+  and collect_and_maybe_grow_gc_heap: the general form of patches/copying-heap-growth.patch (same /4 for copying).
+The Bytecode Alliance AI tool policy wants the submitter to have reviewed every line and ideally written the PR text.
+Once both are in a release on Homebrew/APT: driver.warp's 59 `from "warp_wasmtime"` become "wasmtime" and
+warp_config_gc_heap_initial_size_set becomes wasmtime_config_gc_heap_initial_size_set; scripts/wasmtime-c-api.sh
+keeps only wgpu; crates/wasmtime-capi, the libwarp_wasmtime packaging (release.yml, native_dist.sh, nfpm, brew
+formula, pypi wheels) and the after-push/rebuild/gate install steps go, replaced by a dependency on wasmtime >= that
+release.

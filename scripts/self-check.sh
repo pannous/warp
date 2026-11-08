@@ -65,14 +65,21 @@ check_lane() {
 scratch=$(mktemp -d /tmp/self-check.XXXXXX) && trap "rm -rf $scratch" EXIT
 warp=$scratch/warp
 cp $main_warp $warp || exit 1
-# its wasmtime beside the copy, where its rpath looks
-cp ${main_warp:A:h}/libwarp_wasmtime.* $scratch/ || exit 1
+# The files the binary needs, copied beside the copy from the first of the folders holding them; past the binary's own
+# folders the installed warp's, since a tree's core/native/warp (WARP_BINARY) has none beside it
+installed_warp=$(whence -p warp)
+copied_from_first() {
+  local pattern=$1; shift
+  local found=(${^@}/$~pattern(N))
+  (( $#found )) || { echo "self-check: no $pattern beside $main_warp or the installed warp $installed_warp" >&2; exit 1; }
+  cp ${found[1]:h}/$~pattern $scratch/ || exit 1
+}
+# its wasmtime where its rpath looks, the build folder the launcher links to first
+copied_from_first 'libwarp_wasmtime.*' ${main_warp:A:h} ${main_warp:h} ${installed_warp:A:h} ${installed_warp:h}
 libraries_beside $scratch
 # the seed lies beside the launcher; the pair in the build folder the launcher links to (warp-builds/<tip>). Its
 # runtime is no file: each rebuild compiles it from the sources being built (card seed-compiles)
-for seed_file in warp-seed.wasm; do
-  cp ${main_warp:h}/$seed_file $scratch/ 2>/dev/null || cp ${main_warp:A:h}/$seed_file $scratch/ || exit 1
-done
+copied_from_first warp-seed.wasm ${main_warp:h} ${main_warp:A:h} ${installed_warp:h} ${installed_warp:A:h}
 # the pair for these inputs: lib/'s, else the store's; built by the copy only with --rebuild
 if [[ -n $rebuild ]]; then
   pair=$(WARP_BINARY=$warp $worktree/scripts/rebuild.sh both $worktree 2>&1)
