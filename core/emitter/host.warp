@@ -158,7 +158,8 @@ def unwrapped(body: Body, n: Node): TypedCode {
 
 # a number a host word takes as an int: a fraction or a float rounded to the nearest: `sleep(1/60*1000)`
 def host_int(value: TypedCode): list {
-	if value.kind == ValueKind.Node or value.kind == ValueKind.Float { return runtime_call("rounded", [TypedCode(ValueKind.Float, converted(value, ValueKind.Float))]).code }
+	if value.kind == ValueKind.Node { return runtime_call("nearest_int", [value]).code }
+	if value.kind == ValueKind.Float { return runtime_call("rounded", [value]).code }
 	converted(value, ValueKind.Int)
 }
 

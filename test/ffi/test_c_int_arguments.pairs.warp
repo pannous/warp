@@ -1,0 +1,6 @@
+# a C i64 parameter takes a boxed int exactly, a list item or map value as a written one (a tagged pointer past 2^53 of
+# lib/native_host/webview.warp), and rounds a float (card list-item)
+'use c; m = calloc(1, 8); xs = [-5524291356107002598]; set_field_i64(m, 0, xs#1); field_i64(m, 0)'	-5524291356107002598
+'use c; m = calloc(1, 8); d = {p: 9007199254740993}; set_field_i64(m, 0, d.p); field_i64(m, 0)'	9007199254740993
+'use c; m = calloc(1, 8); xs = [2.6]; set_field_i64(m, 0, xs#1); field_i64(m, 0)'	3
+'use c; m = calloc(1, 8); set_field_i64(m, 0, -5524291356107002598); field_i64(m, 0)'	-5524291356107002598
