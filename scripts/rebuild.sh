@@ -228,6 +228,13 @@ lock_waited() {
 	logged "$2" "waiting-for-$holder"
 	while [ -d "$1" ] && kill -0 "$holder" 2>/dev/null; do sleep 10; done
 }
+# one rebuild of a tree at a time: a second, of another hash, wrote lib/runtime.wasm while the first built its modules
+# behind the one before, and native_host.wasm came out empty (card empty-native-host); held till this run ends
+tree_locked() {
+	local lock=$store/trees/$(echo "$tree" | tr / _).building
+	[ "$(lock_holder "$lock")" = $$ ] && return
+	until lock_taken "$lock"; do lock_waited "$lock" tree; done
+}
 # the build lock of a compiler of this hash
 build_lock() { echo "$store/$hash/$1.building"; }
 building() { lock_taken "$(build_lock "$1")"; }
@@ -279,6 +286,7 @@ build_failed() {
 one() {
 	local name=$1 file=$compilers/$1.wasm built status old
 	local check=${2:-$check}
+	tree_locked
 	old=$compilers/$(legacy "$name").wasm
 	if [ -z "$force" ] && [ ! -f "$file" ] && [ -f "$old" ] && [ "$(cut -d' ' -f1 "$old.inputs" 2>/dev/null)" = "$hash" ]; then
 		copied "$old" "$file" && cp "$old.inputs" "$file.inputs" && logged "$name" hit-lib-old-name
