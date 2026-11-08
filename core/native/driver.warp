@@ -828,6 +828,9 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	wasi_config_inherit_stdin(config)
 	output_to(config, output)
 	name_time_zone()
+	# PWD the real current folder, a module's cwd (wasi.warp std_os_cwd): a parent that changed folder without saying
+	# so (`warp test`'s runs, chdir before exec) left its own, and relative paths then resolved from the wrong one
+	setenv(c_string("PWD"), c_string(current_folder()), 1)
 	wasi_config_inherit_env(config)
 	# the current folder for relative paths and the root for absolute ones, as warp's own host opens them
 	wasi_config_preopen_dir(config, ".", ".", yes)
