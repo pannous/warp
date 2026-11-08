@@ -21,7 +21,7 @@ Principles and Talking live only in common.md.
   lib/aliases.warp.
 - Small changes on main: only what nothing compiles (notes, docs, wiki, scripts, samples, playground text)
   goes straight onto main in the main checkout /Users/me/dev/angles/warp, no worktree or branch: commit your own
-  paths by name (`git commit -- <paths>`), `git fetch origin main && git rebase --autostash --rebase-merges origin/main` (common.md), push; never leave unpushed commits on
+  paths by name (`git commit -- <paths>`), `source scripts/lib/sync-main.sh; up_to_date_main` (fetches main by name, replays your commits, never stashes) (common.md), push; never leave unpushed commits on
   main. A new root .warp data file (components.warp …): tell the Integrator the commit, tests read it.
 - Anything compiled (core/, the harness in src/ and crates/, Cargo.*) keeps its worktree, however small (a half-done
   edit there breaks every build of the main checkout): `cowtree add -b <branch> /Volumes/Worktrees/<branch> origin/main`
@@ -41,9 +41,10 @@ Principles and Talking live only in common.md.
 - Moving on demand: a change in the main checkout that grows (more than a few files, many build/test rounds, or
   another session's files) moves into a worktree while still uncommitted: `cowtree add -b <task> <worktree> HEAD`,
   `git diff -- <own paths> | git -C <worktree> apply`, then undo only your own paths in the main checkout. A worktree
-  branch that turns out small goes straight to main itself (`git fetch origin main && git rebase --autostash --rebase-merges origin/main`, push `HEAD:main`).
-- Rebase and merge with `--autostash`; never a bare `git stash pop` (the stash list is shared by all worktrees).
-  Stashes are agent scratch: drop leftovers yourself (the hook saves them under refs/dropped-stashes).
+  branch that turns out small goes straight to main itself (`source scripts/lib/sync-main.sh; up_to_date_main` (fetches main by name, replays your commits, never stashes), push `HEAD:main`).
+- Never stash (the user's rule; the stash list is shared by all worktrees) and no `--autostash`: commit first; a
+  merge keeps uncommitted files nothing incoming touches, a rebase refuses a dirty tree loudly. Leftover stashes are
+  dropped (the hook saves them under refs/dropped-stashes).
 - The user's uncommitted edits (modified, staged or untracked, in the main checkout or wiki/) are integrated at once
   by whoever meets them, in the main checkout itself, never left lying, reported as "untouched" or parked in a batch
   (an unpushed batch commit leaves their checkout showing them uncommitted). Read each diff; a D next to an untracked
@@ -211,12 +212,12 @@ Principles and Talking live only in common.md.
   and commit what it moved. A change to the Rust harness is also `cargo fmt`ed and `cargo check`ed.
 - Landing (self-landing, user 2026-10-26: no merge queue, no Ready column; common.md "Done"):
   1. Targeted tests, commit, formatted.
-  2. Merge origin/main into the branch: `git fetch origin && git merge --autostash origin/main`, with a merge
+  2. Merge origin/main into the branch: `git fetch origin && git merge origin/main`, with a merge
      message summing up the change. You resolve conflicts. Take a side of a conflicted file only after `git diff
      <merge-base> HEAD -- <file>` (merges your branch carries are your side too); otherwise resolve the hunk and check
      `git diff origin/main -- <file>` shows only your change.
      Keep merges real: one merge commit per branch, and never let a plain `git pull --rebase` flatten them (it replays
-     a merged branch's commits onto main and conflicts): `git fetch origin main && git rebase --autostash --rebase-merges origin/main` or `git merge origin/main`.
+     a merged branch's commits onto main and conflicts): `source scripts/lib/sync-main.sh; up_to_date_main` (fetches main by name, replays your commits, never stashes) or `git merge origin/main`.
   3. Smoke test on that merge (core/ changes: smoke + `scripts/self-check.sh`), then `git push origin HEAD:main`
      (fast-forward only; rejected: merge origin/main again, rerun the smoke test only if the new commits touch core/
      or lib/). On the box, then `scripts/publish-build.sh <worktree>`: the build of the landed inputs goes to the
