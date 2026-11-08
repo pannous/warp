@@ -47,6 +47,8 @@ implicit_modules(source: text, tree: Node, folder: text = "."): list := {
 	# (the texts read too, for the words in their holes, `"a ${clamp(x, 0, 3)}"`; one only in a text isn't free)
 	code = uncommented(source)
 	names = names_mentioned(code)
+	# a circumfix glyph names its function: `⌈2.1⌉` is ceil(2.1), math's
+	for circumfix in circumfixes_among(math_operator_statements()) { if code.contains(circumfix.opening) { names[circumfix.function] = yes } }
 	candidates = index.keys.filter(word => mentions_indexed(code, names, word))
 	rule_named = rule_named_modules(names)
 	if #candidates == 0 and #rule_named == 0 { return [] }
