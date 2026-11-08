@@ -1454,6 +1454,8 @@ read_now(code: Node): list := {
 	if is_lambda(code) or is_curly_group(code) { return [] }
 	# `style: { color: c }`: a word's data block is read as it is made, no code run later
 	if is_data_block(code) { return items_of(value_of(code)).flat_map(read_now) }
+	# `alarm{level: 3}`: a pair's key names a field, no variable read (`level` written later made the item live)
+	if is_key(code, Op.Colon) { return read_now(value_of(code)) }
 	parts_of(code).flat_map(read_now)
 }
 # [name, the names it mentions] of a function or value definition, else ø
