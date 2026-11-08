@@ -31,6 +31,8 @@ spelled(name: Node): text := "${name}".remove_suffix(own_mark)
 # word, the tail of an amount split off before it (`2 L == 2000 cm` parses as 2, L == 2000, cm: card spaced-unit-comparison)
 unit_bound(amounted: Node, unit: Node): any := {
 	if is_amount(amounted) { return Key(amounted, Op.Mul, unit) }
+	# `1900 - 2000 cm`, two written numbers: the closed span between them in that unit (lib/units.warp number_quantity_span)
+	if is_key(amounted, Op.Sub) and is_number_literal(key_of(amounted)) and is_number_literal(value_of(amounted)) { return call_of("number_quantity_span", [key_of(amounted), Key(value_of(amounted), Op.Mul, unit)]) }
 	if amounted is key and op_of(amounted) in unit_ambiguous_ops { throw unit_ambiguous(amounted, unit) }
 	if not (amounted is key and op_of(amounted) in unit_binding_ops) or starts_with_unit(amounted) { return ø }
 	right = unit_bound(value_of(amounted), unit)
