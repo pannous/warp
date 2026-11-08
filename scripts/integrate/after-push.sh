@@ -14,6 +14,7 @@
 set -uo pipefail
 source "$(dirname "$0")/../lib/platform.sh"
 source "$(dirname "$0")/../lib/hello-footprint.sh"
+source "$(dirname "$0")/../lib/site-scripts.sh"
 # git acts on the trees named by -C, never on a caller's repository (a hook's GIT_DIR, on-push.sh)
 unset $(git rev-parse --local-env-vars)
 MAIN_WARP=$HOME/dev/bin/warp  # the native warp (core/native/warp.warp), in a folder of its own (install_native)
@@ -152,7 +153,7 @@ install_compilers() {
 	folder=$(installed_folder) || return 1
 	copy_compilers "$TREE/lib" "$folder" &&
 		rsync -aL --exclude /data --exclude /warp --exclude '/*.wasm*' --exclude /modules --exclude '/*.kept' \
-			"$TREE/lib/" "$folder/" || red "compilers of ${tip:0:10}: the copy into $folder failed" --urgent
+			"$TREE/lib/" "$folder/" && site_scripts_copied "$TREE" "$folder" || red "compilers of ${tip:0:10}: the copy into $folder failed" --urgent
 	for lane in pure self; do
 		[ $lane = self ] && [ ! -f "$folder/warp-self.wasm" ] && continue
 		got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 footprint_run "$TREE/data/hello-footprint" 300 "$MAIN_WARP" $lane samples/hello/hello.warp 2>&1 | tail -1)

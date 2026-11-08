@@ -1,5 +1,6 @@
 #!/usr/bin/env warp
 @primitive
+# host: native: C calls need the native warp
 # C functions of lib/c.warp and lib/math.warp: `GREETING=Hi warp c_calls.warp`, or natively
 # `warp build native c_calls.warp`, then `GREETING=Hi ./c_calls`
 import (getenv, strlen) from "c"

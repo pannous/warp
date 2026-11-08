@@ -918,6 +918,8 @@ full_definition(name: Node, program: Node, source: text): any := {
 function_help(name: Node, program: Node, source: text): any := {
 	# a used module's word, not the program's: its head and comment as the module writes them (module_word_help)
 	if definition_start(source, spelled(name)) == ø and used_word_help(spelled(name), source) != ø { return ø }
+	# defined more than once, `f(x)` and `f(x, y)`: each definition's head as written (card help-shows-overloads)
+	if #definition_slices(source).filter(cut => cut#1 == spelled(name)) > 1 and not owns_word("help", program) { return word_help_in(source, spelled(name)) }
 	signature = if owns_word("help", program) then ø else signature_text(name, program)
 	if signature == ø { return ø }
 	doc = doc_of(name, program, source)

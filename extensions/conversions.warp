@@ -21,7 +21,7 @@ names_class(n: Node): bool := n is symbol and is_capitalized(name_of(n))
 # naming the value, also of `text(p: A) := body`, else ø
 conversion_of(n: Node, scope: map): list? := {
 	if not is_key(n, Op.Define) { return ø }
-	head = key_of(n)
+	head = as_phrase_read(key_of(n))
 	if is_key(head, Op.Colon) and key_of(head) is symbol and is_key(value_of(head), Op.As) {
 		types = value_of(head)
 		return if names_type(key_of(types), scope) and (names_type(value_of(types), scope) or names_class(value_of(types))) then [name_of(key_of(types)), name_of(value_of(types)), value_of(n), name_of(key_of(head))] else ø
@@ -30,8 +30,12 @@ conversion_of(n: Node, scope: map): list? := {
 		return if names_type(value_of(head#2), scope) then [name_of(value_of(head#2)), "text", value_of(n), name_of(key_of(head#2))] else ø
 	}
 	if not is_key(head, Op.As) { return ø }
-	if names_type(key_of(head), scope) and names_type(value_of(head), scope) then [name_of(key_of(head)), name_of(value_of(head)), value_of(n), implicit_parameter] else ø
+	if (names_type(key_of(head), scope) or names_class(key_of(head))) and (names_type(value_of(head), scope) or names_class(value_of(head))) then [name_of(key_of(head)), name_of(value_of(head)), value_of(n), implicit_parameter] else ø
 }
+
+# `Person as text` heading a definition, which the parser reads as a phrase of three words (`fib i as int := …` names a
+# result so), as the conversion `Person as text`; any other head as it is
+as_phrase_read(head: Node): Node := if is_group(head) and #head == 3 and head#2 == symbol("as") then Key(head#1, Op.As, head#3) else head
 
 # the words showing a value as text, which show it through a program's conversion to text
 showing_words = ["print", "str", "text", "text_form"]
