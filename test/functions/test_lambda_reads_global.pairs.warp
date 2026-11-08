@@ -1,0 +1,3 @@
+'global flag = no; set_flag() := { flag = yes }; check() := { flag = no; f = () => flag; set_flag(); f() }; check()'	yes
+'global n = 0; bump() := { n += 1 }; turned(done: function) := { bump(); bump(); done() }; check() := { n = 0; turned(() => n) }; check()'	2
+'f() := { x = 1; g = () => x; x = 5; g() }; f()'	5
