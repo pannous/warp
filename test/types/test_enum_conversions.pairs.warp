@@ -1,0 +1,11 @@
+# a number as an enum (card level-plain): `n as E` and `E(n)` alike, a plain enum's case at that index, a valued
+# enum's case of that number; an expected bare case name is that name (card case-conversion-high)
+'enum Level { Low, Mid, High }; Level(2)'	High
+'enum Level { Low, Mid, High }; 2 as Level'	High
+'enum Level { Low, Mid, High }; x = 1; x as Level'	Mid
+'enum Level { Low, Mid, High }; 5 as Level'	error
+'enum Key { KEY_A = 65, KEY_B = 66 }; 66 as Key'	KEY_B
+'enum Key { KEY_A = 65, KEY_B = 66 }; x = 65; x as Key'	KEY_A
+'enum Key { KEY_A = 65, KEY_B = 66 }; Key(66)'	KEY_B
+'enum Key { KEY_A = 65, KEY_B = 66 }; 2 as Key'	error
+'enum Key { KEY_A = 65, KEY_B = 66 }; Key(66) == Key.KEY_B'	yes
