@@ -1,12 +1,12 @@
 // The native warp's window (decision window-in-warp, card window-ffi-replace), a part of lib/host/native_host.warp: what the
 // playground's canvas answers in JavaScript (web/playground/canvas.js), natively over SDL3 by plain FFI: host_owns /
 // host_value (the window's system values), host_value_set, host_window_layer (a painting's Metal layer, which
-// libwarp_gpu shows it in) and window_run_ended.
+// gpu.warp shows it in) and window_run_ended.
 // `window_open = 1` or the first painting opens it, never under WARP_NO_WINDOW or CI. Each painting is a frame, its
 // title telling the frame times; each painting and reading of window_open takes the window's events in. Closed, it
 // ends a program painting on; a still picture (a run's one painting) stays shown after the run until it is closed.
 // A window sized by its painting opens at the largest whole multiple of it that fits a share of the screen. It resizes
-// freely and goes full screen by the system value window_fullscreen or its green button: libwarp_gpu shows the
+// freely and goes full screen by the system value window_fullscreen or its green button: gpu.warp shows the
 // painting as large as fits, its aspect kept, centered; the pointer is told in the painting's pixels
 WINDOW_TITLE = "warp"
 DEFAULT_WIDTH = 640
@@ -147,7 +147,7 @@ window_side(across: bool): int := {
 	field_i32(if across then points_wide else points_high, 0)
 }
 // a pointer position in the window's points as a pixel of the painting the window shows as large as fits, centered
-// (libwarp_gpu letterboxed); across or down
+// (gpu.warp letterboxed); across or down
 in_painting(point: float, across: bool): int := {
 	wide = window_side(yes)
 	high = window_side(no)
@@ -244,8 +244,12 @@ host_window_layer(painting_width: int, painting_height: int): int := {
 	}
 	SDL_Metal_GetLayer(view)
 }
-// the last painting shown again, the window out of sight or resized since (libwarp_gpu)
-warp_gpu_shown_again(): i32 from 'warp_gpu'
+// the window's size in pixels, which its Metal layer's drawable keeps (gpu.warp shows a painting at it)
+window_pixels(): list := {
+	sides = calloc(2, 4)
+	SDL_GetWindowSizeInPixels(sdl_window, sides, pointer_handle(handle_pointer(sides) + 4))
+	[field_i32(sides, 0), field_i32(sides, 4)]
+}
 // a run that painted one picture leaves it in the window until the window is closed (or Escape), shown again as the
 // window comes into sight (it opens behind the app in front) or changes size; an animation's window closes with its run
 window_run_ended() := {
@@ -253,7 +257,7 @@ window_run_ended() := {
 		type = field_u32(event, SDL_EVENT_TYPE_AT)
 		escaped = type == SDL_EVENT_KEY_DOWN and field_u32(event, SDL_KEY_AT) == SDLK_ESCAPE
 		if type == SDL_EVENT_QUIT or type == SDL_EVENT_WINDOW_CLOSE_REQUESTED or escaped { window_closed() }
-		else if type == SDL_EVENT_WINDOW_EXPOSED or type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED { warp_gpu_shown_again() }
+		else if type == SDL_EVENT_WINDOW_EXPOSED or type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED { shown_again() }
 	}
 }
 

@@ -85,6 +85,8 @@ DISPLAY_DPI_SLOT = 2
 RUN_SLOT = 3
 # the run's timers (signal_listen): a table the run allocates, since a host word's own allocations end with it (events)
 TIMERS_SLOT = 4
+# where the memory of the program a host word of the native host module serves starts (a GPU list's cells are there)
+PROGRAM_MEMORY_SLOT = 5
 # whether the run linked unicode (canonical_text), the native host module (host_export), at these places of its block
 UNICODE_LINKED_AT = 32
 HOST_LINKED_AT = 40
@@ -175,11 +177,7 @@ next_painting(): i32 from "c"
 last_error(): i32 from "c"
 strerror(code: i32): handle from "c"
 gpu_paints(): i32 from "c"
-gpu_painted(shader: pointer, values: pointer, width: i64, height: i64, pixels: pointer): i32 from "c"
 arena_kept(): nothing from "c"
-shader_shown(shader: pointer, values: pointer, layer: handle, width: i64, height: i64): i32 from "c"
-pixels_shown(pixels: pointer, layer: handle, width: i64, height: i64): i32 from "c"
-lazy_library_word(name: pointer, engine: handle, unanswered: i64): handle from "c"
 mkdir(path: pointer, mode: i32): i32 from "c"
 atoll(digits: text): i64 from "c"
 atof(digits: pointer): f64 from "c"
@@ -642,7 +640,7 @@ host_words_defined(linker: handle, engine: handle, context: handle, compiled: ha
 			word_defined(linker, import, foreign_of(line, 0), trap)
 		}
 		if line.length > 0 and is_wasm_path(from) and crosses_memory(line) { word_defined(linker, import, foreign_of(line, wasm_exports_of(linker, context, from, name)), trap) }
-		if same_text(from, "host") { host_word_defined(linker, engine, import, name, trap) }
+		if same_text(from, "host") { word_defined(linker, import, answered_word(name), trap) }
 	}
 }
 # the lines of the C functions a module calls: a GC module's, else a primitive one's, whose values are numbers, texts
@@ -695,12 +693,13 @@ unanswered_word(name: text): i64 := {
 	word_at(cell + 4).value = name.length
 	0 - (cell as i64)
 }
-# a host word neither the driver nor a library beside warp answers, answered by the native host module's
+# a host word the driver doesn't answer, answered by the native host module's
 # host_<word> (host_text_coverage) with the values as they are; one it lacks ends the run naming it
 host_word_answered(caller: handle, name: text, given: pointer, count: i64, results: pointer, results_count: i64): nothing := {
 	context = wasmtime_caller_context(caller)
 	function = allocate(EXTERN_BYTES)
 	if not host_export(context, joined("host_", name), function) { return unanswered(name) }
+	keep_value(PROGRAM_MEMORY_SLOT, guest_memory(caller, context))
 	trap = allocate(8)
 	long_at(trap).value = 0
 	checked(wasmtime_func_call(context, function + 8, given, count, results, results_count, trap), trap)
@@ -710,17 +709,8 @@ unanswered(name: text): nothing := {
 	complain(joined(joined("the host word ", name), " is not in warp yet"))
 	exit(1)
 }
-# a host word the driver answers, else one a library beside warp owns, bound to that library's callback
-# warp_word_<name> (lib/native/foreign.c library_word) with the engine as its data: it reads and builds the module's
-# values in place (lib/native/warp_node.h, decision library-direct-refs); else a word naming it when called
-host_word_defined(linker: handle, engine: handle, import: handle, name: text, trap: pointer): nothing := {
-	word = answered_word(name)
-	if word >= 0 { return word_defined(linker, import, word, trap) }
-	# (its library looked for at its first call, lib/native/foreign.c warp_lazy_host_callback: a module importing it
-	# whose program never calls it opens none)
-	type = wasm_externtype_as_functype_const(wasm_importtype_type(import))
-	checked(wasmtime_linker_define_func(linker, "host", 4, name, name.length, type, c_function("warp_lazy_host_callback"), lazy_library_word(c_string(name), engine, word), 0), trap)
-}
+# a host word the driver answers, else a word naming it when called, which the native host module answers
+# (host_word_answered)
 # the import defined as warp_host_callback, `word` its data
 word_defined(linker: handle, import: handle, word: i64, trap: pointer): nothing := {
 	from = native_vector_text(wasm_importtype_module(import))
@@ -1525,6 +1515,7 @@ system_value(name: text): i64 := {
 	if same_text(name, "display_height") { return display_side(1, "display.height") }
 	if same_text(name, "online") { return route_online() as i64 }
 	if same_text(name, "gpu_paints") { return gpu_paints() as i64 }
+	if same_text(name, "program memory") { return kept_value(PROGRAM_MEMORY_SLOT) }
 	# (an open window tells its size as its user made it; before, the size the program set, else the view's)
 	if host_asked("host_owns", name) != 0 { return host_asked("host_value", name) }
 	if same_text(name, "window_width") { return kept_or(WINDOW_WIDTH_SLOT, NATIVE_VIEW_WIDTH) }
@@ -1788,6 +1779,8 @@ guest_text_of(caller: handle, context: handle, t: text, result: pointer): nothin
 ## an alpha byte its color, any other ink. A shader paints on the GPU, which the native warp has not yet
 PAPER = 250
 INK = 29
+OPAQUE = 4278190080
+PIXEL_BYTES = 4
 COLOR_FROM = 16777216
 STORED_MOST = 65535
 ADLER_MODULUS = 65521
@@ -1825,17 +1818,26 @@ picture_saved(caller: handle, context: handle, given: pointer): text := {
 	height = picture_height(given)
 	png_written(pixels_of(caller, context, given, width * height), width, height, shown(caller, context, given + 3 * VALUE_BYTES))
 }
-# the picture's pixels: a WGSL shader's, its values the uniform, from the GPU (lib/native/foreign.c, libwarp_gpu),
-# else the list's; 0 when a library showed them in its open window (foreign.c shader_shown, pixels_shown)
+# the picture's pixels: a WGSL shader's, its values the uniform, from the GPU (the native host module's gpu part,
+# lib/host/native_host/gpu.warp, over libwgpu_native), else the list's; 0 when that module showed them in its open window
 painted_pixels(caller: handle, context: handle, given: pointer, width: i64, height: i64): pointer := {
 	if guest_flag(caller, context, "is_textual", given) {
-		shader = shown(caller, context, given)
-		values = shown(caller, context, given + 3 * VALUE_BYTES)
-		in_window = shader_shown(c_string(shader), c_string(values), window_layer(width, height), width, height)
-		if in_window < 0 { exit(1) }
-		if in_window > 0 { return 0 }
+		if gpu_paints() == 0 {
+			complain("paint of a shader: libwgpu_native is not beside warp")
+			exit(1)
+		}
+		# (the picture's values as they are: shader, width, height, values)
+		if in_window(gpu_answered("host_shader_shown", given, 4)) { return 0 }
+		colors = allocate((width * height * PIXEL_BYTES) as i32)
+		painting = allocate(5 * VALUE_BYTES)
+		memcpy(painting, native_pointer(given), 4 * VALUE_BYTES)
+		int_result(handle_id(native_pointer(colors)) as i64, painting + 4 * VALUE_BYTES)
+		if gpu_answered("host_shader_painted", painting, 5) != 0 { exit(1) }
 		pixels = allocate((width * height * 8) as i32)
-		if gpu_painted(c_string(shader), c_string(values), width, height, pixels) != 0 { exit(1) }
+		for i in 0..width * height {
+			at = colors + i * PIXEL_BYTES
+			long_at(pixels + i * 8).value = OPAQUE + (byte_at(at).value as i64) * 65536 + (byte_at(at + 1).value as i64) * 256 + byte_at(at + 2).value as i64
+		}
 		pixels
 	} else {
 		count = guest_number(caller, context, "item_count", given)
@@ -1844,21 +1846,37 @@ painted_pixels(caller: handle, context: handle, given: pointer, width: i64, heig
 			exit(1)
 		}
 		pixels = pixels_of(caller, context, given, width * height)
-		in_window = pixels_shown(pixels, window_layer(width, height), width, height)
-		if in_window < 0 { exit(1) }
-		if in_window > 0 then 0 else pixels
+		if gpu_paints() == 0 { return pixels }
+		shown = allocate(3 * VALUE_BYTES)
+		int_result(handle_id(native_pointer(shaded(pixels, width * height))) as i64, shown)
+		int_result(width, shown + VALUE_BYTES)
+		int_result(height, shown + 2 * VALUE_BYTES)
+		if in_window(gpu_answered("host_pixels_shown", shown, 3)) then 0 else pixels
 	}
 }
-# the layer of the native host module's window for a painting of width × height, the window opened by the first; 0
-# where none shows it: no window, or no GPU to show it with (libwarp_gpu)
-window_layer(width: i64, height: i64): handle := {
-	if gpu_paints() == 0 { return 0 }
-	sides = allocate(2 * VALUE_BYTES)
-	int_result(width, sides)
-	int_result(height, sides + VALUE_BYTES)
-	layer = allocate(VALUE_BYTES)
-	guest_call(0, run_context(), "host_window_layer", sides, 2, layer)
-	handle_pointer(value_number(layer) as i32)
+# a painting the native host module answered for: 1 shown in its window, 0 not (no window open), -1 failed (it said why)
+in_window(answer: i64): bool := {
+	if answer < 0 { exit(1) }
+	answer > 0
+}
+gpu_answered(name: text, values: pointer, count: i64): i64 := {
+	result = allocate(VALUE_BYTES)
+	guest_call(0, run_context(), name, values, count, result)
+	value_number(result)
+}
+# the pixels as RGBA bytes, as png_written shades them: 0 paper, a value with an alpha byte its color, any other ink
+shaded(pixels: pointer, count: i64): pointer := {
+	bytes = allocate((count * PIXEL_BYTES) as i32)
+	for i in 0..count {
+		value = long_at(pixels + i * 8).value
+		shade = if value == 0 then PAPER else INK
+		at = bytes + i * PIXEL_BYTES
+		byte_at(at).value = (if value >= COLOR_FROM then value / 65536 % 256 else shade) as u8
+		byte_at(at + 1).value = (if value >= COLOR_FROM then value / 256 % 256 else shade) as u8
+		byte_at(at + 2).value = (if value >= COLOR_FROM then value % 256 else shade) as u8
+		byte_at(at + 3).value = 255 as u8
+	}
+	bytes
 }
 # the first n pixels of the picture, as ints, a chunk of PIXEL_CHUNK at a time by the module's pixels_at (4 bytes each
 # in its memory): one call a chunk, not one a pixel (card native-show-paint: 1280×800 took 360 ms)
