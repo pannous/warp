@@ -105,11 +105,10 @@ measured(amount: number, dims: int, unit: text, scale: number) := {
 // a plain number as the dimensionless quantity it is: an operator meeting a number and a quantity promotes the number
 // (decision as-promotes), so `2.0 / 4m` is 0.5/m; `1.0 - 4m` is a span (card gap-span-units-compare), never a plain number
 n: number as Quantity := measured(n, 0, "", 1)
-// a plain number as a dimension counts its base unit: `5 as Pixels` is 5px, `2 as Length` 2m (night decision length-pixels);
+// a plain number as a dimension counts its base unit: `5 as Pixels` is 5px, `2 as Length` 2m (night decision length-pixels; a Time is `time 6`);
 // so a conversion body giving a number, `length as pixels := it.amount * 2`, gives the target's amount
 n: number as Length := quantity(n, "m")
 n: number as Mass := quantity(n, "kg")
-n: number as Time := quantity(n, "s")
 n: number as Temperature := quantity(n, "K")
 n: number as Pixels := quantity(n, "px")
 n: number as Area := quantity(n, "m²")
