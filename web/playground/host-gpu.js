@@ -15,7 +15,13 @@ const NO_GPU_DRAWING = "use draw draws through pixels on a page (gpu_drawing is 
 const GPU_BINDING = 0;
 // `@group(0) @binding(1) var<storage, read_write> ys: array<f32>`: its binding, name and element type (src/graphics/gpu.rs STORAGE_ARRAY)
 const STORAGE_ARRAY = /@binding\((\d+)\)(?:\s*@group\(\d+\))?\s*var(?:<[^>]*>)?\s+(\w+)\s*:\s*array<(\w+)/g;
-const ELEMENT_ARRAYS = { i32: Int32Array, u32: Uint32Array };
+// an array<f16>'s cells as their raw bits: it takes only a GPU list [f16], whose cells are bound as they are
+const ELEMENT_ARRAYS = { i32: Int32Array, u32: Uint32Array, f16: Uint16Array };
+const HALF_FEATURE = "shader-f16";
+const HALVES_ENABLED = "enable f16";
+// said where the GPU lacks it, as natively (lib/host/native_host/gpu.warp NO_HALVES)
+const NO_HALVES = "this GPU offers no f16 (WebGPU's shader-f16), which the shader's enable f16 needs";
+const WORD_BYTES = 4; // WebGPU writes, copies and binds buffers in whole 4-byte words
 // appended to gpu_render's shader (after it, so its line numbers stay the user's): one triangle covering the image
 const FULL_IMAGE_VERTICES = `
 @vertex fn warp_full_image(@builtin(vertex_index) corner: u32) -> @builtin(position) vec4f {
@@ -92,15 +98,23 @@ let gpuWorker; // the program's side: the task Worker that ran the last GPU job,
 async function gpuComputedFloats({ shader, numbers, workgroups }) {
 	const device = await theGpuDevice();
 	const Elements = gpuElements(shader);
-	const input = numbers instanceof Elements ? numbers : new Elements(numbers);
+	const input = wordPadded(numbers instanceof Elements ? numbers : new Elements(numbers));
 	const storage = storageBuffer(device, input.byteLength);
 	const readback = readbackBuffer(device, input.byteLength);
 	if (input.length) device.queue.writeBuffer(storage, 0, input);
 	const encoder = await encodedComputePass(device, shader, workgroups, [{ binding: GPU_BINDING, buffer: storage }]);
 	encoder.copyBufferToBuffer(storage, 0, readback, 0, input.byteLength);
-	const numbersLeft = new Elements(await gpuReadBack(device, encoder, readback));
+	const numbersLeft = new Elements(await gpuReadBack(device, encoder, readback), 0, numbers.length);
 	storage.destroy();
 	return numbersLeft;
+}
+
+// a typed array's bytes in whole words, the last one filled with zeros (an odd count of f16 cells)
+const wordBytes = byteLength => Math.ceil(byteLength / WORD_BYTES) * WORD_BYTES;
+function wordPadded(array) {
+	const bytes = new Uint8Array(wordBytes(array.byteLength));
+	bytes.set(new Uint8Array(array.buffer, array.byteOffset, array.byteLength));
+	return bytes;
 }
 
 const storageBuffer = (device, size) => device.createBuffer({ size, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
@@ -109,6 +123,7 @@ const readbackBuffer = (device, size) => device.createBuffer({ size, usage: GPUB
 // one pass of the compute shader over the buffers bound as [{binding, buffer}], after `before(encoder)`'s copies;
 // the encoder, for the copies that read the results back
 async function encodedComputePass(device, shader, workgroups, bound, before = () => {}) {
+	if (shader.includes(HALVES_ENABLED) && !device.features.has(HALF_FEATURE)) throw new Error(NO_HALVES);
 	const module = await gpuModule(device, shader);
 	device.pushErrorScope("validation");
 	const pipeline = compiledOnce(compiledPipelines, shader, () => device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: GPU_ENTRY_POINT } }));
@@ -313,7 +328,9 @@ const theGpuDevice = async () => gpuDevice ??= await gpuDeviceOrFailure();
 async function gpuDeviceOrFailure() {
 	const adapter = await answeredWithin(self.navigator.gpu?.requestAdapter(), "adapter");
 	if (!adapter) throw new Error("this browser offers no WebGPU adapter");
-	const device = await answeredWithin(adapter.requestDevice(), "device");
+	// f16 shaders where the adapter has them (array<f16> after `enable f16`)
+	const requiredFeatures = adapter.features.has(HALF_FEATURE) ? [HALF_FEATURE] : [];
+	const device = await answeredWithin(adapter.requestDevice({ requiredFeatures }), "device");
 	// a lost device (the GPU process restarted) is asked for anew by the next job, with all made on it
 	device.lost.then(() => forgetDevice(device));
 	return device;
@@ -384,8 +401,8 @@ async function gpuReadBacks(device, encoder, readbacks) {
 	}));
 }
 
-// the storage arrays the shader declares, each with the typed array of its elements: f32 unless array<i32> or array<u32>
-const storageArrays = shader => [...shader.matchAll(STORAGE_ARRAY)].map(([, binding, name, element]) => ({ binding: Number(binding), name, Elements: ELEMENT_ARRAYS[element] ?? Float32Array }));
+// the storage arrays the shader declares, each with the typed array of its elements: f32 unless array<i32>, array<u32> or array<f16>
+const storageArrays = shader => [...shader.matchAll(STORAGE_ARRAY)].map(([, binding, name, element]) => ({ binding: Number(binding), name, element, Elements: ELEMENT_ARRAYS[element] ?? Float32Array }));
 
 // the typed array of the numbers a compute shader reads at @binding(0) (natively gpu.rs element_of)
 const gpuElements = shader => storageArrays(shader).find(array => array.binding === GPU_BINDING)?.Elements ?? Float32Array;
@@ -405,8 +422,9 @@ async function gpuComputedArrays({ shader, arrays, workgroups }) {
 	});
 	const device = await theGpuDevice();
 	const storages = given.map(({ numbers }) => {
-		const storage = storageBuffer(device, numbers.byteLength);
-		device.queue.writeBuffer(storage, 0, numbers);
+		const bytes = wordPadded(numbers);
+		const storage = storageBuffer(device, bytes.byteLength);
+		device.queue.writeBuffer(storage, 0, bytes);
 		return storage;
 	});
 	const readbacks = storages.map(storage => readbackBuffer(device, storage.size));
@@ -414,17 +432,17 @@ async function gpuComputedArrays({ shader, arrays, workgroups }) {
 	const encoder = await encodedComputePass(device, shader, workgroups, bound);
 	storages.forEach((storage, at) => encoder.copyBufferToBuffer(storage, 0, readbacks[at], 0, storage.size));
 	const left = await gpuReadBacks(device, encoder, readbacks).finally(() => storages.forEach(storage => storage.destroy()));
-	return Object.fromEntries(given.map(({ name, Elements }, at) => [name, new Elements(left[at])]));
+	return Object.fromEntries(given.map(({ name, Elements, numbers }, at) => [name, new Elements(left[at], 0, numbers.length)]));
 }
-// the arrays as one run of 32-bit words, each after the one before
+// the arrays as one run of 32-bit words, each in whole words after the one before
 function joinedWords(arrays) {
-	const words = new Uint32Array(arrays.reduce((total, array) => total + array.length, 0));
-	arrays.reduce((at, array) => (words.set(new Uint32Array(array.buffer, array.byteOffset, array.length), at), at + array.length), 0);
+	const words = new Uint32Array(arrays.reduce((total, array) => total + wordBytes(array.byteLength) / WORD_BYTES, 0));
+	arrays.reduce((at, array) => (words.set(new Uint32Array(wordPadded(array).buffer), at), at + wordBytes(array.byteLength) / WORD_BYTES), 0);
 	return words;
 }
 
-// a GPU list's cells by gpu_list_cell (extensions/gpu_lists/runtime.warp): f32, i32, u32
-const GPU_LIST_CELLS = [Float32Array, Int32Array, Uint32Array];
+// a GPU list's cells by gpu_list_cell (extensions/gpu_lists/runtime.warp GpuCell): f32, i32, u32, f16 (as raw bits)
+const GPU_LIST_CELLS = [Float32Array, Int32Array, Uint32Array, Uint16Array];
 const plainArrays = arrays => Object.fromEntries(Object.entries(arrays).map(([name, array]) => [name, Array.from(array)]));
 // gpu_compute's {values} as a list; a kernel's floats and an image's pixels as {words}, given back as raw bytes
 // (writeSharedWords), not as JSON
@@ -468,14 +486,20 @@ async function gpuJobInto({ gpu: { word, job }, shared }) {
 		answer = { error: failureText(failure) };
 		await forgetDeviceIfLost().catch(() => {});
 	}
-	if (answer.words) writeSharedWords(shared, answer.words);
-	else writeShared(shared, answer);
+	// a failure writing the answer is the job's, said to the program, which would otherwise wait out GPU_JOB_WAIT_MS
+	try {
+		if (answer.words) writeSharedWords(shared, answer.words);
+		else writeShared(shared, answer);
+	} catch (failure) {
+		writeShared(shared, { error: failureText(failure) });
+	}
 }
 
-// 32-bit words into the shared buffer as they are: a million floats as JSON took longer than the GPU
+// a typed array's items into the shared buffer as they are, their count after the state: a million floats as JSON
+// took longer than the GPU
 function writeSharedWords(shared, words) {
 	if (TASK_HEADER + words.byteLength > shared.byteLength) shared.grow(TASK_HEADER + words.byteLength);
-	new Uint32Array(shared, TASK_HEADER, words.length).set(new Uint32Array(words.buffer, words.byteOffset, words.length));
+	new Uint8Array(shared, TASK_HEADER, words.byteLength).set(new Uint8Array(words.buffer, words.byteOffset, words.byteLength));
 	const header = new Int32Array(shared, 0, 2);
 	header[1] = words.length;
 	Atomics.store(header, 0, WORDS_STATE);
@@ -576,29 +600,44 @@ addHostPart({
 			// a GPU list's cells as its type holds them (the shader's array type converts them, as natively), any other as declared
 			const arrays = Object.fromEntries(entries.map(([name, value]) => [name, gpuCells(value)?.slice() ?? (elements[name] ?? Float32Array).from([plain(value)].flat().map(Number))]));
 			const buffers = Object.values(arrays).map(array => array.buffer);
+			// counted before the job: handing the arrays to the task Worker empties them here
+			const lengths = Object.fromEntries(Object.entries(arrays).map(([name, array]) => [name, array.length]));
 			const words = gpuJob("gpu_arrays", { shader: code, arrays, workgroups: Number(workgroups) }, buffers, Uint32Array);
 			let at = 0;
 			return newGuestMap(program(), entries.map(([name, value]) => {
-				const length = arrays[name].length, Elements = elements[name] ?? Float32Array;
-				const left = new Elements(words.buffer, words.byteOffset + at * Uint32Array.BYTES_PER_ELEMENT, length);
-				at += length;
+				const length = lengths[name], Elements = elements[name] ?? Float32Array;
+				const left = new Elements(words.buffer, words.byteOffset + at * WORD_BYTES, length);
+				at += wordBytes(length * Elements.BYTES_PER_ELEMENT) / WORD_BYTES;
 				const cells = gpuCells(value); // read anew: the module's memory may have grown meanwhile
 				if (cells) cells.set(left);
 				return [name, cells ? value : numberList(left, Elements)];
 			}));
 		};
+		// an array<f16> takes only a GPU list [f16], whose cells it binds as they are, and a GPU list [f16] only one
+		// (natively gpu.warp halves_unmatched)
+		const halvesChecked = (code, entries) => {
+			const declared = storageArrays(code);
+			for (const [name, value] of entries) {
+				const array = declared.find(array => array.name === name);
+				const halves = array?.element === "f16";
+				if (!array || halves === gpuCells(value) instanceof Uint16Array) continue;
+				throw new Error(halves ? `the shader's array<f16> ${name} takes a GPU list [f16]: make it as ${name}: [f16] = …` : `the GPU list [f16] ${name} needs the shader's array<f16>, not array<${array.element}>`);
+			}
+		};
 		const computed = (shader, numbers, workgroups) => {
 			const entries = guestEntries(program(), numbers);
-			if (entries?.some(([, value]) => gpuCells(value))) return computedInPlace(plain(shader), entries, workgroups);
+			const code = plain(shader);
+			halvesChecked(code, entries ?? [[storageArrays(code).find(array => array.binding === GPU_BINDING)?.name, numbers]]);
+			if (entries?.some(([, value]) => gpuCells(value))) return computedInPlace(code, entries, workgroups);
 			const cells = gpuCells(numbers);
 			if (cells) {
 				// changed in place, as natively (lib/host/native_host/gpu.warp array_left): the list itself is the value
-				const code = plain(shader), copy = cells.slice();
+				const copy = cells.slice();
 				const left = gpuJob("gpu_kernel", { shader: code, numbers: copy, workgroups: Number(workgroups) }, [copy.buffer], gpuElements(code));
 				gpuCells(numbers).set(left.subarray(0, cells.length)); // the module's memory may have grown meanwhile
 				return numbers;
 			}
-			const code = plain(shader), given = plain(numbers);
+			const given = plain(numbers);
 			if (given !== null && typeof given === "object" && isPlainObject(given)) {
 				const arrays = Object.fromEntries(Object.entries(given).map(([name, array]) => [name, [array].flat().map(Number)]));
 				const left = gpuJob("gpu_compute", { shader: code, arrays, workgroups: Number(workgroups) });
