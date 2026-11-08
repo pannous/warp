@@ -62,6 +62,8 @@ int_of_node(n: Node): int := {
 	if is_null(n) or kind_code(n) != Kind.Int or is_ratio(n) { fail() }
 	whole_int(n)
 }
+# a boxed number as the int a host word takes: an int exactly (a pointer past 2^53 too), any other number rounded
+nearest_int(n: Node): int := if not is_null(n) and kind_code(n) == Kind.Int and not is_ratio(n) then whole_int(n) else rounded(float_of_node(n))
 # a value known only at run time given to a variable declared int: a float or a fraction is no whole number
 int_admitted(n: Node): int := {
 	if is_null(n) or (kind_code(n) != Kind.Int and kind_code(n) != Kind.Float) { not_an_int() }
