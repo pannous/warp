@@ -1,0 +1,4 @@
+'class V{x:int; def ==(o) := x == o.x}; V(1) == V(2)'	error	def names no operator: its English name, equal(o) := …
+'class V{x:int; def +(o) := V(x + o.x)}; V(1) + V(2)'	error
+'class V{x:int; operator ==(o) := x == o.x}; V(1) == V(1)'	yes
+'class V{x:int; operator ==(o) := x == o.x}; V(1) == V(2)'	no

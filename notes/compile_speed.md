@@ -229,3 +229,39 @@ marks are printed where a phase *starts*, so the time after `pass sugar` is suga
 - P8 (8ed01fdcda): those are linked prebuilt (compiler.warp linked_libraries follows the uses of a module whose file
   is empty, never the module being written itself). 25 of the ~100 reals samples print differently from main, all
   noise (pids in file names, timings, stateful storage samples, a module main gained meanwhile).
+
+## Scaling (card library-scaling-passes)
+
+test/bench/compile_scaling.sh measures it (instructions retired, warm): hello beside 400 more indexed words, and
+generated programs of 100/1000/2000 lines (four statement shapes, each using the ones before).
+- Before (4bf73e5575): hello 1.44 G (+1.5 % beside the grown index: flat), 100/1000/2000 lines 5.2/44.4/99.5 G, a
+  line past 1000 costing 1.26 times one before. Phases at 3000 lines (8.3 s): implicit uses 24 %, checked_program
+  14 % (its parse), sugar 13 %, emit 12 %, lambdas 6 %, clauses 5 %; lambdas and clauses grew ~6-8x for 3x lines.
+- P9 (merge of dc3c6251a9..a078e5bc1f): the implicit-uses hooks share one parse (each of four parsed the whole
+  source); clauses finds namesakes by a name map; lambdas looks variables up in sets (class Locals) instead of a list
+  of every main-level variable per symbol; with_reached finds a wanted word's slices by a name map (each wanted word
+  was compared with every slice's name: 8 % of hello, found by summing 20 sampled hello runs, scripts/profile.sh).
+  hello 1.32 G (+1.7 % beside the grown index), 100/1000/2000 lines 4.6/37.6/81.9 G, growth 1.21.
+- Exact call counts per function aren't measurable today: wasmtime counts nothing, and binaryen's --log-execution
+  needs an import the driver doesn't answer. Summed samples over many runs stand in.
+- Pitfall: `x in list` compares node by node (node_equal, NFC for texts): a list of names searched per symbol or per
+  statement is the usual quadratic. A map (`word_set`) of the names, made once outside the loop.
+- Left: two parses of the program (implicit uses, then checked_program's of the source with its uses appended); the
+  sugar pass (rules_reaching per statement) and emit grow a bit faster than linear; GC copying grows with the heap.
+
+## Linked classes (card linked-module)
+
+`use sound; 1` (warp-sprint-web, card sound-start-speed): linked_needs brings each linked module's classes (30
+behind sound), and the classes pass lifted all their methods: 303 statements after it against 69 before, 61 of them
+the program's dispatchers over the linked classes (~70 % of the code), which every later pass walked.
+- L1: a linked class gives the program only the methods it may call (extensions/class_methods/methods.warp
+  linked_methods_called): those the program's statements name, those of the operators they write (compare for an
+  ordering glyph, equal for == and !=), the position words, the constructor once the class is named, and what the
+  kept ones call in turn. Its instances show, convert and operate (+ - * /) through the descriptor its module made.
+  `use sound; 1` 26.2 G -> 17.1 G (159 statements), harmony.warp and music.warp -18 % / -21 %; the 112 units/sound
+  test files fail as before (45 of 554, all present on main too). A module being built still lifts every class.
+- Pitfall: `Op.Mul as text` in a key head is "Mul", not the glyph: compare heads by key_head(Key(ø, glyph as Op, ø)).
+- Pitfall: the operators must count. Without the `*`/`^` dispatchers `4 m²` multiplied a Unit as a float (cast
+  failure in float_of_node), and position words come from `b#i` only after later passes (samples' new_samples).
+- Left: the said words include the bodies of reached helpers the sugar may call (walked_by, task_value), which
+  keep +, ==, text and compare; a narrower reach would need the dispatchers kept out of the passes until called.

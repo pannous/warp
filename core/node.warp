@@ -30,6 +30,9 @@ enum Op {
 	If, Then, Else, While, Do
 	Hash, Range, To, As, PlusMinus
 	None
+	# any other operator, `a ⊕ b` of key(a, "⊕", b): its spelling is its own (`op as text` is "⊕"), each joining the
+	# runtime's spellings at its first use (card enum-op-should)
+	Other
 }
 
 # A list's bracket: `Bracket.Square as text` is "[", an unbracketed list's None is ""
