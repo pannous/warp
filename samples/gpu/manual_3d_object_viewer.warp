@@ -98,4 +98,5 @@ count = #mesh
 for frame in 1..90 {
 	angle = frame * 0.07
 	paint(viewer, size, size, {size: [size, size]})
+	sleep(10ms)
 }

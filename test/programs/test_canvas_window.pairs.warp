@@ -1,0 +1,3 @@
+# use draw: canvas(w, h) sizes the window too (card window-canvas-size)
+'use draw; canvas(30, 20); [window.width, window.height]'	[30, 20]
+'use draw; canvas.width = 50; window.width'	50
