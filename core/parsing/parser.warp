@@ -1873,7 +1873,7 @@ def reached_modules(source: text): list {
 def module_sources(modules: list): list {
 	sources = []
 	for module in modules {
-		module_source = file_source(run_library() + "/" + module + ".warp") ?? ""
+		module_source = std_module_text(module)
 		if module_source { sources += [module_source] }
 	}
 	sources
@@ -2806,7 +2806,7 @@ def line_at(p: Parser, at: int): int {
 }
 
 // the type words naming a kind of number, `number` itself not
-NUMBER_TYPE_WORDS = ["int", "integer", "long", "i64", "i32", "rational", "real", "exact", "float", "double", "f64", "f32", "float32", "float64", "fast"]
+NUMBER_TYPE_WORDS = ["int", "integer", "long", "i64", "i32", "rational", "real", "exact", "precise", "float", "double", "f64", "f32", "float32", "float64", "fast"]
 // the number a literal was written as: a float with a point or an exponent, else an int
 def written_number(written: text): Node := if written.contains(".") or written.contains("e") then float(written) else whole_number(written)
 // the int a literal's digits write; beyond 64 bits, `1e20` and `100000000000000000000`, the number view of its digits,

@@ -1,0 +1,76 @@
+# `warp build --site app.warp` (`--site=<folder>`, else site/ beside the program): the program as a static site any
+# static host serves (card build-site). app.wasm is the program's whole module; the page runs it in a Worker with the
+# playground's host (web/playground/site.js, site-worker.js, driver.js), its markup rendered by lib/markup.warp
+# page_render, its handlers run by page_event, a serving program's routes answering the page's links and forms
+# (notes/web_framework.md "Built sites"). The folder mirrors the repository's layout, web/playground/ holding the
+# scripts, so the program's file reads resolve against the site's root as they do against the repository in the
+# playground
+SITE_OPTION = "site"
+SITE_FOLDER = "site"
+SITE_MODULE = "app.wasm"
+SCRIPT_FOLDER = "web/playground"
+# the page's scripts, in order (site.js needs the others)
+PAGE_SCRIPTS = ["markup.js", "markup-transitions.js", "markup-forms.js", "canvas.js", "task-workers.js", "host-routes.js", "site.js"]
+# the program's Worker and its task Workers (site-worker.js, task-worker.js importScripts) and the C library wasm
+WORKER_SCRIPTS = ["imports.js", "js-members.js", "std.js", "host.js", "values.js", "host-files.js", "host-sound.js",
+	"host-hashes.js", "host-tasks.js", "host-foreign.js", "host-sqlite.js", "host-compiler.js", "host-routes.js",
+	"host-gpu.js", "host-timers.js", "host-random.js", "host-media.js", "components.js", "wasi.js", "driver.js",
+	"site-worker.js", "task-worker.js", "lib/libc.wasm"]
+# a static host gives no cross-origin isolation: this service worker adds it, registered from the site's root
+ISOLATION_SCRIPT = "coi-serviceworker.js"
+# the list of the site's files the page reads (host-files.js isUnserved): a read of any other fails at once
+SERVED_FILES = "served-files.js"
+# where the scripts are: lib/site in an installed warp or a release (scripts/integrate/after-push.sh copies the
+# site_files() there), web/playground beside lib/ in a checkout
+INSTALLED_SCRIPTS = "/site"
+CHECKOUT_SCRIPTS = "/../web/playground"
+
+# every file a site copies from the playground, as named there
+site_files(): list := PAGE_SCRIPTS + WORKER_SCRIPTS.filter(script => script not in PAGE_SCRIPTS) + [ISOLATION_SCRIPT]
+
+site_built(target: text, options: list) := {
+	if not (exists(target) and target.ends_with(".warp")) { raise "warp build --site builds a program file, app.warp, into a site/ beside it" }
+	stem = target.remove_suffix(".warp")
+	folder = option_of(options, SITE_OPTION) ?? (source_folder(target) + "/" + SITE_FOLDER)
+	scripts = site_scripts()
+	shell("mkdir -p " + quoted_path(folder + "/" + SCRIPT_FOLDER + "/lib"))
+	emitting_file(working_relative(target))
+	compile_written(read(target), folder + "/" + SITE_MODULE, source_folder(target))
+	for file in site_files() {
+		copied_to = if file == ISOLATION_SCRIPT then folder + "/" + file else folder + "/" + SCRIPT_FOLDER + "/" + file
+		write_bytes(copied_to, read_bytes(scripts + "/" + file))
+	}
+	write(folder + "/index.html", site_page(stem.split("/").last(), prerendered(target)))
+	write(folder + "/" + SCRIPT_FOLDER + "/" + SERVED_FILES, served_files(folder))
+	print "built " + folder + " (open it from a static server: index.html)"
+}
+
+# the folder holding the site's scripts, loudly none
+site_scripts(): text := {
+	for folder in [library_folder + INSTALLED_SCRIPTS, library_folder + CHECKOUT_SCRIPTS] {
+		if exists(folder + "/" + PAGE_SCRIPTS.last()) { return folder }
+	}
+	raise "warp build --site copies the page's scripts from " + library_folder + INSTALLED_SCRIPTS + " or a checkout's web/playground beside lib/, neither is there"
+}
+
+# the page's first markup: what the program shows once it ran by this warp (`warp run` serves no routes), so the page
+# shows it before its Worker starts, whose first render morphs it in place; none when the program shows no markup
+prerendered(target: text): text := {
+	warp = env("WARP_EXECUTABLE") ?? "warp"
+	shown = ""
+	try { shown = shell("WARP_NO_WINDOW=1 " + quoted_path(warp) + " run " + quoted_path(target) + " </dev/null 2>/dev/null | tail -1").trim() } catch failure { shown = "" }
+	if shown.starts_with("<") { return shown }
+	print "warp build --site: no markup to prerender, the page shows its markup once its Worker runs"
+	""
+}
+
+site_page(title: text, shown: text): text := {
+	head = "<!doctype html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<link rel=\"icon\" href=\"data:,\">\n<title>" + title + "</title>\n</head>\n<body>\n"
+	scripts = PAGE_SCRIPTS.map(script => "<script src=\"" + SCRIPT_FOLDER + "/" + script + "\"></script>\n").join("")
+	head + "<div id=\"warp-root\">" + shown + "</div>\n" + scripts + "</body>\n</html>\n"
+}
+
+served_files(folder: text): text := {
+	files = shell("cd " + quoted_path(folder) + " && find . -type f ! -name " + SERVED_FILES + " | sort").trim().split("\n").filter(file => file != "")
+	"const SERVED_FILES = new Set([" + files.map(file => "\"" + file.remove_prefix("./") + "\"").join(",") + "]);\n"
+}

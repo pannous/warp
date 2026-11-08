@@ -22,7 +22,7 @@ pointer_handle(address: i64): handle from 'c'
 // the call C made, its arguments as the C types said
 export c_callback_fired(slot: int, a: int, b: int, c: int, d: int, e: int, g: int): int := {
 	given = [a, b, c, d, e, g]
-	arguments = [if callback_types#(slot + 1)#i == "handle" then pointer_handle(given#i) else given#i for i in 1 to #callback_types#(slot + 1)]
+	arguments = [if callback_types#(slot + 1)#i == "handle" then pointer_handle(int(given#i)) else given#i for i in 1 to #callback_types#(slot + 1)]
 	f = callback_functions#(slot + 1)
 	result = called_with(f, arguments)
 	if result is bool then (if result then 1 else 0) else if result is int then result else 0

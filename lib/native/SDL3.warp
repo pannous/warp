@@ -1,4 +1,4 @@
-// SDL3 through its C library (lib/native_host/window.warp, the native warp's window): `use SDL3` declares these functions;
+// SDL3 through its C library (lib/host/native_host/window.warp, the native warp's window): `use SDL3` declares these functions;
 // the native warp loads libSDL3 (libSDL3.dylib, libSDL3.so.0) and calls them. Windows, views and layers are handles;
 // an event is a block of SDL_EVENT_BYTES read by its fields' offsets (lib/c.warp field_*)
 SDL_Init(flags: i32): bool from 'SDL3'
@@ -21,7 +21,7 @@ SDL_Metal_GetLayer(view: handle): handle from 'SDL3'
 SDL_PollEvent(event: handle): bool from 'SDL3'
 SDL_WaitEvent(event: handle): bool from 'SDL3'
 SDL_free(memory: handle): void from 'SDL3'
-// sound (lib/native_host/sound.warp): a stream to the default playback device per sound, SDL mixing them; a WAV file
+// sound (lib/host/native_host/sound.warp): a stream to the default playback device per sound, SDL mixing them; a WAV file
 // read and samples converted to another rate and channel count
 SDL_OpenAudioDeviceStream(device: u32, spec: bytes, callback: handle, data: handle): handle from 'SDL3'
 SDL_ResumeAudioStreamDevice(stream: handle): bool from 'SDL3'
