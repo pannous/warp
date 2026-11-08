@@ -14,6 +14,7 @@ ANSWER_MS = 10000
 SPIN_SECONDS = 0.005
 APP_WINDOW_WIDTH = 900.0
 APP_WINDOW_HEIGHT = 700.0
+APP_WINDOW_FRAME = [0.0, 0.0, APP_WINDOW_WIDTH, APP_WINDOW_HEIGHT]
 JS_RUNTIME = "js"
 // `warp app` names the window so (lib/app/command.warp): the program's page shows there, live
 APP_WINDOW_VARIABLE = "WARP_APP_WINDOW"
@@ -53,6 +54,7 @@ objc_getClass(name: text): i64 from 'objc'
 sel_registerName(name: text): i64 from 'objc'
 objc_allocateClassPair(superclass: i64, name: handle, extra: i64): i64 from 'objc'
 class_addMethod(made: i64, selector: i64, implementation: handle, types: handle): bool from 'objc'
+class_replaceMethod(made: i64, selector: i64, implementation: handle, types: handle): i64 from 'objc'
 // a C string that stays: the runtime keeps a class's name and its methods' types where they are given
 strdup(t: text): handle from 'c'
 objc_registerClassPair(made: i64): void from 'objc'
@@ -103,15 +105,19 @@ ns_string(t: text) := {
 ns_text(string: int): text := if string == 0 then "" else field_text(pointer_handle(told(string, "UTF8String")), 0)
 is_kind(object: int, class_name: text): bool := object != 0 and sent(object, "isKindOfClass:", [class_named(class_name)]) != 0
 // a class of NSObject made at run time, its methods warp functions: [selector, Objective-C types, function], each
-// taking the receiver, the selector and the selector's arguments as numbers
+// taking the receiver, the selector and the selector's arguments as numbers. A class an earlier run in this process
+// made (`warp test` runs each test so) stays, its methods given this run's functions
 class_made(name: text, methods: list) := {
-	made = objc_allocateClassPair(class_named("NSObject"), strdup(name), 0)
-	if made == 0 { raise "the Objective-C class " + name + " is there already" }
+	made = class_named(name)
+	earlier = made != 0
+	if not earlier { made = objc_allocateClassPair(class_named("NSObject"), strdup(name), 0) }
 	for method in methods {
 		count = #method#2 - 1
-		class_addMethod(made, sel_registerName(method#1), c_callback(method#3, ["i64" for i in 1 to count]), strdup(method#2))
+		implementation = c_callback(method#3, ["i64" for i in 1 to count])
+		if earlier { class_replaceMethod(made, sel_registerName(method#1), implementation, strdup(method#2)) }
+		else { class_addMethod(made, sel_registerName(method#1), implementation, strdup(method#2)) }
 	}
-	objc_registerClassPair(made)
+	if not earlier { objc_registerClassPair(made) }
 	made
 }
 instance_of(made: int) := told(told(made, "alloc"), "init")
@@ -237,14 +243,14 @@ window_closing(receiver, selector, notification) := { app_window_open = no }
 // (each state a lambda waits for read through a word: a lambda reading a global keeps its value of when it was made, card prebuilt-module)
 window_event_over(): bool := #page_events > 0 or not app_window_open
 app_window_made(title: text) := {
-	made = sent_with_floats(told(class_named("NSWindow"), "alloc"), "initWithContentRect:styleMask:backing:defer:", [WINDOW_STYLE, BUFFERED, 0], [0.0, 0.0, APP_WINDOW_WIDTH, APP_WINDOW_HEIGHT])
+	made = sent_with_floats(told(class_named("NSWindow"), "alloc"), "initWithContentRect:styleMask:backing:defer:", [WINDOW_STYLE, BUFFERED, 0], APP_WINDOW_FRAME)
 	sent(made, "setReleasedWhenClosed:", [0])
 	sent(made, "setTitle:", [ns_string(title)])
 	sent(made, "setDelegate:", [instance_of(class_made("WarpHostAppWindowClosing", [["windowWillClose:", "v@:@", window_closing]]))])
 	made
 }
 window_shown(shown: int, shown_view: int) := {
-	sent_with_floats(shown_view, "setFrame:", [], [0.0, 0.0, APP_WINDOW_WIDTH, APP_WINDOW_HEIGHT])
+	sent_with_floats(shown_view, "setFrame:", [], APP_WINDOW_FRAME)
 	sent(shown_view, "setAutoresizingMask:", [SIZES_WITH_WINDOW])
 	sent(told(shown, "contentView"), "addSubview:", [shown_view])
 	told(shown, "center")
@@ -254,9 +260,9 @@ window_shown(shown: int, shown_view: int) := {
 // `warpWindow.show()`: the run's view in a window; `warpWindow.next(milliseconds)`: the page's next event,
 // {event, detail, wall}, else {event: "tick", wall} once the milliseconds are over (none or -1: wait for an event), wall
 // the local wall clock's milliseconds since 1970 (lib/timers.warp); ø once the window is closed
-window_answered(called: text, member: text, arguments: any): any := {
+window_answered(called: text, member: text, arguments: any): any? := {
 	if member == "show" {
-		if quiet_run() { raise called + ": no window under WARP_NO_WINDOW or CI" }
+		if quiet_run() { return error(called + ": no window under WARP_NO_WINDOW or CI") }
 		if app_window == 0 {
 			shown_view = hidden_view()
 			application_made(POLICY_ACCESSORY)
@@ -267,8 +273,8 @@ window_answered(called: text, member: text, arguments: any): any := {
 		}
 		return ø
 	}
-	if member != "next" { raise called + ": the window has no " + member + ": show or next" }
-	if app_window == 0 { raise called + ": no window shown: warpWindow.show(title) first" }
+	if member != "next" { return error(called + ": the window has no " + member + ": show or next") }
+	if app_window == 0 { return error(called + ": no window shown: warpWindow.show(title) first") }
 	waited = if arguments is list and #arguments > 0 and arguments#1 is int then arguments#1 else -1
 	pumped(() => window_event_over(), if waited >= 0 then waited else FOREVER_MS)
 	if not app_window_open { return ø }
@@ -282,25 +288,23 @@ window_answered(called: text, member: text, arguments: any): any := {
 }
 
 // foreign_call(runtime, module, member, call, arguments), as the page's host-foreign.js foreignCall answers it
-host_foreign_call(runtime, module, member, call, arguments): any := {
+host_foreign_call(runtime, module, member, call, arguments): any? := {
 	pool = objc_autoreleasePoolPush()
-	answer = try { foreign_answered(str(runtime), module, str(member), call == 1, arguments) } catch failure {
-		objc_autoreleasePoolPop(pool)
-		raise failure
-	}
+	// (a failure is the call's Error, a value the program may catch, as the page's foreignCall gives it)
+	answer: any? = foreign_answered(str(runtime), module, str(member), call == 1, arguments)
 	objc_autoreleasePoolPop(pool)
 	answer
 }
-foreign_answered(runtime: text, module: any, member: text, call: bool, arguments: any): any := {
+foreign_answered(runtime: text, module: any, member: text, call: bool, arguments: any): any? := {
 	named_module = module is text
 	module_name = if named_module then module else "value"
 	called = runtime + " " + module_name + "." + member
-	if runtime != JS_RUNTIME { raise called + ": " + runtime + " is not in the native warp yet" }
-	if (named_module and not is_name(module)) or not member_named(member) { raise called + ": not a name js has" }
+	if runtime != JS_RUNTIME { return error(called + ": " + runtime + " is not in the native warp yet") }
+	if (named_module and not is_name(module)) or not member_named(member) { return error(called + ": not a name js has") }
 	if named_module and module == APP_WINDOW { return window_answered(called, member, arguments) }
 	request = to_json({module: module, member: member, arguments: if call then arguments else ø})
 	answer = answered(hidden_view(), "return await warpForeignCall(request)", "request", request)
-	if answer#2 != ø { raise failure_said(called, answer#2) }
+	if answer#2 != ø { return error(failure_said(called, answer#2)) }
 	parse_json(answer#1)
 }
 
