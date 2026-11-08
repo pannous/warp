@@ -251,6 +251,7 @@ MODULE_START = "warp/start"
 # calling C by its foreign lines (`… from "c"`) may refuse and stays compiled from source with the program; any other
 # refusal fails the rebuild, naming the module and why (decision prebuild-fails-loudly)
 write_modules(folder: text, runtime_file: text) := {
+	modules_rewritten = yes
 	write_library_index(folder)
 	refused = []
 	for name in in_dependency_order(std_module_names) {
