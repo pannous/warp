@@ -1,9 +1,9 @@
 #!/usr/bin/env warp
 # Gaussian splatting (Kerbl et al. 2023, "3D Gaussian Splatting for Real-Time Radiance Field Rendering"): a scene made
 # of fuzzy 3D ellipsoids, each a position, a scale and a rotation (its covariance), a color and an opacity.
-# Every frame warp projects each Gaussian to a 2D ellipse on the screen (its covariance through the camera's Jacobian),
-# sorts them by depth, and the GPU draws each as a quad around its ellipse, the farthest first, each blended over the ones
-# behind it (a shader with its own vertex stage: one quad an instance).
+# Every frame warp sorts them by their depth before the camera, and the GPU draws each as a quad around its ellipse on
+# the screen (its covariance through the camera's Jacobian), the farthest first, each blended over the ones behind it
+# (a shader with its own vertex stage: one quad an instance; the scene a storage array each of its parts).
 # The camera orbits a little every frame; drag the mouse to turn it yourself
 use math
 use color
@@ -73,47 +73,32 @@ star(i: int): Splat := {
 stars = [star(i) for i in 1 to star_splats]
 scene = knot + stars
 
-# a camera looking at the origin from yaw and pitch: its place, its axes, its focal length in pixels and the picture's
-# centre
-class Camera { eye: list; right: list; up: list; forward: list; focal: float; centre: list }
-camera(yaw: float, pitch: float, width: float, height: float): Camera := {
+# the scene as the shader reads it, a vec4f each Gaussian: its centre and opacity, the six numbers of its covariance and
+# its color's 24 bits
+centres = scene.map(s => s.position + [s.opacity])
+shapes = scene.map(s => [s.covariance#1#1, s.covariance#1#2, s.covariance#1#3, s.covariance#2#2])
+shades = scene.map(s => [s.covariance#2#3, s.covariance#3#3, int(s.color) % 16777216, 0])
+
+# the camera looking at the origin from yaw and pitch: its place and axes, its focal length in pixels and the picture's
+# centre, as the shader reads them
+global eye = [0.0, 0.0, distance_away]
+global right = [1.0, 0.0, 0.0]
+global up = [0.0, 1.0, 0.0]
+global forward = [0.0, 0.0, -1.0]
+global focal = 1.0
+global centre = [0.0, 0.0]
+global order = [0] # the Gaussians in front of the camera, nearest first
+global instances = 1 # the sky, then every Gaussian in front of the camera
+look(yaw: float, pitch: float, width: float, height: float) := {
 	eye = [cos(pitch) * sin(yaw), sin(pitch), cos(pitch) * cos(yaw)] .* distance_away
 	forward = normalize(eye .* -1)
 	right = normalize(cross(forward, [0, 1, 0]))
-	Camera(eye, right, cross(right, forward), forward, zoom * height, [width / 2, height / 2])
-}
-quadratic(a: list, sigma: list, b: list): float := dot(a, [dot(sigma#i, b) for i in 1 to 3])
-
-# a Gaussian on the screen: [depth, [x, y, conic a, conic b], [conic c, opacity, color's 24 bits, reach]], the conic the
-# inverse of its 2D covariance, the reach three standard deviations along its longest axis, in pixels; ø behind the
-# camera
-projected(s: Splat, view: Camera): any := {
-	seen = s.position .- view.eye
-	x = dot(seen, view.right); y = dot(seen, view.up); z = dot(seen, view.forward)
-	if z < nearest { return ø }
-	f = view.focal
-	# the rows of the projection's Jacobian times the view rotation: how a step in the world moves the pixel
-	across = view.right .* (f / z) .- view.forward .* (f * x / (z * z))
-	down = view.up .* (-f / z) .+ view.forward .* (f * y / (z * z))
-	a = quadratic(across, s.covariance, across) + pixel_blur
-	b = quadratic(across, s.covariance, down)
-	c = quadratic(down, s.covariance, down) + pixel_blur
-	det = a * c - b * b
-	middle = (a + c) / 2
-	reach = 3 * sqrt(middle + sqrt(max(middle * middle - det, 0)))
-	[z, [view.centre#1 + f * x / z, view.centre#2 - f * y / z, c / det, -b / det], [a / det, s.opacity, int(s.color) % 16777216, reach]]
-}
-
-global ellipses = []
-global inks = []
-global instances = 1 # the sky, then every Gaussian in front of the camera
-# the scene seen from yaw and pitch, nearest first, as the shader reads it, for a picture of the size it shows at
-project(yaw: float, pitch: float) := {
-	view = camera(yaw, pitch, shown_width(), shown_height())
-	seen = scene.map(s => projected(s, view)).filter(p => p != ø).sort_by(p => p#1)
-	ellipses = seen.map(p => p#2)
-	inks = seen.map(p => p#3)
-	instances = 1 + #seen
+	up = cross(right, forward)
+	focal = zoom * height
+	centre = [width / 2, height / 2]
+	depths = scene.map(s => dot(s.position .- eye, forward))
+	order = [i - 1 for i in 1 to #scene].filter(i => depths#(i + 1) >= nearest).sort_by(i => depths#(i + 1))
+	instances = 1 + #order
 }
 
 splats = shader {
@@ -127,15 +112,29 @@ struct Corner { @builtin(position) at: vec4f, @location(0) offset: vec2f, @locat
 		out.ink = vec4f($background, 1.0);
 		return out;
 	}
-	let i = u32($instances) - 1u - drawn; // the farthest Gaussian first, the nearest last
-	let e = $ellipses[i];
-	let k = $inks[i];
-	out.offset = side * k.w;
-	let pixel = e.xy + out.offset;
+	let n = u32($instances) - 1u - drawn; // the farthest Gaussian first, the nearest last
+	let i = u32($order[n / 4u][n % 4u]);
+	let a = $shapes[i];
+	let b = $shades[i];
+	let sigma = mat3x3f(a.xyz, vec3f(a.y, a.w, b.x), vec3f(a.z, b.x, b.y));
+	let seen = $centres[i].xyz - $eye;
+	let x = dot(seen, $right);
+	let y = dot(seen, $up);
+	let z = dot(seen, $forward);
+	// the rows of the projection's Jacobian times the view rotation: how a step in the world moves the pixel
+	let f = $focal;
+	let across = $right * (f / z) - $forward * (f * x / (z * z));
+	let down = $up * (-f / z) + $forward * (f * y / (z * z));
+	let spread = vec3f(dot(across, sigma * across), dot(across, sigma * down), dot(down, sigma * down)) + vec3f($pixel_blur, 0.0, $pixel_blur);
+	let det = spread.x * spread.z - spread.y * spread.y;
+	let middle = (spread.x + spread.z) / 2.0;
+	let reach = 3.0 * sqrt(middle + sqrt(max(middle * middle - det, 0.0))); // three standard deviations, in pixels
+	out.offset = side * reach;
+	let pixel = $centre + vec2f(x, -y) * (f / z) + out.offset;
 	out.at = vec4f(pixel.x / $width * 2.0 - 1.0, 1.0 - pixel.y / $height * 2.0, 0.0, 1.0);
-	out.conic = vec3f(e.z, e.w, k.x);
-	let bits = u32(k.z);
-	out.ink = vec4f(vec3f(f32(bits >> 16u), f32((bits >> 8u) & 255u), f32(bits & 255u)) / 255.0, k.y);
+	out.conic = vec3f(spread.z, -spread.y, spread.x) / det;
+	let bits = u32(b.z);
+	out.ink = vec4f(vec3f(f32(bits >> 16u), f32((bits >> 8u) & 255u), f32(bits & 255u)) / 255.0, $centres[i].w);
 	return out;
 }
 
@@ -160,6 +159,6 @@ on frame {
 	}
 	last_x = mouse_x
 	last_y = mouse_y
-	project(yaw, pitch)
+	look(yaw, pitch, shown_width(), shown_height())
 	paint(splats) # at the size it shows at: the window's, the playground's pane
 }
