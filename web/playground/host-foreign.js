@@ -195,13 +195,8 @@ function libraryInJs(holder, library, functions) {
 	});
 }
 
-// dlopen of one of warp's own libraries beside the executable (lib/sound.warp: @executable_path/libwarp_sound.dylib):
-// a handle when the page has it (host-sound.js PAGE_LIBRARIES), else 0, as for a library that is not there
-const OWN_LIBRARY = /\blib(warp_\w+)\.(dylib|so)$/;
-const PAGE_LIBRARY_HANDLE = 1;
-
 // the C functions of stdio a program reaches without a file (lib/sound.warp said: fdopen(2, "w"), fputs, fflush): a
-// FILE * is its descriptor, what it puts goes to the run's output; dlopen of warp's own libraries; getenv/setenv/unsetenv of
+// FILE * is its descriptor, what it puts goes to the run's output; dlopen finds no library; getenv/setenv/unsetenv of
 // the run's environment (driver.js programEnvironment), NULL for a name it lacks; getpid/getppid and strerror
 const withoutVariable = (environment, name) => environment.filter(entry => !entry.startsWith(`${name}=`));
 const pageStdio = (holder, hooks) => ({
@@ -215,7 +210,7 @@ const pageStdio = (holder, hooks) => ({
 	fdopen: descriptor => descriptor,
 	fputs: (text, descriptor) => (hooks.print(text, descriptor), 0),
 	fflush: () => 0,
-	dlopen: path => self.PAGE_LIBRARIES?.has(path.match(OWN_LIBRARY)?.[1]) ? PAGE_LIBRARY_HANDLE : 0,
+	dlopen: () => 0, // no C library loads in the page
 	// lib/file.warp's file words over the page's written files (host-files.js), as C answers: 0 done, -1 failed; folders
 	// exist by the files in them
 	unlink: path => writtenFiles.has(filePath(path)) ? (forgetWritten(path), 0) : C_FAILED,

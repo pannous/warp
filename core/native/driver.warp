@@ -72,6 +72,7 @@ CHANNEL_LISTEN_WORD = 18
 CHANNEL_PENDING_WORD = 19
 CHANNEL_NEXT_WORD = 20
 CHANNEL_SEND_WORD = 21
+SAVE_PICTURE_WORD = 22
 # the end of a field in warp.wasm's parse-code encoding (extensions/parse_words.warp FIELD_END)
 FIELD_END = 1
 # the system values a program sets (set_system_value), kept by foreign.c by slot; before that, the size a window opens
@@ -171,6 +172,8 @@ keep_value(slot: i64, value: i64) from "c"
 route_online(): i32 from "c"
 display_extent(height: i32): i64 from "c"
 next_painting(): i32 from "c"
+last_error(): i32 from "c"
+strerror(code: i32): handle from "c"
 gpu_paints(): i32 from "c"
 gpu_painted(shader: pointer, values: pointer, width: i64, height: i64, pixels: pointer): i32 from "c"
 arena_kept(): nothing from "c"
@@ -625,7 +628,7 @@ warp_config(fuel: bool, heap_bytes: i64): handle := {
 # window refused (headless_checked), but in a module the driver links on its own question, warp's own, which minds
 # WARP_NO_WINDOW itself (lazily_linked: the native host module's window)
 host_words_defined(linker: handle, engine: handle, context: handle, compiled: handle, module: text, guarded: bool, trap: pointer): nothing := {
-	table = custom_section(module, "warp.c_functions")
+	table = c_functions_table(module)
 	imports = allocate(VECTOR_BYTES)
 	wasmtime_module_imports(compiled, imports)
 	for i in 0..long_at(imports).value {
@@ -641,6 +644,13 @@ host_words_defined(linker: handle, engine: handle, context: handle, compiled: ha
 		if line.length > 0 and is_wasm_path(from) and crosses_memory(line) { word_defined(linker, import, foreign_of(line, wasm_exports_of(linker, context, from, name)), trap) }
 		if same_text(from, "host") { host_word_defined(linker, engine, import, name, trap) }
 	}
+}
+# the lines of the C functions a module calls: a GC module's, else a primitive one's, whose values are numbers, texts
+# as their (address, length) pairs and addresses of its memory (decision primitive-c-in-driver: what a native build's
+# glue does, primitive.warp c_function_glue)
+c_functions_table(module: text): text := {
+	table = custom_section(module, "warp.c_functions")
+	if table.length > 0 then table else custom_section(module, "warp.primitive_c_functions")
 }
 # a C function that opens a native window (raylib's InitWindow, SDL's, GLFW's) ends the run before it starts under
 # WARP_NO_WINDOW or CI, so no test or agent run pops one up
@@ -672,6 +682,7 @@ answered_word(name: text): i64 := {
 	if same_text(name, "real_path") { return REAL_PATH_WORD }
 	if same_text(name, "std_pure") { return STD_PURE_WORD }
 	if same_text(name, "paint") { return PAINT_WORD }
+	if same_text(name, "save_picture") { return SAVE_PICTURE_WORD }
 	if same_text(name, "key_held") { return KEY_HELD_WORD }
 	if same_text(name, "signal_listen") { return SIGNAL_LISTEN_WORD }
 	unanswered_word(name)
@@ -1203,6 +1214,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if word == SIGNAL_LISTEN_WORD { return timer_listened(given) }
 	context = wasmtime_caller_context(caller)
 	if word == PAINT_WORD { return painted(caller, context, given) }
+	if word == SAVE_PICTURE_WORD { return guest_text_of(caller, context, picture_saved(caller, context, given), results) }
 	if word == SYSTEM_VALUE_WORD { return int_result(system_value(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64)), results) }
 	if word == PARSE_CODE_WORD { return code_parsed(caller, context, given, results) }
 	if word == EVAL_CODE_WORD { return code_evaluated(caller, context, given, results) }
@@ -1668,11 +1680,13 @@ system_value_set(name: text, value: i64): nothing := {
 	if host_told("host_value_set", name, value, 1) == 0 { slot_set(name, value) }
 }
 ## the native host module (decision window-in-warp): what the playground's JavaScript answers beyond the driver's own
-## words, natively in warp, lib/native_window.warp over SDL3 and the system's fonts: its system values, the layer a
-## painting shows in, the host words it answers as host_<word>, the still picture held open after the run
-# (primitive mode has no text constants: its name `warp/native_window` and the prefix `host_` are written where read)
-host_export(context: handle, name: text, function: pointer): bool := lazily_linked(context, "warp/native_window", HOST_LINKED_AT, name, function)
-# the run's end told the native host module, when the run linked it: a still picture stays shown till its window closes
+## words, natively in warp, lib/native_host.warp (its window over SDL3 and the system's fonts, its sound over SDL3's audio
+## and the system's decoders): its system values, the layer a painting shows in, the host words it answers as
+## host_<word>, the run's end (a still picture held open, the sounds heard out)
+# (primitive mode has no text constants: its name `warp/native_host` and the prefix `host_` are written where read)
+host_export(context: handle, name: text, function: pointer): bool := lazily_linked(context, "warp/native_host", HOST_LINKED_AT, name, function)
+# the run's end told the native host module, when the run linked it: a still picture stays shown till its window
+# closes, the sounds play out
 host_run_ended(context: handle): nothing := {
 	if long_at(kept_value(RUN_SLOT) as i32 + HOST_LINKED_AT as i32).value != 0 { guest_call(0, context, "host_run_ended", 0, 0, allocate(VALUE_BYTES)) }
 }
@@ -1687,6 +1701,34 @@ host_told(export: text, name: text, value: i64, numbers: i64): i64 := {
 	result = allocate(VALUE_BYTES)
 	guest_call(0, context, export, values, 1 + numbers, result)
 	value_number(result)
+}
+## C calling a warp function back (card ffi-callbacks): a trampoline of lib/native/foreign.c, which lib/callbacks.warp
+## c_callback handed C, calls this during the C call; it calls that module's export c_callback_fired(slot, a … f)
+c_callback_answered(slot: i64, a: i64, b: i64, c: i64, d: i64, e: i64, f: i64): i64 := {
+	context = run_context()
+	function = allocate(EXTERN_BYTES)
+	if not wasmtime_linker_get(long_at(kept_value(RUN_SLOT) as i32).value, context, "warp/callbacks", 14, "c_callback_fired", 16, function) {
+		complain("C called a callback back, but the run links no warp/callbacks exporting c_callback_fired")
+		exit(1)
+	}
+	values = allocate(7 * VALUE_BYTES)
+	integer_value_set(values, slot)
+	integer_value_set(values + VALUE_BYTES, a)
+	integer_value_set(values + 2 * VALUE_BYTES, b)
+	integer_value_set(values + 3 * VALUE_BYTES, c)
+	integer_value_set(values + 4 * VALUE_BYTES, d)
+	integer_value_set(values + 5 * VALUE_BYTES, e)
+	integer_value_set(values + 6 * VALUE_BYTES, f)
+	result = allocate(VALUE_BYTES)
+	trap = allocate(8)
+	long_at(trap).value = 0
+	checked(wasmtime_func_call(context, function + 8, values, 7, result, 1, trap), trap)
+	value_number(result)
+}
+# a wasmtime_val_t holding an i64
+integer_value_set(value: pointer, n: i64): nothing := {
+	byte_at(value).value = KIND_I64
+	long_at(value + VALUE_OFFSET).value = n
 }
 slot_set(name: text, value: i64): nothing := {
 	slot = if same_text(name, "window_width") then WINDOW_WIDTH_SLOT else if same_text(name, "window_height") then WINDOW_HEIGHT_SLOT else if same_text(name, "display_dpi") then DISPLAY_DPI_SLOT else -1
@@ -1754,12 +1796,34 @@ FOLDER_MODE = 493
 PNG_SIGNATURE_HIGH = 2303741511
 PNG_SIGNATURE_LOW = 218765834
 painted(caller: handle, context: handle, given: pointer): nothing := {
-	width = long_at(given + VALUE_BYTES + VALUE_OFFSET).value
-	height = long_at(given + 2 * VALUE_BYTES + VALUE_OFFSET).value
+	width = picture_width(given)
+	height = picture_height(given)
 	if width > 0 and height > 0 {
 		pixels = painted_pixels(caller, context, given, width, height)
-		if pixels != 0 { png_written(pixels, width, height) }
+		if pixels != 0 {
+			path = painting_path()
+			failed = png_written(pixels, width, height, path)
+			if failed.length > 0 { return complain(failed) }
+			complain(joined(joined(joined(joined(joined("painted ", text_of(width)), "×"), text_of(height)), ": "), path))
+		}
 	}
+}
+# the width and height a painting's values (picture, width, height, …) give
+picture_width(given: pointer): i64 := long_at(given + VALUE_BYTES + VALUE_OFFSET).value
+picture_height(given: pointer): i64 := long_at(given + 2 * VALUE_BYTES + VALUE_OFFSET).value
+# the next painting's file in the temporary folder: warp-paint/paint.png, then paint-2.png …
+painting_path(): text := {
+	folder = joined(temporary_folder(), "warp-paint")
+	mkdir(c_string(folder), FOLDER_MODE)
+	number = next_painting()
+	joined(folder, if number == 1 then "/paint.png" else joined(joined("/paint-", text_of(number)), ".png"))
+}
+# save(canvas, "hello.png") of lib/draw: the canvas's pixels (picture, width, height, file) as a PNG in that file; why
+# it could not, else "" (lib/draw raises it)
+picture_saved(caller: handle, context: handle, given: pointer): text := {
+	width = picture_width(given)
+	height = picture_height(given)
+	png_written(pixels_of(caller, context, given, width * height), width, height, shown(caller, context, given + 3 * VALUE_BYTES))
 }
 # the picture's pixels: a WGSL shader's, its values the uniform, from the GPU (lib/native/foreign.c, libwarp_gpu),
 # else the list's; 0 when a library showed them in its open window (foreign.c shader_shown, pixels_shown)
@@ -1819,7 +1883,8 @@ pixels_of(caller: handle, context: handle, picture: pointer, n: i64): pointer :=
 	}
 	pixels
 }
-png_written(pixels: pointer, width: i64, height: i64): nothing := {
+# the pixels as a PNG in the file; why it could not, else ""
+png_written(pixels: pointer, width: i64, height: i64, path: text): text := {
 	colored = no
 	for i in 0..width * height { if long_at(pixels + i * 8).value >= COLOR_FROM { colored = yes } }
 	channels = if colored then 3 else 1
@@ -1842,14 +1907,17 @@ png_written(pixels: pointer, width: i64, height: i64): nothing := {
 	at = chunk(png + 8, "IHDR", header, 13)
 	at = chunk(at, "IDAT", deflated.address, deflated.length as i64)
 	at = chunk(at, "IEND", 0, 0)
-	folder = joined(temporary_folder(), "warp-paint")
-	mkdir(c_string(folder), FOLDER_MODE)
-	number = next_painting()
-	path = joined(folder, if number == 1 then "/paint.png" else joined(joined("/paint-", text_of(number)), ".png"))
 	file = fopen(c_string(path), c_string("wb"))
+	if file == 0 { return os_failure(joined("save: cannot write ", path)) }
 	fwrite(native_pointer(png), 1, at - png, file)
 	fclose(file)
-	complain(joined(joined(joined(joined(joined("painted ", text_of(width)), "×"), text_of(height)), ": "), path))
+	""
+}
+# what failed, why the system says it did and its error number: "…: No such file or directory (os error 2)"
+os_failure(what: text): text := {
+	code = last_error()
+	reason = strerror(code)
+	joined(joined(joined(joined(joined(what, ": "), native_copy(reason, strlen(reason))), " (os error "), text_of(code as i64)), ")")
 }
 # a pixel's bytes: gray, or red, green and blue
 shaded(value: i64, at: pointer, colored: bool): nothing := {
@@ -2337,6 +2405,9 @@ PARAMETER_OUT = 7
 PARAMETER_TEXTS = 8
 PARAMETER_BYTES = 9
 PARAMETER_LENGTH = 10
+# a primitive module's text, the address of its (address, length) pair, and its pointer, an address of its memory
+PARAMETER_PAIR = 11
+PARAMETER_ADDRESS = 12
 REGISTER_I32 = 1
 REGISTER_I64 = 2
 REGISTER_F32 = 3
@@ -2348,6 +2419,8 @@ CROSSING_TEXT = 2
 CROSSING_OWNED_TEXT = 3
 CROSSING_HANDLE = 4
 CROSSING_U32 = 5
+CROSSING_PAIR = 6
+CROSSING_ADDRESS = 7
 FAILURE_NONE = 1
 FAILURE_NOT_NULL = 2
 FAILURE_FALSE = 3
@@ -2362,6 +2435,8 @@ parameter_kind(name: text): i32 := {
 	if same_text(name, "texts") { return PARAMETER_TEXTS }
 	if same_text(name, "bytes") { return PARAMETER_BYTES }
 	if same_text(name, "length") { return PARAMETER_LENGTH }
+	if same_text(name, "pair") { return PARAMETER_PAIR }
+	if same_text(name, "address") { return PARAMETER_ADDRESS }
 	0
 }
 register_of(name: text): i32 := {
@@ -2379,6 +2454,8 @@ crossing_of(name: text): i32 := {
 	if same_text(name, "owned_text") { return CROSSING_OWNED_TEXT }
 	if same_text(name, "handle") { return CROSSING_HANDLE }
 	if same_text(name, "u32") { return CROSSING_U32 }
+	if same_text(name, "pair") { return CROSSING_PAIR }
+	if same_text(name, "address") { return CROSSING_ADDRESS }
 	0
 }
 failure_of(name: text): i32 := {
@@ -2394,7 +2471,7 @@ known(kind: i32, name: text, what: text, word: text): i32 := {
 }
 # the C function of a line, found in its library; one the driver can't call stops the run naming it. One its library
 # lacks, or a library not found, stops the run only when called: a program may ask for an optional library first
-# (lib/sound.warp's libwarp_sound, else the system's player)
+# (lib/native_host.warp's SDL3 and mpg123: a machine without them stays windowless and silent)
 foreign_of(line: text, wasm: pointer): i64 := {
 	library = field(line, 1, TAB)
 	name = field(line, 2, TAB)
@@ -2593,6 +2670,8 @@ c_argument(caller: handle, context: handle, name: text, kind: i32, value: pointe
 	if kind == PARAMETER_OUT { return if out == 0 then 0 else native_pointer(out) }
 	if kind == PARAMETER_TEXTS { return native_pointer(c_strings(caller, context, value - VALUE_OFFSET)) }
 	if kind == PARAMETER_BYTES { return native_pointer(c_bytes(caller, context, value - VALUE_OFFSET)) }
+	if kind == PARAMETER_PAIR { return pair_c_text(caller, context, word_at(value).value as i64) }
+	if kind == PARAMETER_ADDRESS { return if word_at(value).value == 0 then 0 else guest_memory(caller, context) + word_at(value).value as i64 }
 	id = word_at(value).value as i32
 	if not handle_known(id) { failed_call(joined(joined(name, ": no handle "), text_of(id))) }
 	handle_pointer(id)
@@ -2618,7 +2697,10 @@ c_strings(caller: handle, context: handle, list: pointer): pointer := {
 # the C result as the module's value: a text, a handle id, else the number in its register
 c_result(caller: handle, context: handle, c: Foreign, returned: i64, result: pointer): nothing := {
 	value = result + VALUE_OFFSET
-	if c.crossing == CROSSING_TEXT or c.crossing == CROSSING_OWNED_TEXT {
+	if c.crossing == CROSSING_PAIR or c.crossing == CROSSING_ADDRESS {
+		byte_at(result).value = KIND_I32
+		word_at(value).value = (if returned == 0 then 0 else if c.crossing == CROSSING_PAIR then guest_pair(caller, context, returned) else returned - guest_memory(caller, context)) as u32
+	} else if c.crossing == CROSSING_TEXT or c.crossing == CROSSING_OWNED_TEXT {
 		if returned == 0 { guest_call(caller, context, "new_empty", 0, 0, result) } else { guest_text(caller, context, returned, strlen(returned), result) }
 		# (a wasm module's own text is freed by its free, wasm_called)
 		if c.crossing == CROSSING_OWNED_TEXT and returned != 0 and c.wasm == 0 { free(returned) }
@@ -2637,6 +2719,51 @@ c_result(caller: handle, context: handle, c: Foreign, returned: i64, result: poi
 	}
 }
 register_kind(register: i32): u8 := if register == REGISTER_I64 then KIND_I64 else if register == REGISTER_F64 then KIND_F64 else if register == REGISTER_F32 then KIND_F32 else KIND_I32
+## a primitive module's texts: the address of an (address, length) pair of its memory, as foreign.c's native_text and
+# module_text take them in a native build
+PAIR_BYTES = 8
+PRIMITIVE_ARENA_ALIGNMENT = 8
+# the module's text at `pair` as a NUL-terminated copy (the null address too, whose pair a module's memory holds empty,
+# as foreign.c native_text reads it)
+pair_c_text(caller: handle, context: handle, pair: i64): i64 := {
+	memory = guest_memory(caller, context)
+	cell = native_long(memory + pair)
+	address = cell % 4294967296
+	length = cell / 4294967296
+	copy = allocate((length + 1) as i32)
+	memcpy(copy, memory + address, length)
+	byte_at(copy + length).value = 0
+	native_pointer(copy)
+}
+# a C text copied into the module's arena as a text: its pair, its bytes behind it
+guest_pair(caller: handle, context: handle, text: handle): i64 := {
+	length = strlen(text)
+	pair = primitive_arena_taken(caller, context, PAIR_BYTES + length)
+	cell = allocate(PAIR_BYTES)
+	word_at(cell).value = (pair + PAIR_BYTES) as u32
+	word_at(cell + 4).value = length as u32
+	memory = guest_memory(caller, context)
+	memmove(memory + pair, native_pointer(cell), PAIR_BYTES)
+	memmove(memory + pair + PAIR_BYTES, text, length)
+	pair
+}
+# bytes taken from the top of the module's arena (its exported global, primitive.warp arena_taken), its memory grown
+# when they pass its end
+primitive_arena_taken(caller: handle, context: handle, size: i64): i64 := {
+	arena = allocate(EXTERN_BYTES)
+	if not exported(caller, context, "arena", arena) { failed_call("a C text for a module without an arena") }
+	top = allocate(VALUE_BYTES)
+	wasmtime_global_get(context, arena + 8, top)
+	taken = word_at(top + VALUE_OFFSET).value as i64
+	next = (taken + size + PRIMITIVE_ARENA_ALIGNMENT - 1) / PRIMITIVE_ARENA_ALIGNMENT * PRIMITIVE_ARENA_ALIGNMENT
+	word_at(top + VALUE_OFFSET).value = next as u32
+	wasmtime_global_set(context, arena + 8, top)
+	memory = allocate(EXTERN_BYTES)
+	exported(caller, context, "memory", memory)
+	size_now = wasmtime_memory_data_size(context, memory + 8)
+	if next > size_now and wasmtime_memory_grow(context, memory + 8, (next - size_now + WASM_PAGE_BYTES - 1) / WASM_PAGE_BYTES, allocate(8)) != 0 { failed_call("the module's memory would not grow for a C text") }
+	taken
+}
 # the module's text of `length` bytes at a C pointer, into `result`: written where its text_heap global says (a module
 # calling C exports it), else at the end of its memory, grown for them
 guest_text(caller: handle, context: handle, bytes: handle, length: i64, result: pointer): nothing := guest_bytes_built(caller, context, bytes, length, "new_text", result)

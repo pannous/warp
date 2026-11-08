@@ -918,6 +918,8 @@ full_definition(name: Node, program: Node, source: text): any := {
 function_help(name: Node, program: Node, source: text): any := {
 	# a used module's word, not the program's: its head and comment as the module writes them (module_word_help)
 	if definition_start(source, spelled(name)) == ø and used_word_help(spelled(name), source) != ø { return ø }
+	# defined more than once, `f(x)` and `f(x, y)`: each definition's head as written (card help-shows-overloads)
+	if #definition_slices(source).filter(cut => cut#1 == spelled(name)) > 1 and not owns_word("help", program) { return word_help_in(source, spelled(name)) }
 	signature = if owns_word("help", program) then ø else signature_text(name, program)
 	if signature == ø { return ø }
 	doc = doc_of(name, program, source)
@@ -930,6 +932,8 @@ module_help(name: Node, program: Node): any := {
 # `help(lowpass)` of a used module's word: each of its definitions' heads as the module writes them, then the comment
 # above the first (wiki/reflection.md "Modules"); ø when the program has its own help or no used module defines it
 module_word_help(name: Node, program: Node, source: text): any := if owns_word("help", program) then ø else used_word_help(spelled(name), source)
+# `help(draw.save)`: the word's help as the module the program uses through that name writes it, else ø
+qualified_word_help(module: Node, word: Node, program: Node): any := if owns_word("help", program) or not qualifies_by_module(spelled(module), program) then ø else word_help_in(used_module_text(spelled(module).lower()), spelled(word))
 used_word_help(word: text, source: text): any := {
 	for module in used_modules(source) {
 		help = word_help_in(used_module_text(module), word)
@@ -1047,9 +1051,13 @@ first_parameter_type(word: text, definition: text): text := {
 # after v
 value_dir_words(program: Node): any := if owns_dir(program) then ø else List(["list", "text", "map"].map(module_dir), Bracket.Square, Separator.Comma)
 
-# `math` of `math.gcd(4, 6)`: a standard module's name (`Math` math's), or a program's own linked one (`shapes`, its
-# text maybe not beside it), the program doesn't bind, else ø
-module_named(module: Node, program: Node): any := if "${module}" in names_bound_in_kept(program) or (not is_module_name("${module}".lower()) and not own_module_wasm.has("${module}")) then ø else module
+# whether a fixed-width int variable is an int holding its cast value (extensions/sugar/calls.warp): in a GC program;
+# @primitive code, lowered with the primitive prelude (extensions/primitive.warp), emits the width itself, `start: u32 = …`
+# a wasm i32
+widened_to_int(width: Node): bool := used_prelude != PRIMITIVE_PRELUDE
+
+# `math` of `math.gcd(4, 6)`, else ø (prelude_words.warp qualifies_by_module)
+module_named(module: Node, program: Node): any := if qualifies_by_module("${module}", program) then module else ø
 
 # the iteration words a trailing block is the function of (extensions/sugar/calls.warp): `xs.map { $0 * 10 }`
 trailing_block_words = ["map", "filter", "each", "for_each", "find", "any", "all", "reduce", "fold", "sorted"]
@@ -1133,6 +1141,7 @@ rule_words = {
 	class_methods_listed: class_methods_listed,
 	program_functions: program_functions,
 	qualified: qualified,
+	widened_to_int: widened_to_int,
 	it_read_as: it_read_as,
 	it_as_lambda: it_as_lambda,
 	it_taking: it_taking,
@@ -1148,6 +1157,7 @@ rule_words = {
 	module_named: module_named,
 	module_view: module_view,
 	module_word_help: module_word_help,
+	qualified_word_help: qualified_word_help,
 	once_listens: once_listens,
 	page_valued: page_valued,
 	paint_size: paint_size,
