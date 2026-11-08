@@ -1115,3 +1115,5 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - linked-class-shapes (user, 11-08 morning, card linked-module, core OK): start now, beside the samples focus: linked classes' shapes come from the module image (as L4 did for globals), so `use sound; 1` stops re-walking 30 classes (1.2 s → ~0.5 s expected).
   - play-timing-tests (user, 11-08 morning, test change OK): test_play_one_word lines 4-8 check the sequence play queues (3 notes for `play [A B C]`, chord + note for `play [A+B C]`), not sound_queued() after a sleep; same behaviour, no timing.
   - hold-js-setter-line (user, 11-08 morning): leave as is: test_one_dispatch.pairs.warp:19 (`set w(v) { … }`) is not held and card pure-lane-class-2 stays open; no `set` syntax added either.
+  - night-2026-11-08-kept (user, 11-08 morning): every night decision of notes/night_2026-11-08.md is kept as logged.
+  - global-pull-rule (user, 11-08 morning): the global ~/.claude/CLAUDE.md now syncs with `git fetch --no-write-fetch-head origin main && git rebase --autostash --rebase-merges origin/main` in every project (as scripts/lib/sync-main.sh), not `git pull --rebase --autostash`.
