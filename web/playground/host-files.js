@@ -13,7 +13,10 @@ const PROGRAM_VARIABLE = "WARP_PROGRAM"; // the program's file, as the native wa
 // the files std's file module wrote (texts) and save sound rendered (bytes, a Uint8Array): read and the file words see
 // them before the served ones. A page keeps them in IndexedDB (keepWrittenFile), so they are still there after a reload
 const writtenFiles = new Map();
-const filePath = path => path.replace(/^\.\//, "");
+const plainPath = path => path.replace(/^\.\//, "");
+// a path as the served root names it: a relative one of a run from a program file names that file's neighbour when it
+// is there (besideProgram), so a test's `../fixtures/unix/poem.txt` reads as natively from its folder
+const filePath = path => besideProgram(plainPath(path), self.programFile);
 const textOf = written => typeof written === "string" ? written : utf8Decoder.decode(written);
 
 // a file written (a text) or rendered (bytes, which the page offers for download: worker.js self.keepFile)
@@ -119,12 +122,21 @@ function programFileOf(run) {
 }
 
 // a relative path of a run from a program file is that file's neighbour when it is there, else as given, as natively
-// (src/modules/program_file.rs beside_program_if_there; card play-beside-program)
+// (src/modules/program_file.rs beside_program_if_there; card play-beside-program); `..` resolved
 function besideProgram(path, file) {
 	const folder = file?.slice(0, file.lastIndexOf("/") + 1);
 	if (!folder || path.startsWith("/") || path.startsWith(PAGE_PREFIX) || /^https?:/.test(path) || path.includes(SCHEME_MARK)) return path;
-	const beside = folder + filePath(path);
-	return writtenFiles.has(beside) || servedFileExists(beside) ? beside : path;
+	const beside = rootRelative(folder + plainPath(path));
+	return writtenFiles.has(beside) || isWrittenFolder(beside) || servedAt(beside) ? beside : path;
+}
+// a path of the served root with its `.` and `..` resolved, as a URL resolves them
+const rootRelative = path => decodeURIComponent(new URL(path, FILE_ROOT).pathname.slice(new URL(FILE_ROOT).pathname.length)).replace(/\/$/, "");
+// whether the served root has a file or folder at the path: served-files.js says without asking, else the server
+let servedFolders;
+function servedAt(path) {
+	if (typeof SERVED_FILES === "undefined") return servedFileExists(FILE_ROOT + path);
+	servedFolders ??= new Set([...SERVED_FILES].flatMap(file => file.split("/").slice(0, -1).map((_, end, parts) => parts.slice(0, end + 1).join("/"))));
+	return SERVED_FILES.has(path) || servedFolders.has(path);
 }
 
 // the bytes of a file of the served repository, of the page or of a URL, failing in the words of the native read
@@ -183,14 +195,18 @@ function nameMatcher(name) {
 // `find_files(folder, "*.warp")` as natively (src/modules/shell_adapters.rs found_below): the paths below the folder
 // whose name matches, outside hidden folders
 function findFiles(folder, pattern) {
-	const prefix = filePath(folder) === "." ? "" : filePath(folder).replace(/\/?$/, "/"), shown = nameMatcher(pattern);
+	const asFolder = path => path === "." || path === "" ? "" : path.replace(/\/?$/, "/");
+	const prefix = asFolder(filePath(folder)), shown = nameMatcher(pattern);
 	const below = pageFiles().filter(path => path.startsWith(prefix)).map(path => path.slice(prefix.length));
 	const outsideHidden = path => !path.split("/").slice(0, -1).some(part => part.startsWith("."));
-	return [...new Set(below.filter(path => outsideHidden(path) && shown(path.slice(path.lastIndexOf("/") + 1))))].sort().map(path => prefix + path);
+	// (named in the folder as the program gave it, `../fixtures/unix/configs/a.json`)
+	return [...new Set(below.filter(path => outsideHidden(path) && shown(path.slice(path.lastIndexOf("/") + 1))))].sort().map(path => asFolder(plainPath(folder)) + path);
 }
 
 // the shell's words on the page's files (lib/shell.warp, src/modules/std_adapters.rs): folders exist by the files in them
-const isWrittenFolder = folder => [...writtenFiles.keys()].some(path => path.startsWith(filePath(folder).replace(/\/?$/, "/")));
+// "~" itself (wasi.js HOME_DIRECTORY), there before the page wrote a file into it
+const isHomeFolder = path => plainPath(path).replace(/\/+$/, "") === HOME_DIRECTORY;
+const isWrittenFolder = folder => [...writtenFiles.keys()].some(path => path.startsWith(plainPath(folder).replace(/\/?$/, "/")));
 const intoFolder = (from, to) => isWrittenFolder(to) ? `${filePath(to).replace(/\/?$/, "/")}${from.slice(from.lastIndexOf("/") + 1)}` : to;
 const writtenOrRead = path => writtenFiles.get(filePath(path)) ?? readBytes(path);
 const sizeOf = path => { const content = writtenOrRead(path); return typeof content === "string" ? utf8.encode(content).length : content.length; };
@@ -470,7 +486,7 @@ addHostPart({
 		// the playground's key), its folder the served root that relative paths start from
 		os: {
 			// WARP_PROGRAM is the chosen sample's file, so program.folder names its folder as natively
-			env(name) { return (name === PROGRAM_VARIABLE ? programFileOf(this.holder.run) : self.pageEnvironment?.[name]) ?? null; },
+			env(name) { return (name === PROGRAM_VARIABLE ? programFileOf(this.holder.run) : self.pageEnvironment?.[name] ?? (name === "HOME" ? HOME_DIRECTORY : undefined)) ?? null; },
 			args: () => self.programArguments ?? [], // a sample's <name>.args (playground.js programArguments)
 			cwd: () => ".",
 			stdin: () => "",
@@ -504,7 +520,7 @@ addHostPart({
 			// a list of ints 0 to 255, like src/modules/std_adapters.rs bytes_of
 			write_bytes: (path, bytes) => { keepWritten(path, Uint8Array.from(bytes, byteOf)); return null; },
 			read_bytes: path => Array.from(readBytes(path)),
-			exists: path => writtenFiles.has(filePath(path)) || servedFileExists(path),
+			exists: path => writtenFiles.has(filePath(path)) || isHomeFolder(path) || servedFileExists(path),
 			list: folder => {
 				const prefix = filePath(folder).replace(/\/?$/, "/");
 				return [...writtenFiles.keys()].filter(path => path.startsWith(prefix) && !path.slice(prefix.length).includes("/")).map(path => path.slice(prefix.length)).sort();
