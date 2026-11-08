@@ -2,3 +2,4 @@
 'class A { v: int }; class B { v: int }; A as B := B(it.v * 2); a = A(3); (a as B).v'	6
 'class P { name: text }; P as text := it.name; p = P("ada"); p as text'	"ada"
 'class P { name: text }; P as text := "P " + it.name; str(P("ada"))'	"P ada"
+'use units; Length as text := "L"; str(3m)'	"L"
