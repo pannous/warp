@@ -325,6 +325,7 @@
 'file="a; rm -rf ~";c=sh "rm -f $file";c#3'	'a; rm -rf ~'
 
 # test_running_queries_and_commands_needs_a_capability
+# — native only: a page runs no process or shell (decision page-host-lines)
 'c=sh "echo hi";exec c'	'hi'
 
 # test_date_literal_needs_strict_form
