@@ -1,0 +1,11 @@
+#!/usr/bin/env warp
+# A swimming reef: sand, kelp, rocks, bubbles and a school, lit through waves.
+# lib/aquarium.warp is the picture. The window keeps painting; without one
+# (WARP_NO_WINDOW) this frame runs once and that paint is the still.
+use aquarium
+
+started = clock()
+on frame {
+	aquarium_time = float(clock() - started) / 1000
+	paint(aquarium_color, view_width, view_height)
+}

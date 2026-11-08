@@ -1,0 +1,388 @@
+# A reef you can paint (samples/gpu/aquarium.warp).
+#
+# The water, the caustics and the schools follow greggman/webgpu-aquarium
+# 055da77885a571e85970b2bb3807b0b504ce1a1c (MIT, Copyright (c) 2026 Gregg Tavares):
+# travelling cosines whose Jacobian focuses light, tropical absorption, and a
+# leader whose followers hold hashed slots in its heading frame.
+# paint() is one fragment shader, so this file is that picture as warp functions:
+# the meshes, the compute passes and the post chain are named in notes/aquarium.md.
+use math
+
+# the clock the sample advances; a still is second 0
+global aquarium_time = 0.0
+
+# tropical shallows, world.ts STYLES[0]
+surface_y = 0
+absorption = [0.1, 0.034, 0.02]
+scattering = 0.016
+ambient_color = [0.26, 0.72, 1.1]
+sun_color = [14, 13.2, 11.8]
+exposure = 0.36
+# frame.misc.z thins the fog there; one readable value, the uniform is theirs
+fog_scale = 0.45
+sun_dir = normalize([0.35, 0.86, 0.28])
+pi_value = 3.14159265
+
+# eight of their twelve tiled cosines (WAVE_TILE 7). Lattice numbers stand in
+# for makeWaves' seeded search: distinct, none zero, the same slope and omega.
+wave_count = 8
+wave_tile = 7
+phase_seed = 0.83
+caustic_alpha = 5.5
+field_scale = 0.6
+march_steps = 48
+march_far = 26
+view_width = 320
+view_height = 180
+camera_at = [0, -3.05, 3.4]
+fish_count = 6
+rock_count = 3
+kelp_count = 2
+bubble_count = 4
+school_wander = 0.22
+
+# --- waves and caustics (shaders/waves.wgsl, render/caustics.ts) ---
+
+nearest(x) := sign(x) * floor(abs(x) + 0.5)
+wave_lattice(i) := {
+	direction = 0.7 + i * 0.55
+	mag = 3 + i * 1.1
+	nx = nearest(cosine(direction) * mag)
+	nz = nearest(sine(direction) * mag)
+	if nx == 0 and nz == 0 { nx = 1 }
+	[nx, nz]
+}
+wave_vector(i) := {
+	flat = wave_lattice(i) .* (2 * pi_value / wave_tile)
+	span = norm(flat)
+	[flat.x, flat.y, 0.026 / span, sqrt(9.81 * span) * 0.95]
+}
+wave_angle(w, i, xz, t) := dot(w.xy, xz) - w.w * t + i * 2.39996 + phase_seed
+wave_height(xz, t) := {
+	h = 0
+	for i in 0..wave_count {
+		w = wave_vector(i)
+		h = h + w.z * cosine(wave_angle(w, i, xz, t))
+	}
+	h
+}
+wave_gradient(xz, t) := {
+	grad = [0, 0]
+	for i in 0..wave_count {
+		w = wave_vector(i)
+		grad = grad .- w.xy .* (w.z * sine(wave_angle(w, i, xz, t)))
+	}
+	grad
+}
+wave_hessian(xz, t) := {
+	hess = [0, 0, 0]
+	for i in 0..wave_count {
+		w = wave_vector(i)
+		k = w.xy
+		hess = hess .- [k.x * k.x, k.x * k.y, k.y * k.y] .* (w.z * cosine(wave_angle(w, i, xz, t)))
+	}
+	hess
+}
+wave_up(xz, t) := {
+	grad = wave_gradient(xz, t)
+	unit_or([-grad.x, 1, -grad.y], [0, 1, 0])
+}
+# 1/|det J| of the refracted mapping; the three alphas are their chromatic fringe
+caustic_intensity(hess, alpha) := {
+	jxx = 1 + alpha * hess.x
+	jzz = 1 + alpha * hess.z
+	jxz = alpha * hess.y
+	det = jxx * jzz - jxz * jxz
+	1 / max(abs(det), 0.08)
+}
+fringe(hess, scale) := caustic_intensity(hess, caustic_alpha * scale)
+caustic_color(xz, t) := {
+	hess = wave_hessian(xz, t)
+	raw = [fringe(hess, 0.94), fringe(hess, 1), fringe(hess, 1.06)]
+	[power(raw.x, 1.25), power(raw.y, 1.25), power(raw.z, 1.25)] .* 0.55
+}
+
+# --- water (shaders/water.wgsl, tropical style) ---
+
+depth_below(y) := max(surface_y - y, 0)
+extinction() := absorption .+ scattering
+sun_at_depth(y) := {
+	path = depth_below(y) / max(sun_dir.y, 0.25)
+	k = absorption .* [0.3, 0.55, 0.6] .+ scattering * 0.3
+	sun_color .* exponential(k .* (0 - path))
+}
+ambient_at_depth(y) := ambient_color .* exponential(extinction() .* (0 - 0.5 * depth_below(y)))
+phase_hg(cos_theta, g) := {
+	g2 = g * g
+	(1 - g2) / (4 * pi_value * power(max(1 + g2 - 2 * g * cos_theta, 0.0001), 1.5))
+}
+water_phase(cos_theta) := mix(phase_hg(cos_theta, 0.2), phase_hg(cos_theta, 0.85), 0.35)
+inscatter_color(y, dir) := {
+	sun = sun_at_depth(y) .* water_phase(dot(dir, sun_dir)) .* (4 * pi_value)
+	amb = ambient_at_depth(y)
+	updown = mix(0.1, 1.3, smoothstep(-0.9, 0.9, dir.y))
+	(sun .* 0.06 .+ amb .* (updown * 0.5)) .* scattering ./ extinction()
+}
+water_transmittance(dist) := {
+	travel = max(dist - 2.5, 0) + min(dist, 2.5) * 0.3
+	k = extinction() .* fog_scale .+ [absorption.x * (1 - fog_scale), 0, 0]
+	exponential(k .* (0 - travel))
+}
+apply_water(color, origin, hit) := {
+	to_hit = hit .- origin
+	dist = max(norm(to_hit), 0.0001)
+	dir = to_hit ./ dist
+	trans = water_transmittance(dist)
+	mid = (origin.y + hit.y) * 0.5
+	color .* trans .+ inscatter_color(mid, dir) .* (1 .- trans)
+}
+sky_color(dir) := {
+	horizon = [0.55, 0.72, 0.85]
+	zenith = [0.18, 0.4, 0.75]
+	mix(horizon, zenith, power(clamp(dir.y, 0, 1), 0.6))
+}
+surface_from_below(direction, xz, t) := {
+	n = wave_up(xz, t)
+	tilted = unit_or([direction.x + n.x * 0.45, direction.y, direction.z + n.z * 0.45], direction)
+	if tilted.y > 0.62 {
+		glint = power(clamp(dot(tilted, sun_dir), 0, 1), 40)
+		return sky_color(tilted) .+ sun_color .* (glint * 0.015)
+	}
+	[0.015, 0.05, 0.07]
+}
+water_backdrop(origin, direction) := inscatter_color(origin.y, direction)
+
+# --- schools (sim/fish.ts: roam loop, hashed slot, drift) ---
+# Leaders ride the home the compute shader pulls them toward, plus its wander.
+# Followers are drawn on the slot that shader springs toward, not integrated.
+
+unit_or(v, fallback) := {
+	n = norm(v)
+	if n < 0.0001 { return fallback }
+	v ./ n
+}
+unit_hash(n) := fract(sine(n * 12.9898) * 43758.5453)
+basis_right(heading) := unit_or(cross([0, 1, 0], heading), [1, 0, 0])
+basis_up(heading) := cross(heading, basis_right(heading))
+school_home(index) := {
+	if index < 1 { return [0.4, -3.0, 0.6] }
+	if index < 2 { return [-1.6, -3.6, -0.4] }
+	[1.8, -2.7, -1.2]
+}
+school_roam(index) := {
+	if index < 1 { return 1.6 }
+	if index < 2 { return 2.0 }
+	2.4
+}
+school_leader(index, t) := {
+	roam_a = t * (0.18 + index * 0.05) + index * 0.37
+	roam = school_roam(index)
+	offset = [cosine(roam_a), 0.12 * sine(roam_a * 2), sine(roam_a) * 0.7] .* roam
+	wander = [sine(t * 0.37 + index * 1.7), sine(t * 0.29 + index * 2.3) * 0.25, cosine(t * 0.41 + index * 0.9)] .* school_wander
+	school_home(index) .+ offset .+ wander
+}
+school_heading(index, t) := unit_or(school_leader(index, t + 0.05) .- school_leader(index, t), [0, 0, -1])
+follower_offset(index, heading, t, radius, stretch, drift) := {
+	slot = [unit_hash(index * 3), unit_hash(index * 3 + 1), unit_hash(index * 3 + 2)] .* 2 .- 1
+	slot = slot ./ max(norm(slot), 0.001) .* power(unit_hash(index * 7 + 5), 0.4)
+	breath = [sine(t * 0.31 + index * 1.7), sine(t * 0.23 + index * 2.3) * 0.5, cosine(t * 0.27 + index * 0.9)]
+	slot = slot .+ breath .* (drift * 0.35)
+	local = [slot.x * radius, slot.y * radius * 0.5, slot.z * radius * stretch]
+	right = basis_right(heading)
+	up = basis_up(heading)
+	right .* local.x .+ up .* local.y .+ heading .* local.z
+}
+fish_place(i, t) := {
+	if i < 1 { return school_leader(0, t) }
+	if i < 4 {
+		heading = school_heading(0, t)
+		return school_leader(0, t) .+ follower_offset(i, heading, t, 1.35, 1.7, 0.4)
+	}
+	if i < 5 { return school_leader(1, t) }
+	school_leader(2, t)
+}
+fish_heading(i, t) := {
+	if i < 4 { return school_heading(0, t) }
+	if i < 5 { return school_heading(1, t) }
+	school_heading(2, t)
+}
+fish_radii(i) := {
+	if i < 4 { return [0.09, 0.14, 0.42] }
+	if i < 5 { return [0.55, 0.04, 0.36] }
+	[0.16, 0.2, 0.72]
+}
+fish_top(i) := {
+	if i < 4 { return [0.12, 0.42, 0.7] }
+	if i < 5 { return [0.45, 0.5, 0.52] }
+	[0.75, 0.78, 0.8]
+}
+fish_belly(i) := {
+	if i < 4 { return [0.92, 0.84, 0.62] }
+	if i < 5 { return [0.72, 0.68, 0.58] }
+	[0.95, 0.9, 0.75]
+}
+ellipsoid(local, radii) := {
+	q = [local.x / radii.x, local.y / radii.y, local.z / radii.z]
+	(norm(q) - 1) * min(radii.x, min(radii.y, radii.z))
+}
+fish_distance(i, p, t) := {
+	place = fish_place(i, t)
+	heading = fish_heading(i, t)
+	d = p .- place
+	along = dot(d, heading)
+	bend = sine(t * 5.5 + i * 1.3) * 0.22 * max(-along, 0)
+	side = dot(d, basis_right(heading)) + bend
+	lifted = dot(d, basis_up(heading))
+	radii = fish_radii(i)
+	body = ellipsoid([side, lifted, along], radii)
+	tail = ellipsoid([side, lifted * 0.8, along + radii.z * 0.95], [radii.x * 0.35, radii.y * 0.5, radii.z * 0.48])
+	min(body, tail)
+}
+fish_albedo(i, p, n) := {
+	shade = clamp(0.5 - n.y, 0, 1)
+	base = mix(fish_top(i), fish_belly(i), shade)
+	if i < 4.5 { return base }
+	band = 0.5 + 0.5 * sine(p.x * 7 + p.z * 11)
+	mix(base, fish_belly(i), band * 0.35)
+}
+
+# --- the reef around the school ---
+
+floor_height(xz) := -6.4 + 0.28 * sine(xz.x * 0.31) * cosine(xz.y * 0.27)
+sand_color(xz) := {
+	ripple = 0.5 + 0.5 * sine(xz.x * 9) * cosine(xz.y * 8)
+	mix([0.52, 0.43, 0.26], [0.8, 0.7, 0.44], ripple)
+}
+rock_center(i) := {
+	if i < 1 { return [1.7, -5.9, -0.4] }
+	if i < 2 { return [-1.4, -6.0, 1.4] }
+	[0.2, -6.15, -1.8]
+}
+rock_radius(i) := {
+	if i < 1 { return 0.72 }
+	if i < 2 { return 0.48 }
+	0.58
+}
+kelp_base(i) := {
+	flat = if i < 1 then [-2.2, 0.6] else [2.3, -0.9]
+	[flat.x, floor_height(flat), flat.y]
+}
+kelp_tip(i, t) := {
+	base = kelp_base(i)
+	sway = sine(t * 0.7 + i * 1.4) * 0.4
+	[base.x + sway, base.y + 1.7, base.z + cosine(t * 0.5 + i) * 0.25]
+}
+segment_distance(p, a, b, radius) := {
+	ab = b .- a
+	along = clamp(dot(p .- a, ab) / max(dot(ab, ab), 0.0001), 0, 1)
+	norm(p .- (a .+ ab .* along)) - radius
+}
+bubble_place(i, t) := {
+	rise = fract(t * 0.12 + i * 0.19)
+	[sine(i * 2.2) * 1.1, -6.1 + rise * 5.8, cosine(i * 1.6) * 0.9]
+}
+bubble_radius(i) := 0.04 + 0.025 * fract(i * 1.37)
+# distance, kind, which. Kinds: 2 rock, 3 kelp, 4 bubble, 5 fish.
+cover(p, t) := {
+	best = 80
+	kind = 2
+	which = 0
+	for i in 0..rock_count {
+		gap = norm(p .- rock_center(i)) - rock_radius(i)
+		if gap < best { best = gap; kind = 2; which = i }
+	}
+	for i in 0..kelp_count {
+		gap = segment_distance(p, kelp_base(i), kelp_tip(i, t), 0.055)
+		if gap < best { best = gap; kind = 3; which = i }
+	}
+	for i in 0..bubble_count {
+		gap = norm(p .- bubble_place(i, t)) - bubble_radius(i)
+		if gap < best { best = gap; kind = 4; which = i }
+	}
+	for i in 0..fish_count {
+		gap = fish_distance(i, p, t)
+		if gap < best { best = gap; kind = 5; which = i }
+	}
+	[best, kind, which]
+}
+scene(p, t) := {
+	floor_span = (p.y - floor_height(p.xz)) * field_scale
+	sheet = (surface_y + wave_height(p.xz, t) - p.y) * field_scale
+	min(min(floor_span, sheet), cover(p, t).x)
+}
+scene_normal(p, t) := {
+	e = 0.03
+	dx = scene(p .+ [e, 0, 0], t) - scene(p .- [e, 0, 0], t)
+	dy = scene(p .+ [0, e, 0], t) - scene(p .- [0, e, 0], t)
+	dz = scene(p .+ [0, 0, e], t) - scene(p .- [0, 0, e], t)
+	normalize([dx, dy, dz])
+}
+# kind, which. 0 sand, 1 the surface from below, then cover's kinds.
+material(p, t) := {
+	best = p.y - floor_height(p.xz)
+	kind = 0
+	which = 0
+	sheet = surface_y + wave_height(p.xz, t) - p.y
+	if sheet < best { best = sheet; kind = 1 }
+	solids = cover(p, t)
+	if solids.x < best { return [solids.y, solids.z] }
+	[kind, which]
+}
+albedo_at(p, n, kind, which) := {
+	if kind < 0.5 { return sand_color(p.xz) }
+	if kind < 2.5 { return [0.34, 0.33, 0.31] }
+	if kind < 3.5 { return [0.08, 0.32, 0.14] }
+	if kind < 4.5 { return [0.75, 0.88, 0.92] }
+	fish_albedo(which, p, n)
+}
+caustic_weight(kind) := {
+	if kind > 4.5 { return 0.3 }
+	if kind > 3.5 { return 0.45 }
+	1
+}
+light_point(p, n, t, kind, which) := {
+	diffuse = clamp(dot(n, sun_dir), 0, 1)
+	weight = caustic_weight(kind)
+	pattern = mix([1, 1, 1], caustic_color(p.xz, t), weight)
+	sun = sun_at_depth(p.y) .* diffuse .* pattern
+	amb = ambient_at_depth(p.y) .* 0.35
+	albedo_at(p, n, kind, which) .* (sun .+ amb)
+}
+shade(origin, direction, p, t) := {
+	found = material(p, t)
+	kind = found.x
+	if kind > 0.5 and kind < 1.5 { return apply_water(surface_from_below(direction, p.xz, t), origin, p) }
+	n = scene_normal(p, t)
+	apply_water(light_point(p, n, t, kind, found.y), origin, p)
+}
+grade(color) := {
+	lifted = [max(color.x, 0), max(color.y, 0), max(color.z, 0)]
+	exposed = lifted .* exposure
+	mapped = exposed ./ (exposed .+ 1)
+	mapped .^ (1 / 2.2)
+}
+camera_ray(x, y) := {
+	uv = [(2 * x - view_width) / view_height, (view_height - 2 * y) / view_height]
+	forward = unit_or([0.12, -0.28, -1], [0, 0, -1])
+	right = unit_or(cross(forward, [0, 1, 0]), [1, 0, 0])
+	up = cross(right, forward)
+	unit_or(forward .+ right .* (uv.x * 0.72) .+ up .* (uv.y * 0.72), forward)
+}
+march(origin, direction, t) := {
+	travel = 0.0
+	for i in 0..march_steps {
+		gap = scene(origin .+ direction .* travel, t)
+		if gap < 0.004 or travel > march_far { break }
+		travel = travel + gap
+	}
+	travel
+}
+view_color(x, y, t) := {
+	direction = camera_ray(x, y)
+	origin = camera_at
+	travel = march(origin, direction, t)
+	p = origin .+ direction .* travel
+	if travel > march_far or scene(p, t) > 0.05 { return grade(water_backdrop(origin, direction)) }
+	grade(shade(origin, direction, p, t))
+}
+aquarium_color(x, y) := view_color(x, y, aquarium_time)
