@@ -150,6 +150,13 @@ conversions(program: Node): Node := {
 			targets[conversion#2] = targets[conversion#2] + [conversion]
 		}
 	}
+	# `x as P` of a class P the program converts nothing to: its instance as it is, any other value refused
+	for target in class_targets(program, scope) {
+		if not targets.has(target) {
+			targets[target] = []
+			order += [target]
+		}
+	}
 	checked = if not order {
 		if #kept == #statements_in(program) then program else List(kept, Bracket.None, Separator.Newline)
 	} else {
@@ -165,6 +172,9 @@ conversions(program: Node): Node := {
 	}
 	forced_conversions(checked)
 }
+
+# the classes the program declares that an `x as P` names, its declarations `x as P = v` too
+class_targets(program: Node, scope: map): list := nodes_in(program).filter(n => is_key(n, Op.As) and value_of(n) is symbol and is_capitalized(name_of(value_of(n))) and binds_as(scope, name_of(value_of(n)), Meaning.Type)).map(n => name_of(value_of(n))).unique()
 
 # `type Q = P`: name → the type it names, Q → P, of each alias the program declares of one type
 type_aliases(statements: list): map := {
