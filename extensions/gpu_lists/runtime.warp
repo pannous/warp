@@ -55,20 +55,23 @@ gpu_put(n: Node, index: int, value: Node): Node := {
 	gpu_list_set(n, index, value)
 	n
 }
-# the index-th number (from 1): a float of an f32 cell, an int of an i32 or u32 one
-gpu_list_at(n: Node, index: int): Node := {
+# where the index-th cell (from 1) is, an index beyond the list failing the run
+cell_address(n: Node, index: int): int := {
 	if index < 1 or index > gpu_list_count(n) { index_out_of_range_of(index, gpu_list_count(n)) }
+	gpu_list_address(n) + (index - 1) * cell_bytes(gpu_list_cell(n))
+}
+# the index-th number (from 1): a float of an f32 or f16 cell, an int of an i32 or u32 one
+gpu_list_at(n: Node, index: int): Node := {
 	cell = gpu_list_cell(n)
-	address = gpu_list_address(n) + (index - 1) * cell_bytes(cell)
+	address = cell_address(n, index)
 	if cell == half_cell() { return narrow_float(half_at(address), half_exponent_bits(), half_fraction_bits()) }
 	if cell == GpuCell.I32 { return memory_i32(address) }
 	if cell == GpuCell.U32 { return memory_u32(address) }
 	memory_f32(address)
 }
 gpu_list_set(n: Node, index: int, value: Node): Node := {
-	if index < 1 or index > gpu_list_count(n) { index_out_of_range_of(index, gpu_list_count(n)) }
 	cell = gpu_list_cell(n)
-	address = gpu_list_address(n) + (index - 1) * cell_bytes(cell)
+	address = cell_address(n, index)
 	if is_float_cell(cell) {
 		if kind_code(value) != Kind.Int and kind_code(value) != Kind.Float { gpu_list_refused("a GPU list [" + gpu_cell_name(cell) + "] holds numbers only") }
 		if cell == half_cell() { half_set(address, narrow_bits(float_of_node(value), half_exponent_bits(), half_fraction_bits())) } else { memory_set_f32(address, float_of_node(value)) }
