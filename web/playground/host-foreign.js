@@ -43,7 +43,7 @@ registerForeignRuntime("python", {
 	},
 });
 
-// lib/markup.warp page_render gives the js runtime its page (natively crates/warp-webview/bridge.js puts it into the
+// lib/markup.warp page_render gives the js runtime its page (natively lib/host/native_host/webview_bridge.js puts it into the
 // hidden web view): the page shows the program's markup itself, its elements found there (task-workers.js ownerOnPage)
 self.warpShowPage = () => {};
 // `use js Math`: the page's own globalThis.Math; npm modules need the native host

@@ -5,6 +5,7 @@
 # lib/native/wasi.c, which answers the WASI calls with libc and has main call run_main, and the main.c of primitive.warp
 # native_main, which calls the C functions the program imports and prints what its main gives
 use "separate_module.warp"
+use "site.warp"
 NATIVE_WORD = "native"
 WASM2C_MODULE = "program"
 C_COMPILER = "cc -O2"
@@ -78,8 +79,8 @@ WASM_ONLY = "--wasm"
 EXE_ONLY = "--exe"
 # what a build of inline code is called: out.wasm, the executable out
 INLINE_STEM = "out"
-# what the Rust compiler built and the warp one doesn't yet: a page's site, its module, WIT, a component
-UNBUILT_OPTIONS = ["--site", "--page", "--wit", "--component"]
+# what the Rust compiler built and the warp one doesn't yet: a page's module, WIT, a component
+UNBUILT_OPTIONS = ["--page", "--wit", "--component"]
 # the kinds a build detects from the program (decision build-kinds-detected): a program with routes builds as a server,
 # its executable serving them (lib/web.warp routes_served, card server-build); `warp build wagi app.warp` (the old
 # `--wagi`) as a WAGI module, app.wasm answering the one request of its environment (lib/wagi.warp routes_wagi, card
@@ -98,6 +99,7 @@ build(words: list) := {
 	for option in options { if option in UNBUILT_OPTIONS { raise "warp build " + option + ": not in the warp compiler yet (card harness-diet)" } }
 	if targets#1 == NATIVE_WORD { return build_native(targets#2, library_folder) }
 	if targets#1 == APP_WORD { return build_app(targets#2, options) }
+	if options.any(option => option == OPTION_MARK + SITE_OPTION or option.starts_with(OPTION_MARK + SITE_OPTION + "=")) { return site_built(targets#1, options) }
 	wagi = targets#1 == WAGI_WORD or WAGI_OPTION in options
 	if targets#1 == WAGI_WORD { targets = targets[1 ..] }
 	routes_end_word = if wagi then WAGI_ENDING else SERVER_ENDING

@@ -418,8 +418,8 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 }
 # whether a slice's definition overloads the definitions of its name a used module brought, rather than being replaced
 # by them: brought (never the program's own, decision library-words-lexical) and told apart from each by the dispatch
-# (arity_overloads): as many parameters, one of another dispatchable type; color's hex_text(c: Color), its Color an
-# int, still replaces the prelude's hex_text(n: int), and so does a definition of another parameter count, which a
+# (arity_overloads): as many parameters, one of another dispatchable type, color's hex_text(c: Color) beside the
+# prelude's hex_text(n: int) too (decision int-type-overloads); a definition of another parameter count replaces it, which a
 # name passed as a function could no longer tell (the compiler's shader_values(s, given, program))
 overloads_brought(slice: list, program: Node): bool := {
 	if not brought_names.has(slice#1) { return no }
@@ -432,6 +432,8 @@ overloads_brought(slice: list, program: Node): bool := {
 	if head == ø or not is_group(head) { return no }
 	types = parameter_types(head)
 	classes = declared_classes(program)
+	# (the named number types it declares, Color beside the prelude's int: decision int-type-overloads)
+	overload_marks = declared_marks(program)
 	heads.all(other => not is_group(other) or told_apart(types, parameter_types(other), classes))
 }
 told_apart(types: list, others: list, classes: list): bool := #types == #others and (0 ..< #types).any(at => types[at] != others[at] and is_overload_type(types[at], classes) and is_overload_type(others[at], classes))
@@ -831,12 +833,12 @@ word_index(file: text): map := {
 	for word in words.keys { index[word] = words[word].split(" ") }
 	index
 }
-# the words each standard module defines (an `alias ln => natural_log` too) but the prelude, each with its modules joined by spaces: a word of letters
+# the words each standard module defines (an `alias ln => natural_log` too) but the prelude and lib/host/'s, each with its modules joined by spaces: a word of letters
 # (`red`, `minute`), no operator or made name (an operator's function, operator_·, kept: is_made_name); also the word leading a rule of the module that means nothing else
 # (storage's `stored users: [User]`), never one the core or the prelude gives a meaning (english's `add $x to`)
 module_word_definers(): map := {
 	definers = {}
-	for module in std_module_names.filter(name => name != "prelude") {
+	for module in std_module_names.filter(name => name != "prelude" and not is_host_module(name)) {
 		source = file_text(std_module_path(module)) ?? ""
 		for word in definition_slices(source).map(slice => slice#1) + module_aliases(source).keys + rule_heads(source).filter(word => not has_meaning(word)) {
 			if word is text and #word > 0 and is_name_start(word[0]) and not is_made_name(word) {
@@ -887,7 +889,7 @@ with_expected_type_uses(program: Node, prelude: text): Node := {
 		for i in 0 ..< #arguments {
 			words = symbol_words(arguments[i]).filter(is_unknown)
 			if #words == 0 { continue }
-			if not heads.has(name) { heads[name] = definitions_of(name, prelude_slices).map(definition_text_head) }
+			if not heads.has(name) { heads[name] = definitions_of(name, prelude_slices).map(definition_parse_head) }
 			for type in parameter_types(heads[name], i) {
 				module = classes.get(type) ?? ""
 				defines = word => module in defining_modules(word)
@@ -904,10 +906,11 @@ module_hint(word: text): text := {
 	definers = defining_modules(word)
 	if #definers == 1 then ": `use " + definers#1 + "` defines it" else ""
 }
-# the texts of the word's definitions, the prelude's first, then those of each module defining it (library index)
-definitions_of(word: text, prelude_slices: list): list := (prelude_slices + defining_modules(word).flat_map(module => definition_slices(file_text(std_module_path(module)) ?? ""))).filter(slice => slice#1 == word).map(slice => slice#2)
-# the head of a definition's text, `sleep(duration: Time)` of `sleep(duration: Time) := …`
-definition_text_head(definition: text): Node? := definition_head_of(statements_in(plain_node(parsed(definition)))#1)
+# the parses of the word's definitions, the prelude's first, then those of each module defining it (library index),
+# a prebuilt module's from its signature (module_definitions), no text read
+definitions_of(word: text, prelude_slices: list): list := prelude_slices.filter(slice => slice#1 == word).map(slice => plain_node(parsed(slice#2))) + defining_modules(word).flat_map(module => module_definitions(module, word))
+# the head of a definition's parse, `sleep(duration: Time)` of `sleep(duration: Time) := …`
+definition_parse_head(definition: Node): Node? := definition_head_of(statements_in(definition)#1)
 # the types written for parameter `at` (from 0) of each definition head, `[Time]` of `sleep(duration: Time)`
 parameter_types(heads: list, at: int): list := {
 	types = []
@@ -968,6 +971,12 @@ names_bound_in(n: Node): any := {
 			waiting += if is_key(part, Op.Question) and is_key(branches, Op.Colon) then [key_of(part), key_of(branches), value_of(branches)] else [key_of(part), branches]
 		} else if is_group(part) {
 			for name in iteration_variables(items_of(part)) { found[name] = yes }
+			# `def r(width, height) {…}` (fun, fn … as the sugar reads them): its name and parameters, never
+			# native_window's width
+			if #part >= 2 and part#1 is symbol and name_of(part#1) in function_keywords {
+				head = if is_group(part#2) and #part#2 > 0 and is_group(part#2#1) then part#2#1 else part#2
+				if is_group(head) { for item in head { found[name_of(leftmost_symbol(item))] = yes } }
+			}
 			# a named pattern, `pattern Definition = Key(head, Op.Define, body)`: head and body, never shell's head
 			if is_pattern_definition(part) { for name in case_pattern_names(value_of(part#2)) { found[name] = yes } }
 			# an enum and its cases, `enum K { B, D }`: B is the program's, never sound's note
@@ -1099,7 +1108,7 @@ used_module_sources(statements: any, folder: text, seen: any, within_module: boo
 				seen = inner#2
 				linked += inner#3
 			} else if not names_no_module(name_of(used)) and not own_module_wasm.has(name_of(used)) {
-				raise "no module, library or package named " + name_of(used) + ": no " + name_of(used) + ".warp beside the program or in lib/; a package is used by its path, use \"packages/" + name_of(used) + "/" + name_of(used) + ".warp\""
+				raise "no module, library or package named " + name_of(used) + ": no " + name_of(used) + ".warp beside the program, in lib/ or as packages/" + name_of(used) + "/" + name_of(used) + ".warp of the project or of warp's registry (scripts/link-packages.sh)"
 			}
 		}
 	}

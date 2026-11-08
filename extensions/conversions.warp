@@ -21,7 +21,7 @@ names_class(n: Node): bool := n is symbol and is_capitalized(name_of(n))
 # naming the value, also of `text(p: A) := body`, else ø
 conversion_of(n: Node, scope: map): list? := {
 	if not is_key(n, Op.Define) { return ø }
-	head = key_of(n)
+	head = as_phrase_read(key_of(n))
 	if is_key(head, Op.Colon) and key_of(head) is symbol and is_key(value_of(head), Op.As) {
 		types = value_of(head)
 		return if names_type(key_of(types), scope) and (names_type(value_of(types), scope) or names_class(value_of(types))) then [name_of(key_of(types)), name_of(value_of(types)), value_of(n), name_of(key_of(head))] else ø
@@ -30,7 +30,7 @@ conversion_of(n: Node, scope: map): list? := {
 		return if names_type(value_of(head#2), scope) then [name_of(value_of(head#2)), "text", value_of(n), name_of(key_of(head#2))] else ø
 	}
 	if not is_key(head, Op.As) { return ø }
-	if names_type(key_of(head), scope) and names_type(value_of(head), scope) then [name_of(key_of(head)), name_of(value_of(head)), value_of(n), implicit_parameter] else ø
+	if (names_type(key_of(head), scope) or names_class(key_of(head))) and (names_type(value_of(head), scope) or names_class(value_of(head))) then [name_of(key_of(head)), name_of(value_of(head)), value_of(n), implicit_parameter] else ø
 }
 
 # the words showing a value as text, which show it through a program's conversion to text
@@ -129,6 +129,8 @@ converted_arguments(n: Node, typed: map, targets: map): Node := {
 # the program with its conversions as functions, before its statements (its last one stays its value), and their uses
 # as calls
 conversions(program: Node): Node := {
+	aliases = type_aliases(statements_in(program))
+	if aliases { program = List(statements_in(program).map(statement => unaliased_conversions(statement, aliases)), Bracket.None, Separator.Newline) }
 	scope = scope_of(program)
 	targets = {}
 	order = []
@@ -163,6 +165,33 @@ conversions(program: Node): Node := {
 	}
 	forced_conversions(checked)
 }
+
+# `type Q = P`: name → the type it names, Q → P, of each alias the program declares of one type
+type_aliases(statements: list): map := {
+	aliases = {}
+	for statement in statements {
+		if is_key(statement, Op.Assign) and value_of(statement) is symbol {
+			name = aliased_type_name(key_of(statement))
+			if name != ø { aliases[name] = name_of(value_of(statement)) }
+		}
+	}
+	aliases
+}
+# the statement with an alias named as the type it names: the target of every `x as Q`, both types of a conversion's
+# head `q as Q := …` (`n: q as Q := …`); a value's own name, `length as pixels` of a variable length, stays
+unaliased_conversions(statement: Node, aliases: map): Node := {
+	targets_named = targets_unaliased(statement, aliases)
+	if not is_key(targets_named, Op.Define) { return targets_named }
+	head = as_phrase_read(key_of(targets_named))
+	head = if is_key(head, Op.As) then Key(unaliased_type(key_of(head), aliases), Op.As, value_of(head)) else if is_key(head, Op.Colon) and is_key(value_of(head), Op.As) then Key(key_of(head), Op.Colon, Key(unaliased_type(key_of(value_of(head)), aliases), Op.As, value_of(value_of(head)))) else key_of(targets_named)
+	Key(head, Op.Define, value_of(targets_named))
+}
+targets_unaliased(n: Node, aliases: map): Node := {
+	walked = children(n, x => targets_unaliased(x, aliases))
+	if is_group(walked) and #walked == 3 and walked#2 == symbol("as") { return group_like(walked, [walked#1, walked#2, unaliased_type(walked#3, aliases)]) }
+	if is_key(walked, Op.As) then Key(key_of(walked), Op.As, unaliased_type(value_of(walked), aliases)) else walked
+}
+unaliased_type(n: Node, aliases: map): Node := if n is symbol and aliases.has(name_of(n)) then symbol(aliases[name_of(n)]) else n
 
 # --- forced conversions, `x as! T` (decision checked-forced-conversions, convert-bang) ---
 # A library writes `convert!(n: number, to: byte) := …`, the twin of `n: number as byte := …`. `to: T` names the target

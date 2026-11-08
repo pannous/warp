@@ -469,6 +469,9 @@ past_options(at: int): int := {
 	i
 }
 # `warp fuel <steps> <file|code…>`: the program counts steps (WARP_FUEL), out of fuel after them
+# WARP_RUN_TO is one warp's word to its own compiler (words_ran): a warp a command runs, `warp build --site`'s `warp
+# run` prerendering, ran its program into the caller's file instead
+unsetenv(c_string("WARP_RUN_TO"))
 start = past_options(1)
 counting = arg_count() > start + 2 and same_text(arg(start), "fuel")
 if counting { setenv(c_string("WARP_FUEL"), c_string(arg(start + 1)), 1) }
@@ -481,5 +484,7 @@ setenv(c_string("WARP_LIB_LINK"), c_string(library_found()), 0)
 setenv(c_string("WARP_LIB"), c_string(library_folder()), 1)
 # and know the native warp hosts them (commands.warp: what it runs itself, what it lacks yet)
 setenv(c_string("WARP_HOST"), c_string("the native warp"), 1)
+# and where it is, so a command runs a program by this warp (`warp build --site` prerenders its page)
+setenv(c_string("WARP_EXECUTABLE"), c_string(executable_path()), 1)
 if prefixed and same_text(arg(start), "fast") { complain("note: warp fast is not in the native warp yet; running at full precision") }
 dispatched(if prefixed and same_text(arg(start), "self") then joined(library_folder(), "/warp-self.wasm") else compiler_path(), prefixed, first)

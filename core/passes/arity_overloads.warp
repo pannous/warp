@@ -26,13 +26,20 @@ definition_call(n: Node): Node := match n {
 	_: ø
 }
 
-# [how many arguments a call must pass, how many it may, -1 for any more]: `b = 1` may be left out, `more...` hold none
+# [how many arguments a call must pass, how many it may, -1 for any more, whether more gather into a last list-typed
+# parameter]: `b = 1` may be left out, `more...` hold none, `xs: [Note]` gathers (decision gathering)
 arity_of(call: Node): list := {
 	signature = signature_of(items_of(call))
 	span = arity(signature)
-	if signature.parameters.any(parameter => parameter.rest) then [span#1 - 1, -1] else span
+	may = if signature.parameters.any(parameter => parameter.rest) then [span#1 - 1, -1] else span
+	may + [gathers(signature, #signature.parameters + 1)]
 }
 span_takes(span: list, count: int): bool := span#1 <= count and (span#2 < 0 or count <= span#2)
+# the variants a call of `count` arguments fits: those taking that many, else those gathering the extra ones
+fitting_spans(spans: list, count: int): list := {
+	exact = spans.filter(span => span_takes(span, count))
+	if #exact > 0 then exact else spans.filter(span => span#3 and count > span#2)
+}
 
 # name → its arities, for each name defined with several parameter counts, no two of them the same
 overloaded_arities(program: Node): map := {
@@ -70,7 +77,7 @@ variant_call(n: Node, overloaded: map, receivers: int): Node := {
 	name = name_of(n#1)
 	if name not in overloaded { return n }
 	count = #n - 1 + receivers
-	fitting = overloaded[name].filter(span => span_takes(span, count))
+	fitting = fitting_spans(overloaded[name], count)
 	if #fitting != 1 { return n }
 	group_like(n, [symbol(overload_variant_name(name, fitting#1#2))] + items_of(n)[1 ..])
 }
@@ -143,6 +150,7 @@ arity_overloads(program: Node): Node := {
 	program = result_overloads(program)
 	overload_classes = declared_classes(program)
 	overload_bases = declared_bases(program)
+	overload_marks = declared_marks(program)
 	defined_twice = defined_more_than_once(program)
 	if #defined_twice > 0 { program = passed_lambdas(program, shadowed(defined_twice, names_bound(program, [])), called_parameters(program)) }
 	overloaded = overloaded_arities(program)
@@ -285,10 +293,23 @@ overload_kind(type: text): text? := {
 }
 
 # also a class the program declares, `x: Real`, which the run time tells by `is`
-is_overload_type(type: text, classes: list): bool := type == any_word or overload_kind(type) != ø or type in classes or (is_union(type) and union_members(type).all(member => is_overload_type(member, classes)))
+is_overload_type(type: text, classes: list): bool := type == any_word or overload_kind(type) != ø or type in classes or type in overload_marks or (is_union(type) and union_members(type).all(member => is_overload_type(member, classes)))
 declared_classes(program: Node): list := statements_in(program).map(class_view).filter(view => view != ø).map(view => declared_type_name(view#2))
 # class → the class it extends ("" of none), of the program's classes
 global overload_bases = {}
+# a named number type → [the number type it marks, its mark] (decision int-type-overloads: `type Color = int`, its
+# values ints with a mark of their own, extensions/int_types): a variant taking one is told apart from the number's,
+# tested first and by the mark
+global overload_marks = {}
+declared_marks(program: Node): map := {
+	marks = int_type_kinds(statements_in(program))
+	bases = {}
+	for statement in statements_in(program) {
+		name = int_type_name(statement)
+		if name != ø { bases[name] = [name_of(value_of(statement)), marks[name]] }
+	}
+	bases
+}
 declared_bases(program: Node): map := {
 	bases = {}
 	for view in statements_in(program).map(class_view).filter(view => view != ø) { bases[declared_type_name(view#2)] = base_of(view#2) }
@@ -518,6 +539,8 @@ element_kind(items: list): text? := {
 fit(kind: text, type: text): int? := {
 	if type == any_word { return any_fit }
 	if type in overload_classes { return class_distance(kind, type) }
+	# (a value the compile knows is never marked: only the run time tells a Color)
+	if type in overload_marks { return ø }
 	if type == "number" { return if kind == "int" or kind == "float" then 1 else ø }
 	wanted = overload_kind(type)
 	if kind == wanted { return 0 }
@@ -573,6 +596,7 @@ run_time_test(argument: Node, type: text): Node := {
 	element = element_of(type)
 	# a class's variant takes its instances: `x is real` of any number (decision real-canonical) chooses no variant
 	if element == ø and type in overload_classes { return call_of(HiddenWord.InstanceOf as text, [argument, type]) }
+	if element == ø and type in overload_marks { return Key(call_of("int_mark_of", [argument]), Op.Eq, overload_marks[type]#2) }
 	if element == ø {
 		word = if takes_widened(type) then "number" else if overload_kind(type) == "function" then "function" else type
 		test = call_of("is_type", [argument, word])
@@ -628,7 +652,9 @@ dispatched(name: text, candidates: list, kinds: list, arguments: list, refusal: 
 }
 
 # whether the other type admits every value this one admits, and more: text of `text or int`, Dog of Animal, any type of any
-admits_less(narrow: text, wide: text): bool := narrow != wide and (wide == any_word or union_members(narrow).all(member => member in union_members(wide) or union_members(wide).any(type => class_distance(member, type) != ø)))
+admits_less(narrow: text, wide: text): bool := narrow != wide and (wide == any_word or marks_narrower(narrow, wide) or union_members(narrow).all(member => member in union_members(wide) or union_members(wide).any(type => class_distance(member, type) != ø)))
+# Color of int and of number: a named number type admits only its marked numbers
+marks_narrower(narrow: text, wide: text): bool := narrow in overload_marks and (overload_kind(wide) == overload_marks[narrow]#1 or overload_kind(wide) == "number")
 # a variant no wider than the other at any parameter and narrower at one: the one a call fitting both takes
 narrower_variant(narrow: list, wide: list): bool := #narrow == #wide and (1 to #narrow).all(at => narrow#at == wide#at or admits_less(narrow#at, wide#at)) and (1 to #narrow).any(at => admits_less(narrow#at, wide#at))
 # the variants, each before the first wider one, else in the order given: a run-time test passing both takes the
@@ -681,6 +707,8 @@ typed_call(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	call_of(typed_variant(name, chosen#1), arguments)
 }
 
+# whether a class of the program has a field of the name, `p.name`
+names_a_field(name: text, program: Node): bool := statements_in(program).any(statement => class_view(statement) != ø and class_declared(statement, class_view(statement)).fields.any(field => field == name))
 # top-down, so a definition is renamed by its own parameter types
 typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	call = definition_call(n)
@@ -696,6 +724,10 @@ typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 		receiver = key_of(n)
 		receivers = if receiver is symbol and qualifies_by_module(name_of(receiver), judge.program) then [] else [receiver]
 		return typed_resolved(group_like(method, [method#1] + receivers + items_of(method)[1 ..]), overloaded, judge)
+	}
+	# `red.hex_text`, no parentheses: the word's call of the receiver, where no class names a field so
+	if method != ø and method is symbol and name_of(method) in overloaded and not names_a_field(name_of(method), judge.program) and not (key_of(n) is symbol and qualifies_by_module(name_of(key_of(n)), judge.program)) {
+		return typed_resolved(call_of(name_of(method), [key_of(n)]), overloaded, judge)
 	}
 	# a one-line block's words are its phrase already, `{ thrice {n += 1} }` (phrase_blocks.warp)
 	children(typed_call(phrase_block(n), overloaded, judge), x => typed_resolved(x, overloaded, judge))

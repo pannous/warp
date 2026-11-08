@@ -21,7 +21,7 @@ Principles and Talking live only in common.md.
   lib/aliases.warp.
 - Small changes on main: only what nothing compiles (notes, docs, wiki, scripts, samples, playground text)
   goes straight onto main in the main checkout /Users/me/dev/angles/warp, no worktree or branch: commit your own
-  paths by name (`git commit -- <paths>`), `git pull --rebase --autostash`, push; never leave unpushed commits on
+  paths by name (`git commit -- <paths>`), `git fetch origin main && git rebase --autostash --rebase-merges origin/main` (common.md), push; never leave unpushed commits on
   main. A new root .warp data file (components.warp …): tell the Integrator the commit, tests read it.
 - Anything compiled (core/, the harness in src/ and crates/, Cargo.*) keeps its worktree, however small (a half-done
   edit there breaks every build of the main checkout): `cowtree add -b <branch> /Volumes/Worktrees/<branch> origin/main`
@@ -41,7 +41,7 @@ Principles and Talking live only in common.md.
 - Moving on demand: a change in the main checkout that grows (more than a few files, many build/test rounds, or
   another session's files) moves into a worktree while still uncommitted: `cowtree add -b <task> <worktree> HEAD`,
   `git diff -- <own paths> | git -C <worktree> apply`, then undo only your own paths in the main checkout. A worktree
-  branch that turns out small goes straight to main itself (`git pull --rebase`, push `HEAD:main`).
+  branch that turns out small goes straight to main itself (`git fetch origin main && git rebase --autostash --rebase-merges origin/main`, push `HEAD:main`).
 - Rebase and merge with `--autostash`; never a bare `git stash pop` (the stash list is shared by all worktrees).
   Stashes are agent scratch: drop leftovers yourself (the hook saves them under refs/dropped-stashes).
 - The user's uncommitted edits (modified, staged or untracked, in the main checkout or wiki/) are integrated at once
@@ -193,8 +193,8 @@ Principles and Talking live only in common.md.
 ## Done
 - Samples: every major or semi-major feature (a new syntax form, library area, server/ORM/GPU capability, playground
   ability) ships with a sample in samples/<topic>.warp that shows it the way a user would write it, in the same
-  branch, `chmod +x`. A sample that cannot run in the browser goes in
-  web/playground/excluded_samples.txt. Name the sample in a `todo note` on the card.
+  branch, `chmod +x`. A sample that cannot run in the browser says so in a line of
+  its own, `# host: native: <why>` (`# host: page`, `# host: none` likewise; scripts/samples.sh HOST_LINE). Name the sample in a `todo note` on the card.
 - Docs are part of done: a card that changes what users write or see (syntax, words, flags, messages, defaults)
   updates the wiki page of that concept in the same task: a minimal example and one sentence, one idea per snippet,
   simplest form first, plain words. Say "docs: <page>" or "docs: none (internal)" in a `todo note`. A feature the
@@ -216,7 +216,7 @@ Principles and Talking live only in common.md.
      <merge-base> HEAD -- <file>` (merges your branch carries are your side too); otherwise resolve the hunk and check
      `git diff origin/main -- <file>` shows only your change.
      Keep merges real: one merge commit per branch, and never let a plain `git pull --rebase` flatten them (it replays
-     a merged branch's commits onto main and conflicts): `git pull --rebase=merges` or `git merge origin/main`.
+     a merged branch's commits onto main and conflicts): `git fetch origin main && git rebase --autostash --rebase-merges origin/main` or `git merge origin/main`.
   3. Smoke test on that merge (core/ changes: smoke + `scripts/self-check.sh`), then `git push origin HEAD:main`
      (fast-forward only; rejected: merge origin/main again, rerun the smoke test only if the new commits touch core/
      or lib/). On the box, then `scripts/publish-build.sh <worktree>`: the build of the landed inputs goes to the
