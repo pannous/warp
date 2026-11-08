@@ -68,16 +68,6 @@ const MOST_COMPILED = 16;
 const compiledModules = new Map();
 const compiledPipelines = new Map();
 const WORDS_STATE = 2; // the shared buffer's state when it holds raw 32-bit words, floats or pixels (writeShared's JSON is state 1)
-// kept buffers (src/lowering/foreign/gpu_maps.rs marked_kept): a map result read on the CPU stays on the GPU for the next map of
-// it, by block, the last MOST_KEPT of them (src/graphics/gpu.rs KEPT); flags as gpu_map_linear's last argument
-const KEEP_RESULT = 1n;
-const SOURCE_KEPT = 2n;
-// a map the compiler switched to the GPU (gpu_maps.rs AUTOMATIC, card gpu-auto): silent without an adapter, else said once
-const AUTOMATIC = 4n;
-const AUTOMATIC_NOTICE = "ran on the GPU by itself (f32, imprecise by design; write @cpu for exact f64)"; // gpu_maps.rs
-const MOST_KEPT = 4;
-const KEPT_MISSING = "no kept buffer";
-const keptBuffers = new Map(); // the task Worker's: block → {storage, count}
 const CANVAS_MISSING = "no canvas of this paint";
 const CANVAS_FAILED = "paint: the page's canvas failed, so shaders paint through pixels"; // said once a run, with why
 let canvasFailure;
@@ -98,27 +88,19 @@ const paintCanvases = new Map(); // the task Worker's: canvas id → {context, f
 let paintCanvasCount = 0; // the program's side: the canvases asked of the page, which names them by this count
 let gpuWorker; // the program's side: the task Worker that ran the last GPU job, and keeps its buffers
 
-// the task Worker's side: the floats the shader left from index `first` on (only those are read back)
-// before `numbers`, the `count` items of the buffer kept for block `source`; the buffer kept for block `keep` after
-async function gpuComputedFloats({ shader, numbers, workgroups, first = 0, source, count, keep }) {
+// the task Worker's side: the numbers the shader left in its storage array, `numbers` before
+async function gpuComputedFloats({ shader, numbers, workgroups }) {
 	const device = await theGpuDevice();
 	const Elements = gpuElements(shader);
 	const input = numbers instanceof Elements ? numbers : new Elements(numbers);
-	const kept = source === undefined ? undefined : keptBuffers.get(source);
-	if (source !== undefined && kept?.count !== count) throw new Error(KEPT_MISSING);
-	const keptBytes = (kept?.count ?? 0) * Float32Array.BYTES_PER_ELEMENT;
-	const size = keptBytes + input.byteLength;
-	const offset = first * Float32Array.BYTES_PER_ELEMENT;
-	const storage = storageBuffer(device, size);
-	const readback = readbackBuffer(device, size - offset);
-	if (input.length) device.queue.writeBuffer(storage, keptBytes, input);
-	const copyKept = encoder => kept && encoder.copyBufferToBuffer(kept.storage, 0, storage, 0, keptBytes);
-	const encoder = await encodedComputePass(device, shader, workgroups, [{ binding: GPU_BINDING, buffer: storage }], copyKept);
-	encoder.copyBufferToBuffer(storage, offset, readback, 0, size - offset);
-	const floats = new Elements(await gpuReadBack(device, encoder, readback));
-	if (keep === undefined) storage.destroy();
-	else keepBuffer(keep.block, { storage, count: keep.count });
-	return floats;
+	const storage = storageBuffer(device, input.byteLength);
+	const readback = readbackBuffer(device, input.byteLength);
+	if (input.length) device.queue.writeBuffer(storage, 0, input);
+	const encoder = await encodedComputePass(device, shader, workgroups, [{ binding: GPU_BINDING, buffer: storage }]);
+	encoder.copyBufferToBuffer(storage, 0, readback, 0, input.byteLength);
+	const numbersLeft = new Elements(await gpuReadBack(device, encoder, readback));
+	storage.destroy();
+	return numbersLeft;
 }
 
 const storageBuffer = (device, size) => device.createBuffer({ size, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
@@ -140,18 +122,6 @@ async function encodedComputePass(device, shader, workgroups, bound, before = ()
 	pass.dispatchWorkgroups(workgroups);
 	pass.end();
 	return encoder;
-}
-
-// an earlier run's buffer for the same block address is stale; the oldest goes beyond MOST_KEPT
-function keepBuffer(block, buffer) {
-	keptBuffers.get(block)?.storage.destroy();
-	keptBuffers.delete(block);
-	keptBuffers.set(block, buffer);
-	if (keptBuffers.size > MOST_KEPT) {
-		const [oldest, { storage }] = keptBuffers.entries().next().value;
-		storage.destroy();
-		keptBuffers.delete(oldest);
-	}
 }
 
 // the holes every shader has (src/graphics/shader_holes.rs BUILTIN_HOLES), filled here when the shader reads them and the
@@ -362,7 +332,7 @@ function answeredWithin(promise, what, waitMs = GPU_DEVICE_WAIT_MS) {
 function forgetDevice(device) {
 	if (gpuDevice !== device) return;
 	gpuDevice = undefined;
-	[compiledModules, compiledPipelines, keptBuffers, paintCanvases, previousFrames].forEach(made => made.clear());
+	[compiledModules, compiledPipelines, paintCanvases, previousFrames].forEach(made => made.clear());
 }
 
 // after a failed job: a device lost by it is forgotten before the program asks again (its loss is said a moment later)
@@ -537,64 +507,15 @@ function gpuTaskWorker() {
 	return worker;
 }
 
-// the f64 cells of a linear array: its block is [count: i64][count cells] (src/wasm_emitter/lists/linear_arrays.rs)
-function linearCells(memory, block) {
-	const count = Number(new DataView(memory.buffer).getBigInt64(Number(block), true));
-	return new Float64Array(memory.buffer, Number(block) + Float64Array.BYTES_PER_ELEMENT, count);
-}
-
 addHostPart({
 	systemValue: (value, holder) => value === GPU_PAINTS ? gpuPaints(holder) : value === GPU_DRAWING ? false : undefined,
 	words: (holder, hooks, { program }) => {
 		const plain = node => guestPlain(program(), node);
 		// floats, also the whole ones (newGuestValue would make 3 an Int); ints of an array<i32> or array<u32>
 		const numberList = (values, Elements) => Elements === Float32Array ? newGuestFloats(program(), values) : newGuestInts(program(), values);
-		// the kernel over the f32 copy of a block's cells, from `first` on read back; `kept` as gpuComputedFloats takes it
-		const kernel = (shader, numbers, workgroups, first, kept = {}) =>
-			gpuJob("gpu_kernel", { shader: plain(shader), numbers, workgroups: Number(workgroups), first, ...kept }, [numbers.buffer]);
-		// the items (none when they come from a kept buffer), then the values of the program's numbers the kernel reads,
-		// then a cell per workgroup to reduce into
-		const kernelNumbers = (items, outer, reductions) => {
-			const numbers = new Float32Array(items.length + outer.length + reductions);
-			numbers.set(items);
-			numbers.set(outer, items.length);
-			return numbers;
-		};
-		// from source's kept buffer if it has one, else as uploaded
-		const keptOrUploaded = (shader, items, outer, workgroups, reduces, source, keep, keeping) => {
-			const first = reduces ? items.length + outer.length : 0;
-			const reductions = reduces ? Number(workgroups) : 0;
-			if (keeping & SOURCE_KEPT) {
-				try {
-					return kernel(shader, kernelNumbers([], outer, reductions), workgroups, first, { source: Number(source), count: items.length, keep });
-				} catch (failure) {
-					if (!failure.message.endsWith(KEPT_MISSING)) throw failure;
-				}
-			}
-			return kernel(shader, kernelNumbers(items, outer, reductions), workgroups, first, { keep });
-		};
 		// as src/diagnostics/diagnostic.rs report_runtime_warning_once: the notice once a run, its detail after a colon
 		const warnOnce = (notice, detail) => {
 			if (!holder.warnings.some(warning => warning.startsWith(notice))) holder.warnings.push(`${notice}: ${detail}`);
-		};
-		const gpuKernelLinear = (shader, source, values, target, workgroups, reduces, keeping = 0n) => {
-			const items = linearCells(program().memory, source);
-			const outer = [plain(values) ?? []].flat().map(Number);
-			const keep = keeping & KEEP_RESULT ? { block: Number(target), count: items.length } : undefined;
-			try {
-				const left = keptOrUploaded(shader, items, outer, workgroups, reduces, source, keep, keeping);
-				const cells = linearCells(program().memory, target);
-				cells.set(left.subarray(0, cells.length));
-				if (keeping & AUTOMATIC) warnOnce(AUTOMATIC_NOTICE, `${reduces ? "a reduction" : "a map"} of ${items.length} items`);
-				return 1n;
-			} catch (failure) {
-				if (!/adapter|task Workers/.test(failure.message)) throw failure;
-				if (keeping & AUTOMATIC) return 0n; // the program did not ask for the GPU
-				// once a run, as the program's runtime warning (natively report_runtime_warning), not on the console
-				const warning = `@gpu: ${failure.message}, so the map runs on the CPU`;
-				if (!holder.warnings.includes(warning)) holder.warnings.push(warning);
-				return 0n;
-			}
 		};
 		const renderValues = (shader, width, height, values) =>
 			({ ...builtinValues(shader, width, height), ...(values == null ? {} : plain(values)) });
@@ -695,17 +616,6 @@ addHostPart({
 		return {
 			gpu_compute: computed,
 			gpu_render: rendered,
-			// over a `linear xs = float[n]`: its cells read and written in place, no list built (card gpu-vectors)
-			gpu_compute_linear: (shader, block, workgroups) => {
-				const cells = linearCells(program().memory, block);
-				cells.set(kernel(shader, Float32Array.from(cells), workgroups, 0));
-				return block;
-			},
-			// `ys = xs.map(x => …) @gpu` (src/lowering/foreign/gpu_maps.rs): the kernel over source's cells (and the values it reads)
-			// into target's; 0 without an adapter (said once), when the program maps them on the CPU
-			gpu_map_linear: (shader, source, values, target, workgroups, keeping) => gpuKernelLinear(shader, source, values, target, workgroups, false, keeping),
-			// `s = sum(xs.map(x => …) @gpu)`, min, max: each workgroup's partial result, left after the values, into target
-			gpu_reduce_linear: (shader, source, values, target, workgroups, keeping) => gpuKernelLinear(shader, source, values, target, workgroups, true, keeping),
 			// use draw on the GPU (src/graphics/gpu_canvas.rs) is native only: lib/draw.warp asks gpu_drawing first
 			draw_shape: () => { throw new Error(NO_GPU_DRAWING); },
 			draw_show: () => { throw new Error(NO_GPU_DRAWING); },
