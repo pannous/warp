@@ -463,6 +463,19 @@ assigns(n: Node, name: text) := {
 	no
 }
 # name → the parameter counts of the functions the program defines by that name
+# name → the arities of the functions the modules brought (passes/prelude_words.warp brought_names) whose parameters
+# are all untyped: `write(path, text)`, `write(path: any, text: any)`
+def untyped_brought_arities(program: Node): map {
+	arities = {}
+	for n in program_statements(program).map(unkeyworded) {
+		head = function_head(n)
+		if head != ø and brought_names.has(name_of(head#1)) and items_of(head)[1..].all(is_untyped_parameter) { arities[name_of(head#1)] = (arities.get(name_of(head#1)) ?? []) + [#head - 1] }
+	}
+	arities
+}
+is_untyped_parameter(parameter: Node): bool := parameter is symbol or (is_key(parameter, Op.Colon) and value_of(parameter) == symbol("any"))
+# a host word a C declaration made (extensions/c_imports c_host_word), its library named, never the driver's own
+is_c_word(signature: list): bool := #signature > 2 and signature#3 != host_module
 def defined_arities(program: Node): map {
 	arities = {}
 	for n in program_statements(program).map(unkeyworded) {
@@ -1097,6 +1110,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 	# wasm_instruction of its own
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("wasm_instruction") and n#2 is text { return wasm_instruction(body, n#2) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol(HiddenWord.RanWithoutError as text) { return ran_without_error(body, n#2) }
+	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and host_beside_function(body, name_of(n#1), items_of(n)[1..]) { return host_or_function(body, name_of(n#1), items_of(n)[1..]) }
 	if (bracket_of(n) == "(" or is_spaced_call(body, n)) and #n > 0 and n#1 is symbol and is_program_call(body, name_of(n#1), items_of(n)[1..]) {
 		return call(body, module.functions[name_of(n#1)], items_of(n)[1..])
 	}
@@ -1595,10 +1609,15 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.texts = {}
 	module.first_text_segment = 0
 	# the host words, but those the program defines itself taking as many values: its own `notify(x) := …` is its own,
-	# its own `paint(picture, width, height)` leaves the host's paint of four
+	# its own `paint(picture, width, height)` leaves the host's paint of four; a library word brought untyped beside a
+	# typed C word of as many leaves it too, the call's arguments picking one (host.warp host_or_function)
 	module.host = {}
 	defined = defined_arities(program)
-	for name in host.keys { if #host[name]#1 not in (defined.get(name) ?? []) { module.host[name] = host[name] } }
+	untyped = untyped_brought_arities(program)
+	for name in host.keys {
+		arity = #host[name]#1
+		if arity not in (defined.get(name) ?? []) or (is_c_word(host[name]) and arity in (untyped.get(name) ?? [])) { module.host[name] = host[name] }
+	}
 	module.classes = {}
 	module.parents = {}
 	module.variants = {}
