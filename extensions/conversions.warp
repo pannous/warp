@@ -146,15 +146,64 @@ alias_resolved(type: text, aliases: map): text := {
 # a word the runtime or C also takes, `exp(x: real)` beside math's `exp(x: float)`: the overload passes choose among
 # them by the argument as written, so it stays unconverted
 has_builtin_variant(name: text): bool := #lines_of(typed_lines + foreign_math_lines, unaliased(name)) > 0
+# the parameter types a call of such a function passes its arguments to, one each, else ø (a named argument too)
+positional_types(call: Node, typed: map): list? := {
+	if not (is_call(call) and call#1 is symbol and typed.has(name_of(call#1))) { return ø }
+	types = typed[name_of(call#1)]
+	arguments = items_of(call)[1 ..]
+	if #arguments != #types or arguments.any(argument => is_key(argument, Op.Colon) or is_key(argument, Op.Assign)) then ø else types
+}
 # each call of such a function with its arguments for those parameters converted; a named argument as it is
 converted_arguments(n: Node, typed: map, targets: map): Node := {
 	if definition_call(n) != ø { return Key(key_of(n), Op.Define, converted_arguments(value_of(n), typed, targets)) }
 	walked = children(n, x => converted_arguments(x, typed, targets))
-	if not (is_call(walked) and walked#1 is symbol and typed.has(name_of(walked#1))) { return walked }
-	types = typed[name_of(walked#1)]
+	types = positional_types(walked, typed)
+	if types == ø { return walked }
 	arguments = items_of(walked)[1 ..]
-	if #arguments != #types or arguments.any(argument => is_key(argument, Op.Colon) or is_key(argument, Op.Assign)) { return walked }
 	group_like(walked, [walked#1] + (1 to #arguments).map(at => if converts_to(types#at, targets) then call_of(argument_conversion_name(types#at), [arguments#at]) else arguments#at))
+}
+
+# the compile-time half of card quantity-dimension-types: an argument written as a number and a unit, `5s`, whose unit
+# names a class (units' `type s = Time`) the parameter's class neither is nor extends, is refused where it is written
+mismatched_units(n: Node, typed: map, aliases: map, parents: map): Node := {
+	walked = children(n, x => mismatched_units(x, typed, aliases, parents))
+	types = positional_types(walked, typed)
+	if types == ø { return walked }
+	arguments = items_of(walked)[1 ..]
+	for at in 1 to #arguments {
+		given = unit_class(arguments#at, aliases)
+		needed = types#at
+		members = union_members(needed)
+		if given != ø and members.all(is_capitalized) and not members.any(member => member in class_lineage(given, parents)) { return diagnose(call_of("unit_argument", [arguments#at, needed, given]), walked) }
+	}
+	walked
+}
+# the class a number and a unit is, `5s` a Time by units' `type s = Time`, else ø
+unit_class(argument: Node, aliases: map): text? := {
+	written = unparenthesized(without_mark(argument))
+	print("DEBUG unit_class " + as_code(written) + " " + (if is_group(written) then "group " + #written else if written is key then "key" else "other") + " aliases " + #aliases)
+	# (juxtaposed as a key without an operator, or a group of the two)
+	parts = if is_key(written, Op.None) then [key_of(written), value_of(written)] else if is_group(written) and #written == 2 then [written#1, written#2] else []
+	if #parts != 2 or not is_number_literal(parts#1) { return ø }
+	unit = without_mark(parts#2)
+	if not (unit is symbol and aliases.has(name_of(unit))) { return ø }
+	named = alias_resolved(name_of(unit), aliases)
+	if is_capitalized(named) then named else ø
+}
+# each declared class's parent, `Length` → `Quantity`
+class_parents(statements: list): map := {
+	parents = {}
+	for statement in statements {
+		view = class_view(statement)
+		if view != ø and base_of(view#2) != "" { parents[declared_type_name(view#2)] = base_of(view#2) }
+	}
+	parents
+}
+# the class and the classes it extends, nearest first
+class_lineage(name: text, parents: map): list := {
+	found = [name]
+	while parents.has(found.last) and parents[found.last] not in found { found += [parents[found.last]] }
+	found
 }
 
 # the program with its conversions as functions, before its statements (its last one stays its value), and their uses
@@ -199,7 +248,8 @@ conversions(program: Node): Node := {
 		# (a program's conversions are its own, seeing every module's: never a linked module's of the same name, time's
 		# passed·Duration knowing no Quantity)
 		if module_written == "" { own_words_unlinked(functions.map(f => name_of(definition_call(f)#1))) }
-		List(functions + kept.map(statement => converted_arguments(converting_uses(statement, targets), typed, targets)), Bracket.None, Separator.Newline)
+		parents = class_parents(kept)
+		List(functions + kept.map(statement => converted_arguments(converting_uses(mismatched_units(statement, typed, aliases, parents), targets), typed, targets)), Bracket.None, Separator.Newline)
 	}
 	forced_conversions(checked)
 }
