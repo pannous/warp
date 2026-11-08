@@ -1,5 +1,5 @@
 # a program file, linked behind runtime.wasm and the prebuilt modules, runs as the same code compiled whole (card program-file, decision N22)
 '../fixtures/program_file/sleep_ms.warp'	yes
 '../fixtures/program_file/fast_sine.warp'	0.8414709848078965
-'../fixtures/program_file/color_names.warp'	'red #80FF0000'
+'../fixtures/program_file/color_names.warp'	'red #FF000080'
 '../fixtures/program_file/unit_parameter.warp'	yes
