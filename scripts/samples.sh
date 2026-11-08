@@ -32,6 +32,10 @@ EXPECTED_FAILURE='^# expected failure: '
 # a sample's interactions (card scripts-samples, decision sample-checks), `# check: click "+1" → count: 1`: a sample
 # that ran is checked by `warp app check` too (lib/app/command.warp, the hidden web view), a failing check its FAIL
 CHECK_LINE='^# check: '
+# where a sample runs, a line of its own (decision page-native-only-samples): `# host: native` runs natively only (the
+# page sweep and menu leave it out), `# host: page` in the page only (PAGE here, not run), `# host: none` in neither,
+# left out of both counts (netbase needs its server); web/playground/test_in_browser.py and build.sh read it too
+HOST_LINE='^# host: '
 
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 results=$tree/data/samples
@@ -53,6 +57,10 @@ wall_seconds() {
 # one <sample>: its line of the results
 one() {
 	local out=$results/out/$(echo "$1" | tr / _) wall
+	local host
+	host=$(grep -m1 "$HOST_LINE" "$tree/$1" | sed -E 's/^# host: ([a-z]+).*/\1/')
+	[ "$host" = none ] && return
+	[ "$host" = page ] && { echo "PAGE $1"; return; }
 	grep -qE "$WINDOW_LIBRARIES" "$tree/$1" && { echo "WIN  $1"; return; }
 	wall=$(wall_seconds)
 	# what a sample keeps (lib/storage.warp, <sample>.database.sqlite beside it) starts anew each run, as the page's
@@ -73,12 +81,12 @@ one() {
 	printf '%-4s %s: %s\n' "$verdict" "$1" "${first:-exit $status, nothing on stderr}"
 }
 export -f one wall_seconds
-export tree results WARP CPU_SECONDS WALL_SECONDS CPU_LIMIT_HIT WINDOW_LIBRARIES SERVING SERVER_PORT EXPECTED_FAILURE CHECK_LINE
+export tree results WARP CPU_SECONDS WALL_SECONDS CPU_LIMIT_HIT WINDOW_LIBRARIES SERVING SERVER_PORT EXPECTED_FAILURE CHECK_LINE HOST_LINE
 
 report=$results/report.txt
 (cd "$tree" && find samples -name '*.warp' | sort) | xargs -P"$PARALLEL" -I{} bash -c 'one "$@"' _ {} | sort -k2 >"$report"
 # a reason without its position and quoted texts: one cause reads alike in every sample and from run to run
 sed 's/"[^"]*"/"…"/g; s/ ([0-9]*)//g; s/ at samples\/[^ ]*//; s/ (no owner)//' "$report" >"$tree/test/samples.txt"
 results_header "$tree/test/samples.txt" "$(git -C "$tree" rev-parse --short=10 HEAD)" 'ok|SRV'
-echo "samples: $(grep -c '^ok\|^SRV' "$report") of $(wc -l <"$report" | tr -d ' ') run, $(grep -c '^WIN' "$report") need a window, $(grep -c '^SRV' "$report") serve, $(grep -c '^EXP' "$report") fail on purpose, $(grep -c '^TIME' "$report") hit a limit ($WARP, $(git -C "$tree" rev-parse --short=10 HEAD)) -> $tree/test/samples.txt"
+echo "samples: $(grep -c '^ok\|^SRV' "$report") of $(wc -l <"$report" | tr -d ' ') run, $(grep -c '^WIN' "$report") need a window, $(grep -c '^SRV' "$report") serve, $(grep -c '^EXP' "$report") fail on purpose, $(grep -c '^PAGE' "$report") run in the page only, $(grep -c '^TIME' "$report") hit a limit ($WARP, $(git -C "$tree" rev-parse --short=10 HEAD)) -> $tree/test/samples.txt"
 grep -aE '^(FAIL|TIME)' "$tree/test/samples.txt" | sed 's/^[A-Z]* *[^:]*: //' | sort | uniq -c | sort -rn
