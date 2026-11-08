@@ -2,8 +2,11 @@
 // alone on a terminal. An entry is compiled together with the session's kept entries and run in this process
 // (compile_wasm, run_wasm), so `a = 7` then `a` gives 7. The session keeps uses and definitions as written, and an
 // assignment as its value (`x = command("date")` kept as `x = "Fri …"`), so later entries never run its effects again;
-// a value without a literal (a list holding what text_form can't write back) keeps the assignment as written
+// a value without a literal (a list holding what text_form can't write back) keeps the assignment as written.
+// `:symbolic` keeps assignments symbolic and shows an evaluation step by step (lib/symbolic.warp, wiki/shell.md),
+// `:direct` (the default; WARP_SHELL_MODE=symbolic starts symbolic) evaluates them at once
 use os
+use symbolic
 
 // whether a file descriptor is a terminal: 1 for the console's own standard input when a person types
 isatty(fd: i32): i32 from 'c'
@@ -21,17 +24,28 @@ open_brackets(t: text) := {
 	depth
 }
 
-// an entry the later ones need: a use, a declaration, a definition, an assignment, ++ or --; not an expression nor a
-// comparison (==, !=, <=, >=)
-state_entry(entry: text) := {
+// a declaration the session keeps silently: use / let / var / const / global / class (not an assignment or expression)
+declaration_entry(entry: text) := {
 	t = trim(entry)
 	for word in ["use ", "let ", "var ", "const ", "global ", "class "] {
 		if starts_with(t, word) { return true }
 	}
+	false
+}
+
+// an entry the later ones need: a use, a declaration, a definition, an assignment, ++ or --; not an expression nor a
+// comparison (==, !=, <=, >=)
+state_entry(entry: text) := {
+	if declaration_entry(entry) { return true }
+	t = trim(entry)
 	if ends_with(t, "++") or ends_with(t, "--") { return true }
 	plain = replace(replace(replace(replace(t, "==", ""), "!=", ""), "<=", ""), ">=", "")
 	contains(plain, "=")
 }
+
+// whether the console prints an entry's value: assignments and expressions yes; := definitions and declarations no
+should_show_repl_value(entry: text, value: any) :=
+	value != ø and not contains(entry, ":=") and not declaration_entry(entry)
 
 // the name an entry assigns: `a = 7`, `a += 2`, `a++` give a; "" for any other entry (a definition `f(x) := …`, `a.b = 1`)
 assigned_name(entry: text) := {
@@ -107,7 +121,31 @@ entry_from(first: text, editor: any) := {
 	entry
 }
 
-repl_help := "exit or quit (or Ctrl+D) ends; :session lists the kept entries, :reset forgets them"
+repl_help := "exit or quit (or Ctrl+D) ends; :session lists the kept entries, :reset forgets them; :symbolic keeps assignments symbolic and shows each step (x! the value alone), :direct evaluates at once"
+
+// the expression of a plain assignment `name = expression`, "" for any other entry
+assigned_expression(entry: text) := {
+	name = assigned_name(entry)
+	if name == "" { return "" }
+	rest = trim(trim(entry)[count(name):])
+	if not starts_with(rest, "=") or starts_with(rest, "==") { return "" }
+	trim(rest[1:])
+}
+
+// whether an entry mentions a name the symbolic table holds
+mentions_symbol(entry: text, symbols: any) := symbolic_names(entry).any(name => name in symbols)
+
+// a symbolic entry shown: each step on a line of its own, or only the value when it ends in !; its Error after the
+// steps it got to
+show_steps(entry: text, symbols: any, session: text, kept: int) := {
+	final = ends_with(entry, "!") and not ends_with(entry, "!!")
+	expression = if final then trim(entry[0:count(entry) - 1]) else entry
+	shown = symbolic_steps(expression, symbols, e => evaluated(session + e))
+	if final {
+		if shown.error == "" and count(shown.steps) > 0 { print shown.steps[count(shown.steps) - 1] }
+	} else { for step in shown.steps { print step } }
+	if shown.error != "" { print "Error: " + message(shown.error, kept) }
+}
 
 // the value of a program, else its Error: the compiler's refusal (compile_wasm answers it, raising nothing), the run's
 // raise or trap
@@ -160,6 +198,8 @@ repl() := {
 	session = ""
 	kept = 0
 	editor = line_editor()
+	symbolic = env("WARP_SHELL_MODE") == "symbolic"
+	symbols = {}
 	while true {
 		line = typed("🌀", editor)
 		if line == ø { break }
@@ -170,13 +210,21 @@ repl() := {
 		else if entry == ":reset" {
 			session = ""
 			kept = 0
+			symbols = {}
 		}
+		else if entry == ":symbolic" { symbolic = true }
+		else if entry == ":direct" { symbolic = false }
+		else if symbolic and assigned_expression(entry) != "" {
+			assigned = try symbolic_assigned(symbols, assigned_name(entry), assigned_expression(entry)) catch e { e }
+			if is_error(assigned) { print "Error: " + str(assigned) } else { symbols = assigned }
+		}
+		else if symbolic and mentions_symbol(entry, symbols) { show_steps(entry, symbols, session, kept) }
 		else if entry != "" {
 			value = evaluated(session + entry)
 			if is_error(value) { print "Error: " + message(value, kept) }
 			else {
-				// a definition's own value is the session's last one: not shown
-				if value != ø and not contains(entry, ":=") { print value }
+				// a definition's or declaration's value is not useful to show (`use shell` is a module, not a result)
+				if should_show_repl_value(entry, value) { print value }
 				if state_entry(entry) {
 					kept_entry = kept_line(entry, value)
 					session = session + kept_entry + "\n"

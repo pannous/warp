@@ -50,5 +50,11 @@ repo); it prints "sent to Grok Bot Supervisor" and wakes it through its fleet in
 changes only when the user regenerates it: a 401 means exactly that, so ask the user to have Grok refresh the file
 and write to data/grok-cards.md meanwhile (a 401 hid every message from 2026-11-02 to 11-03). Grok answers by typing
 into the warp-supervisor tmux pane. Hand its coders simple library-only cards: `todo take <card> <coder>`, write the task into data/grok-cards.md,
-ping with grok-msg; they land their branches themselves. At most 1 active + 1 queued card per Grok coder.
+ping with grok-msg; they land their branches themselves. Grok is the Claude Supervisor's helper (user 2026-11-06): one owner per card: a coder may pick a free card itself
+only by `todo take <card> <coder>` at once (Now + owner), never one whose Agent field names someone else. At most 1 active + 1 queued card per Grok coder.
 Unexplained direct pushes to main with the user's identity (g-* cards) may be Grok Bot: ask the user.
+
+- notes/decisions.md is written only by warp-supervisor and warp-interviewer (Claude). Grok sends a user answer to warp-supervisor, never commits it there itself (b6050eb22a overwrote the user's own answer with a withdrawn relay, 2026-11-06).
+- The box needs wasm-opt (Binaryen 133, as scripts/ci-compilers.sh installs it) on PATH for web/playground/build.sh;
+  without it the page compiler keeps its C imports and fails to instantiate (card install-binaryen).
+- A sample is never shrunk or reshaped to fit a test runner's time budget (shorter notes, fewer frames): the slow part is the bug (9d4277dd8 and 6aaeab861 were reopened, 2026-11-06).

@@ -1,10 +1,13 @@
 # The word tables the passes share, each a plain list (card library-word-tables).
 
 # the words naming a type a value is held as, lowercase
-type_words = ["int", "nat", "integer", "long", "i64", "i32", "rational", "exact", "float", "double", "f64", "f32",
+type_words = ["int", "nat", "integer", "long", "i64", "i32", "rational", "exact", "precise", "float", "double", "f64", "f32",
 	"float32", "float64", "fast", "number", "text", "str", "string", "codepoint", "char", "character", "bool", "boolean", "symbol",
 	"function", "closure", "builtin", "byte", "int8", "int16", "int32", "int64", "uint8", "u8", "uint16", "uint32",
 	"uint64"]
+# `as! byte` (also u8, uint8) wraps into 0..255 through convert!, not the 64-bit wrap of the other int names
+# (decision checked-forced-conversions)
+wrapping_byte_words = ["byte", "u8", "uint8"]
 any_word = "any"
 # the type an optional type word holds when it holds a value, `int` of `int?`
 required_type(word: text): text := if word.ends_with("?") then word[0..<(#word - 1)] else word
@@ -45,6 +48,8 @@ plural_type_word(word: text): bool := {
 }
 # `list`, `list of int`, `ints`: a list type
 is_list_type(word: text): bool := word == "list" or word.starts_with("list of ") or plural_type_word(word)
+# a list type as a parameter declares it: `ints`, `list of int`, `[int]`
+is_list_type_text(written: text): bool := is_list_type(written) or written.starts_with("[")
 is_collection_head(word: text): bool := collection_words contains word or foreign_list_heads contains word
 
 # the words separating a phrase's slots, each naming the slot after it, `to add a to b`, and the articles starting a
@@ -64,6 +69,8 @@ selector_words = ["chars", "characters", "glyphs", "graphemes", "codepoints", "b
 # the operators that change their target, `n = …`, `n += …` (a branch's value assigns through them: parser.warp
 # branch_value; a function changing main's n: main_globals.warp)
 assigning_operators = ["=", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^="]
+# the operators that count their target up or down, `n++`, `n--`
+counting_operators = ["++", "--"]
 # the operators after which `return` names a variable: those and the definitions
 binding_operators = assigning_operators + [":=", ":"]
 
@@ -71,7 +78,7 @@ binding_operators = assigning_operators + [":=", ":"]
 type_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "int", number: "int",
 	float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float", fast: "float",
 	text: "text", str: "text", string: "text", codepoint: "codepoint", char: "codepoint", character: "codepoint",
-	bool: "int", boolean: "int", symbol: "symbol", function: "function", closure: "function", exact: "empty"}
+	bool: "int", boolean: "int", symbol: "symbol", function: "function", closure: "function", exact: "empty", precise: "empty"}
 
 # `a word`, `an item`: the word after its indefinite article (the stages' messages, emitter and diagnostics)
 with_article(word: text): text := (if "AEIOUaeiou".contains(word#1) then "an " else "a ") + word

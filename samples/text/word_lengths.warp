@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# the length of each word
-length "the quick brown fox".split(" ")
-# Very good example to show when broadcasting does not apply and we need the special extra keyword :
-length all "the quick brown fox".split(" ")
+# the number of words: length takes the list itself
+print length split "the quick brown fox"
+# the length of each word: a word that takes the list itself needs the explicit broadcast, `all` (or `each`)
+print length all (split "the quick brown fox")

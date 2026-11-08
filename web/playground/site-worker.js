@@ -1,4 +1,4 @@
-// The program of a built site in a Worker (scripts/build-site.sh): app.wasm runs as the playground runs a compiled
+// The program of a built site in a Worker (`warp build --site`, extensions/commands/site.warp): app.wasm runs as the playground runs a compiled
 // program (driver.js programRan), off the page's thread, so a blocking wait may wait (Atomics.wait) and its tasks run on
 // the pool of task Workers (host-tasks.js). The page (site.js) keeps the DOM: it sends the module's URL, the kept values
 // and each element event; this worker answers with the page's markup (lib/markup.warp page_render) after main and after
@@ -6,7 +6,7 @@
 // (`serving`) and answers each (`served`), HTTP text both ways (host-routes.js).
 // The site mirrors the repository's layout, this file at web/playground/, so FILE_ROOT (host-files.js) is the site's root.
 
-importScripts("reader.js", "imports.js", "exact.js", "js-members.js", "std.js", "host.js");
+importScripts("imports.js", "js-members.js", "std.js", "host.js");
 importScripts(...HOST_PART_FILES, "components.js", "served-files.js", "wasi.js", "driver.js");
 prepareTaskPool(); // host-tasks.js
 
@@ -25,12 +25,12 @@ const hooks = {
 	print: (text, stream) => post({ print: { text, stream } }),
 	dispatch: event => post({ dispatch: event }), // site.js: markup.js dispatchToPage
 	paint: (frame, width, height, canvas, shaded) => post({ paint: { frame, width, height, shaded } }, frame && [frame.words.buffer]), // shown by the page (site.js)
-	listen: holder => startTimers(holder, id => timerShown(holder, id)), // host-timers.js
+	listen: holder => startTimers(holder, (id, answer) => timerShown(holder, id, answer)), // host-timers.js
 };
 
 // a timer fired (driver.js timerFired): the page anew, or the failure, which stops the timers
-function timerShown(holder, id) {
-	const { failure } = timerFired(holder, id);
+function timerShown(holder, id, answer) {
+	const { failure } = timerFired(holder, id, answer);
 	if (failure === undefined) return post({ html: pageHtml(holder) });
 	post({ failure });
 	holder.stopTimers();

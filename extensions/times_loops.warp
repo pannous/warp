@@ -1,3 +1,6 @@
+# DONE Implement as simple infix operator (card times-infix-operator)
+# infix operator times(n:int,b:block):= while n-->0 : b()
+
 # `n times {…}` (card parser-cold-forms, decision core-is-self): the prelude's infix times, read after its count; a
 # suffix reader, so a context binding tighter leaves it alone (`3 times 4` multiplies)
 read_times(p: Parser, count: Node, min_power: int): Node := {

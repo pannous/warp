@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
-# expected failure: needs a netbase server with Wikidata loaded (`load`, card netbase-wikidata-load, notes/netbase.md)
+# host: none: needs a netbase server with Wikidata loaded (`load`)
 use "../../lib/extra/netbase.warp" // lib/extra is no module folder: its modules are used by path
-load wikidata
+load "wikidata"
 results = query "all cities with population > 100000"
 print first 10 of results
-debug results where country is germany
+print results where it.country is "germany"

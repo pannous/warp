@@ -1,19 +1,10 @@
 #!/usr/bin/env warp
-# a compute.toys kernel through compute_toy of `use compute_toys` (samples/gpu/lava_lamp.warp shows the simplest):
-# northern lights over a frozen lake. Curtains of light hang from wavy lines that drift and ripple with time, each
-# curtain its own color; stars twinkle behind them, a ridge of hills stands in front, the lake below mirrors it all.
-# The wheel makes the lights stronger or fainter (compute.toys' mouse.zoom).
+# Northern lights over a frozen lake. Curtains of light hang from wavy lines that drift with time, each in its own
+# color. Stars twinkle behind them, hills stand in front, and the lake below mirrors it all.
+# The wheel makes the lights stronger or fainter.
 use compute_toys
 lights = compute_toy(shader {
 	const CURTAINS = 4;
-
-	// a number in 0 … 1 for each grid cell, scrambled by integer multiplies (sin-based hashes stripe in f32)
-	fn hash(p: float2) -> f32 {
-		var h = (bitcast<u32>(vec2i(p).x) * 1597334677u) ^ (bitcast<u32>(vec2i(p).y) * 3812015801u);
-		h = (h ^ (h >> 16u)) * 2246822519u;
-		h = h ^ (h >> 13u);
-		return f32(h) / 4294967295.0;
-	}
 
 	// smooth noise: the hashes of the four corners of the cell, blended
 	fn noise(p: float2) -> f32 {
@@ -38,7 +29,7 @@ lights = compute_toy(shader {
 		let above = at.y - hem;
 		if (above < 0.0) { return exp(above * 40.0) * 0.4; }
 		let rays = 0.3 + 0.7 * noise(float2(at.x * 40.0 + index * 13.0, t * 0.6));
-		return exp(-above * (3.0 + index)) * rays;
+		return exp(-above * (9.0 + 2.0 * index)) * rays;
 	}
 
 	fn sky(at: float2, t: f32) -> float3 {
@@ -60,7 +51,7 @@ lights = compute_toy(shader {
 	fn main_image(@builtin(global_invocation_id) id: vec3u) {
 		let screen_size = textureDimensions(screen);
 		if (id.x >= screen_size.x || id.y >= screen_size.y) { return; }
-		// y up from the horizon two thirds of the way down; compute.toys counts pixel rows from the top
+		// y counts up from the horizon, two thirds of the way down
 		let at = float2(f32(id.x) - 0.5 * f32(screen_size.x), 0.65 * f32(screen_size.y) - f32(id.y)) / f32(screen_size.y);
 		let t = time.elapsed;
 		var color: float3;
@@ -77,7 +68,7 @@ lights = compute_toy(shader {
 		textureStore(screen, id.xy, float4(color, 1.0));
 	}
 })
-# ten seconds by the clock, however long a frame takes
+# run for ten seconds
 started = clock()
 while clock() - started < 10000 {
 	paint(lights)

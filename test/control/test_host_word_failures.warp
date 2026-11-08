@@ -1,4 +1,7 @@
 # from test_host_word_failures.rs: edit the Rust test, then run the script again
 
 # a_failed_save_is_caught
-is! 'use draw; try { save "/nonexistent/dir/x.png" } catch e { "caught " + e }' 'caught save: cannot write /nonexistent/dir/x.png: No such file or directory (os error 2)'
+is! 'use draw; try { save(canvas, "/nonexistent/dir/x.png") } catch e { "caught " + e }' 'caught save: cannot write /nonexistent/dir/x.png: No such file or directory (os error 2)'
+
+# a_save_in_an_if_branch_keeps_its_as_argument
+is! 'use draw; k = "s"; try { if k == "s": save canvas as: "/nonexistent/dir/x.png" } catch e { "caught " + e }' 'caught save: cannot write /nonexistent/dir/x.png: No such file or directory (os error 2)'

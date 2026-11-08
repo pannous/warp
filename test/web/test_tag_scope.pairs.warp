@@ -1,0 +1,3 @@
+'use markup; greet(name) := "Hi " + name; other(x) := { p = x; p }; to_html(div{ p{ greet "Ann" } })'	'<div><p>Hi Ann</p></div>'
+'greet(name) := "Hi " + name; to_html(div{ p{ greet "Ann" } })'	'<div><p>Hi Ann</p></div>'
+'greet(name) := "Hi " + name; to_html(label{ greet "Ann" })'	'<label>Hi Ann</label>'

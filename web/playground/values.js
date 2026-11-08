@@ -2,15 +2,7 @@
 // as core/native/driver.warp reads and builds them natively: through the module's exports, never its GC layout.
 // Reading: shown_at (a value's text, packed as address · 2^32 + length in the module's memory), is_textual, item_count,
 // item_at and int_item_at (1-based). Building: the constructors of core/emitter/host.warp host_builders (new_empty,
-// new_int, new_bool, new_float, new_text, new_list, error_of, new_bytes …). reader.js reads the Rust-era modules
-// (reflect_* exports), which these have not.
-
-// a module of the Rust-era compiler, which reader.js reads, has reflect_* exports: plainValue and builtValue serve both
-// until the page compiles with the self-hosted compiler only (card wasm-playground-build), then they are these
-const selfHosted = program => !program.reflect_value;
-const plainValue = (program, value) => selfHosted(program) ? guestPlain(program, value) : plainOfTree(readNode(program, value));
-const errorValue = (program, reason) => selfHosted(program) ? newGuestError(program, reason) : errorInProgram(program, reason);
-const builtValue = (program, plain) => selfHosted(program) ? newGuestValue(program, plain) : buildValue(program, treeOfPlain(plain));
+// new_int, new_bool, new_float, new_text, new_list, error_of, new_bytes …).
 
 const SHOWN_TEXT_SHIFT = 2n ** 32n; // driver.warp TEXT_SHIFT
 const SQUARE_BRACKET = 1n; // the bracket info of a [list] (core/node.warp Bracket: Curly 0, Square 1, Round 2)
@@ -22,12 +14,19 @@ const valueEncoder = new TextEncoder();
 // it in (runtime/show.warp shown_at's -1)
 function shownText(program, value) {
 	const packed = program.shown_at(value);
-	return packed < 0n ? undefined : valueDecoder.decode(new Uint8Array(program.memory.buffer, Number(packed / SHOWN_TEXT_SHIFT), Number(packed % SHOWN_TEXT_SHIFT)));
+	return packed < 0n ? undefined : valueDecoder.decode(packedBytes(program, packed));
 }
+const packedBytes = (program, packed) => new Uint8Array(program.memory.buffer, Number(packed / SHOWN_TEXT_SHIFT), Number(packed % SHOWN_TEXT_SHIFT));
+// a host word's text argument of any length: at once, else part by part through the output area (runtime/show.warp
+// shown_from), each part copied before the next overwrites it, as the native driver's shown reads one
 function guestText(program, value) {
 	const text = shownText(program, value);
-	if (text === undefined) throw new Error("a host word's argument is too long to show");
-	return text;
+	if (text !== undefined) return text;
+	const parts = [];
+	for (let at = 0n, part; (part = packedBytes(program, program.shown_from(value, at))).length; at += BigInt(part.length)) parts.push(part.slice());
+	const whole = new Uint8Array(parts.reduce((length, part) => length + part.length, 0));
+	parts.reduce((at, part) => (whole.set(part, at), at + part.length), 0);
+	return valueDecoder.decode(whole);
 }
 const isGuestText = (program, value) => program.is_textual(value) !== 0;
 const guestCount = (program, list) => Number(program.item_count(list));
@@ -37,14 +36,15 @@ const guestItems = (program, list) => Array.from({ length: guestCount(program, l
 const guestInts = (program, list, count = guestCount(program, list)) =>
 	Array.from({ length: count }, (_, index) => Number(program.int_item_at(list, BigInt(index + 1))));
 
+const ENTRY_NAME = /^[\p{L}_][\p{L}\p{N}_]*$/u;
 // a map's entries [name, value], read item by item and never shown (a Key is two items, its name and its value:
 // decision pair-items), so a map of a million numbers is read without its text; undefined for a value of no such
 // entries
 function guestEntries(program, value) {
 	try {
 		if (isGuestText(program, value)) return undefined;
-		// the name a Symbol, shown as itself
-		const named = entry => guestCount(program, entry) === 2 ? shownText(program, guestItem(program, entry, 0)) : undefined;
+		// the name a Symbol, shown as itself: a name, never a number (a list of pairs [[1, 2], …] is no map)
+		const named = entry => guestCount(program, entry) === 2 ? shownText(program, guestItem(program, entry, 0))?.match(ENTRY_NAME)?.[0] : undefined;
 		const entries = guestItems(program, value).map(entry => named(entry) === undefined ? undefined : [named(entry), guestItem(program, entry, 1)]);
 		return entries.length && entries.every(Boolean) ? entries : undefined;
 	} catch {
@@ -59,10 +59,22 @@ function guestEntries(program, value) {
 function guestPlain(program, value) {
 	if (isGuestText(program, value)) return guestText(program, value);
 	const shown = shownText(program, value);
-	return shown === undefined ? guestItems(program, value).map(item => guestPlain(program, item)) : plainOfShown(shown);
+	if (shown !== undefined) return plainOfShown(shown);
+	// too long to show: a map an object of its entries, as plainOfShown reads a shown one (paint's values of a few
+	// thousand vectors, samples/graphics/gaussian_splats.warp), any other list its items
+	const entries = guestEntries(program, value);
+	return entries ? Object.fromEntries(entries.map(([name, item]) => [name, guestPlain(program, item)])) : guestItems(program, value).map(item => guestPlain(program, item));
 }
 const SHOWN_WORDS = { yes: true, no: false, "ø": null };
-const SHOWN_NUMBER = /^-?(\d+(\.\d*)?|\.\d+)([eE][-+]?\d+)?(\/\d+)?/;
+// a number as warp shows it: its repeating digits each marked by a combining overline (`0.16̅`, `0.1̅4̅2̅`), a fraction `a/b`
+const SHOWN_NUMBER = /^-?(\d+(\.(\d\u0305?)*)?|\.(\d\u0305?)+)([eE][-+]?\d+)?(\/\d+)?/;
+const REPEATING_DIGIT = /\d\u0305/g;
+const REPEATED_DIGITS = 17; // the repeating digits written out this far: a double's precision
+// the decimal's value, its repeating digits written out
+const shownDecimal = text => {
+	const repeating = (text.match(REPEATING_DIGIT) ?? []).map(digit => digit[0]).join("");
+	return Number(text.replaceAll("\u0305", "") + repeating.repeat(Math.ceil(REPEATED_DIGITS / Math.max(repeating.length, 1))));
+};
 const SHOWN_NAME = /^[^\s,:{}\[\]()"']+/u;
 function plainOfShown(shown) {
 	let at = 0;
@@ -97,7 +109,7 @@ function plainOfShown(shown) {
 		if (number) {
 			at += number[0].length;
 			const [numerator, denominator] = number[0].split("/");
-			return denominator ? Number(numerator) / Number(denominator) : Number(numerator);
+			return denominator ? shownDecimal(numerator) / Number(denominator) : shownDecimal(numerator);
 		}
 		const name = shown.slice(at).match(SHOWN_NAME) ?? fail();
 		at += name[0].length;
@@ -142,6 +154,8 @@ function newGuestBytes(program, text, builder) {
 }
 const newGuestText = (program, text) => newGuestBytes(program, text, "new_text");
 const newGuestError = (program, message) => program.error_of(newGuestText(program, message));
+// a text's NFC (decision nfc-slot, for text ==): JavaScript's own normalize, where the module builds texts (warp.wasm)
+const canonicalText = (program, text) => newGuestText(program, guestText(program, text).normalize("NFC"));
 // a [list] of the module's values, built from its last item on, a cell at a time (driver.warp code_list_built)
 function newGuestList(program, items) {
 	if (items.length === 0) return program.new_bytes(0, 0, SQUARE_BRACKET);
@@ -157,11 +171,16 @@ const newGuestInts = (program, numbers) => newGuestCells(program, BigInt64Array.
 // a map of the module's: its entries `name: value`, in curly brackets
 function newGuestMap(program, entries) {
 	const keys = entries.map(([name, value]) => program.new_spelled_key(newGuestBytes(program, name, "new_symbol"), newGuestText(program, ":"), value));
-	return program.new_spelled_list(newGuestList(program, keys), newGuestText(program, "{"), newGuestText(program, ","));
+	return program.new_map(keys.length === 0 ? null : newGuestList(program, keys));
 }
-// a plain JavaScript value as the module's: ø, yes/no, Int (a whole number), Float, text, list, map (an object)
+// a plain JavaScript value as the module's: ø, yes/no, Int (a whole number, also a foreign runtime's `{$int: digits}`),
+// Float, a codepoint `{$char}`, text, list, map (an object); an object of the page without a plain form (a Date, a
+// function) as its handle (host.js handleOf)
 function newGuestValue(program, plain) {
 	if (plain === null || plain === undefined) return program.new_empty();
+	if (isCodepoint(plain)) return program.new_codepoint(plain.$char.codePointAt(0));
+	if (typeof plain === "function" || (typeof plain === "object" && !ArrayBuffer.isView(plain) && !Array.isArray(plain) && !isPlainObject(plain))) return newGuestValue(program, handleOf(plain));
+	if (typeof plain === "object" && Object.keys(plain).length === 1 && typeof plain.$int === "string") return program.new_int(BigInt(plain.$int));
 	if (typeof plain === "boolean") return program.new_bool(plain ? 1n : 0n);
 	if (typeof plain === "bigint") return program.new_int(plain);
 	if (typeof plain === "number") return Number.isInteger(plain) ? program.new_int(BigInt(plain)) : program.new_float(plain);

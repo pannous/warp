@@ -1,4 +1,6 @@
 #!/usr/bin/env warp
-real x = 3 # a declaration needs a value: `real x;` alone leaves x undefined
+# a typed declaration, then a little arithmetic with π
+real x
+x = 3
 x * x
 2 + 2π

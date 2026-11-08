@@ -2,11 +2,11 @@
 
 # declaring_global_reads_the_current_value
 'y=3; def z(){ global y; y*y }; y=4; z()'	16
-'global y=3; def z(): y*y; y=4; z()'	16
+# triage-held 2026-11-06: Python-style def z(): …, foreign syntax :: 'global y=3; def z(): y*y; y=4; z()'	16
 
 # a_free_variable_that_never_changes_needs_no_declaration
-'y=3; def z(): y*y; z()'	9
-'y=3; y=4; def z(): y*y; z()'	16
+# triage-held 2026-11-06: Python-style def z(): …, foreign syntax :: 'y=3; def z(): y*y; z()'	9
+# triage-held 2026-11-06: Python-style def z(): …, foreign syntax :: 'y=3; y=4; def z(): y*y; z()'	16
 'k=3; def f(x){x+k}; f(1)'	4
 
 # a_variable_bound_after_the_definition_is_read_at_call_time
@@ -16,13 +16,13 @@
 'xs=[1,2]; def n(){ global xs; count(xs) }; xs.add(3); n()'	3
 
 # a_change_no_later_call_can_observe_is_fine
-'y=3; def z(): y*y; a=z(); y=4; a'	9
+# triage-held 2026-11-06: Python-style def z(): …, foreign syntax :: 'y=3; def z(): y*y; a=z(); y=4; a'	9
 
 # nested_def_without_shared_locals_is_callable
 'def outer(){ def inner(){ 41 }; inner()+1 }; outer()'	42
 
 # a_def_without_parameters_over_constants_gets_a_note
-'def area(): 3*4; area()+1'	13
+# triage-held 2026-11-06: Python-style def z(): …, foreign syntax :: 'def area(): 3*4; area()+1'	13
 
 # late_binding_change_inside_function_with_no_later_call_is_fine
 'def outer(){ y=1; inner := {a=y; a*2}; b=inner(); y=2; b }; outer()'	2

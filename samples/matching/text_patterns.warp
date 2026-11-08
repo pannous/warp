@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# Text patterns: pieces and holes cut a text, a hole's type reads or classifies its part (notes/matching.md)
+# Text patterns: pieces and holes cut a text, a hole's type reads or classifies its part
 
 # a prefix or a suffix binds the rest
 number_of(literal) := match literal {

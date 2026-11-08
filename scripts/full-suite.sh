@@ -10,6 +10,7 @@
 # Run it in the background: it takes about an hour.
 set -uo pipefail
 source "$(dirname "$0")/lib/platform.sh"
+source "$(dirname "$0")/lib/sync-main.sh"
 WARP=${WARP:-$warp_binary}
 LOCK=$HOME/.cache/warp/full-suite.lock
 STORE=$warp_store
@@ -72,4 +73,4 @@ else
 fi
 ((commit)) || exit 0
 git add -- "$report" && git diff --cached --quiet -- "$report" && exit 0
-git commit -q -m "chore: full suite $summary at $tip" -- "$report" && git pull -q --rebase --autostash && git push -q
+git commit -q -m "chore: full suite $summary at $tip" -- "$report" && up_to_date_main && git push -q

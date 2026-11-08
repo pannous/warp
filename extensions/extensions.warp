@@ -10,6 +10,7 @@ use "index_positions.warp"
 use "property_accessors.warp"
 use "attributes.warp"
 use "sum_types.warp"
+use "record_classes.warp"
 use "radix_numbers.warp"
 use "time_literals.warp"
 use "event_phrases.warp"
@@ -22,7 +23,11 @@ use "phrase_definitions.warp"
 use "alias_arrows.warp"
 use "times_loops.warp"
 use "entities.warp"
+use "inline_html.warp"
 use "declared_operators.warp"
+use "list_operators.warp"
+use "last_results.warp"
+use "operator_folds.warp"
 use "go_tasks.warp"
 use "typed_templates.warp"
 use "function_clauses.warp"
@@ -31,17 +36,31 @@ use "match_patterns.warp"
 use "protocols.warp"
 use "conversions.warp"
 use "implicit_uses.warp"
+use "test_lines.warp"
 use "scoped_words.warp"
 use "parse_words.warp"
 use "iteration_inlining.warp"
+use "block_inlining.warp"
 use "of_lookups.warp"
 use "match_phrases.warp"
 use "checked_tries.warp"
+use "key_bindings.warp"
 use "text_lints.warp"
+use "int_misfits.warp"
+use "page_values.warp"
+use "fetch_signals.warp"
+use "js_globals.warp"
+use "dir_hints.warp"
+use "from_imports.warp"
+use "collection_type_tests.warp"
+use "block_definitions.warp"
+use "local_shadows.warp"
 use "effects.warp"
+use "optional_unwraps.warp"
+use "object_functions.warp"
 use "primitive.warp"
 EXTENSIONS = [
-	Extension{name: "uncertain", operator_rows: library_text("extensions/uncertain/operators.warp")}
+	Extension{name: "uncertain", operator_rows: module_source("extensions/uncertain/operators.warp")}
 	gpu_lists_extension
 	degrees_extension
 	glyph_atoms_extension
@@ -51,6 +70,7 @@ EXTENSIONS = [
 	property_accessors_extension
 	attributes_extension
 	sum_types_extension
+	record_classes_extension
 	radix_numbers_extension
 	time_literals_extension
 	event_phrases_extension
@@ -63,7 +83,11 @@ EXTENSIONS = [
 	alias_arrows_extension
 	times_loops_extension
 	entities_extension
+	inline_html_extension
 	declared_operators_extension
+	list_operators_extension
+	# first in the used stage: a fold of an operator alone, `sum := fold +`
+	operator_folds_extension
 	tasks_extension
 	typed_templates_extension
 	function_clauses_extension
@@ -72,17 +96,32 @@ EXTENSIONS = [
 	protocols_extension
 	# right after definition_heads, in this order: a class's conversions become the program's before conversions runs
 	Extension{name: "class_methods", passes: {"definition_heads": classes_rewritten}}
-	Extension{name: "int_types", passes: {"definition_heads": int_types}}
+	Extension{name: "int_types", passes_before: {"definition_heads": formatted_definitions}, passes: {"definition_heads": int_types}}
 	conversions_extension
 	implicit_uses_extension
-	# right before tries, in this order: parse words, then the checked tries the core's tries guard
+	test_lines_extension
+	# right before tries, in this order: the last result `it`, parse words, then the checked tries the core's tries guard
+	last_results_extension
 	Extension{name: "parse_words", passes_before: {"tries": parse_words}}
 	checked_tries_extension
+	key_bindings_extension
 	iteration_inlining_extension
+	block_inlining_extension
 	of_lookups_extension
 	match_phrases_extension
 	text_lints_extension
+	int_misfits_extension
+	page_values_extension
+	fetch_signals_extension
+	js_globals_extension
+	dir_hints_extension
+	from_imports_extension
+	collection_type_tests_extension
+	block_definitions_extension
+	local_shadows_extension
 	effects_extension
+	optional_unwraps_extension
+	object_functions_extension
 	# extensions/primitive.warp, which the compiler uses itself: its attribute `@primitive`
 	Extension{name: "primitive", attributes: [PRIMITIVE_ATTRIBUTE]}
 	Extension{name: "commands", commands: command_words(), runs: extension_command}

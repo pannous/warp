@@ -8,8 +8,8 @@ text_join(a: text, b: text): text := {
 	copy_text(out, 0, a, 0, byte_count(a))
 	copy_text(out, byte_count(a), b, 0, byte_count(b))
 	# a walk over a stays good on out, which starts with a's bytes: `t += …` keeps t's cursor
-	if same_text(a, walked_text) { walked_text = out }
-	if same_text(a, other_text) { other_text = out }
+	if same(a, walked_text) { walked_text = out }
+	if same(a, other_text) { other_text = out }
 	out
 }
 # the texts joined, `between` between each two: one text made and each byte copied once, where `+=` in a loop copies
@@ -38,7 +38,7 @@ global other_before = -1
 # source's count (card text-cache-lru)
 text_count(t: text): int := {
 	if byte_count(t) < short_text() { return characters_counted(t) }
-	if same_text(t, counted_text) and byte_count(t) == counted_bytes { return counted }
+	if same(t, counted_text) and byte_count(t) == counted_bytes { return counted }
 	count = characters_counted(t)
 	counted_text = t
 	counted_bytes = byte_count(t)
@@ -108,7 +108,7 @@ text_order(a: text, b: text): int := {
 # whether a and b have the same bytes: the one text, or texts of other lengths, without looking at a byte (a map's
 # names are mostly the very texts looked up)
 same_bytes(a: text, b: text): bool := {
-	if same_text(a, b) == 1 { return yes }
+	if same(a, b) { return yes }
 	if byte_count(a) != byte_count(b) { return no }
 	i = 0
 	while i < byte_count(a) {
@@ -117,6 +117,54 @@ same_bytes(a: text, b: text): bool := {
 	}
 	yes
 }
+# `a == b` of texts (decisions nfc-tables, nfc-slot; notes/text_equality_nfc.md): equal bytes, else equal NFC forms.
+# Only a text holding a code point NFC may change asks the host: the compiler's own `→` == `≠` never does, so building
+# the runtime needs no modules/unicode.wasm, which the step after it builds
+equal_texts(a: text, b: text): bool := same_bytes(a, b) or ((maybe_decomposed(a) or maybe_decomposed(b)) and same_bytes(canonical(a), canonical(b)))
+maybe_decomposed(t: text): bool := {
+	at = 0
+	before = 0
+	while at < byte_count(t) {
+		# a byte below 204 (0xCC, U+0300's lead byte) is ASCII, a continuation or the lead of a code point NFC keeps
+		if byte_at(t, at) < 204 {
+			before = 0
+			at += 1
+		} else {
+			next = at + code_point_width(byte_at(t, at))
+			if next > byte_count(t) { return no }
+			c = code_point_at(t, at)
+			after = if next < byte_count(t) then code_point_at(t, next) else 0
+			if may_change_in_nfc(c) and not (lone_mark(c) and not may_change_in_nfc(before) and not may_change_in_nfc(after)) { return yes }
+			before = c
+			at = next
+		}
+	}
+	no
+}
+# a combining mark U+0300–036F no composition takes, as the parser's overline `6̅`: between two stable code points
+# nothing composes or reorders it (U+0300–0304, 0306–030C, 030F, 0311, 0313, 0314, 031B, 0323–0328, 032D, 032E, 0330,
+# 0331, 0338, 0340–0345 compose or are replaced)
+lone_mark(c: int): bool := {
+	if not within(c, 768, 879) or within(c, 768, 772) or within(c, 774, 780) or within(c, 803, 808) or within(c, 832, 837) { return no }
+	not (c == 783 or c == 785 or c == 787 or c == 788 or c == 795 or c == 813 or c == 814 or c == 816 or c == 817 or c == 824)
+}
+# a code point NFC may compose, reorder or replace (a combining mark, an NFC_QC No singleton), or one of a block not
+# known free of them. Free of them: below U+0300; Greek and Cyrillic U+0370–0482, 048A–052F; phonetic letters
+# U+1D00–1DBF; Latin extended additional U+1E00–1EFF; punctuation and currency U+2010–20CF; letterlike, number forms,
+# arrows, math and shapes U+2100–2BFF; CJK punctuation U+3000–3029; variation selectors U+FE00–FE0F; small forms
+# U+FE30–FE6F; halfwidth and fullwidth forms U+FF00–FFEF; emoji U+1F000–1FAFF. The singletons among them: U+0374,
+# 037E, 0387 (Greek), 2126 Ω, 212A K, 212B Å, 2329, 232A (angle brackets), 2ADC (forking)
+may_change_in_nfc(c: int): bool := {
+	if c < 768 { return no }
+	if c == 884 or c == 894 or c == 903 or c == 8486 or c == 8490 or c == 8491 or c == 9001 or c == 9002 or c == 10972 { return yes }
+	if within(c, 880, 1154) or within(c, 1162, 1327) or within(c, 7424, 7615) or within(c, 7680, 7935) { return no }
+	if within(c, 8208, 8399) or within(c, 8448, 11263) or within(c, 12288, 12329) { return no }
+	if within(c, 65024, 65039) or within(c, 65072, 65135) or within(c, 65280, 65519) or within(c, 126976, 129791) { return no }
+	yes
+}
+canonical(t: text): text := unboxed_text(canonical_text(t))
+# a text's NFC form, by lib/unicode.warp's canonical_text, which the host links on its first call
+canonical_text(t: Node): Node from runtime
 # where the bytes of part first start in t, -1 when nowhere
 text_index(t: text, part: text): int := {
 	for start in 0..(byte_count(t) - byte_count(part) + 1) {

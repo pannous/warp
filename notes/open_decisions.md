@@ -6,11 +6,12 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## Pending
 (zero-bake hold, user via Supervisor 2026-11-05: only questions serving the library zero-bake plan are asked; others queue here.)
-- test-program-value (warp-playground, card program-test, queued 2026-11-06): a program made of `test …` lines (samples/laws/kitchensink.warp) shows nothing today. Should it end with the summary value "✓ N tests passed" / "K of N failed", as `warp test` prints? Recommended: yes, an ending rule like ended_by (extensions/rules/rule_words.warp) appending tests_summary() plus a counter in lib, no core. Alternative: the tour checks only that no test failed.
 
 ## To confirm (decided on the user's behalf; built as described, keep or undo)
+- data-tag-words: in data, glued `head{…}` / `first{…}` (prelude words) stay tags; only program-defined or used words call. Spaced `first {…}` stays the prelude call (spaced-tag keeps prelude words; only head is a tag via the library index). Keep, or make spaced prelude words tags too? (decisions.md)
 
 ## Parked
+- block-definitions (card inside, Later): scoped functions out of scope for now; if built, the choice was local to the block with capture at definition.
 - phrase-params (user: park for now; card definition-heads-phrases): in `send v to c := …` which words are parameters: (a) the body decides (used or typed words), () optional, unifying the older `to add a to b:` reader (an unused plain word there turns fixed); (b) always parentheses. Also: a phrase head starting with a keyword word (`send` is an emit word) refused aloud vs outranking the keyword. Provisional (a) on the branch only, not landed. Meanwhile phrases are written with named arguments (`give 2 to: 40`, named-argument-phrases).
 - class-text (sound notes), unit plurals, def-first (b), note tests: discuss later (user).
 - event-handlers (prose discussion with the user, no popups; block-parameters-captures landed): proposed `on(event: Event, body: block)` in the prelude, `emit(event, data)` runs the listeners, no handler core. Open: (1) event data as `it`, a chosen name (`on key k {…}`) or both; (2) user events declared (`enum Event += ask`) or any symbol; (3) decided: on-frame-headless. Branch event-handlers-unknown (a4d0dde771) only a reference.

@@ -95,8 +95,9 @@ made_case kind made, since no program decides any more what it makes.
   their heads only (prelude_words.warp declared_only: `f(x) := ø`), from the slice parses baked into the compiler, so
   nothing of their bodies is lowered or analyzed; the analyzer takes their kinds and results from warp.module
   (analyzer.warp declared_linked), the emitter binds them and refuses to compile one (functions.warp). Its classes and
-  globals come in (linked_needs), a class with its methods declared alike, its fields whole; the program runs the globals' initializers. A module whose binding fails is said
-  on stderr ("units: the linked module didn't bind (…); compiled from source") and the program compiled from source.
+  globals come in (linked_needs), a class with its methods declared alike, its fields whole; the program runs the globals' initializers. A module whose binding fails, that lacks
+  its warp.signature or was built of another lib/ text is the compile's error ("units.wasm won't link: …"), never
+  compiled from source (decision module-link-hard-error, 2026-11-07).
   No separate warp.declarations section: the compiler already carries every bundled module's parse.
 - A linked name keeps all its variants (card module-export-arity): draw's own show() beside the show(x) builder the
   host calls, which the layout names by index, not by name. A program's call takes the variant whose count of values
@@ -122,8 +123,11 @@ made_case kind made, since no program decides any more what it makes.
   list, text, shell and matrix link. test/modules gives the same
   results linked and from source. Measured: `use units; 3m + 2m` 0.64 s -> 0.56 s: the program still lowers the
   module's reached definitions (checked_program, 70 of 84 samples); declared: 0.36 s, 46 samples.
-- Open: the module's prelude words are its own copy
-  (they should be the prelude module's, space 2+k); classes from warp.declarations into module.classes before late_code;
+- Since 2026-11-07 (card prelude-listener-globals) every module written links the prelude as a program does: its
+  prelude words and globals are warp/prelude's, one instance per run (signals' listen and the program's unlisten edit
+  one event_listeners). A with_reached pass applies only the aliases of the modules whose slices it brings, so the
+  prelude's pass leaves math's `alias log2 => binary_log` off math's own text, whose log2 is C's.
+- Open: classes from warp.declarations into module.classes before late_code;
   late_code once all modules are bound.
 
 - Load-time linking (2026-11-05, L5c, card wasm-module-linking): a program whose uses link runs as its own module

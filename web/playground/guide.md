@@ -117,7 +117,7 @@ Text is anything in quotes: a word, a name, a sentence.
 `.length` counts the letters.
 
 ```warp => 4
-"warp".length
+"wow🤞🏽".length
 ```
 
 `$(…)` puts a value inside a text.
@@ -162,6 +162,8 @@ x
 
 Some names, like `pi`, are constants. They never change.
 
+Examples: constants, "changing variables", "counting up and down", "typed variables", "let and var", swap
+
 ## Values that follow
 
 Like a spreadsheet cell, a value can follow other values.
@@ -196,9 +198,6 @@ big
 ```
 
 Examples: "derived values", signals, listeners, "signals in lists"; samples: signal_fields
-
-
-Examples: constants
 
 ## Truth
 
@@ -284,11 +283,11 @@ age = 15
 match age { 0 to 12 => "child"; 13 to 19 => "teen"; other => "adult" }
 ```
 
-A case can list several values, or name a type.
+A case can list several values, or name a type. Here `day` is today's weekday (Monday = 1).
 
-```warp => "weekend"
+```warp
 enum Day { Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday }
-day = Sunday
+day = [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]#weekday(clock())
 match day { Saturday | Sunday => "weekend"; other => "workday" }
 ```
 
@@ -386,7 +385,7 @@ square [1 2 3]
 
 Also see [[#Closures]] and [[#Acceleration]] below.
 
-Examples: lists, broadcasting, "lazy ranges", "linear arrays"; samples: sorting, quicksort, primes, sieve, sorting_idiomatic, sieve_idiomatic, dot, typed_lists
+Examples: lists, broadcasting, "lazy ranges", "linear arrays"; samples: sorting, quicksort, primes, sieve, sorting_idiomatic, dot, typed_lists
 
 ## Objects
 
@@ -411,7 +410,7 @@ ada.age += 1
 ada.age
 ```
 
-Examples: data; samples: data_structures, json_parser, binary_tree, dijkstra, dijkstra_idiomatic, references
+Examples: data; samples: data_structures, json_parser, binary_tree, dijkstra, references
 
 ## Loops
 
@@ -446,7 +445,7 @@ while n < 3 { n += 1 }
 n
 ```
 
-Examples: loops; samples: fizzbuzz, sieve, life, mandelbrot, game_of_life, life_idiomatic, iterators
+Examples: loops; samples: fizzbuzz, sieve, mandelbrot, game_of_life, life_idiomatic, iterators
 
 ## Functions
 
@@ -497,7 +496,20 @@ def fib(n) = if n < 2 then n else fib(n - 1) + fib(n - 2)
 fib(10)
 ```
 
-Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci, ackermann, queens, queens_idiomatic, sudoku, block_arguments, y_combinator, code_as_data
+### Warp reads warp
+
+warp's compiler is itself a warp program, and `parse` lends any program its parser: code becomes a tree to take apart.
+
+```warp => 14
+evaluate(n) := match n {
+	data($a + $b) => evaluate(a) + evaluate(b)
+	data($a * $b) => evaluate(a) * evaluate(b)
+	_ => n
+}
+evaluate(parse("2 + 3 * 4"))
+```
+
+Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci, ackermann, queens, queens_idiomatic, sudoku, block_arguments, y_combinator, code_as_data, warp_reads_warp
 
 ## Closures
 
@@ -750,9 +762,26 @@ Examples: forms; samples: server, route_headers, hosting, worker
 
 ## Pictures
 
-`use draw` paints pixels on a canvas, and `show()` shows it. A shader colors every pixel at once on the graphics card.
+`use draw` paints pixels on a canvas, and `show()` shows it. A shader colors every pixel at once on the graphics card: [[#Shaders]] below.
 
-Examples: frames, shader, "shader mouse"; samples: paint_text, finger_paint, shader, webgpu, shader_brush, shader_trails, paint_function, window_size
+Examples: frames, shader, "shader mouse"; samples: paint_text, paint_text_gpu, finger_paint, shader, webgpu, shader_brush, shader_trails, paint_function, window_size
+
+## Shaders
+
+A shader is a small program the graphics card (GPU) runs for every pixel at once. `paint` turns a warp function of the pixel's position into a shader: it returns the pixel's color as red, green and blue between 0 and 1.
+
+```warp
+use math
+stripes(x, y) := [0.5 + 0.5 * sine(x / 4), 0.5 + 0.5 * sine(y / 4), 0.8]
+paint(stripes, 64, 32)
+```
+
+The function may call other functions; `shader_of(stripes)` shows the shader code it becomes. Paint it again in a loop for moving pictures.
+
+You can also write the shader yourself in WGSL, the web's shader language, inside `shader { … }`. In there `$name` reads the warp variable `name`.
+`use compute_toys` runs shaders from [compute.toys](https://compute.toys) as they are: `compute_toy(shader { … })`.
+
+Examples: shader, "shader mouse"; samples: warp_compiled_wgsl_shader, julia, voronoi, sdf_scene, ocean, scene_3d, kaleidoscope, lava_lamp, northern_lights, ringed_planet, manual_3d_object_viewer, gpu_visualizer
 
 ## Acceleration
 
@@ -770,9 +799,9 @@ card by itself, and says so once. The graphics card computes in single precision
 design: a sum of 40 000 cosines may be off by about 40 000 × 2⁻¹¹. Write `@cpu` after the map, before it, or on a
 block or function when every digit counts; `@gpu` asks for the graphics card from about 30 000 items.
 
-[[#Pictures]] above shows how to draw directly on the GPU.
+[[#Shaders]] above shows how to draw directly on the GPU.
 
-Examples: shader; samples: gpu_map, gpu_arrays, manual_3d_object_viewer, gpu_visualizer, warp_compiled_wgsl_shader, lava_lamp, northern_lights, ringed_planet, kaleidoscope
+Examples: "gpu map"; samples: gpu_map, gpu_arrays, gpu_million
 
 ## Sound and music
 
@@ -792,7 +821,7 @@ Examples: melody; samples: play_mp3, music, rhythm, harmony, synth, filters, voi
 
 warp turns warp into WebAssembly, which runs in every browser. Code from Rust or C can be called alike.
 
-Examples: "wasm components"; samples: wasm_interop, import_compiled, component_reflection
+Examples: "wasm modules"; samples: wasm_interop, import_compiled, component_reflection
 
 ## Laws
 

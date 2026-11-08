@@ -1,0 +1,88 @@
+# `warp app [check] <file>` (cards app-webview, static-page-window): the program runs with the page it shows
+# (lib/markup.warp page_of, as `warp` prints it) in a window of the system's web view, its handlers live, till the
+# window is closed; `check` prints the text the page shows instead, read in a hidden web view, no window (tests,
+# WARP_NO_WINDOW). A program with check lines (`# check: click "+1", click "+1" → count: 2`, card scripts-samples,
+# decision sample-checks) is checked instead:
+# each line from a fresh run, its steps done by markup's page words, the page's text then holding the text after →
+use os
+use file
+use webview
+
+check_word = "check"
+usage = "warp app [check] <file.warp>  the page a markup program shows, in a window of the system's web view (check: the text it shows, or its # check: lines checked, no window)"
+page_start = "<"
+CHECK_PREFIX = "# check: "
+CHECK_ARROW = " → "
+STEPS_VARIABLE = "WARP_PAGE_STEPS"
+# the program runs with its page in a window so named, its handlers live (lib/markup.warp page_window_run)
+APP_WINDOW_VARIABLE = "WARP_APP_WINDOW"
+
+# the page the program shows after the steps (WARP_PAGE_STEPS lines, markup's page_after_steps), its HTML; the
+# run's Error when it failed
+page_html(file: text, steps: text) := command(STEPS_VARIABLE + "=" + quoted_path(steps) + " warp run " + quoted_path(file))
+is_page(html: any): bool := html is text and html.trim().starts_with(page_start)
+
+# a check's steps as WARP_PAGE_STEPS takes them, one a line, the words by tabs: `click "+1", type "name" "Ann"` is
+# click⇥+1⏎type⇥name⇥Ann; a quoted word keeps its commas and spaces
+step_lines(steps: text): text := {
+	lines = []
+	words = []
+	word = ""
+	quoted = no
+	for c in steps {
+		if c == "\"" { quoted = not quoted }
+		else if quoted { word = word + c }
+		else if c == "," { lines.add(words.join("\t")); words = [] }
+		else if c == " " { if word != "" { words.add(word); word = "" } }
+		else { word = word + c }
+		if not quoted and c == "\"" { words.add(word); word = "" }
+	}
+	if word != "" { words.add(word) }
+	if #words > 0 { lines.add(words.join("\t")) }
+	lines.join("\n")
+}
+
+# a text with each run of white space one space, trimmed: the page's lines and an expectation compare so
+spaced(text: text): text := words(text).join(" ")
+# each check line of the program checked, said ok or FAIL with what the page showed; the number failing
+checks_failed(file: text, lines: list): int := {
+	failed = 0
+	for line in lines {
+		parts = line[#CHECK_PREFIX ..].split(CHECK_ARROW)
+		html = page_html(file, step_lines(parts[0]))
+		shown = spaced(if is_page(html) then webview_page_text(html) else str(html))
+		if #parts == 2 and shown.contains(spaced(parts[1])) { print "ok   " + line } else {
+			print "FAIL " + line + ": the page shows " + shown
+			failed += 1
+		}
+	}
+	failed
+}
+
+app_command(arguments: list): int := {
+	checking = #arguments > 0 and arguments[0] == check_word
+	files = if checking then arguments[1 ..] else arguments
+	if #files != 1 {
+		print usage
+		return 1
+	}
+	file = files[0]
+	check_lines = read(file).split("\n").filter(line => line.starts_with(CHECK_PREFIX))
+	if checking and #check_lines > 0 { return if checks_failed(file, check_lines) == 0 then 0 else 1 }
+	if checking {
+		html = page_html(file, "")
+		if not is_page(html) { return shows_no_page(file, html) }
+		print webview_page_text(html)
+		return 0
+	}
+	# (what it printed, a failure's too: `|| true` keeps the output a failing command's error drops; nothing when the app
+	# ended itself, `on key { exit }`)
+	shown = command(APP_WINDOW_VARIABLE + "=" + quoted_path(file) + " warp run " + quoted_path(file) + " 2>&1 || true")
+	if is_page(shown) or shown.trim() == "" then 0 else shows_no_page(file, shown)
+}
+shows_no_page(file: text, shown: any): int := {
+	print "warp app: " + file + " shows no page: " + str(shown).trim()
+	1
+}
+
+exit(app_command(args[1 ..]))

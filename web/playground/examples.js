@@ -18,6 +18,31 @@ name = "Ada"
 	constants: { value: 'pi is a constant at playground.warp:2:1; fix: another name', code: `// constants such as pi cannot change
 pi = 4
 2 * pi` },
+	"changing variables": { value: "10", code: `// x op= y is x = x op y, for every operator: *=, max=, ^= …
+x = 3
+x *= 2
+x max= 10
+x` },
+	"counting up and down": { value: "2", code: `// ++ and -- change a variable at once, so i++ and ++i are the same
+i = 1
+i++
+i++
+i--
+i` },
+	"typed variables": { value: "4", code: `// a type after the name: x only ever holds an int
+x: int = 3
+x = 4
+x` },
+	"let and var": { value: "2", code: `// let binds a name once, var is a variable that can change
+let step = 1
+var count = 1
+count += step
+count` },
+	swap: { value: "[2, 1]", code: `// several variables assigned at once: a swap in one line
+a = 1
+b = 2
+a, b = b, a
+[a, b]` },
 	lists: { value: '[3, "apple"]', code: `// a list, how many items it has, and its first item
 fruits = ["apple" "pear" "plum"]
 [#fruits, fruits#1]` },
@@ -70,13 +95,13 @@ tick(); tick()
 class animal { name; speak := name + " makes a sound" }
 class dog extends animal { speak := super.speak + ": woof" }
 dog("Rex").speak` },
-	properties: { value: "[100 51]", code: `// computed properties, generic classes, extension methods
-class Temperature { celsius = 0.0; fahrenheit:{celsius * 9 / 5 + 32} set{celsius = (it - 32) * 5 / 9} }
+	properties: { value: "[100, 51]", code: `// computed properties, generic classes, extension methods
+class Temperature { celsius = 0.0; fahrenheit := celsius * 9 / 5 + 32; fahrenheit(f) := { celsius = (f - 32) * 5 / 9 } }
 water = Temperature()
 water.fahrenheit = 212
 class Box<T>{item:T}
 extension Int { func squared() -> Int { self * self } }
-[water.celsius, Box<int>(42).item + 3.squared()]` },
+[water.celsius, Box(42).item + 3.squared()]` },
 	"welcoming errors": { value: '`say 3 == 3` reads two ways: say(3 == 3) or (say 3) == 3; say\'s parameter is untyped: write the parentheses or declare its type', code: `// an unclear line is an error that offers its readings
 say(x) := x
 say 3 == 3` },
@@ -186,6 +211,9 @@ for frame in 0..300 {
   sleep(30ms)
 }
 "done"` },
+	"gpu map": { value: "14", code: `// @gpu asks for the graphics card: from about 30 000 numbers the map runs there
+xs = [1.0, 2.0, 3.0]
+sum(xs.map(x => x * x) @gpu)` },
 	"game of life": { value: "15", wait: 1200, code: `// Conway's Game of Life, a step every half second
 width = 24
 height = 12
@@ -238,7 +266,7 @@ div{ button{ "+1", on click { count += 1 } } button{ "reset", on click { count =
 use web
 done = false
 toggles = 0
-div{ style{ .done = "green" } button{ on click { done = not done; toggles += 1 }, "toggle" } p{ class: (if done then "done" else "open") "state" } ul{ li{ "toggled " + toggles + " times" } } }` },
+div{ style{ .done{ color: "green" } } button{ on click { done = not done; toggles += 1 }, "toggle" } p{ class: (if done then "done" else "open") "state" } ul{ li{ "toggled " + toggles + " times" } } }` },
 	components: { value: '<div><div><button data-warp-click="1">+</button><p>Apples: 1</p></div><div><button data-warp-click="2">+</button><p>Pears: 5</p></div></div>', clicks: ["+"], clicked: '<div><div><button data-warp-click="1">+</button><p>Apples: 2</p></div><div><button data-warp-click="2">+</button><p>Pears: 5</p></div></div>', kept: true, code: `// a component is a function that returns markup; each keeps its own count
 use web
 def Counter(label, start) {
@@ -278,7 +306,7 @@ users = ["Ann", "Bo"]
 route "/" { div{ h1{ "Users" } a{ href: "/users/2" "Bo" } } }
 route "/users/:id:int" { div{ h1{ users#id } a{ href: "/" "back" } } }
 route "*" { p{ "no such page" } }` },
-	forms: { value: '<div><form method="post" action="/items"><input name="item"><button>add</button></form><ul><li>milk</li></ul></div>', typed: "tea", clicks: ["add"], clicked: '<div><form method="post" action="/items"><input name="item"><button>add</button></form><ul><li>milk</li><li>tea</li></ul></div>', address: "/", code: `// a form posts to the program's own route: here the page answers it, \`warp serve\` serves it to every browser
+	forms: { value: '<div><form method="post" action="/items"><input name="item"><button>add</button></form><ul><li>milk</li></ul></div>', typed: "tea", clicks: ["add"], clicked: '<div><form method="post" action="/items"><input name="item"><button>add</button></form><ul><li>milk</li><li>tea</li></ul></div>', address: "/", code: `// the form sends what you type to the route /items of this same program; here the page plays the server, \`warp serve\` puts it on the web
 use web
 items = ["milk"]
 post "/items" { items.add(request.body.item) }
@@ -299,14 +327,12 @@ div{
 	melody: { value: '"done"', code: `// notes by name: one after another, then together as a chord
 use sound
 melody([C4 E4 G4], 100ms)
-play([C4 E4 G4], 300ms)
+chord([C4 E4 G4], 300ms)
 "done"` },
-	"wasm components": { value: '[12586269025 [\'a\' "bc" \'d\'] 7]', code: `// a Rust library compiled to a WebAssembly component
-use rust_demo as demo
-c = demo.counter(5)
-c.increment(2)
-[demo.fib(50), demo.words("a bc d"), c.value()]` },
-	"C libraries": { value: '["stack" "/b/c" 3400449319 "1.3.2"]', code: `// C functions and zlib, compiled to WebAssembly
+	"wasm modules": { value: '[["fib"], 12586269025]', code: `// a Rust library compiled to WebAssembly: its exports are warp words
+use wasm "test/fixtures/components/rust_demo.wasm" as demo
+[demo.functions, fib(50)]` },
+	"C libraries": { value: '["stack", "/b/c", 3400449319, "1.3.2"]', code: `// C functions and zlib, compiled to WebAssembly
 use c
 import test/fixtures/wasm/zlib
 [strstr("haystack", "st"), strchr("a/b/c", 47), crc32(0, "wasp", 4), zlibVersion()]` },

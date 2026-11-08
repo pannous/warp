@@ -71,7 +71,7 @@ global hashed_text = ""
 global hashed_bytes = -1
 global hashed_code = 0
 name_code(name: text): int := {
-	if same_text(name, hashed_text) == 1 and byte_count(name) == hashed_bytes { return hashed_code }
+	if same(name, hashed_text) and byte_count(name) == hashed_bytes { return hashed_code }
 	h = 5381
 	i = 0
 	while i < byte_count(name) {
@@ -241,6 +241,18 @@ field_with(m: Node, name: text, value: Node): Node := {
 	at = map_index(m, name)
 	if at == 0 { list_append(entries, [new_key(name, value)]) } else { entries#at = new_key(name, value) }
 	m
+}
+# a new instance of m's class holding m's fields (shared: lib/prelude.warp copy copies them), made as calling its
+# class value makes one (`type(m)()`, emitter closures.warp dispatcher_code): the class value of m's descriptor;
+# a value that is no instance is m itself
+instance_copy(m: Node): Node := {
+	if not is_class_instance(m) { return m }
+	descriptor = entry_key(m)
+	maker = keyed(Marked.TypeValue, unboxed_text(descriptor), descriptor)
+	made = maker()
+	entries = unboxed_list(instance_entries(m))
+	for i in 1 to #entries { field_with(made, key_name(entries#i), key_value(entries#i)) }
+	made
 }
 # the map m with the entries of another, ø, after its own (an instance's declared fields, then its extra ones)
 with_entries_of(m: Node, more: Node): Node := {

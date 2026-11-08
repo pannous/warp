@@ -1,9 +1,22 @@
 // The standard library module time (notes/stdlib.md): `use time`, the calendar over clock() (milliseconds since 1970, UTC)
-// its durations are lib/units' Time quantities (milliseconds_of)
-use units
 
-// `now`: the Instant the run reads the wall clock, a library function like any other (bare `now` calls it)
-now(): Instant := Instant(wall_clock_ms())
+// `now`: the Instant the run reads the wall clock, a library function like any other (bare `now` calls it), in the
+// run's time zone (decision local-now): now.hour is the local hour, its text has the zone's offset; an Instant a
+// program builds is UTC
+now(): Instant := Instant(wall_clock_ms(), local_zone_name())
+// the run's time zone: the environment's TZ, natively the system's zone where TZ names none (core/native/driver.warp),
+// in the page the browser's (web/playground/wasi.js); UTC, warned, for a zone not in time_zones
+local_zone_name(): text := {
+	for entry in wasi_environment().split(chr(0)) { if entry.starts_with(TZ_ENTRY) { return known_zone(entry[#TZ_ENTRY ..]) } }
+	UTC_ZONE
+}
+TZ_ENTRY = "TZ="
+UTC_ZONE = "UTC"
+known_zone(name: text): text := {
+	if time_zones.any(zone => zone.name == name) { return name }
+	warning("the time zone " + name + " is not in lib/time.warp time_zones: now is UTC")
+	UTC_ZONE
+}
 // the one hook into the host: WASI's clock_time_get (core/analysis/host_words.warp) of the wall clock
 // (CLOCK_REALTIME, 0), a millisecond's precision asked for. It writes the u64 nanoseconds since 1970 into linear
 // memory's first 8 bytes (the scratch fd_write takes only within its call), read back little-endian
@@ -15,34 +28,56 @@ wall_clock_ms(): int := {
 	nanos /! nanos_per_milli
 }
 
+// a span of time in milliseconds, which moves an Instant: a plain number is one (`Instant(0) + 2`), lib/units converts
+// its quantities of time (`Instant(0) + 2 seconds`), one of another dimension a DimensionError (card instant-typed-duration)
+class Duration { ms: number }
+n: number as Duration := Duration(n)
+
 // a point in time: milliseconds since 1970-01-01T00:00:00Z. Everything on it is plain warp: ordering through
 // compare (<, <=, >, >=), equality structural, the difference of two instants in milliseconds, a duration in
 // milliseconds added or taken away, and its text in RFC 3339 (print, `"at " + now`)
 class Instant {
 	ms: int
+	zone: text = "UTC"
 	// another Instant: the earlier first. A duration (`now > 9.hours`, `now > 17h`) compares the matching part
 	// (decision time-word, Interviewer REVISION 2026-11-05): under a day the time of day, else the day of the month
-	compare(other) := if other is Instant then ms - other.ms else instant_part_compare(ms, other)
-	// its calendar fields, UTC: now.year, now.month, now.day, now.hour, now.minute, now.second
-	year() := date_of(ms).year
-	month() := date_of(ms).month
-	day() := date_of(ms).day
-	hour(): int := ms % 86400000 /! 3600000
-	minute(): int := ms % 3600000 /! 60000
-	second(): int := ms % 60000 /! 1000
-	minus(other) := if other is Instant then ms - other.ms else Instant(ms - milliseconds_of(other))
-	plus(duration) := Instant(ms + milliseconds_of(duration))
-	// RFC 3339 in UTC, the milliseconds without trailing zeros: 2026-10-25T11:43:40.692Z, 2026-10-25T11:43:40.5Z
-	text() := format_date(ms) + "T" + format_time(ms) + millis_fraction(ms % 1000) + "Z"
+	compare(other: Instant or number or Duration) := if other is Instant then ms - other.ms else if other is number then bare_number_refused(other) else instant_part_compare(wall(), other)
+	// seconds east of UTC its zone has then
+	offset(): int := zone_offset(zone_named(zone), ms /! 1000)
+	// its milliseconds on its zone's wall clock, which its calendar fields read: now.year, now.month, now.day,
+	// now.hour, now.minute, now.second
+	wall(): int := ms + offset() * 1000
+	year() := date_of(wall()).year
+	month() := date_of(wall()).month
+	day() := date_of(wall()).day
+	hour(): int := wall() % 86400000 /! 3600000
+	minute(): int := wall() % 3600000 /! 60000
+	second(): int := wall() % 60000 /! 1000
+	// its time of day and its day on its wall clock, times themselves (decision time-word): now.time, now.date
+	time() := time_of(clock_form, wall() % 86400000 /! 1000 * nanos_per_second)
+	date() := time_of(date_form, day_number(wall()))
+	minus(other: Instant or Duration) := if other is Instant then ms - other.ms else Instant(ms - other.ms, zone)
+	plus(duration: Duration) := Instant(ms + duration.ms, zone)
+	// the same instant on the UTC wall clock: now.UTC, also now.utc
+	UTC() := Instant(ms)
+	utc() := Instant(ms)
+	// the same instant on that zone's wall clock: zoned(now, "Asia/Kolkata"), now.zoned("Asia/Kolkata")
+	zoned(zone_name: text) := Instant(ms, zone_name)
+	// RFC 3339, the milliseconds without trailing zeros: 2026-10-25T11:43:40.692Z, 2026-10-25T11:43:40.5Z; in another
+	// zone its wall clock and offset, 2026-10-25T12:43:40.692+01:00 (the zone's name is .zone)
+	text() := format_date(wall()) + "T" + format_time(wall()) + millis_fraction(ms % 1000) + (if zone == UTC_ZONE then "Z" else offset_written(offset()))
 }
-// a duration (`now > 9.hours`) compared with the matching part, with a warning: a bare duration is mostly a clock
-// time meant; a plain number is milliseconds since 1970
-instant_part_compare(ms: int, other: any): int := {
-	if other is number { return ms - other }
-	// a lib/units duration quantity, counted in whole milliseconds
-	d = int(milliseconds_of(other))
-	if d < 86400000 { warning("comparing an Instant with the duration " + other + " compares the time of day: did you mean " + clock_words(d) + "?") }
-	else { warning("comparing an Instant with the duration " + other + " compares the day of the month") }
+// +01:00, -04:00, +05:30: seconds east of UTC as RFC 3339 writes them
+offset_written(seconds: int): text := (if seconds < 0 then "-" else "+") + two_digits(abs(seconds) /! 3600) + ":" + two_digits(abs(seconds) % 3600 /! 60)
+
+// a bare number beside an Instant names no unit (decision instant-bare-number): `t > 5` is refused
+bare_number_refused(n: number) := raise "" + n + " what? write t > " + n + " h, or " + n + " AM"
+// a duration (`now > 9.hours`, `now > 17h`) compared with the matching part, with a warning: a bare duration is
+// mostly a clock time meant
+instant_part_compare(ms: int, other: Duration) := {
+	d = int(other.ms)
+	if d < 86400000 { warning("comparing an Instant with the duration " + format_duration(d) + " compares the time of day: did you mean " + clock_words(d) + "?") }
+	else { warning("comparing an Instant with the duration " + format_duration(d) + " compares the day of the month") }
 	instant_part(ms, d) - d
 }
 // the matching part of an Instant's milliseconds for a duration of d ms: the time of day under a day, else the day of
@@ -64,13 +99,13 @@ millis_fraction(millis): text := {
 	"." + two_digits(millis /! 10) + millis % 10
 }
 
-day_number(ms): int := ms /! 86400000
+day_number(ms: int): int := ms /! 86400000
 // the date of milliseconds as {year, month, day} (lib/prelude.warp civil_from_days)
-date_of(ms) := civil_from_days(day_number(ms))
+public date_of(ms: int) := civil_from_days(day_number(ms))
 // ISO weekday: Monday 1 … Sunday 7
-weekday(ms): int := (day_number(ms) + 3) % 7 + 1
-today() := date_of(clock())
-add_days(ms, n) := ms + n * 86400000
+weekday(ms: int): int := (day_number(ms) + 3) % 7 + 1
+public today() := date_of(clock())
+public add_days(ms, n) := ms + n * 86400000
 days_between(from, to): int := day_number(to) - day_number(from)
 two_digits(n): text := if n < 0 then "-" + two_digits(0 - n) else if n < 10 then "0" + n else "" + n
 // ISO 8601: 2026-10-07
@@ -216,8 +251,10 @@ time_zones = [
 	Zone("Pacific/Honolulu", -36000, Dst.Never)
 ]
 
-zone_named(name: text): Zone := {
-	for zone in time_zones { if zone.name == name { return zone } }
+zone_named(name: text): Zone := time_zones#(zone_index(name) + 1)
+// a zone's place in time_zones from 0, as a zoned time's info holds it
+zone_index(name: text): int := {
+	for at in 0 ..< #time_zones { if time_zones#(at + 1).name == name { return at } }
 	raise "unknown time zone " + name + ": not in the time zone rules (lib/time.warp time_zones)"
 }
 // ISO weekday of a day number: Monday 1 … Sunday 7
@@ -275,6 +312,37 @@ zone_instant(zone: Zone, wall: int, choice: Disambiguation): int := {
 			raise "that wall time does not exist in " + zone.name + ": it is skipped by a daylight saving transition; choose disambiguation: earlier or later"
 		}
 	}
+}
+
+// Zoned times (wiki/time.md "Time zones"): zoned(t, "Asia/Kolkata"), also t.zoned("Asia/Kolkata") (decision zone-word),
+// the one conversion to a zone: a time node of the form Zoned, its position the instant in
+// nanoseconds, its info the zone's index and offset in minutes above the form (extensions/time_values.warp), its zone's
+// name beside them
+nanos_per_second = 1000000000
+date_form = 1
+local_form = 2
+zoned_form = 4
+clock_form = 5
+zone_index_unit = 8
+offset_minute_unit = 2048
+// an instant or a zoned time keeps its instant; a local time's wall clock resolves in the zone, a skipped or repeated
+// one by the disambiguation (`zoned(2024-03-31T02:30, "Europe/Berlin", disambiguation: later)`)
+zoned(t: time, zone_name: text, disambiguation: Disambiguation = Disambiguation.Reject) := {
+	at = zone_index(zone_name)
+	seconds = if t.form == local_form then zone_instant(time_zones#(at + 1), t.epoch_seconds, disambiguation) else t.epoch_seconds
+	zoned_at(at, seconds * nanos_per_second)
+}
+// the zoned time of the zone at that index at an instant (nanoseconds since 1970), its offset the one in effect then
+zoned_at(at: int, nanos: int) := {
+	zone = time_zones#(at + 1)
+	offset = zone_offset(zone, nanos /! nanos_per_second)
+	time_of(zoned_form + at * zone_index_unit + offset /! 60 * offset_minute_unit, nanos, zone.name)
+}
+// the instant a wall time (seconds since 1970 on the zone's clock) means as a calendar shift lands on it: a repeated
+// one the earlier, a skipped one moved past the gap (RFC 5545, Temporal's "compatible")
+compatible_instant(zone: Zone, wall: int): int := {
+	earlier = zone_instant(zone, wall, Disambiguation.Earlier)
+	if earlier + zone_offset(zone, earlier) == wall then earlier else zone_instant(zone, wall, Disambiguation.Later)
 }
 
 // Date patterns (card lib-date-patterns): format_pattern(time, "yyyy-MM-dd HH:mm") and parse_pattern(text, pattern), UTC.

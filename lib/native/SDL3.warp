@@ -1,0 +1,88 @@
+// SDL3 through its C library (lib/host/native_host/window.warp, the native warp's window): `use SDL3` declares these functions;
+// the native warp loads libSDL3 (libSDL3.dylib, libSDL3.so.0) and calls them. Windows, views and layers are handles;
+// an event is a block of SDL_EVENT_BYTES read by its fields' offsets (lib/c.warp field_*)
+SDL_Init(flags: i32): bool from 'SDL3'
+SDL_SetHint(name: text, value: text): bool from 'SDL3'
+SDL_GetError(): text from 'SDL3'
+SDL_GetTicksNS(): i64 from 'SDL3'
+SDL_Delay(milliseconds: i32): void from 'SDL3'
+SDL_GetPrimaryDisplay(): i32 from 'SDL3'
+SDL_GetDisplayUsableBounds(display: i32, bounds: handle): bool from 'SDL3'
+SDL_CreateWindow(title: text, width: i32, height: i32, flags: i64): handle from 'SDL3'
+SDL_DestroyWindow(window: handle): void from 'SDL3'
+SDL_SetWindowTitle(window: handle, title: text): bool from 'SDL3'
+SDL_GetWindowSize(window: handle, width: handle, height: handle): bool from 'SDL3'
+SDL_SetWindowSize(window: handle, width: i32, height: i32): bool from 'SDL3'
+SDL_GetWindowFlags(window: handle): i64 from 'SDL3'
+SDL_SetWindowFullscreen(window: handle, fullscreen: bool): bool from 'SDL3'
+SDL_Metal_CreateView(window: handle): handle from 'SDL3'
+SDL_Metal_DestroyView(view: handle): void from 'SDL3'
+SDL_Metal_GetLayer(view: handle): handle from 'SDL3'
+SDL_PollEvent(event: handle): bool from 'SDL3'
+SDL_WaitEvent(event: handle): bool from 'SDL3'
+SDL_free(memory: handle): void from 'SDL3'
+// sound (lib/host/native_host/sound.warp): a stream to the default playback device per sound, SDL mixing them; a WAV file
+// read and samples converted to another rate and channel count
+SDL_OpenAudioDeviceStream(device: u32, spec: bytes, callback: handle, data: handle): handle from 'SDL3'
+SDL_ResumeAudioStreamDevice(stream: handle): bool from 'SDL3'
+SDL_PutAudioStreamData(stream: handle, samples: bytes, size: length): bool from 'SDL3'
+SDL_FlushAudioStream(stream: handle): bool from 'SDL3'
+SDL_GetAudioStreamQueued(stream: handle): i32 from 'SDL3'
+SDL_DestroyAudioStream(stream: handle): void from 'SDL3'
+SDL_LoadWAV(path: text, spec: handle, samples: handle, size: handle): bool from 'SDL3'
+SDL_ConvertAudioSamples(from_spec: handle, samples: handle, size: i32, to_spec: handle, converted: handle, converted_size: handle): bool from 'SDL3'
+
+SDL_INIT_AUDIO = 0x10
+// SDL turns SIGINT and SIGTERM into a quit event, seen only when its events are taken; "1" leaves them the process's
+SDL_HINT_NO_SIGNAL_HANDLERS = "SDL_NO_SIGNAL_HANDLERS"
+SDL_INIT_VIDEO = 0x20
+SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK = 0xFFFFFFFF
+// SDL_AudioSpec: format, channels, freq, i32 each; SDL_AUDIO_S16LE 16-bit signed samples
+SDL_AUDIO_SPEC_BYTES = 12
+SDL_AUDIO_FORMAT_AT = 0
+SDL_AUDIO_CHANNELS_AT = 4
+SDL_AUDIO_RATE_AT = 8
+SDL_AUDIO_S16LE = 0x8010
+SDL_WINDOW_FULLSCREEN = 0x1
+SDL_WINDOW_OCCLUDED = 0x4
+SDL_WINDOW_HIDDEN = 0x8
+SDL_WINDOW_RESIZABLE = 0x20
+SDL_WINDOW_MINIMIZED = 0x40
+SDL_WINDOW_METAL = 0x20000000
+// SDL_Event: a union of 128 bytes, its type a u32 first; the fields of the events read here at their offsets
+SDL_EVENT_BYTES = 128
+SDL_EVENT_QUIT = 0x100
+SDL_EVENT_WINDOW_EXPOSED = 0x204
+SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED = 0x207
+SDL_EVENT_WINDOW_CLOSE_REQUESTED = 0x210
+SDL_EVENT_KEY_DOWN = 0x300
+SDL_EVENT_KEY_UP = 0x301
+SDL_EVENT_MOUSE_MOTION = 0x400
+SDL_EVENT_MOUSE_BUTTON_DOWN = 0x401
+SDL_EVENT_MOUSE_BUTTON_UP = 0x402
+SDL_EVENT_MOUSE_WHEEL = 0x403
+SDL_EVENT_TYPE_AT = 0
+SDL_KEY_AT = 28 // SDL_KeyboardEvent.key, a u32 keycode
+SDL_KEY_REPEAT_AT = 37 // SDL_KeyboardEvent.repeat, a bool
+SDL_MOUSE_X_AT = 28 // SDL_MouseMotionEvent and SDL_MouseButtonEvent x, y: f32
+SDL_MOUSE_Y_AT = 32
+SDL_WHEEL_Y_AT = 28 // SDL_MouseWheelEvent.y: f32
+// SDL_Rect: x, y, w, h, i32 each
+SDL_RECT_BYTES = 16
+SDL_RECT_WIDTH_AT = 8
+SDL_RECT_HEIGHT_AT = 12
+// keycodes: a character's code point, the keys without one SDLK_SCANCODE_MASK and their scancode
+SDLK_SCANCODE_MASK = 0x40000000
+SDLK_ESCAPE = 27
+SDLK_RIGHT = 0x4000004F
+SDLK_LEFT = 0x40000050
+SDLK_DOWN = 0x40000051
+SDLK_UP = 0x40000052
+SDLK_LCTRL = 0x400000E0
+SDLK_LSHIFT = 0x400000E1
+SDLK_LALT = 0x400000E2
+SDLK_LGUI = 0x400000E3
+SDLK_RCTRL = 0x400000E4
+SDLK_RSHIFT = 0x400000E5
+SDLK_RALT = 0x400000E6
+SDLK_RGUI = 0x400000E7

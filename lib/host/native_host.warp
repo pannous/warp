@@ -1,0 +1,24 @@
+// The native host module (decisions window-in-warp, native-host-modules): what the playground answers in JavaScript
+// beyond the driver's own words, natively in warp over C libraries by plain FFI. No program uses it: the native
+// driver links it at the first question it does not answer itself (core/native/driver.warp host_export) and calls its
+// host_* words: the window's system values and its painting's layer (native_host/window.warp), the host words as
+// host_<word> (text_coverage there, sound's in native_host/sound.warp), and host_run_ended at the run's end
+use SDL3
+use bits
+use file
+use os
+use json
+use time
+use text
+use callbacks
+import (calloc, free, strlen, library_function, field_u8, field_i16, field_i32, field_u32, field_i64, field_f32, field_f64, field_pointer, field_text, set_field_i32, set_field_i64, set_field_f64, set_field_pointer) from 'c'
+use "native_host/platform.warp"
+use "native_host/window.warp"
+use "native_host/sound.warp"
+use "native_host/webview.warp"
+
+// the run's end: a still picture stays shown till its window is closed, the sounds play out
+host_run_ended() := {
+	window_run_ended()
+	sounds_heard_out()
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-
+# a function that takes a block of code and runs it n times
 def repeats(n: int, block) := {
 	for i in 1...n {
 		block()
@@ -13,4 +13,12 @@ repeats 3{
 # ^^ That was just a demonstration. It was already built in:
 3 times{
 	print "Hi"
+}
+
+# the count words are one line each, a block parameter handed on to `times`
+twice(body: block) := 2 times body
+thrice(body: block) := 3 times body
+twice { print "Ho" }
+thrice {
+	print "Hip"
 }

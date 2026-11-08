@@ -5,7 +5,7 @@ length = 6.0m ± 0.3m
 width = 2.0m ± 0.2m
 area = length * width
 print "area: " + str(area)
-print "between " + str(area.low) + " and " + str(area.high)
+print "range: " + str(area.low) + " to " + str(area.high)
 
 # a comparison answers only when the whole interval agrees
 big = area certainly > 10m²
@@ -19,14 +19,12 @@ period = 2 * π * √(pendulum / 9.81)
 print "period: " + period + " s"
 # with units, ± converts its spread into the value's unit and carries both through Quantity arithmetic
 rope = 5m ± 1cm
-print "two ropes: " + str(rope * 2)
-# print "two ropes: " + rope * 2 // TODO Error("wasm trap: cast failure")
+print "two ropes: " + rope * 2 # DONE Error("wasm trap: cast failure")
 print "with a 20 cm knot: " + str(rope + 20cm)  # the exact 20 cm adds no spread
 print "pulled in 2 s: " + str(rope / 2s)
 # one function serves a quantity and a plain number alike
 twice(x) := x * 2
-print "twice: \(twice(rope))"
-# print "twice: \(twice(rope)) and \(twice(3))" // TODO card pure-self: unit literals and ± in the pure/self lanes
+print "twice: \(twice(rope)) and \(twice(3))" # DONE card pure-self: unit literals and ± in the pure/self lanes
 # print "twice: \{twice(rope)} and \(twice(3))"
 
 print "area about " + str(area.value)

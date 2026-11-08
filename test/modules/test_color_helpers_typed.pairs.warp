@@ -1,6 +1,6 @@
 # Color helper outcomes before and after typing
 'use color; "" + red'	"red"
-'use color; hash(rgb(1, 2, 3))'	"#010203"
-'use color; hash(with_alpha(red, 0.5))'	"#80FF0000"
+'use color; hex_text(rgb(1, 2, 3))'	"#010203"
+'use color; hex_text(with_alpha(red, 0.5))'	"#FF000080"
 'use color; hex(red)'	4294901760
 'use color; padded_hex(15, 4)'	"000F"

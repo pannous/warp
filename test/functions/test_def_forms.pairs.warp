@@ -5,7 +5,7 @@
 
 # definition_forms_agree
 'def fib(n){n+1}; fib(3)'	4
-'def fib(n): n+1; fib(3)'	4
+# triage-held 2026-11-06: Python-style def …: bodies, foreign syntax :: 'def fib(n): n+1; fib(3)'	4
 'fib(n) = n + 1; fib(3)'	4
 'fib(n:int) = n + 1; fib(3)'	4
 'fib := it + 1; fib(3)'	4
@@ -16,3 +16,11 @@
 
 # a_parameter_tested_for_membership_is_no_function
 'snake=[1]; f(p) := not (p in snake); f(3)'	1
+
+# a_keyword_definition_may_take_an_operator_words_name
+'def add(a, b) := a + b; add(2, 3)'	5
+# a_method_call_of_the_programs_own_word_counts_its_receiver
+'reduce(xs, f, initial) := initial; [1, 2].reduce((a, b) => a + b, 7)'	7
+# a_rest_pattern_binds_no_library_word
+'total([]) := 0; total([first, rest...]) := first + total(rest); total([1, 2, 3])'	6
+'result = 1; def f() { var result = []; result += [2]; result }; f()'	[2]

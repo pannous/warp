@@ -22,7 +22,7 @@ left_out(name: text, missing: int): list := {
 # giving a node builds and reads nodes through the constructors the module exports for it (host_builders)
 def host_call(body: Body, name: text, arguments: list): TypedCode {
 	signature = module.host[name]
-	if ValueKind.Node in signature#1 or ValueKind.Node in signature#2 { exported_builders() }
+	if (ValueKind.Node in signature#1 or ValueKind.Node in signature#2) and not module.prebuilding { exported_builders() }
 	arguments = arguments + left_out(name, #signature#1 - #arguments)
 	if #arguments != #signature#1 { return refuse("a call of " + name + " with " + #arguments + " arguments") }
 	code = []
@@ -35,7 +35,7 @@ def host_call(body: Body, name: text, arguments: list): TypedCode {
 	TypedCode(result, if is_node_kind(result) then entered_node(code) else code)
 }
 # the constructors a host word builds nodes with: [export name, parameter kinds (char: an i32), runtime word of runtime/builders.warp]
-host_builders = [["new_empty", [], "built_empty"], ["new_int", [ValueKind.Int], "built_int"], ["new_bool", [ValueKind.Int], "built_bool"],
+host_builders = [["new_map", [ValueKind.Node], "built_map"], ["new_empty", [], "built_empty"], ["new_int", [ValueKind.Int], "built_int"], ["new_bool", [ValueKind.Int], "built_bool"],
 	["new_float", [ValueKind.Float], "built_float"], ["new_codepoint", [ValueKind.Char], "built_codepoint"], ["new_text", [ValueKind.Char, ValueKind.Char], "built_text"],
 	["new_symbol", [ValueKind.Char, ValueKind.Char], "built_symbol"], ["new_key", [ValueKind.Node, ValueKind.Node, ValueKind.Int], "built_key"],
 	["new_list", [ValueKind.Node, ValueKind.Node, ValueKind.Int], "built_list"], ["new_type", [ValueKind.Node, ValueKind.Node], "built_type"], ["error_of", [ValueKind.Node], "built_error"],
@@ -76,6 +76,9 @@ def exported_builders(): any {
 	f.code = runtime_call("float_of_node", [runtime_call("node_at", [TypedCode(ValueKind.Node, [op.local_get, 0]), TypedCode(ValueKind.Int, [op.local_get, 1])])]).code
 	# the runtime words the extensions export for a host, as they are (a GPU list's cells: extensions/gpu_lists)
 	for name in extension_host_exports() { exported_runtime_word(name) }
+	# any value as one text and back (runtime/packed_nodes.warp), which a native channel's file holds (driver.warp
+	# channel_sent)
+	for name in ["packed_node", "unpacked_node"] { exported_node_word(name) }
 	f = exported_function("is_textual", [ValueKind.Node], ValueKind.Bool)
 	f.code = runtime_call("textual_node", [TypedCode(ValueKind.Node, [op.local_get, 0])]).code
 }
@@ -127,6 +130,13 @@ def exported_runtime_word(name: text) {
 	word = module.runtime[name]
 	f = exported_function(name, word.kinds, word.result)
 	f.code = runtime_call(name, range_list(#word.kinds).map(i => TypedCode(word.kinds[i], [op.local_get] + uleb(i)))).code
+}
+# … taking and giving nodes, a host that reads no GC objects: its texts as Text nodes
+def exported_node_word(name: text) {
+	word = module.runtime[name]
+	nodes = range_list(#word.kinds).map(i => TypedCode(ValueKind.Node, [op.local_get] + uleb(i)))
+	f = exported_function(name, nodes.map(node => ValueKind.Node), ValueKind.Node)
+	f.code = boxed(runtime_call(name, nodes))
 }
 def host_argument(value: TypedCode, kind: ValueKind): list {
 	if kind == ValueKind.I32 { return host_int(value) + [op.i32_wrap_i64] }

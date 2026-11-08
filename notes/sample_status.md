@@ -70,8 +70,8 @@ Each samples/**/*.warp run with `warp pure` (WARP_NO_WINDOW=1, 30 s timeout, one
 - ✅ samples/golf/rot13.warp
 - ✅ samples/golf/sierpiński-triangle.short.warp
 - ✅ samples/golf/sierpiński-triangle.warp
-- ❌ samples/gpu/gpu_arrays.warp: no field totals
-- ✅ samples/gpu/gpu_map.warp
+- ❌ samples/acceleration/gpu_arrays.warp: no field totals
+- ✅ samples/acceleration/gpu_map.warp
 - ❌ samples/gpu/gpu_visualizer.warp: outside the core: the unknown name pi
 - ❌ samples/gpu/kaleidoscope.warp: outside the core: a call of paint with 1 arguments
 - ❌ samples/gpu/lava_lamp.warp: outside the core: an error value
@@ -109,7 +109,6 @@ Each samples/**/*.warp run with `warp pure` (WARP_NO_WINDOW=1, 30 s timeout, one
 - ❌ samples/lists/primes.warp: outside the core: the unknown name n
 - ❌ samples/lists/quicksort.warp: outside the core: a call of random with 1 arguments
 - ✅ samples/lists/sieve.warp
-- ✅ samples/lists/sieve_idiomatic.warp
 - ✅ samples/lists/sorting.warp
 - ✅ samples/lists/sorting_idiomatic.warp
 - ✅ samples/lists/typed_lists.warp
@@ -151,7 +150,6 @@ Each samples/**/*.warp run with `warp pure` (WARP_NO_WINDOW=1, 30 s timeout, one
 - ✅ samples/objects/binary_tree.warp
 - ❌ samples/objects/data_structures.warp: outside the core: the unknown name red
 - ❌ samples/objects/dijkstra.warp: outside the core: the call insert(…)
-- ✅ samples/objects/dijkstra_idiomatic.warp
 - ❌ samples/objects/json_parser.warp: outside the core: the call byte_slice(…)
 - ❌ samples/objects/references.warp: outside the core: the operator === on int
 - ❌ samples/python/numpy_matrix.warp: could not run the program: unknown import: `python::Py_InitializeEx` has not been defined

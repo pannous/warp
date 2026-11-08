@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# Plain classes as database tables (notes/orm.md): no base class, no annotations, a table is a list of a class.
+# Plain classes as database tables: no base class, no annotations, a table is a list of a class.
 # Natively the rows live in orm.database.sqlite beside this file, so a second run finds them there.
 
 class Team{name: text; players: [Person]}

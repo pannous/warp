@@ -8,7 +8,6 @@ use "kind_changes.warp"
 use "../analysis/diagnostics.warp"
 use "../analysis/words.warp"
 
-counting_operators = ["++", "--"]
 # the methods that change the list or map they are called on, which change in place (and
 # extensions/sugar/method_calls.warp leaves as methods)
 in_place_methods = ["add", "append", "push", "insert", "pop", "remove", "delete", "clear"]
@@ -48,21 +47,26 @@ main_globals(program: Node, own_names: list): any := {
 	program
 }
 
-# the variables main assigns, outside the function definitions
+# the variables main assigns, outside the function definitions; a loop's or comprehension's variable belongs to its
+# loop, a function binding that name is its own: an item variable the lowering binds from made names
+# (reads_made_name), a range's counter it declares, `i: int = a`, and steps (`loop·step: i++`, iteration.warp)
+loop_step_label = "loop·step"
 main_variables(program: Node): any := {
 	found = {}
-	for statement in statements_in(program) { add_assigned(statement, found) }
+	stepped = nodes_in(program).filter(n => is_operator(n, ":") and key_of(n) == symbol(loop_step_label)).map(n => changed_variable(value_of(n)))
+	for statement in statements_in(program) { add_assigned(statement, found, stepped) }
 	found
 }
-add_assigned(n: Node, found: map): any := {
+add_assigned(n: Node, found: map, stepped: list): any := {
 	if is_define_statement(n) { return ø }
 	if is_operator(n, "=") {
 		target = key_of(n)
 		if is_operator(target, ":") and key_of(target) == symbol(global_word) { target = value_of(target) }
 		name = changed_root(target)
-		if name != ø { found[name] = yes }
+		counter = is_operator(target, ":") and name in stepped
+		if name != ø and not counter and not reads_made_name(value_of(n)) { found[name] = yes }
 	}
-	for part in parts_of(n) { add_assigned(part, found) }
+	for part in parts_of(n) { add_assigned(part, found, stepped) }
 	ø
 }
 
@@ -87,8 +91,9 @@ changed_root(target: Node): any := {
 	ø
 }
 
-# `let n = 5` in the body: n is explicitly the function's own
-declares_local(body: Node, name: text): bool := nodes_in(body).any(n => is_group(n) and #n == 2 and n#1 is symbol and name_of(n#1) in local_declaration_keywords and leftmost_name(n#2) == name)
+# `let n = 5`, `var n = []` in the body: n is explicitly the function's own, also once the sugar dropped the word (it
+# noted where, lambdas.warp declared_locally)
+declares_local(body: Node, name: text): bool := name in declared_locally(body) or nodes_in(body).any(n => is_group(n) and #n == 2 and n#1 is symbol and name_of(n#1) in local_declaration_keywords and leftmost_name(n#2) == name)
 
 # how the body first mentions the name: binding it fresh (`primes = []`, the function's own local, as in Python),
 # reading or updating it (main's variable), or not at all ("")

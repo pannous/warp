@@ -154,3 +154,72 @@ declaring only Instant (cast failure across modules).
   web/playground/driver.js). A host keeping one compiler instance across compiles would grow it: clear it there.
 - Open for the user (morning): typed $items (seed ABI), map_index 14.8 % (scope_with copies maps via field_with,
   enum ·case lookups by name), GC 15.8 %.
+
+## Hello takes half a second (card hello-takes, 2026-11-07)
+`time warp hello.warp`: 1.5.1 0.22 s / 1.9 G instructions, 1.6.1 0.47 s / 6.1 G, main 0.47 s / 5.5 G. WARP_TIMES
+marks are printed where a phase *starts*, so the time after `pass sugar` is sugar's, not iteration_inlining's.
+- The native warp sets WARP_LIB for every run (core/native/warp.warp, so warp.wasm's commands read its lib/), and
+  the compiler read any WARP_LIB as "a lib/ edited since its build": every compile rescanned all modules' rule needs
+  (scanned_rule_needs, which re-cut extensions/rules/rule_words.warp), hashed the prelude and the sugar files. First
+  fixed by a trust flag (WARP_LIB_INSTALLED, d152612c4d), then, by decision no-lib-reads (user: "we do not touch any
+  library files after the compiler is built"), the whole edited-lib detection was deleted (4e6b583518): a compile
+  trusts lib/ as its build left it, an edited lib/ is a rebuild. hello 5.5 G -> 3.1 G instructions.
+- text == (equal_texts) ran NFC's quick check (maybe_decomposed) code point by code point over both texts at every
+  unequal compare, ~40 % of tree_patterns' compile through node_equal: bytes below 0xCC (U+0300's lead) are skipped
+  bytewise now. tree_patterns 23.6 G -> 17.6 G with the fix above.
+- one_typed_definitions cut prelude + math.warp joined, a text the index never holds: each is cut on its own now and
+  math is a sliced module of the index.
+- Profiling hello: `sample` attaches ~0.2 s late, so profile.sh catches only a hello's tail; use WARP_TIMES phases
+  for it, or a longer program.
+- mentions_word split the whole source once per word asked: implicit uses ask each of the index's ~1800 words.
+  names_mentioned finds the source's names in one walk.
+- A source with a character beyond ASCII (hello's 🌍) read and scanned all 47 module texts for their glyph operators
+  (declared_operators.warp library_glyph_operators): the index's section `operator` holds them now. With the two
+  above: hello 3.1 G -> 2.05 G, 0.16 s (4e6b583518).
+- WARP_TIMES also prints `§R <path>` for each file a compile reads (library.warp file_source): the audit tool of
+  no-lib-reads. At 4e6b583518 a hello read prelude, math, primitive, c, extensions/uncertain/operators and the five
+  type modules besides modules/index.tsv and sugar_rules.packed.
+- P2/P3 (90e4d4a4fa): prelude, math, primitive, c and the uncertain operator rows are built into the compiler by
+  module_source (scripts/compiler-inputs.sh counts every module_source file as the compiler's code, so editing one is
+  a compiler rebuild); the type modules' tables (sections provider, nullary, unary) and the standard modules'
+  compile-time rules (extensions/rules/modules, packed beside the modules with the sugar's) come from what the build
+  writes. A hello compile reads no lib/ or extensions/ source: 2.05 G -> 1.83 G instructions, 0.13 s.
+- Sample audit (warp compile of each sample, WARP_TIMES §R lines): at 90e4d4a4fa only 27 of 263 samples read no lib/
+  source. The most read: reals 173, units 158, unit_names and uncertain 147, native/units 139, i18n 112. They come
+  from rule needs naming a module the program doesn't link: rules_of_module and modules_used_by read its text, and
+  used_module_text probed lib/native/<m>.warp and the crates cache first. Next (P4): an unlinked module is known by
+  its prebuilt signature (modules/<m>.wasm's warp.signature).
+- P4 (ba51489d85): a module a compile doesn't link is known by its prebuilt signature (signature.warp
+  prebuilt_signature: modules/<m>.wasm's warp.signature, read once a compile), never its text; the signature gained
+  the module's rule patterns. fizz-buzz 6.16 G -> 2.39 G instructions, 0.55 -> 0.21 s; samples compiling without a
+  lib/ read 27 -> 52 of 263 (data/reads.sh in the worktree; note bash 3 has no globstar, so samples/*/*.warp only).
+- Left after P4: programs that `use` a module read it (the parser's declared operators, reached modules, with_reached
+  of modules not linked), and 48 of lib/'s 95 modules (csv, path, tables, toml, html…) are not prebuilt at all (only
+  std_module_names, 47, are), so a program using one compiles it from its source: prebuilding every module is the
+  general fix.
+- P5 (hello-takes-interfaces): implicit uses find the used modules by their signatures (used_module_names), a used
+  module's declared operators come from its signature (new field `operators`, one text each as the index's section
+  holds them), a standard module's `use` probes no lib/native file for C lines, and whether a name is a module asks
+  the disk (is_module_name), not its text. `use json` reads lib/json.warp still: with_reached pulls the linked
+  module's source through the passes (1.0 s / 8.7 G instructions on main and here, sugar + first_sugar the most);
+  first_sugar reads memory.warp and sound.warp. Next: a linked prebuilt module is linked, never recompiled.
+- Pitfall: a function named `operator_<x>` declares the operator <x> (lib/aliases.warp's operator_·): helpers
+  operator_written/operator_read broke the index scan (cast failure in key_left under alias_fields, found with
+  WARP_BACKTRACE=1); they are written_operator/read_operator.
+- P6 (cbd32c5972): a called word's definitions (definitions_of: data_positions_called, the definition heads) are
+  parses from the prebuilt signature, no longer the defining module's text cut once a word; and a module's signature
+  is cut out of its wasm read as text (byte_slice) instead of decoded a code point at a time (utf8_text, ~15 % of a
+  `use json` compile). hello 1.84 G -> 1.42 G instructions (0.11 s), fizzbuzz 2.0 G -> 1.53 G, `use json` 8.6 G ->
+  7.0 G. Pitfall: a text holding wasm bytes is asked for its byte_size, never compared (`== ""`): text equality
+  normalizes (NFC) and trapped on the bytes.
+- Left: `use json` still lowers the reached module definitions with the program (lowered_reached: sugar and walks,
+  ~80 %; card sound-start-speed, warp-sprint-web); imports.warp's reached_within and the libm/foreign line scan read
+  each reached module's text (next: from the signature); prebuilding the 9 modules prebuilt ones link waits for
+  numeric-dispatch phase 2 (warp-sprint-units-time).
+- P7 (281ae7b68a): a standard module's C functions (libm's it calls, its foreign lines and C imports, its parts' too)
+  and the modules it and its parts use come from its signature (fields c_lines, a foreign line each, and c_uses):
+  c_imports reads no reached module's text, and a `use json` compile reads no lib/ source at all. Modules that call C
+  are compiled with the program (not prebuilt), so `use sound` still reads sound and what it uses.
+- Pitfall: while `warp rebuild` writes modules/ anew, the prebuilt signatures on disk are the old ones; they ordered
+  native_host before the callbacks it had come to use. The modules step reads no prebuilt signature
+  (signature.warp modules_rewritten), its sources say it all.

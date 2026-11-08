@@ -1,0 +1,7 @@
+# `it` as the last result at the top level (card it-last-result, wiki/it.md)
+'3+4; it*2'	14
+'x = 5; it + 1'	6
+'[1,2,3]; it#2'	2
+'twice := it*2; twice 3'	6
+'2; it + 1; it * 10'	30
+'xs = [1, 2, 3]; xs where it > 1; it'	[2, 3]

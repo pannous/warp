@@ -49,6 +49,13 @@ number_node(n: Node): Node := {
 marked_int(value: Node, kind: int): Node := with_kind(value, kind)
 # the kind field telling a value's int type, `x is Color`; 0 for ø
 int_mark(n: Node): int := if is_null(n) then 0 else marked_kind(n)
+# a number of a program's int type, lib/color's red: its type's mark above the number's Kind, the info bits below the
+# held ones (no yes/no, nor a rational's held bit)
+type_marked(n: Node): bool := {
+	mark = int_mark(n)
+	kind = mark % KindUnit.Info
+	(kind == Kind.Int or kind == Kind.Float) and mark != Marked.Bool and mark / KindUnit.Info % 16777216 != 0
+}
 # an Int node's int, a big one's low 64 bits
 whole_int(n: Node): int := if is_plain_int(n) then unboxed_int(n) else extended_wrapped(n)
 int_of_node(n: Node): int := {
@@ -88,7 +95,7 @@ bool_checked(n: Node): Node := {
 	if not holds_bool(n) { returned_error("not a bool") }
 	n
 }
-# an instance that converts itself to a float, an exact root √3, is one too and stays exact, as `float x = π` keeps π
+# an instance that converts itself to a float, an exact root √3, is one too: a run-time value checked so stays itself
 float_checked(n: Node): Node := {
 	if converts_to_float(n) { return n }
 	if is_null(n) or (kind_code(n) != Kind.Int and kind_code(n) != Kind.Float) { returned_error("not a float") }
@@ -107,7 +114,7 @@ object_checked(value: Node, message: text): Node := {
 text_of_node(n: Node): text := {
 	if not is_null(n) and (kind_code(n) == Kind.Text or kind_code(n) == Kind.Symbol) { return unboxed_text(n) }
 	if not is_null(n) and kind_code(n) == Kind.Codepoint { return char_text(unboxed_char(n)) }
-	if is_failure(n) { raised(n) }
+	if node_is_error(n) { raised(n) }
 	fail()
 	""
 }
@@ -121,9 +128,14 @@ char_of_node(n: Node): char := {
 }
 list_of_node(n: Node): list := {
 	if is_null(n) { return new_list(0) }
-	if is_failure(n) { raised(n) }
+	if node_is_error(n) { raised(n) }
 	if kind_code(n) != Kind.List { fail() }
 	unboxed_list(n)
+}
+# a boxed time where a time is needed, `g(t)` of a `t: time or Instant` (both a $Node): any other value traps
+time_of_node(n: Node): Node := {
+	if is_null(n) or kind_code(n) != Kind.Time { fail() }
+	n
 }
 # `x as bool` of a value known only at run time: a text spelling a falsy word in any case ("No",
 # "false") is no, another value as a condition (card yes-print)

@@ -1,0 +1,37 @@
+# The inner and outer forms of an operator (card inner-outer-operators, wiki/list.md): with x = [1 2],
+# `x \+ x` is [2 4], the inner addition, item by item as `x .+ x`; `x /+ x` is [[2 3] [3 4]], the outer addition, each
+# item of the left with every item of the right. Every operator computing a value of its two sides has both (`\*`,
+# `/-`, `/max`); `/*` stays the comment, so the outer product is spelled `/×`. The form stands apart: a blank before
+# the `\` or `/` and after the operator, so `a /-b` stays the division by -b. Each binds as its operator does.
+list_operators_extension = Extension{name: "list_operators", infix_readers: [read_list_operator]}
+
+# `left \op right` as the phrase `left .op right` (extensions/sugar/arithmetic.warp gives its meaning), `left /op right`
+# as each item of left `.op` right: map(left, item -> item .op right)
+def read_list_operator(p: Parser, left: Node, min_power: int): Node := {
+	c = char_here(p)
+	if c != '\\' and c != '/' { return ø }
+	# `// …` and `/* … */` are comments
+	if c == '/' and (char_ahead(p, 1) == '/' or char_ahead(p, 1) == '*') { return ø }
+	if p.at == 0 or not is_blank(p.code[p.at - 1]) { return ø }
+	op = list_operator_at(p)
+	if op.length == 0 { return ø }
+	powers = binding_powers(op#2)
+	if powers#1 < min_power { return OPERAND_ENDS }
+	p.at += 1 + op#1.length
+	skip_blanks(p)
+	right = expression(p, powers#2)
+	if c == '\\' { return phrase_operation(left, "." + op#1, right) }
+	item = symbol("outer·item")
+	call_of([symbol("map"), left, Key(item, Op.Arrow, phrase_operation(item, "." + op#1, right))])
+}
+
+# the operator glued after the `\` or `/` at the parser's position as [written, canonical], one computing a value
+# and followed by a blank, else []
+def list_operator_at(p: Parser): list := {
+	# a longer operator of the `/` is that one: `/!`, `/=`, `/!=`
+	if char_here(p) == '/' and spelled_operator_at(p)#1 != "/" { return [] }
+	advance(p)
+	op = spelled_operator_at(p)
+	p.at -= 1
+	if op.length == 0 or not computes(op#2) or not is_blank(char_ahead(p, 1 + op#1.length)) then [] else op
+}

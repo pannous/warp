@@ -1,0 +1,19 @@
+# `dir(time)` lists all of a module's words; its hint names the views of one kind each (card dir-filters):
+# time.functions, time.attributes, time.classes and time.operators (extensions/sugar/reflection.warp), its message in
+# core/analysis/hints.data. Not of a name the program binds, nor where the program has its own dir
+
+dir_word = "dir"
+
+dir_views_hint(n: Node, program: Node) := {
+	module = dir_module(without_mark(n))
+	if module == ø or owns_dir(program) or module in names_bound_in_kept(program) or not is_module_name(module) { return ø }
+	diagnose(call_of("dir_views", [module]), n)
+}
+# `time` of `dir(time)` and `dir time`, else ø
+dir_module(n: Node): text? := {
+	if not (is_group(n) and #n == 2 and n#1 == symbol(dir_word) and (bracket_of(n) == "(" or bracket_of(n) == "")) { return ø }
+	given = if is_group(n#2) and bracket_of(n#2) == "(" and #(n#2) == 1 then n#2#1 else n#2
+	if given is symbol then name_of(given) else ø
+}
+
+dir_hints_extension = Extension{name: "dir_hints", lints: [dir_views_hint]}

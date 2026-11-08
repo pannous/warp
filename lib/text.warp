@@ -4,9 +4,9 @@ use letter_ranges
 use slugs
 repeat(t: text, n: int) := if n < 0 then raise "repeat needs a count of at least 0, not " + str(n) else t * n
 pad_left(t, width) := if count(t) >= width then t else (width - count(t)) times " " + t
-pad_right(t, width) := if count(t) >= width then t else t + (width - count(t)) times " "
+public pad_right(t, width) := if count(t) >= width then t else t + (width - count(t)) times " "
 // format("{} has {} items", ["cart", 3]): each {} takes the next value
-format(template, values) := {
+public format(template, values) := {
 	parts = split(template, "{}")
 	result = parts[0]
 	for i in 1 ..< count(parts) {
@@ -15,7 +15,7 @@ format(template, values) := {
 	result
 }
 // the words between runs of whitespace: spaces, tabs, newlines (Python's split())
-words(t): list := [w for w in split(join([if not is_space(c) then c else " " for c in t], ""), " ") if w]
+words(t: text): list := [w for w in split(join([if not is_space(c) then c else " " for c in t], ""), " ") if w]
 lines(t: text): list := [remove_suffix(l, chr(13)) for l in split(t, "\n")]
 // the letters of a text, no digits, spaces or punctuation: letters of "a1 b!" is ['a' 'b'] (decision 2026-10-15),
 // of any script: letters of "x، ب٣" is ['x' 'ب']
@@ -25,8 +25,8 @@ letters(t): list := [c for c in chars(t) if is_unicode_letter(c)]
 is_unicode_letter(c): bool := {
 	code = ord(c)
 	if code < 128 { return is_alpha(c) }
-	at = letter_range_before(code)
-	at >= 0 and code <= letter_ranges[at * 2 + 1]
+	range_index = letter_range_before(code)
+	range_index >= 0 and code <= letter_ranges[range_index * 2 + 1]
 }
 // the last letter range (lib/letter_ranges.warp) starting at or before code, by halving; -1 when none does
 letter_range_before(code: int): int := {
@@ -38,12 +38,12 @@ letter_range_before(code: int): int := {
 	}
 	low - 1
 }
-capitalize(t) := if t is empty then t else upper(t[0]) + t[1..]
-center(t, width) := pad_right(pad_left(t, (width + count(t)) /! 2), width)
+public capitalize(t) := if t is empty then t else upper(t[0]) + t[1..]
+public center(t, width) := pad_right(pad_left(t, (width + count(t)) /! 2), width)
 title(t): text := join([capitalize(w) for w in words(t)], " ")
 // lower case letters and digits, the rest as single dashes: "Hello, World!" → "hello-world"
 slug(t): text := slugify(t)
-truncate(t, width) := if width < 1 then raise "truncate needs a width of at least 1, not " + str(width) else if count(t) <= width then t else t[0 ..< width - 1] + "…"
+public truncate(t, width) := if width < 1 then raise "truncate needs a width of at least 1, not " + str(width) else if count(t) <= width then t else t[0 ..< width - 1] + "…"
 // UTF-8: a text as its bytes, and bytes back as a text (Rust's String::from_utf8, string.from_utf8)
 def to_utf8(t: text): list {
 	out = []
@@ -57,7 +57,8 @@ def to_utf8(t: text): list {
 	out
 }
 
-def from_utf8(bytes: any): text {
+// bytes → text; UFCS `string.from_utf8(bytes)` arrives as from_utf8(string, bytes) — ignore the owner
+def from_utf8_bytes(bytes: any): text {
 	out = ""
 	i = 0
 	total = count(bytes)
@@ -79,6 +80,8 @@ def from_utf8(bytes: any): text {
 	}
 	out
 }
+from_utf8(bytes) := from_utf8_bytes(bytes)
+from_utf8(owner, bytes) := from_utf8_bytes(bytes)
 // only spaces, tabs and line breaks, or nothing
 is_blank(t): bool := trim(t) is empty
 // has letters, all upper (or lower) case
@@ -188,4 +191,13 @@ human_size(bytes: any): text := {
 	shown = "" + whole
 	if frac != 0 { shown = shown + "." + frac }
 	shown + " " + units#u
+}
+
+// the text with its i-th character replaced (1-based, by grapheme): texts are values, so a new text
+// (card text-element-assign). c may be a character, a one-character text, or a codepoint number (97 → 'a')
+text_with_at(t: text, i: int, c: any): text := {
+	ch = if c is int then "" + chr(c) else "" + c
+	parts = chars(t)
+	parts#i = ch
+	join(parts, "")
 }

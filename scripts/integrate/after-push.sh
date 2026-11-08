@@ -14,6 +14,8 @@
 set -uo pipefail
 source "$(dirname "$0")/../lib/platform.sh"
 source "$(dirname "$0")/../lib/hello-footprint.sh"
+source "$(dirname "$0")/../lib/site-scripts.sh"
+source "$(dirname "$0")/../lib/sync-main.sh"
 # git acts on the trees named by -C, never on a caller's repository (a hook's GIT_DIR, on-push.sh)
 unset $(git rev-parse --local-env-vars)
 MAIN_WARP=$HOME/dev/bin/warp  # the native warp (core/native/warp.warp), in a folder of its own (install_native)
@@ -24,6 +26,7 @@ MAIN_CHECKOUT=${WARP_MAIN_CHECKOUT:-$HOME/dev/angles/warp}
 TREE=/Volumes/Worktrees/integrate2
 SLOW_TREE=/Volumes/Worktrees/integrate-slow
 EXPECTED=Hello
+PAGE_SMOKE=(samples/hello/hello.warp samples/web/component_totals.warp)  # the page's check after each refresh: hello and markup
 SEED=$(dirname "$MAIN_WARP")/warp-seed.wasm  # the seed refresh-seed.sh installs beside the shared binary
 BUILDS=$HOME/dev/bin/warp-builds  # one folder: the installed native warp with its lib/, no other builds or links
 
@@ -87,6 +90,26 @@ red() {
 	say "RED $1 (card $key)"
 }
 
+# cost_watched <record>: the instructions the tip's build of <record> retired against the last landing's; more than
+# COST_JUMP_PERCENT up is an urgent card for the Supervisor (user 2026-11-07: input-bind took the self-compile from
+# 1.8 T to 13 T and nobody noticed for hours). A reused compiler has no record of its own. Only warp-self.record:
+# warp.record swings ±20% by what the seed build reuses (one commit measured 3.43 and 3.85 T, 2026-11-08), so it
+# false-alarmed; the self-compile is one compiler run, steady to ~1%
+COST_JUMP_PERCENT=10
+cost_watched() {
+	local record=$1 hash timing now last last_tip
+	hash=$(cut -d' ' -f1 "$TREE/lib/warp.wasm.inputs" 2>/dev/null) || return
+	timing=$warp_store/$hash/$record/time
+	now=$(awk '/instructions retired/ {print $1}' "$timing" 2>/dev/null)
+	[ -n "$now" ] || return
+	read -r last last_tip <"$state/cost-$record" 2>/dev/null
+	echo "$now ${tip:0:10}" >"$state/cost-$record"
+	if [ -n "${last:-}" ] && [ $((now * 100)) -gt $((last * (100 + COST_JUMP_PERCENT))) ]; then
+		red "build cost: $record $(cost_in_tera "$last") T at ${last_tip} → $(cost_in_tera "$now") T (+$(((now - last) * 100 / last))%)" --urgent
+	fi
+}
+cost_in_tera() { awk -v n="$1" 'BEGIN {printf "%.2f", n / 1e12}'; }
+
 # copy_compilers <lib> <folder>: the compilers a lib/ keeps (runtime.wasm, which every compile links, and warp.wasm;
 # warp-self.wasm only when promoted from the same inputs; modules/*.wasm) into the folder with their machine code (.cwasm) and kept values (.kept/), each file moved into place
 # whole, its machine code before it: a run that finds a compiler finds its code too (card atomic-install)
@@ -133,7 +156,7 @@ install_compilers() {
 	folder=$(installed_folder) || return 1
 	copy_compilers "$TREE/lib" "$folder" &&
 		rsync -aL --exclude /data --exclude /warp --exclude '/*.wasm*' --exclude /modules --exclude '/*.kept' \
-			"$TREE/lib/" "$folder/" || red "compilers of ${tip:0:10}: the copy into $folder failed" --urgent
+			"$TREE/lib/" "$folder/" && site_scripts_copied "$TREE" "$folder" || red "compilers of ${tip:0:10}: the copy into $folder failed" --urgent
 	for lane in pure self; do
 		[ $lane = self ] && [ ! -f "$folder/warp-self.wasm" ] && continue
 		got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 footprint_run "$TREE/data/hello-footprint" 300 "$MAIN_WARP" $lane samples/hello/hello.warp 2>&1 | tail -1)
@@ -155,13 +178,17 @@ linked() {
 # too, and any folder a process still has open: a run started on the previous build reads its warp.wasm and modules
 # until it ends (a full suite wrote an empty results.txt, "No module at …/native-fb9bda25b/warp.wasm", 2026-10-29)
 KEPT_BUILDS=3
+# in_use <folder>: a process has a file of it open (a run's warp, its wasmtime library). By the pids lsof lists, never
+# its status: macOS lsof +D exits 1 even when it lists some, so every folder looked unused and a long `warp test` lost
+# its build mid-run ("…/native-8e0263694/warp.wasm is missing", card test-run-binary-swap)
+in_use() { [ -n "$(lsof -t +D "$1" 2>/dev/null)" ]; }
 pruned() {
 	local kept=() link folder
 	for link in "$MAIN_WARP"; do kept+=("$(basename "$(dirname "$(readlink "$link")")")"); done
 	for folder in $(ls -dt "$BUILDS"/*/ | tail -n +$((KEPT_BUILDS + 1))); do
 		folder=${folder%/}
 		[[ " ${kept[*]} " == *" $(basename "$folder") "* ]] && continue
-		lsof +D "$folder" >/dev/null 2>&1 && continue
+		in_use "$folder" && continue
 		rm -rf "$folder"
 	done
 }
@@ -172,6 +199,8 @@ pruned() {
 # The seed stays beside ~/dev/bin/warp, where the native `warp rebuild` looks (the link's folder)
 NATIVE_PREFIX=native-
 # native_built <folder> <builder>: the native warp built from the folder's core/native/warp.warp into <folder>/warp
+# put_back <folder>: the folder set aside as <folder>.old in its place again, the failed new one gone
+put_back() { [ -d "$1.old" ] || { rm -rf "$1"; return; }; rm -rf "$1" && mv "$1.old" "$1"; }
 native_built() {
 	(cd "$1/compiler/native" && WARP_NO_WINDOW=1 WARP_LIB=$1 "$2" build native warp.warp >/dev/null 2>&1) &&
 		mv "$1/compiler/native/warp" "$1/warp"
@@ -204,10 +233,14 @@ install_native() {
 	fi || { "${failed[@]}" "native warp: lib/ did not copy" --urgent; rm -rf "$folder.new"; return 1; }
 	native_built "$folder.new" "$MAIN_WARP" ||
 		{ "${failed[@]}" "native warp: warp build native core/native/warp.warp failed" --urgent; rm -rf "$folder.new"; return 1; }
-	rm -rf "$folder" && mv "$folder.new" "$folder" || return 1
+	# a folder of this tip already there (the installed one, a second install of one tip) is set aside and put back when
+	# the new one fails its checks: removed, ~/dev/bin/warp would point nowhere (card after-push-leave)
+	rm -rf "$folder.old" && { [ ! -d "$folder" ] || mv "$folder" "$folder.old"; } && mv "$folder.new" "$folder" ||
+		{ put_back "$folder"; return 1; }
 	got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 timeout 300 "$folder/warp" samples/hello/hello.warp 2>&1 | tail -1)
-	[[ $got == *$EXPECTED* ]] || { "${failed[@]}" "native warp: hello got ${got:0:120}" --urgent; rm -rf "$folder"; return 1; }
-	made=$("$scripts/prebuilt-parts.sh" "$folder" 2>&1) || { "${failed[@]}" "native warp: ${made:0:200}" --urgent; rm -rf "$folder"; return 1; }
+	[[ $got == *$EXPECTED* ]] || { "${failed[@]}" "native warp: hello got ${got:0:120}" --urgent; put_back "$folder"; return 1; }
+	made=$("$scripts/prebuilt-parts.sh" "$folder" 2>&1) || { "${failed[@]}" "native warp: ${made:0:200}" --urgent; put_back "$folder"; return 1; }
+	rm -rf "$folder.old"
 	older_than_installed && { say "native warp of ${tip:0:10} not linked: the installed one is newer"; return 2; }
 	linked "$folder/warp" "$MAIN_WARP" && linked "$folder" "$MAIN_LIB" || return 1
 	pruned
@@ -237,6 +270,8 @@ watch() {
 	since=$(cat "$state/watched" 2>/dev/null || git -C "$TREE" rev-parse "$tip^")
 	git -C "$TREE" checkout -q --detach "$tip" && tree_at "$tip" || { red "the tree $TREE is not at ${tip:0:10}" --urgent; return 1; }
 	pushed=$(git -C "$TREE" log --first-parent --format=%s "$since..$tip" | head -5 | paste -sd ';' -)
+	# the repeats main still holds, listed for cards (card repeated-code-check)
+	"$scripts/repeated-code.sh" "$TREE" --report
 	echo "$tip" >"$state/handled"
 	# every stage builds with the installed native warp: without one, nothing installs (relink ~/dev/bin/warp by hand)
 	local missing
@@ -248,7 +283,8 @@ watch() {
 	# stage one: the native warp at once, when the tip's compilers are not in the store yet
 	local early=
 	"$scripts/rebuild.sh" --check pure "$TREE" >/dev/null || { install_native early && early=1; }
-	built=$("$scripts/rebuild.sh" both "$TREE" 2>&1)
+	# main's compiler first in the build line: the branches merging this main reuse it (scripts/build-slot.sh)
+	built=$(WARP_BUILD_FIRST=1 "$scripts/rebuild.sh" both "$TREE" 2>&1)
 	status=$?
 	echo "$built"
 	# the card names the failed step and its log in the store (rebuild.sh), so nobody builds the hash again to read it
@@ -257,10 +293,35 @@ watch() {
 	[[ $got == *$EXPECTED* ]] || { red "smoke test: pure hello got ${got:0:120}" --urgent; return 1; }
 	# stage two: its compilers beside it, else the whole native warp
 	{ if [ -n "$early" ]; then install_compilers; else install_native; fi; } && { installed_compilers_are_trees || red "the installed warp.wasm is not the one built from ${tip:0:10}" --urgent; }
-	git -C "$MAIN_CHECKOUT" pull -q --rebase --autostash || say "the user's checkout did not pull: look at it"
+	up_to_date_main "$MAIN_CHECKOUT" || say "the user's checkout did not pull: look at it"
+	# a new native folder lacks the package libraries (libuniscript_c beside warp): linked again, as samples.sh does
+	"$scripts/link-packages.sh" "$MAIN_CHECKOUT" >/dev/null || say "packages not linked beside the new warp: the package samples fail"
+	playground_refreshed
 	echo "$tip" >"$state/watched"
 	"$0" --slow </dev/null &
 	disown
+}
+
+# the user's playground (web/playground/warp-lib) runs the compilers of the tip just installed, not the ones of its last
+# manual build (card after-push-refresh): built in the tree at that tip, so main moving meanwhile cannot make build.sh
+# refuse it, kept in the installed folder (pruned with it) and linked from the user's checkout
+playground_refreshed() {
+	local folder log=$state/playground-build.log built=$TREE/web/playground/warp-lib page=$MAIN_CHECKOUT/web/playground/warp-lib
+	folder=$(installed_folder) || return 1
+	WARP_LIB=$TREE/lib "$TREE/web/playground/build.sh" compiler >"$log" 2>&1 &&
+		rm -rf "$folder/playground-lib" && mv "$built" "$folder/playground-lib" &&
+		{ [ -L "$page" ] || rm -rf "$page"; } && linked "$folder/playground-lib" "$page" &&
+		page_smoked ||
+		say "the user's playground not refreshed: $(tail -1 "$log" | cut -c1-160)"
+}
+
+# page_smoked: the refreshed playground runs PAGE_SMOKE as the native warp does (card after-push-playground); a host
+# import the page lacks fails every sample here, hello first (canonical_text, 2026-11-06), so this is the import check too
+page_smoked() {
+	local got
+	got=$(nice -n 10 "$scripts/samples-web.sh" "$MAIN_CHECKOUT" "${PAGE_SMOKE[@]}" 2>&1 | tail -1)
+	[[ $got == *"${#PAGE_SMOKE[@]} of ${#PAGE_SMOKE[@]} print"* ]] || red "page smoke: ${got:0:160}"
+	return 0
 }
 
 # the samples that run, the gap to 2.0 (decision night-samples-modules): test/samples.txt committed on main when it
@@ -277,7 +338,7 @@ samples_committed() {
 	git -C "$TREE" checkout -q HEAD -- "$report" 2>/dev/null || rm -f "$TREE/$report"
 	git -C "$MAIN_CHECKOUT" add -- "$report" && git -C "$MAIN_CHECKOUT" diff --cached --quiet -- "$report" && return
 	git -C "$MAIN_CHECKOUT" commit -q -m "chore: samples $count at ${1:0:10}" -- "$report" &&
-		git -C "$MAIN_CHECKOUT" pull -q --rebase --autostash && git -C "$MAIN_CHECKOUT" push -q ||
+		up_to_date_main "$MAIN_CHECKOUT" && git -C "$MAIN_CHECKOUT" push -q ||
 		say "samples of ${1:0:10} not committed: look at the user's checkout"
 }
 # slow_tiers <commit>: promote-self.sh and tiers 1-2 of what changed since the last commit they ran on
@@ -290,6 +351,7 @@ slow_tiers() {
 	promoted=$("$scripts/promote-self.sh" "$TREE" | tail -1)
 	echo "$promoted"
 	[[ $promoted == *"NO FIXPOINT"* || $promoted == *FAILED* ]] && red "self lane: ${promoted:0:160}" --urgent
+	cost_watched warp-self.record
 	install_compilers
 	"$scripts/gate.sh" --no-rebuild --tiers 1-2 --base "$since" --tag-good "$TREE" "$MAIN_WARP" >"$state/gate-${tip:0:10}.log" 2>&1 ||
 		red "tiers 1-2: $(gate_failures "$state/gate-${tip:0:10}.log")"

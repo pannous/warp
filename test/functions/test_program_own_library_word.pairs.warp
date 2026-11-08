@@ -1,0 +1,6 @@
+# a program's typed definition of a library word joins it as a typed overload, else is the program's own: a call
+# never reaches a body of other parameter types (card program-own-log)
+'log(level: text, parts: texts) := level + ": " + parts.join(" "); log("warn", ["a", "b"])'	'warn: a b'
+'log(level: text, parts: texts) := level; [log("warn", ["a"]), log(100, 10)]'	['warn', 2.0]
+'log(level: text, n: int) := level; log("warn", 3)'	'warn'
+'log(level: text) := level; log("warn")'	'warn'

@@ -119,7 +119,7 @@ spelled_equality(left: Node, op: Node, right: Node, n: Node, declared: map): Nod
 	if not is_name(other_side) { return Key(spelled_text(enum_name, left, declared), op, spelled_text(enum_name, right, declared)) }
 	# a case is made once (emitter local_value), so the very case is the one node: no call of Op·is, no bytes compared
 	# (decision enum-identity, card enum-cases)
-	tested = Key(call_of("same_node", [other_side, case_side]), Op.Or, Key(other_side, Op.Eq, spelled_text(enum_name, case_side, declared)))
+	tested = Key(call_of("same", [other_side, case_side]), Op.Or, Key(other_side, Op.Eq, spelled_text(enum_name, case_side, declared)))
 	if op == Op.Ne then Key(ø, Op.Not, tested) else tested
 }
 
@@ -179,23 +179,23 @@ type_test(value: Node, type_name: text): Node := List([symbol("is_type"), value,
 # `ValueKind.Int`, a case named with its enum: a bare `Int` in a match arm would test for an int (card core-types-emitter)
 qualified_case(enum_name: text, case: text): Node := Key(symbol(enum_name), Op.Dot, symbol(case))
 
-# `Op·text(spelled): text := if spelled is text or codepoint then spelled else match spelled {Add: "+", …, _: spelled}`,
-# `Op·cases = {"+": Op.Add, …}` and `Op·case(spelled) := if spelled is text or codepoint then map_get_or(Op·cases, spelled,
-# spelled) else spelled`: a text passes either, so `key(a, "+", b)` keeps working. Op·case looks the spelling up in the map
-# of every spelling (hashed): a match over Op's ~100 spellings compared each in turn, 20% of a rebuild under children
+# `Op·text(spelled): text := if spelled is text or codepoint then spelled else map_get_or(Op·texts, spelled, spelled)`,
+# `Op·texts = {Add: "+", …}`, `Op·cases = {"+": Op.Add, …}` and `Op·case(spelled) := if spelled is text or codepoint
+# then map_get_or(Op·cases, spelled, spelled) else spelled`: a text passes either, so `key(a, "+", b)` keeps working.
+# Both look up a map (hashed, a case by its name): a match over Op's ~100 spellings compared each in turn was 20% of a
+# rebuild under children, and a chain of an `if` a case nests as deep as the enum has cases, which a recursive walk of
+# the program then follows (keys' 120 cases overflowed WebKit's worker stack, card stack-overflow-crash)
 spelling_functions(enum_name: text): list := {
 	value = symbol(spelled_value)
 	cases = spellings[enum_name].keys
-	other = Key(symbol(other_arm), Op.Colon, value)
-	compared = matched(value, cases.map(case => Key(qualified_case(enum_name, case), Op.Colon, spelling(enum_name, case))) + [other], ø, cases)
-	# a case is made once (decision enum-identity): the very node is found by ref.eq, the match comparing each in turn
-	# only after that (node_equal per arm was 15% of a rebuild)
-	to_text = cases.reverse().fold(compared, (rest, case) => chosen(call_of("same_node", [value, qualified_case(enum_name, case)]), spelling(enum_name, case), rest))
+	texts_by_case = symbol(spelled_function(enum_name, "texts"))
+	every_text = List(cases.map(case => Key(symbol(case), Op.Colon, spelling(enum_name, case))), Bracket.Curly, Separator.Comma)
+	to_text = call_of("map_get_or", [texts_by_case, value, value])
 	is_spelling = Key(type_test(value, "text"), Op.Or, type_test(value, "codepoint"))
 	cases_by_spelling = symbol(spelled_function(enum_name, "cases"))
 	every_case = List(cases.map(case => Key(spelling(enum_name, case), Op.Colon, qualified_case(enum_name, case))), Bracket.Curly, Separator.Comma)
 	to_case = chosen(is_spelling, call_of("map_get_or", [cases_by_spelling, value, value]), value)
-	[Key(cases_by_spelling, Op.Assign, every_case), spelling_function(enum_name, "text", "text?", chosen(is_spelling, value, to_text)), spelling_function(enum_name, "case", ø, to_case)] + coded_functions(enum_name) + comparing_functions(enum_name)
+	[Key(texts_by_case, Op.Assign, every_text), Key(cases_by_spelling, Op.Assign, every_case), spelling_function(enum_name, "text", "text?", chosen(is_spelling, value, to_text)), spelling_function(enum_name, "case", ø, to_case)] + coded_functions(enum_name) + comparing_functions(enum_name)
 }
 
 # `Op·by_code = node·cases(Op·cases, 1)` and `Op·coded(n) := Op·by_code#(node·op_code(n) + 1)`: the case of a node's
@@ -220,9 +220,9 @@ comparing_functions(enum_name: text): list := {
 	spelled_of = side => chosen(type_test(side, "symbol"), applied(text_of, side), side)
 	is_case = chosen(type_test(value, "symbol"), Key(value, Op.Eq, case_written), Key(value, Op.Eq, symbol("case_spelled")))
 	both_cases = Key(type_test(value, "symbol"), Op.And, type_test(other, "symbol"))
-	same = chosen(both_cases, Key(value, Op.Eq, other), Key(spelled_of(value), Op.Eq, spelled_of(other)))
+	compared = chosen(both_cases, Key(value, Op.Eq, other), Key(spelled_of(value), Op.Eq, spelled_of(other)))
 	[Key(call_of(spelled_function(enum_name, "is"), [value, case_written, symbol("case_spelled")]), Op.Define, is_case),
-		Key(call_of(spelled_function(enum_name, "same"), [value, other]), Op.Define, same)]
+		Key(call_of(spelled_function(enum_name, "same"), [value, other]), Op.Define, compared)]
 }
 
 # whether the enum, `op: Op`, a case of it, `Op.Add`, or a spelling function, `Op·text(x)`, occurs anywhere in n

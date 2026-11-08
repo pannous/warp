@@ -18,6 +18,8 @@ result_types = {}
 scopes = {}
 # [name, captured] of each function a closure is made of
 closure_targets = []
+# name → captured: the functions whose closures are handed to a word the analysis doesn't see (escaped_closures_in)
+escaped_closures = {}
 
 arithmetic_ops = {"+": 1, "-": 1, "*": 1, "/": 1, "%": 1, "^": 1, "**": 1, "//": 1, "mod": 1}
 comparison_ops = {"==": 1, "!=": 1, "<": 1, ">": 1, "<=": 1, ">=": 1, "≤": 1, "≥": 1, "≠": 1, "is": 1, "in": 1}
@@ -123,6 +125,14 @@ choice_kind(then: Node, otherwise: Node, scope: Scope): ValueKind := {
 	if raises_error(otherwise) and not raises_error(then) { return error_or(branch_kind(then, scope)) }
 	branches_kind(branch_kind(then, scope), branch_kind(otherwise, scope))
 }
+# `try x else y`'s choice (passes/tries.warp: `{try·value·N}` its first branch): x's value or what the try gives
+# instead, the caught Error or y, which the run decides; a text beside another kind is no text there (a module word's
+# `try click("-1")` is its Error, card try-linked)
+is_try_value(branch: Node): bool := is_curly_group(branch) and #branch == 1 and branch#1 is symbol and name_of(branch#1).starts_with("try·value·")
+try_kind(value: ValueKind, instead: ValueKind): ValueKind := {
+	kind = branches_kind(value, instead)
+	if kind == ValueKind.Text and value != instead then ValueKind.Data else kind
+}
 # the kind of a node as written, not run (a block is a list)
 written_kind(n: Node): ValueKind := match n {
 	Key(_, _, _): ValueKind.Key
@@ -201,6 +211,7 @@ kind_of_key(n: Node, scope: Scope): ValueKind := {
 	if op in comparison_ops { return ValueKind.Int }
 	if is_empty(key_of(n)) and op != "#" and op != "if" and op != "while" { return inferred_kind(value_of(n), scope) }
 	if op == "?" and is_key(value_of(n), Op.Colon) { return choice_kind(key_of(value_of(n)), value_of(value_of(n)), scope) }
+	if op == "else" and is_key(key_of(n), Op.Then) and is_try_value(value_of(key_of(n))) { return try_kind(branch_kind(value_of(key_of(n)), scope), branch_kind(value_of(n), scope)) }
 	if op == "else" and is_key(key_of(n), Op.Then) { return choice_kind(value_of(key_of(n)), value_of(n), scope) }
 	if op == "then" and is_key(key_of(n), Op.If) { return branches_kind(branch_kind(value_of(n), scope), ValueKind.Int) }
 	if op == "#" and not is_empty(key_of(n)) { return subscript_kind(key_of(n), value_of(n), scope) }
@@ -709,6 +720,7 @@ gather(n: Node, context: Name, flows: list): list := {
 		captured = n[2..]
 		for index in 0..<min(#captured, #function_parameters(target)) { flows += [Flow(FlowWay.Parameter, context, target, captured[index], index)] }
 	}
+	note_escaped_closures(n)
 	# `closure_call_2(f, a, b)` passes a and b weakly to every function value of its arity
 	arity = closure_arity(head_name(n))
 	if arity > 0 {
@@ -733,6 +745,14 @@ closure_targets_in(n: Node, found: list): list := {
 	}
 	for part in node_parts(n) { closure_targets_in(part, found) }
 	found
+}
+# a closure handed to a word the analysis doesn't see, a linked module's `sort_by(xs, p => 1)`: code it can't see calls
+# it, with any value, never the values the program's own closure calls of its arity pass
+note_escaped_closures(n: Node) := {
+	if head_name(n) == "" or (head_name(n) in defined_functions and not declares_linked(head_name(n))) { return }
+	for argument in n[1..] {
+		if head_name(argument) == "closure_new" and #argument >= 2 and argument#2 is symbol { escaped_closures[name_of(argument#2)] = #argument - 2 }
+	}
 }
 
 # `x: T = v`: the slot is pinned to T
@@ -875,6 +895,7 @@ defaults(flows: list) := {
 				# a function value takes whatever the closure calls pass it: `part => … part#2` handed texts and lists by
 				# view_has holds any value, not the list its use suggests
 				kind = agreed ?? used_as(own, used) ?? forwarded[name].get(own)
+				if name in escaped_closures and index >= escaped_closures[name] { kind = ValueKind.Data }
 				scope.kinds[own] = kind ?? ValueKind.Int
 			}
 		}
@@ -926,7 +947,9 @@ analyze(program: Node): Node := {
 	global result_types
 	global scopes
 	global closure_targets
+	global escaped_closures
 	closure_targets = closure_targets_in(program, [])
+	escaped_closures = {}
 	defined_functions = {}
 	defined_signatures = {}
 	results = {}

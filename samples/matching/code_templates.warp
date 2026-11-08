@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# Code templates: data(…) with holes matches code in a pattern and builds code in a template (notes/quasi_quote.md)
+# Code templates: data(…) with holes matches code in a pattern and builds code in a template
 
 # a pattern's holes bind the code at their place, a template's holes splice it back
 swap(c) := match c {

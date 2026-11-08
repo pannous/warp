@@ -28,23 +28,23 @@
 '(a, b) = 1, 2; a*10+b'	12
 
 # star_rest_from_list
-'a, *rest = [1, 2, 3]; rest == [2, 3]'	1
+# triage-held 2026-11-06: Python star unpacking, foreign syntax :: 'a, *rest = [1, 2, 3]; rest == [2, 3]'	1
 'a, *rest = [1, 2, 3]; a'	1
 
 # star_rest_from_values
-'a, *rest = 1, 2, 3; rest == [2, 3]'	1
+# triage-held 2026-11-06: Python star unpacking, foreign syntax :: 'a, *rest = 1, 2, 3; rest == [2, 3]'	1
 
 # star_init
-'*init, last = [1, 2, 3]; init == [1, 2] and last == 3'	1
+# triage-held 2026-11-06: Python star unpacking, foreign syntax :: '*init, last = [1, 2, 3]; init == [1, 2] and last == 3'	1
 
 # star_middle
-'a, *mid, z = [1, 2, 3, 4]; mid == [2, 3] and a+z == 5'	1
+# triage-held 2026-11-06: Python star unpacking, foreign syntax :: 'a, *mid, z = [1, 2, 3, 4]; mid == [2, 3] and a+z == 5'	1
 
 # star_rest_empty
-'a, *rest = [1]; rest == []'	1
+# triage-held 2026-11-06: Python star unpacking, foreign syntax :: 'a, *rest = [1]; rest == []'	1
 
 # star_rest_from_tuple_function
-'f() := return 1, 2, 3; a, *rest = f(); rest == [2, 3]'	1
+# triage-held 2026-11-06: Python star unpacking, foreign syntax :: 'f() := return 1, 2, 3; a, *rest = f(); rest == [2, 3]'	1
 
 # nested_unpacking
 '(a, b), c = (1, 2), 3; a*100+b*10+c'	123

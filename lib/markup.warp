@@ -31,9 +31,9 @@ html_unitless_properties = ["opacity", "z-index", "font-weight", "line-height", 
 
 to_html(value: any): text := html_render(value, ø, ø)
 
-// `ul{ li all fruits }`: a tag word before all/each makes that tag of each item
-rewrite $tag all $xs => $xs.map($e -> {$tag: $e}) where $tag is symbol and $tag is unbound
-rewrite $tag each $xs => $xs.map($e -> {$tag: $e}) where $tag is symbol and $tag is unbound
+// `ul{ li all fruits }`: a tag word before all/each makes that tag of each item; only the tags an item repeats in, so
+// `await all jobs` (lib/tasks.warp) stays the tasks' word
+rewrite $tag $every $xs => $xs.map($e -> {$tag: $e}) where $every in [all, each] and $tag in [li, tr, td, th, option, dt, dd, p, div, span, a, img, button, label, section, article, figure, pre, code, h1, h2, h3, h4, h5, h6] and $tag is unbound
 
 // A page's markup keeps its live parts as code (card markup-keeps): `p{ "count: " + count }` reading a variable a
 // handler changes is the part `() => …`, recomputed each time the markup renders; `on click { count += 1 }` is the
@@ -50,20 +50,79 @@ export page_render(value: any) := {
 	page_handlers = []
 	page_handler_events = []
 	page_handler_labels = []
+	page_fields = []
 	component_calls = {}
 	component_order = []
 	component_current = ø
 	let html = to_html(value)
 	component_moments_run()
+	if page_in_js { foreign_call("js", "globalThis", JS_PAGE_SHOWN, 1, [html]) }
 	html
 }
+// a program reaching the page's js (`who.focus()`, `document.title`, extensions/js_globals.warp) has its page in the js
+// runtime's document after each render: natively the hidden web view's (lib/host/native_host/webview_bridge.js), the page
+// shows it itself (web/playground/host-foreign.js). Other programs never start the js runtime
+JS_PAGE_SHOWN = "warpShowPage"
+global page_in_js = no
+page_shown_in_js() := { page_in_js = yes }
 // handler n of the last page_render run with the event's detail (value, checked, fields, key …) as `event`
 // a program's value as the page it is, its HTML, when it is markup, else ø: how `warp` prints a program ending in
 // markup (decision html-render-mode; the emitter's _start)
-export page_of(value: any): any := if html_is_page(value) then page_render(value) else ø
+export page_of(value: any): any := if html_is_page(value) then page_after_steps(value) else ø
+// the page after the steps of a sample's check line (`# check: click "+1", type "name" "Ann" → …`, card
+// scripts-samples), which `warp app check` gives in WARP_PAGE_STEPS, one a line, its words by tabs: click⇥+1
+PAGE_STEPS_VARIABLE = "WARP_PAGE_STEPS"
+page_after_steps(value: any): text := {
+	steps = std_io("os", "env", [PAGE_STEPS_VARIABLE]) ?? ""
+	html = render(value)
+	for step in steps.split("\n").filter(line => line != "") { html = page_step(step.split("\t")) }
+	if std_io("os", "env", [APP_WINDOW_VARIABLE]) { page_window_run(html) }
+	html
+}
+// `warp app` (lib/app/command.warp) runs the program so, natively: its page in a window of the system's web view, as
+// the page's site.js runs it: each event of the page runs its handler (page_event), a key pressed the program's `on
+// key` (lib/keys.warp), its timers fire when due (lib/timers.warp hears each tick), and the page is rendered anew after
+// each; closing the window ends the run, the HTML shown last its output (lib/host/native_host/webview.warp warpWindow)
+APP_WINDOW_VARIABLE = "WARP_APP_WINDOW"
+APP_WINDOW = "warpWindow"
+EVENT_JOINER = "·"
+PAGE_KEY_EVENT = "key"
+PAGE_TICK = "tick"
+WAIT_FOR_EVENT = -1
+page_window_run(html: text) := {
+	page_shown_in_js()
+	foreign_call("js", "globalThis", JS_PAGE_SHOWN, 1, [html])
+	foreign_call("js", APP_WINDOW, "show", 1, [])
+	shown = html
+	happened = page_window_event(0)
+	while happened != ø {
+		wait = page_happened(happened)
+		shown = page_render(page_shown)
+		happened = page_window_event(wait)
+	}
+	// (the timers the host was told of are the window's: they end with it)
+	print shown
+	exit(0)
+}
+// the window's next event, {event: "click·1", detail, wall}, else a tick once the milliseconds are over; ø once it is
+// closed
+page_window_event(milliseconds: int): any := foreign_call("js", APP_WINDOW, "next", 1, [milliseconds])
+// what happened on the page, done: the milliseconds till a timer is due, WAIT_FOR_EVENT when none is
+page_happened(happened: any): int := {
+	event = happened["event"]
+	if event == PAGE_KEY_EVENT { emitted(PAGE_KEY_EVENT, happened["detail"]) }
+	else if event != PAGE_TICK { page_event(int(event.split(EVENT_JOINER)[1]), happened["detail"]) }
+	emitted(PAGE_TICK, happened["wall"]) ?? WAIT_FOR_EVENT
+}
+page_step(words: list): text := {
+	if words[0] == "click" and #words == 2 { return click(words[1]) }
+	if words[0] == "type" and #words == 3 { return type_into(words[1], words[2]) }
+	raise "a check's step is click \"<label>\" or type \"<label>\" \"<text>\", not " + words.join(" ")
+}
 // an element, or a group of nothing but elements (`{div{…}}`, `[li{…} li{…}]`)
 html_is_page(value: any): bool := html_is_element(value) or (html_is_group(value) and #html_elements_in(value) > 0 and #html_elements_in(value) == #value)
 export page_event(n: int, detail: any) := {
+	if detail is map and detail.has(page_ids_key) { for id in detail[page_ids_key].keys { page_values[id] = detail[page_ids_key][id] } }
 	action = page_handlers#n
 	action(detail)
 }
@@ -81,6 +140,33 @@ render(value: any) := {
 	page_render(value)
 }
 click(label: any) := page_act("click", name_of(label), ø)
+// `type_into("name", "Ann")`, a check's `type "name" "Ann"` (`type` is the word of types): the text typed into the
+// field showing that label (its placeholder, aria-label, name or id, as click finds an element), its value `$who`
+// then; the page's HTML after it
+type_into(label: any, typed: text) := {
+	for field in page_fields {
+		if label in field#2 {
+			page_values[field#1] = typed
+			return page_render(page_shown)
+		}
+	}
+	raise "no field showing " + label + " to type into; the page: " + page_render(page_shown)
+}
+// [id, its labels] of each field of the last render with an id (`input{ id: "who" placeholder: "name" }`)
+global page_fields = []
+// `$who` (decision page-ids, extensions/page_values.warp): the value of the page's field with the id who, what was
+// typed into it, which every element event brings as its detail's ids (web/playground/markup.js idValues); `$who =
+// "Ann"` writes it, shown as the field's value
+page_ids_key = "ids"
+global page_values = {}
+page_value(id: text) := if page_values.has(id) then page_values[id] else ""
+page_value_set(id: text, value: any) := { page_values[id] = value }
+// ` value="…"` of a field whose id has a value written or typed, unless the markup writes its own
+html_page_value(items: list, tag: any, written: any): text := {
+	if written != ø { return "" }
+	for item in items { if html_is_attribute(item, tag) and html_name(item) == "id" and page_values.has(html_plain(html_content(item))) { return " value=\"" + html_escaped(str(page_values[html_plain(html_content(item))])) + "\"" } }
+	""
+}
 // `click plus`: an id, a word the program binds nothing to
 rewrite click $who => click(data $who) where $who is symbol and $who is unbound
 
@@ -133,7 +219,15 @@ component_moment(moment: any, action: function) := {
 component_moments_run() := {
 	let shown = [page_moments_id] + component_order.map(entry => entry#3)
 	for id in shown { if id not in component_shown { component_moment_run(id, "mount") } }
-	for id in component_shown { if id not in shown { component_moment_run(id, "cleanup") } }
+	for id in component_shown {
+		if id not in shown {
+			component_moment_run(id, "cleanup")
+			if id != page_moments_id {
+				if component_states.has(id) { component_states.remove(id) }
+				if component_moments.has(id) { component_moments.remove(id) }
+			}
+		}
+	}
 	component_shown = shown
 }
 component_moment_run(id: text, moment: text) := {
@@ -164,7 +258,7 @@ html_now(value: any) := if value is Live then html_now(value.now()) else if valu
 class Handler {
 	event: text
 	action: function
-	show() := "on " + event + " " + handler_body_shown
+	format as text := "on " + event + " " + handler_body_shown
 }
 handler(name: any, action: function): Handler := Handler(name_of(name), action)
 // a live value: code kept to run each time its value is wanted, shown as its value now; an item reading a variable a
@@ -173,7 +267,7 @@ handler(name: any, action: function): Handler := Handler(name_of(name), action)
 class Live {
 	compute: function
 	now() := { value = compute; value() }
-	show() := str(now())
+	format as text := str(now())
 }
 live(compute: function): Live := Live(compute)
 
@@ -194,6 +288,10 @@ html_is_handler_pair(item: any): bool := item is pair and html_is_handler_name(h
 html_is_handler_name(name: any): bool := name is text and starts_with(name, handler_prefix) and #name > #handler_prefix
 html_handler(item: any) := if item is Handler then html_handler_attribute(item.event, item.action) else html_handler_attribute(html_name(item)[#handler_prefix ..], html_raw_content(item))
 html_handler_attribute(event: text, action: function) := {
+	if event == "mount" or event == "cleanup" {
+		component_moment(event, action)
+		return ""
+	}
 	page_handlers.add(action)
 	page_handler_events.add(event)
 	page_handler_labels.add([])
@@ -228,7 +326,8 @@ html_is_listed_element(value: any): bool := value is pair and contains(html_elem
 html_is_custom_element(name: any): bool := name is text and contains(str(name), "-") and not starts_with(name, "data-") and not starts_with(name, "aria-") and not contains(html_attributes, name)
 
 html_element(tag: any, content: any, scope: any, chosen: any) := {
-	let items = html_shorthands_spread(html_items(content))
+	// a live item as it is now: `style: { color: (if dark …) }` live as a whole is an attribute again
+	let items = html_shorthands_spread(html_items(content).map(item => if item is Live then html_now(item) else item))
 	var own_scope = scope
 	var own_chosen = chosen
 	var value = ø
@@ -246,8 +345,9 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 	var own_handlers = []
 	for item in items {
 		if html_is_handler(item) {
-			attributes = attributes + html_handler(item)
-			own_handlers.add(#page_handlers)
+			added = html_handler(item)
+			attributes = attributes + added
+			if added != "" { own_handlers.add(#page_handlers) }
 		}
 		else if html_is_binding(item) {
 			attributes = attributes + html_bound(tag, items, html_content(item))
@@ -265,6 +365,8 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 		else { children = children + html_render(item, own_scope, own_chosen) }
 	}
 	for own in own_handlers { page_handler_labels#own = html_labels(tag, items, children) }
+	for item in items { if html_is_attribute(item, tag) and html_name(item) == "id" { page_fields.add([html_plain(html_content(item)), html_labels(tag, items, children)]) } }
+	attributes = attributes + html_page_value(items, tag, value)
 	// the option whose value, else text, is the select's
 	if #styles > 0 { attributes = replace(attributes, html_style_mark, " style=\"" + html_escaped(join(styles, "; ")) + "\"") }
 	if tag == "option" and chosen != ø and (if value == ø then children else html_escaped(value)) == html_escaped(chosen) { attributes = attributes + " selected" }
@@ -334,7 +436,7 @@ html_items(content: any): list := {
 	if not html_is_group(content) or html_is_element(content) { return [content] }
 	var items = []
 	for item in content {
-		if html_is_group(item) and not html_is_element(item) and html_holds_pairs(item) { for pair in item { items.add(pair) } }
+		if html_is_group(item) and not html_is_element(item) and html_holds_pairs(item) { for entry in item { items.add(entry) } }
 		else { items.add(item) }
 	}
 	items
@@ -350,9 +452,13 @@ html_is_attribute(item: any, tag: any): bool := {
 	let value = html_content(item)
 	named = starts_with(name, "data-") or starts_with(name, "aria-") or name == "key" or name == "starting-style" or (contains(html_attributes, name) and not (tag == "head" and contains(html_elements, name)))
 	if not named { return false }
+	if html_is_dotted_name(value) { raise "an attribute value has no dot: " + name + ": \"" + str(value_of(value)) + "\"; fix: write the class name as text" }
 	if (name == "style" or html_attribute_name(name) == html_starting_style) and tag != "head" and html_is_declarations(value) { return true }
 	not html_is_nested(value) and (not html_is_group(value) or not html_holds_pairs(value))
 }
+
+// `class: .card`, the CSS selector's spelling of a class name: the parser's member `.card` of nothing
+html_is_dotted_name(value: any): bool := value is pair and str(value.op) == "." and key_of(value) == ø
 
 // a pair nests markup; an instance of a class, a pair of its class and fields, is one value: `title: 200ms` an attribute
 // shown as its text (card quantity-element)
@@ -735,16 +841,20 @@ css_items(spec: any) := {
 	items
 }
 
-// `ease-out`, `200ms`, `2`
-css_is_word(item: any) := item is symbol or item is number or (item is pair and str(item.op) == "*" and item.key is number and item.value is symbol)
+// `ease-out`, `200ms`, `2`, a measure held in a variable (`q = 400ms`)
+css_is_word(item: any) := item is symbol or item is number or (item is pair and str(item.op) == "*" and item.key is number and item.value is symbol) or css_is_measure(item)
 
-// `2s` → 2000ms, `200ms` as written: CSS reads both, the page's script milliseconds
-css_word(word: any) := {
-	if not (word is pair) or str(word.op) != "*" { return str(word) }
-	let unit = str(word.value)
-	if unit == "s" { return str(word.key * 1000) + "ms" }
-	str(word.key) + unit
+// a value of a unit, `400ms` or `3km` computed or held in a variable: no word, number or tree, its text a number
+// and a CSS unit (card css-shorthand-quantity)
+css_is_measure(item: any): bool := not (item is text or item is symbol or item is number or item is pair or html_is_group(item) or item == ø) and css_measure_unit(str(item)) != ø
+// the CSS unit a measure's text ends with, `ms` of "400ms", ø when the text before it is no number
+css_measure_unit(t: text) := {
+	for unit in style_units { if t.ends_with(unit) and #t > #unit and is_numeric(t[0:#t - #unit]) { return unit } }
+	ø
 }
+
+// `2s`, `200ms` as written: the page reads a transition's duration off the computed style, in any unit
+css_word(word: any) := if css_is_measure(word) or not (word is pair) or str(word.op) != "*" then str(word) else str(word.key) + str(word.value)
 
 // the kind a spec's first word names, ø for CSS
 css_kind(words: any) := {

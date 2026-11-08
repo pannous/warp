@@ -85,7 +85,7 @@ c_primitive_types = {i32: "i32", bool: BOOL_TYPE, i64: "i64", f64: "f64", f32: "
 # `allocate(bytes)`: an address of that many bytes taken from the arena
 ALLOCATE_WORD = "allocate"
 # the code of primitive files: lib/primitive.warp, their prelude, its words reached as the GC prelude's are
-PRIMITIVE_PRELUDE = library_text("primitive.warp")
+PRIMITIVE_PRELUDE = module_source("primitive")
 
 class PrimitiveCode { type: text; code: list }
 # a primitive function: its parameters' names and types, its result type ("" none, ø not yet known), its locals by
@@ -107,9 +107,6 @@ global text_addresses = {}
 # the file's constants: each top-level name given a number literal once, which every function and main read as that
 # literal
 global primitive_constants = {}
-# whether the module is compiled for a native build (commands.warp build_native), the only one that answers C calls:
-# warp's own host would answer them with its GC conventions, wrongly
-global native_build = no
 
 # a source whose leading header, its `#!` line, comments and blank lines before the code, holds the mark builds whole
 # in primitive mode; the mark on its own line below the code is refused, the file would compile as GC warp unmarked
@@ -211,18 +208,13 @@ declare_import(foreign: list) := {
 	parameters = head[1 ..< #head]
 	result = if foreign#2 == ø then NO_VALUE else primitive_type_name(foreign#2)
 	name = name_of(head#1)
-	if foreign#3 != WASI_LIBRARY { native_only(name, foreign#3, place_text(written_at(head#1), module.program_file)) }
 	primitive_functions[name] = PrimitiveFunction(name, parameters.map(p => name_of(key_of(p))), parameters.map(p => primitive_parameter_type(p)), result, ø, #primitive_functions, foreign#3)
-}
-# a C function's import, refused but in a native build: warp's own host would answer it with its GC conventions, wrongly
-native_only(name: text, library: text, place: text) := {
-	if not native_build { throw "primitive mode cannot emit " + name + " from '" + library + "' but in a native build: a primitive file's C calls run by `warp build native`" + place }
 }
 
 # `import strlen from "c"`: each line of lib/c.warp or lib/math.warp it names, read as a GC program reads it
 # (c_imports.warp c_functions_of), as [declaration, line number]; the statement's line left empty
 c_imported(lines: list): list := {
-	catalog = c_catalog(run_library(), [])
+	catalog = c_catalog([])
 	found = []
 	for i in 0..#lines {
 		imported = c_import(lines#(i + 1).trim())
@@ -239,7 +231,6 @@ c_imported(lines: list): list := {
 }
 # a catalog line's [name, library, parameter types, parameter names, result type] as an import of the module
 declare_c_function(d: list, line: int) := {
-	native_only(d#1, d#2, place_text([line, 1], module.program_file))
 	refused = (d#3 + [d#5]).filter(type => type not in c_primitive_types)
 	if #refused > 0 { throw "primitive mode cannot emit " + d#1 + "'s " + refused#1 + place_text([line, 1], module.program_file) }
 	primitive_functions[d#1] = PrimitiveFunction(d#1, d#4, d#3.map(type => c_primitive_types[type]), c_primitive_types[d#5], ø, #primitive_functions, d#2)
@@ -640,8 +631,19 @@ def primitive_bytes(functions: list): list {
 	exports = vector([name_bytes("memory") + [export_memory_byte, 0], name_bytes(ARENA_EXPORT) + [export_global_byte, ARENA_TOP]] + defined.map(f => name_bytes(export_name(f)) + [export_function_byte] + uleb(f.index)))
 	code = vector(defined.map(primitive_body))
 	data = vector([[0, op.i32_const] + sleb(DATA_START) + [op.end] + vector(primitive_data.map(b => [b]))])
-	wasm_header + section(section_ids.type, vector(types)) + section(section_ids.import, imports) + section(section_ids.function, declared) + section(section_ids.memory, memory) + section(section_ids.globals, arena) + section(section_ids.export, exports) + section(section_ids.code, code) + section(section_ids.data, data)
+	c_lines = imported.filter(f => f.library != WASI_LIBRARY).map(c_function_line).join("")
+	c_functions = if c_lines == "" then [] else section(section_ids.custom, name_bytes(PRIMITIVE_C_SECTION) + c_lines.bytes)
+	wasm_header + section(section_ids.type, vector(types)) + section(section_ids.import, imports) + section(section_ids.function, declared) + section(section_ids.memory, memory) + section(section_ids.globals, arena) + section(section_ids.export, exports) + section(section_ids.code, code) + section(section_ids.data, data) + c_functions
 }
+# the C functions a module imports, for the native driver to call under wasmtime as a native build's glue does
+# (c_function_glue; decision primitive-c-in-driver): a line each of the fields driver.warp reads of a GC module's
+# warp.c_functions, import module, library, name, parameters, result register, what the result crosses as
+PRIMITIVE_C_SECTION = "warp.primitive_c_functions"
+c_function_line(f: PrimitiveFunction): text := [f.library, f.library, written_name(f.name), f.types.map(driver_parameter).join(","), driver_register(f.result), driver_crossing(f.result), "", "", ""].join("\t") + "\n"
+# a text as the address of its pair, a pointer an address of the module's memory, a handle the C pointer it is
+driver_parameter(type: text): text := if type == TEXT_TYPE then "pair" else if type == POINTER_TYPE then "address" else if type == HANDLE_TYPE then "i64" else if type == BOOL_TYPE then "i32" else mvp_wasm_of(type)
+driver_register(type: text): text := if type == NO_VALUE then "void" else if type == TEXT_TYPE or type == POINTER_TYPE or type == HANDLE_TYPE then "i64" else if type == BOOL_TYPE then "bool" else mvp_wasm_of(type)
+driver_crossing(type: text): text := if type == TEXT_TYPE then "pair" else if type == POINTER_TYPE then "address" else "number"
 def primitive_body(f: PrimitiveFunction): list {
 	locals = vector(f.local_types[#f.parameters ..< #f.local_types].map(t => [1, value_bytes[mvp_wasm_of(t)]]))
 	content = locals + f.code + [op.end]

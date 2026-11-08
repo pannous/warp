@@ -3,3 +3,13 @@
 'n=1; set = x => {n = x}; set(5); set(7); n'	7
 'x=0; seen=0; once x>2 {seen=x}; x=1; x=3; x=7; seen'	3
 'n=1; f=() => {let n = 5; n}; [f(), n]'	[5, 1]
+
+# a typed variable a lambda changes keeps its declared type (card typed-bind-shared)
+'guests: int = 2; f = () => { guests = 5 }; f(); guests'	5
+'b: float = 2; f = () => { b += 1 }; f(); b / 2'	1.5
+'class P{a:int}; p: P = P(1); f = () => { p = P(2) }; f(); p.a'	2
+
+# a typed variable a lambda assigns takes the value through its type: refused as at the main level (card lambda-captured-assignment)
+'x: int = 2; f = () => { x = 2.5 }; f(); x'	error
+'x: int = 2; f = () => { x += 0.5 }; f(); x'	error
+'x: int = 2; f = () => { x += 3 }; f(); x'	5

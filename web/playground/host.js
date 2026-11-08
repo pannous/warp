@@ -1,13 +1,20 @@
 // The host words of a program warp compiled, run in the page (driver.js programRan): its imports mirror what the native
 // warp answers (core/native/driver.warp, WASI, libm). Shared by the playground (worker.js) and built sites
-// (site-worker.js); needs reader.js. What only some programs reach is in the parts (HOST_PART_FILES, below).
+// (site-worker.js); needs values.js. What only some programs reach is in the parts (HOST_PART_FILES, below).
+
+// the page's build (playground.js startWorker gives its Worker ?build=…): every file a Worker asks of the site carries it,
+// so a deploy never meets a file the browser cached of the build before (card worker-wasm-fetch: an old warp.wasm beside
+// new modules); a URL with its own query (a ?listing) or of another site stays as it is
+const PAGE_BUILD = new URLSearchParams(self.location.search).get("build");
+function ofThisBuild(url) {
+	const asked = new URL(url, self.location.href);
+	return PAGE_BUILD && !asked.search && asked.origin === self.location.origin ? `${url}?build=${encodeURIComponent(PAGE_BUILD)}` : url;
+}
 
 const TEXT_HEAP_EXPORT = "text_heap";
 const TRAP_DETAIL_EXPORT = "trap_detail";
 // a program with a `try` exports it: the runtime error that raises the Error left in trap_detail (runtime_errors.rs)
 const RETURNED_ERROR_EXPORT = "returned_error";
-// the position of the statement a trapped run was in, line << 12 | column (src/wasm_emitter/globals.rs emit_trap_position)
-const TRAP_POSITION_EXPORT = "trap_position";
 const SHARED_CHECK_MILLISECONDS = 10; // how often a busy sleep looks at its check points
 const PAGE_BITS = 16;
 const STDERR = 2;
@@ -17,15 +24,20 @@ const DEFAULT_DPI = 96;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // view_width, view_height on a page that tells no output pane (playground.js tellSystemValues), as natively
 // (crates/warp-runtime/src/system_values.rs NATIVE_VIEW)
-// window_open: no page told it shows the pictures (playground.js tellSystemValues), so `while window_open` never starts
-const VIEW_DEFAULTS = { view_width: 640, view_height: 480, window_open: 0, gpu_drawing: 0 };
+// window_possible: a page paints in its pane, never a window of its own. window_open: no page told it shows the pictures (playground.js tellSystemValues), so `while window_open` never starts
+const VIEW_DEFAULTS = { view_width: 640, view_height: 480, window_open: 0, window_possible: 0, gpu_drawing: 0 };
 // window.width, window.height (card make-width): the frame the paintings show in, in CSS pixels; the view's size until the
 // run sets it (set_system_value), which the page then gives its paintings (hooks.resizeWindow, canvas.js)
 const WINDOW_SIDES = { window_width: "view_width", window_height: "view_height" };
 const DISPLAY_READ_ONLY = "a program cannot resize the display: set window.width or canvas.width instead";
-const toldValue = name => self.pageSystemValues?.[name] ?? VIEW_DEFAULTS[name];
+// the view's size as the page shares it (canvas.js shareView), which a running program sees at once, else as it told it
+const sharedValue = name => {
+	const at = self.pagePointer?.names.indexOf(name) ?? -1;
+	return at >= 0 ? Atomics.load(self.pagePointer.values, at) || undefined : undefined;
+};
+const toldValue = name => sharedValue(name) ?? self.pageSystemValues?.[name] ?? VIEW_DEFAULTS[name];
 // the standard library's adapters (src/modules/std_adapters.rs, notes/stdlib.md section 7): module → member → function of
-// plain values (plainOfTree / treeOfPlain, as for foreign_call); the parts add them (host-hashes.js, host-files.js)
+// plain values (values.js guestPlain / newGuestValue, as for foreign_call); the parts add them (host-hashes.js, host-files.js)
 const STD_ADAPTERS = {};
 
 // the stored values of `stored x = v` and `local[k]`, by name: the page's localStorage as the worker started
@@ -34,11 +46,13 @@ const storedValues = {};
 const sessionValues = {};
 const contentText = content => typeof content === "string" ? content : JSON.stringify(content);
 const utf8 = new TextEncoder();
+const utf8Decoder = new TextDecoder("utf-8", { fatal: false });
+const readText = (module, pointer, length) => utf8Decoder.decode(new Uint8Array(module.memory.buffer, pointer, length));
 
 // the system values of the pointer the page shares; without shared memory a running program cannot see it move (the
 // run blocks its Worker's messages), so it would wait for a finger forever (card abysmally-slow: the in-app browser
 // view of an iPad app painted nothing). A key held reads none there, as in the test suite's page
-const POINTER_VALUES = ["mouse_x", "mouse_y", "mouse_down", "mouse_wheel"];
+const POINTER_VALUES = ["mouse_x", "mouse_y", "mouse_down", "mouse_down_x", "mouse_down_y", "mouse_wheel"];
 const NO_SHARED_POINTER = "this page has no shared memory (it is not cross-origin isolated, as in an app's built-in browser view), so a running program cannot follow the pointer: open the page in Safari, Chrome or Firefox";
 // the pointer the page shares (canvas.js pointerMessage) as the worker keeps it: self.pagePointer, read by system_value
 const sharedPointer = ({ buffer, names }) => ({ values: new Int32Array(buffer), names });
@@ -57,10 +71,6 @@ function writeBytes(program, bytes) {
 	return [pointer, bytes.length];
 }
 
-// the Error of `reason`, built with the program's own error_of: a failure its `try` catches (src/host.rs error_in_program)
-function errorInProgram(program, reason) {
-	return program.error_of(program.new_text(...writeBytes(program, utf8.encode(reason))));
-}
 
 // The parts of the host a program reaches only through some of its imports, each a file that adds itself here:
 // host-files.js, host-sound.js (needs host-files.js), host-hashes.js, host-tasks.js, host-foreign.js (needs host-files.js and js-members.js), host-sqlite.js (needs host-foreign.js and wasi.js), host-compiler.js, host-routes.js,
@@ -121,7 +131,7 @@ function programImports(holder, hooks) {
 					return typeof result === "number" ? module.new_float(result) : result;
 				} catch (failure) {
 					if (!(failure instanceof RangeError)) throw failure;
-					return errorInProgram(module, "call stack exhausted");
+					return newGuestError(module, "call stack exhausted");
 				}
 			},
 			// `serve 8080 {…}` (src/web/web_server.rs): a page cannot listen on a port
@@ -187,7 +197,7 @@ function programImports(holder, hooks) {
 			},
 			// `notify "text"` (src/host.rs notify): the page shows it (playground.js notification)
 			notify: text => {
-				const shown = plainOfTree(readNode(program(), text));
+				const shown = guestPlain(program(), text);
 				if (!hooks.notify) throw new Error(`notify ${JSON.stringify(shown)}: this page shows no notifications`);
 				hooks.notify(typeof shown === "string" ? shown : JSON.stringify(shown));
 			},
@@ -195,7 +205,7 @@ function programImports(holder, hooks) {
 			// (hooks.dispatch), a page's own thread dispatches it (markup.js dispatchToPage)
 			dispatch_event: (name, detail) => {
 				const dispatch = hooks.dispatch ?? globalThis.dispatchToPage;
-				const event = { name: plainOfTree(readNode(program(), name)), detail: plainOfTree(readNode(program(), detail)) };
+				const event = { name: guestPlain(program(), name), detail: guestPlain(program(), detail) };
 				if (!dispatch) throw new Error(`emit ${event.name}: this host has no page to dispatch it to`);
 				dispatch(event);
 			},
@@ -204,6 +214,9 @@ function programImports(holder, hooks) {
 				holder.exitCode = Number(code);
 				throw new Error(`exit(${code})`);
 			},
+			// a text's NFC for text == (decision nfc-slot, driver.warp canonical_text_answered): lib/unicode, its module
+			// linked on this first call, never at the run's start
+			canonical_text: text => linkedInstance(UNICODE_MODULE, linkedUrl(UNICODE_MODULE), holder.imports, holder.linked).canonical_text(text),
 			...Object.assign({}, ...eachHostPart("words", holder, hooks, access)),
 		},
 		wasi_snapshot_preview1: {
@@ -224,141 +237,18 @@ function programImports(holder, hooks) {
 	};
 	// anything else (native FFI libraries) is missing in the browser: say which, when the program calls it
 	const missing = (module, name) => () => { throw new Error(`${module}.${name} is not available in the browser`); };
+	// every host word through one wrapper: its failure is the program's error, which a `try` catches
+	const catchable = word => typeof word !== "function" ? word : (...given) => {
+		try { return word(...given); } catch (failure) { raisedInProgram(program(), failure, holder); }
+	};
 	return new Proxy(known, {
 		get: (modules, module) => new Proxy(modules[module] ?? eachHostPart("importModule", holder, hooks, module).find(Boolean) ?? {}, {
-			get: (functions, name) => functions[name] ?? missing(module, String(name)),
+			get: (functions, name) => catchable(functions[name] ?? missing(module, String(name))),
 		}),
 	});
 }
 
 const decode = bytes => utf8Decoder.decode(bytes);
-
-const textTree = text => ({ kind: "3", data: { text }, chain: [] });
-const KIND_LIST = 8n;
-// the inverse of reader.js readNode for the values a task carries (src/host/tasks.rs TaskValue): built through the module's
-// constructors; a list from its cons cells, the first item in data, the next cells in the chain
-function buildValue(module, tree) {
-	// where it was written (src/web/mod.rs tree_of): kept by node_at, which only a module quoting or parsing code has
-	if (tree.at !== undefined) {
-		const { at: [line, column, comment], ...bare } = tree;
-		const node = buildValue(module, bare);
-		if (!module.node_at) return node;
-		const text = comment === null ? null : buildValue(module, { kind: "3", data: { text: comment }, chain: [] });
-		return module.node_at(node, BigInt(line), BigInt(column), text);
-	}
-	if (tree.closure !== undefined) {
-		const name = buildValue(module, { kind: "5", data: { text: tree.closure }, chain: [] });
-		return module.closure_rebuild(name, tree.captured === null ? null : buildValue(module, tree.captured));
-	}
-	if (tree.key) return module.new_key(buildValue(module, tree.key[0]), buildValue(module, tree.key[1]), BigInt(tree.kind) >> 8n);
-	if (tree.type) return module.new_type(buildValue(module, tree.type[0]), buildValue(module, tree.type[1]));
-	if (tree.items) return tree.items.reduceRight((rest, item) => module.new_list(buildValue(module, item), rest, BigInt(tree.kind) >> 8n), null) ?? module.new_empty();
-	const kind = BigInt(tree.kind);
-	const payload = tree.data ?? {};
-	switch (Number(kind & KIND_MASK)) {
-		case 0: return module.new_empty();
-		case 1: {
-			// a module without bools (no new_bool) takes a truth as its Int 1/0, as src/host/tasks.rs does
-			if (payload.int !== undefined && String(kind) === BOOL_KIND && module.new_bool) return module.new_bool(BigInt(payload.int));
-			if (payload.int !== undefined) return module.new_int(BigInt(payload.int));
-			// beyond the fixnums: exact.js starts the parts that carry such numbers (tasks, foreign calls, run blocks)
-			const exact = typeof exactOfPayload === "function" ? exactOfPayload(payload) : undefined;
-			if (exact) return module.new_int(exactHandle(module, ...exact));
-			throw new Error(`an Int payload of no known form (or exact.js not loaded): ${JSON.stringify(payload)}`);
-		}
-		case 2: return module.new_float(Number(payload.float));
-		case 3: case 5: {
-			const [pointer, length] = writeBytes(module, utf8.encode(payload.text));
-			return Number(kind & KIND_MASK) === 3 ? module.new_text(pointer, length) : module.new_symbol(pointer, length);
-		}
-		case 4: return module.new_codepoint(payload.i31);
-		case 6: { // a key (an instance among them): its right side the first cell of the chain, which holds that side's own chain
-			const [right, ...rest] = tree.chain;
-			return module.new_key(buildValue(module, payload.node), right ? buildValue(module, { ...right, chain: rest }) : module.new_empty(), kind >> 8n);
-		}
-		case 7: case 8: {
-			const items = [payload.node, ...tree.chain.map(cell => cell.data?.node)].filter(Boolean);
-			return items.reduceRight((rest, item) => module.new_list(buildValue(module, item), rest, kind >> 8n), null) ?? module.new_empty();
-		}
-		default: throw new Error(`a value of kind ${kind & KIND_MASK} cannot cross to another task yet`);
-	}
-}
-
-// src/operators/codes.rs OP_CODES as written (Op::as_str), by the code a key carries above the kind bits
-const OPERATOR_SPELLINGS = ["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^=", "<", ">", "<=", ">=", "==", "!=", "≈", "and", "or", "xor", "not", "-", "√", "∛", "‖", "++", "--", "?", "if", "then", "else", "while", "do", "#", "..", "to", "as", "±", "??", "===", "!==", "~", "⌞", "⌟", "&", "|", "↑", "↓", "/!", "/!=", "is"];
-// the keys that are entries of an object; the others are operations
-const ENTRY_OPERATORS = ["", ":", "=", ":="];
-const ROUND_BRACKET = 2n; // src/wasm_emitter bracket info: Curly 0, Square 1, Round 2
-// a value of the program (a reader.js tree) as a plain JavaScript value, for foreign_call: lists arrays, `{a:1}` objects
-const KIND_KEY = 6n;
-function plainOfTree(tree) {
-	const kind = BigInt(tree.kind);
-	const payload = tree.data ?? {};
-	// a ø item reads as a null node: it stays null ([1, ø] is [1, null]); only an empty list has no first node
-	const items = () => payload.node === undefined ? [] : [payload.node, ...(tree.chain ?? []).map(cell => cell.data?.node ?? null)];
-	const plainOfItem = item => item === null ? null : plainOfTree(item);
-	switch (Number(kind & KIND_MASK)) {
-		case 0: return null;
-		case 1:
-			if (String(kind) === BOOL_KIND) return Number(payload.int) !== 0;
-			if (payload.ratio) return Number(payload.ratio[0].int) / Number(payload.ratio[1].int);
-			// a big integer keeps its digits as a BigInt (exact.js, which the parts carrying big numbers start)
-			if (payload.big) return typeof integerOfPayload === "function" ? integerOfPayload(payload) : null;
-			return payload.int === undefined ? null : Number(payload.int);
-		case 2: return Number(payload.float);
-		case 3: case 5: return payload.text;
-		case 4: return String.fromCodePoint(payload.i31);
-		// the value's own cells follow it in the key's flat chain (reader.js): `{a:[1, 2]}` keeps its 2; code, `1+1`, is
-		// `{"+": [1, 1]}` (the JsonLogic shape of src/node/json_xml.rs), a prefix operation without its empty left side
-		case 6: {
-			const [value, ...rest] = tree.chain ?? [];
-			const right = value ? plainOfTree({ ...value, chain: rest }) : null;
-			const operator = OPERATOR_SPELLINGS[Number((kind >> 8n) & KIND_MASK)] ?? ":"; // the operator code is the byte above the kind (src/run/wasm_reader.rs)
-			if (ENTRY_OPERATORS.includes(operator)) return { [keyOfTree(payload.node)]: right };
-			const left = plainOfTree(payload.node);
-			return { [operator]: [left, right].filter(side => side !== null) };
-		}
-		case 7: case 8: {
-			const values = items();
-			const bracket = (kind >> 8n) & KIND_MASK;
-			// a group of one, `(b + 1)`, is its item (src/node/json_xml.rs)
-			if (bracket === ROUND_BRACKET && values.length === 1) return plainOfItem(values[0]);
-			const isObject = bracket === 0n && values.length > 0 && values.every(item => item !== null && (BigInt(item.kind) & KIND_MASK) === KIND_KEY);
-			return isObject ? Object.assign({}, ...values.map(plainOfTree)) : values.map(plainOfItem);
-		}
-		// its value the function's name (src/wasm_emitter/functions/closures.rs), kept for a host word calling the export itself
-		case Number(KIND_FUNCTION): return tree.warpFunction ? Object.assign(callableOf(tree.warpFunction), { warpName: tree.chain?.[0]?.data?.text }) : null;
-		default: return null;
-	}
-}
-
-// the key of an entry as lib/json.warp json_key writes it: a name or text as itself, any other key as warp shows it
-// ("" + key, runtime/show.warp): yes/no, ø, an operation `a+b` and an entry `x: y`, the head of `f(x) := …` "(f x)";
-// a module of the self-hosted compiler needs none of this, its keys are read as shown (values.js guestEntries)
-const BRACKET_PAIRS = ["{}", "[]", "()"];
-function keyOfTree(tree) {
-	const kind = Number(BigInt(tree.kind) & KIND_MASK);
-	if (kind === 6) {
-		const [right, ...rest] = tree.chain ?? [];
-		const operator = OPERATOR_SPELLINGS[Number((BigInt(tree.kind) >> 8n) & KIND_MASK)] ?? ":";
-		const sides = [tree.data?.node, right && { ...right, chain: rest }].filter(Boolean).map(keyOfTree);
-		return sides.join(ENTRY_OPERATORS.includes(operator) ? operator + " " : operator);
-	}
-	if (kind !== 7 && kind !== 8) {
-		const plain = plainOfTree(tree);
-		return plain === true ? "yes" : plain === false ? "no" : plain === null ? "ø" : String(plain);
-	}
-	const payload = tree.data ?? {};
-	const items = payload.node === undefined ? [] : [payload.node, ...(tree.chain ?? []).map(cell => cell.data?.node)].filter(Boolean);
-	const [open = "", close = ""] = BRACKET_PAIRS[Number((BigInt(tree.kind) >> 8n) & KIND_MASK)] ?? "";
-	return open + items.map(keyOfTree).join(" ") + close;
-}
-
-// a warp function given to foreign code: a JavaScript function calling it back through the module's closure_apply
-// (src/wasm_emitter/functions/closures.rs), synchronously, with as many of its arguments as it takes
-function callableOf({ module, node }) {
-	return (...values) => plainOfTree(readResult(module, module.closure_apply(node, buildValue(module, treeOfPlain(values)))));
-}
 
 // objects of the page without a plain form (a Date, a Map, an instance, a function), kept for foreign_call behind ids:
 // they cross as `{$handle: id, type, text}` and are the object again when they come back
@@ -367,43 +257,20 @@ const handleOf = value => ({ $handle: foreignHandles.push(value), type: value?.c
 const unhandled = value => value !== null && typeof value === "object" && "$handle" in value ? foreignHandles[value.$handle - 1] : value;
 const isPlainObject = value => [Object.prototype, null].includes(Object.getPrototypeOf(value));
 
-// a plain JavaScript value as a tree buildValue builds: arrays square lists, objects `{key:value …}`, booleans warp's
-// bools, an Int marked BOOL_INFO above the kind bits (src/type_kinds.rs BOOL_KIND, card booleans-foreign)
-const BOOL_KIND = String((1n << 8n) | 1n); // BOOL_INFO above Kind::Int
-const SQUARE_LIST = String((1n << 8n) | KIND_LIST);
-const CURLY_LIST = String(KIND_LIST);
-const COLON_KEY = String((1n << 8n) | KIND_KEY); // src/operators.rs OP_CODES: Colon is 1
-// a codepoint (a WIT char, P94) as src/modules/foreign.rs sends it, since JSON would make it a text: `{$char: "b"}`
-const KIND_CODEPOINT = "4";
+// a codepoint (a WIT char, P94) as a foreign runtime sends it, since JSON would make it a text: `{$char: "b"}`
 const isCodepoint = value => value !== null && typeof value === "object" && Object.keys(value).length === 1 && typeof value.$char === "string" && [...value.$char].length === 1;
-// a host word failing for the program's reason (a shader that does not compile), as native TaskFailure
-class HostWordFailure extends Error {}
-
-// a host word's failure as the program's own error (card wgsl-error, as src/host/native.rs raised): in a program with a
-// `try` its message goes to trap_detail and the program's returned_error raises it, which a running `try` catches
-// (`catch e` binds the message) and which otherwise traps as `raise` does; without a `try`, or any other exception (a
-// bug of the host), the failure as it was
-function raisedInProgram(exports, failure) {
+// a host word's failure (read_bytes of a missing file, a shader that does not compile) as the program's own error, as
+// the native driver raises it (cards wgsl-error, playground-host-word): in a program with a `try` its message goes to
+// trap_detail and the program's returned_error raises it, which a running `try` catches (`catch e` binds the message)
+// and which otherwise traps as `raise` does. Passing as they were: a program without `try`, the program's own trap or
+// raise coming back through a host word that called it, the engine's stack overflow (a RangeError) and exit
+function raisedInProgram(exports, failure, holder) {
 	const returnedError = exports[RETURNED_ERROR_EXPORT], detail = exports[TRAP_DETAIL_EXPORT];
-	if (!(failure instanceof HostWordFailure) || !returnedError || !detail) throw failure;
-	detail.value = buildValue(exports, treeOfPlain(failure.message));
+	const passing = !(failure instanceof Error) || failure instanceof WebAssembly.RuntimeError || failure instanceof RangeError || holder?.exitCode !== undefined;
+	if (passing || !returnedError || !detail) throw failure;
+	detail.value = newGuestValue(exports, failure.message);
 	returnedError();
 	throw failure;
-}
-
-function treeOfPlain(value) {
-	if (value === null || value === undefined) return { kind: "0", data: null, chain: [] };
-	if (typeof value === "boolean") return { kind: BOOL_KIND, data: { int: value ? "1" : "0" }, chain: [] };
-	if (typeof value === "bigint") return { kind: KIND_INT, data: { int: String(value) }, chain: [] };
-	if (typeof value === "number") return Number.isSafeInteger(value) ? { kind: KIND_INT, data: { int: String(value) }, chain: [] } : { kind: KIND_FLOAT, data: { float: value }, chain: [] };
-	if (typeof value === "string") return textTree(value);
-	if (isCodepoint(value)) return { kind: KIND_CODEPOINT, data: { i31: value.$char.codePointAt(0) }, chain: [] };
-	if (Array.isArray(value)) return { kind: SQUARE_LIST, items: value.map(treeOfPlain) };
-	if (typeof value === "function" || (typeof value === "object" && !isPlainObject(value))) return treeOfPlain(handleOf(value));
-	// an integer beyond 64 bits from Python: its digits (foreign_python.py plain)
-	if (typeof value === "object" && Object.keys(value).length === 1 && typeof value.$int === "string") return { kind: KIND_INT, data: { exact: [value.$int, "1"] }, chain: [] };
-	if (typeof value === "object") return { kind: CURLY_LIST, items: Object.entries(value).map(([key, item]) => ({ kind: COLON_KEY, key: [{ kind: "5", data: { text: key }, chain: [] }, treeOfPlain(item)] })) };
-	return textTree(String(value));
 }
 
 // a run's timers and channels end with it (the next run, worker.js)
@@ -420,7 +287,8 @@ function stopListening(holder) {
 const RUNTIME_MODULE = "warp_runtime";
 const LINKED_MODULE_PREFIX = "warp/";
 const MODULE_START = "warp/start";
-const compiledLibraries = new Map(); // by file: {module, descriptors}, compiled once per worker
+const UNICODE_MODULE = "warp/unicode";
+const compiledLibraries = new Map(); // by url: {module, descriptors}, compiled once per worker
 // (a deployed site has no compiler folder: its runtime and modules beside the page)
 function libraryUrl(file) { return typeof COMPILER_FOLDER === "undefined" ? file : `../../${COMPILER_FOLDER}/${file}`; }
 function libraryFile(name) {
@@ -451,18 +319,30 @@ function runHolder(fields) {
 function withLinkedInstances(descriptors, imports, instances) {
 	const linked = {};
 	for (const name of new Set(descriptors.map(entry => entry.module))) {
-		const file = libraryFile(name);
-		if (file) linked[name] = linkedInstance(name, file, imports, instances);
+		const url = linkedUrl(name);
+		if (url) linked[name] = linkedInstance(name, url, imports, instances);
 	}
 	return new Proxy(imports, { get: (modules, module) => linked[module] ?? modules[module] });
 }
-function linkedInstance(name, file, imports, instances) {
-	if (instances.has(name)) return instances.get(name);
-	if (!compiledLibraries.has(file)) {
-		const bytes = getSync(libraryUrl(file), 0, true);
-		compiledLibraries.set(file, { module: new WebAssembly.Module(bytes), descriptors: importDescriptors(bytes) });
+// a module linked by its import's name: a standard one's file, or a program's own module warp built (`import shapes`
+// beside shapes.wasm, imported by its path), which imports runtime.wasm's words as a standard module does
+function linkedUrl(name) {
+	const file = libraryFile(name);
+	if (file) return libraryUrl(file);
+	if (!MODULE_PATH.test(name)) return null;
+	const url = servedModuleUrl(name);
+	return compiledLibrary(url).descriptors.some(entry => entry.module === RUNTIME_MODULE) ? url : null;
+}
+function compiledLibrary(url) {
+	if (!compiledLibraries.has(url)) {
+		const bytes = getSync(url, 0, true);
+		compiledLibraries.set(url, { module: new WebAssembly.Module(bytes), descriptors: importDescriptors(bytes) });
 	}
-	const { module, descriptors } = compiledLibraries.get(file);
+	return compiledLibraries.get(url);
+}
+function linkedInstance(name, url, imports, instances) {
+	if (instances.has(name)) return instances.get(name);
+	const { module, descriptors } = compiledLibrary(url);
 	const exports = new WebAssembly.Instance(module, withUnlinkedTrapping(descriptors, withLinkedInstances(descriptors, imports, instances))).exports;
 	instances.set(name, exports);
 	exports[MODULE_START]?.();
@@ -480,3 +360,5 @@ function withUnlinkedTrapping(descriptors, imports) {
 
 // the one export a program with timers fires them by, timer_fired(id: int) (host-timers.js, driver.js timerFired)
 const TIMER_FIRED_EXPORT = "timer_fired";
+// the one a fetch's answer comes by, fetch_answered(id: int, answer) (lib/net.warp fetch_later, host-timers.js)
+const FETCH_ANSWERED_EXPORT = "fetch_answered";

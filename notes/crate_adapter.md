@@ -46,11 +46,23 @@ per library, and nothing about a crate in warp-host. The libraries themselves ar
 | bytes (result) | handle to a byte buffer | handle + warp word | `AsRef<[u8]>` (Vec<u8>, a digest), a warp list of 0 to 255 |
 | hex (result) | `const char *` | text | `AsRef<[u8]>` as lowercase hex (digests) |
 | list (result) | handle to a text list | handle + warp word | any iterator of texts/numbers, collected at once; a warp list |
-| handle(T) | `T *` (Box) | handle | result: T, Option<T> or Result<T, E> boxed; parameter: `&mut T` |
+| handle(T) | `T *` (Box) | handle | result: T, Option<T> or Result<T, E> boxed; parameter: `&mut T` (`&T` too) |
+| clone(T) (parameter) | `T *` | handle | `T` by value: a clone of the handle's value (T: Clone), the handle stays the caller's |
 | void | void | void | `()` or `Result<(), E>` |
 
 - The first handle parameter of a method path (`regex::Regex::is_match`) is that type. Elsewhere write `handle(path)`.
 - `?.m` maps m over the Option or Result an item returns. `*.m` maps it over an iterator. `.m` calls it.
+- Config structs (card use-cargo-config-structs): `= crate::Config::default` makes one (a path call like any other);
+  `= crate::Config.width` reads a public field (cloned: a struct field comes back as a handle of its own), and
+  `= crate::Config.width=` sets it from the line's second parameter, a number cast to the field's number type, a text
+  as String or PathBuf, each also into an Option field (runtime.rs FieldIn), a `clone(T)` by `.into()`:
+
+      versionreq_default(): handle(semver::VersionReq) from 'rs_semver' = semver::VersionReq::default
+      config_set_width(config: handle, width: i64): void from 'rs_x' = x::Config.width=
+      version_pre(version: handle): handle(semver::Prerelease) from 'rs_semver' = semver::Version.pre
+
+  `scan` drafts these: a `_default` line for a struct implementing Default, a getter and a `_set_` line for each public
+  field, `clone(T)` for a struct taken by value (a builder's `self` too).
 - Failures:
   - None, an Err, a panic or a NULL handle return the C null: -1 for numbers, NaN for floats, false, NULL for texts
     and handles. A NULL text is ø in warp; a NULL handle is 0.
@@ -96,20 +108,24 @@ per library, and nothing about a crate in warp-host. The libraries themselves ar
 - `warp-crate scan semver@1` drafts 19 lines (constructors, parse, VersionReq::matches, as_str, free lines). They
   build unedited, and a warp program then checks version requirements (`versionreq_matches(req, version_parse("1.4.0"))`).
   scan on regex builds too.
+- With config structs (2026-11-06, cloud Linux, the v1.7.0 native warp): `scan semver@1` drafts 41 lines (3 more
+  skipped), built unedited; a program sets a Version's patch and pre (a Prerelease handle by clone), a Comparator's
+  Option<u64> patch, reads them back, and a cloned handle changes apart from its original. The native warp finds the
+  library by LD_LIBRARY_PATH (not by the crates cache by itself).
 - tests/host/test_crates.sh: 20/20 (2026-10-23, box). It needs a warp-host and warp.wasm from pure-c-imports
   57f273b59 or later, which this branch includes.
 
 ## Open
 
-- `use crate "regex@1"` doesn't build on demand: the shim must be built first (`warp-crate build`, or fetched once
-  precompiled-crates lands). The version after @ isn't checked against the built one.
+- `use crate "regex@1"` doesn't build on demand: the shim must be built (`warp-crate build`) or fetched
+  (`warp-crate fetch regex`) first. The version after @ isn't checked against the built one.
 - Byte and list results cost one FFI call per item. A host result type for bytes (pointer + length out) would make
   them one call.
 - A one-letter text from C prints as a codepoint ('1' in find_all's list): a pure-lane printing quirk, not the shim's.
 - bool results print as 1/0 on the pure lane (c_parameter_kinds maps bool to i32).
 - Retiring src/modules/std_adapters.rs hash/regex: switch lib/hash.warp and lib/regex.warp to `use rs_sha2` /
   `use rs_regex` once shims ship precompiled (below) and the browser keeps its JS twin.
-- Callbacks (closures into Rust), structs by value, generic items: out of scope. Wrap them in a tiny helper crate of
+- Callbacks (closures into Rust), generic items: out of scope (structs by value: `clone(T)`). Wrap them in a tiny helper crate of
   your own and point a manifest at it (a path dependency is a manifest line away; not added yet).
 
 ## Plan: precompiled crates (card precompiled-crates)
@@ -130,3 +146,14 @@ Goal: `use rs_regex` works on a fresh install without cargo, so warp gains libra
    FFI, with the browser's host.js twins kept for wasm in the browser.
 6. Third-party crates: users write a manifest (`warp-crate scan` drafts it) and build locally. A community index of
    manifests could later get the same CI treatment.
+
+Status (2026-11-06): steps 1-3 are in. `warp-crate publish <dir> <manifests>` builds per target (library and native
+file named `<library>-<target>`, entries in `crates-<target>.json`: name, library, crate, resolved version, key, target,
+file, sha256, native, native_sha256); `warp-crate index <dir>` merges them into crates.json (JSON, not json5: python's
+own reader); .github/workflows/crates.yml runs both over the four targets and replaces the assets of the pre-release
+`crates` when lib/crates or the generator changes on main. `warp-crate fetch <name>` downloads this target's entry whose
+key is the local manifest's (WARP_CRATES_URL names another place, also file://), checks both sha256, installs as
+`build` does, and builds with cargo where nothing matching is shipped; without cargo it names the crate, the target and
+why. Open: the native warp fetching on a `use rs_x` itself (step 3's launcher half), packaging (step 4), retiring the
+bridges (step 5); and the native warp's FFI still refuses the shims' handle words (`sha256_bytes_handle`), shipped or
+built.

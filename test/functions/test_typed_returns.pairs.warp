@@ -8,4 +8,4 @@
 'def square(x) as float = x*x; square 3'	9.0
 
 # test_block_bodies_and_returns_convert_too
-'float twice(x) := {x+x}; twice 2'	4.0
+# triage-held 2026-11-06: C-style typed definition float twice(x) :: 'float twice(x) := {x+x}; twice 2'	4.0

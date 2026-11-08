@@ -20,9 +20,9 @@
 'd = 1 day; print d; "in " + d'	'in 1 day'
 
 # test_zoned_fields_at_run_time
-'z = 2024-07-01T10:30[Europe/Berlin]; print z; z.hour * 60 + z.minute'	630
-'z = 2024-07-01T10:30[Europe/Berlin]; print z; z.offset'	7200
-'z = 2024-01-31T23:30[America/New_York]; print z; z.day'	31
+'z = zoned(2024-07-01T10:30, "Europe/Berlin"); print z; z.hour * 60 + z.minute'	630
+'z = zoned(2024-07-01T10:30, "Europe/Berlin"); print z; z.offset'	7200
+'z = zoned(2024-01-31T23:30, "America/New_York"); print z; z.day'	31
 
 # test_zoned_times_and_durations_compare_at_run_time
 'a = 1 day; b = 2 days; print a; a < b'	true

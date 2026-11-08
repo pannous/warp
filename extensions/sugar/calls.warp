@@ -5,6 +5,10 @@
 # `map square xs`, `map (x -> x * 2) [1, 2, 3]`: a function before a list maps it, as `xs.map(square)` does; ahead
 # of the composition below, which would read `map floor xs` as map(floor(xs))
 rewrite (map $f $xs) => map($xs, $f) where $f is function
+# a trailing block after an iteration word's call is its function (Swift, Kotlin, Ruby): `xs.map { $0 * 10 }`,
+# `xs.reduce(0) { $0 + $1 }`; only these words, so `if xs.empty { … }` stays a condition and its block
+rewrite $xs.$f {$body...} => $xs.$f({$body...}) where takes_trailing_block($f)
+rewrite $xs.$f($a...) {$body...} => $xs.$f($a..., {$body...}) where takes_trailing_block($f)
 # so round, the function first: `map(floor, xs)` is map(xs, floor)
 rewrite map($f, $xs) => map($xs, $f) where $f is function and not $xs is function
 # a function before an empty `()`, spaced or not, is called with nothing: `f ()` is f() (user decision calls-arguments)
@@ -14,6 +18,9 @@ rewrite ($f $x) => $f($x) where $f takes one
 rewrite $x then $f => $refused where $f is function and $refused = then_not_pipe($x, $f)
 # nor is a bare `x > 2 then 5` a branch: refused with the fix `if x > 2 then 5` (decision then-not-pipe)
 rewrite $c then $v => $refused where $refused = then_without_if($c, $v)
+# a method of more than its receiver keeps the function after it as its argument: `xs.map length` is xs.map(length),
+# while `xs.first abs` applies backward below, abs(xs.first)
+rewrite ($x.$m $f) => $x.$m($f) where $f is function and $m is function and not $m takes one
 # backward application (decision postfix-words): a phrase of exactly two items, a value then a library word of one
 # typed value, is its call, `16 sqrt` is sqrt(16), `-7 abs` abs(-7); a function first keeps the prefix meaning above,
 # and a use line is none: `use keys` names the module, never keys(use)
@@ -28,6 +35,11 @@ rewrite ($f $g $x) => $f(($g $x)) where $f is function and $g takes one
 # (one typed value) leaves it out. Not a name nothing binds: `int x = 3` declares x; before several words it takes
 # the phrase they make, `int float 3` is int(float(3))
 # `bool(x)`, `bool x`: the truthiness of any value (lib/prelude.warp truth_of)
+# `float y = 1/10 + 2/10`, written type-first, declares as `y: float = …` does: the declared type converts its value (0.3)
+rewrite ($t $x = $v) => ($x: $t = $v) where $t is type and $x is symbol
+# a variable of a fixed-width int, `x: int8 = v` and `int8 x = v`, holds an int its value is cast to, the cast checking
+# that it fits (decision cast-checks); @primitive code keeps the width, a u32 is a wasm i32 there
+rewrite ($x: $t = $v) => ($x: int = ($v as $t)) where $t in [byte, int8, uint8, int16, uint16, int32, uint32, int64, uint64, i8, u8, i16, u16, i32, u32, i64, u64] and widened_to_int($t)
 rewrite bool($x) => truth_of($x)
 rewrite (bool $x) => truth_of($x) where $x is not unbound
 rewrite (int $x) => int($x) where $x is not unbound
@@ -54,11 +66,18 @@ rewrite (type $x $more...) => type(($x $more...))
 # (decision union-or). Typed operators (decision rules-to-typed-operators), dispatched at compile time; a lambda
 # composed keeps its body, `(x => x + 1) | dbl` is `x => dbl(x + 1)`. Rust twin: pipes.rs
 rewrite ($it => $body) | $g => $it => $body | $g where $g is function
+# a composition applied takes the value after it, `twice|abs -4` is abs(twice(-4)), as `&` does
+rewrite $f | $g $x => $g($f($x)) where $f is function and $g is function
+rewrite $f | $g($x) => $g($f($x)) where $f is function and $g is function
 infix operator |(a: type, b: type) := a | b
 infix operator |(f: function, g: function) := x => x | f | g
 infix operator |(x: any, g: function) := g(x)
 # `&` between two functions composes them too, in reading order (wiki/&.md, card amp-compose): (square & print)(2)
-# prints 4; between whole numbers it stays the bits, between truth values and
+# prints 4; between whole numbers it stays the bits, between truth values and. Applied, the value after the last
+# function goes to the first, `square & print 2` is print(square(2)) (decision D6), as is `inc & dbl(3)`
+rewrite ($it => $body) & $g => $it => $body | $g where $g is function
+rewrite $f & $g $x => $g($f($x)) where $f is function and $g is function
+rewrite $f & $g($x) => $g($f($x)) where $f is function and $g is function
 infix operator &(f: function, g: function) := x => x | f | g
 
 # A block reading `it` applied to the value beside it: `{it*2} 5` and `{it*2}(5)` are (it => {it*2}) 5, called as a
@@ -74,6 +93,21 @@ rewrite ($x = $b) => ($x = $c) where $b is block and $c = shorthand_closure($b)
 rewrite sort($xs, ($a, $b) => $body) => sorted_in_order($xs, ($a, $b) => $body)
 rewrite sort($xs, $b) => sorted_by_key($xs, it => $b) where $b is function_block
 rewrite sort($xs, $f) => sorted_by_key($xs, $f) where $f is function
+# An `it` block / bare `it` expr where map/filter/find/any/all/each expect a function
+# (notes/welcoming.md, card map-argument-forms). Word list once in rule_words.it_taking;
+# call vs method vs spaced stay separate (map takes two, so spaced `map xs b` does not
+# normalize via `$f takes one`). `xs.map({it * 10})`, `map([1,2], {it+1})`, `map [1 2] (it * 10)`.
+rewrite $w($xs, $b) => $w($xs, it => $b) where it_taking($w) and $b is function_block
+rewrite $xs.$w($b) => $xs.$w(it => $b) where it_taking($w) and $b is function_block
+rewrite ($w $xs $b) => $w($xs, it => $b) where it_taking($w) and $b is function_block
+# Bare `it` expressions: it_as_lambda returns the lambda, else ø (rule skipped).
+rewrite $w($xs, $e) => $w($xs, $f) where it_taking($w) and $f = it_as_lambda($e)
+rewrite $xs.$w($e) => $xs.$w($f) where it_taking($w) and $f = it_as_lambda($e)
+rewrite ($w $xs $e) => $w($xs, $f) where it_taking($w) and $f = it_as_lambda($e)
+# apply takes the function first; sort already has function_block → sorted_by_key above.
+rewrite apply($e, $x) => apply($f, $x) where $f = it_as_lambda($e)
+rewrite sort($xs, $e) => sorted_by_key($xs, $f) where $f = it_as_lambda($e)
+
 # `increment = add(1, _)`: a call given `_` for its first or last argument is the function of that argument, the
 # partial application `x -> add(1, x)` (decision M3b)
 rewrite $f($a..., _) => ($x -> $f($a..., $x)) where $f is function

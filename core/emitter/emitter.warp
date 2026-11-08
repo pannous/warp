@@ -129,13 +129,13 @@ node_fields = [126, 0, any_reference, 0, 99, gc.node, 0]
 gc_types = [[94, 120, 1], [94, 99, gc.node, 1], [95, 2, 127, 1, 100, gc.items, 1], [80, 0, 95, 3] + node_fields, [95, 1, 126, 0], [95, 1, 124, 0], [95, 2, 110, 0, 110, 0],
 	[79, 1, gc.node, 95, 7] + node_fields + [126, 0, 126, 0, 99, gc.node, 0, 99, gc.node, 0], [94, 127, 1], [95, 2, 127, 0, 99, gc.limbs, 0],
 	[79, 1, gc.node, 95, 5] + node_fields + [funcref_byte, 0, 99, gc.text, 0], [80, 1, gc.node, 95, 4] + node_fields + [99, gc.node, 1],
-	[79, 1, gc.node, 95, 11] + node_fields + concatenated(range_list(8).map(i => [funcref_byte, 0]))] + range_list(hook_arities + 1).map(arity => [function_type_byte, arity + 1] + concatenated(range_list(arity + 1).map(i => references.node)) + [1, any_reference])
+	[79, 1, gc.node, 95, 12] + node_fields + concatenated(range_list(9).map(i => [funcref_byte, 0]))] + range_list(hook_arities + 1).map(arity => [function_type_byte, arity + 1] + concatenated(range_list(arity + 1).map(i => references.node)) + [1, any_reference])
 # a closure's entry (closures.warp), a $Node so it sits in the closure's items: the funcref it calls and the text it shows; $Instance, every class's struct's
 # supertype (instances.warp); $Class, a class's descriptor (instances.warp class_slots); the closure calls' function types, (closure, argument…) to a node. Each the same in every
 # module, so one module's instances and closures pass into another's code
 gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node", ["kind", "data", "value"]], ["i64box", ["value"]], ["f64box", ["value"]], ["Ratio", ["numerator", "denominator"]],
 	["MetaNode", ["kind", "data", "value", "line", "column", "comment", "attributes"]], ["Limbs", []], ["BigInt", ["negative", "limbs"]], ["Closure", ["kind", "data", "value", "entry", "shown"]], ["Instance", ["kind", "data", "value", "extra"]],
-	["Class", ["kind", "data", "value", "entries", "field_at", "place", "set", "construct", "show", "float", "call"]],
+	["Class", ["kind", "data", "value", "entries", "field_at", "place", "set", "construct", "show", "float", "call", "operate"]],
 	["closure_call_type_0", []], ["closure_call_type_1", []], ["closure_call_type_2", []], ["closure_call_type_3", []], ["closure_call_type_4", []],
 	["closure_call_type_5", []], ["closure_call_type_6", []], ["closure_call_type_7", []], ["closure_call_type_8", []]]
 # a kind's wasm value type: a number's, a yes/no's or a character's own byte, else its reference (decision kinds-as-cases)
@@ -292,6 +292,11 @@ def fresh_module() {
 refuse(why: text): any := {
 	throw outside_the_core + why + module.emitting_at
 }
+# the program's own mistake found while emitting, `beat(1, 2)` of beat(n): its error with a fix, as a check says one,
+# never a gap of the core
+program_error(message: text, fix: text): any := {
+	throw message + module.emitting_at + "; fix: " + fix
+}
 # a refusal of binding a linked module's word to the program, marked: the compile is retried from the modules' sources
 # (compiler.warp), a program's own error never (a global: a Module field more fails the seed's compile)
 global link_refused = no
@@ -387,6 +392,8 @@ def collect_functions(program: Node, functions: map): list {
 	for n in program_statements(program).map(unkeyworded) {
 		head = function_head(n)
 		if head == ø and not is_import(n) { kept += [n] } else if head != ø {
+			# a name the passes made is made once: of two lifted lambdas named alike, one closure would call the other's code
+			if is_lifted_lambda(name_of(head#1)) and functions.has(name_of(head#1)) { raise "two lifted lambdas named " + name_of(head#1) + " (passes/walk.warp fresh_number)" }
 			functions[name_of(head#1)] = Function(name_of(head#1), signature_of(head), value_of(n))
 		}
 	}
@@ -502,6 +509,7 @@ node_reader(kind: ValueKind): text? := match kind {
 	ValueKind.Text: "text_of_node"
 	ValueKind.Bool: "bool_of_node"
 	ValueKind.List: "list_of_node"
+	ValueKind.Time: "time_of_node"
 	ValueKind.Char: "char_of_node"
 	_: ø
 }
@@ -553,14 +561,23 @@ def instance_number(n: Node, value: TypedCode): TypedCode {
 	if value.kind == ValueKind.Node and float_converting_word in module.functions { return instance_cast(n, value, ValueKind.Float) }
 	value
 }
-# `x as! int` (decision cast-checks): converted no matter what, a whole number past 64 bits to its low 64 bits, where
-# `x as int` raises "too big for int"
+# `x as! int` (decision cast-checks): a whole number past 64 bits keeps its low 64 bits, where `x as int` raises
+# "too big for int". byte, u8 and uint8 are not that wrap: they call convert! (0..255). Any other target calls
+# convert! too, or refuses where the program declares none (decision checked-forced-conversions)
 def forced_cast(body: Body, subject: Node, type: Node): TypedCode {
 	value = expression_code(body, subject)
-	if value.kind == ValueKind.Node and type is symbol and names_int(name_of(type)) { return runtime_call("wrapped_int", [value]) }
-	expression_code(body, Key(subject, Op.As, type))
+	word = if type is symbol then name_of(type) else ""
+	if keeps_wrapped_int(word) {
+		if value.kind == ValueKind.Node { return runtime_call("wrapped_int", [value]) }
+		return expression_code(body, Key(subject, Op.As, type))
+	}
+	forced = if "convert!" in module.functions then "convert!" else if own_word("convert!") in module.functions then own_word("convert!") else ""
+	if type is symbol and forced != "" { return call(body, module.functions[forced], [subject, Key(symbol("to"), Op.Colon, type)]) }
+	refuse("no forced conversion to " + (if word != "" then word else "that type"))
 }
 names_int(word: text): bool := core_type_words.get(word) == "int" or word in int_spellings
+# an int name whose forced cast is the 64-bit wrap; byte, u8 and uint8 go through convert! instead
+keeps_wrapped_int(word: text): bool := word != "" and names_int(word) and word not in wrapping_byte_words
 def cast(value: TypedCode, to: ValueKind): TypedCode {
 	if value.kind == ValueKind.Text { return runtime_call(text_reader(to), [value]) }
 	# '7' as int is 7, the text it is
@@ -717,6 +734,8 @@ global_key(body: Body, name: text): text := if body.intrinsics then name else pr
 is_global(body: Body, name: text): bool := name not in body.names and global_key(body, name) in module.globals
 # a built-in type's name, `type` or a declared class's
 names_a_type_value(name: text): bool := is_tested_type_word(name) or name == "type" or name in module.classes
+# a name with its first letter capitalized, `later` → Later, the case a lowercase bare name may mean
+folded_case(name: text): text := if name == "" then name else name[0 ..< 1].upper() + name[1 ..]
 def local_value(body: Body, n: Node): TypedCode {
 	name = name_of(n)
 	# a main-level value read by a function compiled before main's assignment declares it, one an earlier value's
@@ -732,10 +751,14 @@ def local_value(body: Body, n: Node): TypedCode {
 	nullary = if name in module.functions then name else name + "·0"
 	if name not in body.names and nullary in module.functions and #module.functions[nullary].signature.parameters == 0 { return call(body, module.functions[nullary], []) }
 	# a bare enum case is its name, a symbol, at run time, made once: the very case is the one node (decision
-	# enum-identity)
+	# enum-identity); its first letter lowercase names it too, `disambiguation: later` the case Later (decision
+	# lowercase-key-comparisons)
+	if name not in body.names and name not in module.variants and folded_case(name) in module.variants { name = folded_case(name) }
 	if name not in body.names and name in module.variants { return if #module.variants[name] == 1 then case_value(module.variants[name]#1, name) else interned_symbol(body, name) }
 	# a type's name, unbound, is the type value: `k = int`
 	if name not in body.names and names_a_type_value(name) { return TypedCode(ValueKind.Node, type_value_code(name)) }
+	# a function named without the arguments it takes: `x = beat` of beat(n)
+	if name not in body.names and #functions_named(name) > 0 { return refuse_count(functions_named(name), 0) }
 	if name not in body.names { return refuse("the unknown name " + name + module_hint(name)) }
 	index = body.names[name]
 	TypedCode(body.kinds#(index + 1), [op.local_get] + uleb(index), body.marks.get(name) ?? 0)
@@ -1048,13 +1071,14 @@ def expression_code(body: Body, n: Node): TypedCode {
 }
 
 # `f 3 4`: a program function's name before spaced arguments it takes calls it, as `f(3, 4)`; `midi_on C4` too,
-# the rest defaulted; a word the emitter expands as well, by its signature line (`read "s.txt"`, `chr 65`)
+# the rest defaulted; a word the emitter expands or warp computes as well, by its signature line (`read "s.txt"`,
+# `chr 65`, `join xs "-"`)
 is_spaced_call(body: Body, n: Node): bool := {
 	if not (bracket_of(n) == "" and separator_of(n) == " " and #n > 1 and n#1 is symbol) { return no }
 	name = name_of(n#1)
 	if name in body.names { return no }
 	if name in module.functions { return takes_arguments(module.functions[name], items_of(n)[1..]) }
-	lines_of(emitter_lines, unaliased(name)).any(line => takes(line.signature, #n - 1))
+	lines_of(typed_lines, unaliased(name)).any(line => takes(line.signature, #n - 1))
 }
 # `print x`, `raise x` called, a line of their own, or the one line of a block (`if c { print x }`)
 is_call_or_line(n: Node): bool := bracket_of(n) == "(" or bracket_of(n) == "" or (bracket_of(n) == "{" and separator_of(n) == " ")
@@ -1089,7 +1113,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 		if name_of(n#1) == ending_host_word { return TypedCode(never, ended_code(host_call(body, name_of(n#1), items_of(n)[1..]))) }
 		return host_call(body, name_of(n#1), items_of(n)[1..])
 	}
-	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in intrinsics and (body.intrinsics or name_of(n#1) in program_intrinsics) {
+	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in intrinsics and (body.intrinsics or (name_of(n#1) in program_intrinsics and #n - 1 == intrinsics[name_of(n#1)])) {
 		return intrinsic(body, name_of(n#1), items_of(n)[1..])
 	}
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in time_intrinsics and body.intrinsics {
@@ -1193,6 +1217,8 @@ def group_expression(body: Body, n: Node): TypedCode {
 	if separator_of(n) == " " and #n > 1 and assigns(n#1) { refuse("a value after an assignment") }
 	# `y 1+1`: values side by side are a list without brackets, a spaced group (only `;` and
 	# lines are statements); its text is the items with a space between
+	# `beat 1 1/2` of beat(n): a function before values it does not take, never a list holding it
+	if separator_of(n) == " " and #n > 1 and n#1 is symbol and name_of(n#1) not in body.names and #functions_named(name_of(n#1)) > 0 { return refuse_count(functions_named(name_of(n#1)), #n - 1) }
 	if separator_of(n) == " " and #n > 1 { return TypedCode(ValueKind.Node, node(Marked.UnbracketedList, list_value(body, items_of(n)).code)) }
 	sequence(body, items_of(n))
 }
@@ -1279,7 +1305,8 @@ def key_expression(body: Body, n: Node): TypedCode {
 		numeric = target.kind == ValueKind.Int or target.kind == ValueKind.Float
 		if numeric and is_textual(added.kind) { return refuse("a number += a " + kind_spelling(added.kind)) }
 		sum = left is symbol and (numeric or name_of(left) in body.function.sums)
-		if sum and added.kind == ValueKind.Node {
+		# (a class defining `+` may be what is added, `total += sqrt(i)` an exact root: the arithmetic below dispatches)
+		if sum and added.kind == ValueKind.Node and not adds_by_dispatcher(body) {
 			body.function.sums[name_of(left)] = yes
 			return assignment(body, left, operation_code(body, "+", target, runtime_call("number_node", [added])))
 		}
@@ -1322,6 +1349,9 @@ def key_expression(body: Body, n: Node): TypedCode {
 	# `m.a`: the entry a of the map (or instance) m, `m#("a"+1)`
 	if operator == Op.Dot and right is symbol {
 		value = expression_code(body, left)
+		# `d.weekday`: a time's own field, ahead of a word of that name (lib/time's weekday(ms: int)), as a known class's
+		# struct field is (decision time-fields-before-ufcs)
+		if value.kind == ValueKind.Time and time_fields.has(name_of(right)) and module.functions.has(time_field_word) { return time_field(value, name_of(right)) }
 		# `n.sq`, `parts.last`: a member naming a function of the program that takes the value is its call (a node's
 		# entry of that name first)
 		method = method_function(body, name_of(right), [left])

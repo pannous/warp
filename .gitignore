@@ -3,6 +3,7 @@ target
 *.wasm
 # the library index `warp rebuild` writes beside the prebuilt modules
 lib/modules/index.tsv
+lib/modules/sugar_rules.packed
 wiki/
 out
 
@@ -33,16 +34,16 @@ data/
 # the machine code a linked run keeps beside runtime.wasm and each prebuilt module (driver.warp machine_code_file)
 /lib/runtime.wasm.driver.*
 /lib/modules/*.cwasm*
-# warp's wasmtime C API and sound library, copied in by scripts/wasmtime-c-api.sh (cards wasmtime-bundled, sound-plays)
+# … and beside every other module a run links, test/fixtures/wasm's too
+*.driver.cwasm*
+# warp's wasmtime C API and native libraries, copied in by scripts/wasmtime-c-api.sh (card wasmtime-bundled)
 /lib/libwarp_wasmtime.*
-/lib/libwarp_sound.*
 /lib/libwarp_gpu.*
-/lib/libwarp_window.*
 /lib/compiler.wasm*
 /lib/compiler-self.wasm*
 
-# packages fetched by `use <name>`, see packages.warp
-/packages/
+# packages fetched by `use <name>`, see packages.warp; a worktree links the main checkout's (rebuild.sh), so no trailing slash
+/packages
 
 # test fixtures may be prebuilt modules and components (tests/fixtures/components/*/build.sh rebuilds them)
 !tests/fixtures/**/*.wasm
@@ -86,3 +87,5 @@ samples/tune.mid
 samples/sound/tune.mid
 
 kick.wav
+# the packed sugar rules warp rebuild writes beside the modules (build output)
+/lib/modules/sugar_rules.packed

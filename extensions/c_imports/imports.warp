@@ -25,20 +25,22 @@ c_library_aliases = {libc: "c", libm: "m", cmath: "m", zlib: "z", SDL2: "SDL2", 
 c_and_m = ["c", "m"]
 # the libraries of typed lines that are not C's
 not_c_libraries = ["warp", "emitter", "runtime", "host"]
-# the files whose foreign lines say what a library's functions take and give
+# the files whose foreign lines say what a library's functions take and give, built in: lib/c.warp, lib/math.warp
 c_catalog_files = ["c.warp", "math.warp"]
+c_catalog_texts(): list := [module_source("c"), math_text]
 c_foreign_mark = " from "
 c_quotes = ["'", "\""]
 # a type word of a foreign line → the type it crosses as
-c_type_words = {i32: "i32", int: "i32", int32: "i32", bool: "bool", char: "i32", i64: "i64", int64: "i64", long: "i64", size_t: "i64",
+c_type_words = {i32: "i32", int: "i32", int32: "i32", bool: "bool", char: "i32", i64: "i64", int64: "i64", long: "i64", size_t: "i64", u32: "u32", uint32: "u32",
 	f64: "f64", float: "f64", double: "f64", number: "f64", f32: "f32", float32: "f32", text: "text", string: "text", owned_text: "owned_text", handle: "handle", pointer: "handle",
 	out: "out", bytes: "bytes", length: "length", texts: "texts", void: "void", nothing: "void"}
 # the kind the emitter passes a type as (host_words.warp's), and the c_signatures.rs name of the parameter
-c_parameter_kinds = {bool: ValueKind.I32, i32: ValueKind.I32, i64: ValueKind.Int, f64: ValueKind.Float, f32: ValueKind.F32, text: ValueKind.Node, bytes: ValueKind.Node, texts: ValueKind.Node, handle: ValueKind.I32}
-c_parameter_names = {bool: "i32", i32: "i32", i64: "i64", f64: "f64", f32: "f32", text: "ptr", bytes: "bytes", length: "length",
+c_parameter_kinds = {bool: ValueKind.I32, i32: ValueKind.I32, u32: ValueKind.I32, i64: ValueKind.Int, f64: ValueKind.Float, f32: ValueKind.F32, text: ValueKind.Node, bytes: ValueKind.Node, texts: ValueKind.Node, handle: ValueKind.I32}
+c_parameter_names = {bool: "i32", i32: "i32", u32: "i32", i64: "i64", f64: "f64", f32: "f32", text: "ptr", bytes: "bytes", length: "length",
 	handle: "handle", out: "out", texts: "texts"}
 # the parameters the host fills, which take no argument
 c_filled_types = ["out", "length"]
+UNSIGNED_TYPE = "u32"
 # the types only a parameter has
 c_parameter_only_types = ["out", "bytes", "length", "texts"]
 
@@ -81,6 +83,42 @@ c_type_of(word: text): text := {
 
 # the foreign lines of `text`
 c_declarations_in(content: text): list := content.split("\n").map(line => c_declaration(line)).filter(d => d != ø)
+# the catalog's lines of `name` from `library`; libc and libm are one library on macOS: `import sqrtf from "c"` takes libm's line
+catalog_lines(catalog: list, name: text, library: text): list := {
+	found = catalog.filter(d => d#1 == name and d#2 == library)
+	if #found == 0 and library in c_and_m { found = catalog.filter(d => d#1 == name and d#2 in c_and_m) }
+	found
+}
+# a module's or program's text with its parts, the files it uses by path from `folder` (lib/host/native_host.warp's
+# `use "native_host/window.warp"`), whose foreign lines, imports and calls are its own
+module_with_parts(content: text, folder: text): text := parts_joined(content, folder, [])
+# (a part's own parts too, each file once)
+parts_joined(content: text, folder: text, seen: list): text := {
+	joined = [content]
+	for path in c_statements(content).map(module_part).filter(path => path != ø).map(path => folder + "/" + path) {
+		if path not in seen {
+			seen += [path]
+			joined += [parts_joined(file_source(path) ?? "", folder_of(path), seen)]
+		}
+	}
+	joined.join("\n")
+}
+# a standard module's text with its parts, beside it in its own folder (lib/host/native_host/window.warp)
+library_module_with_parts(module: text): text := module_with_parts(file_source(std_module_path(module)) ?? "", folder_of(std_module_path(module)))
+module_part(statement: text): any := if statement.starts_with("use \"") and statement.ends_with(".warp\"") then statement.remove_prefix("use \"").remove_suffix("\"") else ø
+# the C functions a used module's text declares: its foreign lines and the catalog's lines its imports name
+# (`import (calloc, field_u32) from 'c'`), as a program's own are (c_functions_of)
+c_declarations_used(content: text, catalog: list): list := {
+	found = c_declarations_in(content)
+	imports = c_statements(content).map(c_import).filter(imported => imported != ø)
+	for imported in imports {
+		for name in imported#2 {
+			lines = catalog_lines(catalog, name, imported#1)
+			if #lines > 0 { found += [lines#1] }
+		}
+	}
+	found
+}
 # the C functions of the standard modules a compile's program uses, name → declaration (prelude_words.warp
 # with_used_modules): a module a pass or rule brings (`use web` of server routes) calls C as one its text names does
 global used_c_functions = {}
@@ -99,14 +137,7 @@ is_c_library(name: text): bool := {
 }
 
 # the foreign lines of lib/c.warp, lib/math.warp and the native files at `native_paths`
-c_catalog(library_folder: text, native_paths: list): list := {
-	found = []
-	for path in c_catalog_files.map(file => library_folder + "/" + file) + native_paths {
-		content = file_source(path) ?? ""
-		found += c_declarations_in(content)
-	}
-	found
-}
+c_catalog(native_paths: list): list := (c_catalog_texts() + native_paths.map(path => file_source(path) ?? "")).flat_map(text => c_declarations_in(text))
 # lib/native/sqlite3.warp: the foreign lines of a C library and the warp words over them (card pure-c-imports)
 native_folder = "native"
 native_file(library: text): text := native_folder + "/" + library + ".warp"
@@ -136,7 +167,7 @@ c_crate_use(statement: text): any := {
 # need an import (`floor` is warp's, `fmin` libm's)
 warp_word_names(): any := {
 	names = {}
-	for content in [library_text("math.warp"), library_text("prelude.warp")] {
+	for content in [math_text, prelude_text] {
 		for line in content.split("\n") {
 			trimmed = line.trim()
 			if trimmed.ends_with(" from warp") or trimmed.ends_with(" from emitter") {
@@ -177,6 +208,40 @@ used_word(statement: text): any := {
 	ø
 }
 comment_marks = ["#", "//"]
+
+# `use math as m`, `use wasm "rust_demo.wasm" as demo`: the name after `as` is a second spelling of the module in its
+# qualified words and its dir (decision samples-modules-wasm, test_use_modules): the use without it, each `m.` and
+# `dir(m)` of the source the module's own name, the last part of what the use names (`math`, `rust_demo`)
+ALIAS_MARK = " as "
+with_module_aliases(source: text): text := {
+	aliased = source
+	for statement in c_statements(source) {
+		used = used_word(statement)
+		if used == ø or not used.contains(ALIAS_MARK) { continue }
+		parts = used.split(ALIAS_MARK)
+		alias = parts#2.trim()
+		module = module_named_by(parts#1)
+		aliased = renamed_name(aliased.replace(statement, statement.split(ALIAS_MARK)#1), alias + ".", module + ".").replace("dir(" + alias + ")", "dir(" + module + ")")
+	}
+	aliased
+}
+# `math`, `"list"`, `wasm "../x/rust_demo.wasm"`: the module's name, its file's name without folders and extension
+module_named_by(written: text): text := {
+	file = written.trim().split(" ").last().split("/").last()
+	for mark in ["\"", "'"] { file = file.replace(mark, "") }
+	file.split(".")#1
+}
+# each `old` of the text standing as a name of its own as `new`: `sq.` in `sq.square(7)` but not in `msq.x`, `m.fib`
+# but not `m.fibs`
+renamed_name(text: text, old: text, new: text): text := {
+	parts = text.split(old)
+	written = parts#1
+	for part in parts[1..] {
+		glued = (#written > 0 and is_name_char(written[#written - 1])) or (is_name_char(old[#old - 1]) and #part > 0 and is_name_char(part[0]))
+		written += (if glued then old else new) + part
+	}
+	written
+}
 # `use sqlite3` → "sqlite3", `import raylib` too, `use crate "regex@1"` → "rs_regex"; ø for another statement
 c_use(statement: text): any := {
 	crate = c_crate_use(statement)
@@ -205,14 +270,22 @@ quoted_lines(source: text): list := {
 # [the source without its foreign lines (each an empty line, so the positions stay) and each `use sqlite3` of a
 # library with a lib/native/sqlite3.warp a `use` of that file, the C functions it calls: name → declaration, the
 # names the imports name that no line declares]
-c_functions_of(source: text, library_folder: text): list := {
+c_functions_of(written: text, library_folder: text, folder: text = "."): list := {
+	source = with_module_aliases(written)
 	statements = c_statements(source)
 	libraries = []
+	# the wasm modules it uses, each statement standing for the values the module gives
+	wasm_uses = {}
 	for statement in statements {
+		path = wasm_module_used(statement, folder)
+		if path != ø { wasm_uses[statement] = wasm_exports(path, folder) }
+	}
+	for statement in statements.filter(statement => not wasm_uses.has(statement)) {
 		imported = c_import(statement)
 		if imported != ø and imported#1 not in libraries { libraries += [imported#1] }
 		library = c_use(statement)
-		if library != ø and library not in libraries { libraries += [library] }
+		# (a standard module is no C library: its name never probes lib/native)
+		if library != ø and library not in libraries and not exists(std_module_path(library)) { libraries += [library] }
 	}
 	# [library, the path of its native file] of each library with one
 	native = []
@@ -232,7 +305,7 @@ c_functions_of(source: text, library_folder: text): list := {
 			functions[declaration#1] = declaration
 		}
 	}
-	catalog = c_catalog(library_folder, native.map(n => n#2))
+	catalog = c_catalog(native.map(n => n#2))
 	# warp's own floor stays warp's when libm is imported or used (c_warps)
 	own = warp_word_names()
 	missing = []
@@ -245,9 +318,7 @@ c_functions_of(source: text, library_folder: text): list := {
 			before = #missing
 			for name in imported#2 {
 				if not functions.has(name) and not c_warps(own, name, imported#1) {
-					found = catalog.filter(d => d#1 == name and d#2 == imported#1)
-					# libc and libm are one library on macOS: `import sqrtf from "c"` takes libm's line
-					if #found == 0 and imported#1 in c_and_m { found = catalog.filter(d => d#1 == name and d#2 in c_and_m) }
+					found = catalog_lines(catalog, name, imported#1)
 					if #found > 0 { functions[name] = found#1 } else { missing += [name + " from '" + imported#1 + "'"] }
 				}
 			}
@@ -258,34 +329,68 @@ c_functions_of(source: text, library_folder: text): list := {
 			for d in catalog { if d#2 == library and not functions.has(d#1) and not c_warps(own, d#1, library) { functions[d#1] = d } }
 		}
 	}
-	# libm's functions warp has no pure code for (all but c_emitted_words: sin, cos, exp…), called without an import as
-	# Rust's lane calls them, by the program or a standard module it uses (`use sound`'s log2)
-	reached = reached_within(source)
-	calling = ([source] + module_sources(reached)).join("\n")
-	for d in catalog { if d#2 == "m" and not functions.has(d#1) and not c_warps(own, d#1, "m") and calling.contains(d#1 + "(") { functions[d#1] = d } }
-	# the foreign lines of the standard modules it uses, each it calls (lib/sound.warp's kill, unlink, mkdir); the
-	# catalog's own files (c.warp, math.warp) only as its rules above take them
-	for line in module_sources(reached.filter(name => name + ".warp" not in c_catalog_files)).join("\n").split("\n") {
-		d = c_declaration(line)
-		if d != ø and not functions.has(d#1) and calling.contains(d#1 + "(") { functions[d#1] = d }
+	# the C functions the program, the files it uses by path and the standard modules it uses call: libm's warp has no
+	# pure code for (all but c_emitted_words: sin, cos, exp…), called without an import as Rust's lane calls them
+	# (`use sound`'s log2), and their foreign lines and C imports (lib/sound.warp's kill, unlink, mkdir;
+	# lib/host/native_host/window.warp's `import calloc from 'c'`); a standard module's from its signature
+	# (module_c_functions)
+	with_parts = module_with_parts(source, folder)
+	for d in c_functions_called(with_parts, no, catalog) { if not functions.has(d#1) and not c_warps(own, d#1, d#2) { functions[d#1] = d } }
+	for module in reached_within(with_parts) {
+		for d in module_c_functions(module) { if not functions.has(d#1) and not c_warps(own, d#1, d#2) { functions[d#1] = d } }
+	}
+	replaced = {}
+	for statement in wasm_uses.keys {
+		for d in wasm_uses[statement].functions { functions[d#1] = d }
+		replaced[statement] = wasm_statements(statement, wasm_uses[statement])
 	}
 	declared_c_functions = functions.keys.map(name => functions[name]) + catalog
-	[c_without(kept, resolved).join("\n"), functions, missing]
+	lines_out = c_without(kept, resolved, replaced).map(line => with_wasm_module_words(line, wasm_uses))
+	[lines_out.join("\n"), functions, missing]
 }
-# the standard modules a source reaches, those they use in turn too (matrix's math uses reals, whose sin is libm's)
+# the standard modules a source reaches, those they and their parts use in turn too (matrix's math uses reals, whose sin
+# is libm's)
 reached_within(source: text): list := {
 	reached = reached_modules(source)
 	at = 1
 	while at <= #reached {
-		for module in used_modules(file_source(run_library() + "/" + reached#at + ".warp") ?? "") { if module not in reached { reached += [module] } }
+		for module in module_c_uses(reached#at) { if module not in reached { reached += [module] } }
 		at += 1
 	}
 	reached
 }
-# the lines without the statements of `statements`, the other statements of a line kept (a line left empty stays)
-c_without(lines: list, statements: list): list := {
-	if #statements == 0 { return lines }
-	lines.map(line => line.split(";").filter(part => part.trim() not in statements).join(";"))
+# the C functions a text with its parts calls (`name(`): libm's, which it calls without importing them (`use sound`'s
+# log2), and, but in the catalog's own files (c.warp, math.warp, whose lines its rules take), those it declares by a
+# foreign line or imports
+c_functions_called(content: text, catalog_file: bool, catalog: list): list := {
+	declared = if catalog_file then [] else c_declarations_used(content, catalog)
+	(catalog.filter(d => d#2 == "m") + declared).filter(d => content.contains(d#1 + "("))
+}
+# a standard module's C functions and the modules it and its parts use, by its prebuilt signature (signature.warp:
+# c_lines, c_uses), else (one not prebuilt, or prebuilt by an older build) by its text with its parts
+module_c_functions(module: text): list := {
+	signature = prebuilt_signature(module)
+	if signature != ø and signature.c_lines != ø then signature.c_lines.map(c_declaration) else c_functions_called(library_module_with_parts(module), module + module_extension in c_catalog_files, c_catalog([]))
+}
+module_c_uses(module: text): list := {
+	signature = prebuilt_signature(module)
+	if signature != ø and signature.c_uses != ø then signature.c_uses else used_modules(library_module_with_parts(module))
+}
+# what a signature holds of a module's C: its C functions as foreign lines (c_line_written, read back by
+# c_declaration), the modules it and its parts use
+module_c_lines(name: text): list := c_functions_called(library_module_with_parts(name), name + module_extension in c_catalog_files, c_catalog([])).map(c_line_written)
+module_c_used(name: text): list := used_modules(library_module_with_parts(name))
+# a C declaration as a foreign line, `strlen(s: text): i64 from 'c'`
+c_line_written(d: list): text := {
+	types = d#3
+	names = d#4
+	d#1 + "(" + (0 ..< #types).map(at => names[at] + ": " + types[at]).join(", ") + "): " + d#5 + " from '" + d#2 + "'"
+}
+# the lines without the statements of `statements` and with those `replaced` names replaced, the other statements of a
+# line kept (a line left empty stays)
+c_without(lines: list, statements: list, replaced: map = {}): list := {
+	if #statements == 0 and #replaced.keys == 0 { return lines }
+	lines.map(line => line.split(";").filter(part => part.trim() not in statements).map(part => replaced.get(part.trim()) ?? part).join(";"))
 }
 # the words of warp's own the pure emitter makes itself (emitter.warp `floored`, `magnitude`), of other results than C's:
 # warp's floor is an int, libm's a float, warp's sqrt keeps √2 exact; warp's other math words (ceil, round) have no pure
@@ -314,7 +419,9 @@ c_host_word(declaration: list): any := {
 	if "?" in types or "owned_text" in types or result == "?" or result in c_parameter_only_types { return ø }
 	kinds = types.filter(t => t not in c_filled_types).map(t => c_parameter_kinds[t])
 	gives_text = result == "text" or result == "owned_text"
-	results = if result == "void" then [] else if gives_text then [ValueKind.Node] else [c_parameter_kinds[result]]
+	# (an unsigned 32-bit result crosses as the int it means, 3400449319 never -894517977: zlib's crc32)
+	unsigned = result == UNSIGNED_TYPE
+	results = if result == "void" then [] else if gives_text then [ValueKind.Node] else if unsigned then [ValueKind.Int] else [c_parameter_kinds[result]]
 	# the first out-pointer's parameter name: a NULL there fails the call naming it
 	pointee = ""
 	i = 0
@@ -322,8 +429,8 @@ c_host_word(declaration: list): any := {
 		if types[i] == "out" and pointee == "" { pointee = declaration#4[i] }
 		i += 1
 	}
-	returned = if gives_text then "i64" else if result == "handle" then (if pointee != "" then "i32" else "i64") else result
-	crossing = if gives_text or result == "handle" then result else "number"
+	returned = if gives_text or unsigned then "i64" else if result == "handle" then (if pointee != "" then "i32" else "i64") else result
+	crossing = if gives_text or result == "handle" or unsigned then result else "number"
 	if result != "handle" { pointee = "" }
 	fields = [declaration#2, declaration#2, declaration#1, types.map(t => c_parameter_names[t]).join(","), returned, crossing, pointee, "", ""]
 	[kinds, results, declaration#2, fields.join("\t")]
@@ -346,6 +453,6 @@ c_refused_form(refusal: text, functions: map, library_folder: text): any := {
 	start = outside_the_core + "the call "
 	if not refusal.starts_with(start) { return ø }
 	name = refusal.remove_prefix(start).split("(")#1
-	if functions.has(name) or c_catalog(library_folder, []).any(d => d#1 == name) { return "foreign C call" }
+	if functions.has(name) or c_catalog([]).any(d => d#1 == name) { return "foreign C call" }
 	ø
 }

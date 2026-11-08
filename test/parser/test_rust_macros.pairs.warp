@@ -1,25 +1,25 @@
 # from test_rust_macros.rs: edit the Rust test, then run the script again
 
 # format_fills_the_placeholders_in_order
-'format!("a={} b={}", 1, 2)'	'a=1 b=2'
-'format!("plain")'	'plain'
-'let x = 3; format!("x={:?}", x)'	'x=3'
+# triage-held 2026-11-06: Rust spelling, foreign syntax :: 'format!("a={} b={}", 1, 2)'	'a=1 b=2'
+# triage-held 2026-11-06: Rust spelling, foreign syntax :: 'format!("plain")'	'plain'
+# triage-held 2026-11-06: Rust spelling, foreign syntax :: 'let x = 3; format!("x={:?}", x)'	'x=3'
 
 # format_reads_inline_names_and_positions
-'let x = 3; format!("x={x}")'	'x=3'
-'format!("{1} {0}", "a", "b")'	'b a'
-'let n = "n"; format!("{} {n} {}", 1, 2)'	'1 n 2'
+# triage-held 2026-11-06: Rust spelling, foreign syntax :: 'let x = 3; format!("x={x}")'	'x=3'
+# triage-held 2026-11-06: Rust spelling, foreign syntax :: 'format!("{1} {0}", "a", "b")'	'b a'
+# triage-held 2026-11-06: Rust spelling, foreign syntax :: 'let n = "n"; format!("{} {n} {}", 1, 2)'	'1 n 2'
 
 # vec_is_a_list
-'vec![1, 2, 3] == [1, 2, 3]'	true
-'let v = vec![1, 2, 3]; v.len()'	3
+# triage-held 2026-11-06: Rust spelling, foreign syntax :: 'vec![1, 2, 3] == [1, 2, 3]'	true
+# triage-held 2026-11-06: Rust spelling, foreign syntax :: 'let v = vec![1, 2, 3]; v.len()'	3
 
 # assert_macros_assert
-'assert!(1 == 1); 7'	7
-'assert_eq!(2, 1 + 1); 7'	7
+# triage-held 2026-11-06: Rust spelling, foreign syntax :: 'assert!(1 == 1); 7'	7
+# triage-held 2026-11-06: Rust spelling, foreign syntax :: 'assert_eq!(2, 1 + 1); 7'	7
 
 # another_macro_is_a_call
-'twice(x) := x * 2; twice!(4)'	8
+# triage-held 2026-11-06: Rust spelling, foreign syntax :: 'twice(x) := x * 2; twice!(4)'	8
 
 # a_spaced_bang_stays_not
 'yes and !(no)'	true

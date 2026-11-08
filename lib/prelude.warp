@@ -30,7 +30,7 @@ collection_position(t: text, part): int from warp
 slice(xs: list, start, end = ø): list from warp
 slice(t: text, start, end = ø): text from warp
 field_with(object, name, value): same as object from warp
-instance_copy(x, shallow): same as x from warp
+instance_copy(x): same as x from warp
 wasi_environment(): text from warp
 
 // The builtins the emitter expands in place, without a runtime function (card typed-builtins): their signatures and
@@ -41,10 +41,6 @@ count(m: map): int from emitter
 byte_size(x): int from emitter
 type(x): symbol from emitter
 print(values...): nothing from emitter
-// fetch(url): the text a GET of the url answers, through the adapter std_io as lib/net.warp's post (the page answers
-// it with a request; the native warp has no HTTP client yet and says so: no declared result, so that error comes through
-// as itself, not as a failed cast to text)
-fetch(url: text) := std_io("net", "get", [url])
 // the builtin methods of lists, texts and maps (members.rs), each a function value like the others (card dir-lists)
 // over a text they take its characters; a map has no overload (`map(m, f)` would see its entries)
 map(xs: list, f: (any) -> any): list from emitter
@@ -77,6 +73,10 @@ remove(m: map, key) from emitter
 pop(xs: list): any := list_pop(xs)
 // Python's xs.clear() and m.clear(): x emptied in place, so every alias sees it
 clear(x: any): any := { if x is map { for k in keys(x) { x.remove(k) } } else { while count(x) > 0 { x.pop() } }; x }
+// clear() the screen: the terminal clear and the cursor home, in the playground a text frame's start, the text shown
+// anew (decision page-text-frames: `loop { clear(); draw_board(); sleep 50ms }`)
+TERMINAL_CLEAR = "\e[2J\e[H"
+clear() := print TERMINAL_CLEAR
 // Python's xs.pop(i) and m.pop(k): the item at the 0-based position i (-1 the last) or the value of the key k, removed
 // from x in place, so every alias sees it
 pop(x: any, k: any): any := {
@@ -93,14 +93,14 @@ list_become(place, fresh): same as place from emitter
 list_drop_last(place): same as place from emitter
 removed_value(x, k): any from emitter
 list_sorted_by(xs, keys): any from emitter
-str(x): text from emitter
+text(x): text from emitter
 text_form(x): text from emitter
 int(x): int from emitter
 float(x): float from emitter
 // bool(x), the truthiness of any value (wiki/bool.md; a call only, extensions/sugar/calls.warp, as a function named bool
 // would hide the type in `x: bool = …`): bool([]) is no, bool([0]) yes; a text or character is read as a word,
 // bool("0") and bool("no") are no
-truth_of(x) := if x is text or x is codepoint then str(x) as bool else if x then yes else no
+truth_of(x) := if x is text or x is codepoint then text(x) as bool else if x then yes else no
 symbol(name): symbol from emitter
 // the emitter's text builtins
 trim(t: text): text from emitter
@@ -177,11 +177,15 @@ alias uppercase => upper
 alias lowercase => lower
 // the text builtin trim, Python's strip
 alias strip => trim
+// card fix-rewrites: we call it text; str stays as an alias
+alias str => text
 alias reversed => reverse
 alias size => count
 alias len => count
 alias length => count
 alias sorted => sort
+alias squared => square
+alias cubed => cube
 alias clone => copy
 alias ordinal => ord
 alias codepoint => ord
@@ -248,7 +252,9 @@ operator_laws = {"+": {associative: yes, identity: 0}, "*": {associative: yes, i
 // own sum: rust-harness:src/lowering/words/library_words.rs)
 // `list or number`, not `list`: a list parameter gets the items as a $list, so a range would make all of them first;
 // not `any`, which takes a yes/no: `sum xs == 3` would be sum(xs == 3) (card xs-sum). Of one number that number, as max
-sum(xs: list or number) := if is_range(xs) then range_sum(xs) else if xs is number then xs else fold(xs, 0, +)
+// A list sums from its first item, so a class's own + adds its items (decision class-operators-generic):
+// `sum([5km, 1500m])` is 6.5km; an empty list sums to 0
+sum(xs: list or number) := if is_range(xs) then range_sum(xs) else if xs is number then xs else if count(xs) == 0 then 0 else fold(xs[1 ..], xs#1, +)
 // `sum 1 2 3`, `sum(1, 2, 3)`: the numbers given, as max takes them (lib/extrema.warp)
 sum(a: number, b: number, more...): number := fold([a, b] + more, 0, +)
 // dir(v) of a value only the run knows (extensions/sugar/reflection.warp gives the words of a list, a text and a map): a map's
@@ -277,12 +283,25 @@ rewrite ($xs: [u32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(u32, 
 mean(xs) := if count(xs) == 0 then raise "mean of an empty list" else sum(xs) / count(xs)
 // the UTF-8 bytes of a text, `t.bytes` (decision text-unit-plurals)
 bytes(t: text) := (0..byte_size(t)).map(at => byte_at(t, at))
+// `for byte in t` (decision loop-variable): the value walked by that unit when its type has one, a text's bytes,
+// chars or code points, a map's [key, value] pairs; else by its own items, a map's keys, a list's items (a list of bytes
+// stays one), so the loop needs no type at the sugar
+walked_by(value: any, unit: text): list := {
+	if value is text { return if unit == "bytes" then bytes(value) else if unit == "codepoints" then code_point_list(value) else chars(value) }
+	if value is map { return if unit == "pairs" then map_keys(value).map(key => [key, value[key]]) else map_keys(value) }
+	value
+}
 // x↑n, Knuth's up arrow, is the power and x↓b the log of x to base b (card easy-add): operators of numbers only, so
 // another type declares its own `infix operator ↑(v: V, n: int) := …`
 infix operator ↑(x: number, n: number) := x ^ n
 infix operator ↓(x: number, b: number) := log(x, b)
 // the logarithm of x to the base: log(100, 10) is 2
 log(x: number, base: number): float := log(x) / log(base)
+// the natural logarithm, a standard word without `use math`, as sin is (math's alias ln => natural_log maps it over lists)
+ln(x: number): float := log(x)
+// `3 squared`, `2 cubed` (suffix words, decision postfix-words)
+square(x: number): number := x * x
+cube(x: number): number := x * x * x
 // ∜x (lib/math.warp prefix operator)
 fourth_root(x) := sqrt(sqrt(x))
 fourth_root(x: float): float := sqrt(sqrt(x))
@@ -335,8 +354,8 @@ text_holes(t, pieces: [text], types: [text]) := {
 // the digits of n in a base up to 36, letters past 9 (upper: true capitals): to_base(255, 16) is "ff",
 // from_base("ff", 16) is 255; a digit is its code point ('0' is 48, 'A' 10 + 55, 'a' 10 + 87), not an index into a text of
 // symbols, which needs the grapheme runtime
-to_base(n: int, base: int, upper = false) := { if base < 2 or base > 36 { raise "to_base: the base " + str(base) + " is not 2 to 36" }; if n == 0 { return "0" }; out = ""; rest = abs(n); while rest > 0 { digit = rest % base; out = (digit + (if digit < 10 then 48 else if upper then 55 else 87)) as char + out; rest = rest /! base }; if n < 0 then "-" + out else out }
-from_base(t: text, base: int) := { if base < 2 or base > 36 { raise "from_base: the base " + str(base) + " is not 2 to 36" }; if t == "" { raise "from_base of an empty text" }; out = 0; for c in lower(t) { code = ord(c); digit = if code >= 48 and code < 58 then code - 48 else if code >= 97 and code <= 122 then code - 87 else 99; if digit >= base { raise "from_base: " + c + " is not a base-" + str(base) + " digit in " + t }; out = out * base + digit }; out }
+to_base(n: int, base: int, upper = false) := { if base < 2 or base > 36 { raise "to_base: the base " + text(base) + " is not 2 to 36" }; if n == 0 { return "0" }; out = ""; rest = abs(n); while rest > 0 { digit = rest % base; out = (digit + (if digit < 10 then 48 else if upper then 55 else 87)) as char + out; rest = rest /! base }; if n < 0 then "-" + out else out }
+from_base(t: text, base: int) := { if base < 2 or base > 36 { raise "from_base: the base " + text(base) + " is not 2 to 36" }; if t == "" { raise "from_base of an empty text" }; out = 0; for c in lower(t) { code = ord(c); digit = if code >= 48 and code < 58 then code - 48 else if code >= 97 and code <= 122 then code - 87 else 99; if digit >= base { raise "from_base: " + c + " is not a base-" + text(base) + " digit in " + t }; out = out * base + digit }; out }
 // how an int shown in hex or binary prints (cards hex-printing, binary-int): hex_text(255) is "0xFF", binary_text(-5)
 // "-0b101"; the printer of such values calls them (wasm_emitter/numbers/radix.rs)
 radix_text(n: int, base: int, prefix: text) := (if n < 0 then "-" else "") + prefix + to_base(abs(n), base, upper: true)
@@ -359,28 +378,10 @@ twice(value: any) := 2 times value
 thrice(body: block) := 3 times body
 thrice(value: any) := 3 times value
 // `x as decimal` of a ratio (card repeating-decimals): the digits before the period, then the period's overlined, 1/6
-// is 0.16̅; a terminating decimal, or a period longer than 1000 digits, as the ratio prints. The cast calls it with the
-// ratio's parts, the denominator never 0 (wasm_emitter/numbers/exact.rs)
-decimal_text(numerator: int, denominator: int) := {
-	rest = denominator; twos = 0; fives = 0
-	while rest % 2 == 0 { rest = rest /! 2; twos += 1 }
-	while rest % 5 == 0 { rest = rest /! 5; fives += 1 }
-	if rest == 1 { return "\(numerator / denominator)" }
-	// the period: the first power of ten that is 1 modulo the rest
-	power = 10 % rest; period = 1
-	while power != 1 and period <= 1000 { power = power * 10 % rest; period += 1 }
-	if period > 1000 { return "\(numerator / denominator)" }
-	before_period = if twos > fives then twos else fives
-	whole = abs(numerator)
-	text = (if numerator < 0 then "-" else "") + "\(whole /! denominator)."
-	remainder = whole % denominator
-	for digit in 1 to before_period + period {
-		remainder = remainder * 10
-		text = text + "\(remainder /! denominator)" + (if digit > before_period then "̅" else "")
-		remainder = remainder % denominator
-	}
-	text
-}
+// is 0.16̅; a terminating decimal as its digits, a period longer than 1000 digits as the ratio n/d: how a quotient of
+// values shows (extensions/big_numbers/exact.warp exact_text, decision quotient-period). The cast calls it with the
+// ratio's parts, the denominator never 0
+decimal_text(numerator: int, denominator: int) := "\(numerator / denominator)"
 // `x as decimal` (extensions/sugar/arithmetic.warp): the decimal digits of x, its period overlined
 as_decimal(x: number) := decimal_text(numerator(x), denominator(x))
 // x as a fraction, by its continued fraction (rust-harness:src/numbers/real.rs computes it exactly for √2, π, … written in the program):
@@ -411,6 +412,17 @@ nearest(x, kind, limit = 1000000, within = 0) := {
 }
 // Python's dict(pairs) (card python-stdlib): a map of [key value] pairs
 dict(pairs) := { out = {}; for pair in pairs { out[pair#1] = pair#2 }; out }
+// copy(x), clone(x): a value of its own that a change to x no longer reaches (decisions P205-P207): deep, each
+// field, item and entry copied too; copy(x, shallow: yes) is a new one sharing what x holds. A copy keeps its class
+copy(x, shallow: bool = no) := {
+	if x is list { return x.map(item => copy_item(item, shallow)) }
+	made = if x is map then {} else instance_copy(x)
+	# (neither a map nor an instance: a number, a text, … is a value of its own)
+	if made === x { return x }
+	for name in keys(x) { made[name] = copy_item(x[name], shallow) }
+	made
+}
+copy_item(item, shallow: bool) := if shallow then item else copy(item)
 // Python's dict.fromkeys(ks, value) (card python-aliases): a map of each key with the one value
 fromkeys(ks, value) := { out = {}; for k in ks { out[k] = value }; out }
 // Python's xs.pop(i) and m.pop(k) (card python-aliases, declaration_lowering removed_key): the element at the 0-based
@@ -445,10 +457,7 @@ paint_each(f, width, height) := {
 }
 // paint(pixels, width, height) of a list of pixels, row by row, as the host paints them; of a WGSL shader text, as the
 // host renders it; of a function, f(column, row) of each pixel on the CPU (paint_each)
-paint(picture, width, height) := if picture is list or picture is text then paint(picture, width, height, ø) else paint_each(picture, width, height)
-// paint(f, width, height) of a program function: its shader on the GPU, else f of each pixel on the CPU (the rules
-// at the sum rules above)
-paint_shader(painting: map, width, height, f) := if gpu_paints() then paint(painting.shader as text, width, height, shader_values(painting.uniform)) else paint_each(f, width, height)
+paint(picture, width, height) := if picture is list or picture is text then paint(shader_words(picture), width, height, ø) else paint_each(picture, width, height)
 // the program values a shader reads as the plain floats it takes: a quantity by its amount in SI base units, an angle in
 // radians, each item of a vector (decision no-units-in-shaders: a shader ignores units)
 shader_values(values) := {
@@ -458,11 +467,33 @@ shader_values(values) := {
 	plain
 }
 shader_value(value) := if value is list then value.map(shader_value) else float(value)
+// the words warp gives every shader, as WGSL: hash(cell), a number 0 ..< 1 that stays the same for a cell (decision
+// shader-hash); the cell taken modulo 289 keeps the sine's argument small enough for f32
+SHADER_WORDS_WGSL = {hash: "fn hash(cell: vec2f) -> f32 {\n\tlet wrapped = cell - 289.0 * floor(cell / 289.0);\n\treturn fract(sin(dot(wrapped, vec2f(127.1, 311.7))) * 43758.5453);\n}"}
+// a WGSL shader text with each of those words it calls but does not define added after it; anything else as it is
+shader_words(shader) := {
+	if not (shader is text) { return shader }
+	added = shader
+	for word in keys(SHADER_WORDS_WGSL) {
+		if shader.contains(word + "(") and not shader.contains("fn " + word + "(") { added += "\n" + SHADER_WORDS_WGSL[word] + "\n" }
+	}
+	added
+}
+// the shader words of a shader block's text, placed where the block stands in the program: [its first line, the columns
+// before that line, the columns before each later one] (extensions/shader_blocks.warp shader_place), so the GPU says
+// its errors at their place in the program (card wgsl-error)
+shader_words(shader, place) := {
+	lines = shader.split("\n")
+	indented = join(["\n" + " " * place#3 + line for line in lines[1 ..]], "")
+	shader_words("\n" * (place#1 - 1) + " " * place#2 + lines[0] + indented)
+}
 // paint(shader) of a WGSL shader text, at the size of where it shows (wiki/graphics.md)
-paint(shader: text) := paint(shader, shown_width(), shown_height(), ø)
-// where a painting without a size shows: the window, in its frames or once it is open (natively its points, the pointer
-// told in them; headless the frame's small window, decision on-frame-headless), else the view (the playground's pane)
-painting_in_window() := painting_headless_frame or window_open()
+paint(shader: text) := paint(shader_words(shader), shown_width(), shown_height(), ø)
+// where a painting without a size shows: the window, in its frames, once it is open or where one can open (natively its
+// points as its user sizes it, the pointer told in them; headless the frame's small window, decision on-frame-headless),
+// else the view (the playground's pane, the terminal)
+painting_in_window() := painting_headless_frame or window_open() or window_possible()
+window_possible() := system_value("window_possible") != 0
 shown_width() := if painting_in_window() then window_width() else view_width()
 shown_height() := if painting_in_window() then window_height() else view_height()
 // sleep 0.2, sleep(t): a bare number is seconds (decision sleep-seconds); `sleep 20ms` the compiler folds into sleep_ms
@@ -512,6 +543,10 @@ dark_mode() := system_value("dark mode") != 0
 mouse_x() := system_value("mouse_x") as float
 mouse_y() := system_value("mouse_y") as float
 mouse_down() := system_value("mouse_down") != 0
+// where the button went down, while it is down: a stroke starts there, though a frame polling mouse_x saw the pointer
+// move on first; while it is up (and without a window), where the pointer is
+mouse_down_x() := if mouse_down then system_value("mouse_down_x") as float else mouse_x
+mouse_down_y() := if mouse_down then system_value("mouse_down_y") as float else mouse_y
 mouse_wheel() := system_value("mouse_wheel")
 key_down() := system_value("key_down") != 0
 window_open() := system_value("window_open") != 0
@@ -549,9 +584,11 @@ display.size := [display_width, display_height] px
 // float)
 display.diagonal := round(√(display_width² + display_height²)) * 1px / (display_dpi * 1dpi)
 // The fields of a time at run time (card time-fields-warp, notes/dates_at_run_time.md), called late by the emitter's
-// time_field with the time's form (TimeForm: 1 a date, its position in days; else nanoseconds since 1970), its wall
-// clock position, its zone's seconds east of UTC (not `offset`: the index type's synonym) and the index of the field in times.rs TIME_FIELDS
-time_field_of(form: int, wall: int, zone_seconds: int, field: int): int := {
+// time_field with the time's form (TimeForm: 1 a date, its position in days; else nanoseconds since 1970), its
+// position, its zone's seconds east of UTC (a zoned time's, else 0; not `offset`: the index type's synonym) and the
+// index of the field in times.rs TIME_FIELDS. A zoned time's fields are those of its wall clock, its epoch seconds the instant's
+time_field_of(form: int, position: int, zone_seconds: int, field: int): int := {
+	wall = if form == 1 then position else position + zone_seconds * 1000000000
 	days = time_days(form, wall)
 	nanos = time_nanos(form, wall)
 	match field {
@@ -564,10 +601,12 @@ time_field_of(form: int, wall: int, zone_seconds: int, field: int): int := {
 		5 => nanos /! 3600000000000
 		6 => nanos /! 60000000000 % 60
 		7 => nanos /! 1000000000 % 60
-		8 => days * 86400 + nanos /! 1000000000
+		8 => days * 86400 + nanos /! 1000000000 - zone_seconds
 		9 => zone_seconds
 		// the time of day in whole seconds, as calendar::Time::part: 22:27:46
 		10 => nanos /! 1000000000 * 1000000000
+		// the form of the time (lib/time.warp zoned tells a local time from an instant so)
+		12 => form
 		_ => days
 	}
 }
@@ -616,8 +655,60 @@ days_from_civil(year: int, month: int, day: int): int := {
 is!(warp: text, expected: any) := {
 	got = eval(warp)
 	passed = got == expected or (not got and not expected)
-	if not passed then print("✗ is! \"" + warp + "\" " + str(expected) + ": got " + str(got))
+	if not passed then print("✗ is! \"" + warp + "\" " + text(expected) + ": got " + text(got))
 	passed
+}
+
+// `300 as! byte` is 44: the low 8 bits, in 0..255 (decision checked-forced-conversions). A text is not a byte:
+// parsing has no forced rule, so "200" as! byte refuses
+byte_wrapped(n) := {
+	if n is text or n is list or n is map { raise "no forced conversion to byte of that value" }
+	whole = n as! int
+	rest = whole % 256
+	if rest < 0 then rest + 256 else rest
+}
+
+// bytes as! text: invalid UTF-8 becomes U+FFFD, one replacement per bad byte. from_utf8 stays strict
+lossy_utf8(bytes) := {
+	if not (bytes is list) { raise "no forced conversion to text of that value" }
+	out = ""
+	i = 0
+	total = count(bytes)
+	while i < total {
+		b = bytes[i]
+		length = if not (b is int) or b < 0 or b > 255 then 0 else if b < 128 then 1 else if b >= 194 and b < 224 then 2 else if b >= 224 and b < 240 then 3 else if b >= 240 and b < 245 then 4 else 0
+		if length == 0 or i + length > total {
+			out = out + chr(65533)
+			i = i + 1
+		} else {
+			n = if length == 1 then b else if length == 2 then b % 32 else if length == 3 then b % 16 else b % 8
+			ok = yes
+			if length > 1 {
+				for k in 1 to length - 1 {
+					c = bytes[i + k]
+					if not (c is int) or c < 128 or c > 191 { ok = no } else { n = n * 64 + c % 64 }
+				}
+			}
+			if not ok or (length == 3 and n < 2048) or (length == 4 and (n < 65536 or n > 1114111)) or (n >= 55296 and n <= 57343) {
+				out = out + chr(65533)
+				i = i + 1
+			} else {
+				out = out + chr(n)
+				i = i + length
+			}
+		}
+	}
+	out
+}
+// `x as! T` is convert!(x, to: T), the target a value (decision checked-forced-conversions, convert-bang): one
+// definition for every target the prelude forces, as typed parameters cannot tell targets apart; T a type or its
+// symbol (`as!` passes symbol("byte")), named alike
+byte_names = ["byte", "u8", "uint8"]
+convert!(value, to) := {
+	target = to.name
+	if byte_names.contains(target) { return byte_wrapped(value) }
+	if target == "text" { return lossy_utf8(value) }
+	raise "no forced conversion to " + target + " of that value"
 }
 
 // The class of every error (decision error-classes): `class ParseError: Error` declares one, `except Error` catches all
@@ -821,14 +912,15 @@ find_matches(value: any, pattern: any): list := {
 	}
 	found
 }
-// `value replace pattern with template`: the items and fields replaced first, then the value itself where it fits,
-// the template's names its bindings
+// `value replace pattern with template`: the items, fields and code parts replaced first (`n * 1 + k * 1`'s two
+// products), then the value itself where it fits, the template's names its bindings
 replace_matches(value: any, pattern: any, template: any): any := {
 	inner = value
-	if is_type(value, "list") { inner = value.map(item => replace_matches(item, pattern, template)) }
+	if is_type(value, "key") { inner = key(replace_matches(key_of(value), pattern, template), op_of(value), replace_matches(value_of(value), pattern, template)) }
+	else if is_type(value, "list") { inner = value.map(item => replace_matches(item, pattern, template)) }
 	else if is_type(value, "map") {
 		inner = {}
-		for key in value.keys { inner[key] = replace_matches(value[key], pattern, template) }
+		for field in value.keys { inner[field] = replace_matches(value[field], pattern, template) }
 	}
 	bound = pattern_bindings(inner, pattern)
 	if bound == ø then inner else instantiated(template, bound)
@@ -851,6 +943,19 @@ converted_to_pattern(value: any, pattern: any): any := {
 	}
 	if pattern_bindings(value, pattern) == ø { raise "the value does not fit the pattern it converts to" }
 	value
+}
+// `{port: "80", extra: 1} as! Config`: the fields the pattern does not name are dropped, then it converts as `as` does
+kept_pattern(value, pattern) := {
+	if bracket_of(pattern) == "{" and is_type(value, "map") {
+		kept = {}
+		for i in 0..<#pattern {
+			field = pattern#(i + 1)
+			name = if is_type(field, "symbol") then name_of(field) else if is_optional_field(field) then name_of(field#1) else if is_type(field, "key") then field_key(field) else ø
+			if name != ø and name in value { kept[name] = value[name] }
+		}
+		return converted_to_pattern(kept, pattern)
+	}
+	converted_to_pattern(value, pattern)
 }
 // a map pattern's field name: `port` of `port: int`
 field_key(field: any): any := if is_type(key_of(field), "symbol") then name_of(key_of(field)) else key_of(field)
@@ -929,7 +1034,7 @@ fits_text_cut(value: any, pieces: list, bound: map): bool := {
 			rest = rest[#piece ..< #rest]
 		} else {
 			next = if i + 1 < #pieces then pieces#(i + 2) else ø
-			ends = if next == ø then #rest + 1 else if rest.contains(next) then rest.find(str(next)) else 0
+			ends = if next == ø then #rest + 1 else if rest.contains(next) then rest.find(text(next)) else 0
 			if ends == 0 { return no }
 			part = rest[0 ..< ends - 1]
 			rest = rest[ends - 1 ..< #rest]

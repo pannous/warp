@@ -24,6 +24,7 @@ rewrite ($xs contains $x) => collection_contains($xs, $x)
 rewrite ($xs has $x) => collection_contains($xs, $x)
 rewrite ($xs includes $x) => collection_contains($xs, $x)
 # `count(2 in xs)` counts a yes/no question: refused, naming `xs.count(2)` (extensions/rules/rule_words.warp counted_question)
+rewrite count(collection_contains($xs, $f)) => $refused where $f is function and $refused = counted_results($xs, $f)
 rewrite count(collection_contains($xs, $x)) => $refused where $refused = counted_question($xs, $x)
 # `x.upper!`, `sort xs!` (the parser's unwrap of a marked call): a function's bang assigns its result back to the
 # variable it was called on, as `upper(x)!` does (test/operators/test_mutating_bang.pairs.warp)
@@ -32,6 +33,8 @@ rewrite unwrap($x.$m) => $x = $x.$m where $x is value and $m is function
 rewrite unwrap($x.$m()) => $x = $x.$m() where $x is value and $m is function
 rewrite $f unwrap($x) => $x = $f($x) where $x is value and $f is function and not $f in [print, puts]
 rewrite $f(unwrap($x)) => $x = $f($x) where $x is value and $f is function and not $f in [print, puts]
+# `friends!` of a map is the map itself (P73: a value forced is itself), never its entries run as code
+rewrite unwrap($x) => $x where $x is map
 # `xs.size -1`, `p.x -1`: a member taking nothing but its receiver (a word of one parameter, or a field), then a new
 # item, as `x -1` of a variable x is (decision glued-negative); `xs.add -1` stays its call
 rewrite $x.$f $b $a... => [$x.$f, $b, $a...] where $f is symbol and $b < 0 and $f takes one

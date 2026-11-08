@@ -33,6 +33,9 @@ def conditional(body: Body, test: Node, yes_branch: Node, no_branch: Node, has_e
 	a = nested(body, statements_block(yes_branch), 1)
 	if not has_else { return unmatched(c, a, yes_branch is number) }
 	b = nested(body, statements_block(no_branch), 1)
+	# both branches leave by a return: the if gives no value, the function's result is its
+	# returns' alone, `if x > 2 { return "big" } else { return "small" }` a text
+	if a.kind == never and b.kind == never and leaves(yes_branch) and leaves(no_branch) { return TypedCode(never, c + [op.if, no_value] + a.code + [op.else] + b.code + [op.end, op.unreachable]) }
 	kind = joint_kind(a.kind, b.kind)
 	# a first reading whose branches both wait on calls still compiling: its kind is not known yet either (its code is
 	# not kept), so the function's other readings decide it
@@ -41,6 +44,15 @@ def conditional(body: Body, test: Node, yes_branch: Node, no_branch: Node, has_e
 	if kind == no_kind or kind == ValueKind.Mixed { return TypedCode(no_kind, c + [op.if, no_value] + dropped(a) + [op.else] + dropped(b) + [op.end]) }
 	TypedCode(kind, c + [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end])
 }
+# a branch that leaves its function: its last statement a return, or an if/else each branch of which leaves it
+def leaves(branch: Node): bool {
+	if is_return(branch) { return yes }
+	# `else if …`: the nested if/else itself
+	if is_key(branch, Op.Else) and is_key(key_of(branch), Op.Then) and is_key(key_of(key_of(branch)), Op.If) { return leaves(value_of(key_of(branch))) and leaves(value_of(branch)) }
+	parts = block_statements(statements_block(branch))
+	#parts > 0 and parts.last != branch and leaves(parts.last)
+}
+is_return(n: Node): bool := n == symbol("return") or (is_group(n) and bracket_of(n) == "" and #n == 2 and n#1 == symbol("return"))
 # `if c then a` without else: a, or when c fails the 0 of a number or yes/no, else ø
 def unmatched(c: list, a: TypedCode, numeric: bool): TypedCode {
 	if a.kind == no_kind { return TypedCode(no_kind, c + [op.if, no_value] + a.code + [op.end]) }
@@ -167,10 +179,12 @@ def field_or_word(body: Body, value: TypedCode, name: text, word: function): Typ
 # the program's statement n about to run, its position in trap_position: a runtime error names it;
 # a runtime word's statements leave it, and so do a library function's: its lines are its
 # file's, which the place would give the program's name, so an error in it names the program's calling line (card
-# wasm-trap: arrangement.warp:34:56 was a line of lib/timers.warp)
+# wasm-trap: arrangement.warp:34:56 was a line of lib/timers.warp); so do a module's own, built to be linked (the
+# page's paint of prelude.wasm named prelude.warp:478:37 under the program's name, card playground-tours-red)
 def position_code(body: Body, n: Node): list {
-	if stores_constant_data(n) { return [] }
-	at = if body.intrinsics or defined_origins.has(body.function.name) then ø else written_at(n)
+	# `x = 2.5` to a declared int converts, so it can fail and names itself (card int-reports)
+	if stores_constant_data(n) and name_of(key_of(n)) not in body.declared { return [] }
+	at = if body.intrinsics or module_written != "" or defined_origins.has(body.function.name) then ø else written_at(n)
 	if not at { return [] }
 	line: int = at#1
 	column: int = min(at#2, columns_per_line - 1)
@@ -196,10 +210,21 @@ appended(body: Body, target_name: Node, addition: Node): TypedCode? := {
 	# `for w in words { xs += w }`: an addition known only at run time is its items or one item (runtime appended_items)
 	if target.kind == ValueKind.List and added.kind == ValueKind.Node { added = runtime_call("appended_items", [added]) }
 	if target.kind == ValueKind.List { return runtime_call("list_append", [target, added]) }
+	# `3.add(2)`, `n += [2]` of a number: no list takes the items, said at run time where a try catches it (runtime no_sum)
+	if added.kind == ValueKind.List and target.kind in [ValueKind.Int, ValueKind.Float, ValueKind.Bool] { return runtime_call("node_append", [target, added]) }
 	# an instance whose class defines `+` adds by it, `total += run.distance` (the compound operators' arithmetic)
-	if target.kind == ValueKind.Node and adds_by_dispatcher(body) { return ø }
+	# beside a class's `+` a list held as a node still grows in place, so `xs += [o]` reaches the caller's list: decided
+	# by the value at run time, any other value added by the class's `+`
+	if target.kind == ValueKind.Node and adds_by_dispatcher(body) { return if target_name is symbol then appended_or_added(body, target_name, addition) else ø }
 	if target.kind == ValueKind.Node { return assignment(body, target_name, runtime_call("node_append", [target, added])) }
 	ø
+}
+# (the addition evaluated once, held in a local of its own)
+appended_or_added(body: Body, name: Node, addition: Node): TypedCode := {
+	added = fresh_name("added", fresh_number())
+	appends = Key(ø, Op.If, call_of("appends_in_place", [name, added]))
+	chosen = Key(Key(appends, Op.Then, name), Op.Else, Key(name, Op.Assign, Key(name, Op.Add, added)))
+	expression_code(body, separated(bracketed([Key(added, Op.Assign, addition), chosen], ""), ";"))
 }
 adds_by_dispatcher(body: Body): bool := plus_dispatcher in module.functions and body.function.name != plus_dispatcher
 # the statements in order, the value that of the last

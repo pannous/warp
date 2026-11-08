@@ -23,6 +23,7 @@ tested_type_call(subject: Node, type: Node, scope: map): Node := match type {
 	Symbol(word): tested_word_call(subject, word, Key(subject, Op.Eq, type), scope)
 	# `x is (int or text)`: x is one of the alternatives, `x is (1 or 2)` too
 	Key(left, Op.Or, right): Key(tested_type_call(subject, left, scope), Op.Or, tested_type_call(subject, right, scope))
+	Key(left, Op.BitOr, right): Key(tested_type_call(subject, left, scope), Op.Or, tested_type_call(subject, right, scope))
 	List(items, bracket, separator): if #items == 1 and bracket == Bracket.Round then tested_type_call(subject, items#1, scope) else Key(subject, Op.Eq, type)
 	_: Key(subject, Op.Eq, type)
 }
@@ -46,12 +47,4 @@ type_test_node(n: Node, scope: map): Node := match n {
 
 # a function's body sees the program's names outside function bodies and its own parameters and locals:
 # `x is key` in one function stays a type test beside a local `key` of another
-scoped_type_tests(n: Node, outer: map): Node := {
-	if is_function_definition(n) {
-		inner = function_scope(outer, n)
-		return bottom_up(n, x => type_test_node(x, inner))
-	}
-	type_test_node(children(n, x => scoped_type_tests(x, outer)), outer)
-}
-
-type_tests(program: Node): Node := scoped_type_tests(program, scope_with({}, outer_nodes_in(program)))
+type_tests(program: Node): Node := lexical_bottom_up(program, scope_with({}, outer_nodes_in(program)), type_test_node)

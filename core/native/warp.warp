@@ -10,6 +10,7 @@
 #   warp                  on a terminal the version, the help and the console; a piped program run, its value shown
 #   warp beautify|fix …   lib/fix/command.warp with the words; warp format|lint … too, the layout only
 #   warp docs|wiki|home   where the documentation is, opened
+#   warp app [check] …    lib/app/command.warp: a markup program's page in the system's web view
 #   warp repl|start       the console: each line compiled by warp.wasm's repl-step after the lines that stay, then run
 #   warp rebuild [pure]   warp.wasm built anew from lib/ by the seed (rebuilt)
 #   warp rebuild from <step>  the same from that step on (seed, optimize, runtime, modules)
@@ -22,13 +23,9 @@
 use "driver.warp"
 use "tests.warp"
 
-fork(): i32 from "c"
-waitpid(child: i32, status: pointer, options: i32): i32 from "c"
-fdopen(descriptor: i32, mode: pointer): handle from "c"
 getline(line: pointer, capacity: pointer, stream: handle): i64 from "c"
 isatty(descriptor: i32): i32 from "c"
 execv(path: pointer, arguments: pointer): i32 from "c"
-execvp(name: pointer, arguments: pointer): i32 from "c"
 read(descriptor: i32, data: pointer, size: i64): i64 from "c"
 STDIN = 0
 STDOUT = 1
@@ -367,14 +364,13 @@ line_ran(compiler: text, state: text, line: text): nothing := {
 	file_ran(compiler, words(compiler, "repl-step", state, line, module, joined(library_folder(), "/runtime.wasm")))
 	written_run(module, "repl", arg_count())
 }
-# `warp version`: warp.wasm's version line, then when this executable was built and the stamps of the compilers
+# `warp version`: warp.wasm's version line, then when this executable and warp.wasm were built
 versioned(compiler: text): nothing := {
 	given = compiler_arguments(compiler)
 	added(given, "version")
 	file_ran(compiler, given)
 	print(joined("the native warp · built ", built_minute()))
-	self_compiler = joined(library_folder(), "/warp-self.wasm")
-	print(joined(joined(compiler_stamp(compiler_path(), "warp.wasm", "pure"), ", "), compiler_stamp(self_compiler, "warp-self.wasm", "self")))
+	print(compiler_stamp(compiler_path(), "warp.wasm"))
 }
 # when this executable was built, as `warp build native` baked it (primitive.warp built_function, cc's `Oct 30 2026
 # 12:07:33`), shown as the stamps are: `2026-10-30 12:07`
@@ -396,9 +392,9 @@ built_minute(): text := {
 	text_from(shown, 16)
 }
 # a compiler's build stamp (stamped): `warp.wasm of 1792a05d8a · built 2026-10-28 20:25`
-compiler_stamp(file: text, name: text, rebuild: text): text := {
+compiler_stamp(file: text, name: text): text := {
 	wasm = read_file(file)
-	if wasm.length == 0 { return joined(joined(joined(name, " missing (warp rebuild "), rebuild), ")") }
+	if wasm.length == 0 { return joined(name, " missing (warp rebuild)") }
 	stamp = custom_section(wasm, "warp.build")
 	if stamp.length == 0 { return joined(name, " unstamped") }
 	commit = field(stamp, 3, NEWLINE)
@@ -431,6 +427,7 @@ dispatched(compiler: text, prefixed: bool, first: int): nothing := {
 		if same_text(word, "rebuild") { return rebuild_command(first) }
 		if same_text(word, "beautify") or same_text(word, "fix") or same_text(word, "format") or same_text(word, "lint") { return compiled_and_run(compiler, joined(library_folder(), "/fix/command.warp"), 1) }
 		if same_text(word, "docs") or same_text(word, "wiki") or same_text(word, "home") { return documentation_opened() }
+		if same_text(word, "app") { return compiled_and_run(compiler, joined(library_folder(), "/app/command.warp"), 1) }
 	}
 	# `warp test`, and `warp self test` as `warp test --self`: the native warp runs the cases, each by the compiler named
 	if same_text(word, "test") and (not prefixed or self_named(compiler)) { return tests_run(compiler, flagged("--self") or self_named(compiler), first) }
@@ -472,6 +469,9 @@ past_options(at: int): int := {
 	i
 }
 # `warp fuel <steps> <file|code…>`: the program counts steps (WARP_FUEL), out of fuel after them
+# WARP_RUN_TO is one warp's word to its own compiler (words_ran): a warp a command runs, `warp build --site`'s `warp
+# run` prerendering, ran its program into the caller's file instead
+unsetenv(c_string("WARP_RUN_TO"))
 start = past_options(1)
 counting = arg_count() > start + 2 and same_text(arg(start), "fuel")
 if counting { setenv(c_string("WARP_FUEL"), c_string(arg(start + 1)), 1) }
@@ -484,5 +484,7 @@ setenv(c_string("WARP_LIB_LINK"), c_string(library_found()), 0)
 setenv(c_string("WARP_LIB"), c_string(library_folder()), 1)
 # and know the native warp hosts them (commands.warp: what it runs itself, what it lacks yet)
 setenv(c_string("WARP_HOST"), c_string("the native warp"), 1)
+# and where it is, so a command runs a program by this warp (`warp build --site` prerenders its page)
+setenv(c_string("WARP_EXECUTABLE"), c_string(executable_path()), 1)
 if prefixed and same_text(arg(start), "fast") { complain("note: warp fast is not in the native warp yet; running at full precision") }
 dispatched(if prefixed and same_text(arg(start), "self") then joined(library_folder(), "/warp-self.wasm") else compiler_path(), prefixed, first)

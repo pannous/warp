@@ -1,0 +1,23 @@
+# Inline HTML (card jsx, decision jsx): `<div class="box">Hue: {hue}°</div>` where an expression starts reads as the
+# warp markup it stands for, `div{ class: "box", "Hue: ", (hue), "°" }`, with a warning that `warp format` writes it
+# so (lib/fix does, with markup_of_inline_html). Attributes `name="text"`, `name={expr}`, a bare `name` (yes);
+# children texts (JSX's whitespace: lines trimmed, blank ones dropped), `{expr}` holes and elements; `<br/>` closes
+# itself; `onClick={…}` is the handler attribute `onclick:`. Only a `<` glued to a name where an expression starts
+# (a line's start, after `=`, `(`, `[`, `{`, `,`, `:`, `>` or `return`/`then`/`else`) and closed as HTML closes is
+# read so: `a <b` and `x<y` stay comparisons. A line keeps its newlines, so nodes keep their lines (no shifts)
+use "inline_html/markup.warp"
+inline_html_extension = Extension{name: "inline_html", source_passes: [inline_html_warned]}
+
+WARNING_FACT = "inline_html"
+
+# The source pass: each inline element as markup, a warning where each was written
+inline_html_warned(source: text): list := {
+	converted = markup_of_inline_html(source)
+	for found in converted#3 {
+		said = said_fact(call_of(WARNING_FACT, [found#1])) + [found#2]
+		# (a source is parsed more than once: one warning a place)
+		if not (said in diagnosed) { diagnosed += [said] }
+	}
+	[converted#1, []]
+}
+

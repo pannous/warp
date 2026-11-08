@@ -23,6 +23,14 @@ const FULL_IMAGE_VERTICES = `
 }`;
 const VERTEX_ENTRY_POINT = "warp_full_image";
 const TRIANGLE_CORNERS = 3;
+// a shader with a vertex stage of its own (card gpu-instanced-blend) draws `values.instances` quads, each its 4 corners
+// (vertex_index 0 to 3) as a triangle strip, blended over what the quads before drew (instance_index 0 first), as
+// crates/warp-gpu/warp_gpu.c draws them
+const OWN_VERTEX_STAGE = /@vertex\s+fn\s+(\w+)/;
+const QUAD_CORNERS = 4;
+const INSTANCES_NAME = "instances";
+// a quad's color over the ones drawn before it: source alpha, as `vec4f(color, alpha)` says
+const OVER = { color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha" }, alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha" } };
 const PIXEL_BYTES = 4;
 const ROW_ALIGNMENT = 256; // a copied row is padded to 256 bytes
 const OPAQUE = 0xFF000000;
@@ -36,6 +44,11 @@ const VALUES_BINDING = 0;
 const PREVIOUS_HOLE = "previous";
 const PREVIOUS_FUNCTION = "warp_previous";
 const PREVIOUS_FRAME_BINDING = 1;
+// paint's lists of more than 4 numbers or of vectors: each a read-only storage array of its own from this binding on, as
+// long as it is (card paint-values-storage), `values.mesh` in the shader the array warp_values_mesh
+// (crates/warp-gpu/warp_gpu.c STORAGE_BINDING)
+const STORAGE_BINDING = 2;
+const STORAGE_PREFIX = "warp_values_";
 const PREVIOUS_FRAME = `
 @group(0) @binding(${PREVIOUS_FRAME_BINDING}) var warp_previous_frame: texture_2d<f32>;
 fn ${PREVIOUS_FUNCTION}(at: vec2f) -> vec4f {
@@ -195,11 +208,16 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 	const device = await theGpuDevice();
 	const painted = paintCanvases.get(canvas);
 	if (canvas !== undefined && !painted) throw new Error(CANVAS_MISSING);
-	const { declarations, bytes: valueBytes } = uniformLayout(values);
+	const { declarations, bytes: valueBytes, arrays } = valuesLayout(values);
+	const read = arrays.filter(({ name }) => holeRead(shader, name));
+	shader = read.reduce((code, { name }) => code.replace(holePattern(name), STORAGE_PREFIX + name), shader);
+	const storages = read.map(({ name }, at) => `\n@group(0) @binding(${STORAGE_BINDING + at}) var<storage, read> ${STORAGE_PREFIX}${name}: array<vec4f>;`).join("");
+	const ownVertexStage = shader.match(OWN_VERTEX_STAGE)?.[1];
+	const vertices = ownVertexStage ? "" : FULL_IMAGE_VERTICES;
 	const readsPrevious = new RegExp(`\\b${VALUES_NAME}\\.${PREVIOUS_HOLE}\\b`).test(shader);
 	const code = readsPrevious
-		? shader.replaceAll(`${VALUES_NAME}.${PREVIOUS_HOLE}`, PREVIOUS_FUNCTION) + FULL_IMAGE_VERTICES + declarations + PREVIOUS_FRAME
-		: shader + FULL_IMAGE_VERTICES + declarations;
+		? shader.replaceAll(`${VALUES_NAME}.${PREVIOUS_HOLE}`, PREVIOUS_FUNCTION) + vertices + declarations + storages + PREVIOUS_FRAME
+		: shader + vertices + declarations + storages;
 	const module = await gpuModule(device, code);
 	const format = painted?.format ?? "rgba8unorm";
 	const usage = GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC | (readsPrevious ? GPUTextureUsage.TEXTURE_BINDING : 0);
@@ -207,32 +225,35 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 	const image = canvasImage && !readsPrevious ? canvasImage : device.createTexture({ size: [width, height], format, usage });
 	device.pushErrorScope("validation");
 	const { pipeline, groupLayout } = compiledOnce(compiledPipelines, `${format}\n${code}`, () => {
-		const groupLayout = declarations || readsPrevious ? bindingsGroupLayout(device, !!declarations, readsPrevious) : undefined;
+		const groupLayout = declarations || readsPrevious || read.length ? bindingsGroupLayout(device, !!declarations, readsPrevious, read.length) : undefined;
 		const layout = groupLayout ? device.createPipelineLayout({ bindGroupLayouts: [groupLayout] }) : "auto";
 		const pipeline = device.createRenderPipeline({
 			layout,
-			vertex: { module, entryPoint: VERTEX_ENTRY_POINT },
-			fragment: { module, entryPoint: GPU_ENTRY_POINT, targets: [{ format }] },
+			vertex: { module, entryPoint: ownVertexStage ?? VERTEX_ENTRY_POINT },
+			fragment: { module, entryPoint: GPU_ENTRY_POINT, targets: [ownVertexStage ? { format, blend: OVER } : { format }] },
+			...ownVertexStage ? { primitive: { topology: "triangle-strip" } } : {},
 		});
 		return { pipeline, groupLayout };
 	});
 	const previous = readsPrevious ? previousFrame(device, `${format}\n${shader}`, image) : undefined;
-	const uniform = groupLayout ? uniformBinding(device, groupLayout, declarations ? valueBytes : undefined, previous) : undefined;
+	const uniform = groupLayout ? uniformBinding(device, groupLayout, declarations ? valueBytes : undefined, previous, read) : undefined;
+	const released = () => uniform?.buffers.forEach(buffer => buffer.destroy());
 	const encoder = device.createCommandEncoder();
 	const pass = encoder.beginRenderPass({ colorAttachments: [paperAttachment(image)] });
 	pass.setPipeline(pipeline);
 	if (uniform) pass.setBindGroup(0, uniform.bindings);
-	pass.draw(TRIANGLE_CORNERS);
+	if (ownVertexStage) pass.draw(QUAD_CORNERS, Math.max(0, Math.trunc(values?.[INSTANCES_NAME] ?? 1)));
+	else pass.draw(TRIANGLE_CORNERS);
 	pass.end();
 	if (canvasImage && image !== canvasImage)
 		encoder.copyTextureToTexture({ texture: image }, { texture: canvasImage }, [Math.min(width, canvasImage.width), Math.min(height, canvasImage.height)]);
-	if (painted) return gpuSubmitted(device, encoder).finally(() => uniform?.buffer?.destroy());
+	if (painted) return gpuSubmitted(device, encoder).finally(released);
 	const rowBytes = Math.ceil(width * PIXEL_BYTES / ROW_ALIGNMENT) * ROW_ALIGNMENT;
 	const readback = readbackBuffer(device, rowBytes * height);
 	encoder.copyTextureToBuffer({ texture: image }, { buffer: readback, bytesPerRow: rowBytes, rowsPerImage: height }, [width, height]);
 	const bytes = new Uint8Array(await gpuReadBack(device, encoder, readback));
 	if (!readsPrevious) image.destroy();
-	uniform?.buffer?.destroy();
+	released();
 	const pixels = new Uint32Array(width * height);
 	for (let row = 0, pixel = 0; row < height; row++)
 		for (let at = row * rowBytes; at < row * rowBytes + width * PIXEL_BYTES; at += PIXEL_BYTES)
@@ -241,47 +262,61 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 }
 
 // the WGSL declaring `values` (appended, so the shader's line numbers stay the user's) and the uniform's bytes, laid out
-// as WGSL aligns its members (src/graphics/gpu.rs uniform_layout)
-function uniformLayout(values) {
-	const entries = Object.entries(values ?? {});
-	if (!entries.length) return { declarations: "", bytes: new ArrayBuffer(0) };
-	const members = [], floats = [];
-	const padded = alignment => { while (floats.length % (alignment / 4)) floats.push(0); };
-	for (const [name, value] of entries) {
+// as WGSL aligns its members (crates/warp-gpu/warp_gpu.c values_laid_out); its lists of more than 4 numbers or of
+// vectors as storage arrays [{name, numbers}], 4 numbers a vec4f
+function valuesLayout(values) {
+	const members = [], floats = [], arrays = [];
+	const padded = (numbers, alignment) => { while (numbers.length % (alignment / 4)) numbers.push(0); };
+	for (const [name, value] of Object.entries(values ?? {})) {
 		// a list of lists: one vec4f per item, its missing coordinates 0
 		const vectors = Array.isArray(value) && value.some(Array.isArray);
 		if (vectors && value.some(item => [item].flat().length > VECTOR_FLOATS)) throw new Error(`${VALUES_NAME}.${name} is a list of vectors of up to four numbers, got ${JSON.stringify(value)}`);
 		const numbers = vectors ? value.flatMap(item => [...[item].flat(), 0, 0, 0, 0].slice(0, VECTOR_FLOATS)) : [value].flat();
 		if (!numbers.every(number => typeof number === "number")) throw new Error(`${VALUES_NAME}.${name} is a number or a list of numbers, got ${JSON.stringify(value)}${PREVIOUS_WORDS.includes(name) ? "; the shader's own previous frame is $previous(at)" : ""}`);
-		const array = vectors || numbers.length > VECTOR_FLOATS;
-		const [type, alignment] = array ? [`array<vec4f, ${Math.max(1, Math.ceil(numbers.length / VECTOR_FLOATS))}>`, UNIFORM_ALIGNMENT] : VALUE_TYPES[numbers.length] ?? [];
+		if (vectors || numbers.length > VECTOR_FLOATS) {
+			padded(numbers, UNIFORM_ALIGNMENT);
+			arrays.push({ name, numbers: new Float32Array(numbers.length ? numbers : [0, 0, 0, 0]) });
+			continue;
+		}
+		const [type, alignment] = VALUE_TYPES[numbers.length] ?? [];
 		if (!type) throw new Error(`${VALUES_NAME}.${name} is one number or a list of two to four, got ${numbers.length}`);
-		padded(alignment);
+		padded(floats, alignment);
 		floats.push(...numbers);
-		if (array) padded(UNIFORM_ALIGNMENT);
 		members.push(`${name}: ${type}`);
 	}
-	padded(UNIFORM_ALIGNMENT);
+	if (!members.length) return { declarations: "", bytes: new ArrayBuffer(0), arrays };
+	padded(floats, UNIFORM_ALIGNMENT);
 	const declarations = `\nstruct WarpValues { ${members.join(", ")} }\n@group(0) @binding(${VALUES_BINDING}) var<uniform> ${VALUES_NAME}: WarpValues;`;
-	return { declarations, bytes: new Float32Array(floats).buffer };
+	return { declarations, bytes: new Float32Array(floats).buffer, arrays };
 }
+// `values.name` in a shader, whole
+const holePattern = name => new RegExp(`\\b${VALUES_NAME}\\.${name}\\b`, "g");
+const holeRead = (shader, name) => holePattern(name).test(shader);
 
 // an explicit layout holding the uniform and the previous frame, so a shader that leaves `values` unread still binds them
-const bindingsGroupLayout = (device, takesValues, readsPrevious) => device.createBindGroupLayout({ entries: [
-	...takesValues ? [{ binding: VALUES_BINDING, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } }] : [],
+const SHADER_STAGES = GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT;
+const bindingsGroupLayout = (device, takesValues, readsPrevious, arrayCount) => device.createBindGroupLayout({ entries: [
+	...takesValues ? [{ binding: VALUES_BINDING, visibility: SHADER_STAGES, buffer: { type: "uniform" } }] : [],
+	...Array.from({ length: arrayCount }, (_, at) => ({ binding: STORAGE_BINDING + at, visibility: SHADER_STAGES, buffer: { type: "read-only-storage" } })),
 	...readsPrevious ? [{ binding: PREVIOUS_FRAME_BINDING, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "unfilterable-float" } }] : [],
 ] });
 
-// this frame's values in a uniform buffer (no bytes: none) and the previous frame, bound as the layout says; the buffer
-// is destroyed once the frame is read
-function uniformBinding(device, groupLayout, bytes, previous) {
-	const buffer = bytes && device.createBuffer({ size: bytes.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-	if (buffer) device.queue.writeBuffer(buffer, 0, bytes);
+// this frame's values in a uniform buffer (no bytes: none), its storage arrays and the previous frame, bound as the
+// layout says; the buffers are destroyed once the frame is read
+function uniformBinding(device, groupLayout, bytes, previous, arrays) {
+	const filled = (data, usage) => {
+		const buffer = device.createBuffer({ size: data.byteLength, usage: usage | GPUBufferUsage.COPY_DST });
+		device.queue.writeBuffer(buffer, 0, data);
+		return buffer;
+	};
+	const buffer = bytes && filled(bytes, GPUBufferUsage.UNIFORM);
+	const storages = arrays.map(({ numbers }) => filled(numbers, GPUBufferUsage.STORAGE));
 	const entries = [
 		...buffer ? [{ binding: VALUES_BINDING, resource: { buffer } }] : [],
+		...storages.map((storage, at) => ({ binding: STORAGE_BINDING + at, resource: { buffer: storage } })),
 		...previous ? [{ binding: PREVIOUS_FRAME_BINDING, resource: previous.createView() }] : [],
 	];
-	return { buffer, bindings: device.createBindGroup({ layout: groupLayout, entries }) };
+	return { buffers: [...buffer ? [buffer] : [], ...storages], bindings: device.createBindGroup({ layout: groupLayout, entries }) };
 }
 
 // the frame `shader` drew last when it has the size of `image` (a black one otherwise), and `image` kept as the next
@@ -341,11 +376,12 @@ async function forgetDeviceIfLost() {
 // the shader's module, checked once: asking a module for its compilation info a second time crashed Chrome's page (Mac)
 const gpuModule = (device, shader) => compiledOnce(compiledModules, shader, () => checkedModule(device, shader));
 
-// the shader's module; one that does not compile throws where and why
+// the shader's module; one that does not compile throws why and where, `why at line:column`: a shader block's place in
+// the program, as the program placed its text (lib/prelude.warp shader_words), as natively (warp_gpu.c shader_failed)
 async function checkedModule(device, shader) {
 	const module = device.createShaderModule({ code: shader });
 	const problems = (await answeredWithin(module.getCompilationInfo(), "compilation report", GPU_WORK_WAIT_MS)).messages.filter(message => message.type === "error");
-	if (problems.length) throw new Error(problems.map(problem => `${problem.lineNum}:${problem.linePos}: ${essence(problem.message)}`).join("; "));
+	if (problems.length) throw new Error(problems.map(problem => `${essence(problem.message)} at ${problem.lineNum}:${problem.linePos}`).join("; "));
 	return module;
 }
 
@@ -479,17 +515,17 @@ function writeSharedWords(shared, words) {
 // the program's side: hand the job to a task Worker (by default the GPU's, gpuTaskWorker) and wait for the values it
 // gives, raw words as `Words` (a copy: the shared buffer takes the next answer)
 function gpuJob(word, job, transfer = [], Words = Float32Array, worker = hasTaskWorkers() && gpuTaskWorker()) {
-	if (!hasTaskWorkers()) throw new HostWordFailure(`${word} needs task Workers, which only a cross-origin isolated page has (the playground)`);
-	if (!worker) throw new HostWordFailure(`${word}: every task Worker is busy`);
+	if (!hasTaskWorkers()) throw new Error(`${word} needs task Workers, which only a cross-origin isolated page has (the playground)`);
+	if (!worker) throw new Error(`${word}: every task Worker is busy`);
 	const shared = takeAnswerBuffer();
 	worker.postMessage({ gpu: { word, job }, shared }, transfer);
 	const header = new Int32Array(shared, 0, 2);
 	// the buffer and the Worker stay out of their pools: the answer may still come
-	if (Atomics.wait(header, 0, 0, GPU_JOB_WAIT_MS) === "timed-out") throw new HostWordFailure(`${word}: the GPU's task Worker gave no answer in ${GPU_JOB_WAIT_MS / 1000} s`);
+	if (Atomics.wait(header, 0, 0, GPU_JOB_WAIT_MS) === "timed-out") throw new Error(`${word}: the GPU's task Worker gave no answer in ${GPU_JOB_WAIT_MS / 1000} s`);
 	const { values, error } = header[0] === WORDS_STATE ? { values: new Words(shared, TASK_HEADER, header[1]).slice() } : readShared(shared);
 	taskPool.push(worker);
 	returnAnswerBuffer(shared);
-	if (error) throw new HostWordFailure(`${word}: ${error}`);
+	if (error) throw new Error(`${word}: ${error}`);
 	return values;
 }
 
@@ -510,12 +546,9 @@ function linearCells(memory, block) {
 addHostPart({
 	systemValue: (value, holder) => value === GPU_PAINTS ? gpuPaints(holder) : value === GPU_DRAWING ? false : undefined,
 	words: (holder, hooks, { program }) => {
-		const plain = node => plainValue(program(), node);
-		const list = (values, item) => buildValue(program(), { kind: SQUARE_LIST, items: values.map(item) });
-		// floats, also the whole ones (treeOfPlain would make 3 an Int); ints of an array<i32> or array<u32>
-		const item = Elements => Elements === Float32Array ? float => ({ kind: KIND_FLOAT, data: { float }, chain: [] }) : int => ({ kind: KIND_INT, data: { int: String(int) }, chain: [] });
-		const numberList = (values, Elements) => !selfHosted(program()) ? list(Array.from(values), item(Elements))
-			: Elements === Float32Array ? newGuestFloats(program(), values) : newGuestInts(program(), values);
+		const plain = node => guestPlain(program(), node);
+		// floats, also the whole ones (newGuestValue would make 3 an Int); ints of an array<i32> or array<u32>
+		const numberList = (values, Elements) => Elements === Float32Array ? newGuestFloats(program(), values) : newGuestInts(program(), values);
 		// the kernel over the f32 copy of a block's cells, from `first` on read back; `kept` as gpuComputedFloats takes it
 		const kernel = (shader, numbers, workgroups, first, kept = {}) =>
 			gpuJob("gpu_kernel", { shader: plain(shader), numbers, workgroups: Number(workgroups), first, ...kept }, [numbers.buffer]);
@@ -610,7 +643,7 @@ addHostPart({
 		// a GPU list [f32] of the program's (extensions/gpu_lists/runtime.warp): its cells where they are in the module's memory,
 		// undefined for any other value
 		const gpuCells = value => {
-			const place = selfHosted(program()) && program().gpu_list_place ? program().gpu_list_place(value) : -1n;
+			const place = program().gpu_list_place ? program().gpu_list_place(value) : -1n;
 			if (place < 0n) return undefined;
 			const Cells = GPU_LIST_CELLS[Number(program().gpu_list_cell?.(value) ?? 0n)];
 			return new Cells(program().memory.buffer, Number(place >> 32n), Number(place & 0xFFFFFFFFn));
@@ -634,7 +667,7 @@ addHostPart({
 			}));
 		};
 		const computed = (shader, numbers, workgroups) => {
-			const entries = selfHosted(program()) ? guestEntries(program(), numbers) : undefined;
+			const entries = guestEntries(program(), numbers);
 			if (entries?.some(([, value]) => gpuCells(value))) return computedInPlace(plain(shader), entries, workgroups);
 			const cells = gpuCells(numbers);
 			if (cells) {
@@ -649,24 +682,19 @@ addHostPart({
 				const arrays = Object.fromEntries(Object.entries(given).map(([name, array]) => [name, [array].flat().map(Number)]));
 				const left = gpuJob("gpu_compute", { shader: code, arrays, workgroups: Number(workgroups) });
 				const elements = Object.fromEntries(storageArrays(code).map(array => [array.name, array.Elements]));
-				if (selfHosted(program())) return newGuestMap(program(), Object.entries(left).map(([name, values]) => [name, numberList(values, elements[name])]));
-				const entries = Object.entries(left).map(([name, values]) => ({ kind: COLON_KEY, key: [{ kind: "5", data: { text: name }, chain: [] }, { kind: SQUARE_LIST, items: values.map(item(elements[name])) }] }));
-				return buildValue(program(), { kind: CURLY_LIST, items: entries });
+				return newGuestMap(program(), Object.entries(left).map(([name, values]) => [name, numberList(values, elements[name])]));
 			}
 			const values = gpuJob("gpu_compute", { shader: code, numbers: given.map(Number), workgroups: Number(workgroups) });
 			return numberList(values, gpuElements(code));
 		};
 		const rendered = (shader, width, height, values) => {
 			const pixels = holder.gpuRendered(plain(shader), width, height, values);
-			return listOfInts(program(), pixels) ?? list(Array.from(pixels), treeOfPlain);
+			return newGuestInts(program(), pixels);
 		};
-		// a WGSL error inside a `try` is the program's to catch
-		const catchable = word => (...given) => {
-			try { return word(...given); } catch (failure) { raisedInProgram(program(), failure); }
-		};
+		// a WGSL error inside a `try` is the program's to catch, as every host word's failure (host.js raisedInProgram)
 		return {
-			gpu_compute: catchable(computed),
-			gpu_render: catchable(rendered),
+			gpu_compute: computed,
+			gpu_render: rendered,
 			// over a `linear xs = float[n]`: its cells read and written in place, no list built (card gpu-vectors)
 			gpu_compute_linear: (shader, block, workgroups) => {
 				const cells = linearCells(program().memory, block);

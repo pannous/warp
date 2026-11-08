@@ -4,12 +4,16 @@ name: Playground
 # The browser playground (web/playground, notes/playground_plan.md) on GitHub Pages, custom domain warp.pannous.com:
 # the self-hosted compiler warp.wasm with its lib/ (warp-lib/: this checkout's, built by scripts/ci-compilers.sh,
 # web/playground/build.sh), the page and samples/<chapter>/*.warp. scripts/browser-dry-run.sh runs the same tours on
-# pannous.com. The workflow is disabled on GitHub (2026-11-01): it is enabled only when the user says so.
+# pannous.com.
 # Stage 2 of 2 : the Integrator pushes main after the native gate (stage 1) and never waits for this.
-# Hourly, the latest main is built, checked in the browsers and deployed, if it changed the compiler, the page or the
-# samples since the last green run; by hand at once (`gh workflow run Playground -R pannous/warp`) for an urgent fix or
-# a branch check. A failure keeps the last good site up and is fixed forward.
+# Every push to main that changes the compiler, the page or the samples is built and deployed at once (user 2026-11-07:
+# GitHub's hourly cron ran only every few hours, the site lagged main by half a day); the hourly schedule stays as a
+# fallback; by hand (`gh workflow run Playground -R pannous/warp`) for a branch check. A failure keeps the last good
+# site up and is fixed forward.
 on:
+  push:
+    branches: [main]
+    paths: [core/**, lib/**, web/playground/**, samples/**, scripts/ci-compilers.sh, .github/workflows/pages.yml]
   schedule:
     - cron: "17 * * * *"
   workflow_dispatch:
@@ -31,12 +35,6 @@ permissions:
   actions: read
   pages: write
   id-token: write
-
-# one group per ref: an integrator's check of a branch (`gh workflow run Playground --ref <branch>`) and a deploy of main
-# don't cancel each other
-concurrency:
-  group: pages-${{ github.ref }}
-  cancel-in-progress: true
 
 env:
   # the runner has no GPU: headless Chrome gets SwiftShader's software WebGPU adapter, else samples/graphics/webgpu logs
@@ -100,7 +98,7 @@ jobs:
   # console, in the collected site, else no deploy
   tour-chrome:
     needs: build
-    if: ${{ !inputs.skip_checks }}
+    if: ${{ !inputs.skip_checks && github.event_name != 'push' }}
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
     - uses: actions/checkout@v7
@@ -118,7 +116,7 @@ jobs:
   # the same in headless Firefox: the runner's own, driven by firefox_driver.mjs
   tour-firefox:
     needs: build
-    if: ${{ !inputs.skip_checks }}
+    if: ${{ !inputs.skip_checks && github.event_name != 'push' }}
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
     - uses: actions/checkout@v7
@@ -152,7 +150,7 @@ jobs:
   # not before it: macOS runners queue longer
   tour-safari:
     needs: build
-    if: ${{ !inputs.skip_checks }}
+    if: ${{ !inputs.skip_checks && github.event_name != 'push' }}
     runs-on: macos-26
     timeout-minutes: 20
     steps:
@@ -166,13 +164,17 @@ jobs:
     - name: The painting checks in Safari
       run: python3 web/playground/test_in_browser.py --examples --safari --site _site webgpu shader_trails "(the view's size stays as paintings of that size are shown)" "(many GPU jobs in one run)" "(many tasks in one run)" async "(named GPU arrays, a shader painted into the page's canvas)"
 
-  # only main may deploy (the github-pages environment); a branch check (workflow_dispatch on batchNN) ends after the
-  # tours, green, instead of a failed deploy mailing a failed run
+  # only main may deploy (the github-pages environment). The deploy follows the build at once; the tours run beside it
+  # as checks whose failures are fixed forward, never a gate (user 2026-11-07: a red tour held every deploy for a day)
+  # A push deploys only (about 6 minutes); the tours and verify run on the schedule and by hand, so pushes every few
+  # minutes don't queue browser runs. Deploys run one at a time per ref, never cancelled: GitHub keeps one pending
+  # deploy, the newest, so the site follows main's latest push
   deploy:
-    needs: [ build, tour-chrome, tour-firefox ]
-    if: >-
-      always() && github.ref == 'refs/heads/main' && needs.build.result == 'success' &&
-      (inputs.skip_checks || (needs.tour-chrome.result == 'success' && needs.tour-firefox.result == 'success'))
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    concurrency:
+      group: pages-deploy-${{ github.ref }}
+      cancel-in-progress: false
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     environment:
       name: github-pages
@@ -184,6 +186,7 @@ jobs:
   # the same check against the deployed page: its console stays clean too (card console-errors)
   verify:
     needs: deploy
+    if: github.event_name != 'push'
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
     - uses: actions/checkout@v7

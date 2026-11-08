@@ -1,2 +1,3 @@
 #!/usr/bin/env warp
+# the first program: a greeting joined from text and a number
 "Hello " + "🌍" + (2000 + 26)

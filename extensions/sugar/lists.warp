@@ -1,6 +1,9 @@
 # Typed arrays (notes/layers.md, sugar): `int[3]`, which the parser reads as the subscript `int#4`, is the list of 3
 # zeros of the type, zero_fill(3, 0); `float[n]` of float zeros, `text[n]` of empty texts. A program binding the type
 # word as a value indexes it.
+# `xs#(2…4)`, `s#(2…4)`: a slice counted from 1 as `xs#2` is, `…` taking its end and `..` stopping before it
+rewrite $xs#($a … $b) => $xs[($a - 1) .. $b]
+rewrite $xs#($a .. $b) => $xs[($a - 1) .. ($b - 1)]
 rewrite int#$n => zero_fill($n - 1, 0)
 rewrite float#$n => zero_fill($n - 1, 0 as float)
 rewrite text#$n => zero_fill($n - 1, "")
@@ -9,15 +12,34 @@ rewrite $n * int => zero_fill($n, 0)
 rewrite $n * float => zero_fill($n, 0 as float)
 rewrite $x : $n int => $x = zero_fill($n, 0)
 
+# The type forms of a list (card list-type-forms, wiki/list.md "Typed lists"): `x = int[]` (the parser's `x = [int]`)
+# and `x = list of numbers` (or `list of number`) are the empty list of the type, as `int[0]`
+rewrite ($x = [int]) => ($x = zero_fill(0, 0))
+rewrite ($x = [float]) => ($x = zero_fill(0, 0 as float))
+rewrite ($x = [text]) => ($x = zero_fill(0, ""))
+rewrite ($x = [$t]) => ($x = []) where $t is type
+rewrite ($x = list of int) => ($x = zero_fill(0, 0))
+rewrite ($x = list of float) => ($x = zero_fill(0, 0 as float))
+rewrite ($x = list of text) => ($x = zero_fill(0, ""))
+rewrite ($x = list of $t) => ($x = []) where $t is type
+rewrite ($x = list of numbers) => ($x = [])
+rewrite ($x = list of ints) => ($x = zero_fill(0, 0))
+rewrite ($x = list of floats) => ($x = zero_fill(0, 0 as float))
+rewrite ($x = list of texts) => ($x = zero_fill(0, ""))
+rewrite ($x = list of strings) => ($x = zero_fill(0, ""))
+rewrite ($x = list of bools) => ($x = [])
+
 # A conversion to a list of a type (card pure-as-conversions): `["1", "2"] as list of int` converts each item, [1, 2]
 rewrite $v as list of $t => $v.map($x => $x as $t)
 
 # `count bytes in t`: the text's byte size, ahead of the `in` of a membership
 rewrite (count bytes in $t) => byte_size($t)
 
+# `xs are in t`: every item of xs is in t (decisions.md 2026-11-06 round 9: are-words-in, all-words-in)
+rewrite ($xs are in $t) => $xs.all($x => collection_contains($t, $x))
 # A filter (card pair-count-filter): `xs where it > 2` is the items the condition holds for, `it` each item, also as a
 # call's argument, `count(xs where it is Pair)`; a field named bare reads the item's (decision P223, `people where age > 18`)
 rewrite ($xs where $c...) => $xs.filter(it => $d) where $d = bare_fields_read($c..., $program)
 rewrite $f($xs where $c...) => $f($xs.filter(it => $d)) where $d = bare_fields_read($c..., $program)
-# `for p in people where p.age > 90 {…}`: the filter reads the loop's variable
-rewrite for $x in $xs.filter(it => $c) {$body...} => for $x in $xs.filter($x => $c) {$body...} where $x is symbol
+# `for p in people where p.age > 90 {…}`: the filter reads the loop's variable, and `it` as well (`where it > 2`)
+rewrite for $x in $xs.filter(it => $c) {$body...} => for $x in $xs.filter($x => $d) {$body...} where $x is symbol and $d = it_read_as($c, $x)

@@ -8,21 +8,38 @@ use "lists.warp"
 use "show.warp"
 use "types.warp"
 use "nodes.warp"
+use "errors.warp"
+use "builders.warp"
 # `a + b` of values known only at run time: lists and texts join, numbers add, a marked number's mark kept
 node_add(a: Node, b: Node): Node := marks_kept(node_sum(a, b), a, b)
 node_sum(a: Node, b: Node): Node := {
 	# ø, also `[]` in the lowered program, beside a list is a copy of that list (ø + ø the empty list), so a later
-	# `+=` growing the sum in place leaves the list untouched; beside a text "ø"; beside a number it fails
+	# `+=` growing the sum in place leaves the list untouched; a text after it shows ø ("a" + ø); ø is no start of a
+	# sum or a text, which says where to start (decisions xs-ys, empty-plus-text)
 	if is_null(a) and is_null(b) { return a }
 	if is_null(a) and not is_null(b) and kind_code(b) == Kind.List { return list_join(unboxed_list(b), new_list(0)) }
 	if not is_null(a) and kind_code(a) == Kind.List { return list_join(unboxed_list(a), appended_items(b)) }
+	if is_null(a) and textual_node(b) { absent_start("start the text at \"\" (t = \"\")") }
 	if textual_node(a) or textual_node(b) { return node_text(a) + node_text(b) }
-	if is_null(a) or is_null(b) { fail() }
+	if is_null(a) { absent_start("start the sum at 0 (x = 0)") }
+	if is_null(b) { fail() }
+	if not (summable(a) and summable(b)) { no_sum(a, b) }
 	# two plain ints add here; a ratio or a big int on either side goes to the extended runtime
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and (is_plain_int(a) and is_plain_int(b)) { return grown_sum(unboxed_int(a), unboxed_int(b)) }
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return extended_sum(a, b) }
 	float_of_node(a) + float_of_node(b)
 }
+# a number, or an instance whose class makes it one (conversions.warp float_of_node)
+summable(n: Node): bool := kind_code(n) == Kind.Int or kind_code(n) == Kind.Float or is_class_instance(n)
+# `users.add(x)`, `n += [2]` of a value that is no list, `{a: 1} + 2`: an error a try catches, naming both, never the
+# engine's cast trap (card list-add-trap)
+no_sum(a: Node, b: Node): int := {
+	if held_kind_word(b) == "list" { return raised(failure_of(kind_named(a) + " is no list: add, push, append and += [x] need one")) }
+	raised(failure_of("no + between " + kind_named(a) + " and " + kind_named(b)))
+}
+# `x = ø; x += 3`: an error a try catches, saying what to start with
+absent_start(fix: text): int := raised(failure_of("ø has no +: " + fix))
+kind_named(x: Node): text := held_kind_word(x) + " " + node_text(x)
 # the result of arithmetic on boxed values keeps a marked operand's mark (decision marks-survive-arithmetic): the left
 # one's, else the right one's, where it marks a number of the result's Kind; a type's mark lies above a yes/no's,
 # which never carries
@@ -59,6 +76,13 @@ appended_items(b: Node): list := {
 	if is_null(b) { return new_list(0) }
 	if kind_code(b) == Kind.List { return unboxed_list(b) }
 	[b]
+}
+# `a += b` beside a class's `+` (control_flow.warp appended): b's items appended to a list a in place, yes; no for
+# any other a, which the class's `+` then adds to
+appends_in_place(a: Node, b: Node): bool := {
+	if is_null(a) or kind_code(a) != Kind.List { return no }
+	list_append(unboxed_list(a), appended_items(b))
+	yes
 }
 # `a += b` of values known only at run time: a list grows in place as list_append, anything else is a + b
 node_append(a: Node, b: Node) := {

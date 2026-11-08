@@ -342,7 +342,8 @@ def runtime_fingerprint(): int {
 }
 def folded_bytes(bytes: list): int {
 	folded = 0
-	for byte in bytes { folded = (folded * 257 + byte) % 1000000007 }
+	# `part`, not `byte`: `for byte in xs` walks xs.bytes (decision text-unit-plurals)
+	for part in bytes { folded = (folded * 257 + part) % 1000000007 }
 	folded
 }
 
@@ -480,7 +481,65 @@ def bind_library_words() {
 			variant = if linked_extended.has(word.name) then module.functions.get(typed_variant_written(image.name, word)) else ø
 			if variant != ø and variant.kinds == ø { bound_to(variant, image, k) }
 		}
+		bind_written_variants(image)
 	}
+	for name in module.functions.keys { bound_by_class(module.functions[name]) }
+}
+# a linked class's method the program declares by its class's name, compare·Instant (units' Quantity declares compare
+# too), whose module named it plainly, compare (Instant its only class declaring it): bound to that module's word, never
+# left the lifted method of its bodiless declaration, answering ø (card linked-dynamic-method)
+def bound_by_class(f: Function) {
+	parts = f.name.split("·")
+	if f.kinds != ø or #parts != 2 { return }
+	for image in by_precedence(module.linked_images) {
+		if image.classes.any(entry => entry#1 == instance_struct_prefix + parts#2) {
+			for k in 0..<#image.functions { if image.functions[k].name == parts#1 and #image.functions[k].kinds == #f.signature.parameters and linkable(image, image.functions[k]) {
+				bound_to(f, image, k)
+				return
+			} }
+		}
+	}
+}
+# the program's variants of a module's words, its definitions of one name told apart by count or types
+# (arity_overloads: the prelude's sum(xs) beside a linked class's method sum() are sum·1·list_or_number and
+# sum·1·any), each bound to the word the module wrote it as
+def bind_written_variants(image: LibraryImage) {
+	signature = linked_signature(image.name)
+	if signature == ø { return }
+	varied = {}
+	for name in module.functions.keys { if name.contains("·") { varied[name.split("·")#1] = yes } }
+	# (a class's methods are in its slice, whose text is its head line only)
+	for slice in signature.slices.filter(slice => varied.has(slice#1) or leading_name(slice#2) == "class") {
+		for written in written_definitions(unpack(slice#3)) {
+			name = written#1
+			types = written#2
+			for k in 0..<#image.functions {
+				# (the module's own of several counts is name·count too: the prelude's sum·1)
+				if image.functions[k].name in [name, name + "·" + "${#types}"] and #image.functions[k].kinds == #types {
+					for variant in [typed_variant(name + "·" + "${#types}", types), typed_variant(name, types), name + "·" + "${#types}"] {
+						f = module.functions.get(variant)
+						if f != ø and f.kinds == ø { bound_to(f, image, k) }
+					}
+				}
+			}
+		}
+	}
+}
+# [name, parameter types] of each definition a module's statement writes, a class's methods with their receiver first
+written_definitions(code: Node): list := {
+	found = []
+	for statement in statements_in(code) {
+		call = definition_call(statement)
+		if call != ø { found += [[name_of(call#1), parameter_types(call)]] }
+		view = class_view(statement)
+		if view != ø {
+			for member in view#3[3 ..] {
+				method = definition_call(member_read(member))
+				if method != ø { found += [[name_of(method#1), [any_word] + parameter_types(method)]] }
+			}
+		}
+	}
+	found
 }
 def bound_to(f: Function, image: LibraryImage, k: int) {
 	f.index = linked_index(image, k)

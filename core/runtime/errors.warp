@@ -105,7 +105,7 @@ too_big_for_int_of(value: Node): int := {
 	too_big_for_int()
 }
 no_length_of(value: Node): int := {
-	if is_failure(value) { raised(value) }
+	if node_is_error(value) { raised(value) }
 	global trap_detail = value
 	no_length()
 }
@@ -140,6 +140,9 @@ caught_error(finished: bool, value: Node): Node := {
 	name = unboxed_text(trap_name)
 	if name == "returned_error" or name == "missing_field" then failure_of(error_sentence(name)) else failure_of(error_words(name))
 }
+# the caught error at the program's statement it happened in (passes/tries.warp gives trap_place, 0 for none known):
+# `e.line`, `e.column` name it
+placed_at(failure: Node, position: int): Node := if position == 0 then failure else meta_node(failure, int_quotient(position, 4096), int_remainder(position, 4096))
 # `xs#i` of an i known only at run time: an int, else "index must be an integer"
 index_of_node(n: Node): int := {
 	if is_null(n) or kind_code(n) != Kind.Int or is_ratio(n) { index_must_be_an_integer() }

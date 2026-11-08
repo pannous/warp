@@ -76,8 +76,10 @@ is_empty_list(n: Node): bool := empty_group_bracket(n) == "["
 # the node parser.warp builds as plain gives its view: no attribute layers but the mark of `x!`, an empty group as ø but
 # the empty map `{}` (number_keys.warp keys a variable that starts as one by texts) and the empty list `[]`,
 # a character as a text, an opaque type or error whole
-# the node made at the place of `at`, where the user wrote the code it stands for (a rewritten form, a rebuilt group)
+# the node made at the place of `at`, where the user wrote the code it stands for (a rewritten form, a rebuilt group);
+# ø stays ø, as a rule's `() => $e` makes its `()`
 placed(made: Node, at: Node): Node := {
+	if made === ø { return made }
 	line = line_of(at)
 	column = column_of(at)
 	if line is int and column is int then positioned(made, line, column) else made
@@ -159,11 +161,11 @@ view_of(n: Node): View := if n == ø and n !== ø then ["list", "[", ""] else ma
 }
 
 # the members of a union type, `list or text`, `int | text` (decision union-or); a single type is its own one member
-union_members(type: text): list := type.split(" or ").flat_map(part => part.split(" | ")).map(member => member.trim())
+union_members(type: text): list := type.split(" or ").flat_map(part => part.split("|")).map(member => member.trim())
 is_union(type: text): bool := #union_members(type) > 1
 # a union type as written, `int or text` (`int | text` parses so too), its members type words; ø for any other node
 union_spelling(type: Node): text? := {
-	if not is_key(type, Op.Or) { return ø }
+	if not (is_key(type, Op.Or) or is_key(type, Op.BitOr)) { return ø }
 	members = [key_of(type), value_of(type)].map(member => if member is symbol then name_of(member) else union_spelling(member))
 	if members.any(member => member == ø) then ø else members.join(" or ")
 }
@@ -221,12 +223,16 @@ group_like(n: Node, items: list): Node := match n {
 	_: separated(bracketed(items, bracket_of(n)), separator_of(n))
 }
 
-# the call `name(arguments…)`
 # the symbol `word`
 is_word(n: Node, word: text): bool := n == symbol(word)
 # `pattern Definition = Key(head, Op.Define, body)`, a named pattern (node_matches.warp)
 is_pattern_definition(n: Node): bool := is_group(n) and #n == 2 and is_word(n#1, "pattern") and is_key(n#2, Op.Assign)
-call_of(name: text, arguments: list): Node := bracketed([symbol(name)] + arguments, "(")
+# the call `name(arguments…)` a pass makes: its name is the word, never a local of the program named so (a local
+# `same = …` beside the `same(op, Op.Ne)` an enum's equality became, card implicit-word-binding)
+call_of(name: text, arguments: list): Node := bracketed([word_named(name)] + arguments, "(")
+INSERTED_WORD = "word"
+word_named(name: text): Node := with_attribute(symbol(name), symbol(INSERTED_WORD))
+is_inserted_word(n: Node): bool := attributes_of(n).any(attribute => attribute == symbol(INSERTED_WORD))
 # the statements as a block, `{ a; b }`
 block_of(parts: list): Node := List(parts, Bracket.Curly, Separator.Semicolon)
 
@@ -253,7 +259,7 @@ children(n: Node, f: function): Node := match n {
 		if left == opaque_symbol { return n }
 		walked_left = f(left)
 		walked_right = f(right)
-		if same_node(walked_left, left) and same_node(walked_right, right) then n else Key(walked_left, op, walked_right)
+		if same(walked_left, left) and same(walked_right, right) then n else Key(walked_left, op, walked_right)
 	}
 	List(items, bracket, separator): {
 		if is_quote(n) or is_spliced_quote(n) { return n }
@@ -264,7 +270,7 @@ children(n: Node, f: function): Node := match n {
 }
 # whether each item is the very same node as the other's at its place
 same_items(items: list, others: list): bool := {
-	for i in 0..<#items { if not same_node(items[i], others[i]) { return no } }
+	for i in 0..<#items { if not same(items[i], others[i]) { return no } }
 	yes
 }
 

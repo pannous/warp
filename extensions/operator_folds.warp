@@ -1,0 +1,58 @@
+# A fold given its operator alone (card fold-bare-arguments, wiki/examples.md "folding"): `sum := fold +` is the
+# function of the list it folds, from the operator's identity, `sum [1 2 3]` is 6; an operator without one, and
+# `total := reduce +`, folds from the first item. Spaced arguments are the call's: `fold [1 2 3] 0 +` is
+# fold([1 2 3], 0, +), `reduce xs *` reduces xs by *. A pass, as the parser leaves a trailing operator in more than one
+# shape: `(+ fold ø)`, `fold (- ø ø)`, the phrase `(sum := fold) +` before a `;`, `(+ 0 ø)` as the last argument.
+# It runs first in the used stage, so the words it writes (reduce, a program's own sum) are the ones reached.
+operator_folds_extension = Extension{name: "operator_folds", passes_before: {"rules_rewritten": folded_operators}}
+FOLD_WORDS = ["fold", "reduce"]
+FOLD_OPERATORS = [Op.Add, Op.Sub, Op.Mul, Op.Div, Op.Pow, Op.And, Op.Or]
+# the identity each fold starts from (lib/prelude.warp operator_laws)
+FOLD_IDENTITIES = {"+": 0, "*": 1, "and": yes, "or": no}
+
+folded_operators(n: Node): Node := {
+	folded = written_fold(n)
+	if folded != ø then folded else children(n, folded_operators)
+}
+
+# the fold the node writes with its operator alone, else ø
+written_fold(n: Node): Node? := {
+	# `sum := fold *`: the operator took the word as its operand
+	if is_key(n, Op.Define) and fold_trailing_op(value_of(n)) != ø and is_fold_word(key_of(value_of(n))) { return folding_definition(key_of(n), key_of(value_of(n)), fold_trailing_op(value_of(n))) }
+	# `d := fold -;`: the word and the operator as the definition's phrase
+	if is_key(n, Op.Define) and is_spaced(value_of(n)) and #value_of(n) == 2 and is_fold_word(value_of(n)#1) and fold_op_alone(value_of(n)#2) != ø { return folding_definition(key_of(n), value_of(n)#1, fold_op_alone(value_of(n)#2)) }
+	if not is_spaced(n) { return ø }
+	items = items_of(n)
+	# `sum := fold +;`: the operator after the definition
+	if #items == 2 and is_key(items#1, Op.Define) and is_fold_word(value_of(items#1)) and fold_op_alone(items#2) != ø { return folding_definition(key_of(items#1), value_of(items#1), fold_op_alone(items#2)) }
+	# `fold [1 2 3] 0 +`
+	if #items == 3 and items#1 == symbol("fold") and fold_trailing_op(items#3) != ø { return call_of([symbol("fold"), items#2, key_of(items#3), fold_operator_value(fold_trailing_op(items#3))]) }
+	# `reduce xs *`
+	if #items == 2 and items#1 == symbol("reduce") and fold_trailing_op(items#2) != ø { return call_of([symbol("reduce"), key_of(items#2), fold_combining(fold_trailing_op(items#2))]) }
+	ø
+}
+
+is_fold_word(n: Node): bool := n is symbol and name_of(n) in FOLD_WORDS
+# the operator of `x +`, nothing after it, one a fold combines with, else ø
+fold_trailing_op(n: Node): Op? := match n {
+	Key(left, op, right): if right == ø and left != ø and op in FOLD_OPERATORS then op else ø
+	_: ø
+}
+# the operator a node stands for alone, `+`, `(+ ø ø)` or the text the parser leaves of a `+` before a `;`, else ø
+fold_op_alone(n: Node): Op? := match n {
+	Key(left, op, right): if left == ø and right == ø and op in FOLD_OPERATORS then op else ø
+	Symbol(name): fold_op_spelled(name)
+	Text(written): fold_op_spelled(written)
+	_: ø
+}
+fold_op_spelled(written: text): Op? := if FOLD_OPERATORS.any(op => op as text == written) then written as Op else ø
+# the operator as a value, as `fold(xs, 0, +)` writes it
+fold_operator_value(op: Op): Node := Key(ø, op, ø)
+# `(a, b) => a + b`
+fold_combining(op: Op): Node := Key(List([symbol("a"), symbol("b")], Bracket.Round, Separator.Comma), Op.Arrow, Key(symbol("a"), op, symbol("b")))
+# `name(xs) := fold(xs, identity, op)`, or reduce(xs, …) where the operator has no identity or the word is reduce
+folding_definition(name: Node, word: Node, op: Op): Node := {
+	xs = symbol("xs")
+	body = if name_of(word) == "fold" and op as text in FOLD_IDENTITIES then call_of([symbol("fold"), xs, FOLD_IDENTITIES[op as text], fold_operator_value(op)]) else call_of([symbol("reduce"), xs, fold_combining(op)])
+	Key(call_of([name, xs]), Op.Define, body)
+}

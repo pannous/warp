@@ -44,6 +44,19 @@ times_of_different_kinds_have_no_order() := {
 	fail()
 	0
 }
+# n as it is, unless n and other are durations of the two kinds: a calendar duration (`1 day`) beside an instance
+# (lib/units' `2 hours`), which are one kind only from card dates-times-extraction (decision one-duration)
+one_duration_kind(n: Node, other: Node): Node := {
+	if (is_calendar_duration(n) and is_instance(other)) or (is_calendar_duration(other) and is_instance(n)) { calendar_and_clock_durations_are_different_kinds() }
+	n
+}
+is_calendar_duration(n: Node): bool := is_time(n) and is_duration(n)
+is_instance(n: Node): bool := not is_null(n) and marked_kind(n) == Marked.Instance
+# the runtime error of one_duration_kind, named to read off the trace
+calendar_and_clock_durations_are_different_kinds() := {
+	fail()
+	0
+}
 # an operand of a time's + - * as lib/time_arithmetic.warp time_operation takes it: its form, -1 for a whole number,
 # and its position, a whole number's value
 operand_form(n: Node): int := if is_time(n) then time_form(n) else -1
@@ -58,11 +71,12 @@ time_form(n: Node): int := int_remainder(info_byte(n), TimeInfoUnit.Days)
 # whether n is a time, what made_case(Made.Time, …) tests
 holds_time(n: Node): bool := kind_code(n) == Kind.Time
 # RFC 3339, `2026-10-10T14:43:33.682Z`: a date has no clock, a time of day no date, a
-# local time no Z. A duration (card duration-warp) and a zoned time (its zone names) trap
+# local time no Z; a duration (card duration-warp) as its parts; a zoned time its wall clock and offset only,
+# `2024-07-01T12:00+02:00`, its zone's name being .zone (decisions local-now, zone-literal-dropped)
 time_text(n: Node): text := {
 	form = time_form(n)
 	if form == TimeFormCode.Duration { return duration_text(n) }
-	if form == TimeFormCode.Zoned { time_form_not_in_warp() }
+	if form == TimeFormCode.Zoned { return zoned_text(n) }
 	position = unboxed_int(n)
 	if form == TimeFormCode.Date { return date_text(position) }
 	days = floor_quotient(position, day_nanos())
@@ -105,8 +119,17 @@ fraction_text(fraction: int): text := {
 }
 # n with leading zeros to count digits
 padded(n: int, count: int): text := zeros(count - byte_count(int_text(n))) + int_text(n)
-# a zoned time in time_text: "time form not in warp" (warp knows no zone names yet)
-time_form_not_in_warp() := {
-	fail()
-	0
+# a zoned time's seconds east of UTC: its offset in minutes above the kind (8 bits), form (3) and zone index (8)
+zone_seconds_of(n: Node): int := floor_quotient(marked_kind(n), power(2, 19)) * 60
+zoned_text(n: Node): text := {
+	east = zone_seconds_of(n)
+	wall = unboxed_int(n) + east * second_nanos()
+	day = floor_quotient(wall, day_nanos())
+	date_text(day) + "T" + clock_text(wall - day * day_nanos(), TimeFormCode.Local) + offset_text(east)
+}
+# `+05:30` of seconds east of UTC
+offset_text(east: int): text := {
+	sign = if east < 0 then "-" else "+"
+	whole_minutes = int_quotient(if east < 0 then 0 - east else east, 60)
+	sign + padded(int_quotient(whole_minutes, 60), 2) + ":" + padded(int_remainder(whole_minutes, 60), 2)
 }

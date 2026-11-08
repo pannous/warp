@@ -1,0 +1,16 @@
+#!/usr/bin/env warp
+# Pattern values: find/replace with patterns as values.
+# A pattern held unevaluated, `data {…}` or the infix `find`'s right side, so bare names bind.
+
+page = {top: {logo: {type: "image", src: "logo.png"}}, body: [{type: "text"}, {type: "image", src: "cat.jpg"}]}
+
+print page find {type: "image", src}
+print count(page find {type: "text"})
+
+# pattern held in a variable
+image = data {type: "image", src}
+print find_matches(page, image)
+
+# replace: children first, template names from the bindings
+print replace_matches(page, data {type: "image", src}, data {type: "link", href: src})
+print replace_matches([[1, 2], [3, [1, 5]]], data [1, x], data x)

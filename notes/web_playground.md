@@ -72,12 +72,9 @@ Markup values show as warp data there (`p{class:"note" "hello"}`), not as HTML l
   playground.js rejects workerReady on the Worker's error event, restarts a start silent for STALLED_START_MS (60 s,
   every message restarts the clock) once with a console warning naming its stage, and a second silent start fails the
   run naming the stage.
-- Reading a GC result: JavaScript cannot read struct fields, so modules built without `native` export 13 `reflect_*`
-  getters (src/wasm_emitter/reflection/exports.rs, EmitterConfig.emit_reflection). reader.js walks the result into
-  `{kind, data, chain}` (chain = the value-field cells, flat, so long lists need no recursion), web::node_from_tree
-  mirrors Node::from_gc_object. Floats travel as text when JSON cannot hold them (NaN, ±Infinity, -0).
-- Traps: the JS error's stack names the wasm functions (name section), plus the `trap_detail` global read through the
-  reflection getters → wasm_emitter::trap_error, the same reading wasmtime's trace gets (failed_run).
+- Reading a GC result: JavaScript cannot read struct fields, so a host word reads values through the module's exports
+  (values.js, below).
+- Traps: the JS error's stack names the wasm functions (name section), plus the `trap_detail` global.
 - Asks: web::evaluate runs with a PageAsker: answers the page sent are taken (and hinted, as on the terminal), every
   other Ask is reported with its readings and falls back. Clicking a reading stores `topic = explicit form` in
   localStorage and runs again. educate_once notes get a "got it" button (`ack:<topic> = acknowledged`).
@@ -94,6 +91,16 @@ Markup values show as warp data there (`p{class:"note" "hello"}`), not as HTML l
 - The first markup program a worker compiles pays a one-time cost (lib/markup.warp's to_html): after a run is shown
   the page asks its worker once to warm up (playground.js warmWorker → worker.js warmUp: `p{ "" }` evaluated with the
   worker's messages silenced, skipped over a live run).
+  It waits for 5 s without a key or click (WARM_UP_QUIET_MS): sent right after the first run, it held the worker for
+  1–4 s and a Hello clicked meanwhile waited behind it (card compiler-cache-compiled).
+- The compiler's machine code is cached by the browser, not by the page: compileStreaming of the versioned warp.wasm
+  (?build=, host.js ofThisBuild) keeps it with the HTTP-cached response. IndexedDB cannot hold a WebAssembly.Module
+  (Chrome and Firefox removed its serialization). Measured on the live site, headless Chrome: Hello at 7.5 s on a
+  first visit, 2.3 s after (1.1 s with the quiet warm-up); playground.state().stages shows where a start's time goes.
+- Stopping a run (an animation the next run stops, Stop, a sound handover) ends its worker; a new worker loads and warms
+  the compiler first, so Hello after a shader took 0.8–1.2 s in Firefox (the user: 4 s after five shaders). A run that
+  animates starts a standby worker (playground.js prepareStandby), which the stop takes at once: Hello 0.33 s
+  (card playground-progressive-slowdown). Chrome and Firefox showed no growth over many runs otherwise.
 
 ## Values of self-hosted modules (values.js, 2026-11-01)
 A module of the self-hosted compiler has no reflect_* exports: a host word reads its value arguments as driver.warp
@@ -102,13 +109,13 @@ guestCount/guestItem/guestInts (item_count, item_at, int_item_at), guestBytes; g
 shown text (maps, lists, texts, yes/no, ø, numbers, ratios; a list too long to show item by item). Built back with
 the constructors of core/emitter/host.warp host_builders (newGuestText, newGuestList from the last item on,
 newGuestMap by new_spelled_key/new_spelled_list, newGuestFloats, newGuestError, newGuestValue of plain JS).
-plainValue/builtValue/errorValue pick reader.js for a Rust-era module until none runs in the page (card
+Every host word reads and builds so (reader.js and exact.js, the Rust-era tree reading, went with card
 drop-readnode-branch). Ported: std.js stdCall (every std adapter), paint, save_picture, text_coverage,
 sound_samples, gpu_*. Known cost: newGuestList is O(n²) (built_list copies its rest) and floats are read by shown
-text, so a million-item GPU list stops the run (samples/gpu/gpu_million; bulk exports asked of core).
-libwarp_sound is a page library: lib/sound.warp's `from 'warp_sound'` words (host-sound.js soundLibrary: play
-samples on the run's voice, play a file, decode/resample) and c.dlopen of @executable_path/libwarp_<name> answers a
-handle when self.PAGE_LIBRARIES has it (host-foreign.js pageStdio).
+text, so a million-item GPU list stops the run (samples/acceleration/gpu_million; bulk exports asked of core).
+lib/sound.warp's device words are host words (sound_played, sound_file_played, sound_file_decoded, midi_sent,
+midi_ports): host-sound.js soundWords plays samples on the run's voice, plays a file, decodes and resamples; natively
+lib/host/native_host/sound.warp answers them.
 Sweep caveats: samples that print a measured duration as "N ms" compare masked; gpu/gpu_visualizer and
 gpu/warp_compiled_wgsl_shader end with a while loop whose printed value is a measured time (5.001 vs 5.123): DIFF.
 

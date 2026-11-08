@@ -1,0 +1,5 @@
+'f(x) := { if x > 2 { return "big" } else { return "small" } }; f(2)'	'small'
+'f(x) := { if x > 2 { return [1] } else { return [2] } }; f(5)'	[1]
+'def f(x) { if x > 2 { return "big" } else if x > 1 { return "mid" } else { return "small" } }; f(2)'	'mid'
+'f(x): text := { if x > 2 { return "big" } else { return "small" } }; f(3)'	'big'
+'f(x) := { if x > 2 { return 1 } else { return 2 } }; f(2)'	2

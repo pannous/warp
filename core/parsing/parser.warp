@@ -11,8 +11,9 @@ use file
 use "../passes/library.warp"
 
 // Where the items being read stand: the bracket of their group, whether that group is closed by a bracket or a word
-// (`grouped`), whether a Ruby block's `end` closes it (`stops_at_end`) and whether an `else` ends it too (`in_branch`)
-class GroupContext { bracket: Bracket = Bracket.None; grouped: bool = no; in_branch: bool = no; stops_at_end: bool = no }
+// (`grouped`), whether a Ruby block's `end` closes it (`stops_at_end`), whether an `else` ends it too (`in_branch`) and
+// whether a glued operator's operand is read, which a blank ends (`glued`, decision glued-binds-tighter)
+class GroupContext { bracket: Bracket = Bracket.None; grouped: bool = no; in_branch: bool = no; stops_at_end: bool = no; glued: bool = no }
 
 // What closes the items of items_until: the end of the source, the closing bracket, a Ruby block's `end`, that or a
 // `then` block's `else` (kept for the branch), or, for the rest of an enclosing group or block, whatever closes that one
@@ -105,7 +106,7 @@ def bang_words(source: text): list {
 // front stage 5× slower (card front-stage-5x-slower)
 global prelude_bangs = ø
 def prelude_bang_words(): list {
-	if prelude_bangs == ø { prelude_bangs = bang_words(library_text("prelude.warp")) }
+	if prelude_bangs == ø { prelude_bangs = bang_words(prelude_text) }
 	prelude_bangs
 }
 
@@ -213,11 +214,11 @@ def spells_function(alias: OperatorAlias): bool := is_name_start(alias.target#1)
 // the operator statements among statements, read once
 def operator_statements(statements: list): list := statements.filter(statement => statement.contains(":=")).map(statement => operator_statement(blank_words(statement))).filter(statement => statement != ø)
 def source_operator_statements(source: text): list := if source.contains(":=") then operator_statements(code_statements(source)) else []
-// lib/math.warp's operator statements, which every program reads (decision operator-alias), read the first time a
+// lib/math.warp's operator statements (its text built in), which every program reads (decision operator-alias), read the first time a
 // parse needs them
 global math_statements = ø
 def math_operator_statements(): list {
-	if math_statements == ø { math_statements = operator_statements(code_statements_of("math")) }
+	if math_statements == ø { math_statements = operator_statements(code_statements(math_text)) }
 	math_statements
 }
 // the aliases among statements
@@ -295,11 +296,12 @@ def aliased_spellings(): Spellings := {
 	tables
 }
 // The spellings an entry gives: a symbol alias spells the entry's operator (its `operator`, else the entry itself), a
-// word alias its word (also infix with `infix: yes`, also a keyword form when the word is one)
+// word alias its word (also a keyword form when the word is one); `infix: yes` makes the word and its word aliases
+// infix, `infix: [plus]` only the words listed: `1 plus 2` adds while `print add(1, 2)` stays a call
 def add_alias_entry(tables: Spellings, word: text, fields: map) {
 	target = fields.get("operator") ?? word
-	written_infix = fields.get("infix") == "yes"
-	if written_infix { add_infix_word(tables, word, target) }
+	infix = fields.get("infix") ?? "no"
+	if infix == "yes" { add_infix_word(tables, word, target) }
 	if fields.get("declared") == "yes" { tables.declared += [target] }
 	power = if fields.has("power") then fields["power"].map(level => int(level)) else ø
 	if power != ø {
@@ -310,10 +312,11 @@ def add_alias_entry(tables: Spellings, word: text, fields: map) {
 	for spelling in fields.get("aliases") ?? [] {
 		tables.canonical[spelling] = word
 		if not is_name_start(spelling#1) { tables.operator_symbols += [[spelling, target]] }
-		else if written_infix { add_infix_word(tables, spelling, target) }
+		else if spelled_infix(infix, spelling) { add_infix_word(tables, spelling, target) }
 		if word in tables.forms { tables.forms[spelling] = tables.forms[word] }
 	}
 }
+def spelled_infix(infix: any, spelling: text): bool := if infix is list then infix.contains(spelling) else infix == "yes"
 def add_infix_word(tables: Spellings, word: text, target: text) {
 	tables.operator_words += [[word, target]]
 	tables.infix_words += [word]
@@ -549,9 +552,12 @@ def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 		if stray and p.group.grouped { break }
 		if stray { raise "`" + c + "` closes no group" }
 		before = p.at
-		signed = found and found#(found.length)#2 == Separator.Space and signed_item_at(p)
+		spaced = found and found#(found.length)#2 == Separator.Space
+		signed = spaced and signed_item_at(p)
+		pathed = spaced and at_char(p, '/') and starts_path(p)
 		item = if follows_clause_word(found) then header_expression(p, 0) else if heads_block(p, found) then head_item(p) else expression(p, 0)
 		if signed { item = spaced_sign_marked(p, p.code[previous_start ..< before].trim(), before, item) }
+		if pathed { item = attributed(PATH_AFTER_OPERAND_MARK, listed(Bracket.Square, Separator.Space, [p.code[previous_start ..< before].trim(), item]), item) }
 		previous_start = before
 		// `def f(x)` ending its line: its body the lines below, indented or a `{…}` opening the next line (Allman), as
 		// `if c` reads its own (card def-body-next-line); without one the header stays as it is
@@ -845,11 +851,18 @@ def grouped(pairs: list, bracket: Bracket): Node := {
 	}
 	if group.length > 0 { groups += [group] }
 	nodes = [if group.length == 1 and group#1#2 == Separator.None then group#1#1 else grouped(group, Bracket.None) for group in groups]
+	if bracket == Bracket.Curly { nodes = entries_spliced(nodes) }
 	if nodes.length == 1 and bracket == Bracket.None { return nodes#1 }
 	if split == Separator.Space { return phrase(bracket, nodes) }
 	if split == Separator.Comma { return comma_list(bracket, nodes) }
 	listed(bracket, split, nodes)
 }
+// `{ a: 1, b: 2 ⏎ c: 3 }`: commas, semicolons and lines all separate a block's entries, as in JSON5 (wiki/list.md); a
+// list's runs stay its rows, `[1, 2 ⏎ 3, 4]`
+def entries_spliced(nodes: list): list := if nodes.any(is_entry_run) and nodes.all(n => is_colon_entry(n) or is_entry_run(n)) then nodes.flat_map(run_entries) else nodes
+def run_entries(n: Node): list := if is_entry_run(n) then items_of(n).flat_map(run_entries) else [n]
+def is_colon_entry(n: Node): bool := is_key(n, Op.Colon)
+def is_entry_run(n: Node): bool := is_group(n) and bracket_of(n) == "" and separator_of(n) != " " and #n > 1 and items_of(n).all(item => is_colon_entry(item) or is_entry_run(item))
 
 // Words side by side; `print ord c` and `{ print ord c }` print the rest of the line as one value
 def phrase(bracket: Bracket, nodes: list): Node := {
@@ -1087,6 +1100,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				continue
 			}
 			if op#1 == "." and char_here(p) == "(" { raise dot_call_refused(left) }
+			glued = glued_at(p, operator_start, op#1)
 			skip_blanks(p)
 			if is_phrase_operator(op) {
 				left = phrase_operation(left, op#1, expression(p, powers#2))
@@ -1101,11 +1115,12 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				// rule's rest hole before a comprehension's clause, `[$e... for $x in $xs]` (card sugar-comprehensions)
 				left = keyed(op#2, left, ø)
 			} else {
-				right = if END_BLOCK_WORDS contains op#2 then end_block_operand(p, op#2, powers#2) else if (op#2 == "=" or op#2 == ":=") and block_head_at(p) then headed_phrase(p) else expression(p, powers#2)
+				right = if END_BLOCK_WORDS contains op#2 then end_block_operand(p, op#2, powers#2) else if (op#2 == "=" or op#2 == ":=") and block_head_at(p) then headed_phrase(p) else right_operand(p, powers#2, glued)
 				// `x(p: P) -> int := …`, Swift's and Rust's result arrow, is the typed head `x(p: P): int := …`
 				if op#2 == ":=" or op#2 == "=" { left = result_typed(left) }
 				operand = left
 				left = keyed(bit_operator(op#1, left, right, op#2), left, if op#2 == ":" then with_switch_cases(p, right) else right)
+				if spaced_operand_in_list(p, op#1, glued, right) { left = attributed(SPACED_OPERAND_MARK, listed(Bracket.Square, Separator.Space, [written_before(p, operand, operator_start), op#1, written_before(p, right, p.at)]), left) }
 				if unevenly_spaced(p, operator_start, op#1) { left = attributed(UNEVEN_SPACING_MARK, listed(Bracket.Square, Separator.Space, [written_before(p, operand, p.at), op#1, written_before(p, operand, operator_start), p.code[operator_start + op#1.length ..< p.at].trim()]), left) }
 				// `{f: x => x * 2}`: the field f holds the lambda; `f: (float) -> float` stays a typed name
 				if op#1 == "=>" { left = field_holding_lambda(left) }
@@ -1115,8 +1130,9 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 	left
 }
 
-// `3 & 5`, `a & 1`, `x | 4`: a single `&` or `|` between operands that may be whole numbers combines their bits, between
-// others it is and/or (`yes & no`, `a > 1 & b`, `int | text`); `xs | sort` stays an or, which may pipe; else `spelled`
+// `3 & 5`, `a & 1`: a single `&` between operands that may be whole numbers combines their bits, between others it is
+// and (`yes & no`, `a > 1 & b`); `|` is never the logical or (decision bar-never-or): bits of numbers, a pipe into a
+// function (`xs | sort`), a union of types (`int | text`), as the rules after the parse tell; else `spelled`
 // `x(p: P) -> int` before `:=` or `=`, a call's result arrow, as the typed head `x(p: P): int`; any other target as it is
 def result_typed(target: Node): Node := match target {
 	Key(head, Op.Arrow, result): { if calls_by_name(head) then Key(head, Op.Colon, result) else target }
@@ -1128,9 +1144,7 @@ def calls_by_name(n: Node): bool := match n {
 }
 
 def bit_operator(written: text, left: Node, right: Node, spelled: text): text {
-	if not (written == "&" or written == "|") or not may_be_whole_number(left) or not may_be_whole_number(right) { return spelled }
-	if written == "|" and right is symbol { return spelled }
-	written
+	if written == "|" or (written == "&" and may_be_whole_number(left) and may_be_whole_number(right)) then written else spelled
 }
 
 // A number, a name or an operation that may give a whole number: no float, text, list, type word, capitalized name,
@@ -1333,8 +1347,9 @@ def word_before(p: Parser): text {
 	p.code[start .. end]
 }
 
-// An infix word of lib/aliases.warp before a block names it: `div {…}` is the html tag, `7 div 2` divides
-def names_block(p: Parser, word: text): bool := alias_spellings().infix_words.contains(word) and opens_block(p, word.length)
+// An infix word of lib/aliases.warp before a block or right before `(` names a word: `div {…}` is the html tag,
+// `print add(2, 3)` calls add, `7 div 2` divides
+def names_word(p: Parser, word: text): bool := alias_spellings().infix_words.contains(word) and (opens_block(p, word.length) or char_ahead(p, word.length) == '(')
 // A block opens after the `width` characters at the parser's position and blanks: `div {…}` is the html tag
 def opens_block(p: Parser, width: int): bool {
 	char_at(p, blank_end(p, p.at + width)) == '{'
@@ -1387,6 +1402,8 @@ def operand_after(p: Parser, width: int): bool {
 // `or` up to `+` (not in an argument or a loop header) or with an argument that is no name, never before `for`
 def applies(p: Parser, left: Node, min_power: int): bool {
 	if min_power == 0 or min_power > 151 { return false }
+	// `[a+b c]`: a glued operator's operand ends at a blank (decision glued-binds-tighter)
+	if p.group.glued and p.at > 0 and is_blank(p.code[p.at - 1]) { return false }
 	// `do r += i end`: the `end` closing the block is no argument
 	if p.group.stops_at_end and keyword_at(p, "end") { return false }
 	// `ys = @parallel square all xs`: a word an attribute marks applies as the word itself
@@ -1557,6 +1574,14 @@ def spaced_sign_marked(p: Parser, before: text, sign_at: int, item: Node): Node 
 // `a *b`, `a* b`: an arithmetic or comparing operator spaced on one side only, which computes but reads as a sign or a
 // suffix; the analyzer warns (decision binary-operator-spacing, source_checks.warp uneven_spacing)
 def unevenly_spaced(p: Parser, at: int, glyph: text): bool := EVENLY_SPACED_OPERATORS contains glyph and at > 0 and is_blank(p.code[at - 1]) != is_blank(char_at(p, at + glyph.length))
+// `[a+b c]`: in a square list an arithmetic operator glued to both its operands joins them into one item, `[(a+b), c]`; its right operand
+// ends at a blank (decision glued-binds-tighter); precedence stays: `1+2 * 3` is 7
+def glued_at(p: Parser, at: int, glyph: text): bool := p.group.bracket == Bracket.Square and GLUED_OPERATORS contains glyph and at > 0 and not is_blank(p.code[at - 1]) and not is_blank(char_here(p))
+GLUED_OPERATORS = ["+", "-", "*", "/", "%", "^"]
+def right_operand(p: Parser, min_power: int, glued: bool): Node := if glued then with_field(p.group, "glued", yes, () => expression(p, min_power)) else expression(p, min_power)
+// `[a + b c]`: a spaced operator in a square list whose right operand is a phrase `b c`, which the analyzer refuses where
+// b is a value, naming both readings (source_checks.warp spaced_operand)
+def spaced_operand_in_list(p: Parser, glyph: text, glued: bool, right: Node): bool := not glued and p.group.bracket == Bracket.Square and GLUED_OPERATORS contains glyph and is_group(right) and bracket_of(right) == "" and separator_of(right) == " " and #right > 1 and right#1 is symbol
 EVENLY_SPACED_OPERATORS = ["*", "/", "%", "^", "==", "!=", "<", ">", "<=", ">="]
 // the source written from the node's place to the offset `end`, "" for a node of no place
 def written_before(p: Parser, n: Node, end: int): text := {
@@ -1661,7 +1686,7 @@ def operand_word_at_from(p: Parser, at: int): text {
 def spelled_operator_at(p: Parser): list {
 	c = char_here(p)
 	if is_name_start(c) {
-		if bang_word_at(p) > 0 or word_names_key(p, word_at(p)) { return [] }
+		if bang_word_at(p) > 0 or word_names_key(p, word_at(p)) or follows_naming_keyword(p) { return [] }
 		word = word_operator_at(p, c)
 		if word.length > 0 { return word }
 		if p.iterable and iterable_operator_at(p).length > 0 { return iterable_operator_at(p) }
@@ -1677,7 +1702,7 @@ def spelled_operator_at(p: Parser): list {
 def word_operator_at(p: Parser, c: text): list {
 	for pair in word_operators() {
 		written = pair#1
-		if written#1 == c and keyword_at(p, written) and not (p.group.in_branch and written == "else") and not names_block(p, written) and not heads_rule(p) { return pair }
+		if written#1 == c and keyword_at(p, written) and not (p.group.in_branch and written == "else") and not names_word(p, written) and not heads_rule(p) { return pair }
 	}
 	[]
 }
@@ -1688,6 +1713,10 @@ def heads_rule(p: Parser): bool {
 	while start > 0 and p.code[start - 1] != '\n' { start -= 1 }
 	p.code[start .. p.at].trim() == "rewrite"
 }
+// The parser's position is the name a function keyword defines: `def add(a, b)` defines add, never `def + (a, b)`;
+// `$f is function and …` goes on with its operator
+NAMING_KEYWORDS = function_keywords + ["override"]
+def follows_naming_keyword(p: Parser): bool := word_before(p) in NAMING_KEYWORDS and char_ahead(p, word_at(p).length) == '('
 // The operator symbol at the parser's position as [written, canonical], the longest, else []
 // (`c ?.5 : 1` keeps its ternary: `?.` before a digit is `?` and the number .5)
 def symbol_operator_at(p: Parser, c: text): list {
@@ -1756,8 +1785,10 @@ def blank_words(statement: text): list := statement.replace("\t", " ").split(" "
 // uses the module without its `use`); "classes", class → its module, `class Time` of units (decision
 // expected-type-names: a parameter typed Time finds its values there); "tags", tag → its module, each text of a global
 // list, `global html_elements = ["div", …]` of markup (decision html-render-mode: a program writing `div{…}` uses it);
-// "constants", constant → its module, `const pi() := π` of reals (decision library-constant-refused: `pi = 4` is refused)
+// "constants", constant → its module, `const pi() := π` of reals (decision library-constant-refused: `pi = 4` is refused);
+// "typed", a name assigned an instance of a class → that class, `km = Unit("km")` of units (a rule's `$u is Unit`)
 def global_words(): map := library_index_section("global")
+def library_typed_constants(): map := library_index_section("typed")
 def library_constants(): map := library_index_section("const")
 def declared_classes_modules(): map := library_index_section("class")
 def declarations_scanned(files: map): map {
@@ -1765,6 +1796,7 @@ def declarations_scanned(files: map): map {
 	classes = {}
 	tags = {}
 	constants = {}
+	assigned = []
 	for path in files.keys {
 		if not path.contains("/") and path.ends_with(module_extension) {
 			module = path[0 ..< #path - #module_extension]
@@ -1784,10 +1816,21 @@ def declarations_scanned(files: map): map {
 				}
 				if line.starts_with(CLASS_MARK) { classes[name_starting(line[#CLASS_MARK ..])] = module }
 				if line.starts_with(CONSTANT_MARK) { constants[name_starting(line[#CONSTANT_MARK ..])] = module }
+				instance = instance_constant(line)
+				if instance != ø { assigned += [instance] }
 			}
 		}
 	}
-	{"words": words, "classes": classes, "tags": tags, "constants": constants}
+	typed = {}
+	for instance in assigned { if classes.has(instance#2) { typed[instance#1] = instance#2 } }
+	{"words": words, "classes": classes, "tags": tags, "constants": constants, "typed": typed}
+}
+// a top-level line `km = Unit("km")`: [the name, the word called], else ø
+def instance_constant(line: text): list? {
+	sides = line.split(" = ")
+	if #sides < 2 or sides#1 == "" or sides#1.contains(" ") or is_blank(line[0]) { return ø }
+	called = name_starting(sides#2)
+	if called and sides#2[#called ..].starts_with("(") then [sides#1, called] else ø
 }
 def declared_tags(): map := library_index_section("tag")
 // the texts quoted in a line of a list, `"a", "b",` → ["a", "b"]: every other piece between its quotes
@@ -1820,17 +1863,17 @@ def used_module_sources(source: text): list := module_sources(reached_modules(so
 // the standard modules a source uses by name or reaches by one of their global words
 def reached_modules(source: text): list {
 	modules = used_modules(source)
-	code = code_only(source)
+	names = names_mentioned(code_only(source))
 	words = global_words()
 	for word in words.keys {
-		if not modules.contains(words[word]) and mentions_word(code, word) { modules += [words[word]] }
+		if not modules.contains(words[word]) and names.has(word) { modules += [words[word]] }
 	}
 	modules
 }
 def module_sources(modules: list): list {
 	sources = []
 	for module in modules {
-		module_source = file_source(run_library() + "/" + module + ".warp") ?? ""
+		module_source = std_module_text(module)
 		if module_source { sources += [module_source] }
 	}
 	sources
@@ -1840,33 +1883,31 @@ def used_modules(source: text): list {
 	modules = []
 	for statement in code_statements(use_candidates(source)) {
 		words = blank_words(statement)
-		if words.length == 2 and USE_KEYWORDS.contains(words#1) and not modules.contains(words#2) { modules += [words#2] }
+		module = if words.length == 2 and USE_KEYWORDS.contains(words#1) then words#2 else if words.length >= 4 and words#1 == FROM_WORD and words#3 == "import" then words#2 else ""
+		if module != "" and not modules.contains(module) { modules += [module] }
 	}
 	modules
 }
+// `from list import zip` uses list as `use list` does (core/passes/uses.warp with_imports_as_uses)
+FROM_WORD = "from"
 // the lines of a source a use statement may start or stand in: one leads a line, unindented, or follows a `;` (the
 // statements of all the prelude were ~20 ms a compile)
-def use_candidates(source: text): text := source.split("\n").filter(line => USE_KEYWORDS.any(keyword => line.starts_with(keyword + " ") or line.contains("; " + keyword + " "))).join("\n")
+def use_candidates(source: text): text := source.split("\n").filter(line => (USE_KEYWORDS + [FROM_WORD]).any(keyword => line.starts_with(keyword + " ") or line.contains("; " + keyword + " "))).join("\n")
 // the use lines of a source, as a slice of it reads them (written_tree's `uses`)
 def use_lines(source: text): text := used_modules(source).map(module => "\nuse " + module).join("")
-// whether the code names the word, not as a part of a longer name: `play` in `play(A4)`, not in `display`; glued to a
-// number it is its own (`km` in `3km`, a number times km), as no name starts with a digit
-def mentions_word(code: text, word: text): bool {
-	parts = code.split(word)
-	i = 1
-	while i < #parts {
-		before = parts#i
-		after = parts#(i + 1)
-		if not ends_in_name(before) and (#after == 0 or not is_name_char(after[0])) { return yes }
-		i += 1
+// the names the code says, found in one walk (a caller asking of many words asks this once), each as a whole name:
+// `play` of `play(A4)`, no `play` of `display`; each run of name characters starting a name, and every end of a run
+// glued to a number, as no name starts with a digit (`km` of `3km`, a number times km)
+def names_mentioned(code: text): map {
+	names = {}
+	run = ""
+	for c in code + " " {
+		if is_name_char(c) { run += c } else {
+			if #run > 0 and is_name_start(run[0]) { names[run] = yes } else if #run > 1 { for start in 1 ..< #run { names[run[start ..]] = yes } }
+			run = ""
+		}
 	}
-	no
-}
-// whether the text ends in a name, its last run of name characters starting as a name does, not as a number (`3`)
-def ends_in_name(t: text): bool {
-	start = #t
-	while start > 0 and is_name_char(t[start - 1]) { start -= 1 }
-	start < #t and is_name_start(t[start])
+	names
 }
 
 // The statements of a source's code, outside comments and texts, split at line ends and `;`
@@ -2217,6 +2258,8 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 	}
 	if c == '!' or c == '¬' {
 		advance(p)
+		# `as! int` is `as` of `!int`: the type may be a word after a blank (decision cast-checks)
+		skip_spaces(p)
 		return Key(ø, Op.Not, expression(p, 105))
 	}
 	if c == '#' and not is_blank(next) {
@@ -2766,7 +2809,7 @@ def line_at(p: Parser, at: int): int {
 }
 
 // the type words naming a kind of number, `number` itself not
-NUMBER_TYPE_WORDS = ["int", "integer", "long", "i64", "i32", "rational", "real", "exact", "float", "double", "f64", "f32", "float32", "float64", "fast"]
+NUMBER_TYPE_WORDS = ["int", "integer", "long", "i64", "i32", "rational", "real", "exact", "precise", "float", "double", "f64", "f32", "float32", "float64", "fast"]
 // the number a literal was written as: a float with a point or an exponent, else an int
 def written_number(written: text): Node := if written.contains(".") or written.contains("e") then float(written) else whole_number(written)
 // the int a literal's digits write; beyond 64 bits, `1e20` and `100000000000000000000`, the number view of its digits,
@@ -2916,8 +2959,8 @@ def url_text(p: Parser, scheme: text): text {
 }
 
 // A file path without quotes starts here, glued to what follows and not to an operand before it: `./a.wav`,
-// `../songs/a.wav`, `./` alone, `~/notes.txt`, `/etc/hosts` where no operand stands before it (`x = /tmp`, `[/a, /b]`);
-// after an operand `/` divides (`width /height`). `ls /tmp`, a path after a word taking one, waits for card path-words
+// `../songs/a.wav`, `./` alone, `~/notes.txt`, `/etc/hosts` (`x = /tmp`, `[/a, /b]`); after an operand too, by its
+// spacing (decision path-after-operand): `show /tmp` is show(/tmp), while `a / b`, `a/b` and `x /2` divide
 def starts_path(p: Parser): bool := starts_path_at(p, p.at)
 
 def starts_path_at(p: Parser, at: int): bool {
@@ -2930,7 +2973,7 @@ def starts_path_at(p: Parser, at: int): bool {
 	}
 	// `cd ~` alone; `a ~ b` stays the comparison
 	if c == '~' { return char_at(p, at + 1) == '/' or not operand_follows_at(p, at + 1) }
-	if c == '/' { return starts_path_name(char_at(p, at + 1)) and not operand_before(p, at) }
+	if c == '/' { return starts_path_name(char_at(p, at + 1)) }
 	false
 }
 
@@ -2946,13 +2989,6 @@ def path_literal(p: Parser): text {
 def is_operand_end(c: text): bool := is_name_char(c) or c == ')' or c == ']' or c == '}' or c == '"' or c == '\'' or c == '»'
 def ends_path(c: text): bool := is_blank(c) or c == ']' or c == ')' or c == '}' or c == ',' or c == ';'
 def starts_path_name(c: text): bool := is_name_start(c) or c == '.'
-
-// Whether an operand ends before the blanks before `start`
-def operand_before(p: Parser, start: int): bool {
-	at = start - 1
-	while at >= 0 and (p.code[at] == ' ' or p.code[at] == '\t') { at -= 1 }
-	at >= 0 and is_operand_end(p.code[at])
-}
 
 // `2x` is 2*x, `500ms` is 500*ms, `3(4)` is 3*(4): a name or `(` glued to a number multiplies it; ordinals `1st` do not
 def with_glued_factor(p: Parser, amount: Node): Node := {

@@ -58,7 +58,41 @@ function withoutClassTags(value, classes) {
 function regexOf(pattern, flags = "") {
 	const feature = /\(\?<?[=!]/.test(pattern) ? "look-around" : /\\[1-9]/.test(pattern) ? "a backreference" : null;
 	if (feature) throw new Error(`${feature} is not in warp's regex (one engine lacks it): ${pattern}`);
-	return new RegExp(pattern, flags + "u");
+	return new RegExp(posixInJs(pattern), flags + "u");
+}
+// POSIX's named classes (the native engine is regcomp's extended syntax, driver.warp regex_answered) as JavaScript's
+// ranges, in the C locale
+const POSIX_CLASSES = {
+	alpha: "a-zA-Z", digit: "0-9", alnum: "a-zA-Z0-9", upper: "A-Z", lower: "a-z", space: "\\s", blank: " \\t",
+	xdigit: "0-9A-Fa-f", punct: "!-\\/:-@\\[-`{-~", cntrl: "\\x00-\\x1f\\x7f", print: "\\x20-\\x7e", graph: "\\x21-\\x7e",
+	word: "\\w",
+};
+// a pattern as the native engine reads it, in JavaScript's spelling (card samples-page-apps). Inside a bracket class:
+// a `]` first in it is a literal one (`[^]]`, which JavaScript reads as `[^]` and a stray `]`), a `[` a literal one
+// (`[^[]`), `[:alpha:]` a named class; the escapes JavaScript and the macOS engine share stay as written
+function posixInJs(pattern) {
+	let out = "", inside = false;
+	for (let at = 0; at < pattern.length; at++) {
+		const c = pattern[at];
+		if (c === "\\") { out += c + (pattern[++at] ?? ""); continue; }
+		if (!inside) {
+			out += c;
+			if (c !== "[") continue;
+			inside = true;
+			if (pattern[at + 1] === "^") out += pattern[++at];
+			if (pattern[at + 1] === "]") { out += "\\]"; at++; }
+		} else if (c === "]") {
+			out += c;
+			inside = false;
+		} else if (c === "[" && pattern[at + 1] === ":") {
+			const end = pattern.indexOf(":]", at + 2);
+			const named = end < 0 ? undefined : POSIX_CLASSES[pattern.slice(at + 2, end)];
+			if (named === undefined) throw new Error(`no such class in warp's regex: ${pattern.slice(at, end < 0 ? undefined : end + 2)}`);
+			out += named;
+			at = end + 1;
+		} else out += c === "[" ? "\\[" : c;
+	}
+	return out;
 }
 
 // JSON5 as JSON (card json5-parse): 'single quoted' texts, comments, trailing commas, bare keys; src/node/json_xml.rs's
@@ -76,26 +110,9 @@ const finiteForJson = (key, value) => {
 	if (typeof value === "number" && !Number.isFinite(value)) throw new Error(`JSON has no ${value}: it cannot be written as JSON`);
 	return typeof value === "bigint" ? JSON.rawJSON(String(value)) : value;
 };
-// the numerator and denominator of the first fraction among the arguments as read without decimal digits, ["1", "3"],
-// which JSON writes only as its float; 0.1 and 19.99 are decimal, so exact (as src/node/json_xml.rs inexact_in_json)
-const hasDecimalDigits = denominator => [2n, 5n].reduce((rest, factor) => { while (rest % factor === 0n) rest /= factor; return rest; }, denominator < 0n ? -denominator : denominator) === 1n;
-const firstFraction = tree => {
-	const ratio = tree?.data?.ratio?.map(part => BigInt(part.int ?? integerOfPayload(part)));
-	if (ratio && !hasDecimalDigits(ratio[1])) return ratio.map(String);
-	for (const part of [tree?.data?.node, ...(tree?.chain ?? [])]) {
-		const found = part && firstFraction(part);
-		if (found) return found;
-	}
-};
-// to_json warns of a fraction's loss, exact_json (to_json under `use strict`) refuses it
-function jsonText(value, classes, exact) {
-	const text = JSON.stringify(classes ? withoutClassTags(value, new Set(classes)) : value, finiteForJson);
-	const fraction = firstFraction(this.tree);
-	if (!fraction) return text;
-	const [numerator, denominator] = fraction;
-	if (exact) throw new Error(`JSON has no exact ${numerator}/${denominator}: it cannot be written as JSON exactly`);
-	this.warn(`JSON has no exact ${numerator}/${denominator}: it is written as the float ${Number(numerator) / Number(denominator)}`);
-	return text;
+// the arguments come as shown (values.js guestPlain): a fraction as its float
+function jsonText(value, classes) {
+	return JSON.stringify(classes ? withoutClassTags(value, new Set(classes)) : value, finiteForJson);
 }
 
 addHostPart({
@@ -104,7 +121,7 @@ addHostPart({
 	}),
 	adapters: {
 		hash: { sha256: subject => sha256Hex(hashedBytes(subject)), crc32: subject => crc32Of(hashedBytes(subject)) },
-		json: { parse: jsonOrJson5, to_json(value, classes) { return jsonText.call(this, value, classes, false); }, exact_json(value, classes) { return jsonText.call(this, value, classes, true); } },
+		json: { parse: jsonOrJson5, to_json: jsonText, exact_json: jsonText },
 		regex: {
 			matches: (subject, pattern) => regexOf(pattern).test(subject),
 			first: (subject, pattern) => subject.match(regexOf(pattern))?.[0] ?? null,

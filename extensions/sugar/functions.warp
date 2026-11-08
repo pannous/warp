@@ -2,6 +2,10 @@
 # passes): `def f(x) := e`, `def f(x) = e`, `def f(x) { body }`, `def f(x): T { body }` and
 # `def f(x) -> T { body }` (Swift's and Rust's result arrow), `def f(x) as T { body }` are the definitions
 # `f(x) := e` and `f(x): T := { body }`; fun, fn, define, function and func are def (words.warp function_keywords)
+# Swift's extension, `extension Int { func squared() -> Int { self * self } }`: each method a function whose first
+# parameter `self` is of that type, as Kotlin's extension function below (rules go bottom-up: each `func` member is a
+# definition already)
+rewrite extension $T {$members...} => (($h(self: $T, $p...): $t := {$b...}) for ($h($p...): $t := {$b...}) in $members...)
 rewrite (fun $d) => def $d
 rewrite (fn $d) => def $d
 rewrite (define $d) => def $d
@@ -10,6 +14,7 @@ rewrite (func $d) => def $d
 # Kotlin's extension function, `fun Int.twice() = this * 2`: a function whose first parameter `this` is of that type,
 # so `3.twice()` calls it as `twice(3)` does
 rewrite (def $T.$f($p...) = $e) => ($f(this: $T, $p...) := $e)
+rewrite (def $T.$f($p...): $t = $e) => ($f(this: $T, $p...): $t := $e)
 rewrite (def $T.$f($p...): $t {$b...}) => ($f(this: $T, $p...): $t := {$b...})
 rewrite (def $T.$f($p...) {$b...}) => ($f(this: $T, $p...) := {$b...})
 rewrite (def $h($p...): $t {$b...}) => ($h($p...): $t := {$b...})
@@ -26,6 +31,8 @@ rewrite def $h($p...) {$b...} => ($h($p...) := {$b...})
 # Python's colon before the lines indented below, `def f(x):` (or none, `def f(x)`), which the parser reads as the pair
 # f(x): {body}
 rewrite (def $h($p...): {$b...}) => ($h($p...) := {$b...})
+# Ruby's endless method, `def twice = x * 2`, is the function (in a class body the method) `twice := x * 2`
+rewrite (def $h = $e) => ($h := $e) where $h is symbol
 rewrite (def $d) => $d
 # `square of number = it * it` (wiki/function.md, inventions.md "Of keyword"), also `square of a number`: the
 # bracket-less `square(it: number) := it * it`, a variant of each type it is defined of

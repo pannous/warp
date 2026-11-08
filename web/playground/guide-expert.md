@@ -137,6 +137,7 @@ for i in 1 to 3 { print i }; n = 0; while n < 3 { n += 1 }; n
 ## Functions
 
 `def f(x) = …`, calls without parentheses, `:=` with the implicit parameter `it`, recursion.
+`parse(text)` is the compiler's own parser, written in warp: code as a tree for `match … data($a + $b)`.
 
 ```warp => [55 42]
 def fib(n) = if n < 2 then n else fib(n - 1) + fib(n - 2); twice := it * 2; [fib 10, twice 21]
@@ -215,7 +216,13 @@ Routes answer requests; `warp serve` serves them, `warp deploy` deploys them (Cl
 
 ## Pictures
 
-`use draw` keeps a pixel canvas that `show()` paints; WGSL shaders color every pixel on the GPU (WebGPU in the page).
+`use draw` keeps a pixel canvas that `show()` paints.
+
+## Shaders
+
+`paint(f, width, height)` compiles a warp function of (x, y) returning [r, g, b] to a WGSL fragment shader
+(`shader_of(f)` shows it); `shader { … }` is WGSL written in place, `$name` a warp variable read at each paint;
+`compute_toy(shader { … })` of `use compute_toys` runs a compute.toys kernel. WebGPU in the page.
 
 ## Acceleration
 

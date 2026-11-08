@@ -1,0 +1,9 @@
+# `with object do … end` (wiki/with.md, card with-do-block): the statements of the block address the object, so a word
+# taking a typed value (a method of the object's class, a typed library word) is called on it: `stroke` is
+# `context.stroke()`, `move n` is `context.move(n)`; any other statement, `print n`, `x = 3`, stays as written.
+# Each statement goes through `with(object, statement)`, its rules below: a sugar module's rules load for a program
+# mentioning their first word, so all of them start with `with`
+rewrite (with $x do {$statements...}) => {$t = $x; with($t, $s) for $s in $statements...}
+rewrite with($o, $f) => $o.$f() where $f is symbol and $f takes value
+rewrite with($o, $f $a...) => $o.$f($a...) where $f is symbol and $f takes value
+rewrite with($o, $s) => $s

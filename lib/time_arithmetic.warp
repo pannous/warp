@@ -8,7 +8,7 @@
 # (passes/prelude_words.warp). The calendar is plain integers here: a time is its form and position, a duration its
 # month, day and nanosecond counts. Its names stay clear of the runtime's times.warp and durations.warp words and
 # of the unit words (days, months, hours …), which the lowering reads as durations.
-# Zoned times are refused here (their wall clock needs card time-zones-warp).
+# A zoned time moves on its zone's wall clock by a calendar part, on its instant by an exact one (RFC 5545).
 use time
 
 nanos_per_day = 86400000000000
@@ -21,7 +21,6 @@ no_time_of_day = "a date has no time of day: add that duration to a local time"
 no_calendar = "an instant has no calendar: place it in a zone before adding months or days"
 clock_without_calendar = "a time of day has no calendar: add months or days to a local time"
 no_such_day = "the day does not exist in that month: use add(…, overflow: clamp) for the last day of the month"
-no_zones = "a zoned time at run time needs the time zone functions"
 mismatched = "cannot subtract a date, a local time, an instant and a zoned time from each other: no implicit conversion between kinds of time"
 not_arithmetic = "a time takes + or - a duration, a duration takes + or - a duration and * a whole number: nothing else is arithmetic on times"
 too_long = "a duration of 2^31 days (5.8 million years) or 2^20 months (87000 years) or more does not fit a time"
@@ -47,10 +46,11 @@ class Span {
 }
 
 # a time of any form but Duration: its position is nanoseconds (Instant, Local, Zoned since 1970, Clock since
-# midnight) or days since 1970 (Date)
+# midnight) or days since 1970 (Date); a zoned one's zone its index in lib/time.warp time_zones
 class Moment {
 	form: TimeForm
 	position: int
+	zone: int = -1
 }
 
 # an operand of + - *: a time, a duration or a whole number
@@ -68,7 +68,7 @@ day_and_nanos(moment: Moment): list := if moment.form == TimeForm.Date then [mom
 # `moment + span`, the span already signed: calendar.rs `Time.add`. The month count first, then the days: 2024-01-31
 # + 1 month is refused, + 1 month 2 days too (no 2024-02-31 to add the days to)
 shift_time(moment: Moment, span: Span): Moment := match moment.form {
-	TimeForm.Zoned => raise no_zones
+	TimeForm.Zoned => shift_zoned(moment, span)
 	TimeForm.Instant => {
 		if span.has_calendar_parts() { raise no_calendar }
 		Moment(moment.form, moment.position + span.nano_count)
@@ -90,6 +90,17 @@ shift_time(moment: Moment, span: Span): Moment := match moment.form {
 		# a date's position is its day, a local time's the nanoseconds since 1970 as if UTC
 		if moment.form == TimeForm.Date then Moment(moment.form, epoch_day) else Moment(moment.form, epoch_day * nanos_per_day + parts#2 + span.nano_count)
 	}
+}
+
+# `z + 1 day` keeps the wall clock across a clock change, `z + 24 hours` the elapsed time: the calendar part moves
+# the wall clock, resolved in the zone as a calendar shift lands (compatible_instant), then the exact part the instant
+shift_zoned(moment: Moment, span: Span): Moment := {
+	zone = time_zones#(moment.zone + 1)
+	seconds = floor_split(moment.position, nanos_per_second)
+	wall = Moment(TimeForm.Local, (seconds#1 + zone_offset(zone, seconds#1)) * nanos_per_second)
+	shifted = shift_time(wall, Span(span.month_count, span.day_count, 0))
+	instant = compatible_instant(zone, shifted.position /! nanos_per_second) * nanos_per_second + seconds#2
+	Moment(TimeForm.Zoned, instant + span.nano_count, moment.zone)
 }
 
 # `a - b` of two times of one form: the days between dates, else an exact duration
@@ -164,30 +175,37 @@ duration_form_code = 3
 info_days = 8
 info_day_range = 4294967296
 info_months = 34359738368
+# the zone indexes a zoned time's info holds (8 bits)
+zone_index_range = 256
 # the signed range of a duration's days (32 bits) and months (the 21 bits above them, to the top of the kind word)
 day_limit = 2147483648
 month_limit = 1048576
 # `a + b`, `a - b`, `a * b` (operator 0, 1, 2) of two run-time operands, each its form code (-1 a whole number, its
 # position the number), position, months and days: the time node or whole number they make
 # an operand of a time's + - * the emitter holds as a node, before its parts are read: a time, a duration or a whole
-# number as it is; a quantity of lib/units the duration it lasts by its milliseconds (milliseconds_of, as it moves lib/time's
-# Instant): `2024-01-31T10:00 + 1 h`
+# number as it is; a quantity of lib/units the duration it lasts, by the Duration it converts to (as it moves lib/time's
+# Instant): `2024-01-31T10:00 + 1 h`. Its milliseconds are a float (`24 h` is 86400000.0 ms): a duration counts whole nanoseconds,
+# so they are rounded to the nearest one
 time_operand(x: any) := {
 	if x is number and not (x is int) { raise not_arithmetic }
-	milliseconds = milliseconds_of(x)
-	if milliseconds is number and not (x is number) then lasting_nanos(milliseconds * 1000000) else x
+	if x is int then x else lasting_of(x)
 }
+# a Duration as the exact duration it lasts; a value converting to one too, any other, a time, as it is
+lasting_of(d: Duration or any) := if d is Duration then lasting_nanos(round(d.ms * 1000000) as int) else d
 # the exact duration of nanoseconds, as a quantity of time moves a time
 lasting_nanos(nanos: int) := time_of(duration_form_code, nanos)
 time_operation(a_form: int, a_position: int, a_months: int, a_days: int, b_form: int, b_position: int, b_months: int, b_days: int, operator: int) := operand_value(time_arithmetic(operand_of(a_form, a_position, a_months, a_days), operand_of(b_form, b_position, b_months, b_days), time_operator(operator)))
 operand_of(form: int, position: int, months: int, days: int): Operand := {
 	if form < 0 { return Whole(position) }
 	if form == duration_form_code { return Lasting(Span(months, days, position)) }
+	# a zoned time's info above its form, read as a duration's days: its zone's index, its offset above that
+	if form == zoned_form { return At(Moment(TimeForm.Zoned, position, floor_split(days, zone_index_range)#2)) }
 	At(Moment(form_of(form), position))
 }
 operand_value(operand: Operand) := {
 	if operand is Whole { return operand.count }
 	if operand is Lasting { return duration_value(operand.span) }
+	if operand.moment.form == TimeForm.Zoned { return zoned_at(operand.moment.zone, operand.moment.position) }
 	time_of(form_code(operand.moment.form), operand.moment.position)
 }
 # a duration made at run time beyond its info bits raises, never wraps

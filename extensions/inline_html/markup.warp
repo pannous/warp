@@ -1,0 +1,203 @@
+# Inline HTML as warp markup (decision jsx): the reading extensions/inline_html.warp's source pass and warp format
+# (lib/fix) share, on the code points of a source, with the lexer's words (core/parsing/lexer.warp: the compiler has
+# them, lib/fix uses them)
+
+ELEMENT_OPEN = '<'
+ELEMENT_CLOSE = '>'
+HOLE_OPEN = '{'
+HOLE_CLOSE = '}'
+SELF_CLOSE = "/>"
+END_TAG = "</"
+EXPRESSION_STARTS = ['=', '(', '[', '{', ',', ':', '>', '\n']
+EXPRESSION_START_WORDS = ["return", "then", "else"]
+NAME_PUNCTUATION = ['-', '_', ':', '.']
+HANDLER_PREFIX = "on"
+TRUE_WORD = "yes"
+NO_PARAMETERS = "()"
+IGNORED_PARAMETER = "_"
+# [the source with each inline element as markup, no shifts, [[tag, [line, column]] of each element]]
+markup_of_inline_html(source: text, lines_kept: bool = yes): list := {
+	if not source.contains(END_TAG) and not source.contains(SELF_CLOSE) { return [source, [], []] }
+	points = code_points(source)
+	n = points.length
+	parts = []
+	found = []
+	copied = 0
+	at = 0
+	while at < n {
+		skipped = span_end(points, at, n)
+		read = if skipped == at and points[at] == ELEMENT_OPEN and starts_expression(points, at) then element_read(points, at, n, lines_kept) else ø
+		if skipped > at { at = skipped }
+		else if read == ø { at += 1 }
+		else {
+			parts += [points_text(points, copied, at), read#1]
+			found += [[read#3, place_of(points, at)]]
+			at = read#2
+			copied = at
+		}
+	}
+	[join(parts + [points_text(points, copied, n)], ""), [], found]
+}
+
+# whether the `<` at `at` starts an expression: a letter glued after it, before it only blanks back to a start
+starts_expression(points: list, at: int): bool := {
+	if not is_alpha(peek(points, at + 1, points.length)) { return no }
+	before = at - 1
+	while before >= 0 and (points[before] == ' ' or points[before] == '\t') { before -= 1 }
+	if before < 0 or points[before] in EXPRESSION_STARTS { return yes }
+	word_ending_at(points, before) in EXPRESSION_START_WORDS
+}
+# the word of letters ending at index `end`
+word_ending_at(points: list, end: int): text := {
+	start = end
+	while start >= 0 and is_alpha(points[start]) { start -= 1 }
+	points_text(points, start + 1, end + 1)
+}
+
+# [the markup of the element at `at`, the index after it, its tag], ø where no element closes there
+element_read(points: list, at: int, n: int, lines_kept: bool): list? := {
+	name_end = tag_name_end(points, at + 1, n)
+	tag = points_text(points, at + 1, name_end)
+	items = []
+	cursor = name_end
+	while yes {
+		cursor = whitespace_end(points, cursor, n)
+		if cursor >= n { return ø }
+		if starts_at(points, SELF_CLOSE, cursor, n) { return element_written(points, at, cursor + 2, tag, items, lines_kept) }
+		if points[cursor] == ELEMENT_CLOSE { break }
+		attribute = attribute_read(points, cursor, n)
+		if attribute == ø { return ø }
+		items += [attribute#1]
+		cursor = attribute#2
+	}
+	children = children_read(points, cursor + 1, n, tag, lines_kept)
+	if children == ø then ø else element_written(points, at, children#2, tag, items + children#1, lines_kept)
+}
+# [the markup of the element written from `from` to `to`, `to`, its tag]: `tag{ a, b }`, `tag{}` for none, with the
+# newlines its texts and tags took before its `}` where the lines are kept (the compiler), so the lines after it stay
+element_written(points: list, from: int, to: int, tag: text, items: list, lines_kept: bool): list := {
+	markup = if items.length == 0 then tag + "{" else tag + "{ " + join(items, ", ")
+	missing = if not lines_kept then 0 else newlines_in(points[from ..< to]) - newlines_in(code_points(markup))
+	closing = if items.length == 0 or missing > 0 then "}" else " }"
+	while missing > 0 {
+		closing = "\n" + closing
+		missing -= 1
+	}
+	[markup + closing, to, tag]
+}
+newlines_in(points: list): int := points.filter(c => c == '\n').length
+
+tag_name_end(points: list, from: int, n: int): int := {
+	at = from
+	while at < n and (is_alphanumeric(points[at]) or points[at] in NAME_PUNCTUATION) { at += 1 }
+	at
+}
+whitespace_end(points: list, from: int, n: int): int := {
+	at = from
+	while at < n and is_blank(points[at]) { at += 1 }
+	at
+}
+
+# [`name: value`, the index after it] of the attribute at `at`, ø where none is
+attribute_read(points: list, at: int, n: int): list? := {
+	end = tag_name_end(points, at, n)
+	if end == at { return ø }
+	name = attribute_name(points_text(points, at, end))
+	if peek(points, end, n) != '=' { return [name + ": " + TRUE_WORD, end] }
+	value_at = end + 1
+	quote = peek(points, value_at, n)
+	if quote == '"' or quote == '\'' {
+		closed = quoted_end(points, value_at + 1, quote, n)
+		return [name + ": " + warp_text(points_text(points, value_at + 1, closed - 1)), closed]
+	}
+	if quote != HOLE_OPEN { return ø }
+	hole = hole_end(points, value_at, n)
+	if hole == ø then ø else [name + ": (" + handler_code(name, points_text(points, value_at + 1, hole - 1).trim()) + ")", hole]
+}
+# a handler's `() => …` as `_ => …`: lib/markup.warp hands a handler the event
+handler_code(name: text, code: text): text := if name.starts_with(HANDLER_PREFIX) and code.starts_with(NO_PARAMETERS) then IGNORED_PARAMETER + code[NO_PARAMETERS.length ..] else code
+# `onClick` → `onclick`, the handler attribute lib/markup.warp knows; any other name as written
+attribute_name(name: text): text := if name.starts_with(HANDLER_PREFIX) and name.length > 2 and name[2].lower() != name[2] then name.lower() else name
+
+# the index after the `}` closing the hole at `at`, its texts, comments and nested braces skipped; ø where none does
+hole_end(points: list, at: int, n: int): int? := {
+	depth = 0
+	cursor = at
+	while cursor < n {
+		skipped = span_end(points, cursor, n)
+		if skipped > cursor { cursor = skipped } else {
+			c = points[cursor]
+			if c == HOLE_OPEN { depth += 1 }
+			if c == HOLE_CLOSE { depth -= 1 }
+			cursor += 1
+			if depth == 0 { return cursor }
+		}
+	}
+	ø
+}
+
+# [the children's markup items, the index after `</tag>`], ø where the element never closes
+children_read(points: list, at: int, n: int, tag: text, lines_kept: bool): list? := {
+	items = []
+	written = at
+	cursor = at
+	while cursor < n {
+		c = points[cursor]
+		next = peek(points, cursor + 1, n)
+		if c == ELEMENT_OPEN and next == '/' {
+			end = tag_name_end(points, cursor + 2, n)
+			if points_text(points, cursor + 2, end) != tag or peek(points, end, n) != ELEMENT_CLOSE { return ø }
+			return [with_text(items, points, written, cursor), end + 1]
+		}
+		child = if c == ELEMENT_OPEN and is_alpha(next) then child_element_read(points, cursor, n, lines_kept) else if c == HOLE_OPEN then hole_read(points, cursor, n) else []
+		if child == ø { return ø }
+		if child == [] { cursor += 1 } else {
+			items = with_text(items, points, written, cursor) + child[0 ..< child.length - 1]
+			cursor = child#(child.length)
+			written = cursor
+		}
+	}
+	ø
+}
+# [the markup of the child element at `at`, the index after it], ø where it never closes
+child_element_read(points: list, at: int, n: int, lines_kept: bool): list? := {
+	element = element_read(points, at, n, lines_kept)
+	if element == ø then ø else element[0 ..< 2]
+}
+# [the item of the hole `{expr}` at `at` (none for `{}` or `{/* a comment */}`), the index after it], ø where it never
+# closes
+hole_read(points: list, at: int, n: int): list? := {
+	end = hole_end(points, at, n)
+	if end == ø { return ø }
+	code = points_text(points, at + 1, end - 1).trim()
+	if code == "" or (code.starts_with("/*") and code.ends_with("*/")) then [end] else ["(" + code + ")", end]
+}
+# the items with the text written from `from` to `to`, as JSX shows it: each line trimmed but where it meets the item
+# before or after on its own line, blank lines dropped, the rest joined by a space
+with_text(items: list, points: list, from: int, to: int): list := {
+	kept = []
+	line_start = from
+	while line_start <= to {
+		line_end = index_of(points, "\n", line_start, to)
+		first = if line_start > from then whitespace_end(points, line_start, line_end) else line_start
+		end = line_end
+		if line_end < to { while end > first and is_blank(points[end - 1]) { end -= 1 } }
+		if whitespace_end(points, first, end) < end { kept += [points_text(points, first, end)] }
+		line_start = line_end + 1
+	}
+	if kept.length == 0 then items else items + [warp_text(join(kept, " "))]
+}
+# a warp text of the characters, its quotes and backslashes escaped
+warp_text(characters: text): text := "\"" + characters.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
+# [line, column] of `at`, both from 1
+place_of(points: list, at: int): list := {
+	line = 1
+	column = 1
+	for k in 0 ..< at {
+		if points[k] == '\n' { line += 1; column = 1 } else { column += 1 }
+	}
+	[line, column]
+}
+
+points_text(points: list, from: int, to: int): text := join(points[from ..< to], "")

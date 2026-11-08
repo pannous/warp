@@ -97,11 +97,21 @@ json_after_item(source: text, at: int, closing: text): int := {
 	if at <= #source and source#at != closing { raise json_refusal(source, "no , or " + closing + " after an item") }
 	at
 }
+// the place after a run of characters that need no escape handling inside a quoted text
+json_scan_plain(source: text, at: int, quote: text): int := {
+	while at <= #source and source#at != quote and source#at != "\\" { at += 1 }
+	at
+}
+// skip a leading + or - of a number text
+json_skip_sign(digits: text, at: int): int := {
+	if at <= #digits and (digits#at == "-" or digits#at == "+") { at += 1 }
+	at
+}
 // a run of plain characters joins the text as one slice, not character by character (card lib-perf-bench)
 json_text_read(source: text, at: int, quote: text): list := {
 	// no-escape fast path: one slice, no builder (card lib-json-read-perf)
 	start0 = at
-	while at <= #source and source#at != quote and source#at != "\\" { at += 1 }
+	at = json_scan_plain(source, at, quote)
 	if at <= #source and source#at == quote { return [source[start0 - 1..<at - 1], at + 1] }
 	read = source[start0 - 1..<at - 1]
 	while at <= #source and source#at != quote {
@@ -120,7 +130,7 @@ json_text_read(source: text, at: int, quote: text): list := {
 			}
 		} else {
 			start = at
-			while at <= #source and source#at != quote and source#at != "\\" { at += 1 }
+			at = json_scan_plain(source, at, quote)
 			read += source[start - 1..<at - 1]
 		}
 	}
@@ -158,7 +168,7 @@ json_number_read(source: text, at: int): list := {
 json_number_valid(digits: text): bool := {
 	at = 1
 	n = #digits
-	if at <= n and (digits#at == "-" or digits#at == "+") { at += 1 }
+	at = json_skip_sign(digits, at)
 	whole = at
 	while at <= n and is_digit(digits#at) { at += 1 }
 	if at - whole > 1 and digits#whole == "0" { return no }
@@ -172,7 +182,7 @@ json_number_valid(digits: text): bool := {
 	if not some { return no }
 	if at <= n and (digits#at == "e" or digits#at == "E") {
 		at += 1
-		if at <= n and (digits#at == "-" or digits#at == "+") { at += 1 }
+		at = json_skip_sign(digits, at)
 		exponent = at
 		while at <= n and is_digit(digits#at) { at += 1 }
 		if at == exponent { return no }
@@ -317,3 +327,44 @@ json_list(n: any, written: function): text := {
 	}
 	json_object(entries)
 }
+
+// parse(text, T) of a class T the program declares (its rule, extensions/rules/modules/json.warp, hands T as the
+// compiler's class_data gives it): the JSON read, each field checked by its type, missing ones defaulted, made a T;
+// a field missing, unknown or of another type raised, naming its path (`addresses[2].city`)
+typed_json_value(value: any, described: map, path: text): any := {
+	if type(value).name != "map" { raise (if path == "" then "expected object" else path + " must be object") + ", received " + type(value).name }
+	order = described["order"]
+	for field in keys(value) { if not order.contains(field) { raise "unknown field " + typed_json_path(path, field) } }
+	defaults = described["defaults"] ?? {}
+	given = {}
+	for field in order {
+		at = typed_json_path(path, field)
+		if keys(value).contains(field) { given[field] = typed_json_item(value[field], described["types"][field], at) }
+		else if defaults.has(field) { given[field] = defaults[field] }
+		else { raise at + " is required" }
+	}
+	described["make"](given)
+}
+typed_json_path(path: text, field: text): text := if path == "" then field else path + "." + field
+// a field's value by its type: a type word's, `{list: …}` each item's, else a class's
+typed_json_item(value: any, item_type: any, path: text): any := {
+	if item_type is text {
+		if not typed_json_is(value, item_type) { raise path + " must be " + (if item_type == "string" then "text" else item_type) + ", received " + typed_json_received(value) }
+		return value
+	}
+	if item_type.has("list") {
+		if not (value is list) { raise path + " must be list, received " + type(value).name }
+		items = []
+		for i in 0 ..< #value { items += [typed_json_item(value[i], item_type["list"], path + "[${i + 1}]")] }
+		return items
+	}
+	typed_json_value(value, item_type, path)
+}
+typed_json_is(value: any, type_word: text): bool := {
+	if type_word == "number" { return value is number }
+	if type_word == "int" { return value is int }
+	if type_word == "float" { return value is float }
+	if type_word == "bool" { return value is bool }
+	value is text
+}
+typed_json_received(value: any): text := if value is number then "number" else if value is text then "text" else type(value).name

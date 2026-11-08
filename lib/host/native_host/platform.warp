@@ -1,0 +1,33 @@
+// The native host module's platform words (lib/host/native_host.warp): SDL's start, a quiet run, macOS and its
+// CoreFoundation strings, shared by its window and sound parts. In a part, not the module's root, so that no program
+// implicitly uses the module by naming one of them (the library index reads a module's root only)
+
+// SDL's parts started (video, audio), Control-C left to stop the program at once (card window-ctrl-c: SDL's own
+// handler made it a quit event, which waited for the window's next events)
+sdl_started(flags: int) := {
+	SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1")
+	SDL_Init(flags)
+}
+// a quiet run (a test, an agent's: WARP_NO_WINDOW or CI) opens no window and sounds nothing
+quiet_run() := env("WARP_NO_WINDOW") != ø or env("CI") != ø
+// macOS, whose frameworks answer what elsewhere other libraries do (CoreText, AudioToolbox, CoreMIDI)
+CORE_FOUNDATION = "/System/Library/Frameworks/CoreFoundation.framework"
+on_mac() := exists(CORE_FOUNDATION)
+CFStringCreateWithCString(allocator: handle, text: text, encoding: i32): handle from 'CoreFoundation'
+CFStringGetCString(string: handle, buffer: handle, size: i64, encoding: i32): bool from 'CoreFoundation'
+CFRelease(object: handle): void from 'CoreFoundation'
+CF_UTF8 = 0x08000100
+// a CoreFoundation string of a text the module names (a key, a style, a MIDI port), made once
+global cf_texts = {}
+cf_text(t: text) := {
+	if not cf_texts.has(t) { cf_texts[t] = CFStringCreateWithCString(0, t, CF_UTF8) }
+	cf_texts[t]
+}
+CF_TEXT_MOST_BYTES = 1024
+// a CoreFoundation string's text
+cf_string_text(string) := {
+	buffer = calloc(1, CF_TEXT_MOST_BYTES)
+	read = if CFStringGetCString(string, buffer, CF_TEXT_MOST_BYTES, CF_UTF8) then field_text(buffer, 0) else ""
+	free(buffer)
+	read
+}

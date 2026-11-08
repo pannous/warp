@@ -180,33 +180,31 @@ function pageDecoded(name) {
 	return { rate, amplitudes: Float32Array.from(amplitudes) };
 }
 
-// libwarp_sound in the page (lib/sound.warp: its words `from 'warp_sound'`, opened by dlopen beside warp; card
-// sound-direct): samples go to the run's voice as sound_samples' do, a file plays on the page as play_file's, a decoded
-// file's 16-bit values come from wavFrames or the page's decoder, at the rate and channel count asked (0: the file's),
-// linearly resampled as miniaudio's default resampler does. Each word answers 0 (or a file's number) as libwarp_sound does
-self.PAGE_LIBRARIES = new Set(["warp_sound"]); // host-foreign.js dlopen: warp's own libraries the page has
-function soundLibrary(holder) {
-	const program = () => holder.exports;
-	const files = [];
+// lib/sound.warp's host words in the page (natively lib/host/native_host/sound.warp; card sound-direct): samples go to the
+// run's voice as sound_samples' do, a file plays on the page as play_file's, a decoded file's 16-bit values come from
+// wavFrames or the page's decoder, at the rate and channel count asked (0: the file's), linearly resampled. A sound
+// played answers 0 as natively; MIDI goes to the page's Web MIDI on the voice's clock, the device lists stay the page's
+function soundWords(holder, program) {
 	return {
-		warp_sound_play_samples: (bytes, rate, channels) => {
-			const pcm = guestBytes(program(), bytes);
-			const view = new DataView(pcm.buffer, pcm.byteOffset, pcm.byteLength);
-			holder.sounded(Array.from({ length: pcm.length >> 1 }, (_, at) => view.getInt16(2 * at, true) + SAMPLE_OFFSET), rate, channels);
-			return 0;
+		sound_played: (pcm, rate, channels) => {
+			const bytes = Uint8Array.from(guestInts(program(), pcm));
+			const view = new DataView(bytes.buffer);
+			holder.sounded(Array.from({ length: bytes.length >> 1 }, (_, at) => view.getInt16(2 * at, true) + SAMPLE_OFFSET), Number(rate), Number(channels));
+			return 0n;
 		},
-		warp_sound_play: path => {
+		sound_file_played: path => {
 			STD_ADAPTERS.sound.play_file.call({ holder }, guestText(program(), path));
-			return 0;
+			return 0n;
 		},
-		warp_sound_decode: (path, rate, channels) => {
-			files.push(decodedSound(guestText(program(), path), rate, channels));
-			return files.length - 1;
+		sound_file_decoded: (path, rate, channels) => {
+			const { rate: made, channels: kept, values } = decodedSound(guestText(program(), path), Number(rate), Number(channels));
+			return newGuestInts(program(), [made, kept, ...values]);
 		},
-		warp_sound_decoded_frames: file => BigInt(files[file].values.length / files[file].channels),
-		warp_sound_decoded_rate: file => files[file].rate,
-		warp_sound_decoded_channels: file => files[file].channels,
-		warp_sound_decoded_value: (file, at) => files[file].values[Number(at)] ?? 0,
+		midi_sent: (port, message) => {
+			self.sendMidi?.(guestText(program(), port), guestInts(program(), message), self.voiceSounded?.(0).at);
+			return 0n;
+		},
+		midi_ports: inputs => newGuestText(program(), Number(inputs) === 1 ? STD_ADAPTERS.midi.inputs() : STD_ADAPTERS.midi.outputs()),
 	};
 }
 // {rate, channels, values}: the file's 16-bit values interleaved, at the rate and channel count asked
@@ -246,7 +244,6 @@ function resampled({ rate: own, channels, values }, rate) {
 }
 
 addHostPart({
-	imports: holder => ({ warp_sound: soundLibrary(holder) }),
 	words: (holder, hooks, { program }) => {
 		// samples (amplitude + SAMPLE_OFFSET, stereo interleaved) queued on the voice, for the page and save sound; a
 		// signal's blocks keep its first one's handle. Heard, once the voice is within PLAY_AHEAD_SECONDS of the speaker
@@ -261,11 +258,12 @@ addHostPart({
 			return own;
 		};
 		return {
+			...soundWords(holder, program),
 			// sound_samples(samples, count, rate, channels) (src/host.rs, lib/sound.warp; stereo interleaved left, right):
 			// the page plays them with WebAudio (playground.js playSound); a run without a page (tests, node) has no
 			// speakers and stays silent, as natively save sound writes them, played or not, into a WAV (STD_ADAPTERS.sound.render)
 			sound_samples: (samples, count, rate, channels) => {
-				holder.sounded(intsOfList(program(), samples, Number(count)) ?? plainValue(program(), samples), Number(rate), Number(channels));
+				holder.sounded(intsOfList(program(), samples, Number(count)) ?? guestPlain(program(), samples), Number(rate), Number(channels));
 			},
 		};
 	},

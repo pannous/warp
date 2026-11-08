@@ -10,6 +10,7 @@ const LEVELS = ["hint", "weak", "normal", "severe"]; // src/diagnostics/diagnost
 const SIZES_KEY = "warp-playground-sizes"; // the guide's width and the editor's height as the resizers left them
 const GUIDE_WIDTH_RANGE = [200, 0.6]; // pixels, then the share of the page's width
 const EDITOR_HEIGHT_RANGE = [120, 0.85]; // pixels, then the share of the window's height
+const DEFAULT_VIEWPORT_MARGIN = 10; // CodeMirror's lines rendered beyond the visible ones, unless the editor fits its code
 // the most sounds sounding at once and how fast a stolen one fades out (src/sound/sound_engine.rs MAX_VOICES, STEAL_SECONDS)
 const MAX_VOICES = 32;
 const STEAL_SECONDS = 0.005;
@@ -18,6 +19,10 @@ const OLD_ANSWERS_KEY = "warp-playground-answers"; // the Ask era kept {topic: f
 // ?run_seconds=<s>: runs stop that much later (scripts/samples-web.sh, whose samples compile on a loaded machine)
 const RUN_SECONDS_PARAMETER = "run_seconds";
 const RUN_TIMEOUT_MS = 1000 * Number(new URLSearchParams(location.search).get(RUN_SECONDS_PARAMETER) ?? 10);
+// a run the limit stopped offers to run again with it this many times longer, for the page's later runs too (card
+// timeout-hang: #ocean's first frame takes longer than 10 s on a slow GPU)
+const LONGER_RUNS = 6;
+let runLimitMs = RUN_TIMEOUT_MS;
 // a run going on longer than this, or a program left running (timers, an animation), turns Run into Stop (card
 // playground-turn); a quick run never flickers
 const STOP_GRACE_MS = 500;
@@ -42,14 +47,15 @@ const DEFAULT_EXAMPLE = "hello";
 const COMMIT_URL = "https://github.com/pannous/warp/commit/";
 const SHORT_COMMIT = 9;
 // terminal codes in printed text (`print "\e[H"`, samples/loops/game_of_life.warp): clearing the screen or moving the cursor
-// home starts the text anew, the other codes (colors, cursor moves) are dropped
-const TERMINAL_RESTART = /\x1b\[(?:2J|H|1;1H)/g;
+// home starts the text anew, with the line end clear()'s print gives it, the other codes (colors, cursor moves) are dropped
+const TERMINAL_RESTART = /(?:\x1b\[(?:2J|H|1;1H))+\n?/g;
 const TERMINAL_CODE = /\x1b\[[0-9;?]*[A-Za-z]/g;
 const EXAMPLE_PARAMETERS = ["example", "sample"]; // ?example=fizzbuzz (or #fizzbuzz) picks a tour example or sample; the address shows the chosen one as #fizzbuzz
 const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
 const DEBUG_COMPILER = "warp.debug.wasm";
 const WAV_TYPE = "audio/wav"; // save sound's files (host-files.js wavOf)
 const PNG_TYPE = "image/png"; // save canvas's pictures (savePicture)
+const BUILD_PARAMETER = "build"; // ?build=<the build time>: the files the worker fetches are of this build (host.js PAGE_BUILD)
 const SLOW_START_PARAMETER = "slow_start"; // ?slow_start=<ms>: the worker reports ready that much later (a slow machine)
 // a starting worker silent this long is stuck (card firefox-hello-hang, three of six deploys): started again once, loudly
 const STALLED_START_MS = 60_000;
@@ -99,9 +105,44 @@ function element(tag, properties = {}, ...children) {
 	return node;
 }
 
+// card bug-report-console: the bug report carries the page's last console entries, uncaught errors and worker messages,
+// newest last, so a report from a device no one can debug says what happened (the iPad's Hello stop). A card is a public
+// issue: never localStorage, and the bug tokens are blanked out of every entry
+const CONSOLE_KEPT = 200;
+const CONSOLE_ENTRY_LENGTH = 400;
+const CONSOLE_LEVELS = ["log", "info", "warn", "error", "debug"];
+// the worker's messages each frame or print sends, which would push every other entry out
+const FREQUENT_WORKER_MESSAGES = new Set(["print", "paint", "live loops", "sleep", "loading"]);
+const consoleKept = [];
+function keepConsoleEntry(kind, parts) {
+	const text = parts.map(part => typeof part === "string" ? part : part instanceof Error ? `${part.name}: ${part.message}` : (() => {
+		try { return JSON.stringify(part); } catch { return String(part); }
+	})()).join(" ");
+	consoleKept.push(`${(performance.now() / 1000).toFixed(3)}s ${kind} ${text.slice(0, CONSOLE_ENTRY_LENGTH)}`);
+	if (consoleKept.length > CONSOLE_KEPT) consoleKept.shift();
+}
+for (const level of CONSOLE_LEVELS) {
+	const original = console[level].bind(console);
+	console[level] = (...parts) => {
+		keepConsoleEntry(level, parts);
+		original(...parts);
+	};
+}
+addEventListener("error", failure => keepConsoleEntry("uncaught", [`${failure.message} at ${failure.filename}:${failure.lineno}:${failure.colno}`]));
+addEventListener("unhandledrejection", rejection => keepConsoleEntry("unhandled rejection", [rejection.reason]));
+// the report's console field: the browser, the worker's stages, then the entries, the tokens blanked
+function consoleReport() {
+	const stages = workerStages.map(({ stage, at }) => `${stage} at ${at} ms`).join(", ") || "none";
+	const lines = [`browser: ${navigator.userAgent}`, `worker: ${workerSettled}, stage "${workerStage}"; stages: ${stages}`, ...consoleKept];
+	const secrets = [BUG_TOKEN, stored(BUG_TOKEN_KEY), $("bug-token")?.value.trim()].filter(Boolean);
+	return lines.join("\n").replace(new RegExp(secrets.map(secret => secret.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") || "$^", "g"), "‹token›");
+}
+
 let worker;
 let workerReady;
 let workerStage = "not started"; // the worker's last stage (worker.js stage), for playground.state
+const workerStages = []; // the worker's stages so far, each with the page's milliseconds it began at, for playground.state: where a start's time goes
+const stageBegan = stage => workerStages.push({ stage: workerStage = stage, at: Math.round(performance.now()) });
 let workerSettled = "starting"; // workerReady's outcome
 let workerWarmed; // the worker was asked to compile the markup renderer ahead of the first markup run (worker.js warmUp)
 let nextRunId = 0;
@@ -140,9 +181,17 @@ function applySizes() {
 	const main = document.querySelector("main");
 	if (sizes.guide) main.style.setProperty("--guide-width", `${clamp(sizes.guide, GUIDE_WIDTH_RANGE, main.clientWidth)}px`);
 	else main.style.removeProperty("--guide-width");
-	editor.getWrapperElement().style.height = sizes.editor ? `${clamp(sizes.editor, EDITOR_HEIGHT_RANGE, innerHeight)}px` : "";
+	const fitted = fitsCode();
+	editor.setOption("viewportMargin", fitted ? Infinity : DEFAULT_VIEWPORT_MARGIN);
+	editor.getWrapperElement().style.height = fitted ? "auto" : sizes.editor ? `${clamp(sizes.editor, EDITOR_HEIGHT_RANGE, innerHeight)}px` : "";
+	$("fit-code").setAttribute("aria-pressed", fitted);
 	editor.refresh();
 }
+
+// ⛶ over the code (card fullscreen-toggle-icon): the editor as tall as its code, no scrolling inside it; again: the
+// height the resizer left
+const fitsCode = () => Boolean(sizes.fitted);
+const toggleFitsCode = () => setSize("fitted", fitsCode() ? undefined : 1);
 
 function setSize(name, value) {
 	if (value === undefined) delete sizes[name];
@@ -191,9 +240,15 @@ function showAgain(topic) {
 
 // ---- the worker ---------------------------------------------------------------------------------------------
 
-// a starting worker silent for STALLED_START_MS: started again once (a warning), then its runs fail naming its stage
+// a starting worker silent for STALLED_START_MS: started again once (a warning), then its runs fail naming its stage;
+// a stalled standby is dropped, the next stop starts a worker of its own
 function restartStalledWorker(stalledWorker, restarts, resolve, reject) {
 	const stall = `the compiler's worker gave no sign for ${STALLED_START_MS / 1000} s at stage "${workerStage}"`;
+	if (stalledWorker === standby) {
+		standby = undefined;
+		stalledWorker.terminate();
+		return reject(new Error(stall));
+	}
 	if (restarts > 0) return reject(new Error(stall));
 	console.warn(`${stall}: starting it again`);
 	stalledWorker.terminate();
@@ -201,18 +256,42 @@ function restartStalledWorker(stalledWorker, restarts, resolve, reject) {
 	resolve(workerReady);
 }
 
+// the standby takes over when a run is stopped, else a new worker starts
 function startWorker(restarts = 0) {
 	workerWarmed = false;
+	workerStages.length = 0;
+	worker = standby ?? newWorker(restarts);
+	worker.fromStandby = worker === standby;
+	standby = undefined;
+	workerReady = worker.ready;
+	if (!worker.isReady) showLoading("starting the compiler's worker", false);
+	// a slow start (the CI runner) finishes after the first run began: "ready" then must not hide its "running…"
+	workerReady.then(() => stopLoading() || showing || setStatus("ready"), failure => stopLoading() || setStatus(failure.message, true));
+	workerSettled = "starting";
+	workerReady.then(() => workerSettled = "ready", failure => workerSettled = `failed: ${failure.message}`);
+	tellSystemValues();
+	sharePointer();
+	worker.postMessage({ stored: keptValues(), session: keptValues([SESSION_STORE]) });
+	tellEnvironment();
+}
+
+// a worker started while a run animates (startsFrame): stopping that run, as the next run does, takes it at once instead
+// of starting a worker then, whose compiler loads and warms up first (0.5–1 s, seconds on a slow machine: card
+// playground-progressive-slowdown, Hello after a shader)
+let standby;
+const prepareStandby = () => standby ??= newWorker();
+
+// a worker loading the compiler: `ready` resolves once it can run programs
+function newWorker(restarts = 0) {
 	const options = new URLSearchParams();
 	if (debugBuild) options.set("compiler", DEBUG_COMPILER);
 	// test_in_browser.py --examples: a worker that starts as late as on a slow CI runner
 	const slowStart = new URLSearchParams(location.search).get(SLOW_START_PARAMETER);
 	if (slowStart) options.set(SLOW_START_PARAMETER, slowStart);
-	worker = serveTaskWorkers(new Worker(options.size ? `worker.js?${options}` : "worker.js")); // task-workers.js
-	worker.liveLoops = new Map(); // its run's live loops: name → {start, period} of their last cycle (liveCycled)
-	showLoading("starting the compiler's worker", false);
-	workerReady = new Promise((resolve, reject) => {
-		const starting = worker;
+	if (PLAYGROUND_VERSION) options.set(BUILD_PARAMETER, PLAYGROUND_VERSION.built); // host.js ofThisBuild
+	const starting = serveTaskWorkers(new Worker(options.size ? `worker.js?${options}` : "worker.js")); // task-workers.js
+	starting.liveLoops = new Map(); // its run's live loops: name → {start, period} of their last cycle (liveCycled)
+	starting.ready = new Promise((resolve, reject) => {
 		let stalled;
 		// each message of the starting worker shows it alive: the stall timer starts over
 		const watchStart = () => {
@@ -227,8 +306,10 @@ function startWorker(restarts = 0) {
 		const [ready, failed] = [settled(resolve), settled(reject)];
 		watchStart();
 		// worker.js or a script it imports failed to load: without this the first run waits for "ready" forever (card firefox-hello-hang)
-		worker.onerror = event => failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
-		worker.onmessage = ({ data }) => {
+		starting.onerror = event => failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
+		starting.onmessage = ({ data }) => {
+			starting.heard = { type: data?.type, at: Math.round(performance.now()) }; // playground.js hungWhere
+			if (!FREQUENT_WORKER_MESSAGES.has(data?.type)) keepConsoleEntry("worker", [data?.type ?? String(data), ...(data?.stage ? [data.stage] : data?.message ? [data.message] : [])]);
 			if (starting.retired && !RETIRED_MESSAGES.has(data?.type)) return;
 			if (starting.retired && data.type === "report") return retire(starting);
 			if (data.type === "notify") data = notification(data.text);
@@ -237,13 +318,20 @@ function startWorker(restarts = 0) {
 			if (data.type === "dispatch") return dispatchToPage(data.event); // markup.js, card page-custom-event
 			if (!data) return;
 			if (stalled) watchStart();
-			if (data.type === "stage") return workerStage = data.stage;
+			// the standby starts unseen: its stages and its loading are not the shown worker's
+			const shown = starting === worker;
+			if (data.type === "stage") return shown && stageBegan(data.stage);
 			if (data.type === "loading") {
+				if (!shown) return;
 				workerStage = `downloading the compiler: ${megabytes(data.loaded)} MB so far`; // a stalled download says how far
 				return showLoading(`loading the compiler: ${megabytes(data.loaded)}${data.total ? ` of ${megabytes(data.total)}` : ""} MB`);
 			}
-			if (data.type === "compiling") return stopLoading();
-			if (data.type === "ready") return ready();
+			if (data.type === "compiling") return shown && stageBegan("compiling") && stopLoading();
+			if (data.type === "ready") {
+				starting.isReady = true;
+				if (shown) stageBegan("ready");
+				return ready();
+			}
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
 			if (data.type === "clipboard") return copyText(data.text);
 			if (data.type === "clipboard read") return pasteInto(data.shared);
@@ -252,7 +340,8 @@ function startWorker(restarts = 0) {
 			if (data.type === "failed") return failed(new Error(data.message));
 			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
 			if (data.type === "members") return answerMembers(data);
-			if (data.type === "sound") return playSound(data, starting);
+			// a sound made is progress, as an animation's frame is: the runaway limit counts from the last one
+			if (data.type === "sound") { if (pending) soundMade(pending, data); return playSound(data, starting); }
 			if (data.type === "live cycle") return liveCycled(starting, data.name, data.at);
 			if (data.type === "live loops") return liveLoopsNamed(data.names);
 			if (data.type === "sound file") return playSoundFile(data.url, data.handle, data.bytes);
@@ -265,6 +354,8 @@ function startWorker(restarts = 0) {
 			if (data.type === "gpu canvas") return sendPaintCanvas(data);
 			if (data.type === "serving") return servingRequests(data);
 			if (data.type === "served") return showServed(data.response);
+			if (listened) eventHeard(data);
+			if (data.type === "handled" && data.fetchesLeft !== undefined) lastAnswered = data;
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
 			if (data.type === "print") printedChunk(pending, data);
@@ -274,17 +365,10 @@ function startWorker(restarts = 0) {
 			}
 			if (data.type === "paint") painted(pending, paintingOf(data));
 			if (data.type === "module") lastModule = data.bytes;
-			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, printedWhole: pending.printedWhole ?? [], paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
+			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, sounded: pending.sounded, printed: pending.printed, printedWhole: pending.printedWhole ?? [], paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
 		};
 	});
-	// a slow start (the CI runner) finishes after the first run began: "ready" then must not hide its "running…"
-	workerReady.then(() => stopLoading() || showing || setStatus("ready"), failure => stopLoading() || setStatus(failure.message, true));
-	workerSettled = "starting";
-	workerReady.then(() => workerSettled = "ready", failure => workerSettled = `failed: ${failure.message}`);
-	tellSystemValues();
-	sharePointer();
-	worker.postMessage({ stored: keptValues(), session: keptValues([SESSION_STORE]) });
-	tellEnvironment();
+	return starting;
 }
 
 // the members to offer after the code and a dot (completion.js), from the compiler (src/lowering/data/members.rs)
@@ -323,8 +407,14 @@ function stopLoading() {
 
 const megabytes = bytes => (bytes / 1e6).toFixed(1);
 
-// the program's environment (assistant.js: the stand-in of the API key), sent again when the key changes
-const tellEnvironment = () => worker.postMessage(programEnvironment());
+// the program's environment (assistant.js: the stand-in of the API key), sent again when the key changes.
+// WARP_SOUND_NOPACE before a click: lib/sound.warp env() reads pageEnvironment (host-files os.env), not WASI
+// (card samples-page-sound-pipes)
+const tellEnvironment = () => {
+	const payload = programEnvironment();
+	if (beforeUserActivation()) payload.environment = { ...payload.environment, WARP_SOUND_NOPACE: "1" };
+	worker.postMessage(payload);
+};
 
 // `notify "text"`: the browser's notification once the page may show them; until then (or when refused) a printed
 // line, so the text never goes missing; the first one asks for the permission
@@ -341,10 +431,14 @@ function notification(text) {
 // paces sound by it): the page was clicked or typed in, as a browser plays sound only then
 const darkMode = matchMedia(DARK_MODE_QUERY);
 const windowOpen = () => (navigator.webdriver ? !beforeUserActivation() : document.visibilityState === "visible");
-const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(windowOpen()), window_fullscreen: Number(document.fullscreenElement === $("painted")), heard: Number(!beforeUserActivation()), ...displayValues(), ...viewSize() } });
+function tellSystemValues() {
+	const view = viewSize();
+	shareView(view);
+	worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(windowOpen()), window_fullscreen: Number(document.fullscreenElement === $("painted")), heard: Number(!beforeUserActivation()), ...displayValues(), ...view } });
+}
 darkMode.addEventListener("change", tellSystemValues);
 document.addEventListener("visibilitychange", () => worker && tellSystemValues());
-["pointerdown", "keydown"].forEach(type => addEventListener(type, () => worker && tellSystemValues(), { once: true, capture: true }));
+["pointerdown", "keydown"].forEach(type => addEventListener(type, () => { if (!worker) return; tellSystemValues(); tellEnvironment(); }, { once: true, capture: true }));
 new ResizeObserver(() => worker && tellSystemValues()).observe($("output"));
 document.addEventListener("fullscreenchange", () => worker && tellSystemValues());
 
@@ -354,13 +448,15 @@ document.addEventListener("fullscreenchange", () => worker && tellSystemValues()
 // view taller each frame, until Safari ran out of memory (card webgpu-safari). What follows the paintings down to the
 // page's end is left free: a view-sized painting that overflowed the window brought a scrollbar, which narrowed the
 // next view (card tour-firefox). Measured again as each run starts: the text above the paintings moves without
-// resizing the pane, which is all the ResizeObserver sees. In full screen (⛶) the view is the screen, so a shader
+// resizing the pane, which is all the ResizeObserver sees. Measured on the page, not the window: scrolled down, a
+// painting filling the window kept the page scrolled and its scrollbar, the view a pixel shorter each run (card
+// firefox-tour-resize). In full screen (⛶) the view is the screen, so a shader
 // painted at the view's size renders at the screen's (card full-screen)
 function viewSize() {
 	if (document.fullscreenElement === $("painted")) return { view_width: innerWidth, view_height: innerHeight };
 	const pane = $("output"), style = getComputedStyle(pane), painted = $("painted").getBoundingClientRect();
 	const width = Math.floor(pane.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - PAINTING_BORDERS);
-	const room = innerHeight - Math.max(painted.top, 0) - PAINTING_MARGIN - PAINTING_BORDERS - roomBelowPaintings(style);
+	const room = innerHeight - (painted.top + scrollY) - PAINTING_MARGIN - PAINTING_BORDERS - roomBelowPaintings(style);
 	return width > 0 ? { view_width: width, view_height: Math.floor(Math.max(room, MIN_VIEW_HEIGHT)) } : {};
 }
 
@@ -371,8 +467,8 @@ function roomBelowPaintings(paneStyle) {
 		+ pixels(paneStyle.paddingBottom) + pixels(paneStyle.borderBottomWidth) + pixels(getComputedStyle(document.body).paddingBottom);
 }
 
-// `loop { …; show(); sleep(16ms) }`: each sleep starts an animation's next frame, what the run paints or prints in it
-// replaces the last frame's; frames keep the run alive past RUN_TIMEOUT_MS, the next run stops it (cards
+// `loop { …; show(); sleep(16ms) }`: each sleep starts an animation's next frame, what the run paints in it replaces
+// the last frame's (printed text only at clear(), decision page-text-frames); frames keep the run alive past RUN_TIMEOUT_MS, the next run stops it (cards
 // drawing-frames, snake-frames)
 function startsFrame(run, output) {
 	const starts = run.frame > 0 && run.framesShown[output] !== run.frame;
@@ -380,6 +476,7 @@ function startsFrame(run, output) {
 	if (starts) {
 		run.animating = true;
 		stopAfterTimeout(run);
+		prepareStandby();
 	}
 	return starts;
 }
@@ -396,11 +493,32 @@ let sounding = []; // the playing and queued sounds, silenced when the next run 
 
 // before the page's first click or key press (the run on load, the CI tour) a sound stays silent: an AudioContext made
 // then cannot start and the browser warns
-const beforeUserActivation = () => navigator.userActivation && !navigator.userActivation.hasBeenActive;
-function playSound({ samples, rate, channels, at, handle, loop }, from) {
-	if (beforeUserActivation()) return;
+// missing userActivation (some headless builds): treat as before a click, so heard stays 0 and sound does not pace (card samples-page-sound-pipes)
+const beforeUserActivation = () => !navigator.userActivation || !navigator.userActivation.hasBeenActive;
+// a run's sounds so far, in seconds, which the page names below its result (showSounded): a program that only plays
+// shows nothing else, and one run before the first click or key press stays silent
+function soundMade(run, { samples, rate, channels }) {
+	stopAfterTimeout(run);
+	run.sounded = (run.sounded ?? 0) + samples.length / Math.max(channels, 1) / rate;
+}
+const SILENT_BEFORE_ACTIVATION = "silent: a browser plays sound only after a click or key press on the page, then run it again";
+function showSounded(seconds) {
+	$("sounded").hidden = !seconds;
+	if (seconds) $("sounded").textContent = `♪ ${seconds.toFixed(1)} s of sound` + (beforeUserActivation() ? `, ${SILENT_BEFORE_ACTIVATION}` : "");
+}
+// the page's AudioContext, made and started by the first click, touch or key press itself: iOS Safari starts one only
+// inside a gesture's own handler, never when a run's sound arrives later from its Worker, and mutes WebAudio with the
+// ring switch unless the page's audio session plays (card rust-example-ipad)
+function startedAudio() {
 	audio ??= new AudioContext();
 	audio.resume();
+	if (navigator.audioSession) navigator.audioSession.type = "playback";
+	return audio;
+}
+for (const gesture of ["pointerdown", "touchend", "keydown"]) addEventListener(gesture, startedAudio, { capture: true, once: true });
+function playSound({ samples, rate, channels, at, handle, loop }, from) {
+	if (beforeUserActivation()) return;
+	startedAudio();
 	const frames = Math.max(Math.ceil(samples.length / channels), 1);
 	const buffer = audio.createBuffer(channels, frames, rate);
 	for (let channel = 0; channel < channels; channel++)
@@ -583,35 +701,49 @@ function painted(run, painting) {
 	showFrame(run.paintings);
 }
 
-// a text frame (`render(); sleep(.1s)`) arrives line by line: the last one is shown whole once the next one begins.
-// Before any frame each print shows at once, so a print before a slow paint is read while it renders (card print-watch)
+// what a run prints shows at once and stays, a sleep between or not (decision page-text-frames): a text animation starts
+// each frame with clear(), whose terminal clear shows the text anew (terminalText). Each print shows at once, so a
+// print before a slow paint is read while it renders (card print-watch)
 function printedChunk(run, chunk) {
-	(run.printedWhole ??= []).push(chunk); // every frame's, for the report (scripts/samples-web.sh compares it with the native run's)
-	if (startsFrame(run, "printed")) {
-		showPrinted(run.printed);
-		run.printed = [];
-	}
+	(run.printedWhole ??= []).push(chunk); // for the report (scripts/samples-web.sh compares it with the native run's)
 	run.printed.push(chunk);
 	if (!run.animating) showPrinted(run.printed);
 }
 
 // the runaway limit counts running time only: a sleep moves the deadline on by its milliseconds (card sleep-run-limit)
-function stopAfterTimeout(run, milliseconds = RUN_TIMEOUT_MS) {
+function stopAfterTimeout(run, milliseconds = runLimitMs) {
 	clearTimeout(run.timer);
 	run.deadline = Date.now() + milliseconds;
-	run.timer = setTimeout(() => stopRun(run, `stopped after ${RUN_TIMEOUT_MS / 1000} s: the program may not terminate`), milliseconds);
+	run.timer = setTimeout(() => stopRun(run, `stopped after ${runLimitMs / 1000} s: the program may not terminate`, !run.animating, [hungWhere()], true), milliseconds);
+}
+// the run again, the limit LONGER_RUNS times longer
+function runLonger() {
+	runLimitMs *= LONGER_RUNS;
+	runChanged();
+}
+const longerButton = () => element("button", { className: "apply-fix", title: "run it again, letting it run longer before it is stopped", onclick: runLonger },
+	`run for ${runLimitMs * LONGER_RUNS / 1000} s`);
+const HUNG_STAGES_SHOWN = 8;
+// where a run stopped by the limit hung, said beside it (card safari-hello-timeout: Hello stopped on the iPad only): the
+// worker's start, whether it was the standby, its stages and the last message it sent
+function hungWhere() {
+	const now = Math.round(performance.now());
+	const heard = worker.heard ? `"${worker.heard.type}" ${((now - worker.heard.at) / 1000).toFixed(1)} s ago` : "nothing";
+	const stages = workerStages.slice(-HUNG_STAGES_SHOWN).map(({ stage, at }) => `${stage} at ${at} ms`).join(", ") || "none seen";
+	return `where it hung: the worker ${worker.fromStandby ? "was the standby" : "started for the page"}, ${worker.isReady ? "ready" : "not ready"}; its last message ${heard}; last stages: ${stages}; page time ${now} ms`;
 }
 const slept = (run, milliseconds) => stopAfterTimeout(run, run.deadline - Date.now() + milliseconds);
 
 // a program that does not stop blocks the worker: replace it
-function stopRun(run, message, failed = !run.animating) {
+const ANIMATION_STOPPED = "animation stopped";
+function stopRun(run, message, failed = !run.animating, said = [], timedOut = false) {
 	worker.terminate();
 	startWorker();
-	finish(run, stoppedReport(run, message, failed));
+	finish(run, { ...stoppedReport(run, message, failed, said), timedOut });
 }
 
-const stoppedReport = (run, message, failed) => ({ value: message, error: failed, printed: run.printed, paintings: run.paintings,
-	warnings: [], runtime_warnings: [], hints: [], notes: [] });
+const stoppedReport = (run, message, failed, said = []) => ({ value: message, error: failed, sounded: run.sounded, printed: run.printed, paintings: run.paintings,
+	warnings: [], runtime_warnings: said, hints: [], notes: [] });
 
 // the Run button while a program runs: Stop (card playground-turn)
 function showStop(stoppable) {
@@ -623,6 +755,7 @@ const showsStop = () => $("run").classList.contains("stop");
 
 // Stop pressed: a run going on ends as stopped; a program left listening to its timers stops listening
 function stopPressed() {
+	queued = undefined; // a run asked meanwhile goes too
 	retiredWorkers.forEach(retire);
 	silence();
 	if (pending) return stopRun(pending, STOPPED, false);
@@ -637,39 +770,86 @@ function finish(run, report) {
 	clearTimeout(run.stopTimer);
 	if (pending === run) pending = undefined;
 	showStop(false); // the shown report's timers turn it back to Stop (listenTo)
+	// (a stopped run's report lists no events: stoppedReport)
+	if (run.eventsFor && (report.listening ?? []).some(label => !PAGE_EVENT.test(label))) return listenedFor(run, report);
 	run.resolve(report);
+}
+
+// evaluate's `eventsFor`: a program left listening to its timers is reported once they ran that long, what they printed
+// in its report, as the native warp's event loop runs them under WARP_EVENTS_FOR (core/native/driver.warp events); a
+// timer's failure or exit ends the wait sooner
+let listened; // {run, report} while its timers run
+function listenedFor(run, report) {
+	listened = { run, report };
+	run.timer = setTimeout(listenedEnd, run.eventsFor);
+}
+function listenedEnd() {
+	const { run, report } = listened;
+	clearTimeout(run.timer);
+	listened = undefined;
+	run.resolve({ ...report, printedWhole: run.printedWhole ?? [] });
+}
+function eventHeard(data) {
+	if (data.type === "print") (listened.run.printedWhole ??= []).push(data);
+	if (data.type === "handled" && data.error) listenedEnd();
 }
 
 // evaluate code in the worker: the report of src/web/mod.rs evaluate plus `printed` [{text, stream}]. The worker runs one
 // program at a time, so each call waits for the calls before it (typing while the compiler still loads makes several).
 // `file`: the program's path in the served repository (samples/…), so its `use` and file reads resolve beside it, as
 // the chosen sample's do (scripts/samples-web.sh runs every sample so). `asData`: the program prints its value as data
-// after the value mark, as a native `warp test` run does (test_in_browser.py --tests)
-function evaluate(code, file = programFile(), { asData = false } = {}) {
-	const run = runs.then(() => runInWorker(code, file, asData));
+// after the value mark, as a native `warp test` run does (test_in_browser.py --tests). `eventsFor`: milliseconds the
+// program's timers run before the report (listenedFor)
+function evaluate(code, file = programFile(), { asData = false, eventsFor = 0 } = {}) {
+	const run = runs.then(() => runInWorker(code, file, asData, eventsFor));
 	runs = run.catch(() => {});
 	return run;
 }
 
-async function runInWorker(code, file, asData) {
+// the shown run's last fetch answer (lib/net.warp fetch_later), each rendering the page anew: settled(report) is the
+// run's report once no answer is out, with the value and page of the last (test_in_browser.py --samples compares that)
+let lastAnswered;
+const SETTLE_MILLISECONDS = 15000, SETTLE_POLL_MILLISECONDS = 50;
+async function settled(report) {
+	const deadline = Date.now() + SETTLE_MILLISECONDS;
+	const out = () => lastAnswered?.fetchesLeft ?? report.fetching;
+	while (report.fetching && out() > 0 && Date.now() < deadline) await new Promise(done => setTimeout(done, SETTLE_POLL_MILLISECONDS));
+	if (!report.fetching || !lastAnswered) return report;
+	return { ...report, value: lastAnswered.value ?? report.value, html: lastAnswered.html ?? report.html, error: lastAnswered.error };
+}
+
+function runInWorker(code, file, asData, eventsFor) {
+	lastAnswered = undefined;
 	// a program serving requests waits for them (lib/web.warp page_serve): the next run starts in a fresh Worker
 	if (worker.serving) {
 		worker.terminate();
 		startWorker();
 	}
-	await workerReady;
-	return new Promise(resolve => {
-		const run = { id: ++nextRunId, resolve, printed: [], paintings: [], frame: 0, framesShown: {} };
-		stopAfterTimeout(run);
-		run.stopTimer = setTimeout(() => pending === run && showStop(true), STOP_GRACE_MS);
-		pending = run;
-		silence(false);
-		Object.assign(worker, { runId: run.id, liveLoops: new Map() });
-		paintingWindow = undefined; // canvas.js: each run's paintings at their own size until it sets window.width
-		tellSystemValues();
-		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file, arguments: programArguments(), liveHandover, asData });
-		liveHandover = {};
+	// the run is pending, its Stop shown after the grace, while the worker still loads: a Run pressed on a slow first
+	// load (7.5 s on an iPad) reacts as any run does, and Stop cancels it (card run-during-load-feedback). Its report
+	// never waits on the loading worker itself: a stopped worker's ready never settles. Its time limit counts from the
+	// worker's start of it
+	const run = { id: ++nextRunId, printed: [], paintings: [], frame: 0, framesShown: {}, eventsFor };
+	const reported = new Promise((resolve, reject) => Object.assign(run, { resolve, reject }));
+	run.stopTimer = setTimeout(() => pending === run && showStop(true), STOP_GRACE_MS);
+	pending = run;
+	workerReady.then(() => pending === run && startInWorker(run, code, file, asData), failure => {
+		clearTimeout(run.stopTimer);
+		if (pending === run) pending = undefined;
+		showStop(false);
+		run.reject(failure);
 	});
+	return reported;
+}
+
+function startInWorker(run, code, file, asData) {
+	stopAfterTimeout(run);
+	silence(false);
+	Object.assign(worker, { runId: run.id, liveLoops: new Map() });
+	paintingWindow = undefined; // canvas.js: each run's paintings at their own size until it sets window.width
+	tellSystemValues();
+	worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file, arguments: programArguments(), liveHandover, asData });
+	liveHandover = {};
 }
 
 // ---- showing a report ---------------------------------------------------------------------------------------
@@ -764,6 +944,7 @@ function showReport(report) {
 	showRendered(report.html);
 	showPaintings(report.paintings ?? []);
 	listenTo(report.listening ?? []);
+	showSounded(report.sounded);
 	showAddress(report.address);
 	const isShown = level => LEVELS.indexOf(level ?? "normal") >= LEVELS.indexOf($("shown-from").value);
 	const hints = isShown("hint") ? report.hints : [];
@@ -781,6 +962,7 @@ function showReport(report) {
 			element("span", { className: "reason" }, hint.reason), fixButtons(hint.fixes))),
 		...notes.filter(topic => !inline.has(topic) && isShown("hint")).map(topic => diagnostic("note", "", `the ${topic} note above shows until you say `, gotIt(topic, expressionOf(topic)))),
 	];
+	if (report.timedOut) items.unshift(diagnostic("note", "", "a program that takes long to start may only need more time: ", longerButton()));
 	$("diagnostics").replaceChildren(...items);
 	// the level select shows where there is something it filters, shown or not
 	const filtered = [report.warnings, report.runtime_warnings, report.hints, notes].some(list => list?.length);
@@ -821,7 +1003,10 @@ function showRendered(html) {
 	morphChildren(host.shadowRoot ?? renderedRoot(host), parsedHtml(html ?? ""));
 }
 
-self.programElements = () => $("rendered").shadowRoot ?? document; // task-workers.js ownerOnPage: `who`, `$who`
+// task-workers.js ownerOnPage: `who`, `$who`, document.getElementById("who"): an element of the program's markup, else
+// one of the page itself, "paintings" the frame its paintings show in (card paintings-document)
+const programElement = id => $("rendered").shadowRoot?.getElementById(id) ?? document.getElementById(id);
+self.programElements = () => ({ getElementById: programElement });
 
 // a form's submit stays inside the shadow root (it is not composed): listened to there
 function renderedRoot(host) {
@@ -900,12 +1085,15 @@ let listening = new Set(); // the page events the shown program handles: "click"
 
 // what the shown program listens to: "on click", "on key" (page events, sent from here), "every 1 s", "at 09:00",
 // "message from …" (timers and channels, run by the worker)
+// an element's own handler (on click·1, a button's) is the element to use, not named in the note
+const ELEMENT_EVENT = /·\d+$/;
 function listenTo(labels) {
 	listening = new Set(labels.filter(label => PAGE_EVENT.test(label)).map(label => label.replace(PAGE_EVENT, "$1")));
 	$("output").classList.toggle("listening", listening.size > 0);
-	$("listening").hidden = labels.length === 0;
-	const hint = listening.has("key") ? "; click here, then type" : listening.size ? "; click here" : "";
-	$("listening").textContent = `listening: ${labels.join(", ")}${hint}`;
+	const shown = labels.filter(label => !ELEMENT_EVENT.test(label));
+	$("listening").hidden = shown.length === 0;
+	const hint = listening.has("key") ? "; click here, then type" : listening.has("click") ? "; click here" : "";
+	$("listening").textContent = `listening: ${shown.join(", ")}${hint}`;
 	// timers and channels go on by themselves: the program still runs (page events wait for the user)
 	showStop(labels.some(label => !PAGE_EVENT.test(label)));
 }
@@ -953,7 +1141,7 @@ function servingRequests({ shared, port }) {
 	const first = !worker.serving;
 	const waiting = worker.serving?.waiting ?? (first ? ["GET", SERVED_ROOT] : undefined);
 	worker.serving = { shared };
-	if (first && pending) firstServed = { run: pending, report: { ...SERVING_RUN, printed: pending.printed, paintings: pending.paintings, listening: [`serving http://localhost:${port}`], address: SERVED_ROOT } };
+	if (first && pending) firstServed = { run: pending, report: { ...SERVING_RUN, printed: pending.printed, paintings: pending.paintings, listening: [`web requests (http://localhost:${port} when warp runs it)`], address: SERVED_ROOT } };
 	if (waiting) servedRequest(...waiting);
 }
 
@@ -1019,14 +1207,27 @@ function showEventOutput(data) {
 	if (data.html !== undefined) showRendered(data.html);
 }
 
+// a run starting, however it was started (Run, auto-run, an example chosen, a queued run): the old value gives way to
+// "…", and the old errors, warnings, underlines and printed text go, so none is taken for the new run's, nor stays
+// above an animation as long as it runs (cards g_oc54, playground-stale-value)
+function clearPreviousRun() {
+	showValue(PENDING_VALUE);
+	$("value").classList.remove("located");
+	$("value").onclick = null;
+	$("diagnostics").replaceChildren();
+	markPositions({});
+	showPrinted([]);
+}
+
 async function show(code) {
 	if (showing) {
 		queued = code; // only the newest code is worth running next
-		if (pending?.animating) stopRun(pending, "animation stopped");
+		if (pending?.animating) stopRun(pending, ANIMATION_STOPPED);
 		else if (playsLive(pending)) handOver(pending);
 		return;
 	}
 	showing = true;
+	clearPreviousRun();
 	setStatus("running…");
 	try {
 		showReport(await evaluate(code));
@@ -1043,12 +1244,24 @@ async function show(code) {
 	warmWorker();
 }
 
-// once per worker, after a run is shown: the page is idle, the worker free
+// once per worker, after a run is shown and the person did nothing for WARM_UP_QUIET_MS: the warm-up takes the
+// worker for 0.5–4 s, and a run asked meanwhile waited for it, so a Hello clicked right after the page loaded took
+// seconds (card compiler-cache-compiled). A key or a click restarts the wait
+const WARM_UP_QUIET_MS = 5000;
+let warmUpWait;
 function warmWorker() {
 	if (workerWarmed) return;
+	clearTimeout(warmUpWait);
+	warmUpWait = setTimeout(warmNow, WARM_UP_QUIET_MS);
+}
+function warmNow() {
+	warmUpWait = undefined;
+	if (workerWarmed || pending || showing) return;
 	workerWarmed = true;
 	worker.postMessage({ warm: true });
 }
+const quietAgain = () => warmUpWait && warmWorker();
+["keydown", "pointerdown"].forEach(input => addEventListener(input, quietAgain, true));
 
 // a link to the same page with the other compiler build
 function showBuildSwitch() {
@@ -1117,7 +1330,7 @@ function startBugButton() {
 function bugReport() {
 	const run = reportedRun();
 	const source = $("bug-source").checked ? { code: run.code, output: run.output } : { code: "", output: "" };
-	return { ...run, ...source, comment: $("bug-comment").value, express: $("bug-express").checked, page: location.href,
+	return { ...run, ...source, comment: $("bug-comment").value, express: $("bug-express").checked, page: location.href, console: consoleReport(),
 		token: stored(BUG_TOKEN_KEY) ?? ($("bug-token").value.trim() || BUG_TOKEN) };
 }
 
@@ -1208,17 +1421,10 @@ function runChanged() {
 	return runNow();
 }
 
-// Run pressed (the button, Ctrl/Cmd-Enter): the old value gives way to "…" at once, and the old errors, warnings,
-// underlines and printed text go, so none is taken for the new run's (card g_oc54)
-// Ctrl/Cmd-Enter while live loops play runs the code again, handing them over (card playground-live); the button stops
+// Run pressed (the button, Ctrl/Cmd-Enter); Ctrl/Cmd-Enter while live loops play runs the code again, handing them
+// over (card playground-live); the button stops
 function runPressed(fromKeys = false) {
 	if (showsStop() && !(fromKeys && playsLive(pending))) return stopPressed();
-	showValue(PENDING_VALUE);
-	$("value").classList.remove("located");
-	$("value").onclick = null;
-	$("diagnostics").replaceChildren();
-	markPositions({});
-	showPrinted([]);
 	return runNow();
 }
 
@@ -1294,6 +1500,8 @@ function initialize() {
 		editor.focus();
 	};
 	$("full-screen").onclick = toggleFullScreen;
+	$("fit-code").append($("full-screen").firstElementChild.cloneNode(true));
+	$("fit-code").onclick = toggleFitsCode;
 	$("shown-from").value = stored(SHOWN_FROM_KEY) ?? (stored(HINTS_KEY) === "off" ? "weak" : "hint");
 	store(HINTS_KEY, null);
 	$("shown-from").onchange = () => {
@@ -1320,9 +1528,12 @@ function initialize() {
 }
 
 // for headless runs (test_in_browser.py --examples): evaluate code as the page does and return the report
-window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress, bugReport, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
+window.playground = { evaluate, settled, applyFix, chooseExample, runCode, reportAddress, bugReport, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
+	// an animation that runs until stopped (a raylib window's `while not WindowShouldClose()`) ends with its report, as
+	// the next run would end it (test_in_browser.py sample_answer); yes when one ran
+	stopAnimation: () => Boolean(pending?.animating && (stopRun(pending, ANIMATION_STOPPED), true)),
 	// what a run waits for, for the Firefox driver's timeout report (card firefox-hello-again)
-	state: () => ({ worker: workerStage, ready: workerSettled, pending: pending?.id, queued: queued !== undefined, showing }) };
+	state: () => ({ worker: workerStage, stages: workerStages, ready: workerSettled, pending: pending?.id, queued: queued !== undefined, showing }) };
 
 reportBareErrors(self, "page"); // task-workers.js
 addEventListener("unhandledrejection", event => {

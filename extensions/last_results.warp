@@ -1,0 +1,42 @@
+# `it` as the last result at the top level (card it-last-result, wiki/it.md): `3 + 4; it * 2` is 14. A statement of
+# the program that reads `it` outside a block, a lambda and a definition reads the value of the statement before it,
+# kept under a hidden name; after an assignment `x = 5` that is x. In a block or a lambda, `{it * it}`, and in a
+# charged definition, `twice := it * 2`, `it` stays the argument; at the start, or after a definition, `it` is unbound
+# as before.
+last_results_extension = Extension{name: "last_results", passes_before: {"tries": last_results}}
+LAST_RESULT = symbol("it·last")
+IT = symbol("it")
+
+last_results(program: Node): Node := {
+	if not is_statement_sequence(program) { return program }
+	statements = items_of(program)
+	out = []
+	changed = no
+	for statement in statements {
+		if #out > 0 and reads_last_result(statement) and gives_last_result(out#(#out)) {
+			previous = out#(#out)
+			assigned = last_assigned(previous)
+			if assigned != ø { out += [Key(LAST_RESULT, Op.Assign, assigned)] } else { out[#out - 1] = Key(LAST_RESULT, Op.Assign, previous) }
+			out += [with_last_result(statement)]
+			changed = yes
+		} else {
+			out += [statement]
+		}
+	}
+	if changed then group_like(program, out) else program
+}
+
+# where `it` names something else: a definition, a lambda, a block, quoted code, and a phrase or call of a word that
+# gives `it` each item, `xs where it > 1`, `xs.filter(it > 2)`, `xs each it * 2`
+binds_it(n: Node): bool := is_key(n, Op.Define) or is_key(n, Op.Arrow) or is_curly_group(n) or is_quote(n) or (n is list and items_of(n).any(item => item is symbol and name_of(item) in ITEM_IT_WORDS))
+ITEM_IT_WORDS = ["where", "each", "by", "filter", "map", "select", "every", "any", "all", "find", "sort", "sorted", "having", "until", "while", "when"]
+# the statement reads the last result: `it` outside what binds it
+reads_last_result(n: Node): bool := n == IT or (not binds_it(n) and parts_of(n).any(reads_last_result))
+with_last_result(n: Node): Node := if n == IT then LAST_RESULT else if binds_it(n) then n else children(n, with_last_result)
+# a statement with a value to keep: no definition, no `use`
+gives_last_result(n: Node): bool := not is_key(n, Op.Define) and not (is_spaced(n) and #n > 0 and n#1 in [symbol("use"), symbol("import"), symbol("include")])
+# the name an assignment `x = 5` gives its value to, else ø
+last_assigned(n: Node): Node? := match n {
+	Key(target, Op.Assign, value): if target is symbol then target else ø
+	_: ø
+}

@@ -26,7 +26,7 @@ keep(items: list) := write(store, to_json(items))
 
 next_id(items: list): int := if count(items) == 0 then 1 else max([item.id for item in items]) + 1
 
-# (named add_todo: a program word named add breaks lib/json, card core-program-word-leaks-into-module)
+# (named add_todo: a program word named add breaks lib/json)
 add_todo(title: text) := {
 	items = load()
 	item = {id: next_id(items), title: title, done: no}

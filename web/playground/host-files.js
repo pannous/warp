@@ -8,6 +8,7 @@ const PAGE_PREFIX = "page:"; // src/web/mod.rs PAGE_PREFIX: a file of the page i
 const HTTP_NOT_FOUND = "HTTP status 404";
 const FILE_NOT_FOUND = "No such file or directory (os error 2)";
 const NO_PROCESSES = "not in the browser: a page runs no process or shell, natively only";
+const PROGRAM_VARIABLE = "WARP_PROGRAM"; // the program's file, as the native warp sets it (lib/file.warp program_file)
 
 // the files std's file module wrote (texts) and save sound rendered (bytes, a Uint8Array): read and the file words see
 // them before the served ones. A page keeps them in IndexedDB (keepWrittenFile), so they are still there after a reload
@@ -32,7 +33,7 @@ function servedFileExists(path) {
 	if (isUnserved(url)) return false;
 	try {
 		const request = new XMLHttpRequest();
-		request.open("HEAD", url, false);
+		request.open("HEAD", ofThisBuild(url), false);
 		request.send();
 		return request.status > 0 && request.status < 400;
 	} catch {
@@ -53,7 +54,7 @@ function getSync(url, timeout, binary = false) {
 	url = withPageProtocol(url);
 	if (isUnserved(url)) throw new Error(HTTP_NOT_FOUND);
 	const request = new XMLHttpRequest();
-	request.open("GET", url, false);
+	request.open("GET", ofThisBuild(url), false);
 	if (timeout) request.timeout = timeout;
 	if (binary) request.overrideMimeType("text/plain; charset=x-user-defined"); // bytes as they are
 	request.send();
@@ -468,7 +469,8 @@ addHostPart({
 		// a page has no command line, no input and runs no process; its environment is what the page sets (the stand-in of
 		// the playground's key), its folder the served root that relative paths start from
 		os: {
-			env: name => self.pageEnvironment?.[name] ?? null,
+			// WARP_PROGRAM is the chosen sample's file, so program.folder names its folder as natively
+			env(name) { return (name === PROGRAM_VARIABLE ? programFileOf(this.holder.run) : self.pageEnvironment?.[name]) ?? null; },
 			args: () => self.programArguments ?? [], // a sample's <name>.args (playground.js programArguments)
 			cwd: () => ".",
 			stdin: () => "",
@@ -520,7 +522,9 @@ addHostPart({
 		},
 		// a filter compiled natively is an SQL query (a page compiled by the browser keeps filters as comprehensions)
 		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: tablePage, count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, delete: deleteRow, update: updateRow, begin: beginTransaction, commit: file => { delete tablesBefore[file]; return null; }, rollback: rollBack, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
-		net: { get: url => getSync(url), post: (url, body, headers) => postSync(url, contentText(body), headers ?? {}) },
+		// start (lib/net.warp fetch_later): the request goes out after main and its answer comes as the program's
+		// fetch_answered (host-timers.js startTimers); a host that listens to nothing answers at once
+		net: { get: url => getSync(url), post: (url, body, headers) => postSync(url, contentText(body), headers ?? {}), start(url, id) { return fetchLater(this.holder, url, id); } },
 		// `clipboard.write(text)` (lowering/signals/system_values.rs): a page writes it (markup.js copyText), a Worker has no
 		// clipboard and hands the text to its page (self.writeClipboard: worker.js)
 		clipboard: { write: text => { (self.writeClipboard ?? copyText)(contentText(text)); return null; } },

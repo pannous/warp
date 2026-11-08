@@ -1,4 +1,4 @@
-// The standard library module wagi (card fermyon-hosting, notes/hosting.md "Fermyon"): `warp build --wagi` makes a
+// The standard library module wagi (card fermyon-hosting, notes/hosting.md "Fermyon"): `warp build wagi app.warp` makes a
 // program's routes answer one request the WAGI way (Spin's wagi executor, Akamai Functions): the request comes in the
 // environment (REQUEST_METHOD, PATH_INFO, QUERY_STRING), the answer goes CGI-style to stdout: headers, a blank line, the
 // body. A text answers as text, anything else as JSON, as `warp serve` answers (rust-harness:src/web/web_server.rs Answer::of).
@@ -15,9 +15,9 @@ wagi_variable(name: any) := {
 }
 
 // the query's fields, + and %XX decoded as UTF-8, a malformed % kept: lib/url.warp's query_map (card lib-url-wagi-cleanup)
-wagi_query(query: any) := query_map(query)
+public wagi_query(query: any) := query_map(query)
 // a query component as sent: url's query_decode under wagi's old name
-url_decoded(t: any) := query_decode(t)
+public url_decoded(t: any) := query_decode(t)
 
 wagi_request() := {method: wagi_variable("REQUEST_METHOD"), path: wagi_variable("PATH_INFO"), query: wagi_query(wagi_variable("QUERY_STRING")), body: ""}
 
@@ -62,11 +62,18 @@ wagi_reply(status: any, content_type: any, body: any) := puts "Status: " + str(s
 // the route's value with the status and headers it set
 wagi_answer(value: any) := puts "Status: " + str(answer_status) + "\n" + wagi_headers(value) + "\n\n" + wagi_body(value)
 // its header lines, Content-Type first, and its body (also lib/web.warp's HTTP answer)
-wagi_headers(value: any) := {
+public wagi_headers(value: any) := {
 	let own_type = if value is text then "text/plain; charset=utf-8" else "application/json"
 	"Content-Type: " + (if answer_content_type is empty then own_type else answer_content_type) + answer_header_lines
 }
-wagi_body(value: any) := if value is text then value else wagi_json(value)
+public wagi_body(value: any) := if value is text then value else wagi_json(value)
 
 // lowering/serve.rs page·submitted throws "no route answers …" for a request no route takes
 wagi_failed(message: any) := wagi_reply(if starts_with(message, "no route answers") then 404 else 500, "text/plain; charset=utf-8", message)
+
+// the end of a program with routes built for WAGI (`warp build wagi app.warp`, card site-wagi-build): the module
+// answers the one request its environment holds, and gives no value of its own to print after the answer
+routes_wagi(value: any = ø) := {
+	try wagi_answer(route_answer(wagi_request())) catch e { wagi_failed(str(e)) }
+	ø
+}

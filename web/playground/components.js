@@ -66,7 +66,7 @@ function loadComponent(path, hooks) {
 	const name = componentName(path);
 	if (!transpiled.has(name)) {
 		try {
-			importScripts(`${COMPONENTS_FOLDER}${name}.js`);
+			importScripts(ofThisBuild(`${COMPONENTS_FOLDER}${name}.js`));
 		} catch (failure) {
 			throw new Error(`cannot load the component ${path}: the page has no ${COMPONENTS_FOLDER}${name}.js (web/playground/build.sh components transpiles it): ${failure.message}`);
 		}

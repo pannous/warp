@@ -133,12 +133,21 @@ value_view(printed: text): any := {
 	if printed.starts_with(TYPE_SHOWN) { return ["symbol", printed[#TYPE_SHOWN ..< #printed]] }
 	literals_folded(view_of(plain_node(parsed(printed))))
 }
-# a float printed with an exponent, `9.007199254740994e15`, parses as `… as float`: the number it is
+# a float printed with an exponent, `9.007199254740994e15`, parses as `… as float`: the number it is; a repeating
+# decimal, 0.6̅, parses as the quotient 6/9: in lowest terms, so 0.6̅, 2/3 and a run's 2/3 compare equal (with ints
+# only: the compiler has no exact numbers of its own)
 literals_folded(view: any): any := {
 	form = kind(view)
 	if form == "key" and view#2 == "as" and view#3 is number and view#4 == ["symbol", "float"] { return view#3 }
+	if form == "key" and view#2 == "/" and view#3 is int and view#4 is int and view#4 != 0 { return lowest_terms(view#3, view#4) }
 	if form == "list" then view[0 ..< 3] + view[3 ..< #view].map(literals_folded) else view
 }
+
+lowest_terms(numerator: int, denominator: int): list := {
+	divisor = common_divisor(abs(numerator), abs(denominator))
+	["key", "/", numerator /! divisor, denominator /! divisor]
+}
+common_divisor(a: int, b: int): int := if b == 0 then a else common_divisor(b, a % b)
 
 # the test files: the folders' test files, sorted, at any depth, and the files named themselves
 test_files_of(words: list): list := {
@@ -169,11 +178,14 @@ cases_in(file: text, source: text): list := {
 	cases
 }
 # the pair lines of a pairs file no case starts on: `'"I'm"'⇥"I'm"`'s unescaped ' opens a text that runs over the
-# next lines, which then are one statement and no pair; each such line fails loudly, never silently dropped
+# next lines, which then are one statement and no pair; each such line fails loudly, never silently dropped. A case
+# whose code runs over lines (an Allman `{` on the next line) reads each of them, its tab on its last
 unread_lines(file: text, cases: list): list := {
 	if not file.ends_with(PAIRS_SUFFIX) { return [] }
 	read_at = {}
-	for case in cases { if case.file == file { read_at["" + case.line] = yes } }
+	for case in cases {
+		if case.file == file { for at in case.line to case.line + #case.code.split("\n") - 1 { read_at["" + at] = yes } }
+	}
 	lines = read(file).split("\n")
 	(1 to #lines).filter(at => is_pair_line(lines#at) and not read_at.has("" + at))
 }
@@ -241,6 +253,8 @@ needs_run(expected: any): bool := not is_data_expected(expected) and not expects
 # separators, a text and a symbol of the same name, a character and a text it starts, ø and an empty value, yes and no
 # and the values they are true of
 same_value(a: any, b: any): bool := {
+	a = literals_folded(a)
+	b = literals_folded(b)
 	if a == b { return yes }
 	if a is bool { return a == not is_falsy_view(b) }
 	if b is bool { return b == not is_falsy_view(a) }

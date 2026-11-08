@@ -2,7 +2,8 @@
 
 Every `samples/<chapter>/*.warp` runs, ideally by fixing the language rather than the sample. Fixed samples get an
 `is!("samples/<chapter>/x.warp", …)` line in tests/programs/test_samples.rs; tests/programs/test_playground_samples.rs
-runs every sample not listed in web/playground/excluded_samples.txt, which gives each exclusion its reason.
+runs every sample but those whose `# host: native` (or `none`) line says why they don't run in a browser; `# host: page`
+runs in the page only, `# host: none` in neither sweep (netbase needs its server).
 
 ## How to sweep
 - Build a private CLI copy: `WARP=$(scripts/own-warp.sh)` then run `"$WARP" …`. The shared `debug/warp` is
@@ -30,7 +31,7 @@ runs every sample not listed in web/playground/excluded_samples.txt, which gives
 ## Folders
 - samples/ has one folder per chapter of the playground guide, the groups of its example menu (web/playground/guide.js
   groupExamplesByChapter): hello numbers text signals conditions matching lists objects loops functions types storage
-  errors modules events tasks web servers graphics gpu sound wasm laws advanced; plus system (crontab, unix_commands:
+  errors modules events tasks web servers graphics gpu (Shaders) acceleration sound wasm laws advanced; plus system (crontab, unix_commands:
   native-only processes), golf/ and wit/. A sample sits in the folder of the first chapter whose `Examples: …;
   samples:` line names it; samples no chapter can name (raylib, SDL, errors…) sit by topic.
 - tests/web/test_guide.rs every_chapter_has_its_own_sample_folder keeps the two in step: a chapter's samples in one

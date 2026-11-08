@@ -1,5 +1,6 @@
 #!/usr/bin/env warp
-# use script: the basic Unix commands as warp words, their results lists and maps (card unix-words, wiki/script.md)
+# host: native: the browser has no home folder and no programs to list
+# use script: the basic Unix commands as warp words, their results lists and maps (wiki/script.md)
 use script
 
 print "home folder entries:", count(ls ~/)

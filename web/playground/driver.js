@@ -24,7 +24,10 @@ const compilerEnvironment = () => self.valueAsData ? [...COMPILER_ENVIRONMENT, .
 // tables beside it) and serves its routes: here the page's requests (lib/web.warp); a test run (valueAsData) does
 // neither, as core/native/tests.warp's `warp run <code>` does not: a program with routes gives its value, tables stay
 // in memory
-const programEnvironment = file => [...ENVIRONMENT, ...(self.valueAsData ? [] : ["WARP_SERVE=page", `WARP_PROGRAM=${file}`])];
+// WARP_SOUND_NOPACE when the page has not been clicked: sounds stay silent (playground.js heard), so lib/sound.warp
+// waited_till must not sleep on a silent clock (card samples-page-sound-pipes). Not WARP_NO_WINDOW: that forces the
+// WAV / getpid path the page lacks.
+const programEnvironment = file => [...ENVIRONMENT, ...(self.valueAsData ? [] : ["WARP_SERVE=page", `WARP_PROGRAM=${file}`]), ...(self.pageSystemValues?.heard ? [] : ["WARP_SOUND_NOPACE=1"])];
 const FAILURE_STATUS = 1;
 const STDOUT = 1;
 const FLOAT_DIGITS = 17; // driver.warp FLOAT_DIGITS
@@ -32,7 +35,7 @@ const FLOAT_DIGITS = 17; // driver.warp FLOAT_DIGITS
 let compilerModule; // warp.wasm compiled once; each compile gets a fresh instance, as each native run a fresh store
 
 async function loadDriverCompiler(progress = () => {}) {
-	const [response] = await Promise.all([fetch(COMPILER_URL), preloadedSources()]);
+	const [response] = await Promise.all([fetch(ofThisBuild(COMPILER_URL)), preloadedSources()]);
 	if (!response.ok) throw new Error(`${COMPILER_URL}: HTTP ${response.status}; build it with web/playground/build.sh`);
 	// compiled as it streams in, so Chrome and Safari keep its machine code with the cached response: a second visit
 	// skips the compile; the clone feeds the progress. A server without the application/wasm type compiles the bytes
@@ -41,7 +44,7 @@ async function loadDriverCompiler(progress = () => {}) {
 }
 
 async function preloadedSources() {
-	const response = await fetch(SOURCES_URL);
+	const response = await fetch(ofThisBuild(SOURCES_URL));
 	if (!response.ok) return console.warn(`${SOURCES_URL}: HTTP ${response.status}, each library source is fetched on its own; build it with web/playground/build.sh`);
 	preloadSources(await response.json(), COMPILER_FOLDER);
 }
@@ -198,14 +201,17 @@ function codeBuilt(program, encoding, cursor) {
 	return newGuestText(program, field);
 }
 
-// a timer's firing (lib/timers.warp): the program's timer_fired(id), what its block prints going out as it goes;
+// a timer's firing (lib/timers.warp): the program's timer_fired(id), what its block prints going out as it goes; a
+// fetch's answer {url, text} or {url, failure} (host-timers.js) its fetch_answered(id, answer), the failure an Error;
 // { value } the program's value anew by its VALUE_ANEW_EXPORT (main's last expression again, as _start shows it),
 // { failure } the sentence its trap or raise says, as a run's (raisedMessage)
 const VALUE_ANEW_EXPORT = "page_value";
-function timerFired(holder, id) {
+const fetchAnswerOf = (exports, { url, text, failure }) => failure === undefined ? newGuestText(exports, text) : newGuestError(exports, `fetch ${url} failed: ${failure}`);
+function timerFired(holder, id, answer) {
 	const { exports } = holder;
 	try {
-		exports.timer_fired(BigInt(id));
+		if (answer) exports[FETCH_ANSWERED_EXPORT](BigInt(id), fetchAnswerOf(exports, answer));
+		else exports.timer_fired(BigInt(id));
 		return exports[VALUE_ANEW_EXPORT] ? { value: shownValue(exports, exports[VALUE_ANEW_EXPORT]()) } : {};
 	} catch (failure) {
 		return { failure: failure instanceof WasiExit ? `the timer's block exited (status ${failure.code})` : raisedMessage(exports, failure) };
@@ -221,6 +227,7 @@ function compilerHostWords(exports) {
 			std_pure: (module, member, argumentList) => stdCall(exports(), module, member, argumentList, { warnings: [] }),
 			paint: () => { throw new Error("the compiler paints nothing"); },
 			real_path: () => -1,
+			canonical_text: text => canonicalText(exports(), text),
 			random: Math.random,
 			random_below: below => BigInt(Math.floor(Math.random() * Number(below))),
 			clock: () => BigInt(Date.now()),
@@ -282,7 +289,9 @@ function programRan(bytes, file, hooks) {
 		holder.run = { module, bytes };
 		self.joinVoice?.();
 		eachHostPart("started", holder.run);
-		holder.exports = new WebAssembly.Instance(module, withRuntime(bytes, withWasi(programImports(holder, hooks), wasi), holder.linked)).exports;
+		// (kept: a module the run links on a host word's first call, unicode for canonical_text, takes the same imports)
+		holder.imports = withWasi(programImports(holder, hooks), wasi);
+		holder.exports = new WebAssembly.Instance(module, withRuntime(bytes, holder.imports, holder.linked)).exports;
 	} catch (failure) {
 		return { status: FAILURE_STATUS, said: String(failure.message ?? failure) };
 	}
@@ -306,7 +315,9 @@ function evaluatedNatively(code, file, hooks) {
 		const events = html !== undefined && holder.exports.page_event ? pageEventsOf(html) : [];
 		// a page listens after main for its markup's events and its timers (lib/timers.warp, host-timers.js)
 		if (status === 0 && (events.length || holder.timers?.length)) hooks.listen?.(holder, events);
-		return { ...report(status === 0 ? value : said, status), html, warnings };
+		// fetching: the answers still out (lib/net.warp fetch_later), each rendering the page anew when it comes
+		// runtime_warnings: what the host words said once a run (host-gpu.js warnOnce, @gpu on the CPU, `warn`)
+		return { ...report(status === 0 ? value : said, status), html, warnings, runtime_warnings: holder?.warnings ?? [], fetching: holder?.fetchesLeft ?? 0 };
 	});
 }
 
@@ -410,4 +421,10 @@ function pageEventHandled(holder, event, detail) {
 	}
 }
 
-const report = (value, status) => ({ value, error: status !== 0 && value !== "", status, warnings: [], runtime_warnings: [], hints: [], notes: [] });
+const report = (value, status) => ({ value, error: status !== 0 && value !== "", error_at: placeNamed(value), status, warnings: [], runtime_warnings: [], hints: [], notes: [] });
+// the place in the typed program a failure names last, ` at 5:22` or ` at playground.warp:5:22`, which the page marks
+const PLACE_IN_PROGRAM = new RegExp(` at (?:${TYPED_FILE.replace(".", "\\.")}:)?(\\d+):(\\d+)`, "g");
+function placeNamed(value) {
+	const [, line, column] = [...String(value).matchAll(PLACE_IN_PROGRAM)].at(-1) ?? [];
+	return line ? { line: Number(line), column: Number(column) } : undefined;
+}

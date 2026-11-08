@@ -1,0 +1,398 @@
+// The native warp's window (decision window-in-warp, card window-ffi-replace), a part of lib/host/native_host.warp: what the
+// playground's canvas answers in JavaScript (web/playground/canvas.js), natively over SDL3 by plain FFI: host_owns /
+// host_value (the window's system values), host_value_set, host_window_layer (a painting's Metal layer, which
+// libwarp_gpu shows it in) and window_run_ended.
+// `window_open = 1` or the first painting opens it, never under WARP_NO_WINDOW or CI. Each painting is a frame, its
+// title telling the frame times; each painting and reading of window_open takes the window's events in. Closed, it
+// ends a program painting on; a still picture (a run's one painting) stays shown after the run until it is closed.
+// A window sized by its painting opens at the largest whole multiple of it that fits a share of the screen. It resizes
+// freely and goes full screen by the system value window_fullscreen or its green button: libwarp_gpu shows the
+// painting as large as fits, its aspect kept, centered; the pointer is told in the painting's pixels
+WINDOW_TITLE = "warp"
+DEFAULT_WIDTH = 640
+DEFAULT_HEIGHT = 480
+// the most of the screen a window sized by its painting opens to
+SCREEN_SHARE = 0.7
+TITLE_EVERY_NS = 500000000
+OUT_OF_SIGHT_MS = 16
+// the codes lib/keys.warp KEY_NAMES gives the keys SDL codes above the characters (web/playground/canvas.js KEY_CODES)
+SDL_KEYS = [SDLK_UP, SDLK_DOWN, SDLK_LEFT, SDLK_RIGHT, SDLK_LSHIFT, SDLK_RSHIFT, SDLK_LCTRL, SDLK_RCTRL, SDLK_LALT, SDLK_RALT, SDLK_LGUI, SDLK_RGUI]
+WARP_KEYS = [63232, 63233, 63234, 63235, 63312, 63312, 63313, 63313, 63314, 63314, 63315, 63315]
+// the system values answered here, those the pointer tells in the painting's pixels among them
+POINTER_VALUES = ["mouse_x", "mouse_y", "mouse_down_x", "mouse_down_y"]
+// (the window's sides only while it is open: before, the size the program set, which the driver keeps)
+SIDES = ["window_width", "window_height"]
+OWNED_VALUES = ["window_open", "window_possible", "window_fullscreen", "key_down", "key code held", "keys pressed", "key code pressed", "mouse_down", "mouse_wheel", "gpu_drawing", "dark mode"] + POINTER_VALUES
+
+global sdl_window = 0
+global view = 0
+global open_now = no
+global sized_by_program = no
+global closed_by_user = no
+global width = DEFAULT_WIDTH
+global height = DEFAULT_HEIGHT
+// the last painting's size: the pointer is told in its pixels
+global painted_width = 0
+global painted_height = 0
+// the keys held, the last pressed last; the keys that went down so far and the last of them: `on key {…}` runs for a
+// press even when the key is up again before the frame looks (lib/keys.warp)
+global held = []
+global presses = 0
+global last_pressed = 0
+global mouse_x = 0.0
+global mouse_y = 0.0
+global wheel = 0.0
+global mouse_down = no
+// where the button last went down, in the window's points: a stroke starts there (mouse_down_x, mouse_down_y)
+global down_x = 0.0
+global down_y = 0.0
+global frames = 0
+global frames_since_title = 0
+global title_ns = 0
+// the blocks SDL fills: an event, a rectangle, the window's two sides
+global event = 0
+global rectangle = 0
+global points_wide = 0
+global points_high = 0
+
+// no window under WARP_NO_WINDOW or CI, nor without SDL3
+windows_refused() := quiet_run() or library_function("SDL3", "SDL_Init") == 0
+// the keycode SDL tells as the code warp gives the key; 0 for a key without one
+key_code(key: int): int := {
+	for i in 0 ..< count(SDL_KEYS) { if SDL_KEYS[i] == key { return WARP_KEYS[i] } }
+	if key >= SDLK_SCANCODE_MASK then 0 else key
+}
+key_went_down(code: int, repeated: bool) := {
+	if code != 0 and not repeated {
+		presses += 1
+		last_pressed = code
+	}
+	if code != 0 and code not in held { held += [code] }
+}
+key_released(code: int) := { held = held.filter(k => k != code) }
+
+// how many times the painting's size the window opens at: the most that fits SCREEN_SHARE of the screen, at least once
+enlarged(): int := {
+	if sized_by_program or not SDL_GetDisplayUsableBounds(SDL_GetPrimaryDisplay(), rectangle) { return 1 }
+	times = floor(min(field_i32(rectangle, SDL_RECT_WIDTH_AT) * SCREEN_SHARE / width, field_i32(rectangle, SDL_RECT_HEIGHT_AT) * SCREEN_SHARE / height)) as int
+	max(times, 1)
+}
+window_opened() := {
+	if open_now or windows_refused() { return ø }
+	if not sdl_started(SDL_INIT_VIDEO) { return eprint("window: " + SDL_GetError()) }
+	event = calloc(1, SDL_EVENT_BYTES)
+	rectangle = calloc(1, SDL_RECT_BYTES)
+	points_wide = calloc(1, 4)
+	points_high = calloc(1, 4)
+	times = enlarged()
+	sdl_window = SDL_CreateWindow(WINDOW_TITLE, width * times, height * times, SDL_WINDOW_METAL + SDL_WINDOW_RESIZABLE)
+	if sdl_window == 0 { return eprint("window: " + SDL_GetError()) }
+	view = SDL_Metal_CreateView(sdl_window)
+	open_now = yes
+	title_ns = SDL_GetTicksNS()
+}
+window_closed() := {
+	if view != 0 { SDL_Metal_DestroyView(view) }
+	if sdl_window != 0 { SDL_DestroyWindow(sdl_window) }
+	view = 0
+	sdl_window = 0
+	open_now = no
+}
+// the frame times in the title, every half second: the mean of the frames since
+frame_timed() := {
+	now = SDL_GetTicksNS()
+	frames += 1
+	frames_since_title += 1
+	if now - title_ns < TITLE_EVERY_NS { return ø }
+	milliseconds = (now - title_ns) / 1000000.0 / frames_since_title
+	SDL_SetWindowTitle(sdl_window, WINDOW_TITLE + " — " + tenths(milliseconds) + " ms a frame, " + round(1000 / milliseconds) + " fps")
+	title_ns = now
+	frames_since_title = 0
+}
+tenths(x: float): text := {
+	whole = round(x * 10) as int
+	"\(whole /! 10).\(whole % 10)"
+}
+// the window's events since the last frame taken in
+events_taken() := {
+	wheel = 0.0
+	while open_now and SDL_PollEvent(event) { event_taken(field_u32(event, SDL_EVENT_TYPE_AT)) }
+	// a window out of sight has no refresh to wait for: its frames idle instead of spinning
+	out_of_sight = SDL_WINDOW_HIDDEN + SDL_WINDOW_MINIMIZED + SDL_WINDOW_OCCLUDED
+	if open_now and both_bits(SDL_GetWindowFlags(sdl_window), out_of_sight) != 0 { SDL_Delay(OUT_OF_SIGHT_MS) }
+}
+event_taken(type: int) := {
+	if type == SDL_EVENT_QUIT or type == SDL_EVENT_WINDOW_CLOSE_REQUESTED {
+		closed_by_user = yes
+		window_closed()
+	}
+	if type == SDL_EVENT_KEY_DOWN { key_went_down(key_code(field_u32(event, SDL_KEY_AT)), field_u8(event, SDL_KEY_REPEAT_AT) != 0) }
+	if type == SDL_EVENT_KEY_UP { key_released(key_code(field_u32(event, SDL_KEY_AT))) }
+	if type == SDL_EVENT_MOUSE_MOTION {
+		mouse_x = field_f32(event, SDL_MOUSE_X_AT)
+		mouse_y = field_f32(event, SDL_MOUSE_Y_AT)
+	}
+	if type == SDL_EVENT_MOUSE_BUTTON_DOWN {
+		mouse_down = yes
+		down_x = field_f32(event, SDL_MOUSE_X_AT)
+		down_y = field_f32(event, SDL_MOUSE_Y_AT)
+	}
+	if type == SDL_EVENT_MOUSE_BUTTON_UP { mouse_down = no }
+	if type == SDL_EVENT_MOUSE_WHEEL { wheel += field_f32(event, SDL_WHEEL_Y_AT) }
+}
+
+// the window's width (across), else its height, in points
+window_side(across: bool): int := {
+	SDL_GetWindowSize(sdl_window, points_wide, points_high)
+	field_i32(if across then points_wide else points_high, 0)
+}
+// a pointer position in the window's points as a pixel of the painting the window shows as large as fits, centered
+// (libwarp_gpu letterboxed); across or down
+in_painting(point: float, across: bool): int := {
+	wide = window_side(yes)
+	high = window_side(no)
+	if painted_width <= 0 or painted_height <= 0 or wide <= 0 or high <= 0 { return floor(point) as int }
+	scale = min(wide / painted_width, high / painted_height) as float
+	margin = if across then (wide - painted_width * scale) / 2 else (high - painted_height * scale) / 2
+	floor((point - margin) / scale) as int
+}
+pointer_value(name: text): int := {
+	if not open_now { return 0 }
+	across = name == "mouse_x" or name == "mouse_down_x"
+	pressed = name == "mouse_down_x" or name == "mouse_down_y"
+	in_painting(if across then (if pressed then down_x else mouse_x) else (if pressed then down_y else mouse_y), across)
+}
+full_screen() := open_now and both_bits(SDL_GetWindowFlags(sdl_window), SDL_WINDOW_FULLSCREEN) != 0
+// whether the system shows dark mode, asked without a window (SDL's theme needs its video started): macOS keeps it as
+// the global preference AppleInterfaceStyle "Dark"; elsewhere not known, light
+CFPreferencesCopyAppValue(key: handle, application: handle): handle from 'CoreFoundation'
+CFStringCompare(a: handle, b: handle, options: i64): i64 from 'CoreFoundation'
+CF_CASE_INSENSITIVE = 1
+dark_mode(): bool := {
+	if not on_mac() { return no }
+	style = CFPreferencesCopyAppValue(cf_text("AppleInterfaceStyle"), cf_text("kCFPreferencesAnyApplication"))
+	if style == 0 { return no }
+	dark = CFStringCompare(style, cf_text("Dark"), CF_CASE_INSENSITIVE) == 0
+	CFRelease(style)
+	dark
+}
+
+// whether a system value is answered here (the driver gives the name as a node)
+host_owns(name): bool := str(name) in OWNED_VALUES or (open_now and str(name) in SIDES)
+// a system value answered here (host_owns)
+host_value(name): int := value_of(str(name))
+value_of(name: text): int := {
+	if name == "window_open" {
+		if open_now { events_taken() }
+		return if open_now then 1 else 0
+	}
+	if name in POINTER_VALUES { return pointer_value(name) }
+	// the open window's size as its user made it, in points: a painting without a size follows it
+	if name in SIDES { return window_side(name == "window_width") }
+	if name == "window_possible" { return if windows_refused() then 0 else 1 }
+	if name == "key_down" { return if open_now and count(held) > 0 then 1 else 0 }
+	if name == "key code held" { return if open_now and count(held) > 0 then held.last() else 0 }
+	if name == "keys pressed" { return presses }
+	if name == "key code pressed" { return last_pressed }
+	if name == "mouse_down" { return if open_now and mouse_down then 1 else 0 }
+	if name == "mouse_wheel" { return if open_now then wheel as int else 0 }
+	if name == "window_fullscreen" { return if full_screen() then 1 else 0 }
+	if name == "dark mode" { return if dark_mode() then 1 else 0 }
+	0
+}
+// a system value set: window_open opens (1) or closes (0) the window, window_fullscreen fills the screen, both owned
+// here (yes); the window's size is the driver's and only followed here (no)
+host_value_set(name, value: int): bool := value_set(str(name), value)
+value_set(name: text, value: int): bool := {
+	if name == "window_open" {
+		if value != 0 then window_opened() else window_closed()
+		return yes
+	}
+	if name == "window_fullscreen" {
+		if open_now { SDL_SetWindowFullscreen(sdl_window, value != 0) }
+		return yes
+	}
+	if name == "window_width" or name == "window_height" {
+		if name == "window_width" then width = value else height = value
+		sized_by_program = yes
+		if open_now { SDL_SetWindowSize(sdl_window, width, height) }
+	}
+	no
+}
+// the window's Metal layer for a painting of width × height, the window opened by the first; 0 where none opens. A
+// window the program gave no size takes its first painting's. Closed by its user, the run ends
+host_window_layer(painting_width: int, painting_height: int): int := {
+	if closed_by_user { exit(0) }
+	if not open_now {
+		if not sized_by_program {
+			width = painting_width
+			height = painting_height
+		}
+		window_opened()
+	}
+	if not open_now or view == 0 { return 0 }
+	events_taken()
+	if closed_by_user { exit(0) }
+	frame_timed()
+	painted_width = painting_width
+	painted_height = painting_height
+	if not sized_by_program and frames == 1 and (painting_width != width or painting_height != height) {
+		width = painting_width
+		height = painting_height
+		times = enlarged()
+		SDL_SetWindowSize(sdl_window, width * times, height * times)
+	}
+	SDL_Metal_GetLayer(view)
+}
+// the last painting shown again, the window out of sight or resized since (libwarp_gpu)
+warp_gpu_shown_again(): i32 from 'warp_gpu'
+// a run that painted one picture leaves it in the window until the window is closed (or Escape), shown again as the
+// window comes into sight (it opens behind the app in front) or changes size; an animation's window closes with its run
+window_run_ended() := {
+	while open_now and frames == 1 and SDL_WaitEvent(event) {
+		type = field_u32(event, SDL_EVENT_TYPE_AT)
+		escaped = type == SDL_EVENT_KEY_DOWN and field_u32(event, SDL_KEY_AT) == SDLK_ESCAPE
+		if type == SDL_EVENT_QUIT or type == SDL_EVENT_WINDOW_CLOSE_REQUESTED or escaped { window_closed() }
+		else if type == SDL_EVENT_WINDOW_EXPOSED or type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED { warp_gpu_shown_again() }
+	}
+}
+
+// text_coverage(words, size) (label of use draw): the words set `size` pixels per em on one line in the system's
+// sans-serif font, as [width, height, then how much each pixel is covered from 0 to 255, row by row], its height the
+// font's ascent and descent, as the playground's canvas sets them (web/playground/host-media.js). On macOS CoreText
+// sets them, as the system shows text; elsewhere, or with WARP_FONT naming a font file, FreeType
+host_text_coverage(words, size: int): any := if on_mac() and env(FONT_VARIABLE) == ø then core_text_coverage(str(words), size) else free_type_coverage(str(words), size)
+
+CTFontCreateWithName(name: handle, size: f64, matrix: handle): handle from 'CoreText'
+CTLineCreateWithAttributedString(string: handle): handle from 'CoreText'
+CTLineGetTypographicBounds(line: handle, ascent: handle, descent: handle, leading: handle): f64 from 'CoreText'
+CTLineDraw(line: handle, context: handle): void from 'CoreText'
+CFAttributedStringCreateMutable(allocator: handle, most: i64): handle from 'CoreFoundation'
+// (a CFRange crosses as its start and length)
+CFAttributedStringReplaceString(string: handle, start: i64, length: i64, replacement: handle): void from 'CoreFoundation'
+CFAttributedStringSetAttribute(string: handle, start: i64, length: i64, name: handle, value: handle): void from 'CoreFoundation'
+CFStringGetLength(string: handle): i64 from 'CoreFoundation'
+CGBitmapContextCreate(data: handle, width: i64, height: i64, bits: i64, row: i64, space: handle, info: i32): handle from 'CoreGraphics'
+CGBitmapContextGetData(context: handle): handle from 'CoreGraphics'
+CGContextSetTextPosition(context: handle, x: f64, y: f64): void from 'CoreGraphics'
+SYSTEM_FONT_NAME = "Helvetica"
+// kCTFontAttributeName's string
+FONT_ATTRIBUTE = "NSFont"
+// a bitmap of one byte a pixel, its coverage (kCGImageAlphaOnly, no color space)
+ALPHA_ONLY = 7
+// cells CoreText and FreeType fill: a line's ascent, descent and leading, a kerning's vector
+global ascent_cell = 0
+global descent_cell = 0
+global leading_cell = 0
+global kerning_cell = 0
+cells_made() := {
+	if ascent_cell == 0 {
+		ascent_cell = calloc(1, 8)
+		descent_cell = calloc(1, 8)
+		leading_cell = calloc(1, 8)
+		kerning_cell = calloc(2, 8)
+	}
+}
+// the coverage list of a width × height bitmap whose pixel i `covered(i)` gives
+coverage_list(width: int, height: int, coverage: list): list := [width, height] + coverage
+core_text_coverage(words: text, size: int): list := {
+	cells_made()
+	string = CFStringCreateWithCString(0, words, CF_UTF8)
+	attributed = CFAttributedStringCreateMutable(0, 0)
+	CFAttributedStringReplaceString(attributed, 0, 0, string)
+	font = CTFontCreateWithName(cf_text(SYSTEM_FONT_NAME), size, 0)
+	CFAttributedStringSetAttribute(attributed, 0, CFStringGetLength(string), cf_text(FONT_ATTRIBUTE), font)
+	line = CTLineCreateWithAttributedString(attributed)
+	across = CTLineGetTypographicBounds(line, ascent_cell, descent_cell, leading_cell)
+	descent = field_f64(descent_cell, 0)
+	width = max(ceil(across) as int, 1)
+	height = max(ceil(field_f64(ascent_cell, 0) + descent) as int, 1)
+	bitmap = CGBitmapContextCreate(0, width, height, 8, width, 0, ALPHA_ONLY)
+	// (the baseline above the bottom by the descent; the bitmap's rows from the top)
+	CGContextSetTextPosition(bitmap, 0, descent)
+	CTLineDraw(line, bitmap)
+	data = CGBitmapContextGetData(bitmap)
+	covered = coverage_list(width, height, [field_u8(data, i) for i in 0 ..< width * height])
+	for made in [bitmap, line, font, attributed, string] { CFRelease(made) }
+	covered
+}
+
+// FreeType (Linux's own text, or WARP_FONT's file anywhere): the font read once, each glyph rendered at its place on
+// the line, its kerning from the one before
+FT_Init_FreeType(library: out): handle from 'freetype'
+FT_New_Face(library: handle, path: text, index: i64, face: out): handle from 'freetype'
+FT_Set_Pixel_Sizes(face: handle, width: i32, height: i32): i32 from 'freetype'
+FT_Get_Char_Index(face: handle, code: i64): i32 from 'freetype'
+FT_Load_Glyph(face: handle, glyph: i32, flags: i32): i32 from 'freetype'
+FT_Get_Kerning(face: handle, left: i32, right: i32, mode: i32, kerning: handle): i32 from 'freetype'
+FONT_VARIABLE = "WARP_FONT"
+// the sans-serif fonts looked for, the first found used: what browsers show for sans-serif on each system
+SYSTEM_FONTS = ["/System/Library/Fonts/Helvetica.ttc", "/System/Library/Fonts/Supplemental/Arial.ttf",
+	"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/TTF/DejaVuSans.ttf", "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+	"/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", "/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf"]
+FT_LOAD_RENDER = 4
+FT_KERNING_DEFAULT = 0
+// FreeType's lengths are 64ths of a pixel
+FT_UNITS = 64
+// the fields read: FT_FaceRec's glyph and size, FT_SizeRec's metrics' ascender and descender, FT_GlyphSlotRec's
+// advance.x, bitmap (rows, width, pitch, buffer), bitmap_left and bitmap_top
+FT_FACE_GLYPH_AT = 152
+FT_FACE_SIZE_AT = 160
+FT_SIZE_ASCENDER_AT = 48
+FT_SIZE_DESCENDER_AT = 56
+FT_GLYPH_ADVANCE_AT = 128
+FT_GLYPH_ROWS_AT = 152
+FT_GLYPH_WIDTH_AT = 156
+FT_GLYPH_PITCH_AT = 160
+FT_GLYPH_BUFFER_AT = 168
+FT_GLYPH_LEFT_AT = 192
+FT_GLYPH_TOP_AT = 196
+global face = 0
+font_face() := {
+	if face == 0 {
+		path = env(FONT_VARIABLE) ?? SYSTEM_FONTS.find(exists)
+		if path == ø { raise "no font found: install DejaVu Sans, or name a .ttf in " + FONT_VARIABLE }
+		if not exists(path) { raise "cannot read the font " + path }
+		face = FT_New_Face(FT_Init_FreeType(), path, 0)
+	}
+	face
+}
+free_type_coverage(words: text, size: int): list := {
+	cells_made()
+	font = font_face()
+	FT_Set_Pixel_Sizes(font, 0, size)
+	metrics = field_pointer(font, FT_FACE_SIZE_AT)
+	ascent = field_i64(metrics, FT_SIZE_ASCENDER_AT) / FT_UNITS
+	height = max(ceil(ascent - field_i64(metrics, FT_SIZE_DESCENDER_AT) / FT_UNITS) as int, 1)
+	slot = field_pointer(font, FT_FACE_GLYPH_AT)
+	// each glyph's [left, top, columns, rows, coverage], left and top on the line's bitmap
+	glyphs = []
+	caret = 0
+	previous = 0
+	for c in words {
+		glyph = FT_Get_Char_Index(font, ord(c))
+		if previous != 0 {
+			FT_Get_Kerning(font, previous, glyph, FT_KERNING_DEFAULT, kerning_cell)
+			caret += field_i64(kerning_cell, 0)
+		}
+		FT_Load_Glyph(font, glyph, FT_LOAD_RENDER)
+		columns = field_u32(slot, FT_GLYPH_WIDTH_AT)
+		rows = field_u32(slot, FT_GLYPH_ROWS_AT)
+		pitch = field_i32(slot, FT_GLYPH_PITCH_AT)
+		buffer = field_pointer(slot, FT_GLYPH_BUFFER_AT)
+		coverage = [field_u8(buffer, (k /! columns) * pitch + k % columns) for k in 0 ..< columns * rows]
+		glyphs += [[caret /! FT_UNITS + field_i32(slot, FT_GLYPH_LEFT_AT), round(ascent) as int - field_i32(slot, FT_GLYPH_TOP_AT), columns, rows, coverage]]
+		caret += field_i64(slot, FT_GLYPH_ADVANCE_AT)
+		previous = glyph
+	}
+	width = max(ceil(caret / FT_UNITS) as int, 1)
+	cells = int[width * height]
+	for g in glyphs {
+		for k in 0 ..< g[2] * g[3] {
+			column = g[0] + k % g[2]
+			row = g[1] + k /! g[2]
+			if column >= 0 and column < width and row >= 0 and row < height { cells[row * width + column] = min(cells[row * width + column] + g[4][k], 255) }
+		}
+	}
+	coverage_list(width, height, [cells[i] for i in 0 ..< width * height])
+}

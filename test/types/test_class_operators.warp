@@ -7,12 +7,12 @@ is! 'class V{x:int; y:int; plus(o) := V(x + o.x, y + o.y); times(k) := V(x * k, 
 is! 'class V{x:int; y:int; plus(o) := V(x + o.x, y + o.y); times(k) := V(x * k, y * k)}; a = V(1, 1); (a + a + a).x' 3
 
 # operators_as_python_and_kotlin_write_them
-is! 'class V:
-    def __init__(self, x):
-        self.x = x
-    def __add__(self, other):
-        return V(self.x + other.x)
-(V(1) + V(2)).x' 3
+# triage-held 2026-11-06: Python class, foreign syntax :: is! 'class V:
+# ::     def __init__(self, x):
+# ::         self.x = x
+# ::     def __add__(self, other):
+# ::         return V(self.x + other.x)
+# :: (V(1) + V(2)).x' 3
 is! 'data class V(val x: Int) { operator fun plus(o: V) = V(x + o.x) }
 (V(1) + V(2)).x' 3
 

@@ -1,0 +1,5 @@
+# functions(): the program's own functions as function values, a list to filter (card functions-list, user 2026-10-15)
+'test_a(x) := x; helper(y) := y; [f.name for f in functions().filter(f => f.name.starts_with("test_"))]'	["test_a"]
+'square(x) := x * x; fs = functions(); (fs#1)(4)'	16
+'x = 3; f(y) := y; count(functions())'	1
+'count(functions())'	0

@@ -25,8 +25,20 @@ import functools, http.server, json, os, re, subprocess, sys, threading, time, u
 # --samples (scripts/samples-web.sh): every samples/**/*.warp in the page, its output against the native run's
 SAMPLES_WEB_RESULTS = "test/samples-web.txt"  # tracked: status and sample, one a line, like test/samples.txt
 # a sample that fails on purpose says why on a line of its own, `# expected failure: deliberate parse errors`: EXP
-# instead of FAIL in either sweep (scripts/samples.sh EXPECTED_FAILURE)
+# instead of FAIL in either sweep (scripts/samples.sh EXPECTED_FAILURE); in the page ok when it fails with the native
+# run's error, it gives what the native run gives (decision exp-counts)
 EXPECTED_FAILURE = re.compile(r"^# expected failure: ", re.M)
+# where a sample runs, a line of its own: `# host: native` or `# host: none` stay out of the page's sweep and menu
+# (build.sh), `# host: page` runs here with no native output to compare (scripts/samples.sh HOST_LINE)
+HOST_LINE = re.compile(r"^# host: ([a-z]+)", re.M)
+def sample_host(source):
+	"""where a sample says it runs (HOST_LINE): native, page, none, or both when it says nothing"""
+	host = HOST_LINE.search(source)
+	return host.group(1) if host else "both"
+# a sample's interactions (card scripts-samples, decision sample-checks): `# check: click "+1", type "name" "Ann" → text`,
+# each from a fresh run, its steps done on the page, its text then holding the text after → (natively `warp app check`)
+CHECK_LINE = re.compile(r"^# check: (.*) → (.*)$", re.M)
+CHECK_STEP = re.compile(r'(click|type)((?:\s+"[^"]*")+)')
 NATIVE_RESULTS = "test/samples.txt"  # scripts/samples.sh: WIN samples need a C window library, never run in a page
 # scripts/samples.sh: <sample with / as _>.txt, what the native run printed (samples-web.sh names the main checkout's)
 NATIVE_OUTPUTS = os.environ.get("WARP_NATIVE_OUTPUTS", "data/samples/out")
@@ -50,8 +62,8 @@ STOPPED = "stopped after"  # playground.js: the report of a run the page stopped
 # a section of a test file the browser cannot run (a C window library, a shell command) says why in its heading,
 # `# raylib_calls — native only: raylib, a C library the browser has not`: EXP instead of PAGE for the cases below it, up
 # to the next blank line (night decision N20, as the samples' EXPECTED_FAILURE; in the heading, as a line of its own
-# would move the cases' lines the native verdicts are stored by)
-NATIVE_ONLY = re.compile(r"^#.* native only: ")
+# would move the cases' lines the native verdicts are stored by); a sample with such a line is EXP instead of FAIL
+NATIVE_ONLY = re.compile(r"^#.* native only: ", re.M)
 CASE_PLACE = re.compile(r"^(\S+):(\d+) ")
 PAGE_LOST = "playground is not defined"  # a report of a page that lost its API mid-batch: no verdict, the case runs again
 # a test-verdicts line: its mark, then the case; a failure's ends in what it got (scripts/baseline.sh case_of)
@@ -161,9 +173,9 @@ PAGE_ELEMENTS = "(a handler reads the value of the page's element of an id: $who
 PAGE_ELEMENTS_CODE = 'use web\ngreeting = "-"\ndiv{ input{ id: "who" } button{ on click { greeting = "Hello " + $who }, "Greet" } p{ greeting } }'
 PAGE_ELEMENTS_NAME = "Ada"
 PAGE_ELEMENTS_SHOWN = "Hello Ada"
-# scripts/build-site.sh: a markup program built as a static site, its page loaded and its button clicked (card
-# blockcompiler-entries: built sites on page_render/page_event); checked last, it leaves the playground's page
-BUILT_SITE = "(a site scripts/build-site.sh built shows its page and runs its handlers)"
+# `warp build --site`: a markup program built as a static site, its page loaded and its button clicked (cards
+# blockcompiler-entries, build-site: built sites on page_render/page_event); checked last, it leaves the playground's page
+BUILT_SITE = "(a site warp build --site built shows its page and runs its handlers)"
 BUILT_SITE_CODE = 'use web\ncount = 0\ndiv{ h1{ "Count " + count } button{ on click { count += 1 }, "add" } }\n'
 BUILT_SITE_FOLDER = "data/site-check"
 BUILT_SITE_SHOWN = ["Count 0", "Count 1"]  # the heading after main, after the click
@@ -179,7 +191,7 @@ NAMED_ARRAYS = """shader = "@group(0) @binding(0) var<storage, read_write> xs: a
 	if (id.x < arrayLength(&xs)) { xs[id.x] = xs[id.x] + 10.0; ns[id.x] = ns[id.x] - 1; }
 }"
 gpu_compute(shader, {xs: [1.5 2 3], ns: [7 8 9]}, 1)"""
-NAMED_ARRAYS_SHOWN = ["11.5", "6 7 8"]
+NAMED_ARRAYS_SHOWN = ["11.5", "6, 7, 8"]
 RED_SHADER = 'paint("@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }", 8, 8)'
 # card wgsl-error: a WGSL error of a shader block names its line and column in the program, whose word there is marked
 SHADER_ERROR = "(a WGSL error at its place in the program)"
@@ -278,6 +290,16 @@ gpu_render(s, 2, 2)
 gpu_render(s, 2, 2)
 gpu_render(s, 2, 2)#2"""
 PREVIOUS_FRAME_SHOWN = str(0xFFC0_0000)
+# card playground-stale-value: a run started without the Run button (an example chosen, auto-run, runCode) clears the
+# last run's value as Run does: an animation running long showed the value before it above itself
+STALE_VALUE = "(a run started without Run leaves no old value above an animation)"
+STALE_VALUE_CODE = "use draw\ncanvas(40, 40)\nloop {\n\tclear(paper)\n\tshow()\n\tsleep(16ms)\n}"
+STALE_VALUE_FIRST = "4242"
+STALE_VALUE_WAIT_MS = 3000
+# card run-during-load-feedback: while the worker still loads (?slow_start; 7.5 s on the user's iPad), the page's run is
+# pending as any run is: Run becomes Stop after the grace, and Stop cancels the run before it starts
+STOP_WHILE_LOADING = "(Stop shows while the compiler loads, and cancels the run)"
+STOP_WHILE_LOADING_WAIT_MS = 1500  # past STOP_GRACE_MS, before SLOW_START_MS lets the worker start the run
 # each GET the server began and finished, (seconds since it started, path, finished): shown after a failed tour, which
 # then says whether the browser asked for a stalled worker's scripts at all (card tour-firefox)
 served = []
@@ -420,16 +442,72 @@ def browser(*arguments):
 # shows an example or sample (%s: its name as JSON) and waits until its run finished
 RUN_EXAMPLE = """await playground.chooseExample(%s);
 		while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));"""
+# a window sample (WIN) still animating this long after it started (a raylib window's loop, natively until Escape) is
+# stopped and judged by the frames it showed (playground.js stopAnimation); other samples run to their end
+WINDOW_ANIMATION_SECONDS = 5
+SAMPLE_POLL_SECONDS = 0.5
+# a tour's sample started, then asked after in short evals (one eval waiting out a window's frames outlasted the
+# browser daemon's answer); its animation, which runs until the next run (playground.js startsFrame), is stopped after
+# WINDOW_ANIMATION_SECONDS: {running, failed}
+CHOOSE_SAMPLE = """window.sampleChosen = false; playground.chooseExample(%s).then(() => window.sampleChosen = true); "started";"""
+SAMPLE_STATUS = """(() => { const status = document.getElementById("status");
+	const running = !window.sampleChosen || status.textContent === "running…";
+	if (running && %s) playground.stopAnimation();
+	return JSON.stringify({ running, failed: !running && status.classList.contains("failed") ? status.textContent : "" }); })()"""
+
+
+# the sample shown anew (%s: its name), each step done on its rendered page as lib/markup.warp's click and type_into
+# find an element, by its text, placeholder, aria-label, name or id (%s: the steps as [word, label, text]): the
+# page's text after them, or the label no element shows
+CHECK_STEPS = """(async () => { """ + RUN_EXAMPLE + """
+	const root = document.getElementById("rendered").shadowRoot;
+	const labels = element => [element.textContent.trim(), ...["placeholder", "aria-label", "name", "id"].map(name => element.getAttribute(name))];
+	for (const [word, label, text] of %s) {
+		const element = [...root.querySelectorAll("*")].reverse().find(element => labels(element).includes(label));
+		if (!element) return JSON.stringify({ missing: label });
+		if (word === "type") {
+			element.value = text;
+			element.dispatchEvent(new Event("input", { bubbles: true }));
+		} else element.click();
+		await new Promise(done => setTimeout(done, """ + str(CLICK_MILLISECONDS) + """));
+	}
+	return JSON.stringify({ text: [...root.children].map(element => element.innerText).join(" ") });
+})()"""
+
+
+def spaced(text):
+	"""the text with each run of white space one space, as `warp app check` compares (lib/app/command.warp spaced)"""
+	return " ".join(text.split())
+
+
+def checks_wrong(name, source):
+	"""each check line of the sample that the page does not pass, with what it showed"""
+	wrong = []
+	for steps, expected in CHECK_LINE.findall(source):
+		parsed = [[word, *re.findall(r'"([^"]*)"', quoted)] for word, quoted in CHECK_STEP.findall(steps)]
+		answer = browser("eval", CHECK_STEPS % (json.dumps(name), json.dumps(parsed)))
+		shown = json.loads(json.loads(answer)) if answer.startswith('"') else {"text": f"(page gave no answer: {answer or browser_complaint})"}
+		if "missing" in shown:
+			wrong.append(f"check {steps} → {expected}: no element shows {shown['missing']}")
+		elif spaced(expected) not in spaced(shown["text"]):
+			wrong.append(f"check {steps} → {expected}: the page shows {spaced(shown['text'])[:SHOWN_DIFFERENCE]}")
+	return wrong
 
 
 def run_sample(name):
 	"""what is wrong with the sample's run: its failed status (`cannot open mozart.mp3`, card open-mozart), as the console
 	shows no error for it"""
-	answer = browser("eval", f"""(async () => {{ {RUN_EXAMPLE % json.dumps(name)}
-		const status = document.getElementById("status");
-		return JSON.stringify(status.classList.contains("failed") ? status.textContent : ""); }})()""")
-	failed = json.loads(json.loads(answer)) if answer.startswith('"') else f"(page gave no answer: {answer or browser_complaint})"
-	return [f"status: {failed}"] if failed else []
+	browser("eval", CHOOSE_SAMPLE % json.dumps(name))
+	started_at = time.time()
+	while time.time() < started_at + SAMPLE_ANSWER_SECONDS:
+		time.sleep(SAMPLE_POLL_SECONDS)
+		answer = browser("eval", SAMPLE_STATUS % json.dumps(time.time() - started_at > WINDOW_ANIMATION_SECONDS))
+		if not answer.startswith('"'):
+			return [f"status: (page gave no answer: {answer or browser_complaint})"]
+		shown = json.loads(json.loads(answer))
+		if not shown["running"]:
+			return [f"status: {shown['failed']}"] if shown["failed"] else []
+	return [f"status: still running after {SAMPLE_ANSWER_SECONDS} s"]
 
 
 def reported(message):
@@ -542,11 +620,21 @@ class ConsoleWatch:
 		self.process.terminate()
 
 
+# a page script's wait until the run going on is shown
+SHOWN_WAIT = 'while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));'
+
+
+def wait_for_first_run():
+	"""the page runs its example as it loads: a check run first otherwise met that run, its own queued behind it (card
+	stop-button-check-red: Run never became Stop within the check's wait, the worker started ?slow_start late)"""
+	browser("eval", f"(async () => {{ {SHOWN_WAIT} return true; }})()")
+
+
 def run_code(code):
 	"""the playground's value once it ran `code`"""
 	script = f"""(async () => {{
 		await playground.runCode({json.dumps(code)});
-		while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));
+		{SHOWN_WAIT}
 		return document.getElementById("value").textContent;
 	}})()"""
 	shown = browser("eval", script)
@@ -702,9 +790,9 @@ def built_site_wrong():
 	os.makedirs(os.path.dirname(program), exist_ok=True)
 	with open(program, "w") as file:
 		file.write(BUILT_SITE_CODE)
-	built = subprocess.run([os.path.join(REPOSITORY, "scripts", "build-site.sh"), program], capture_output=True, text=True)
+	built = subprocess.run(["warp", "build", "--site", program], capture_output=True, text=True, env={**os.environ, "WARP_NO_WINDOW": "1"})
 	if built.returncode:
-		return [f"scripts/build-site.sh failed: {(built.stderr or built.stdout).strip()[-300:]}"]
+		return [f"warp build --site failed: {(built.stderr or built.stdout).strip()[-300:]}"]
 	browser("open", f"http://127.0.0.1:{PORT}/{BUILT_SITE_FOLDER}/site/index.html")
 	shown = browser("eval", f"""(async () => {{
 		const heading = async before => {{
@@ -786,6 +874,38 @@ def shader_error_wrong():
 	return wrong + ([] if ":" in marked else [f"shader error marks {marked!r}, expected the colon"])
 
 
+def stop_while_loading_wrong(page_url):
+	"""the page loaded anew: before its worker is ready the Run button says Stop, and pressing it ends the run as stopped"""
+	open_page(page_url)
+	wait_for_isolation()
+	shown = browser("eval", f"""(async () => {{
+		const pause = milliseconds => new Promise(done => setTimeout(done, milliseconds));
+		const button = document.getElementById("run");
+		for (let waited = 0; waited < {STOP_WHILE_LOADING_WAIT_MS} && !button.classList.contains("stop"); waited += 50) await pause(50);
+		const loading = button.textContent;
+		button.click();
+		await pause(300);
+		return JSON.stringify({{ loading, after: button.textContent, value: document.getElementById("value").textContent }});
+	}})()""")
+	wait_for_first_run()
+	shown = json.loads(json.loads(shown)) if shown.startswith('"') else {"loading": f"(page gave no answer: {shown or browser_complaint})"}
+	expected = {"loading": "Stop ■", "after": "Run ▶", "value": "stopped"}
+	return [f"{part}: {shown.get(part)!r}, expected {value!r}" for part, value in expected.items() if shown.get(part) != value]
+
+
+def stale_value_wrong():
+	"""a value shown, then an animation started by runCode: while it runs, the value line no longer shows that value"""
+	run_code(STALE_VALUE_FIRST)
+	shown = browser("eval", f"""(async () => {{
+		playground.runCode({json.dumps(STALE_VALUE_CODE)});
+		await new Promise(done => setTimeout(done, {STALE_VALUE_WAIT_MS}));
+		const line = document.getElementById("value");
+		const value = line.parentElement.hidden ? "" : line.textContent;
+		return value;
+	}})()""")
+	return [f"while the animation runs the value line shows {shown}, the last run's"] if STALE_VALUE_FIRST in shown else []
+
+
 def previous_frame_wrong():
 	"""a shader reading $previous adds to what its last render left; skipped loudly without WebGPU"""
 	rendered = run_code(PREVIOUS_FRAME_CODE)
@@ -843,7 +963,9 @@ def brush_wrong():
 	`while window_open` loop runs only once the page was clicked (playground.js tellSystemValues), so a real click first;
 	the sample then runs until stopped, so it is started, not waited for, and checked last (a check after it found
 	the page still busy with it)"""
-	if not webdriver:  # Firefox has no WebGPU here: the sample's error is the skip below
+	# Firefox's driver clicks for real too, now that its WebGPU paints the brush; Safari's has no click: without WebGPU
+	# the sample's error is the skip below
+	if not isinstance(webdriver, SafariDriver):
 		browser("click", "#output")
 	browser("eval", f"void playground.chooseExample({json.dumps(BRUSH_SAMPLE)})")
 	shown = browser("eval", f"""(async () => {{
@@ -1130,6 +1252,7 @@ def check_examples(names, page_url=None, site=None):
 	page_url = f"{page_url}{'&' if '?' in page_url else '?'}slow_start={SLOW_START_MS}"
 	open_page(page_url)
 	wait_for_isolation()
+	wait_for_first_run()
 	examples = json.loads(json.loads(browser("eval", "JSON.stringify(EXAMPLES)")))
 	samples = json.loads(json.loads(browser("eval", "JSON.stringify(Object.keys(SAMPLES).sort())")))
 	failures = []
@@ -1164,7 +1287,7 @@ def check_examples(names, page_url=None, site=None):
 	snippets = guide_snippets() if GUIDE in names else []
 	for line, code, value, printed in snippets:
 		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), *([(BUILT_SITE, built_site_wrong)] if serves_repository else [])) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), *([(BUILT_SITE, built_site_wrong)] if serves_repository else [])) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
@@ -1180,21 +1303,24 @@ def check_examples(names, page_url=None, site=None):
 
 
 # one sample started in the page as its own file (%s: path and source as JSON), its report kept as JSON in
-# window.sampleReport; asked for in short evals, since a long one loses agent-browser's channel ("CDP response channel
+# window.sampleReport, once the fetches it started are answered (playground.js settled); asked for in short evals, since a long one loses agent-browser's channel ("CDP response channel
 # closed" for gpu_visualizer under load)
 # only the fields the verdict reads: a sample's whole report holds its pictures too, and a full-HD frame (samples/gpu/
 # ringed_planet.warp) as JSON took this process past the dry run's memory cap
-REPORT_FIELDS = ["error", "errors", "message", "value", "printed", "printedWhole", "text", "stream"]
-START_SAMPLE = """window.sampleReport = undefined; playground.evaluate(%s, %s).then(report => window.sampleReport = JSON.stringify(report, """ + json.dumps(REPORT_FIELDS) + """),
+REPORT_FIELDS = ["error", "errors", "message", "value", "html", "printed", "printedWhole", "text", "stream", "paintings", "width", "height"]
+# a sample's timers run this long before its output is taken, as scripts/samples.sh's WARP_EVENTS_FOR has them run
+# natively (milliseconds)
+SAMPLE_EVENTS_MS = 3500
+START_SAMPLE = """window.sampleReport = undefined; playground.evaluate(%s, %s, { eventsFor: """ + str(SAMPLE_EVENTS_MS) + """ }).then(playground.settled).then(report => window.sampleReport = JSON.stringify(report, """ + json.dumps(REPORT_FIELDS) + """),
 	failure => window.sampleReport = JSON.stringify({ error: true, value: String(failure) })); "started";"""
-SAMPLE_POLL_SECONDS = 0.5
 
 
 def page_output(report):
-	"""what the page shows as the native warp prints it: the program's stdout, then its value unless that is ø"""
+	"""what the page shows as the native warp prints it: the program's stdout, then its value unless that is ø; a page of
+	markup its HTML (driver.js pageHtml), as the native warp prints page_render's"""
 	# printedWhole: every frame's output (playground.js shows only an animation's last frame, its `printed`)
 	printed = "".join(part["text"] for part in report.get("printedWhole", report.get("printed", [])) if part.get("stream", 1) == 1)
-	value = report.get("value") or ""
+	value = report.get("html") or report.get("value") or ""
 	if value in ("ø", "") or report.get("error"):
 		return printed
 	return printed + value + "\n"  # as the native warp shows it, a text in its quotes
@@ -1216,27 +1342,59 @@ def sample_verdict(report, native_output):
 	return "DIFF", f"page: {shown[:SHOWN_DIFFERENCE]!r}\n     native: {native_output[:SHOWN_DIFFERENCE]!r}"
 
 
-def page_report(source, path, page_url):
+def native_error(err_file):
+	"""the native run's error of an expected failure: the first line of its stderr but warnings, None without one"""
+	if not os.path.isfile(err_file):
+		return None
+	lines = [line for line in open(err_file, encoding="utf-8", errors="replace").read().splitlines() if line.strip() and not line.startswith("warning:")]
+	return lines[0][:200] if lines else None
+
+
+def expected_failure_verdict(page_error, native):
+	"""an expected failure (EXPECTED_FAILURE) gives what the native run gives when it fails with the native error: ok,
+	else EXP, which does not pass (decision exp-counts)"""
+	if native is not None and page_error.strip() == native.strip():
+		return "ok", ""
+	return "EXP", f"page: {page_error!r}\n     native: {native!r}"
+
+
+def window_verdict(report):
+	"""(status, detail) of a sample opening a C library's window (raylib, SDL), which natively has no output to compare
+	(scripts/samples.sh WIN): drew when the page ran it and showed its frames (host-media.js windowShown)"""
+	status, detail = sample_verdict(report, "")
+	if status in ("FAIL", "TIME"):
+		return status, detail
+	paintings = report.get("paintings") or []
+	if not paintings:
+		return "FAIL", "it drew nothing in the page"
+	return "drew", f"{paintings[-1].get('width')}×{paintings[-1].get('height')}"
+
+
+def page_report(source, path, page_url, animation_seconds=None):
 	"""the page's report of the sample; a page that gave none (its renderer crashed, now and then after many runs) is
 	opened anew and asked once more, so only a sample that fails twice in a fresh page counts as stuck"""
 	for attempt in range(2):
-		report = sample_answer(source, path)
+		report = sample_answer(source, path, animation_seconds)
 		if "stuck" not in report:
 			return report
 		open_samples_page(page_url)
 	return report
 
 
-def sample_answer(source, path):
-	"""the report of the sample started in the page, {stuck} when none came in SAMPLE_ANSWER_SECONDS"""
+def sample_answer(source, path, animation_seconds=None):
+	"""the report of the sample started in the page, {stuck} when none came in SAMPLE_ANSWER_SECONDS; an animation
+	stopped after `animation_seconds`, when given"""
 	started = browser("eval", START_SAMPLE % (json.dumps(source), json.dumps(path)))
 	if started != '"started"' and wait_for_playground():  # the page was still (re)loading: its API came since
 		started = browser("eval", START_SAMPLE % (json.dumps(source), json.dumps(path)))
 	if started != '"started"':
 		return {"error": True, "stuck": None, "value": f"(the page did not start it: {(started or browser_complaint)[:200]})"}
-	deadline = time.time() + SAMPLE_ANSWER_SECONDS
+	started_at = time.time()
+	deadline = started_at + SAMPLE_ANSWER_SECONDS
 	while time.time() < deadline:
 		time.sleep(SAMPLE_POLL_SECONDS)
+		if animation_seconds is not None and time.time() - started_at > animation_seconds:
+			browser("eval", "playground.stopAnimation()")
 		answer = browser("eval", "window.sampleReport ?? null")
 		if answer not in ("null", ""):
 			try:
@@ -1268,8 +1426,12 @@ def wait_for_playground():
 def check_samples(paths, tree):
 	"""every sample (or the given ones) in the page served from `tree`, its output against the native run's"""
 	native = dict(line.split(None, 1)[::-1] for line in open(os.path.join(tree, NATIVE_RESULTS), encoding="utf-8").read().split("\n") if line.strip() and not line.startswith("#"))
-	native = {path.strip(): status for path, status in native.items()}
-	paths = paths or sorted(native)
+	# a failure's line names its reason after the path (scripts/samples.sh): `FAIL samples/x.warp: <reason>`
+	native = {path.split(":", 1)[0].strip(): status for path, status in native.items()}
+	# a run of some samples leaves the tracked results alone
+	written = not paths
+	# a sample removed since the native run is not in the tree any more
+	paths = paths or sorted(path for path in native if os.path.isfile(os.path.join(tree, path)))
 	data = os.path.join(tree, SAMPLES_WEB_DATA)
 	os.makedirs(os.path.join(data, "out"), exist_ok=True)
 	server = serve(tree)
@@ -1278,30 +1440,37 @@ def check_samples(paths, tree):
 	lines, details = [], []
 	for path in paths:
 		output_name = path.replace("/", "_") + ".txt"
-		if native.get(path) == "WIN":
-			status, detail = "WIN", "needs a C window library"
+		source = open(os.path.join(tree, path), encoding="utf-8").read()
+		if sample_host(source) in ("native", "none"):
+			continue
+		window = native.get(path) == "WIN"
+		report = page_report(source, path, page_url, WINDOW_ANIMATION_SECONDS if window else None)
+		if window:
+			status, detail = window_verdict(report)
 		else:
-			source = open(os.path.join(tree, path), encoding="utf-8").read()
-			report = page_report(source, path, page_url)
 			native_file = os.path.join(tree, NATIVE_OUTPUTS, output_name)
 			compared = native.get(path) == "ok" and os.path.isfile(native_file)
 			native_output = open(native_file, encoding="utf-8", errors="replace").read() if compared else None
 			status, detail = sample_verdict(report, native_output)
-			if status == "FAIL" and EXPECTED_FAILURE.search(source):
-				status = "EXP"
-			with open(os.path.join(data, "out", output_name), "w", encoding="utf-8") as shown:
-				shown.write(page_output(report) if not report.get("error") else str(report.get("value")))
+		wrong = checks_wrong(os.path.basename(path)[:-len(".warp")], source) if status in ("ok", "ran") and CHECK_LINE.search(source) else []
+		if wrong:
+			status, detail = "DIFF", "; ".join(wrong)
+		if status == "FAIL" and EXPECTED_FAILURE.search(source):
+			status, detail = expected_failure_verdict(detail, native_error(os.path.join(tree, NATIVE_OUTPUTS, path.replace("/", "_") + ".err")))
+		elif status == "FAIL" and NATIVE_ONLY.search(source):
+			status = "EXP"
+		with open(os.path.join(data, "out", output_name), "w", encoding="utf-8") as shown:
+			shown.write(page_output(report) if not report.get("error") else str(report.get("value")))
 		print(f"{status:<4} {path}" + (f": {detail}" if detail and status != "ok" else ""))
 		lines.append(f"{status:<4} {path}")
 		details.append(f"{status:<4} {path}" + (f"\n     {detail}" if detail else ""))
 	browser("close")
 	server.shutdown()
-	written = len(paths) == len(native)  # a run of some samples leaves the tracked results alone
 	if written:
 		open(os.path.join(tree, SAMPLES_WEB_RESULTS), "w", encoding="utf-8").write("\n".join(lines) + "\n")
 	# a run of some samples keeps the whole run's report too
 	open(os.path.join(data, "report.txt" if written else "report-some.txt"), "w", encoding="utf-8").write("\n".join(details) + "\n")
-	counts = {status: sum(line.startswith(status) for line in lines) for status in ("ok", "DIFF", "FAIL", "EXP", "TIME", "ran", "WIN")}
+	counts = {status: sum(line.startswith(status) for line in lines) for status in ("ok", "drew", "DIFF", "FAIL", "EXP", "TIME", "ran", "WIN")}
 	print(f"samples in the page: {counts['ok']} of {len(lines)} print what the native warp prints; " + ", ".join(f"{count} {status}" for status, count in counts.items() if count and status != "ok") + (f" -> {os.path.join(tree, SAMPLES_WEB_RESULTS)}" if written else ""))
 
 

@@ -19,9 +19,11 @@ command_help = [
 	["parse-code <code> <file>", "The parsed code into the file, encoded for the native warp to rebuild (its parse_code)"],
 	["lower <code|file>", "Show the program after the lowering passes"],
 	["uses <code|file>", "The standard modules it uses without their `use`, one a line (warp beautify writes them)"],
+	["debug <code|file>", "Every view of the program at once: parsed, the modules it uses unsaid, lowered"],
 	["compile <file> [out.wasm]", "Only the module, <file>.wasm, without running"],
 	["build [--wasm|--exe] [--trim=<way>] <file>", "The executable <file> and its modules; a primitive file natively (wasm2c, cc)"],
 	["build native <file>", "A primitive file as a native executable, by wasm2c and cc"],
+	["build app <file>", "The executable as the macOS application bundle <file>.app, warp's libraries inside"],
 	["runtime [runtime.wasm]", "The runtime words compiled once, for linking programs to"],
 	["optimize <in.wasm> <out.wasm>", "The module optimized by Binaryen's wasm-opt, as warp rebuild optimizes warp.wasm"],
 	["module <name> [runtime.wasm] [<name>.wasm]", "A bundled module compiled once behind runtime.wasm, for linking programs to"],
@@ -35,7 +37,7 @@ native_commands = ["pure", "self", "rebuild", "tool", "fetch", "dev", "serve", "
 	"home", "lsp", "start", "types", "format", "lint", "beautify", "fix"]
 
 # the commands the native warp runs itself, before warp.wasm sees them (core/native/warp.warp)
-native_warp_commands = ["run", "pure", "self", "eval", "fast", "fuel", "rebuild", "test", "repl", "console", "start", "version", "beautify", "fix", "format", "lint", "docs", "wiki", "home"]
+native_warp_commands = ["run", "pure", "self", "eval", "fast", "fuel", "rebuild", "test", "repl", "console", "start", "version", "beautify", "fix", "format", "lint", "docs", "wiki", "home", "app"]
 # set by the native warp for the compiler it hosts: the host's name
 HOST_VARIABLE = "WARP_HOST"
 natively_hosted(): bool := (env(HOST_VARIABLE) ?? "") != ""
@@ -100,8 +102,16 @@ show_version() := print version_text(library_folder)
 show_parsed() := print structure(plain_node(parsed(source_or_code(1))))
 show_data() := print plain_node(parsed(source_or_code(1)))
 # written so it parses back to the same node (extensions/serializer.warp): `print(-42)`, `#a + #b`, "b" in quotes
-show_lowered() := print serialize(view_of(lowered_program(source_or_code(1), ".", prelude_source)))
+show_lowered() := print serialize(view_of(lowered_program(source_or_code(1), ".", prelude_text)))
 show_uses() := { for module in implicit_modules_of(source_or_code(1)) { print module } }
+# `warp debug`: the views above, one after the other under their names (card help-menu)
+show_debug() := {
+	print "parsed:"
+	show_parsed()
+	print "uses: " + implicit_modules_of(source_or_code(1)).join(" ")
+	print "lowered:"
+	show_lowered()
+}
 
 # the REPL (`warp repl`): the lines that stay for the next ones, a program's declarations and uses, as warp text
 REPL_STATE = ".warp-repl-state.warp"
@@ -144,6 +154,7 @@ extension_command(command: text) := match command {
 	"data": show_data()
 	"lower": show_lowered()
 	"uses": show_uses()
+	"debug": show_debug()
 	"parse-code": write_parse_code(args#2, args#3)
 	"build": build(args[1 ..< #args])
 	"repl": repl()

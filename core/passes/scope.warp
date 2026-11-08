@@ -39,7 +39,8 @@ head_word(n: Node): text := match n {
 
 # the parameters of a lambda's left side `(a, b)`, `a`, or of a head's items after its name; a group of them, `f (a b)`,
 # gives its items
-parameters_of(head: Node): list := if is_round(head) then parameters_in(items_of(head)) else bound_names(head)
+# (a quoted pattern, a match arm's `data($a) => a`, binds no word: data is no parameter)
+parameters_of(head: Node): list := if is_quote(head) then [] else if is_round(head) then parameters_in(items_of(head)) else bound_names(head)
 
 parameters_in(items: list): list := {
 	names = []
@@ -191,6 +192,26 @@ is_function_definition(n: Node): bool := match n {
 
 # the nodes outside the bodies of functions, whose names every function sees
 outer_nodes_in(top: Node): list := nodes_kept(top, n => not is_function_definition(n))
+
+# name → its meanings where the program's own statements stand: the names outside function bodies and each such
+# function's name, never another function's parameters or locals (a used module's local p beside the program's p{…})
+outer_scope(program: Node): map := {
+	outer = outer_nodes_in(program)
+	scope = scope_with({}, outer)
+	for n in outer {
+		for part in parts_within(n).filter(is_function_definition) { scope = remember(scope, [function_meanings(key_of(part))#1]) }
+	}
+	scope
+}
+
+# n rewritten bottom-up by rewrite(node, scope), each node with the scope where it stands: a function's body its own
+lexical_bottom_up(n: Node, outer: map, rewrite: function): Node := {
+	if is_function_definition(n) {
+		inner = function_scope(outer, n)
+		return bottom_up(n, x => rewrite(x, inner))
+	}
+	rewrite(children(n, x => lexical_bottom_up(x, outer, rewrite)), outer)
+}
 
 binds(scope: map, name: text): bool := scope.has(name)
 binds_as(scope: map, name: text, meaning: Meaning): bool := scope.has(name) and scope[name] contains meaning

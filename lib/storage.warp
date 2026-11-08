@@ -4,7 +4,9 @@
 // made or widened from User's fields first; `stored_add("users", u)` inserts u; `stored_save("users", users)` makes the
 // list the table's rows. `stored users: [User]` declares users so, its table named as it is, or `in "people"`.
 // A table's add, remove and its instances' field writes are written through, `transaction {…}` lands whole or not
-// at all. Waiting: lazy loading and filters as SQL (card storage-write-through).
+// at all. Read in part: `stored_count("users", User)` counts the rows, `stored_page("users", User, 100, 50)` reads rows
+// 100 ..< 150, `stored_found("users", User, "age > ?", [20])` the rows an SQL condition keeps. Waiting: `users` read
+// lazily and `users where it.age > 20` as SQL, rules of extensions/rules/rule_words.warp (card storage-write-through).
 use os
 use sqlite3
 use signals
@@ -42,6 +44,13 @@ global storage_database = ø
 // the table of each class stored, by the class's name; every instance read or added, for a rollback
 global kept_tables = {}
 global kept_instances = []
+// each row read or added, by "table·id": a row read twice is one instance, a foreign key finds the row read before
+global loaded_rows = {}
+// the relations between the stored classes, by table, then field (extensions/rules/rule_words.warp tables_kept)
+global table_relations = {}
+// a field's relation to the table holding another class: a foreign key holding its row's id, or with a back key the
+// rows of that table whose foreign key (the back key) is the row: `players: [Person]` of `team: Team?`
+class Relation{table: text; model: any; back_key: text}
 // the program's database, opened at its first use
 opened_database() := {
 	if storage_database == ø {
@@ -62,7 +71,7 @@ value_type(value: any) := if value == ø then "any" else if value is bool then "
 migrated(name: text, model: any) := {
 	kept_tables["${model}"] = name
 	blank = model()
-	fields = keys(blank).filter(field => field != ROW_ID)
+	fields = column_fields(name, blank)
 	types = fields.map(field => value_type(blank[field]))
 	columns = (1 to count(fields)).map(i => quoted_name(fields#i) + " " + COLUMN_TYPES[types#i])
 	run_query(opened_database(), "create table if not exists " + quoted_name(name) + " (" + columns.join(", ") + ")")
@@ -77,11 +86,52 @@ migrated(name: text, model: any) := {
 	fields
 }
 
-// the instance given a row's values: its fields from the row's columns in the class's order, its id the row's
-row_read(made: any, fields: list, row: list, units: map) := {
+// the fields of the instance its table's columns hold: neither its id nor a list of rows pointing back
+column_fields(name: text, instance: any) := keys(instance).filter(field => field != ROW_ID and not is_back(relation_of(name, field)))
+
+stored_key(name: text, field: text, other: text, model: any) := relation_kept(name, field, Relation(other, model, ""))
+stored_back(name: text, field: text, other: text, model: any, back_key: text) := relation_kept(name, field, Relation(other, model, back_key))
+relation_kept(name: text, field: text, relation: Relation) := {
+	relations = if table_relations.has(name) then table_relations[name] else {}
+	relations[field] = relation
+	table_relations[name] = relations
+}
+// the relation of the table's field, ø for a plain field
+relation_of(name: text, field: text) := if table_relations.has(name) and table_relations[name].has(field) then table_relations[name][field] else ø
+is_back(relation: any) := relation != ø and relation.back_key != ""
+// the relation of a kept instance's field, ø for a plain field or an instance of no table
+instance_relation(instance: any, field: text) := {
+	class_name = "${type(instance)}"
+	if kept_tables.has(class_name) then relation_of(kept_tables[class_name], field) else ø
+}
+// `climbers.players`: the rows pointing back to a stored row, read anew; any other field's value
+stored_rows_of(owner: any, field: text) := {
+	relation = instance_relation(owner, field)
+	if not is_back(relation) or owner[ROW_ID] == 0 { return owner[field] }
+	stored_found(relation.table, relation.model, quoted_name(relation.back_key) + " IS ?", [owner[ROW_ID]])
+}
+// `climbers.players.add(bo)`: the item's foreign key made the owner, written through; the item
+stored_joined(owner: any, field: text, item: any) := {
+	relation = instance_relation(owner, field)
+	if not is_back(relation) { return owner[field].add(item) }
+	item[relation.back_key] = owner
+	stored_written(item, item)
+}
+// the row of the table with that id, read once
+stored_row(name: text, model: any, id: int) := {
+	key = loaded_key(name, id)
+	if loaded_rows.has(key) then loaded_rows[key] else stored_found(name, model, ROWID + " = ?", [id])#1
+}
+loaded_key(name: text, id: int) := name + "·" + id
+
+// the instance given a row's values: its fields from the row's columns in the class's order, its id the row's, a
+// foreign key the row it holds the id of
+row_read(made: any, name: text, fields: list, row: list, units: map) := {
 	for i in 1 to count(fields) {
 		value = row#i
 		if units.has(fields#i) and value != ø { value = quantity_in(value, units[fields#i]) }
+		relation = relation_of(name, fields#i)
+		if relation != ø and value != ø { value = stored_row(relation.table, relation.model, value) }
 		made[fields#i] = if made[fields#i] is bool then value == 1 else value
 	}
 	if has_row_id(made) { made[ROW_ID] = row#(count(fields) + 1) }
@@ -92,9 +142,29 @@ has_row_id(instance: any) := ROW_ID in keys(instance)
 selected(fields: list) := (fields.map(quoted_name) + [ROWID]).join(", ")
 
 // the table's rows as instances of the class, each kept for a rollback
-stored_table(name: text, model: any) := {
+stored_table(name: text, model: any) := stored_selected(name, model, "", [])
+// the rows an SQL condition on the table's columns keeps, its `?`s bound to the values: `"age > ?"`, [20]
+stored_found(name: text, model: any, condition: text, values: list) := stored_selected(name, model, " where " + condition, values)
+// the rows start ..< start + size in the table's order (0-based start), one page read
+stored_page(name: text, model: any, start: int, size: int) := stored_selected(name, model, " order by " + ROWID + " limit ? offset ?", [size, start])
+// the number of the table's rows, none read
+stored_count(name: text, model: any) := {
+	migrated(name, model)
+	rows(opened_database(), "select count(*) from " + quoted_name(name))#1#1
+}
+// the rows the select's tail (its where, order and limit) keeps, as instances of the class, each kept for a rollback
+stored_selected(name: text, model: any, tail: text, values: list) := {
 	fields = migrated(name, model)
-	rows(opened_database(), "select " + selected(fields) + " from " + quoted_name(name)).map(row => kept_instance(row_read(model(), fields, row, units_of(name))))
+	units = units_of(name)
+	rows_bound(opened_database(), "select " + selected(fields) + " from " + quoted_name(name) + tail, values).map(row => loaded_row(name, model, fields, row, units))
+}
+// the instance of a row read, the one read before if any: kept for a rollback, known before its foreign keys are read
+loaded_row(name: text, model: any, fields: list, row: list, units: map) := {
+	key = loaded_key(name, row#(count(fields) + 1))
+	if loaded_rows.has(key) { return loaded_rows[key] }
+	made = model()
+	loaded_rows[key] = made
+	kept_instance(row_read(made, name, fields, row, units))
 }
 kept_instance(instance: any) := {
 	kept_instances += [instance]
@@ -106,20 +176,24 @@ stored_add(name: text, instance: any) := {
 	fields = migrated(name, type(instance))
 	marks = fields.map(field => "?").join(", ")
 	run_bound(opened_database(), "insert into " + quoted_name(name) + " (" + fields.map(quoted_name).join(", ") + ") values (" + marks + ")", column_values(name, instance, fields))
-	if has_row_id(instance) { instance[ROW_ID] = sqlite3_last_insert_rowid(opened_database()) }
+	if has_row_id(instance) {
+		instance[ROW_ID] = sqlite3_last_insert_rowid(opened_database())
+		loaded_rows[loaded_key(name, instance[ROW_ID])] = instance
+	}
 	kept_instance(instance)
 }
 // a kept instance's fields written to its row once a field write gave the value (extensions/rules/rule_words.warp tables_kept); the value
 stored_written(instance: any, value: any) := {
 	name = kept_tables["${type(instance)}"]
 	if name == ø or not has_row_id(instance) or instance[ROW_ID] == 0 { return value }
-	fields = keys(instance).filter(field => field != ROW_ID)
+	fields = column_fields(name, instance)
 	run_bound(opened_database(), "update " + quoted_name(name) + " set " + fields.map(field => quoted_name(field) + " = ?").join(", ") + " where " + ROWID + " = ?", column_values(name, instance, fields) + [instance[ROW_ID]])
 	value
 }
 // the fields' values as their columns hold them: a quantity as its amount in SI units, a float (REAL), its unit kept for the column
 column_values(name: text, instance: any, fields: list) := fields.map(field => column_value(name, field, instance[field]))
 column_value(name: text, field: text, value: any) := {
+	if relation_of(name, field) != ø and value != ø { return value[ROW_ID] }
 	if not (value is Quantity) { return value }
 	run_bound(units_database(), "insert or replace into " + quoted_name(UNITS_TABLE) + " (tbl, field, unit) values (?, ?, ?)", [name, field, value.unit])
 	column_amount(value.amount)
@@ -151,6 +225,7 @@ quantity_in(amount: any, unit: text) := {
 stored_removed(name: text, instance: any) := {
 	if has_row_id(instance) and instance[ROW_ID] != 0 {
 		run_bound(opened_database(), "delete from " + quoted_name(name) + " where " + ROWID + " = ?", [instance[ROW_ID]])
+		loaded_rows.remove(loaded_key(name, instance[ROW_ID]))
 		instance[ROW_ID] = 0
 	}
 	instance
@@ -173,9 +248,9 @@ stored_transaction(block: function) := {
 row_restored(instance: any) := {
 	name = kept_tables["${type(instance)}"]
 	if name == ø or not has_row_id(instance) or instance[ROW_ID] == 0 { return instance }
-	fields = keys(instance).filter(field => field != ROW_ID)
+	fields = column_fields(name, instance)
 	found = rows_bound(opened_database(), "select " + selected(fields) + " from " + quoted_name(name) + " where " + ROWID + " = ?", [instance[ROW_ID]])
-	if count(found) == 0 { instance[ROW_ID] = 0 } else { row_read(instance, fields, found#1, units_of(name)) }
+	if count(found) == 0 { instance[ROW_ID] = 0 } else { row_read(instance, name, fields, found#1, units_of(name)) }
 	instance
 }
 
