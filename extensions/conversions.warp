@@ -184,8 +184,12 @@ conversions(program: Node): Node := {
 	forced_conversions(checked)
 }
 
-# the classes the program declares that an `x as P` names, its declarations `x as P = v` too
-class_targets(program: Node, scope: map): list := nodes_in(program).filter(n => is_key(n, Op.As) and value_of(n) is symbol and is_capitalized(name_of(value_of(n))) and binds_as(scope, name_of(value_of(n)), Meaning.Type)).map(n => name_of(value_of(n))).unique()
+# the classes the program declares that an `x as P` names, its declarations `x as P = v` too; not its enums, whose
+# `2 as Level` is the case at an index, `66 as Key` the case of that number (plain_enums, extensions/sugar/enums.warp)
+class_targets(program: Node, scope: map): list := {
+	enums = declarations_found(program, declared_enum, {})
+	nodes_in(program).filter(n => is_key(n, Op.As) and value_of(n) is symbol and is_capitalized(name_of(value_of(n))) and binds_as(scope, name_of(value_of(n)), Meaning.Type) and not enums.has(name_of(value_of(n)))).map(n => name_of(value_of(n))).unique()
+}
 
 # `type Q = P`: name → the type it names, Q → P, of each alias the program declares of one type
 type_aliases(statements: list): map := {
