@@ -18,6 +18,12 @@ left_out(name: text, missing: int): list := {
 	defaults = host_defaults.get(name) ?? []
 	if missing > 0 and missing <= #defaults then defaults[(#defaults - missing)..] else []
 }
+# whether the host word takes that many arguments, its defaulted last ones left out: a call of another count is the
+# builtin word's of the name, web's C `read(fd, buffer, size)` beside the prelude's `read(path)` (card dev-page)
+host_takes(name: text, count: int): bool := {
+	parameters = module.host[name]#1
+	count <= #parameters and count + #(host_defaults.get(name) ?? []) >= #parameters
+}
 # `clock`, `sleep(ms)`: a call of the imported host word, its arguments in the kinds it takes; a host word taking or
 # giving a node builds and reads nodes through the constructors the module exports for it (host_builders)
 def host_call(body: Body, name: text, arguments: list): TypedCode {
