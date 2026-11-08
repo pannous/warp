@@ -20,5 +20,5 @@ before=$(mtime_of "$results" 2>/dev/null)
 python3 "$tree/web/playground/test_in_browser.py" --samples "$@"
 status=$?
 # the page script writes the results only when all ran: a header only for a file it wrote anew
-[ "$(mtime_of "$results" 2>/dev/null)" != "$before" ] && results_header "$results" "$(git -C "$tree" rev-parse --short=10 HEAD)" "ok|drew"
+[ "$(mtime_of "$results" 2>/dev/null)" != "$before" ] && results_header "$results" "$(git -C "$tree" rev-parse --short=10 HEAD)" "$SAMPLES_WEB_PASSING"
 exit $status
