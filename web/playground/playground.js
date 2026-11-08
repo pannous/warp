@@ -440,13 +440,15 @@ document.addEventListener("fullscreenchange", () => worker && tellSystemValues()
 // view taller each frame, until Safari ran out of memory (card webgpu-safari). What follows the paintings down to the
 // page's end is left free: a view-sized painting that overflowed the window brought a scrollbar, which narrowed the
 // next view (card tour-firefox). Measured again as each run starts: the text above the paintings moves without
-// resizing the pane, which is all the ResizeObserver sees. In full screen (⛶) the view is the screen, so a shader
+// resizing the pane, which is all the ResizeObserver sees. Measured on the page, not the window: scrolled down, a
+// painting filling the window kept the page scrolled and its scrollbar, the view a pixel shorter each run (card
+// firefox-tour-resize). In full screen (⛶) the view is the screen, so a shader
 // painted at the view's size renders at the screen's (card full-screen)
 function viewSize() {
 	if (document.fullscreenElement === $("painted")) return { view_width: innerWidth, view_height: innerHeight };
 	const pane = $("output"), style = getComputedStyle(pane), painted = $("painted").getBoundingClientRect();
 	const width = Math.floor(pane.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - PAINTING_BORDERS);
-	const room = innerHeight - Math.max(painted.top, 0) - PAINTING_MARGIN - PAINTING_BORDERS - roomBelowPaintings(style);
+	const room = innerHeight - (painted.top + scrollY) - PAINTING_MARGIN - PAINTING_BORDERS - roomBelowPaintings(style);
 	return width > 0 ? { view_width: width, view_height: Math.floor(Math.max(room, MIN_VIEW_HEIGHT)) } : {};
 }
 
@@ -963,7 +965,10 @@ function showRendered(html) {
 	morphChildren(host.shadowRoot ?? renderedRoot(host), parsedHtml(html ?? ""));
 }
 
-self.programElements = () => $("rendered").shadowRoot ?? document; // task-workers.js ownerOnPage: `who`, `$who`
+// task-workers.js ownerOnPage: `who`, `$who`, document.getElementById("who"): an element of the program's markup, else
+// one of the page itself, "paintings" the frame its paintings show in (card paintings-document)
+const programElement = id => $("rendered").shadowRoot?.getElementById(id) ?? document.getElementById(id);
+self.programElements = () => ({ getElementById: programElement });
 
 // a form's submit stays inside the shadow root (it is not composed): listened to there
 function renderedRoot(host) {
@@ -1164,6 +1169,18 @@ function showEventOutput(data) {
 	if (data.html !== undefined) showRendered(data.html);
 }
 
+// a run starting, however it was started (Run, auto-run, an example chosen, a queued run): the old value gives way to
+// "…", and the old errors, warnings, underlines and printed text go, so none is taken for the new run's, nor stays
+// above an animation as long as it runs (cards g_oc54, playground-stale-value)
+function clearPreviousRun() {
+	showValue(PENDING_VALUE);
+	$("value").classList.remove("located");
+	$("value").onclick = null;
+	$("diagnostics").replaceChildren();
+	markPositions({});
+	showPrinted([]);
+}
+
 async function show(code) {
 	if (showing) {
 		queued = code; // only the newest code is worth running next
@@ -1172,6 +1189,7 @@ async function show(code) {
 		return;
 	}
 	showing = true;
+	clearPreviousRun();
 	setStatus("running…");
 	try {
 		showReport(await evaluate(code));
@@ -1365,17 +1383,10 @@ function runChanged() {
 	return runNow();
 }
 
-// Run pressed (the button, Ctrl/Cmd-Enter): the old value gives way to "…" at once, and the old errors, warnings,
-// underlines and printed text go, so none is taken for the new run's (card g_oc54)
-// Ctrl/Cmd-Enter while live loops play runs the code again, handing them over (card playground-live); the button stops
+// Run pressed (the button, Ctrl/Cmd-Enter); Ctrl/Cmd-Enter while live loops play runs the code again, handing them
+// over (card playground-live); the button stops
 function runPressed(fromKeys = false) {
 	if (showsStop() && !(fromKeys && playsLive(pending))) return stopPressed();
-	showValue(PENDING_VALUE);
-	$("value").classList.remove("located");
-	$("value").onclick = null;
-	$("diagnostics").replaceChildren();
-	markPositions({});
-	showPrinted([]);
 	return runNow();
 }
 

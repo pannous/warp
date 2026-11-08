@@ -36,14 +36,15 @@ const guestItems = (program, list) => Array.from({ length: guestCount(program, l
 const guestInts = (program, list, count = guestCount(program, list)) =>
 	Array.from({ length: count }, (_, index) => Number(program.int_item_at(list, BigInt(index + 1))));
 
+const ENTRY_NAME = /^[\p{L}_][\p{L}\p{N}_]*$/u;
 // a map's entries [name, value], read item by item and never shown (a Key is two items, its name and its value:
 // decision pair-items), so a map of a million numbers is read without its text; undefined for a value of no such
 // entries
 function guestEntries(program, value) {
 	try {
 		if (isGuestText(program, value)) return undefined;
-		// the name a Symbol, shown as itself
-		const named = entry => guestCount(program, entry) === 2 ? shownText(program, guestItem(program, entry, 0)) : undefined;
+		// the name a Symbol, shown as itself: a name, never a number (a list of pairs [[1, 2], …] is no map)
+		const named = entry => guestCount(program, entry) === 2 ? shownText(program, guestItem(program, entry, 0))?.match(ENTRY_NAME)?.[0] : undefined;
 		const entries = guestItems(program, value).map(entry => named(entry) === undefined ? undefined : [named(entry), guestItem(program, entry, 1)]);
 		return entries.length && entries.every(Boolean) ? entries : undefined;
 	} catch {
@@ -58,10 +59,22 @@ function guestEntries(program, value) {
 function guestPlain(program, value) {
 	if (isGuestText(program, value)) return guestText(program, value);
 	const shown = shownText(program, value);
-	return shown === undefined ? guestItems(program, value).map(item => guestPlain(program, item)) : plainOfShown(shown);
+	if (shown !== undefined) return plainOfShown(shown);
+	// too long to show: a map an object of its entries, as plainOfShown reads a shown one (paint's values of a few
+	// thousand vectors, samples/graphics/gaussian_splats.warp), any other list its items
+	const entries = guestEntries(program, value);
+	return entries ? Object.fromEntries(entries.map(([name, item]) => [name, guestPlain(program, item)])) : guestItems(program, value).map(item => guestPlain(program, item));
 }
 const SHOWN_WORDS = { yes: true, no: false, "ø": null };
-const SHOWN_NUMBER = /^-?(\d+(\.\d*)?|\.\d+)([eE][-+]?\d+)?(\/\d+)?/;
+// a number as warp shows it: its repeating digits each marked by a combining overline (`0.16̅`, `0.1̅4̅2̅`), a fraction `a/b`
+const SHOWN_NUMBER = /^-?(\d+(\.(\d\u0305?)*)?|\.(\d\u0305?)+)([eE][-+]?\d+)?(\/\d+)?/;
+const REPEATING_DIGIT = /\d\u0305/g;
+const REPEATED_DIGITS = 17; // the repeating digits written out this far: a double's precision
+// the decimal's value, its repeating digits written out
+const shownDecimal = text => {
+	const repeating = (text.match(REPEATING_DIGIT) ?? []).map(digit => digit[0]).join("");
+	return Number(text.replaceAll("\u0305", "") + repeating.repeat(Math.ceil(REPEATED_DIGITS / Math.max(repeating.length, 1))));
+};
 const SHOWN_NAME = /^[^\s,:{}\[\]()"']+/u;
 function plainOfShown(shown) {
 	let at = 0;
@@ -96,7 +109,7 @@ function plainOfShown(shown) {
 		if (number) {
 			at += number[0].length;
 			const [numerator, denominator] = number[0].split("/");
-			return denominator ? Number(numerator) / Number(denominator) : Number(numerator);
+			return denominator ? shownDecimal(numerator) / Number(denominator) : shownDecimal(numerator);
 		}
 		const name = shown.slice(at).match(SHOWN_NAME) ?? fail();
 		at += name[0].length;

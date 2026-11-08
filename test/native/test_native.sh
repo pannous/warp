@@ -34,7 +34,7 @@ by_warp hello Hello
 native arguments $'one\ntwo words' one "two words"
 native files "Hello from a file"
 GREETING="Hi there" native c_calls $'Hi there\n8\n5'
-check "c_calls by warp refused" "$(cd "$stage" && "$warp" c_calls.warp 2>&1 | grep -c "C calls run by \`warp build native\`")" 1
+check "c_calls by warp" "$(cd "$stage" && GREETING="Hi there" "$warp" c_calls.warp 2>&1)" $'Hi there\n8\n5'
 cp "$checkout/samples/native/doubling.warp" "$stage/"
 native uses $'42\n7'
 

@@ -72,7 +72,7 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 	if symbol == "%" and kind == ValueKind.Int { return euclidean_remainder(body, a, b) }
 	if symbol == "%" { return runtime_call("float_mod", [TypedCode(ValueKind.Float, converted(a, kind)), TypedCode(ValueKind.Float, converted(b, kind))]) }
 	if symbol == "rem" and kind == ValueKind.Float { return float_remainder(body, converted(a, kind), converted(b, kind)) }
-	if symbol == "/" and kind == ValueKind.Int { return needed_call(if written_int(a) and written_int(b) then "extended_fraction" else "extended_ratio", [a, b]) }
+	if symbol == "/" and kind == ValueKind.Int { return needed_call("extended_ratio", [a, b]) }
 	# a negative exponent gives an exact rational, so the power is a boxed value
 	if symbol == "^" and kind == ValueKind.Int { return needed_call("extended_power", as_nodes(a, b)) }
 	if symbol == "^" { return float_power(body, converted(a, kind), converted(b, kind)) }
@@ -82,14 +82,6 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 	TypedCode(result, converted(a, kind) + converted(b, kind) + [ops[symbol]])
 }
 
-# an int written as a number, `3` (number_value's i64.const and its sleb, whose last byte alone is below 128): `1/3`
-# divides two, a written fraction (decision fraction-written-form)
-written_int(value: TypedCode): bool := {
-	code = value.code
-	if value.kind != ValueKind.Int or #code < 2 or code#1 != op.i64_const or code[#code - 1] >= 128 { return no }
-	for i in 1 ..< #code - 1 { if code[i] < 128 { return no } }
-	yes
-}
 # a yes/no is the int 0 or 1 underneath (notes/bool_type.md): any operator but equality takes it as that int, `yes + yes`
 # is 2; of two yes/no values an operator that gives 0 or 1 again gives yes/no, `yes xor no` is yes (user 2026-11-02)
 number_like(kind: ValueKind): bool := kind == ValueKind.Bool or kind == ValueKind.Int or kind == ValueKind.Float
@@ -208,11 +200,16 @@ def arithmetic(body: Body, symbol: text, left: Node, right: Node): TypedCode {
 		b = unboxed_int_slot(body, right, b)
 	}
 	if symbol in grown_words and a.kind == ValueKind.Int and b.kind == ValueKind.Int and not wraps(body, left, right) { return marked(symbol, runtime_call(grown_words[symbol], [a, b]), a, b) }
+	# `1/3` of two ints written as such is a written fraction, shown 1/3 (decision fraction-written-form); 10.0/4.0,
+	# a decimal, or a quotient of computed values is a ratio shown as a decimal
+	if symbol == "/" and written_int(left) and written_int(right) and a.kind == ValueKind.Int and b.kind == ValueKind.Int { return needed_call("extended_fraction", [a, b]) }
 	# `"ab" * 2.5`: a text repeats a whole number of times, so a fraction written there is refused at once; only a
 	# count known at run time is left to the runtime repeat
 	if symbol == "*" and ((is_textual(a.kind) and is_fraction(right)) or (is_textual(b.kind) and is_fraction(left))) { return refuse("the operator * on " + kind_spelling(a.kind) + " and " + kind_spelling(b.kind)) }
 	operation_code(body, symbol, a, b)
 }
+# an int literal as written, `3` or `-3`, not `3.0`
+written_int(n: Node): bool := n is number and not (n is float)
 # a number literal with a fractional part: 2.5, not 3.0 (the int 3)
 is_fraction(n: Node): bool := n is float and n != float(int(n))
 # a variable declared int in an optional or union slot holds a node, an int still (boxing is the layout, not the type)
