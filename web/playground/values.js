@@ -36,14 +36,15 @@ const guestItems = (program, list) => Array.from({ length: guestCount(program, l
 const guestInts = (program, list, count = guestCount(program, list)) =>
 	Array.from({ length: count }, (_, index) => Number(program.int_item_at(list, BigInt(index + 1))));
 
+const ENTRY_NAME = /^[\p{L}_][\p{L}\p{N}_]*$/u;
 // a map's entries [name, value], read item by item and never shown (a Key is two items, its name and its value:
 // decision pair-items), so a map of a million numbers is read without its text; undefined for a value of no such
 // entries
 function guestEntries(program, value) {
 	try {
 		if (isGuestText(program, value)) return undefined;
-		// the name a Symbol, shown as itself
-		const named = entry => guestCount(program, entry) === 2 ? shownText(program, guestItem(program, entry, 0)) : undefined;
+		// the name a Symbol, shown as itself: a name, never a number (a list of pairs [[1, 2], …] is no map)
+		const named = entry => guestCount(program, entry) === 2 ? shownText(program, guestItem(program, entry, 0))?.match(ENTRY_NAME)?.[0] : undefined;
 		const entries = guestItems(program, value).map(entry => named(entry) === undefined ? undefined : [named(entry), guestItem(program, entry, 1)]);
 		return entries.length && entries.every(Boolean) ? entries : undefined;
 	} catch {
@@ -58,7 +59,11 @@ function guestEntries(program, value) {
 function guestPlain(program, value) {
 	if (isGuestText(program, value)) return guestText(program, value);
 	const shown = shownText(program, value);
-	return shown === undefined ? guestItems(program, value).map(item => guestPlain(program, item)) : plainOfShown(shown);
+	if (shown !== undefined) return plainOfShown(shown);
+	// too long to show: a map an object of its entries, as plainOfShown reads a shown one (paint's values of a few
+	// thousand vectors, samples/graphics/gaussian_splats.warp), any other list its items
+	const entries = guestEntries(program, value);
+	return entries ? Object.fromEntries(entries.map(([name, item]) => [name, guestPlain(program, item)])) : guestItems(program, value).map(item => guestPlain(program, item));
 }
 const SHOWN_WORDS = { yes: true, no: false, "ø": null };
 const SHOWN_NUMBER = /^-?(\d+(\.\d*)?|\.\d+)([eE][-+]?\d+)?(\/\d+)?/;

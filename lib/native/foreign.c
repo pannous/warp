@@ -94,7 +94,8 @@ static int64_t library_value(const char* name) {
 // the holes every shader has, filled where the shader reads them and the program gave none, as the playground fills
 // them (web/playground/host-gpu.js builtinValues): the image's size, seconds since the first painting, the paintings
 // before, the pointer and key over the window (0 without one)
-enum { MOST_VALUES_TEXT = 65536 };
+// room for the built-in holes written after the program's values, the longest each ("size: [w, h]", ", ") well inside
+enum { HOLE_TEXT = 64 };
 static const char* BUILTIN_HOLES[] = {"width", "height", "size", "time", "frame", "mouse", "mouse_down", "mouse_wheel", "key"};
 static int32_t reads_hole(const char* text, const char* name) {
 	size_t length = strlen(name);
@@ -120,7 +121,7 @@ static double seconds_now(void) {
 static void hole_written(char* into, const char* name, int64_t width, int64_t height, double time, int64_t frame) {
 	size_t used = strlen(into);
 	char* at = into + used;
-	size_t room = MOST_VALUES_TEXT - used;
+	size_t room = HOLE_TEXT;
 	if (!strcmp(name, "width")) snprintf(at, room, "width: %lld", (long long)width);
 	else if (!strcmp(name, "height")) snprintf(at, room, "height: %lld", (long long)height);
 	else if (!strcmp(name, "size")) snprintf(at, room, "size: [%lld, %lld]", (long long)width, (long long)height);
@@ -135,17 +136,18 @@ static char* values_filled(const char* shader, const char* values, int64_t width
 	static double first_painting;
 	static int64_t paintings;
 	if (!first_painting) first_painting = seconds_now();
-	char* filled = calloc(MOST_VALUES_TEXT, 1);
 	const char* given = values[0] == '{' ? values : "{}";
 	size_t given_length = strlen(given);
-	snprintf(filled, MOST_VALUES_TEXT, "%.*s", (int)(given_length - 1), given);
+	size_t size = given_length + HOLE_TEXT * (sizeof BUILTIN_HOLES / sizeof *BUILTIN_HOLES + 1);
+	char* filled = calloc(size, 1);
+	snprintf(filled, size, "%.*s", (int)(given_length - 1), given);
 	int members = strcmp(given, "{}") != 0;
 	for (size_t i = 0; i < sizeof BUILTIN_HOLES / sizeof *BUILTIN_HOLES; i++) {
 		if (!reads_hole(shader, BUILTIN_HOLES[i]) || given_hole(given, BUILTIN_HOLES[i])) continue;
-		if (members++) strncat(filled, ", ", MOST_VALUES_TEXT - strlen(filled) - 1);
+		if (members++) strcat(filled, ", ");
 		hole_written(filled, BUILTIN_HOLES[i], width, height, seconds_now() - first_painting, paintings);
 	}
-	strncat(filled, "}", MOST_VALUES_TEXT - strlen(filled) - 1);
+	strcat(filled, "}");
 	paintings++;
 	return filled;
 }
