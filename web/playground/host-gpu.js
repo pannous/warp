@@ -486,14 +486,20 @@ async function gpuJobInto({ gpu: { word, job }, shared }) {
 		answer = { error: failureText(failure) };
 		await forgetDeviceIfLost().catch(() => {});
 	}
-	if (answer.words) writeSharedWords(shared, answer.words);
-	else writeShared(shared, answer);
+	// a failure writing the answer is the job's, said to the program, which would otherwise wait out GPU_JOB_WAIT_MS
+	try {
+		if (answer.words) writeSharedWords(shared, answer.words);
+		else writeShared(shared, answer);
+	} catch (failure) {
+		writeShared(shared, { error: failureText(failure) });
+	}
 }
 
-// 32-bit words into the shared buffer as they are: a million floats as JSON took longer than the GPU
+// a typed array's items into the shared buffer as they are, their count after the state: a million floats as JSON
+// took longer than the GPU
 function writeSharedWords(shared, words) {
 	if (TASK_HEADER + words.byteLength > shared.byteLength) shared.grow(TASK_HEADER + words.byteLength);
-	new Uint32Array(shared, TASK_HEADER, words.length).set(new Uint32Array(words.buffer, words.byteOffset, words.length));
+	new Uint8Array(shared, TASK_HEADER, words.byteLength).set(new Uint8Array(words.buffer, words.byteOffset, words.byteLength));
 	const header = new Int32Array(shared, 0, 2);
 	header[1] = words.length;
 	Atomics.store(header, 0, WORDS_STATE);
@@ -594,10 +600,12 @@ addHostPart({
 			// a GPU list's cells as its type holds them (the shader's array type converts them, as natively), any other as declared
 			const arrays = Object.fromEntries(entries.map(([name, value]) => [name, gpuCells(value)?.slice() ?? (elements[name] ?? Float32Array).from([plain(value)].flat().map(Number))]));
 			const buffers = Object.values(arrays).map(array => array.buffer);
+			// counted before the job: handing the arrays to the task Worker empties them here
+			const lengths = Object.fromEntries(Object.entries(arrays).map(([name, array]) => [name, array.length]));
 			const words = gpuJob("gpu_arrays", { shader: code, arrays, workgroups: Number(workgroups) }, buffers, Uint32Array);
 			let at = 0;
 			return newGuestMap(program(), entries.map(([name, value]) => {
-				const length = arrays[name].length, Elements = elements[name] ?? Float32Array;
+				const length = lengths[name], Elements = elements[name] ?? Float32Array;
 				const left = new Elements(words.buffer, words.byteOffset + at * WORD_BYTES, length);
 				at += wordBytes(length * Elements.BYTES_PER_ELEMENT) / WORD_BYTES;
 				const cells = gpuCells(value); // read anew: the module's memory may have grown meanwhile
