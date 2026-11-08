@@ -1,4 +1,4 @@
-# 85a26c7457 2026-11-08 10:32 255/257 99.2%
+# 77b85f582c 2026-11-08 12:25 250/257 97.3%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_map.warp
 ok   samples/acceleration/gpu_million.warp
@@ -69,7 +69,6 @@ ok   samples/golf/fibonacci.short.warp
 ok   samples/golf/fibonacci.warp
 ok   samples/golf/fizz-buzz.short.warp
 ok   samples/golf/fizz-buzz.warp
-ok   samples/golf/happy-numbers.short.warp
 ok   samples/golf/happy-numbers.warp
 ok   samples/golf/leap-years.short.warp
 ok   samples/golf/leap-years.warp
@@ -89,20 +88,16 @@ ok   samples/golf/rot13.short.warp
 ok   samples/golf/rot13.warp
 ok   samples/golf/sierpiński-triangle.short.warp
 ok   samples/golf/sierpiński-triangle.warp
-ok   samples/gpu/gpu_visualizer.warp
 ok   samples/gpu/julia.warp
 ok   samples/gpu/kaleidoscope.warp
 ok   samples/gpu/lava_lamp.warp
-ok   samples/gpu/manual_3d_object_viewer.warp
 ok   samples/gpu/northern_lights.warp
 ok   samples/gpu/ocean.warp
 ok   samples/gpu/ringed_planet.warp
-ok   samples/gpu/scene_3d.warp
 ok   samples/gpu/sdf_scene.warp
 ok   samples/gpu/voronoi.warp
 ok   samples/gpu/warp_compiled_wgsl_shader.warp
 ok   samples/graphics/finger_paint.warp
-ok   samples/graphics/gaussian_splats.warp
 ok   samples/graphics/paint_function.warp
 ok   samples/graphics/paint_text_gpu.warp
 ok   samples/graphics/paint_text.warp
@@ -125,14 +120,12 @@ ok   samples/lists/quicksort.warp
 ok   samples/lists/sieve.warp
 ok   samples/lists/sorting_idiomatic.warp
 ok   samples/lists/sorting.warp
-ok   samples/lists/typed_lists.warp
 ok   samples/loops/game_of_life.warp
 ok   samples/loops/iterators.warp
 ok   samples/loops/life_idiomatic.warp
 ok   samples/loops/life_kotlin_ranges.warp
 ok   samples/loops/mandelbrot.warp
 ok   samples/matching/code_templates.warp
-ok   samples/matching/matching.warp
 ok   samples/matching/pattern_clauses.warp
 ok   samples/matching/pattern_values.warp
 ok   samples/matching/text_patterns.warp
@@ -251,8 +244,15 @@ WIN  samples/graphics/raylib_circle.warp
 WIN  samples/graphics/raylib_mouse_circle.warp
 WIN  samples/graphics/raylib_sleep.warp
 WIN  samples/graphics/sdl_red_square.warp
+SRV  samples/servers/hosting.warp
+SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
-FAIL samples/servers/hosting.warp: warp: Trace/BPT trap while running samples/servers/hosting.warp
-FAIL samples/servers/route_headers.warp: warp: Trace/BPT trap while running samples/servers/route_headers.warp
+FAIL samples/golf/happy-numbers.short.warp: samples/golf/happy-numbers.short.warp:1:20 h((digits n).(map d->d*d).(sum)): n<2: after a definition's head `:` names its type; a body is def h((digits n).(map d->d*d).(sum)) := n<2; fix: def h((digit
+FAIL samples/gpu/gpu_visualizer.warp: a second definition of sleep taking as many arguments can never run: sleep(duration) takes every call first; give one another name, or parameter types or patterns that tell them apart
+FAIL samples/gpu/manual_3d_object_viewer.warp: a second definition of sleep taking as many arguments can never run: sleep(duration) takes every call first; give one another name, or parameter types or patterns that tell them apart
+FAIL samples/gpu/scene_3d.warp: samples/gpu/scene_3d.warp:1:55 the definitions of operator_times taking as many arguments cannot be told apart at operator_times(n: int, body: block): give the parameters types the dispatch tells apar
+FAIL samples/graphics/gaussian_splats.warp: samples/graphics/gaussian_splats.warp:1:55 the definitions of operator_times taking as many arguments cannot be told apart at operator_times(n: int, body: block): give the parameters types the dispatc
+FAIL samples/lists/typed_lists.warp: samples/lists/typed_lists.warp:1:55 the definitions of operator_times taking as many arguments cannot be told apart at operator_times(n: int, body: block): give the parameters types the dispatch tells
+FAIL samples/matching/matching.warp: samples/matching/matching.warp:41:44 Square(a): a*a: after a definition's head `:` names its type; a body is def Square(a) := a*a; fix: def Square(a) := a*a
