@@ -440,13 +440,15 @@ document.addEventListener("fullscreenchange", () => worker && tellSystemValues()
 // view taller each frame, until Safari ran out of memory (card webgpu-safari). What follows the paintings down to the
 // page's end is left free: a view-sized painting that overflowed the window brought a scrollbar, which narrowed the
 // next view (card tour-firefox). Measured again as each run starts: the text above the paintings moves without
-// resizing the pane, which is all the ResizeObserver sees. In full screen (⛶) the view is the screen, so a shader
+// resizing the pane, which is all the ResizeObserver sees. Measured on the page, not the window: scrolled down, a
+// painting filling the window kept the page scrolled and its scrollbar, the view a pixel shorter each run (card
+// firefox-tour-resize). In full screen (⛶) the view is the screen, so a shader
 // painted at the view's size renders at the screen's (card full-screen)
 function viewSize() {
 	if (document.fullscreenElement === $("painted")) return { view_width: innerWidth, view_height: innerHeight };
 	const pane = $("output"), style = getComputedStyle(pane), painted = $("painted").getBoundingClientRect();
 	const width = Math.floor(pane.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - PAINTING_BORDERS);
-	const room = innerHeight - Math.max(painted.top, 0) - PAINTING_MARGIN - PAINTING_BORDERS - roomBelowPaintings(style);
+	const room = innerHeight - (painted.top + scrollY) - PAINTING_MARGIN - PAINTING_BORDERS - roomBelowPaintings(style);
 	return width > 0 ? { view_width: width, view_height: Math.floor(Math.max(room, MIN_VIEW_HEIGHT)) } : {};
 }
 
