@@ -32,6 +32,8 @@ slice(t: text, start, end = ø): text from warp
 field_with(object, name, value): same as object from warp
 instance_copy(x): same as x from warp
 wasi_environment(): text from warp
+// the line on standard error through WASI, natively and in the page (lib/os.warp eprint; warn and hint say theirs so)
+said_on_stderr(words: text) from warp
 
 // The builtins the emitter expands in place, without a runtime function (card typed-builtins): their signatures and
 // results, as the analyzer reads them

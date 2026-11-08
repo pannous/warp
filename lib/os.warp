@@ -36,16 +36,8 @@ stdin() := std_io("os", "stdin", [])
 // setenv through the 'c' library (lib/c.warp), so a page has none. env reads the environment the program started with
 setenv(name: text, value: text, overwrite: i32): i32 from 'c'
 set_env(name: any, value: any): bool := setenv(str(name), str(value), 1) == 0
-// `eprint "no such file"`: the value on standard error, a line of its own (natively, through C's stdio)
-fopen(path: text, mode: text): handle from 'c'
-fputs(s: text, file: handle): i32 from 'c'
-fclose(file: handle): i32 from 'c'
-eprint(value: any) := {
-	stream = fopen("/dev/stderr", "a")
-	fputs(str(value) + "\n", stream)
-	fclose(stream)
-	ø
-}
+// `eprint "no such file"`: the value on standard error, a line of its own, through WASI natively and in the page
+eprint(value: any) := said_on_stderr(str(value))
 // `temp_file()`, `temp_dir()`: the path of a new empty file, folder, which mktemp made
 temp_file() := command("mktemp").trim()
 temp_dir() := command("mktemp -d").trim()
