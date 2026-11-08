@@ -248,12 +248,12 @@ module_written_behind(name: text, runtime, file: text) := {
 }
 MODULE_START = "warp/start"
 # every standard module (rewrites.warp std_module_names) as <name>.wasm in the folder, each after the modules it uses
-# (it links them), all behind the one runtime read once (a rebuild of the same tree writing runtime.wasm meanwhile
-# made native_host's link of callbacks.wasm "behind another runtime.wasm", card empty-native-host). One refusing to
+# (it links them), all behind the one runtime read once. One refusing to
 # prebuild keeps an empty file, never an older build linked in its place. A module calling C by its foreign lines
 # (`… from "c"`) may refuse to compile and stays compiled from source with the program; any other refusal fails the
 # rebuild, naming the module and why (decision prebuild-fails-loudly): one that won't link the modules it uses, and
-# any of lib/host/, which the native driver links itself and no program compiles
+# any of lib/host/, which the native driver links itself and no program compiles (card empty-native-host: native_host
+# linked an older callbacks.wasm, was left empty, and every window, paint and sound run failed while hello passed)
 write_modules(folder: text, runtime_file: text) := {
 	modules_rewritten = yes
 	write_library_index(folder)

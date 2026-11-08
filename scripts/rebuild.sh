@@ -240,8 +240,8 @@ modules_whole() {
 		[ -s "$folder/modules/$module.wasm" ] || { echo "rebuild.sh: $folder/modules/$module.wasm is empty: its modules are built anew" >&2; return 1; }
 	done
 }
-# one rebuild of a tree at a time: a second, of another hash, wrote lib/runtime.wasm while the first built its modules
-# behind the one before, and native_host.wasm came out empty (card empty-native-host); held till this run ends
+# one rebuild of a tree at a time: a second, of another hash, would write lib/runtime.wasm and lib/modules/ while the
+# first builds its modules behind them (card empty-native-host); held till this run ends
 tree_locked() {
 	local lock=$store/trees/$(echo "$tree" | tr / _).building
 	[ "$(lock_holder "$lock")" = $$ ] && return
