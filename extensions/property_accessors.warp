@@ -150,8 +150,7 @@ is_dotted_write(target: Node, op: Op): bool := is_key(target, Op.Dot) and key_of
 property_accessors(program: Node): Node := {
 	statements = statements_in(program)
 	own = property_definitions(statements)
-	mentioned = symbol_words(program)
-	wants_standard = mentioned.any(word => word in ["window", "display", "canvas"])
+	wants_standard = names_standard_object(program)
 	if #own == 0 and not wants_standard { return program }
 	properties = property_table()
 	if wants_standard { standard_properties(properties) }
@@ -161,11 +160,28 @@ property_accessors(program: Node): Node := {
 	# an argument for a parameter typed T reads a free x as the property T.x (card expected-type-names, plain_enums.warp)
 	expectation = Expectation(property_values(properties), parameter_types_of(program), scope, program)
 	rewritten = kept.map(statement => property_accessed(expected_in(statement, expectation), properties, scope))
-	# the modules of the properties the program names: `use draw` in front for the canvas's
-	needed = properties.owners.keys.filter(name => property_object(name) in mentioned).map(name => properties.owners[name])
-	uses = flat_statements(program).map(use_target).filter(target => target is symbol).map(name_of)
-	brought = property_modules.filter(module => module != prelude_module and module in needed and module not in uses)
+	brought = property_modules_needed(program, properties)
 	separated(bracketed(brought.map(module => plain_node(parsed("use " + module))) + rewritten, ""), ";")
 }
+# the objects the standard properties belong to
+standard_objects = ["window", "display", "canvas"]
+names_standard_object(program: Node): bool := symbol_words(program).any(word => word in standard_objects)
+# the modules of the properties the program names that it doesn't use yet: draw for the canvas's
+property_modules_needed(program: Node, properties: PropertyTable): list := {
+	mentioned = symbol_words(program)
+	needed = properties.owners.keys.filter(name => property_object(name) in mentioned).map(name => properties.owners[name])
+	uses = flat_statements(program).map(use_target).filter(target => target is symbol).map(name_of)
+	property_modules.filter(module => module != prelude_module and module in needed and module not in uses)
+}
+# the same modules as implicit uses of the source, so that they are linked as `use draw` is: `canvas.width = 600`
+# reads as binding canvas, so the free words of implicit_uses.warp miss it, and draw's own `window.width = …`, reached
+# as text, would stay unrewritten (card canvas-width-fix)
+property_modules_of(source: text, folder: text = "."): list := {
+	program = plain_node(parsed(source))
+	if not names_standard_object(program) { return [] }
+	properties = property_table()
+	standard_properties(properties)
+	property_modules_needed(program, properties)
+}
 # a pass of the used stage, before the type modules are reached (card leaves-core)
-property_accessors_extension = Extension{name: "property_accessors", passes_before: {"with_type_module_uses": property_accessors}}
+property_accessors_extension = Extension{name: "property_accessors", passes_before: {"with_type_module_uses": property_accessors}, implicit_uses: [property_modules_of]}
