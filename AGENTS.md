@@ -102,7 +102,7 @@ runs warp.wasm and the programs through wasmtime's C API and answers their host 
 Agents must inherit a clean baseline and start working from there. 
 Agents must not rebuild and retest the baseline, this will save many rebuilds.
 Whoever pushes keeps main clean, functional and up to date.
-As soon as a branch, merged with origin/main, passes the smoke test (see Testing), its worker pushes it to main.
+As soon as a branch, merged with origin/main, passes the smoke test (see Testing), its worker hands it to the integrator, who pushes it to main (notes/agents/common.md "Handoff"). The worker does not push to main.
 The full suite runs only at rare intervals, never per branch or batch.
 
 The `warp` binary is the native warp, built by warp itself; the compiler it runs by `warp rebuild`.
@@ -128,8 +128,8 @@ When implementing gaps that the old Rust legacy implementation had, but are not 
 Every worker gets a plan from Supervisor, and everything in it is pre-approved: implement it without asking.
 A good idea of your own beyond the plan may be implemented too, as long as it is undoable (its own commits on a branch).
 AVOID full rebuild for small changes! Main moved in the meantime: if the minimal smoke test (Compiling Hello World)
-passes on the branch merged with origin/main, the worker pushes it to main itself and closes the card with `todo done <card> <commit>`
-(notes/agents/common.md "Done"). The merge commit message MUST include a summary of the changes.
+passes on the branch merged with origin/main, the worker hands it to the integrator and does not push it to main itself (notes/agents/common.md "Handoff").
+The card is closed with `todo done <card> <commit>` once that push is on main (notes/agents/common.md "Done"). The merge commit message MUST include a summary of the changes.
 
 ### Testing
 
@@ -144,9 +144,9 @@ Several agent sessions share this Mac and the full suite is slow, so run the che
 - Full suite (`warp test`): only the Integrator, at rare intervals (nightly, before a release), never per branch.
 We always want the very quick feedback loop and quick merges: anything slower than smoke + self test runs in the
 background (`run_in_background`) and never holds a merge; what it finds is fixed forward on a card.
-Workers merge origin/main into their branch, run the smoke test on that merge and push it to main themselves; nobody
+Workers merge origin/main into their branch, run the smoke test on that merge, and hand it to the integrator, who pushes it to main (notes/agents/common.md "Handoff"); nobody
 repeats their test. The Integrator runs the slower tiers in the background on main and sends what fails back to the
-pusher's card, who fixes it forward.
+worker's card, who fixes it forward.
 
 Warp tests run locally with the shared binary, through the warp compiler (core/native/tests.warp, notes/is_tests.md):
 ```bash
@@ -252,7 +252,7 @@ disappear
 NEVER modify a README without the user's review and explicit confirmation.
 
 ## worktrees
-Small or non-conflicting changes may go straight onto main without a worktree. 
+Small or non-conflicting changes need no worktree. The worker does not put them on main; it hands them to the integrator (notes/agents/common.md "Handoff").
 Otherwise one branch per task, in a git worktree outside the repo: /Volumes/Worktrees/<name>
 /Volumes/Worktrees/warp is cowtree's donor, never removed.
 /Volumes/Worktrees/integrate and integrate2 are the Integrator's (tools: scripts/integrate/, notes/agents/integrator.md).
