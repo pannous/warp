@@ -178,7 +178,17 @@ print("// made by build.sh: the files the server has (host-files.js isUnserved)\
 # the repository's files, as the dev server and test_in_browser.py serve them from the repository root
 write_repository_served_files() {
 	# plus the compiler's lib/ and the packages, which git ignores
-	{ git -c core.quotepath=off ls-files --cached --others --exclude-standard; find web/playground/warp-lib -type f 2>/dev/null || true; package_files; find web/playground/lib -name '*.wasm'; } | write_served_files "$page/served-files.js"
+	{ git -c core.quotepath=off ls-files --cached --others --exclude-standard; linked_folder_files; find web/playground/warp-lib -type f 2>/dev/null || true; package_files; find web/playground/lib -name '*.wasm'; } | write_served_files "$page/served-files.js"
+}
+
+# the files under each tracked link to a folder, by the link's path: lib/compiler -> ../core serves
+# lib/compiler/parsing/lexer.warp, which lib/fix/fix.warp uses (git lists the link alone)
+linked_folder_files() {
+	local link
+	git -c core.quotepath=off ls-files -s | awk '$1 == "120000" { print $4 }' | while IFS= read -r link; do
+		[ -d "$link" ] && find -L "$link" -type f -not -name .DS_Store
+	done
+	return 0
 }
 
 # the files of packages/ (scripts/link-packages.sh, the registry's folders linked in), which samples use by path,
