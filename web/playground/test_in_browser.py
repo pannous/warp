@@ -173,9 +173,9 @@ PAGE_ELEMENTS = "(a handler reads the value of the page's element of an id: $who
 PAGE_ELEMENTS_CODE = 'use web\ngreeting = "-"\ndiv{ input{ id: "who" } button{ on click { greeting = "Hello " + $who }, "Greet" } p{ greeting } }'
 PAGE_ELEMENTS_NAME = "Ada"
 PAGE_ELEMENTS_SHOWN = "Hello Ada"
-# scripts/build-site.sh: a markup program built as a static site, its page loaded and its button clicked (card
-# blockcompiler-entries: built sites on page_render/page_event); checked last, it leaves the playground's page
-BUILT_SITE = "(a site scripts/build-site.sh built shows its page and runs its handlers)"
+# `warp build --site`: a markup program built as a static site, its page loaded and its button clicked (cards
+# blockcompiler-entries, build-site: built sites on page_render/page_event); checked last, it leaves the playground's page
+BUILT_SITE = "(a site warp build --site built shows its page and runs its handlers)"
 BUILT_SITE_CODE = 'use web\ncount = 0\ndiv{ h1{ "Count " + count } button{ on click { count += 1 }, "add" } }\n'
 BUILT_SITE_FOLDER = "data/site-check"
 BUILT_SITE_SHOWN = ["Count 0", "Count 1"]  # the heading after main, after the click
@@ -790,9 +790,9 @@ def built_site_wrong():
 	os.makedirs(os.path.dirname(program), exist_ok=True)
 	with open(program, "w") as file:
 		file.write(BUILT_SITE_CODE)
-	built = subprocess.run([os.path.join(REPOSITORY, "scripts", "build-site.sh"), program], capture_output=True, text=True)
+	built = subprocess.run(["warp", "build", "--site", program], capture_output=True, text=True, env={**os.environ, "WARP_NO_WINDOW": "1"})
 	if built.returncode:
-		return [f"scripts/build-site.sh failed: {(built.stderr or built.stdout).strip()[-300:]}"]
+		return [f"warp build --site failed: {(built.stderr or built.stdout).strip()[-300:]}"]
 	browser("open", f"http://127.0.0.1:{PORT}/{BUILT_SITE_FOLDER}/site/index.html")
 	shown = browser("eval", f"""(async () => {{
 		const heading = async before => {{

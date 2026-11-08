@@ -1,4 +1,4 @@
-// The program of a built site in a Worker (scripts/build-site.sh): app.wasm runs as the playground runs a compiled
+// The program of a built site in a Worker (`warp build --site`, extensions/commands/site.warp): app.wasm runs as the playground runs a compiled
 // program (driver.js programRan), off the page's thread, so a blocking wait may wait (Atomics.wait) and its tasks run on
 // the pool of task Workers (host-tasks.js). The page (site.js) keeps the DOM: it sends the module's URL, the kept values
 // and each element event; this worker answers with the page's markup (lib/markup.warp page_render) after main and after
