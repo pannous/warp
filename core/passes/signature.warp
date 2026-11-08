@@ -6,7 +6,7 @@
 # ~0.3 s). The first section behind the header, so a reader reads its bytes first. `warp signature <m>` shows it as
 # warp text
 SIGNATURE_SECTION = "warp.signature"
-class ModuleSignature { source: text; uses: list; slices: list; rules: list; foreign: map; aliases: map; words: list; globals: list; classes: list; builders: list; runtime: list; patterns: list; operators: list; c_lines: list; c_uses: list }
+class ModuleSignature { source: text; uses: list; slices: list; rules: list; foreign: map; aliases: map; words: list; globals: list; classes: list; builders: list; runtime: list; patterns: list; operators: list; c_lines: list?; c_uses: list? }
 
 # the signature of the standard module `name` as lib/ lies now, a node; with the fields of its image (prebuilt.warp
 # image_fields) when its compile wrote them
@@ -39,10 +39,12 @@ module_signature(name: text, wasm: text): ModuleSignature? := {
 	fields = {}
 	for entry in items_of(unpack(byte_slice(wasm, place#1, place#2))) { fields[name_of(key_of(entry))] = value_of(entry) }
 	module_name = name
-	ModuleSignature(source: "${fields["source"]}", uses: items_of(fields["uses"]).map(module => "${module}"), slices: items_of(fields["slices"]).map(slice => ["${slice#1}", "${slice#2}", "${slice#3}", module_name]), rules: items_of(fields["rules"]).map(rule => unpacked_rule(rule, module_name)), foreign: texts_read(fields.get("foreign")), aliases: texts_read(fields.get("aliases")), words: listed(fields, "words"), globals: listed(fields, "globals"), classes: listed(fields, "classes"), builders: listed(fields, "builders"), runtime: listed(fields, "runtime"), patterns: listed(fields, "patterns").map(pattern => "${pattern}"), operators: listed(fields, "operators").map(operator => "${operator}"), c_lines: listed(fields, "c_lines").map(line => "${line}"), c_uses: listed(fields, "c_uses").map(module => "${module}"))
+	ModuleSignature(source: "${fields["source"]}", uses: items_of(fields["uses"]).map(module => "${module}"), slices: items_of(fields["slices"]).map(slice => ["${slice#1}", "${slice#2}", "${slice#3}", module_name]), rules: items_of(fields["rules"]).map(rule => unpacked_rule(rule, module_name)), foreign: texts_read(fields.get("foreign")), aliases: texts_read(fields.get("aliases")), words: listed(fields, "words"), globals: listed(fields, "globals"), classes: listed(fields, "classes"), builders: listed(fields, "builders"), runtime: listed(fields, "runtime"), patterns: listed(fields, "patterns").map(pattern => "${pattern}"), operators: listed(fields, "operators").map(operator => "${operator}"), c_lines: texts_listed(fields, "c_lines"), c_uses: texts_listed(fields, "c_uses"))
 }
 # a signature field's items, none for one an older build left out
 listed(fields: map, field: text): list := if fields.get(field) == ø then [] else items_of(fields[field])
+# a field of texts, ø for one an older build left out (what it says is then read off the module's text)
+texts_listed(fields: map, field: text): list? := if fields.get(field) == ø then ø else items_of(fields[field]).map(item => "${item}")
 # `warp signature <m>`: the prebuilt module's signature as warp text, a definition's head line a line, as its file
 # writes it (the parses behind them are the signature's, `warp parse` shows one)
 show_signature(name: text) := {

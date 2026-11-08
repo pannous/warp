@@ -366,14 +366,14 @@ c_functions_called(content: text, catalog_file: bool, catalog: list): list := {
 	(catalog.filter(d => d#2 == "m") + declared).filter(d => content.contains(d#1 + "("))
 }
 # a standard module's C functions and the modules it and its parts use, by its prebuilt signature (signature.warp:
-# c_lines, c_uses), else by its text with its parts
+# c_lines, c_uses), else (one not prebuilt, or prebuilt by an older build) by its text with its parts
 module_c_functions(module: text): list := {
 	signature = prebuilt_signature(module)
-	if signature != ø then signature.c_lines.map(c_declaration) else c_functions_called(library_module_with_parts(used_module_text(module)), module + module_extension in c_catalog_files, c_catalog([]))
+	if signature != ø and signature.c_lines != ø then signature.c_lines.map(c_declaration) else c_functions_called(library_module_with_parts(used_module_text(module)), module + module_extension in c_catalog_files, c_catalog([]))
 }
 module_c_uses(module: text): list := {
 	signature = prebuilt_signature(module)
-	if signature != ø then signature.c_uses else used_modules(library_module_with_parts(used_module_text(module)))
+	if signature != ø and signature.c_uses != ø then signature.c_uses else used_modules(library_module_with_parts(used_module_text(module)))
 }
 # what a signature holds of a module's C: its C functions as foreign lines (c_line_written, read back by
 # c_declaration), the modules it and its parts use
