@@ -26,6 +26,12 @@ rewrite $c.methods => [$functions...] where $c is symbol and $functions = class_
 # instance_members)
 rewrite $p.fields => [$names...] where $p is symbol and $names = instance_members($p, fields, $source)
 rewrite $p.methods => [$names...] where $p is symbol and $names = instance_members($p, methods, $source)
+# `functions` is a synonym of methods (decision methods-declared); a type word's or alias's methods, `text.methods`
+# (extensions/rules/rule_words.warp type_methods)
+rewrite $c.functions => [$functions...] where $c is symbol and $functions = class_methods_listed($c, $program, $source)
+rewrite $p.functions => [$names...] where $p is symbol and $names = instance_members($p, methods, $source)
+rewrite $t.methods => [$names...] where $t is symbol and $names = type_methods($t, methods, $program, $source)
+rewrite $t.functions => [$names...] where $t is symbol and $names = type_methods($t, functions, $program, $source)
 # `fields(B)`, `methods(B)` of a class the program declares: its field names, its methods (inherited and outside ones
 # among them) as function values (extensions/rules/rule_words.warp class_fields_listed, class_methods_listed)
 rewrite fields($c) => [$names...] where $c is symbol and $names = class_fields_listed($c, $program, $source)
