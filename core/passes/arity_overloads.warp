@@ -858,7 +858,8 @@ is_untold(n: Node, overloaded: map): bool := {
 result_untold(call: Node, overloaded: map, target: list): Node := {
 	name = name_of(overloaded_call(call, overloaded)#1)
 	first = overloaded[name]#1
-	diagnose(call_of("ambiguous_result", [name, overloaded[name].join(", "), first] + target + ["${call}"]), call)
+	written = if is_round(call) and #call == 1 and call#1 is symbol then name + "()" else "${call}"
+	diagnose(call_of("ambiguous_result", [name, overloaded[name].join(", "), first] + target + [written]), call)
 	returning(call, symbol(first), overloaded)
 }
 
