@@ -176,8 +176,8 @@ property_modules_needed(program: Node, properties: PropertyTable): list := {
 # the same modules as implicit uses of the source, so that they are linked as `use draw` is: `canvas.width = 600`
 # reads as binding canvas, so the free words of implicit_uses.warp miss it, and draw's own `window.width = …`, reached
 # as text, would stay unrewritten (card canvas-width-fix)
-property_modules_of(source: text, folder: text = "."): list := {
-	program = plain_node(parsed(source))
+property_modules_of(source: text, tree: Node, folder: text = "."): list := {
+	program = plain_node(tree)
 	if not names_standard_object(program) { return [] }
 	properties = property_table()
 	standard_properties(properties)
