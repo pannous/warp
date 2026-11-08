@@ -1,0 +1,10 @@
+# `from list import zip` (decision modules-triage): Python's import of named words, which core/passes/uses.warp reads
+# as `use list`; its hint says so, every word of the module being visible, its message in core/analysis/hints.data
+
+from_import_hint(n: Node, program: Node) := {
+	module = from_line(without_mark(n))
+	if module == ø { return ø }
+	diagnose(call_of("from_import", [if module is text then module else name_of(module)]), n)
+}
+
+from_imports_extension = Extension{name: "from_imports", lints: [from_import_hint]}
