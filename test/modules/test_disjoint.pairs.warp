@@ -1,0 +1,13 @@
+# DisjointSet / UnionFind (lib/disjoint.warp). unite joins by size; find halves the path.
+'use disjoint; d = DisjointSet(6); d.unite(1, 2); d.unite(2, 3); d.unite(1, 3); [d.components(), d.size_of(3), d.connected(1, 3), d.connected(1, 4)]'	[4, 3, yes, no]
+'use disjoint; DisjointSet(0).is_empty()'	yes
+'use disjoint; d = DisjointSet(1); [d.unite(1, 1), d.components(), d.size_of(1), d.connected(1, 1)]'	[no, 1, 1, yes]
+'use disjoint; d = DisjointSet(8); for i in 1 to 3 { d.unite(i, i + 1) }; for i in 5 to 7 { d.unite(i, i + 1) }; [d.components(), d.connected(1, 4), d.connected(1, 5), d.size_of(4), d.size_of(8)]'	[2, yes, no, 4, 4]
+'use disjoint; d = DisjointSet(8); for i in 1 to 3 { d.unite(i, i + 1) }; for i in 5 to 7 { d.unite(i, i + 1) }; d.unite(4, 5); [d.components(), d.connected(1, 8), d.size_of(8)]'	[1, yes, 8]
+'use disjoint; d = DisjointSet(40); for i in 1 to 39 { d.unite(i, i + 1) }; [d.components(), d.connected(1, 40), d.size_of(20), d.find(1) == d.find(40)]'	[1, yes, 40, yes]
+'use disjoint; d = DisjointSet(5); d.unite(1, 2); d.unite(1, 3); d.unite(1, 4); d.unite(5, 1); d.find(5)'	1
+'use disjoint; UnionFind(3).unite(3, 1)'	yes
+'use disjoint; DisjointSet(-1)'	error	negative count
+'use disjoint; DisjointSet(3).find(0)'	error	element below 1
+'use disjoint; DisjointSet(3).unite(1, 4)'	error	element above n
+'samples/objects/disjoint_groups.warp'	23

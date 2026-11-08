@@ -1,0 +1,37 @@
+// Disjoint sets (union-find) for elements 1..n. `use disjoint`.
+// find uses path halving and unite joins by size, the same rules graphs' Kruskal keeps inline.
+// unite returns yes when two components become one. The word union stays the list function.
+// A missing element, or a negative count, is refused.
+
+alias UnionFind => DisjointSet
+
+class DisjointSet { parent = []; sizes = []; parts = 0
+	init(n) := {
+		if n < 0 { raise "DisjointSet needs a count >= 0, not " + str(n) }
+		for i in 1 to n { parent.add(i); sizes.add(1) }
+		parts = n
+	}
+	find(x) := {
+		disjoint_check(count(parent), x)
+		while parent#x != x { parent#x = parent#(parent#x); x = parent#x }
+		x
+	}
+	unite(a, b) := {
+		ra = find(a)
+		rb = find(b)
+		if ra == rb { return no }
+		if sizes#ra < sizes#rb { t = ra; ra = rb; rb = t }
+		parent#rb = ra
+		sizes#ra = sizes#ra + sizes#rb
+		parts = parts - 1
+		yes
+	}
+	connected(a, b) := find(a) == find(b)
+	size_of(x) := sizes#find(x)
+	components() := parts
+	is_empty() := parts == 0
+}
+
+disjoint_check(n, x) := {
+	if x < 1 or x > n { raise "disjoint: no element " + str(x) + " in 1.." + str(n) }
+}
