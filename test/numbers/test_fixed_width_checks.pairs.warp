@@ -1,0 +1,8 @@
+# a fixed-width int takes a value that fits it, else a catchable error naming the range (decision cast-checks; card u8-literal-overflow)
+'x: u8 = 300; x'	error
+'x: u8 = 200; x'	200
+'300 as u8'	error
+'(-1) as uint32'	error
+'-128 as int8'	-128
+'try { 40000 as int16 } catch e { e.message }'	"40000 does not fit int16 (-32768…32767)"
+'300 as! u8'	44
