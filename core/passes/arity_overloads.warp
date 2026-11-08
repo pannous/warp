@@ -12,6 +12,7 @@ use "../analysis/builtin_signatures.warp"
 use "../analysis/words.warp"
 use "classes.warp"
 use "definitions.warp"
+use "prefix_calls.warp"
 
 # the call `f(a, b)` a definition's target names: `f(a, b)`, `f(a, b): T`, `f(a, b) as T`; ø for another target
 target_call(target: Node): Node := match target {
@@ -690,6 +691,7 @@ typed_call(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	if not (is_call_form(n) and #n > 1 and n#1 is symbol) { return n }
 	name = name_of(n#1)
 	if name not in overloaded { return n }
+	if compares_after_argument(n, overloaded[name]) { return Key(typed_call(spaced([n#1, key_of(n#2)]), overloaded, judge), op_of(n#2), value_of(n#2)) }
 	arguments = items_of(n)[1 ..]
 	# a call may leave out the defaulted parameters at the end, `lowpass(sig, 800)` of `lowpass(signal, frequency, q = 0.707)`
 	least = judge.least[name]
@@ -706,6 +708,10 @@ typed_call(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	if #chosen != 1 { return diagnose(call_of("tied_variants", [written, listed]), n) }
 	call_of(typed_variant(name, chosen#1), arguments)
 }
+
+# `time 6 == 6s`: the comparison after a typed overload's spaced argument compares its value, as of a function of one
+# definition (prefix_calls.warp fitted_comparison, which runs after the variants are renamed), unless a variant takes a yes/no
+compares_after_argument(n: Node, variants: list): bool := is_word_phrase(n) and n#2 is key and op_of(n#2) in comparing_ops and not variants.any(types => #types > 0 and takes_condition(types#1))
 
 # whether `p.name` may read a field: a class of the program has one of the name, or a key is written so, `{once: …}`
 names_a_field(name: text, program: Node): bool := {

@@ -128,8 +128,16 @@ static void crash_said(const char* what) {
 	const char* parts[] = {"warp: ", what, " while ", activity, "\n"};
 	for (size_t i = 0; i < sizeof parts / sizeof *parts; i++) (void)!write(STDERR_FILENO, parts[i], strlen(parts[i]));
 }
+// the crash signal's name without strsignal, which allocates: a crash inside malloc (a heap corrupted beneath it) then
+// waited on malloc's own lock and the system killed the process silently, exit 137 (card server-samples)
+static const char* crash_name(int signal_number) {
+	if (signal_number == SIGABRT) return "Abort trap";
+	if (signal_number == SIGTRAP) return "Trace/BPT trap";
+	if (signal_number == SIGILL) return "Illegal instruction";
+	return "a signal";
+}
 static void crashed_by(int signal_number) {
-	crash_said(strsignal(signal_number));
+	crash_said(crash_name(signal_number));
 	signal(signal_number, SIG_DFL);
 	raise(signal_number);
 }
