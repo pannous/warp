@@ -49,6 +49,13 @@ channel_byte(c: Color, shift: int): int := ((c as int) >> shift) % 256
 channel_shifts = [24, 16, 8, 0]
 // the color t of the way from a to b, each channel and the alpha alike: mix(red, blue) is #800080
 mix(a: Color, b: Color, t: float = 0.5): Color := sum(channel_shifts.map(shift => (round(lerp(channel_byte(a, shift), channel_byte(b, shift), t)) as int) << shift)) as Color
+// light adding (decision color-light-adding): red + blue is #FF00FF, each channel summed and capped at 255, `-` floored
+// at 0, a color times a number scales its channels; the left color keeps its alpha
++(a: Color, b: Color): Color := channels_made(a, shift => channel_byte(a, shift) + channel_byte(b, shift))
+-(a: Color, b: Color): Color := channels_made(a, shift => channel_byte(a, shift) - channel_byte(b, shift))
+*(c: Color, f: number): Color := channels_made(c, shift => round(channel_byte(c, shift) * f) as int)
+// a's alpha and each of red, green and blue the byte gives for its shift, kept from 0 to 255
+channels_made(a: Color, byte: function): Color := ((alpha_of(a) << 24) + sum([16, 8, 0].map(shift => (clamp(byte(shift), 0, 255) as int) << shift))) as Color
 // #FF0000, and #FF000080 when not opaque, its alpha last as in CSS (decision color-text-css)
 hex_text(c: Color): text := "#" + padded_hex((c as int) % 16777216, 6) + (if alpha_of(c) == 255 then "" else padded_hex(alpha_of(c), 2))
 // the number 0xAARRGGBB itself
