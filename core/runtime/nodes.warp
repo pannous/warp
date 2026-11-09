@@ -33,7 +33,7 @@ spellings_of(table: int): list := {
 			["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=",
 				"*=", "/=", "%=", "^=", "&&=", "||=", "^^=", "<", ">", "<=", ">=", "==", "!=", "≈", "and", "or", "xor", "not", "-", "√", "∛",
 				"‖", "++", "--", "?", "if", "then", "else", "while", "do", "#", "..", "to", "as", "±", "??", "===", "!==", "~", "⌞", "⌟", "&",
-				"|", "↑", "↓", "/!", "/!=", "is"],
+				"|", "↑", "↓", "÷", "÷=", "is"],
 			# a list's bracket and separator, as `n.bracket` and `n.separator` give them
 			["{", "[", "(", "<", "·other", ""],
 			["", " ", ",", ";", "\n", "\t"],
@@ -56,7 +56,7 @@ operator_code(written: text): int := {
 	#spellings - 1
 }
 # floor division's other spelling as its table's (node_cases.warp other_spellings)
-canonical_operator(spelled: text): text := if text_order(spelled, "÷") == 0 then "/!" else if text_order(spelled, "÷=") == 0 then "/!=" else spelled
+canonical_operator(spelled: text): text := if text_order(spelled, "/!") == 0 then "÷" else if text_order(spelled, "/!=") == 0 then "÷=" else spelled
 # `key(1, "⊕", 2)`: a key of any operator, its spelling kept
 key_node(left: Node, operator: Node, right: Node): Node := keyed(operator_code(node_text(operator)) * KindUnit.Info + Kind.Key, left, right)
 # the case of a node part's code among the cases by code, an operator past them (Op.Other) its own spelling
