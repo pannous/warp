@@ -28,9 +28,25 @@ changed=$({ git -C "$tree" diff --name-only "$base" HEAD; git -C "$tree" diff --
 baked=$(echo "$changed" | grep -E "$BAKED" | grep -v '^core/native/')  # the native warp is no compiler input (compiler-inputs.sh)
 # whether it changes a top-level line of a lib/ module, one that may add, drop or rename a word other modules reach: a
 # changed line at column 0 that is no comment (a body line is indented; a comment, sample or test edit changes none)
+changed_modules() { echo "$changed" | grep -E '^lib/(host/)?[A-Za-z_0-9]+\.warp$'; }
 changes_module_words() {
-	local modules=$(echo "$changed" | grep -E '^lib/(host/)?[A-Za-z_0-9]+\.warp$')
+	local modules=$(changed_modules)
 	[ -n "$modules" ] && git -C "$tree" diff -U0 "$base" -- $modules | grep -vE '^(\+\+\+|---) ' | grep -qE '^[-+][^[:space:]#]'
+}
+# a function a lib module defines anew at its top level that another lib file defines too: every call of the word may
+# now reach the other definition (pattern-parameters' find(value: any, p: data) in text.warp made find("hello", "l")
+# ø in every program, card smoke-lib-shadow; the choice itself is card lib-module). Said loudly with the test files
+# that call the word, for the worker to run in the background: tests stay feedback (supervisor decision, option b)
+clashes_said() {
+	local module word others tests
+	for module in $(changed_modules); do
+		for word in $(git -C "$tree" diff -U0 "$base" -- "$module" | sed -nE 's/^\+(def )?([A-Za-z_][A-Za-z_0-9]*)\(.*/\2/p' | sort -u); do
+			others=$(cd "$tree" && grep -lE "^(def )?$word\(" lib/*.warp lib/host/*.warp 2>/dev/null | grep -vx "$module")
+			[ -z "$others" ] && continue
+			tests=$(cd "$tree" && grep -rlE "(^|[^A-Za-z_0-9.])$word\(|\.$word([^A-Za-z_0-9]|$)" test --include='*.warp' | sort)
+			echo "smoke: CLASH: $module defines $word, which $(echo $others) define(s) too: a call of $word may now reach the other one. Run in the background: warp test $(echo $tests)" >&2
+		done
+	done
 }
 if [ -n "$baked" ]; then
 	echo "smoke: REBUILDING, the compiler bakes in what this branch changed: $(echo $baked)"
@@ -70,4 +86,5 @@ footprint_checked "$(cat "$peak" 2>/dev/null)" "this branch's hello"
 # sound run while hello passed (card empty-native-host)
 host=$(cd "$tree" && WARP_LIB=$tree/lib WARP_NO_WINDOW=1 "$INSTALLED" 'window_possible()' 2>&1 | without_runtime_noise | tail -1)
 [[ $host == no ]] || { echo "smoke: the native host module did not answer window_possible(): ${host:0:160}" >&2; exit 1; }
+clashes_said
 echo "smoke: $got ($way, WARP_LIB=$tree/lib)"
