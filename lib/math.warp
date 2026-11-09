@@ -1,6 +1,7 @@
 // The standard library module math (notes/stdlib.md): `use math`, together with the C library libm.
 // Whole-number words declare int parameters, which their signatures show; the others take any number
 use reals
+use integers
 use case_table
 
 // The math spellings of operators (decision operator-alias), every program reads them: each keeps the precedence
@@ -167,14 +168,7 @@ exp2(x: float): float from 'm'
 erf(x: float): float from 'm'
 erfc(x: float): float from 'm'
 
-// Two ints. A value past 64 bits is unsupported: an int parameter is 64 bits, and that limit is the
-// compiler's. wide_gcd is the same steps for a caller that needs the wider value.
-gcd(a: int, b: int): int := {
-	x = if a < 0 then 0 - a else a
-	y = if b < 0 then 0 - b else b
-	while y != 0 { rest = x % y; x = y; y = rest }
-	x
-}
+// gcd(a, b) is the core's (core/integers.warp); wide_gcd is the same steps for a caller that needs a value past 64 bits
 wide_gcd(a, b) := {
 	x = if a < 0 then 0 - a else a
 	y = if b < 0 then 0 - b else b
