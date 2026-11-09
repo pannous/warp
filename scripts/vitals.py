@@ -366,7 +366,9 @@ def hello_track():
 
 landed = {line.split()[0]: line.split()[1][:16].replace("T", " ") for line in
           git("log", "--format=%H %ad", "--date=iso-strict", "--since=" + SINCE, TIP).splitlines()}
-data = {"cards": card_counts(), "hello": hello_track(), "pace": hourly_pace(), "builds": [[name, record, build_history(record, by_seed, landed)] for name, record, by_seed in BUILDS], "tiers": [[name, path, tier_history(path), latest_flips(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows}
+data = {"cards": card_counts(), "hello": hello_track(), "pace": hourly_pace(), "builds": [[name, record, build_history(record, by_seed, landed)] for name, record, by_seed in BUILDS], "tiers": [[name, path, tier_history(path), latest_flips(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows,
+        "tip": git("log", "-1", "--format=%h%x09%s%x09%ad", "--date=format:%Y-%m-%d %H:%M", TIP).strip().split("\t"),
+        "generated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 with open(TEMPLATE) as template, open(OUT, "w") as page:
     page.write(template.read().replace("__DATA__", json.dumps(data, separators=(",", ":")).replace("</", "<\\/")))

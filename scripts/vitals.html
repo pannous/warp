@@ -36,6 +36,8 @@ body { background: var(--paper); color: var(--ink); font: 15px/1.55 var(--font-t
 h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
 h2 { font-size: 17px; font-weight: 600; margin: 0; }
 .lede { color: var(--ink-2); margin: 6px 0 0; max-width: 65ch; }
+.stamp { color: var(--ink-3); margin: 4px 0 0; font: 13px var(--font-data); }
+.stamp a { color: inherit; }
 .label { font: 500 11px/1.3 var(--font-data); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); }
 .figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 .figure { background: var(--panel); border-radius: 6px; padding: 14px 16px; display: grid; gap: 4px; }
@@ -86,6 +88,7 @@ footer { color: var(--ink-3); font-size: 12px; }
     <div class="label">warp compiler · since self-hosting</div>
     <h1>Warp vitals</h1>
     <p class="lede">How many tests pass in each lane, and how heavy the compiler is, rebuilt from git history.</p>
+    <p class="stamp" id="stamp"></p>
   </header>
 
   <section>
@@ -155,6 +158,13 @@ const GROUP_COLORS = ["--s1","--s2","--s3","--s4","--s5","--s6","--s7"];
 const WIDTH = 940, PAD = { left: 52, right: 12, top: 12, bottom: 26 };
 const rows = DATA.rows.map(([date, sha, subject, groups, delta, extensionsDelta, lib, test]) => ({ date, sha, subject, groups, delta, extensionsDelta, lib, test, core: groups.slice(0, -1).reduce((a, b) => a + b, 0), extensions: groups[groups.length - 1] }));
 const first = rows[0], last = rows[rows.length - 1];
+{
+	const [sha, subject, committed] = DATA.tip;
+	const stamp = document.getElementById("stamp");
+	stamp.append("Last commit ");
+	stamp.append(Object.assign(document.createElement("a"), { href: COMMIT_URL + sha, textContent: sha }));
+	stamp.append(` (${committed}) ${subject.length > 80 ? subject.slice(0, 80) + "…" : subject} · updated ${DATA.generated}`);
+}
 const format = n => n.toLocaleString("en-US");
 const signed = n => (n > 0 ? "+" : n < 0 ? "−" : "±") + format(Math.abs(n));
 const percent = (a, b) => signed(Math.round((b - a) / a * 100)) + "%";
