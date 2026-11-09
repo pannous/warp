@@ -4,11 +4,11 @@
 is! 'def log(x) { log(x, 10) }; def log(x, base) { x/base }; log(50)' 3.912023005428146
 
 # an_overloaded_name_given_as_a_function_is_the_variant_called
-is! 'apply(h, x) := h(x)
+is! 'apply(h: function, x) := h(x)
 f() := 0
 f(x) := x * 2
 apply(f, 3)' 6
-is! 'twice(h) := h() + h()
+is! 'twice(h: function) := h() + h()
 f() := 5
 f(x) := x
 twice(f)' 10
