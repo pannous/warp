@@ -258,7 +258,8 @@ conversions(program: Node): Node := {
 			order += [target]
 		}
 	}
-	classes = class_declarations(program)
+	# (@primitive code's classes are structs, no class places: a check would hold any value)
+	classes = if lowering_primitive() then {} else class_declarations(program)
 	checked = if not order and not classes {
 		if #kept == #statements_in(program) then program else List(kept, Bracket.None, Separator.Newline)
 	} else {
