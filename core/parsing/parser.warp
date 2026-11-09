@@ -2909,7 +2909,10 @@ def number_atom(p: Parser): Node := {
 	// i64 a float (card int-beyond)
 	// `1.5e-7` is a float, as measurements and other programs write it (decision exact-decimals); `1e3` stays the integer 1000 (decimal_number writes its zeros), `0.5` exact
 	if written.contains("e") { return Key(float(written), Op.As, symbol("float")) }
-	with_glued_factor(p, if written.contains(".") then decimal_value(written) else whole_number(written))
+	amount = if written.contains(".") then decimal_value(written) else whole_number(written)
+	// an index glued after `#` is no factor: `fs#1(4)` calls the item fs#1, never reads fs#4
+	if number_start > 0 and p.code[number_start - 1] == '#' and char_here(p) == '(' { return amount }
+	with_glued_factor(p, amount)
 }
 // `.5` is 0.5, `...xs` spreads xs; Swift's `.north`, a member of the type the context expects (a match arm's case),
 // also a rule's `.$k`

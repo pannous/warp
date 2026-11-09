@@ -1,4 +1,4 @@
-# 5ae124e4d3 2026-11-08 14:26 255/258 98.8%
+# 805a3299c0 2026-11-09 03:24 258/258 100.0%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -40,14 +40,15 @@ ok   samples/errors/try_else.warp
 ok   samples/errors/try_failed_json.warp
 ok   samples/events/arrow_keys.warp
 ok   samples/events/effects.warp
+ok   samples/events/ticks.warp
 ok   samples/functions/ackermann.warp
 ok   samples/functions/block_arguments.warp
 ok   samples/functions/code_as_data.warp
 ok   samples/functions/fibonacci.warp
 ok   samples/functions/functions.warp
 ok   samples/functions/list_overloads.warp
-ok   samples/functions/queens_idiomatic.warp
 ok   samples/functions/queens.warp
+ok   samples/functions/queens_idiomatic.warp
 ok   samples/functions/sudoku.warp
 ok   samples/functions/warp_reads_warp.warp
 ok   samples/functions/y_combinator.warp
@@ -104,11 +105,11 @@ ok   samples/gpu/warp_compiled_wgsl_shader.warp
 ok   samples/graphics/finger_paint.warp
 ok   samples/graphics/gaussian_splats.warp
 ok   samples/graphics/paint_function.warp
-ok   samples/graphics/paint_text_gpu.warp
 ok   samples/graphics/paint_text.warp
+ok   samples/graphics/paint_text_gpu.warp
+ok   samples/graphics/shader.warp
 ok   samples/graphics/shader_brush.warp
 ok   samples/graphics/shader_trails.warp
-ok   samples/graphics/shader.warp
 ok   samples/graphics/webgpu.warp
 ok   samples/graphics/window_size.warp
 ok   samples/hello/comments.warp
@@ -123,8 +124,8 @@ ok   samples/lists/dot.warp
 ok   samples/lists/primes.warp
 ok   samples/lists/quicksort.warp
 ok   samples/lists/sieve.warp
-ok   samples/lists/sorting_idiomatic.warp
 ok   samples/lists/sorting.warp
+ok   samples/lists/sorting_idiomatic.warp
 ok   samples/lists/typed_lists.warp
 ok   samples/loops/game_of_life.warp
 ok   samples/loops/iterators.warp
@@ -149,9 +150,9 @@ ok   samples/modules/packages.warp
 ok   samples/modules/rust_crates.warp
 ok   samples/modules/slug_paths.warp
 ok   samples/modules/square.warp
+ok   samples/modules/test_ffi.warp
 ok   samples/modules/test_ffi_comprehensive.warp
 ok   samples/modules/test_ffi_extended.warp
-ok   samples/modules/test_ffi.warp
 ok   samples/native/arguments.warp
 ok   samples/native/c_calls.warp
 ok   samples/native/doubling.warp
@@ -180,6 +181,7 @@ ok   samples/objects/json_parser.warp
 ok   samples/objects/references.warp
 ok   samples/python/numpy_matrix.warp
 ok   samples/python/python_modules.warp
+ok   samples/signals/signal_fields.warp
 ok   samples/sound/arrangement.warp
 ok   samples/sound/filters.warp
 ok   samples/sound/gpu_visualizer_warp.warp
@@ -194,13 +196,14 @@ ok   samples/sound/siren_sound.warp
 ok   samples/sound/sound_features.warp
 ok   samples/sound/sound_kick_samples.warp
 ok   samples/sound/sound_patterns.warp
+ok   samples/sound/sound_pipes.warp
 ok   samples/sound/stereo_sound.warp
 ok   samples/sound/synth.warp
 ok   samples/sound/visualizer.warp
 ok   samples/sound/voices.warp
+ok   samples/storage/orm.warp
 ok   samples/storage/orm_transaction.warp
 ok   samples/storage/orm_units.warp
-ok   samples/storage/orm.warp
 ok   samples/storage/store.warp
 ok   samples/system/c_lines.warp
 ok   samples/system/crontab.warp
@@ -210,8 +213,8 @@ ok   samples/tasks/parallel_let.warp
 ok   samples/tasks/threads.warp
 ok   samples/text/calculator.warp
 ok   samples/text/find_text.warp
-ok   samples/text/levenshtein_idiomatic.warp
 ok   samples/text/levenshtein.warp
+ok   samples/text/levenshtein_idiomatic.warp
 ok   samples/text/palindrome.warp
 ok   samples/text/regexes.warp
 ok   samples/text/replace_word.warp
@@ -234,8 +237,8 @@ ok   samples/web/computed_tags.warp
 ok   samples/web/counter.warp
 ok   samples/web/form_submit.warp
 ok   samples/web/hello_div.warp
-ok   samples/web/html_dsl.warp
 ok   samples/web/html.warp
+ok   samples/web/html_dsl.warp
 ok   samples/web/keyed_counters.warp
 ok   samples/web/keyframes.warp
 ok   samples/web/leaving_list.warp
@@ -254,6 +257,3 @@ SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
-FAIL samples/events/ticks.warp: samples/events/ticks.warp:1:42 outside the core: the call in(…)
-FAIL samples/signals/signal_fields.warp: samples/signals/signal_fields.warp:1:42 outside the core: the call in(…)
-FAIL samples/sound/sound_pipes.warp: samples/sound/sound_pipes.warp:1:42 outside the core: the call in(…)
