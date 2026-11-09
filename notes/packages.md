@@ -4,7 +4,7 @@
   is used by its path, `use "packages/egraph/egraph.warp"`; getting it there (a clone of
   github.com/pannous/warp-packages, a link) is the project's business. `use <name>` names `<name>.warp` beside the
   program, a standard module lib/<name>.warp, a C library (lib/native/<name>.warp, libc/libm, a foreign line's library)
-  or a mode of lib/modes.data (`use strict`); any other name fails the compile, "no module, library or package named
+  or a mode of core/passes/modes.data (`use strict`); any other name fails the compile, "no module, library or package named
   <name>" (card egraph-use-ignored; it was silently ignored before).
 - What follows describes the Rust compiler (branch rust-bootstrap): its registry lookup, pins and package tools are not
   in the warp compiler.
