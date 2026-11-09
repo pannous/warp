@@ -50,7 +50,7 @@ native_commands = ["pure", "self", "rebuild", "tool", "fetch", "dev", "serve", "
 native_warp_commands = ["run", "pure", "self", "eval", "fast", "fuel", "rebuild", "test", "repl", "console", "start", "version", "beautify", "fix", "format", "lint", "docs", "wiki", "home", "app", "dev"]
 # set by the native warp for the compiler it hosts: the host's name
 HOST_VARIABLE = "WARP_HOST"
-natively_hosted(): bool := (env(HOST_VARIABLE) ?? "") != ""
+natively_hosted(): bool := (started_env(HOST_VARIABLE) ?? "") != ""
 # what no host of these commands has yet: under the native warp, the commands it lacks
 NOT_YET = " is not in warp yet"
 

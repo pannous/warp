@@ -6,8 +6,7 @@ use "../analysis/words.warp"
 use "../passes/sugar.warp"
 use "foreign_forms.warp"
 use "../extension.warp"
-use os
-use file
+use "../host_io.warp"
 use "../passes/library.warp"
 
 // Where the items being read stand: the bracket of their group, whether that group is closed by a bracket or a word
@@ -1630,8 +1629,8 @@ def written_before(p: Parser, n: Node, end: int): text := {
 INDEX_POWER = 170
 
 // The operators written with symbols, longest first, each with its canonical name; alias_spellings() adds their other
-// spellings (lib/aliases.warp)
-SYMBOL_OPERATORS = {"?.": "?.", "===": "===", "!==": "!==", "/!": "/!", "??": "??", "?:": "?:", "··": "··", ":=": ":=", "::": "::", "->": "->", "|>": "|>", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "..": "..", ":": ":", "=": "=", "←": "←", "<-": "←", ".": ".", "+": "+", "-": "-", "*": "*", "/": "/", "%": "%", "^": "^", "<": "<", ">": ">", "≈": "≈", "~": "~", "#": "#", "?": "?", "↑": "↑", "↓": "↓"}
+// spellings (lib/aliases.warp), and floor division's all: which of `/!` and `÷` is canonical is the table's word
+SYMBOL_OPERATORS = {"?.": "?.", "===": "===", "!==": "!==", "??": "??", "?:": "?:", "··": "··", ":=": ":=", "::": "::", "->": "->", "|>": "|>", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "..": "..", ":": ":", "=": "=", "←": "←", "<-": "←", ".": ".", "+": "+", "-": "-", "*": "*", "/": "/", "%": "%", "^": "^", "<": "<", ">": ">", "≈": "≈", "~": "~", "#": "#", "?": "?", "↑": "↑", "↓": "↓"}
 // The operators kept as the phrase [a op b] for the sugar to read: `a ?: b` is a or its fallback
 // (extensions/sugar/fallbacks.warp); so are each operator's element-wise form `.op` and compound assignment `op=`
 PHRASE_OPERATORS = ["?:"]

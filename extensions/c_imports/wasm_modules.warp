@@ -239,7 +239,7 @@ wasm_imported(bytes: list): WasmImported := {
 skip_limits(reader: ByteReader) := {
 	flags = read_number(reader)
 	read_number(reader)
-	if bit_and(flags, LIMITS_WITH_MAXIMUM) != 0 { read_number(reader) }
+	if bits_and(flags, LIMITS_WITH_MAXIMUM) != 0 { read_number(reader) }
 }
 # a global's value as warp code when it is an immutable int constant, else ø; the reader past its initializer
 wasm_global_value(reader: ByteReader): text? := {
@@ -262,10 +262,10 @@ sleb_read_from(reader: ByteReader): int := {
 	while byte >= 128 {
 		byte = reader.bytes[reader.offset]
 		reader.offset += 1
-		n += bit_and(byte, 127) << shift
+		n += bits_and(byte, 127) << shift
 		shift += 7
 	}
-	if bit_and(byte, 64) != 0 and shift < 64 then n - (1 << shift) else n
+	if bits_and(byte, 64) != 0 and shift < 64 then n - (1 << shift) else n
 }
 # an exported function as a foreign line declares it, none for a type a line can't say (several results, a reference)
 wasm_declaration(name: text, path: text, type: list?): list := {

@@ -1,0 +1,30 @@
+# x.w is x's own w where it has one, else the call w(x) of whatever takes x (decision fields-are-functions)
+'3.type == type(3)'	yes
+'xs=[1,2]; xs.type == type(xs)'	yes
+'class P{x:int}; p=P(3); p.type == P'	yes
+'class P{type:int}; p=P(3); p.type'	3
+'16.sqrt'	4
+'x=-3; x.abs'	3
+'x=3.7; x.floor'	3
+'x=3; x.text'	"3"
+'g(m):=m.type; g({a:1}) == type({a:1})'	yes
+'g(m):=m.type; g({type:"t"})'	"t"
+'g(m):=m.keys; g({keys:1})'	["keys"]
+'g(m):=m.keys; g({a:1})'	["a"]
+'sq(x):=x*x; m={a:3}; m.a.sq'	9
+'m={sq:2}; sq(x):=x*x; m.sq'	2
+'3.type.name'	"nat"
+# own methods first, then fields, then functions: a map's protocol methods win over its entries (decision dot-call answers)
+'m={keys:1, a:2}; m.keys'	["keys", "a"]
+'m={keys:1, a:2}; m["keys"]'	1
+'g(m):=m.count; g({count:3})'	3
+# a local or parameter holding a function, where no object has a field of that name
+'g = x => x*2; 3.g'	6
+'g = (a,b) => a+b; 3.g(4)'	7
+'ap(f: function, x) := x.f; ap(x => x+1, 4)'	5
+'x = {value: 5}; value = 3; x.value'	5
+# x.w = v: a declared setter of x's class where x has no field w, else the entry (decision setters-declared)
+'class P{x:int}; double(p: P, v) := { p.x = v*2 }; p = P(1); p.double = 5; p.x'	10
+'class P{x:int; twice(v) := { x = v*2 }}; p = P(1); p.twice = 5; p.x'	10
+'class P{x:int}; p = P(1); p.x = 4; p.x'	4
+'m = {a:1}; m.merge = 3; m.merge'	3
