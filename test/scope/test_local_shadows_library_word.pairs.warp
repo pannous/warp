@@ -4,3 +4,5 @@
 # a C-style definition with math's types spelled otherwise (double for float) is the program's own word
 'double sin(double x){ return x*2 }; sin(3)'	6
 'sin(x: f64) := x * 2; sin(3)'	6
+# a local variable of a definition shadows a global function taking a class, called by its name (card local-shadowing)
+'class P { x: int }; named(p: P): int := p.x; g() := { named = (m => [m]); named("a") }; g()'	['a']
