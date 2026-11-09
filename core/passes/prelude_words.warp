@@ -274,7 +274,7 @@ time_literal_words(program: Node): list := {
 }
 is_time_typed(n: Node): bool := is_operator(n, ":") and value_of(n) == symbol(time_module)
 # `x is time`, `x is duration`: lib/time's word the emitter asks (runtime_words.warp time_test_code)
-time_test_words(program: Node): list := if nodes_in(program).any(is_time_test) or statements_in(program).any(has_time_field) then [time_test_word] else []
+time_test_words(program: Node): list := if nodes_in(program).any(is_time_test) or statements_in(program).any(has_time_field) then [time_test_word, quantity_test_word] else []
 # a class with a field typed so, `class car { year: date? }`, whose instances test it (decision typed-places-check)
 has_time_field(statement: Node): bool := class_view(statement) != ø and words_within(statement).any(word => base_type(word) in time_test_types)
 # `x is time` as written, or as the type tests make it, is_type(x, "time") (core/analysis/type_tests.warp)
