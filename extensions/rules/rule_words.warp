@@ -1000,6 +1000,17 @@ class_made_as(variable: text, source: text): any := {
 	made = source.split("\n").flat_map(line => line.split(";")).map(statement => statement.trim()).filter(line => line.starts_with(variable + " = ")).map(line => line[#variable + 3 ..].split("(")#1.trim())
 	if #made > 0 and made.all(name => name == made#1 and name in classes) then made#1 else ø
 }
+# `p.double = 5` (decision setters-declared): the setter double(p, 5) where p is made as an instance of a class whose
+# lineage declares no field double and a function double's first parameter is typed with one of those classes (a
+# class's own one-parameter method is extensions/class_methods' setter_calls); ø otherwise, so a map or an untyped
+# value keeps its entry write
+class_setter(variable: Node, word: Node, source: text): any := {
+	made = class_made_as(spelled(variable), source)
+	if made == ø { return ø }
+	lineage = class_lineage(made, plain_node(parsed(source)))
+	if lineage.any(owner => spelled(word) in (class_members(owner, source) ?? [[], []])#1.map(field => "${field}")) { return ø }
+	if lineage.contains(first_parameter_types.get(spelled(word))) then yes else ø
+}
 # `area.full`: what printing area shows, its doc as comment lines above its definition as written
 full_definition(name: Node, program: Node, source: text): any := {
 	definition = definition_text(name, program, source)
@@ -1254,6 +1265,7 @@ rule_words = {
 	instance_members: instance_members,
 	class_fields_listed: class_fields_listed,
 	class_methods_listed: class_methods_listed,
+	class_setter: class_setter,
 	program_functions: program_functions,
 	qualified: qualified,
 	widened_to_int: widened_to_int,

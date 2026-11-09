@@ -23,3 +23,8 @@
 'g = (a,b) => a+b; 3.g(4)'	7
 'ap(f: function, x) := x.f; ap(x => x+1, 4)'	5
 'x = {value: 5}; value = 3; x.value'	5
+# x.w = v: a declared setter of x's class where x has no field w, else the entry (decision setters-declared)
+'class P{x:int}; double(p: P, v) := { p.x = v*2 }; p = P(1); p.double = 5; p.x'	10
+'class P{x:int; twice(v) := { x = v*2 }}; p = P(1); p.twice = 5; p.x'	10
+'class P{x:int}; p = P(1); p.x = 4; p.x'	4
+'m = {a:1}; m.merge = 3; m.merge'	3
