@@ -59,3 +59,5 @@ instead of evaluating `beautify / Users / …` ("type error: int / text").
 ## Gate
 
 The Integrator's gate.sh runs `warp format check samples lib` report-only (`FORMAT n to format`), never failing.
+
+`warp fix` formats code and applies recommended improvements; it previews file changes before applying them.
