@@ -2,6 +2,7 @@
 # compiler itself is written with, so its build reads nothing of lib/. Every program's prelude is this text before
 # lib/prelude.warp (builtin_signatures.warp prelude_text); compiler.warp includes it, as the current seed reads only
 # lib/prelude.warp (whose copies of the alias lines go with the next seed refresh, card builtins-seed-transition)
+// the first element, combined with every later one in turn: `[3, 1, 2].reduce((a, b) => a + b)` is 6
 reduce(xs: list, f: function) := {
 	if count(xs) == 0 { raise "reduce of an empty list" }
 	combined = xs#1
