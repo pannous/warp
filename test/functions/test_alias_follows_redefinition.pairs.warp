@@ -1,0 +1,4 @@
+# an alias the program calls means the program's own definition of its word where that takes the call, the library's
+# else (card alias-follows-redefinition)
+'square(x):=x*x*10; 3 squared'	90
+'square(x):=x*x*10; squared(2)'	40
