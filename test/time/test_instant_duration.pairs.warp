@@ -8,3 +8,6 @@
 # a bare number beside an Instant names no unit (decision instant-bare-number); a duration compares the time of day
 'use time; try { Instant(0) > 5 } catch e { e.message }'	"5 what? write t > 5 h, or 5 AM"
 'use time; [Instant(36000000) > Duration(32400000), Instant(0) > Duration(1)]'	[yes, no]
+# a time moved by a quantity of time at run time, its kind a node: the core duration it lasts (card since-time)
+'d = 2 seconds; str(2030-03-30T12:00 + d)'	"2030-03-30T12:00:02"
+'str(2030-03-30T12:00 + 90 minutes)'	"2030-03-30T13:30"
