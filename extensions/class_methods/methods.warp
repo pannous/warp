@@ -40,7 +40,7 @@ instance_names = ["self", "this"]
 # what a method calls its class's parent, as Java's, Swift's and Python's
 parent_word = "super"
 # the operators whose operands may change places, so a value before an instance is the instance's operator with it
-commutative_operators = ["+", "*", "==", "!="]
+commutative_operators = ["+", "*", "==", "!=", "≈", "~"]
 # the static type of a time literal
 time_type = "time"
 # the method a class's instances are equal by under == (and != by its negation), compare's 0 where it declares none
@@ -148,7 +148,8 @@ method_key(class_name: text, method: Node): text := class_name + " " + defined_w
 # compare, `==` by equal; a position word by any `b#i`, `b[i]` or `#b`, which the passes after write as its call
 method_said(word: text, said: map, operator_table: map): bool := {
 	spelled = spelled_operator(operator_table, word)
-	operated = glyph => said.has(key_head(Key(ø, glyph as Op, ø)))
+	# (a declared operator is said as its function's call, `a ≈ b` operator_≈(a, b))
+	operated = glyph => said.has(key_head(Key(ø, glyph as Op, ø))) or said.has(OPERATOR_FUNCTION_PREFIX + glyph)
 	said.has(word) or word in position_words or (spelled != ø and operated(spelled#2)) or (word == ordering_method and ordering_operators.any(operated)) or (word == equality_method and (operated("==") or operated("!=")))
 }
 # a definition lowered on its own once called: of a name no program writes, `text·Interval`, `hertz·method`, saying
@@ -168,13 +169,15 @@ is_linked_class(statement: Node, linked: list): bool := {
 }
 # the program with the methods of its classes lifted out as functions
 methods_lifted(program: Node): Node := {
-	top_statements = statements_in(program)
+	# (a one-line program, `class P{…}; P(1) + P(5)`, is one `;` statement among the linked modules' definitions)
+	top_statements = flat_statements(program)
 	classes = {}
 	for top_statement in top_statements {
 		view = class_view(top_statement)
 		if view != ø { classes[declared_type_name(view#2)] = class_declared(top_statement, view) }
 	}
-	operator_table = core_operators(operator_spellings())
+	written = if module.relocating then [] else declared_written(top_statements)
+	operator_table = core_operators(operator_spellings(), written)
 	outside = top_statements.filter(top_statement => operated_class(top_statement, classes, operator_table) != ø)
 	for definition in outside {
 		owner = classes[operated_class(definition, classes, operator_table)]
@@ -186,7 +189,7 @@ methods_lifted(program: Node): Node := {
 		owner.methods = owner.methods + [as_reflected_method(definition, operator_table)]
 	}
 	top_statements = top_statements.filter(top_statement => operated_class(top_statement, classes, operator_table) == ø and top_statement not in reflected)
-	for name in classes.keys { classes[name].methods = aliases_derived(equality_derived(name, rows_merged(name, positions_derived(classes[name].methods, operator_table), operator_table, classes), operator_table)) }
+	for name in classes.keys { classes[name].methods = aliases_derived(stand_ins_derived(equality_derived(name, rows_merged(name, positions_derived(classes[name].methods, operator_table), operator_table, classes), operator_table))) }
 	linked_names = if module.relocating then [] else linked_class_names()
 	linked = classes.keys.filter(name => name in linked_names)
 	if #linked > 0 { linked_methods_called(classes, linked, top_statements, operator_table) }
@@ -298,6 +301,12 @@ methods_lifted(program: Node): Node := {
 		for dispatcher in operating { deferred_triggers[defined_word(dispatcher)] = operator_tokens(defined_word(dispatcher)) }
 		dispatchers = dispatchers.filter(dispatcher => dispatcher not in operating)
 		deferred_dispatchers += operating
+	}
+	dispatched_glyphs = written.filter(glyph => (dispatchers + deferred_dispatchers).any(dispatcher => defined_word(dispatcher) == operator_dispatcher(glyph)))
+	for glyph in dispatched_glyphs {
+		rewritten = rewritten.map(statement => declared_routed(statement, glyph))
+		dispatchers = dispatchers.map(dispatcher => declared_fallback(dispatcher, glyph))
+		deferred_dispatchers = deferred_dispatchers.map(dispatcher => declared_fallback(dispatcher, glyph))
 	}
 	own_words_unlinked((dispatchers + deferred_dispatchers).map(defined_word))
 	deferred_definitions += deferred_dispatchers
@@ -515,6 +524,17 @@ equality_derived(class_name: text, methods: list, operator_table: map): list := 
 	compared = Key(Key(self_node, Op.Dot, call_of(ordering_method, [other])), Op.Eq, 0)
 	methods + [Key(call_of(equality_method, [other]), Op.Define, Key(instance_test(other, class_name), Op.And, compared))]
 }
+# a class giving only one of two methods that may answer for each other, approximately(o) or similar(o), answers both
+# operators by it: `similar(o) := approximately(o)` (test_rough_similarity: a class method serves ≈ and ~)
+stand_ins = {"approximately": "similar", "similar": "approximately"}
+stand_ins_derived(methods: list): list := {
+	words = methods.map(defined_word)
+	derived = []
+	for method in methods.filter(method => stand_ins.has(defined_word(method) ?? "") and stand_ins[defined_word(method)] not in words) {
+		derived += [forwarding(stand_ins[defined_word(method)], method)]
+	}
+	methods + derived
+}
 # The alias network (card alias-network, notes/aliases.md): a class's method answers every word spelling of its
 # lib/aliases.warp entry the class does not declare itself, so a class giving add(o) answers `a.plus(b)` and one giving
 # plus(o) answers `a.add(b)`: each other spelling is a method calling the declared one, `plus(o) := add(o)`.
@@ -529,11 +549,15 @@ aliases_derived(methods: list): list := {
 		for spelling in alias_words(word) {
 			if spelling in words { continue }
 			words += [spelling]
-			arguments = method_parameters(method).map(parameter => if parameter is symbol then parameter else key_of(parameter))
-			derived += [Key(call_of(spelling, method_parameters(method)), Op.Define, call_of(word, arguments))]
+			derived += [forwarding(spelling, method)]
 		}
 	}
 	methods + derived
+}
+# a method of another name calling this one with its parameters, `plus(o) := add(o)`
+forwarding(name: text, method: Node): Node := {
+	arguments = method_parameters(method).map(parameter => if parameter is symbol then parameter else key_of(parameter))
+	Key(call_of(name, method_parameters(method)), Op.Define, call_of(defined_word(method), arguments))
 }
 # the word spellings of a word's alias entry, the canonical word first, the word itself among them; [word] when no
 # entry names it
@@ -666,15 +690,30 @@ foreign_first(method: text, call_arguments: list, fallback: Node?, operated: boo
 foreign_method_word = "instance·method"
 instance_test_word = "instance·tested"
 foreign_instance_words = {"instance·method": "instance_method", "instance·tested": "is_class_instance"}
-# the operators a class's method may define by its English name, without those only a declaration gives a meaning
-# (lib/aliases.warp `declared`: lib/math.warp's `≈`, `~`, `↑`): the core computes none of them for the two numbers a
-# dispatcher falls back to (uncertain's approximately(o) stays a method, card class-declared-operators)
-core_operators(table: map): map := {
+# the operators a class's method may define by its English name; one only a declaration gives a meaning (lib/aliases.warp
+# `declared`: lib/math.warp's `≈`, `~`, `↑`) only where the program writes it (`written`), its dispatcher falling back
+# to the declaration's function: a module built, `use uncertain` or `use sound` writing none, pays nothing for
+# lib/math (card class-method)
+core_operators(table: map, written: list): map := {
 	declared = alias_spellings().declared
 	kept = {}
-	for spelling in table.keys { if table[spelling]#2 not in declared { kept[spelling] = table[spelling] } }
+	for spelling in table.keys { if table[spelling]#2 not in declared or table[spelling]#2 in written { kept[spelling] = table[spelling] } }
 	kept
 }
+# the declared glyphs whose function the program calls, `P(1) ≈ P(5)` parsed as operator_≈(P(1), P(5))
+declared_written(top_statements: list): list := {
+	called = word_set(top_statements.flat_map(statement => nodes_in(statement).filter(is_called_name).map(call => name_of(call#1))))
+	alias_spellings().declared.filter(glyph => called.has(OPERATOR_FUNCTION_PREFIX + glyph))
+}
+# the program's calls of a declared operator's function call its class dispatcher, `≈·operator(P(1), P(5))`; the
+# declaration itself, `infix operator ≈(a, b) := …`, kept
+declared_routed(statement: Node, glyph: text): Node := {
+	function = OPERATOR_FUNCTION_PREFIX + glyph
+	if defined_word(statement) == function { return statement }
+	bottom_up(statement, part => if is_called_name(part) and name_of(part#1) == function then call_of(operator_dispatcher(glyph), arguments_of(part)) else part)
+}
+# a dispatcher's builtin `a ≈ b` of a declared operator: the declaration's function, operator_≈(a, b)
+declared_fallback(dispatcher: Node, glyph: text): Node := bottom_up(dispatcher, part => if part is key and op_of(part) == glyph as Op then operator_call(glyph, [key_of(part), value_of(part)]) else part)
 # two numbers operate as numbers, before any class is asked: `x is real` holds of every number (lib/reals), so a boxed
 # `0.5 * 0.4` of a program using reals went through real's `*` and back, ~9× the builtin in lib/sound's per-sample
 # loops (card sound-start-speed)

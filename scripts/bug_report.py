@@ -44,6 +44,9 @@ OWNER_TOKEN_FILE = Path("~/.config/warp/bug-report-owner-token")
 REPOSITORY = os.environ.get("WARP_MAIN_CHECKOUT", os.path.expanduser("~/dev/angles/warp"))
 PLAYGROUND = "https://warp.pannous.com/"
 TOKEN_PARAMETER = "bug_token"  # playground.js BUG_TOKEN_PARAMETER
+# user 2026-11-09: who sent a report is proven by GitHub metadata, never by text: the owner's cards get OWNER_LABEL,
+# which nobody opening an issue can set (the gatekeeper and agents trust the label, not the card's first line)
+OWNER_LABEL = "from-owner"
 MAX_BODY = 64 * 1024
 # user, 2026-10-17: with the shared token an address may send REPORTS_PER_HOUR reports an hour; one sending more than
 # ATTEMPTS_PER_HOUR within an hour is banned for good (unban: delete its line from BANNED in the state directory and
@@ -59,11 +62,11 @@ COLUMNS = {False: "Next", True: "Now"}  # by express
 LATER_COLUMN = "Later"  # a comment saying the word "later" (card if-such): not now, nor next
 LATER_WORD = re.compile(r"\blater\b", re.IGNORECASE)
 BOARD_QUERY = """query($owner: String!, $name: String!, $number: Int!) {
-  repository(owner: $owner, name: $name) { id }
+  repository(owner: $owner, name: $name) { id label(name: "%s") { id } }
   user(login: $owner) { projectV2(number: $number) { id field(name: "Status") {
-    ... on ProjectV2SingleSelectField { id options { id name } } } } } }"""
-CREATE_ISSUE = """mutation($repository: ID!, $title: String!, $body: String) {
-  createIssue(input: {repositoryId: $repository, title: $title, body: $body}) { issue { id url } } }"""
+    ... on ProjectV2SingleSelectField { id options { id name } } } } } }""" % OWNER_LABEL
+CREATE_ISSUE = """mutation($repository: ID!, $title: String!, $body: String, $labels: [ID!]) {
+  createIssue(input: {repositoryId: $repository, title: $title, body: $body, labelIds: $labels}) { issue { id url } } }"""
 ADD_ITEM = """mutation($project: ID!, $content: ID!) {
   addProjectV2ItemById(input: {projectId: $project, contentId: $content}) { item { id databaseId } } }"""
 UPDATE_BODY = """mutation($issue: ID!, $body: String!) { updateIssue(input: {id: $issue, body: $body}) { issue { id } } }"""
@@ -117,7 +120,9 @@ def make_card(report):
     title, body = card_of(report)
     board = graphql(BOARD_QUERY, owner=OWNER, name=REPOSITORY_NAME, number=BOARD_NUMBER)
     project, status = board["user"]["projectV2"]["id"], board["user"]["projectV2"]["field"]
-    issue = graphql(CREATE_ISSUE, repository=board["repository"]["id"], title=title, body=body)["createIssue"]["issue"]
+    labels = [board["repository"]["label"]["id"]] if report["owner"] else []
+    issue = graphql(CREATE_ISSUE, repository=board["repository"]["id"], title=title, body=body,
+                    labels=labels)["createIssue"]["issue"]
     item = graphql(ADD_ITEM, project=project, content=issue["id"])["addProjectV2ItemById"]["item"]
     board_card = BOARD_CARD_URL % item["databaseId"]
     graphql(UPDATE_BODY, issue=issue["id"], body=f"{body}\n\nBoard card: {board_card}")

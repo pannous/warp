@@ -20,6 +20,8 @@ time_operand_word = "time_operand"
 time_arithmetic_module = "time_arithmetic"
 # `x is time`, `x is duration`: lib/time.warp's word the emitter tests with (runtime_words.warp time_test_code)
 time_test_word = "time_valued"
+# lib/units' word testing a quantity's dimension, `x is duration` of 2 hours (runtime_words.warp time_valued_code)
+quantity_test_word = "measures"
 time_operator_symbols = ["+", "-", "*"]
 
 # the arm of a match any value takes, `_: …`

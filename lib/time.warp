@@ -53,10 +53,17 @@ time(b: block) := {
 	print("time: " + Duration(now() - start))
 	value
 }
-// `x is time` (kind "time") of an instant, a duration or a time the core holds (now.date, now.time), `x is duration` of
-// a duration (decision time-word): the emitter asks it (core/emitter/runtime_words.warp time_test_code), its own
-// `x is time` the core's; lib/units asks it beside its quantities of time
-time_valued(x, kind: text): bool := x is Duration or (kind == "time" and (x is Instant or x is time))
+// `x is time` (kind "time") of an instant, a duration or a time the core holds (now.date, now.time), `x is duration`,
+// `x is instant`, `x is date` of a time of that form, a Duration or Instant too (decision time-word): the emitter asks
+// it (core/emitter/runtime_words.warp time_test_code), its own `x is time` the core's; lib/units asks it beside its
+// quantities of time
+time_valued(x, kind: text): bool := {
+	if x is Duration { return kind == "time" or kind == "duration" }
+	if x is Instant { return kind == "time" or kind == "instant" }
+	x is time and (kind == "time" or time_form_names#(x.form + 1) == kind)
+}
+// the core time's forms, in the order of its form field (lib/time_arithmetic.warp TimeForm)
+time_form_names = ["instant", "date", "local", "duration", "zoned", "clock"]
 
 // a point in time: milliseconds since 1970-01-01T00:00:00Z. Everything on it is plain warp: ordering through
 // compare (<, <=, >, >=), equality structural, the difference of two instants in milliseconds, a duration in
