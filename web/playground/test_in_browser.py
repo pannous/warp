@@ -151,6 +151,10 @@ FIX_BUTTON = "(an \"I meant\" button rewrites the code and runs it again)"  # ca
 FIX_BUTTON_CODE = "a=5; b=1; a-b:2; a-b"  # the kebab key's fix renames it at the key and at its read (P81)
 FIX_BUTTON_LABEL = "I meant: a_b"
 FIX_BUTTON_FIXED = ("2", "a=5; b=1; a_b:2; a_b")
+STALE_DEPLOY = "(a deploy under an open page reloads it before the next run, which runs the code kept)"  # card math-wasm-link
+STALE_DEPLOY_CODE = "40 + 3"
+# version.js as a later deploy serves it: another build than the page's
+LATER_VERSION = 'const PLAYGROUND_VERSION = { built: "a later deploy" };'
 FILE_KEPT = "(a written file after a reload)"  # card files-written: host-files.js keeps written files in IndexedDB
 FILE_KEPT_TEXT = "kept across a reload"
 WRITE_FILE = f'use file\nwrite("kept.txt", "{FILE_KEPT_TEXT}")'
@@ -732,6 +736,27 @@ def report_wrong(page_url):
 	body = urllib.parse.parse_qs(urllib.parse.urlparse(address).query).get("body", [""])[0]
 	wrong += [] if REPORT_PRINTED in body.partition("Output:")[2] else [f"report issue without the program's output: {address!r}"]
 	return wrong + ([] if REPORT_CODE in body else [f"report issue without the program: {address!r}"])
+
+
+def stale_deploy_wrong():
+	"""the server's version.js names a later build while the page is open: the next run reloads the page instead of
+	linking that build's modules, and the reloaded page runs the code typed"""
+	browser("eval", f"""(() => {{
+		window.beforeTheDeploy = true;
+		const fetched = window.fetch;
+		window.fetch = (url, options) => String(url).startsWith("version.js") ? Promise.resolve(new Response({json.dumps(LATER_VERSION)})) : fetched(url, options);
+		playground.runCode({json.dumps(STALE_DEPLOY_CODE)});
+		return true;
+	}})()""")
+	deadline = time.time() + ISOLATION_SECONDS
+	while browser("eval", "Boolean(window.playground && !window.beforeTheDeploy && document.readyState === 'complete')") != "true" and time.time() < deadline:
+		time.sleep(0.5)
+	wait_for_isolation()
+	wait_for_first_run()
+	shown = browser("eval", "JSON.stringify({ reloaded: !window.beforeTheDeploy, code: playground.code(), value: document.getElementById('value').textContent })")
+	shown = json.loads(json.loads(shown)) if shown.startswith('"') else {"reloaded": f"(page gave no answer: {shown or browser_complaint})"}
+	expected = {"reloaded": True, "code": STALE_DEPLOY_CODE, "value": "43"}
+	return [f"{part}: {shown.get(part)!r}, expected {value!r}" for part, value in expected.items() if shown.get(part) != value]
 
 
 def file_kept_wrong(page_url):
@@ -1324,7 +1349,7 @@ def check_examples(names, page_url=None, site=None):
 	snippets = guide_snippets() if GUIDE in names else []
 	for line, code, value, printed in snippets:
 		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), (STALE_DEPLOY, stale_deploy_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
