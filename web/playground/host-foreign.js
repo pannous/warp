@@ -135,7 +135,6 @@ function callC(holder, exports, member, call, values, what) {
 		return block;
 	};
 	const textBlock = value => malloc([...utf8.encode(guestText(program, value)), 0]);
-	const bytesOf = value => isGuestText(program, value) ? utf8.encode(guestText(program, value)) : guestInts(program, value).map(byte => byte & 0xff);
 	const memory = () => new DataView(exports.memory.buffer);
 	let out, bytesLength = 0;
 	const remaining = [...values];
@@ -149,7 +148,7 @@ function callC(holder, exports, member, call, values, what) {
 			return malloc(new Uint8Array(pointers.buffer));
 		}
 		if (kind === "bytes" || kind in CELL_ARRAYS) {
-			const bytes = kind === "bytes" ? bytesOf(value) : CELL_ARRAYS[kind](program, value);
+			const bytes = kind === "bytes" ? guestBytes(program, value) : CELL_ARRAYS[kind](program, value);
 			bytesLength = bytes.length;
 			return malloc(bytes);
 		}
@@ -196,6 +195,10 @@ function crossedResult(program, call, returned, textOf) {
 	return returned;
 }
 
+// a text or bytes argument crosses to a JavaScript C function as a string, any other as it is
+const jsArgument = (program, kind, value) => kind === "ptr" ? guestText(program, value)
+	: kind === "bytes" ? valueDecoder.decode(guestBytes(program, value)) : value;
+
 // a C library the page answers in JavaScript (natively a shared library): `functions(name)` gives a C function as a
 // JavaScript one, which takes a text as a string and gives one so, its numbers and handles' ids as they cross
 function libraryInJs(holder, library, functions) {
@@ -207,7 +210,7 @@ function libraryInJs(holder, library, functions) {
 			const program = holder.exports;
 			const remaining = [...values];
 			const given = (call?.parameters ?? []).filter(kind => kind !== "out" && kind !== "length")
-				.map(kind => (value => kind === "ptr" ? guestText(program, value) : value)(remaining.shift()));
+				.map(kind => jsArgument(program, kind, remaining.shift()));
 			return crossedResult(program, call, member(...given), text => text);
 		},
 	});
