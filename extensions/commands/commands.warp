@@ -37,7 +37,7 @@ native_commands = ["pure", "self", "rebuild", "tool", "fetch", "dev", "serve", "
 	"home", "lsp", "start", "types", "format", "lint", "beautify", "fix"]
 
 # the commands the native warp runs itself, before warp.wasm sees them (core/native/warp.warp)
-native_warp_commands = ["run", "pure", "self", "eval", "fast", "fuel", "rebuild", "test", "repl", "console", "start", "version", "beautify", "fix", "format", "lint", "docs", "wiki", "home", "app"]
+native_warp_commands = ["run", "pure", "self", "eval", "fast", "fuel", "rebuild", "test", "repl", "console", "start", "version", "beautify", "fix", "format", "lint", "docs", "wiki", "home", "app", "dev"]
 # set by the native warp for the compiler it hosts: the host's name
 HOST_VARIABLE = "WARP_HOST"
 natively_hosted(): bool := (env(HOST_VARIABLE) ?? "") != ""
@@ -102,7 +102,7 @@ show_version() := print version_text(library_folder)
 show_parsed() := print structure(plain_node(parsed(source_or_code(1))))
 show_data() := print plain_node(parsed(source_or_code(1)))
 # written so it parses back to the same node (extensions/serializer.warp): `print(-42)`, `#a + #b`, "b" in quotes
-show_lowered() := print serialize(view_of(lowered_program(source_or_code(1), ".", prelude_source)))
+show_lowered() := print serialize(view_of(lowered_program(source_or_code(1), ".", prelude_text)))
 show_uses() := { for module in implicit_modules_of(source_or_code(1)) { print module } }
 # `warp debug`: the views above, one after the other under their names (card help-menu)
 show_debug() := {

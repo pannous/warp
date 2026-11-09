@@ -38,8 +38,16 @@ VULGAR_FRACTIONS = {"½": [1, 2], "↉": [0, 3], "⅓": [1, 3], "⅔": [2, 3], "
 vulgar_fraction(p: Parser): Node := {
 	parts = VULGAR_FRACTIONS[p.code[p.at]]
 	advance(p)
-	fraction = keyed("/", int(parts#1), int(parts#2))
+	fraction = glyph_value(parts#1, parts#2)
 	if is_digit(char_here(p)) then Key(fraction, Op.Mul, atom(p)) else fraction
+}
+# a glyph is one numeral, never a written fraction (decision fraction-glyphs): ½ is the decimal 0.5, which stays exact
+# and shows as one; ⅓, no decimal, is the ratio, which shows as 1/3 marked or not
+glyph_value(numerator: int, denominator: int): Node := {
+	rest = denominator
+	while rest % 2 == 0 { rest = rest ÷ 2 }
+	while rest % 5 == 0 { rest = rest ÷ 5 }
+	if rest == 1 then float(numerator) / float(denominator) else keyed("/", int(numerator), int(denominator))
 }
 # `0.16̅`: the digits under an overline (U+0305, one grapheme with its digit) repeat forever
 overlined_digits(p: Parser): text := {

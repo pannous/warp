@@ -12,6 +12,8 @@ in_dist() { (cd "$dist" && unset WARP_LIB && sh -c "$1"); }
 
 ls lib/*warp_wasmtime.* >/dev/null || { echo "native_dist: no libwarp_wasmtime in lib/ (crates/wasmtime-capi)" >&2; exit 1; }
 cp -RL lib "$dist"
+source "$(dirname "$0")/../scripts/lib/site-scripts.sh"
+site_scripts_copied . "$dist"
 rm -rf "$dist/data" "$dist"/*.cwasm "$dist"/*.inputs  # this machine's builds and machine code
 cp core/native/warp "$dist/warp"
 

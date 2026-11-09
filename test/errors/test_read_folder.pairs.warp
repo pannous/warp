@@ -1,0 +1,2 @@
+'try read(".") else "caught"'	"caught"
+'try { read_bytes(".") } catch e { "${e}" }'	"read . failed: Is a directory"

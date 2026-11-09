@@ -1,0 +1,3 @@
+# a folder beside the program named as a standard module it uses compiles at once and uses the module (card hit,
+# decision local-folder-clash: a warning names both)
+'use compute_toys; compute_toys_kernel("x")'	'x'

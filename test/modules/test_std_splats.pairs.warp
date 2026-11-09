@@ -1,0 +1,4 @@
+# the f32 at a byte of a file's bytes, little-endian
+'use bits; f32_at([0, 0, 128, 63, 0, 0, 32, 192], 4)'	-2.5
+# a Gaussian splat written to a .splat file and read back
+'use splats; use color; p = temp_folder() + "/warp_one.splat"; write_splats(p, [Splat([1.5, -2.0, 0.25], [0.5, 0.5, 0.125], [1.0, 0.0, 0.0, 0.0], rgb(255, 128, 0), 1.0)]); s = read_splats(p)#1; delete_file(p); [s.position, s.scale, s.rotation, hex_text(s.color), s.opacity]'	[[1.5, -2, 0.25], [0.5, 0.5, 0.125], [1, 0, 0, 0], "#FF8000", 1]

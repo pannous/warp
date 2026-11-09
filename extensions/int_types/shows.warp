@@ -2,9 +2,6 @@
 # too, so a class's routed show() never falls back to a hook that int_types.warp renames away (card
 # module-arity-overloads)
 
-# the hook's own name, which no program spells: a program writes `format Color c as text := …`
-showing_word = "format·text"
-
 # the number types a marked type is held as: `type Color = int`, `type Angle = float`
 MARKED_NUMBER_KINDS = {int: Kind.Int, float: Kind.Float}
 # `type Color = int`, `type Angle = float`: Color, Angle; ø for any other statement
@@ -26,14 +23,39 @@ int_type_kinds(statements: list): map := {
 	kinds
 }
 # `format Color c as text := …` (the user's decision format-as-text, not show: showing is no printing): the hook giving
-# a value of Color its text, read as `format·text(c: Color) := …` before any pass takes it for a call of lib/text format
-formatted_definitions(program: Node): Node := group_like(program, statements_in(program).map(formatted_definition))
+# a value of Color its text, read as `format·text(c: Color) := …`, a class's shown form's name (core/passes/classes.warp
+# form_method), before any pass takes it for a call of lib/text format. Of a class of the program, `format Point p as
+# text := …`, it is the class's own `format as text`, its p the instance
+formatted_definitions(program: Node): Node := {
+	statements = statements_in(program).map(formatted_definition)
+	classes = statements.map(class_view).filter(view => view != ø).map(view => declared_type_name(view#2))
+	formats = statements.filter(statement => shower_of(statement) in classes)
+	if #formats == 0 { return statements_as(program, statements) }
+	statements_as(program, statements.filter(statement => statement not in formats).map(statement => with_class_formats(statement, formats)))
+}
+# the statements as the program held its own: a program of one statement, `div{ "clamp" }`, is that statement
+statements_as(program: Node, statements: list): Node := {
+	if is_statement_sequence(program) { return group_like(program, statements) }
+	if #statements == 1 then statements#1 else List(statements, Bracket.None, Separator.Newline)
+}
+# a class declaration with the formats of its class among its members
+with_class_formats(statement: Node, formats: list): Node := {
+	view = class_view(statement)
+	if view == ø { return statement }
+	owned = formats.filter(format => shower_of(format) == declared_type_name(view#2)).map(format => view_of(instance_format(format)))
+	if #owned == 0 then statement else Key(key_of(statement), op_of(statement), [view#1, view#2, view#3 + owned])
+}
+# `format·text(p: Point) := …` as Point's method `format·text() := …`, p its this
+instance_format(format: Node): Node := {
+	instance = key_of(key_of(format)#2)
+	Key(call_of(form_method, []), Op.Define, bottom_up(value_of(format), n => if n == instance then symbol("this") else n))
+}
 formatted_definition(statement: Node): Node := {
 	if not is_key(statement, Op.Define) or not is_group(key_of(statement)) { return statement }
 	words = items_of(key_of(statement))
 	if not (#words == 5 and words.all(word => word is symbol)) { return statement }
 	if [words#1, words#4, words#5].map(name_of) != ["format", "as", "text"] { return statement }
-	Key(call_of(showing_word, [Key(words#3, Op.Colon, words#2)]), Op.Define, value_of(statement))
+	Key(call_of(form_method, [Key(words#3, Op.Colon, words#2)]), Op.Define, value_of(statement))
 }
 # the type a module's line `format Angle a as text := …` gives its text, "" of any other line: the hook is a slice of
 # Angle's, reached with the type (core/passes/prelude_words.warp name_defined_in)
@@ -45,7 +67,7 @@ formatted_type(line: text): text := {
 shower_of(statement: Node): text? := {
 	if not is_key(statement, Op.Define) { return ø }
 	head = key_of(statement)
-	if not (is_group(head) and #head == 2 and head#1 == symbol(showing_word) and is_key(head#2, Op.Colon)) { return ø }
+	if not (is_group(head) and #head == 2 and head#1 == symbol(form_method) and is_key(head#2, Op.Colon)) { return ø }
 	typed = value_of(head#2)
 	if typed is symbol then name_of(typed) else ø
 }

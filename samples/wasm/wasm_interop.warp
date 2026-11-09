@@ -26,15 +26,16 @@ round_trip(s: text): text := {
 write_string(s: text) := s.to_utf8()
 
 # GC types (wasm-gc): every warp class is a GC struct, a missing child ø
+enum Kind { Branch, Leaf }
 class Node {
-	tag: int
+	kind: Kind
 	value: int
 	left: Node?
 	right: Node?
 }
 
 # Create GC object
-tree = Node(1, 42, Node(2, 8, ø, ø), ø)
+tree = Node(Kind.Branch, 42, Node(Kind.Leaf, 8, ø, ø), ø)
 
 # Interface types (WIT): what a calculator offers, as a class whose methods become the component's exports
 class Calculator {

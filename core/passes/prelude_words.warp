@@ -53,23 +53,16 @@ spans_of(source: text): list := {
 	}
 	source_spans[source]
 }
-# the module of sliced_modules whose file the source is, as the library index was written of it: its length the
-# index's, and in a lib/ maybe edited since the build (library_unedited) its hash too, as rule_needs_by_module trusts the index
-# (hashing the prelude and the type modules was ~25 ms a compile); ø for any other text
-indexed_module(source: text): text? := {
-	for module in sliced_modules() {
-		hash = library_index_section("hash").get(module) ?? ""
-		if hash.starts_with("${#source}-") and source == file_text(std_module_path(module)) and (library_unedited() or hash == source_hash(source)) { return module }
-	}
-	ø
-}
-# the modules every compile cuts: the prelude, lib/math.warp beside it (builtin_signatures.warp library_texts_seen) and
-# the type modules
-sliced_modules(): list := ["prelude", "math"] + type_modules
+# the module of sliced_texts the source is; ø for any other text
+indexed_module(source: text): text? := sliced_modules().find(module => source == sliced_texts()[module])
+# the texts every compile cuts, by the library index's cuts: the prelude and lib/math.warp beside it, both built in
+# (builtin_signatures.warp; decision no-lib-reads)
+sliced_texts(): map := {prelude: prelude_text, math: math_text}
+sliced_modules(): list := sliced_texts().keys
 # each sliced module's cut as the index holds it, `name start end` of each slice joined by ";"
 sliced_modules_scanned(): map := {
 	found = {}
-	for module in sliced_modules() { found[module] = slice_spans(file_text(std_module_path(module)) ?? "").map(span => "${span#1} ${span#2} ${span#3}").join(";") }
+	for module in sliced_modules() { found[module] = slice_spans(sliced_texts()[module]).map(span => "${span#1} ${span#2} ${span#3}").join(";") }
 	found
 }
 indexed_spans(spans: text): list := spans.split(";").filter(span => span != "").map(span => span.split(" ")).map(span => [span#1, span#2 as int, span#3 as int])
@@ -221,7 +214,8 @@ names_within(n: Node, with_keys: bool): list := {
 			}
 		} else {
 			if with_keys and part is key { found[key_head(part)] = yes }
-			waiting += parts_within(part)
+			# a text's holes are code too: a slice is read before interpolation builds them (`"${f(x)}"` reaches f)
+			waiting += parts_within(part) + template_hole_codes(part).map(code => plain_node(parsed(code)))
 		}
 	}
 	found.keys
@@ -249,7 +243,7 @@ is_quoted_arm(n: Node): bool := is_key(n, Op.Arrow) and is_quote(key_of(n))
 # data view) a time's fields (extensions/time_values.warp time_field), its + - * where the program writes one
 # (time_operation_call); the exact root of a program taking one (root_words); the library words the extension passes
 # write calls of (extension_writes)
-emitted_words(program: Node): list := time_literal_words(program) + root_words(program) + extension_writes.flat_map(writes => writes(program))
+emitted_words(program: Node): list := time_literal_words(program) + time_test_words(program) + root_words(program) + extension_writes.flat_map(writes => writes(program))
 # each extension pass that writes calls of library words the program may never write declares them here, by its
 # function of the program giving them: the next such pass is one entry, no other edit
 # `x as! T` is a call of convert! written by extensions/conversions.warp, so the prelude's overloads are reached
@@ -279,16 +273,19 @@ time_literal_words(program: Node): list := {
 	[time_field_word] + (if nodes.any(n => time_operator_symbols.any(symbol => is_operator(n, symbol))) then [time_operation_word, time_operand_word] else [])
 }
 is_time_typed(n: Node): bool := is_operator(n, ":") and value_of(n) == symbol(time_module)
-# the modules of the emitted words: lib/time_arithmetic.warp for a time's + - *, lib/time.warp for a time placed in a
-# zone, `t in "Europe/Berlin"`, which the sugar makes zoned(t, "Europe/Berlin") (extensions/sugar/methods.warp)
-emitted_modules(program: Node): list := (if time_operation_word in time_literal_words(program) then [time_arithmetic_module] else []) + (if places_in_zone(program) then [time_module] else [])
+# `x is time`, `x is duration`: lib/time's word the emitter asks (runtime_words.warp time_test_code)
+time_test_words(program: Node): list := if nodes_in(program).any(is_time_test) then [time_test_word] else []
+# `x is time` as written, or as the type tests make it, is_type(x, "time") (core/analysis/type_tests.warp)
+is_time_test(n: Node): bool := (is_key(n, Op.Is) and value_of(n) in time_test_types.map(symbol)) or (is_group(n) and #n == 3 and n#1 == symbol("is_type") and n#3 is text and str(n#3) in time_test_types)
+time_test_types = ["time", "duration"]
+# the modules of the emitted words: lib/time_arithmetic.warp for a time's + - *, lib/time.warp for `is time`
+emitted_modules(program: Node): list := (if time_operation_word in time_literal_words(program) then [time_arithmetic_module] else []) + (if #time_test_words(program) > 0 then [time_module] else [])
 time_module = "time"
-# (`t in "Europe/Berlin"` read as the group of its three words, the sugar's form)
-places_in_zone(program: Node): bool := nodes_in(program).any(n => is_group(n) and #n == 3 and n#2 == symbol(placed_in_word) and zone_written(n#3))
-placed_in_word = "in"
 
 # the names of the functions with_reached brought from the prelude and the modules, of the compile at hand
 global brought_names = {}
+# the names of the values it brought, `m = Unit("m")` of lib/units, which go in front of the program
+global brought_value_names = {}
 # those of them a library exports, which called_only keeps uncalled
 global exported_names = {}
 # the reach's last step, once the passes ran (passes.warp lowered_reached): the program without the brought functions
@@ -368,7 +365,8 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	# a used module's definition of the name replaces the slice only when it takes the same parameter types; any other
 	# joins it as an overload, chosen by the arguments (decision cross-module-overload: shell's find(folder: Path,
 	# pattern: text) beside the prelude's find(t: text, part: text))
-	replaced = slice => (slice#1 in own_names and not overloads_brought(slice, program)) or (slice#1 in own_classes and leading_name(slice#2) not in defining_keywords)
+	own_name_set = word_set(own_names)
+	replaced = slice => (own_name_set.has(slice#1) and not overloads_brought(slice, program)) or (slice#1 in own_classes and leading_name(slice#2) not in defining_keywords)
 	kept = slice => not replaced(slice) or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX) or (slice#2.starts_with("global ") and slice#1 in assigned)
 	# the program's globals, `global hue = 10`, which every function of its own shares, are no module's: hsv's `hue`
 	# stays its local
@@ -390,11 +388,14 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	wanted = exported + program_words + program_words.filter(word => written_aliases.has(word)).map(word => written_aliases[word]) + variant_words(program_words) + lowering_words(program) + sugar_words_of(program) + linked_needs() + (if callable_word in module_names and calls_a_value(program) then [callable_word] else []) + extension_value_settlers().values.filter(word => word in module_names)
 	uses = ø
 	origins = {}
-	while #wanted > 0 {
-		word = wanted#1
-		wanted = wanted[1 ..]
-		for slice in slices {
-			if slice#1 == word and slice#5 not in reached {
+	# (the slices by name, made once: each wanted word compared with every slice's name was most of hello's reaching)
+	named = slices_by_name(slices)
+	at = 0
+	while at < #wanted {
+		word = wanted[at]
+		at += 1
+		for slice in named.get(word) ?? [] {
+			if slice#5 not in reached {
 				if slice#4 == ø and uses == ø { uses = use_lines(module) }
 				# (a linked one's parse packed alone in its signature, unpacked once reached)
 				slice_node = early_sugared(if slice#4 != ø then unpack(slice#4) else plain_node(parsed(slice#2, uses)))
@@ -419,6 +420,10 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	# function goes where the module wants its definitions (card prelude-definition-reachability)
 	values = brought.filter(goes_in_front)
 	functions = brought.filter(statement => not goes_in_front(statement))
+	for statement in values {
+		name = declared_name(statement)
+		if name != ø { brought_value_names[name] = yes }
+	}
 	for statement in functions {
 		name = declared_name(statement)
 		if name != ø { brought_names[name] = yes }
@@ -427,10 +432,16 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	parts = if in_front then values + functions + own_statements else values + own_statements + functions
 	separated(bracketed(parts, ""), ";")
 }
+# each name → its slices, in their order
+slices_by_name(slices: list): map := {
+	named = {}
+	for slice in slices { named[slice#1] = (named.get(slice#1) ?? []) + [slice] }
+	named
+}
 # whether a slice's definition overloads the definitions of its name a used module brought, rather than being replaced
 # by them: brought (never the program's own, decision library-words-lexical) and told apart from each by the dispatch
-# (arity_overloads): as many parameters, one of another dispatchable type; color's hex_text(c: Color), its Color an
-# int, still replaces the prelude's hex_text(n: int), and so does a definition of another parameter count, which a
+# (arity_overloads): as many parameters, one of another dispatchable type, color's hex_text(c: Color) beside the
+# prelude's hex_text(n: int) too (decision int-type-overloads); a definition of another parameter count replaces it, which a
 # name passed as a function could no longer tell (the compiler's shader_values(s, given, program))
 overloads_brought(slice: list, program: Node): bool := {
 	if not brought_names.has(slice#1) { return no }
@@ -443,6 +454,8 @@ overloads_brought(slice: list, program: Node): bool := {
 	if head == ø or not is_group(head) { return no }
 	types = parameter_types(head)
 	classes = declared_classes(program)
+	# (the named number types it declares, Color beside the prelude's int: decision int-type-overloads)
+	overload_marks = declared_marks(program)
 	heads.all(other => not is_group(other) or told_apart(types, parameter_types(other), classes))
 }
 told_apart(types: list, others: list, classes: list): bool := #types == #others and (0 ..< #types).any(at => types[at] != others[at] and is_overload_type(types[at], classes) and is_overload_type(others[at], classes))
@@ -452,12 +465,16 @@ declared_only(n: Node): Node := {
 	if is_group(n) { return children(n, declared_only) }
 	if class_view(n) != ø { return with_members(n, declared_only) }
 	head = if n is key then key_of(n) else ø
-	if is_group(head) and bracket_of(head) == "(" {
+	# (a head with its result type, `now(): Instant := …`, is declared by its call as a bare one is: with its body every
+	# typed word a linked module's reached word called came along, compiled anew, lib/time's calendar behind `use time`;
+	# its result type would make the empty body a function of the program's answering ø)
+	call = if is_key(head, Op.Colon) then key_of(head) else head
+	if is_group(call) and bracket_of(call) == "(" {
 		# (a word taking a block keeps its body: extensions/block_inlining.warp runs a literal block in it in place,
 		# `3 times {…}` a loop of the caller's own, card times-infix-operator)
-		if takes_block(head) { return n }
-		if is_key(n, Op.Define) { return Key(head, Op.Define, Node.Empty) }
-		if is_key(n, Op.Assign) { return Key(head, Op.Assign, Node.Empty) }
+		if takes_block(call) { return n }
+		if is_key(n, Op.Define) { return Key(call, Op.Define, Node.Empty) }
+		if is_key(n, Op.Assign) { return Key(call, Op.Assign, Node.Empty) }
 	}
 	# `A4 := midi_hertz(69)`, a value the module made a function of (charged, P71): its head, called at each use
 	if is_key(n, Op.Define) and head is symbol and name_of(head) in module.linked_words { return Key(call_of(name_of(head), []), Op.Define, Node.Empty) }
@@ -579,8 +596,7 @@ module_of_path(path: text): text := {
 modules_used_by(module_name: text, seen: list): list := {
 	if module_name in seen { return seen }
 	seen += [module_name]
-	signature = linked_signature(module_name)
-	for used in (if signature != ø then signature.uses else used_modules(used_module_text(module_name))) { seen = modules_used_by(used, seen) }
+	for used in module_uses(module_name) { seen = modules_used_by(used, seen) }
 	seen
 }
 # `keys(m)` as `map_keys(m)`: a call of an alias calls the word unless the program defines that name, as a variable
@@ -609,8 +625,9 @@ changed_member(member: any, f: function): any := {
 	if changed == read then member else view_of(changed)
 }
 
+# a call, written `melody([C4 E4])` or spaced `melody [C4 E4]` (sound's `alias melody => play`)
 aliased_call(n: Node, aliases: map, own: map, receivers: int): any := {
-	if not (is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol) { return n }
+	if not (is_group(n) and (bracket_of(n) == "(" or is_word_phrase(n)) and #n > 0 and n#1 is symbol) { return n }
 	called = name_of(n#1)
 	count = #n - 1 + receivers
 	# an arity variant fits the call's count, before the module's word: first(xs, 2) of a program's own first(x) is first_items
@@ -703,10 +720,11 @@ written_word(name: text): text := if name.ends_with(own_word("")) then name.repl
 # whether a library module is being built (prebuilt.warp sets it), not a program
 building_a_module(): bool := module.relocating
 # `sin(x: Real) := …`: a definition typing its parameters overloads the library's typed word beside it
-# (arity_overloads.warp library_variants joins the library's lines), so a call of another type, `sin(x.float())` in its
-# own body too, reaches the library's; an untyped one, `round(x) := …`, and one of a word with no typed line to join,
-# `add(a: int, b: int) := …` beside the prelude's `add(xs, x) := …`, is the program's own
-is_typed_overload(name: text, head: Node): bool := word_lines().has(name) and #head > 1 and items_of(head)[1 ..].all(parameter => is_key(parameter, Op.Colon) and value_of(parameter) != symbol(any_word))
+# (arity_overloads.warp library_variants joins the library's lines and a linked module's typed definitions of as many
+# parameters), so a call of another type, `sin(x.float())` in its own body too, reaches the library's; an untyped one,
+# `round(x) := …`, and one with nothing of its parameter count to join, `add(a: int, b: int) := …` beside the prelude's
+# `add(xs, x) := …` or `log(a: text, b: int)` beside only math's log(x: float), is the program's own
+is_typed_overload(name: text, head: Node): bool := #head > 1 and items_of(head)[1 ..].all(parameter => is_key(parameter, Op.Colon) and value_of(parameter) != symbol(any_word)) and #library_variants(name, [parameter_types(head)]) > 0
 
 # name → the head `f(a, b)` of each top-level statement defining a function, `yes` for one defining another name
 own_heads(program: Node): any := {
@@ -772,17 +790,45 @@ global_word_modules(program: Node, own: any, used: list): list := {
 	modules
 }
 # the runtime words lib/math.warp declares, `max(a, b, more...) from warp`, which a program calls without its use
-runtime_words_of_math = library_text("math.warp").split("\n").map(line => typed_line(line, runtime_library)).filter(line => line != ø).map(line => line.name)
+runtime_words_of_math = math_runtime_lines.map(line => line.name)
 # the source with a `use` line of each module it uses without saying it, after its last line (no position moves)
 # a used module's source: lib/<module>.warp, else a C library's words, lib/native/<module>.warp (`use sqlite3`'s rows)
 # read once a module: a rule word asks it at each call site it tries (extensions/rules/rule_words.warp module_named)
 global used_module_texts = {}
 used_module_text(module: text): text := {
 	if not used_module_texts.has(module) {
-		native = native_path(run_library(), module)
-		used_module_texts[module] = file_text(std_module_path(module)) ?? (if native == ø then "" else file_text(native) ?? "")
+		source = file_text(std_module_path(module))
+		# (a C library's lines, lib/native/<m>.warp, only for a name no module file has)
+		if source == ø {
+			native = native_path(run_library(), module)
+			source = if native == ø then "" else file_text(native) ?? ""
+		}
+		used_module_texts[module] = source
 	}
 	used_module_texts[module]
+}
+# whether a module of the name is there to use: a standard module's file (asked of the disk, not read), else a C
+# library's lines
+is_module_name(name: text): bool := exists(std_module_path(name)) or used_module_text(name) != ""
+# what a module says, by its prebuilt signature (signature.warp prebuilt_signature), else, a program's own module or
+# one not prebuilt, by its text: the modules it uses, its rule patterns (after `rewrite `), whether it defines the
+# word (a definition or an alias), the parses of its definitions of the word
+module_uses(module: text): list := {
+	signature = prebuilt_signature(module)
+	if signature != ø then signature.uses else used_modules(used_module_text(module))
+}
+module_patterns(module: text): list := {
+	signature = prebuilt_signature(module)
+	if signature != ø then signature.patterns else rule_patterns(used_module_text(module))
+}
+module_defines(module: text, word: text): bool := {
+	signature = prebuilt_signature(module)
+	if signature == ø { return definition_slices(used_module_text(module)).any(slice => slice#1 == word) or module_aliases(used_module_text(module)).has(word) }
+	signature.slices.any(slice => slice#1 == word) or signature.aliases.has(word)
+}
+module_definitions(module: text, word: text): list := {
+	signature = prebuilt_signature(module)
+	if signature != ø then signature.slices.filter(slice => slice#1 == word).map(slice => unpack(slice#3)) else definition_slices(used_module_text(module)).filter(slice => slice#1 == word).map(slice => plain_node(parsed(slice#2)))
 }
 # `use strict`, `use m`: a mode (lib/modes.data) or a C library, which a `use` names without a module file
 use_modes = module_source("modes.data").split("\n").filter(line => line != "" and not line.starts_with("#")).map(line => line.split("\t")#1)
@@ -790,7 +836,7 @@ names_no_module(name: text): bool := name in use_modes or is_c_library(name)
 # the names the prelude defines, read once
 global prelude_definition_names = ø
 prelude_definitions(): list := {
-	if prelude_definition_names == ø { prelude_definition_names = definition_slices(library_text("prelude.warp")).map(slice => slice#1) }
+	if prelude_definition_names == ø { prelude_definition_names = definition_slices(prelude_text).map(slice => slice#1) }
 	prelude_definition_names
 }
 # (an implicit use is always the standard module, never a same-named file beside the program: only an explicit
@@ -814,12 +860,12 @@ word_index(file: text): map := {
 	for word in words.keys { index[word] = words[word].split(" ") }
 	index
 }
-# the words each standard module defines (an `alias ln => natural_log` too) but the prelude, each with its modules joined by spaces: a word of letters
+# the words each standard module defines (an `alias ln => natural_log` too) but the prelude and lib/host/'s, each with its modules joined by spaces: a word of letters
 # (`red`, `minute`), no operator or made name (an operator's function, operator_·, kept: is_made_name); also the word leading a rule of the module that means nothing else
 # (storage's `stored users: [User]`), never one the core or the prelude gives a meaning (english's `add $x to`)
 module_word_definers(): map := {
 	definers = {}
-	for module in std_module_names.filter(name => name != "prelude") {
+	for module in std_module_names.filter(name => name != "prelude" and not is_host_module(name)) {
 		source = file_text(std_module_path(module)) ?? ""
 		for word in definition_slices(source).map(slice => slice#1) + module_aliases(source).keys + rule_heads(source).filter(word => not has_meaning(word)) {
 			if word is text and #word > 0 and is_name_start(word[0]) and not is_made_name(word) {
@@ -870,7 +916,7 @@ with_expected_type_uses(program: Node, prelude: text): Node := {
 		for i in 0 ..< #arguments {
 			words = symbol_words(arguments[i]).filter(is_unknown)
 			if #words == 0 { continue }
-			if not heads.has(name) { heads[name] = definitions_of(name, prelude_slices).map(definition_text_head) }
+			if not heads.has(name) { heads[name] = definitions_of(name, prelude_slices).map(definition_parse_head) }
 			for type in parameter_types(heads[name], i) {
 				module = classes.get(type) ?? ""
 				defines = word => module in defining_modules(word)
@@ -887,10 +933,11 @@ module_hint(word: text): text := {
 	definers = defining_modules(word)
 	if #definers == 1 then ": `use " + definers#1 + "` defines it" else ""
 }
-# the texts of the word's definitions, the prelude's first, then those of each module defining it (library index)
-definitions_of(word: text, prelude_slices: list): list := (prelude_slices + defining_modules(word).flat_map(module => definition_slices(file_text(std_module_path(module)) ?? ""))).filter(slice => slice#1 == word).map(slice => slice#2)
-# the head of a definition's text, `sleep(duration: Time)` of `sleep(duration: Time) := …`
-definition_text_head(definition: text): Node? := definition_head_of(statements_in(plain_node(parsed(definition)))#1)
+# the parses of the word's definitions, the prelude's first, then those of each module defining it (library index),
+# a prebuilt module's from its signature (module_definitions), no text read
+definitions_of(word: text, prelude_slices: list): list := prelude_slices.filter(slice => slice#1 == word).map(slice => plain_node(parsed(slice#2))) + defining_modules(word).flat_map(module => module_definitions(module, word))
+# the head of a definition's parse, `sleep(duration: Time)` of `sleep(duration: Time) := …`
+definition_parse_head(definition: Node): Node? := definition_head_of(statements_in(definition)#1)
 # the types written for parameter `at` (from 0) of each definition head, `[Time]` of `sleep(duration: Time)`
 parameter_types(heads: list, at: int): list := {
 	types = []
@@ -902,20 +949,13 @@ parameter_types(heads: list, at: int): list := {
 }
 # the words the program names bare that a type module defines as a function taking nothing, `now() := …`
 bare_calls(program: Node, providers: map): list := {
-	nullary = {}
-	for module in type_modules {
-		path = std_module_path(module)
-		for slice in definition_slices(file_text(path) ?? "") { if without_keyword(slice#2).starts_with(slice#1 + "()") { nullary[slice#1] = yes } }
-	}
+	nullary = library_index_section("nullary")
 	bound = names_bound_in(program)
 	symbol_words(program).filter(word => word in nullary and providers[word] != "" and word not in bound)
 }
 # `t.words`: the names read as a member, each a type module's function of one value (words(t)), called so as t.words()
 member_reads(program: Node): list := {
-	unary = {}
-	for module in type_modules {
-		for slice in definition_slices(file_text(std_module_path(module)) ?? "") { if takes_one_value(without_keyword(slice#2), slice#1) { unary[slice#1] = yes } }
-	}
+	unary = library_index_section("unary")
 	nodes_in(program).filter(n => is_key(n, Op.Dot) and value_of(n) is symbol and name_of(value_of(n)) in unary).map(n => name_of(value_of(n)))
 }
 # `words(t): list := …`: a definition's head of one parameter
@@ -958,6 +998,12 @@ names_bound_in(n: Node): any := {
 			waiting += if is_key(part, Op.Question) and is_key(branches, Op.Colon) then [key_of(part), key_of(branches), value_of(branches)] else [key_of(part), branches]
 		} else if is_group(part) {
 			for name in iteration_variables(items_of(part)) { found[name] = yes }
+			# `def r(width, height) {…}` (fun, fn … as the sugar reads them): its name and parameters, never
+			# native_window's width
+			if #part >= 2 and part#1 is symbol and name_of(part#1) in function_keywords {
+				head = if is_group(part#2) and #part#2 > 0 and is_group(part#2#1) then part#2#1 else part#2
+				if is_group(head) { for item in head { found[name_of(leftmost_symbol(item))] = yes } }
+			}
 			# a named pattern, `pattern Definition = Key(head, Op.Define, body)`: head and body, never shell's head
 			if is_pattern_definition(part) { for name in case_pattern_names(value_of(part#2)) { found[name] = yes } }
 			# an enum and its cases, `enum K { B, D }`: B is the program's, never sound's note
@@ -979,6 +1025,9 @@ names_bound_in_kept(program: Node): any := {
 	}
 	bound_names_found
 }
+# `math` of `math.gcd(4, 6)`: a standard module's name (`Math` math's), or a program's own linked one (`shapes`, its
+# text maybe not beside it), which the program doesn't bind
+qualifies_by_module(name: text, program: Node): bool := name not in names_bound_in_kept(program) and (is_module_name(name.lower()) or own_module_wasm.has(name))
 # the names in a view, `["attribute", "variants", ["list", ["symbol", "red"]], ["symbol", "Color"]]`'s red and Color
 view_symbols(view: any): list := if kind_of(view) == "symbol" then [view#2] else if view is list then view.flat_map(view_symbols) else []
 # the names a pattern binds: `x`, `(a, b)`, `x: int`, `[first, rest...]`, `Point{x, y}` (its x and y, not Point), the
@@ -1011,18 +1060,21 @@ leftmost_symbol(n: Node): Node := {
 	if n is symbol then n else symbol("")
 }
 # word → the type module defining it, "" for a word two of them define
-type_module_providers(): map := {
+type_module_providers(): map := library_index_section("provider")
+# the type modules' tables of the library index, read off their texts by the build writing it: each word with the
+# type module defining it ("" for two), those defined taking nothing (`now() := …`), those taking one value
+# (`words(t) := …`)
+type_module_slices(): list := type_modules.flat_map(module => definition_slices(file_text(std_module_path(module)) ?? "").map(slice => slice + [module]))
+nullary_words_scanned(): map := words_marked(type_module_slices().filter(slice => without_keyword(slice#2).starts_with(slice#1 + "()")))
+unary_words_scanned(): map := words_marked(type_module_slices().filter(slice => takes_one_value(without_keyword(slice#2), slice#1)))
+words_marked(slices: list): map := {
+	marked = {}
+	for slice in slices { marked[slice#1] = "yes" }
+	marked
+}
+type_module_providers_scanned(): map := {
 	providers = {}
-	for module in type_modules {
-		path = std_module_path(module)
-		source = file_text(path)
-		if source != ø {
-			for slice in definition_slices(source) {
-				word = slice#1
-				providers[word] = if word in providers and providers[word] != module then "" else module
-			}
-		}
-	}
+	for slice in type_module_slices() { providers[slice#1] = if slice#1 in providers and providers[slice#1] != slice#3 then "" else slice#3 }
 	providers
 }
 # the word of a root, `√2`, sqrt(2), which lib/reals.warp keeps exact (emitter.warp exact_root_word); a program's own
@@ -1083,11 +1135,21 @@ used_module_sources(statements: any, folder: text, seen: any, within_module: boo
 				seen = inner#2
 				linked += inner#3
 			} else if not names_no_module(name_of(used)) and not own_module_wasm.has(name_of(used)) {
-				raise "no module, library or package named " + name_of(used) + ": no " + name_of(used) + ".warp beside the program or in lib/; a package is used by its path, use \"packages/" + name_of(used) + "/" + name_of(used) + ".warp\""
+				raise "no module, library or package named " + name_of(used) + ": no " + name_of(used) + ".warp beside the program, in lib/ or as packages/" + name_of(used) + "/" + name_of(used) + ".warp of the project or of warp's registry (scripts/link-packages.sh)"
 			}
 		}
 	}
 	[sources, seen, linked]
+}
+# the standard modules the statements use and those these use in turn, by name, as used_module_sources sees them
+# but by their signatures, no text read (a file beside the program taking a use is the program's own)
+used_module_names(statements: list, folder: text): list := {
+	seen = []
+	for statement in statements {
+		used = use_target(statement)
+		if used is symbol and not taken_as_file(statement, folder, no) { seen = modules_used_by(name_of(used), seen) }
+	}
+	seen
 }
 # whether a file the folder holds takes the use (uses.warp file_used): of the program's own uses any file, of a standard
 # module's uses only the module's own file (a module built in lib/ uses its neighbours so)

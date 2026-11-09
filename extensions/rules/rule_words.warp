@@ -31,6 +31,8 @@ spelled(name: Node): text := "${name}".remove_suffix(own_mark)
 # word, the tail of an amount split off before it (`2 L == 2000 cm` parses as 2, L == 2000, cm: card spaced-unit-comparison)
 unit_bound(amounted: Node, unit: Node): any := {
 	if is_amount(amounted) { return Key(amounted, Op.Mul, unit) }
+	# `1900 - 2000 cm`, two written numbers: the closed span between them in that unit (lib/units.warp number_quantity_span)
+	if is_key(amounted, Op.Sub) and is_number_literal(key_of(amounted)) and is_number_literal(value_of(amounted)) { return call_of("number_quantity_span", [key_of(amounted), Key(value_of(amounted), Op.Mul, unit)]) }
 	if amounted is key and op_of(amounted) in unit_ambiguous_ops { throw unit_ambiguous(amounted, unit) }
 	if not (amounted is key and op_of(amounted) in unit_binding_ops) or starts_with_unit(amounted) { return ø }
 	right = unit_bound(value_of(amounted), unit)
@@ -63,8 +65,6 @@ unit_written(code: Node): bool := {
 # single unit word or any other code
 compound_unit(code: Node): any := if code is key and unit_written(code) then "${code}".replace(" ", "") else ø
 # `km/h`, `kg·m/s^2`: the unit word leading a unit written of several parts, ø for other code
-# `"Europe/Berlin"`, `"UTC"`: a text written as a time zone's name, an IANA Area/Location (lib/time.warp time_zones)
-zone_written(code: Node): bool := code is text and ("${code}" == "UTC" or ("${code}".contains("/") and not "${code}".contains(" ")))
 # `area possibly`: the code a word qualifies, as the two words read as one group within an expression; ø for other code
 qualified(code: Node, word: Node): any := if is_group(code) and bracket_of(code) == "" and #code == 2 and code#2 == word then code#1 else ø
 leading_unit(code: Node): any := if code is key and op_of(code) in [Op.Div, Op.Mul, Op.Pow] then leading_unit(key_of(code)) else if code is symbol then code else ø
@@ -573,8 +573,11 @@ end_refused(task: Node): Node := {
 	throw "end ${as_code(task)}: did you mean finish ${as_code(task)} (let it run to its end) or cancel ${as_code(task)} (end it now)?"
 }
 # a value as code to paste: a text in its quotes, no attribute of the parser's (`float[n * m]`'s marked `+ 1` would
-# read back as `view·attribute: …`)
-as_code(n: Node): text := if n is text then "\"${n}\"" else "${plain_node(n)}"
+# read back as `view·attribute: …`), a number past int64 its digits again (the parser's `view·opaque: ["number", …]`
+# would read back as a product: `xs: [f32] = [1e38]`, card exponent-literal-reparse)
+as_code(n: Node): text := if n is text then "\"${n}\"" else code_written(plain_node(bottom_up(n, big_number_written)))
+code_written(n: Node): text := "${n}"
+big_number_written(n: Node): Node := if is_big_number_view(n) then symbol("${value_of(n)#2}") else n
 
 # `people where age > 18` (decision P223, extensions/sugar/lists.warp): a name the program binds nothing to that a class of it
 # declares as a field reads the item's field, `it.age`; a name the program binds keeps its value
@@ -675,10 +678,19 @@ function_parameters_written(definition: Node): list := {
 # has; ø when the program defines no such function or no kind is known of its result
 signature_text(name: Node, program: Node): any := {
 	definition = function_definition(name, program)
-	if definition == ø { return builtin_shown(name, program, "") }
+	if definition == ø { return builtin_shown(name, program, "") ?? foreign_shown(spelled(name)) }
 	returned = function_result_kind(name, definition)
 	if returned == ø { return ø }
 	"(" + function_parameters_written(definition).map(parameter_shown).join(", ") + ") -> " + returned
+}
+# a C function or a wasm module's export the program calls, as its foreign line declares it (extensions/c_imports
+# imports.warp declared_c_functions): `fib.signature` of rust_demo.wasm is "(p1: i64) -> i64"; ø for any other name
+foreign_shown(name: text): any := {
+	d = declared_c_functions.find(d => d#1 == name)
+	if d == ø { return ø }
+	types = d#3
+	names = d#4
+	"(" + range_list(#types).map(i => names[i] + ": " + types[i]).join(", ") + ") -> " + d#5
 }
 # `type(sqrt)` of a library word the program neither defines nor binds: "builtin: (x:number) -> number", its first typed
 # line (`sqrt(x: number): number from warp`, lib/math.warp); ø for any other name (card function-signatures)
@@ -829,7 +841,7 @@ class_help(name: Node, program: Node, source: text): any := {
 # [fields, methods] of the class as written, ø when the program declares none of that name: the class methods pass
 # has lifted its methods out of the program's view by now
 class_members(class_name: text, source: text): any := {
-	statement = declared_class(class_name, plain_node(parsed(source)))
+	statement = declared_class(class_name, written_program(source))
 	if statement == ø { return ø }
 	view = class_view(statement)
 	# a method by the name it is written with, `length` (read, it is its alias's word, count)
@@ -894,7 +906,7 @@ instance_members(variable: Node, part: Node, source: text): any := {
 }
 # the names as a list of texts, parsed: a one-letter name in List(…) would be a character, and the compiler compiling
 # itself has no node constructors
-texts_list(names: list): Node := plain_node(parsed("[" + names.map(name => "\"" + name + "\"").join(", ") + "]"))
+texts_list(names: list): Node := if #names == 0 then List([], Bracket.Square, Separator.Comma) else plain_node(parsed("[" + names.map(name => "\"" + name + "\"").join(", ") + "]"))
 # the class every assignment of the variable makes, `Point` of `p = Point(3, 4)`; ø when one makes something else
 class_made_as(variable: text, source: text): any := {
 	classes = class_names(source)
@@ -911,6 +923,8 @@ full_definition(name: Node, program: Node, source: text): any := {
 function_help(name: Node, program: Node, source: text): any := {
 	# a used module's word, not the program's: its head and comment as the module writes them (module_word_help)
 	if definition_start(source, spelled(name)) == ø and used_word_help(spelled(name), source) != ø { return ø }
+	# defined more than once, `f(x)` and `f(x, y)`: each definition's head as written (card help-shows-overloads)
+	if #definition_slices(source).filter(cut => cut#1 == spelled(name)) > 1 and not owns_word("help", program) { return word_help_in(source, spelled(name)) }
 	signature = if owns_word("help", program) then ø else signature_text(name, program)
 	if signature == ø { return ø }
 	doc = doc_of(name, program, source)
@@ -923,6 +937,8 @@ module_help(name: Node, program: Node): any := {
 # `help(lowpass)` of a used module's word: each of its definitions' heads as the module writes them, then the comment
 # above the first (wiki/reflection.md "Modules"); ø when the program has its own help or no used module defines it
 module_word_help(name: Node, program: Node, source: text): any := if owns_word("help", program) then ø else used_word_help(spelled(name), source)
+# `help(draw.save)`: the word's help as the module the program uses through that name writes it, else ø
+qualified_word_help(module: Node, word: Node, program: Node): any := if owns_word("help", program) or not qualifies_by_module(spelled(module), program) then ø else word_help_in(used_module_text(spelled(module).lower()), spelled(word))
 used_word_help(word: text, source: text): any := {
 	for module in used_modules(source) {
 		help = word_help_in(used_module_text(module), word)
@@ -931,10 +947,18 @@ used_word_help(word: text, source: text): any := {
 	ø
 }
 word_help_in(module_text: text, word: text): any := {
-	heads = definition_slices(module_text).filter(cut => cut#1 == word).map(cut => written_head(cut#2))
-	if #heads == 0 { return ø }
-	doc = comment_above(module_text, word)
+	spans = spans_of(module_text).filter(span => span#1 == word)
+	if #spans == 0 { return ø }
+	heads = spans.map(span => written_head(module_text[span#2 ..< span#3]))
+	doc = comment_before(module_text, spans#1#2)
 	heads.join("\n") + (if doc == "" then "" else "\n" + doc)
+}
+# the comment lines right above the line starting at `start`, a value's as a function's (card module-export-attributes)
+comment_before(source: text, start: int): text := {
+	lines = source[0 ..< start].split("\n")
+	first = #lines
+	while first > 1 and is_comment_line(lines#(first - 1).trim()) { first -= 1 }
+	lines[first - 1 ..< #lines - 1].map(line => comment_text(line.trim())).join("\n")
 }
 # `midi(pitch)` of `midi(pitch) := …`: a definition's first line up to its `:=`
 written_head(definition: text): text := definition.split("\n")#1.split(":=")#1.trim()
@@ -973,7 +997,8 @@ module_dir(word: text): any := {
 	if source == "" { return ø }
 	listed = {}
 	for name in definition_slices(source).map(cut => cut#1) + typed_words(word) { if is_listed_word(name) { listed[name] = yes } }
-	List(listed.keys, Bracket.Square, Separator.Comma)
+	# sorted, so an edit of the module leaves the order of its other words as it was (decision core-dir-order)
+	List(listed.keys.sort(), Bracket.Square, Separator.Comma)
 }
 # the prelude's words whose first parameter is of the type: its declarations, `upper(t: text): text from warp`
 # (word_lines), and its definitions, `pad_left(t: text, width) := …`
@@ -986,6 +1011,21 @@ typed_words(kind: text): list := {
 type_alternatives(written: text): list := written.split(" or ").map(part => part.trim())
 # a module's word dir lists: a function or value, never a class (`Cursor`) or an operator's function
 is_listed_word(word: text): bool := not is_capitalized(word) and word.chars().all(c => is_name_char(c))
+
+# the source parsed, its methods declared outside their types moved in (extensions/class_extensions.warp)
+written_program(source: text): Node := class_extensions(plain_node(parsed(source)))
+# `text.methods`, `Name.methods` (decision methods-declared, both ways; `functions` a synonym): the words of a type
+# word's module, as text.functions lists them, and the program's functions taking the type first, `shout(self: text)`
+# of `text.shout() := …`, `greet(n: Name)` of an alias; ø where the program has its own word or nothing names the type
+type_methods(name: Node, program: Node, source: text): any := {
+	if owns_word("methods", program) or owns_word("functions", program) { return ø }
+	listed = module_view(name, symbol("functions"), program)
+	words = if listed == ø then [] else items_of(listed).map(word => "${word}")
+	firsts = typed_first_parameters(written_program(source))
+	own = firsts.keys.filter(function => firsts[function] == "${name}" and not words.contains(function))
+	if listed == ø and #own == 0 { return ø }
+	texts_list(words + own)
+}
 
 # The views of a module's words (card dir-filters): `time.functions`, `time.attributes` (its values, `day_seconds`),
 # `time.classes` and `list.operators`, the operators it declares (`∪` of `infix operator ∪(a, b) := …`), which dir
@@ -1039,9 +1079,13 @@ first_parameter_type(word: text, definition: text): text := {
 # after v
 value_dir_words(program: Node): any := if owns_dir(program) then ø else List(["list", "text", "map"].map(module_dir), Bracket.Square, Separator.Comma)
 
-# `math` of `math.gcd(4, 6)`: a standard module's name (`Math` math's), or a program's own linked one (`shapes`, its
-# text maybe not beside it), the program doesn't bind, else ø
-module_named(module: Node, program: Node): any := if "${module}" in names_bound_in_kept(program) or (used_module_text("${module}".lower()) == "" and not own_module_wasm.has("${module}")) then ø else module
+# whether a fixed-width int variable is an int holding its cast value (extensions/sugar/calls.warp): in a GC program;
+# @primitive code, lowered with the primitive prelude (extensions/primitive.warp), emits the width itself, `start: u32 = …`
+# a wasm i32
+widened_to_int(width: Node): bool := used_prelude != PRIMITIVE_PRELUDE
+
+# `math` of `math.gcd(4, 6)`, else ø (prelude_words.warp qualifies_by_module)
+module_named(module: Node, program: Node): any := if qualifies_by_module("${module}", program) then module else ø
 
 # the iteration words a trailing block is the function of (extensions/sugar/calls.warp): `xs.map { $0 * 10 }`
 trailing_block_words = ["map", "filter", "each", "for_each", "find", "any", "all", "reduce", "fold", "sorted"]
@@ -1125,6 +1169,7 @@ rule_words = {
 	class_methods_listed: class_methods_listed,
 	program_functions: program_functions,
 	qualified: qualified,
+	widened_to_int: widened_to_int,
 	it_read_as: it_read_as,
 	it_as_lambda: it_as_lambda,
 	it_taking: it_taking,
@@ -1139,7 +1184,9 @@ rule_words = {
 	module_help: module_help,
 	module_named: module_named,
 	module_view: module_view,
+	type_methods: type_methods,
 	module_word_help: module_word_help,
+	qualified_word_help: qualified_word_help,
 	once_listens: once_listens,
 	page_valued: page_valued,
 	paint_size: paint_size,
@@ -1152,6 +1199,8 @@ rule_words = {
 	served: served,
 	shader_values: shader_values,
 	shader_values_of: shader_values_of,
+	shader_words_of: shader_words_of,
+	shader_place_of: shader_place_of,
 	shorthand_closure: shorthand_closure,
 	signaled: signaled,
 	signature_text: signature_text,
@@ -1170,8 +1219,7 @@ rule_words = {
 	value_dir_words: value_dir_words,
 	value_helps: value_helps,
 	whenever_listens: whenever_listens,
-	written_after: written_after,
-	zone_written: zone_written
+	written_after: written_after
 }
 
 # A field annotation can still be a Type node when the early rewrite runs.

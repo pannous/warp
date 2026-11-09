@@ -4,6 +4,9 @@
 # `remove h from listeners of alarm`. An item of a structure, `button{ "+1", on click {…} }`, is the structure's own
 # Handler (lib/markup.warp). The registry is the prelude's (lib/prelude.warp listen)
 rewrite on $e $body: block => handler(data $e, event => $body) where $e is symbol and item
+# `input{ bind: name }` (card input-bind-name): the variable as code to read and to write, the field's two-way binding
+# (lib/markup.warp Binding); its writer makes the items reading name live (rewrites.warp early_sugared)
+rewrite bind: $v => bind: binding(() => $v, entered => { $v = entered }) where item and $v is symbol
 # an item reading a variable a handler writes is live, recomputed each time it is shown (decision markup-keeps):
 # `p{ "count: " + count }`, `class: (if done then "done" else "open")`
 rewrite $k: $v => $k: live(() => $v) where item and $v is varying

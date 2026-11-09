@@ -4,8 +4,8 @@
 # canvas). The shader reads warp's variables through `$name`: $levels (16 bands, the spectrum at this moment),
 # $bass, $treble, $kick (a beat: a band got louder), $tone (the loudest band's hue), $time; $size is built in
 use sound
-width = 1920
-height = 1080
+width = 960
+height = 540
 bands = 16
 # each band is measured against its own recent peak, which fades this much per frame: quiet bands still reach the top
 peak_fade = 0.995

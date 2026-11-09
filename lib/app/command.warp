@@ -1,7 +1,8 @@
-# `warp app [check] <file>` (card app-webview): the page a markup program shows (lib/markup.warp page_of, as `warp`
-# prints it) in a window of the system's web view till it is closed (lib/webview.warp); `check` prints the text the
-# page shows instead, read in a hidden web view, no window (tests, WARP_NO_WINDOW). A program with check lines
-# (`# check: click "+1", click "+1" → count: 2`, card scripts-samples, decision sample-checks) is checked instead:
+# `warp app [check] <file>` (cards app-webview, static-page-window): the program runs with the page it shows
+# (lib/markup.warp page_of, as `warp` prints it) in a window of the system's web view, its handlers live, till the
+# window is closed; `check` prints the text the page shows instead, read in a hidden web view, no window (tests,
+# WARP_NO_WINDOW). A program with check lines (`# check: click "+1", click "+1" → count: 2`, card scripts-samples,
+# decision sample-checks) is checked instead:
 # each line from a fresh run, its steps done by markup's page words, the page's text then holding the text after →
 use os
 use file
@@ -13,6 +14,8 @@ page_start = "<"
 CHECK_PREFIX = "# check: "
 CHECK_ARROW = " → "
 STEPS_VARIABLE = "WARP_PAGE_STEPS"
+# the program runs with its page in a window so named, its handlers live (lib/markup.warp page_window_run)
+APP_WINDOW_VARIABLE = "WARP_APP_WINDOW"
 
 # the page the program shows after the steps (WARP_PAGE_STEPS lines, markup's page_after_steps), its HTML; the
 # run's Error when it failed
@@ -66,16 +69,20 @@ app_command(arguments: list): int := {
 	file = files[0]
 	check_lines = read(file).split("\n").filter(line => line.starts_with(CHECK_PREFIX))
 	if checking and #check_lines > 0 { return if checks_failed(file, check_lines) == 0 then 0 else 1 }
-	html = page_html(file, "")
-	if not is_page(html) {
-		print "warp app: " + file + " shows no page (its value is no markup): " + str(html).trim()
-		return 1
-	}
 	if checking {
+		html = page_html(file, "")
+		if not is_page(html) { return shows_no_page(file, html) }
 		print webview_page_text(html)
 		return 0
 	}
-	webview_show(html, file)
+	# (what it printed, a failure's too: `|| true` keeps the output a failing command's error drops; nothing when the app
+	# ended itself, `on key { exit }`)
+	shown = command(APP_WINDOW_VARIABLE + "=" + quoted_path(file) + " warp run " + quoted_path(file) + " 2>&1 || true")
+	if is_page(shown) or shown.trim() == "" then 0 else shows_no_page(file, shown)
+}
+shows_no_page(file: text, shown: any): int := {
+	print "warp app: " + file + " shows no page: " + str(shown).trim()
+	1
 }
 
 exit(app_command(args[1 ..]))

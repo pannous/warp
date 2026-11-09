@@ -8,5 +8,5 @@
 'add(a, b) := a+b; square(n) := n*n; add 1 square 3'	10
 
 # a_function_passed_as_a_value_stays_one
-'twice(f, x) := f(f(x)); square(n) := n*n; twice square 3'	81
-'apply(f, x) := f(x); square(n) := n*n; apply(square, 4)'	16
+'twice(f: function, x) := f(f(x)); square(n) := n*n; twice square 3'	81
+'apply(f: function, x) := f(x); square(n) := n*n; apply(square, 4)'	16

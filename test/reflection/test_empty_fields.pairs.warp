@@ -1,0 +1,6 @@
+# a class without fields lists none: fields(E) and e.fields are [] (card fields-unknown-name)
+'class E{}; fields(E)'	[]
+'class E{ f() := 1 }; fields(E)'	[]
+'class E{}; e = E(); e.fields'	[]
+'class E{}; methods(E)'	[]
+'class F{x: int}; fields(F)'	["x"]

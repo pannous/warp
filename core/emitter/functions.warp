@@ -1,7 +1,7 @@
 # Functions (emitter.warp's part): calls and their arguments, each function's kinds and code, analyzer.warp's kinds
 def call(body: Body, f: Function, arguments: list): TypedCode {
 	parameters = f.signature.parameters
-	if parameters and parameters.last.rest { return rest_call(body, f, arguments) }
+	if gathers(f.signature, #arguments) { return rest_call(body, f, arguments) }
 	if #arguments > #parameters { return refuse_arguments(f, #arguments) }
 	slots = placed_arguments(taken_names(f.signature), arguments, f.signature.parameters.map(p => p.label))
 	if slots == ø { return refuse_arguments(f, #arguments) }
@@ -44,7 +44,16 @@ placed_arguments(names: list, arguments: list, labels: list = []): any := {
 	}
 	slots
 }
-refuse_arguments(f: Function, count: int): any := refuse("a call of " + f.name + " with " + count + " arguments")
+# a call of f with arguments it does not take: the program's error naming the call f takes, `beat(n)`
+refuse_arguments(f: Function, count: int): any := refuse_count([f], count)
+refuse_count(functions: list, count: int): any := {
+	shapes = functions.map(call_shape).join(" or ")
+	program_error(shapes + " is called with " + count + (if count == 1 then " argument" else " arguments"), shapes)
+}
+# the program's functions of a name, each of its parameter counts (`low·0`, `low·1`)
+functions_named(name: text): list := module.functions.keys.filter(key => without_arity(key) == name).map(key => module.functions[key]).filter(f => not f.is_runtime)
+# the call a function takes as its definition writes it: `beat(n)`, `f(x, y = …)`, `g(xs...)`
+call_shape(f: Function): text := without_arity(f.name) + "(" + f.signature.parameters.map(p => if p.rest then p.name + "..." else if p.defaulted_to != ø then p.name + " = …" else p.name).join(", ") + ")"
 # the default of f's parameter i a call leaves out, compiled where the call is: refused when it reads a parameter
 def default_value(body: Body, f: Function, i: int, count: int): TypedCode {
 	default = f.signature.parameters[i].defaulted_to

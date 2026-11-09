@@ -9,7 +9,7 @@
 # core/native/ is no input: the native warp's own sources, which no compiler embeds.
 # --baked: the hash of the compiler's code alone: core/**, extensions/**, the lib/ modules they use (`use os`) with
 # those these use in turn, compiled in, and the lib/ data it reads at its own build (CODE_DATA: the prelude, the
-# aliases, module_source's files), and the seed; the rest of lib/ left out: two lib/ trees of one baked hash compile
+# aliases, every file module_source builds in), and the seed; the rest of lib/ left out: two lib/ trees of one baked hash compile
 # compiler.warp alike, so a self test passed for one holds for the other (scripts/rebuild.sh self), and a lib/-only
 # change reuses a stored compiler of that code (rebuild.sh reused_stored). --baked-files [<lib>]: those lib/ files,
 # one a line, of <lib> or this tree's (scripts/smoke.sh, integrate/land.sh)
@@ -30,6 +30,9 @@ code_files() {
 		queue+=($(sed -n "$USE_LINE" "$lib/$module.warp"))
 	done
 	printf '%s\n' "${CODE_DATA[@]}"
+	# the files module_source("…") builds in: a name with an extension the file within lib/, else lib/<name>.warp
+	(cd "$lib" && find -H compiler extensions -path compiler/native -prune -o -name '*.warp' -print | env LC_ALL=C xargs grep -ho 'module_source("[^"]*")' |
+		sed 's/module_source("\(.*\)")/\1/' | sed '/\./!s/$/.warp/' | env LC_ALL=C sort -u)
 }
 if [ "${1-}" = --baked-files ]; then code_files "${2:-$(cd "$(dirname "$0")/../lib" && pwd)}" | env LC_ALL=C sort -u; exit 0; fi
 lib=$(cd "${1:?usage: scripts/compiler-inputs.sh <lib> [-v] [--baked] | --baked-files}" && pwd)

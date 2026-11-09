@@ -193,7 +193,7 @@ async function startGuide() {
 	if (matchMedia(NARROW_SCREEN).matches) $("guide").open = false;
 	try {
 		// the beginner guide first: its Examples lines group the example menu
-		for (const [level, file] of Object.entries(GUIDE_FILES)) renderedGuides[level] = renderGuide(await (await fetch(file)).text());
+		for (const [level, file] of Object.entries(GUIDE_FILES)) renderedGuides[level] = renderGuide(await (await fetch(file, { cache: "no-cache" })).text()); // a deploy's guide at once (card stale-cached-assets)
 	} catch (error) {
 		$("guide-chapters").textContent = `the guide did not load: ${error.message}`;
 		return;

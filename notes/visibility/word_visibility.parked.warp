@@ -1,0 +1,44 @@
+# Library word visibility (decision library-word-visibility, card untyped-word-privacy): typing is the guard against
+# clashes between libraries, so a library word with no parameter type and no result type (`any` counting as none) is
+# private to its module, visible to the programs using it only when marked `public f(x) := …`; a typed word is visible.
+# A program's own call of a module's private word is refused, naming the fix; its own definition of that name is its
+# own word, no call of the module's. Runs before modules_used, while the program holds only its own statements
+
+private_calls_refused(program: Node): Node := {
+	if module_written != "" { return program }
+	own = own_heads(program)
+	called = called_words(program).filter(word => not own.has(word))
+	if #called == 0 { return program }
+	for module in used_std_modules(program) {
+		private = private_words(module)
+		for word in called { if private.has(word) { raise private_refusal(word, module) } }
+	}
+	program
+}
+private_refusal(word: text, module: text): text := word + " is private to lib/" + module + module_extension + ": it has no parameter or result type; mark it `public " + word + "(…) := …` there, or type it (decision library-word-visibility)"
+
+# the standard modules the program's own `use` lines name
+used_std_modules(program: Node): list := statements_in(program).map(use_target).filter(used => used is symbol and name_of(used) in std_module_names).map(name_of)
+
+# name → yes for each word the module writes untyped and unmarked: as its signature holds it when linked, else its text
+private_words(module: text): map := {
+	signature = linked_signature(module)
+	slices = if signature != ø then signature.slices.map(slice => [slice#1, slice#2, unpack(slice#3)]) else definition_slices(library_text(module + module_extension)).map(slice => [slice#1, slice#2, plain_node(parsed(slice#2))])
+	typed = {}
+	untyped = {}
+	for slice in slices {
+		if leading_name(slice#2) == public_word { typed[slice#1] = yes }
+		for statement in statements_in(slice#3) {
+			call = definition_call(statement)
+			if call != ø { if is_untyped_definition(statement, call) { untyped[slice#1] = yes } else { typed[slice#1] = yes } }
+		}
+	}
+	# (a word with one typed or public definition is visible: its other variants come with it)
+	without_keys(untyped, untyped.keys.filter(word => typed.has(word)))
+}
+# `f(x) := …`, `f(x: any): any := …`: no parameter type and no result type
+is_untyped_definition(statement: Node, call: Node): bool := parameter_types(call).all(type => type == any_word) and written_result_type(key_of(statement)) == any_word
+# `T` of a head `f(x): T` or `f(x) as T`, any_word of a bare head
+written_result_type(head: Node): text := if (is_key(head, Op.Colon) or is_key(head, Op.As)) and value_of(head) is symbol then name_of(value_of(head)) else any_word
+
+word_visibility_extension = Extension{name: "word_visibility", passes_before: {"modules_used": private_calls_refused}}

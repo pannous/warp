@@ -23,6 +23,7 @@ tested_type_call(subject: Node, type: Node, scope: map): Node := match type {
 	Symbol(word): tested_word_call(subject, word, Key(subject, Op.Eq, type), scope)
 	# `x is (int or text)`: x is one of the alternatives, `x is (1 or 2)` too
 	Key(left, Op.Or, right): Key(tested_type_call(subject, left, scope), Op.Or, tested_type_call(subject, right, scope))
+	Key(left, Op.BitOr, right): Key(tested_type_call(subject, left, scope), Op.Or, tested_type_call(subject, right, scope))
 	List(items, bracket, separator): if #items == 1 and bracket == Bracket.Round then tested_type_call(subject, items#1, scope) else Key(subject, Op.Eq, type)
 	_: Key(subject, Op.Eq, type)
 }
@@ -32,15 +33,26 @@ tested_type_call(subject: Node, type: Node, scope: map): Node := match type {
 # pattern_bindings); one naming only known values still compares, `xs is [a, b]` of a = 1, b = 2
 is_shape_pattern(p: Node): bool := (is_group(p) and (bracket_of(p) == "[" or bracket_of(p) == "{" or (bracket_of(p) == "(" and separator_of(p) == ","))) or is_text_cut_pattern(p)
 is_text_cut_pattern(p: Node): bool := (is_key(p, Op.Add) and nodes_in(p).any(part => part is text)) or (is_key(p, Op.Colon) and (is_key(key_of(p), Op.Add) or is_key(key_of(p), Op.Colon)))
-new_pattern_names(p: Node, scope: map): list := structural_names(p, no).filter(name => not binds_value(scope, name))
+new_pattern_names(p: Node, scope: map): list := structural_names(p, no).filter(name => not binds_own_value(scope, name))
+# a value the program binds itself, not a global only a used module brought (units' s, m, px), which a pattern's name
+# shadows as a match arm's does: `r is {status: s}` binds s
+binds_own_value(scope: map, name: text): bool := binds_value(scope, name) and not brought_names.has(name) and not brought_value_names.has(name)
 binds_new_names(p: Node, scope: map): bool := is_shape_pattern(p) and (#new_pattern_names(p, scope) > 0 or nodes_in(p).any(part => part == symbol(other_arm)))
 shape_test(subject: Node, p: Node, scope: map): Node := {
 	bound = new_pattern_names(p, scope).map(name => Key(symbol(name), Op.Assign, subscript(symbol(match_bound), name)))
 	Key(structural_test(subject, p), Op.And, List(bound + [yes], Bracket.Round, Separator.Semicolon))
 }
 
+# `n is Key(h, Op.Define, b)`: a node case tests the subject's kind and parts and binds the parts it names, as a match
+# arm does (node_matches.warp arm_test, part_bindings); a subject other than a name is evaluated once
+case_test(subject: Node, pattern: list): Node := {
+	held = if is_name(subject) then subject else symbol(subject_name)
+	test = Key(arm_test(pattern, held), Op.And, List(part_bindings(pattern, held) + [yes], Bracket.Round, Separator.Semicolon))
+	if held == subject then test else List([Key(held, Op.Assign, subject), test], Bracket.Round, Separator.Semicolon)
+}
+
 type_test_node(n: Node, scope: map): Node := match n {
-	Key(subject, Op.Is, type): if binds_new_names(type, scope) then shape_test(subject, type, scope) else tested_type_call(subject, type, scope)
+	Key(subject, Op.Is, type): if case_pattern(type) != ø then case_test(subject, case_pattern(type)) else if binds_new_names(type, scope) then shape_test(subject, type, scope) else tested_type_call(subject, type, scope)
 	_: n
 }
 

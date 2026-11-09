@@ -42,27 +42,38 @@ use "parse_words.warp"
 use "iteration_inlining.warp"
 use "block_inlining.warp"
 use "of_lookups.warp"
+use "c_enums.warp"
+use "enum_calls.warp"
 use "match_phrases.warp"
 use "checked_tries.warp"
 use "key_bindings.warp"
 use "text_lints.warp"
+use "int_misfits.warp"
 use "page_values.warp"
+use "dev_values.warp"
 use "fetch_signals.warp"
 use "js_globals.warp"
 use "dir_hints.warp"
+use "from_imports.warp"
+use "collection_type_tests.warp"
 use "block_definitions.warp"
+use "class_extensions.warp"
+use "parameter_values.warp"
+use "local_shadows.warp"
 use "effects.warp"
 use "optional_unwraps.warp"
 use "object_functions.warp"
 use "primitive.warp"
 EXTENSIONS = [
-	Extension{name: "uncertain", operator_rows: library_text("extensions/uncertain/operators.warp")}
+	Extension{name: "uncertain", operator_rows: module_source("extensions/uncertain/operators.warp")}
 	gpu_lists_extension
 	degrees_extension
 	glyph_atoms_extension
 	pipe_lambdas_extension
 	circumfixes_extension
 	index_positions_extension
+	# before property_accessors, which would read `P.scaled(k) := …` as a property setter
+	class_extensions_extension
 	property_accessors_extension
 	attributes_extension
 	sum_types_extension
@@ -91,9 +102,12 @@ EXTENSIONS = [
 	match_patterns_extension
 	protocols_extension
 	# right after definition_heads, in this order: a class's conversions become the program's before conversions runs
-	Extension{name: "class_methods", passes: {"definition_heads": classes_rewritten}}
+	Extension{name: "class_methods", passes: {"definition_heads": classes_rewritten}, library_words: foreign_instance_words}
 	Extension{name: "int_types", passes_before: {"definition_heads": formatted_definitions}, passes: {"definition_heads": int_types}}
 	conversions_extension
+	# (after conversions: its `as` of a C enum reach plain_enums)
+	c_enums_extension
+	enum_calls_extension
 	implicit_uses_extension
 	test_lines_extension
 	# right before tries, in this order: the last result `it`, parse words, then the checked tries the core's tries guard
@@ -106,11 +120,17 @@ EXTENSIONS = [
 	of_lookups_extension
 	match_phrases_extension
 	text_lints_extension
+	int_misfits_extension
 	page_values_extension
+	dev_values_extension
 	fetch_signals_extension
 	js_globals_extension
 	dir_hints_extension
+	from_imports_extension
+	collection_type_tests_extension
 	block_definitions_extension
+	parameter_values_extension
+	local_shadows_extension
 	effects_extension
 	optional_unwraps_extension
 	object_functions_extension

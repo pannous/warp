@@ -8,6 +8,7 @@
 use unit_names
 use uncertain
 use reals
+use time
 
 class Quantity {
 	amount: number
@@ -22,17 +23,16 @@ class Quantity {
 		}
 		measured(amount + summand(this, other, "add").amount - unit_zero(unit), dims, unit, scale)
 	}
-	# number - Quantity via as-promotes (dims 0, empty unit): a span in the quantitys unit, `1900 - 2000 cm`
+	# 0 - Quantity, the negation `-40°F` and `-x` are (0 as-promoted: dims 0, no unit), counts the 0 in its unit, as
+	# summand's plain 0 does; a written span `1900 - 2000 cm` is unit_bound's (extensions/rules/rule_words.warp)
 	-(other) := {
-		if dims == 0 and unit is empty and (other is Quantity) and other.dims != 0 {
-			return number_quantity_span(amount, other)
-		}
+		if dims == 0 and unit is empty and amount == 0 and (other is Quantity) { return quantity(0 - other.shown(), other.unit) }
 		measured(amount - summand(this, other, "subtract").amount + unit_zero(unit), dims, unit, scale)
 	}
 	*(other) := if other is Unit then times_unit(this, other.unit) else if other is Quantity then measured(amount * other.amount, dims + other.dims, unit_combined(unit, other.unit, 1), scale * other.scale) else measured(amount * other, dims, unit, scale)
 	/(other) := if other is Unit then quotient(this, other.one()) else if other is Quantity then quotient(this, other) else measured(amount / other, dims, unit, scale)
 	power(exponent) := measured(amount ^ exponent, dims * exponent, unit_raised(unit, exponent), scale ^ exponent)
-	equal(other) := other is Quantity and dims == other.dims and amount == other.amount
+	equal(other) := { o = time_quantity(other); o is Quantity and dims == o.dims and amount == o.amount }
 	compare(other) := amount - compared_amount(this, other)
 	// `<` and `>` of the amounts, an amount with a tolerance as an interval: `area > 10m²` holds when all of it is
 	// above (P224b, `certainly`), `possibly_greater` when some of it is (lib/uncertain.warp)
@@ -48,7 +48,7 @@ class Quantity {
 	// its amount in SI base units as a plain float: what a shader reads of it (decision no-units-in-shaders)
 	float() := amount as float
 	text() := quantity_text(this)
-	show() := quantity_text(this)
+	format as text := quantity_text(this)
 	// a tolerance's bounds and value, each a quantity in its unit: `(6m ± 0.3).low` is 5.7m, a bound to the digits the spread justifies
 	low() := measured(as_interval(amount).low_bound(), dims, unit, scale)
 	high() := measured(as_interval(amount).high_bound(), dims, unit, scale)
@@ -81,7 +81,12 @@ class Density extends Quantity {}
 
 // a quantity moving lib/time's Instant (`now + 1h`) as the Duration it lasts, a DimensionError of any other dimension
 // than time; a program without lib/time has no Duration and leaves it out (card instant-typed-duration)
-q: Quantity as Duration := Duration(q.in("ms"))
+// (its milliseconds by same_quantity, not q.in("ms"): a linked class's method in a conversion body is refused when
+// lib/timers comes in through an implicit use, card linked-method-conversion; back to q.in("ms") once that is fixed)
+q: Quantity as Duration := Duration(same_quantity(quantity(1, "ms"), q, "convert").amount * 1000)
+d: Duration as Quantity := quantity(d.ms / 1000, "s")
+// lib/time's Duration as the quantity of time it is, so `6s == time 6` and `1s + time 6` (decision one-duration)
+time_quantity(x) := if x is Duration then x as Quantity else x
 
 // `5 * km`, the plain number promoted (as Quantity below): the quantity counted from the unit's zero, `20 * °C` the
 // temperature 20 on its scale; a quantity times a unit, `3 m * m`, their product
@@ -105,11 +110,24 @@ measured(amount: number, dims: int, unit: text, scale: number) := {
 // a plain number as the dimensionless quantity it is: an operator meeting a number and a quantity promotes the number
 // (decision as-promotes), so `2.0 / 4m` is 0.5/m; `1.0 - 4m` is a span (card gap-span-units-compare), never a plain number
 n: number as Quantity := measured(n, 0, "", 1)
+// a plain number as a dimension counts its base unit: `5 as Pixels` is 5px, `2 as Length` 2m (night decision length-pixels; a Time is `time 6`);
+// so a conversion body giving a number, `length as pixels := it.amount * 2`, gives the target's amount
+n: number as Length := quantity(n, "m")
+n: number as Mass := quantity(n, "kg")
+n: number as Temperature := quantity(n, "K")
+n: number as Pixels := quantity(n, "px")
+n: number as Area := quantity(n, "m²")
+n: number as Volume := quantity(n, "m³")
+n: number as Speed := quantity(n, "m/s")
+n: number as Frequency := quantity(n, "Hz")
+n: number as Force := quantity(n, "N")
+n: number as Density := quantity(n, "dpi")
 // `6km / 2000m` of one dimension is the plain number 3; `90km / h` a speed
 quotient(above: Quantity, below: Quantity) := if above.dims == below.dims then above.amount / below.amount else measured(above.amount / below.amount, above.dims - below.dims, unit_combined(above.unit, below.unit, -1), above.scale / below.scale)
 
 // other when it measures what q measures, else the loud DimensionError
-same_quantity(q: Quantity, other: any, action: text) := {
+same_quantity(q: Quantity, given: any, action: text) := {
+	other = time_quantity(given)
 	if not (other is Quantity) { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and the plain number " + str(other) }
 	if q.dims != other.dims { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and " + quantity_text(other) }
 	other
@@ -121,7 +139,7 @@ compared_amount(q: Quantity, other: any) := same_quantity(q, other, "compare").a
 summand(q: Quantity, other: any, action: text) := {
 	# a plain 0 adds as nothing, the start of a sum: `sum(distances)`, `average(runs.map(r => r.distance))`
 	if other == 0 and not (other is Quantity) { return measured(unit_zero(q.unit), q.dims, q.unit, q.scale) }
-	same_quantity(q, other, action)
+	other = same_quantity(q, other, action)
 	if unit_zero(q.unit) != unit_zero(other.unit) { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and " + quantity_text(other) + ", temperatures of two scales: convert one first (`" + quantity_text(other) + " as " + q.unit + "`)" }
 	other
 }
@@ -177,7 +195,7 @@ class Unit {
 	// the quantity of one of it: `km` the Length of 1000 m shown in km
 	one() := unit_named(unit)
 	text() := unit
-	show() := unit
+	format as text := unit
 }
 m = Unit("m")
 kg = Unit("kg")
@@ -258,7 +276,10 @@ rewrite $a ^ $b => $converted where raw and $u = converted_unit($a) and $u is Un
 rewrite $e $u is $t => ($e $u) is $t where $e is number and unit_led($u) and $t in [length, area, volume, mass, duration, time, temperature, speed, frequency, force, density, Quantity, Length, Mass, Time, Temperature, Pixels, Area, Volume, Speed, Frequency, Force, Density]
 // `3 cm is length`, `2 km/h is speed`: a quantity measures a named dimension, after its unit went with its amount (no
 // `cm is length` alone); a program's own `length` stays its own
-rewrite $q is $d => measures($q, $name) where $d is symbol and $d in [length, area, volume, mass, duration, time, temperature, speed, frequency, force, density] and not unit_led($q) and $name = spelled($d)
+rewrite $q is $d => measures($q, $name) where $d is symbol and $d in [length, area, volume, mass, temperature, speed, frequency, force, density] and not unit_led($q) and $name = spelled($d)
+// `x is time`, `x is duration`: a quantity of time, or one of lib/time's values, an instant a time, a Duration both
+// (decision time-word: instant, date, duration are times)
+rewrite $q is $d => (measures($q, $name) or time_valued($q, $name)) where $d is symbol and $d in [duration, time] and not unit_led($q) and $name = spelled($d)
 named_dimensions() := {"length": length_dimension, "area": area_dimension, "volume": volume_dimension, "mass": mass_dimension, "duration": duration_dimension, "time": duration_dimension, "temperature": temperature_dimension, "speed": speed_dimension, "frequency": frequency_dimension, "force": force_dimension, "density": density_dimension}
 measures(q: any, dimension: text) := q is Quantity and q.dims == named_dimensions()[dimension]
 // `unit furlong := 201.168m`: a program's own unit, the quantity of one of it shown by its name (`1km as furlong` waits
@@ -322,6 +343,18 @@ type ml = Volume
 type ha = Area
 type dpi = Density
 type ppi = Density
+// the dimensions in lower case (quantity-naming, night decision length-pixels): `length as pixels := it.amount * 2`; at a
+// definition head `length` is the type, elsewhere `length xs` stays count's alias; time is lib/time's word
+type length = Length
+type mass = Mass
+type temperature = Temperature
+type pixels = Pixels
+type area = Area
+type volume = Volume
+type speed = Speed
+type frequency = Frequency
+type force = Force
+type density = Density
 
 // a unit as written, `km`, `km/h`, `m²`, `kg·m/s²`: the quantity of one of it
 unit_named(u: text) := {

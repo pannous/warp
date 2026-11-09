@@ -1,0 +1,8 @@
+# a control keyword names no variable: `until = …` is refused, never read as a loop that miscompiles (card
+# until-variable-miscompile)
+'until = 3; until + 1'	error
+'g(d: function) := { until = 20; while not d() and 1 < until { 1 }; d() }; g(() => no)'	error
+'while = 3; while + 1'	error
+'unless = 3; unless + 1'	error
+'x = 3; until x > 5 { x += 1 }; x'	6
+'loop = [1 2]; #loop'	2

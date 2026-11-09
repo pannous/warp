@@ -6,4 +6,4 @@
 'type(2024-06-01T12:00Z)'	'instant'
 'type(2024-06-01)'	'date'
 'type(1 day)'	'duration'
-'type(2024-01-31T10:00 in "Europe/Berlin")'	'zoned time'
+'type(zoned(2024-01-31T10:00, "Europe/Berlin"))'	'zoned time'

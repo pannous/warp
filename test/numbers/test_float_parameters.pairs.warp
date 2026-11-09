@@ -10,7 +10,7 @@
 
 # test_float_local_inside_float_function
 'half(x:float) := {y=x/2; y+1}; half(1)'	1.5
-'quarters(n) := {q=1/4; q*n}; quarters(2)'	0.5
+'quarters(n) := {q=1/4; q*n}; quarters(2)'	1/2
 
 # test_parameter_passed_a_float_returning_call
 'def f() := 0.5 * random() + 1.5; def g(s) := s * 2; g(f()) >= 3'	true

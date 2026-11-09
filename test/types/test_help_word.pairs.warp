@@ -3,3 +3,6 @@
 'area(width: int, height: int) := width * height; help area'	"area(width: int, height: int) -> int"
 'help(x) := 7; class P { a: int }; help(P)'	7
 'class Point { x: int; length() := 1 }; help(Point) == "class Point\nfields: x\nmethods: length"'	yes
+# a module's word through the module's name, help(draw.save): the word's help
+'use sound; help(sound.midi) == help(midi)'	yes
+'use draw; help(draw.save).starts_with("save(made: Picture, as file)")'	yes

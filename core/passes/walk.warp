@@ -18,6 +18,8 @@ time_operation_word = "time_operation"
 # what an operand of those is before its parts are read: a time, or a quantity lib/units moves it by (`t + 1 h`)
 time_operand_word = "time_operand"
 time_arithmetic_module = "time_arithmetic"
+# `x is time`, `x is duration`: lib/time.warp's word the emitter tests with (runtime_words.warp time_test_code)
+time_test_word = "time_valued"
 time_operator_symbols = ["+", "-", "*"]
 
 # the arm of a match any value takes, `_: …`
@@ -161,11 +163,11 @@ view_of(n: Node): View := if n == ø and n !== ø then ["list", "[", ""] else ma
 }
 
 # the members of a union type, `list or text`, `int | text` (decision union-or); a single type is its own one member
-union_members(type: text): list := type.split(" or ").flat_map(part => part.split(" | ")).map(member => member.trim())
+union_members(type: text): list := type.split(" or ").flat_map(part => part.split("|")).map(member => member.trim())
 is_union(type: text): bool := #union_members(type) > 1
 # a union type as written, `int or text` (`int | text` parses so too), its members type words; ø for any other node
 union_spelling(type: Node): text? := {
-	if not is_key(type, Op.Or) { return ø }
+	if not (is_key(type, Op.Or) or is_key(type, Op.BitOr)) { return ø }
 	members = [key_of(type), value_of(type)].map(member => if member is symbol then name_of(member) else union_spelling(member))
 	if members.any(member => member == ø) then ø else members.join(" or ")
 }
@@ -410,6 +412,9 @@ holed_pieces(template: text, bare_names: bool): list := {
 	if literal != "" { found += [literal] }
 	found
 }
+
+# the code of each hole of a template the parser keeps whole, `"a ${f(x)} b"` → ["f(x)"]; none for any other node
+template_hole_codes(n: Node): list := if n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == template_kind then template_pieces(value_of(n)#2).filter(piece => piece is list).map(piece => piece#1) else []
 
 # whether `found` holds for the code of a hole of a template in n, kept whole in an opaque view (`"caught: \(e)"`)
 has_hole(n: Node, found: function): bool := match n {

@@ -1,0 +1,6 @@
+# a caught runtime error names the program's statement it happened in (card route-users-add): `e.line`, `e.column`,
+# and a route's failed answer says where, `not a function at 1:28`, the place an uncaught one names
+'f = 3; r = try f(2) catch e { e.line }; r'	1
+'g(x) := try x(2) catch e { str(e) + " at " + str(e.line) + ":" + str(e.column) }; g(3)'	'not a function at 1:32'
+'f = 3; r = try f(2) catch e { str(e) }; r'	'not a function'
+'users = 3; get "/" { users(1) }; use web; http_served("GET / HTTP/1.1\r\n\r\n").split("\r\n\r\n")#2'	'not a function at 1:28'

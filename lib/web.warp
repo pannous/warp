@@ -42,7 +42,10 @@ INTERNET = 2
 STREAM = 1
 SOCKET_LEVEL = {Darwin: 65535, Linux: 1}
 REUSE_ADDRESS = {Darwin: 4, Linux: 2}
-// struct utsname: its first field, the system's name
+// struct utsname whole, its first field the system's name: uname writes all of it, 5 fields of 256 bytes on macOS (6 of
+// 65 on Linux); a buffer of the first field alone took 1024 bytes of the heap beyond it, and a server crashed in a later
+// free now and then (card server-samples)
+UTSNAME_BYTES = 1280
 SYSTEM_NAME_BYTES = 256
 // struct sockaddr_in: its bytes 3 and 4 the port, the high byte first
 SOCKET_ADDRESS_BYTES = 16
@@ -67,7 +70,7 @@ fclose(file: handle): i32 from 'c'
 
 // the system's name, Darwin or Linux
 system_name() := {
-	buffer = calloc(1, SYSTEM_NAME_BYTES)
+	buffer = calloc(1, UTSNAME_BYTES)
 	uname(buffer)
 	name = strndup(buffer, SYSTEM_NAME_BYTES)
 	free(buffer)
@@ -165,7 +168,9 @@ http_failure(message: text) := {
 }
 
 // the HTTP answer of the program's routes to a request as the client sent it
-http_served(raw: text) := try http_answer(form_redirected(request_of(raw))) catch e { http_failure(str(e)) }
+http_served(raw: text) := try http_answer(form_redirected(request_of(raw))) catch e { http_failure(placed_words(e)) }
+# a caught error's words and the place of the program's statement it happened in, `not a function at 3:5`
+placed_words(e) := if e.line then str(e) + " at " + str(e.line) + ":" + str(e.column) else str(e)
 // the route's answer to the request; after a form's POST whose route set no status of its own the browser's
 // post/redirect/get: 303 See Other, back to the page the form was on (its Referer, else "/")
 form_redirected(request: any) := {
@@ -198,7 +203,7 @@ serve(port: int) := {
 // the program's routes answering the playground's requests (its address bar, links and forms) as HTTP text, which a
 // page hands over and shows (web/playground/host-routes.js): a browser page listens on no port
 page_serve(port: int) := {
-	print "serving in the page: the address bar below asks it, its links and forms too"
+	print "This program is a web server, running here in the page: type a path in the address field below, or use its links and forms."
 	while true { std_io("web", "answer", [http_served(std_io("web", "request", [port]))]) }
 }
 
@@ -211,3 +216,11 @@ routes_served(value: any = ø) := {
 	port = env("WARP_PORT")
 	serve(if port == ø then DEFAULT_PORT else int(port))
 }
+
+// use js <global> (card js-global-missing, lib/web.webidl): self-hosted, that global module (crypto, url, math,
+// json). use js crypto; crypto.randomUUID() and use js URL; URL(t).hostname match the sample. Math and JSON keep
+// their ECMAScript capitals in source and name the modules math and json.
+rewrite js crypto => crypto
+rewrite js URL => url
+rewrite js Math => math
+rewrite js JSON => json

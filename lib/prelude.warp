@@ -32,6 +32,8 @@ slice(t: text, start, end = ø): text from warp
 field_with(object, name, value): same as object from warp
 instance_copy(x): same as x from warp
 wasi_environment(): text from warp
+// the line on standard error through WASI, natively and in the page (lib/os.warp eprint; warn and hint say theirs so)
+said_on_stderr(words: text): any from warp
 
 // The builtins the emitter expands in place, without a runtime function (card typed-builtins): their signatures and
 // results, as the analyzer reads them
@@ -279,6 +281,8 @@ rewrite $n ints => int[$n]
 rewrite ($xs: [f32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(f32, $v)
 rewrite ($xs: [i32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(i32, $v)
 rewrite ($xs: [u32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(u32, $v)
+rewrite ($xs: [f16] = $v) => ($xs = $packed) where $packed = gpu_packed_as(f16, $v)
+rewrite ($xs: [bf16] = $v) => ($xs = $packed) where $packed = gpu_packed_as(bf16, $v)
 // the arithmetic mean, also spelled average
 mean(xs) := if count(xs) == 0 then raise "mean of an empty list" else sum(xs) / count(xs)
 // the UTF-8 bytes of a text, `t.bytes` (decision text-unit-plurals)
@@ -315,7 +319,7 @@ is_space(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
 is_hex_digit(c) := is_digit(c) or (lower(c) >= 'a' and lower(c) <= 'f')
 is_word_char(c) := is_alphanumeric(c) or c == '_'
 // at least one character, each passing is_class: consists_of("42", is_digit)
-consists_of(t: text, is_class) := { if t is empty { return false }; for c in t { if not is_class(c) { return false } }; true }
+consists_of(t: text, is_class: function) := { if t is empty { return false }; for c in t { if not is_class(c) { return false } }; true }
 // a whole number, optionally signed: "-3"
 is_integer(t: text) := consists_of(unsigned(t), is_digit)
 // a hole's text fits its type in a text pattern: `"/users/" + id: int`, `"v" + n: digits`, `c: letter + "!"`
@@ -378,28 +382,10 @@ twice(value: any) := 2 times value
 thrice(body: block) := 3 times body
 thrice(value: any) := 3 times value
 // `x as decimal` of a ratio (card repeating-decimals): the digits before the period, then the period's overlined, 1/6
-// is 0.16̅; a terminating decimal, or a period longer than 1000 digits, as the ratio prints. The cast calls it with the
-// ratio's parts, the denominator never 0 (wasm_emitter/numbers/exact.rs)
-decimal_text(numerator: int, denominator: int) := {
-	rest = denominator; twos = 0; fives = 0
-	while rest % 2 == 0 { rest = rest /! 2; twos += 1 }
-	while rest % 5 == 0 { rest = rest /! 5; fives += 1 }
-	if rest == 1 { return "\(numerator / denominator)" }
-	// the period: the first power of ten that is 1 modulo the rest
-	power = 10 % rest; period = 1
-	while power != 1 and period <= 1000 { power = power * 10 % rest; period += 1 }
-	if period > 1000 { return "\(numerator / denominator)" }
-	before_period = if twos > fives then twos else fives
-	whole = abs(numerator)
-	text = (if numerator < 0 then "-" else "") + "\(whole /! denominator)."
-	remainder = whole % denominator
-	for digit in 1 to before_period + period {
-		remainder = remainder * 10
-		text = text + "\(remainder /! denominator)" + (if digit > before_period then "̅" else "")
-		remainder = remainder % denominator
-	}
-	text
-}
+// is 0.16̅; a terminating decimal as its digits, a period longer than 1000 digits as the ratio n/d: how a quotient of
+// values shows (extensions/big_numbers/exact.warp exact_text, decision quotient-period). The cast calls it with the
+// ratio's parts, the denominator never 0
+decimal_text(numerator: int, denominator: int) := "\(numerator / denominator)"
 // `x as decimal` (extensions/sugar/arithmetic.warp): the decimal digits of x, its period overlined
 as_decimal(x: number) := decimal_text(numerator(x), denominator(x))
 // x as a fraction, by its continued fraction (rust-harness:src/numbers/real.rs computes it exactly for √2, π, … written in the program):
@@ -456,9 +442,9 @@ inserted(xs, i: int, v: any) := if i < 0 or i >= count(xs) then xs + [v] else xs
 // `a .op b` where the compiler cannot tell which side is a list (broadcasting.rs, card compile-shaders): each item of
 // a list with the other side, two lists paired by index, two numbers plainly; `combined` is `(l, r) => l op r`. Both
 // sides are `any`: inferred from the body, one call with a number made it a list
-element_wise_any(left: any, right: any, combined) := if left is list and right is list then { if count(left) != count(right) { raise "element-wise operator: the lists differ in length" }; [combined(left#i, right#i) for i in 1 to count(left)] } else if left is list then [combined(item, right) for item in left] else if right is list then [combined(left, item) for item in right] else combined(left, right)
+element_wise_any(left: any, right: any, combined: function) := if left is list and right is list then { if count(left) != count(right) { raise "element-wise operator: the lists differ in length" }; [combined(left#i, right#i) for i in 1 to count(left)] } else if left is list then [combined(item, right) for item in left] else if right is list then [combined(left, item) for item in right] else combined(left, right)
 // f of a value that may be a list (extensions/sugar/broadcasting.warp): of each item of a list, else of the value itself
-each_any(value: any, f) := if value is list then [f(item) for item in value] else f(value)
+each_any(value: any, f: function) := if value is list then [f(item) for item in value] else f(value)
 // a pixel of paint(f, width, height) on the CPU (gpu_maps painted_functions): a vector of 3 numbers from 0 to 1 is
 // that color as 0xAARRGGBB, as the shader paints it; a number stays itself
 pixel_color(v: any) := if v is list then 0xFF000000 + pixel_channel(v#1) * 65536 + pixel_channel(v#2) * 256 + pixel_channel(v#3) else v
@@ -468,7 +454,7 @@ pixel_channel(c: float): int := round(255 * min(max(c, 0.0), 1.0)) as int
 // row) of every pixel, row by row; in a frame without a window (lib/frames.warp frames_end) at most the window's size,
 // f sampled across the size asked; the coordinates are floats as a fragment shader's are (a mandelbrot's z² + c in exact fractions never ends; decision gpu-first-asap)
 global painting_headless_frame = no
-paint_each(f, width, height) := {
+paint_each(f: function, width, height) := {
 	columns = if painting_headless_frame then min(width, window_width(), window_height() * width /! height) else width
 	rows = columns * height /! width
 	paint([pixel_color(f(float((i % columns) * width /! columns), float((i /! columns) * height /! rows))) for i in 0..columns * rows], columns, rows)
@@ -478,7 +464,7 @@ paint_each(f, width, height) := {
 paint(picture, width, height) := if picture is list or picture is text then paint(shader_words(picture), width, height, ø) else paint_each(picture, width, height)
 // the program values a shader reads as the plain floats it takes: a quantity by its amount in SI base units, an angle in
 // radians, each item of a vector (decision no-units-in-shaders: a shader ignores units)
-shader_values(values) := {
+shader_floats(values) := {
 	if values == ø { return ø }
 	plain = {}
 	for name in values.keys { plain[name] = shader_value(values[name]) }
@@ -497,11 +483,21 @@ shader_words(shader) := {
 	}
 	added
 }
+// the shader words of a shader block's text, placed where the block stands in the program: [its first line, the columns
+// before that line, the columns before each later one] (extensions/shader_blocks.warp shader_place), so the GPU says
+// its errors at their place in the program (card wgsl-error)
+shader_words(shader, place) := {
+	lines = shader.split("\n")
+	indented = join(["\n" + " " * place#3 + line for line in lines[1 ..]], "")
+	shader_words("\n" * (place#1 - 1) + " " * place#2 + lines[0] + indented)
+}
 // paint(shader) of a WGSL shader text, at the size of where it shows (wiki/graphics.md)
 paint(shader: text) := paint(shader_words(shader), shown_width(), shown_height(), ø)
-// where a painting without a size shows: the window, in its frames or once it is open (natively its points, the pointer
-// told in them; headless the frame's small window, decision on-frame-headless), else the view (the playground's pane)
-painting_in_window() := painting_headless_frame or window_open()
+// where a painting without a size shows: the window, in its frames, once it is open or where one can open (natively its
+// points as its user sizes it, the pointer told in them; headless the frame's small window, decision on-frame-headless),
+// else the view (the playground's pane, the terminal)
+painting_in_window() := painting_headless_frame or window_open() or window_possible()
+window_possible() := system_value("window_possible") != 0
 shown_width() := if painting_in_window() then window_width() else view_width()
 shown_height() := if painting_in_window() then window_height() else view_height()
 // sleep 0.2, sleep(t): a bare number is seconds (decision sleep-seconds); `sleep 20ms` the compiler folds into sleep_ms
@@ -530,6 +526,23 @@ random_of_type(x) := {
 	if x == codepoint { return random_codepoint() }
 	if x == float { return random() }
 	if x is int then random_below(x) else random_fraction(0, x)
+}
+// `300 as u8`, `x: u8 = 300` (decision cast-checks): a fixed-width int takes a value that fits it, else a catchable
+// error naming the range; `as! u8` wraps instead
+fitted_int(value: any, type: text): int := {
+	n = value as int
+	range = fixed_int_range(type)
+	if n < range#1 or n > range#2 { raise "${value} does not fit ${type} (${range#1}…${range#2})" }
+	n
+}
+fixed_int_range(type: text): list := {
+	if type in ["u8", "uint8", "byte"] { return [0, 255] }
+	if type in ["i8", "int8"] { return [-128, 127] }
+	if type in ["u16", "uint16"] { return [0, 65535] }
+	if type in ["i16", "int16"] { return [-32768, 32767] }
+	if type in ["u32", "uint32"] { return [0, 4294967295] }
+	if type in ["i32", "int32"] { return [-2147483648, 2147483647] }
+	[0, 18446744073709551615]
 }
 // random int, random bool, random codepoint: a random value of the type; random int spans the whole 64-bit range
 random_int() := (random_below(0x100000000) - 0x80000000) * 0x100000000 + random_below(0x100000000)
@@ -776,7 +789,7 @@ fits_key(value: any, pattern: any, bound: map, code: bool): bool := {
 	if is_text_cut(pattern) and not code { return fits_text_cut(value, text_pieces(pattern), bound) }
 	// `x: int`, `$k: int`, `$n: > 0`: the part fits the condition, and the name takes it
 	if op == ":" and is_type(left, "symbol") { return fits_pattern(value, right, bound, no) and fits_name(value, name_of(left), bound, code) }
-	if op == "|" or op == "or" { return fits_pattern(value, left, bound, code) or fits_pattern(value, right, bound, code) }
+	if op == "|" or op == "or" { return fits_alternative(value, left, bound, code) or fits_pattern(value, right, bound, code) }
 	// `Shape::Circle(r)`, `Shape.Circle(r)`: the case of its enum
 	if (op == "::" or op == ".") and not code and is_case_with_fields(right) { return fits_pattern(value, right, bound, code) }
 	// `not p`, `!= x` (read as `not == x`): the part does not fit p, binding nothing
@@ -784,6 +797,14 @@ fits_key(value: any, pattern: any, bound: map, code: bool): bool := {
 	if op in range_ops and not code { return in_range(value, op, left, right) }
 	if left == ø and not code { return compares(value, op, right) }
 	is_type(value, "key") and op_of(value) == op and fits_pattern(key_of(value), left, bound, code) and fits_pattern(value_of(value), right, bound, code)
+}
+// an alternative keeps its names only where it fits: `data($x * 2) | data(2 * $x)` of 2 * y binds x = y, never the 2
+// the first one took before it failed
+fits_alternative(value: any, pattern: any, bound: map, code: bool): bool := {
+	tried = copy(bound, shallow: yes)
+	if not fits_pattern(value, pattern, tried, code) { return no }
+	for name in keys(tried) { bound[name] = tried[name] }
+	yes
 }
 // `>= 18`, `!= ""`: the comparison of the part with the limit; an order only between two numbers or two texts
 comparisons = {">=": at_least, ">": above, "<=": at_most, "<": below, "!=": unequal, "==": equal}
@@ -1138,10 +1159,23 @@ kept_listeners(key: text, keep: function): any := {
 // Python's range: `range(4)` is [0, 1, 2, 3], `range(1, 4)` [1, 2, 3]
 range(stop: int): list := 0 ..< stop
 range(start: int, stop: int): list := start ..< stop
-// the GPU host words, which the host answers (natively core/native/driver.warp, the playground its JS); the shaders
-// they run are written at compile time by extensions/rules/wgsl.warp
-gpu_compute(shader: node, values: node, count: int): node from host
+// the GPU host words, which a library answers (natively lib/host/native_host/gpu.warp over wgpu-native, the
+// playground's host-gpu.js over WebGPU); the shaders they run are written at compile time by extensions/rules/wgsl.warp
+gpu_computed(shader: node, values: node, count: int): node from host
 gpu_render(shader: node, width: int, height: int, values: node): node from host
-gpu_compute_linear(shader: node, address: int, count: int): int from host
-gpu_map_linear(shader: node, address: int, values: node, count: int, width: int, result: int): int from host
-gpu_reduce_linear(shader: node, address: int, values: node, count: int, width: int, result: int): int from host
+// gpu_compute(shader, values, workgroups): the compute shader run over the numbers given (a list, or a map of named
+// lists), which it changes where they are, as any word writing into a list does: the lists given, the shader's
+// numbers in them, whether or not the program made them GPU lists (card xs-float-xs); a GPU list's cells the host
+// changes itself
+gpu_compute(shader: text, values: any, count: int): any := written_back(gpu_computed(shader, values, count), values)
+written_back(left: any, given: any): any := {
+	if is_error(left) { raise left }
+	if not (given is map) { return items_written(left, given) }
+	for name in given.keys { items_written(left[name], given[name]) }
+	given
+}
+items_written(left: any, given: any): any := {
+	if same(left, given) { return given }
+	for i in 1 to #given { given#i = left#i }
+	given
+}

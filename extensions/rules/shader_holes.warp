@@ -6,8 +6,13 @@ VALUES_NAME = "values"
 IDENTIFIER_LETTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
 # the value the program's main level assigns the name first, ø where it assigns none
 main_level_value(word: text, program: Node): any := {
+	assignment = main_level_assignment(word, program)
+	if assignment == ø then ø else value_of(assignment)
+}
+# the program's main-level statement assigning the name first, ø where none does
+main_level_assignment(word: text, program: Node): any := {
 	found = level_statements(program).map(statement => wgsl_declared(statement)).filter(statement => is_key(statement, Op.Assign) and wgsl_assigned_name(key_of(statement)) == word)
-	if #found == 0 then ø else value_of(found#1)
+	if #found == 0 then ø else found#1
 }
 # `global x = 3`, parsed `global: (x = 3)`: the assignment it declares
 wgsl_declared(statement: Node): Node := if is_key(statement, Op.Colon) and key_of(statement) == symbol("global") then value_of(statement) else statement
@@ -41,6 +46,23 @@ shader_holes_added(s: Node, entries: list, program: Node): any := {
 	added = shader_holes("${shader}").filter(name => name not in given and name != SHADER_FRAME_HOLE and (name not in SHADER_BUILTIN_HOLES or main_level_value(name, program) != ø))
 	if #added == 0 { return ø }
 	List(entries + added.map(name => Key(symbol(name), Op.Colon, symbol(name))), Bracket.Curly, Separator.Comma)
+}
+# shader_words(s) (lib/prelude.warp) of a shader the program assigns, given its place in the program where a shader
+# block wrote it: the GPU compiles it placed so, its errors at their place (card wgsl-error)
+shader_words_of(s: Node, program: Node, source: text): Node := {
+	place = shader_place_of(s, program, source)
+	call_of("shader_words", if place == ø then [s] else [s, listed(Bracket.Square, Separator.Space, place)])
+}
+# where the shader block the program assigns the name stands in the program (extensions/shader_blocks.warp
+# shader_place), read again from the source after the name it assigns; ø for any other value
+shader_place_of(s: Node, program: Node, source: text): any := {
+	assignment = main_level_assignment(name_of(s), program)
+	if assignment == ø or not (value_of(assignment) is text) { return ø }
+	target = key_of(assignment)
+	lines = source.split("\n")
+	if not (target is symbol and is_positioned(target)) or line_of(target) > #lines { return ø }
+	line = line_of(target)
+	shader_place(source, sum([count(lines#index) + 1 for index in 1 .. line]) + column_of(target) - 1 + #name_of(target), line)
 }
 # the names a shader reads as values.name, each once
 shader_holes(code: text): list := {

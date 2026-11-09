@@ -1,7 +1,7 @@
 # from test_declared_float_exact_reals.rs: edit the Rust test, then run the script again
 
 # test_declared_float_accepts_exact_reals
-'float x = π; x'	π
+'float x = π; x'	3.141592653589793
 
 # test_declared_float_reassignment_accepts_exact_reals
 'float x = 1.5; x = π; x'	π

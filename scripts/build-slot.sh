@@ -26,7 +26,9 @@ mkdir -p "$store/build-slots"
 # as it holds one (inside the lock), so the next moves up while its build runs. A dead waiter's ticket is dropped
 line=$store/build-slots/line
 mkdir -p "$line"
-ticket=$line/$(date +%s).$$
+# WARP_BUILD_FIRST=1 (after-push's build of main) goes to the head of the line: every branch merged with that main
+# reuses its stored compiler instead of building it once more while it waits (2026-11-07, one slot, 11 in line)
+ticket=$line/$([ -n "${WARP_BUILD_FIRST:-}" ] && echo 0 || date +%s).$$
 touch "$ticket"
 trap 'rm -f "$ticket"' EXIT
 tickets_in_order() { ls "$line" | sort -t. -k1,1n -k2,2n; }

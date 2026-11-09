@@ -104,7 +104,7 @@ public shortest_path(g, a, b) := {
 }
 graph_check_weights(g, who) := { for e in g.edge_list { if e#3 < 0 { raise who + ": negative weight " + str(e#3) + " on " + str(e#1) + " -> " + str(e#2) } } }
 // the core of dijkstra and a_star: [dist, prev, done] over node numbers; target 0 means all nodes
-graph_search(g, s, t, h, who) := {
+graph_search(g, s, t, h: function, who) := {
 	graph_check_weights(g, who)
 	n = count(g.nodes)
 	dist = [ø for x in g.nodes]

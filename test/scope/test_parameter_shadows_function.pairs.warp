@@ -5,5 +5,5 @@
 'f := 3; g(f, b) := [f, b]; g(1, 2)'	[1 2]
 
 # a_function_parameter_is_still_called
-'apply(f, x, y) := f(x, y); add(a, b) := a + b; apply(add, 1, 2)'	3
-'apply(f, x) := f x; inc(a) := a + 1; apply(inc, 1)'	2
+'apply(f: function, x, y) := f(x, y); add(a, b) := a + b; apply(add, 1, 2)'	3
+'apply(f: function, x) := f x; inc(a) := a + 1; apply(inc, 1)'	2

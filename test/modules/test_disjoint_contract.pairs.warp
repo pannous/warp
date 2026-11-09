@@ -1,0 +1,18 @@
+# Whole counts and elements, a list per instance, and path halving on a tree deeper than a star.
+# A fraction used to be stored as the component count (2.5, 1/2). A fractional index fails inside find as "int of node".
+'use disjoint; DisjointSet(2.5)'	error	fractional count
+'use disjoint; DisjointSet(1.5)'	error	fractional count
+'use disjoint; DisjointSet(1 / 2)'	error	ratio count
+'use disjoint; DisjointSet(-1.5)'	error	negative fraction
+'use disjoint; d = DisjointSet(2.0); d.unite(1, 2); [count(d.parent), d.components(), d.components() == floor(d.components()), d.size_of(1)]'	[2, 1, yes, 2]
+'use disjoint; DisjointSet(4).find(1.5)'	error	fractional element
+'use disjoint; DisjointSet(4).unite(1, 2.5)'	error	fractional unite
+'use disjoint; DisjointSet(4).connected(1.2, 2)'	error	fractional connected
+'use disjoint; DisjointSet(4).size_of(0.5)'	error	fractional size
+'use disjoint; DisjointSet(3).find(2.9)'	error	fraction just below n
+'use disjoint; a = DisjointSet(3); b = DisjointSet(3); a.unite(1, 2); [a.parent, b.parent, a.sizes, b.sizes, a.components(), b.components()]'	[[1, 1, 3], [1, 2, 3], [2, 1, 1], [1, 1, 1], 2, 3]
+'use disjoint; a = DisjointSet(0); b = DisjointSet(0); a.parent.add(9); a.sizes.add(9); [a.parent, b.parent, a.sizes, b.sizes]'	[[9], [], [9], []]
+'use disjoint; a = DisjointSet(2); a.unite(1, 2); b = DisjointSet(2); [a.parent, b.parent, a.components(), b.components()]'	[[1, 1], [1, 2], 1, 2]
+# Two size-4 trees, linked by leaves 2 and 6, leave 8 -> 7 -> 5 -> 1. Halving once points 8 at 5; the next find points 8 at 1.
+# The snapshots are copies: parent is one list, and find rewrites it.
+'use disjoint; d = DisjointSet(8); d.unite(1, 2); d.unite(3, 4); d.unite(2, 4); d.unite(5, 6); d.unite(7, 8); d.unite(6, 8); d.unite(2, 6); before = [x for x in d.parent]; r1 = d.find(8); mid = [x for x in d.parent]; r2 = d.find(8); after = [x for x in d.parent]; [before, r1, mid, r2, after, d.components(), d.size_of(8)]'	[[1, 1, 1, 3, 1, 5, 5, 7], 1, [1, 1, 1, 3, 1, 5, 5, 5], 1, [1, 1, 1, 3, 1, 5, 5, 1], 1, 8]

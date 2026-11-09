@@ -4,7 +4,8 @@
 # an index out of a list written in place) extensions/checked_tries.warp checks before they happen.
 #   try x else y        → (try·finished = ran·without·error({try·value = x});
 #                          if try·finished and not is_error(try·value) then {try·value} else {y})
-#   try x catch e { y } → … else {e = caught_error(try·finished, try·value); y}
+#   try x catch e { y } → … else {e = placed_at(caught_error(try·finished, try·value), trap_place()); y}, the Error at
+#                          the program's statement it happened in
 # Each try's names carry its number (try·value·3), so two tries of a function keep their own kinds.
 use "walk.warp"
 use "../parsing/phrase_blocks.warp"
@@ -24,7 +25,7 @@ guarded_try(value: Node, fallback: Node, binding: Node?, number: int): Node := {
 	ran = try_assigned(finished, applied_to(HiddenWord.RanWithoutError as text, [braced(try_assigned(result, value))]))
 	succeeded = Key(finished, Op.And, Key(ø, Op.Not, applied_to("is_error", [result])))
 	# the caught Error's name is a handler's place, `e: error`, where it raises no more (decision errors-one-rule)
-	caught = try_assigned(Key(binding, Op.Colon, symbol("error")), applied_to("caught_error", [finished, result]))
+	caught = try_assigned(Key(binding, Op.Colon, symbol("error")), applied_to("placed_at", [applied_to("caught_error", [finished, result]), applied_to("trap_place", [])]))
 	otherwise = if binding == ø then braced(fallback) else List([caught, fallback], Bracket.Curly, Separator.Semicolon)
 	statements([ran, chosen(succeeded, braced(result), otherwise)])
 }
