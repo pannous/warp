@@ -21,7 +21,7 @@
 'n=0; def f(x){let n=5;n}; f(3)'	5
 
 # test_fresh_binding_of_a_main_name_asks_local_or_global
-'n=0; def f(x){n=5;x}; f(3); n'	0
+'n=0; def f(x){n=5;x}; f(3); n'	error
 'def f(){ total = 5; total }; total = f(); total'	5
 'global n=0; def f(x){n=5;x}; f(3); n'	5
 'global xs=[1,2]; def f(){xs=[7,8,9];0}; f(); count(xs)'	3

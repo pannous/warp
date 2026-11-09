@@ -1,6 +1,6 @@
 # A function changes a main-level variable only when it is declared `global` (wiki/effects.md; card port-remaining): updating main's n from a function (`n += 1`, `xs[i] = 9`, `xs.add(x)`)
-# is the error main_variable_change(n), binding it fresh (`n = 5`) the warning local_or_global(n, f), taking it as
-# the function's own local.
+# is the error main_variable_change(n), binding it fresh (`n = 5`) where main bound n before f the error local_or_global(n, f), which names
+# both readings, `let n = 5` for the function's own and `global n = 5` for main's (decision inner-assignment-refused).
 use "walk.warp"
 use "uses.warp"
 use "sugar.warp"
@@ -39,7 +39,8 @@ main_globals(program: Node, own_names: list): any := {
 				if not is_made_name(name) and name in main_names and name not in global_names and name not in own and name not in decided and not declares_local(body, name) and not bound_by_compiler(body, name) {
 					decided[name] = yes
 					if first_mention(body, name) != fresh_mention { return diagnose(call_of("main_variable_change", [name]), function_definition) }
-					diagnose(call_of("local_or_global", [name, defined_function]), function_definition)
+					# a name main binds only after the definition, `def f(){ total = 5 }; total = f()`, is f's own
+					if name in main_variables_before(program, function_definition) { return diagnose(call_of("local_or_global", [name, defined_function]), function_definition) }
 				}
 			}
 		}
@@ -53,8 +54,21 @@ main_globals(program: Node, own_names: list): any := {
 loop_step_label = "loop·step"
 main_variables(program: Node): any := {
 	found = {}
-	stepped = nodes_in(program).filter(n => is_operator(n, ":") and key_of(n) == symbol(loop_step_label)).map(n => changed_variable(value_of(n)))
+	stepped = stepped_variables(program)
 	for statement in statements_in(program) { add_assigned(statement, found, stepped) }
+	found
+}
+stepped_variables(program: Node): list := nodes_in(program).filter(n => is_operator(n, ":") and key_of(n) == symbol(loop_step_label)).map(n => changed_variable(value_of(n)))
+# the variables main assigns before the definition, as written (the lowering may move definitions to the top); a
+# statement without a place counts (decision inner-assignment-refused: only a name main has bound reads two ways)
+main_variables_before(program: Node, definition: Node): any := {
+	found = {}
+	stepped = stepped_variables(program)
+	defined_at = written_at(definition)
+	for statement in statements_in(program) {
+		at = written_at(statement)
+		if defined_at == ø or at == ø or at#1 < defined_at#1 or (at#1 == defined_at#1 and at#2 < defined_at#2) { add_assigned(statement, found, stepped) }
+	}
 	found
 }
 add_assigned(n: Node, found: map, stepped: list): any := {

@@ -38,7 +38,5 @@ big_decimal_in_loop($digits)	"{digits} is exact, a ratio of a big denominator pa
 arithmetic_conversion($whole, $target, $tight)	"`{whole} as {target}` converts the whole `{whole}`, not only its last operand"	"({whole}) as {target} or {tight}"	"arithmetic-conversion@{whole} as {target}"
 # definitions.warp: a function declared `: T` that can answer ø (decision optional-result)
 optional_result($function, $type)	"{function} can answer ø; declare `: {type}?`"	"{type} → {type}?"	"optional-result@{function}"
-# main_globals.warp: `n = …` in a function where main has an n, taken as a new local of the function
-local_or_global($name, $function)	"does `{name} = …` inside {function} make a new local of {function}, or change the main-level {name}? (taking a new local of {function})"	"let {name} = …"	"local-or-global@{name} = …"
 # inline HTML read as warp markup (extensions/inline_html.warp, decision jsx)
 inline_html($tag)	"inline HTML <{tag}> reads as warp markup; `warp format` writes it so"	"warp format"
