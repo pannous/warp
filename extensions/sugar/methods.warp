@@ -2,6 +2,9 @@
 # of one value) appends, `xs += [v]`, which emitter.warp grows in place while the list is unshared; `xs.pop()` is the
 # runtime word list_pop(xs), which shortens xs in place; an instance's own push and pop are its class's. Rust twin:
 # list_mutations.rs appends
+# `p.double = 5` of an instance whose class has a setter function double(p: P, v) and no field double (decision
+# setters-declared; extensions/rules/rule_words.warp class_setter); a map or an untyped value keeps its entry write
+rewrite ($x.$w = $v) => $w($x, $v) where $x is instance and $w is symbol and $setter = class_setter($x, $w, $source)
 rewrite $xs.push($v...) => $xs += [$v...] where $xs is not instance
 rewrite $xs.add($v...) => $xs += [$v...] where $xs is not instance
 rewrite $xs.append($v...) => $xs += [$v...] where $xs is not instance

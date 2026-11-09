@@ -221,8 +221,9 @@ methods_lifted(program: Node): Node := {
 		deferred_definitions += set_aside
 		rewritten += made.filter(definition => definition not in set_aside)
 	}
-	# `w.fahrenheit = 212` of a property with a setter calls it, fahrenheit(w, 212) (decision setter-calls)
-	setters = methods.filter(method => 0 in taken_counts(classes, liftable, method) and 1 in taken_counts(classes, liftable, method) and not is_field_of_any(classes, liftable, method))
+	# `w.fahrenheit = 212` of a method of one parameter, its setter, calls it, fahrenheit(w, 212), with or without a
+	# getter beside it (decisions setter-calls, setters-declared)
+	setters = methods.filter(method => 1 in taken_counts(classes, liftable, method) and not is_field_of_any(classes, liftable, method))
 	if #setters > 0 { rewritten = rewritten.map(top_statement => setter_calls(top_statement, setters, routes)) }
 	entry_words = []
 	for method in operator_methods {

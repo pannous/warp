@@ -32,6 +32,9 @@ node_equal(a: Node, b: Node): bool := {
 	if is_case_node(b) and textual_node(a) { return same_bytes(case_spelling(b), textual_text(a)) }
 	# a case knows its enum in the info byte: two enums' cases of one name, or a case and a plain symbol, differ
 	if kind_code(a) == Kind.Symbol or kind_code(b) == Kind.Symbol { return code_free_kind(a) == code_free_kind(b) and same_bytes(unboxed_text(a), unboxed_text(b)) }
+	# a character equals its code point (user 2026-11-06): `"ab".codepoints#1 == 97` holds as `== 'a'` does
+	if kind_code(a) == Kind.Codepoint and kind_code(b) == Kind.Int { return is_code_of(a, b) }
+	if kind_code(b) == Kind.Codepoint and kind_code(a) == Kind.Int { return is_code_of(b, a) }
 	if textual_node(a) or textual_node(b) { return textual_node(a) == textual_node(b) and textual_equal(a, b) }
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and (is_plain_int(a) and is_plain_int(b)) { return unboxed_int(a) == unboxed_int(b) }
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return extended_order(a, b) == 0 }
@@ -53,6 +56,7 @@ textual_equal(a: Node, b: Node): bool := {
 	if kind_code(a) == Kind.Codepoint and kind_code(b) == Kind.Codepoint { return unboxed_char(a) == unboxed_char(b) }
 	equal_texts(textual_text(a), textual_text(b))
 }
+is_code_of(character: Node, number: Node): bool := is_plain_int(number) and code_of(unboxed_char(character)) == unboxed_int(number)
 textual_text(n: Node): text := if kind_code(n) == Kind.Codepoint then char_text(unboxed_char(n)) else unboxed_text(n)
 list_equal(a: list, b: list): bool := {
 	if #a != #b { return no }
