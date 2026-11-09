@@ -731,6 +731,17 @@ linked_definitions(program: Node): list := {
 	found
 }
 
+# a global or main-level variable named as one of the program's functions, `global marks = {}` beside
+# `marks(n) := …`, in one file or two: the function's name read as a value is its closure, which takes no assignment,
+# so the compile is refused naming each place the name is declared
+refuse_variables_named_as_functions(main_statements: list, globals: map, arities: map) := {
+	assigned = main_statements.filter(statement => is_key(statement, Op.Assign) and key_of(statement) is symbol).map(statement => name_of(key_of(statement)))
+	for name in (globals.keys + assigned).filter(name => arities.has(name)) {
+		places = written_places(name, used_source)
+		raise written_word(name) + " is declared " + (if #places > 1 then "${#places} times, at " + and_listed(places) else "twice") + ": a variable and a function share the name; give one another name"
+	}
+}
+
 lambdas(program: Node): Node := {
 	positions = function_positions_of(statements_in(program) + linked_definitions(program))
 	written = statements_in(program).map(statement => with_function_parameters(celled_definition(statement, positions)))
@@ -753,6 +764,7 @@ lambdas(program: Node): Node := {
 	lowering.globals = globals
 	# (those the main level declares: a `global results` within a function is that function's alone)
 	lowering.main_globals = global_variables(block_of(written.filter(statement => definition_of(statement) == ø)))
+	refuse_variables_named_as_functions(main_statements, globals, arities)
 	top_locals = []
 	for statement in written {
 		if definition_of(statement) == ø { top_locals = names_bound(statement, top_locals) }
