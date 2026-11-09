@@ -1,0 +1,7 @@
+# chord of notes is a Chord value, with a note that the word isn't needed (decision chord-word-hint): C4+E4+G4 is it;
+# chord(C4, major) builds a named chord
+'use sound; c = chord([C4 E4 G4]); ["" + c, c == C4+E4+G4]'	["C4+E4+G4", true]
+'use sound; ["" + chord(C4, E4, G4), "" + chord(C4, E4)]'	["C4+E4+G4", "C4+E4"]
+'use sound; c = chord C4 E4 G4; "" + c'	"C4+E4+G4"
+'use sound; "" + chord(C4, major)'	"C4+E4+G4"
+'use sound; "" + chord(C4, E4, G4, B4, D5)'	"C4+E4+G4+B4+D5"

@@ -41,6 +41,8 @@ instance_names = ["self", "this"]
 parent_word = "super"
 # the operators whose operands may change places, so a value before an instance is the instance's operator with it
 commutative_operators = ["+", "*", "==", "!="]
+# the static type of a time literal
+time_type = "time"
 # the method a class's instances are equal by under == (and != by its negation), compare's 0 where it declares none
 # (decision compare-equal-hooks)
 equality_method = "equal"
@@ -109,10 +111,60 @@ class Routing { classes: map; names: list; methods: list; known: map; results: m
 # built and a program linking it lift its classes alike, so both name a method the same (`union·Set`); ø for a
 # method a class of the program's own declares too, routed by all the program reaches
 module_routing(classes: map, names: list, method: text, operator_methods: list): bool? := {
-	linked = concatenated(linked_signatures.values.map(signature => signature.classes.map(entry => "${entry#1}".remove_prefix(instance_struct_prefix))))
+	linked = linked_class_names()
 	owners = owners_of(classes, names, method)
 	if #owners == 0 or not (module.relocating or owners.all(owner => owner in linked)) { return ø }
 	is_library_word(method) or library_index_section("word").has(method) or method in operator_methods or names_syntax(method) or method in position_words
+}
+# the classes of the linked modules, by name
+linked_class_names(): list := concatenated(linked_signatures.values.map(signature => signature.classes.map(entry => "${entry#1}".remove_prefix(instance_struct_prefix))))
+# A linked module's class gives the program only the methods it may call (card linked-module): those it names, those
+# of the operators it writes (compare for `<`, equal for `==`) and its constructor once it names the class. Its
+# instances show, convert and operate (+ - * /) through the descriptor its module made (notes/runtime_linking.md), so
+# lifting all the methods of every linked class (~230 statements behind `use sound`, most of them dispatchers) only
+# had each pass walk them. The words and operators the program says, and those the kept methods say in turn
+# (toString·real calls text·method)
+def linked_methods_called(classes: map, linked: list, top_statements: list, operator_table: map) {
+	said = word_set(top_statements.filter(statement => not is_linked_class(statement, linked)).flat_map(tokens_within))
+	kept = {}
+	grew = yes
+	while grew {
+		grew = no
+		for name in linked {
+			for method in classes[name].methods {
+				key = method_key(name, method)
+				if not kept.has(key) and (method_said(defined_word(method), said, operator_table) or (defined_word(method) == constructor_method and said.has(name))) {
+					kept[key] = yes
+					grew = yes
+					for word in tokens_within(method) { said[word] = yes }
+				}
+			}
+		}
+	}
+	for name in linked { classes[name].methods = classes[name].methods.filter(method => kept.has(method_key(name, method))) }
+}
+method_key(class_name: text, method: Node): text := class_name + " " + defined_word(method) + " " + #method_parameters(method)
+# whether code saying these words and operators may call a method of that name: by it, by its operator, `<` by
+# compare, `==` by equal; a position word by any `b#i`, `b[i]` or `#b`, which the passes after write as its call
+method_said(word: text, said: map, operator_table: map): bool := {
+	spelled = spelled_operator(operator_table, word)
+	operated = glyph => said.has(key_head(Key(ø, glyph as Op, ø)))
+	said.has(word) or word in position_words or (spelled != ø and operated(spelled#2)) or (word == ordering_method and ordering_operators.any(operated)) or (word == equality_method and (operated("==") or operated("!=")))
+}
+# a definition lowered on its own once called: of a name no program writes, `text·Interval`, `hertz·method`, saying
+# no word only the whole program's passes read: an overloaded one, whose variants they tell apart (`sum` of the
+# prelude's), or a class's name, which their scope holds (`o is Quantity` of a promotion, `duration: Duration`)
+is_deferrable(definition: Node, program_words: map): bool := (declared_name(definition) ?? "").contains("·") and not words_within(definition).any(word => program_words.has(word))
+# the words defined more than once
+repeated_words(words: list): map := {
+	seen = {}
+	repeated = {}
+	for word in words { if seen.has(word) { repeated[word] = yes } else { seen[word] = yes } }
+	repeated
+}
+is_linked_class(statement: Node, linked: list): bool := {
+	view = class_view(statement)
+	view != ø and declared_type_name(view#2) in linked
 }
 # the program with the methods of its classes lifted out as functions
 methods_lifted(program: Node): Node := {
@@ -122,7 +174,7 @@ methods_lifted(program: Node): Node := {
 		view = class_view(top_statement)
 		if view != ø { classes[declared_type_name(view#2)] = class_declared(top_statement, view) }
 	}
-	operator_table = operator_spellings()
+	operator_table = core_operators(operator_spellings())
 	outside = top_statements.filter(top_statement => operated_class(top_statement, classes, operator_table) != ø)
 	for definition in outside {
 		owner = classes[operated_class(definition, classes, operator_table)]
@@ -135,14 +187,17 @@ methods_lifted(program: Node): Node := {
 	}
 	top_statements = top_statements.filter(top_statement => operated_class(top_statement, classes, operator_table) == ø and top_statement not in reflected)
 	for name in classes.keys { classes[name].methods = aliases_derived(equality_derived(name, rows_merged(name, positions_derived(classes[name].methods, operator_table), operator_table, classes), operator_table)) }
+	linked_names = if module.relocating then [] else linked_class_names()
+	linked = classes.keys.filter(name => name in linked_names)
+	if #linked > 0 { linked_methods_called(classes, linked, top_statements, operator_table) }
 	promotions = promotions_of(top_statements, classes, scope_of(program))
 	liftable = classes.keys.filter(name => lifts(classes, name, top_statements))
-	if #liftable == 0 { return program }
+	if #liftable == 0 and #linked == 0 { return program }
 	rewritten = []
 	for top_statement in top_statements {
 		view = class_view(top_statement)
 		name = if view == ø then "" else declared_type_name(view#2)
-		rewritten += [if name in liftable then without_methods(top_statement, view) else top_statement]
+		rewritten += [if name in liftable or name in linked then without_methods(top_statement, view) else top_statement]
 	}
 	# an int type's `format Color c as text` is a hook extensions/int_types/marks.warp renames format·text·Color, no function to route to
 	hooks = int_type_showers(top_statements)
@@ -153,7 +208,16 @@ methods_lifted(program: Node): Node := {
 	methods = methods_of(classes, liftable).filter(method => method != constructor_method)
 	operator_methods = methods.filter(method => spelled_operator(operator_table, method) != ø and 1 in taken_counts(classes, liftable, method))
 	routes = methods.filter(method => module_routing(classes, liftable, method, operator_methods) ?? (is_library_word(method) or method in functions or method in operator_methods or names_syntax(method) or method in position_words))
-	for name in methods { rewritten += functions_of(classes, liftable, name, routes) }
+	# (a method only linked classes have, of one parameter count and no word of the program's own: its functions and
+	# dispatcher lowered once the lowered program calls them, passes.warp deferred_definitions)
+	deferred = methods.filter(method => #linked > 0 and owners_of(classes, liftable, method).all(owner => owner in linked) and #taken_counts(classes, liftable, method) == 1 and method not in functions and called_name(method, routes) not in functions)
+	program_words = word_set(repeated_words(functions).keys + classes.keys)
+	for name in methods {
+		made = functions_of(classes, liftable, name, routes)
+		set_aside = if name in deferred then made.filter(definition => is_deferrable(definition, program_words)) else []
+		deferred_definitions += set_aside
+		rewritten += made.filter(definition => definition not in set_aside)
+	}
 	# `w.fahrenheit = 212` of a property with a setter calls it, fahrenheit(w, 212) (decision setter-calls)
 	setters = methods.filter(method => 0 in taken_counts(classes, liftable, method) and 1 in taken_counts(classes, liftable, method) and not is_field_of_any(classes, liftable, method))
 	if #setters > 0 { rewritten = rewritten.map(top_statement => setter_calls(top_statement, setters, routes)) }
@@ -172,6 +236,7 @@ methods_lifted(program: Node): Node := {
 	}
 	floaters = float_converters(classes, liftable, routes)
 	dispatchers = []
+	deferred_dispatchers = []
 	for name in methods.filter(method => method in routes or #owners_of(classes, liftable, method) > 1) {
 		# a dispatcher for each parameter count the classes take the method with (Channel.more(), Interval.more(o)):
 		# the arity overloads tell the calls apart
@@ -182,11 +247,15 @@ methods_lifted(program: Node): Node := {
 			# (a module's method routed only as a word of another module's reaches no function of it: an instance of none
 			# of the classes reads its field, a map's `d.day` beside Instant's day() and units' day())
 			reached = is_library_word(name) or name in functions or (not names_syntax(name) and module_routing(classes, liftable, name, operator_methods) == ø)
-			reads_field = not reached and count == 0 and not names_syntax(name) and name not in position_words
+			# (a type word is a field's name too: a time's `t.time` and `t.date` beside Instant's time() and date())
+			reads_field = not reached and count == 0 and name not in syntax_words and name not in position_words
 			# (an element, `b#p` and `b[i]`, falls back to the builtin's of any other value, in a module being built too, which
 			# routes position words: sound's samples class made every `xs[i]` of the module its float cell)
 			falls_back = name in routes and (name in position_words or ((reached or reads_field) and written_call_fits(top_statements.filter(statement => statement not in hooks), name, count + 1)))
-			dispatchers += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), falls_back, reads_field, spelled_operator(operator_table, name), promotions, floaters)]
+			made = method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), falls_back, reads_field, spelled_operator(operator_table, name), promotions, floaters)
+			# (one falling back to a library word calls it as the program does, which only the program's passes resolve:
+			# sum(self) among the prelude's overloads of sum)
+			if name in deferred and not falls_back and is_deferrable(made, program_words) { deferred_dispatchers += [made] } else { dispatchers += [made] }
 		}
 	}
 	spelled_ordering = {}
@@ -212,8 +281,8 @@ methods_lifted(program: Node): Node := {
 		dispatchers += [method_dispatcher(classes, owners, owned_spellings, operator_dispatcher(operator#2), yes, no, operator, promotions, floaters, owners_of(classes, liftable, reflected_name(operator#2)))]
 	}
 	# an operator only reflected methods give, `*(k: number, v: V)` of a class with no `*` of its own
-	operated_glyphs = operator_methods.map(method => spelled_operator(operator_table, method)#2)
-	for method in methods.filter(method => method.ends_with(REFLECTED_MARK) and method.remove_suffix(REFLECTED_MARK) not in operated_glyphs) {
+	own_glyphs = operator_methods.map(method => spelled_operator(operator_table, method)#2)
+	for method in methods.filter(method => method.ends_with(REFLECTED_MARK) and method.remove_suffix(REFLECTED_MARK) not in own_glyphs) {
 		glyph = method.remove_suffix(REFLECTED_MARK)
 		operands = [self_node, symbol("other")]
 		builtin = promoted(Key(operands#1, glyph as Op, operands#2), promotions, operator_dispatcher(glyph))
@@ -223,7 +292,15 @@ methods_lifted(program: Node): Node := {
 	dispatchers += derived_dispatchers(classes, liftable, routes, promotions, spelled_ordering, operator_table)
 	# a dispatcher is the program's own over all its classes, a linked module's among them: the module's of that name
 	# knows its own classes only (card bind-linked)
-	own_words_unlinked(dispatchers.map(defined_word))
+	# (the operator dispatchers of linked classes only wait for their operator: `use sound; 1` writes none)
+	if liftable.all(name => name in linked) {
+		operating = dispatchers.filter(dispatcher => is_operator_dispatcher(defined_word(dispatcher) ?? "") and is_deferrable(dispatcher, program_words))
+		for dispatcher in operating { deferred_triggers[defined_word(dispatcher)] = operator_tokens(defined_word(dispatcher)) }
+		dispatchers = dispatchers.filter(dispatcher => dispatcher not in operating)
+		deferred_dispatchers += operating
+	}
+	own_words_unlinked((dispatchers + deferred_dispatchers).map(defined_word))
+	deferred_definitions += deferred_dispatchers
 	group_like(program, rewritten + dispatchers)
 }
 # `+(a: Vec, b: Vec) := …` (also `infix operator +(…)`, `plus(…)`) outside a class: an operator its first parameter's
@@ -334,7 +411,8 @@ derived_dispatchers(classes: map, names: list, routes: list, promotions: list, s
 			spelled = spelled_ordering.get(glyph) ?? {}
 			for owning_class in spelled.keys { ordered[owning_class] = call_of(spelled[owning_class], [self_node, other]) }
 			head = [Key(self_node, Op.Colon, symbol("any")), Key(other, Op.Colon, symbol("any"))]
-			made += [Key(call_of(operator_dispatcher(glyph), head), Op.Define, value_dispatch(deepest_first(classes, ordered.keys), ordered, promoted(Key(self_node, glyph as Op, other), promotions, operator_dispatcher(glyph))))]
+			builtin = Key(self_node, glyph as Op, other)
+			made += [Key(call_of(operator_dispatcher(glyph), head), Op.Define, numbers_first(builtin, value_dispatch(deepest_first(classes, ordered.keys), ordered, promoted(builtin, promotions, operator_dispatcher(glyph)))))]
 		}
 	}
 	for conversion in conversion_methods {
@@ -542,6 +620,13 @@ assigns_name(body: Node, name: text): bool := #assigned_values(body, name) > 0
 operator_dispatcher(spelled: text): text := spelled + OPERATOR_DISPATCHER_MARK
 OPERATOR_DISPATCHER_MARK = "·operator"
 is_operator_dispatcher(name: text): bool := name.ends_with(OPERATOR_DISPATCHER_MARK)
+# the keys whose emitted code calls the dispatcher `name`: its operator's, `a + b`, a compound one's, `total += x`, and
+# the negation's of `-`
+operator_tokens(name: text): list := {
+	glyph = name.split(OPERATOR_DISPATCHER_MARK)#1
+	glyphs = [glyph] + (if glyph in operated_glyphs then [glyph + "="] else [])
+	glyphs.map(spelled => key_head(Key(ø, spelled as Op, ø))) + (if glyph == "-" then [key_head(Key(ø, Op.Neg, ø))] else [])
+}
 method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls_back: bool, reads_field: bool, operator: list?, promotions: list, floaters: list, reflected_owners: list = []): Node := {
 	parameters = method_parameters(method_in(classes[owners#1], spellings#1))
 	call_arguments = [self_node] + parameters.map(method_parameter => symbol(parameter_name(method_parameter)))
@@ -562,11 +647,40 @@ method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls
 	# class's position(p, v), whose `p` would be a text); so a list `[3, 1].sort()` passes none of the owners' methods
 	# its kind (their `self.n`)
 	head = if falls_back then call_arguments.map(argument => Key(argument, Op.Colon, symbol("any"))) else [self_node] + parameters
-	dispatched = class_dispatch(deepest_first(classes, owners), called, call_arguments, fallback)
+	dispatched = class_dispatch(deepest_first(classes, owners), called, call_arguments, foreign_first(spellings#1, call_arguments, fallback, operated))
 	# a class with its own method of the operator takes a float itself (`q * sin(x)` keeps q's unit, π's `*` gives the
 	# float): contagion only for the classes that leave the operator to the builtin
 	contagious = floaters.filter(floater => not lineage(classes, floater#1).any(ancestor => ancestor in owners))
-	Key(call_of(name, head), Op.Define, if operated then float_contagion(Key(call_arguments#1, operator#2 as Op, call_arguments#2), contagious, dispatched) else dispatched)
+	Key(call_of(name, head), Op.Define, if operated then numbers_first(Key(call_arguments#1, operator#2 as Op, call_arguments#2), float_contagion(Key(call_arguments#1, operator#2 as Op, call_arguments#2), contagious, dispatched)) else dispatched)
+}
+# a module's dispatcher meeting an instance of a class it never saw (a linked module's only know their own, card
+# bind-linked): the method of that name of the instance's own module (its descriptor's method word), so reals' √ of
+# uncertain's interval calls the interval's root(); an operator's builtin asks the instance's class itself (by_class)
+foreign_first(method: text, call_arguments: list, fallback: Node?, operated: bool): Node? := {
+	if module_written == "" or operated { return fallback }
+	foreign = call_of(foreign_method_word, [call_arguments#1, Text(method), List(call_arguments[1..], Bracket.Square, Separator.Comma)])
+	if fallback == ø { return foreign }
+	Key(Key(Key(ø, Op.If, call_of(instance_test_word, [call_arguments#1])), Op.Then, foreign), Op.Else, fallback)
+}
+# the runtime's words a dispatcher calls so, by names no program spells
+foreign_method_word = "instance·method"
+instance_test_word = "instance·tested"
+foreign_instance_words = {"instance·method": "instance_method", "instance·tested": "is_class_instance"}
+# the operators a class's method may define by its English name, without those only a declaration gives a meaning
+# (lib/aliases.warp `declared`: lib/math.warp's `≈`, `~`, `↑`): the core computes none of them for the two numbers a
+# dispatcher falls back to (uncertain's approximately(o) stays a method, card class-declared-operators)
+core_operators(table: map): map := {
+	declared = alias_spellings().declared
+	kept = {}
+	for spelling in table.keys { if table[spelling]#2 not in declared { kept[spelling] = table[spelling] } }
+	kept
+}
+# two numbers operate as numbers, before any class is asked: `x is real` holds of every number (lib/reals), so a boxed
+# `0.5 * 0.4` of a program using reals went through real's `*` and back, ~9× the builtin in lib/sound's per-sample
+# loops (card sound-start-speed)
+numbers_first(operation: Node, dispatched: Node): Node := {
+	both_numbers = Key(Key(key_of(operation), Op.Is, symbol("number")), Op.And, Key(value_of(operation), Op.Is, symbol("number")))
+	Key(Key(Key(ø, Op.If, both_numbers), Op.Then, operation), Op.Else, dispatched)
 }
 # the reflected method of the right operand's class, `*·reflected(v, k)` of `k * v`, else the otherwise
 reflected_dispatch(classes: map, owners: list, glyph: text, operands: list, otherwise: Node): Node := {
@@ -812,6 +926,8 @@ static_type(n: Node, routing: Routing): text? := {
 		owner = static_type(key_of(n), routing)
 		return if owner in routing.classes then field_type(routing.classes, owner, name_of(value_of(n))) else ø
 	}
+	# a time literal is no instance: `2026-10-14T23:00.time` reads its field, never Instant's time()
+	if is_time_view(n) { return time_type }
 	written_type(n, routing.classes, routing.results)
 }
 # function → the class it declares it gives, `now(): Instant`
@@ -833,11 +949,12 @@ field_type(classes: map, owning_class: text, field: text): text? := {
 	ø
 }
 # whether a call of that many arguments fits a definition the word has, the program's or a typed line of the
-# library's; a word of none (a sugar rule's, the emitter's) is taken as fitting
+# library's; a word of none (a sugar rule's, the emitter's) is taken as fitting. The arguments are passed as they are:
+# no gathering into a list parameter, so count(xs) takes no count(self, x) of a class's count(x), alias size(x)
 written_call_fits(statements: list, word: text, count: int): bool := {
 	defined = statements.map(defined_call_head).filter(head => head != ø and name_of(head#1) == word)
 	signatures = defined.map(head => signature_of(items_of(head))) + (lines_of(typed_lines, word) + (if word_lines().has(word) then word_lines()[word] else [])).map(line => line.signature)
-	#signatures == 0 or signatures.any(signature => takes(signature, count))
+	#signatures == 0 or signatures.any(signature => takes(signature, count) and (count <= #signature.parameters or signature.parameters.last.rest))
 }
 # the head `f(x)` of a definition `f(x) := …`, or of `def f(x) {…}` before extensions/sugar/declarations.warp makes it one
 # (draw's `def show()`), else ø

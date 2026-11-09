@@ -8,7 +8,7 @@
 '[1 2 3].find(it > 1)'	2
 
 # an_it_argument_of_a_defined_function_is_a_function
-'apply(f, x) := f(f(x)); apply(it + 3, 1)'	7
+'apply(f: function, x) := f(f(x)); apply(it + 3, 1)'	7
 
 # an_it_argument_reads_the_variables_around_it
 'k = 5; [1 2].map(it + k)'	[6 7]

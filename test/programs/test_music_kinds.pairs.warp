@@ -5,3 +5,5 @@
 # a function of no parameters read bare is its call's value, also for the parameters it flows into
 'use units; m(d) := d; m(0.5 as float); m(5 * ms) == 5ms'	true
 'use sound; melody([C4], 5ms); 1'	1
+# a list of notes and a duration sound together (card rename-play): chord([C4 E4 G4], 3000ms), as play does
+'use sound; h = chord([C4 E4 G4], 5ms); [h > 0, chord(C4, major) == [C4, E4, G4]]'	[true, true]

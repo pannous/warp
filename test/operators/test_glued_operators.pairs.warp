@@ -1,0 +1,9 @@
+# a glued operator joins its neighbours into one item of a space list (decision glued-binds-tighter): [a+b c] is
+# [(a+b), c]; gluing changes item boundaries, never precedence; the spaced form beside a phrase of values is refused
+'a = 1; b = 2; c = 3; [a+b c]'	[3, 3]
+'a = 1; b = 2; c = 3; [a*b c a-b]'	[2, 3, -1]
+'1+2 * 3'	7
+'a = 1; b = 2; c = 3; [a + b c]'	error	[a + b c] reads neither way: [a+b c] or [a + b, c]
+'f(x) := x * 2; a = 1; [a + f 3]'	[7]
+'a-b = 5; c = 1; [a-b c]'	[5, 1]
+'f(x) := x * 2; a = 1; y = a+f 3; y'	7

@@ -1,5 +1,8 @@
 # The warnings of the warp compiler (core/diagnostics.warp): pattern TAB message, the first match wins
 
+# a whole number known when compiling that misfits an int, i64, which wraps it (extensions/int_misfits.warp,
+# night decision int-wrap-declarations)
+int_misfit($code)	"`{code}` does not fit an int (i64): it wraps"	"declare nat or number to keep it"
 # a text spelling a number added to a number (extensions/text_lints.warp, card print-oldest)
 spelled_number_join($written, $spelled, $as_sum, $as_text)	"{written} joins the texts; {spelled} spells a number"	"{as_sum} or {as_text}"
 # a file or folder beside the program named as a standard module it uses (extensions/local_shadows.warp, decision
@@ -37,7 +40,5 @@ arithmetic_conversion($whole, $target, $tight)	"`{whole} as {target}` converts t
 optional_result($function, $type)	"{function} can answer ø; declare `: {type}?`"	"{type} → {type}?"	"optional-result@{function}"
 # main_globals.warp: `n = …` in a function where main has an n, taken as a new local of the function
 local_or_global($name, $function)	"does `{name} = …` inside {function} make a new local of {function}, or change the main-level {name}? (taking a new local of {function})"	"let {name} = …"	"local-or-global@{name} = …"
-# a call of a function overloaded by result type whose expected type names no variant: the first declared (arity_overloads.warp)
-result_variant_taken($name, $returning, $taken, $written)	"{name} has variants returning {returning}: which does {written} mean? (taking {taken})"	"({written}) as {taken}"	"return-type@{name}"
 # inline HTML read as warp markup (extensions/inline_html.warp, decision jsx)
 inline_html($tag)	"inline HTML <{tag}> reads as warp markup; `warp format` writes it so"	"warp format"

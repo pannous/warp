@@ -1,0 +1,35 @@
+// A million placed trees, culled by chunk (notes/forest.md).
+// Counts are the trees, not the sky. Floats of a placement stay inside its cell.
+
+// the grid is one million cells, and one index is one tree
+'use forest; [FOREST_TREES, FOREST_SIDE * FOREST_SIDE == FOREST_TREES, FOREST_CHUNKS * FOREST_CHUNKS * CHUNK_TREES]'	[1000000, yes, 1000000]
+
+// the same index is the same tree, inside its own cell; 0 and the last cell differ
+'use forest; a = tree_place(0); b = tree_place(0); c = tree_place(424242); d = tree_place(999999); e = tree_place(1); [a#1 == b#1, a#2 == b#2, a#3 == b#3, a#4 == b#4, a#1 > 0, a#1 < 4, a#2 > 0, a#2 < 4, a#3 > 2, a#3 < 6, a#4 == 1, c#1 > 968, c#1 < 972, c#2 > 1696, c#2 < 1700, d#1 > 3996, d#1 < 4000, d#2 > 3996, d#2 < 4000, a#1 != e#1]'	[yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes]
+
+// a tree just in front is kept; the same tree is past a short far plane; the far chunk is not
+'use forest; near = Glance(2.0, 1.7, -10.0, 0.0, 0.0, FOREST_FOV, 1.0, 0.25, 30.0); short = Glance(2.0, 1.7, -10.0, 0.0, 0.0, FOREST_FOV, 1.0, 0.25, 5.0); [tree_seen(0, near), tree_seen(0, short), chunk_seen(0, 0, near), chunk_seen(39, 39, near)]'	[yes, no, yes, no]
+
+// looking away from the woods, with a short far plane, draws the sky and no tree
+'use forest; v = forest_view(Glance(-100.0, 1.7, -100.0, 0.4, 0.0, FOREST_FOV, 1.0, 0.25, 30.0)); [v.total, v.candidate, v.submitted, v.nearest, v.scenery, count(v.sprites)]'	[1000000, 0, 0, -1, 1, 1]
+
+// yaw 0, pitch 0 looks along +z with +y up
+'use forest; use math; v = forest_view(Glance(0.0, 1.7, -40.0, 0.0, 0.0, FOREST_FOV, 1.0, 0.25, 20.0)); [abs(v.forward#1) < 0.000001, abs(v.forward#2) < 0.000001, abs(v.forward#3 - 1) < 0.000001, abs(v.up#2 - 1) < 0.000001]'	[yes, yes, yes, yes]
+
+// the opening camera: every candidate is not drawn, the budget is the cap, the closest tree is near detail
+'use forest; v = forest_view(Glance(80.0, 1.7, -12.0, 0.15, -0.18, FOREST_FOV, 240.0 / 135.0, FOREST_NEAR, FOREST_FAR)); s = v.sprites#(count(v.sprites)); [v.total, v.candidate, v.submitted, v.scenery, v.nearest, count(v.sprites), (int(s#4) /! 16) == 2, s#1 > 0, s#1 < 4000]'	[1000000, 5797, 2400, 13, 0, 2413, yes, yes, yes]
+
+// the same view again, the same counts
+'use forest; a = forest_view(Glance(80.0, 1.7, -12.0, 0.15, -0.18, FOREST_FOV, 240.0 / 135.0, FOREST_NEAR, FOREST_FAR)); b = forest_view(Glance(80.0, 1.7, -12.0, 0.15, -0.18, FOREST_FOV, 240.0 / 135.0, FOREST_NEAR, FOREST_FAR)); [a.candidate == b.candidate, a.submitted == b.submitted, a.sprites#(count(a.sprites))#1 == b.sprites#(count(b.sprites))#1]'	[yes, yes, yes]
+
+// standing far south, every submitted tree is the far detail and most candidates stay out of the draw
+'use forest; v = forest_view(Glance(80.0, 1.7, -250.0, 0.0, -0.05, FOREST_FOV, 1.0, FOREST_NEAR, FOREST_FAR)); [v.candidate, v.submitted, v.nearest, v.candidate > v.submitted, v.submitted <= TREE_BUDGET]'	[1462, 12, 2, yes, yes]
+
+// the other end of the woods submits a different closest tree
+'use forest; use math; a = forest_view(Glance(80.0, 1.7, -12.0, 0.15, -0.18, FOREST_FOV, 1.6, FOREST_NEAR, FOREST_FAR)); b = forest_view(Glance(3900.0, 1.7, -12.0, -0.15, -0.18, FOREST_FOV, 1.6, FOREST_NEAR, FOREST_FAR)); [a.submitted, b.submitted, abs(a.sprites#(count(a.sprites))#1 - b.sprites#(count(b.sprites))#1) > 1000]'	[2400, 2400, yes]
+
+// inside the woods the budget still caps the draw, and the closest tree is near
+'use forest; v = forest_view(Glance(2000.0, 1.7, 2000.0, 0.0, -0.2, FOREST_FOV, 1.6, FOREST_NEAR, FOREST_FAR)); [v.nearest, v.submitted <= TREE_BUDGET, v.submitted > 2000, v.candidate > v.submitted, v.total]'	[0, yes, yes, yes, 1000000]
+
+// refusals, rather than a guess
+'use forest; attempt(f) := try { str(f()) } catch e { "" + e }; [attempt(() -> tree_place(1000000)), attempt(() -> tree_place(-1)), attempt(() -> chunk_seen(40, 0, Glance(0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.25, 10.0))), attempt(() -> forest_view(Glance(0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.25, 10.0))), attempt(() -> forest_view(Glance(0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.25, 10.0))), attempt(() -> forest_view(Glance(0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 2.0, 1.0))), attempt(() -> picture_focal(0))]'	["forest: a tree index is 0 to 999999, not 1000000", "forest: a tree index is 0 to 999999, not -1", "forest: a chunk is 0 to 39, not 40 by 0", "forest: fov must be between 0 and pi, not 0", "forest: aspect must be positive, not 0", "forest: far must be past near, not 1 past 2", "forest: picture height must be positive, not 0"]

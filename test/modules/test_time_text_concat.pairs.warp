@@ -1,0 +1,8 @@
+# date/instant + text concatenates; field UFCS under lib/time stays usable in + (samples/numbers/dates.warp)
+'leap_day = 2024-02-29; leap_day + " is day "'	'2024-02-29 is day '
+'"day " + 2024-02-29'	'day 2024-02-29'
+'leap_day = 2024-02-29; leap_day + " is day " + leap_day.day_of_year + ", weekday " + leap_day.weekday'	'2024-02-29 is day 60, weekday 4'
+'meeting = 2024-01-31T10:30; "meeting at " + meeting.hour + ":" + meeting.minute'	'meeting at 10:30'
+'"w " + 2024-02-29.weekday'	'w 4'
+'use time; weekday(0)'	4
+'use time; Instant(0).hour'	0

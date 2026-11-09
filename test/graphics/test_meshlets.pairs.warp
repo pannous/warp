@@ -1,0 +1,36 @@
+// Meshlet clustering, grid LOD, frustum and cone counts (notes/meshlets.md).
+// The coarse mesh is every other vertex of an even heightfield, not a general simplifier.
+// Floats are compared within 1e-9. Cone and frustum tests include the touching case, which stays visible.
+
+// flat 2 by 2 is exact when coarsened; the peaked center is 1 above the coarse surface
+'use meshlets; use math; flat = grid_levels(2, 2, flat_heights(2, 2)); peak = grid_levels(2, 2, [0, 0, 0, 0, 1, 0, 0, 0, 0]); [count(flat#1.triangles), count(flat#2.triangles), count(peak#1.triangles), count(peak#2.triangles), abs(flat#1.error) < 0.000000001, abs(flat#2.error) < 0.000000001, abs(peak#2.error - 1) < 0.000000001]'	[8, 2, 8, 2, yes, yes, yes]
+
+// 4 by 6 is 48 triangles, under the cluster limit, so it stays one cluster; the coarse grid is 12 and exact
+'use meshlets; use math; levels = grid_levels(4, 6, flat_heights(4, 6)); cs = levels#1.clusters; [count(levels#1.triangles), count(cs), count(cs#1.triangles), count(levels#2.triangles), abs(levels#2.error) < 0.000000001]'	[48, 1, 48, 12, yes]
+
+// 8 by 6 fills one cluster and starts another: 64 then 32
+'use meshlets; cs = cluster_triangles(grid_triangles(8, 6, flat_heights(8, 6))); [count(cs), count(cs#1.triangles), count(cs#2.triangles)]'	[2, 64, 32]
+
+// the box sphere contains a corner and matches the corner distance
+'use meshlets; use math; flat = grid_levels(2, 2, flat_heights(2, 2))#1.clusters#1.sphere; peak = grid_levels(2, 2, [0, 0, 0, 0, 1, 0, 0, 0, 0])#1.clusters#1.sphere; [abs(flat.center#1 - 1) < 0.000000001, abs(flat.center#2 - 1) < 0.000000001, abs(flat.center#3 - 0) < 0.000000001, abs(flat.radius - sqrt(2)) < 0.000000001, abs(peak.center#3 - 0.5) < 0.000000001, abs(peak.radius - 1.5) < 0.000000001]'	[yes, yes, yes, yes, yes, yes]
+
+// a flat grid may be cone-culled; a peak still has a usable cone; opposite and degenerate triangles may not
+'use meshlets; use math; flat = grid_levels(2, 2, flat_heights(2, 2))#1.clusters#1.cone; peak = grid_levels(2, 2, [0, 0, 0, 0, 1, 0, 0, 0, 0])#1.clusters#1.cone; mixed = cluster_triangles([[[0, 0, 0], [1, 0, 0], [0, 1, 0]], [[0, 0, 0], [0, 1, 0], [1, 0, 0]]])#1.cone; degenerate = cluster_triangles([[[0, 0, 0], [1, 0, 0], [2, 0, 0]]])#1.cone; both = cluster_triangles([[[0, 0, 0], [1, 0, 0], [0, 1, 0]], [[0, 0, 0], [1, 0, 0], [2, 0, 0]]])#1.cone; [flat.cullable, abs(flat.cutoff - 0) < 0.000000001, abs(flat.axis#3 - 1) < 0.000000001, peak.cullable, mixed.cullable, degenerate.cullable, both.cullable]'	[yes, yes, yes, yes, no, no, no]
+
+// in front the flat cluster stays; behind it goes; exactly at the sphere radius behind, it stays
+'use meshlets; cs = grid_levels(2, 2, flat_heights(2, 2))#1.clusters; r = cs#1.sphere.radius; [count(visible_clusters(cs, [], [1, 1, 10])), count(visible_clusters(cs, [], [1, 1, -10])), count(visible_clusters(cs, [], [1, 1, -r])), count(visible_clusters(cs, [], [1, 1, -r - 1]))]'	[1, 0, 1, 0]
+
+// a plane that only touches the sphere keeps the cluster; one step further drops it; a far plane drops it
+'use meshlets; cs = grid_levels(2, 2, flat_heights(2, 2))#1.clusters; r = cs#1.sphere.radius; [count(visible_clusters(cs, [[1, 0, 0, -1 - r]], [1, 1, 10])), count(visible_clusters(cs, [[1, 0, 0, -2 - r]], [1, 1, 10])), count(visible_clusters(cs, [[1, 0, 0, -10]], [1, 1, 10]))]'	[1, 0, 0]
+
+// mixed-facing and degenerate clusters stay when the camera is behind them
+'use meshlets; back = [1, 1, -10]; mixed = cluster_triangles([[[0, 0, 0], [1, 0, 0], [0, 1, 0]], [[0, 0, 0], [0, 1, 0], [1, 0, 0]]]); degenerate = cluster_triangles([[[0, 0, 0], [1, 0, 0], [2, 0, 0]]]); [count(visible_clusters(mixed, [], back)), count(visible_clusters(degenerate, [], back))]'	[1, 1]
+
+// half a pixel of error on the peak selects the coarse 2 triangles; a threshold of 0 keeps all 8
+'use meshlets; peak = grid_levels(2, 2, [0, 0, 0, 0, 1, 0, 0, 0, 0]); flat = grid_levels(2, 2, flat_heights(2, 2)); near = chosen_level(peak, 2, 1, 2, 0); far = chosen_level(peak, 2, 1, 2, 0.5); [near, far, chosen_level(flat, 2, 1, 2, 0), triangle_count(visible_clusters(peak#(near).clusters, [], [1, 1, 10])), triangle_count(visible_clusters(peak#(far).clusters, [], [1, 1, 10]))]'	[1, 2, 2, 8, 2]
+
+// the projected peak error at distance 2, cot 1, height 2 is half a pixel
+'use meshlets; use math; abs(projected_error(1, 2, 1, 2) - 0.5) < 0.000000001'	yes
+
+// refusals, rather than a guess
+'use meshlets; attempt(f) := try { str(f()) } catch e { "" + e }; [attempt(() -> grid_triangles(3, 2, flat_heights(2, 2))), attempt(() -> grid_triangles(2, 2, [0])), attempt(() -> cluster_triangles([[[0, 0], [1, 0], [0, 1]]])), attempt(() -> projected_error(0, 0, 1, 1)), attempt(() -> chosen_level([MeshLevel([], [], 1.0), MeshLevel([], [], 0.0)], 1, 1, 1, 1)), attempt(() -> chosen_level([MeshLevel([], [], 2.0)], 1, 1, 1, 0))]'	["meshlets: a grid needs even cell counts of at least 2, not 3 by 2", "meshlets: a 2 by 2 grid needs 9 heights, not 1", "meshlets needs 3D points, not [0, 0]", "meshlets: distance must be positive, not 0", "meshlets: level errors must not decrease", "meshlets: no level is within the error threshold"]

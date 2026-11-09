@@ -1,0 +1,35 @@
+// The standard library module splats: Gaussian splats as a capture keeps them, in the .splat file web viewers read
+// (antimatter15/splat): a record of 32 bytes each splat, its position and its scale (three little-endian f32 each),
+// its color and opacity (red, green, blue, alpha: a byte each) and its rotation, the unit quaternion [w, x, y, z] a
+// byte each component (q · 128 + 128). read_splats("tree.splat") is the list of its Splats, write_splats writes one
+use bits
+use color
+use file
+use math
+
+splat_record_size = 32
+
+class Splat { position: list; scale: list; rotation: list; color: Color; opacity: float }
+
+// the splats of a .splat file, in its order (a capture puts the biggest, most opaque ones first)
+read_splats(path: any): list := splats_of(read_bytes(path))
+write_splats(path: any, splats: list) := write_bytes(path, splats_bytes(splats))
+
+splats_of(bytes: list): list := [splat_at(bytes, splat_record_size * i) for i in 0 ..< count(bytes) /! splat_record_size]
+splat_at(bytes: list, at: int): Splat := {
+	numbers = [f32_at(bytes, at + 4 * k) for k in 0 ..< 6]
+	quaternion = [(bytes[at + 28 + k] - 128) / 128.0 for k in 0 ..< 4]
+	Splat(numbers[0 ..< 3], numbers[3 ..< 6], normalize(quaternion), rgb(bytes[at + 24], bytes[at + 25], bytes[at + 26]), bytes[at + 27] / 255.0)
+}
+
+splats_bytes(splats: list): list := {
+	bytes = []
+	for s in splats { bytes += splat_bytes(s) }
+	bytes
+}
+splat_bytes(s: Splat): list := {
+	bytes = []
+	for x in s.position + s.scale { bytes += float_bytes(x, 32, "little") }
+	bytes + [round(c * 255) as int for c in channels(s.color)] + [round(s.opacity * 255) as int] + [quaternion_byte(q) for q in s.rotation]
+}
+quaternion_byte(q: float): int := clamp(round(q * 128 + 128) as int, 0, 255)

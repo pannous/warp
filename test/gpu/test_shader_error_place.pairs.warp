@@ -1,0 +1,4 @@
+# a shader block's WGSL error says its place in the program, the line and column where the block wrote it, as on the
+# page (card wgsl-error)
+'broken = shader {\n\t@group(0) @binding(0) var<storage, read_write> xs: array<f32>;\n\t@compute @workgroup_size(1) fn main() {\n\t\txs[0] = xs[0] + 1.0\n\t}\n}\ntry { gpu_compute(broken, [1], 1) } catch e { e.message }'	'the shader: expected `;`, found "}" at 5:2'
+'broken = shader { @group(0) @binding(0) var<storage, read_write> xs: array<f32>; @compute @workgroup_size(1) fn main() { xs[0] = 1.0 } }; try { gpu_compute(broken, [1], 1) } catch e { e.message }'	'the shader: expected `;`, found "}" at 1:134'

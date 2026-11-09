@@ -8,6 +8,9 @@ def sigmoid_derivative(x) := x * (1.0 - x)
 
 # 2 inputs, 4 hidden, 1 output; seeded, every run learns alike
 random_seed(42)
+# hyperparameters
+learning_rate = 0.5
+epochs = 10000
 def weight() { random() * 2 - 1 }
 hidden_weights = matrix(2, 4, weight)
 output_weights = matrix(4, 1, weight)
@@ -29,7 +32,7 @@ def forward(input) {
 	return hidden, sigmoid(output_sum)
 }
 
-def train(input, target, learning_rate) {
+def train(input, target) {
 	global hidden_weights, output_weights, hidden_bias, output_bias
 	(hidden, output) = forward(input)
 
@@ -62,9 +65,9 @@ examples = [
 ]
 
 # Train
-for epoch in 0..10000 {
+for epoch in 0..epochs {
 	for (input, target) in examples :
-		train(input, target, 0.5)
+		train(input, target)
 }
 
 # Test

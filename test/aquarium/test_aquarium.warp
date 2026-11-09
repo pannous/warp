@@ -1,0 +1,61 @@
+# lib/aquarium.warp, the tropical water, Jacobian caustics and school slots of
+# greggman/webgpu-aquarium 055da778 (MIT). These check the functions the sample
+# paints. A pixel of view_color is that picture at one point in time.
+
+# eight wave vectors, none on top of another and none the zero vector
+is! 'use aquarium
+use math
+same = no
+zero = no
+for i in 0..wave_count {
+	if norm(wave_lattice(i)) < 0.1 { zero = yes }
+	for j in 0..i {
+		if norm(wave_lattice(i) .- wave_lattice(j)) < 0.1 { same = yes }
+	}
+}
+same or zero' no
+
+# a sum of the travelling cosines stays a ripple, and it moves
+is! 'use aquarium
+use math
+h = wave_height([1.2, -0.4], 0.7)
+moved = abs(h - wave_height([1.2, -0.4], 2.0))
+h > -0.2 and h < 0.2 and moved > 0.0001' yes
+
+# red dies faster than blue on the way down, and along a long view
+is! 'use aquarium
+top = sun_at_depth(surface_y)
+deep = sun_at_depth(surface_y - 8)
+(deep.x / top.x) < (deep.z / top.z)' yes
+
+is! 'use aquarium
+near = water_transmittance(1)
+far = water_transmittance(12)
+far.x < near.x and far.x < far.z' yes
+
+# the fringe is positive light, and the three alphas do not paint one grey
+is! 'use aquarium
+use math
+c = caustic_color([0.4, 1.1], 0.8)
+c.x > 0 and c.y > 0 and c.z > 0 and abs(c.x - c.z) > 0.0001' yes
+
+# the leader leaves home on its roam, and a follower stays in the school
+is! 'use aquarium
+use math
+moved = norm(school_leader(0, 0) .- school_leader(0, 3))
+beside = norm(fish_place(2, 1.2) .- school_leader(0, 1.2))
+moved > 0.2 and beside > 0.05 and beside < 4' yes
+
+# inside the body the distance is negative; well clear of it, positive
+is! 'use aquarium
+place = fish_place(0, 0.5)
+fish_distance(0, place, 0.5) < 0 and fish_distance(0, place .+ [0, 3, 0], 0.5) > 0' yes
+
+# one pixel of the frame is a colour, and a later moment is not the same still
+is! 'use aquarium
+use math
+a = view_color(view_width / 2, view_height / 2, 0.2)
+b = view_color(view_width / 2, view_height / 2, 2.4)
+held = a.x >= 0 and a.x <= 1 and a.y >= 0 and a.y <= 1 and a.z >= 0 and a.z <= 1
+lit = a.x + a.y + a.z > 0.02
+held and lit and norm(a .- b) > 0.002' yes

@@ -1,0 +1,4 @@
+# the canvas's properties bring draw without a `use` (card canvas-width-fix); the canvas shows its size
+'canvas.width = 600; canvas.width'	600
+'canvas.height = 50; [canvas.height, window.height]'	[50, 50]
+'canvas.width = 60; canvas.height = 40; "${canvas}"'	"canvas 60×40"

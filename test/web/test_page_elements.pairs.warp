@@ -1,0 +1,5 @@
+# `$id.member`: an element of the page by its id, its members checked as an HTMLElement's (decision
+# dollar-any-element; it runs in the playground: `$paintings.className` is "paintings"); a bare `$who` stays the
+# value of the field (test_page_values.warp)
+'$paintings.classNam'	error	through the parents: HTMLElement, Element
+'use web; $who'	""

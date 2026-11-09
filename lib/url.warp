@@ -259,3 +259,26 @@ def is_email(t: text): bool {
 	labels = split(parts[1], ".")
 	all(split(parts[0], "."), a => is_atom(a)) and count(labels) >= 2 and all(labels, l => is_label(l))
 }
+
+
+// WebIDL URL (lib/web.webidl, card js-global-missing): URL(text) / use js URL. href and the authority/path fields
+// browsers expose (hostname is the host without a port; host keeps host:port when a port is set)
+URL(text: text): map := {
+	parts = parse_url(text)
+	host = parts.host ?? ""
+	port = parts.port
+	port_text = if port == nil then "" else str(port)
+	{
+		href: text,
+		protocol: if parts.scheme == nil then "" else parts.scheme + ":",
+		username: parts.user ?? "",
+		password: parts.password ?? "",
+		host: if port_text == "" then host else host + ":" + port_text,
+		hostname: host,
+		port: port_text,
+		pathname: parts.path,
+		search: if parts.query == nil then "" else "?" + parts.query,
+		hash: if parts.fragment == nil then "" else "#" + parts.fragment,
+		origin: if parts.scheme == nil or host == "" then "" else parts.scheme + "://" + host + (if port_text == "" then "" else ":" + port_text)
+	}
+}

@@ -191,7 +191,7 @@ operator_spellings(): map := {
 	for row in alias_rows() {
 		glyph = row#2.get("operator")
 		word = row#1
-		if glyph is text { for spelling in [glyph, word] + (row#2.get("aliases") ?? []) { found[spelling] = [word, glyph] } }
+		if glyph is text { for spelling in [glyph, word] + (row#2.get("aliases") ?? []) + (row#2.get("names") ?? []) { found[spelling] = [word, glyph] } }
 	}
 	found
 }

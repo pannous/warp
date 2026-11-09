@@ -1,0 +1,5 @@
+# decision time-word: an instant, a date, a time of day and a duration are times; a number or a text is none
+'now() is time'	yes
+'[now().date is time, now().time is time]'	[yes, yes]
+'use units; [6s is time, 6s is duration, now() is duration]'	[yes, yes, no]
+'[5 is time, "x" is time]'	[no, no]

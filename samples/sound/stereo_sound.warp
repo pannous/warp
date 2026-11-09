@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# A signal computed a block at a time (sound layer 8): warp calls two_tones to fill a block of 512 samples per speaker, t
+# A signal computed a block at a time: warp calls two_tones to fill a block of 512 samples per speaker, t
 # the time of the first one, once every 23 ms: one call a block instead of one a sample. Two blocks make it stereo,
 # play_blocks(two_tones, linear_address(left_block), 3s) with one would be mono
 use sound

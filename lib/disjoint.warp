@@ -1,0 +1,43 @@
+// Disjoint sets (union-find) for elements 1..n. `use disjoint`.
+// find uses path halving and unite joins by size, the same rules graphs' Kruskal keeps inline.
+// unite returns yes when two components become one. The word union stays the list function.
+// The count and each element are whole numbers. A fraction would become the component count, or a list
+// index. Inside a class method `n is int` is no for a whole number (the mark does not survive the call),
+// so the check is `n == floor(n)`, which still separates 2 and 2.0 from 2.5 and 1/2. A missing element,
+// or a negative count, is refused.
+
+alias UnionFind => DisjointSet
+
+class DisjointSet { parent = []; sizes = []; parts = 0
+	init(n) := {
+		if n != floor(n) or n < 0 { raise "DisjointSet needs a whole count >= 0, not " + str(n) }
+		n = (floor(n)) as int
+		parent = []
+		sizes = []
+		for i in 1 to n { parent.add(i); sizes.add(1) }
+		parts = n
+	}
+	find(x) := {
+		disjoint_check(count(parent), x)
+		while parent#x != x { parent#x = parent#(parent#x); x = parent#x }
+		x
+	}
+	unite(a, b) := {
+		ra = find(a)
+		rb = find(b)
+		if ra == rb { return no }
+		if sizes#ra < sizes#rb { t = ra; ra = rb; rb = t }
+		parent#rb = ra
+		sizes#ra = sizes#ra + sizes#rb
+		parts = parts - 1
+		yes
+	}
+	connected(a, b) := find(a) == find(b)
+	size_of(x) := sizes#find(x)
+	components() := parts
+	is_empty() := parts == 0
+}
+
+disjoint_check(n, x) := {
+	if x != floor(x) or x < 1 or x > n { raise "disjoint: no element " + str(x) + " in 1.." + str(n) }
+}

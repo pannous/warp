@@ -19,6 +19,10 @@ const OLD_ANSWERS_KEY = "warp-playground-answers"; // the Ask era kept {topic: f
 // ?run_seconds=<s>: runs stop that much later (scripts/samples-web.sh, whose samples compile on a loaded machine)
 const RUN_SECONDS_PARAMETER = "run_seconds";
 const RUN_TIMEOUT_MS = 1000 * Number(new URLSearchParams(location.search).get(RUN_SECONDS_PARAMETER) ?? 10);
+// a run the limit stopped offers to run again with it this many times longer, for the page's later runs too (card
+// timeout-hang: #ocean's first frame takes longer than 10 s on a slow GPU)
+const LONGER_RUNS = 6;
+let runLimitMs = RUN_TIMEOUT_MS;
 // a run going on longer than this, or a program left running (timers, an animation), turns Run into Stop (card
 // playground-turn); a quick run never flickers
 const STOP_GRACE_MS = 500;
@@ -99,6 +103,39 @@ function element(tag, properties = {}, ...children) {
 	const node = Object.assign(document.createElement(tag), properties);
 	node.append(...children);
 	return node;
+}
+
+// card bug-report-console: the bug report carries the page's last console entries, uncaught errors and worker messages,
+// newest last, so a report from a device no one can debug says what happened (the iPad's Hello stop). A card is a public
+// issue: never localStorage, and the bug tokens are blanked out of every entry
+const CONSOLE_KEPT = 200;
+const CONSOLE_ENTRY_LENGTH = 400;
+const CONSOLE_LEVELS = ["log", "info", "warn", "error", "debug"];
+// the worker's messages each frame or print sends, which would push every other entry out
+const FREQUENT_WORKER_MESSAGES = new Set(["print", "paint", "live loops", "sleep", "loading"]);
+const consoleKept = [];
+function keepConsoleEntry(kind, parts) {
+	const text = parts.map(part => typeof part === "string" ? part : part instanceof Error ? `${part.name}: ${part.message}` : (() => {
+		try { return JSON.stringify(part); } catch { return String(part); }
+	})()).join(" ");
+	consoleKept.push(`${(performance.now() / 1000).toFixed(3)}s ${kind} ${text.slice(0, CONSOLE_ENTRY_LENGTH)}`);
+	if (consoleKept.length > CONSOLE_KEPT) consoleKept.shift();
+}
+for (const level of CONSOLE_LEVELS) {
+	const original = console[level].bind(console);
+	console[level] = (...parts) => {
+		keepConsoleEntry(level, parts);
+		original(...parts);
+	};
+}
+addEventListener("error", failure => keepConsoleEntry("uncaught", [`${failure.message} at ${failure.filename}:${failure.lineno}:${failure.colno}`]));
+addEventListener("unhandledrejection", rejection => keepConsoleEntry("unhandled rejection", [rejection.reason]));
+// the report's console field: the browser, the worker's stages, then the entries, the tokens blanked
+function consoleReport() {
+	const stages = workerStages.map(({ stage, at }) => `${stage} at ${at} ms`).join(", ") || "none";
+	const lines = [`browser: ${navigator.userAgent}`, `worker: ${workerSettled}, stage "${workerStage}"; stages: ${stages}`, ...consoleKept];
+	const secrets = [BUG_TOKEN, stored(BUG_TOKEN_KEY), $("bug-token")?.value.trim()].filter(Boolean);
+	return lines.join("\n").replace(new RegExp(secrets.map(secret => secret.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") || "$^", "g"), "‹token›");
 }
 
 let worker;
@@ -224,6 +261,7 @@ function startWorker(restarts = 0) {
 	workerWarmed = false;
 	workerStages.length = 0;
 	worker = standby ?? newWorker(restarts);
+	worker.fromStandby = worker === standby;
 	standby = undefined;
 	workerReady = worker.ready;
 	if (!worker.isReady) showLoading("starting the compiler's worker", false);
@@ -268,8 +306,12 @@ function newWorker(restarts = 0) {
 		const [ready, failed] = [settled(resolve), settled(reject)];
 		watchStart();
 		// worker.js or a script it imports failed to load: without this the first run waits for "ready" forever (card firefox-hello-hang)
-		starting.onerror = event => failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
+		// once ready, an error event is the worker ending under a run: the browser's word for it, else what a bare one
+		// means (iPad Safari ends a Worker so when it runs out of memory or stack, card ipad-storage-bug)
+		starting.onerror = event => starting.isReady ? workerEnded(starting, event.message || WORKER_ENDED) : failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
 		starting.onmessage = ({ data }) => {
+			starting.heard = { type: data?.type, at: Math.round(performance.now()) }; // playground.js hungWhere
+			if (!FREQUENT_WORKER_MESSAGES.has(data?.type)) keepConsoleEntry("worker", [data?.type ?? String(data), ...(data?.stage ? [data.stage] : data?.message ? [data.message] : [])]);
 			if (starting.retired && !RETIRED_MESSAGES.has(data?.type)) return;
 			if (starting.retired && data.type === "report") return retire(starting);
 			if (data.type === "notify") data = notification(data.text);
@@ -391,7 +433,11 @@ function notification(text) {
 // paces sound by it): the page was clicked or typed in, as a browser plays sound only then
 const darkMode = matchMedia(DARK_MODE_QUERY);
 const windowOpen = () => (navigator.webdriver ? !beforeUserActivation() : document.visibilityState === "visible");
-const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(windowOpen()), window_fullscreen: Number(document.fullscreenElement === $("painted")), heard: Number(!beforeUserActivation()), ...displayValues(), ...viewSize() } });
+function tellSystemValues() {
+	const view = viewSize();
+	shareView(view);
+	worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(windowOpen()), window_fullscreen: Number(document.fullscreenElement === $("painted")), heard: Number(!beforeUserActivation()), ...displayValues(), ...view } });
+}
 darkMode.addEventListener("change", tellSystemValues);
 document.addEventListener("visibilitychange", () => worker && tellSystemValues());
 ["pointerdown", "keydown"].forEach(type => addEventListener(type, () => { if (!worker) return; tellSystemValues(); tellEnvironment(); }, { once: true, capture: true }));
@@ -404,13 +450,15 @@ document.addEventListener("fullscreenchange", () => worker && tellSystemValues()
 // view taller each frame, until Safari ran out of memory (card webgpu-safari). What follows the paintings down to the
 // page's end is left free: a view-sized painting that overflowed the window brought a scrollbar, which narrowed the
 // next view (card tour-firefox). Measured again as each run starts: the text above the paintings moves without
-// resizing the pane, which is all the ResizeObserver sees. In full screen (⛶) the view is the screen, so a shader
+// resizing the pane, which is all the ResizeObserver sees. Measured on the page, not the window: scrolled down, a
+// painting filling the window kept the page scrolled and its scrollbar, the view a pixel shorter each run (card
+// firefox-tour-resize). In full screen (⛶) the view is the screen, so a shader
 // painted at the view's size renders at the screen's (card full-screen)
 function viewSize() {
 	if (document.fullscreenElement === $("painted")) return { view_width: innerWidth, view_height: innerHeight };
 	const pane = $("output"), style = getComputedStyle(pane), painted = $("painted").getBoundingClientRect();
 	const width = Math.floor(pane.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - PAINTING_BORDERS);
-	const room = innerHeight - Math.max(painted.top, 0) - PAINTING_MARGIN - PAINTING_BORDERS - roomBelowPaintings(style);
+	const room = innerHeight - (painted.top + scrollY) - PAINTING_MARGIN - PAINTING_BORDERS - roomBelowPaintings(style);
 	return width > 0 ? { view_width: width, view_height: Math.floor(Math.max(room, MIN_VIEW_HEIGHT)) } : {};
 }
 
@@ -460,10 +508,19 @@ function showSounded(seconds) {
 	$("sounded").hidden = !seconds;
 	if (seconds) $("sounded").textContent = `♪ ${seconds.toFixed(1)} s of sound` + (beforeUserActivation() ? `, ${SILENT_BEFORE_ACTIVATION}` : "");
 }
-function playSound({ samples, rate, channels, at, handle, loop }, from) {
-	if (beforeUserActivation()) return;
+// the page's AudioContext, made and started by the first click, touch or key press itself: iOS Safari starts one only
+// inside a gesture's own handler, never when a run's sound arrives later from its Worker, and mutes WebAudio with the
+// ring switch unless the page's audio session plays (card rust-example-ipad)
+function startedAudio() {
 	audio ??= new AudioContext();
 	audio.resume();
+	if (navigator.audioSession) navigator.audioSession.type = "playback";
+	return audio;
+}
+for (const gesture of ["pointerdown", "touchend", "keydown"]) addEventListener(gesture, startedAudio, { capture: true, once: true });
+function playSound({ samples, rate, channels, at, handle, loop }, from) {
+	if (beforeUserActivation()) return;
+	startedAudio();
 	const frames = Math.max(Math.ceil(samples.length / channels), 1);
 	const buffer = audio.createBuffer(channels, frames, rate);
 	for (let channel = 0; channel < channels; channel++)
@@ -656,23 +713,47 @@ function printedChunk(run, chunk) {
 }
 
 // the runaway limit counts running time only: a sleep moves the deadline on by its milliseconds (card sleep-run-limit)
-function stopAfterTimeout(run, milliseconds = RUN_TIMEOUT_MS) {
+function stopAfterTimeout(run, milliseconds = runLimitMs) {
 	clearTimeout(run.timer);
 	run.deadline = Date.now() + milliseconds;
-	run.timer = setTimeout(() => stopRun(run, `stopped after ${RUN_TIMEOUT_MS / 1000} s: the program may not terminate`), milliseconds);
+	run.timer = setTimeout(() => stopRun(run, `stopped after ${runLimitMs / 1000} s: the program may not terminate`, !run.animating, [hungWhere()], true), milliseconds);
+}
+// the run again, the limit LONGER_RUNS times longer
+function runLonger() {
+	runLimitMs *= LONGER_RUNS;
+	runChanged();
+}
+const longerButton = () => element("button", { className: "apply-fix", title: "run it again, letting it run longer before it is stopped", onclick: runLonger },
+	`run for ${runLimitMs * LONGER_RUNS / 1000} s`);
+const HUNG_STAGES_SHOWN = 8;
+// where a run stopped by the limit hung, said beside it (card safari-hello-timeout: Hello stopped on the iPad only): the
+// worker's start, whether it was the standby, its stages and the last message it sent
+function hungWhere() {
+	const now = Math.round(performance.now());
+	const heard = worker.heard ? `"${worker.heard.type}" ${((now - worker.heard.at) / 1000).toFixed(1)} s ago` : "nothing";
+	const stages = workerStages.slice(-HUNG_STAGES_SHOWN).map(({ stage, at }) => `${stage} at ${at} ms`).join(", ") || "none seen";
+	return `where it hung: the worker ${worker.fromStandby ? "was the standby" : "started for the page"}, ${worker.isReady ? "ready" : "not ready"}; its last message ${heard}; last stages: ${stages}; page time ${now} ms`;
 }
 const slept = (run, milliseconds) => stopAfterTimeout(run, run.deadline - Date.now() + milliseconds);
 
 // a program that does not stop blocks the worker: replace it
 const ANIMATION_STOPPED = "animation stopped";
-function stopRun(run, message, failed = !run.animating) {
+const WORKER_ENDED = "the browser ended it without a message (out of memory or stack?)";
+// the shown worker ended under the pending run: the run fails saying so, a fresh worker takes the next
+function workerEnded(ended, why) {
+	if (ended !== worker) return;
+	if (pending) return stopRun(pending, `the compiler's worker stopped: ${why}`, true, [hungWhere()]);
 	worker.terminate();
 	startWorker();
-	finish(run, stoppedReport(run, message, failed));
+}
+function stopRun(run, message, failed = !run.animating, said = [], timedOut = false) {
+	worker.terminate();
+	startWorker();
+	finish(run, { ...stoppedReport(run, message, failed, said), timedOut });
 }
 
-const stoppedReport = (run, message, failed) => ({ value: message, error: failed, sounded: run.sounded, printed: run.printed, paintings: run.paintings,
-	warnings: [], runtime_warnings: [], hints: [], notes: [] });
+const stoppedReport = (run, message, failed, said = []) => ({ value: message, error: failed, sounded: run.sounded, printed: run.printed, paintings: run.paintings,
+	warnings: [], runtime_warnings: said, hints: [], notes: [] });
 
 // the Run button while a program runs: Stop (card playground-turn)
 function showStop(stoppable) {
@@ -684,6 +765,7 @@ const showsStop = () => $("run").classList.contains("stop");
 
 // Stop pressed: a run going on ends as stopped; a program left listening to its timers stops listening
 function stopPressed() {
+	queued = undefined; // a run asked meanwhile goes too
 	retiredWorkers.forEach(retire);
 	silence();
 	if (pending) return stopRun(pending, STOPPED, false);
@@ -746,26 +828,38 @@ async function settled(report) {
 	return { ...report, value: lastAnswered.value ?? report.value, html: lastAnswered.html ?? report.html, error: lastAnswered.error };
 }
 
-async function runInWorker(code, file, asData, eventsFor) {
+function runInWorker(code, file, asData, eventsFor) {
 	lastAnswered = undefined;
 	// a program serving requests waits for them (lib/web.warp page_serve): the next run starts in a fresh Worker
 	if (worker.serving) {
 		worker.terminate();
 		startWorker();
 	}
-	await workerReady;
-	return new Promise(resolve => {
-		const run = { id: ++nextRunId, resolve, printed: [], paintings: [], frame: 0, framesShown: {}, eventsFor };
-		stopAfterTimeout(run);
-		run.stopTimer = setTimeout(() => pending === run && showStop(true), STOP_GRACE_MS);
-		pending = run;
-		silence(false);
-		Object.assign(worker, { runId: run.id, liveLoops: new Map() });
-		paintingWindow = undefined; // canvas.js: each run's paintings at their own size until it sets window.width
-		tellSystemValues();
-		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file, arguments: programArguments(), liveHandover, asData });
-		liveHandover = {};
+	// the run is pending, its Stop shown after the grace, while the worker still loads: a Run pressed on a slow first
+	// load (7.5 s on an iPad) reacts as any run does, and Stop cancels it (card run-during-load-feedback). Its report
+	// never waits on the loading worker itself: a stopped worker's ready never settles. Its time limit counts from the
+	// worker's start of it
+	const run = { id: ++nextRunId, printed: [], paintings: [], frame: 0, framesShown: {}, eventsFor };
+	const reported = new Promise((resolve, reject) => Object.assign(run, { resolve, reject }));
+	run.stopTimer = setTimeout(() => pending === run && showStop(true), STOP_GRACE_MS);
+	pending = run;
+	workerReady.then(() => pending === run && startInWorker(run, code, file, asData), failure => {
+		clearTimeout(run.stopTimer);
+		if (pending === run) pending = undefined;
+		showStop(false);
+		run.reject(failure);
 	});
+	return reported;
+}
+
+function startInWorker(run, code, file, asData) {
+	stopAfterTimeout(run);
+	silence(false);
+	Object.assign(worker, { runId: run.id, liveLoops: new Map() });
+	paintingWindow = undefined; // canvas.js: each run's paintings at their own size until it sets window.width
+	tellSystemValues();
+	worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file, arguments: programArguments(), liveHandover, asData });
+	liveHandover = {};
 }
 
 // ---- showing a report ---------------------------------------------------------------------------------------
@@ -878,6 +972,7 @@ function showReport(report) {
 			element("span", { className: "reason" }, hint.reason), fixButtons(hint.fixes))),
 		...notes.filter(topic => !inline.has(topic) && isShown("hint")).map(topic => diagnostic("note", "", `the ${topic} note above shows until you say `, gotIt(topic, expressionOf(topic)))),
 	];
+	if (report.timedOut) items.unshift(diagnostic("note", "", "a program that takes long to start may only need more time: ", longerButton()));
 	$("diagnostics").replaceChildren(...items);
 	// the level select shows where there is something it filters, shown or not
 	const filtered = [report.warnings, report.runtime_warnings, report.hints, notes].some(list => list?.length);
@@ -918,7 +1013,10 @@ function showRendered(html) {
 	morphChildren(host.shadowRoot ?? renderedRoot(host), parsedHtml(html ?? ""));
 }
 
-self.programElements = () => $("rendered").shadowRoot ?? document; // task-workers.js ownerOnPage: `who`, `$who`
+// task-workers.js ownerOnPage: `who`, `$who`, document.getElementById("who"): an element of the program's markup, else
+// one of the page itself, "paintings" the frame its paintings show in (card paintings-document)
+const programElement = id => $("rendered").shadowRoot?.getElementById(id) ?? document.getElementById(id);
+self.programElements = () => ({ getElementById: programElement });
 
 // a form's submit stays inside the shadow root (it is not composed): listened to there
 function renderedRoot(host) {
@@ -1119,6 +1217,18 @@ function showEventOutput(data) {
 	if (data.html !== undefined) showRendered(data.html);
 }
 
+// a run starting, however it was started (Run, auto-run, an example chosen, a queued run): the old value gives way to
+// "…", and the old errors, warnings, underlines and printed text go, so none is taken for the new run's, nor stays
+// above an animation as long as it runs (cards g_oc54, playground-stale-value)
+function clearPreviousRun() {
+	showValue(PENDING_VALUE);
+	$("value").classList.remove("located");
+	$("value").onclick = null;
+	$("diagnostics").replaceChildren();
+	markPositions({});
+	showPrinted([]);
+}
+
 async function show(code) {
 	if (showing) {
 		queued = code; // only the newest code is worth running next
@@ -1127,6 +1237,7 @@ async function show(code) {
 		return;
 	}
 	showing = true;
+	clearPreviousRun();
 	setStatus("running…");
 	try {
 		showReport(await evaluate(code));
@@ -1229,7 +1340,7 @@ function startBugButton() {
 function bugReport() {
 	const run = reportedRun();
 	const source = $("bug-source").checked ? { code: run.code, output: run.output } : { code: "", output: "" };
-	return { ...run, ...source, comment: $("bug-comment").value, express: $("bug-express").checked, page: location.href,
+	return { ...run, ...source, comment: $("bug-comment").value, express: $("bug-express").checked, page: location.href, console: consoleReport(),
 		token: stored(BUG_TOKEN_KEY) ?? ($("bug-token").value.trim() || BUG_TOKEN) };
 }
 
@@ -1320,17 +1431,10 @@ function runChanged() {
 	return runNow();
 }
 
-// Run pressed (the button, Ctrl/Cmd-Enter): the old value gives way to "…" at once, and the old errors, warnings,
-// underlines and printed text go, so none is taken for the new run's (card g_oc54)
-// Ctrl/Cmd-Enter while live loops play runs the code again, handing them over (card playground-live); the button stops
+// Run pressed (the button, Ctrl/Cmd-Enter); Ctrl/Cmd-Enter while live loops play runs the code again, handing them
+// over (card playground-live); the button stops
 function runPressed(fromKeys = false) {
 	if (showsStop() && !(fromKeys && playsLive(pending))) return stopPressed();
-	showValue(PENDING_VALUE);
-	$("value").classList.remove("located");
-	$("value").onclick = null;
-	$("diagnostics").replaceChildren();
-	markPositions({});
-	showPrinted([]);
 	return runNow();
 }
 
@@ -1448,4 +1552,21 @@ addEventListener("unhandledrejection", event => {
 	console.error("warp page: a promise failed without a reason", event.promise, new Error("seen here").stack);
 });
 
-(window.pageStarts ?? Promise.resolve()).then(initialize); // index.html: not before its reload for isolation
+// a page the browser kept from the build before (GitHub Pages lets it keep index.html 10 minutes) asks the new build's
+// files for its workers, `worker.js?build=<old>`, and runs an old page beside a new compiler: its build asked anew,
+// a newer one reloads the page once, which asks index.html anew (card start-slow-browser, "bad files in the cache")
+const STALE_RELOAD = "warp stale reload";
+async function reloadWhenStale() {
+	if (!PLAYGROUND_VERSION) return;
+	try {
+		const served = await (await fetch("version.js", { cache: "no-store" })).text();
+		if (served.includes(PLAYGROUND_VERSION.built)) return sessionStorage.removeItem(STALE_RELOAD);
+		if (sessionStorage.getItem(STALE_RELOAD) === PLAYGROUND_VERSION.built) return console.error(`warp page: built ${PLAYGROUND_VERSION.built}, the server has a newer build, and a reload kept this page`);
+		sessionStorage.setItem(STALE_RELOAD, PLAYGROUND_VERSION.built);
+		location.reload();
+	} catch (failure) {
+		console.warn("warp page: its build could not be compared with the server's:", failure);
+	}
+}
+
+(window.pageStarts ?? Promise.resolve()).then(() => { initialize(); reloadWhenStale(); }); // index.html: not before its reload for isolation

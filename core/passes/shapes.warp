@@ -33,6 +33,8 @@ SPACED_SIGN_MARK = "spaced_sign"
 PATH_AFTER_OPERAND_MARK = "path_after_operand"
 # the mark of an operation whose operator is spaced on one side only, `a *b`: [it as written, the operator, its left and its right as written] (parser.warp unevenly_spaced)
 UNEVEN_SPACING_MARK = "uneven_spacing"
+# the mark of `[a + b c]`, a spaced operator in a square list before a phrase: [its left, the operator, the phrase as written] (parser.warp spaced_operand_in_list)
+SPACED_OPERAND_MARK = "spaced_operand"
 
 // [bracket, separator, items] of a group, an empty one too; ø for any other node
 def group_parts(node: Node): list? := match node {

@@ -197,6 +197,7 @@ is_class_instance_name = "is_class_instance"
 instance_show_name = "instance_show"
 instance_float_name = "instance_float"
 instance_operated_name = "instance_operated"
+instance_method_name = "instance_method"
 def class_depth(class_name: text): int { if class_name in module.parents then 1 + class_depth(module.parents[class_name]) else 0 }
 def made_classes(): list {
 	made = module.classes.keys.filter(class_name => instance_struct_prefix + class_name in module.class_structs)
@@ -258,9 +259,9 @@ def field_setter_code(f: Function) {
 ## class descriptors
 # a $Class's words, each a reference of a closure call's type (emitter.warp gc_types), in its fields from 3: a class's
 # own entries(m), field_at(m, index), place(m, name), set(m, name, value) and construct(type, values), then the
-# module's show(m), float(m), call(m, argument…) and operate(m, a, b, operator), shared by its classes (its dispatchers
-# know them all); a place and a set's outcome an i31. A word the module lacks is ø
-class_slots = ["entries", "field_at", "place", "set", "construct", "show", "float", "call", "operate"]
+# module's show(m), float(m), call(m, argument…), operate(m, a, b, operator) and method(m, name, arguments), shared by
+# its classes (its dispatchers know them all); a place and a set's outcome an i31. A word the module lacks is ø
+class_slots = ["entries", "field_at", "place", "set", "construct", "show", "float", "call", "operate", "method"]
 own_class_slots = ["entries", "field_at", "place", "set", "construct"]
 class_word_prefix = "class_word·"
 descriptor_prefix = "descriptor·"
@@ -271,6 +272,7 @@ def slot_arity(slot: text): int := match slot {
 	"float": 0
 	"set": 2
 	"operate": 3
+	"method": 2
 	_: 1
 }
 # the class's descriptor, made once into its global at its first use; a linked module's class its module's (its
@@ -318,6 +320,7 @@ def class_word_code(made: list) {
 	else if slot == "set" { f.code = class_set_code(class_name) }
 	else if slot == "construct" { f.code = class_construct_code(f, class_name) }
 	else if slot == "operate" { f.code = class_operate_code() }
+	else if slot == "method" { f.code = class_method_code() }
 	else if slot == "call" { f.code = boxed(call_values(module.functions[instance_call_word()], range_list(#f.kinds).map(i => TypedCode(ValueKind.Node, [op.local_get] + uleb(i))))) }
 	else { f.code = instance_converted_code(if slot == "show" then instance_show_word else HiddenWord.FloatHooked as text) }
 }
@@ -334,7 +337,7 @@ def descriptor_maker(class_name: text): list {
 # a reference to the descriptor's word of the slot, ø when the module has none (no show(), no call word)
 def slot_reference(slot: text, class_name: text): list {
 	if slot in own_class_slots { return [op.ref_func] + relocatable(relocated.calls, class_word(slot, class_name).index) }
-	present = if slot == "call" then instance_call_word() != ø else if slot == "operate" then #operated_dispatchers() > 0 else module.functions.get(if slot == "show" then instance_show_word else HiddenWord.FloatHooked as text) != ø
+	present = if slot == "call" then instance_call_word() != ø else if slot == "operate" then #operated_dispatchers() > 0 else if slot == "method" then #method_dispatchers() > 0 else module.functions.get(if slot == "show" then instance_show_word else HiddenWord.FloatHooked as text) != ø
 	if present then [op.ref_func] + relocatable(relocated.calls, class_word(slot, "").index) else [ref_null, funcref_byte]
 }
 # the instance (parameter 0) cast to the class's struct
@@ -449,6 +452,30 @@ def class_operate_code(): list {
 	operator = unboxed([op.local_get, 3], gc_type(gc.int_box))
 	cases = concatenated(range_list(#operated_glyphs).filter(i => module.functions.has(operated_glyphs[i] + "·operator")).map(i => operator + [op.i64_const] + sleb(i) + [op.i64_eq, op.if, no_value] + boxed(call_values(module.functions[operated_glyphs[i] + "·operator"], [TypedCode(ValueKind.Node, [op.local_get, 1]), TypedCode(ValueKind.Node, [op.local_get, 2])])) + [op.return, op.end]))
 	cases + [ref_null, gc_type(gc.node)]
+}
+# instance_method(m, name, arguments): m's method of that name, by the dispatcher of m's own module, for a module
+# that never saw m's class (card reals-prebuilt: reals' √ of uncertain's interval calls its root()); ø when that
+# module has none
+def instance_method_code(f: Function) { f.code = optional_slot_call("method", 3) }
+# [method, its dispatcher] of each method the module's classes lift (`root·real` is real's root, `root` or the routed
+# `root·method` its dispatcher)
+def method_dispatchers(): list {
+	found = []
+	for name in module.functions.keys {
+		parts = name.split(name_joiner)
+		if #parts != 2 or parts#2 not in module.classes or found.any(pair => pair#1 == parts#1) { continue }
+		dispatcher = module.functions.get(parts#1 + name_joiner + "method") ?? module.functions.get(parts#1)
+		if dispatcher != ø { found += [[parts#1, dispatcher]] }
+	}
+	found
+}
+# the module's method word: the dispatcher of the name given (parameter 1) on the instance (parameter 0) and the items
+# of the arguments' list (parameter 2), ø for a name it lacks
+def class_method_code(): list {
+	named = (method => runtime_call("node_equal", [TypedCode(ValueKind.Node, [op.local_get, 1]), TypedCode(ValueKind.Node, boxed(text_value_of(method)))]).code)
+	argument = (i => runtime_call("node_at", [TypedCode(ValueKind.Node, [op.local_get, 2]), TypedCode(ValueKind.Int, [op.i64_const] + sleb(i))]))
+	called = (dispatcher => boxed(call_values(dispatcher, [TypedCode(ValueKind.Node, [op.local_get, 0])] + range_list(#dispatcher.signature.parameters - 1).map(i => argument(i + 1)))))
+	concatenated(method_dispatchers().map(pair => named(pair#1) + [op.if, no_value] + called(pair#2) + [op.return, op.end])) + [ref_null, gc_type(gc.node)]
 }
 # whether a declared class has a field `name`: a read of it may meet an instance (field_value), else only a map
 def declares_field(name: text): bool { module.classes.keys.any(class_name => name in module.classes[class_name]) }

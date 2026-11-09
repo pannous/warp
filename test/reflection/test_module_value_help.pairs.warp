@@ -1,0 +1,2 @@
+# help of a module's value shows the comment above it, as a function's does (card module-export-attributes)
+'use color; help(named_colors)'	'named_colors = [[black, "black"], [white, "white"], [gray, "gray"], [red, "red"], [green, "green"], [blue, "blue"], [yellow, "yellow"], [orange, "orange"], [purple, "purple"]]\neach named color with its name'

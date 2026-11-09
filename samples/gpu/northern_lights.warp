@@ -29,7 +29,7 @@ lights = compute_toy(shader {
 		let above = at.y - hem;
 		if (above < 0.0) { return exp(above * 40.0) * 0.4; }
 		let rays = 0.3 + 0.7 * noise(float2(at.x * 40.0 + index * 13.0, t * 0.6));
-		return exp(-above * (3.0 + index)) * rays;
+		return exp(-above * (9.0 + 2.0 * index)) * rays;
 	}
 
 	fn sky(at: float2, t: f32) -> float3 {

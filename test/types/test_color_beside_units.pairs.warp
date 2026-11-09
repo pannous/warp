@@ -1,4 +1,4 @@
 # a color prints as its name or #RRGGBB beside unit quantities, and prelude's hex_text still serves (card use-color)
 'use color; x = 30ms; "${x} ${rgb(16, 32, 48)}"'	"30ms #102030"
-'use color; "${red} ${with_alpha(red, 0.5)}"'	"red #80FF0000"
+'use color; "${red} ${with_alpha(red, 0.5)}"'	"red #FF000080"
 'use color; hex_text(255)'	"0xFF"

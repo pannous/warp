@@ -65,3 +65,12 @@ results#1.of.i64
 A standard module named after an installed C library brings both (`use wasmtime`, as `use math` brings libm).
 Trap: a second wasmtime in the process (Homebrew's beside warp's) installs its own signal handlers on its first
 memory, and warp's next trap becomes a SIGILL: lib/wasmtime.warp turns `signals_based_traps` off.
+
+## Callbacks (card ffi-callbacks)
+A warp function passed to C: `c_callback(f, types)` (lib/callbacks.warp) gives the handle of a C function C can call,
+one of 16 trampolines in lib/native/foreign.c; each passes its six integer arguments to the driver's
+c_callback_answered (core/native/driver.warp), which calls the module's export c_callback_fired(slot, a … f) through the
+run's store, re-entering the program inside the C call. `types` says each argument's C type, "i32", "i64" or "handle"
+(a pointer, made the run's handle); the function's number or yes/no result goes back to C. Floats are refused (they
+come in other registers). `qsort(m, 4, 8, c_callback((a, b) => field_i64(a, 0) - field_i64(b, 0), ["handle", "handle"]))`
+(test/ffi/test_c_callbacks.pairs.warp). The page has no C to call back.

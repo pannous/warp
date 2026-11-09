@@ -37,6 +37,14 @@ with_block_inlined(n: Node, block: text, statements_given: Node): Node := {
 	children(n, child => with_block_inlined(child, block, statements_given))
 }
 
+# whether a call of the block gives a value its function uses: the function's result, `value = body()`, `g(body())`
+valued_block_call(body: Node, block: text): bool := is_block_call(body, block) or (holds_statements(body) and #body > 0 and is_block_call(body.last, block)) or valued_inside(body, block)
+valued_inside(n: Node, block: text): bool := {
+	if is_block_call(n, block) { return yes }
+	if holds_statements(n) { return items_of(n).any(item => not is_block_call(item, block) and valued_inside(item, block)) }
+	parts_of(n).any(part => valued_inside(part, block))
+}
+
 every_loop_variable(n: Node): list := loop_variables(n) + parts_of(n).flat_map(every_loop_variable)
 
 LEAVING_WORDS = ["return", "break", "continue", "it"]
@@ -57,6 +65,9 @@ inlined_into(function: BlockFunction, arguments: list): Node? := {
 	if not is_curly_group(given) { return ø }
 	if mentioned_names(given, []).any(name => name in LEAVING_WORDS) { return ø }
 	body = with_fresh_locals(sole_statement(function.body), names)
+	# several statements stand only where the call stands as a statement (card block-typed: `value = b()` of
+	# `f { sleep(0.2); 7 }` read `value = (sleep(0.2); 7)`); the block stays a closure there
+	if #items_of(given) > 1 and valued_block_call(body, names#(function.at)) { return ø }
 	for i in 1 to #names {
 		if i != function.at {
 			if mention_count(body, names#i) > 1 and not is_steady(arguments#i) { return ø }

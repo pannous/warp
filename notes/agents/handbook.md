@@ -5,7 +5,7 @@ Principles and Talking live only in common.md.
 
 ## Where to work
 - Quota wind-down : every Claude worker
-  finishes and lands the card it is on, writes its handover into the card (`todo release`), then retires. No new
+  finishes the card it is on; the finished work is handed to the integrator, who applies it on the user's Mac and pushes it (notes/agents/common.md "Handoff"). It writes its handover into the card (`todo release`), then retires. No new
   cards. Only warp-integrator and warp-layers keep running. The sugar passes outside parser.warp belong to the user's
   Grok Bot coders; warp-layers keeps
   parser.warp only.
@@ -14,14 +14,14 @@ Principles and Talking live only in common.md.
   adds the shallow subclasses; don't invent parallel ones in your branch.
 - The sugar migration  keeps one line of history: warp-layers alone removes sugar
   from core/parsing/parser.warp and moves passes into extensions/sugar/, one module group per branch, branched from
-  origin/main after the engine feature it needs has landed (never stacked on warp-rewrite-engine's branch), landed
-  the same day. Other branches touching parser.warp or a pass on the migration list stay small and land at once;
+  origin/main after the engine feature it needs has landed (never stacked on warp-rewrite-engine's branch), handed
+  off the same day (notes/agents/common.md "Handoff"). Other branches touching parser.warp or a pass on the migration list stay small and are handed off at once;
   one older than a day merges origin/main or is closed. Folds and fusion (min_max.warp, broadcasting,
   lambdas.warp's fusion) are warp-folds' until its cards land; migration 3 skips them. Aliases are warp-signatures'
   lib/aliases.warp.
 - Small changes on main: only what nothing compiles (notes, docs, wiki, scripts, samples, playground text)
-  goes straight onto main in the main checkout /Users/me/dev/angles/warp, no worktree or branch: commit your own
-  paths by name (`git commit -- <paths>`), `git pull --rebase --autostash`, push; never leave unpushed commits on
+  in the main checkout /Users/me/dev/angles/warp, no worktree: commit your own
+  paths by name (`git commit -- <paths>`), `source scripts/lib/sync-main.sh; up_to_date_main` (fetches main by name, replays your commits, never stashes) (common.md). The finished work is handed to the integrator, who applies it on the user's Mac and pushes it (notes/agents/common.md "Handoff"); never leave unpushed commits on
   main. A new root .warp data file (components.warp …): tell the Integrator the commit, tests read it.
 - Anything compiled (core/, the harness in src/ and crates/, Cargo.*) keeps its worktree, however small (a half-done
   edit there breaks every build of the main checkout): `cowtree add -b <branch> /Volumes/Worktrees/<branch> origin/main`
@@ -41,9 +41,10 @@ Principles and Talking live only in common.md.
 - Moving on demand: a change in the main checkout that grows (more than a few files, many build/test rounds, or
   another session's files) moves into a worktree while still uncommitted: `cowtree add -b <task> <worktree> HEAD`,
   `git diff -- <own paths> | git -C <worktree> apply`, then undo only your own paths in the main checkout. A worktree
-  branch that turns out small goes straight to main itself (`git pull --rebase`, push `HEAD:main`).
-- Rebase and merge with `--autostash`; never a bare `git stash pop` (the stash list is shared by all worktrees).
-  Stashes are agent scratch: drop leftovers yourself (the hook saves them under refs/dropped-stashes).
+  branch that turns out small is finished work handed to the integrator, who applies it on the user's Mac and pushes it (notes/agents/common.md "Handoff") (`source scripts/lib/sync-main.sh; up_to_date_main` (fetches main by name, replays your commits, never stashes)).
+- Never stash (the user's rule; the stash list is shared by all worktrees) and no `--autostash`: commit first; a
+  merge keeps uncommitted files nothing incoming touches, a rebase refuses a dirty tree loudly. Leftover stashes are
+  dropped (the hook saves them under refs/dropped-stashes).
 - The user's uncommitted edits (modified, staged or untracked, in the main checkout or wiki/) are integrated at once
   by whoever meets them, in the main checkout itself, never left lying, reported as "untouched" or parked in a batch
   (an unpushed batch commit leaves their checkout showing them uncommitted). Read each diff; a D next to an untracked
@@ -114,7 +115,7 @@ Principles and Talking live only in common.md.
   wording or timing. Exit codes are tested only when the feature itself is about them (e.g. `exit(5)`).
 - Acceptance (decision warp-only-acceptance): a branch is accepted when warp.wasm compiles
   compiler.warp itself and that self build compiles and runs hello world: `scripts/self-check.sh <worktree>` (main's
-  binary), run on the branch merged with origin/main; then the worker pushes it to main itself ("Done" below). While
+  binary), run on the branch merged with origin/main; then the finished work is handed to the integrator, who applies it on the user's Mac and pushes it (notes/agents/common.md "Handoff"). While
   main's own self build is red (its owner fixes it), a branch passes when its pure lane is green and its self check
   fails no worse than main's (the same error): a red main never blocks a landing.
   A change to core/ checks the self build before landing: `scripts/self-check.sh <worktree>` (with --rebuild it
@@ -193,8 +194,8 @@ Principles and Talking live only in common.md.
 ## Done
 - Samples: every major or semi-major feature (a new syntax form, library area, server/ORM/GPU capability, playground
   ability) ships with a sample in samples/<topic>.warp that shows it the way a user would write it, in the same
-  branch, `chmod +x`. A sample that cannot run in the browser goes in
-  web/playground/excluded_samples.txt. Name the sample in a `todo note` on the card.
+  branch, `chmod +x`. A sample that cannot run in the browser says so in a line of
+  its own, `# host: native: <why>` (`# host: page`, `# host: none` likewise; scripts/samples.sh HOST_LINE). Name the sample in a `todo note` on the card.
 - Docs are part of done: a card that changes what users write or see (syntax, words, flags, messages, defaults)
   updates the wiki page of that concept in the same task: a minimal example and one sentence, one idea per snippet,
   simplest form first, plain words. Say "docs: <page>" or "docs: none (internal)" in a `todo note`. A feature the
@@ -204,28 +205,28 @@ Principles and Talking live only in common.md.
   HEAD:master`): commit only your pages by name, never `-a` (other sessions leave edits there); a refused pull is
   someone else's work. Write a branch's doc changes only with its landing, never leave them lying in wiki/ to be
   published early.
-- Forward crunch: land a branch once it builds and its smoke test passes; tests failing in its own area don't hold
+- Forward crunch: the finished work is handed to the integrator, who applies it on the user's Mac and pushes it (notes/agents/common.md "Handoff"), once it builds and its smoke test passes; tests failing in its own area don't hold
   it back: the Integrator's background tiers card them and you fix forward. More than ~20 failing tests of yours:
   fix those before new work.
-- Before landing: `warp format yes <files>` on the .warp files you wrote or changed (notes/warp_format.md),
+- Before the handoff: `warp format yes <files>` on the .warp files you wrote or changed (notes/warp_format.md),
   and commit what it moved. A change to the Rust harness is also `cargo fmt`ed and `cargo check`ed.
-- Landing (self-landing, user 2026-10-26: no merge queue, no Ready column; common.md "Done"):
+- Handoff (notes/agents/common.md "Handoff"; no merge queue, no Ready column):
   1. Targeted tests, commit, formatted.
-  2. Merge origin/main into the branch: `git fetch origin && git merge --autostash origin/main`, with a merge
+  2. Merge origin/main into the branch: `git fetch origin && git merge origin/main`, with a merge
      message summing up the change. You resolve conflicts. Take a side of a conflicted file only after `git diff
      <merge-base> HEAD -- <file>` (merges your branch carries are your side too); otherwise resolve the hunk and check
      `git diff origin/main -- <file>` shows only your change.
      Keep merges real: one merge commit per branch, and never let a plain `git pull --rebase` flatten them (it replays
-     a merged branch's commits onto main and conflicts): `git pull --rebase=merges` or `git merge origin/main`.
-  3. Smoke test on that merge (core/ changes: smoke + `scripts/self-check.sh`), then `git push origin HEAD:main`
-     (fast-forward only; rejected: merge origin/main again, rerun the smoke test only if the new commits touch core/
+     a merged branch's commits onto main and conflicts): `source scripts/lib/sync-main.sh; up_to_date_main` (fetches main by name, replays your commits, never stashes) or `git merge origin/main`.
+  3. Smoke test on that merge (core/ changes: smoke + `scripts/self-check.sh`), then the finished work is handed to the integrator, who applies it on the user's Mac and pushes it (notes/agents/common.md "Handoff").
+     The push is fast-forward only; rejected: merge origin/main again, rerun the smoke test only if the new commits touch core/
      or lib/). On the box, then `scripts/publish-build.sh <worktree>`: the build of the landed inputs goes to the
      `builds` pre-release, where rebuild.sh on the Mac (after-push) fetches it instead of compiling (scripts/fetch-build.sh).
      Then `todo done <card> <commit>`, with a `todo note` naming new tests, "docs: <page>" and the sample.
      When the user says "quickly", they expect about a minute: one targeted test or none, give the user a try line
-     with `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp`, land it right after.
+     with `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp`, hand it off right after (notes/agents/common.md "Handoff").
   4. Report one line to the Supervisor.
-  A finished branch whose session retires before landing stays in Now with the note `land: <branch> <tip>` for the
+  A finished branch whose session retires before the handoff stays in Now with the note `land: <branch> <tip>` for the
   Integrator. Something the background tiers find red comes back as a card: fix forward, never revert-and-wait.
   A pushed branch is never rebased or force-pushed.
 - Post-hoc changes don't block: a small reviewer point or polish is a follow-up commit with its own card, never

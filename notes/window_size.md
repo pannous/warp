@@ -19,7 +19,7 @@ system values, so `whenever window.width > 800 {…}` listens like `battery`.
 
 Native (crates/warp-window over SDL3, crates/warp-gpu over wgpu): a window the program gave no size opens at the
 largest whole multiple of its first painting that fits 70% of the screen (a 320×200 painting no longer opens tiny). It
-resizes freely and goes full screen; libwarp_gpu configures its surface at the Metal layer's drawableSize (SDL keeps
+resizes freely and goes full screen; gpu.warp configures its surface at the Metal layer's drawableSize (SDL keeps
 that at the window's pixels) and draws each painting at its own size, then scales it in whole, aspect kept, centered
 (nearest pixel, black bars). The pointer is mapped through the same letterbox. Pitfall: a surface configured at the
 painting's size while SDL resizes the drawable shows the painting 1:1 in the corner with smeared edge pixels; forcing

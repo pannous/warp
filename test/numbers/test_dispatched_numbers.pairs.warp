@@ -1,0 +1,6 @@
+# two numbers held as values operate as numbers in a program using classes with operators (lib/reals, lib/units),
+# never through a class's method (card sound-start-speed)
+'use reals; xs = [0.5, "a"]; xs#1 * 0.4'	0.2
+'use reals; xs = [3, "a"]; xs#1 + 4'	7
+'use reals; xs = [3, "a"]; xs#1 < 4'	yes
+'use units; xs = [2, "a"]; xs#1 * 3'	6

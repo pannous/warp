@@ -1,6 +1,7 @@
 // The C functions a primitive program imports (`import getenv from "c"`), in a native build: each import wasm2c calls
 // is written by extensions/primitive.warp c_function_glue, which finds the function by name in the process and
 // passes the module's values over with these. Included behind lib/native/wasi.c.
+#include <errno.h>
 #include <arpa/inet.h>
 #include <dlfcn.h>
 #include <netinet/in.h>
@@ -15,9 +16,17 @@
 
 enum { ARENA_ALIGNMENT = 8, TEXT_RECORD = 8, PAGE_BYTES = 65536 }; // primitive.warp ARENA_ALIGNMENT, text_layout's size
 
+// a symbol of the process: the executable's, a library's it links or one opened RTLD_GLOBAL. POSIX's dlopen(NULL)
+// handle, not RTLD_DEFAULT, which glibc declares only under _GNU_SOURCE, and this file comes behind the header wasm2c
+// writes, too late to define it (the v1.8.0 Linux release jobs, card release-linux-bootstrap)
+static void* process_symbol(const char* name) {
+	static void* process;
+	if (!process) process = dlopen(NULL, RTLD_LAZY);
+	return dlsym(process, name);
+}
 // the C function of that name the executable or a library it links has; a program calling one it lacks stops here
 static void* native_function(const char* name) {
-	void* found = dlsym(RTLD_DEFAULT, name);
+	void* found = process_symbol(name);
 	if (!found) {
 		fprintf(stderr, "no C function %s in this executable or the libraries it links\n", name);
 		exit(1);
@@ -32,200 +41,44 @@ static uint32_t module_address(struct w2c_wasi__snapshot__preview1* wasi, void* 
 // an address of the module's memory as the C pointer it is, for a program to hold as a handle (`native_pointer(address:
 // pointer): handle from "c"`): the glue made it the pointer already
 void* native_pointer(void* address) { return address; }
+// a pointer C passed to a callback (lib/callbacks.warp), returned as a handle, which the driver makes its id
+void* pointer_handle(int64_t address) { return (void*)(intptr_t)address; }
+// The C functions a warp function behind lib/callbacks.warp c_callback is passed to C as, one a slot: each calls the
+// driver's c_callback_answered(slot, its six integer arguments), which calls the program's c_callback_fired; float
+// arguments never reach one (they come in other registers)
+typedef uint64_t (*callback_answer_t)(w2c_program*, u64, u64, u64, u64, u64, u64, u64);
+static uint64_t callback_answered(uint64_t slot, uint64_t a, uint64_t b, uint64_t c, uint64_t d, uint64_t e, uint64_t f) {
+	static callback_answer_t answer;
+	if (!answer) answer = (callback_answer_t)native_function("w2c_program_c_callback_answered");
+	return answer(running_wasi->program, slot, a, b, c, d, e, f);
+}
+#define TRAMPOLINE(n) static uint64_t trampoline_##n(uint64_t a, uint64_t b, uint64_t c, uint64_t d, uint64_t e, uint64_t f) { return callback_answered(n, a, b, c, d, e, f); }
+TRAMPOLINE(0) TRAMPOLINE(1) TRAMPOLINE(2) TRAMPOLINE(3) TRAMPOLINE(4) TRAMPOLINE(5) TRAMPOLINE(6) TRAMPOLINE(7)
+TRAMPOLINE(8) TRAMPOLINE(9) TRAMPOLINE(10) TRAMPOLINE(11) TRAMPOLINE(12) TRAMPOLINE(13) TRAMPOLINE(14) TRAMPOLINE(15)
+static void* trampolines[] = {trampoline_0, trampoline_1, trampoline_2, trampoline_3, trampoline_4, trampoline_5, trampoline_6, trampoline_7,
+	trampoline_8, trampoline_9, trampoline_10, trampoline_11, trampoline_12, trampoline_13, trampoline_14, trampoline_15};
+void* c_callback_pointer(int64_t slot) {
+	if (slot < 0 || slot >= (int64_t)(sizeof trampolines / sizeof *trampolines)) {
+		fprintf(stderr, "c_callback: at most %zu callbacks a run\n", sizeof trampolines / sizeof *trampolines);
+		exit(1);
+	}
+	return trampolines[slot];
+}
 // paint's count in this run, from 1: its PNG's number (core/native/driver.warp painted)
 int32_t next_painting(void) { static int32_t painted; return ++painted; }
+// the error number of the C call that failed last (core/native/driver.warp os_failure)
+int32_t last_error(void) { return errno; }
 void* library_function(char* library, char* name);
-// libwarp_gpu beside warp (crates/warp-gpu, card gpu-functions), found at the first question: a shader paints on the
-// GPU, else (none, or WARP_GPU=off) its function on the CPU (lib/prelude.warp paint_shader)
-typedef int32_t (*gpu_paint_function)(const char*, const char*, int32_t, int32_t, uint32_t*);
-static gpu_paint_function gpu_paint;
-static const char* (*gpu_failure)(void);
+// whether a shader paints on the GPU: libwgpu_native beside warp (lib/host/native_host/gpu.warp paints through it),
+// else (none, or WARP_GPU=off) its function on the CPU (lib/prelude.warp paint_shader)
 int32_t gpu_paints(void) {
-	static int32_t asked;
+	static int32_t asked, present;
 	if (!asked) {
 		asked = 1;
 		const char* chosen = getenv("WARP_GPU");
-		if (chosen && !strcmp(chosen, "off")) return 0;
-		gpu_paint = (gpu_paint_function)library_function("warp_gpu", "warp_gpu_paint");
-		gpu_failure = (const char* (*)(void))library_function("warp_gpu", "warp_gpu_failure");
+		present = !(chosen && !strcmp(chosen, "off")) && library_function("wgpu_native", "wgpuCreateInstance");
 	}
-	return gpu_paint && gpu_failure;
-}
-int32_t library_system_value(char* name, int64_t* value);
-static int64_t library_value(const char* name) {
-	int64_t value = 0;
-	return library_system_value((char*)name, &value) ? value : 0;
-}
-// the holes every shader has, filled where the shader reads them and the program gave none, as the playground fills
-// them (web/playground/host-gpu.js builtinValues): the image's size, seconds since the first painting, the paintings
-// before, the pointer and key over the window (0 without one)
-enum { MOST_VALUES_TEXT = 65536 };
-static const char* BUILTIN_HOLES[] = {"width", "height", "size", "time", "frame", "mouse", "mouse_down", "mouse_wheel", "key"};
-static int32_t reads_hole(const char* text, const char* name) {
-	size_t length = strlen(name);
-	for (const char* at = strstr(text, "values."); at; at = strstr(at + 1, "values.")) {
-		const char* field = at + strlen("values.");
-		char after = field[length];
-		int boundary = !(after == '_' || (after >= 'a' && after <= 'z') || (after >= 'A' && after <= 'Z') || (after >= '0' && after <= '9'));
-		if (!strncmp(field, name, length) && boundary) return 1;
-	}
-	return 0;
-}
-static int32_t given_hole(const char* values, const char* name) {
-	size_t length = strlen(name);
-	for (const char* at = strstr(values, name); at; at = strstr(at + 1, name))
-		if ((at == values || at[-1] == '{' || at[-1] == ' ' || at[-1] == ',') && at[length] == ':') return 1;
-	return 0;
-}
-static double seconds_now(void) {
-	struct timespec now;
-	clock_gettime(CLOCK_MONOTONIC, &now);
-	return now.tv_sec + now.tv_nsec / 1e9;
-}
-static void hole_written(char* into, const char* name, int64_t width, int64_t height, double time, int64_t frame) {
-	size_t used = strlen(into);
-	char* at = into + used;
-	size_t room = MOST_VALUES_TEXT - used;
-	if (!strcmp(name, "width")) snprintf(at, room, "width: %lld", (long long)width);
-	else if (!strcmp(name, "height")) snprintf(at, room, "height: %lld", (long long)height);
-	else if (!strcmp(name, "size")) snprintf(at, room, "size: [%lld, %lld]", (long long)width, (long long)height);
-	else if (!strcmp(name, "time")) snprintf(at, room, "time: %.6f", time);
-	else if (!strcmp(name, "frame")) snprintf(at, room, "frame: %lld", (long long)frame);
-	else if (!strcmp(name, "mouse")) snprintf(at, room, "mouse: [%lld, %lld]", (long long)library_value("mouse_x"), (long long)library_value("mouse_y"));
-	else if (!strcmp(name, "key")) snprintf(at, room, "key: %lld", (long long)library_value("key code held"));
-	else snprintf(at, room, "%s: %lld", name, (long long)library_value(name));
-}
-// the program's values with the built-in holes its shader reads; the caller frees it
-static char* values_filled(const char* shader, const char* values, int64_t width, int64_t height) {
-	static double first_painting;
-	static int64_t paintings;
-	if (!first_painting) first_painting = seconds_now();
-	char* filled = calloc(MOST_VALUES_TEXT, 1);
-	const char* given = values[0] == '{' ? values : "{}";
-	size_t given_length = strlen(given);
-	snprintf(filled, MOST_VALUES_TEXT, "%.*s", (int)(given_length - 1), given);
-	int members = strcmp(given, "{}") != 0;
-	for (size_t i = 0; i < sizeof BUILTIN_HOLES / sizeof *BUILTIN_HOLES; i++) {
-		if (!reads_hole(shader, BUILTIN_HOLES[i]) || given_hole(given, BUILTIN_HOLES[i])) continue;
-		if (members++) strncat(filled, ", ", MOST_VALUES_TEXT - strlen(filled) - 1);
-		hole_written(filled, BUILTIN_HOLES[i], width, height, seconds_now() - first_painting, paintings);
-	}
-	strncat(filled, "}", MOST_VALUES_TEXT - strlen(filled) - 1);
-	paintings++;
-	return filled;
-}
-// the shader's pixels, as 0xAARRGGBB ints of 8 bytes (driver.warp png_written); 0, else -1, the GPU's reason told
-int32_t gpu_painted(char* shader, char* given_values, int64_t width, int64_t height, int64_t* pixels) {
-	if (!gpu_paints()) return fprintf(stderr, "paint of a shader: libwarp_gpu is not beside warp\n"), -1;
-	uint32_t* colors = malloc(width * height * sizeof *colors);
-	char* values = values_filled(shader, given_values, width, height);
-	int32_t failed = gpu_paint(shader, values, (int32_t)width, (int32_t)height, colors);
-	free(values);
-	if (failed) fprintf(stderr, "paint of a shader: %s\n", gpu_failure());
-	else for (int64_t i = 0; i < width * height; i++) pixels[i] = colors[i];
-	free(colors);
-	return failed;
-}
-// The system values the driver does not own, forwarded to the libraries that do (libwarp_window's window, keys and
-// mouse), each found beside warp at the first question; none owning one, the driver answers it
-static const char* OWNING_LIBRARIES[] = {"warp_window"};
-enum { OWNING_COUNT = sizeof OWNING_LIBRARIES / sizeof *OWNING_LIBRARIES };
-typedef int32_t (*value_answer)(const char*, int64_t*);
-typedef int32_t (*value_taker)(const char*, int64_t);
-static value_answer value_answers[OWNING_COUNT];
-static value_taker value_takers[OWNING_COUNT];
-static void owning_libraries_found(void) {
-	static int32_t found;
-	if (found) return;
-	found = 1;
-	for (int i = 0; i < OWNING_COUNT; i++) {
-		value_answers[i] = (value_answer)library_function((char*)OWNING_LIBRARIES[i], "warp_system_value");
-		value_takers[i] = (value_taker)library_function((char*)OWNING_LIBRARIES[i], "warp_set_system_value");
-	}
-}
-// 1 and the value into *value when a library owns the name, else 0
-int32_t library_system_value(char* name, int64_t* value) {
-	owning_libraries_found();
-	for (int i = 0; i < OWNING_COUNT; i++) if (value_answers[i] && value_answers[i](name, value)) return 1;
-	return 0;
-}
-// the value told every library; 1 when one owns the name (the driver keeps it otherwise)
-int32_t library_system_value_set(char* name, int64_t value) {
-	owning_libraries_found();
-	int32_t owned = 0;
-	for (int i = 0; i < OWNING_COUNT; i++) if (value_takers[i] && value_takers[i](name, value)) owned = 1;
-	return owned;
-}
-// The host words the driver does not answer, bound to the libraries beside warp that own some (libwarp_gpu's
-// gpu_compute, libwarp_window's text_coverage, libwarp_webview's foreign_call; decision library-direct-refs): the wasmtime_func_callback_t
-// `warp_word_<name>` a library exports, reading and building the module's values in place (lib/native/warp_node.h);
-// NULL when none owns it. Two owning one name end the run naming both
-static const char* HOST_WORD_LIBRARIES[] = {"warp_gpu", "warp_window", "warp_webview"};
-enum { HOST_WORD_COUNT = sizeof HOST_WORD_LIBRARIES / sizeof *HOST_WORD_LIBRARIES, WORD_SYMBOL_ROOM = 256 };
-void* library_word(char* name) {
-	char symbol[WORD_SYMBOL_ROOM];
-	snprintf(symbol, sizeof symbol, "warp_word_%s", name);
-	void* word = NULL;
-	const char* owner = NULL;
-	for (int i = 0; i < HOST_WORD_COUNT; i++) {
-		void* found = library_function((char*)HOST_WORD_LIBRARIES[i], symbol);
-		if (!found) continue;
-		if (word) {
-			fprintf(stderr, "the host word %s is in two libraries: lib%s and lib%s\n", name, owner, HOST_WORD_LIBRARIES[i]);
-			exit(1);
-		}
-		word = found;
-		owner = HOST_WORD_LIBRARIES[i];
-	}
-	return word;
-}
-// A painting shown in an open window (libwarp_window's layer) by libwarp_gpu, on the GPU throughout: 1 shown, 0 no
-// window open (the driver writes its PNG), -1 failed, the reason told
-static void* window_layer(int64_t width, int64_t height) {
-	static void* (*layer_of)(int32_t, int32_t);
-	static int32_t asked;
-	if (!asked) {
-		asked = 1;
-		layer_of = (void* (*)(int32_t, int32_t))library_function("warp_window", "warp_window_layer");
-		void (*repainted_by)(int32_t (*)(void)) = (void (*)(int32_t (*)(void)))library_function("warp_window", "warp_window_repainted_by");
-		int32_t (*shown_again)(void) = (int32_t (*)(void))library_function("warp_gpu", "warp_gpu_shown_again");
-		if (repainted_by && shown_again) repainted_by(shown_again);
-	}
-	return layer_of && gpu_paints() ? layer_of((int32_t)width, (int32_t)height) : NULL;
-}
-static int32_t shown_or_told(int32_t failed) {
-	if (failed) fprintf(stderr, "paint into the window: %s\n", gpu_failure());
-	return failed ? -1 : 1;
-}
-int32_t shader_shown(char* shader, char* given_values, int64_t width, int64_t height) {
-	void* layer = window_layer(width, height);
-	if (!layer) return 0;
-	static int32_t (*show)(const char*, const char*, void*, int32_t, int32_t);
-	if (!show) show = (int32_t (*)(const char*, const char*, void*, int32_t, int32_t))library_function("warp_gpu", "warp_gpu_show");
-	char* values = values_filled(shader, given_values, width, height);
-	int32_t shown = shown_or_told(show(shader, values, layer, (int32_t)width, (int32_t)height));
-	free(values);
-	return shown;
-}
-// the pixels as driver.warp png_written shades them: 0 paper, a value with an alpha byte its color, any other ink
-enum { PAPER = 250, INK = 29, COLOR_FROM = 16777216 };
-int32_t pixels_shown(int64_t* pixels, int64_t width, int64_t height) {
-	void* layer = window_layer(width, height);
-	if (!layer) return 0;
-	static int32_t (*show)(const uint8_t*, void*, int32_t, int32_t);
-	if (!show) show = (int32_t (*)(const uint8_t*, void*, int32_t, int32_t))library_function("warp_gpu", "warp_gpu_show_pixels");
-	uint8_t* bytes = malloc(width * height * 4);
-	for (int64_t i = 0; i < width * height; i++) {
-		int64_t value = pixels[i];
-		uint8_t shade = value == 0 ? PAPER : INK;
-		bytes[4 * i] = value >= COLOR_FROM ? (value >> 16) & 255 : shade;
-		bytes[4 * i + 1] = value >= COLOR_FROM ? (value >> 8) & 255 : shade;
-		bytes[4 * i + 2] = value >= COLOR_FROM ? value & 255 : shade;
-		bytes[4 * i + 3] = 255;
-	}
-	int32_t shown = shown_or_told(show(bytes, layer, (int32_t)width, (int32_t)height));
-	free(bytes);
-	return shown;
+	return present;
 }
 // the terminal's rows, else its columns, on standard output; 0 outside a terminal (ioctl is variadic: called here, not
 // through native_call)
@@ -272,6 +125,7 @@ static uint32_t arena_bytes(struct w2c_wasi__snapshot__preview1* wasi, uint32_t 
 	if (*top > wasi->memory->size) wasm_rt_grow_memory(wasi->memory, (*top - wasi->memory->size + PAGE_BYTES - 1) / PAGE_BYTES);
 	return taken;
 }
+
 // a C text copied into the module's arena as a text, its bytes behind its pair; NULL the null address
 static uint32_t module_text(struct w2c_wasi__snapshot__preview1* wasi, const char* text) {
 	if (!text) return 0;
@@ -288,10 +142,11 @@ void* c_function(char* name) { return native_function(name); }
 
 // The C calls of a module the driver runs (core/native/driver.warp c_called), as the Rust stub makes them (c_calls.rs)
 // where a library lies by the name a program imports it under (`sqlite3`); libc's and libm's are the process's
-// warp's own libraries (libwarp_sound) beside the executable first, as libwarp_wasmtime is
+// libraries beside the executable first (libwgpu_native), as libwarp_wasmtime is
 // Fixed short folders per platform (user 2026-11-06 library-search-paths): no scan/sort/computed from.
-// macOS: homebrew + local + opt/<name>/Frameworks/<Name>.framework/<Name>. Linux: /usr/lib(+triple) + local,
-// lib<name>.so / .so.0 / -2.0.so.0 / .so.1 (usual versioned sonames; odd ones like libpython3.13.so.1.0 still
+// macOS: homebrew + local + opt/<name>/Frameworks/<Name>.framework/<Name> + the system's frameworks. Linux:
+// /usr/lib(+triple) + local, lib<name>.so / .so.0 / -2.0.so.0 / .so.1 / .so.6 (usual versioned sonames, FreeType's
+// .so.6; odd ones like libpython3.13.so.1.0 still
 // need a symlink, WARP path, or a computed `from`). Windows: LoadLibrary System32+PATH (not this dlopen list).
 static const char* LIBRARY_PATHS[] = {
 	"@executable_path/lib%s.dylib",
@@ -303,6 +158,7 @@ static const char* LIBRARY_PATHS[] = {
 	"lib%s-2.so.0",
 	"lib%s.so.1",
 	"lib%s.so.1.0",
+	"lib%s.so.6",
 	"lib%s3.so",
 	"/opt/homebrew/lib/lib%s.dylib",
 	"/usr/local/lib/lib%s.dylib",
@@ -327,7 +183,7 @@ static const char* PROCESS_LIBRARIES[] = {"c", "m", "libc", "libm"};
 // a library's function, NULL when the library has none of that name: never another library's
 void* library_function(char* library, char* name) {
 	for (size_t i = 0; i < sizeof PROCESS_LIBRARIES / sizeof *PROCESS_LIBRARIES; i++)
-		if (!strcmp(library, PROCESS_LIBRARIES[i])) return dlsym(RTLD_DEFAULT, name);
+		if (!strcmp(library, PROCESS_LIBRARIES[i])) return process_symbol(name);
 	// global: a library's own plugins (python's extension modules) find its symbols; dlsym on the handle still answers
 	// from this library alone
 	int flags = RTLD_NOW | RTLD_GLOBAL;
@@ -355,9 +211,41 @@ void* library_function(char* library, char* name) {
 			if (loaded) return dlsym(loaded, name);
 		}
 	}
+	// a system framework by its name: `from 'CoreFoundation'`
+	snprintf(path, sizeof path, "/System/Library/Frameworks/%s.framework/%s", library, library);
+	void* framework = dlopen(path, flags);
+	if (framework) return dlsym(framework, name);
 #endif
 	return NULL;
 }
+// A field of a C struct a program holds as a handle, by its offset (lib/c.warp: SDL_Event's union, FreeType's glyph
+// slot): its bytes as the C type is, a signed integer widened, a float as a double, a pointer as a handle; set_field_*
+// writes one (an AudioStreamBasicDescription, an AudioBufferList pointing at memory of the program's)
+#define FIELD_READER(name, type, result) result name(const uint8_t* address, int64_t offset) { type value; memcpy(&value, address + offset, sizeof value); return (result)value; }
+#define FIELD_WRITER(name, type, given) void name(uint8_t* address, int64_t offset, given value) { type field = (type)value; memcpy(address + offset, &field, sizeof field); }
+FIELD_WRITER(set_field_i32, int32_t, int64_t)
+FIELD_WRITER(set_field_i64, int64_t, int64_t)
+FIELD_WRITER(set_field_f64, double, double)
+FIELD_WRITER(set_field_pointer, void*, void*)
+FIELD_READER(field_u8, uint8_t, int32_t)
+FIELD_READER(field_i16, int16_t, int32_t)
+FIELD_READER(field_i32, int32_t, int32_t)
+FIELD_READER(field_u32, uint32_t, int64_t)
+FIELD_READER(field_i64, int64_t, int64_t)
+FIELD_READER(field_f32, float, double)
+FIELD_READER(field_f64, double, double)
+FIELD_READER(field_pointer, void*, void*)
+const char* field_text(const uint8_t* address, int64_t offset) { return (const char*)(address + offset); }
+// count bytes of a struct or buffer at once, a `bytes` result: {length, bytes} in memory the driver copies into a text
+// and frees; set_field_bytes writes a text's bytes there (a mapped GPU buffer read back, a vertex array filled)
+struct bytes_result { int64_t length; uint8_t bytes[]; };
+struct bytes_result* field_bytes(const uint8_t* address, int64_t offset, int64_t count) {
+	struct bytes_result* result = malloc(sizeof *result + (size_t)count);
+	result->length = count;
+	memcpy(result->bytes, address + offset, (size_t)count);
+	return result;
+}
+void set_field_bytes(uint8_t* address, int64_t offset, const uint8_t* data, int64_t size) { memcpy(address + offset, data, (size_t)size); }
 // a C function called with up to 8 integers and pointers and up to 8 floats in their registers (the ARM64 and x86-64
 // conventions keep the two apart, `ldexp(double, int)` takes d0 and x0): it reads only the ones its parameters name.
 // Its result is the integer register, or the bits of the float register
@@ -397,6 +285,17 @@ int32_t handle_id(void* pointer) {
 int32_t handle_known(int32_t id) { return id >= 0 && (uint32_t)id <= handle_count; }
 void* handle_pointer(int32_t id) { return id > 0 && (uint32_t)id <= handle_count ? handles[id - 1] : NULL; }
 
+// what a host word allocated given back, zeroed: the arena past its top stays as fresh memory is, so an allocate after
+// a host word (warp test's slots after test-list ran) never starts with an earlier word's bytes. What arena_kept
+// kept stays: a module the driver links on a host word's question (driver.warp lazily_linked) keeps its records
+static uint32_t arena_floor;
+void arena_kept(void) { arena_floor = *w2c_program_arena(running_wasi->program); }
+static void arena_given_back(struct w2c_wasi__snapshot__preview1* wasi, uint32_t before) {
+	uint32_t* top = w2c_program_arena(wasi->program);
+	uint32_t kept = before > arena_floor ? before : arena_floor;
+	if (*top > kept) memset(at(wasi, kept), 0, *top - kept);
+	*top = kept;
+}
 // A host word a program defines for a module it runs through wasmtime's C API (core/native/driver.warp
 // host_words_defined): a wasmtime_func_callback_t whose data is the word's number. The values (wasmtime_val_t, VALUE_BYTES
 // each) cross through the program's arena to its exported host_word(word, caller, values, count, results, count),
@@ -414,31 +313,6 @@ void* warp_host_callback(void* word, void* caller, const void* values, size_t co
 	memcpy(at(wasi, given), values, count * VALUE_BYTES);
 	answer(wasi->program, (u64)(uintptr_t)word, (u64)(uintptr_t)caller, given, count, answered, results_count);
 	memcpy(results, at(wasi, answered), results_count * VALUE_BYTES);
-	// given back zeroed: the arena past its top stays as fresh memory is, so an allocate after a host word (warp test's
-	// slots after test-list ran) never starts with an earlier word's bytes
-	memset(at(wasi, before), 0, *top - before);
-	*top = before;
+	arena_given_back(wasi, before);
 	return NULL;
-}
-// A host word the driver doesn't answer, owned by a library beside warp or by none, found at its first call: opening
-// libwarp_gpu and libwarp_window to look was half of hello's run once every program linked prelude.wasm, which
-// imports clipboard_text. Its data: the word's name, the engine its owner reads values with, the owner once found,
-// and the word naming it when none owns it (driver.warp unanswered_word)
-typedef void* (*wasm_callback_t)(void*, void*, const void*, size_t, void*, size_t);
-struct lazy_word { char* name; void* engine; wasm_callback_t owner; int64_t unanswered; int asked; };
-void* lazy_library_word(char* name, void* engine, int64_t unanswered) {
-	struct lazy_word* word = calloc(1, sizeof *word);
-	word->name = strdup(name);
-	word->engine = engine;
-	word->unanswered = unanswered;
-	return word;
-}
-void* warp_lazy_host_callback(void* data, void* caller, const void* values, size_t count, void* results, size_t results_count) {
-	struct lazy_word* word = data;
-	if (!word->asked) {
-		word->asked = 1;
-		word->owner = (wasm_callback_t)library_word(word->name);
-	}
-	if (word->owner) return word->owner(word->engine, caller, values, count, results, results_count);
-	return warp_host_callback((void*)(intptr_t)word->unanswered, caller, values, count, results, results_count);
 }

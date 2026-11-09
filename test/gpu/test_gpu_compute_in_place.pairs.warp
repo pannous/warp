@@ -1,0 +1,6 @@
+# gpu_compute changes the lists it is given where they are, whatever else the program does with them (card xs-float-xs)
+'xs = float[4]; gpu_compute("@group(0) @binding(0) var<storage, read_write> xs: array<f32>; @compute @workgroup_size(4) fn main(@builtin(global_invocation_id) id: vec3u) { xs[id.x] = f32(id.x) * 2.0; }", xs, 1); xs'	[0, 2, 4, 6]
+'xs = float[4]; gpu_compute("@group(0) @binding(0) var<storage, read_write> xs: array<f32>; @compute @workgroup_size(4) fn main(@builtin(global_invocation_id) id: vec3u) { xs[id.x] = f32(id.x) * 2.0; }", xs, 1); print xs; xs'	[0, 2, 4, 6]
+'xs = [1.0, 1.0, 1.0, 1.0]; y = xs; gpu_compute("@group(0) @binding(0) var<storage, read_write> xs: array<f32>; @compute @workgroup_size(4) fn main(@builtin(global_invocation_id) id: vec3u) { xs[id.x] = f32(id.x) * 2.0; }", xs, 1); y'	[0, 2, 4, 6]
+'xs = float[4]; gpu_compute("@group(0) @binding(0) var<storage, read_write> xs: array<f32>; @compute @workgroup_size(4) fn main(@builtin(global_invocation_id) id: vec3u) { xs[id.x] = f32(id.x) * 2.0; }", {xs: xs}, 1); xs'	[0, 2, 4, 6]
+'xs = float[4]; gpu_compute("@group(0) @binding(0) var<storage, read_write> xs: array<f32>; @compute @workgroup_size(4) fn main(@builtin(global_invocation_id) id: vec3u) { xs[id.x] = f32(id.x) * 2.0; }", xs, 1); xs#3'	4

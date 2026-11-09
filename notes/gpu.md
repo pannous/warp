@@ -9,14 +9,18 @@ threshold, on the CPU below it and without an adapter; tests compare GPU and CPU
 gpu_compute / gpu_render plumbing (src/graphics/gpu.rs, web/playground/host-gpu.js, notes/web_framework.md "web-apis: WebGPU").
 
 ## In warp now (the Rust paths below are the snapshot on branch rust-bootstrap)
-- gpu_compute(shader, arrays, workgroups) is a host word libwarp_gpu answers directly (crates/warp-gpu/warp_gpu.c
-  warp_word_gpu_compute, decision library-direct-refs), reading and building warp values through lib/native/warp_node.h.
+- gpu_compute(shader, arrays, workgroups) and gpu_render(shader, width, height, values) are host words a library
+  answers: natively the native host module (lib/host/native_host/gpu.warp host_gpu_compute, host_gpu_render over
+  libwgpu_native by FFI, notes/native_host.md "The GPU"), in the page web/playground/host-gpu.js over WebGPU. They are
+  the only GPU words: the Rust harness's gpu_compute_linear / gpu_map_linear / gpu_reduce_linear are gone (card
+  gpu-native-library); gpu_compute over a GPU list does what gpu_compute_linear did, and `@gpu` maps are to go
+  through gpu_compute (card xs-map-gpu).
 - GPU lists `[f32]` (decision gpu-bound-floats, extensions/gpu_lists/runtime.warp): f32 cells in linear memory from their
   creation, a square List $Node marked KindUnit.GpuList whose Int is (address << 32) + count. `xs: [f32] = …` asks for
   one; a list the program makes once (literal, comprehension, `float[n]`) at its main level and uses only by #, xs#i,
   xs#i = v, for, print and gpu_compute is one by itself (lib/rule_words.warp gpu_lists_packed, lib/wgsl.warp
-  gpu_bound), as is a creating form written in a gpu_compute call. libwarp_gpu binds the cells as the storage buffer
-  and writes results back into them (warp_node.h warp_floats): samples/acceleration/gpu_million.warp went 852 + 1686 ms → 138 +
+  gpu_bound), as is a creating form written in a gpu_compute call. gpu.warp binds the cells as the storage buffer
+  and writes results back into them (array_left): samples/acceleration/gpu_million.warp went 852 + 1686 ms → 138 +
   20 ms. Other list words refuse a `[f32]` list today; card f32-gpu gives reads a boxed copy (one function, which
   xs-map-gpu replaces by a kernel) and growth (a [count, capacity, cells] header, vector doubling). Linear memory is
   never freed yet (card packed-f32-memory).
@@ -79,8 +83,8 @@ WGSL has no f64 and no i64 (the shader-f64 feature is native-only and missing on
 ## What pays on the GPU (measured, release, M-series)
 - The round trip through a linear block (f64 → f32, upload, readback, back) costs ~11 ns an item + ~1–2 ms fixed;
   going through Nodes (gpu_compute of a GC list) costs ~1 µs an item and never pays. `gpu_compute(shader, xs, w)` of
-  a `linear xs = float[n]` lowers to the host word gpu_compute_linear (shared_arrays.rs; host.rs natively,
-  host-gpu.js in the browser), which runs the shader over the block's cells as f32 in place.
+  a GPU list `[f32]` runs the shader over its cells as they are, in place (in Rust: a `linear` block and the host word
+  gpu_compute_linear, both gone).
 - A fused CPU reduction (broadcasting.rs fused_sum: `sum(xs .op k)`, `sum(xs .op ys)` and `dot` are one loop, no list
   built; 3–15 ns an item) beats the GPU at every size, so Int reductions and element-wise ops are never offloaded.
   The GPU wins only on heavy per-item work (sin/exp/pow, long fused chains) or data that stays on the GPU.
@@ -239,14 +243,16 @@ shader per paint covers only the last pass. The plan, in warp's words, with $pre
   image and painting it shifted (probes/gpu/). Then the browser host, then samples/gpu/ocean.warp's waves as a texture.
 
 ## WGSL errors at their place in the program
-WGSL in `shader { … }` stays as written (no warp syntax converted into it; only `$name` holes). Both hosts report a
-shader that does not compile as `<word>: line:column: why` in the shader's text (native gpu.rs compile_errors, browser
-host-gpu.js checkedModule, `gpu_paint: …` there). pipeline::eval_source passes the failed program through
-shader_errors::relocated: it finds the program's shader blocks again in the source (warp_parser shader_blocks, the
-same dedent as the block's text: lines dropped around it, characters dropped before each line) and, when exactly one
-block has that place, says `<word>: why at line:column` in the program, which the CLI and the playground underline.
-Columns count `$name` as written, not as `values.name`. Two blocks that both have the place: the message stays as the
-GPU said it (no guess). Not relocated: shaders from imported modules, shaders given as quoted text.
+WGSL in `shader { … }` stays as written (no warp syntax converted into it; only `$name` holes). The block's reader
+(extensions/shader_blocks.warp shader_place) marks its text with where it stands: the line of its first written line,
+the columns before that line and before each later one, which the dedent took off. A paint, gpu_render or gpu_compute
+of a name the program assigns a shader block passes shader_words(s, place) (rules in extensions/rules/modules/
+prelude.warp, rule word shader_words_of): the GPU compiles the text placed as written, blank lines and spaces before
+it, so its own line:column is the program's. Both hosts then say `why at line:column` (host-gpu.js checkedModule,
+gpu.warp shader_failure out of naga's report), the runtime adds no call site (error_sentences names_place) and the
+playground marks the place (driver.js placeNamed, report.error_at). Columns after a `$name` hole on the same line count
+it as `values.name`. Not placed: a shader block given inline (`paint(shader {…})`), shaders from imported modules,
+shaders given as quoted text: their place stays the shader's own.
 
 ## GLSL (twigl, shadertoy)
 Not in the compiler, to keep Rust lean (naga's GLSL front end alone was a 705 KB glsl.wasm). Commit b04da3e2c has the
@@ -343,8 +349,8 @@ Shadertoy view URL) out of samples/ and lib/. The old files remain in git histor
 wgpu's Metal surface answers Occluded while NSWindow.occlusionState lacks "visible" (wgpu-hal metal/surface.rs,
 workaround for gfx-rs/wgpu#8309), and presented() then skips the frame. A native window opens behind the app in front
 (a run from a terminal or an agent is not activated), so a still picture's only present was dropped: black until
-closed. libwarp_gpu keeps the painting it could not show (unshown_kept) and warp_gpu_shown_again shows it;
-libwarp_window's held_open calls that on SDL_EVENT_WINDOW_EXPOSED (foreign.c window_layer connects the two). An
+closed. gpu.warp keeps the painting it could not show (shown_kept) and shown_again shows it; window.warp's event
+loop calls that on SDL_EVENT_WINDOW_EXPOSED. An
 animation needs nothing: its next frame shows. SDL_RaiseWindow/SyncWindow don't help (SDL's OCCLUDED flag lags).
 Checking a window by eye: capture it by window id (Quartz CGWindowList by the run's pid, screencapture -l), bring it
 to the front with System Events `set frontmost of (first process whose unix id is <pid>)`; SIGTERM does not end a

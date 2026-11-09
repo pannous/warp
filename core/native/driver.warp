@@ -72,6 +72,7 @@ CHANNEL_LISTEN_WORD = 18
 CHANNEL_PENDING_WORD = 19
 CHANNEL_NEXT_WORD = 20
 CHANNEL_SEND_WORD = 21
+SAVE_PICTURE_WORD = 22
 # the end of a field in warp.wasm's parse-code encoding (extensions/parse_words.warp FIELD_END)
 FIELD_END = 1
 # the system values a program sets (set_system_value), kept by foreign.c by slot; before that, the size a window opens
@@ -79,12 +80,17 @@ FIELD_END = 1
 WINDOW_WIDTH_SLOT = 0
 WINDOW_HEIGHT_SLOT = 1
 DISPLAY_DPI_SLOT = 2
-# the running run's linker, engine, linked instances and unicode instance (run_state), for a host word that links a
-# module on its first call (canonical_text); a nested run (eval) keeps its own and gives the outer one back
+# the running run's linker, engine, linked instances and store context (run_state), for a host word that links a
+# module on its first call (lazily_linked); a nested run (eval) keeps its own and gives the outer one back
 RUN_SLOT = 3
 # the run's timers (signal_listen): a table the run allocates, since a host word's own allocations end with it (events)
 TIMERS_SLOT = 4
-# a run's channel listeners (lib/channels.warp), in its block past the unicode instance: how many, then each one's
+# where the memory of the program a host word of the native host module serves starts (a GPU list's cells are there)
+PROGRAM_MEMORY_SLOT = 5
+# whether the run linked unicode (canonical_text), the native host module (host_export), at these places of its block
+UNICODE_LINKED_AT = 32
+HOST_LINKED_AT = 40
+# a run's channel listeners (lib/channels.warp), in its block past those: how many, then each one's
 # id, the bytes of its channel's file read so far, its name's length and the name
 LISTENERS_AT = 48
 LISTENERS_MAX = 32
@@ -168,13 +174,10 @@ keep_value(slot: i64, value: i64) from "c"
 route_online(): i32 from "c"
 display_extent(height: i32): i64 from "c"
 next_painting(): i32 from "c"
+last_error(): i32 from "c"
+strerror(code: i32): handle from "c"
 gpu_paints(): i32 from "c"
-gpu_painted(shader: pointer, values: pointer, width: i64, height: i64, pixels: pointer): i32 from "c"
-library_system_value(name: text, value: pointer): i32 from "c"
-library_system_value_set(name: text, value: i64): i32 from "c"
-shader_shown(shader: pointer, values: pointer, width: i64, height: i64): i32 from "c"
-pixels_shown(pixels: pointer, width: i64, height: i64): i32 from "c"
-lazy_library_word(name: pointer, engine: handle, unanswered: i64): handle from "c"
+arena_kept(): nothing from "c"
 mkdir(path: pointer, mode: i32): i32 from "c"
 atoll(digits: text): i64 from "c"
 atof(digits: pointer): f64 from "c"
@@ -369,12 +372,17 @@ invoked_path(): text := {
 	named = arg(0)
 	if starts_with(named, "/") { return named }
 	if contains_byte(named, SLASH) { return joined(joined(current_folder(), "/"), named) }
+	found = path_found(named)
+	if found.length > 0 then found else executable_path()
+}
+# the first of $PATH's folders' executables named so, else the empty text
+path_found(named: text): text := {
 	folders = getenv("PATH")
 	for i in 0..field_count(folders, COLON) {
 		candidate = joined(joined(field(folders, i, COLON), "/"), named)
 		if access(c_string(candidate), EXECUTABLE) == 0 { return candidate }
 	}
-	executable_path()
+	""
 }
 contains_byte(t: text, byte: int): bool := field_count(t, byte) > 1
 current_folder(): text := {
@@ -619,9 +627,11 @@ warp_config(fuel: bool, heap_bytes: i64): handle := {
 
 # the host words the module imports, each defined as its callback (lib/native/foreign.c warp_host_callback, which calls
 # host_word) with the type the module declares: std_io, exit, and each C function its warp.c_functions section
-# describes; a word the driver doesn't answer as a library's own (library_bound)
-host_words_defined(linker: handle, engine: handle, context: handle, compiled: handle, module: text, trap: pointer): nothing := {
-	table = custom_section(module, "warp.c_functions")
+# describes; a word the driver doesn't answer as a library's own (library_bound). `guarded`: a C function that opens a
+# window refused (headless_checked), but in a module the driver links on its own question, warp's own, which minds
+# WARP_NO_WINDOW itself (lazily_linked: the native host module's window)
+host_words_defined(linker: handle, engine: handle, context: handle, compiled: handle, module: text, guarded: bool, trap: pointer): nothing := {
+	table = c_functions_table(module)
 	imports = allocate(VECTOR_BYTES)
 	wasmtime_module_imports(compiled, imports)
 	for i in 0..long_at(imports).value {
@@ -631,12 +641,19 @@ host_words_defined(linker: handle, engine: handle, context: handle, compiled: ha
 		line = c_line(table, from, name)
 		# (a wasm module's export is linked as its instance's, instances_linked, unless values cross into its memory)
 		if line.length > 0 and not is_wasm_path(from) {
-			headless_checked(name, field(line, 1, TAB))
+			if guarded { headless_checked(name, field(line, 1, TAB)) }
 			word_defined(linker, import, foreign_of(line, 0), trap)
 		}
 		if line.length > 0 and is_wasm_path(from) and crosses_memory(line) { word_defined(linker, import, foreign_of(line, wasm_exports_of(linker, context, from, name)), trap) }
-		if same_text(from, "host") { host_word_defined(linker, engine, import, name, trap) }
+		if same_text(from, "host") { word_defined(linker, import, answered_word(name), trap) }
 	}
+}
+# the lines of the C functions a module calls: a GC module's, else a primitive one's, whose values are numbers, texts
+# as their (address, length) pairs and addresses of its memory (decision primitive-c-in-driver: what a native build's
+# glue does, primitive.warp c_function_glue)
+c_functions_table(module: text): text := {
+	table = custom_section(module, "warp.c_functions")
+	if table.length > 0 then table else custom_section(module, "warp.primitive_c_functions")
 }
 # a C function that opens a native window (raylib's InitWindow, SDL's, GLFW's) ends the run before it starts under
 # WARP_NO_WINDOW or CI, so no test or agent run pops one up
@@ -668,6 +685,7 @@ answered_word(name: text): i64 := {
 	if same_text(name, "real_path") { return REAL_PATH_WORD }
 	if same_text(name, "std_pure") { return STD_PURE_WORD }
 	if same_text(name, "paint") { return PAINT_WORD }
+	if same_text(name, "save_picture") { return SAVE_PICTURE_WORD }
 	if same_text(name, "key_held") { return KEY_HELD_WORD }
 	if same_text(name, "signal_listen") { return SIGNAL_LISTEN_WORD }
 	unanswered_word(name)
@@ -680,22 +698,24 @@ unanswered_word(name: text): i64 := {
 	word_at(cell + 4).value = name.length
 	0 - (cell as i64)
 }
+# a host word the driver doesn't answer, answered by the native host module's
+# host_<word> (host_text_coverage) with the values as they are; one it lacks ends the run naming it
+host_word_answered(caller: handle, name: text, given: pointer, count: i64, results: pointer, results_count: i64): nothing := {
+	context = wasmtime_caller_context(caller)
+	function = allocate(EXTERN_BYTES)
+	if not host_export(context, joined("host_", name), function) { return unanswered(name) }
+	keep_value(PROGRAM_MEMORY_SLOT, guest_memory(caller, context))
+	trap = allocate(8)
+	long_at(trap).value = 0
+	checked(wasmtime_func_call(context, function + 8, given, count, results, results_count, trap), trap)
+}
 # the run ended naming a host word it called that this host lacks
 unanswered(name: text): nothing := {
 	complain(joined(joined("the host word ", name), " is not in warp yet"))
 	exit(1)
 }
-# a host word the driver answers, else one a library beside warp owns, bound to that library's callback
-# warp_word_<name> (lib/native/foreign.c library_word) with the engine as its data: it reads and builds the module's
-# values in place (lib/native/warp_node.h, decision library-direct-refs); else a word naming it when called
-host_word_defined(linker: handle, engine: handle, import: handle, name: text, trap: pointer): nothing := {
-	word = answered_word(name)
-	if word >= 0 { return word_defined(linker, import, word, trap) }
-	# (its library looked for at its first call, lib/native/foreign.c warp_lazy_host_callback: a module importing it
-	# whose program never calls it opens none)
-	type = wasm_externtype_as_functype_const(wasm_importtype_type(import))
-	checked(wasmtime_linker_define_func(linker, "host", 4, name, name.length, type, c_function("warp_lazy_host_callback"), lazy_library_word(c_string(name), engine, word), 0), trap)
-}
+# a host word the driver answers, else a word naming it when called, which the native host module answers
+# (host_word_answered)
 # the import defined as warp_host_callback, `word` its data
 word_defined(linker: handle, import: handle, word: i64, trap: pointer): nothing := {
 	from = native_vector_text(wasm_importtype_module(import))
@@ -717,7 +737,7 @@ instances_linked(linker: handle, engine: handle, context: handle, compiled: hand
 	for i in 0..long_at(imports).value {
 		from = native_vector_text(wasm_importtype_module(native_long(long_at(imports + 8).value + i * 8)))
 		path = instance_path(from, library)
-		if path.length > 0 and not contains_line(cell_text(linked), from) { instance_defined(linker, engine, context, from, path, linked, library, trap) }
+		if path.length > 0 and not contains_line(cell_text(linked), from) { instance_defined(linker, engine, context, from, path, linked, library, yes, trap) }
 	}
 }
 # where the instance of that import module is: runtime.wasm or modules/<m>.wasm of the library folder, a module the
@@ -766,7 +786,7 @@ contains_line(lines: text, line: text): bool := {
 	no
 }
 # the module at `path` instantiated and defined in the linker as `name`, its start run
-instance_defined(linker: handle, engine: handle, context: handle, name: text, path: text, linked: pointer, library: text, trap: pointer): pointer := {
+instance_defined(linker: handle, engine: handle, context: handle, name: text, path: text, linked: pointer, library: text, guarded: bool, trap: pointer): pointer := {
 	text_kept(linked, joined(joined(cell_text(linked), name), "\n"))
 	module = read_file(path)
 	if module.length == 0 {
@@ -775,7 +795,7 @@ instance_defined(linker: handle, engine: handle, context: handle, name: text, pa
 	}
 	compiled = compiled_module(engine, module, machine_code_file(path, PROGRAM_GC_HEAP_BYTES), trap)
 	instances_linked(linker, engine, context, compiled, linked, library, trap)
-	host_words_defined(linker, engine, context, compiled, module, trap)
+	host_words_defined(linker, engine, context, compiled, module, guarded, trap)
 	checked(wasmtime_linker_define_unknown_imports_as_traps(linker, compiled), trap)
 	instance = allocate(INSTANCE_BYTES)
 	checked(wasmtime_linker_instantiate(linker, context, compiled, instance, trap), trap)
@@ -810,6 +830,9 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	wasi_config_inherit_stdin(config)
 	output_to(config, output)
 	name_time_zone()
+	# PWD the real current folder, a module's cwd (wasi.warp std_os_cwd): a parent that changed folder without saying
+	# so (`warp test`'s runs, chdir before exec) left its own, and relative paths then resolved from the wrong one
+	setenv(c_string("PWD"), c_string(current_folder()), 1)
 	wasi_config_inherit_env(config)
 	# the current folder for relative paths and the root for absolute ones, as warp's own host opens them
 	wasi_config_preopen_dir(config, ".", ".", yes)
@@ -823,9 +846,9 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	text_kept(linked, "")
 	outer_run = kept_value(RUN_SLOT)
 	if outer_run == 0 { timers_forgotten() }
-	keep_value(RUN_SLOT, run_state(linker, engine, linked) as i64)
+	keep_value(RUN_SLOT, run_state(linker, engine, linked, context) as i64)
 	instances_linked(linker, engine, context, compiled, linked, library_folder(), trap)
-	host_words_defined(linker, engine, context, compiled, module, trap)
+	host_words_defined(linker, engine, context, compiled, module, yes, trap)
 	checked(wasmtime_linker_define_unknown_imports_as_traps(linker, compiled), trap)
 	instance = allocate(INSTANCE_BYTES)
 	checked(wasmtime_linker_instantiate(linker, context, compiled, instance, trap), trap)
@@ -843,6 +866,7 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	failure = call_failure(context, instance, error, trap, output)
 	if results_count > 0 and output.length == 0 { print_result(results) }
 	if failure.length == 0 and outer_run == 0 { failure = events_run(linker, context, instance, output) }
+	if failure.length == 0 and outer_run == 0 { host_run_ended(context) }
 	crash_context_restored(outer)
 	keep_value(RUN_SLOT, outer_run)
 	# the run's GC heap, instance and machine code given back: `warp rebuild` runs four compilers in one process, each
@@ -853,41 +877,52 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	wasm_engine_delete(engine)
 	failure
 }
-# a run's linker, engine and linked-instances cell, whether canonical_text linked unicode (1) and that instance, kept in
-# the run's block: what a host word allocates is given back when it returns (foreign.c warp_host_callback)
-run_state(linker: handle, engine: handle, linked: pointer): pointer := {
+# a run's linker, engine, linked-instances cell and store context, and whether it linked unicode and the native host
+# module yet, kept in the run's block: what a host word allocates is given back when it returns (foreign.c
+# warp_host_callback)
+run_state(linker: handle, engine: handle, linked: pointer, context: handle): pointer := {
 	run = allocate((LISTENERS_AT + 8 + LISTENERS_MAX * LISTENER_BYTES) as i32)
 	long_at(run + LISTENERS_AT as i32).value = 0
 	long_at(run).value = linker
 	long_at(run + 8).value = engine
 	long_at(run + 16).value = linked as i64
-	long_at(run + 24).value = 0
+	long_at(run + 24).value = context
+	long_at(run + UNICODE_LINKED_AT as i32).value = 0
+	long_at(run + HOST_LINKED_AT as i32).value = 0
 	run
 }
-# `"é" == "e◌́"` (decisions nfc-tables, nfc-slot; notes/text_equality_nfc.md): the runtime's canonical_text, a text's
-# NFC by lib/unicode, whose module (modules/unicode.wasm) the run links on this first call, never at its start; a
-# library folder without it ends the run naming the file (instance_defined), never a silent byte compare. A program
-# linked to a runtime gets the unicode of that runtime's library; a module without one (the compiler) the installed
-# warp's, both of a finished build: a `warp rebuild` runs its compilers beside a lib/ whose runtime.wasm and modules/
-# it is writing, which do not fit together until it ends
-canonical_text_answered(context: handle, given: pointer, result: pointer): nothing := {
+run_context(): handle := long_at(kept_value(RUN_SLOT) as i32 + 24).value
+# the export `name` of the standard module `module_name` into `function`, no when it has none: the module linked into
+# the run at the first ask, never at its start, so a run that never asks links none; whether it did is kept at `flag`
+# of the run's block. A program linked to a runtime gets the module of that runtime's library; a module without one
+# (the compiler) the installed warp's, both of a finished build: a `warp rebuild` runs its compilers beside a lib/ whose
+# runtime.wasm and modules/ it is writing, which do not fit together until it ends. A library folder without the module
+# ends the run naming the file (instance_defined)
+lazily_linked(context: handle, module_name: text, flag: i64, name: text, function: pointer): bool := {
 	run = kept_value(RUN_SLOT) as i32
-	trap = allocate(8)
-	long_at(trap).value = 0
-	if long_at(run + 24).value == 0 {
-		module_name = "warp/unicode"
+	if long_at(run + flag as i32).value == 0 {
+		trap = allocate(8)
+		long_at(trap).value = 0
 		linked = long_at(run + 16).value as i32
 		library = if contains_line(cell_text(linked), "warp_runtime") then library_folder() else installed_library()
-		instance = instance_defined(long_at(run).value, long_at(run + 8).value, context, module_name, instance_path(module_name, library), linked, library, trap)
-		memcpy(run + 32, native_pointer(instance), INSTANCE_BYTES)
-		long_at(run + 24).value = 1
+		instance_defined(long_at(run).value, long_at(run + 8).value, context, module_name, instance_path(module_name, library), linked, library, no, trap)
+		# (linked in a host word, its records kept past the word's end)
+		arena_kept()
+		long_at(run + flag as i32).value = 1
 	}
+	wasmtime_linker_get(long_at(run).value, context, module_name, module_name.length, name, name.length, function)
+}
+# `"é" == "e◌́"` (decisions nfc-tables, nfc-slot; notes/text_equality_nfc.md): the runtime's canonical_text, a text's
+# NFC by lib/unicode, whose module (modules/unicode.wasm) the run links on this first call (lazily_linked), never a
+# silent byte compare
+canonical_text_answered(context: handle, given: pointer, result: pointer): nothing := {
 	function = allocate(EXTERN_BYTES)
-	word = "canonical_text"
-	if not wasmtime_instance_export_get(context, run + 32, word, word.length, function) {
+	if not lazily_linked(context, "warp/unicode", UNICODE_LINKED_AT, "canonical_text", function) {
 		complain("modules/unicode.wasm exports no canonical_text: warp rebuild writes it anew")
 		exit(1)
 	}
+	trap = allocate(8)
+	long_at(trap).value = 0
 	checked(wasmtime_func_call(context, function + 8, given, 1, result, 1, trap), trap)
 }
 ## machine-wide channels (lib/channels.warp; the page's are BroadcastChannels, web/playground/host-tasks.js): every
@@ -1166,7 +1201,7 @@ kept_machine_code(compiled: handle, machine_code: text, key: text, fingerprint: 
 host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointer, results_count: i64): nothing := {
 	number = long_at(given + VALUE_OFFSET).value
 	if word == EXIT_WORD { exit(number as i32) }
-	if word < 0 { return unanswered(text_from(word_at((0 - word) as i32).value, word_at((0 - word) as i32 + 4).value)) }
+	if word < 0 { return host_word_answered(caller, text_from(word_at((0 - word) as i32).value, word_at((0 - word) as i32 + 4).value), given, count, results, results_count) }
 	if word == SLEEP_WORD { return slept(number) }
 	if word == CLOCK_WORD { return int_result(milliseconds_now(), results) }
 	if word == RANDOM_WORD { return float_result(drand48(), results) }
@@ -1177,6 +1212,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if word == SIGNAL_LISTEN_WORD { return timer_listened(given) }
 	context = wasmtime_caller_context(caller)
 	if word == PAINT_WORD { return painted(caller, context, given) }
+	if word == SAVE_PICTURE_WORD { return guest_text_of(caller, context, picture_saved(caller, context, given), results) }
 	if word == SYSTEM_VALUE_WORD { return int_result(system_value(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64)), results) }
 	if word == PARSE_CODE_WORD { return code_parsed(caller, context, given, results) }
 	if word == EVAL_CODE_WORD { return code_evaluated(caller, context, given, results) }
@@ -1193,6 +1229,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	listed = given + 2 * VALUE_BYTES
 	if same_text(module, "os") and same_text(member, "command") { return os_command(caller, context, listed, results) }
 	if same_text(module, "os") and same_text(member, "exec") { return os_exec(caller, context, listed, results) }
+	if same_text(module, "os") and same_text(member, "run") { return os_run(caller, context, listed, results) }
 	# net.start (lib/net.warp fetch_later): the page answers later, the native warp at once, as net.get
 	if same_text(module, "net") and (same_text(member, "get") or same_text(member, "start")) { return url_got(caller, context, shown(caller, context, item_of(caller, context, listed, 1)), results) }
 	if same_text(module, "regex") { return regex_answered(caller, context, member, listed, results) }
@@ -1243,14 +1280,41 @@ os_command(caller: handle, context: handle, listed: pointer, result: pointer): n
 # os.exec(words): the argument vector (`exec sh "crontab -l"`, lib/os.warp) run as that command, each word a word of
 # its own however it reads (quoted for sh, no expansion), what it printed; else the Error naming the command (card
 # crontab-sample-error)
-os_exec(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
-	words = item_of(caller, context, listed, 1)
-	# (a command of one word, `sh "date"`, is that word)
-	if guest_flag(caller, context, "is_textual", words) { return line_run(caller, context, sh_quoted(shown(caller, context, words)), result) }
+os_exec(caller: handle, context: handle, listed: pointer, result: pointer): nothing := line_run(caller, context, words_line(caller, context, item_of(caller, context, listed, 1)), result)
+# an argument vector as the sh line running it, each word quoted; a command of one word, `sh "date"`, is that word
+words_line(caller: handle, context: handle, words: pointer): text := {
+	if guest_flag(caller, context, "is_textual", words) { return sh_quoted(shown(caller, context, words)) }
 	count = guest_number(caller, context, "item_count", words)
 	line = ""
 	for i in 1..(count + 1) { line = joined(joined(line, " "), sh_quoted(shown(caller, context, item_of(caller, context, words, i)))) }
-	line_run(caller, context, line, result)
+	line
+}
+# os.run(words): the argument vector run as os.exec runs it, its {status, out, err} (trailing newlines dropped); a
+# failing command is no error, its status says so, killed by a signal 128 + the signal
+os_run(caller: handle, context: handle, listed: pointer, result: pointer): nothing := line_ran(caller, context, words_line(caller, context, item_of(caller, context, listed, 1)), true, result)
+# a command's {status, out, err}, of pclose's wait status
+run_recorded(caller: handle, context: handle, printed: Printed, waited: i32, said: text, result: pointer): nothing := {
+	status = if waited % 256 == 0 then waited / 256 else 128 + waited % 128
+	fields = allocate(3 * VALUE_BYTES)
+	value = allocate(VALUE_BYTES)
+	guest_int(caller, context, "new_int", status as i64, value)
+	field_built(caller, context, "status", value, fields)
+	guest_text(caller, context, printed.at, trimmed_size(printed), value)
+	field_built(caller, context, "out", value, fields + VALUE_BYTES)
+	guest_text_of(caller, context, trimmed_end(read_file(said)), value)
+	field_built(caller, context, "err", value, fields + 2 * VALUE_BYTES)
+	unlink(said)
+	free(printed.at)
+	square_list_built(caller, context, fields, 3, value)
+	guest_call(caller, context, "new_map", value, 1, result)
+}
+# the key `name: value` built in the module
+field_built(caller: handle, context: handle, name: text, value: pointer, result: pointer): nothing := {
+	parts = allocate(3 * VALUE_BYTES)
+	guest_bytes_built(caller, context, native_pointer(name.address), name.length as i64, "new_symbol", parts)
+	guest_text_of(caller, context, ":", parts + VALUE_BYTES)
+	memcpy(parts + 2 * VALUE_BYTES, native_pointer(value), VALUE_BYTES)
+	guest_call(caller, context, "new_spelled_key", parts, 3, result)
 }
 # a text as one sh word: in single quotes, each ' in it as '\''
 sh_quoted(t: text): text := {
@@ -1309,19 +1373,27 @@ words_run(caller: handle, context: handle, command: text, words: Arguments, resu
 	}
 	answered(caller, context, command, printed, exit_status, said, result)
 }
-line_run(caller: handle, context: handle, line: text, result: pointer): nothing := {
+line_run(caller: handle, context: handle, line: text, result: pointer): nothing := line_ran(caller, context, line, false, result)
+# the sh line run, what it said on stderr kept in a file: recorded its {status, out, err}, else what it printed
+line_ran(caller: handle, context: handle, line: text, recorded: bool, result: pointer): nothing := {
 	said = joined(compiled_path(), ".stderr")
 	pipe = popen(c_string(joined(joined(joined("{ ", line), "\n} 2>"), said)), c_string("r"))
 	if pipe == 0 { return guest_error(caller, context, joined("cannot run sh for ", line), result) }
 	printed = piped(pipe)
-	answered(caller, context, joined("sh -c ", line), printed, pclose(pipe) / 256, said, result)
+	waited = pclose(pipe)
+	if recorded { return run_recorded(caller, context, printed, waited, said, result) }
+	answered(caller, context, joined("sh -c ", line), printed, waited / 256, said, result)
+}
+# the size of what a command printed, its trailing newlines left off
+trimmed_size(printed: Printed): i64 := {
+	size = printed.size
+	while size > 0 and native_byte(printed.at + size - 1) == NEWLINE { size = size - 1 }
+	size
 }
 # what a command printed, its trailing newlines left off, else (exit status not 0) the Error naming the status and
 # what it said on stderr
 answered(caller: handle, context: handle, command: text, printed: Printed, exit_status: i32, said: text, result: pointer): nothing := {
-	size = printed.size
-	while size > 0 and native_byte(printed.at + size - 1) == NEWLINE { size = size - 1 }
-	if exit_status == 0 { guest_text(caller, context, printed.at, size, result) } else {
+	if exit_status == 0 { guest_text(caller, context, printed.at, trimmed_size(printed), result) } else {
 		guest_error(caller, context, joined(joined(joined(joined(command, " failed (exit status: "), text_of(exit_status)), "): "), trimmed_end(read_file(said))), result)
 	}
 	unlink(said)
@@ -1476,23 +1548,22 @@ call_failure(context: handle, instance: pointer, error: handle, trap: pointer, o
 	if output.length == 0 { failed_raising(error, trap, raised_message(context, instance, trap)) }
 	failure_said(error, trap, raised_message(context, instance, trap))
 }
-# system_value(name): the machine's readings that are plain libc; the others (battery, mouse, window, display …) come
-# with the libraries that own them (decision libraries-not-core), forwarded to them (lib/native/foreign.c
-# library_system_value); one no library owns ends the run naming it
+# system_value(name): the machine's readings that are plain libc; the others (mouse, window, keys …) come with the
+# native host module (decision libraries-not-core, host_owns); one it does not own ends the run naming it
 system_value(name: text): i64 := {
 	if same_text(name, "time of day") { return time_of_day() }
 	if same_text(name, "view_width") { return terminal_extent(0, "COLUMNS", 80) }
 	if same_text(name, "view_height") { return terminal_extent(1, "LINES", 24) }
-	if same_text(name, "window_width") { return kept_or(WINDOW_WIDTH_SLOT, NATIVE_VIEW_WIDTH) }
-	if same_text(name, "window_height") { return kept_or(WINDOW_HEIGHT_SLOT, NATIVE_VIEW_HEIGHT) }
 	if same_text(name, "display_dpi") { return kept_or(DISPLAY_DPI_SLOT, DEFAULT_DPI) }
 	if same_text(name, "display_width") { return display_side(0, "display.width") }
 	if same_text(name, "display_height") { return display_side(1, "display.height") }
 	if same_text(name, "online") { return route_online() as i64 }
 	if same_text(name, "gpu_paints") { return gpu_paints() as i64 }
-	answer = allocate(8)
-	if library_system_value(name, answer) != 0 { return long_at(answer).value }
-	if windowless(name) { return 0 }
+	if same_text(name, "program memory") { return kept_value(PROGRAM_MEMORY_SLOT) }
+	# (an open window tells its size as its user made it; before, the size the program set, else the view's)
+	if host_asked("host_owns", name) != 0 { return host_asked("host_value", name) }
+	if same_text(name, "window_width") { return kept_or(WINDOW_WIDTH_SLOT, NATIVE_VIEW_WIDTH) }
+	if same_text(name, "window_height") { return kept_or(WINDOW_HEIGHT_SLOT, NATIVE_VIEW_HEIGHT) }
 	complain(joined(joined("the system value ", name), " is not in warp yet"))
 	exit(1)
 	0
@@ -1605,6 +1676,11 @@ code_list_built(caller: handle, context: handle, encoding: text, at: pointer, co
 	guest_text_of(caller, context, encoded_field(encoding, at), parts + 2 * VALUE_BYTES)
 	items = allocate((count as i32 + 1) * VALUE_BYTES)
 	for i in 0..count { code_built(caller, context, encoding, at, items + (i as i32) * VALUE_BYTES) }
+	square_list_built(caller, context, items, count, parts)
+	guest_call(caller, context, "new_spelled_list", parts, 3, result)
+}
+# a square list of the `count` values at `items`, built from the last one on, a cell at a time (new_list), into `result`
+square_list_built(caller: handle, context: handle, items: pointer, count: i64, result: pointer): nothing := {
 	cell = allocate(3 * VALUE_BYTES)
 	byte_at(cell + VALUE_BYTES).value = ANYREF
 	long_at(cell + VALUE_BYTES + VALUE_OFFSET).value = 0
@@ -1616,8 +1692,7 @@ code_list_built(caller: handle, context: handle, encoding: text, at: pointer, co
 		guest_call(caller, context, "new_list", cell, 3, cell + VALUE_BYTES)
 		i = i - 1
 	}
-	memcpy(parts, native_pointer(cell + VALUE_BYTES), VALUE_BYTES)
-	guest_call(caller, context, "new_spelled_list", parts, 3, result)
+	memcpy(result, native_pointer(cell + VALUE_BYTES), VALUE_BYTES)
 }
 # the field at `at`, up to its FIELD_END, `at` advanced past that
 encoded_field(encoding: text, at: pointer): text := {
@@ -1638,10 +1713,61 @@ display_side(height: i32, name: text): i64 := {
 	}
 	side
 }
-# `window.width = 800` (the size a window opens at, told the libraries too), `display.dpi = 300 dpi`, the others the
-# libraries' (window_open: without a window library none opens) or read only
+# `window.width = 800` (the size a window opens at, told the native host module too), `display.dpi = 300 dpi`, the
+# others the native host module's (window_open) or read only
 system_value_set(name: text, value: i64): nothing := {
-	if library_system_value_set(name, value) == 0 and not same_text(name, "window_open") { slot_set(name, value) }
+	if host_told("host_value_set", name, value, 1) == 0 { slot_set(name, value) }
+}
+## the native host module (decision window-in-warp): what the playground's JavaScript answers beyond the driver's own
+## words, natively in warp, lib/host/native_host.warp (its window over SDL3 and the system's fonts, its sound over SDL3's audio
+## and the system's decoders): its system values, the layer a painting shows in, the host words it answers as
+## host_<word>, the run's end (a still picture held open, the sounds heard out)
+# (primitive mode has no text constants: its name `warp/native_host` and the prefix `host_` are written where read)
+host_export(context: handle, name: text, function: pointer): bool := lazily_linked(context, "warp/native_host", HOST_LINKED_AT, name, function)
+# the run's end told the native host module, when the run linked it: a still picture stays shown till its window
+# closes, the sounds play out
+host_run_ended(context: handle): nothing := {
+	if long_at(kept_value(RUN_SLOT) as i32 + HOST_LINKED_AT as i32).value != 0 { guest_call(0, context, "host_run_ended", 0, 0, allocate(VALUE_BYTES)) }
+}
+# its export `export` of a system value's name, its number; host_told also of a number after it (`numbers`: 1)
+host_asked(export: text, name: text): i64 := host_told(export, name, 0, 0)
+host_told(export: text, name: text, value: i64, numbers: i64): i64 := {
+	context = run_context()
+	values = allocate(2 * VALUE_BYTES)
+	guest_text(0, context, native_pointer(name.address), name.length as i64, values)
+	byte_at(values + VALUE_BYTES).value = KIND_I64
+	long_at(values + VALUE_BYTES + VALUE_OFFSET).value = value
+	result = allocate(VALUE_BYTES)
+	guest_call(0, context, export, values, 1 + numbers, result)
+	value_number(result)
+}
+## C calling a warp function back (card ffi-callbacks): a trampoline of lib/native/foreign.c, which lib/callbacks.warp
+## c_callback handed C, calls this during the C call; it calls that module's export c_callback_fired(slot, a … f)
+c_callback_answered(slot: i64, a: i64, b: i64, c: i64, d: i64, e: i64, f: i64): i64 := {
+	context = run_context()
+	function = allocate(EXTERN_BYTES)
+	if not wasmtime_linker_get(long_at(kept_value(RUN_SLOT) as i32).value, context, "warp/callbacks", 14, "c_callback_fired", 16, function) {
+		complain("C called a callback back, but the run links no warp/callbacks exporting c_callback_fired")
+		exit(1)
+	}
+	values = allocate(7 * VALUE_BYTES)
+	integer_value_set(values, slot)
+	integer_value_set(values + VALUE_BYTES, a)
+	integer_value_set(values + 2 * VALUE_BYTES, b)
+	integer_value_set(values + 3 * VALUE_BYTES, c)
+	integer_value_set(values + 4 * VALUE_BYTES, d)
+	integer_value_set(values + 5 * VALUE_BYTES, e)
+	integer_value_set(values + 6 * VALUE_BYTES, f)
+	result = allocate(VALUE_BYTES)
+	trap = allocate(8)
+	long_at(trap).value = 0
+	checked(wasmtime_func_call(context, function + 8, values, 7, result, 1, trap), trap)
+	value_number(result)
+}
+# a wasmtime_val_t holding an i64
+integer_value_set(value: pointer, n: i64): nothing := {
+	byte_at(value).value = KIND_I64
+	long_at(value + VALUE_OFFSET).value = n
 }
 slot_set(name: text, value: i64): nothing := {
 	slot = if same_text(name, "window_width") then WINDOW_WIDTH_SLOT else if same_text(name, "window_height") then WINDOW_HEIGHT_SLOT else if same_text(name, "display_dpi") then DISPLAY_DPI_SLOT else -1
@@ -1655,8 +1781,6 @@ slot_set(name: text, value: i64): nothing := {
 	}
 	keep_value(slot, value)
 }
-# what a window would tell, without one: no window open, no pointer, no key, no GPU drawing (paint is no window)
-windowless(name: text): bool := same_text(name, "window_open") or same_text(name, "gpu_drawing") or same_text(name, "key_down") or same_text(name, "key code held") or same_text(name, "mouse_x") or same_text(name, "mouse_y") or same_text(name, "mouse_down") or same_text(name, "mouse_wheel")
 # outside a window the view is the terminal: its columns (rows), else the variable's, else the default
 terminal_extent(rows: i32, variable: text, default: i64): i64 := {
 	measured = terminal_size(rows)
@@ -1703,6 +1827,8 @@ guest_text_of(caller: handle, context: handle, t: text, result: pointer): nothin
 ## an alpha byte its color, any other ink. A shader paints on the GPU, which the native warp has not yet
 PAPER = 250
 INK = 29
+OPAQUE = 4278190080
+PIXEL_BYTES = 4
 COLOR_FROM = 16777216
 STORED_MOST = 65535
 ADLER_MODULUS = 65521
@@ -1711,24 +1837,55 @@ FOLDER_MODE = 493
 PNG_SIGNATURE_HIGH = 2303741511
 PNG_SIGNATURE_LOW = 218765834
 painted(caller: handle, context: handle, given: pointer): nothing := {
-	width = long_at(given + VALUE_BYTES + VALUE_OFFSET).value
-	height = long_at(given + 2 * VALUE_BYTES + VALUE_OFFSET).value
+	width = picture_width(given)
+	height = picture_height(given)
 	if width > 0 and height > 0 {
 		pixels = painted_pixels(caller, context, given, width, height)
-		if pixels != 0 { png_written(pixels, width, height) }
+		if pixels != 0 {
+			path = painting_path()
+			failed = png_written(pixels, width, height, path)
+			if failed.length > 0 { return complain(failed) }
+			complain(joined(joined(joined(joined(joined("painted ", text_of(width)), "×"), text_of(height)), ": "), path))
+		}
 	}
 }
-# the picture's pixels: a WGSL shader's, its values the uniform, from the GPU (lib/native/foreign.c, libwarp_gpu),
-# else the list's; 0 when a library showed them in its open window (foreign.c shader_shown, pixels_shown)
+# the width and height a painting's values (picture, width, height, …) give
+picture_width(given: pointer): i64 := long_at(given + VALUE_BYTES + VALUE_OFFSET).value
+picture_height(given: pointer): i64 := long_at(given + 2 * VALUE_BYTES + VALUE_OFFSET).value
+# the next painting's file in the temporary folder: warp-paint/paint.png, then paint-2.png …
+painting_path(): text := {
+	folder = joined(temporary_folder(), "warp-paint")
+	mkdir(c_string(folder), FOLDER_MODE)
+	number = next_painting()
+	joined(folder, if number == 1 then "/paint.png" else joined(joined("/paint-", text_of(number)), ".png"))
+}
+# save(canvas, "hello.png") of lib/draw: the canvas's pixels (picture, width, height, file) as a PNG in that file; why
+# it could not, else "" (lib/draw raises it)
+picture_saved(caller: handle, context: handle, given: pointer): text := {
+	width = picture_width(given)
+	height = picture_height(given)
+	png_written(pixels_of(caller, context, given, width * height), width, height, shown(caller, context, given + 3 * VALUE_BYTES))
+}
+# the picture's pixels: a WGSL shader's, its values the uniform, from the GPU (the native host module's gpu part,
+# lib/host/native_host/gpu.warp, over libwgpu_native), else the list's; 0 when that module showed them in its open window
 painted_pixels(caller: handle, context: handle, given: pointer, width: i64, height: i64): pointer := {
 	if guest_flag(caller, context, "is_textual", given) {
-		shader = shown(caller, context, given)
-		values = shown(caller, context, given + 3 * VALUE_BYTES)
-		in_window = shader_shown(c_string(shader), c_string(values), width, height)
-		if in_window < 0 { exit(1) }
-		if in_window > 0 { return 0 }
+		if gpu_paints() == 0 {
+			complain("paint of a shader: libwgpu_native is not beside warp")
+			exit(1)
+		}
+		# (the picture's values as they are: shader, width, height, values)
+		if in_window(gpu_answered("host_shader_shown", given, 4)) { return 0 }
+		colors = allocate((width * height * PIXEL_BYTES) as i32)
+		painting = allocate(5 * VALUE_BYTES)
+		memcpy(painting, native_pointer(given), 4 * VALUE_BYTES)
+		int_result(handle_id(native_pointer(colors)) as i64, painting + 4 * VALUE_BYTES)
+		if gpu_answered("host_shader_painted", painting, 5) != 0 { exit(1) }
 		pixels = allocate((width * height * 8) as i32)
-		if gpu_painted(c_string(shader), c_string(values), width, height, pixels) != 0 { exit(1) }
+		for i in 0..width * height {
+			at = colors + i * PIXEL_BYTES
+			long_at(pixels + i * 8).value = OPAQUE + (byte_at(at).value as i64) * 65536 + (byte_at(at + 1).value as i64) * 256 + byte_at(at + 2).value as i64
+		}
 		pixels
 	} else {
 		count = guest_number(caller, context, "item_count", given)
@@ -1737,10 +1894,37 @@ painted_pixels(caller: handle, context: handle, given: pointer, width: i64, heig
 			exit(1)
 		}
 		pixels = pixels_of(caller, context, given, width * height)
-		in_window = pixels_shown(pixels, width, height)
-		if in_window < 0 { exit(1) }
-		if in_window > 0 then 0 else pixels
+		if gpu_paints() == 0 { return pixels }
+		shown = allocate(3 * VALUE_BYTES)
+		int_result(handle_id(native_pointer(shaded(pixels, width * height))) as i64, shown)
+		int_result(width, shown + VALUE_BYTES)
+		int_result(height, shown + 2 * VALUE_BYTES)
+		if in_window(gpu_answered("host_pixels_shown", shown, 3)) then 0 else pixels
 	}
+}
+# a painting the native host module answered for: 1 shown in its window, 0 not (no window open), -1 failed (it said why)
+in_window(answer: i64): bool := {
+	if answer < 0 { exit(1) }
+	answer > 0
+}
+gpu_answered(name: text, values: pointer, count: i64): i64 := {
+	result = allocate(VALUE_BYTES)
+	guest_call(0, run_context(), name, values, count, result)
+	value_number(result)
+}
+# the pixels as RGBA bytes, as png_written shades them: 0 paper, a value with an alpha byte its color, any other ink
+shaded(pixels: pointer, count: i64): pointer := {
+	bytes = allocate((count * PIXEL_BYTES) as i32)
+	for i in 0..count {
+		value = long_at(pixels + i * 8).value
+		shade = if value == 0 then PAPER else INK
+		at = bytes + i * PIXEL_BYTES
+		byte_at(at).value = (if value >= COLOR_FROM then value / 65536 % 256 else shade) as u8
+		byte_at(at + 1).value = (if value >= COLOR_FROM then value / 256 % 256 else shade) as u8
+		byte_at(at + 2).value = (if value >= COLOR_FROM then value % 256 else shade) as u8
+		byte_at(at + 3).value = 255 as u8
+	}
+	bytes
 }
 # the first n pixels of the picture, as ints, a chunk of PIXEL_CHUNK at a time by the module's pixels_at (4 bytes each
 # in its memory): one call a chunk, not one a pixel (card native-show-paint: 1280×800 took 360 ms)
@@ -1765,7 +1949,8 @@ pixels_of(caller: handle, context: handle, picture: pointer, n: i64): pointer :=
 	}
 	pixels
 }
-png_written(pixels: pointer, width: i64, height: i64): nothing := {
+# the pixels as a PNG in the file; why it could not, else ""
+png_written(pixels: pointer, width: i64, height: i64, path: text): text := {
 	colored = no
 	for i in 0..width * height { if long_at(pixels + i * 8).value >= COLOR_FROM { colored = yes } }
 	channels = if colored then 3 else 1
@@ -1788,14 +1973,17 @@ png_written(pixels: pointer, width: i64, height: i64): nothing := {
 	at = chunk(png + 8, "IHDR", header, 13)
 	at = chunk(at, "IDAT", deflated.address, deflated.length as i64)
 	at = chunk(at, "IEND", 0, 0)
-	folder = joined(temporary_folder(), "warp-paint")
-	mkdir(c_string(folder), FOLDER_MODE)
-	number = next_painting()
-	path = joined(folder, if number == 1 then "/paint.png" else joined(joined("/paint-", text_of(number)), ".png"))
 	file = fopen(c_string(path), c_string("wb"))
+	if file == 0 { return os_failure(joined("save: cannot write ", path)) }
 	fwrite(native_pointer(png), 1, at - png, file)
 	fclose(file)
-	complain(joined(joined(joined(joined(joined("painted ", text_of(width)), "×"), text_of(height)), ": "), path))
+	""
+}
+# what failed, why the system says it did and its error number: "…: No such file or directory (os error 2)"
+os_failure(what: text): text := {
+	code = last_error()
+	reason = strerror(code)
+	joined(joined(joined(joined(joined(what, ": "), native_copy(reason, strlen(reason))), " (os error "), text_of(code as i64)), ")")
 }
 # a pixel's bytes: gray, or red, green and blue
 shaded(value: i64, at: pointer, colored: bool): nothing := {
@@ -2140,10 +2328,12 @@ native_byte(at: handle): u8 := {
 	memcpy(cell, at, 1)
 	byte_at(cell).value
 }
+# an export of the module calling the host (caller), else (0) of the native host module (host_export)
+exported(caller: handle, context: handle, name: text, into: pointer): bool := if caller != 0 then wasmtime_caller_export_get(caller, name, name.length, into) else host_export(context, name, into)
 # the module's export `name` called on the values, its result into `result`
 guest_call(caller: handle, context: handle, name: text, values: pointer, count: i64, result: pointer): nothing := {
 	function = allocate(EXTERN_BYTES)
-	if not wasmtime_caller_export_get(caller, name, name.length, function) {
+	if not exported(caller, context, name, function) {
 		complain(joined("the module exports no ", name))
 		exit(1)
 	}
@@ -2281,6 +2471,13 @@ PARAMETER_OUT = 7
 PARAMETER_TEXTS = 8
 PARAMETER_BYTES = 9
 PARAMETER_LENGTH = 10
+# a primitive module's text, the address of its (address, length) pair, and its pointer, an address of its memory
+PARAMETER_PAIR = 11
+PARAMETER_ADDRESS = 12
+# a list of numbers as a C array of f32 or of int32 cells, its byte count the length after it
+PARAMETER_F32S = 13
+PARAMETER_I32S = 14
+CELL_BYTES = 4
 REGISTER_I32 = 1
 REGISTER_I64 = 2
 REGISTER_F32 = 3
@@ -2292,6 +2489,9 @@ CROSSING_TEXT = 2
 CROSSING_OWNED_TEXT = 3
 CROSSING_HANDLE = 4
 CROSSING_U32 = 5
+CROSSING_PAIR = 6
+CROSSING_ADDRESS = 7
+CROSSING_BYTES = 8
 FAILURE_NONE = 1
 FAILURE_NOT_NULL = 2
 FAILURE_FALSE = 3
@@ -2306,6 +2506,10 @@ parameter_kind(name: text): i32 := {
 	if same_text(name, "texts") { return PARAMETER_TEXTS }
 	if same_text(name, "bytes") { return PARAMETER_BYTES }
 	if same_text(name, "length") { return PARAMETER_LENGTH }
+	if same_text(name, "pair") { return PARAMETER_PAIR }
+	if same_text(name, "address") { return PARAMETER_ADDRESS }
+	if same_text(name, "f32s") { return PARAMETER_F32S }
+	if same_text(name, "i32s") { return PARAMETER_I32S }
 	0
 }
 register_of(name: text): i32 := {
@@ -2323,6 +2527,9 @@ crossing_of(name: text): i32 := {
 	if same_text(name, "owned_text") { return CROSSING_OWNED_TEXT }
 	if same_text(name, "handle") { return CROSSING_HANDLE }
 	if same_text(name, "u32") { return CROSSING_U32 }
+	if same_text(name, "pair") { return CROSSING_PAIR }
+	if same_text(name, "address") { return CROSSING_ADDRESS }
+	if same_text(name, "bytes") { return CROSSING_BYTES }
 	0
 }
 failure_of(name: text): i32 := {
@@ -2338,7 +2545,7 @@ known(kind: i32, name: text, what: text, word: text): i32 := {
 }
 # the C function of a line, found in its library; one the driver can't call stops the run naming it. One its library
 # lacks, or a library not found, stops the run only when called: a program may ask for an optional library first
-# (lib/sound.warp's libwarp_sound, else the system's player)
+# (lib/host/native_host.warp's SDL3 and mpg123: a machine without them stays windowless and silent)
 foreign_of(line: text, wasm: pointer): i64 := {
 	library = field(line, 1, TAB)
 	name = field(line, 2, TAB)
@@ -2395,7 +2602,7 @@ library_called(c: Foreign, caller: handle, context: handle, given: pointer, resu
 			long_at(integers + integer_count * 8).value = if kind == PARAMETER_LENGTH then bytes_length else c_argument(caller, context, name, kind, value, if outs == 0 then out else 0)
 			integer_count = integer_count + 1
 		}
-		if kind == PARAMETER_BYTES { bytes_length = c_bytes_length(caller, context, value - VALUE_OFFSET) }
+		if is_array(kind) { bytes_length = c_array_length(caller, context, kind, value - VALUE_OFFSET) }
 		if kind == PARAMETER_OUT { outs = outs + 1 }
 		passed = passed + program_argument(kind)
 	}
@@ -2446,9 +2653,10 @@ wasm_function_called(context: handle, exports: pointer, which: i64, arguments: p
 	trap = allocate(8)
 	long_at(trap).value = 0
 	checked(wasmtime_func_call(context, function, arguments, count, results, results_count, trap), trap)
-	if results_count == 0 { return 0 }
-	if byte_at(results).value == KIND_I32 then word_at(results + VALUE_OFFSET).value as i64 else long_at(results + VALUE_OFFSET).value
+	if results_count == 0 then 0 else value_number(results)
 }
+# a value's number as an i64, an i32's unsigned
+value_number(value: pointer): i64 := if byte_at(value).value == KIND_I32 then word_at(value + VALUE_OFFSET).value as i64 else long_at(value + VALUE_OFFSET).value
 # an i32 as the call's value
 wasm_i32(values: pointer, at: i64, value: i64): nothing := {
 	byte_at(values + at * VALUE_BYTES).value = KIND_I32
@@ -2486,15 +2694,15 @@ wasm_called(c: Foreign, caller: handle, context: handle, given: pointer, results
 		value = given + passed * VALUE_BYTES + VALUE_OFFSET
 		argument = arguments + p * VALUE_BYTES
 		if kind == PARAMETER_HANDLE or kind == PARAMETER_TEXTS { failed_call(joined(name, ": a handle or a list of texts into a wasm module, not in the native driver yet")) }
-		if kind == PARAMETER_TEXT or kind == PARAMETER_BYTES or kind == PARAMETER_OUT {
+		if kind == PARAMETER_TEXT or is_array(kind) or kind == PARAMETER_OUT {
 			# (a later out-pointer is NULL, as for a C library)
 			block = 0 as i64
 			if kind == PARAMETER_TEXT {
 				host = c_argument(caller, context, name, kind, value, 0)
 				block = wasm_block(c, context, host, strlen(host) + 1)
 			}
-			if kind == PARAMETER_BYTES {
-				bytes_length = c_bytes_length(caller, context, value - VALUE_OFFSET)
+			if is_array(kind) {
+				bytes_length = c_array_length(caller, context, kind, value - VALUE_OFFSET)
 				block = wasm_block(c, context, c_argument(caller, context, name, kind, value, 0), bytes_length)
 			}
 			if kind == PARAMETER_OUT and out == 0 {
@@ -2514,10 +2722,10 @@ wasm_called(c: Foreign, caller: handle, context: handle, given: pointer, results
 	}
 	returned = wasm_function_called(context, c.wasm, WASM_FUNCTION, arguments, c.count as i64)
 	pointed = if out == 0 then 0 else (native_long(wasm_memory(context, c.wasm) + out) % 4294967296 + 4294967296) % 4294967296
-	gives_text = c.crossing == CROSSING_TEXT or c.crossing == CROSSING_OWNED_TEXT
+	gives_text = c.crossing == CROSSING_TEXT or c.crossing == CROSSING_OWNED_TEXT or c.crossing == CROSSING_BYTES
 	# (a text result read where it is in the module's memory)
 	c_finished(c, caller, context, if gives_text and returned != 0 then wasm_memory(context, c.wasm) + returned else returned, pointed, results, results_count)
-	if c.crossing == CROSSING_OWNED_TEXT { wasm_freed(c, context, returned) }
+	if c.crossing == CROSSING_OWNED_TEXT or c.crossing == CROSSING_BYTES { wasm_freed(c, context, returned) }
 	for i in 0..block_count { wasm_freed(c, context, long_at(blocks + i * 8).value) }
 }
 # a C call's result checked as its line says how a failure shows, then crossed back: the first out-pointer's value
@@ -2536,6 +2744,9 @@ c_argument(caller: handle, context: handle, name: text, kind: i32, value: pointe
 	if kind == PARAMETER_OUT { return if out == 0 then 0 else native_pointer(out) }
 	if kind == PARAMETER_TEXTS { return native_pointer(c_strings(caller, context, value - VALUE_OFFSET)) }
 	if kind == PARAMETER_BYTES { return native_pointer(c_bytes(caller, context, value - VALUE_OFFSET)) }
+	if kind == PARAMETER_F32S or kind == PARAMETER_I32S { return native_pointer(c_cells(caller, context, kind, value - VALUE_OFFSET)) }
+	if kind == PARAMETER_PAIR { return pair_c_text(caller, context, word_at(value).value as i64) }
+	if kind == PARAMETER_ADDRESS { return if word_at(value).value == 0 then 0 else guest_memory(caller, context) + word_at(value).value as i64 }
 	id = word_at(value).value as i32
 	if not handle_known(id) { failed_call(joined(joined(name, ": no handle "), text_of(id))) }
 	handle_pointer(id)
@@ -2549,6 +2760,25 @@ c_bytes(caller: handle, context: handle, given: pointer): pointer := {
 	bytes
 }
 c_bytes_length(caller: handle, context: handle, given: pointer): i64 := if guest_flag(caller, context, "is_textual", given) then shown(caller, context, given).length as i64 else guest_number(caller, context, "item_count", given)
+# a parameter of many values in one block: bytes, f32 or int32 cells, and that block's byte count
+is_array(kind: i32): bool := kind == PARAMETER_BYTES or kind == PARAMETER_F32S or kind == PARAMETER_I32S
+c_array_length(caller: handle, context: handle, kind: i32, given: pointer): i64 := if kind == PARAMETER_BYTES then c_bytes_length(caller, context, given) else guest_number(caller, context, "item_count", given) * CELL_BYTES
+# a list of numbers of the module as f32 or int32 cells in the arena, each read by its export float_item_at or
+# int_item_at (one value block reused: a vertex array has many)
+c_cells(caller: handle, context: handle, kind: i32, given: pointer): pointer := {
+	count = guest_number(caller, context, "item_count", given)
+	cells = allocate((count * CELL_BYTES) as i32)
+	values = allocate(2 * VALUE_BYTES)
+	memcpy(values, native_pointer(given), VALUE_BYTES)
+	byte_at(values + VALUE_BYTES).value = KIND_I64
+	item = allocate(VALUE_BYTES)
+	for i in 0..count {
+		long_at(values + VALUE_BYTES + VALUE_OFFSET).value = i + 1
+		guest_call(caller, context, if kind == PARAMETER_F32S then "float_item_at" else "int_item_at", values, 2, item)
+		if kind == PARAMETER_F32S { single_at(cells + i * CELL_BYTES).value = float_at(item + VALUE_OFFSET).value as f32 } else { word_at(cells + i * CELL_BYTES).value = long_at(item + VALUE_OFFSET).value as u32 }
+	}
+	cells
+}
 # a list of texts of the module as a NULL-terminated array of C strings (argv), the strings and it in the arena
 c_strings(caller: handle, context: handle, list: pointer): pointer := {
 	counted = allocate(VALUE_BYTES)
@@ -2561,7 +2791,14 @@ c_strings(caller: handle, context: handle, list: pointer): pointer := {
 # the C result as the module's value: a text, a handle id, else the number in its register
 c_result(caller: handle, context: handle, c: Foreign, returned: i64, result: pointer): nothing := {
 	value = result + VALUE_OFFSET
-	if c.crossing == CROSSING_TEXT or c.crossing == CROSSING_OWNED_TEXT {
+	if c.crossing == CROSSING_PAIR or c.crossing == CROSSING_ADDRESS {
+		byte_at(result).value = KIND_I32
+		word_at(value).value = (if returned == 0 then 0 else if c.crossing == CROSSING_PAIR then guest_pair(caller, context, returned) else returned - guest_memory(caller, context)) as u32
+	} else if c.crossing == CROSSING_BYTES {
+		# ({i64 length, the bytes}, the callee's malloc: freed here, a wasm module's by its free)
+		if returned == 0 { guest_call(caller, context, "new_empty", 0, 0, result) } else { guest_text(caller, context, returned + 8, native_long(returned), result) }
+		if returned != 0 and c.wasm == 0 { free(returned) }
+	} else if c.crossing == CROSSING_TEXT or c.crossing == CROSSING_OWNED_TEXT {
 		if returned == 0 { guest_call(caller, context, "new_empty", 0, 0, result) } else { guest_text(caller, context, returned, strlen(returned), result) }
 		# (a wasm module's own text is freed by its free, wasm_called)
 		if c.crossing == CROSSING_OWNED_TEXT and returned != 0 and c.wasm == 0 { free(returned) }
@@ -2580,15 +2817,60 @@ c_result(caller: handle, context: handle, c: Foreign, returned: i64, result: poi
 	}
 }
 register_kind(register: i32): u8 := if register == REGISTER_I64 then KIND_I64 else if register == REGISTER_F64 then KIND_F64 else if register == REGISTER_F32 then KIND_F32 else KIND_I32
+## a primitive module's texts: the address of an (address, length) pair of its memory, as foreign.c's native_text and
+# module_text take them in a native build
+PAIR_BYTES = 8
+PRIMITIVE_ARENA_ALIGNMENT = 8
+# the module's text at `pair` as a NUL-terminated copy (the null address too, whose pair a module's memory holds empty,
+# as foreign.c native_text reads it)
+pair_c_text(caller: handle, context: handle, pair: i64): i64 := {
+	memory = guest_memory(caller, context)
+	cell = native_long(memory + pair)
+	address = cell % 4294967296
+	length = cell / 4294967296
+	copy = allocate((length + 1) as i32)
+	memcpy(copy, memory + address, length)
+	byte_at(copy + length).value = 0
+	native_pointer(copy)
+}
+# a C text copied into the module's arena as a text: its pair, its bytes behind it
+guest_pair(caller: handle, context: handle, text: handle): i64 := {
+	length = strlen(text)
+	pair = primitive_arena_taken(caller, context, PAIR_BYTES + length)
+	cell = allocate(PAIR_BYTES)
+	word_at(cell).value = (pair + PAIR_BYTES) as u32
+	word_at(cell + 4).value = length as u32
+	memory = guest_memory(caller, context)
+	memmove(memory + pair, native_pointer(cell), PAIR_BYTES)
+	memmove(memory + pair + PAIR_BYTES, text, length)
+	pair
+}
+# bytes taken from the top of the module's arena (its exported global, primitive.warp arena_taken), its memory grown
+# when they pass its end
+primitive_arena_taken(caller: handle, context: handle, size: i64): i64 := {
+	arena = allocate(EXTERN_BYTES)
+	if not exported(caller, context, "arena", arena) { failed_call("a C text for a module without an arena") }
+	top = allocate(VALUE_BYTES)
+	wasmtime_global_get(context, arena + 8, top)
+	taken = word_at(top + VALUE_OFFSET).value as i64
+	next = (taken + size + PRIMITIVE_ARENA_ALIGNMENT - 1) / PRIMITIVE_ARENA_ALIGNMENT * PRIMITIVE_ARENA_ALIGNMENT
+	word_at(top + VALUE_OFFSET).value = next as u32
+	wasmtime_global_set(context, arena + 8, top)
+	memory = allocate(EXTERN_BYTES)
+	exported(caller, context, "memory", memory)
+	size_now = wasmtime_memory_data_size(context, memory + 8)
+	if next > size_now and wasmtime_memory_grow(context, memory + 8, (next - size_now + WASM_PAGE_BYTES - 1) / WASM_PAGE_BYTES, allocate(8)) != 0 { failed_call("the module's memory would not grow for a C text") }
+	taken
+}
 # the module's text of `length` bytes at a C pointer, into `result`: written where its text_heap global says (a module
 # calling C exports it), else at the end of its memory, grown for them
 guest_text(caller: handle, context: handle, bytes: handle, length: i64, result: pointer): nothing := guest_bytes_built(caller, context, bytes, length, "new_text", result)
 # the bytes in the module's memory, built into a node by its builder of an (address, length): new_text, new_symbol
 guest_bytes_built(caller: handle, context: handle, bytes: handle, length: i64, builder: text, result: pointer): nothing := {
 	heap = allocate(EXTERN_BYTES)
-	has_heap = wasmtime_caller_export_get(caller, "text_heap", 9, heap)
+	has_heap = exported(caller, context, "text_heap", heap)
 	memory = allocate(EXTERN_BYTES)
-	wasmtime_caller_export_get(caller, "memory", 6, memory)
+	exported(caller, context, "memory", memory)
 	top = allocate(VALUE_BYTES)
 	place = 0 as i64
 	if has_heap {

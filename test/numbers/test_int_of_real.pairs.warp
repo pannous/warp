@@ -1,0 +1,5 @@
+# `int(x)` and `x as int` of an exact real truncate its value toward 0, as of a float
+'int(2 * π)'	6
+'int(sqrt(8) * 9)'	25
+'(-2 * π) as int'	-6
+'int(√2 + 1)'	2

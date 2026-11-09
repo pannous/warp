@@ -19,7 +19,7 @@ This supersedes decision playground-after-parity (the user: "the bigger local is
 3. Fix the gaps by host area, lib/ and web/playground/ first:
    - warp-web-host: compiler hosting, files, modules, tasks, timers, events, storage, servers, foreign/python.
    - warp-web-samples: the sweep, then graphics (canvas, gpu), sound, media, markup.
-   excluded_samples.txt keeps only samples that can't run in a browser (raylib/SDL windows, processes), each with why.
+   a sample that can't run in a browser (processes, C calls) says `# host: native: <why>`, which keeps it out of the menu and the page sweep.
 
 ## Host areas, state (warp-web-host, 2026-11-01)
 - Step 1 done: web/playground/driver.js is driver.warp's twin (warp.wasm over wasi.js; the compiler reads the
@@ -103,7 +103,7 @@ Card remove-rust (verified by `test_in_browser.py --examples --firefox`): the Ru
 host.js page·value/page·render/page·hole(s)/on·<event>·node (renderedHtml, pageHoles, holePatches, pageEvents,
 runPageEvent, listeningRun), worker.js PAGE_VALUE and showHoles, host-compiler.js page_event, markup.js
 data-warp-instance (done c76e12a0e0). Then blockcompiler-entries: the block compiler, effects/spectrum entries and the
-Rust test binary's runner gone; built sites on driver.js (scripts/build-site.sh, notes/web_framework.md "Built sites").
+Rust test binary's runner gone; built sites on driver.js (`warp build --site`, notes/web_framework.md "Built sites").
 Still open: lists (`[#fruits, fruits#1]` writes a comma, so native's `[3, "apple"]` may be
 right) and welcoming errors (native's new sentence carries no position).
 

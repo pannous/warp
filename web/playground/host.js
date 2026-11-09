@@ -24,13 +24,18 @@ const DEFAULT_DPI = 96;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // view_width, view_height on a page that tells no output pane (playground.js tellSystemValues), as natively
 // (crates/warp-runtime/src/system_values.rs NATIVE_VIEW)
-// window_open: no page told it shows the pictures (playground.js tellSystemValues), so `while window_open` never starts
-const VIEW_DEFAULTS = { view_width: 640, view_height: 480, window_open: 0, gpu_drawing: 0 };
+// window_possible: a page paints in its pane, never a window of its own. window_open: no page told it shows the pictures (playground.js tellSystemValues), so `while window_open` never starts
+const VIEW_DEFAULTS = { view_width: 640, view_height: 480, window_open: 0, window_possible: 0, gpu_drawing: 0 };
 // window.width, window.height (card make-width): the frame the paintings show in, in CSS pixels; the view's size until the
 // run sets it (set_system_value), which the page then gives its paintings (hooks.resizeWindow, canvas.js)
 const WINDOW_SIDES = { window_width: "view_width", window_height: "view_height" };
 const DISPLAY_READ_ONLY = "a program cannot resize the display: set window.width or canvas.width instead";
-const toldValue = name => self.pageSystemValues?.[name] ?? VIEW_DEFAULTS[name];
+// the view's size as the page shares it (canvas.js shareView), which a running program sees at once, else as it told it
+const sharedValue = name => {
+	const at = self.pagePointer?.names.indexOf(name) ?? -1;
+	return at >= 0 ? Atomics.load(self.pagePointer.values, at) || undefined : undefined;
+};
+const toldValue = name => sharedValue(name) ?? self.pageSystemValues?.[name] ?? VIEW_DEFAULTS[name];
 // the standard library's adapters (src/modules/std_adapters.rs, notes/stdlib.md section 7): module → member → function of
 // plain values (values.js guestPlain / newGuestValue, as for foreign_call); the parts add them (host-hashes.js, host-files.js)
 const STD_ADAPTERS = {};

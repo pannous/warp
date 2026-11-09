@@ -7,9 +7,9 @@ print "started in " + start.year
 later = now
 if later >= start then print "time did not run backwards"
 
-# an instant's wall clock is the one of the time zone the program runs in (TZ)
+# a written instant stays UTC; zoned shows it on a zone's wall clock
 noon = 2024-07-01T12:00Z
-print "noon UTC, here at hour " + noon.hour
+print "noon UTC is hour " + zoned(noon, "Europe/Berlin").hour + " in Berlin"
 
 # date and local time literals are values the program keeps, prints and asks
 leap_day = 2024-02-29
