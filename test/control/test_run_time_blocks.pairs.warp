@@ -30,7 +30,7 @@
 'x = 3; x!'	3
 
 # a_bang_on_a_parameter_or_a_call_result_decides_at_run_time
-'f(b: block) := b!; xs=[block a+1, block 0]; a=1; f(xs#1)'	2
+'f(b: block) := b(); xs=[block a+1, block 0]; a=1; f(xs#1)'	2
 'f(b) := b!; f(4)'	error
 'g() := [data 2*3, data 0]; y = g()#1; y!'	6
 'g() := [data 2*3, data 0]; g()#1!'	6
