@@ -149,6 +149,32 @@ listening_program(program: Node): any := {
 	unshown = registration_unshown(program)
 	page_valued(unshown ?? program) ?? unshown
 }
+# `f(x) := 10/x; on error of f { 7 }`: each such statement gone, the definition of f `f(x) := try 10/x else { 7 }`, a
+# failing call giving the handler's value (card charged-field-values, a rule, no `.` on a function); before or after it
+errors_handled(program: Node): any := {
+	statements = level_statements(program)
+	handlers = {}
+	for statement in statements {
+		handled = error_handler(statement)
+		if handled != ø { handlers[handled#1] = handled#2 }
+	}
+	if #handlers == 0 { return ø }
+	kept = statements.filter(statement => error_handler(statement) == ø).map(statement => error_guarded(statement, handlers))
+	separated(bracketed(kept, ""), ";")
+}
+# [the function's name, the handler] of `on error of f {…}`, else ø
+error_handler(statement: Node): any := {
+	if not (is_group(statement) and bracket_of(statement) == "" and #statement == 5) { return ø }
+	words = items_of(statement)
+	if words[0 ..< 3] != [symbol("on"), symbol("error"), symbol("of")] or not (words#4 is symbol) { return ø }
+	[name_of(words#4), words#5]
+}
+# a definition of a handled function, its body tried
+error_guarded(statement: Node, handlers: map): Node := {
+	if not (is_key(statement, Op.Define) and is_call(key_of(statement))) { return statement }
+	handler = handlers.get(name_of(key_of(statement)#1))
+	if handler == ø then statement else Key(key_of(statement), Op.Define, call_of("try·else", [value_of(statement), handler]))
+}
 registration_unshown(program: Node): any := {
 	statements = level_statements(program)
 	ending = non_use_indices(statements)
