@@ -37,7 +37,8 @@ archive you write answers to; workers get decisions as your messages, not by rea
   as a question is queued and not parked, ask it with AskUserQuestion, up to 4 per batch, multiple choice, recommended option
   first and marked "(Recommended)". Whenever code already exists, one option is "Leave as is" (today's behaviour,
   shown with its example): not changing the code is often the cheapest and most elegant answer.
-  Workers proposing options include it too. Every question and option carries a small explanation so the user decides
+  Workers proposing options include it too. Every question also offers "Park for later" (user 2026-11-09): the card goes to
+  Later with its root cause noted. Every question and option carries a small explanation so the user decides
   informed: a short example of what changes, the trade-off, the footgun it avoids. Concrete code examples beat abstract wording; when the user says
   "I don't understand", re-ask one case at a time with input → result. Merge duplicates, drop what the code or an earlier
   decision already answers, order by impact. Allow multiple selections (multiSelect) whenever options can coexist,

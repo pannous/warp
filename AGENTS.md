@@ -32,6 +32,11 @@ itself once more (no fixed point needed).
 - **extensions/**: every other language feature, baked in through one static hook table.
 - **lib/**: modules programs import. A new feature goes into an extension or a library, never into the core;
   the language is never simplified to shrink the core (scripts/vitals.py measures the split).
+- Everything else has its own place: demos and examples in samples/, tests in test/, tools in scripts/. Never a
+  demo, sample or test fixture in core/, extensions/ or lib/ (an aquarium demo is a sample, not an extension).
+- The compiler `use`s no lib/ module: what it needs of one lives in core/ (decision core-takes-what-it-uses).
+- Before adding a file or a function, ask where it belongs; when unsure, ask the Supervisor. The Integrator refuses
+  a landing that puts something in the wrong layer (notes/agents/integrator.md "Layers").
 
 ## Core Architecture
 
