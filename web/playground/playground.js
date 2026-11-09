@@ -811,7 +811,7 @@ function eventHeard(data) {
 // after the value mark, as a native `warp test` run does (test_in_browser.py --tests). `eventsFor`: milliseconds the
 // program's timers run before the report (listenedFor)
 function evaluate(code, file = programFile(), { asData = false, eventsFor = 0 } = {}) {
-	const run = runs.then(() => runInWorker(code, file, asData, eventsFor));
+	const run = runs.then(reloadWhenStale).then(() => runInWorker(code, file, asData, eventsFor));
 	runs = run.catch(() => {});
 	return run;
 }
@@ -1534,7 +1534,10 @@ function initialize() {
 	fillExamples();
 	startWorker();
 	startAssistant(editor, tellEnvironment, startCompletion(editor, askMembers));
-	chooseExample(requestedExample() ?? DEFAULT_EXAMPLE);
+	const reloadedCode = sessionStorage.getItem(RELOADED_CODE);
+	sessionStorage.removeItem(RELOADED_CODE);
+	if (reloadedCode !== null) runCode(reloadedCode);
+	else chooseExample(requestedExample() ?? DEFAULT_EXAMPLE);
 	addEventListener("hashchange", chooseExampleOfHash);
 }
 
@@ -1555,8 +1558,11 @@ addEventListener("unhandledrejection", event => {
 
 // a page the browser kept from the build before (GitHub Pages lets it keep index.html 10 minutes) asks the new build's
 // files for its workers, `worker.js?build=<old>`, and runs an old page beside a new compiler: its build asked anew,
-// a newer one reloads the page once, which asks index.html anew (card start-slow-browser, "bad files in the cache")
+// a newer one reloads the page once, which asks index.html anew (card start-slow-browser, "bad files in the cache").
+// Asked again before each run: a tab left open over a deploy would link the new build's modules to its old compiler
+// ("math.wasm won't link: built behind another runtime.wasm", card math-wasm-link); the code typed stays over the reload
 const STALE_RELOAD = "warp stale reload";
+const RELOADED_CODE = "warp code over a reload";
 async function reloadWhenStale() {
 	if (!PLAYGROUND_VERSION) return;
 	try {
@@ -1564,7 +1570,9 @@ async function reloadWhenStale() {
 		if (served.includes(PLAYGROUND_VERSION.built)) return sessionStorage.removeItem(STALE_RELOAD);
 		if (sessionStorage.getItem(STALE_RELOAD) === PLAYGROUND_VERSION.built) return console.error(`warp page: built ${PLAYGROUND_VERSION.built}, the server has a newer build, and a reload kept this page`);
 		sessionStorage.setItem(STALE_RELOAD, PLAYGROUND_VERSION.built);
+		if (editor) sessionStorage.setItem(RELOADED_CODE, editor.getValue());
 		location.reload();
+		await new Promise(() => {}); // the run waits for the reload, never starting on this page
 	} catch (failure) {
 		console.warn("warp page: its build could not be compared with the server's:", failure);
 	}
