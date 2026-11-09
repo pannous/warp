@@ -1,6 +1,6 @@
 # Records (card pure-record-keyword): `record Point { x: int; y: int }`, C#'s `record Point(int X, int Y);`, Java's
 # `record Point(int x, int y) {}` declare the class of those fields. A warp class compares by value already, as a record
-# does (and as Kotlin's `data class`, foreign_forms.warp), so a record is read as that class declaration. Only a
+# does (and as Kotlin's `data class`, foreign_declarations.warp), so a record is read as that class declaration. Only a
 # statement `record Name {…}` or `record Name(…)` declares one: `record = 5`, `f(record)` keep the word a name
 
 record_class_word = "class"

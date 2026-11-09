@@ -44,6 +44,8 @@ use "block_inlining.warp"
 use "of_lookups.warp"
 use "c_enums.warp"
 use "enum_calls.warp"
+use "number_words.warp"
+use "foreign_declarations.warp"
 use "match_phrases.warp"
 use "checked_tries.warp"
 use "key_bindings.warp"
@@ -104,11 +106,14 @@ EXTENSIONS = [
 	protocols_extension
 	# right after definition_heads, in this order: a class's conversions become the program's before conversions runs
 	Extension{name: "class_methods", passes: {"definition_heads": classes_rewritten}, library_words: foreign_instance_words}
-	Extension{name: "int_types", passes_before: {"definition_heads": formatted_definitions}, passes: {"definition_heads": int_types}}
+	Extension{name: "int_types", passes_before: {"definition_heads": classed_definitions}, passes: {"definition_heads": int_types}}
 	conversions_extension
 	# (after conversions: its `as` of a C enum reach plain_enums)
 	c_enums_extension
 	enum_calls_extension
+	# (after definitions, before arity_overloads)
+	number_words_extension
+	foreign_declarations_extension
 	implicit_uses_extension
 	test_lines_extension
 	# right before tries, in this order: the last result `it`, parse words, then the checked tries the core's tries guard

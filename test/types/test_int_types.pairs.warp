@@ -2,8 +2,8 @@
 '"" + red'	"red"
 '"" + rgb(1, 2, 3)'	"#010203"
 '"" + with_alpha(red, 0.5)'	"#FF000080"
-'red + 0'	4294901760
-'red == 0xFFFF0000'	true
+'(red as int) + 0'	4294901760
+'(red as int) == 0xFFFF0000'	true
 'red is Color'	true
 '5 is Color'	false
 'type Flag = int; format Flag f as text := "flag " + (f as int); "" + (3 as Flag)'	"flag 3"

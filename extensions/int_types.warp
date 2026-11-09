@@ -4,3 +4,4 @@
 # parts name core words without a use of core paths (lib/extensions has no ../core)
 use "int_types/shows.warp"
 use "int_types/marks.warp"
+use "int_types/classes.warp"

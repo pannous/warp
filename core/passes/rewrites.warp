@@ -42,7 +42,6 @@ use rule_words
 
 rewrite_word = "rewrite"
 where_word = "where"
-use_line_start = "use "
 rule_hole_mark = "$"
 # the characters of a word in a rule's text besides letters and digits
 rule_word_marks = "_$"
