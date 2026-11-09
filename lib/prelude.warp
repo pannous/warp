@@ -124,6 +124,13 @@ eval(code: text, with names: map) := eval_code(names.keys.map(name => "${name} =
 warning(message): text from emitter
 raise(message): same as message from emitter
 error(message): any from emitter
+// a class place's refusal (decision class-types-checked, extensions/conversions.warp argument_conversion):
+// `f takes a Length, not 5s (a Time)`
+place_refused(value, taker: text, needed: text) := raise taker + " takes " + with_article(needed) + ", not " + value + " (" + with_article(type(value).name) + ")"
+// `a word`, `an item`: the word after its indefinite article (the compiler's messages too)
+with_article(word: text): text := (if "AEIOUaeiou".contains(word#1) then "an " else "a ") + word
+// whether an instance or a map has every one of the fields, as a class extending none takes it
+has_fields(value, names: list): bool := names.all(name => value.has(name))
 is_error(x): bool from emitter
 is_type(x, type_name): bool from emitter
 // a node's parts and a node made of parts (wiki/node.md)

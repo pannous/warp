@@ -40,6 +40,33 @@ KEY_BACKSPACE = 8
 KEY_END_OF_INPUT = 4
 KEY_RETURN = 13
 KEY_SPACE = 32
+KEY_LINE_START = 1
+KEY_LINE_END = 5
+# the bytes of a key's escape sequence (card repl-editing-keys): ESC [ <number>;<modifier> <final>, ESC O <final>, ESC <key>
+KEY_APPLICATION = 79
+KEY_ALT_D = 100
+FINAL_HOME = 72
+FINAL_END = 70
+FINAL_NUMBERED = 126
+NINE = 57
+NUMBERED_HOME = 1
+NUMBERED_HOME_VT = 7
+NUMBERED_END = 4
+NUMBERED_END_VT = 8
+NUMBERED_DELETE = 3
+MODIFIER_ALT = 3
+# what a line editing key does, past the byte values a typed key has
+EDIT_NONE = 0
+EDIT_LEFT = 256
+EDIT_RIGHT = 257
+EDIT_UP = 258
+EDIT_DOWN = 259
+EDIT_START = 260
+EDIT_END = 261
+EDIT_DELETE = 262
+EDIT_WORD_AFTER = 263
+EDIT_WORD_BEFORE = 264
+EDIT_BACK = 265
 
 # a compiler with this executable's words from `first` on: a command runs, code is compiled to WARP_RUN_TO and run after
 hosted(compiler: text, first: int): nothing := {
@@ -294,7 +321,9 @@ console(compiler: text): nothing := {
 }
 # The console's line on a terminal (card repl-arrow-escape): the terminal reads a key at a time without echo while
 # the line is edited, ←/→ move the cursor, ↑/↓ step through the earlier lines, ⌫ deletes before the cursor, Ctrl+D on
-# an empty line ends the console (input_ended). The cursor steps over a character's UTF-8 bytes whole
+# an empty line ends the console (input_ended). Home/End (or Ctrl+A/E) go to the line's start and end, Delete removes
+# the character under the cursor, Alt+Delete the word after it and Alt+⌫ the word before it (card repl-editing-keys).
+# The cursor steps over a character's UTF-8 bytes whole
 edited_line(history: text, lines: i64): text := {
 	settings = command_output("stty -g")
 	command_output("stty -icanon -echo min 1")
@@ -308,24 +337,31 @@ edited_line(history: text, lines: i64): text := {
 			break
 		}
 		if c == KEY_RETURN or c == NEWLINE then break
-		if c == KEY_ESCAPE {
-			if key() == KEY_BRACKET {
-				arrow = key()
-				if arrow == ARROW_LEFT and at > 0 { at = character_before(line, at) }
-				if arrow == ARROW_RIGHT and at < line.length { at = character_after(line, at) }
-				if arrow == ARROW_UP and back < lines { back = back + 1 }
-				if arrow == ARROW_DOWN and back > 0 { back = back - 1 }
-				if arrow == ARROW_UP or arrow == ARROW_DOWN {
-					line = if back == 0 then "" else history_line(history, lines - back)
-					at = line.length
-				}
-			}
-		} else if (c == KEY_DELETE or c == KEY_BACKSPACE) and at > 0 {
-			start = character_before(line, at)
-			line = joined(text_from(line.address, start as u32), text_from(line.address + at, (line.length - at) as u32))
+		edit = edit_of(c)
+		if edit == EDIT_LEFT and at > 0 { at = character_before(line, at) }
+		if edit == EDIT_RIGHT and at < line.length { at = character_after(line, at) }
+		if edit == EDIT_UP and back < lines { back = back + 1 }
+		if edit == EDIT_DOWN and back > 0 { back = back - 1 }
+		if edit == EDIT_UP or edit == EDIT_DOWN {
+			line = if back == 0 then "" else history_line(history, lines - back)
+			at = line.length
+		}
+		if edit == EDIT_START { at = 0 }
+		if edit == EDIT_END { at = line.length }
+		if edit == EDIT_DELETE and at < line.length { line = cut(line, at, character_after(line, at)) }
+		if edit == EDIT_WORD_AFTER { line = cut(line, at, word_after(line, at)) }
+		if edit == EDIT_WORD_BEFORE {
+			start = word_before(line, at)
+			line = cut(line, start, at)
 			at = start
-		} else if c >= KEY_SPACE {
-			line = joined(joined(text_from(line.address, at as u32), byte_text(c)), text_from(line.address + at, (line.length - at) as u32))
+		}
+		if edit == EDIT_BACK and at > 0 {
+			start = character_before(line, at)
+			line = cut(line, start, at)
+			at = start
+		}
+		if edit == EDIT_NONE and c >= KEY_SPACE {
+			line = joined(joined(text_from(line.address, at as u32), byte_text(c)), after(line, at))
 			at = at + 1
 		}
 		redrawn(line, at)
@@ -348,6 +384,68 @@ control(rest: text): text := joined(joined(byte_text(KEY_ESCAPE), "["), rest)
 key(): i32 := {
 	cell = allocate(1)
 	if read(STDIN, cell, 1) <= 0 then -1 else byte_at(cell).value as i32
+}
+# the edit a key asks for, EDIT_NONE for a typed character
+edit_of(c: i32): i32 := {
+	if c == KEY_ESCAPE { return escaped_edit() }
+	if c == KEY_DELETE or c == KEY_BACKSPACE { return EDIT_BACK }
+	if c == KEY_LINE_START { return EDIT_START }
+	if c == KEY_LINE_END { return EDIT_END }
+	EDIT_NONE
+}
+# the edit of the escape sequence after ESC, as macOS Terminal, iTerm and xterm send them: ESC [ <number>;<modifier>
+# <final> or ESC O <final> (Home ESC[H ESC[1~ ESC OH, End ESC[F ESC[4~ ESC OF, Delete ESC[3~, Alt+Delete ESC[3;3~), or
+# Alt with a key, ESC <key> (Alt+Delete ESC d, Alt+⌫ ESC DEL)
+escaped_edit(): i32 := {
+	c = key()
+	if c == KEY_DELETE or c == KEY_BACKSPACE { return EDIT_WORD_BEFORE }
+	if c == KEY_ALT_D { return EDIT_WORD_AFTER }
+	if c != KEY_BRACKET and c != KEY_APPLICATION { return EDIT_NONE }
+	number = 0
+	modifier = 0
+	given = 0
+	c = key()
+	while c == SEMICOLON or (c >= ZERO and c <= NINE) {
+		if c == SEMICOLON {
+			number = given
+			given = 0
+		} else {
+			given = given * 10 + c - ZERO
+		}
+		c = key()
+	}
+	if number == 0 { number = given } else { modifier = given }
+	if c == ARROW_LEFT { return EDIT_LEFT }
+	if c == ARROW_RIGHT { return EDIT_RIGHT }
+	if c == ARROW_UP { return EDIT_UP }
+	if c == ARROW_DOWN { return EDIT_DOWN }
+	if c == FINAL_HOME { return EDIT_START }
+	if c == FINAL_END { return EDIT_END }
+	if c != FINAL_NUMBERED { return EDIT_NONE }
+	if number == NUMBERED_HOME or number == NUMBERED_HOME_VT { return EDIT_START }
+	if number == NUMBERED_END or number == NUMBERED_END_VT { return EDIT_END }
+	if number == NUMBERED_DELETE and modifier == MODIFIER_ALT { return EDIT_WORD_AFTER }
+	if number == NUMBERED_DELETE { return EDIT_DELETE }
+	EDIT_NONE
+}
+# the line from byte at on
+after(line: text, at: i64): text := text_from(line.address + at, (line.length - at) as u32)
+# the line without its bytes from start until end
+cut(line: text, start: i64, end: i64): text := joined(text_from(line.address, start as u32), after(line, end))
+blank(line: text, at: i64): bool := byte_at(line.address + at).value == KEY_SPACE
+# where the word before the cursor starts, past the blanks right before it
+word_before(line: text, at: i64): i64 := {
+	start = at
+	while start > 0 and blank(line, start - 1) { start = start - 1 }
+	while start > 0 and not blank(line, start - 1) { start = start - 1 }
+	start
+}
+# where the word after the cursor ends, past the blanks right after it
+word_after(line: text, at: i64): i64 := {
+	end = at
+	while end < line.length and blank(line, end) { end = end + 1 }
+	while end < line.length and not blank(line, end) { end = end + 1 }
+	end
 }
 # a UTF-8 byte that continues a character
 continues(line: text, at: i64): bool := byte_at(line.address + at).value / 64 == 2

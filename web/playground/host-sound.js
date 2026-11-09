@@ -281,7 +281,7 @@ addHostPart({
 			inputs: () => { throw new Error("midi.inputs: the playground's page owns the MIDI devices and a program cannot wait for their list"); },
 			receive: () => { throw new Error("midi.receive: MIDI input does not reach a playground program yet (Web MIDI answers on the page, not in the program's Worker)"); },
 		},
-		// `play "song.mp3"`, `stop_sound` (lib/sound.warp, card sound-library): the page plays it with an <audio>
+		// `play ./song.mp3`, `stop_sound` (lib/sound.warp, card sound-library): the page plays it with an <audio>
 		// (worker.js self.playSoundFile, playground.js); a run without a page (tests, node) stays silent, as natively
 		sound: {
 			// a written file (a rendered WAV) goes to the page as its bytes, a served or remote one by its URL; a local file
@@ -316,7 +316,7 @@ addHostPart({
 			// a named live loop's cycle starts (lib live_cycle_started, host-tasks.js liveCycleStarted)
 			live_cycle: name => { self.liveCycleStarted?.(contentText(name)); return null; },
 			wait: () => null,
-			// sample("kick.wav") (card sound-samples, src/sound/audio_files.rs): [rate, channels, offset frames …]; the playground
+			// sample(./kick.wav) (card sound-samples, src/sound/audio_files.rs): [rate, channels, offset frames …]; the playground
 			// decodes WAV only, a Worker has no decoder for the other formats
 			load: path => wavFrames(readBytes(contentText(path)), contentText(path)),
 			// how long a file sounds

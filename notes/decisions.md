@@ -1150,6 +1150,32 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - untyped-block-bang (FYI, warp-rgb-color-literal, card untyped-block-parameter, small core): `body!` of an untyped parameter runs the given block each time (`repeats(n, body) := { for i in 1...n { body! } }; repeats 3 { c += 1 }` counts 3); `x!` of a non-closure gives the value (`f(b) := b!; f(4)` is 4); running other node data as code stays refused.
   - declared-block-parameters (user, 11-08, card untyped-block-parameter, with block-lazy-body and implicit-def-parameters): a parameter is a block or function only when declared so (`repeats(n, body: block)`); the compiler never infers it from `body()` / `body!` in the body. An untyped parameter run as a block is refused at the definition: "body is run as a block: declare it body: block". `x!` of a plain value stays the value (`f(b) := b!; f(4)` → 4). Undoes the inference part of untyped-block-bang.
   - declared-block-parameters, clarified (user, 11-08, strict): calling or forcing an untyped parameter (`f()`, `f(x)`, `body!`) is refused at the definition with a fix-it naming the typed form (`f: function`, `body: block`); `apply(f, x) := f(x)` and `twice(f) := { f(); f() }` must be typed; `f(b) := b!; f(4)` is that error too. The dependent tests (test_closures_given_to_modules, test_closure_entries, test_it_arguments, test_nested_prefix_calls, test_parameter_shadows_function) are upgraded to typed parameters with the user's OK, expected values unchanged; lib/ and samples get the same sweep.
+  - declared-block-parameters sweep (Supervisor FYI, landed ca0c39bb25): ~78 test lines in 42 files typed (`f: function`, `b: block`), values unchanged; test_run_time_blocks:33-34 `f(b) := b!; f(4)` becomes the refusal, as decided.
+  - function-type-specific (Interviewer, by default-methods' more-specific-wins, card function-type-specific): beside `f(g: function)`, a
+    function-type parameter `f(g: (int, int) -> any)` is more specific and wins for a two-parameter g; test_function_value_overloads:3-4
+    types its fallback `g: function`, values unchanged.
+  - block-values-forced (Interviewer, card block-values-forced): data stays data, it is not a block; a quoted value forced through a
+    parameter is a block value, `f(b: block) := b!; xs=[block a+1, block 0]; a=1; f(xs#1)` → 2 (test_run_time_blocks:33 rewritten so).
+  - shader-import-quote (FYI warp-integrator, generic extension, card shader-import-quote): paint(f) / shader_of(f) quote a
+    function brought in by `use <module>` and the functions it calls; lib/aquarium.warp moves to samples/gpu (a picture is a
+    sample, not a library); quoting from `use "./x.warp"` is card shader-quote-path-uses.
+  - cancel-timer (user): `t = on every 1 second {…}; cancel t` stops a timer; cancel works on any listener handle, as on tasks;
+    `remove h from listeners of e` stays for named events.
+  - ctrl-c-runs-exit (user): ctrl-c, kill or SIGTERM runs `on exit {…}` (when there is no `on interrupt`), then ends with status
+    130 (143 for kill); a second ctrl-c within a second ends at once.
+  - event-delivery-points (user): one rule native and page: a handler runs on the program's thread at its waits (sleep, await,
+    receive, a painted frame) and at loop starts, by one compiled flag check in programs that listen; the waiting (clock, keys,
+    signals) runs on a host thread that only queues; never inside a running handler. `n = 0; on every 50 ms { n += 1 };
+    sleep 175 ms; n` is 3. Wasmtime epochs may replace the native check later.
+  - threaded-handlers (user: "plan for true threads too"): real parallelism is the decided `go` task (tasks-parallel) plus
+    `shared` atomic values (P106, lib-oddities): `shared n = 0; on every 50 ms go { n += 1 }` runs the handler as a task on its
+    own thread; it sees only shared values, the rest are copies. Simple scenarios natively first; the page cooperative until
+    it offers real threads.
+  - subscript-slices-dropped (Interviewer, technical): branch subscript-slices-rules (6f653ed733) closed: keeping `xs[i]` as a
+    round call reads as a definition head on the left of `=` and escapes later sugar; fixing it costs more core than it saves.
+    Main's parser subscript stays.
+  - repl-editing-keys (FYI warp-file-literals, small native core): the native console's line editor gets Home/End, Ctrl+A/E,
+    Delete, Alt+Delete and Alt+Backspace.
   - bf16-f8-shaders (user, 11-08, card bf16-storage, after f16): a shader declares `array<bf16>` / `array<f8>` and indexes `xs[i]` as if native; lib/shaders rewrites it to array<u32> plus unpack/pack helpers (2 bf16 or 4 f8 a word), as it already rewrites shader words and holes. Plain `[f8]` is e4m3 (max 448, no ∞); `[f8e5m2]` only when a program needs it.
   - class-types-checked (user, 11-08): a class that extends another is checked by name: a T place takes only T or its subclasses (`f(d: Length) := d; f(5s)` is refused "f takes a Length, not 5s (a Time)"); a standalone class keeps the fit by fields, now really checked (`a: A = B(1)` refused when B lacks A's fields). At compile time where known, else on entry. An extension, no core.
   - bare-number-to-unit (user, 11-08, with length-pixels): `f(d: Length) := d; f(5)` is 5m: a bare number reaches a unit place by the unit's declared number conversion, as `5 as Length` does.

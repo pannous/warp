@@ -86,6 +86,8 @@ c_primitive_types = {i32: "i32", bool: BOOL_TYPE, i64: "i64", f64: "f64", f32: "
 ALLOCATE_WORD = "allocate"
 # the code of primitive files: lib/primitive.warp, their prelude, its words reached as the GC prelude's are
 PRIMITIVE_PRELUDE = module_source("primitive")
+# whether the program at hand is @primitive code, lowered with that prelude
+lowering_primitive(): bool := used_prelude == PRIMITIVE_PRELUDE
 
 class PrimitiveCode { type: text; code: list }
 # a primitive function: its parameters' names and types, its result type ("" none, ø not yet known), its locals by
