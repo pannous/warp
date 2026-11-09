@@ -650,6 +650,7 @@ wgsl_statement(n: Node, scope: WgslScope, depth: int) := {
 	else if n == symbol("continue") { scope.wgsl_lines += [indent + "continue;"] }
 	else if wgsl_is_return(n) { wgsl_return(n#2, scope, depth) }
 	else if wgsl_is_loop(n) { wgsl_loop(n, scope, depth) }
+	else if keyed(n, "do") and keyed(key_of(n), "while") and wgsl_conditions(value_of(key_of(n))).any(wgsl_is_step) { wgsl_stepping_loop(value_of(key_of(n)), value_of(n), scope, depth) }
 	else if keyed(n, "do") and keyed(key_of(n), "while") {
 		scope.wgsl_lines += [indent + "while (" + wgsl_condition(value_of(key_of(n)), scope) + ") {"]
 		wgsl_block(value_of(n), scope, depth + 1)
@@ -667,6 +668,24 @@ wgsl_statement(n: Node, scope: WgslScope, depth: int) := {
 		scope.wgsl_lines += [indent + "}"]
 	} else { wgsl_refused(n, "WGSL has no statement for " + form_of(n)) }
 }
+# `while n < 200 and n++ {…}` (card julia-wgsl): WGSL has no `n++` as a value, so the loop tests its conditions one by
+# one, in order as `and` does, a step changing its variable and going on while the new value is not 0
+wgsl_stepping_loop(condition: Node, body: Node, scope: WgslScope, depth: int) := {
+	indent = wgsl_indent(depth + 1)
+	scope.wgsl_lines += [wgsl_indent(depth) + "loop {"]
+	for part in wgsl_conditions(condition) {
+		if wgsl_is_step(part) {
+			wgsl_changed(wgsl_compound(part), part, scope, depth + 1)
+			scope.wgsl_lines += [indent + "if (" + wgsl_expression(key_of(part), scope)#1 + " == 0.0) { break; }"]
+		} else { scope.wgsl_lines += [indent + "if (!(" + wgsl_condition(part, scope) + ")) { break; }"] }
+	}
+	wgsl_block(body, scope, depth + 1)
+	scope.wgsl_lines += [wgsl_indent(depth) + "}"]
+}
+# the parts of `a and b and c`, in order
+wgsl_conditions(n: Node): list := if keyed(n, "and") then wgsl_conditions(key_of(n)) + wgsl_conditions(value_of(n)) else [n]
+# `n++`, `n--`
+wgsl_is_step(n: Node): bool := keyed(n, "++") or keyed(n, "--")
 # `x += 1`, `p.x *= 2`, `x %= 3`, `x max= 5`: `x = x op v` (decision op-assign-general), parts [x, "op", v]
 wgsl_changed(parts: list, n: Node, scope: WgslScope, depth: int) := {
 	target = parts#1
@@ -681,6 +700,7 @@ wgsl_changed(parts: list, n: Node, scope: WgslScope, depth: int) := {
 # the parts [target, operator as written, value] of a compound assignment: the parser's own (`x += 1`) or another
 # operator's or word's, which it leaves as written (`x %= 3`, `x max= 5`); [] for any other code
 wgsl_compound(n: Node): list := {
+	if wgsl_is_step(n) { return [key_of(n), if keyed(n, "++") then "+" else "-", 1] }
 	for pair in COMPOUND_OPERATORS { if keyed(n, pair#1) { return [key_of(n), pair#2, value_of(n)] } }
 	if not is_group(n) or bracket_of(n) != "" or #n != 3 or not (n#2 is symbol) { return [] }
 	written = name_of(n#2)
