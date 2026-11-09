@@ -1335,7 +1335,7 @@ declared_class(type_name: text, program: Node): Node? := {
 # `{name: "User", order: ["id", "address"], types: {id: "number", address: {…Address's…}, tags: {list: "text"}},
 # defaults: {port: 80}, make: (fields) => User{id: fields["id"], …}}`: a class the program declares as data, for a
 # reader at run time (lib/json.warp typed_json_value): its fields in order, each one's type (a type word, a class's
-# data, `{list: …}` of a list), the defaults of those that have one and its maker from the fields by name; a raise
+# data, `{list: …}` of a list, `{optional: …}` of a `T?` one), the defaults of those that have one and its maker from the fields by name; a raise
 # naming why for a class it can't give so
 CLASS_DATA_TYPES = ["number", "int", "float", "string", "text", "bool"]
 class_data(type_name: Node, program: Node): Node := {
@@ -1355,6 +1355,7 @@ class_data_text(name: text, program: Node, ancestors: list): text? := {
 	if constructor_of(declared) != ø { return ø }
 	types = []
 	defaults = []
+	optional = []
 	for member in view#3[3..].map(member_read) {
 		field = field_name(member)
 		if field != ø {
@@ -1363,16 +1364,23 @@ class_data_text(name: text, program: Node, ancestors: list): text? := {
 			written = type_data_text(field_type, program, ancestors + [name])
 			if written == ø { return ø }
 			types += [field + ": " + written]
+			if field_type.ends_with("?") { optional += [field] }
 			if is_key(member, Op.Assign) { defaults += [field + ": " + as_code(value_of(member))] }
 		}
 	}
 	fields = declared.fields
 	order = fields.map(field => "\"" + field + "\"").join(", ")
-	made = name + "{" + fields.map(field => field + ": typed_fields[\"" + field + "\"]").join(", ") + "}"
+	# (a `T?` field the data leaves out is set only when given: the class leaves it ø)
+	given = field => "typed_fields[\"" + field + "\"]"
+	made = "{ made = " + name + "{" + fields.filter(field => field not in optional).map(field => field + ": " + given(field)).join(", ") + "}; " + optional.map(field => "if typed_fields.has(\"" + field + "\") { made." + field + " = " + given(field) + " }; ").join("") + "made }"
 	"{name: \"" + name + "\", order: [" + order + "], types: {" + types.join(", ") + "}, defaults: {" + defaults.join(", ") + "}, make: (typed_fields => " + made + ")}"
 }
 type_data_text(field_type: text, program: Node, ancestors: list): text? := {
 	list_prefix = "list of "
+	if field_type.ends_with("?") {
+		item = type_data_text(field_type[0 ..< #field_type - 1], program, ancestors)
+		return if item == ø then ø else "{optional: " + item + "}"
+	}
 	if field_type.starts_with(list_prefix) {
 		item = type_data_text(field_type[#list_prefix ..], program, ancestors)
 		return if item == ø then ø else "{list: " + item + "}"
