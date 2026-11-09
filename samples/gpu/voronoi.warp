@@ -3,7 +3,6 @@
 use math
 width = 320
 height = 180
-hash2(p) := fract(sine([dot(p, [127.1, 311.7]), dot(p, [269.5, 183.3])]) .* 43758.5453)
 voronoi(x, y) := {
 	p = [x, y] ./ 30
 	cell = floor(p)
@@ -11,7 +10,7 @@ voronoi(x, y) := {
 	for j in -1..2 {
 		for i in -1..2 {
 			neighbour = [i, j]
-			point = hash2(cell .+ neighbour)
+			point = hash(cell .+ neighbour)
 			nearest = min(nearest, norm(neighbour .+ point .- fract(p)))
 		}
 	}
