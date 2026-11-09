@@ -288,14 +288,17 @@ lowering_from(prelude: text) := {
 		typed_one_definitions = ø
 	}
 }
+# whether the lowering sees the standard prelude, not a primitive file's
+standard_prelude_seen(): bool := word_lines_prelude == ø or word_lines_prelude == prelude_text()
 # the library a lowering sees: the prelude, with lib/math.warp beside the standard one; each text cut on its own, so
 # the library index's cuts of both serve (prelude_words.warp spans_of)
-library_texts_seen(): list := if word_lines_prelude == ø or word_lines_prelude == prelude_text() then [builtin_text, math_builtin_text, prelude_text(), math_text()] else [word_lines_prelude]
-library_sources(): text := library_texts_seen().join("\n")
+library_texts_seen(): list := if standard_prelude_seen() then [prelude_text(), math_text()] else [word_lines_prelude]
+# the typed lines a lowering sees: the builtins' beside the standard prelude, a primitive prelude's own
+typed_texts_seen(): list := if standard_prelude_seen() then [builtin_text, math_builtin_text] else [word_lines_prelude]
 word_lines(): map := {
 	if typed_word_lines != ø { return typed_word_lines }
 	typed_word_lines = {}
-	for line in library_sources().split("\n") {
+	for line in typed_texts_seen().join("\n").split("\n") {
 		for library in typed_libraries {
 			typed = typed_line(line, library)
 			if typed != ø {
