@@ -283,11 +283,10 @@ age = 15
 match age { 0 to 12 => "child"; 13 to 19 => "teen"; other => "adult" }
 ```
 
-A case can list several values, or name a type. Here `day` is today's weekday (Monday = 1).
+A case can list several values, or name a type. Here `day` is today's weekday, Monday … Sunday.
 
 ```warp
-enum Day { Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday }
-day = [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]#weekday(clock())
+day = today.weekday
 match day { Saturday | Sunday => "weekend"; other => "workday" }
 ```
 
