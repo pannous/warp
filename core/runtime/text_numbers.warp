@@ -7,6 +7,7 @@ use "floats.warp"
 use "instructions.warp"
 use "library_words.warp"
 use "text.warp"
+use "text_words.warp"
 use "../emitter/byte_codes.warp"
 # 1 for a leading - or + of t, else 0: the byte offset of what follows the sign
 sign_length(t: text): int := if byte_count(t) > 0 and (byte_at(t, 0) == Ascii.Minus or byte_at(t, 0) == Ascii.Plus) then 1 else 0
@@ -20,10 +21,13 @@ digit_run(t: text, start: int): int := {
 	while at < byte_count(t) and digit_of(byte_at(t, at)) >= 0 { at += 1 }
 	at - start
 }
-# `t as int`: an optional sign and decimal digits, nothing else; 64 bits
-text_as_int(t: text): int := {
+# `t as int`: an optional sign and decimal digits between spaces, nothing else; 64 bits (decision text-to-int-trim:
+# a fraction, "2.7", is no int)
+text_as_int(written: text): int := {
+	t = text_trim(written)
 	start = sign_length(t)
 	count = digit_run(t, start)
+	if count > 0 and start + count < byte_count(t) and byte_at(t, start + count) == Ascii.Point { a_fraction_is_no_int() }
 	if count == 0 or start + count != byte_count(t) { invalid_number() }
 	value = 0
 	for i in start..byte_count(t) { value = value * 10 + digit_of(byte_at(t, i)) }
@@ -31,7 +35,8 @@ text_as_int(t: text): int := {
 }
 # `t as float`: a sign, digits with an optional point among them, an optional exponent (e or E, a sign, digits): the
 # nearest float, correctly rounded also beyond 10^±22
-text_as_float(t: text): float := {
+text_as_float(written: text): float := {
+	t = text_trim(written)
 	start = sign_length(t)
 	whole = digit_run(t, start)
 	at = start + whole

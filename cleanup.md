@@ -155,3 +155,7 @@ Cover public pause, resume and cancel outcomes before adding non-narrowing signa
 # library-typed calendar day helpers
 
 Cover public day calculations, then annotate precise integer results without narrowing inputs; verify outcomes and smoke on merged main.
+
+## Fix help wording
+
+Use plain English for the existing fix help entry while preserving the surrounding edits.

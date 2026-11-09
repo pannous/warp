@@ -26,6 +26,9 @@ CodeMirror.defineSimpleMode("warp", {
 		// P165: hard keywords are never redefined, soft ones may name a local (keywords.js, made by build.sh)
 		{ regex: words(KEYWORDS.hard), token: "keyword" },
 		{ regex: DEFINED_HEAD, token: ["def", "variable"] },
+		// a call's name, right before its `(`, as editors colour function calls (TextMate's entity.name.function, card
+		// call-highlight): `hash(x)`, also a soft keyword called so, `print(x)`
+		{ regex: new RegExp(`${NAME}(?=\\()`, "u"), token: "call" },
 		{ regex: words(KEYWORDS.soft), token: "soft-keyword" },
 		{ regex: /\$[\w$]+/, token: "variable-2" },
 		{ regex: /[-+\/*=<>!:….≥≤≠×÷^¬√∑²³#%&|~≈∈∉]+/, token: "operator" },

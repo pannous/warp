@@ -19,12 +19,20 @@ rewrite transaction $body: block => stored_transaction(() => $body)
 // each write kept: a listener of lib/signals.warp writes it through
 rewrite stored $name default $value => ($name = stored_value($key, $value); variable_listen([$key], no, (value, old) => stored_put($key, value))) where $name is symbol and $key = spelled($name)
 rewrite (stored $name = $value) => stored $name default $value where $name is symbol
-// `database.score = 42`, `local["name"]`: a value kept under a name, natively both in the program's database, in the
-// browser local is localStorage
-rewrite $store.$name => stored_got($key) where $store in [database, local] and $name is symbol and $key = spelled($name)
-rewrite $store[$key] => stored_got($key) where $store in [database, local]
+// `storage.score = 42`, `local["name"]`, `database[k]`: a value kept under a name, natively all three the program's
+// database, in the browser local is localStorage; `delete local[k]` forgets it, `keys(local)` (values, entries) lists
+// them. A program's own variable of the name stays its own
+rewrite $store.$name => stored_got($key) where $store in [storage, database, local] and $store is unbound and $name is symbol and $key = spelled($name)
+rewrite $store[$key] => stored_got($key) where $store in [storage, database, local] and $store is unbound
+rewrite $listing($store) => $listing(storage()) where $listing in [keys, values, entries] and $store in [storage, database, local] and $store is unbound
 // a write of a store's value: its read written to; the listing names the stores, so the rule comes when they are named
-rewrite ($read($key) = $value) => stored_put($key, $value) where $read in [stored_got, database, local]
+rewrite ($read($key) = $value) => stored_put($key, $value) where $read in [stored_got, storage, database, local]
+rewrite delete $read($key) => stored_forgot($key) where $read in [stored_got, storage, database, local]
+// `session[k]`: a value kept while the run lasts, apart from the kept ones (in the browser the tab's sessionStorage)
+rewrite delete $read[$key] => session_values.remove($key) where $read in [session_values, session]
+rewrite $store.$name => session_values[$key] where $store in [session] and $store is unbound and $name is symbol and $key = spelled($name)
+rewrite $store[$key] => session_values[$key] where $store in [session] and $store is unbound
+rewrite $listing($store) => $listing(session_values) where $listing in [keys, values, entries] and $store in [session] and $store is unbound
 
 PROGRAM_VARIABLE = "WARP_PROGRAM"
 PROGRAM_EXTENSION = ".warp"
@@ -279,6 +287,13 @@ stored_got(name: text) := {
 	found = kept_rows(name)
 	if count(found) == 0 then ø else found#1#1
 }
+// the value under the name forgotten; ø
+stored_forgot(name: text) := {
+	run_bound(values_database(), "delete from " + quoted_name(VALUES_TABLE) + " where name = ?", [name])
+	ø
+}
+// the values of `session[k]`, kept while the run lasts
+global session_values = {}
 // every value kept under a name, as a map: `print(storage)`
 storage() := {
 	kept = {}

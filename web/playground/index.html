@@ -6,6 +6,9 @@
 	<title>warp playground</title>
 	<!-- inline, so no favicon.ico request fails in the console (card console-errors) -->
 	<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌀</text></svg>">
+	<!-- the same 🌀 as a picture: Safari on the iPad shows no SVG icon, neither in its tabs nor on the home screen -->
+	<link rel="icon" type="image/png" sizes="180x180" href="apple-touch-icon.png">
+	<link rel="apple-touch-icon" href="apple-touch-icon.png">
 	<script>
 		// tasks on Workers need shared memory, which needs cross-origin isolation: a service worker adds the headers
 		// GitHub Pages cannot send, then the page reloads once under it (coi-serviceworker.js), once it is active: a reload
