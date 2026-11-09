@@ -1186,8 +1186,10 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - color-light-adding (user, card color-addition-wrap): Color + Color adds per channel capped at 255 (red + blue = #FF00FF),
     `-` floored at 0, `color * number` scales the channels; a module's `+(a: T, b: T)` for a named int type is the meaning of
     + for two T (operators-are-functions, an extension); a top-level operator definition is never silently ignored.
-  - named-int-show: open: the user asks whether named int types could be cheap classes instead of marks (one int field, the
-    class descriptor giving show, operators and dispatch); the per-program show hook waits for that answer.
+  - int-types-are-classes (user, core OK ~20–40 lines, card named-int): a named int type is a cheap class with one int field
+    (`type Color = int` ≡ `class Color { value: int }`), no type mark: show, operators (`+(a: Color, b: Color)`) and dispatch
+    come from the class descriptor; a typed list [Color] keeps raw ints and boxes only into untyped places; arithmetic on the
+    number says `c as int`. The int mark code goes (extensions/int_types, core marks); Bool and path marks stay.
   - use-path-literal (FYI warp-file-literals, 4 core lines, card shader-quote-path-uses): `use ./x.warp` / `include ./x.warp` take
     the path literal; lib/quote_helper.warp moves beside its test as test/web/quote_helper.warp.
   - map-function-definition (FYI warp-functions-finish, small core fix): `square := it * it` is the definition square(it) already in lambdas, so `g = square` and `apply(square, 3)` pass the function.
