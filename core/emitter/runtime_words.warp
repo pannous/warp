@@ -269,7 +269,7 @@ def time_test_code(body: Body, value: TypedCode, spec: text): TypedCode {
 # lib/time's answer, or lib/units' quantity of time where the program has it, as units' rule reads `x is duration`
 def time_valued_code(body: Body, value: TypedCode, spec: text): TypedCode {
 	held = fresh_node_local(body)
-	asked = word => call_values(module.functions[word], [TypedCode(ValueKind.Node, held), text_value(spec)]).code
+	asked = word => converted(call_values(module.functions[word], [TypedCode(ValueKind.Node, held), text_value(spec)]), ValueKind.Bool)
 	measured = if spec in quantity_time_specs and module.functions.has(quantity_test_word) then asked(quantity_test_word) + [op.i32_or] else []
 	TypedCode(ValueKind.Bool, value.code + [op.local_set] + held[1..] + asked(time_test_word) + measured)
 }
