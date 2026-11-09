@@ -11,6 +11,8 @@ the investigation of 2026-10-23 is in /workspace/cow/compiler-rebuilds.md on the
   only with `--rebuild`.
 - warp.wasm (plain `warp`'s) is the one build: the seed (warp-seed.wasm beside the binary, user 2026-10-26: out of git, each
   refresh published as a GitHub pre-release seed-<date>-<sha8> by scripts/refresh-seed.sh) compiles core/compiler.warp.
+  A cron job refreshes it daily at 05:47 from main (user 2026-11-09: at least once a day, so the compiler may use newer
+  features; log ~/Library/Logs/warp/cron/refresh-seed.log, a failure becomes an urgent card).
   warp-self.wasm (`warp self`) is no build of its own: `warp rebuild self` lets warp.wasm compile compiler.warp again
   and copies warp.wasm to warp-self.wasm when it does (user 2026-10-26: "If the compiler can compile itself once more,
   we don't need the fixed point"; whether the output is byte-identical is only said); otherwise warp-self.wasm stays as
