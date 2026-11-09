@@ -100,7 +100,7 @@ def intrinsic_of(body: Body, name: text, values: list): TypedCode {
 		# keyed(kind, left, right): a $Node of the kind with the two nodes; entry_key(n) a key's left node
 		# with_kind(n, kind): n's data and value in a $Node of that whole kind field
 		"with_kind": {
-			held = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
+			held = fresh_node_local(body)
 			part = i => held + gc_code(gc_ops.struct_get, [gc_type(gc.node), i])
 			TypedCode(ValueKind.Node, values#1.code + [op.local_set] + held[1..] + converted(values#2, ValueKind.Int) + part(1) + part(2) + gc_code(gc_ops.struct_new, [gc_type(gc.node)]))
 		}
@@ -113,14 +113,14 @@ def intrinsic_of(body: Body, name: text, values: list): TypedCode {
 		"list_node": TypedCode(ValueKind.Node, node_code(converted(values#1, ValueKind.Int), values#2.code))
 		# meta_node(n, line, column): n's kind, data and value in a $MetaNode at that position, no comment
 		"meta_node": {
-			held = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
+			held = fresh_node_local(body)
 			part = i => held + gc_code(gc_ops.struct_get, [gc_type(gc.node), i])
 			code = values#1.code + [op.local_set] + held[1..] + part(0) + part(1) + part(2) + converted(values#2, ValueKind.Int) + converted(values#3, ValueKind.Int)
 			TypedCode(ValueKind.Node, code + [ref_null, gc_type(gc.node), ref_null, gc_type(gc.node)] + gc_code(gc_ops.struct_new, [gc_type(gc.meta_node)]))
 		}
 		# meta_with_attributes(m, attributes): the $MetaNode m, its attributes these (a list's $Node)
 		"meta_with_attributes": {
-			held = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
+			held = fresh_node_local(body)
 			part = i => held + gc_code(gc_ops.ref_cast_null, [gc_type(gc.meta_node)]) + gc_code(gc_ops.struct_get, [gc_type(gc.meta_node), i])
 			code = values#1.code + [op.local_set] + held[1..] + part(0) + part(1) + part(2) + part(3) + part(4) + part(5) + boxed(values#2)
 			TypedCode(ValueKind.Node, code + gc_code(gc_ops.struct_new, [gc_type(gc.meta_node)]))
@@ -208,52 +208,77 @@ library_words = extended_library_words({numerator: "numerator", denominator: "de
 # canonical name, and the kinds of the core each covers; an untyped value asks runtime.warp node_is_type
 core_type_words = {int: "int", nat: "nat", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational",
 	exact: "rational", precise: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
-	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
+	number: "number", text: "text", str: "text", string: "text", path: "path", codepoint: "char", char: "char", character: "char",
 	bool: "bool", boolean: "bool", list: "list", key: "key", pair: "key", symbol: "symbol", map: "map", error: "error", code: "code",
 	function: "function", block: "function"}
+# the marked texts by their type word: `x as path` marks a text, `x is path` tests the mark
+marked_text_types = {path: Marked.Path}
 # the kinds of a value known only at run time each type passes: an int is a
 # rational and a number, a float too, a character a text, a block a list; `code` none, it is a mark (runtime
 # types.warp node_is_type, held_kind_bit)
-passing_kinds = {int: [Kind.Int], nat: [Kind.Int], rational: [Kind.Int, HeldBit.Rational, Kind.Float], float: [Kind.Float],
-	number: [Kind.Int, HeldBit.Rational, Kind.Float], text: [Kind.Text, Kind.Codepoint], char: [Kind.Codepoint],
+numeric_held_kinds = [Kind.Int, HeldBit.Rational, Kind.Float]
+passing_kinds = {int: [Kind.Int], nat: [Kind.Int], rational: numeric_held_kinds, float: [Kind.Float],
+	number: numeric_held_kinds, text: [Kind.Text, Kind.Codepoint, HeldBit.Path], path: [HeldBit.Path], char: [Kind.Codepoint],
 	bool: [HeldBit.Bool], list: [Kind.List, Kind.Block], key: [Kind.Key], symbol: [Kind.Symbol], map: [HeldBit.Map],
 	error: [Kind.Error], code: [], function: [Kind.Function]}
-covered_kinds = {int: [ValueKind.Int], nat: [ValueKind.Int], rational: [ValueKind.Int], float: [ValueKind.Float], number: [ValueKind.Int, ValueKind.Float], text: [ValueKind.Text, ValueKind.Char],
+covered_kinds = {int: [ValueKind.Int], nat: [ValueKind.Int], rational: [ValueKind.Int], float: [ValueKind.Float], number: [ValueKind.Int, ValueKind.Float], text: [ValueKind.Text, ValueKind.Char], path: [],
 	char: [ValueKind.Char], bool: [ValueKind.Bool], list: [ValueKind.List], key: [], symbol: [], map: [], error: [], code: [], function: []}
 kind_bit(kind: int): int := 1 << kind
 # whether the class is the ancestor or extends it
 descends(name: text, ancestor: text): bool := name == ancestor or (name in module.parents and descends(module.parents[name], ancestor))
 # the runtime word's test of the value against the class and those extending it
-def class_test_code(body: Body, subject: Node, spec: text, word: text): TypedCode {
-	runtime_call(word, [TypedCode(ValueKind.Node, boxed(expression_code(body, subject))), list_value(body, module.classes.keys.filter(name => descends(name, spec)))])
+def class_test_code(body: Body, value: TypedCode, spec: text, word: text): TypedCode {
+	runtime_call(word, [TypedCode(ValueKind.Node, boxed(value)), list_value(body, module.classes.keys.filter(name => descends(name, spec)))])
 }
-def type_test_code(body: Body, subject: Node, written: text): TypedCode {
+def type_test_code(body: Body, subject: Node, written: text): TypedCode { value_type_test(body, expression_code(body, subject), written) }
+def value_type_test(body: Body, value: TypedCode, written: text): TypedCode {
 	# `x is Q` of `type Q = P` tests a P
 	spec = aliased_type(written)
 	if spec in module.sum_types and module.sum_types[spec] == "cases" { return refuse("a test of the type " + spec + ", which has cases") }
 	# `x is real` (REAL_CLASS) also of any number (decision real-canonical)
 	# an instance of the class or of one extending it, whatever the subject: `(5ms) is Quantity` of a Time
-	if spec in module.classes { return class_test_code(body, subject, spec, if spec == REAL_CLASS then "real_among" else "instance_among") }
-	if spec in time_test_specs { return time_test_code(body, subject, spec) }
+	if spec in module.classes { return class_test_code(body, value, spec, if spec == REAL_CLASS then "real_among" else "instance_among") }
+	if spec in time_test_types { return time_test_code(body, value, spec) }
 	if spec not in core_type_words { return refuse("a test of the type " + spec) }
 	type = core_type_words[spec]
-	value = expression_code(body, subject)
 	# a pair `a: b` is no class's instance, though a Key holds both (runtime fields.warp is_entry); `is key` and a Key arm take both
 	if value.kind == ValueKind.Node and spec == "pair" { return TypedCode(ValueKind.Bool, runtime_call("is_entry", [value]).code) }
 	if value.kind == ValueKind.Node { return node_type_test(body, value, type) }
-	TypedCode(ValueKind.Bool, [op.i32_const, if covered_kinds[type].any(kind => same_kind(kind, value.kind)) then 1 else 0])
+	# a text held unboxed carries its mark statically: `p is path` of a path in a local
+	passes = if type in marked_text_types then value.mark == marked_text_types[type] else covered_kinds[type].any(kind => same_kind(kind, value.kind))
+	TypedCode(ValueKind.Bool, [op.i32_const, if passes then 1 else 0])
 }
-# `x is time`, `x is duration` (decision time-word: an instant, a date, a time of day, a duration are times): lib/time's
-# time_valued answers where the program has it (prelude_words.warp time_test_words brings it), else, and in its own
-# body, the core's times answer `is time`: a value known only at run time asks holds_time once the program makes times
-time_test_specs = ["time", "duration"]
-def time_test_code(body: Body, subject: Node, spec: text): TypedCode {
-	value = expression_code(body, subject)
-	if module.functions.has(time_test_word) and body.function.name != time_test_word { return call_values(module.functions[time_test_word], [TypedCode(ValueKind.Node, boxed(value)), text_value(spec)]) }
+# whether `x is T` tests the type: a class, a type word of the core or of time (aliases too)
+has_type_test(written: text): bool := aliased_type(written) in module.classes or aliased_type(written) in time_test_types or aliased_type(written) in core_type_words
+# a place typed T, or T?, with no value kind of the core (`d: date? = v`, a field `year: date?`) holds v as a node
+# and checks it as `v is T` does, ø too for T?: else the run fails with "not a T" (decision typed-places-check)
+def type_checked(body: Body, written: text, value: TypedCode): TypedCode {
+	spec = base_type(written)
+	held = fresh_node_local(body)
+	tested = value_type_test(body, TypedCode(ValueKind.Node, held), spec)
+	# (ø not tested: a time test of ø traps)
+	passes = if written != spec then held + [op.ref_is_null] + if_else_code(ValueKind.Bool, TypedCode(ValueKind.Bool, [op.i32_const, 1]), tested) else tested.code
+	stored = boxed(value) + [op.local_set] + held[1..]
+	TypedCode(ValueKind.Node, stored + runtime_call("type_checked", [TypedCode(ValueKind.Node, held), TypedCode(ValueKind.Bool, passes), text_value_of("not " + with_article(spec))]).code)
+}
+# `x is time`, `x is duration`, `x is date`, `x is instant` (decision time-word: an instant, a date, a time of day, a
+# duration are times): lib/time's time_valued answers where the program has it (prelude_words.warp time_test_words
+# brings it), else, and in its own body, the core's times answer `is time`: a value known only at run time asks
+# holds_time once the program makes times
+def time_test_code(body: Body, value: TypedCode, spec: text): TypedCode {
+	if module.functions.has(time_test_word) and body.function.name != time_test_word { return time_valued_code(body, TypedCode(ValueKind.Node, boxed(value)), spec) }
 	if spec != "time" { return refuse("a test of the type " + spec) }
 	if value.kind == ValueKind.Node and "Time" in module.made { return runtime_call(made_tests.Time, [value]) }
 	TypedCode(ValueKind.Bool, [op.i32_const, if value.kind == ValueKind.Time then 1 else 0])
 }
+# lib/time's answer, or lib/units' quantity of time where the program has it, as units' rule reads `x is duration`
+def time_valued_code(body: Body, value: TypedCode, spec: text): TypedCode {
+	held = fresh_node_local(body)
+	asked = word => converted(call_values(module.functions[word], [TypedCode(ValueKind.Node, held), text_value(spec)]), ValueKind.Bool)
+	measured = if spec in quantity_time_specs and module.functions.has(quantity_test_word) then asked(quantity_test_word) + [op.i32_or] else []
+	TypedCode(ValueKind.Bool, value.code + [op.local_set] + held[1..] + asked(time_test_word) + measured)
+}
+quantity_time_specs = ["time", "duration"]
 # (typed, so a kind from a table and one a cast spelled, `2 as float`, compare as kinds)
 same_kind(a: ValueKind, b: ValueKind): bool := a == b
 # `x is type` of a value known only at run time: its held kind bit against the kinds passing the type, inline;
@@ -262,7 +287,7 @@ def node_type_test(body: Body, value: TypedCode, type: text): TypedCode {
 	kinds = 0
 	for kind in passing_kinds[type] { kinds = bit_or(kinds, kind_bit(kind)) }
 	if kinds == 0 { return runtime_call("node_is_type", [value, text_value(type), number_value(kinds)]) }
-	held = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
+	held = fresh_node_local(body)
 	bits = [op.local_get] + uleb(fresh_local(body, ValueKind.Int))
 	read = value.code + [op.local_set] + held[1..] + held_kind_bit_code(body, held) + [op.local_tee] + bits[1..]
 	type_value = read + [op.i64_const] + sleb(kind_bit(HeldBit.TypeValue)) + [op.i64_and, op.i64_eqz, op.i32_eqz]
@@ -280,7 +305,7 @@ def held_kind_bit_code(body: Body, held: list): list {
 	ratio = kind + [op.i64_const] + sleb(Kind.Int) + [op.i64_eq] + ratio_test(held) + [op.i32_and]
 	marked = held + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.local_set] + field[1..] + [op.i64_const, 1] + kind + [shift_ops.i64_shl]
 	marked += unless_held(HeldBit.Bool, is_field(Marked.Bool)) + unless_held(HeldBit.TypeValue, is_field(Marked.TypeValue))
-	marked += unless_held(HeldBit.Map, is_field(Marked.Map)) + unless_held(HeldBit.Rational, ratio)
+	marked += unless_held(HeldBit.Map, is_field(Marked.Map)) + unless_held(HeldBit.Rational, ratio) + unless_held(HeldBit.Path, is_field(Marked.Path))
 	held + [op.ref_is_null, op.if] + value_type(ValueKind.Int) + held_bit(Kind.List) + [op.else] + marked + [op.end]
 }
 def held_bit(place: int): list { [op.i64_const] + sleb(kind_bit(place)) }

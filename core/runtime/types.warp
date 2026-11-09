@@ -29,6 +29,8 @@ held_kind_bit(n: Node): int := {
 	kind = kind_code(n)
 	if kind == Kind.Int and is_ratio(n) { return HeldBit.Rational }
 	if marked_kind(n) == Marked.Map { return HeldBit.Map }
+	# (a path's mark and held bit by the rows an older seed knows, until scripts/refresh-seed.sh: Marked.Path, HeldBit.Path)
+	if marked_kind(n) == Kind.Text + KindUnit.Info { return HeldBit.TypeValue + 1 }
 	kind
 }
 # a type value `int`: a symbol marked TYPE_VALUE_MARK above its kind
@@ -49,7 +51,8 @@ covered_type_words(type: text): list := {
 		"rational": rationals
 		"float": floats
 		"number": rationals + floats + ["number"]
-		"text": ["text", "str", "string"] + chars
+		"text": ["text", "str", "string", "path"] + chars
+		"path": ["path"]
 		"char": chars
 		"bool": ["bool", "boolean"]
 		_: [type]
@@ -136,6 +139,7 @@ held_kind_word(n: any): text := {
 	kind = kind_code(n)
 	if kind == Kind.Int and is_ratio(n) { return "rational" }
 	if marked_kind(n) == Marked.Map { return "map" }
+	if marked_kind(n) == Kind.Text + KindUnit.Info { return "path" }
 	kind_word(kind)
 }
 # the type word of a kind by its code, data for the others: a match, as reading
