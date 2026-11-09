@@ -22,14 +22,14 @@ rewrite (stored $name = $value) => stored $name default $value where $name is sy
 // `storage.score = 42`, `local["name"]`, `database[k]`: a value kept under a name, natively all three the program's
 // database, in the browser local is localStorage; `delete local[k]` forgets it, `keys(local)` (values, entries) lists
 // them. A program's own variable of the name stays its own
-rewrite delete $store[$key] => stored_forgot($key) where $store in [storage, database, local] and $store is unbound
 rewrite $store.$name => stored_got($key) where $store in [storage, database, local] and $store is unbound and $name is symbol and $key = spelled($name)
 rewrite $store[$key] => stored_got($key) where $store in [storage, database, local] and $store is unbound
 rewrite $listing($store) => $listing(storage()) where $listing in [keys, values, entries] and $store in [storage, database, local] and $store is unbound
 // a write of a store's value: its read written to; the listing names the stores, so the rule comes when they are named
 rewrite ($read($key) = $value) => stored_put($key, $value) where $read in [stored_got, storage, database, local]
+rewrite delete $read($key) => stored_forgot($key) where $read in [stored_got, storage, database, local]
 // `session[k]`: a value kept while the run lasts, apart from the kept ones (in the browser the tab's sessionStorage)
-rewrite delete $store[$key] => session_values.remove($key) where $store in [session] and $store is unbound
+rewrite delete $read[$key] => session_values.remove($key) where $read in [session_values, session]
 rewrite $store.$name => session_values[$key] where $store in [session] and $store is unbound and $name is symbol and $key = spelled($name)
 rewrite $store[$key] => session_values[$key] where $store in [session] and $store is unbound
 rewrite $listing($store) => $listing(session_values) where $listing in [keys, values, entries] and $store in [session] and $store is unbound
