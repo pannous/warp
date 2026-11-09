@@ -4,8 +4,8 @@ Roadmap card: event-loop (board topic; its sub-cards are the steps of section 6,
 Companions: notes/signals.md (signals inside a program), notes/system_signals.md (the Rust era's system signals: the
 record of what was decided, its paths are gone), notes/ffi_handles.md (callbacks), notes/roadmap_native_harness.md.
 User answers 2026-11-09 (through warp-interviewer, section 7): cancel-timer A (`cancel t`), ctrl-c-runs-exit A (`on
-exit` runs, then 130 / 143). Open: event-delivery-points (Q1): the user rejected "only where it waits" and asked about
-a second thread; the options are in section 7, and steps 2 and 4 hold the parts it decides.
+exit` runs, then 130 / 143), event-delivery-points (Q1): waits and loop starts, one rule for native and the page,
+and threaded-handlers: real threads planned too (section 7, "Decided").
 
 ## In one paragraph
 A run has one event loop. Sources (timers, OS signals, readable descriptors, the window, file watches, callbacks from
@@ -137,7 +137,7 @@ loop for all components; warp emits core modules on WASI preview 1, so that is a
 Natively the loop is plain warp around one blocking word, `wait = events_turn(events_wait(deadline, watched), now)`
 until wait is -1 or the deadline passed.
 
-### Delivery and re-entrancy (Q1 open)
+### Delivery and re-entrancy (Q1 decided: event-delivery-points, section 7)
 - Occurrences from outside are handled at wait points: after main's last line (a listening program ends in
   `events_end`, one ending in place of exits_end, frames_end, tasks_end and routes_end), inside `sleep`, `await` and a
   channel's `receive` (each turns the loop until its deadline or its completion), and after each painted frame
@@ -357,6 +357,16 @@ Risks:
   event; real-time audio stays a ring of samples warp fills ahead (lib/sound.warp), never a call into wasm.
 - macOS's modal window resize blocks the main loop while dragging: frames pause during a resize (SDL's event watch
   could paint, later).
+
+Decided by the user 2026-11-09 (through warp-interviewer; these overrule the options below):
+- event-delivery-points: one rule for native and the page. A handler runs on the program's thread at its waits
+  (sleep, await, receive, a painted frame) and at loop starts, through one compiled flag check, only in programs that
+  listen (~15 emitter lines, core OK given). A host thread does the waiting and only queues events. Nothing is
+  delivered while a handler runs. Test: `n = 0; on every 50 ms { n += 1 }; sleep 175 ms; n` → 3. Wasmtime epochs may
+  replace the native check later, if a probe shows the epoch callback may call into the store (busy-loop-events).
+- threaded-handlers: real threads are planned too, from what is decided already (go tasks truly parallel natively,
+  `shared` atomic values): `shared n = 0; on every 50 ms go { n += 1 }`. A threaded handler sees only shared values.
+  Simple native scenarios first; the page stays cooperative.
 
 Questions for the user, through warp-interviewer 2026-11-09:
 - cancel-timer (Q2), decided A: `t = on every 1 second {…}; cancel t`.
