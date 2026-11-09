@@ -1,0 +1,9 @@
+#!/usr/bin/env warp
+# Five people. A friendship joins their groups. 23 is two groups, and person 1's group has three.
+use disjoint
+
+people = DisjointSet(5)
+people.unite(1, 2)
+people.unite(2, 3)
+people.unite(4, 5)
+people.components() * 10 + people.size_of(1)

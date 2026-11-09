@@ -81,7 +81,9 @@ class Density extends Quantity {}
 
 // a quantity moving lib/time's Instant (`now + 1h`) as the Duration it lasts, a DimensionError of any other dimension
 // than time; a program without lib/time has no Duration and leaves it out (card instant-typed-duration)
-q: Quantity as Duration := Duration(q.in("ms"))
+// (its milliseconds by same_quantity, not q.in("ms"): a linked class's method in a conversion body is refused when
+// lib/timers comes in through an implicit use, card linked-method-conversion; back to q.in("ms") once that is fixed)
+q: Quantity as Duration := Duration(same_quantity(quantity(1, "ms"), q, "convert").amount * 1000)
 d: Duration as Quantity := quantity(d.ms / 1000, "s")
 // lib/time's Duration as the quantity of time it is, so `6s == time 6` and `1s + time 6` (decision one-duration)
 time_quantity(x) := if x is Duration then x as Quantity else x

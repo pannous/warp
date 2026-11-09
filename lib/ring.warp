@@ -1,0 +1,62 @@
+// A fixed-capacity ring. `use ring`.
+// Deque grows a list. A ring keeps one slot per place in its capacity: a push into a full ring drops the
+// oldest value and returns it, and returns ø when nothing was dropped. The capacity is a whole number >= 1
+// (2.0 counts, 2.5 and 1/2 do not). `n is int` does not survive into a class method, so wholeness is
+// `n == floor(n)`.
+
+alias RingBuffer => Ring
+alias CircularBuffer => Ring
+
+class Ring { slots = []; capacity = 0; head = 1; filled = 0
+	init(n) := {
+		if n != floor(n) or n < 1 { raise "Ring needs a whole capacity >= 1, not " + str(n) }
+		n = (floor(n)) as int
+		slots = []
+		for i in 1 to n { slots.add(ø) }
+		// the length, not n: a whole float's int mark does not stay on the field, and a float index is refused
+		capacity = count(slots)
+		head = 1
+		filled = 0
+	}
+	push(x) := {
+		if filled == capacity {
+			dropped = slots#head
+			slots#head = x
+			head = head % capacity + 1
+			return dropped
+		}
+		slots#((head + filled - 1) % capacity + 1) = x
+		filled = filled + 1
+		ø
+	}
+	pop() := {
+		if filled == 0 { raise "pop of an empty ring" }
+		x = slots#head
+		slots#head = ø
+		head = head % capacity + 1
+		filled = filled - 1
+		x
+	}
+	peek() := { if filled == 0 { raise "peek of an empty ring" }; slots#head }
+	latest() := { if filled == 0 { raise "latest of an empty ring" }; slots#((head + filled - 2) % capacity + 1) }
+	size() := filled
+	is_empty() := filled == 0
+	is_full() := filled == capacity
+	to_list() := ring_order(slots, head, filled, capacity)
+	clear() := {
+		slots = []
+		for i in 1 to capacity { slots.add(ø) }
+		head = 1
+		filled = 0
+	}
+}
+
+ring_order(slots, head, count, capacity) := {
+	out = []
+	i = 0
+	while i < count {
+		out.add(slots#((head + i - 1) % capacity + 1))
+		i = i + 1
+	}
+	out
+}

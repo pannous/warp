@@ -1,0 +1,19 @@
+# Ring / RingBuffer / CircularBuffer (lib/ring.warp). A full push drops the oldest and returns it.
+'use ring; r = Ring(3); r.push(10); r.push(20); r.push(30); [r.is_full(), r.push(40), r.to_list(), r.peek(), r.latest()]'	[yes, 10, [20, 30, 40], 20, 40]
+'use ring; r = Ring(3); r.push(10); r.push(20); r.push(30); r.push(40); [r.pop(), r.to_list(), r.size()]'	[20, [30, 40], 2]
+'use ring; r = Ring(1); r.push("a"); [r.push("b"), r.to_list(), r.pop(), r.is_empty()]'	["a", ["b"], "b", yes]
+'use ring; r = Ring(2); [r.push(1), r.is_empty(), r.is_full(), r.size()]'	[ø, no, no, 1]
+'use ring; r = Ring(3); r.push(1); r.push(2); r.clear(); [r.is_empty(), r.push(8), r.to_list()]'	[yes, ø, [8]]
+'use ring; a = Ring(2); b = Ring(2); a.push(1); [a.to_list(), b.to_list(), a.size(), b.size()]'	[[1], [], 1, 0]
+'use ring; a = Ring(2); b = Ring(2); a.slots.add(9); [count(a.slots), count(b.slots)]'	[3, 2]
+'use ring; r = Ring(2.0); r.push(1); r.push(2); [r.push(3), r.capacity, r.to_list()]'	[1, 2, [2, 3]]
+'use ring; rb = RingBuffer(2); rb.push(7); rb.to_list()'	[7]
+'use ring; c = CircularBuffer(2); c.push(1); c.push(2); c.push(3); c.to_list()'	[2, 3]
+'use ring; Ring(0)'	error	zero capacity
+'use ring; Ring(2.5)'	error	fractional capacity
+'use ring; Ring(1 / 2)'	error	ratio capacity
+'use ring; Ring(-3)'	error	negative capacity
+'use ring; r = Ring(2); r.pop()'	error	pop of an empty ring
+'use ring; r = Ring(2); r.peek()'	error	peek of an empty ring
+'use ring; r = Ring(2); r.latest()'	error	latest of an empty ring
+'samples/objects/ring_log.warp'	90
