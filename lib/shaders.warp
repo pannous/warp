@@ -172,7 +172,10 @@ values_read(reached: map): any := {
 	read
 }
 # a value as the shader reads it: a color its channels, a complex number [re, im]
-painted_value(value) := if value is Color then channels(value) else if value is Complex then [value.re, value.im] else value
+painted_value(value) := if is_color(value) then channels(value) else if value is Complex then [value.re, value.im] else value
+# a Color of lib/color, `orange`: a plain number is no color here, though `1600 is Color` holds as `1600 as Color` would
+# (decision int-fits-named-int)
+is_color(value): bool := value is Color and not (value is int)
 # `shader_of(f)`: the WGSL fragment shader that paints f(column, row) at every pixel, as a text
 shader_of(reached: map): text := shader_made(reached)#1
 shader_made(reached: map): list := {
@@ -560,7 +563,7 @@ wgsl_program_value(n: Node): list := {
 # vectors (a list of more than four, or of lists) its items' width negated, `levels#b` reads an item; 0 for any other
 wgsl_value_width(value): int := {
 	if value is bool { return 0 }
-	if value is Color { return COLOR_WIDTH }
+	if is_color(value) { return COLOR_WIDTH }
 	if value is Complex { return COMPLEX_WIDTH }
 	if not (value is list) { return 1 }
 	if #value == 0 { return 0 }
