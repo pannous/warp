@@ -10,6 +10,7 @@ use "../extensions/c_imports.warp"
 use "../extensions/primitive.warp"
 use "../extensions/extensions.warp"
 use "host_io.warp"
+use "prelude_core.warp"
 
 # a command (commands.warp), else the source file of a compile
 command = if #args > 0 and is_command(args#1) then args#1 else ""
@@ -233,7 +234,7 @@ write_runtime(file: text) := {
 module_source(name: text): text := "use " + name + "\nø"
 # the text a compile defines its words in: the module's own when it writes one (its source is only module_source's
 # stub), else the source
-written_source(source: text): text := if module_written != "" then file_text(std_module_path(module_written)) ?? "" else source
+written_source(source: text): text := if module_written != "" then std_module_text(module_written) else source
 # where the modules a compile links are: beside runtime.wasm, or where the module written goes
 linked_modules_folder(): text := if module_written != "" and not own_module_files.has(module_written) then module_written_folder else folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/"
 # the module a compile writes, and the folder of the modules it links: its own never linked
