@@ -1,0 +1,6 @@
+# a class's approximately(o) and similar(o) answer ≈ and ~ of its instances, either side; other values keep lib/math's
+# (card class-method)
+'class P{x: float; similar(o) := abs(x - o.x) < 10}; [P(1) ~ P(5), P(1) ~ P(50)]'	[yes, no]
+'class P{x: float; approximately(o) := abs(x - o.x) < 1}; [P(1) ≈ P(1.5), P(1) ≈ P(5)]'	[yes, no]
+'use uncertain; [(1 ± 0.1) ≈ 1.05, (1 ± 0.1) ≈ 3, 1.05 ≈ (1 ± 0.1)]'	[yes, no, yes]
+'class P{x: float; similar(o) := yes}; [1 ~ 1.001, [1, 2] ≈ [1, 2], 1 ≈ 2]'	[yes, yes, no]
