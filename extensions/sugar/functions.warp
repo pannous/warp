@@ -7,11 +7,8 @@
 # definition already)
 rewrite extension $T {$members...} => (($h(self: $T, $p...): $t := {$b...}) for ($h($p...): $t := {$b...}) in $members...)
 # a name defined as a function value is bound to it, as `f = e` binds it (decision function-valued-definition):
-# `f := x => x + 1`, a composition `root_sum := sum | sqrt` or `h := square & print`; a bare name stays the body that
-# calls it, `pwd := cwd`
-rewrite $f := $e => $f = $e where $f is symbol and $e is function and $e is not symbol
-rewrite $f := $g | $h => $f = $g | $h where $f is symbol and $g is function and $h is function
-rewrite $f := $g & $h => $f = $g & $h where $f is symbol and $g is function and $h is function
+# `f := x => x + 1`, a composition `root_sum := sum | sqrt` or `h := square & print` (rule_words.warp function_value)
+rewrite $f := $e => $f = $e where $f is symbol and function_value($e)
 rewrite (fun $d) => def $d
 rewrite (fn $d) => def $d
 rewrite (define $d) => def $d
