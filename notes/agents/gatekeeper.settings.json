@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "defaultMode": "dontAsk",
+    "allow": [
+      "Bash(gate-ticket view *)",
+      "Bash(gate-ticket verdict *)",
+      "SendMessage",
+      "ListAgents"
+    ],
+    "deny": [
+      "Read",
+      "Write",
+      "Edit",
+      "NotebookEdit",
+      "WebFetch",
+      "WebSearch",
+      "Agent",
+      "Workflow",
+      "Skill"
+    ]
+  }
+}
