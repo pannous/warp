@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Writes lib/case_tables.warp: the case tables of lib/case_table.warp (card case-table-warp), Python's Unicode case
+"""Writes core/runtime/case_tables.warp (lib/case_tables.warp links to it): the case tables of the runtime's upper and
+lower and of lib/case_table.warp (card case-table-warp), Python's Unicode case
 mappings as flat int lists of six fields per range: start, last, stride, delta, second, third. Writes
 lib/letter_ranges.warp too: the code points of Unicode's letters (categories L*) beyond ASCII, two fields per range
 (start, last), which lib/text.warp's is_unicode_letter searches. The Unicode version is Python's
@@ -8,8 +9,9 @@ import pathlib
 import sys
 import unicodedata
 
-OUTPUT = pathlib.Path(__file__).resolve().parent.parent / "lib" / "case_tables.warp"
-LETTERS_OUTPUT = OUTPUT.with_name("letter_ranges.warp")
+REPOSITORY = pathlib.Path(__file__).resolve().parent.parent
+OUTPUT = REPOSITORY / "core" / "runtime" / "case_tables.warp"
+LETTERS_OUTPUT = REPOSITORY / "lib" / "letter_ranges.warp"
 FIRST_BEYOND_ASCII = 0x80
 STRIDES = (1, 2)
 LAST_CODE_POINT = 0x10FFFF
@@ -57,7 +59,7 @@ def case_ranges(mapping):
 
 
 # the ints as one text read when the module loads: a 9,600-int list literal took wasmtime 39 s to compile (debug);
-# the text as a word of its own, which core/runtime.warp reads too (`use case_tables`)
+# the text as a word of its own, which core/runtime/case.warp reads too
 def warp_list(name, ranges):
 	numbers = " ".join(str(field) for range_ in ranges for field in range_)
 	return f'{name}_case_text(): text := "{numbers}"\n{name}_case_ranges = {INTS_WORD}({name}_case_text())\n'

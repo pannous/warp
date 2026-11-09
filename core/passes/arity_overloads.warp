@@ -286,6 +286,8 @@ element_of(type: text): text? := {
 	if type.ends_with("s") and (singular in overload_kinds or singular in overload_classes) then singular else ø
 }
 
+# parameter types each in the one spelling of its overload kind, `double` and `f64` as `float`
+spelled_alike(types: list): list := types.map(type => if type in overload_kinds then overload_kinds[type] else type)
 # the kind of value a parameter type takes: list, map or one of overload_kinds; ø of `any` and of another type
 overload_kind(type: text): text? := {
 	if type == "list" or element_of(type) != ø { return "list" }
@@ -406,8 +408,10 @@ library_variants(name: text, defined: list): list := {
 	word = library_word_named(name)
 	written = if word_lines().has(word) then word_lines()[word].map(line => line.signature.parameters.map(p => if p.type_name == "" then any_word else p.type_name)) else []
 	joining = []
-	# math declares sin twice, from warp and from 'm': one variant
-	for types in written { if types not in defined and types not in joining and defined.any(own => #own == #types) { joining += [types] } }
+	own_spelled = defined.map(spelled_alike)
+	# math declares sin twice, from warp and from 'm': one variant; the program's `sin(x: double)` is math's sin(x: float)
+	# spelled otherwise, the program's own then (card sin-double-impl)
+	for types in written { if spelled_alike(types) not in own_spelled and types not in joining and defined.any(own => #own == #types) { joining += [types] } }
 	# a linked module's definition of as many parameters, all typed and of types the dispatch tells from the program's
 	# (decision cross-module-overload): the prelude's log(x: number, base: number) beside a program's log(level: text,
 	# parts: texts), each call reaching the body of its arguments' types (card program-own-log)

@@ -8,7 +8,7 @@
 # triage-held 2026-11-06: running data as code at run time needs a run-time interpreter :: 'y = data 1+2; y!'	3
 
 # test_block_parameters_take_their_argument_unevaluated
-'twice(body:block) := { body!; body! }; n = 0; twice(n += 5); n'	10
+'twice(body:block) := { body(); body() }; n = 0; twice(n += 5); n'	10
 
 # test_a_bang_known_only_at_run_time_is_loud
 # triage-held 2026-11-06: running data as code at run time needs a run-time interpreter :: 'xs = [data a+1, data a*2]; a=5; xs#2!'	10
