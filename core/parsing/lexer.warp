@@ -144,8 +144,8 @@ def block_comment_end(source: text, at: int, mark: text, n: int): int {
 // breaks do not count. The parser asks these instead of scanning ahead (card parser-tokens)
 class Gaps { resumes: list; breaks: list }
 def gaps(source: text, n: int): Gaps := {
-	resumes = (n + 1) times [n]
-	breaks = (n + 1) times [false]
+	resumes = [n for position in 0 to n]
+	breaks = [false for position in 0 to n]
 	at = n - 1
 	while at >= 0 {
 		c = source[at]
