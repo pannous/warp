@@ -19,6 +19,15 @@ class Complex {
 		if d == 0 { raise "complex: division by zero" }
 		Complex((re * b.re + im * b.im) / d, (im * b.re - re * b.im) / d)
 	}
+	// z² + c (card possible): a whole exponent by repeated multiplication, exact; any other through complex_pow
+	power(o: any): Complex := {
+		if o is int and o >= 0 {
+			result = Complex(1.0, 0.0)
+			for _ in 0..o { result = result * this }
+			return result
+		}
+		complex_pow(this, o)
+	}
 	equals(o: any): bool := (o is Complex or o is number) and re == as_complex(o).re and im == as_complex(o).im
 	text(): text := complex_text(this)
 }
