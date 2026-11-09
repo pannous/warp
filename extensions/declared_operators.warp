@@ -218,3 +218,45 @@ def holds_top_level_comma(code: text, at: int, n: int): bool {
 	}
 	false
 }
+
+# `greater(a: list, b: int) := all a > b` defines `>` as its glyph form does (decision operator-words-top-level): a
+# definition starting a line, named by an operator's English word (lib/aliases.warp), its two parameters typed, one of
+# them beyond the numbers, is spelled with the glyph; an untyped one, lib's add(xs, x), and one of numbers stay plain
+# functions. A source pass: the parse reads a built-in operator's overloads before any pass (rewrites.warp
+# operator_overload)
+NUMBER_TYPE_NAMES = ["int", "integer", "float", "number", "real"]
+operator_words_extension = Extension{name: "operator_words", source_passes: [operator_words_spelled]}
+def operator_words_spelled(source: text): list {
+	lines = lines_of(source)
+	# (the table only where a line starts a definition: reading it parses lib/aliases.warp, through this pass)
+	if not lines.any(line => defined_head_word(line) != ø) { return [source, []] }
+	table = operator_spellings()
+	spelled = []
+	shifts = []
+	for line in lines {
+		glyph = operator_word_head(line, table)
+		if glyph == ø { spelled += [line] } else {
+			word = defined_head_word(line)
+			start = code_points((spelled + [""]).join("\n")).length
+			shifts += [[start + glyph.length, word.length - glyph.length]]
+			spelled += [glyph + line[word.length ..]]
+		}
+	}
+	[if #shifts == 0 then source else spelled.join("\n"), shifts]
+}
+# the name a line's definition `name(…) := …` starts with, else ø
+def defined_head_word(line: text): text? {
+	open = 0
+	while open < line.length and is_name_char(line[open]) { open += 1 }
+	if open == 0 or open >= line.length or line[open] != '(' { return ø }
+	if line[hole_end(line, open + 1, '(', ')', line.length) ..].trim().starts_with(":=") then line[0 ..< open] else ø
+}
+# the glyph a line's definition `greater(a: list, b: int) := …` spells by its word, else ø
+def operator_word_head(line: text, table: map): text? {
+	word = defined_head_word(line)
+	operator = if word == ø then ø else table.get(word)
+	if operator == ø or operator#2 == "#" or operator#2 == word or not METHOD_OPERATORS.contains(operator#2) { return ø }
+	parameters = items_of(statements_in(plain_node(parsed(line[0 ..< hole_end(line, word.length + 1, '(', ')', line.length)])))#1)[1 ..]
+	types = parameters.map(parameter => if is_key(parameter, Op.Colon) then type_named(value_of(parameter)) else ø)
+	if #parameters != 2 or types.any(type => type == ø) or types.all(type => type in NUMBER_TYPE_NAMES) then ø else operator#2
+}
