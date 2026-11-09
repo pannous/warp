@@ -6,8 +6,7 @@ use "../analysis/words.warp"
 use "../passes/sugar.warp"
 use "foreign_forms.warp"
 use "../extension.warp"
-use os
-use file
+use "../host_io.warp"
 use "../passes/library.warp"
 
 // Where the items being read stand: the bracket of their group, whether that group is closed by a bracket or a word

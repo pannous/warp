@@ -269,7 +269,7 @@ declare_struct(n: Node) := {
 # the name of a declaration, under its attribute layers (`class` marks it bare_class)
 struct_name(name: any): text := if kind_of(name) == "attribute" then struct_name(name#4) else name#2
 # widths are powers of two
-aligned(offset: int, width: int): int := bit_and(offset + width - 1, -width)
+aligned(offset: int, width: int): int := bits_and(offset + width - 1, -width)
 
 primitive_parameter_type(p: Node): text := {
 	if not is_key(p, Op.Colon) { primitive_refusal(p, "a parameter without a primitive type: write `x: i32`") }

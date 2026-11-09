@@ -3,8 +3,7 @@
 # needs to build itself and its library (`warp rebuild`, the native warp); every other command is the commands
 # extension's (extensions/commands.warp: help, version, parse, lower, uses, build, repl, `warp test`'s steps and
 # the refusals of what plain WASI cannot run)
-use os
-use file
+use "../host_io.warp"
 
 core_commands = ["compile", "runtime", "module", "modules", "optimize", "baked-current"]
 is_command(word: text): bool := word in core_commands or word in extension_command_words()
