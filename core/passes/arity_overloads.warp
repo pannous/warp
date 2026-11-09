@@ -735,9 +735,9 @@ typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	call = definition_call(n)
 	if call != ø {
 		head = if name_of(call#1) in overloaded then renamed_target(key_of(n), typed_variant(name_of(call#1), parameter_types(call))) else key_of(n)
-		return Key(head, Op.Define, typed_resolved(value_of(n), shadowed(overloaded, items_of(call)[1 ..].map(parameter_name)), judge))
+		return Key(head, Op.Define, typed_resolved(value_of(n), shadowed(overloaded, bound_at(n)), judge))
 	}
-	if is_key(n, Op.Arrow) { return Key(key_of(n), Op.Arrow, typed_resolved(value_of(n), shadowed(overloaded, parameters_of(key_of(n))), judge)) }
+	if is_key(n, Op.Arrow) { return Key(key_of(n), Op.Arrow, typed_resolved(value_of(n), shadowed(overloaded, bound_at(n)), judge)) }
 	# a method call `xs.find(f)` is the call find(xs, f), its receiver the first argument; a module's word called through
 	# its name, `memory.copy(bytes, at)`, the word's own call, copy(bytes, at)
 	method = if is_key(n, Op.Dot) then value_of(n) else ø
@@ -754,8 +754,9 @@ typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	children(typed_call(phrase_block(n), overloaded, judge), x => typed_resolved(x, overloaded, judge))
 }
 
-# inside a definition or a lambda its parameters are its own, never an overloaded function of their name: the prelude's
-# `f(item)` of map(xs, f) calls its f, `find => find(a, b)` its find, not the program's or a library's variants
+# inside a definition or a lambda its parameters and variables are its own, never an overloaded function of their name:
+# the prelude's `f(item)` of map(xs, f) calls its f, `find => find(a, b)` its find, `color = …; color .^ 2` its color,
+# not the program's or a library's variants
 shadowed(overloaded: map, parameters: list): map := if parameters.any(name => name in overloaded) then without_keys(overloaded, parameters) else overloaded
 typed_overloads(program: Node): Node := {
 	overloaded = overloaded_types(program)
