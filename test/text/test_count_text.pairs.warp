@@ -1,0 +1,3 @@
+# a part counted in a text, not overlapping, a character of several bytes too (card count-of-split)
+'"aaa".count("aa")'	1
+'"a👍🏽b👍🏽".count("👍🏽")'	2
