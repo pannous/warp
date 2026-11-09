@@ -2024,7 +2024,8 @@ def operator_method_head(p: Parser, declared: bool = false): Node {
 	if char_at(p, defines_at) == '?' { defines_at = blank_end(p, defines_at + 1) }
 	if not starts_at(p.code, ":=", defines_at, p.n) { return ø }
 	p.at = open
-	parameters = group_items(expression(p, binding_powers(":=")#1 + 1))
+	// (the group alone: its result type's `:` after it binds tighter than `:=`)
+	parameters = group_items(expression(p, STRUCTURE_POWERS[":"]#1 + 1))
 	head = call_of([symbol(if METHOD_OPERATORS.contains(op#2) then op#2 else OPERATOR_FUNCTION_PREFIX + op#1)] + parameters)
 	if not typed { return head }
 	// `+(a: Color, b: Color): Color := …`: its result type
