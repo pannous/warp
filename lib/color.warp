@@ -2,6 +2,7 @@
 // (extensions/int_types), which prints as its name or as CSS writes it, #RRGGBB or #RRGGBBAA; the named colors, rgb, hsv, with_alpha and
 // alpha_of; draw paints them, arithmetic sees the number
 use math
+use encoding
 type Color = int
 opaque = 0xFF000000
 // a number as a color, color(0xFF8000) or 0xFF8000 as Color, read as CSS reads hex (decision color-text-css): six
@@ -9,6 +10,14 @@ opaque = 0xFF000000
 // with_alpha(c, 0). A value computed, `(…) as Color`, is already a color's number and only marked
 color(n: int): Color := (if n <= 0xFFFFFF then opaque + n else (n % 256) * 16777216 + n /! 256) as Color
 rgb(n: int): Color := color(n)
+// a CSS hex text as its color: color("#0000ff"), color("#0000ff80") with its alpha last, the short color("#00f")
+color(css: text): Color := {
+	digits = css.remove_prefix("#")
+	if #digits == 3 or #digits == 4 { digits = join([c + c for c in digits], "") }
+	n = hex_value(digits)
+	if n < 0 or not (#digits == 6 or #digits == 8) { raise "not a CSS hex color: " + css }
+	(if #digits == 6 then opaque + n else (n % 256) * 16777216 + n /! 256) as Color
+}
 n: int as Color := color(n)
 black = 0x000000 as Color
 white = 0xFFFFFF as Color
@@ -34,10 +43,12 @@ color_named(name: text): any := {
 	ø
 }
 // [red, green, blue], each from 0 to 1, as a painted pixel takes them (lib/shaders.warp)
-channels(c: Color): list := {
-	n = c as int
-	[float((n /! 65536) % 256) / 255, float((n /! 256) % 256) / 255, float(n % 256) / 255]
-}
+channels(c: Color): list := [16, 8, 0].map(shift => float(channel(c, shift)) / 255)
+// the byte of 0xAARRGGBB at the shift: 24 its alpha, 16 red, 8 green, 0 blue
+channel(c: Color, shift: int): int := ((c as int) >> shift) % 256
+channel_shifts = [24, 16, 8, 0]
+// the color t of the way from a to b, each channel and the alpha alike: mix(red, blue) is #800080
+mix(a: Color, b: Color, t: float = 0.5): Color := sum(channel_shifts.map(shift => (round(lerp(channel(a, shift), channel(b, shift), t)) as int) << shift)) as Color
 // #FF0000, and #FF000080 when not opaque, its alpha last as in CSS (decision color-text-css)
 hex_text(c: Color): text := "#" + padded_hex(c % 16777216, 6) + (if c /! 16777216 == 255 then "" else padded_hex(c /! 16777216, 2))
 // the number 0xAARRGGBB itself
