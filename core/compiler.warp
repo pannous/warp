@@ -27,7 +27,7 @@ RUNTIME_ROOTS = ["runtime.warp", "runtime/extended.warp"]
 root_text(file: text): text := {
 	text = file_text(runtime_folder() + "/" + file)
 	if text == ø { raise "no runtime file " + runtime_folder() + "/" + file }
-	steps = file.split("/")
+	let steps = file.split("/")
 	if #steps == 1 { return text }
 	text.replace("use \"", "use \"" + steps[0 ..< #steps - 1].join("/") + "/")
 }

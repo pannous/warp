@@ -24,6 +24,9 @@ ambiguous_result($name, $results, $first, $written)	"{name} has several results 
 division_path($before, $name)	"{before} /{name} gives {before} the path /{name}: write {before} / {name} for division"	"{before} / {name}"
 # decision glued-binds-tighter: `[a + b c]` with b a value reads neither way silently (source_checks.warp spaced_operand)
 spaced_operand($left, $op, $head, $rest)	"[{left} {op} {head} {rest}] is ambiguous: write [{left}{op}{head} {rest}] for two items or [{left} {op} {head}, {rest}]"	"[{left}{op}{head} {rest}]"
+# main_globals.warp: `n = …` in a function where main has an n reads two ways, refused naming both (decision
+# inner-assignment-refused, card steps-inside)
+local_or_global($name, $function)	"`{name} = …` inside {function} could make a new local of {function} or change the main-level {name}: write `let {name} = …` for {function}'s own, or `global {name} = …` to change main's"	"let {name} = …"	"local-or-global@{name} = …"
 # a function changing a main-level variable not declared global (main_globals.warp)
 main_variable_change($name)	"{name} is a main-level variable: declare it `global {name}` to change it from a function, or use a new local name"	"global {name}"
 # a lambda whose parameter is a literal, `1 => 2` (lambdas.warp written_parameters, card pure-lane-traps-2)

@@ -1,3 +1,6 @@
 # a variable of a function or lambda is its own, never a library function of its name (sdf_scene.warp, color-power-variant)
 'use color; f(d: float) := { color = [1, 2] .* d; color .^ 2 }; f(2.0)'	[4 16]
 'use color; g = (d => { color = [1, 2] .* d; color .^ 2 }); g(2.0)'	[4 16]
+# a C-style definition with math's types spelled otherwise (double for float) is the program's own word
+'double sin(double x){ return x*2 }; sin(3)'	6
+'sin(x: f64) := x * 2; sin(3)'	6
