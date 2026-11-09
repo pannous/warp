@@ -74,6 +74,9 @@ timer_due(at: int, after: int): int := {
 	after + 7 * DAY_MILLISECONDS
 }
 timer_every(period: any, handler: function): int := timer_started(TIMER_EVERY, floor(period / 1ms) as int, handler)
+// `every(200 ms, f)`, the call of `on every 200 ms {…}`: its period a Time, never prelude's every => all of a list
+// (card timers-every-refusal)
+every(period: Time, handler: function): int := timer_every(period, handler)
 // `9:30`, the pair of an hour and its minutes
 timer_at(time: any, weekdays: int, handler: function): int := timer_started(TIMER_CLOCK, weekdays * WEEKDAYS_SHIFT + key_of(time) * 60 + value_of(time), handler)
 // the handler named before its call: `timer_handlers#id()` calls no function ("not a function")
