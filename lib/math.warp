@@ -192,8 +192,9 @@ rewrite unwrap($n) => factorial($n) where $n is literal
 is_prime(n: int) := { if n < 2 { return false }; i = 2; while i * i <= n { if n % i == 0 { return false }; i++ }; true }
 // the value a fraction t of the way from a to b
 lerp(a, b, t) := a .+ (b .- a) .* t
-// lerp's GLSL name; both take numbers and lists of numbers (vectors)
-mix=&lerp
+// lerp's GLSL name; both take numbers and lists of numbers (vectors); a function, so a module's typed mix overloads
+// it (lib/color.warp mix of two colors)
+mix(a, b, t) := lerp(a, b, t)
 // shader math (card compile-shaders, WGSL's words): the fractional part, 0 below the edge and 1 from it, and the smooth
 // Hermite step from 0 at low to 1 at high
 fract(x) := each_any(x, e -> e - floor(e))

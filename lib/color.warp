@@ -12,7 +12,7 @@ color(n: int): Color := (if n <= 0xFFFFFF then opaque + n else (n % 256) * 16777
 rgb(n: int): Color := color(n)
 // a CSS hex text as its color: color("#0000ff"), color("#0000ff80") with its alpha last, the short color("#00f")
 color(css: text): Color := {
-	digits = css.remove_prefix("#")
+	digits = if css.starts_with("#") then css[1..] else css
 	if #digits == 3 or #digits == 4 { digits = join([c + c for c in digits], "") }
 	n = hex_value(digits)
 	if n < 0 or not (#digits == 6 or #digits == 8) { raise "not a CSS hex color: " + css }
