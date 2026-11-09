@@ -33,13 +33,11 @@ baked-lib-split.
     `warp out.wasm`.
 
 ## Left
-- P3: the prelude words the compiler itself reaches move to core, so lib/prelude.warp leaves EVERY_PROGRAMS in
-  compiler-inputs.sh. 47 prelude definitions are in warp.wasm's name section; many only through prelude globals
-  (pattern_types, comparisons, part_conversions, character_classes, event listeners), direct calls are few (first, last,
-  replace, is_alpha, is_alphanumeric, bytes, with_article, unsigned …). Open design: how programs keep seeing them as
-  prelude words once they live in core: a core part of the prelude text (prelude_text() = core part + lib part, the
-  prelude module and its index spans built of the same text), or a core module linked into lib like host_io with
-  implicit uses. Mind the seed: it reaches the prelude off lib/prelude.warp.
-- After the seed refresh: card builtins-seed-transition.
+- P3 done on branch baked-lib-split-3 (worker warp-baked-lib-split-3): core/prelude_core.warp, the prelude's core
+  part (the 20 words the compiler calls, the 12 aliases its code writes); std_module_text("prelude") = core part + lib
+  file, the one reader (notes/library_zero_bake.md "core-takes-what-it-uses"); compiler-inputs.sh --baked-files lists
+  no lib/ file. Left from it: the dead reaches by name (card note), which still compile ~45 uncalled lib prelude words in.
+- After the seed refresh: card builtins-seed-transition (it also deletes lib/prelude.warp's copies of the core part's
+  12 alias lines; compiler.warp's include of core/prelude_core.warp can go then too).
 - Card the three gcds (lib/math.warp wide_gcd, extensions/big_numbers/exact.warp int_gcd, core/integers.warp gcd) and
   lib/math.warp's bit_and/bit_or beside the runtime's bits_and/bits_or.

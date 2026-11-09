@@ -9,9 +9,18 @@ modes.data as text, and the compiler compiled os, file, path, math, reals and ca
 (checked line by line against warp.wasm's bytes). Now the compiler `use`s no lib module and module_source names only
 core's and extensions' files: core/host_io.warp, core/integers.warp, core/runtime/case_tables.warp (lib/ links to them),
 the typed builtin lines in core/analysis/builtins.warp and math_builtins.warp, and prelude, math and c are read from
-disk when a compile first asks. Left: the prelude words the compiler itself reaches (scripts/compiler-inputs.sh
-EVERY_PROGRAMS), and the transitional typed lines in lib/ for the seed (card builtins-seed-transition);
-notes/handover/baked-lib-split.md.
+disk when a compile first asks.
+P3: the prelude's core part, core/prelude_core.warp: the 20 prelude words the compiler really calls (its call graph
+from main, not its name section: ~45 of the 64 prelude functions in warp.wasm are reached only by name, a map key
+`random:`, a local `emitted`, and never called) and the 12 aliases its code writes (`.keys`, `.has`, `.index_of(x)`,
+`.length` …; alias lines of an included file don't apply, so they must be prelude text). One reader joins the parts:
+std_module_text("prelude") is the core part, baked by module_source, then lib/prelude.warp; every read of a standard
+module's text goes through it (prelude.wasm's signature and hash, the index spans, prelude_text's readers: aliases,
+prelude_definitions, implicit uses), prelude_files() gives both files for positions, and the prelude module's stub
+uses the core file before `use prelude`. compiler.warp includes the core part for the current seed, which reads only
+lib/prelude.warp and so its copies of the 12 alias lines too, until the seed refresh (card builtins-seed-transition).
+Checked: compiler.warp compiles with lib/prelude.warp emptied. scripts/compiler-inputs.sh --baked-files lists no lib/
+file. Left: the reach by name still compiles the dead prelude words in from lib/ (card baked-lib-split note).
 
 ## Final state (main c25c72d181, 2026-11-06; card library-removal-core done)
 
