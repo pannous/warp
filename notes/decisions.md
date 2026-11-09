@@ -1176,6 +1176,9 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
     Main's parser subscript stays.
   - repl-editing-keys (FYI warp-file-literals, small native core): the native console's line editor gets Home/End, Ctrl+A/E,
     Delete, Alt+Delete and Alt+Backspace.
+  - overload-signatures (Interviewer by the user's card signature-sample-mismatch): `f.signatures` lists one signature per
+    definition in written order; `f.signature` of an overloaded f shows them all, a line each, as help(f) does (no guess: every
+    definition is shown).
   - bf16-f8-shaders (user, 11-08, card bf16-storage, after f16): a shader declares `array<bf16>` / `array<f8>` and indexes `xs[i]` as if native; lib/shaders rewrites it to array<u32> plus unpack/pack helpers (2 bf16 or 4 f8 a word), as it already rewrites shader words and holes. Plain `[f8]` is e4m3 (max 448, no ∞); `[f8e5m2]` only when a program needs it.
   - class-types-checked (user, 11-08): a class that extends another is checked by name: a T place takes only T or its subclasses (`f(d: Length) := d; f(5s)` is refused "f takes a Length, not 5s (a Time)"); a standalone class keeps the fit by fields, now really checked (`a: A = B(1)` refused when B lacks A's fields). At compile time where known, else on entry. An extension, no core.
   - bare-number-to-unit (user, 11-08, with length-pixels): `f(d: Length) := d; f(5)` is 5m: a bare number reaches a unit place by the unit's declared number conversion, as `5 as Length` does.
