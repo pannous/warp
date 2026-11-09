@@ -1,6 +1,8 @@
 # System signals: hooking into the world outside the module
 
 Companion of notes/signals.md (signals inside a program); this is the outside.
+The Rust era's design: its decisions stand, its paths (crates/, src/lowering/) are gone. Today's state and the plan of
+one event loop for all of it: notes/events_plan.md.
 
 ## The idea
 The program says what it listens to with the same words as for its own signals: `on interrupt {…}`,
