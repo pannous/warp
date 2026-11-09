@@ -1,0 +1,5 @@
+# a unit after a compound assignment measures its amount, and -y negates a quantity (cards raises-dimensionerror, uncertainty-negation-print)
+'y = 1 m; y += 2 m; y'	3m
+'y = 5 m; y -= 2 m; y'	3m
+'y = 1 m; -y'	-1m
+'y = 1 m; 0 - y'	-1m
