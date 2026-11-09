@@ -1156,6 +1156,9 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
     types its fallback `g: function`, values unchanged.
   - block-values-forced (Interviewer, card block-values-forced): data stays data, it is not a block; a quoted value forced through a
     parameter is a block value, `f(b: block) := b!; xs=[block a+1, block 0]; a=1; f(xs#1)` → 2 (test_run_time_blocks:33 rewritten so).
+  - shader-import-quote (FYI warp-integrator, generic extension, card shader-import-quote): paint(f) / shader_of(f) quote a
+    function brought in by `use <module>` and the functions it calls; lib/aquarium.warp moves to samples/gpu (a picture is a
+    sample, not a library); quoting from `use "./x.warp"` is card shader-quote-path-uses.
   - bf16-f8-shaders (user, 11-08, card bf16-storage, after f16): a shader declares `array<bf16>` / `array<f8>` and indexes `xs[i]` as if native; lib/shaders rewrites it to array<u32> plus unpack/pack helpers (2 bf16 or 4 f8 a word), as it already rewrites shader words and holes. Plain `[f8]` is e4m3 (max 448, no ∞); `[f8e5m2]` only when a program needs it.
   - class-types-checked (user, 11-08): a class that extends another is checked by name: a T place takes only T or its subclasses (`f(d: Length) := d; f(5s)` is refused "f takes a Length, not 5s (a Time)"); a standalone class keeps the fit by fields, now really checked (`a: A = B(1)` refused when B lacks A's fields). At compile time where known, else on entry. An extension, no core.
   - bare-number-to-unit (user, 11-08, with length-pixels): `f(d: Length) := d; f(5)` is 5m: a bare number reaches a unit place by the unit's declared number conversion, as `5 as Length` does.
