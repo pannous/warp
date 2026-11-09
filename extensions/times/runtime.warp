@@ -57,7 +57,7 @@ calendar_and_clock_durations_are_different_kinds() := {
 	fail()
 	0
 }
-# an operand of a time's + - * as lib/time_arithmetic.warp time_operation takes it: its form, -1 for a whole number,
+# an operand of a time's + - * as lib/time.warp time_operation takes it: its form, -1 for a whole number,
 # and its position, a whole number's value
 operand_form(n: Node): int := if is_time(n) then time_form(n) else -1
 operand_position(n: Node): int := unboxed_int(n)

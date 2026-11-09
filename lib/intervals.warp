@@ -1,6 +1,6 @@
 // The standard library module intervals (card lib-intervals): `use intervals`. An Extent runs from lo to hi, half-open
 // [lo, hi) by default, closed [lo, hi] made by closed_extent; lo and hi are numbers or lib/time Instants (any values
-// < and == order and hi - lo measures). Named Extent, not Interval or Span: lib/uncertain has Interval, lib/time_arithmetic
+// < and == order and hi - lo measures). Named Extent, not Interval or Span: lib/uncertain has Interval, lib/time
 // Span, lib/list union/intersection and lib/collections contains, so the functions here are extent_… or *_intervals.
 // A span of quantities (`1900 - 2000 cm`) is a Quantity with an Interval amount in lib/units (same shape as ±).
 //
