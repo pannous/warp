@@ -1335,7 +1335,7 @@ declared_class(type_name: text, program: Node): Node? := {
 # `{name: "User", order: ["id", "address"], types: {id: "number", address: {…Address's…}, tags: {list: "text"}},
 # defaults: {port: 80}, make: (fields) => User{id: fields["id"], …}}`: a class the program declares as data, for a
 # reader at run time (lib/json.warp typed_json_value): its fields in order, each one's type (a type word, a class's
-# data, `{list: …}` of a list), the defaults of those that have one and its maker from the fields by name; a raise
+# data, `{list: …}` of a list, `{optional: …}` of a `T?` one), the defaults of those that have one and its maker from the fields by name; a raise
 # naming why for a class it can't give so
 CLASS_DATA_TYPES = ["number", "int", "float", "string", "text", "bool"]
 class_data(type_name: Node, program: Node): Node := {
@@ -1373,6 +1373,10 @@ class_data_text(name: text, program: Node, ancestors: list): text? := {
 }
 type_data_text(field_type: text, program: Node, ancestors: list): text? := {
 	list_prefix = "list of "
+	if field_type.ends_with("?") {
+		item = type_data_text(field_type[0 ..< #field_type - 1], program, ancestors)
+		return if item == ø then ø else "{optional: " + item + "}"
+	}
 	if field_type.starts_with(list_prefix) {
 		item = type_data_text(field_type[#list_prefix ..], program, ancestors)
 		return if item == ø then ø else "{list: " + item + "}"
