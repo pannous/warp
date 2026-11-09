@@ -289,8 +289,8 @@ has_time_field(statement: Node): bool := class_view(statement) != ø and words_w
 # a place typed so, `d: date? = v`, a field `year: date?` (decision typed-places-check), tests it too
 is_time_test(n: Node): bool := ((is_key(n, Op.Is) or is_operator(n, ":")) and value_of(n) is symbol and base_type(name_of(value_of(n))) in time_test_types) or (is_group(n) and #n == 3 and n#1 == symbol("is_type") and n#3 is text and str(n#3) in time_test_types)
 time_test_types = ["time", "duration", "date", "instant"]
-# the modules of the emitted words: lib/time_arithmetic.warp for a time's + - *, lib/time.warp for `is time`
-emitted_modules(program: Node): list := (if time_operation_word in time_literal_words(program) then [time_arithmetic_module] else []) + (if #time_test_words(program) > 0 then [time_module] else [])
+# the module of the emitted words: lib/time.warp for a time's + - * and for `is time`
+emitted_modules(program: Node): list := if time_operation_word in time_literal_words(program) or #time_test_words(program) > 0 then [time_module] else []
 time_module = "time"
 
 # the names of the functions with_reached brought from the prelude and the modules, of the compile at hand
@@ -580,9 +580,9 @@ with_call_forms(aliases: map, names: list): any := {
 # those of the modules it uses, at any depth, and the prelude's, never another used module's (math's
 # `alias log2 => binary_log` stays out of sound's plain_midi). owners: the linked module of each alias
 aliased_in_scope(program: Node, aliases: map, own: map, owners: map): Node := {
-	if not statements_in(program).any(is_brought) { return aliased(program, aliases, own) }
+	if not statements_in(program).any(is_brought) { return aliased(program, aliases, own, no) }
 	seen_by = {}
-	children(program, statement => aliased(statement, if is_brought(statement) then aliases_seen(statement, aliases, owners, seen_by) else aliases, own))
+	children(program, statement => aliased(statement, if is_brought(statement) then aliases_seen(statement, aliases, owners, seen_by) else aliases, own, is_brought(statement)))
 }
 is_brought(statement: Node): bool := {
 	name = declared_name(statement)
@@ -615,15 +615,15 @@ modules_used_by(module_name: text, seen: list): list := {
 # or a function taking as many arguments (shadowing is per arity: a program's
 # `index_of(source, part, from, n)` leaves `"abc".index_of(c)` to the library); top-down, so a method call
 # `x.f(a)` counts its receiver
-aliased(n: Node, aliases: map, own: map): any := if class_view(n) != ø then with_members(n, member => aliased_member(member, aliases, own)) else match n {
-	Key(receiver, Op.Dot, call): Key(aliased(receiver, aliases, own), Op.Dot, aliased_call(children(call, x => aliased(x, aliases, own)), aliases, own, 1))
-	_: children(aliased_call(n, aliases, own, 0), x => aliased(x, aliases, own))
+aliased(n: Node, aliases: map, own: map, library_code: bool): any := if class_view(n) != ø then with_members(n, member => aliased_member(member, aliases, own, library_code)) else match n {
+	Key(receiver, Op.Dot, call): Key(aliased(receiver, aliases, own, library_code), Op.Dot, aliased_call(children(call, x => aliased(x, aliases, own, library_code)), aliases, own, 1, library_code))
+	_: children(aliased_call(n, aliases, own, 0, library_code), x => aliased(x, aliases, own, library_code))
 }
 # a method's body aliased, its head named by an alias as a call on its instance is (`has(x)` as collection_contains(x),
 # as `s.has(x)` calls it), but an operator's (`times(k) := …` stays the class's own `*`) or a word another arity
 # varies (`sum()`), never a field (`m: map = {}`)
-aliased_member(member: Node, aliases: map, own: map): any := if is_key(member, Op.Define) and is_group(key_of(member)) then Key(aliased_head(key_of(member), aliases, own), Op.Define, aliased(value_of(member), aliases, own)) else member
-aliased_head(head: Node, aliases: map, own: map): Node := if head#1 is symbol and name_of(head#1) in aliases and name_of(head#1) not in operator_spellings() then aliased_call(head, aliases, own, 1) else head
+aliased_member(member: Node, aliases: map, own: map, library_code: bool): any := if is_key(member, Op.Define) and is_group(key_of(member)) then Key(aliased_head(key_of(member), aliases, own, library_code), Op.Define, aliased(value_of(member), aliases, own, library_code)) else member
+aliased_head(head: Node, aliases: map, own: map, library_code: bool): Node := if head#1 is symbol and name_of(head#1) in aliases and name_of(head#1) not in operator_spellings() then aliased_call(head, aliases, own, 1, library_code) else head
 # a class declaration with each member, read as the definitions pass reads it, changed by f: a class body is a type
 # view the walks don't enter (`keys.index_of(x)` in a method is aliased so)
 with_members(n: Node, f: function): Node := {
@@ -637,14 +637,20 @@ changed_member(member: any, f: function): any := {
 	if changed == read then member else view_of(changed)
 }
 
-# a call, written `melody([C4 E4])` or spaced `melody [C4 E4]` (sound's `alias melody => play`)
-aliased_call(n: Node, aliases: map, own: map, receivers: int): any := {
+# a call, written `melody([C4 E4])` or spaced `melody [C4 E4]` (sound's `alias melody => play`). The program's own
+# alias call means its own definition of the word where that takes the call (`square(x) := x*x*10; 3 squared` is 90,
+# card alias-follows-redefinition); library code's, and an arity variant's, the library's
+aliased_call(n: Node, aliases: map, own: map, receivers: int, library_code: bool): any := {
 	if not (is_group(n) and (bracket_of(n) == "(" or is_word_phrase(n)) and #n > 0 and n#1 is symbol) { return n }
 	called = name_of(n#1)
 	count = #n - 1 + receivers
+	arguments = if receivers == 0 then items_of(n)[1 ..] else []
 	# an arity variant fits the call's count, before the module's word: first(xs, 2) of a program's own first(x) is first_items
-	word = arity_variant(called, count) ?? aliases.get(called)
-	if word == ø or shadows(own, called, count, if receivers == 0 then items_of(n)[1 ..] else []) { return n }
+	variant = arity_variant(called, count)
+	word = variant ?? aliases.get(called)
+	if word == ø or shadows(own, called, count, arguments) { return n }
+	# (the program's definition of a library word is named name·own by now, with_own_words)
+	if not library_code and variant == ø and shadows(own, own_word(word), count, arguments) { return group_like(n, [symbol(own_word(word))] + items_of(n)[1 ..]) }
 	# (a C function is never set aside as a program's definition is: its name stays the alias's word)
 	group_like(n, [symbol(if word in own and not word.starts_with(OPERATOR_FUNCTION_PREFIX) and not used_c_functions.has(word) then library_word(word) else word)] + items_of(n)[1 ..])
 }

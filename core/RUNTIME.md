@@ -26,7 +26,7 @@ features: durations, times and wasi, plus the bodies of their hooks (below).
 (`extensions/big_numbers.warp`: big_ints, exact, big_ratios, exact_rounding, pow and pow_tables in
 `extensions/big_numbers/`, card big-numbers-extension) gives ints past 64 bits, exact ratios and float pow, and the
 bodies of their hooks. Its parts `use` the core's files as lib/ links them (`../../compiler/runtime/…`).
-Calendar arithmetic is not part of the runtime: `lib/time_arithmetic.warp` (card time-arithmetic-library) is a class
+Calendar arithmetic is not part of the runtime: `lib/time.warp` (card time-arithmetic-library) is a class
 library beside `lib/units.warp`, over plain integers (form and position, month/day/nanosecond counts). The compiler
 never loads it: its Span's plus would send every `+` the compiler compiles through operator dispatch, and some of its
 names (time_form, day_nanos, hour_nanos, sign_of) clash with times' and durations'. Nothing in the compiler uses it.
