@@ -1164,3 +1164,10 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
     declared-block-parameters), functions-n-z-hold (contradicts the user's final sound-rest), input-bind-name (landed on
     main in another form), wasm-module-uses (only rebuilt fixture bytes). stale-modules-kept is tooling, no language
     objection.
+  - pipe-after-braceless-call (Interviewer at night, core OK ~35 parser lines, card pipe-number-argument): a pipe binds
+    weaker than a braceless call: `square 3 |> text` is text(square 3).
+  - function-valued-definition (Interviewer at night, card pipe-number-argument): `f := e` with e a function value (lambda,
+    function name, composition `a|b`, `a & b`) defines f as that function, as `f = e` binds it; one rule, no per-shape
+    sugar. `|` between two functions composes in reading order, like `&`.
+  - definition-head-phrases-dropped (Interviewer at night): colonless phrase heads (`give v to c := …`) stay parked
+    (phrase-params); branch definition-head-phrases 2cfd2e22c5 dropped, card to Later with its tip noted.
