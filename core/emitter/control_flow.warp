@@ -241,6 +241,9 @@ def sequence(body: Body, items: list): TypedCode {
 	# Error; 7` reaches made the program show nothing)
 	valued = items
 	while #valued > 1 and declares_type(valued.last) { valued = valued[0..<(#valued - 1)] }
+	# nor a module's `global` a link put in front: `use math`, its globals and the prelude's type Cell, showed math's
+	# tolerance 1e-9 (card color-shows-precision); a block of declarations alone gives nothing
+	if #valued < #items and (declares_type(valued.last) or is_global_declaration(valued.last)) { return TypedCode(no_kind, effects(body, items)) }
 	code = effects(body, valued[0..<(#valued - 1)])
 	last = statement(body, valued.last)
 	TypedCode(last.kind, code + last.code, last.mark)
