@@ -22,8 +22,11 @@ lib/prelude.warp and so its copies of the 12 alias lines too, until the seed ref
 No operator in the core part while compiler.warp includes it: in the self build that operator and the prelude's same
 one are two overloads the dispatch cannot tell apart (a function replaces, an operator overloads), so the lexer's
 `(n + 1) times [n]` became a comprehension and `times` stays in lib/.
-Checked: compiler.warp compiles with lib/prelude.warp emptied. scripts/compiler-inputs.sh --baked-files lists no lib/
-file. Left: the reach by name still compiles the dead prelude words in from lib/ (card baked-lib-split note).
+Checked: smoke, self-check, gate tier 1; compiler.warp compiled against a lib/prelude.warp holding only the core part's
+text built a compiler that compiled and ran a program (before `times` left the core part). With lib/prelude.warp emptied
+the compile now stops in lib/text.warp's indent, which the compiler uses implicitly by name (its field and local
+`indent`) and which needs `times`. scripts/compiler-inputs.sh --baked-files lists no lib/ file. Left: the reach by name
+still compiles dead prelude words, and lib/text.warp's, in from lib/ (card baked-lib-split note).
 
 ## Final state (main c25c72d181, 2026-11-06; card library-removal-core done)
 
