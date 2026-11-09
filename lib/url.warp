@@ -261,7 +261,7 @@ def is_email(t: text): bool {
 }
 
 
-// WebIDL URL (lib/web.webidl, card js-global-missing): URL(text) / use js URL. href and the authority/path fields
+// WebIDL URL (extensions/js_globals/web.webidl, card js-global-missing): URL(text) / use js URL. href and the authority/path fields
 // browsers expose (hostname is the host without a port; host keeps host:port when a port is set)
 URL(text: text): map := {
 	parts = parse_url(text)

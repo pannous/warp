@@ -264,7 +264,7 @@ declared_call_kind(word: text, arguments: int): text? := {
 typed_libraries = ["warp", "emitter", "'m'"]
 
 # word → its typed lines of the prelude the lowering reads (lowering_from) and, beside lib/prelude.warp, of the
-# lib/math.warp it reaches, the first written first. A primitive file's prelude (lib/primitive.warp) has none: no GC
+# lib/math.warp it reaches, the first written first. A primitive file's prelude (extensions/primitive/prelude.warp) has none: no GC
 # library word joins its definitions as a variant (arity_overloads.warp library_variants)
 global typed_word_lines = ø
 global typed_one_definitions = ø

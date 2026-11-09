@@ -285,7 +285,7 @@ same_kind(a: ValueKind, b: ValueKind): bool := a == b
 # a type value (`int is number`) and `is code` ask runtime node_is_type
 def node_type_test(body: Body, value: TypedCode, type: text): TypedCode {
 	kinds = 0
-	for kind in passing_kinds[type] { kinds = bit_or(kinds, kind_bit(kind)) }
+	for kind in passing_kinds[type] { kinds = bits_or(kinds, kind_bit(kind)) }
 	if kinds == 0 { return runtime_call("node_is_type", [value, text_value(type), number_value(kinds)]) }
 	held = fresh_node_local(body)
 	bits = [op.local_get] + uleb(fresh_local(body, ValueKind.Int))

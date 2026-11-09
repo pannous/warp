@@ -3,7 +3,7 @@
 ENTITY_MARK = "\\:"
 # `name TAB characters` lines, the table Rust include_str!s, built into the compiler as its other data
 # (module_source: user 2026-10-25, "These should all be built in")
-ENTITY_TABLE = module_source("entities.tsv")
+ENTITY_TABLE = module_source("extensions/entities.tsv")
 # the escape `\:name` in a text at `at`, ø where no letter follows the `:`
 entity_escape(source: any, at: int, n: int): list? := if source[at + 1] == ':' and at + 2 < n and is_alpha(source[at + 2]) then entity_read(source, at, n) else ø
 entities_extension = Extension{name: "entities", source_passes: [expanded_entities], text_escape_readers: {":": entity_escape}}
