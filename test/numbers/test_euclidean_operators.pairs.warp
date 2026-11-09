@@ -1,0 +1,11 @@
+# euclidean_remainder and euclidean_quotient are `%` and `/!` (lib/math.warp, notes/ratio_gcd_warp.md)
+
+# a negative divisor
+'use math; euclidean_remainder(-9, -2) == (-9) % (-2)'	true
+'use math; euclidean_quotient(-9, -2) == (-9) /! (-2)'	true
+'use math; euclidean_remainder(7, -2) == 7 % (-2)'	true
+'use math; euclidean_quotient(7, -2) == 7 /! (-2)'	true
+
+# a value past 64 bits
+'use math; n = -(2^70); euclidean_remainder(n, 1000) == n % 1000'	true
+'use math; n = -(2^70); euclidean_quotient(n, 3) == n /! 3'	true

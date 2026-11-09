@@ -1,0 +1,20 @@
+# Named-color bands. Source: lib/color.warp named_colors, painted by samples/graphics/color_swatches.warp
+# (the same band_at / band_color selection). Palette order and every band edge, including the column just past the strip.
+
+is! 'use color; named_colors.map(pair => pair[1])' ["black", "white", "gray", "red", "green", "blue", "yellow", "orange", "purple"]
+
+is! 'use color
+swatch_width = 40
+band_count = #named_colors
+band_at(column) := min(column /! swatch_width, band_count - 1)
+band_color(column) := named_colors[band_at(column)][0]
+held = yes
+for pair in named_colors { if color_named(pair[1]) != pair[0] { held = no } }
+for i in 0..<band_count {
+	start = i * swatch_width
+	last = start + swatch_width - 1
+	if band_at(start) != i or band_at(last) != i { held = no }
+	if band_color(start) != named_colors[i][0] or band_color(last) != named_colors[i][0] { held = no }
+	if i > 0 and band_color(start - 1) == band_color(start) { held = no }
+}
+held and band_count == 9 and band_color(0) == black and band_color(swatch_width) == white and band_color(band_count * swatch_width - 1) == purple and band_at(band_count * swatch_width) == band_count - 1' yes

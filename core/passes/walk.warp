@@ -413,6 +413,9 @@ holed_pieces(template: text, bare_names: bool): list := {
 	found
 }
 
+# the code of each hole of a template the parser keeps whole, `"a ${f(x)} b"` → ["f(x)"]; none for any other node
+template_hole_codes(n: Node): list := if n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == template_kind then template_pieces(value_of(n)#2).filter(piece => piece is list).map(piece => piece#1) else []
+
 # whether `found` holds for the code of a hole of a template in n, kept whole in an opaque view (`"caught: \(e)"`)
 has_hole(n: Node, found: function): bool := match n {
 	Key(left, _, right): { if left == opaque_symbol then view_has(right, part => kind_of(part) == template_kind and template_pieces(part#2).any(piece => piece is list and found(piece#1))) else has_hole(left, found) or has_hole(right, found) }

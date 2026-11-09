@@ -10,7 +10,7 @@ n = 3
 # where_not_shadowed_leaves_a_definitions_own_word
 is! 'rewrite plus($x) => $x * 1000 where not shadowed
 f(t) := { plus = x => x + 1; plus(t) }
-g(plus, t) := plus(t)
+g(plus: function, t) := plus(t)
 [plus(2), f(5), g(x => x - 1, 5)]' [2000, 6, 4]
 
 # where_in_a_word_list

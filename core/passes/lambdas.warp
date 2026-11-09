@@ -640,14 +640,21 @@ as_function_parameter(parameter: Node): Node := {
 with_function_parameters(statement: Node): Node := match statement {
 	Key(List(call, Bracket.Round, Separator.None), Op.Define, body): {
 		blocks = arguments_of(call).filter(is_function_parameter).map(parameter_name)
+		for parameter in arguments_of(call).filter(p => p is symbol and p != block_word) {
+			if unwrapped_in(body, parameter) { raise undeclared_use(name_of(parameter), "run as a block", "block") }
+			if called_in(body, parameter) { raise undeclared_use(name_of(parameter), "called as a function", "function") }
+		}
 		Key(call_node(call#1, arguments_of(call).map(as_function_parameter)), Op.Define, bottom_up(body, part => block_run(part, blocks)))
 	}
 	_: statement
 }
 # `body!` of a block parameter runs it, as `body()` does (wiki/block.md)
-block_run(n: Node, blocks: list): Node := {
-	if is_round(n) and #n == 2 and n#1 == symbol(unwrap_word) and n#2 is symbol and name_of(n#2) in blocks then call_node(n#2, []) else n
-}
+block_run(n: Node, blocks: list): Node := if is_unwrapping(n) and n#2 is symbol and name_of(n#2) in blocks then call_node(n#2, []) else n
+is_unwrapping(n: Node): bool := is_round(n) and #n == 2 and n#1 == symbol(unwrap_word)
+# `body!` or `f(x)` of an untyped parameter: a parameter is a block or function only when declared one, never inferred
+# from its use (decision declared-block-parameters)
+undeclared_use(name: text, use: text, type: text): text := name + " is " + use + "; fix: declare it " + name + ": " + type
+unwrapped_in(body: Node, name: Node): bool := nodes_in(body).any(part => is_unwrapping(part) and part#2 == name)
 # each function's parameter names, "" where a parameter takes no function, by the function's name
 function_positions_of(written: list): map := {
 	found = {}
@@ -659,8 +666,9 @@ function_positions_of(written: list): map := {
 	}
 	found
 }
-# a parameter declared a function, or one the body calls (`f` or `f: any`): `matrix(r, c, f) := [[f() …]]` takes a
-# function, so a function of no parameters given for it is passed, not called (`matrix(2, 4, weight)`)
+# a parameter declared a function, or one the body calls (`f: any`; an untyped one is refused, undeclared_use):
+# `matrix(r, c, f: function) := [[f() …]]` takes a function, so a function of no parameters given for it is passed, not
+# called (`matrix(2, 4, weight)`)
 takes_function_at(parts: Definition, parameter: Node): bool := is_function_parameter(parameter) or called_in(parts.body, symbol(parameter_name(parameter)))
 called_in(body: Node, name: Node): bool := nodes_in(body).any(part => is_call_headed(part, name))
 # a name of its own: a word of the same name and arity elsewhere in the compiler (the rule words) would hide one of the two

@@ -127,7 +127,7 @@ copy_compilers() {
 			continue
 		fi
 		[ -d "$from/$name.kept" ] && mkdir -p "$folder/$name.kept" && cp -R "$from/$name.kept/." "$folder/$name.kept/"
-		for part in "$name.cwasm" "$name"; do
+		for part in "$name.cwasm" "$name" "$name.inputs"; do
 			[ -f "$from/$part" ] || continue
 			cp "$from/$part" "$folder/$part.new" && mv "$folder/$part.new" "$folder/$part" || return 1
 		done

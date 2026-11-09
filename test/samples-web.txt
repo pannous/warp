@@ -1,5 +1,6 @@
-# 85a26c7457 2026-11-08 10:17 254/254 100.0%
+# 805a3299c0 2026-11-09 03:35 255/255 100.0%
 ok   samples/acceleration/gpu_arrays.warp
+ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
 ok   samples/acceleration/gpu_million.warp
 ok   samples/advanced/circle.warp

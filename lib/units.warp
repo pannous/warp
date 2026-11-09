@@ -8,6 +8,7 @@
 use unit_names
 use uncertain
 use reals
+use time
 
 class Quantity {
 	amount: number
@@ -22,17 +23,16 @@ class Quantity {
 		}
 		measured(amount + summand(this, other, "add").amount - unit_zero(unit), dims, unit, scale)
 	}
-	# number - Quantity via as-promotes (dims 0, empty unit): a span in the quantitys unit, `1900 - 2000 cm`
+	# 0 - Quantity, the negation `-40°F` and `-x` are (0 as-promoted: dims 0, no unit), counts the 0 in its unit, as
+	# summand's plain 0 does; a written span `1900 - 2000 cm` is unit_bound's (extensions/rules/rule_words.warp)
 	-(other) := {
-		if dims == 0 and unit is empty and (other is Quantity) and other.dims != 0 {
-			return number_quantity_span(amount, other)
-		}
+		if dims == 0 and unit is empty and amount == 0 and (other is Quantity) { return quantity(0 - other.shown(), other.unit) }
 		measured(amount - summand(this, other, "subtract").amount + unit_zero(unit), dims, unit, scale)
 	}
 	*(other) := if other is Unit then times_unit(this, other.unit) else if other is Quantity then measured(amount * other.amount, dims + other.dims, unit_combined(unit, other.unit, 1), scale * other.scale) else measured(amount * other, dims, unit, scale)
 	/(other) := if other is Unit then quotient(this, other.one()) else if other is Quantity then quotient(this, other) else measured(amount / other, dims, unit, scale)
 	power(exponent) := measured(amount ^ exponent, dims * exponent, unit_raised(unit, exponent), scale ^ exponent)
-	equal(other) := other is Quantity and dims == other.dims and amount == other.amount
+	equal(other) := { o = time_quantity(other); o is Quantity and dims == o.dims and amount == o.amount }
 	compare(other) := amount - compared_amount(this, other)
 	// `<` and `>` of the amounts, an amount with a tolerance as an interval: `area > 10m²` holds when all of it is
 	// above (P224b, `certainly`), `possibly_greater` when some of it is (lib/uncertain.warp)
@@ -81,7 +81,12 @@ class Density extends Quantity {}
 
 // a quantity moving lib/time's Instant (`now + 1h`) as the Duration it lasts, a DimensionError of any other dimension
 // than time; a program without lib/time has no Duration and leaves it out (card instant-typed-duration)
-q: Quantity as Duration := Duration(q.in("ms"))
+// (its milliseconds by same_quantity, not q.in("ms"): a linked class's method in a conversion body is refused when
+// lib/timers comes in through an implicit use, card linked-method-conversion; back to q.in("ms") once that is fixed)
+q: Quantity as Duration := Duration(same_quantity(quantity(1, "ms"), q, "convert").amount * 1000)
+d: Duration as Quantity := quantity(d.ms / 1000, "s")
+// lib/time's Duration as the quantity of time it is, so `6s == time 6` and `1s + time 6` (decision one-duration)
+time_quantity(x) := if x is Duration then x as Quantity else x
 
 // `5 * km`, the plain number promoted (as Quantity below): the quantity counted from the unit's zero, `20 * °C` the
 // temperature 20 on its scale; a quantity times a unit, `3 m * m`, their product
@@ -121,7 +126,8 @@ n: number as Density := quantity(n, "dpi")
 quotient(above: Quantity, below: Quantity) := if above.dims == below.dims then above.amount / below.amount else measured(above.amount / below.amount, above.dims - below.dims, unit_combined(above.unit, below.unit, -1), above.scale / below.scale)
 
 // other when it measures what q measures, else the loud DimensionError
-same_quantity(q: Quantity, other: any, action: text) := {
+same_quantity(q: Quantity, given: any, action: text) := {
+	other = time_quantity(given)
 	if not (other is Quantity) { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and the plain number " + str(other) }
 	if q.dims != other.dims { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and " + quantity_text(other) }
 	other
@@ -133,7 +139,7 @@ compared_amount(q: Quantity, other: any) := same_quantity(q, other, "compare").a
 summand(q: Quantity, other: any, action: text) := {
 	# a plain 0 adds as nothing, the start of a sum: `sum(distances)`, `average(runs.map(r => r.distance))`
 	if other == 0 and not (other is Quantity) { return measured(unit_zero(q.unit), q.dims, q.unit, q.scale) }
-	same_quantity(q, other, action)
+	other = same_quantity(q, other, action)
 	if unit_zero(q.unit) != unit_zero(other.unit) { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and " + quantity_text(other) + ", temperatures of two scales: convert one first (`" + quantity_text(other) + " as " + q.unit + "`)" }
 	other
 }

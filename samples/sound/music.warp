@@ -2,14 +2,14 @@
 # Sound without setup: frequencies in Hz, durations in s or ms, notes by name (lib/sound.warp).
 # The playground plays it with WebAudio, the warp command with the system's player.
 
-use sound  # melody, tone and the rest; play and beep need no use
+use sound  # note names and scores; play and beep need no use
 
 beep
 play(440Hz, 0.5s)
 play C4
-chord([C4 E4 G4], 1s)       # the notes sound together
-melody [C4 D4 E4 F4 G4]       # one note after another
-melody([G4 E4 C4], 200ms)  # each note 200 ms long
-tone(220Hz, 300ms, "square")  # sine, square, triangle or sawtooth
+play(C4+E4+G4, 1s)       # the notes sound together
+play [C4 D4 E4 F4 G4]       # one note after another
+play([G4 E4 C4], 200ms)  # each note 200 ms long
+play(220Hz, 300ms, "square")  # sine, square, triangle or sawtooth
 play(note("F#4"), 250ms)
-tune({ c4 e4 g4 [c4 g4] })  # music as data: a note name in small letters too, a group a chord
+play { c4 e4 g4 [c4 g4] }  # music as data: a note name in small letters too, a group a chord

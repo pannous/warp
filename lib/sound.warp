@@ -1,5 +1,5 @@
-// The standard library module sound (card basic-sound): `play(440Hz, 0.5s)`, `play(C4)`, `chord([C4 E4 G4], 1s)` (the notes together,
-// `play([C4 E4 G4])` too, as in Sonic Pi), `play note("C#4")` (a Note), `melody [C4 E4 G4]` (one note after another), `beep`, `tone(frequency, seconds, "square")`. Frequencies
+// The standard library module sound (card basic-sound): `play(440Hz, 0.5s)`, `play(C4)`, `play(C4+E4+G4, 1s)` (the notes together),
+// `play([C4 E4 G4])` (one note after another), `play note("C#4")` (a Note), `beep`, `play(frequency, seconds, "square")`. Frequencies
 // and durations are numbers or quantities (440Hz, 0.5s, 250ms), read by si_amount as plain numbers. The samples are made
 // here and natively go straight to the audio device (sounded; silent under tests and WARP_NO_WINDOW), in the browser to
 // WebAudio. Loaded when a program calls one of its words (rust-harness:src/modules.rs SOUND_WORDS)
@@ -18,7 +18,7 @@ global loudness = 0.3 as float
 global wave_shape = "sine"
 // `as float`: a float assigned later (loudness = -6 dB) stays readable in the functions (card float-global)
 global note_seconds = 0.5 as float
-// beats per minute: `play(C4, beat(1/4))`, `melody([C4 E4], beat(1/8))`, `sleep bar 1`;
+// beats per minute: `play(C4, beat(1/4))`, `play([C4 E4], beat(1/8))`, `sleep bar 1`;
 // a float, so `tempo *= 1.05` a round stays short instead of an exact ratio growing digits (card exact-tempo-growth)
 global tempo = 120 as float
 global beats_per_bar = 4
@@ -52,7 +52,7 @@ global tuning = 440.0 as float
 // (C4 = 261.63)
 midi_hertz(n) := round(tuning * 2 ^ ((n - 69) / 12) * 100) / 100
 // the note names (decision music-plain-details): a letter, a sharp (♯ or s) or flat (b or ♭) and an octave 0–8 is its MIDI
-// note, a Note (decision notes-are-notes) played at its frequency at the tuning, `play F♯4`, `melody [C4 Eb4 G4]`; the
+// note, a Note (decision notes-are-notes) played at its frequency at the tuning, `play F♯4`, `play [C4 Eb4 G4]`; the
 // text "F#4" names a note too (note_hertz), and so does F#4 itself (PitchClass). Plain values, no getters: a Note
 // is tuned when it sounds, and `[C4+E4 G4]` reads G4 as an item, never as an argument of E4
 key_note(key) := Note(key, 0)
@@ -383,8 +383,8 @@ enum ChordKind { major, minor, diminished, augmented, sus2, sus4, seventh, major
 enum Scale { major, minor, ionian, dorian, phrygian, lydian, mixolydian, aeolian, locrian, pentatonic, minor_pentatonic, blues, chromatic }
 chord_intervals = {major: [0, 4, 7], minor: [0, 3, 7], diminished: [0, 3, 6], augmented: [0, 4, 8], sus2: [0, 2, 7], sus4: [0, 5, 7], seventh: [0, 4, 7, 10], major7: [0, 4, 7, 11], minor7: [0, 3, 7, 10], diminished7: [0, 3, 6, 9]}
 scale_intervals = {major: [0, 2, 4, 5, 7, 9, 11, 12], minor: [0, 2, 3, 5, 7, 8, 10, 12], ionian: [0, 2, 4, 5, 7, 9, 11, 12], dorian: [0, 2, 3, 5, 7, 9, 10, 12], phrygian: [0, 1, 3, 5, 7, 8, 10, 12], lydian: [0, 2, 4, 6, 7, 9, 11, 12], mixolydian: [0, 2, 4, 5, 7, 9, 10, 12], aeolian: [0, 2, 3, 5, 7, 8, 10, 12], locrian: [0, 1, 3, 5, 6, 8, 10, 12], pentatonic: [0, 2, 4, 7, 9, 12], minor_pentatonic: [0, 3, 5, 7, 10, 12], blues: [0, 3, 5, 6, 7, 10, 12], chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]}
-// chord(C4, major) the Chord of that kind on C4; chord([C4 E4 G4], 3000ms) the notes sounding together for the duration
-// (cards rename-play, play-c4), as play(C4+E4+G4, 3000ms) does. One definition: an enum-typed parameter beside a list one is no overload the
+// chord(C4, major) the Chord of that kind on C4; the notes sounding together are play(C4+E4+G4, 3000ms)
+// (cards rename-play, play-c4). One definition: an enum-typed parameter beside a list one is no overload the
 // dispatch tells apart yet (card enum-overload-dispatch)
 chord(root, kind) := if root is list then play(Chord(root), kind) else if kind is Note then hinted_chord([root, kind]) else Chord(transpose_each(root, chord_intervals[kind]))
 // chord([C4 E4 G4]), chord(C4, E4, G4, B4, D5), `chord C4 E4 G4`: the Chord of those notes, as many as given (decision
@@ -1053,7 +1053,7 @@ play(fill: (samples, float) -> any, for duration) := {
 	played_blocks(t => fill(block, t), [block], duration)
 }
 // fill(t) writes the speakers' blocks, one mono, [left, right] interleaved in stereo, once a block
-played_blocks(fill, speakers, duration) := {
+played_blocks(fill: function, speakers, duration) := {
 	wanted = round(si_amount(duration) * sample_rate) as int
 	length = count(speakers[0])
 	amplitudes = []
@@ -1201,7 +1201,7 @@ decoded_sound(path: text, rate, channels) := {
 	decoded
 }
 sample_seconds(clip: Sample) := count(clip.frames) / clip.channels / clip.rate
-// plain seconds below; the words take si_amount once, as melody does (notes/units_runtime.md)
+// plain seconds below; the words take si_amount once, as play does (notes/units_runtime.md)
 // where the frame at that many seconds starts among the interleaved values, at most the end
 sample_frame(clip: Sample, seconds) := min(round(seconds * clip.rate) as int, count(clip.frames) / clip.channels) * clip.channels
 sample_between(clip: Sample, from, to) := Sample(clip.rate, clip.channels, clip.frames[sample_frame(clip, from)..sample_frame(clip, to)])
@@ -1225,8 +1225,8 @@ public melody_samples(notes, seconds, shape = wave_shape) := {
 	for pitch in notes { samples = samples + chord_samples(pitches_of(pitch), seconds, shape) }
 	samples
 }
-// music as plain data, no parser syntax (card music-data-dsl, decision self-parser-drops): tune({ C4 E4 [C4 G4] }) is
-// the melody of its notes, a group of them a chord; a note name written in small letters (c4, eb4) reads as C4, Eb4
+// music as plain data, no parser syntax (card music-data-dsl, decision self-parser-drops): play { c4 e4 [c4 g4] } is
+// its notes one after another, a group of them a chord; a note name written in small letters (c4, eb4) reads as C4, Eb4
 // (a rule: a parameter typed data beside play's untyped one is no overload the dispatch tells apart yet)
 rewrite play {$score...} => score_played({$score...})
 rewrite play({$score...}) => score_played({$score...})

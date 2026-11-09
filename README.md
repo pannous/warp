@@ -63,8 +63,7 @@ brew install pannous/tap/warp
 **From source** (warp builds itself, so it needs an installed `warp` first):
 ```bash
 git clone https://github.com/pannous/warp && cd warp
-warp rebuild                              # warp.wasm, the compiler written in Warp (core/)
-warp build native core/native/warp.warp   # the native warp command
+warp rebuild                              # warp.wasm, the compiler written in Warp (core/), then the native warp command
 ```
 
 ## Run
