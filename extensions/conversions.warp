@@ -108,7 +108,8 @@ argument_conversion(type: text, places: map, classes: map): Node := {
 	conversions = members.filter(member => places.has(member)).flat_map(member => places[member].map(conversion => [conversion#1, call_of(conversion_name(member) + "·" + conversion#1, [it])]))
 	steps = class_first(passes + conversions)
 	checked = members.filter(member => classes.has(member))
-	passed = if checked then call_of(place_refusal_word, [it, symbol(taker_name), Text(type)]) else it
+	refused = call_of(place_refusal_word, [it, symbol(taker_name), Text(type)])
+	passed = if checked then chosen(Key(symbol(taker_name), Op.Eq, Text("")), it, refused) else it
 	for member in checked.filter(member => classes[member].parent == "").reverse() { passed = chosen(fields_fit(it, classes[member].fields), it, passed) }
 	for step in steps.reverse() { passed = chosen(Key(it, Op.Is, symbol(step#1)), step#2, passed) }
 	Key(call_of(argument_conversion_name(type), [Key(it, Op.Colon, symbol(any_word)), Key(symbol(taker_name), Op.Colon, symbol("text"))]), Op.Define, passed)
@@ -139,10 +140,16 @@ typed_parameters(statements: list, targets: map, aliases: map): map := {
 		if call != ø and call#1 is symbol {
 			name = name_of(call#1)
 			# (a type's alias as the type it names, units' length as Length)
-			found[name] = if found.has(name) then ø else parameter_types(call).map(type => if type is text then alias_resolved(type, aliases) else type)
+			found[name] = if found.has(name) then ø else signature_types(parameter_types(call), aliases)
 		}
 	}
 	without_keys(found, found.keys.filter(name => found[name] == ø or not found[name].any(type => converts_to(type, targets)) or has_builtin_variant(name)))
+}
+# each parameter type, an alias as the type it names, but a type variable of the signature, `K` of `m: map of K, k: K`,
+# as any
+signature_types(types: list, aliases: map): list := {
+	variables = types.filter(type => type is text).flat_map(type => type.split(" of ")[1..])
+	types.map(type => if type is text and type in variables then any_word else if type is text then alias_resolved(type, aliases) else type)
 }
 alias_resolved(type: text, aliases: map): text := {
 	resolved = type
@@ -166,7 +173,8 @@ positional_types(call: Node, typed: map): list? := {
 }
 # where values pass to typed places: name → the parameter types of each function converting some (typed_parameters),
 # the types the program converts to or checks, a class's own [] (decision class-types-checked), each class declared
-class Places { typed: map; converting: map; classes: map }
+# and the functions of several results, whose call a typed place picks one of (arity_overloads.warp result_overloads)
+class Places { typed: map; converting: map; classes: map; results: map }
 # each call of such a function with its arguments for those parameters converted, the function's name the taker a
 # refusal names, and each `x: T = v` so, x the taker; a named argument as it is, and a value known to be a T already:
 # a parameter typed so of the definition around it (`g(d: Length) := f(d)`), the instance of a constructor of the class
@@ -180,13 +188,15 @@ converted_arguments(n: Node, places: Places, known: map): Node := {
 	types = positional_types(walked, places.typed)
 	if types == ø { return walked }
 	arguments = items_of(walked)[1 ..]
-	group_like(walked, [walked#1] + (1 to #arguments).map(at => passed(arguments#at, types#at, name_of(walked#1), places, known)))
+	# (a method a dispatcher calls, `equal·method`, by a name no program writes: its dispatch tests the types, "" no taker)
+	taker = if name_of(walked#1).contains("·") then "" else name_of(walked#1)
+	group_like(walked, [walked#1] + (1 to #arguments).map(at => passed(arguments#at, types#at, taker, places, known)))
 }
-passed(value: Node, type: text, taker: text, places: Places, known: map): Node := if converts_to(type, places.converting) and not known_as(value, type, places.classes, known) then call_of(argument_conversion_name(type), [value, Text(taker)]) else value
+passed(value: Node, type: text, taker: text, places: Places, known: map): Node := if converts_to(type, places.converting) and not known_as(value, type, places, known) then call_of(argument_conversion_name(type), [value, Text(taker)]) else value
 # the places without the functions a parameter of the definition shadows, `apply: function` called `apply([item])`
 unshadowed(places: Places, call: Node): Places := {
 	names = signature_of(items_of(call)).parameters.map(parameter => parameter.name)
-	if names.any(name => places.typed.has(name)) then Places(without_keys(places.typed, names), places.converting, places.classes) else places
+	if names.any(name => places.typed.has(name)) then Places(without_keys(places.typed, names), places.converting, places.classes, places.results) else places
 }
 # name → type of each parameter of a definition
 parameters_typed(call: Node): map := {
@@ -194,11 +204,14 @@ parameters_typed(call: Node): map := {
 	for parameter in signature_of(items_of(call)).parameters { if parameter.type_name != "" { typed[parameter.name] = parameter.type_name } }
 	typed
 }
-# whether the value is known to be of a member class of the type, or of one extending it
-known_as(value: Node, type: text, classes: map, known: map): bool := {
-	plain = without_mark(value)
-	given = if plain is symbol and known.has(name_of(plain)) then known[name_of(plain)] else if is_call(plain) and plain#1 is symbol and classes.has(name_of(plain#1)) then name_of(plain#1) else ""
-	given != "" and union_members(type).any(member => classes.has(member) and descends_from(given, member, classes))
+# whether the value is known to be of a member class of the type, or of one extending it, or is the call of a function
+# of several results, which the place picks
+known_as(value: Node, type: text, places: Places, known: map): bool := {
+	plain = unparenthesized(without_mark(value))
+	head = if is_group(plain) and #plain > 0 and plain#1 is symbol then name_of(plain#1) else ""
+	if places.results.has(head) { return yes }
+	given = if plain is symbol and known.has(name_of(plain)) then known[name_of(plain)] else if is_call(plain) and places.classes.has(head) then head else ""
+	given != "" and union_members(type).any(member => places.classes.has(member) and descends_from(given, member, places.classes))
 }
 descends_from(name: text, ancestor: text, classes: map): bool := name == ancestor or (classes.has(name) and classes[name].parent != "" and descends_from(classes[name].parent, ancestor, classes))
 # the types of the program's `x: T = v`
@@ -243,7 +256,7 @@ conversions(program: Node): Node := {
 		# (a class checked with no conversions to it: a copy, `x as C` converts only to targets)
 		converting_to = entries_of_both(targets, {})
 		for name in classes.keys { if not targets.has(name) { converting_to[name] = [] } }
-		places = Places(typed_parameters(kept, converting_to, aliases), converting_to, classes)
+		places = Places(typed_parameters(kept, converting_to, aliases), converting_to, classes, overloaded_results(program))
 		converting = {}
 		for type in places.typed.values.flatten() + declared_types(program) { if converts_to(type, places.converting) { converting[type] = yes } }
 		functions += converting.keys.map(type => argument_conversion(type, places.converting, classes))
