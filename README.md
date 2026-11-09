@@ -81,13 +81,12 @@ Python-like style and an idiomatic Warp style, one folder per chapter of the gui
 
 ## Packages
 
-`use` loads a local module, or else a package of the registry
+[use](https://github.com/pannous/warp/wiki/use) loads a local module, or else a package of the registry
 [warp-packages](https://github.com/pannous/warp-packages) by name, fetched once into `packages/`:
 ```warp
 use colors
 to_hex(mix(from_hex("#ff0000"), from_hex("#0000ff"), 0.5))   # "#800080"
 ```
-([use](https://github.com/pannous/warp/wiki/use)).
 
 ## Wasm GC objects
 
