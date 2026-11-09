@@ -70,14 +70,14 @@ WGSL_MEANINGS = {"round": "sign($1) * floor(abs($1) + 0.5)", "remainder": "$1 - 
 	"cbrt": "sign($1) * exp(log(abs($1)) / 3.0)", "log10": "log($1) * 0.4342944819", "log1p": "log(1.0 + $1)",
 	"expm1": "exp($1) - 1.0"}
 # warp's operators WGSL has with another meaning, as WGSL expressions of warp's: % is Euclidean (never negative, as
-# in mathematics), WGSL's % truncates as rem does; /! floors the quotient
+# in mathematics), WGSL's % truncates as rem does; ÷ floors the quotient
 OPERATOR_MEANINGS = [["%", "$1 - abs($2) * floor($1 / abs($2))"], ["rem", "$1 - $2 * trunc($1 / $2)"],
-	["/!", "floor($1 / $2)"]]
+	["÷", "floor($1 / $2)"]]
 # `x op= v` is `x = x op v` (decision op-assign-general): the operators the parser keeps as their own assignments
 COMPOUND_OPERATORS = [["+=", "+"], ["-=", "-"], ["*=", "*"], ["/=", "/"],
-	["/!=", "/!"], ["%=", "%"], ["^=", "^"]]
+	["÷=", "÷"], ["%=", "%"], ["^=", "^"]]
 # warp's operators as written (in `x %= 3`), beside the ones it writes as WGSL does (WGSL_OPERATORS)
-SPELLED_OPERATORS = [["%", "%"], ["rem", "rem"], ["/!", "/!"], ["^", "^"], ["and", "and"], ["or", "or"]]
+SPELLED_OPERATORS = [["%", "%"], ["rem", "rem"], ["÷", "÷"], ["^", "^"], ["and", "and"], ["or", "or"]]
 COMPOUND_MARK = "="
 # yes and no as WGSL writes them
 WGSL_TRUE = "true"

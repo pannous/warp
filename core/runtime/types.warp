@@ -161,5 +161,5 @@ kind_word(kind: int): text := match kind {
 }
 # the operators whose key computes a value, `1+1`, `a<b`, `-x`: a pair `a:1`, a binding
 # `a=1` and a lookup `a.b` stay keys
-operation_spellings(): list := ["+", "-", "*", "/", "/!", "%", "rem", "^", "<<", ">>", "<", ">", "<=", ">=", "==", "!=", "is",
+operation_spellings(): list := ["+", "-", "*", "/", "÷", "%", "rem", "^", "<<", ">>", "<", ">", "<=", ">=", "==", "!=", "is",
 	"===", "!==", "≈", "~", "and", "or", "xor", "&", "|", "not", "⌞", "⌟", "±", "??", "↑", "↓"]
