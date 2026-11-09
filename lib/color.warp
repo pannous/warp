@@ -43,12 +43,12 @@ color_named(name: text): any := {
 	ø
 }
 // [red, green, blue], each from 0 to 1, as a painted pixel takes them (lib/shaders.warp)
-channels(c: Color): list := [16, 8, 0].map(shift => float(channel(c, shift)) / 255)
+channels(c: Color): list := [16, 8, 0].map(shift => float(channel_byte(c, shift)) / 255)
 // the byte of 0xAARRGGBB at the shift: 24 its alpha, 16 red, 8 green, 0 blue
-channel(c: Color, shift: int): int := ((c as int) >> shift) % 256
+channel_byte(c: Color, shift: int): int := ((c as int) >> shift) % 256
 channel_shifts = [24, 16, 8, 0]
 // the color t of the way from a to b, each channel and the alpha alike: mix(red, blue) is #800080
-mix(a: Color, b: Color, t: float = 0.5): Color := sum(channel_shifts.map(shift => (round(lerp(channel(a, shift), channel(b, shift), t)) as int) << shift)) as Color
+mix(a: Color, b: Color, t: float = 0.5): Color := sum(channel_shifts.map(shift => (round(lerp(channel_byte(a, shift), channel_byte(b, shift), t)) as int) << shift)) as Color
 // #FF0000, and #FF000080 when not opaque, its alpha last as in CSS (decision color-text-css)
 hex_text(c: Color): text := "#" + padded_hex(c % 16777216, 6) + (if c /! 16777216 == 255 then "" else padded_hex(c /! 16777216, 2))
 // the number 0xAARRGGBB itself
