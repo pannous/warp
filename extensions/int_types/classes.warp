@@ -1,0 +1,38 @@
+# Int types as classes (decision int-types-are-classes): `type Color = int` is a cheap class of one int field whose
+# float() is its number, so `c as int` reads it, and its `format Color c as text`, ==, `is` and dispatch are a class's;
+# `x as Color` makes one, a written number through the type's conversion `n: int as Color := …`. A float type, `type
+# Angle = float`, keeps its mark (marks.warp) until it moves too (card cheap-classes-everywhere)
+
+# the program with its int types classes, then the classes' formats among their members
+classed_definitions(program: Node): Node := formatted_definitions(int_classes(program))
+int_classes(program: Node): Node := {
+	statements = statements_in(program)
+	classes = {}
+	for statement in statements { if int_class_name(statement) != ø { classes[int_class_name(statement)] = yes } }
+	if #classes == 0 { return program }
+	converters = statements.map(statement => converted_type(statement, classes)).filter(name => name != ø)
+	statements_as(program, statements.flat_map(statement => int_class_statements(statement, classes, converters)))
+}
+# `type Color = int`: Color, else ø
+int_class_name(statement: Node): text? := {
+	name = int_type_name(statement)
+	if name != ø and value_of(statement) == symbol("int") then name else ø
+}
+# the class and its making of a value, `made·Color(x)`, a Color as it is, a number as Color(x)
+int_class_statements(statement: Node, classes: map, converters: list): list := {
+	name = int_class_name(statement)
+	if name != ø { return int_class_declared(name) }
+	if converted_type(statement, classes) != ø { return [converter_defined(statement, classes, n => int_class_made(n, classes, []))] }
+	[bottom_up(statement, n => int_class_made(n, classes, converters))]
+}
+made_word(type_name: text): text := "made" + name_joiner + type_name
+int_class_declared(name: text): list := {
+	declared = statements_in(plain_node(parsed("class ${name} { value: int; float() := value }; made(x) := if x is ${name} then x else ${name}(x)")))
+	[declared#1, Key(renamed_target(key_of(declared#2), made_word(name)), Op.Define, value_of(declared#2))]
+}
+# `x as Color` as made·Color(x), a written number as the type's conversion gives it
+int_class_made(n: Node, classes: map, converters: list): Node := {
+	if not (is_key(n, Op.As) and value_of(n) is symbol and name_of(value_of(n)) in classes) { return n }
+	name = name_of(value_of(n))
+	if name in converters and key_of(n) is int then call_of(converter_word(name), [key_of(n)]) else call_of(made_word(name), [key_of(n)])
+}

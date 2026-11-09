@@ -1,6 +1,9 @@
 // The prelude (notes/stdlib.md §8): words every program has without `use`; only those it calls come along.
 // Each is `name(parameters) := body` (modules::prelude_word_arity reads the parameters); library_words maps other
 // spellings and method forms onto them (`isdigit(c)`, `xs.first()`, `round(x, 2)` → round_to)
+// Transition (card builtins-seed-transition): the typed builtin lines below (`from warp`, `from emitter`, `from 'm'`)
+// are the core's, core/analysis/builtins.warp and math_builtins.warp, which the compiler reads; they stay here only for
+// the seed, which reads them off this file, until the next seed refresh deletes them here
 
 // The words warp computes itself, the emitter's runtime functions, with their signatures (decision
 // foreign-signature, `from warp`); a parameter with a default may be left out (`s.split` splits at spaces). A word
@@ -607,6 +610,12 @@ display.height := display_height
 // that turns lengths into px, `3 cm * display.density`; a program sets it in dpi, `display.density = 300 dpi`
 display.density := display_dpi * 1dpi
 display.density(density) := set_system_value("display_dpi", density / 1dpi)
+// its other names repeat its body: a dotted definition cannot name another (`display.dpi := display.density` reads
+// display as a value) and alias takes no dotted name (card dotted-definition-naming)
+display.dpi := display_dpi * 1dpi
+display.dpi(density) := set_system_value("display_dpi", density / 1dpi)
+display.ppi := display_dpi * 1dpi
+display.ppi(density) := set_system_value("display_dpi", density / 1dpi)
 // width × height in px (other names display.dimensions and display.resolution)
 display.size := [display_width, display_height] px
 // the diagonal as a length: its nearest whole px at the density (quantities run as exact amounts, a run-time √ is a

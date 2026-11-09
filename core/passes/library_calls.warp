@@ -23,7 +23,7 @@ counts_after(word: Node, functions: list, scope: map): bool := {
 	written = name_of(word)
 	if binds_value(scope, written) { return no }
 	if functions contains written { return yes }
-	not binds(scope, written) and (value_taking_words contains written or takes_one_typed_value(unaliased(written)))
+	not binds(scope, written) and (value_taking_words() contains written or takes_one_typed_value(unaliased(written)))
 }
 
 # [the word, the counted value] of `word#x`, or of a member chain on it: `print #s.names` parses as `(print#s).names`

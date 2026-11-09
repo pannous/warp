@@ -1,8 +1,10 @@
 // Other languages' ways of writing a declaration (card pure-class-forms) that decide what the parser reads next: a run
 // of modifiers mixing warp's (`public export fun f()`), and the forms `new Point(1, 2)`, Ruby's `attr_accessor :x`,
-// Kotlin's `enum class` and `data class`, `mixin Name {…}`, read as the warp form they mean. Modifiers without warp
-// meaning alone (`public static fun f()`, `private x = 4`) and `constant x` are rewrite rules: extensions/sugar/declarations.warp
-// A part of parser.warp, which uses it: it reads with the parser's expression and atom, so it compiles only with it
+// Kotlin's `data class`, `mixin Name {…}`, read as the warp form they mean (Kotlin's `enum class` is
+// extensions/sum_types.warp's). Modifiers without warp meaning alone (`public static fun f()`, `private x = 4`) and
+// `constant x` are rewrite rules: extensions/sugar/declarations.warp
+// Each word below is a keyword reader (core/extension.warp keyword_readers) of one reader, foreign_form: it reads with
+// the parser's expression and atom, and answers ø, nothing read, where the form is not there
 
 // Modifiers of other languages with no meaning in warp ; `static` marks the statement
 FOREIGN_MODIFIERS = ["private", "protected", "internal", "static", "extern", "external", "C", "inline", "local", "virtual", "override", "abstract", "constexpr", "volatile", "thread_local", "synchronized", "transient", "native"]
@@ -14,11 +16,11 @@ PUBLIC_WORD = "public"
 // Words before a class declaration that change nothing in warp: `data class` (a warp class compares by value already),
 // `open`, `abstract`, `sealed`, `final`, visibility
 CLASS_MODIFIERS = ["data", "open", "abstract", "sealed", "final", "public", "private", "internal"]
-// The declaration words a class modifier stands before
-CLASS_KEYWORDS = ["class", "struct"]
 // Ruby's field declarations `attr_accessor :x, :y`
 RUBY_FIELD_WORDS = ["attr_accessor", "attr_reader", "attr_writer"]
 STATIC_WORD = "static"
+NEW_WORD = "new"
+MIXIN_WORD = "mixin"
 
 // The form another language writes with `word` at the parser's position, the parser after it; else ø, nothing read
 def foreign_form(p: Parser, word: text): Node := {
@@ -31,24 +33,13 @@ def foreign_form(p: Parser, word: text): Node := {
 		p.at = blank_end(p, p.at + word.length)
 		return type_declaration(p, keyword)
 	}
-	if word == "new" and p.types.contains(name_after_blanks(p, word)) {
+	if word == NEW_WORD and p.types.contains(name_after_blanks(p, word)) {
 		p.at = blank_end(p, p.at + word.length)
 		return atom(p)
 	}
-	if word == "enum" and keyword == "class" {
-		p.at = blank_end(p, p.at + word.length) + keyword.length
-		return symbol(word)
-	}
 	if p.type_body and RUBY_FIELD_WORDS.contains(word) { return ruby_fields(p, word) }
-	if word == "mixin" and block_after_name(p, word) { return type_declaration(p, word) }
+	if word == MIXIN_WORD and block_after_name(p, word) { return type_declaration(p, word) }
 	ø
-}
-
-// Only blanks stand between the start of the statement and the parser's position
-def starts_statement(p: Parser): bool {
-	at = p.at - 1
-	while at >= 0 and " \t\r".contains(p.code[at]) { at -= 1 }
-	at < 0 or "\n;{".contains(p.code[at])
 }
 
 // `public export fun f(){…}` (P78): a run of modifiers with one of warp's that ends before a function definition is
@@ -77,19 +68,6 @@ def without_foreign_modifiers(p: Parser, first: text): Node := {
 
 def is_modifier(word: text): bool := FOREIGN_MODIFIERS.contains(word) or DEFINITION_MODIFIERS.contains(word)
 
-// The name after one or more blanks behind `word`, else ""
-def name_after_blanks(p: Parser, word: text): text {
-	start = spaces_end(p, p.at + word.length)
-	if start == p.at + word.length { return "" }
-	p.code[start .. name_end(p.code, start, p.n)]
-}
-
-// `class` or `struct` after the blanks behind `word`, the word a class modifier stands before, else ""
-def class_keyword_after(p: Parser, word: text): text {
-	name = name_after_blanks(p, word)
-	if CLASS_KEYWORDS.contains(name) then name else ""
-}
-
 // Ruby's `attr_accessor :x, :y` in a class body: the fields x and y, read to the end of the line
 def ruby_fields(p: Parser, word: text): Node := {
 	start = p.at + word.length
@@ -103,8 +81,5 @@ def ruby_fields(p: Parser, word: text): Node := {
 
 def without_colon(name: text): text := if name.starts_with(":") then name[1 .. name.length] else name
 
-// `mixin Name {`: a name and a block after the blanks behind `word`
-def block_after_name(p: Parser, word: text): bool {
-	name = name_after_blanks(p, word)
-	count(name) > 0 and char_at(p, spaces_end(p, spaces_end(p, p.at + word.length) + name.length)) == '{'
-}
+foreign_words = FOREIGN_MODIFIERS + DEFINITION_MODIFIERS + CLASS_MODIFIERS + RUBY_FIELD_WORDS + [NEW_WORD, MIXIN_WORD]
+foreign_declarations_extension = Extension{name: "foreign_declarations", keyword_readers: reading_rows(foreign_words, foreign_form)}

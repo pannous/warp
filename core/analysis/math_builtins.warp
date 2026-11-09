@@ -1,0 +1,51 @@
+# The math builtins, beside builtins.warp: the math words warp computes itself (`from warp`) and the C library's
+# (`from 'm'`), which every program calls without `use math`; lib/math.warp defines the math words written in warp
+
+# The math words warp computes itself, with their signatures (decision foreign-signature, `from warp`): exact on
+# exact values where they can be, so floor gives an int where C's floor gives a float
+sqrt(x: number): number from warp
+cbrt(x: number): number from warp
+abs(x: number): number from warp
+floor(x: number): int from warp
+ceil(x: number): int from warp
+round(x: number): int from warp
+trunc(x: float): float from warp
+# the real functions, exact on exact values (rust-harness:src/numbers/real.rs), else libm's
+sin(x: float): float from warp
+cos(x: float): float from warp
+tan(x: float): float from warp
+exp(x: float): float from warp
+min(a: number, b: number, more...): number from warp
+max(a: number, b: number, more...): number from warp
+# The C library's math functions (libm), f64 each: the host links them (rust-harness:src/ffi reads these lines, decision
+# foreign-signature), the browser takes them from Math. Every program calls them without `use math`
+fmin(a: float, b: float): float from 'm'
+fmax(a: float, b: float): float from 'm'
+fabs(x: float): float from 'm'
+floor(x: float): float from 'm'
+ceil(x: float): float from 'm'
+round(x: float): float from 'm'
+sqrt(x: float): float from 'm'
+sin(x: float): float from 'm'
+cos(x: float): float from 'm'
+tan(x: float): float from 'm'
+fmod(a: float, b: float): float from 'm'
+pow(base: float, exponent: float): float from 'm'
+exp(x: float): float from 'm'
+log(x: float): float from 'm'
+log10(x: float): float from 'm'
+asin(x: float): float from 'm'
+acos(x: float): float from 'm'
+atan(x: float): float from 'm'
+atan2(y: float, x: float): float from 'm'
+sinh(x: float): float from 'm'
+cosh(x: float): float from 'm'
+tanh(x: float): float from 'm'
+hypot(a: float, b: float): float from 'm'
+log2(x: float): float from 'm'
+trunc(x: float): float from 'm'
+log1p(x: float): float from 'm'
+expm1(x: float): float from 'm'
+exp2(x: float): float from 'm'
+erf(x: float): float from 'm'
+erfc(x: float): float from 'm'

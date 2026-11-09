@@ -3,6 +3,16 @@
 The goal: the core binary bakes the library zero times. No LIBRARY_FILES, no LIBRARY_PARSES. Each module publishes
 its signatures, and the compiler loads it as compiled wasm when a program uses it.
 
+## core-takes-what-it-uses (card baked-lib-split, 2026-11-09)
+The L4 statement below was not true: module_source baked prelude, math, c, primitive, web.webidl, entities.tsv and
+modes.data as text, and the compiler compiled os, file, path, math, reals and case_table(s) in through `use`
+(checked line by line against warp.wasm's bytes). Now the compiler `use`s no lib module and module_source names only
+core's and extensions' files: core/host_io.warp, core/integers.warp, core/runtime/case_tables.warp (lib/ links to them),
+the typed builtin lines in core/analysis/builtins.warp and math_builtins.warp, and prelude, math and c are read from
+disk when a compile first asks. Left: the prelude words the compiler itself reaches (scripts/compiler-inputs.sh
+EVERY_PROGRAMS), and the transitional typed lines in lib/ for the seed (card builtins-seed-transition);
+notes/handover/baked-lib-split.md.
+
 ## Final state (main c25c72d181, 2026-11-06; card library-removal-core done)
 
 **Baked into warp.wasm** (2.15 MB, from 5.05 MB): SUGAR_RULES, the packed rules of extensions/sugar by file with each
