@@ -188,6 +188,42 @@ notes/dispatch.md: Key, Timer, Signal, FileWatch, Channel, each module adding th
 no longer three modules' word); X a word the program binds to nothing is a named event, as `click $who` already
 decides by `is unbound`. The signal names (interrupt, terminate, hangup, resize) are an enum in lib/events.warp
 (vocabulary is library; an FYI to the Interviewer).
+A source carries its own filter, so a program never chains `if`s inside a catch-all handler: `on ESC { exit }`,
+`on key up SPACE { jump }`, `on click "+1" {…}`, `on resize {…}`; `on key {…}` stays for any key. `on <key>` runs
+once as the key goes down (a press is an event); a key held is a state, read by `whenever held_key == LEFT {…}` or in
+a frame (today lib/keys.warp runs `on Key.escape` each frame while held: card key-press-on).
+
+### Hooks are calls, never queued (user 2026-11-09)
+`before f {…}`, `after f {…}`, `on set x`, `on change x`, `whenever`, `once` and an in-program `emit` are synchronous
+calls at the place of the call or the write, in declaration order: `test() := print "ok"; before test { print "will
+be ok" }; test()` prints "will be ok", then "ok", always, natively and in the page. Only occurrences from outside go
+through the loop's queue. These hooks are never parallel (`before test go {…}` is refused).
+
+### Same thread and parallel (discussed with the user 2026-11-09, not decided yet)
+Proposal: a plain `on …` handler runs on the program's thread (wait points, plus epoch safe points if Q1 picks D) and
+sees every variable. A parallel handler is asked for with the decided task word, `on every 1 s go {…}` (spelling
+open), and runs on its own thread at once with main (decision tasks-parallel): its own instance and heap, so it touches
+only `shared` variables (atomic, decision lib-oddities); the compiler refuses any other main variable it names, with
+the fix "declare it shared" (it knows a block's reads and writes, function_reads). Texts, lists and maps cross by
+channels as copies (share by communicating). An `atomic {…}` block over several shared variables comes only when a
+program needs it. In the page a parallel handler is a Web Worker, its shared variables in a SharedArrayBuffer.
+
+### Event streams of a complex system, and where warp stands
+| stream | events | state |
+|---|---|---|
+| time | intervals, clock times, frames, timeouts | covered: on every, at, on frame, await … within |
+| keyboard | key down, key up, repeat | down covered; up and repeat missing (key-events) |
+| pointer and touch | move, down, up, click, double click, drag, wheel, gestures | click covered; the rest missing (pointer-events) |
+| text input | typed text, IME composition (Chinese, Japanese input) | missing (text-input) |
+| focus and controllers | focus, blur, gamepad buttons and sticks | missing (later, gamepad its own library) |
+| window and app | resize, close request, hidden and shown, full screen, DPI, dark mode, sleep and wake | dark mode only through whenever (window-events) |
+| process and OS | interrupt, terminate, hangup, exit, child exit, power, online, locale and time zone, clipboard | exit, clipboard; signals planned (os-signals); child exit and the rest (process-events) |
+| I/O streams | stdin lines, connections and data on sockets, HTTP requests, files, pipes | routes; files and sockets planned (file-watch, routes-in-loop); stdin lines (stdin-lines) |
+| between programs | channels, broadcast, WebSocket, server-sent events, page custom events | channels, broadcast, custom events; web sockets later |
+| completions | task done, fetch answered, timeout, cancellation, failure | tasks, fetch; a task's failure as an event thin |
+| data and state | variable writes and changes, derived values, list items, fields | covered (notes/signals.md) |
+| devices | audio, MIDI in, camera, sensors, location | later, one library each |
+The mechanism covers every row; what is missing is vocabulary: a source type in lib per stream, each `on <source>`.
 
 ## 4. The native harness
 ```
@@ -331,6 +367,34 @@ least 50 ms of slack and never bound a count from above by a few milliseconds.
     callback (wasmtime_store_epoch_deadline_callback) call into the store? Then: epoch interruption on for programs
     that listen, a C timer thread bumping the epoch at the next due time (wasm_engine_increment_epoch), the callback
     running one turn on main's thread. Test: step 2's busy-loop line gives 5 or more.
+16. **key-press-on** (lib, careful; with or after one-on). `on ESC {…}` runs once as the key goes down, not each frame
+    held; `on key up SPACE {…}`. File lib/keys.warp. Test: `'n = 0; on ESC { n += 1 }; emit key{key: "Escape"}; n'	1`.
+17. **samples-direct-events** (samples + wiki, mechanical; after key-press-on). Samples and wiki pages say `on ESC {
+    exit }` instead of `on key { if key == ESC … }`; a held key stays `whenever held_key == LEFT` or a frame's `if`.
+    Each rewrite its own commit saying why. Test: the samples sweep stays green.
+18. **key-events** (lib, careful). Key up and repeat as Key sources. Test: `'n = 0; on key up SPACE { n += 1 }; emit
+    key up{key: " "}; n'	1` (spelling of the emit as the step finds it).
+19. **pointer-events** (lib, careful). Pointer move, down, up, double click, drag and wheel, natively from SDL and in
+    the page from the canvas, each a source (`on pointer move {…}`, `on wheel {…}`); motion coalesced per turn.
+    Test: the emitted forms as in step 18, one line each.
+20. **window-events** (lib, careful). Resize, close request, hidden and shown, full screen, DPI, dark mode, the
+    machine's sleep and wake (`on resize {…}`, `on dark mode {…}`). Test: emitted forms; a try line with a window.
+21. **text-input** (lib, careful). Typed text with IME composition (SDL text input events, the page's input and
+    composition events) as `on text {…}`, apart from raw keys. Test: emitted form.
+22. **stdin-lines** (lib, careful; after events-loop). Lines of stdin as a Readable source (`on line {…}`, spelling
+    to the Interviewer). Test (test/native): `printf 'a\nb\n' | warp '…'` prints both lines.
+23. **process-events** (lib, careful; after os-signals). A child process ending, power, online, locale and time zone
+    as sources (`on child exit`, `on online change` …). Test per source.
+
+### Roadmap: the order agents take the cards
+A card starts once the cards it names are done; cards on one line may run in parallel (different files).
+1. listener-value, events-loop, cancel-handles (cancel-handles builds on events-loop's handles: start it right after).
+2. one-on, then key-press-on and samples-direct-events; tasks-on-loop beside them.
+3. frames-in-loop, routes-in-loop, file-watch, stdin-lines (all need events-loop's wait).
+4. page-turns, then page-jspi-waits.
+5. key-events, pointer-events, window-events, text-input (vocabulary, after one-on and frames-in-loop).
+6. Core, each after the user's OK through the Supervisor: os-signals, then process-events; deferred-callbacks;
+   driver-timers-gone (after events-loop and page-turns); busy-loop-events (after Q1); gui-wake last.
 
 Later, cards that exist: natively-go and stop-endless-spin (a loop per thread); load-time-linking (components: map
 Readable to stream<u8> and Completion to future<T>, and let wasmtime's component-model-async own the wait once its C
