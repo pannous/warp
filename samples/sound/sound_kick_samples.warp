@@ -7,7 +7,7 @@ use sound
 
 # a kick made and saved here, so the sample has a file to read; any recording plays the same way
 release = 0.08
-melody([C2 G1], 60ms)
+play([C2 G1], 60ms)
 save sound as: "kick.wav"
 release = 0.005
 
