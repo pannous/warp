@@ -13,6 +13,8 @@
 const GPU_ENTRY_POINT = "main";
 const NO_GPU_DRAWING = "use draw draws through pixels on a page (gpu_drawing is no here), so draw_shape, draw_show and draw_shader never run";
 const GPU_BINDING = 0;
+// what a shader that does not compile is said as, natively too (lib/host/native_host/gpu.warp shader_failure)
+const SHADER_SUBJECT = "the shader: ";
 // `@group(0) @binding(1) var<storage, read_write> ys: array<f32>`: its binding, name and element type (src/graphics/gpu.rs STORAGE_ARRAY)
 const STORAGE_ARRAY = /@binding\((\d+)\)(?:\s*@group\(\d+\))?\s*var(?:<[^>]*>)?\s+(\w+)\s*:\s*array<(\w+)/g;
 // an array<f16>'s cells as their raw bits: it takes only a GPU list [f16], whose cells are bound as they are
@@ -363,12 +365,13 @@ async function forgetDeviceIfLost() {
 // the shader's module, checked once: asking a module for its compilation info a second time crashed Chrome's page (Mac)
 const gpuModule = (device, shader) => compiledOnce(compiledModules, shader, () => checkedModule(device, shader));
 
-// the shader's module; one that does not compile throws why and where, `why at line:column`: a shader block's place in
-// the program, as the program placed its text (lib/prelude.warp shader_words), as natively (lib/host/native_host/gpu.warp shader_failure)
+// the shader's module; one that does not compile throws why and where, `the shader: why at line:column`: a shader
+// block's place in the program, as the program placed its text (lib/prelude.warp shader_words), as natively
+// (lib/host/native_host/gpu.warp shader_failure); why in the browser's words (Chrome's Tint, Firefox's naga)
 async function checkedModule(device, shader) {
 	const module = device.createShaderModule({ code: shader });
 	const problems = (await answeredWithin(module.getCompilationInfo(), "compilation report", GPU_WORK_WAIT_MS)).messages.filter(message => message.type === "error");
-	if (problems.length) throw new Error(problems.map(problem => `${essence(problem.message)} at ${problem.lineNum}:${problem.linePos}`).join("; "));
+	if (problems.length) throw new Error(SHADER_SUBJECT + problems.map(problem => `${essence(problem.message)} at ${problem.lineNum}:${problem.linePos}`).join("; "));
 	return module;
 }
 
@@ -520,7 +523,8 @@ function gpuJob(word, job, transfer = [], Words = Float32Array, worker = hasTask
 	const { values, error } = header[0] === WORDS_STATE ? { values: new Words(shared, TASK_HEADER, header[1]).slice() } : readShared(shared);
 	taskPool.push(worker);
 	returnAnswerBuffer(shared);
-	if (error) throw new Error(`${word}: ${error}`);
+	// a failure naming its subject (the shader's) is said as it is, any other one names the job
+	if (error) throw new Error(error.startsWith(SHADER_SUBJECT) ? error : `${word}: ${error}`);
 	return values;
 }
 
