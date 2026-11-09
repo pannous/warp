@@ -61,8 +61,10 @@ def instance_of_fields(body: Body, class_name: text, field_names: list, field_va
 		# an optional field `b: text?` takes ø as it is, any other value as its base type
 		field_type = if given[field_name] == ø and written_type != base_type(written_type) then ø else base_type(written_type)
 		value = texted(field_type, expression_code(body, given[field_name]))
-		if not checked_at_run_time(field_type, value.kind) and not admits(field_type, value.kind) { return refuse("a " + kind_spelling(value.kind) + " for a typed field of " + class_name) }
-		codes += [boxed(field_value(field_type, value))]
+		if checked_by_test(written_type, field_type, value.kind) { codes += [type_checked(body, written_type, value).code] } else {
+			if not checked_at_run_time(field_type, value.kind) and not admits(field_type, value.kind) { return refuse("a " + kind_spelling(value.kind) + " for a typed field of " + class_name) }
+			codes += [boxed(field_value(field_type, value))]
+		}
 	}
 	TypedCode(ValueKind.Node, instance_head(class_name) + concatenated(codes) + gc_code(gc_ops.struct_new, [class_struct_index(class_name)]))
 }
@@ -156,7 +158,7 @@ def field_read(body: Body, target: Node, name: text, class_name: text = ""): Typ
 	TypedCode(ValueKind.Bool, converted(read, ValueKind.Bool))
 }
 def boxed_field_read(body: Body, target: Node, name: text, class_name: text = ""): TypedCode {
-	held = TypedCode(ValueKind.Node, [op.local_get] + uleb(fresh_local(body, ValueKind.Node)))
+	held = TypedCode(ValueKind.Node, fresh_node_local(body))
 	named = text_value_of(name)
 	missing = ended_in(ValueKind.Node, no_field_prefix + name)
 	if is_swizzle(name) {
@@ -652,6 +654,8 @@ field_check(kind: ValueKind): text? := match kind {
 	ValueKind.Float: "float_checked"
 	_: ø
 }
+# a field typed with no value kind of the core, `year: date?`, checked as `v is date` (decision typed-places-check)
+def checked_by_test(written_type: text?, field_type: text?, kind: ValueKind): bool { written_type != ø and field_kind(written_type) == ValueKind.Instance and base_type(written_type) not in module.classes and has_type_test(base_type(written_type)) and not admits(field_type, kind) }
 def checked_at_run_time(field_type: text?, kind: ValueKind): bool { not admits(field_type, kind) and field_check(field_kind(field_type)) != ø }
 def field_value(field_type: text?, value: TypedCode): TypedCode { if checked_at_run_time(field_type, value.kind) then runtime_call(field_check(field_kind(field_type)), [value]) else value }
 

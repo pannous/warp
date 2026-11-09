@@ -50,7 +50,7 @@ square := it * it
 test square(9) == 81
 def fib(n) { if n < 2 { return n }; fib(n - 1) + fib(n - 2) }
 test fib(10) == 55
-twice(f, x) := f(f(x))
+twice(f: function, x) := f(f(x))
 test twice(x => x + 3, 1) == 7
 adder(a) := b => a + b
 plus_two = adder(2)

@@ -36,6 +36,13 @@ note_file_origins(file: text, source: text) := {
 	origins = slice_origins([file])
 	for slice in definition_slices(source) { if origins.has(slice#2) { defined_origins[slice#1] = origins[slice#2] } }
 }
+# `file:line` of each definition named `name`, in the program's source and the files its brought definitions came from:
+# defined_origins keeps one place a name, a clash between two files needs both (lambdas.warp)
+written_places(name: text, source: text): list := {
+	files = word_set(defined_origins.values.map(origin => origin#1)).keys.filter(file => file != module.program_file).sort()
+	named_lines(source, module.program_file, name) + files.flat_map(file => named_lines(file_text(file) ?? "", file.remove_prefix("./"), name))
+}
+named_lines(source: text, file: text, name: text): list := spans_of(source).filter(span => span#1 == name).map(span => (if file then file + ":" else "line ") + "${#source[0 ..< span#2].split("\n")}")
 # source → its slices: the passes ask for each library module's slices per call and argument, cut once
 global source_slices = {}
 definition_slices(source: text): list := {
@@ -179,9 +186,10 @@ symbol_words(n: Node): list := {
 # the words a class's body mentions but its own fields and methods: `class C{pi = 3; f() := pi * r}` names no library pi
 # a type named with no body, a field's `x: Int` (sugar.warp typed_fields): it uses the type, as a prelude alias
 is_named_type(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "type" and value_of(n)#3 == ø
+# (a method's parameters and locals are its own too: ListMap's init(m = {}) names no unit m)
 class_words(view: Node): list := {
 	parts = parts_within(view)
-	own = parts.flat_map(part => if is_group(part) then items_of(part) else [part]).map(member_name)
+	own = parts.flat_map(part => if is_group(part) then items_of(part) else [part]).map(member_name) + parts.flat_map(part => names_bound_in(part).keys)
 	parts.flat_map(symbol_words).filter(word => word not in own)
 }
 
@@ -274,10 +282,13 @@ time_literal_words(program: Node): list := {
 }
 is_time_typed(n: Node): bool := is_operator(n, ":") and value_of(n) == symbol(time_module)
 # `x is time`, `x is duration`: lib/time's word the emitter asks (runtime_words.warp time_test_code)
-time_test_words(program: Node): list := if nodes_in(program).any(is_time_test) then [time_test_word] else []
+time_test_words(program: Node): list := if nodes_in(program).any(is_time_test) or statements_in(program).any(has_time_field) then [time_test_word, quantity_test_word] else []
+# a class with a field typed so, `class car { year: date? }`, whose instances test it (decision typed-places-check)
+has_time_field(statement: Node): bool := class_view(statement) != ø and words_within(statement).any(word => base_type(word) in time_test_types)
 # `x is time` as written, or as the type tests make it, is_type(x, "time") (core/analysis/type_tests.warp)
-is_time_test(n: Node): bool := (is_key(n, Op.Is) and value_of(n) in time_test_types.map(symbol)) or (is_group(n) and #n == 3 and n#1 == symbol("is_type") and n#3 is text and str(n#3) in time_test_types)
-time_test_types = ["time", "duration"]
+# a place typed so, `d: date? = v`, a field `year: date?` (decision typed-places-check), tests it too
+is_time_test(n: Node): bool := ((is_key(n, Op.Is) or is_operator(n, ":")) and value_of(n) is symbol and base_type(name_of(value_of(n))) in time_test_types) or (is_group(n) and #n == 3 and n#1 == symbol("is_type") and n#3 is text and str(n#3) in time_test_types)
+time_test_types = ["time", "duration", "date", "instant"]
 # the modules of the emitted words: lib/time_arithmetic.warp for a time's + - *, lib/time.warp for `is time`
 emitted_modules(program: Node): list := (if time_operation_word in time_literal_words(program) then [time_arithmetic_module] else []) + (if #time_test_words(program) > 0 then [time_module] else [])
 time_module = "time"
@@ -465,12 +476,16 @@ declared_only(n: Node): Node := {
 	if is_group(n) { return children(n, declared_only) }
 	if class_view(n) != ø { return with_members(n, declared_only) }
 	head = if n is key then key_of(n) else ø
-	if is_group(head) and bracket_of(head) == "(" {
+	# (a head with its result type, `now(): Instant := …`, is declared by its call as a bare one is: with its body every
+	# typed word a linked module's reached word called came along, compiled anew, lib/time's calendar behind `use time`;
+	# its result type would make the empty body a function of the program's answering ø)
+	call = if is_key(head, Op.Colon) then key_of(head) else head
+	if is_group(call) and bracket_of(call) == "(" {
 		# (a word taking a block keeps its body: extensions/block_inlining.warp runs a literal block in it in place,
 		# `3 times {…}` a loop of the caller's own, card times-infix-operator)
-		if takes_block(head) { return n }
-		if is_key(n, Op.Define) { return Key(head, Op.Define, Node.Empty) }
-		if is_key(n, Op.Assign) { return Key(head, Op.Assign, Node.Empty) }
+		if takes_block(call) { return n }
+		if is_key(n, Op.Define) { return Key(call, Op.Define, Node.Empty) }
+		if is_key(n, Op.Assign) { return Key(call, Op.Assign, Node.Empty) }
 	}
 	# `A4 := midi_hertz(69)`, a value the module made a function of (charged, P71): its head, called at each use
 	if is_key(n, Op.Define) and head is symbol and name_of(head) in module.linked_words { return Key(call_of(name_of(head), []), Op.Define, Node.Empty) }
