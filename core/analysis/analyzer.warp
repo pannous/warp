@@ -318,9 +318,9 @@ typed_element_kind(type_name: TypeWord?): ValueKind? := {
 	if kind != ø { kind } else { ValueKind.Empty }
 }
 
-# an operand's kind; a function of no parameters read bare is its call, `5 * ms` (lib/units.warp) a quantity
+# an operand's kind; a function called with nothing (none or defaulted parameters) read bare is its call, `5 * ms` (lib/units.warp) a quantity
 operand_kind(n: Node, scope: Scope): ValueKind := {
-	if n is symbol and binding(scope, name_of(n)) == ø and name_of(n) in defined_signatures and #function_parameters(name_of(n)) == 0 { return inferred_kind(call_of(name_of(n), []), scope) }
+	if n is symbol and binding(scope, name_of(n)) == ø and name_of(n) in defined_signatures and callable_with_nothing(defined_signatures[name_of(n)]) { return inferred_kind(call_of(name_of(n), []), scope) }
 	inferred_kind(n, scope)
 }
 inferred_kind(n: Node, scope: Scope): ValueKind := {

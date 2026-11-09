@@ -759,10 +759,11 @@ def local_value(body: Body, n: Node): TypedCode {
 		entry = module.globals[global_key(body, name)]
 		return TypedCode(entry#2, [op.global_get] + relocatable(relocated.globals, entry#1), module.global_marks.get(global_key(body, name)) ?? 0)
 	}
-	# a function taking nothing, named bare, is its call: `f() := 42; f + 1`, a library's `now`; before an enum's bare case of that name, the weakest reading: `m` the
+	# a function taking nothing, named bare, is its call: `f() := 42; f + 1`, a library's `now`, shell's `ls` of
+	# ls(folder = ".") (decision defaults-bare-call); before an enum's bare case of that name, the weakest reading: `m` the
 	# metre beside keys.warp's Key.m. Overloaded by arity, its variant taking nothing: sound() beside sound(samples)
 	nullary = if name in module.functions then name else name + "·0"
-	if name not in body.names and nullary in module.functions and #module.functions[nullary].signature.parameters == 0 { return call(body, module.functions[nullary], []) }
+	if name not in body.names and nullary in module.functions and callable_with_nothing(module.functions[nullary].signature) { return call(body, module.functions[nullary], []) }
 	# a bare enum case is its name, a symbol, at run time, made once: the very case is the one node (decision
 	# enum-identity); its first letter lowercase names it too, `disambiguation: later` the case Later (decision
 	# lowercase-key-comparisons)
