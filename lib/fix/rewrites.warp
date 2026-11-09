@@ -14,8 +14,8 @@ foreign_words = [["auto", "var"]]
 # another language's name of a warp word, called (decisions.md round 15-17, card compile-time: only foreign or
 # deprecated spellings are rewritten, warp's English aliases stay): `len(xs)` → `count(xs)`, `xs.push(3)` → `xs.add(3)`
 foreign_calls = {len: "count", strlen: "count", strip: "trim", isdigit: "is_digit", isalpha: "is_alpha", isalnum: "is_alphanumeric", isspace: "is_space", toString: "text", to_s: "text", __str__: "text", compareTo: "compare", push: "add", append: "add"}
-# `7 div 2` (Pascal) → `7 /! 2`: floor division is `/!` (decision floor-division)
-floor_division = "/!"
+# `7 div 2` (Pascal) → `7 ÷ 2`: floor division is `÷` (decision core-int-division; `/!` its alias)
+floor_division = "÷"
 floor_division_words = ["div"]
 # `alias acos = arc_cosine` → `alias acos => arc_cosine`: an alias says its direction (decision alias-arrows)
 alias_word = "alias"

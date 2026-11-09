@@ -12,3 +12,7 @@
 'str((6m ± 0.3).low)'	'5.7m'
 # a glyph definition on built-in types overloads the operator for them: `[1 2 3 4] > 2` asks whether all are greater (card greater-list-all)
 '>(a: list, b: int) := all a > b; [[1, 2, 3, 4] > 2, [3, 4] > 2, 5 > 2]'	[no, yes, yes]
+# so does its English word (decision operator-words-top-level); a definition of numbers stays a plain function
+'greater(a: list, b: int) := all a > b; [[1, 2, 3, 4] > 2, [3, 4] > 2, 5 > 2]'	[no, yes, yes]
+'plus(a: list, b: int) := a.map(x => x + b); [1, 2] + 1'	[2, 3]
+'greater(a: int, b: int) := 7; [greater(1, 2), 3 > 2]'	[7, yes]
