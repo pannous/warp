@@ -37,7 +37,8 @@ baked-lib-split.
   part (the 16 words the compiler calls, the 12 aliases its code writes); std_module_text("prelude") = core part + lib
   file, the one reader (notes/library_zero_bake.md "core-takes-what-it-uses"); compiler-inputs.sh --baked-files lists
   no lib/ file. Left from it: the dead reaches by name (card note), which still compile ~45 uncalled lib prelude words in.
-- After the seed refresh: card builtins-seed-transition (it also deletes lib/prelude.warp's copies of the core part's
-  12 alias lines; compiler.warp's include of core/prelude_core.warp can go then too).
+- Card builtins-seed-transition: the typed builtin lines left lib/prelude.warp and lib/math.warp with seed a77a792f
+  (branch builtins-seed-transition). Left on the card: once a seed is built from a main with P3, delete lib/prelude.warp's
+  copies of the core part's 12 alias lines and compiler.warp's include of core/prelude_core.warp.
 - Card the three gcds (lib/math.warp wide_gcd, extensions/big_numbers/exact.warp int_gcd, core/integers.warp gcd) and
   lib/math.warp's bit_and/bit_or beside the runtime's bits_and/bits_or.
