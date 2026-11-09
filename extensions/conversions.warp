@@ -94,29 +94,38 @@ given_amount = "amount·given"
 # (never `to·T`, the compiled name of a method `to` of class T: Quantity.to beside the conversion to Quantity)
 argument_conversion_name(type: text): text := "passed·" + union_members(type).join("_or_")
 converts_to(type: text, targets: map): bool := union_members(type).any(member => targets.has(member))
-# `passed·T(it: any)`: a value of the type (of a member of the union) as it is, one of a source type converted, the first
-# member's conversions first; any other value as it is too, the parameter's own check says what it takes. A class
-# goes before a type word, as a member and as a source: a lib/units quantity also tests as a number, so
-# Instant.compare(other: Instant or number or Duration) takes 9h as a Duration and only a bare 5 as a number
-argument_conversion(type: text, targets: map): Node := {
+# `passed·T(it: any, taker: text)`: a value of the type (of a member of the union) as it is, one of a source type
+# converted, the first member's conversions first. A class goes before a type word, as a member and as a source: a
+# lib/units quantity also tests as a number, so Instant.compare(other: Instant or number or Duration) takes 9h as a
+# Duration and only a bare 5 as a number. A class place (decision class-types-checked) takes, besides, a value with
+# every field of a member class extending none, and refuses any other value: `f takes a Length, not 5s (a Time)`; a
+# place of type words only takes it as it is, the parameter's own check says what it takes
+argument_conversion(type: text, places: map, classes: map): Node := {
 	it = symbol(converted_value)
 	# (`Duration or any`: a Duration, a value converting to one, else any value as it is)
 	members = union_members(type).filter(member => member != any_word)
 	passes = members.map(member => [member, it])
-	conversions = members.filter(member => targets.has(member)).flat_map(member => targets[member].map(conversion => [conversion#1, call_of(conversion_name(member) + "·" + conversion#1, [it])]))
+	conversions = members.filter(member => places.has(member)).flat_map(member => places[member].map(conversion => [conversion#1, call_of(conversion_name(member) + "·" + conversion#1, [it])]))
 	steps = class_first(passes + conversions)
-	passed = mismatch_refused(it, members)
+	checked = members.filter(member => classes.has(member))
+	passed = if checked then call_of(place_refusal_word, [it, symbol(taker_name), Text(type)]) else it
+	for member in checked.filter(member => classes[member].parent == "").reverse() { passed = chosen(fields_fit(it, classes[member].fields), it, passed) }
 	for step in steps.reverse() { passed = chosen(Key(it, Op.Is, symbol(step#1)), step#2, passed) }
-	Key(call_of(argument_conversion_name(type), [Key(it, Op.Colon, symbol(any_word))]), Op.Define, passed)
+	Key(call_of(argument_conversion_name(type), [Key(it, Op.Colon, symbol(any_word)), Key(symbol(taker_name), Op.Colon, symbol("text"))]), Op.Define, passed)
 }
-# what a parameter typed by classes gives a value none of them takes: an instance of another class refused, run-time
-# half of card quantity-dimension-types (5s where a Length is needed); any other value as it is, the parameter's own
-# check says what it takes
-mismatch_refused(it: Node, members: list): Node := {
-	classes = members.filter(is_capitalized)
-	if not classes { return it }
-	needed = "a " + classes.join(" or ") + " is needed, not "
-	chosen(call_of(instance_test_word, [it]), call_of("raise", [Key(Text(needed), Op.Add, call_of("str", [it]))]), it)
+taker_name = "taker·named"
+place_refusal_word = "place_refused"
+# whether an instance or a map has every one of the fields (lib/prelude.warp has_fields)
+fields_fit(it: Node, fields: list): Node := Key(Key(call_of(instance_test_word, [it]), Op.Or, Key(it, Op.Is, symbol("map"))), Op.And, call_of("has_fields", [it, List(fields.map(field => Text(field)), Bracket.Square, Separator.Comma)]))
+# each class the program declares, not an enum: name → its Declared (core/passes/classes.warp)
+declared_classes(program: Node): map := {
+	enums = declarations_found(program, declared_enum, {})
+	found = {}
+	for statement in statements_in(program) {
+		view = class_view(statement)
+		if view != ø and not enums.has(declared_type_name(view#2)) { found[declared_type_name(view#2)] = class_declared(statement, view) }
+	}
+	found
 }
 # conversions (or [type, …] steps) from a class first, then from a type word, each in the order written
 class_first(steps: list): list := steps.filter(step => is_capitalized(step#1)) + steps.filter(step => not is_capitalized(step#1))
@@ -153,58 +162,40 @@ positional_types(call: Node, typed: map): list? := {
 	arguments = items_of(call)[1 ..]
 	if #arguments != #types or arguments.any(argument => is_key(argument, Op.Colon) or is_key(argument, Op.Assign)) then ø else types
 }
-# each call of such a function with its arguments for those parameters converted; a named argument as it is
-converted_arguments(n: Node, typed: map, targets: map): Node := {
-	if definition_call(n) != ø { return Key(key_of(n), Op.Define, converted_arguments(value_of(n), typed, targets)) }
-	walked = children(n, x => converted_arguments(x, typed, targets))
-	types = positional_types(walked, typed)
+# where values pass to typed places: name → the parameter types of each function converting some (typed_parameters),
+# the types the program converts to or checks, a class's own [] (decision class-types-checked), each class declared
+class Places { typed: map; converting: map; classes: map }
+# each call of such a function with its arguments for those parameters converted, the function's name the taker a
+# refusal names, and each `x: T = v` so, x the taker; a named argument as it is, and a value known to be a T already:
+# a parameter typed so of the definition around it (`g(d: Length) := f(d)`), the instance of a constructor of the class
+converted_arguments(n: Node, places: Places, known: map): Node := {
+	call = definition_call(n)
+	if call != ø { return Key(key_of(n), Op.Define, converted_arguments(value_of(n), places, parameters_typed(call))) }
+	walked = children(n, x => converted_arguments(x, places, known))
+	if is_key(walked, Op.Assign) and is_key(key_of(walked), Op.Colon) and key_of(key_of(walked)) is symbol and value_of(key_of(walked)) is symbol {
+		return Key(key_of(walked), Op.Assign, passed(value_of(walked), name_of(value_of(key_of(walked))), name_of(key_of(key_of(walked))), places, known))
+	}
+	types = positional_types(walked, places.typed)
 	if types == ø { return walked }
 	arguments = items_of(walked)[1 ..]
-	group_like(walked, [walked#1] + (1 to #arguments).map(at => if converts_to(types#at, targets) then call_of(argument_conversion_name(types#at), [arguments#at]) else arguments#at))
+	group_like(walked, [walked#1] + (1 to #arguments).map(at => passed(arguments#at, types#at, name_of(walked#1), places, known)))
 }
-
-# the compile-time half of card quantity-dimension-types: an argument written as a number and a unit, `5s`, whose unit
-# names a class (units' `type s = Time`) the parameter's class neither is nor extends, is refused where it is written
-mismatched_units(n: Node, typed: map, aliases: map, parents: map): Node := {
-	walked = children(n, x => mismatched_units(x, typed, aliases, parents))
-	types = positional_types(walked, typed)
-	if types == ø { return walked }
-	arguments = items_of(walked)[1 ..]
-	for at in 1 to #arguments {
-		given = unit_class(arguments#at, aliases)
-		needed = types#at
-		members = union_members(needed)
-		if given != ø and members.all(is_capitalized) and not members.any(member => member in class_lineage(given, parents)) { return diagnose(call_of("unit_argument", [arguments#at, needed, given]), walked) }
-	}
-	walked
+passed(value: Node, type: text, taker: text, places: Places, known: map): Node := if converts_to(type, places.converting) and not known_as(value, type, places.classes, known) then call_of(argument_conversion_name(type), [value, Text(taker)]) else value
+# name → type of each parameter of a definition
+parameters_typed(call: Node): map := {
+	typed = {}
+	for parameter in signature_of(items_of(call)).parameters { if parameter.type_name != "" { typed[parameter.name] = parameter.type_name } }
+	typed
 }
-# the class a number and a unit is, `5s` a Time by units' `type s = Time`, else ø
-unit_class(argument: Node, aliases: map): text? := {
-	written = unparenthesized(without_mark(argument))
-	print("DEBUG unit_class " + as_code(written) + " " + (if is_group(written) then "group " + #written else if written is key then "key" else "other") + " aliases " + #aliases)
-	# (juxtaposed as a key without an operator, or a group of the two)
-	parts = if is_key(written, Op.None) then [key_of(written), value_of(written)] else if is_group(written) and #written == 2 then [written#1, written#2] else []
-	if #parts != 2 or not is_number_literal(parts#1) { return ø }
-	unit = without_mark(parts#2)
-	if not (unit is symbol and aliases.has(name_of(unit))) { return ø }
-	named = alias_resolved(name_of(unit), aliases)
-	if is_capitalized(named) then named else ø
+# whether the value is known to be of a member class of the type, or of one extending it
+known_as(value: Node, type: text, classes: map, known: map): bool := {
+	plain = without_mark(value)
+	given = if plain is symbol and known.has(name_of(plain)) then known[name_of(plain)] else if is_call(plain) and plain#1 is symbol and classes.has(name_of(plain#1)) then name_of(plain#1) else ""
+	given != "" and union_members(type).any(member => classes.has(member) and descends_from(given, member, classes))
 }
-# each declared class's parent, `Length` → `Quantity`
-class_parents(statements: list): map := {
-	parents = {}
-	for statement in statements {
-		view = class_view(statement)
-		if view != ø and base_of(view#2) != "" { parents[declared_type_name(view#2)] = base_of(view#2) }
-	}
-	parents
-}
-# the class and the classes it extends, nearest first
-class_lineage(name: text, parents: map): list := {
-	found = [name]
-	while parents.has(found.last) and parents[found.last] not in found { found += [parents[found.last]] }
-	found
-}
+descends_from(name: text, ancestor: text, classes: map): bool := name == ancestor or (classes.has(name) and classes[name].parent != "" and descends_from(classes[name].parent, ancestor, classes))
+# the types of the program's `x: T = v`
+declared_types(program: Node): list := nodes_in(program).filter(n => is_key(n, Op.Assign) and is_key(key_of(n), Op.Colon) and key_of(key_of(n)) is symbol and value_of(key_of(n)) is symbol).map(n => name_of(value_of(key_of(n))))
 
 # the program with its conversions as functions, before its statements (its last one stays its value), and their uses
 # as calls
@@ -237,19 +228,22 @@ conversions(program: Node): Node := {
 			order += [target]
 		}
 	}
-	checked = if not order {
+	classes = declared_classes(program)
+	checked = if not order and not classes {
 		if #kept == #statements_in(program) then program else List(kept, Bracket.None, Separator.Newline)
 	} else {
 		functions = order.map(target => conversion_functions(target, targets[target], targets, scope)).flatten()
-		typed = typed_parameters(kept, targets, aliases)
+		# (a class checked with no conversions to it: a copy, `x as C` converts only to targets)
+		converting_to = entries_of_both(targets, {})
+		for name in classes.keys { if not targets.has(name) { converting_to[name] = [] } }
+		places = Places(typed_parameters(kept, converting_to, aliases), converting_to, classes)
 		converting = {}
-		for type in typed.values.flatten() { if converts_to(type, targets) { converting[type] = yes } }
-		functions += converting.keys.map(type => argument_conversion(type, targets))
+		for type in places.typed.values.flatten() + declared_types(program) { if converts_to(type, places.converting) { converting[type] = yes } }
+		functions += converting.keys.map(type => argument_conversion(type, places.converting, classes))
 		# (a program's conversions are its own, seeing every module's: never a linked module's of the same name, time's
 		# passed·Duration knowing no Quantity)
 		if module_written == "" { own_words_unlinked(functions.map(f => name_of(definition_call(f)#1))) }
-		parents = class_parents(kept)
-		List(functions + kept.map(statement => converted_arguments(converting_uses(mismatched_units(statement, typed, aliases, parents), targets), typed, targets)), Bracket.None, Separator.Newline)
+		List(functions + kept.map(statement => converted_arguments(converting_uses(statement, targets), places, {})), Bracket.None, Separator.Newline)
 	}
 	forced_conversions(checked)
 }

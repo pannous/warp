@@ -80,8 +80,6 @@ type_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", r
 	text: "text", str: "text", string: "text", codepoint: "codepoint", char: "codepoint", character: "codepoint",
 	bool: "int", boolean: "int", symbol: "symbol", function: "function", closure: "function", exact: "empty", precise: "empty"}
 
-# `a word`, `an item`: the word after its indefinite article (the stages' messages, emitter and diagnostics)
-with_article(word: text): text := (if "AEIOUaeiou".contains(word#1) then "an " else "a ") + word
 # the words naming the parameter after them, a preposition or `as`: `play(tone, for duration)` called `play C4 for: 2s`
 label_words = phrase_prepositions + ["as"]
 # the instructions a function body may be (decision wasm-instruction-body), those on ints (i64) and floats (f64), by

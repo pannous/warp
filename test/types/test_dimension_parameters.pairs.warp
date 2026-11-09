@@ -1,10 +1,18 @@
-# A parameter typed by a dimension takes a quantity of that dimension (card quantity-dimension-types): another one is
-# refused, a plain number converts as the dimension counts it, its base unit
-'use units; f(d: length) := d; f(5s)'	error	needed
-'use units; f(d: Length) := d; f(5 kg)'	error	needed
-'use units; f(d: length) := d; x: any = 5s; f(x)'	error	needed
+# A class place takes its class by name (decisions class-types-checked, bare-number-to-unit): a Length place refuses
+# a quantity of another dimension, a plain number converts as the dimension counts it, its base unit; a class
+# extending none takes a value with its fields, any other refused
+'use units; f(d: length) := d; f(5s)'	error	f takes a Length, not 5s (a Time)
+'use units; f(d: Length) := d; f(5 kg)'	error	f takes a Length, not 5kg (a Mass)
+'use units; f(d: length) := d; x: any = 5s; f(x)'	error	takes a Length
 'use units; f(d: length) := d; f(5m)'	5m
 'use units; f(d: length) := d; f(3 km)'	3km
 'use units; f(d: Length) := d; f(5)'	5m
 'use units; f(t: Time) := t; f(2 min)'	2min
-'use units; f(t: Time) := t; f(2 m)'	error	needed
+'use units; f(t: Time) := t; f(2 m)'	error	takes a Time
+'use units; g(d: Length) := d; f(d: Length) := g(d); f(2 km)'	2km
+'use units; d: Length = 5s'	error	d takes a Length
+'class A { x: int }; class B { y: int }; a: A = B(1)'	error	a takes an A
+'class A { x: int }; class B { x: int; y: int }; a: A = B(1, 2); a.x'	1
+'class A { x: int }; f(a: A) := a.x; f(5)'	error	f takes an A, not 5
+'class A { x: int }; f(a: A) := a.x; f({x: 3})'	3
+'class A { x: int }; class C extends A {}; f(a: A) := a.x; f(C(4))'	4
