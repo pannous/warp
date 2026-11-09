@@ -758,13 +758,37 @@ function_parameters_written(definition: Node): list := {
 	if is_group(taken) then items_of(taken) else [taken]
 }
 # `(a: int, b: int) -> int`: the parameters as written, untyped ones by their name alone, and the kind its result
-# has; ø when the program defines no such function or no kind is known of its result
+# has; a word defined several times (`f(x: int)` and `f(x: text)`, `sample(n: int) as text` and `as int`) each
+# definition's, joined by ` | `; ø when the program defines no such function or no kind is known of a result
 signature_text(name: Node, program: Node): any := {
-	definition = function_definition(name, program)
-	if definition == ø { return builtin_shown(name, program, "") ?? foreign_shown(spelled(name)) }
-	returned = function_result_kind(name, definition)
-	if returned == ø { return ø }
-	"(" + function_parameters_written(definition).map(parameter_shown).join(", ") + ") -> " + returned
+	shown = signatures_listed(name, program)
+	if shown == ø then ø else shown.join(" | ")
+}
+# `f.signatures`: each definition's signature in order, a library or foreign word's one; ø as signature_text
+signatures_listed(name: Node, program: Node): list? := {
+	definitions = definitions_of(name, program)
+	if #definitions == 0 {
+		outside = builtin_shown(name, program, "") ?? foreign_shown(spelled(name))
+		return if outside == ø then ø else [outside]
+	}
+	shown = definitions.map(definition => definition_signature(name, definition))
+	if shown.any(signature => signature == ø) then ø else shown
+}
+# the program's definitions of a word: of one overloaded by its parameter or result types, each variant
+# (`f·int`, `f·text`, arity_overloads.warp typed_variant) in order, else its definition
+definitions_of(name: Node, program: Node): list := {
+	statements = level_statements(program)
+	variants = statements.filter(statement => (defined_name(statement) ?? "").starts_with("${name}·"))
+	if #variants > 0 then variants else statements.filter(statement => defines(statement, "${name}"))
+}
+definition_signature(name: Node, definition: Node): text? := {
+	returned = written_result_type(definition) ?? function_result_kind(symbol(defined_name(definition) ?? "${name}"), definition)
+	if returned == ø then ø else "(" + function_parameters_written(definition).map(parameter_shown).join(", ") + ") -> " + returned
+}
+# the result type a definition writes, `int` of `f(x) as int := …` and of `f(x): int := …`; ø of none
+written_result_type(definition: Node): text? := {
+	head = if is_key(definition, Op.Define) then key_of(definition) else ø
+	if head != ø and (is_key(head, Op.As) or is_key(head, Op.Colon)) and value_of(head) is symbol then name_of(value_of(head)) else ø
 }
 # a C function or a wasm module's export the program calls, as its foreign line declares it (extensions/c_imports
 # imports.warp declared_c_functions): `fib.signature` of rust_demo.wasm is "(p1: i64) -> i64"; ø for any other name
@@ -1293,6 +1317,7 @@ rule_words = {
 	shorthand_closure: shorthand_closure,
 	signaled: signaled,
 	signature_text: signature_text,
+	signatures_listed: signatures_listed,
 	spelled: spelled,
 	hyphen_difference: hyphen_difference,
 	tables_kept: tables_kept,
@@ -1335,7 +1360,7 @@ declared_class(type_name: text, program: Node): Node? := {
 # `{name: "User", order: ["id", "address"], types: {id: "number", address: {…Address's…}, tags: {list: "text"}},
 # defaults: {port: 80}, make: (fields) => User{id: fields["id"], …}}`: a class the program declares as data, for a
 # reader at run time (lib/json.warp typed_json_value): its fields in order, each one's type (a type word, a class's
-# data, `{list: …}` of a list), the defaults of those that have one and its maker from the fields by name; a raise
+# data, `{list: …}` of a list, `{optional: …}` of a `T?` one), the defaults of those that have one and its maker from the fields by name; a raise
 # naming why for a class it can't give so
 CLASS_DATA_TYPES = ["number", "int", "float", "string", "text", "bool"]
 class_data(type_name: Node, program: Node): Node := {
@@ -1355,6 +1380,7 @@ class_data_text(name: text, program: Node, ancestors: list): text? := {
 	if constructor_of(declared) != ø { return ø }
 	types = []
 	defaults = []
+	optional = []
 	for member in view#3[3..].map(member_read) {
 		field = field_name(member)
 		if field != ø {
@@ -1363,16 +1389,23 @@ class_data_text(name: text, program: Node, ancestors: list): text? := {
 			written = type_data_text(field_type, program, ancestors + [name])
 			if written == ø { return ø }
 			types += [field + ": " + written]
+			if field_type.ends_with("?") { optional += [field] }
 			if is_key(member, Op.Assign) { defaults += [field + ": " + as_code(value_of(member))] }
 		}
 	}
 	fields = declared.fields
 	order = fields.map(field => "\"" + field + "\"").join(", ")
-	made = name + "{" + fields.map(field => field + ": typed_fields[\"" + field + "\"]").join(", ") + "}"
+	# (a `T?` field the data leaves out is set only when given: the class leaves it ø)
+	given = field => "typed_fields[\"" + field + "\"]"
+	made = "{ made = " + name + "{" + fields.filter(field => field not in optional).map(field => field + ": " + given(field)).join(", ") + "}; " + optional.map(field => "if typed_fields.has(\"" + field + "\") { made." + field + " = " + given(field) + " }; ").join("") + "made }"
 	"{name: \"" + name + "\", order: [" + order + "], types: {" + types.join(", ") + "}, defaults: {" + defaults.join(", ") + "}, make: (typed_fields => " + made + ")}"
 }
 type_data_text(field_type: text, program: Node, ancestors: list): text? := {
 	list_prefix = "list of "
+	if field_type.ends_with("?") {
+		item = type_data_text(field_type[0 ..< #field_type - 1], program, ancestors)
+		return if item == ø then ø else "{optional: " + item + "}"
+	}
 	if field_type.starts_with(list_prefix) {
 		item = type_data_text(field_type[#list_prefix ..], program, ancestors)
 		return if item == ø then ø else "{list: " + item + "}"

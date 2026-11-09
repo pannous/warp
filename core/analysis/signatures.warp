@@ -48,6 +48,9 @@ type_text(type: any): text := if type is symbol then name_of(type) else "${type}
 
 # the head `f(a, b: int)` of a definition (its name first)
 signature_of(head: list): Signature := Signature(parameters: head[1..].map(parameter_of))
+# whether a call may give the function nothing: no parameters, or each defaulted, `ls(folder = ".")`, which a bare name
+# calls (decision defaults-bare-call)
+callable_with_nothing(signature: Signature): bool := signature.parameters.all(p => p.defaulted_to != ø)
 taken_names(signature: Signature): list := signature.parameters.map(parameter => parameter.name)
 # [how many arguments a call must pass, how many it may]: a defaulted parameter may be left out
 arity(signature: Signature): list := [#signature.parameters.filter(parameter => parameter.defaulted_to == ø), #signature.parameters]

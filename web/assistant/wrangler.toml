@@ -1,5 +1,5 @@
 # warp-assistant, the playground assistant's proxy for visitors without a key (assistant.mjs, card assistant-proxy)
-# Secrets (wrangler secret put …): ANTHROPIC_API_KEY, TURNSTILE_SECRET, SESSION_SECRET. Deploy: wrangler deploy (here)
+# Secrets (wrangler secret put …): ANTHROPIC_API_KEY, TURNSTILE_SECRET, SESSION_SECRET, OWNER_TOKEN_HASH. Deploy: wrangler deploy (here)
 name = "warp-assistant"
 main = "assistant.mjs"
 compatibility_date = "2026-09-01"

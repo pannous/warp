@@ -6,6 +6,21 @@
 OPERATORS_SCAN = "declared_operators"
 declared_operators_extension = Extension{name: "declared_operators", prescans: {"declared_operators": scanned_operators}, infix_readers: [read_declared_infix], prefix_readers: [read_declared_prefix], glyph_owners: [declares_glyph], keyword_readers: {"operator": read_declaration, "infix": read_declaration, "prefix": read_declaration, "suffix": read_declaration, "postfix": read_declaration}}
 
+# the suffixes the parser itself reads as a call of a word, `x!` as unwrap(x): `postfix operator !(n: int) :=
+# factorial(n)` overloads that word, so `5!` is 120 and `!` of another value keeps its meaning (decision
+# bang-overloadable); the parser's own operator method, under the word's name
+PARSED_SUFFIX_WORDS = {"!": "unwrap"}
+def suffix_word_overload(p: Parser, word: text): Node := {
+	if FIXITY_WORDS.get(word) != Fixity.Suffix { return ø }
+	words = statement_words_at(p)
+	glyph = if #words > 2 and words#2 == "operator" then words#3 else if #words > 1 then words#2 else ""
+	spelled = PARSED_SUFFIX_WORDS.keys.filter(suffix => glyph.starts_with(suffix + "("))
+	if #spelled == 0 { return ø }
+	method = operator_method_definition(p, word)
+	if method == ø { return ø }
+	Key(call_of([symbol(PARSED_SUFFIX_WORDS[spelled#1])] + items_of(key_of(method))[1 ..]), Op.Define, value_of(method))
+}
+
 # the operators this parse knows
 declared_in(p: Parser): list := p.scans.get(OPERATORS_SCAN) ?? []
 # The declared operator written at the parser's position, the longest glyph, a word one as a whole word, else ø; a
@@ -47,6 +62,8 @@ declares_glyph(p: Parser, glyph: text): bool := declared_level(declared_in(p), g
 # a statement opening with a fixity word: a declaration, a precedence the scan applied (skipped), else ø: an alias
 # `operator × := *` or a method `operator #(n) := …` is the parser's
 def read_declaration(p: Parser, word: text): Node := {
+	overload = suffix_word_overload(p, word)
+	if overload != ø { return overload }
 	words = statement_words_at(p)
 	statement = operator_statement(words)
 	if only_spells(statement) { return ø }

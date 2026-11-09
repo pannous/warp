@@ -221,6 +221,58 @@ def record_field(path, key):
         return next((line.split() for line in lines if line.split()[1:2] == [key] or line.split()[:1] == [key]), None)
 
 
+def landed_records(record, landed):
+    """(folder, commit, build log) of each build record <record> in the store of a landed commit, the commit the record
+    says it built (a build of uncommitted edits says `<sha>+dirty`, rebuild.sh built_commit, and is no landing's); the
+    builds that rebake are no landing's cost"""
+    for folder in glob.glob(os.path.join(STORE, "*", record)):
+        try:
+            commit = record_field(os.path.join(folder, "inputs.txt"), "commit")[1]
+            with open(os.path.join(folder, "build.log")) as log:
+                text = log.read()
+        except (OSError, TypeError, IndexError):
+            continue
+        if commit in landed and "rebak" not in text:
+            yield folder, commit, text
+
+
+def step_seconds(folder):
+    """{step: seconds since the build started, "end": its end} of a record's steps file (scripts/build-slot.sh), {} for
+    a record from before it"""
+    try:
+        with open(os.path.join(folder, "steps")) as lines:
+            return {name: int(seconds) for name, seconds in (line.split() for line in lines)}
+    except (OSError, ValueError):
+        return {}
+
+
+def build_seconds(folder, text):
+    """(core, libraries, everything): the wall seconds of rebuilding the compiler (the seed and optimize steps), of the
+    runtime and modules steps, and of the whole build, None where the record can't tell: a build from before the steps
+    file knows only its total, except a lib-only one (no seed step), whose total is the libraries"""
+    total = float(record_field(os.path.join(folder, "time"), "real")[1])
+    steps = step_seconds(folder)
+    if "runtime" in steps and "seed" in steps:
+        return steps["runtime"] - steps["seed"], total - steps["runtime"], total
+    if "rebuild step seed" not in text:
+        return None, total, None
+    return None, None, total
+
+
+def build_times(landed):
+    """Each landing's [date, commit, core, libraries, everything] wall seconds of rebuilding warp.wasm, the leanest
+    of the landing's records for each part"""
+    leanest = {}
+    for folder, commit, text in landed_records("warp.record", landed):
+        try:
+            parts = build_seconds(folder, text)
+        except (OSError, TypeError, ValueError, IndexError):
+            continue
+        best = leanest.setdefault(commit, [None] * len(parts))
+        leanest[commit] = [part if best[i] is None or (part is not None and part < best[i]) else best[i] for i, part in enumerate(parts)]
+    return sorted([landed[commit], commit[:10], *(None if part is None else round(part, 1) for part in parts)] for commit, parts in leanest.items())
+
+
 def build_history(record, by_seed, landed):
     """Each landing's instructions retired (in 10^12), peak memory and CPU seconds of building <record>, its leanest
     full build (a lib-only build reusing a stored compiler skipped: its log has no seed step; older ones say rebake), by the commit the record says it built: a build of uncommitted edits says
@@ -228,17 +280,13 @@ def build_history(record, by_seed, landed):
     load and cores; <by_seed>: a seed's first build is left out, a compiler's cold first run reads ~3% more
     (notes/compiler_rebuilds.md)."""
     builds = []
-    for folder in glob.glob(os.path.join(STORE, "*", record)):
+    for folder, commit, text in landed_records(record, landed):
         try:
-            commit = record_field(os.path.join(folder, "inputs.txt"), "commit")[1]
             seed = (record_field(os.path.join(folder, "inputs.txt"), "seed") or [None, None])[1]
-            with open(os.path.join(folder, "build.log")) as log:
-                text = log.read()
-                # only a seed build has steps; warp-self's log (warp.wasm compiling itself) has none, and the step test
-                # dropped every self-compile record since b9af7cea67
-                lib_only = by_seed and "rebuild step seed" not in text
-                if commit not in landed or "rebak" in text or lib_only:
-                    continue
+            # only a seed build has steps; warp-self's log (warp.wasm compiling itself) has none, and the step test
+            # dropped every self-compile record since b9af7cea67
+            if by_seed and "rebuild step seed" not in text:
+                continue
             timing = os.path.join(folder, "time")
             instructions = int(record_field(timing, "instructions")[0])
             cpu = sum(float(record_field(timing, key)[1]) for key in ("user", "sys"))
@@ -366,7 +414,7 @@ def hello_track():
 
 landed = {line.split()[0]: line.split()[1][:16].replace("T", " ") for line in
           git("log", "--format=%H %ad", "--date=iso-strict", "--since=" + SINCE, TIP).splitlines()}
-data = {"cards": card_counts(), "hello": hello_track(), "pace": hourly_pace(), "builds": [[name, record, build_history(record, by_seed, landed)] for name, record, by_seed in BUILDS], "tiers": [[name, path, tier_history(path), latest_flips(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows,
+data = {"cards": card_counts(), "hello": hello_track(), "pace": hourly_pace(), "builds": [[name, record, build_history(record, by_seed, landed)] for name, record, by_seed in BUILDS], "build_times": build_times(landed), "tiers": [[name, path, tier_history(path), latest_flips(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows,
         "tip": git("log", "-1", "--format=%h%x09%s%x09%ad", "--date=format:%Y-%m-%d %H:%M", TIP).strip().split("\t"),
         "generated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
 os.makedirs(os.path.dirname(OUT), exist_ok=True)

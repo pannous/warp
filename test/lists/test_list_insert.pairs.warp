@@ -3,3 +3,5 @@
 'xs = [1, 2, 3]; xs.insert(9, at: 1); xs'	[1, 9, 2, 3]
 'xs = [1, 2]; xs.insert(2, 7); xs'	[1, 2, 7]
 'xs = ["a"]; ys = xs; ys.insert(0, "z"); xs'	['z', 'a']
+# a map's insert sets the key in place (Rust's HashMap::insert), beside a list's insert at: (card library-labelled-args)
+'m = {a: 1}; m.insert("b", 2); m.b'	2

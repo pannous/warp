@@ -41,7 +41,10 @@ wasm_module_named(statement: text, folder: text): text? := {
 	# (`fourty_two.wat` is the binary beside it, fourty_two.wasm: WAT text needs the native build, notes/wasm_modules.md)
 	written = bare.remove_suffix(WAT_EXTENSION).remove_suffix(WASM_EXTENSION) + WASM_EXTENSION
 	name = if rooted(written, folder) == written then path_in(folder, written) else written
-	if is_core_wasm(bytes_if_there(wasm_file(name, folder))) then name else ø
+	if is_core_wasm(bytes_if_there(wasm_file(name, folder))) { return name }
+	# `use cargo semver` of a crate no module was built for is refused, naming how to build it (refuse, never guess)
+	if used_word(statement) != ø and used_word(statement).starts_with(CARGO_WORD) { raise unbuilt_crate(used_word(statement).remove_prefix(CARGO_WORD).trim(), name) }
+	ø
 }
 # the module as a use statement writes it, unquoted, ø for no use: `use wasm "rust_demo.wasm"` (decision
 # samples-modules-wasm: the long form, `wasm` before a quoted path) is "rust_demo.wasm"; an `as` name is gone by now
@@ -58,6 +61,7 @@ wasm_use_written(statement: text): text? := {
 	for quote in c_quotes { if written.starts_with(quote) and written.ends_with(quote) and #written > 2 { written = written.remove_prefix(quote).remove_suffix(quote) } }
 	written
 }
+unbuilt_crate(crate: text, module: text): text := "use cargo " + crate + ": no module " + module + " was built for the crate; describe its items in lib/crates/" + crate + ".warp (scripts/warp-crate scan " + crate + " drafts them), then build it: scripts/warp-crate wasm lib/crates/" + crate + ".warp"
 # the file of a module name, which is already in the program's folder (wasm_module_used): joined again, a program run
 # from another folder (`warp samples/wasm/x.warp` from the root) read samples/wasm/samples/wasm/…
 wasm_file(name: text, folder: text): text := rooted(name, folder)

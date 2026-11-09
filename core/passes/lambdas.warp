@@ -213,7 +213,7 @@ locals_of(names: list, outer: map = {}): Locals := Locals{own: word_set(names), 
 with_locals(scope: Locals, names: list): Locals := if #names == 0 then scope else Locals{own: word_set(scope.own.keys + names), outer: scope.outer}
 is_local(name: text, scope: Locals): bool := scope.own.has(name) or scope.outer.has(name)
 
-class Lowering { arities: map; lambdas_lifted: list; callable_fields: map = {}; function_values: map = {}; globals: map = {}; main_globals: map = {}; function_positions: map = {} }
+class Lowering { arities: map; defaulted: map = {}; lambdas_lifted: list; callable_fields: map = {}; function_values: map = {}; globals: map = {}; main_globals: map = {}; function_positions: map = {} }
 
 ## the walk
 
@@ -255,9 +255,10 @@ lowered_lambdas(n: Node, locals: Locals, lowering: Lowering): Node := {
 	}
 }
 
-# a function of the program with parameters, named where a value goes: its closure; one without stays its bare call
+# a function of the program with parameters, named where a value goes: its closure; one without, or with each
+# defaulted, stays its bare call (decision defaults-bare-call)
 function_value(name: text, n: Node, locals: Locals, lowering: Lowering): Node := {
-	if is_local(name, locals) or name not in lowering.arities or lowering.arities[name] == 0 { return n }
+	if is_local(name, locals) or name not in lowering.arities or lowering.arities[name] == 0 or lowering.defaulted.has(name) { return n }
 	call_node(symbol("closure_new"), [n])
 }
 
@@ -273,7 +274,7 @@ passed_value(argument: Node, at: int, callee: Node, locals: Locals, lowering: Lo
 # the function a bare name calls without arguments: its own, or its parameterless variant; "" for none
 parameterless_function(name: text, lowering: Lowering): text := {
 	variant = overload_variant_name(name, 0)
-	if lowering.arities.get(name) == 0 then name else if lowering.arities.get(variant) == 0 then variant else ""
+	if lowering.arities.get(name) == 0 or lowering.defaulted.has(name) then name else if lowering.arities.get(variant) == 0 then variant else ""
 }
 # `f(a, b)`: a call of a variable is a call of the function value it holds, a function's call keeps its name; a call
 # of any other expression calls the function value it gives: `(x => x*2)(5)`, `adder(5)(1)`, `fs[0](3)`
@@ -641,15 +642,17 @@ with_function_parameters(statement: Node): Node := match statement {
 	Key(List(call, Bracket.Round, Separator.None), Op.Define, body): {
 		blocks = arguments_of(call).filter(is_function_parameter).map(parameter_name)
 		for parameter in arguments_of(call).filter(p => p is symbol and p != block_word) {
-			if unwrapped_in(body, parameter) { raise undeclared_use(name_of(parameter), "run as a block", "block") }
+			if unwrapped_in(body, parameter) { raise undeclared_use(name_of(parameter), "run as a block", "block, and run it " + name_of(parameter) + "()") }
 			if called_in(body, parameter) { raise undeclared_use(name_of(parameter), "called as a function", "function") }
 		}
-		Key(call_node(call#1, arguments_of(call).map(as_function_parameter)), Op.Define, bottom_up(body, part => block_run(part, blocks)))
+		for block in blocks { if unwrapped_in(body, symbol(block)) { raise block_bang(block) } }
+		Key(call_node(call#1, arguments_of(call).map(as_function_parameter)), Op.Define, body)
 	}
 	_: statement
 }
-# `body!` of a block parameter runs it, as `body()` does (wiki/block.md)
-block_run(n: Node, blocks: list): Node := if is_unwrapping(n) and n#2 is symbol and name_of(n#2) in blocks then call_node(n#2, []) else n
+# `body!` of a block parameter: a block runs only by a call, `!` is unwrap, in place or an operator (decision
+# blocks-run-by-call)
+block_bang(name: text): text := name + "! runs no block; fix: " + name + "()"
 is_unwrapping(n: Node): bool := is_round(n) and #n == 2 and n#1 == symbol(unwrap_word)
 # `body!` or `f(x)` of an untyped parameter: a parameter is a block or function only when declared one, never inferred
 # from its use (decision declared-block-parameters)
@@ -749,6 +752,16 @@ refuse_variables_named_as_functions(main_statements: list, globals: map, arities
 	}
 }
 
+# the functions of parameters each defaulted, `f(x = 3)`: a bare name calls them, passed for a function they are
+# their closure (decision defaults-bare-call)
+defaulted_functions(statements: list): map := {
+	defaulted = {}
+	for statement in statements {
+		parts = definition_of(statement)
+		if parts != ø and #parts.parameters > 0 and parts.parameters.all(p => parameter_of(p).defaulted_to != ø) { defaulted[parts.name] = yes }
+	}
+	defaulted
+}
 lambdas(program: Node): Node := {
 	statements = statements_in(program).map(explicit_definition)
 	positions = function_positions_of(statements + linked_definitions(program))
@@ -761,7 +774,7 @@ lambdas(program: Node): Node := {
 		parts = definition_of(statement)
 		if parts != ø { arities[parts.name] = #parts.parameters }
 	}
-	lowering = Lowering{arities: arities, lambdas_lifted: [], function_positions: positions}
+	lowering = Lowering{arities: arities, lambdas_lifted: [], function_positions: positions, defaulted: defaulted_functions(written)}
 	function_parameters = parameters_given_functions(written, arities, function_parameters_of(written))
 	lowering.callable_fields = callable_names_of(program, Op.Colon, arities, function_parameters)
 	lowering.function_values = callable_names_of(program, Op.Assign, arities, function_parameters)

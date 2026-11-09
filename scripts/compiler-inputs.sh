@@ -8,13 +8,14 @@
 # The seed building warp.wasm (WARP_SEED, its SHA-256): a refreshed seed builds anew (card scripts-rebuild).
 # core/native/ is no input: the native warp's own sources, which no compiler embeds.
 # --baked: the hash of the compiler's code alone: core/**, extensions/**, the lib/ modules they use (`use os`) with
-# those these use in turn, compiled in, and the lib/ data it reads at its own build (CODE_DATA: the prelude, the
-# aliases, every file module_source builds in), and the seed; the rest of lib/ left out: two lib/ trees of one baked hash compile
+# those these use in turn, and the prelude every program reaches (EVERY_PROGRAMS), compiled in, and the lib/ files
+# module_source builds in as text, and the seed; the rest of lib/ left out (aliases.warp too: read from the library
+# index at each compile, never in warp.wasm's bytes, card baked-lib-split): two lib/ trees of one baked hash compile
 # compiler.warp alike, so a self test passed for one holds for the other (scripts/rebuild.sh self), and a lib/-only
 # change reuses a stored compiler of that code (rebuild.sh reused_stored). --baked-files [<lib>]: those lib/ files,
 # one a line, of <lib> or this tree's (scripts/smoke.sh, integrate/land.sh)
 set -euo pipefail
-CODE_DATA=(prelude.warp aliases.warp entities.tsv modes.data)
+EVERY_PROGRAMS=(prelude.warp)
 USE_LINE='s/^use \([a-z_]*\)$/\1/p'
 # code_files <lib>: the lib/ files of the compiler's code, its modules found by their use lines, never listed by hand
 code_files() {
@@ -29,7 +30,7 @@ code_files() {
 		echo "$module.warp"
 		queue+=($(sed -n "$USE_LINE" "$lib/$module.warp"))
 	done
-	printf '%s\n' "${CODE_DATA[@]}"
+	printf '%s\n' "${EVERY_PROGRAMS[@]}"
 	# the files module_source("…") builds in: a name with an extension the file within lib/, else lib/<name>.warp
 	(cd "$lib" && find -H compiler extensions -path compiler/native -prune -o -name '*.warp' -print | env LC_ALL=C xargs grep -ho 'module_source("[^"]*")' |
 		sed 's/module_source("\(.*\)")/\1/' | sed '/\./!s/$/.warp/' | env LC_ALL=C sort -u)
@@ -53,7 +54,8 @@ done
 # 11-01..05, all in reset_locale_vars; promote-self RED 07:40 11-05). env changes only the command's environment
 modules() {
 	if [ -n "$baked" ]; then code_files "$lib" | env LC_ALL=C sort -u; return; fi
-	{ (cd "$lib" && find . -path ./compiler -prune -o -path ./data -prune -o -name '*.warp' -type f -print | sed 's|^\./||'); printf '%s\n' "${CODE_DATA[@]}" | grep -v '\.warp$'; } | env LC_ALL=C sort
+	# every module, and the data of lib/ built in (outside compiler/ and extensions/, which files() lists)
+	{ (cd "$lib" && find . -path ./compiler -prune -o -path ./data -prune -o -name '*.warp' -type f -print | sed 's|^\./||'); code_files "$lib" | grep -v -e '\.warp$' -e '^compiler/' -e '^extensions/' || true; } | env LC_ALL=C sort -u
 }
 files() {
 	(cd "$lib" && find -H compiler extensions -path compiler/native -prune -o -type f ! -name '.*' -print | env LC_ALL=C sort)
