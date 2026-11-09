@@ -47,13 +47,16 @@ spellings_of(table: int): list := {
 operator_spellings(): list := spellings_of(1)
 # a spelling's code; one of no built-in operator, `⊕` (Op.Other), joins the table at its first use, while the code
 # still fits the byte a key holds it in
-operator_code(spelled: text): int := {
+operator_code(written: text): int := {
 	spellings = operator_spellings()
+	spelled = canonical_operator(written)
 	for i in 1 to #spellings { if text_order(node_text(spellings#i), spelled) == 0 { return i - 1 } }
 	if #spellings >= KindUnit.Info { raised("too many operators: " + spelled + " is one more than a key holds") }
 	list_append(spellings, [spelled])
 	#spellings - 1
 }
+# floor division's other spelling as its table's (node_cases.warp other_spellings)
+canonical_operator(spelled: text): text := if text_order(spelled, "÷") == 0 then "/!" else if text_order(spelled, "÷=") == 0 then "/!=" else spelled
 # `key(1, "⊕", 2)`: a key of any operator, its spelling kept
 key_node(left: Node, operator: Node, right: Node): Node := keyed(operator_code(node_text(operator)) * KindUnit.Info + Kind.Key, left, right)
 # the case of a node part's code among the cases by code, an operator past them (Op.Other) its own spelling
