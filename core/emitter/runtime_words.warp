@@ -224,31 +224,42 @@ kind_bit(kind: int): int := 1 << kind
 # whether the class is the ancestor or extends it
 descends(name: text, ancestor: text): bool := name == ancestor or (name in module.parents and descends(module.parents[name], ancestor))
 # the runtime word's test of the value against the class and those extending it
-def class_test_code(body: Body, subject: Node, spec: text, word: text): TypedCode {
-	runtime_call(word, [TypedCode(ValueKind.Node, boxed(expression_code(body, subject))), list_value(body, module.classes.keys.filter(name => descends(name, spec)))])
+def class_test_code(body: Body, value: TypedCode, spec: text, word: text): TypedCode {
+	runtime_call(word, [TypedCode(ValueKind.Node, boxed(value)), list_value(body, module.classes.keys.filter(name => descends(name, spec)))])
 }
-def type_test_code(body: Body, subject: Node, written: text): TypedCode {
+def type_test_code(body: Body, subject: Node, written: text): TypedCode { value_type_test(body, expression_code(body, subject), written) }
+def value_type_test(body: Body, value: TypedCode, written: text): TypedCode {
 	# `x is Q` of `type Q = P` tests a P
 	spec = aliased_type(written)
 	if spec in module.sum_types and module.sum_types[spec] == "cases" { return refuse("a test of the type " + spec + ", which has cases") }
 	# `x is real` (REAL_CLASS) also of any number (decision real-canonical)
 	# an instance of the class or of one extending it, whatever the subject: `(5ms) is Quantity` of a Time
-	if spec in module.classes { return class_test_code(body, subject, spec, if spec == REAL_CLASS then "real_among" else "instance_among") }
-	if spec in time_test_specs { return time_test_code(body, subject, spec) }
+	if spec in module.classes { return class_test_code(body, value, spec, if spec == REAL_CLASS then "real_among" else "instance_among") }
+	if spec in time_test_types { return time_test_code(body, value, spec) }
 	if spec not in core_type_words { return refuse("a test of the type " + spec) }
 	type = core_type_words[spec]
-	value = expression_code(body, subject)
 	# a pair `a: b` is no class's instance, though a Key holds both (runtime fields.warp is_entry); `is key` and a Key arm take both
 	if value.kind == ValueKind.Node and spec == "pair" { return TypedCode(ValueKind.Bool, runtime_call("is_entry", [value]).code) }
 	if value.kind == ValueKind.Node { return node_type_test(body, value, type) }
 	TypedCode(ValueKind.Bool, [op.i32_const, if covered_kinds[type].any(kind => same_kind(kind, value.kind)) then 1 else 0])
 }
-# `x is time`, `x is duration` (decision time-word: an instant, a date, a time of day, a duration are times): lib/time's
-# time_valued answers where the program has it (prelude_words.warp time_test_words brings it), else, and in its own
-# body, the core's times answer `is time`: a value known only at run time asks holds_time once the program makes times
-time_test_specs = ["time", "duration"]
-def time_test_code(body: Body, subject: Node, spec: text): TypedCode {
-	value = expression_code(body, subject)
+# whether `x is T` tests the type: a class, a type word of the core or of time (aliases too)
+has_type_test(written: text): bool := aliased_type(written) in module.classes or aliased_type(written) in time_test_types or aliased_type(written) in core_type_words
+# a place typed T, or T?, with no value kind of the core (`d: date? = v`, a field `year: date?`) holds v as a node
+# and checks it as `v is T` does, ø too for T?: else the run fails with "not a T" (decision typed-places-check)
+def type_checked(body: Body, written: text, value: TypedCode): TypedCode {
+	spec = base_type(written)
+	held = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
+	passes = value_type_test(body, TypedCode(ValueKind.Node, held), spec).code
+	if written != spec { passes += held + [op.ref_is_null, op.i32_or] }
+	stored = boxed(value) + [op.local_set] + held[1..]
+	TypedCode(ValueKind.Node, stored + runtime_call("type_checked", [TypedCode(ValueKind.Node, held), TypedCode(ValueKind.Bool, passes), text_value_of("not " + with_article(spec))]).code)
+}
+# `x is time`, `x is duration`, `x is date`, `x is instant` (decision time-word: an instant, a date, a time of day, a
+# duration are times): lib/time's time_valued answers where the program has it (prelude_words.warp time_test_words
+# brings it), else, and in its own body, the core's times answer `is time`: a value known only at run time asks
+# holds_time once the program makes times
+def time_test_code(body: Body, value: TypedCode, spec: text): TypedCode {
 	if module.functions.has(time_test_word) and body.function.name != time_test_word { return call_values(module.functions[time_test_word], [TypedCode(ValueKind.Node, boxed(value)), text_value(spec)]) }
 	if spec != "time" { return refuse("a test of the type " + spec) }
 	if value.kind == ValueKind.Node and "Time" in module.made { return runtime_call(made_tests.Time, [value]) }
