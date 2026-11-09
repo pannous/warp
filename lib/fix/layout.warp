@@ -8,7 +8,7 @@ layout_rules = ["# comment", "trailing whitespace", "blank lines", "spaces", "sp
 # the binary operators written with a blank on each side, longest first; `<` and `>` stay as written (tags, generics),
 # `/` too (units like km/h), and `-` only after a number or a closing bracket (`full-name` is a name, `f it-1` reads
 # f(it - 1))
-spaced_operators = ["/!=", ":=", "==", "!=", "<=", ">=", "+=", "-=", "*=", "/!", "&&", "||", "=>", "=", "+", "-", "*"]
+spaced_operators = ["/!=", "÷=", ":=", "==", "!=", "<=", ">=", "+=", "-=", "*=", "/!", "÷", "&&", "||", "=>", "=", "+", "-", "*"]
 # an operator glued to one of these is part of another (`===`, `x=-1`, `..`), left alone
 operator_characters = chars("=+-*/<>!&|%^~?:.")
 # what ends an operand before a binary operator and what starts one after it
