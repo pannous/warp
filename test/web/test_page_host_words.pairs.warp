@@ -2,4 +2,4 @@
 'try read_bytes("no/such/file.bin") else "caught"'	"caught"
 'try { read_bytes("no/such/file.bin") } catch e { "no such file" in "${e}".lower() }'	yes
 # a host word takes a text of any length (card page-host)
-'write("big.txt", "a" * 70000); byte_size(read("big.txt"))'	70000
+'use file; big = temp_folder() + "/big.txt"; write(big, "a" * 70000); byte_size(read(big))'	70000

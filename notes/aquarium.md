@@ -1,14 +1,8 @@
 # Aquarium
 
-UNEXECUTED fragment-based aquarium approximation. Not a faithful WebGPU port.
+Fragment-based aquarium approximation. Not a faithful WebGPU port. No GPU frame has been shown.
 
-A paintable reef in `lib/aquarium.warp`, shown by `samples/gpu/aquarium.warp`. The machine that wrote this source did not run it. `command -v warp` was empty, `~/dev/bin/warp` was absent, and no `warp.wasm` was present. `scripts/smoke.sh .` exited 1:
-
-```
-cp: cannot stat './warp.wasm': No such file or directory
-```
-
-`warp test test/aquarium` was not run. `samples/gpu/aquarium.warp` was not run. No frame was rendered. There is no screenshot.
+The picture is `samples/gpu/aquarium.warp`, one self-contained program. It is not a library: there is no `lib/aquarium.warp`. `test/aquarium/test_aquarium.warp` imports the sample file, which brings the functions and not the `on frame` paint.
 
 ## Reference
 
@@ -18,7 +12,7 @@ The formulas kept are the tiled travelling cosines and the Jacobian caustic (`sr
 
 ## Upstream license
 
-Exact `LICENSE.md` from greggman/webgpu-aquarium at `055da77885a571e85970b2bb3807b0b504ce1a1c` (sha256 `22bf9b52b86f92408391fc504d696bc1c1604a789f7502ac59ebcbf32901379f`). Kept in this note. No separate license file was added. The header of `lib/aquarium.warp` is unchanged.
+Exact `LICENSE.md` from greggman/webgpu-aquarium at `055da77885a571e85970b2bb3807b0b504ce1a1c` (sha256 `22bf9b52b86f92408391fc504d696bc1c1604a789f7502ac59ebcbf32901379f`). Kept in this note. No separate license file was added. The header of `samples/gpu/aquarium.warp` names that revision.
 
 ```
 MIT License
@@ -62,4 +56,4 @@ A faithful multi-pass port needs a library call that dispatches a WGSL compute p
 
 ## Tests
 
-`warp test test/aquarium` checks waves, caustics, absorption, the school, the body distance and one pixel at two times. It does not claim a GPU frame was shown. That command was not run here, and neither was the sample.
+`warp test test/aquarium` checks waves, caustics, absorption, the school, the body distance and one pixel at two times. It does not claim a GPU frame was shown. A headless run of the sample is a still from `paint`, and without a GPU that still is the CPU `paint_each`, not a fragment shader that ran.
