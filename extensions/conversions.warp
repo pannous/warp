@@ -240,7 +240,7 @@ conversions(program: Node): Node := {
 	for statement in statements_in(program) {
 		conversion = conversion_of(statement, scope)
 		if conversion == ø {
-			kept += [statement]
+			kept += [result_type_checked(statement, scope, aliases)]
 		} else if conversion#1 == conversion#2 {
 			kept += [diagnose(call_of("own_type_conversion", [conversion#2]), statement)]
 		} else if names_type(symbol(conversion#2), scope) {
@@ -279,6 +279,16 @@ conversions(program: Node): Node := {
 	forced_conversions(checked)
 }
 
+# `render(t) as pdf := …` with no type pdf is refused, never a variable declared pdf (Interviewer screen 11-08, card
+# render-pdf-string): a result's type must be a type, declared `type pdf = text`, a class, or a built-in one
+result_type_checked(statement: Node, scope: map, aliases: map): Node := {
+	if not (is_key(statement, Op.Define) and is_key(key_of(statement), Op.As)) { return statement }
+	head = key_of(key_of(statement))
+	type = value_of(key_of(statement))
+	if not (is_group(head) and bracket_of(head) == "(" and #head > 0 and head#1 is symbol and type is symbol) { return statement }
+	if names_type(type, scope) or aliases.has(name_of(type)) { return statement }
+	diagnose(call_of("result_type_unknown", [name_of(type)]), statement)
+}
 # the classes the program declares that an `x as P` names, its declarations `x as P = v` too; not its enums, whose
 # `2 as Level` is the case at an index, `66 as Key` the case of that number (plain_enums, extensions/sugar/enums.warp)
 class_targets(program: Node, scope: map): list := {
