@@ -33,16 +33,20 @@ function family, and static reach is useless there (words are dispatched by text
 
 ## Totals
 
+(As first counted. Afterwards: D shrank to 6 lines, and 26 of its lines plus the hash words (107) and the commands group
+(97) belong to A, not C; the two sound small C groups, number words (54) and foreign declarations (101), are moved.
+The table below is not recounted.)
+
 | | lines of definitions | of which compiler | of which native harness |
 |---|---:|---:|---:|
 | A self (stays) | 22,068 | 20,499 | 1,569 |
 | B tangential (stays, flagged) | 2,380 | 1,562 | 818 |
 | C feature (move) | 3,794 | 2,434 | 1,360 |
-| D dead (delete) | 32 | 32 | 0 |
+| D dead (delete) | 6 | 6 | 0 |
 | **sum** | **28,274** | 24,527 | 3,747 |
 
 - **Current core size: 30,181 lines in core/ (26,369 compiler, 3,812 native harness).**
-- Moving the curated C groups (3,068 lines) and deleting D (32): **about 27,081 lines left**
+- Moving the curated C groups (3,068 lines) and deleting D (6): **about 27,081 lines left**
   (10 % less). The 726 lines of unreached helpers (class C, last C table) are
   not counted: they go only with the feature they belong to, so the floor is about 26,355.
 - Class A is 78 % of all definition lines: the core is already lean at the definition level.
@@ -137,6 +141,18 @@ heads (`name(args): type from runtime`, the interface between the emitter, the r
 
 ## Class C: features (candidates to move), ordered by lines saved per effort
 
+Done on branch core-shake-small: number words (core/parsing/number_words.warp → extensions/number_words.warp, a pass
+right after `definitions`) and the foreign declarations (core/parsing/foreign_forms.warp →
+extensions/foreign_declarations.warp, one keyword reader per modifier word; Kotlin `enum class` joined sum_types' `enum`
+reader, since two extensions may not claim one word). Both needed no new hook. The parser keeps the position helpers
+other extensions use too (`starts_statement`, `name_after_blanks`, `class_keyword_after`, `block_after_name`).
+
+Examined and dropped from C (they are core, not features):
+- native hash, prime and compress words (107 lines): `sha256_hex` and `crc32_of` are used by core itself (the library
+  linker's hashes, the png writer); there is no mechanism yet to answer library host words from a lib/ module.
+- module dependency writing and extension commands (97 lines): core's build-time commands (`core_commands`, `trim`,
+  `shell`) and `taken_before`, the machinery of source passes; the commands table of extensions already holds the rest.
+
 Effort: small = 1, medium = 3, large = 8 (my estimate; a hook is only proposed, whether the hook table has it is for the
 Interviewer). The entered/ran columns are in the git-ignored scratch data/core_shake/tables.md. All native rows need one prerequisite: library host words
 answered from a lib/ module instead of driver.warp (decision libraries-not-core, roadmap_native_harness.md step 5), the
@@ -144,16 +160,12 @@ mechanism is not verified here.
 
 | lines | group | effort | lines per effort | why and hook |
 |---:|---|---|---|---|
-| 107 | native: hash, prime and compress words | small | 107 | crc32, sha256, primes, compression: pure number crunching served natively for speed. Hook: library host words |
-| 101 | foreign declarations (ruby/java-style modifiers) | small | 101 | `public static`, `class X extends`, ruby `attr` lines accepted from other languages; the compiler's own source never writes one. Hook: parser statement hook |
-| 97 | module dependency writing and extension commands | small | 97 | `warp write-modules`, trim and extension commands: CLI features beside compile. Hook: commands table (already the hook) |
 | 285 | native: interactive console (REPL) | medium | 95 | line editor with history, arrow keys, alt-word moves for `warp` without arguments. Hook: a lib/ tool behind the commands table |
 | 245 | warp test runner | medium | 82 | `warp test`: parallel slots, CPU limits, progress lines; no compile needs it. Hook: a lib/ tool run by `warp <tool>` (commands table) |
 | 238 | native: png, pictures and gpu paint | medium | 79 | saving pictures, PNG and zlib writing, window paint: graphics library host words. Hook: library host words |
 | 181 | native: timers and calendar | medium | 60 | every/frame timers, weekday and local time, sleep: event-loop host words. Hook: library host words |
 | 174 | rule engine: glue, each and statement templates | medium | 58 | glued calls, each/indexed clauses, statement templates of sugar rules. Hook: rule registry options |
 | 165 | packed node format (is! round trip) | medium | 55 | serialises a Node tree into a packed byte format for the test round trip and quoting; no compile needs it. Hook: lib/ module `pack` (words are called by name) |
-| 54 | number words (three hundred) | small | 54 | turns `three hundred` into 300; a convenience, a pass over every token. Hook: a pre-lexer pass in extensions/sugar |
 | 157 | rule engine: where-conditions and holes | medium | 52 | `where` clauses, called holes and conjunct splitting of sugar rules: only extension rules that use them need it. Hook: rule registry options |
 | 49 | spacing diagnostics | small | 49 | warns about `a -b` / `a - b` unevenness: a lint, no language meaning. Hook: source_checks list (a lint registry) |
 | 147 | native: regex words | medium | 49 | regcomp/regexec bindings and match/replace/expand: a library's host words, not the compile loop. Hook: library host words (roadmap_native_harness.md) |
@@ -209,13 +221,15 @@ error path; they move with their feature, or stay.
 
 Each name occurs only at its definition in core, extensions, lib, test, samples, scripts and web (grepped).
 The static analysis alone claimed 484 dead lines; the rest were declaration-only heads (`from runtime`), constants read by
-extensions or by text, and functions called only by other cold functions.
+extensions or by text, and functions called only by other cold functions. Done on branch core-shake-small (card of that name).
+
+Correction while implementing: the first count of 32 was wrong. `std_os_input` is built by name in the emitter ("std_" +
+module + "_" + member, a plain grep of the name misses it), and `word_index` / `word_index_file` are kept for the seed
+compiler. Only the six lines below are dead.
 
 | lines | file: names | why |
 |---:|---|---|
-| 14 | `core/runtime/extended/wasi.warp`: std_os_input(14) | `std_os_input`, a stdin line reader nothing calls |
-| 9 | `core/passes/prelude_words.warp`: word_index_file(3), word_index(6) | word index reader, named only by itself |
-| 7 | `core/passes/node_patterns.warp`: Assignment(4), Lambda(1), Call(1), Phrase(1) | four named patterns with no use (`Assignment`, `Lambda`, `Call`, `Phrase`) |
+| 4 | `core/passes/node_patterns.warp`: Assignment(4), Lambda(1), Call(1), Phrase(1) | four named patterns with no use (`Assignment`, `Lambda`, `Call`, `Phrase`) |
 | 1 | `core/analysis/source_checks.warp`: fail_word(1) | a constant nobody reads |
 | 1 | `core/passes/rewrites.warp`: use_line_start(1) | a constant nobody reads |
 
@@ -228,7 +242,7 @@ extensions or by text, and functions called only by other cold functions.
 - Samples and tests were not part of the hit set for class A by design: a program feature is class C even when a
   sample uses it (the loop forms). Moving it needs the extension hook to exist first; where the
   hook table lacks one, the group needs a core change (Interviewer).
-- Next steps with the best yield: (1) the cheap D deletions, (2) the parser-side groups behind a statement/literal hook
-  (foreign forms, number words, spacing, url/paths, loop forms: about 340 lines), (3) the native test runner and REPL as
+- Next steps with the best yield: (1) the cheap D deletions (done), (2) the parser-side groups behind a statement/literal hook
+  (foreign forms and number words done; spacing, url/paths, loop forms: about 125 lines left), (3) the native test runner and REPL as
   lib/ tools behind the commands table (about 530 lines), (4) the rule-engine groups (about 330 lines) as registry options of
   extensions/sugar, (5) a split of `intrinsic_of`/`key_expression`/`group_expression` by form.
