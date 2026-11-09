@@ -94,6 +94,7 @@ EXTENSIONS = [
 	entities_extension
 	inline_html_extension
 	declared_operators_extension
+	operator_words_extension
 	list_operators_extension
 	# first in the used stage: a fold of an operator alone, `sum := fold +`
 	operator_folds_extension
