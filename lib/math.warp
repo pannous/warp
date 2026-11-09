@@ -1,5 +1,8 @@
 // The standard library module math (notes/stdlib.md): `use math`, together with the C library libm.
 // Whole-number words declare int parameters, which their signatures show; the others take any number
+// Transition (card builtins-seed-transition): the typed builtin lines below (`from warp`, `from emitter`, `from 'm'`)
+// are the core's, core/analysis/builtins.warp and math_builtins.warp, which the compiler reads; they stay here only for
+// the seed, which reads them off this file, until the next seed refresh deletes them here
 use reals
 use integers
 use case_table

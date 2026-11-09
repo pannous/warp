@@ -35,7 +35,7 @@ root_text(file: text): text := {
 runtime_folder(): text := library_folder + "/compiler"
 
 # the runtime words, lowered by the same passes as a program, only to build runtime.wasm: a compile takes them from it
-lowered_runtime_words(): Node := lowered_program(RUNTIME_ROOTS.map(file => root_text(file)).join("\n"), runtime_folder(), prelude_text)
+lowered_runtime_words(): Node := lowered_program(RUNTIME_ROOTS.map(file => root_text(file)).join("\n"), runtime_folder(), prelude_text())
 
 # the compiler's own build, this library's compiler.warp (by its text): its runtime carries only the rows of
 # COMPILER_BUILD_EXTENSIONS (decision extension-row-optional). Its file as written: file_text may answer the bundle's
@@ -93,7 +93,7 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	link_libraries(images, if linking and module.relocating then definition_slices(written_source(source)).map(slice => slice#1) else [])
 	used_c_functions = {}
 	timed("checked_program")
-	program = checked_program(foreign#1, folder, prelude_text)
+	program = checked_program(foreign#1, folder, prelude_text())
 	timed("checked_program done")
 	c_functions = with_used_c_functions(foreign#2)
 	found = checked_facts(known)

@@ -20,7 +20,7 @@ prefix_call_operators = [Op.Sub, Op.Hash]
 # `f = x => …`), a builtin of one value; not a name it binds as a value
 value_takers(program: Node): list := {
 	scope = scope_of(program)
-	(value_taking_functions(program) + value_taking_words).filter(name => not binds_value(scope, name))
+	(value_taking_functions(program) + value_taking_words()).filter(name => not binds_value(scope, name))
 }
 
 # the program's functions that take a value

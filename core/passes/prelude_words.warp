@@ -64,7 +64,7 @@ spans_of(source: text): list := {
 indexed_module(source: text): text? := sliced_modules().find(module => source == sliced_texts()[module])
 # the texts every compile cuts, by the library index's cuts: the prelude and lib/math.warp beside it, both built in
 # (builtin_signatures.warp; decision no-lib-reads)
-sliced_texts(): map := {prelude: prelude_text, math: math_text}
+sliced_texts(): map := {prelude: prelude_text(), math: math_text()}
 sliced_modules(): list := sliced_texts().keys
 # each sliced module's cut as the index holds it, `name start end` of each slice joined by ";"
 sliced_modules_scanned(): map := {
@@ -848,7 +848,7 @@ names_no_module(name: text): bool := name in use_modes or is_c_library(name)
 # the names the prelude defines, read once
 global prelude_definition_names = ø
 prelude_definitions(): list := {
-	if prelude_definition_names == ø { prelude_definition_names = definition_slices(prelude_text).map(slice => slice#1) }
+	if prelude_definition_names == ø { prelude_definition_names = definition_slices(prelude_text()).map(slice => slice#1) }
 	prelude_definition_names
 }
 # (an implicit use is always the standard module, never a same-named file beside the program: only an explicit
