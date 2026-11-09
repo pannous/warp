@@ -121,7 +121,16 @@ Picking a card is `todo take <card> <session name>` The branch will and must be 
 
 When encountering a TODO without corresponding card in my main checkout ~/dev/angles/warp/lib/ Create a card for that to do and mark the card name behind the todo and commit 
 
-When implementing gaps that the old Rust legacy implementation had, but are not part of the pure WARP implementation yet, do not resort to blindly copying old spaghetti code. Instead, create a clean, idiomatic new implementation from first principles. 
+Create a clean, idiomatic, new generic implementation from first principles. 
+
+Quick fixes:
+Tickets that never touch core/ or extensions/  like website and sample cards first
+A lib/ change is quick only outside the baked files: `scripts/smoke.sh <worktree>` reuses the installed compilers, no
+build. Baked files (`scripts/compiler-inputs.sh --baked-files`: prelude, math, file, os, path, reals, aliases …),
+core/ and extensions/ need a full compiler build (`scripts/rebuild.sh pure`, minutes, waits for a build slot): never a
+quick fix. To merely run a program: `warp <file>`, nothing to build.
+`todo take <card> <session> --keep-name` for a card outside your area, else the session is renamed after the card.
+A medium core change for an edge case is never done; the root cause goes to the Interviewer first (common.md "Cards").
 
 
 ## Pre-approved plans
@@ -135,8 +144,9 @@ The card is closed with `todo done <card> <commit>` once that push is on main (n
 
 Several agent sessions share this Mac and the full suite is slow, so run the cheapest check that covers the change
 (roles: notes/roles.md):
-- Smoke test (minutes), every branch: `scripts/rebuild.sh pure <worktree>`, then `WARP_LIB=<worktree>/lib`
-  `warp samples/hello/hello.warp` prints Hello.
+- Smoke test, every branch: `scripts/smoke.sh <worktree>`: Hello printed with `WARP_LIB=<worktree>/lib`. It builds
+  only what the branch needs: nothing for lib/, web/ or samples, a full compiler build (`scripts/rebuild.sh pure`)
+  only for core/, extensions/ or a baked lib file.
 - Self test, only for parser/compiler changes (core/): `scripts/self-check.sh <worktree>`, the compiler compiles
   itself and that build prints Hello. For core/ changes smoke + self test is the whole check: no test folders.
 - Changes outside core/: the smoke test is enough to merge. `warp test <folders>` of the few test files a lib/
