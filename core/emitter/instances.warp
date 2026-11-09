@@ -158,7 +158,7 @@ def field_read(body: Body, target: Node, name: text, class_name: text = ""): Typ
 	TypedCode(ValueKind.Bool, converted(read, ValueKind.Bool))
 }
 def boxed_field_read(body: Body, target: Node, name: text, class_name: text = ""): TypedCode {
-	held = TypedCode(ValueKind.Node, fresh_node_read(body))
+	held = TypedCode(ValueKind.Node, fresh_node_local(body))
 	named = text_value_of(name)
 	missing = ended_in(ValueKind.Node, no_field_prefix + name)
 	if is_swizzle(name) {

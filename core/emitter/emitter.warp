@@ -1373,7 +1373,9 @@ def key_expression(body: Body, n: Node): TypedCode {
 		method = method_function(body, name_of(right), [left])
 		if method != ø {
 			called = module.functions[method]
-			return field_or_word(body, value, name_of(right), receiver => call_values(called, defaulted(body, called, [receiver], 1)))
+			by_method = given => field_or_word(body, given, name_of(right), receiver => call_values(called, defaulted(body, called, [receiver], 1)))
+			# (a time held as a node, `d: date? = …; d.year`, reads its own field ahead of Instant's year too)
+			return if value.kind == ValueKind.Node and time_fields.has(name_of(right)) and module.functions.has(time_field_word) then node_time_field(body, value, name_of(right), by_method) else by_method(value)
 		}
 		# `t.split`: a member naming a library word that takes the value alone, its other parameters defaulted
 		word = library_words.get(name_of(right))
