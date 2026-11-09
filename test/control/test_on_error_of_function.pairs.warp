@@ -2,7 +2,7 @@
 
 # a_failing_call_has_the_handler_value
 'f(x) := 10/x; on error of f { 7 }; f(0) + f(5)'	9
-'f(x) := { raise oops }; on error of f { 9 }; f(1)'	9
+'f(x) := { raise "oops" }; on error of f { 9 }; f(1)'	9
 
 # every_definition_and_handler_form
 # triage-held 2026-11-06: fun/def …:/function definitions, foreign syntax :: 'fun f(x) { 10/x }; on error of f: -1; f(0)'	-1
