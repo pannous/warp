@@ -1,0 +1,3 @@
+# `use cargo` of a crate no module was built for is refused, naming how to build it (card cargo-semver-version)
+'use cargo semver; 1'	error	no module
+'use cargo strsim; strsim.levenshtein("kitten", "sitting")'	3

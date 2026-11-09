@@ -1,0 +1,3 @@
+# `n++` in a while condition or as a statement: WGSL has no ++ as a value, the loop tests each condition in order (card julia-wgsl)
+'f(x, y) := { n = 0.0; while n < x and n++ { y = y + 1 }; [n, y, 0] }; shader_of(f).contains("\tloop {\n\t\tif (!((n < x))) { break; }\n\t\tn = (n + 1.0);\n\t\tif (n == 0.0) { break; }")'	yes
+'f(x, y) := { n = x; n++; [n, y, 0] }; shader_of(f).contains("n = (n + 1.0);")'	yes
