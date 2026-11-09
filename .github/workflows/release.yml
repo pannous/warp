@@ -192,7 +192,9 @@ jobs:
         sudo dpkg -i dist/linux/warp-lang_*_amd64.deb
         (cd "$RUNNER_TEMP" && warp '6*7' | grep -q 42)
         pip install --no-deps --break-system-packages --prefix "$RUNNER_TEMP/pip" dist/wheels/*manylinux*_x86_64.whl
-        (cd "$RUNNER_TEMP" && "$RUNNER_TEMP/pip/bin/warp" '6*7' | grep -q 42)
+        # Debian's pip puts a --prefix install's scripts in <prefix>/local/bin, others in <prefix>/bin
+        pip_warp=$(find "$RUNNER_TEMP/pip" -path '*/bin/warp' -type f | head -1)
+        (cd "$RUNNER_TEMP" && "${pip_warp:?the wheel installed no bin/warp}" '6*7' | grep -q 42)
     - name: upload
       run: gh release upload "$TAG" dist/linux/* --clobber
     - uses: actions/upload-artifact@v7

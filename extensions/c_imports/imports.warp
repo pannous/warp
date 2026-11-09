@@ -41,6 +41,13 @@ c_type_words = {i32: "i32", int: "i32", int32: "i32", bool: "bool", char: "i32",
 c_parameter_kinds = {bool: ValueKind.I32, i32: ValueKind.I32, u32: ValueKind.I32, i64: ValueKind.Int, f64: ValueKind.Float, f32: ValueKind.F32, text: ValueKind.Node, bytes: ValueKind.Node, f32s: ValueKind.Node, i32s: ValueKind.Node, texts: ValueKind.Node, handle: ValueKind.I32}
 c_parameter_names = {bool: "i32", i32: "i32", u32: "i32", i64: "i64", f64: "f64", f32: "f32", text: "ptr", bytes: "bytes", f32s: "f32s", i32s: "i32s", length: "length",
 	handle: "handle", out: "out", texts: "texts"}
+# the enums the compile's source declares (c_functions_of): a foreign line's parameter or result of one crosses as the
+# case's int, an i32 (card enum-parameters, extensions/c_enums.warp): `IsKeyDown(key: KeyboardKey): bool from 'raylib'`
+global c_enum_types = []
+enum_mark = "enum "
+c_enums_declared(source: text): list := c_statements(source).filter(s => s.starts_with(enum_mark)).map(s => s.remove_prefix(enum_mark).split("{")#1.trim()).filter(name => name != "" and not name.contains(" "))
+# a type word naming such an enum → its name, else ""
+c_enum_of(word: text): text := if word.trim() in c_enum_types then word.trim() else ""
 # the parameters the host fills, which take no argument
 c_filled_types = ["out", "length"]
 UNSIGNED_TYPE = "u32"
@@ -58,7 +65,8 @@ c_library_of(written: text, quoted: bool): any := {
 	c_library_aliases.get(bare) ?? bare
 }
 
-# `strlen(s: text): i64 from 'c'` → [name, library, parameter types, parameter names, result type]; ø for another line
+# `strlen(s: text): i64 from 'c'` → [name, library, parameter types, parameter names, result type, the enum each
+# parameter is of ("" for none), the result's enum]; ø for another line
 c_declaration(line: text): any := {
 	parts = line.trim().split(c_foreign_mark)
 	if #parts != 2 { return ø }
@@ -72,15 +80,16 @@ c_declaration(line: text): any := {
 	if #tail != 2 { return ø }
 	written = tail#1.trim()
 	parameters = if written == "" then [] else written.split(",")
-	types = parameters.map(p => c_type_of(if p.contains(":") then p.split(":")#2 else ""))
+	type_words = parameters.map(p => if p.contains(":") then p.split(":")#2 else "")
 	names = parameters.map(p => p.split(":")#1.trim())
 	result = tail#2.trim().remove_prefix(":").trim()
-	[name, library, types, names, c_type_of(result)]
+	[name, library, type_words.map(c_type_of), names, c_type_of(result), type_words.map(c_enum_of), c_enum_of(result)]
 }
 # a type word → its type; "" is no type, which no C function takes ("?")
 c_type_of(word: text): text := {
 	written = word.trim()
 	if written == "" { return "?" }
+	if written in c_enum_types { return "i32" }
 	c_type_words.get(written) ?? "?"
 }
 
@@ -282,6 +291,8 @@ quoted_lines(source: text): list := {
 c_functions_of(written: text, library_folder: text, folder: text = "."): list := {
 	source = with_module_aliases(written)
 	statements = c_statements(source)
+	with_parts = module_with_parts(source, folder)
+	c_enum_types = c_enums_declared(with_parts)
 	libraries = []
 	# the wasm modules it uses, each statement standing for the values the module gives
 	wasm_uses = {}
@@ -347,7 +358,6 @@ c_functions_of(written: text, library_folder: text, folder: text = "."): list :=
 	# (`use sound`'s log2), and their foreign lines and C imports (lib/sound.warp's kill, unlink, mkdir;
 	# lib/host/native_host/window.warp's `import calloc from 'c'`); a standard module's from its signature
 	# (module_c_functions)
-	with_parts = module_with_parts(source, folder)
 	for d in c_functions_called(with_parts, no, catalog) { if not functions.has(d#1) and not c_warps(own, d#1, d#2) { functions[d#1] = d } }
 	for module in reached_within(with_parts) {
 		for d in module_c_functions(module) { if not functions.has(d#1) and not c_warps(own, d#1, d#2) { functions[d#1] = d } }

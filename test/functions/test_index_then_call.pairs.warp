@@ -1,0 +1,4 @@
+# a call after an index calls the item: fs#1(4) is (fs#1)(4), not fs#4; 3(4) alone still multiplies (card wrong-value-index-call)
+'s = {fs: [x => x * 2]}; s.fs#1(4)'	8
+'fs = [x => x * 2, x => x + 1]; fs#2(4)'	5
+'3(4)'	12

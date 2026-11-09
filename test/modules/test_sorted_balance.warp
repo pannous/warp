@@ -1,0 +1,51 @@
+# Weight of every node after cuts and mixed edits (lib/sorted.warp, card sorted-map-library).
+# One rotation is not enough when intersection or difference drops a whole side: 1..127 ∩ 120..127
+# used to leave a child heavier than delta 3. The check walks the tree; it is not a height bound.
+
+is! "use sorted
+
+node_size(t) := if t == ø then 0 else t.size
+weight_ok(t) := {
+	if t == ø { return yes }
+	sl = node_size(t.left)
+	sr = node_size(t.right)
+	if t.size != sl + sr + 1 { return no }
+	if not weight_ok(t.left) or not weight_ok(t.right) { return no }
+	if sl + sr <= 1 { return yes }
+	if sl > 3 * sr or sr > 3 * sl { return no }
+	yes
+}
+order_ok(s) := {
+	xs = s.values()
+	if count(xs) != s.size() { return no }
+	if count(xs) > 1 { for i in 1 to count(xs) - 1 { if not (xs#i < xs#(i + 1)) { return no } } }
+	for i in 1 to count(xs) { if s.at(i) != xs#i { return no } }
+	yes
+}
+whole(s) := weight_ok(s.root) and order_ok(s)
+nums(lo, hi) := [i for i in lo to hi]
+
+a = SortedSet(nums(1, 127))
+evens = a
+for i in 1 to 63 { evens = evens.remove(i * 2) }
+prefix = a
+for i in 1 to 60 { prefix = prefix.remove(i) }
+mixed = SortedSet()
+for i in 1 to 80 {
+	mixed = mixed.add(i)
+	if i % 3 == 0 and i > 1 { mixed = mixed.remove(i - 1) }
+	if i % 7 == 0 { mixed = mixed.remove(i / 2:int) }
+}
+desc = SortedSet()
+for i in 1 to 90 { desc = desc.add(91 - i) }
+right = a.intersection(SortedSet(nums(120, 127)))
+kept = a.difference(SortedSet(nums(1, 119)))
+wide = SortedSet(nums(1, 255))
+top = wide.intersection(SortedSet(nums(250, 255)))
+rest = wide.difference(SortedSet(nums(1, 249)))
+missed = a.intersection(SortedSet([1000]))
+m = SortedMap()
+for i in 1 to 40 { m = m.set(i, i * 10) }
+for i in 1 to 20 { m = m.remove(i * 2) }
+map_ok = weight_ok(m.root) and m.keys() == [i * 2 - 1 for i in 1 to 20] and m.rank(7) == 4 and m.get(7) == 70
+[whole(a), whole(evens), whole(prefix), whole(mixed), whole(desc), whole(right), whole(kept), whole(top), whole(rest), whole(missed), right.values() == nums(120, 127), kept.values() == nums(120, 127), top.values() == nums(250, 255), rest.values() == nums(250, 255), map_ok]" [yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes]

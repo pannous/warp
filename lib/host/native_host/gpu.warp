@@ -609,12 +609,13 @@ submitted(encoder: int) := {
 	wgpuCommandBufferRelease(commands)
 	wgpuCommandEncoderRelease(encoder)
 }
-// the drawing drawn into an image of its own (RGBA8) by the encoder; one a later frame reads as previous can be bound
+// the drawing drawn into an image of its own (RGBA8) by the encoder; one a later frame reads as previous can be bound.
+// texture_view, not view: view is the window's Metal view, a global of this module (window.warp)
 image_drawn(encoder: int, drawing: Drawing, width: int, height: int): int := {
 	image = texture_of(width, height, TEXTURE_RENDER_ATTACHMENT + TEXTURE_COPY_SRC + TEXTURE_BINDING)
-	view = wgpuTextureCreateView(image, 0)
-	drawn_into(encoder, view, drawing, [])
-	wgpuTextureViewRelease(view)
+	texture_view = wgpuTextureCreateView(image, 0)
+	drawn_into(encoder, texture_view, drawing, [])
+	wgpuTextureViewRelease(texture_view)
 	image
 }
 drawing_of(shader: text, values: any, width: int, height: int) := drawing_made(shader, values_filled(shader, values, width, height), width, height)
@@ -745,11 +746,11 @@ presented(encoder: int, drawing: Drawing, viewport: list): bool := {
 		return failed("the window's surface gave no image to draw (status " + status + ")")
 	}
 	texture = field_pointer(current, 8)
-	view = wgpuTextureCreateView(texture, 0)
-	drawn_into(encoder, view, drawing, viewport)
+	texture_view = wgpuTextureCreateView(texture, 0)
+	drawn_into(encoder, texture_view, drawing, viewport)
 	submitted(encoder)
 	wgpuSurfacePresent(surface)
-	wgpuTextureViewRelease(view)
+	wgpuTextureViewRelease(texture_view)
 	wgpuTextureRelease(texture)
 	free(current)
 	yes
@@ -769,11 +770,11 @@ picture_presented(encoder: int, picture: int, layer: int, width: int, height: in
 		submitted(encoder)
 		return no
 	}
-	view = wgpuTextureCreateView(picture, 0)
-	drawing = Drawing(picture_pipeline, bindings_of(wgpuRenderPipelineGetBindGroupLayout(picture_pipeline, 0), [[0, 0, 0, view]]), [], 0, no, TRIANGLE_CORNERS, 1)
+	texture_view = wgpuTextureCreateView(picture, 0)
+	drawing = Drawing(picture_pipeline, bindings_of(wgpuRenderPipelineGetBindGroupLayout(picture_pipeline, 0), [[0, 0, 0, texture_view]]), [], 0, no, TRIANGLE_CORNERS, 1)
 	shown = presented(encoder, drawing, letterboxed(width, height))
 	wgpuBindGroupRelease(drawing.bindings)
-	wgpuTextureViewRelease(view)
+	wgpuTextureViewRelease(texture_view)
 	shown
 }
 shown_kept(picture: int, layer: int, width: int, height: int) := {

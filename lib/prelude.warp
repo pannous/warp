@@ -464,7 +464,7 @@ paint_each(f, width, height) := {
 paint(picture, width, height) := if picture is list or picture is text then paint(shader_words(picture), width, height, ø) else paint_each(picture, width, height)
 // the program values a shader reads as the plain floats it takes: a quantity by its amount in SI base units, an angle in
 // radians, each item of a vector (decision no-units-in-shaders: a shader ignores units)
-shader_values(values) := {
+shader_floats(values) := {
 	if values == ø { return ø }
 	plain = {}
 	for name in values.keys { plain[name] = shader_value(values[name]) }
@@ -526,6 +526,23 @@ random_of_type(x) := {
 	if x == codepoint { return random_codepoint() }
 	if x == float { return random() }
 	if x is int then random_below(x) else random_fraction(0, x)
+}
+// `300 as u8`, `x: u8 = 300` (decision cast-checks): a fixed-width int takes a value that fits it, else a catchable
+// error naming the range; `as! u8` wraps instead
+fitted_int(value: any, type: text): int := {
+	n = value as int
+	range = fixed_int_range(type)
+	if n < range#1 or n > range#2 { raise "${value} does not fit ${type} (${range#1}…${range#2})" }
+	n
+}
+fixed_int_range(type: text): list := {
+	if type in ["u8", "uint8", "byte"] { return [0, 255] }
+	if type in ["i8", "int8"] { return [-128, 127] }
+	if type in ["u16", "uint16"] { return [0, 65535] }
+	if type in ["i16", "int16"] { return [-32768, 32767] }
+	if type in ["u32", "uint32"] { return [0, 4294967295] }
+	if type in ["i32", "int32"] { return [-2147483648, 2147483647] }
+	[0, 18446744073709551615]
 }
 // random int, random bool, random codepoint: a random value of the type; random int spans the whole 64-bit range
 random_int() := (random_below(0x100000000) - 0x80000000) * 0x100000000 + random_below(0x100000000)

@@ -1,0 +1,290 @@
+// A million trees on a regular ground, placed from their index, culled by chunk.
+// `use forest`. Nothing here is stored per tree: a 1000 by 1000 grid, one tree a cell,
+// its shift and species a mix of the cell. A view keeps the chunks whose boxes meet the
+// frustum and draws only a budget of them, near ones as whole trees and far ones as a
+// few of that chunk's own trees. It is not Nanite: no cluster hierarchy, no indexed mesh,
+// no indirect draw. notes/forest.md.
+use geometry
+use math
+
+FOREST_SIDE = 1000
+FOREST_TREES = 1000000
+FOREST_SPACING = 4.0
+FOREST_CHUNK = 25
+FOREST_CHUNKS = 40
+FOREST_FOV = 1.05
+FOREST_NEAR = 0.25
+FOREST_FAR = 340.0
+NEAR_REACH = 56.0
+MID_REACH = 180.0
+TREE_BUDGET = 2400
+FAR_TAKE = 4
+GROUND_CAP = 12
+CHUNK_TREES = 625
+CHUNK_SPAN = 100.0
+CROWN = 0.45
+CHUNK_PAD = 3.0
+TREE_TOP = 6.0
+
+class Glance { x: float; y: float; z: float; yaw: float; pitch: float; fov: float; aspect: float; near: float; far: float }
+class Canopy { total: int; candidate: int; submitted: int; scenery: int; nearest: int; sprites: list; eye: list; right: list; up: list; forward: list }
+
+forest_mix(ix, iy) := {
+	n = ix * 374761393 + iy * 668265263 + 1442695041
+	n = n % 2147483647
+	if n < 0 { n = -n }
+	n
+}
+
+forest_cells(index) := {
+	if not (index is int) or index < 0 or index >= FOREST_TREES {
+		raise "forest: a tree index is 0 to 999999, not " + str(index)
+	}
+}
+
+tree_place(index: int): list := {
+	forest_cells(index)
+	ix = index % FOREST_SIDE
+	iy = index /! FOREST_SIDE
+	mixed = forest_mix(ix, iy)
+	jx = (mixed % 1000) / 1000.0 - 0.5
+	jz = ((mixed /! 1000) % 1000) / 1000.0 - 0.5
+	x = (ix + 0.5 + jx * 0.6) * FOREST_SPACING
+	z = (iy + 0.5 + jz * 0.6) * FOREST_SPACING
+	height = 2.4 + (mixed % 13) * 0.22
+	[x, z, height, mixed % 4]
+}
+
+forest_glance(glance) := {
+	if not (glance is Glance) { raise "forest: a view is a Glance, not " + str(glance) }
+	if glance.fov <= 0.0 or glance.fov >= 3.141592653589793 {
+		raise "forest: fov must be between 0 and pi, not " + str(glance.fov)
+	}
+	if glance.aspect <= 0.0 { raise "forest: aspect must be positive, not " + str(glance.aspect) }
+	if glance.near <= 0.0 or glance.far <= glance.near {
+		raise "forest: far must be past near, not " + str(glance.far) + " past " + str(glance.near)
+	}
+}
+
+picture_focal(height: number): float := {
+	if height <= 0 { raise "forest: picture height must be positive, not " + str(height) }
+	(height / 2.0) / tan(FOREST_FOV / 2.0)
+}
+
+forest_unit(v) := vec_scale(v, 1.0 / vec_norm(v))
+
+forest_basis(glance) := {
+	cp = cos(glance.pitch)
+	sp = sin(glance.pitch)
+	cy = cos(glance.yaw)
+	sy = sin(glance.yaw)
+	forward = [sy * cp, sp, cy * cp]
+	right = [cy, 0.0, -sy]
+	up = vec_cross(forward, right)
+	[forward, right, up]
+}
+
+forest_plane(normal, point) := [normal#1, normal#2, normal#3, -vec_dot(normal, point)]
+
+forest_planes(glance) := {
+	axes = forest_basis(glance)
+	forward = axes#1
+	right = axes#2
+	up = axes#3
+	eye = [glance.x, glance.y, glance.z]
+	half_v = glance.fov / 2.0
+	half_h = atan(tan(half_v) * glance.aspect)
+	left_edge = vec_add(vec_scale(forward, cos(half_h)), vec_scale(right, -sin(half_h)))
+	right_edge = vec_add(vec_scale(forward, cos(half_h)), vec_scale(right, sin(half_h)))
+	top_edge = vec_add(vec_scale(forward, cos(half_v)), vec_scale(up, sin(half_v)))
+	bottom_edge = vec_add(vec_scale(forward, cos(half_v)), vec_scale(up, -sin(half_v)))
+	[
+		forest_plane(forward, vec_add(eye, vec_scale(forward, glance.near))),
+		forest_plane(vec_scale(forward, -1.0), vec_add(eye, vec_scale(forward, glance.far))),
+		forest_plane(forest_unit(vec_cross(up, left_edge)), eye),
+		forest_plane(forest_unit(vec_cross(right_edge, up)), eye),
+		forest_plane(forest_unit(vec_cross(right, top_edge)), eye),
+		forest_plane(forest_unit(vec_cross(bottom_edge, right)), eye)
+	]
+}
+
+// toward yes: the corner farthest along the plane normal. Outside when that corner is still behind the plane.
+forest_support(box, plane, toward) := {
+	x = if (plane#1 >= 0.0) == toward then box#4 else box#1
+	y = if (plane#2 >= 0.0) == toward then box#5 else box#2
+	z = if (plane#3 >= 0.0) == toward then box#6 else box#3
+	plane#1 * x + plane#2 * y + plane#3 * z + plane#4
+}
+
+forest_outside(box, planes) := {
+	for plane in planes { if forest_support(box, plane, yes) < 0.0 { return yes } }
+	no
+}
+
+forest_inside(box, planes) := {
+	for plane in planes { if forest_support(box, plane, no) < 0.0 { return no } }
+	yes
+}
+
+chunk_box(cx, cz) := {
+	minx = cx * CHUNK_SPAN - CHUNK_PAD
+	minz = cz * CHUNK_SPAN - CHUNK_PAD
+	[minx, 0.0, minz, minx + CHUNK_SPAN + CHUNK_PAD * 2.0, TREE_TOP, minz + CHUNK_SPAN + CHUNK_PAD * 2.0]
+}
+
+chunk_reach(cx, cz, glance) := {
+	minx = cx * CHUNK_SPAN
+	minz = cz * CHUNK_SPAN
+	maxx = minx + CHUNK_SPAN
+	maxz = minz + CHUNK_SPAN
+	dx = if glance.x < minx then minx - glance.x else if glance.x > maxx then glance.x - maxx else 0.0
+	dz = if glance.z < minz then minz - glance.z else if glance.z > maxz then glance.z - maxz else 0.0
+	dy = if glance.y < 0.0 then -glance.y else if glance.y > TREE_TOP then glance.y - TREE_TOP else 0.0
+	sqrt(dx * dx + dy * dy + dz * dz) as float
+}
+
+forest_chunk(cx, cz) := {
+	if not (cx is int) or not (cz is int) or cx < 0 or cz < 0 or cx >= FOREST_CHUNKS or cz >= FOREST_CHUNKS {
+		raise "forest: a chunk is 0 to 39, not " + str(cx) + " by " + str(cz)
+	}
+}
+
+chunk_seen(cx: int, cz: int, glance: Glance): bool := {
+	forest_chunk(cx, cz)
+	forest_glance(glance)
+	if chunk_reach(cx, cz, glance) > glance.far { return no }
+	not forest_outside(chunk_box(cx, cz), forest_planes(glance))
+}
+
+tree_box(spot) := {
+	half = spot#3 * CROWN
+	[spot#1 - half, 0.0, spot#2 - half, spot#1 + half, spot#3, spot#2 + half]
+}
+
+tree_seen(index: int, glance: Glance): bool := {
+	forest_glance(glance)
+	spot = tree_place(index)
+	not forest_outside(tree_box(spot), forest_planes(glance))
+}
+
+placed_at(cx, cz, local) := {
+	ix = cx * FOREST_CHUNK + local % FOREST_CHUNK
+	iy = cz * FOREST_CHUNK + local /! FOREST_CHUNK
+	tree_place(iy * FOREST_SIDE + ix)
+}
+
+forest_detail(reach) := if reach < NEAR_REACH then 0 else if reach < MID_REACH then 1 else 2
+
+forest_spend(picked, spot, detail, room) := {
+	if room <= 0 { return 0 }
+	picked.add([0.0 + spot#1, 0.0 + spot#2, 0.0 + spot#3, 0.0 + spot#4 + detail * 4 + 32])
+	room - 1
+}
+
+// Every tree of a near or mid chunk, closest to the eye first, until the budget.
+forest_fill(cx, cz, detail, room, picked, ex, ez) := {
+	found = []
+	for local in 0 ..< CHUNK_TREES {
+		spot = placed_at(cx, cz, local)
+		dx = spot#1 - ex
+		dz = spot#2 - ez
+		found.add([spot, (dx * dx + dz * dz) as float])
+	}
+	found = sort_by(found, item => item#2 as float)
+	for item in found {
+		if room <= 0 { break }
+		room = forest_spend(picked, item#1, detail, room)
+	}
+	room
+}
+
+// Four real trees of a far chunk, spread across its cells.
+forest_sample(cx, cz, room, picked) := {
+	taken = 0
+	local = 0
+	while taken < FAR_TAKE and room > 0 {
+		room = forest_spend(picked, placed_at(cx, cz, local), 2, room)
+		taken = taken + 1
+		local = local + CHUNK_TREES /! FAR_TAKE
+	}
+	room
+}
+
+// A clipped chunk: count every tree that meets the frustum, draw the closest that fit.
+forest_clip(cx, cz, detail, room, picked, planes, ex, ez) := {
+	if room <= 0 or detail == 2 {
+		seen = 0
+		taken = 0
+		for local in 0 ..< CHUNK_TREES {
+			spot = placed_at(cx, cz, local)
+			if forest_outside(tree_box(spot), planes) { continue }
+			seen = seen + 1
+			if detail == 2 and taken < FAR_TAKE and room > 0 {
+				room = forest_spend(picked, spot, 2, room)
+				taken = taken + 1
+			}
+		}
+		return [seen, room]
+	}
+	found = []
+	for local in 0 ..< CHUNK_TREES {
+		spot = placed_at(cx, cz, local)
+		if forest_outside(tree_box(spot), planes) { continue }
+		dx = spot#1 - ex
+		dz = spot#2 - ez
+		found.add([spot, (dx * dx + dz * dz) as float])
+	}
+	found = sort_by(found, item => item#2 as float)
+	for item in found {
+		if room <= 0 { break }
+		room = forest_spend(picked, item#1, detail, room)
+	}
+	[count(found), room]
+}
+
+forest_ground(cx, cz) := {
+	kind = forest_mix(cx, cz) % 4
+	[cx * CHUNK_SPAN + CHUNK_SPAN / 2.0, cz * CHUNK_SPAN + CHUNK_SPAN / 2.0, CHUNK_SPAN / 2.0, 0.0 + kind + 16]
+}
+
+forest_view(glance: Glance): Canopy := {
+	forest_glance(glance)
+	axes = forest_basis(glance)
+	planes = forest_planes(glance)
+	chunks = []
+	for cz in 0 ..< FOREST_CHUNKS {
+		for cx in 0 ..< FOREST_CHUNKS {
+			reach = chunk_reach(cx, cz, glance)
+			if reach > glance.far { continue }
+			box = chunk_box(cx, cz)
+			if forest_outside(box, planes) { continue }
+			full = if forest_inside(box, planes) then 1 else 0
+			chunks.add([cx, cz, reach, full])
+		}
+	}
+	chunks = sort_by(chunks, chunk => (chunk#3 * 100000.0 + chunk#2 * 40.0 + chunk#1) as float)
+	candidate = 0
+	room = TREE_BUDGET
+	picked = []
+	grounds = []
+	for chunk in chunks {
+		reach = chunk#3
+		detail = forest_detail(reach)
+		if chunk#4 == 1 {
+			candidate = candidate + CHUNK_TREES
+			if room > 0 {
+				room = if detail == 2 then forest_sample(chunk#1, chunk#2, room, picked) else forest_fill(chunk#1, chunk#2, detail, room, picked, glance.x, glance.z)
+			}
+		} else {
+			scanned = forest_clip(chunk#1, chunk#2, detail, room, picked, planes, glance.x, glance.z)
+			candidate = candidate + scanned#1
+			room = scanned#2
+		}
+		if count(grounds) < GROUND_CAP { grounds.add(forest_ground(chunk#1, chunk#2)) }
+	}
+	sprites = [[0.0, 0.0, 0.0, 0.0]]
+	for tile in reverse(grounds) { sprites.add(tile) }
+	for tree in reverse(picked) { sprites.add(tree) }
+	nearest = if count(picked) == 0 then -1 else (int(picked#1#4) /! 4) % 4
+	Canopy(FOREST_TREES, candidate, count(picked), 1 + count(grounds), nearest, sprites, [glance.x, glance.y, glance.z], axes#2, axes#3, axes#1)
+}

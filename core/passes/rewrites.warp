@@ -120,7 +120,7 @@ comprehension_sugar_module_names = sugar_files(["comprehensions"])
 # the sugar of declarations (extensions/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
 declaration_sugar_module_names = sugar_files(["declarations"])
 # the standard modules: those with `rewrite` lines lend their rules to the programs mentioning them
-std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "uncertain", "web", "storage", "frames", "native_host", "callbacks", "signals", "timers", "tasks", "shaders", "unicode_data", "unicode", "exact_values"]
+std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "uncertain", "web", "storage", "frames", "native_host", "callbacks", "signals", "timers", "tasks", "shaders", "unicode_data", "unicode", "exact_values", "reals"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # the declarations sugar strips it, and the function keyword's rule rewrites the rest)
@@ -1435,11 +1435,7 @@ varying_of(statements: list): map := {
 		}
 	}
 	assigned = {}
-	# (the program's own writes: a function's local of the same name, `var total = 0` in lib/math.warp's norm that
-	# `use math` brings, is no write of the program's `total := …`, card reactive-ports-test)
-	for statement in flat_statements(rule_program).filter(statement => definition_of(statement) == ø) {
-		for n in nodes_in(statement) { if is_key(n, Op.Assign) and key_of(n) is symbol { assigned[name_of(key_of(n))] = yes } }
-	}
+	for n in own_writes(flat_statements(rule_program)) { if key_of(n) is symbol { assigned[name_of(key_of(n))] = yes } }
 	values = {}
 	for statement in statements {
 		if is_charged_value(statement) and varying.has(name_of(key_of(statement))) and not assigned.has(name_of(key_of(statement))) { values[name_of(key_of(statement))] = yes }

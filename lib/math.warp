@@ -167,7 +167,15 @@ exp2(x: float): float from 'm'
 erf(x: float): float from 'm'
 erfc(x: float): float from 'm'
 
+// Two ints. A value past 64 bits is unsupported: an int parameter is 64 bits, and that limit is the
+// compiler's. wide_gcd is the same steps for a caller that needs the wider value.
 gcd(a: int, b: int): int := {
+	x = if a < 0 then 0 - a else a
+	y = if b < 0 then 0 - b else b
+	while y != 0 { rest = x % y; x = y; y = rest }
+	x
+}
+wide_gcd(a, b) := {
 	x = if a < 0 then 0 - a else a
 	y = if b < 0 then 0 - b else b
 	while y != 0 { rest = x % y; x = y; y = rest }
@@ -362,9 +370,9 @@ class RatioParts {
 	denominator: int
 }
 // n/d in lowest terms with a positive denominator, as ratio_new keeps every ratio: 6/-4 is -3/2, 5/0 is 1/0 (∞), 0/0 stays
-lowest_terms(n: int, d: int): RatioParts := {
+lowest_terms(n: number, d: number): RatioParts := {
 	sign = if d < 0 then -1 else 1
-	divisor = gcd(n, d)
+	divisor = wide_gcd(n, d)
 	if divisor > 1 { return RatioParts(sign * n /! divisor, sign * d /! divisor) }
 	RatioParts(sign * n, sign * d)
 }
@@ -374,17 +382,11 @@ exact_quotient(top: RatioParts, bottom: RatioParts): RatioParts := {
 	if bottom.numerator == 0 { raise "divide by zero" }
 	lowest_terms(top.numerator * bottom.denominator, top.denominator * bottom.numerator)
 }
-// a % b of two ints as int_mod takes it: never below 0, the truncated remainder `rem` plus |b| when it is negative
-euclidean_remainder(a: int, b: int): int := {
-	rest = a rem b
-	if rest >= 0 then rest else if b < 0 then rest - b else rest + b
-}
-// a /! b as int_euclid_div takes it, the quotient that goes with `%` (a = q·b + r, 0 ≤ r < |b|): -7 /! 2 is -4;
-// a - rest is a multiple of b, so its `/!` is the truncated quotient
-euclidean_quotient(a: int, b: int): int := {
-	rest = a rem b
-	truncated = (a - rest) /! b
-	if rest >= 0 then truncated else if b < 0 then truncated + 1 else truncated - 1
-}
+// the call is the operator, written where the call is, so a literal and a for-loop value each keep the `/!` and `%`
+// of that place. A parameter would be inferred on its own and those two disagree when the divisor is negative
+euclidean_remainder(a, b) := a % b
+euclidean_quotient(a, b) := a /! b
+rewrite euclidean_remainder($a, $b) => $a % $b
+rewrite euclidean_quotient($a, $b) => $a /! $b
 even(n: int) := is_even(n)
 odd(n: int) := is_odd(n)
