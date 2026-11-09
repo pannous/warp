@@ -658,6 +658,8 @@ unit_list_word(variable: Node, iterable: Node): any := {
 	if not unit_lists.has(name_of(variable)) or (is_group(iterable) and bracket_of(iterable) == "[") { return ø }
 	Text(unit_lists[name_of(variable)])
 }
+# the unit `v as list of T` walks a text by: T's own (codepoint, byte, char), else its characters, each converted to T
+unit_of_type(type: Node): Node := Text(if type is symbol then unit_lists.get(name_of(type)) ?? "chars" else "chars")
 # `when x {1 -> "a"; else -> "b"}`: a block of match arms only, each `pattern -> value`
 are_arms(body: Node): bool := #items_of(body) > 0 and items_of(body).all(item => is_key(item, Op.Arrow))
 # `for p in ps where it > 2`: the condition's `it` read as the loop's variable
@@ -1339,6 +1341,7 @@ rule_words = {
 	units_shown: units_shown,
 	unit_bound: unit_bound,
 	unit_list_word: unit_list_word,
+	unit_of_type: unit_of_type,
 	unit_led: unit_led,
 	unit_regrouped: unit_regrouped,
 	value_definitions: value_definitions,
