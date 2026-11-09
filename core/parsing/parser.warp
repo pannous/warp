@@ -1629,8 +1629,8 @@ def written_before(p: Parser, n: Node, end: int): text := {
 INDEX_POWER = 170
 
 // The operators written with symbols, longest first, each with its canonical name; alias_spellings() adds their other
-// spellings (lib/aliases.warp)
-SYMBOL_OPERATORS = {"?.": "?.", "===": "===", "!==": "!==", "/!": "/!", "??": "??", "?:": "?:", "··": "··", ":=": ":=", "::": "::", "->": "->", "|>": "|>", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "..": "..", ":": ":", "=": "=", "←": "←", "<-": "←", ".": ".", "+": "+", "-": "-", "*": "*", "/": "/", "%": "%", "^": "^", "<": "<", ">": ">", "≈": "≈", "~": "~", "#": "#", "?": "?", "↑": "↑", "↓": "↓"}
+// spellings (lib/aliases.warp), and floor division's all: which of `/!` and `÷` is canonical is the table's word
+SYMBOL_OPERATORS = {"?.": "?.", "===": "===", "!==": "!==", "??": "??", "?:": "?:", "··": "··", ":=": ":=", "::": "::", "->": "->", "|>": "|>", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "..": "..", ":": ":", "=": "=", "←": "←", "<-": "←", ".": ".", "+": "+", "-": "-", "*": "*", "/": "/", "%": "%", "^": "^", "<": "<", ">": ">", "≈": "≈", "~": "~", "#": "#", "?": "?", "↑": "↑", "↓": "↓"}
 // The operators kept as the phrase [a op b] for the sugar to read: `a ?: b` is a or its fallback
 // (extensions/sugar/fallbacks.warp); so are each operator's element-wise form `.op` and compound assignment `op=`
 PHRASE_OPERATORS = ["?:"]

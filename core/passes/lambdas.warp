@@ -213,7 +213,7 @@ locals_of(names: list, outer: map = {}): Locals := Locals{own: word_set(names), 
 with_locals(scope: Locals, names: list): Locals := if #names == 0 then scope else Locals{own: word_set(scope.own.keys + names), outer: scope.outer}
 is_local(name: text, scope: Locals): bool := scope.own.has(name) or scope.outer.has(name)
 
-class Lowering { arities: map; defaulted: map = {}; lambdas_lifted: list; callable_fields: map = {}; function_values: map = {}; globals: map = {}; main_globals: map = {}; function_positions: map = {} }
+class Lowering { arities: map; defaulted: map = {}; lambdas_lifted: list; callable_fields: map = {}; function_values: map = {}; field_names: map = {}; globals: map = {}; main_globals: map = {}; function_positions: map = {} }
 
 ## the walk
 
@@ -362,6 +362,13 @@ nested_phrase(words: list, lowering: Lowering): list? := {
 # `closure_call_1(x.f, a)`; else a method call, its name kept
 dotted_lowered(left: Node, right: Node, locals: Locals, lowering: Lowering): Node := {
 	receiver = lowered_lambdas(left, locals, lowering)
+	# `3.g`, `x.g(a)` of a local variable or parameter holding a function: the function it holds called, g(x, a), where
+	# no object of the program has its own g (decision fields-are-functions: own fields first)
+	method = if is_round(right) then items_of(right) else [right]
+	if #method > 0 and method#1 is symbol and is_local(name_of(method#1), locals) and lowering.function_values.has(name_of(method#1)) and not lowering.field_names.has(name_of(method#1)) {
+		arguments = [receiver] + arguments_of(method).map(argument => lowered_lambdas(argument, locals, lowering))
+		return call_node(symbol(closure_call_word + #arguments), [method#1] + arguments)
+	}
 	if not is_round(right) { return Key(receiver, Op.Dot, lowered_method(right, locals, lowering)) }
 	called = items_of(right)
 	if not (#called > 0 and called#1 is symbol and lowering.callable_fields.has(name_of(called#1))) {
@@ -374,10 +381,12 @@ dotted_lowered(left: Node, right: Node, locals: Locals, lowering: Lowering): Nod
 # the names the program gives a function value by op, named unlike any of its functions: the fields (Op.Colon)
 # `{answer: answer}` of a parameter `answer: function`, `{d: x => x + 1}`, `{f: square}` of a function with parameters;
 # the variables (Op.Assign) `sq = x => x*x`
-callable_names_of(program: Node, op: Op, arities: map, function_parameters: map): map := {
+callable_names_of(program: Node, op: Op, arities: map, function_parameters: map): map := keyed_names(program, op, n => not arities.has(name_of(key_of(n))) and gives_function(value_of(n), arities, function_parameters))
+# the names the program keys by op whose key holds: by Op.Colon its objects' fields, `{a: 1}`, `class T { a: int }`
+keyed_names(program: Node, op: Op, holds: function): map := {
 	names = {}
 	for n in nodes_in(program) {
-		if is_key(n, op) and key_of(n) is symbol and not arities.has(name_of(key_of(n))) and gives_function(value_of(n), arities, function_parameters) { names[name_of(key_of(n))] = yes }
+		if is_key(n, op) and key_of(n) is symbol and holds(n) { names[name_of(key_of(n))] = yes }
 	}
 	names
 }
@@ -642,15 +651,17 @@ with_function_parameters(statement: Node): Node := match statement {
 	Key(List(call, Bracket.Round, Separator.None), Op.Define, body): {
 		blocks = arguments_of(call).filter(is_function_parameter).map(parameter_name)
 		for parameter in arguments_of(call).filter(p => p is symbol and p != block_word) {
-			if unwrapped_in(body, parameter) { raise undeclared_use(name_of(parameter), "run as a block", "block") }
+			if unwrapped_in(body, parameter) { raise undeclared_use(name_of(parameter), "run as a block", "block, and run it " + name_of(parameter) + "()") }
 			if called_in(body, parameter) { raise undeclared_use(name_of(parameter), "called as a function", "function") }
 		}
-		Key(call_node(call#1, arguments_of(call).map(as_function_parameter)), Op.Define, bottom_up(body, part => block_run(part, blocks)))
+		for block in blocks { if unwrapped_in(body, symbol(block)) { raise block_bang(block) } }
+		Key(call_node(call#1, arguments_of(call).map(as_function_parameter)), Op.Define, body)
 	}
 	_: statement
 }
-# `body!` of a block parameter runs it, as `body()` does (wiki/block.md)
-block_run(n: Node, blocks: list): Node := if is_unwrapping(n) and n#2 is symbol and name_of(n#2) in blocks then call_node(n#2, []) else n
+# `body!` of a block parameter: a block runs only by a call, `!` is unwrap, in place or an operator (decision
+# blocks-run-by-call)
+block_bang(name: text): text := name + "! runs no block; fix: " + name + "()"
 is_unwrapping(n: Node): bool := is_round(n) and #n == 2 and n#1 == symbol(unwrap_word)
 # `body!` or `f(x)` of an untyped parameter: a parameter is a block or function only when declared one, never inferred
 # from its use (decision declared-block-parameters)
@@ -776,6 +787,8 @@ lambdas(program: Node): Node := {
 	function_parameters = parameters_given_functions(written, arities, function_parameters_of(written))
 	lowering.callable_fields = callable_names_of(program, Op.Colon, arities, function_parameters)
 	lowering.function_values = callable_names_of(program, Op.Assign, arities, function_parameters)
+	# (a parameter declared `f: function` is no field)
+	lowering.field_names = keyed_names(program, Op.Colon, n => value_of(n) != symbol("function"))
 	# a parameter holding a function, declared so or given one, is called spaced too: `f x` as `f(x)`
 	for name in function_parameters.keys { lowering.function_values[name] = yes }
 	# a global is no lambda's capture: it reads and changes the one global, as a function does
