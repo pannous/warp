@@ -227,7 +227,19 @@ as_list(x) := x as list
 // `count x in y`, `y.count(x)`: how often x occurs as an item of a list or a character of a text, and how often part
 // occurs in a text, not overlapping: count_of("banana", "an") is 2; # counts, so a program's own count leaves them be
 count_item(xs, x) := #filter(xs, item => item == x)
-count_of(t, part) := #split(t, part) - 1
+// (a walk over the bytes, nothing allocated: split made a list of every piece only to count them, card count-of-split)
+count_of(t, part) := {
+	size = byte_size(part)
+	if size == 0 { return #split(t, part) - 1 }
+	found = 0
+	at = 0
+	while at + size <= byte_size(t) {
+		matched = 0
+		while matched < size and byte_at(t, at + matched) == byte_at(part, matched) { matched += 1 }
+		if matched == size { found += 1; at += size } else { at += 1 }
+	}
+	found
+}
 // the count of x in y, written `count(y, x)` or `y.count(x)` (arity_variants; `count x in y` counts a yes/no, refused): of a text its parts,
 // else its items, and of a function the items it holds for, `xs.count { |x| x > 1 }`; its own name, so `count xs`
 // stays the emitter's count
