@@ -135,7 +135,6 @@ function callC(holder, exports, member, call, values, what) {
 		return block;
 	};
 	const textBlock = value => malloc([...utf8.encode(guestText(program, value)), 0]);
-	const bytesOf = value => isGuestText(program, value) ? utf8.encode(guestText(program, value)) : guestInts(program, value).map(byte => byte & 0xff);
 	const memory = () => new DataView(exports.memory.buffer);
 	let out, bytesLength = 0;
 	const remaining = [...values];
@@ -148,8 +147,8 @@ function callC(holder, exports, member, call, values, what) {
 			const pointers = new Uint32Array([...guestItems(program, value).map(textBlock), 0]);
 			return malloc(new Uint8Array(pointers.buffer));
 		}
-		if (kind === "bytes") {
-			const bytes = bytesOf(value);
+		if (kind === "bytes" || kind in CELL_ARRAYS) {
+			const bytes = kind === "bytes" ? guestBytes(program, value) : CELL_ARRAYS[kind](program, value);
 			bytesLength = bytes.length;
 			return malloc(bytes);
 		}
@@ -162,10 +161,28 @@ function callC(holder, exports, member, call, values, what) {
 		returned = out === undefined ? 0 : memory().getUint32(out, true);
 		if (returned === 0) throw new Error(`${what} gave no ${call.pointee}, C status ${asNumber}`);
 	}
-	const result = crossedResult(program, call, returned, address => utf8Decoder.decode(cText(exports.memory, Number(address))));
+	const result = call?.crossing === "bytes" ? bytesResult(program, exports.memory, Number(returned ?? 0))
+		: crossedResult(program, call, returned, address => utf8Decoder.decode(cText(exports.memory, Number(address))));
+	if (call?.crossing === "bytes" && returned) blocks.push(returned);
 	if (exports.free) blocks.forEach(block => exports.free(block));
 	return result;
 }
+
+// a `bytes` result, {i64 length, the bytes} in the library's memory (driver.warp c_result): those bytes as a text of
+// the program, each byte kept (byte_at reads one); NULL is ø
+function bytesResult(program, memory, address) {
+	if (!address) return program.new_empty();
+	const length = Number(new DataView(memory.buffer).getBigInt64(address, true));
+	const bytes = new Uint8Array(memory.buffer, address + 8, length).slice();
+	return program.new_text(placedBytes(program, bytes), bytes.length);
+}
+
+// a list of numbers as a C array of 4-byte cells, f32 or int32 (driver.warp c_cells), its byte count the length after it
+const cellBytes = cells => new Uint8Array(cells.buffer);
+const CELL_ARRAYS = {
+	f32s: (program, list) => cellBytes(Float32Array.from(guestFloats(program, list))),
+	i32s: (program, list) => cellBytes(Int32Array.from(guestInts(program, list))),
+};
 
 // a C function's result as the program takes it (driver.warp c_result): a text (NULL is ø, textOf reads it), a
 // handle's id, a yes/no, an i32, an unsigned u32 as the i64 it means, or an i64
@@ -178,6 +195,10 @@ function crossedResult(program, call, returned, textOf) {
 	return returned;
 }
 
+// a text or bytes argument crosses to a JavaScript C function as a string, any other as it is
+const jsArgument = (program, kind, value) => kind === "ptr" ? guestText(program, value)
+	: kind === "bytes" ? valueDecoder.decode(guestBytes(program, value)) : value;
+
 // a C library the page answers in JavaScript (natively a shared library): `functions(name)` gives a C function as a
 // JavaScript one, which takes a text as a string and gives one so, its numbers and handles' ids as they cross
 function libraryInJs(holder, library, functions) {
@@ -189,7 +210,7 @@ function libraryInJs(holder, library, functions) {
 			const program = holder.exports;
 			const remaining = [...values];
 			const given = (call?.parameters ?? []).filter(kind => kind !== "out" && kind !== "length")
-				.map(kind => (value => kind === "ptr" ? guestText(program, value) : value)(remaining.shift()));
+				.map(kind => jsArgument(program, kind, remaining.shift()));
 			return crossedResult(program, call, member(...given), text => text);
 		},
 	});
@@ -210,6 +231,9 @@ const pageStdio = (holder, hooks) => ({
 	fdopen: descriptor => descriptor,
 	fputs: (text, descriptor) => (hooks.print(text, descriptor), 0),
 	fflush: () => 0,
+	// write(fd, data) to stdout or stderr puts it to the run's output, its byte count; close of no file fails as C's
+	write: (descriptor, data) => (hooks.print(data, descriptor), utf8.encode(data).length),
+	close: () => C_FAILED,
 	dlopen: () => 0, // no C library loads in the page
 	// lib/file.warp's file words over the page's written files (host-files.js), as C answers: 0 done, -1 failed; folders
 	// exist by the files in them

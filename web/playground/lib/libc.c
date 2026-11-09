@@ -64,3 +64,33 @@ EXPORT(unsetenv) int warp_unsetenv(const char *name) {
 	}
 	return 0;
 }
+
+// memory a program hands C to fill and its fields by offset and C type (lib/c.warp calloc, field_*, set_field_*;
+// natively lib/native/foreign.c), counts and offsets 64 bits as there
+#include <stdint.h>
+EXPORT(calloc) void *warp_calloc(long long count, long long size) { return calloc(count, size); }
+EXPORT(memcpy) void *warp_memcpy(void *into, const void *from, long long size) { return memcpy(into, from, size); }
+#define FIELD_READER(name, type, result) EXPORT(name) result warp_##name(const uint8_t *address, long long offset) { return (result)*(const type *)(address + offset); }
+#define FIELD_WRITER(name, type, value_type) EXPORT(name) void warp_##name(uint8_t *address, long long offset, value_type value) { *(type *)(address + offset) = (type)value; }
+FIELD_WRITER(set_field_i32, int32_t, long long)
+FIELD_WRITER(set_field_i64, int64_t, long long)
+FIELD_WRITER(set_field_f64, double, double)
+FIELD_WRITER(set_field_pointer, void *, void *)
+FIELD_READER(field_u8, uint8_t, int32_t)
+FIELD_READER(field_i16, int16_t, int32_t)
+FIELD_READER(field_i32, int32_t, int32_t)
+FIELD_READER(field_u32, uint32_t, long long)
+FIELD_READER(field_i64, int64_t, long long)
+FIELD_READER(field_f32, float, double)
+FIELD_READER(field_f64, double, double)
+FIELD_READER(field_pointer, void *, void *)
+EXPORT(field_text) const char *warp_field_text(const uint8_t *address, long long offset) { return (const char *)(address + offset); }
+// count bytes at once, a `bytes` result: {i64 length, the bytes}, freed after host-foreign.js read it
+struct bytes_result { int64_t length; uint8_t bytes[]; };
+EXPORT(field_bytes) struct bytes_result *warp_field_bytes(const uint8_t *address, long long offset, long long count) {
+	struct bytes_result *result = malloc(sizeof *result + (size_t)count);
+	result->length = count;
+	memcpy(result->bytes, address + offset, (size_t)count);
+	return result;
+}
+EXPORT(set_field_bytes) void warp_set_field_bytes(uint8_t *address, long long offset, const uint8_t *data, long long size) { memcpy(address + offset, data, (size_t)size); }

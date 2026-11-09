@@ -884,7 +884,7 @@ word_index(file: text): map := {
 module_word_definers(): map := {
 	definers = {}
 	for module in std_module_names.filter(name => name != "prelude" and not is_host_module(name)) {
-		source = file_text(std_module_path(module)) ?? ""
+		source = std_module_text(module)
 		for word in definition_slices(source).map(slice => slice#1) + module_aliases(source).keys + rule_heads(source).filter(word => not has_meaning(word)) {
 			if word is text and #word > 0 and is_name_start(word[0]) and not is_made_name(word) {
 				known = definers.get(word) ?? []
@@ -950,6 +950,15 @@ with_expected_type_uses(program: Node, prelude: text): Node := {
 module_hint(word: text): text := {
 	definers = defining_modules(word)
 	if #definers == 1 then ": `use " + definers#1 + "` defines it" else ""
+}
+# a word nothing defines, no prelude's, module's or language's: its call, `from_hex(…)`, is the program's mistake
+is_unknown_word(word: text): bool := not has_meaning(word) and #defining_modules(word) == 0
+# the fix of an unknown word: the known words sharing a part of its name, `from_hex` gives is_hex, hex_text …
+unknown_word_fix(word: text): text := {
+	parts = word.split("_").filter(part => #part >= 3)
+	related = (prelude_definitions() + library_index_section("word").keys).filter(known => parts.any(part => known.contains(part)))
+	if #related > 4 { related = related[0 ..< 4] }
+	if #related == 0 then "define " + word + " or check its spelling" else "did you mean " + related.join(", ") + "?"
 }
 # the parses of the word's definitions, the prelude's first, then those of each module defining it (library index),
 # a prebuilt module's from its signature (module_definitions), no text read
@@ -1082,7 +1091,7 @@ type_module_providers(): map := library_index_section("provider")
 # the type modules' tables of the library index, read off their texts by the build writing it: each word with the
 # type module defining it ("" for two), those defined taking nothing (`now() := …`), those taking one value
 # (`words(t) := …`)
-type_module_slices(): list := type_modules.flat_map(module => definition_slices(file_text(std_module_path(module)) ?? "").map(slice => slice + [module]))
+type_module_slices(): list := type_modules.flat_map(module => definition_slices(std_module_text(module)).map(slice => slice + [module]))
 nullary_words_scanned(): map := words_marked(type_module_slices().filter(slice => without_keyword(slice#2).starts_with(slice#1 + "()")))
 unary_words_scanned(): map := words_marked(type_module_slices().filter(slice => takes_one_value(without_keyword(slice#2), slice#1)))
 words_marked(slices: list): map := {
