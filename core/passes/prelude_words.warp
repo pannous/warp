@@ -951,6 +951,15 @@ module_hint(word: text): text := {
 	definers = defining_modules(word)
 	if #definers == 1 then ": `use " + definers#1 + "` defines it" else ""
 }
+# a word nothing defines, no prelude's, module's or language's: its call, `from_hex(…)`, is the program's mistake
+is_unknown_word(word: text): bool := not has_meaning(word) and #defining_modules(word) == 0
+# the fix of an unknown word: the known words sharing a part of its name, `from_hex` gives is_hex, hex_text …
+unknown_word_fix(word: text): text := {
+	parts = word.split("_").filter(part => #part >= 3)
+	related = (prelude_definitions() + library_index_section("word").keys).filter(known => parts.any(part => known.contains(part)))
+	if #related > 4 { related = related[0 ..< 4] }
+	if #related == 0 then "define " + word + " or check its spelling" else "did you mean " + related.join(", ") + "?"
+}
 # the parses of the word's definitions, the prelude's first, then those of each module defining it (library index),
 # a prebuilt module's from its signature (module_definitions), no text read
 definitions_of(word: text, prelude_slices: list): list := prelude_slices.filter(slice => slice#1 == word).map(slice => plain_node(parsed(slice#2))) + defining_modules(word).flat_map(module => module_definitions(module, word))
