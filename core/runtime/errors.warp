@@ -48,6 +48,11 @@ not_a_text(): int := {
 	fail()
 	0
 }
+# a text, list or other value where a number is computed with, `-xs#2` of a text: a run-time error a try catches, no trap
+not_a_number(): int := {
+	fail()
+	0
+}
 not_an_int(): int := {
 	fail()
 	0
