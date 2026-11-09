@@ -188,6 +188,8 @@ def field_or_word(body: Body, value: TypedCode, name: text, word: function): Typ
 def position_code(body: Body, n: Node): list {
 	# `x = 2.5` to a declared int converts, so it can fail and names itself (card int-reports)
 	if stores_constant_data(n) and name_of(key_of(n)) not in body.declared { return [] }
+	# a catch's `e = placed_at(…, trap_place())` reads the failed statement's place, so it keeps it (passes/tries.warp)
+	if mentions(n, "trap_place") { return [] }
 	at = if body.intrinsics or module_written != "" or defined_origins.has(body.function.name) then ø else written_at(n)
 	if not at { return [] }
 	line: int = at#1

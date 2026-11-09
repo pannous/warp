@@ -1,4 +1,4 @@
-# cc173dc87b 2026-11-09 11:12 257/265 97.0%
+# 100da7ed38 2026-11-09 15:18 258/265 97.4%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -105,6 +105,7 @@ ok   samples/graphics/color_swatches.warp
 ok   samples/graphics/finger_paint.warp
 ok   samples/graphics/gaussian_splats.warp
 ok   samples/graphics/meshlet_grid.warp
+ok   samples/graphics/million_trees.warp
 ok   samples/graphics/paint_function.warp
 ok   samples/graphics/paint_text_gpu.warp
 ok   samples/graphics/paint_text.warp
@@ -119,7 +120,6 @@ ok   samples/hello/natural.warp
 ok   samples/hello/phrases.warp
 ok   samples/hello/sample.warp
 ok   samples/laws/basic_laws.warp
-ok   samples/laws/kitchensink.warp
 ok   samples/laws/project_laws.warp
 ok   samples/lists/dot.warp
 ok   samples/lists/primes.warp
@@ -156,10 +156,12 @@ ok   samples/modules/test_ffi_extended.warp
 ok   samples/modules/test_ffi.warp
 ok   samples/native/arguments.warp
 ok   samples/native/c_calls.warp
+ok   samples/native/doubling.warp
 ok   samples/native/fib.warp
 ok   samples/native/files.warp
 ok   samples/native/hello.warp
 ok   samples/native/structs.warp
+ok   samples/native/uses.warp
 ok   samples/numbers/bits.warp
 ok   samples/numbers/collatz.warp
 ok   samples/numbers/dates.warp
@@ -235,7 +237,6 @@ ok   samples/web/component_totals.warp
 ok   samples/web/computed_tags.warp
 ok   samples/web/counter.warp
 ok   samples/web/form_submit.warp
-ok   samples/web/hello_div.warp
 ok   samples/web/html_dsl.warp
 ok   samples/web/html.warp
 ok   samples/web/keyed_counters.warp
@@ -257,10 +258,9 @@ SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
 FAIL samples/golf/sierpiński-triangle.warp: samples/golf/sierpiński-triangle.warp:33:116 not an int
-FAIL samples/gpu/aquarium.warp: samples/gpu/aquarium.warp:10:8 outside the core: the unknown name aquarium_color
-FAIL samples/graphics/million_trees.warp: outside the core: a int where a text is needed at lib/forest.warp:58 (in forest_glance)
-FAIL samples/native/doubling.warp: primitive mode cannot emit the type any, not a primitive type (i8, int8, u8, uint8, byte, bool, i16, int16, u16, uint16, i32, int32, u32, uint32, char, pointer, handle, i64, int64, int, long, u64, uin
-FAIL samples/native/uses.warp: primitive mode cannot emit the type any, not a primitive type (i8, int8, u8, uint8, byte, bool, i16, int16, u16, uint16, i32, int32, u32, uint32, char, pointer, handle, i64, int64, int, long, u64, uin
+FAIL samples/gpu/aquarium.warp: samples/gpu/aquarium.warp:258:41 outside the core: a list where a int is needed
+FAIL samples/laws/kitchensink.warp: samples/laws/kitchensink.warp:114:1 outside the core: the unknown name test
 FAIL samples/sound/gpu_visualizer_warp.warp: samples/sound/gpu_visualizer_warp.warp:133:1 samples/sound/tune.mp3: no such sound file
 FAIL samples/sound/visualizer.warp: shown is declared twice: a variable and a function share the name; give one another name
 FAIL samples/storage/orm_units.warp: samples/storage/orm_units.warp:1:1 unknown type kg
+FAIL samples/web/hello_div.warp: samples/web/hello_div.warp:5:10 outside the core: an instance of div, a class not declared here

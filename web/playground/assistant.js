@@ -95,8 +95,13 @@ async function askProxy(request, renewed = false) {
 	return askProxy(request, true);
 }
 
+// the owner's token (the bug button's, kept by ?bug_token=…) opens the session without the bot check
+const OWNER_TOKEN_STORAGE = "warp-playground-bug-token";
+
 async function openProxySession() {
-	return (await replyOf(await postJson(`${PROXY_ORIGIN}/session`, { turnstile: await turnstileToken() }))).session;
+	const ownerToken = stored(OWNER_TOKEN_STORAGE);
+	const credential = ownerToken ? { owner_token: ownerToken } : { turnstile: await turnstileToken() };
+	return (await replyOf(await postJson(`${PROXY_ORIGIN}/session`, credential))).session;
 }
 
 let turnstileLoaded;

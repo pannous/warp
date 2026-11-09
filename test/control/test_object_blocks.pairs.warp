@@ -13,5 +13,5 @@
 'help = {print: "there is help"}; help!'	ø
 
 # test_charged_object_fields_are_value_now
-'o = {a: 1, s := clock()}; o.a'	1
-'o = {a: 1, s := clock()}; o.s > 1700000000000'	true
+'class O { a: int; s := clock() }; O(1).a'	1
+'class O { a: int; s := clock() }; O(1).s > 1700000000000'	true

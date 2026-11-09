@@ -33,3 +33,5 @@ rewrite trigger $e... => emit $e...
 # listener-value), and defines page_value(), its last expression again, for the page to show after each firing
 # (extensions/rules/rule_words.warp listening_program)
 rewrite $p => $q where program and $q = listening_program($p)
+# `on error of f { 7 }`: a failing call of f gives the handler's value (extensions/rules/rule_words.warp errors_handled)
+rewrite $p => $q where program and $q = errors_handled($p)

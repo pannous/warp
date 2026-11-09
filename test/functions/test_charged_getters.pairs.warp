@@ -7,8 +7,8 @@
 't=0; for i in 1...3 { t += 1 }; z := t*10; z'	30
 
 # an_object_getter_runs_at_every_read
-'i=0; o = {s := i*10}; i=5; o.s'	50
-'i=1; o = {a: 2, s := i+1}; i=7; o.s + o.a'	10
+'i=0; class O { s := i*10 }; o = O(); i=5; o.s'	50
+'i=1; class O { a: int; s := i+1 }; o = O(2); i=7; o.s + o.a'	10
 
 # a_getter_of_now_reads_the_clock_at_every_use
 'time := now; a = time; b = time; b >= a'	true
