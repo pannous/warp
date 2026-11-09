@@ -186,6 +186,15 @@ def glyph_headed(head: list): bool {
 	glyph = first[0 .. end]
 	end > 0 and end < first.length and (SYMBOL_OPERATORS.get(glyph) != ø or is_definable_glyph(glyph))
 }
+// a statement `+(a: Color, b: Color) := …` here, a glyph right before its parameters
+def glyph_definition_at(p: Parser): bool {
+	end = p.at
+	while end < p.n and not is_name_char(p.code[end]) and not is_blank(p.code[end]) and p.code[end] != '(' { end += 1 }
+	if end == p.at or end >= p.n or p.code[end] != '(' { return false }
+	words = statement_words_at(p)
+	position = words.index_of(":=")
+	position >= 2 and glyph_headed(words[0 .. position - 1])
+}
 // `a ⊕ b := …`: an infix operator declared by a pattern of two plain names around its glyph
 def operator_pattern(words: list, define: int): OperatorStatement? {
 	if define != 3 or not is_operator_glyph(words#2) or not is_plain_name(words#1) or not is_plain_name(words#3) { return ø }
@@ -2201,6 +2210,7 @@ def prefixed(p: Parser): Node := {
 	c = char_here(p)
 	// `./a.txt` is a path, a text marked as one (decision path-type)
 	if starts_path(p) { return Key(Text(path_literal(p)), Op.As, symbol("path")) }
+	if glyph_definition_at(p) { return operator_method_definition(p, "") }
 	prefixed_operand = read_prefix(p)
 	if prefixed_operand != ø { return prefixed_operand }
 	if not is_name_start(c) { return prefixed_by_symbol(p, c) }
