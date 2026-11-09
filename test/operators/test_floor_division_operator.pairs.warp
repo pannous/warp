@@ -3,3 +3,7 @@
 # floor_division_and_true_division_compute_apart
 'x = 7.0; x /= 2; x'	3.5
 '2*7 /! 2'	7
+# ÷ is floor division's own operator, /! its alias (card make-floordiv)
+'7 ÷ 2'	3
+'x = 9; x ÷= 2; x'	4
+'data (7 /! 2)'	data (7 ÷ 2)

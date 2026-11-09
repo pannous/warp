@@ -21,7 +21,7 @@ add { operator: "+", symbol: Op.Add, aliases: [plus], infix: [plus], power: [140
 subtract { operator: "-", symbol: Op.Sub, aliases: [minus, "‐", "‑", "‒", "–", "—", "―"], infix: [minus], power: [140, 141], names: [hyphen_minus] }
 multiply { operator: "*", symbol: Op.Mul, aliases: [times, "×", "⋅"], power: [150, 151], names: [asterisk, multiplication_sign, dot_operator] }
 divide { operator: "/", symbol: Op.Div, power: [150, 151], names: [solidus] }
-div { operator: "/!", symbol: Op.FloorDiv, aliases: ["÷"], infix: yes, power: [150, 151], names: [division_sign] }
+div { operator: "÷", symbol: Op.FloorDiv, aliases: ["/!"], infix: yes, power: [150, 151], names: [division_sign] }
 modulo { operator: "%", symbol: Op.Mod, aliases: [mod], infix: yes, power: [150, 151], names: [percent_sign] }
 remainder { operator: "rem", power: [150, 151] }
 power { operator: "^", symbol: Op.Pow, aliases: ["**"], power: [160, 159], names: [circumflex_accent] }

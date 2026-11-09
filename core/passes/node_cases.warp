@@ -30,8 +30,8 @@ OTHER_SPELLING = "·other"
 # node.warp's cases in its order, each with the text a node carries for it
 node_spellings = {"Op": {"Colon": ":", "Dot": ".", "SafeDot": "?.", "Coalesce": "??", "Scope": "::", "Define": ":=",
 	"Assign": "=", "Arrow": "->", "ArrowUp": "↑", "ArrowDown": "↓", "Add": "+", "Sub": "-", "Mul": "*", "Div": "/",
-	"FloorDiv": "/!", "Mod": "%", "Rem": "rem", "Pow": "^", "LogBase": "⌞", "LogOf": "⌟", "Shl": "<<", "Shr": ">>",
-	"AddAssign": "+=", "SubAssign": "-=", "MulAssign": "*=", "DivAssign": "/=", "FloorDivAssign": "/!=",
+	"FloorDiv": "÷", "Mod": "%", "Rem": "rem", "Pow": "^", "LogBase": "⌞", "LogOf": "⌟", "Shl": "<<", "Shr": ">>",
+	"AddAssign": "+=", "SubAssign": "-=", "MulAssign": "*=", "DivAssign": "/=", "FloorDivAssign": "÷=",
 	"ModAssign": "%=", "PowAssign": "^=", "AndAssign": "&&=", "OrAssign": "||=", "XorAssign": "^^=", "Lt": "<",
 	"Gt": ">", "Le": "<=", "Ge": ">=", "Eq": "==", "Is": "is", "Ne": "!=", "Identical": "===", "NotIdentical": "!==",
 	"Similar": "≈", "Rough": "~", "And": "and", "Or": "or", "Xor": "xor", "Not": "not", "BitAnd": "&", "BitOr": "|",
@@ -42,9 +42,9 @@ node_spellings = {"Op": {"Colon": ":", "Dot": ".", "SafeDot": "?.", "Coalesce": 
 	"Separator": {"Space": " ", "Comma": ",", "Semicolon": ";", "Newline": "\n", "Tab": "\t", "None": ""}}
 # those and the program's own spelled enums, each case with its spelling
 global spellings = node_spellings
-# a case's second spelling, which reads as the case and never shows: floor division's `÷` beside its `/!` while a seed
-# compiled before either was canonical still runs (card make-floordiv)
-other_spellings = {"Op": {"÷": "FloorDiv", "÷=": "FloorDivAssign"}}
+# a case's second spelling, which reads as the case and never shows: floor division's `/!` beside its `÷`, so a seed
+# compiled when `/!` was canonical still runs (card make-floordiv)
+other_spellings = {"Op": {"/!": "FloorDiv", "/!=": "FloorDivAssign"}}
 
 # the text a node carries for a case, `+` of Add, a text even of one character
 spelling(enum_name: text, case: text): text := "" + spellings[enum_name][case]
