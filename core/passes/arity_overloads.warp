@@ -656,8 +656,11 @@ dispatched(name: text, candidates: list, kinds: list, arguments: list, refusal: 
 	if not bindings then chain else List(bindings + [chain], Bracket.Round, Separator.Semicolon)
 }
 
-# whether the other type admits every value this one admits, and more: text of `text or int`, Dog of Animal, any type of any
-admits_less(narrow: text, wide: text): bool := narrow != wide and (wide == any_word or marks_narrower(narrow, wide) or union_members(narrow).all(member => member in union_members(wide) or union_members(wide).any(type => class_distance(member, type) != ø or marked_text_of(member, type))))
+# whether the other type admits every value this one admits, and more: text of `text or int`, Dog of Animal, any type of
+# any, a two-parameter function of any function
+admits_less(narrow: text, wide: text): bool := narrow != wide and (wide == any_word or marks_narrower(narrow, wide) or names_parameters(narrow, wide) or union_members(narrow).all(member => member in union_members(wide) or union_members(wide).any(type => class_distance(member, type) != ø or marked_text_of(member, type))))
+# `(int, int) -> any` of `function`: a function type naming its parameters admits only the functions taking those
+names_parameters(narrow: text, wide: text): bool := function_type_arity(narrow) != ø and overload_kind(wide) == "function" and function_type_arity(wide) == ø
 # Color of int and of number: a named number type admits only its marked numbers
 marks_narrower(narrow: text, wide: text): bool := narrow in overload_marks and (overload_kind(wide) == overload_marks[narrow]#1 or overload_kind(wide) == "number")
 # a variant no wider than the other at any parameter and narrower at one: the one a call fitting both takes
@@ -709,7 +712,8 @@ typed_call(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	}
 	if not fitting { return diagnose(call_of("no_single_variant", [written, listed]), n) }
 	chosen = best_fitting(fitting, kinds)
-	if #chosen != 1 { return diagnose(call_of("tied_variants", [written, listed]), n) }
+	# (`x as float` types a number; a function argument has no such fix)
+	if #chosen != 1 { return diagnose(call_of(if kinds.any(kind => kind#1 == "function") then "no_single_variant" else "tied_variants", [written, listed]), n) }
 	call_of(typed_variant(name, chosen#1), arguments)
 }
 
