@@ -39,7 +39,10 @@ HOST_LINE='^# host: '
 
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 results=$tree/data/samples
-mkdir -p "$results/out"
+# each sample runs in this folder, never the tree's root: a file a sample writes by a relative path (native/files'
+# greeting.txt) stayed in the tree untracked and blocked after-push's checkout once someone committed it (11-09)
+run_folder=$results/cwd
+mkdir -p "$results/out" "$run_folder"
 # the tree's own compilers, else a count names the tree's commit but measures whichever compiler is installed (128 to
 # 122 at 08:12 was the installed one's, the trees' own went 131 to 132)
 [ -f "$tree/lib/warp.wasm" ] && export WARP_LIB=${WARP_LIB:-$tree/lib}
@@ -66,22 +69,23 @@ one() {
 	# what a sample keeps (lib/storage.warp, <sample>.database.sqlite beside it) starts anew each run, as the page's
 	# storage does: a counter prints its first run's value, not the sweep count's
 	rm -f "$tree/${1%.warp}.database.sqlite"
-	(cd "$tree" && ulimit -t "$CPU_SECONDS" && WARP_NO_WINDOW=1 WARP_EVENTS_FOR=${WARP_EVENTS_FOR:-3500} WARP_PORT=$SERVER_PORT timeout "$wall" "$WARP" "$1" </dev/null >"$out.txt" 2>"$out.err")
+	(cd "$run_folder" && ulimit -t "$CPU_SECONDS" && WARP_NO_WINDOW=1 WARP_EVENTS_FOR=${WARP_EVENTS_FOR:-3500} WARP_PORT=$SERVER_PORT timeout "$wall" "$WARP" "$tree/$1" </dev/null >"$out.txt" 2>"$out.err")
 	local status=$? first verdict=FAIL
 	[ $status -eq 124 ] && grep -aq "$SERVING" "$out.txt" && { echo "SRV  $1"; return; }
 	if [ $status -eq 0 ] && grep -q "$CHECK_LINE" "$tree/$1"; then
-		(cd "$tree" && WARP_NO_WINDOW=1 timeout "$wall" "$WARP" app check "$1" </dev/null >"$out.checks" 2>&1) || status=1
+		(cd "$run_folder" && WARP_NO_WINDOW=1 timeout "$wall" "$WARP" app check "$tree/$1" </dev/null >"$out.checks" 2>&1) || status=1
 		[ $status -ne 0 ] && { printf 'FAIL %s: %s\n' "$1" "$(grep -av '^ok ' "$out.checks" | grep -am1 . | cut -c1-200)"; return; }
 	fi
 	[ $status -eq 0 ] && { echo "ok   $1"; return; }
-	first=$(grep -av '^wasm-rt warning\|^warning: ' "$out.err" | grep -am1 . | tr '\t' ' ' | cut -c1-200)
+	# (a position names the sample by its full path now: shown as before, from the tree's root)
+	first=$(grep -av '^wasm-rt warning\|^warning: ' "$out.err" | grep -am1 . | tr '\t' ' ' | sed "s|$tree/||g" | cut -c1-200)
 	[ $status -eq 124 ] && { verdict=TIME; first="still running after ${wall} s"; }
 	[ $status -eq $CPU_LIMIT_HIT ] && { verdict=TIME; first="used its ${CPU_SECONDS} s of CPU"; }
 	grep -q "$EXPECTED_FAILURE" "$tree/$1" && verdict=EXP
 	printf '%-4s %s: %s\n' "$verdict" "$1" "${first:-exit $status, nothing on stderr}"
 }
 export -f one wall_seconds
-export tree results WARP CPU_SECONDS WALL_SECONDS CPU_LIMIT_HIT WINDOW_LIBRARIES SERVING SERVER_PORT EXPECTED_FAILURE CHECK_LINE HOST_LINE
+export tree results run_folder WARP CPU_SECONDS WALL_SECONDS CPU_LIMIT_HIT WINDOW_LIBRARIES SERVING SERVER_PORT EXPECTED_FAILURE CHECK_LINE HOST_LINE
 
 report=$results/report.txt
 (cd "$tree" && find samples -name '*.warp' | sort) | xargs -P"$PARALLEL" -I{} bash -c 'one "$@"' _ {} | sort -k2 >"$report"
