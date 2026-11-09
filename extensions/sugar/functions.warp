@@ -6,10 +6,12 @@
 # parameter `self` is of that type, as Kotlin's extension function below (rules go bottom-up: each `func` member is a
 # definition already)
 rewrite extension $T {$members...} => (($h(self: $T, $p...): $t := {$b...}) for ($h($p...): $t := {$b...}) in $members...)
-# a name defined as a function value is that function: `f := x => x + 1` is f(x) := x + 1, a composition
-# `root_sum := sum | sqrt` root_sum(x) := sqrt(sum(x)) (definitions are taken before later sugar sees them)
-rewrite $f := $x => $body => $f($x) := $body where $f is symbol and $x is symbol
-rewrite $f := $g | $h => $f(composed) := $h($g(composed)) where $f is symbol and $g is function and $h is function
+# a name defined as a function value is bound to it, as `f = e` binds it (decision function-valued-definition):
+# `f := x => x + 1`, a composition `root_sum := sum | sqrt` or `h := square & print`; a bare name stays the body that
+# calls it, `pwd := cwd`
+rewrite $f := $e => $f = $e where $f is symbol and $e is function and $e is not symbol
+rewrite $f := $g | $h => $f = $g | $h where $f is symbol and $g is function and $h is function
+rewrite $f := $g & $h => $f = $g & $h where $f is symbol and $g is function and $h is function
 rewrite (fun $d) => def $d
 rewrite (fn $d) => def $d
 rewrite (define $d) => def $d
