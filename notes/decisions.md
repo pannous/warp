@@ -1163,7 +1163,14 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
     `remove h from listeners of e` stays for named events.
   - ctrl-c-runs-exit (user): ctrl-c, kill or SIGTERM runs `on exit {…}` (when there is no `on interrupt`), then ends with status
     130 (143 for kill); a second ctrl-c within a second ends at once.
-  - event-delivery-points: in discussion with the user (handlers on a second thread?); planner default meanwhile.
+  - event-delivery-points (user): one rule native and page: a handler runs on the program's thread at its waits (sleep, await,
+    receive, a painted frame) and at loop starts, by one compiled flag check in programs that listen; the waiting (clock, keys,
+    signals) runs on a host thread that only queues; never inside a running handler. `n = 0; on every 50 ms { n += 1 };
+    sleep 175 ms; n` is 3. Wasmtime epochs may replace the native check later.
+  - threaded-handlers (user: "plan for true threads too"): real parallelism is the decided `go` task (tasks-parallel) plus
+    `shared` atomic values (P106, lib-oddities): `shared n = 0; on every 50 ms go { n += 1 }` runs the handler as a task on its
+    own thread; it sees only shared values, the rest are copies. Simple scenarios natively first; the page cooperative until
+    it offers real threads.
   - subscript-slices-dropped (Interviewer, technical): branch subscript-slices-rules (6f653ed733) closed: keeping `xs[i]` as a
     round call reads as a definition head on the left of `=` and escapes later sugar; fixing it costs more core than it saves.
     Main's parser subscript stays.
