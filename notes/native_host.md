@@ -45,7 +45,7 @@ coverage list (width, height, rows) through `coverage_list`.
   little-endian 16-bit bytes), SDL mixing them; streams played out are closed at the next sound; the run's end waits
   till every queue is empty plus DEVICE_TAIL_MS. Without SDL3 or a device, lib/sound.warp falls back to the system's
   player with a WAV, as before.
-- Decoding (`sample`, `sound_seconds`, `spectrum`, `play "song.mp3"`): [rate, channels, values…], lib/sound.warp
+- Decoding (`sample`, `sound_seconds`, `spectrum`, `play ./song.mp3`): [rate, channels, values…], lib/sound.warp
   caching each file once a run. macOS: AudioToolbox ExtAudioFile (wav, mp3, flac, aac, m4a), converting rate and
   channels itself and leaving out an MP3's encoder delay and padding (decision mp3-true-length). Elsewhere: a WAV by
   SDL_LoadWAV (made 16-bit by SDL_ConvertAudioSamples), an MP3 by libmpg123 (missing: refused naming the package),

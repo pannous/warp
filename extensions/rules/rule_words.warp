@@ -50,7 +50,7 @@ starts_with_unit(code: Node): bool := if code is key and op_of(code) in unit_bin
 unit_led(code: Node): bool := if code is key and op_of(code) in [Op.Div, Op.Mul, Op.Pow] then unit_led(key_of(code)) else is_unit_word(code)
 # a name lib/units defines, a unit by its class (`km`, `°C`: `km = Unit("km")`), else any other of its words (`min`)
 is_unit_word(code: Node): bool := code is symbol and (typed_as(name_of(code), "Unit") or "units" in defining_modules(name_of(code)))
-unit_binding_ops = [Op.Assign, Op.Define, Op.Add, Op.Sub, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne]
+unit_binding_ops = [Op.Assign, Op.Define, Op.AddAssign, Op.SubAssign, Op.MulAssign, Op.DivAssign, Op.Add, Op.Sub, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne]
 # a unit after a product, a quotient or a power reads two ways, `10 / 2 ms`: refused with a fix-it naming both
 # (decision unit-after-number)
 unit_ambiguous_ops = [Op.Mul, Op.Div, Op.FloorDiv, Op.Mod, Op.Pow]
@@ -849,6 +849,10 @@ definition_start(source: text, word: text): any := {
 }
 # `3 then twice` (decision then-not-pipe): `then` is only the branch word, the pipe is `|>`; ø after `if c`, whose
 # branch may be a function (`if wanted then float_pi`)
+# a function value, no bare name: a lambda, or a composition `a | b`, `a & b` of functions (decision
+# function-valued-definition; a bare name on the right of `:=` stays the body calling it, `pwd := cwd`)
+function_value(code: Node): bool := not (code is symbol) and (has_property(code, "function") or composition(code))
+composition(code: Node): bool := (is_key(code, Op.BitOr) or is_key(code, Op.BitAnd)) and [key_of(code), value_of(code)].all(part => has_property(part, "function") or composition(part))
 then_not_pipe(value: Node, function: Node): Node := {
 	if is_key(value, Op.If) or is_key(value, Op.While) { return ø }
 	throw "`${spelled(value)} then ${spelled(function)}` is no pipe: `then` is only the branch word, pipe with `${spelled(value)} |> ${spelled(function)}`"
@@ -1214,6 +1218,7 @@ rule_words = {
 	misnamed: misnamed,
 	missed_cases: missed_cases,
 	then_not_pipe: then_not_pipe,
+	function_value: function_value,
 	takes_trailing_block: takes_trailing_block,
 	then_without_if: then_without_if,
 	module_help: module_help,

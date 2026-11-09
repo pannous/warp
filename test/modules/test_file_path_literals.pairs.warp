@@ -1,0 +1,4 @@
+# files named by path literals, unquoted (decision path-literals-preferred, card file-literal-replace)
+'use file; write ./warp_fpl_shopping.txt "milk"; t = read(./warp_fpl_shopping.txt); delete_file(./warp_fpl_shopping.txt); t'	"milk"
+'use file; write(/tmp/warp_fpl_list.txt, "tea"); t = read(/tmp/warp_fpl_list.txt); delete_file(/tmp/warp_fpl_list.txt); t'	"tea"
+'use file; write ./warp_fpl_seen.txt "x"; seen = exists ./warp_fpl_seen.txt; delete_file(./warp_fpl_seen.txt); [seen, exists ./warp_fpl_seen.txt]'	[yes, no]

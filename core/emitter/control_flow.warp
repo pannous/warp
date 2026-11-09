@@ -31,7 +31,7 @@ def conditional(body: Body, test: Node, yes_branch: Node, no_branch: Node, has_e
 	if c == known_condition(yes) { return nested(body, statements_block(yes_branch), 0) }
 	if c == known_condition(no) { return if has_else then nested(body, statements_block(no_branch), 0) else TypedCode(ValueKind.Node, [ref_null, gc_type(gc.node)]) }
 	a = nested(body, statements_block(yes_branch), 1)
-	if not has_else { return unmatched(c, a, yes_branch is number) }
+	if not has_else { return unmatched(body, c, a, yes_branch is number) }
 	b = nested(body, statements_block(no_branch), 1)
 	# both branches leave by a return: the if gives no value, the function's result is its
 	# returns' alone, `if x > 2 { return "big" } else { return "small" }` a text
@@ -54,8 +54,11 @@ def leaves(branch: Node): bool {
 }
 is_return(n: Node): bool := n == symbol("return") or (is_group(n) and bracket_of(n) == "" and #n == 2 and n#1 == symbol("return"))
 # `if c then a` without else: a, or when c fails the 0 of a number or yes/no, else ø
-def unmatched(c: list, a: TypedCode, numeric: bool): TypedCode {
+def unmatched(body: Body, c: list, a: TypedCode, numeric: bool): TypedCode {
 	if a.kind == no_kind { return TypedCode(no_kind, c + [op.if, no_value] + a.code + [op.end]) }
+	# a first reading whose branch waits on a call still compiling, as the if/else's: no int yet, which collections'
+	# Set.add (`if … { items.add(x) }` last, its + dispatcher compiling) kept as an i64 of its list
+	if a.kind == pending and body.function.result == pending { return TypedCode(pending, c + [op.if] + value_type(ValueKind.Node) + a.code + [op.else, ref_null, gc_type(gc.node), op.end]) }
 	if a.kind == ValueKind.Int or a.kind == pending { return TypedCode(ValueKind.Int, c + [op.if] + value_type(ValueKind.Int) + converted(a, ValueKind.Int) + [op.else, op.i64_const, 0, op.end]) }
 	otherwise = if numeric or a.kind == ValueKind.Float or a.kind == ValueKind.Bool then boxed(number_value(0)) else [ref_null, gc_type(gc.node)]
 	TypedCode(ValueKind.Node, c + [op.if] + value_type(ValueKind.Node) + boxed(a) + [op.else] + otherwise + [op.end])

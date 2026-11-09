@@ -598,8 +598,8 @@ A row is an ordinary object: change a field (`bo.age += 1`) and the table change
 Files are written and read by name. In the browser they are kept in the browser's storage, so they are still there after a reload.
 
 ```warp => "milk"
-write "shopping.txt" "milk"
-read "shopping.txt"
+write ./shopping.txt "milk"
+read ./shopping.txt
 ```
 
 JSON(5) from elsewhere becomes warp data.
@@ -812,7 +812,7 @@ Examples: "gpu map"; samples: gpu_map, gpu_arrays, gpu_million
 `play` plays a music file in the background. A relative name is relative to the current folder, so the samples name their files from the repository's root, as here.
 
 ```warp
-play "samples/sound/tune.mp3"
+play ./samples/sound/tune.mp3
 ```
 
 Examples: melody; samples: play_mp3, music, rhythm, harmony, synth, filters, voices, arrangement, sound_patterns, signal_graph, siren_sound, stereo_sound, midi, visualizer, sound_features, sound_kick_samples, sound_pipes, gpu_visualizer_warp

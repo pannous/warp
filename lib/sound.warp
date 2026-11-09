@@ -973,7 +973,7 @@ rendered(file) := {
 	seconds
 }
 sound_folder() := {
-	temporary = env("TMPDIR") ?? "/tmp"
+	temporary = env("TMPDIR") ?? /tmp
 	(if ends_with(temporary, "/") then temporary else temporary + "/") + SOUND_FOLDER
 }
 sound_file_name(process, handle) := "sound-" + str(process) + (if handle == 1 then "" else "-" + str(handle)) + ".wav"
@@ -1093,7 +1093,7 @@ new_samples(n: int): samples := {
 is_signal(tone) := tone is function or tone is list and count(tone) == 2 and tone[0] is function
 // the note played through a bus (card shared-buses stage 2): play(C4, 1s, bus: room)
 play(tone, for duration, bus: Bus) := sent_back(sent_to(bus), music_played(tone, duration, wave_shape))
-// a music file in the background (wav, mp3, ogg, flac, aiff, m4a): play "song.mp3", through the system's player as
+// a music file in the background (wav, mp3, ogg, flac, aiff, m4a): play ./song.mp3, through the system's player as
 // it is, its line on stderr `sound file: song.mp3`
 public play_file(path) := {
 	if not exists(path) { raise "no sound file " + path }
@@ -1143,7 +1143,7 @@ play_blocks(fill: (float) -> any, blocks, seconds) := played_blocks(fill, if blo
 // wait_sound waits for them (a program's end does too)
 public sound_queued() := max(0, voice_end - clock()) / 1000
 global wait_sound() := if count(sound_players()) > 0 and voice_end > clock() then sleep_ms(voice_end - clock())
-// the sounds since the last save (or the start), which `save sound as: "song.wav"` (or `save(sound, "song.wav")`)
+// the sounds since the last save (or the start), which `save sound as: ./song.wav` (or `save(sound, ./song.wav)`)
 // writes one after another in one WAV file, offline (also without speakers), giving its seconds (card save-sound)
 // `sound.seconds` how long they last, the seconds of the voice's clock since the last save: [C4 E4 G4] of 100 ms each
 // is 0.3, whenever the program asks
@@ -1172,7 +1172,7 @@ live_cycle_started(name) := std_io("sound", "live_cycle", [name])
 // (the name read before the go: inside it cycle.name is read as a Note's, card go-function-type)
 live_loop(cycle: function, cycles) := { name = cycle.name; go { for counted in 0..cycles { live_cycle_started(name); cycle() } } }
 live_loop(cycle: function) := { name = cycle.name; go { for counted in 0.. { live_cycle_started(name); cycle() } } }
-// an audio file's samples to play (card sound-samples): kick = sample("kick.wav") (wav, mp3, ogg, flac, aiff, m4a; the
+// an audio file's samples to play (card sound-samples): kick = sample(./kick.wav) (wav, mp3, ogg, flac, aiff, m4a; the
 // playground reads wav), play(kick); play_sample(kick, 2) twice as fast and an octave up, as a sampler plays it;
 // sample_slice(kick, 0.1s, 0.3s) the part between, sample_slices(kick, 4) four equal parts, sample_looped(kick, 4s, 0.5s,
 // 1s) four seconds: up to 1 s, then from 0.5 s to 1 s again and again. Its frames are whole numbers as sound_samples
@@ -1523,7 +1523,7 @@ midi_milliseconds(tick, tempi, division) := {
 
 
 // how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/sound/visualizer.warp), or of an
-// audio file, spectrum("song.mp3", seconds, bands), decoded once: the bands spaced evenly in pitch from band_low to
+// audio file, spectrum(./song.mp3, seconds, bands), decoded once: the bands spaced evenly in pitch from band_low to
 // band_high Hz, each level from 0 to 1 (a full-scale sine is 1). The window Hann-weighted, each band measured by
 // Goertzel's recurrence in warp, of samples or of a file's decoded by the host
 global band_low = 60
@@ -1532,7 +1532,7 @@ global band_high = 5000
 spectrum_window = 512
 // the band whose middle frequency is nearest in pitch
 public nearest_band(frequency, count) := round(log(frequency / band_low) / log(band_high / band_low) * (count - 1)) as int
-// how many seconds an audio file sounds: sound_seconds("song.mp3")
+// how many seconds an audio file sounds: sound_seconds(./song.mp3)
 sound_seconds(path: text) := {
 	(count(decoded_sound(path, sample_rate, 1)) - DECODED_VALUES_AT) / (sample_rate as float)
 }

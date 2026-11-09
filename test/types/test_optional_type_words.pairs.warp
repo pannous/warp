@@ -1,0 +1,12 @@
+# `T?` of every type word, a time type too (card optional-date-type): a variable or field declared T or T? holds a T
+# (and ø of T?), checked as `x is T` checks it; any other value is refused
+'d: date? = ø; d == ø'	true
+'d: date? = 2024-06-01; d.year'	2024
+'d: date = 2024-06-01; d.month'	6
+'d: time? = ø; d = now; d is time'	true
+'x: duration? = 2 hours; x > 1 hour'	true
+'x: nat? = 3; x + 1'	4
+'class car { year: date? }; car(ø).year == ø'	true
+'class car { year: date? }; car(2024-06-01).year.year'	2024
+'class P { n: nat }; P(3).n'	3
+'d: date? = 3; d'	error

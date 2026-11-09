@@ -49,7 +49,7 @@ UNIT_ALIASES); `si_amount(x)` takes a quantity or a plain number.
   macOS cpal dependency is declared).
 - Browser: the worker posts `{type: "sound"}`, the page (playground.js playSound) plays it with WebAudio at its
   `at`; a new run silences what still plays. Audio starts only after a gesture: the run on page load stays silent.
-- Music files: `play "song.mp3"` / `play ./tune.mp3` / `play_file(path)` play wav, mp3, ogg, flac, aiff or m4a in
+- Music files: `play ./song.mp3` / `play_file(path)` play wav, mp3, ogg, flac, aiff or m4a in
   the background (format by its first bytes). Natively the first player the system has for the format: afplay (no
   ogg), paplay (no mp3), ffplay, mpv; the file is decoded first by ffprobe or afinfo (a broken one fails play, also
   headless), a player failing within 0.3 s fails play, a later failure prints `sound file <path>: <player> failed
@@ -62,7 +62,7 @@ Each layer keeps the ones above working and lowers to them. Order of value: 1 + 
 1. **Non-blocking, clocked playback** (built). `play` returns at once, its sound queued on the audio clock behind the
    sounds before it; `sound_queued()` the seconds still to sound, `wait_sound`, `stop_sound` drops the queue, the
    process's end waits (also for music files).
-   - Handles: `play`, `melody`, `tone`, `play "song.mp3"` give the sound's number in the run (from 1);
+   - Handles: `play`, `melody`, `tone`, `play ./song.mp3` give the sound's number in the run (from 1);
      `stop_sound(h)` drops or stops that one, `stop_sound` all (tests/programs/test_sound_handles.rs).
    - Offline render: `save sound as: "song.wav"` / `save(sound, "song.wav")` (the word sound is a lib Recording,
      `render_sound` the old name with a note) writes the sounds since the last render
