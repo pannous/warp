@@ -38,15 +38,15 @@ command_help = [
 	# ["<file> <out.wasm> [folder [lib]]", "Compile the file to the module, as the native `warp` calls it"]
 ]
 # the commands that run what they compile: plain WASI cannot instantiate the module
-# TODO Drastically reduce all these internal commands, none of which are used by the user (card commands-reduce)
+# TODO (card commands-reduce) Drastically reduce all these internal commands, none of which are used by the user
 running_commands = ["run", "eval", "test", "verify", "fuel", "fast", "console"]
 # the commands that need the native warp's host: a server, a window, the network, the Lean model, the build files
-# TODO Drastically reduce all these internal commands, none of which are used by the user (card commands-reduce)
+# TODO (card commands-reduce) Drastically reduce all these internal commands, none of which are used by the user
 native_commands = ["pure", "self", "rebuild", "tool", "fetch", "dev", "serve", "deploy", "link", "app", "docs", "wiki",
 	"home", "lsp", "start", "types", "format", "lint", "beautify", "fix"]
 
 # the commands the native warp runs itself, before warp.wasm sees them (core/native/warp.warp)
-# TODO Drastically reduce all these internal commands, none of which are used by the user (card commands-reduce)
+# TODO (card commands-reduce) Drastically reduce all these internal commands, none of which are used by the user
 native_warp_commands = ["run", "pure", "self", "eval", "fast", "fuel", "rebuild", "test", "repl", "console", "start", "version", "beautify", "fix", "format", "lint", "docs", "wiki", "home", "app", "dev"]
 # set by the native warp for the compiler it hosts: the host's name
 HOST_VARIABLE = "WARP_HOST"

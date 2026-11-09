@@ -5,7 +5,7 @@
 '(red as int) + 0'	4294901760
 '(red as int) == 0xFFFF0000'	true
 'red is Color'	true
-'5 is Color'	false
+'5 is Color'	true
 'type Flag = int; format Flag f as text := "flag " + (f as int); "" + (3 as Flag)'	"flag 3"
 'red.hex == 0xFFFF0000'	true
 'red.hex_text'	"#FF0000"

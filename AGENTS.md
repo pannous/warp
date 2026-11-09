@@ -124,7 +124,7 @@ every issue you encounter goes in with `todo add "…"` (~/dev/bin/todo, column 
 `todo list`, `todo move <card> <column>`, `todo done <card> [commit]` (never delete a card). 
 Picking a card is `todo take <card> <session name>` The branch will and must be named identical to the card. 
 
-When encountering a TODO without corresponding card in my main checkout ~/dev/angles/warp/lib/ Create a card for that to do and mark the card name behind the todo and commit 
+When encountering a TODO without corresponding card in my main checkout ~/dev/angles/warp/lib/ Create a card for that to do and put the card name right after the word TODO, `# TODO (card <name>) <text>`, and commit 
 
 Create a clean, idiomatic, new generic implementation from first principles. 
 
