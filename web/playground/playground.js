@@ -946,7 +946,7 @@ function showValue(value, error, html) {
 
 function showReport(report) {
 	showValue(report.value, report.error, report.html);
-	const errorAt = report.error ? report.error_at : null; // the failing place: clicking the error goes there
+	const errorAt = report.error ? report.error_at ?? placeInProgram(report.value) : null; // the failing place: clicking the error goes there
 	$("value").classList.toggle("located", Boolean(errorAt));
 	$("value").title = errorAt ? `go to ${at(errorAt.line, errorAt.column)}` : "";
 	$("value").onclick = errorAt ? () => jumpTo(errorAt.line, errorAt.column) : null;
@@ -977,18 +977,26 @@ function showReport(report) {
 	// the level select shows where there is something it filters, shown or not
 	const filtered = [report.warnings, report.runtime_warnings, report.hints, notes].some(list => list?.length);
 	$("diagnostics-level").hidden = !filtered;
-	markPositions(report);
+	markPositions(report, errorAt);
 	showAcknowledged();
 	setStatus(report.crashed ? "the compiler crashed; reloaded" : `${Math.round(report.milliseconds ?? 0)} ms`, report.crashed);
+}
+
+// "… at samples/gpu/sdf_scene.warp:54:2": the place in the chosen sample an error message names (card clickable-error-jump)
+const FILE_PLACE = /([\w.\/-]+\.warp):(\d+):(\d+)/g;
+function placeInProgram(message) {
+	const file = programFile();
+	const place = file && [...String(message).matchAll(FILE_PLACE)].find(([, named]) => named.replace(/^\.\//, "") === file);
+	return place ? { line: Number(place[2]), column: Number(place[3]) } : null;
 }
 
 let positionMarks = []; // the editor's underlines of the shown report
 
 // the word at each error and warning position underlined in the editor, its message on hover (src/web/mod.rs error_at is
 // the position of an error no diagnostic made); hints are not marked: their positions can lag behind (card hint-positions)
-function markPositions(report) {
+function markPositions(report, errorAt) {
 	positionMarks.forEach(mark => mark.clear());
-	const errors = report.errors?.length ? report.errors : [report.error_at && { ...report.error_at, message: report.value }].filter(Boolean);
+	const errors = report.errors?.length ? report.errors : [errorAt && { ...errorAt, message: report.value }].filter(Boolean);
 	const places = [...errors.map(error => ["error", error]), ...(report.warnings ?? []).map(warning => ["warning", warning])];
 	positionMarks = places.filter(([, { line, column }]) => line > 0 && column > 0 && line <= editor.lineCount())
 		.map(([kind, { line, column, message }]) => markWord(kind, line - 1, column - 1, message)).filter(Boolean);
