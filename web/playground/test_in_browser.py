@@ -129,7 +129,8 @@ PRINTED_FENCE = "```printed"
 # a snippet run in the page (%s: its code as JSON, the milliseconds it may take): its value and stdout, or {stuck}
 RUN_SNIPPET = """(async () => {
 	const report = await Promise.race([playground.evaluate(%s), new Promise(done => setTimeout(() => done({ stuck: true }), %d))]);
-	return JSON.stringify(report.stuck ? report : { value: report.value, printed: (report.printed || []).filter(part => part.stream !== 2).map(part => part.text).join("") });
+	// (markup shows rendered, its » value line hidden: playground.js showValue)
+	return JSON.stringify(report.stuck ? report : { value: report.html || report.value, printed: (report.printed || []).filter(part => part.stream !== 2).map(part => part.text).join("") });
 })()"""
 TEXT_HOLE = "(a computed text between children changes alone)"  # card web-fine-text-nodes: markup.rs text_holes
 TEXT_HOLE_CODE = 'use web\nn = 0\ndiv{ section{ h1{ "Counter" } button{ on click { n += 1 }, "add" } "clicked " + n + " times" } }'
@@ -141,6 +142,8 @@ COMPONENT_HOLE_SHOWN = "addclicked 2 timesaddclicked 10 times"
 REPORT = "(?report shows the report button, which drafts an issue with the program)"  # card report-button
 REPORT_CODE = 'print "reported"'
 REPORT_PRINTED = "reported"
+REPORT_PAGE = "(a report and a bug report carry the page's address, which names the example shown: #loops)"  # card include-source
+REPORTED_EXAMPLE = "loops"
 BUG_BUTTON = "(the bug button sends a comment with the program; ?bug_token stores the token, a wrong one is refused)"  # card bug-report
 BUG_TOKEN = "wrong-probe-token"  # never the real one: the endpoint refuses it, so no card is made
 BUG_COMMENT = "probe comment"
@@ -692,6 +695,20 @@ def bug_button_wrong(page_url):
 	wrong += [] if BUG_TOKEN not in shown.get("address", "") else [f"bug token left in the address: {shown['address']}"]
 	wrong += [] if "wrong token" in shown["status"] else [f"wrong bug token not refused: {shown['status']!r}"]
 	return wrong + ([] if shown.get("forgotten") else ["refused bug token still stored"])
+
+
+def report_page_wrong():
+	"""the address follows the chosen example, and both reports carry it, so a card links to that example"""
+	shown = browser("eval", f"""(async () => {{
+		await playground.chooseExample({json.dumps(REPORTED_EXAMPLE)});
+		return JSON.stringify({{ address: location.href, page: playground.bugReport().page, issue: playground.reportAddress() }});
+	}})()""")
+	shown = json.loads(json.loads(shown)) if shown.startswith('"') else {"address": f"(page gave no answer: {shown or browser_complaint})"}
+	example = "#" + REPORTED_EXAMPLE
+	body = urllib.parse.parse_qs(urllib.parse.urlparse(shown.get("issue", "")).query).get("body", [""])[0]
+	wrong = [] if shown["address"].endswith(example) else [f"address not following the example {example}: {shown['address']}"]
+	wrong += [] if shown.get("page") == shown["address"] else [f"bug report without the address: {shown.get('page')!r}"]
+	return wrong + ([] if shown["address"] in body else [f"report issue without the address: {body[-200:]!r}"])
 
 
 def report_wrong(page_url):
@@ -1307,7 +1324,7 @@ def check_examples(names, page_url=None, site=None):
 	snippets = guide_snippets() if GUIDE in names else []
 	for line, code, value, printed in snippets:
 		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
