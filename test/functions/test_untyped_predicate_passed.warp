@@ -2,5 +2,5 @@
 
 # an_untyped_predicate_passed_as_a_value
 is! «f(c) := is_digit(c) or c == '-'
-apply(g, v) := g(v)
+apply(g: function, v) := g(v)
 apply(f, '-')» true

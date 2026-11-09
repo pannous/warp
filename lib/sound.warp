@@ -1053,7 +1053,7 @@ play(fill: (samples, float) -> any, for duration) := {
 	played_blocks(t => fill(block, t), [block], duration)
 }
 // fill(t) writes the speakers' blocks, one mono, [left, right] interleaved in stereo, once a block
-played_blocks(fill, speakers, duration) := {
+played_blocks(fill: function, speakers, duration) := {
 	wanted = round(si_amount(duration) * sample_rate) as int
 	length = count(speakers[0])
 	amplitudes = []
