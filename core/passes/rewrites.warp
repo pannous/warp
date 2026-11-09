@@ -1227,6 +1227,12 @@ named_enum(code: Node): text := {
 
 # whether the code a hole bound passes the condition
 program_word(word: text): bool := binds_value(rule_scope, word) or binds_as(rule_scope, word, Meaning.Function)
+# the word a synonym calls, the program's own definition of it (name·own, prelude_words.warp with_own_words) before
+# the library's: `square(x) := x*x*10; 3 squared` is 90 (card alias-follows-redefinition)
+synonym_word(written: text): text := {
+	word = unaliased(written)
+	if program_word(own_word(word)) then own_word(word) else word
+}
 condition_holds(condition: Node, bound: map): bool := {
 	if is_negation(condition) { return not condition_holds(value_of(condition), bound) }
 	if is_rule_word_call(condition) { return computed(condition, bound) == yes }
@@ -1244,7 +1250,7 @@ condition_holds(condition: Node, bound: map): bool := {
 		if rule_in_attribute and bound[hole] is symbol and not program_word(name_of(bound[hole])) { return no }
 		if not first_parameter_fits(bound[hole], name_of(condition#3)) { return no }
 		# `$f takes one` binds the word the synonym calls: `size xs` is count(xs)
-		if name_of(condition#3) == one_word { bound[hole] = placed(symbol(unaliased(name_of(bound[hole]))), bound[hole]) }
+		if name_of(condition#3) == one_word { bound[hole] = placed(symbol(synonym_word(name_of(bound[hole]))), bound[hole]) }
 		return yes
 	}
 	if is_context_word(condition) { return context_holds(rule_matched, name_of(condition)) }

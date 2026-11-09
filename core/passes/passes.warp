@@ -182,7 +182,7 @@ with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 	timed("with_reached")
 	# (the prelude being built as a module is the program's use of it, never reached a second time: only its alias
 	# calls named, `index_of(rest, piece)` in its text_holes, as with_reached names a program's)
-	if module_written == "prelude" { return aliased(passed, module_aliases(prelude), {}) }
+	if module_written == "prelude" { return aliased(passed, module_aliases(prelude), {}, yes) }
 	# (a linked prelude's definitions from its signature, declared only, its words called in prelude.wasm)
 	linked = linked_signature("prelude")
 	if linked != ø and prelude == prelude_text then with_reached(passed, "", no, [], linked.slices) else with_reached(passed, prelude, no, [std_module_path("prelude")])
