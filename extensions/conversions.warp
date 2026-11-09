@@ -180,7 +180,7 @@ class Places { typed: map; converting: map; classes: map; results: map }
 # a parameter typed so of the definition around it (`g(d: Length) := f(d)`), the instance of a constructor of the class
 converted_arguments(n: Node, places: Places, known: map): Node := {
 	call = definition_call(n)
-	if call != ø { return Key(key_of(n), Op.Define, converted_arguments(value_of(n), unshadowed(places, call), parameters_typed(call))) }
+	if call != ø { return Key(key_of(n), Op.Define, converted_arguments(value_of(n), unshadowed(places, bound_at(n)), parameters_typed(call))) }
 	walked = children(n, x => converted_arguments(x, places, known))
 	if is_key(walked, Op.Assign) and is_key(key_of(walked), Op.Colon) and key_of(key_of(walked)) is symbol and value_of(key_of(walked)) is symbol {
 		return Key(key_of(walked), Op.Assign, passed(value_of(walked), name_of(value_of(key_of(walked))), name_of(key_of(key_of(walked))), places, known))
@@ -193,9 +193,9 @@ converted_arguments(n: Node, places: Places, known: map): Node := {
 	group_like(walked, [walked#1] + (1 to #arguments).map(at => passed(arguments#at, types#at, taker, places, known)))
 }
 passed(value: Node, type: text, taker: text, places: Places, known: map): Node := if converts_to(type, places.converting) and not known_as(value, type, places, known) then call_of(argument_conversion_name(type), [value, Text(taker)]) else value
-# the places without the functions a parameter of the definition shadows, `apply: function` called `apply([item])`
-unshadowed(places: Places, call: Node): Places := {
-	names = signature_of(items_of(call)).parameters.map(parameter => parameter.name)
+# the places without the functions a parameter or variable of the definition shadows, `apply: function` called
+# `apply([item])`, `named = (m => …)` called `named(w)` (card local-shadowing)
+unshadowed(places: Places, names: list): Places := {
 	if names.any(name => places.typed.has(name)) then Places(without_keys(places.typed, names), places.converting, places.classes, places.results) else places
 }
 # name → type of each parameter of a definition
