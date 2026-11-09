@@ -162,6 +162,7 @@ def time_operation_call(body: Body, symbol: text, a: TypedCode, b: TypedCode): T
 	held = []
 	for operand in [a, b] {
 		if operand.kind not in time_operand_kinds { return refuse("a time moved by a " + kind_spelling(operand.kind) + ": a time takes + or - a duration") }
+		if operand.kind == ValueKind.Node and module.functions.has(quantity_lasting_word) { operand = TypedCode(ValueKind.Node, boxed(call_values(module.functions[quantity_lasting_word], [operand]))) }
 		place = fresh_local(body, ValueKind.Node)
 		stored += boxed(operand) + [op.local_set] + uleb(place)
 		held += [[operand.kind, place]]
