@@ -1,9 +1,12 @@
 // The prelude (notes/stdlib.md §8): words every program has without `use`; only those it calls come along.
 // Each is `name(parameters) := body` (modules::prelude_word_arity reads the parameters); library_words maps other
 // spellings and method forms onto them (`isdigit(c)`, `xs.first()`, `round(x, 2)` → round_to)
+// The words and aliases the compiler itself is written with are the prelude's core part, core/prelude_core.warp,
+// which every program's prelude reads before this file (decision core-takes-what-it-uses).
 // Transition (card builtins-seed-transition): the typed builtin lines below (`from warp`, `from emitter`, `from 'm'`)
-// are the core's, core/analysis/builtins.warp and math_builtins.warp, which the compiler reads; they stay here only for
-// the seed, which reads them off this file, until the next seed refresh deletes them here
+// are the core's, core/analysis/builtins.warp and math_builtins.warp, which the compiler reads, and the core part's
+// aliases are written here too; they stay here only for the seed, which reads them off this file, until the next seed
+// refresh deletes them here
 
 // The words warp computes itself, the emitter's runtime functions, with their signatures (decision
 // foreign-signature, `from warp`); a parameter with a default may be left out (`s.split` splits at spaces). A word
@@ -53,12 +56,6 @@ map(t: text, f: (any) -> any): list from emitter
 filter(xs: list, f: (any) -> bool): list from emitter
 filter(t: text, f: (any) -> bool): list from emitter
 // the first element, combined with every later one in turn: `[3, 1, 2].reduce((a, b) => a + b)` is 6
-reduce(xs: list, f: function) := {
-	if count(xs) == 0 { raise "reduce of an empty list" }
-	combined = xs#1
-	for i in 2 to count(xs) { combined = f(combined, xs#i) }
-	combined
-}
 fold(xs: list, start, f: (any, any) -> any): same as start from emitter
 any(xs: list, f: function): bool from emitter
 any(t: text, f: function): bool from emitter
@@ -128,13 +125,6 @@ eval(code: text, with names: map) := eval_code(names.keys.map(name => "${name} =
 warning(message): text from emitter
 raise(message): same as message from emitter
 error(message): any from emitter
-// a class place's refusal (decision class-types-checked, extensions/conversions.warp argument_conversion):
-// `f takes a Length, not 5s (a Time)`
-place_refused(value, taker: text, needed: text) := raise taker + " takes " + with_article(needed) + ", not " + value + " (" + with_article(type(value).name) + ")"
-// `a word`, `an item`: the word after its indefinite article (the compiler's messages too)
-with_article(word: text): text := (if "AEIOUaeiou".contains(word#1) then "an " else "a ") + word
-// whether an instance or a map has every one of the fields, as a class extending none takes it
-has_fields(value, names: list): bool := names.all(name => value.has(name))
 is_error(x): bool from emitter
 is_type(x, type_name): bool from emitter
 // a node's parts and a node made of parts (wiki/node.md)
@@ -216,18 +206,27 @@ puti(n: int) := print n
 putl(n: int) := print n
 putf(x: float) := print x
 first(xs: list or text) := xs#1
-last(xs: list or text) := xs#(count(xs))
 // decision byte-index-of: a text names the unit it counts a part's place in: `"a👍🏽b".find "b"` is the position 3
 // (characters from 1, like t#p), `"a👍🏽b".byte_index_of "b"` the offset 9 (bytes from 0); a missing part is an error
-find(t: text, part: text) := count(split(t, present_part(t, part))#1) + 1
 byte_index_of(t: text, part: text) := byte_size(split(t, present_part(t, part))#1)
-present_part(t: text, part: text) := { if not (part in t) { raise "ValueError: \"" + part + "\" is not in \"" + t + "\"" }; part }
 // Python's `list(x)`: the list itself, a text's characters
 as_list(x) := x as list
 // `count x in y`, `y.count(x)`: how often x occurs as an item of a list or a character of a text, and how often part
 // occurs in a text, not overlapping: count_of("banana", "an") is 2; # counts, so a program's own count leaves them be
 count_item(xs, x) := #filter(xs, item => item == x)
-count_of(t, part) := #split(t, part) - 1
+// (a walk over the bytes, nothing allocated: split made a list of every piece only to count them, card count-of-split)
+count_of(t, part) := {
+	size = byte_size(part)
+	if size == 0 { return #split(t, part) - 1 }
+	found = 0
+	at = 0
+	while at + size <= byte_size(t) {
+		matched = 0
+		while matched < size and byte_at(t, at + matched) == byte_at(part, matched) { matched += 1 }
+		if matched == size { found += 1; at += size } else { at += 1 }
+	}
+	found
+}
 // the count of x in y, written `count(y, x)` or `y.count(x)` (arity_variants; `count x in y` counts a yes/no, refused): of a text its parts,
 // else its items, and of a function the items it holds for, `xs.count { |x| x > 1 }`; its own name, so `count xs`
 // stays the emitter's count
@@ -261,13 +260,6 @@ round_to(x: float, places: int): float := round(x * 10 ^ places) / 10 ^ places
 // The laws of the operators a fold combines with (card sum-plain-fold): each one is associative, so the compiler may
 // regroup, fuse and split any fold of it, whatever the word calling it is named, and the identity starts the fold
 operator_laws = {"+": {associative: yes, identity: 0}, "*": {associative: yes, identity: 1}, and: {associative: yes, identity: yes}, or: {associative: yes, identity: no}, max: {associative: yes}, min: {associative: yes}}
-// the sum of the items, a fold like any other: a program's own sum replaces it (the Rust compiler still expands its
-// own sum: rust-harness:src/lowering/words/library_words.rs)
-// `list or number`, not `list`: a list parameter gets the items as a $list, so a range would make all of them first;
-// not `any`, which takes a yes/no: `sum xs == 3` would be sum(xs == 3) (card xs-sum). Of one number that number, as max
-// A list sums from its first item, so a class's own + adds its items (decision class-operators-generic):
-// `sum([5km, 1500m])` is 6.5km; an empty list sums to 0
-sum(xs: list or number) := if is_range(xs) then range_sum(xs) else if xs is number then xs else if count(xs) == 0 then 0 else fold(xs[1 ..], xs#1, +)
 // `sum 1 2 3`, `sum(1, 2, 3)`: the numbers given, as max takes them (lib/extrema.warp)
 sum(a: number, b: number, more...): number := fold([a, b] + more, 0, +)
 // dir(v) of a value only the run knows (extensions/sugar/reflection.warp gives the words of a list, a text and a map): a map's
@@ -296,16 +288,6 @@ rewrite ($xs: [f16] = $v) => ($xs = $packed) where $packed = gpu_packed_as(f16, 
 rewrite ($xs: [bf16] = $v) => ($xs = $packed) where $packed = gpu_packed_as(bf16, $v)
 // the arithmetic mean, also spelled average
 mean(xs) := if count(xs) == 0 then raise "mean of an empty list" else sum(xs) / count(xs)
-// the UTF-8 bytes of a text, `t.bytes` (decision text-unit-plurals)
-bytes(t: text) := (0..byte_size(t)).map(at => byte_at(t, at))
-// `for byte in t` (decision loop-variable): the value walked by that unit when its type has one, a text's bytes,
-// chars or code points, a map's [key, value] pairs; else by its own items, a map's keys, a list's items (a list of bytes
-// stays one), so the loop needs no type at the sugar
-walked_by(value: any, unit: text): list := {
-	if value is text { return if unit == "bytes" then bytes(value) else if unit == "codepoints" then code_point_list(value) else chars(value) }
-	if value is map { return if unit == "pairs" then map_keys(value).map(key => [key, value[key]]) else map_keys(value) }
-	value
-}
 // x↑n, Knuth's up arrow, is the power and x↓b the log of x to base b (card easy-add): operators of numbers only, so
 // another type declares its own `infix operator ↑(v: V, n: int) := …`
 infix operator ↑(x: number, n: number) := x ^ n
@@ -320,13 +302,6 @@ cube(x: number): number := x * x * x
 // ∜x (lib/math.warp prefix operator)
 fourth_root(x) := sqrt(sqrt(x))
 fourth_root(x: float): float := sqrt(sqrt(x))
-replace(t, old, with new) := join(split(t, old), new)
-// ASCII character tests; a character compares by its code point
-is_digit(c) := c >= '0' and c <= '9'
-is_digit(c: codepoint): bool := c >= '0' and c <= '9'
-is_alpha(c) := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')
-is_alphanumeric(c) := is_alpha(c) or is_digit(c)
-is_space(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
 is_hex_digit(c) := is_digit(c) or (lower(c) >= 'a' and lower(c) <= 'f')
 is_word_char(c) := is_alphanumeric(c) or c == '_'
 // at least one character, each passing is_class: consists_of("42", is_digit)
@@ -679,15 +654,6 @@ civil_year(days: int): int := {
 }
 // the date of a day number as {year, month, day}
 civil_from_days(day_count: int) := {year: civil_year(day_count), month: civil_month(day_count), day: civil_day(day_count)}
-// the day number of a proleptic Gregorian date
-days_from_civil(year: int, month: int, day: int): int := {
-	march_year = if month <= 2 then year - 1 else year
-	era = march_year /! 400
-	year_of_era = march_year - era * 400
-	march_month = if month > 2 then month - 3 else month + 9
-	day_of_year = (153 * march_month + 2) /! 5 + day - 1
-	era * 146097 + year_of_era * 365 + year_of_era /! 4 - year_of_era /! 100 + day_of_year - 719468
-}
 // the check of the Rust tests' `is!("3+3", 6)`, written `is! "3+3" 6` (decision warp-is-tests): the code's value is
 // the expected one, permissively: equal, or both nothing-like (0, ø, [], no); a failure says what the code gave
 is!(warp: text, expected: any) := {

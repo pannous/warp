@@ -12,7 +12,7 @@ class ModuleSignature { source: text; uses: list; slices: list; rules: list; for
 # image_fields) when its compile wrote them
 module_signature_node(name: text, image: list): Node := {
 	path = std_module_path(name)
-	source = file_text(path) ?? ""
+	source = std_module_text(name)
 	uses = use_lines(source)
 	slices = definition_slices(source).map(slice => square_list([Text(slice#1), Text(first_line(slice#2)), Text(pack(plain_node(parsed(slice#2, uses))))]))
 	curly_list([

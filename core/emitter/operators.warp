@@ -33,7 +33,7 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 	if symbol == "+" and a.kind == ValueKind.List and b.kind != ValueKind.Node { return runtime_call("list_join", [a, TypedCode(ValueKind.List, vector_code([boxed(b)]))]) }
 	textual = is_textual(a.kind) or is_textual(b.kind)
 	if symbol == "+" and textual { return runtime_call("text_join", [shown_text(a), shown_text(b)]) }
-	# `d + 1 day`, `a - b` of a time: lib/time_arithmetic.warp's time_operation
+	# `d + 1 day`, `a - b` of a time: lib/time.warp's time_operation
 	if (a.kind == ValueKind.Time or b.kind == ValueKind.Time) and symbol in time_operators and module.functions.has(time_operation_word) { return time_operation_call(body, symbol, a, b) }
 	# `1 day > 2 hours`, `90 min < 1 day`, `1 day == 24 hours`: a time beside a boxed value passes extensions/times
 	# one_duration_kind first, lib/units' time quantities another duration kind until card dates-times-extraction
