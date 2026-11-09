@@ -143,8 +143,8 @@ def show() {
 	else { paint(canvas_pixels, canvas_width, canvas_height) }
 }
 
-// save canvas as: "painting.png", save(canvas, "painting.png") or canvas.save("painting.png") (card save-painting;
-// decision save-picture-word: save is typed by the Picture, no bare save "painting.png" beside file's save): the canvas
+// save canvas as: ./painting.png, save(canvas, ./painting.png) or canvas.save(./painting.png) (card save-painting;
+// decision save-picture-word: save is typed by the Picture, no bare save ./painting.png beside file's save): the canvas
 // as drawn so far as a PNG, natively that file, in the playground a download. On the GPU the pixels are there, not
 // here: the host draws them again
 class Picture {
