@@ -134,7 +134,7 @@
 
 # test_invalid_number_text_is_an_error
 'int(" -12 ")'	-12
-'int("2.7")'	2
+'int("2.7")'	error
 
 # test_scientific_notation
 '1e3'	1000

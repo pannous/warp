@@ -405,11 +405,12 @@ folders_upward(at: text): list := {
 }
 absolute_folder(folder: text): text := if folder.starts_with("/") then folder else cwd + "/" + folder
 path_in(folder: text, name: text): text := without_steps_up(if name.starts_with("/") then name else folder + "/" + name)
-# the path with each `folder/..` taken out, so a file two folders use is one file (runtime/extended/../text.warp is
-# runtime/text.warp, card runtime-split)
+# the path with each `folder/..` and inner `.` taken out, so a file two folders use is one file (runtime/extended/../text.warp is
+# runtime/text.warp, card runtime-split), and `/project/test/./..` walks up to /project (card wasm-fixture-root)
 without_steps_up(path: text): text := {
 	kept = []
 	for part in path.split("/") {
+		if part == "." and #kept > 0 { continue }
 		if part == ".." and #kept > 0 and kept#(#kept) not in ["..", "."] { kept = kept[0 ..< #kept - 1] } else { kept += [part] }
 	}
 	kept.join("/")

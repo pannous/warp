@@ -28,7 +28,7 @@ SITE_FILES=(index.html playground.css playground.js deploy.js assistant.js compl
 	guide.md guide-expert.md primer.md markup.js markup-transitions.js markup-forms.js canvas.js worker.js task-worker.js
 	task-workers.js js-members.js coi-serviceworker.js host.js "host-*.js" values.js wasi.js driver.js components.js foreign_python.py python_capi.py
 	imports.js std.js examples.js codemirror-warp-mode.js codemirror lib samples.js keywords.js
-	keywords.txt assistant.json version.js)
+	keywords.txt assistant.json version.js apple-touch-icon.png)
 DOMAIN=warp.pannous.com
 # the digits of a file's content hash its deployed URL carries (stamp_assets)
 STAMP_DIGITS=10

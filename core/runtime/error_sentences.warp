@@ -23,6 +23,7 @@ error_fix(name: text): text := {
 	if name == "a_list_item_holds_no_error" or name == "a_field_holds_no_error" { return error_in_data_fix() }
 	if name == "not_a_map" { return "keys, values and entries are a map's; a list's positions are 1..count(xs)" }
 	if name == "ø_plus_a_text" { return "fix: start a text with `t = \"\"`, a list with `t = []`" }
+	if name == "a_fraction_is_no_int" { return "fix: int(number(t)) drops the fraction, round(number(t)) rounds" }
 	if name == "invalid_code_point" { return "a code point is 0…0x10FFFF, outside the surrogates 0xD800…0xDFFF" }
 	# one kind from card dates-times-extraction on (decision one-duration)
 	if name == "calendar_and_clock_durations_are_different_kinds" { return "fix: for now write the calendar part in hours: 24 hours, not 1 day" }
