@@ -1,0 +1,4 @@
+# ⅈ is lib/complex's imaginary unit, no use needed (card imaginary-unit-evaluation)
+«ⅈ * ⅈ == Complex(-1, 0)»	yes
+«c = -0.8 + 0.156ⅈ; [c.re, c.im]»	[-0.8, 0.156]
+«z = 1 + 2ⅈ; w = z² + z; [w.re, w.im]»	[-2, 6]
