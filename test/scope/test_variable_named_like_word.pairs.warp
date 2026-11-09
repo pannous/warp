@@ -1,0 +1,4 @@
+# a variable named like a library word stays a value when range-indexed (variable-named-like-2)
+'slice = "abc"; slice[1 ..]'	"bc"
+'f() := { slice = [1, 2, 3]; slice[1 ..] }; f()'	[2 3]
+'t = "hello"; t[1 ..] + "!"'	"ello!"

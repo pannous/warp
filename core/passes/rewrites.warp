@@ -333,7 +333,9 @@ enums_declared(program: Node): Node := {
 # the program with the sugar rules applied everywhere, the definitions it reached from the prelude and the modules too,
 # its stores assignments; the rules of a place apply only there
 sugared(program: Node, rules: list): Node := stored(sugar_applied(program, rules))
-sugar_applied(program: Node, rules: list): Node := {
+# then the rules of its whole, `where program` (extensions/sugar/events.warp's listening_program), each once
+sugar_applied(program: Node, rules: list): Node := with_program_rules(sugar_walked(program, rules), rules, rules.map(rule => {}))
+sugar_walked(program: Node, rules: list): Node := {
 	if #rules == 0 { return program }
 	# the program's nodes listed once for all that its rules ask of it (each listing them anew was ~6% of a compile)
 	nodes = nodes_in(program)
