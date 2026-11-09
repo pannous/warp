@@ -129,7 +129,8 @@ PRINTED_FENCE = "```printed"
 # a snippet run in the page (%s: its code as JSON, the milliseconds it may take): its value and stdout, or {stuck}
 RUN_SNIPPET = """(async () => {
 	const report = await Promise.race([playground.evaluate(%s), new Promise(done => setTimeout(() => done({ stuck: true }), %d))]);
-	return JSON.stringify(report.stuck ? report : { value: report.value, printed: (report.printed || []).filter(part => part.stream !== 2).map(part => part.text).join("") });
+	// (markup shows rendered, its » value line hidden: playground.js showValue)
+	return JSON.stringify(report.stuck ? report : { value: report.html || report.value, printed: (report.printed || []).filter(part => part.stream !== 2).map(part => part.text).join("") });
 })()"""
 TEXT_HOLE = "(a computed text between children changes alone)"  # card web-fine-text-nodes: markup.rs text_holes
 TEXT_HOLE_CODE = 'use web\nn = 0\ndiv{ section{ h1{ "Counter" } button{ on click { n += 1 }, "add" } "clicked " + n + " times" } }'

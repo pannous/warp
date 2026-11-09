@@ -342,10 +342,14 @@ modules_in(folder: text): map := {
 # what a `use` statement names, ø for another statement
 use_target(statement: Node): any := {
 	if not (is_group(statement) and #statement == 2 and statement#1 is symbol and name_of(statement#1) in import_keywords) { return ø }
+	target = path_text(statement#2)
 	# a quoted name without an extension is the bare one: `use "list"` is `use list`, a file of the folder or a std module
-	if statement#2 is text and not statement#2.contains(".") { return symbol(statement#2) }
-	statement#2
+	if target is text and not target.contains(".") { return symbol(target) }
+	target
 }
+# the text a path literal marks, `./x.warp` parsed as `"./x.warp" as path` (core/parsing/parser.warp), so `use ./x.warp`
+# names the file `use "./x.warp"` does (card colors-package-import); any other node as it is
+path_text(n: Node): Node := if is_key(n, Op.As) and value_of(n) == symbol("path") and key_of(n) is text then key_of(n) else n
 
 # the path of the file of the folder a `use` statement names, ø for another statement or a module of no such file
 file_used(statement: Node, folder: text): any := {

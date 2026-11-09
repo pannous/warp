@@ -53,7 +53,7 @@ Parentheses go first.
 
 `/` divides.
 
-```warp => 2.5
+```warp => 5/2
 10 / 4
 ```
 
@@ -65,7 +65,7 @@ Parentheses go first.
 
 Numbers stay exact. Fractions and decimals are exact numbers: no rounding, ever.
 
-```warp => 0.5
+```warp => 1/2
 1/3 + 1/6
 ```
 
@@ -625,13 +625,13 @@ Things go wrong sometimes. In warp an error is a value that says what happened.
 raise "boom"
 ```
 
-A function can also hand an error back as its value. The caller keeps it in an optional place (`int?`) and asks
+A function can also hand an error back as its value. The caller keeps it in an optional place (`number?`) and asks
 `failed`: no try, no catch. In a plain variable the error stops the program, as a raised one does.
 
-```warp => 1
-f(x) := if x < 0 then error "neg" else x
-r: int? = f(-1)
-if r failed then 1 else 2
+```warp => negative number!
+f(x) := if x < 0 then error "negative number!" else x
+r: number? = f(-1) # question mark means the result can be absent or failed.
+if not r failed then "all positive" else r
 ```
 
 A raised error stops the program, even inside `r = 10/0`. A bare `try` keeps it as the value instead, so `failed` works

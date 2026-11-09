@@ -1,5 +1,5 @@
 # a function brought by `use`, and the functions it calls, quoted into one shader
-# (extensions/rules/modules/shaders.warp, extensions/rules/rule_words.warp definitions_reached, lib/quote_helper.warp)
-'use quote_helper; made = shader_of(quote_helper); made.contains("fn quote_helper") and made.contains("values.quote_bias")'	yes
-'use quote_helper; made = shader_of(quote_deeper); made.contains("fn quote_deeper") and made.contains("fn quote_helper")'	yes
-'use quote_helper; ink(x, y) := quote_helper(x, y); made = shader_of(ink); made.contains("fn ink") and made.contains("fn quote_helper") and made.contains("values.quote_bias")'	yes
+# (extensions/rules/modules/shaders.warp, extensions/rules/rule_words.warp definitions_reached, test/web/quote_helper.warp)
+'use ./quote_helper.warp; made = shader_of(quote_helper); made.contains("fn quote_helper") and made.contains("values.quote_bias")'	yes
+'use ./quote_helper.warp; made = shader_of(quote_deeper); made.contains("fn quote_deeper") and made.contains("fn quote_helper")'	yes
+'use ./quote_helper.warp; ink(x, y) := quote_helper(x, y); made = shader_of(ink); made.contains("fn ink") and made.contains("fn quote_helper") and made.contains("values.quote_bias")'	yes
