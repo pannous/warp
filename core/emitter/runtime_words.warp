@@ -100,7 +100,7 @@ def intrinsic_of(body: Body, name: text, values: list): TypedCode {
 		# keyed(kind, left, right): a $Node of the kind with the two nodes; entry_key(n) a key's left node
 		# with_kind(n, kind): n's data and value in a $Node of that whole kind field
 		"with_kind": {
-			held = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
+			held = fresh_node_read(body)
 			part = i => held + gc_code(gc_ops.struct_get, [gc_type(gc.node), i])
 			TypedCode(ValueKind.Node, values#1.code + [op.local_set] + held[1..] + converted(values#2, ValueKind.Int) + part(1) + part(2) + gc_code(gc_ops.struct_new, [gc_type(gc.node)]))
 		}
@@ -113,14 +113,14 @@ def intrinsic_of(body: Body, name: text, values: list): TypedCode {
 		"list_node": TypedCode(ValueKind.Node, node_code(converted(values#1, ValueKind.Int), values#2.code))
 		# meta_node(n, line, column): n's kind, data and value in a $MetaNode at that position, no comment
 		"meta_node": {
-			held = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
+			held = fresh_node_read(body)
 			part = i => held + gc_code(gc_ops.struct_get, [gc_type(gc.node), i])
 			code = values#1.code + [op.local_set] + held[1..] + part(0) + part(1) + part(2) + converted(values#2, ValueKind.Int) + converted(values#3, ValueKind.Int)
 			TypedCode(ValueKind.Node, code + [ref_null, gc_type(gc.node), ref_null, gc_type(gc.node)] + gc_code(gc_ops.struct_new, [gc_type(gc.meta_node)]))
 		}
 		# meta_with_attributes(m, attributes): the $MetaNode m, its attributes these (a list's $Node)
 		"meta_with_attributes": {
-			held = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
+			held = fresh_node_read(body)
 			part = i => held + gc_code(gc_ops.ref_cast_null, [gc_type(gc.meta_node)]) + gc_code(gc_ops.struct_get, [gc_type(gc.meta_node), i])
 			code = values#1.code + [op.local_set] + held[1..] + part(0) + part(1) + part(2) + part(3) + part(4) + part(5) + boxed(values#2)
 			TypedCode(ValueKind.Node, code + gc_code(gc_ops.struct_new, [gc_type(gc.meta_node)]))
@@ -249,7 +249,7 @@ has_type_test(written: text): bool := aliased_type(written) in module.classes or
 # and checks it as `v is T` does, ø too for T?: else the run fails with "not a T" (decision typed-places-check)
 def type_checked(body: Body, written: text, value: TypedCode): TypedCode {
 	spec = base_type(written)
-	held = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
+	held = fresh_node_read(body)
 	passes = value_type_test(body, TypedCode(ValueKind.Node, held), spec).code
 	if written != spec { passes += held + [op.ref_is_null, op.i32_or] }
 	stored = boxed(value) + [op.local_set] + held[1..]
@@ -273,7 +273,7 @@ def node_type_test(body: Body, value: TypedCode, type: text): TypedCode {
 	kinds = 0
 	for kind in passing_kinds[type] { kinds = bit_or(kinds, kind_bit(kind)) }
 	if kinds == 0 { return runtime_call("node_is_type", [value, text_value(type), number_value(kinds)]) }
-	held = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
+	held = fresh_node_read(body)
 	bits = [op.local_get] + uleb(fresh_local(body, ValueKind.Int))
 	read = value.code + [op.local_set] + held[1..] + held_kind_bit_code(body, held) + [op.local_tee] + bits[1..]
 	type_value = read + [op.i64_const] + sleb(kind_bit(HeldBit.TypeValue)) + [op.i64_and, op.i64_eqz, op.i32_eqz]
@@ -294,6 +294,8 @@ def held_kind_bit_code(body: Body, held: list): list {
 	marked += unless_held(HeldBit.Map, is_field(Marked.Map)) + unless_held(HeldBit.Rational, ratio)
 	held + [op.ref_is_null, op.if] + value_type(ValueKind.Int) + held_bit(Kind.List) + [op.else] + marked + [op.end]
 }
+# the read of a new node local, which `+ [op.local_set] + read[1..]` fills
+def fresh_node_read(body: Body): list { [op.local_get] + uleb(fresh_local(body, ValueKind.Node)) }
 def held_bit(place: int): list { [op.i64_const] + sleb(kind_bit(place)) }
 # the bit on the stack, or the place's bit when the test holds
 def unless_held(place: int, test: list): list { held_bit(place) + test + [op.i32_eqz, op.select] }
