@@ -34,7 +34,7 @@ baked-lib-split.
 
 ## Left
 - P3 done on branch baked-lib-split-3 (worker warp-baked-lib-split-3): core/prelude_core.warp, the prelude's core
-  part (the 17 words the compiler calls, the 12 aliases its code writes); std_module_text("prelude") = core part + lib
+  part (the 16 words the compiler calls, the 12 aliases its code writes); std_module_text("prelude") = core part + lib
   file, the one reader (notes/library_zero_bake.md "core-takes-what-it-uses"); compiler-inputs.sh --baked-files lists
   no lib/ file. Left from it: the dead reaches by name (card note), which still compile ~45 uncalled lib prelude words in.
 - After the seed refresh: card builtins-seed-transition (it also deletes lib/prelude.warp's copies of the core part's
