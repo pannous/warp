@@ -36,6 +36,13 @@ note_file_origins(file: text, source: text) := {
 	origins = slice_origins([file])
 	for slice in definition_slices(source) { if origins.has(slice#2) { defined_origins[slice#1] = origins[slice#2] } }
 }
+# `file:line` of each definition named `name`, in the program's source and the files its brought definitions came from:
+# defined_origins keeps one place a name, a clash between two files needs both (lambdas.warp)
+written_places(name: text, source: text): list := {
+	files = word_set(defined_origins.values.map(origin => origin#1)).keys.filter(file => file != module.program_file).sort()
+	named_lines(source, module.program_file, name) + files.flat_map(file => named_lines(file_text(file) ?? "", file.remove_prefix("./"), name))
+}
+named_lines(source: text, file: text, name: text): list := spans_of(source).filter(span => span#1 == name).map(span => (if file then file + ":" else "line ") + "${#source[0 ..< span#2].split("\n")}")
 # source → its slices: the passes ask for each library module's slices per call and argument, cut once
 global source_slices = {}
 definition_slices(source: text): list := {
@@ -179,9 +186,10 @@ symbol_words(n: Node): list := {
 # the words a class's body mentions but its own fields and methods: `class C{pi = 3; f() := pi * r}` names no library pi
 # a type named with no body, a field's `x: Int` (sugar.warp typed_fields): it uses the type, as a prelude alias
 is_named_type(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "type" and value_of(n)#3 == ø
+# (a method's parameters and locals are its own too: ListMap's init(m = {}) names no unit m)
 class_words(view: Node): list := {
 	parts = parts_within(view)
-	own = parts.flat_map(part => if is_group(part) then items_of(part) else [part]).map(member_name)
+	own = parts.flat_map(part => if is_group(part) then items_of(part) else [part]).map(member_name) + parts.flat_map(part => names_bound_in(part).keys)
 	parts.flat_map(symbol_words).filter(word => word not in own)
 }
 
