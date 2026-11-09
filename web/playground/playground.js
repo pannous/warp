@@ -1291,17 +1291,18 @@ function showReportButton() {
 	$("report").onclick = () => window.open(reportAddress(), "_blank", "noopener");
 }
 
-// what a report holds: the program, what it showed and the playground's version
+// what a report holds: the program, what it showed, the playground's version and its address, which names the example
+// shown (#counter, showExampleInAddress)
 function reportedRun() {
-	return { code: editor.getValue(), output: $("output").innerText.trim(), version: $("version").textContent || "unversioned build" };
+	return { code: editor.getValue(), output: $("output").innerText.trim(), version: $("version").textContent || "unversioned build", page: location.href };
 }
 
 // a new GitHub issue holding the reported run, for its reporter to submit
 function reportAddress() {
-	const { code, output, version } = reportedRun();
+	const { code, output, version, page } = reportedRun();
 	const fenced = (text, limit, language = "") => "```" + language + "\n" + text.slice(0, limit) + (text.length > limit ? "\n…" : "") + "\n```";
 	const title = `playground: ${code.split("\n").find(line => line.trim()) ?? "empty program"}`;
-	const body = [fenced(code, REPORT_LIMITS.code, "warp"), "Output:", fenced(output, REPORT_LIMITS.output), version].join("\n\n");
+	const body = [fenced(code, REPORT_LIMITS.code, "warp"), "Output:", fenced(output, REPORT_LIMITS.output), `${version} · ${page}`].join("\n\n");
 	return `${ISSUE_URL}?${new URLSearchParams({ title, body })}`;
 }
 
@@ -1340,7 +1341,7 @@ function startBugButton() {
 function bugReport() {
 	const run = reportedRun();
 	const source = $("bug-source").checked ? { code: run.code, output: run.output } : { code: "", output: "" };
-	return { ...run, ...source, comment: $("bug-comment").value, express: $("bug-express").checked, page: location.href, console: consoleReport(),
+	return { ...run, ...source, comment: $("bug-comment").value, express: $("bug-express").checked, console: consoleReport(),
 		token: stored(BUG_TOKEN_KEY) ?? ($("bug-token").value.trim() || BUG_TOKEN) };
 }
 
