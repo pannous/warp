@@ -1155,3 +1155,12 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - bare-number-to-unit (user, 11-08, with length-pixels): `f(d: Length) := d; f(5)` is 5m: a bare number reaches a unit place by the unit's declared number conversion, as `5 as Length` does.
   - zone-literal-kept (user, 11-08, revises zone-literal-dropped): the bracketed zone literal stays, the RFC 9557 form: `2024-07-31T10:00[Europe/Berlin]` is +02:00, unknown zones refused; `zoned(t, "Europe/Berlin")` stays the word form. No test changes.
   - typed-places-check (user, 11-08, core OK, card optional-date-type): a variable or field typed with a type that has no core value kind (`d: date? = ø`, `x: duration = 2 hours`, `class car { year: date? }`) holds the value and checks it on assignment exactly as `x is T` does; `T?` lets ø through; failure raises "not a date". Core route (core/emitter declarations and instance fields reuse type_test_code).
+  - branch-cleanup-11-09 (Interviewer by decisions and taste, with warp-integrator; only main stays):
+    untyped-block-parameter finished as declared-block-parameters (its WIP refusal and sweep kept, the inference
+    commits dropped); quantity-dimension-types rebuilt on class-types-checked + bare-number-to-unit (one nominal check
+    for every class place, not a unit-literal path); optional-date-type finished as typed-places-check (its test is the
+    spec); rewrite-codepoints finished as text-unit-plurals (`t.bytes` as a number → `count t.bytes` like the other
+    unit words, no separate bytecount hint). Dropped: then-branch (then-not-pipe), ub-selfcheck (inference undone by
+    declared-block-parameters), functions-n-z-hold (contradicts the user's final sound-rest), input-bind-name (landed on
+    main in another form), wasm-module-uses (only rebuilt fixture bytes). stale-modules-kept is tooling, no language
+    objection.
