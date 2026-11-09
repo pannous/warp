@@ -1,0 +1,5 @@
+# `n = …` in a function where main has an n reads two ways: refused naming both (decision inner-assignment-refused)
+'n = 1; f() := { n = 2 }; f(); n'	error
+'n = 1; f() := { let n = 2; n }; [f(), n]'	[2 1]
+'n = 1; f() := { global n = 2 }; f(); n'	2
+'def f(){ total = 5; total }; total = f(); total'	5

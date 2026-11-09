@@ -1,3 +1,6 @@
 # now.UTC, also .utc: the same instant on the UTC wall clock (user 2026-11-07, card instant-zoned-utc)
 'use time; [str(Instant(0, "Asia/Kolkata").UTC), Instant(0, "Asia/Kolkata").utc.hour]'	["1970-01-01T00:00:00Z", 0]
 'use time; now.UTC.zone'	"UTC"
+# a getter giving now's result is an Instant to the class methods (card zoned-clock-utc)
+'clock := now; zoned(clock, "UTC").year >= 2026'	true
+'clock() := now(); zoned(clock, "UTC").year >= 2026'	true

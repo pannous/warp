@@ -59,7 +59,7 @@ native_links(wabt: text, library: text): text := {
 	libraries = c_libraries(c_functions_imported()).filter(l => l not in c_and_m)
 	if #libraries == 0 { return "" }
 	itself = if is_macos() then "@executable_path" else "'$ORIGIN'"
-	run_paths = [itself, itself + "/../lib", quoted_path(env(LIBRARY_LINK_VARIABLE) ?? library)].map(path => " -Wl,-rpath," + path).join("")
+	run_paths = [itself, itself + "/../lib", quoted_path(started_env(LIBRARY_LINK_VARIABLE) ?? library)].map(path => " -Wl,-rpath," + path).join("")
 	# GNU ld's --as-needed (Debian's default) drops a library the C calls reach only through dlsym
 	kept = if is_macos() then "" else " -Wl,--no-as-needed"
 	" -L" + quoted_path(library) + " -L" + quoted_path(wabt + "/lib") + run_paths + kept + libraries.map(l => " -l" + l).join("")
@@ -246,7 +246,7 @@ extended_to_end(image: list): list := {
 		at += little_endian(image, at + 4, 4)
 	}
 	size = #image - little_endian(image, last + SEGMENT_FILEOFF_AT, 8)
-	pages = bit_and(size + PAGE_BYTES - 1, -PAGE_BYTES)
+	pages = bits_and(size + PAGE_BYTES - 1, -PAGE_BYTES)
 	image[0 ..< last + SEGMENT_VMSIZE_AT] + le64(pages) + image[last + SEGMENT_FILEOFF_AT ..< last + SEGMENT_FILESIZE_AT] + le64(size) + image[last + SEGMENT_FILESIZE_AT + 8 ..< #image]
 }
 # the int of `width` bytes at `at`, little-endian

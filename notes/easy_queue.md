@@ -43,8 +43,8 @@ Cards marked 'old pure lane?' name the retired pure lane: check whether they sti
 - library-labelled-args | S | lib | insert at: | Next
 - display-dpi-word | S | lib | display.dpi | Next
 - color-shows-precision | S | lib | 1e-9 | Next
-- regex-error-messages | S | lib | messages | Soon
-- unknown-from-hex | S | lib | from_hex | Soon
+- regex-error-messages | S | lib | messages | Next
+- unknown-from-hex | S | lib | from_hex | Next
 - user-sign | S | web | akamai signup (user) | Later
 - root-power-warning | S | ext | add a warning | Later
 - print-in-script | S | lib | cyrillic print | Later
@@ -53,7 +53,7 @@ Cards marked 'old pure lane?' name the retired pure lane: check whether they sti
 - measurements-area-check | S | lib | sample check | Later
 - use-log-warning | S | lib | warning text | Later
 - rename-lib-helper | S | lib | rename | Later
-- tree-find | S | lib | infix-only find | Core
+- tree-find | S | lib | infix-only find | Next
 - sqrt-takes | S | lib | argument check | Core
 - quantity-program | S | lib | result display | Core
 - clock-plain | S | lib | clock type | Core
@@ -72,38 +72,38 @@ Cards marked 'old pure lane?' name the retired pure lane: check whether they sti
 - library-words | S | lib | overridable defaults | Core
 - sqrt-plus-minus-alone | S | lib | print form | Core
 - map-unit-field | S | lib | warning text | Core
-- list-codepoint | S | lib | as list of codepoint | Core
-- time-arithmetic-move | S | lib | move file | Core
-- kind-as-text | S | lib | case name | Core
-- code-points-once | S | lib | one pass | Core
+- list-codepoint | S | lib | as list of codepoint | Next
+- time-arithmetic-move | S | lib | move file | Next
+- kind-as-text | S | lib | case name | Next
+- code-points-once | S | lib | one pass | Next
 - int8-division-print | S | lib | print form | Core
-- count-of-split | S | lib | one-liner | Core
+- count-of-split | S | lib | one-liner | Next
 - canonical-word-print | S | ext | print | Core
 - plural-singular-check | S | ext | unit rule | Core
 - char-literal-matching | S | ext | rule match | Core
-- color-old | S | lib | hex_text | Core
-- play-wrong-arguments | S | lib | sound | Core
-- typed-color | S | lib | return annotation | Core
-- def-hsv | S | lib | hsv | Core
-- save-named-as | S | lib | save as: | Core
-- list-boxed | S | lib | read_bytes | Core
-- headless-ocean-run | S | lib | ocean sample | Core
+- color-old | S | lib | hex_text | Next
+- play-wrong-arguments | S | lib | sound | Next
+- typed-color | S | lib | return annotation | Next
+- def-hsv | S | lib | hsv | Next
+- save-named-as | S | lib | save as: | Next
+- list-boxed | S | lib | read_bytes | Next
+- headless-ocean-run | S | lib | ocean sample | Next
 - hex-mark | S | ext | hex print | Core
 - as-cast-warning | S | ext | warning | Core
-- char-times-length | S | lib | char times | Core
+- char-times-length | S | lib | char times | Next
 
 ## S script/test
 
-- commit-guard | S | script | merge commit guard | Soon
+- commit-guard | S | script | merge commit guard | Next
 - pypi-warp-release | S | script | release | Soon
-- test-stops | S | test | runner skips files | Soon
-- library-typed-outcome | S | test | tests use internals | Soon
+- test-stops | S | test | runner skips files | Next
+- library-typed-outcome | S | test | tests use internals | Next
 - sh-restarted | S | script | codex worker | Soon
 - native-driver-fails | S | script | todo done in driver | Soon
-- smoke-lib-shadow | S | script | smoke.sh builds nothing | Soon
-- old-reds | S | test | class_methods reds | Soon
-- sublime-hello-run | S | script | sublime | Soon
-- prebuilt-module-links | S | script | prebuilt links | Soon
+- smoke-lib-shadow | S | script | smoke.sh builds nothing | Next
+- old-reds | S | test | class_methods reds | Next
+- sublime-hello-run | S | script | sublime | Next
+- prebuilt-module-links | S | script | prebuilt links | Next
 - build-sh | S | script | build.sh | Soon
 - after-push-must | S | script | installs | Soon
 - quoted-path-format | S | script | parked branch | Soon
@@ -111,19 +111,19 @@ Cards marked 'old pure lane?' name the retired pure lane: check whether they sti
 - smoke-sh | S | script | native_host check | Soon
 - prebuild-crash-fix | S | script | prebuild | Soon
 - after-push-self-lane-1108 | S | script | promote failed | Soon
-- samples-direct-events | S | test | samples text | Soon
+- samples-direct-events | S | test | samples text | Next
 - wiki-remote-main | S | script | delete remote branch | Later
 - parked-branch | S | script | parked branch | Later
 - hints-run | S | script | flag | Core
 - warp-build-hello | S | script | build output | Core
-- error-kind-expectations | S | test | pairs line | Core
-- test-case-timeout | S | test | runner | Core
+- error-kind-expectations | S | test | pairs line | Next
+- test-case-timeout | S | test | runner | Next
 - format-writes | S | script | format | Core
-- units-arithmetic-test | S | test | test line | Core
-- arity-type-overloads | S | test | test file | Core
+- units-arithmetic-test | S | test | test line | Next
+- arity-type-overloads | S | test | test file | Next
 - warp-test | S | test | runner | Core
 - rebuild-runtime | S | script | rebuild step | Core
-- package-tests-registry | S | test | paths | Core
+- package-tests-registry | S | test | paths | Next
 
 ## S core
 

@@ -1,7 +1,6 @@
 # The standard library a compile reads: lib/'s folder for this run, a source file's text by its path, read from disk,
 # and the library index. The parser, uses.warp and compiler.warp read lib/ through these words.
-use os
-use file
+use "../host_io.warp"
 # The lib/ a run reads a program's standard modules from (its own data is built in, module_source): the one the run was
 # given (compiler.warp's fourth argument, given_library), else WARP_LIB, else the one above this file, or beside it when
 # the file was reached as core/ (card compiler-core-link). A compiled stage is kept for every identical lib/ and runs
@@ -14,7 +13,7 @@ global warp_lib_asked = no
 global warp_lib_given = ø
 def warp_lib(): text? {
 	if not warp_lib_asked {
-		warp_lib_given = env("WARP_LIB")
+		warp_lib_given = started_env("WARP_LIB")
 		warp_lib_asked = yes
 	}
 	warp_lib_given

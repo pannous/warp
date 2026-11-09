@@ -120,7 +120,7 @@ comprehension_sugar_module_names = sugar_files(["comprehensions"])
 # the sugar of declarations (extensions/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
 declaration_sugar_module_names = sugar_files(["declarations"])
 # the standard modules: those with `rewrite` lines lend their rules to the programs mentioning them
-std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "uncertain", "web", "storage", "frames", "native_host", "callbacks", "signals", "timers", "tasks", "shaders", "unicode_data", "unicode", "exact_values", "reals"]
+std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "host_io", "integers", "uncertain", "web", "storage", "frames", "native_host", "callbacks", "signals", "timers", "tasks", "shaders", "unicode_data", "unicode", "exact_values", "reals"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # the declarations sugar strips it, and the function keyword's rule rewrites the rest)
@@ -1121,8 +1121,12 @@ takes_only_numbers(word: text, arity: int?): bool := {
 # fixed parameters, at least one, all numbers: a word of a rest alone, `print(values...)`, takes a list as it is
 takes_numbers(fixed: list): bool := #fixed > 0 and fixed.all(parameter => is_numeric_type(parameter.type_name))
 # a number type by its name or by a foreign name of one, the prelude's `type Int = int` (Kotlin's `fun Int.plus`)
-is_numeric_type(name: text): bool := name in numeric_parameter_types or (prelude_foreign_types.get(name) ?? "") in numeric_parameter_types
-prelude_foreign_types = foreign_types(prelude_text)
+is_numeric_type(name: text): bool := name in numeric_parameter_types or (prelude_foreign_types().get(name) ?? "") in numeric_parameter_types
+global prelude_foreign_names = ø
+prelude_foreign_types(): map := {
+	if prelude_foreign_names == ø { prelude_foreign_names = foreign_types(prelude_text()) }
+	prelude_foreign_names
+}
 # how many arguments the call the rule matched passes the word, ø when it matched no call of it
 matched_arity(word: Node): int? := if rule_matched != ø and is_round(rule_matched) and #rule_matched > 0 and rule_matched#1 == word then #rule_matched - 1 else ø
 
@@ -2089,7 +2093,7 @@ rule_applied(rule: Rule, origin: map, n: Node): Node := {
 
 # WARP_RULES_FIRED set: `§R <module> <pattern>` printed for each rule that fires, so a compile's log counts which
 # rules (sugar, a library's) its program relies on (card core-extensions-roadmap). Silent unset
-RULES_FIRED = env("WARP_RULES_FIRED") ?? ""
+RULES_FIRED = started_env("WARP_RULES_FIRED") ?? ""
 fired(rule: Rule, result: Node): Node := {
 	if RULES_FIRED != "" { print "§R " + rule.module + " " + "${rule.pattern}" }
 	# (the prelude is in every program already: a use of it once more is none, card prelude-rule)

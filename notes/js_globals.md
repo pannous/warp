@@ -10,10 +10,10 @@ warp has no JavaScript, and a run there stops at "the host word foreign_call is 
   - `x.member = v` calls the member `"set member"`.
   - `Name(a)` is the constructor (member ""). A function of the global scope, such as `atob(t)`, is called on
     `globalThis` instead.
-- Types come from lib/web.webidl, read by extensions/js_globals/webidl.warp: interfaces, mixins, namespaces and
+- Types come from extensions/js_globals/web.webidl, read by extensions/js_globals/webidl.warp: interfaces, mixins, namespaces and
   partials, with parents and `includes`.
   - A global is its own definition (URL, console) or an attribute of the global scope's interfaces (crypto: Crypto).
-  - A member its interface lacks is a compile error: `js: URL has no pathnam (lib/web.webidl)`.
+  - A member its interface lacks is a compile error: `js: URL has no pathnam (extensions/js_globals/web.webidl)`.
   - A value of a defined interface keeps its type in a variable (`u = URL(…)`, `u.pathname`) and in a chain
     (`document.body.innerHTML`).
   - A text or a number comes back as warp's own value, so its members are warp's: `crypto.randomUUID().upper()`.

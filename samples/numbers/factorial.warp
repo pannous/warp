@@ -2,6 +2,9 @@
 # Factorial - recursive
 def factorial(n) = if n <= 1 then 1 else n * factorial(n - 1)
 
+# a number's `!` means nothing until a program says so: postfix `!` is an operator to overload (decision bang-overloadable)
+postfix operator !(n: int) := factorial(n)
+
 test factorial(1000) > 10 ^ 2500
 
-factorial(5)
+5!

@@ -1,6 +1,9 @@
 // The prelude (notes/stdlib.md §8): words every program has without `use`; only those it calls come along.
 // Each is `name(parameters) := body` (modules::prelude_word_arity reads the parameters); library_words maps other
 // spellings and method forms onto them (`isdigit(c)`, `xs.first()`, `round(x, 2)` → round_to)
+// Transition (card builtins-seed-transition): the typed builtin lines below (`from warp`, `from emitter`, `from 'm'`)
+// are the core's, core/analysis/builtins.warp and math_builtins.warp, which the compiler reads; they stay here only for
+// the seed, which reads them off this file, until the next seed refresh deletes them here
 
 // The words warp computes itself, the emitter's runtime functions, with their signatures (decision
 // foreign-signature, `from warp`); a parameter with a default may be left out (`s.split` splits at spaces). A word
@@ -67,9 +70,10 @@ each(xs: list, f: (any) -> any) from emitter
 each(t: text, f: (any) -> any) from emitter
 // the call form of xs.add(x), which extensions/sugar/methods.warp appends in place (the emitter has no call add)
 add(xs, x) := { xs.add(x); xs }
-insert(xs: list, at: int, x) := list_insert(xs, at, x)
-// Rust's HashMap::insert (card rust-map-insert): key set to value in place, the map back
-insert(m: map, key, value) := { m[key] = value; m }
+// xs.insert(x, at: i) at the 0-based position i, in place; of a map Rust's HashMap::insert (card rust-map-insert): the
+// key at set to x in place, the map back. One definition, so a call names its arguments (`at:`) as written (an
+// overload set by type passes them by position, card library-labelled-args)
+insert(xs, at, x) := if xs is map then { xs[at] = x; xs } else list_insert(xs, at, x)
 remove(xs: list, x) from emitter
 remove(m: map, key) from emitter
 pop(xs: list): any := list_pop(xs)

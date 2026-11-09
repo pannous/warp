@@ -33,7 +33,7 @@ multiple of its width, the size a multiple of the widest. `Header(…)` (positio
 value is that pointer, `h.len` loads, `h.len = …` stores.
 
 ## The prelude
-lib/primitive.warp is a primitive file's prelude (its words reached as the GC prelude's are; the GC library's typed
+extensions/primitive/prelude.warp is a primitive file's prelude (its words reached as the GC prelude's are; the GC library's typed
 lines are left out, so they make no variants of the file's definitions): WASI's calls as foreign lines (imports of
 `wasi_snapshot_preview1`), `print`, `write`, `text_of(n)`, `arg_count()`, `arg(i)` (the program's path at 0),
 `read_file(path)` (the empty text when it does not open), `write_file(path, content)`, `exit(code)`, and `byte_at`,

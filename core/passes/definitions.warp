@@ -210,8 +210,9 @@ value_can_be_empty(value: Node, body: Node, optional: list, looked_up: list): bo
 }
 
 # `f = { it * 2 }` defines a function as `f := { it * 2 }` does: a name assigned a block that reads `it`; other blocks
-# are data
-is_function_block(name: Node, body: Node): bool := name is symbol and bracket_of(body) == "{" and mentions(body, implicit_parameter)
+# are data, so is an object whose function entries read their own `it`, `o = {a: 1, f := it*2}`, `f: it => it*2`
+is_function_block(name: Node, body: Node): bool := name is symbol and bracket_of(body) == "{" and items_of(body).any(item => not binds_own_it(item) and mentions(item, implicit_parameter))
+binds_own_it(entry: Node): bool := is_key(entry, Op.Define) or (is_key(entry, Op.Colon) and is_lambda(value_of(entry)))
 
 # `f(x: int, y)`: a name applied to parameters
 is_call(n: Node): bool := match n {

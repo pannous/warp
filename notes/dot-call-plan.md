@@ -97,6 +97,36 @@ the Dot mirrors in three passes.
 - Module members vs reflection: `math.sqrt` is math's own member, `time.functions` = functions(time): the same rule, but
   module_named must run before it (it does: sugar).
 
+## Status (branch fields-are-functions, 2026-11-09)
+Answers (decision dot-call answers): own methods first, then fields, then functions; o.f(3) calls the field's
+function; local closures by dot; `x.w = v` setter by arity; step 8 after 1-5.
+- Steps 1+2 landed as one: emitter `member_read` (own field → call w(x) via `called_on` → field_of). The receiver is
+  held in a named scratch local (`scratch_name`) and `w(x)` compiles through the call path; the emitter's one-value
+  forms are `is_own_word`/`own_word_code`, reached by `w(x)` and `x.w` alike (a table of lambdas was not needed).
+  Optional returns (`TypedCode?`) broke the seed ("a ? where a list … is needed"): predicate + code instead.
+- Map protocol: the self-compile died on `entries.keys` of the compiler's library_words, a dictionary holding the
+  entry "keys". The words declared with a map first (`takes_map_first`: keys, values, get …, taking the map alone)
+  are the map's own methods and win over its entries; `m["keys"]` reads the entry. `p = {has: 2}; p.has` stays 2:
+  has takes two values. When protocol-default-implementation declares `protocol map`, its method set replaces
+  typed_lines as the source.
+- Local closures (step 4 part): in the lambdas pass (dotted_lowered), where function_values knows which variables
+  hold functions; only a local or parameter, and only where no object of the program declares a field of that name
+  (`field_names`, Op.Colon keys except `: function`): `task.value` beside a local `value` stays Task's field.
+- definitions.warp is_function_block: an object whose function entries bind their own `it` is data. `o.f(3)` with
+  `f := it*a` still fails (on main too): the entry lambda reads o, which its own initializer binds → card
+  object-computed-field.
+- Step 3 (analyzer) skipped: the analyzer's Data for `x.w` is the safe superset; the emitter's TypedCode carries the
+  call's kind. Step 6: of_lookups' `type of` is a parser quirk (`type of` reads as a declaration head), not a dot
+  workaround: stays. Step 5 (node parts as words) dropped (user): global words `name value key line …` cost more
+  than the ~15 lines of map_get they save.
+- Step 7 (decision setters-declared, extensions only): a class's one-parameter method is its setter
+  (class_methods setter_calls, no getter needed); a function whose first parameter is typed with x's class is one too
+  where x is made as that class and declares no field w (sugar rule in methods.warp + rule word class_setter). Maps
+  and untyped values keep the entry write: every two-parameter function would else hijack `m.merge = 3`. A rule
+  pattern with `=` needs parentheses, `rewrite ($x.$w = $v) => …`: unbracketed, `=>` binds tighter.
+- Step 8 parked: card canonical-call-rewrite (Later). 38 sugar rules in 10 files match `x.w(…)`; it waits for a
+  rewrite-engine feature matching a call and its dot form in one pattern.
+
 ## Open questions for the user
 1. `o.f(3)` with `f` a function-valued field: the field's function called with 3 (recommended, object-functions) or
    `f(o, 3)`?
