@@ -318,7 +318,7 @@ A list keeps several values in order, like a shopping list.
 
 ```warp => 2
 friends = ["Alf", "Bob"]
-#friends
+#friends # the number of friends
 ```
 
 `#1` is the first item.
