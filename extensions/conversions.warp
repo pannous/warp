@@ -118,7 +118,7 @@ place_refusal_word = "place_refused"
 # whether an instance or a map has every one of the fields (lib/prelude.warp has_fields)
 fields_fit(it: Node, fields: list): Node := Key(Key(call_of(instance_test_word, [it]), Op.Or, Key(it, Op.Is, symbol("map"))), Op.And, call_of("has_fields", [it, List(fields.map(field => Text(field)), Bracket.Square, Separator.Comma)]))
 # each class the program declares, not an enum: name → its Declared (core/passes/classes.warp)
-declared_classes(program: Node): map := {
+class_declarations(program: Node): map := {
 	enums = declarations_found(program, declared_enum, {})
 	found = {}
 	for statement in statements_in(program) {
@@ -228,7 +228,7 @@ conversions(program: Node): Node := {
 			order += [target]
 		}
 	}
-	classes = declared_classes(program)
+	classes = class_declarations(program)
 	checked = if not order and not classes {
 		if #kept == #statements_in(program) then program else List(kept, Bracket.None, Separator.Newline)
 	} else {
