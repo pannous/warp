@@ -567,7 +567,7 @@ async function sendMidi(port, message, at) {
 	}
 }
 
-// `play "song.mp3"` (card sound-library): a music file in the background, by its URL beside the page or anywhere
+// `play ./song.mp3` (card sound-library): a music file in the background, by its URL beside the page or anywhere
 let playingFiles = [];
 function playSoundFile(url, handle, bytes) {
 	if (beforeUserActivation()) return;
@@ -1402,7 +1402,7 @@ function offerFile(path, bytes, type = WAV_TYPE) {
 	return link;
 }
 
-// `save canvas as "painting.png"` (host-media.js save_picture, card save-painting): the picture's words as a PNG,
+// `save canvas as: ./painting.png` (host-media.js save_picture, card save-painting): the picture's words as a PNG,
 // downloaded at once and offered beside the wasm's link
 function savePicture({ path, words, width, height }) {
 	const canvas = Object.assign(document.createElement("canvas"), { width, height });
