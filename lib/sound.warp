@@ -1158,7 +1158,7 @@ save(made: Recording, as file) := rendered(file)
 render_sound(path) := save(Recording(), path)
 // `at beats(2) { play C4 }`, `at bar(1) { … }` (card sample-accurate): the block's sounds start that many seconds after
 // the voice's first sound, exactly so in save sound; the voice goes on where it stood
-at(time, actions: block) := { sound_at(time); actions!; sound_at_end() }
+at(time, actions: block) := { sound_at(time); actions(); sound_at_end() }
 public sound_at(seconds) := clock_at(si_amount(seconds))
 public sound_at_end() := clock_at_end()
 // silence of that length on the voice's clock: the next sound or MIDI message follows (host sound.silence; card sound-native-clock)
