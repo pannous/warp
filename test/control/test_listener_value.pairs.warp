@@ -4,3 +4,4 @@
 'on frame { 1 }'	ø
 'on exit { 1 }'	ø
 'x = 5; on alarm { x }; x'	5
+'on alarm { 1 }'	ø

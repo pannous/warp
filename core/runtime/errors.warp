@@ -69,6 +69,10 @@ invalid_number(): int := {
 	fail()
 	0
 }
+a_fraction_is_no_int(): int := {
+	fail()
+	0
+}
 not_a_whole_number(): int := {
 	fail()
 	0
