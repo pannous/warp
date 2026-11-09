@@ -1176,9 +1176,18 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
     Main's parser subscript stays.
   - repl-editing-keys (FYI warp-file-literals, small native core): the native console's line editor gets Home/End, Ctrl+A/E,
     Delete, Alt+Delete and Alt+Backspace.
-  - overload-signatures: withdrawn (user: "it's not a printing function, it's a returning function"); `.signature` returns a
-    value, never display text. In discussion: `sample` an overload set holding all implementations, `.signature` a Signature
-    value, `.signatures` a list of them.
+  - overload-signatures (user, replaces the withdrawn joined-text answer): `.signature` returns a Signature value (parameters,
+    result; it only shows as `(x: int) -> int`), never display text. An overloaded function is one value, an overload set: its
+    `.signature` joins the implementations per position, `sample.signature` = `(nr: int) -> text | int`, and is `(any) -> any`
+    where they can't be combined (different parameter counts); `.signatures` lists one Signature per implementation in
+    written order; `.implementations` gives the individual functions, each callable with its own `.signature`.
+  - function-words-as-values (card composition-value-fails): discuss later (user). Proposed: a builtin, library or overloaded
+    word used as a value is `x => f(x)` (~15–25 core lines before arity_overloads); test_pipe_stages:16, test_postfix_words:21-22 stay red.
+  - color-light-adding (user, card color-addition-wrap): Color + Color adds per channel capped at 255 (red + blue = #FF00FF),
+    `-` floored at 0, `color * number` scales the channels; a module's `+(a: T, b: T)` for a named int type is the meaning of
+    + for two T (operators-are-functions, an extension); a top-level operator definition is never silently ignored.
+  - named-int-show: open: the user asks whether named int types could be cheap classes instead of marks (one int field, the
+    class descriptor giving show, operators and dispatch); the per-program show hook waits for that answer.
   - use-path-literal (FYI warp-file-literals, 4 core lines, card shader-quote-path-uses): `use ./x.warp` / `include ./x.warp` take
     the path literal; lib/quote_helper.warp moves beside its test as test/web/quote_helper.warp.
   - map-function-definition (FYI warp-functions-finish, small core fix): `square := it * it` is the definition square(it) already in lambdas, so `g = square` and `apply(square, 3)` pass the function.
