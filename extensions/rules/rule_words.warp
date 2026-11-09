@@ -849,6 +849,9 @@ definition_start(source: text, word: text): any := {
 }
 # `3 then twice` (decision then-not-pipe): `then` is only the branch word, the pipe is `|>`; ø after `if c`, whose
 # branch may be a function (`if wanted then float_pi`)
+# a word holding a value, the program's variable or a library constant of a type (`ESC = Key.escape`), no word naming
+# nothing, which `on` reads as a named event (decisions one-on, enum-constants-typed)
+value_word(code: Node): bool := code is symbol and (binds_value(rule_scope, name_of(code)) or library_typed_constants().has(name_of(code)))
 # a function value, no bare name: a lambda, or a composition `a | b`, `a & b` of functions (decision
 # function-valued-definition; a bare name on the right of `:=` stays the body calling it, `pwd := cwd`)
 function_value(code: Node): bool := not (code is symbol) and (has_property(code, "function") or composition(code))
@@ -1219,6 +1222,7 @@ rule_words = {
 	missed_cases: missed_cases,
 	then_not_pipe: then_not_pipe,
 	function_value: function_value,
+	value_word: value_word,
 	takes_trailing_block: takes_trailing_block,
 	then_without_if: then_without_if,
 	module_help: module_help,

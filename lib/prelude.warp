@@ -1139,6 +1139,9 @@ emitted(name: any, data: any): any := {
 	for listener in running { result = listener(data) }
 	result
 }
+// `on X {…}` of a value (decision one-on): its type's listened(X, handler), keys' Key and timers' Timer; a value of
+// no source type is refused
+listened(source: any, handler: function): int := raise "${source} is no event source: on listens to a key, a timer or a named event"
 listeners_of(name: any): list := if name_of(name) in listener_numbers then listener_numbers[name_of(name)] else []
 unlisten(name: any, number: int): any := {
 	key = name_of(name)

@@ -1831,6 +1831,7 @@ def declarations_scanned(files: map): map {
 	classes = {}
 	tags = {}
 	constants = {}
+	enums = {}
 	assigned = []
 	for path in files.keys {
 		if not path.contains("/") and path.ends_with(module_extension) {
@@ -1850,6 +1851,7 @@ def declarations_scanned(files: map): map {
 					}
 				}
 				if line.starts_with(CLASS_MARK) { classes[name_starting(line[#CLASS_MARK ..])] = module }
+				if line.starts_with(ENUM_MARK) { enums[name_starting(line[#ENUM_MARK ..])] = module }
 				if line.starts_with(CONSTANT_MARK) { constants[name_starting(line[#CONSTANT_MARK ..])] = module }
 				instance = instance_constant(line)
 				if instance != ø { assigned += [instance] }
@@ -1857,15 +1859,16 @@ def declarations_scanned(files: map): map {
 		}
 	}
 	typed = {}
-	for instance in assigned { if classes.has(instance#2) { typed[instance#1] = instance#2 } }
+	for instance in assigned { if classes.has(instance#2) or enums.has(instance#2) { typed[instance#1] = instance#2 } }
 	{"words": words, "classes": classes, "tags": tags, "constants": constants, "typed": typed}
 }
-// a top-level line `km = Unit("km")`: [the name, the word called], else ø
+// a top-level line `km = Unit("km")` or `ESC = Key.escape` (decision enum-constants-typed): [the name, the class
+// called or the enum named], else ø
 def instance_constant(line: text): list? {
 	sides = line.split(" = ")
 	if #sides < 2 or sides#1 == "" or sides#1.contains(" ") or is_blank(line[0]) { return ø }
 	called = name_starting(sides#2)
-	if called and sides#2[#called ..].starts_with("(") then [sides#1, called] else ø
+	if called and (sides#2[#called ..].starts_with("(") or sides#2[#called ..].starts_with(".")) then [sides#1, called] else ø
 }
 def declared_tags(): map := library_index_section("tag")
 // the texts quoted in a line of a list, `"a", "b",` → ["a", "b"]: every other piece between its quotes
@@ -1877,6 +1880,7 @@ def quoted_texts(line: text): list {
 }
 GLOBAL_MARK = "global "
 CLASS_MARK = "class "
+ENUM_MARK = "enum "
 CONSTANT_MARK = "const "
 // the name a text starts with, "" when none
 def name_starting(line: text): text {

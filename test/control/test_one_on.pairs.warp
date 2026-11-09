@@ -1,0 +1,7 @@
+# `on X {…}`: a value is a source listened by its type, a word naming nothing a named event (decisions one-on,
+# enum-constants-typed; notes/events_plan.md section 6 step 3)
+'broadcast {text: "hi"} on "test-nobody"; 5'	5
+'n = 0; on alarm { n += 1 }; emit alarm; n'	1
+'use keys; n = 0; on ESC { n += 1 }; 7'	7
+'use keys; n = 0; on Key.escape { n += 1 }; 7'	7
+'x = 3; on x { print "never" }'	error	3 is no event source

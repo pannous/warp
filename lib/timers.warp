@@ -73,7 +73,13 @@ timer_due(at: int, after: int): int := {
 	}
 	after + 7 * DAY_MILLISECONDS
 }
-timer_every(period: any, handler: function): int := timer_started(TIMER_EVERY, floor(period / 1ms) as int, handler)
+// a timer as a value (decision one-on): `every(500 ms)` fires each period, `on every(500 ms) {…}` or
+// `every(500 ms, handler)` starts it, `t = every(1 s); on t {…}` alike
+class Timer { kind: int; argument: int }
+every(period: any): Timer := Timer{kind: TIMER_EVERY, argument: floor(period / 1ms) as int}
+every(period: any, handler: function): int := listened(every(period), handler)
+listened(timer: Timer, handler: function): int := timer_started(timer.kind, timer.argument, handler)
+timer_every(period: any, handler: function): int := listened(every(period), handler)
 // `9:30`, the pair of an hour and its minutes
 timer_at(time: any, weekdays: int, handler: function): int := timer_started(TIMER_CLOCK, weekdays * WEEKDAYS_SHIFT + key_of(time) * 60 + value_of(time), handler)
 // the handler named before its call: `timer_handlers#id()` calls no function ("not a function")
