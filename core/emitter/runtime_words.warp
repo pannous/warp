@@ -216,9 +216,9 @@ marked_text_types = {path: Marked.Path}
 # the kinds of a value known only at run time each type passes: an int is a
 # rational and a number, a float too, a character a text, a block a list; `code` none, it is a mark (runtime
 # types.warp node_is_type, held_kind_bit)
-number_kinds = [Kind.Int, HeldBit.Rational, Kind.Float]
-passing_kinds = {int: [Kind.Int], nat: [Kind.Int], rational: number_kinds, float: [Kind.Float],
-	number: number_kinds, text: [Kind.Text, Kind.Codepoint, HeldBit.Path], path: [HeldBit.Path], char: [Kind.Codepoint],
+numeric_held_kinds = [Kind.Int, HeldBit.Rational, Kind.Float]
+passing_kinds = {int: [Kind.Int], nat: [Kind.Int], rational: numeric_held_kinds, float: [Kind.Float],
+	number: numeric_held_kinds, text: [Kind.Text, Kind.Codepoint, HeldBit.Path], path: [HeldBit.Path], char: [Kind.Codepoint],
 	bool: [HeldBit.Bool], list: [Kind.List, Kind.Block], key: [Kind.Key], symbol: [Kind.Symbol], map: [HeldBit.Map],
 	error: [Kind.Error], code: [], function: [Kind.Function]}
 covered_kinds = {int: [ValueKind.Int], nat: [ValueKind.Int], rational: [ValueKind.Int], float: [ValueKind.Float], number: [ValueKind.Int, ValueKind.Float], text: [ValueKind.Text, ValueKind.Char], path: [],
