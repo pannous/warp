@@ -6,11 +6,21 @@
 # uniformLayout), so a frame changes them without a new shader. A form WGSL has none of is refused, naming it.
 # This module's rules (extensions/rules/modules/shaders.warp) hand paint and shader_of the function as the compiler's
 # rule word definitions_reached quotes it: `{name: "f", code: data [definitions], values: {sun: sun, …}}`.
-# A color of lib/color (a named one, `orange`, or a program value holding one) is the [r, g, b] it paints.
+# A color of lib/color (a named one, `orange`, or a program value holding one) is the [r, g, b] it paints. A complex
+# number of lib/complex (`ⅈ`, `Complex(re, im)`, a program value holding one) is a vec2f [re, im], its + - * / ^ the
+# complex ones (card paint-shader): julia's `z = z² + c` runs on the GPU.
 use color
+use complex
 use math
 
 VECTOR_TYPES = ["f32", "vec2f", "vec3f", "vec4f"]
+# a complex number's width: a mark of its own beside the vectors' 2 to 4, a vec2f [re, im] in WGSL
+COMPLEX_WIDTH = 5
+COMPLEX_TYPE = "vec2f"
+COMPLEX_PARTS = {"re": "x", "im": "y"}
+# the WGSL functions a complex product and quotient call, written into the shader that uses them
+COMPLEX_HELPERS = {"complex_times": "fn complex_times(a: vec2f, b: vec2f) -> vec2f {\n\treturn vec2f(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);\n}",
+	"complex_over": "fn complex_over(a: vec2f, b: vec2f) -> vec2f {\n\treturn vec2f(a.x * b.x + a.y * b.y, a.y * b.x - a.x * b.y) / dot(b, b);\n}"}
 VALUES_NAME = "values"
 # a painted function's color: three numbers from 0 to 1
 COLOR_WIDTH = 3
@@ -58,7 +68,7 @@ WGSL_WORDS = {"sine": ["sin", "each"], "cosine": ["cos", "each"], "tangent": ["t
 	"degrees": ["degrees", "each"], "min": ["min", "each"], "max": ["max", "each"], "clamp": ["clamp", "each"],
 	"step": ["step", "each"], "smoothstep": ["smoothstep", "each"], "pow": ["pow", "each"], "power": ["pow", "each"],
 	"mix": ["mix", "mix"], "lerp": ["mix", "mix"], "dot": ["dot", "to_one"], "distance": ["distance", "to_one"],
-	"norm": ["length", "to_one"], "magnitude": ["length", "to_one"],
+	"norm": ["length", "to_one"], "magnitude": ["length", "to_one"], "complex_abs": ["length", "to_one"],
 	"normalize": ["normalize", "kept"], "cross": ["cross", "kept"], "reflect": ["reflect", "kept"],
 	"sinh": ["sinh", "each"], "cosh": ["cosh", "each"], "tanh": ["tanh", "each"], "fabs": ["abs", "each"],
 	"fmin": ["min", "each"], "fmax": ["max", "each"], "ceiling": ["ceil", "each"], "whole_part": ["trunc", "each"],
@@ -161,8 +171,8 @@ values_read(reached: map): any := {
 	for name in names { read[name] = painted_value(reached.values[name]) }
 	read
 }
-# a value as the shader reads it: a color its channels
-painted_value(value) := if value is Color then channels(value) else value
+# a value as the shader reads it: a color its channels, a complex number [re, im]
+painted_value(value) := if value is Color then channels(value) else if value is Complex then [value.re, value.im] else value
 # `shader_of(f)`: the WGSL fragment shader that paints f(column, row) at every pixel, as a text
 shader_of(reached: map): text := shader_made(reached)#1
 shader_made(reached: map): list := {
@@ -199,14 +209,18 @@ wgsl_refused(n: Node, why: text): list := {
 	if shading.refusal == "" { shading.refusal = why + " (at `${n}`)" }
 	return ["0.0", 1]
 }
-wgsl_type(width: int): text := if width == 0 then "bool" else VECTOR_TYPES#width
-# the value as `width` wide: a number repeated into a vector
-wgsl_splat(value: list, width: int): text := if value#2 == width or width <= 1 then value#1 else wgsl_type(width) + "(" + value#1 + ")"
+wgsl_type(width: int): text := if width == 0 then "bool" else if width == COMPLEX_WIDTH then COMPLEX_TYPE else VECTOR_TYPES#width
+# the value as `width` wide: a number repeated into a vector, a number as the complex one re + 0ⅈ
+wgsl_splat(value: list, width: int): text := {
+	if value#2 == width or width <= 1 { return value#1 }
+	if width == COMPLEX_WIDTH then COMPLEX_TYPE + "(" + value#1 + ", 0.0)" else wgsl_type(width) + "(" + value#1 + ")"
+}
+width_named(width: int): text := if width == COMPLEX_WIDTH then "a complex number" else "a vector of ${width}"
 # the width values combine to: one width, a number beside vectors of one width broadcasting
 wgsl_common_width(values: list, n: Node): int := {
 	width = 1
 	for value in values {
-		if value#2 > 1 and width > 1 and value#2 != width { wgsl_refused(n, "a vector of ${width} beside one of ${value#2}") }
+		if value#2 > 1 and width > 1 and value#2 != width { wgsl_refused(n, width_named(width) + " beside " + width_named(value#2)) }
 		if value#2 > width { width = value#2 }
 	}
 	width
@@ -239,7 +253,7 @@ wgsl_expression(n: Node, scope: WgslScope): list := {
 	if keyed(n, "as") { return wgsl_expression(key_of(n), scope) }
 	if keyed(n, "-") and key_of(n) == ø {
 		value = wgsl_expression(value_of(n), scope)
-		if value#2 > 1 { return wgsl_refused(n, "a negated list: warp negates numbers; a vector's opposite is v .* -1") }
+		if value#2 > 1 and value#2 != COMPLEX_WIDTH { return wgsl_refused(n, "a negated list: warp negates numbers; a vector's opposite is v .* -1") }
 		return ["-(" + value#1 + ")", value#2]
 	}
 	if keyed(n, "not") {
@@ -267,6 +281,7 @@ wgsl_operation(left: Node, op: text, right: Node, n: Node, scope: WgslScope): li
 	if op == "and" or op == "or" { return ["(" + wgsl_condition(left, scope) + " " + written_op + " " + wgsl_condition(right, scope) + ")", 0] }
 	a = wgsl_expression(left, scope)
 	b = wgsl_expression(right, scope)
+	if LIST_OPERATORS.has(written_op) and (a#2 == COMPLEX_WIDTH or b#2 == COMPLEX_WIDTH) { return wgsl_complex_operation(a, written_op, b, n) }
 	if LIST_OPERATORS.has(written_op) and (a#2 > 1 or b#2 > 1) {
 		return wgsl_refused(n, "${written_op} of a list: warp's + joins lists; a vector's element-wise math is .+ .- .* ./")
 	}
@@ -277,6 +292,19 @@ wgsl_operation(left: Node, op: text, right: Node, n: Node, scope: WgslScope): li
 		return ["(" + a#1 + " " + written_op + " " + b#1 + ")", 0]
 	}
 	return ["(" + a#1 + " " + written_op + " " + b#1 + ")", wgsl_common_width([a, b], n)]
+}
+# `a op b` of + - * / with a complex number: a number beside it the complex one; * and / of two complex numbers the
+# complex product and quotient, a complex one by a number scaled
+wgsl_complex_operation(a: list, op: text, b: list, n: Node): list := {
+	width = wgsl_common_width([a, b], n)
+	if op == "*" and a#2 == COMPLEX_WIDTH and b#2 == COMPLEX_WIDTH { return wgsl_complex_helper_call("complex_times", [a, b]) }
+	if op == "/" and b#2 == COMPLEX_WIDTH { return wgsl_complex_helper_call("complex_over", [a, b]) }
+	if op == "*" or op == "/" { return ["(" + a#1 + " " + op + " " + b#1 + ")", width] }
+	["(" + wgsl_splat(a, width) + " " + op + " " + wgsl_splat(b, width) + ")", width]
+}
+wgsl_complex_helper_call(helper: text, values: list): list := {
+	if COMPLEX_HELPERS[helper] not in shading.written_functions { shading.written_functions += [COMPLEX_HELPERS[helper]] }
+	[helper + "(" + values.map(value => wgsl_splat(value, COMPLEX_WIDTH)).join(", ") + ")", COMPLEX_WIDTH]
 }
 # the operators whose meaning on lists is not the element-wise one: refused there, naming the element-wise ones
 LIST_OPERATORS = {"+": yes, "-": yes, "*": yes, "/": yes}
@@ -310,10 +338,18 @@ wgsl_combined(left: Node, spelled: text, right: Node, n: Node, scope: WgslScope)
 wgsl_power(left: Node, right: Node, n: Node, scope: WgslScope): list := {
 	base = wgsl_expression(left, scope)
 	times = wgsl_small_whole(right)
+	if base#2 == COMPLEX_WIDTH { return wgsl_complex_power(base, times, n) }
 	if times >= 2 { return ["(" + (1 to times).map(i => base#1).join(" * ") + ")", base#2] }
 	exponent = wgsl_expression(right, scope)
 	width = wgsl_common_width([base, exponent], n)
 	return ["pow(" + wgsl_splat(base, width) + ", " + wgsl_splat(exponent, width) + ")", width]
+}
+# `z²`: a complex number to a small whole power, multiplied out
+wgsl_complex_power(base: list, times: int, n: Node): list := {
+	if times < 1 { return wgsl_refused(n, "a complex number's power on the GPU is a whole one from 1 to 4") }
+	power = base
+	for i in 1 ..< times { power = wgsl_complex_helper_call("complex_times", [power, base]) }
+	power
 }
 # 1 to 4 written as a number literal, else 0: a power multiplied out, a vector's item
 SMALL_WHOLES = ["1", "2", "3", "4"]
@@ -347,6 +383,7 @@ wgsl_vector(items: list, n: Node, scope: WgslScope): list := {
 wgsl_field(n: Node, scope: WgslScope): list := {
 	vec = wgsl_expression(key_of(n), scope)
 	component_name = value_of(n)
+	if vec#2 == COMPLEX_WIDTH and component_name is symbol and COMPLEX_PARTS.has(name_of(component_name)) { return [vec#1 + "." + COMPLEX_PARTS[name_of(component_name)], 1] }
 	if not (component_name is symbol) or not wgsl_is_swizzle(name_of(component_name)) {
 		return wgsl_refused(n, "a vector's components are .x .y .z .w (or .r .g .b .a) and swizzles of them")
 	}
@@ -395,7 +432,16 @@ wgsl_spaced(n: Node, scope: WgslScope): list := {
 	if #items >= 2 and items#1 is symbol { return wgsl_call(items#1, items[1 ..], n, scope) }
 	wgsl_refused(n, "WGSL has no form for " + form_of(n))
 }
-wgsl_is_function(name: Node): bool := WGSL_WORDS.has(name_of(name)) or WGSL_MEANINGS.has(name_of(name)) or function_definition(name) != ø
+wgsl_is_function(name: Node): bool := WGSL_WORDS.has(name_of(name)) or WGSL_MEANINGS.has(name_of(name)) or COMPLEX_MAKERS.has(name_of(name)) or function_definition(name) != ø
+
+# the words of lib/complex making a complex number: ⅈ (the call imaginary_unit()), Complex(re, im)
+COMPLEX_MAKERS = {"imaginary_unit": 0, "Complex": 2}
+wgsl_complex_made(word: text, values: list, n: Node): list := {
+	if #values != COMPLEX_MAKERS[word] { return wgsl_refused(n, "${word} takes ${COMPLEX_MAKERS[word]} numbers") }
+	if values.any(value => value#2 != 1) { return wgsl_refused(n, "a complex number's parts are numbers") }
+	parts = if #values == 0 then ["0.0", "1.0"] else values.map(value => value#1)
+	[COMPLEX_TYPE + "(" + parts.join(", ") + ")", COMPLEX_WIDTH]
+}
 
 wgsl_call(name: Node, arguments: list, n: Node, scope: WgslScope): list := {
 	word = name_of(name)
@@ -405,6 +451,7 @@ wgsl_call(name: Node, arguments: list, n: Node, scope: WgslScope): list := {
 	# a word WGSL has wins over its library definition (lib/math's cosine is each_any of cos)
 	if word in SAME_VALUE_WORDS and #arguments == 1 { return wgsl_expression(arguments#1, scope) }
 	if WGSL_MEANINGS.has(word) { return wgsl_meant(word, arguments.map(argument => wgsl_expression(argument, scope)), n) }
+	if COMPLEX_MAKERS.has(word) and function_definition(name) == ø { return wgsl_complex_made(word, arguments.map(argument => wgsl_expression(argument, scope)), n) }
 	if not WGSL_WORDS.has(word) {
 		if function_definition(name) != ø { return wgsl_program_call(word, wgsl_arranged(name, arguments).map(argument => wgsl_expression(argument, scope)), n) }
 		if COUNTING_WORDS.has(word) { return wgsl_refused(n, "${word}(v) counts the numbers of v in warp; a vector's magnitude is norm(v)") }
@@ -412,6 +459,11 @@ wgsl_call(name: Node, arguments: list, n: Node, scope: WgslScope): list := {
 	}
 	values = arguments.map(argument => wgsl_expression(argument, scope))
 	builtin = WGSL_WORDS[word]
+	if values.any(value => value#2 == COMPLEX_WIDTH) and builtin#2 != "to_one" {
+		# a complex number's abs is its length, as complex_abs
+		if builtin#1 == "abs" and #values == 1 { return ["length(" + values#1#1 + ")", 1] }
+		return wgsl_refused(n, "${word} of a complex number: the shader knows its + - * / ^, abs and .re .im")
+	}
 	wgsl_builtin(builtin#1, builtin#2, values, n)
 }
 # the arguments of a call of a program function in its parameters' order: the positional ones first, each named one
@@ -509,6 +561,7 @@ wgsl_program_value(n: Node): list := {
 wgsl_value_width(value): int := {
 	if value is bool { return 0 }
 	if value is Color { return COLOR_WIDTH }
+	if value is Complex { return COMPLEX_WIDTH }
 	if not (value is list) { return 1 }
 	if #value == 0 { return 0 }
 	if #value <= 4 and value.all(item => not (item is list)) { return #value }

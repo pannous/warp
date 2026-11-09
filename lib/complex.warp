@@ -28,6 +28,8 @@ class Complex {
 		}
 		complex_pow(this, o)
 	}
+	// abs(z), its length, as on a number
+	abs(): float := sqrt(re * re + im * im)
 	equals(o: any): bool := (o is Complex or o is number) and re == as_complex(o).re and im == as_complex(o).im
 	text(): text := complex_text(this)
 }
@@ -39,7 +41,7 @@ as_complex(x: any): Complex := if x is Complex then x else Complex(x * 1.0, 0.0)
 // r·e^(iθ)
 polar(r: number, theta: number): Complex := Complex(r * cos(theta), r * sin(theta))
 // |z|
-complex_abs(z: any): float := { c = as_complex(z); sqrt(c.re * c.re + c.im * c.im) }
+complex_abs(z: any): float := as_complex(z).abs()
 // the angle of z in (-π, π]
 complex_arg(z: any): float := { c = as_complex(z); atan2(c.im, c.re) }
 // the conjugate re - im·i
