@@ -132,8 +132,29 @@ sleep_of(statement: Node): any := if is_call_named(statement, "sleep") and #stat
 # (web/playground/driver.js); ø for any other program, one ending in a declaration or a listener, or one that has it
 page_value_word = "page_value"
 # (`on message from "chat" {…}` is lib/channels.warp's message_listened by the time this reads it)
-listening_words = ["timer_every", "timer_at", "listen", "variable_listen", "frame_listened", "message_listened", "exits_end", frames_end_word]
+# the calls registering a listener, each giving its handle (notes/events_plan.md "Cancellation and lifetime")
+registering_words = ["timer_every", "timer_at", "listen", "variable_listen", "frame_listened", "exit_listened", "message_listened"]
+listening_words = registering_words + ["exits_end", frames_end_word]
 event_heads = [symbol("on"), symbol("once")]
+# a statement registering a listener, `on alarm {…}` before the sugar or its call after: its handle is for a name to
+# keep (`t = on every 1 s {…}`), no value a program ending in it shows (card listener-value)
+registers(statement: Node): bool := registering_words.any(word => is_call_named(statement, word)) or is_group(statement) and #statement > 1 and statement#1 in event_heads
+# (a function, not a global: the rule words' globals are made before the parser's tables)
+nothing_statement() := plain_node(parsed("ø"))
+# the indices of the statements but the `use`s (with_implicit_uses appends some), the last one the program's ending
+non_use_indices(statements: list): list := (0 ..< #statements).filter(i => use_target(statements[i]) == ø)
+# a program that listens: ending in a registration, ø after it as its value; then page_valued's; ø when neither
+# changes it
+listening_program(program: Node): any := {
+	unshown = registration_unshown(program)
+	page_valued(unshown ?? program) ?? unshown
+}
+registration_unshown(program: Node): any := {
+	statements = level_statements(program)
+	ending = non_use_indices(statements)
+	if #ending == 0 or not registers(statements[ending.last()]) { return ø }
+	separated(bracketed(statements + [nothing_statement()], ""), ";")
+}
 # a test check (extensions/rules/modules/laws.warp) and the tests' summary run where they stand: no value to read again
 is_test_line(statement: Node): bool := is_call_named(statement, test_check_word) or is_call_named(statement, tests_end_word)
 # `test C` as lib/laws.warp's call: C as written, the rest of the line after the word `test`, as it reads when made
@@ -173,9 +194,10 @@ page_valued(program: Node): any := {
 	listens = statement => nodes_in(statement).any(n => listening_words.any(word => is_call_named(n, word)) or is_group(n) and #n > 1 and n#1 in event_heads)
 	# (`print "done"` as `print("done")`: a group the output word heads)
 	outputs = statement => nodes_in(statement).any(n => is_group(n) and #n > 1 and n#1 in printing_heads)
-	ending = (0 ..< #statements).filter(i => use_target(statements[i]) == ø)
+	ending = non_use_indices(statements)
 	if #ending == 0 or not statements.any(listens) or nodes_in(program).any(n => n == symbol(page_value_word)) { return ø }
 	last = statements[ending.last()]
+	if last == nothing_statement() { return ø }
 	# (a write, `x = 3` once signaled notifies its listeners, or an output, `print "done"`, is no value to read again:
 	# run again it would write or print anew)
 	if is_declaration(last) or listens(last) or is_test_line(last) or nodes_in(last).any(writes) or outputs(last) { return ø }
@@ -184,18 +206,18 @@ page_valued(program: Node): any := {
 }
 # the program ended by a call of the ending word, when a statement of it calls the starting word and none calls the
 # ending one yet: its last statement but a `use` (with_implicit_uses appends some) the ending's value, after it when
-# that declares or is a test line, which runs where it stands
+# that declares, registers or is a test line, which runs where it stands
 ended_by(program: Node, starting: text, ending_word: text): any := ending_appended(program, level_statements(program).any(statement => is_call_named(statement, starting)), ending_word)
 ending_appended(program: Node, started: bool, ending_word: text): any := {
 	statements = level_statements(program)
 	if not started or statements.any(statement => is_call_named(statement, ending_word)) { return ø }
-	last = (0 ..< #statements).filter(i => use_target(statements[i]) == ø).last()
+	last = non_use_indices(statements).last()
 	separated(bracketed(statements[0 ..< last] + ended_with(statements[last], ending_word) + statements[last + 1 ..], ""), ";")
 }
 # the last statement ended by the ending word; the tests' summary stays outermost, once the tasks, frames … ran
 ended_with(ending: Node, ending_word: text): list := {
 	if is_call_named(ending, tests_end_word) and ending_word != tests_end_word { return [call_of(tests_end_word, ended_with(if #ending == 2 then ending#2 else Node.Empty, ending_word))] }
-	if ending == Node.Empty then [call_of(ending_word, [])] else if is_declaration(ending) or is_test_line(ending) then [ending, call_of(ending_word, [])] else [call_of(ending_word, [ending])]
+	if ending == Node.Empty then [call_of(ending_word, [])] else if is_declaration(ending) or is_test_line(ending) or registers(ending) then [ending, call_of(ending_word, [])] else [call_of(ending_word, [ending])]
 }
 # the main level's statements, of lines and of `;` within a line alike
 level_statements(program: Node): list := statements_in(program).flat_map(s => if is_statement_sequence(s) then level_statements(s) else [s])
@@ -1228,7 +1250,7 @@ rule_words = {
 	module_word_help: module_word_help,
 	qualified_word_help: qualified_word_help,
 	once_listens: once_listens,
-	page_valued: page_valued,
+	listening_program: listening_program,
 	paint_size: paint_size,
 	parameters_named: parameters_named,
 	polled_word: polled_word,

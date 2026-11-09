@@ -142,6 +142,9 @@ COMPONENT_HOLE_SHOWN = "addclicked 2 timesaddclicked 10 times"
 REPORT = "(?report shows the report button, which drafts an issue with the program)"  # card report-button
 REPORT_CODE = 'print "reported"'
 REPORT_PRINTED = "reported"
+DEFINED_NAMES = "(the editor shows a definition's name bold: film(color, x, y) := {, square x := …, def f, class Point)"  # card film-color-syntax
+DEFINED_NAMES_CODE = "film(color, x, y) := {\n\tcolor\n}\nsquare x := x*x\nf(x): int := x + 1\ncount := 0\ndef twice(x) { 2 * x }\nclass Point { x: int }\nfilm(1, 2, 3)\ny = square 3"
+DEFINED_NAMES_SHOWN = ["film", "square", "f", "count", "twice", "Point"]
 REPORT_PAGE = "(a report and a bug report carry the page's address, which names the example shown: #loops)"  # card include-source
 REPORTED_EXAMPLE = "loops"
 BUG_BUTTON = "(the bug button sends a comment with the program; ?bug_token stores the token, a wrong one is refused)"  # card bug-report
@@ -699,6 +702,16 @@ def bug_button_wrong(page_url):
 	wrong += [] if BUG_TOKEN not in shown.get("address", "") else [f"bug token left in the address: {shown['address']}"]
 	wrong += [] if "wrong token" in shown["status"] else [f"wrong bug token not refused: {shown['status']!r}"]
 	return wrong + ([] if shown.get("forgotten") else ["refused bug token still stored"])
+
+
+def defined_names_wrong():
+	"""the names the editor marks as defined, in order: each definition's, no call's"""
+	browser("eval", f"playground.setCode({json.dumps(DEFINED_NAMES_CODE)})")
+	shown = browser("eval", 'JSON.stringify([...document.querySelectorAll(".CodeMirror .cm-def")].map(name => name.textContent))')
+	names = json.loads(json.loads(shown)) if shown.startswith('"') else shown
+	bold = browser("eval", 'getComputedStyle(document.querySelector(".CodeMirror .cm-def")).fontWeight')
+	wrong = [] if names == DEFINED_NAMES_SHOWN else [f"defined names shown: {names!r}, expected {DEFINED_NAMES_SHOWN!r}"]
+	return wrong + ([] if bold.strip('"') in ("bold", "700") else [f"a defined name not bold: font-weight {bold}"])
 
 
 def report_page_wrong():
@@ -1349,7 +1362,7 @@ def check_examples(names, page_url=None, site=None):
 	snippets = guide_snippets() if GUIDE in names else []
 	for line, code, value, printed in snippets:
 		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), (STALE_DEPLOY, stale_deploy_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), (STALE_DEPLOY, stale_deploy_wrong), (DEFINED_NAMES, defined_names_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
