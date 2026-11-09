@@ -20,7 +20,7 @@ module_extension = ".warp"
 module_directory_word = "module_directory"
 
 # the program with the declarations of the files its uses name, read from `folder`, in front of it, and each
-# `module_source("prelude")` the text of that standard module
+# `module_source("compiler/analysis/errors.data")` the text of that file of the compiler
 with_uses(program: Node, folder: text): Node := {
 	directed = with_own_aliases(with_module_directory(with_imports_as_uses(program), folder))
 	timed("uses: used files")
@@ -192,8 +192,8 @@ aliased(n: Node, aliases: list): any := {
 	n
 }
 
-# `module_source("prelude")`: lib/prelude.warp's text, read at compile time (the std modules are lib/<name>.warp); `module_source("compiler/analysis/errors.data")`, a name with an
-# extension, that file of lib/. A compiled compiler reads its own data from nowhere (user 2026-10-25: "These should all be built in"; decision built-in-lib)
+# `module_source("compiler/analysis/errors.data")`: that file's text, read at compile time: the compiler's own data, never a library's (decision core-takes-what-it-uses); a name with an
+# extension, that file of lib/ (its links compiler/ and extensions/). A compiled compiler reads its own data from nowhere (user 2026-10-25: "These should all be built in"; decision built-in-lib)
 module_text(n: Node): any := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol("module_source") and n#2 is text) { return n }
 	# the file itself, never a bundled copy: the compiler being built carries this tree's lib/
