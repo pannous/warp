@@ -6,7 +6,7 @@
 'quoted(t: text) := "<" + t + ">"; quoted(n: int) := n * 10; [1, 2].map(quoted)'	[10, 20]
 'quoted(t: text) := "<" + t + ">"; quoted(n: int) := n * 10; ["a", "b"].map(quoted)'	["<a>", "<b>"]
 'twice(x) := x * 5; twice(x, y) := x * y; [1, 2].map(twice)'	[5, 10]
-'scaled(x) := x * 2; scaled(x, y) := x * y; apply(f, x) := f(x); apply(scaled, 3)'	6
-'scaled(x) := x * 2; scaled(x, y) := x * y; both(f) := f(2, 3); both(scaled)'	6
+'scaled(x) := x * 2; scaled(x, y) := x * y; apply(f: function, x) := f(x); apply(scaled, 3)'	6
+'scaled(x) := x * 2; scaled(x, y) := x * y; both(f: function) := f(2, 3); both(scaled)'	6
 # with no call to say how many, the name means none of them: refused, naming the definitions and the lambda
 'scaled(x) := x * 2; scaled(x, y) := x * y; g = scaled; g(3)'	error
