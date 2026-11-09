@@ -45,6 +45,9 @@ KEY_LINE_END = 5
 # the bytes of a key's escape sequence (card repl-editing-keys): ESC [ <number>;<modifier> <final>, ESC O <final>, ESC <key>
 KEY_APPLICATION = 79
 KEY_ALT_D = 100
+# Alt+←/→ as macOS Terminal sends them with Option as Meta: ESC b, ESC f (card repl-alt-arrows)
+KEY_ALT_B = 98
+KEY_ALT_F = 102
 FINAL_HOME = 72
 FINAL_END = 70
 FINAL_NUMBERED = 126
@@ -295,8 +298,8 @@ console(compiler: text): nothing := {
 	line_cell = allocate(8)
 	capacity = allocate(8)
 	editing = isatty(STDIN) != 0
-	history = ""
-	lines = 0
+	history = read_file(history_path())
+	lines = line_count(history)
 	while yes {
 		fd_write(STDOUT, prompt(), 1, allocate(4))
 		line = ""
@@ -311,6 +314,7 @@ console(compiler: text): nothing := {
 		if line.length > 0 {
 			history = joined(joined(history, line), "\n")
 			lines = lines + 1
+			if editing { write_file(history_path(), history) }
 			child = fork()
 			if child == 0 { line_started(state, line) }
 			waitpid(child, allocate(4), 0)
@@ -319,10 +323,24 @@ console(compiler: text): nothing := {
 	print("")
 	unlink(state)
 }
+# where the lines typed on a terminal stay for the next console, ↑ reaching them as the shells' history does (card
+# repl-alt-arrows): ~/.warp_history, WARP_HISTORY names another file
+history_path(): text := {
+	given = getenv("WARP_HISTORY")
+	if given.length > 0 then given else joined(getenv("HOME"), "/.warp_history")
+}
+line_count(lines: text): i64 := {
+	count = 0
+	for i in 0..lines.length {
+		if byte_at(lines.address + i).value == NEWLINE { count = count + 1 }
+	}
+	count
+}
 # The console's line on a terminal (card repl-arrow-escape): the terminal reads a key at a time without echo while
 # the line is edited, ←/→ move the cursor, ↑/↓ step through the earlier lines, ⌫ deletes before the cursor, Ctrl+D on
 # an empty line ends the console (input_ended). Home/End (or Ctrl+A/E) go to the line's start and end, Delete removes
-# the character under the cursor, Alt+Delete the word after it and Alt+⌫ the word before it (card repl-editing-keys).
+# the character under the cursor, Alt+Delete the word after it and Alt+⌫ the word before it (card repl-editing-keys);
+# Alt+←/→ go to the start and end too, and ↑ reaches the earlier consoles' lines (history_path, card repl-alt-arrows).
 # The cursor steps over a character's UTF-8 bytes whole
 edited_line(history: text, lines: i64): text := {
 	settings = command_output("stty -g")
@@ -400,6 +418,10 @@ escaped_edit(): i32 := {
 	c = key()
 	if c == KEY_DELETE or c == KEY_BACKSPACE { return EDIT_WORD_BEFORE }
 	if c == KEY_ALT_D { return EDIT_WORD_AFTER }
+	if c == KEY_ALT_B { return EDIT_START }
+	if c == KEY_ALT_F { return EDIT_END }
+	# ESC ESC [D, iTerm's Option+← (Option as Esc+): the arrow with Alt
+	if c == KEY_ESCAPE { return with_alt(escaped_edit()) }
 	if c != KEY_BRACKET and c != KEY_APPLICATION { return EDIT_NONE }
 	number = 0
 	modifier = 0
@@ -415,10 +437,8 @@ escaped_edit(): i32 := {
 		c = key()
 	}
 	if number == 0 { number = given } else { modifier = given }
-	if c == ARROW_LEFT { return EDIT_LEFT }
-	if c == ARROW_RIGHT { return EDIT_RIGHT }
-	if c == ARROW_UP { return EDIT_UP }
-	if c == ARROW_DOWN { return EDIT_DOWN }
+	arrow = arrow_edit(c)
+	if arrow != EDIT_NONE { return if modifier == MODIFIER_ALT then with_alt(arrow) else arrow }
 	if c == FINAL_HOME { return EDIT_START }
 	if c == FINAL_END { return EDIT_END }
 	if c != FINAL_NUMBERED { return EDIT_NONE }
@@ -428,6 +448,15 @@ escaped_edit(): i32 := {
 	if number == NUMBERED_DELETE { return EDIT_DELETE }
 	EDIT_NONE
 }
+arrow_edit(c: i32): i32 := {
+	if c == ARROW_LEFT { return EDIT_LEFT }
+	if c == ARROW_RIGHT { return EDIT_RIGHT }
+	if c == ARROW_UP { return EDIT_UP }
+	if c == ARROW_DOWN { return EDIT_DOWN }
+	EDIT_NONE
+}
+# an arrow with Alt: ← to the line's start, → to its end, as Home and End (user 11-09)
+with_alt(edit: i32): i32 := if edit == EDIT_LEFT then EDIT_START else if edit == EDIT_RIGHT then EDIT_END else edit
 # the line from byte at on
 after(line: text, at: i64): text := text_from(line.address + at, (line.length - at) as u32)
 # the line without its bytes from start until end
