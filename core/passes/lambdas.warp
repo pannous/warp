@@ -642,15 +642,17 @@ with_function_parameters(statement: Node): Node := match statement {
 	Key(List(call, Bracket.Round, Separator.None), Op.Define, body): {
 		blocks = arguments_of(call).filter(is_function_parameter).map(parameter_name)
 		for parameter in arguments_of(call).filter(p => p is symbol and p != block_word) {
-			if unwrapped_in(body, parameter) { raise undeclared_use(name_of(parameter), "run as a block", "block") }
+			if unwrapped_in(body, parameter) { raise undeclared_use(name_of(parameter), "run as a block", "block, and run it " + name_of(parameter) + "()") }
 			if called_in(body, parameter) { raise undeclared_use(name_of(parameter), "called as a function", "function") }
 		}
-		Key(call_node(call#1, arguments_of(call).map(as_function_parameter)), Op.Define, bottom_up(body, part => block_run(part, blocks)))
+		for block in blocks { if unwrapped_in(body, symbol(block)) { raise block_bang(block) } }
+		Key(call_node(call#1, arguments_of(call).map(as_function_parameter)), Op.Define, body)
 	}
 	_: statement
 }
-# `body!` of a block parameter runs it, as `body()` does (wiki/block.md)
-block_run(n: Node, blocks: list): Node := if is_unwrapping(n) and n#2 is symbol and name_of(n#2) in blocks then call_node(n#2, []) else n
+# `body!` of a block parameter: a block runs only by a call, `!` is unwrap, in place or an operator (decision
+# blocks-run-by-call)
+block_bang(name: text): text := name + "! runs no block; fix: " + name + "()"
 is_unwrapping(n: Node): bool := is_round(n) and #n == 2 and n#1 == symbol(unwrap_word)
 # `body!` or `f(x)` of an untyped parameter: a parameter is a block or function only when declared one, never inferred
 # from its use (decision declared-block-parameters)
