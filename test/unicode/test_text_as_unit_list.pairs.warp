@@ -1,0 +1,6 @@
+# a text as a list of a unit type walks it by that unit: its code points, its bytes, its characters; any other type
+# converts each character (card list-codepoint)
+'#("שָלוֹם" as list of codepoint)'	6
+'"ab" as list of codepoint'	['a', 'b']
+'"ab" as list of byte'	[97, 98]
+'"12" as list of int'	[1, 2]
