@@ -30,7 +30,9 @@ rewrite ($x = list of strings) => ($x = zero_fill(0, ""))
 rewrite ($x = list of bools) => ($x = [])
 
 # A conversion to a list of a type (card pure-as-conversions): `["1", "2"] as list of int` converts each item, [1, 2]
-rewrite $v as list of $t => $v.map($x => $x as $t)
+# a unit type walks a text by that unit first, as `for codepoint in t` does: `"שָלוֹם" as list of codepoint` is its six code
+# points, never its four characters (card list-codepoint)
+rewrite ($v as list of $t) => walked_by($v, $unit).map($x => $x as $t) where $unit = unit_of_type($t)
 
 # `count bytes in t`: the text's byte size, ahead of the `in` of a membership
 rewrite (count bytes in $t) => byte_size($t)

@@ -57,8 +57,11 @@ NOT_YET = " is not in warp yet"
 command_name(entry: list): text := entry#1.split(" ")#1
 # the commands only a native host calls, never shown in help: a console line's step, `warp test`'s listing and verdicts
 host_commands = ["repl-step", "test-list", "test-verdicts"]
+# the commands it answers that help leaves out, the user-facing list kept short: the shown stages, the REPL, and
+# parse-code, which parse_code and eval call (core/native/driver.warp, web/playground/driver.js)
+hidden_commands = ["repl", "parse", "signature", "data", "parse-code", "lower", "uses", "debug"]
 # the commands this extension answers (its Extension row, extensions/extensions.warp)
-command_words(): list := command_help.map(command_name).filter(word => not word.starts_with("<")) + host_commands + running_commands + native_commands
+command_words(): list := command_help.map(command_name).filter(word => not word.starts_with("<")) + host_commands + hidden_commands + running_commands + native_commands
 
 # the text of the file `target` names, else `target` itself as code
 source_of(target: text): text := try read(target) else target
