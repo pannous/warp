@@ -420,7 +420,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P43 lists do not grow past the end: setting past it is a catchable `index out of range`.
 - P34 a number subscript on an empty `{}` keys it as a map. map-subscript-runtime: the same at run time: `m[1]` on a value that is a map when the program runs keys it (`f(m) := m[1] + 1; f({1: 5, 2: 6})` → 6), on a list or text it stays a position (`f([5, 6])` → 7). single-entry: `{a:1}` stays a pair and becomes a one-entry map where a map is needed.
 - stored-table-name: `stored people: [Person]` names its table after the variable; `… in "people_v2"` explicitly.
-- element-named-pair: a one-key pair named like an element (`{body: [...]}`) is markup; as data it takes a second key or a quoted key.
+- markup-needs-html (user 11-09, replaces element-named-pair, card data-key-brings-markup): markup is written inside `html{…}`, or in a function known to return html (its result typed html), where a plain `b{"bold"}` still works; anywhere else a tag-named key or tag form is data: `x = {p: {c: 1}}; x` → {p: {c: 1}}, `{i: 1}` stays {i: 1}. Tests and samples that write bare markup get the `html{…}` wrapper.
 - #25/#36 a space before `[` never indexes; only glued `a[..]`.
 - P29 `pair.0` counts from 0. P30 `xs.pop()` gives the last item, `m.remove(k)` the value or ø.
 - Word slices: `xs from #2 to #4`, `xs starting from #2`, `xs up to #2` or ordinals, both ends inclusive; a bare number is an error. P58 `xs#a..b` keeps the range with a strong warning naming `xs#(a..b)` and `(xs#a)..b`.
