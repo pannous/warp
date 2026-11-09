@@ -125,8 +125,6 @@ eval(code: text, with names: map) := eval_code(names.keys.map(name => "${name} =
 warning(message): text from emitter
 raise(message): same as message from emitter
 error(message): any from emitter
-// whether an instance or a map has every one of the fields, as a class extending none takes it
-has_fields(value, names: list): bool := names.all(name => value.has(name))
 is_error(x): bool from emitter
 is_type(x, type_name): bool from emitter
 // a node's parts and a node made of parts (wiki/node.md)

@@ -13,6 +13,8 @@ reduce(xs: list, f: function) := {
 place_refused(value, taker: text, needed: text) := raise taker + " takes " + with_article(needed) + ", not " + value + " (" + with_article(type(value).name) + ")"
 // `a word`, `an item`: the word after its indefinite article (the compiler's messages too)
 with_article(word: text): text := (if "AEIOUaeiou".contains(word#1) then "an " else "a ") + word
+// whether an instance or a map has every one of the fields, as a class extending none takes it
+has_fields(value, names: list): bool := names.all(name => value.has(name))
 last(xs: list or text) := xs#(count(xs))
 find(t: text, part: text) := count(split(t, present_part(t, part))#1) + 1
 present_part(t: text, part: text) := { if not (part in t) { raise "ValueError: \"" + part + "\" is not in \"" + t + "\"" }; part }
