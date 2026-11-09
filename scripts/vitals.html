@@ -93,7 +93,7 @@ footer { color: var(--ink-3); font-size: 12px; }
 
   <section>
     <h2>Compile cost and size</h2>
-    <p class="section-note">Instructions retired by each landing's compiler build, recorded by scripts/build-slot.sh for every build since 2026-10-31 and read from the build records in the store: warp.wasm compiling itself (the self-compile), the seed building warp.wasm, and warp.wasm's size. Instructions, not CPU seconds, which swing with the machine's load; a seed's cold first build is left out. A lighter core should compile cheaper. A dot is a landing; hover for its CPU seconds and peak memory, click to open the commit.</p>
+    <p class="section-note">Instructions retired by each landing's compiler build, recorded by scripts/build-slot.sh for every build since 2026-10-31 and read from the build records in the store: warp.wasm compiling itself (the self-compile), the seed building warp.wasm, and warp.wasm's size. Instructions, not CPU seconds, which swing with the machine's load; a seed's cold first build is left out. Three more cards give the wall seconds of rebuilding the core, the libraries and everything, the leanest build of each landing (the first two only from builds since the steps were timed; a lib-only build is the libraries). A lighter core should compile cheaper. A dot is a landing; hover for its CPU seconds and peak memory, click to open the commit.</p>
     <div class="tiers" id="builds"></div>
   </section>
 
@@ -401,8 +401,8 @@ function columnLines(snapshots, columns, container) {
   });
   const metricCard = (name, points, index, unit, detail) => {
     const card = document.createElement("div"); card.className = "tier";
-    if (!points.length) { card.innerHTML = `<div class="label">${name}</div><div class="empty">no build record of a landing yet</div>`; holder.appendChild(card); return; }
     points = points.filter(p => p[index] != null);
+    if (!points.length) { card.innerHTML = `<div class="label">${name}</div><div class="empty">no build record of a landing yet</div>`; holder.appendChild(card); return; }
     const top = Math.ceil(Math.max(...points.map(p => p[index])));
     const y = value => T + (1 - value / top) * (H - T - B);
     const firstPoint = points[0], lastPoint = points[points.length - 1];
@@ -424,6 +424,10 @@ function columnLines(snapshots, columns, container) {
   };
   const cost = p => `${Math.round(p[4])} s CPU · ${(p[3] / 1024).toFixed(1)} GB peak`;
   [...DATA.builds].reverse().forEach(([name, , points]) => metricCard(name, points, INSTRUCTIONS, "T instructions", cost));
+  // wall seconds per landing of rebuilding warp.wasm (scripts/build-slot.sh notes each step's start): the compiler (seed and
+  // optimize steps), the libraries (runtime and modules steps), everything; a build of before the steps file has only its total
+  const REBUILD_PARTS = [["rebuild the core", 2], ["rebuild the libraries", 3], ["rebuild everything", 4]];
+  REBUILD_PARTS.forEach(([name, index]) => metricCard(name, DATA.build_times, index, "s", p => `core ${p[2] ?? "?"} s · libraries ${p[3] ?? "?"} s · all ${p[4] ?? "?"} s`));
   const seedBuild = DATA.builds.find(([, record]) => record === "warp.record");
   if (seedBuild) metricCard("warp.wasm size", seedBuild[2], MEGABYTES, "MB", p => `${p[1]}`);
 })();

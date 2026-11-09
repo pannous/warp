@@ -50,6 +50,8 @@ global_variables(program: Node): map := {
 		if is_operator(part, ":") and key_of(part) == symbol(global_word) {
 			declared = value_of(part)
 			target = if is_operator(declared, "=") then key_of(declared) else declared
+			# a typed one, `global float y = 2`, is `y: float`
+			if is_operator(target, ":") { target = key_of(target) }
 			if target is symbol { found[name_of(target)] = yes }
 		}
 	}
