@@ -53,7 +53,7 @@ Parentheses go first.
 
 `/` divides.
 
-```warp => 2.5
+```warp => 5/2
 10 / 4
 ```
 
@@ -65,7 +65,7 @@ Parentheses go first.
 
 Numbers stay exact. Fractions and decimals are exact numbers: no rounding, ever.
 
-```warp => 0.5
+```warp => 1/2
 1/3 + 1/6
 ```
 
