@@ -6,7 +6,9 @@
 // CORS: ACAO + Cross-Origin-Resource-Policy: cross-origin for that Origin only (the playground is COEP require-corp),
 // and every answer Varies on Origin so a foreign refusal is never reused for it (card cors-blocked-request).
 // Secrets (wrangler secret put …): ANTHROPIC_API_KEY (from its own Console workspace, with a monthly spend limit),
-// TURNSTILE_SECRET, SESSION_SECRET. Deploy: wrangler deploy (in this folder). Test: node web/assistant/test_assistant.mjs
+// TURNSTILE_SECRET, SESSION_SECRET, and OWNER_TOKEN_HASH, the SHA-256 (hex) of the owner's token (the bug button's,
+// ~/.config/warp/bug-report-owner-token): that token in place of the Turnstile check opens a session, so the owner never
+// sees the challenge (card owner-token-session). Deploy: wrangler deploy (in this folder). Test: node web/assistant/test_assistant.mjs
 import ASSISTANT from "../playground/assistant.json";
 
 const MESSAGES_URL = "https://api.anthropic.com/v1/messages";
@@ -52,21 +54,40 @@ async function answered(request, env) {
 	if (!(await env.PER_ADDRESS.limit({ key: address })).success) throw failure(429, "Too many requests from this address: wait a minute.");
 	const body = await request.json().catch(() => { throw failure(400, "The request is not JSON."); });
 	const path = new URL(request.url).pathname;
-	if (path === "/session") return Response.json({ session: await openSession(body.turnstile, address, env) });
+	if (path === "/session") return Response.json({ session: await openSession(body, address, env) });
 	if (path !== "/messages") throw failure(404, "POST /session or /messages.");
 	await checkSession(request, address, env);
 	return claudeAnswer(body, env);
 }
 
-// ---- sessions: one Turnstile check, then a token signed for this address that holds an hour --------------------------
+// ---- sessions: one Turnstile check (the owner's token instead), then a token signed for this address that holds an hour ---
 
-async function openSession(turnstileToken, address, env) {
+async function checkTurnstile(turnstileToken, address, env) {
 	const form = new FormData();
 	form.append("secret", env.TURNSTILE_SECRET);
 	form.append("response", String(turnstileToken ?? ""));
 	form.append("remoteip", address);
 	const outcome = await (await fetch(SITEVERIFY_URL, { method: "POST", body: form })).json();
 	if (!outcome.success) throw failure(403, `The bot check failed (${outcome["error-codes"]?.join(", ")}).`);
+}
+
+// only the hash of the owner token is a secret of this Worker: a token that hashes to it is the owner's
+async function checkOwnerToken(ownerToken, env) {
+	const encoder = new TextEncoder();
+	const hashed = await hexSha256(String(ownerToken));
+	const expected = String(env.OWNER_TOKEN_HASH ?? "").toLowerCase();
+	const matches = hashed.length === expected.length && crypto.subtle.timingSafeEqual(encoder.encode(hashed), encoder.encode(expected));
+	if (!matches) throw failure(403, "This is not the owner's token.");
+}
+
+async function hexSha256(text) {
+	const hashed = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
+	return Array.from(hashed, byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function openSession({ turnstile, owner_token: ownerToken }, address, env) {
+	if (ownerToken === undefined) await checkTurnstile(turnstile, address, env);
+	else await checkOwnerToken(ownerToken, env);
 	const expires = Math.floor(Date.now() / 1000) + SESSION_SECONDS;
 	return `${expires}.${await signature(`${expires}.${address}`, env.SESSION_SECRET)}`;
 }
