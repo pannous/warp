@@ -3,3 +3,6 @@
 # A value definition reading a variable, or a word that reads one, is charged (P71, wiki/charged.md): the function of
 # no parameters, whose bare use is its call, so `tuning = 442; A4` follows the tuning; a constant stays a value (P70)
 rewrite ($h := $e) => ($h() := $e) where $h is varying and statement
+# a name defined as a function value is bound to it, as `f = e` binds it (decision function-valued-definition):
+# `f := x => x + 1`, a composition `root_sum := sum | sqrt` or `h := square & print` (rule_words.warp function_value)
+rewrite ($f := $e) => ($f = $e) where $f is symbol and function_value($e)

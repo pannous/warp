@@ -8,10 +8,10 @@ use sound
 # a kick made and saved here, so the sample has a file to read; any recording plays the same way
 release = 0.08
 play([C2 G1], 60ms)
-save sound as: "kick.wav"
+save sound as: ./kick.wav
 release = 0.005
 
-kick = sample("kick.wav")
+kick = sample(./kick.wav)
 print type of kick
 play(kick)                                  # as recorded
 play_sample(kick, 2)                        # twice as fast, an octave up
