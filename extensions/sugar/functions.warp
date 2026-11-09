@@ -6,6 +6,10 @@
 # parameter `self` is of that type, as Kotlin's extension function below (rules go bottom-up: each `func` member is a
 # definition already)
 rewrite extension $T {$members...} => (($h(self: $T, $p...): $t := {$b...}) for ($h($p...): $t := {$b...}) in $members...)
+# `block a+1`, `code a+1` (wiki/block.md): a block value, the function of no parameters run where it is forced, `b!`,
+# reading names as they are then (decision block-values-forced)
+rewrite (block $x) => (() => $x)
+rewrite (code $x) => (() => $x)
 rewrite (fun $d) => def $d
 rewrite (fn $d) => def $d
 rewrite (define $d) => def $d
