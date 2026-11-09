@@ -1355,6 +1355,7 @@ class_data_text(name: text, program: Node, ancestors: list): text? := {
 	if constructor_of(declared) != ø { return ø }
 	types = []
 	defaults = []
+	optional = []
 	for member in view#3[3..].map(member_read) {
 		field = field_name(member)
 		if field != ø {
@@ -1363,12 +1364,15 @@ class_data_text(name: text, program: Node, ancestors: list): text? := {
 			written = type_data_text(field_type, program, ancestors + [name])
 			if written == ø { return ø }
 			types += [field + ": " + written]
+			if field_type.ends_with("?") { optional += [field] }
 			if is_key(member, Op.Assign) { defaults += [field + ": " + as_code(value_of(member))] }
 		}
 	}
 	fields = declared.fields
 	order = fields.map(field => "\"" + field + "\"").join(", ")
-	made = name + "{" + fields.map(field => field + ": typed_fields[\"" + field + "\"]").join(", ") + "}"
+	# (a `T?` field the data leaves out is set only when given: the class leaves it ø)
+	given = field => "typed_fields[\"" + field + "\"]"
+	made = "{ made = " + name + "{" + fields.filter(field => field not in optional).map(field => field + ": " + given(field)).join(", ") + "}; " + optional.map(field => "if typed_fields.has(\"" + field + "\") { made." + field + " = " + given(field) + " }; ").join("") + "made }"
 	"{name: \"" + name + "\", order: [" + order + "], types: {" + types.join(", ") + "}, defaults: {" + defaults.join(", ") + "}, make: (typed_fields => " + made + ")}"
 }
 type_data_text(field_type: text, program: Node, ancestors: list): text? := {

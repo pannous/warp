@@ -330,7 +330,7 @@ json_list(n: any, written: function): text := {
 
 // parse(text, T) of a class T the program declares (its rule, extensions/rules/modules/json.warp, hands T as the
 // compiler's class_data gives it): the JSON read, each field checked by its type, missing ones defaulted (a `T?` one
-// to ø), made a T;
+// left ø), made a T;
 // a field missing, unknown or of another type raised, naming its path (`addresses[2].city`)
 typed_json_value(value: any, described: map, path: text): any := {
 	if type(value).name != "map" { raise (if path == "" then "expected object" else path + " must be object") + ", received " + type(value).name }
@@ -340,10 +340,12 @@ typed_json_value(value: any, described: map, path: text): any := {
 	given = {}
 	for field in order {
 		at = typed_json_path(path, field)
-		if keys(value).contains(field) { given[field] = typed_json_item(value[field], described["types"][field], at) }
+		item_type = described["types"][field]
+		# a `T?` field missing or null is left out: the maker leaves it ø
+		given_here = keys(value).contains(field) and not (typed_json_optional(item_type) and value[field] == ø)
+		if given_here { given[field] = typed_json_item(value[field], item_type, at) }
 		else if defaults.has(field) { given[field] = defaults[field] }
-		else if typed_json_optional(described["types"][field]) { given[field] = ø }
-		else { raise at + " is required" }
+		else if not typed_json_optional(item_type) { raise at + " is required" }
 	}
 	described["make"](given)
 }
