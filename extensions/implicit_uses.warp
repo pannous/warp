@@ -141,10 +141,10 @@ module_rule_heads(module: text): list := {
 }
 # whether every statement the word leads goes on with a bare word nothing defines, `on alarm {…}`: a phrase, no call,
 # so the word names a module there only by a rule going on with it (keys' on(key, body) is no `on alarm`, card
-# on-alarm-keys)
+# on-alarm-keys); `words of t` is no phrase but the lookup t.words (extensions/of_lookups.warp), naming words
 only_phrases_lead(program: Node, word: text, defined: function): bool := {
 	led = nodes_in(program).filter(n => is_group(n) and #n > 0 and n#1 == symbol(word))
-	#led > 0 and led.all(n => #n > 1 and n#2 is symbol and not defined(name_of(n#2)))
+	#led > 0 and led.all(n => #n > 1 and n#2 is symbol and not is_word(n#2, of_word) and not defined(name_of(n#2)))
 }
 # A word several modules define is the one module's whose definitions take every call the program makes of it, by
 # the count of arguments: math's dot(u, v) beside draw's dot(x, y, color) (card dot-product-definition); a module whose
