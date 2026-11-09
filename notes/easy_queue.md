@@ -13,36 +13,36 @@ Cards marked 'old pure lane?' name the retired pure lane: check whether they sti
 - use-shell-fix | S | lib | shell module | Next
 - unicode-emoji-favicon | S | web | favicon | Next
 - julia-wgsl | S | lib | shader operator ++ | Next
-- render-pdf-string | S | lib | one render rule | Soon
-- cargo-semver-version | S | lib | version parse | Soon
-- implicit-copy-call | S | lib | copy(x) implicit use | Soon
-- prints-reads | S | lib | time print | Soon
-- core-code-point-list-chars | S | lib | return type | Soon
-- add-xs | S | lib | name clash | Soon
-- make-floordiv | S | ext | canonical operator | Soon
-- wrong-value-zone-in | S | lib | zone text | Soon
-- typed-parse-optional-null | S | lib | T? missing field | Soon
-- linear-dotf-interpolation | S | lib | float interpolation | Soon
-- sin-double-impl | S | lib | C sample | Soon
-- real-int-power | S | lib | Real power | Soon
-- sort-function-stub | S | lib | sort name clash | Soon
-- override-keyword-refused | S | ext | override keyword | Soon
-- rest-keyword | S | lib | sound.rest | Soon
-- zoned-clock-utc | S | lib | zoned getter | Soon
-- set-operations-fail | S | lib | Set int of node | Soon
-- on-alarm-keys | S | lib | implicit keys use | Soon
-- signature-sample-mismatch | S | lib | sample.signature | Soon
-- example-nothing-return | S | web | example text | Soon
-- uncertainty-negation-print | S | lib | print of -y | Soon
-- shader-error | S | web | error words | Soon
-- timers-every-refusal | S | lib | every(200 ms) | Soon
-- named-color-swatches | S | lib | sample | Soon
-- ignore-tilde-readwrite | S | lib | ~ expansion | Soon
-- gcd-overflow-zero | S | lib | gcd bignum | Soon
-- js-array-from-callback | S | lib | js lambda | Soon
-- library-labelled-args | S | lib | insert at: | Soon
-- display-dpi-word | S | lib | display.dpi | Soon
-- color-shows-precision | S | lib | 1e-9 | Soon
+- render-pdf-string | S | lib | one render rule | Next
+- cargo-semver-version | S | lib | version parse | Next
+- implicit-copy-call | S | lib | copy(x) implicit use | Next
+- prints-reads | S | lib | time print | Next
+- core-code-point-list-chars | S | lib | return type | Next
+- add-xs | S | lib | name clash | Next
+- make-floordiv | S | ext | canonical operator | Next
+- wrong-value-zone-in | S | lib | zone text | Next
+- typed-parse-optional-null | S | lib | T? missing field | Next
+- linear-dotf-interpolation | S | lib | float interpolation | Next
+- sin-double-impl | S | lib | C sample | Next
+- real-int-power | S | lib | Real power | Next
+- sort-function-stub | S | lib | sort name clash | Next
+- override-keyword-refused | S | ext | override keyword | Next
+- rest-keyword | S | lib | sound.rest | Next
+- zoned-clock-utc | S | lib | zoned getter | Next
+- set-operations-fail | S | lib | Set int of node | Next
+- on-alarm-keys | S | lib | implicit keys use | Next
+- signature-sample-mismatch | S | lib | sample.signature | Next
+- example-nothing-return | S | web | example text | Next
+- uncertainty-negation-print | S | lib | print of -y | Next
+- shader-error | S | web | error words | Next
+- timers-every-refusal | S | lib | every(200 ms) | Next
+- named-color-swatches | S | lib | sample | Next
+- ignore-tilde-readwrite | S | lib | ~ expansion | Next
+- gcd-overflow-zero | S | lib | gcd bignum | Next
+- js-array-from-callback | S | lib | js lambda | Next
+- library-labelled-args | S | lib | insert at: | Next
+- display-dpi-word | S | lib | display.dpi | Next
+- color-shows-precision | S | lib | 1e-9 | Next
 - regex-error-messages | S | lib | messages | Soon
 - unknown-from-hex | S | lib | from_hex | Soon
 - user-sign | S | web | akamai signup (user) | Later
