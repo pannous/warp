@@ -46,7 +46,7 @@ p = {doc: 7}
 p.doc' 7
 
 # a_modules_exports
-is! 'import test/fixtures/wasm/fourty_two; ("twice" in fourty_two.exports) > 0' true
+is! 'import •/test/fixtures/wasm/fourty_two; ("twice" in fourty_two.exports) > 0' true
 
 # fields_of_an_instance_known_at_run_time
 is! 'class P{x:int; y:int; sq() := x*x+y*y}; p = P(1, 2); class Q{z:int}; f(o) := o.fields; f(Q(3))' ['z']
@@ -63,12 +63,12 @@ add.signature' '(left: int) -> int'
 
 # a_functions_dump
 is! 'area(width: int, height: int) := width * height
-area.dump' 'area(width: int, height: int) := width*height'
+area.definition' 'area(width: int, height: int) := width * height'
 is! 'twice(x) := x * 2
-twice.dump' 'twice(x) := x*2'
+twice.definition' 'twice(x) := x * 2'
 is! 'greet(name:text, greeting:text = "hi") := greeting + " " + name
-greet.dump' «greet(name: text, greeting: text = "hi") := greeting+' '+name»
+greet.definition' «greet(name:text, greeting:text = "hi") := greeting + " " + name»
 is! 'fib(n) := {if n<2 then { return n }; (fib n-1)+(fib n-2)}
 fib(10)' 55
 is! 'fib(n) := { if n < 2 { return n }; fib(n-1) + fib(n-2) }
-fib.dump' 'fib(n) := {if n<2 then { return n }; (fib n-1)+(fib n-2)}'
+fib.definition' 'fib(n) := { if n < 2 { return n }; fib(n-1) + fib(n-2) }'
