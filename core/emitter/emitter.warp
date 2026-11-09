@@ -189,16 +189,6 @@ zero_one_operators = ["xor", "&", "|", "min", "max"]
 # `xs.length`, `count xs`: `#xs`; a property also by count's other names, and `x.number` (not `number x`, a conversion)
 length_words = {length: yes, count: yes}
 counting_properties = {length: yes, count: yes, size: yes, len: yes, number: yes}
-# `m.keys`, `t.chars`, `t.codepoints`: a member name naming a library word of one value, by itself or as a prelude alias,
-# is that word's call (a node's entry of that name first, unless keeps_word);
-# else ø
-member_word(name: text): any := {
-	word = library_words.get(unaliased(name)) ?? ""
-	if word in module.runtime and #module.runtime[word].signature.parameters == 1 then word else ø
-}
-# whether `x.name` is the word's call even when x has an entry of that name: a map's own
-# member (`found.keys` of a map holding the entry "keys") or a word of a known result, which the code after it reads
-keeps_word(name: text, word: text): bool := takes_map_first(name) or module.runtime[word].signature.result not in ["", "any"]
 # whether the variable only ever holds map literals with that entry in the function: `n = {keys: 5}; n.keys` is its
 # own member 5, known as it compiles
 holds_entry(body: Body, receiver: Node, entry: text): bool := {
@@ -207,6 +197,52 @@ holds_entry(body: Body, receiver: Node, entry: text): bool := {
 	#values > 0 and values.all(value => is_group(value) and bracket_of(value) == "{" and #value > 0 and value.all(is_map_entry) and value.any(item => entry_name(item) == entry))
 }
 entry_name(entry: Node): text := if key_of(entry) is symbol then name_of(key_of(entry)) else "" + key_of(entry)
+# `m.a`, `n.sq`, `x.type`, `16.sqrt` (decision fields-are-functions): x's own w where it has one, else the call w(x) of
+# whatever takes x; of a value known only at run time its entry w when it has one (field_or_word), else that call. A
+# time's fields are its own, ahead of a word of that name (lib/time's weekday(ms: int); decision time-fields-before-ufcs),
+# also of a time held as a node (`d: date? = …; d.year`)
+def member_read(body: Body, receiver: Node, name: text): TypedCode {
+	value = expression_code(body, receiver)
+	if value.kind == ValueKind.Time and time_fields.has(name) and module.functions.has(time_field_word) { return time_field(value, name) }
+	if holds_entry(body, receiver, name) { return field_read(body, value, name) }
+	if not takes_receiver(body, name, receiver) { return field_of(body, value, name, receiver_class(body, receiver)) }
+	held = fresh_local(body, value.kind)
+	called = called_on(body, name, symbol(body.order#(held + 1)))
+	by_call = given => field_or_word(body, given, name, x => TypedCode(called.kind, x.code + [op.local_set] + uleb(held) + called.code, called.mark))
+	if value.kind == ValueKind.Node and time_fields.has(name) and module.functions.has(time_field_word) then node_time_field(body, value, name, by_call) else by_call(value)
+}
+# whether something takes x alone as w: the program's function (of a name overloaded by arity the variant taking x),
+# a library word, their other parameters defaulted, or the emitter's own word
+def takes_receiver(body: Body, name: text, x: Node): bool { method_function(body, name, [x]) != ø or takes_library_word(name, x) or is_own_word(name) }
+def takes_library_word(name: text, x: Node): bool {
+	word = library_words.get(unaliased(name)) ?? ""
+	word in module.runtime and takes_arguments(module.runtime[word], [x])
+}
+# the call w(x) of what takes_receiver found
+def called_on(body: Body, name: text, x: Node): TypedCode {
+	method = method_function(body, name, [x])
+	if method != ø { return call(body, module.functions[method], [x]) }
+	if takes_library_word(name, x) { return expression_code(body, call_of(unaliased(name), [x])) }
+	own_word_code(body, name, x)
+}
+# the emitter's own words of one value, `type(x)`, `floor(x)`, `ord(c)`, `length(xs)`
+def is_own_word(name: text): bool {
+	name in length_words or name in byte_count_words or name in bit_casts or name in text_words or name in cast_words or name in single_own_words or (name in magnitude_words and name not in module.functions)
+}
+single_own_words = ["floor", "type", "ord", "chr", "number"]
+def own_word_code(body: Body, name: text, x: Node): TypedCode {
+	if name in length_words { return length_code(expression_code(body, x)) }
+	if name == "floor" { return floored(instance_number(x, expression_code(body, x))) }
+	if name in magnitude_words and name not in module.functions { return magnitude(body, name, expression_code(body, x)) }
+	if name in byte_count_words { return byte_size_code(expression_code(body, x)) }
+	if name == "type" { return type_value_of(body, x) }
+	if name == "ord" { return code_point(expression_code(body, x)) }
+	if name == "chr" { return TypedCode(ValueKind.Char, converted(expression_code(body, x), ValueKind.Int) + [op.i32_wrap_i64]) }
+	if name in bit_casts { return bit_cast(expression_code(body, x), bit_casts[name]) }
+	if name in text_words { return shown_text(expression_code(body, x)) }
+	if name in cast_words { return instance_cast(x, expression_code(body, x), name) }
+	as_number(expression_code(body, x))
+}
 # `t.bytecount`, `t.byte_size`: the bytes of a text's UTF-8, 8 bytes an item of a list
 byte_count_words = {bytecount: yes, byte_size: yes}
 def byte_size_code(value: TypedCode): TypedCode { runtime_call("node_bytes", [TypedCode(ValueKind.Node, boxed(value))]) }
@@ -1188,22 +1224,10 @@ def group_expression(body: Body, n: Node): TypedCode {
 	if is_call_or_line(n) and #n >= 2 and n#1 == symbol("print") { return printed(if #n == 2 then printed_value(body, n#2) else texts_joined(body, items_of(n)[1..], " ")) }
 	if is_call_or_line(n) and #n == 2 and n#1 is symbol and name_of(n#1) in warning_words { return call(body, module.runtime["warned"], [n#2]) }
 	if is_call_or_line(n) and #n == 2 and n#1 == symbol(hint_word) and hint_word not in module.functions and hint_word not in body.names { return call(body, module.runtime["hinted"], [n#2]) }
-	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in length_words {
-		# `count = 0; count(users)`: "`count` is a variable here"
-		if name_of(n#1) in body.names { return refuse("the variable " + name_of(n#1) + " applied to a value") }
-		return length_code(expression_code(body, n#2))
-	}
-	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("floor") { return floored(instance_number(n#2, expression_code(body, n#2))) }
-	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in magnitude_words and name_of(n#1) not in module.functions { return magnitude(body, name_of(n#1), expression_code(body, n#2)) }
-	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in byte_count_words { return byte_size_code(expression_code(body, n#2)) }
-	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("type") { return type_value_of(body, n#2) }
-	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("ord") { return code_point(expression_code(body, n#2)) }
-	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("chr") { return TypedCode(ValueKind.Char, converted(expression_code(body, n#2), ValueKind.Int) + [op.i32_wrap_i64]) }
-	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in bit_casts { return bit_cast(expression_code(body, n#2), bit_casts[name_of(n#1)]) }
+	# `count = 0; count(users)`: "`count` is a variable here"
+	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in length_words and name_of(n#1) in body.names { return refuse("the variable " + name_of(n#1) + " applied to a value") }
+	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and is_own_word(name_of(n#1)) { return own_word_code(body, name_of(n#1), n#2) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("unwrap") { return unwrapped(body, n#2) }
-	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in text_words { return shown_text(expression_code(body, n#2)) }
-	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in cast_words { return instance_cast(n#2, expression_code(body, n#2), name_of(n#1)) }
-	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("number") { return as_number(expression_code(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 1 { return expression_code(body, n#1) }
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("return") { return return_value(body, expression_code(body, n#2)) }
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("global") { return global_declaration_code(body, n#2) }
@@ -1353,38 +1377,7 @@ def key_expression(body: Body, n: Node): TypedCode {
 	}
 	# `type(x).name`
 	if operator == Op.Dot and right == symbol("name") and is_type_call(left) { return TypedCode(ValueKind.Text, payload(type_value_of(body, left#2).code, gc_type(gc.text))) }
-	if operator == Op.Dot and right is symbol and member_word(name_of(right)) != ø {
-		word = member_word(name_of(right))
-		value = expression_code(body, left)
-		if holds_entry(body, left, name_of(right)) { return field_read(body, value, name_of(right)) }
-		# a field some class declares is read first, `c.keys` of a class declaring keys (card declared-class)
-		if keeps_word(name_of(right), word) and not declares_field(name_of(right)) { return runtime_call(word, [value]) }
-		return field_or_word(body, value, name_of(right), receiver => runtime_call(word, [receiver]))
-	}
-	if operator == Op.Dot and right is symbol and name_of(right) in byte_count_words { return byte_size_code(expression_code(body, left)) }
-	# `m.a`: the entry a of the map (or instance) m, `m#("a"+1)`
-	if operator == Op.Dot and right is symbol {
-		value = expression_code(body, left)
-		# `d.weekday`: a time's own field, ahead of a word of that name (lib/time's weekday(ms: int)), as a known class's
-		# struct field is (decision time-fields-before-ufcs)
-		if value.kind == ValueKind.Time and time_fields.has(name_of(right)) and module.functions.has(time_field_word) { return time_field(value, name_of(right)) }
-		# `n.sq`, `parts.last`: a member naming a function of the program that takes the value is its call (a node's
-		# entry of that name first)
-		method = method_function(body, name_of(right), [left])
-		if method != ø {
-			called = module.functions[method]
-			by_method = given => field_or_word(body, given, name_of(right), receiver => call_values(called, defaulted(body, called, [receiver], 1)))
-			# (a time held as a node, `d: date? = …; d.year`, reads its own field ahead of Instant's year too)
-			return if value.kind == ValueKind.Node and time_fields.has(name_of(right)) and module.functions.has(time_field_word) then node_time_field(body, value, name_of(right), by_method) else by_method(value)
-		}
-		# `t.split`: a member naming a library word that takes the value alone, its other parameters defaulted
-		word = library_words.get(name_of(right))
-		if word != ø and takes_arguments(module.runtime[word], [left]) {
-			runtime_word = module.runtime[word]
-			return field_or_word(body, value, name_of(right), receiver => call_values(runtime_word, defaulted(body, runtime_word, [receiver], 1)))
-		}
-		return field_of(body, value, name_of(right), receiver_class(body, left))
-	}
+	if operator == Op.Dot and right is symbol { return member_read(body, left, name_of(right)) }
 	# (only `rational`: a float `as real` or `as exact` stays a float)
 	if operator == Op.As and right is symbol and name_of(right) == "rational" {
 		return as_rational(expression_code(body, left))
