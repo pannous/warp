@@ -371,15 +371,15 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	aliases = without_keys(with_call_forms(written_aliases, module_names + own.keys), own_classes)
 	program = aliased_in_scope(program, aliases, own, owners)
 	# a program's operator declaration overloads the module's beside it (`infix operator ↑(v: V, n: int)` beside the
-	# numbers' ↑), a program's assignment to a module's global sets it (`tuning = 442` retunes sound's notes), any other
-	# definition replaces the module's
+	# numbers' ↑) and replaces one of its very parameter types, a program's assignment to a module's global sets it
+	# (`tuning = 442` retunes sound's notes), any other definition replaces the module's
 	assigned = statements_in(program).filter(statement => is_key(statement, Op.Assign) and key_of(statement) is symbol).map(declared_name)
 	# a used module's definition of the name replaces the slice only when it takes the same parameter types; any other
 	# joins it as an overload, chosen by the arguments (decision cross-module-overload: shell's find(folder: Path,
 	# pattern: text) beside the prelude's find(t: text, part: text))
 	own_name_set = word_set(own_names)
 	replaced = slice => (own_name_set.has(slice#1) and not overloads_brought(slice, program)) or (slice#1 in own_classes and leading_name(slice#2) not in defining_keywords)
-	kept = slice => not replaced(slice) or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX) or (slice#2.starts_with("global ") and slice#1 in assigned)
+	kept = slice => not replaced(slice) or (slice#1.starts_with(OPERATOR_FUNCTION_PREFIX) and not redefined(slice, program)) or (slice#2.starts_with("global ") and slice#1 in assigned)
 	# the program's globals, `global hue = 10`, which every function of its own shares, are no module's: hsv's `hue`
 	# stays its local
 	program_globals = statements_in(program).filter(is_global_declaration).map(declared_name).filter(name => name != ø and name not in module_names)
@@ -457,18 +457,29 @@ slices_by_name(slices: list): map := {
 # name passed as a function could no longer tell (the compiler's shader_values(s, given, program))
 overloads_brought(slice: list, program: Node): bool := {
 	if not brought_names.has(slice#1) { return no }
-	heads = statements_in(program).filter(statement => declared_name(statement) == slice#1).map(definition_head_of)
-	if heads.any(head => head == ø) { return no }
-	# (given's [name, text, packed parse or ø, identity]; its head's types only: parsed without its module's uses, which
-	# would link modules not built yet)
-	parsed_slice = if slice#3 != ø then unpack(slice#3) else plain_node(parsed(slice#2))
-	head = definition_head_of(statements_in(parsed_slice)#1)
-	if head == ø or not is_group(head) { return no }
-	types = parameter_types(head)
+	heads = program_heads(slice#1, program)
+	types = slice_parameter_types(slice)
+	if heads.any(head => head == ø) or types == ø { return no }
 	classes = declared_classes(program)
 	# (the named number types it declares, Color beside the prelude's int: decision int-type-overloads)
 	overload_marks = declared_marks(program)
 	heads.all(other => not is_group(other) or told_apart(types, parameter_types(other), classes))
+}
+# whether the program defines the slice's word with the very parameter types it takes: an operator of the program then
+# replaces the module's as a function does, where another one joins it as an overload
+redefined(slice: list, program: Node): bool := {
+	types = slice_parameter_types(slice)
+	types != ø and program_heads(slice#1, program).any(head => is_group(head) and parameter_types(head) == types)
+}
+program_heads(name: text, program: Node): list := statements_in(program).filter(statement => declared_name(statement) == name).map(definition_head_of)
+# the parameter types of a slice's head, ø for a definition of no parameter list
+# (given's [name, text, packed parse or ø, identity]; its head's types only: parsed without its module's uses, which
+# would link modules not built yet)
+slice_parameter_types(slice: list): list? := {
+	parsed_slice = if slice#3 != ø then unpack(slice#3) else plain_node(parsed(slice#2))
+	head = definition_head_of(statements_in(parsed_slice)#1)
+	if head == ø or not is_group(head) { return ø }
+	parameter_types(head)
 }
 told_apart(types: list, others: list, classes: list): bool := #types == #others and (0 ..< #types).any(at => types[at] != others[at] and is_overload_type(types[at], classes) and is_overload_type(others[at], classes))
 # a linked module's definition as the program needs it: a function's head, its body left to the module's code, a
