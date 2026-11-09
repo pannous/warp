@@ -1196,6 +1196,10 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - enum-constants-typed (Interviewer, no-special-cases sibling of instance_constant, ~5–10 parser lines, card one-on): a library
     constant holding an enum case, `ESC = Key.escape`, is typed for rules like `km = Unit("km")`; `on X {…}` is a named event
     only when X is unbound and no library constant, else listened(X, handler).
+  - cheap-classes-everywhere (user, extends int-types-are-classes, card cheap-classes-everywhere): every mark becomes a cheap
+    class: hex, binary, octal, byte, codepoint (one int field), bool (yes/no) and path (one text field). Literals keep their
+    form: `0xFF` prints 0xFF, `0b101` 0b101, `0o10` 0o10; arithmetic gives a plain int (`0xFF + 1` → 256, hex-printing).
+    Order: after named-int; bool last, measured (conditions are hot), typed places keep raw values as for [Color].
   - bf16-f8-shaders (user, 11-08, card bf16-storage, after f16): a shader declares `array<bf16>` / `array<f8>` and indexes `xs[i]` as if native; lib/shaders rewrites it to array<u32> plus unpack/pack helpers (2 bf16 or 4 f8 a word), as it already rewrites shader words and holes. Plain `[f8]` is e4m3 (max 448, no ∞); `[f8e5m2]` only when a program needs it.
   - class-types-checked (user, 11-08): a class that extends another is checked by name: a T place takes only T or its subclasses (`f(d: Length) := d; f(5s)` is refused "f takes a Length, not 5s (a Time)"); a standalone class keeps the fit by fields, now really checked (`a: A = B(1)` refused when B lacks A's fields). At compile time where known, else on entry. An extension, no core.
   - bare-number-to-unit (user, 11-08, with length-pixels): `f(d: Length) := d; f(5)` is 5m: a bare number reaches a unit place by the unit's declared number conversion, as `5 as Length` does.
