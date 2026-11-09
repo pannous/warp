@@ -19,7 +19,7 @@ baked-lib-split.
     index cover plain calls, so the names are in rewrites.warp std_module_names). The emitter's bit_and/bit_or are
     the runtime instruction words bits_and/bits_or (core/runtime/instructions.warp, included by emitter.warp).
   - baked list 18 → 11 (lib: prelude.warp, math.warp, c.warp left).
-- Part 2, P1+P2, commits d11d08d497 + the fix after it (smoke running when this was written):
+- Part 2, P1+P2, commits d11d08d497 + 459585c1a2 (smoke, self-check, gate tier 1 green; handed to the Integrator):
   - core/analysis/builtins.warp and math_builtins.warp: the typed builtin lines (`from warp`, `from emitter`,
     `from 'm'`), the only typed lines the compiler reads (builtin_signatures.warp typed_texts_seen).
   - prelude, math and c are read from disk when a compile first asks (prelude_text(), math_text(),
