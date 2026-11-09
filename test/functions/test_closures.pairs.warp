@@ -12,8 +12,8 @@
 'mul(n) := (x => x*n); k=3; g = mul(k); k=5; g(2)'	6
 
 # test_capturing_lambda_passed_to_a_function
-'apply(f, x):=f(x); k=4; apply(y=>y*k, 3)'	12
-'twice(f, x):=f(f(x)); n=1; twice(y=>y+n, 5)'	7
+'apply(f: function, x):=f(x); k=4; apply(y=>y*k, 3)'	12
+'twice(f: function, x):=f(f(x)); n=1; twice(y=>y+n, 5)'	7
 
 # test_map_and_reduce_with_a_closure_variable
 'sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])'	6

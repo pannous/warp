@@ -24,4 +24,4 @@
 'f(xs, n) := xs#1 * n; job = go f([3,4], 2); await job'	6
 
 # function_values_cross_to_a_task
-'twice(f, v) := f(f(v)); job = go twice(x => x * 3, 2); await job'	18
+'twice(f: function, v) := f(f(v)); job = go twice(x => x * 3, 2); await job'	18

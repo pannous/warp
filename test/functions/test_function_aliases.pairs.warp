@@ -5,4 +5,4 @@
 'def add(t){ t + "!" }; g = &add; h = g; h("x")'	'x!'
 
 # test_a_function_argument_stays_bare
-'def sq(x){x*x}; def apply(f, x){ f(x) }; apply(sq, 3)'	9
+'def sq(x){x*x}; def apply(f: function, x){ f(x) }; apply(sq, 3)'	9

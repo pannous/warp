@@ -60,14 +60,14 @@ g(5)' 5
 
 # test_block_changes_the_callers_variable
 is! 'total = 0
-def g(h)
+def g(h: function)
   h(1)
   h(2)
 end
 g(x => total += x)
 total' 3
 is! 'global total = 0
-def g(h)
+def g(h: function)
   h(1)
   h(2)
 end

@@ -12,7 +12,7 @@
 'f(xs) := { xs.add(420); xs }; count(f([1]))'	2
 
 # a_library_word_is_a_function_value_of_a_user_function
-«f(ok) := ok('a'); f(is_letter)»	true
-«f(ok) := ok('a'); f(is_digit)»	false
-'twice(g, x) := g(g(x)); twice(upper, "hi")'	'HI'
-'apply(g, a, b) := g(a, b); apply(join, ["a", "b"], "-")'	'a-b'
+«f(ok: function) := ok('a'); f(is_letter)»	true
+«f(ok: function) := ok('a'); f(is_digit)»	false
+'twice(g: function, x) := g(g(x)); twice(upper, "hi")'	'HI'
+'apply(g: function, a, b) := g(a, b); apply(join, ["a", "b"], "-")'	'a-b'
