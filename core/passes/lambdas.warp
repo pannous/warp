@@ -731,6 +731,13 @@ linked_definitions(program: Node): list := {
 	found
 }
 
+# `square := it * it` as the definition `square(it) := it * it` it is, so `g = square` or `apply(square, 3)` passes it
+# as a function value
+explicit_definition(statement: Node): Node := {
+	call = implicit_call(statement)
+	if call == ø then statement else Key(call, Op.Define, value_of(statement))
+}
+
 # a global or main-level variable named as one of the program's functions, `global marks = {}` beside
 # `marks(n) := …`, in one file or two: the function's name read as a value is its closure, which takes no assignment,
 # so the compile is refused naming each place the name is declared
@@ -743,8 +750,9 @@ refuse_variables_named_as_functions(main_statements: list, globals: map, arities
 }
 
 lambdas(program: Node): Node := {
-	positions = function_positions_of(statements_in(program) + linked_definitions(program))
-	written = statements_in(program).map(statement => with_function_parameters(celled_definition(statement, positions)))
+	statements = statements_in(program).map(explicit_definition)
+	positions = function_positions_of(statements + linked_definitions(program))
+	written = statements.map(statement => with_function_parameters(celled_definition(statement, positions)))
 	main_statements = written.filter(statement => definition_of(statement) == ø)
 	read_by_functions = written.flat_map(statement => read_from_outside(statement))
 	written = written.filter(statement => definition_of(statement) != ø) + celled_scope(main_statements, [], positions, read_by_functions)
