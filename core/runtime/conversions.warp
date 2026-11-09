@@ -54,7 +54,7 @@ int_mark(n: Node): int := if is_null(n) then 0 else marked_kind(n)
 type_marked(n: Node): bool := {
 	mark = int_mark(n)
 	kind = mark % KindUnit.Info
-	(kind == Kind.Int or kind == Kind.Float) and mark != Marked.Bool and mark / KindUnit.Info % 16777216 != 0
+	(kind == Kind.Int or kind == Kind.Float) and mark != Marked.Bool and int_remainder(int_quotient(mark, KindUnit.Info), 16777216) != 0
 }
 # an Int node's int, a big one's low 64 bits
 whole_int(n: Node): int := if is_plain_int(n) then unboxed_int(n) else extended_wrapped(n)
