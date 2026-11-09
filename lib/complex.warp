@@ -32,6 +32,8 @@ class Complex {
 	text(): text := complex_text(this)
 }
 
+// ⅈ, the imaginary unit (extensions/glyph_atoms.warp GLYPH_WORDS): -0.8 + 0.156ⅈ
+imaginary_unit(): Complex := Complex(0.0, 1.0)
 // a Complex or a plain number as a Complex
 as_complex(x: any): Complex := if x is Complex then x else Complex(x * 1.0, 0.0)
 // r·e^(iθ)
