@@ -145,8 +145,14 @@ read_sum_type(p: Parser, name: Node, parameters: list): Node := {
 	start = variants_start(p)
 	if start < 0 then ø else sum_type(p, name, start, parameters)
 }
-# `enum Shape { Circle(r), … }` with a case carrying values, else ø with the parser where it was
+# `enum Shape { Circle(r), … }` with a case carrying values, else ø with the parser where it was; Kotlin's
+# `enum class Color {…}` is the plain enum `enum Color {…}`: the word `class` is skipped
 read_enum_with_values(p: Parser, word: text): Node := {
+	keyword = class_keyword_after(p, word)
+	if keyword == "class" {
+		p.at = blank_end(p, p.at + word.length) + keyword.length
+		return symbol(word)
+	}
 	start = p.at
 	p.at += word.length
 	if enum_values_ahead(p) { return enum_with_values(p) }

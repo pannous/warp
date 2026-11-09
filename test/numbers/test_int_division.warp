@@ -3,4 +3,4 @@
 # ratios_keep_their_division
 is! 'use draw
 colors = [hsv(band * 280 / 16, 1, 1) for band in 0..16]
-colors#4' 4294958848
+colors#4 as int' 4294958848

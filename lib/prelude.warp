@@ -567,6 +567,12 @@ display.height := display_height
 // that turns lengths into px, `3 cm * display.density`; a program sets it in dpi, `display.density = 300 dpi`
 display.density := display_dpi * 1dpi
 display.density(density) := set_system_value("display_dpi", density / 1dpi)
+// its other names repeat its body: a dotted definition cannot name another (`display.dpi := display.density` reads
+// display as a value) and alias takes no dotted name (card dotted-definition-naming)
+display.dpi := display_dpi * 1dpi
+display.dpi(density) := set_system_value("display_dpi", density / 1dpi)
+display.ppi := display_dpi * 1dpi
+display.ppi(density) := set_system_value("display_dpi", density / 1dpi)
 // width × height in px (other names display.dimensions and display.resolution)
 display.size := [display_width, display_height] px
 // the diagonal as a length: its nearest whole px at the density (quantities run as exact amounts, a run-time √ is a

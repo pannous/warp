@@ -4,7 +4,6 @@ use "lexer.warp"
 use "../passes/shapes.warp"
 use "../analysis/words.warp"
 use "../passes/sugar.warp"
-use "foreign_forms.warp"
 use "../extension.warp"
 use "../host_io.warp"
 use "../passes/library.warp"
@@ -1996,10 +1995,19 @@ def operator_method_head(p: Parser, declared: bool = false): Node {
 	if op.length == 0 or not (declared or METHOD_OPERATORS.contains(op#2)) { return ø }
 	open = p.at + op#1.length
 	if char_at(p, open) != '(' { return ø }
-	if not starts_at(p.code, ":=", blank_end(p, hole_end(p.code, open + 1, '(', ')', p.n)), p.n) { return ø }
+	close = blank_end(p, hole_end(p.code, open + 1, '(', ')', p.n))
+	typed = char_at(p, close) == ':' and char_at(p, close + 1) != '='
+	defines_at = if typed then blank_end(p, name_end(p.code, blank_end(p, close + 1), p.n)) else close
+	if char_at(p, defines_at) == '?' { defines_at = blank_end(p, defines_at + 1) }
+	if not starts_at(p.code, ":=", defines_at, p.n) { return ø }
 	p.at = open
-	parameters = group_items(expression(p, binding_powers(":=")#1 + 1))
-	call_of([symbol(if METHOD_OPERATORS.contains(op#2) then op#2 else OPERATOR_FUNCTION_PREFIX + op#1)] + parameters)
+	// (the group alone: its result type's `:` after it binds tighter than `:=`)
+	parameters = group_items(expression(p, STRUCTURE_POWERS[":"]#1 + 1))
+	head = call_of([symbol(if METHOD_OPERATORS.contains(op#2) then op#2 else OPERATOR_FUNCTION_PREFIX + op#1)] + parameters)
+	if not typed { return head }
+	// `+(a: Color, b: Color): Color := …`: its result type
+	p.at = blank_end(p, close + 1)
+	Key(head, Op.Colon, expression(p, binding_powers(":=")#1 + 1))
 }
 
 // `def ==(o) := …`: def defines no operator, its English name does, `equal(o) := …` (decision operator-english-names;
@@ -2209,8 +2217,6 @@ def prefixed(p: Parser): Node := {
 		loop = looped(p)
 		return if loop == ø then atom(p) else loop
 	}
-	foreign = foreign_form(p, word)
-	if foreign != ø { return foreign }
 	// a phrase an extension reads from its word, `emit alarm` (core/extension.warp keyword_readers)
 	keyword_reader = keyword_reader_of(word)
 	word_start = p.at
@@ -3237,6 +3243,35 @@ def declaration_follows(p: Parser, word: text, at: int): bool {
 // After the spaces and tabs from `at` on
 def spaces_end(p: Parser, at: int): int := blanks_end(p.code, at, p.n)
 
+// The declaration words a class modifier stands before
+CLASS_KEYWORDS = ["class", "struct"]
+
+// Only blanks stand between the start of the statement and the parser's position
+def starts_statement(p: Parser): bool {
+	at = p.at - 1
+	while at >= 0 and " \t\r".contains(p.code[at]) { at -= 1 }
+	at < 0 or "\n;{".contains(p.code[at])
+}
+
+// The name after one or more blanks behind `word`, else ""
+def name_after_blanks(p: Parser, word: text): text {
+	start = spaces_end(p, p.at + word.length)
+	if start == p.at + word.length { return "" }
+	p.code[start .. name_end(p.code, start, p.n)]
+}
+
+// `class` or `struct` after the blanks behind `word`, the word a class modifier stands before, else ""
+def class_keyword_after(p: Parser, word: text): text {
+	name = name_after_blanks(p, word)
+	if CLASS_KEYWORDS.contains(name) then name else ""
+}
+
+// `mixin Name {`: a name and a block after the blanks behind `word`
+def block_after_name(p: Parser, word: text): bool {
+	name = name_after_blanks(p, word)
+	count(name) > 0 and char_at(p, spaces_end(p, spaces_end(p, p.at + word.length) + name.length)) == '{'
+}
+
 // Blanks, then a block of fields: `{}`, `{ name: …`, or with `assignments` `{ x = 1 …` (its first entry may start on
 // the next line)
 def block_after_blanks(p: Parser, assignments: bool): bool {
@@ -3484,7 +3519,7 @@ def declared_type(p: Parser, word: text): Node := {
 	joined = joined_type_name(p, p.code[p.at .. word_end], word_end)
 	end = joined#2
 	name = symbol(joined#1)
-	// `mixin Name {…}`: the type its classes take the methods of (foreign_forms.warp)
+	// `mixin Name {…}`: the type its classes take the methods of (extensions/foreign_declarations.warp)
 	if word == "mixin" { name = attributed("mixin", true, name) }
 	p.at = end
 	parameters = type_parameters(p)
