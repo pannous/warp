@@ -1,0 +1,6 @@
+# two-way form bindings (card web-bind, notes/web_framework.md step 6): `input{ bind: name }` shows name as its value and
+# sets name from what is typed (its handler of the page event input); a checkbox binds `checked`
+'use web; name = "Ann"; to_html(div{ input{ bind: name } p{ "Hi " + name } })'	'<div><input value="Ann" data-warp-input="1"><p>Hi Ann</p></div>'
+'use web; done = true; to_html(input{ type: "checkbox" bind: done })'	'<input type="checkbox" checked data-warp-input="1">'
+'use web; done = false; to_html(input{ type: "checkbox" bind: done })'	'<input type="checkbox" data-warp-input="1">'
+'use web; name = "Ann"; v = div{ input{ bind: name } p{ "Hi " + name } }; page_render(v); page_event(1, {value: "Bob"}); page_render(v)'	'<div><input value="Bob" data-warp-input="1"><p>Hi Bob</p></div>'

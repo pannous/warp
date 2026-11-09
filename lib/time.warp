@@ -30,8 +30,33 @@ wall_clock_ms(): int := {
 
 // a span of time in milliseconds, which moves an Instant: a plain number is one (`Instant(0) + 2`), lib/units converts
 // its quantities of time (`Instant(0) + 2 seconds`), one of another dimension a DimensionError (card instant-typed-duration)
-class Duration { ms: number }
+// It shows in seconds as the shell's time does, `6s`, `0.207s`. Its operators take a Duration or a number, so one
+// meeting lib/units' quantity of time converts it (decision as-promotes, one-duration): `time 6 == 6s`, `d + 1s` is 7s
+class Duration {
+	ms: number
+	text() := seconds_text(int(round(ms)))
+	format as text := seconds_text(int(round(ms)))
+	equal(other: Duration) := ms == other.ms
+	+(other: Duration or number) := Duration(ms + duration_ms(other))
+	-(other: Duration or number) := Duration(ms - duration_ms(other))
+}
+duration_ms(other: Duration or number) := if other is Duration then other.ms else other
 n: number as Duration := Duration(n)
+seconds_text(ms: int): text := (if ms < 0 then "-" else "") + abs(ms) /! 1000 + millis_fraction(abs(ms) % 1000) + "s"
+
+// decision time-command: `time 6` is six seconds, `time { … }` runs the block, prints how long it took as the shell's
+// time does and gives the block's value
+time(n: number) := Duration(n * 1000)
+time(b: block) := {
+	start = now()
+	value = b()
+	print("time: " + Duration(now() - start))
+	value
+}
+// `x is time` (kind "time") of an instant, a duration or a time the core holds (now.date, now.time), `x is duration` of
+// a duration (decision time-word): the emitter asks it (core/emitter/runtime_words.warp time_test_code), its own
+// `x is time` the core's; lib/units asks it beside its quantities of time
+time_valued(x, kind: text): bool := x is Duration or (kind == "time" and (x is Instant or x is time))
 
 // a point in time: milliseconds since 1970-01-01T00:00:00Z. Everything on it is plain warp: ordering through
 // compare (<, <=, >, >=), equality structural, the difference of two instants in milliseconds, a duration in
@@ -53,6 +78,9 @@ class Instant {
 	hour(): int := wall() % 86400000 /! 3600000
 	minute(): int := wall() % 3600000 /! 60000
 	second(): int := wall() % 60000 /! 1000
+	// its time of day and its day on its wall clock, times themselves (decision time-word): now.time, now.date
+	time() := time_of(clock_form, wall() % 86400000 /! 1000 * nanos_per_second)
+	date() := time_of(date_form, day_number(wall()))
 	minus(other: Instant or Duration) := if other is Instant then ms - other.ms else Instant(ms - other.ms, zone)
 	plus(duration: Duration) := Instant(ms + duration.ms, zone)
 	// the same instant on the UTC wall clock: now.UTC, also now.utc
@@ -316,8 +344,10 @@ zone_instant(zone: Zone, wall: int, choice: Disambiguation): int := {
 // nanoseconds, its info the zone's index and offset in minutes above the form (extensions/time_values.warp), its zone's
 // name beside them
 nanos_per_second = 1000000000
+date_form = 1
 local_form = 2
 zoned_form = 4
+clock_form = 5
 zone_index_unit = 8
 offset_minute_unit = 2048
 // an instant or a zoned time keeps its instant; a local time's wall clock resolves in the zone, a skipped or repeated

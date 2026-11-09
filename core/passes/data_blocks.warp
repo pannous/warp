@@ -35,8 +35,7 @@ data_positions_called(program: Node): map := {
 	written = nodes_in(program)
 	found = data_positions_of(written)
 	for word in (called_words(program) + block_heads(written)).filter(word => not found.has(word)) {
-		definitions = definitions_of(word, []).filter(definition => definition.contains(": data"))
-		module_positions = data_positions_of(definitions.map(definition => statements_in(plain_node(parsed(definition)))#1))
+		module_positions = data_positions_of(definitions_of(word, []).map(definition => statements_in(definition)#1))
 		for name in module_positions.keys { found[name] = module_positions[name] }
 	}
 	found

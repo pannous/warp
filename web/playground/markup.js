@@ -5,7 +5,7 @@
 const KEY_ATTRIBUTE = "data-warp-key"; // a list item's element (lib/markup.warp)
 const NUMBER_FIELDS = ["number", "range"]; // fields whose bound value is a number
 const LEAVING_ATTRIBUTE = "data-warp-leaving"; // an element animating out: no longer matched, removed when done
-const DEV_STORE = "warp-dev"; // the store of the values a `warp dev` page keeps (src/lowering/data/stored_values.rs DEV_STORE)
+const DEV_STORE = "warp-dev"; // the store of the values a `warp dev` page keeps (extensions/dev_values.warp DEV_STORE)
 const STORED_PREFIX = "warp stored "; // a stored value in localStorage, kept across visits
 const DEV_PREFIX = "warp dev "; // a value a `warp dev` page keeps in sessionStorage, across its reloads
 const SESSION_STORE = "warp-session"; // the store of `session[k]` (src/lowering/data/stored_values.rs SESSION_STORE)
@@ -100,7 +100,7 @@ function inputDetail(field) {
 
 // each event of a page its program hears, to `handle`: its element's {event, detail} (elementEvent) or nothing, and the
 // DOM event; a key pressed anywhere but in a text field is the program's `on key` (lib/keys.warp). A built site
-// (site.js) and the native warp's app window (crates/warp-webview/bridge.js) listen so; markup-forms.js adds submit
+// (site.js) and the native warp's app window (lib/host/native_host/webview_bridge.js) listen so; markup-forms.js adds submit
 const KEY_EVENT = "key";
 const fieldDetail = happened => inputDetail(happened.composedPath()[0]);
 function listenToElements(root, handle) {

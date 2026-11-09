@@ -6,11 +6,14 @@ FOOTPRINT_GROWTH_PERCENT=10
 footprint_record=$warp_store/hello-footprint
 
 # footprint_run <MiB file> <seconds> <command…>: the command run for at most that long, its peak footprint in MiB
-# written to the file
+# written to the file. Measured warm: a run in a freshly installed or built lib/ first compiles every module's machine
+# code (its .cwasm), which doubled hello's peak (149 MiB recorded at d51ec3f759, 72 MiB warm; card
+# hello-footprint-growth), so the command runs once unmeasured before
 footprint_run() {
 	local measured=$1 seconds=$2 timing status
 	shift 2
 	[ $warp_platform = mac ] || { timeout "$seconds" "$@"; return; }
+	timeout "$seconds" "$@" >/dev/null 2>&1
 	timing=$(mktemp "${TMPDIR:-/tmp}/footprint.XXXXXX")
 	timeout "$seconds" /usr/bin/time -l -o "$timing" "$@"
 	status=$?

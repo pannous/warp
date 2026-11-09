@@ -49,12 +49,21 @@ number_node(n: Node): Node := {
 marked_int(value: Node, kind: int): Node := with_kind(value, kind)
 # the kind field telling a value's int type, `x is Color`; 0 for ø
 int_mark(n: Node): int := if is_null(n) then 0 else marked_kind(n)
+# a number of a program's int type, lib/color's red: its type's mark above the number's Kind, the info bits below the
+# held ones (no yes/no, nor a rational's held bit)
+type_marked(n: Node): bool := {
+	mark = int_mark(n)
+	kind = mark % KindUnit.Info
+	(kind == Kind.Int or kind == Kind.Float) and mark != Marked.Bool and mark / KindUnit.Info % 16777216 != 0
+}
 # an Int node's int, a big one's low 64 bits
 whole_int(n: Node): int := if is_plain_int(n) then unboxed_int(n) else extended_wrapped(n)
 int_of_node(n: Node): int := {
 	if is_null(n) or kind_code(n) != Kind.Int or is_ratio(n) { fail() }
 	whole_int(n)
 }
+# a boxed number as the int a host word takes: an int exactly (a pointer past 2^53 too), any other number rounded
+nearest_int(n: Node): int := if not is_null(n) and kind_code(n) == Kind.Int and not is_ratio(n) then whole_int(n) else rounded(float_of_node(n))
 # a value known only at run time given to a variable declared int: a float or a fraction is no whole number
 int_admitted(n: Node): int := {
 	if is_null(n) or (kind_code(n) != Kind.Int and kind_code(n) != Kind.Float) { not_an_int() }
@@ -88,7 +97,7 @@ bool_checked(n: Node): Node := {
 	if not holds_bool(n) { returned_error("not a bool") }
 	n
 }
-# an instance that converts itself to a float, an exact root √3, is one too and stays exact, as `float x = π` keeps π
+# an instance that converts itself to a float, an exact root √3, is one too: a run-time value checked so stays itself
 float_checked(n: Node): Node := {
 	if converts_to_float(n) { return n }
 	if is_null(n) or (kind_code(n) != Kind.Int and kind_code(n) != Kind.Float) { returned_error("not a float") }
@@ -165,6 +174,8 @@ node_truthy(n: Node): bool := {
 truncated_int(n: Node): int := {
 	if textual_node(n) { return text_as_int(text_of_node(n)) }
 	if not is_null(n) and kind_code(n) == Kind.Float { return truncated(unboxed_float(n)) }
+	# an instance with its own float, an exact real 2π
+	if converts_to_float(n) { return truncated(float_of_node(n)) }
 	if is_null(n) or kind_code(n) != Kind.Int { fail() }
 	if is_ratio(n) then extended_truncated(n) else fitting_int(n)
 }

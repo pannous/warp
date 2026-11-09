@@ -1,0 +1,319 @@
+// The system's web view natively (decision native-js-webview, card warp-webview-removal), a part of lib/host/native_host.warp:
+// macOS's WKWebView over the Objective-C runtime by plain FFI, as libwarp_webview (crates/warp-webview) answered it
+// in Objective-C. It answers the host word foreign_call for `use js` in one hidden web view a run, made at the first
+// call: never shown, never activating the app, no Dock icon; `warp app` shows that view in a window, the program's
+// handlers live (APP_WINDOW below, lib/markup.warp page_window_run), never under WARP_NO_WINDOW or CI; and
+// webview_page_text for `warp app check`. An object of the runtime is its address here, never a program's handle;
+// the classes WebKit calls back (a page loaded, a page's message, the window closing) are made at run time, their
+// methods warp functions (lib/callbacks.warp), as is the block an answer comes back to
+
+// a secure origin, so the page's crypto.randomUUID and the like are there
+PAGE_ORIGIN = "https://localhost/"
+EMPTY_PAGE = "<!doctype html><meta charset=utf-8><title>warp</title>"
+ANSWER_MS = 10000
+SPIN_SECONDS = 0.005
+APP_WINDOW_WIDTH = 900.0
+APP_WINDOW_HEIGHT = 700.0
+APP_WINDOW_FRAME = [0.0, 0.0, APP_WINDOW_WIDTH, APP_WINDOW_HEIGHT]
+JS_RUNTIME = "js"
+// `warp app` names the window so (lib/app/command.warp): the program's page shows there, live
+APP_WINDOW_VARIABLE = "WARP_APP_WINDOW"
+// web/playground/js-members.js (jsMember), markup.js (listenToElements, morphChildren) and markup-forms.js (submit),
+// shared with the page, and webview_bridge.js (warpForeignCall, the page's events), put into each page; read when the
+// module is built
+PAGE_BRIDGE = [module_source("../web/playground/js-members.js"), module_source("../web/playground/markup.js"), module_source("../web/playground/markup-forms.js"), module_source("host/native_host/webview_bridge.js")].join("\n")
+// the module `use js` calls answered here, not in the page: the run's window, `show` it, the `next` event of its page
+APP_WINDOW = "warpWindow"
+// what warpWindow.next answers once its time is over without an event (lib/markup.warp page_window_run)
+TICK_EVENT = "tick"
+// the message webview_bridge.js posts each event of the page with, its {event, detail} as JSON
+EVENT_MESSAGE = "warpEvent"
+// a module's or member's name as `use js` writes it, never JS source (an argument crosses only as JSON)
+NAME_STARTS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$"
+NAME_GOES_ON = NAME_STARTS + "0123456789"
+// how long warpWindow.next() waits without milliseconds: till an event comes
+FOREVER_MS = 1 << 62
+// AppKit's and WebKit's numbers
+POLICY_ACCESSORY = 1
+POLICY_PROHIBITED = 2
+DOCUMENT_START = 0
+WINDOW_STYLE = 15
+BUFFERED = 2
+SIZES_WITH_WINDOW = 18
+ANY_EVENT = -1
+// a global block (Clang's block layout): its isa, flags, invoke and descriptor, the descriptor's size
+BLOCK_IS_GLOBAL = 1 << 28
+BLOCK_BYTES = 32
+BLOCK_FLAGS_AT = 8
+BLOCK_INVOKE_AT = 16
+BLOCK_DESCRIPTOR_AT = 24
+
+// the Objective-C runtime
+OBJC = "objc"
+objc_getClass(name: text): i64 from 'objc'
+sel_registerName(name: text): i64 from 'objc'
+objc_allocateClassPair(superclass: i64, name: handle, extra: i64): i64 from 'objc'
+class_addMethod(made: i64, selector: i64, implementation: handle, types: handle): bool from 'objc'
+class_replaceMethod(made: i64, selector: i64, implementation: handle, types: handle): i64 from 'objc'
+// a C string that stays: the runtime keeps a class's name and its methods' types where they are given
+strdup(t: text): handle from 'c'
+objc_registerClassPair(made: i64): void from 'objc'
+objc_autoreleasePoolPush(): i64 from 'objc'
+objc_autoreleasePoolPop(pool: i64): void from 'objc'
+handle_pointer(id: i32): i64 from 'c'
+native_call(function: i64, integers: handle, floats: handle, float_result: i32): i64 from 'c'
+MESSAGE_REGISTERS = 8
+global message_function = 0
+global message_integers = 0
+global message_floats = 0
+// `[receiver selector: arguments…]`: the receiver, the selector and the arguments in the integer registers, the floats
+// in the float ones (a CGRect by value is four, arm64's way); its result as a number (an object's address)
+sent(receiver: int, selector: text, arguments: list) := sent_with_floats(receiver, selector, arguments, [])
+sent_with_floats(receiver: int, selector: text, arguments: list, floats: list) := {
+	if message_function == 0 {
+		message_function = handle_pointer(library_function(OBJC, "objc_msgSend"))
+		message_integers = calloc(MESSAGE_REGISTERS, 8)
+		message_floats = calloc(MESSAGE_REGISTERS, 8)
+	}
+	set_field_i64(message_integers, 0, receiver)
+	set_field_i64(message_integers, 8, sel_registerName(selector))
+	for at in 1 to #arguments { set_field_i64(message_integers, (at + 1) * 8, int(arguments#at)) }
+	for at in 1 to #floats { set_field_f64(message_floats, (at - 1) * 8, floats#at) }
+	native_call(message_function, message_integers, message_floats, 0)
+}
+told(receiver: int, selector: text) := sent(receiver, selector, [])
+class_named(name: text) := {
+	frameworks_loaded()
+	objc_getClass(name)
+}
+// AppKit's and WebKit's classes are there once their frameworks are loaded (a symbol of each asked for loads it)
+global frameworks_asked = no
+frameworks_loaded() := {
+	if not frameworks_asked {
+		frameworks_asked = yes
+		library_function("AppKit", "NSApp")
+		library_function("WebKit", "WKErrorDomain")
+	}
+}
+// a framework's global object (NSDefaultRunLoopMode)
+framework_object(framework: text, name: text) := field_i64(library_function(framework, name), 0)
+// an NSString of a text, autoreleased; an NSString's text
+ns_string(t: text) := {
+	made = handle_pointer(CFStringCreateWithCString(0, t, CF_UTF8))
+	told(made, "autorelease")
+}
+ns_text(string: int): text := if string == 0 then "" else field_text(pointer_handle(told(string, "UTF8String")), 0)
+is_kind(object: int, class_name: text): bool := object != 0 and sent(object, "isKindOfClass:", [class_named(class_name)]) != 0
+// a class of NSObject made at run time, its methods warp functions: [selector, Objective-C types, function], each
+// taking the receiver, the selector and the selector's arguments as numbers. A class an earlier run in this process
+// made (`warp test` runs each test so) stays, its methods given this run's functions
+class_made(name: text, methods: list) := {
+	made = class_named(name)
+	earlier = made != 0
+	if not earlier { made = objc_allocateClassPair(class_named("NSObject"), strdup(name), 0) }
+	for method in methods {
+		count = #method#2 - 1
+		implementation = c_callback(method#3, ["i64" for i in 1 to count])
+		if earlier { class_replaceMethod(made, sel_registerName(method#1), implementation, strdup(method#2)) }
+		else { class_addMethod(made, sel_registerName(method#1), implementation, strdup(method#2)) }
+	}
+	if not earlier { objc_registerClassPair(made) }
+	made
+}
+instance_of(made: int) := told(told(made, "alloc"), "init")
+
+// the run loop turned until done() or the milliseconds are over: no when they were
+spun(done: function, milliseconds: int): bool := turned(done, milliseconds, () => sent(told(class_named("NSRunLoop"), "currentRunLoop"), "runMode:beforeDate:", [framework_object("Foundation", "NSDefaultRunLoopMode"), soon()]))
+// the app's events (clicks, keys) handed to its windows until done() or the milliseconds are over, as [NSApp run] would
+pumped(done: function, milliseconds: int): bool := turned(done, milliseconds, () => {
+	event = sent(application(), "nextEventMatchingMask:untilDate:inMode:dequeue:", [ANY_EVENT, soon(), framework_object("Foundation", "NSDefaultRunLoopMode"), 1])
+	if event != 0 { sent(application(), "sendEvent:", [event]) }
+})
+turned(done: function, milliseconds: int, turn: function): bool := {
+	deadline = wall_clock_ms() + milliseconds
+	while not done() and wall_clock_ms() < deadline { turn() }
+	done()
+}
+soon() := sent_with_floats(class_named("NSDate"), "dateWithTimeIntervalSinceNow:", [], [SPIN_SECONDS])
+application() := told(class_named("NSApplication"), "sharedApplication")
+application_made(policy: int) := {
+	if told(application(), "activationPolicy") == POLICY_PROHIBITED or policy != POLICY_PROHIBITED { sent(application(), "setActivationPolicy:", [policy]) }
+}
+
+// a page's loading: the navigation delegate's two answers end it
+global page_loading_ended = no
+global page_loading = 0
+// (read through a word: a lambda reading the global would keep its value of when it was made, card prebuilt-module)
+loading_over(): bool := page_loading_ended
+loading_ended(receiver, selector, web_view, navigation) := { page_loading_ended = yes }
+loading_failed(receiver, selector, web_view, navigation, error) := { page_loading_ended = yes }
+// the page's events not yet given to the program, each its {event, detail} as JSON
+global page_events = []
+page_message(receiver, selector, controller, message) := {
+	body = told(message, "body")
+	if is_kind(body, "NSString") { page_events += [ns_text(body)] }
+}
+global web_view = 0
+view_made(width: float, height: float) := {
+	configuration = instance_of(class_named("WKWebViewConfiguration"))
+	contents = told(configuration, "userContentController")
+	bridge = sent(told(class_named("WKUserScript"), "alloc"), "initWithSource:injectionTime:forMainFrameOnly:", [ns_string(PAGE_BRIDGE), DOCUMENT_START, 1])
+	sent(contents, "addUserScript:", [bridge])
+	messages = instance_of(class_made("WarpHostEvents", [["userContentController:didReceiveScriptMessage:", "v@:@@", page_message]]))
+	sent(contents, "addScriptMessageHandler:name:", [messages, ns_string(EVENT_MESSAGE)])
+	sent_with_floats(told(class_named("WKWebView"), "alloc"), "initWithFrame:configuration:", [configuration], [0.0, 0.0, width, height])
+}
+// the HTML shown in the view, waited for: no when it did not load in time
+page_loaded(shown_in: int, html: text): bool := {
+	if page_loading == 0 { page_loading = instance_of(class_made("WarpHostLoading", [["webView:didFinishNavigation:", "v@:@@", loading_ended], ["webView:didFailNavigation:withError:", "v@:@@@", loading_failed]])) }
+	page_loading_ended = no
+	sent(shown_in, "setNavigationDelegate:", [page_loading])
+	sent(shown_in, "loadHTMLString:baseURL:", [ns_string(html), sent(class_named("NSURL"), "URLWithString:", [ns_string(PAGE_ORIGIN)])])
+	loaded = spun(() => loading_over(), ANSWER_MS)
+	sent(shown_in, "setNavigationDelegate:", [0])
+	loaded
+}
+// the run's hidden web view, made at its first use: the process never becomes an app on screen for it
+hidden_view() := {
+	if web_view != 0 { return web_view }
+	application_made(POLICY_PROHIBITED)
+	web_view = view_made(1.0, 1.0)
+	if not page_loaded(web_view, EMPTY_PAGE) { eprint "the hidden web view did not load" }
+	web_view
+}
+
+// the answer of a body run as an async function in the view: [its text, ø] or [ø, the failure]
+global answer_block = 0
+global answer_heard = no
+global answer_value = 0
+global answer_error = 0
+answer_over(): bool := answer_heard
+answer_given(block, result, error) := {
+	answer_value = if result == 0 then 0 else told(result, "retain")
+	answer_error = if error == 0 then 0 else told(error, "retain")
+	answer_heard = yes
+}
+// the block callAsyncJavaScript calls back, one a run (a global block: never copied, never freed)
+answering_block() := {
+	if answer_block == 0 {
+		block = calloc(1, BLOCK_BYTES)
+		descriptor = calloc(2, 8)
+		set_field_i64(descriptor, 8, BLOCK_BYTES)
+		set_field_pointer(block, 0, library_function("c", "_NSConcreteGlobalBlock"))
+		set_field_i32(block, BLOCK_FLAGS_AT, BLOCK_IS_GLOBAL)
+		set_field_pointer(block, BLOCK_INVOKE_AT, c_callback(answer_given, ["i64", "i64", "i64"]))
+		set_field_pointer(block, BLOCK_DESCRIPTOR_AT, descriptor)
+		answer_block = handle_pointer(block)
+	}
+	answer_block
+}
+answered(shown_in: int, body: text, name: text, value: text): list := {
+	answer_heard = no
+	given = if name == "" then told(class_named("NSDictionary"), "dictionary") else sent(class_named("NSDictionary"), "dictionaryWithObject:forKey:", [ns_string(value), ns_string(name)])
+	world = told(class_named("WKContentWorld"), "pageWorld")
+	sent(shown_in, "callAsyncJavaScript:arguments:inFrame:inContentWorld:completionHandler:", [ns_string(body), given, 0, world, answering_block()])
+	if not spun(() => answer_over(), ANSWER_MS) { return [ø, "no answer in " + (ANSWER_MS / 1000) + " s (a promise that never settles?)"] }
+	if answer_error != 0 {
+		said = sent(told(answer_error, "userInfo"), "objectForKey:", [ns_string("WKJavaScriptExceptionMessage")])
+		failure = ns_text(if said != 0 then said else told(answer_error, "localizedDescription"))
+		told(answer_error, "release")
+		return [ø, failure]
+	}
+	text = if answer_value == 0 then "" else ns_text(if is_kind(answer_value, "NSString") then answer_value else told(answer_value, "description"))
+	if answer_value != 0 { told(answer_value, "release") }
+	[text, ø]
+}
+
+is_name(name: text): bool := #name > 0 and NAME_STARTS.contains(name[0]) and name.chars().all(c => NAME_GOES_ON.contains(c))
+// a member `use js` may name: an identifier, or as js-members.js reads it "" (construct), "set x", "a.b"
+member_named(member: text): bool := {
+	name = member.remove_prefix("set ")
+	name == "" or name.split(".").all(is_name)
+}
+// the failure as the page says it: "js Math.nope: ReferenceError: …", the call named once, without WebKit's "Error: "
+failure_said(called: text, failure: text): text := {
+	plain = failure.remove_prefix("Error: ")
+	if plain.starts_with(called) then plain else called + ": " + plain
+}
+
+// the run's window, the hidden view in it: open until it is closed
+global app_window = 0
+global app_window_open = no
+window_closing(receiver, selector, notification) := { app_window_open = no }
+// (each state a lambda waits for read through a word: a lambda reading a global keeps its value of when it was made, card prebuilt-module)
+window_event_over(): bool := #page_events > 0 or not app_window_open
+app_window_made(title: text) := {
+	made = sent_with_floats(told(class_named("NSWindow"), "alloc"), "initWithContentRect:styleMask:backing:defer:", [WINDOW_STYLE, BUFFERED, 0], APP_WINDOW_FRAME)
+	sent(made, "setReleasedWhenClosed:", [0])
+	sent(made, "setTitle:", [ns_string(title)])
+	sent(made, "setDelegate:", [instance_of(class_made("WarpHostAppWindowClosing", [["windowWillClose:", "v@:@", window_closing]]))])
+	made
+}
+window_shown(shown: int, shown_view: int) := {
+	sent_with_floats(shown_view, "setFrame:", [], APP_WINDOW_FRAME)
+	sent(shown_view, "setAutoresizingMask:", [SIZES_WITH_WINDOW])
+	sent(told(shown, "contentView"), "addSubview:", [shown_view])
+	told(shown, "center")
+	sent(shown, "makeKeyAndOrderFront:", [0])
+	sent(application(), "activateIgnoringOtherApps:", [1])
+}
+// `warpWindow.show()`: the run's view in a window; `warpWindow.next(milliseconds)`: the page's next event,
+// {event, detail, wall}, else {event: "tick", wall} once the milliseconds are over (none or -1: wait for an event), wall
+// the local wall clock's milliseconds since 1970 (lib/timers.warp); ø once the window is closed
+window_answered(called: text, member: text, arguments: any): any? := {
+	if member == "show" {
+		if quiet_run() { return error(called + ": no window under WARP_NO_WINDOW or CI") }
+		if app_window == 0 {
+			shown_view = hidden_view()
+			application_made(POLICY_ACCESSORY)
+			told(application(), "finishLaunching")
+			app_window = app_window_made(env(APP_WINDOW_VARIABLE) ?? "warp")
+			app_window_open = yes
+			window_shown(app_window, shown_view)
+		}
+		return ø
+	}
+	if member != "next" { return error(called + ": the window has no " + member + ": show or next") }
+	if app_window == 0 { return error(called + ": no window shown: warpWindow.show(title) first") }
+	waited = if arguments is list and #arguments > 0 and arguments#1 is int then arguments#1 else -1
+	pumped(() => window_event_over(), if waited >= 0 then waited else FOREVER_MS)
+	if not app_window_open { return ø }
+	happened = {event: TICK_EVENT}
+	if #page_events > 0 {
+		happened = parse_json(page_events#1)
+		page_events = page_events[1:]
+	}
+	happened["wall"] = wall_clock_ms() + sent(told(class_named("NSTimeZone"), "localTimeZone"), "secondsFromGMT", []) * 1000
+	happened
+}
+
+// foreign_call(runtime, module, member, call, arguments), as the page's host-foreign.js foreignCall answers it
+host_foreign_call(runtime, module, member, call, arguments): any? := {
+	pool = objc_autoreleasePoolPush()
+	// (a failure is the call's Error, a value the program may catch, as the page's foreignCall gives it)
+	answer: any? = foreign_answered(str(runtime), module, str(member), call == 1, arguments)
+	objc_autoreleasePoolPop(pool)
+	answer
+}
+foreign_answered(runtime: text, module: any, member: text, call: bool, arguments: any): any? := {
+	named_module = module is text
+	module_name = if named_module then module else "value"
+	called = runtime + " " + module_name + "." + member
+	if runtime != JS_RUNTIME { return error(called + ": " + runtime + " is not in the native warp yet") }
+	if (named_module and not is_name(module)) or not member_named(member) { return error(called + ": not a name js has") }
+	if named_module and module == APP_WINDOW { return window_answered(called, member, arguments) }
+	request = to_json({module: module, member: member, arguments: if call then arguments else ø})
+	answer = answered(hidden_view(), "return await warpForeignCall(request)", "request", request)
+	if answer#2 != ø { return error(failure_said(called, answer#2)) }
+	parse_json(answer#1)
+}
+
+// `warp app check`: the text the page shows, read in the hidden web view
+host_webview_page_text(html): any := {
+	pool = objc_autoreleasePoolPush()
+	shown_in = hidden_view()
+	answer = if page_loaded(shown_in, str(html)) then answered(shown_in, "return document.body?.innerText ?? ''", "", "") else [ø, ""]
+	if answer#1 == ø { eprint "the page did not load" + (if answer#2 != "" then ": " + answer#2 else "") }
+	objc_autoreleasePoolPop(pool)
+	answer#1 ?? ""
+}

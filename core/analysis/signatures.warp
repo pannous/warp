@@ -53,8 +53,16 @@ taken_names(signature: Signature): list := signature.parameters.map(parameter =>
 arity(signature: Signature): list := [#signature.parameters.filter(parameter => parameter.defaulted_to == ø), #signature.parameters]
 # a function's parameter by its index, `bottom_up·2`, the key of what the stages learn about it
 parameter_key(function: text, index: int): text := function + "·" + index
-# whether a call of `arguments` values fits: the parameters without a default at least, any more after a rest one
+# whether a call of `arguments` values fits: the parameters without a default at least, any more gathered into the last
 takes(signature: Signature, arguments: int): bool := {
 	rest = signature.parameters.any(parameter => parameter.rest)
-	arguments >= arity(signature)#1 - (if rest then 1 else 0) and (rest or arguments <= #signature.parameters)
+	arguments >= arity(signature)#1 - (if rest then 1 else 0) and (gathers(signature, arguments) or arguments <= #signature.parameters)
+}
+# decision gathering, the mirror of P50 broadcasting: the arguments past the others gather into the last parameter, a
+# rest `*xs` always, one of a list type when there are more arguments than parameters (`total(xs: numbers)` takes
+# `total 1 2 3` as total([1, 2, 3]))
+gathers(signature: Signature, arguments: int): bool := {
+	if #signature.parameters == 0 { return no }
+	last = signature.parameters.last
+	last.rest or (arguments > #signature.parameters and is_list_type_text(last.type_name))
 }

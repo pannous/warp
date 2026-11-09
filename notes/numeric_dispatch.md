@@ -79,3 +79,25 @@ samples/numbers/*, and core size (scripts/vitals.py). Neither may get worse.
 4. Drop the commutative swap. Card leftovers: time arithmetic (emitter time_operation) could become table rows later.
 
 Core: none expected; the emitter already calls `op·operator` for boxed operands.
+
+## Phase 2 carries the prebuilt-module closure (card prebuilt-module-links, 2026-11-07)
+Decision no-lib-reads: every module that a prebuilt module links must be prebuilt itself. Today units, math and sound
+link reals, and file, hash, text, markup and wagi link path, bits, encoding, html, letter_ranges, slugs, unit_names
+and url; none of those is in std_module_names. The closure in core/compiler.warp write_modules is
+`for name in in_dependency_order(prebuilt_module_names())`, with:
+
+    prebuilt_module_names(): list := {
+        names = std_module_names
+        at = 0
+        while at < #names {
+            for used in used_modules(library_text(names[at] + module_extension)) { if used not in names and library_text(used + module_extension) != "" { names += [used] } }
+            at += 1
+        }
+        names
+    }
+
+It builds and self-checks, but prebuilt reals breaks samples/numbers/measurements.warp: `2 * π * √(interval)` fails
+with "no field radicand". A linked module's operator dispatcher knows only its own classes, so real's `*` never meets
+uncertain's Interval. The per-operator tables baked across modules (Supervisor's condition 2) fix that, and
+measurements.warp with prebuilt reals is the proof. Until then, linked_libraries asks exists() first, so the page
+skips a missing module as native does.

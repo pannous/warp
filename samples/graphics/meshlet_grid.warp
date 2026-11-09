@@ -1,0 +1,30 @@
+#!/usr/bin/env warp
+# A flat 8 by 6 heightfield and a 2 by 2 peak. The value is counts, not a rendered frame:
+# flat fine triangles, flat coarse triangles, the two flat cluster sizes, peak coarse error,
+# peak triangles kept up close and from far enough that the coarse level fits in half a pixel,
+# flat clusters kept in front, behind, and outside one plane.
+# The coarse mesh is every other vertex of this grid. It is not a general simplifier and not Nanite.
+use meshlets
+
+flat = grid_levels(8, 6, flat_heights(8, 6))
+peak_heights = [0, 0, 0, 0, 1, 0, 0, 0, 0]
+peak = grid_levels(2, 2, peak_heights)
+front = [1, 1, 10]
+back = [1, 1, -10]
+around = [[1, 0, 0, 1], [-1, 0, 0, 3], [0, 1, 0, 1], [0, -1, 0, 3], [0, 0, 1, 2], [0, 0, -1, 2]]
+outside = [[1, 0, 0, -10]]
+near = chosen_level(peak, 2, 1, 2, 0)
+far = chosen_level(peak, 2, 1, 2, 0.5)
+
+[
+	count(flat#1.triangles),
+	count(flat#2.triangles),
+	count(flat#1.clusters#1.triangles),
+	count(flat#1.clusters#2.triangles),
+	peak#2.error,
+	triangle_count(visible_clusters(peak#(near).clusters, around, front)),
+	triangle_count(visible_clusters(peak#(far).clusters, around, front)),
+	count(visible_clusters(flat#1.clusters, around, front)),
+	count(visible_clusters(flat#1.clusters, around, back)),
+	count(visible_clusters(flat#1.clusters, outside, front))
+]

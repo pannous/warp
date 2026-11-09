@@ -1,0 +1,23 @@
+# a sum of unlike exact reals stays exact, shown as written, the rational first; `as float` and digits(n) give its decimals; `precise` is
+# `exact`, `exact e` is `e as exact` (lib/reals.warp, decision exact-sums)
+'(2 + 2π) as string'	'2 + 2π'
+'(5 - π) as string'	'5 - π'
+'(π + √2 - 1) as string'	'-1 + π + √2'
+'((2 + 2π) * 3) as string'	'6 + 6π'
+'((2 + 2π) / 2) as string'	'1 + π'
+'(1 + π) - π'	1
+'2π - 2π'	0
+'1 + π == π + 1'	true
+'1 + π == 1.0 + π'	true
+'(2 + 2π) as float'	8.283185307179586
+'(2 + 2π).digits(30)'	"8.28318530717958647692528676656"
+'π.digits(30)'	"3.14159265358979323846264338328"
+'(√2).digits(20)'	"1.4142135623730950488"
+'(exact 2 + 2π) as string'	'2 + 2π'
+'(precise 2 + 2π) as string'	'2 + 2π'
+'((2 + 2π) as exact) as string'	'2 + 2π'
+'exact 1/2'	1/2
+'exact x = 1/3; x'	1/3
+'precise x = 1/3; x'	1/3
+'x: precise = 1/3; x'	1/3
+'x = 1/3; exact x'	1/3

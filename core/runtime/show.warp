@@ -111,13 +111,21 @@ shown_at(n: Node): int := {
 	for i in 0..<byte_count(t) { output_byte(c_text_at() + i, byte_at(t, i)) }
 	(output_address() + c_text_at()) * 4294967296 + byte_count(t)
 }
+# the text of the value a host reads part by part, and where its next part starts (shown_from)
+global shown_whole = ""
+global shown_next = 0
 # n as print shows it from byte `start` on, as much as the output area holds, where shown_at puts it and packed as its:
-# a host reads a text of any length part by part so (the native driver's shown; lib/sound.warp, 67 KB, outgrew one)
+# a host reads a text of any length part by part so (the native driver's shown; lib/sound.warp, 67 KB, outgrew one).
+# A read starts at 0 and shows n once; its later parts, asked for in order, are cut from that text, which goes with the
+# last part (card shown-once: paint's 450 KB of values showed 7 times a frame)
 shown_from(n: Node, start: int): int := {
-	t = node_text(n)
+	if start == 0 or start != shown_next or byte_count(shown_whole) == 0 { shown_whole = node_text(n) }
+	t = shown_whole
 	count = byte_count(t) - start
 	if count > output_room() - c_text_at() { count = output_room() - c_text_at() }
 	for i in 0..<count { output_byte(c_text_at() + i, byte_at(t, start + i)) }
+	shown_next = start + count
+	if shown_next >= byte_count(t) { shown_whole = "" }
 	(output_address() + c_text_at()) * 4294967296 + count
 }
 # a picture's pixels (paint's int list) from item `from` (1-based) on, `count` of them, each 4 bytes (a color keeps its

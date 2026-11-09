@@ -1,0 +1,7 @@
+# adding items to a value that is no list is a warp error a try catches, at its place, never the engine's cast trap
+# (card list-add-trap)
+'xs = [3, "a"]; y = xs#1; r = try y.add(2) catch e { str(e) }; r'	'int 3 is no list: add, push, append and += [x] need one'
+'r = try 3.add(2) catch e { str(e) }; r'	'int 3 is no list: add, push, append and += [x] need one'
+'users = 3; g = () => users.add(2); r = try g() catch e { e.line }; r'	1
+'xs = [3, {a: 1}]; r = try xs#1 + xs#2 catch e { str(e) }; r'	'no + between int 3 and map {a: 1}'
+'xs = [[1]]; y = xs#1; y.add(2); y'	[1, 2]

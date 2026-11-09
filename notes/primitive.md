@@ -59,8 +59,10 @@ function by name in the process (lib/native/foreign.c native_function, dlsym; a 
 linked with -l) and passes the values as C takes them: a text a NUL-terminated copy (freed after the call), a text
 result copied into the arena (exported as global `arena`), `pointer` an address of the module's memory, `handle` a C
 pointer as an i64 id (fopen's FILE *). out, bytes, length and owned_text are refused at the import's line. Sample:
-samples/native/c_calls.warp. Under wasmtime, warp's own host answers `c` imports with its GC conventions, so a
-primitive file calling C runs natively only.
+samples/native/c_calls.warp. Under wasmtime (`warp c_calls.warp`) the native driver calls them the same way (decision
+primitive-c-in-driver): the module lists them in its section warp.primitive_c_functions (primitive.warp
+c_function_line, the fields of a GC module's warp.c_functions), a text crossing as `pair`, a pointer as `address`, a
+handle as the i64 it is (driver.warp pair_c_text, guest_pair, primitive_arena_taken).
 
 ## Driver
 core/native/driver.warp is the native runner (roadmap_native_harness.md milestone 3): a primitive file calling

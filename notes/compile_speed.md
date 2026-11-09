@@ -197,3 +197,85 @@ marks are printed where a phase *starts*, so the time after `pass sugar` is suga
   of modules not linked), and 48 of lib/'s 95 modules (csv, path, tables, toml, html…) are not prebuilt at all (only
   std_module_names, 47, are), so a program using one compiles it from its source: prebuilding every module is the
   general fix.
+- P5 (hello-takes-interfaces): implicit uses find the used modules by their signatures (used_module_names), a used
+  module's declared operators come from its signature (new field `operators`, one text each as the index's section
+  holds them), a standard module's `use` probes no lib/native file for C lines, and whether a name is a module asks
+  the disk (is_module_name), not its text. `use json` reads lib/json.warp still: with_reached pulls the linked
+  module's source through the passes (1.0 s / 8.7 G instructions on main and here, sugar + first_sugar the most);
+  first_sugar reads memory.warp and sound.warp. Next: a linked prebuilt module is linked, never recompiled.
+- Pitfall: a function named `operator_<x>` declares the operator <x> (lib/aliases.warp's operator_·): helpers
+  operator_written/operator_read broke the index scan (cast failure in key_left under alias_fields, found with
+  WARP_BACKTRACE=1); they are written_operator/read_operator.
+- P6 (cbd32c5972): a called word's definitions (definitions_of: data_positions_called, the definition heads) are
+  parses from the prebuilt signature, no longer the defining module's text cut once a word; and a module's signature
+  is cut out of its wasm read as text (byte_slice) instead of decoded a code point at a time (utf8_text, ~15 % of a
+  `use json` compile). hello 1.84 G -> 1.42 G instructions (0.11 s), fizzbuzz 2.0 G -> 1.53 G, `use json` 8.6 G ->
+  7.0 G. Pitfall: a text holding wasm bytes is asked for its byte_size, never compared (`== ""`): text equality
+  normalizes (NFC) and trapped on the bytes.
+- Left: `use json` still lowers the reached module definitions with the program (lowered_reached: sugar and walks,
+  ~80 %; card sound-start-speed, warp-sprint-web); imports.warp's reached_within and the libm/foreign line scan read
+  each reached module's text (next: from the signature); prebuilding the 9 modules prebuilt ones link waits for
+  numeric-dispatch phase 2 (warp-sprint-units-time).
+- P7 (281ae7b68a): a standard module's C functions (libm's it calls, its foreign lines and C imports, its parts' too)
+  and the modules it and its parts use come from its signature (fields c_lines, a foreign line each, and c_uses):
+  c_imports reads no reached module's text, and a `use json` compile reads no lib/ source at all. Modules that call C
+  are compiled with the program (not prebuilt), so `use sound` still reads sound and what it uses.
+- Pitfall: while `warp rebuild` writes modules/ anew, the prebuilt signatures on disk are the old ones; they ordered
+  native_host before the callbacks it had come to use. The modules step reads no prebuilt signature
+  (signature.warp modules_rewritten), its sources say it all.
+- Sample audit at P7 (data/reads.sh): 111 of 274 samples compile without a lib/ source read (52 of 263 at P4). The
+  most read: reals 100 (not prebuilt), then math, case_table(s) ~50: modules a module compiled from its source uses
+  were compiled from their sources beside it.
+- P8 (8ed01fdcda): those are linked prebuilt (compiler.warp linked_libraries follows the uses of a module whose file
+  is empty, never the module being written itself). 25 of the ~100 reals samples print differently from main, all
+  noise (pids in file names, timings, stateful storage samples, a module main gained meanwhile).
+
+## Scaling (card library-scaling-passes)
+
+test/bench/compile_scaling.sh measures it (instructions retired, warm): hello beside 400 more indexed words, and
+generated programs of 100/1000/2000 lines (four statement shapes, each using the ones before).
+- Before (4bf73e5575): hello 1.44 G (+1.5 % beside the grown index: flat), 100/1000/2000 lines 5.2/44.4/99.5 G, a
+  line past 1000 costing 1.26 times one before. Phases at 3000 lines (8.3 s): implicit uses 24 %, checked_program
+  14 % (its parse), sugar 13 %, emit 12 %, lambdas 6 %, clauses 5 %; lambdas and clauses grew ~6-8x for 3x lines.
+- P9 (merge of dc3c6251a9..a078e5bc1f): the implicit-uses hooks share one parse (each of four parsed the whole
+  source); clauses finds namesakes by a name map; lambdas looks variables up in sets (class Locals) instead of a list
+  of every main-level variable per symbol; with_reached finds a wanted word's slices by a name map (each wanted word
+  was compared with every slice's name: 8 % of hello, found by summing 20 sampled hello runs, scripts/profile.sh).
+  hello 1.32 G (+1.7 % beside the grown index), 100/1000/2000 lines 4.6/37.6/81.9 G, growth 1.21.
+- Exact call counts per function aren't measurable today: wasmtime counts nothing, and binaryen's --log-execution
+  needs an import the driver doesn't answer. Summed samples over many runs stand in.
+- Pitfall: `x in list` compares node by node (node_equal, NFC for texts): a list of names searched per symbol or per
+  statement is the usual quadratic. A map (`word_set`) of the names, made once outside the loop.
+- Left: two parses of the program (implicit uses, then checked_program's of the source with its uses appended); the
+  sugar pass (rules_reaching per statement) and emit grow a bit faster than linear; GC copying grows with the heap.
+
+## Linked classes (card linked-module)
+
+`use sound; 1` (warp-sprint-web, card sound-start-speed): linked_needs brings each linked module's classes (30
+behind sound), and the classes pass lifted all their methods: 303 statements after it against 69 before, 61 of them
+the program's dispatchers over the linked classes (~70 % of the code), which every later pass walked.
+- L1: a linked class gives the program only the methods it may call (extensions/class_methods/methods.warp
+  linked_methods_called): those the program's statements name, those of the operators they write (compare for an
+  ordering glyph, equal for == and !=), the position words, the constructor once the class is named, and what the
+  kept ones call in turn. Its instances show, convert and operate (+ - * /) through the descriptor its module made.
+  `use sound; 1` 26.2 G -> 17.1 G (159 statements), harmony.warp and music.warp -18 % / -21 %; the 112 units/sound
+  test files fail as before (45 of 554, all present on main too). A module being built still lifts every class.
+- Pitfall: `Op.Mul as text` in a key head is "Mul", not the glyph: compare heads by key_head(Key(ø, glyph as Op, ø)).
+- Pitfall: the operators must count. Without the `*`/`^` dispatchers `4 m²` multiplied a Unit as a float (cast
+  failure in float_of_node), and position words come from `b#i` only after later passes (samples' new_samples).
+- Left: the said words include the bodies of reached helpers the sugar may call (walked_by, task_value), which
+  keep +, ==, text and compare; a narrower reach would need the dispatchers kept out of the passes until called.
+- L2: the dispatchers and lifted functions of methods only linked classes have wait outside the pure passes
+  (core/passes/passes.warp deferred_definitions): lowered_node runs the passes on the program, then lowers in batches
+  the deferred ones its tokens call (an operator dispatcher also by its operator's keys, `a < b`, `x += y`, `-x`:
+  the emitter calls it there, deferred_triggers), until none is newly called. Only definitions of `·` names saying no
+  word only the whole program's passes read wait: no word the program defines twice (an overloaded `sum` of the
+  prelude's stayed unresolved, "the call sum(…) (no owner)") and no class name (a promotion's `o is Quantity` lowered
+  without the classes in scope: `Instant(0) + 2 seconds` lost its Instant). Operator
+  dispatchers wait only while every lifted class is linked. Lifted functions of linked classes are declarations of the
+  module's words: only the dispatchers are unlinked as the program's own (unlinking all printed ø for every quantity).
+  Instructions, main 77b85f582c -> L2: `use sound; 1` 33.2 G -> 28.1 G, `use matrix; 1` 14.6 -> 13.7 G, `use tasks; 1`
+  2.52 -> 2.37 G. The 112 units/sound test files: 40 of 556 red, none new (5 play lines pass now).
+- Left: reals is compiled from source again (card reals-prebuilt), its classes the program's own, so behind `use
+  sound` the operator dispatchers stay in the passes (their reals keys call them anyway); once reals links again they
+  wait too.

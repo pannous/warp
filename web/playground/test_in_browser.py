@@ -28,6 +28,13 @@ SAMPLES_WEB_RESULTS = "test/samples-web.txt"  # tracked: status and sample, one 
 # instead of FAIL in either sweep (scripts/samples.sh EXPECTED_FAILURE); in the page ok when it fails with the native
 # run's error, it gives what the native run gives (decision exp-counts)
 EXPECTED_FAILURE = re.compile(r"^# expected failure: ", re.M)
+# where a sample runs, a line of its own: `# host: native` or `# host: none` stay out of the page's sweep and menu
+# (build.sh), `# host: page` runs here with no native output to compare (scripts/samples.sh HOST_LINE)
+HOST_LINE = re.compile(r"^# host: ([a-z]+)", re.M)
+def sample_host(source):
+	"""where a sample says it runs (HOST_LINE): native, page, none, or both when it says nothing"""
+	host = HOST_LINE.search(source)
+	return host.group(1) if host else "both"
 # a sample's interactions (card scripts-samples, decision sample-checks): `# check: click "+1", type "name" "Ann" → text`,
 # each from a fresh run, its steps done on the page, its text then holding the text after → (natively `warp app check`)
 CHECK_LINE = re.compile(r"^# check: (.*) → (.*)$", re.M)
@@ -110,6 +117,9 @@ CONSOLE_SETTLE_SECONDS = 0.3  # a shown example's last messages reach the watche
 BROWSER_OWN_WARNINGS = {"No available adapters.", "A valid external Instance reference no longer exists."}
 # an example on the GPU (paint of a shader) in a browser without WebGPU (the runner's Firefox): skipped, loudly
 NO_GPU = "offers no WebGPU adapter"
+# a sample needing a GPU feature this browser's GPU lacks (host-gpu.js NO_HALVES: the server's headless Chrome has no
+# shader-f16): it ran and said so, loudly, nothing to compare
+NO_GPU_FEATURE = "this GPU offers no "
 PAGE_LOAD = "(loading the page)"
 # `--examples --guide`: every guide.md snippet's `=> value` and ```printed lines in the page (guide.js SNIPPET_FENCE)
 GUIDE = "--guide"
@@ -166,13 +176,18 @@ PAGE_ELEMENTS = "(a handler reads the value of the page's element of an id: $who
 PAGE_ELEMENTS_CODE = 'use web\ngreeting = "-"\ndiv{ input{ id: "who" } button{ on click { greeting = "Hello " + $who }, "Greet" } p{ greeting } }'
 PAGE_ELEMENTS_NAME = "Ada"
 PAGE_ELEMENTS_SHOWN = "Hello Ada"
-# scripts/build-site.sh: a markup program built as a static site, its page loaded and its button clicked (card
-# blockcompiler-entries: built sites on page_render/page_event); checked last, it leaves the playground's page
-BUILT_SITE = "(a site scripts/build-site.sh built shows its page and runs its handlers)"
+# `warp build --site`: a markup program built as a static site, its page loaded and its button clicked (cards
+# blockcompiler-entries, build-site: built sites on page_render/page_event); checked last, it leaves the playground's page
+BUILT_SITE = "(a site warp build --site built shows its page and runs its handlers)"
 BUILT_SITE_CODE = 'use web\ncount = 0\ndiv{ h1{ "Count " + count } button{ on click { count += 1 }, "add" } }\n'
 BUILT_SITE_FOLDER = "data/site-check"
 BUILT_SITE_SHOWN = ["Count 0", "Count 1"]  # the heading after main, after the click
 BUILT_SITE_WAIT_MS = 20000
+# card dev-build: a value the program wrote stays across the page's reload in a dev build (warp dev, --dev), a value
+# never written again would take the edited source's
+DEV_VALUES = "(a dev build keeps the values the program wrote across a reload)"
+DEV_VALUES_FOLDER = "data/dev-values-check"
+DEV_VALUES_SHOWN = ["Count 0", "Count 1", "Count 1"]  # after main, after the click, after the reload
 CLIPBOARD_READ = "(a program reads the clipboard)"  # card web-apis-rest: host.js clipboard_text asks the page
 CLIPBOARD_TEXT = "copied by the page"
 # card web-apis-rest: gpu_compute over named arrays, and paint of a shader drawn straight into the page's canvas
@@ -283,6 +298,16 @@ gpu_render(s, 2, 2)
 gpu_render(s, 2, 2)
 gpu_render(s, 2, 2)#2"""
 PREVIOUS_FRAME_SHOWN = str(0xFFC0_0000)
+# card playground-stale-value: a run started without the Run button (an example chosen, auto-run, runCode) clears the
+# last run's value as Run does: an animation running long showed the value before it above itself
+STALE_VALUE = "(a run started without Run leaves no old value above an animation)"
+STALE_VALUE_CODE = "use draw\ncanvas(40, 40)\nloop {\n\tclear(paper)\n\tshow()\n\tsleep(16ms)\n}"
+STALE_VALUE_FIRST = "4242"
+STALE_VALUE_WAIT_MS = 3000
+# card run-during-load-feedback: while the worker still loads (?slow_start; 7.5 s on the user's iPad), the page's run is
+# pending as any run is: Run becomes Stop after the grace, and Stop cancels the run before it starts
+STOP_WHILE_LOADING = "(Stop shows while the compiler loads, and cancels the run)"
+STOP_WHILE_LOADING_WAIT_MS = 1500  # past STOP_GRACE_MS, before SLOW_START_MS lets the worker start the run
 # each GET the server began and finished, (seconds since it started, path, finished): shown after a failed tour, which
 # then says whether the browser asked for a stalled worker's scripts at all (card tour-firefox)
 served = []
@@ -603,11 +628,21 @@ class ConsoleWatch:
 		self.process.terminate()
 
 
+# a page script's wait until the run going on is shown
+SHOWN_WAIT = 'while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));'
+
+
+def wait_for_first_run():
+	"""the page runs its example as it loads: a check run first otherwise met that run, its own queued behind it (card
+	stop-button-check-red: Run never became Stop within the check's wait, the worker started ?slow_start late)"""
+	browser("eval", f"(async () => {{ {SHOWN_WAIT} return true; }})()")
+
+
 def run_code(code):
 	"""the playground's value once it ran `code`"""
 	script = f"""(async () => {{
 		await playground.runCode({json.dumps(code)});
-		while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));
+		{SHOWN_WAIT}
 		return document.getElementById("value").textContent;
 	}})()"""
 	shown = browser("eval", script)
@@ -757,29 +792,41 @@ def page_elements_wrong():
 	return [] if shown == PAGE_ELEMENTS_SHOWN else [f"typed {PAGE_ELEMENTS_NAME!r} and clicked: shown {shown!r}, expected {PAGE_ELEMENTS_SHOWN!r}"]
 
 
-def built_site_wrong():
-	"""the site's heading after main and after a click on its button"""
-	program = os.path.join(REPOSITORY, BUILT_SITE_FOLDER, "app.warp")
+def built_site_wrong(folder=BUILT_SITE_FOLDER, options=(), reloads=False, expected=BUILT_SITE_SHOWN):
+	"""the site's heading after main and after a click on its button (and after a reload of the page)"""
+	program = os.path.join(REPOSITORY, folder, "app.warp")
 	os.makedirs(os.path.dirname(program), exist_ok=True)
 	with open(program, "w") as file:
 		file.write(BUILT_SITE_CODE)
-	built = subprocess.run([os.path.join(REPOSITORY, "scripts", "build-site.sh"), program], capture_output=True, text=True)
+	built = subprocess.run(["warp", "build", "--site", *options, program], capture_output=True, text=True, env={**os.environ, "WARP_NO_WINDOW": "1"})
 	if built.returncode:
-		return [f"scripts/build-site.sh failed: {(built.stderr or built.stdout).strip()[-300:]}"]
-	browser("open", f"http://127.0.0.1:{PORT}/{BUILT_SITE_FOLDER}/site/index.html")
+		return [f"warp build --site failed: {(built.stderr or built.stdout).strip()[-300:]}"]
+	browser("open", f"http://127.0.0.1:{PORT}/{folder}/site/index.html")
 	shown = browser("eval", f"""(async () => {{
-		const heading = async before => {{
-			const deadline = Date.now() + {BUILT_SITE_WAIT_MS};
-			const text = () => document.querySelector("#warp-root h1")?.textContent;
-			while (text() === before && Date.now() < deadline) await new Promise(done => setTimeout(done, 100));
-			return text() ?? null;
-		}};
+		{SITE_HEADING}
 		const first = await heading(undefined);
 		document.querySelector("#warp-root button")?.click();
 		return JSON.stringify([first, await heading(first)]);
 	}})()""")
 	shown = json.loads(json.loads(shown)) if shown.startswith('"') else f"(page gave no answer: {shown or browser_complaint})"
-	return [] if shown == BUILT_SITE_SHOWN else [f"headings {shown!r}, expected {BUILT_SITE_SHOWN!r}"]
+	if reloads and isinstance(shown, list):
+		browser("eval", "location.reload()")
+		# the prerendered heading first, then the run's: the kept value once main ran
+		again = browser("eval", f"""(async () => {{
+			{SITE_HEADING}
+			await new Promise(done => setTimeout(done, 500));
+			return JSON.stringify(await heading({json.dumps(shown[0])}));
+		}})()""")
+		shown.append(json.loads(json.loads(again)) if again.startswith('"') else f"(page gave no answer: {again or browser_complaint})")
+	return [] if shown == expected else [f"headings {shown!r}, expected {expected!r}"]
+
+
+SITE_HEADING = f"""const heading = async before => {{
+			const deadline = Date.now() + {BUILT_SITE_WAIT_MS};
+			const text = () => document.querySelector("#warp-root h1")?.textContent;
+			while (text() === before && Date.now() < deadline) await new Promise(done => setTimeout(done, 100));
+			return text() ?? null;
+		}};"""
 
 
 def clipboard_read_wrong():
@@ -847,6 +894,38 @@ def shader_error_wrong():
 	return wrong + ([] if ":" in marked else [f"shader error marks {marked!r}, expected the colon"])
 
 
+def stop_while_loading_wrong(page_url):
+	"""the page loaded anew: before its worker is ready the Run button says Stop, and pressing it ends the run as stopped"""
+	open_page(page_url)
+	wait_for_isolation()
+	shown = browser("eval", f"""(async () => {{
+		const pause = milliseconds => new Promise(done => setTimeout(done, milliseconds));
+		const button = document.getElementById("run");
+		for (let waited = 0; waited < {STOP_WHILE_LOADING_WAIT_MS} && !button.classList.contains("stop"); waited += 50) await pause(50);
+		const loading = button.textContent;
+		button.click();
+		await pause(300);
+		return JSON.stringify({{ loading, after: button.textContent, value: document.getElementById("value").textContent }});
+	}})()""")
+	wait_for_first_run()
+	shown = json.loads(json.loads(shown)) if shown.startswith('"') else {"loading": f"(page gave no answer: {shown or browser_complaint})"}
+	expected = {"loading": "Stop ■", "after": "Run ▶", "value": "stopped"}
+	return [f"{part}: {shown.get(part)!r}, expected {value!r}" for part, value in expected.items() if shown.get(part) != value]
+
+
+def stale_value_wrong():
+	"""a value shown, then an animation started by runCode: while it runs, the value line no longer shows that value"""
+	run_code(STALE_VALUE_FIRST)
+	shown = browser("eval", f"""(async () => {{
+		playground.runCode({json.dumps(STALE_VALUE_CODE)});
+		await new Promise(done => setTimeout(done, {STALE_VALUE_WAIT_MS}));
+		const line = document.getElementById("value");
+		const value = line.parentElement.hidden ? "" : line.textContent;
+		return value;
+	}})()""")
+	return [f"while the animation runs the value line shows {shown}, the last run's"] if STALE_VALUE_FIRST in shown else []
+
+
 def previous_frame_wrong():
 	"""a shader reading $previous adds to what its last render left; skipped loudly without WebGPU"""
 	rendered = run_code(PREVIOUS_FRAME_CODE)
@@ -904,7 +983,9 @@ def brush_wrong():
 	`while window_open` loop runs only once the page was clicked (playground.js tellSystemValues), so a real click first;
 	the sample then runs until stopped, so it is started, not waited for, and checked last (a check after it found
 	the page still busy with it)"""
-	if not webdriver:  # Firefox has no WebGPU here: the sample's error is the skip below
+	# Firefox's driver clicks for real too, now that its WebGPU paints the brush; Safari's has no click: without WebGPU
+	# the sample's error is the skip below
+	if not isinstance(webdriver, SafariDriver):
 		browser("click", "#output")
 	browser("eval", f"void playground.chooseExample({json.dumps(BRUSH_SAMPLE)})")
 	shown = browser("eval", f"""(async () => {{
@@ -1191,6 +1272,7 @@ def check_examples(names, page_url=None, site=None):
 	page_url = f"{page_url}{'&' if '?' in page_url else '?'}slow_start={SLOW_START_MS}"
 	open_page(page_url)
 	wait_for_isolation()
+	wait_for_first_run()
 	examples = json.loads(json.loads(browser("eval", "JSON.stringify(EXAMPLES)")))
 	samples = json.loads(json.loads(browser("eval", "JSON.stringify(Object.keys(SAMPLES).sort())")))
 	failures = []
@@ -1225,7 +1307,7 @@ def check_examples(names, page_url=None, site=None):
 	snippets = guide_snippets() if GUIDE in names else []
 	for line, code, value, printed in snippets:
 		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), *([(BUILT_SITE, built_site_wrong)] if serves_repository else [])) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
@@ -1271,6 +1353,8 @@ def sample_verdict(report, native_output):
 	if report.get("error"):
 		first = (report.get("errors") or [report.get("value")])[0]
 		first = first.get("message", first) if isinstance(first, dict) else first
+		if NO_GPU_FEATURE in str(first):
+			return "ran", str(first)[:200].replace("\n", " ")
 		return "FAIL", str(first)[:200].replace("\n", " ")
 	shown = page_output(report)
 	if native_output is None:
@@ -1379,6 +1463,8 @@ def check_samples(paths, tree):
 	for path in paths:
 		output_name = path.replace("/", "_") + ".txt"
 		source = open(os.path.join(tree, path), encoding="utf-8").read()
+		if sample_host(source) in ("native", "none"):
+			continue
 		window = native.get(path) == "WIN"
 		report = page_report(source, path, page_url, WINDOW_ANIMATION_SECONDS if window else None)
 		if window:
@@ -1420,7 +1506,7 @@ TAKE_REPORTS = "JSON.stringify((window.caseReports ?? []).splice(0))"
 
 def compiler_said(tree, *words):
 	"""what the page's compiler printed for a command of extensions/commands/tests.warp, run natively in `tree`"""
-	ran = subprocess.run(["warp", os.path.join(tree, PAGE_COMPILER), *words], cwd=tree, capture_output=True, text=True)
+	ran = subprocess.run(["warp", os.path.join(tree, PAGE_COMPILER), *words], cwd=tree, capture_output=True, text=True, errors="replace")
 	if ran.returncode not in (0, 1):
 		sys.exit(f"error: warp {PAGE_COMPILER} {words[0]} failed ({ran.returncode}): {ran.stderr[-500:]}")
 	return ran.stdout
@@ -1437,13 +1523,23 @@ def case_written(work, run, report, milliseconds):
 		open(os.path.join(work, f"{run}.{extension}"), "w", encoding="utf-8", newline="").write(content)
 
 
-def cases_ran(work, runs, page_url):
+def case_run(tree, code, folder):
+	"""what the page evaluates for a case, and as which file: a case naming a program file of the tree (`'../fixtures/
+	program_file/fast_sine.warp'`) runs that file, as `warp <file>` does natively (core/native/warp.warp is_warp_file);
+	any other runs as a file of its test file's folder, so its uses resolve beside it"""
+	path = os.path.normpath(os.path.join(folder, code))
+	if code.endswith(".warp") and not any(blank in code for blank in " \t\n") and os.path.isfile(os.path.join(tree, path)):
+		return [open(os.path.join(tree, path), encoding="utf-8", newline="").read(), path]
+	return [code, f"{folder}/{CASE_FILE}"]
+
+
+def cases_ran(work, runs, page_url, tree):
 	"""each run of the work folder run in the page, CASE_BATCH at a time; a page that ends no run in CASE_ANSWER_SECONDS
 	is opened anew, the run it stuck on written as timed out"""
 	done, lost_at = 0, None
 	while done < len(runs):
 		batch = runs[done:done + CASE_BATCH]
-		cases = [[open(os.path.join(work, f"{run}.code"), encoding="utf-8", newline="").read(), f"{folder}/{CASE_FILE}"] for run, folder in batch]
+		cases = [case_run(tree, open(os.path.join(work, f"{run}.code"), encoding="utf-8", newline="").read(), folder) for run, folder in batch]
 		if browser("eval", RUN_CASES % (PAGE_LOST, json.dumps(cases))) != '"started"':
 			page_opened(page_url)
 			continue
@@ -1523,14 +1619,22 @@ def check_tests(paths, tree):
 	server = serve(tree)
 	page_url = f"http://127.0.0.1:{PORT}/web/playground/?run_seconds={CASE_RUN_SECONDS}"
 	open_samples_page(page_url)
-	cases_ran(work, runs, page_url)
+	cases_ran(work, runs, page_url, tree)
 	browser("close")
 	server.shutdown()
+	return tests_judged(paths, tree)
+
+
+def tests_judged(paths, tree):
+	"""the verdicts of the runs the page wrote into the work folder (check_tests), written as check_tests writes them:
+	`--tests-judged` judges a kept work folder again without running the page"""
+	data = os.path.join(tree, TESTS_WEB_DATA)
+	work = os.path.join(data, "work")
 	said = compiler_said(tree, "test-verdicts", work, "--each", *paths)
 	page = verdicts_of(said.split("\n"))
 	if not page:
 		sys.exit(f"error: test-verdicts gave no verdicts (the runs are kept in {work}): {said[-500:]}")
-	baseline = subprocess.run([os.path.join(tree, "scripts", "baseline.sh"), *(paths or ["test"])], cwd=tree, capture_output=True, text=True)
+	baseline = subprocess.run([os.path.join(tree, "scripts", "baseline.sh"), *(paths or ["test"])], cwd=tree, capture_output=True, text=True, errors="replace")  # a case may print bytes
 	native = verdicts_of(baseline.stdout.split("\n"))
 	status_of = lambda case: "ok" if page[case] == "✓" else "EXP" if native.get(case) == "✓" and native_only(tree, case) else {"✓": "PAGE", "✗": "BOTH"}.get(native.get(case), "NONE")
 	lines = [f"{status_of(case):<4} {case}" for case in page]
@@ -1550,7 +1654,7 @@ def chrome_allowed():
 	--firefox runs Firefox, --safari Safari; --samples runs headless Chrome (user 2026-11-01, notes/playground_plan.md),
 	and so does --tests, its twin for test/ (night decision N6, notes/night_2026-11-02.md), and --examples, the tour and
 	the guide, in headless Chromium, Chrome for Testing (user 2026-11-02)"""
-	return bool(os.environ.get("CI")) or sys.argv[1:2] in (["--serve"], ["--samples"], ["--tests"], ["--examples"]) or any(name in sys.argv[2:] for name in WEBDRIVERS)
+	return bool(os.environ.get("CI")) or sys.argv[1:2] in (["--serve"], ["--samples"], ["--tests"], ["--tests-judged"], ["--examples"]) or any(name in sys.argv[2:] for name in WEBDRIVERS)
 
 
 def live_differences(url, site):
@@ -1597,6 +1701,8 @@ def main():
 		return check_samples(sys.argv[2:], REPOSITORY)
 	if sys.argv[1:2] == ["--tests"]:
 		return check_tests(sys.argv[2:], REPOSITORY)
+	if sys.argv[1:2] == ["--tests-judged"]:
+		return tests_judged(sys.argv[2:], REPOSITORY)
 	if sys.argv[1:2] == ["--serve"]:
 		serve()
 		print(f"serving {REPOSITORY}\n  playground: http://127.0.0.1:{PORT}/web/playground/")

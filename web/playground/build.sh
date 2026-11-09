@@ -36,7 +36,7 @@ STAMP_DIGITS=10
 PRELOADED_SOURCES=('*.warp' 'extensions/sugar/*.warp' 'modules/index.tsv' 'modules/sugar_rules.packed')
 # the exports of warp.wasm the page calls (driver.js, values.js): the browser's copy keeps only these, and Binaryen drops
 # what they never reach and the name section (1.35 → 1.26 MB gzipped); an export missing here fails the tour loudly
-COMPILER_EXPORTS=(main _start memory text_heap trap_detail trap_position trap_name show trap_message shown_at returned_error
+COMPILER_EXPORTS=(main _start memory text_heap trap_detail trap_position trap_name show trap_message shown_at shown_from returned_error
 	error_of new_empty new_int new_bool new_float new_codepoint new_text new_symbol new_key new_list new_type new_bytes new_ints
 	new_floats new_spelled_key new_spelled_list item_count item_at int_item_at float_item_at gpu_list_place gpu_list_cell
 	is_textual)
@@ -93,6 +93,10 @@ build_compiler() {
 # `library: "dir/name"` prebuilt as <clone>/dir/name.wasm; natively scripts/link-packages.sh builds it beside warp
 pack_package_libraries() {
 	local manifest clone library
+	# a fresh worktree has no packages/ (git ignores it): linked first, else the page lacks uniscript_c.wasm and
+	# samples/text/uniscript_text.warp fails "uniscript_c.uniscript_error is not available in the browser"; the served
+	# list, written after, then holds the packages samples use by path (samples/modules/packages.warp)
+	compgen -G "packages/*/package.warp" > /dev/null || "$repository/scripts/link-packages.sh" "$repository"
 	for manifest in packages/*/package.warp; do
 		[ -f "$manifest" ] || continue
 		library=$(manifest_field "$manifest" library)
@@ -174,7 +178,17 @@ print("// made by build.sh: the files the server has (host-files.js isUnserved)\
 # the repository's files, as the dev server and test_in_browser.py serve them from the repository root
 write_repository_served_files() {
 	# plus the compiler's lib/ and the packages, which git ignores
-	{ git -c core.quotepath=off ls-files --cached --others --exclude-standard; find web/playground/warp-lib -type f 2>/dev/null || true; package_files; find web/playground/lib -name '*.wasm'; } | write_served_files "$page/served-files.js"
+	{ git -c core.quotepath=off ls-files --cached --others --exclude-standard; linked_folder_files; find web/playground/warp-lib -type f 2>/dev/null || true; package_files; find web/playground/lib -name '*.wasm'; } | write_served_files "$page/served-files.js"
+}
+
+# the files under each tracked link to a folder, by the link's path: lib/compiler -> ../core serves
+# lib/compiler/parsing/lexer.warp, which lib/fix/fix.warp uses (git lists the link alone)
+linked_folder_files() {
+	local link
+	git -c core.quotepath=off ls-files -s | awk '$1 == "120000" { print $4 }' | while IFS= read -r link; do
+		[ -d "$link" ] && find -L "$link" -type f -not -name .DS_Store
+	done
+	return 0
 }
 
 # the files of packages/ (scripts/link-packages.sh, the registry's folders linked in), which samples use by path,
@@ -253,16 +267,17 @@ WARP_LIB="$INSTALLED_LIBRARY" warp build --module test/fixtures/compiled/shapes.
 write_repository_served_files
 
 # a folder per guide chapter (notes/samples.md); golf/ and wit/ hold no menu samples, native/ only natively built ones
-python3 - "$page/samples.js" "$page/excluded_samples.txt" $(ls samples/*/*.warp | grep -v '^samples/\(golf\|wit\|native\)/') <<'PYTHON'
-import collections, json, os, sys
-# the samples the page cannot run yet stay out of the menu, each named with its error in excluded_samples.txt
-excluded = {line.split()[0] for line in open(sys.argv[2], encoding="utf-8") if line.strip() and not line.startswith("#")}
+python3 - "$page/samples.js" $(ls samples/*/*.warp | grep -v '^samples/\(golf\|wit\|native\)/') <<'PYTHON'
+import collections, json, os, re, sys
+# a sample a browser cannot run says so on a line of its own, `# host: native: <why>` (or none), and stays out of the
+# menu (test_in_browser.py HOST_LINE)
+NOT_IN_PAGE = re.compile(r"^# host: (native|none)\b", re.M)
 files = collections.defaultdict(list)
-for path in sys.argv[3:]: files[os.path.basename(path)[:-len(".warp")]].append(path)
+for path in sys.argv[2:]: files[os.path.basename(path)[:-len(".warp")]].append(path)
 # the menu and the address (#fizzbuzz) name a sample by its file name: one name, one file
 twins = {name: paths for name, paths in files.items() if len(paths) > 1}
 if twins: sys.exit(f"samples sharing a name: {twins}")
-names = {name: paths[0] for name, paths in sorted(files.items()) if name not in excluded}
+names = {name: paths[0] for name, paths in sorted(files.items()) if not NOT_IN_PAGE.search(open(paths[0], encoding="utf-8").read())}
 samples = {name: open(path, encoding="utf-8").read() for name, path in names.items()}
 with open(sys.argv[1], "w", encoding="utf-8") as script:
 	script.write("// made by build.sh from samples/<chapter>/*.warp\nconst SAMPLES = " + json.dumps(samples, ensure_ascii=False, indent="\t") + ";\n")

@@ -1,5 +1,9 @@
 # Reusing existing work for sound (card reuse-sound, user policy reuse-giants 2026-10-29)
 
+Since 2026-11-07 (decision sound-in-warp) the native sound is warp over SDL3's audio, AudioToolbox / libmpg123 and
+CoreMIDI (notes/native_host.md); miniaudio and libwarp_sound are gone. The survey below is kept for the effects and
+nodes still to come.
+
 What we build ourselves today, and which existing library covers it instead. Since the Rust harness went (11:00,
 2026-10-29), the native warp plays sound only as a WAV handed to afplay/paplay/aplay. Fifteen sound and MIDI host
 words of lib/sound.warp (`std_io("sound", …)` and `std_io("midi", …)`) answered from Rust (cpal mixer, midir,

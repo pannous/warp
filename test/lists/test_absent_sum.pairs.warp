@@ -1,0 +1,7 @@
+# ø is absence, no start value (decisions xs-ys and empty-plus-text): adding to it says where to start; a list on the left
+# grows in place, so a name sharing it sees the new items (P200b)
+'x = ø; try { x += 3 } catch e { "" + e }'	"ø has no +: start the sum at 0 (x = 0)"
+'t = ø; try { t += "a" } catch e { "" + e }'	'ø has no +: start the text at "" (t = "")'
+'n = ø; "a" + n'	"aø"
+'xs = [1]; ys = xs; xs += [2]; ys'	[1 2]
+'xs = [1, 2]; xs += xs; xs'	[1 2 1 2]

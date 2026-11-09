@@ -1,21 +1,30 @@
 #!/usr/bin/env warp
-# a raylib window animated for two seconds, frame by frame
-use raylib
+# a raylib window animated for two seconds, frame by frame, paced by sleep with a unit
+# Only the raylib functions it names are imported, one by one; `use units` gives `16ms`
+import InitWindow from "raylib"
+import CloseWindow from "raylib"
+import BeginDrawing from "raylib"
+import EndDrawing from "raylib"
+import ClearBackground from "raylib"
+import DrawCircle from "raylib"
+import DrawText from "raylib"
 use units
-InitWindow(800, 600, "Warp Raylib  Circle Demo")
-SetTargetFPS(60)
 
-# Draw multiple frames to keep window responsive
-# NOTE: Event loops with while(!WindowShouldClose()) don't work yet due to WASM compiler issue
-# Using frame loop with sleep()  keeps window responsive, no spinning cursor
+LIGHT_GRAY = 0xFFF5F5F5
+DARK_GRAY = 0xFF505050
+DARK_RED = 0xFF2E1990
+FRAMES = 120  # 120 frames of 16 ms each: two seconds
+
+InitWindow(800, 600, "Warp Raylib - Sleep Demo")
 frame = 0
-while(frame < 120) {  # 120 frames at 60fps = 2 seconds
+while frame < FRAMES {
 	BeginDrawing()
-	ClearBackground(0xFFF5F5F5)  # RAYWHITE  Light gray background
-	DrawText("Warp Raylib FFI Demo", 250, 20, 30, 0xFF505050)  # DARKGRAY
-	DrawText("Press Ctrl+C to close", 260, 560, 20, 0xFF505050)  # DARKGRAY
-	DrawCircle(400, 300, 80.0, 0xFF2E1990)  # MAROON  Dark red circle
+	ClearBackground(LIGHT_GRAY)
+	DrawText("Warp Raylib FFI Demo", 250, 20, 30, DARK_GRAY)
+	DrawText("frame ${frame} of ${FRAMES}", 300, 560, 20, DARK_GRAY)
+	DrawCircle(400, 300, 40.0 + frame / 2, DARK_RED)
 	EndDrawing()
-	sleep(16ms)  # ~60fps (16ms per frame)
-	frame = frame + 1
+	sleep(16ms)
+	frame += 1
 }
+CloseWindow()

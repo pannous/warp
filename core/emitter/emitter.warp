@@ -90,7 +90,7 @@ runtime_space = 0
 own_space = 1
 # the closure arities runtime.wasm holds a closure·call hook for, 0 to these, each of a fixed function type
 hook_arities = 8
-# (gc_names lists them by name, closure_call_type_0 to _8: a literal, as scripts/node_layout.warp reads it)
+# (gc_names lists them by name, closure_call_type_0 to _8: a literal)
 closure_call_type_prefix = "closure_call_type_"
 # `try`: while one runs (try_depth above 0) a runtime error throws the
 # tag warp_error(i32), which the try's try_table catches; otherwise it traps as before
@@ -124,18 +124,18 @@ gc = {text: "text", items: "items", list: "list", node: "Node", int_box: "i64box
 # anyref, as the host holds a node
 any_reference = 110
 # a time, a $Node of Kind time like a node, is its own kind so that only what handles times takes one
-references = {text: [99, gc.text], list: [99, gc.list], node: [99, gc.node], time: [99, gc.node]}
+references = {text: [99, gc.text], list: [99, gc.list], node: [99, gc.node]}
 node_fields = [126, 0, any_reference, 0, 99, gc.node, 0]
 gc_types = [[94, 120, 1], [94, 99, gc.node, 1], [95, 2, 127, 1, 100, gc.items, 1], [80, 0, 95, 3] + node_fields, [95, 1, 126, 0], [95, 1, 124, 0], [95, 2, 110, 0, 110, 0],
 	[79, 1, gc.node, 95, 7] + node_fields + [126, 0, 126, 0, 99, gc.node, 0, 99, gc.node, 0], [94, 127, 1], [95, 2, 127, 0, 99, gc.limbs, 0],
 	[79, 1, gc.node, 95, 5] + node_fields + [funcref_byte, 0, 99, gc.text, 0], [80, 1, gc.node, 95, 4] + node_fields + [99, gc.node, 1],
-	[79, 1, gc.node, 95, 12] + node_fields + concatenated(range_list(9).map(i => [funcref_byte, 0]))] + range_list(hook_arities + 1).map(arity => [function_type_byte, arity + 1] + concatenated(range_list(arity + 1).map(i => references.node)) + [1, any_reference])
+	[79, 1, gc.node, 95, 13] + node_fields + concatenated(range_list(10).map(i => [funcref_byte, 0]))] + range_list(hook_arities + 1).map(arity => [function_type_byte, arity + 1] + concatenated(range_list(arity + 1).map(i => references.node)) + [1, any_reference])
 # a closure's entry (closures.warp), a $Node so it sits in the closure's items: the funcref it calls and the text it shows; $Instance, every class's struct's
 # supertype (instances.warp); $Class, a class's descriptor (instances.warp class_slots); the closure calls' function types, (closure, argument…) to a node. Each the same in every
 # module, so one module's instances and closures pass into another's code
 gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node", ["kind", "data", "value"]], ["i64box", ["value"]], ["f64box", ["value"]], ["Ratio", ["numerator", "denominator"]],
 	["MetaNode", ["kind", "data", "value", "line", "column", "comment", "attributes"]], ["Limbs", []], ["BigInt", ["negative", "limbs"]], ["Closure", ["kind", "data", "value", "entry", "shown"]], ["Instance", ["kind", "data", "value", "extra"]],
-	["Class", ["kind", "data", "value", "entries", "field_at", "place", "set", "construct", "show", "float", "call", "operate"]],
+	["Class", ["kind", "data", "value", "entries", "field_at", "place", "set", "construct", "show", "float", "call", "operate", "method"]],
 	["closure_call_type_0", []], ["closure_call_type_1", []], ["closure_call_type_2", []], ["closure_call_type_3", []], ["closure_call_type_4", []],
 	["closure_call_type_5", []], ["closure_call_type_6", []], ["closure_call_type_7", []], ["closure_call_type_8", []]]
 # a kind's wasm value type: a number's, a yes/no's or a character's own byte, else its reference (decision kinds-as-cases)
@@ -151,7 +151,7 @@ reference_of(kind: ValueKind): list? := match kind {
 	ValueKind.Text: references.text
 	ValueKind.List: references.list
 	ValueKind.Node: references.node
-	ValueKind.Time: references.time
+	ValueKind.Time: references.node
 	_: ø
 }
 is_reference(kind: ValueKind): bool := reference_of(kind) != ø
@@ -463,6 +463,19 @@ assigns(n: Node, name: text) := {
 	no
 }
 # name → the parameter counts of the functions the program defines by that name
+# name → the arities of the functions the modules brought (passes/prelude_words.warp brought_names) whose parameters
+# are all untyped: `write(path, text)`, `write(path: any, text: any)`
+def untyped_brought_arities(program: Node): map {
+	arities = {}
+	for n in program_statements(program).map(unkeyworded) {
+		head = function_head(n)
+		if head != ø and brought_names.has(name_of(head#1)) and items_of(head)[1..].all(is_untyped_parameter) { arities[name_of(head#1)] = (arities.get(name_of(head#1)) ?? []) + [#head - 1] }
+	}
+	arities
+}
+is_untyped_parameter(parameter: Node): bool := parameter is symbol or (is_key(parameter, Op.Colon) and value_of(parameter) == symbol("any"))
+# a host word a C declaration made (extensions/c_imports c_host_word), its library named, never the driver's own
+is_c_word(signature: list): bool := #signature > 2 and signature#3 != host_module
 def defined_arities(program: Node): map {
 	arities = {}
 	for n in program_statements(program).map(unkeyworded) {
@@ -1097,6 +1110,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 	# wasm_instruction of its own
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("wasm_instruction") and n#2 is text { return wasm_instruction(body, n#2) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol(HiddenWord.RanWithoutError as text) { return ran_without_error(body, n#2) }
+	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and host_beside_function(body, name_of(n#1), items_of(n)[1..]) { return host_or_function(body, name_of(n#1), items_of(n)[1..]) }
 	if (bracket_of(n) == "(" or is_spaced_call(body, n)) and #n > 0 and n#1 is symbol and is_program_call(body, name_of(n#1), items_of(n)[1..]) {
 		return call(body, module.functions[name_of(n#1)], items_of(n)[1..])
 	}
@@ -1107,7 +1121,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 	}
 	std = std_word(n)
 	if std != ø { return call(body, module.runtime[std], listed_items(n#4)) }
-	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.host {
+	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.host and host_takes(name_of(n#1), #n - 1) {
 		# `exit(1)` ends the run: never a value, so `try 42 catch e { exit(1) }` and `if x > 0 { x } else { exit(1) }`
 		# take the other branch's kind (card pure-exit-miscompile)
 		if name_of(n#1) == ending_host_word { return TypedCode(never, ended_code(host_call(body, name_of(n#1), items_of(n)[1..]))) }
@@ -1149,6 +1163,8 @@ def group_expression(body: Body, n: Node): TypedCode {
 	}
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in library_words {
 		word = library_words[name_of(n#1)]
+		# a late word, made once the module's classes are known (an extension's dispatcher asking a foreign instance)
+		if word in late_words { return intrinsic_of(body, word, n[1..].map(x => TypedCode(ValueKind.Node, boxed(expression_code(body, x))))) }
 		if word == "symbol_node" and #n == 2 and n#2 is text { return interned_symbol(body, n#2) }
 		# `x as Angle`: the number held unboxed as its type's number, an exact 0.5 as the float an Angle is, with its
 		# mark, carried statically (decision marks-unboxed-first)
@@ -1595,10 +1611,15 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.texts = {}
 	module.first_text_segment = 0
 	# the host words, but those the program defines itself taking as many values: its own `notify(x) := …` is its own,
-	# its own `paint(picture, width, height)` leaves the host's paint of four
+	# its own `paint(picture, width, height)` leaves the host's paint of four; a library word brought untyped beside a
+	# typed C word of as many leaves it too, the call's arguments picking one (host.warp host_or_function)
 	module.host = {}
 	defined = defined_arities(program)
-	for name in host.keys { if #host[name]#1 not in (defined.get(name) ?? []) { module.host[name] = host[name] } }
+	untyped = untyped_brought_arities(program)
+	for name in host.keys {
+		arity = #host[name]#1
+		if arity not in (defined.get(name) ?? []) or (is_c_word(host[name]) and arity in (untyped.get(name) ?? [])) { module.host[name] = host[name] }
+	}
 	module.classes = {}
 	module.parents = {}
 	module.variants = {}

@@ -1,10 +1,6 @@
 #!/usr/bin/env warp
-# Prime check with helper recursion
-def check(n, i) = if i * i > n then yes else if n % i == 0 then false else check(n, i + 1)
-def is_prime(n,i=2) = if n < 2 then no else check(n, 2)
-
-# TODO Prime check without helper recursion, depends on default args
-# def is_prime(n,i=2) = if n < 2 then no else if i * i > n then yes else if n % i == 0 then false else check(n, i + 1)
-
+# Prime check by recursion: i, the divisor tried next, starts at 2 by its default
+def is_prime(n,i=2) = if n < 2 then no else if i * i > n then yes else if n % i == 0 then false else is_prime(n, i + 1)
+# DONE Prime check without helper recursion, depends on default args
 
 is_prime(97)

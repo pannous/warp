@@ -24,10 +24,10 @@
 'xs=[5,6,7]; xs#3'	7
 
 # test_division_type_upgrade
-'1/2'	0.5
-'3/2'	1.5
-'-1/2'	-0.5
-'10/4'	2.5
+'1/2'	1/2
+'3/2'	3/2
+'-1/2'	-1/2
+'10/4'	5/2
 
 # typed_name_binds_before_assignment
 'a:int=7; a'	7

@@ -1,0 +1,40 @@
+// The standard module callbacks (card ffi-callbacks): a warp function C calls back, `qsort(base, n, 8,
+// c_callback(compare, ["handle", "handle"]))`. c_callback hands C one of a fixed set of C functions (lib/native/foreign.c
+// trampolines); C calling it calls the driver (core/native/driver.warp c_callback_answered), which calls this module's
+// export c_callback_fired(slot, arguments…) during the C call that called back. Its arguments' C types, each "i32",
+// "i64" or "handle" (a pointer, held as a handle as every C pointer is, notes/ffi_handles.md), at most
+// CALLBACK_ARGUMENTS; its result, a number or yes/no, goes back to C, anything else as 0
+CALLBACK_ARGUMENTS = 6
+CALLBACK_TYPES = ["i32", "i64", "handle"]
+global callback_functions = []
+global callback_types = []
+c_callback(f: function, types: list) := {
+	if #types > CALLBACK_ARGUMENTS { raise "c_callback: at most " + CALLBACK_ARGUMENTS + " arguments, not " + #types }
+	for type in types { if type not in CALLBACK_TYPES { raise "c_callback: an argument is one of " + CALLBACK_TYPES.join(", ") + ", not " + type } }
+	callback_functions += [f]
+	callback_types += [types]
+	c_callback_pointer(#callback_functions - 1)
+}
+// the C function of a slot, which calls c_callback_fired(slot, …); ø past the trampolines foreign.c has
+c_callback_pointer(slot: i64): handle from 'c'
+// a pointer C passed as the handle the program holds it as
+pointer_handle(address: i64): handle from 'c'
+// the call C made, its arguments as the C types said
+export c_callback_fired(slot: int, a: int, b: int, c: int, d: int, e: int, g: int): int := {
+	given = [a, b, c, d, e, g]
+	arguments = [if callback_types#(slot + 1)#i == "handle" then pointer_handle(int(given#i)) else given#i for i in 1 to #callback_types#(slot + 1)]
+	f = callback_functions#(slot + 1)
+	result = called_with(f, arguments)
+	if result is bool then (if result then 1 else 0) else if result is int then result else 0
+}
+// (one call a count of arguments: a closure is called with as many as it takes)
+called_with(f: function, given: list): any := {
+	n = #given
+	if n == 0 { return f() }
+	if n == 1 { return f(given#1) }
+	if n == 2 { return f(given#1, given#2) }
+	if n == 3 { return f(given#1, given#2, given#3) }
+	if n == 4 { return f(given#1, given#2, given#3, given#4) }
+	if n == 5 { return f(given#1, given#2, given#3, given#4, given#5) }
+	f(given#1, given#2, given#3, given#4, given#5, given#6)
+}

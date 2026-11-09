@@ -12,6 +12,7 @@
 set -uo pipefail
 source "$(dirname "$0")/../lib/platform.sh"
 source "$(dirname "$0")/../lib/results-header.sh"
+source "$(dirname "$0")/../lib/sync-main.sh"
 NICENESS=19
 export WARP_BUILD_SLOTS=1
 SNAPSHOT=${NIGHTLY_SNAPSHOT:-/Volumes/Worktrees/nightly}
@@ -86,7 +87,7 @@ say "$(python3 "$scripts/vitals.py" 2026-10-29 "$main/data/vitals/vitals.html")"
 
 git -C "$main" add -- "${files[@]}" &&
 	git -C "$main" commit -q -m "chore: nightly pass rates at $tip ${row#*$tip | }" -- "${files[@]}" &&
-	git -C "$main" pull -q --rebase --autostash && git -C "$main" push -q || say "results of $tip not pushed: look at the main checkout"
+	up_to_date_main "$main" && git -C "$main" push -q || say "results of $tip not pushed: look at the main checkout"
 
 if ((${#fell[@]})); then
 	todo add Now "nightly: pass rate fell at $tip: $(IFS=';'; echo "${fell[*]}")" --no-topic \

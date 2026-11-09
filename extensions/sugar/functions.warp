@@ -37,6 +37,8 @@ rewrite def $h($p...) {$b...} => ($h($p...) := {$b...})
 rewrite (def $h($p...): {$b...}) => ($h($p...) := {$b...})
 # Ruby's endless method, `def twice = x * 2`, is the function (in a class body the method) `twice := x * 2`
 rewrite (def $h = $e) => ($h := $e) where $h is symbol
+# Python's `def two: 1+1` without parameters: the function two() := 1+1, called two() or two
+rewrite (def $h: $e) => ($h() := $e) where $h is symbol
 rewrite (def $d) => $d
 # `square of number = it * it` (wiki/function.md, inventions.md "Of keyword"), also `square of a number`: the
 # bracket-less `square(it: number) := it * it`, a variant of each type it is defined of

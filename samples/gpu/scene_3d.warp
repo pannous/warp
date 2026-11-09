@@ -58,7 +58,9 @@ render = shader {
 }
 
 corners = #mesh
-for frame in 1..120 {
-	angle = frame * 0.05
+# each frame of the window the camera turns on, three radians a second (headless: one frame, as a PNG)
+started = clock()
+on frame {
+	angle = float(clock() - started) * 0.003
 	paint(render, size, size, {size: [size, size]})
 }

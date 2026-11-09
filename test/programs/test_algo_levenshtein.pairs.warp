@@ -1,7 +1,7 @@
 # from test_algo_levenshtein.rs: edit the Rust test, then run the script again
 
-# test_levenshtein
-'samples/text/levenshtein.warp'	11
+# test_levenshtein: the sample prints its five distances (card bug-levenshtein-total, faf3345b4b), the test reads them
+'use "../../samples/text/levenshtein.warp"; [levenshtein("kitten", "sitting"), levenshtein("flaw", "lawn"), levenshtein("", "abc"), levenshtein("abc", "abc"), levenshtein("saturday", "sunday")]'	[3, 2, 3, 0, 3]
 
 # test_levenshtein_idiomatic
-'samples/text/levenshtein_idiomatic.warp'	11
+'use "../../samples/text/levenshtein_idiomatic.warp"; [levenshtein("kitten", "sitting"), levenshtein("flaw", "lawn"), levenshtein("", "abc"), levenshtein("abc", "abc"), levenshtein("saturday", "sunday")]'	[3, 2, 3, 0, 3]

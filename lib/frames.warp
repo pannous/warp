@@ -1,6 +1,6 @@
 // The standard module frames (decision on-frame-headless): `on frame {…}` (extensions/sugar/events.warp) runs each frame of
-// the window, the native warp's (crates/warp-window) until it closes, its paintings shown in it. Without a window
-// (WARP_NO_WINDOW, CI, no libwarp_window) the frame runs once after the program, the window a small one, so a program
+// the window, the native warp's (lib/host/native_host/window.warp) until it closes, its paintings shown in it. Without a window
+// (WARP_NO_WINDOW, CI, no SDL3) the frame runs once after the program, the window a small one, so a program
 // painting each frame paints one PNG at that size (the prelude's paint_each samples a painted function down to it)
 HEADLESS_FRAME_WIDTH = 240
 HEADLESS_FRAME_HEIGHT = 135

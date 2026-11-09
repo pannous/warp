@@ -1,0 +1,7 @@
+# a parameter is a block or function only when declared one (decision declared-block-parameters, card
+# untyped-block-parameter): body! of a block parameter runs the block each time; calling or running an untyped one
+# is refused at its definition, saying how to declare it
+'repeats(n, body: block) := { for i in 1...n { body! } }; c = 0; repeats 3 { c += 1 }; c'	3
+'repeats(n, body) := { for i in 1...n { body! } }; c = 0; repeats 3 { c += 1 }; c'	error
+'apply(f, x) := f(x); apply(x => x * 2, 3)'	error
+'apply(f: function, x) := f(x); apply(x => x * 2, 3)'	6

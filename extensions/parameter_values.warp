@@ -1,0 +1,32 @@
+# A parameter given a value with a colon, `f(a, b: 0) := …`, is refused with its fix, `b = 0`: in a definition's head
+# `:` gives a type and `=` a default (night decision parameter-named-fails). Its message is in core/analysis/errors.data
+
+parameter_value(n: Node, program: Node) := {
+	parts = definition_of(without_mark(n))
+	if parts == ø { return ø }
+	valued = parts.parameters.find(parameter => is_key(parameter, Op.Colon) and key_of(parameter) is symbol and is_literal_value(value_of(parameter)))
+	if valued == ø { return ø }
+	diagnose(call_of("parameter_value", [name_of(key_of(valued)), written_value(value_of(valued))]), valued)
+}
+is_literal_value(n: Node): bool := n is number or n is text
+# the value as code, a text in its quotes: `as = "x"`
+written_value(n: Node): text := if n is text then "\"${n}\"" else "${n}"
+
+# A body after a definition's head colon, `def f(x): x * 2`, is refused with its fix `def f(x) := x * 2`: the colon
+# names the result type, `def f(x): int := x * 2` (decision def-colon-body). Only after `def`: `f(x): x * 2` without it is
+# a key, a match arm `Square(a): a*a` or the golf form `h(n): n<2 …`
+DEF_WORD = "def"
+head_body(n: Node, program: Node) := {
+	plain = without_mark(n)
+	if not (is_group(plain) and #plain == 2 and plain#1 == symbol(DEF_WORD)) { return ø }
+	defined = plain#2
+	if not (is_key(defined, Op.Colon) and is_call(key_of(defined)) and is_body_value(value_of(defined))) { return ø }
+	diagnose(call_of("head_body", [head_code(key_of(defined)), written_value(value_of(defined))]), defined)
+}
+# a definition's head as written: `f(x, y)`
+head_code(head: Node): text := "${head#1}(" + items_of(head)[1 ..].map(parameter => "${parameter}").join(", ") + ")"
+# code no type is written as: a literal or an operation, `x * 2`, `n > 0`
+BODY_OPERATORS = [Op.Add, Op.Sub, Op.Mul, Op.Div, Op.Mod, Op.Pow, Op.Eq, Op.Ne, Op.Lt, Op.Gt, Op.Le, Op.Ge]
+is_body_value(n: Node): bool := is_literal_value(n) or BODY_OPERATORS.any(op => is_key(n, op))
+
+parameter_values_extension = Extension{name: "parameter_values", lints: [parameter_value, head_body]}

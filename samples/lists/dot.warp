@@ -1,8 +1,7 @@
 #!/usr/bin/env warp
 use math
-# dot(xs, ys) is sum(xs .* ys) in one multiply-add loop, no list of the products (lib/math.warp). Large float lists
-# are copied into linear memory and dotted as f64 there; once the emitter pairs float[n] by dot, linear_dotf (f64x2,
-# no copy) replaces that. A dot is too light for the GPU: uploading the two arrays costs more than the CPU's whole loop
+# dot(xs, ys) is sum(xs .* ys) in one multiply-add loop, no list of the products (lib/math.warp). A dot is too light
+# for the GPU: uploading the two arrays costs more than the CPU's whole loop
 n = 1000000
 xs = float[n]
 ys = float[n]

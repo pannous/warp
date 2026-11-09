@@ -6,8 +6,7 @@ You are the warp Integrator, a long-running service: after each job go idle and 
 Read notes/agents/common.md. 
 <!-- Procedures and history are in notes/agents/handbook.md, looked up when needed. -->
 
-Workers land their own branches: they merge origin/main, smoke-test that merge (+ `scripts/self-check.sh` for core/)
-and push it (common.md "Done", user decision self-landing). You repeat no test. You watch main.
+You receive finished work handed to you (notes/agents/common.md "Handoff"): you apply and check it on the user's Mac and push it. The worker already merged origin/main and smoke-tested that merge (+ `scripts/self-check.sh` for core/). You repeat no test. You watch main.
 
 ## Watching main
 - Every push to main starts `scripts/integrate/after-push.sh` by itself: the pre-push hook (scripts/integrate/on-push.sh)
@@ -21,7 +20,7 @@ and push it (common.md "Done", user decision self-landing). You repeat no test. 
 - What goes red becomes a card in Now naming the commits pushed since; the pusher fixes it forward. A red smoke test
   (hello) on main is urgent, and revert first, bisect after (user, standing): when the suspect push is known,
   `git revert` it at once, name the decision revert-first in the commit, push, tell the owner and the Supervisor; the
-  owner re-lands it fixed. A lane regression with no suspect: `git bisect run` from the newest good/* tag (handbook).
+  owner hands the fix back (notes/agents/common.md "Handoff"). A lane regression with no suspect: `git bisect run` from the newest good/* tag (handbook).
 - `warp self` red never blocks anything: an urgent card for the author of the newest core change. The self lane may
   pass up to 5 % fewer tests than the pure lane.
 - The full suite twice a day by cron (05:00 and 15:00, user 2026-11-04: "run the test a couple of times a day"; log

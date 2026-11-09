@@ -397,7 +397,7 @@ function columnLines(snapshots, columns, container) {
     const y = value => T + (1 - value / top) * (H - T - B);
     const firstPoint = points[0], lastPoint = points[points.length - 1];
     card.innerHTML = `<div class="label">${name}</div><div class="value">${lastPoint[index].toFixed(2)} ${unit}</div>` +
-      `<div class="change">${detail(lastPoint)} · ${points.length > 1 ? percent(firstPoint[index], lastPoint[index]) + " since " + shortDay(firstPoint[0].slice(0, 10)) : "one build"} · ${points.length} landings</div>`;
+      `<div class="change">${lastPoint[0]} · ${detail(lastPoint)} · ${points.length > 1 ? percent(firstPoint[index], lastPoint[index]) + " since " + shortDay(firstPoint[0].slice(0, 10)) : "one build"} · ${points.length} landings</div>`;
     const svg = element("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `${name} per landing` }, card);
     [0, top / 2, top].forEach(v => {
       element("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: "var(--rule)", "stroke-width": 0.6 }, svg);

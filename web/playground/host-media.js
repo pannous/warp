@@ -134,6 +134,7 @@ addHostPart({
 			[width, height] = [Number(width), Number(height)];
 			const halves = pictureHalves(program(), pixels, width * height) ?? halvesOf(guestPlain(program(), pixels));
 			hooks.savePicture(String(guestPlain(program(), file)), shadedWords(halves, width * height), width, height);
+			return program().new_empty(); // no failure: lib/draw's save raises the text a host gives back
 		},
 	}),
 });

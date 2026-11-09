@@ -129,13 +129,11 @@ jobs:
         gh release download "$WABT" --repo WebAssembly/wabt --pattern "wabt-$WABT-${{ matrix.wabt }}.tar.gz"
         tar -xzf "wabt-$WABT-${{ matrix.wabt }}.tar.gz" -C "$RUNNER_TEMP"
         echo "$RUNNER_TEMP/wabt-$WABT/bin" >>"$GITHUB_PATH"
-    - name: our wasmtime C API and sound library
-      # the copying collector and the GC setters wasmtime's own lacks (card wasmtime-bundled), and libwarp_sound
-      # (miniaudio, decision sound-plays), in lib/, where `warp build native` links from and the native warp finds
-      # them beside itself
+    - name: our wasmtime C API and native libraries
+      # the copying collector and the GC setters wasmtime's own lacks (card wasmtime-bundled), and libwgpu_native, in lib/,
+      # where `warp build native` links from and the native warp finds them beside itself
       run: |
-        WARP_WASMTIME_TARGET=$PWD/crates/wasmtime-capi/target WARP_SOUND_TARGET="$RUNNER_TEMP/warp-sound" \
-          WARP_GPU_TARGET="$RUNNER_TEMP/warp-gpu" WARP_WINDOW_TARGET="$RUNNER_TEMP/warp-window" scripts/wasmtime-c-api.sh lib
+        WARP_WASMTIME_TARGET=$PWD/crates/wasmtime-capi/target WARP_GPU_TARGET="$RUNNER_TEMP/warp-gpu" scripts/wasmtime-c-api.sh lib
     - name: the previous release's native warp, brought up to the tag's host words
       run: .workflow/scripts/release-bootstrap.sh ${{ matrix.target }} "$RUNNER_TEMP/bootstrap" .
     - name: the native warp
@@ -194,7 +192,9 @@ jobs:
         sudo dpkg -i dist/linux/warp-lang_*_amd64.deb
         (cd "$RUNNER_TEMP" && warp '6*7' | grep -q 42)
         pip install --no-deps --break-system-packages --prefix "$RUNNER_TEMP/pip" dist/wheels/*manylinux*_x86_64.whl
-        (cd "$RUNNER_TEMP" && "$RUNNER_TEMP/pip/bin/warp" '6*7' | grep -q 42)
+        # Debian's pip puts a --prefix install's scripts in <prefix>/local/bin, others in <prefix>/bin
+        pip_warp=$(find "$RUNNER_TEMP/pip" -path '*/bin/warp' -type f | head -1)
+        (cd "$RUNNER_TEMP" && "${pip_warp:?the wheel installed no bin/warp}" '6*7' | grep -q 42)
     - name: upload
       run: gh release upload "$TAG" dist/linux/* --clobber
     - uses: actions/upload-artifact@v7
