@@ -6,6 +6,7 @@
 # A component (WIT types) is no core module and stays unread.
 #   count_up(by: i64): i64 from 'test/fixtures/wasm/counter.wasm'     what `use test/fixtures/wasm/counter.wasm` declares
 WASM_EXTENSION = ".wasm"
+WAT_EXTENSION = ".wat"
 INCLUDE_WORD = "include"
 INCLUDED_MAIN = "main"
 # wasm's value types as a foreign line's types
@@ -37,7 +38,8 @@ wasm_module_named(statement: text, folder: text): text? := {
 	# `use shapes`, and a shapes.wasm an older compiler left beside it, without its signature, read as one: index out of range)
 	if bare == ø or bare == module_written { return ø }
 	# (only a .wasm file is read: `use compute_toys` beside a folder compute_toys read the folder, which never ended, card hit)
-	written = if bare.ends_with(WASM_EXTENSION) then bare else bare + WASM_EXTENSION
+	# (`fourty_two.wat` is the binary beside it, fourty_two.wasm: WAT text needs the native build, notes/wasm_modules.md)
+	written = bare.remove_suffix(WAT_EXTENSION).remove_suffix(WASM_EXTENSION) + WASM_EXTENSION
 	name = if rooted(written, folder) == written then path_in(folder, written) else written
 	if is_core_wasm(bytes_if_there(wasm_file(name, folder))) then name else ø
 }
@@ -101,11 +103,57 @@ wasm_exports(path: text, folder: text): WasmExports := {
 # `zlibVersion(): text from "zlib.wasm"`, say which cross as texts (a copy in the module's memory, its malloc's), which
 # give one back, which are unsigned (web/playground/host-foreign.js callC; natively card native-driver)
 with_c_types(functions: list, path: text, folder: text): list := {
-	typed = c_declarations_in(file_text(wasm_file(path.remove_suffix(WASM_EXTENSION) + module_extension, folder)) ?? "")
+	beside = path.remove_suffix(WASM_EXTENSION)
+	header = file_text(wasm_file(beside + C_HEADER_EXTENSION, folder)) ?? ""
+	# (its foreign lines first: they say what the header cannot, zlib's unsigned long being 32 bits)
+	typed = c_declarations_in((file_text(wasm_file(beside + module_extension, folder)) ?? "") + "\n" + header_foreign_lines(header, path))
 	functions.map(d => {
 		lines = typed.filter(line => line#1 == d#1)
 		if #lines == 0 then d else [d#1, path, lines#1#3, lines#1#4, lines#1#5]
 	})
+}
+# A C module's header beside it, shout.h of shout.wasm (notes/wasm_modules.md): each prototype as a foreign line,
+# `char *shout(const char *text);` → `shout(text: text): text from "shout.wasm"`, crossing as notes/wasm_modules.md
+# says: `char *` and a const pointer to anything but a struct is a text, crossing by its bytes when an unsigned count
+# right after it is their length (which the call leaves out: `XXH32("hello", 0)`), `T **` an out-pointer, any other pointer the module's number; wasm32's int,
+# long and size_t are 32 bits
+C_HEADER_EXTENSION = ".h"
+header_foreign_lines(header: text, library: text): text := {
+	code = header.split("\n").map(line => line.split("//")#1).filter(line => not line.trim().starts_with("#")).join(" ")
+	code.split(";").map(prototype => prototype.trim()).filter(prototype => prototype.contains("(") and prototype.ends_with(")"))
+		.map(prototype => header_foreign_line(prototype, library)).join("\n")
+}
+header_foreign_line(prototype: text, library: text): text := {
+	head = c_words(prototype.split("(")#1)
+	parameters = prototype.split("(")#2.remove_suffix(")").split(",").map(c_words).filter(words => #words > 0 and words != ["void"])
+	types = parameters.map(header_type)
+	for index in 1 ..< #types {
+		if types[index] == "u32" and types[index - 1] == "text" {
+			types[index - 1] = "bytes"
+			types[index] = "length"
+		}
+	}
+	named = range_list(#parameters).map(index => header_parameter_name(parameters[index], index) + ": " + types[index])
+	result = header_type(head[0 ..< #head - 1])
+	head#(#head) + "(" + named.join(", ") + ")" + (if result == "void" then "" else ": " + result) + " from \"" + library + "\""
+}
+# a C declaration's words, each `*` one of them: `const char *text` → [const, char, *, text]
+c_words(code: text): list := code.replace("*", " * ").split(" ").map(word => word.trim()).filter(word => word != "")
+# a parameter's name, its last word, or p1, p2 … where the header names none (`int abs(int);`)
+header_parameter_name(words: list, index: int): text := if #words > 1 and words#(#words) != "*" and not is_c_type_word(words#(#words)) then words#(#words) else "p" + str(index + 1)
+C_TYPE_WORDS = ["void", "char", "short", "int", "long", "unsigned", "signed", "float", "double", "size_t", "const", "struct"]
+is_c_type_word(word: text): bool := word in C_TYPE_WORDS
+# a C type's words (a parameter's name among them, which no rule reads) → a foreign line's type word
+header_type(words: list): text := {
+	stars = #words.filter(word => word == "*")
+	if stars > 1 { return "out" }
+	if stars == 1 { return if "char" in words or ("const" in words and "struct" not in words) then "text" else "i32" }
+	if "void" in words { return "void" }
+	if "double" in words { return "f64" }
+	if "float" in words { return "f32" }
+	if #words.filter(word => word == "long") > 1 { return "i64" }
+	if "unsigned" in words or "size_t" in words { return "u32" }
+	"i32"
 }
 # the words the wasm modules a source uses give it: their functions and warp words
 wasm_module_words(source: text, folder: text): list := {
