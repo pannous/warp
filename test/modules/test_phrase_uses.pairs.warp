@@ -1,0 +1,4 @@
+# a statement a word leads with a bare word nothing defines, `on alarm {…}`, is a phrase: it brings no module defining
+# the word (keys' on(key, body)), only one whose rule goes on with it (card on-alarm-keys; `warp uses` prints none)
+'on alarm { 7 }; emit alarm'	7
+'h = on alarm { 8 }; emit alarm'	8

@@ -1,47 +1,56 @@
-# The commands extension's commands beside compiling (card commands-extension): help, version, the shown stages
+# command arguments for native warp.warp
+# The commands extension's commands beside compiling (card commands-extension): 
+# help, version, the shown stages
 # (parse, data, lower, uses), the REPL, and the refusals of the commands plain WASI cannot run; build.warp builds
 # executables, tests.warp lists and judges `warp test`'s cases. compiler.warp runs each command it does not know
 # itself through this extension's row (extensions/extensions.warp): extension_command below
 # warp's version, the one place a release bumps (Cargo.toml follows it for the harness)
-VERSION = "1.7.0"
+VERSION = "1.9.0"
 REPL_PROMPT = "warp> "
 NATIVE = "the native warp"
 HELP_COLUMN = 38
 
 # each command and what it does, in `warp help`'s order
+# ⚠️ Do not edit this user-facing beautiful list and bloat with internal commands without asking the interviewer 
 command_help = [
-	["help", "Show this help"],
 	["version", "Show version"],
-	["repl", "Start interactive console: definitions stay for the next lines"],
-	["parse <code|file>", "Show the parsed program"],
-	["signature <module>", "Show a prebuilt standard module's warp.signature: its source hash, uses, definitions, rules"],
-	["data <file>", "Read untrusted data without evaluating it"],
-	["parse-code <code> <file>", "The parsed code into the file, encoded for the native warp to rebuild (its parse_code)"],
-	["lower <code|file>", "Show the program after the lowering passes"],
-	["uses <code|file>", "The standard modules it uses without their `use`, one a line (warp beautify writes them)"],
-	["debug <code|file>", "Every view of the program at once: parsed, the modules it uses unsaid, lowered"],
-	["fix <file>", "Format code and apply recommended improvements"],
-	["compile <file> [out.wasm]", "Only the module, <file>.wasm, without running"],
-	["build [--wasm|--exe] [--trim=<way>] <file>", "The executable <file> and its modules; a primitive file natively (wasm2c, cc)"],
-	["build native <file>", "A primitive file as a native executable, by wasm2c and cc"],
-	["build app <file>", "The executable as the macOS application bundle <file>.app, warp's libraries inside"],
-	["runtime [runtime.wasm]", "The runtime words compiled once, for linking programs to"],
-	["optimize <in.wasm> <out.wasm>", "The module optimized by Binaryen's wasm-opt, as warp rebuild optimizes warp.wasm"],
-	["module <name> [runtime.wasm] [<name>.wasm]", "A bundled module compiled once behind runtime.wasm, for linking programs to"],
-	["modules <folder> [runtime.wasm]", "Every standard module so, into the folder"],
-	["<file> <out.wasm> [folder [lib]]", "Compile the file to the module, as the native `warp` calls it"]
+	["help [topic]", "Show this help"],
+	# ["repl", "Start interactive console: definitions stay for the next lines"],
+	# ["parse <code|file>", "Show the parsed program"],
+	# ["signature <module>", "Show a prebuilt standard module's warp.signature: its source hash, uses, definitions, rules"],
+	# ["data <file>", "Read untrusted data without evaluating it"],
+	# ["parse-code <code> <file>", "The parsed code into the file, encoded for the native warp to rebuild (its parse_code)"],
+	# ["lower <code|file>", "Show the program after the lowering passes"],
+	# ["uses <code|file>", "The standard modules it uses without their `use`, one a line (warp beautify writes them)"],
+	["build <file>", "The executable <file> and its modules"],
+	# ["debug <code|file>", "Every view of the program at once: parsed, the modules it uses unsaid, lowered"],
+	["format <file>","lint according to formatting standards"],
+	["fix <file>","apply recommended improvements"],
+	# ["compile <file> [out.wasm]", "Only the module, <file>.wasm, without running"],
+	# ["build [--wasm|--exe] [--trim=<way>] <file>", "The executable <file> and its modules; a primitive file natively (wasm2c, cc)"],
+	# ["build native <file>", "A primitive file as a native executable, by wasm2c and cc"],
+	# ["build app <file>", "The executable as the macOS application bundle <file>.app, warp's libraries inside"],
+	# ["runtime [runtime.wasm]", "The runtime words compiled once, for linking programs to"],
+	# ["optimize <in.wasm> <out.wasm>", "The module optimized by Binaryen's wasm-opt, as warp rebuild optimizes warp.wasm"],
+	# ["module <name> [runtime.wasm] [<name>.wasm]", "A bundled module compiled once behind runtime.wasm, for linking programs to"],
+	# ["modules <folder> [runtime.wasm]", "Every standard module so, into the folder"],
+	# ["<file|folder>", "Compile the file to the module, as the native `warp` calls it"]
+	# ["<file> <out.wasm> [folder [lib]]", "Compile the file to the module, as the native `warp` calls it"]
 ]
 # the commands that run what they compile: plain WASI cannot instantiate the module
+# TODO Drastically reduce all these internal commands, none of which are used by the user (card commands-reduce)
 running_commands = ["run", "eval", "test", "verify", "fuel", "fast", "console"]
 # the commands that need the native warp's host: a server, a window, the network, the Lean model, the build files
+# TODO Drastically reduce all these internal commands, none of which are used by the user (card commands-reduce)
 native_commands = ["pure", "self", "rebuild", "tool", "fetch", "dev", "serve", "deploy", "link", "app", "docs", "wiki",
 	"home", "lsp", "start", "types", "format", "lint", "beautify", "fix"]
 
 # the commands the native warp runs itself, before warp.wasm sees them (core/native/warp.warp)
+# TODO Drastically reduce all these internal commands, none of which are used by the user (card commands-reduce)
 native_warp_commands = ["run", "pure", "self", "eval", "fast", "fuel", "rebuild", "test", "repl", "console", "start", "version", "beautify", "fix", "format", "lint", "docs", "wiki", "home", "app", "dev"]
 # set by the native warp for the compiler it hosts: the host's name
 HOST_VARIABLE = "WARP_HOST"
-natively_hosted(): bool := (env(HOST_VARIABLE) ?? "") != ""
+natively_hosted(): bool := (started_env(HOST_VARIABLE) ?? "") != ""
 # what no host of these commands has yet: under the native warp, the commands it lacks
 NOT_YET = " is not in warp yet"
 

@@ -152,6 +152,9 @@ point_placed(n: number, decimals: int): text := {
 # a number as an exact real, π to the power 0: `3 as real`, and a number meeting a real under any operator becomes one
 # first, so `3 / π` is 3/π exact (decision as-promotes)
 n: number as real := real(n, 0, 1)
+# … and a number meeting a sum, `1 - (√2 - 1)`, `1 / (√2 - 1)`, a sum of it alone first (the builtin would ask the
+# sum's dispatcher again)
+n: number as real_sum := real_sum([n])
 # the real c·√r·π^p at its simplest: the square factors of r out under the root, a plain number where no π or root is
 # left, a float of a float coefficient or a radicand past largest_exact_radicand
 real_of(coefficient: number, pi_power: number, radicand: number) := {
