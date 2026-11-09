@@ -1,12 +1,13 @@
-// The standard library module color (decision implicit-standard-words): a color is a number 0xAARRGGBB of its own type
-// (extensions/int_types), which prints as its name or as CSS writes it, #RRGGBB or #RRGGBBAA; the named colors, rgb, hsv, with_alpha and
-// alpha_of; draw paints them, arithmetic sees the number
+// The standard library module color (decision implicit-standard-words): a color is a number 0xAARRGGBB of its own type,
+// a cheap class (extensions/int_types/classes.warp, decision int-types-are-classes) that prints as its name or as CSS
+// writes it, #RRGGBB or #RRGGBBAA, and says `c as int` where its number is meant; the named colors, rgb, hsv,
+// with_alpha and alpha_of; draw paints them
 use math
 type Color = int
 opaque = 0xFF000000
 // a number as a color, color(0xFF8000) or 0xFF8000 as Color, read as CSS reads hex (decision color-text-css): six
 // digits are opaque, eight end in their alpha (0xFF800080 is half transparent); a fully transparent one is
-// with_alpha(c, 0). A value computed, `(…) as Color`, is already a color's number and only marked
+// with_alpha(c, 0). A value computed, `(…) as Color`, is already a color's number
 color(n: int): Color := (if n <= 0xFFFFFF then opaque + n else (n % 256) * 16777216 + n /! 256) as Color
 rgb(n: int): Color := color(n)
 // a CSS hex text as its color: color("#0000ff"), color("#0000ff80") with its alpha last, the short color("#00f")
@@ -48,8 +49,15 @@ channel_byte(c: Color, shift: int): int := ((c as int) >> shift) % 256
 channel_shifts = [24, 16, 8, 0]
 // the color t of the way from a to b, each channel and the alpha alike: mix(red, blue) is #800080
 mix(a: Color, b: Color, t: float = 0.5): Color := sum(channel_shifts.map(shift => (round(lerp(channel_byte(a, shift), channel_byte(b, shift), t)) as int) << shift)) as Color
+// light adding (decision color-light-adding): red + blue is #FF00FF, each channel summed and capped at 255, `-` floored
+// at 0, a color times a number scales its channels; the left color keeps its alpha
++(a: Color, b: Color): Color := channels_made(a, shift => channel_byte(a, shift) + channel_byte(b, shift))
+-(a: Color, b: Color): Color := channels_made(a, shift => channel_byte(a, shift) - channel_byte(b, shift))
+*(c: Color, f: number): Color := channels_made(c, shift => round(channel_byte(c, shift) * f) as int)
+// a's alpha and each of red, green and blue the byte gives for its shift, kept from 0 to 255
+channels_made(a: Color, byte: function): Color := ((alpha_of(a) << 24) + sum([16, 8, 0].map(shift => (clamp(byte(shift), 0, 255) as int) << shift))) as Color
 // #FF0000, and #FF000080 when not opaque, its alpha last as in CSS (decision color-text-css)
-hex_text(c: Color): text := "#" + padded_hex(c % 16777216, 6) + (if c /! 16777216 == 255 then "" else padded_hex(c /! 16777216, 2))
+hex_text(c: Color): text := "#" + padded_hex((c as int) % 16777216, 6) + (if alpha_of(c) == 255 then "" else padded_hex(alpha_of(c), 2))
 // the number 0xAARRGGBB itself
 hex(c: Color): int := c as int
 // the low digits of n in upper-case hexadecimal, zeros in front
@@ -69,5 +77,5 @@ hsv(h: any, s: any, v: any): Color := {
 	rgb((r + m) * 255, (g + m) * 255, (b + m) * 255)
 }
 // alpha from 0 (invisible) to 1 (opaque)
-with_alpha(color: any, alpha: any): Color := ((round(clamp(alpha, 0, 1) * 255) as int) * 16777216 + color % 16777216) as Color
-alpha_of(color: any): int := color /! 16777216
+with_alpha(color: any, alpha: any): Color := ((round(clamp(alpha, 0, 1) * 255) as int) * 16777216 + (color as int) % 16777216) as Color
+alpha_of(color: any): int := (color as int) /! 16777216

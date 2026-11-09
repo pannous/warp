@@ -16,7 +16,7 @@ int_types(program: Node): Node := {
 	# (the functions a conversion calls, lib/color's color(n) of `n: int as Color := color(n)`, only mark: their `as Color`
 	# calling the conversion again would never end, wherever the module's text is compiled)
 	marking = statements.filter(statement => converted_type(statement, kinds) != ø).flat_map(statement => called_words(value_of(statement)))
-	marked = group_like(program, statements.map(statement => if converted_type(statement, kinds) != ø then converter_defined(statement, kinds) else bottom_up(statement, n => int_type_used(n, kinds, if function_named(statement) in marking then [] else converters))))
+	marked = group_like(program, statements.map(statement => if converted_type(statement, kinds) != ø then converter_defined(statement, kinds, n => int_type_used(n, kinds)) else bottom_up(statement, n => int_type_used(n, kinds, if function_named(statement) in marking then [] else converters))))
 	showers = kinds.keys.filter(name => statements_in(marked).any(statement => shower_of(statement) == name))
 	if #showers == 0 { return marked }
 	statements = statements_in(marked).map(statement => if shower_of(statement) in showers then shower_renamed(statement) else statement)
@@ -43,10 +43,10 @@ converted_type(statement: Node, kinds: map): text? := {
 }
 # the conversion as the function every other `x as Color` calls, `as·Color(n: int) := body`; its own body's `as Color`
 # only marks
-converter_defined(statement: Node, kinds: map): Node := {
+converter_defined(statement: Node, kinds: map, used: function): Node := {
 	types = value_of(key_of(statement))
 	head = call_of(converter_word(name_of(value_of(types))), [Key(key_of(key_of(statement)), Op.Colon, key_of(types))])
-	Key(head, Op.Define, bottom_up(value_of(statement), n => int_type_used(n, kinds)))
+	Key(head, Op.Define, bottom_up(value_of(statement), used))
 }
 converter_word(type_name: text): text := "as" + name_joiner + type_name
 # a type's `format … as text` under its own name, format·text·Color, so that every int type has one

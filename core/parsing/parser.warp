@@ -1995,10 +1995,19 @@ def operator_method_head(p: Parser, declared: bool = false): Node {
 	if op.length == 0 or not (declared or METHOD_OPERATORS.contains(op#2)) { return ø }
 	open = p.at + op#1.length
 	if char_at(p, open) != '(' { return ø }
-	if not starts_at(p.code, ":=", blank_end(p, hole_end(p.code, open + 1, '(', ')', p.n)), p.n) { return ø }
+	close = blank_end(p, hole_end(p.code, open + 1, '(', ')', p.n))
+	typed = char_at(p, close) == ':' and char_at(p, close + 1) != '='
+	defines_at = if typed then blank_end(p, name_end(p.code, blank_end(p, close + 1), p.n)) else close
+	if char_at(p, defines_at) == '?' { defines_at = blank_end(p, defines_at + 1) }
+	if not starts_at(p.code, ":=", defines_at, p.n) { return ø }
 	p.at = open
-	parameters = group_items(expression(p, binding_powers(":=")#1 + 1))
-	call_of([symbol(if METHOD_OPERATORS.contains(op#2) then op#2 else OPERATOR_FUNCTION_PREFIX + op#1)] + parameters)
+	// (the group alone: its result type's `:` after it binds tighter than `:=`)
+	parameters = group_items(expression(p, STRUCTURE_POWERS[":"]#1 + 1))
+	head = call_of([symbol(if METHOD_OPERATORS.contains(op#2) then op#2 else OPERATOR_FUNCTION_PREFIX + op#1)] + parameters)
+	if not typed { return head }
+	// `+(a: Color, b: Color): Color := …`: its result type
+	p.at = blank_end(p, close + 1)
+	Key(head, Op.Colon, expression(p, binding_powers(":=")#1 + 1))
 }
 
 // `def ==(o) := …`: def defines no operator, its English name does, `equal(o) := …` (decision operator-english-names;
