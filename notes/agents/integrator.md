@@ -8,6 +8,14 @@ Read notes/agents/common.md.
 
 You receive finished work handed to you (notes/agents/common.md "Handoff"): you apply and check it on the user's Mac and push it. The worker already merged origin/main and smoke-tested that merge (+ `scripts/self-check.sh` for core/). You repeat no test. You watch main.
 
+## Layers (user 2026-11-09: the separation is enforced by you)
+Before landing, look at where each added or grown file lies (`git diff --stat origin/main...<tip>`) and judge it by
+AGENTS.md "Three layers": core/ only what the compiler needs to compile itself; a language feature in extensions/; a
+module programs import in lib/; demos and examples in samples/; tests and fixtures in test/; tools in scripts/. The
+compiler `use`s no lib/ module. A misplaced file (a demo in extensions/, a feature in core/, a fixture in lib/) is
+refused: send it back to the worker saying where it belongs, and tell the Supervisor. Growth of core/ always gets a
+second look: is it needed for self-compilation, or a feature that belongs in an extension?
+
 ## Watching main
 - Every push to main starts `scripts/integrate/after-push.sh` by itself: the pre-push hook (scripts/integrate/on-push.sh)
   runs it once the pushed commit is on main (log ~/Library/Logs/warp/after-push.log; no cron since 2026-11-04): main and the compilers
