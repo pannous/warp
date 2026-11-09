@@ -1,0 +1,8 @@
+# a CSS hex text as its color, and mix of two colors per channel (card hex-color-mix)
+'use color; color("#0000ff") == blue'	yes
+'use color; color("#00f") == blue'	yes
+'use color; with_alpha(color("#ff000080"), 1.0) == red'	yes
+'use color; mix(red, blue) == color("#800080")'	yes
+'use color; mix(red, blue, 0) == red'	yes
+'use color; color("#zz0000")'	error	not a hex text
+'use math; mix(1.0, 3.0, 0.25)'	1.5

@@ -1,0 +1,6 @@
+# a program ending in a registration shows no value: the handle it gives is for a name to keep (notes/events_plan.md
+# section 6 step 1, cards listener-value, frame-block-ending)
+'on every day at 21:15 {}'	ø
+'on frame { 1 }'	ø
+'on exit { 1 }'	ø
+'x = 5; on alarm { x }; x'	5

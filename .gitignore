@@ -75,7 +75,6 @@ samples/**/*.stored.json
 # the native warp `warp build native core/native/warp.warp` writes beside its source
 /core/native/warp
 
-notes/OLD/
 *.bak
 **/*.bak
 # what tests write beside themselves (a case runs in its file's folder): the sounds they render, the files they write
