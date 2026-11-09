@@ -1987,15 +1987,12 @@ def group_items(declared: Node): list {
 // The operators a class defines as methods by their glyph: `+(o) := …` is its plus, `#(n) := …` its index, `==(o)` its
 // equality (lib/aliases.warp names == equal)
 METHOD_OPERATORS = ["+", "-", "*", "/", "%", "<", ">", "==", "≈", "~", "#"]
-// the suffixes the parser reads as a call of a word, `x!` as unwrap(x): `postfix operator !(n: int) := factorial(n)`
-// overloads that word, so `5!` is 120 and `!` of another value keeps its meaning (decision bang-overloadable)
-PARSED_SUFFIX_WORDS = {"!": "unwrap"}
 
 // `+(o) := …` defines a class's method of an operator by its glyph (its plus): the head is the call `+(o)`, no unary
 // plus, no count `#`; ø where no `:=` follows the parentheses. After the keyword (`infix operator |(x: any, g:
 // function) := …`, `infix operator as(…)`, `declared`) any built-in operator, its function named as written
 // (`operator_|`): an overload by its operands' kinds (rewrites.warp operator_rules)
-def operator_method_head(p: Parser, declared: bool = false, suffix: bool = false): Node {
+def operator_method_head(p: Parser, declared: bool = false): Node {
 	op = operator_at(p)
 	if op.length == 0 or not (declared or METHOD_OPERATORS.contains(op#2)) { return ø }
 	open = p.at + op#1.length
@@ -2003,8 +2000,7 @@ def operator_method_head(p: Parser, declared: bool = false, suffix: bool = false
 	if not starts_at(p.code, ":=", blank_end(p, hole_end(p.code, open + 1, '(', ')', p.n)), p.n) { return ø }
 	p.at = open
 	parameters = group_items(expression(p, binding_powers(":=")#1 + 1))
-	word = if METHOD_OPERATORS.contains(op#2) then op#2 else if suffix and PARSED_SUFFIX_WORDS.has(op#1) then PARSED_SUFFIX_WORDS[op#1] else OPERATOR_FUNCTION_PREFIX + op#1
-	call_of([symbol(word)] + parameters)
+	call_of([symbol(if METHOD_OPERATORS.contains(op#2) then op#2 else OPERATOR_FUNCTION_PREFIX + op#1)] + parameters)
 }
 
 // `def ==(o) := …`: def defines no operator, its English name does, `equal(o) := …` (decision operator-english-names;
@@ -2031,7 +2027,7 @@ def operator_method_definition(p: Parser, word: text): Node {
 		p.at += 8
 		skip_spaces(p)
 	}
-	head = operator_method_head(p, true, FIXITY_WORDS[word] == Fixity.Suffix)
+	head = operator_method_head(p, true)
 	if head == ø {
 		p.at = start
 		return ø
