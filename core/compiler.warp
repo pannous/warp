@@ -230,8 +230,8 @@ write_runtime(file: text) := {
 # imported from `warp_runtime`, the words of the modules it uses from theirs (`warp/<module>`), its own words exported
 # by name, its global initializers the export `warp/start`. Its warp.signature (passes/signature.warp) carries what a
 # compile needs of it: its definitions' parses and its image, the words, globals and classes it exports.
-# The prelude's too, every word of it (its compile reaches no prelude of its own, compile)
-module_source(name: text): text := "use " + name + "\nø"
+# The prelude's too, every word of it, its core part's first (its compile reaches no prelude of its own, compile)
+module_source(name: text): text := (if name == PRELUDE_MODULE then "use \"${prelude_core_path()}\"\n" else "") + "use " + name + "\nø"
 # the text a compile defines its words in: the module's own when it writes one (its source is only module_source's
 # stub), else the source
 written_source(source: text): text := if module_written != "" then std_module_text(module_written) else source

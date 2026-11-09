@@ -36,8 +36,9 @@ def library_text(within: text): text := file_source(run_library() + "/" + within
 # prelude's begins with its core part, the words the compiler itself is written with
 def std_module_text(name: text): text := (if name == PRELUDE_MODULE then prelude_core_text else "") + (file_source(std_module_path(name)) ?? "")
 prelude_core_text = module_source("compiler/prelude_core.warp")
+prelude_core_path(): text := module_source_path("compiler/prelude_core.warp")
 # the files of the prelude's text, in its order (where its words' positions point)
-prelude_files(): list := [module_source_path("compiler/prelude_core.warp"), std_module_path(PRELUDE_MODULE)]
+prelude_files(): list := [prelude_core_path(), std_module_path(PRELUDE_MODULE)]
 
 # the .warp files of lib/<within> and its folders, by their paths within lib/
 def library_texts(library: text, within: text): map {
