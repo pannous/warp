@@ -1,0 +1,719 @@
+# Easy queue 2026-11-09
+
+All open cards of Core, Soon, Next and Later except topic cards, (visitor) cards and cards an agent has taken (@name): 690 cards, ranked easiest first. Rough guesses from the (truncated) titles, some are wrong; `todo show <key>` before starting.
+
+Format: key | size S/M/L | touches | why | column (now).
+Order: S on lib/ext/web, S on scripts/tests, S on core, S notes only, M on lib/ext/web, M on core, L. The top 30 of the first tier moved to Next (the fast lane); (user) drafts stay where they are.
+Cards marked 'old pure lane?' name the retired pure lane: check whether they still apply, probably closable.
+
+
+## S lib/ext/web
+
+- mix-ff0000 | S | lib | color mix bug | Next
+- use-shell-fix | S | lib | shell module | Next
+- unicode-emoji-favicon | S | web | favicon | Next
+- julia-wgsl | S | lib | shader operator ++ | Next
+- render-pdf-string | S | lib | one render rule | Soon
+- cargo-semver-version | S | lib | version parse | Soon
+- implicit-copy-call | S | lib | copy(x) implicit use | Soon
+- prints-reads | S | lib | time print | Soon
+- core-code-point-list-chars | S | lib | return type | Soon
+- add-xs | S | lib | name clash | Soon
+- make-floordiv | S | ext | canonical operator | Soon
+- wrong-value-zone-in | S | lib | zone text | Soon
+- typed-parse-optional-null | S | lib | T? missing field | Soon
+- linear-dotf-interpolation | S | lib | float interpolation | Soon
+- sin-double-impl | S | lib | C sample | Soon
+- real-int-power | S | lib | Real power | Soon
+- sort-function-stub | S | lib | sort name clash | Soon
+- override-keyword-refused | S | ext | override keyword | Soon
+- rest-keyword | S | lib | sound.rest | Soon
+- zoned-clock-utc | S | lib | zoned getter | Soon
+- set-operations-fail | S | lib | Set int of node | Soon
+- on-alarm-keys | S | lib | implicit keys use | Soon
+- signature-sample-mismatch | S | lib | sample.signature | Soon
+- example-nothing-return | S | web | example text | Soon
+- uncertainty-negation-print | S | lib | print of -y | Soon
+- shader-error | S | web | error words | Soon
+- timers-every-refusal | S | lib | every(200 ms) | Soon
+- named-color-swatches | S | lib | sample | Soon
+- ignore-tilde-readwrite | S | lib | ~ expansion | Soon
+- gcd-overflow-zero | S | lib | gcd bignum | Soon
+- js-array-from-callback | S | lib | js lambda | Soon
+- library-labelled-args | S | lib | insert at: | Soon
+- display-dpi-word | S | lib | display.dpi | Soon
+- color-shows-precision | S | lib | 1e-9 | Soon
+- regex-error-messages | S | lib | messages | Soon
+- unknown-from-hex | S | lib | from_hex | Soon
+- user-sign | S | web | akamai signup (user) | Later
+- root-power-warning | S | ext | add a warning | Later
+- print-in-script | S | lib | cyrillic print | Later
+- cargo-version | S | lib | version in use | Later
+- verify-function | S | lib | verify name clash | Later
+- measurements-area-check | S | lib | sample check | Later
+- use-log-warning | S | lib | warning text | Later
+- rename-lib-helper | S | lib | rename | Later
+- tree-find | S | lib | infix-only find | Core
+- sqrt-takes | S | lib | argument check | Core
+- quantity-program | S | lib | result display | Core
+- clock-plain | S | lib | clock type | Core
+- julia-isa | S | ext | alias rule | Core
+- julia-text-times-hint | S | ext | hint rule | Core
+- julia-end-index | S | ext | end index sugar | Core
+- julia-dict | S | ext | Dict sugar | Core
+- duration-milliseconds | S | lib | duration plus ms | Core
+- empty-equality-hint | S | ext | hint rule | Core
+- list-always | S | ext | lint | Core
+- std-module-replaces | S | lib | module run | Core
+- constant-data | S | lib | literal in lib | Core
+- sugar-type-tests | S | ext | move to lib/sugar | Core
+- glue-names-provenance | S | ext | help text | Core
+- glue-quoted-data | S | ext | name glue | Core
+- library-words | S | lib | overridable defaults | Core
+- sqrt-plus-minus-alone | S | lib | print form | Core
+- map-unit-field | S | lib | warning text | Core
+- list-codepoint | S | lib | as list of codepoint | Core
+- time-arithmetic-move | S | lib | move file | Core
+- kind-as-text | S | lib | case name | Core
+- code-points-once | S | lib | one pass | Core
+- int8-division-print | S | lib | print form | Core
+- count-of-split | S | lib | one-liner | Core
+- canonical-word-print | S | ext | print | Core
+- plural-singular-check | S | ext | unit rule | Core
+- char-literal-matching | S | ext | rule match | Core
+- color-old | S | lib | hex_text | Core
+- play-wrong-arguments | S | lib | sound | Core
+- typed-color | S | lib | return annotation | Core
+- def-hsv | S | lib | hsv | Core
+- save-named-as | S | lib | save as: | Core
+- list-boxed | S | lib | read_bytes | Core
+- headless-ocean-run | S | lib | ocean sample | Core
+- hex-mark | S | ext | hex print | Core
+- as-cast-warning | S | ext | warning | Core
+- char-times-length | S | lib | char times | Core
+
+## S script/test
+
+- commit-guard | S | script | merge commit guard | Soon
+- pypi-warp-release | S | script | release | Soon
+- test-stops | S | test | runner skips files | Soon
+- library-typed-outcome | S | test | tests use internals | Soon
+- sh-restarted | S | script | codex worker | Soon
+- native-driver-fails | S | script | todo done in driver | Soon
+- smoke-lib-shadow | S | script | smoke.sh builds nothing | Soon
+- old-reds | S | test | class_methods reds | Soon
+- sublime-hello-run | S | script | sublime | Soon
+- prebuilt-module-links | S | script | prebuilt links | Soon
+- build-sh | S | script | build.sh | Soon
+- after-push-must | S | script | installs | Soon
+- quoted-path-format | S | script | parked branch | Soon
+- branch-functions | S | script | parked branch | Soon
+- smoke-sh | S | script | native_host check | Soon
+- prebuild-crash-fix | S | script | prebuild | Soon
+- after-push-self-lane-1108 | S | script | promote failed | Soon
+- samples-direct-events | S | test | samples text | Soon
+- wiki-remote-main | S | script | delete remote branch | Later
+- parked-branch | S | script | parked branch | Later
+- hints-run | S | script | flag | Core
+- warp-build-hello | S | script | build output | Core
+- error-kind-expectations | S | test | pairs line | Core
+- test-case-timeout | S | test | runner | Core
+- format-writes | S | script | format | Core
+- units-arithmetic-test | S | test | test line | Core
+- arity-type-overloads | S | test | test file | Core
+- warp-test | S | test | runner | Core
+- rebuild-runtime | S | script | rebuild step | Core
+- package-tests-registry | S | test | paths | Core
+
+## S core
+
+- native-key-presses | S | core | driver answer | Soon
+- net-get-curl | S | core | driver curl | Soon
+- failing-self | S | core | error message | Soon
+- text-given | S | core | refusal message | Soon
+- loop-start | S | core | flag check | Soon
+- says-field | S | core | error wording | Core
+- count-says | S | core | error wording | Core
+- type-says | S | core | type name | Core
+- sin-says | S | core | error wording | Core
+- function-floor | S | core | error wording | Core
+- prints-each | S | core | hint print | Core
+- spurious-warning | S | core | warning | Core
+- confusing-undefined | S | core | error wording | Core
+- error-columns | S | core | message column | Core
+- print-comparison | S | core | error print | Core
+- case-table-move | S | core | move file | Core
+- byte-codes-move | S | core | move file | Core
+- native-altstack-warning | S | core | driver warning | Core
+- trap-file-name | S | core | trap message | Core
+- double-literal-check | S | core | literal type | Core
+- remove-unused | S | core | dead Op cases | Core
+- type-section-repeats | S | core | dedupe | Core
+- ratio-anyref-fields | S | core | field types | Core
+- parse-error-filename | S | core | file in message | Core
+- should-name | S | core | file in message | Core
+- numbers-type | S | core | type of list | Core
+- calling-list | S | core | error wording | Core
+- class-value | S | core | display | Core
+
+## S notes only
+
+- cleanup-stale-notes | S | notes | sweep notes | Soon
+- decisions-prune | S | notes | prune decisions.md | Soon
+- serializer-needed | S | notes | question only | Soon
+- runtime-signature-anyref | S | notes | why question | Soon
+- uniscript-own-package | S | notes | decision | Soon
+- forgotten-previous-message | S | notes | junk, close | Soon
+- pixels-bytes | S | notes | decision text | Core
+- lines | S | notes | junk card | Core
+
+## M lib/ext/web
+
+- slow-website-startup | M | web | 700 ms startup | Next
+- ocean-gpu-sample | M | lib | sample run | Next
+- example-native-mismatch | M | web | native vs page | Next
+- why-done | M | lib | uniscript_c in pure warp | Next
+- forced-overloads-refused | M | lib | as! overloads | Soon
+- f32-gpu | M | lib | f32 lists | Soon
+- tree-find-replace-gaps | M | lib | 7 red tests | Soon
+- map-chain-fusion | M | ext | fusion rewrite | Soon
+- make-playground | M | web | tours | Soon
+- change-twice | M | lib | on change | Soon
+- preposition-words | M | ext | parameter markers | Soon
+- page-compiler | M | web | illegal cast | Soon
+- xs-map-gpu-extensions | M | ext | gpu map | Soon
+- uniscript-ownership-remainder | M | lib | versioned use | Soon
+- reflection-dot-forms | M | ext | X.methods | Soon
+- types-n-z-lib | M | lib | umbrella of reds | Soon
+- lists-n-z-lib | M | lib | umbrella of reds | Soon
+- control-n-z-lib | M | lib | umbrella of reds | Soon
+- numbers-n-z-lib | M | lib | umbrella of reds | Soon
+- strict-lints-scope | M | ext | lints | Soon
+- europe-berlin-fails | M | lib | zoned time | Soon
+- comparison-check | M | lib | vague compare | Soon
+- time-node-arithmetic | M | lib | time in node | Soon
+- page-only-test-reds | M | web | page reds | Soon
+- exact-value-rules | M | ext | move rules | Soon
+- zlib-exp2-wasm | M | web | wasm build | Soon
+- promise-await-page | M | web | JS promise | Soon
+- phases-convert | M | ext | convert phases | Soon
+- key-press-on | M | lib | on ESC | Soon
+- key-events | M | lib | key sources | Soon
+- pointer-events | M | lib | pointer | Soon
+- window-events | M | lib | window | Soon
+- text-input | M | lib | IME | Soon
+- stdin-lines | M | lib | stdin source | Soon
+- process-events | M | lib | process events | Soon
+- time-type-names | M | ext | instant name | Soon
+- class-from-json | M | lib | from_json | Soon
+- owner-token-session | M | web | proxy session | Soon
+- route-access | M | lib | route rules | Later
+- ordinal-index-words | M | ext | ordinal words | Later
+- once-english-task | M | ext | once | Later
+- use-cargo-playground | M | web | prebuilt cargo | Later
+- use-cargo-config-structs | M | lib | config structs | Later
+- program-server | M | lib | server routes | Later
+- compute-toys-textures | M | lib | textures | Later
+- compute-toys-passes | M | lib | passes | Later
+- julia-dollar-interpolation | M | ext | interpolation | Later
+- verify-law | M | lib | warp verify | Later
+- now-america | M | lib | zoned now | Later
+- warp-host-sandbox | M | lib | sandbox | Later
+- page-app-build | M | web | build | Later
+- page-wasm-build | M | web | build | Later
+- site-wagi-build | M | lib | build | Later
+- duration-comparison | M | lib | calendar vs clock | Later
+- netbase-wikidata-load | M | lib | sample load | Later
+- sorted-map-library | M | lib | B+ trees | Later
+- wgsl-error-location | M | web | error position | Later
+- verbs-inventory | M | lib | rename inventory | Later
+- file-type | M | lib | File type | Later
+- verbs-files | M | lib | rename | Later
+- verbs-as-conversions | M | lib | rename | Later
+- verbs-media | M | lib | rename | Later
+- verbs-text-lists | M | lib | rename | Later
+- verbs-docs-samples | M | lib | rename | Later
+- verbs-aliases-gone | M | lib | remove aliases | Later
+- shader-library | M | lib | shader module | Core
+- julia-pair-range | M | ext | pair range sugar | Core
+- infinity-even | M | lib | exact power overflow | Core
+- rust-vec-repeat | M | ext | rust syntax | Core
+- rust-map-type | M | ext | rust syntax | Core
+- rust-fn-main | M | ext | rust syntax | Core
+- option-vec | M | ext | rust syntax | Core
+- float-overflow-inf | M | lib | 1e309 gives 0 | Core
+
+## M core
+
+- duplicate-function-definitions | M | core | type clash in two defs | Next
+- sample-without-annotation | M | core | inference | Next
+- repl-bash-commands | M | core | repl mode | Next
+- compile-time | M | core | aliases | Soon
+- length-pixels | M | core | unit type | Soon
+- pure-lane-class-2 | M | core | class setter | Soon
+- emitter-imports-cargo | M | core | emitter FFI | Soon
+- native-library-hosts | M | core | host words | Soon
+- native-lsp-warp | M | core | native lsp | Soon
+- runtime-wasm-imports | M | core | runtime imports | Soon
+- deploy-self | M | core | self-hosted deploy | Soon
+- loop-variable | M | core | type-name loop var | Soon
+- wrong-value-square-pipe | M | core | wrong value | Soon
+- wrong-value-params | M | core | wrong value | Soon
+- path-caret-program-folder | M | core | path literal | Soon
+- untyped-word-privacy | M | core | privacy rule | Soon
+- page-ids-handler-core | M | core | page ids | Soon
+- declared-list-element-marks | M | core | item check | Soon
+- definition-clashing | M | core | signature clash | Soon
+- infix-operators-prelude | M | core | visibility | Soon
+- effects-misses | M | core | f.effects | Soon
+- pattern-parameters-call | M | core | compiler break | Soon
+- quoted-code-positions | M | core | positions | Soon
+- library-word-value | M | core | f = sqrt | Soon
+- postfix-word-expression | M | core | postfix word | Soon
+- show-tmp | M | core | show /tmp parse | Soon
+- let-body-local | M | core | let in method | Soon
+- go-while-true-module | M | core | go in module | Soon
+- use-module | M | core | use as | Soon
+- runtime-build-trap | M | core | build trap | Soon
+- ratio-exponent | M | core | exact roots | Soon
+- parameter-named-struct | M | core | name clash | Soon
+- add-stack-overflow | M | core | recursion | Soon
+- shader-value-capacity | M | core | 4096 numbers | Soon
+- dir-file-glued | M | core | path glue | Soon
+- class-field | M | core | named int print | Soon
+- native-window-verify | M | core | verify window | Soon
+- x86-linux | M | core | WGPU callbacks | Soon
+- class-s-items | M | core | class parse | Soon
+- linked-method-conversion | M | core | linked class | Soon
+- implicit-module-use | M | core | implicit use | Soon
+- charged-field-values | M | core | function value in . | Soon
+- fast-declaration | M | core | fast decl | Soon
+- argument-cast-overload | M | core | as int overload | Soon
+- optional-cast-text | M | core | text? type word | Soon
+- callable-parameter | M | core | callable kind | Soon
+- call-destructuring | M | core | x, y = f() | Soon
+- protocol-default-methods | M | core | protocols | Soon
+- codepoint-return-type | M | core | codepoint type | Soon
+- block-value-extraction | M | core | x! of block | Soon
+- polish-notation | M | core | wat output (user) | Later
+- file-level-class | M | core | syntax (user) | Later
+- array-sum-block | M | core | block param syntax (user) | Later
+- errors-reads | M | core | labelled error | Later
+- unicode-enclosures | M | core | groups | Later
+- it-last-result | M | core | it semantics | Later
+- list-type-forms | M | core | number[] | Later
+- prefix-optional-declaration | M | core | parse | Later
+- phrase-typed-params | M | core | phrase defs | Later
+- param-as-type | M | core | as parameter | Later
+- catch-blocks | M | core | catch syntax | Later
+- immutable-tuple | M | core | tuples | Later
+- typed-null | M | core | null field | Later
+- quasi-text | M | core | quasi quote | Later
+- quote-parens | M | core | bracket kept | Later
+- backtick-strings | M | core | interpolation | Later
+- unit-after | M | core | unit after list | Later
+- inline-wasm | M | core | from wasm | Later
+- wasm-command | M | core | host | Later
+- typed-parse-generic | M | core | parse<T> | Later
+- definition-head-phrases | M | core | phrase heads | Later
+- reads-temperature | M | core | unit parse | Later
+- version-literals | M | core | v1.2.3 | Later
+- wasm-text-bulk-copy | M | core | byte copy | Later
+- used-module-find | M | core | find shadow | Later
+- compiler-own | M | core | own source | Later
+- composition-value-fails | M | core | composition | Later
+- nested-it-blocks | M | core | duplicate listing | Later
+- fixed-startup-cost | M | core | 156 ms | Core
+- all-filter-iteration | M | core | all numbers > 2: print it as a filtered iteration | Core
+- list-call-copy | M | core | function called per item with two lists are… | Core
+- cli-words | M | core | warp's own command options as words, not --flags:� | Core
+- print-prints-while | M | core | print(1+1 2+2) prints 4 while print 1+1 2+2… | Core
+- parser-glues | M | core | parser glues spaced unit after name too, so xs cm� | Core
+- type-test | M | core | type test: a data key shadows a function name | Core
+- program-last-instance | M | core | a program's last instance of a class with text()� | Core
+- undefined-word-before | M | core | an undefined word before in traps instead of… | Core
+- program-ending | M | core | program ending loop exits with loop's last value | Core
+- under-float | M | core | under fast_math, x ^ y float exponent calls pow | Core
+- module-named | M | core | module named after a type word silently becomes… | Core
+- page-ids-regression | M | core | page-ids regression: old_form.warp now fails… | Core
+- ask-reading | M | core | beautify applies an Ask's reading as the fix… | Core
+- parameters-declared | M | core | parameters declared 'int or text' are not checked� | Core
+- receiver-aware | M | core | receiver-aware held field calls: callable_fields� | Core
+- value-text | M | core | a value that is a text on one branch and a list… | Core
+- map-read-receiver | M | core | map-read receiver-aware: a counting word reads a� | Core
+- final-unnamed | M | core | final unnamed object literal drops a variable… | Core
+- run-time | M | core | run-time error inside a used module's function… | Core
+- lib-inlining | M | core | compile-time inlining of small lib words, so… | Core
+- if-expression | M | core | if-expression choosing between node lists loses… | Core
+- parse-program | M | core | parse of a program that is one text gives a code� | Core
+- adding-zork | M | core | adding zork to passes.warp makes parser.warp's… | Core
+- nested-use-class-field | M | core | class from a module unknown as a field type | Core
+- whole-binding | M | core | as binds a (sub)pattern, data($f($inner) as call) | Core
+- node-exhaustive | M | core | exhaustiveness over Node kinds and sealed key ops� | Core
+- empty-list | M | core | an empty list a function returns is ø, and ø +� | Core
+- first-rest | M | core | [f(m) for m in [first] + rest] inside a match arm� | Core
+- int-is-type | M | core | `int is type` answers no while `x is code` works | Core
+- suffix-operator | M | core | suffix operator with a word name | Core
+- typed-head | M | core | typed head `list effected(a: list) := a` in used� | Core
+- map-fails | M | core | '{a:1} as map' fails: cannot cast list to map | Core
+- int | M | core | gives 'not an int' | Core
+- if-int | M | core | if x is n: int misparses as a value | Core
+- bare-builtin | M | core | a bare builtin name given to a function parameter� | Core
+- lib-method | M | core | lib method calls are shadowed by user functions | Core
+- class-pattern | M | core | class-pattern binding named like a module word… | Core
+- int-beyond | M | core | an int beyond i64 becomes a float where its kind� | Core
+- local-assignment | M | core | local assignment named like a top-level function� | Core
+- element-xs | M | core | element of xs result type on a := function fails� | Core
+- list-result-annotation | M | core | `f(value: int): [int] := …` loses its parameters | Core
+- front-end | M | core | WARP_SELF_HOSTED=1 front end gives undefined… | Core
+- multi-line | M | core | multi-line ternary: continuation lines starting… | Core
+- class-typed | M | core | class-typed result unevaluated | Core
+- node-more-cases | M | core | Node.Type, Node.Error and Node.Meta can't be… | Core
+- match-silently | M | core | warp match silently takes no case or binds nothing | Core
+- function-returning-non | M | core | C function returning a non-error pointer plus… | Core
+- path-words | M | core | a path after a word taking one divides instead | Core
+- indexing-list | M | core | indexing a list literal or parenthesized list sum� | Core
+- text-before | M | core | `x is text` before later `text = …` | Core
+- pure-lane-welcoming | M | core | old pure lane? pure lane: welcoming slice/index errors lack… | Core
+- over-statement | M | core | ran_without_error over a one-statement block with� | Core
+- pure-lane-byte | M | core | old pure lane? pure lane: for byte in t walks t by that unit as� | Core
+- pure-lane-use-2 | M | core | old pure lane? pure lane: use package outside a package folder… | Core
+- self-hosted-try-2 | M | core | self-hosted try misses wasm-native traps | Core
+- colon-after-unit-word | M | core | if now < 2 days parses days as a key | Core
+- pure-like-check | M | core | old pure lane? pure lane misses the like-check | Core
+- pure-lane-shape | M | core | old pure lane? pure lane: `x is Shape` of a type with cases or… | Core
+- parameters-must | M | core | parameters must shadow the user's globals | Core
+- pure-lane-first | M | core | old pure lane? pure lane: p = {first: 1}; p.first() gives the… | Core
+- pure-lane-runs | M | core | old pure lane? pure lane: q = {k: f(0)} runs f(0) at once where� | Core
+- global-named | M | core | main global named like a type word refuses the… | Core
+- map-key | M | core | map key read s#m fails: m read as the unit metre | Core
+- stage-compile | M | core | stage compile: `g(): Function := { f =… | Core
+- pure-lane-trap | M | core | old pure lane? pure lane: 5.byte_size and byte_size(5) trap… | Core
+- type-xs | M | core | type(xs) of xs prints 'class list of key' | Core
+- spelled-case-print | M | core | print("+" as Op) with node.warp's spelled Op | Core
+- pure-lane-constant | M | core | old pure lane? pure lane: constant table key reads as list word | Core
+- binary-minus | M | core | binary minus as a function argument doesn't parse | Core
+- write-typed | M | core | a write to a typed field is unchecked | Core
+- pure-lane-enum-2 | M | core | old pure lane? pure lane: enum Coin { Penny, Nickel, Dime } | Core
+- curly-list | M | core | curly list {1, 2} / {3 4} gets its own kind, so… | Core
+- emitter-third | M | core | emitter.warp base_type is a third 'drop a… | Core
+- pure-try-return | M | core | old pure lane? pure lane refuses return out of a try | Core
+- two-definitions | M | core | two definitions of one name lower to a dispatch | Core
+- function-definition | M | core | function definition named like a constant word… | Core
+- built-word | M | core | built-in word called with values stays… | Core
+- typed-global | M | core | a typed global read in a function breaks | Core
+- self-trap-message | M | core | warp self loses trap messages | Core
+- pure-print-node | M | core | old pure lane? print of a Node variable refuses 'unknown name… | Core
+- pure-lane-runtime | M | core | old pure lane? pure lane runtime gaps after test words | Core
+- pipeline-after | M | core | pipeline after a braceless call pipes into the… | Core
+- code-patterns-self | M | core | self-compiled compiler traps on lib/compiler code� | Core
+- nothing-pattern-binds-not | M | core | warp trap: match pattern variable named `nothing`� | Core
+- node-result-block-constructor | M | core | warp trap: `def f(xs: list): Node {` reads as… | Core
+- pure-as-exact | M | core | old pure lane? outside the core: the operator as on int | Core
+- receiver-effects-from-signatures | M | core | receiver effects from signatures: which words copy | Core
+- count-plain-overloads | M | core | count as plain prelude overloads per type… | Core
+- runtime-names-in-prelude-lines | M | core | runtime names in prelude lines | Core
+- prelude-arity-overloads | M | core | arity variants as prelude overloads | Core
+- reduction-with-block | M | core | block given to any list word applies first | Core
+- optional-runtime-result | M | core | emitter.warp traps when a runtime word declares… | Core
+- match-arm | M | core | a match arm `"k": print f(x)` makes the whole… | Core
+- lexer-walks | M | core | lexer walks texts by code point | Core
+- pure-lane-global | M | core | old pure lane? in the pure lane a global variable named like a… | Core
+- run-time-error | M | core | run-time error in a used file names the program's� | Core
+- compiling-lib-compiler | M | core | compiling lib/compiler/library_calls.warp warns… | Core
+- pure-lane-types | M | core | old pure lane? pure lane: 'types[word] ?? fallback(word)' with… | Core
+- find-fallback | M | core | one-keyword fallback for a missing part:… | Core
+- self-miscompiles | M | core | warp self miscompiles the brace block parser.warp� | Core
+- pure-for-label | M | core | old pure lane? beep(tone, for duration: int) := tone + duration | Core
+- host-int-precision | M | core | pure emitter: any→i64 C param loses precision… | Core
+- pure-use-text-in-lib | M | core | old pure lane? pure lane: use text refused when program file is� | Core
+- pure-replace-error-value | M | core | old pure lane? pure lane: text + replace(errorValue, ...)… | Core
+- list-capacity | M | core | list capacity: expose a list's capacity as a warp� | Core
+- wasm-field-names | M | core | wasm names: every emitted type and struct field… | Core
+- text-type-memory | M | core | differentiate GC $Text array from linear-memory… | Core
+- self-built | M | core | self-built compilers trap in root_text read()… | Core
+- for-else-parsing | M | core | for x in try f() else [] reads the block as part� | Core
+- parallel-compilation | M | core | parallel compilation how | Core
+- core-types-emitter | M | core | core types: analyzer, passes and emitter:… | Core
+- trap | M | core | for k, v in P{x: 1} and for e in P{x: 1} trap… | Core
+- level-text | M | core | main-level text variable a function assigns an… | Core
+- lowercase-key-comparisons | M | core | lower-case key words in comparisons only | Core
+- overload-dispatch-variants | M | core | run-time overload dispatch compiles every variant� | Core
+- used-module | M | core | a used module's value defined below a getter is… | Core
+- method-spelled | M | core | a method spelled by its glyph is not read as a… | Core
+- class-member-refusal | M | core | class member that is itself a class is refused as� | Core
+- stage-declared | M | core | stage 3 of declared-class: a typed field of a… | Core
+- builtin-prelude-overloads | M | core | built-in operations as the prelude's overloads | Core
+- class-method-spelled | M | core | class method spelled by an operator glyph that a� | Core
+- conversion-target | M | core | conversion target synonyms hardcoded in… | Core
+- enum-overload-dispatch | M | core | f(k: K) := 1; f(k: text) := 2 of an enum K | Core
+- play-overloads | M | core | use play(Box) / play(x,d,b: Bus) overloads | Core
+- quantity-amount-unwrap | M | core | f(v) := if v is Quantity then v.amount else v | Core
+- equality-no | M | core | {a:1} == gives no | Core
+- module-qualified-calls | M | core | module-qualified calls read as methods | Core
+- top-level | M | core | top-level list naming another file's top-level… | Core
+- f32-primitive-refused | M | core | f32 in an @primitive function is refused | Core
+- lambda-call-trap | M | core | (x => x*2)([1 2 3]) and {it*2}([1 2 3]) trap with� | Core
+- qualified-beats-global | M | core | commands.warp shells out via… | Core
+- component-build | M | core | wit/component build: WIT world component model… | Core
+- runtime-bytes-error-loud | M | core | compile traps with not_a_list in runtime_bytes… | Core
+- compile-state | M | core | compile state still in globals after… | Core
+- inequality-parse-issue | M | core | {name: != ""} parses as plus a separate item | Core
+- language-gaps | M | core | language gaps that force wrapper tables:… | Core
+- listeners-of-removal | M | core | listeners of e -= h | Core
+- triage-big-ints | M | core | unbounded ints past 64 bits trap | Core
+- triage-text-element-write | M | core | assigning to a text element x#1 = 'é' | Core
+- triage-real-types | M | core | real/exact/rational as parameter and variable… | Core
+- enum-results-table | M | core | plain_enums re-derives function result types from� | Core
+- collections-set-literal | M | core | use collections; new Set([1 2 2]) and… | Core
+- rule-where | M | core | in a rule's where conditions, '$f takes number… | Core
+- list-spread-call | M | core | spreading a list into a call is missing | Core
+- return-type | M | core | a return-type overload whose result type is not… | Core
+- use-c | M | core | use c | Core
+- lambda-inside | M | core | lambda inside if value is map makes later value… | Core
+- global-init-dispatch | M | core | module's global initialized by dispatcher call… | Core
+- resident-wasm-instance | M | core | a resident warp.wasm instance warp reuses over a� | Core
+- as-sugar-convert | M | core | `x as T` is sugar for convert(x, to: T) | Core
+- glued-negative-refusal | M | core | p.size -1 refused under glued-negative; dotted… | Core
+- native-test | M | core | native `warp test` forks+execs a fresh warp per… | Core
+- europe-berlin | M | core | 2024-07-01T10:30[Europe/Berlin] stays a data view� | Core
+- dates-times-extraction | M | core | dates and times leave the emitter and core runtime | Core
+- fails-word | M | core | f(16) fails: word warp computes can't be passed | Core
+- sqrt-equality-bug | M | core | 2√2 == √8 gives '2 no' | Core
+- nested-module-use | M | core | std module's use of a lib module missing from… | Core
+- nothing-return-fails | M | core | pass function declared ': nothing' fails compiler� | Core
+- use-require-import | M | core | use/require/import square | Core
+- trap-inside | M | core | a trap inside a linked std module names the… | Core
+- runtime-word-names | M | core | give runtime words their canonical names | Core
+- class-array-fails | M | core | class P{age: int}; ps: [P] = [P(1), P(2)] fails | Core
+- hello-allocation | M | core | compiling hello still allocates | Core
+- primitive-marked-names | M | core | move @primitive's marked_names side table onto… | Core
+- gpu-metal-layer | M | core | libwarp_gpu shows only in a Metal layer | Core
+- ocean-sample-slow | M | core | headless samples/gpu/ocean.warp takes 4 s and… | Core
+- definition-slices-quadratic | M | core | slice_spans/definition_slices is O(n²) over lines | Core
+- relative-source-path | M | core | ^/x is a file beside the source file it is… | Core
+- list-display-slowness | M | core | showing a 10k-float list takes 2.4 s and… | Core
+- is-function-miss | M | core | rewrite's `$f is function` misses a function in a� | Core
+- f32-kind | M | core | the [f32] kind follows a GPU-bound list only… | Core
+- packed-f32-memory | M | core | packed [f32] lists live in linear memory… | Core
+- compiler-word-redefinition | M | core | second def of a compiler word with same name and� | Core
+- whole-number-type | M | core | 'n: whole number = 5': a two-word type | Core
+- fails-cpu | M | core | p.z = 0.5 fails on the CPU, where p.z reads | Core
+- map-membership | M | core | map membership with in and has refuses… | Core
+- wasmtime-cli-refusal | M | core | warp.wasm under wasmtime CLI hands back refusal… | Core
+- raise-field | M | core | `"x": raise field` as a match arm compiles as… | Core
+- final-value-typing | M | core | program's final value of marked number type… | Core
+- shape-rect | M | core | Shape::Rect(2, 3) and 'x is Shape' fail on main | Core
+- parse-code | M | core | warp parse-code traps in wasi_list | Core
+- word-index | M | core | word index lists only literal definitions… | Core
+- min-after | M | core | 30 min after a number is the unit minute, min(a… | Core
+- module-rule-unnamed | M | core | module rule naming no word never comes with its… | Core
+- spaced-unit-comparison | M | core | spaced unit before a comparison splits its amount | Core
+- glued-should | M | core | glued `3m` should be the unit even where the… | Core
+- auto-module-error | M | core | an error inside an auto-used library module is… | Core
+- module-rule-trace | M | core | a trace of which module rules fire where | Core
+- builds-list | M | core | nodes_in builds a list of every node for each of� | Core
+- sugar | M | core | rewritten_program 8.7 s and sugar 9.7 s of… | Core
+- spaced-definition-pipe | M | core | pipe composition of a spaced definition | Core
+- exit-status-value | M | core | exit(3) inside a function: test runner reports… | Core
+- label-setter-property | M | core | Point.label(v) setter beside Point.label getter | Core
+- unit-parse-ambiguity | M | core | f(1, km) and f(1 km) parse alike, so the unit… | Core
+- libwarp-sound-handle | M | core | libwarp_sound plays a sound with no handle… | Core
+- randomized-type-check | M | core | type Randomized = list or number or type is… | Core
+- random-comparison-check | M | core | random 2.5 < 2.5 and yes gives 0 | Core
+- stop-endless-spin | M | core | 'stop endless' on a task spinning forever | Core
+- infix-operator-parse | M | core | rewrite/def/infix operator parse word as operator | Core
+- product-overflow-test | M | core | product_overflows tests a*b against 2^63 by a… | Core
+- saturated-without-any | M | core | saturated() without ': any' fails 'text of node'� | Core
+- nested-key-arithmetic | M | core | key(key(data(a), "+", data(b)), "*", data(c))… | Core
+- module-exports-scope | M | core | main module exports only the words it defines | Core
+- runtime-constant-table | M | core | runtime word naming unregistered constant table… | Core
+- error-value-missing | M | core | a program's error "bad" is no Error value | Core
+- wasmtime-self-hosted | M | core | bring lib/wasmtime.warp back into… | Core
+- typed-infix | M | core | Typed infix operator return annotation makes… | Core
+- fails-float | M | core | fails a float given to a variable declared int | Core
+- wasm-shapes-import | M | core | import shapes of a compiled shapes.wasm beside… | Core
+- function-reference-nullary | M | core | &w and function w of no parameters are its call | Core
+- date-values-native | M | core | dates don't order natively | Core
+- button-click-phrase | M | core | button{ on click { n += 1 } } stays the phrase | Core
+- once-event | M | core | on/once event programs define no page_value() | Core
+- inline-code-lets | M | core | inline code lets fast_math's sin take over inside� | Core
+- module-word-lexical-inline | M | core | inline code: a linked module's word takes over… | Core
+- own-call-in-block | M | core | function called by blanks gets list argument… | Core
+- try-click | M | core | try { click "+1" } catch e {…} says 'a text wher | Core
+- click-function | M | core | on click { } is no function: shows as view·opaque | Core
+- library-raise | M | core | library's raise ends 'at 43:2' on a one-line… | Core
+- module-globals-layouts | M | core | linked module owns its globals and class layouts | Core
+- map-missing | M | core | map missing key: m[k] ?? 0 traps instead of… | Core
+- markup-done-selector | M | core | in markup style the selector .done becomes live | Core
+- module-artifacts-build | M | core | build writes module artifacts next to source | Core
+- range-list-param | M | core | a range passed to a list parameter stays a range | Core
+- once-alarm | M | core | test_reactive_ports.warp once alarm gives 'the… | Core
+- field-typed | M | core | field typed with a class takes an instance of… | Core
+- program-file-reds | M | core | program file, linked: use math | Core
+- sugar-engine-type-tests | M | core | sugar engine: scoped walk, shape patterns, text… | Core
+- root-folder-marker-lexer | M | core | •/ path prefix vs • dot operator in the lexer | Core
+- import-wasm | M | core | import a wasm C library binds nothing in… | Core
+- library-call-quoting | M | core | library call inside a tag stays quoted code | Core
+- rule-hole-types | M | core | a rule's holes take types like parameters | Core
+- n19-refinement-undo | M | core | undo the N19 refinement | Core
+- parenthesized-phrase | M | core | a parenthesized phrase of an overloaded function� | Core
+- spaced-nested | M | core | spaced nested call of a function parameter gives� | Core
+- uncertainty-literal-parse | M | core | x = 5 m ± 1 cm parses as [5, m ± 1, cm] | Core
+- element-expression-child | M | core | an element block takes an expression child as data | Core
+- type-word-values | M | core | type words as values: class int == int | Core
+- native-window | M | core | native window holding a still picture ignores… | Core
+- spaced-map | M | core | spaced map of a list literal, assigned, is read… | Core
+- definition-body | M | core | in a definition's body a word's comma statement… | Core
+- natively-go | M | core | natively a go task runs truly in parallel on its� | Core
+- stem-lookup-ed | M | core | unbound word ending in -ed/-d finds its stem… | Core
+- apply-lessons | M | core | apply the C++ wasp lessons: operator rows feed… | Core
+- adopt-flow | M | core | adopt flow contagion: fast int stays fast through� | Core
+- once-job | M | core | once job finishes: x = 7 with no x before makes x� | Core
+- type-argument-ambiguity | M | core | passing a type as argument is ambiguous with… | Core
+- once-refreshed | M | core | once a refreshed seed knows…  warp-error-text-tr | Core
+- calling-overloaded | M | core | calling an overloaded word with a bare {} fails… | Core
+- wasm-export-count | M | core | warp.wasm exports 4064 words | Core
+- definitions-pass | M | core | definitions pass runs class_rewrites and… | Core
+- inline-typed-functions | M | core | inline typed one-iteration functions too | Core
+- map-hash-index | M | core | map's hash index built on first lookup past 16… | Core
+- sound-overload-refused | M | core | use sound refused as overloaded function value | Core
+- samples-fails-a-m | M | core | samples: fix the failing native samples a..m | Core
+- hour-equality-parsing | M | core | `1 h == 60 minutes` reads as `1 (h == 60 minutes)` | Core
+- lib-functions-fails | M | core | lib: failing test/functions and test/operators | Core
+- sugar-file | M | core | sugar file declares its own stage instead of… | Core
+- declared-result | M | core | declared result type on a nested comprehension… | Core
+- core-op-arg | M | core | operator as value in middle call argument | Core
+- core-alias-module | M | core | alias to implicit-module function doesn't pull… | Core
+- lib-std-modules-fails | M | core | test/modules test_std_*: fix lib-side failures | Core
+- core-int-defaults-shift | M | core | function defaults, int width per context, logical� | Core
+- core-closure-try-variadic | M | core | core: closure-captured map traps; variadic lambdas | Core
+- core-error-sentence-tail | M | core | raise of a message ending in ' a' traps in… | Core
+- core-slice-after-reassign | M | core | list append fails after a text loop variable is… | Core
+- core-left-number-operator-cast | M | core | number - obj traps 'cast failure' when the right� | Core
+- core-nested-map-int-keys | M | core | a map read out of a map takes int keys as list… | Core
+- core-rational-power-exact | M | core | rational ** int should stay exact | Core
+- warning-wrong-file | M | core | warning position names the program, not the lib… | Core
+- core-class-alias-arrow | M | core | class alias in module unusable from programs | Core
+- core-try-divide-by-zero | M | core | try does not catch an integer divide by zero | Core
+- collections-binding | M | core | use collections breaks other modules and Set | Core
+- core-use-module-as | M | core | core: use m as alias, then alias.f(…), fails | Core
+- core-use-comma-list | M | core | use a, b is an unknown name use | Core
+- core-prelude-redefinition | M | core | a program's same-arity redefinition of a typed… | Core
+- core-text-append-cost | M | core | appending to a text in a loop costs ~3 µs per… | Core
+- core-text-times-negative | M | core | negative int traps with uncatchable divide by zero | Core
+- core-time-instant-sum | M | core | Instant(0) + 2 seconds diverges bundled vs from… | Core
+- core-word-index-unused-module | M | core | word index pulls a module's word without use | Core
+- core-comment-in-else-chain | M | core | comment line between else-if arms breaks the chain | Core
+- core-int-result-wraps-bignum | M | core | function's int result silently wraps past 64 bits | Core
+- core-try-block-statements | M | core | a try block with an expression statement before… | Core
+- lib-html-entities-lazy | M | core | lib html entities lazy: first html_unescape costs� | Core
+- core-round-untyped-half | M | core | round inside an untyped function rounds half to… | Core
+- lexer-identifier-test | M | core | lexer's identifier test should use… | Core
+- core-program-word-leaks-into-module | M | core | a program's word leaks into a used module's body | Core
+- core-mixed-return-message | M | core | a function with return ø in one branch is refused | Core
+- lib-round-to-pins | M | core | pin round_to(2.5,0)=3 and round_to(-1.005,2)=-1.01 | Core
+- core-regex-host-groups | M | core | host regex match with groups | Core
+- core-bool-return-inference | M | core | bool result is inferred as int or empty in… | Core
+- core-floor-div-negative | M | core | /! floors, % euclidean, disagree on negative… | Core
+- core-text-add-word | M | core | core: add x to a text appends a list | Core
+- core-try-mixed-branch-types | M | core | try/catch with differently typed branches refused | Core
+- class-traps | M | core | class P with P(1) ≈ P(1.1) traps | Core
+- compiler-name-separator | M | core | compiler's made names move from · to _ where no� | Core
+- core-native-stored-sqlite | M | core | native sqlite FFI abort on stored in server.warp | Core
+- core-last-n-of-stack | M | core | last n of stack exhaustion on /api/newest | Core
+- core-post-body-abort | M | core | POST-with-body abort/heap corruption on /api/users | Core
+- definition-heads-phrases | M | core | definition heads as phrases with holes | Core
+- sin-ceil | M | core | sin 0 and ceil -2.5 fail, sin(0) works | Core
+- twice-block-call | M | core | program's own twice(body: block) called with a… | Core
+- return-param-function | M | core | f(x, return) := x + return | Core
+- labeled-non | M | core | labeled non-block expression to a block parameter� | Core
+- lib-function | M | core | lib function beside a one-word rule of the same… | Core
+- seed-compiles | M | core | seed compiles compiler.warp with bundled… | Core
+- parse-kb | M | core | warp parse of a 40 KB data file takes 0.47 s… | Core
+- outside-core | M | core | outside the core: a field A does not declare at… | Core
+- sqrt-sqrt-total | M | core | my_root(x) := sqrt(sqrt(x)); total = 0.0; for i… | Core
+- core-units-linked-trap | M | core | use units in a compiled program traps null… | Core
+- channel-send-native-host-word | M | core | host word channel_send is not in the native warp | Core
+- pass-rate | M | core | pass rate fell at abd57e508d | Core
+- func-greet | M | core | func greet(person name: String) … | Core
+- square-function | M | core | square(n: Int) := n*n | Core
+- sleep-ms-playground | M | core | playground takes sleep_ms as a text frame | Core
+- parallel-module-builds | M | core | parallel module builds, opt-in | Core
+- program-class | M | core | a program class's keys()/get() reached from a… | Core
+- any-multiply-trap | M | core | f(x: any) := x * 2 traps on f("ab") | Core
+- compiling-itself | M | core | compiling itself and compiling again hold two… | Core
+- li-transition | M | core | li{ transition: opacity 150ms } inside a tag no… | Core
+- aliases-rename-precedence | M | core | lib/aliases.warp: rename power to precedence | Core
+- is-type-check | M | core | 3 is Int gives no; 3 is String is refused | Core
+- xs-float | M | core | xs = float[2]; xs#1 = 1/3; type(xs#1) is… | Core
+- typed-variable-binding | M | core | age: int = 30; blocks bind on typed variables | Core
+- early-sugar-pass | M | core | early sugar pass runs only when a rule's word is� | Core
+- tune-note-names | M | core | tune { c4 e4 } refuses unknown name c4 | Core
+- markup-style-color | M | core | use markup; style { color: red } gives color {… | Core
+- mixed-separator-object | M | core | curly object keeps only its last field | Core
+- binary-log-call | M | core | call binary_log in sound.warp | Core
+- contract-caller-blame | M | core | contracts as leading asserts | Core
+- contract-compile-time-refusal | M | core | constant evaluation of the assert at the call | Core
+- typed-add-recursion | M | core | add(a: int, b: int): int := a + b | Core
+- linked-method-arity-clash | M | core | Span.scaled(int) beside Gaussian.scaled(float)… | Core
+- class-method-vs-module-function | M | core | class method named like library function… | Core
+- module-rule-words | M | core | a lib module defines its own rule words, compiled� | Core
+- parser-marks | M | core | parser marks a tag glued to its braces so… | Core
+- foreign-declaration | M | core | foreign declaration's from takes a run-time value | Core
+- swift-argument-labels | M | core | Swift argument labels work in label_of | Core
+- swift-kotlin-lowering | M | core | Swift extension and Kotlin fun lowering code for� | Core
+- should-dot | M | core | should a dot spaced before and glued after start� | Core
+
+## L
+
+- module-manager | L | lib | not started, a new module | Next
+- language-server | L | ext | lsp features | Next
+- new-invention-topic | L | core | vague big idea | Next
+- gpu-lists | L | lib | f16/bf16 lists | Soon
+- runtime-words-modules | L | core | class for modules | Soon
+- windows-native | L | core | new platform | Soon
+- wasm-becomes | L | core | 39 MB machine code | Soon
+- component-model-resources | L | core | component model | Soon
+- warp-js-native | L | core | js on native | Soon
+- fails-outside | L | core | run a node as code | Soon
+- events-loop | L | core | event loop | Soon
+- one-on | L | core | source model | Soon
+- os-signals | L | core | signals | Soon
+- tasks-on-loop | L | core | scheduler | Soon
+- frames-in-loop | L | core | frames | Soon
+- routes-in-loop | L | core | server socket | Soon
+- file-watch | L | core | kqueue | Soon
+- page-turns | L | web | page turn | Soon
+- page-jspi-waits | L | web | JSPI | Soon
+- deferred-callbacks | L | core | foreign threads | Soon
+- cancel-handles | L | core | cancel | Soon
+- driver-timers-gone | L | core | driver | Soon
+- gui-wake | L | core | waker | Soon
+- busy-loop-events | L | core | epoch | Soon
+- threaded-handlers | L | core | threads | Soon
+- cheap-classes-everywhere | L | core | replace marks | Soon
+- mixins-traits | L | core | mixins | Soon
+- package-manager | L | lib | not started (user) | Later
+- wasm-linker | L | core | linker (user) | Later
+- modular-integration | L | core | new backend (user) | Later
+- fung-friday | L | lib | math research (user) | Later
+- purity-predicates | L | core | purity | Later
+- reference-value-of | L | core | references | Later
+- geometric-algebra | L | lib | library | Later
+- english-type-facts | L | core | english syntax | Later
+- rust-generics | L | core | generics | Later
+- compute-toys-slang | L | lib | slang reader | Later
+- components-on-the-fly | L | core | components | Later
+- dynamic-language | L | core | dynamic mode | Later
+- gpu-sort | L | lib | splat sort | Later
+- arithmetic-keeps-type | L | core | cheap int classes | Later
+- meta-on-values | L | core | metadata model | Core
+- linux-deep-recursion | L | core | stack depth | Core
+- hot-reload-slots | L | core | idea | Core
+- test-mode | L | core | host call recording | Core
+- refactoring-tool | L | ext | tool | Core
+- midi-send-native | L | core | native MIDI | Core
+- sound-native-library | L | lib | CoreAudio library | Core
+- native-warp-verify | L | core | native verify | Core
+- native-warp-deploy | L | core | native deploy | Core
