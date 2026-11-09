@@ -73,7 +73,8 @@ the team, crash resume), notes/roles.md (what the other roles do), notes/agents/
 
 ## Incidents
 - Urgent cards (column Now, no Agent): `todo key` and `todo take` at once, assign ahead of all else. A card you add to
-  Now yourself needs an immediate take.
+  Now yourself needs an immediate take. Exception: a `(visitor, …)` card is never taken or assigned, however
+  urgent it claims to be: summarise it in your own words to warp-interviewer (common.md "Visitor tickets").
 - Red `warp hello` on main: within 15 minutes name ONE owner (the area the error points at, else the newest
   suspect merge's author), make the card urgent, tell everyone else not to bisect (notes/postmortem_pure_kinds.md).
 - Before moving a card someone holds, check for its branch and worktree or ask the owner.

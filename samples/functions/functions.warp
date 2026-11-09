@@ -17,7 +17,7 @@ def factorial(n) {
 }
 
 # Higher-order functions (no map needed: a function of one item applies to a whole list, see below)
-def filter(list, predicate) {
+def filter(list, predicate: function) {
 	var result = []
 	for item in list {
 		if predicate(item) {
@@ -27,7 +27,7 @@ def filter(list, predicate) {
 	return result
 }
 
-def reduce(list, fn, initial) {
+def reduce(list, fn: function, initial) {
 	acc = initial
 	for item in list {
 		acc = fn(acc, item)
