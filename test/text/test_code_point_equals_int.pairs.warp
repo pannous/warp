@@ -1,4 +1,4 @@
 # a character equals its code point (user decision 2026-11-06, card core-code-point-list-chars)
-'xs = code_point_list("ab"); [xs#1 == 97, xs#1 == '\''a'\'', xs#2 == 97]'	[yes, yes, no]
-"'a' == 97"	yes
-"'a' < 98"	yes
+«xs = code_point_list("ab"); [xs#1 == 97, xs#1 == 'a', xs#2 == 97]»	[yes, yes, no]
+«'a' == 97»	yes
+«'a' < 98»	yes
