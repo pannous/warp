@@ -1202,6 +1202,16 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
     Order: after named-int; bool last, measured (conditions are hot), typed places keep raw values as for [Color].
     Each type's printed form is only its own overload of `format … as text` (`format Hex h as text := …`); no type-specific print code.
   - sugar-program-place (Interviewer, small core bug fix, card sugar-program): sugar_applied applies the `where program` (Place.Program) rules the extension layer already declares, so a program ending in `on alarm {…}` no longer prints its listener number.
+  - tests-roadmap core batch (user, 11-09, notes/tests_triage.md): text-element-write OK (core), its tests rewritten idiomatically
+    (`k#1 = 'z'`, a char); nested-it-blocks parked as an edge case; charged-field-values: tests rewritten to idiomatic forms
+    (`class P { n: int; double := n*2 }; P(3).double` already works), core only for what still fails after; call-destructuring
+    OK (`x, y = f()`); fast kept and fixed (fast-scope); mixins-traits: design discussion now; run-time `x!`: the user asks to
+    link the existing compiler rather than ship one with the program (in discussion).
+  - inner-assignment-refused (user, card steps-inside): `n = 1; f() := { n = 2 }` is refused, naming `let n = …` (f's own) and
+    `global n = …` (main's); no warning-and-local guess. Sources relying on the warning get a `let` (counted first).
+  - reflection-dump-tests (Interviewer, follows reflection-definition): test_reflection_words:65,67,69,73 say `.definition`.
+  - name-shadows-overload (FYI warp-parsing-finish, card color-power-variant): any name a definition or lambda binds hides an
+    overloaded library function of that name, as parameters already did.
   - bf16-f8-shaders (user, 11-08, card bf16-storage, after f16): a shader declares `array<bf16>` / `array<f8>` and indexes `xs[i]` as if native; lib/shaders rewrites it to array<u32> plus unpack/pack helpers (2 bf16 or 4 f8 a word), as it already rewrites shader words and holes. Plain `[f8]` is e4m3 (max 448, no ∞); `[f8e5m2]` only when a program needs it.
   - class-types-checked (user, 11-08): a class that extends another is checked by name: a T place takes only T or its subclasses (`f(d: Length) := d; f(5s)` is refused "f takes a Length, not 5s (a Time)"); a standalone class keeps the fit by fields, now really checked (`a: A = B(1)` refused when B lacks A's fields). At compile time where known, else on entry. An extension, no core.
   - bare-number-to-unit (user, 11-08, with length-pixels): `f(d: Length) := d; f(5)` is 5m: a bare number reaches a unit place by the unit's declared number conversion, as `5 as Length` does.
