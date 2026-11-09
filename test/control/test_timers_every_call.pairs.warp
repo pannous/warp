@@ -1,0 +1,4 @@
+# every(period, f) is timers' call of a timer, its period a Time; of a list every stays the prelude's all (card
+# timers-every-refusal)
+'use timers; n = 0; id = every(100 ms, () => { n += 1; if n == 3 { exit(0) } }); id > 0'	yes
+'use timers; every([1, 2], x => x > 0)'	yes
