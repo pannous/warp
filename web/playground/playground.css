@@ -109,6 +109,7 @@ main { display: grid; grid-template-columns: var(--guide-width, minmax(16rem, 26
 .cm-s-default .cm-string { color: #2f8a3d; }
 .cm-s-default .cm-number, .cm-s-default .cm-atom { color: #b5590a; }
 .cm-s-default .cm-keyword { color: var(--keyword); }
+.cm-s-default .cm-def { color: inherit; font-weight: bold; }
 .cm-s-default .cm-soft-keyword { color: var(--soft-keyword); }
 .cm-s-default .cm-type { color: var(--hint); }
 @media (prefers-color-scheme: dark) { .cm-s-default .cm-string { color: #8bd17c; } .cm-s-default .cm-number, .cm-s-default .cm-atom { color: #f0a54a; } .cm-s-default .cm-variable { color: var(--ink); } }
