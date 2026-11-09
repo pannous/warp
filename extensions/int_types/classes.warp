@@ -14,7 +14,10 @@ int_classes(program: Node): Node := {
 	statements_as(program, statements.map(statement => int_class_statement(statement, classes, converters)))
 }
 # `type Color = int`: Color, else ø
-int_class_name(statement: Node): text? := if value_of(statement) == symbol("int") then int_type_name(statement) else ø
+int_class_name(statement: Node): text? := {
+	name = int_type_name(statement)
+	if name != ø and value_of(statement) == symbol("int") then name else ø
+}
 int_class_statement(statement: Node, classes: map, converters: list): Node := {
 	name = int_class_name(statement)
 	if name != ø { return plain_node(parsed("class " + name + " { value: int; float() := value }")) }
