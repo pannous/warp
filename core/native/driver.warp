@@ -90,9 +90,11 @@ PROGRAM_MEMORY_SLOT = 5
 # whether the run linked unicode (canonical_text), the native host module (host_export), at these places of its block
 UNICODE_LINKED_AT = 32
 HOST_LINKED_AT = 40
+# the GC heap the run's engine starts with: a module it links keeps its machine code for that heap (instance_defined)
+HEAP_BYTES_AT = 48
 # a run's channel listeners (lib/channels.warp), in its block past those: how many, then each one's
 # id, the bytes of its channel's file read so far, its name's length and the name
-LISTENERS_AT = 48
+LISTENERS_AT = 56
 LISTENERS_MAX = 32
 LISTENER_BYTES = 128
 LISTENER_NAME_BYTES = 104
@@ -793,7 +795,7 @@ instance_defined(linker: handle, engine: handle, context: handle, name: text, pa
 		complain(joined(joined(joined("the program links ", name), ", but there is no "), path))
 		exit(1)
 	}
-	compiled = compiled_module(engine, module, machine_code_file(path, PROGRAM_GC_HEAP_BYTES), trap)
+	compiled = compiled_module(engine, module, machine_code_file(path, run_heap_bytes()), trap)
 	instances_linked(linker, engine, context, compiled, linked, library, trap)
 	host_words_defined(linker, engine, context, compiled, module, guarded, trap)
 	checked(wasmtime_linker_define_unknown_imports_as_traps(linker, compiled), trap)
@@ -846,7 +848,7 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	text_kept(linked, "")
 	outer_run = kept_value(RUN_SLOT)
 	if outer_run == 0 { timers_forgotten() }
-	keep_value(RUN_SLOT, run_state(linker, engine, linked, context) as i64)
+	keep_value(RUN_SLOT, run_state(linker, engine, linked, context, heap_bytes) as i64)
 	instances_linked(linker, engine, context, compiled, linked, library_folder(), trap)
 	host_words_defined(linker, engine, context, compiled, module, yes, trap)
 	checked(wasmtime_linker_define_unknown_imports_as_traps(linker, compiled), trap)
@@ -877,10 +879,10 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	wasm_engine_delete(engine)
 	failure
 }
-# a run's linker, engine, linked-instances cell and store context, and whether it linked unicode and the native host
+# a run's linker, engine, linked-instances cell, store context and GC heap size, and whether it linked unicode and the native host
 # module yet, kept in the run's block: what a host word allocates is given back when it returns (foreign.c
 # warp_host_callback)
-run_state(linker: handle, engine: handle, linked: pointer, context: handle): pointer := {
+run_state(linker: handle, engine: handle, linked: pointer, context: handle, heap_bytes: i64): pointer := {
 	run = allocate((LISTENERS_AT + 8 + LISTENERS_MAX * LISTENER_BYTES) as i32)
 	long_at(run + LISTENERS_AT as i32).value = 0
 	long_at(run).value = linker
@@ -889,9 +891,11 @@ run_state(linker: handle, engine: handle, linked: pointer, context: handle): poi
 	long_at(run + 24).value = context
 	long_at(run + UNICODE_LINKED_AT as i32).value = 0
 	long_at(run + HOST_LINKED_AT as i32).value = 0
+	long_at(run + HEAP_BYTES_AT as i32).value = heap_bytes
 	run
 }
 run_context(): handle := long_at(kept_value(RUN_SLOT) as i32 + 24).value
+run_heap_bytes(): i64 := long_at(kept_value(RUN_SLOT) as i32 + HEAP_BYTES_AT as i32).value
 # the export `name` of the standard module `module_name` into `function`, no when it has none: the module linked into
 # the run at the first ask, never at its start, so a run that never asks links none; whether it did is kept at `flag`
 # of the run's block. A program linked to a runtime gets the module of that runtime's library; a module without one
