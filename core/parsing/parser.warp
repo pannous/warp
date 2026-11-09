@@ -145,6 +145,7 @@ def operator_statement(words: list): OperatorStatement? {
 	if position < 2 { return ø }
 	// the offset of `:=`, where the head ends
 	define = position - 1
+	if glyph_headed(words#1) { return operator_statement(["operator"] + words) }
 	if not (words#1 in FIXITY_WORDS) { return operator_pattern(words, define) }
 	start = if words#1 != "operator" and define > 1 and words#2 == "operator" then 2 else 1
 	keyword = words#start == "operator"
@@ -173,6 +174,14 @@ def says_it(word: text): bool {
 		at += 1
 	}
 	false
+}
+// `+(a: Color, b: Color) := …` (decision color-light-adding): an operator's glyph with its parameters heads the
+// operator's definition, `operator +(…)`
+def glyph_headed(first: text): bool {
+	end = 0
+	while end < first.length and first[end] != '(' { end += 1 }
+	glyph = first[0 .. end]
+	end > 0 and end < first.length and (SYMBOL_OPERATORS.get(glyph) != ø or is_definable_glyph(glyph))
 }
 // `a ⊕ b := …`: an infix operator declared by a pattern of two plain names around its glyph
 def operator_pattern(words: list, define: int): OperatorStatement? {
