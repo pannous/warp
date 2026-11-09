@@ -18,7 +18,8 @@ float_of_node(n: Node): float := {
 		converted = instance_float(n)
 		if not is_null(converted) { return float_of_node(converted) }
 	}
-	if kind_code(n) != Kind.Int { return unboxed_float(n) }
+	if is_null(n) or kind_code(n) == Kind.Float { return unboxed_float(n) }
+	if kind_code(n) != Kind.Int { not_a_number() }
 	if is_plain_int(n) then float(unboxed_int(n)) else extended_float(n)
 }
 # `x.bytecount`: the bytes of a text's or character's UTF-8, 8 an item of a list or map; an error has none

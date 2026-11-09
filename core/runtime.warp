@@ -4,7 +4,6 @@
 # Its parts, one idea each, are the files core/runtime/*.warp the `use` lines name; the words of each used
 # file come after this one, in the order of the lines.
 # The case tables of upper and lower
-use case_tables
 use "runtime/instructions.warp"
 use "runtime/walks.warp"
 use "runtime/text.warp"

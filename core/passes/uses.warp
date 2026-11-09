@@ -2,7 +2,7 @@
 # that file, read from the program's folder; each used file once, the files it
 # uses ahead of it. A `use` naming no file of the folder (`use os`, a std module) stays as written, a used file's too,
 # so prelude_words.warp brings the words reached of that module.
-use os
+use "../host_io.warp"
 use "walk.warp"
 use "../parsing/parser.warp"
 use "scope.warp"
@@ -366,7 +366,7 @@ REGISTRY_CLONE = "/.cache/warp/packages/.registry/"
 package_file(name: text, folder: text): any := {
 	if is_module_name(name) or names_no_module(name) { return ø }
 	root = project_root(folder)
-	places = (if root == ø then [] else [root + "/packages/"]) + [(env("HOME") ?? "") + REGISTRY_CLONE]
+	places = (if root == ø then [] else [root + "/packages/"]) + [(started_env("HOME") ?? "") + REGISTRY_CLONE]
 	found = places.map(place => place + name + "/" + name + module_extension).filter(file => file_text(file) != ø)
 	if #found > 0 then found#1 else ø
 }
