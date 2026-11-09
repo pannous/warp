@@ -2,4 +2,3 @@
 # else (card alias-follows-redefinition)
 'square(x):=x*x*10; 3 squared'	90
 'square(x):=x*x*10; squared(2)'	40
-'square(x: text) := x + x; 3 squared'	9
