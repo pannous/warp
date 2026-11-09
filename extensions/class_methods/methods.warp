@@ -317,7 +317,8 @@ methods_lifted(program: Node): Node := {
 # class gives its instances, as if the class declared it (as_operator_method); the class's name, else ø
 operated_class(n: Node, classes: map, operator_table: map): text? := operand_class(n, 1, classes, operator_table)
 # the class the operator definition's operand at that place (1 or 2) declares, else ø
-operand_class(n: Node, place: int, classes: map, operator_table: map): text? := {
+operand_class(typed: Node, place: int, classes: map, operator_table: map): text? := {
+	n = result_untyped(typed)
 	word = defined_word(n)
 	if word == ø or spelled_operator(operator_table, word) == ø { return ø }
 	parameters = method_parameters(n)
@@ -328,15 +329,19 @@ operand_class(n: Node, place: int, classes: map, operator_table: map): text? := 
 # `*(k: number, v: V) := …` outside a class, its first parameter no class's: the operator with an instance on the right,
 # the class's method `*·reflected(k)` (decision operators-are-functions): `4 * v` calls it before any swap or the builtin
 reflected_class(n: Node, classes: map, operator_table: map): text? := operand_class(n, 2, classes, operator_table)
-as_reflected_method(n: Node, operator_table: map): Node := {
+as_reflected_method(typed: Node, operator_table: map): Node := {
+	n = result_untyped(typed)
 	parameters = method_parameters(n)
 	instance = key_of(parameters#2)
 	Key(call_of(reflected_name(spelled_operator(operator_table, defined_word(n))#2), [parameters#1]), Op.Define, bottom_up(value_of(n), part => if part == instance then self_node else part))
 }
 reflected_name(glyph: text): text := glyph + REFLECTED_MARK
 REFLECTED_MARK = "·reflected"
+# `+(a: C, b: C): C := …` as `+(a: C, b: C) := …`: an operator's result is its dispatcher's, any value
+result_untyped(n: Node): Node := if is_key(n, Op.Define) and is_key(key_of(n), Op.Colon) and is_called_name(key_of(key_of(n))) then Key(key_of(key_of(n)), Op.Define, value_of(n)) else n
 # that definition as its class's method, its first parameter the instance
-as_operator_method(n: Node): Node := {
+as_operator_method(typed: Node): Node := {
+	n = result_untyped(typed)
 	parameters = method_parameters(n)
 	instance = key_of(parameters#1)
 	Key(call_of(defined_word(n), parameters[1..]), Op.Define, bottom_up(value_of(n), part => if part == instance then self_node else part))
