@@ -634,12 +634,47 @@ function_definition(name: Node, program: Node): any := {
 	if #found == 0 then ø else found#1
 }
 defines(statement: Node, name: text): bool := defined_name(statement) == name or (is_key(statement, Op.Assign) and key_of(statement) == symbol(name) and is_lambda(value_of(statement)))
-# `{name: "f", code: data [definitions], values: {sun: sun, …}}`: a function of the program with what it reaches,
-# quoted for a reader at run time (lib/shaders.warp, decision shaders-in-lib): its definition and those of the program
-# functions it calls, transitively, and the program values they name, each read anew where the map is made; ø for a
-# name the program defines no function of
+# the modules a shader may quote: the program's `use`s and the modules those use, never a standard module (math's
+# cosine is a WGSL word; quoting its body would hide that word). Their bodies are not in the program yet:
+# rules_rewritten runs before modules_used (passes.warp used_passes)
+quoted_modules(program: Node): list := {
+	seen = {}
+	order = []
+	pending = level_statements(program).map(use_target).filter(used => used is symbol).map(name_of)
+	while #pending > 0 {
+		module = pending.last
+		pending = pending[0 ..< #pending - 1]
+		if not seen.has(module) {
+			seen[module] = yes
+			if module not in std_module_names {
+				source = used_module_text(module)
+				if source != "" {
+					order += [module]
+					pending += used_modules(source)
+				}
+			}
+		}
+	}
+	order
+}
+# the program's statements, then those modules', so a function the program defines stays its own and one it only
+# uses is still found
+with_quoted_modules(program: Node): Node := {
+	modules = quoted_modules(program)
+	if #modules == 0 { return program }
+	extra = []
+	for module in modules { extra += level_statements(early_sugared(plain_node(parsed(used_module_text(module))))) }
+	if #extra == 0 { return program }
+	separated(bracketed(level_statements(program) + extra, ""), ";")
+}
+# `{name: "f", code: data [definitions], values: {sun: sun, …}}`: a function with what it reaches, quoted for a reader
+# at run time (lib/shaders.warp, decision shaders-in-lib): its definition and those of the functions it calls,
+# transitively, in the program or in a module it uses, and the values they name, each read anew where the map is made;
+# ø where nothing defines such a function, or where the program assigns the name as a value
 definitions_reached(f: Node, program: Node): any := {
-	if function_definition(f, program) == ø { return ø }
+	if function_definition(f, program) == ø and main_level_value(name_of(f), program) != ø { return ø }
+	brought = with_quoted_modules(program)
+	if function_definition(f, brought) == ø { return ø }
 	definitions = []
 	values = []
 	reached = {}
@@ -649,11 +684,11 @@ definitions_reached(f: Node, program: Node): any := {
 		pending = pending[0 ..< #pending - 1]
 		if not reached.has(word) {
 			reached[word] = yes
-			definition = function_definition(symbol(word), program)
+			definition = function_definition(symbol(word), brought)
 			if definition != ø {
 				definitions += [definition]
 				pending += nodes_in(definition).filter(n => n is symbol).map(name_of)
-			} else if main_level_value(word, program) != ø { values += [word] }
+			} else if main_level_value(word, brought) != ø { values += [word] }
 		}
 	}
 	read = if #values == 0 then Node.Empty else List(values.map(word => Key(symbol(word), Op.Colon, symbol(word))), Bracket.Curly, Separator.Comma)
