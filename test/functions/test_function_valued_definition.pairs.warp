@@ -2,6 +2,6 @@
 # braceless call of any argument (card pipe-number-argument)
 'f := x => x*2; f(3)'	6
 'square(x) := x*x; h := square & square; h(3)'	81
-'square(x) := x*x; h := square | text; h(3)'	"9"
+'square(x) := x*x; inc(x) := x+1; h := square | inc; h(3)'	10
 'square(x) := x*x; square 3 |> text'	"9"
 'square(x) := x*x; square 3 |> text |> size'	1
