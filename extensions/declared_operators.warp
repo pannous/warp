@@ -4,7 +4,7 @@
 # operator_⊕. The parser keeps what its passes read too: the one statement reader operator_statement (decision
 # one-operator-reader), aliases, methods.
 OPERATORS_SCAN = "declared_operators"
-declared_operators_extension = Extension{name: "declared_operators", prescans: {"declared_operators": scanned_operators}, infix_readers: [read_declared_infix], prefix_readers: [read_declared_prefix], glyph_owners: [declares_glyph], keyword_readers: {"operator": read_declaration, "infix": read_declaration, "prefix": read_declaration, "suffix": read_declaration, "postfix": read_declaration}}
+declared_operators_extension = Extension{name: "declared_operators", prescans: {"declared_operators": scanned_operators}, infix_readers: [read_declared_infix], prefix_readers: [read_glyph_definition, read_declared_prefix], glyph_owners: [declares_glyph], keyword_readers: {"operator": read_declaration, "infix": read_declaration, "prefix": read_declaration, "suffix": read_declaration, "postfix": read_declaration}}
 
 # the suffixes the parser itself reads as a call of a word, `x!` as unwrap(x): `postfix operator !(n: int) :=
 # factorial(n)` overloads that word, so `5!` is 120 and `!` of another value keeps its meaning (decision
@@ -19,6 +19,21 @@ def suffix_word_overload(p: Parser, word: text): Node := {
 	method = operator_method_definition(p, word)
 	if method == ø { return ø }
 	Key(call_of([symbol(PARSED_SUFFIX_WORDS[spelled#1])] + items_of(key_of(method))[1 ..]), Op.Define, value_of(method))
+}
+
+# `+(a: Color, b: Color): Color := …` (decision color-light-adding): a statement headed by an operator's glyph and its
+# two parameters is that infix operator's definition, `operator +(…)`; a class's operator method `+(o) := …` and a
+# glyph's value `∞() := …` stay as they are. The glyph before `(` the cheap test first
+def read_glyph_definition(p: Parser): Node := {
+	end = p.at
+	while end < p.n and not is_name_char(p.code[end]) and not is_blank(p.code[end]) and p.code[end] != '(' { end += 1 }
+	if end == p.at or end >= p.n or p.code[end] != '(' { return ø }
+	glyph = p.code[p.at .. end]
+	if SYMBOL_OPERATORS.get(glyph) == ø and not is_definable_glyph(glyph) { return ø }
+	words = statement_words_at(p)
+	position = words.index_of(":=")
+	if position < 2 or not words[0 .. position - 1].join(" ").contains(",") { return ø }
+	operator_method_definition(p, "")
 }
 
 # the operators this parse knows

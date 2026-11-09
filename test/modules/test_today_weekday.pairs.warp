@@ -1,0 +1,5 @@
+# today.weekday and now.weekday are a Weekday, Monday … Sunday (card weekday-day-implement)
+«today.weekday in [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]»	yes
+«now.weekday == today.weekday»	yes
+«day = Saturday; match day { Saturday | Sunday => "weekend"; other => "workday" }»	"weekend"
+«Weekday(1)»	Monday

@@ -82,6 +82,8 @@ class Instant {
 	year() := date_of(wall()).year
 	month() := date_of(wall()).month
 	day() := date_of(wall()).day
+	// the day of the week on its wall clock: now.weekday is Monday … Sunday
+	weekday() := Weekday(weekday_of_day(day_number(wall())))
 	hour(): int := wall() % 86400000 /! 3600000
 	minute(): int := wall() % 3600000 /! 60000
 	second(): int := wall() % 60000 /! 1000
@@ -136,7 +138,14 @@ day_number(ms: int): int := ms /! 86400000
 public date_of(ms: int) := civil_from_days(day_number(ms))
 // ISO weekday: Monday 1 … Sunday 7
 weekday(ms: int): int := (day_number(ms) + 3) % 7 + 1
-public today() := date_of(clock())
+// the days of the week in ISO order, Monday 1 … Sunday 7: `match today.weekday { Saturday | Sunday => "weekend" }`
+enum Weekday { Monday = 1, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday }
+// today's date on the run's wall clock as {year, month, day, weekday}
+public today() := {
+	wall = now().wall()
+	date = date_of(wall)
+	{year: date.year, month: date.month, day: date.day, weekday: Weekday(weekday(wall))}
+}
 public add_days(ms, n) := ms + n * 86400000
 days_between(from, to): int := day_number(to) - day_number(from)
 two_digits(n): text := if n < 0 then "-" + two_digits(0 - n) else if n < 10 then "0" + n else "" + n
