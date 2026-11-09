@@ -214,6 +214,16 @@ known_as(value: Node, type: text, places: Places, known: map): bool := {
 	given != "" and union_members(type).any(member => places.classes.has(member) and descends_from(given, member, places.classes))
 }
 descends_from(name: text, ancestor: text, classes: map): bool := name == ancestor or (classes.has(name) and classes[name].parent != "" and descends_from(classes[name].parent, ancestor, classes))
+# the functions defined more than once, each declaring its result, `render(t) as pdf := …` beside `… as docx`: read
+# before the definitions pass normalizes the heads (arity_overloads.warp overloaded_results reads them after)
+several_results(statements: list): map := {
+	found = {}
+	for statement in statements {
+		call = definition_call(statement)
+		if call != ø and call#1 is symbol and (is_key(key_of(statement), Op.As) or is_key(key_of(statement), Op.Colon)) { found[name_of(call#1)] = (found.get(name_of(call#1)) ?? 0) + 1 }
+	}
+	without_keys(found, found.keys.filter(name => found[name] < 2))
+}
 # the types of the program's `x: T = v`
 declared_types(program: Node): list := nodes_in(program).filter(n => is_key(n, Op.Assign) and is_key(key_of(n), Op.Colon) and key_of(key_of(n)) is symbol and value_of(key_of(n)) is symbol).map(n => name_of(value_of(key_of(n))))
 
@@ -256,7 +266,7 @@ conversions(program: Node): Node := {
 		# (a class checked with no conversions to it: a copy, `x as C` converts only to targets)
 		converting_to = entries_of_both(targets, {})
 		for name in classes.keys { if not targets.has(name) { converting_to[name] = [] } }
-		places = Places(typed_parameters(kept, converting_to, aliases), converting_to, classes, overloaded_results(program))
+		places = Places(typed_parameters(kept, converting_to, aliases), converting_to, classes, several_results(kept))
 		converting = {}
 		for type in places.typed.values.flatten() + declared_types(program) { if converts_to(type, places.converting) { converting[type] = yes } }
 		functions += converting.keys.map(type => argument_conversion(type, places.converting, classes))
