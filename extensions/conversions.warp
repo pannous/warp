@@ -107,7 +107,8 @@ argument_conversion(type: text, places: map, classes: map): Node := {
 	passes = members.map(member => [member, it])
 	conversions = members.filter(member => places.has(member)).flat_map(member => places[member].map(conversion => [conversion#1, call_of(conversion_name(member) + "·" + conversion#1, [it])]))
 	steps = class_first(passes + conversions)
-	checked = members.filter(member => classes.has(member))
+	# (a union naming any refuses nothing: lib/time's lasting_of(d: Duration or any) of 24 hours, card zoned-europe)
+	checked = if any_word in union_members(type) then [] else members.filter(member => classes.has(member))
 	refused = call_of(place_refusal_word, [it, symbol(taker_name), Text(type)])
 	passed = if checked then chosen(Key(symbol(taker_name), Op.Eq, Text("")), it, refused) else it
 	for member in checked.filter(member => classes[member].parent == "").reverse() { passed = chosen(fields_fit(it, classes[member].fields), it, passed) }
