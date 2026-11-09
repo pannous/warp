@@ -1173,4 +1173,4 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
     (phrase-params); branch definition-head-phrases 2cfd2e22c5 dropped, card to Later with its tip noted.
   - vitals-links-outside-core (Interviewer at night, core-is-self, card vitals-module-compile): Vitals counts linked vs
     from-source module words from the existing "compiled from source" warnings in full-suite.sh's output; no telemetry
-    globals or env switch in core. A silent fallback becomes a warning instead.
+    globals or env switch in core. Moot since module-link-hard-error (no fallback exists); the card closed as obsolete.
