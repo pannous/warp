@@ -1,0 +1,5 @@
+# a module used or included by a path literal, unquoted, as by its quoted path (decisions path-literals-preferred,
+# path-type; cards shader-quote-path-uses, colors-package-import)
+'use ./own_mix.warp; mix(1, 3, 0.5)'	2
+'include ./own_mix.warp; mix(1, 3, 0.5)'	2
+'use ../../packages/colors/colors.warp; to_hex(from_hex("f80"))'	'#ff8800'

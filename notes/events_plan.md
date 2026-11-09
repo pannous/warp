@@ -141,9 +141,9 @@ until wait is -1 or the deadline passed.
 - Occurrences from outside are handled at wait points: after main's last line (a listening program ends in
   `events_end`, one ending in place of exits_end, frames_end, tasks_end and routes_end), inside `sleep`, `await` and a
   channel's `receive` (each turns the loop until its deadline or its completion), and after each painted frame
-  (paint is a frame's wait). The user rejected wait points alone: a busy loop must see its timers too. Recommended
-  for that (section 7, D): natively, wasmtime's epoch interruption turns the loop at wasmtime's own checks (each loop
-  header and function entry) when a source is due, on main's thread; the page keeps the wait points.
+  (paint is a frame's wait), and at every loop start through one compiled flag check, only in programs that listen
+  (card loop-start), so a busy loop sees its timers too, natively and in the page alike. A host thread does the
+  waiting and only queues. Wasmtime epochs may replace the native check later (busy-loop-events).
 - A handler runs to its end before another starts. Its own wait points turn the loop nested, but a source whose
   handler runs is held: never re-entered, its repeats coalesce (Rust's timer-handler rule, for every source).
 - `emit` inside a program stays a synchronous call (P163: `1 + emit ask` uses the handler's value), as the DOM's
@@ -199,10 +199,10 @@ calls at the place of the call or the write, in declaration order: `test() := pr
 be ok" }; test()` prints "will be ok", then "ok", always, natively and in the page. Only occurrences from outside go
 through the loop's queue. These hooks are never parallel (`before test go {…}` is refused).
 
-### Same thread and parallel (discussed with the user 2026-11-09, not decided yet)
-Proposal: a plain `on …` handler runs on the program's thread (wait points, plus epoch safe points if Q1 picks D) and
-sees every variable. A parallel handler is asked for with the decided task word, `on every 1 s go {…}` (spelling
-open), and runs on its own thread at once with main (decision tasks-parallel): its own instance and heap, so it touches
+### Same thread and parallel (decided: threaded-handlers, user 2026-11-09)
+A plain `on …` handler runs on the program's thread (its waits and loop starts) and sees every variable. A parallel
+handler is asked for with the decided task word, `shared n = 0; on every 50 ms go { n += 1 }` (card
+threaded-handlers; simple native cases first, the page stays cooperative), and runs on its own thread at once with main (decision tasks-parallel): its own instance and heap, so it touches
 only `shared` variables (atomic, decision lib-oddities); the compiler refuses any other main variable it names, with
 the fix "declare it shared" (it knows a block's reads and writes, function_reads). Texts, lists and maps cross by
 channels as copies (share by communicating). An `atomic {…}` block over several shared variables comes only when a
@@ -310,8 +310,8 @@ least 50 ms of slack and never bound a count from above by a few milliseconds.
    Tests (test/control/test_event_loop.pairs.warp):
    `'n = 0; on every 100 ms { n += 1 }; sleep 350 ms; n'	3` (0 now);
    `'d = 0; most = 0; on every 10 ms { d += 1; most = max(most, d); sleep 30 ms; d -= 1 }; sleep 200 ms; most'	1`;
-   `'n = 0; on every 50 ms { n += 1 }; t = clock(); while clock() - t < 300 {}; sleep 5 ms; n'` gives 1 under Q1 A
-   (one call however late), 5 or more under D (the busy loop ticks): written once Q1 is decided;
+   `'n = 0; on every 50 ms { n += 1 }; t = clock(); while clock() - t < 300 {}; sleep 5 ms; n'` gives 5 or more
+   once loop-start lands (the busy loop ticks), 1 before it (one call however late);
    test/native/test_events.sh: `on every 100 ms { print "tick"; exit(0) }; on exit { print "bye" }` prints tick,
    then bye (bye first now).
 3. **one-on** (lib + ext, careful). `on X {…}`: a value calls `listened(X, handler)` by X's type, a free word is a
@@ -363,7 +363,7 @@ least 50 ms of slack and never bound a count from above by a few milliseconds.
     loop go, signal_listen leaves the host words. Test: smoke, self-check, the tests above stay green.
 14. **gui-wake** (core: foreign.c, careful; later). The waker thread (section 4, C part 3): a SIGINT or a socket
     wakes a window's wait at once. Try line only (a window).
-15. **busy-loop-events** (core: driver + foreign.c, careful; if Q1 picks D). First a probe: may the store's epoch
+15. **busy-loop-events** (core: driver + foreign.c, careful; later, may replace loop-start natively). First a probe: may the store's epoch
     callback (wasmtime_store_epoch_deadline_callback) call into the store? Then: epoch interruption on for programs
     that listen, a C timer thread bumping the epoch at the next due time (wasm_engine_increment_epoch), the callback
     running one turn on main's thread. Test: step 2's busy-loop line gives 5 or more.
@@ -394,7 +394,8 @@ A card starts once the cards it names are done; cards on one line may run in par
 4. page-turns, then page-jspi-waits.
 5. key-events, pointer-events, window-events, text-input (vocabulary, after one-on and frames-in-loop).
 6. Core, each after the user's OK through the Supervisor: os-signals, then process-events; deferred-callbacks;
-   driver-timers-gone (after events-loop and page-turns); busy-loop-events (after Q1); gui-wake last.
+   driver-timers-gone (after events-loop and page-turns); loop-start (core OK given); threaded-handlers; busy-loop-events
+   (optional); gui-wake last.
 
 Later, cards that exist: natively-go and stop-endless-spin (a loop per thread); load-time-linking (components: map
 Readable to stream<u8> and Completion to future<T>, and let wasmtime's component-model-async own the wait once its C
@@ -436,19 +437,7 @@ Questions for the user, through warp-interviewer 2026-11-09:
 - cancel-timer (Q2), decided A: `t = on every 1 second {…}; cancel t`.
 - ctrl-c-runs-exit (Q3), decided A: with `on exit` and no `on interrupt`, ctrl-c and a kill run `on exit`, then the
   run ends with 130 (143 for a kill); a second ctrl-c within a second ends it at once.
-- event-delivery-points (Q1), open (the user rejected A and asked about a second thread; being discussed):
-  - A: wait points only (after main, sleep, await, receive, painted frames). The JS / libuv model.
-  - B: also a check compiled at every loop start (the Rust check points): an emitter change, a cost per iteration.
-  - C: handlers on a second thread. A wasmtime store is single-threaded and GC objects cannot cross threads
-    (shared-everything threads is an early proposal, not in wasmtime), so the handler runs a second instance with
-    its own globals: `on every 1 s { n += 1 }` would not change main's n unless n is `shared`, and every handler
-    touching main's data races with it.
-  - D, recommended: epoch safe points on main's thread. A C timer thread bumps wasmtime's epoch when a source is due;
-    wasmtime's compiled code checks it at each loop header and function entry, and the store's epoch callback runs a
-    turn before main goes on (preemption at safe points, as in Go and Erlang). No emitter change, a cost only in
-    programs that listen, ctrl-c reaches busy loops; a handler may run in the middle of one of main's updates
-    (interrupt semantics). Native only: the page's worker cannot be preempted, so it keeps A. To verify by a probe:
-    that the epoch callback may call into the store.
+- event-delivery-points (Q1) and threaded-handlers: decided, see "Decided by the user" above.
 
 Decided here by taste and evidence (an objection goes to the Interviewer): emit stays synchronous (P163); the turn's
 phase order; the keep-alive list; back-pressure by coalescing, lazy reads and bounded loud queues; monotonic periods;
