@@ -124,10 +124,10 @@ count.
 
 `use wasm` (lib/wasm.warp), served by std_io module `wasm` (warp_host/wasm_modules.rs, components.rs):
 
-    m = load_wasm("calc.wasm")          // a handle {wasm:1 path:"calc.wasm" kind:"module"}
+    m = load_wasm(./calc.wasm)          // a handle {wasm:1 path:"./calc.wasm" kind:"module"}
     wasm_call(m, "twice", [21])         // 42; m may be the path too: wasm_call("calc.wasm", "twice", [21])
     wasm_exports(m)                     // {twice:"func(i64) -> i64" divmod:"func(i64, i64) -> (i64, i64)" …}
-    c = load_wasm("rust_demo.wasm")     // a component, told by its header
+    c = load_wasm(./rust_demo.wasm)     // a component, told by its header
     wasm_call(c, "stats_of", ["hello big world"])   // {words:3 letters:13}
 
 - What load_wasm takes:
