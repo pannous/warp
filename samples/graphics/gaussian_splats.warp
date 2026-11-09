@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
 # Gaussian splatting (Kerbl et al. 2023, "3D Gaussian Splatting for Real-Time Radiance Field Rendering"): a scene made
 # of fuzzy 3D ellipsoids, each a position, a scale and a rotation (its covariance), a color and an opacity: here a
-# capture, a .splat file (lib/splats.warp), the one given or the angel beside this program (angel.splat.md).
+# capture, a .splat file (lib/splats.warp), the one given or the bee beside this program (bee.splat.md).
 # Every frame warp sorts them by their depth before the camera, and the GPU draws each as a quad around its ellipse on
 # the screen (its covariance through the camera's Jacobian), the farthest first, each blended over the ones behind it
 # (a shader with its own vertex stage: one quad an instance; the scene a storage array each of its parts).
@@ -11,11 +11,11 @@ use file
 use os
 use splats
 
-capture = if count(args) > 0 then args#1 else program.folder + "/angel.splat"
+capture = if count(args) > 0 then args#1 else program.folder + "/bee.splat"
 zoom = 1.5 # the focal length, in picture heights
 backed_off = 3.0 # the camera's distance from the scene's middle, in the scene's sizes
 nearest = 0.05 # what is nearer the camera, in the scene's sizes, is not seen
-upward = [0, -1, 0] # a capture's up: COLMAP's and so most captures' y points down
+upward = [0, 1, 0] # this capture's up: the bee is y-up. A COLMAP capture such as angel.splat has y down, [0, -1, 0]
 background = [0.05, 0.06, 0.10]
 # a Gaussian narrower than a pixel aliases: every projected one gets this much variance (in pixels²) more
 pixel_blur = 0.3
