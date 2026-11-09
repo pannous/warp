@@ -1,0 +1,6 @@
+# a function whose parameters all have defaults, written bare, is its call; passed for a function it stays the function (decision defaults-bare-call)
+'f(x = 3) := x * 2; f'	6
+'f(x = 3) := x * 2; f + 1'	7
+'f(x = 3) := x * 2; apply(g: function, v) := g(v); apply(f, 5)'	10
+'f(x = 3) := x * 2; [1, 2].map(f)'	[2 4]
+'use shell; count(ls) == count(ls("."))'	yes

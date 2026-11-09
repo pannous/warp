@@ -1349,7 +1349,7 @@ function startBugButton() {
 function bugReport() {
 	const run = reportedRun();
 	const source = $("bug-source").checked ? { code: run.code, output: run.output } : { code: "", output: "" };
-	return { ...run, ...source, comment: $("bug-comment").value, express: $("bug-express").checked, console: consoleReport(),
+	return { ...run, ...source, comment: $("bug-comment").value, express: $("bug-express").checked, quick: $("bug-quick").checked, console: consoleReport(),
 		token: stored(BUG_TOKEN_KEY) ?? ($("bug-token").value.trim() || BUG_TOKEN) };
 }
 
@@ -1367,7 +1367,7 @@ async function sendBugReport() {
 		if (!answer.ok) return showBugStatus(`not sent: ${error ?? answer.status}`, true);
 		if (report.token !== BUG_TOKEN) store(BUG_TOKEN_KEY, report.token);
 		$("bug-comment").value = "";
-		$("bug-express").checked = false;
+		$("bug-express").checked = $("bug-quick").checked = false;
 		if (card) showBugStatus("card made: ", false, card, board);
 		else showBugStatus(`sent (${queued}): a card within minutes`);
 	} catch (failure) {

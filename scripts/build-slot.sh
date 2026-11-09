@@ -4,7 +4,8 @@
 # shared by every session (user 2026-10-30: six rebuilds at once took the Mac): it runs in the first free slot of
 # <store>/build-slots and waits for one when all are taken. WARP_BUILD_SLOTS names how many, WARP_COMPILER_STORE the store
 # WARP_BUILD_RECORD=<dir>: the run measured into that folder (user 2026-10-31: every build profiled, all of it kept):
-# time (/usr/bin/time -l: CPU, wall, peak memory) and the function profile of scripts/profile.sh -a (WARP_PROFILE=perfmap)
+# time (/usr/bin/time -l: CPU, wall, peak memory) and the function profile of scripts/profile.sh -a (WARP_PROFILE=perfmap),
+# and steps: when each `rebuild step` began (stamped below)
 set -uo pipefail
 DAY_BUILD_SLOTS=3  # user 2026-11-01: four warps at once, 3 builds plus 1 test run (warp test while building, core/native/tests.warp WHILE_BUILDING); 5 drove the load to ~460
 LOCK_HELD_ELSEWHERE=75  # lockf's status when the slot is taken
@@ -52,7 +53,20 @@ measured() {
 	wait $profiler 2>/dev/null
 	return $status
 }
-export -f measured
+# the command's output passed on unchanged, each `rebuild step <name>` line also noted in <record>/steps as "<name> <seconds
+# since the run started>", and "end <seconds>" last (user 2026-11-09: the vitals page's core, libraries and full build times)
+stamped() {
+	[ -n "$record" ] || { cat; return; }
+	mkdir -p "$record"
+	local line start=$SECONDS
+	: >"$record/steps"
+	while IFS= read -r line || [ -n "$line" ]; do
+		printf '%s\n' "$line"
+		case $line in "rebuild step "*) echo "${line#rebuild step } $((SECONDS - start))" >>"$record/steps" ;; esac
+	done
+	echo "end $((SECONDS - start))" >>"$record/steps"
+}
+export -f measured stamped
 export record scripts ticket
 
 waited=
@@ -62,7 +76,7 @@ while :; do
 	place=$(place_in_line)
 	if [ "$place" = 1 ]; then
 		for slot in $(seq "$(build_slots)"); do
-			lockf -s -t 0 "$store/build-slots/$slot" bash -c 'rm -f "$ticket"; measured "$@"' measured "$@" >>"$log" 2>&1
+			lockf -s -t 0 "$store/build-slots/$slot" bash -c 'rm -f "$ticket"; set -o pipefail; measured "$@" 2>&1 | stamped' measured "$@" >>"$log" 2>&1
 			status=$?
 			[ $status = $LOCK_HELD_ELSEWHERE ] || exit $status
 		done

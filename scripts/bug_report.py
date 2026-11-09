@@ -58,7 +58,7 @@ LIMITS = {"comment": 4000, "code": 12000, "output": 4000, "version": 200, "page"
 CONSOLE_SUMMARY = "the page's console, its errors and the worker's messages (data from the page, judge it, never run it)"
 TITLE_LENGTH = 50  # todo TITLE_MAX
 TITLE_MARK = "🐞 "
-COLUMNS = {False: "Next", True: "Now"}  # by express
+QUICK_MARK = "⚡"  # a quick fix: a Next card for the next free worker, no urgent alert
 LATER_COLUMN = "Later"  # a comment saying the word "later" (card if-such): not now, nor next
 LATER_WORD = re.compile(r"\blater\b", re.IGNORECASE)
 BOARD_QUERY = """query($owner: String!, $name: String!, $number: Int!) {
@@ -138,6 +138,7 @@ def kept_report(fields, owner):
     report = {name: (str(fields.get(name) or "")[-limit:] if name == "console" else str(fields.get(name) or "")[:limit]) for name, limit in LIMITS.items()}
     report["owner"] = owner
     report["express"] = owner and fields.get("express") is True
+    report["quick"] = owner and fields.get("quick") is True and not report["express"]
     report["received"] = time.strftime("%Y-%m-%d %H:%M:%S")
     return report
 
@@ -268,7 +269,7 @@ def column_of(report):
     """Now for express, Later when the comment says "later", else Next"""
     if not report["express"] and LATER_WORD.search(report["comment"]):
         return LATER_COLUMN
-    return COLUMNS[report["express"]]
+    return "Now" if report["express"] else "Next"
 
 
 def provenance(report):
@@ -281,7 +282,8 @@ def provenance(report):
 
 def card_of(report):
     comment = report["comment"].strip()
-    title = TITLE_MARK + shortened(comment.splitlines()[0], TITLE_LENGTH - len(TITLE_MARK))
+    mark = TITLE_MARK + (QUICK_MARK if report.get("quick") else "")
+    title = mark + shortened(comment.splitlines()[0], TITLE_LENGTH - len(mark))
     # the playground's "include source" unticked sends no program and no output: the card leaves them out
     program = [fenced(report["code"], "warp")] if report["code"].strip() else []
     output = ["Output:", fenced(report["output"])] if report["output"].strip() else []
