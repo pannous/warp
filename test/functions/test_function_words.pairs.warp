@@ -19,3 +19,7 @@
 'twice(x) := x*2; twice.doc'	''
 'use math; lerp.doc'	'the value a fraction t of the way from a to b'
 'use math; gcd.doc'	''
+# a word defined several times: each definition's signature (card signature-sample-mismatch)
+'f(x: int) := 1; f(x: text) := "a"; f.signatures'	['(x: int) -> int', '(x: text) -> text']
+'sample(nr: int) as text := "seven"; sample(nr: int) as int := 7; sample.signature'	'(nr: int) -> text | (nr: int) -> int'
+'twice(x) := x*2; twice.signatures'	['(x) -> int']
