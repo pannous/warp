@@ -54,8 +54,9 @@ shape_shader = shader {
 
 // the pixels the canvas keeps here: none when they are on the GPU
 pixels_for(width, height) := if drawing_on_gpu then 0 else width * height
-// the canvas's pixels, each a Color (decision int-types-are-classes: `canvas_pixels[4] == red`), none drawn yet
-blank_pixels(count: int) := filled_list(count, with_alpha(black, 0))
+// the canvas's pixels before anything is drawn, each 0; a drawn one is a Color (decision int-types-are-classes:
+// `canvas_pixels[4] == red`)
+blank_pixels(count: int) := filled_list(count, 0)
 
 // canvas(width, height) sizes the window too (card window-canvas-size), which then shows the canvas pixel for pixel
 def canvas(width, height) {
