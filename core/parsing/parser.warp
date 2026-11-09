@@ -105,7 +105,7 @@ def bang_words(source: text): list {
 // front stage 5× slower (card front-stage-5x-slower)
 global prelude_bangs = ø
 def prelude_bang_words(): list {
-	if prelude_bangs == ø { prelude_bangs = bang_words(prelude_text) }
+	if prelude_bangs == ø { prelude_bangs = bang_words(prelude_text()) }
 	prelude_bangs
 }
 
@@ -217,7 +217,7 @@ def source_operator_statements(source: text): list := if source.contains(":=") t
 // parse needs them
 global math_statements = ø
 def math_operator_statements(): list {
-	if math_statements == ø { math_statements = operator_statements(code_statements(math_text)) }
+	if math_statements == ø { math_statements = operator_statements(code_statements(math_text())) }
 	math_statements
 }
 // the aliases among statements

@@ -1,54 +1,9 @@
 // The prelude (notes/stdlib.md §8): words every program has without `use`; only those it calls come along.
 // Each is `name(parameters) := body` (modules::prelude_word_arity reads the parameters); library_words maps other
-// spellings and method forms onto them (`isdigit(c)`, `xs.first()`, `round(x, 2)` → round_to)
+// spellings and method forms onto them (`isdigit(c)`, `xs.first()`, `round(x, 2)` → round_to). The builtins' signatures,
+// `upper(t: text): text from warp`, are the core's (core/analysis/builtins.warp)
 
-// The words warp computes itself, the emitter's runtime functions, with their signatures (decision
-// foreign-signature, `from warp`); a parameter with a default may be left out (`s.split` splits at spaces). A word
-// of several lines is overloaded by its first parameter's type, whose line gives the call's result (card typed-builtins)
-upper(t: text): text from warp
-lower(t: text): text from warp
-reverse(xs: list): list from warp
-reverse(t: text): text from warp
-sort(xs: list): list from warp
-sort(t: text): text from warp
-split(t: text, separator: text = ø): list of text from warp
-join(xs: list, separator: text): text from warp
-chars(t: text): list of text from warp
-code_point_list(t: text): list of int from warp
-ord(c: codepoint): int from warp
-map_keys(m: map): list from warp
-map_values(m: map): list from warp
-map_entries(m: map): list from warp
-map_without(m: map, key): list from warp
-map_of_entry(entry): same as entry from warp
-map_get_or(m: map, key, default = ø): value of m from warp
-collection_contains(xs: list, x): bool from warp
-collection_contains(t: text, part): bool from warp
-collection_contains(m: map, key): bool from warp
-collection_position(xs: list, x): int from warp
-collection_position(t: text, part): int from warp
-slice(xs: list, start, end = ø): list from warp
-slice(t: text, start, end = ø): text from warp
-field_with(object, name, value): same as object from warp
-instance_copy(x): same as x from warp
-wasi_environment(): text from warp
-// the line on standard error through WASI, natively and in the page (lib/os.warp eprint; warn and hint say theirs so)
-said_on_stderr(words: text): any from warp
 
-// The builtins the emitter expands in place, without a runtime function (card typed-builtins): their signatures and
-// results, as the analyzer reads them
-count(xs: list): int from emitter
-count(t: text): int from emitter
-count(m: map): int from emitter
-byte_size(x): int from emitter
-type(x): symbol from emitter
-print(values...): nothing from emitter
-// the builtin methods of lists, texts and maps (members.rs), each a function value like the others (card dir-lists)
-// over a text they take its characters; a map has no overload (`map(m, f)` would see its entries)
-map(xs: list, f: (any) -> any): list from emitter
-map(t: text, f: (any) -> any): list from emitter
-filter(xs: list, f: (any) -> bool): list from emitter
-filter(t: text, f: (any) -> bool): list from emitter
 // the first element, combined with every later one in turn: `[3, 1, 2].reduce((a, b) => a + b)` is 6
 reduce(xs: list, f: function) := {
 	if count(xs) == 0 { raise "reduce of an empty list" }
@@ -56,22 +11,11 @@ reduce(xs: list, f: function) := {
 	for i in 2 to count(xs) { combined = f(combined, xs#i) }
 	combined
 }
-fold(xs: list, start, f: (any, any) -> any): same as start from emitter
-any(xs: list, f: function): bool from emitter
-any(t: text, f: function): bool from emitter
-// all of any value: `f(all xs)` broadcasts (wiki/all.md), a typed `all` would nest as a call of two values
-all(xs, f: function): bool from emitter
-find(xs: list, f: function): element of xs from emitter
-find(t: text, f: function): element of t from emitter
-each(xs: list, f: (any) -> any) from emitter
-each(t: text, f: (any) -> any) from emitter
 // the call form of xs.add(x), which extensions/sugar/methods.warp appends in place (the emitter has no call add)
 add(xs, x) := { xs.add(x); xs }
 insert(xs: list, at: int, x) := list_insert(xs, at, x)
 // Rust's HashMap::insert (card rust-map-insert): key set to value in place, the map back
 insert(m: map, key, value) := { m[key] = value; m }
-remove(xs: list, x) from emitter
-remove(m: map, key) from emitter
 pop(xs: list): any := list_pop(xs)
 // Python's xs.clear() and m.clear(): x emptied in place, so every alias sees it
 clear(x: any): any := { if x is map { for k in keys(x) { x.remove(k) } } else { while count(x) > 0 { x.pop() } }; x }
@@ -89,31 +33,10 @@ pop(x: any, k: any): any := {
 	x.pop()
 	v
 }
-number(x): number from emitter
-// the calls lowering passes write: a list changed in place, a removed map value or list, a list ordered by keys
-list_become(place, fresh): same as place from emitter
-list_drop_last(place): same as place from emitter
-removed_value(x, k): any from emitter
-list_sorted_by(xs, keys): any from emitter
-text(x): text from emitter
-text_form(x): text from emitter
-int(x): int from emitter
-float(x): float from emitter
 // bool(x), the truthiness of any value (wiki/bool.md; a call only, extensions/sugar/calls.warp, as a function named bool
 // would hide the type in `x: bool = …`): bool([]) is no, bool([0]) yes; a text or character is read as a word,
 // bool("0") and bool("no") are no
 truth_of(x) := if x is text or x is codepoint then text(x) as bool else if x then yes else no
-symbol(name): symbol from emitter
-// the emitter's text builtins
-trim(t: text): text from emitter
-starts_with(t: text, part): bool from emitter
-ends_with(t: text, part): bool from emitter
-byte_slice(t: text, start, end): text from emitter
-// a program's int type (core/passes/int_types.warp): `x as Color` marks x, `x is Color` reads its mark
-int_marked(x, kind: int): any from emitter
-int_mark_of(x): int from emitter
-chr(code): codepoint from emitter
-read(path): text from emitter
 // eval(code): the value of the code run as a program of its own, by the host word eval_code, which the host compiles
 // with its own warp.wasm (decision N31; core/native/driver.warp code_evaluated, the page's driver.js). It sees none of
 // the caller's names: eval(code, with: {x: 5}) names them, each bound to its value as data before the code (card
@@ -121,9 +44,6 @@ read(path): text from emitter
 eval(code) := eval_code(code)
 // each name bound to warp code giving its value back: text_form quotes the texts inside a list, not a text itself
 eval(code: text, with names: map) := eval_code(names.keys.map(name => "${name} = ${text_form([names[name]])}#1").join("\n") + "\n" + code)
-warning(message): text from emitter
-raise(message): same as message from emitter
-error(message): any from emitter
 // a class place's refusal (decision class-types-checked, extensions/conversions.warp argument_conversion):
 // `f takes a Length, not 5s (a Time)`
 place_refused(value, taker: text, needed: text) := raise taker + " takes " + with_article(needed) + ", not " + value + " (" + with_article(type(value).name) + ")"
@@ -131,22 +51,6 @@ place_refused(value, taker: text, needed: text) := raise taker + " takes " + wit
 with_article(word: text): text := (if "AEIOUaeiou".contains(word#1) then "an " else "a ") + word
 // whether an instance or a map has every one of the fields, as a class extending none takes it
 has_fields(value, names: list): bool := names.all(name => value.has(name))
-is_error(x): bool from emitter
-is_type(x, type_name): bool from emitter
-// a node's parts and a node made of parts (wiki/node.md)
-key_of(n): any from emitter
-value_of(n): any from emitter
-op_of(n): any from emitter
-name_of(n): any from emitter
-bracket_of(n): any from emitter
-separator_of(n): any from emitter
-line_of(n): any from emitter
-column_of(n): any from emitter
-attributes_of(n): list from emitter
-with_attribute(n, word): any from emitter
-bracketed(n, bracket): list from emitter
-separated(n, separator): list from emitter
-string(x): text from emitter
 
 // Foreign type names (Kotlin, Java, Swift, C#): `x: Int`, `class P(val name: String)` read as warp's type; types, not
 // aliases, so only a type's place reads them (an alias would rename the enum case Kind.Int too); a program's own

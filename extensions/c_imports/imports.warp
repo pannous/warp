@@ -28,9 +28,10 @@ c_library_aliases = {libc: "c", libm: "m", cmath: "m", zlib: "z", SDL2: "SDL2", 
 c_and_m = ["c", "m"]
 # the libraries of typed lines that are not C's
 not_c_libraries = ["warp", "emitter", "runtime", "host"]
-# the files whose foreign lines say what a library's functions take and give, built in: lib/c.warp, lib/math.warp
+# the files whose foreign lines say what a library's functions take and give: lib/c.warp, read from disk, and the math
+# builtins (core/analysis/math_builtins.warp)
 c_catalog_files = ["c.warp", "math.warp"]
-c_catalog_texts(): list := [module_source("c"), math_text]
+c_catalog_texts(): list := [std_module_text("c"), math_builtin_text]
 c_foreign_mark = " from "
 c_quotes = ["'", "\""]
 # a type word of a foreign line → the type it crosses as
@@ -181,11 +182,11 @@ c_crate_use(statement: text): any := {
 	if bare == written { return ø }
 	crate_library_prefix + bare.split("@")#1.replace("-", "_")
 }
-# the names the typed lines of lib/math.warp and lib/prelude.warp give warp words of its own: libm's of those names
+# the names the builtins' typed lines (core/analysis/builtins.warp, math_builtins.warp) give warp words of its own: libm's of those names
 # need an import (`floor` is warp's, `fmin` libm's)
 warp_word_names(): any := {
 	names = {}
-	for content in [math_text, prelude_text] {
+	for content in [math_builtin_text, builtin_text] {
 		for line in content.split("\n") {
 			trimmed = line.trim()
 			if trimmed.ends_with(" from warp") or trimmed.ends_with(" from emitter") {
