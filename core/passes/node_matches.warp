@@ -220,6 +220,7 @@ arm_chain(arms: list, subject: Node, variants: map): Node := {
 	chosen(arm_test(case_parts, subject), arm_value(case_parts, subject, arm_result(arms#1)), arm_chain(arms[1..], subject, variants))
 }
 
+
 # the arms lowered, an extension's past the core's first (extension.warp with_arm_lowerings)
 chained_arms(arms: list, subject: Node, variants: map): Node := arm_chain(with_arm_lowerings(arms, subject, variants), subject, variants)
 

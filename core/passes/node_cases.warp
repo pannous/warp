@@ -276,6 +276,7 @@ spelled_cases(n: Node): list? := match n {
 }
 is_spelled_case(row: Node): bool := is_key(row, Op.Assign) and is_name(key_of(row)) and value_of(row) is text
 
+
 # node.warp's spelled enums and the program's own, their spellings taken in; the program's declarations go, as
 # with_spelled_enums declares each spelled enum again with its spelling functions
 # `enum Coin { Penny = 1, Dime = 10, Quarter }` (decision enum-raw-values): [its name, its cases each with its number],
