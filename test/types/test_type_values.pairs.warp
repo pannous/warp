@@ -1,9 +1,9 @@
 # from test_type_values.rs: edit the Rust test, then run the script again
 
 # a_type_value_joins_as_its_class
-'"type is " + type 3'	'type is class nat'
-'x = int; "\\(x)"'	'class int'
-'x = int; x as text'	'class int'
+'"type is " + type 3'	'type is nat'
+'x = int; "\\(x)"'	'int'
+'x = int; x as text'	'int'
 'x = 3; "" + type(x) == "class nat"'	true
 
 # the_type_of_a_type_value_is_type
