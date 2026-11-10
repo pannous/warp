@@ -223,6 +223,7 @@ names_within(n: Node, with_keys: bool): list := {
 		at += 1
 		if part is symbol {
 			found[name_of(part)] = yes
+			if with_keys { for token in affix_tokens(name_of(part)) { found[token] = yes } }
 			for name in operated_within(name_of(part)) {
 				found[name] = yes
 				# the operation a rule makes of it, `x = x /! 2` (rules_reaching)

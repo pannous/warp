@@ -6,7 +6,8 @@
 use draw
 width = 200
 height = 100
-letters = text_coverage("hello", 48)
+system_font = ""
+letters = text_coverage("hello", 48, system_font)
 glyph_size = [letters#1, letters#2]
 covered = letters[2 ..] + [0, 0]
 glyph = [covered[3 * k] + 256 * covered[3 * k + 1] + 65536 * covered[3 * k + 2] for k in 0 ..< #covered /! 3]
