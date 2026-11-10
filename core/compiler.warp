@@ -285,7 +285,8 @@ write_modules(folder: text, runtime_file: text) := {
 	write_library_index(folder)
 	runtime = read_bytes(runtime_file)
 	refused = []
-	for name in in_dependency_order(std_module_names) {
+	# (the runtime modules first: any module's power links big_numbers, though it writes no `use` of it)
+	for name in in_dependency_order(hooks().runtime_modules + std_module_names.filter(name => not is_runtime_module(name))) {
 		file = folder + "/" + name + ".wasm"
 		try { module_written_behind(name, runtime, file) } catch refusal {
 			write_bytes(file, [])

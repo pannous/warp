@@ -847,7 +847,7 @@ is_module_name(name: text): bool := exists(std_module_path(name)) or used_module
 # word (a definition or an alias), the parses of its definitions of the word
 module_uses(module: text): list := {
 	signature = prebuilt_signature(module)
-	if signature != ø then signature.uses else used_modules(used_module_text(module)) + runtime_modules_of(module)
+	if signature != ø then signature.uses else used_modules(used_module_text(module))
 }
 module_patterns(module: text): list := {
 	signature = prebuilt_signature(module)
