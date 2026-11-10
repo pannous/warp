@@ -42,7 +42,8 @@ const LOADING_STALL_MS = 30000; // the compiler's download shows a note when it 
 // the origin a link of the shown program resolves against: "/about" is a page of the program, "https://…" is not
 const PROGRAM_ORIGIN = "http://program.invalid";
 const TYPING_DELAY_MS = 300;
-const PENDING_VALUE = "…"; // the value shown from Run until the new one arrives
+const PENDING_VALUE = "…"; // the value shown from the new run's first output until its value arrives
+const RUNNING = "running…"; // the status while a run goes on
 const DEFAULT_EXAMPLE = "hello";
 const COMMIT_URL = "https://github.com/pannous/warp/commit/";
 const SHORT_COMMIT = 9;
@@ -694,6 +695,7 @@ function painted(run, painting) {
 	if (startsFrame(run, "paintings")) run.paintings = [];
 	else if (last && sameSize(last, painting)) run.paintings.pop();
 	run.paintings.push(painting);
+	clearPreviousRun();
 	showFrame(run.paintings);
 }
 
@@ -703,7 +705,9 @@ function painted(run, painting) {
 function printedChunk(run, chunk) {
 	(run.printedWhole ??= []).push(chunk); // for the report (scripts/samples-web.sh compares it with the native run's)
 	run.printed.push(chunk);
-	if (!run.animating) showPrinted(run.printed);
+	if (run.animating) return;
+	clearPreviousRun();
+	showPrinted(run.printed);
 }
 
 // the runaway limit counts running time only: a sleep moves the deadline on by its milliseconds (card sleep-run-limit)
@@ -848,6 +852,7 @@ function startInWorker(run, code, file, asData) {
 function setStatus(text, failed = false) {
 	$("status").textContent = text;
 	$("status").classList.toggle("failed", failed);
+	$("status").classList.toggle("running", text === RUNNING);
 }
 
 const at = (line, column) => line ? `${line}:${column}` : "";
@@ -1206,15 +1211,24 @@ function showEventOutput(data) {
 	if (data.html !== undefined) showRendered(data.html);
 }
 
-// a run starting, however it was started (Run, auto-run, an example chosen, a queued run): the old value gives way to
-// "…", and the old errors, warnings, underlines and printed text go, so none is taken for the new run's, nor stays
-// above an animation as long as it runs (cards g_oc54, playground-stale-value)
-function clearPreviousRun() {
-	showValue(PENDING_VALUE);
+// a run starting, however it was started (Run, auto-run, an example chosen, a queued run): the last run's output stays,
+// dimmed, until the new run shows something of its own, so the pane never flashes blank (card pressing-try-run); the
+// editor's underlines go at once, the code they marked has changed
+function dimPreviousRun() {
+	$("output").setAttribute("aria-busy", "true");
+	markPositions({});
+}
+
+// the new run's first output (a print, a frame, its report, its failure): the dimmed value, errors, warnings and printed
+// text of the run before go, so none is taken for the new run's, nor stays above an animation as long as it runs (cards
+// g_oc54, playground-stale-value)
+function clearPreviousRun(value = PENDING_VALUE) {
+	if ($("output").getAttribute("aria-busy") !== "true") return;
+	$("output").removeAttribute("aria-busy");
+	showValue(value);
 	$("value").classList.remove("located");
 	$("value").onclick = null;
 	$("diagnostics").replaceChildren();
-	markPositions({});
 	showPrinted([]);
 }
 
@@ -1226,11 +1240,14 @@ async function show(code) {
 		return;
 	}
 	showing = true;
-	clearPreviousRun();
-	setStatus("running…");
+	dimPreviousRun();
+	setStatus(RUNNING);
 	try {
-		showReport(await evaluate(code));
+		const report = await evaluate(code);
+		clearPreviousRun();
+		showReport(report);
 	} catch (failure) {
+		clearPreviousRun("");
 		setStatus(failure.message, true);
 	}
 	showing = false;
