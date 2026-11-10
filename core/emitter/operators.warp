@@ -8,7 +8,7 @@ def operation_code(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedC
 # result), stamped by the runtime's kept_mark
 def marked(symbol: text, result: TypedCode, a: TypedCode, b: TypedCode): TypedCode {
 	if symbol in comparisons or (a.mark == 0 and b.mark == 0) or result.mark != 0 { return result }
-	if result.kind == ValueKind.Node and module.runtime.has("kept_mark") { return runtime_call("kept_mark", [result, number_value(if a.mark != 0 then a.mark else b.mark)]) }
+	if result.kind == ValueKind.Node and has_runtime_word("kept_mark") { return runtime_call("kept_mark", [result, number_value(if a.mark != 0 then a.mark else b.mark)]) }
 	mark = if marks_kind(a.mark, result.kind) then a.mark else if marks_kind(b.mark, result.kind) then b.mark else 0
 	if mark != 0 { return TypedCode(result.kind, result.code, mark) }
 	result
@@ -130,7 +130,7 @@ def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
 	right = TypedCode(ValueKind.Node, fresh_node_local(body))
 	# each operand as the number it is, a subtype's instance as its float() gives it (`red % 256` an int, decision
 	# subtype-less-than); a class's own operator (by_class) and the marks still see the operands as given
-	numeric = module.runtime.has("number_held")
+	numeric = has_runtime_word("number_held")
 	left_number = if numeric then TypedCode(ValueKind.Node, fresh_node_local(body)) else left
 	right_number = if numeric then TypedCode(ValueKind.Node, fresh_node_local(body)) else right
 	plain = [TypedCode(ValueKind.Int, unboxed(left_number.code, gc_type(gc.int_box))), TypedCode(ValueKind.Int, unboxed(right_number.code, gc_type(gc.int_box)))]
@@ -146,9 +146,9 @@ def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
 	code = a + [op.local_set] + left.code[1..] + b + [op.local_set] + right.code[1..] + unwrapped
 	textual = x => condition(runtime_call("textual_node", [x]))
 	# (a runtime built before marks_kept, the seed's, keeps none)
-	computed = if symbol not in comparisons and module.runtime.has("marks_kept") then runtime_call("marks_kept", [TypedCode(kind, numbers), left, right]) else TypedCode(kind, numbers)
+	computed = if symbol not in comparisons and has_runtime_word("marks_kept") then runtime_call("marks_kept", [TypedCode(kind, numbers), left, right]) else TypedCode(kind, numbers)
 	# a text held in a node repeats as a static one does, `x * 2` of an untyped x given "ab"
-	if symbol == "*" and module.runtime.has("repeated_node") {
+	if symbol == "*" and has_runtime_word("repeated_node") {
 		repeated_texts = TypedCode(ValueKind.Node, boxed(runtime_call("repeated_node", [left, right])))
 		return TypedCode(kind, code + textual(left) + textual(right) + [op.i32_or] + if_else_code(kind, repeated_texts, computed))
 	}
