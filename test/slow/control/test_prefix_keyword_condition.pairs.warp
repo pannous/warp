@@ -1,0 +1,3 @@
+# an assigned block head takes its whole condition up to its body, and a glued 9:30 in a head stays one time (decision
+# prefix-keyword-condition)
+'x = 0; n = 0; h = on change x : n += 1; x = 1; remove h from listeners of x; x = 2; n'	1

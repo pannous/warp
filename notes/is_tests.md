@@ -46,7 +46,9 @@ gate and sweeps queue for the slots instead of piling up (card shared-test-slots
 the test file's folder. An expected column that is not data (`π`, `(-1)`, `1 + pi`) runs through warp.wasm too.
 Prints ⊘ for skipped pairs, a ✗ line per failure (`file:line "code" expected: got …`), then `m of n failed in f files,
 s skipped`; exits 1 on a failure. `--self`: through `warp self` (warp-self.wasm); `--each`: a ✓ line for each passed
-test too. The verdict lines print in file order after the run, so two runs (pure and self) diff line by line.
+test too. A case over 2 s (the runner marks it ⏱) lives in test/slow/<topic>/, a file of the same name as its topic's
+(card slow-test-relocation), which a folder's walk passes by: `warp test test/slow`, `--slow` and `--each` (the full
+suite) run it. The verdict lines print in file order after the run, so two runs (pure and self) diff line by line.
 `warp "2+3*4"` / `warp self "…"`: inline code through the warp compiler, `use` reading from the current folder.
 
 ## Known gaps (cards)

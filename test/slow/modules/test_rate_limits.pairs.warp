@@ -1,0 +1,2 @@
+# throttle_calls_at_most_once_per_period
+'use functions; n = 0; f = throttle(x => { n = n + 1; x }, 30); f(1); sleep(40 ms); [f(2), n]'	[2, 2]

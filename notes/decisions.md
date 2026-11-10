@@ -23,6 +23,16 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 ---
 
 ## Inbox
+- 2026-11-10 compile-only-metric: the Vitals page shows the compile alone (hello minus `warp version`, startup apart); `warp version` loads the whole machinery and is not optimized; fingerprint-by-stat parked, stamp-read-tail dropped.
+- 2026-11-10 runtime-words-lazy: per compile, runtime words are parsed on demand (a name → offset index over runtime.wasm's word table), library words are bound from the program's side, runtime imports are read from the import section.
+- 2026-11-10 text-representations: one text protocol with kinds (Ascii, Utf8 with a lazily cached code-point array) in one struct, landed in two steps with a stop gate at >3% build cost; internal, no AsciiText spelling.
+- 2026-11-10 block-call-parked: a glued `{…}(…)` is not a call yet (parked).
+- 2026-11-10 compiler-size-levers: the three size levers of notes/compiler_size.md are built in this order, each landing with before/after bytes: literal-nodes-inline (each distinct literal one global, ~460 KB), globals-constant-init (constant tables as packed data, ~198 KB), each-wasm (~190 KB); all core/emitter, by warp-sugar-program.
+- 2026-11-10 text-equality-ascii: text == skips the NFC check when both texts are ASCII or already NFC; results unchanged, measured on the build profile.
+- 2026-11-10 lambda-broadcast: a lambda applied to a list broadcasts like a named function (`g = x => x*2; g([1 2 3])` is [2, 4, 6]).
+- 2026-11-10 euler-glyph: ℯ (and ⅈ, π) read as the constants' names, not characters: `ln(ℯ) == 1`.
+- 2026-11-10 link-reach: linked words record their reach in warp.signature (step 1) and arrive already lowered (step 2), so the passes walk only the program.
+- 2026-11-10 compile-fixed-cost: the prelude signature is read packed, sugar rules are indexed by head word, and the GC heap start grows only if RSS stays acceptable.
 - 2026-11-10 warp-window-env: `WARP_WINDOW=0` (set by `warp --no-window`) is the twin of `WARP_SOUND=0` (set by `warp --mute`): the two machine switches kept as environment variables; it replaces WARP_NO_WINDOW=1.
 - 2026-11-10 warp-sound-env: `WARP_SOUND=0 warp app.warp` mutes a run (`warp --mute` sets it), the one environment variable kept as an interface (exception to no-bash-exports).
 - 2026-11-10 aliases-in-rules: a sugar rule's literal word matches every alias spelling of it (`xs.forEach {…}` through the `each` rule); aliases otherwise stay call-only, so data keys and type names never change; the full unification (aliases-unified) is parked: renaming everywhere would rename data keys.

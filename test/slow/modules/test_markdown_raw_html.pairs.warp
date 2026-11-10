@@ -1,0 +1,3 @@
+# card lib-markdown-commonmark-3: raw HTML passed through by default; backslash keeps < literal
+«use markdown; markdown_html("foo <a href=\\"&ouml;\\">\\n") == "<p>foo <a href=\\"&ouml;\\"></p>\\n"»	true
+«use markdown; markdown_html("\\\\<br/> not a tag\\n") == "<p>&lt;br/&gt; not a tag</p>\\n"»	true

@@ -1,0 +1,5 @@
+# Spans in different units compare after conversion (card gap-span-units-compare):
+# `1900 - 2000 cm` is the span as a Quantity with that ± interval amount;
+# vs `1950m ± 50` after SI conversion → no (19–20 m vs 1900–2000 m). Same-unit → yes.
+# `1900cm - 2000cm` stays quantity subtraction. Span + 1 shifts both ends by 1 of its unit.
+'use units; 1900cm - 2000cm'	-100cm
