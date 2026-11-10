@@ -1,6 +1,6 @@
 // The standard module web (card native-server): a program's routes (lib/router.warp) served over HTTP/1.1 through the
 // process's C sockets, as a plain `warp app.warp` asks (the native warp sets WARP_SERVE; `warp run` runs once), on
-// WARP_PORT, else 8080; port 0 is one the system chooses, printed as it serves. One request at a time, each connection closed after its answer; a route answers as in a WAGI
+// the port serve(port) names, a built server's `--port <n>`, else 8080; port 0 is one the system chooses, printed as it serves. One request at a time, each connection closed after its answer; a route answers as in a WAGI
 // build (lib/wagi.warp): a text as text, anything else as JSON, with the status and headers it set.
 use os
 use router
@@ -23,6 +23,7 @@ rewrite server def $h() {$b...} => ($h() := {$b...}; route_add("POST", "/rpc/" +
 rewrite server def $h($x) {$b...} => ($h($x) := {$b...}; route_add("POST", "/rpc/" + $name, request => $h(request.body))) where $name = spelled($h)
 
 DEFAULT_PORT = 8080
+PORT_OPTION = "--port"
 HTML_TYPE = "text/html; charset=utf-8"
 // a page route's answer: the markup its block gives, as HTML (typed html, so its block is markup:
 // extensions/markup_values.warp)
@@ -211,12 +212,10 @@ page_serve(port: int) := {
 // the end of a program with routes, its last value: served when the native warp runs it as a program (WARP_SERVE),
 // else that value, the program's result; read by env, so a program not serving calls no C (none in a browser)
 routes_end(value: any = ø) := if env("WARP_SERVE") == ø then value else routes_served()
-// the end of a program with routes built as a server (`warp build app.warp`): its executable serves them at WARP_PORT,
-// else 8080 (card server-build)
-routes_served(value: any = ø) := {
-	port = env("WARP_PORT")
-	serve(if port == ø then DEFAULT_PORT else int(port))
-}
+// the end of a program with routes built as a server (`warp build app.warp`): its executable serves them at the port
+// it was started with (`./app --port 9000`), else 8080 (card server-build)
+routes_served(value: any = ø) := serve(port_given())
+port_given() := { at = args.index_of(PORT_OPTION); if at then int(args#(at + 1)) else DEFAULT_PORT }
 
 // use js <global> (card js-global-missing, lib/web.webidl): self-hosted, that global module (crypto, url, math,
 // json). use js crypto; crypto.randomUUID() and use js URL; URL(t).hostname match the sample. Math and JSON keep

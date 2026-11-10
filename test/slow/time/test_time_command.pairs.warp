@@ -1,0 +1,4 @@
+# decision time-command: time of a number is that many seconds, time of a block measures it as the shell's time does
+'d = time 6; d + 1s'	7s
+'d = time 6; 1s + d'	7s
+'d = time 6; d - 1s'	5s

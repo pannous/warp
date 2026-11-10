@@ -1,0 +1,2 @@
+# classes sharing a method name with other parameter counts: each class keeps its own (card lifts-refuses)
+'x = 3km; c = channel(); c.send(1); c.receive()'	1

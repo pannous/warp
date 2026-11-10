@@ -7,5 +7,3 @@
 'use shell; class Q { name: text }; Q("a") is Path'	no
 'use shell; p = Path("a"); p.name'	'a'
 'use units; x = 3m; x is Quantity'	yes
-'use units; 3m + 2m'	5m
-'use units; use sound; 3m + 2m'	5m

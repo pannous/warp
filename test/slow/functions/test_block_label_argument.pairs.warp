@@ -1,0 +1,2 @@
+# a block given by the label of its parameter is its lazy body, as a positional block is (card block-label-parameter)
+'run_two(body: block) := { body(); body() }; n = 0; run_two body: { n += 1 }; n'	2

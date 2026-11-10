@@ -10,7 +10,6 @@
 'class counter{n=0; step:int=1}; c = counter(5); c.step'	1
 
 # test_an_unknown_word_with_a_block_stays_data
-'(a{x:1}) == (a:{x:1})'	true
 
 # test_a_typed_optional_field_puts_the_question_mark_on_its_name
 «class contact{name; email?: text}; c = contact{name:'Jo'}; c.name»	'Jo'

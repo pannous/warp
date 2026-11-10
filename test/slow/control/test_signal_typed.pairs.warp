@@ -1,0 +1,2 @@
+# Signal values retain their values and watched names follow writes (notes/signals.md "Lists of signals").
+'global seen = 0; watch(xs) := for s in xs { on change s { seen = s } }; a = 1; watch([a]); a = 7; seen'	7

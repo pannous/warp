@@ -1,0 +1,1 @@
+'class Foo { beep(){ 7 } }; Foo().beep()'	7

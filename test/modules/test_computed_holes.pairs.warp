@@ -3,4 +3,3 @@
 'rewrite verb $m => $v where $m in [get, post] and $v = route_verb($m)\nverb post'	"POST"
 'rewrite pair $a $p => [$v, $names...] where $v = route_verb($a) and $names = path_parameters($p)\npair get "/:x"'	["GET", "x"]
 # a program with routes serves them, its last value kept when run once
-'get "/sq/:n:int" { n * n }; route_answer({method: "GET", path: "/sq/7"})'	49

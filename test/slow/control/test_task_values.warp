@@ -1,0 +1,3 @@
+# from test_task_values.rs: edit the Rust test, then run the script again
+# a_task_gives_the_result_of_its_function
+is! 'f(ms) := { started = clock(); sleep(ms / 1000); started }; a = go f(1000); b = go f(1000); if abs(await a - await b) < 1000 then 2000 else -1' 2000

@@ -1,0 +1,2 @@
+// lib/tables.warp table_text: plain, box and markdown, alignment, CJK and emoji, truncation, map rows (card lib-text-tables)
+'use tables; table_text([["a", 1, 1.5, "x"], ["b", 22, -3, 5]], {"headers": ["k", "n", "f", "mixed"]})'	"k   n    f  mixed\n-  --  ---  -----\na   1  1.5  x\nb  22   -3  5"

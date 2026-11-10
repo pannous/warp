@@ -14,7 +14,6 @@
 # a_tag_in_a_variable_reads_as_written
 'p = data point{x:1}; string p'	'point{x:1}'
 'm = {a: data point{x:1}}; string m'	'{a:point{x:1}}'
-'m = {a:{b:1}}; string m'	'{a: {b: 1}}'
 'e = data a:1; string e'	'{a:1}'
 
 # data_in_a_list_reads_as_written

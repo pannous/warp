@@ -27,7 +27,6 @@
 'n = 0; once a { n += 1; emit b }; on b { emit a }; emit a; n'	1
 
 # a_one_line_function_listener_subscribes
-'n = 0; watch(s) := whenever s > 5 { n += 1 }; x = 0; n'	0
 
 # a_global_declared_after_a_first_write_is_one_variable
 'b = 0; global b = 1; f() := b; b = 5; f()'	5

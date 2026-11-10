@@ -1,0 +1,7 @@
+# from test_async_ports.rs: edit the Rust test, then run the script again
+# await_all_of_started_tasks_gives_their_results
+is! 'f(x) := { sleep(300 ms); x }; started = clock(); xs = await all [go f(1), go f(2)]; clock() - started < 550' true
+is! 'gate = channel(); slow(g) := { g.receive(); 10 }; quick() := { sleep(10 ms); 20 }; r = await any [go slow(gate), go quick()]; gate.send(0); r' 20
+is! 'gate = channel(); slow(g) := { g.receive(); 10 }; quick() := { sleep(10 ms); 20 }; r = await any [go quick(), go slow(gate)]; gate.send(0); r' 20
+is! 'job = go { sleep(2000 ms); 1 }; x = await job within 100 ms or 5; x * 2' 10
+is! 'job = go { sleep(10 ms); 7 }; x = await job within 1000 ms or 5; x * 2' 14

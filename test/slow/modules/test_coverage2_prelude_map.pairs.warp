@@ -1,0 +1,2 @@
+# coverage audit 2 (ranked 81-160): prelude and map helpers, edge cases
+«use map; set_path({}, ["a", "b"], 1) == {a: {b: 1}}»	true
