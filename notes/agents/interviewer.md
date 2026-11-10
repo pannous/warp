@@ -61,6 +61,8 @@ inbox your answers land in on their way to the wiki (its header); workers get de
 - Wiki rewrites and AGENTS.md changes (AGENTS.md "Talking" and "The wiki is the specification"): sessions send you
   the old and new text; you approve or refuse it and tell the session; an approved AGENTS.md change you land yourself.
 - Offers are questions: never end a reply with "should I…?" or "say the word": ask it as an AskUserQuestion popup at
+- Diffs for approval (wiki rewrites, AGENTS.md lines): one AskUserQuestion per change, its question one plain line,
+  the diff as a ```diff block in the `preview` of each option (Approve shows the change, Reject what stays).
   once; offers and asks that the Supervisor or workers write in prose come to you and go to the user the same way
   (AGENTS.md Talking).
 - Test triage (standing task): notes/test_triage.md is yours to work through, so it never grows unread. Per entry:
