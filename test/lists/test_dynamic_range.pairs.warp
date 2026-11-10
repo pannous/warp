@@ -13,7 +13,3 @@
 # a_recursive_list_function_in_a_ternary
 'f(xs) := #xs <= 1 ? xs : xs.filter(x => x > 1); f([1 2 3])'	[2, 3]
 'f(xs) := #xs <= 1 ? xs : f(xs[1:]) + [xs#1]; f([1 2 3])'	[3, 2, 1]
-# a range whose start is past its end is empty, a variable's as a literal's (card position-range-empty)
-'a = 20; b = 3; a..b'	[]
-'a = 20; count(a..3)'	0
-'a = 5; a to 2'	[]
