@@ -114,14 +114,21 @@ before asking a question). After a context swap, this file and your role file be
   by name (`git commit -- <paths>`), `source scripts/lib/sync-main.sh; up_to_date_main` (fetches main by name, replays your commits, never stashes) (never `git pull`: it rebases onto FETCH_HEAD, which concurrent fetches rewrite; scripts: scripts/lib/sync-main.sh). Do not push that onto main; hand the commit or patch to the integrator (Handoff, below). Never leave unpushed commits on main.
 - Anything compiled (core/, the harness in src/, Cargo.*): a worktree,
   `cowtree add -b <card> /Volumes/Worktrees/<card> origin/main`, branch named as the card. Never touch
-  /Volumes/Worktrees/warp or /integrator. At most 2 open worktrees per worker (user 2026-11-02: 23 were far too
+  /Volumes/Worktrees/warp (cowtree's donor) or the Integrator's integrate and integrate2. At most 2 open worktrees per worker (user 2026-11-02: 23 were far too
   many): the one being handed off and the one being built; hand off before opening another, waiting work is a plan on its card.
+- Before removing a worktree: `git status --short -uall` (untracked files are hidden on this Mac) + files changed in 2 h.
+- Commit and push your branch's progress all the time, notes, handovers and WIP included: a box or session can
+  disappear. Before and after a task `git status` shows a clean tree, up to date with origin/main.
 - Output (logs, dumps, builds, scratch) goes in your own worktree's data/ and goes with it; never into the main
   checkout's data/. Logs that must outlive your session: ~/Library/Logs/warp/<role or card>/.
 - The user's uncommitted edits are integrated at once by whoever meets them: complete, run, commit as "(user)", push.
 - Absolute paths and `git -C <worktree>`; in zsh `${var}:path`. Files named `*_local*` are globally git-ignored.
 
 ## Testing
+- Tiers, cheapest first: smoke for every branch; self-check (+ gate probes) for core/; `warp test <folders>` of the
+  files a change touches is the worker's feedback, in the background, never a merge condition; the full suite only
+  by the Integrator at rare intervals (nightly, before a release). Tests that passed before and fail after your
+  change: fix them or roll the change back.
 - Start from the clean baseline: don't rebuild or retest main before your change; whoever pushes keeps main green (a red main: fix it at once or revert your push).
 - The baseline is stored with its compiler: rely on it, never rerun your touched tests on main to compare (user,
   2026-11-01). `scripts/baseline.sh <test paths>` prints their stored lines; `scripts/baseline.sh --regressions
@@ -177,6 +184,17 @@ before asking a question). After a context swap, this file and your role file be
 - No Ready column, no merge queue (user 2026-10-26). The worker does not land the branch. Finished work is handed
   to the integrator (Handoff, below), noted `land: <branch> <tip>` (`todo landing`). A finished branch
   whose session retires unlanded stays in Now with that same note; the integrator lands those.
+- The Supervisor's plan for a card is pre-approved: implement it without asking. An idea of your own beyond it may
+  be built too when it is undoable (its own commits on the branch).
+- Explore before the first edit of a card, a bug report or a "why" question, wider than the card names, and use
+  what you find: the spec (wiki/, test/, samples/), the history (`todo show` with its comments, related cards via
+  `todo list | grep`, notes/<topic>.md, notes/handover/, the decisions inbox, `git log -S`/blame of the code
+  involved), live work (open branches and worktrees on the same files, the Now column), and the evidence (the stored
+  baseline, `scripts/baseline.sh <tests>`; a failed build's record in the store). Not for a mechanical step whose
+  context you already hold.
+- Quick cards first: those that never touch core/ or extensions/ (website, samples, lib/ outside the baked files,
+  `scripts/compiler-inputs.sh --baked-files`). A baked file, core/ or extensions/ needs a compiler build: never quick.
+- A TODO in the code without a card gets one: `# TODO (card <name>) <text>`, card name right after the word TODO.
 - Unrelated problems: `todo add "…"`. Tiny no-choice fixes (typo, stale comment, wrong path) on the spot, own commit.
 - Judge the cost against the gain (user 2026-11-09): a medium or larger core change is only worth it for a real feature
   or a common case, never for an edge case (a print form, a rare call shape, a couple of test lines). When a card turns
@@ -211,7 +229,7 @@ main and the playground. The worker does not land it, push it to main, or publis
 - A major feature ships with samples/<topic>.warp (chmod +x) and its wiki page updated in the same task.
 - Landing checks, then the handoff (Handoff, above). The worker does not push to main (user 2026-11-08): `warp format yes <files>` on the .warp files you
   wrote; merge origin/main into the branch (real merges, you resolve conflicts) with a merge message summing up the
-  change; on that merge run the smoke test (`scripts/smoke.sh <worktree>`; core/ changes: it + `scripts/self-check.sh` + the gate probes, `scripts/gate.sh --tiers 1 <worktree>`, seconds; AGENTS.md "Testing");
+  change; on that merge run the smoke test (`scripts/smoke.sh <worktree>`; core/ changes: it + `scripts/self-check.sh` + the gate probes, `scripts/gate.sh --tiers 1 <worktree>`, seconds; "Testing" above);
   then hand the branch and a patch to the integrator. The integrator applies that on the user's Mac and pushes with `git push origin HEAD:main` (fast-forward only). Rejected because main moved: merge origin/main again; rerun the
   smoke test only if the new commits touch core/ or lib/; push. The self-check and gate are never rerun after such a
   re-merge (they passed on your change; the new commits passed their own), only the smoke test, and right after it
