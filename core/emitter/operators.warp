@@ -93,7 +93,7 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 }
 
 # a yes/no is the int 0 or 1 underneath (wiki/bool.md): any operator but equality takes it as that int, `yes + yes`
-# is 2; of two yes/no values an operator that gives 0 or 1 again gives yes/no, `yes xor no` is yes (user 2026-11-02)
+# is 2; of two yes/no values an operator that gives 0 or 1 again gives yes/no, `yes xor no` is yes
 number_like(kind: ValueKind): bool := kind == ValueKind.Bool or kind == ValueKind.Int or kind == ValueKind.Float
 as_int(value: TypedCode): TypedCode := if value.kind == ValueKind.Bool then TypedCode(ValueKind.Int, converted(value, ValueKind.Int)) else value
 def bools_as_ints(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {

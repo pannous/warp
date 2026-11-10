@@ -38,7 +38,7 @@ rewrite ($v as list of $t) => walked_by($v, $unit).map($x => $x as $t) where $un
 # `count bytes in t`: the text's byte size, ahead of the `in` of a membership
 rewrite (count bytes in $t) => byte_size($t)
 
-# `xs are in t`: every item of xs is in t (decisions.md 2026-11-06 round 9: are-words-in, all-words-in)
+# `xs are in t`: every item of xs is in t (decisions are-words-in, all-words-in)
 rewrite ($xs are in $t) => $xs.all($x => collection_contains($t, $x))
 # `all xs in t`, `are xs in t`: the same; `any xs in t`: some item of xs is in t (decision all-any-in), only where xs is
 # a value the program has, never a fresh name (`for all x in xs`)
