@@ -123,16 +123,22 @@ def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
 	if symbol in bit_operators { return operation_code(body, symbol, TypedCode(ValueKind.Int, converted(TypedCode(ValueKind.Node, a), ValueKind.Int)), TypedCode(ValueKind.Int, converted(TypedCode(ValueKind.Node, b), ValueKind.Int))) }
 	left = TypedCode(ValueKind.Node, fresh_node_local(body))
 	right = TypedCode(ValueKind.Node, fresh_node_local(body))
-	plain = [TypedCode(ValueKind.Int, unboxed(left.code, gc_type(gc.int_box))), TypedCode(ValueKind.Int, unboxed(right.code, gc_type(gc.int_box)))]
+	# each operand as the number it is, a subtype's instance as its float() gives it (`red % 256` an int, decision
+	# subtype-less-than); a class's own operator (by_class) and the marks still see the operands as given
+	numeric = module.runtime.has("number_held")
+	left_number = if numeric then TypedCode(ValueKind.Node, fresh_node_local(body)) else left
+	right_number = if numeric then TypedCode(ValueKind.Node, fresh_node_local(body)) else right
+	plain = [TypedCode(ValueKind.Int, unboxed(left_number.code, gc_type(gc.int_box))), TypedCode(ValueKind.Int, unboxed(right_number.code, gc_type(gc.int_box)))]
 	# two plain ints past 64 bits make a big int (D16): the runtime's grown words
 	ints = if symbol in grown_words then runtime_call(grown_words[symbol], plain) else operation_code(body, symbol, plain#1, plain#2)
-	floats = operation_code(body, symbol, runtime_call("float_of_node", [left]), runtime_call("float_of_node", [right]))
+	floats = operation_code(body, symbol, runtime_call("float_of_node", [left_number]), runtime_call("float_of_node", [right_number]))
 	kind = if ints.kind == ValueKind.Bool then ValueKind.Bool else ValueKind.Node
-	exact = exact_operation(body, symbol, left, right, floats)
+	exact = exact_operation(body, symbol, left_number, right_number, floats)
 	# two Ints in $i64boxes stay ints; a ratio or a big int on either side takes the exact word
-	integers = plain_int_test(boxed(left)) + plain_int_test(boxed(right)) + [op.i32_and] + if_else_code(kind, ints, exact)
-	numbers = by_class(body, symbol, left, right, kind, both_of_kind(left.code, right.code, Kind.Int) + if_else_code(kind, TypedCode(kind, integers), floats))
-	code = a + [op.local_set] + left.code[1..] + b + [op.local_set] + right.code[1..]
+	integers = plain_int_test(boxed(left_number)) + plain_int_test(boxed(right_number)) + [op.i32_and] + if_else_code(kind, ints, exact)
+	numbers = by_class(body, symbol, left, right, kind, both_of_kind(left_number.code, right_number.code, Kind.Int) + if_else_code(kind, TypedCode(kind, integers), floats))
+	unwrapped = if numeric then runtime_call("number_held", [left]).code + [op.local_set] + left_number.code[1..] + runtime_call("number_held", [right]).code + [op.local_set] + right_number.code[1..] else []
+	code = a + [op.local_set] + left.code[1..] + b + [op.local_set] + right.code[1..] + unwrapped
 	textual = x => condition(runtime_call("textual_node", [x]))
 	# (a runtime built before marks_kept, the seed's, keeps none)
 	computed = if symbol not in comparisons and module.runtime.has("marks_kept") then runtime_call("marks_kept", [TypedCode(kind, numbers), left, right]) else TypedCode(kind, numbers)
