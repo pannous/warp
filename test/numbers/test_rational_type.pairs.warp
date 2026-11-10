@@ -17,6 +17,7 @@
 'type([1 2.5f])'	'list of number'
 
 # test_pi_is_real_whatever_its_representation
+'type(π)'	'class real' # OR
 'type(π)'	'real'
 'type(pi)'	'real'
 'type([π π])'	'list of real'
