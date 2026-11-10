@@ -145,8 +145,16 @@ alias_pairs(): list := {
 # `alias keys => map_keys` lines
 unaliased(written: text): text := {
 	word = canonical_word(written) ?? written
-	for pair in alias_pairs() { if pair#1 == word { return pair#2 } }
-	word
+	alias_targets().get(word) ?? word
+}
+# the word by each alias of alias_pairs, looked up once a rule compares a word (rewrites.warp rule_matches)
+global prelude_alias_targets = ø
+alias_targets(): map := {
+	if prelude_alias_targets == ø {
+		prelude_alias_targets = {}
+		for pair in alias_pairs() { prelude_alias_targets[pair#1] = pair#2 }
+	}
+	prelude_alias_targets
 }
 
 lines_of(lines: list, word: text): list := lines.filter(line => line.name == word)
