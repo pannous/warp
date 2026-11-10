@@ -209,7 +209,7 @@ promoted(): nothing := {
 	unlink(next)
 	promoted_file = joined(library, "/warp-self.wasm")
 	copied(compiler, promoted_file)
-	machine_code_copied(compiler, promoted_file, machine_code_suffix(COMPILER_GC_HEAP_BYTES))
+	machine_code_copied(compiler, promoted_file, machine_code_suffix(RUN_GC_HEAP_BYTES))
 	machine_code_copied(compiler, promoted_file, machine_code_suffix(BUILDER_GC_HEAP_BYTES))
 	said = if fixpoint then " compiles compiler.warp once more (to its own bytes, a fixpoint), promoted to " else " compiles compiler.warp once more (to other bytes, no fixpoint), promoted to "
 	print(joined(joined(compiler, said), promoted_file))
@@ -224,7 +224,7 @@ seed_shipped(): nothing := {
 }
 # a build's machine code (the driver's .cwasm and its key) moved to another build file of the same bytes
 machine_code_moved(from: text, to: text): nothing := {
-	machine_code_renamed(from, to, machine_code_suffix(COMPILER_GC_HEAP_BYTES))
+	machine_code_renamed(from, to, machine_code_suffix(RUN_GC_HEAP_BYTES))
 	machine_code_renamed(from, to, machine_code_suffix(BUILDER_GC_HEAP_BYTES))
 }
 machine_code_renamed(from: text, to: text, suffix: text): nothing := {
