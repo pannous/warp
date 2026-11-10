@@ -230,6 +230,9 @@ methods_lifted(program: Node): Node := {
 		deferred_definitions += set_aside
 		rewritten += made.filter(definition => definition not in set_aside)
 	}
+	# a one-parameter method named like a stored field of its class, `w: int` beside `w(v) := …`, reads as the field's
+	# setter or as a method of its own: refused, naming both (card class-setter-ignored)
+	for owning_class in liftable { for clash in field_clashes(classes[owning_class]) { diagnose(call_of("setter_field_clash", [defined_word(clash)]), clash) } }
 	# `w.fahrenheit = 212` of a method of one parameter, its setter, calls it, fahrenheit(w, 212), with or without a
 	# getter beside it (decisions setter-calls, setters-declared)
 	setters = methods.filter(method => 1 in taken_counts(classes, liftable, method) and not is_field_of_any(classes, liftable, method))
@@ -1060,6 +1063,8 @@ setter_calls(n: Node, setters: list, routes: list): Node := {
 }
 # the classes declaring a method of that name taking that many parameters
 owners_taking(classes: map, names: list, method: text, count: int): list := owners_of(classes, names, method).filter(owning_class => methods_named(classes[owning_class], method).any(declared => #method_parameters(declared) == count))
+# a class's one-parameter methods named like one of its stored fields
+field_clashes(declared: Declared): list := declared.methods.filter(method => #method_parameters(method) == 1 and defined_word(method) in declared.fields)
 is_field_of_any(classes: map, names: list, name: text): bool := names.any(owning_class => name in classes[owning_class].fields)
 
 # the classes, each before the classes it extends
