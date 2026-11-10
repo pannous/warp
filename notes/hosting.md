@@ -1,6 +1,6 @@
 # Hosting warp programs
 
-Roadmap card: hosting (notes/roadmaps.md). Hosting options and login for deployed programs; `warp deploy` through
+Roadmap card: hosting. Hosting options and login for deployed programs; `warp deploy` through
 wrangler is warp-web's.
 
 ## What a host has to do
@@ -8,7 +8,7 @@ A warp program is one WASM GC module (`warp compile --wasm`). A pure one has no 
 `wasi_snapshot_preview1.fd_write`. A host therefore needs (1) WASM GC, (2) a way to load *this* module, and (3)
 glue that turns a request into a call and the returned Node into a response. The glue is warp-web's Worker glue.
 
-## Verified by running a warp module (probes/hosting/gc_hosts.sh, `--edge` deploys to workers.dev too)
+## Verified by running a warp module
 | host | engine | GC | how checked |
 |---|---|---|---|
 | Cloudflare Workers | V8 (workerd) | **yes** | `wrangler dev`, and deployed to warp-gc-check.pannous.workers.dev (since deleted): `{"gc":"object","kind":"262"}` |
@@ -61,7 +61,7 @@ lambda's DNS moves to Cloudflare):
   `workers-scripts.admin` (Workers Admin) + `user-details.read` + `account-settings.read`. Each must be registered on
   the client, else the authorize page refuses the whole login (invalid_scope). Which scopes the client has can be read
   without a login: `/oauth2/auth?client_id=…&state=x&scope=<one>` redirects with error=invalid_scope for an
-  unregistered one (probes/hosting/oauth_scopes.sh over `GET /client/v4/oauth/scopes`). Registered:
+  unregistered one (over `GET /client/v4/oauth/scopes`). Registered:
   account-settings.read user-details.read workers-scripts.edit workers-routes.write workers-ci.write containers.write
   workers-kv-storage.write workers-observability(-telemetry).write workers-r2(-bucket-item).write r2-catalog.write.
   Errors name the call (`Cloudflare PUT workers/scripts/x: …`); Cloudflare's 9109 "Invalid access token" is a 401
@@ -86,31 +86,26 @@ lambda's DNS moves to Cloudflare):
   once `GET /up?program=` says it answers: Cloudflare's "error code: 1042" means no Worker under that name yet, a new
   *.lambda.pannous.com name fails until its certificate is issued. After a minute without an answer the window says
   so and keeps the link. /up fetches Workers of our own account, which Cloudflare refuses (1042) unless the control
-  Worker has the compatibility flag `global_fetch_strictly_public`. Probe: probes/hosting/login_ticket.sh runs the
-  window's script in node (deploying_window.mjs).
+  Worker has the compatibility flag `global_fetch_strictly_public`.
 - Names of the account's own Workers (warp-hosting itself, warp-assistant) can't be claimed: `claim` refuses a name
   whose warp-<name> Worker exists without an owner in NAMES (else deploying the name `hosting` would overwrite the
   control Worker).
   An expired session asks for another click. `claim` leaves ticket keys out of its program counts.
-- Clients: `warp deploy --hosted app.warp` (src/web/deploy.rs; WARP_HOSTING, WARP_HOSTING_TOKEN); the playground's ⋯ menu
-  (deploy.js: Deploy, Deploy to my Cloudflare, a pasted token; the browser compiler builds the module and names the
-  scripts, src/web/mod.rs worker_bundle → src/host/host_parts.rs).
-- Tests: tests/web/test_deploy.rs (the bundle); `node web/hosting/test_hosting.mjs` against the real API (wrangler
-  dev of the control Worker, `warp deploy --hosted`, the live routes, DELETE; needs ~/.keys CLOUDFLARE_API_TOKEN and gh).
+- Clients: the playground's ⋯ menu (deploy.js: Deploy, Deploy to my Cloudflare, a pasted token). `warp deploy` is
+  not in the native warp yet (extensions/commands/commands.warp, card deploy-self).
+- The Worker glue cloud-worker.js and cloud-site.js left web/playground/ with the Rust-era runner (2d7c6d8181), but
+  web/hosting/hosting.mjs still imports them: the control Worker does not build until card deploy-self gives it
+  the built sites' glue (web/playground/site.js, site-worker.js).
+- Tests: `node web/hosting/test_hosting.mjs` against the real API (wrangler dev of the control Worker, the live
+  routes, DELETE; needs ~/.keys CLOUDFLARE_API_TOKEN and gh).
 
 ## Browser programs
 A program that uses the browser (paint, use draw, the GPU, sound, text on a canvas, the clipboard, `on frame` and
-other page events: host_parts.rs uses_the_browser) has nothing to answer on a server: the Worker would fail at its
-first request ("host.signal_listen is not available"). Deploy makes it a site instead (host_parts.rs `deployable` →
-`Deployable::Site`): the module compiled for a page, the page's scripts, those of the program's Worker and the files
-shipped (src/host/page_parts.rs, the layout `warp build --site` uses, which builds on wasm32 too, so the playground's
-Deploy computes it). The Worker is `const SITE = {title, scripts, workerScripts, files}` + web/playground/cloud-site.js:
-it serves the page (empty markup, the program shows itself once it runs; no native prerender), the scripts and
-app.wasm (app.bin's bytes), all with COOP/COEP so the page and the program's Worker share memory. warp-hosting gets
-`?site=…&worker=…&files=…` instead of `?scripts=…` and composes the same Worker from its own copies (SITE_FILES).
-Page routes (`route "/x" {…}`) work in the page. Server parts (a top-level `get "/api" {…}`, `serve PORT {…}`, a
-`server def`; serve.rs has_server_parts) have no server in a site: Deploy refuses such a program, naming card
-program-server (CLI and playground alike), rather than dropping them silently. Serving both from one Worker is open:
+other page events) has nothing to answer on a server: the Worker would fail at its first request. Deploy makes it a
+site instead: the module compiled for a page, the page's scripts and the files shipped, served with COOP/COEP so the
+page and the program's Worker share memory. Page routes (`route "/x" {…}`) work in the page. Server parts (a
+top-level `get "/api" {…}`, `serve PORT {…}`, a `server def`) have no server in a site: Deploy refuses such a
+program, naming card program-server, rather than dropping them silently. Serving both from one Worker is open:
 `warp serve` runs main on the server too (paint writes a png there), while a Worker's host has no browser words, so
 the server's module would need main without them, or the Worker host a decided meaning for them.
 
@@ -121,11 +116,10 @@ the server's module would need main without them, or the Worker host a decided m
 - web/hosting/server/: warp_lambda.py (Python stdlib daemon on 127.0.0.1:8890, user warp-lambda; who deploys comes
   from the Worker's /me; names.json keeps owners; 20 programs, 5 per user), warp-lambda@.service (one unit per
   program), warp-lambda.service, warp-lambda.rules (polkit: the daemon may start/restart/stop/clean only
-  warp-lambda@*.service), install.sh (over ssh, optional Linux binary:
-  `cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.39 --bin warp`).
+  warp-lambda@*.service), install.sh (over ssh, optional Linux binary).
 - Sandboxed: `warp --sandbox` grants Host, Wasi, Libm, Sql only (no C/FFI, shell, foreign
-  runtimes: "capability denied" at deploy). The rule at run time (src/host/sandbox.rs): no process (os.exec behind `exec sh"…"`, which std_io hid from the capability check;
-  sound players, the MIDI sender), loud "capability denied … warp --sandbox"; files are written only inside the state
+  runtimes: "capability denied" at deploy); the native warp has no `--sandbox` yet, the server runs the binary it was
+  installed with. The rule at run time: no process (os.exec, sound players, the MIDI sender), loud "capability denied … warp --sandbox"; files are written only inside the state
   folder (systemd's STATE_DIRECTORY, else the working directory): file.write/write_bytes/append, stored values,
   SQLite files, midi.write_file, sound.render, the path resolved, `..` and symbolic links refused; fetch and net reach
   the network (the unit's IPAddressDeny keeps it off the server itself). The unit: DynamicUser, own state folder

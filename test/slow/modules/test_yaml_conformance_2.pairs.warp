@@ -1,0 +1,3 @@
+// card lib-template-yaml-conformance: the yaml-test-suite cases parked on lib-config-conformance
+# yaml_flow_plain_over_lines
+'use yaml; parse_yaml("[\\nplain\\n text, [ nested ],\\nsingle: pair,\\n]\\n") == ["plain text", ["nested"], {"single": "pair"}]'	yes

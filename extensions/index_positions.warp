@@ -140,7 +140,7 @@ counted_node(n: Node, counted: map, type_words: list): Node := {
 	counts_met(children(n, x => counted_node(x, counted, type_words)), counted)
 }
 
-# a count meeting the other kind's brackets, read as meant (notes/index_position.md): `xs[p]` of a position p is
+# a count meeting the other kind's brackets, read as meant (wiki/indexing.md): `xs[p]` of a position p is
 # `xs#p`, `xs#i` of an index i `xs#(i+1)`, `insert(xs, at: p)` takes `p - 1`; adding two counts is an error
 counts_met(n: Node, counted: map): Node := match n {
 	Key(target, Op.Hash, place): Key(target, Op.Hash, hash_place(place, counted))

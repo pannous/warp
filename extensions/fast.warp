@@ -1,0 +1,39 @@
+# `fast g(n) := n * n`: a function of machine arithmetic (card fast-declaration). Each parameter is an
+# int, which wraps at 64 bits, when every call passes a whole number, else a float; `/` divides as floats; sin, cos,
+# exp, pow and atan2 are lib/machine_math's polynomials, fast_math's for this function alone. Before the rules, so
+# that modules_used brings machine_math for the words it writes
+FAST_WORD = "fast"
+FAST_MATH = {sin: "fast_sin", cos: "fast_cos", exp: "fast_exp", pow: "fast_pow", atan2: "fast_atan2"}
+WHOLE_OPERATORS = [Op.Add, Op.Sub, Op.Mul, Op.Pow]
+
+fast_functions(program: Node): Node := {
+	statements = statements_in(program)
+	if not statements.any(statement => fast_head(statement) != ø) { return program }
+	statements_as(program, statements.map(statement => fast_definition(statement, statements)))
+}
+# the definition `g(n) := …` of `fast g(n) := …` (the word binds looser than `:=`), else ø
+fast_head(statement: Node): any := {
+	plain = without_mark(statement)
+	if not (is_group(plain) and #plain == 2 and plain#1 == symbol(FAST_WORD)) { return ø }
+	defined = without_mark(plain#2)
+	if is_key(defined, Op.Define) and is_call(key_of(defined)) then defined else ø
+}
+fast_definition(statement: Node, statements: list): Node := {
+	defined = fast_head(statement)
+	if defined == ø { return statement }
+	call = key_of(defined)
+	calls = statements.filter(other => other != statement).flat_map(nodes_in).filter(n => is_call(n) and n#1 == call#1)
+	parameters = items_of(call)[1 ..]
+	typed = (1 to #parameters).map(at => Key(parameters#at, Op.Colon, symbol(if #calls > 0 and calls.all(c => #c > at and is_whole(c#(at + 1))) then "int" else "float")))
+	Key(call_node(call#1, typed), Op.Define, bottom_up(value_of(defined), machine_part))
+}
+# a whole number as written: `10^10`, `2^63 - 1`
+is_whole(n: Node): bool := n is int or WHOLE_OPERATORS.any(op => is_key(n, op) and is_whole(key_of(n)) and is_whole(value_of(n))) or (is_group(n) and #n == 1 and is_whole(n#1))
+# `a / b` as floats, `sin(x)` as fast_sin(x)
+machine_part(n: Node): Node := {
+	if is_key(n, Op.Div) { return Key(call_of("float", [key_of(n)]), Op.Div, value_of(n)) }
+	if is_call(n) and n#1 is symbol and FAST_MATH.has(name_of(n#1)) { return call_node(symbol(FAST_MATH[name_of(n#1)]), items_of(n)[1 ..]) }
+	n
+}
+
+fast_extension = Extension{name: "fast", passes_before: {"rules_rewritten": fast_functions}}

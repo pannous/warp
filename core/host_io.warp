@@ -8,7 +8,7 @@ global read_bytes(path: any) := std_io("file", "read_bytes", [home_expanded(path
 # "" names no file (python's os.path.exists)
 global exists(path: any) := if path == "" then no else std_io("file", "exists", [home_expanded(path)])
 list_files(folder: any) := std_io("file", "list", [home_expanded(folder)])
-# `~/notes.txt`: a path's leading ~ is the home folder ($HOME), expanded where the path is used (notes/shell_words.md),
+# `~/notes.txt`: a path's leading ~ is the home folder ($HOME), expanded where the path is used (wiki/script.md),
 # so a quoted "~/x" works too and a program expands it on the machine it runs on; any other value stays as it is
 # a run without one (a browser page) is told so, never handed "ø/…"
 home_expanded(path: any): any := if path is text and (path == "~" or path.starts_with("~/")) then home_folder() + path[1..] else path

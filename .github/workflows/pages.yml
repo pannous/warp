@@ -1,7 +1,7 @@
 # .github/workflows/pages.yml
 name: Playground
 
-# The browser playground (web/playground, notes/playground_plan.md) on GitHub Pages, custom domain warp.pannous.com:
+# The browser playground (web/playground, notes/web_playground.md) on GitHub Pages, custom domain warp.pannous.com:
 # the self-hosted compiler warp.wasm with its lib/ (warp-lib/: this checkout's, built by scripts/ci-compilers.sh,
 # web/playground/build.sh), the page and samples/<chapter>/*.warp. scripts/browser-dry-run.sh runs the same tours on
 # pannous.com.

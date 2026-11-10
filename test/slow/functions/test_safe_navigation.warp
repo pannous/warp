@@ -1,0 +1,3 @@
+# safe navigation `a?.b` as the rule of core/extensions/safe_navigation.warp (card pure-safe-navigation)
+# a present value: its member
+is! 'p = {a: {b: 3}}; p?.a?.b' 3

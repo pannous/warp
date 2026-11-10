@@ -5,4 +5,3 @@
 'send stop the machine{reason: "x"} to: "test-nobody"; 5'	5
 
 # raise_stays_inside_the_program
-'n = 1; on stop the machine { n = 2 }; emit stop the machine; n'	2

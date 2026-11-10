@@ -62,8 +62,10 @@ written_parameters(signature: Node): list := {
 	parameters
 }
 
+# (a result type after the parentheses, `(a, b): int => a + b`, is no parameter: the parser reads the head as
+# `(a, b): int`, which only `x: int => …` without parentheses is, a typed parameter; card lambda-own)
 arrow_parameters(n: Node): Node := match lambda_of(n) {
-	Key(parameters, arrow, body): parameters
+	Key(parameters, arrow, body): if is_key(parameters, Op.Colon) and is_round(key_of(parameters)) then key_of(parameters) else parameters
 	_: n
 }
 arrow_result(n: Node): Node := match lambda_of(n) {
@@ -749,6 +751,17 @@ explicit_definition(statement: Node): Node := {
 	call = implicit_call(statement)
 	if call == ø then statement else Key(call, Op.Define, value_of(statement))
 }
+# `f = (a, b = 1) => a + b`, f written once, as the definition `f(a, b = 1) := a + b` it is, so a call leaving out b
+# takes its default as a definition's does (a lambda is a definition, card lambda-own); a result type after its
+# parentheses is dropped, as a lifted lambda's is (arrow_parameters)
+defaulted_lambda_definition(statement: Node, statements: list): Node := {
+	if not (is_key(statement, Op.Assign) and key_of(statement) is symbol and is_lambda(lambda_of(value_of(statement)))) { return statement }
+	arrow = lambda_of(value_of(statement))
+	parameters = written_parameters(arrow_parameters(arrow))
+	if not parameters.any(parameter => parameter_of(parameter).defaulted_to != ø) or writes_of(key_of(statement), statements) != 1 { return statement }
+	Key(call_node(key_of(statement), parameters), Op.Define, arrow_result(arrow))
+}
+writes_of(name: Node, statements: list): int := #statements.flat_map(nodes_in).filter(n => n is key and op_of(n) in [Op.Assign, Op.AddAssign, Op.SubAssign] and key_of(n) == name)
 
 # a global or main-level variable named as one of the program's functions, `global marks = {}` beside
 # `marks(n) := …`, in one file or two: the function's name read as a value is its closure, which takes no assignment,
@@ -772,7 +785,8 @@ defaulted_functions(statements: list): map := {
 	defaulted
 }
 lambdas(program: Node): Node := {
-	statements = statements_in(program).map(explicit_definition)
+	given = statements_in(program)
+	statements = given.map(statement => defaulted_lambda_definition(explicit_definition(statement), given))
 	positions = function_positions_of(statements + linked_definitions(program))
 	written = statements.map(statement => with_function_parameters(celled_definition(statement, positions)))
 	main_statements = written.filter(statement => definition_of(statement) == ø)

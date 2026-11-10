@@ -26,15 +26,8 @@ Weekly: `scripts/llm/docs_check.py --dry-run && scripts/llm/corpus.py --dry-run`
 `--file-cards` each. A full run of both costs about $2–3 and takes 20–40 min (batches take minutes even when small).
 Needs the anthropic SDK ≥ 1.0 (output_config) and json5: `pip3 install --upgrade --break-system-packages anthropic json5`.
 
-## Claude Code on the API key (checked 2026-10-10, Claude Code 2.1.296)
-- Headless works: `ANTHROPIC_API_KEY=$ANTHROPIC_KEY_WARP claude -p …` (apiKeySource ANTHROPIC_API_KEY), and its
-  ListAgents and SendMessage reach the local sessions (a probe's message arrived in warp-llm).
-- Interactive does not: the same key in an interactive session gets `400 Your credit balance is too low` on every
-  turn, while `-p` requests a minute apart succeed. The only request difference in the debug log is the billing
-  header `cc_entrypoint=cli` versus `sdk-cli`: the credit apparently covers API/SDK use, not the interactive CLI.
-- Remote Control: `/remote-control` in a session on the key says "Remote Control is disabled by your organization's
-  policy" (the key's organization, not the claude.ai one). So no claude.ai URL, no phone control.
-- A trivial Opus turn costs ~$0.14 (37k tokens of system prompt and tools, cached once); a real worker session
-  costs dollars to tens of dollars on Opus 5.5 ($4/$20 per MTok), a fraction on Sonnet 5.5.
-- Wrapper used for the probes: source ~/.keys, `export ANTHROPIC_API_KEY=$ANTHROPIC_KEY_WARP`, `exec claude "$@"`
-  (the key stays out of argv). The first interactive start asks "Do you want to use this API key?".
+## Claude Code on the API key
+- Headless works: `ANTHROPIC_API_KEY=$ANTHROPIC_KEY_WARP claude -p …`; its ListAgents and SendMessage reach the local
+  sessions.
+- Interactive and Remote Control do not: an interactive session on the key gets `400 Your credit balance is too low`,
+  and `/remote-control` is disabled by the key's organization's policy.

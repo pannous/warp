@@ -76,6 +76,20 @@ alias reversed => reverse
 alias squared => square
 alias cubed => cube
 alias clone => copy
+// synonyms of the canonical words (decision synonyms-are-aliases)
+alias description => doc
+alias returns => return_type
+alias was => old
+alias previous => old
+alias invocable => callable
+alias runnable => callable
+alias forEach => each
+alias for_each => each
+alias foreach => each
+alias integer => int
+alias string => text
+alias unit => empty
+alias nil => empty
 alias ordinal => ord
 alias codepoint => ord
 alias isdigit => is_digit
@@ -95,6 +109,15 @@ first(xs: list or text) := xs#1
 // decision byte-index-of: a text names the unit it counts a part's place in: `"a👍🏽b".find "b"` is the position 3
 // (characters from 1, like t#p), `"a👍🏽b".byte_index_of "b"` the offset 9 (bytes from 0); a missing part is an error
 byte_index_of(t: text, part: text) := byte_size(split(t, present_part(t, part))#1)
+// `x#i = c` of a text (extensions/sugar/text_elements.warp): the text with its i-th character replaced (1-based, by
+// grapheme), a new text, as texts are values; c a character, a one-character text or a code point (97 → 'a'). A
+// prelude word, as a sugar rule's call brings the prelude's word along and no module (card text-element-assign)
+text_with_at(t: text, i: int, c: any): text := {
+	ch = if c is int then "" + chr(c) else "" + c
+	parts = chars(t)
+	parts#i = ch
+	join(parts, "")
+}
 // Python's `list(x)`: the list itself, a text's characters
 as_list(x) := x as list
 // `count x in y`, `y.count(x)`: how often x occurs as an item of a list or a character of a text, and how often part
@@ -207,7 +230,7 @@ fits_text_type(t: text, type: text) := match type {
 	"word" => consists_of(t, is_word_char)
 	_ => true
 }
-// text patterns (notes/matching.md): the texts of the holes between the pieces of `"0x" + rest`, [] when t doesn't
+// text patterns (wiki/pattern-matching.md): the texts of the holes between the pieces of `"0x" + rest`, [] when t doesn't
 // match (also when t is no text); the first piece is the prefix, the last the suffix, "" where the pattern starts or
 // ends with a hole; each hole's text fits its type, "" for any text
 text_holes(t, pieces: [text], types: [text]) := {
@@ -482,7 +505,7 @@ display.size := [display_width, display_height] px
 // the diagonal as a length: its nearest whole px at the density (quantities run as exact amounts, a run-time √ is a
 // float)
 display.diagonal := round(√(display_width² + display_height²)) * 1px / (display_dpi * 1dpi)
-// The fields of a time at run time (card time-fields-warp, notes/dates_at_run_time.md), called late by the emitter's
+// The fields of a time at run time (card time-fields-warp, wiki/time.md), called late by the emitter's
 // time_field with the time's form (TimeForm: 1 a date, its position in days; else nanoseconds since 1970), its
 // position, its zone's seconds east of UTC (a zoned time's, else 0; not `offset`: the index type's synonym) and the
 // index of the field in times.rs TIME_FIELDS. A zoned time's fields are those of its wall clock, its epoch seconds the instant's

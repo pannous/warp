@@ -1,0 +1,1 @@
+'p = {a: {type: "image", src: "c.jpg"}}; (p replace {type: "image", src} with {type: "link", href: src}).a.href'	'c.jpg'

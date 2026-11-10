@@ -1,0 +1,4 @@
+# from test_property_access.rs: edit the Rust test, then run the script again
+# test_dot_on_an_object_literal
+'p={a:1 b:{c:3}}; p.b.c'	3
+'p={a:1 b:{c:3}}; c of b of p'	3

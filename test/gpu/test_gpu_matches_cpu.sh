@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The GPU paints what the CPU paints (card shader-port, notes/wgsl_robustness.md): each program paints a warp function
+# The GPU paints what the CPU paints (card shader-port): each program paints a warp function
 # headless twice, as its WGSL shader and, with WARP_GPU=off, as warp code on the CPU, and the two pictures agree pixel
 # by pixel (within f32 rounding). A form the shader can't say is refused by name, so the GPU run paints nothing and the
 # case fails. Run it with bash test/gpu/test_gpu_matches_cpu.sh [name…]; the warp under test is WARP (default the warp

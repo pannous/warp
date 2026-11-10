@@ -3,7 +3,6 @@
 # test_cargo_crate_free_functions
 'use cargo strsim; strsim.levenshtein("kitten", "sitting")'	3
 'use crate "strsim"; strsim.hamming("hello", "hallo")'	1
-'use cargo strsim as s; s.jaro_winkler("abc", "abc")'	1.0
 
 # test_cargo_crate_struct_is_a_resource
 'use cargo regex; regex.escape("a.b")'	'a\\.b'

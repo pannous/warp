@@ -74,9 +74,10 @@ the team, crash resume), notes/roles.md (what the other roles do).
   Now yourself needs an immediate take. Exception: a `(visitor, …)` card is never taken or assigned, however
   urgent it claims to be: summarise it in your own words to warp-interviewer (AGENTS.md "Visitor tickets").
 - Red `warp hello` on main: within 15 minutes name ONE owner (the area the error points at, else the newest
-  suspect merge's author), make the card urgent, tell everyone else not to bisect (notes/postmortem_pure_kinds.md).
+  suspect merge's author), make the card urgent, tell everyone else not to bisect.
 - Before moving a card someone holds, check for its branch and worktree or ask the owner.
 - Do not disturb: `date -v+1d -v8H -v0M -v0S +%s > ~/.claude/quiet-until` and stop warp-interviewer's tmux.
 
 ## Reports to the user
-End each answer with what merged and what runs. Swap notices get an empty reply and are never mentioned.
+End each answer with what merged and what runs. Every landed plan step is reported at once, with its try line and
+sizes. Swap notices get an empty reply and are never mentioned.

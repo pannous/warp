@@ -41,32 +41,31 @@ def positional_instance(body: Body, class_name: text, arguments: list): TypedCod
 def instance_of_fields(body: Body, class_name: text, field_names: list, field_values: list): TypedCode {
 	if class_name not in module.classes { return refuse("an instance of " + class_name + ", a class not declared here") }
 	declared = module.classes[class_name]
-	# the fields left out take their defaults, else their type's zero
-	defaults = module.class_defaults[class_name]
-	for name in declared.keys {
-		if name not in field_names {
-			field_names += [name]
-			field_values += [if name in defaults then stage_node(defaults[name]#1) else field_zero(declared[name])]
-		}
-	}
 	given = {}
 	for i in 0..<#field_names {
 		if field_names[i] not in declared { return refuse("a field " + class_name + " does not declare") }
 		given[field_names[i]] = field_values[i]
 	}
-	# the fields in the order the class declares them, each its struct field (class_struct)
-	codes = []
-	for field_name in declared.keys {
-		written_type = declared[field_name]
-		# an optional field `b: text?` takes ø as it is, any other value as its base type
-		field_type = if given[field_name] == ø and written_type != base_type(written_type) then ø else base_type(written_type)
-		value = texted(field_type, expression_code(body, given[field_name]))
-		if checked_by_test(written_type, field_type, value.kind) { codes += [type_checked(body, written_type, value).code] } else {
-			if not checked_at_run_time(field_type, value.kind) and not admits(field_type, value.kind) { return refuse("a " + kind_spelling(value.kind) + " for a typed field of " + class_name) }
-			codes += [boxed(field_value(field_type, value))]
-		}
-	}
-	TypedCode(ValueKind.Node, instance_head(class_name) + concatenated(codes) + gc_code(gc_ops.struct_new, [class_struct_index(class_name)]))
+	# the fields in the order the class declares them, each its struct field (class_struct); those left out take their
+	# defaults
+	instance_made(class_name, declared.keys.map(name => field_code(body, class_name, name, if name in field_names then given[name] else field_default(class_name, name))))
+}
+# the instance of the class whose struct fields the codes give, in the order it declares them
+instance_made(class_name: text, codes: list): TypedCode := TypedCode(ValueKind.Node, instance_head(class_name) + concatenated(codes) + gc_code(gc_ops.struct_new, [class_struct_index(class_name)]))
+# a field left out: its default, else its type's zero
+def field_default(class_name: text, name: text): any {
+	defaults = module.class_defaults[class_name]
+	if name in defaults then stage_node(defaults[name]#1) else field_zero(module.classes[class_name][name])
+}
+# the code of the field's value as its struct holds it, checked against the field's type
+def field_code(body: Body, class_name: text, name: text, given: any): list {
+	written_type = module.classes[class_name][name]
+	# an optional field `b: text?` takes ø as it is, any other value as its base type
+	field_type = if given == ø and written_type != base_type(written_type) then ø else base_type(written_type)
+	value = texted(field_type, expression_code(body, given))
+	if checked_by_test(written_type, field_type, value.kind) { return type_checked(body, written_type, value).code }
+	if not checked_at_run_time(field_type, value.kind) and not admits(field_type, value.kind) { return refuse("a " + kind_spelling(value.kind) + " for a typed field of " + class_name) }
+	boxed(field_value(field_type, value))
 }
 # a field's type's zero: 0, 0.0, "", no, [], else ø (an untyped or optional field, one of a class)
 kind_zero(kind: ValueKind?): any := match kind {
@@ -100,8 +99,11 @@ def class_struct(class_name: text): text {
 }
 # a class no other class extends has a final struct (79), else an open one (80): wasmtime tests a value against a
 # final type by comparing type indexes, against an open one of another type through its is_subtype libcall (each
-# instance lookup tested every class in turn so: a quarter of the emit; notes/compile_speed.md "Emit")
-def subtype_prefix(class_name: text): int { if class_name in module.parents.values then 80 else 79 }
+# instance lookup tested every class in turn so: a quarter of the emit; notes/compile_speed.md "Emit"). A library
+# module's class is open wherever it is declared, in the module and in each program linking it: any program may extend
+# it (`class ParseError: Error` of the prelude's Error), and a final struct has no subtype
+def subtype_prefix(class_name: text): int { if class_name in module.parents.values or is_module_class(class_name) then 80 else 79 }
+def is_module_class(class_name: text): bool { (module.relocating and not module.prebuilding) or class_name in linked_needs() }
 # $Instance, every class's struct's supertype, a fixed GC type (emitter.warp gc_types): a $Node with the map of its
 # extra fields
 instance_fields = ["kind", "data", "value", "extra"]
@@ -234,13 +236,6 @@ def of_class(value: list, class_name: text): list {
 	same = as_eq(value + gc_code(gc_ops.ref_cast, [struct_index]) + gc_code(gc_ops.struct_get, [struct_index, 1])) + as_eq(descriptor_global(class_name)) + [op.ref_eq]
 	value + gc_code(gc_ops.ref_test, [struct_index]) + [op.if] + value_type(ValueKind.Bool) + same + [op.else, op.i32_const, 0, op.end]
 }
-# whether the name (parameter 1, a text node) is this field's: its byte count first, then its bytes (a lookup tests
-# each field of a class)
-def names_field(field: text): list {
-	name = payload([op.local_get, 1], gc_type(gc.text))
-	same_count = name + gc_code(gc_ops.array_len, []) + [op.i32_const] + sleb(#field.bytes) + [op.i32_sub, op.i32_eqz]
-	same_count + if_else_code(ValueKind.Bool, runtime_call("same_bytes", [TypedCode(ValueKind.Text, name), text_value_of(field)]), TypedCode(ValueKind.Bool, [op.i32_const, 0]))
-}
 # `field·code(m)`: m's field code read from the struct of whichever class declaring it m is an instance of, a subclass
 # before its parent; any other value as map_get reads it
 field_getter_prefix = "field·"
@@ -259,12 +254,16 @@ def field_setter_code(f: Function) {
 }
 
 ## class descriptors
-# a $Class's words, each a reference of a closure call's type (emitter.warp gc_types), in its fields from 3: a class's
-# own entries(m), field_at(m, index), place(m, name), set(m, name, value) and construct(type, values), then the
-# module's show(m), float(m), call(m, argument…), operate(m, a, b, operator) and method(m, name, arguments), shared by
-# its classes (its dispatchers know them all); a place and a set's outcome an i31. A word the module lacks is ø
+# a $Class's words, each a reference of a closure call's type (emitter.warp gc_types), in its fields from 3:
+# entries(m), field_at(m, index), place(m, name), set(m, name, value) and construct(type, values), a class's own but
+# entries and place (named_class_slots), then the module's show(m), float(m), call(m, argument…), operate(m, a, b,
+# operator) and method(m, name, arguments), shared by its classes (its dispatchers know them all); a place and a set's
+# outcome an i31. A word the module lacks is ø
 class_slots = ["entries", "field_at", "place", "set", "construct", "show", "float", "call", "operate", "method"]
-own_class_slots = ["entries", "field_at", "place", "set", "construct"]
+own_class_slots = ["field_at", "set", "construct"]
+# the slots whose words read only the field names every instance carries (runtime maps.warp declared_place): one word
+# for all classes
+named_class_slots = ["entries", "place"]
 class_word_prefix = "class_word·"
 descriptor_prefix = "descriptor·"
 def slot_field(slot: text): int := 3 + class_slots.index_of(slot) - 1
@@ -316,10 +315,10 @@ def class_word_code(made: list) {
 	class_name = made#2
 	slot = made#3
 	if slot == "descriptor" { f.code = descriptor_maker(class_name) }
-	else if slot == "entries" { f.code = class_entries_code(class_name) }
-	else if slot == "field_at" { f.code = class_field_at_code(class_name) }
-	else if slot == "place" { f.code = class_place_code(class_name) }
-	else if slot == "set" { f.code = class_set_code(class_name) }
+	else if slot == "entries" { f.code = class_entries_code() }
+	else if slot == "field_at" { f.code = class_field_at_code(f, class_name) }
+	else if slot == "place" { f.code = class_place_code() }
+	else if slot == "set" { f.code = class_set_code(f, class_name) }
 	else if slot == "construct" { f.code = class_construct_code(f, class_name) }
 	else if slot == "operate" { f.code = class_operate_code() }
 	else if slot == "method" { f.code = class_method_code() }
@@ -339,20 +338,11 @@ def descriptor_maker(class_name: text): list {
 # a reference to the descriptor's word of the slot, ø when the module has none (no show(), no call word)
 def slot_reference(slot: text, class_name: text): list {
 	if slot in own_class_slots { return [op.ref_func] + relocatable(relocated.calls, class_word(slot, class_name).index) }
-	present = if slot == "call" then instance_call_word() != ø else if slot == "operate" then #operated_dispatchers() > 0 else if slot == "method" then #method_dispatchers() > 0 else module.functions.get(if slot == "show" then instance_show_word else HiddenWord.FloatHooked as text) != ø
+	present = if slot in named_class_slots then yes else if slot == "call" then instance_call_word() != ø else if slot == "operate" then #operated_dispatchers() > 0 else if slot == "method" then #method_dispatchers() > 0 else module.functions.get(if slot == "show" then instance_show_word else HiddenWord.FloatHooked as text) != ø
 	if present then [op.ref_func] + relocatable(relocated.calls, class_word(slot, "").index) else [ref_null, funcref_byte]
 }
 # the instance (parameter 0) cast to the class's struct
 def instance_cast(class_name: text): list := [op.local_get, 0] + gc_code(gc_ops.ref_cast, [class_struct_index(class_name)])
-# its fields as the map of their names, then its extra ones
-def class_entries_code(class_name: text): list {
-	struct_index = class_struct_index(class_name)
-	fields = module.classes[class_name].keys
-	entries = range_list(#fields).map(i => keyed_code(name_node(symbol(fields[i])), instance_cast(class_name) + gc_code(gc_ops.struct_get, [struct_index, i + #instance_fields])))
-	declared = TypedCode(ValueKind.Node, node(Marked.Map, vector_code(entries)))
-	extra = TypedCode(ValueKind.Node, instance_cast(class_name) + gc_code(gc_ops.struct_get, [struct_index, extra_field]))
-	runtime_call("with_entries_of", [declared, extra]).code
-}
 # The places of an instance's fields, as map_index counts them: its class's declared ones from 1, then its extra ones
 # (card instance-words-build: a lookup reads the struct, the entries are built only to walk or show them)
 # m's extra fields, the map or ø
@@ -360,53 +350,70 @@ def extra_of(): TypedCode {
 	base = gc_type(instance_struct())
 	TypedCode(ValueKind.Node, [op.local_get, 0] + gc_code(gc_ops.ref_cast, [base]) + gc_code(gc_ops.struct_get, [base, extra_field]))
 }
+# m's declared field names, the list its class's instances share (instance_head)
+names_of(): TypedCode := TypedCode(ValueKind.Node, [op.local_get, 0] + gc_code(gc_ops.struct_get, [gc_type(gc.node), 2]))
+# the place of the field named by parameter 1, an i64 (runtime maps.warp declared_place)
+declared_place_code(): list := runtime_call("declared_place", [names_of(), extra_of(), TypedCode(ValueKind.Text, payload([op.local_get, 1], gc_type(gc.text)))]).code
 # a place, an outcome, as an i31 a descriptor's word gives
 def small_number(code: list): list { code + [op.i32_wrap_i64] + gc_code(gc_ops.ref_i31, []) }
-# field_at(m, index): its field at that place, ø past its fields
-def class_field_at_code(class_name: text): list {
-	struct_index = class_struct_index(class_name)
-	fields = module.classes[class_name].keys
-	index = unboxed([op.local_get, 1], gc_type(gc.int_box))
-	code = []
-	for i in 0..<#fields { code += index + [op.i64_const] + sleb(i + 1) + [op.i64_eq, op.if, no_value] + instance_cast(class_name) + gc_code(gc_ops.struct_get, [struct_index, i + #instance_fields]) + [op.return, op.end] }
-	code + runtime_call("extra_value_at", [extra_of(), TypedCode(ValueKind.Int, index), TypedCode(ValueKind.Int, [op.i64_const] + sleb(#fields))]).code
+# entries(m) and place(m, name), every class's: its fields as the map of their names, then its extra ones; the place of
+# its field name, 0 when it has none
+class_entries_code(): list := runtime_call("declared_entries", [TypedCode(ValueKind.Node, [op.local_get, 0]), names_of(), extra_of()]).code
+class_place_code(): list := small_number(declared_place_code())
+# the case of a place (an i64 counted from 1, held in the word's one local) among the class's fields, each case's code
+# ending in a return, else the otherwise code: one jump table, never a test per field
+def field_cases(f: Function, place: list, count: int, case: function, otherwise: list): list {
+	at = uleb(#f.kinds)
+	f.locals = [ValueKind.Int]
+	held = place + [op.i64_const, 1, op.i64_sub, op.local_set] + at
+	blocks = concatenated(range_list(count + 1).map(i => [op.block, no_value]))
+	outside = [op.local_get] + at + [op.i64_const] + sleb(count) + [op.i64_ge_u, op.br_if] + uleb(count)
+	table = [op.local_get] + at + [op.i32_wrap_i64, op.br_table] + uleb(count) + concatenated(range_list(count + 1).map(i => uleb(i)))
+	held + blocks + outside + table + concatenated(range_list(count).map(i => [op.end] + case(i))) + [op.end] + otherwise
 }
-# place(m, name): the place of its field name, 0 when it has none
-def class_place_code(class_name: text): list {
-	fields = module.classes[class_name].keys
-	code = []
-	for i in 0..<#fields { code += names_field(fields[i]) + [op.if, no_value] + small_number([op.i64_const] + sleb(i + 1)) + [op.return, op.end] }
-	name = TypedCode(ValueKind.Text, payload([op.local_get, 1], gc_type(gc.text)))
-	code + small_number(runtime_call("extra_place", [extra_of(), name, TypedCode(ValueKind.Int, [op.i64_const] + sleb(#fields))]).code)
+# field_at(m, index): its field at that place, ø past its fields
+def class_field_at_code(f: Function, class_name: text): list {
+	struct_index = class_struct_index(class_name)
+	count = #module.classes[class_name].keys
+	index = unboxed([op.local_get, 1], gc_type(gc.int_box))
+	read = (i => instance_cast(class_name) + gc_code(gc_ops.struct_get, [struct_index, i + #instance_fields]) + [op.return])
+	field_cases(f, index, count, read, runtime_call("extra_value_at", [extra_of(), TypedCode(ValueKind.Int, index), TypedCode(ValueKind.Int, [op.i64_const] + sleb(count))]).code)
 }
 # set(m, name, value): 1 when its class declares the field, set in its struct; 0 when it does not, the field set in its
 # extra fields
-def class_set_code(class_name: text): list {
+def class_set_code(f: Function, class_name: text): list {
 	struct_index = class_struct_index(class_name)
-	fields = module.classes[class_name].keys
-	code = []
-	for i in 0..<#fields { code += names_field(fields[i]) + [op.if, no_value] + instance_cast(class_name) + [op.local_get, 2] + gc_code(gc_ops.struct_set, [struct_index, i + #instance_fields]) + small_number([op.i64_const, 1]) + [op.return, op.end] }
+	write = (i => instance_cast(class_name) + [op.local_get, 2] + gc_code(gc_ops.struct_set, [struct_index, i + #instance_fields]) + small_number([op.i64_const, 1]) + [op.return])
 	base = gc_type(instance_struct())
 	name = payload([op.local_get, 1], gc_type(gc.text))
 	put = runtime_call("field_with", [extra_of(), TypedCode(ValueKind.Text, name), TypedCode(ValueKind.Node, [op.local_get, 2])]).code
-	code + [op.local_get, 0] + gc_code(gc_ops.ref_cast, [base]) + put + gc_code(gc_ops.struct_set, [base, extra_field]) + small_number([op.i64_const, 0])
+	extra = [op.local_get, 0] + gc_code(gc_ops.ref_cast, [base]) + put + gc_code(gc_ops.struct_set, [base, extra_field]) + small_number([op.i64_const, 0])
+	field_cases(f, declared_place_code(), #module.classes[class_name].keys, write, extra)
 }
-# construct(type, values): the class's instance of the values, as `P(3, "a")` makes it, for each count up to its fields;
-# ø for more values
+# construct(type, values): the class's instance of the values, as `P(3, "a")` makes it, its fields past the values
+# taking their defaults; ø for more values than it has fields. One instance made, each field choosing by the count
+# (one instance per count made Module's construct 18.6 KB, card each-wasm)
 def class_construct_code(f: Function, class_name: text): list {
 	scope = new_body(f)
 	# (a made word's signature names no parameters: its locals in their order first)
 	for name in ["class", "values"] { local_index(scope, name, ValueKind.Node) }
+	fields = module.classes[class_name].keys
 	# a closure call passes at most hook_arities values, so no other count is ever constructed
-	given = min(#module.classes[class_name].keys, hook_arities)
-	values = range_list(given).map(i => "value" + (i + 1))
-	for name in values { local_index(scope, name, ValueKind.Node) }
+	given = min(#fields, hook_arities)
 	count = payload([op.local_get, 1], gc_type(gc.list)) + gc_code(gc_ops.struct_get, [gc_type(gc.list), 0])
-	code = []
-	for i in 0..<given { code += count + [op.i32_const] + sleb(i) + [op.i32_gt_s, op.if, no_value] + closure_item([op.local_get, 1], i).code + [op.local_set] + uleb(local_index(scope, values[i], ValueKind.Node)) + [op.end] }
-	for k in 0 to given { code += count + [op.i32_const] + sleb(k) + [op.i32_eq, op.if, no_value] + boxed(positional_instance(scope, class_name, values[0 ..< k].map(name => symbol(name)))) + [op.return, op.end] }
+	beyond = (at => count + [op.i32_const] + sleb(at) + [op.i32_gt_s])
+	code = beyond(given) + [op.if, no_value, ref_null, gc_type(gc.node), op.return, op.end]
+	codes = []
+	for i in 0..<#fields {
+		default = field_code(scope, class_name, fields[i], field_default(class_name, fields[i]))
+		if i >= given { codes += [default] } else {
+			value = local_index(scope, "value" + (i + 1), ValueKind.Node)
+			chosen = closure_item([op.local_get, 1], i).code + [op.local_set] + uleb(value) + field_code(scope, class_name, fields[i], symbol("value" + (i + 1)))
+			codes += [beyond(i) + [op.if] + value_type(ValueKind.Node) + chosen + [op.else] + default + [op.end]]
+		}
+	}
 	f.locals = scope.kinds[#f.kinds ..]
-	code + [ref_null, gc_type(gc.node)]
+	code + boxed(instance_made(class_name, codes))
 }
 # the parameter as the module's conversion dispatcher named gives it, boxed; ø without that dispatcher
 def instance_converted_code(dispatcher: text): list {
@@ -637,16 +644,19 @@ declared_field(field: any): any := {
 }
 # an optional type's base, `text?` → text; any other type as it is
 base_type(type: text?): text? := if type is text and #type > 1 and type.ends_with("?") then type[0..<(#type - 1)] else type
-# a field's declared type as a name: `int` read as a type or as a symbol, `[int]` a list, else "?"
+# a field's declared type as a name: `int` read as a type or as a symbol, `[int]` a list, else "?": `a: [1]` and
+# `a: {b: 1}` are values, the field's default
 type_name_of(type: any): text := {
 	if kind_of(type) == "symbol" { return type#2 }
-	if kind_of(type) == "list" { return "list" }
+	if is_list_type(type) { return "list" }
 	# `int or text`, a union (decision union-or)
 	if kind_of(type) == "key" and type#2 == "or" { return type_name_of(type#3) + " or " + type_name_of(type#4) }
 	if kind_of(type) == "type" and kind_of(type#2) == "symbol" { return type#2#2 }
 	unnamed_type
 }
 unnamed_type = "?"
+# `[int]`, `[Point]`: a square list of one word, the type of its items (a view: "list", bracket, separator, items)
+is_list_type(type: any): bool := kind_of(type) == "list" and type#2 == "[" and #type == 4 and kind_of(type#4) in ["symbol", "type"]
 field_types(body: any): map := {
 	types = {}
 	for field in declared_fields(body) { types[field#1] = field#2 }

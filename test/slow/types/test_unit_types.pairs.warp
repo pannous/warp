@@ -1,0 +1,6 @@
+# a unit word in a type position is its dimension's class (card unit-fields): fields, variables, parameters
+'f(d: km) := d * 2; f(3km)'	6km
+'t = 1km; t += 500m; t'	1.5km
+'class Run{distance: km; note: text}; stored runs: [Run]; runs.add(Run(5km, "park")); stored_table("runs", Run)#1.distance'	5km
+'sum([2km, 500m])'	2.5km
+'x: km = 1500m; x'	1.5km

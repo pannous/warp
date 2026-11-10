@@ -96,22 +96,26 @@ red() {
 	say "RED $1 (card $key)"
 }
 
-# cost_watched <record>: the instructions the tip's build of <record> retired against the last landing's; more than
-# COST_JUMP_PERCENT up is an urgent card for the Supervisor (input-bind took the self-compile from
-# 1.8 T to 13 T and nobody noticed for hours). A reused compiler has no record of its own. Only warp-self.record:
-# warp.record swings ±20% by what the seed build reuses (one commit measured 3.43 and 3.85 T), so it
-# false-alarmed; the self-compile is one compiler run, steady to ~1%
+# cost_watched <record>: the instructions the tip's build of <record> retired against the lowest of the last
+# COST_HISTORY clean landings; more than COST_JUMP_PERCENT up is an urgent card for the Supervisor (input-bind took
+# the self-compile from 1.8 T to 13 T and nobody noticed for hours; warp.wasm's 4.4 → 6.4 T in two +15% steps on 11-09
+# passed unseen against a last-landing-only baseline, and warp-self rose in <10% steps). A reused compiler has no
+# record of its own; a +dirty tree's build (it reuses what the seed build kept: 3.43 and 3.85 T for one commit) is
+# neither compared nor kept as a baseline. Clean builds of one stretch stay within ±3%.
 COST_JUMP_PERCENT=10
+COST_HISTORY=10
 cost_watched() {
-	local record=$1 hash timing now last last_tip
+	local record=$1 hash timing now lowest history
+	history=$state/cost-$record
 	hash=$(cut -d' ' -f1 "$TREE/lib/warp.wasm.inputs" 2>/dev/null) || return
 	timing=$warp_store/$hash/$record/time
 	now=$(awk '/instructions retired/ {print $1}' "$timing" 2>/dev/null)
 	[ -n "$now" ] || return
-	read -r last last_tip <"$state/cost-$record" 2>/dev/null
-	echo "$now ${tip:0:10}" >"$state/cost-$record"
-	if [ -n "${last:-}" ] && [ $((now * 100)) -gt $((last * (100 + COST_JUMP_PERCENT))) ]; then
-		red "build cost: $record $(cost_in_tera "$last") T at ${last_tip} → $(cost_in_tera "$now") T (+$(((now - last) * 100 / last))%)" --urgent
+	grep -q '^commit .*+dirty' "$warp_store/$hash/$record/inputs.txt" 2>/dev/null && return
+	lowest=$(sort -n "$history" 2>/dev/null | head -1 | cut -d' ' -f1)
+	{ echo "$now ${tip:0:10}"; head -n $((COST_HISTORY - 1)) "$history" 2>/dev/null; true; } >"$history.new" && mv "$history.new" "$history"
+	if [ -n "${lowest:-}" ] && [ $((now * 100)) -gt $((lowest * (100 + COST_JUMP_PERCENT))) ]; then
+		red "build cost: $record $(cost_in_tera "$lowest") T (lowest of the last $COST_HISTORY) → $(cost_in_tera "$now") T at ${tip:0:10} (+$(((now - lowest) * 100 / lowest))%)" --urgent
 	fi
 }
 cost_in_tera() { awk -v n="$1" 'BEGIN {printf "%.2f", n / 1e12}'; }
@@ -323,9 +327,12 @@ playground_refreshed() {
 }
 
 # page_smoked: the refreshed playground runs PAGE_SMOKE as the native warp does (card after-push-playground); a host
-# import the page lacks fails every sample here, hello first (canonical_text), so this is the import check too
+# import the page lacks fails every sample here, hello first (canonical_text), so this is the import check too. The
+# native side runs anew first: the checkout's stored outputs were days old (component_totals before its html sweep
+# was DIFF from 1f11efe450 on, card after-push-page-smoke-1110)
 page_smoked() {
 	local got
+	nice -n 10 "$scripts/samples.sh" "$MAIN_CHECKOUT" "${PAGE_SMOKE[@]}" >/dev/null
 	got=$(nice -n 10 "$scripts/samples-web.sh" "$MAIN_CHECKOUT" "${PAGE_SMOKE[@]}" 2>&1 | tail -1)
 	[[ $got == *"${#PAGE_SMOKE[@]} of ${#PAGE_SMOKE[@]} print"* ]] || red "page smoke: ${got:0:160}"
 	return 0
@@ -358,6 +365,7 @@ slow_tiers() {
 	promoted=$("$scripts/promote-self.sh" "$TREE" | tail -1)
 	echo "$promoted"
 	[[ $promoted == *"NO FIXPOINT"* || $promoted == *FAILED* ]] && red "self lane: ${promoted:0:160}" --urgent
+	cost_watched warp.record
 	cost_watched warp-self.record
 	install_compilers
 	"$scripts/gate.sh" --no-rebuild --tiers 1-2 --base "$since" --tag-good "$TREE" "$MAIN_WARP" >"$state/gate-${tip:0:10}.log" 2>&1 ||

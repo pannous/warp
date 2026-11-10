@@ -88,7 +88,9 @@ function postSync(url, body, headers = {}) {
 }
 
 // A program sees a secret of the page (the playground's API key, assistant.js) only as its stand-in `env` gives:
-// the secret itself goes into a header of a request to its own service, nowhere else, so no program can send it away
+// the secret itself goes into a header of a request to its own service, nowhere else, so no program can send it away.
+// The Anthropic key (⋯ menu, localStorage warp-playground-anthropic-key): env gives "playground-key", swapped for the
+// key only in a header of a request to api.anthropic.com; any other URL is an error
 function withPageSecret(url, value) {
 	const secret = self.pageSecrets?.[value];
 	if (!secret) return value;

@@ -1,0 +1,2 @@
+# date/instant + text concatenates; field UFCS under lib/time stays usable in + (samples/numbers/dates.warp)
+'"w " + 2024-02-29.weekday'	'w 4'

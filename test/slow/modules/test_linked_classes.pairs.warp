@@ -1,0 +1,4 @@
+# a module's classes linked at load time (card wasm-module-linking, L5c): a class of the same shape in the program or
+# another module is another class; a module's instances are its own class's wherever they go
+'use units; 3m + 2m'	5m
+'use units; use sound; 3m + 2m'	5m

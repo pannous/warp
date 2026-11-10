@@ -1,21 +1,21 @@
 # Warp's type theory: the core calculus W0 and its formal model
 
-Roadmap card: type-theory (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
+Roadmap card: type-theory (board topic; its sub-cards are the steps and leftovers below).
 
 Goal: warp's type system has a formal model in Lean 4 with machine-checked soundness (progress and
 preservation), and the implementation is tied to that model by tests so they cannot drift.
 
-This note states the model and maps every rule to the code that implements it today. Where warp's checker accepts a
-program the model rejects, that is a **hole** (listed at the end, each with its card); the differential test
-(tests/types/test_type_model.rs) pins them, so a fixed hole fails the test until it is taken off the list.
+This note states the model. Where warp's checker accepts a program the model rejects, that is a **hole** (listed
+below, each with its card). The exporter (a warp program as W0 items) and the differential test were part of the Rust
+compiler and are gone; where a section says what "the exporter" does, it says how a warp form maps into W0, and its
+holes and differences were measured against the Rust compiler.
 
 ## Why a checker of many passes can still have one theory
 
-Warp has no single type checker. Static typing is spread over passes that each refuse one kind of mistake:
-`analyzer::check_type_errors`/`check_assignment` (variable kinds), `check_kind_changes` (P45), `check_declared_types`
-(`x:int = …`), `check_constants` (P130), charged `:=` (P71/P138), parameter checks in user_functions.rs (P49) and
-lowering/types/traits.rs `admit`, and the operator checks in inference.rs `node_arithmetic`. The model W0 is the single
-judgment those passes approximate. The contract: **warp rejects ⇐ W0 rejects** (soundness of the implementation is
+Warp has no single type checker. Static typing is spread over checks that each refuse one kind of mistake:
+variable kinds (P45), declared types (`x:int = …`), constants (P130), charged `:=` (P71/P138), parameter checks
+(P49), and the operator checks (core/analysis/analyzer.warp `arithmetic_kind`). The model W0 is the single
+judgment those checks approximate. The contract: **warp rejects ⇐ W0 rejects** (soundness of the implementation is
 what we want; every program W0 rejects should be refused by warp at compile time). Warp may refuse more (it refuses
 ambiguous forms per notes/welcoming.md), never less, except at a listed hole.
 
@@ -45,25 +45,25 @@ program    P ::= Σ (declared names: x ↦ (m, τ, charged body?)), Φ (function
                Θ (classes: C ↦ its own fields f:τ), main e
 ```
 
-Code: `Node` (src/node/mod.rs) carries all of this untyped; `Kind` (src/type_kinds.rs) is the run-time tag. W0 types
-are the static view: `bool` is BOOL_KIND (an Int marked above the kind bits, notes/bool_type.md), `exact` the
-decimals and rationals (`0.5`, `7/2`: a ratio, wasm_emitter/exact.rs; warp's word `rational`), `float` the floats
-(Kind::Float: `sqrt(2)`, `x as float`), `number` either, kept as given (card number-keeps-exact), see Exact numbers and floats below. `never` is the type of `error …` (inference.rs
-`raises_error`: "an `error …` branch is the bottom kind", notes/error_branch_kind.md) and of the elements of `[]`.
+Code: `Node` (core/node.warp) carries all of this untyped; `Kind` is the run-time tag. W0 types
+are the static view: `bool` is BOOL_KIND (an Int marked above the kind bits, wiki/bool.md), `exact` the
+decimals and rationals (`0.5`, `7/2`: a ratio; warp's word `rational`), `float` the floats
+(`sqrt(2)`, `x as float`), `number` either, kept as given (card number-keeps-exact), see Exact numbers and floats below. `never` is the type of `error …` (core/analysis/analyzer.warp
+`raises_error`: "an `error …` branch is the bottom kind", wiki/Error.md) and of the elements of `[]`.
 
 ## Subtyping (≤)
 
-| rule | meaning | code |
-| --- | --- | --- |
-| τ ≤ τ, never ≤ τ, τ ≤ any | reflexive, bottom, top (`any` = a Node, `value:any`) | — |
-| bool ≤ int | true/false act as 1/0 (P195: `true + 1` is 2) | BOOL_KIND masks to Int |
-| int ≤ exact ≤ number, int ≤ float ≤ number | `x: rational = 2`, `x: float = 2` are accepted; `x: rational = sqrt(2)` is not | checks.rs `assignment_mismatch` (Float ← Int), user_functions.rs (a float where an exact is expected) |
-| list σ ≤ list τ if σ ≤ τ | **covariant lists** | probes/variance/ |
-| ranged a b ≤ ranged c d if c ≤ a, b ≤ d; ranged ≤ int | a fixed width (`int16`) is the range of ints it holds | fixed_width.rs |
-| cls p ≤ cls q if q is a prefix of p | a subclass or variant extends its parent's chain | class_methods.rs inherit, traits.rs IS_TYPE |
-| quantity D ≤ quantity D only | a quantity is no number: `1 m + 1` is a DimensionError | static_units.rs |
-| codepoint ≤ text | `"a"` parses as a codepoint, taken where a text is (`x: text = "a"`) | analyzer admits |
-| ø ≤ τ? ≤ any, τ ≤ τ? | an optional `int?` (`Ty.opt`) takes ø and its inner type's values; `σ? ≤ τ` when τ admits ø and σ ≤ τ | checks.rs (`a: int = none` is refused) |
+| rule | meaning |
+| --- | --- |
+| τ ≤ τ, never ≤ τ, τ ≤ any | reflexive, bottom, top (`any` = a Node, `value:any`) |
+| bool ≤ int | true/false act as 1/0 (P195: `true + 1` is 2) |
+| int ≤ exact ≤ number, int ≤ float ≤ number | `x: rational = 2`, `x: float = 2` are accepted; `x: rational = sqrt(2)` is not |
+| list σ ≤ list τ if σ ≤ τ | **covariant lists** |
+| ranged a b ≤ ranged c d if c ≤ a, b ≤ d; ranged ≤ int | a fixed width (`int16`) is the range of ints it holds |
+| cls p ≤ cls q if q is a prefix of p | a subclass or variant extends its parent's chain |
+| quantity D ≤ quantity D only | a quantity is no number: `1 m + 1` is a DimensionError |
+| codepoint ≤ text | `"a"` parses as a codepoint, taken where a text is (`x: text = "a"`) |
+| ø ≤ τ? ≤ any, τ ≤ τ? | an optional `int?` (`Ty.opt`) takes ø and its inner type's values; `σ? ≤ τ` when τ admits ø and σ ≤ τ |
 
 **Optionals (Ty.lean).** `admitsUnit τ` (ø, an optional, any) says where ø goes; `base` strips the optional marks,
 `strip` the ø part (`strip ø = never`). `sub` stays structural on its first argument and compares a plain type with
@@ -98,34 +98,34 @@ typed array against a call's result (`f(xs) === xs`) is still no. The compile-ti
 lists `ys: numbers = xs; ys.add(2.5)` and `ys#1 = 2.5` as known value differences (W0: error, warp: adds it; card p215-user).
 
 Join (least upper bound) `σ ⊔ τ`: the type of `if … then σ else τ`, of a list literal's elements, of `try σ catch τ`.
-`int ⊔ text = any`, `list int ⊔ list text = list any`, `never ⊔ τ = τ`. Code: inference.rs `branches_kind`.
+`int ⊔ text = any`, `list int ⊔ list text = list any`, `never ⊔ τ = τ`. Code: core/analysis/analyzer.warp `branches_kind`.
 
 ## Typing Σ; Γ ⊢ e : τ (algorithmic: one type per expression, checks against upper bounds)
 
-| expression | rule | code |
-| --- | --- | --- |
-| literals | `n : int`, `q : number`, `"s" : text`, `true : bool`, `ø : unit`, `[] : list never` | inference.rs `infer_type` |
-| `v :: vs` | `σ :: list τ : list (σ ⊔ τ)` | `infer_list_type`, `list_type_name` |
-| `x` | Σ(x) = (m, τ) ⇒ τ; reading a charged name runs its body | analyzer `Scope::lookup` |
-| `e1 + e2` | `never` if a side is, `any` if a side is, `text` if a side is text (`"a" + 1` is "a1"), `int` if both ≤ int, else `number`; operands other than numbers and texts raise "not addable" at run time (checker: both ≤ number, text or any) | inference.rs `arithmetic_kind`, `node_arithmetic` |
-| `e1 - e2`, `e1 * e2` | `any` if a side is, `int` if both ≤ int, else `number`; non-numbers raise "not a number" (checker: both ≤ number or any) | same |
-| `e1 < e2` | ⇒ bool; non-numbers raise "not comparable" (checker: both ≤ number or any) | `infer_type` comparison arm |
-| `e1 == e2` | any operands ⇒ bool (`0 == false` is true) | equality.rs |
-| `if c then a else b` | c : any (truthiness: false, 0, ø, [] are falsy); a ⊔ b | `infer_type` if arms |
-| `while c do b` | ⇒ unit | lowering of loops |
-| `e # i` | e ≤ list any, i ≤ int ⇒ element type; out of range is an `error` at run time | `element_kind`, `index_out_of_range` |
-| `e1 ++ e2` | both ≤ list any ⇒ list (elem e1 ⊔ elem e2) | list_emitter append |
-| `init x e` | Σ(x) = (var or const, τ), e ≤ τ ⇒ τ | `check_assignment`, `check_declared_types` |
-| `x = e` | Σ(x) = (var, τ), e ≤ τ ⇒ τ. const: refused (P130). charged: refused (P138) | `check_constants`, `check_assignment` |
-| `let y : τ = e in b` | e ≤ τ, then b with y : τ | function locals |
-| `f(e)` | Φ(f) = (y:σ):τ, e ≤ σ ⇒ τ | user_functions.rs P49, traits.rs `admit` |
-| `f(xs)` broadcast | Φ(f) = (y:σ):τ, xs : list α, α ≤ σ ⇒ list τ (`f(x: int) := x+1; f([1])` is [2]); decided at compile time, so its own form | broadcasting |
-| `cast e τ` | any e ⇒ τ; at run time the value if it fits τ, else an error | list-element-types run-time item checks |
-| `error "s"` | `never` | `raises_error` |
-| `fail "s"` | `any` (dynamic data: a run-time check takes it where a type is declared) | Decided #1, errors as values |
-| `e failed` | any e ⇒ bool | `is_error` (warp_parser suffixes) |
-| `try e catch h` | e ⊔ h | try lowering, P60, decision #34 |
-| program | each charged body : τ under Σ; each function body ≤ its declared result with y : σ and assigns only `global` names; main typed | analyzer passes, functions2 (`global names`) |
+| expression | rule |
+| --- | --- |
+| literals | `n : int`, `q : number`, `"s" : text`, `true : bool`, `ø : unit`, `[] : list never` |
+| `v :: vs` | `σ :: list τ : list (σ ⊔ τ)` |
+| `x` | Σ(x) = (m, τ) ⇒ τ; reading a charged name runs its body |
+| `e1 + e2` | `never` if a side is, `any` if a side is, `text` if a side is text (`"a" + 1` is "a1"), `int` if both ≤ int, else `number`; operands other than numbers and texts raise "not addable" at run time (checker: both ≤ number, text or any) |
+| `e1 - e2`, `e1 * e2` | `any` if a side is, `int` if both ≤ int, else `number`; non-numbers raise "not a number" (checker: both ≤ number or any) |
+| `e1 < e2` | ⇒ bool; non-numbers raise "not comparable" (checker: both ≤ number or any) |
+| `e1 == e2` | any operands ⇒ bool (`0 == false` is true) |
+| `if c then a else b` | c : any (truthiness: false, 0, ø, [] are falsy); a ⊔ b |
+| `while c do b` | ⇒ unit |
+| `e # i` | e ≤ list any, i ≤ int ⇒ element type; out of range is an `error` at run time |
+| `e1 ++ e2` | both ≤ list any ⇒ list (elem e1 ⊔ elem e2) |
+| `init x e` | Σ(x) = (var or const, τ), e ≤ τ ⇒ τ |
+| `x = e` | Σ(x) = (var, τ), e ≤ τ ⇒ τ. const: refused (P130). charged: refused (P138) |
+| `let y : τ = e in b` | e ≤ τ, then b with y : τ |
+| `f(e)` | Φ(f) = (y:σ):τ, e ≤ σ ⇒ τ |
+| `f(xs)` broadcast | Φ(f) = (y:σ):τ, xs : list α, α ≤ σ ⇒ list τ (`f(x: int) := x+1; f([1])` is [2]); decided at compile time, so its own form |
+| `cast e τ` | any e ⇒ τ; at run time the value if it fits τ, else an error |
+| `error "s"` | `never` |
+| `fail "s"` | `any` (dynamic data: a run-time check takes it where a type is declared) |
+| `e failed` | any e ⇒ bool |
+| `try e catch h` | e ⊔ h |
+| program | each charged body : τ under Σ; each function body ≤ its declared result with y : σ and assigns only `global` names; main typed |
 
 A main-level name's declared type τ is its annotation (`x: int = …`, `xs: texts = …` = list text) or the type of its
 first value (`x = 1` declares int; P45: a later `x = "a"` is refused, "x was an Int, is given a Text").
@@ -179,14 +179,7 @@ Model choices to keep in mind (each a simplification of warp, not a claim about 
   first value, widened over the numbers it is given later (P45: `x = 1; x = 2.5` is a number; a bool stays bool), an
   undeclared list is `list any` (list-element-types: `[1, "a"]` is a valid list); a function's result is inferred by
   iteration from `never` (recursion); a call with a list where the function takes its items is a broadcast.
-- src/law/type_model.rs: `export` turns a warp program (parsed source) into W0 items; `verdicts` runs the model (it
-  builds the lake project first, so a broken proof fails); `warp_verdict` is `pipeline::compile`. Reuses the law
-  bridge's Lean runner (law/lean.rs). `warp types <file|code>` prints the export and both verdicts.
-- tests/types/test_type_model.rs: the model builds, no `sorry`/`admit`/`axiom` in it, the soundness theorems rest only
-  on Lean's core axioms; on the corpus, warp rejects every program the model rejects except the KNOWN_HOLES, and the
-  model accepts what warp compiles. A fixed hole fails the test until it is taken off the list.
-
-## Holes (warp compiles, W0 rejects), pinned by KNOWN_HOLES in tests/types/test_type_model.rs
+## Holes (warp compiles, W0 rejects)
 
 | program | W0 | card |
 | --- | --- | --- |
@@ -195,20 +188,19 @@ Model choices to keep in mind (each a simplification of warp, not a claim about 
 | `s = 0; for x in 3 { s += x }; s` | a for over an int (warp fails at run time, "not a list") | cleanup-early-shape-checks |
 
 P199: a bool place (a declared variable or parameter, or a variable whose first value is evidently bool) takes
-the literals 1 and 0 as yes and no. The exporter elaborates them to `.bool` (src/law/type_model.rs bool_literal),
+the literals 1 and 0 as yes and no. The exporter elaborates them to `.bool`,
 so `x: bool = 1` and `b = true; b = 1` are no holes.
 
 analyzer admits (the run-time check of a value against a builtin type word) agrees with W0 `Ty.sub` for every
-type word × W0 scalar value type (test_warp_admits_what_the_type_model_subtypes), except bool ← int: the run-time
+type word × W0 scalar value type, except bool ← int: the run-time
 Kind has no bool, so any int passes a bool check there.
 
 Refused by warp (no holes): declared list elements (`xs: ints = [1]; xs.add("a")`, `xs = ["a"]`, `xs: texts =
 [420]`), typed parameters (`f(x: text) := x; f(3)`), call results (`f(x: int) := x + 1; y = f(2); y = "a"`), upcasts
 read as their declared type (`s: Shape = Circle("a", 2); s.r`).
 static-int: a constant call whose value misfits its declared result (`def half(x) -> int { x / 2 }; half(3)`) is
-refused by `compile` (folding.rs refuse_result_misfits computes the call without the check); `half(4)` stays 2, as
-`x: int = 4/2` does (value-based, where W0 types `int / int` as exact and refuses both). Two corpus programs the model
-checks only by a run-time cast are refused earlier by warp: KNOWN_EARLIER_REFUSALS. Not a hole: `xs = [1]; xs = ["a"]`, an undeclared list holds anything.
+refused by `compile` (folding computes the call without the check); `half(4)` stays 2, as
+`x: int = 4/2` does (value-based, where W0 types `int / int` as exact and refuses both). Not a hole: `xs = [1]; xs = ["a"]`, an undeclared list holds anything.
 
 ## Classes and sum types (phase 4)
 
@@ -237,8 +229,8 @@ typed by a sum or by a variant.
 Evaluator.lean: `step` computes the next state, `step_sound` proves each of its steps is a `Step`, and `run` iterates
 it with fuel (`run_sound`: the end state is reachable by `Steps`). `outcome` elaborates, checks and runs a program,
 printing the value as warp prints it (`yes`, `[1 2]`, `"a"`, `3.5`, `1/3`) or `?` where the model keeps no value
-(floats other than whole ones, whose digits Lean prints differently; instances). test_warp_computes_what_the_type_model_computes compares that with warp's
-`pipeline::eval` on the corpus. The known differences are listed in KNOWN_VALUE_DIFFERENCES, each with its card:
+(floats other than whole ones, whose digits Lean prints differently; instances). The known differences
+from warp, each with its card:
 - instance-field (P200): `f(q: Point) := q.x = 7; p = Point(1); f(p); p.x` gives 1 in warp, 7 in the model.
 - bool-literal-value (P199): `f(b: bool) := b; f(1)` gives 1 (the parameter keeps the int), and the assignment
   expression `x: bool = 1` gives 1 while x holds yes.
@@ -269,12 +261,10 @@ for a whole number when they run. This is stricter than warp, never unsound, so 
   `f(x) := x + 1; f(3); f("a")` ("a1"), `f(x) := x - 1; f(3); f("a")` (a run-time error), `x: any = 2; x * 3`.
   warp is stricter than W0 where it knows the value: `x: any = "a"; x - 1` is a compile error in warp (constant
   propagation), so that form stays out of the corpus.
-- Coverage (probes/type_coverage.sh over data/types/sample_programs.txt, ~600 is!() programs sampled from tests/,
-  result data/types/coverage.txt): the exporter refuses method calls exported as field reads (a field read needs a
+- Coverage: the exporter refuses method calls exported as field reads (a field read needs a
   field some class declares; `.add` needs a name bound to a list). Lists are gradual like arithmetic: `#` gives
   `elementTy` (a text's element is a text, anything but a list or text gives `any`), `++` takes any operands, and
-  non-lists raise "not a list" when it runs; the checker demands lists, texts (for `#`) or `any`. Each section below
-  widened the exported share; every exported program agrees with warp.
+  non-lists raise "not a list" when it runs; the checker demands lists, texts (for `#`) or `any`.
 
 ## Globals
 
@@ -306,7 +296,7 @@ hold anything, as in warp. `a, *mid, z = …` is refused; destructuring into nam
 `a, b = 1, 2` (a tuple) exports each value into a hidden `·valueN_i` first, then assigns the names, so the values
 keep their static types and `a, b = b, a` swaps; names that hold values take plain assignments, checked against
 their declarations. A wrong count is refused (warp counts at compile time, W0 has no static count). warp skips the
-declaration check here: `a: int = 0; a, b = 2.5, 6` (card destructure-unchecked, KNOWN_HOLES).
+declaration check here: `a: int = 0; a, b = 2.5, 6` (card destructure-unchecked).
 
 `a = b = 3` exports as `b = 3`, then `a = b` (each a first binding or an assignment). warp checks a chained
 declared name only at run time (`a: int = 0; a = b = 2.5`, card chain-unchecked), and `a = p.x = 5` gives `a` the
@@ -332,7 +322,7 @@ stores "t". Not modelled: `m.keys`, methods (`get`, `remove`), `{}` subscripted 
 ## Increments
 
 `i++`, `++i` (and `--`) export as `i = i + 1`; in warp both forms give the new value. `b: bool = no; b++` compiles in
-warp (card bool-assign, KNOWN_HOLES); `s = "a"; s++` is an internal error in warp, while `s += 1` gives "a1" as in W0
+warp (card bool-assign); `s = "a"; s++` is an internal error in warp, while `s += 1` gives "a1" as in W0
 (card inc-text).
 
 ## + on lists
@@ -340,13 +330,13 @@ warp (card bool-assign, KNOWN_HOLES); `s = "a"; s++` is an internal error in war
 `xs + ys` of two lists concatenates (`plus`: a list of the elements' join; `addValues` concatenates two list values,
 `add_typed` proves it). The checker takes `+` when both sides are addable or both are listy (a list or `any`), so
 `[1] + 2` and `xs + "a"` stay errors, as in warp. warp skips the element check when a named list is concatenated
-into a declared one: `xs: ints = [1]; ys = ["a"]; xs = xs + ys` (card concat-unchecked, KNOWN_HOLES).
+into a declared one: `xs: ints = [1]; ys = ["a"]; xs = xs + ys` (card concat-unchecked).
 
 ## Texts in loops, count, in
 
 `for c in "abc"` walks the text's one-character texts (`forText` peels one with `walkText`; the loop variable has
 type `elementTy`, `text` for a text, as `#` gives). `count xs`, `count x in xs` (how often) and `x in xs` (warp's
-1-based first position, 0 when absent, tests/operators/test_in_position.rs) are derived forms: a walk with a fresh
+1-based first position, 0 when absent, test/operators/test_in_position.pairs.warp) are derived forms: a walk with a fresh
 `·tally` instance whose int fields hold the count and the index, items compared by `==`. `count 5` (warp: 1) is
 outside W0. warp checks a loop body's last expression by another rule: `for c in ["a"] { c + 1 }` is a compile
 error there while `c = "a"; c + 1` is "a1" (card loop-text).
@@ -359,8 +349,7 @@ value (ø in a program, the exporter writes `.unit`); a round runs the body in t
 list or text gives v. The type is `join tb (join td any)`, syntax-directed and monotone, so `for i in [1, 2] { i }` is
 `any`: warp does not track the ø of a loop that never ran (`(for x in [1, 2] { x }) + 1` compiles), so that ø is
 dynamic, not an optional (an emit nobody answers likewise: `join R any`). forIn's loop variable takes any type above the element type (`sub (elementTy tl) T`): a round
-keeps the body's typing, no narrowing. warp: a loop over a list parameter gives the wrong value (card loop-param,
-KNOWN_VALUE_DIFFERENCES), a loop that never ran gives 0 (card loop-empty; W0 keeps no ø value to compare), text and
+keeps the body's typing, no narrowing. warp: a loop over a list parameter gives the wrong value (card loop-param), a loop that never ran gives 0 (card loop-empty; W0 keeps no ø value to compare), text and
 list bodies are card loop-value.
 
 ## not, and, or
@@ -421,25 +410,25 @@ declaration as its alternatives' join (`Ty.joinAll`: `int | text` is `any`, `int
 value given to it as `cast v [alternatives]`, the run-time check, which keeps a value fitting one alternative. The
 checker admits a cast when the value's static type is consistent with an alternative (`consub`, gradual consistent
 subtyping: `any` stands for anything, `list any` fits `list int`), so `x: int | text = 3; x = 2.5` and
-`f(x: int | text) := x; f(2.5)` are rejected as warp rejects them. The exporter (src/law/type_model.rs) reads the
+`f(x: int | text) := x; f(2.5)` are rejected as warp rejects them. The exporter reads the
 union with the analyzer's `union_type_name` (a covered part dropped, ø made optional: `.opt` of the rest) and wraps main-level bindings,
 assignments and call arguments. A union field (`size: int | text`) and one of several union parameters (a field of the
 arguments object `f·args`) are casts where an instance is made and where a field is written; W0 knows no object's class
 at `o.size = v`, so it casts only when every class with a field of that name declares it alike (card w0-unions). Warp
-checks a union field's literal when it is constructed and written (type_kinds keeps the union's name, its storage is a
+checks a union field's literal when it is constructed and written (its storage is a
 Node), and folding never inlines a variant with a declared parameter (`f(a: int, b: int) := a + b; f(1, 2.5)` is
 checked). A union may name declared classes (card union-types): `s: Circle | Square` is the join of the
 classes (their common ancestor, `object` of unrelated ones), so W0 needs nothing new; warp lowers it like a union of
 builtin types (analyzer `union_of_types`, a class covers no builtin part: `Point | text` keeps both), holds it as a Node,
-and traits.rs `admit` refuses an instance like none of the classes. Class-typed places (card class-field): traits.rs
-`Dispatch` remembers `s: C = …` per definition scope (a function's `s = …` is its own local) and admits a later `s = v`,
+and warp refuses an instance like none of the classes. Class-typed places (card class-field): warp
+remembers `s: C = …` per definition scope (a function's `s = …` is its own local) and admits a later `s = v`,
 each constructor field (`instance_parts`) and a field write, which reaches dispatch as `b = field_with(b, "content", v)`;
 a class field may hold ø (tree leaves). The analyzer lowers unions inside class bodies too: `map_children` skips field
 declarations, so `content: Circle | Square` is not `any`. Every union part names a builtin type or a
 class (card undeclared-union): only a builtin part covers another (`int | zork` is an unknown type error).
 `or` spells `|` everywhere. A union result (card union-return, `def f(x) as int or text {…}`,
 `f(x): int | text := …`; `as` is the canonical spelling, `->` hints toward it; `as` binds
-tighter than `or`, so declarations::as_union_result regroups `(f(x) as int) or text`) is checked, not converted: type_name_matching passes each returned value through the local
+tighter than `or`, so warp regroups `(f(x) as int) or text`) is checked, not converted: type_name_matching passes each returned value through the local
 `the result: int or text = v`, so a result gets the variable's checks. Not yet: a run-time check of a union
 variable (`x: int | text = f(2.5)` holds 2.5), `x is int` of a rational variable is yes (card int-accepts). Not yet: `x as T?` (a conversion in warp:
 `"4" as int?` is 4; W0's cast only checks).
@@ -452,13 +441,13 @@ into `x = cast v [T]` (T the name's or parameter's type), for annotated places a
 at compile time (`y: any = 3; x: int = y`, `f(n: int) := n + 1; f(y)`, `x = xs#1` of a mixed list,
 `level = event.level`). The cast is part of the proved calculus, so soundness needs nothing new. User decision P204:
 an annotated place given an `any` value compiles and is checked when it runs (not a compile error). Warp does not check these values at run time yet: `y: any = "a";
-x: int = 0; x = y; x` gives 97 (card int-unchecked, KNOWN_VALUE_DIFFERENCES).
+x: int = 0; x = y; x` gives 97 (card int-unchecked).
 `Expr.rewrite` (bottom-up, carrying the locals in scope) is the one traversal behind both elaboration rewrites
 (`resolveCalls` decides broadcasting the same way).
 
 ## Effect handlers
 
-Semantics from the functions session (notes/effect_handlers.md): `on ev {h} in {body}` (`Expr.handle`) runs body with
+Semantics from the functions session (wiki/effects.md): `on ev {h} in {body}` (`Expr.handle`) runs body with
 h as the innermost handler of ev; `emit ev payload` (`Expr.emit`) evaluates to the innermost active handler's value
 (tail-resumptive, an emit is a call of the handler); the handler body runs with only the handlers outside it
 (`Expr.scope k e`), so an emit inside a handler goes outward; a program-wide `on ev {h}` (`Item.on`,
@@ -493,14 +482,14 @@ the value comparison above, maps, then tasks.
 `f(b=1, a=5)` writes the fields of `f·args` by name, positional arguments fill the others in order, a missing one
 takes its default (`f(a, b=3)`, `b: int = 3`); a call whose arguments do not fit exports as a call given `unit`, so
 W0 rejects it as warp does. Arguments run as written, left to right (P216; warp computed them in parameter order
-until src/lowering/definitions/named_arguments.rs moved effectful reordered ones into temporaries). `f(n=4)` names the one
-parameter. A function defined in a function's body is lifted (src/law/type_model/nested_functions.rs) to the
+until effectful reordered ones moved into temporaries). `f(n=4)` names the one
+parameter. A function defined in a function's body is lifted to the
 main-level `outer·inner`, the names of outer it reads added as parameters passed by name; a name it declares
 `nonlocal` is passed as outer's cell (parameter type `outer·y`, the cell class), so writes reach outer. Siblings
 pass on what their callees capture. Checker.lean `inferFunctions` infers all functions' results together, in rounds,
 so a function may call one defined after it and two may call each other (warp hoists functions; before, W0 rejected
 `a() := b() + 1; b() := 5`). A function giving a literal `true` returns 1 in warp (card bool-return). Cards: nested-two-deep (warp cannot read two levels up),
-nonlocal-assign-unchecked (KNOWN_HOLES), named-constructor-args.
+nonlocal-assign-unchecked, named-constructor-args.
 
 ## return
 
@@ -512,13 +501,13 @@ is `any`). A declared result type converts the value (see Conversions below).
 
 ## use, min/max, text order
 
-`use list` (src/law/type_model/used_modules.rs) brings the definitions of lib/list.warp the program calls, and the
+`use list` brings the definitions of lib/list.warp the program calls, and the
 ones those call, as if the program had written them (not the ones it defines itself). Most of lib/text.warp still
 needs builtins outside W0 (upper, chars, split, ends_with, ord, sort). `min(a, b)` / `max(a, b)` export as
 `b < a ? b : a` / `a < b ? b : a`, a and b bound once (typed `any`). `<` orders texts by codepoints (`ltValues`,
 the checker's `textual`); `"a" < 1` stays out (a one-letter `"a"` is a codepoint in warp).
-`sum` comes along as the warp definition `sum(xs) := { out = 0; for x in xs { out = out + x }; out }` (used_modules.rs
-LIBRARY_WORDS: warp's sum folds from 0, `sum(["a", "b"])` is "0ab"); `.size`, `.count`, `.length` are `count`. A
+`sum` comes along as the warp definition `sum(xs) := { out = 0; for x in xs { out = out + x }; out }` (warp's
+sum folds from 0, `sum(["a", "b"])` is "0ab"); `.size`, `.count`, `.length` are `count`. A
 function local widens over the numbers it is given, as a main-level name does (P45); an annotated parameter's cell
 keeps its annotation (`Item.cell c (some t)`, P203). Elaboration types a loop variable by its list's element type
 (Expr.rewrite takes P), so `out + x` in a loop over floats is a number, not `any` cast to the local's first type.
@@ -539,12 +528,11 @@ A declared result converts the body's value only when nothing is lost (card loss
 `-> float` convert as `body as T` and the exporter wraps the body in `.conv`; a whole-number type (`-> int`) and a
 union check it as a variable declared of the type is (type_name_matching `checked_result`, the local `the result`),
 `.cast` in W0: `def f() -> int { 2.5 }` is a compile error, `half(3)` of `-> int { x / 2 }` fails when it runs with
-"an int must be a whole number" (W0 refuses it statically: KNOWN_HOLES, card static-int). Returns included: `def f(x) -> int { … }`, `func f(x: Int) -> Int`,
+"an int must be a whole number" (W0 refuses it statically: card static-int). Returns included: `def f(x) -> int { … }`, `func f(x: Int) -> Int`,
 `fun f(x: Int): Int`, `function f(x: number): number`, `def f(x) -> int: body`, `f(a, b): int := …`,
-`square(x) as int := …`, `def square(x) as int = …`, `int square(x) = …` (`typed_definition` in
-src/law/type_model.rs); nested functions keep theirs when lifted. Coverage: 246 of the 600 sampled programs, all
-agreeing. Found: card kind-name (`x = 3.7 as int; x = "a"` compiles: the analyzer does not type a
-conversion, KNOWN_HOLES) and card bool-conversion (`2 as bool` gives 1, not yes, KNOWN_VALUE_DIFFERENCES).
+`square(x) as int := …`, `def square(x) as int = …`, `int square(x) = …`; nested functions keep
+theirs when lifted. Found: card kind-name (`x = 3.7 as int; x = "a"` compiles: the analyzer does not type a
+conversion) and card bool-conversion (`2 as bool` gives 1, not yes).
 
 ## Fixed widths and typed list elements
 
@@ -556,15 +544,14 @@ is in it, a list fits `list e` when each item fits e, so `share`, `push` and `se
 items one by one. A value given to a fixed-width place is a run-time `cast` (`x: int16 = 70000` is an error when it
 runs, as warp's overflow trap; `x: byte = 5; x = 300`), which the checker admits since `consub int (ranged …)`: an
 int may be in range. A literal written into a typed list that evidently does not fit (Checker.lean `evidentMisfit`:
-`xs: [int16] = [1, 70000]`, `xs: [int] = [1, "a"]`, `xs.add(70000)`) is rejected statically, as warp's
-checks.rs `misfit_item`; soundness is untouched (rejecting more never is unsound). Arithmetic on a fixed width gives
+`xs: [int16] = [1, 70000]`, `xs: [int] = [1, "a"]`, `xs.add(70000)`) is rejected statically, as warp does; soundness is untouched (rejecting more never is unsound). Arithmetic on a fixed width gives
 `int` (`arith`): looser than warp, which traps when an int16 sum leaves int16 (a value difference only on overflow,
 not yet in the corpus). The exporter reads `[int]` as `list int` and `int16s` as `list (ranged …)` (card
 typed-list-elements).
 
 ## Units (quantities)
 A quantity `2 m` is the value `qty n D`: D the powers of its base dimensions (`[("Length", 1), ("Time", -1)]`, sorted,
-none zero: `Dims.times`), n its number of the dimension's smallest steps (units.rs `factor`: 0.1 mm, ms, 10 µg, so
+none zero: `Dims.times`), n its number of the dimension's smallest steps (0.1 mm, ms, 10 µg, so
 every unit is whole). Its type `quantity D` stands beside the numbers: below only itself (and above `never`), since
 `1 m + 1` is a DimensionError in warp. `+`, `-`, `<` take one dimension on both sides (`sameQuantity`, else the value
 is an error and the type `never`), `*` and `/` combine a quantity with a quantity or a number (`ArithOp.dims`,
@@ -599,8 +586,7 @@ float meets an exact number; `/` widens its left side to exact (`7/2`), `^` to e
 (`2^-1` is 0.5) and to number for a fractional one (`2^0.5`, the only rational operation that leaves the rationals).
 `%` is Euclidean on rationals too (`7.5 % 2` is 1.5). `as float` (Ty `float`) makes a float, `as int` cuts toward
 zero. Printing follows warp's `Number` display: a terminating decimal (`3.5`, `0.0009765625`), else `n/d`; floats print
-`?` unless whole. The exporter reads a decimal literal warp keeps exact (`Number::is_exact_decimal`, through
-`decimal_fraction`) and a quotient as `exactValue (n / d)`, any other float literal as a float, and the type words
+`?` unless whole. The exporter reads a decimal literal warp keeps exact and a quotient as `exactValue (n / d)`, any other float literal as a float, and the type words
 `exact`, `rational`, `real` as `exact`, `float` as `float`, `number` as `number`. Soundness re-proved (one lemma,
 `exactNumber_typed`: an operation on exact numbers gives an exact number, or a float only where the type says number).
 warp's analyzer sees a decimal and a float as one Kind (Float), so admits is compared on the decimal (`.exact`).

@@ -13,6 +13,10 @@ module programs import in lib/; demos and examples in samples/; tests and fixtur
 compiler `use`s no lib/ module. A misplaced file (a demo in extensions/, a feature in core/, a fixture in lib/) is
 refused: send it back to the worker saying where it belongs, and tell the Supervisor. Growth of core/ always gets a
 second look: is it needed for self-compilation, or a feature that belongs in an extension?
+A change to core/ or extensions/ (sugar rules and small extensions included) lands only with the user's OK given
+before the work (AGENTS.md "Core and extensions"): find it as a card note or a notes/decisions.md key. A worker's word
+alone is not the record: without one, ask warp-interviewer to confirm and note it, and hold the branch. One that
+skipped the question is refused and goes to warp-interviewer; there is no FYI path.
 
 ## Watching main
 - Every push to main starts `scripts/integrate/after-push.sh` by itself: the pre-push hook (scripts/integrate/on-push.sh)
@@ -29,12 +33,11 @@ second look: is it needed for self-compilation, or a feature that belongs in an 
   owner hands the fix back (AGENTS.md "Handoff"). A lane regression with no suspect: `git bisect run` from the newest good/* tag (handbook).
 - `warp self` red never blocks anything: an urgent card for the author of the newest core change. The self lane may
   pass up to 5 % fewer tests than the pure lane.
-- The full suite twice a day by cron (05:00 and 15:00, user 2026-11-04: "run the test a couple of times a day"; log
-  ~/Library/Logs/warp/cron/full-suite.log) and before a release, in the background, as `scripts/full-suite.sh
-  --commit` (one at a time on the machine, by its lock; `warp test --each test` into test/results.txt only when the
-  run ended with its summary: a ✓ or ✗ line per test, in file order, and the `m of n failed` summary), committed, so
-  `git diff test/results.txt` (or `git log -p`) shows what went green or red since the last run. Its
-  failures are grouped into cards.
+- The full suite runs only in the cloud, never on the Mac: the routine "warp full suite (cloud)"
+  (https://claude.ai/code/routines/trig_011CmX1HYy4erz3ugNtuYZwm, 04:00 and 14:00 UTC; before a release run it on
+  demand) runs `warp test --each test` on Linux and commits test/results.txt ("chore: full suite <summary> at
+  <commit> in <n> min"), so `git diff test/results.txt` (or `git log -p`) shows what went green or red since the last
+  run. Its failures are grouped into cards.
 - The samples the same way: scripts/samples.sh overwrites test/samples.txt (ok/FAIL/SRV/WIN and the sample, a line,
   run with the tree's own compilers), and after-push's slow lane commits it to main when it changed ("chore: samples N
   of 232 at <commit>"): its git log is the history, `git diff` names the samples that changed.
@@ -86,3 +89,20 @@ second look: is it needed for self-compilation, or a feature that belongs in an 
 - The shared target dir is pruned by cron every 6 h: a harness build that fails mid-run then is rerun.
 
 <!-- Start: run the gate once on origin/main as the baseline, then tell the Supervisor "integrator ready, <counts>". -->
+
+## Landing
+
+- Landing checks, then the handoff (Handoff, above). The worker does not push to main: `warp format yes <files>` on the .warp files you
+  wrote; merge origin/main into the branch (real merges, you resolve conflicts) with a merge message summing up the
+  change; on that merge run the smoke test (`scripts/smoke.sh <worktree>`; core/ changes: it + `scripts/self-check.sh` + the gate probes, `scripts/gate.sh --tiers 1 <worktree>`, seconds; "Testing" above);
+  then hand the branch and a patch to the integrator. The integrator applies that on the user's Mac and pushes with `git push origin HEAD:main` (fast-forward only). Rejected because main moved: merge origin/main again; rerun the
+  smoke test only if the new commits touch core/ or lib/; push. The self-check and gate are never rerun after such a
+  re-merge (they passed on your change; the new commits passed their own), only the smoke test, and right after it
+  merge and push in one `&&` chain, so main cannot move again in between (a landing looped 1.5 h). The chain may end with one more
+  merge of origin/main without its own smoke, only when it merges cleanly and touches none of your files; a conflict
+  means smoke again. Its unsmoked commits touch no compiler input: no lib/*.warp, core/ or extensions/, only notes/,
+  test/, samples/, web/, wiki/ and scripts/ (a lib-only `: list` in lib/matrix.warp, 050e032656, came in
+  so and broke the module prebuild for every tree). The push itself starts `scripts/integrate/after-push.sh` (pre-push hook, on-push.sh): it installs the
+  compilers of the pushed tip beside ~/dev/bin/warp from your build in the store (seconds), so the user's warp matches
+  main right away. Then `todo done <card> <commit>`. The full suite runs
+  only in the cloud routine.

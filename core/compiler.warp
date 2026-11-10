@@ -1,4 +1,4 @@
-# The warp compiler as one warp program (card standalone, notes/standalone_compiler.md): source text in, wasm bytes out,
+# The warp compiler as one warp program (card standalone, notes/self_hosting.md): source text in, wasm bytes out,
 # its stages handing each other plain warp values. `warp core/compiler.warp app.warp app.wasm`, then
 # `warp app.wasm`; a form beyond the emitter's core is the compile's error ("outside the core: …")
 use "passes/passes.warp"
@@ -78,6 +78,7 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	# (the compiler's own build, and a `warp build` whose program stands alone, compile the modules they use in)
 	linking = (links ?? (library_runtime == ø and not own and modules_linked)) and prepended()
 	linked_signatures = {}
+	linking_late = linking
 	images = if linking then linked_libraries(source) else []
 	# a program using linked modules runs as its own module beside theirs and runtime.wasm's, importing their words
 	# (L5c, card wasm-module-linking)
@@ -137,17 +138,34 @@ prebuilt_path(name: text, folder: text): text := own_module_wasm.get(name) ?? (i
 linked_libraries(source: text): list := {
 	linked_signatures = {}
 	folder = linked_modules_folder()
-	images = []
 	# the modules it uses and those they use in turn (sound's units): each one's words declared, not brought whole; a
 	# module written links those it uses, never itself
 	# (the prelude too, every program's and every module's, so a run holds one instance of its words and globals: signals'
 	# listen and the program's unlisten edit the same event_listeners)
 	names = (["prelude"] + used_modules(written_source(source))).filter(name => name != module_written)
 	timed("linking from " + folder + ": " + names.join(", "))
+	dependencies_first(images_of(names, folder))
+}
+# a module the passes find used late, the module of a type the program names (units for `20°C`, with_type_module_uses):
+# linked from its prebuilt image as one its source named, with those it uses, never compiled from its source (decision
+# link-modules-lazily: compiling units in made `str(20°C)` 6.9 s); ø when this compile links nothing or it isn't prebuilt
+global linking_late = no
+linked_late(name: text): ModuleSignature? := {
+	# (while the build writes the modules anew those on disk are the ones it replaces, built behind another runtime)
+	if not linking_late or modules_rewritten or name == module_written { return ø }
+	images = images_of([name], linked_modules_folder())
+	if #images > 0 { link_libraries(dependencies_first(module.linked_images + images), module.linked_own_names) }
+	linked_signature(name)
+}
+# the prebuilt images of the modules named and of those they use in turn, each signature kept in linked_signatures;
+# one already linked is skipped
+images_of(names: list, folder: text): list := {
+	images = []
 	at = 0
 	while at < #names {
 		name = names[at]
 		at += 1
+		if linked_signatures.has(name) { continue }
 		wasm = wasm_if_there(prebuilt_path(name, folder))
 		# (a module not prebuilt was said by the rebuild, its file left empty or never written: markup's html, compiled
 		# into markup; one prebuilt that won't link is the compile's error, never compiled from its source instead:
@@ -165,7 +183,7 @@ linked_libraries(source: text): list := {
 		linked_signatures[name] = signature
 		for inner in signature.uses { if inner not in names { names += [inner] } }
 	}
-	dependencies_first(images)
+	images
 }
 # `import shapes` beside a shapes.wasm carrying a warp.signature: the program's own module, linked as a standard
 # module is, imported by its path (decision samples-modules-wasm); its text, where beside it, is shapes.warp

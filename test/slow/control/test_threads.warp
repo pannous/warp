@@ -1,0 +1,6 @@
+# from test_threads.rs: edit the Rust test, then run the script again
+# tasks_run_at_the_same_time
+is! 'f(ms) := { sleep(ms / 1000); ms }; a = go f(1000); b = go f(1000); c = go f(1000); await a + await b + await c' 3000
+is! 'f(ms) := { sleep(ms / 1000); ms }; job = go f(300); x = 0; once job finishes: x = 7; sleep(0.6s); x' 7
+is! 'f(ms) := { sleep(ms / 1000); ms }; job = go f(1000); x = 0; once job finishes: x = 7; y = x; y' 0
+is! 'f(ms) := { sleep(ms / 1000); ms }; job = go f(100); done = 0; once job finishes: done = done + 1; for i in 1 to 3 { sleep(0.1s) }; done' 1
