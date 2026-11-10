@@ -54,54 +54,19 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - uniscript-binary-import: `use uniscript` imports the released prebuilt uniscript_c.wasm (+ .h), committed in the uniscript repo at each release (uniscript-browser-wasm); warp's tests follow the released uniscript.
 
 ## Tooling: format, beautify, CLI
-- prebuild-fails-loudly: a library that fails to prebuild fails the rebuild, naming the module and why; a module whose words are C imports (`… from "c"`, lib/wasmtime.warp) is source-only by itself, no marker comment. wasmtime-dropped: lib/wasmtime.warp leaves std_module_names; `use wasmtime` fails loudly as an unknown module; card wasmtime-self-hosted brings it back once foreign lines take structs.
-- hello-size-exports: shown_at and trap_message are exported only from a program that can raise (raise/throw, a raising runtime word, a host word with arguments); hello ~1.5 KB; an engine trap in another program prints as wasmtime names it, without position.
-- sample-spellings: samples are rewritten to the general forms (`int[height * width]`, `(y - center)^2`) instead of new syntax; no wish cards for those.
-- drop-pure-word: `warp pure` is gone: plain `warp <file>` is the warp compiler (warp.wasm); `warp self` stays the self-built variant; `pure` survives only as a hidden CLI alias with a one-line note. Card drop-pure-word.
-- warp-format: `warp format` (synonym `warp lint`, no `fmt`) only fixes layout in one canonical form, never meaning: tabs, `name: value`, spaced binary operators (glued only where spacing changes meaning; checked by comparing parse trees), list separators as written, `{` on its header's line, one space after `,`, none inside brackets, ≤ 1 blank line. Abbreviated words get a soft hint ("warp avoids abbreviations"), never a fix.
-- beautify (also: beautify-preview): opinionated rewrites are `warp beautify`: prints the diff, asks "apply? y/n" in a terminal (piped lines answer it, one per file; end of input is no), `beautify yes` applies, `beautify check` previews; rules: hash-comments, alias words to their warp word via the I-meant fixes.
-- cli-words: warp's command options are words, never `--flags` (`warp format check …`); card cli-words migrates the old ones.
-- P102 `warp build hello.warp` makes the native executable; build-should: it writes x.wasm beside it, `--wasm` only the module. build-links: `warp build page.warp` opens the page in the system web view.
-- no-executable-by-default: plain `warp file.warp` writes no executable (WARP_EXECUTABLE=1). P105 `warp run` never writes an executable nor takes the machine-code path.
-- P77 an executable prints the output, then its value; exit 0, 1 on a trap; only an Int result is the exit status. P113 a ø result shows nothing. P236 `warp run` echoes the final value after the prints.
-- P222 `warp serve [file] [port]` serves a page program; plain `warp app.warp` serves when the program declares a route/server; CGI mode retired.
-- test-soft: `test C` records and continues, `check C` asserts, `test "name" {…}` is a test block. P209 test blocks run only under `warp test`. P210 all pass → one summary line; failures exit nonzero.
-- fuel-metering: runaway loops are stopped by the epoch timer: 60 s CPU time by default (WARP_TIME_LIMIT), not for `warp build` executables or windowed/event-loop programs; the stop says how to raise it. Fuel (exact step budget, 4.4× on calls) only on request: `use fuel`, `warp fuel N app.warp`, WARP_FUEL, and compile-time folding of constant calls.
-- fast-math: the polynomial math module is `use fast_math`; the CLI word is `warp fast app.warp`.
-- P107 the playground offers only the .wasm download plus a `warp hello.warp` line. P108 Warp.sublime-syntax takes .wasp/.warp/.a/.angle. P229 double-clicking a .warp file opens the editor.
 
 ## Welcoming, diagnostics and newcomer forms
-- kebab-hint-both-fixes: the kebab warning offers both fixes, "a_b or a - b".
-- errors-name-file: every error, warning and hint, in every lane, prints file:line:column and the source line; a refusal never names internal words (`view·opaque`) but the user's code. Runtime errors and warnings keep their "at line:col" (card appends-line). Cards error-names, pure-error-candidate.
-- Newcomer syntax is eaten, its intent compiled and the warp form hinted, only where it does not clash with a known footgun.
-- Asks become got-it warnings; error-fallback cases (`[x]*n`, insert order, `[1 2 3]+4`, `1+2 squared`) stay loud errors naming the explicit forms (D3, D9/P5).
-- Got-it scope: `[y = this one, a = all of this kind, n]`; an expression is remembered by its text; a `// got it` comment silences the line.
-- warning-levels (also: hints-are-warnings): one Diagnostic with a level hint < weak < normal < severe; `--no-hints` and `use strict` are thresholds (notes/welcoming.md).
 
-- canvas-zero: a missing setting takes a sensible default; errors only for an ambiguity too dangerous to guess.
-- P75 fix buttons read "I meant: <replacement>", the meaning as a tooltip.
-- julia-compat: stay close to Julia; its syntax is beautiful and its semantics often near perfect. Julia forms read with Julia's meaning; deliberate departures listed in wiki/Julia.md.
   - julia-floor-divide: `÷` is floor division as in Julia (synonym of `/!`, `7 ÷ 2` → 3), with a hint for newcomers expecting `/`.
   - julia-pair-range: `1:4` stays a pair; iterated (for, sum, comprehensions) a pair of two numbers is the range.
   - julia-text-times-hint: `"a" * "b"` concatenates with a got-it warning naming `+`; an error only when a text holds a number (`"3" * "4"`).
   - julia-dollar-interpolation: `"x is $x"` only as a toggled feature after the self-hosting migration (`$million`, `$0` clash).
-- P78 modifiers from other languages (`public`, `static`, `inline`, …) are skipped with a got-it note; words with a warp meaning keep it.
-- Word choices are not asked: the recommended word is canonical, synonyms are aliases with a note.
 - foreign-spellings: foreign names are cheap aliases of existing words, not lowering code. Kept: Rust `<T>`/`let mut`, Enum.map/List.map/Seq.sum, Python lambda, variadic lambdas, JS destructured parameters, Ruby lambda/proc/blocks/to_s, C# LINQ, C++ `auto x`. Dropped: OCaml let-in and `fun`, Elixir `def …, do:`, C++ `[](…){…}`. R/PHP forms live in `use R` / `use PHP`. Kotlin `when x { 1 -> … }` = `match` with a warning; `match` takes `->` arms and `else`; `case` is optional before any arm.
 - P157 no generic syntax: ported `fn id<T>(x: T)` compiles untyped with a note. P161 no Swift argument labels; ported labels compile with a note.
 - P167 Go's `Point{1, 2}` builds `Point(1, 2)` for a known class with a note; unknown names stay tagged data.
-- P145 R's `x <- 3` assigns with a note; `x<-3` is an error naming both readings; docs never use `<-`.
-- P241 no vector type: `Vec<int>`, `vector<int>`, `Array<int>` read as `list of int` with the note "warp says list".
-- Error highlighting: CLI carets under the word; web red/amber wavy underlines with the message on hover.
-- #7/P92 unresolved calls are errors: `foo()` is "undefined function: foo"; a bare word statement naming nothing is "undefined variable: foo"; a bare `foo` in data stays a symbol.
-- constant-words: null nul none nil nill nix nada nothing empty void true yes false no are constants in any case; `empty = 3` is `ø = 3`.
-- function-words-consume: every function word, not only print, takes its arguments without parentheses, by its parameters (arity and types), no special rules: `show a, b` = show(a, b), `add 1 2` = add(1, 2), `print ord c` = print(ord(c)), `[twice 1, twice 2]` = [twice(1), twice(2)], `count xs > 3` = count(xs) > 3; a function word where the parameter takes a function is a value (`map square xs` = map(square, xs)); non-function words are unchanged. An argument reaches right as long as the expression fits the parameter type (`sqrt 4 + 5` = sqrt(9); `xs > 3` is a bool, so count stops). Varargs/defaults take what fits to the statement end, overloads the most arguments that type-check, a function value of unknown arity one atom per blank.
-- spaced-definition-head: parentheses in a definition head are optional: `square x := x*x` defines square(x), `add a b := a + b` add(a, b); `f x` outside a definition stays a call.
 - negated-call: minus binds weaker than application: `-f x` = -(f x), so `1 + -floor 2.5` → -1 and `-sin 0` → 0; `-a * b`, `-x^2` unchanged and `x=5; -x 1` stays [-5, 1] (a plain value is not a call).
 - phrase-functions: a definition head may be a phrase with holes: `send v to c := c.send(v)`, `on every period (body: block) := timer_every(period, body)`, `await x within t or d := …`, `set field of object to value := …`; one phrase-row mechanism like the operator rows (~60–120 core lines), replacing ~35 lib rewrite rules (tasks, timers, signals, channels, english, which stay as such declarations).
-- named-argument-phrases: a phrase is already an ordinary function called with named arguments: `give(v, to) := v + to; give 2 to: 40` → 42, `transfer 5 from: 1 to: 2`. Colonless phrase heads (`send v to c := …`) stay parked (phrase-params).
 - phrase-rules-kept: `on change x {…}` / `on set x {…}` and `set name of p to 3` stay rewrite rules until name parameters (`f(x: name)`) exist, then become plain functions; `await all xs` / `await any xs` stay as written (notes/phrase_inventory.md).
-- P86 adding values of unknown kinds builds `a + b` lazily; evaluated operands need Addable, else a type error.
 
 ## Comments, separators and lexing
 - floor-division: `//` is always a comment; floor division is `/!` (`7 /! 2` = 3, `x /!= 2`); where `//` was clearly meant as division (`n = 7//2`), a strong warning names `/!` and `warp fix` rewrites it; `div` warns with the fix `/!` (`div` stays the html tag). A comment hiding a closing bracket is a parse error naming the `//`.
@@ -114,61 +79,24 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - data-reserved: `data` is a keyword (the `data …` quoting prefix); a variable named data is an error.
 
 ## Numbers
-- core-int-division: the compiler's source writes every integer division as `÷` (plain `/` of ints and every `/!` in core/ become `÷`; `/!` stays an alias), so the compiler needs no exact ratios and big numbers stay an optional extension.
-- bool-int-fallthrough: a bool falls through to the int implementation of any operator.
-- element-wise-scalars: element-wise operators apply to a non-list value directly (`3 .* 3` → 9).
-- type-shows-nat: type(3) and an undeclared whole value show `nat`, a declared int shows `int`.
-- fast-int-readings: a literal beside a fast int stays int (`xs[i + 1]` in a range loop); `i++`/`i--` on an undeclared counter stay int; `s += i` grows like + (a nat).
-- int-boxed-overflow-big: + - * of two boxed ints that overflow give the big-int result instead of trapping (`xs = [2^62]; xs#1 * 4`).
-- marked-floats-shape: `type X = float` beside `= int`; marks survive arithmetic (left mark, else right, only when the Kind matches, so `Color * 0.5` is plain); `°` an Angle shown in degrees, also when statically known and unboxed.
-- exact-decimals: decimal literals are exact (`0.1 + 0.2 == 0.3`), division gives exact ratios; floats come only from float sources (transcendentals, sqrt of a non-square, host values, `as float`, float-typed places, e-notation) and are contagious; `==` warns only with a float involved.
-- exact-power: a power of exact operands stays exact, a whole decimal exponent included (`0.5 ^ 1074.0` prints all ~750 digits of 2^-1074); the float pow is used only for float operands. Tests and probes keep their examples to calculations under ~10 s.
-- int-list: a whole decimal literal is int (`type([0.0, 0.0])` is list of int, P196b); a variable's type joins every write. #21 `x=π; type(x)` is real.
-- number-converts: `number` keeps an exact value; only `float` converts.
-- float-text: floats print shortest round-trip digits (Python/JS repr) everywhere; P225 also joined to text.
-- repeating-decimals: only the overline `0.3̅` is the exact 1/3; `x as decimal` writes the period overlined; never for floats.
-- float-intervals: `±` says a value is not exact, so an interval (lib/intervals.warp) switches to fast floats. It shows only the digits its spread justifies: `(6.0m ± 0.3m) * (2.0m ± 0.2m)` is between 10.26m² and 13.86m², never 13.860000000000001; the float value itself is untouched; lib-only. interval-bounds-guard-digit: `low()`/`high()` hand out the bound rounded one digit finer than the ± text shows (12.0 ± 1.9 → bounds at 0.01: 10.26m² to 13.86m²); the interval keeps its floats. Ranges are written `A to B`. samples/units_dynamic.warp shows its pace by `pace.in("km/h")` rounded; exact arithmetic stays elsewhere (151/15 km/h).
 - D16 `byte`, `int8..int32` are declared FFI types that trap on overflow; `u8` = `uint8` = `byte` (`int` and `nat`: nat-and-int). i64-wraps: `i64`/`int64` wrap silently at 2^63 like `fast int`; `use strict` catches it.
-- c-int-names: C's multi-word integer names are the fixed widths C means, each with a got-it note naming warp's word: `unsigned int` = uint32, `unsigned long (long)` = uint64, `long long` = int64, `unsigned short` = uint16, `short int` = int16, `unsigned char` = byte, `signed char` = int8 (`x: unsigned int = -1` errors "uint32 overflow"). Single words keep warp's meaning (`long`, `int`: nat-and-int).
-- fast-scope: `fast` before a function or module makes it machine arithmetic: polynomial sin/cos/exp/pow, `/` gives f64, ints are wrapping i64; `x: fast int` is i64.
 
 - hex-printing: `255 as hex` is an int shown as 0xFF; arithmetic gives a plain int. binary-int: `5 as binary` shows 0b101.
-- footgun-divzero: exact numbers raise divide by zero (catchable); computed IEEE floats give ∞/NaN.
 - gpu-f32 (also: P240): heavy float maps (from 10× the measured break-even) run on the GPU in f32 with a one-time notice; `@cpu` and `WARP_GPU=off` keep f64; `@gpu @cpu` together is an error; `@gpu` warns when the GPU doesn't apply; int lists fitting i32 may use the GPU with an overflow flag. go-heavy-map: a `go` map of a heavy kernel runs as the plain map.
-- P119 NaN canonicalization only where a float's bits are observable.
 - approx-zero: `≈` is relative 1e-9 with absolute floor 1e-12; `tolerance = …` overrides. P211 `~` is looser: 1% for numbers, texts ignoring whitespace and punctuation; `≈` on texts ignores case and accents. P212 a class may define `approximately` and/or `similar`.
-- ± intervals: P217 `5 ± 1` is a worst-case interval (Gaussian later as `5 ± 1σ`). P218 `x ≈ r ± 1` holds when |x−r| ≤ 1. P219 prints 2 significant digits of the ± part. P220 `1950 ± 50 AD` is the same ± value. P224/P224b comparisons answer only when certain: known ± values need `certainly`/`possibly`/`.value` (compile error), run-time ones count an overlap as not certain with a one-time warning. P233 a field typed with a tolerance gives each value that tolerance.
-- `x /= y` is exactly `x = x / y`; an `x:int` keeps a whole number.
-- Trailing percent: `10%` is 1/10, `50 % of 200` is 100; infix `%` stays remainder; CSS values stay as written.
-- P184 English number words are numbers when no variable has that name, with a hint toward digits.
 - #11 exact reals may go into a declared float with precision loss. rational-float: `x: rational = sqrt(2)` is a compile error, `x: real = sqrt(2)` works.
 - lossy-return (also: float-result): a fraction reaching a declared int result is an error ("declare number, or truncate with as int"). P49/P49b a float, even a written `2.0`, to an int parameter is a compile error. P131 an int variable or field refuses a fraction loudly. P127 int class fields keep exact ints.
 - round-halves: `round` rounds halves away from zero; banker's rounding is `round_even`; an exact half seen at compile time gets a hint about Python. `⌊x⌋` floor, `⌈x⌉` ceil, `⌊x⌉` round. `x as int` truncates toward zero.
-- nearest-limit: `nearest(x, rational)` limits the denominator to 1,000,000; `limit = 0` gives the exact fraction of the float. float-as-rational: `x as rational` of a float is the exact fraction of its shortest printed digits.
 - P226/P226b log glyphs: `b⌞x` and `x⌟b` are log base b; postfix `x⌟` is ln. easy-add: `x↑n` power and `x↓b` log are typed infix operators for numbers, other types define their own.
 - P57 hyperreals: `1/(1+ε)` stays an error; dual numbers later. P56(2-4) `∞` is f64 infinity, ω the hyperreal infinite.
-- real-runtime: real.rs (compile-time symbolic reals) stays until symbolic reals are a run-time number type; the general run-time exact mechanism is parked (notes/real_runtime.md).
 
 ## Units and quantities
-- unit-sum-display: a sum of quantities keeps today's display (`2h + 30min` in hours).
-- #5 units yes; #3 juxtaposition `3x` multiplies; units are written glued (`3km`), `3 km` works with a hint. P64 units are checked at compile time and kept as metadata where static knowledge ends. P36 `100 cm in m` / `as m` convert within a quantity. Unit sums use the finer unit. Quantities print without a space (`500m`); P231 print rounds quantities, str() keeps the exact value. #31 `min` stays the function.
-- quantity-naming: warp says quantity (length, speed, density), axis for width/height, rank for the number of axes, shape for 28 × 28 px; `dimension` is only an alias with a hint.
 - dimensions-units: quantity names are types (`3 cm is length`; `h: length = 3 s` errs); the time quantity is `duration`; units live in lib/units.warp; a unit after a list applies to each element (`[3, 4] cm`). Predefined derived names: speed, area, volume, frequency.
 - unit-definitions: `quantity length meter` declares a base and its SI anchor; `unit cm := meter / 100`, `unit N := kg*m/s²` (derived quantities follow from the expression); offsets `unit °F := (it + 459.67) * 5/9 K`; SI prefixes only for SI-anchored/derived units. unit-target: `unit °C as K := it + 273.15`. unit-prefix-lines: `prefix k := 10^3`, `SI dimension length meter`.
 - Unit symbols bind only after a number, never as bare names; a variable gets a unit by `x * 1 m`.
 - unit-after-number (also: variable-named-like): `m = 5; 3m` is 3 meters with a hint "write 3*m to multiply".
-- litre-suffix: a glued unit beats a number suffix (`2L` is 2 litres) once units are on (units-opt-in); exactness is `2 as exact`.
-- units-opt-in (historic; the code wins, card units-back): the parser never imports or builds the unit module itself, but `3km` works without `use units` (standard modules load on demand: implicit-standard-words).
-- pixel-lengths: px is its own quantity (`unit dpi := px / inch`); a length becomes px by `3 cm * display.dpi`; `3 cm as px` is a plain DimensionError.
 - display-names: display.density (aliases dpi, ppi) in dpi; display.size width × height in px (alias dimensions, with a hint); display.diagonal in inch; display.resolution is an ambiguous alias reading display.size, with a hint.
 - unit-types: a unit can type a field (`display { density: dpi }`): it fixes the kind of quantity, converts other units, refuses other quantities. unit-field-plain-number: a plain number there warns with a fix adding the unit.
-- general-conversions: one conversion mechanism `A as B := body` (`Person as text := it.name`); a program's conversions come before built-in ones; unit lines are its unit cases.
-- units-library: units, quantities and prefixes are lib/units.warp lines, run-time quantities its Quantity class; the compile-time check (static_units.rs, P64) stays Rust until types take a quantity parameter.
-- units-as-values (user; also: units-quantity-lib replaced): units are values: Quantity in lib/units.warp, dimensions (Time, Length, …) are classes, a unit a value of magnitude 1 (`ms = Quantity(1, "ms") as Time`); `5km` is implicit multiplication `5 * km` through Quantity's `*`, no sugar rule, so `90km/h`, `9.81m/s²` come free; conversion, showing and dimension errors in Quantity's operators. Card unit-literals.
-- overloads-before-reals: class operator overloads are fixed in core first (card class-operator-overloads; they unblock Real, Quantity, Vec), then π, τ, ℯ, ∞ are lib/reals.warp's exact Real (`π/2` prints π/2); no float interim.
-- expected-type-names: an argument for a parameter typed T also finds T's values by name: `sleep(3ms)` without `use units`, `paint(Red)` finds Color.Red; a signature naming T loads T's module on demand. A local of the same name is used if it fits T (warning: shadows), else T's value wins (warning names the local). Without an expected type `3ms` is an error with the fix-it `use units`. wiki/inventions.md; card expected-type-names.
-- duration-units: `1 h` beside a duration is a duration; `name hour := h` stays (`2 h in minutes` → 120min).
-- canvas-size: `window`, `display` and `canvas` `.width/.height` are writable properties natively and in the playground; a bare top-level `width` works with a did-you-mean.
 
 ## Text
 - digit-as-char: `2 as char` is the digit '2', like P25 `int('5')` is 5; a code point becomes a character by `char(0x41)`.
@@ -179,240 +107,90 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 ## Bool and truthiness
 
 ## Types and annotations
-- real-canonical-core: `real` is no longer a rational synonym (`exact` stays); `3 is real` yes; a program's own type of a core type word shadows it; a float given to `real` converts to the exact real (2.5).
-- parameter-typed: `a or b` / `a | b` as a parameter, field or local type holds the members' shared kind, else a node; a known kind fitting no member is refused at compile time, a node checked at run time.
-- primitive-annotation: `@primitive` marks GC-free code emitted as plain MVP wasm (extensions/primitive.warp): on a function (`@primitive add(a: i32, b: i32): i32 := a + b`; called from GC code it converts at the boundary like an FFI call, the reverse is refused), on a file (first line: every definition primitive, the file builds to MVP wasm), on a class (`@primitive class Header { len: u32; tag: u8 }` a fixed linear-memory layout, C structs; `struct Header { len: u32; tag: u8 }` is the same). A form the mode can't emit is refused loudly at its line. i32/u8/… are the FFI types usable everywhere (D16); `pointer` joins them.
 
-- map-protocol: `map` is a protocol and `{a: 1}` its default implementation (the hashed map, zero cost). Five required methods: keys, get, has, set (`m[k] = v`), remove; every other map word (lib/map.warp: values, count, merge, entries, pick, …) is a default body. Any class giving the five is a map (structural, wiki/trait.md); bare calls `keys(p)`, `p["b"]`, `k in p`, `for k in p` and library words use the class's methods (~10–15 core lines, rest in extensions/class_methods). `Map default ListMap` affects only maps built explicitly with `Map{…}` / `map{…}`; a bare `{a: 1}` always stays the hashed map. Any default (ListMap included) must be well optimized, measured before it ships. Map implementations convert transparently: `Map x = {a: 1}` makes x the Map default from the hashed literal, and `f(a: map)` accepts any implementation (card protocol-default-implementation).
-- matrix-protocol: `matrix` is a protocol as `map` is: a few required methods, the rest (map, multiply, transpose, …) default bodies; lib/matrix.warp's list of lists is the default implementation, later ones may be flat typed arrays, sparse or GPU-backed; implementations convert transparently, defaults well optimized. The protocol mechanism is general (card matrix-protocol-default). matrix-protocol-words: required rows(), cols() (alias columns), element(i, j) (not `at`); the lib/matrix.warp words are default bodies that read a list of rows as it is (no copy) and any other implementation once per call; a list of equally long lists `is matrix`; `Matrix x = [[1, 2], [3, 4]]` stays that list until `matrix default …` names another class.
-- lowercase-protocols: a lowercase type word is the protocol (`map`, `matrix`, `list`, `text`), so `f(m: matrix)` accepts any implementation; the capitalized name is its default class, which can switch (`Map{a: 1}` builds today's default; after `map default ListMap` a ListMap); other capitalized names are concrete classes (NodeMap, ListMap, DenseMatrix). wiki/trait.md "Protocol and default class".
-- effect-annotations: effect marks are meta annotations like `@primitive`: `@pure square(x) := x*x`, `@io`, `@ffi`; the `! Pure` / `! IO, FFI` suffix form is not built; checking and `effects of f` come with extensions/effects.warp (card effect-word-parameter).
-- primitive-int-width: `int` is warp's 64-bit int everywhere, @primitive code included; 32-bit is `i32`; C's 32-bit int only on foreign signature lines; a literal takes its expected type's width, untyped 64-bit.
-- P203 annotations make code strict; unannotated code is lax (checked at run time); `--strict` warns on lax spots. P204 an `any` value entering an annotated place gets a run-time check. P201 `s: Shape = Circle(…); s.r` is a compile error with hints `match Circle(r)` / `s as Circle`.
-- Duck typing: a truly unknown type is duck typed; a known different type with the right fields is an error teaching `image like photo` (P22); a written map is accepted structurally; `p.word` on an untyped parameter is a run-time "no field word".
-- #30 only `is` tests types (`3 == int` educates toward `is`). type-equal: `is` is the subtype test, `==` between types exact; a bare type name is the type as a value. is-union: `v is int or text` means `v is (int or text)`.
-- type-value-is: a type value tested against a type word (`is`, a match arm) is the subtype test: `float is float` and `float is number` yes, `int is float` no; `name(t: type) := match t { int: …; float: "real" }` gives "real" for float, also for an undeclared `x = float`.
 - type-text (also: type-print, time-word's type clause, type-result-shown): a type value is `class int` in every text form; `type(int)` is class type; every type value prints `class X`, which reads back as a reference (`type(3)` → class nat); warp test reads `class X` back as the type.
 - unknown-type: an unknown declared type is an error with the near type as fix.
-- union-or: in types `or` = `|` (`x: int or text`); in values `or` is boolean.
 - return-as (also: union-return): return types are `def f(x) as int or text`; `->` works with a hint; no `returns`.
-- error-type (also: error-optional): a function that can fail has type `T or error`, never Result; `T?` is T, ø or an error. Writing an Error into a field or list element raises; `x is ø` missing only, `x failed` failed only, `if no x` / `x or 0` both; at a WIT export: `result`, `option` or `result<option<T>>`; an Error propagates where a caller can take it.
-- optional-result: ø reaching a place declared `list` (a result or a parameter) becomes [] silently, no warning, no refusal (`rule_needs(source: text): list` may answer ø). `list?` keeps ø as missing. For other declared types a result that can answer ø warns "f can answer ø; declare `: T?`" (warp fix adds the ?) and the ø reaches the caller unchanged; ø passed into a plain non-list `T` parameter is open. `[] == ø` stays no (empty-is-not-missing).
 - empty-field: ø needs `?` everywhere (`class Tree{left: Tree}` errs, fix `left: Tree?`).
 - P185 `none(xs, f)`, the null spelling with arguments, is an error naming the null.
 - P125 optional parameters: `x=ø`, `maybe x`, `x?` alike; typed `x:int?`; `a ?? b` only for ø.
 - P179 sum types auto-unwrap like optionals; payload fields by position `rgb(1,2,3)#1`; a payload-free variant is its symbol and `red is Color`. P178 enum cases with values are sealed classes.
-- instance-position: `#` reads a class instance's fields by position like P179 payloads: `class P { x: int; y: int }; P(2, 3)#1` → 2; what is built by position reads by position. Code that names fields (the compiler) uses `.field`. Later (card class-position-index) a class may override its position function like its index function, and defining one of the two derives the other.
-- position-index-words: a class's `#` is its `position(p)` (from 1), `[]` its `index(i)` (from 0), prefix `#b` its `count()`; writes `b#i = v` / `b[i] = v` are `position(p, value)` / `index(i, value)` (setters by arity), chosen by the assignment, so `m[i, j]` stays a read; defining one of position/index derives the other. PitchClass `F#4` is `position(octave)`. Card class-position-index.
-- P45 a variable given kinds that don't mix (`x=[1]; x=5`) is a compile error; Int→Float widening stays; undeclared lists stay `list any`.
 - P28 `real x;` read before assignment is its type's zero value.
 - type-words-reserved (also: P23, P20): every type word is reserved as a function name (`double(x) := …` errs, "name it to_double"), except P31's `text(p)`. type-word-local-warns: binding a variable to a type word (`symbol = ":"`) warns, since it shadows the type in `is`/`as`.
 - list-cast-each: `as` a list type converts each item like `as` its item type (`["1", "2"] as ints` → [1 2], `[1, 2] as texts` → ["1" "2"]; an item that can't convert is that item's error); a declared result type `: ints` checks, never converts.
 - #9 `list of int`; plural type words (`numbers`) are lists; `list<int>` reads too; `x : 100 int` and `pixel:int[100]` declare typed arrays.
-- `type(ø)` prints "empty". static-int: a constant call misfitting its declared int result is refused at compile time.
-- D5 any noun can name a type/parameter (notes/matching.md).
 - index-position: `index` (from 0, `xs[i]`) and `position` (from 1, `xs#p`) are int types; index_of, argmax, argmin, insert use them by declared type; position ± int stays a position, position − position is a count, position + position an error; a missing element is an error, never -1 (notes/index_position.md). index-units: base `index` from 0 (`offset` its synonym), `position` from 1; unit: characters (graphemes) by default, `byte` as the adjective (`byte index`, `byte position`). One word `find`, its result chosen by the receiver's declared type: `position p = "a👍🏽b".find "b"` 3, `index i = …` 2, `byte index b = …` 9; untyped a position. Byte and character indexes do not mix without a conversion. `byte_index_of` stays as the explicit word. A bare `index_of` on a text works as find with a warning; on lists `index_of` stays. core writes the explicit forms; lib/ parameters named offset are renamed so the type word does not shadow them. Card index-of-bytes.
 - schema-as: `x as Config` converts field by field or errs naming the field; `x is Config` stays strict.
 - D10/P17 dispatch on return type (`render "hello" as pdf`); ambiguous → got-it warning (notes/dispatch.md).
 - function-type: `type(gcd)` prints `function: (a, b) -> int`. parse-type / body-code: quoted program parts (`parse("1+1")`, `f.body`) have type `code`, print their source, keep `.op`.
 
 ## Variables, binding and charged definitions
-- library-constant-refused: `pi = 4` at the top level is refused, "pi is a constant"; a local inside a function may shadow it. Today it prints 8: fix forward, the tour expectation stands.
-- charged-values-rule: a charged value definition is the rule `($h := $e) => ($h() := $e) where $h is varying` in extensions/sugar/heads.warp, not a pass.
-- lambda-assign-writes-through: in a lambda or block argument `=` to a name of the enclosing scope writes that name (`seen=0; f=() => {seen=3}; f(); seen` → 3); `let x = …` makes a new local; a def's body keeps its own locals.
 - op-assign-target-once: `x[f()] op= y` evaluates the target's parts once, as C, Python, JS.
-- let-reassign: `let` is fully immutable (fix "use var x"); `var` is the variable; `let mut x` = `var x` with a loud warning. const-deep: `const` is deep like `let`.
 - P159 `const x=7; x=7` warns "remove the redundant assignment". P130 pi and named constants are constants; a class field named pi is the class's own.
-- let-parallel: the parallel let is only `a b = f(x) g(y)`; `let a b = …` is a function definition; `let a, b = 3, 4` unpacks.
-- Data vs code (P51, P62, P63, D7): specified in wiki/charged.md. P70 late binding: a change is an error only where a later call sees it; pure getters over constants may fold.
-- P71 `:=` without parameters is charged, re-evaluated at each use; assigning it after is an error (P138: also Go's `total := 0; total += n`).
-- P124 a lambda or nested `def` changing an enclosing variable (`n += 1`) shares it; `nonlocal n` only makes a plain `n = 5` shared. P70c handlers and definitions created in a loop keep their iteration's variable.
-- watched-cells: watched variables use the run-time cell, except main-level variables no function writes.
-- P72 no memoization syntax; the compiler decides.
-- P73 / D2 `!`: `x!` forces (a block runs, an optional unwraps, a value is itself); `!` after a method mutates in place (`xs.sort!`). print-bang: a function that gives nothing never takes the in-place bang (`print friends!` prints the forced friends).
 - P69b a block arriving at run time is pure by default. P69c `warp compile` with run-time `!` warns and loads a shared compiler lazily.
-- data-stays-data: a bare word in data stays a symbol; only `!` and `${…}` evaluate; `created: now` stays a block until `!`.
-- runtime-dates (also: now-live): `now` reads the clock at run time at each use; tests pin `now <= now`, not `now == now`.
 - time-word (also: print-time, time-now, anchor-time): bare `time` is the type; instant, date, local time, zoned time, duration are its subtypes; `now.time` is the time of day, `now.date` the date; `now > 17h` / `now >= October` compare the matching part, `==` stays exact; `time > 18h` is an error with the fix `now > 18h`.
-- module-global-assign: a top-level `tempo = 90` sets the standard module's global.
-- global-plain-write: a variable declared `global x` at the top level is written by a plain `x = …` in any function; no `global x` inside the function needed (library code relies on it: walk.warp's `said = []`).
-- shared-captures (user, card block-parameters-captures): a variable a lambda assigns lives in a shared cell, so `n=0; f = () => n += 1; f(); f(); n` is 2 (P124); a `{…}` at a `block` parameter is a closure called `body()`; `times` is then the prelude's `infix times(n: int, body: block)`; inlining literal blocks is a later optimization.
-- handler-blocks-share: an event handler (`on frame {…}`) is a block, not a function: `x = 160; on frame { x -= 4 }` changes the main-level x; a name only the handler uses stays local to it; the same block rule as `n times {…}`.
-- handlers-wait-for-blocks: event handlers land only after block-parameters-captures, then their shape is discussed again (the elegant option: `on(event, body: block)` as a prelude function). Host values (system_value_kinds: battery, mouse_x, key_pressed…) do not belong in the emitter: they are declared in lib (card whole-table).
-- Mutating a main-level list in a function needs `global names`. P106 tasks share a variable only when declared `shared`. P44 `shared xs = int[n]` arrays with atomic `xs#i += v` (`atomic` synonym).
-- count-words-library: once/twice/thrice leave both compilers and become prelude words over a block parameter (`def twice(a:block){a();a()}`), defined through `times` so `twice "ab"` stays "abab" and `thrice [0]` three items.
-- range-end-once: every `for` range end is evaluated once. #22 `N times {…}` evaluates N once; `i++ while c` is a plain while; `a = 2 if c` guards the whole assignment.
 
 - #23 a loop's `it` shadows a function's `it`, with a warning. P174 `mk(k) := { it * k }`: `it` stays the parameter, with a warning. P239 in a lambda naming its parameter, `it` is the outer `it`.
-- kebab-or-minus: `a-b` is a name when declared or bound; otherwise, with a and b bound, it is subtraction with a got-it note, and `warp format` prints `a - b` (`j = 5; i = 2; j-i` → 3); both existing → the name wins, with #6's warning.
-- esoteric-phrases-commented: esoteric phrases in samples (`3 is at least 3`, `is at most`) are commented out with their canonical form beside them (`3 >= 3`), no rule words restored (card pure-reads).
-- operator-even-spacing (user, like Swift): a binary operator is spaced evenly, both sides or neither; `1 +1` reads as `1 -1` does (the list `[1, +1]` with its warning), never as addition. `1 -1` and `1 +1` both give two items with "warning: … is two items; fix: 1 - 1"; an unevenly spaced operator with no prefix form (`a *b`) keeps computing, with the same warning where cheap.
 - spaced-call-parentheses: `f (3)` is the call f(3) as `f 3` is; `f ()` calls f with no arguments as `f()` does (a one-parameter f gets ø), not a list `[f ø]`.
-- dot-space-property: `p. b` as `p.b` is allowed only while it costs at most 2–3 core lines; otherwise it is refused with the fix `p.b`.
-- default-parameter-def: `def f(n, i=2) = n + i` takes `i = 2` as a default parameter.
-- #6 data as scope, warning when kebab parts are also variables; P81 that warning offers three fixes.
-- stored-visits: `stored visits default 0`; `stored visits = 0` works with a note.
 - Ranges: `r: 1..n` is the range itself; `upto` excludes the end with a hint. range-in-brackets: a range inside [ ] is one item, never spread.
 
 ## Functions and calls
 - postfix-words: two rules. (1) backward application: a phrase of exactly two items, a value then a known one-parameter function, is the call, `4 square` → 16, `xs sorted` → [1, 2, 3]; one typed sugar rule (typed-rule-holes, `($x: any) ($f: any -> any) => $f($x)`), never inside `[…]` (`[1 f]` stays a list), a function first keeps prefix meaning (`square 4`). (2) an unbound word ending in -ed/-d looks up its stem as a one-parameter function with a got-it note (`xs reversed` → reverse(xs), `x doubled` → double(x)); two matching stems refuse naming both; at most ~20 core lines in name lookup, else parked.
-- night-forms-kept: a def/fn header ending its line takes the body below (6 parser lines, def-body-next-line); `return a, b` returns the list [a, b]; `go for x in xs {…}` runs each iteration as a task, joined at the statement's end (needs its wiki line); a float repeat count known at compile time (`"ab" * 2.5`) is refused; `shared n = 0` is a main-level global for tasks.
-- def-brace-body: a brace body without `:=` defines a function only after `def` or its alias words (`def f(x){x*2}`, fun, fn, function …), at no extra core cost; a bare `g(n) { … }` with g defined is a call with a block argument; with g defined nowhere it is refused, fix `g(n) := { … }` (refuse-never-guess: no definition by absence; cards gap-brace-def-no-assign, gap-fib-brace-body).
 - map-all-test: the test reads as English, `all xs are even` and `are all xs even`, `any xs is even` and `is any xs even` (extensions/sugar/broadcasting.warp); the call all(xs, f) / xs.all(f) stays yes/no.
-- map-all-canonical: `f all xs` is the canonical map (`moved all particles`), `xs.map(f)` its alias; the yes/no test over a list is map-all-test.
-- int-overflow-shape: int-boxed-overflow-big keeps its ~23 lines with named overflow tests; no bit-trick or float shortcut.
 - words-as-values: a function word used as a value is the lambda of its call (`f = sqrt; f(16)` 4, `apply(floor, 2.5)` 2), bringing its module; with several arities the one its use needs, never silently the first.
-- definition-name-canonical: the name a definition carries is canonical for dir and everything warp prints (count stays count); internal names get canonical ones (map_keys → keys), old names become aliases or go.
-- call-function-values: a glued `(` after a round group or an element calls a function value: `(x => x*2)(5)` 10, `adder(5)(1)` 6, `fs[0](3)`; numbers keep juxtaposed multiplication, `(2)(3)` 6, but no special code to keep it; if it breaks, a Later card.
-- keywordless-def (superseded by def-brace-body: refused, no definition by absence): when f exists `f(x) { body }` stays a call with a trailing block (block-lazy-body).
 - reflection: function objects have .name, .signature, .return_type, .parameters, .doc; printing one shows its doc above its typed .dump; `methods(x)` returns the function objects; `use reflection` adds compilation unit, compiler, origin, wasm index, effects. A bare parameterless function inside print/help/dump/type is called, with a warning and hint `function now`.
-- function-in-list: in a list or text a function prints as its name; only alone it shows doc + definition.
 - dir-lists: built-ins are function values of type `builtin` (a subtype of function); methods(x) lists them.
-- default-methods: `x.word` ≡ `x.word()`, resolved by multi-dispatch on the receiver's type; a member or method of the object's own class is more specific and wins.
-- class-members-free: built-in and library words are not keywords; class fields and methods dispatch on their class and never conflict; locals may shadow them.
 - receiver-field-assign: `fresh(f: F) := { body = 99 }` writes f.body, same as in a class-body method (one-method-form, P115/P116); `let body = …` makes a local; any warning applies equally in both places.
-- library-words-typed (also: dispatch-untyped-library-words): every library word has a full type signature and is immutable for its types; a program's untyped definition of the same name covers only other values, with a hint (`count(x) := 7; count([1,2])` → 2, `first(3)` → the program's).
-- field-forms: plain fields take only `.` and `of` (read and set); call forms (`w(b)`, `b.w(5)`) are only for properties.
-- cross-module-overload: definitions in different modules overload by argument type, no shadowing (`use script; sort ./names.txt` sorts lines, `sort [3 1 2]` the list); also for the program's own files: same-named definitions with different parameter types in two used files are legal multiple dispatch, chosen by the argument's actual type; until that dispatch is right, rename clashing helpers. static-dispatch: a declared argument type picks the variant written with it at compile time (`n: Node` takes the Node/any variant even for a text node); a value of no declared type is dispatched at run time by its actual type. list-variant-dispatch: `play(xs: list of note)` / `play(xs: list of file)` pick by the items at compile time where known, else at run time by every item's type, the same test as `xs is list of note` (a mixed list falls to a plain `list`/any variant or the no-variant error); an empty list fits every variant and takes the first declared one, a literal `play([])` with a got-it warning naming it and the explicit `[] as list of file`.
 - random-forms: bare `random` is a float in [0,1) where a value is used; `random T` is a random value of type T (`random bool`, `random int`); `random(n)` 0…n-1; `random(a, b)` whole numbers inclusive, floats [a, b); `random 1..10` picks from the range. Any parameter of type Type accepts bare type words.
 - function-references: a bare function name compared with a type or in `type(f)` is the function itself; `.floor` in argument position is a lambda (`xs.map(.floor)`, `people.sort(.age)`); `&floor` and `function floor` are the explicit references.
 - declared-belonging: calling stays uniform (`f(x)` ≡ `x.f()` for every function, silently), but belonging is declared, not inferred from the first parameter: a function is a method of a type (dir, completion, docs, the playground's method list) only when declared in the class, the type's own module, or an extension; any other function is a free function of its module, dot-callable where that module is used (P171). Reflection keeps both: `Text.methods` the declared ones, `Text.functions` every function taking a Text. A type alias carries its own methods (`type Name = text; argument_result(n: Name)` is a method of Name, not of text). class-extensions: outside code adds a method by its dotted name `text.shout() := upper(it) + "!"` (canonical) or groups several in `extend text { shout() := …; whisper() := … }`.
-- path-literals-preferred: a path is written as a path literal without quotes (`./data/a.txt`, `~/x`, `/etc/x`, `../x`, `^/x`, `•/x`), never a quoted text, in samples, tests, docs and generated code; a quoted text given as a path (a file word's argument, a path-typed place) gets the "I meant" fix to the literal, which `warp fix` applies. A path with spaces stays quoted. Wiki: significant-whitespace (`xs ./2` path vs `xs ./ 2` element-wise).
-- path-type (user, Soon): a path written without quotes (`./n.txt`) is a value of type path, a text subtype marked in its kind field like type values: every text word takes it, `type(./n.txt)` is path, Path methods dispatch at run time too; shell.warp's `class Path` becomes the marked text.
-- type-library-words: list/map/text library words are always available as `x.f()` and `f(x)`; `use list` only for qualified `list.zip`. P171 other modules' words need their `use` (error naming the module); `write` and `exists` are global.
 - module-alias: an `alias pw = power` line in a program or a directly run file adds a name and never shadows one (`alias exp = exponential` beside a builtin exp leaves exp the builtin).
 - own-name-not-builtin: a program wanting its own version of a builtin math word (a Taylor-series sin) defines it under its own name (`sin_test`), not by redefining `sin`.
-- library-own-words: a library file that needs an existing word (lib/extrema.warp's min, lib/fast_math.warp's sin) uses the existing one, never redefines it. `norm` (refused in lib/prelude.warp as the operator ‖) moves into the math module, visible only after `use math`. A std module under lib/ that deliberately replaces a library word (lib/extrema.warp's min/max, lib/fast_math.warp's fast sin/cos/exp for `warp fast`) is allowed to, also when run directly.
 - (override-keyword governs redefining a library word; a foreign export is called qualified.) P39 no `id`/`square` builtins; P191 `square` lives in math.
-- builtins-name: library words are called builtins in notes, cards, messages and new code names; the Rust-only ones are "Rust builtins" until retired.
-- music-plain-library: music (lib/sound.warp and the music words) is a plain library: no compiler magic, no Rust pass, no rewrite rules, no module pass; only core language features. Each form becomes an ordinary function/class/operator call; a form that can't be written that way either needs a general core feature (card, useful beyond music) or is dropped/simplified. Rephrasing the syntax of some calls is fine (definition clauses, function-word patterns, notes/matching.md).
-- domains-plain-libraries: the same holds for web routes, markup and styles, graphics/window properties, shader holes and reflection/help. Whatever isn't expressible in pure warp yet goes to the user as a question, since the language may be extended for it.
-- markup-plain-library: glued attributes are dropped (`label{ for: name; "Name" }`); `form` is a plain function `form(method: symbol, action: text, body)`, so `form post "/todos" {…}` comes from function-words-consume; core rule: `name = value` inside any data block is a key, as `name: value` (`input{type="text"}`).
-- rewrite-general: `rewrite PATTERN => TEMPLATE [where $c = SHAPE]` stays as a general user-macro feature (`rewrite double $x => $x * 2`); the arrow may later become `as`/`with`. Channels are a plain Channel class (send/receive/close); `for v in ch` uses an iteration protocol for classes (core feature).
-- block-lazy-body: a `{…}` block passed to a function-typed parameter is its lazy body, a function of no parameters or of `it` when called with one (`get "/echo" { it.body }`); general core rule.
-- serve-plain: path parameters via text patterns (`get "/users/" + id: int { users#id }`, card route-path-patterns); `$field` dropped (`it.body.title`); default routes of `warp deploy` move into the library via a reflection word `functions()`.
-- transitions-data: markup tags take their body as `data`, so `li{ transition: opacity 200ms ease-out }` and the library kinds `fade/scale/slide 200ms` stay bare words, joined into CSS by the library.
-- data-names: inside a data argument a name the program binds is its value, spliced in at the call site (`color: theme` → red, `p{ "count " + n }` shows n); an unbound word stays a word (`ul > li`); quote it (`"red"`) to keep a word that is also a variable.
 - reflection-plain: one builtin `meta(x): map` gives what the compiler knows about a class, module or function; lib/reflection.warp builds typed views (`.name .fields .methods .parent`, `.words .doc`) and dir/fields/methods/help on it. `help(x)` gives the text; the REPL/program value prints it, mid-program `print help(x)`.
-- shown-by-warp: every program result is shown by warp: the compiled program exports one show, the host prints the text it returns (`3km + 500m` → 3.5km, as print shows it).
-- self-hosting-focus: non-self-hosting design questions are parked with their leave-as-is defaults.
-- parser-first: focus on features necessary to compile the parser itself with warp (only what core/parsing/parser.warp needs; advanced and domain features wait). Classes and try are in scope: the compiler's warp code uses them where they fit, their absence is a code smell to fix (cards parser-try, class constructor rung 15).
-- standalone-compiler: no more interest in Rust; everything is tried directly with warp, no conversion to and fro. Rust only bootstraps; the warp compiler's stages pass warp values directly, no JSON or Rust between them.
 
-- rename-clashes: same-named words in two used core files get stage-specific names; the general rule (a used file's own code calls its own words) is card file-own-words in Later.
-- diagnostics-files: core/analysis/diagnostics.warp is the general machinery, no enums, no bridge. The messages live in errors.data, warnings.data, hints.data: TSV, pattern TAB message (`data($x / 0)	"division by zero: {x}"`), comments allowed, translations later as extra columns; ".data" stresses it is a list of lists, read as plain warp data. First match wins.
-- instant-vs-duration: `now > 9.hours` / `now > 17h` compare the matching part (lib/time Instant.compare: under a day the time of day, else the day of the month), with a warning "did you mean 9 AM?"; Instant fields `now.year` `now.month` `now.day` `now.hour` `now.minute` `now.second` (local, local-now).
-- batch 2026-10-19 (user, to build later): a loop in a plain data block gives a nested list, elements splice it; shader `$holes` pass stays (re-read at each paint); run-time block grants are an effect mark `def f(b: block) ! IO`; the eight ignored unit-edge tests stay ignored.
-- letters-only: `letters` stays Unicode letters only; `.length` counts characters.
 - same-as-result: a result typed like an argument is spelled `same as <param>` (`shuffled(xs): same as xs`); an element of an argument is `element of xs`, `value of m`, `key of m` in type position (`first(xs): element of xs`); no type variables per P157.
-- music-plain-details: live loops take a function (`live_loop(drums, 4)`), a block once block-into-go lands; in-program redefinition dropped, the playground handover between runs stays. Sharps: constants `F♯4`, alias `Fs4`, note texts "F#4", and `F#4` itself by overloading the index of the note object F (no pass). Block-wise sound functions: interim `play_blocks(hum, linear_address(hum_block), 0.1s)` with a linear array; goal: `play` picks the block filler by the function's parameter type (`hum(block: samples, t)`). samples-type: `samples` is declared in lib/sound.warp as a linear block of 512 floats, independent of class Sample (a clip, lists of it are `list of Sample`); a declared type name wins over plural derivation.
-- P82 a function reference is `function add` or `&add`; a bare name that needs arguments is "add needs 1 argument". P83 an alias needs the reference; an argument to a function parameter stays bare.
-- arctan-allow: `arctan := arc_tangent` names the function; partial application only with a hole (`add(1, _)`).
-- `sum := fold +`.
-- P50 a declared scalar parameter broadcasts over a list. P173 an unannotated parameter called with several kinds becomes `any`.
-- P37 named arguments set parameters and free variables; no implicit capture; a missing argument is an error. P216 named arguments run left to right.
-- labels-calls: a preposition labelling an argument in a call takes a colon (`save file in: folder`, `move x from: 1 to: 5`), for every preposition and `as`; definitions keep the bare form `play(tone, for duration)`; where the bare word can mean nothing else (for, each) it is read as the label with a warning.
-- P52 elsewhere `to` is a range, `of` a field lookup; `f - x` with a user function is `f(-x)`.
 - P24 suffix forms (`4 doubled`) call user functions. P164 a type word after a parameter name is its type (`phone number`); `phone-number:text` is one hyphenated name in declarations.
-- P132 `{f: x => x * 2}` holds a lambda; a type word after the colon makes it typed. P133 `|x| x*2` is a lambda.
 - P48 custom operators: `prefix operator ⁻ := …`, `suffix`, `infix operator ⊕ := left+right`, word operators `infix operator divides(d, n) := …`. P54 only declared operators are ranked (`has precedence above +`). P166 element-wise operators on plain numbers act plainly.
 - values-number: a system value is `$mouse.x`; `$mouse_x` hints `mouse.x`.
 - D6 `|` is one operator dispatched on types: logical or, or pipe (`2|square|root`). operator-shall: `&`/`|` of two whole numbers combine bits; `and`/`or`/`&&`/`||` stay logical. amp-compose: `&` of two functions composes in reading order, `∘` alias. P158 `then` pipes only into a stage missing its argument with no `else`.
 - `root` is an alias of sqrt. P2 tuple returns `return a, b` / `x, y = f()` as wasm multi-value. P3 closures keep boxing.
-- runtime-function (also: print-closure): function values compare by definition and captures; a closure prints as written, `&f` prints the name.
-- check-assert: `check` asserts; float parameters stay IEEE, `==` exact.
 - D4 constructors: `T{…}` of a known type constructs and validates, `k:{…}` is plain data; missing fields are errors unless `?` or defaulted. #41 spaced `V { x: 1 }` constructs a declared V.
-- use-script: `use script` = `use relaxed` (no hints) plus the os, file and net words and `command("…")`, `arguments`, `cwd`, `glob`, `stdin`/`input`, `sleep`, `exit n`. unix-words: it adds shell words with warp results (ls pwd cd cat echo mkdir cp mv touch head tail wc grep which rm find size/info sort/uniq open, curl/wget = fetch/download); rm takes one file or an empty folder, never / ~ or the working dir and above, and moves to the Trash; unquoted paths `~/x ./x /etc`.
-- sleep-seconds: a bare number in `sleep 0.3` means seconds, with a "needs a unit" warning (none under `use script`).
-- cleanup-cuts: dropped compile-time lambdas, generators/yield, type-name parameters `fib int i`, scoped handlers `on … in {…}`, the defined-twice diagnostic, all phrase calls (until prepositions-call: `move x from: a to: b`). Kept: return-type overloads, tuple returns, list element checks, instance destructuring, object-shaped parameters, dispatch by class, version literals (rebuilt small). Traits are a thin alias of classes with default methods; ORM keeps only `stored people: [Person]`; `a of b` ≡ `b.a`.
 
 ## Lists, maps and indexing
-- ordinal-dot-index: no core rule and no plural guessing (`1.friend` is not a form). A program that wants `1.friends` as `friends#1` writes one overload of the dot, `infix operator .(i: int, a: any) := a#i`; that works on int literals. The general hook would be an overridable attribute access (`attribute(of, name)`), not built.
-- each-field-broadcast: `xs.each.count` broadcasts a field or method over the items (`sum(counters.each.count)`); a list's own `.count` keeps its meaning; no field-wins-when-all-have-it (card xs-each).
-- lazy-range-value: `a..b` / `a to b` hold only their two ends (a list node marked KindUnit.Range, `range` a type word, ~28 core lines); count, #, sum, indexing and iteration answer from the ends; any other list operation makes the items once, so a range stays a list everywhere (range-dots: `..` excludes its end).
-- pair-items (user, ~4 core lines node_at/node_length): a key-value pair reads as two items, `p = (a: 1); p#1` → a (the name), `p#2` → 1 (the value), `#p` → 2; host item_count/item_at the same.
-- bare-pair: `a:1` as a value is a pair; a word key stays the word as written, as `{a:1}`'s keys (`a = 5; x = a:1` is a:1, `x is pair` yes); any other key is its value (`1:4`); a computed key is `(a):1` → 5:1.
-- to-inclusive: `a to b` always includes b, also when b is a length: walking 0-based indexes is `1 ..< #a` or `1 to #a - 1` (samples/lists/sorting.warp).
-- #4/P40 `size` = count; bytes via `byte_size` / `number of bytes`; `len(x)` counts with a hint `#x`.
-- P43 lists do not grow past the end: setting past it is a catchable `index out of range`.
-- P34 a number subscript on an empty `{}` keys it as a map. map-subscript-runtime: the same at run time: `m[1]` on a value that is a map when the program runs keys it (`f(m) := m[1] + 1; f({1: 5, 2: 6})` → 6), on a list or text it stays a position (`f([5, 6])` → 7). single-entry: `{a:1}` stays a pair and becomes a one-entry map where a map is needed.
-- stored-table-name: `stored people: [Person]` names its table after the variable; `… in "people_v2"` explicitly.
 - markup-needs-html (user 11-09, replaces element-named-pair, card data-key-brings-markup): markup is written inside `html{…}`, or in a function known to return html (its result typed html), where a plain `b{"bold"}` still works; anywhere else a tag-named key or tag form is data: `x = {p: {c: 1}}; x` → {p: {c: 1}}, `{i: 1}` stays {i: 1}. Tests and samples that write bare markup get the `html{…}` wrapper.
 - html-value (Interviewer, by markup-needs-html, card html-anywhere): markup is a value of `class Html { element: pair }` (a cheap class, not a subtype of pair: a pair would fill a subtype and data would count as markup), printed by its own `format` overload, rendered by dispatch on `is Html`. An element written inside html{…}, in an html-typed function, or as the argument of an html-typed parameter (to_html, render, page_render take `value: html`) becomes an Html; a data entry like `"a": "Apple"` stays a pair.
 - format-types-inline-html (user 11-10, refines jsx under html-value, card inline-div-format): `warp format` turns inline HTML into warp markup and adds the html type where the element is a whole value: `p = <p>Hi</p>` → `p: html = p{ "Hi" }`, `f() := <div/>` → `f(): html := div{}`; elsewhere (an argument, inside an expression) the inline HTML stays as written.
-- #25/#36 a space before `[` never indexes; only glued `a[..]`.
 - P29 `pair.0` counts from 0. P30 `xs.pop()` gives the last item, `m.remove(k)` the value or ø.
 - Word slices: `xs from #2 to #4`, `xs starting from #2`, `xs up to #2` or ordinals, both ends inclusive; a bare number is an error. P58 `xs#a..b` keeps the range with a strong warning naming `xs#(a..b)` and `(xs#a)..b`.
-- `[x]*n` / `[1 2]*2` are refused; `n times [x]` repeats. `xs.insert` never guesses: `insert(x, at: i)`, two Ints are an error. D3 `.+` is element-wise, `xs + [4]` concatenates.
-- list-append-plus: `xs + item` and `xs += item` append an item that is no list (`xs = [1]; xs += 3` → `[1 3]`, `[] += 3` → `[3]`); a list on the right still concatenates, and a one-item list literal (`xs += [3]`) gets a hint that the brackets are not needed (`xs += [p]` of a variable keeps its brackets silently). A list on the left wins over text joining (`[1 2] + "z"` → [1 2 "z"]; `"a" + [1]` still joins); a number on the left (`4 + [1 2 3]`) stays the too-ambiguous ask.
-- reconsider-spaced: spaced values are lists (`xs = 1 2 3`, `print 1+1 2+2` → 2 4); only a glued sign after a space (`x = 5 -2`) asks. list-sign: in a comma-less list a space plus a glued sign starts a new item (`[a -1]`); outside brackets `x -1` subtracts; never inside an index.
-- P175 `xs where it > 1` filters; P223 filters may name fields bare (`people where age > 20`), a variable in scope wins with a warning. people-where: no new `with`/`without` sugar.
-- P200b maps and lists share like instances (`n = m; n.a = 2` changes m); `x.copy()` copies; a typed list read from a field shares. P215 covariant list assignment is an error where the alias is visible, else a run-time check per write.
 - P176 repeated `key: value` in a named tag block are children; a plain `{…}` keeps the duplicate-key error.
-- `pixels size` works like `size of pixels`.
-- swizzles: `.x .y .z .w` and combinations (`.xy`, `.zyx`) read a list of 2–4 numbers everywhere; Euclidean length is `norm(v)` (alias `magnitude`), `length` stays the count.
-- curly-group: `{a; b}` is a list at every depth; `{a: b}` is a map literal at every depth, inside a parse() result too (`parse("f {a: b}")#2 is map`); walkers test groups with `n.bracket != ø`.
-- node-part-clash: part readers `key_of(n)`, `value_of(n)`, `op_of(n)`, `name_of(n)`, `bracket_of(n)`, `separator_of(n)` always read the node part at any depth; `.key` etc. keep field → meta → reflection for data.
 
 ## Control flow, matching and errors
-- comparison-after-arms: a comparison after a switch/match compares its value, never swallows the arms block: `switch 3 {1: "one" 3: "three"} == "three"` is yes, `match n {…} > 15` likewise; one general case in prefix_calls.warp fitted_comparison (~6 core lines), no per-operator rules.
-- raw-rules (user, ~15 lines core/passes/rewrites.warp): a rule marked `where raw` fires top-down on its code as written, before the rules inside it; its result is rewritten bottom-up as usual (law, quote, test bodies).
 - prefix-keyword-condition: a prefix keyword (whenever/when/on/at) takes its whole condition up to the trailing block (`alarm = whenever t > 30 {…}` is a listener handle); a glued digits:digits after a word stays one time value (`at 9:30 {…}`).
 
-- for-over-iterator: a construction of a program class counts as an instance, so `for x in Countdown(3)` iterates by next() until ø.
-- rewrite-rules: a rule set `rules { data($a * 1) => a; … }` is a value; calling it rewrites bottom-up to a normal form (a rewritten node is tried again until no rule fires: `simplify(data(y * 1 * 1 + 0))` → y); a step cap stops a rule set that never settles with a loud error naming the rule that keeps firing. `tree replace P with Q` stays a single pass.
-- match-whole-value: no binding syntax; inside an arm the subject's name and `value` are the whole matched value.
-- match-alternatives: `1 | 2`, `1 or 2`, `1, 2` as case keys all mean either; `int or text` as a key is the type test; `other` is a catch-all like `_`/`default`/`else`.
 - match-exhaustive: a match on a known enum or sealed class missing a case is a compile error.
 - pattern-keyword: named patterns only with `pattern Adult = {age: >= 18}`; a plain `Name = …` is a value.
 - #31 a switch without a match reports the run-time value (`no case for n = 4`).
-- `if c {1} else 3+1`: the else takes the whole `3+1`.
-- P21 `try X else Y`. P60 `try {…} catch {…}` and `try: … except:` are synonyms. P67 `catch e`: e is the Error value. #34 deep traps under `try` are caught. failed-raised: a raised error stops the program; bare `try X` turns it into the value (`r failed`). try-finally: `try X finally Z`.
-- P55 a while loop's value is its last body value. P213 a loop ending in `print` gives ø.
 - `when` by shape: `when click {…}` = `on click`, `when x > 3 {…}` = `whenever`, `when x {… -> …}` = `match`, `when {cond -> …}` = an if chain; each warns naming the word meant.
 - P46 type-name and condition patterns in `for` filter with a got-it warning (`for friend in xs`, `for (it>2) in xs`).
 - P61 `is` is always a comparison; with an undefined x it teaches `x be <value>`. #27 `be` is `:=`; `≤ ≥ ≠ × ÷ ¬ √` are accepted and normalized (÷ is floor division: julia-floor-divide).
-- #39 `==` never chains: `a<b<c` chains, `1<2==2` is `(1<2)==2`.
 - fail-effect: the `Fail` effect tracks explicit raises, division by a value that may be 0, and library calls answering with an Error; index out of range, missing fields and failed casts are untracked bugs.
 - error-classes: errors are classes: the prelude declares `class Error` and the run-time errors as subclasses with Python names (IndexError, ZeroDivisionError, …); users declare their own (`class ParseError: Error`), an undeclared error name is a compile error with that hint. `except T as e` catches T and its subclasses; `except Error`, bare `except:` and `catch e` catch everything.
-- pattern-roadmap: pattern-clauses: functions whose parameters are patterns are clauses tried in order (`simplify(data($a * 1)) := a; simplify(n) := n`); binding-alternatives: `|` branches bind when every branch binds the same names; whole-binding: `as` inside a pattern names the (sub)pattern (`data($f($inner) as call)`), outside it casts; text-patterns: `"0x" + rest`, at most one hole per side, plus prefix/suffix and character classes. A class is the type of a hole, like a typed hole that converts (`"0x" + h: hex`, `"v" + n: digits`, `c: digit`, `"/users/" + id: int`); class words digit(s), letter(s), hex, space, word are hole types only in a text pattern's hole position, nothing reserved (a variable `digits` stays plain).
 
 ## Classes, objects and enums
-- valued-field-default: a class field given a value declares its default, type from the value: `class Animal { name: "?" }` is `name: text = "?"` (2 core lines, instances.warp declared_field).
 - capitalized-field-list: a capitalized plural field named after a declared class declares a list of it under the lowercase name: `class Signature { Parameters = [] }` is `parameters: list[Parameter] = []`, read as `sig.parameters`; otherwise an ordinary field.
 - property-accessors: accessors are overloads by arity: getter `canvas.width := canvas_width`, setter `canvas.width(new_width) := …` or with `it`; a getter without setter is read-only (assigning is a loud error).
 - setter-calls: a setter is called by `canvas.width = 12`, `canvas.width(12)`, `width(canvas, 12)`; `width of canvas = 12` is `canvas.width = 12`; `set x to y` is `x = y` with a style hint.
 - saved-words: lib/draw.warp declares `canvas()` (no arguments) as the current Picture, so `save canvas as: "painting.png"` works through the bare-call rule; likewise `sound()`.
-- P115 bare field names read the receiver (`self`/`this` too). P116 `c.inc()` updates c. P117 a body definition without parentheses is a getter; `class b extends a` inherits.
-- P122 static members need `static`; plain `pi = 3` is a per-instance default.
-- P162 `init` is the constructor; `constructor`, `__init__`, `initialize`, `new`, a class-named method … are aliases with a note; `new Point(1, 2)` works with a note.
-- P123 an object's text is its constructor form `Point{x:1 y:2}`; classes are capitalized in docs.
 - P177 `implements` / `struct Square: Shape` is a checked claim.
 - P200c every object has `copy()` and `clone()`. P205 `copy()` is deep; `copy(shallow: true)` shallow. P206 resources inside are shared with a note (error under --strict). P207 `clone` calls `copy`; a copy keeps its class. `===` (taste call, the code): same value and same kind of thing (`1 === 1.0` yes, both numbers; `0 === false` no); `≡` spells it; identity, if ever needed, gets its own word.
-- enum-case: a plain enum case is its own value (`print Coin.Dime` → Dime, `as int` → 2, `2 as Coin` → Dime, `9 as Coin` errs). An operator case and its spelling are synonyms: `print Op.Add` → Add, `Op.Add as text` → "+" held or literal (`x = Op.Add; x as text` too), an explicit conversion; comparing a case with its spelling holds (user 11-09: comparing is not becoming): `Op.Add == "+"` → yes, as does `op_of(key(1, "+", 2)) == Op.Add`. A case is still never stored or passed as its text (kinds-as-cases). enum-int: C functions and fields typed with an enum convert to and from its int; in warp only explicitly.
-- enum-raw-values: `enum W { A = "a·b", B }` spells a case (TS/Swift raw value): `W.A as text` "a·b", `"a·b" as W`, `W.A == "a·b"`; an unspelled case is spelled by its name (`W.B as text` "B"), no mix error; a number raw value (`Dime = 10`) is its `as int`. Not P178's payload cases. Later node.warp's Op/Bracket/Separator declare their spellings this way and node_cases' table goes. Card enum-spelled-cases.
-- kinds-as-cases: the compiler's kind names are `enum ValueKind` cases used as ordinary values (returns, list items, parameters, map keys); texts only at the edges (`word as ValueKind` in, `kind as text` out). A case does not turn into its spelling at run time (enum-case stands); a missing map-key or parameter ability is fixed in the language; enum compares and enum-keyed tables are made fast in the language: cases compare and index as small ints.
 - enum-identity: each enum case is one unique value; `==` with a case is identity, plus its spelling as text (`Op.Add == "+"`, `Coin.Dime == "Dime"` yes); cases of different enums never equal (`Level.Error == ValueKind.Error` no); text becomes a case only by `"Int" as ValueKind` (`symbol("Int") == ValueKind.Int` no).
-- declared-class: a declared class is its own wasm GC struct (descriptor + fields in declared order, a subclass a struct subtype); a known class's `p.code` is one struct.get; classes with methods are not refused; an undeclared field turns the instance into a map with a warning naming class and field; maps unchanged. Structs and Node values convert automatically both ways, so anything taking a generic value or node takes an instance. class-field-slots is the interim speed path until then.
 - Reflection: `dir(x)` from compile time when known, else from WASM metadata; x.type, x.fields (alias members), x.methods, f.params, f.effects; lookup order field → meta → reflection; one custom section warp.meta. P230 `effects of f` gives symbols.
 - P114 `x.meta` / `x.@key` stay; comments fill them only with `use comments`; `@key` in a literal is never a field; iteration skips `@` keys.
 - field-or-minus: `p.phone-number` without that field is "p has no field phone-number" with the fix `p.phone - number`.
-- tag-assign: every `=` in a tag body is a value entry like `:`.
 - page-ids: an id in the program's own markup is a name in scope (`who.focus()`); a clash with a variable or function is a compile error naming both; kebab ids resolve; `$who` is the element's value and `$who = "Ann"` writes it; dynamic ids via `element("user-name")`; `$` means something only in warp code.
 
 ## Signals, events and tasks
-- finish-await: `finish job` is a soft alias of `await job` (a library word, not a reserved keyword; a program may define its own `finish`); `once job finishes` reads the same way.
-- stopped-no-result: a cancelled task yields no result: after `cancel job`, reading or awaiting `job` raises an error ("job was cancelled"), so `try await job else -1` gives -1; never the value it would have computed. `stop job` / `job.stop()` is a synonym of `pause job` and warns "stop pauses job; to end it: cancel job". A stopped job resumes when awaited, so `job = go 3; stop job; job` → 3 (the final value is awaited).
-- end-refused: `end job` is a compile error naming both readings, "end job: did you mean finish job (let it run to its end) or cancel job (end it now)?" — no default, since neither can be undone. Wiki: async.md "Controlling a task".
-- task-tests-answers: `once job finishes: x = 7` then reading x needs `await job` first (on real threads the handler runs when the task ends); a program's final value is a value place, so a task there is awaited (task-to-value-awaits).
-- task-to-value-awaits: putting a task into a place typed as a value awaits it in between: `n: int = go f(3)` is `n: int = await go f(3)`, as is passing a task to a value-typed parameter or returning it from a value-typed function; an untyped place (`job = go f(3)`) or one typed task keeps the task. `task` and `thread` both name the job type (`job: task = go f(3)`, `job: thread = …`): thread is one type with task, an alias.
-- go-unified (also: tasks-parallel): `go f(x)` means `go { f(x) }`, a task; natively a go task runs truly in parallel (its own thread), with no extra keyword; only the JavaScript page runs tasks cooperatively, until it offers real threads (card go-go).
-- after-condition: `after done return "third"` (also `after done "third"`) is a task that waits until the condition holds, then yields; await, cancel and `await t or fallback` as any task (stopped-no-result), as built in lib/tasks.warp (card unknown-name-after).
-- block-hole-empty-braces: an empty `{}` in a rewrite rule's block hole is an empty block (`on change a {}`), not an empty map (card says-unknown).
-- quote-typo-fix: stray closing quotes in 4 pairs files (`«…«` for `«…»`) are fixed so their 17 swallowed lines run; expectations unchanged.
-- eval-explicit-with (refines N31): eval runs its text as a separate program; values go in explicitly, `eval("x*2", with: {x: 5})` → 10; bare `eval("x*2")` keeps refusing x as unknown; no caller scope (card eval-explicit-names).
-- P109 every variable can be watched; checks only where a listener watches. P111 writes through `global x` in called functions run the listeners. P112 no batching block; a multi-assignment notifies once.
-- P163 `emit alarm{…}` runs `on alarm` handlers and continues; `raise`/`throw` are errors; fire/trigger/signal alias emit with a note; `send alarm{…}` without `to` is emit. P202 an emit no handler receives warns.
 
 - P129 `broadcast v on "chat"` / `send v to "chat"` reach `on message from "chat"` machine-wide; P129b named events cross programs. P155 channels: `channel()` local, `channel "chat"` machine-wide.
 - P156 `whenever cond {…}` is edge-triggered. P38 listeners see later writes in their statements.
@@ -423,64 +201,19 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - go-voice: a `go {}` task is a voice sounding along from where its starter stands. deleted-loop: a live_loop deleted from the source stops on re-evaluation (≤ ~4 s fade).
 
 ## Modules, library and foreign code
-- write-makes-folders: `write(path, text)` makes missing parent folders (mkdir -p), always; tests expecting a failure on a missing folder use another failing write, and tests clean the folders they make.
-- host-callback-exports: the main module exports everything it defines, helpers included; a leading underscore (`_square`) or the keyword `private` keeps a word unexported; a library exports nothing by default, and `export f(…) := …` marks a word a host calls back (page_render, page_event, left_sample), kept whenever the module is used and exported under its name. `public` is no alias of `export`: public makes a library word visible to importers, export is a wasm export (library-word-visibility); revises P78 for private. ~10–15 core lines in prelude_words.warp. Library `export` first (~8 lines); the main-module/private half is card host-exports-own.
-- packages-by-name (user; also: package-use-by-path superseded): `use colors` takes colors.warp beside the program, else lib/colors.warp, else a folder of warp's own registry github.com/pannous/warp-packages, used by name and fetched automatically with no declaration; an external package (any other repository) is used only once the project declares it in packages.warp (that line is the confirmation; pins and redirects as package-forms); a name found nowhere fails loudly ("no module, library or package named X"). A package missing on the machine is fetched on first use into ~/.cache/warp/packages/<name>[@version] with one printed line (natively by the driver, in the page as raw registry files); offline it fails naming `warp fetch <name>`. Samples write `use colors`, never a packages/ path.
-- uniscript-on-literal: uniscript stays a package of its own (pannous/uniscript, proxied by the registry, fetched once, never bundled or baked); the compiler knows exactly one thing about it: a uniscript literal (`\:alpha`, `<:upper A>`) loads the package implicitly. A tiny core marker, nothing more.
-- package-repos: the registry github.com/pannous/warp-packages holds small extension packages as folders (colors, ciphers, geometry, svg, webgl, life); larger packages live in their own repositories behind a proxy entry: uniscript and egraph.
-- implicit-operators (user, extends implicit-standard-words): an operator a standard module declares loads that module on demand like a word (`6.0 ± 0.3` without `use uncertain`, the hint names the module); one two modules declare needs `use`. The word index covers operators (~10 core lines, prelude_words).
-- file-words-implicit: every word of lib/file.warp (write, exists, append, delete…) works without `use file`, like `read`; its first use loads the bundled module on demand (built-in-lib); the host's capability check still applies.
-- bare-append-file: `append("log.txt", "line")` with two texts is the file word `append(file: File, content: any)`, with a warning suggesting the File type or a path literal (`~/my/path`), or `"a" + "b"` for concatenation; a File or path literal takes it silently; `file.append` (P183) is the explicit form.
-- errors-one-rule (user; also: dropped-error-raises, partly superseded): one rule for every word, library, host or program: an Error raises unless it reaches an optional place or a handler: `r: json? = parse_json("{oops")` keeps it (`if r failed …`), `try …` catches it, `parse_json("{oops") or {}` falls back; a plain `r = parse_json("{oops")` raises, so does `r = write("nofolder/x", "hi")`; a dropped Error value raises and stops the run with its message. Driver words (write, read) raise like library words; a program's own Error assigned to a plain variable raises; an Error passed as an argument (`print f(1)`) stays a value. ~40 core lines. Tests pinning a kept error in a plain variable use `?` or `try`.
   - or-fallback: `a or b` is b when a raises, else `or` as before, falsy values included: `0 or 10` is 10.
   - nullish-default: `X ?? Y` and its keyword `X default Y` replace only an error or ø and keep falsy values (`0 default 10` 0, `parse_json("{oops") default []` []), the meaning of `stored visits default 0`; `default` canonical, `except`, `otherwise`, `failing` aliases with a note; the one-line `try X except Y` means exactly `X except Y` (errors and ø); the block `try: … except: …` stays the error handler; `else` only if's and try's; a bare `x else 5` is refused with the fix `x default 5` or `x or 5`. A match arm `default:` (key with a colon) stays the catch-all; `try X else Y` and `??` stay.
-- error-held-or-raises (user, keeps errors-one-rule): an Error raises unless held with `try` or in an optional place (`?`; an optional holds errors too), a program's own `error "neg"` included: `r = f(-1)` raises, `r: int? = f(-1)` keeps it for `if r failed`. An Error that is data (quoted code, the compiler's own nodes) is not a failure and never raises.
-- bodiless-imports: a function without a body is its typed head with who supplies it: `is_null(x: any): bool from warp` (the foreign-signature line, `from runtime`/`from 'm'` alike); `import is_null(x: any): bool` works too. `import m` without a head stays `use m` (P139).
-- foreign-signature: a libm function is declared by a typed foreign line `sin(x: float): float from 'm'`; builtin math words use the same line with `from warp`; a bare `floor` is warp's, C's only qualified (`m.floor`); `import (…) from 'm'` keeps working for headers. Open (card foreign-line): a program's own line should win over the header's signature.
-- P169 `use math` is the module with readable names; raw C math is `use cmath`.
-- P182 Set, Stack, Queue, Deque, Counter only in `collections`. P183 std modules are backed only by warp, host words or C compiled to wasm; regex is the common Rust/JS subset; `file.append(path, text)`.
-- P194 std/ merged into lib/; netbase in lib/extra/, later external (P193, P192).
-- D15 no automatic imports: `use folder`, `use package`, `use project`. #12 `use <file>`. P139 `import`/`use`/`require` only declare; `include m` runs m. P140 assigning an imported mutable global sets it.
-- P146 C libraries compiled to WebAssembly are the way to reuse standard libraries; P147 the prebuilt libc.wasm lives in web/playground/lib.
-- P88 every host grants every capability for now; the checks stay. P89 foreign runtimes get their own capability. #8 print's IO capability is granted implicitly. P26 libm counts as pure.
-- P94 WIT `char` is a Codepoint. exe-foreign: an executable using python/js starts them from PATH and fails loudly when missing.
-- P228 programs using tables or JSON don't build stand-alone; the runtime stays ~1 MB.
-- #14e `download <url>` is an alias of `fetch`.
-- package-forms: packages.warp entries take short forms (`uniscript`, `name: owner/repo`, `"github:owner/repo"`); `version: latest` follows the default branch; a pin is `{repository: pannous/uniscript, version: 1.0.7}`.
 
 ## Web, markup and server
-- markup-auto-render (user; also: keep-use-web-explicit overridden): an HTML element in a program's result switches on render mode by itself, natively and in the page: no `use web`, no `render page` needed (card html-render-mode).
-- instances-not-plural: no magic plural `counters` for a component's instances (the sugar goes); `Counter.instances` and `instances of Counter` (the same thing); card counters-sugar-removal.
-- click-by-id: a program or test clicks an element through page-ids: `button{ id: "plus", "+1", on click {…} }; click plus`. click-by-label: `click "+1"`, `fill "name" with "Ada"`, `check text is "Add1"` act on the page `render` last showed, finding the element by trimmed text, then placeholder, aria-label, name, id, with a handler for that event; none → "no element showing "+1" handles click; the page: …".
-- web-words: host plumbing words (page_render, page_event) never appear in programs, samples, docs or try lines; a simulated click gets a readable word (spelling to be proposed).
-- markup-keeps: interactive markup is library-first. Core: (1) a tag block's items are expressions like any block's (module rules walk them, a phrase headed by a bound function is a call, unbound words stay data), ~15–25 lines; (2) automatic liveness, ~20 lines: an item reading a variable written later is kept as code (`is varying`), so `p{ "count: " + count }` updates after a click. Library: `on(event, handler: block)` (comma allowed before it), live parts re-evaluated after a handler with only changed output patched, a Live class showing its current value natively, `input{ bind: name }` as an extensions/sugar rule, keyed instances by hand `instance(t, () => Counter(t))`. General, not web: any library (terminal UI, native canvas, sound, `on change`) uses the same live API; core names carry no web words. Rejected: React-style re-render.
   - live-word-items: a bare word item read from a variable written later is live too (`p{ greeting }` like `p{ "${greeting}" }`).
   - data-tag-words (user + interviewer): samples write markup elements glued, `head{ title: "My Page" }`; inside data, a prelude function before a block (head, first, last, sort) stays a tag; only words the program defines or `use`s make `word{…}` a call (`json{…}` with use json); head of a block in data is written head(…). One check in extensions/quotes.warp is_data_tag, no core.
-- markup-handler-comma: a handler inside a tag may be separated by a comma, `button{ "+1", on click { count += 1 } }`.
 - P188 stay close to HTML and CSS; only the basic machinery. web-keyframes: CSS's own `@keyframes`; warp adds only `leave:`.
-- html-meta: page facts are keys on html (`title:`, `description:`, `meta: {…}`).
-- key-if: inside `on key {…}` bare `key` reads event.key; named keys compare as words (ESC, ENTER, UP); held-key: `held_key` is the held key's name.
 - unknown-tag: an unknown element warns with the near name; custom elements and components are not flagged.
-- P186/P187 DOM morph, identity by order. P190 page-test words stand.
-- Web words: `local["k"]`, `session["k"]`, `database["k"]`, `clipboard.write`; reading the clipboard in a page is an error.
-- select-shorthand: a list inside select{} gives one option per item; `["a": "Apple"]` value + label. Form shorthand: `form post "/todos" {…}`.
-- P232 `$a` in data references the enclosing node (`$` contexts: dollar-interpolation; `$name` in a rewrite rule is a hole, `$dir` a word). P160 `@1` is the node with id 1, `ref 1`/`ref a` in words, `$<digits>` only positional.
-- P221 one route line serves both sides: server render first, then data fetches.
 - Served routes: a raising form route answers 400 and re-renders; missing field 400, unknown id 404; /api and /rpc give instances as plain objects. route-access: a route gives out only what it displays.
-- ORM: plain classes connect to the database by registering, no inheritance; filters run any warp expression; assigning a stored row's field writes through; `save bo` accepted (notes/orm.md).
-- site-budget: the hello-world site is ≤ 100 KB gzipped. tour-firefox-stall: a Worker-run site ships task-workers.js.
-- Hosting: our own login first, then deploy to one's own provider: Cloudflare Workers, Ferron on pannous.com (`<name>.lambda.pannous.com`), Fermyon/Akamai (notes/hosting.md).
-- P235 WGSL is a `shader { … }` block (alias `wgsl`); P235b no capture of warp variables, `$name` is an explicit hole; shader-untouched: WGSL stays as written otherwise; WGSL errors are reported at the .warp line and column. P234 `paint` takes a shader text; `use graphics` = `use draw`.
-- gpu-multipass: `waves = render(height_field, 256, 256)` paints off-screen, the image stays on the GPU (alias `texture`); another painted function reads it as a function, `waves(uv)`, like `$previous(at)` (notes/gpu.md "Several passes").
 
 ## Sound
-- mp3-true-length: an MP3's length excludes encoder padding (the browser's 0.5, not miniaudio's 0.5747): native trims too; `sound_seconds(tune.mp3) >= 0.5`.
-- play-dispatch: `play` dispatches on what it plays (signal, stereo pair, block function); `play(hum, 2s)` until prepositions-call.
 - sound-at: `at 2 beats play C4` places sounds from the voice's first sound.
-- note-value: note names are frequencies (`C4 * 2` = 523.25); `note(C4)` is a Note printing "C4", `note(445Hz)` "A4+20c".
 - shared-buses: a bus is a named effect chain `room = bus() |> reverb(0.4)`; `osc(C4, 1s) |> room`, `play(C4, 1s, bus: room)`; `room.reverb = 0.6` applies from that moment.
-- save-sound: audio goes to a file through the general `save` (`save sound as: "song.wav"`); render_sound gives an I-meant hint.
-- signal-samples: samples/signal*.warp are siren_sound/stereo_sound.
 
 ## Compiler internals (technical, decided by the Supervisor or Interviewer)
 - lib-oddities: `unwrap(n)` of a literal is no longer factorial; `click who` with an unbound name is refused with a fix naming `click(:who)`; `shared x = 0` keeps its word and means more than global: a shared variable is atomic (`shared n = 0; … n += 1` from several tasks never loses an update).
@@ -933,3 +666,76 @@ Text, P1, brace-hole, P126, #26, result-keyword, letters, guillemets, Emoji → 
 parse-json → wiki/string.md, wiki/json.md, test/text/test_text_rules.pairs.warp.
 used-module-bare-words → wiki/use.md, test/text/test_text_rules.pairs.warp.
 uniscript → wiki/uniscript.md, test/text/test_text_rules.pairs.warp.
+bool-int-fallthrough, element-wise-scalars, type-shows-nat, int-boxed-overflow-big, exact-decimals, exact-power, int-list, number-converts, float-text, repeating-decimals, footgun-divzero, `x /= y`, Trailing, P184, nearest-limit → wiki/number.md, test/numbers/test_number_and_unit_rules.pairs.warp.
+core-int-division → AGENTS.md Principles.
+fast-int-readings, fast-scope → wiki/number.md, test/numbers/test_fast_int.pairs.warp.
+marked-floats-shape → wiki/unit.md, test/numbers/test_dimension_types.pairs.warp.
+c-int-names → wiki/int.md, test/numbers/test_fixed_width_ints.pairs.warp.
+± → wiki/number.md, test/numbers/test_plus_minus_numbers.pairs.warp. P119, units-library → historic (git).
+real-runtime → notes/real_runtime.md.
+unit-sum-display, #5, quantity-naming, litre-suffix, units-opt-in, pixel-lengths, general-conversions, units-as-values, overloads-before-reals, expected-type-names, duration-units → wiki/unit.md, test/numbers/test_number_and_unit_rules.pairs.warp.
+canvas-size → wiki/unit.md, test/programs/test_canvas_window.pairs.warp.
+float-intervals → wiki/number.md, test/numbers/test_plus_minus_numbers.pairs.warp.
+real-canonical-core, parameter-typed, Duck, #30, type-value-is, union-or, optional-result, instance-position, P45, `type(ø)` → wiki/type.md, test/types/test_type_rules.pairs.warp.
+primitive-annotation, primitive-int-width → wiki/primitive.md, test/native/test_primitive.pairs.warp.
+map-protocol, lowercase-protocols → wiki/trait.md, test/types/test_map_protocol.pairs.warp.
+matrix-protocol → wiki/trait.md, test/modules/test_matrix_typed.pairs.warp.
+effect-annotations → wiki/effects.md, test/functions/test_effect_annotations.pairs.warp.
+P203 → wiki/type.md, test/welcoming/test_warning_mode.pairs.warp.
+error-type → wiki/optional.md, test/control/test_error_not_in_data.warp.
+position-index-words → wiki/class.md, test/types/test_class_positions.pairs.warp. D5 → notes/matching.md.
+library-constant-refused, lambda-assign-writes-through, let-reassign, let-parallel, P71, P124, P73, data-stays-data, runtime-dates, module-global-assign, global-plain-write, shared-captures, handler-blocks-share, Mutating, count-words-library, range-end-once, kebab-or-minus, operator-even-spacing, dot-space-property, default-parameter-def, stored-visits → wiki/variable.md, test/scope/test_variable_rules.pairs.warp.
+charged-values-rule → extensions/sugar/heads.warp. Data → wiki/charged.md. watched-cells → core (watched cells).
+P72, handlers-wait-for-blocks → historic (git). esoteric-phrases-commented → notes/test_triage.md.
+#6 → wiki/variable.md (kebab-or-minus).
+def-brace-body, map-all-canonical, call-function-values, function-in-list, P82, arctan-allow, `sum := fold +`, P50, P37, labels-calls, P52, P132, check-assert, library-words-typed, runtime-function, night-forms-kept, path-type → wiki/function.md, test/functions/test_function_rules.pairs.warp.
+sleep-seconds → test/numbers/test_decimal_units.pairs.warp.
+letters-only → test/lists/test_down_and_letter_ranges.pairs.warp.
+shown-by-warp → test/numbers/test_units_as_values.pairs.warp.
+path-literals-preferred → wiki/significant-whitespace.md, test/text/test_fix_path_literals.warp.
+use-script → wiki/script.md, test/modules/test_unix_words.pairs.warp.
+type-library-words → wiki/standard-library.md, test/modules/test_std_qualified.pairs.warp.
+instant-vs-duration → wiki/time.md, test/types/test_partial_time_comparisons.pairs.warp.
+cross-module-overload → wiki/script.md, test/types/test_traits.pairs.warp.
+default-methods, class-members-free, field-forms → wiki/function.md (Methods), notes/dispatch.md.
+library-own-words → AGENTS.md (Never repeat code).
+music-plain-library, domains-plain-libraries → AGENTS.md (Plain warp first).
+definition-name-canonical → AGENTS.md (Word choices are aliases). batch → cards (to build).
+cleanup-cuts, int-overflow-shape, keywordless-def, builtins-name, self-hosting-focus, parser-first, standalone-compiler → historic (git).
+rename-clashes → card file-own-words. diagnostics-files → core/analysis/diagnostics.warp.
+each-field-broadcast, lazy-range-value, pair-items, bare-pair, to-inclusive, #4/P40, P43, P34, `[x]*n`, list-append-plus, reconsider-spaced, P175, P200b, swizzles, curly-group, #25/#36, `pixels size` → wiki/list.md, test/lists/test_list_rules.pairs.warp.
+ordinal-dot-index → wiki/indexing.md (no ordinal dot form; nothing to pin).
+node-part-clash → lib (key_of … readers), wiki/node.md.
+stored-table-name → wiki/keyword.md, test/modules/test_stored_relations.pairs.warp.
+comparison-after-arms, for-over-iterator, rewrite-rules, match-alternatives, `if c {1} else 3+1`, P21, P55, #39 → wiki/switch.md, test/control/test_control_rules.pairs.warp.
+raw-rules → core/passes/rewrites.warp (where raw). match-whole-value → wiki/pattern-matching.md.
+pattern-roadmap → wiki/pattern-matching.md (roadmap: cards pattern-clauses, binding-alternatives, whole-binding).
+valued-field-default, P115, P122, P162, P123, enum-case, enum-raw-values → wiki/class.md, wiki/enum.md, test/types/test_class_rules.pairs.warp.
+kinds-as-cases → core (ValueKind enum). declared-class → core (emitter: class structs). tag-assign → wiki/html.md.
+finish-await, stopped-no-result, end-refused, task-to-value-awaits, go-unified, after-condition → wiki/async.md, test/control/test_task_rules.pairs.warp.
+eval-explicit-with → wiki/evaluation.md, test/control/test_task_rules.pairs.warp.
+P109 → wiki/signal.md, test/control/test_task_rules.pairs.warp.
+P163 → wiki/keyword.md, test/control/test_task_rules.pairs.warp. task-tests-answers → wiki/async.md.
+block-hole-empty-braces → extensions (rule block holes). quote-typo-fix → historic (git).
+implicit-operators → wiki/number.md, test/modules/test_module_rules.pairs.warp.
+errors-one-rule, error-held-or-raises → wiki/Error.md, test/modules/test_module_rules.pairs.warp.
+foreign-signature, bodiless-imports → wiki/haskell.md, test/modules/test_module_rules.pairs.warp.
+P169 → wiki/use.md, test/modules/test_module_rules.pairs.warp.
+host-callback-exports, packages-by-name, uniscript-on-literal, file-words-implicit, bare-append-file, P182, D15, P94, #14e, package-forms → wiki/use.md and the tests citing it.
+write-makes-folders → lib/file.warp (write makes folders). package-repos → github.com/pannous/warp-packages.
+P194, P88, P228 → historic (git). P146 → web/playground/lib.
+markup-handler-comma → wiki/html.md, test/web/test_markup_and_note_rules.pairs.warp.
+note-value → wiki/sound.md, test/web/test_markup_and_note_rules.pairs.warp.
+select-shorthand → wiki/html.md (select).
+markup-auto-render, instances-not-plural, click-by-id, markup-keeps, html-meta, key-if, Web, P232, ORM, P235, gpu-multipass, play-dispatch, save-sound, markup-plain-library, rewrite-general, block-lazy-body, serve-plain, transitions-data, data-names, music-plain-details → wiki (html, sound, shader, pattern-matching pages) and the tests citing it.
+web-words → AGENTS.md (canonical-output; host words stay internal). P186/P187, signal-samples → historic (git).
+P221 → wiki/html.md (routes). site-budget, Hosting → notes/hosting.md.
+mp3-true-length → lib/sound.warp (mp3 length).
+P78, P145, P241, constant-words, spaced-definition-head, named-argument-phrases → wiki/function.md, wiki/assignment.md, test/welcoming/test_newcomer_rules.pairs.warp.
+warp-format, beautify, cli-words, P102, no-executable-by-default, P77, P222, test-soft, fuel-metering, fast-math → wiki/cli.md.
+kebab-hint-both-fixes, errors-name-file, Newcomer, Asks, Got-it, warning-levels, canvas-zero, P75 → notes/welcoming.md, notes/fixits.md.
+prebuild-fails-loudly → scripts/rebuild.sh (prebuild fails loudly). hello-size-exports → core (emitter exports).
+sample-spellings → AGENTS.md (Samples are not the spec). drop-pure-word → AGENTS.md (warp self).
+P107 → historic (git). Word → AGENTS.md (Word choices are aliases). Error → web/playground (error highlighting).
+julia-compat → notes/taste.md (Familiar conventions first). #7/P92 → wiki/Error.md and the tests citing it.
+function-words-consume → wiki/function.md and the tests citing it. P86 → wiki/operator.md.

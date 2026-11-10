@@ -1,4 +1,4 @@
-# Test triage 2026-10-28 (decision night-releases-and-test-triage)
+# Test triage (decision night-releases-and-test-triage)
 
 The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three groups:
 - **gap**: the test is right and warp should do it. These are grouped into cards below and not edited.
@@ -35,21 +35,21 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 
 ## Held (esoteric)
 
-| file:line | reason | verdict (Interviewer 2026-11-10) |
+| file:line | reason | verdict |
 |---|---|---|
 | test/text/test_count_in.pairs.warp:4-9; test/text/test_counts_in_warp.pairs.warp:4, 5, 10; test/functions/test_words_in_phrases.pairs.warp:11, 12 | `count x in y`, `count(x in y)`: the count of a membership's yes/no, refused with did-you-mean `y.count(x)` | delete: the refusal with its fix `y.count(x)` is the behaviour |
-| test/welcoming/test_footguns.pairs.warp:383 | `fast` floats that reassociate math | delete |
-| test/welcoming/test_footguns.pairs.warp:395 | C float32 suffix `.1f` | delete |
+| test/welcoming/test_footguns.pairs.warp:383 | `fast` floats that reassociate math | keep: wiki Footguns.md:764 promises `fast x=3.3` / `as fast`; gap |
+| test/welcoming/test_footguns.pairs.warp:395 | C float32 suffix `.1f` | keep: wiki Footguns.md:772, number.md:28 promise `0.1f`; gap |
 | test/welcoming/test_footguns.pairs.warp:403, 404, 425 | symbolic surds (√2·√2 exactly 2) | gap: restore under exact-roots (√2·√2 = 2) |
 | test/welcoming/test_footguns.pairs.warp:414 | symbolic trig, sin(π/6) exactly 1/2 | keep held: symbolic trig, no decision yet |
 | test/welcoming/test_footguns.pairs.warp:428 | complex exponentials (Euler's identity) | gap: restore now that complex numbers exist (card euler-identity) |
 | test/welcoming/test_footguns.pairs.warp:442, 445, 446 | function equality by algebra (undecidable in general) | delete |
 | test/welcoming/test_footguns.warp:44 | function equality by boolean algebra | delete |
-| test/welcoming/test_footguns.pairs.warp:262, 263, 266, 267, 268 | tzdata version stamps on times (267 and 268 contradict each other) | delete |
-| test/welcoming/test_footguns.warp:9 | `law` property declarations | ask user (law) |
+| test/welcoming/test_footguns.pairs.warp:262, 263, 266, 267, 268 | tzdata version stamps on times (267 and 268 contradict each other) | keep: wiki Footguns.md:845 promises `[_tzdata=…]`; fix the contradicting line, else gap |
+| test/welcoming/test_footguns.warp:9 | `law` property declarations | keep: planned (user; wiki laws.md, card verify-law) |
 | test/welcoming/test_footguns.warp:33, 37 | effect annotations `! Pure`, `! Div` | rewrite to `@pure`/`@io` under effect-annotations, else delete |
-| test/numbers/test_log_glyphs.pairs.warp:4-7, 10-12 | log glyphs ⌞ ⌟ (P226), hard to read beside log(x, b) | delete |
-| test/numbers/test_law.pairs.warp:4, test_law.warp:4 | `law` property declarations | ask user (law) |
+| test/numbers/test_log_glyphs.pairs.warp:4-7, 10-12 | log glyphs ⌞ ⌟ (P226), hard to read beside log(x, b) | keep: wiki operator.md:46 promises ⌟ and ⌞; gap |
+| test/numbers/test_law.pairs.warp:4, test_law.warp:4 | `law` property declarations | keep: planned (user; wiki laws.md, card verify-law) |
 | test/numbers/test_unit_definitions.pairs.warp:20 | a calendar era as a unit (`2 AD`) | delete |
 | test/numbers/test_unit_prefix_lines.pairs.warp:16, 17 | `name` and `prefix` as declaration words for plain functions | delete |
 | test/text/test_interpolation.pairs.warp:35 | shell-style `$0` as a function's parameter | delete |

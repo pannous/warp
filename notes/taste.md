@@ -41,3 +41,5 @@ shows; a new form needs the decision first, then the test.
 ## Familiar conventions first
 Where warp has no stated reason to differ, the meaning people know from shells and mainstream languages wins over a convenience for samples
 -relative paths resolve against the current folder
+-Julia first among them: Julia forms read with Julia's meaning; its syntax is beautiful and its semantics often near
+ perfect. Deliberate departures are listed in wiki/Julia.md.

@@ -345,7 +345,7 @@ author, source and license; they run there with `warp <file>`. Our own compute.t
 northern_lights. test_compute_toys::no_sample_or_library_is_a_third_party_shader keeps ports (a compute.toys or
 Shadertoy view URL) out of samples/ and lib/. The old files remain in git history.
 
-## A window out of sight shows nothing (card show-black-native, 2026-11-02)
+## A window out of sight shows nothing (card show-black-native)
 wgpu's Metal surface answers Occluded while NSWindow.occlusionState lacks "visible" (wgpu-hal metal/surface.rs,
 workaround for gfx-rs/wgpu#8309), and presented() then skips the frame. A native window opens behind the app in front
 (a run from a terminal or an agent is not activated), so a still picture's only present was dropped: black until

@@ -3,7 +3,7 @@
 The goal: the core binary bakes the library zero times. No LIBRARY_FILES, no LIBRARY_PARSES. Each module publishes
 its signatures, and the compiler loads it as compiled wasm when a program uses it.
 
-## core-takes-what-it-uses (card baked-lib-split, 2026-11-09)
+## core-takes-what-it-uses (card baked-lib-split)
 The L4 statement below was not true: module_source baked prelude, math, c, primitive, web.webidl, entities.tsv and
 modes.data as text, and the compiler compiled os, file, path, math, reals and case_table(s) in through `use`
 (checked line by line against warp.wasm's bytes). Now the compiler `use`s no lib module and module_source names only
@@ -25,7 +25,7 @@ one are two overloads the dispatch cannot tell apart (a function replaces, an op
 Checked: smoke, self-check, gate tier 1; compiler.warp compiled against a lib/prelude.warp holding only the core part's
 text built a compiler that compiled and ran a program (before `times` left the core part). With lib/prelude.warp emptied
 the compile now stops in lib/text.warp's indent, which the compiler uses implicitly by name (its field and local
-`indent`) and which needs `times`. scripts/compiler-inputs.sh --baked-files lists no lib/ file. Left: the reach by name
+`indent`) and which needs `times`. scripts/compiler-inputs.sh --code-files lists no lib/ file. Left: the reach by name
 still compiles dead prelude words, and lib/text.warp's, in from lib/ (card baked-lib-split note).
 Data on demand (cards webidl-on-demand, entities-on-demand, user 2026-11-10): lib/web.webidl and lib/entities.tsv are
 read through library_data (core/passes/library.warp, loud when missing) the first time a program reaches the page's js
@@ -57,7 +57,7 @@ warp.fingerprint) use units −18 %.
 - pixel-channel-sums (own card): the prelude compiled from source into a program summed pixel_channel differently
   (25500128) from a typed or linked one (25500130, IEEE); linked, programs now give the latter.
 
-## Assessment (main c0a082, 2026-11-05)
+## Assessment (main c0a082)
 
 warp.wasm is 5.05 MB, and 3.04 MB of it (60%) is baked library tables:
 
@@ -257,7 +257,7 @@ The emitter must guarantee these for L3–L5:
   (prelude_words.warp with_reached), its rules from the signature: no text of it is read. `warp signature <m>` shows
   one as warp text. The hash moves to sha256 once the host takes long texts (card signature-sha256). With `use units`
   the compile went from 19.6 G to 19.3 G instructions.
-- Measured before L3 (2026-11-05): the prelude's untyped parameters compiled as nodes, as a linked prelude would
+- Measured before L3: the prelude's untyped parameters compiled as nodes, as a linked prelude would
   take them (a switch in emitter/functions.warp call_values, never committed; data/boxed-measurement.patch of the
   worktree). The emitter types a function by its first call's argument kinds (call_values), not the analyzer's slots.
   Instructions retired, compile and run:
@@ -285,7 +285,7 @@ The emitter must guarantee these for L3–L5:
   source.bytes), so the host's sha256 (card signature-sha256) would make the hash free everywhere.
   Paired against main (instructions retired): hello 5.20 G → 5.14 G (−1.1%; under WARP_LIB 5.15 → 5.03), `use units`
   17.82 G → 17.03 G (−4.4%); compiler.warp compiling itself 2577.6 G → 2526.3 G (−2.0%).
-- L4 step 2 (2026-11-06), the prelude linked: 2a a signature's definitions packed one by one; 2b prelude.wasm
+- L4 step 2, the prelude linked: 2a a signature's definitions packed one by one; 2b prelude.wasm
   exports every word (built as `use prelude`, given the prelude, never reaching it twice; the dead kind_* words gone);
   2d every program links it (linked_libraries names it first, with_used declares what it reaches from its signature),
   with what that exposed fixed for every linked module: 2d.1 a host word the driver doesn't answer finds its library

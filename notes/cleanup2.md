@@ -109,7 +109,7 @@
 - Remove any temporary probes or debug output once the focused tests pass.
 - Keep the worktree-only Cargo version suffix uncommitted.
 
-## Done (2026-10-12)
+## Done
 
 - Parser: `diagnostic::first_located_error` in the pipeline. Runtime: the `trap_position` global. Guide in
   notes/error_positions.md.
@@ -147,7 +147,7 @@
   wasm32 library check.
 # Single-statement curly calls
 
-## Done (2026-10-15)
+## Done
 
 - Library words now use the shared spaced-call predicate for a one-statement curly block and preserve the block wrapper.
 - `if yes {sum [1 2]}` and `if yes {sum 1+1 2+2}` have focused regression coverage.

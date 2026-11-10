@@ -1,4 +1,4 @@
-# Core hygiene: what in core/ the compiler itself does not need (card unused-core-relocation, 2026-11-01)
+# Core hygiene: what in core/ the compiler itself does not need (card unused-core-relocation)
 
 User's question: did we keep core, extensions and library apart? What could be an extension: everything in the core
 that the compiler itself does not use. Investigation only: nothing moved; every move below needs the user's OK
@@ -105,7 +105,7 @@ not yet the home it is meant to be: it holds sugar and an always-loaded mode.
 5. **Make extensions truly optional**: primitive.warp loaded only for a `@primitive` file; times (emitter/times.warp +
    runtime) and C FFI (c_imports) as extensions under the same switch — the compiler pays nothing for them.
 
-## Done: move D (user decision core-hygiene, 2026-11-01)
+## Done: move D (user decision core-hygiene)
 
 Plain relocation, no behaviour change: extensions/tuples.warp and safe_navigation.warp → extensions/sugar/ (first sugar,
 the same place as before); core/entities.tsv → lib/entities.tsv (read by module_source("entities.tsv"), hashed through
@@ -124,7 +124,7 @@ data, plus a hint text an alias note doesn't give. The cheap honest move is a li
 | **A1** host imports declared by their library: `draw_shape(kind: int, x: float, …) from host` as a foreign line (c_imports' existing `from 'lib'` mechanism, module "host") | ~60 of host_words.warp's 93 (draw, gpu, fetch, serve, clipboard, paint, sound, signals, key_held, system values, tasks/shared/channels) | ~25 (c_imports: `from host` → the host table, kinds of the foreign types) | ~60 lines spread over draw, wgsl, web, router, sound, channels, signals, keys | analysis/host_words.warp, emitter/c_imports.warp, builtin_signatures.warp (host results), emitter.warp imported_words | medium: the analyzer must see the kinds before passes run; tasks/channels are used by runtime words too (stay core) | 1st |
 | **A2** std modules from lib/, not a list: every lib/*.warp module is standard unless it says otherwise | 1 long line + 4 call sites changed | ~10 (LIBRARY_FILES top-level keys, a `# not standard` marker or a short exclusion of aliases/rule_words/wgsl/primitive/c/repl) | marker lines in ~6 modules | rewrites.warp, prelude_words.warp, compiler.warp prebuild | low-medium: prebuild then tries modules not prebuilt today | 2nd |
 | **A3** property modules and their trigger words read off lib (who defines `x.p :=`) | ~6 (property_modules, the window/display/canvas list) | ~15 (a baked table like BLOCK_HEADS) | 0 | property_accessors.warp, uses.warp baking | low | 3rd |
-| **A4** compile-time rule words declared by their module (`@rule_word`), the table baked from the marks instead of lib/rule_words.warp's hand table | ~0 core removed; rule_words' 1 table line | ~30 (a baking like LIBRARY_RULES, rewrites.computed reads it) | words move to their modules (wgsl, router, units, json) | rewrites.warp, uses.warp, lib/rule_words.warp, compiler-inputs.sh BAKED | medium. NB: still baked: un-baking wgsl needs running library code at compile time (an interpreter or a second wasm instance), a much bigger mechanism | 4th, optional |
+| **A4** compile-time rule words declared by their module (`@rule_word`), the table baked from the marks instead of lib/rule_words.warp's hand table | ~0 core removed; rule_words' 1 table line | ~30 (a baking like LIBRARY_RULES, rewrites.computed reads it) | words move to their modules (wgsl, router, units, json) | rewrites.warp, uses.warp, lib/rule_words.warp, compiler-inputs.sh --code-files | medium. NB: still baked: un-baking wgsl needs running library code at compile time (an interpreter or a second wasm instance), a much bigger mechanism | 4th, optional |
 | **B** GPU lists behind list-kind hooks (bridge.warp pattern): core list words ask one generic "cells list" mark, gpu_lists.warp → runtime/extended/ | ~20 (4 is_gpu_list branches, gpu intrinsics in runtime_words.warp, `use gpu_lists`) | ~15 (generic hook names in bridge.warp, bodies in extended.warp) | 0 (gpu_lists.warp moves, 57) | runtime/lists, nodes, bridge, extended.warp, runtime_words.warp, kinds.warp | medium: GPU tests are window/GPU-bound; the speed gain is small (the mark test stays, as a generic one) — mainly hygiene | after A1 |
 | **C** one named-language literal: `word "…"` / `word {…}` for a word a library declares as a language (shader, wgsl, sql, sh): the parser keeps the raw text and its holes, the library's word gives its meaning | ~300 (injection.warp 217, parser shader_block/shader_text ~100, lexer shader_brace ~20, interpolation's sql/sh step) | ~70 (one raw-literal reader in lexer/parser, a baked table of language words) | ~150 (sql/sh hole rules in shell.warp and a sql module, wgsl holes in wgsl.warp) | parsing/lexer, parser, injection, interpolation; lib/shell, lib/wgsl, new lib/sql | medium-high: new syntax → user's OK; injection's safety guarantees (a hole never changes the query's shape) must hold in lib; the playground highlights shaders | after A (it reuses the declaration idea) |
 | **E** extensions only when used | — | — | — | — | see below | last |
@@ -137,7 +137,7 @@ call sites) move under extensions/ and are reached only through that table: ~+30
 call sites touched (34 primitive, 42 C, 107 time). Benefit: honest folders and a scan skipped per source; size and
 risk high for times (spread through the emitter). Recommend: primitive and FFI via the table, times later or never.
 
-### lib/sugar/ moved to extensions/sugar/ (user 2026-11-03: "sugar is not a library, it is a compiler extension")
+### lib/sugar/ moved to extensions/sugar/ ("sugar is not a library, it is a compiler extension")
 
 Done on card sugar-under-extensions: the folder is bundled with extensions/ (parser.warp BUNDLED_CORE_FOLDERS),
 rewrites.warp names its files by `sugar(["…"])`. The accepted cost: a sugar edit is a compiler build, not a rebake.
@@ -149,7 +149,7 @@ extensions. Moving the folder is mechanical; what it changes is the cost of ever
   `"compiler/sugar/x"`), core/parsing/parser.warp BUNDLED_CORE_FOLDERS (add `compiler/sugar`, else the rules are
   parsed at each run, ~25 ms a program), ~46 files naming `extensions/sugar/` in comments (core, lib, test, notes, wiki: one
   fastmod), web/playground keywords.py if it lists sugar words. No test reads the path.
-- **Cost:** core/** is compiler code (scripts/compiler-inputs.sh hashes it as code, `--baked` too). A sugar edit today
+- **Cost:** core/** is compiler code (scripts/compiler-inputs.sh hashes it as code, `--code` too). A sugar edit today
   is a lib rebake (~1 min, no compiler build, smoke test only); under core/ it is a full compiler build (~6 min CPU,
   97c39a1f this branch: cpu=365 s) plus self-check, and by common.md's core rule it needs the user's OK first. Rewrite
   rules are the cheap way to add syntax (notes/layers.md); moving them into core makes them as dear as a parser branch.
@@ -160,12 +160,12 @@ extensions. Moving the folder is mechanical; what it changes is the cost of ever
   Recommended: (b) `lib/extensions/` — "extension" by name, rebaked like data; extensions/ keeps the
   extensions that need compiler code (primitive). Same for D: tuples and safe_navigation would sit in lib/extensions/.
 
-## Warp vitals (user 2026-11-03)
+## Warp vitals
 scripts/vitals.py draws the test pass rate of every lane over time (each committed version of test/results.txt,
-results-cloud.txt, samples.txt, samples-web.txt, tests-web.txt) and counts the lines of code for every landing on main since self-hosting began (2026-10-29),
+results-cloud.txt, samples.txt, samples-web.txt, tests-web.txt) and counts the lines of code for every landing on main since self-hosting began,
 reconstructed from git history in ~6 s: the core without extensions (parsing, passes, analysis, emitter, runtime,
 native) and the extensions (extensions/, and lib/sugar/ before it moved there) always separately, plus lib/ and
 test/. It fills scripts/vitals.html into data/vitals/vitals.html; the nightly run (nightly.sh) refreshes
 it. The page is the artifact https://claude.ai/code/artifact/b988ec61-123d-4e97-833b-0dd2342cac4c: the Integrator
-republishes it after each landing and the Supervisor's hourly watch round as well (user 2026-11-03). 2026-11-03: core 28,186 → 32,641 lines (+16%),
+republishes it after each landing and the Supervisor's hourly watch round as well. 2026-11-03: core 28,186 → 32,641 lines (+16%),
 extensions 1,211 → 1,477 (+22%) over 381 landings; the core almost only grows, the largest cut was −71.

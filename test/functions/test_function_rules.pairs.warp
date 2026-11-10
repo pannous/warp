@@ -1,0 +1,34 @@
+# Functions and calls: postfix words, brace bodies, all/any tests, calling function values, lambdas, folds, holes,
+# named and labelled arguments, declared operators, random (wiki function, call, lambda, operator, random;
+# decisions postfix-words, def-brace-body, map-all-test, map-all-canonical, call-function-values, function-in-list,
+# P82, arctan-allow, P50, P37, P216, labels-calls, P52, P132, P133, P48, D6, operator-shall, check-assert, D4)
+'def f(x){x*2}; f(4)'	8
+'all [2,4] are even'	yes
+'is any [1,2] even'	yes
+'double(x):=x*2; double all [1,2]'	[2, 4]
+'adder(n) := (x => x+n); adder(5)(1)'	6
+'fs = [x => x*3]; fs[0](3)'	9
+'f(x):=x; str([f])'	"[f]"
+'f(x):=x+1; f.name'	"f"
+'str(type(sqrt))'	"builtin: (x:number) -> number"
+'m = {f: x => x * 2}; m.f(3)'	6
+'g = |x| x*2; g(3)'	6
+'sum := fold +; sum [1,2,3]'	6
+'5 & 3'	1
+'5 | 3'	7
+'f(x:float):=x; f([1,2])'	[1, 2]
+'add(a,b):=a+b; inc = add(1, _); inc(4)'	5
+'arctan := arc_tangent; arctan 0'	0
+'random(1, 1)'	1
+'add(a,b):=a+b; function add'	add
+'add(a,b):=a+b; &add'	add
+'g(n):=n; g(2){1}'	2
+'infix operator ⊕ := left+right; 2 ⊕ 3'	5
+'x=1; f(y):=x+y; f(y: 2)'	3
+'class V{x:int}; v = V { x: 1 }; v.x'	1
+'move(x, from, to):=to; move 1 from: 2 to: 3'	3
+'neg(x):=-x; neg - 3'	3
+'[1.7, 2.2].map(floor)'	[1, 2]
+'x=(y=>y+1); str(x)'	"y => y+1"
+'str(type(./n.txt))'	"class path"
+'f() := { return 1, 2 }; f()'	[1, 2]

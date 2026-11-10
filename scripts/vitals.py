@@ -19,7 +19,7 @@ CODE_SUFFIXES = (".warp", ".c", ".h", ".js", ".sh", ".py")
 CORE_GROUPS = [("parsing", ["core/parsing"]), ("passes", ["core/passes"]),
                ("analysis", ["core/analysis", "core/commands", "core/(top)"]), ("emitter", ["core/emitter"]),
                ("runtime", ["core/runtime"]), ("native", ["core/native"])]
-EXTENSIONS = "extensions"  # extensions/; extensions/ and lib/sugar/ before it moved there (2026-11-03)
+EXTENSIONS = "extensions"  # extensions/; extensions/ and lib/sugar/ before it moved there
 TIERS = [("native pairs and is! lines", "test/results.txt"),
          ("samples, native", "test/samples.txt"), ("samples, playground", "test/samples-web.txt"),
          ("tests, playground", "test/tests-web.txt")]

@@ -144,7 +144,7 @@ as a list keeps no item type at run time. An empty list fits every variant and t
 `ints` is of int. `xs: list of int` and `xs: int list` in a head fold to the one parameter `xs:"list of int"` early
 (declaration_forms lower_list_parameters), so arity, overloads and the analyzer see one parameter.
 
-## Class-method dispatchers and argument kinds (card use-sound, 2026-10-31)
+## Class-method dispatchers and argument kinds (card use-sound)
 A function compiles once, with the kinds of its first call. A class's routed method (position, index, float, a word
 named like a library word) is first called from its dispatcher's instance branch, so the dispatcher decides its kinds:
 a dispatcher with a fallback takes `any` in every place (class_methods.warp method_dispatcher), or `m[name] = v` of a

@@ -25,6 +25,6 @@ runtime.wasm), analyzer 0.03 s, parse 0.05 s. Inside checked_program:
 `warp rebuild` writes warp.wasm through wasm-opt -O2 (card wasm-untrimmed-output, src/compiler/binaryen.rs): 3.0 MB →
 2.4 MB in 1.1 s of a ~100 s rebuild; snake 1.08 s → 1.00 s user (min of six), hello unchanged (0.11 s). runtime.wasm
 stays as compiled: its warp.relocations name byte offsets in its code, which an optimizer moves.
-Every compile is prepended behind runtime.wasm (runtime-lowering-scope, 2026-10-28): it lowers and compiles no
+Every compile is prepended behind runtime.wasm (runtime-lowering-scope): it lowers and compiles no
 runtime word, so the kept-runtime-words miss (4.5-7 s) is gone with the cache; it costs reading runtime.wasm (~40 ms)
 and ~0.05 s more machine code: hello 0.22 s vs 0.17 s before, snake 1.04 s vs 1.14 s.

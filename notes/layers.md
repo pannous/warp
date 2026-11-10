@@ -45,7 +45,7 @@ Has: holes `$a`, rest holes `$xs...`, typed holes `$x: text|symbol|list|block|in
 inside a longer phrase), statement templates `($a; $b)`, origin conditions `where $c = channel()`, module rules that
 skip words the program binds, bottom-up, each node once.
 
-Features named by the sugar below (2026-10-22: F1–F4, F6, F7 built, spec and examples in notes/rewrites.md;
+Features named by the sugar below (F1–F4, F6, F7 built, spec and examples in notes/rewrites.md;
 F5 unparked with high priority by the user 2026-10-22 evening, card rewrite-templates in Now; F8 open, no card):
 - **F1 positions/context** (built): match only as a statement head, in a condition, in a class body, as a key or a value.
 - **F2 where-predicates** (built) beyond `= shape`: "$t is a type word", "$x unbound", "$n < 0 literal", "f's first
@@ -192,7 +192,7 @@ Sugar passes, with the rule each would become:
 | 86 | prefix_comparisons | `sq 2 == 4` done: prefix_calls.warp fitted_comparison, by the parameter's fit (decisions juxtaposition, untyped-fit-ambiguous); `print #xs`, `f -x` stay a pass, prefix_calls.warp: no `where` condition for "a word taking a value" (untyped parameters, builtins) |
 | 65 | number_words | `rewrite one => 1` per word, works today (module rules skip bound words); keys/members stay: F1 |
 | 65 | parse_words | `eval(t)` is the host word eval_code (N31: the host's warp.wasm compiles and runs t, its value built back); folding a constant text is a pass |
-| 64 | multiple_assignments | stays a pass (supervisor, 2026-10-22): as rules it needs zip over two rest holes, an index binding (`x, y = [1, 2]`), two rest holes in one pattern (the matcher has one, rewrites.warp rest_at) and conditions over a rest hole (all names, equal counts), ~60–100 engine lines for a 64-line pass. Built once a second pass needs them (comprehensions' zip, F4 enum values) |
+| 64 | multiple_assignments | stays a pass (supervisor): as rules it needs zip over two rest holes, an index binding (`x, y = [1, 2]`), two rest holes in one pattern (the matcher has one, rewrites.warp rest_at) and conditions over a rest hole (all names, equal counts), ~60–100 engine lines for a 64-line pass. Built once a second pass needs them (comprehensions' zip, F4 enum values) |
 | 61 | list_methods | `rewrite $xs.push($v) => $xs += [$v]` (add, append alike): works today |
 | 44 | interpolation | F8 |
 | 42 | type_tests | `rewrite $x is $t => is_type($x, "$t")`: F2 (t a type word no name binds) |
@@ -228,15 +228,15 @@ Sugar passes, with the rule each would become:
    for_loops, min_max, multiple_assignments, broadcasting. Largest gain per engine line.
 4. **F2 where-predicates** (~450 lines): type_tests, filled_lists, grouped_receivers, library_calls,
    prefix_comparisons, plain_enums, subscripts with negative bounds, Java `int[]`.
-   Status (warp-layers, 2026-10-22): subscripts, slices and negative bounds stay parse-time (sugar.warp subscript())
+   Status (warp-layers): subscripts, slices and negative bounds stay parse-time (sugar.warp subscript())
    until the WARP_SELF_HOSTED=1 hybrid lane retires: raw subscripts before the Rust passes would cost that lane most
    indexing tests (supervisor). Java `int[]` stays notation: a type spelling parse-time typed_parameter reads
    (`int[] xs`, `params int[] xs`), which a sugar rule would reach too late.
 5. **F1 positions** (~250 lines): trailing guards, `if no xs`, foreign modifiers, C-style for heads.
-   Status (warp-layers, 2026-10-22): the C-style head is a extensions/sugar/loops.warp rule onto while (the parser only groups
+   Status (warp-layers): the C-style head is a extensions/sugar/loops.warp rule onto while (the parser only groups
    it). Trailing guards and `if no xs` stay: the parser must find the guard word and the condition context anyway
    (grouping), what is left is guarded_statement's four lines onto the kernel if/while and `no` as `not`'s alias in a
-   condition. With the hybrid lane gone (2026-10-23, decision pure-fallback) they still stay (supervisor): the guard is
+   condition. With the hybrid lane gone (decision pure-fallback) they still stay (supervisor): the guard is
    found in two places (statement level, and guarded_command regrouping a command's words, `print it if it%2`, `do {…}
    while c`), so moving the four lines onto the kernel would leave all the grouping in the parser and add rules.
 6. **Notation generalizations** replacing parser branches (~300 lines): word brackets (`do … end`, `fi`), raw-text

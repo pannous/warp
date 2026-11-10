@@ -1,9 +1,9 @@
-# Roadmap: the Rust harness written in warp (draft, 2026-10-28)
+# Roadmap: the Rust harness written in warp (draft)
 
 User 2026-10-28: "create the Rust harness with pure Warp. For that we would need primitive types … the compiler would
 need a hint to only use pure types, no runtime, nothing, to create a pure binary … We might then compile with wasm2c."
 
-## Earlier work (notes/host_from_warp_eval.md, 2026-10-23)
+## Earlier work (notes/host_from_warp_eval.md)
 - Every native route failed on the *whole* warp module: wasm2c (wabt 1.0.42) has no GC and only legacy EH; WAMR has no
   standard EH; Binaryen has no GC→linear-memory lowering. The user then dropped those routes and kept the Rust host.
 - What worked: driver.warp, warp-host's CLI written in warp (157 lines: run, compile, help, options, refusals, exit
@@ -37,9 +37,9 @@ MVP wasm.
 3. **Driver**: revive driver.warp as an `@primitive` file. It loads warp.wasm and user modules through wasmtime's C API
    (libwasmtime + wasm.h, called by FFI like any C library) and links the host words that warp.wasm imports, as C
    callbacks. Done when `warp-native hello.warp` prints Hello. The same runner, with a program's precompiled module
-   appended, is the executable `warp build` writes for GC programs (user 2026-10-28), replacing the Rust warp-runtime
+   appended, is the executable `warp build` writes for GC programs, replacing the Rust warp-runtime
    stub that executable-prints-value reconnects in the meantime.
-   Done (2026-10-28): core/native/driver.warp (decision native-warp-in-core moved it to core/); `warp build` writes
+   Done: core/native/driver.warp (decision native-warp-in-core moved it to core/); `warp build` writes
    <driver><module> for every GC program, its C calls linked from the module's warp.c_functions section; the Rust stub
    is no longer written (stub-retired drops its build).
 3b. **The native warp** (decision native-warp-in-core): core/native/warp.warp, `use "driver.warp"`, is the warp

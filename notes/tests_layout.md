@@ -3,7 +3,7 @@
 ## Rules
 - Tests are warp files, outcome tests only (AGENTS.md "Outcome tests only"): `test/<topic>/test_*.pairs.warp` (code ⇥
   expected, one a line) and `test_*.warp` (`is!` lines), notes/is_tests.md. Run them with `warp test [folder…]`.
-- A new test goes into the folder of its topic; every kept test lives in test/ (probes/ is gone since 2026-10-26, its
+- A new test goes into the folder of its topic; every kept test lives in test/ (probes/ is gone, its
   files are in git history). Experiments go to the session scratchpad or data/<topic>/ and become test lines or are
   dropped. Assertions in regular test files stay where they are, even when duplicated.
 - Network: no third-party hosts like httpbin.org, and no mocks. A test of a request goes to a server we run, or to

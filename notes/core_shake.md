@@ -1,4 +1,4 @@
-# Tree shake of the core (2026-11-09)
+# Tree shake of the core
 
 Question: what of core/ does the compiler really use, so that what is clearly not core can go to extensions/ or lib/
 (decision core-is-self: the core is what the compiler needs to compile itself) and what is tangential stays. Analysis only:

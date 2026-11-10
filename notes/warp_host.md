@@ -349,7 +349,7 @@ hello.wasm, warm, 2–3 runs. Host suite 29/29 and launcher suite 22/22 pass wit
   - Work: nodes.rs, words.rs, ffi.rs, cache.rs and c_calls.rs's linking use the Rust API (Rooted, StructRef, Caller,
     Linker), so they would be rewritten against the C API: ~1500 lines of unsafe code (estimate).
 
-## lib/shell.warp under warp-host (2026-10-22, branch warp-host-shell)
+## lib/shell.warp under warp-host (branch warp-host-shell)
 
 Work: ls, cd (its value, and commands and std_io paths after it), mkdir, touch, cp, mv, rm, cat, echo, head, tail, wc,
 unique_lines, find_files, file_size, info, which, glob, list_files. tests/host/test_host.sh checks them, each in a fresh folder.

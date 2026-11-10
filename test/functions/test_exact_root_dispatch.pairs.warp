@@ -1,4 +1,4 @@
-# an irrational exact root takes a float or number variant, as a float; a whole root an int one (user 2026-10-31)
+# an irrational exact root takes a float or number variant, as a float; a whole root an int one
 'f(x: int) := "int"; f(x: float) := "float"; f(sqrt(2))'	'float'
 'f(x: int) := "int"; f(x: float) := "float"; f(sqrt(9))'	'int'
 'f(x: int) := x; f(x: float) := x * 2; f(sqrt(2))'	2.8284271247461903

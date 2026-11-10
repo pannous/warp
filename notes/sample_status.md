@@ -7,7 +7,7 @@ The live status is what the sweeps write, one line a sample, never by hand:
   output: ok, drew, DIFF, FAIL, EXP, ran
 
 The nightly (scripts/integrate/nightly.sh) runs both and commits them; a red sample becomes a card (the samples focus,
-notes/agents/common.md). The topic sample-gaps that grouped the reds of the first sweeps (2026-10-26/27, 80/224 run)
+AGENTS.md). The topic sample-gaps that grouped the reds of the first sweeps (2026-10-26/27, 80/224 run)
 is closed: its causes are fixed or carded on their own.
 
 Open on 2026-11-08 (nightly at 16d63e4bed, rechecked on main 48ebaaca4d):

@@ -54,6 +54,6 @@ builders), values_equal/unordered entries, list_changes (in-place changes), copy
   the browser readers through the reflection exports (reader.js `readNode` chain, host-tasks.js `readTaskValue`,
   src/web/mod.rs `list_node`): a `reflect_item(list, i)` / length export instead of walking `reflect_value`.
 
-## Inventory (2026-10-18)
+## Inventory
 ~60 walker sites in ~30 functions, ~35 builder sites, 7 cons-only readers outside the emitter (stage A takes the native
 ones; the JS ones read through the emitter's exports, stage C).

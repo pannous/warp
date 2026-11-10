@@ -1,4 +1,4 @@
-# WGSL translator robustness (card shader-port, 2026-10-30)
+# WGSL translator robustness (card shader-port)
 
 Well-known fragment shaders ported to plain warp paint functions, as a sample author writes them
 (samples/gpu/ocean.warp is the model), painted headless on the GPU and on the CPU (`WARP_GPU=off`), the two PNGs
@@ -37,7 +37,7 @@ a local lambda (now refused by name: WGSL has no closures).
 - Refuse, never guess: on a vector, `+ - * /` (warp's + joins lists, - and * are refused by warp), negation, and
   `length`/`count`/`size` (warp counts; the magnitude is `norm`) are refused with the element-wise fix-it.
 
-## Outcome (2026-10-30)
+## Outcome
 test/gpu/test_gpu_matches_cpu.sh: all 8 cases pass (6 GPU == CPU pixel checks, 2 refusals). A compound operator written
 as warp writes it (`x %= 5`) is looked up by its spelling (SPELLED_OPERATORS), never by the Op's name (`"${Op.Mod}"` is
 "Mod", not "%").

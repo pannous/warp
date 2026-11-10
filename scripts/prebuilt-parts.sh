@@ -2,7 +2,7 @@
 # scripts/prebuilt-parts.sh <folder>: every part of warp a user command would otherwise build on its first use built
 # into the native warp's folder (an install, a release folder): `warp build`'s driver in data/native, the machine code of
 # runtime.wasm and the prebuilt modules. Then the first uses once more: exit 1, naming the files, when one still writes
-# into the folder (user 2026-10-30: all modules and drivers prebuilt when installing; an installed /usr/lib/warp is
+# into the folder (all modules and drivers prebuilt when installing; an installed /usr/lib/warp is
 # read-only). after-push.sh runs it before the
 # link switches, packaging/native_dist.sh before the tarball.
 set -uo pipefail

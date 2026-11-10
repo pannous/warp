@@ -96,7 +96,7 @@ if wants 1; then
 fi
 
 from=$(git merge-base "$base" HEAD 2>/dev/null)
-# `warp test` held machine-wide while this file exists, its text the reason (2026-10-31: the runner killed garbage pids)
+# `warp test` held machine-wide while this file exists, its text the reason (the runner killed garbage pids)
 TEST_HOLD=$HOME/.cache/warp/warp-test-held
 if wants 2 && [ -f "$TEST_HOLD" ]; then echo "tier 2 held: $(cat "$TEST_HOLD") (remove $TEST_HOLD to run it)"
 elif wants 2; then
