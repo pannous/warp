@@ -1,0 +1,3 @@
+# sort orders class instances by their compare(other) (decision compare-equal-hooks, old-reds-class-methods)
+'class dot{x:int; compare(other:dot) := x - other.x}; (sort [dot(3), dot(1), dot(2)]).map(d => d.x)'	[1, 2, 3]
+'class dot{x:int; compare(other:dot) := x - other.x}; class pin{y:int; compare(other:pin) := other.y - y}; (sort [pin(1), pin(3), pin(2)]).map(p => p.y)'	[3, 2, 1]
