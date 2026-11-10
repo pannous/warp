@@ -27,6 +27,7 @@ use "inline_html.warp"
 use "declared_operators.warp"
 use "list_operators.warp"
 use "last_results.warp"
+use "function_arguments.warp"
 use "operator_folds.warp"
 use "go_tasks.warp"
 use "typed_templates.warp"
@@ -117,7 +118,9 @@ EXTENSIONS = [
 	foreign_declarations_extension
 	implicit_uses_extension
 	test_lines_extension
-	# right before tries, in this order: the last result `it`, parse words, then the checked tries the core's tries guard
+	# right before tries, in this order: `it` arguments made functions by their callee's signature, the last result
+	# `it`, parse words, then the checked tries the core's tries guard
+	function_arguments_extension
 	last_results_extension
 	Extension{name: "parse_words", passes_before: {"tries": parse_words}}
 	checked_tries_extension
