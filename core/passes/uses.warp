@@ -316,11 +316,17 @@ std_module_path(name: text): text := own_module_files.get(name) ?? run_library()
 module_folder(name: text): text := if modules_in(COMPILER_MODULES).has(name) then COMPILER_MODULES else if is_host_module(name) then HOST_MODULES else if is_runtime_module(name) then "/extensions/" + name + "/" else "/"
 # a standard module of runtime words, built apart from runtime.wasm (extension.warp runtime_modules)
 is_runtime_module(name: text): bool := name in hooks().runtime_modules
-# the words of the runtime modules: their functions compile as runtime words do (intrinsics, the runtime's own words),
-# linked or compiled with the program
+# the words of the runtime modules a compile brings the source of: their functions compile as runtime words do
+# (intrinsics, the runtime's own words). Only the module being written, or any a `warp build` compiles in: a program
+# links them, and hello reads none of their files
 global runtime_module_words = ø
+global runtime_module_words_of = ø
 is_runtime_module_word(name: text): bool := {
-	if runtime_module_words == ø { runtime_module_words = word_set(hooks().runtime_modules.flat_map(module => file_words(std_module_path(module)))) }
+	compiled = hooks().runtime_modules.filter(module => module == module_written or not modules_linked)
+	if runtime_module_words_of != compiled {
+		runtime_module_words = word_set(compiled.flat_map(module => file_words(std_module_path(module))))
+		runtime_module_words_of = compiled
+	}
 	runtime_module_words.has(name)
 }
 # the definitions of a file and of the files beside it that it uses
