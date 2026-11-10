@@ -546,6 +546,32 @@ Biggest clusters by cause (new or grown against the earlier triage in **bold**):
 Unchanged since the earlier triage: ∞ 7, divide by zero 7, `x as text?` 6, Color cases 6, calendar/clock durations 6,
 `time` defined twice 6, callable parameter 6, tuple returns 5, mixins 5, Array.from 5, display 5.
 
+## numbers n–z (cloud worker numbers-n-z-lib, 2026-11-10, main 51b1e68)
+
+`warp test test/numbers/test_[n-z]*`: 61 of 627 ✗. No cluster has its cause in lib/ alone, so nothing changed.
+
+| lines | cluster | root cause | smallest shape |
+|---|---|---|---|
+| 16 | unit spellings as literals: `3 kilometers`, `str(3 meter)`, `1 Gs`, `1000 µg`, `1 dam`, `1 kK`, `1 Mg`, `1 mph`, `2dot`, `3 feet in inches` (unit_literals 4-6 11, unit_prefix_lines 4-6 9 13, unit_definitions 10 22 24 35, pixel_unit 10) | a unit word is a name lib/units declares as a `Unit` (rule_words is_unit_word); lib/unit_names reads every spelling, but only at run time (`quantity(3, "kilometers")` works). Declaring each spelling would repeat unit_names' tables | the rule engine reads an unbound word after an amount as a unit when unit_names knows its spelling (a module text word callable in a `where`), card headless-module-rules; or `$u is unbound` → `quantity($e, $name)` with a run-time refusal (question below) |
+| 8 | a program variable named like a unit: `m = 5; str(3m)` "3m", `s = 3; str(0.5s)`, `h = 2 inch; 3 km/h`, `s = 2; 9.8 m/s²` (unit_beside_variable 4 + .warp 4, units_after_numbers 4 7 16 20, units_arithmetic 4) | core/passes/rewrites.warp typed_as: a name the program binds hides the library's Unit, so glued `3m` multiplies the program's m; the glued literal is not told apart from `3*m` | the parser marks a glued number+word, and `$e * $u` of a glued one takes the library's unit |
+| 7 | a spaced unit inside `if … :`, `if … {` or a chain of comparisons: `x = 2 km; if x > 1500 m : …` (DimensionError 1500 plain), `2 h + 30 min == 150 min`, `now < 24h`, `now >= 0 ms and now < 1 day`, `if now < 0 h` ("0 what?") (time_of_day 4 5 6 14, unit_literals 9 10, unit_word_keys 13) | extensions/rules/rule_words.warp unit_bound walks only unit_binding_ops; the `if` head and a second unit in one comparison (card spaced-unit-comparison) leave the unit off its amount | unit_bound through the condition of if and through both sides of ==/< |
+| 5 | `nearest` of an exact real (nearest 4, nearest.warp 4 5, nearest_default 8 9) | lib/prelude nearest's steps turn √2 into floats after the first (`1/(rest - a)` of a real is a float); limit 0 of an irrational loops (Error "") | lib-only once the tests agree: x to enough exact digits (lib/reals decimal_digits' scaled total), limit 0 of a non-float irrational its float's. **Conflict**: nearest:4 wants 941664/665857 (exact √2) but the passing nearest:21 `x = sqrt(2); nearest(x, rational) == 665857/470832` wants the float's; `x = sqrt(2)` is the exact √2 now, so fixing 4 turns 21 ✓ → ✗ |
+| 3 | `type(3px)` "pixels", `type(2 m²)` "area", `type(5 Hz)` "frequency" (pixel_unit 5, unit_definitions 18 19) | type() shows the class, Pixels / Area / Frequency | question: lower-case dimension words canonical? |
+| 2 | `-0.0/0.0`, `(0.0/0.0) * -1.0` divide by zero (nan_observed 4 5) | core float division refuses 0.0/0.0 | core |
+| 2 | `1 << 100`, `(2^100) >> 98` (shift_operators 18 19) | shifts are i64 | core big_numbers |
+| 3 | `unit furlong := 201.168m; 1km as furlong` (operator as on int), `14 * 24 h` refused, `x = 2 hand; x as cm` (unit_definitions 29, .warp 4 9 15) | card module-rule-unnamed (lib/units comment); `14 * 24 h` is the intended unit-after-product refusal (decision unit-after-number) → wrong expectation | |
+| 2 | `unit rankine as kelvin := …`, `unit hand as inch := 4 * it` (unit_definitions.warp 19 21) | no `unit … as …` conversion form | esoteric? |
+| singles | `x.ceil` no field (number_methods 6: core emitter single_own_words has floor, not ceil); `gcd(2^70, 3·2^65)` 0 (core gcd is i64; lib/math wide_gcd exists); `√(4 m²)` stack exhausted (Quantity has no root()); `sqrt(2) as rational`, `"2.5 km" as quantity`, `"1 km" as unit` (no conversions); `type([π 1])`, `list of rational` (core types); `x : int[100000]` (core); `v: km/h = 3 km/h` (core) | | |
+
+Wrong expectations (approve to correct):
+| file:line | expected now | proposed | why |
+|---|---|---|---|
+| test/numbers/test_rounding_in_functions.pairs.warp:6 | 2 | 3 | decision round-halves: round rounds halves away from zero (banker's is round_even) |
+| test/numbers/test_unbounded_int.pairs.warp:57 | "too big for int: 9223372037000250000" | "too big for int; fix: `x as! int` keeps its low 64 bits" | the refusal now names the fix-it (decision checked-forced-conversions) |
+| test/numbers/test_unit_prefix_lines.pairs.warp:19 | `'a'   todo: …` (spaces, read as the expected) | a tab before the note | got "a" already; the note is glued to the expected value |
+| test/numbers/test_units_after_numbers.warp:30 | `s = 3; str(440Hz)` "440/s" | "440Hz" | Hz shows as written (canonical-output); Rust-era form |
+| test/numbers/test_unit_after_comma.pairs.warp:4 | `str([1, m])` "[1, 1m]" | "[1, m]" | a Unit shows by its symbol (lib/units Unit.text); esoteric |
+| test/numbers/test_unit_definitions.warp:9 | `14 * 24 h` as a unit's value | `(14 * 24) h` | decision unit-after-number refuses a unit after a product |
 ## test/control/test_[n-z]* (cloud worker control-n-z-lib, main 51b1e68)
 
 166 of 848 failed in 187 files. No lib-only cluster of 5+ lines: every cluster below needs core/ or extensions/, so the
