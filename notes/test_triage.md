@@ -35,7 +35,7 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 
 ## Held (esoteric)
 
-| file:line | reason | verdict (Interviewer 2026-11-10) |
+| file:line | reason | verdict |
 |---|---|---|
 | test/text/test_count_in.pairs.warp:4-9; test/text/test_counts_in_warp.pairs.warp:4, 5, 10; test/functions/test_words_in_phrases.pairs.warp:11, 12 | `count x in y`, `count(x in y)`: the count of a membership's yes/no, refused with did-you-mean `y.count(x)` | delete: the refusal with its fix `y.count(x)` is the behaviour |
 | test/welcoming/test_footguns.pairs.warp:383 | `fast` floats that reassociate math | keep: wiki Footguns.md:764 promises `fast x=3.3` / `as fast`; gap |
@@ -46,10 +46,10 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 | test/welcoming/test_footguns.pairs.warp:442, 445, 446 | function equality by algebra (undecidable in general) | delete |
 | test/welcoming/test_footguns.warp:44 | function equality by boolean algebra | delete |
 | test/welcoming/test_footguns.pairs.warp:262, 263, 266, 267, 268 | tzdata version stamps on times (267 and 268 contradict each other) | keep: wiki Footguns.md:845 promises `[_tzdata=…]`; fix the contradicting line, else gap |
-| test/welcoming/test_footguns.warp:9 | `law` property declarations | keep: planned (user 11-10; wiki laws.md, card verify-law) |
+| test/welcoming/test_footguns.warp:9 | `law` property declarations | keep: planned (user; wiki laws.md, card verify-law) |
 | test/welcoming/test_footguns.warp:33, 37 | effect annotations `! Pure`, `! Div` | rewrite to `@pure`/`@io` under effect-annotations, else delete |
 | test/numbers/test_log_glyphs.pairs.warp:4-7, 10-12 | log glyphs ⌞ ⌟ (P226), hard to read beside log(x, b) | keep: wiki operator.md:46 promises ⌟ and ⌞; gap |
-| test/numbers/test_law.pairs.warp:4, test_law.warp:4 | `law` property declarations | keep: planned (user 11-10; wiki laws.md, card verify-law) |
+| test/numbers/test_law.pairs.warp:4, test_law.warp:4 | `law` property declarations | keep: planned (user; wiki laws.md, card verify-law) |
 | test/numbers/test_unit_definitions.pairs.warp:20 | a calendar era as a unit (`2 AD`) | delete |
 | test/numbers/test_unit_prefix_lines.pairs.warp:16, 17 | `name` and `prefix` as declaration words for plain functions | delete |
 | test/text/test_interpolation.pairs.warp:35 | shell-style `$0` as a function's parameter | delete |

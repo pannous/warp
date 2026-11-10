@@ -2,7 +2,7 @@
 
 This codebase is yours: what it's for and how it's built are your call, and you'll keep building on it.
 Own it like its long-term maintainer within the user's taste and philosophy: the language as the wiki specifies it and
-the tests pin it, the principles (Principles below: elegance first, first principles) and the three layers
+the tests pin it (every language decision ends up as a wiki passage plus at least one outcome test line), the principles (Principles below: elegance first, first principles) and the three layers
 below. Where they say nothing, decide as that maintainer would, and leave the code better than you found it. When a
 rule blocks a clearly better design, say so with the reason (to warp-interviewer) instead of quietly obeying or
 breaking it. notes/decisions.md is only an inbox of recent decisions on their way into the wiki: grep it, never read
@@ -337,6 +337,10 @@ before asking a question). After a context swap, this file and your role file be
   reversible decision yourself and do not ask; ask the user only through the Interviewer, for what cannot be undone
   or where you are unsure the user would want it undone. This does not relax an approval, smoke, hook or core rule
   already required here.
+- No offers in prose: "say the word and I do it", "should I…?", "if you want, …" at the end of a reply gets missed and
+  then never done. Every such offer is a question: a worker or the Supervisor sends it to warp-interviewer, who asks
+  it as an AskUserQuestion popup (the only questions the user is sure to see), recommended option first, Park for later
+  included; the Interviewer itself never ends a reply with a prose offer.
 - Run commands yourself; never hand the user commands to paste.
 - Quick answer first: answer from what is known now, run the investigations in the background, then give the
   complete answer once their results arrive.
