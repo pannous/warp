@@ -4,7 +4,7 @@
 '"type is " + type 3'	'type is nat'
 'x = int; "\\(x)"'	'int'
 'x = int; x as text'	'int'
-'x = 3; "" + type(x) == "class nat"'	true
+'x = 3; "" + type(x) == "nat"'	true
 
 # the_type_of_a_type_value_is_type
 'x = int; type x'	'type'
