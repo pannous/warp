@@ -4,7 +4,7 @@ How decisions live (user 2026-11-10). A decision is one of three kinds, and each
 1. Language rules (`type A < T` is a subtype, `÷` floors, markup only inside `html{…}`): the specification. Home: the
    wiki page of the topic, plus at least one outcome test line in test/. The wiki says what the language is, the test
    proves it and goes red when code drifts. Where the wiki and an entry here disagree, the wiki wins.
-2. Process rules (quick merges, outcome tests only, where workers work): notes/agents/common.md or a role file.
+2. Process rules (quick merges, outcome tests only, where workers work): AGENTS.md or a role file.
 3. Rulings for one moment (stage B waits for a seed, park this edge case, core OK for card X): the card and the
    commit message. They are not kept here.
 
@@ -171,22 +171,10 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - canvas-size: `window`, `display` and `canvas` `.width/.height` are writable properties natively and in the playground; a bare top-level `width` works with a did-you-mean.
 
 ## Text
-- Text + anything concatenates in its str() form; a function stays an error; `"3"+3` warns and gives "33" (error under `use strict`); a Printable instance joins as its own text.
-- P1 text * number repeats (`"ab"*2`); a digit text warns; text*float and text*text are type errors; `n times "ab"` is the explicit repeat.
-- brace-hole: `\(…)` canonical interpolation; `\{…}`, `${…}`, `$(…)` work; bare `"$x"` is literal (P6); single quotes stay literal; `$` holes in sql/sh templates keep working.
-- P126 texts inside containers print double-quoted; a top-level `print "a"` writes a.
 - digit-as-char: `2 as char` is the digit '2', like P25 `int('5')` is 5; a code point becomes a character by `char(0x41)`.
 - #35 lists join to "[1 2]"; `"x" as float` is a loud error. P74 `codepoint(c)` (aliases ord, ordinal, P27) gives an Int; P25 `int('5')` is 5; `int(c)` of a non-digit is invalid_number; P65 arithmetic on a character is not_a_number.
-- #26 upper/lower are Unicode, sort takes any comparable values, reverse works on text; `names.upper` = `upper names`.
 - An untyped parameter given a one-character text takes it as Text. P31 the Printable operation is `text(p:person)`, the one allowed type-word function name. P32 `print xs` prints its str(). P41 `print "x changed to " value` joins without a separator after a text literal; commas join with a space.
-- result-keyword: after a print, `result` is the printed value.
 - chars-codepoints: `"abc".chars` is a list of characters printing `['a' 'b' 'c']`; a one-character text is a character; `'a' == "a"`. A character is a grapheme; code points are `.codepoints` ("שָלוֹם": 4 characters, 6 code points). text-unit-plurals: every plural unit word is the list (also as a cast: `t as words` = `t.words`) (`.chars`, `.codepoints`, `.graphemes`, `.bytes`); counting is `count t.codepoints`; `.bytes` is the byte list of any value, size `x.bytes.count` / `byte_size(x)`.
-- letters: `letters of "a1 b!"` → ['a' 'b'] (Unicode letters); `characters` is an alias of `chars`.
-- guillemets: «…» quotes its content as unevaluated warp data (`«x + 1»` the expression as data).
-- Emoji: a single emoji is a codepoint; multi-codepoint emoji are texts, not names.
-- parse-json: quoted code's `.json` is the operator-as-key shape (`{"*":["a",{"+":["b",1]}]}`); what it can't express warns or errs, never `{}`. json-exactness: big ints all digits; a fraction as a JSON float with a warning (error under strict); functions, ∞, NaN, complex are errors.
-- used-module-bare-words: a used module's qualified words (WARP_FORMS, today json.parse) may be called bare after its `use`; a program's own definition wins.
-- uniscript: entities are `\:name` in code and texts; an unknown entity stays as written with a warning; bare `\alpha` is an error. P198 HTML names for letters, LaTeX for operators.
 
 ## Bool and truthiness
 
@@ -570,7 +558,7 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - type-word-aliases: `whole number` is a two-word alias of `nat` (as the C names `unsigned int`), `fraction` an alias of `rational` (always reduced); `nat` and `rational` stay what type() shows.
 - article-optional: `x is a number`, `x is an int` read as `x is number`: one sugar rule in extensions/, no core; refused only where `a`/`an` is a bound name (card number-says).
 - mixed-number-glyph: a whole number glued to a vulgar fraction is a mixed number: `3½` → 3.5, `2¾` → 2.75 (a number-suffix reader in extensions/glyph_atoms.warp); `2.5½` is refused loudly. A key position reads ε as a name: `{ε: 5}` keys on ε (card parser-coverage-2).
-- refuse-never-guess: where code reads two ways or a form is unknown, refuse with a fix-it naming the readings, never pick one; a reading decided by spacing or by a parameter's type is written explicitly by `warp format` and noted by the compiler (`[a -1]` → `[a, -1]`, `count xs > 3` → `count(xs) > 3`). In notes/agents/common.md Principles. The formatter keeps a tensor literal whose nested lists mix comma and space separators (`[[1 2 3], [4 5 6]]`) as written; it adds commas only where spacing actually decides a reading.
+- refuse-never-guess: where code reads two ways or a form is unknown, refuse with a fix-it naming the readings, never pick one; a reading decided by spacing or by a parameter's type is written explicitly by `warp format` and noted by the compiler (`[a -1]` → `[a, -1]`, `count xs > 3` → `count(xs) > 3`). In AGENTS.md Principles. The formatter keeps a tensor literal whose nested lists mix comma and space separators (`[[1 2 3], [4 5 6]]`) as written; it adds commas only where spacing actually decides a reading.
 - canonical-output: everything warp prints (errors, fix-its, shown results, `warp format`, help, docs) uses the canonical word of each alias group.
 - unused-imports-pass: after module assembly one reachability walk (exports, _start, hooks, global initializers) drops every unreferenced function and global import; full.wasm keeps unreached runtime functions, whose calls to dropped imports go to one trapping stub per type ("unreached import"). `wasmtime hello.full.wasm` runs standalone; hello.mod.wasm is a linking artifact that runs with runtime.wasm preloaded; runtime.wasm itself sheds its graphics/sound/channel host imports to the modules that use them (card runtime-host-words-out), after which mod.wasm + runtime.wasm also run under plain wasmtime.
 - relative-paths-cwd: a relative file name in a program (`play "tune.mp3"`) resolves against the current folder, as in shells; samples name their files from the repo root ("samples/sound/tune.mp3") or are run from their folder; no `here` word. Rejected: the program folder (writes would land beside the script), program-then-current (two readings).
@@ -890,33 +878,33 @@ D8 → approx-zero. D9, D12, D13 → got-it rule + reconsider-spaced + list-sign
 exact-decimals. #40 → list-sign. dimension-bridges → pixel-lengths. dollar-element → page-ids. definition-cases → cut.
 P85, P87, P93, P95, P96, P98, P99, P101, P137, P144, P181, P53, P59, P79, P80, P9, P10, P16, P19, #2, #14b–d, #15–20,
 the original questions 1–41: test edits and housekeeping done.
-clean-compiler-first, emergent-forms-welcome, self-source-minimal, extension-oks, extension-wording, no-pass-proliferation, passes-first-principles, no-primitive-rewrites, restructuring-regressions, compiler-high-level, edge-cases-general → notes/agents/common.md Principles.
+clean-compiler-first, emergent-forms-welcome, self-source-minimal, extension-oks, extension-wording, no-pass-proliferation, passes-first-principles, no-primitive-rewrites, restructuring-regressions, compiler-high-level, edge-cases-general → AGENTS.md Principles.
 core-is-self, core-takes-what-it-uses → AGENTS.md "Three layers". prelude-from-disk → card baked-lib-split.
 core-shake-small → card core-shake (notes/core_shake.md).
 no-fixpoint, compilers-delivered → AGENTS.md "self hosted".
 no-slots, root-files, parser-now, playground-paused, launcher-not-yet, sugar-hybrid-lane, cloud-paused, finish-migration, test-keyword, self-compiled-parity, warp-only-acceptance, warp-first, slow-redundant, quality-before-gap, urgent-direct, fix-forward, whole-pipeline-in-warp, sprint-merge-as-is, forward-crunch, lane-floats, cleanup-may-drop-edge-cases, consistency, gate-cuts, git-hook restore, P180 split-debuginfo, Repo layout, warp-ast.wit lives, Bee/wasp entity, P13 libm, browser-server, Playground CI → historic (git).
-runtime-prepended → notes/runtime_linking.md. quick-merges → notes/agents/common.md "Testing".
-quick-answer-first → notes/agents/common.md Talking. no-aur → notes/packaging.md.
+runtime-prepended → notes/runtime_linking.md. quick-merges → AGENTS.md "Testing".
+quick-answer-first → AGENTS.md Talking. no-aur → notes/packaging.md.
 beautiful-types, compiler-typed → notes/agents/handbook.md. node-refinements → notes/node_refinements.md.
 runtime-split → core/runtime/bridge.warp, core/runtime/extended.warp. wasm-standalone → card standalone.
 pass-triggers → card pass-triggers. revert-first → notes/agents/integrator.md.
 reviewer-role → notes/agents/reviewer.md. crash-fixes-first → notes/agents/reviewer.md, AGENTS.md.
 outcome-tests-only → AGENTS.md "Outcome tests only". weekly-cleanup → notes/agents/README.md.
-topic-priority → notes/agents/common.md Cards.
+topic-priority → AGENTS.md Cards.
 cleanup-means-fewer-lines, restructuring → notes/agents/refactorer.md.
-question-popups → notes/agents/common.md (superseded: questions go to warp-interviewer).
-test-consolidation → notes/agents/common.md Testing. P150 license → notes/packaging.md, CONTRIBUTING.md.
+question-popups → AGENTS.md (superseded: questions go to warp-interviewer).
+test-consolidation → AGENTS.md Testing. P150 license → notes/packaging.md, CONTRIBUTING.md.
 laws-file → samples/laws/project_laws.warp. deploy-hook → scripts/watch-playground-deploy.sh.
 typed-signatures → notes/agents/handbook.md. night-watch → notes/agents/supervisor.md.
-codex-library-cards → notes/codex_cron.md. core-gate-probes → notes/agents/common.md Done.
+codex-library-cards → notes/codex_cron.md. core-gate-probes → AGENTS.md Done.
 rebuild-next-lever, no-seed-before-instance-runtime, sound-core-order, runtime-linking-team, merge-then-reshuffle-then-celebrate, easy-reshuffle-then-pure-warp, native-replaces-rust-first, rust-gone-in-1-5, night-samples-modules → historic (git).
-plain-warp-first, samples-not-spec → notes/agents/common.md Principles. key-op-spelling → core (key_operator).
+plain-warp-first, samples-not-spec → AGENTS.md Principles. key-op-spelling → core (key_operator).
 native-harness → AGENTS.md "Native warp", notes/roadmap_native_harness.md.
 test-results-file → AGENTS.md, test/results.txt. primitive-hooks → extensions/primitive.warp.
 seed-speed-from-stages → scripts/refresh-seed.sh. libraries-not-core → notes/roadmap_native_harness.md.
 native-warp-in-core → AGENTS.md "Native warp". core-is-compiler-and-harness → AGENTS.md "Three layers".
 patterns-compiled-later → card pattern-direct-tests. dynamic-on-demand → card dynamic-language.
-night-releases-and-test-triage, tests-serve-the-language → notes/agents/common.md Principles, notes/test_triage.md.
+night-releases-and-test-triage, tests-serve-the-language → AGENTS.md Principles, notes/test_triage.md.
 resident-compiler → card resident-wasm-instance.
 extension-rule-forms, hello-lazy-runtime-dropped, small-int-cache → historic (git).
 extension-parser-hooks, extension-lints, extension-attributes, extension-text-hooks, extension-passes → core/extension.warp.
@@ -941,3 +929,7 @@ Truthiness → wiki/truthiness.md, wiki/bool.md, test/types/test_bool_and_emptin
 hash-comments, `print a    print b` (an error) → wiki/comments.md, test/parser/test_comments_and_keywords.pairs.warp.
 P165, P172 → wiki/keyword.md, test/parser/test_comments_and_keywords.pairs.warp.
 unicode-symbols, operator-alias → wiki/operator.md, test/parser/test_comments_and_keywords.pairs.warp.
+Text, P1, brace-hole, P126, #26, result-keyword, letters, guillemets, Emoji → wiki/string.md, test/text/test_text_rules.pairs.warp.
+parse-json → wiki/string.md, wiki/json.md, test/text/test_text_rules.pairs.warp.
+used-module-bare-words → wiki/use.md, test/text/test_text_rules.pairs.warp.
+uniscript → wiki/uniscript.md, test/text/test_text_rules.pairs.warp.
