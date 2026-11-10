@@ -5,7 +5,7 @@
 # lib/ WARP_LIB as usual
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
 failures=0
@@ -86,7 +86,7 @@ if [ -x "$stage/warp" ]; then
 0"
 	# never called, so no window even if the refusal failed
 	printf 'import InitWindow from "raylib"\nprint "reached"\n' >"$stage/window.warp"
-	check "a window opener under WARP_NO_WINDOW" "$(native window.warp)" "InitWindow from raylib opens a window: refused under WARP_NO_WINDOW or CI"
+	check "a window opener under --no-window" "$(native window.warp)" "InitWindow from raylib opens a window: refused under --no-window or CI"
 	# an installed lib/ this user can't write: the machine code goes to the user's cache folder, a file only read opens
 	(cp -Rc "$library" "$stage/readonly" 2>/dev/null || cp -R "$library" "$stage/readonly") && rm -f "$stage"/readonly/*.cwasm* && chmod a-w "$stage/readonly"
 	check "a read-only lib/, its machine code in the user's cache" "$(XDG_CACHE_HOME="$stage/cache" WARP_LIB="$stage/readonly" native '6 * 7'; ls "$stage/cache/warp" | grep -c 'cwasm$')" "42

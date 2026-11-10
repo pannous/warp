@@ -3,7 +3,7 @@
 # inside): scoped functions are parked. A function's own body still defines. Run it with
 # bash test/errors/test_block_definition_refused.sh; the warp under test is WARP (default the warp on PATH)
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 failed=0
 refused() {
 	said=$("$warp" "$1" 2>&1 | tail -1)

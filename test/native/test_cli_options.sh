@@ -5,7 +5,7 @@
 # lib/ WARP_LIB as usual
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 unset WARP_HINTS
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT

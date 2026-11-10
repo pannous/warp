@@ -4,7 +4,7 @@
 # serves on. Headless: it opens no browser. Run it with bash test/web/test_warp_dev.sh; the warp under test is WARP
 # (default the warp on PATH), its compiler from WARP_LIB as usual
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 PORT=${WARP_DEV_TEST_PORT:-8791}
 WAIT_SECONDS=120
 status=0

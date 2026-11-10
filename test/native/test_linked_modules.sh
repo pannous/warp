@@ -4,7 +4,7 @@
 # runtime.wasm's instance and its warp/start run first. Needs wat2wasm (wabt). Run it with
 # bash test/native/test_linked_modules.sh; the warp is WARP (default the warp on PATH), its lib/ WARP_LIB as usual
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 library=${WARP_LIB:-$("$warp" version | sed -n 's/.*(compiler.warp of \(.*\))$/\1/p')}
 command -v wat2wasm >/dev/null || { echo "skipped: no wat2wasm"; exit 0; }
 stage=$(mktemp -d) || exit 1

@@ -3,7 +3,7 @@
 # part of its name, never "outside the core" (card unknown-from-hex).
 # Run it with bash test/errors/test_unknown_function.sh; the warp is WARP (default the warp on PATH), its lib/ WARP_LIB
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 failures=0
 
 # refused <code> <said…>: the run fails, says each part and no gap of the core

@@ -3,7 +3,7 @@
 # at run time, or one that fits, stays silent (extensions/int_misfits.warp, night decision int-wrap-declarations). Run
 # it with bash test/native/test_int_misfits.sh; the warp is WARP (default the warp on PATH), its lib/ WARP_LIB as usual
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 unset WARP_HINTS
 failures=0
 

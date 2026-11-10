@@ -3,7 +3,7 @@
 # a text's index_of, a type word bound to a value the program also tests with. Run it with bash test/native/test_text_lints.sh; the warp is WARP (default the warp on PATH), its
 # lib/ WARP_LIB as usual
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 unset WARP_HINTS
 failures=0
 

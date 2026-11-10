@@ -4,7 +4,7 @@
 # entities source pass). Run it with bash test/errors/test_entity_error_column.sh; the warp under test is WARP (default
 # the warp on PATH), its compiler from WARP_LIB as usual
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 said=$("$warp" 'α = 1; x = \:alpha + nope' 2>&1 | tail -1)
 case $said in
 	*"nope at 1:22"*) echo "✓ the error keeps its written column: $said" ;;

@@ -3,7 +3,7 @@
 # page, natively warp prints its HTML; a value of no element prints as before. Run it with bash
 # test/web/test_html_render.sh; the warp under test is WARP (default the warp on PATH), its compiler from WARP_LIB as usual
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
 failures=0

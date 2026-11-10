@@ -4,7 +4,7 @@
 # is its own. Run it with bash test/errors/test_variable_named_as_function.sh; the warp under test is WARP (default
 # the warp on PATH), its compiler from WARP_LIB as usual
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 status=0
 folder=$(mktemp -d) && trap 'rm -rf "$folder"' EXIT
 gives() {

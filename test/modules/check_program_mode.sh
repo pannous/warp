@@ -10,7 +10,7 @@ tree=$(cd "${1:-$(dirname "$0")/../..}" && pwd -P); shift
 cases=${PROGRAM_MODE_CASES:-3}
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 cp -r "$tree/lib" "$work/lib"
-run() { rm -f "$work"/case.database.sqlite*; (cd "$tree" && WARP_LIB=$1 WARP_NO_WINDOW=1 timeout 120 "${WARP:-warp}" "$2" 2>&1 | grep -vE 'alternate stack|^warning: .*compiled from source$' | sed "s#$work/##g; s#$tree/##g"); }
+run() { rm -f "$work"/case.database.sqlite*; (cd "$tree" && WARP_LIB=$1 WARP_WINDOW=0 timeout 120 "${WARP:-warp}" "$2" 2>&1 | grep -vE 'alternate stack|^warning: .*compiled from source$' | sed "s#$work/##g; s#$tree/##g"); }
 modules=("$@"); [ ${#modules[@]} -eq 0 ] && modules=($(cd "$tree/lib" && ls *.warp | sed 's/\.warp$//'))
 diverged=()
 for m in "${modules[@]}"; do

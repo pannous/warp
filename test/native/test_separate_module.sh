@@ -4,7 +4,7 @@
 # what the program prints. Node links the two (as web/playground/host.js does), WASI from node:wasi. Run it with
 # bash test/native/test_separate_module.sh; the warp is WARP (default the warp on PATH), its lib/ WARP_LIB as usual
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 library=${WARP_LIB:-$("$warp" version | sed -n 's/.*(compiler.warp of \(.*\))$/\1/p')}
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT

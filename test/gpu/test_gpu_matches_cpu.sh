@@ -5,7 +5,7 @@
 # case fails. Run it with bash test/gpu/test_gpu_matches_cpu.sh [name…]; the warp under test is WARP (default the warp
 # on PATH), its compiler from WARP_LIB as usual. Needs a GPU (wgpu) and python3.
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 # the most a channel (of 255) may differ, and the share of pixels allowed to: f32 against f64 at an edge
 TOLERANCE=3
 OFF_SHARE=0.02

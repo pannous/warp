@@ -3,7 +3,7 @@
 # type of that name, or an enum case so named, hears nothing. Run it with bash test/types/test_foreign_type_hint.sh;
 # the warp is WARP (default the warp on PATH), its lib/ WARP_LIB as usual
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 unset WARP_HINTS
 failures=0
 

@@ -8,7 +8,7 @@ failed=0
 known() { grep -E "^$1 " "$tree/test/apps/known_failures.txt" 2>/dev/null | cut -d' ' -f2-; }
 for want in "$tree"/test/apps/expected/*.txt; do
 	name=$(basename "$want" .txt)
-	got=$(cd "$tree" && WARP_LIB=$tree/lib WARP_NO_WINDOW=1 TMPDIR=$(mktemp -d) timeout 300 "${WARP:-warp}" "samples/apps/$name.warp" 2>&1 | grep -v 'alternate stack')
+	got=$(cd "$tree" && WARP_LIB=$tree/lib WARP_WINDOW=0 TMPDIR=$(mktemp -d) timeout 300 "${WARP:-warp}" "samples/apps/$name.warp" 2>&1 | grep -v 'alternate stack')
 	card=$(known "$name")
 	if [ "$got" == "$(cat "$want")" ]; then
 		if [ -n "$card" ]; then echo "FIXED samples/apps/$name.warp: drop its line ($card) from test/apps/known_failures.txt"; else echo "ok   samples/apps/$name.warp"; fi

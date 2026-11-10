@@ -4,7 +4,7 @@
 # bash test/native/test_unread_pair_lines.sh; the warp under test is WARP (default the warp on PATH), its compiler from
 # WARP_LIB as usual
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 cases=$(cd "$(dirname "$0")/../.." && pwd)/data/unread-pairs
 mkdir -p "$cases"
 printf "'1 + 1'\t2\n'\"I'm\"'\t\"I'm\"\n'2 + 2'\t4\n" >"$cases/test_quote.pairs.warp"

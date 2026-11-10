@@ -4,7 +4,7 @@
 # of lib/timers.warp). Run it with bash test/errors/test_library_trap_place.sh; the warp under test is WARP (default
 # the warp on PATH), its compiler from WARP_LIB as usual
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
 program=$stage/calls_library.warp

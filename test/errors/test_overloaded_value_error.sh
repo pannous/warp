@@ -3,7 +3,7 @@
 # the lambda that says which (card function-redefinition-error). Run it with bash test/errors/test_overloaded_value_error.sh;
 # the warp under test is WARP (default the warp on PATH), its compiler from WARP_LIB as usual
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 status=0
 says() {
 	local code=$1 expected=$2 said

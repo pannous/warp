@@ -17,7 +17,7 @@ hello=$checkout/samples/hello/hello.warp
 lib=${WARP_LIB:-$(dirname "$(realpath "$(command -v warp)")")}
 work=$(mktemp -d "$checkout/data/compile-scaling.XXXXXX")
 trap 'rm -rf "$work"' EXIT
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 
 # instructions <lib> <program>: the instructions a warm run of the program retires; a failing run ends the check
 instructions() {

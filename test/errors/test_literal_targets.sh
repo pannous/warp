@@ -3,7 +3,7 @@
 # its readings, never guessed. Run it with bash test/errors/test_literal_targets.sh; the warp is WARP (default the
 # warp on PATH), its lib/ WARP_LIB as usual
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 failures=0
 
 # refused <code> <reading>…: the run fails and its error names every reading
