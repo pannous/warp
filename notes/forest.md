@@ -8,7 +8,8 @@ meshlet renderer: there is no cluster hierarchy, no indexed triangle mesh, and n
 
 ## Scene
 
-Exactly 1,000,000 trees, a 1000 by 1000 grid of 4 metre cells. A tree's position, height and species are a
+`forest_view(glance, side)` takes the trees along each edge (a multiple of 25; default 1000, the sample uses 100 = 10,000 trees).
+The default is exactly 1,000,000 trees, a 1000 by 1000 grid of 4 metre cells. A tree's position, height and species are a
 mix of its cell, so the same index is the same tree and nothing stores a million objects. Species are pine,
 oak, birch and autumn. Heights run from 2.4 to just over 5.
 
