@@ -1,4 +1,4 @@
-# Reusing a physics engine (card reuse-physics, user policy reuse-giants 2026-10-29)
+# Reusing a physics engine (card reuse-physics, user policy reuse-giants)
 
 What we build ourselves today: nothing general. samples/advanced/particles.warp integrates gravity and bounces
 by hand (Euler steps, wall checks); there is no rigid body, collision shape, joint or broad phase anywhere in lib/.

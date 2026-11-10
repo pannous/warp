@@ -2,8 +2,6 @@
 
 Library `lib/meshlets.warp`, sample `samples/graphics/meshlet_grid.warp`, tests `test/graphics/test_meshlets.pairs.warp`.
 The sample is not named `meshlets.warp`: a file of that name is what `use meshlets` loads, so the sample would import itself.
-Card key intended: `nanite-library-poc` (title Warp Nanite). The `todo` CLI was not on the machine that wrote this
-(`todo: command not found`, exit 127), so the board was not updated.
 
 This is a CPU picture of clustered triangles. It is not Unreal Nanite, and it is not a port of three.js.
 

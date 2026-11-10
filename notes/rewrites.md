@@ -1,11 +1,10 @@
 # The rewrite engine (core/passes/rewrites.warp, card rewrite-engine)
 
-`rewrite PATTERN => TEMPLATE [where …]` rules carry the sugar layer (notes/layers.md). The engine gains the features
-the migration needs one at a time, each landed on its own before warp-layers moves the modules it unblocks.
+`rewrite PATTERN => TEMPLATE [where …]` rules carry the sugar layer (notes/layers.md).
 
 ## Fresh names (F3)
 A template's hole the pattern doesn't bind is a fresh name each firing: `$t` becomes `t·3`, a compiler temporary
-(notes/compiler_temporaries.md) no program can write, and every use of `$t` in that firing is the same name. Evaluate
+no program can write, and every use of `$t` in that firing is the same name. Evaluate
 once is spelled with one:
 
 ```warp
@@ -35,7 +34,7 @@ rewrite speed_unit => km·per·hour                # km_per_hour
   temporary stays one (`t·3_end`).
 - Numbers multiply: a number written beside `·` (`$x·2`) leaves the product, and so does a hole that bound a number
   (`$n·ten` of 3 → `3 * ten`). A hole bound to other code (`x + 1`) is an error.
-- `··` glues with the mark itself: `loop··step` is the hidden compiler name `loop·step` (notes/compiler_temporaries.md)
+- `··` glues with the mark itself: `loop··step` is the hidden compiler name `loop·step`
   no program can write, the way for_loops.warp marks a loop's step; `$i··end` of k is `k·end`, `$i·end··x` is
   `k_end·x`. The parser reads `a··b` as the declared-only operator call `operator_··(a, b)`, so outside a template it is
   an operator nothing declares, an error (extensions/sugar/loops.warp: the C-style for's `loop··step: $step`).
@@ -49,7 +48,7 @@ Everything the template adds (its words, keys and groups, the fresh names) is pl
 written; the holes keep the positions of the code they bound. An error inside a rewrite points at the user's line,
 never at the rule.
 
-Tests: tests/modules/test_rewrite_engine.warp (warp only, `warp test tests/modules`).
+Tests: test/modules/test_rewrite_engine.warp (`warp test test/modules`).
 
 ## Where-conditions (F2)
 After `where`, conditions joined by `and` ask about what the holes bound:
@@ -77,7 +76,7 @@ Three more ask about a word list and where the matched code stands (card engine-
 |---|---|
 | `$x in [add, push]` (also `$x is in […]`) | the hole bound one of the words listed, a name or a text naming it (`"push"`) |
 | `method` | the matched code is the method part of `x.f(…)` or `x.f`: `f(…)`, `f`, the right of `.` |
-| `shadowed` | a definition around the matched code binds the word it starts with: a parameter, or a name its body declares (`f(t) := { parse = x => 7; parse(t) }`, notes/dispatch.md: shadowing is scoped) |
+| `shadowed` | a definition around the matched code binds the word it starts with: a parameter, or a name its body declares (`f(t) := { parse = x => 7; parse(t) }`, wiki/polymorphism.md: shadowing is scoped) |
 
 Each is negated as the others: `where $f not in [add, push]`, `where not method and not shadowed`:
 
@@ -93,7 +92,7 @@ meaning), and `$x is unbound` asks it of a hole. A run of statements (F6) has no
 holds there. Open: a lambda's parameter (`plus => plus(1)`) and a class's method bodies don't shadow yet, and a
 result rewritten again (F7) is walked without them.
 
-Tests: tests/modules/test_rule_conditions.warp; probes/rewrites/rule_conditions.
+Tests: test/modules/test_rule_conditions.warp.
 
 ## Places (F1)
 A place word among the `where` conditions lets a rule rewrite code only standing there:
@@ -154,7 +153,7 @@ rewrite ($a = $x; $b = $a) => ($a = $x; $b = $x + 1)
 A run a rule made shorter is tried again where it stands, together with the statements after it, so a pairwise rule
 folds a whole run: `rewrite (add_up($a); add_up($b)) => add_up($a + $b)` turns `add_up(1); add_up(2); add_up(3)` into
 `add_up(1 + (2 + 3))` (right to left, F13); a run as long or longer moves on, so this can't loop (F12). The sugar step (extensions/sugar) matches
-runs of statements the same way. Tests: tests/modules/test_rewrite_zip_runs.warp, probes/rewrites/zip_runs.
+runs of statements the same way. Tests: test/modules/test_rewrite_zip_runs.warp.
 
 Runs are rewritten right to left (F13, card engine-right-to-left-runs): the run starting at the last statement is
 tried first, then the one before it, so a rule for the first statements of a run sees what follows them already
@@ -170,7 +169,7 @@ fib(n) := fib(n - 1) + fib(n - 2)   # one fib: if n == 0 then 0 else if n == 1 t
 A pairwise rule folds to the right: `rewrite (say($a); say($b)) => say($a - $b)` turns `say(10); say(5); say(2)`
 into `say(10 - (5 - 2))`, and a rule for an end (`(item($a); done) => last_item($a)`) reaches every pair before it
 (`(item($a); last_item($b)) => last_item($a + $b)`). Phrase runs (`keep 1 past 3`) stay left to right. Tests:
-tests/modules/test_rewrite_right_to_left_runs.warp, probes/rewrites/right_to_left_runs.
+test/modules/test_rewrite_right_to_left_runs.warp.
 
 ## Results rewritten again (F7)
 A rule's result is rewritten again by the rules, its parts first, until none fires, so rules build on rules:
@@ -225,7 +224,7 @@ rewrite $word $p => $p where $word is label and parameter   # replace(t, old, wi
 Write the place word last: with it first, `where parameter and $w is label`, the rule rewrote the head wrongly
 (`scaled(x, by factor) := x * factor` lost `x`, so the body's `x` was unknown). The sugar step applies a rule of a
 place only there (before F10 it ignored places). Tests:
-tests/modules/test_rewrite_parameters.warp.
+test/modules/test_rewrite_parameters.warp.
 
 ## Rest templates
 A template that is a rest hole alone, `$s...`, is the words the hole bound, rebuilt as a phrase; a phrase template
@@ -242,7 +241,7 @@ swallowed the line after it (the next rule, or the program's next statement); th
 engine-rest-template) a bare `$s...` gave the tree `$s to ø` around the words, and a phrase of one word stayed a
 phrase, so each word took two fixed-arity rules. A `where` after a template ending in `$s...`
 on its line, which the parser reads as the range's end, ends the template (split_at_where); on the next line it is
-still swallowed. Tests: tests/modules/test_rewrite_engine.warp.
+still swallowed. Tests: test/modules/test_rewrite_engine.warp.
 
 ## Called holes
 A hole written right before `(`, `$t($a...)`, is the call it reads as, as the code's `P(1)` is; the parser itself reads
@@ -253,7 +252,7 @@ with_called_holes, in patterns and templates). `$t ($a)`, with a space, stays th
 rewrite build $t($a...) => $t($a...) where $t is type   # p = build P(4) → p = P(4); build f(2) stays
 ```
 
-Tests: tests/modules/test_rewrite_engine.warp; probes: probes/rewrites/guarded_call.
+Tests: test/modules/test_rewrite_engine.warp.
 
 ## Function keywords: early sugar, applied holes, parenthesized templates (card sugar-definitions)
 extensions/sugar/functions.warp takes the function keywords (`def`, `fun`, `fn`, `define`, `function`, `func`) away before

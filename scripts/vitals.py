@@ -6,8 +6,8 @@ Weight: lines of code after every commit of origin/main, each by what it changed
 the core without extensions and the extensions apart. Tests: every committed version of each results file (TIERS),
 its pass count read from its summary or its status lines. Build time: the CPU seconds and peak memory of each
 landing's compiler builds, read from the build records in the store (STORE). All of it is reconstructed (seconds) into scripts/vitals.html. The nightly run
-(scripts/integrate/nightly.sh) calls it; a Claude session republishes the page to its artifact URL
-(notes/core_hygiene.md "Warp vitals").
+(scripts/integrate/nightly.sh) calls it; a Claude session (the Integrator after a landing) republishes the page to its
+artifact URL, https://claude.ai/code/artifact/b988ec61-123d-4e97-833b-0dd2342cac4c.
 """
 import collections, datetime, glob, json, os, re, subprocess, sys
 
@@ -24,6 +24,7 @@ TIERS = [("native pairs and is! lines", "test/results.txt"),
          ("samples, native", "test/samples.txt"), ("samples, playground", "test/samples-web.txt"),
          ("tests, playground", "test/tests-web.txt")]
 SUMMARY = re.compile(r"(\d+) of (\d+) failed")
+RUN_MINUTES = re.compile(r" in (\d+) min$")  # a run's duration, which scripts/full-suite.sh ends its commit subject with
 HEADER = re.compile(r"^# \S+ \S+ \S+ (\d+)/(\d+)")
 STATUS = re.compile(r"^(ok|SRV|ran|✓|FAIL|✗|BOTH|PAGE|EXP|NONE|WIN|DIFF|TIME|ERR)\s")
 PASSING = ("ok", "SRV", "ran", "✓")  # ran: a sample without an expected output that ran without error
@@ -208,11 +209,12 @@ def latest_flips(path):
 
 def tier_history(path):
     points = []
-    for line in git("log", "--reverse", "--format=%H %ad", "--date=iso-strict", "--since=" + SINCE, TIP, "--", path).splitlines():
-        sha, date = line.split(" ")
+    for line in git("log", "--reverse", "--format=%H %ad %s", "--date=iso-strict", "--since=" + SINCE, TIP, "--", path).splitlines():
+        sha, date, subject = line.split(" ", 2)
         counts = pass_count(git("show", f"{sha}:{path}"))
         if counts and counts[1]:
-            points.append([date[:16].replace("T", " "), sha[:10], *counts])
+            minutes = RUN_MINUTES.search(subject)
+            points.append([date[:16].replace("T", " "), sha[:10], *counts, int(minutes[1]) if minutes else None])
     return points
 
 

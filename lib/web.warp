@@ -12,7 +12,7 @@ use markup
 // its body; post, put, delete and patch alike. A program with routes ends serving them (routes_end; extensions/rules/rule_words.warp
 // computes both, decision computed-hole)
 // `form post "/todos" { … }` is the form sending there, `form{ method: "POST", action: "/todos", … }`, the path any
-// expression (notes/server_routes.md)
+// expression
 rewrite form $m $path {$body...} => form{ method: $verb, action: $path, $body... } where $m in [get, post, put, delete, patch] and $verb = route_verb($m)
 rewrite $m $path {$body...} => route_add($verb, $path, request => { $bindings...; {$body...} }) where $m in [get, post, put, delete, patch] and $path is text and $verb = route_verb($m) and $bindings = route_bindings($path)
 // `route "/users/:id:int" { div{…} }`: a page, a GET answering its block's markup as HTML (lib/markup.warp to_html)

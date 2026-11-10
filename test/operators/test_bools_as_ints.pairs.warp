@@ -1,5 +1,5 @@
 # a yes/no is the int 0 or 1 underneath: any operator but equality takes it as that int; of two yes/no values an
-# operator that gives 0 or 1 again gives yes/no (notes/bool_type.md, user 2026-11-02, card surprised-simple-implement)
+# operator that gives 0 or 1 again gives yes/no (wiki/bool.md, user 2026-11-02, card surprised-simple-implement)
 'yes xor no'	yes
 'no xor yes'	yes
 'yes xor yes'	no

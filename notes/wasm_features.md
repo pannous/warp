@@ -1,17 +1,17 @@
 # Wasm features: what warp uses, wants, and skips
 
-Decisions and directions. Runtime support for exceptions: notes/wasm_exceptions.md.
+Decisions and directions. Runtime support for exceptions: wiki/Exception.md.
 
 ## On by default
 - GC, reference types, typed function references, bulk memory, exception handling (`try`).
 - Extended constant expressions (Wasm 3.0): default. wasmtime and wasmparser enable them by default,
-  wasm-opt gets `--enable-extended-const` (BINARYEN_FEATURES in src/wasm_optimizer.rs). The emitter does not use them
+  wasm-opt gets `--enable-extended-const` (WASM_OPT in core/commands/commands.warp). The emitter does not use them
   yet: a global with an arithmetic initialiser (`global x = 2*21`) could be a constant expression instead of a store in main.
 
 ## Built
-- typed-lists: homogeneous Int/Float lists as GC arrays behind one list-operation dispatch layer (notes/typed_lists.md).
-- closures: first-class functions as a GC struct of a typed function reference plus captured values (notes/closures.md).
-- multi-value: real multi-value results in the runtime helpers and tuple returns (`return a, b`) (notes/multi_value.md).
+- typed-lists: homogeneous Int/Float lists as GC arrays behind one list-operation dispatch layer.
+- closures: first-class functions as a GC struct of a typed function reference plus captured values (wiki/closure.md).
+- multi-value: real multi-value results in the runtime helpers and tuple returns (`return a, b`) (wiki/multi-value.md).
 
 ## Not wanted: SIMD
 We are not interested in wasm SIMD (128-bit or relaxed). Vector work goes the direct vector/GPU path: list operations
@@ -32,3 +32,7 @@ backend choice lives in warp's list-operation table, not in wasm instructions.
 - A memory per FFI library: raylib/SDL buffers in their own memory, shared with the host, isolated from warp texts.
 - A GPU staging memory: typed-array payloads copied into one memory that the host maps straight to a GPU buffer.
 - Scratch memory for big-int limbs or temporary texts, dropped wholesale after a call.
+
+## Not used: Wasmer
+Wasmer (7.5.0) cannot load warp's modules on any backend: it refuses GC types (struct, array, anyref). warp stays
+wasmtime-only; revisit when Wasmer supports GC references.

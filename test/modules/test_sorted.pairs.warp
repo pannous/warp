@@ -1,4 +1,4 @@
-# SortedMap and SortedSet (lib/sorted.warp, card sorted-map-library, notes/bb_trees.md)
+# SortedMap and SortedSet (lib/sorted.warp, card sorted-map-library)
 
 # insertion order, including the reverse order that forces rotations; height stays logarithmic
 'use sorted; m = SortedMap(); for i in 1 to 31 { m = m.set(32 - i, i) }; m.keys() == [i for i in 1 to 31] and m.size() == 31 and m.height() <= 12'	yes

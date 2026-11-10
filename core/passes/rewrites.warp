@@ -69,7 +69,7 @@ rewrite_depth_limit = 64
 glue_mark = "·"
 glue_marker = HiddenWord.GlueName as text
 name_joint = "_"
-# `loop··step`: `··` glues with the mark itself, a hidden compiler name (notes/compiler_temporaries.md) no program can
+# `loop··step`: `··` glues with the mark itself, a hidden compiler name no program can
 # write; the parser reads it as the call operator_··(loop, step), whose parts wait beside hidden_joint in the glue
 hidden_glue = "··"
 hidden_joint = HiddenWord.GlueHidden as text
@@ -1313,7 +1313,7 @@ program_typing(): list := {
 # the words that may be a class's instance, needing a rule `where $u is Unit`: the class, the library's constants of it
 instance_words(class_name: text): list := [class_name] + library_typed_constants().keys.filter(word => library_typed_constants()[word] == class_name)
 
-# The program's names and functions that may give a list (notes/broadcasting.md "Vector parameters"): a name assigned
+# The program's names and functions that may give a list (wiki/broadcasting.md): a name assigned
 # a value that may be one, a parameter some call passes one, a function whose result may be one; worked out to a
 # fixpoint, [names, functions]. A name is its definition's (scoped_name: a function's own and its parameters, the main
 # level's apart), so `xs = [1]` in one function marks no `xs` of another
@@ -1476,7 +1476,7 @@ reading(statement: Node): list? := {
 is_charged_value(n: Node): bool := is_key(n, Op.Define) and key_of(n) is symbol and not is_lambda(value_of(n)) and not mentions(value_of(n), implicit_parameter)
 
 # a name a definition around the code binds, a parameter or a local (`listed = …; assigned or listed`): it shadows the
-# program's function and the library word of that name (notes/dispatch.md: shadowing is scoped), so `x | listed` is
+# program's function and the library word of that name (wiki/polymorphism.md: shadowing is scoped), so `x | listed` is
 # no pipe and `count xs` of a local count no call
 locally_bound(code: Node): bool := code is symbol and name_of(code) in rule_binding
 
@@ -1516,7 +1516,7 @@ starting_word(code: Node): Node := {
 
 # `method`: the code is the method part of the `.` being walked, `f(…)` of `x.f(…)`, `f` of `x.f`; `shadowed`: a
 # definition around it binds the word it starts with, as a parameter or in its body (`f(t) := { parse = x => 7;
-# parse(t) }`, notes/dispatch.md: shadowing is scoped)
+# parse(t) }`, wiki/polymorphism.md: shadowing is scoped)
 context_holds(code: Node, context: text): bool := {
 	if code == ø { return no }
 	if context == "method" { return rule_method_part != ø and code == rule_method_part }
@@ -2492,7 +2492,7 @@ copied_binding(bound: map): map := {
 	copy
 }
 
-# `$t` → `t·3`: a compiler temporary (notes/compiler_temporaries.md), apart from every other firing's and from every
+# `$t` → `t·3`: a compiler temporary, apart from every other firing's and from every
 # name another pass makes: one count for all (walk.warp fresh_number), else `for 2 {…}`'s item·1 and an inlined
 # map's item·1 were one variable
 fresh_name(hole: text): Node := symbol(hole.remove_prefix(rule_hole_mark) + "·" + fresh_number())

@@ -1,9 +1,11 @@
-// The standard library module i18n (card web-i18n, notes/i18n.md): `use i18n`. Translations are data, one map per
+// The standard library module i18n (card web-i18n): `use i18n`. Translations are data, one map per
 // language; a message is a text with {name} holes, or a map of plural categories (Unicode CLDR: zero one two few many
 // other) chosen by the value `count`:
 //   messages = { en: { cart: { one: "{count} item", other: "{count} items" } }, de: { cart: { one: "{count} Artikel", other: "{count} Artikel" } } }
 //   translate(messages, "de", "cart", { count: 3 }) → "3 Artikel"
 // A language the messages lack, or a message one language lacks, comes from the first language (de-AT reads de first).
+// A key no language has is the error `no translation of <key>`, never an empty text; a plural map without the
+// category falls back to `other`. Plural categories of whole numbers only (CLDR's v/f operands are not modelled).
 
 translate(messages: any, language: text, key: text, values: any): text := {
 	let message = i18n_message(messages, language, key)

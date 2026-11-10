@@ -40,13 +40,13 @@ counted below as language.
 So moving something to lib/ with load on demand needs one of two core mechanisms that do not exist yet:
 
 - **(M1) module rule words.** A lib module brings its own compile-time words, which the compiler runs through the
-  host. This is notes/compile_time_code.md, recommendation 3. Core: computed() in rewrites.warp, a host word in the
+  host. Core: computed() in rewrites.warp, a host word in the
   driver, and its twin in the playground.
 - **(M2) bridge slots.** A bridge hook becomes a slot that a module linked behind runtime.wasm fills when it is
   instantiated, for example a funcref global or table entry the module's start sets. The emitter links the module
   when a compile-time trigger shows the program needs it.
 
-Without M1 or M2, the only moves possible today are tool code (class D) and dead code (class E).
+Without M1 or M2, the only move possible today is tool code (class D).
 
 ## Totals
 
@@ -56,14 +56,13 @@ Without M1 or M2, the only moves possible today are tool code (class D) and dead
 | B split (hook stays, bulk moves) | 3,265 | 2,104 | M1 (compile-time domain words), M2 (runtime) |
 | C library (all moves) | 2 | 2 | – |
 | D tool | 954 | 435 | a dispatch line in core/native/warp.warp (precedent: `warp fix`) |
-| E dead | (≈30, inside B files) | ≈30 | – |
-| **sum** | **14,764** | **2,541** | |
+| **sum** | **14,764** | **2,541** (incl. ≈30 dead lines since deleted) | |
 
 - **extensions/ now: 14,764 lines of .warp.**
   - The total includes 762 lines of sugar/ and 82 of rules/modules/: rules read as text, no compiled code.
   - Data files not counted: entities.tsv (7,129 lines) and web.webidl (3,503), both in flight.
 - **After moving B's bulk, C and D's movable part: about 12,223 lines (−17 %).**
-- **Moves possible without a core change: about 465 lines (−3 %).** That is D's `warp test` (435) and E (≈30).
+- **Moves possible without a core change: about 435 lines (−3 %).** That is D's `warp test`.
 - The rest waits on M1 (about 1,050 lines) or M2 (about 1,055 lines).
 - **Candid summary:** extensions/ is mostly language. Its library-shaped bulk comes in two kinds:
   - runtime words (about 1,050 lines). They are already out of warp.wasm but sit in the runtime.wasm every run loads.
@@ -101,7 +100,7 @@ Ordered by lines moved per effort. Every row needs M1 or M2 first.
 | moves | of | file | what moves where | trigger (on demand) | why |
 |---:|---:|---|---|---|---|
 | 689 | 1,043 | big_numbers/big_ints 317, big_ratios 108, pow 258, pow_tables 6 | a lib module big_numbers behind runtime.wasm (M2). exact.warp and exact_rounding.warp (305) stay in the runtime, because every int `/` makes a ratio. | a literal past 64 bits or 18 decimal places, an int `^`, a float `^`, `as rational` (all visible to the emitter) | 16 % of runtime.wasm's code, carried by every run, reached only by big literals and powers |
-| ≈720 | 1,510 | rules/rule_words.warp domain words: signals 209, tasks/events/frames/pages 158, units 110, storage 91, typed JSON 82, web routes 37, laws 33 | each lib module's own rule words (M1): lib/signals, tasks, frames, markup, units, storage, json, web, laws | the module's use, which already brings its rules (rules/modules/<m>.warp) | the rules already load with their module; their words do not. compile_time_code.md counts the same split. |
+| ≈720 | 1,510 | rules/rule_words.warp domain words: signals 209, tasks/events/frames/pages 158, units 110, storage 91, typed JSON 82, web routes 37, laws 33 | each lib module's own rule words (M1): lib/signals, tasks, frames, markup, units, storage, json, web, laws | the module's use, which already brings its rules (rules/modules/<m>.warp) | the rules already load with their module; their words do not. |
 | 214 | 214 | times/runtime 135, times/durations 79 | lib/time (M2). The bridge bodies in core/runtime/extended.warp stay. | time_values.warp's makes_time(program): `instant_at`/`time_of` in the lowered program | time values are a library domain; the compile-time trigger already exists |
 | 152 | 152 | gpu_lists/runtime | a lib GPU module (M2). extensions/runtime.warp's list hooks and the 9-line row stay. | the row's library_words (gpu_zeros, gpu_list_of …) or a `[f32]` type | only GPU programs make GPU lists |
 | 120 | 125 | fetch_signals | lib/net (M1). Check first whether plain rewrite rules in rules/modules/net.warp can do it: then no core change is needed. | the module's use (`fetch`) | a pass for one library word |
@@ -130,16 +129,6 @@ the bridge (class B, M2), and whatever reads a library's words runs at compile t
 Risk: `warp test` is the Integrator's suite. As a lib program it must be compiled once and cached, as lib/fix is,
 or every run pays for a compile.
 
-## Class E: dead (grep-confirmed: no other mention in core, extensions, lib, web, scripts, test, samples)
-
-| lines | where | names |
-|---:|---|---|
-| ≈15 | times/runtime.warp:15–25, 65 | is_instant, is_date, is_local_time, is_zoned, is_time_of_day, duration_of, local_offset_at |
-| ≈15 | big_numbers/big_ratios.warp:75, exact_rounding.warp:12, 57 | big_exact_floor, exact_cmp, exact_euclid_div |
-
-Runtime words can be named by text (`made_tests.Time`). Before deleting, run `warp runtime` and a program that shows
-and compares a time and a ratio.
-
 ## Side findings
 
 - **The core bypasses the hook table.** These extension files are `use`d by core files directly, by path:
@@ -157,18 +146,16 @@ and compares a time and a ratio.
   It belongs beside core/emitter/prebuilt.warp. This is a placement fix that grows core by 187 lines (Interviewer).
 - **time_values.warp (188) is emitter code without a row**: time intrinsics and time_of. When times become library
   values (dates-times-extraction), it goes with B's times row.
-- extensions/rules/rule_words.warp has grown from 1,185 to 1,510 lines since compile_time_code.md.
-  M1 is the only thing that stops that growth.
+- extensions/rules/rule_words.warp keeps growing (1,510 lines); M1 is the only thing that stops that growth.
 
 ## Recommended order
 
-1. E (≈30 lines): delete, after one run of `warp runtime`. No core change.
-2. D `warp test` (435): lib/test/command.warp plus one dispatch line in core/native/warp.warp (a small, generic core
+1. D `warp test` (435): lib/test/command.warp plus one dispatch line in core/native/warp.warp (a small, generic core
    change on the `warp fix` precedent). Closes card serializer-needed.
-3. C uncertain row (2): verify, then drop.
-4. M2 bridge slots (a core decision through the Interviewer) unlocks big numbers (689), times (214) and GPU lists
+2. C uncertain row (2): verify, then drop.
+3. M2 bridge slots (a core decision through the Interviewer) unlocks big numbers (689), times (214) and GPU lists
    (152). That takes about 9 % of runtime.wasm's code out of every run.
-5. M1 module rule words (a core decision, already recommended in compile_time_code.md) unlocks about 1,050 lines of
+4. M1 module rule words (a core decision) unlocks about 1,050 lines of
    compile-time domain words: rule_words' domains, fetch_signals, components, shader_holes, dev_values, page_values.
    Try plain rules for fetch_signals and page_values first.
 

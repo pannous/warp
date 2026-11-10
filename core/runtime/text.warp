@@ -117,7 +117,7 @@ same_bytes(a: text, b: text): bool := {
 	}
 	yes
 }
-# `a == b` of texts (decisions nfc-tables, nfc-slot; notes/text_equality_nfc.md): equal bytes, else equal NFC forms.
+# `a == b` of texts (decisions nfc-tables, nfc-slot; wiki/Footguns.md): equal bytes, else equal NFC forms.
 # Only a text holding a code point NFC may change asks the host: the compiler's own `→` == `≠` never does, so building
 # the runtime needs no modules/unicode.wasm, which the step after it builds
 equal_texts(a: text, b: text): bool := same_bytes(a, b) or ((maybe_decomposed(a) or maybe_decomposed(b)) and same_bytes(canonical(a), canonical(b)))

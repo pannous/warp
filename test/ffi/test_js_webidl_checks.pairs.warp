@@ -1,4 +1,4 @@
-# `use js` members checked by lib/web.webidl when compiled (card js-webidl-bindings, notes/js_globals.md); the calls
+# `use js` members checked by lib/web.webidl when compiled (card js-webidl-bindings, extensions/js_globals.warp); the calls
 # themselves run in the playground (test_web_idl.pairs.warp, the browser tour)
 'use js URL; u = URL("https://a.b/c"); u.pathnam'	error	URL has no pathnam
 'use js crypto; crypto.randomUUD()'	error	the global crypto is a Crypto
