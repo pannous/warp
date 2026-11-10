@@ -54,54 +54,19 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - uniscript-binary-import: `use uniscript` imports the released prebuilt uniscript_c.wasm (+ .h), committed in the uniscript repo at each release (uniscript-browser-wasm); warp's tests follow the released uniscript.
 
 ## Tooling: format, beautify, CLI
-- prebuild-fails-loudly: a library that fails to prebuild fails the rebuild, naming the module and why; a module whose words are C imports (`… from "c"`, lib/wasmtime.warp) is source-only by itself, no marker comment. wasmtime-dropped: lib/wasmtime.warp leaves std_module_names; `use wasmtime` fails loudly as an unknown module; card wasmtime-self-hosted brings it back once foreign lines take structs.
-- hello-size-exports: shown_at and trap_message are exported only from a program that can raise (raise/throw, a raising runtime word, a host word with arguments); hello ~1.5 KB; an engine trap in another program prints as wasmtime names it, without position.
-- sample-spellings: samples are rewritten to the general forms (`int[height * width]`, `(y - center)^2`) instead of new syntax; no wish cards for those.
-- drop-pure-word: `warp pure` is gone: plain `warp <file>` is the warp compiler (warp.wasm); `warp self` stays the self-built variant; `pure` survives only as a hidden CLI alias with a one-line note. Card drop-pure-word.
-- warp-format: `warp format` (synonym `warp lint`, no `fmt`) only fixes layout in one canonical form, never meaning: tabs, `name: value`, spaced binary operators (glued only where spacing changes meaning; checked by comparing parse trees), list separators as written, `{` on its header's line, one space after `,`, none inside brackets, ≤ 1 blank line. Abbreviated words get a soft hint ("warp avoids abbreviations"), never a fix.
-- beautify (also: beautify-preview): opinionated rewrites are `warp beautify`: prints the diff, asks "apply? y/n" in a terminal (piped lines answer it, one per file; end of input is no), `beautify yes` applies, `beautify check` previews; rules: hash-comments, alias words to their warp word via the I-meant fixes.
-- cli-words: warp's command options are words, never `--flags` (`warp format check …`); card cli-words migrates the old ones.
-- P102 `warp build hello.warp` makes the native executable; build-should: it writes x.wasm beside it, `--wasm` only the module. build-links: `warp build page.warp` opens the page in the system web view.
-- no-executable-by-default: plain `warp file.warp` writes no executable (WARP_EXECUTABLE=1). P105 `warp run` never writes an executable nor takes the machine-code path.
-- P77 an executable prints the output, then its value; exit 0, 1 on a trap; only an Int result is the exit status. P113 a ø result shows nothing. P236 `warp run` echoes the final value after the prints.
-- P222 `warp serve [file] [port]` serves a page program; plain `warp app.warp` serves when the program declares a route/server; CGI mode retired.
-- test-soft: `test C` records and continues, `check C` asserts, `test "name" {…}` is a test block. P209 test blocks run only under `warp test`. P210 all pass → one summary line; failures exit nonzero.
-- fuel-metering: runaway loops are stopped by the epoch timer: 60 s CPU time by default (WARP_TIME_LIMIT), not for `warp build` executables or windowed/event-loop programs; the stop says how to raise it. Fuel (exact step budget, 4.4× on calls) only on request: `use fuel`, `warp fuel N app.warp`, WARP_FUEL, and compile-time folding of constant calls.
-- fast-math: the polynomial math module is `use fast_math`; the CLI word is `warp fast app.warp`.
-- P107 the playground offers only the .wasm download plus a `warp hello.warp` line. P108 Warp.sublime-syntax takes .wasp/.warp/.a/.angle. P229 double-clicking a .warp file opens the editor.
 
 ## Welcoming, diagnostics and newcomer forms
-- kebab-hint-both-fixes: the kebab warning offers both fixes, "a_b or a - b".
-- errors-name-file: every error, warning and hint, in every lane, prints file:line:column and the source line; a refusal never names internal words (`view·opaque`) but the user's code. Runtime errors and warnings keep their "at line:col" (card appends-line). Cards error-names, pure-error-candidate.
-- Newcomer syntax is eaten, its intent compiled and the warp form hinted, only where it does not clash with a known footgun.
-- Asks become got-it warnings; error-fallback cases (`[x]*n`, insert order, `[1 2 3]+4`, `1+2 squared`) stay loud errors naming the explicit forms (D3, D9/P5).
-- Got-it scope: `[y = this one, a = all of this kind, n]`; an expression is remembered by its text; a `// got it` comment silences the line.
-- warning-levels (also: hints-are-warnings): one Diagnostic with a level hint < weak < normal < severe; `--no-hints` and `use strict` are thresholds (notes/welcoming.md).
 
-- canvas-zero: a missing setting takes a sensible default; errors only for an ambiguity too dangerous to guess.
-- P75 fix buttons read "I meant: <replacement>", the meaning as a tooltip.
-- julia-compat: stay close to Julia; its syntax is beautiful and its semantics often near perfect. Julia forms read with Julia's meaning; deliberate departures listed in wiki/Julia.md.
   - julia-floor-divide: `÷` is floor division as in Julia (synonym of `/!`, `7 ÷ 2` → 3), with a hint for newcomers expecting `/`.
   - julia-pair-range: `1:4` stays a pair; iterated (for, sum, comprehensions) a pair of two numbers is the range.
   - julia-text-times-hint: `"a" * "b"` concatenates with a got-it warning naming `+`; an error only when a text holds a number (`"3" * "4"`).
   - julia-dollar-interpolation: `"x is $x"` only as a toggled feature after the self-hosting migration (`$million`, `$0` clash).
-- P78 modifiers from other languages (`public`, `static`, `inline`, …) are skipped with a got-it note; words with a warp meaning keep it.
-- Word choices are not asked: the recommended word is canonical, synonyms are aliases with a note.
 - foreign-spellings: foreign names are cheap aliases of existing words, not lowering code. Kept: Rust `<T>`/`let mut`, Enum.map/List.map/Seq.sum, Python lambda, variadic lambdas, JS destructured parameters, Ruby lambda/proc/blocks/to_s, C# LINQ, C++ `auto x`. Dropped: OCaml let-in and `fun`, Elixir `def …, do:`, C++ `[](…){…}`. R/PHP forms live in `use R` / `use PHP`. Kotlin `when x { 1 -> … }` = `match` with a warning; `match` takes `->` arms and `else`; `case` is optional before any arm.
 - P157 no generic syntax: ported `fn id<T>(x: T)` compiles untyped with a note. P161 no Swift argument labels; ported labels compile with a note.
 - P167 Go's `Point{1, 2}` builds `Point(1, 2)` for a known class with a note; unknown names stay tagged data.
-- P145 R's `x <- 3` assigns with a note; `x<-3` is an error naming both readings; docs never use `<-`.
-- P241 no vector type: `Vec<int>`, `vector<int>`, `Array<int>` read as `list of int` with the note "warp says list".
-- Error highlighting: CLI carets under the word; web red/amber wavy underlines with the message on hover.
-- #7/P92 unresolved calls are errors: `foo()` is "undefined function: foo"; a bare word statement naming nothing is "undefined variable: foo"; a bare `foo` in data stays a symbol.
-- constant-words: null nul none nil nill nix nada nothing empty void true yes false no are constants in any case; `empty = 3` is `ø = 3`.
-- function-words-consume: every function word, not only print, takes its arguments without parentheses, by its parameters (arity and types), no special rules: `show a, b` = show(a, b), `add 1 2` = add(1, 2), `print ord c` = print(ord(c)), `[twice 1, twice 2]` = [twice(1), twice(2)], `count xs > 3` = count(xs) > 3; a function word where the parameter takes a function is a value (`map square xs` = map(square, xs)); non-function words are unchanged. An argument reaches right as long as the expression fits the parameter type (`sqrt 4 + 5` = sqrt(9); `xs > 3` is a bool, so count stops). Varargs/defaults take what fits to the statement end, overloads the most arguments that type-check, a function value of unknown arity one atom per blank.
-- spaced-definition-head: parentheses in a definition head are optional: `square x := x*x` defines square(x), `add a b := a + b` add(a, b); `f x` outside a definition stays a call.
 - negated-call: minus binds weaker than application: `-f x` = -(f x), so `1 + -floor 2.5` → -1 and `-sin 0` → 0; `-a * b`, `-x^2` unchanged and `x=5; -x 1` stays [-5, 1] (a plain value is not a call).
 - phrase-functions: a definition head may be a phrase with holes: `send v to c := c.send(v)`, `on every period (body: block) := timer_every(period, body)`, `await x within t or d := …`, `set field of object to value := …`; one phrase-row mechanism like the operator rows (~60–120 core lines), replacing ~35 lib rewrite rules (tasks, timers, signals, channels, english, which stay as such declarations).
-- named-argument-phrases: a phrase is already an ordinary function called with named arguments: `give(v, to) := v + to; give 2 to: 40` → 42, `transfer 5 from: 1 to: 2`. Colonless phrase heads (`send v to c := …`) stay parked (phrase-params).
 - phrase-rules-kept: `on change x {…}` / `on set x {…}` and `set name of p to 3` stay rewrite rules until name parameters (`f(x: name)`) exist, then become plain functions; `await all xs` / `await any xs` stay as written (notes/phrase_inventory.md).
-- P86 adding values of unknown kinds builds `a + b` lazily; evaluated operands need Addable, else a type error.
 
 ## Comments, separators and lexing
 - floor-division: `//` is always a comment; floor division is `/!` (`7 /! 2` = 3, `x /!= 2`); where `//` was clearly meant as division (`n = 7//2`), a strong warning names `/!` and `warp fix` rewrites it; `div` warns with the fix `/!` (`div` stays the html tag). A comment hiding a closing bracket is a parse error naming the `//`.
@@ -766,3 +731,11 @@ markup-auto-render, instances-not-plural, click-by-id, markup-keeps, html-meta, 
 web-words → AGENTS.md (canonical-output; host words stay internal). P186/P187, signal-samples → historic (git).
 P221 → wiki/html.md (routes). site-budget, Hosting → notes/hosting.md.
 mp3-true-length → lib/sound.warp (mp3 length).
+P78, P145, P241, constant-words, spaced-definition-head, named-argument-phrases → wiki/function.md, wiki/assignment.md, test/welcoming/test_newcomer_rules.pairs.warp.
+warp-format, beautify, cli-words, P102, no-executable-by-default, P77, P222, test-soft, fuel-metering, fast-math → wiki/cli.md.
+kebab-hint-both-fixes, errors-name-file, Newcomer, Asks, Got-it, warning-levels, canvas-zero, P75 → notes/welcoming.md, notes/fixits.md.
+prebuild-fails-loudly → scripts/rebuild.sh (prebuild fails loudly). hello-size-exports → core (emitter exports).
+sample-spellings → AGENTS.md (Samples are not the spec). drop-pure-word → AGENTS.md (warp self).
+P107 → historic (git). Word → AGENTS.md (Word choices are aliases). Error → web/playground (error highlighting).
+julia-compat → notes/taste.md (Familiar conventions first). #7/P92 → wiki/Error.md and the tests citing it.
+function-words-consume → wiki/function.md and the tests citing it. P86 → wiki/operator.md.
