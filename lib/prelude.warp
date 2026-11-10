@@ -497,9 +497,9 @@ display.ppi := display_dpi * 1dpi
 display.ppi(density) := set_system_value("display_dpi", density / 1dpi)
 // width × height in px (other names display.dimensions and display.resolution)
 display.size := [display_width, display_height] px
-// the diagonal as a length: its nearest whole px at the density (quantities run as exact amounts, a run-time √ is a
-// float)
-display.diagonal := round(√(display_width² + display_height²)) * 1px / (display_dpi * 1dpi)
+// the diagonal as a length: its nearest whole px at the density (quantities run as exact amounts, a run-time hypot is
+// a float; the prelude writes no power, which would link big_numbers into every program)
+display.diagonal := round(hypot(display_width, display_height)) * 1px / (display_dpi * 1dpi)
 // The fields of a time at run time (card time-fields-warp, wiki/time.md), called late by the emitter's
 // time_field with the time's form (TimeForm: 1 a date, its position in days; else nanoseconds since 1970), its
 // position, its zone's seconds east of UTC (a zoned time's, else 0; not `offset`: the index type's synonym) and the
