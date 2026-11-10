@@ -160,41 +160,13 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - function-type: `type(gcd)` prints `function: (a, b) -> int`. parse-type / body-code: quoted program parts (`parse("1+1")`, `f.body`) have type `code`, print their source, keep `.op`.
 
 ## Variables, binding and charged definitions
-- library-constant-refused: `pi = 4` at the top level is refused, "pi is a constant"; a local inside a function may shadow it. Today it prints 8: fix forward, the tour expectation stands.
-- charged-values-rule: a charged value definition is the rule `($h := $e) => ($h() := $e) where $h is varying` in extensions/sugar/heads.warp, not a pass.
-- lambda-assign-writes-through: in a lambda or block argument `=` to a name of the enclosing scope writes that name (`seen=0; f=() => {seen=3}; f(); seen` → 3); `let x = …` makes a new local; a def's body keeps its own locals.
 - op-assign-target-once: `x[f()] op= y` evaluates the target's parts once, as C, Python, JS.
-- let-reassign: `let` is fully immutable (fix "use var x"); `var` is the variable; `let mut x` = `var x` with a loud warning. const-deep: `const` is deep like `let`.
 - P159 `const x=7; x=7` warns "remove the redundant assignment". P130 pi and named constants are constants; a class field named pi is the class's own.
-- let-parallel: the parallel let is only `a b = f(x) g(y)`; `let a b = …` is a function definition; `let a, b = 3, 4` unpacks.
-- Data vs code (P51, P62, P63, D7): specified in wiki/charged.md. P70 late binding: a change is an error only where a later call sees it; pure getters over constants may fold.
-- P71 `:=` without parameters is charged, re-evaluated at each use; assigning it after is an error (P138: also Go's `total := 0; total += n`).
-- P124 a lambda or nested `def` changing an enclosing variable (`n += 1`) shares it; `nonlocal n` only makes a plain `n = 5` shared. P70c handlers and definitions created in a loop keep their iteration's variable.
-- watched-cells: watched variables use the run-time cell, except main-level variables no function writes.
-- P72 no memoization syntax; the compiler decides.
-- P73 / D2 `!`: `x!` forces (a block runs, an optional unwraps, a value is itself); `!` after a method mutates in place (`xs.sort!`). print-bang: a function that gives nothing never takes the in-place bang (`print friends!` prints the forced friends).
 - P69b a block arriving at run time is pure by default. P69c `warp compile` with run-time `!` warns and loads a shared compiler lazily.
-- data-stays-data: a bare word in data stays a symbol; only `!` and `${…}` evaluate; `created: now` stays a block until `!`.
-- runtime-dates (also: now-live): `now` reads the clock at run time at each use; tests pin `now <= now`, not `now == now`.
 - time-word (also: print-time, time-now, anchor-time): bare `time` is the type; instant, date, local time, zoned time, duration are its subtypes; `now.time` is the time of day, `now.date` the date; `now > 17h` / `now >= October` compare the matching part, `==` stays exact; `time > 18h` is an error with the fix `now > 18h`.
-- module-global-assign: a top-level `tempo = 90` sets the standard module's global.
-- global-plain-write: a variable declared `global x` at the top level is written by a plain `x = …` in any function; no `global x` inside the function needed (library code relies on it: walk.warp's `said = []`).
-- shared-captures (user, card block-parameters-captures): a variable a lambda assigns lives in a shared cell, so `n=0; f = () => n += 1; f(); f(); n` is 2 (P124); a `{…}` at a `block` parameter is a closure called `body()`; `times` is then the prelude's `infix times(n: int, body: block)`; inlining literal blocks is a later optimization.
-- handler-blocks-share: an event handler (`on frame {…}`) is a block, not a function: `x = 160; on frame { x -= 4 }` changes the main-level x; a name only the handler uses stays local to it; the same block rule as `n times {…}`.
-- handlers-wait-for-blocks: event handlers land only after block-parameters-captures, then their shape is discussed again (the elegant option: `on(event, body: block)` as a prelude function). Host values (system_value_kinds: battery, mouse_x, key_pressed…) do not belong in the emitter: they are declared in lib (card whole-table).
-- Mutating a main-level list in a function needs `global names`. P106 tasks share a variable only when declared `shared`. P44 `shared xs = int[n]` arrays with atomic `xs#i += v` (`atomic` synonym).
-- count-words-library: once/twice/thrice leave both compilers and become prelude words over a block parameter (`def twice(a:block){a();a()}`), defined through `times` so `twice "ab"` stays "abab" and `thrice [0]` three items.
-- range-end-once: every `for` range end is evaluated once. #22 `N times {…}` evaluates N once; `i++ while c` is a plain while; `a = 2 if c` guards the whole assignment.
 
 - #23 a loop's `it` shadows a function's `it`, with a warning. P174 `mk(k) := { it * k }`: `it` stays the parameter, with a warning. P239 in a lambda naming its parameter, `it` is the outer `it`.
-- kebab-or-minus: `a-b` is a name when declared or bound; otherwise, with a and b bound, it is subtraction with a got-it note, and `warp format` prints `a - b` (`j = 5; i = 2; j-i` → 3); both existing → the name wins, with #6's warning.
-- esoteric-phrases-commented: esoteric phrases in samples (`3 is at least 3`, `is at most`) are commented out with their canonical form beside them (`3 >= 3`), no rule words restored (card pure-reads).
-- operator-even-spacing (user, like Swift): a binary operator is spaced evenly, both sides or neither; `1 +1` reads as `1 -1` does (the list `[1, +1]` with its warning), never as addition. `1 -1` and `1 +1` both give two items with "warning: … is two items; fix: 1 - 1"; an unevenly spaced operator with no prefix form (`a *b`) keeps computing, with the same warning where cheap.
 - spaced-call-parentheses: `f (3)` is the call f(3) as `f 3` is; `f ()` calls f with no arguments as `f()` does (a one-parameter f gets ø), not a list `[f ø]`.
-- dot-space-property: `p. b` as `p.b` is allowed only while it costs at most 2–3 core lines; otherwise it is refused with the fix `p.b`.
-- default-parameter-def: `def f(n, i=2) = n + i` takes `i = 2` as a default parameter.
-- #6 data as scope, warning when kebab parts are also variables; P81 that warning offers three fixes.
-- stored-visits: `stored visits default 0`; `stored visits = 0` works with a note.
 - Ranges: `r: 1..n` is the range itself; `upto` excludes the end with a hint. range-in-brackets: a range inside [ ] is one item, never spread.
 
 ## Functions and calls
@@ -894,3 +866,7 @@ effect-annotations → wiki/effects.md, test/functions/test_effect_annotations.p
 P203 → wiki/type.md, test/welcoming/test_warning_mode.pairs.warp.
 error-type → wiki/optional.md, test/control/test_error_not_in_data.warp.
 position-index-words → wiki/class.md, test/types/test_class_positions.pairs.warp. D5 → notes/matching.md.
+library-constant-refused, lambda-assign-writes-through, let-reassign, let-parallel, P71, P124, P73, data-stays-data, runtime-dates, module-global-assign, global-plain-write, shared-captures, handler-blocks-share, Mutating, count-words-library, range-end-once, kebab-or-minus, operator-even-spacing, dot-space-property, default-parameter-def, stored-visits → wiki/variable.md, test/scope/test_variable_rules.pairs.warp.
+charged-values-rule → extensions/sugar/heads.warp. Data → wiki/charged.md. watched-cells → core (watched cells).
+P72, handlers-wait-for-blocks → historic (git). esoteric-phrases-commented → notes/test_triage.md.
+#6 → wiki/variable.md (kebab-or-minus).

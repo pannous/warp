@@ -27,6 +27,11 @@ text built a compiler that compiled and ran a program (before `times` left the c
 the compile now stops in lib/text.warp's indent, which the compiler uses implicitly by name (its field and local
 `indent`) and which needs `times`. scripts/compiler-inputs.sh --baked-files lists no lib/ file. Left: the reach by name
 still compiles dead prelude words, and lib/text.warp's, in from lib/ (card baked-lib-split note).
+Data on demand (cards webidl-on-demand, entities-on-demand, user 2026-11-10): lib/web.webidl and lib/entities.tsv are
+read through library_data (core/passes/library.warp, loud when missing) the first time a program reaches the page's js
+or writes an entity outside a text (`\:alpha`, or `\alpha` for its refusal; `"\:alpha"` reads it at the text escape).
+warp.wasm 2,707,575 → 2,488,970 bytes (−213 KB, the two tables), hello 0.16 → 0.13 s; test/ffi + test/parser fail
+the same 91 lines as main.
 
 ## Final state (main c25c72d181, 2026-11-06; card library-removal-core done)
 

@@ -1,4 +1,4 @@
-# The definitions of extensions/js_globals/web.webidl (card js-webidl-bindings) as extensions/js_globals.warp checks `use js` with:
+# The definitions of lib/web.webidl (card js-webidl-bindings) as extensions/js_globals.warp checks `use js` with:
 # each interface, mixin, namespace and dictionary with its partials, its members and the types they give
 # (a type WebIDL does not define, a text, a number, gives UNCHECKED)
 UNCHECKED = ""

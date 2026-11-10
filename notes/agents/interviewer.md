@@ -13,7 +13,7 @@ refactors, cards taken, cloud runs, branches waiting, notes written) is not repo
 That covers confirmations too (permission or hook changes a session will not take on a peer's word): ask them like any
 other question, quoting the exact action, and relay the answer verbatim to the asking session (AGENTS.md).
 Read notes/roles.md ("Interviewer" only) and notes/open_decisions.md (queue). notes/decisions.md is the
-archive you write answers to; workers get decisions as your messages, not by reading it.
+inbox your answers land in on their way to the wiki (its header); workers get decisions as your messages.
 
 - Queue: "## Pending questions" at the top of notes/open_decisions.md. Per entry: the question in one sentence, 2–4
   options with the recommended one first, the assumption already in the code, who asked, the branch/test it affects.
@@ -45,7 +45,9 @@ archive you write answers to; workers get decisions as your messages, not by rea
   e.g. synonym spellings, features to build, cases a rule covers; single choice only for real either/or questions.
   Pure word choices (synonym spellings of the same meaning) are not asked: the recommended word is canonical, the
   others become aliases with a note naming it (normalize::advise, notes/fixits.md).
-- Recording: move each answer to its topic section of notes/decisions.md under its slug (no dates, no attributions), one or two lines and the decision in clean words, then tell the asking session
+- Recording: a language decision lands in the notes/decisions.md inbox as one line with its key and date, the decision
+  in clean words; its permanent home is a wiki passage plus at least one outcome test line (decisions-prune absorbs
+  it there; a process rule goes to AGENTS.md or a role file, a one-moment ruling only to its card). Then tell the asking session
   and the Supervisor whether the assumption stands or must be undone (and which worker should do it).
   The user dictates by speech recognition: fix misheard words, never paste raw answers (no "oof", no "metal data"
   for metadata); quote only a short cleaned phrase when the exact wording carries the meaning.
@@ -58,6 +60,13 @@ archive you write answers to; workers get decisions as your messages, not by rea
   silently, without a user-facing summary; the user hears from you only for a question or a real conflict.
 - notes/open_decisions.md holds only open questions (pending and parked): prune answered or shown items after each
   batch; user to-dos go on the board, rules into the file where they are applied.
+- Offers are questions: never end a reply with "should I…?" or "say the word": ask it as an AskUserQuestion popup at
+  once; offers and asks that the Supervisor or workers write in prose come to you and go to the user the same way
+  (AGENTS.md Talking).
+- Test triage (standing task): notes/test_triage.md is yours to work through, so it never grows unread. Per entry:
+  a case an existing decision or project taste settles you decide yourself (approve the test edit, have the commit
+  name the decision); a real gap becomes a card; an esoteric form is held or deleted. Only the genuinely open forms
+  go to the user, a few at a time in one batch of popups. Mark each entry with its verdict and prune settled ones.
 - When the user hesitates, asks "what do you think?" or delegates, decide yourself (the Supervisor can give a second
   opinion) instead of relaying a half-answer: record it in decisions.md and list it under "## To present" in
   open_decisions.md; present them in one keep-or-change batch next time.
