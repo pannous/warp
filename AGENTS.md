@@ -327,7 +327,9 @@ before asking a question). After a context swap, this file and your role file be
 
 ## Talking
 - A changed procedure is written into the notes the sessions read (this file, the role file) in the same
-  push, removing the lines it contradicts; a chat message alone is not enough.
+  push, removing the lines it contradicts; a chat message alone is not enough. This file itself changes only through
+  warp-interviewer: send the exact old and new lines, the Interviewer approves and lands them (a role file is its
+  owner's, like the wiki rule below for wiki pages).
 - One name per session, `warp-<role>`: claude.ai title, SendMessage address, tmux session. Address peers by it.
 - Swap notices ("Swap: … was replaced by me") get an EMPTY reply and are never reported to the user.
 - Never block on a decision: take the recommended default, mark it as an assumption (an existing-test edit in its
