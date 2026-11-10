@@ -1358,10 +1358,11 @@ async function sendBugReport() {
 	if (!report.comment.trim()) return showBugStatus("write what went wrong first", true);
 	showBugStatus("sending…");
 	try {
-		const answer = await fetch(BUG_REPORT_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report) });
+		const answer = await serviceFetch(BUG_REPORT_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report) });
 		const { card, board, queued, error } = await answer.json();
 		if (answer.status === FORBIDDEN) {
 			store(BUG_TOKEN_KEY, null);
+			showStatus("owner-token-status", "rejected", "the bug-report server refused the token");
 			$("bug-token").hidden = false;
 		}
 		if (!answer.ok) return showBugStatus(`not sent: ${error ?? answer.status}`, true);
