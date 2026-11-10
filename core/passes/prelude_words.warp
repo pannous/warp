@@ -875,21 +875,25 @@ prelude_definitions(): list := {
 # `use x` takes one, decision implicit-use-lib-first)
 global implicitly_used = []
 with_implicit_uses(source: text, folder: text = "."): text := {
-	# (a module's compile has only module_source's stub: its own text is written_source's)
+	# (a module's compile has only module_source's stub: its own text is written_source's, scanned here as the
+	# extensions' implicit uses scan a program's)
 	written = written_source(source)
-	found = if module_written == "" then implicit_modules_of(source, folder) else []
-	used = used_modules(written) + found
-	implicitly_used = found + runtime_modules_reached(written, used).filter(name => name != module_written and name not in used)
-	source + implicitly_used.map(module => "\nuse " + module).join("")
+	written_uses = used_modules(written)
+	found = if module_written == "" then implicit_modules_of(source, folder) else runtime_modules_needed(written)
+	needed = found + runtime_modules_reached(written_uses + found)
+	runtime = hooks().runtime_modules.filter(name => name in needed and name != module_written and name not in written_uses)
+	implicitly_used = found.filter(name => not is_runtime_module(name)) + runtime
+	# (a runtime module is linked as runtime.wasm is, linked_libraries, never a `use` of the program; only a `warp build`
+	# that compiles modules in reads its source)
+	appended = implicitly_used.filter(name => not is_runtime_module(name) or not modules_linked)
+	source + appended.map(module => "\nuse " + module).join("")
 }
-# the runtime modules a text needs, or any module it uses at any depth: units' `^` reached by a program's `3 km²`, a
-# module's own `^`, link big_numbers
-runtime_modules_reached(source: text, uses: list): list := {
+# the runtime modules the modules used need, at any depth: units' `^` reached by a program's `3 km²` links big_numbers
+runtime_modules_reached(uses: list): list := {
 	modules = []
 	# (a runtime module used is needed already, its own text never read)
 	for used in uses.filter(name => not is_runtime_module(name)) { modules = modules_used_by(used, modules) }
-	needed = runtime_modules_needed(source) + modules.flat_map(module_runtime_modules)
-	hooks().runtime_modules.filter(name => name in needed)
+	modules.flat_map(module_runtime_modules)
 }
 # (each module's text read once a compile: the prelude's is long)
 global runtime_modules_by_module = {}
