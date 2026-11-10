@@ -103,6 +103,9 @@ operator ← := <-
 operator ⟵ := <-
 operator ⬅ := <-
 operator ⭠ := <-
+// x↑n, Knuth's up arrow, is the power (card easy-add); here, not in the prelude, because a power links big_numbers
+// (card runtime-bridge-slots): an operator of numbers only, another type declares its own `infix operator ↑(v: V, n: int)`
+infix operator ↑(x: number, n: number) := x ^ n
 operator ⬆ := ↑
 operator ⇧ := ↑
 operator ⭡ := ↑
@@ -334,3 +337,7 @@ rewrite euclidean_remainder($a, $b) => $a % $b
 rewrite euclidean_quotient($a, $b) => $a /! $b
 even(n: int) := is_even(n)
 odd(n: int) := is_odd(n)
+// x rounded to that many digits after the point (here, not in the prelude: a power links big_numbers)
+round_to(x, places) := round(x * 10 ^ places) / 10 ^ places
+// (a float's own, unboxed: a linked module's untyped words take nodes)
+round_to(x: float, places: int): float := round(x * 10 ^ places) / 10 ^ places

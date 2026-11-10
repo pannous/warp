@@ -162,10 +162,6 @@ sorted_in_order(xs: list, before: function): list := {
 	}
 	out
 }
-// x rounded to that many digits after the point
-round_to(x, places) := round(x * 10 ^ places) / 10 ^ places
-// (a float's own, unboxed: the prelude is linked, its untyped words take nodes)
-round_to(x: float, places: int): float := round(x * 10 ^ places) / 10 ^ places
 // The laws of the operators a fold combines with (card sum-plain-fold): each one is associative, so the compiler may
 // regroup, fuse and split any fold of it, whatever the word calling it is named, and the identity starts the fold
 operator_laws = {"+": {associative: yes, identity: 0}, "*": {associative: yes, identity: 1}, and: {associative: yes, identity: yes}, or: {associative: yes, identity: no}, max: {associative: yes}, min: {associative: yes}}
@@ -197,9 +193,8 @@ rewrite ($xs: [f16] = $v) => ($xs = $packed) where $packed = gpu_packed_as(f16, 
 rewrite ($xs: [bf16] = $v) => ($xs = $packed) where $packed = gpu_packed_as(bf16, $v)
 // the arithmetic mean, also spelled average
 mean(xs) := if count(xs) == 0 then raise "mean of an empty list" else sum(xs) / count(xs)
-// x↑n, Knuth's up arrow, is the power and x↓b the log of x to base b (card easy-add): operators of numbers only, so
-// another type declares its own `infix operator ↑(v: V, n: int) := …`
-infix operator ↑(x: number, n: number) := x ^ n
+// x↓b is the log of x to base b (card easy-add), x↑n the power in lib/math: operators of numbers only, so another
+// type declares its own `infix operator ↓(v: V, b: int) := …`
 infix operator ↓(x: number, b: number) := log(x, b)
 // the logarithm of x to the base: log(100, 10) is 2
 log(x: number, base: number): float := log(x) / log(base)
