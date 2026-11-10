@@ -1,2 +1,5 @@
 # text == compares NFC forms (decisions nfc-tables, nfc-slot): é precomposed equals e + combining acute
 «"é" == "é"»	true
+# a text byte_slice cut inside a character is no whole UTF-8: it compares by bytes, never traps
+«byte_slice("😍", 0, 3) == "é"»	false
+«byte_slice("😍", 1, 4) != "é"»	true
