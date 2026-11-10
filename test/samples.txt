@@ -1,4 +1,4 @@
-# 9b1499c1af 2026-11-10 08:00 257/265 97.0%
+# a4957a43b6 2026-11-10 16:31 263/265 99.2%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -7,6 +7,7 @@ ok   samples/advanced/circle.warp
 ok   samples/advanced/filled_circle.warp
 ok   samples/advanced/mandelbrot_canvas.warp
 ok   samples/advanced/neural_net.warp
+ok   samples/advanced/particles.warp
 ok   samples/advanced/raytracer.warp
 ok   samples/advanced/self_parser.warp
 ok   samples/advanced/snake.warp
@@ -88,6 +89,7 @@ ok   samples/golf/quine.warp
 ok   samples/golf/rot13.short.warp
 ok   samples/golf/rot13.warp
 ok   samples/golf/sierpiński-triangle.short.warp
+ok   samples/golf/sierpiński-triangle.warp
 ok   samples/gpu/aquarium.warp
 ok   samples/gpu/gpu_visualizer.warp
 ok   samples/gpu/julia.warp
@@ -107,7 +109,6 @@ ok   samples/graphics/gaussian_splats.warp
 ok   samples/graphics/meshlet_grid.warp
 ok   samples/graphics/million_trees.warp
 ok   samples/graphics/paint_function.warp
-ok   samples/graphics/paint_text_gpu.warp
 ok   samples/graphics/paint_text.warp
 ok   samples/graphics/shader_brush.warp
 ok   samples/graphics/shader_trails.warp
@@ -147,6 +148,7 @@ ok   samples/modules/javascript.warp
 ok   samples/modules/lib.warp
 ok   samples/modules/main.warp
 ok   samples/modules/modules.warp
+ok   samples/modules/packages.warp
 ok   samples/modules/rust_crates.warp
 ok   samples/modules/slug_paths.warp
 ok   samples/modules/square.warp
@@ -187,6 +189,7 @@ ok   samples/python/python_modules.warp
 ok   samples/signals/signal_fields.warp
 ok   samples/sound/arrangement.warp
 ok   samples/sound/filters.warp
+ok   samples/sound/gpu_visualizer_warp.warp
 ok   samples/sound/harmony.warp
 ok   samples/sound/hum_blocks.warp
 ok   samples/sound/midi.warp
@@ -201,11 +204,14 @@ ok   samples/sound/sound_patterns.warp
 ok   samples/sound/sound_pipes.warp
 ok   samples/sound/stereo_sound.warp
 ok   samples/sound/synth.warp
+ok   samples/sound/visualizer.warp
 ok   samples/sound/voices.warp
 ok   samples/storage/orm_transaction.warp
+ok   samples/storage/orm_units.warp
 ok   samples/storage/orm.warp
 ok   samples/storage/store.warp
 ok   samples/system/c_lines.warp
+ok   samples/system/crontab.warp
 ok   samples/system/unix_commands.warp
 ok   samples/tasks/async.warp
 ok   samples/tasks/parallel_let.warp
@@ -256,11 +262,5 @@ SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
-FAIL samples/advanced/particles.warp: samples/advanced/particles.warp:26:3 not an int
-FAIL samples/golf/sierpiński-triangle.warp: samples/golf/sierpiński-triangle.warp:33:116 not an int
+FAIL samples/graphics/paint_text_gpu.warp: samples/graphics/paint_text_gpu.warp:9:25 outside the core: the call text_coverage(…)
 TIME samples/lists/dot.warp: used its 30 s of CPU
-FAIL samples/modules/packages.warp: samples/modules/packages.warp:1:61 int of node
-FAIL samples/sound/gpu_visualizer_warp.warp: samples/sound/gpu_visualizer_warp.warp:133:1 samples/sound/tune.mp3: no such sound file
-FAIL samples/sound/visualizer.warp: shown is declared twice: a variable and a function share the name; give one another name
-FAIL samples/storage/orm_units.warp: samples/storage/orm_units.warp:1:1 unknown type kg
-FAIL samples/system/crontab.warp: samples/system/crontab.warp:44:23 outside the core: the unknown name pre-wrap

@@ -23,9 +23,12 @@ TIME_MARK = "⏲ TIME "
 TYPE_SHOWN = "class "
 NEVER_RAN = "·never ran"
 # a case slower than this is no part of `warp test` (decision no-slow-tests): said with its time, it belongs in
-# test/slow/<topic>/, run only when named
-SLOW_MILLISECONDS = 1000
+# test/slow/<topic>/, which a folder's walk passes by: run when named (`warp test test/slow`), with --slow, and in the
+# full suite (--each)
+SLOW_MILLISECONDS = 2000
 SLOW_MARK = "⏱ "
+SLOW_FOLDER = "slow"
+SLOW_FLAG = "--slow"
 use "../serializer.warp"
 
 class TestCase { file: text, line: int, code: text, expected: any }
@@ -154,14 +157,16 @@ common_divisor(a: int, b: int): int := if b == 0 then a else common_divisor(b, a
 # the test files: the folders' test files, sorted, at any depth, and the files named themselves
 test_files_of(words: list): list := {
 	named = words.filter(word => not word.starts_with("--"))
-	(if #named == 0 then [TEST_FOLDER] else named).flat_map(test_files_in)
+	slow = SLOW_FLAG in words or EACH_FLAG in words
+	(if #named == 0 then [TEST_FOLDER] else named).flat_map(path => test_files_in(path, slow))
 }
-# a path ending in .warp is a file (listing one is no error a try catches), any other a folder
-test_files_in(path: text): list := {
+# a path ending in .warp is a file (listing one is no error a try catches), any other a folder; a slow folder inside
+# it only with `slow`
+test_files_in(path: text, slow: bool): list := {
 	if path.ends_with(".warp") { return if is_test_file(path) then [path] else [] }
 	(try list_files(path) else []).sort().flat_map(name => {
 		inner = path + "/" + name
-		if is_test_file(name) then [inner] else if name.contains(".") then [] else test_files_in(inner)
+		if is_test_file(name) then [inner] else if name.contains(".") or (name == SLOW_FOLDER and not slow) then [] else test_files_in(inner, slow)
 	})
 }
 is_test_file(path: text): bool := {

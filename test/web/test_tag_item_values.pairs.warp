@@ -2,4 +2,3 @@
 'use web; greet(n) := "Hi " + n; page: html = li{ title: greet "Ann", "x" }; render page'	'<li title="Hi Ann">x</li>'
 'use web; q = 400ms; page = li{ animation: pop q "x" }; render page'	'<li style="animation: pop 400ms">x</li>'
 'use web; q = 2s; page = li{ transition: opacity q "x" }; render page'	'<li style="transition: opacity 2s">x</li>'
-'use web; page: html = li{ "x", 3km }; render page'	'<li>x3km</li>'

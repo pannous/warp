@@ -1,0 +1,2 @@
+# a parameter named like a rule's word (`text#$n`, `int#$n` fill a list) is the local: the rule does not fire on it
+'use sound; pattern_end("ab]c", 0, "]")'	2

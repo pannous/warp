@@ -781,7 +781,7 @@ function finish(run, report) {
 }
 
 // evaluate's `eventsFor`: a program left listening to its timers is reported once they ran that long, what they printed
-// in its report, as the native warp's event loop runs them under WARP_EVENTS_FOR (core/native/driver.warp events); a
+// in its report, as the native warp's event loop runs them with --events-for (core/native/driver.warp events); a
 // timer's failure or exit ends the wait sooner
 let listened; // {run, report} while its timers run
 function listenedFor(run, report) {
@@ -1353,10 +1353,11 @@ async function sendBugReport() {
 	if (!report.comment.trim()) return showBugStatus("write what went wrong first", true);
 	showBugStatus("sending…");
 	try {
-		const answer = await fetch(BUG_REPORT_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report) });
+		const answer = await serviceFetch(BUG_REPORT_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report) });
 		const { card, board, queued, error } = await answer.json();
 		if (answer.status === FORBIDDEN) {
 			store(BUG_TOKEN_KEY, null);
+			showStatus("owner-token-status", "rejected", "the bug-report server refused the token");
 			$("bug-token").hidden = false;
 		}
 		if (!answer.ok) return showBugStatus(`not sent: ${error ?? answer.status}`, true);

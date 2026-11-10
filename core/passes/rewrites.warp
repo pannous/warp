@@ -128,7 +128,15 @@ early_sugar_module_names = sugar_files(["functions", "declarations", "events", "
 # a rule: `where $hole = shape` its origin (ø both without one), `conditions` the other `where` conditions, `place`
 # the one Place it rewrites only, else Anywhere, `module` the standard module declaring it, else ""; `whole` for a
 # phrase pattern that matches only a whole phrase, not its runs; `alias` for a rule marked alias
-class Rule { pattern: Node; template: Node; hole: Node; shape: Node; conditions: list; place: Place; module: text; whole: bool; alias: bool; head: text }
+class Rule { pattern: Node; template: Node; hole: Node; shape: Node; conditions: list; place: Place; module: text; whole: bool; alias: bool; head: text; needs: list; gives: list; says: list }
+# a rule with what it reaches worked out once, never at each statement of each sugar pass (rules_reaching): the words
+# code must hold for it to fire (its pattern's words outside holes, and the operator of the key its pattern is: `$a ??
+# $b` fires only where code has a `??`), the tokens its result holds, which a rule may rewrite again, and its result's
+# words
+rule_made(pattern: Node, template: Node, hole: Node, shape: Node, conditions: list, place: Place, module: text, whole: bool, alias: bool, head: text): Rule := {
+	needs = required_words(pattern) + (if pattern is key and head != "" then [head] else [])
+	Rule(pattern, template, hole, shape, conditions, place, module, whole, alias, head, needs, tokens_within(template), words_within(template))
+}
 
 # the early sugar modules' rules once read (early_module_rules)
 global early_rules_read = no
@@ -152,6 +160,8 @@ global rule_case_holders = {}
 # enum → its case names, of the program being rewritten (`where $c is case of $e`, `cases of $e`), read before
 # plain_enums.warp lowers the declarations: by rewritten_program, and by the pass enums_declared for the sugar rules
 global rule_enums = {}
+# a plain alias → the enum it names
+global rule_enum_aliases = {}
 # the names that hold only instances of the program's classes (`where $s is instance`)
 global rule_instances = {}
 # the program's classes, whose construction `Counter(3)` is an instance (`where $o is instance`)
@@ -251,7 +261,7 @@ own_rules_applied(program: Node, source: text): Node := {
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
 	rule_signatures = definitions_signatures(program)
-	rule_enums = declarations_found(program, declared_enum, {})
+	rule_enums = enums_of(program)
 	rule_case_holders = case_holders_of(program)
 	origins = rules.map(rule => if rule.shape == ø then {} else names_assigned_shape(program, rule.shape))
 	fired_modules = []
@@ -320,10 +330,21 @@ is_unbound(rule: Rule, bindings: list): bool := not literal_words(rule.pattern).
 # program's own `push` keeps its own), before the definitions it reaches from the prelude and the modules join it
 sugar_rules(bindings: list, modules: list): list := rules_unbound_by(modules.flat_map(module => module_rules_of(std_module_path(module), "")), bindings)
 
+# the enums the program declares, and its plain aliases of them, `type Paint = Color` (`c is Paint`)
+enums_of(program: Node): map := {
+	rule_enum_aliases = {}
+	enums = declarations_found(program, declared_enum, {})
+	for statement in statements_in(program).filter(is_type_alias) {
+		named = value_of(statement)
+		alias = declared_type_name(value_of(key_of(statement))#2)
+		if named is symbol and enums.has(name_of(named)) and alias != ø { rule_enum_aliases[alias] = name_of(named) }
+	}
+	enums
+}
 # the program as it is, the enums it declares kept for the sugar rules: a pass right before plain_enums.warp lowers
 # their declarations, after node_cases.warp declared node.warp's Op, Bracket and Separator for a program naming them
 enums_declared(program: Node): Node := {
-	rule_enums = declarations_found(program, declared_enum, {})
+	rule_enums = enums_of(program)
 	program
 }
 
@@ -351,9 +372,8 @@ sugar_walked(program: Node, rules: list): Node := {
 	# a program of one statement: that statement, so the rules `where statement` apply to it too
 	if not is_statement_sequence(program) { return sugar_at_place(placed_map_scoped(program, n => sugared_node(n, rules), maps), Place.Statement, rules) }
 	# each statement walked with the rules that can fire in it (rules_reaching), the program's runs with them all
-	needs = rules.map(needed_tokens)
-	results = rules.map(rule => tokens_within(rule.template))
-	walked = children(program, statement => sugared_statement(statement, rules_reaching(rules, needs, results, statement), maps))
+	index = rule_index(rules)
+	walked = children(program, statement => sugared_statement(statement, rules_reaching(index, statement), maps))
 	rule_maps = maps
 	sugared_node(walked, rules)
 }
@@ -365,37 +385,52 @@ sugared_statement(statement: Node, rules: list, maps: map): Node := {
 }
 
 # the words of the templates of the rules that can fire in the program
-reaching_template_words(program: Node, rules: list): list := rules_reaching(rules, rules.map(needed_tokens), rules.map(rule => tokens_within(rule.template)), program).flat_map(rule => words_within(rule.template))
+reaching_template_words(program: Node, rules: list): list := rules_reaching(rule_index(rules), program).flat_map(rule => rule.says)
 
 # the rules that can fire in the statement (card speed-module-cache): those whose pattern's words it mentions, or the
 # result of such a rule does (a result is rewritten again); a rule missing one matches nowhere in it, so walking it
-# with these alone gives what all the rules give, without trying the others at each node
-rules_reaching(rules: list, needs: list, results: list, statement: Node): list := {
+# with these alone gives what all the rules give, without trying the others at each node. Only the rules needing a
+# word mentioned are tried (rule_index), each again when another of its words comes in
+rules_reaching(index: RuleIndex, statement: Node): list := {
+	rules = index.rules
 	mentioned = word_set(tokens_within(statement))
 	# (a yes/no per rule: `index in picked` of a list compared each index with every picked one, node by node)
-	picked = range_list(#rules).map(index => no)
-	grew = yes
-	while grew {
-		grew = no
-		for index in 0 ..< #rules {
-			if not picked[index] and needs[index].all(word => mentioned.has(word)) {
-				picked[index] = yes
-				for word in results[index] { mentioned[word] = yes }
-				grew = yes
+	picked = range_list(#rules).map(each => no)
+	pending = index.free + mentioned.keys.flat_map(word => index.by_word.get(word) ?? [])
+	at = 0
+	while at < #pending {
+		tried = pending[at]
+		at += 1
+		if not picked[tried] and rules[tried].needs.all(word => mentioned.has(word)) {
+			picked[tried] = yes
+			for word in rules[tried].gives.filter(word => not mentioned.has(word)) {
+				mentioned[word] = yes
+				pending += index.by_word.get(word) ?? []
 			}
 		}
 	}
-	range_list(#rules).filter(index => picked[index]).map(index => rules[index])
+	range_list(#rules).filter(each => picked[each]).map(each => rules[each])
+}
+# rules by each word they need, made once for a walk of a program (rules_reaching), those needing none apart
+class RuleIndex { rules: list; free: list; by_word: map }
+rule_index(rules: list): RuleIndex := {
+	by_word = {}
+	free = []
+	for at in 0 ..< #rules {
+		needs = rules[at].needs
+		if #needs == 0 { free += [at] }
+		for word in needs { by_word[word] = (by_word.get(word) ?? []) + [at] }
+	}
+	RuleIndex(rules, free, by_word)
 }
 
-# what code must hold for the rule to fire in it (tokens_within): its pattern's words outside holes, and the operator
-# of the key its pattern is (`$a ?? $b` fires only where code has a `??`)
-needed_tokens(rule: Rule): list := required_words(rule.pattern) + (if rule.pattern is key and rule.head != "" then [rule.head] else [])
 # a hole of any form: `$x`, `$body: block`, `$xs...` or an affixed one; its words (a typed hole's kind) are no words of
 # the code it matches
 is_hole(pattern: Node): bool := rule_hole(pattern) != ø or typed_hole(pattern) != ø or rest_hole_name(pattern) != ø or affixed_hole(pattern) != ø
 # the words code must hold for the pattern to match it (rule_matches): its words outside holes
 required_words(pattern: Node): list := {
+	affix = affixed_hole(pattern)
+	if affix != ø { return [affix_token(affix#2, affix#3)] }
 	if is_hole(pattern) { return [] }
 	if pattern is symbol { return [name_of(pattern)] }
 	if pattern is key { return required_words(key_of(pattern)) + required_words(value_of(pattern)) }
@@ -448,7 +483,10 @@ code_heads(n: Node, written: any): map := {
 own_heads_of(code: Node, heads: map) := {
 	if code is key { heads[key_head(code)] = yes } else if is_group(code) {
 		heads[group_head(code, "")] = yes
-		if #code > 0 and code#1 is symbol { heads[group_head(code, name_of(code#1))] = yes }
+		if #code > 0 and code#1 is symbol {
+			heads[group_head(code, name_of(code#1))] = yes
+			heads[group_head(code, unaliased(name_of(code#1)))] = yes
+		}
 	} else { heads[atom_head] = yes }
 }
 fits_head(rule: Rule, heads: map): bool := rule.head == "" or heads.has(rule.head)
@@ -778,7 +816,7 @@ operator_rules(overloads: list, module: text): list := {
 			unfitting = [[]]
 			for arm in arms { unfitting = unfitting.flat_map(guards => arm_misfits(arm, overload).map(misfit => guards + misfit)) }
 			for alternative in operand_alternatives(overload) {
-				for guards in unfitting { rules += [Rule(overload.pattern, overload.template, ø, ø, alternative + guards, Place.Anywhere, module, no, no, pattern_head(overload.pattern))] }
+				for guards in unfitting { rules += [rule_made(overload.pattern, overload.template, ø, ø, alternative + guards, Place.Anywhere, module, no, no, pattern_head(overload.pattern))] }
 			}
 		}
 	}
@@ -839,7 +877,7 @@ unpacked_rule(n: Node, module: text): Rule := {
 		hole = ø
 		shape = ø
 	}
-	Rule(fields#1, fields#2, hole, shape, conditions, PLACE_WORDS.get(name_of(fields#6)) ?? Place.Anywhere, module, name_of(fields#7) == "yes", name_of(fields#8) == "yes", name_of(fields#9))
+	rule_made(fields#1, fields#2, hole, shape, conditions, PLACE_WORDS.get(name_of(fields#6)) ?? Place.Anywhere, module, name_of(fields#7) == "yes", name_of(fields#8) == "yes", name_of(fields#9))
 }
 
 # the rule's code with each hole written right before `(`, `$t($a...)`, the call it is, as the code's `P(1)` is: the
@@ -933,7 +971,7 @@ rule_of(statement: Node, module: text, source: text): Rule? := {
 	lines = if source.contains(rule_hole_mark) then lines_of(source) else []
 	pattern = with_called_holes(pattern, lines)
 	template = with_called_holes(template, lines)
-	if where_at == #after { return Rule(pattern, template, ø, ø, [], Place.Anywhere, module, whole, no, pattern_head(pattern)) }
+	if where_at == #after { return rule_made(pattern, template, ø, ø, [], Place.Anywhere, module, whole, no, pattern_head(pattern)) }
 	conditions = []
 	for run in split_at_word(after[where_at + 1 ..], and_word) { conditions += conjuncts(continued_key(run)) }
 	aliased = conditions.any(condition => condition == symbol(alias_mark))
@@ -947,8 +985,8 @@ rule_of(statement: Node, module: text, source: text): Rule? := {
 	place = if #places == 0 then Place.Anywhere else PLACE_WORDS[name_of(places#1)]
 	origins = conditions.filter(condition => is_key(condition, Op.Assign) and not is_computed_binding(condition))
 	if #origins > 1 { return ø }
-	if #origins == 0 { return Rule(pattern, template, ø, ø, conditions, place, module, whole, aliased, pattern_head(pattern)) }
-	Rule(pattern, template, key_of(origins#1), value_of(origins#1), conditions.filter(condition => condition != origins#1), place, module, whole, aliased, pattern_head(pattern))
+	if #origins == 0 { return rule_made(pattern, template, ø, ø, conditions, place, module, whole, aliased, pattern_head(pattern)) }
+	rule_made(pattern, template, key_of(origins#1), value_of(origins#1), conditions.filter(condition => condition != origins#1), place, module, whole, aliased, pattern_head(pattern))
 }
 
 # a rule source's lines, split once for all its rules (rule_of and glued ask at each rule)
@@ -1097,6 +1135,8 @@ is_takes(condition: Node): bool := is_group(condition) and bracket_of(condition)
 
 # whether the code names a function whose first parameter is typed as wanted: `value` any type but yes/no
 first_parameter_fits(code: Node, wanted: text): bool := {
+	given = value_signature(code)
+	if given != ø { return wanted == number_word and takes_numbers(given.parameters) }
 	if not (code is symbol) or locally_bound(code) { return no }
 	word = name_of(code)
 	if wanted == one_word { return not rule_scope.has(word) and takes_one_typed_value(unaliased(word)) }
@@ -1149,8 +1189,22 @@ definitions_signatures_in(nodes: list): map := {
 			word = name_of(call#1)
 			signatures[word] = (if signatures.has(word) then signatures[word] else []) + [computing_signature(signature_of(items_of(call)), value_of(n))]
 		}
+		# `g = x => x * 2`: g's signature its function's
+		given = if is_key(n, Op.Assign) and key_of(n) is symbol then value_signature(value_of(n)) else ø
+		if given != ø { signatures[name_of(key_of(n))] = (signatures.get(name_of(key_of(n))) ?? []) + [given] }
 	}
 	signatures
+}
+# the signature of a function value, `x => x * 2` or `{it * 2}`, read as a named function's (computing_signature), so
+# `(x => x * 2)([1 2 3])` broadcasts as `f([1 2 3])` does (card traps-cast); ø for any other code
+value_signature(code: Node): Signature? := {
+	if is_lambda(code) {
+		arrow = if is_round(code) then code#1 else code
+		left = key_of(arrow)
+		return computing_signature(signature_of([arrow] + (if is_round(left) then items_of(left) else [left])), value_of(arrow))
+	}
+	if is_curly_group(code) and mentions(code, implicit_parameter) { return computing_signature(signature_of([code, symbol(implicit_parameter)]), code) }
+	ø
 }
 # `def square := it * it`: a lone untyped parameter that the body computes with takes a number, so `square numbers`
 # squares each item as `square all numbers` does (decision M3c); not by `+`, which also joins lists and texts, nor
@@ -1222,7 +1276,8 @@ case_holds(code: Node, hole: text?, bound: map): bool := {
 
 # the enum a name or a text names (`Coin`, `"Coin"` as type_tests.warp's is_type gets it), else ""
 named_enum(code: Node): text := {
-	name = if code is symbol then name_of(code) else if code is text then code else ""
+	written = if code is symbol then name_of(code) else if code is text then code else ""
+	name = rule_enum_aliases.get(written) ?? written
 	if rule_enums.has(name) then name else ""
 }
 
@@ -2151,8 +2206,11 @@ rule_matches(pattern: Node, code: Node, bound: map): bool := {
 	if spread != ø { return rule_matches(pattern, spread, bound) }
 	if is_group(pattern) { return is_group(code) and bracket_of(code) == bracket_of(pattern) and tuple_fits(pattern, code) and phrase_fits(pattern, code) and items_match(items_of(pattern), items_of(code), bound) and one_statement_kept(pattern, code, bound) }
 	if code is key or is_group(code) { return no }
-	pattern == code
+	pattern == code or spells_word(code, pattern)
 }
+# a word of the code another spelling of the pattern's, the program binding it nowhere: `xs.forEach {…}` matches
+# `$xs.each $body` as `xs.each {…}` does (card prelude-alias-line)
+spells_word(code: Node, pattern: Node): bool := pattern is symbol and code is symbol and unaliased(name_of(code)) == name_of(pattern) and not program_word(name_of(code))
 
 # a definition the parser gave its spaced words as a call head (decision spaced-definition-head: `unit hand := 4inch`
 # is unit(hand) := 4inch), as written for a pattern spelling it spaced, `unit $name := $value` (the phrase unit,
@@ -2204,6 +2262,11 @@ is_one_statement(binding: Node): bool := is_curly_group(binding) and separator_o
 
 # `$op=`, `.$op`: a hole of the operator a compound assignment or an element-wise form is written with (decisions
 # op-assign-general, dot-operators-now) as [hole, before, after]: `x ^= 3` binds ^, `xs .< 2` binds <
+# what code holding a symbol of the affix mentions (tokens_within), what a rule with an affixed hole needs
+# (required_words): `…=`, `.…`, so `$a $op= $b` reaches only code written with an `…=` operator
+AFFIX_TOKEN_MARK = "…"
+affix_token(before: text, after: text): text := before + AFFIX_TOKEN_MARK + after
+affix_tokens(name: text): list := (if #name > 1 and name.ends_with("=") then [affix_token("", "=")] else []) + (if #name > 1 and name.starts_with(".") then [affix_token(".", "")] else [])
 affixed_hole(n: Node): list? := {
 	if not (n is symbol) { return ø }
 	name = name_of(n)

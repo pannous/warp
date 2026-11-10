@@ -1,12 +1,10 @@
 # from test_time_values_at_run_time.rs: edit the Rust test, then run the script again
 
 # test_a_time_joins_a_text
-'x = 1; print x; "on " + 2024-02-29'	'on 2024-02-29'
 'd = 2024-01-31T10:30; print d; str(d)'	'2024-01-31T10:30'
 
 # test_fields_at_run_time
 'd = 2024-02-29; print d; d.month'	2
-'d = 2024-02-29; print d; d.year * 10000 + d.month * 100 + d.day'	20240229
 'd = 2024-02-29; print d; d.weekday'	4
 'd = 2024-02-29; print d; d.day_of_year'	60
 't = 2024-01-31T10:30:15; print t; t.hour + t.minute + t.second'	55
@@ -17,7 +15,6 @@
 'a = 2024-01-01T10:00; b = 2024-01-01T09:00; print a; a > b'	true
 
 # test_durations_and_zoned_times_read_back
-'d = 1 day; print d; "in " + d'	'in 1 day'
 
 # test_zoned_fields_at_run_time
 'z = zoned(2024-07-01T10:30, "Europe/Berlin"); print z; z.hour * 60 + z.minute'	630

@@ -222,7 +222,7 @@ def member_read(body: Body, receiver: Node, name: text): TypedCode {
 def takes_receiver(body: Body, name: text, x: Node): bool { method_function(body, name, [x]) != ø or takes_library_word(name, x) or is_own_word(name) }
 def takes_library_word(name: text, x: Node): bool {
 	word = library_words.get(unaliased(name)) ?? ""
-	word in module.runtime and takes_arguments(module.runtime[word], [x])
+	has_runtime_word(word) and takes_arguments(runtime_word(word), [x])
 }
 # the call w(x) of what takes_receiver found
 def called_on(body: Body, name: text, x: Node): TypedCode {
@@ -320,7 +320,7 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # program defines itself, never the module's; linked_words: each linked module word by name, its kinds and result,
 # which the program declares (prelude_words.warp declared_only) and the analyzer takes as they are
 # Every compile starts with a fresh Module (fresh_module): nothing of one compile reaches the next
-class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; first_text_segment: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; case_spellings: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: map = {}; class_words: map = {}; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; main_globals: map = {}; early_globals: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; relocating: bool = no; relocations: list = []; own_from: list = []; left_out: map = {}; runtime_types: int = 0; runtime_image: any = ø; runtime_calls: any = ø; runtime_sites: any = ø; relocates_program: bool = no; shakes_runtime: bool = no; shaking: any = ø; linked_images: list = []; linked_own_names: list = []; linked_words: map = {}; marks: map = {}; global_marks: map = {}; int_globals: map = {}; warned: map = {} }
+class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; runtime_bound: bool = no; texts: map = {}; first_text_segment: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; case_spellings: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: map = {}; class_words: map = {}; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; main_globals: map = {}; early_globals: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; relocating: bool = no; relocations: list = []; own_from: list = []; left_out: map = {}; runtime_types: int = 0; runtime_image: any = ø; runtime_calls: any = ø; runtime_sites: any = ø; relocates_program: bool = no; shakes_runtime: bool = no; shaking: any = ø; linked_images: list = []; linked_own_names: list = []; linked_words: map = {}; marks: map = {}; global_marks: map = {}; int_globals: map = {}; warned: map = {} }
 
 module = Module({}, [])
 # a new compile's module, emitting the same file
@@ -714,9 +714,21 @@ def space_marked(mark: int): int := (-1 - mark) ÷ #relocated.keys
 # the imports of these host words, each once, behind WASI's fd_write for a module that prints
 def imported_words(names: list, prints: bool): list {
 	imports = if prints then [fd_write_import] else []
-	for name in names { if host_import(name) not in imports { imports += [host_import(name)] } }
+	# (each told apart by its written form in a map: a list's `in` compares every import before it, node by node)
+	seen = {}
+	for entry in imports { seen[import_written(entry)] = yes }
+	for name in names {
+		entry = host_import(name)
+		written = import_written(entry)
+		if not seen.has(written) {
+			seen[written] = yes
+			imports += [entry]
+		}
+	}
 	imports
 }
+# an import [module, name, type bytes] as one text, the same of equal imports
+def import_written(entry: list): text := entry#1 + " " + entry#2 + " " + entry#3.map(part => "" + part).join(",")
 # the fixed GC types in gc_names order at indices 0…G-1, each its own group, as runtime.wasm declares them
 def canonical_type_entries() { for entry in gc_names { gc_type(entry#1) } }
 def gc_type(name: text): int {
@@ -777,7 +789,7 @@ def boxed(value: TypedCode): list {
 	if kind == ValueKind.Bool { return node(Marked.Bool, code + [op.i64_extend_i32_u] + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)])) }
 	if kind != ValueKind.Int and kind != pending { refuse("a " + kind_spelling(kind) + " as a value") }
 	# (a small number's node is shared, runtime nodes.warp int_node)
-	if module.runtime.has("int_node") { return runtime_call("int_node", [TypedCode(ValueKind.Int, code)]).code }
+	if has_runtime_word("int_node") { return runtime_call("int_node", [TypedCode(ValueKind.Int, code)]).code }
 	fresh_int_code(code)
 }
 # a new Int $Node of the int the code gives
@@ -1170,7 +1182,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 		return positional_instance(body, name_of(n#1), items_of(n)[1..])
 	}
 	std = std_word(n)
-	if std != ø { return call(body, module.runtime[std], listed_items(n#4)) }
+	if std != ø { return call(body, runtime_word(std), listed_items(n#4)) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.host and host_takes(name_of(n#1), #n - 1) {
 		# `exit(1)` ends the run: never a value, so `try 42 catch e { exit(1) }` and `if x > 0 { x } else { exit(1) }`
 		# take the other branch's kind (card pure-exit-miscompile)
@@ -1186,8 +1198,8 @@ def group_expression(body: Body, n: Node): TypedCode {
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in time_words {
 		return time_call(body, name_of(n#1), items_of(n)[1..])
 	}
-	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.runtime and body.intrinsics {
-		return call(body, module.runtime[name_of(n#1)], items_of(n)[1..])
+	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and has_runtime_word(name_of(n#1)) and body.intrinsics {
+		return call(body, runtime_word(name_of(n#1)), items_of(n)[1..])
 	}
 	if bracket_of(n) == "(" and #n == 3 and n#1 == symbol("is_type") and n#3 is text { return type_test_code(body, n#2, n#3) }
 	if bracket_of(n) == "(" and #n == 3 and n#1 == symbol(HiddenWord.InstanceOf as text) and n#3 is text { return class_test_code(body, expression_code(body, n#2), n#3, "instance_among") }
@@ -1237,12 +1249,12 @@ def group_expression(body: Body, n: Node): TypedCode {
 			if values.any(value => value.kind == ValueKind.Node or value.kind == pending) { return runtime_call("node_floor_quotient", values.map(value => TypedCode(ValueKind.Node, boxed(value)))) }
 			if values.any(value => value.kind != ValueKind.Int) { return floored(operation_code(body, "/", values#1, values#2)) }
 		}
-		return call(body, module.runtime[word], items_of(n)[1..])
+		return call(body, runtime_word(word), items_of(n)[1..])
 	}
 	# `print a, b` is print(a, b): its values shown, a space between
 	if is_call_or_line(n) and #n >= 2 and n#1 == symbol("print") { return printed(if #n == 2 then printed_value(body, n#2) else texts_joined(body, items_of(n)[1..], " ")) }
-	if is_call_or_line(n) and #n == 2 and n#1 is symbol and name_of(n#1) in warning_words { return call(body, module.runtime["warned"], [n#2]) }
-	if is_call_or_line(n) and #n == 2 and n#1 == symbol(hint_word) and hint_word not in module.functions and hint_word not in body.names { return call(body, module.runtime["hinted"], [n#2]) }
+	if is_call_or_line(n) and #n == 2 and n#1 is symbol and name_of(n#1) in warning_words { return call(body, runtime_word("warned"), [n#2]) }
+	if is_call_or_line(n) and #n == 2 and n#1 == symbol(hint_word) and hint_word not in module.functions and hint_word not in body.names { return call(body, runtime_word("hinted"), [n#2]) }
 	# `count = 0; count(users)`: "`count` is a variable here"
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in length_words and name_of(n#1) in body.names { return refuse("the variable " + name_of(n#1) + " applied to a value") }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and is_own_word(name_of(n#1)) { return own_word_code(body, name_of(n#1), n#2) }
@@ -1542,7 +1554,7 @@ def reached_words(program: Node): any {
 			reached[name] = yes
 			more = {}
 			if name in library_words { more[library_words[name]] = yes }
-			if name in module.runtime { collect_referred_outside(module.runtime[name], more) }
+			if has_runtime_word(name) { collect_referred_outside(runtime_word(name), more) }
 			pending += more.keys
 		}
 	}
@@ -1596,7 +1608,7 @@ def std_word(n: Node): any {
 	if bracket_of(n) != "(" or #n != 4 { return ø }
 	if n#1 != symbol("std_io") or not (n#2 is text) or not (n#3 is text) or (bracket_of(n#4) != "[" and not is_empty_list(n#4)) { return ø }
 	name = "std_" + n#2 + "_" + n#3
-	if name in module.runtime then name else ø
+	if has_runtime_word(name) then name else ø
 }
 # the items of a written list, a std word's arguments: `[]` is held behind the opaque word (is_empty_list)
 listed_items(n: Node): list := if is_empty_list(n) then [] else items_of(n)
@@ -1622,6 +1634,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.order = []
 	module.placed = 0
 	module.runtime = {}
+	module.runtime_bound = no
 	module.globals = {}
 	module.global_order = []
 	# (a value's `f(x) or b` too, logical reading f(x) under a try)

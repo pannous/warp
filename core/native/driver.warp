@@ -123,6 +123,7 @@ warp_config_gc_heap_initial_size_set(config: handle, bytes: i64) from "warp_wasm
 wasmtime_config_consume_fuel_set(config: handle, enabled: bool) from "warp_wasmtime"
 wasmtime_config_parallel_compilation_set(config: handle, enabled: bool) from "warp_wasmtime"
 wasmtime_config_profiler_set(config: handle, strategy: i32) from "warp_wasmtime"
+wasmtime_config_macos_use_mach_ports_set(config: handle, enabled: bool) from "warp_wasmtime"
 wasmtime_context_set_fuel(context: handle, fuel: i64): handle from "warp_wasmtime"
 wasmtime_trap_code(trap: handle, code: pointer): bool from "warp_wasmtime"
 wasmtime_config_cache_config_load(config: handle, path: handle): handle from "warp_wasmtime"
@@ -145,6 +146,8 @@ wasi_config_set_argv(config: handle, count: i64, arguments: pointer): bool from 
 # what a crash says the process was running (lib/native/wasi.c): a module's arguments while it runs
 crash_context_running(arguments: pointer, count: i32): handle from "c"
 crash_context_restored(outer: handle): nothing from "c"
+# the command line the executable reads from now on (lib/native/wasi.c): a forked child's own
+arguments_replaced(arguments: pointer, count: i32): nothing from "c"
 wasi_config_inherit_stdin(config: handle) from "warp_wasmtime"
 wasi_config_inherit_env(config: handle) from "warp_wasmtime"
 wasi_config_inherit_stdout(config: handle) from "warp_wasmtime"
@@ -624,6 +627,13 @@ out_of_fuel(trap: pointer, fuel: i64): nothing := {
 # --profile writes each compiled function's address range to /tmp/perf-<pid>.map, which
 # scripts/profile.sh maps `sample`'s addresses through (notes/compile_speed.md)
 warp_config(fuel: bool, heap_bytes: i64): handle := {
+	config = uncached_config(fuel, heap_bytes)
+	wasmtime_config_cache_config_load(config, 0)
+	config
+}
+# so without wasmtime's cache, whose worker thread a forked child lacks (its first compile crashed waking it): the
+# resident engine's (resident_loaded)
+uncached_config(fuel: bool, heap_bytes: i64): handle := {
 	config = wasm_config_new()
 	wasmtime_config_consume_fuel_set(config, fuel)
 	wasmtime_config_parallel_compilation_set(config, not has_option("one-thread"))
@@ -631,7 +641,9 @@ warp_config(fuel: bool, heap_bytes: i64): handle := {
 	wasmtime_config_wasm_gc_set(config, yes)
 	wasmtime_config_wasm_function_references_set(config, yes)
 	wasmtime_config_wasm_exceptions_set(config, yes)
-	wasmtime_config_cache_config_load(config, 0)
+	# traps caught by signal handlers, which a forked child inherits (a `warp test` case, resident_loaded), never by
+	# mach ports, whose thread fork leaves behind; one choice for every engine of the process (wasmtime asserts it)
+	wasmtime_config_macos_use_mach_ports_set(config, no)
 	if has_option("profile") { wasmtime_config_profiler_set(config, PROFILING_PERFMAP) }
 	config
 }
@@ -829,7 +841,7 @@ run(module: text, given: Arguments, machine_code: text, heap_bytes: i64): nothin
 run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, output: text): text := {
 	outer = crash_context_running(given.pointers, given.count)
 	fuel = fuel_of(module, machine_code)
-	engine = wasm_engine_new_with_config(warp_config(fuel > 0, heap_bytes))
+	engine = run_engine(fuel > 0, heap_bytes)
 	store = wasmtime_store_new(engine, 0, 0)
 	context = wasmtime_store_context(store)
 	if fuel > 0 { wasmtime_context_set_fuel(context, fuel) }
@@ -884,8 +896,10 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	# behind the last (it peaked at 4.8 GB with all of them kept)
 	wasmtime_store_delete(store)
 	wasmtime_linker_delete(linker)
-	wasmtime_module_delete(compiled)
-	wasm_engine_delete(engine)
+	if not is_resident(engine) {
+		wasmtime_module_delete(compiled)
+		wasm_engine_delete(engine)
+	}
 	failure
 }
 # a run's linker, engine, linked-instances cell, store context and GC heap size, and whether it linked unicode and the native host
@@ -1122,6 +1136,10 @@ written_run(output: text, name: text, first: int): nothing := {
 FNV_OFFSET = -3750763034362895579
 FNV_PRIME = 1099511628211
 compiled_module(engine: handle, module: text, machine_code: text, trap: pointer): handle := {
+	if is_resident(engine) and machine_code.length > 0 { return resident_module(engine, module, machine_code, trap) }
+	loaded_module(engine, module, machine_code, trap)
+}
+loaded_module(engine: handle, module: text, machine_code: text, trap: pointer): handle := {
 	compiled = allocate(8)
 	key = joined(machine_code, ".key")
 	fingerprint = text_of(fingerprint_of(module))
@@ -1136,6 +1154,55 @@ compiled_module(engine: handle, module: text, machine_code: text, trap: pointer)
 	if machine_code.length > 0 { kept_machine_code(long_at(compiled).value, machine_code, key, fingerprint, trap) }
 	long_at(compiled).value
 }
+## the resident engine (card resident-wasm-instance)
+# One engine and the machine code of warp.wasm, runtime.wasm and the prebuilt modules, loaded once and shared by every
+# run of the process that fits them (no fuel, the compiler's heap: a compile and its program alike): `warp test` loads
+# them before its cases fork, so a case starts no process, engine or machine code of its own (0.10 s a case before).
+# The block: the engine, the count of modules, then each module's machine code file (a cell) and handle
+RESIDENT_SLOT = 6
+RESIDENT_MAX = 256
+RESIDENT_ENTRY_BYTES = 24
+resident_block(): pointer := kept_value(RESIDENT_SLOT) as i32
+is_resident(engine: handle): bool := resident_block() != 0 and long_at(resident_block()).value == engine
+# the engine a run takes: the resident one where its fuel and heap fit, else its own
+run_engine(fuel: bool, heap_bytes: i64): handle := {
+	if resident_block() != 0 and not fuel and heap_bytes == COMPILER_GC_HEAP_BYTES { return long_at(resident_block()).value }
+	wasm_engine_new_with_config(warp_config(fuel, heap_bytes))
+}
+# the resident engine made, with the machine code of the compiler and of every module of the library folder a program
+# may link; what runs later loads anything else itself, never adding to the block (a host word's allocations end with it)
+resident_loaded(compiler: text): nothing := {
+	block = allocate((16 + RESIDENT_MAX * RESIDENT_ENTRY_BYTES) as i32)
+	engine = wasm_engine_new_with_config(uncached_config(no, COMPILER_GC_HEAP_BYTES))
+	long_at(block).value = engine
+	long_at(block + 8).value = 0
+	trap = allocate(8)
+	library = library_folder()
+	paths = joined(joined(joined(joined(compiler, "\n"), library), "/runtime.wasm\n"), command_output(joined(joined(joined(joined("ls '", library), "/modules' | grep -E '^[^.]+[.]wasm$' | sed 's|^|"), library), "/modules/|'")))
+	for i in 0..field_count(paths, NEWLINE) {
+		path = field(paths, i, NEWLINE)
+		count = long_at(block + 8).value as i32
+		if path.length > 0 and count < RESIDENT_MAX {
+			entry = block + 16 + count * RESIDENT_ENTRY_BYTES
+			machine_code = machine_code_file(path, COMPILER_GC_HEAP_BYTES)
+			text_kept(entry, machine_code)
+			long_at(entry + 16).value = loaded_module(engine, read_file(path), machine_code, trap)
+			long_at(block + 8).value = (count + 1) as i64
+		}
+	}
+	keep_value(RESIDENT_SLOT, block as i64)
+}
+# a module's resident machine code, else the module loaded
+resident_module(engine: handle, module: text, machine_code: text, trap: pointer): handle := {
+	block = resident_block()
+	count = long_at(block + 8).value as i32
+	for k in 0..count {
+		entry = block + 16 + k * RESIDENT_ENTRY_BYTES
+		if same_text(cell_text(entry), machine_code) { return long_at(entry + 16).value }
+	}
+	loaded_module(engine, module, machine_code, trap)
+}
+
 # the machine code of the module at `path` kept beside it, current for this wasmtime, nothing run
 machine_code_kept(path: text): nothing := {
 	trap = allocate(8)

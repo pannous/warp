@@ -1,0 +1,23 @@
+# A block held in a variable runs by a call: `b = {1+2}; b()` is `b := {1+2}; b()`, 3 (decision blocks-run-by-call,
+# card block-value-extraction). Only a name assigned once, so the block is all it ever holds; `b` uncalled stays data
+
+called_blocks(program: Node): Node := {
+	statements = statements_in(program)
+	nodes = nodes_in(program)
+	if not statements.any(statement => block_held(statement, nodes) != ø) { return program }
+	statements_as(program, statements.map(statement => {
+		name = block_held(statement, nodes)
+		if name == ø then statement else Key(symbol(name), Op.Define, value_of(without_mark(statement)))
+	}))
+}
+# the name of `b = {…}` when b is called as `b()` and assigned nowhere else, else ø
+block_held(statement: Node, nodes: list): text? := {
+	plain = without_mark(statement)
+	if not (is_key(plain, Op.Assign) and key_of(plain) is symbol and is_curly_group(without_mark(value_of(plain)))) { return ø }
+	name = key_of(plain)
+	called = nodes.any(n => is_call(n) and #n == 1 and n#1 == name)
+	assigned_once = #nodes.filter(n => is_key(n, Op.Assign) and key_of(n) == name) == 1
+	if called and assigned_once then name_of(name) else ø
+}
+
+called_blocks_extension = Extension{name: "called_blocks", passes_before: {"definition_heads": called_blocks}}

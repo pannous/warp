@@ -15,6 +15,8 @@ const API_KEY_STAND_IN = "playground-key"; // what env gives a program instead o
 const API_ORIGIN = "https://api.anthropic.com";
 const MESSAGES_URL = `${API_ORIGIN}/v1/messages`;
 const API_VERSION = "2023-06-01";
+const API_HEADERS = key => ({ "x-api-key": key, "anthropic-version": API_VERSION, "anthropic-dangerous-direct-browser-access": "true" });
+const UNAUTHORIZED = 401;
 const CHAT_MODEL = "claude-sonnet-5-5";
 const COMPLETION_MODEL = "claude-haiku-5-5";
 // a continuation needs no thinking first: thinking took the 256 tokens, and the answer came without text (card code-completion)
@@ -67,7 +69,36 @@ async function replyOf(answer) {
 	return reply;
 }
 
-const postJson = (url, body, headers = {}) => fetch(url, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+// a fetch that cannot reach its service says which one, not the browser's bare "NetworkError when attempting to fetch
+// resource" (card menu-status-mark); the services are named by origin
+const SERVICE_NAMES = { [API_ORIGIN]: "the Anthropic API", "https://warp-assistant.pannous.workers.dev": "the assistant proxy", "https://pannous.com": "the bug-report server" };
+async function serviceFetch(url, options) {
+	try { return await fetch(url, options); }
+	catch (failure) { throw new Error(`${SERVICE_NAMES[new URL(url).origin] ?? new URL(url).host} is unreachable (${failure.message})`); }
+}
+const postJson = (url, body, headers = {}) => serviceFetch(url, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+
+// ---- the ⋯ menu's status marks: the assistant's API key and the bug-report owner token ----------------------------------
+const STATUS_MARKS = { ok: "✓ ok", missing: "– missing", rejected: "✗ rejected", checking: "… checking", unreachable: "✗ unreachable" };
+function showStatus(id, state, detail = "") {
+	Object.assign($(id), { textContent: STATUS_MARKS[state], className: `status ${state}`, title: detail });
+}
+// the answer's status as the mark: accepted, refused, or neither (a service in trouble)
+// FORBIDDEN is playground.js's, read when a check runs
+const markOfAnswer = answer => answer.ok ? "ok" : [UNAUTHORIZED, FORBIDDEN].includes(answer.status) ? "rejected" : "unreachable";
+async function checkService(id, request, missing) {
+	if (missing) return showStatus(id, "missing", missing);
+	showStatus(id, "checking");
+	try {
+		const answer = await request();
+		showStatus(id, markOfAnswer(answer), answer.ok ? "" : `HTTP status ${answer.status}`);
+	} catch (failure) { showStatus(id, "unreachable", failure.message); }
+}
+const checkApiKey = () => checkService("api-key-status", () => serviceFetch(`${API_ORIGIN}/v1/models?limit=1`, { headers: API_HEADERS(apiKey().trim()) }),
+	apiKey().trim() ? "" : "no key: completion and Ask use the playground's proxy");
+const checkOwnerToken = () => checkService("owner-token-status", () => postJson(`${PROXY_ORIGIN}/session`, { owner_token: stored(OWNER_TOKEN_STORAGE) }),
+	stored(OWNER_TOKEN_STORAGE) ? "" : "open the page once with ?bug_token=<token> (python3 scripts/bug_report.py token)");
+const checkServices = () => { checkApiKey(); checkOwnerToken(); };
 
 // Claude's answer for one of assistant.json's tasks, as text: with a pasted key straight from the API, else from the proxy
 async function askClaude({ task, messages, program }) {
@@ -77,7 +108,7 @@ async function askClaude({ task, messages, program }) {
 		model: task === "chat" ? CHAT_MODEL : COMPLETION_MODEL,
 		system: await systemPrompt(task, program),
 		messages, max_tokens: tokens, thinking: thinking === false ? NO_THINKING : undefined,
-	}, { "x-api-key": key, "anthropic-version": API_VERSION, "anthropic-dangerous-direct-browser-access": "true" }) : await askProxy({ task, messages, program }));
+	}, API_HEADERS(key)) : await askProxy({ task, messages, program }));
 	const text = reply.content?.filter(part => part.type === "text").map(part => part.text).join("") ?? "";
 	if (!text && reply.stop_reason === "max_tokens") throw new Error(`Claude's answer ran out of its ${tokens} tokens before any text.`);
 	return text;
@@ -386,7 +417,8 @@ async function sendChat(editor, question) {
 function startAssistant(editor, keyChanged, wordList) {
 	closeWordList = wordList.close;
 	$("api-key").value = apiKey();
-	$("api-key").onchange = event => { saveApiKey(event.target.value.trim()); failureShown = undefined; keyChanged(); };
+	$("api-key").onchange = event => { saveApiKey(event.target.value.trim()); failureShown = undefined; keyChanged(); checkApiKey(); };
+	document.querySelector("details.tools").addEventListener("toggle", event => event.target.open && checkServices());
 	editor.addKeyMap({ "Ctrl-Space": suggestCompletion, "Alt-Space": suggestCompletion, Tab: takeSuggestion, Esc: dismissSuggestion });
 	editor.on("change", (_, change) => {
 		edits++;

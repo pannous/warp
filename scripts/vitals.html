@@ -99,7 +99,7 @@ footer { color: var(--ink-3); font-size: 12px; }
 
   <section>
     <h2>Hello, compiled and run</h2>
-    <p class="section-note">What <code>warp samples/hello/hello.warp</code> costs on each installed main tip: instructions retired and wall time by /usr/bin/time -l, the cheapest of 3 runs. Hollow dots are earlier measurements by hand, the releases among them. Hover a dot for its commit, click it to open the commit.</p>
+    <p class="section-note">What <code>warp samples/hello/hello.warp</code> costs on each installed main tip: instructions retired and wall time by /usr/bin/time -l, the cheapest of 3 runs. The compile alone is hello's instructions minus <code>warp version</code>'s, the startup both share (loading wasmtime, the compiler's machine code and its start; notes/hello_startup.md). Hollow dots are earlier measurements by hand, the releases among them. Hover a dot for its commit, click it to open the commit.</p>
     <div class="tiers" id="hello"></div>
   </section>
 
@@ -246,23 +246,29 @@ const head = row => `<div class="tip-row"><span>${row.sha}</span><span>${row.dat
   const all = [...references, ...series], time = date => new Date(date.replace(" ", "T")).getTime();
   if (!all.length) { holder.innerHTML = `<div class="tier"><div class="empty">no measurement yet</div></div>`; return; }
   const start = Math.min(...all.map(p => time(p[0]))), end = Math.max(...all.map(p => time(p[0])));
-  const W = 300, H = 110, L = 34, R = 8, T = 6, B = 18, INSTRUCTIONS = 2, SECONDS = 3;
+  const W = 300, H = 110, L = 34, R = 8, T = 6, B = 18, INSTRUCTIONS = 2, SECONDS = 3, COMPILE = 5;
   const x = date => L + (time(date) - start) / Math.max(1, end - start) * (W - L - R);
-  const describe = p => `${p[0]} · ${p[4] ? p[4] + " · " : ""}${p[1]} · ${p[INSTRUCTIONS]} G instructions · ${p[SECONDS]} s`;
-  [[INSTRUCTIONS, "G instructions", "instructions retired"], [SECONDS, "s", "wall time"]].forEach(([index, unit, name]) => {
-    const top = Math.max(...all.map(p => p[index])) * 1.1, y = v => T + (1 - v / top) * (H - T - B);
-    const latest = series.length ? series[series.length - 1] : references[references.length - 1];
+  const describe = p => `${p[0]} · ${p[4] ? p[4] + " · " : ""}${p[1]} · ${p[INSTRUCTIONS]} G instructions · ${p[SECONDS]} s` +
+    (p[COMPILE] != null ? ` · compile alone ${p[COMPILE]} G` : "");
+  // the compile alone (hello minus warp version, notes/hello_startup.md) only of the installs measured since it began
+  const compiled = series.filter(p => p[COMPILE] != null);
+  [[INSTRUCTIONS, "G instructions", "instructions retired", all, series],
+   [SECONDS, "s", "wall time", all, series],
+   [COMPILE, "G instructions", "the compile alone, startup apart", compiled, compiled]].forEach(([index, unit, name, dots, line]) => {
+    if (!dots.length) return;
+    const top = Math.max(...dots.map(p => p[index])) * 1.1, y = v => T + (1 - v / top) * (H - T - B);
+    const latest = line.length ? line[line.length - 1] : dots[dots.length - 1];
     const card = document.createElement("div"); card.className = "tier";
     card.innerHTML = `<div class="label">hello: ${name}</div><div class="value">${latest[index]} ${unit}</div>` +
-      `<div class="change">${latest[1]} · ${latest[0]} · ${series.length} installs measured</div>`;
+      `<div class="change">${latest[1]} · ${latest[0]} · ${line.length} installs measured</div>`;
     const svg = element("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `hello ${name} per main tip` }, card);
     [0, top / 2, top].forEach(v => {
       element("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: "var(--rule)", "stroke-width": 0.6 }, svg);
       element("text", { x: L - 4, y: y(v) + 3, "text-anchor": "end" }, svg).textContent = +v.toFixed(2);
     });
     [start, end].forEach((t, i) => element("text", { x: i ? W - R : L, y: H - 4, "text-anchor": i ? "end" : "start" }, svg).textContent = shortDay(new Date(t).toISOString().slice(0, 10)));
-    if (series.length > 1) element("polyline", { points: series.map(p => `${x(p[0])},${y(p[index])}`).join(" "), fill: "none", stroke: "var(--s3)", "stroke-width": 2, "stroke-linejoin": "round" }, svg);
-    all.forEach(p => {
+    if (line.length > 1) element("polyline", { points: line.map(p => `${x(p[0])},${y(p[index])}`).join(" "), fill: "none", stroke: "var(--s3)", "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+    dots.forEach(p => {
       const measuredByHand = Boolean(p[4]);
       const dot = element("circle", { cx: x(p[0]), cy: y(p[index]), r: 3, fill: measuredByHand ? "var(--panel)" : "var(--s3)", stroke: "var(--s3)", "stroke-width": 1.5, style: "cursor:pointer" }, svg);
       element("title", {}, dot).textContent = describe(p);

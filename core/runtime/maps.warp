@@ -125,6 +125,22 @@ extra_value_at(extra: Node, at: int, count: int): Node := {
 	if is_null(extra) or at <= count or at - count > #unboxed_list(fields_of(extra)) { return ø }
 	key_value(unboxed_list(fields_of(extra))#(at - count))
 }
+# A class instance's declared field names are the list of symbols its class's instances share (its struct's value
+# field), so its place and entries words are one pair for every class (card each-wasm): only the words that touch its
+# struct's fields (field_at, set, construct) are its class's own
+# the place of the field name among the names, counted from 1, else among the extra fields after them; 0 when none
+declared_place(names: Node, extra: Node, name: text): int := {
+	declared = unboxed_list(names)
+	for at in 1 to #declared { if same_bytes(unboxed_text(declared#at), name) { return at } }
+	extra_place(extra, name, #declared)
+}
+# the instance's fields as the map of their names, then its extra ones: a new map at each call
+declared_entries(m: Node, names: Node, extra: Node): Node := {
+	entries = []
+	declared = unboxed_list(names)
+	for at in 1 to #declared { entries += [keyed(Marked.Entry, declared#at, instance_field_at(m, at))] }
+	with_entries_of(map_of(entries), extra)
+}
 # the value of m's entry at a place map_index gave: a class instance's from its struct
 value_at(m: Node, at: int): Node := if is_class_instance(m) then instance_field_at(m, at) else key_value(unboxed_list(fields_of(m))#at)
 # `m.name`: the value of m's entry `name`; a value without it fails as "no field name"

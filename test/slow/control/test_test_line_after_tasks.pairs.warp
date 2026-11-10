@@ -1,0 +1,2 @@
+# a test line ending a program that starts tasks runs where it stands, after the tasks (samples/laws/kitchensink.warp)
+'go { 1 }; x = 2; test x == 2; x'	2

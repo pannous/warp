@@ -1,0 +1,3 @@
+# same-named functions of different arity coexist across modules: draw's show(), color's `format Color c as text`, the
+# `format as text` of units and reals (card module-arity-overloads)
+'use sound; use draw; 1'	1
