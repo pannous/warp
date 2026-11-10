@@ -1,0 +1,3 @@
+# from test_reactive_ports.rs: edit the Rust test, then run the script again
+# svelte_vue_solid_derivations
+'x = 0; n = 0; h = on change x {n += value}; x = 4; x = 4; n'	4

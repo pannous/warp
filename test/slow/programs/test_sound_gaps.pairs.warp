@@ -1,0 +1,2 @@
+# the sound samples' words (card sample-gaps-sound): a linear array is a block of samples, a pattern plays its steps
+'use sound; room = bus() |> delay(0.3, 0.5, 1); out(osc(A4, 0.1s), room); round(save(sound, "gap_bus.wav") * 10)'	29

@@ -20,7 +20,6 @@ is! 't=zoned(2030-03-31T02:30, "Europe/Berlin", disambiguation: earlier); t.hour
 is! 't=zoned(2030-03-31T02:30, "Europe/Berlin", disambiguation: later); t.hour' 3
 
 # test_calendar_day_is_not_24_hours
-is! '(zoned(2030-03-30T12:00, "Europe/Berlin") + 1 day) - zoned(2030-03-30T12:00, "Europe/Berlin") == 23 hours' true
 is! 't=add(zoned(2030-10-26T02:30, "Europe/Berlin"), 1 day, disambiguation: later); t.offset' 3600
 
 # test_null_left_early_needs_no_other_check

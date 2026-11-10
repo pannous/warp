@@ -1,0 +1,2 @@
+# a comma separates a call's arguments, a blank joins the words of one (card call-argument-flattening)
+'f(a, b) := b; f(4, s)'	1s

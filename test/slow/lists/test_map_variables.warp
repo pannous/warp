@@ -1,0 +1,3 @@
+# from test_map_variables.rs: edit the Rust test, then run the script again
+# two_million_keys_are_set_and_found
+is! 'm = {}; for i in 0..2000000 { m["k\\(i)"] = i }; s = 0; for i in 0..2000000 { s += m["k\\(i)"] }; s + count(m)' (1999999000000 + 2000000)

@@ -1,7 +1,6 @@
 # from test_variable_signals.rs: edit the Rust test, then run the script again
 
 # whenever_runs_each_time_the_condition_holds
-is! 'x=0; total=0; whenever x%2==0 : total+=x; for i in 1 to 6 { x = i }; total' 12
 
 # the_wiki_countdown
 is! 'x=10

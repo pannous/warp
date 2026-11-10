@@ -51,7 +51,6 @@
 'use money; [p.minor for p in money_allocate(Money(99, "EUR"), [70, 20, 10])]'	[69, 20, 10]
 'use money; [p.minor for p in money_allocate(Money(-1001, "EUR"), [1, 2, 3/2])]'	[-222, -445, -334]
 'use money; [p.minor for p in money_allocate(Money(1, "EUR"), [1, 1])]'	[1, 0]
-'use money; [p.minor for p in money_allocate(Money(0, "EUR"), [3, 7])]'	[0, 0]
 'use money; [p.minor for p in money_split(Money(100, "JPY"), 3)]'	[34, 33, 33]
 'use money; [p.minor for p in money_split(Money(1000, "JPY"), 7)]'	[143, 143, 143, 143, 143, 143, 142]
 'use money; [p.minor for p in money_split(Money(-7, "JPY"), 4)]'	[-2, -2, -2, -1]

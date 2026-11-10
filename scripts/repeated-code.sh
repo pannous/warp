@@ -31,9 +31,11 @@ if [ "${2-}" = --report ]; then
 	exit 0
 fi
 base=$(git merge-base origin/main HEAD) || exit 2
-added=$(for file in $(git diff --name-only "$base" -- '*.warp'); do
+# (a test case is a program of its own, which can't name what another case writes: test/ is not checked; a hunk that
+# only deletes adds no line, where `seq 5 4` would count down)
+added=$(for file in $(git diff --name-only "$base" -- '*.warp' ':!test/'); do
 	[ -f "$file" ] || continue
-	lines=" $(git diff -U0 "$base" -- "$file" | sed -n 's/^@@ .* +\([0-9]*\)\(,\([0-9]*\)\)\{0,1\} @@.*/\1 \3/p' | while read -r start count; do seq "$start" $((start + ${count:-1} - 1)); done | tr '\n' ' ')"
+	lines=" $(git diff -U0 "$base" -- "$file" | sed -n 's/^@@ .* +\([0-9]*\)\(,\([0-9]*\)\)\{0,1\} @@.*/\1 \3/p' | while read -r start count; do [ "${count:-1}" -gt 0 ] && seq "$start" $((start + ${count:-1} - 1)); done | tr '\n' ' ')"
 	repeats "$file" | awk -F'\t' -v lines="$lines" 'index(lines, " " $1 " ") || index(lines, " " $2 " ")' | shown "$file"
 done)
 [ -z "$added" ] && exit 0

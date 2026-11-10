@@ -1,0 +1,3 @@
+# from test_constructor_vs_data.rs: edit the Rust test, then run the script again
+# test_construction_reads_its_fields
+'(a{x:1}) == (a:{x:1})'	true

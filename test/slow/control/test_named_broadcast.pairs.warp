@@ -1,0 +1,3 @@
+# from test_named_broadcast.rs: edit the Rust test, then run the script again
+# a_send_is_a_statement_of_no_value
+'n = 1; on stop the machine { n = 2 }; emit stop the machine; n'	2
