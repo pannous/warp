@@ -38,6 +38,7 @@ use "conversions.warp"
 use "implicit_uses.warp"
 use "test_lines.warp"
 use "scoped_words.warp"
+use "fast.warp"
 use "parse_words.warp"
 use "iteration_inlining.warp"
 use "block_inlining.warp"
@@ -138,6 +139,7 @@ EXTENSIONS = [
 	collection_type_tests_extension
 	block_definitions_extension
 	parameter_values_extension
+	fast_extension
 	local_shadows_extension
 	effects_extension
 	optional_unwraps_extension
