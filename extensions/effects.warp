@@ -1,4 +1,4 @@
-# Effect annotations (decision effect-annotations, notes/effects.md): `@pure f(x) := …`, `@io`, `@ffi` mark a definition
+# Effect annotations (decision effect-annotations, wiki/effects.md): `@pure f(x) := …`, `@io`, `@ffi` mark a definition
 # with the effects it may have, meta annotations as `@primitive` is; a function with an effect its marks leave out is
 # refused, naming the calls that lead to it: `@pure shout(t) := print t` does IO via shout → print. A raise or an Error
 # made is the effect Fail, which only @pure leaves out (card error-gaps).

@@ -166,6 +166,7 @@ const first = rows[0], last = rows[rows.length - 1];
 	stamp.append(` (${committed}) ${subject.length > 80 ? subject.slice(0, 80) + "…" : subject} · updated ${DATA.generated}`);
 }
 const format = n => n.toLocaleString("en-US");
+const duration = minutes => minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
 const signed = n => (n > 0 ? "+" : n < 0 ? "−" : "±") + format(Math.abs(n));
 const percent = (a, b) => signed(Math.round((b - a) / a * 100)) + "%";
 const svgNS = "http://www.w3.org/2000/svg";
@@ -287,7 +288,8 @@ const head = row => `<div class="tip-row"><span>${row.sha}</span><span>${row.dat
     if (!points.length) { card.innerHTML = `<div class="label">${name}</div><div class="empty">no committed run yet</div>`; document.getElementById("tiers").appendChild(card); return; }
     const lastPoint = points[points.length - 1], firstPoint = points[0];
     card.innerHTML = `<div class="label">${name}</div><div class="value">${rate(lastPoint).toFixed(1)}%</div>` +
-      `<div class="change">${format(lastPoint[2])} of ${format(lastPoint[3])} · ${points.length > 1 ? signed(Math.round((rate(lastPoint) - rate(firstPoint)) * 10) / 10) + " pts since " + shortDay(firstPoint[0].slice(0, 10)) : "one run"} · ${path}</div>`;
+      `<div class="change">${format(lastPoint[2])} of ${format(lastPoint[3])} tests · ${points.length > 1 ? signed(Math.round((rate(lastPoint) - rate(firstPoint)) * 10) / 10) + " pts since " + shortDay(firstPoint[0].slice(0, 10)) : "one run"} · ${path}</div>` +
+      `<div class="change">measured ${lastPoint[0]} at ${commitLink(lastPoint[1])}${lastPoint[4] ? ` · run took ${duration(lastPoint[4])}` : ""}</div>`;
     const svg = element("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `${name} pass rate over time` }, card);
     [50, 75, 100].forEach(v => {
       element("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: "var(--rule)", "stroke-width": 0.6 }, svg);

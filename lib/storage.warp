@@ -1,4 +1,4 @@
-// The standard module storage (card storage-words-unknown, notes/orm.md): a class's instances kept as the rows of a
+// The standard module storage (card storage-words-unknown): a class's instances kept as the rows of a
 // table in <program>.database.sqlite beside the program (WARP_PROGRAM, as the native warp names it), else in memory.
 // Loaded whole and written whole for now: `users = stored_table("users", User)` gives the rows as instances, the table
 // made or widened from User's fields first; `stored_add("users", u)` inserts u; `stored_save("users", users)` makes the

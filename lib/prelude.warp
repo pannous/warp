@@ -207,7 +207,7 @@ fits_text_type(t: text, type: text) := match type {
 	"word" => consists_of(t, is_word_char)
 	_ => true
 }
-// text patterns (notes/matching.md): the texts of the holes between the pieces of `"0x" + rest`, [] when t doesn't
+// text patterns (wiki/pattern-matching.md): the texts of the holes between the pieces of `"0x" + rest`, [] when t doesn't
 // match (also when t is no text); the first piece is the prefix, the last the suffix, "" where the pattern starts or
 // ends with a hole; each hole's text fits its type, "" for any text
 text_holes(t, pieces: [text], types: [text]) := {
@@ -482,7 +482,7 @@ display.size := [display_width, display_height] px
 // the diagonal as a length: its nearest whole px at the density (quantities run as exact amounts, a run-time √ is a
 // float)
 display.diagonal := round(√(display_width² + display_height²)) * 1px / (display_dpi * 1dpi)
-// The fields of a time at run time (card time-fields-warp, notes/dates_at_run_time.md), called late by the emitter's
+// The fields of a time at run time (card time-fields-warp, wiki/time.md), called late by the emitter's
 // time_field with the time's form (TimeForm: 1 a date, its position in days; else nanoseconds since 1970), its
 // position, its zone's seconds east of UTC (a zoned time's, else 0; not `offset`: the index type's synonym) and the
 // index of the field in times.rs TIME_FIELDS. A zoned time's fields are those of its wall clock, its epoch seconds the instant's

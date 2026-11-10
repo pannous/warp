@@ -1,4 +1,4 @@
-# euclidean_remainder and euclidean_quotient are `%` and `/!` (lib/math.warp, notes/ratio_gcd_warp.md)
+# euclidean_remainder and euclidean_quotient are `%` and `/!` (lib/math.warp)
 
 # a negative divisor
 'use math; euclidean_remainder(-9, -2) == (-9) % (-2)'	true

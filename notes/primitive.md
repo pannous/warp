@@ -1,6 +1,6 @@
 # Primitive mode (`@primitive`)
 
-Decision primitive-annotation, milestone 1 of notes/roadmap_native_harness.md. The code is
+Decision primitive-annotation, milestone 1 of the native warp (AGENTS.md "Native warp"). The code is
 extensions/primitive.warp, an emitter of plain MVP wasm of its own: no GC types, no runtime words, no exceptions.
 
 ## Two places
@@ -42,7 +42,7 @@ the $String layout and a WASI iovec at once; its literals are data in front of t
 memory from the arena. A function declared `: nothing` gives no value.
 
 ## Native build
-`warp build native app.warp` (extensions/commands/build.warp build_native; Rust only routes the word) compiles the primitive file,
+`warp build native app.warp` (extensions/commands/build.warp build_native) compiles the primitive file,
 makes it C with wasm2c (module "program"), writes app.native.main.c (primitive.warp native_main: the C calls' glue, instantiate, run_main printing main's value by its type) and
 compiles both with cc -O2, wasm2c's runtime (beside the wasm2c on the PATH) and lib/native/wasi.c: libc answering
 fd_write, fd_read, fd_seek, fd_close, path_open (paths of the current folder), args_sizes_get, args_get, proc_exit,
@@ -65,7 +65,7 @@ c_function_line, the fields of a GC module's warp.c_functions), a text crossing 
 handle as the i64 it is (driver.warp pair_c_text, guest_pair, primitive_arena_taken).
 
 ## Driver
-core/native/driver.warp is the native runner (roadmap_native_harness.md milestone 3): a primitive file calling
+core/native/driver.warp is the native runner: a primitive file calling
 wasmtime's C API through its own foreign lines (`wasmtime_module_new(engine: handle, wasm: pointer, size: i64, module:
 pointer): handle from "wasmtime"`; the structs the calls fill are arena bytes read with long_at/byte_at, native memory
 copied in with memcpy). `warp build native core/native/driver.warp` makes `driver`:
@@ -76,20 +76,19 @@ copied in with memcpy). `warp build native core/native/driver.warp` makes `drive
 `warp build app.warp` of a GC program writes that executable (extensions/commands/build.warp write_executable: __LINKEDIT grown over
 the module, then signed): about 100 KB beside the module. The driver is built once per lib/ into lib/data/native/
 (again when driver.warp changes), in the same run as the program: every compile starts with a fresh Module
-(emitter.warp fresh_module, card module-inheritance). The Rust warp-runtime stub is no longer written.
+(emitter.warp fresh_module, card module-inheritance).
 Tests: test/native/test_executables.sh.
 A module gets WASI (stdin/out/err and the environment inherited, "." and "/" preopened), GC, typed references and
 exceptions, wasmtime's machine-code cache. warp.wasm's machine code is the driver's own, beside it as
 warp.wasm.driver.cwasm with the fingerprint (FNV-1a) of the warp.wasm it is of in .driver.cwasm.key: the first run after
-a rebuild compiles it (6 s), later ones load it (hello 0.9 s in all). The harness's warp.wasm.cwasm is wasmtime 49's with
-its own flags, never loadable by the driver's (brew's, 50); machine code that won't load is one line on stderr, then
+a rebuild compiles it (6 s), later ones load it (hello 0.9 s in all). Machine code that won't load is one line on stderr, then
 compiled anew (card native-driver). Its `_start` runs (a GC program prints its own value), else `main`, whose
 value is printed by its kind; an error's or trap's message goes to stderr with status 1, the module's exit status is
 kept. Host words: std_io is a C callback (lib/native/foreign.c warp_host_callback, the values through the driver's
 arena to its exported host_word), which reads its arguments through the module's export shown_at (the node as print
-shows it, in linear memory) and builds answers with new_text/new_empty/error_of: every word is an Error saying
-the driver lacks it (the compiler calls none since kept values were retired). A C function the module's
-warp.c_functions section describes (one tab-separated line each, crates/warp-runtime c_signatures.rs) is the same
+shows it, in linear memory) and builds answers with new_text/new_empty/error_of: a std_io or std_pure member the
+driver lacks is an Error saying so. A C function the module's
+warp.c_functions section describes (one tab-separated line each, extensions/c_imports/section.warp) is the same
 callback, its data the line and the function (foreign.c library_function: lib<name>.dylib/.so, libc and libm the
 process's): numbers go in registers (foreign.c native_call, up to 8 integers and 8 floats), a text NUL-terminated
 through shown_at, a handle id through foreign.c's handle table, the first out-pointer to a slot that becomes the
