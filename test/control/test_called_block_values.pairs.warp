@@ -1,0 +1,4 @@
+# a block held in a variable runs by a call, b() (decision blocks-run-by-call, card block-value-extraction)
+'b = {1+2}; b()'	3
+'a = 6; b = {a*a}; b()'	36
+'b = {1+2}; b() + b()'	6

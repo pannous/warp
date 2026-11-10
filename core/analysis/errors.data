@@ -9,9 +9,9 @@ block_definition($name)	"{name} is defined inside a block: functions are not sco
 # night decision parameter-named-fails: a parameter given a value with a colon, `f(a, b: 0)` (extensions/parameter_values.warp)
 parameter_value($name, $value)	"{name}: {value} gives {name} a value, not a type: a default is written {name} = {value}"	"{name} = {value}"
 # decision def-colon-body: a body after a definition's head colon, `def f(x): x * 2` (extensions/parameter_values.warp)
-head_body($head, $body)	"{head}: {body}: after a definition's head `:` names its type; a body is def {head} := {body}"	"def {head} := {body}"
+head_body($head, $body)	"{head}: {body}: after a definition's head `:` names its type"	"def {head} := {body}"
 # the Python head `def f(x) -> T: body` (card wrong-value-params): its result type after `:`, its body after `:=`
-head_arrow_body($head, $type, $body)	"{head} -> {type}: {body}: a result type follows the head's `:`; a body is def {head}: {type} := {body}"	"def {head}: {type} := {body}"
+head_arrow_body($head, $type, $body)	"{head} -> {type}: {body}: a result type follows the head's `:`"	"def {head}: {type} := {body}"
 # decisions let-reassign, const-deep: a `let`/`const` name assigned again (source_checks.warp)
 constant_assignment($name)	"{name} is a constant: declared with let or const, it binds once; declare it `var {name} = …` for a variable"	"var {name}"
 # decision library-constant-refused: a library constant assigned at the top level, `pi = 4` (source_checks.warp)
