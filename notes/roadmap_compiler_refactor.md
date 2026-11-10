@@ -6,4 +6,4 @@ The compiler's own code, made to read like the language it compiles. The user fi
 
 | # | Card | Step |
 |---|------|------|
-| 1 | code-type | `type Code = list of byte` for wasm bytes: the emitter writes them as plain `list` today (158 emitter functions return `list`, e.g. `fresh_int_code(code: list): list`, `entry_code(name_code: list, value_code: list): list`); naming the type says what the list holds and lets a wrong list be refused (wiki/alias.md shows the alias) |
+| 1 | code-type | `type Code < list of byte` for wasm bytes (a subtype, decision subtype-less-than: it can print and check itself; needs card subtype-of-phrase): the emitter writes them as plain `list` today (158 emitter functions return `list`, e.g. `fresh_int_code(code: list): list`, `entry_code(name_code: list, value_code: list): list`); naming the type says what the list holds and lets a wrong list be refused (wiki/alias.md shows the alias) |
