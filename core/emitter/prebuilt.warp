@@ -497,7 +497,8 @@ image_class_names(image: LibraryImage): list := image.classes.map(entry => entry
 linked_reaches(): map := {
 	reaches = {}
 	for signature in linked_signatures.values.filter(signature => signature.reaches != ø) {
-		for name in signature.reaches.keys { reaches[name] = (reaches.get(name) ?? []) + signature.reaches[name] }
+		# (an arity overload's under its written word too: the program says graph_of, the module recorded graph_of·2)
+		for name in signature.reaches.keys { for key in [name] + [arity_base(name)].filter(base => base != ø) { reaches[key] = (reaches.get(key) ?? []) + signature.reaches[name] } }
 	}
 	reaches
 }
@@ -520,12 +521,8 @@ word_reaches(functions: list, classes: list): map := {
 }
 # a word's name and, lifted, its parts: next·Channel, next, Channel
 name_parts(name: text): list := if name.contains("·") then [name] + name.split("·") else [name]
-# a word's name, its written name and its class's: next·Channel, Graph·new, graph_of·2 of Channel, Graph, graph_of
-owning_names(name: text): list := {
-	written = arity_base(name)
-	owner = word_class(written ?? name)
-	[name] + (if written != ø then [written] else []) + (if owner != ø then [owner] else [])
-}
+# a word's name and its class's: next·Channel and Graph·new of Channel and Graph
+owning_names(name: text): list := if word_class(arity_base(name) ?? name) != ø then [name, word_class(arity_base(name) ?? name)] else [name]
 # the word an arity overload was written as, graph_of of graph_of·2 (linked_variant), ø for another word
 arity_base(name: text): text? := {
 	parts = name.split("·")
@@ -555,7 +552,7 @@ def image_fields(functions: list): list {
 		field_node("classes", square_list(own_classes.map(name => square_list([Text(name), Text(struct_written(name))])))),
 		field_node("builders", square_list(module.builders.map(f => Text(f.name)))),
 		field_node("runtime", square_list(runtime_behind().map(n => Number(n)))),
-		field_node("reaches", texts_pairs_node(word_reaches(functions, own_classes.map(name => name[#instance_struct_prefix ..]))))]
+		field_node("reaches", texts_node(word_reaches(functions, own_classes.map(name => name[#instance_struct_prefix ..]))))]
 }
 # the image of a linked module read back from its signature; why it is not linkable behind this runtime, a text
 def library_image_of(name: text, signature: ModuleSignature): any {
