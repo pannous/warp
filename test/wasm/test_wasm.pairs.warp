@@ -13,21 +13,20 @@
 'global x=1;x=7;x'	7
 
 # test_get_local
-# triage-held 2026-11-06: old wasp definition by space, `add1 x:=…` :: 'add1 x:=it+1;add1 3'	4
-# triage-held 2026-11-06: old wasp definition by space, `add1 x:=…` :: 'add1 x:=$0+1;add1 3'	4
+'add1 x:=it+1;add1 3'	4
 
 # test_wasm_function_definiton
 'fib:=if it<2 then it else fib(it-1)+fib(it-2);fib(7)'	13
-# triage-held 2026-11-06: old wasp definition by space, `add1 x:=…` :: 'add1 x:=x+1;add1 3'	4
-# triage-held 2026-11-06: old wasp definition by space, `add1 x:=…` :: 'add2 x:=x+2;add2 3'	5
+'add1 x:=x+1;add1 3'	4
+'add2 x:=x+2;add2 3'	5
 'expression_as_return:=y=9;expression_as_return'	9
-# triage-held 2026-11-06: old wasp definition by space, `add1 x:=…` :: 'addy x:= y=2 ; x+y ; addy 3'	5
-# triage-held 2026-11-06: old wasp definition by space, `add1 x:=…` :: 'grows x:=x*2;grows(4)'	8
+'addy x:= y=2 ; x+y ; addy 3'	5
+'grows x:=x*2;grows(4)'	8
 'grows:=it*2; grows 3'	6
 'grows:=it*2; grows 3*4'	24
 'grows:=it*2; grows(3*42) > grows 2*3'	1
 'factorial:=it<2?1:it*factorial(it-1);factorial 5'	120
-# triage-held 2026-11-06: old wasp definition by space, `add1 x:=…` :: 'fib x:=if x<2 then x else fib(x-1)+fib(x-2);fib(7)'	13
+'fib x:=if x<2 then x else fib(x-1)+fib(x-2);fib(7)'	13
 'fib:=it<2 then 1 else fib(it-1)+fib(it-2);fib(4)'	5
 # triage-held 2026-11-06: and/or/then as value operators on ints :: 'fib:=it<2 and it or fib(it-1)+fib(it-2);fib(7)'	13
 # triage-held 2026-11-06: and/or/then as value operators on ints :: 'fib:=it<2 then it or fib(it-1)+fib(it-2);fib(7)'	13
