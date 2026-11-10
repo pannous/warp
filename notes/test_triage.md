@@ -595,3 +595,14 @@ changed; most test files are Rust-era (`# from test_….rs`) with no wiki page b
 | 3 | `parse("1+1") is operation` (operation_type 14 15 17) | no operation/expression types | esoteric? |
 | 3 | `ints`/`texts`/`a list of int` (type_tests 21 25 26) | plural type words unknown in `is` | alias rule; Interviewer |
 | singles | `f 3 == 6` refused as two readings (nested_type_calls 15: the refusal is right, refuse-never-guess → wrong expectation); `P(1/3).v is float` no (number_converts 4 7 9); `x.type` (type_of 4); `t: Type` (type_parameters 6 21); `list of int16` (types 50, types_scope 12); `'2.1' as real` (types 17); `2^70` in an int field (struct_instances 16); `inc(c)` copy (struct_instances 18); `string(p)` spacing (struct_instances 13: "Point{x:6 y:4}" is Rust-era → wrong expectation); `form post "/todos"` clashes with lib/net post (symbol_parameters 4 9); `friends{ div(…) }.div` (tag_children 4); `cat{ x = 1 "t" }` (tag_entries 4); `insert.params` order (typed_builtins 16); `{x:1 y:2} as Point` (unknown_conversion 6); `list of any` (unknown_type 9); `match` on an upcast (upcast_fields 6); `value{…}` block (value_constructor 4); `π is number` no (type_tests 30); `str(1 day in h)` (time_programs_run 7); `shown` overload (units_free_function 2); empty() maps (plain_enum 17 18); fibonacci number (type_name_matching 4); string(result) spacing (one_dispatch 29) | | |
+
+## lists n–z (worker lists-n-z-lib, 2026-11-10, main aa75297d68)
+
+`warp test test/lists/test_[n-z]*`: 18 of 393 ✗ in 65 files. No cluster has its cause in lib/ alone.
+
+| lines | cluster | root cause | smallest shape |
+|---|---|---|---|
+| 5 | named fields of a bracket list: `p = [x:1, y:2]; p.x`, `f(p) := p.xy` (swizzles 21-25) | `.name` on a list of pairs is no field read (a map's is) | core: `.name` of a list of pairs reads its pair, as `{…}` does |
+| 5 | unpacking: `a, b = f()` of `return 1, 2`, `(a, b) = 1, 2`, `(a, b), c = …`, `_, b = f()`, `for a, b in [[1,2],…]` (unpacking 16 28 50 56 59) | the assignment of a list to a pattern only takes plain names | core destructuring pass |
+| 3 | a comprehension inside `where`, or `to#i` in its filter: `#[i for i in idx where to#i == 0]` (nested_comprehension 7 8 14) | the comprehension's name is unbound in its `where` when the filter indexes another list | core/extension comprehension scope |
+| singles | `sqrt (1 to 4)` exact `(sqrt 2)` where the test wants floats (range_broadcast 2: exact reals are decided → wrong expectation?); `{r = 1..100001}; o.r` no field (range_in_structure 10); `f(xs) := {xs#1 = 9; xs#1}; f(1..5000)` gives 1 (range_arguments 16: a range argument is not a list to write into); `qs(xs…)` sorts the caller's xs in place (node_lists 9: lists are shared, the test wants a copy → Interviewer); `values(pair)` "not a map" (pair_values 4: values of a pair is its value?) | | |
