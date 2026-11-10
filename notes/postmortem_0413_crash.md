@@ -41,7 +41,7 @@ Evidence:
   - after-push.sh: it started at 04:13:31 for a331690053, 9 s earlier, and doesn't kill anything.
 
 ## What made it worse
-- The rule already existed and was ignored. notes/agents/common.md says "Kill your own leftover processes by PID,
+- The rule already existed and was ignored. AGENTS.md says "Kill your own leftover processes by PID,
   never `pkill -f`", and the memory note never-pkill-by-pattern records the 10-02 self-kill.
 - The GNU habit `pkill … -n` fails silently on macOS. The `2>/dev/null` hid everything, and the agent didn't
   notice that its own pgrep check printed nothing.

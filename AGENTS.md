@@ -250,7 +250,7 @@ At night (until the user is back, usually 10:00) notes/agents/night.md applies t
 
 Startup reading is this file (loaded automatically) plus your role file, nothing more. Everything else is
 looked up when a task needs it: notes/agents/handbook.md (the detailed procedures: worktree build tweak,
-gate tiers, bisects, Grok box, try lines, the Done checklist), notes/welcoming.md (how warp treats unclear input),
+gate tiers, bisects, try lines, the Done checklist), notes/welcoming.md (how warp treats unclear input),
 wiki/Footguns.md (decided language rules: grep it, never read it whole), notes/decisions.md (grep a key or a topic
 before asking a question). After a context swap, this file and your role file beat the handover.
 
@@ -423,7 +423,7 @@ before asking a question). After a context swap, this file and your role file be
   branch or worktree for it. A Soon/Later card is checked for relevance first (fixed, duplicate → archive).
   The column is the priority, for topic cards too; the user's own cards (drafts, issues not "Added by <session> with
   `todo add`") stay where the user put them.
-- Every branch has a card: comment branch, tip and state on it; a parked branch gets notes/handover/<branch>.md.
+- Every branch has a card: comment branch, tip and state on it; a parked branch gets its handover as a card note (`todo note`).
 - No Ready column, no merge queue. The worker does not land the branch. Finished work is handed
   to the integrator (Handoff, below), noted `land: <branch> <tip>` (`todo landing`). A finished branch
   whose session retires unlanded stays in Now with that same note; the integrator lands those.
@@ -431,7 +431,7 @@ before asking a question). After a context swap, this file and your role file be
   be built too when it is undoable (its own commits on the branch).
 - Explore before the first edit of a card, a bug report or a "why" question, wider than the card names, and use
   what you find: the spec (wiki/, test/, samples/), the history (`todo show` with its comments, related cards via
-  `todo list | grep`, notes/<topic>.md, notes/handover/, the decisions inbox, `git log -S`/blame of the code
+  `todo list | grep`, notes/<topic>.md, the decisions inbox, `git log -S`/blame of the code
   involved), live work (open branches and worktrees on the same files, the Now column), and the evidence (the stored
   baseline, `scripts/baseline.sh <tests>`; a failed build's record in the store). Not for a mechanical step whose
   context you already hold.
