@@ -220,26 +220,16 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - error-classes: errors are classes: the prelude declares `class Error` and the run-time errors as subclasses with Python names (IndexError, ZeroDivisionError, …); users declare their own (`class ParseError: Error`), an undeclared error name is a compile error with that hint. `except T as e` catches T and its subclasses; `except Error`, bare `except:` and `catch e` catch everything.
 
 ## Classes, objects and enums
-- valued-field-default: a class field given a value declares its default, type from the value: `class Animal { name: "?" }` is `name: text = "?"` (2 core lines, instances.warp declared_field).
 - capitalized-field-list: a capitalized plural field named after a declared class declares a list of it under the lowercase name: `class Signature { Parameters = [] }` is `parameters: list[Parameter] = []`, read as `sig.parameters`; otherwise an ordinary field.
 - property-accessors: accessors are overloads by arity: getter `canvas.width := canvas_width`, setter `canvas.width(new_width) := …` or with `it`; a getter without setter is read-only (assigning is a loud error).
 - setter-calls: a setter is called by `canvas.width = 12`, `canvas.width(12)`, `width(canvas, 12)`; `width of canvas = 12` is `canvas.width = 12`; `set x to y` is `x = y` with a style hint.
 - saved-words: lib/draw.warp declares `canvas()` (no arguments) as the current Picture, so `save canvas as: "painting.png"` works through the bare-call rule; likewise `sound()`.
-- P115 bare field names read the receiver (`self`/`this` too). P116 `c.inc()` updates c. P117 a body definition without parentheses is a getter; `class b extends a` inherits.
-- P122 static members need `static`; plain `pi = 3` is a per-instance default.
-- P162 `init` is the constructor; `constructor`, `__init__`, `initialize`, `new`, a class-named method … are aliases with a note; `new Point(1, 2)` works with a note.
-- P123 an object's text is its constructor form `Point{x:1 y:2}`; classes are capitalized in docs.
 - P177 `implements` / `struct Square: Shape` is a checked claim.
 - P200c every object has `copy()` and `clone()`. P205 `copy()` is deep; `copy(shallow: true)` shallow. P206 resources inside are shared with a note (error under --strict). P207 `clone` calls `copy`; a copy keeps its class. `===` (taste call, the code): same value and same kind of thing (`1 === 1.0` yes, both numbers; `0 === false` no); `≡` spells it; identity, if ever needed, gets its own word.
-- enum-case: a plain enum case is its own value (`print Coin.Dime` → Dime, `as int` → 2, `2 as Coin` → Dime, `9 as Coin` errs). An operator case and its spelling are synonyms: `print Op.Add` → Add, `Op.Add as text` → "+" held or literal (`x = Op.Add; x as text` too), an explicit conversion; comparing a case with its spelling holds (user 11-09: comparing is not becoming): `Op.Add == "+"` → yes, as does `op_of(key(1, "+", 2)) == Op.Add`. A case is still never stored or passed as its text (kinds-as-cases). enum-int: C functions and fields typed with an enum convert to and from its int; in warp only explicitly.
-- enum-raw-values: `enum W { A = "a·b", B }` spells a case (TS/Swift raw value): `W.A as text` "a·b", `"a·b" as W`, `W.A == "a·b"`; an unspelled case is spelled by its name (`W.B as text` "B"), no mix error; a number raw value (`Dime = 10`) is its `as int`. Not P178's payload cases. Later node.warp's Op/Bracket/Separator declare their spellings this way and node_cases' table goes. Card enum-spelled-cases.
-- kinds-as-cases: the compiler's kind names are `enum ValueKind` cases used as ordinary values (returns, list items, parameters, map keys); texts only at the edges (`word as ValueKind` in, `kind as text` out). A case does not turn into its spelling at run time (enum-case stands); a missing map-key or parameter ability is fixed in the language; enum compares and enum-keyed tables are made fast in the language: cases compare and index as small ints.
 - enum-identity: each enum case is one unique value; `==` with a case is identity, plus its spelling as text (`Op.Add == "+"`, `Coin.Dime == "Dime"` yes); cases of different enums never equal (`Level.Error == ValueKind.Error` no); text becomes a case only by `"Int" as ValueKind` (`symbol("Int") == ValueKind.Int` no).
-- declared-class: a declared class is its own wasm GC struct (descriptor + fields in declared order, a subclass a struct subtype); a known class's `p.code` is one struct.get; classes with methods are not refused; an undeclared field turns the instance into a map with a warning naming class and field; maps unchanged. Structs and Node values convert automatically both ways, so anything taking a generic value or node takes an instance. class-field-slots is the interim speed path until then.
 - Reflection: `dir(x)` from compile time when known, else from WASM metadata; x.type, x.fields (alias members), x.methods, f.params, f.effects; lookup order field → meta → reflection; one custom section warp.meta. P230 `effects of f` gives symbols.
 - P114 `x.meta` / `x.@key` stay; comments fill them only with `use comments`; `@key` in a literal is never a field; iteration skips `@` keys.
 - field-or-minus: `p.phone-number` without that field is "p has no field phone-number" with the fix `p.phone - number`.
-- tag-assign: every `=` in a tag body is a value entry like `:`.
 - page-ids: an id in the program's own markup is a name in scope (`who.focus()`); a clash with a variable or function is a compile error naming both; kebab ids resolve; `$who` is the element's value and `$who = "Ann"` writes it; dynamic ids via `element("user-name")`; `$` means something only in warp code.
 
 ## Signals, events and tasks
@@ -819,3 +809,5 @@ stored-table-name → wiki/keyword.md, test/modules/test_stored_relations.pairs.
 comparison-after-arms, for-over-iterator, rewrite-rules, match-alternatives, `if c {1} else 3+1`, P21, P55, #39 → wiki/switch.md, test/control/test_control_rules.pairs.warp.
 raw-rules → core/passes/rewrites.warp (where raw). match-whole-value → wiki/pattern-matching.md.
 pattern-roadmap → wiki/pattern-matching.md (roadmap: cards pattern-clauses, binding-alternatives, whole-binding).
+valued-field-default, P115, P122, P162, P123, enum-case, enum-raw-values → wiki/class.md, wiki/enum.md, test/types/test_class_rules.pairs.warp.
+kinds-as-cases → core (ValueKind enum). declared-class → core (emitter: class structs). tag-assign → wiki/html.md.
