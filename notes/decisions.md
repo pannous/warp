@@ -233,18 +233,6 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - page-ids: an id in the program's own markup is a name in scope (`who.focus()`); a clash with a variable or function is a compile error naming both; kebab ids resolve; `$who` is the element's value and `$who = "Ann"` writes it; dynamic ids via `element("user-name")`; `$` means something only in warp code.
 
 ## Signals, events and tasks
-- finish-await: `finish job` is a soft alias of `await job` (a library word, not a reserved keyword; a program may define its own `finish`); `once job finishes` reads the same way.
-- stopped-no-result: a cancelled task yields no result: after `cancel job`, reading or awaiting `job` raises an error ("job was cancelled"), so `try await job else -1` gives -1; never the value it would have computed. `stop job` / `job.stop()` is a synonym of `pause job` and warns "stop pauses job; to end it: cancel job". A stopped job resumes when awaited, so `job = go 3; stop job; job` → 3 (the final value is awaited).
-- end-refused: `end job` is a compile error naming both readings, "end job: did you mean finish job (let it run to its end) or cancel job (end it now)?" — no default, since neither can be undone. Wiki: async.md "Controlling a task".
-- task-tests-answers: `once job finishes: x = 7` then reading x needs `await job` first (on real threads the handler runs when the task ends); a program's final value is a value place, so a task there is awaited (task-to-value-awaits).
-- task-to-value-awaits: putting a task into a place typed as a value awaits it in between: `n: int = go f(3)` is `n: int = await go f(3)`, as is passing a task to a value-typed parameter or returning it from a value-typed function; an untyped place (`job = go f(3)`) or one typed task keeps the task. `task` and `thread` both name the job type (`job: task = go f(3)`, `job: thread = …`): thread is one type with task, an alias.
-- go-unified (also: tasks-parallel): `go f(x)` means `go { f(x) }`, a task; natively a go task runs truly in parallel (its own thread), with no extra keyword; only the JavaScript page runs tasks cooperatively, until it offers real threads (card go-go).
-- after-condition: `after done return "third"` (also `after done "third"`) is a task that waits until the condition holds, then yields; await, cancel and `await t or fallback` as any task (stopped-no-result), as built in lib/tasks.warp (card unknown-name-after).
-- block-hole-empty-braces: an empty `{}` in a rewrite rule's block hole is an empty block (`on change a {}`), not an empty map (card says-unknown).
-- quote-typo-fix: stray closing quotes in 4 pairs files (`«…«` for `«…»`) are fixed so their 17 swallowed lines run; expectations unchanged.
-- eval-explicit-with (refines N31): eval runs its text as a separate program; values go in explicitly, `eval("x*2", with: {x: 5})` → 10; bare `eval("x*2")` keeps refusing x as unknown; no caller scope (card eval-explicit-names).
-- P109 every variable can be watched; checks only where a listener watches. P111 writes through `global x` in called functions run the listeners. P112 no batching block; a multi-assignment notifies once.
-- P163 `emit alarm{…}` runs `on alarm` handlers and continues; `raise`/`throw` are errors; fire/trigger/signal alias emit with a note; `send alarm{…}` without `to` is emit. P202 an emit no handler receives warns.
 
 - P129 `broadcast v on "chat"` / `send v to "chat"` reach `on message from "chat"` machine-wide; P129b named events cross programs. P155 channels: `channel()` local, `channel "chat"` machine-wide.
 - P156 `whenever cond {…}` is edge-triggered. P38 listeners see later writes in their statements.
@@ -811,3 +799,8 @@ raw-rules → core/passes/rewrites.warp (where raw). match-whole-value → wiki/
 pattern-roadmap → wiki/pattern-matching.md (roadmap: cards pattern-clauses, binding-alternatives, whole-binding).
 valued-field-default, P115, P122, P162, P123, enum-case, enum-raw-values → wiki/class.md, wiki/enum.md, test/types/test_class_rules.pairs.warp.
 kinds-as-cases → core (ValueKind enum). declared-class → core (emitter: class structs). tag-assign → wiki/html.md.
+finish-await, stopped-no-result, end-refused, task-to-value-awaits, go-unified, after-condition → wiki/async.md, test/control/test_task_rules.pairs.warp.
+eval-explicit-with → wiki/evaluation.md, test/control/test_task_rules.pairs.warp.
+P109 → wiki/signal.md, test/control/test_task_rules.pairs.warp.
+P163 → wiki/keyword.md, test/control/test_task_rules.pairs.warp. task-tests-answers → wiki/async.md.
+block-hole-empty-braces → extensions (rule block holes). quote-typo-fix → historic (git).
