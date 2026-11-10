@@ -115,7 +115,9 @@ elif wants 2; then
 		# change is a known red, counted, never the gate's failure (a touched file's old reds kept tier 2 red for days)
 		failing=$(grep -oE '^✗ [^ ]+:[0-9]+' "$logs/tests.log" | sed 's/^✗ //' | sort -u)
 		regressions=$("$(dirname "$0")/baseline.sh" --regressions "$logs/tests.log" 2>/dev/null | grep -oE '^[^ ]+:[0-9]+' | sort -u)
-		new_reds=$(comm -12 <(echo "$failing") <(written_lines $files))
+		# a written line the baseline had red already (an expectation edited, still failing) stays a known red
+		red_before=$("$(dirname "$0")/baseline.sh" $files 2>/dev/null | grep -oE '^✗ [^ ]+:[0-9]+' | sed 's/^✗ //' | sort -u)
+		new_reds=$(comm -12 <(echo "$failing") <(written_lines $files) | comm -23 - <(echo "$red_before"))
 		bad=$(printf '%s\n%s\n' "$regressions" "$new_reds" | grep . | sort -u)
 		# a run that ended without a single ✗ yet failed (a crash, a timeout) is red too
 		[[ $status != 0 && -z $failing ]] && bad="warp test failed: $(tail -1 "$logs/tests.log")"
