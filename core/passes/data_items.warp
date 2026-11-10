@@ -28,6 +28,8 @@ shown_in(n: Node, admitting: list, maps: list): any := {
 		name, value, node = value_of(n)
 		return attributed(name, value, shown_in(node, admitting, maps))
 	}
+	# `type Code = [int]` names a type: its [int] holds no item written (card code-type-alias)
+	if is_key(n, Op.Assign) and is_type_view(key_of(n)) { return n }
 	if is_key(n, Op.Define) {
 		inside = admitting + parameters_admitting_errors(key_of(n)) + admitting_errors(value_of(n))
 		return Key(key_of(n), Op.Define, shown_in(value_of(n), inside, maps))

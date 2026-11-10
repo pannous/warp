@@ -3,3 +3,6 @@
 'type Code = list of int; class P{c: Code}; #P([7, 8, 9]).c'	3
 'type Code = list of int; c: Code = [1, 2]; #c'	2
 'type Rows = list of list of int; f(r: Rows) := #r; f([[1], [2, 3]])'	2
+'type Code = int[]; f(c: Code) := #c; f([1, 2, 3])'	3
+'type Code = [int]; c: Code = [4, 5]; #c'	2
+'type Code = [text]; class P{c: Code}; #P(["a"]).c'	1
