@@ -98,7 +98,7 @@ def unboxed_to_show(given: TypedCode, result: ValueKind): TypedCode {
 	given
 }
 kinds_shown_unboxed = [ValueKind.Text, ValueKind.List, ValueKind.Char, ValueKind.Bool]
-def runtime_call(name: text, values: list): TypedCode { call_values(module.runtime[name], values) }
+def runtime_call(name: text, values: list): TypedCode { call_values(runtime_word(name), values) }
 # a runtime word the value always needs, not one a run reaches only for values past the core (a ratio, a big int): in a
 # build that leaves out its extension, a warning where it is written, as a run that gets there traps (`took / 100` of
 # two ints is an exact ratio: warp test trapped; card after-push-tiers-1-2-1105). Not a refusal: a library the build
