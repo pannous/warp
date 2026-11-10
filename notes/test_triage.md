@@ -19,7 +19,6 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 | test/lists/test_lists.pairs.warp:61, 68, 72, 81 | [1, 2, 3] / ['a', 'b', 'c'] | 3 / 'c' | `;` separates statements: `(1;2;3)` and `{a;b;c}` give their last, as `a;b;c` gives 'c' (line 73) |
 | test/types/test_one_dispatch.pairs.warp:53, 60, 63 | 'A' / yes / 3 | "U" / no / 7 | the program's own `upper`, `add`, `sum` win over the prelude's, as `min` in lists |
 | test/types/test_dispatch.pairs.warp:7 | yes | no | `def sort(x):=0` is the program's own sort, as above |
-| test/types/test_time_type_names.pairs.warp:4, 5 | "instant" | "Instant" | type(…) shows a class by its declared name (card real-type-display); Instant or instant is open with the user |
 | `tests/fixtures/…` in 18 files, 70 failing lines (test/modules/test_wasm_modules, test_include, test_import_compiled, test_module_signals; test/control/test_reflection_words; test/ffi/test_component_short_use; test/wasm/test_wasm.warp) | `include tests/fixtures/counter` | `include test/fixtures/counter` | the folder is test/ now; with the new path `include "test/fixtures/counter.warp"` works, unquoted paths stay a gap |
 | test/parser/test_newline_precedence.warp:18 | 56 | 55 | `fib := it < 2 ? it : …` starts 0, 1: fib(10) is 55 |
 | test/ffi/test_foreign_lines.pairs.warp:4 | π | 3.141592653589793 | atan2 is a float function; the exact π comes only from π |
