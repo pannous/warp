@@ -1133,6 +1133,8 @@ is_takes(condition: Node): bool := is_group(condition) and bracket_of(condition)
 
 # whether the code names a function whose first parameter is typed as wanted: `value` any type but yes/no
 first_parameter_fits(code: Node, wanted: text): bool := {
+	given = value_signature(code)
+	if given != ø { return wanted == number_word and takes_numbers(given.parameters) }
 	if not (code is symbol) or locally_bound(code) { return no }
 	word = name_of(code)
 	if wanted == one_word { return not rule_scope.has(word) and takes_one_typed_value(unaliased(word)) }
@@ -1185,8 +1187,22 @@ definitions_signatures_in(nodes: list): map := {
 			word = name_of(call#1)
 			signatures[word] = (if signatures.has(word) then signatures[word] else []) + [computing_signature(signature_of(items_of(call)), value_of(n))]
 		}
+		# `g = x => x * 2`: g's signature its function's
+		given = if is_key(n, Op.Assign) and key_of(n) is symbol then value_signature(value_of(n)) else ø
+		if given != ø { signatures[name_of(key_of(n))] = (signatures.get(name_of(key_of(n))) ?? []) + [given] }
 	}
 	signatures
+}
+# the signature of a function value, `x => x * 2` or `{it * 2}`, read as a named function's (computing_signature), so
+# `(x => x * 2)([1 2 3])` broadcasts as `f([1 2 3])` does (card traps-cast); ø for any other code
+value_signature(code: Node): Signature? := {
+	if is_lambda(code) {
+		arrow = if is_round(code) then code#1 else code
+		left = key_of(arrow)
+		return computing_signature(signature_of([arrow] + (if is_round(left) then items_of(left) else [left])), value_of(arrow))
+	}
+	if is_curly_group(code) and mentions(code, implicit_parameter) { return computing_signature(signature_of([code, symbol(implicit_parameter)]), code) }
+	ø
 }
 # `def square := it * it`: a lone untyped parameter that the body computes with takes a number, so `square numbers`
 # squares each item as `square all numbers` does (decision M3c); not by `+`, which also joins lists and texts, nor
