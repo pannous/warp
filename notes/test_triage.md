@@ -201,7 +201,8 @@ Groups:
 - Match and switch: alternatives, tuples, list and class patterns with `..`, text patterns `"v" + n: digits`, ranges. About 85 lines.
 - Stores: `storage`, `local`, `session`, `database`, `stored x default …`, values across runs. About 50 lines.
 - Quasi-quotes and code patterns: `data($a + 1)` splices, `$rest...`, `replace data(…) with …`, tree find/replace. About 45 lines.
-- Run-time blocks: `interpret`, `x!` charging a quoted block, `x : a+b` uncharged blocks. About 30 lines.
+- Run-time blocks (decision blocks-run-by-call): a block runs by `x()`, a data value by `interpret x`, `x!` only
+  unwraps; `x : a+b` uncharged blocks. About 30 lines.
 - `try … else` over traps: list index, division, named traps, stack overflow, host failure, `break`/`continue` inside try. 28 lines.
 - One-offs: `on every … at 9:00` timers, `undo x`/`redo x`, `for (even number) in`, `[x for x in xs where …]`, Rust `let mut`/`1..=5`/`loop`,
   `int? i`, `def f(x) as int or error`, pattern schemas `{port: int} is …`, soft `test`/`check` blocks, `exit`, the `is!` word in programs.
