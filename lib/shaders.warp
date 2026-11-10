@@ -162,7 +162,9 @@ global shaders_made = {}
 # each pixel on the CPU (lib/prelude.warp paint_each)
 # hash(cell) on the CPU, as the shader word computes it (lib/prelude.warp SHADER_WORDS_WGSL), for a painting without a GPU
 hash(cell: list) := fract(sine(dot(cell .- 289 .* floor(cell ./ 289), [127.1, 311.7])) * 43758.5453)
-paint_function(reached: map, width, height, f) := if gpu_paints() then paint(shader_of(reached), width, height, shader_floats(values_read(reached))) else paint_each(f, width, height)
+// a program paints on the CPU, exact in f64, with `paint_on_gpu = no`
+global paint_on_gpu = yes
+paint_function(reached: map, width, height, f) := if paint_on_gpu and gpu_paints() then paint(shader_of(reached), width, height, shader_floats(values_read(reached))) else paint_each(f, width, height)
 # the program values the function's shader reads, as they are now; ø for none
 values_read(reached: map): any := {
 	names = shader_made(reached)#2
@@ -851,4 +853,3 @@ wgsl_loop(n: Node, scope: WgslScope, depth: int) := {
 	wgsl_block(n#5, scope, depth + 1)
 	scope.wgsl_lines += [wgsl_indent(depth) + "}"]
 }
-

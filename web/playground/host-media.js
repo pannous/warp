@@ -105,8 +105,11 @@ function changedFrame(holder, words, width, height) {
 
 addHostPart({
 	words: (holder, hooks, { program }) => ({
-		// text_coverage(words, size) (label of use draw, card paint-text): the words set by the browser's canvas
-		text_coverage: (words, size) => {
+		// text_coverage(words, size, font) (label of use draw, card paint-text): the words set by the browser's canvas;
+		// a font file is read natively only
+		text_coverage: (words, size, font) => {
+			const file = String(guestPlain(program(), font));
+			if (file) throw new Error(`label: the font file ${file} is read natively only; the page sets labels in its sans-serif`);
 			const covered = textCoverage(String(guestPlain(program(), words)), Number(size));
 			return newGuestInts(program(), covered);
 		},
