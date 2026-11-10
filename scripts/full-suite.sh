@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # scripts/full-suite.sh [--commit] [<tree>, default this checkout]: the full suite, `warp test --each test` of the
 # tree, into its tracked test/results.txt (a ✓ or ✗ line per test, in file order, then the `m of n failed` summary);
-# --commit commits and pushes it when it changed ("chore: full suite <summary> at <commit>"), so git diff and git log -p
-# of it name what went green or red.
+# --commit commits and pushes it when it changed ("chore: full suite <summary> at <commit> in <minutes> min"), so git
+# diff and git log -p of it name what went green or red, and scripts/vitals.py reads each run's duration from it.
 # One at a time on this machine: a second call while one runs says so and exits 0 (two full suites at once doubled the
 # load to 200 and wrote one results file, 2026-10-29). The results land only when the run ended with its summary; a run
 # that died leaves test/results.txt as it was, says why (its last error lines) and keeps its output in data/full-suite/.
 # It runs on a snapshot of HEAD (/Volumes/Worktrees/full-suite, removed after), so pulls and edits in the tree never reach it.
-# Run it in the background: it takes about an hour.
+# Run it in the background: it takes about 3½ hours (2026-11-10).
 set -uo pipefail
 source "$(dirname "$0")/lib/platform.sh"
 source "$(dirname "$0")/lib/sync-main.sh"
@@ -35,6 +35,7 @@ fi
 echo $$ >"$LOCK/pid"
 echo "$tree" >"$LOCK/tree"
 date '+%H:%M' >"$LOCK/since"
+started=$(date +%s)
 trap 'rm -rf "$LOCK"' EXIT
 
 cd "$tree" || exit 1
@@ -60,7 +61,8 @@ if [ -z "$summary" ]; then
 	exit 1
 fi
 mv "$scratch/results.txt" "$report"
-echo "full-suite: $summary at $tip"
+run="$summary at $tip in $(( ($(date +%s) - started) / 60 )) min"
+echo "full-suite: $run"
 # the baseline of the compiler that ran: its store record keeps these results, so a branch compares its touched tests
 # against the record of its merge base's compiler instead of rerunning them on main
 compiler_hash=$(cut -d' ' -f1 "$pinned/warp.wasm.inputs" 2>/dev/null)
@@ -73,4 +75,4 @@ else
 fi
 ((commit)) || exit 0
 git add -- "$report" && git diff --cached --quiet -- "$report" && exit 0
-git commit -q -m "chore: full suite $summary at $tip" -- "$report" && up_to_date_main && git push -q
+git commit -q -m "chore: full suite $run" -- "$report" && up_to_date_main && git push -q
