@@ -112,7 +112,7 @@ Principles and Talking live only in AGENTS.md.
   Interviewer's approval only, not a new question.
 - Outcome tests only (AGENTS.md "Outcome tests only"): new tests check what warp code produces, never an
   intermediate; a test pinning one may be deleted or rewritten as one is! line.
-- Tests are result-based (user): assert what a program computes, e.g. `is! '6*7' 42`, or its printed
+- Tests are result-based: assert what a program computes, e.g. `is! '6*7' 42`, or its printed
   output. Don't pin incidental details such as exit codes of successful runs, internal forms, pass names, error
   wording or timing. Exit codes are tested only when the feature itself is about them (e.g. `exit(5)`).
 - Acceptance (decision warp-only-acceptance): a branch is accepted when warp.wasm compiles

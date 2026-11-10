@@ -117,7 +117,7 @@ function; local closures by dot; `x.w = v` setter by arity; step 8 after 1-5.
   object-computed-field.
 - Step 3 (analyzer) skipped: the analyzer's Data for `x.w` is the safe superset; the emitter's TypedCode carries the
   call's kind. Step 6: of_lookups' `type of` is a parser quirk (`type of` reads as a declaration head), not a dot
-  workaround: stays. Step 5 (node parts as words) dropped (user): global words `name value key line …` cost more
+  workaround: stays. Step 5 (node parts as words) dropped: global words `name value key line …` cost more
   than the ~15 lines of map_get they save.
 - Step 7 (decision setters-declared, extensions only): a class's one-parameter method is its setter
   (class_methods setter_calls, no getter needed); a function whose first parameter is typed with x's class is one too

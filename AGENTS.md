@@ -255,7 +255,7 @@ wiki/Footguns.md (decided language rules: grep it, never read it whole), notes/d
 before asking a question). After a context swap, this file and your role file beat the handover.
 
 ## Principles
-- Elegance first (user): always the most elegant option, never the quick hack. Before writing code, picture how the
+- Elegance first: always the most elegant option, never the quick hack. Before writing code, picture how the
   most beautiful, most general code would look (a library function over a general feature beats a rewrite plus core
   patches), and build that; if it needs a missing language feature, build or card the feature instead of a workaround.
   Recommended options in questions and plans are the elegant ones.
@@ -298,9 +298,9 @@ before asking a question). After a context swap, this file and your role file be
 - Plain warp first: a feature is a function, an enum, a class, an overload or a block parameter in lib/ whenever
   plain warp can say it (`on Key.escape {…}` is a call of `on(event, handler: block)`, no rule). A `rewrite` rule
   only for a spelling plain warp cannot parse or mean; its commit names why a function would not do (user 2026-10-27).
-- Wording (user): a rewrite rule that gives the language a new spelling is a compiler extension, never "library" (its
+- Wording: a rewrite rule that gives the language a new spelling is a compiler extension, never "library" (its
   file sits in extensions/sugar/); "library" means only modules programs import.
-- Extension OKs (user): a core extension the compiler does not need to rebuild itself (a rule or file under
+- Extension OKs: a core extension the compiler does not need to rebuild itself (a rule or file under
   extensions/, its sugar/ rules included) needs no strong confirmation when it is generic and/or small: build it,
   send the Interviewer an FYI. A spelling the user has not decided, a new pass or a change to the compiler proper
   still asks first.

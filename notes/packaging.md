@@ -28,7 +28,7 @@ pattern; Wasp (C++) has its own tap pannous/homebrew-wasp).
     and release.yml checks each against GLIBC_FLOOR (card linux-glibc-floor). warp and libwarp_wasmtime ask 2.34
     (RHEL 9), libwarp_gpu 2.35 (hypot). Lower (manylinux_2_28) needs an older container; the bootstrap, the previous
     release's warp, would then have to ask no newer glibc than that container either.
-  - One-time setup (user): PyPI account → pypi.org/manage/account/publishing "Add a new pending publisher": project
+  - One-time setup: PyPI account → pypi.org/manage/account/publishing "Add a new pending publisher": project
     warp-language, owner pannous, repository warp, workflow release.yml, environment pypi; then
     `gh variable set PYPI_PUBLISH -R pannous/warp -b true`. PyPI is live since v1.3.0.
 - `cargo install --locked --git https://github.com/pannous/warp warp warp-runtime`.

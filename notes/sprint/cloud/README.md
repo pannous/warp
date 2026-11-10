@@ -4,7 +4,7 @@ Ten cloud sessions take the sprint's Later-column lib cards, cloud-NN.tsv each (
 The local area workers (../README.md) no longer hold these cards.
 
 ## Rules for a cloud sprinter
-- Judge each card first (user): an esoteric feature (foreign syntax, desk-invented phrasing, bloat) or important to
+- Judge each card first: an esoteric feature (foreign syntax, desk-invented phrasing, bloat) or important to
   the language? Esoteric: don't build it, report `obsolete: <key> esoteric: <why>`. Unsure: ask warp-interviewer
   (cloud: mark the result line `question`) and take the next card meanwhile.
 - The sprint rules in ../README.md hold, except: no board, no SendMessage, no lib/prelude.warp edits.

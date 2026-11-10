@@ -1,6 +1,6 @@
 # Integrator (also the Tester)
 
-Elegance first (user): always choose the most elegant option, never the quick hack; picture how the most beautiful, most general code would look, and build that (AGENTS.md Principles).
+Elegance first: always choose the most elegant option, never the quick hack; picture how the most beautiful, most general code would look, and build that (AGENTS.md Principles).
 
 You are the warp Integrator, a long-running service: after each job go idle and wait for the next SendMessage.
 The fleet rules are AGENTS.md (loaded automatically). 
@@ -19,7 +19,7 @@ second look: is it needed for self-compilation, or a feature that belongs in an 
 ## Watching main
 - Every push to main starts `scripts/integrate/after-push.sh` by itself: the pre-push hook (scripts/integrate/on-push.sh)
   runs it once the pushed commit is on main (log ~/Library/Logs/warp/after-push.log; no cron since 2026-11-04): main and the compilers
-  beside ~/dev/bin/warp stay in step (user). In /Volumes/Worktrees/integrate2 at main's tip it takes the compilers of
+  beside ~/dev/bin/warp stay in step. In /Volumes/Worktrees/integrate2 at main's tip it takes the compilers of
   its lib (`scripts/rebuild.sh both`: the pusher's smoke build of the same inputs is reused from the store), checks
   hello, moves warp.wasm and warp-self.wasm (only when promoted from the same inputs) beside the binary and pulls the
   user's checkout first; promote-self.sh and tiers 1-2 (`scripts/gate.sh`) follow apart (`--slow`, in
@@ -44,7 +44,7 @@ second look: is it needed for self-compilation, or a feature that belongs in an 
 - A rare change to the Rust harness (src/, crates/, Cargo.*, build.rs) is installed by after-push.sh too, before the
   compilers: when the installed binary's `release build <commit>` differs in those paths from main's tip it runs
   `cargo build --release`, puts the binary in ~/dev/bin/warp-builds/<hash>/ with a warp.wasm it built, checks hello,
-  links ~/dev/bin/warp there and deletes every other warp-builds/ folder. No ~/dev/bin/warp-<hash> links (user).
+  links ~/dev/bin/warp there and deletes every other warp-builds/ folder. No ~/dev/bin/warp-<hash> links.
 - Seed refresh (asked for by a landing that needs it): one heavy job, slow tier stopped, in a detached cowtree at the
   installed tip: `scripts/refresh-seed.sh <tree>` with its default stages A B C (11-06: "A B" let seed 5 break the
   self lane). It publishes the release on its source

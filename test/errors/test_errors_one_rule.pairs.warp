@@ -1,4 +1,4 @@
-# decision errors-one-rule (user): an Error raises unless it reaches an optional place or a handler
+# decision errors-one-rule: an Error raises unless it reaches an optional place or a handler
 'r = write("/dev/null/x.txt", "hi"); 1'	error	a failed write put in a plain variable stops the run
 'f(p) := write(p, "hi"); r = f("/dev/null/x.txt"); 2'	error	an Error a program’s own word gives back too
 'r: text? = parse_json("{oops"); r failed'	true
