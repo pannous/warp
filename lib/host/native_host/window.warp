@@ -264,8 +264,8 @@ window_run_ended() := {
 // text_coverage(words, size) (label of use draw): the words set `size` pixels per em on one line in the system's
 // sans-serif font, as [width, height, then how much each pixel is covered from 0 to 255, row by row], its height the
 // font's ascent and descent, as the playground's canvas sets them (web/playground/host-media.js). On macOS CoreText
-// sets them, as the system shows text; elsewhere, or with WARP_FONT naming a font file, FreeType
-host_text_coverage(words, size: int): any := if on_mac() and env(FONT_VARIABLE) == ø then core_text_coverage(str(words), size) else free_type_coverage(str(words), size)
+// sets them, as the system shows text; elsewhere, or with `font` naming a font file, FreeType
+host_text_coverage(words, size: int, font): any := if on_mac() and str(font) == "" then core_text_coverage(str(words), size) else free_type_coverage(str(words), size, str(font))
 
 CTFontCreateWithName(name: handle, size: f64, matrix: handle): handle from 'CoreText'
 CTLineCreateWithAttributedString(string: handle): handle from 'CoreText'
@@ -321,7 +321,7 @@ core_text_coverage(words: text, size: int): list := {
 	covered
 }
 
-// FreeType (Linux's own text, or WARP_FONT's file anywhere): the font read once, each glyph rendered at its place on
+// FreeType (Linux's own text, or label's `font` file anywhere): each font read once, each glyph rendered at its place on
 // the line, its kerning from the one before
 FT_Init_FreeType(library: out): handle from 'freetype'
 FT_New_Face(library: handle, path: text, index: i64, face: out): handle from 'freetype'
@@ -329,7 +329,6 @@ FT_Set_Pixel_Sizes(face: handle, width: i32, height: i32): i32 from 'freetype'
 FT_Get_Char_Index(face: handle, code: i64): i32 from 'freetype'
 FT_Load_Glyph(face: handle, glyph: i32, flags: i32): i32 from 'freetype'
 FT_Get_Kerning(face: handle, left: i32, right: i32, mode: i32, kerning: handle): i32 from 'freetype'
-FONT_VARIABLE = "WARP_FONT"
 // the sans-serif fonts looked for, the first found used: what browsers show for sans-serif on each system
 SYSTEM_FONTS = ["/System/Library/Fonts/Helvetica.ttc", "/System/Library/Fonts/Supplemental/Arial.ttf",
 	"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/TTF/DejaVuSans.ttf", "/usr/share/fonts/dejavu/DejaVuSans.ttf",
@@ -351,19 +350,20 @@ FT_GLYPH_PITCH_AT = 160
 FT_GLYPH_BUFFER_AT = 168
 FT_GLYPH_LEFT_AT = 192
 FT_GLYPH_TOP_AT = 196
-global face = 0
-font_face() := {
-	if face == 0 {
-		path = env(FONT_VARIABLE) ?? SYSTEM_FONTS.find(exists)
-		if path == ø { raise "no font found: install DejaVu Sans, or name a .ttf in " + FONT_VARIABLE }
+// the faces read so far, by font file ("" the system's)
+global faces = {}
+font_face(font: text) := {
+	if not faces.has(font) {
+		path = if font == "" then SYSTEM_FONTS.find(exists) else font
+		if path == ø { raise "no font found: install DejaVu Sans, or name a font file: label(…, font: ./my.ttf)" }
 		if not exists(path) { raise "cannot read the font " + path }
-		face = FT_New_Face(FT_Init_FreeType(), path, 0)
+		faces[font] = FT_New_Face(FT_Init_FreeType(), path, 0)
 	}
-	face
+	faces[font]
 }
-free_type_coverage(words: text, size: int): list := {
+free_type_coverage(words: text, size: int, file: text): list := {
 	cells_made()
-	font = font_face()
+	font = font_face(file)
 	FT_Set_Pixel_Sizes(font, 0, size)
 	metrics = field_pointer(font, FT_FACE_SIZE_AT)
 	ascent = field_i64(metrics, FT_SIZE_ASCENDER_AT) / FT_UNITS

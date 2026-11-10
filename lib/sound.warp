@@ -832,7 +832,7 @@ sound(samples) := {
 }
 
 // A sound heard goes from memory straight to the audio device (card sound-direct; the host word sound_played): no file,
-// no line. Else, a silent run's, one for WARP_SOUND_PLAYER's or the system's player (card sound-native-library), its
+// no line. Else, a silent run's, one for the program's sound_player or the system's (card sound-native-library), its
 // samples become a 16-bit PCM WAV in the system's temporary folder, warp-sound/sound-<process id>-<handle>.wav
 // (sound-<process id>.wav the first), with its line on stderr: `sound 0.55 s: <file>`. A run's first file sweeps the
 // files of runs that ended, so none pile up
@@ -881,29 +881,29 @@ def waited_till(start) {
 // Playing (decision sound-system-player): a sound starts when its voice reaches it (the clock paces the program till
 // then). The host plays it in the process (decision sound-plays: natively lib/host/native_host/sound.warp over SDL3, in the
 // playground web/playground/host-sound.js), the run waiting at its end till its sounds are heard out; under
-// WARP_NO_WINDOW or CI nothing sounds. Without an audio device, or with WARP_SOUND_PLAYER set, the WAV goes to that
-// player, else the first of afplay (macOS), paplay, aplay (Linux) that starts. Under WARP_NO_WINDOW or CI only an
-// explicit WARP_SOUND_PLAYER plays
+// WARP_NO_WINDOW or CI nothing sounds. Without an audio device, or with the program naming its player
+// (`sound_player = "mpv"`), the WAV goes to that player, else the first of afplay (macOS), paplay, aplay (Linux) that
+// starts. Under WARP_NO_WINDOW or CI only a named player plays
+global sound_player = ""
 posix_spawnp(process: out, file: text, actions: handle, attributes: handle, arguments: texts, environment: texts): i32 from 'c'
 // the host's sound words: 0 once the sound plays, else -1 (no audio device), the samples little-endian 16-bit bytes
 sound_played(pcm: node, rate: int, channels: int): int from host
 sound_file_played(path: node): int from host
 quiet_run() := env("WARP_NO_WINDOW") != ø or env("CI") != ø
-heard_directly(speakers, rate, channels) := env("WARP_SOUND_PLAYER") == ø and not quiet_run() and sound_played(pcm_bytes(speakers), rate, channels) == 0
+heard_directly(speakers, rate, channels) := sound_player == "" and not quiet_run() and sound_played(pcm_bytes(speakers), rate, channels) == 0
 SYSTEM_PLAYERS = ["afplay", "paplay", "aplay"]
 sound_players() := {
-	chosen = env("WARP_SOUND_PLAYER")
-	if chosen != ø { return [chosen] }
+	if sound_player != "" { return [sound_player] }
 	if quiet_run() { return [] }
 	SYSTEM_PLAYERS
 }
 played(file) := {
-	if env("WARP_SOUND_PLAYER") == ø and sound_file_played(file) == 0 { return ø }
+	if sound_player == "" and sound_file_played(file) == 0 { return ø }
 	players = sound_players()
 	if count(players) == 0 { return ø }
 	environment = wasi_environment().split(chr(0)).filter(line => line != "")
 	for player in players { if posix_spawnp(player, 0, 0, [player, file], environment) == 0 { return ø } }
-	said("no sound player started: set WARP_SOUND_PLAYER")
+	said("no sound player started: name one in the program, sound_player = \"mpv\"")
 }
 
 // The voice's clock (card sound-native-clock): where its queued sounds end in real time (clock() milliseconds) and its
@@ -1520,7 +1520,6 @@ midi_milliseconds(tick, tempi, division) := {
 	}
 	round((seconds + (tick - from) * tempo / 1000000.0 / division) * 1000) as int
 }
-
 
 // how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/sound/visualizer.warp), or of an
 // audio file, spectrum(./song.mp3, seconds, bands), decoded once: the bands spaced evenly in pitch from band_low to

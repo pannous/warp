@@ -38,7 +38,9 @@ is! 'use sin;sin π' 0
 line of the `test_*.warp` files under the folders through warp.wasm, with the installed binary
 (core/native/tests.warp; warp.wasm lists the cases and prints the verdicts, extensions/commands/tests.warp). Each test
 is its own program in a child process (`warp run <code>` in the test file's folder, 30 s of CPU each, killed after a
-load-stretched 120 s wall clock as a TIME), so a hang, trap or crash fails only that test. Every case takes a slot of one machine-wide pool
+load-stretched 120 s wall clock as a TIME), so a hang, trap or crash fails only that test. The children are forks of
+the one `warp test` process, which loads the engine and the machine code of warp.wasm, runtime.wasm and the prebuilt
+modules once (card resident-wasm-instance): no process start, engine or machine code load per case. Every case takes a slot of one machine-wide pool
 (~/.cache/warp/test-slots, as many lock files as cores, WARP_TEST_SLOTS overrides): parallel runs of sessions, the
 gate and sweeps queue for the slots instead of piling up (card shared-test-slots). Its `use` reads from
 the test file's folder. An expected column that is not data (`π`, `(-1)`, `1 + pi`) runs through warp.wasm too.

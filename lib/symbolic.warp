@@ -1,7 +1,7 @@
 // The shell's symbolic mode (wiki/shell.md "Symbolic mode", wiki/evaluation.md; card shell-symbolic-mode): an
 // assignment stays its expression until its value is asked for, and asking shows the evaluation step by step:
 //   z = y*y; y = x+x; x = 3; then z shows  y*y  (x+x)*(x+x)  (3+3)*(3+3)  6*6  36
-// lib/repl.warp's `:symbolic` turns it on, `:direct` off (the default); `z!` there gives the value alone.
+// lib/repl.warp's `:symbolic` turns it on, `:direct` off (the default); `interpret z` there gives the value alone.
 // Decisions (card shell-symbolic-mode):
 // - a table maps each symbolic name to its expression, as written; a step replaces every name of the table at once,
 //   its expression grouped in ( ) unless atomic (a number, a name, a quoted text)
