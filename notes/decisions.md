@@ -114,61 +114,24 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - data-reserved: `data` is a keyword (the `data …` quoting prefix); a variable named data is an error.
 
 ## Numbers
-- core-int-division: the compiler's source writes every integer division as `÷` (plain `/` of ints and every `/!` in core/ become `÷`; `/!` stays an alias), so the compiler needs no exact ratios and big numbers stay an optional extension.
-- bool-int-fallthrough: a bool falls through to the int implementation of any operator.
-- element-wise-scalars: element-wise operators apply to a non-list value directly (`3 .* 3` → 9).
-- type-shows-nat: type(3) and an undeclared whole value show `nat`, a declared int shows `int`.
-- fast-int-readings: a literal beside a fast int stays int (`xs[i + 1]` in a range loop); `i++`/`i--` on an undeclared counter stay int; `s += i` grows like + (a nat).
-- int-boxed-overflow-big: + - * of two boxed ints that overflow give the big-int result instead of trapping (`xs = [2^62]; xs#1 * 4`).
-- marked-floats-shape: `type X = float` beside `= int`; marks survive arithmetic (left mark, else right, only when the Kind matches, so `Color * 0.5` is plain); `°` an Angle shown in degrees, also when statically known and unboxed.
-- exact-decimals: decimal literals are exact (`0.1 + 0.2 == 0.3`), division gives exact ratios; floats come only from float sources (transcendentals, sqrt of a non-square, host values, `as float`, float-typed places, e-notation) and are contagious; `==` warns only with a float involved.
-- exact-power: a power of exact operands stays exact, a whole decimal exponent included (`0.5 ^ 1074.0` prints all ~750 digits of 2^-1074); the float pow is used only for float operands. Tests and probes keep their examples to calculations under ~10 s.
-- int-list: a whole decimal literal is int (`type([0.0, 0.0])` is list of int, P196b); a variable's type joins every write. #21 `x=π; type(x)` is real.
-- number-converts: `number` keeps an exact value; only `float` converts.
-- float-text: floats print shortest round-trip digits (Python/JS repr) everywhere; P225 also joined to text.
-- repeating-decimals: only the overline `0.3̅` is the exact 1/3; `x as decimal` writes the period overlined; never for floats.
-- float-intervals: `±` says a value is not exact, so an interval (lib/intervals.warp) switches to fast floats. It shows only the digits its spread justifies: `(6.0m ± 0.3m) * (2.0m ± 0.2m)` is between 10.26m² and 13.86m², never 13.860000000000001; the float value itself is untouched; lib-only. interval-bounds-guard-digit: `low()`/`high()` hand out the bound rounded one digit finer than the ± text shows (12.0 ± 1.9 → bounds at 0.01: 10.26m² to 13.86m²); the interval keeps its floats. Ranges are written `A to B`. samples/units_dynamic.warp shows its pace by `pace.in("km/h")` rounded; exact arithmetic stays elsewhere (151/15 km/h).
 - D16 `byte`, `int8..int32` are declared FFI types that trap on overflow; `u8` = `uint8` = `byte` (`int` and `nat`: nat-and-int). i64-wraps: `i64`/`int64` wrap silently at 2^63 like `fast int`; `use strict` catches it.
-- c-int-names: C's multi-word integer names are the fixed widths C means, each with a got-it note naming warp's word: `unsigned int` = uint32, `unsigned long (long)` = uint64, `long long` = int64, `unsigned short` = uint16, `short int` = int16, `unsigned char` = byte, `signed char` = int8 (`x: unsigned int = -1` errors "uint32 overflow"). Single words keep warp's meaning (`long`, `int`: nat-and-int).
-- fast-scope: `fast` before a function or module makes it machine arithmetic: polynomial sin/cos/exp/pow, `/` gives f64, ints are wrapping i64; `x: fast int` is i64.
 
 - hex-printing: `255 as hex` is an int shown as 0xFF; arithmetic gives a plain int. binary-int: `5 as binary` shows 0b101.
-- footgun-divzero: exact numbers raise divide by zero (catchable); computed IEEE floats give ∞/NaN.
 - gpu-f32 (also: P240): heavy float maps (from 10× the measured break-even) run on the GPU in f32 with a one-time notice; `@cpu` and `WARP_GPU=off` keep f64; `@gpu @cpu` together is an error; `@gpu` warns when the GPU doesn't apply; int lists fitting i32 may use the GPU with an overflow flag. go-heavy-map: a `go` map of a heavy kernel runs as the plain map.
-- P119 NaN canonicalization only where a float's bits are observable.
 - approx-zero: `≈` is relative 1e-9 with absolute floor 1e-12; `tolerance = …` overrides. P211 `~` is looser: 1% for numbers, texts ignoring whitespace and punctuation; `≈` on texts ignores case and accents. P212 a class may define `approximately` and/or `similar`.
-- ± intervals: P217 `5 ± 1` is a worst-case interval (Gaussian later as `5 ± 1σ`). P218 `x ≈ r ± 1` holds when |x−r| ≤ 1. P219 prints 2 significant digits of the ± part. P220 `1950 ± 50 AD` is the same ± value. P224/P224b comparisons answer only when certain: known ± values need `certainly`/`possibly`/`.value` (compile error), run-time ones count an overlap as not certain with a one-time warning. P233 a field typed with a tolerance gives each value that tolerance.
-- `x /= y` is exactly `x = x / y`; an `x:int` keeps a whole number.
-- Trailing percent: `10%` is 1/10, `50 % of 200` is 100; infix `%` stays remainder; CSS values stay as written.
-- P184 English number words are numbers when no variable has that name, with a hint toward digits.
 - #11 exact reals may go into a declared float with precision loss. rational-float: `x: rational = sqrt(2)` is a compile error, `x: real = sqrt(2)` works.
 - lossy-return (also: float-result): a fraction reaching a declared int result is an error ("declare number, or truncate with as int"). P49/P49b a float, even a written `2.0`, to an int parameter is a compile error. P131 an int variable or field refuses a fraction loudly. P127 int class fields keep exact ints.
 - round-halves: `round` rounds halves away from zero; banker's rounding is `round_even`; an exact half seen at compile time gets a hint about Python. `⌊x⌋` floor, `⌈x⌉` ceil, `⌊x⌉` round. `x as int` truncates toward zero.
-- nearest-limit: `nearest(x, rational)` limits the denominator to 1,000,000; `limit = 0` gives the exact fraction of the float. float-as-rational: `x as rational` of a float is the exact fraction of its shortest printed digits.
 - P226/P226b log glyphs: `b⌞x` and `x⌟b` are log base b; postfix `x⌟` is ln. easy-add: `x↑n` power and `x↓b` log are typed infix operators for numbers, other types define their own.
 - P57 hyperreals: `1/(1+ε)` stays an error; dual numbers later. P56(2-4) `∞` is f64 infinity, ω the hyperreal infinite.
-- real-runtime: real.rs (compile-time symbolic reals) stays until symbolic reals are a run-time number type; the general run-time exact mechanism is parked (notes/real_runtime.md).
 
 ## Units and quantities
-- unit-sum-display: a sum of quantities keeps today's display (`2h + 30min` in hours).
-- #5 units yes; #3 juxtaposition `3x` multiplies; units are written glued (`3km`), `3 km` works with a hint. P64 units are checked at compile time and kept as metadata where static knowledge ends. P36 `100 cm in m` / `as m` convert within a quantity. Unit sums use the finer unit. Quantities print without a space (`500m`); P231 print rounds quantities, str() keeps the exact value. #31 `min` stays the function.
-- quantity-naming: warp says quantity (length, speed, density), axis for width/height, rank for the number of axes, shape for 28 × 28 px; `dimension` is only an alias with a hint.
 - dimensions-units: quantity names are types (`3 cm is length`; `h: length = 3 s` errs); the time quantity is `duration`; units live in lib/units.warp; a unit after a list applies to each element (`[3, 4] cm`). Predefined derived names: speed, area, volume, frequency.
 - unit-definitions: `quantity length meter` declares a base and its SI anchor; `unit cm := meter / 100`, `unit N := kg*m/s²` (derived quantities follow from the expression); offsets `unit °F := (it + 459.67) * 5/9 K`; SI prefixes only for SI-anchored/derived units. unit-target: `unit °C as K := it + 273.15`. unit-prefix-lines: `prefix k := 10^3`, `SI dimension length meter`.
 - Unit symbols bind only after a number, never as bare names; a variable gets a unit by `x * 1 m`.
 - unit-after-number (also: variable-named-like): `m = 5; 3m` is 3 meters with a hint "write 3*m to multiply".
-- litre-suffix: a glued unit beats a number suffix (`2L` is 2 litres) once units are on (units-opt-in); exactness is `2 as exact`.
-- units-opt-in (historic; the code wins, card units-back): the parser never imports or builds the unit module itself, but `3km` works without `use units` (standard modules load on demand: implicit-standard-words).
-- pixel-lengths: px is its own quantity (`unit dpi := px / inch`); a length becomes px by `3 cm * display.dpi`; `3 cm as px` is a plain DimensionError.
 - display-names: display.density (aliases dpi, ppi) in dpi; display.size width × height in px (alias dimensions, with a hint); display.diagonal in inch; display.resolution is an ambiguous alias reading display.size, with a hint.
 - unit-types: a unit can type a field (`display { density: dpi }`): it fixes the kind of quantity, converts other units, refuses other quantities. unit-field-plain-number: a plain number there warns with a fix adding the unit.
-- general-conversions: one conversion mechanism `A as B := body` (`Person as text := it.name`); a program's conversions come before built-in ones; unit lines are its unit cases.
-- units-library: units, quantities and prefixes are lib/units.warp lines, run-time quantities its Quantity class; the compile-time check (static_units.rs, P64) stays Rust until types take a quantity parameter.
-- units-as-values (user; also: units-quantity-lib replaced): units are values: Quantity in lib/units.warp, dimensions (Time, Length, …) are classes, a unit a value of magnitude 1 (`ms = Quantity(1, "ms") as Time`); `5km` is implicit multiplication `5 * km` through Quantity's `*`, no sugar rule, so `90km/h`, `9.81m/s²` come free; conversion, showing and dimension errors in Quantity's operators. Card unit-literals.
-- overloads-before-reals: class operator overloads are fixed in core first (card class-operator-overloads; they unblock Real, Quantity, Vec), then π, τ, ℯ, ∞ are lib/reals.warp's exact Real (`π/2` prints π/2); no float interim.
-- expected-type-names: an argument for a parameter typed T also finds T's values by name: `sleep(3ms)` without `use units`, `paint(Red)` finds Color.Red; a signature naming T loads T's module on demand. A local of the same name is used if it fits T (warning: shadows), else T's value wins (warning names the local). Without an expected type `3ms` is an error with the fix-it `use units`. wiki/inventions.md; card expected-type-names.
-- duration-units: `1 h` beside a duration is a duration; `name hour := h` stays (`2 h in minutes` → 120min).
-- canvas-size: `window`, `display` and `canvas` `.width/.height` are writable properties natively and in the playground; a bare top-level `width` works with a did-you-mean.
 
 ## Text
 - digit-as-char: `2 as char` is the digit '2', like P25 `int('5')` is 5; a code point becomes a character by `char(0x41)`.
@@ -179,38 +142,18 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 ## Bool and truthiness
 
 ## Types and annotations
-- real-canonical-core: `real` is no longer a rational synonym (`exact` stays); `3 is real` yes; a program's own type of a core type word shadows it; a float given to `real` converts to the exact real (2.5).
-- parameter-typed: `a or b` / `a | b` as a parameter, field or local type holds the members' shared kind, else a node; a known kind fitting no member is refused at compile time, a node checked at run time.
-- primitive-annotation: `@primitive` marks GC-free code emitted as plain MVP wasm (extensions/primitive.warp): on a function (`@primitive add(a: i32, b: i32): i32 := a + b`; called from GC code it converts at the boundary like an FFI call, the reverse is refused), on a file (first line: every definition primitive, the file builds to MVP wasm), on a class (`@primitive class Header { len: u32; tag: u8 }` a fixed linear-memory layout, C structs; `struct Header { len: u32; tag: u8 }` is the same). A form the mode can't emit is refused loudly at its line. i32/u8/… are the FFI types usable everywhere (D16); `pointer` joins them.
 
-- map-protocol: `map` is a protocol and `{a: 1}` its default implementation (the hashed map, zero cost). Five required methods: keys, get, has, set (`m[k] = v`), remove; every other map word (lib/map.warp: values, count, merge, entries, pick, …) is a default body. Any class giving the five is a map (structural, wiki/trait.md); bare calls `keys(p)`, `p["b"]`, `k in p`, `for k in p` and library words use the class's methods (~10–15 core lines, rest in extensions/class_methods). `Map default ListMap` affects only maps built explicitly with `Map{…}` / `map{…}`; a bare `{a: 1}` always stays the hashed map. Any default (ListMap included) must be well optimized, measured before it ships. Map implementations convert transparently: `Map x = {a: 1}` makes x the Map default from the hashed literal, and `f(a: map)` accepts any implementation (card protocol-default-implementation).
-- matrix-protocol: `matrix` is a protocol as `map` is: a few required methods, the rest (map, multiply, transpose, …) default bodies; lib/matrix.warp's list of lists is the default implementation, later ones may be flat typed arrays, sparse or GPU-backed; implementations convert transparently, defaults well optimized. The protocol mechanism is general (card matrix-protocol-default). matrix-protocol-words: required rows(), cols() (alias columns), element(i, j) (not `at`); the lib/matrix.warp words are default bodies that read a list of rows as it is (no copy) and any other implementation once per call; a list of equally long lists `is matrix`; `Matrix x = [[1, 2], [3, 4]]` stays that list until `matrix default …` names another class.
-- lowercase-protocols: a lowercase type word is the protocol (`map`, `matrix`, `list`, `text`), so `f(m: matrix)` accepts any implementation; the capitalized name is its default class, which can switch (`Map{a: 1}` builds today's default; after `map default ListMap` a ListMap); other capitalized names are concrete classes (NodeMap, ListMap, DenseMatrix). wiki/trait.md "Protocol and default class".
-- effect-annotations: effect marks are meta annotations like `@primitive`: `@pure square(x) := x*x`, `@io`, `@ffi`; the `! Pure` / `! IO, FFI` suffix form is not built; checking and `effects of f` come with extensions/effects.warp (card effect-word-parameter).
-- primitive-int-width: `int` is warp's 64-bit int everywhere, @primitive code included; 32-bit is `i32`; C's 32-bit int only on foreign signature lines; a literal takes its expected type's width, untyped 64-bit.
-- P203 annotations make code strict; unannotated code is lax (checked at run time); `--strict` warns on lax spots. P204 an `any` value entering an annotated place gets a run-time check. P201 `s: Shape = Circle(…); s.r` is a compile error with hints `match Circle(r)` / `s as Circle`.
-- Duck typing: a truly unknown type is duck typed; a known different type with the right fields is an error teaching `image like photo` (P22); a written map is accepted structurally; `p.word` on an untyped parameter is a run-time "no field word".
-- #30 only `is` tests types (`3 == int` educates toward `is`). type-equal: `is` is the subtype test, `==` between types exact; a bare type name is the type as a value. is-union: `v is int or text` means `v is (int or text)`.
-- type-value-is: a type value tested against a type word (`is`, a match arm) is the subtype test: `float is float` and `float is number` yes, `int is float` no; `name(t: type) := match t { int: …; float: "real" }` gives "real" for float, also for an undeclared `x = float`.
 - type-text (also: type-print, time-word's type clause, type-result-shown): a type value is `class int` in every text form; `type(int)` is class type; every type value prints `class X`, which reads back as a reference (`type(3)` → class nat); warp test reads `class X` back as the type.
 - unknown-type: an unknown declared type is an error with the near type as fix.
-- union-or: in types `or` = `|` (`x: int or text`); in values `or` is boolean.
 - return-as (also: union-return): return types are `def f(x) as int or text`; `->` works with a hint; no `returns`.
-- error-type (also: error-optional): a function that can fail has type `T or error`, never Result; `T?` is T, ø or an error. Writing an Error into a field or list element raises; `x is ø` missing only, `x failed` failed only, `if no x` / `x or 0` both; at a WIT export: `result`, `option` or `result<option<T>>`; an Error propagates where a caller can take it.
-- optional-result: ø reaching a place declared `list` (a result or a parameter) becomes [] silently, no warning, no refusal (`rule_needs(source: text): list` may answer ø). `list?` keeps ø as missing. For other declared types a result that can answer ø warns "f can answer ø; declare `: T?`" (warp fix adds the ?) and the ø reaches the caller unchanged; ø passed into a plain non-list `T` parameter is open. `[] == ø` stays no (empty-is-not-missing).
 - empty-field: ø needs `?` everywhere (`class Tree{left: Tree}` errs, fix `left: Tree?`).
 - P185 `none(xs, f)`, the null spelling with arguments, is an error naming the null.
 - P125 optional parameters: `x=ø`, `maybe x`, `x?` alike; typed `x:int?`; `a ?? b` only for ø.
 - P179 sum types auto-unwrap like optionals; payload fields by position `rgb(1,2,3)#1`; a payload-free variant is its symbol and `red is Color`. P178 enum cases with values are sealed classes.
-- instance-position: `#` reads a class instance's fields by position like P179 payloads: `class P { x: int; y: int }; P(2, 3)#1` → 2; what is built by position reads by position. Code that names fields (the compiler) uses `.field`. Later (card class-position-index) a class may override its position function like its index function, and defining one of the two derives the other.
-- position-index-words: a class's `#` is its `position(p)` (from 1), `[]` its `index(i)` (from 0), prefix `#b` its `count()`; writes `b#i = v` / `b[i] = v` are `position(p, value)` / `index(i, value)` (setters by arity), chosen by the assignment, so `m[i, j]` stays a read; defining one of position/index derives the other. PitchClass `F#4` is `position(octave)`. Card class-position-index.
-- P45 a variable given kinds that don't mix (`x=[1]; x=5`) is a compile error; Int→Float widening stays; undeclared lists stay `list any`.
 - P28 `real x;` read before assignment is its type's zero value.
 - type-words-reserved (also: P23, P20): every type word is reserved as a function name (`double(x) := …` errs, "name it to_double"), except P31's `text(p)`. type-word-local-warns: binding a variable to a type word (`symbol = ":"`) warns, since it shadows the type in `is`/`as`.
 - list-cast-each: `as` a list type converts each item like `as` its item type (`["1", "2"] as ints` → [1 2], `[1, 2] as texts` → ["1" "2"]; an item that can't convert is that item's error); a declared result type `: ints` checks, never converts.
 - #9 `list of int`; plural type words (`numbers`) are lists; `list<int>` reads too; `x : 100 int` and `pixel:int[100]` declare typed arrays.
-- `type(ø)` prints "empty". static-int: a constant call misfitting its declared int result is refused at compile time.
-- D5 any noun can name a type/parameter (notes/matching.md).
 - index-position: `index` (from 0, `xs[i]`) and `position` (from 1, `xs#p`) are int types; index_of, argmax, argmin, insert use them by declared type; position ± int stays a position, position − position is a count, position + position an error; a missing element is an error, never -1 (notes/index_position.md). index-units: base `index` from 0 (`offset` its synonym), `position` from 1; unit: characters (graphemes) by default, `byte` as the adjective (`byte index`, `byte position`). One word `find`, its result chosen by the receiver's declared type: `position p = "a👍🏽b".find "b"` 3, `index i = …` 2, `byte index b = …` 9; untyped a position. Byte and character indexes do not mix without a conversion. `byte_index_of` stays as the explicit word. A bare `index_of` on a text works as find with a warning; on lists `index_of` stays. core writes the explicit forms; lib/ parameters named offset are renamed so the type word does not shadow them. Card index-of-bytes.
 - schema-as: `x as Config` converts field by field or errs naming the field; `x is Config` stays strict.
 - D10/P17 dispatch on return type (`render "hello" as pdf`); ambiguous → got-it warning (notes/dispatch.md).
@@ -933,3 +876,21 @@ Text, P1, brace-hole, P126, #26, result-keyword, letters, guillemets, Emoji → 
 parse-json → wiki/string.md, wiki/json.md, test/text/test_text_rules.pairs.warp.
 used-module-bare-words → wiki/use.md, test/text/test_text_rules.pairs.warp.
 uniscript → wiki/uniscript.md, test/text/test_text_rules.pairs.warp.
+bool-int-fallthrough, element-wise-scalars, type-shows-nat, int-boxed-overflow-big, exact-decimals, exact-power, int-list, number-converts, float-text, repeating-decimals, footgun-divzero, `x /= y`, Trailing, P184, nearest-limit → wiki/number.md, test/numbers/test_number_and_unit_rules.pairs.warp.
+core-int-division → AGENTS.md Principles.
+fast-int-readings, fast-scope → wiki/number.md, test/numbers/test_fast_int.pairs.warp.
+marked-floats-shape → wiki/unit.md, test/numbers/test_dimension_types.pairs.warp.
+c-int-names → wiki/int.md, test/numbers/test_fixed_width_ints.pairs.warp.
+± → wiki/number.md, test/numbers/test_plus_minus_numbers.pairs.warp. P119, units-library → historic (git).
+real-runtime → notes/real_runtime.md.
+unit-sum-display, #5, quantity-naming, litre-suffix, units-opt-in, pixel-lengths, general-conversions, units-as-values, overloads-before-reals, expected-type-names, duration-units → wiki/unit.md, test/numbers/test_number_and_unit_rules.pairs.warp.
+canvas-size → wiki/unit.md, test/programs/test_canvas_window.pairs.warp.
+float-intervals → wiki/number.md, test/numbers/test_plus_minus_numbers.pairs.warp.
+real-canonical-core, parameter-typed, Duck, #30, type-value-is, union-or, optional-result, instance-position, P45, `type(ø)` → wiki/type.md, test/types/test_type_rules.pairs.warp.
+primitive-annotation, primitive-int-width → wiki/primitive.md, test/native/test_primitive.pairs.warp.
+map-protocol, lowercase-protocols → wiki/trait.md, test/types/test_map_protocol.pairs.warp.
+matrix-protocol → wiki/trait.md, test/modules/test_matrix_typed.pairs.warp.
+effect-annotations → wiki/effects.md, test/functions/test_effect_annotations.pairs.warp.
+P203 → wiki/type.md, test/welcoming/test_warning_mode.pairs.warp.
+error-type → wiki/optional.md, test/control/test_error_not_in_data.warp.
+position-index-words → wiki/class.md, test/types/test_class_positions.pairs.warp. D5 → notes/matching.md.
