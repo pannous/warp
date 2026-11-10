@@ -313,7 +313,22 @@ call_head(n: Node): any := {
 # include of it as the compiler's own code typed the emitter's values anew: shown_text refused), or lib/host/<name>.warp,
 # a module the native driver links itself (decision host-folder)
 std_module_path(name: text): text := own_module_files.get(name) ?? run_library() + module_folder(name) + name + module_extension
-module_folder(name: text): text := if modules_in(COMPILER_MODULES).has(name) then COMPILER_MODULES else if is_host_module(name) then HOST_MODULES else "/"
+module_folder(name: text): text := if modules_in(COMPILER_MODULES).has(name) then COMPILER_MODULES else if is_host_module(name) then HOST_MODULES else if is_runtime_module(name) then "/extensions/" + name + "/" else "/"
+# a standard module of runtime words, built apart from runtime.wasm (extension.warp runtime_modules)
+is_runtime_module(name: text): bool := name in hooks().runtime_modules
+# the words of the runtime modules: their functions compile as runtime words do (intrinsics, the runtime's own words),
+# linked or compiled with the program
+global runtime_module_words = ø
+is_runtime_module_word(name: text): bool := {
+	if runtime_module_words == ø { runtime_module_words = word_set(hooks().runtime_modules.flat_map(module => file_words(std_module_path(module)))) }
+	runtime_module_words.has(name)
+}
+# the definitions of a file and of the files beside it that it uses
+file_words(file: text): list := {
+	source = file_text(file) ?? ""
+	beside = source.split("\n").filter(line => line.starts_with("use \"") and not line.contains("..")).map(line => folder_of(file) + "/" + line.split("\"")#2)
+	definition_slices(source).map(slice => slice#1) + beside.flat_map(file_words)
+}
 # a module of lib/host/: no program uses it, so none of its words brings it in (prelude_words.warp module_word_definers)
 is_host_module(name: text): bool := modules_in(HOST_MODULES).has(name)
 # A program's own module, compiled as a standard module is and linked like one (decision samples-modules-wasm:

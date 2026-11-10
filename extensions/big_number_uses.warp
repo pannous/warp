@@ -1,0 +1,22 @@
+# When a program links big_numbers, the runtime module of powers, `x as rational` and long decimals
+# (extensions/big_numbers/big_numbers.warp, card runtime-bridge-slots): its code, comments left out, writes a power,
+# a cube root, rational or a decimal past 18 places. Read from the text, so it may link the module for a `^` that
+# never runs, but never misses one
+BIG_NUMBERS_MODULE = "big_numbers"
+POWER_SPELLINGS = ["^", "**", "cbrt", "∛", "rational"]
+# a decimal past this many places is an exact ratio of a big denominator (core/emitter/literals.warp big_decimal)
+DECIMAL_PLACES_HELD = 18
+
+big_number_uses(source: text, tree: Node, folder: text = "."): list := {
+	code = uncommented(source)
+	if POWER_SPELLINGS.any(spelling => code.contains(spelling)) or has_long_decimal(code) then [BIG_NUMBERS_MODULE] else []
+}
+# whether a `.` is followed by more digits than a decimal holds exactly in 64 bits
+has_long_decimal(code: text): bool := {
+	run = -1
+	for c in code {
+		if c == '.' { run = 0 } else if run >= 0 and is_digit(c) { run += 1 } else { run = -1 }
+		if run > DECIMAL_PLACES_HELD { return yes }
+	}
+	no
+}

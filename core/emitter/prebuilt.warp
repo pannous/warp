@@ -608,6 +608,20 @@ written_definitions(code: Node): list := {
 	}
 	found
 }
+# a linked module's word of that name, bound to it, else ø: a class's descriptor, a runtime module's word the emitter
+# calls (extension.warp runtime_modules)
+def linked_word(name: text): Function? {
+	for image in module.linked_images {
+		for k in 0..<#image.functions {
+			if image.functions[k].name == name {
+				f = Function(name, image.functions[k].signature, ø)
+				bound_to(f, image, k)
+				return f
+			}
+		}
+	}
+	ø
+}
 def bound_to(f: Function, image: LibraryImage, k: int) {
 	f.index = linked_index(image, k)
 	f.kinds = image.functions[k].kinds
