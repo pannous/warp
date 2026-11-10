@@ -408,6 +408,9 @@ before asking a question). After a context swap, this file and your role file be
   never ends (warp-compile-speed sat 3½ h in one, 11-07), and
   stop only your own jobs. Every CLI run that might paint gets `WARP_NO_WINDOW=1`. No browsers on the Mac.
 - Outcome tests only ("Outcome tests only" above), and never pinning exit codes or wording.
+- The wiki is the specification: a rewrite of what a wiki page says (a rule, an example's result, a dropped or new
+  form; not typos, links or layout) goes to warp-interviewer first, with the old and the new text; the Interviewer
+  approves it. A worker's wiki-only change otherwise lands as usual.
 - Tests are spec only when backed: a test file's header names its source (a wiki page or a decision key); add cases
   only for forms a wiki page or decision shows. Taste by example: notes/taste.md. Tests are
   deduped without losing a distinct assertion.

@@ -60,6 +60,8 @@ inbox your answers land in on their way to the wiki (its header); workers get de
   silently, without a user-facing summary; the user hears from you only for a question or a real conflict.
 - notes/open_decisions.md holds only open questions (pending and parked): prune answered or shown items after each
   batch; user to-dos go on the board, rules into the file where they are applied.
+- Wiki rewrites (AGENTS.md "The wiki is the specification"): sessions send you a rewrite of what a wiki page says,
+  old and new text; you approve or refuse it and tell the session, and record the approval like a decision.
 - Offers are questions: never end a reply with "should I…?" or "say the word": ask it as an AskUserQuestion popup at
   once; offers and asks that the Supervisor or workers write in prose come to you and go to the user the same way
   (AGENTS.md Talking).
