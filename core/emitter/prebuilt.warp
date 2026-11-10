@@ -614,7 +614,7 @@ def linked_word(name: text): Function? {
 	for image in module.linked_images {
 		for k in 0..<#image.functions {
 			if image.functions[k].name == name {
-				f = Function(name, image.functions[k].signature, ø)
+				f = Function(name, ø, ø)
 				bound_to(f, image, k)
 				return f
 			}
