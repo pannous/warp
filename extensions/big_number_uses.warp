@@ -15,13 +15,13 @@ big_number_uses(source: text, tree: Node, folder: text = "."): list := {
 	code = uncommented(source)
 	if big_number_spellings().any(spelling => code.contains(spelling)) or has_long_decimal(code) then [BIG_NUMBERS_MODULE] else []
 }
-# every spelling of the power, as the alias table gives them (`**`, `power`), a superscript (`x²`), and the cube root's
+# every spelling of the power, as the alias table gives them (`**`, `power`), a superscript (`x²`, `2ⁿ`), and the cube root's
 # and `as rational`'s
 big_number_spellings(): list := {
 	tables = alias_spellings()
 	symbols = tables.operator_symbols.filter(pair => pair#2 == POWER_OPERATOR).map(pair => pair#1)
 	words = tables.canonical.keys.filter(spelling => tables.canonical[spelling] == POWER_WORD)
-	[POWER_OPERATOR, POWER_WORD] + symbols + words + SUPERSCRIPT_DIGITS.chars() + ROOT_AND_RATIO_SPELLINGS
+	[POWER_OPERATOR, POWER_WORD] + symbols + words + (SUPERSCRIPT_DIGITS + SUPERSCRIPT_LETTERS).chars() + ROOT_AND_RATIO_SPELLINGS
 }
 # whether a `.` is followed by more digits than a decimal holds exactly in 64 bits
 has_long_decimal(code: text): bool := {
