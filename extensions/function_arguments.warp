@@ -1,0 +1,92 @@
+# An `it` expression given where a function is taken is the function of `it` (card it-expression-function, decision
+# declared-block-parameters): the callee's signature says which arguments are functions, the program's own definition
+# (`apply(f: function, x) := f(f(x)); apply(it + 3, 1)` is 7) or a builtin's typed line (`find(xs: list, f: function)`:
+# `[1 2 3].find(it > 1)` is 2); a block `{it * 10}` there too. It runs first, so such an `it` is never the last result.
+function_arguments_extension = Extension{name: "function_arguments", passes_before: {"tries": function_arguments}}
+
+IT_WORD = "it"
+
+function_arguments(program: Node): Node := {
+	defined = own_signatures(program)
+	bottom_up(program, n => with_function_arguments(n, defined))
+}
+
+# the program's definitions by name: [their signatures]
+own_signatures(program: Node): map := {
+	found = {}
+	for n in nodes_in(program) {
+		definition = definition_of(plain_node(n))
+		if definition != ø { found[definition.name] = (found.get(definition.name) ?? []) + [Signature(parameters: definition.parameters.map(parameter_of))] }
+	}
+	found
+}
+
+# the signatures a call of the word may take: the definitions the program holds (the prelude's it reaches too: text's
+# `find(t, part)`) and the builtins' typed lines (a list's `find(xs, f: function)`)
+signatures_of(word: text, defined: map): list := (defined.get(word) ?? []) + lines_of(typed_lines, unaliased(word)).map(line => line.signature)
+
+# `f: function`, `body: block`, a bare `block`, `f: (any) -> bool`
+is_function_typed(parameter: Parameter): bool := parameter.type_name in ["function", "block"] or parameter.type_name.contains("->") or (parameter.name == "block" and parameter.type_name == "")
+
+# the parameter an argument at place (from 1) fills: a named argument `by: -it` its own, else the one at its place
+parameter_filled(signature: Signature, place: int, argument: Node): Parameter? := {
+	if is_key(argument, Op.Colon) and key_of(argument) is symbol {
+		return signature.parameters.find(parameter => parameter.name == name_of(key_of(argument)) or parameter.label == name_of(key_of(argument)))
+	}
+	if place <= #signature.parameters then signature.parameters#place else ø
+}
+
+# a function in a signature that takes as many arguments as the call gives: `find(xs, it > 1)` beside text's
+# `find(t, part)` reads the list's
+is_function_place(signatures: list, place: int, arguments: list): bool := {
+	signatures.filter(signature => #signature.parameters >= #arguments).any(signature => {
+		parameter = parameter_filled(signature, place, arguments#place)
+		parameter != ø and is_function_typed(parameter)
+	})
+}
+
+# whether `it` occurs in n outside a function that binds it
+names_free_it(n: Node): bool := n == symbol(IT_WORD) or (not is_lambda(n) and parts_of(n).any(names_free_it))
+
+# `it + 3` → `it => it + 3`; a named argument keeps its name, `by: -it` → `by: it => -it`
+as_function_of_it(argument: Node): Node := {
+	if is_key(argument, Op.Colon) and key_of(argument) is symbol { return Key(key_of(argument), Op.Colon, as_function_of_it(value_of(argument))) }
+	if names_free_it(argument) then Key(symbol(IT_WORD), Op.Arrow, argument) else argument
+}
+
+# the arguments with each one at a function place made the function of `it`
+with_functions(word: text, arguments: list, defined: map): list := {
+	signatures = signatures_of(word, defined)
+	if #signatures == 0 { return arguments }
+	range_list(#arguments).map(i => if is_function_place(signatures, i + 1, arguments) then as_function_of_it(arguments#(i + 1)) else arguments#(i + 1))
+}
+
+# `x.w(a)` with x its first argument: the call of w on the arguments given, else ø when no argument changed
+method_call(receiver: Node, word: Node, arguments: list, defined: map): Node? := {
+	given = with_functions(name_of(word), [receiver] + arguments, defined)
+	if given[1..] == arguments then ø else Key(receiver, Op.Dot, List([word] + given[1..], Bracket.Round, Separator.None))
+}
+
+# `w(a, b)`, `w a b`, `x.w(a)` and `x.w a`; a spaced phrase given a function becomes the call, `map [1 2] (it * 10)` is
+# map([1 2], it => (it * 10)), `xs.map { it * 10 }` is xs.map(it => { it * 10 })
+with_function_arguments(n: Node, defined: map): Node := match n {
+	# a block on one line, `{ it.map { it * 10 } }`, holds its phrase's words itself (core/parsing/phrase_blocks.warp)
+	List(items, Bracket.Curly, Separator.Space): {
+		phrase = List(items, Bracket.None, Separator.Space)
+		call = with_function_arguments(phrase, defined)
+		if call == phrase then n else List([call], Bracket.Curly, Separator.Semicolon)
+	}
+	List(items, bracket, separator): {
+		if #items < 2 or not (bracket == Bracket.Round or (bracket == Bracket.None and separator == Separator.Space)) { return n }
+		head = items#1
+		if is_key(head, Op.Dot) and value_of(head) is symbol and bracket == Bracket.None { return method_call(key_of(head), value_of(head), items[1..], defined) ?? n }
+		if not (head is symbol) { return n }
+		given = with_functions(name_of(head), items[1..], defined)
+		if given == items[1..] then n else List([head] + given, Bracket.Round, Separator.None)
+	}
+	Key(receiver, Op.Dot, List(items, Bracket.Round, separator)): {
+		if #items < 1 or not (items#1 is symbol) { return n }
+		method_call(receiver, items#1, items[1..], defined) ?? n
+	}
+	_: n
+}

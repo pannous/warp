@@ -43,6 +43,8 @@ is_class_instance(m: Node): bool from runtime
 instance_show(m: Node): Node from runtime
 # m as its class's float() gives it, ø when it gives none (`sin(2km)`)
 instance_float(m: Node): Node from runtime
+# m's method of that name called with the arguments' items, ø when its module has none (card reals-prebuilt)
+instance_method(m: Node, name: Node, arguments: Node): Node from runtime
 # exact rationals
 is_ratio(n: any): bool from runtime
 # whether an Int node holds its number in an $i64box, neither a ratio nor a big int

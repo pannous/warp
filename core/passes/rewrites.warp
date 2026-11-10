@@ -160,6 +160,8 @@ global rule_case_holders = {}
 # enum → its case names, of the program being rewritten (`where $c is case of $e`, `cases of $e`), read before
 # plain_enums.warp lowers the declarations: by rewritten_program, and by the pass enums_declared for the sugar rules
 global rule_enums = {}
+# a plain alias → the enum it names
+global rule_enum_aliases = {}
 # the names that hold only instances of the program's classes (`where $s is instance`)
 global rule_instances = {}
 # the program's classes, whose construction `Counter(3)` is an instance (`where $o is instance`)
@@ -259,7 +261,7 @@ own_rules_applied(program: Node, source: text): Node := {
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
 	rule_signatures = definitions_signatures(program)
-	rule_enums = declarations_found(program, declared_enum, {})
+	rule_enums = enums_of(program)
 	rule_case_holders = case_holders_of(program)
 	origins = rules.map(rule => if rule.shape == ø then {} else names_assigned_shape(program, rule.shape))
 	fired_modules = []
@@ -328,10 +330,21 @@ is_unbound(rule: Rule, bindings: list): bool := not literal_words(rule.pattern).
 # program's own `push` keeps its own), before the definitions it reaches from the prelude and the modules join it
 sugar_rules(bindings: list, modules: list): list := rules_unbound_by(modules.flat_map(module => module_rules_of(std_module_path(module), "")), bindings)
 
+# the enums the program declares, and its plain aliases of them, `type Paint = Color` (`c is Paint`)
+enums_of(program: Node): map := {
+	rule_enum_aliases = {}
+	enums = declarations_found(program, declared_enum, {})
+	for statement in statements_in(program).filter(is_type_alias) {
+		named = value_of(statement)
+		alias = declared_type_name(value_of(key_of(statement))#2)
+		if named is symbol and enums.has(name_of(named)) and alias != ø { rule_enum_aliases[alias] = name_of(named) }
+	}
+	enums
+}
 # the program as it is, the enums it declares kept for the sugar rules: a pass right before plain_enums.warp lowers
 # their declarations, after node_cases.warp declared node.warp's Op, Bracket and Separator for a program naming them
 enums_declared(program: Node): Node := {
-	rule_enums = declarations_found(program, declared_enum, {})
+	rule_enums = enums_of(program)
 	program
 }
 
@@ -421,8 +434,14 @@ required_words(pattern: Node): list := {
 	if is_hole(pattern) { return [] }
 	if pattern is symbol { return [name_of(pattern)] }
 	if pattern is key { return required_words(key_of(pattern)) + required_words(value_of(pattern)) }
-	if is_group(pattern) then items_of(pattern).flat_map(item => required_words(item)) else []
+	if not is_group(pattern) { return [] }
+	items_of(pattern).flat_map(item => required_words(item)) + (if is_phrase(pattern) and separator_of(pattern) == " " then [PHRASE_TOKEN] else [])
 }
+# what code holding a phrase mentions (tokens_within), what a rule whose pattern is a phrase needs (required_words):
+# `$f $x` matches only a phrase, never `1` (phrase_fits: never statements), so a rule of holes alone reaches only code
+# with one
+PHRASE_TOKEN = "⟨phrase⟩"
+is_phrase(n: Node): bool := is_group(n) and bracket_of(n) == "" and separator_of(n) not in statement_separators
 
 # `[a, b]`: a list literal, whose items are rewritten by the rules `where element`
 is_element_list(n: Node): bool := is_group(n) and bracket_of(n) == "["
@@ -1122,6 +1141,8 @@ is_takes(condition: Node): bool := is_group(condition) and bracket_of(condition)
 
 # whether the code names a function whose first parameter is typed as wanted: `value` any type but yes/no
 first_parameter_fits(code: Node, wanted: text): bool := {
+	given = value_signature(code)
+	if given != ø { return wanted == number_word and takes_numbers(given.parameters) }
 	if not (code is symbol) or locally_bound(code) { return no }
 	word = name_of(code)
 	if wanted == one_word { return not rule_scope.has(word) and takes_one_typed_value(unaliased(word)) }
@@ -1174,8 +1195,22 @@ definitions_signatures_in(nodes: list): map := {
 			word = name_of(call#1)
 			signatures[word] = (if signatures.has(word) then signatures[word] else []) + [computing_signature(signature_of(items_of(call)), value_of(n))]
 		}
+		# `g = x => x * 2`: g's signature its function's
+		given = if is_key(n, Op.Assign) and key_of(n) is symbol then value_signature(value_of(n)) else ø
+		if given != ø { signatures[name_of(key_of(n))] = (signatures.get(name_of(key_of(n))) ?? []) + [given] }
 	}
 	signatures
+}
+# the signature of a function value, `x => x * 2` or `{it * 2}`, read as a named function's (computing_signature), so
+# `(x => x * 2)([1 2 3])` broadcasts as `f([1 2 3])` does (card traps-cast); ø for any other code
+value_signature(code: Node): Signature? := {
+	if is_lambda(code) {
+		arrow = if is_round(code) then code#1 else code
+		left = key_of(arrow)
+		return computing_signature(signature_of([arrow] + (if is_round(left) then items_of(left) else [left])), value_of(arrow))
+	}
+	if is_curly_group(code) and mentions(code, implicit_parameter) { return computing_signature(signature_of([code, symbol(implicit_parameter)]), code) }
+	ø
 }
 # `def square := it * it`: a lone untyped parameter that the body computes with takes a number, so `square numbers`
 # squares each item as `square all numbers` does (decision M3c); not by `+`, which also joins lists and texts, nor
@@ -1247,7 +1282,8 @@ case_holds(code: Node, hole: text?, bound: map): bool := {
 
 # the enum a name or a text names (`Coin`, `"Coin"` as type_tests.warp's is_type gets it), else ""
 named_enum(code: Node): text := {
-	name = if code is symbol then name_of(code) else if code is text then code else ""
+	written = if code is symbol then name_of(code) else if code is text then code else ""
+	name = rule_enum_aliases.get(written) ?? written
 	if rule_enums.has(name) then name else ""
 }
 
