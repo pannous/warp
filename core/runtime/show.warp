@@ -52,9 +52,12 @@ node_code(n: Node): text := match n {
 	Text(_): text_code(unboxed_text(n))
 	_: node_text(n)
 }
-# a value as `warp test` reads it back (WARP_VALUE_AS_DATA): as a list shows it, a type value `class nat` as print
-# shows it (decision type-result-shown), never quoted as the character a type value of kind Char would read as
+# a shown result: as a list shows it, a type value by its name as print shows it (decision type-result-shown), never
+# quoted as the character a type value of kind Char would read as
 value_code(n: Node): text := if names_a_type(n) then node_text(n) else node_code(n)
+# a value as `warp test` reads it back (WARP_VALUE_AS_DATA): a type value its name quoted, so `list of real` reads back
+# whole, as the text a test line writes, not as code
+data_code(n: Node): text := if names_a_type(n) then quoted_text(unboxed_text(n)) else value_code(n)
 # a one-character text reads as the character it is
 text_code(t: text): text := if code_point_count(t) == 1 then "'" + t + "'" else quoted_text(t)
 # a text in double quotes, a `\` before each of its quotes and backslashes, so the printed list reads back (P126)
