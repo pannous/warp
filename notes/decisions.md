@@ -23,6 +23,14 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 ---
 
 ## Inbox
+- 2026-11-10 test-slots-shared: `warp test` slots stay one machine-wide pool (cores − 2 × builds + 1); no per-run floor.
+- 2026-11-10 compile-heap-128: a compile starts with a 128 MB GC heap (big compiles ~2× faster); a compiler build keeps 1 GB.
+- 2026-11-10 shape-tokens: a sugar rule of holes only needs its group's shape token, so it is picked only where the code has that shape.
+- 2026-11-10 spaced-unit-precedence: `2 km == 2000 m` follows from juxtaposition multiplying, which binds tighter than comparison; rejoin rules only if that reading fails.
+- 2026-11-10 lambda-scope-cells: a lambda's block body is a scope; its blocks share its names (handler-blocks-share holds there too).
+- 2026-11-10 is-type-variable: `x is v` tests the type a variable holds; a name assigned again is refused (`type Paint = Color`); no wiki text.
+- 2026-11-10 nullish-default stays: `??` replaces errors as well as ø; no Footguns note.
+- 2026-11-10 time-of-day-order: a local datetime or a time of day orders against a duration by its time of day (`ref.time >= 6h`).
 - 2026-11-10 compile-only-metric: the Vitals page shows the compile alone (hello minus `warp version`, startup apart); `warp version` loads the whole machinery and is not optimized; fingerprint-by-stat parked, stamp-read-tail dropped.
 - 2026-11-10 runtime-words-lazy: per compile, runtime words are parsed on demand (a name → offset index over runtime.wasm's word table), library words are bound from the program's side, runtime imports are read from the import section.
 - 2026-11-10 text-representations: one text protocol with kinds (Ascii, Utf8 with a lazily cached code-point array) in one struct, landed in two steps with a stop gate at >3% build cost; internal, no AsciiText spelling.
