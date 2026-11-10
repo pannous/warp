@@ -146,13 +146,14 @@ raised_if_error(n: Node): Node := {
 	n
 }
 # `try x catch e { y }`: e is the Error x gave back when it finished, else the one of the runtime error thrown inside
-# it, the words of the word it failed in (trap_name): a raise's is the raised value, a missing field's names it
+# it, the words of the word it failed in (trap_name): a raise's is the raised value, a missing field's names it, a
+# match no case took names the value (the words whose detail is always set fresh)
 caught_error(finished: bool, value: Node): Node := {
 	if finished { return value }
 	global trap_name
 	global trap_detail
 	name = unboxed_text(trap_name)
-	if name == "returned_error" or name == "missing_field" then failure_of(error_sentence(name)) else failure_of(error_words(name))
+	if name == "returned_error" or name == "missing_field" or text_starts_with(name, "no_case_") then failure_of(error_sentence(name)) else failure_of(error_words(name))
 }
 # the caught error at the program's statement it happened in (passes/tries.warp gives trap_place, 0 for none known):
 # `e.line`, `e.column` name it
