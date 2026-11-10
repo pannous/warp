@@ -126,10 +126,12 @@ linked_class_names(): list := concatenated(linked_signatures.values.map(signatur
 # of the operators it writes (compare for `<`, equal for `==`) and its constructor once it names the class. Its
 # instances show, convert and operate (+ - * /) through the descriptor its module made (notes/runtime_linking.md), so
 # lifting all the methods of every linked class (~230 statements behind `use sound`, most of them dispatchers) only
-# had each pass walk them. The words and operators the program says, and those the kept methods say in turn
+# had each pass walk them. The words and operators the program says, those the sugar it keeps will write once it fires
+# (`for v in ch {…}` a `.next()`, extensions/sugar/iteration.warp), and those the kept methods say in turn
 # (toString·real calls text·method)
 def linked_methods_called(classes: map, linked: list, top_statements: list, operator_table: map) {
-	said = word_set(top_statements.filter(statement => not is_linked_class(statement, linked)).flat_map(tokens_within))
+	own = top_statements.filter(statement => not is_linked_class(statement, linked))
+	said = word_set(own.flat_map(tokens_within) + sugar_words_of(separated(bracketed(own, ""), ";")))
 	kept = {}
 	grew = yes
 	while grew {

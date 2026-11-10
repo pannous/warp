@@ -421,6 +421,7 @@
 # test_euler_identity
 'ℯ^(ⅈ*π) == -1'	true
 'ln(ℯ) == 1'	true
+'ℯ^0'	1
 'exp(0)'	1
 
 # test_fetch_result_needs_a_check

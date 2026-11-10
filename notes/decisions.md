@@ -23,6 +23,10 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 ---
 
 ## Inbox
+- 2026-11-10 compile-only-metric: the Vitals page shows the compile alone (hello minus `warp version`, startup apart); `warp version` loads the whole machinery and is not optimized; fingerprint-by-stat parked, stamp-read-tail dropped.
+- 2026-11-10 runtime-words-lazy: per compile, runtime words are parsed on demand (a name → offset index over runtime.wasm's word table), library words are bound from the program's side, runtime imports are read from the import section.
+- 2026-11-10 text-representations: one text protocol with kinds (Ascii, Utf8 with a lazily cached code-point array) in one struct, landed in two steps with a stop gate at >3% build cost; internal, no AsciiText spelling.
+- 2026-11-10 block-call-parked: a glued `{…}(…)` is not a call yet (parked).
 - 2026-11-10 compiler-size-levers: the three size levers of notes/compiler_size.md are built in this order, each landing with before/after bytes: literal-nodes-inline (each distinct literal one global, ~460 KB), globals-constant-init (constant tables as packed data, ~198 KB), each-wasm (~190 KB); all core/emitter, by warp-sugar-program.
 - 2026-11-10 text-equality-ascii: text == skips the NFC check when both texts are ASCII or already NFC; results unchanged, measured on the build profile.
 - 2026-11-10 lambda-broadcast: a lambda applied to a list broadcasts like a named function (`g = x => x*2; g([1 2 3])` is [2, 4, 6]).
