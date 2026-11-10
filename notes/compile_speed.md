@@ -72,3 +72,16 @@ once per program, never per node or call site. Cheap `where` guards don't save a
 - The marks are printed (stdout): WARP_TIMES set for a test or gate run makes every case's output differ; set it only
   for the build or self-check measured.
 - WARP_TIMES marks are printed where a phase *starts*, so the time after `pass sugar` is sugar's, not the next pass's.
+
+## The compiler's machine code (card wasm-becomes, measured on warp.wasm 2.5 MB, wasmtime 50)
+- warp.wasm compiles to 38.7 MB of Cranelift output: .text 26.3 MB, then .wasmtime.stackmap 4.5, .addrmap 4.0, .traps
+  1.2, .eh_frame 1.0. The GC code itself is the size (~10 bytes of machine code per wasm byte); no config shrinks it.
+- Config levers, each alone (data/wasm-becomes/measure.c compiles a module under one config): native_unwind_info off
+  37.7 MB (−1 MB, the .eh_frame); cranelift opt level speed_and_size 38.7 MB (no change, compile +40%); opt none
+  48.6 MB; regalloc single_pass 57.9 MB; all fast settings 77.9 MB (compile 5.2 s instead of 10). generate_address_map
+  is not in the C API (−4 MB of file at most). Parallel compilation only changes the first compile's wall time.
+- Resident: a running warp holds the whole 25 MB .text resident, but clean and file-backed (vmmap: resident 25.0M,
+  dirty 0): shared by concurrent warp processes and reclaimable, so not the private memory it looks like. Of the 11.8 MB
+  of side tables ~3.5 MB is touched. Hello: 0.15 s wall, 108 MB max RSS, mostly that mapping and the dylib.
+- So the levers are not worth it: the only size cut (unwind info off, −2.6% of file, ~0 resident) costs native
+  backtraces. A smaller compiler comes from less wasm (fewer or smaller functions), not from wasmtime's config.
