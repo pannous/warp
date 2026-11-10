@@ -21,3 +21,5 @@
 'f(k) := { t = 0; k times { t += 1 }; t }; f(4)'	4
 '2 times [1, 2]'	[1, 2, 1, 2]
 'n=0; thrice{n+=1}; n'	3
+'g = () -> { n = 0; thrice { n = n + 1 }; n }; g()'	3
+'g = x -> { n = x; thrice { n += 1 }; n }; g(10)'	13

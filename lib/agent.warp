@@ -6,7 +6,7 @@
 use net
 use json
 use os
-agent(prompt: text) := agent(prompt, "claude-sonnet-5-5") # todo inline default :
+agent(prompt: text) := agent(prompt, "claude-sonnet-5-5") # todo (card agent-inline-default) inline default :
 agent(prompt: text, model: text) := {
 	key = env("ANTHROPIC_API_KEY")
 	if key == ø { raise "agent needs an Anthropic API key (console.anthropic.com): in a terminal `export ANTHROPIC_API_KEY=sk-ant-…` before running warp, in ~/.zshrc to keep it; in the playground paste it into the API key field of its ⋯ menu" }

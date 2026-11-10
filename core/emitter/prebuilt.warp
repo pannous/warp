@@ -375,7 +375,7 @@ def prepended_names(functions: list, classes: list, own_globals: list): list {
 	content = subsection(names_subsections.functions, vector(imported + words + functions.map(f => index_name(f.index, f.name))))
 	content += subsection(names_subsections.locals, shifted_locals(runtime_subsection(names_subsections.locals), functions.map(local_name_map)))
 	content += runtime_names(names_subsections.types, classes.map(name => index_name(module.gc_indices[name], name)))
-	content += runtime_names(names_subsections.globals, own_globals.map(name => index_name(module.globals[name]#1, name)))
+	content += runtime_names(names_subsections.globals, global_names(own_globals))
 	content += runtime_names(names_subsections.fields, classes.map(name => uleb(module.gc_indices[name]) + name_map(gc_field_names(name))))
 	content += runtime_names(names_subsections.tags, [])
 	section(section_ids.custom, name_bytes("name") + content)

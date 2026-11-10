@@ -92,9 +92,9 @@ shown(part: any): text := if part is symbol then name_of(part) else if part is t
 diagnosed_since(known: int): list := diagnosed[known ..]
 
 # the first error among the diagnosed in the program's file; ø when none is an error
-# todo list of what?
+# todo (card diagnostics-list-of-what) list of what?
 first_error(found: list, file: text): text? := {
-	# todo BIG refactor said#1 =>  said.name Or whatever the number one here and everywhere applies to 
+	# todo (card said-field-names) BIG refactor said#1 =>  said.name Or whatever the number one here and everywhere applies to 
 	failing = found.find(said => said#1 == Level.Error)
 	if not failing { return ø }
 	said_text(failing, file)
@@ -104,7 +104,7 @@ first_error(found: list, file: text): text? := {
 said_at(found: list, level: Level, file: text): list := found.filter(said => said#1 == level).map(said => said_text(said, file))
 
 # a diagnosed [level, message, fix, topic, place] as diagnostic says it: the message and where in the file,
-# todo wrap [level, message, fix, topic, place] as small type / class
+# todo (card diagnostic-class) wrap [level, message, fix, topic, place] as small type / class
 # then `; fix: ` and the fix when it names one
 said_text(said: list, file: text): text := {
 	text = said#2 + place_text(said#5, file)

@@ -31,6 +31,18 @@ global temp_folder(): text := {
 	folder = std_io("os", "env", ["TMPDIR"]) ?? /tmp
 	if folder == "" then /tmp else if folder.ends_with("/") and #folder > 1 then folder[0 ..< #folder - 1] else folder
 }
+// `temp_file()`, `temp_dir()`: the path of a new empty file, folder in temp_folder(), named as no file there is yet;
+// made by the file words, so natively and in the page alike
+temp_file(): text := { path = fresh_temp_path(); write(path, ""); path }
+temp_dir(): text := { path = fresh_temp_path(); ensured_folder(path); path }
+TEMP_PREFIX = "warp-"
+TEMP_NAMES = 1000000000
+fresh_temp_path(): text := {
+	path = temp_named()
+	while exists(path) { path = temp_named() }
+	path
+}
+temp_named(): text := path_join(temp_folder(), TEMP_PREFIX + str(random_below(TEMP_NAMES)))
 // `delete_file(~/old.txt)`: the file removed, yes when it was there; natively C's unlink through the 'c' library
 // (lib/c.warp), so a page, which has no C library, has no delete_file yet
 unlink(path: text): i32 from 'c'
@@ -38,8 +50,8 @@ rename(from: text, to: text): i32 from 'c'
 rmdir(path: text): i32 from 'c'
 mkdir(path: text, mode: i32): i32 from 'c'
 global delete_file(path: any): bool := unlink(home_expanded(path)) == 0
-// the program file this run was started from (WARP_PROGRAM), "" when none (inline code / some playground snippets)
-program_file(): text := std_io("os", "env", ["WARP_PROGRAM"]) ?? ""
+// the program file this run was started from (the program option), "" when none (inline code / some playground snippets)
+program_file(): text := run_option("program") ?? ""
 // the folder holding the program file (decision play-mozart-mp3, source-dir-words): same place $dir and ^/ name
 // at compile time; the working folder when there is no program file
 program_folder(): text := {

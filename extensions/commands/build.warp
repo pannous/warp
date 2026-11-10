@@ -52,14 +52,13 @@ version_at_least(version: text, oldest: list): bool := {
 # -l of each C library the program imports beside libc and libm, found in warp's library folder first (warp's own
 # libraries, libwarp_wasmtime: card wasmtime-bundled), then among the libraries of the wabt's prefix (/opt/homebrew/lib)
 # or the system's; the executable finds them at run time beside itself, in ../lib (a package's <prefix>/bin and
-# <prefix>/lib), else in that library folder by its stable name (rpath): the native warp's WARP_LIB_LINK, a link the
+# <prefix>/lib), else in that library folder by its stable name (rpath): the native warp's lib-link option, a link the
 # next install moves to its own build, never the build folder behind it (card native-rpath-builds-folder)
-LIBRARY_LINK_VARIABLE = "WARP_LIB_LINK"
 native_links(wabt: text, library: text): text := {
 	libraries = c_libraries(c_functions_imported()).filter(l => l not in c_and_m)
 	if #libraries == 0 { return "" }
 	itself = if is_macos() then "@executable_path" else "'$ORIGIN'"
-	run_paths = [itself, itself + "/../lib", quoted_path(started_env(LIBRARY_LINK_VARIABLE) ?? library)].map(path => " -Wl,-rpath," + path).join("")
+	run_paths = [itself, itself + "/../lib", quoted_path(run_option("lib-link") ?? library)].map(path => " -Wl,-rpath," + path).join("")
 	# GNU ld's --as-needed (Debian's default) drops a library the C calls reach only through dlsym
 	kept = if is_macos() then "" else " -Wl,--no-as-needed"
 	" -L" + quoted_path(library) + " -L" + quoted_path(wabt + "/lib") + run_paths + kept + libraries.map(l => " -l" + l).join("")
@@ -120,7 +119,7 @@ build(words: list) := {
 	modules = [stem + ".full.wasm", stem + ".mod.wasm", stem + ".wasm"]
 	if wagi { return wagi_built(stem, modules) }
 	if not (WASM_ONLY in options) { write_executable(stem + ".wasm", stem) }
-	if routes_seen and not (WASM_ONLY in options) { print stem + " serves its routes at WARP_PORT, else 8080" }
+	if routes_seen and not (WASM_ONLY in options) { print stem + " serves its routes at 8080, another port with --port <n>" }
 	if EXE_ONLY in options { shell("rm -f " + modules.map(quoted_path).join(" ")) } else {
 		for written in modules { print "compiled " + size_of(written) + " bytes to " + written }
 	}

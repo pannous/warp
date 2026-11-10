@@ -1,6 +1,6 @@
 # from test_js_callbacks.rs: edit the Rust test, then run the script again
 
-# a_promise_is_awaited_natively
+# a_promise_is_awaited_natively — native only: node awaits it; the page has its own line below
 'use js Promise; Promise.resolve(1)'	1
 
 # a_promise_in_the_page_is_awaited_with_jspi_else_a_clear_error

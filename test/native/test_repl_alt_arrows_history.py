@@ -22,9 +22,9 @@ console.CASES = [
 
 
 def history_kept(main) -> int:
-    """the console's lines stay in WARP_HISTORY for the next console: a second console's ↑ shows the first's last line"""
+    """the console's lines stay in ~/.warp_history for the next console: a second console's ↑ shows the first's last line"""
     with tempfile.TemporaryDirectory() as folder:
-        os.environ["WARP_HISTORY"] = os.path.join(folder, "history")
+        os.environ["HOME"] = folder
         failures = main()
         console.CASES = [(UP, "65")]
         return failures + main()

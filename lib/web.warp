@@ -1,5 +1,5 @@
 // The standard module web (card native-server): a program's routes (lib/router.warp) served over HTTP/1.1 through the
-// process's C sockets, as a plain `warp app.warp` asks (the native warp sets WARP_SERVE; `warp run` runs once), on
+// process's C sockets, as a plain `warp app.warp` asks (the native warp gives the serve option; `warp run` runs once), on
 // the port serve(port) names, a built server's `--port <n>`, else 8080; port 0 is one the system chooses, printed as it serves. One request at a time, each connection closed after its answer; a route answers as in a WAGI
 // build (lib/wagi.warp): a text as text, anything else as JSON, with the status and headers it set.
 use os
@@ -31,7 +31,7 @@ page_answering(page: html) := request => {
 	header("Content-Type", HTML_TYPE)
 	to_html(page(request))
 }
-// WARP_SERVE's value in the playground, which serves the page's requests
+// the serve option in the playground, which serves the page's requests
 PAGE_SERVING = "page"
 BACKLOG = 64
 READ_BYTES = 65536
@@ -187,10 +187,10 @@ is_form(headers: any) := (headers.get("content-type") ?? "").starts_with(FORM_TY
 // what a program says as it starts serving
 serving_line(port: int) := "serving http://localhost:" + port + " (`warp run` runs the program once without serving)"
 
-// the program's routes served at the port until the process is stopped; in the playground (WARP_SERVE=page) the page's
+// the program's routes served at the port until the process is stopped; in the playground (serve option "page") the page's
 // own requests
 serve(port: int) := {
-	if env("WARP_SERVE") == PAGE_SERVING { return page_serve(port) }
+	if run_option("serve") == PAGE_SERVING { return page_serve(port) }
 	fd = listening(port)
 	print serving_line(bound_port(fd))
 	while true {
@@ -209,9 +209,9 @@ page_serve(port: int) := {
 	while true { std_io("web", "answer", [http_served(std_io("web", "request", [port]))]) }
 }
 
-// the end of a program with routes, its last value: served when the native warp runs it as a program (WARP_SERVE),
+// the end of a program with routes, its last value: served when the native warp runs it as a program (the serve option),
 // else that value, the program's result; read by env, so a program not serving calls no C (none in a browser)
-routes_end(value: any = ø) := if env("WARP_SERVE") == ø then value else routes_served()
+routes_end(value: any = ø) := if run_option("serve") == ø then value else routes_served()
 // the end of a program with routes built as a server (`warp build app.warp`): its executable serves them at the port
 // it was started with (`./app --port 9000`), else 8080 (card server-build)
 routes_served(value: any = ø) := serve(port_given())
