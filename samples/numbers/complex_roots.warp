@@ -1,0 +1,14 @@
+#!/usr/bin/env warp
+# Solve x² + 2x + 5 = 0: its discriminant is negative, so its two roots are complex, -1 + 2i and -1 - 2i
+# (samples/numbers/quadratic.warp solves one with real roots)
+use complex
+a = 1
+b = 2
+c = 5
+root = complex_sqrt(b * b - 4 * a * c)
+x1 = (root - b) / (2 * a)
+# (-root - b) / 2a, with the complex number on the left
+x2 = (root + b) / (-2 * a)
+print "x1 = \(x1), x2 = \(x2)"
+# each root makes the polynomial zero
+x1 * x1 + x1 * b + c == 0 and x2 * x2 + x2 * b + c == 0
