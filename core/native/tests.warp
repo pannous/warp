@@ -164,6 +164,9 @@ started_run(work: text, run: text, prefix: text, children: pointer, slots: i32):
 	# --events-for <ms>; core/native/driver.warp events)
 	added(given, "--events-for")
 	added(given, if has_option("events-for") then option_of("events-for") else "0")
+	# and this run's lib/, resolved (the child runs in the case's folder)
+	added(given, "--lib")
+	added(given, option_of("lib"))
 	added(given, prefix)
 	added(given, read_file(joined(id, ".code")))
 	long_at(given.pointers + given.count * 8).value = 0
