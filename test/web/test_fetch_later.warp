@@ -1,5 +1,5 @@
-# `name := fetch url` does not wait (card fetch-users-async, extensions/fetch_signals.warp): the page sets it when the
-# answer comes, the native warp at once; a failed fetch leaves it ø and says why in name.error
+# `name := fetch url` waits for the answer, in the page as natively (the user: fetch is synchronous, `go fetch` is the
+# task that does not wait; extensions/fetch_signals.warp): a failed fetch leaves it ø and says why in name.error
 
 is! 'config := fetch "://warp.pannous.com/assistant.json"
 [config.loading, config.error, config.about.starts_with("What the assistant")]' [no, ø, yes]
@@ -9,3 +9,8 @@ is! 'missing := fetch "://warp.pannous.com/no-such-file.json"
 
 is! 'people := fetch "://warp.pannous.com/assistant.json"
 to_html(html{ p{ if people.loading then "Loading…" else "loaded" } })' '<html><p aria-live="polite">loaded</p></html>'
+
+# go fetch is the fetch that does not wait: a task, its answer awaited (wiki/async.md)
+is! 'job = go fetch("://warp.pannous.com/assistant.json")
+answer = await job
+answer.about.starts_with("What the assistant")' yes
