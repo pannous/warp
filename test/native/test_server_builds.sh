@@ -13,10 +13,10 @@ check() { # check <name> <got> <expected>
 }
 printf '%s\n' 'use web' 'get "/hi" { "hi" }' 'get "/twice/:n:int" { n * 2 }' >"$stage/app.warp"
 
-# the executable serves its routes, at the port WARP_PORT names (0: one the system chooses, printed as it serves)
+# the executable serves its routes, at the port --port names (0: one the system chooses, printed as it serves)
 (cd "$stage" && "$warp" build app.warp >"$stage/build.log" 2>&1)
 if [ -x "$stage/app" ]; then
-	WARP_PORT=0 "$stage/app" >"$stage/serving.log" 2>&1 &
+	"$stage/app" --port 0 >"$stage/serving.log" 2>&1 &
 	server=$!
 	for _ in $(seq 50); do grep -q "serving http" "$stage/serving.log" && break; sleep 0.2; done
 	address=$(grep -o "http://localhost:[0-9]*" "$stage/serving.log" | head -1)
