@@ -303,7 +303,7 @@ page = {logo: {type: "image", src: "logo.png"}, body: [{type: "text"}, {type: "i
 page find {type: "image", src}
 ```
 
-Examples: matching; samples: matching, tree_patterns
+Examples: matching; samples: matching, tree_patterns, code_templates, pattern_clauses, pattern_values, text_patterns
 
 ## Lists
 
@@ -409,7 +409,7 @@ ada.age += 1
 ada.age
 ```
 
-Examples: data; samples: data_structures, json_parser, binary_tree, dijkstra, references
+Examples: data; samples: data_structures, json_parser, binary_tree, dijkstra, references, disjoint_groups, ring_log, sorted_leaderboard
 
 ## Loops
 
@@ -444,7 +444,7 @@ while n < 3 { n += 1 }
 n
 ```
 
-Examples: loops; samples: fizzbuzz, sieve, mandelbrot, game_of_life, life_idiomatic, iterators
+Examples: loops; samples: fizzbuzz, sieve, mandelbrot, game_of_life, life_idiomatic, iterators, life_kotlin_ranges
 
 ## Functions
 
@@ -508,7 +508,7 @@ evaluate(n) := match n {
 evaluate(parse("2 + 3 * 4"))
 ```
 
-Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci, ackermann, queens, queens_idiomatic, sudoku, block_arguments, y_combinator, code_as_data, warp_reads_warp
+Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci, ackermann, queens, queens_idiomatic, sudoku, block_arguments, y_combinator, code_as_data, warp_reads_warp, list_overloads
 
 ## Closures
 
@@ -646,7 +646,7 @@ When a line could mean two things, warp asks which one you meant.
 Some lines work but look like a slip. Then warp prints a warning and goes on. `use strict` at the top of a program
 makes warnings stop it, as errors do.
 
-Examples: "welcoming errors", ambiguity; samples: try_catch, try_else, parse_number, raise_error, assertions, try_failed_json
+Examples: "welcoming errors", ambiguity; samples: try_catch, try_else, parse_number, raise_error, assertions, try_failed_json, errors
 
 ## Modules
 
@@ -657,7 +657,7 @@ use math
 max(√2 arc_cosine(π/4))
 ```
 
-Examples: "C libraries"; samples: lib, square, main, test_ffi, test_ffi_comprehensive, test_ffi_extended, modules, javascript, agent
+Examples: "C libraries"; samples: lib, square, main, test_ffi, test_ffi_comprehensive, test_ffi_extended, modules, javascript, agent, csv_report, config_patch, slug_paths, free_slots, ask_claude, packages, c_lines, python_modules, numpy_matrix, rust_crates, regex_and_sha2
 
 ## Events and timers
 
@@ -673,7 +673,7 @@ emit ping
 pong
 ```
 
-Examples: "emit and on", events, timers, animation, mouse, "game of life", "system values", "on exit"; samples: effects, arrow_keys
+Examples: "emit and on", events, timers, animation, mouse, "game of life", "system values", "on exit"; samples: effects, arrow_keys, ticks
 
 ## Tasks and channels
 
@@ -730,7 +730,7 @@ div{
 }
 ```
 
-Examples: markup, "element events", "fine updates", components, cleanup, "keyed list", "form binding", styles, routes, transitions; samples: html, html_dsl, hello_div, component_binding, component_totals, keyed_counters, computed_tags, live_region, form_submit, typed_form, select_binding, page_elements, page_custom_event, keyframes, leaving_list
+Examples: markup, "element events", "fine updates", components, cleanup, "keyed list", "form binding", styles, routes, transitions; samples: html, html_dsl, hello_div, component_binding, component_totals, keyed_counters, computed_tags, live_region, form_submit, typed_form, select_binding, page_elements, page_custom_event, keyframes, leaving_list, counter
 
 ## Servers
 
@@ -763,7 +763,7 @@ Examples: forms; samples: server, route_headers, hosting, worker
 
 `use draw` paints pixels on a canvas, and `show()` shows it. A shader colors every pixel at once on the graphics card: [[#Shaders]] below.
 
-Examples: frames, shader, "shader mouse"; samples: paint_text, color_swatches, paint_text_gpu, finger_paint, shader, webgpu, shader_brush, shader_trails, paint_function, window_size
+Examples: frames, shader, "shader mouse"; samples: paint_text, color_swatches, paint_text_gpu, finger_paint, shader, webgpu, shader_brush, shader_trails, paint_function, window_size, raylib_circle, raylib_mouse_circle, raylib_sleep, sdl_red_square
 
 ## Shaders
 
@@ -780,7 +780,7 @@ The function may call other functions; `shader_of(stripes)` shows the shader cod
 You can also write the shader yourself in WGSL, the web's shader language, inside `shader { … }`. In there `$name` reads the warp variable `name`.
 `use compute_toys` runs shaders from [compute.toys](https://compute.toys) as they are: `compute_toy(shader { … })`.
 
-Examples: shader, "shader mouse"; samples: warp_compiled_wgsl_shader, julia, voronoi, sdf_scene, ocean, scene_3d, kaleidoscope, lava_lamp, northern_lights, ringed_planet, manual_3d_object_viewer, gpu_visualizer
+Examples: shader, "shader mouse"; samples: warp_compiled_wgsl_shader, julia, voronoi, sdf_scene, ocean, scene_3d, kaleidoscope, lava_lamp, northern_lights, ringed_planet, manual_3d_object_viewer, gpu_visualizer, aquarium, gaussian_splats
 
 ## Acceleration
 
@@ -800,7 +800,7 @@ block or function when every digit counts; `@gpu` asks for the graphics card fro
 
 [[#Shaders]] above shows how to draw directly on the GPU.
 
-Examples: "gpu map"; samples: gpu_map, gpu_arrays, gpu_million
+Examples: "gpu map"; samples: gpu_map, gpu_arrays, gpu_million, gpu_f16, meshlet_grid, million_trees
 
 ## Sound and music
 
@@ -814,7 +814,7 @@ Examples: "gpu map"; samples: gpu_map, gpu_arrays, gpu_million
 play ./samples/sound/tune.mp3
 ```
 
-Examples: melody; samples: play_mp3, music, rhythm, harmony, synth, filters, voices, arrangement, sound_patterns, signal_graph, siren_sound, stereo_sound, midi, visualizer, sound_features, sound_kick_samples, sound_pipes, gpu_visualizer_warp
+Examples: melody; samples: play_mp3, music, rhythm, harmony, synth, filters, voices, arrangement, sound_patterns, signal_graph, siren_sound, stereo_sound, midi, visualizer, sound_features, sound_kick_samples, sound_pipes, gpu_visualizer_warp, hum_blocks
 
 ## WebAssembly
 
@@ -834,8 +834,15 @@ square(3)
 
 This way, you can prove that your program always does the correct thing. 
 
-Examples: "kitchen sink"; samples: laws, kitchensink
+Examples: "kitchen sink"; samples: laws, kitchensink, basic_laws, project_laws
 
+
+## Everyday programs
+
+Small programs of the kind people write every week: reports from a CSV or a log, a planner, a todo list on the command
+line, a site built from markdown. Each puts the chapters together and runs as it stands.
+
+Examples: "kitchen sink"; samples: todo_cli, settings_cli, invoice_report, inventory_report, checksum_inventory, log_analyzer, url_report, mail_merge, meeting_planner, open_hours, deadlines, recipe_scaler, name_matcher, config_validator, dependency_resolver, comment_board, site_generator
 
 ## Advanced
 
