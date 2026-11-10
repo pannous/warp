@@ -438,10 +438,11 @@ required_words(pattern: Node): list := {
 	items_of(pattern).flat_map(item => required_words(item)) + (if is_phrase(pattern) then [PHRASE_TOKEN] else [])
 }
 # what code a phrase pattern can match mentions (tokens_within), what a rule whose pattern is a phrase needs
-# (required_words): `$f $x` matches only an unbracketed group that is no statements (phrase_fits), never `1`, so a rule of
-# holes alone reaches only code with one
+# (required_words): `$f $x` matches only a group of words, bracketed too where a block or parentheses hold one
+# statement (`{remove b from xs}`, `(ps where age > 18)`), never statements (phrase_fits) nor `1`, so a rule of holes
+# alone reaches only code with one
 PHRASE_TOKEN = "⟨phrase⟩"
-is_phrase_matchable(n: Node): bool := is_group(n) and bracket_of(n) == "" and separator_of(n) not in statement_separators
+is_phrase_matchable(n: Node): bool := is_group(n) and separator_of(n) not in statement_separators
 
 # `[a, b]`: a list literal, whose items are rewritten by the rules `where element`
 is_element_list(n: Node): bool := is_group(n) and bracket_of(n) == "["
