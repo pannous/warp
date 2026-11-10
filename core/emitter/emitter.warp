@@ -572,6 +572,9 @@ node_reader(kind: ValueKind): text? := match kind {
 	ValueKind.Char: "char_of_node"
 	_: ø
 }
+# a value known only at run time as the core duration it lasts when it is a lib/units quantity of time
+# (quantity_lasting, kept where the program has it), else as it is: `f(n: duration) := n; f(2 hours)`, `d + 2 hours`
+lasting(value: TypedCode): TypedCode := if value.kind == ValueKind.Node and module.functions.has(quantity_lasting_word) then TypedCode(ValueKind.Node, boxed(call_values(module.functions[quantity_lasting_word], [value]))) else value
 def converted(value: TypedCode, to: ValueKind): list {
 	from = value.kind
 	if to == ValueKind.Node { return boxed(value) }
@@ -580,6 +583,7 @@ def converted(value: TypedCode, to: ValueKind): list {
 	if from == ValueKind.Int and to == ValueKind.Bool { return condition(value) }
 	if from == ValueKind.Node and to == ValueKind.Int { return runtime_call("int_of_node", [value]).code }
 	if from == ValueKind.Node and to == ValueKind.Float { return runtime_call("float_of_node", [value]).code }
+	if from == ValueKind.Node and to == ValueKind.Time { return runtime_call(node_reader(to), [lasting(value)]).code }
 	if from == ValueKind.Node and node_reader(to) != ø { return runtime_call(node_reader(to), [value]).code }
 	if from == ValueKind.Char and to == ValueKind.Text { return runtime_call("char_text", [value]).code }
 	# (a local holding a call still compiling, in a first reading of a cycle, whose code is not kept)
