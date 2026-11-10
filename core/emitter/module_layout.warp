@@ -40,6 +40,9 @@ def code_entries(functions: list): list {
 }
 def index_name(i: int, name: text): list { uleb(i) + name_bytes(name) }
 def name_map(names: list): list { vector(range_list(#names).map(i => index_name(i, names#(i + 1)))) }
+# the globals' names for debuggers, each by its index, a literal's left out: its name only links (the exports), and
+# warp.wasm's 3,700 literal names were 110 KB, more than their globals saved in code
+def global_names(names: list): list := names.filter(name => not name.starts_with(LITERAL_GLOBAL_PREFIX)).map(name => index_name(module.globals[name]#1, name))
 def local_name_map(f: Function): list { uleb(f.index) + name_map(f.local_names) }
 def range_list(n: int): list {
 	out = []
@@ -54,8 +57,7 @@ def names_section(functions: list): list {
 	types = name_map(module.gc_order)
 	fields = vector(range_list(#module.gc_order).map(i => uleb(i) + name_map(gc_field_names(module.gc_order#(i + 1)))))
 	content = subsection(names_subsections.functions, function_names) + subsection(names_subsections.locals, locals)
-	globals = name_map(module.global_order)
-	content += subsection(names_subsections.types, types) + subsection(names_subsections.globals, globals)
+	content += subsection(names_subsections.types, types) + subsection(names_subsections.globals, vector(global_names(module.global_order)))
 	content += subsection(names_subsections.fields, fields)
 	if module.catches_errors { content += subsection(names_subsections.tags, name_map([error_tag_name])) }
 	section(section_ids.custom, name_bytes("name") + content)

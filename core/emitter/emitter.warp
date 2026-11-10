@@ -776,8 +776,9 @@ def node(kind_code: int, payload: list): list {
 # The global is named by its kind and text: a module behind another shares a global of the same name, its start run
 # first (driver.warp instance_defined), so a name holds one literal in every module
 LITERAL_CODE_BYTES = 32
+LITERAL_GLOBAL_PREFIX = "literal·"
 def literal_node(kind_code: int, t: text, payload: list): list {
-	name = "literal·" + kind_code + "·" + t
+	name = LITERAL_GLOBAL_PREFIX + kind_code + "·" + t
 	if name not in module.globals {
 		declared_global(name, ValueKind.Node)
 		module.global_firsts[name] = [ref_null] + uleb(gc_type(gc.node))
