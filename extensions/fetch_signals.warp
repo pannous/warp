@@ -15,6 +15,8 @@ ERROR_TYPE = "error"
 LIVE_ATTRIBUTE = "aria-live"
 LIVE_POLITENESS = "polite"
 MARKUP_MODULE = "markup"
+MARKUP_TYPE = "html"
+MARKUP_ELEMENTS = "html_elements = ["
 FETCH_LATER = "fetch_later"
 ANSWER = "answer"
 SIGNAL_SEPARATOR = "·"
@@ -26,7 +28,7 @@ fetch_signals(program: Node): Node := {
 	if #fetched == 0 { return program }
 	later = statements_in(program).map(later_fetched_name).filter(name => name != "")
 	# (regions and live items first: `users.loading` reads users before it becomes users·loading)
-	marked = live_reads(live_regions(program, fetched), later)
+	marked = in_markup(program, scope => live_reads(live_regions(scope, fetched), later))
 	read = bottom_up(marked, n => signal_read(n, fetched, later))
 	if #later == 0 { return read }
 	# (its statements among the program's, main-level: written later by the reply, its variables are varying)
@@ -93,10 +95,31 @@ live_item(item: Node, later: list): Node := {
 	kept_live(item)
 }
 kept_live(code: Node): Node := call_of(LIVE_WORD, [Key(Node.Empty, Op.Arrow, code)])
-# `div{ … }`: a tag of lib/markup.warp with its block
+# `div{ … }`: an element of lib/markup.warp with its block, markup only inside a markup scope
 is_markup_element(n: Node): bool := match n {
-	Key(Symbol(tag), Op.Colon, List(_, Bracket.Curly, _)): declared_tags().get(tag) == MARKUP_MODULE
+	Key(Symbol(tag), Op.Colon, List(_, Bracket.Curly, _)): tag in markup_elements()
 	_: no
+}
+# Markup is written inside html{…} or in a function typed html, `f(): html := b{"bold"}` (decision markup-needs-html);
+# anywhere else a tag-named key is data: `{p: {c: 1}}` stays a map
+is_markup_scope(n: Node): bool := match n {
+	Key(Symbol(tag), Op.Colon, List(_, Bracket.Curly, _)): tag == MARKUP_TYPE
+	Key(Key(_, Op.Colon, Symbol(type)), Op.Define, _): type == MARKUP_TYPE
+	_: no
+}
+markup_scopes(program: Node): list := nodes_in(program).filter(is_markup_scope)
+# the program with each markup scope rewritten, the rest as written
+in_markup(n: Node, rewrite: function): Node := if is_markup_scope(n) then rewrite(n) else children(n, child => in_markup(child, rewrite))
+# the element names of lib/markup.warp, its list html_elements, read once
+global markup_elements_held = ø
+markup_elements(): list := {
+	if markup_elements_held == ø {
+		source = used_module_text(MARKUP_MODULE)
+		n = source.length
+		from = index_of(source, MARKUP_ELEMENTS, 0, n)
+		markup_elements_held = quoted_texts(source[from ..< index_of(source, "]", from, n)])
+	}
+	markup_elements_held
 }
 # `users.error`: `if users is error then str(users) else ø`
 failure_text(fetched: Node): Node := chosen(Key(fetched, Op.Is, symbol(ERROR_TYPE)), call_of("str", [fetched]), Node.Empty)

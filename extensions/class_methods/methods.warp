@@ -94,6 +94,10 @@ syntax_words = phrase_prepositions + ["if", "then", "else", "while", "is", "as",
 names_syntax(method: text): bool := is_tested_type_word(method) or method in syntax_words
 # the function a bare call of a sibling method calls: the dispatcher of a routed one
 called_name(method: text, routes: list): text := if method in routes then routed_name(method) else method
+# the variables the program's top level assigns, by name: a method of that name, `hour()` beside `hour = 5`, is routed,
+# lifted as itself it would be a function sharing the variable's name (lib/time's Instant.minute() beside lib/units'
+# `minute = Unit("min")`, card units-build-failure)
+variables_assigned(top_statements: list): list := top_statements.filter(statement => is_key(statement, Op.Assign) and key_of(statement) is symbol).map(statement => name_of(key_of(statement)))
 # the functions the program defines, by name
 functions_defined(top_statements: list): list := top_statements.map(function_word).filter(found_word => found_word != ø)
 # the function a top statement defines, also one with a result type, `shown(x: any): text := …`
@@ -210,7 +214,8 @@ methods_lifted(program: Node): Node := {
 	if #constructed > 0 { rewritten = rewritten.map(top_statement => if class_view(top_statement) == ø then constructions(top_statement, constructed) else top_statement) }
 	methods = methods_of(classes, liftable).filter(method => method != constructor_method)
 	operator_methods = methods.filter(method => spelled_operator(operator_table, method) != ø and 1 in taken_counts(classes, liftable, method))
-	routes = methods.filter(method => module_routing(classes, liftable, method, operator_methods) ?? (is_library_word(method) or method in functions or method in operator_methods or names_syntax(method) or method in position_words))
+	variables = variables_assigned(top_statements)
+	routes = methods.filter(method => module_routing(classes, liftable, method, operator_methods) ?? (is_library_word(method) or method in functions or method in variables or method in operator_methods or names_syntax(method) or method in position_words))
 	# (a method only linked classes have, of one parameter count and no word of the program's own: its functions and
 	# dispatcher lowered once the lowered program calls them, passes.warp deferred_definitions)
 	deferred = methods.filter(method => #linked > 0 and owners_of(classes, liftable, method).all(owner => owner in linked) and #taken_counts(classes, liftable, method) == 1 and method not in functions and called_name(method, routes) not in functions)

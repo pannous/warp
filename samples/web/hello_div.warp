@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# Any element is a page: run from a terminal, `warp samples/web/hello_div.warp` opens the app window
-# as html{…} does; piped or redirected it prints the HTML
+# A page is markup inside html{…}: run from a terminal, `warp samples/web/hello_div.warp` opens the app
+# window; piped or redirected it prints the HTML
 on key { exit }
-div{ h1{ "hello" } p{ "a div is enough to open the app" } }
+html{ div{ h1{ "hello" } p{ "html{…} is enough to open the app" } } }
