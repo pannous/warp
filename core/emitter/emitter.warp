@@ -715,9 +715,21 @@ def space_marked(mark: int): int := (-1 - mark) ÷ #relocated.keys
 # the imports of these host words, each once, behind WASI's fd_write for a module that prints
 def imported_words(names: list, prints: bool): list {
 	imports = if prints then [fd_write_import] else []
-	for name in names { if host_import(name) not in imports { imports += [host_import(name)] } }
+	# (each told apart by its written form in a map: a list's `in` compares every import before it, node by node)
+	seen = {}
+	for entry in imports { seen[import_written(entry)] = yes }
+	for name in names {
+		entry = host_import(name)
+		written = import_written(entry)
+		if not seen.has(written) {
+			seen[written] = yes
+			imports += [entry]
+		}
+	}
 	imports
 }
+# an import [module, name, type bytes] as one text, the same of equal imports
+def import_written(entry: list): text := entry#1 + " " + entry#2 + " " + entry#3.map(part => "" + part).join(",")
 # the fixed GC types in gc_names order at indices 0…G-1, each its own group, as runtime.wasm declares them
 def canonical_type_entries() { for entry in gc_names { gc_type(entry#1) } }
 def gc_type(name: text): int {
