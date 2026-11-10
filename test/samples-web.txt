@@ -1,4 +1,4 @@
-# 805a3299c0 2026-11-09 03:35 255/255 100.0%
+# 7afcde9933 2026-11-10 03:36 255/262 97.3%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -7,7 +7,7 @@ ok   samples/advanced/circle.warp
 ok   samples/advanced/filled_circle.warp
 ok   samples/advanced/mandelbrot_canvas.warp
 ok   samples/advanced/neural_net.warp
-ok   samples/advanced/particles.warp
+FAIL samples/advanced/particles.warp
 ok   samples/advanced/raytracer.warp
 ok   samples/advanced/self_parser.warp
 ok   samples/advanced/snake.warp
@@ -90,7 +90,8 @@ ok   samples/golf/quine.warp
 ok   samples/golf/rot13.short.warp
 ok   samples/golf/rot13.warp
 ok   samples/golf/sierpiński-triangle.short.warp
-ok   samples/golf/sierpiński-triangle.warp
+FAIL samples/golf/sierpiński-triangle.warp
+ok   samples/gpu/aquarium.warp
 ok   samples/gpu/gpu_visualizer.warp
 ok   samples/gpu/julia.warp
 ok   samples/gpu/kaleidoscope.warp
@@ -103,8 +104,11 @@ ok   samples/gpu/scene_3d.warp
 ok   samples/gpu/sdf_scene.warp
 ok   samples/gpu/voronoi.warp
 ok   samples/gpu/warp_compiled_wgsl_shader.warp
+ok   samples/graphics/color_swatches.warp
 ok   samples/graphics/finger_paint.warp
 ok   samples/graphics/gaussian_splats.warp
+ok   samples/graphics/meshlet_grid.warp
+ok   samples/graphics/million_trees.warp
 ok   samples/graphics/paint_function.warp
 ok   samples/graphics/paint_text.warp
 ok   samples/graphics/paint_text_gpu.warp
@@ -123,9 +127,9 @@ ok   samples/hello/natural.warp
 ok   samples/hello/phrases.warp
 ok   samples/hello/sample.warp
 ok   samples/laws/basic_laws.warp
-ok   samples/laws/kitchensink.warp
+FAIL samples/laws/kitchensink.warp
 ok   samples/laws/project_laws.warp
-ok   samples/lists/dot.warp
+ran  samples/lists/dot.warp
 ok   samples/lists/primes.warp
 ok   samples/lists/quicksort.warp
 ok   samples/lists/sieve.warp
@@ -151,7 +155,7 @@ ok   samples/modules/javascript.warp
 ok   samples/modules/lib.warp
 ok   samples/modules/main.warp
 ok   samples/modules/modules.warp
-ok   samples/modules/packages.warp
+FAIL samples/modules/packages.warp
 ok   samples/modules/rust_crates.warp
 ok   samples/modules/slug_paths.warp
 ok   samples/modules/square.warp
@@ -181,8 +185,11 @@ ok   samples/numbers/units_dynamic.warp
 ok   samples/objects/binary_tree.warp
 ok   samples/objects/data_structures.warp
 ok   samples/objects/dijkstra.warp
+ok   samples/objects/disjoint_groups.warp
 ok   samples/objects/json_parser.warp
 ok   samples/objects/references.warp
+ok   samples/objects/ring_log.warp
+ok   samples/objects/sorted_leaderboard.warp
 ok   samples/python/numpy_matrix.warp
 ok   samples/python/python_modules.warp
 ran  samples/servers/hosting.warp
@@ -192,7 +199,7 @@ ran  samples/servers/worker.warp
 ok   samples/signals/signal_fields.warp
 ok   samples/sound/arrangement.warp
 ok   samples/sound/filters.warp
-ok   samples/sound/gpu_visualizer_warp.warp
+ran  samples/sound/gpu_visualizer_warp.warp
 ok   samples/sound/harmony.warp
 ok   samples/sound/hum_blocks.warp
 ok   samples/sound/midi.warp
@@ -207,11 +214,11 @@ ok   samples/sound/sound_patterns.warp
 ok   samples/sound/sound_pipes.warp
 ok   samples/sound/stereo_sound.warp
 ok   samples/sound/synth.warp
-ok   samples/sound/visualizer.warp
+FAIL samples/sound/visualizer.warp
 ok   samples/sound/voices.warp
 ok   samples/storage/orm.warp
 ok   samples/storage/orm_transaction.warp
-ok   samples/storage/orm_units.warp
+FAIL samples/storage/orm_units.warp
 ok   samples/storage/store.warp
 ran  samples/storage/todo_app.warp
 ok   samples/system/c_lines.warp
@@ -234,7 +241,7 @@ ok   samples/types/polymorphism.warp
 ok   samples/types/reflection.warp
 ok   samples/types/return_polymorphism.warp
 ok   samples/types/return_polymorphism2.warp
-ok   samples/types/types.warp
+FAIL samples/types/types.warp
 ok   samples/wasm/component_reflection.warp
 ok   samples/wasm/import_compiled.warp
 ok   samples/wasm/wasm_interop.warp
