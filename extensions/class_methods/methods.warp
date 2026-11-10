@@ -231,10 +231,9 @@ methods_lifted(program: Node): Node := {
 		rewritten += made.filter(definition => definition not in set_aside)
 	}
 	# `w.fahrenheit = 212` of a method of one parameter, its setter, calls it, fahrenheit(w, 212), with or without a
-	# getter or a stored field beside it (decisions setter-calls, setters-declared); in the setter itself the field of
-	# its name is written, `w(v) := { w = v * 2 }` beside `w: int`
-	setters = methods.filter(method => 1 in taken_counts(classes, liftable, method))
-	if #setters > 0 { rewritten = rewritten.map(top_statement => setter_calls(top_statement, setters.filter(setter => not is_setter_of(top_statement, setter, routes)), routes)) }
+	# getter beside it (decisions setter-calls, setters-declared)
+	setters = methods.filter(method => 1 in taken_counts(classes, liftable, method) and not is_field_of_any(classes, liftable, method))
+	if #setters > 0 { rewritten = rewritten.map(top_statement => setter_calls(top_statement, setters, routes)) }
 	entry_words = []
 	for method in operator_methods {
 		word = spelled_operator(operator_table, method)#1
@@ -1059,8 +1058,6 @@ setter_calls(n: Node, setters: list, routes: list): Node := {
 	}
 	children(n, parts)
 }
-# whether the statement defines the setter itself
-is_setter_of(statement: Node, setter: text, routes: list): bool := defined_word(statement) in [setter, called_name(setter, routes)]
 # the classes declaring a method of that name taking that many parameters
 owners_taking(classes: map, names: list, method: text, count: int): list := owners_of(classes, names, method).filter(owning_class => methods_named(classes[owning_class], method).any(declared => #method_parameters(declared) == count))
 is_field_of_any(classes: map, names: list, name: text): bool := names.any(owning_class => name in classes[owning_class].fields)
