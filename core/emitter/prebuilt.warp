@@ -511,7 +511,7 @@ word_reaches(functions: list, classes: list): map := {
 	naming = word_set(concatenated(own.map(f => name_parts(f.name))) + classes + module.linked_words.keys + concatenated(module.linked_images.map(image_class_names)))
 	reached = {}
 	for f in own {
-		said = words_within(f.body).filter(word => naming.has(word) and word != f.name)
+		said = words_within(f.body).flat_map(with_constructed_class).filter(word => naming.has(word) and word != f.name)
 		if #said > 0 { for key in owning_names(f.name) { reached[key] = (reached.get(key) ?? []) + said } }
 	}
 	reaches = {}
@@ -520,11 +520,18 @@ word_reaches(functions: list, classes: list): map := {
 }
 # a word's name and, lifted, its parts: next·Channel, next, Channel
 name_parts(name: text): list := if name.contains("·") then [name] + name.split("·") else [name]
-# a word's name and, lifted, its class's: next·Channel, Channel
-owning_names(name: text): list := {
+# a word's name and its class's: next·Channel and Graph·new of Channel and Graph
+owning_names(name: text): list := if word_class(name) != ø then [name, word_class(name)] else [name]
+# a call and, of a constructor (classes.warp constructor_name, made_name), the class it makes: Graph·new, Graph
+# (a struct made in place names it, class·Graph)
+with_constructed_class(word: text): list := if made_by_constructor(word) or word.starts_with(instance_struct_prefix) then [word, word_class(word)] else [word]
+# the class a lifted word belongs to, the last part of next·Channel, the first of a constructor's Graph·new
+word_class(name: text): text? := {
 	parts = name.split("·")
-	if #parts > 1 then [name, parts[#parts - 1]] else [name]
+	if #parts < 2 { return ø }
+	if made_by_constructor(name) then parts#1 else parts[#parts - 1]
 }
+made_by_constructor(name: text): bool := name.contains("·") and (constructor_name(name.split("·")#1) == name or made_name(name.split("·")#1) == name)
 # a linked module's image, the part of its warp.signature (signature.warp) its linked form's compile writes: its
 # words (each name, parameter kinds, result kind), its globals [name, kind, mark], its own class structs [name,
 # definition written], the host's builders it exports (by name) and the runtime it was built behind
