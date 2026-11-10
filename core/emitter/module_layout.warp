@@ -13,7 +13,7 @@ def zero_code_of(kind: ValueKind): list {
 	[op.i32_const, 0]
 }
 # (a first value names only the fixed GC types: no relocation, its marks dropped)
-def global_entry(name: text): list { value_type(module.globals[name]#2) + [mutable] + zero_code_of(module.globals[name]#2).filter(byte => byte >= 0) + [op.end] }
+def global_entry(name: text): list { value_type(module.globals[name]#2) + [mutable] + (module.global_firsts.get(name) ?? zero_code_of(module.globals[name]#2)).filter(byte => byte >= 0) + [op.end] }
 def function_type(f: Function): list { [function_type_byte] + vector(f.kinds.map(value_type)) + (if f.result == no_kind then [0] else [1] + returned_type(f)) }
 # a word called by reference (a closure's entry, a class word) gives an anyref, as the closure call types do
 # (emitter.warp gc_types): a class word's place or set is a small number, an i31
