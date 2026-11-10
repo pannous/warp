@@ -61,7 +61,9 @@ def late_runtime_words() {
 ## a program behind runtime.wasm (card runtime-prepended, notes/runtime_linking.md): the runtime's imports, types,
 ## functions, globals and texts first, as runtime.wasm has them; the program's numbered behind them
 # runtime.wasm read back (module.runtime_image)
-class RuntimeImage { wasm: list; types: int; imports: int; functions: int; data: int; globals: list; words: map }
+# words: the words read so far, by name; entries: where each word's entry starts in warp.runtime; places: those
+# places by their name's word_key; missing: the names looked up that runtime.wasm has no word of
+class RuntimeImage { wasm: list; types: int; imports: int; functions: int; data: int; globals: list; words: map; entries: list; places: map; missing: map }
 def prepend_runtime(wasm: any) {
 	module.runtime_image = if wasm == ø then ø else runtime_image_of(wasm)
 	raisers_read = ø
@@ -86,17 +88,59 @@ def runtime_image_of(wasm: list): any {
 	left = read_names(layout)
 	globals = []
 	for i in 0..<read_number(layout) { globals += [read_global(layout)] }
-	words = {}
+	# (each word read only when a program asks for it, runtime_word: a compile reaches a few dozen of thousands)
+	entries = []
+	places = {}
 	for i in 0..<read_number(layout) {
-		name = read_name(layout)
-		index = read_number(layout)
-		kinds = []
-		for j in 0..<read_number(layout) { kinds += [read_kind(layout)] }
-		result = read_kind(layout)
-		words[name] = [index, kinds, result, read_signature(layout)]
+		entries += [layout.offset]
+		named = uleb_read(wasm, layout.offset)
+		key = word_key(wasm, named#2, named#1)
+		places[key] = (places.get(key) ?? []) + [layout.offset]
+		layout.offset = named#2 + named#1
+		skipped_word(layout)
 	}
 	types = uleb_read(wasm, section_place(wasm, section_ids.type)#1)#1
-	RuntimeImage(wasm, types, imports, functions, segments, globals, words)
+	RuntimeImage(wasm, types, imports, functions, segments, globals, {}, entries, places, {})
+}
+# a word's entry after its name, as runtime_image_of writes it: its index, parameter kinds, result kind and signature
+def word_read(reader: ByteReader): list {
+	index = read_number(reader)
+	kinds = []
+	for j in 0..<read_number(reader) { kinds += [read_kind(reader)] }
+	result = read_kind(reader)
+	[index, kinds, result, read_signature(reader)]
+}
+# the reader past that entry, nothing made of it
+def skipped_word(reader: ByteReader) {
+	read_number(reader)
+	for j in 0..<read_number(reader) { read_number(reader) }
+	read_number(reader)
+	for i in 0..<read_number(reader) {
+		skipped_name(reader)
+		skipped_name(reader)
+		if bits_and(read_number(reader), default_flag) != 0 { skipped_name(reader) }
+	}
+	skipped_name(reader)
+}
+def skipped_name(reader: ByteReader) {
+	count = read_number(reader)
+	reader.offset += count
+}
+# a name's bucket of runtime_image_of's places: its length, first and last byte, of the `count` bytes from `at`
+def word_key(bytes: list, at: int, count: int): int := if count == 0 then 0 else count * 65536 + bytes[at] * 256 + bytes[at + count - 1]
+# runtime.wasm's word of the name, [index, parameter kinds, result kind, signature], read at its first asking; ø
+# where it has none
+def runtime_word_entry(name: text): any {
+	image = module.runtime_image
+	if image.words.has(name) { return image.words[name] }
+	if image.missing.has(name) { return ø }
+	bytes = name.bytes
+	for at in image.places.get(word_key(bytes, 0, #bytes)) ?? [] {
+		named = uleb_read(image.wasm, at)
+		if image.wasm[named#2 ..< named#2 + named#1] == bytes { return image.words[name] = word_read(ByteReader(image.wasm, named#2 + named#1)) }
+	}
+	image.missing[name] = yes
+	ø
 }
 # a reading of bytes from a place on: LEB128 numbers, names (a length and UTF-8 bytes), kinds (held_kinds' places)
 class ByteReader { bytes: list; offset: int }
@@ -181,18 +225,25 @@ def runtime_imports(host: map): list {
 }
 def runtime_shift(): int := #module.imports - module.runtime_image.imports
 # the runtime words a program calls: runtime.wasm's, each at its index, of its kinds and signature; none is lowered or
-# compiled again (the runtime's sources are read only to build runtime.wasm)
-def bind_runtime_words() {
-	for name in module.runtime_image.words.keys {
-		word = module.runtime_image.words[name]
-		f = Function(name, word#4, ø)
-		f.index = word#1 + runtime_shift()
-		f.kinds = word#2
-		f.result = word#3
-		f.is_runtime = yes
-		module.runtime[name] = f
-	}
+# compiled again (the runtime's sources are read only to build runtime.wasm). Each is made at its first asking
+# (runtime_word), once its index is known: from here on, the imports placed
+def bind_runtime_words() { module.runtime_bound = yes }
+# the runtime word of the name: the runtime's own of the module (a runtime compiled from its sources), else, behind
+# runtime.wasm once bound, runtime.wasm's, made at its first asking; ø where there is none
+def runtime_word(name: text): Function? {
+	f = module.runtime.get(name)
+	if f != ø or not module.runtime_bound { return f }
+	word = runtime_word_entry(name)
+	if word == ø { return ø }
+	f = Function(name, word#4, ø)
+	f.index = word#1 + runtime_shift()
+	f.kinds = word#2
+	f.result = word#3
+	f.is_runtime = yes
+	module.runtime[name] = f
+	f
 }
+def has_runtime_word(name: text): bool := runtime_word(name) != ø
 
 # the content of runtime.wasm's section of this id, a custom one by its name; the vector it holds with more entries
 def runtime_part(id: int, name: text = ""): list {
@@ -306,9 +357,21 @@ def program_marks(): list {
 	fuel + c_functions_custom_section()
 }
 # runtime.wasm's names and the program's behind them
+# each runtime word kept, its index and name as warp.runtime holds the name (its length and UTF-8 bytes, as
+# module_layout.warp index_name writes it), no text made of it
+def runtime_word_names(): list {
+	wasm = module.runtime_image.wasm
+	names = []
+	for at in module.runtime_image.entries {
+		named = uleb_read(wasm, at)
+		index = runtime_index(uleb_read(wasm, named#2 + named#1)#1)
+		if index != ø { names += [uleb(index) + wasm[at ..< named#2 + named#1]] }
+	}
+	names
+}
 def prepended_names(functions: list, classes: list, own_globals: list): list {
 	imported = range_list(#module.imports).filter(i => import_kept(i)).map(i => index_name(import_place(i), module.imports#(i + 1)#2)) + stub_names()
-	words = module.runtime_image.words.keys.filter(name => runtime_index(module.runtime_image.words[name]#1) != ø).map(name => index_name(runtime_index(module.runtime_image.words[name]#1), name))
+	words = runtime_word_names()
 	content = subsection(names_subsections.functions, vector(imported + words + functions.map(f => index_name(f.index, f.name))))
 	content += subsection(names_subsections.locals, shifted_locals(runtime_subsection(names_subsections.locals), functions.map(local_name_map)))
 	content += runtime_names(names_subsections.types, classes.map(name => index_name(module.gc_indices[name], name)))
@@ -509,7 +572,7 @@ def bind_written_variants(image: LibraryImage) {
 	varied = {}
 	for name in module.functions.keys { if name.contains("·") { varied[name.split("·")#1] = yes } }
 	# (a class's methods are in its slice, whose text is its head line only)
-	for slice in signature.slices.filter(slice => varied.has(slice#1) or leading_name(slice#2) == "class") {
+	for slice in signature.slices.filter(slice => varied.has(slice#1) or is_class_slice(slice#2)) {
 		for written in written_definitions(unpack(slice#3)) {
 			name = written#1
 			types = written#2
@@ -525,6 +588,10 @@ def bind_written_variants(image: LibraryImage) {
 		}
 	}
 }
+# a slice of a class's head line, `class Instant {…}`: its text tested whole only when it starts so (leading_name counts
+# a text's characters at each of its own)
+class_head = "class"
+is_class_slice(text: text): bool := text.starts_with(class_head) and leading_name(text) == class_head
 # [name, parameter types] of each definition a module's statement writes, a class's methods with their receiver first
 written_definitions(code: Node): list := {
 	found = []
@@ -805,7 +872,10 @@ def cut_runtime_words(names: list) {
 	cut_names = {}
 	for name in names { cut_names[name] = yes }
 	if module.runtime_image == ø { return }
-	for name in names { if module.runtime_image.words.has(name) { cut_positions[module.runtime_image.words[name]#1 - module.runtime_image.imports] = yes } }
+	for name in names {
+		word = runtime_word_entry(name)
+		if word != ø { cut_positions[word#1 - module.runtime_image.imports] = yes }
+	}
 }
 # a function body that only traps
 def trapping_body(): list := uleb(3) + [0, op.unreachable, op.end]
