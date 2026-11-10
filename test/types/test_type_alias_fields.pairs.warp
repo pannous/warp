@@ -4,4 +4,4 @@
 'type Name = string; type P: { name: Name }; p = P{name: "Al"}; p.name'	'Al'
 
 # alias_as_optional_field_and_parameter
-'type Age = int; older(a: Age) := a + 1; older(41)'	42
+'type Age < int; older(a: Age) := a + 1; older(41)'	42
