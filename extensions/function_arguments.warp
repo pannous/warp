@@ -35,10 +35,10 @@ parameter_filled(signature: Signature, place: int, argument: Node): Parameter? :
 	if place <= #signature.parameters then signature.parameters#place else ø
 }
 
-# a function in every signature that takes as many arguments as the call gives
+# a function in a signature that takes as many arguments as the call gives: `find(xs, it > 1)` beside text's
+# `find(t, part)` reads the list's
 is_function_place(signatures: list, place: int, arguments: list): bool := {
-	fitting = signatures.filter(signature => #signature.parameters >= #arguments)
-	#fitting > 0 and fitting.all(signature => {
+	signatures.filter(signature => #signature.parameters >= #arguments).any(signature => {
 		parameter = parameter_filled(signature, place, arguments#place)
 		parameter != ø and is_function_typed(parameter)
 	})
@@ -62,9 +62,12 @@ with_functions(word: text, arguments: list, defined: map): list := {
 
 # `w(a, b)`, `w a b` and `x.w(a)` (x its first argument)
 with_function_arguments(n: Node, defined: map): Node := match n {
+	# a spaced phrase given a function becomes the call, `map [1 2] (it * 10)` is map([1 2], it => (it * 10))
 	List(items, bracket, separator): {
 		if #items < 2 or not (items#1 is symbol) or not (bracket == Bracket.Round or (bracket == Bracket.None and separator == Separator.Space)) { return n }
-		List([items#1] + with_functions(name_of(items#1), items[1..], defined), bracket, separator)
+		given = with_functions(name_of(items#1), items[1..], defined)
+		if given == items[1..] { return n }
+		List([items#1] + given, Bracket.Round, Separator.None)
 	}
 	Key(receiver, Op.Dot, List(items, Bracket.Round, separator)): {
 		if #items < 1 or not (items#1 is symbol) { return n }
