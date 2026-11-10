@@ -427,6 +427,8 @@ records_reaches(module_name: text): bool := {
 	signature = linked_signature(module_name)
 	signature != ø and signature.reaches != ø
 }
+# the classes of the linked modules, by name
+linked_class_set(): map := word_set(concatenated(module.linked_images.map(image_class_names)))
 image_class_names(image: LibraryImage): list := image.classes.map(entry => entry#1[#instance_struct_prefix ..])
 # what each word of the linked modules reaches, by its name (word_reaches), all modules' merged
 linked_reaches(): map := {

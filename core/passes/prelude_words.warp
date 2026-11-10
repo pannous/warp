@@ -427,7 +427,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	# declared only, say none of it)
 	wanted += linked_classes_reached.keys
 	reaches = linked_reaches()
-	linked_classes = word_set(concatenated(module.linked_images.map(image_class_names)))
+	linked_classes = linked_class_set()
 	uses = ø
 	origins = {}
 	# (the slices by name, made once: each wanted word compared with every slice's name was most of hello's reaching)
