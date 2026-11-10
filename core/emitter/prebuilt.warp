@@ -413,12 +413,14 @@ def own_words_unlinked(names: list) {
 		}
 	}
 }
-# the names a program reaching a linked module needs of it even when it never says them: its classes, which the
-# bodies of its words, declared only, construct and a conversion or operator dispatches on (`str(6.0 ± 0.3)`'s
-# Interval). A module the program reaches nothing of brings none (decision link-modules-lazily: `use units; 1`)
-# (never its globals: each is imported from the module, whose warp/start ran its initializer; brought, every program
-# ran the prelude's tables again, half of hello's compile)
-linked_needs(module_name: text): list := concatenated(module.linked_images.filter(image => image.name == module_name).map(image => image.classes.map(entry => entry#1[#instance_struct_prefix ..])))
+# the names the program needs of each linked module even when it never says them: its classes
+def linked_needs(): list {
+	names = []
+	# (never its globals: each is imported from the module, whose warp/start ran its initializer; brought, every
+	# program ran the prelude's tables again, half of hello's compile)
+	for image in module.linked_images { names += image.classes.map(entry => entry#1[#instance_struct_prefix ..]) }
+	names
+}
 # a linked module's image, the part of its warp.signature (signature.warp) its linked form's compile writes: its
 # words (each name, parameter kinds, result kind), its globals [name, kind, mark], its own class structs [name,
 # definition written], the host's builders it exports (by name) and the runtime it was built behind

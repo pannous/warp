@@ -397,23 +397,17 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	exported = slices.filter(is_exported_slice).map(slice => slice#1)
 	for name in exported { exported_names[name] = yes }
 	# (an alias the program writes where the sugar makes its call later, `3 squared`, wants its word: square)
-	wanted = exported + program_words + program_words.filter(word => written_aliases.has(word)).map(word => written_aliases[word]) + variant_words(program_words) + lowering_words(program) + sugar_words_of(program) + (if callable_word in module_names and calls_a_value(program) then [callable_word] else []) + extension_value_settlers().values.filter(word => word in module_names)
+	wanted = exported + program_words + program_words.filter(word => written_aliases.has(word)).map(word => written_aliases[word]) + variant_words(program_words) + lowering_words(program) + sugar_words_of(program) + linked_needs() + (if callable_word in module_names and calls_a_value(program) then [callable_word] else []) + extension_value_settlers().values.filter(word => word in module_names)
 	uses = ø
 	origins = {}
 	# (the slices by name, made once: each wanted word compared with every slice's name was most of hello's reaching)
 	named = slices_by_name(slices)
-	# (each linked slice's module by its identity, whose classes come in with the first of its words reached)
-	linked_module = {}
-	for slice in linked { linked_module[slice#4 + " " + slice#1 + " " + slice#2] = slice#4 }
-	modules_reached = {}
 	at = 0
 	while at < #wanted {
 		word = wanted[at]
 		at += 1
 		for slice in named.get(word) ?? [] {
 			if slice#5 not in reached {
-				reached_module = linked_module.get(slice#5)
-				if reached_module != ø { wanted += classes_reaching(reached_module, modules_reached) }
 				if slice#4 == ø and uses == ø { uses = use_lines(module) }
 				# (a linked one's parse packed alone in its signature, unpacked once reached)
 				slice_node = early_sugared(if slice#4 != ø then unpack(slice#4) else plain_node(parsed(slice#2, uses)))
@@ -449,15 +443,6 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	own_statements = statements_in(program)
 	parts = if in_front then values + functions + own_statements else values + own_statements + functions
 	separated(bracketed(parts, ""), ";")
-}
-# the classes of a linked module reached the first time, and of each module it uses, whose words its bodies, declared
-# only, reach unseen (graphs' collections, channels' tasks); none of a module reached before
-classes_reaching(module_name: text, modules_reached: map): list := {
-	if modules_reached.has(module_name) { return [] }
-	modules_reached[module_name] = yes
-	signature = linked_signatures.get(module_name)
-	used = if signature == ø then [] else signature.uses
-	linked_needs(module_name) + concatenated(used.map(name => classes_reaching(name, modules_reached)))
 }
 # each name → its slices, in their order
 slices_by_name(slices: list): map := {
