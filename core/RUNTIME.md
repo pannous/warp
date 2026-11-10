@@ -12,8 +12,6 @@ program).
 
 ## Core and extended
 
-The split was approved by the user on 2026-10-22 (decision commit c23bd8b476, card runtime-split).
-
 **Core** is `runtime.warp` and the parts its `use` lines name in `core/runtime/`. It is what every program,
 or the compiler itself, needs: instructions, intrinsics, walks, text, text_words, characters, case and case_tables,
 show, float printing, arithmetic, equality, ordering, types, conversions, text_numbers, lists, library_words, maps,

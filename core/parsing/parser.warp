@@ -48,7 +48,7 @@ def parsed(source: text, uses: text = ""): Node := {
 	}
 }
 
-// The words that take a block last, as `if` does (user 2026-10-29: derived from the signature): a function whose last
+// The words that take a block last, as `if` does (derived from the signature): a function whose last
 // parameter is `body: block` (`once(body: block)`), a rewrite rule whose pattern ends in a `: block` hole (`rewrite
 // whenever $c $body: block`), read off the library index (library.warp library_index_section)
 def is_block_head(word: text): bool := library_index_section("block").has(word)
