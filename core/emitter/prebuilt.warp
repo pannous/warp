@@ -457,8 +457,9 @@ written_words(name: text): map := {
 # the images, the prelude's last: a word is bound to the first of them defining it
 by_precedence(images: list): list := images.filter(image => image.name != PRELUDE_MODULE) + images.filter(image => image.name == PRELUDE_MODULE)
 # a module's word a program may call: not one of the builders it exports for the host (its show(x) is the host's,
-# beside draw's own show()), which a program linking it exports its own of
-linkable(image: LibraryImage, word: Function): bool := word.name not in image.builders
+# beside draw's own show()), which a program linking it exports its own of, nor a runtime module's, which only the
+# emitter calls (linked_word), as it calls runtime.wasm's: big_numbers' two_to(power: int) is no word of machine_math's
+linkable(image: LibraryImage, word: Function): bool := word.name not in image.builders and not is_runtime_module(image.name)
 # the variant of a linked name that takes that many values (card module-export-arity), ø for none
 linked_variant(name: text, parameters: int): any := {
 	fitting = (module.linked_words.get(name) ?? []).filter(word => #word.kinds == parameters)
