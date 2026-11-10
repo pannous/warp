@@ -578,7 +578,22 @@ celled_scope(statements: list, parameters: list, positions: map, read_elsewhere:
 	types = {}
 	for name in shared { types[name] = type_declared(statements, name) }
 	celled = statements.map(statement => shared.fold(statement, (part, name) => renamed(typed_through_local(part, name, types[name]), name, cell_of(name))))
-	shared.map(name => set_to(symbol(name + cell_suffix), call_node(symbol(cell_class), [if name in parameters then symbol(name) else ø]))) + celled
+	made = shared.map(name => set_to(symbol(name + cell_suffix), call_node(symbol(cell_class), [if name in parameters then symbol(name) else ø])))
+	made + celled.map(statement => with_celled_lambdas(statement, positions))
+}
+# each lambda with a block body a scope of its own, as a definition's body is: `g = () -> { n = 0; thrice { n += 1 };
+# n }` shares n with its block (card core-lambda-block-capture); a scope's lambdas are celled after it, so a name it
+# shares is already its cell there
+with_celled_lambdas(n: Node, positions: map): Node := {
+	if is_lambda(n) and is_block_argument(arrow_result(n)) { return celled_lambda(lambda_of(n), positions) }
+	children(n, part => with_celled_lambdas(part, positions))
+}
+celled_lambda(arrow: Node, positions: map): Node := match arrow {
+	Key(head, op, body): {
+		statements = celled_scope(items_of(body), lambda_parameter_names(arrow), positions, [])
+		if statements == items_of(body) then arrow else Key(head, op, block_of(statements))
+	}
+	_: arrow
 }
 # where the scope first assigns the name as a statement of its own, `price = 3`, else -1
 first_assignment(statements: list, name: text): int := {
