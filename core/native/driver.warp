@@ -584,10 +584,12 @@ single_at(address: pointer): Single := address
 # of its many growths (the native `warp rebuild` 6:03 -> ~2 min, card wasmtime-native-rebuild; at 128 MB 698 -> 1408 s);
 # 1 GB over 512 MB: the self compile 75.6 -> 68.6 s CPU (-9%), peak RSS 595 -> 1107 MB (card gc-heap-measure).
 # A compiler compiling a program starts small, as a program does: one that never fills its heap never collects, so
-# every byte it makes stays (hello 218 -> 101 MB RSS, sudoku 663 -> 106 MB, as fast; card compile-memory-limit). The
+# every byte it makes stays (hello 218 -> 101 MB RSS, sudoku 663 -> 106 MB, as fast; card compile-memory-limit). 128 MB
+# over 64: a big compile stops collecting at each growth, `warp build` ocean 38-42 -> 20-22 s CPU at the same peak RSS,
+# a one-liner +14-18 MB, sudoku +67 MB (user 2026-11-10, card compile-setup-overhead; the builder's 2 GB gave <=2.5%). The
 # machine code holds the size, so each is kept apart (machine_code_file)
 BUILDER_GC_HEAP_BYTES = 1073741824
-COMPILER_GC_HEAP_BYTES = 67108864
+COMPILER_GC_HEAP_BYTES = 134217728
 PROGRAM_GC_HEAP_BYTES = 67108864
 # A program's fuel when it counts steps (decision fuel-metering): wasmtime burns about one
 # a WASM instruction; counting makes calls about four times slower, so only runs that ask for it count
