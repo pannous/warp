@@ -908,7 +908,7 @@ core-is-self, core-takes-what-it-uses → AGENTS.md "Three layers". prelude-from
 core-shake-small → card core-shake (notes/core_shake.md).
 no-fixpoint, compilers-delivered → AGENTS.md "self hosted".
 no-slots, root-files, parser-now, playground-paused, launcher-not-yet, sugar-hybrid-lane, cloud-paused, finish-migration, test-keyword, self-compiled-parity, warp-only-acceptance, warp-first, slow-redundant, quality-before-gap, urgent-direct, fix-forward, whole-pipeline-in-warp, sprint-merge-as-is, forward-crunch, lane-floats, cleanup-may-drop-edge-cases, consistency, gate-cuts, git-hook restore, P180 split-debuginfo, Repo layout, warp-ast.wit lives, Bee/wasp entity, P13 libm, browser-server, Playground CI → historic (git).
-runtime-prepended → notes/runtime_linking.md. quick-merges → AGENTS.md "Testing".
+runtime-prepended → notes/runtime_linking.md. quick-merges → notes/agents/common.md "Testing".
 quick-answer-first → notes/agents/common.md Talking. no-aur → notes/packaging.md.
 beautiful-types, compiler-typed → notes/agents/handbook.md. node-refinements → notes/node_refinements.md.
 runtime-split → core/runtime/bridge.warp, core/runtime/extended.warp. wasm-standalone → card standalone.

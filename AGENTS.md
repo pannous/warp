@@ -110,13 +110,8 @@ runs warp.wasm and the programs through wasmtime's C API and answers their host 
 
 ## Build and Test Commands
 
-### Building
-
-Agents must inherit a clean baseline and start working from there. 
-Agents must not rebuild and retest the baseline, this will save many rebuilds.
-Whoever pushes keeps main clean, functional and up to date.
-As soon as a branch, merged with origin/main, passes the smoke test (see Testing), its worker hands it to the integrator, who pushes it to main (notes/agents/common.md "Handoff"). The worker does not push to main.
-The full suite runs only at rare intervals, never per branch or batch.
+How agents work together (baseline, cards, plans, worktrees, which test tier when, handoff to the integrator) is
+notes/agents/common.md, the one rule book of the fleet; this file only describes the project.
 
 The `warp` binary is the native warp, built by warp itself; the compiler it runs by `warp rebuild`.
 After each push scripts/integrate/after-push.sh installs both beside ~/dev/bin/warp:
@@ -128,49 +123,14 @@ scripts/promote-self.sh                   # warp.wasm -> warp-self.wasm once it 
 
 ## To-dos
 This project keeps its to-dos on the board https://github.com/users/pannous/projects/1 (columns Now/Next/Soon/Later/Done),
-every issue you encounter goes in with `todo add "…"` (~/dev/bin/todo, column Next) todo.md as fallback
-`todo list`, `todo move <card> <column>`, `todo done <card> [commit]` (never delete a card). 
-Picking a card is `todo take <card> <session name>` The branch will and must be named identical to the card. 
-
-When encountering a TODO without corresponding card in my main checkout ~/dev/angles/warp/lib/ Create a card for that to do and put the card name right after the word TODO, `# TODO (card <name>) <text>`, and commit 
-
-Create a clean, idiomatic, new generic implementation from first principles. 
-
-Quick fixes:
-Tickets that never touch core/ or extensions/  like website and sample cards first
-A lib/ change is quick only outside the baked files: `scripts/smoke.sh <worktree>` reuses the installed compilers, no
-build. Baked files (`scripts/compiler-inputs.sh --baked-files`: prelude, math, file, os, path, reals, aliases …),
-core/ and extensions/ need a full compiler build (`scripts/rebuild.sh pure`, minutes, waits for a build slot): never a
-quick fix. To merely run a program: `warp <file>`, nothing to build.
-`todo take <card> <session> --keep-name` for a card outside your area, else the session is renamed after the card.
-A medium core change for an edge case is never done; the root cause goes to the Interviewer first (common.md "Cards").
-
-
-## Pre-approved plans
-Every worker gets a plan from Supervisor, and everything in it is pre-approved: implement it without asking.
-A good idea of your own beyond the plan may be implemented too, as long as it is undoable (its own commits on a branch).
-AVOID full rebuild for small changes! Main moved in the meantime: if the minimal smoke test (Compiling Hello World)
-passes on the branch merged with origin/main, the worker hands it to the integrator and does not push it to main itself (notes/agents/common.md "Handoff").
-The card is closed with `todo done <card> <commit>` once that push is on main (notes/agents/common.md "Done"). The merge commit message MUST include a summary of the changes.
+every issue you encounter goes in with `todo add "…"` (~/dev/bin/todo, column Next), todo.md as fallback; how cards
+are taken, branched and closed: notes/agents/common.md "Cards".
 
 ### Testing
 
-Several agent sessions share this Mac and the full suite is slow, so run the cheapest check that covers the change
-(roles: notes/roles.md):
-- Smoke test, every branch: `scripts/smoke.sh <worktree>`: Hello printed with `WARP_LIB=<worktree>/lib`. It builds
-  only what the branch needs: nothing for lib/, web/ or samples, a full compiler build (`scripts/rebuild.sh pure`)
-  only for core/, extensions/ or a baked lib file.
-- Self test, only for parser/compiler changes (core/): `scripts/self-check.sh <worktree>`, the compiler compiles
-  itself and that build prints Hello. For core/ changes smoke + self test is the whole check: no test folders.
-- Changes outside core/: the smoke test is enough to merge. `warp test <folders>` of the few test files a lib/
-  feature touches is feedback for the worker, run in the background, never a merge condition.
-- Full suite (`warp test`): only the Integrator, at rare intervals (nightly, before a release), never per branch.
-We always want the very quick feedback loop and quick merges: anything slower than smoke + self test runs in the
-background (`run_in_background`) and never holds a merge; what it finds is fixed forward on a card.
-Workers merge origin/main into their branch, run the smoke test on that merge, and hand it to the integrator, who pushes it to main (notes/agents/common.md "Handoff"); nobody
-repeats their test. The Integrator runs the slower tiers in the background on main and sends what fails back to the
-worker's card, who fixes it forward.
-
+The checks are tiers, cheapest first: smoke (`scripts/smoke.sh <worktree>`, Hello), self test for core/
+(`scripts/self-check.sh <worktree>`), a few test folders as feedback, the full suite rarely; who runs which:
+notes/agents/common.md "Testing" and "Done".
 Warp tests run locally with the shared binary, through the warp compiler (core/native/tests.warp, notes/is_tests.md):
 ```bash
 warp test                      # all of test/: each *.pairs.warp pair, each is! line of test_*.warp, via warp.wasm
@@ -267,38 +227,16 @@ A test pins only behavior we want. Never write an expectation for a known flaw (
 No tests of intermediates: parse tree shapes, node views, pass outputs, analyzer kind tables, wasm bytes, module or GC layouts, internal APIs.
 
 
-## Commit everything
-Commit and push all meaningful progress all the time, including notes, handovers and WIP: a box or session can
-disappear
+When fixing a problem NEVER modify the test itself without consulting!
+A test may be upgraded without asking when the code now does better: an expected error, refusal or "not supported
+yet" becomes the working value, an ignored test that passes is un-ignored, a weaker assertion becomes the stronger one.
 
 # Important
 NEVER modify a README without the user's review and explicit confirmation.
 
-## worktrees
-Small or non-conflicting changes need no worktree. The worker does not put them on main; it hands them to the integrator (notes/agents/common.md "Handoff").
-Otherwise one branch per task, in a git worktree outside the repo: /Volumes/Worktrees/<name>
-/Volumes/Worktrees/warp is cowtree's donor, never removed.
-/Volumes/Worktrees/integrate and integrate2 are the Integrator's (tools: scripts/integrate/, notes/agents/integrator.md).
-Create worktrees with `cowtree add <path> -b <branch> [<commit>]` 
-Before removing a worktree: `git status --short -uall` (untracked files are hidden on this Mac) + files changed in 2 h.
-
-
 ## Folders
 - `test/` = every kept test (test/<topic>/, test/gate/ for the gate); there is no probes/ folder any more
 - `data/` = kept but ignored: logs, test result dumps, patches, json/txt outputs, benchmark data, agent logs (`data/<topic>/`).
-
-Workers: before and after each task, run `git status` and the tests that cover your change (never the full suite,
-Testing above). If previously passing tests fail after the task (git diff test/results.txt), fix them, else roll back.
-
-When fixing a problem NEVER modify the test itself without consulting!
-A test may be upgraded without asking when the code now does better 
-<!-- when the code now does better than the test pinned: an
-expected error, refusal or "not supported yet" becomes the working value, an ignored test that passes is un-ignored,
-a weaker assertion becomes the stronger one.
- -->
-git status before and after each task should show
-Your branch is up to date with 'origin/main'.
-nothing to commit
 
 <!-- ### Associated projects
 ~/Library/Application Support/Sublime Text 3/Packages/Warp
