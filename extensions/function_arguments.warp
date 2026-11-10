@@ -7,12 +7,12 @@ function_arguments_extension = Extension{name: "function_arguments", passes_befo
 IT_WORD = "it"
 
 function_arguments(program: Node): Node := {
-	defined = defined_signatures(program)
+	defined = own_signatures(program)
 	bottom_up(program, n => with_function_arguments(n, defined))
 }
 
 # the program's definitions by name: [their signatures]
-defined_signatures(program: Node): map := {
+own_signatures(program: Node): map := {
 	found = {}
 	for n in nodes_in(program) {
 		definition = definition_of(plain_node(n))
@@ -24,7 +24,8 @@ defined_signatures(program: Node): map := {
 # the signatures a call of the word may take: the program's own, else the builtins' typed lines
 signatures_of(word: text, defined: map): list := defined.get(word) ?? lines_of(typed_lines, unaliased(word)).map(line => line.signature)
 
-takes_function(parameter: Parameter): bool := parameter.type_name in ["function", "block"] or parameter.type_name.contains("->")
+# `f: function`, `body: block`, a bare `block`, `f: (any) -> bool`
+is_function_typed(parameter: Parameter): bool := parameter.type_name in ["function", "block"] or parameter.type_name.contains("->") or (parameter.name == "block" and parameter.type_name == "")
 
 # the parameter an argument at place (from 1) fills: a named argument `by: -it` its own, else the one at its place
 parameter_filled(signature: Signature, place: int, argument: Node): Parameter? := {
@@ -39,7 +40,7 @@ is_function_place(signatures: list, place: int, arguments: list): bool := {
 	fitting = signatures.filter(signature => #signature.parameters >= #arguments)
 	#fitting > 0 and fitting.all(signature => {
 		parameter = parameter_filled(signature, place, arguments#place)
-		parameter != ø and takes_function(parameter)
+		parameter != ø and is_function_typed(parameter)
 	})
 }
 
