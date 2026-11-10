@@ -79,4 +79,5 @@ the team, crash resume), notes/roles.md (what the other roles do).
 - Do not disturb: `date -v+1d -v8H -v0M -v0S +%s > ~/.claude/quiet-until` and stop warp-interviewer's tmux.
 
 ## Reports to the user
-End each answer with what merged and what runs. Swap notices get an empty reply and are never mentioned.
+End each answer with what merged and what runs. Every landed plan step is reported at once, with its try line and
+sizes. Swap notices get an empty reply and are never mentioned.

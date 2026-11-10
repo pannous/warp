@@ -43,3 +43,8 @@ Where warp has no stated reason to differ, the meaning people know from shells a
 -relative paths resolve against the current folder
 -Julia first among them: Julia forms read with Julia's meaning; its syntax is beautiful and its semantics often near
  perfect. Deliberate departures are listed in wiki/Julia.md.
+
+## Stand on giants
+Big existing libraries do the heavy work: Rust crates as wasm components with WIT for computation (symphonia, regex,
+rapier), C-ABI shims for OS crates (cpal, winit), plain C libraries (SDL3, raylib, wgpu-native); one review card per
+area picks the library.
