@@ -39,7 +39,7 @@ command_help = [
 ]
 # the options warp takes before its command or file (core/native/warp.warp is_flag knows them), `warp help options`
 option_help = [
-	["--no-window", "No window: a painting is written as a PNG (tests, agents; a CI machine runs so)"],
+	["--no-window", "No window: a painting is written as a PNG (or WARP_WINDOW=0; tests, agents, a CI machine)"],
 	["--mute", "No sound (or WARP_SOUND=0)"],
 	["--no-hints", "Warnings from weak up, no hints"],
 	["--lib <folder>", "Compile with this lib/ (a worktree's)"],
@@ -47,8 +47,9 @@ option_help = [
 	["--profile", "Each compiled function's address range in /tmp/perf-<pid>.map, for perf"],
 	["fuel <steps>", "The program counts steps, out of fuel after them"]
 ]
-# the one environment variable warp reads (decision no-bash-exports), in `warp help options`
-environment_help = [["WARP_SOUND=0", "No sound, for the run and the warps it starts (warp --mute)"]]
+# warp's two environment variables, its machine switches (decision no-bash-exports), in `warp help options`
+environment_help = [["WARP_WINDOW=0", "No window, for the run and the warps it starts (warp --no-window)"],
+	["WARP_SOUND=0", "No sound, for the run and the warps it starts (warp --mute)"]]
 # the commands that run what they compile: plain WASI cannot instantiate the module
 # TODO (card commands-reduce) Drastically reduce all these internal commands, none of which are used by the user
 running_commands = ["run", "eval", "test", "verify", "fuel", "fast", "console"]

@@ -644,15 +644,18 @@ option_words(at: int): int := {
 }
 # TODO (card no-bash-exports) the scripts still export WARP_<OPTION> (the warp installed before took no options): each
 # is its option until the scripts give the options (the second push); then this goes, with host_io.warp legacy_option
-LEGACY_OPTIONS = "no-window times value-as-data one-thread emit-survey rules-fired seed events-for fuel backtrace profile"
+LEGACY_OPTIONS = "times value-as-data one-thread emit-survey rules-fired seed events-for fuel backtrace profile"
 legacy_options_given(): nothing := {
 	for i in 0..field_count(LEGACY_OPTIONS, SPACE) {
 		name = field(LEGACY_OPTIONS, i, SPACE)
 		value = getenv(legacy_variable(name))
 		if value.length > 0 and not has_option(name) { option_given(name, value) }
 	}
-	# (WARP_NO_WINDOW muted sound too)
-	if getenv("WARP_NO_WINDOW").length > 0 { option_given("mute", "") }
+	# WARP_NO_WINDOW=1, WARP_WINDOW=0's name before, which muted sound too
+	if getenv("WARP_NO_WINDOW").length > 0 {
+		option_given("no-window", "")
+		option_given("mute", "")
+	}
 }
 # WARP_ and the name in capitals, its dashes underscores: no-window's WARP_NO_WINDOW
 legacy_variable(name: text): text := {
@@ -662,6 +665,12 @@ legacy_variable(name: text): text := {
 		byte_at(variable.address + i).value = if letter == DASH then UNDERSCORE else letter - CAPITAL_OFFSET
 	}
 	variable
+}
+# warp's two machine switches (decision no-bash-exports): --no-window is WARP_WINDOW=0, --mute WARP_SOUND=0, either
+# spelling sets both, so the warps and programs this one starts are switched too (lib/os.warp windowless, muted)
+switched(option: text, variable: text): nothing := {
+	if same_text(getenv(variable), "0") { option_given(option, "") }
+	if has_option(option) { setenv(c_string(variable), c_string("0"), 1) }
 }
 # the first word from `at` on that is no option, the options before it kept
 past_options(at: int): int := {
@@ -685,8 +694,8 @@ counting = arg_count() > start + 2 and same_text(arg(start), "fuel")
 if counting { option_given("fuel", arg(start + 1)) }
 prefixed = counting or (arg_count() > start and is_prefix(arg(start)))
 first = past_options(if counting then start + 2 else if prefixed then start + 1 else start)
-# --mute is WARP_SOUND=0, the one variable warp reads (lib/prelude.warp muted): for the run and the warps it starts
-if has_option("mute") { setenv(c_string("WARP_SOUND"), c_string("0"), 1) }
+switched("no-window", "WARP_WINDOW")
+switched("mute", "WARP_SOUND")
 # warp.wasm's own commands (build) read the same lib/ as this executable, resolved, as the module's WASI reaches it
 # (no link to an absolute path), and its stable name, the run path of the executables `warp build native` makes
 # (commands.warp native_links)
