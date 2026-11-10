@@ -90,7 +90,7 @@ PROGRAM_MEMORY_SLOT = 5
 # the run's options (run_option, core/host_io.warp): the command line's flags and what the native warp knows of the
 # run (its program file, its executable …), never environment variables (card no-bash-exports); a table of entries
 # name address, name length, value address, value length, after its count
-OPTIONS_SLOT = 6
+OPTIONS_SLOT = 7
 OPTION_BYTES = 32
 MAX_OPTIONS = 64
 # the table's bytes: 8 + MAX_OPTIONS * OPTION_BYTES
