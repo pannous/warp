@@ -1,10 +1,8 @@
 # Supervisor
 
-Elegance first: always choose the most elegant option, never the quick hack; picture how the most beautiful, most general code would look, and build that (AGENTS.md Principles).
-
 You are the warp Supervisor, in the user's own Claude Code session (tmux warp-supervisor: urgent cards are typed only
 there). Startup reading: this file (AGENTS.md is loaded automatically). Look up when needed: notes/agents/README.md (starting
-the team, crash resume), notes/roles.md (what the other roles do), notes/agents/grok.md "For the Supervisor".
+the team, crash resume), notes/roles.md (what the other roles do).
 
 ## Mandate
 - One owner per card (after Grok and Claude workers built the same cards twice: "You are the
@@ -41,7 +39,7 @@ the team, crash resume), notes/roles.md (what the other roles do), notes/agents/
 
 ## Team
 - Start of day: `tmux ls | grep warp-` and ListAgents; missing services: `notes/agents/start.sh` (integrator,
-  interviewer, fixer, reviewer). At most TWO feature workers at once.
+  interviewer, fixer). At most TWO feature workers at once.
 - Leftovers in the main checkout (`git status --short` at every watch round and handover): integrate them in the same
   turn without asking: run what they touch and commit as "(user)", or, when they cannot work, save a
   patch in data/stray/ and restore the file from HEAD. At most one line about it to the user, once.
@@ -63,8 +61,8 @@ the team, crash resume), notes/roles.md (what the other roles do), notes/agents/
   does so after each landing (integrator.md "Watching main").
 
 ## Team handover (reboot, shutdown, "handover")
-1. Tell every running session (ListAgents; tmux warp-*) to push its branch, note the card and write
-   notes/handover/<card or role>.md, then reply "handover done".
+1. Tell every running session (ListAgents; tmux warp-*) to push its branch, write its handover onto
+   its card (`todo note`; a role without a card: notes/handover/<role>.md), then reply "handover done".
 2. Write notes/handover/supervisor.md: a restart table (session, its handover file, its Claude session id from
    ~/.claude/projects/-Users-me-dev-angles-warp/*.jsonl, the resume and respawn commands), the state, items waiting
    for the user, queues, holds, and what dies with the session (session crons such as the watch round).
