@@ -208,27 +208,16 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - P176 repeated `key: value` in a named tag block are children; a plain `{…}` keeps the duplicate-key error.
 
 ## Control flow, matching and errors
-- comparison-after-arms: a comparison after a switch/match compares its value, never swallows the arms block: `switch 3 {1: "one" 3: "three"} == "three"` is yes, `match n {…} > 15` likewise; one general case in prefix_calls.warp fitted_comparison (~6 core lines), no per-operator rules.
-- raw-rules (user, ~15 lines core/passes/rewrites.warp): a rule marked `where raw` fires top-down on its code as written, before the rules inside it; its result is rewritten bottom-up as usual (law, quote, test bodies).
 - prefix-keyword-condition: a prefix keyword (whenever/when/on/at) takes its whole condition up to the trailing block (`alarm = whenever t > 30 {…}` is a listener handle); a glued digits:digits after a word stays one time value (`at 9:30 {…}`).
 
-- for-over-iterator: a construction of a program class counts as an instance, so `for x in Countdown(3)` iterates by next() until ø.
-- rewrite-rules: a rule set `rules { data($a * 1) => a; … }` is a value; calling it rewrites bottom-up to a normal form (a rewritten node is tried again until no rule fires: `simplify(data(y * 1 * 1 + 0))` → y); a step cap stops a rule set that never settles with a loud error naming the rule that keeps firing. `tree replace P with Q` stays a single pass.
-- match-whole-value: no binding syntax; inside an arm the subject's name and `value` are the whole matched value.
-- match-alternatives: `1 | 2`, `1 or 2`, `1, 2` as case keys all mean either; `int or text` as a key is the type test; `other` is a catch-all like `_`/`default`/`else`.
 - match-exhaustive: a match on a known enum or sealed class missing a case is a compile error.
 - pattern-keyword: named patterns only with `pattern Adult = {age: >= 18}`; a plain `Name = …` is a value.
 - #31 a switch without a match reports the run-time value (`no case for n = 4`).
-- `if c {1} else 3+1`: the else takes the whole `3+1`.
-- P21 `try X else Y`. P60 `try {…} catch {…}` and `try: … except:` are synonyms. P67 `catch e`: e is the Error value. #34 deep traps under `try` are caught. failed-raised: a raised error stops the program; bare `try X` turns it into the value (`r failed`). try-finally: `try X finally Z`.
-- P55 a while loop's value is its last body value. P213 a loop ending in `print` gives ø.
 - `when` by shape: `when click {…}` = `on click`, `when x > 3 {…}` = `whenever`, `when x {… -> …}` = `match`, `when {cond -> …}` = an if chain; each warns naming the word meant.
 - P46 type-name and condition patterns in `for` filter with a got-it warning (`for friend in xs`, `for (it>2) in xs`).
 - P61 `is` is always a comparison; with an undefined x it teaches `x be <value>`. #27 `be` is `:=`; `≤ ≥ ≠ × ÷ ¬ √` are accepted and normalized (÷ is floor division: julia-floor-divide).
-- #39 `==` never chains: `a<b<c` chains, `1<2==2` is `(1<2)==2`.
 - fail-effect: the `Fail` effect tracks explicit raises, division by a value that may be 0, and library calls answering with an Error; index out of range, missing fields and failed casts are untracked bugs.
 - error-classes: errors are classes: the prelude declares `class Error` and the run-time errors as subclasses with Python names (IndexError, ZeroDivisionError, …); users declare their own (`class ParseError: Error`), an undeclared error name is a compile error with that hint. `except T as e` catches T and its subclasses; `except Error`, bare `except:` and `catch e` catch everything.
-- pattern-roadmap: pattern-clauses: functions whose parameters are patterns are clauses tried in order (`simplify(data($a * 1)) := a; simplify(n) := n`); binding-alternatives: `|` branches bind when every branch binds the same names; whole-binding: `as` inside a pattern names the (sub)pattern (`data($f($inner) as call)`), outside it casts; text-patterns: `"0x" + rest`, at most one hole per side, plus prefix/suffix and character classes. A class is the type of a hole, like a typed hole that converts (`"0x" + h: hex`, `"v" + n: digits`, `c: digit`, `"/users/" + id: int`); class words digit(s), letter(s), hex, space, word are hole types only in a text pattern's hole position, nothing reserved (a variable `digits` stays plain).
 
 ## Classes, objects and enums
 - valued-field-default: a class field given a value declares its default, type from the value: `class Animal { name: "?" }` is `name: text = "?"` (2 core lines, instances.warp declared_field).
@@ -827,3 +816,6 @@ each-field-broadcast, lazy-range-value, pair-items, bare-pair, to-inclusive, #4/
 ordinal-dot-index → wiki/indexing.md (no ordinal dot form; nothing to pin).
 node-part-clash → lib (key_of … readers), wiki/node.md.
 stored-table-name → wiki/keyword.md, test/modules/test_stored_relations.pairs.warp.
+comparison-after-arms, for-over-iterator, rewrite-rules, match-alternatives, `if c {1} else 3+1`, P21, P55, #39 → wiki/switch.md, test/control/test_control_rules.pairs.warp.
+raw-rules → core/passes/rewrites.warp (where raw). match-whole-value → wiki/pattern-matching.md.
+pattern-roadmap → wiki/pattern-matching.md (roadmap: cards pattern-clauses, binding-alternatives, whole-binding).
