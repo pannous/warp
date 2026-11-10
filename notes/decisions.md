@@ -1,11 +1,24 @@
-# Decided questions
+# Decided questions: an inbox, not a law book
 
-One line per live decision, grouped by topic, keyed by its id (P71, D5, #10 or a slug such as gpu-f32) so cited ids can
-be looked up. Merged keys are listed after the surviving one ("also: …"). The code, tests and wiki are the truth; this
-file is for lookups and for checking before asking the user, not for reading front to back. Superseded entries are
-deleted (git keeps them; the old-id index at the end names the replacement). Open and parked questions:
-notes/open_decisions.md. New answers go into their topic section as one line.
-Numbering: P = interview questions, D = wiki-survey questions, #n = the first question lists.
+How decisions live (user 2026-11-10). A decision is one of three kinds, and each has its own permanent home:
+1. Language rules (`type A < T` is a subtype, `÷` floors, markup only inside `html{…}`): the specification. Home: the
+   wiki page of the topic, plus at least one outcome test line in test/. The wiki says what the language is, the test
+   proves it and goes red when code drifts. Where the wiki and an entry here disagree, the wiki wins.
+2. Process rules (quick merges, outcome tests only, where workers work): notes/agents/common.md or a role file.
+3. Rulings for one moment (stage B waits for a seed, park this edge case, core OK for card X): the card and the
+   commit message. They are not kept here.
+
+This file is the inbox: a new decision lands here as one line with its key and date, and within a few days it is
+absorbed into its home and deleted here (git keeps the history; the old-id index at the end names where it went). So
+the file stays short and nothing in it lives long enough to go stale. Never read it front to back: grep a key or a
+topic when the wiki and the tests are silent.
+The regular round (card decisions-prune, every 3 days) absorbs entries into their homes and flags every entry the
+current wiki, code or tests contradict; the flagged ones go to warp-interviewer as one batch question for the user:
+keep, update or drop.
+Decisions are taken in their moment and can be myopic or age. An agent who finds one blocking a clearly better design
+says so with the reason (to warp-interviewer), instead of quietly obeying or quietly breaking it.
+Open and parked questions: notes/open_decisions.md. Keys: P = interview questions, D = wiki-survey questions,
+#n = the first question lists, slugs such as gpu-f32 for the rest; merged keys follow the survivor ("also: …").
 
 ---
 
