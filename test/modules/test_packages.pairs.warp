@@ -3,5 +3,5 @@
 # use_loads_the_module_of_a_package
 'use uniscript; uniscript("<:alpha>")'	'α'
 
-# module_directory_is_where_the_module_lives
+# module_directory_is_where_the_module_lives — native only: the page runs a module from its served root, in no working folder
 'module_directory'	'.'
