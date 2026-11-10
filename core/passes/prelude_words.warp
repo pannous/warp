@@ -886,7 +886,8 @@ with_implicit_uses(source: text, folder: text = "."): text := {
 # module's own `^`, link big_numbers
 runtime_modules_reached(source: text, uses: list): list := {
 	modules = []
-	for used in uses { modules = modules_used_by(used, modules) }
+	# (a runtime module used is needed already, its own text never read)
+	for used in uses.filter(name => not is_runtime_module(name)) { modules = modules_used_by(used, modules) }
 	needed = runtime_modules_needed(source) + modules.flat_map(module_runtime_modules)
 	hooks().runtime_modules.filter(name => name in needed)
 }
