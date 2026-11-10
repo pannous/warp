@@ -23,6 +23,8 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 ---
 
 ## Inbox
+- 2026-11-10 warp-window-env: `WARP_WINDOW=0` (set by `warp --no-window`) is the twin of `WARP_SOUND=0` (set by `warp --mute`): the two machine switches kept as environment variables; it replaces WARP_NO_WINDOW=1.
+- 2026-11-10 warp-sound-env: `WARP_SOUND=0 warp app.warp` mutes a run (`warp --mute` sets it), the one environment variable kept as an interface (exception to no-bash-exports).
 - 2026-11-10 aliases-in-rules: a sugar rule's literal word matches every alias spelling of it (`xs.forEach {…}` through the `each` rule); aliases otherwise stay call-only, so data keys and type names never change; the full unification (aliases-unified) is parked: renaming everywhere would rename data keys.
 - 2026-11-10 x-bang-refusal: a block's `x!` is refused with "`x!` runs no code: x() runs a block, interpret x runs data".
 - 2026-11-10 bare-typed-overloads: `name: T := e` is `name(): T := e`, so `sample: int := 7; sample: text := "seven"` overload by result type.
