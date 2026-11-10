@@ -4,7 +4,7 @@
 
 # Simple type alias
 type Age = int
-type Name = string
+type Name < string
 
 # Record type (struct-like)
 type Person: {
