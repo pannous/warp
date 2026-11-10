@@ -5,5 +5,5 @@
 'parse_json("{oops") or 7'	7
 '0 or 10'	10
 'try { 1 / 0 } catch e { "caught" }'	"caught"	the caught Error’s name is a handler’s place
-# decision N19: only a failure raises; printing, equality and `is error` see a failed Error as any Error
+# decision N19: only a failure raises; printing, equality and `is error` see a failed Error as any Error — native only: the page has no /dev, so its write fails otherwise
 'r: text? = write("/dev/null/x.txt", "hi"); [r is error, r == r, "${r}"]'	[yes, yes, "write /dev/null/x.txt failed: Not a directory"]
