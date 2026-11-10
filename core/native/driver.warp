@@ -87,6 +87,14 @@ RUN_SLOT = 3
 TIMERS_SLOT = 4
 # where the memory of the program a host word of the native host module serves starts (a GPU list's cells are there)
 PROGRAM_MEMORY_SLOT = 5
+# the run's options (run_option, core/host_io.warp): the command line's flags and what the native warp knows of the
+# run (its program file, its executable …), never environment variables (card no-bash-exports); a table of entries
+# name address, name length, value address, value length, after its count
+OPTIONS_SLOT = 7
+OPTION_BYTES = 32
+MAX_OPTIONS = 64
+# the table's bytes: 8 + MAX_OPTIONS * OPTION_BYTES
+OPTIONS_BYTES = 2056
 # whether the run linked unicode (canonical_text), the native host module (host_export), at these places of its block
 UNICODE_LINKED_AT = 32
 HOST_LINKED_AT = 40
@@ -294,8 +302,8 @@ failed_raising(error: handle, trap: pointer, raised: text): nothing := {
 		status = allocate(4)
 		if wasmtime_error_exit_status(error, status) { exit(word_at(status).value as i32) }
 	}
-	# the engine's message carries the wasm backtrace, by function name: WARP_BACKTRACE=1 shows it beside the sentence
-	if raised.length == 0 or same_text(getenv("WARP_BACKTRACE"), "1") {
+	# the engine's message carries the wasm backtrace, by function name: --backtrace shows it beside the sentence
+	if raised.length == 0 or has_option("backtrace") {
 		if error != 0 { wasmtime_error_message(error, message) } else { wasm_trap_message(long_at(trap).value, message) }
 		complain(native_vector_text(native_pointer(message)))
 	}
@@ -421,20 +429,22 @@ signature_offset(image: text): u32 := {
 	}
 	image.length
 }
-# warp's lib/, whose warp.wasm compiles a .warp file, in one search order: $WARP_LIB, else the first folder holding a
+# warp's lib/, whose warp.wasm compiles a .warp file, in one search order: --lib <folder>, $WARP_LIB (the scripts'
+# worktrees), else the first folder holding a
 # lib/ (its prelude.warp) of this executable's folder (a tarball), its lib/ (~/dev/bin/lib, which the install keeps
 # linked to the current build), the folder its links lead to, and <prefix>/share/warp beside that folder's bin/ (brew,
 # deb, pip: bin/warp links to it); none is an error naming them. The folder as found, its links kept, is a stable
 # name for it (an install replaces the build behind the link): what a native build's executables find libraries by
 library_folder(): text := resolved_path(library_found())
 library_found(): text := {
+	if has_option("lib") { return option_of("lib") }
 	given = getenv("WARP_LIB")
 	if given.length > 0 { return given }
 	found = installed_found()
 	if found.length > 0 { return found }
 	own = folder_of(invoked_path())
 	linked = folder_of(resolved_path(executable_path()))
-	complain(joined(joined(joined(joined(joined(joined("warp: no lib/ (prelude.warp) in ", own), ", "), linked), " or "), joined(folder_of(linked), "/share/warp")), "; WARP_LIB names one"))
+	complain(joined(joined(joined(joined(joined(joined("warp: no lib/ (prelude.warp) in ", own), ", "), linked), " or "), joined(folder_of(linked), "/share/warp")), "; --lib <folder> names one"))
 	exit(1)
 	own
 }
@@ -588,12 +598,11 @@ DEFAULT_FUEL = 100000000000
 OUT_OF_FUEL = 11
 ZERO = 48
 UNDERSCORE = 95
-# the steps a program run counts: WARP_FUEL's (`warp fuel <steps>`), else the default when the module asks for fuel
+# the steps a program run counts: the run's fuel option (`warp fuel <steps>`), else the default when the module asks for fuel
 # (`use fuel`: its section warp.fuel), else none; a compiler's run (its machine code kept) never counts
 fuel_of(module: text, machine_code: text): i64 := {
 	if machine_code.length > 0 { return 0 }
-	given = getenv("WARP_FUEL")
-	if given.length > 0 { return steps_of(given) }
+	if has_option("fuel") { return steps_of(option_of("fuel")) }
 	if custom_section(module, "warp.fuel").address != 0 then DEFAULT_FUEL else 0
 }
 # the number a text of digits names, underscores between them allowed (1_000_000)
@@ -609,16 +618,16 @@ steps_of(digits: text): i64 := {
 out_of_fuel(trap: pointer, fuel: i64): nothing := {
 	code = allocate(1)
 	if fuel > 0 and long_at(trap).value != 0 and wasmtime_trap_code(long_at(trap).value, code) and byte_at(code).value == OUT_OF_FUEL {
-		complain(joined(joined("out of fuel after ", text_of(fuel)), " steps: the program may not terminate (raise the budget with WARP_FUEL=<steps> or warp fuel <steps>)"))
+		complain(joined(joined("out of fuel after ", text_of(fuel)), " steps: the program may not terminate (raise the budget with warp fuel <steps>)"))
 		exit(1)
 	}
 }
 # what warp's modules use beside the MVP: GC, typed function references, exceptions,
 # fuel metering when the run counts steps,
 # warp_wasmtime's copying collector with its initial heap; a program's machine code kept in wasmtime's own cache,
-# warp.wasm's beside it (compiled_module); compiled on one thread with WARP_ONE_THREAD (a `warp test` case: its slot
+# warp.wasm's beside it (compiled_module); compiled on one thread with --one-thread (a `warp test` case: its slot
 # is one core, else every case compiles on all of them, a load of 200 on 16 cores)
-# WARP_PROFILE=perfmap writes each compiled function's address range to /tmp/perf-<pid>.map, which
+# --profile writes each compiled function's address range to /tmp/perf-<pid>.map, which
 # scripts/profile.sh maps `sample`'s addresses through (notes/compile_speed.md)
 warp_config(fuel: bool, heap_bytes: i64): handle := {
 	config = uncached_config(fuel, heap_bytes)
@@ -630,7 +639,7 @@ warp_config(fuel: bool, heap_bytes: i64): handle := {
 uncached_config(fuel: bool, heap_bytes: i64): handle := {
 	config = wasm_config_new()
 	wasmtime_config_consume_fuel_set(config, fuel)
-	wasmtime_config_parallel_compilation_set(config, getenv("WARP_ONE_THREAD").length == 0)
+	wasmtime_config_parallel_compilation_set(config, not has_option("one-thread"))
 	warp_config_gc_heap_initial_size_set(config, heap_bytes)
 	wasmtime_config_wasm_gc_set(config, yes)
 	wasmtime_config_wasm_function_references_set(config, yes)
@@ -638,7 +647,7 @@ uncached_config(fuel: bool, heap_bytes: i64): handle := {
 	# traps caught by signal handlers, which a forked child inherits (a `warp test` case, resident_loaded), never by
 	# mach ports, whose thread fork leaves behind; one choice for every engine of the process (wasmtime asserts it)
 	wasmtime_config_macos_use_mach_ports_set(config, no)
-	if same_text(getenv("WARP_PROFILE"), "perfmap") { wasmtime_config_profiler_set(config, PROFILING_PERFMAP) }
+	if has_option("profile") { wasmtime_config_profiler_set(config, PROFILING_PERFMAP) }
 	config
 }
 
@@ -646,7 +655,7 @@ uncached_config(fuel: bool, heap_bytes: i64): handle := {
 # host_word) with the type the module declares: std_io, exit, and each C function its warp.c_functions section
 # describes; a word the driver doesn't answer as a library's own (library_bound). `guarded`: a C function that opens a
 # window refused (headless_checked), but in a module the driver links on its own question, warp's own, which minds
-# WARP_NO_WINDOW itself (lazily_linked: the native host module's window)
+# --no-window itself (lazily_linked: the native host module's window)
 host_words_defined(linker: handle, engine: handle, context: handle, compiled: handle, module: text, guarded: bool, trap: pointer): nothing := {
 	table = c_functions_table(module)
 	imports = allocate(VECTOR_BYTES)
@@ -672,11 +681,11 @@ c_functions_table(module: text): text := {
 	table = custom_section(module, "warp.c_functions")
 	if table.length > 0 then table else custom_section(module, "warp.primitive_c_functions")
 }
-# a C function that opens a native window (raylib's InitWindow, SDL's, GLFW's) ends the run before it starts under
-# WARP_NO_WINDOW or CI, so no test or agent run pops one up
+# a C function that opens a native window (raylib's InitWindow, SDL's, GLFW's) ends the run before it starts in a
+# windowless run, so no test or agent run pops one up
 headless_checked(name: text, library: text): nothing := {
-	if opens_window(name) and (getenv("WARP_NO_WINDOW").length > 0 or getenv("CI").length > 0) {
-		complain(joined(joined(joined(name, " from "), library), " opens a window: refused under WARP_NO_WINDOW or CI"))
+	if opens_window(name) and has_option("no-window") {
+		complain(joined(joined(joined(name, " from "), library), " opens a window: refused under --no-window or CI"))
 		exit(1)
 	}
 }
@@ -1305,6 +1314,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if same_text(module, "os") and same_text(member, "exec") { return os_exec(caller, context, listed, results) }
 	if same_text(module, "os") and same_text(member, "run") { return os_run(caller, context, listed, results) }
 	if same_text(module, "net") and same_text(member, "get") { return url_got(caller, context, shown(caller, context, item_of(caller, context, listed, 1)), results) }
+	if same_text(module, "warp") and same_text(member, "option") { return option_answered(caller, context, listed, results) }
 	if same_text(module, "regex") { return regex_answered(caller, context, member, listed, results) }
 	if same_text(module, "hash") { return hash_answered(caller, context, member, listed, results) }
 	# a live loop's cycle starts: only the playground hands loops over between runs; a fade or stop save sound applies
@@ -1496,7 +1506,7 @@ milliseconds_now(): i64 := {
 # The program tells each timer by signal_listen(kind, id, argument) while main runs (lib/timers.warp); once main
 # returned, the loop sleeps until the earliest is due and calls the program's export timer_fired(id). An `every` timer
 # keeps the run going, as a page's does, until exit() or Ctrl-C; a run whose timers are all once ends after the last
-# fired; WARP_EVENTS_FOR=<ms> ends it sooner (the test harness and the samples sweep set it). Channels' `on message
+# fired; --events-for <ms> ends it sooner (the test harness and the samples sweep give it). Channels' `on message
 # from` polls through a timer (lib/channels.warp), so it runs in this loop too.
 TIMER_EVERY = 0
 TIMER_FRAME = 1
@@ -1569,7 +1579,7 @@ events_run(linker: handle, context: handle, instance: pointer, output: text): te
 		}
 		return refused
 	}
-	limit = getenv("WARP_EVENTS_FOR")
+	limit = option_of("events-for")
 	ends = if limit.length > 0 then milliseconds_now() + atoll(limit) else 0
 	failure = ""
 	at = earliest_timer(table)
@@ -1621,6 +1631,60 @@ call_failure(context: handle, instance: pointer, error: handle, trap: pointer, o
 	if output.length == 0 { failed_raising(error, trap, raised_message(context, instance, trap)) }
 	failure_said(error, trap, raised_message(context, instance, trap))
 }
+# the options table, made at its first option
+options_table(): pointer := {
+	if kept_value(OPTIONS_SLOT) == 0 { keep_value(OPTIONS_SLOT, allocate(OPTIONS_BYTES) as i64) }
+	kept_value(OPTIONS_SLOT) as i32
+}
+# an option of the run given, "" for a flag: its value replaced when it was given before
+option_given(name: text, value: text): nothing := {
+	entry = option_entry(name)
+	if entry == 0 {
+		table = options_table()
+		count = long_at(table).value
+		if count == MAX_OPTIONS {
+			complain(joined(joined("more than ", text_of(MAX_OPTIONS)), " options"))
+			exit(1)
+		}
+		entry = table + 8 + (count as i32) * OPTION_BYTES
+		long_at(entry).value = name.address as i64
+		long_at(entry + 8).value = name.length as i64
+		long_at(table).value = count + 1
+	}
+	long_at(entry + 16).value = value.address as i64
+	long_at(entry + 24).value = value.length as i64
+}
+# an option no longer given: the last entry takes its place
+option_dropped(name: text): nothing := {
+	entry = option_entry(name)
+	if entry != 0 {
+		table = options_table()
+		count = long_at(table).value - 1
+		memcpy(entry, native_pointer(table + 8 + (count as i32) * OPTION_BYTES), OPTION_BYTES)
+		long_at(table).value = count
+	}
+}
+# the option's entry, else 0
+option_entry(name: text): pointer := {
+	table = options_table()
+	for i in 0..long_at(table).value {
+		entry = table + 8 + (i as i32) * OPTION_BYTES
+		if same_text(text_from(long_at(entry).value as i32, long_at(entry + 8).value as u32), name) { return entry }
+	}
+	0
+}
+# an option's value, "" for a flag or one not given
+option_of(name: text): text := {
+	entry = option_entry(name)
+	if entry == 0 then "" else text_from(long_at(entry + 16).value as i32, long_at(entry + 24).value as u32)
+}
+has_option(name: text): bool := option_entry(name) != 0
+# std_io warp.option(name): its value as text, ø when the run was not given it
+option_answered(caller: handle, context: handle, listed: pointer, results: pointer): nothing := {
+	name = shown(caller, context, item_of(caller, context, listed, 1))
+	if not has_option(name) { return guest_call(caller, context, "new_empty", 0, 0, results) }
+	guest_text_of(caller, context, option_of(name), results)
+}
 # system_value(name): the machine's readings that are plain libc; the others (mouse, window, keys …) come with the
 # native host module (decision libraries-not-core, host_owns); one it does not own ends the run naming it
 system_value(name: text): i64 := {
@@ -1658,9 +1722,9 @@ code_evaluated(caller: handle, context: handle, given: pointer, result: pointer)
 	added(compiling, ".")
 	added(compiling, library)
 	added(compiling, joined(library, "/runtime.wasm"))
-	setenv(value_as_data_variable(), c_string("1"), 1)
+	option_given(value_as_data_option(), "")
 	failure = run_into(read_file(compiler_path()), compiling, machine_code_file(compiler_path(), RUN_GC_HEAP_BYTES), RUN_GC_HEAP_BYTES, printed)
-	unsetenv(value_as_data_variable())
+	option_dropped(value_as_data_option())
 	if failure.length == 0 { failure = run_into(read_file(module), program_arguments(source, arg_count()), "", RUN_GC_HEAP_BYTES, printed) }
 	output = read_file(printed)
 	unlink(source)
@@ -1679,7 +1743,7 @@ code_evaluated(caller: handle, context: handle, given: pointer, result: pointer)
 }
 # an eval's program prints its value as data after a line of the mark (core/emitter/emitter.warp VALUE_MARK); a
 # primitive program's texts are words, not globals
-value_as_data_variable(): pointer := c_string("WARP_VALUE_AS_DATA")
+value_as_data_option(): text := "value-as-data"
 value_mark(): text := "§warp value§"
 # where `part` first starts in t, -1 when nowhere
 text_found(t: text, part: text): i64 := {

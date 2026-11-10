@@ -57,10 +57,10 @@ wasi_start = "_start"
 # lib/markup.warp's export giving the HTML of a value that is markup, else ø: a program using markup prints its
 # markup value as that page (decision html-render-mode)
 page_shown_word = "page_of"
-# WARP_VALUE_AS_DATA set: _start prints main's value as data after a line of its own, VALUE_MARK, as a list shows an
+# --value-as-data: _start prints main's value as data after a line of its own, VALUE_MARK, as a list shows an
 # item (a text quoted, a character in single quotes: runtime node_code), ø too, so `warp test` reads back the value
 # the case gave, not its printed text (card native-warp-test)
-value_as_data = started_env("WARP_VALUE_AS_DATA") != ø
+value_as_data = run_option("value-as-data") != ø
 VALUE_MARK = "§warp value§"
 # a module that prints imports WASI's fd_write(fd, iovecs, iovec count, written at) → error code, all i32
 fd_write_import = ["wasi_snapshot_preview1", "fd_write", [96, 4, 127, 127, 127, 127, 1, 127]]
@@ -255,7 +255,7 @@ def own_word_code(body: Body, name: text, x: Node): TypedCode {
 byte_count_words = {bytecount: yes, byte_size: yes}
 def byte_size_code(value: TypedCode): TypedCode { runtime_call("node_bytes", [TypedCode(ValueKind.Node, boxed(value))]) }
 # the kinds `+` joins as texts
-comparisons = {"==": yes, "!=": yes, "<": yes, ">": yes, "<=": yes, ">=": yes} # todo (card comparisons-yes-map) yes?? 
+comparisons = {"==": yes, "!=": yes, "<": yes, ">": yes, "<=": yes, ">=": yes} # todo (card comparisons-yes-map) yes??
 equalities = {"==": yes, "!=": yes}
 # the order comparisons of two times, as extensions/times/runtime.warp time_holds reads them
 time_relations = {"<": 0, "<=": 1, ">": 2, ">=": 3}
@@ -284,9 +284,8 @@ ending_host_word = "exit"
 def ended_code(value: TypedCode): list { value.code + [op.unreachable] }
 # the names of the helpers the lowering adds to a program (prelude·round_to)
 prelude_prefix = "prelude·"
-# WARP_EMIT_SURVEY set: a refused function is recorded and taken as giving a node, the others compiled on, and the
+# --emit-survey: a refused function is recorded and taken as giving a node, the others compiled on, and the
 # refusal names each refused function's first refused form, a line each
-survey_setting = "WARP_EMIT_SURVEY"
 
 ## the program's functions
 # a function as written, its name, signature and body; compiling it gives the rest: kinds its parameters' kinds, result
@@ -1636,7 +1635,7 @@ def std_word(n: Node): any {
 # the items of a written list, a std word's arguments: `[]` is held behind the opaque word (is_empty_list)
 listed_items(n: Node): list := if is_empty_list(n) then [] else items_of(n)
 # the module of a lowered program, or a text naming the first form outside the core; `runtime` is
-# core/runtime.warp lowered by the same pipeline, `host` the host words importable; an unannotated parameter of the kind analyzer.warp found in `kinds` (WARP_SELF_ANALYSIS); again
+# core/runtime.warp lowered by the same pipeline, `host` the host words importable; an unannotated parameter of the kind analyzer.warp found in `kinds`; again
 # while a call widens a parameter (passed)
 typed_wasm_module(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.later_kinds = {}
@@ -1693,7 +1692,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.dispatchers = []
 	module.counts_fuel = uses_fuel(program)
 	module.reads_positions = reads_position(program)
-	module.surveying = started_env(survey_setting) != ø
+	module.surveying = run_option("emit-survey") != ø
 	module.refusals = []
 	module.literal_arguments = {}
 	module.saw_pending = no

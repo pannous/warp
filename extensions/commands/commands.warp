@@ -1,5 +1,5 @@
 # command arguments for native warp.warp
-# The commands extension's commands beside compiling (card commands-extension): 
+# The commands extension's commands beside compiling (card commands-extension):
 # help, version, the shown stages
 # (parse, data, lower, uses), the REPL, and the refusals of the commands plain WASI cannot run; build.warp builds
 # executables, tests.warp lists and judges `warp test`'s cases. compiler.warp runs each command it does not know
@@ -11,7 +11,7 @@ NATIVE = "the native warp"
 HELP_COLUMN = 38
 
 # each command and what it does, in `warp help`'s order
-# ⚠️ Do not edit this user-facing beautiful list and bloat with internal commands without asking the interviewer 
+# ⚠️ Do not edit this user-facing beautiful list and bloat with internal commands without asking the interviewer
 command_help = [
 	["version", "Show version"],
 	["help [topic]", "Show this help"],
@@ -24,8 +24,8 @@ command_help = [
 	# ["uses <code|file>", "The standard modules it uses without their `use`, one a line (warp beautify writes them)"],
 	["build <file>", "The executable <file> and its modules"],
 	# ["debug <code|file>", "Every view of the program at once: parsed, the modules it uses unsaid, lowered"],
-	["format <file>","lint according to formatting standards"],
-	["fix <file>","apply recommended improvements"],
+	["format <file>", "lint according to formatting standards"],
+	["fix <file>", "apply recommended improvements"],
 	# ["compile <file> [out.wasm]", "Only the module, <file>.wasm, without running"],
 	# ["build [--wasm|--exe] [--trim=<way>] <file>", "The executable <file> and its modules; a primitive file natively (wasm2c, cc)"],
 	# ["build native <file>", "A primitive file as a native executable, by wasm2c and cc"],
@@ -37,6 +37,19 @@ command_help = [
 	# ["<file|folder>", "Compile the file to the module, as the native `warp` calls it"]
 	# ["<file> <out.wasm> [folder [lib]]", "Compile the file to the module, as the native `warp` calls it"]
 ]
+# the options warp takes before its command or file (core/native/warp.warp is_flag knows them), `warp help options`
+option_help = [
+	["--no-window", "No window: a painting is written as a PNG (or WARP_WINDOW=0; tests, agents, a CI machine)"],
+	["--mute", "No sound (or WARP_SOUND=0)"],
+	["--no-hints", "Warnings from weak up, no hints"],
+	["--lib <folder>", "Compile with this lib/ (a worktree's)"],
+	["--backtrace", "An error shows the wasm backtrace beside its sentence"],
+	["--profile", "Each compiled function's address range in /tmp/perf-<pid>.map, for perf"],
+	["fuel <steps>", "The program counts steps, out of fuel after them"]
+]
+# warp's two environment variables, its machine switches (decision no-bash-exports), in `warp help options`
+environment_help = [["WARP_WINDOW=0", "No window, for the run and the warps it starts (warp --no-window)"],
+	["WARP_SOUND=0", "No sound, for the run and the warps it starts (warp --mute)"]]
 # the commands that run what they compile: plain WASI cannot instantiate the module
 # TODO (card commands-reduce) Drastically reduce all these internal commands, none of which are used by the user
 running_commands = ["run", "eval", "test", "verify", "fuel", "fast", "console"]
@@ -49,8 +62,7 @@ native_commands = ["pure", "self", "rebuild", "tool", "fetch", "dev", "serve", "
 # TODO (card commands-reduce) Drastically reduce all these internal commands, none of which are used by the user
 native_warp_commands = ["run", "pure", "self", "eval", "fast", "fuel", "rebuild", "test", "repl", "console", "start", "version", "beautify", "fix", "format", "lint", "docs", "wiki", "home", "app", "dev"]
 # set by the native warp for the compiler it hosts: the host's name
-HOST_VARIABLE = "WARP_HOST"
-natively_hosted(): bool := (started_env(HOST_VARIABLE) ?? "") != ""
+natively_hosted(): bool := run_option("host") != ø
 # what no host of these commands has yet: under the native warp, the commands it lacks
 NOT_YET = " is not in warp yet"
 
@@ -66,9 +78,11 @@ command_words(): list := command_help.map(command_name).filter(word => not word.
 # the text of the file `target` names, else `target` itself as code
 source_of(target: text): text := try read(target) else target
 
-show_help() := {
+show_help() := if #args > 1 and args#2 == "options" then show_options() else show_commands()
+show_commands() := {
 	print "warp, the compiler written in warp (core/compiler.warp), its commands:"
-	for entry in command_help { print "  " + padded("warp " + entry#1, HELP_COLUMN) + entry#2 }
+	help_lines(command_help, "warp ")
+	print "  options: warp help options"
 	host_commands = running_commands + native_commands
 	if natively_hosted() {
 		print "  the native warp itself: " + native_warp_commands.join(" ")
@@ -76,6 +90,15 @@ show_help() := {
 	} else { print "  need the native warp: " + host_commands.join(" ") }
 }
 
+show_options() := {
+	print "warp's options, before its command or file (warp --no-window app.warp):"
+	help_lines(option_help, "")
+	print "environment:"
+	help_lines(environment_help, "")
+}
+
+# each entry of a help table on its line: its words after the prefix, then what it does
+help_lines(entries: list, prefix: text) := { for entry in entries { print "  " + padded(prefix + entry#1, HELP_COLUMN) + entry#2 } }
 # words, then spaces up to width, at least one
 padded(words: text, width: int): text := {
 	line = words + " "

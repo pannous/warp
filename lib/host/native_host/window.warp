@@ -2,7 +2,7 @@
 // playground's canvas answers in JavaScript (web/playground/canvas.js), natively over SDL3 by plain FFI: host_owns /
 // host_value (the window's system values), host_value_set, host_window_layer (a painting's Metal layer, which
 // gpu.warp shows it in) and window_run_ended.
-// `window_open = 1` or the first painting opens it, never under WARP_NO_WINDOW or CI. Each painting is a frame, its
+// `window_open = 1` or the first painting opens it, never under --no-window or CI. Each painting is a frame, its
 // title telling the frame times; each painting and reading of window_open takes the window's events in. Closed, it
 // ends a program painting on; a still picture (a run's one painting) stays shown after the run until it is closed.
 // A window sized by its painting opens at the largest whole multiple of it that fits a share of the screen. It resizes
@@ -55,8 +55,8 @@ global rectangle = 0
 global points_wide = 0
 global points_high = 0
 
-// no window under WARP_NO_WINDOW or CI, nor without SDL3
-windows_refused() := quiet_run() or library_function("SDL3", "SDL_Init") == 0
+// no window under --no-window or CI, nor without SDL3
+windows_refused() := windowless() or library_function("SDL3", "SDL_Init") == 0
 // the keycode SDL tells as the code warp gives the key; 0 for a key without one
 key_code(key: int): int := {
 	for i in 0 ..< count(SDL_KEYS) { if SDL_KEYS[i] == key { return WARP_KEYS[i] } }

@@ -16,7 +16,7 @@ use "data_blocks.warp"
 
 # `f(x, y)`, `f(x: int, y)`: a name applied to parameter names, each maybe typed
 is_head(n: Node): bool := match n {
-	# todo (card separator-any) Separator.None => Separator.Any / _ !?! Otherwise comma shouldn't match? 
+	# todo (card separator-any) Separator.None => Separator.Any / _ !?! Otherwise comma shouldn't match?
 	List(call, Bracket.Round, Separator.None): #call > 0 and is_name(call#1) and call[1..].all(is_parameter)
 	_: no
 }

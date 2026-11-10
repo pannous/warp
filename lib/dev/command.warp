@@ -20,7 +20,6 @@ OTHER_CONTENT = "application/octet-stream"
 DEV_HEADERS = ["Cross-Origin-Opener-Policy: same-origin", "Cross-Origin-Embedder-Policy: require-corp", "Cache-Control: no-store"]
 
 quoted(path: text): text := "'" + path.replace("'", "'\\''") + "'"
-warp_executable(): text := env("WARP_EXECUTABLE") ?? "warp"
 
 # the build folders live under one fresh folder, one a version: a failed build leaves the last good one serving
 global builds = ""
@@ -33,7 +32,7 @@ global stamp = ""
 # the program built anew into the next version's folder; its failure, the compiler's words, kept for the page instead
 rebuilt() := {
 	folder = builds + "/" + (version + 1)
-	said = command(quoted(warp_executable()) + " build --dev --site=" + quoted(folder) + " " + quoted(source) + " 2>&1; echo \"exit $?\"").trim().split("\n")
+	said = command(warp_command("build --dev --site=" + quoted(folder) + " " + quoted(source) + " 2>&1; echo \"exit $?\"")).trim().split("\n")
 	command("touch " + quoted(stamp))
 	if said.last() == "exit 0" and exists(folder + INDEX) {
 		version += 1
@@ -53,7 +52,7 @@ folder_of_source(): text := {
 }
 
 dev_script(): text := {
-	library = env("WARP_LIB") ?? ""
+	library = run_option("lib") ?? ""
 	for folder in SCRIPT_FOLDERS { if exists(library + folder + "/" + DEV_SCRIPT) { return read(library + folder + "/" + DEV_SCRIPT) } }
 	raise "warp dev: no " + DEV_SCRIPT + " in " + library + "/site or a checkout's web/playground beside lib/"
 }

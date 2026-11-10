@@ -10,7 +10,7 @@ importScripts("imports.js", "js-members.js", "std.js", "host.js");
 importScripts(...HOST_PART_FILES, "components.js", "served-files.js", "wasi.js", "driver.js");
 prepareTaskPool(); // host-tasks.js
 
-const SITE_PROGRAM = "app.warp"; // the program's name, as `warp app.warp` names it (WARP_PROGRAM)
+const SITE_PROGRAM = "app.warp"; // the program's name, as `warp app.warp` names it (the program option)
 let site; // the program's run (driver.js programRan's holder)
 // main has run (start): an element event before that, a click on the prerendered page, waits for it, never lost
 let mainRan;

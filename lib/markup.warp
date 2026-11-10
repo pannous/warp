@@ -5,6 +5,7 @@
 // (extensions/markup_values.warp); inside it a key named after an attribute with a plain value is an attribute
 // (`style: { fontSize: 12 }` inline CSS), anything else a child in order.
 use html
+use host_io
 // Markup is written inside html{…}, in a place typed html (`f(): html := b{"bold"}`) or as an argument for a
 // parameter typed html (to_html(div{…})) (decisions markup-needs-html, html-value): html{…} brings this module without
 // its use, the one tag of the global list; there each element is an Html, anywhere else a tag-named key is data,
@@ -83,20 +84,20 @@ page_shown_in_js() := { page_in_js = yes }
 // markup (decision html-render-mode; the emitter's _start)
 export page_of(value: html): any := if html_is_page(value) then page_after_steps(value) else ø
 // the page after the steps of a sample's check line (`# check: click "+1", type "name" "Ann" → …`, card
-// scripts-samples), which `warp app check` gives in WARP_PAGE_STEPS, one a line, its words by tabs: click⇥+1
-PAGE_STEPS_VARIABLE = "WARP_PAGE_STEPS"
+// scripts-samples), which `warp app check` gives as the page-steps option, one a line, its words by tabs: click⇥+1
 page_after_steps(value: any): text := {
-	steps = std_io("os", "env", [PAGE_STEPS_VARIABLE]) ?? ""
+	steps = run_option(PAGE_STEPS_OPTION) ?? ""
 	html = render(value)
 	for step in steps.split("\n").filter(line => line != "") { html = page_step(step.split("\t")) }
-	if std_io("os", "env", [APP_WINDOW_VARIABLE]) { page_window_run(html) }
+	if run_option(APP_WINDOW_OPTION) != ø { page_window_run(html) }
 	html
 }
 // `warp app` (lib/app/command.warp) runs the program so, natively: its page in a window of the system's web view, as
 // the page's site.js runs it: each event of the page runs its handler (page_event), a key pressed the program's `on
 // key` (lib/keys.warp), its timers fire when due (lib/timers.warp hears each tick), and the page is rendered anew after
 // each; closing the window ends the run, the HTML shown last its output (lib/host/native_host/webview.warp warpWindow)
-APP_WINDOW_VARIABLE = "WARP_APP_WINDOW"
+APP_WINDOW_OPTION = "app-window"
+PAGE_STEPS_OPTION = "page-steps"
 APP_WINDOW = "warpWindow"
 EVENT_JOINER = "·"
 PAGE_KEY_EVENT = "key"
@@ -870,7 +871,7 @@ css_is_word(item: any) := item is symbol or item is number or (item is pair and 
 css_is_measure(item: any): bool := not (item is text or item is symbol or item is number or item is pair or html_is_group(item) or item == ø) and css_measure_unit(str(item)) != ø
 // the CSS unit a measure's text ends with, `ms` of "400ms", ø when the text before it is no number
 css_measure_unit(t: text) := {
-	for unit in style_units { if t.ends_with(unit) and #t > #unit and is_numeric(t[0:#t - #unit]) { return unit } }
+	for unit in style_units { if t.ends_with(unit) and #t > #unit and is_numeric(t[0: #t - #unit]) { return unit } }
 	ø
 }
 

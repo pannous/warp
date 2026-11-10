@@ -434,8 +434,15 @@ required_words(pattern: Node): list := {
 	if is_hole(pattern) { return [] }
 	if pattern is symbol { return [name_of(pattern)] }
 	if pattern is key { return required_words(key_of(pattern)) + required_words(value_of(pattern)) }
-	if is_group(pattern) then items_of(pattern).flat_map(item => required_words(item)) else []
+	if not is_group(pattern) { return [] }
+	items_of(pattern).flat_map(item => required_words(item)) + (if is_phrase(pattern) then [PHRASE_TOKEN] else [])
 }
+# what code a phrase pattern can match mentions (tokens_within), what a rule whose pattern is a phrase needs
+# (required_words): `$f $x` matches only a group of words, bracketed too where a block or parentheses hold one
+# statement (`{remove b from xs}`, `(ps where age > 18)`), never statements (phrase_fits) nor `1`, so a rule of holes
+# alone reaches only code with one
+PHRASE_TOKEN = "⟨phrase⟩"
+is_phrase_matchable(n: Node): bool := is_group(n) and separator_of(n) not in statement_separators
 
 # `[a, b]`: a list literal, whose items are rewritten by the rules `where element`
 is_element_list(n: Node): bool := is_group(n) and bracket_of(n) == "["
@@ -2152,11 +2159,11 @@ rule_applied(rule: Rule, origin: map, n: Node): Node := {
 	fired(rule, List(statements_in(rule_spliced(rule.template, bound, n)), Bracket.Curly, Separator.Semicolon))
 }
 
-# WARP_RULES_FIRED set: `§R <module> <pattern>` printed for each rule that fires, so a compile's log counts which
+# --rules-fired: `§R <module> <pattern>` printed for each rule that fires, so a compile's log counts which
 # rules (sugar, a library's) its program relies on (card core-extensions-roadmap). Silent unset
-RULES_FIRED = started_env("WARP_RULES_FIRED") ?? ""
+RULES_FIRED = run_option("rules-fired") != ø
 fired(rule: Rule, result: Node): Node := {
-	if RULES_FIRED != "" { print "§R " + rule.module + " " + "${rule.pattern}" }
+	if RULES_FIRED { print "§R " + rule.module + " " + "${rule.pattern}" }
 	# (the prelude is in every program already: a use of it once more is none, card prelude-rule)
 	if rule.module != "" and rule.module != "prelude" { fired_modules += [rule.module] }
 	if rule.alias { diagnose(call_of("alias_word", [symbol(first_word_of(rule.pattern)), symbol(first_word_of(rule.template))]), result) }
