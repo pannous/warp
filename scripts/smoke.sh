@@ -6,7 +6,7 @@
 #     inputs hash they were built of, then `scripts/rebuild.sh pure <worktree>` takes them only when that hash is the
 #     tree's (card tree-installed: an install lagging main left modules of an older lib/, "markup.wasm won't link");
 #     else the store's, or the stored compiler of this code with the runtime and modules built anew of this lib/
-#   - core/, or a lib/ file the compiler reads at its own build (BAKED, compiler-inputs.sh --baked-files): said loudly
+#   - core/ or extensions/, the compiler's own code (compiler-inputs.sh --baked-files): said loudly
 #     with the files, then `scripts/rebuild.sh pure <worktree>` (core/: run `scripts/self-check.sh <worktree>` too)
 # after-push still builds the installed warp.wasm anew, so the lib it bundles is main's. Exit 0: hello printed.
 set -uo pipefail

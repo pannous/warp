@@ -348,7 +348,7 @@ before asking a question). After a context swap, this file and your role file be
 ## Where to work
 - Notes, docs, wiki, scripts, samples: in /Users/me/dev/angles/warp, on a branch named as the card (a small change needs no worktree); commit your own paths
   by name (`git commit -- <paths>`), `source scripts/lib/sync-main.sh; up_to_date_main` (fetches main by name, replays your commits, never stashes) (never `git pull`: it rebases onto FETCH_HEAD, which concurrent fetches rewrite; scripts: scripts/lib/sync-main.sh). Do not push that onto main; hand the commit or patch to the integrator (Handoff, below). Never leave unpushed commits on main.
-- Anything compiled (core/, extensions/, baked lib files): a worktree,
+- Anything compiled (core/, extensions/): a worktree,
   `cowtree add -b <card> /Volumes/Worktrees/<card> origin/main`, branch named as the card. Never touch
   /Volumes/Worktrees/warp (cowtree's donor) or the Integrator's integrate and integrate2. At most 2 open worktrees per worker (user 2026-11-02: 23 were far too
   many): the one being handed off and the one being built; hand off before opening another, waiting work is a plan on its card.
@@ -394,9 +394,9 @@ before asking a question). After a context swap, this file and your role file be
   Every build keeps its full record (<hash>/warp.record/: inputs and sources, build.log, CPU and memory, a function
   profile; notes/compiler_rebuilds.md "Build records"): read a build's time and profile there, never build to measure. Every
   hit, miss, wait and failure is a line of <store>/rebuilds.log.
-  Only core/**, the BAKED files (compiler-inputs.sh) and the seed are a compiler's code; the rest of lib/ is data it
-  carries. A lib/-only change compiles nothing: rebuild.sh takes the stored compiler of the same code
-  (<store>/code/<baked hash>), rebakes lib/ into it and makes its runtime and modules (`miss-rebaking-<hash>`, about a
+  Only core/**, extensions/** and the seed are a compiler's code (compiler-inputs.sh --baked-files); lib/ is never
+  part of it. A lib/-only change compiles nothing: rebuild.sh takes the stored compiler of the same code
+  (<store>/code/<code hash>) and makes lib/'s runtime, modules and index anew (`miss-rebaking-<hash>`, about a
   minute; decision lib-hash-rebake; a failed rebake is kept like a failed build, step rebake). So a library feature
   costs no compiler build, a core one does.
 - Long commands with `run_in_background`, no polling. Kill your own leftover processes by PID, never pkill or killall (the hook .claude/hooks/no-pattern-kill.sh refuses them since the 04:13 crash,
@@ -426,8 +426,8 @@ before asking a question). After a context swap, this file and your role file be
   involved), live work (open branches and worktrees on the same files, the Now column), and the evidence (the stored
   baseline, `scripts/baseline.sh <tests>`; a failed build's record in the store). Not for a mechanical step whose
   context you already hold.
-- Quick cards first: those that never touch core/ or extensions/ (website, samples, lib/ outside the baked files,
-  `scripts/compiler-inputs.sh --baked-files`). A baked file, core/ or extensions/ needs a compiler build: never quick.
+- Quick cards first: those that never touch core/ or extensions/ (website, samples, lib/). core/ or extensions/ needs a
+  compiler build: never quick.
 - A TODO in the code without a card gets one: `# TODO (card <name>) <text>`, card name right after the word TODO.
 - Unrelated problems: `todo add "…"`. Tiny no-choice fixes (typo, stale comment, wrong path) on the spot, own commit.
 - Judge the cost against the gain (user 2026-11-09): a medium or larger core change is only worth it for a real feature
