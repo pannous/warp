@@ -90,10 +90,10 @@ const GPU_DEVICE_WAIT_MS = 5000;
 // a step doing real work, compiling a shader or reading back a heavy compute shader's result (a slow or software GPU):
 // silent this long it fails naming itself, still before the program's side stops waiting (GPU_JOB_WAIT_MS)
 const GPU_WORK_WAIT_MS = 25000;
-const GPU_JOB_WAIT_MS = 30000;
+const GPU_JOB_WAIT_MS = 30000; // the program's side: a task Worker that gives no answer in this time is said to
 // a painting into the page's canvas waits for the GPU to draw it at most this long: frames keep pace with a heavy shader,
 // and a browser whose WebGPU never says its work is done (CI's software adapters) still paints on
-const FRAME_DRAWN_WAIT_MS = 100; // the program's side: a task Worker that gives no answer in this time is said to
+const FRAME_DRAWN_WAIT_MS = 100;
 const LOSS_WAIT_MS = 100; // the program's side: why painting into the page's canvas failed, after which pixels are painted
 const paintCanvases = new Map(); // the task Worker's: canvas id → {context, format}
 let paintCanvasCount = 0; // the program's side: the canvases asked of the page, which names them by this count
