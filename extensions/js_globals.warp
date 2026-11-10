@@ -1,6 +1,6 @@
 # `use js Name` (card js-webidl-bindings, decision js-webidl-bindings): a JavaScript global of the page, its members
 # reached through the host word foreign_call (web/playground/host-foreign.js in the page; natively the native host module's
-# hidden web view, decision native-js-webview, notes/webview.md), checked and typed by the standard WebIDL in extensions/js_globals/web.webidl. A member its interface lacks is a
+# hidden web view, decision native-js-webview, notes/webview.md), checked and typed by the standard WebIDL in lib/web.webidl. A member its interface lacks is a
 # compile error; a value of an interface keeps its type (`u = URL(…)`, `u.pathname`); a text or a number comes back
 # as warp's own, with warp's members (`crypto.randomUUID().upper()`).
 #   Name.member(a, b)  foreign_call("js", "Name", "member", 1, [a, b])
@@ -24,7 +24,8 @@ ELEMENT_LOOKUP = "getElementById"
 PAGE_ELEMENT_TYPE = "HTMLElement"
 # the interfaces whose attributes and operations are the page's globals (`crypto`, `atob`)
 GLOBAL_INTERFACES = ["Window", "WindowOrWorkerGlobalScope", "WorkerGlobalScope", "WindowLocalStorage", "WindowSessionStorage"]
-WEBIDL = module_source("extensions/js_globals/web.webidl")
+# read from lib/ the first time a program reaches the page's js (user 2026-11-10, load on demand)
+WEBIDL = "web.webidl"
 use "js_globals/webidl.warp"
 
 # --- the program ---
@@ -195,7 +196,7 @@ js_member_type(interface: text, member: text): text := {
 	if interface == UNCHECKED { return UNCHECKED }
 	found = webidl_member_of(interface, member)
 	if member == CONSTRUCTOR_MEMBER and found != ø { return interface }
-	if found == ø { raise "js: " + interface + " has no " + (if member == CONSTRUCTOR_MEMBER then "constructor" else member) + " (extensions/js_globals/web.webidl)" }
+	if found == ø { raise "js: " + interface + " has no " + (if member == CONSTRUCTOR_MEMBER then "constructor" else member) + " (lib/web.webidl)" }
 	if webidl().has(found.type) then found.type else UNCHECKED
 }
 # the member of a definition, its parents' and its mixins' included
@@ -213,6 +214,6 @@ webidl_member_of(name: text, member: text): WebIdlMember? := {
 # name → WebIdlDefinition: the interfaces, mixins, namespaces and dictionaries with their partials, read once
 global webidl_definitions = ø
 webidl(): map := {
-	if webidl_definitions == ø { webidl_definitions = webidl_read(WEBIDL) }
+	if webidl_definitions == ø { webidl_definitions = webidl_read(library_data(WEBIDL)) }
 	webidl_definitions
 }
