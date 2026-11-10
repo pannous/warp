@@ -1,6 +1,6 @@
 # Decided questions: an inbox, not a law book
 
-How decisions live (user 2026-11-10). A decision is one of three kinds, and each has its own permanent home:
+How decisions live. A decision is one of three kinds, and each has its own permanent home:
 1. Language rules (`type A < T` is a subtype, `÷` floors, markup only inside `html{…}`): the specification. Home: the
    wiki page of the topic, plus at least one outcome test line in test/. The wiki says what the language is, the test
    proves it and goes red when code drifts. Where the wiki and an entry here disagree, the wiki wins.
@@ -132,9 +132,9 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - D4 constructors: `T{…}` of a known type constructs and validates, `k:{…}` is plain data; missing fields are errors unless `?` or defaulted. #41 spaced `V { x: 1 }` constructs a declared V.
 
 ## Lists, maps and indexing
-- markup-needs-html (user 11-09, replaces element-named-pair, card data-key-brings-markup): markup is written inside `html{…}`, or in a function known to return html (its result typed html), where a plain `b{"bold"}` still works; anywhere else a tag-named key or tag form is data: `x = {p: {c: 1}}; x` → {p: {c: 1}}, `{i: 1}` stays {i: 1}. Tests and samples that write bare markup get the `html{…}` wrapper.
+- markup-needs-html (replaces element-named-pair, card data-key-brings-markup): markup is written inside `html{…}`, or in a function known to return html (its result typed html), where a plain `b{"bold"}` still works; anywhere else a tag-named key or tag form is data: `x = {p: {c: 1}}; x` → {p: {c: 1}}, `{i: 1}` stays {i: 1}. Tests and samples that write bare markup get the `html{…}` wrapper.
 - html-value (Interviewer, by markup-needs-html, card html-anywhere): markup is a value of `class Html { element: pair }` (a cheap class, not a subtype of pair: a pair would fill a subtype and data would count as markup), printed by its own `format` overload, rendered by dispatch on `is Html`. An element written inside html{…}, in an html-typed function, or as the argument of an html-typed parameter (to_html, render, page_render take `value: html`) becomes an Html; a data entry like `"a": "Apple"` stays a pair.
-- format-types-inline-html (user 11-10, refines jsx under html-value, card inline-div-format): `warp format` turns inline HTML into warp markup and adds the html type where the element is a whole value: `p = <p>Hi</p>` → `p: html = p{ "Hi" }`, `f() := <div/>` → `f(): html := div{}`; elsewhere (an argument, inside an expression) the inline HTML stays as written.
+- format-types-inline-html (refines jsx under html-value, card inline-div-format): `warp format` turns inline HTML into warp markup and adds the html type where the element is a whole value: `p = <p>Hi</p>` → `p: html = p{ "Hi" }`, `f() := <div/>` → `f(): html := div{}`; elsewhere (an argument, inside an expression) the inline HTML stays as written.
 - P29 `pair.0` counts from 0. P30 `xs.pop()` gives the last item, `m.remove(k)` the value or ø.
 - Word slices: `xs from #2 to #4`, `xs starting from #2`, `xs up to #2` or ordinals, both ends inclusive; a bare number is an error. P58 `xs#a..b` keeps the range with a strong warning naming `xs#(a..b)` and `(xs#a)..b`.
 - P176 repeated `key: value` in a named tag block are children; a plain `{…}` keeps the duplicate-key error.
@@ -294,15 +294,15 @@ quick-answer-first → AGENTS.md Talking. no-aur → notes/packaging.md.
 beautiful-types, compiler-typed → notes/agents/handbook.md. node-refinements → notes/node_refinements.md.
 runtime-split → core/runtime/bridge.warp, core/runtime/extended.warp. wasm-standalone → card standalone.
 pass-triggers → card pass-triggers. revert-first → notes/agents/integrator.md.
-reviewer-role → notes/agents/reviewer.md. crash-fixes-first → notes/agents/reviewer.md, AGENTS.md.
+reviewer-role → retired reviewer.md (git). crash-fixes-first → retired reviewer.md (git), AGENTS.md.
 outcome-tests-only → AGENTS.md "Outcome tests only". weekly-cleanup → notes/agents/README.md.
 topic-priority → AGENTS.md Cards.
-cleanup-means-fewer-lines, restructuring → notes/agents/refactorer.md.
+cleanup-means-fewer-lines, restructuring → retired refactorer.md (git).
 question-popups → AGENTS.md (superseded: questions go to warp-interviewer).
 test-consolidation → AGENTS.md Testing. P150 license → notes/packaging.md, CONTRIBUTING.md.
-laws-file → samples/laws/project_laws.warp. deploy-hook → scripts/watch-playground-deploy.sh.
+laws-file → samples/laws/project_laws.warp. deploy-hook → retired watch-playground-deploy.sh (git).
 typed-signatures → notes/agents/handbook.md. night-watch → notes/agents/supervisor.md.
-codex-library-cards → notes/codex_cron.md. core-gate-probes → AGENTS.md Done.
+codex-library-cards → retired codex_cron.md (git). core-gate-probes → AGENTS.md Done.
 rebuild-next-lever, no-seed-before-instance-runtime, sound-core-order, runtime-linking-team, merge-then-reshuffle-then-celebrate, easy-reshuffle-then-pure-warp, native-replaces-rust-first, rust-gone-in-1-5, night-samples-modules → historic (git).
 plain-warp-first, samples-not-spec → AGENTS.md Principles. key-op-spelling → core (key_operator).
 native-harness → AGENTS.md "Native warp", notes/roadmap_native_harness.md.
@@ -316,7 +316,7 @@ extension-rule-forms, hello-lazy-runtime-dropped, small-int-cache → historic (
 extension-parser-hooks, extension-lints, extension-attributes, extension-text-hooks, extension-passes → core/extension.warp.
 one-operator-reader → core/parsing/parser.warp, extensions/declared_operators.warp.
 atoms-as-rows → core/parsing/parser.warp. node-wasm-type → core/emitter/emitter.warp.
-night-2026-11-04-kept → notes/night_2026-11-04.md.
+night-2026-11-04-kept → retired night_2026-11-04.md (git).
 load-time-linking, library-zero-bake, library-zero-bake-plan → notes/library_zero_bake.md.
 units-as-class → lib/units.warp. extension-row-optional → core/compiler.warp, core/emitter/prebuilt.warp.
 core-hygiene → notes/core_hygiene.md. linked-variants-by-arity → core/emitter (linking).
@@ -324,7 +324,7 @@ made-by-reach → core/emitter (module.made).
 comments-not-candidates, implicit-standard-words-index → extensions/implicit_uses.warp.
 native-window-sdl3 → window-in-warp. node-attributes → core/node.warp ($MetaNode).
 canonical-runtime-names → core/runtime. rule-whose, prelude-rule-no-use → core/passes/rewrites.warp.
-inline-code → core/compiler.warp. gpu-driver-plumbing → lib/gpu.warp. shaders-in-lib → lib/shaders.warp.
+inline-code → core/compiler.warp. gpu-driver-plumbing → retired gpu.warp (git). shaders-in-lib → lib/shaders.warp.
 signals-test-15 → test/control/test_variable_signals.pairs.warp.
 program-match-lowering → core/passes/node_matches.warp. computed-hole-shape → extensions/rules/rule_words.warp.
 ffi-link-any-import → core/native/driver.warp. host-list-one-shot → core/emitter/host.warp.
