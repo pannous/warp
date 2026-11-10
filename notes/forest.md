@@ -45,8 +45,10 @@ that same list for the opening camera (aspect 240 by 135, the headless frame).
 
 The sample uses `paint` of a shader with its own vertex stage, which draws `instances` quads from one storage
 array (`lib/host/native_host/gpu.warp`, the existing instanced-quad path). Each quad is one sprite: sky,
-a ground tile, or a tree billboard. The fragment draws a trunk and a crown (a cone for pine, a round crown
-otherwise, a smaller blob when far) and fades color with distance. There is no depth buffer; far sprites are
+a ground tile, or a tree billboard. The fragment draws each tree lit by a low sun in the billboard's frame:
+tiered ragged pines, oak and autumn crowns of seven clumps (backlit rims when the sun is behind), airy birches with
+scarred white bark, each tinted by a hash of its position; the sky quad paints sky, sun, clouds and, below the horizon,
+the meadow per pixel; everything hazes with distance. The sample starts at SIDE = 100 (10,000 trees). There is no depth buffer; far sprites are
 submitted before near ones and blended over.
 
 Still absent, and not added here: indexed meshes, indirect draws, a depth attachment, mesh shaders, and
