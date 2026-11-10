@@ -30,12 +30,12 @@ time_holds(a: Node, b: Node, relation: int): bool := {
 	if fewest > 0 or (fewest == 0 and strict) { return no }
 	durations_compare_differently_on_different_dates() != 0
 }
-# an instant or local time beside a duration without months or days compares by its time of day, `ref >= 6h`
+# an instant, local time or time of day beside a duration without months or days compares by its time of day, `ref >= 6h`
 is_clock_of_day_pair(a: Node, b: Node): bool := {
 	if not is_time(a) or not is_time(b) { return no }
-	clocked = (time_form(a) == TimeFormCode.Instant or time_form(a) == TimeFormCode.Local) and is_plain_duration(b)
-	clocked or ((time_form(b) == TimeFormCode.Instant or time_form(b) == TimeFormCode.Local) and is_plain_duration(a))
+	(has_clock(a) and is_plain_duration(b)) or (has_clock(b) and is_plain_duration(a))
 }
+has_clock(n: Node): bool := time_form(n) in [TimeFormCode.Instant, TimeFormCode.Local, TimeFormCode.Clock]
 is_plain_duration(n: Node): bool := is_duration(n) and duration_months(n) == 0 and duration_days(n) == 0
 # the nanoseconds since midnight of an instant or local time, a plain duration's own
 nanos_of_day(n: Node): int := {
