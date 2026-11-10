@@ -423,10 +423,16 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	exported = slices.filter(is_exported_slice).map(slice => slice#1)
 	for name in exported { exported_names[name] = yes }
 	# (an alias the program writes where the sugar makes its call later, `3 squared`, wants its word: square)
-	wanted = exported + program_words + program_words.filter(word => written_aliases.has(word)).map(word => written_aliases[word]) + variant_words(program_words) + lowering_words(program) + sugar_words_of(program) + linked_needs() + (if callable_word in module_names and calls_a_value(program) then [callable_word] else []) + extension_value_settlers().values.filter(word => word in module_names)
+	sugar_words = sugar_words_of(program)
+	wanted = exported + program_words + program_words.filter(word => written_aliases.has(word)).map(word => written_aliases[word]) + variant_words(program_words) + lowering_words(program) + sugar_words + linked_needs() + (if callable_word in module_names and calls_a_value(program) then [callable_word] else []) + extension_value_settlers().values.filter(word => word in module_names)
 	# (and the classes the linked words reached so far reach, a used module's reaching the prelude's: their bodies,
 	# declared only, say none of it)
 	wanted += linked_classes_reached.keys
+	# (a sugar word only a rule picked by another's result says, never the program's own words, brings its declaration
+	# but no linked class: `$a $op= $b` writing an assignment picks the destructuring rule, whose `for … in` picks
+	# for $u in $t's walked_by, whose reach is every class of units and time, for `use units; 1`)
+	direct = word_set(direct_sugar_words_of(program) + program_words + lowering_words(program) + exported)
+	chained = word_set(sugar_words.filter(word => not direct.has(word)))
 	reaches = linked_reaches()
 	linked_classes = linked_class_set()
 	uses = ø
@@ -437,7 +443,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	while at < #wanted {
 		word = wanted[at]
 		at += 1
-		if not linked_reached.has(word) { wanted += classes_reached(word, reaches, linked_classes) }
+		if not linked_reached.has(word) and not chained.has(word) { wanted += classes_reached(word, reaches, linked_classes) }
 		for slice in named.get(word) ?? [] {
 			if slice#5 not in reached {
 				if slice#4 == ø and uses == ø { uses = use_lines(module) }

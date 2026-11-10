@@ -201,7 +201,13 @@ every_pass = pure_passes + used_passes
 global used_lowering = ø
 # the words code will say once the sugar the program keeps rewrote it: `twice {…}` says the prelude's times, a module's
 # `a .+ b` element_wise_any
-sugar_words_of(code: Node): list := reaching_template_words(code, kept_first_sugar + kept_sugar + kept_iteration_sugar + kept_late_sugar + kept_comprehension_sugar)
+sugar_words_of(code: Node): list := reaching_template_words(code, kept_sugar_rules())
+kept_sugar_rules(): list := kept_first_sugar + kept_sugar + kept_iteration_sugar + kept_late_sugar + kept_comprehension_sugar
+# the words of the kept sugar rules the code's own tokens can fire, none picked by another rule's result
+direct_sugar_words_of(code: Node): list := {
+	mentioned = word_set(tokens_within(code))
+	kept_sugar_rules().filter(rule => needed_tokens(rule).all(word => mentioned.has(word))).flat_map(rule => words_within(rule.template))
+}
 
 # the sugar rules (extensions/sugar/) the program keeps, over it and the definitions it reached: the first before the passes
 # that would read its forms as something else (rewrites.warp first_sugar_module_names), the others where the passes
