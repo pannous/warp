@@ -91,7 +91,7 @@ case $? in
   *) print -r -- "SELF CHECK RED: scripts/rebuild.sh failed in $worktree (its step and log in the store):"; print -r -- $pair; exit 1 ;;
 esac
 print -r -- $pair
-# the self test itself (notes/agents/common.md "Testing"): warp.wasm compiles compiler.warp and that build, promoted to warp-self.wasm,
+# the self test itself (AGENTS.md "Testing"): warp.wasm compiles compiler.warp and that build, promoted to warp-self.wasm,
 # runs hello; a warp-self.wasm of these inputs in lib/ or the store is taken as it is (scripts/rebuild.sh self). Red
 # when the compile fails: the self lane was red unnoticed for hours while it was skipped here (card self-check-compile)
 self_lane() {

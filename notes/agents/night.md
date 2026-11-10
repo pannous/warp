@@ -1,6 +1,6 @@
 # Night rules (user 2026-11-02)
 
-How the fleet works while the user sleeps, until the user is back (usually 10:00). Read with common.md and your role file.
+How the fleet works while the user sleeps, until the user is back (usually 10:00). Read with AGENTS.md and your role file.
 
 ## Decisions
 - The Supervisor and the Interviewer decide themselves: meaning, spellings, core OKs, process. Courageous, not

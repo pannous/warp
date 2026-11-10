@@ -160,8 +160,8 @@ RETIRED=$(sed -n 's/^retired: *\([A-Za-z0-9_-]*\).*/\1/p' "$CARD_LIST" 2>/dev/nu
 not_retired() { awk -v retired=" $RETIRED " '/^PARKED/{block=""; skip=0} {block=block $0 "\n"} /^card:/{if (index(retired, " " $2 " ")) skip=1} /^END/{if (!skip) printf "%s", block; block=""}'; }
 PARKED_BEFORE=$([ -n "$PREVIOUS_RESULT" ] && blocks PARKED "$PREVIOUS_RESULT" | not_retired)
 
-PROMPT="You are a warp worker session named codex, started by a timer; nobody watches this run. Read AGENTS.md and
-notes/agents/common.md and follow them, with these differences: you cannot use SendMessage, ListAgents or ask anyone,
+PROMPT="You are a warp worker session named codex, started by a timer; nobody watches this run. Read AGENTS.md
+and follow it, with these differences: you cannot use SendMessage, ListAgents or ask anyone,
 so never wait for input, and make undoable default choices yourself (note them in your final message).
 
 FIRST, finish what earlier runs left (user 2026-10-30: a run continues the previous one when it was not finished and
@@ -182,7 +182,7 @@ in lib/ (and samples/, test/, wiki/); never change core/ or the Rust harness. Cl
 
 Reproduce before you judge: run the card's example with WARP_NO_WINDOW=1 /Users/me/dev/bin/warp '<code>'; an old
 investigation on the card is a hint, not a verdict. A card that truly needs core is not a dead end: look for the
-library way first (common.md Principles: a function, enum, overload or extensions/sugar rule); only when there is none, write
+library way first (AGENTS.md Principles: a function, enum, overload or extensions/sugar rule); only when there is none, write
 the smallest core shape into \`todo note <card> \"needs core: <files, functions, why in 3 lines>\"\`, release it and
 take the next card.
 
@@ -192,7 +192,7 @@ or changes lib/, samples/ or wiki/; a run whose only commit is a handover has fa
 optional fields, a name), take the recommended default, write it into the handover and keep going. End your turn only
 when every card you took is landed, parked with such a commit, or released as needing core.
 
-Per card: its own branch and worktree (\`cowtree add\`, as in common.md), a test first in test/<topic>/, then common.md
+Per card: its own branch and worktree (\`cowtree add\`, as in AGENTS.md), a test first in test/<topic>/, then AGENTS.md
 \"Done\": format, merge origin/main, \`scripts/smoke.sh <worktree>\`, follow the current testing rules, push to
 main yourself, \`todo done <card> <commit>\`. Never change an existing test's expectation yourself, not even as an upgrade: park the card with the question
 (old vs new output) and the Supervisor decides. A working part of a
