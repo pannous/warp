@@ -2085,6 +2085,9 @@ with_rightmost(n: Node, words: list): Node := {
 is_written_code(n: Node): bool := is_quote(n) or is_spliced_quote(n)
 # the rule's template for the node; a block of a statement the pattern matches keeps its block
 rule_applied(rule: Rule, origin: map, n: Node): Node := {
+	# `type Code = list of int` names a type and runs nothing: no rule takes it for the assignment `x = list of int`, an
+	# empty list (card type-code-alias)
+	if is_type_alias(n) { return ø }
 	if rule_defining != "" and first_word_of(rule.template) == rule_defining { return ø }
 	if is_written_code(n) and not is_written_code(rule.pattern) { return ø }
 	bound = {}
