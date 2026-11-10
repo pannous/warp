@@ -234,7 +234,10 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 	pass.end();
 	if (canvasImage && image !== canvasImage)
 		encoder.copyTextureToTexture({ texture: image }, { texture: canvasImage }, [Math.min(width, canvasImage.width), Math.min(height, canvasImage.height)]);
-	if (painted) return gpuSubmitted(device, encoder).finally(released);
+	// a painting into the page's canvas answers once the GPU drew it, as the native window's surface waits for the
+	// display: a program painting each frame no faster than its shader draws (card example-native-mismatch: #ocean queued
+	// frames far ahead of its heavy shader and showed two)
+	if (painted) return gpuSubmitted(device, encoder).then(() => answeredWithin(device.queue.onSubmittedWorkDone(), "drawn frame", GPU_WORK_WAIT_MS)).finally(released);
 	const rowBytes = Math.ceil(width * PIXEL_BYTES / ROW_ALIGNMENT) * ROW_ALIGNMENT;
 	const readback = readbackBuffer(device, rowBytes * height);
 	encoder.copyTextureToBuffer({ texture: image }, { buffer: readback, bytesPerRow: rowBytes, rowsPerImage: height }, [width, height]);

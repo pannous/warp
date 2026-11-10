@@ -475,12 +475,14 @@ function roomBelowPaintings(paneStyle) {
 function startsFrame(run, output) {
 	const starts = run.frame > 0 && run.framesShown[output] !== run.frame;
 	run.framesShown[output] = run.frame;
-	if (starts) {
-		run.animating = true;
-		stopAfterTimeout(run);
-		prepareStandby();
-	}
+	if (starts) animates(run);
 	return starts;
+}
+// a run showing frames animates: it lives on past the limit, counted again from each frame
+function animates(run) {
+	run.animating = true;
+	stopAfterTimeout(run);
+	prepareStandby();
 }
 
 // ---- sound ----------------------------------------------------------------------------------------------------
@@ -693,12 +695,16 @@ function handOver(run) {
 	finish(run, stoppedReport(run, LIVE_HANDED_OVER, false));
 }
 
-// each painting shows at once, while the program still runs: one the size of the last replaces it, as a frame (card
-// g_oldM: `if frame % 6 == 0 { render() }` animates without a sleep, as the native window does)
+// each painting shows at once, while the program still runs: one the size of the last replaces it, as a frame that
+// animates the run as natively each painting is the window's frame (card g_oldM: `if frame % 6 == 0 { render() }`
+// animates without a sleep; card example-native-mismatch: `on frame` never sleeps, and #ocean was stopped after 10 s)
 function painted(run, painting) {
 	const last = run.paintings.at(-1);
 	if (startsFrame(run, "paintings")) run.paintings = [];
-	else if (last && sameSize(last, painting)) run.paintings.pop();
+	else if (last && sameSize(last, painting)) {
+		run.paintings.pop();
+		animates(run);
+	}
 	run.paintings.push(painting);
 	showFrame(run.paintings);
 }
