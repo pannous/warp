@@ -345,9 +345,7 @@ before asking a question). After a context swap, this file and your role file be
   or where you are unsure the user would want it undone. This does not relax an approval, smoke, hook or core rule
   already required here.
 - No offers in prose: "say the word and I do it", "should I…?", "if you want, …" at the end of a reply gets missed and
-  then never done. Every such offer is a question: a worker or the Supervisor sends it to warp-interviewer, who asks
-  it as an AskUserQuestion popup (the only questions the user is sure to see), recommended option first, Park for later
-  included; the Interviewer itself never ends a reply with a prose offer.
+  then never done. Every such offer is a question: a worker or the Supervisor sends it to warp-interviewer.
 - Run commands yourself; never hand the user commands to paste.
 - Quick answer first: answer from what is known now, run the investigations in the background, then give the
   complete answer once their results arrive.
