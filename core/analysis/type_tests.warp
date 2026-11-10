@@ -7,17 +7,17 @@ use "words.warp"
 use "../passes/scope.warp"
 
 tested_word_call(subject: Node, word: text, equality: Node, scope: map): Node :=
-	if is_tested_type(word, scope) then call_of("is_type", [tested(subject), word]) else held_type_test(subject, word, scope) ?? equality
+	if is_tested_type(word, scope) then call_of("is_type", [tested(subject), word]) else held_type_test(subject, word, equality, scope)
 
-# `Paint = Color; c is Paint` tests Color, `t = type(-3); 5 is t` is `type(5) is t`: a type is a value, a variable holding
+# `Paint = Color; c is Paint` tests Color, `t = type(-3); 5 is t` is `type(5) == t`: a type is a value, a variable holding
 # one is tested against it (decision type-text); one assigned again reads two ways, so it is refused
 global assigned_values = {}
-held_type_test(subject: Node, word: text, scope: map): Node? := {
+held_type_test(subject: Node, word: text, equality: Node, scope: map): Node := {
 	values = assigned_values.get(word) ?? []
 	held = values.filter(value => holds_type(value, scope))
-	if #held == 0 { return ø }
+	if #held == 0 { return equality }
 	if #values > 1 { raise word + " is reassigned: write `type " + word + " = ${held#1}`, or compare values with ==" + place_text(written_at(subject), "") }
-	if held#1 is symbol then tested_type_call(subject, held#1, scope) else Key(call_of("type", [subject]), Op.Is, symbol(word))
+	if held#1 is symbol then tested_type_call(subject, held#1, scope) else Key(bracketed([symbol("type"), subject], "("), Op.Eq, symbol(word))
 }
 holds_type(value: Node, scope: map): bool := (value is symbol and is_tested_type(name_of(value), scope)) or tested(value) != value
 
