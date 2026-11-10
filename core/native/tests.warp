@@ -99,6 +99,7 @@ test_words(compiler: text, command: text, work: text, first: int): Arguments := 
 all_ran(work: text, runs: text, prefix: text): nothing := {
 	total = if runs.length == 0 then 0 else field_count(runs, NEWLINE)
 	slots = slot_count()
+	pool = slots_folder()
 	children = allocate(slots * CHILD_BYTES)
 	next = 0
 	done = 0
@@ -110,7 +111,7 @@ all_ran(work: text, runs: text, prefix: text): nothing := {
 		for k in 0..slots {
 			child = child_at(children + k * CHILD_BYTES)
 			if child.pid == 0 and next < total {
-				lock = taken_slot(slots)
+				lock = taken_slot(pool, slots)
 				if lock >= 0 {
 					child.pid = started_run(work, field(runs, next, NEWLINE), prefix, children, slots)
 					child.run = next
@@ -236,11 +237,15 @@ compiler_building(): bool := {
 	}
 	no
 }
-# a free slot of the machine's pool (card shared-test-slots: lock files in ~/.cache/warp/test-slots, shared by every
-# `warp test` there is), its lock held until closed; -1 after waiting a while for one
-taken_slot(slots: i32): i32 := {
+# the folder of the machine's pool of slots (card shared-test-slots: lock files shared by every `warp test` there is),
+# made once a run (a shell made it at each try for a slot: 50 a second while all were taken)
+slots_folder(): text := {
 	folder = joined(getenv("HOME"), "/.cache/warp/test-slots")
 	command_output(joined(joined("mkdir -p '", folder), "'"))
+	folder
+}
+# a free slot of that pool, its lock held until closed; -1 after waiting a while for one
+taken_slot(folder: text, slots: i32): i32 := {
 	first = getpid() % slots
 	for offset in 0..slots {
 		lock = creat(c_string(joined(joined(folder, "/"), text_of((first + offset) % slots))), FILE_MODE)
