@@ -1865,9 +1865,7 @@ is_run_pattern(pattern: Node): bool := match pattern {
 # runs rewritten, over its words as written (the parser nests `keep 1 past 3` as `keep 1 (past 3)`); the rules of a
 # place rewrite the node's parts standing there first
 rule_rewritten(n: Node, rules: list, origins: list): Node := {
-	# `type Code = list of int` names a type and runs nothing: no rule takes it for the assignment `x = list of int`
-	# (card type-code-alias)
-	if is_key(n, Op.Assign) and is_type_declaration(key_of(n)) { return n }
+	if is_type_alias(n) { return n }
 	if is_group(n) and separator_of(n) in statement_separators {
 		n = group_like(n, statement_runs(spliced_statements(items_of(n).map(statement => at_place(statement, Place.Statement, rules, origins))), rules, origins))
 	} else if is_group(n) and #n > 0 {
@@ -1994,6 +1992,9 @@ with_changed_members(n: Node, changed: function): Node := {
 # matches (`loudly gently f() := 3` loses both words to the rules `loudly $s...` and `gently $s...`, card
 # engine-placed-where-chain)
 at_place(n: Node, place: Place, rules: list, origins: list): Node := {
+	# `type Code = list of int` names a type and runs nothing: no rule takes it for the assignment `x = list of int`, an
+	# empty list (card type-code-alias)
+	if is_type_alias(n) { return n }
 	for index in 0 ..< #rules {
 		if rules[index].place == place {
 			result = rule_applied(rules[index], origins[index], n)
