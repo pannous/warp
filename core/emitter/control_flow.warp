@@ -76,7 +76,7 @@ def loop_of(body: Body, test: Node, block: Node): TypedCode {
 }
 # the code of a loop; each run of its body sets the local `last` to its value, or, with last -1, runs it for its effect
 def loop_code(body: Body, test: Node, block: Node, last: int): list {
-	exit_unless = condition_of(body, test, 2) + [op.i32_eqz, op.br_if, 1]
+	exit_unless = position_code(body, test) + condition_of(body, test, 2) + [op.i32_eqz, op.br_if, 1]
 	parts = block_statements(block)
 	has_step = #parts > 0 and is_loop_step(parts.last)
 	again = if has_step then dropped(nested(body, value_of(parts.last), 2)) + [op.br, 0] else [op.br, 0]
@@ -133,7 +133,8 @@ def conditional_effect(body: Body, test: Node, yes_branch: Node, no_branch: Node
 	if c == known_condition(yes) { return nested_effect(body, yes_branch, 0) }
 	if c == known_condition(no) { return if has_else then nested_effect(body, no_branch, 0) else [] }
 	otherwise = if has_else then [op.else] + nested_effect(body, no_branch, 1) else []
-	c + [op.if, no_value] + nested_effect(body, yes_branch, 1) + otherwise + [op.end]
+	# the header's own place: the test is a statement of its own to a runtime error, as each time round a loop
+	position_code(body, test) + c + [op.if, no_value] + nested_effect(body, yes_branch, 1) + otherwise + [op.end]
 }
 def effects(body: Body, items: list): list {
 	code = []
