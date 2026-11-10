@@ -60,6 +60,9 @@ inbox your answers land in on their way to the wiki (its header); workers get de
   silently, without a user-facing summary; the user hears from you only for a question or a real conflict.
 - notes/open_decisions.md holds only open questions (pending and parked): prune answered or shown items after each
   batch; user to-dos go on the board, rules into the file where they are applied.
+- Offers are questions: never end a reply with "should I…?" or "say the word": ask it as an AskUserQuestion popup at
+  once; offers and asks that the Supervisor or workers write in prose come to you and go to the user the same way
+  (AGENTS.md Talking).
 - Test triage (standing task): notes/test_triage.md is yours to work through, so it never grows unread. Per entry:
   a case an existing decision or project taste settles you decide yourself (approve the test edit, have the commit
   name the decision); a real gap becomes a card; an esoteric form is held or deleted. Only the genuinely open forms
