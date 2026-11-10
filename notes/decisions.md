@@ -114,61 +114,24 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - data-reserved: `data` is a keyword (the `data …` quoting prefix); a variable named data is an error.
 
 ## Numbers
-- core-int-division: the compiler's source writes every integer division as `÷` (plain `/` of ints and every `/!` in core/ become `÷`; `/!` stays an alias), so the compiler needs no exact ratios and big numbers stay an optional extension.
-- bool-int-fallthrough: a bool falls through to the int implementation of any operator.
-- element-wise-scalars: element-wise operators apply to a non-list value directly (`3 .* 3` → 9).
-- type-shows-nat: type(3) and an undeclared whole value show `nat`, a declared int shows `int`.
-- fast-int-readings: a literal beside a fast int stays int (`xs[i + 1]` in a range loop); `i++`/`i--` on an undeclared counter stay int; `s += i` grows like + (a nat).
-- int-boxed-overflow-big: + - * of two boxed ints that overflow give the big-int result instead of trapping (`xs = [2^62]; xs#1 * 4`).
-- marked-floats-shape: `type X = float` beside `= int`; marks survive arithmetic (left mark, else right, only when the Kind matches, so `Color * 0.5` is plain); `°` an Angle shown in degrees, also when statically known and unboxed.
-- exact-decimals: decimal literals are exact (`0.1 + 0.2 == 0.3`), division gives exact ratios; floats come only from float sources (transcendentals, sqrt of a non-square, host values, `as float`, float-typed places, e-notation) and are contagious; `==` warns only with a float involved.
-- exact-power: a power of exact operands stays exact, a whole decimal exponent included (`0.5 ^ 1074.0` prints all ~750 digits of 2^-1074); the float pow is used only for float operands. Tests and probes keep their examples to calculations under ~10 s.
-- int-list: a whole decimal literal is int (`type([0.0, 0.0])` is list of int, P196b); a variable's type joins every write. #21 `x=π; type(x)` is real.
-- number-converts: `number` keeps an exact value; only `float` converts.
-- float-text: floats print shortest round-trip digits (Python/JS repr) everywhere; P225 also joined to text.
-- repeating-decimals: only the overline `0.3̅` is the exact 1/3; `x as decimal` writes the period overlined; never for floats.
-- float-intervals: `±` says a value is not exact, so an interval (lib/intervals.warp) switches to fast floats. It shows only the digits its spread justifies: `(6.0m ± 0.3m) * (2.0m ± 0.2m)` is between 10.26m² and 13.86m², never 13.860000000000001; the float value itself is untouched; lib-only. interval-bounds-guard-digit: `low()`/`high()` hand out the bound rounded one digit finer than the ± text shows (12.0 ± 1.9 → bounds at 0.01: 10.26m² to 13.86m²); the interval keeps its floats. Ranges are written `A to B`. samples/units_dynamic.warp shows its pace by `pace.in("km/h")` rounded; exact arithmetic stays elsewhere (151/15 km/h).
 - D16 `byte`, `int8..int32` are declared FFI types that trap on overflow; `u8` = `uint8` = `byte` (`int` and `nat`: nat-and-int). i64-wraps: `i64`/`int64` wrap silently at 2^63 like `fast int`; `use strict` catches it.
-- c-int-names: C's multi-word integer names are the fixed widths C means, each with a got-it note naming warp's word: `unsigned int` = uint32, `unsigned long (long)` = uint64, `long long` = int64, `unsigned short` = uint16, `short int` = int16, `unsigned char` = byte, `signed char` = int8 (`x: unsigned int = -1` errors "uint32 overflow"). Single words keep warp's meaning (`long`, `int`: nat-and-int).
-- fast-scope: `fast` before a function or module makes it machine arithmetic: polynomial sin/cos/exp/pow, `/` gives f64, ints are wrapping i64; `x: fast int` is i64.
 
 - hex-printing: `255 as hex` is an int shown as 0xFF; arithmetic gives a plain int. binary-int: `5 as binary` shows 0b101.
-- footgun-divzero: exact numbers raise divide by zero (catchable); computed IEEE floats give ∞/NaN.
 - gpu-f32 (also: P240): heavy float maps (from 10× the measured break-even) run on the GPU in f32 with a one-time notice; `@cpu` and `WARP_GPU=off` keep f64; `@gpu @cpu` together is an error; `@gpu` warns when the GPU doesn't apply; int lists fitting i32 may use the GPU with an overflow flag. go-heavy-map: a `go` map of a heavy kernel runs as the plain map.
-- P119 NaN canonicalization only where a float's bits are observable.
 - approx-zero: `≈` is relative 1e-9 with absolute floor 1e-12; `tolerance = …` overrides. P211 `~` is looser: 1% for numbers, texts ignoring whitespace and punctuation; `≈` on texts ignores case and accents. P212 a class may define `approximately` and/or `similar`.
-- ± intervals: P217 `5 ± 1` is a worst-case interval (Gaussian later as `5 ± 1σ`). P218 `x ≈ r ± 1` holds when |x−r| ≤ 1. P219 prints 2 significant digits of the ± part. P220 `1950 ± 50 AD` is the same ± value. P224/P224b comparisons answer only when certain: known ± values need `certainly`/`possibly`/`.value` (compile error), run-time ones count an overlap as not certain with a one-time warning. P233 a field typed with a tolerance gives each value that tolerance.
-- `x /= y` is exactly `x = x / y`; an `x:int` keeps a whole number.
-- Trailing percent: `10%` is 1/10, `50 % of 200` is 100; infix `%` stays remainder; CSS values stay as written.
-- P184 English number words are numbers when no variable has that name, with a hint toward digits.
 - #11 exact reals may go into a declared float with precision loss. rational-float: `x: rational = sqrt(2)` is a compile error, `x: real = sqrt(2)` works.
 - lossy-return (also: float-result): a fraction reaching a declared int result is an error ("declare number, or truncate with as int"). P49/P49b a float, even a written `2.0`, to an int parameter is a compile error. P131 an int variable or field refuses a fraction loudly. P127 int class fields keep exact ints.
 - round-halves: `round` rounds halves away from zero; banker's rounding is `round_even`; an exact half seen at compile time gets a hint about Python. `⌊x⌋` floor, `⌈x⌉` ceil, `⌊x⌉` round. `x as int` truncates toward zero.
-- nearest-limit: `nearest(x, rational)` limits the denominator to 1,000,000; `limit = 0` gives the exact fraction of the float. float-as-rational: `x as rational` of a float is the exact fraction of its shortest printed digits.
 - P226/P226b log glyphs: `b⌞x` and `x⌟b` are log base b; postfix `x⌟` is ln. easy-add: `x↑n` power and `x↓b` log are typed infix operators for numbers, other types define their own.
 - P57 hyperreals: `1/(1+ε)` stays an error; dual numbers later. P56(2-4) `∞` is f64 infinity, ω the hyperreal infinite.
-- real-runtime: real.rs (compile-time symbolic reals) stays until symbolic reals are a run-time number type; the general run-time exact mechanism is parked (notes/real_runtime.md).
 
 ## Units and quantities
-- unit-sum-display: a sum of quantities keeps today's display (`2h + 30min` in hours).
-- #5 units yes; #3 juxtaposition `3x` multiplies; units are written glued (`3km`), `3 km` works with a hint. P64 units are checked at compile time and kept as metadata where static knowledge ends. P36 `100 cm in m` / `as m` convert within a quantity. Unit sums use the finer unit. Quantities print without a space (`500m`); P231 print rounds quantities, str() keeps the exact value. #31 `min` stays the function.
-- quantity-naming: warp says quantity (length, speed, density), axis for width/height, rank for the number of axes, shape for 28 × 28 px; `dimension` is only an alias with a hint.
 - dimensions-units: quantity names are types (`3 cm is length`; `h: length = 3 s` errs); the time quantity is `duration`; units live in lib/units.warp; a unit after a list applies to each element (`[3, 4] cm`). Predefined derived names: speed, area, volume, frequency.
 - unit-definitions: `quantity length meter` declares a base and its SI anchor; `unit cm := meter / 100`, `unit N := kg*m/s²` (derived quantities follow from the expression); offsets `unit °F := (it + 459.67) * 5/9 K`; SI prefixes only for SI-anchored/derived units. unit-target: `unit °C as K := it + 273.15`. unit-prefix-lines: `prefix k := 10^3`, `SI dimension length meter`.
 - Unit symbols bind only after a number, never as bare names; a variable gets a unit by `x * 1 m`.
 - unit-after-number (also: variable-named-like): `m = 5; 3m` is 3 meters with a hint "write 3*m to multiply".
-- litre-suffix: a glued unit beats a number suffix (`2L` is 2 litres) once units are on (units-opt-in); exactness is `2 as exact`.
-- units-opt-in (historic; the code wins, card units-back): the parser never imports or builds the unit module itself, but `3km` works without `use units` (standard modules load on demand: implicit-standard-words).
-- pixel-lengths: px is its own quantity (`unit dpi := px / inch`); a length becomes px by `3 cm * display.dpi`; `3 cm as px` is a plain DimensionError.
 - display-names: display.density (aliases dpi, ppi) in dpi; display.size width × height in px (alias dimensions, with a hint); display.diagonal in inch; display.resolution is an ambiguous alias reading display.size, with a hint.
 - unit-types: a unit can type a field (`display { density: dpi }`): it fixes the kind of quantity, converts other units, refuses other quantities. unit-field-plain-number: a plain number there warns with a fix adding the unit.
-- general-conversions: one conversion mechanism `A as B := body` (`Person as text := it.name`); a program's conversions come before built-in ones; unit lines are its unit cases.
-- units-library: units, quantities and prefixes are lib/units.warp lines, run-time quantities its Quantity class; the compile-time check (static_units.rs, P64) stays Rust until types take a quantity parameter.
-- units-as-values (user; also: units-quantity-lib replaced): units are values: Quantity in lib/units.warp, dimensions (Time, Length, …) are classes, a unit a value of magnitude 1 (`ms = Quantity(1, "ms") as Time`); `5km` is implicit multiplication `5 * km` through Quantity's `*`, no sugar rule, so `90km/h`, `9.81m/s²` come free; conversion, showing and dimension errors in Quantity's operators. Card unit-literals.
-- overloads-before-reals: class operator overloads are fixed in core first (card class-operator-overloads; they unblock Real, Quantity, Vec), then π, τ, ℯ, ∞ are lib/reals.warp's exact Real (`π/2` prints π/2); no float interim.
-- expected-type-names: an argument for a parameter typed T also finds T's values by name: `sleep(3ms)` without `use units`, `paint(Red)` finds Color.Red; a signature naming T loads T's module on demand. A local of the same name is used if it fits T (warning: shadows), else T's value wins (warning names the local). Without an expected type `3ms` is an error with the fix-it `use units`. wiki/inventions.md; card expected-type-names.
-- duration-units: `1 h` beside a duration is a duration; `name hour := h` stays (`2 h in minutes` → 120min).
-- canvas-size: `window`, `display` and `canvas` `.width/.height` are writable properties natively and in the playground; a bare top-level `width` works with a did-you-mean.
 
 ## Text
 - digit-as-char: `2 as char` is the digit '2', like P25 `int('5')` is 5; a code point becomes a character by `char(0x41)`.
@@ -933,3 +896,13 @@ Text, P1, brace-hole, P126, #26, result-keyword, letters, guillemets, Emoji → 
 parse-json → wiki/string.md, wiki/json.md, test/text/test_text_rules.pairs.warp.
 used-module-bare-words → wiki/use.md, test/text/test_text_rules.pairs.warp.
 uniscript → wiki/uniscript.md, test/text/test_text_rules.pairs.warp.
+bool-int-fallthrough, element-wise-scalars, type-shows-nat, int-boxed-overflow-big, exact-decimals, exact-power, int-list, number-converts, float-text, repeating-decimals, footgun-divzero, `x /= y`, Trailing, P184, nearest-limit → wiki/number.md, test/numbers/test_number_and_unit_rules.pairs.warp.
+core-int-division → AGENTS.md Principles.
+fast-int-readings, fast-scope → wiki/number.md, test/numbers/test_fast_int.pairs.warp.
+marked-floats-shape → wiki/unit.md, test/numbers/test_dimension_types.pairs.warp.
+c-int-names → wiki/int.md, test/numbers/test_fixed_width_ints.pairs.warp.
+± → wiki/number.md, test/numbers/test_plus_minus_numbers.pairs.warp. P119, units-library → historic (git).
+real-runtime → notes/real_runtime.md.
+unit-sum-display, #5, quantity-naming, litre-suffix, units-opt-in, pixel-lengths, general-conversions, units-as-values, overloads-before-reals, expected-type-names, duration-units → wiki/unit.md, test/numbers/test_number_and_unit_rules.pairs.warp.
+canvas-size → wiki/unit.md, test/programs/test_canvas_window.pairs.warp.
+float-intervals → wiki/number.md, test/numbers/test_plus_minus_numbers.pairs.warp.
