@@ -44,12 +44,12 @@ module_signature(name: text, wasm: text): ModuleSignature? := {
 	module_name = name
 	ModuleSignature(source: "${fields["source"]}", uses: items_of(fields["uses"]).map(module => "${module}"), slices: items_of(fields["slices"]).map(slice => ["${slice#1}", "${slice#2}", "${slice#3}", module_name]), rules: items_of(fields["rules"]).map(rule => unpacked_rule(rule, module_name)), foreign: texts_read(fields.get("foreign")), aliases: texts_read(fields.get("aliases")), words: listed(fields, "words"), globals: listed(fields, "globals"), classes: listed(fields, "classes"), builders: listed(fields, "builders"), runtime: listed(fields, "runtime"), patterns: listed(fields, "patterns").map(pattern => "${pattern}"), operators: listed(fields, "operators").map(operator => "${operator}"), c_lines: texts_listed(fields, "c_lines"), c_uses: texts_listed(fields, "c_uses"), reaches: words_read(fields.get("reaches")))
 }
-# a map of word lists by name, each written as one text of its words (prebuilt.warp word_reaches); ø for a field an
-# older build left out
+# a map of word lists by name, each written as a pair of the name and one text of its words (prebuilt.warp
+# word_reaches: a name may be an operator's, `+`, which a key could not hold); ø for a field an older build left out
 words_read(n: any): map? := {
 	if n == ø { return ø }
 	words = {}
-	for entry in items_of(n) { words[name_of(key_of(entry))] = "${value_of(entry)}".split(" ") }
+	for pair in items_of(n) { words["${pair#1}"] = "${pair#2}".split(" ") }
 	words
 }
 # a signature field's items, none for one an older build left out
@@ -68,6 +68,8 @@ show_signature(name: text) := {
 field_node(name: text, value: Node): Node := Key(symbol(name), Op.Colon, value)
 # a map of texts by name as a node, `{deque: "Deque"}`, and read back (none for a field an older build left out)
 texts_node(texts: map): Node := curly_list(texts.keys.map(name => field_node(name, Text(texts[name]))))
+# a map of texts by any name, an operator's too, as a list of [name, text] pairs
+texts_pairs_node(texts: map): Node := square_list(texts.keys.map(name => square_list([Text(name), Text(texts[name])])))
 texts_read(n: any): map := {
 	texts = {}
 	if n != ø { for entry in items_of(n) { texts[name_of(key_of(entry))] = "${value_of(entry)}" } }
