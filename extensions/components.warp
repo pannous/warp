@@ -4,12 +4,15 @@
 # set once, when the instance has none: `count = start` is `component_state(this, "count", () => start)`, and `count`
 # reads `this.count`. A call of it among a tag's items is a live part
 # (`live(() => Counter(0))`), so each render calls it again, and component gives back the same instance: by its `key:`,
-# else the n-th call of that render. `Counter.instances` are the page's instances in order.
+# else the n-th call of that render. `Counter.instances`, and the lower-case plural `counters`, are the page's
+# instances in order (card component-plural).
 
 this_word = symbol("this·component")
 key_parameter = "key"
 instances_field = "instances"
 instances_word = "component_instances"
+# the program's components by their lower-case plural, `counters` → "Counter", where it binds no such name itself
+global instances_plurals = {}
 # the words of lib/markup.warp the calls this pass writes need, reached though the program writes none (prelude_words.warp)
 component_words(program: Node): list := if statements_in(program).any(statement => component_name(statement) != "") then ["component", "component_state", instances_word, "live"] else []
 
@@ -17,6 +20,10 @@ components(program: Node): Node := {
 	statements = statements_in(program)
 	names = statements.map(component_name).filter(name => name != "")
 	if #names == 0 { return program }
+	# (a name the program binds itself, `counters = []`, stays its own)
+	bound = nodes_in(program).filter(part => (is_key(part, Op.Assign) or is_key(part, Op.Define)) and key_of(part) is symbol).map(part => name_of(key_of(part)))
+	instances_plurals = {}
+	for name in names { if instances_plural(name) not in bound { instances_plurals[instances_plural(name)] = name } }
 	separated(bracketed(statements.map(statement => if component_name(statement) != "" then component_defined(statement) else statement).map(statement => with_calls_in(statement, names)), ""), ";")
 }
 
@@ -67,6 +74,12 @@ calls_component(n: Node, names: list): bool := not is_lambda(n) and #tag_parts(n
 live_part(item: Node): Node := call_node(symbol("live"), [deferred(item)])
 instances_named(n: Node, names: list): Node := {
 	if is_key(n, Op.Dot) and key_of(n) is symbol and name_of(key_of(n)) in names and value_of(n) == symbol(instances_field) { return instances_of(name_of(key_of(n))) }
+	if n is symbol and instances_plurals.has(name_of(n)) { return instances_of(instances_plurals[name_of(n)]) }
 	n
+}
+# a component's lower-case plural, its instances' name: Counter → counters, Box → boxes, Match → matches
+instances_plural(name: text): text := {
+	lower = name[0..<1].lower() + name[1..]
+	if lower.ends_with("s") or lower.ends_with("x") or lower.ends_with("z") or lower.ends_with("ch") or lower.ends_with("sh") then lower + "es" else lower + "s"
 }
 instances_of(name: text): Node := call_node(symbol(instances_word), [name])
