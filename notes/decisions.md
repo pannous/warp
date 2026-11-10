@@ -508,53 +508,16 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - signal-samples: samples/signal*.warp are siren_sound/stereo_sound.
 
 ## Compiler internals (technical, decided by the Supervisor or Interviewer)
-- extension-rule-forms (not built): the rule engine stays whole in core; the self-build uses 223 of 246 rewrites.warp functions (case, each and glue forms included), only 117 scattered lines unused.
-- extension-parser-hooks: Extension rows may add `prescans` (per-parse source scans read as p.scans[name]) and `prefix_readers`; a suffix reader may answer a stop mark (ends the operand). Declared operators (`infix operator ⊕ := …`, precedence) live in extensions/declared_operators.warp; operator and circumfix aliases stay core while operator_at lexes them (card parser-cold-forms). Declared infix operators read through their own `infix_readers` (glued factors keep `2x⊕3` as (2x)⊕3), and `glyph_owners` keeps a declared prefix glyph from reading as a free infix operator.
-- one-operator-reader: one reader, operator_statement, reads every operator declaration (`(infix|prefix|suffix|postfix|circumfix)? operator $op := body`, and keyword-less `a ⊕ b := …`) into one record; aliases, circumfixes and declared operators filter that record, one scan per source. `postfix` is a synonym of `suffix` (one FIXITY_WORDS row). Precedence declarations keep their own reader. No outcome change (card one-operator-reader).
-- atoms-as-rows: the parser's own atoms (digits, vulgar fractions, quotes, `.`, `\`, truth glyphs, `*`, `$`, ⅈ, `@`, brackets) are core rows of the atom_readers table, first character → reader; extension rows join after them and a clash on a character is refused at load. Names stay the fast path before the table. No outcome change (card atoms-as-rows).
-- extension-lints: Extension rows may add `lints`, functions over each node of the program as written, run beside the core's own lints. The text lints spelled_number_join and text_index_of live in extensions; warnings unchanged (card compiler-untaken-lines).
-- extension-attributes: Extension rows may add `attributes`, words read as `@word` marks on definitions the way `@primitive` is; extensions/effects.warp declares pure, io, ffi and refuses a function doing an effect its marks leave out (card effect-word-parameter).
-- node-wasm-type (user): Node-kind values are emitted as (ref null $Node), cast only where an anyref enters (node data field, list items, host returns), once the premise (a Node-kind value is always a $Node or null) is verified; up to ~10% compile time (card node-wasm-type).
-- night-2026-11-04-kept (user): all decisions of notes/night_2026-11-04.md stay (times extension, interned library names, domain host words, closed cards, operator words in the word index).
-- load-time-linking (user): design study first: the host links standard modules as wasm components at load time instead of the emitter splicing bytes (~−170 core lines); build after the study (card load-time-linking).
-- library-zero-bake (user, open direction; also: keyed slices replaced): bake the library zero times: publish a handful of exported function signatures and load the library as compiled wasm on demand. To be assessed: what still needs library source/parses at compile time (rewrite rules, generic and inlined words) (card drop-keying).
-- library-zero-bake-plan (user): the plan of notes/library_zero_bake.md is approved (L1 no bundled source, L2 module index, L3 signatures, L4 prelude overloads and the tables go, L5 load-time linking), each landing reported with try lines and sizes. The ~21 compile-time rules (whole-program `$p => $q where program`, paint/shader_of, law checks, typed json) move from lib/ into extensions/, so no library code runs inside the compiler (card library-removal-core).
 - lib-oddities (user): `unwrap(n)` of a literal is no longer factorial; `click who` with an unbound name is refused with a fix naming `click(:who)`; `shared x = 0` keeps its word and means more than global: a shared variable is atomic (`shared n = 0; … n += 1` from several tasks never loses an update).
-- units-as-class (user): lib/units.warp is rewritten around a Unit class, units as callable values (`3 m` applies m), so no rule lists unit names.
-- extension-text-hooks: Extension rows may add `source_passes` (source text → text before parsing, positions kept) and `text_escape_readers` (character after `\` → reader); uniscript entities `\:alpha` live in extensions/entities.warp (card parser-cold-forms).
-- extension-passes (user): an Extension row may put its pass into the pass list after a named core pass, `passes: {"arity_overloads": clauses}`; an unknown core pass name is refused at build time; pass order for programs unchanged. First user: multi-clause functions (card clauses-structural-match).
-- extension-row-optional (user): big_numbers is a regular Extension row with its runtime root; a build may leave a row out and its runtime words become the shaker's trapping stubs. The compiler's own build lists its extensions without big_numbers, so an int past 64 bits in the compiler traps instead of growing. The core names no big_numbers word: `÷` is the core runtime word node_floor_quotient (ints in i64, floats floored, else hook extended_floor_quotient) and the emitter reaches exact arithmetic only through bridge hooks (cards compiler-without-big-numbers, node-floor-quotient).
 - typed-rule-holes (user): a rule's holes take types as parameters do: `rewrite ($x: vector) ($f: number -> any) => $f($x)` instead of `where $x is vector and $f takes number`; generalizes today's hole_kinds (`$body: block`, `$xs: [f32]`, text-pattern `id: int`) to any type, function types included; the `$` stays and `=>` stays (a rule rewrites unevaluated code; `:=` defines a function). Existing `where … is`/`takes` conditions move over. Its own big card; relates to rules-to-typed-operators.
-- core-hygiene (user, notes/core_hygiene.md; also: core-hygiene-build, sugar-in-core, number-words-table): D (tuples, safe_navigation → extensions/sugar; number_words → lib/english; entities.tsv → lib data; durations → runtime/extended) as plain relocation; A (libraries declare their host imports as `… from host` lines and compile-time words, removing host_words, std_module_names, canvas words, the rule_words table, wgsl baking; A2 std modules read from lib/; A3 property modules derived; A4 rule words marked in their modules), B (GPU lists an extension behind list-kind hooks), C (one parser rule for a named language's literal with holes: shader, wgsl, sql, sh; its spelling its own question) and E (@primitive, times, C FFI loaded only when used; one extension table for @primitive and C FFI) are sized first, core line counts back to the user before building. Order A1, A2, A3, B, C, A4, E. sugar-in-core: extensions/sugar/ moves under extensions/. number-words-table: the number word table lives in lib/english.warp, the core pass reads it.
-- linked-variants-by-arity: linking keeps every variant of a name, a call takes the one whose arity fits; none fits → refused naming the variants.
-- made-by-reach: module.made counts only kinds made by functions reachable from the program's roots.
-- comments-not-candidates: words in comments or a shebang never make a program an implicit-use candidate.
-- native-window-sdl3 (superseded by window-in-warp): see window-in-warp.
-- node-attributes: marks ride on the node, an `attributes` field of $MetaNode beside `comment` (with_attribute / attributes_of); `let` inside a lambda is such a mark.
-- hello-lazy-runtime-dropped: binding runtime words lazily is dropped (under 7 MB of hello's 176 MB).
-- canonical-runtime-names: runtime words map_keys/map_values/map_get_or/collection_contains are keys/values/get/has; contains/includes stay aliases of has.
 - rule-not-in-own-definition: a rewrite rule never fires inside the definition of the word its template produces.
-- small-int-cache: Int nodes of −128..1023 are shared, landing only if hello, a byte-heavy program and rebuild time all improve.
-- rule-whose: a rule word missing from an older compiler skips its rules with a warning instead of failing the build.
-- inline-code: every entry (file, inline, piped, compile) links the prebuilt lib/modules beside the runtime.
-- gpu-driver-plumbing: painted_pixels() and system_value("gpu_paints") from the GPU library, plumbing of the GPU hand-off OK.
-- prelude-rule-no-use: a fired rule of the prelude itself adds no `use prelude`.
 - modules-triage: test/modules paths moved to test/fixtures/; `use square` held as esoteric; `use uniscript` a gap; Python's `from list import zip` an extensions/sugar rule meaning `use list`, with a hint.
 - hole-calls-unreached: a standard-library word inside a text hole loads its module like anywhere else.
 - refusal-place-of-lib: a refusal inside a library function names its file, the definition's first line and the function.
-- shaders-in-lib: the WGSL translator is lib/shaders.warp; `paint(f, w, h)` hands f's quoted definition, callees and globals (uniforms) to it; native GPU through lib/gpu.warp + libwarp_gpu (wgpu-native).
 - float-int-power: float ^ int by square-and-multiply (within about 1 ulp); exact values untouched.
-- signals-test-15: test_variable_signals:15 expects 4, the loop's final x-- is a write too.
 - after-participle-held: `after tested: …` (hook by past participle) held as esoteric.
-- implicit-standard-words-index: the word index covers every standard module's definitions but the prelude, dialects included, read at rebuild; a program's own class names never pull a module in.
-- program-match-lowering: run-time matcher in lib/prelude.warp + core/node_matches.warp.
-- computed-hole-shape: compile-time rule words live in lib/rule_words.warp (`where $h = word(…)`, `where word(…)`, `$program`, `where program`); routes rules sit in lib/web.warp.
-- ffi-link-any-import: pure runs link C libraries for any import module other than wasi/host; `--sandbox` refuses C imports.
 
 - error-expectation: a test expectation `error` matches any Error result, no message substrings.
-- host-list-one-shot: a host word's list result is built in one shot.
-- shown-non: show/print of a statically known Text/Int/Float/Bool/Char uses its own word; rare-kind branches only when the program makes them.
-- test-oversubscribes-mac: `warp test` case processes compile single-threaded when cases already run in parallel.
 
 ## Process and platform decisions, continued
 - method-routing-by-type (Supervisor; card method-name-clash): a method call x.m(…) is routed to a class method by x's static type; only a receiver of unknown type gets the runtime dispatcher, whose fallback stays in written method form so the sugar rules (e.g. xs.add(v)) still apply; no pass reorder.
@@ -968,3 +931,20 @@ native-warp-in-core → AGENTS.md "Native warp". core-is-compiler-and-harness �
 patterns-compiled-later → card pattern-direct-tests. dynamic-on-demand → card dynamic-language.
 night-releases-and-test-triage, tests-serve-the-language → notes/agents/common.md Principles, notes/test_triage.md.
 resident-compiler → card resident-wasm-instance.
+extension-rule-forms, hello-lazy-runtime-dropped, small-int-cache → historic (git).
+extension-parser-hooks, extension-lints, extension-attributes, extension-text-hooks, extension-passes → core/extension.warp.
+one-operator-reader → core/parsing/parser.warp, extensions/declared_operators.warp.
+atoms-as-rows → core/parsing/parser.warp. node-wasm-type → core/emitter/emitter.warp.
+night-2026-11-04-kept → notes/night_2026-11-04.md.
+load-time-linking, library-zero-bake, library-zero-bake-plan → notes/library_zero_bake.md.
+units-as-class → lib/units.warp. extension-row-optional → core/compiler.warp, core/emitter/prebuilt.warp.
+core-hygiene → notes/core_hygiene.md. linked-variants-by-arity → core/emitter (linking).
+made-by-reach → core/emitter (module.made).
+comments-not-candidates, implicit-standard-words-index → extensions/implicit_uses.warp.
+native-window-sdl3 → window-in-warp. node-attributes → core/node.warp ($MetaNode).
+canonical-runtime-names → core/runtime. rule-whose, prelude-rule-no-use → core/passes/rewrites.warp.
+inline-code → core/compiler.warp. gpu-driver-plumbing → lib/gpu.warp. shaders-in-lib → lib/shaders.warp.
+signals-test-15 → test/control/test_variable_signals.pairs.warp.
+program-match-lowering → core/passes/node_matches.warp. computed-hole-shape → extensions/rules/rule_words.warp.
+ffi-link-any-import → core/native/driver.warp. host-list-one-shot → core/emitter/host.warp.
+shown-non → core/emitter/output.warp. test-oversubscribes-mac → core/native/tests.warp.
