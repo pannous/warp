@@ -120,11 +120,16 @@ same_bytes(a: text, b: text): bool := {
 # `a == b` of texts (decisions nfc-tables, nfc-slot; wiki/Footguns.md): equal bytes, else equal NFC forms.
 # Only a text holding a code point NFC may change asks the host: the compiler's own `→` == `≠` never does, so building
 # the runtime needs no modules/unicode.wasm, which the step after it builds. The shared start of two texts is the same
-# in both NFC forms up to an ASCII byte (nothing composes into an ASCII letter), so only what follows it is looked at
+# in both NFC forms up to an ASCII byte (nothing composes into an ASCII letter), so only what follows it is looked at,
+# once. NFC reads code points, so a text that is no whole UTF-8 (byte_slice cut a character) compares by its bytes
+# alone; a slice cuts only at its ends, so the shared start is checked at its first byte only
 equal_texts(a: text, b: text): bool := {
 	if same_bytes(a, b) { return yes }
 	from = stable_start(a, shared_bytes(a, b))
-	(maybe_decomposed(a, from) or maybe_decomposed(b, from)) and same_bytes(canonical(a), canonical(b))
+	first_a = first_suspect(a, from)
+	first_b = first_suspect(b, from)
+	if first_a < 0 or first_b < 0 { return no }
+	(maybe_decomposed(a, first_a) or maybe_decomposed(b, first_b)) and same_bytes(canonical(a), canonical(b))
 }
 # how many bytes the two texts start the same
 shared_bytes(a: text, b: text): int := {
@@ -138,7 +143,26 @@ stable_start(t: text, shared: int): int := {
 	while at > 0 and byte_at(t, at) >= Utf8.Continuation { at -= 1 }
 	if at < 0 then 0 else at
 }
-# whether t from byte `from` on (an ASCII byte or 0) holds a code point NFC may change
+# where t from byte `from` on first holds a lead byte of a code point NFC may change (see maybe_decomposed), its byte
+# count when none; -1 when t is no whole UTF-8: a continuation byte first, or a lead byte without all its continuation bytes
+first_suspect(t: text, from: int): int := {
+	if byte_count(t) > 0 and is_continuation_byte(byte_at(t, 0)) { return -1 }
+	suspect = byte_count(t)
+	at = from
+	while at < byte_count(t) {
+		lead = byte_at(t, at)
+		next = at + code_point_width(lead)
+		if next > byte_count(t) { return -1 }
+		if lead >= 204 and suspect == byte_count(t) { suspect = at }
+		at += 1
+		while at < next {
+			if not is_continuation_byte(byte_at(t, at)) { return -1 }
+			at += 1
+		}
+	}
+	suspect
+}
+# whether t from byte `from` on (the lead byte first_suspect found, or the end) holds a code point NFC may change
 maybe_decomposed(t: text, from: int): bool := {
 	at = from
 	before = 0
@@ -149,7 +173,6 @@ maybe_decomposed(t: text, from: int): bool := {
 			at += 1
 		} else {
 			next = at + code_point_width(byte_at(t, at))
-			if next > byte_count(t) { return no }
 			c = code_point_at(t, at)
 			after = if next < byte_count(t) then code_point_at(t, next) else 0
 			if may_change_in_nfc(c) and not (lone_mark(c) and not may_change_in_nfc(before) and not may_change_in_nfc(after)) { return yes }

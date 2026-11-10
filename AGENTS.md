@@ -100,8 +100,6 @@ After each push scripts/integrate/after-push.sh installs both beside ~/dev/bin/w
 warp rebuild                              # warp.wasm from lib/ by the seed, then the native warp; `warp rebuild pure`: the compilers alone
 scripts/promote-self.sh                   # warp.wasm -> warp-self.wasm once it compiles itself; never fails
 ```
-Command-line options (`--no-window`, `--profile`, `fuel <n>` …) are not listed here: `warp help` shows them all;
-consult it when you need a specific one.
 
 
 ## To-dos
@@ -222,30 +220,32 @@ before asking a question). After a context swap, this file and your role file be
   is the sign that a mechanism is missing: card it.
 - Emptiness is tested loosely: `is empty`, `if no x`, `if x`; `x is ø` only tests missing.
 - JSON5 or warp notation for anything people or agents write; strict JSON only where a tool requires it.
-- No environment variables as an interface: a choice a program or user makes is written in code (a `use`, an
-  annotation like `@cpu`, a call) or given as a CLI option; no wiki page, sample or message tells anyone to export a
-  `WARP_*` variable (card no-bash-exports); the two exceptions are the machine switches `WARP_WINDOW=0`
-  (set by `warp --no-window`) and `WARP_SOUND=0` (set by `warp --mute`). Build and test
-  plumbing inside scripts is not an interface.
+- NO environment variables as an interface, configure exclusively via:
+- Command-line options (`--no-window`, `--profile`, `fuel <n>` …) `warp help options` normally hidden
+  (exceptions, set by those options: `WARP_WINDOW=0` by `--no-window`, `WARP_SOUND=0` by `--mute`)
+
 
 ## Talking
-- A changed procedure is written into the notes the sessions read (this file, the role file) in the same
+<!-- - A changed procedure is written into the notes the sessions read (this file, the role file) in the same
   push, removing the lines it contradicts; a chat message alone is not enough. This file itself changes only through
   warp-interviewer: send the exact old and new lines, the Interviewer approves and lands them (a role file is its
-  owner's, like the wiki rule below for wiki pages).
+  owner's, like the wiki rule below for wiki pages). -->
 - One name per session, `warp-<role>`: claude.ai title, SendMessage address, tmux session. Address peers by it.
 - Swap notices ("Swap: … was replaced by me") get an EMPTY reply and are never reported to the user.
 - Never block: make the smart reversible decision yourself and keep working (an existing-test edit in its own
   commit). Only what cannot be undone, or what the user might not want undone, goes to warp-interviewer with the
   exact action. Never ask the user yourself; an offer ("should I…?") is a question for warp-interviewer too.
+- Run commands yourself; never hand the user commands to paste.
+- Quick answer first: answer from what is known now, run the investigations in the background, then give the
+  complete answer once their results arrive.
 - A wrong value that another reading could make right, or a bug that may not matter, goes to warp-interviewer with
   code, value and expectation before anyone fixes code or test.
 - Communicate less: message only for landed, blocked or a decision needed. Git (branch, commits, card) is the status.
   warp-integrator gets only requests it must act on.
 
 ## Where to work
-- Notes, docs, wiki, scripts, samples: in /Users/me/dev/angles/warp, on a branch named as the card (a small change needs no worktree); commit your own paths
-  by name (`git commit -- <paths>`), `source scripts/lib/sync-main.sh; up_to_date_main` (fetches main by name, replays your commits, never stashes) (never `git pull`: it rebases onto FETCH_HEAD, which concurrent fetches rewrite; scripts: scripts/lib/sync-main.sh). Do not push that onto main; hand the commit or patch to the integrator (Handoff, below). Never leave unpushed commits on main.
+- Notes, docs, wiki, scripts, samples: in /Users/me/dev/angles/warp, on a branch named as the card (a small change needs no worktree); 
+- commit your own paths by name (`git commit -- <paths>`), `source scripts/lib/sync-main.sh; up_to_date_main` (fetches main by name, replays your commits, never stashes) (never `git pull`: it rebases onto FETCH_HEAD, which concurrent fetches rewrite; scripts: scripts/lib/sync-main.sh). Do not push that onto main; hand the commit or patch to the integrator (Handoff, below). Never leave unpushed commits on main.
 - Anything compiled (core/, extensions/): a worktree,
   `cowtree add -b <card> /Volumes/Worktrees/<card> origin/main`, branch named as the card. Never touch
   /Volumes/Worktrees/warp (cowtree's donor) or the Integrator's integrate and integrate2. At most 2 open worktrees per worker (23 were far too
