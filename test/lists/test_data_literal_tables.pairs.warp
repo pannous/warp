@@ -1,0 +1,9 @@
+# a big data literal of a program's main level (a table of texts, numbers, yes/no, lists and maps) reads and changes as
+# the literal it is written as, each one its own value, and survives pack and unpack whole (card globals-constant-init:
+# where the program unpacks anyway, main unpacks such a literal from one packed text)
+'xs = [1, 2, 3, 4, 5, 6, 7, 8, 9]; ys = unpack(pack(xs)); xs#1 = 100; [xs#1, ys#1, ys#9 + xs#9]'	[100, 1, 18]
+'t = ["a", "b", "c", "d", "e", "f", "g", "h"]; u = unpack(pack(t)); t#8 + u#1'	'ha'
+'m = {a: "x", b: [1, 2, 3], c: {d: yes}, e: "é", f: -7}; n = unpack(pack(m)); [m.b#3, m.c.d, n.e, n.f]'	[3, yes, 'é', -7]
+'xs = [1, 2, 3, 4, 5, 6, 7, 8, 9]; ys = [1, 2, 3, 4, 5, 6, 7, 8, 9]; xs#1 = 100; [xs#1, ys#1, unpack(pack(ys))#1]'	[100, 1, 1]
+'names = [["text", []], ["list", ["length", "items"]], ["Node", ["kind", "data"]]]; [names#2#2#1, unpack(pack(names)) == names]'	['length', yes]
+'ops = {"Colon": ":", "Dot": ".", "SafeDot": "?.", "Coalesce": "??"}; ops["SafeDot"] + unpack(pack(ops)).Dot'	'?..'
