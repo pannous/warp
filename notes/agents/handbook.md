@@ -11,7 +11,9 @@ Principles and Talking live only in common.md.
   parser.warp only.
 - Beautiful types (decision beautiful-types): every lib/ declaration a migration or cleanup branch touches leaves it
   fully and precisely typed. A type that doesn't exist yet is asked of warp-types-back (card beautiful-types), which
-  adds the shallow subclasses; don't invent parallel ones in your branch.
+  adds the shallow subclasses; don't invent parallel ones in your branch. Every function of the compiler and runtime
+  declares its parameter and result types; generic helpers are typed generically (T, element of xs); any stays only
+  for values that really are anything.
 - The sugar migration  keeps one line of history: warp-layers alone removes sugar
   from core/parsing/parser.warp and moves passes into extensions/sugar/, one module group per branch, branched from
   origin/main after the engine feature it needs has landed (never stacked on warp-rewrite-engine's branch), handed

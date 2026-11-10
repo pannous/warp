@@ -34,11 +34,14 @@ before asking a question). After a context swap, this file and your role file be
   ask the Interviewer before building it. Old commented-out Rust tests (`gap-*` cards) are not spec.
 - Smaller, faster compiler (user 2026-11-03: "that's the kind of change I want to see"): look out for little changes
   that make the compiler faster and much smaller, like core-int-division (core writes `÷`, so big numbers leave
-  the compiler build). Card each one you spot; they rank above new forms.
+  the compiler build). Card each one you spot; they rank above new forms. The compiler's own source may change
+  minimally where that helps a lot (it stops using a sugar form, so the form can leave the core); the language itself
+  is never simplified to shrink the core: every spelling programs may write stays (self-source-minimal).
 - No special cases: a fix is the general rule, holding for the siblings of the example. A test that seems to force a
   special case goes to warp-interviewer.
 - Never degrade the input to suit a tool (compiler stage, parser, harness): fix or card the tool. Warp source, the
-  compiler's included, uses the full language and reads like a good sample program.
+  compiler's included, uses the full language and reads like a good sample program. A regression that comes with a
+  clean restructuring is fixed the clean way on the new structure, never by bringing the old shape back.
 - Word choices are aliases: the recommended word is canonical, the others work with a got-it note (notes/fixits.md).
   Only differences in meaning go to the Interviewer. Everything warp prints (errors, shown results, `warp format`,
   docs) uses the canonical word (user 2026-10-30, canonical-output).
@@ -97,6 +100,8 @@ before asking a question). After a context swap, this file and your role file be
   or where you are unsure the user would want it undone. This does not relax an approval, smoke, hook or core rule
   already required here.
 - Run commands yourself; never hand the user commands to paste.
+- Quick answer first: answer from what is known now, run the investigations in the background, then give the
+  complete answer once their results arrive.
 - A wrong value that another reading could make right, or a bug that may not matter, goes to warp-interviewer with
   code, value and expectation before anyone fixes code or test.
 - Communicate less: message only for landed, blocked or a decision needed. Git (branch, commits, card) is the status.
@@ -157,12 +162,15 @@ before asking a question). After a context swap, this file and your role file be
   wording. An error/"not yet"/ignored test that now works is upgraded in its own commit without asking; a change of
   meaning goes to the Interviewer.
 - Tests are spec only when backed: a test file's header names its source (a wiki page or a decision key); add cases
-  only for forms a wiki page or decision shows. Taste by example: notes/taste.md (user 2026-10-27).
+  only for forms a wiki page or decision shows. Taste by example: notes/taste.md (user 2026-10-27). Tests are
+  deduped without losing a distinct assertion.
 - GitHub API quota is shared: never poll `todo list` or `gh` in a loop.
 
 ## Cards
 - `todo pick` shows the next cards in board order; `todo take <card> <session>` (a further card of the same session: `--keep-name`, so the session keeps its area name); before taking check nobody has a
   branch or worktree for it. A Soon/Later card is checked for relevance first (fixed, duplicate → archive).
+  The column is the priority, for topic cards too; the user's own cards (drafts, issues not "Added by <session> with
+  `todo add`") stay where the user put them.
 - Every branch has a card: comment branch, tip and state on it; a parked branch gets notes/handover/<branch>.md.
 - No Ready column, no merge queue (user 2026-10-26). The worker does not land the branch. Finished work is handed
   to the integrator (Handoff, below), noted `land: <branch> <tip>` (`todo landing`). A finished branch
