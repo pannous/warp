@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The GPU paints what the CPU paints (card shader-port): each program paints a warp function
-# headless twice, as its WGSL shader and, with WARP_GPU=off, as warp code on the CPU, and the two pictures agree pixel
+# headless twice, as its WGSL shader and, with `paint_on_gpu = no`, as warp code on the CPU, and the two pictures agree pixel
 # by pixel (within f32 rounding). A form the shader can't say is refused by name, so the GPU run paints nothing and the
 # case fails. Run it with bash test/gpu/test_gpu_matches_cpu.sh [name…]; the warp under test is WARP (default the warp
 # on PATH), its compiler from WARP_LIB as usual. Needs a GPU (wgpu) and python3.
@@ -59,7 +59,8 @@ check() { # check <name> <code painting f>
 	case $only in "  ") ;; *" $1 "*) ;; *) return ;; esac
 	printf '%s\n' "$2" >"$stage/$1.warp"
 	gpu=$(painted "$stage/$1-gpu" "$stage/$1.warp")
-	cpu=$(painted "$stage/$1-cpu" "$stage/$1.warp" WARP_GPU=off)
+	printf 'use shaders\npaint_on_gpu = no\n%s\n' "$2" >"$stage/$1-cpu.warp"
+	cpu=$(painted "$stage/$1-cpu" "$stage/$1-cpu.warp")
 	if [ -z "$gpu" ] || [ -z "$cpu" ]; then
 		echo "✗ $1: painted nothing: $(grep -v '^hint' "$stage/$1-$([ -z "$gpu" ] && echo gpu || echo cpu)/said" | head -3)"
 		failures=$((failures + 1))
