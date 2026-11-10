@@ -19,7 +19,7 @@ uncertainty; every generic function computes with it, the uncertainty propagates
   `x: float`) is a loud error naming the ± value, never a dropped bound.
 
 ## Where it runs
-Now (2026-11-02, card numbers-outside): `a ± b` of numbers is lib/uncertain.warp's Interval through its
+Now (card numbers-outside): `a ± b` of numbers is lib/uncertain.warp's Interval through its
 `infix operator ±(value: number, radius: number)`, printed by uncertain_text there; it needs `use uncertain` until a
 module's declared operator implies its use (core OK asked). Units' ± (a Quantity's amount an Interval), `σ` and
 `certainly`/`possibly` are not back yet. The Rust description below is history.

@@ -25,7 +25,7 @@ module, beside the compiler; not embedded, user), and a program is the runtime w
   text is the bundled one (a WARP_LIB edit is parsed). Sugar rules, the alias table and the operator modules read it;
   no os.kept for them. Packed text rather than constant GC globals: globals are built eagerly at instantiation and
   would need the class layouts; a packed text is one data segment, unpacked lazily. The Rule, Operator and Spellings
-  instances are derived from the baked trees per run (O(rows)). Measured (2026-10-28, hello-sized program, fresh
+  instances are derived from the baked trees per run (O(rows)). Measured (hello-sized program, fresh
   module cache): cold 7.1 s → 0.22 s, warm 0.55 s → 0.22 s; the cold 7 s were the sugar-rule parses. A compiler built
   by a seed that bakes none parses at run time (the plain def library_parses), so the seed is refreshed after landing.
 
@@ -50,7 +50,7 @@ made_case kind made, since no program decides any more what it makes.
   function indices: those are rewritten through the call-site list below.
 - **Functions**: the runtime words in a fixed order. Every `call` and `ref.func` operand is a padded
   5-byte LEB128 (a valid non-minimal encoding), so an index changes in place without moving code.
-- **No hooks** (2026-11-05, card wasm-module-linking): a runtime word that reaches program code goes through the
+- **No hooks** (card wasm-module-linking): a runtime word that reaches program code goes through the
   value itself. A closure's item 0 is a Closure struct {funcref entry, text shown}, called by call_ref on its fixed
   type closure_call_type_N; an instance's data field is its class's descriptor, a Class node (the class name as a
   symbol, then funcrefs entries, field_at, place, set, construct, show, float, call), so instance_set, instance_place,
@@ -91,33 +91,33 @@ made_case kind made, since no program decides any more what it makes.
   (the module's own layout: function, global and data counts, each exported word's kinds) and `warp.relocations`.
   Its calls into the runtime hold the runtime's fixed indices; its own and other modules' are numbered from 0 and
   rebased by the module's base offset when it is appended between the runtime and the program.
-- Declared (2026-10-28, card prebuilt-module-declarations): a linked module's functions come into the program as
+- Declared (card prebuilt-module-declarations): a linked module's functions come into the program as
   their heads only (prelude_words.warp declared_only: `f(x) := ø`), from the slice parses baked into the compiler, so
   nothing of their bodies is lowered or analyzed; the analyzer takes their kinds and results from warp.module
   (analyzer.warp declared_linked), the emitter binds them and refuses to compile one (functions.warp). Its classes and
   globals come in (linked_needs), a class with its methods declared alike, its fields whole; the program runs the globals' initializers. A module whose binding fails, that lacks
   its warp.signature or was built of another lib/ text is the compile's error ("units.wasm won't link: …"), never
-  compiled from source (decision module-link-hard-error, 2026-11-07).
+  compiled from source (decision module-link-hard-error).
   No separate warp.declarations section: the compiler already carries every bundled module's parse.
 - A linked name keeps all its variants (card module-export-arity): draw's own show() beside the show(x) builder the
   host calls, which the layout names by index, not by name. A program's call takes the variant whose count of values
   fits (prebuilt.warp linked_variant); one that none takes is refused naming theirs, never bound to another.
 - A module's class (units) carries its own words in its descriptor, so module code and program code call them alike.
-- Built (2026-10-28): `warp module <name> [runtime.wasm] [<name>.wasm]`, `warp modules <folder> [runtime.wasm]`
+- Built: `warp module <name> [runtime.wasm] [<name>.wasm]`, `warp modules <folder> [runtime.wasm]`
   (core/compiler.warp write_module: compile() given runtime.wasm, `module.relocating`); every `warp rebuild` writes
   modules/<name>.wasm beside warp.wasm (std_module_names), rebuild.sh keeps them in the
   store with runtime.wasm. Each file today is the whole prepended module (runtime + own items, valid wasm), its section
   `warp.module` in warp.runtime's binary layout, counting only its own items; its own operands are marked space 1,
   offsets from the code section's content start. 26 of 36 prebuild; the rest are named with their refusal, mostly a
   word whose untyped parameters are nodes reaching a call the core lacks for nodes (sound `number(…)`, math `dot`).
-- Linked (2026-10-28): compile() reads modules/<name>.wasm beside runtime.wasm for each `use`d bundled module whose
+- Linked: compile() reads modules/<name>.wasm beside runtime.wasm for each `use`d bundled module whose
   text is the bundled one (compiler.warp linked_libraries, prebuilt.warp library_image_of). Its own functions, types
   (one per function), globals (by name: one already declared is that one) and text segments go behind the runtime's,
   its code moved by separate-modules' `rebased` moves; its words the program calls are bound (bind_library_words),
   never compiled; its class structs are the program's of the same name when declared alike (struct_written), else
   the compile goes on from source. Not linked: a module importing C functions, or built behind another
   runtime.wasm (warp.module's trailer: own_from, closures, classes, builds).
-- Closures (2026-10-28): a module's closure numbers are relocatable operands (kind closures, i64.const padded); its
+- Closures: a module's closure numbers are relocatable operands (kind closures, i64.const padded); its
   trailer lists each closure [target, captured, shown text]; a link numbers them first, as `<module>·<target>` at the
   module's index, so the closure's entry calls them; lifted lambdas are never bound by name.
   list, text, shell and matrix link. test/modules gives the same
@@ -130,7 +130,7 @@ made_case kind made, since no program decides any more what it makes.
 - Open: classes from warp.declarations into module.classes before late_code;
   late_code once all modules are bound.
 
-- Load-time linking (2026-11-05, L5c, card wasm-module-linking): a program whose uses link runs as its own module
+- Load-time linking (L5c, card wasm-module-linking): a program whose uses link runs as its own module
   (linked_bytes), importing warp_runtime and each module word it calls from `warp/<m>` by name, each module global
   from its owner as `global/<name>`; the native driver instantiates runtime.wasm and the modules once per run. Every
   module's linked form links the modules it uses the same way (`warp rebuild` writes them dependencies first). Each module's class group is emitted whole, in one canonical order (by name, a
@@ -160,7 +160,7 @@ the function index space anyway, so the program numbers only its own functions, 
 - **Trimming** the shared runtime against one program's imports is where wasm-metadce fits (roots: the imported
   names); a runtime shared by several programs stays whole.
 - **Check**: hello and a class with text() built separately print the same as built prepended.
-- **State** (2026-10-28): `warp build x.warp` writes x.full.wasm (prepended), x.wasm (that one trimmed) and x.mod.wasm
+- **State**: `warp build x.warp` writes x.full.wasm (prepended), x.wasm (that one trimmed) and x.mod.wasm
   (linked) from one compile: the harness passes the .mod.wasm path as the compile's sixth argument, compiler.warp
   writes linked_bytes(module.order) of the compile it just made (separate_module). The program's code is the same in
   both forms: its texts are data segment 1 (own_texts_segment), the runtime's segment 0 (empty in x.mod.wasm), so no
@@ -191,7 +191,7 @@ All options stay open and are exposed to the build process (`warp build` options
   compile combines modules natively, so size may not matter at all (card runtime-separate-modules; GC types match
   across modules through the canonical type section).
 - `warp build --trim=<way>` (core/commands/commands.warp trim; also `warp self build`): `optimize` (the default, and bare
-  `--trim`), `unused`, `none`, `warp` (refused until runtime-shaking). Trimmed by default (user, 2026-10-28), the way
+  `--trim`), `unused`, `none`, `warp` (refused until runtime-shaking). Trimmed by default, the way
   picked by measurement: wasm-opt with wasmtime's feature list (never `-all`: custom descriptors write exact
   references wasmtime refuses) and the name section kept. Measured 2026-10-28 on the seed-era modules:
 

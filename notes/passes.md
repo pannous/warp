@@ -1,6 +1,6 @@
-# Passes: inventory, overlaps, merges (card passes-audit, 2026-10-21)
+# Passes: inventory, overlaps, merges (card passes-audit)
 
-Rule (notes/agents/common.md "No new passes", user 2026-10-21): a feature extends or generalizes an existing pass; a
+Rule (notes/agents/common.md "No new passes"): a feature extends or generalizes an existing pass; a
 new pass needs a reason no existing one can carry, named in the commit.
 
 ## Inventory

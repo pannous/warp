@@ -30,7 +30,7 @@ counting_word = "count"
 file_words = ["read", "write", "exists", "list_files"]
 path_characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/~"
 path_starts = ["/", "./", "../", "~/"]
-# `str(x)` → `text(x)`: we call it text (card fix-rewrites; user 2026-11-06)
+# `str(x)` → `text(x)`: we call it text (card fix-rewrites)
 showing_as_text = "text"
 showing_as_text_words = ["str"]
 

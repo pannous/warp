@@ -76,7 +76,7 @@ per library, and nothing about a crate in warp-host. The libraries themselves ar
     `<library>_list_count/_list_text/_list_free` and `<library>_bytes_count/_bytes_at/_bytes_free`.
   - Every shim exports these accessors, plus `<library>_last_error`.
 
-## Decisions (made on the card, 2026-10-23)
+## Decisions (made on the card)
 
 - The generator is a Python script, not Rust in src/ or crates/: those are frozen, and the work is text templating
   plus rustdoc JSON reading. It could become warp once warp has a process and JSON story stable enough.
@@ -101,18 +101,18 @@ per library, and nothing about a crate in warp-host. The libraries themselves ar
 - regex 1.12, sha2 0.10.9 and crc32fast 1 build into shims:
   - first build ~1-8 min on the loaded box; a manifest change rebuilds in ~9 s (shared target dir)
   - a cache hit takes no build
-- Run through warp-host and warp.wasm built from this branch merged with pure-c-imports 57f273b59 (2026-10-23):
+- Run through warp-host and warp.wasm built from this branch merged with pure-c-imports 57f273b59:
   - sha256 by a foreign line
   - `use crate "regex@1"`, and `use rs_regex` with is_match / first_match / find_all / replace_all / find_start / free
   - sha256 of [97, 0, 98] (a zero byte), sha256_bytes as 32 raw bytes, crc32 of bytes with a zero byte
 - `warp-crate scan semver@1` drafts 19 lines (constructors, parse, VersionReq::matches, as_str, free lines). They
   build unedited, and a warp program then checks version requirements (`versionreq_matches(req, version_parse("1.4.0"))`).
   scan on regex builds too.
-- With config structs (2026-11-06, cloud Linux, the v1.7.0 native warp): `scan semver@1` drafts 41 lines (3 more
+- With config structs (cloud Linux, the v1.7.0 native warp): `scan semver@1` drafts 41 lines (3 more
   skipped), built unedited; a program sets a Version's patch and pre (a Prerelease handle by clone), a Comparator's
   Option<u64> patch, reads them back, and a cloned handle changes apart from its original. The native warp finds the
   library by LD_LIBRARY_PATH (not by the crates cache by itself).
-- tests/host/test_crates.sh: 20/20 (2026-10-23, box). It needs a warp-host and warp.wasm from pure-c-imports
+- tests/host/test_crates.sh: 20/20 (box). It needs a warp-host and warp.wasm from pure-c-imports
   57f273b59 or later, which this branch includes.
 
 ## Open
@@ -147,7 +147,7 @@ Goal: `use rs_regex` works on a fresh install without cargo, so warp gains libra
 6. Third-party crates: users write a manifest (`warp-crate scan` drafts it) and build locally. A community index of
    manifests could later get the same CI treatment.
 
-Status (2026-11-06): steps 1-3 are in. `warp-crate publish <dir> <manifests>` builds per target (library and native
+Status: steps 1-3 are in. `warp-crate publish <dir> <manifests>` builds per target (library and native
 file named `<library>-<target>`, entries in `crates-<target>.json`: name, library, crate, resolved version, key, target,
 file, sha256, native, native_sha256); `warp-crate index <dir>` merges them into crates.json (JSON, not json5: python's
 own reader); .github/workflows/crates.yml runs both over the four targets and replaces the assets of the pre-release

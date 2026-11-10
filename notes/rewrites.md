@@ -125,7 +125,7 @@ rewrite bump_all $vs... => ($v += 1 for $v in $vs...)
 rewrite flags $ns... => {($n: yes) for $n in $ns...}
 ```
 
-The clause takes more than one hole (card f4, 2026-10-23):
+The clause takes more than one hole (card f4):
 
 ```warp
 rewrite numbered $xs... => [$x * $i for $x at $i in $xs...]              # numbered 5 5 5 → [5 10 15]: $i the position, from 1

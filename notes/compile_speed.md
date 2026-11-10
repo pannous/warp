@@ -15,8 +15,8 @@ CPU seconds between phase markers:
   /tmp/perf-<pid>.map), macOS's sample takes its main thread's stacks, and the script prints each wasm function's own
   samples and those with its callees: no rebuild, no markers. `-r <pid>` reports a kept data/profile/<pid>.sample
   again. sample manages ~30 ms a sample on wasmtime's threads, so profile a minute or more. Its first find: 55% of a
-  parse in alias_at → longest_spelled_at, 39% in operator_at → spelled_operator_at (2026-10-31).
-  Cost (2026-10-31, bench.warp on parser.warp, ~94 s CPU): WARP_PROFILE=perfmap alone changes nothing (93.3 vs 93.5 s
+  parse in alias_at → longest_spelled_at, 39% in operator_at → spelled_operator_at.
+  Cost (bench.warp on parser.warp, ~94 s CPU): WARP_PROFILE=perfmap alone changes nothing (93.3 vs 93.5 s
   CPU); `sample` attached for the whole run keeps CPU the same (94.0 s) and adds ~10–15% wall (108 vs 94–95 s) while
   it pauses the thread. On that run it took 76 k main-thread samples in 108 s, ~1.4 ms each.
 - Phase markers (card phase-markers): `timed(label)` (core/passes/passes.warp) prints `§T <milliseconds> <label>`
@@ -65,7 +65,7 @@ No single fix of 5 s or more is left without a design change (cards):
 - then lambdas 7.5 s, arity_overloads 6.2 s (mostly nodes_in), first/late/iteration/comprehension sugar 4–5 s each.
 `warp parse` printing a big tree is quadratic (card parse-print-quadratic); the parse itself isn't.
 
-## Three walks (2026-10-31, found on the def-first measurement)
+## Three walks (found on the def-first measurement)
 Self-check's stage two (compiler.warp compiled by the tree's own warp.wasm), both on the GC growth fix (1cd7a5c2e3:
 wasmtime grew a copying heap only when its active half was full; that run was 831 -> 227 s CPU and ~80% GC before),
 records /Volumes/Build/compilers/{2cd7795a6e4464f8,044362cbf97a7d00}/stage-two.record: CPU 214.2 -> 194.9 s (-9.0%),
@@ -107,7 +107,7 @@ definitions; user: discuss later). Left: emit 44 s (22%), index_positions 18 s, 
 - The marks are printed (stdout): WARP_TIMES set for a test or gate run makes every case's output differ; set it only
   for the build or self-check measured.
 
-## Hints and warnings cost nothing worth skipping (card hints-at-parse-cost, 2026-11-01)
+## Hints and warnings cost nothing worth skipping (card hints-at-parse-cost)
 WARP_HINTS=0 / --no-hints only filters hints when printing (core/compiler.warp said_at); the checks still run. Measured
 on stage two's stored profile (record 1221d950b1ac6a95, 25 k samples, compiler.warp): diagnose, said_fact, rows,
 rows_of, written_at, place_text together 0.1 %; dropped_value 0.2 %; source_checks/lints run only on the main file
@@ -115,7 +115,7 @@ rows_of, written_at, place_text together 0.1 %; dropped_value 0.2 %; source_chec
 say what the rewrite and use resolution do anyway. kind_changes (2.0 %) and main_globals (0.3 %) find errors too,
 so they must run. A switch that skips the producers would save under 0.5 %: not built.
 
-## Compile-cost drift after the parser moves (card compile-cost-drift, 2026-11-04)
+## Compile-cost drift after the parser moves (card compile-cost-drift)
 Each landing's compiler compiling one fixed source (idioms 3f968216af, worktree drift-src), instructions retired, one
 warm-up run discarded (notes/compiler_rebuilds.md "Build records"; data/drift/landings.sh, landings.times):
 idioms 3.6496e12; 704bb24c11 (attributes, sum types leave the parser) 3.6939e12 (+1.2%); 41c1e0d036 (checked tries,
@@ -142,7 +142,7 @@ place/set is an i31). A closure's item 0 is a $Closure: read by `closure_slot`, 
 Each class struct is its own wasm type group: a module grouping two classes made another Instant type than a program
 declaring only Instant (cast failure across modules).
 
-## Hot spots after typed nodes (2026-11-06, profile data/profile/53103.sample)
+## Hot spots after typed nodes (profile data/profile/53103.sample)
 - lambdas-definitions-index (a14808ff41): parameters_given_functions filtered every definition per call node; by
   name now: self compile −5.0 %.
 - lexer-codepoints (9dec4062f4): code_only was asked of one source 4–5 times per parse (declared operators, type
@@ -155,7 +155,7 @@ declaring only Instant (cast failure across modules).
 - Open for the user (morning): typed $items (seed ABI), map_index 14.8 % (scope_with copies maps via field_with,
   enum ·case lookups by name), GC 15.8 %.
 
-## Hello takes half a second (card hello-takes, 2026-11-07)
+## Hello takes half a second (card hello-takes)
 `time warp hello.warp`: 1.5.1 0.22 s / 1.9 G instructions, 1.6.1 0.47 s / 6.1 G, main 0.47 s / 5.5 G. WARP_TIMES
 marks are printed where a phase *starts*, so the time after `pass sugar` is sugar's, not iteration_inlining's.
 - The native warp sets WARP_LIB for every run (core/native/warp.warp, so warp.wasm's commands read its lib/), and

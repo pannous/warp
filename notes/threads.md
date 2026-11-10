@@ -2,7 +2,7 @@
 
 Roadmap card: threads (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
 
-## Status and plan (2026-11-03, user + Supervisor)
+## Status and plan (user + Supervisor)
 The design below is the Rust bootstrap's (branch rust-bootstrap: src/host/…, lowering/…); it worked. The self-hosted
 warp has none of it natively yet: lib/tasks.warp's cooperative scheduler stands in (it splits a go block at its own
 top-level sleeps, so a sleep inside a called function does not switch). Decision tasks-parallel: natively go is truly

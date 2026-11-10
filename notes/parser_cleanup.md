@@ -1,4 +1,4 @@
-# Parser cleanup (user 2026-11-03: "denser, if it doesn't compromise readability"; "implement all as you suggested")
+# Parser cleanup ("denser, if it doesn't compromise readability"; "implement all as you suggested")
 
 Decision parser-cleanup in notes/decisions.md. One branch and one landing per step, in this order; each step changes
 no outcome (every test and sample gives what main gives) and reports parser.warp's lines and stage-two CPU

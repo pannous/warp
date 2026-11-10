@@ -22,7 +22,7 @@ warp-self-analyzer. One small branch per step, each with its net src/ delta.
 3. reflection.rs objects (fields/methods/dir of instances and classes) → library over class values
 4. reflection.rs function words → library over function values (body/effects/dump fields)
 
-## Answers (decision reflection-plain, 2026-10-18)
+## Answers (decision reflection-plain)
 - Q1 hybrid: one core builtin `meta(x): map` (src/lowering/data/meta_values.rs) gives what the compiler knows of a
   class, module or function; lib/ builds the typed views on it (`fields(o) := meta(type(o)).fields`,
   `dir(m) := meta(m).words`). Only the library reads the map.

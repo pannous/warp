@@ -22,7 +22,7 @@ NEWLINE_MARK = "⏎"  # the wiki writes a line break inside inline code as ⏎
 VALUE_MARK = "=>"  # ```warp => value: the value the guide shows
 PRINTED_FENCE = "printed"  # a ```printed block right after a snippet: what it prints
 # ```warp compiles: servers and windows, compiled only (tests/web/test_primer.rs); ```warp planned: an unbuilt
-# feature with its own card (warp-docs, 2026-10-10)
+# feature with its own card (warp-docs)
 SKIP_MARKS = ("compiles", "planned")
 HISTORY_MARKS = ("Warp before", "before this change")  # wiki lines that record old behaviour on purpose
 CONTEXT_BEFORE, CONTEXT_AFTER = 900, 400  # characters of the doc around an example shown to the model

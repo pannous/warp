@@ -1,4 +1,4 @@
-# Test triage 2026-10-28 (decision night-releases-and-test-triage)
+# Test triage (decision night-releases-and-test-triage)
 
 The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three groups:
 - **gap**: the test is right and warp should do it. These are grouped into cards below and not edited.

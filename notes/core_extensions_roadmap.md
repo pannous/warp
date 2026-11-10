@@ -52,7 +52,7 @@ Against the target shape (Lessons from wasp: operators as rows, keywords through
   injection's `sql`/`sh` text prefix, shader and wasm raw blocks, the guard words (GUARD_MARKERS: try, assert,
   check). Each is a name → handler entry; the statement head, declaration, raw block and text prefix hooks above
   are that table's kinds.
-- Agreed with warp-sugar (2026-11-03): a row is `operator, symbol, aliases, power: [left, right], fixity: infix |
+- Agreed with warp-sugar: a row is `operator, symbol, aliases, power: [left, right], fixity: infix |
   prefix | suffix | circumfix` (with `closing` for circumfix). The core's operators stay rows in lib/aliases.warp;
   an extension's operators are the same rows in its own file (± in uncertain's, ² ‰ √ in number forms), listed by
   its registration in the hook table, and the parser reads aliases.warp plus the registered rows as one table. The
@@ -97,7 +97,7 @@ keyword row is needed. lib/units and lib/uncertain stay libraries; the module-or
 as general rules. Time literals with their emitter part (~250 lines) are the one larger unit-like piece, owned by the
 parsing row's time entry. Nothing here needs the compiler's own source changed.
 
-## Measurement: what compiling itself reaches (warp-sugar, 2026-11-03)
+## Measurement: what compiling itself reaches (warp-sugar)
 
 Method: scripts/core-coverage.py instruments a built warp.wasm (a call at every function's start and every
 if/else/block/loop: 4,369 functions, 60,883 points; each point says `cov <id>` once on stderr), which then compiles
@@ -165,7 +165,7 @@ never firing while compiling itself: broadcasting, calls, declarations, enums, e
 safe_navigation, heads, loops, lists (about 330 lines of rules). With the four minimal source
 changes above (contains, is empty, min/max, /!) test_words, extremes and arithmetic join them.
 
-## Hook table design (warp-sugar, agreed with warp-operators and warp-web-host, 2026-11-03)
+## Hook table design (warp-sugar, agreed with warp-operators and warp-web-host)
 
 One static table in the core, filled at build time from the extensions' own files (no dynamic loading):
 1. **operator rows**: lib/aliases.warp's entries for the core's operators, each extension's own rows in its file
@@ -178,7 +178,7 @@ One static table in the core, filled at build time from the extensions' own file
 4. **one registration per extension**: its rules file, operator rows, atom readers (glyph or suffix → reader of
    the literal), passes in the pass list, runtime sources and host exports for runtime.wasm.
 
-Built (card gpu-lists-extraction, 2026-11-03): GPU lists are the first extension through the table. core/extension.warp
+Built (card gpu-lists-extraction): GPU lists are the first extension through the table. core/extension.warp
 `class Extension { name; library_words; host_exports; constant_tables }`, the rows in extensions/extensions.warp;
 the emitter merges each row's library words and constant tables into its own and exports its host words. List kinds:
 KindUnit.ListKind is a two-bit field (ListKind.Range 1, GPU lists 2); the core list words test only "an extension's
@@ -199,7 +199,7 @@ Row pitfalls (card tasks-signals-extensions, 2026-11-03; each cost a failed seed
   needs the core file defining that name used before the extension (definitions.warp uses kinds.warp first; card
   int-types-extraction: the seed failed "unknown name Kind").
 
-## Rules (user 2026-11-03)
+## Rules
 - The compiler's own source may change minimally where it helps a lot (e.g. it stops using a sugar form so the form can leave the core).
 - The language is never simplified to shrink the core: every spelling programs may write stays (decision self-source-minimal).
 

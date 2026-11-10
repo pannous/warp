@@ -920,7 +920,7 @@ function commentGotIt(line) {
 	runChanged();
 }
 
-// "got it" (user, 2026-10-05): for this expression (its `topic@expression` key), for all of the kind (the topic), or
+// "got it": for this expression (its `topic@expression` key), for all of the kind (the topic), or
 // as a `// got it` comment on its line; each keeps the code and never changes the value
 function gotIt(topic, expression, line) {
 	const button = (label, title, onclick) => element("button", { className: "got-it", title, onclick }, label);

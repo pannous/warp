@@ -54,7 +54,7 @@ coverage list (width, height, rows) through `coverage_list`.
   names by kMIDIPropertyDisplayName, a CFString global read through library_function + field_pointer. Linux: not yet.
 - The page answers the same host words in web/playground/host-sound.js soundWords.
 
-## The GPU (gpu.warp, card warp-gpu-source, 2026-11-08)
+## The GPU (gpu.warp, card warp-gpu-source)
 crates/warp-gpu/warp_gpu.c (918 lines over wgpu-native's webgpu.h, statically linked into libwarp_gpu) became the part
 native_host/gpu.warp over libwgpu_native, the wgpu-native release's shared library, which scripts/wasmtime-c-api.sh
 installs beside warp. Its mechanisms:

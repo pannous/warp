@@ -8,7 +8,7 @@ The fleet rules are AGENTS.md (loaded automatically).
 
 You receive finished work handed to you (AGENTS.md "Handoff"): you apply and check it on the user's Mac and push it. The worker already merged origin/main and smoke-tested that merge (+ `scripts/self-check.sh` for core/). You repeat no test. You watch main.
 
-## Layers (user 2026-11-09: the separation is enforced by you)
+## Layers (the separation is enforced by you)
 Before landing, look at where each added or grown file lies (`git diff --stat origin/main...<tip>`) and judge it by
 AGENTS.md "Three layers": core/ only what the compiler needs to compile itself; a language feature in extensions/; a
 module programs import in lib/; demos and examples in samples/; tests and fixtures in test/; tools in scripts/. The
@@ -18,7 +18,7 @@ second look: is it needed for self-compilation, or a feature that belongs in an 
 
 ## Watching main
 - Every push to main starts `scripts/integrate/after-push.sh` by itself: the pre-push hook (scripts/integrate/on-push.sh)
-  runs it once the pushed commit is on main (log ~/Library/Logs/warp/after-push.log; no cron since 2026-11-04): main and the compilers
+  runs it once the pushed commit is on main (log ~/Library/Logs/warp/after-push.log; no cron): main and the compilers
   beside ~/dev/bin/warp stay in step. In /Volumes/Worktrees/integrate2 at main's tip it takes the compilers of
   its lib (`scripts/rebuild.sh both`: the pusher's smoke build of the same inputs is reused from the store), checks
   hello, moves warp.wasm and warp-self.wasm (only when promoted from the same inputs) beside the binary and pulls the
@@ -35,11 +35,11 @@ second look: is it needed for self-compilation, or a feature that belongs in an 
   ~/Library/Logs/warp/cron/full-suite.log) and before a release, in the background, as `scripts/full-suite.sh
   --commit` (one at a time on the machine, by its lock; `warp test --each test` into test/results.txt only when the
   run ended with its summary: a ✓ or ✗ line per test, in file order, and the `m of n failed` summary), committed, so
-  `git diff test/results.txt` (or `git log -p`) shows what went green or red since the last run (user 2026-10-28). Its
+  `git diff test/results.txt` (or `git log -p`) shows what went green or red since the last run. Its
   failures are grouped into cards.
 - The samples the same way: scripts/samples.sh overwrites test/samples.txt (ok/FAIL/SRV/WIN and the sample, a line,
   run with the tree's own compilers), and after-push's slow lane commits it to main when it changed ("chore: samples N
-  of 232 at <commit>"): its git log is the history, `git diff` names the samples that changed (user 2026-10-29).
+  of 232 at <commit>"): its git log is the history, `git diff` names the samples that changed.
 - Read each failure's message before passing it as flaky; a different message is a real failure.
 - A rare change to the Rust harness (src/, crates/, Cargo.*, build.rs) is installed by after-push.sh too, before the
   compilers: when the installed binary's `release build <commit>` differs in those paths from main's tip it runs
@@ -52,7 +52,7 @@ second look: is it needed for self-compilation, or a feature that belongs in an 
 - Compilers beside ~/dev/bin/warp come only with main's tip, never because a lib/ changed, and are never built in the
   main checkout (a pull mid-build paired mismatched compilers).
 
-- Warp Vitals after every landing (user 2026-11-03): when an install of a new tip is done (or a landing reaches you),
+- Warp Vitals after every landing: when an install of a new tip is done (or a landing reaches you),
   run `python3 scripts/vitals.py` in the main checkout (about 6 s) and republish data/vitals/vitals.html to
   https://claude.ai/code/artifact/b988ec61-123d-4e97-833b-0dd2342cac4c (Artifact publish, that url). Several landings
   in a row: one republish for the newest. The Supervisor's hourly watch round republishes too, as the safety net.
