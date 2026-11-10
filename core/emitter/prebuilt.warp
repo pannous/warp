@@ -572,7 +572,7 @@ def bind_written_variants(image: LibraryImage) {
 	varied = {}
 	for name in module.functions.keys { if name.contains("·") { varied[name.split("·")#1] = yes } }
 	# (a class's methods are in its slice, whose text is its head line only)
-	for slice in signature.slices.filter(slice => varied.has(slice#1) or leading_name(slice#2) == "class") {
+	for slice in signature.slices.filter(slice => varied.has(slice#1) or is_class_slice(slice#2)) {
 		for written in written_definitions(unpack(slice#3)) {
 			name = written#1
 			types = written#2
@@ -588,6 +588,10 @@ def bind_written_variants(image: LibraryImage) {
 		}
 	}
 }
+# a slice of a class's head line, `class Instant {…}`: its text tested whole only when it starts so (leading_name counts
+# a text's characters at each of its own)
+class_head = "class"
+is_class_slice(text: text): bool := text.starts_with(class_head) and leading_name(text) == class_head
 # [name, parameter types] of each definition a module's statement writes, a class's methods with their receiver first
 written_definitions(code: Node): list := {
 	found = []
