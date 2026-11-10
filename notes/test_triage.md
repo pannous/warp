@@ -35,38 +35,38 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 
 ## Held (esoteric)
 
-| file:line | reason | delete? |
+| file:line | reason | verdict (Interviewer 2026-11-10) |
 |---|---|---|
-| test/text/test_count_in.pairs.warp:4-9; test/text/test_counts_in_warp.pairs.warp:4, 5, 10; test/functions/test_words_in_phrases.pairs.warp:11, 12 | `count x in y`, `count(x in y)`: the count of a membership's yes/no, refused with did-you-mean `y.count(x)` (user 2026-10-29) | |
-| test/welcoming/test_footguns.pairs.warp:383 | `fast` floats that reassociate math | delete? |
-| test/welcoming/test_footguns.pairs.warp:395 | C float32 suffix `.1f` | delete? |
-| test/welcoming/test_footguns.pairs.warp:403, 404, 425 | symbolic surds (√2·√2 exactly 2) | |
-| test/welcoming/test_footguns.pairs.warp:414 | symbolic trig, sin(π/6) exactly 1/2 | |
-| test/welcoming/test_footguns.pairs.warp:428 | complex exponentials (Euler's identity) | |
-| test/welcoming/test_footguns.pairs.warp:442, 445, 446 | function equality by algebra (undecidable in general) | delete? |
-| test/welcoming/test_footguns.warp:44 | function equality by boolean algebra | delete? |
-| test/welcoming/test_footguns.pairs.warp:262, 263, 266, 267, 268 | tzdata version stamps on times (267 and 268 contradict each other) | delete? |
-| test/welcoming/test_footguns.warp:9 | `law` property declarations | |
-| test/welcoming/test_footguns.warp:33, 37 | effect annotations `! Pure`, `! Div` | |
-| test/numbers/test_log_glyphs.pairs.warp:4-7, 10-12 | log glyphs ⌞ ⌟ (P226), hard to read beside log(x, b) | delete? |
-| test/numbers/test_law.pairs.warp:4, test_law.warp:4 | `law` property declarations | |
-| test/numbers/test_unit_definitions.pairs.warp:20 | a calendar era as a unit (`2 AD`) | delete? |
-| test/numbers/test_unit_prefix_lines.pairs.warp:16, 17 | `name` and `prefix` as declaration words for plain functions | delete? |
-| test/text/test_interpolation.pairs.warp:35 | shell-style `$0` as a function's parameter | delete? |
-| test/text/test_text_type_words.pairs.warp:9 | symbolic surds, `str(√2)` as "√2" | |
-| test/lists/test_element_wise_scalar.pairs.warp:5, 7, 10 | MATLAB anonymous functions `@(x)` | delete? |
-| test/lists/test_where_filter.pairs.warp:13 | Swift closure arguments `$0 + $1` | delete? |
-| test/operators/test_add_subtract_words.pairs.warp:14, 15, 16 | events named by operator words (`on subtract`, `emit plus`) | delete? |
-| test/operators/test_approximately.pairs.warp:19, 20, 21 | truthiness under ≈ (`yes ≈ 2`, `no ≈ ""`) | delete? |
+| test/text/test_count_in.pairs.warp:4-9; test/text/test_counts_in_warp.pairs.warp:4, 5, 10; test/functions/test_words_in_phrases.pairs.warp:11, 12 | `count x in y`, `count(x in y)`: the count of a membership's yes/no, refused with did-you-mean `y.count(x)` | delete: the refusal with its fix `y.count(x)` is the behaviour |
+| test/welcoming/test_footguns.pairs.warp:383 | `fast` floats that reassociate math | delete |
+| test/welcoming/test_footguns.pairs.warp:395 | C float32 suffix `.1f` | delete |
+| test/welcoming/test_footguns.pairs.warp:403, 404, 425 | symbolic surds (√2·√2 exactly 2) | gap: restore under exact-roots (√2·√2 = 2) |
+| test/welcoming/test_footguns.pairs.warp:414 | symbolic trig, sin(π/6) exactly 1/2 | keep held: symbolic trig, no decision yet |
+| test/welcoming/test_footguns.pairs.warp:428 | complex exponentials (Euler's identity) | gap: restore now that complex numbers exist (card euler-identity) |
+| test/welcoming/test_footguns.pairs.warp:442, 445, 446 | function equality by algebra (undecidable in general) | delete |
+| test/welcoming/test_footguns.warp:44 | function equality by boolean algebra | delete |
+| test/welcoming/test_footguns.pairs.warp:262, 263, 266, 267, 268 | tzdata version stamps on times (267 and 268 contradict each other) | delete |
+| test/welcoming/test_footguns.warp:9 | `law` property declarations | ask user (law) |
+| test/welcoming/test_footguns.warp:33, 37 | effect annotations `! Pure`, `! Div` | rewrite to `@pure`/`@io` under effect-annotations, else delete |
+| test/numbers/test_log_glyphs.pairs.warp:4-7, 10-12 | log glyphs ⌞ ⌟ (P226), hard to read beside log(x, b) | delete |
+| test/numbers/test_law.pairs.warp:4, test_law.warp:4 | `law` property declarations | ask user (law) |
+| test/numbers/test_unit_definitions.pairs.warp:20 | a calendar era as a unit (`2 AD`) | delete |
+| test/numbers/test_unit_prefix_lines.pairs.warp:16, 17 | `name` and `prefix` as declaration words for plain functions | delete |
+| test/text/test_interpolation.pairs.warp:35 | shell-style `$0` as a function's parameter | delete |
+| test/text/test_text_type_words.pairs.warp:9 | symbolic surds, `str(√2)` as "√2" | gap: restore under exact-roots (√2 shows √2) |
+| test/lists/test_element_wise_scalar.pairs.warp:5, 7, 10 | MATLAB anonymous functions `@(x)` | delete |
+| test/lists/test_where_filter.pairs.warp:13 | Swift closure arguments `$0 + $1` | delete |
+| test/operators/test_add_subtract_words.pairs.warp:14, 15, 16 | events named by operator words (`on subtract`, `emit plus`) | delete |
+| test/operators/test_approximately.pairs.warp:19, 20, 21 | truthiness under ≈ (`yes ≈ 2`, `no ≈ ""`) | delete |
 | test/operators/test_operators.pairs.warp:4, 5, 6 | endless loops (`while True : 2`) expected to give 0; each times out after 30 s | delete |
 
-| test/control/test_cell_truth.pairs.warp:4, 5, 6, 9, 10 | internal cell_new/cell_get API, not a language form | delete? |
-| test/control/test_text_patterns.pairs.warp:25-31 | internal text_holes helper; text patterns are tested by the match lines | delete? |
-| test/control/test_value_methods_are_functions.pairs.warp:5 | methods picked by position (fs#4), an order nobody promises | delete? |
-| test/types/test_kind_marks.pairs.warp:4-9, 12-14, 17-20, 23, 24 | kind_number/kind_info/kind_mark expose the internal kind bits, a layout test | delete? |
-| test/types/test_real_text.pairs.warp:4, 5, 7, 10 | symbolic surds, √2 printed as "√2" | |
-| test/wasm/test_wasm.pairs.warp:252-255 | postfix (RPN) operators, `true true and` | delete? |
-| test/wasm/test_wasm.pairs.warp:307 | a second block as else without `else`, `if(2){3}{4}` | delete? |
+| test/control/test_cell_truth.pairs.warp:4, 5, 6, 9, 10 | internal cell_new/cell_get API, not a language form | delete: internal API (outcome tests only) |
+| test/control/test_text_patterns.pairs.warp:25-31 | internal text_holes helper; text patterns are tested by the match lines | delete: internal helper (outcome tests only) |
+| test/control/test_value_methods_are_functions.pairs.warp:5 | methods picked by position (fs#4), an order nobody promises | delete |
+| test/types/test_kind_marks.pairs.warp:4-9, 12-14, 17-20, 23, 24 | kind_number/kind_info/kind_mark expose the internal kind bits, a layout test | delete: internal kind bits (outcome tests only) |
+| test/types/test_real_text.pairs.warp:4, 5, 7, 10 | symbolic surds, √2 printed as "√2" | gap: restore under exact-roots |
+| test/wasm/test_wasm.pairs.warp:252-255 | postfix (RPN) operators, `true true and` | delete |
+| test/wasm/test_wasm.pairs.warp:307 | a second block as else without `else`, `if(2){3}{4}` | delete |
 
 ## Gap groups (cards)
 
@@ -152,7 +152,7 @@ Groups:
 - A round group `(1 2 3)` as a list. 25 lines.
 - Element-wise `.+ .* .- ./` and scalar broadcasting; `dot`; math words over lists. 45 lines.
 - `linear` arrays. 17 lines.
-- Swizzles `.x .xy .zyx` (decided). 16 lines.
+- Swizzles `.x .xy .zyx`. 16 lines.
 - `where` filters and comprehensions. 14 lines.
 - Lazy ranges counted without materializing (time out). 10 lines.
 - `pop(i)`, `clear()`, `delete xs[i]` and their aliasing. 15 lines.
