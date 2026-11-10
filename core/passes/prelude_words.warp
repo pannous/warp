@@ -317,11 +317,9 @@ global exported_names = {}
 # of the compile at hand
 global linked_reached = {}
 global linked_classes_reached = {}
-# the variants of a linked class not reached yet, by that class: `format·text·Quantity` runs only on a Quantity, so the
-# `text` dispatcher reaching it brings Quantity's code only once something makes a Quantity
-global linked_variants_waiting = {}
 # the linked classes a word reaches through the words its body calls, each followed once a compile: only the classes
-# join the program, the words a linked body calls being its module's (decision link-modules-lazily)
+# join the program, the words a linked body calls being its module's (decision link-modules-lazily). A dispatcher's
+# variant brings its class (pop·Stack, Stack): the program types a call through every variant it sees
 classes_reached(word: text, reaches: map, linked_classes: map): list := {
 	found = []
 	waiting = [word]
@@ -329,22 +327,17 @@ classes_reached(word: text, reaches: map, linked_classes: map): list := {
 	while at < #waiting {
 		next_word = waiting[at]
 		at += 1
-		guard = unreached_variant_class(next_word, linked_classes)
-		if guard != ø { linked_variants_waiting[guard] = (linked_variants_waiting.get(guard) ?? []) + [next_word] }
-		else if not linked_reached.has(next_word) {
+		if not linked_reached.has(next_word) {
 			linked_reached[next_word] = yes
 			if linked_classes.has(next_word) {
 				found += [next_word]
 				linked_classes_reached[next_word] = yes
-				waiting += linked_variants_waiting.get(next_word) ?? []
 			}
 			waiting += reaches.get(next_word) ?? []
 		}
 	}
 	found
 }
-# the first linked class a variant's name types, `Quantity` of format·text·Quantity, while none has reached it
-unreached_variant_class(word: text, linked_classes: map): text? := word.split("·")[1 ..].find(part => linked_classes.has(part) and not linked_classes_reached.has(part))
 # the reach's last step, once the passes ran (passes.warp lowered_reached): the program without the brought functions
 # nothing calls. What a sugar rule might write is brought before it fires (sugar_words_of: `each_any` for any call,
 # `count_in` for any count), and typing and emitting the unused ones cost each compile (card measure). A module being
