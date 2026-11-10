@@ -15,7 +15,8 @@ int_classes(program: Node): Node := {
 	classes = int_classes_named(statements)
 	if #classes == 0 { return program }
 	converters = statements.map(statement => converted_type(statement, classes)).filter(name => name != ø)
-	statements_as(program, statements.flat_map(statement => int_class_statements(statement, classes, converters)))
+	formatted = statements.map(statement => shower_of(formatted_definition(statement))).filter(name => name != ø)
+	statements_as(program, statements.flat_map(statement => int_class_statements(statement, classes, converters, formatted)))
 }
 # each subtype held as a class the statements declare and each alias reaching one, `type Years = Age` of `type Age <
 # int`, written in any order: name → [its class, the type it narrows]
@@ -40,11 +41,11 @@ subtypes_named(statements: list, subtype_read: function): map := {
 # the class and its making of a value, `made·Color(x)`, a Color as it is, a value as Color(x); the conversion a place
 # takes a value of the narrowed type by, the program's own `n: int as Color := …` (lib/color), else made·Color's, an
 # alias's place too (the emitter reads `type Shade = Color` as Color)
-int_class_statements(statement: Node, classes: map, converters: list): list := {
+int_class_statements(statement: Node, classes: map, converters: list, formatted: list): list := {
 	subtype = class_subtype_of(statement)
 	if subtype != ø {
 		name = subtype#1
-		return subtype_declared(name, subtype#2) + (if name in converters then [] else [subtype_conversion(subtype, made_word(name))])
+		return subtype_declared(name, subtype#2, name in formatted) + (if name in converters then [] else [subtype_conversion(subtype, made_word(name))])
 	}
 	if converted_type(statement, classes) != ø { return [Key(key_of(statement), Op.Define, bottom_up(value_of(statement), n => int_class_made(n, classes, [])))] }
 	[bottom_up(statement, n => int_class_made(n, classes, converters))]
@@ -55,9 +56,11 @@ class_subtype_of(statement: Node): list? := {
 	if subtype != ø and subtype#2 not in MARKED_ONLY_KINDS then subtype else ø
 }
 made_word(type_name: text): text := "made" + name_joiner + type_name
-subtype_declared(name: text, narrowed: text): list := {
+# a subtype with no format of its own shows as its value (is-a, not has-a: an Age of 3 prints 3)
+subtype_declared(name: text, narrowed: text, formats_itself: bool): list := {
 	number_value = if narrowed in NUMBER_TYPES then "; float() := value" else ""
-	declared = statements_in(plain_node(parsed("class ${name} { value: ${narrowed}${number_value} }; made(x) := if x is ${name} then x else ${name}(x)")))
+	shown = if formats_itself then "" else "; format as text := str(value)"
+	declared = statements_in(plain_node(parsed("class ${name} { value: ${narrowed}${number_value}${shown} }; made(x) := if x is ${name} then x else ${name}(x)")))
 	[declared#1, Key(renamed_target(key_of(declared#2), made_word(name)), Op.Define, value_of(declared#2))]
 }
 # `n: int as Color := maker(n)`, the conversion a Color place takes an int by
