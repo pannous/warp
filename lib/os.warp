@@ -45,6 +45,3 @@ set_env(name: any, value: any): bool := {
 }
 // `eprint "no such file"`: the value on standard error, a line of its own, through WASI natively and in the page
 eprint(value: any) := said_on_stderr(str(value))
-// `temp_file()`, `temp_dir()`: the path of a new empty file, folder, which mktemp made
-temp_file() := command("mktemp").trim()
-temp_dir() := command("mktemp -d").trim()
