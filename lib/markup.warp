@@ -5,7 +5,12 @@
 // named after an attribute with a plain value is an attribute (`style: { fontSize: 12 }` inline CSS), anything else a
 // child in order.
 use html
-global html_elements = ["html", "head", "body", "title", "meta", "link", "style", "script", "base",
+// Markup is written inside html{…} or in a function typed html, `f(): html := b{"bold"}` (decision markup-needs-html):
+// those bring this module without its use, the one tag of the global list; anywhere else a tag-named key is data,
+// `{p: {c: 1}}` stays {p: {c: 1}}
+global html_scopes = ["html"]
+type html = any
+html_elements = ["html", "head", "body", "title", "meta", "link", "style", "script", "base",
 	"header", "footer", "main", "nav", "section", "article", "aside", "div", "span", "p", "h1", "h2", "h3", "h4", "h5", "h6",
 	"a", "em", "strong", "b", "i", "u", "small", "code", "pre", "blockquote", "br", "hr", "img", "figure", "figcaption",
 	"ul", "ol", "li", "dl", "dt", "dd", "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption",
