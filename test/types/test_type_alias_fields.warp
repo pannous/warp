@@ -32,7 +32,7 @@ c is Paint' false
 # a_literal_is_tested_against_the_type_an_alias_names
 is! 'type Age = int
 30 is Age' true
-is! 'type Age = duration
+is! 'type Age < duration
 3 years is Age' true
 is! 'type Age = int
 "a" is Age' false

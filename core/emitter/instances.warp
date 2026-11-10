@@ -512,7 +512,7 @@ def text_value_of(name: text): TypedCode { TypedCode(ValueKind.Text, text_bytes(
 base_class_layers = ["extends", "inherited_from"]
 collect_types(n: Node): any := {
 	if declares_type(n) { return record_type(value_of(n)#2, value_of(n)#3) }
-	if is_type_alias(n) { return module.aliases[value_of(key_of(n))#2#2] = aliased_spelling(value_of(n)) }
+	if is_type_alias(n) { return module.aliases[declared_type_name(value_of(key_of(n))#2)] = aliased_spelling(value_of(n)) }
 	if is_group(n) { for x in n { collect_types(x) } }
 }
 # a class or enum declaration, the opaque view ["type", name, body]
