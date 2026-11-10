@@ -416,6 +416,8 @@ rule_index(rules: list): RuleIndex := {
 is_hole(pattern: Node): bool := rule_hole(pattern) != ø or typed_hole(pattern) != ø or rest_hole_name(pattern) != ø or affixed_hole(pattern) != ø
 # the words code must hold for the pattern to match it (rule_matches): its words outside holes
 required_words(pattern: Node): list := {
+	affix = affixed_hole(pattern)
+	if affix != ø { return [affix_token(affix#2, affix#3)] }
 	if is_hole(pattern) { return [] }
 	if pattern is symbol { return [name_of(pattern)] }
 	if pattern is key { return required_words(key_of(pattern)) + required_words(value_of(pattern)) }
@@ -2230,6 +2232,11 @@ is_one_statement(binding: Node): bool := is_curly_group(binding) and separator_o
 
 # `$op=`, `.$op`: a hole of the operator a compound assignment or an element-wise form is written with (decisions
 # op-assign-general, dot-operators-now) as [hole, before, after]: `x ^= 3` binds ^, `xs .< 2` binds <
+# what code holding a symbol of the affix mentions (tokens_within), what a rule with an affixed hole needs
+# (required_words): `…=`, `.…`, so `$a $op= $b` reaches only code written with an `…=` operator
+AFFIX_TOKEN_MARK = "…"
+affix_token(before: text, after: text): text := before + AFFIX_TOKEN_MARK + after
+affix_tokens(name: text): list := (if #name > 1 and name.ends_with("=") then [affix_token("", "=")] else []) + (if #name > 1 and name.starts_with(".") then [affix_token(".", "")] else [])
 affixed_hole(n: Node): list? := {
 	if not (n is symbol) { return ø }
 	name = name_of(n)
