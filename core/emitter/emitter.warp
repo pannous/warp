@@ -1168,6 +1168,8 @@ is_spaced_call(body: Body, n: Node): bool := {
 # `print x`, `raise x` called, a line of their own, or the one line of a block (`if c { print x }`)
 is_call_or_line(n: Node): bool := bracket_of(n) == "(" or bracket_of(n) == "" or (bracket_of(n) == "{" and separator_of(n) == " ")
 def group_expression(body: Body, n: Node): TypedCode {
+	packed = packed_data_value(body, n)
+	if packed != ø { return packed }
 	if is_quote(n) { return TypedCode(ValueKind.Node, quoted_code(body, n#2)) }
 	if is_spliced_quote(n) { return TypedCode(ValueKind.Node, spliced_code(body, n#2)) }
 	if inline_quote_at(n) > 0 { return group_expression(body, quote_folded(n, inline_quote_at(n))) }

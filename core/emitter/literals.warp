@@ -54,3 +54,35 @@ def text_bytes(t: text): list {
 }
 # a text of the bytes of t's segment, from the start and count the code before it leaves
 def segment_read(t: text): list := [gc_prefix] + uleb(gc_ops.array_new_data) + relocatable(relocated.types, gc_type(gc.text)) + relocatable(relocated.texts, text_segment(t))
+
+# a data literal of PACKED_DATA_NODES nodes or more in main, `gc_names = [["text", []], …]`: one packed text main
+# unpacks (runtime packed_nodes.warp) where the code would build it node by node (card globals-constant-init: warp.wasm's
+# main built its 1,189 tables so, 10% of its code)
+PACKED_DATA_NODES = 8
+def packed_data_value(body: Body, n: Node): any {
+	if body.function.name != "main" or module.prebuilding or not module.runtime.has("unpacked_node") { return ø }
+	if #nodes_in(n) < PACKED_DATA_NODES { return ø }
+	data = literal_data(n)
+	if data is ø { return ø }
+	value = runtime_call("unpacked_node", [text_value(pack(data))])
+	if bracket_of(n) == "[" then TypedCode(ValueKind.List, converted(value, ValueKind.List)) else value
+}
+# the node a literal of ints, texts, yes/no, lists and maps evaluates to, as the emitter builds it (a text of one code
+# point a character), made anew without the parse's positions (`"" + t`: a new text; a list bracketed anew, listed
+# by no separator as a literal's); ø for any other form
+literal_data(n: Node): Node? := {
+	if n is bool { return if n then True else False }
+	if n is text or n is number { return literal_atom(n) }
+	if not is_group(n) or (bracket_of(n) == "{" and #n == 0) { return ø }
+	if bracket_of(n) == "[" { return listed_data(items_of(n).map(literal_data), "[") }
+	if bracket_of(n) != "{" or not n.all(is_map_entry) or n.any(entry => key_of(entry) is symbol and name_of(key_of(entry)) in module.classes) { return ø }
+	listed_data(items_of(n).map(entry => literal_entry(key_of(entry), literal_data(value_of(entry)))), "{")
+}
+literal_atom(n: Node): Node? := match n {
+	Symbol(name): Symbol("" + name)
+	Text(t): if one_code_point(t) then Char(codepoints(t)#1) else Text("" + t)
+	Number(value): if value is int then Number(value + 0) else ø
+	_: ø
+}
+literal_entry(name: Node, value: Node?): Node? := if value is ø then ø else Key(literal_atom(name), Op.Colon, value)
+listed_data(items: list, bracket: text): Node? := if items.any(item => item is ø) then ø else bracketed(items, bracket)
