@@ -178,6 +178,12 @@ implicit_modules_of(source: text, folder: text = "."): list := {
 	tree = parsed(source)
 	concatenated(hooks().implicit_uses.map(modules_found => modules_found(source, tree, folder)))
 }
+# the runtime modules a text needs, as the extensions bringing them find them (only theirs: a module's text names words
+# of several modules, `at`, which the program's own uses settle)
+runtime_modules_needed(source: text): list := {
+	tree = parsed(source)
+	concatenated(EXTENSIONS.filter(extension => #extension.runtime_modules > 0).flat_map(extension => extension.implicit_uses.map(found => found(source, tree, "."))))
+}
 # a match's arms through every extension's arm lowerings, in row order
 with_arm_lowerings(arms: list, subject: Node, variants: map): list := {
 	lowered = arms

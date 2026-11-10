@@ -846,7 +846,7 @@ is_module_name(name: text): bool := exists(std_module_path(name)) or used_module
 # word (a definition or an alias), the parses of its definitions of the word
 module_uses(module: text): list := {
 	signature = prebuilt_signature(module)
-	if signature != ø then signature.uses else used_modules(used_module_text(module))
+	if signature != ø then signature.uses else used_modules(used_module_text(module)) + runtime_modules_of(module)
 }
 module_patterns(module: text): list := {
 	signature = prebuilt_signature(module)
@@ -879,7 +879,7 @@ with_implicit_uses(source: text, folder: text = "."): text := {
 }
 # the runtime modules a standard module's own text needs (its `^` links big_numbers as a program's does), but itself:
 # its compile's source is only module_source's stub
-runtime_modules_of(name: text): list := implicit_modules_of(std_module_text(name)).filter(used => used != name and is_runtime_module(used))
+runtime_modules_of(name: text): list := runtime_modules_needed(used_module_text(name)).filter(used => used != name)
 # the standard modules defining a word, from the library index (library.warp library_index_section "word")
 defining_modules(word: text): list := {
 	found = library_index_section("word").get(word)
