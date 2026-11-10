@@ -468,12 +468,17 @@ def method_dispatchers(): list {
 	found = []
 	for name in module.functions.keys {
 		parts = name.split(name_joiner)
+		# (a method only one class declares keeps its plain name, `compare(self: dot, other)`)
+		if #parts == 1 and takes_instance(module.functions[name]) and not found.any(pair => pair#1 == name) { found += [[name, module.functions[name]]] }
 		if #parts != 2 or parts#2 not in module.classes or found.any(pair => pair#1 == parts#1) { continue }
 		dispatcher = module.functions.get(parts#1 + name_joiner + "method") ?? module.functions.get(parts#1)
 		if dispatcher != ø { found += [[parts#1, dispatcher]] }
 	}
 	found
 }
+# whether a function is a method: its first parameter the instance, `self` as the class methods lift it
+method_receiver = "self"
+def takes_instance(f: Function): bool { #f.signature.parameters > 0 and f.signature.parameters[0].name == method_receiver }
 # the module's method word: the dispatcher of the name given (parameter 1) on the instance (parameter 0) and the items
 # of the arguments' list (parameter 2), ø for a name it lacks
 def class_method_code(): list {
