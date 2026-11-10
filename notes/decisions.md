@@ -1,6 +1,6 @@
 # Decided questions: an inbox, not a law book
 
-How decisions live (user 2026-11-10). A decision is one of three kinds, and each has its own permanent home:
+How decisions live. A decision is one of three kinds, and each has its own permanent home:
 1. Language rules (`type A < T` is a subtype, `÷` floors, markup only inside `html{…}`): the specification. Home: the
    wiki page of the topic, plus at least one outcome test line in test/. The wiki says what the language is, the test
    proves it and goes red when code drifts. Where the wiki and an entry here disagree, the wiki wins.
@@ -23,35 +23,9 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 ---
 
 ## Process
-- build-kinds-detected: page app, page wasm, site, wagi/server, wit and component outputs are warp build features, all Later, the server first; `warp build` detects the kind from the program itself (routes → a server, a page → its app, @primitive → native). Options are words (cli-words), not --flags.
-- language-layers: notation (the parser, no keywords), kernel, and sugar as warp rewrite rules in extensions/sugar/ (migration plan notes/layers.md). Kernel: `:=` definitions, `=` assignment, call/member/`#`, function literals, if-then-else, `match` (not lowered to if chains), while with break/continue/return, class with variants, use, try-else, global, `data` quote, `rewrite` and `operator` declarations. Everything else (for, enum, unless/until, `?:`, `??`, `is T`, `as`, comprehensions, ranges, `n times`) is sugar. `n times {…}` is a plain library function `infix times(n: number, b: block)`; n-times-prelude-now: build block parameters and blocks that change outer variables now, then `times` is that prelude function; the sugar rule `rewrite $n times $body: block => for ·i in 1 to $n $body` is only a stopgap; `n times [x]` / `n times "ab"` stay list/text repetition.
-- appends-line (supervisor): runtime errors and warnings end in their position "at line:col"; tests and guide expect it.
-- alias-mechanism: one alias table lib/aliases.warp in warp data, one entry per canonical word: `add { operator: "+"  aliases: [plus, addiere] }`, `count { prefix-operator: "#"  aliases: [size, len, length] }`; an entry may name its operation (`add { symbol: Op.Add … }`); the aliases list is open-ended (other words and languages). Cards alias-mechanism, warp-signatures. alias-network (Later card): mutual lookup between a word and its aliases on classes (a class giving plus but not add makes `+` fall back to plus, and vice versa); richer data per alias (warns? shows as canonical?) maybe as @meta tags.
-- alias-arrows: an alias names its direction with an arrow: `alias acos => arc_cosine` (new means existing) or `alias arc_cosine <= acos`; plain `alias acos = arc_cosine` is refused with the fix naming the arrow, and `warp fix` rewrites it (card alias-arc-cosine).
-- operator-word-optional: one word suffices: `infix ⊕(a, b) := …`, `prefix √ := sqrt`, `suffix ‼(n) := …`; bare `operator ⊕(a, b)` takes its fixity from the parameter count (2 infix, 1 or `it` prefix); a class's `operator #(i)` stays its method (card operator-word-optional).
-- after-sum: the prelude's `sum` carries its types in warp, `sum(xs: list): element of xs := fold(xs, 0, +)`. The linear-hint test for `sum(xs .* ys)` is ignored, naming the card for the warp-written analysis.
-- name-glue: a rewrite template builds a visible name with `·`, `square·$a` → square_a_number, `$i·end`; it glues only inside templates and quoted code beside a $hole or symbol, numbers beside it multiply, plain `x·y` between values stays multiplication. Generated names name their rule in help and errors ("made by the rule at sugar/x.warp:12").
 
-- warp-is-tests: the Rust tests' `is!("code", expected)` assertions also live as warp files, written `is! "3+3" 6`, where `is!` is a small warp function over eval: `def is!(warp: text, expected: any) := eval(warp) == expected` (failures report code, got, expected); names ending in `!` are definable words. Run with `warp test` through any pipeline switch. Card warp-is-tests. Test pairs as data: files hold code/expected pairs without repeated `is!`, loaded as data (map `test_pairs = { "1+1" 2 \n "√9" 3 }` or bare pairs). Matching is permissive: a result counts if warp's `==` says yes (1.0 ≈ 1 ≈ yes) or both sides are empty/falsy (0 ≈ ø ≈ [] ≈ no); warp's own `==` stays (0 == ø is no). The `is! "3+3" 6` line form stays for pairs exceeding the 80-character limit. Two kinds of files, not mixed: a pairs file of pure data (tab separated: code TAB expected TAB optional note, read as a list of lists), and ordinary warp test files with `is!` lines and other tests. A commented-out pair is a skipped test whose note names the regression's card (forward-crunch per line).
-- wasm-instruction-body: a function or operator whose body is one wasm instruction says so: `prefix operator √(a: float): float := wasm f64.sqrt`, `floor(a: float): float := wasm f64.floor`, `min(a: float, b: float): float := wasm f64.min`. Arguments are evaluated onto the wasm stack in parameter order, the instruction consumes them and leaves the result; names and types only give the signature (and pick the overload). Replaces emitter.warp's hard-coded intrinsics table and FFI calls (libm) wherever wasm has the instruction. Multi dispatch: `√` is declared per type (`prefix operator √(a: exact): exact := a^(1/2)`), the argument's type picks the body: `√2.0` → 1.414…, `√16` → 4, `√2` → √2, `√-4` → 2ⅈ. Other small builtins may stay hard-coded until they need overloads.
-- sound-buffer-lib: the host-filled sample buffer's words (new, count, get, set) are lib/sound.warp functions with `:= wasm` bodies over linear memory and a plain-warp bump allocator; no core file for it.
-- pure-it-block: in the pure lane the `:=` form of an `it` block is enough (`f := { it + 1 }`); `f = { it + 1 }` defining a function of `it` is not required now (card pure-error, Later).
-- unicode-glyphs: the warp lexer/parser never stops on an unexpected character: every Unicode character is consumed by its class (letters into names, symbols into operator/symbol tokens).
-- call-takes-right: a function consumes everything to its right if it can: `square 3 + 1` → square(4) = 16, `2 * square 3` → 18, `print 1 + 2` prints 3. No spacing- or type-based tightening; parentheses split it: `square(3) + 1`. "If it can" is function-words-consume's fit to the parameter type (`count xs > 3` stops at the bool).
-- leave-as-is batch: P237 `size`/`sort by size` (count of a list, no number meaning), P45 (a variable keeps its kind under `use script` too), exact 1/0 stays an error, no subscript log base (`log(100, 10)`).
-- operators-are-functions: an infix, prefix or suffix operator is a normal function with a flag for its fixity, sharing arguments, signatures, types, overloads, `:= wasm` bodies and names in the wasm name section; no separate operator table. The only other difference is spacing: a function call needs spaces (`square 3`), an operator doesn't (`√2`, `a+b`, `3!`). fixity-operators-only: the flag is `enum Fixity { Prefix, Suffix, Infix }` on operators only; a plain function has no fixity.
-- typed-builtin-variant: a typed definition named like a builtin (`sin(x: Real) := …`) adds a variant: values of its types take it, others keep the builtin (`sin 1.0` stays the float sin).
-- method-by-type: `x.m(…)` is routed by x's type: a class receiver calls its method, a known other receiver keeps the word as written (`names.add(3)` on a list appends), only an unknown type is dispatched at run time.
-- compiler-node-enum: the warp compiler uses the built-in node, no parallel class and no conversion: one warp declaration (core/node.warp) IS the built-in node's definition (emitter.warp derives the $Node struct from it), with the cases True, False, Empty, Number, Char, Text, Symbol, Error, Key, List, Data, Meta, Type (Op, Bracket, Separator as enums), so `Node` works as a type and in `match n { Key(left, op, right): … }` (cards node-enum, node-rewrite). Cases by name → Kind, fields by position → node parts. Op/Bracket/Separator cases print their name (`print Op.Add` → Add); `Op.Add as text` → "+", `"+" as Op` → Add; op_of/bracket_of/separator_of return the case.
-- self-parser-drops: core/parsing/parser.warp leaves out foreign syntax (Rust macros, Python generators/yield from, Ruby blocks), music `go {…}`, phrase definitions (`to get price of item := …`), CSS in style; silently also WGSL shader holes and error nodes (`$a` pattern names stay: pattern-roadmap). Code is data: music and CSS need no parser syntax and work as library data DSLs (`tune d:data := play d` → `tune { c4 e4 g4 }`; `style {…}` reads its block as data).
-- sugar-twins-drops: core/passes/passes.warp leaves out Rust Option forms (`if let Some`, `match o {Some/None}`, `unwrap_or`, `expect`, `is_some`; warp has `o != ø`, `o ?? d`, `o ?? raise(m)`) and the `set x to y` pass; setter-calls stands, `set x of y to z` comes back as a library code template.
 
-- sugar-triage: web + markup, media + host, help + reflection passes stay out of the warp compiler and return as library code. `of`/`in` are right-associative infix operators (`length of characters in text` = `length of (characters in text)`), so the of extras are no special passes; forms that aren't a right-hand infix application are dropped or carded. `in`/`from` are a lookup only after a selector word (chars, words, lines, keys, …; one table), membership otherwise (in-bool); `print words in t` walks and `byte count of t` are dropped.
 - #1 avoid panics, errors as values. #14 not-implemented errors unless easy.
-- exports-kept: a module written for others (`warp compile --wasm` and the other module outputs) exports every top-level function under its name, so a JS host can call it; only a run (`warp run`, eval, tests) may drop an original nobody calls any more after specialising (card specialise-dead-originals). A function still mentioned (task by name, `&f`, an unspecialised call) always stays.
-- package-reexport (card module-own): a package's own `use` lines reach the programs that use it: `use webgl` (which says `use draw`) alone gives draw's words too: `canvas(200, 100)`, `star(…)`, `save "x.png"`.
-- Language name: warp everywhere; `.wasp` files still read; URLs/domains and wisp unchanged.
-- uniscript-binary-import: `use uniscript` imports the released prebuilt uniscript_c.wasm (+ .h), committed in the uniscript repo at each release (uniscript-browser-wasm); warp's tests follow the released uniscript.
 
 ## Tooling: format, beautify, CLI
 
@@ -158,9 +132,9 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - D4 constructors: `T{…}` of a known type constructs and validates, `k:{…}` is plain data; missing fields are errors unless `?` or defaulted. #41 spaced `V { x: 1 }` constructs a declared V.
 
 ## Lists, maps and indexing
-- markup-needs-html (user 11-09, replaces element-named-pair, card data-key-brings-markup): markup is written inside `html{…}`, or in a function known to return html (its result typed html), where a plain `b{"bold"}` still works; anywhere else a tag-named key or tag form is data: `x = {p: {c: 1}}; x` → {p: {c: 1}}, `{i: 1}` stays {i: 1}. Tests and samples that write bare markup get the `html{…}` wrapper.
+- markup-needs-html (replaces element-named-pair, card data-key-brings-markup): markup is written inside `html{…}`, or in a function known to return html (its result typed html), where a plain `b{"bold"}` still works; anywhere else a tag-named key or tag form is data: `x = {p: {c: 1}}; x` → {p: {c: 1}}, `{i: 1}` stays {i: 1}. Tests and samples that write bare markup get the `html{…}` wrapper.
 - html-value (Interviewer, by markup-needs-html, card html-anywhere): markup is a value of `class Html { element: pair }` (a cheap class, not a subtype of pair: a pair would fill a subtype and data would count as markup), printed by its own `format` overload, rendered by dispatch on `is Html`. An element written inside html{…}, in an html-typed function, or as the argument of an html-typed parameter (to_html, render, page_render take `value: html`) becomes an Html; a data entry like `"a": "Apple"` stays a pair.
-- format-types-inline-html (user 11-10, refines jsx under html-value, card inline-div-format): `warp format` turns inline HTML into warp markup and adds the html type where the element is a whole value: `p = <p>Hi</p>` → `p: html = p{ "Hi" }`, `f() := <div/>` → `f(): html := div{}`; elsewhere (an argument, inside an expression) the inline HTML stays as written.
+- format-types-inline-html (refines jsx under html-value, card inline-div-format): `warp format` turns inline HTML into warp markup and adds the html type where the element is a whole value: `p = <p>Hi</p>` → `p: html = p{ "Hi" }`, `f() := <div/>` → `f(): html := div{}`; elsewhere (an argument, inside an expression) the inline HTML stays as written.
 - P29 `pair.0` counts from 0. P30 `xs.pop()` gives the last item, `m.remove(k)` the value or ø.
 - Word slices: `xs from #2 to #4`, `xs starting from #2`, `xs up to #2` or ordinals, both ends inclusive; a bare number is an error. P58 `xs#a..b` keeps the range with a strong warning naming `xs#(a..b)` and `(xs#a)..b`.
 - P176 repeated `key: value` in a named tag block are children; a plain `{…}` keeps the duplicate-key error.
@@ -216,35 +190,11 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - shared-buses: a bus is a named effect chain `room = bus() |> reverb(0.4)`; `osc(C4, 1s) |> room`, `play(C4, 1s, bus: room)`; `room.reverb = 0.6` applies from that moment.
 
 ## Compiler internals (technical, decided by the Supervisor or Interviewer)
-- lib-oddities: `unwrap(n)` of a literal is no longer factorial; `click who` with an unbound name is refused with a fix naming `click(:who)`; `shared x = 0` keeps its word and means more than global: a shared variable is atomic (`shared n = 0; … n += 1` from several tasks never loses an update).
-- typed-rule-holes: a rule's holes take types as parameters do: `rewrite ($x: vector) ($f: number -> any) => $f($x)` instead of `where $x is vector and $f takes number`; generalizes today's hole_kinds (`$body: block`, `$xs: [f32]`, text-pattern `id: int`) to any type, function types included; the `$` stays and `=>` stays (a rule rewrites unevaluated code; `:=` defines a function). Existing `where … is`/`takes` conditions move over. Its own big card; relates to rules-to-typed-operators.
-- rule-not-in-own-definition: a rewrite rule never fires inside the definition of the word its template produces.
-- modules-triage: test/modules paths moved to test/fixtures/; `use square` held as esoteric; `use uniscript` a gap; Python's `from list import zip` an extensions/sugar rule meaning `use list`, with a hint.
-- hole-calls-unreached: a standard-library word inside a text hole loads its module like anywhere else.
-- refusal-place-of-lib: a refusal inside a library function names its file, the definition's first line and the function.
-- float-int-power: float ^ int by square-and-multiply (within about 1 ulp); exact values untouched.
-- after-participle-held: `after tested: …` (hook by past participle) held as esoteric.
 
-- error-expectation: a test expectation `error` matches any Error result, no message substrings.
 
 ## Process and platform decisions, continued
-- method-routing-by-type (Supervisor; card method-name-clash): a method call x.m(…) is routed to a class method by x's static type; only a receiver of unknown type gets the runtime dispatcher, whose fallback stays in written method form so the sugar rules (e.g. xs.add(v)) still apply; no pass reorder.
-- trim-default: one trim set by default, chosen by measured speed/size: warp build trims by default, `--trim=none` opts out.
 - pair-map-equality: `{a:1} == (a:1)` but `{a:1} !== (a:1)`: a one-entry map and a pair are equal loosely (==), not strictly (=== compares the type too, P196); `!==` and `=!=` both spell strict not-equal.
-- juxtaposed-product-later: `(2)(3)` as a product is an edge case: kept while it works (6), but nobody spends effort or special-case code on it; a glued-call change that breaks it gets a Later card.
-- build-includes-native: plain `warp build` always writes an executable beside the wasm outputs, the wasm2c native binary for an @primitive file, the wasmtime-stub executable for a GC program; `warp build native` stays as an optional word.
-- is-pattern-binds (interviewer): `x is <pattern>` stays a yes/no test (P61) and binds the pattern's new names where the test is known true: the then-branch of an if, the rest of an `and` chain, a match arm (`if p is Point{x, ..}: print x`). One rule shared by `is` and `match`.
-- implicit-standard-words: an unambiguous word of a standard module works without `use`: the compiler loads the defining module on demand and a hint names it (`warp beautify` writes the `use`); a word two modules define needs an explicit `use`. `use` is needed for non-standard modules (lib/extra, paths, packages); a bare word of such a module is refused with the `use` fix-it (taste call, the code). Units (`3 minute`, `2 hour`) and colors (`red`) are in; the colors move out of draw into their own module color (card color-words). Extends file-words-implicit.
-- range-dots (user; taste call, the code): `a..b` excludes b (`(1..3) + [4]` is [1, 2, 4], `sum(1..3)` 3), `a...b` includes it, for ranges and `xs#a..b` alike; `a to b` is the inclusive range (to-inclusive). `xs#2..3` printing nothing is a bug (carded).
-- glued-negative (user; operator-even-spacing): a minus spaced before and glued after starts a negative number as a new item everywhere: `[a -1]` = [a, -1], `f it -1` = f(it, -1), `x -1` is x followed by -1; `a - 1` and `a-1` stay subtraction (whitespace is meaning); a round group of spaced values is a list (`(a -1)` = [a, -1]), only a glued `a(-1)` calls.
-- computed-hole: a lib rewrite rule's `where` may call a lib word at compile time, testing (`where $x in watched($program)`) or binding a hole (`where $names = path_parameters($path)`), `$program` the whole program for collectors; a plain store `x ← v` that rules don't re-match. Routes (core/passes/routes.warp goes), unit literals, sql/sh templates, format strings, signals (card signals-lib) and `stored users: [User]` move to lib.
-- color-prints: one general core mechanism: a lib type declares itself a marked int with its own show (`type Color = int` + `show`); core never names Color; arithmetic and C calls see the plain int; Color shows one of 8 names or #RRGGBB (#AARRGGBB not opaque); later types (Angle, Key…) reuse it.
-- on-frame-headless: without a window `on frame {…}` runs once at a small headless size (e.g. 240×135) and saves one PNG; the window size applies only with a window.
-- class-index-test: the test expects 503 under position-index-words (`F#4` = position(4) = index(3)).
 - exact-decimal-big: a decimal literal beyond int64's 10^18 denominator stays exact with an unbounded-int denominator, not a float; a warning names the cost where such a value is used heavily, e.g. inside a loop.
-- shown-warp-notation: every shown result is warp code that can be pasted back: texts quoted, an instance as `P{n: 3}`, a quantity as 3.5km; one rule for the REPL, tests and print-back; `print` of a text still writes it bare.
-- global-word-marker-not-needed: no marker; implicit-standard-words covers unambiguous words, a word two modules define needs `use`; core's global_words table goes.
-- of-binds-tighter: `a of b = e` is `(a of b) = e`.
 
 
 ## Later rounds
@@ -344,15 +294,15 @@ quick-answer-first → AGENTS.md Talking. no-aur → notes/packaging.md.
 beautiful-types, compiler-typed → notes/agents/handbook.md. node-refinements → notes/node_refinements.md.
 runtime-split → core/runtime/bridge.warp, core/runtime/extended.warp. wasm-standalone → card standalone.
 pass-triggers → card pass-triggers. revert-first → notes/agents/integrator.md.
-reviewer-role → notes/agents/reviewer.md. crash-fixes-first → notes/agents/reviewer.md, AGENTS.md.
+reviewer-role → retired reviewer.md (git). crash-fixes-first → retired reviewer.md (git), AGENTS.md.
 outcome-tests-only → AGENTS.md "Outcome tests only". weekly-cleanup → notes/agents/README.md.
 topic-priority → AGENTS.md Cards.
-cleanup-means-fewer-lines, restructuring → notes/agents/refactorer.md.
+cleanup-means-fewer-lines, restructuring → retired refactorer.md (git).
 question-popups → AGENTS.md (superseded: questions go to warp-interviewer).
 test-consolidation → AGENTS.md Testing. P150 license → notes/packaging.md, CONTRIBUTING.md.
-laws-file → samples/laws/project_laws.warp. deploy-hook → scripts/watch-playground-deploy.sh.
+laws-file → samples/laws/project_laws.warp. deploy-hook → retired watch-playground-deploy.sh (git).
 typed-signatures → notes/agents/handbook.md. night-watch → notes/agents/supervisor.md.
-codex-library-cards → notes/codex_cron.md. core-gate-probes → AGENTS.md Done.
+codex-library-cards → retired codex_cron.md (git). core-gate-probes → AGENTS.md Done.
 rebuild-next-lever, no-seed-before-instance-runtime, sound-core-order, runtime-linking-team, merge-then-reshuffle-then-celebrate, easy-reshuffle-then-pure-warp, native-replaces-rust-first, rust-gone-in-1-5, night-samples-modules → historic (git).
 plain-warp-first, samples-not-spec → AGENTS.md Principles. key-op-spelling → core (key_operator).
 native-harness → AGENTS.md "Native warp", notes/roadmap_native_harness.md.
@@ -366,7 +316,7 @@ extension-rule-forms, hello-lazy-runtime-dropped, small-int-cache → historic (
 extension-parser-hooks, extension-lints, extension-attributes, extension-text-hooks, extension-passes → core/extension.warp.
 one-operator-reader → core/parsing/parser.warp, extensions/declared_operators.warp.
 atoms-as-rows → core/parsing/parser.warp. node-wasm-type → core/emitter/emitter.warp.
-night-2026-11-04-kept → notes/night_2026-11-04.md.
+night-2026-11-04-kept → retired night_2026-11-04.md (git).
 load-time-linking, library-zero-bake, library-zero-bake-plan → notes/library_zero_bake.md.
 units-as-class → lib/units.warp. extension-row-optional → core/compiler.warp, core/emitter/prebuilt.warp.
 core-hygiene → notes/core_hygiene.md. linked-variants-by-arity → core/emitter (linking).
@@ -374,7 +324,7 @@ made-by-reach → core/emitter (module.made).
 comments-not-candidates, implicit-standard-words-index → extensions/implicit_uses.warp.
 native-window-sdl3 → window-in-warp. node-attributes → core/node.warp ($MetaNode).
 canonical-runtime-names → core/runtime. rule-whose, prelude-rule-no-use → core/passes/rewrites.warp.
-inline-code → core/compiler.warp. gpu-driver-plumbing → lib/gpu.warp. shaders-in-lib → lib/shaders.warp.
+inline-code → core/compiler.warp. gpu-driver-plumbing → retired gpu.warp (git). shaders-in-lib → lib/shaders.warp.
 signals-test-15 → test/control/test_variable_signals.pairs.warp.
 program-match-lowering → core/passes/node_matches.warp. computed-hole-shape → extensions/rules/rule_words.warp.
 ffi-link-any-import → core/native/driver.warp. host-list-one-shot → core/emitter/host.warp.
@@ -622,3 +572,25 @@ zone-literal-kept → test/types/test_time_programs_run.pairs.warp.
 typed-places-check → test/types/test_optional_type_words.pairs.warp.
 pipe-after-braceless-call → test/functions/test_function_valued_definition.pairs.warp.
 function-valued-definition → wiki/pipe.md, test/text/test_scan_by_index.warp.
+build-kinds-detected → wiki/cli.md (build outputs, Later cards).
+language-layers → AGENTS.md (Three layers), notes/layers.md.
+appends-line, refusal-place-of-lib → notes/welcoming.md. alias-mechanism → lib/aliases.warp.
+alias-arrows → wiki/alias.md, test/text/test_fix_alias_arrows.warp.
+operator-word-optional → wiki/operator.md, test/operators/test_operator_word_optional.pairs.warp.
+after-sum → lib/prelude.warp. name-glue → extensions/sugar (rewrite templates). warp-is-tests → notes/is_tests.md.
+wasm-instruction-body → wiki/wasm.md. sound-buffer-lib → lib/sound.warp.
+pure-it-block, self-parser-drops, sugar-twins-drops, Language, class-index-test, global-word-marker-not-needed, lib-oddities → historic (git).
+unicode-glyphs → core/parsing. call-takes-right → wiki/function.md, test/functions/test_definition_rules.pairs.warp.
+leave-as-is → historic (git; leave as is). operators-are-functions → wiki/operator.md.
+typed-builtin-variant → wiki/function.md. method-by-type, method-routing-by-type → core (method routing).
+compiler-node-enum → core/node.warp. sugar-triage → AGENTS.md (Three layers).
+exports-kept, package-reexport, implicit-standard-words → wiki/use.md.
+uniscript-binary-import → github.com/pannous/uniscript.
+trim-default, build-includes-native, shown-warp-notation → wiki/cli.md.
+juxtaposed-product-later → test/functions/test_function_rules.pairs.warp.
+is-pattern-binds → wiki/pattern-matching.md. range-dots → wiki/list.md, test/lists/test_list_rules.pairs.warp.
+glued-negative, of-binds-tighter → test/functions/test_definition_rules.pairs.warp.
+computed-hole, typed-rule-holes, rule-not-in-own-definition → core (rewrite engine).
+color-prints → lib/color (superseded by color-show-variants). on-frame-headless → lib/graphics.
+modules-triage, after-participle-held → notes/test_triage.md. hole-calls-unreached, float-int-power → core.
+error-expectation → core/native/tests.warp.
