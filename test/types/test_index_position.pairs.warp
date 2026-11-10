@@ -1,5 +1,5 @@
 # index counts from 0, position from 1, a text's find answering by the declared type (decision index-position,
-# index-units; notes/index_position.md); a function's own assignment counts as its own, a variable of the same name
+# index-units; wiki/indexing.md); a function's own assignment counts as its own, a variable of the same name
 # around it notwithstanding (local-variable rule, supervisor 2026-10-31)
 'position p = "a👍🏽b".find("b"); p'	3
 'index i = "a👍🏽b".find("b"); i'	2

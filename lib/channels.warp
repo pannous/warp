@@ -1,4 +1,4 @@
-// Channels (P155, notes/channels.md): a channel inside one run, written in warp, and `channel "chat"`, the
+// Channels (P155, wiki/async.md): a channel inside one run, written in warp, and `channel "chat"`, the
 // machine-wide channel (rust-harness:src/host/channels.rs). The words are rewrite rules (card compiler-modules): every program
 // mentioning them gets them, no `use` needed. A task `go {…}` is cooperative (lib/tasks.warp): `ch.receive()` lets
 // the tasks run until one sent a value and takes the oldest, `for v in ch {…}` receives until the channel is closed or

@@ -6,8 +6,8 @@ Weight: lines of code after every commit of origin/main, each by what it changed
 the core without extensions and the extensions apart. Tests: every committed version of each results file (TIERS),
 its pass count read from its summary or its status lines. Build time: the CPU seconds and peak memory of each
 landing's compiler builds, read from the build records in the store (STORE). All of it is reconstructed (seconds) into scripts/vitals.html. The nightly run
-(scripts/integrate/nightly.sh) calls it; a Claude session republishes the page to its artifact URL
-(notes/core_hygiene.md "Warp vitals").
+(scripts/integrate/nightly.sh) calls it; a Claude session (the Integrator after a landing) republishes the page to its
+artifact URL, https://claude.ai/code/artifact/b988ec61-123d-4e97-833b-0dd2342cac4c.
 """
 import collections, datetime, glob, json, os, re, subprocess, sys
 

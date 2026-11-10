@@ -773,7 +773,7 @@ typed_overloads(program: Node): Node := {
 	if #variants == 0 then resolved else separated(bracketed(statements_in(resolved) + variants, ""), ";")
 }
 
-# --- by result type (decision cleanup-cuts; notes/dispatch.md "Dispatch on return type") ---
+# --- by result type (decision cleanup-cuts; wiki/polymorphism.md "return type polymorphism") ---
 # `to render text as pdf: …` beside `to render text as docx: …` are the variants render·pdf and render·docx, each
 # declaring its result; a call takes the one its expected type names, `(render "x") as pdf`, `docx d = render "x"`,
 # `d: docx = render "x"`, an argument for a parameter declared docx; any other call the first declared, with a warning

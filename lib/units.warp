@@ -3,7 +3,7 @@
 // `9.81m/s²` their quotients and powers. A quantity keeps its amount in SI base units, exact where the written amount is,
 // and shows in the unit written: `3km + 500m` is 3.5km, equal to 3500m. Quantities of different dimensions neither add
 // nor compare (a DimensionError); `quantity("5 km")` and `quantity(5, "km")` read a unit given as data
-// (notes/units_runtime.md)
+// (wiki/unit.md)
 
 use unit_names
 use uncertain
@@ -406,7 +406,7 @@ exact_decimal(t: text) := {
 sleep(duration) := slept((if duration is Time then duration.amount else duration) * 1000)
 
 // `6.0m ± 0.3`: a tolerance of a quantity, its amount an interval; a plain spread counts in the value's unit, a
-// quantity's converts to it: `5m ± 1cm` is 5.00 ± 0.01 m (notes/plus_minus.md P220)
+// quantity's converts to it: `5m ± 1cm` is 5.00 ± 0.01 m (wiki/number.md, P220)
 infix operator ±(q: Quantity, spread: number) := measured(plus_minus(q.amount, spread * q.scale), q.dims, q.unit, q.scale)
 infix operator ±(q: Quantity, spread: Quantity) := measured(plus_minus(q.amount, same_quantity(q, spread, "spread").amount), q.dims, q.unit, q.scale)
 # `1900 - 2000 cm == 1950 m ± 50`: ± binds the value on the right of ==, and the span on the left stays one quantity

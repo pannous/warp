@@ -35,72 +35,54 @@ typed variable `p:photo = …` alike (assignments to typed variables are checked
 `image like photo` declares that an image may stand wherever a photo is expected. It is a promise, not a conversion:
 the image is still judged by its uses, so a field it lacks fails loudly where it is read. Unknown values get the benefit
 of the doubt (a newcomer's untyped code runs), known types never mix silently (two declared types that happen to share
-fields are a decision the writer states once, in one line). Implemented in src/lowering/types/traits.rs (`Likeness`,
-`Dispatch::refused_argument`), tests/operators/test_like.rs, wiki/like.md.
+fields are a decision the writer states once, in one line). wiki/like.md, test/operators/test_like_known_type_mismatch.warp.
 
 ## Forms newcomers write
 Samples of standard algorithms written in Python/JS style sit next to idiomatic ones (samples/<name>.warp,
 samples/<name>_idiomatic.warp).
 - text + number concatenates (`"F:" + 13` → "F:13")
-- floor division is `/!` (`7 /! 2`, `x /!= 2`); `//` is always a comment, glued (`7//2`) with a severe warning naming `/!`
+- floor division is `/!` (`7 /! 2`, `x /!= 2`); `//` is always a comment, glued (`7//2`) too (the warning naming `/!` is not ported yet)
 - `#ident` with no space is count (`#s`); `# text` stays a comment; directives (#use, #include, #!) keep working
-- `upto` excludes the end, with a warning naming the explicit forms (`..<`/`..` exclusive, `to`/`...` inclusive)
+- `upto` excludes the end (`..<`/`..` exclusive, `to`/`...` inclusive)
 - missing map key `m["Z"]` stays an error (as in Python); `m.get(k)`, `m.get(k, default)`, `k in m`, `m.has(k)` are the soft forms
 - an expression of `it` where a function is expected is that function: `xs.map(it * 2)`, `apply(it + 3, 1)`; inside a
-  function of one parameter its `it` stays the argument function's (src/lowering/definitions/lambdas.rs it_function)
+  function of one parameter its `it` stays the argument function's
 
-## Ask: how it works (src/errors/diagnostic/asks.rs)
-- `Ask { topic, written, question, readings: [Reading{meaning, explicit_form}], default, fallback: Fallback::{Warning, Error}, line, column }`;
-  `ask(&Ask) -> Result<usize, Node>` returns the default reading or the error. It never asks and never remembers a reading.
-- Fallback Warning prints `warning: <question> (taking <default>) at l:c; fix: <explicit form>` and takes the default.
-  The warning shows until the user says "got it" for its topic, then never again (an acknowledgement silences, it never
-  changes the value). Under `--strict` or a `use strict` line it is an error, acknowledged or not.
-- Fallback Error returns `Node::Error` naming every explicit form (`` `a` for first or `b` for second``), acknowledged or not.
-- "Got it" is the educate_once machinery, shared by Ask warnings and educating notes (`educate_once(topic, written,
-  preferred, reason)`): `trait Acknowledger` (`has_acknowledged` for a host's own list, `acknowledge` asked once per run
-  after the warning or note), `set_acknowledger` / `with_acknowledger`; `TerminalAcknowledger` (`got it? [y …]`),
-  `Acknowledging(topics)` for tests, the playground's page list (src/web/mod.rs `PageAcknowledger`, report `notes`).
-  Remembered as `ack:<topic> = acknowledged` in `.warp-acknowledged` (CLI, working directory). Non-interactive runs
-  just show the warning, never block; `--no-ask` never prompts.
-- Scope: the prompt answers `GotIt::{This, All, No}`: `[y this / a all of this kind / n]`. "This"
-  remembers one expression, `ack:<topic>@<expression> = acknowledged` (an Ask by its question, which names the
-  expression; educate_once by its written text); "all" the topic. A `// got it` comment on a line silences the
-  warnings and notes of that line (diagnostic::silenced_by_comment). The playground acknowledges whole topics.
-- Users: `a upto b` (topic `upto`) and the for-header bound `0..n-1` (topic `kotlin-range`, Kotlin's `..` is inclusive),
-  both default exclusive, fallback Warning (src/warp_parser/ `range_reading`); `local-or-global` (src/analyzer/
-  `resolve_main_variable_assignments`, default a new local `let n = …`, explicit main's `global n = …`); `signed-operand`
-  `1 -1` (default the list `[1 -1]`). Error fallback: `list-times` `[x]*n`, `insert-order`, `list-plus` `[1 2 3]+4`,
-  `bare-list` `a=1 2 3`, `suffix-precedence` `1+2 squared`. Explicit forms (`..<`, `...`, `to`, `global n`, `[4]`, `.+`
-  …) never warn. tests/welcoming/test_got_it_warnings.rs, test_welcoming_ask.rs, test_welcoming_globals.rs.
-- A wrong guess fails far away, so `eval` names it: a runtime error lists the defaults the warnings took
-  (`assumed at 23:13, 24:15: …; fix: ..<`, diagnostic::take_assumptions), and an index out of range in a program with an
-  exclusive range adds "hint: `..` excludes the end; `...` or `to` include it". The kotlin-range warning fires for every
-  for-header `a..b-1` form, also `(0..n-1)`, `0..(n-1)`, `do` bodies and loops inside functions.
-- New ambiguities: build an `Ask` where the ambiguity is still visible (often the parser, which knows the written form),
-  give every reading its explicit form, pick Error only when a wrong guess would silently corrupt results.
+## Ask: how it works (core/analysis/diagnostics.warp)
+- An ambiguity is a fact a check diagnoses; its row in warnings.data takes the default reading and names the explicit
+  form in its fix column (`warning: <message> at l:c; fix: <explicit form>`); a row in errors.data refuses and names
+  every explicit form, for a guess too dangerous to take. It never asks and never remembers a reading.
+- A row's 4th column `topic@expression` is what "got it" silences: the playground remembers acknowledged topics in the
+  browser (web/playground/playground.js). An acknowledgement silences, it never changes the value.
+- Users: `signed-operand` `1 -1` (default the list `[1, -1]`, warning spaced_sign); `local-or-global` (errors.data
+  local_or_global: `let n = …` or `global n = …`); and-or, negative-modulo, arithmetic-conversion, optional-result
+  (warnings.data). Explicit forms (`..<`, `...`, `to`, `global n`, `[4]`, `.+` …) never warn. test/welcoming/.
+- Not ported from the Rust compiler yet: the warnings of `a upto b`, the for-header bound `0..n-1` (kotlin-range) and
+  glued `//`, and the error fallbacks `list-plus` `[1 2 3]+4`, `bare-list` `a=1 2 3` (both compile today),
+  `insert-order`, `suffix-precedence`; `list-times` `[x]*n` is refused as "outside the core", without naming its readings.
+- New ambiguities: a fact where the ambiguity is still visible (often the parser, which knows the written form), a row
+  giving every reading its explicit form, errors.data only when a wrong guess would silently corrupt results.
 
-## Change the code to the intended form (notes/fixits.md)
+## Change the code to the intended form (core/analysis/diagnostics.warp)
 Instead of a question that changes what the source means, an action rewrites the source to the explicit form the user
-picks, so the file itself says it. Each reading is a `Fix` on the diagnostic (from the Ask's `written`, `line`/`column`
-and each reading's `explicit_form`); the playground shows it as an "I meant: …" button, after which the warning is gone
-because the explicit form never warns. Open: `warp fix`, IDE quick fixes, fixes that need several edits (multi-line
+picks, so the file itself says it. The fix is a row's fix column; the playground shows it as an "I meant: …" button
+(web/playground/driver.js), after which the warning is gone because the explicit form never warns. Open: `warp fix`, IDE quick fixes, fixes that need several edits (multi-line
 `written`, `global n` as a declaration elsewhere).
 
 ## Assigning a named constant (P130)
 The named numbers (`pi`, `tau`, `euler`, their glyphs) are declared constants, so `pi = …` / `pi := …` is the compile
 error "pi is a constant; fix: another name" (it never silently stays π). A field `class circle{pi = 3}` or
 `class C{pi:int}` is the type's own field, no message: the type's methods read the field (`f() := pi * r`), everywhere
-else `pi` stays the constant (parser state `type_fields`).
-src/warp_parser/atoms.rs `refuse_constant_assignment`, tests/welcoming/test_constant_shadowing.rs.
+else `pi` stays the constant. errors.data constant_assignment, test/welcoming/test_constant_shadowing.pairs.warp.
 
 ## Control flow as other languages write it
-(samples/conditions/control_flow.warp, tests/control/test_match_guards_and_finally.rs)
+(samples/conditions/control_flow.warp, test/control/test_match_guards_and_finally.warp)
 - match guards (Rust, Scala): `n if n < 0 => "negative"` binds n to the subject and holds when the condition does;
-  a list pattern takes a guard too (`[a, b] if a > b => …`). switch.rs split_guard.
+  a list pattern takes a guard too (`[a, b] if a > b => …`).
 - an assigned match `d = match v {k => …, _ => …}` parses as `match (v {…})`; welcome_forms turns its arrow cases into
   `k: …` / `default: …` as for the statement form.
 - `try … catch/else/except … finally {Z}` (Java, Python): `(finally·N = try…; Z; finally·N)`, Z runs either way and
-  the value stays the try's or the catch's. lookahead.rs with_finally.
+  the value stays the try's or the catch's. parser.warp with_finally.
 - `global a, b` (Python) declares both; several `global` lines in a block are no duplicate key.
 - English operator words are aliases (samples/hello/natural.warp, wiki/operator.md): `plus`, `minus`, `divided by`,
   `equals`, `is greater than`, `greater than`, `is less than`, `less than`, `is at least`, `is at most`, `through`
@@ -112,11 +94,8 @@ src/warp_parser/atoms.rs `refuse_constant_assignment`, tests/welcoming/test_cons
   error "`> 100` compares nothing".
 
 ## Warning levels (decisions warning-levels, hints-are-warnings)
-Shown from hint; `--no-hints` / `WARP_HINTS=0` show from weak; `--warnings=<level>` and the playground's "show … and
-up" select set it. `use strict` / `--strict` fail from normal, `--strict=<level>` from that level; Rust's
-`WarningMode::Error` fails on every warning, weak too. Hints never fail. HintMode::Once dedups every level.
-- Severe: a key name that names nothing, an event nothing emits, a signal that never fires, a task that never
-  happens, a variable updated in a parallel loop.
-- Weak: @parallel running in sequence, a GPU map running on the CPU, a std module shadowed, an event from the
-  playground page, run-time blocks needing the host.
-- Every other warning is normal; the CLI labels weak and severe ones `warning (weak):`.
+Three levels: error, warning, hint (core/analysis/errors.data, warnings.data, hints.data). Hints are shown unless the
+run asks for none (`--no-hints`, `WARP_HINTS=0`, `use relaxed`, `use script`; wiki/warning.md). Hints never fail.
+The Rust compiler's weak/severe levels, `--warnings=<level>` and failing on warnings under `--strict` are not ported
+(`use strict` is a numbers and JSON mode, core/passes/modes.data); the playground's "show … and up" select still
+names hint/weak/normal/severe.

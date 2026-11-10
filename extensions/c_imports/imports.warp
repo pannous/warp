@@ -1,4 +1,4 @@
-# C functions a program calls through its host (card pure-c-imports, notes/warp_host.md "C calls"): read from the
+# C functions a program calls through its host (card pure-c-imports, core/native/driver.warp): read from the
 # source's text before it is parsed, each becomes a host word of the module its library names, so the emitter imports
 # `library.name` and calls it like any host word, and describes it in the warp.c_functions custom section with one
 # rust-harness:crates/warp-runtime/src/c_signatures.rs line, which the native warp links by dlopen and dlsym.

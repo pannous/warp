@@ -40,7 +40,11 @@ differ and holds every rule; this file holds only the procedures behind them.
 - Known-good tags and bisects: after a green gate on main, `scripts/gate.sh --tag-good` tags it
   `good/<YYYY-MM-DD-HHMM>` and pushes the tag. A regression: `git bisect start origin/main <good tag>` and `git bisect
   run` a line that rebuilds (`scripts/rebuild.sh --check`, exit 125 when that fails) and compares `warp <program>`
-  with the expected output (notes/bisect_stored_compilers.md).
+  with the expected output. No build needed: each <store>/<hash>/warp.wasm.inputs names its commit, so per
+  first-parent commit a detached worktree + `scripts/rebuild.sh --check` takes the stored compiler, then runs the exact
+  failing line with WARP_LIB=<wt>/lib. The first run of each stored warp.wasm compiles machine code (~1 min).
+  `warp '<code>'` prints the shown value, `warp test` reads it back as data in the file's folder: they may differ
+  (`type(ø)`).
 - Targeted runs only, filtered to the test files your change touches (grep test/ for the changed syntax to find the
   ones pinning old behaviour).
 - Long commands: note the job's PID in your handover; a job you abandon gets killed by PID. After every test, probe
@@ -74,6 +78,10 @@ differ and holds every rule; this file holds only the procedures behind them.
 - `todo take <card> <session>` assigns the user on GitHub, names you in the field Agent and moves the card to Now.
   Before taking, check nobody has a branch or worktree for it (`git branch -r --list '*<key>*'`, `ls
   /Volumes/Worktrees/`). A topic's cards together: `todo list Next --by-topic`, `todo take --topic <topic> [-n 3]`.
+- A roadmap is a plan note `notes/<goal>.md` (first line under the title: `Roadmap card: <topic-key>`), its topic card
+  (body links the note; column Roadmaps, or Now while driven; `todo done` once every sub-card is Done) and sub-cards
+  (`todo add … --topic <key>`, `todo sub <key> <card>…`). Status lives on the board, not the note; leftovers become new
+  sub-cards; a new plan note gets its topic card in the same commit. A recurring chore: `todo repeat <card> <days>`.
 - A Soon/Later card that is clearly dead (fixed on main, duplicate, a bug of the old Rust compiler) is archived with a
   one-line note; unsure → warp-interviewer.
 - Every card has a meaningful key: rename a poor one at once (`todo key <card> <short-name>`) and use it in branch
@@ -95,7 +103,10 @@ differ and holds every rule; this file holds only the procedures behind them.
 - Docs are part of done: a card that changes what users write or see updates the wiki page of that concept in the
   same task: a minimal example and one sentence, simplest form first, plain words. Say "docs: <page>" or "docs: none
   (internal)" in a `todo note`. A feature the docs mention but that isn't built gets a card named on the page
-  (notes/docs_planned.md); docs and code that disagree on meaning go to warp-interviewer.
+  and stays fenced ```` ```warp planned ```` with a one-line `*Planned:* …` sentence above and the card in Later; its
+  worker drops `planned` when the feature lands. scripts/llm/docs_check.py runs every warp fence except those marked
+  `compiles` or `planned`. A doc example failing only on a renamed or reserved word (`double`, `fun`) is a doc fix:
+  rename it. Docs and code that disagree on meaning go to warp-interviewer.
 - Wiki (`wiki/` in the main checkout, its own repo pannous/warp.wiki, branch master only: `git push origin
   HEAD:master`): commit only your pages by name, never `-a`; a refused pull is someone else's work. Write a branch's
   doc changes only with its landing.

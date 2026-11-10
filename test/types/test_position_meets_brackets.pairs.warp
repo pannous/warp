@@ -1,5 +1,5 @@
 # a position meeting [ ], an index meeting #, insert(at:) taking an index, adding two counts an error
-# (decision index-position, notes/index_position.md; card pure-lane-position)
+# (decision index-position, wiki/indexing.md; card pure-lane-position)
 'xs = [10 20 30]; xs[xs.index_of(20)]'	20
 'xs = [10 20 30]; p = xs.index_of(30); xs[p]'	30
 'xs = [10 20 30]; xs#(xs.index_of(20))'	20

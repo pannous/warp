@@ -1,8 +1,8 @@
 # Events: one loop for timers, signals, input, sockets, windows and the page
 
-Roadmap card: event-loop (board topic; its sub-cards are the steps of section 6, notes/roadmaps.md).
+Roadmap card: event-loop (board topic; its sub-cards are the steps of section 6).
 Companions: notes/signals.md (signals inside a program), notes/system_signals.md (the Rust era's system signals: the
-record of what was decided, its paths are gone), notes/ffi_handles.md (callbacks), notes/roadmap_native_harness.md.
+record of what was decided, its paths are gone), notes/ffi_handles.md (callbacks), notes/primitive.md.
 User answers 2026-11-09 (through warp-interviewer, section 7): cancel-timer A (`cancel t`), ctrl-c-runs-exit A (`on
 exit` runs, then 130 / 143), event-delivery-points (Q1): waits and loop starts, one rule for native and the page,
 and threaded-handlers: real threads planned too (section 7, "Decided").
