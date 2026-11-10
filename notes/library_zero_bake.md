@@ -25,7 +25,7 @@ one are two overloads the dispatch cannot tell apart (a function replaces, an op
 Checked: smoke, self-check, gate tier 1; compiler.warp compiled against a lib/prelude.warp holding only the core part's
 text built a compiler that compiled and ran a program (before `times` left the core part). With lib/prelude.warp emptied
 the compile now stops in lib/text.warp's indent, which the compiler uses implicitly by name (its field and local
-`indent`) and which needs `times`. scripts/compiler-inputs.sh --baked-files lists no lib/ file. Left: the reach by name
+`indent`) and which needs `times`. scripts/compiler-inputs.sh --code-files lists no lib/ file. Left: the reach by name
 still compiles dead prelude words, and lib/text.warp's, in from lib/ (card baked-lib-split note).
 Data on demand (cards webidl-on-demand, entities-on-demand, user 2026-11-10): lib/web.webidl and lib/entities.tsv are
 read through library_data (core/passes/library.warp, loud when missing) the first time a program reaches the page's js

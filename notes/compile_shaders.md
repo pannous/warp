@@ -47,7 +47,7 @@ The translator runs inside the compiler as rule words, which the seed compiles; 
 - a line starting with `[` or `(` glues to the statement before it as indexing or a call: `return [...]`
 - locals must not shadow a core function or global name; map keys that are operator words (ln, sqrt, π) are quoted
 - the translator is lib/wgsl.warp, used by rule_words.warp (whose rule-word map names its words) and using
-  rule_words for the program's reflection words; both are baked into the compiler (compiler-inputs.sh BAKED), so a
+  rule_words for the program's reflection words; both are baked into the compiler (compiler-inputs.sh --code-files), so a
   change of either needs `scripts/rebuild.sh pure` before it shows
 - `use math` brings lib's own `cosine` etc. into the program: WGSL's words are looked up before program functions
 
