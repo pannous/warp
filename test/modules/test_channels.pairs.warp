@@ -1,0 +1,12 @@
+# lib/channels.warp (P155, wiki/async.md, decisions for-over-iterator and named-argument-phrases): a channel inside one run
+# values come out oldest first
+'c = channel(); c.send(1); c.send(2); [c.receive(), c.receive()]'	[1, 2]
+# a task sends, receive runs the tasks until a value arrived
+'use tasks; c = channel(); go { c.send(7) }; c.receive()'	7
+# `for v in ch {…}` receives until the channel is closed
+'c = channel(); c.send(1); c.send(2); c.close(); s = 0; for v in c { s += v }; s'	3
+# `send v to: c`
+'use channels; c = channel(); send 5 to: c; c.receive()'	5
+# a closed channel takes no value, an empty one no task sends to gives none
+'c = channel(); c.close(); c.send(1)'	error	send on a closed channel
+'c = channel(); c.receive()'	error	receive on a channel no task sends to
