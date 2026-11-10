@@ -1,0 +1,5 @@
+# a type alias may name a type phrase: `type Code = list of int` declares parameters, fields and variables as `list of int` does (wiki/alias.md)
+'type Code = list of int; f(c: Code) := #c; f([1, 2])'	2
+'type Code = list of int; class P{c: Code}; #P([7, 8, 9]).c'	3
+'type Code = list of int; c: Code = [1, 2]; #c'	2
+'type Rows = list of list of int; f(r: Rows) := #r; f([[1], [2, 3]])'	2
