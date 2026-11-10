@@ -8,4 +8,4 @@ is! 'missing := fetch "://warp.pannous.com/no-such-file.json"
 [missing, missing.loading, missing.error.contains("404")]' [ø, no, yes]
 
 is! 'people := fetch "://warp.pannous.com/assistant.json"
-to_html(p{ if people.loading then "Loading…" else "loaded" })' '<p aria-live="polite">loaded</p>'
+to_html(html{ p{ if people.loading then "Loading…" else "loaded" } })' '<html><p aria-live="polite">loaded</p></html>'
