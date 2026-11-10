@@ -10,8 +10,8 @@
 # --baked: the hash of the compiler's code alone: core/**, extensions/**, the lib/ modules they use (`use os`) with
 # those these use in turn, compiled in, and the lib/ files module_source builds in as text, and the seed; the rest of
 # lib/ left out (aliases.warp too: read from the library index at each compile, never in warp.wasm's bytes; and
-# prelude.warp: the words and aliases the compiler is written with are core/prelude_core.warp, card baked-lib-split;
-# the current seed still reads its alias copies there, card builtins-seed-transition): two lib/ trees of one baked hash compile
+# prelude.warp: the words and aliases the compiler is written with are core/prelude_core.warp, card baked-lib-split):
+# two lib/ trees of one baked hash compile
 # compiler.warp alike, so a self test passed for one holds for the other (scripts/rebuild.sh self), and a lib/-only
 # change reuses a stored compiler of that code (rebuild.sh reused_stored). --baked-files [<lib>]: those lib/ files,
 # one a line, of <lib> or this tree's (scripts/smoke.sh, integrate/land.sh)

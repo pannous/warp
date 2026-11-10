@@ -4,8 +4,6 @@
 // The words and aliases the compiler itself is written with are the prelude's core part, core/prelude_core.warp,
 // which every program's prelude reads before this file (decision core-takes-what-it-uses).
 // The builtins, the words no warp definition gives, are the core's: core/analysis/builtins.warp and math_builtins.warp.
-// Transition (card builtins-seed-transition): the core part's aliases are written here too, for the seed, which reads
-// them off this file, until a seed built with the core part deletes them here
 
 // the call form of xs.add(x), which extensions/sugar/methods.warp appends in place (the emitter has no call add)
 add(xs, x) := { xs.add(x); xs }
@@ -59,34 +57,22 @@ alias warn => warning
 alias tuple => list
 // decision nat-and-int: a fraction is a rational
 type fraction = rational
-alias keys => map_keys
-alias values => map_values
-alias contains => collection_contains
 // JavaScript's names of the list tests
 alias every => all
 alias some => any
-alias has => collection_contains
 alias includes => collection_contains
-alias get => map_get_or
 // P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
-alias index_of => collection_position
 // card of-in-chain: `t.characters`, `characters in t`; a glyph is a character too; decision text-unit-plurals:
 // `t.graphemes`, `t.codepoints` are the lists
 alias characters => chars
 alias glyphs => chars
 alias graphemes => chars
-alias codepoints => code_point_list
 alias uppercase => upper
 alias lowercase => lower
 // the text builtin trim, Python's strip
 alias strip => trim
 // card fix-rewrites: we call it text; str stays as an alias
-alias str => text
 alias reversed => reverse
-alias size => count
-alias len => count
-alias length => count
-alias sorted => sort
 alias squared => square
 alias cubed => cube
 alias clone => copy
