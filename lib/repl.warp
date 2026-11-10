@@ -4,9 +4,12 @@
 // assignment as its value (`x = command("date")` kept as `x = "Fri …"`), so later entries never run its effects again;
 // a value without a literal (a list holding what text_form can't write back) keeps the assignment as written.
 // `:symbolic` keeps assignments symbolic and shows an evaluation step by step (lib/symbolic.warp, wiki/shell.md),
-// `:direct` (the default; WARP_SHELL_MODE=symbolic starts symbolic) evaluates them at once
+// `:direct` (the default; `warp lib/repl.warp --symbolic` starts symbolic) evaluates them at once
 use os
 use symbolic
+
+// the option that starts the console symbolic
+SYMBOLIC_OPTION = "--symbolic"
 
 // whether a file descriptor is a terminal: 1 for the console's own standard input when a person types
 isatty(fd: i32): i32 from 'c'
@@ -139,7 +142,7 @@ mentions_symbol(entry: text, symbols: any) := symbolic_names(entry).any(name => 
 // steps it got to
 show_steps(entry: text, symbols: any, session: text, kept: int) := {
 	final = ends_with(entry, "!") and not ends_with(entry, "!!")
-	expression = if final then trim(entry[0:count(entry) - 1]) else entry
+	expression = if final then trim(entry[0: count(entry) - 1]) else entry
 	shown = symbolic_steps(expression, symbols, e => evaluated(session + e))
 	if final {
 		if shown.error == "" and count(shown.steps) > 0 { print shown.steps[count(shown.steps) - 1] }
@@ -198,7 +201,7 @@ repl() := {
 	session = ""
 	kept = 0
 	editor = line_editor()
-	symbolic = env("WARP_SHELL_MODE") == "symbolic"
+	symbolic = SYMBOLIC_OPTION in args
 	symbols = {}
 	while true {
 		line = typed("🌀", editor)
