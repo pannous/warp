@@ -6,7 +6,7 @@
 #     inputs hash they were built of, then `scripts/rebuild.sh pure <worktree>` takes them only when that hash is the
 #     tree's (card tree-installed: an install lagging main left modules of an older lib/, "markup.wasm won't link");
 #     else the store's, or the stored compiler of this code with the runtime and modules built anew of this lib/
-#   - core/ or extensions/, the compiler's own code (compiler-inputs.sh --baked-files): said loudly
+#   - core/ or extensions/, the compiler's own code (compiler-inputs.sh --code-files): said loudly
 #     with the files, then `scripts/rebuild.sh pure <worktree>` (core/: run `scripts/self-check.sh <worktree>` too)
 # after-push still builds the installed warp.wasm anew, so the lib it bundles is main's. Exit 0: hello printed.
 set -uo pipefail
@@ -19,13 +19,13 @@ EXPECTED=Hello
 tree=$(cd "${1:?usage: smoke.sh <worktree>}" && pwd) || exit 2
 packages_linked "$tree"
 scripts=$(cd "$(dirname "$0")" && pwd)
-BAKED="^(core/|extensions/$(printf '|lib/%s$' $("$scripts/compiler-inputs.sh" --baked-files | sed 's/\./\\./g')))"
+CODE_PATHS="^(core/|extensions/$(printf '|lib/%s$' $("$scripts/compiler-inputs.sh" --code-files | sed 's/\./\\./g')))"
 installed=$(dirname "$(readlink -f "$INSTALLED")")
 base=$(git -C "$tree" merge-base origin/main HEAD) || exit 2
 # a change writing code a second time in one file is refused before any build (card repeated-code-check)
 "$scripts/repeated-code.sh" "$tree" || exit 1
 changed=$({ git -C "$tree" diff --name-only "$base" HEAD; git -C "$tree" diff --name-only HEAD; } | sort -u)
-baked=$(echo "$changed" | grep -E "$BAKED" | grep -v '^core/native/')  # the native warp is no compiler input (compiler-inputs.sh)
+code_changed=$(echo "$changed" | grep -E "$CODE_PATHS" | grep -v '^core/native/')  # the native warp is no compiler input (compiler-inputs.sh)
 # the lib/ modules the branch changed: the prebuilt lib/modules/*.wasm run in place of their source, so any edit of one
 # (a body line too, card smoke-prebuild-body) needs them built anew before a probe sees it
 changed_modules() { echo "$changed" | grep -E '^lib/(host/)?[A-Za-z_0-9]+\.warp$'; }
@@ -44,8 +44,8 @@ clashes_said() {
 		done
 	done
 }
-if [ -n "$baked" ]; then
-	echo "smoke: REBUILDING, the compiler bakes in what this branch changed: $(echo $baked)"
+if [ -n "$code_changed" ]; then
+	echo "smoke: REBUILDING, the compiler code this branch changed: $(echo $code_changed)"
 else
 	for part in "${COMPILERS[@]}"; do
 		# machine code (.cwasm) is made at a module's first run (the 512 MB heap's at the compiler's first compile), so an
@@ -64,7 +64,7 @@ way=$(echo "$built" | tail -1)
 # others by their words too (time reaches units in no use line and no signature), and one run is cheaper than a run
 # per module, whose start dominates. For any change of a module's source (night decision smoke-prebuilds-modules:
 # about 2.5-5.5 min more under load; card smoke-prebuild-body: a body-only edit left the stale module in place)
-if [ -z "$baked" ] && [ -n "$(changed_modules)" ]; then
+if [ -z "$code_changed" ] && [ -n "$(changed_modules)" ]; then
 	fresh=$tree/data/smoke-modules
 	rm -rf "$fresh" && mkdir -p "$fresh" || exit 1
 	made=$(cd "$tree" && WARP_LIB=$tree/lib WARP_NO_WINDOW=1 "$INSTALLED" "$tree/lib/warp.wasm" modules "$fresh" "$tree/lib/runtime.wasm" 2>&1) ||

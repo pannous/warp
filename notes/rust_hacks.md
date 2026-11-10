@@ -2,7 +2,7 @@
 
 Survey (card rust-hacks-survey, 2026-10-22, main 6bfc3c1deb) of src/lowering, src/analyzer, src/wasm_emitter, src/law and
 core/*.warp for special cases keyed on a word: word lists, per-word templates, closed forms, fast paths. The
-Rust stays as it is (frozen legacy, notes/agents/common.md); each hack gets the banner
+Rust stays as it is (frozen legacy, AGENTS.md); each hack gets the banner
 `// ⚠ WARP DOES THIS DIFFERENTLY: <what> → <lib file>` once warp has the general rule. Vocabulary that only names
 keywords (`for`, `in`, `break`/`continue`/`next`, prepositions, articles) is no hack and is left out.
 

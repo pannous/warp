@@ -247,7 +247,7 @@ instances only (constructions, annotated or constructed variables, loop variable
 operand keeps the built-in operator (card class-method: dispatch at run time). A method named by its glyph
 `+(o) := …` and C++/C#'s `operator +(o) := …` (classes-25: the parser's try_parse_operator_method_head reads a glyph
 before `(…) :=` as the head, as_member renames it to the english name).
-Foreign spellings are aliases (classes-24, alias rule in notes/agents/common.md): they work and give a got-it note
+Foreign spellings are aliases (classes-24, alias rule in AGENTS.md): they work and give a got-it note
 with an "I meant: <warp word>" fix, `diagnostic::note_alias(written, warp_word)` (educate_once, topic
 `alias-<foreign word>`): `__add__`/`add` → `plus` (every non-first name in
 OPERATOR_METHODS), `data class`/`open class`… → `class`, `mutating func` → `func`, `val x`/`var count` → the field
