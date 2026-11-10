@@ -12,7 +12,7 @@ check() { # check <code> <expected shown result>
 check 'use color; red' red
 check 'use color; color(0xFF8000)' '#FF8000'
 check 'use color; with_alpha(red, 0.5)' '#FF000080'
-check 'type Kolor = int; format Kolor c as text := "K"; 5 as Kolor' K
+check 'type Kolor < int; format Kolor c as text := "K"; 5 as Kolor' K
 check 'use color; hex(red)' 4294901760
 check 'use color; "red"' '"red"'
 check 'class P{x:int; format as text := "P!"}; P(1)' 'P!'
