@@ -1,4 +1,4 @@
-# a4957a43b6 2026-11-10 16:31 263/265 99.2%
+# 0c8290e03d 2026-11-10 20:53 263/265 99.2%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -109,6 +109,7 @@ ok   samples/graphics/gaussian_splats.warp
 ok   samples/graphics/meshlet_grid.warp
 ok   samples/graphics/million_trees.warp
 ok   samples/graphics/paint_function.warp
+ok   samples/graphics/paint_text_gpu.warp
 ok   samples/graphics/paint_text.warp
 ok   samples/graphics/shader_brush.warp
 ok   samples/graphics/shader_trails.warp
@@ -149,7 +150,6 @@ ok   samples/modules/lib.warp
 ok   samples/modules/main.warp
 ok   samples/modules/modules.warp
 ok   samples/modules/packages.warp
-ok   samples/modules/rust_crates.warp
 ok   samples/modules/slug_paths.warp
 ok   samples/modules/square.warp
 ok   samples/modules/test_ffi_comprehensive.warp
@@ -262,5 +262,5 @@ SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
-FAIL samples/graphics/paint_text_gpu.warp: samples/graphics/paint_text_gpu.warp:9:25 outside the core: the call text_coverage(…)
 TIME samples/lists/dot.warp: used its 30 s of CPU
+FAIL samples/modules/rust_crates.warp: samples/modules/rust_crates.warp:6:49 bytes(t) is called with 0 arguments; fix: bytes(t)
