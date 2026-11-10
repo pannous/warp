@@ -369,7 +369,8 @@ before asking a question). After a context swap, this file and your role file be
 ## Testing
 - Tiers, cheapest first: smoke for every branch; self-check (+ gate probes) for core/; `warp test <folders>` of the
   files a change touches is the worker's feedback, in the background, never a merge condition; the full suite only
-  by the Integrator at rare intervals (nightly, before a release). Tests that passed before and fail after your
+  in the cloud, never on the Mac: the routine "warp full suite (cloud)" runs it twice a day (and on demand before a
+  release) and commits test/results.txt. Tests that passed before and fail after your
   change: fix them or roll the change back.
 - Start from the clean baseline: don't rebuild or retest main before your change; whoever pushes keeps main green (a red main: fix it at once or revert your push).
 - The baseline is stored with its compiler: rely on it, never rerun your touched tests on main to compare (user,
@@ -483,7 +484,7 @@ main and the playground. The worker does not land it, push it to main, or publis
   so and broke the module prebuild for every tree). The push itself starts `scripts/integrate/after-push.sh` (pre-push hook, on-push.sh): it installs the
   compilers of the pushed tip beside ~/dev/bin/warp from your build in the store (seconds), so the user's warp matches
   main right away. Then `todo done <card> <commit>`. The full suite runs
-  only at rare intervals, in the background.
+  only in the cloud routine.
 - Express mode: a phase is handed to the integrator as soon as its smoke (+ self-check and gate for core/) is green;
   never wait for slower tests. The next phase starts at once, branched from that tip; what the slower tests find is
   fixed forward as new commits, never by rewriting the landed phase. Only a red smoke on the merge stops the next phase.
