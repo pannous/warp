@@ -398,7 +398,7 @@ before asking a question). After a context swap, this file and your role file be
   Every build keeps its full record (<hash>/warp.record/: inputs and sources, build.log, CPU and memory, a function
   profile; notes/compiler_rebuilds.md "Build records"): read a build's time and profile there, never build to measure. Every
   hit, miss, wait and failure is a line of <store>/rebuilds.log.
-  Only core/**, extensions/** and the seed are a compiler's code (compiler-inputs.sh --baked-files); lib/ is never
+  Only core/**, extensions/** and the seed are a compiler's code (compiler-inputs.sh --code-files); lib/ is never
   part of it. A lib/-only change compiles nothing: rebuild.sh takes the stored compiler of the same code
   (<store>/code/<code hash>) and makes lib/'s runtime, modules and index anew (`miss-rebaking-<hash>`, about a
   minute; decision lib-hash-rebake; a failed rebake is kept like a failed build, step rebake). So a library feature
