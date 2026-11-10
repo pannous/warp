@@ -16,7 +16,7 @@
 'pixel=[1 2 3];pixel.add(5);#pixel'	4
 
 # test_array_creation
-# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], x : 100 numbers) :: 'pixel:int[100];pixel[1]=15;pixel[1]'	15
+'pixel:int[100];pixel[1]=15;pixel[1]'	15
 'pixel=int[100];pixel[1]=15;pixel[1]'	15
 'pixel: 100 int;pixel[1]=15;pixel[1]'	15
 
@@ -39,15 +39,15 @@
 # triage-held 2026-11-06: nop word :: 'x=0;while x++<11: nop;x'	11
 
 # test_array_initialization_basics
-# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], x : 100 numbers) :: 'x : 100 numbers; count(x)'	100
+'x : 100 numbers; count(x)'	100
 
 # test_array_initialization
-# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], x : 100 numbers) :: 'x : int[100]; x.length'	100
-# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], x : 100 numbers) :: 'x : 100 * int; x.length'	100
-# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], x : 100 numbers) :: 'x : 100 * ints; x.length'	100
+'x : int[100]; x.length'	100
+'x : 100 * int; x.length'	100
+'x : 100 * ints; x.length'	100
 'x : 100 int; x.length'	100
-# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], x : 100 numbers) :: 'x : 100 integers; x.length'	100
-# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], x : 100 numbers) :: 'x : 100 numbers; x.length'	100
+'x : 100 integers; x.length'	100
+'x : 100 numbers; x.length'	100
 'x = 100 times [0]; x.length'	100
 
 # test_array_indices

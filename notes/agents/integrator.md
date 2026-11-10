@@ -85,3 +85,20 @@ second look: is it needed for self-compilation, or a feature that belongs in an 
 - The shared target dir is pruned by cron every 6 h: a harness build that fails mid-run then is rerun.
 
 <!-- Start: run the gate once on origin/main as the baseline, then tell the Supervisor "integrator ready, <counts>". -->
+
+## Landing
+
+- Landing checks, then the handoff (Handoff, above). The worker does not push to main: `warp format yes <files>` on the .warp files you
+  wrote; merge origin/main into the branch (real merges, you resolve conflicts) with a merge message summing up the
+  change; on that merge run the smoke test (`scripts/smoke.sh <worktree>`; core/ changes: it + `scripts/self-check.sh` + the gate probes, `scripts/gate.sh --tiers 1 <worktree>`, seconds; "Testing" above);
+  then hand the branch and a patch to the integrator. The integrator applies that on the user's Mac and pushes with `git push origin HEAD:main` (fast-forward only). Rejected because main moved: merge origin/main again; rerun the
+  smoke test only if the new commits touch core/ or lib/; push. The self-check and gate are never rerun after such a
+  re-merge (they passed on your change; the new commits passed their own), only the smoke test, and right after it
+  merge and push in one `&&` chain, so main cannot move again in between (a landing looped 1.5 h). The chain may end with one more
+  merge of origin/main without its own smoke, only when it merges cleanly and touches none of your files; a conflict
+  means smoke again. Its unsmoked commits touch no compiler input: no lib/*.warp, core/ or extensions/, only notes/,
+  test/, samples/, web/, wiki/ and scripts/ (a lib-only `: list` in lib/matrix.warp, 050e032656, came in
+  so and broke the module prebuild for every tree). The push itself starts `scripts/integrate/after-push.sh` (pre-push hook, on-push.sh): it installs the
+  compilers of the pushed tip beside ~/dev/bin/warp from your build in the store (seconds), so the user's warp matches
+  main right away. Then `todo done <card> <commit>`. The full suite runs
+  only in the cloud routine.
