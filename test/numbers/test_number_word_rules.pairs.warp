@@ -1,0 +1,19 @@
+# Numbers and operators: exact roots, glyph numbers, dot products, bit-or, decrement, not, ln, fractions, exact sums,
+# compound operators (wiki number, operator; decisions exact-roots, mixed-number-glyph, dot-glyphs, middot-scalars,
+# triage-pipes, decrement-immediate, test_wasm forms, fraction-written-form, exact-sums, text-to-int-trim,
+# op-assign-general, bang-overloadable, color-light-adding)
+'√9'	3
+'x = 7; x max= 9; x'	9
+'3½'	3.5
+'u=[1,2]; v=[3,4]; u·v'	11
+'x = 3; y = 4; x·y'	12
+'n = 2; m = 4; n | m'	6
+'n = 3; n--; n'	2
+'n = 3; n-- * 10'	20
+'¬ 1'	no
+'ln(1)'	0
+'1/3 + 1/6'	1/2
+'precise 0.1 + 0.2 == 0.3'	yes
+'int(" -12 ")'	-12
+'3!'	3
+'text(red + blue)'	"#FF00FF"
