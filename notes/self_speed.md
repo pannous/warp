@@ -1,4 +1,4 @@
-# Speed of the self-compiled compiler (card self-speed, 2026-10-22)
+# Speed of the self-compiled compiler (card self-speed)
 
 `warp self` (warp-self.wasm, emitted by emitter.warp) against `warp pure` (warp.wasm, emitted by Rust),
 compiling samples/functions/fibonacci.warp. Measured with `WARP_PROFILE=<file>` (guest sampler, 10 ms epochs), 8 runs
@@ -52,7 +52,7 @@ a field read sharing its name with a function compiled to has_field + map_get + 
 class-field-reads (0d6920297d) reads a known class's field by struct.get. Lesson: before publishing a seed, time
 `warp rebuild pure` with it against the installed one (WARP_SEED=<new>), not only its fixpoint.
 
-## Noise of a single timing (2026-10-28, card global-map-read)
+## Noise of a single timing (card global-map-read)
 
 One `warp pure build core/compiler.warp` moves by ±20 s with the load of the shared Mac: main's warp.wasm took 84 s and
 a branch's 65 s back to back at load ~6, and refresh-seed refused seed 30d01c7a as 115 s vs 65 s during a load spike

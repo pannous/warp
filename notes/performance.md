@@ -15,7 +15,7 @@ host's side; compile time with probes/perf/xctrace_summary.py (unstripped build:
   lazily: the copying collector grows its heap too little, so a growing live set is copied again at every collection.
 - **wasmtime's own build** `[profile.*.package.wasmtime] opt-level = 3`: dev is unoptimized and web-release
   size-optimized; they ran the host side of GC-heavy programs 2.5–10× slower.
-- **The native release is opt-level 3** (card release-profile-slower, 2026-10-17): at opt-level z the compiler itself
+- **The native release is opt-level 3** (card release-profile-slower): at opt-level z the compiler itself
   lowered and emitted 3.3× slower (a 300-function program 5.0 s → 1.5 s user); the binary grew 15.5 → 28.9 MB. Only
   the playground's warp.wasm, downloaded by every visitor, keeps z (profile web-release).
 - **Map variables are hash tables** (wasm_emitter/map_backend.rs): `m = {}` followed by `m[k] = v` with name keys is
@@ -133,7 +133,7 @@ page cache apart) of the scope holding Chrome, the examples that grew it most, a
 timing (peak 0.8–1.1 GB before 5b0b7f1bdb). A binary read must not go through `Uint8Array.from(text, …)`: it lists every
 character as a string first (uniscript's 10 MB index cost 550 MB, now 195).
 
-## samples/gpu/ocean.warp on the CPU (card samples-gpu, 2026-10-29)
+## samples/gpu/ocean.warp on the CPU (card samples-gpu)
 Measured with micro-benches in data/ocean-speed/ (main at c963a0387a, `clock()` over 50–2000 calls):
 - a pixel ≈ 6 ms (40 pixels 237 ms), so the 240×135 headless frame ≈ 190 s; water pixels dominate
 - hit_distance ≈ 3.2 ms: ~18 marches × waves(p, 12) ≈ 180 µs, ≈ 15 µs a wave

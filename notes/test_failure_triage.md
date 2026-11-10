@@ -2,7 +2,7 @@
 
 Which of the red lines are really needed before more are fixed. Input: test/results.txt of b6287277e5 (03:46),
 2630 ✗ lines in 774 files (results-cloud.txt 3057 ✗ is the older cloud lane, tests-web.txt 0 ✗). The earlier round,
-notes/test_triage.md (2026-10-28, 4149 ✗), held the esoteric lines then; this one only counts and samples.
+notes/test_triage.md (4149 ✗), held the esoteric lines then; this one only counts and samples.
 
 ## Where the red lines are
 

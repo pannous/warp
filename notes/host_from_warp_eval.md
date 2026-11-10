@@ -94,7 +94,7 @@ WasmEdge (64 MB, C++/LLVM) cover GC+EH today. A smaller interpreter would be WAM
 - Supervisor: is ~6.5 MB with Cranelift acceptable long-term? Answered yes (Decisions below).
 - (Cancelled 2026-10-23 by the user decision below: the WasmEdge AOT retry.)
 
-## Decisions (2026-10-23)
+## Decisions
 - warp-host stays the thin native stub: wasmtime + Cranelift, WASI, the os/FFI/wasm-load words (std_io, C calls by
   dlopen, run_wasm, compile_wasm) and the kept-values cache. Everything else (the CLI and the policy around compiling
   and running) moves to Warp. probes/host_from_warp/driver.warp is the first step.
@@ -103,7 +103,7 @@ WasmEdge (64 MB, C++/LLVM) cover GC+EH today. A smaller interpreter would be WAM
   no-Rust/no-wasmtime host is not a goal; the WasmEdge/wasm2c/WAMR routes are dropped. The WasmEdge AOT rerun is
   cancelled, and the measurements above stay as a record.
 
-## Driver: warp-host's CLI in Warp (probes/host_from_warp/, 2026-10-23)
+## Driver: warp-host's CLI in Warp (probes/host_from_warp/)
 - driver.warp (157 lines) handles run, compile, help, --help/-h, --compiler/--fuel/other options, the no-command forms,
   a module by name or magic bytes, the missing-.warp error, refusals as the only `Error("…")` line, and exit statuses.
   It is built on os.compile_wasm, os.run_wasm, os.run and the file words.
@@ -121,7 +121,7 @@ WasmEdge (64 MB, C++/LLVM) cover GC+EH today. A smaller interpreter would be WAM
     works at any size.
   - run_wasm takes no argument vector: a module run in-process sees its runner's args. The check
     "inline code gets the words after it" needs os.run_wasm(bytes, args) even after the list fix.
-- compiler-self (2026-10-22) miscompile, worked around in the driver: `try X catch e { …; exit(1) }` (and an if
+- compiler-self miscompile, worked around in the driver: `try X catch e { …; exit(1) }` (and an if
   with an inline exit() branch) gives ø when nothing fails. Repro: `use os; c(code) := try compile_wasm(code) catch
   e { exit(1) }; count(c("6*7"))` gives 0. The driver marks failures as texts and exits in functions of its own.
 - Not covered by the driver yet: `--compiler full` (compile_wasm uses the compiler warp-host started with), stderr
@@ -153,7 +153,7 @@ WasmEdge (64 MB, C++/LLVM) cover GC+EH today. A smaller interpreter would be WAM
   - Not covered by test_host.sh, still different: an uncaught raise prints `Error("bad")` on stdout from the driver,
     `warp-host: bad` on stderr from warp-host (both status 1).
 
-## Native glue route (parked, 2026-10-23)
+## Native glue route (parked)
 Question: can the thin stub's own Rust glue (crates/warp-runtime/src/warp_host, feature `host`) also become Warp, written
 in a Warp subset that compiles to plain wasm (no GC, no exceptions), then wasm2c/w2c2 → C → native, linked against
 wasmtime's C API? Answer: **not yet**. Only number-only programs compile to non-GC wasm today. Every text, list or
@@ -257,7 +257,7 @@ wasm_modules.rs: main 484, words 239, nodes 380, shell 255, cache 128, ffi 132, 
 - **stderr-word gap**: the driver prints an uncaught raise as `Error("bad")` on stdout. warp-host prints `warp-host: bad`
   on stderr. Both exit with status 1. There is no stderr word (os.stderr / print to fd 2) to close it, and test_host.sh
   does not check it.
-- **pure-exit-miscompile**: in compiler-self (2026-10-22), `try 42 catch e { exit(1) }`, and an if with an inline exit()
+- **pure-exit-miscompile**: in compiler-self, `try 42 catch e { exit(1) }`, and an if with an inline exit()
   branch, yield ø when nothing fails. Repro: `use os; c(code) := try compile_wasm(code) catch e { exit(1) }; count(c("6*7"))`
   gives 0. The driver works around it by marking failures as texts and exiting in functions of its own.
 - **Exception-free / plain-memory emitter mode**: a later option, not planned. It is the prerequisite of this route

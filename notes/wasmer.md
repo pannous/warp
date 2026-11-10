@@ -1,10 +1,10 @@
-# Wasmer for warp: feasibility (2026-10-21, warp-wasmer)
+# Wasmer for warp: feasibility (warp-wasmer)
 
 Asked by the user: "evaluate the feasibility of Wasmer, in general". The investigation was stopped early by the user;
 items 1 and 2 are probed, 3–4 partly sourced, the rest marked open.
 
 ## Verdict: stay wasmtime-only; Wasmer is blocked on WASM GC
-Wasmer 7.5.0 (latest, 2026-10-01) cannot load any module warp emits, on any backend. GC types (struct, array, anyref)
+Wasmer 7.5.0 (latest) cannot load any module warp emits, on any backend. GC types (struct, array, anyref)
 are refused before compiling. Revisit only when Wasmer's `Value`/type layer gains GC references. Until then the
 decision wasm-standalone's two-step route (warp.wasm writes file.wasm, then `wasmtime file.wasm`) stays the answer.
 A WASIX one-command compile-and-run stays a Later idea.
@@ -57,7 +57,7 @@ Cranelift, LLVM, V8") has all four; `WASMER=<it> probes/wasmer/features.sh` runs
   wasmtime has it. docs.rs failed to build 7.5.0, so 7.2.1 is the last documented release.
 
 ## 4. Other factors (partly checked)
-- License MIT (GitHub API); ~21 k stars; pushed daily (2026-10-20); releases about every 2–4 weeks (7.2.1 Jul → 7.5.0 Oct).
+- License MIT (GitHub API); ~21 k stars; pushed daily; releases about every 2–4 weeks (7.2.1 Jul → 7.5.0 Oct).
 - The release tarball for darwin-arm64 is 286 MB (it includes the V8, LLVM and headless builds).
 - [wasmer-js / @wasmer/sdk](https://github.com/wasmerio/wasmer-js) runs WASIX packages in the browser via
   wasm-bindgen. warp's browser build already runs its modules in JavaScript with the browser's own GC, so it gains

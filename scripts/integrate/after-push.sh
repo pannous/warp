@@ -55,7 +55,7 @@ mkdir -p "$state"
 interrupted() { local holder; holder=$(cat "$state/lock/pid" 2>/dev/null) && ! kill -0 "$holder" 2>/dev/null; }
 [ -n "$if_moved" ] && [ "$(main_tip)" = "$(handled)" ] && ! interrupted && exit 0
 # the lock holds the runner's pid: a dead runner's (a reboot, a kill) is taken over. The install lane's runner takes the
-# newest tip when it ends; the slow lane's finishes its older tip (user 2026-11-05: stopping it for every push meant
+# newest tip when it ends; the slow lane's finishes its older tip (stopping it for every push meant
 # the slow tiers almost never finished), and the next install after it starts the slow tiers on the newest tip
 lock=$state/lock
 if ! mkdir "$lock" 2>/dev/null; then
@@ -89,7 +89,7 @@ red() {
 		todo add Now "$text" --key "$key" "${@:2}" >/dev/null
 	else
 		# a closed card of the same kind and day reopens: adding its key again failed silently and lost the RED
-		# (2026-11-08, tier 2's time_command lines after after-push-tiers-1-2-1108 was Done)
+		# (tier 2's time_command lines after after-push-tiers-1-2-1108 was Done)
 		[[ $column == "[Done]"* || $column == *Archived* ]] && { todo move "$key" Now >/dev/null || say "card $key did not reopen"; }
 		todo note "$key" "$text" >/dev/null
 	fi
@@ -97,9 +97,9 @@ red() {
 }
 
 # cost_watched <record>: the instructions the tip's build of <record> retired against the last landing's; more than
-# COST_JUMP_PERCENT up is an urgent card for the Supervisor (user 2026-11-07: input-bind took the self-compile from
+# COST_JUMP_PERCENT up is an urgent card for the Supervisor (input-bind took the self-compile from
 # 1.8 T to 13 T and nobody noticed for hours). A reused compiler has no record of its own. Only warp-self.record:
-# warp.record swings ±20% by what the seed build reuses (one commit measured 3.43 and 3.85 T, 2026-11-08), so it
+# warp.record swings ±20% by what the seed build reuses (one commit measured 3.43 and 3.85 T), so it
 # false-alarmed; the self-compile is one compiler run, steady to ~1%
 COST_JUMP_PERCENT=10
 cost_watched() {
@@ -181,9 +181,9 @@ linked() {
 }
 
 # the build folders ~/dev/bin/warp doesn't link into removed, only once the links are in place: a link
-# never dangles (2026-10-28: warp pointed into a folder the Rust install had pruned). The newest KEPT_BUILDS folders stay
+# never dangles (warp pointed into a folder the Rust install had pruned). The newest KEPT_BUILDS folders stay
 # too, and any folder a process still has open: a run started on the previous build reads its warp.wasm and modules
-# until it ends (a full suite wrote an empty results.txt, "No module at …/native-fb9bda25b/warp.wasm", 2026-10-29)
+# until it ends (a full suite wrote an empty results.txt, "No module at …/native-fb9bda25b/warp.wasm")
 KEPT_BUILDS=3
 # in_use <folder>: a process has a file of it open (a run's warp, its wasmtime library). By the pids lsof lists, never
 # its status: macOS lsof +D exits 1 even when it lists some, so every folder looked unused and a long `warp test` lost
@@ -213,10 +213,10 @@ native_built() {
 		mv "$1/compiler/native/warp" "$1/warp"
 }
 # install_native [early]: early, before the tip's compilers are built, with the tree's compilers of the last install
-# (stage one: a driver fix reaches the user in minutes, never hours behind a compiler build; user 2026-10-30). Its
+# (stage one: a driver fix reaches the user in minutes, never hours behind a compiler build). Its
 # failure is only said: stage two installs the native warp again with the tip's compilers
 # the tip an ancestor of the installed native warp's (its folder native-<commit>[.anything], an install by hand too):
-# a link to it would take the user back (2026-10-30: an install undid the user's newer .express one)
+# a link to it would take the user back (an install undid the user's newer .express one)
 older_than_installed() {
 	local installed
 	installed=$(basename "$(dirname "$(readlink "$MAIN_WARP")")" | sed "s/^$NATIVE_PREFIX//; s/\..*//")
@@ -323,7 +323,7 @@ playground_refreshed() {
 }
 
 # page_smoked: the refreshed playground runs PAGE_SMOKE as the native warp does (card after-push-playground); a host
-# import the page lacks fails every sample here, hello first (canonical_text, 2026-11-06), so this is the import check too
+# import the page lacks fails every sample here, hello first (canonical_text), so this is the import check too
 page_smoked() {
 	local got
 	got=$(nice -n 10 "$scripts/samples-web.sh" "$MAIN_CHECKOUT" "${PAGE_SMOKE[@]}" 2>&1 | tail -1)
@@ -332,8 +332,8 @@ page_smoked() {
 }
 
 # the samples that run, the gap to 2.0 (decision night-samples-modules): test/samples.txt committed on main when it
-# changed, so its git log is the history and git diff names the samples that changed (user 2026-10-29); at most once
-# every SAMPLES_HOURS, never on every push (the sweep with the rest loaded the machine to 109, 2026-10-30)
+# changed, so its git log is the history and git diff names the samples that changed; at most once
+# every SAMPLES_HOURS, never on every push (the sweep with the rest loaded the machine to 109)
 SAMPLES_HOURS=4
 samples_committed() {
 	local count report=test/samples.txt last=$state/samples-at

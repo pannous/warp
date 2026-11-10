@@ -1,6 +1,6 @@
 # Dot call plan: `b.a` ≡ `a(b)` (decision fields-are-functions, card fields-are-functions)
 
-Investigation only (warp-dot-call-plan, 2026-11-09). Probes run against main 5e6fdf72f3.
+Investigation only (warp-dot-call-plan). Probes run against main 5e6fdf72f3.
 
 ## Today
 
@@ -97,7 +97,7 @@ the Dot mirrors in three passes.
 - Module members vs reflection: `math.sqrt` is math's own member, `time.functions` = functions(time): the same rule, but
   module_named must run before it (it does: sugar).
 
-## Status (branch fields-are-functions, 2026-11-09)
+## Status (branch fields-are-functions)
 Answers (decision dot-call answers): own methods first, then fields, then functions; o.f(3) calls the field's
 function; local closures by dot; `x.w = v` setter by arity; step 8 after 1-5.
 - Steps 1+2 landed as one: emitter `member_read` (own field → call w(x) via `called_on` → field_of). The receiver is

@@ -1,6 +1,6 @@
 # Tasks: go blocks, await, channels
 
-Decision tasks-parallel (user 2026-11-03, undoes night decision N29): natively `go {…}` runs truly in parallel on its own
+Decision tasks-parallel (undoes night decision N29): natively `go {…}` runs truly in parallel on its own
 thread, no extra keyword; the cooperative scheduler below is the JavaScript page's lane (and today's native stopgap) until
 the page has real threads. Card go-native-threads. lib/tasks.warp (a std module: "tasks" in core/passes/rewrites.warp std_module_names, so its `where program` rule
 runs) holds the rules and the scheduler.

@@ -1,6 +1,6 @@
 # Packages: used by their path
 
-- Decision package-use-by-path (user 2026-11-01): the compiler searches no packages and fetches no registry. A package
+- Decision package-use-by-path: the compiler searches no packages and fetches no registry. A package
   is used by its path, `use "packages/egraph/egraph.warp"`; getting it there (a clone of
   github.com/pannous/warp-packages, a link) is the project's business. `use <name>` names `<name>.warp` beside the
   program, a standard module lib/<name>.warp, a C library (lib/native/<name>.warp, libc/libm, a foreign line's library)
@@ -71,7 +71,7 @@
   packages/.replaced/ and the pin takes its place; a link outside the cache or a clone with changes wins, with a warning.
 - First package: uniscript (github.com/pannous/uniscript): its uniscript.wasp and data replaced warp's lib/uniscript.warp
   and data/uniscript/. warp's tests/web/test_uniscript.rs still tests it (through `use uniscript`).
-- First registry-only extension: egraph (warp-packages/egraph, user 2026-11-01): equality saturation over code, never in
+- First registry-only extension: egraph (warp-packages/egraph): equality saturation over code, never in
   lib/ or core/ (notes/egraphs.md); its tests run by `warp test` in its folder; programs say
   `use "packages/egraph/egraph.warp"` (decision package-use-by-path).
 - Versions (src/lowering/data/versions.rs): `use x version 1.2.3` exactly, `use x from 1.2.3` / `use x >= 1.2.3` that or later.

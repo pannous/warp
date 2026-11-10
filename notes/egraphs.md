@@ -1,4 +1,4 @@
-# E-graphs and equality saturation: what they are, where warp could use one (research, 2026-11-01)
+# E-graphs and equality saturation: what they are, where warp could use one (research)
 
 Research only, no code changed. Verdict first: the compiler's sugar is a poor fit (its rules are directional
 definitions, not equalities); emitted code is already optimized by Cranelift's own e-graph inside wasmtime; the best

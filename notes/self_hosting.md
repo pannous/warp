@@ -47,7 +47,7 @@ Traps writing passes in warp (cards match-silently and others):
 Goal (issue #33): write the whole parser and as many components as possible in warp itself. A secondary goal that
 must not bias the language design (wiki/Features.md "self hosting", wiki/goals.md).
 
-ACTIVE again (decision self-hosting-resumed, 2026-10-17): self-hosting is the fleet's next big task. Workers finish
+ACTIVE again (decision self-hosting-resumed): self-hosting is the fleet's next big task. Workers finish
 their current work, then switch to it. The first step is a readiness survey (session warp-self-survey): are all the
 language parts there, or should macros (or a cheaper feature) come first so the warp compiler doesn't bloat? The twins
 on main stay and keep being tested.
@@ -85,7 +85,7 @@ Decision self-hosting:
   agree (the tree after a later pass, or the program's result) instead of forcing the Rust structure. Each
   restructuring is a short entry in Deviations; ones that change the language go to warp-interviewer.
 
-Size of the job (Rust lines, 2026-10-12): parser 7.4k, Node 2.1k, analyzer 6.6k, emitter 23k, lowering + top-level
+Size of the job (Rust lines): parser 7.4k, Node 2.1k, analyzer 6.6k, emitter 23k, lowering + top-level
 src ~59k.
 
 ## Parser restructuring (review 2026-10-17, topic self-hosted)
@@ -194,7 +194,7 @@ checks (match_exhaustive, switch unit names, index_positions, check_unit_names: 
 ## Back-end focus
 Goal: WARP_SELF_HOSTED runs parser → passes → analyzer → emitter → runtime all in warp; the suite count per stage
 shows the progress. Every compiler function typed (generic ones generically), written with classes, enums and match.
-Emitter rule (2026-10-19, after emitter-structures cost 57 + emitter tests the gate didn't see): a form enters
+Emitter rule (after emitter-structures cost 57 + emitter tests the gate didn't see): a form enters
 emitter.warp's core only when it compiles right; unsure → refuse (Rust takes it).
 WARP_SELF_HOSTED=emit runs Rust's front end and lowering, then emitter.warp: an emitter form whose source the warp front
 end cannot read yet (`try … else …`) is checked there before parser.warp reads it.
@@ -229,7 +229,7 @@ Order: lowering passes first, then the analyzer, then the emitter; only the boot
   shared walk (`children(n, f)`, `bottom_up(n, f)`; a group is `n.bracket != ø`). Both sides drop literal and attribute
   layers, read a character as a text and an empty group as ø (card empty-group-node, open). `bridge_differential`
   checks the bridge alone. Twins so far: number_words.warp (with its hints).
-- Phrases out of the core (card phrases-out-of-core, user 2026-10-20): `n times …` and sleep's units are no compiler
+- Phrases out of the core (card phrases-out-of-core): `n times …` and sleep's units are no compiler
   passes in warp. `n times` is refused by name ("`n times` (library word pending)", emitter.warp
   pending_library_words) until it is a library word; `sleep(seconds)` is the prelude word, calling the host word
   sleep_ms (decision sleep-seconds), so a bare number needs no pass; `sleep 20ms` waits for unit values (Rust's pass
@@ -366,7 +366,7 @@ find is 1.7x the builtin (0.50 s vs 0.29 s); module size equal. Left: the matche
 fuel-metering). Rerun once that lands, then decide whether find moves to warp; TEXT_FIND's second caller, `in` /
 contains (fields_and_keys.rs), then needs a late_call.
 
-## Library sweep: Rust that becomes lib warp (card library-sweep, 2026-10-17)
+## Library sweep: Rust that becomes lib warp (card library-sweep)
 Survey of src/wasm_emitter runtime functions and src/lowering source expansions that are plain logic. Of ~33k
 emitter lines ~5k are movable; the rest is CORE (GC layout, hash tables, list cells and cursors, big-int limbs, host
 imports, inline instruction selection). Every move is a card in topic self-hosted; features they wait on are cards too.
@@ -388,7 +388,7 @@ Ranked by Rust lines removed (≈ of lists/maps is lists-maps; trim/find words a
 | 12 | split, live-loop, try-assert, swizzle, text-set-char, contains, tree-walk-lib, parallel-map, signals | 60-80 each | |
 | 13 | text-quoted, insert-at, element-children, node-codes, reverse, log-root, zero-fill, pop-clear, codepoint-count, builtin-signatures, small-dispatch | 15-55 each | |
 
-float-as-exact-warp (2026-10-19): runtime.warp `float_as_exact` (float_digits, factors 2 and 5 taken out before the
+float-as-exact-warp: runtime.warp `float_as_exact` (float_digits, factors 2 and 5 taken out before the
 denominator is built) and emitter.warp `as_rational`; only `as rational` (a float `as real`/`as exact` stays a float).
 The warp runtime has no big ints: a fraction beyond 64 bits (`1e-20 as rational`) fails as int64 overflow, Rust's
 twin goes on in big ints. Rust's float_as_exact stays until the switch hands emission to warp.
@@ -400,7 +400,7 @@ named, through `compiler_word(word)` (a call it writes, `n times [x]` → filled
 missing, notes the word; pipeline::loading_compiler_words then compiles once more with resolve loading it (hints muted).
 The second compile is a safety net, not the plan: with it alone 13 of 216 samples compiled twice (~7% of compile time),
 so each move also adds an implied_words scan of the forms that need its word (filled_lists.rs: none twice).
-Measured cost (2026-10-17, quick-release, thread CPU of the lowering; cards cache-lowered, parse-once): a small program
+Measured cost (quick-release, thread CPU of the lowering; cards cache-lowered, parse-once): a small program
 4 ms, with one function of its own 11 ms, with one prelude word 22 ms (the prelude parse 8 ms, the reach look-ahead
 4 ms, the word itself as an own function). So a scan must not load words a program cannot need, and a runtime function
 that nearly every program carries stays Rust until lowered prelude words are cached across runs: exact_text (any int
@@ -428,12 +428,12 @@ Host after self-hosting: the native `warp` stays a Rust shell (wasmtime, host wo
 `warp.wasm` precompiled to .cwasm; the playground loads the same file. New interface: compiler imports for
 reading `use`d files, FFI signatures, the host-word list.
 
-Measured (2026-10-17, probes/self_hosting/emitter/bench/list_reads.warp: 20 million `xs#i` at scattered places of a
+Measured (probes/self_hosting/emitter/bench/list_reads.warp: 20 million `xs#i` at scattered places of a
 1000-item mixed list; `warp compile --wasm` for Rust's module, emit_lowered.sh for emitter.warp's, hyperfine): Rust's
 cons cells 151 ms, emitter.warp's vector 80 ms (1.9x). Reads in order: 141 ms vs 66 ms (2.2x). Rust's list cursors
 keep its reads far from O(i) here; the gain is the plain array.get.
 
-## Ahead-of-time executables and a host made of FFI (2026-10-17)
+## Ahead-of-time executables and a host made of FFI
 Exists: `warp build x.warp` (and plain `warp x.warp`) writes a standalone executable = crates/warp-runtime stub
 (wasmtime runtime + GC, no Cranelift) + the program's .cwasm appended: hello world 1.77 MB, 109 KB of it machine code.
 `warp compile --aot` writes the .cwasm alone. The stub provides basic host words, libm, fd_write and foreign_call
@@ -451,7 +451,7 @@ no total saving, loses self-contained files, and a .cwasm only runs on the exact
 
 ## The suite through the warp pipeline (card warp-pipeline-suite)
 History: scripts/self-hosted-suite.sh ran the Rust suite with the warp stages switched on; it went with the Rust
-compiler (2026-10-26), `warp test` is the suite now.
+compiler, `warp test` is the suite now.
 - src/compiler/self_hosted.rs: with the switch on, `lawful_program` parses with parser.warp (passes.warp `stage`
   [0, source]) and `run_program_passes` hands every source pass with a warp twin (TWINNED_PASSES, the order of
   passes.warp `passes`) to it ([i, view]); the passes without a twin, the analyzer and the emitter stay Rust.
@@ -473,7 +473,7 @@ compiler (2026-10-26), `warp test` is the suite now.
   never compared with src/analyzer's (decision ignore-rust): an unannotated parameter takes the analyzed kind instead
   of its first call's, and a node where an analyzed program needs a list or text is unboxed (runtime.warp
   list_of_node, text_of_node: ø is [], anything else traps). That took sorting_idiomatic, quicksort, divisors and
-  pascals-triangle into the core (2026-10-19). Suite count: self-hosted-suite.sh --stage
+  pascals-triangle into the core. Suite count: self-hosted-suite.sh --stage
   analyzer=WARP_SELF_ANALYSIS.
 - Emit refusals ranked 2026-10-19 (probes/self_hosting/refusals.sh, every sample and probe with the switch on, each
   refusal once per program; raw list data/self_hosting/refusals.txt): 1482 programs, 810 inside the core (or no emit;
@@ -492,7 +492,7 @@ compiler (2026-10-26), `warp test` is the suite now.
   | 10+9+5+7 | operator `:` on char and text / int / list; `^` on int | warp-self-emitter |
   | 8 | `global` (the unknown name global) | warp-cache |
   | 11+9+8+6 | midi_hertz, as_code, linear_new, signal_new | later |
-- Inside the core but printing otherwise than Rust (205 of the 810, refusals.sh's DIFFERENT lines, 2026-10-19):
+- Inside the core but printing otherwise than Rust (205 of the 810, refusals.sh's DIFFERENT lines):
   63 parse (parser.warp refuses the source: `...` spreads, `.` forms), 55 diagnostics only (warnings and errors
   without positions), 87 output. Of the 87 most are front-end: storage `·met may be ø` hints (~30), keywords as
   names (`for`, `return`, `data`), lost units (DimensionError ~8), field counts. Emitter.warp miscompiles (programs
@@ -504,7 +504,7 @@ compiler (2026-10-26), `warp test` is the suite now.
 - The cloud run is the pushed tip plus a throwaway commit turning the switch on in .cargo/config.toml [env] (with
   warp-lang at opt-level 2, as test.sh), in three jobs at once (TEST_GROUPS: self-hosted, the whole suite outlasts the
   lane's 2400 s limit), branches self-hosted/<tip>-<n>, deleted after the run.
-- First count (2026-10-17, aa7a536a, data/self-hosted/aa7a536a.txt): 4529 passed / 6421 (70.5%). Top families:
+- First count (aa7a536a, data/self-hosted/aa7a536a.txt): 4529 passed / 6421 (70.5%). Top families:
   parser.warp's `Unexpected character` 344 (π @ > . $ & = * ⊕ : σ, a space before a trailing block), `undefined
   variable` 184 (try 52, T# 22: forms parser.warp reads otherwise), a bare `#` left side 76 (a wrong number), `cannot
   extract a numeric value from ø` 46, database `may be ø` hints 50, `not a number` 33, hints pointing into

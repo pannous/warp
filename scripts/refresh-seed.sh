@@ -1,7 +1,7 @@
 #!/bin/bash
 # Refresh the seed compiler (warp-seed.wasm beside the warp binary, card rust-bootstrap): the seed compiles core/compiler.warp
 # (stage A), each stage compiles it again with the one before (B, C; WARP_SEED_STAGES names them), and the last stage
-# that compiled itself once more (the next stage built) replaces the seed; no fixpoint is needed (user 2026-10-26), one
+# that compiled itself once more (the next stage built) replaces the seed; no fixpoint is needed, one
 # ends the stages early. A feature the compiler uses on itself (a runtime word, a bundled lib/) arrives a stage after
 # the stage that brings it, so such a change asks for more stages. The seed is what `warp rebuild` builds warp.wasm
 # with; no Rust-compiled stage takes part. (scripts/promote-self.sh is the light check of warp.wasm alone.)
@@ -50,7 +50,7 @@ stage() {
   rm -f "$built"
   local start=$SECONDS record=$scratch/$(basename "$2" .wasm).record
   # the speed guard's measure is the instructions the rebuild retired (build-slot.sh's record, /usr/bin/time -l): the
-  # same work retires the same count whatever the load and the cores it ran on, where the CPU seconds don't (2026-11-02:
+  # same work retires the same count whatever the load and the cores it ran on, where the CPU seconds don't (
   # one compile took 268 s CPU on a quiet Mac, 869 s at load 30 on efficiency cores, both 4.7e12 instructions); the CPU
   # seconds (user + system) only where no record counts instructions (no lockf, no time -l)
   # a failed rebuild fails the stage even when it wrote warp.wasm (a runtime.wasm or the warming that failed)
@@ -104,7 +104,7 @@ cp "$chosen" "$seed" && echo "refresh-seed: replaced $seed"
 rm -f "${seed%.wasm}.runtime.wasm" "${seed%.wasm}.runtime.wasm.cwasm" "$seed.cwasm" "$seed.driver.cwasm" "$seed.driver.cwasm.key" "$seed.driver.build.cwasm" "$seed.driver.build.cwasm.key"
 release=seed-$(date +%Y-%m-%d)-$(shasum -a 256 "$seed" | cut -c1-8)
 # the release's tag on the very commit the seed was built from, and seed.lock committed beside it, so every later commit
-# names its seed and any commit's compiler can be built again (scripts/seed.sh, user 2026-10-30)
+# names its seed and any commit's compiler can be built again (scripts/seed.sh)
 source_commit=$(git -C "$tree" rev-parse HEAD)
 # the pair the seed builds of its own source goes with it: the seed links them on a lib/ without any (seed-bootstrap.sh)
 pair=("$scratch/warp-seed-runtime.wasm" "$scratch/warp-seed-unicode.wasm")

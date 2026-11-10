@@ -1,4 +1,4 @@
-# Shake of the extensions (2026-11-10)
+# Shake of the extensions
 
 Question: which parts of extensions/ are really libraries (code a program runs), so they can move to lib/ and load
 only on demand, and which are language (what the compiler understands). The same analysis as notes/core_shake.md,
@@ -157,7 +157,7 @@ and compares a time and a ratio.
   It belongs beside core/emitter/prebuilt.warp. This is a placement fix that grows core by 187 lines (Interviewer).
 - **time_values.warp (188) is emitter code without a row**: time intrinsics and time_of. When times become library
   values (dates-times-extraction), it goes with B's times row.
-- extensions/rules/rule_words.warp has grown from 1,185 to 1,510 lines since compile_time_code.md (2026-11-06).
+- extensions/rules/rule_words.warp has grown from 1,185 to 1,510 lines since compile_time_code.md.
   M1 is the only thing that stops that growth.
 
 ## Recommended order

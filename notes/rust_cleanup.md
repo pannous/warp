@@ -44,7 +44,7 @@ program) 0.6 s. A pass at compile time would need the module built ahead and emb
 compiler: the bootstrap problem) and still costs ~0.5 s per pass and program. So the Rust twins stay for now; this
 comes back with AOT-embedded compiler modules (cwasm) and the prelude caching work.
 
-## Lowering: helper dedup (warp-self-passes, 2026-10-18)
+## Lowering: helper dedup (warp-self-passes)
 Landed or Ready: rust-scope (program_names::Bindings, one walk for the names a program gives, -31) and rust-dedup
 (-60): Node::written_names (`x` of every `x = …`/`x := …`), Node::ungrouped (`(x)` → x under its meta; word_help keeps
 its own because a non-group keeps its position there), `node.symbol_name().and_then(…)` for two-arm symbol matches.
@@ -58,7 +58,7 @@ drops after parser S2/S3 and the word-phrase pass, not helpers.
 Then per file (symbol_name/is_symbol/is_block idioms, shared helpers): rust-closures (lambdas+closures, -124), rust-broadcasting
 (-34), rust-tasks (-29), rust-library-words (-12), rust-welcome (welcome_forms, -8).
 
-## Analyzer: flow settle (warp-self-analyzer, 2026-10-18)
+## Analyzer: flow settle (warp-self-analyzer)
 src-analyzer (branch analyzer-returns, -101 in src/): results step once per flow round, main-level globals widen
 each round, literals tell their kind, free names tell a symbol, parameters forwarded to a typed callee parameter take
 its kind as usage fallback. Traps found on the way:

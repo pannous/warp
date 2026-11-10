@@ -2,7 +2,7 @@
 # scripts/seed.sh [<tree>]: the path of the seed that builds the tree's warp.wasm, fetched once into the store. The
 # tree's seed.lock names it (its release and SHA-256; refresh-seed.sh writes it with each new seed); a commit older than
 # seed.lock gets the newest seed published before it. Every seed stays a GitHub pre-release seed-<date>-<sha8>, so any
-# commit's compiler can be built again (user 2026-10-30: "we must be able to reconstruct them")
+# commit's compiler can be built again ("we must be able to reconstruct them")
 set -uo pipefail
 REPO=pannous/warp
 source "$(dirname "$0")/lib/platform.sh"

@@ -1,4 +1,4 @@
-# Today's plan (user 2026-11-01): every sample runs in the browser playground
+# Today's plan: every sample runs in the browser playground
 
 Goal: each samples/**/*.warp runs in web/playground with the output the native warp gives (test/samples.txt).
 This supersedes decision playground-after-parity (the user: "the bigger local issues appear resolved").
@@ -21,7 +21,7 @@ This supersedes decision playground-after-parity (the user: "the bigger local is
    - warp-web-samples: the sweep, then graphics (canvas, gpu), sound, media, markup.
    a sample that can't run in a browser (processes, C calls) says `# host: native: <why>`, which keeps it out of the menu and the page sweep.
 
-## Host areas, state (warp-web-host, 2026-11-01)
+## Host areas, state (warp-web-host)
 - Step 1 done: web/playground/driver.js is driver.warp's twin (warp.wasm over wasi.js; the compiler reads the
   tree's lib/ through WARP_LIB; build.sh overlays it on the installed lib).
 - Servers: a program with routes serves the page's requests (lib/web.warp page_serve under WARP_SERVE=page,
@@ -33,7 +33,7 @@ This supersedes decision playground-after-parity (the user: "the bigger local is
   module goes through host-foreign.js wasmLibraryImports and typedExports (arguments fitted to the wasm signature).
 - FFI and Python: callC follows driver.warp c_called (warp.c_functions section; only the first out-pointer gets a
   slot); `use python` runs in Pyodide through python_capi.py, the C API by handle.
-## Tour gaps (2026-11-02: 19 of 52 tour examples pass in the self-hosted page, `test_in_browser.py --examples --firefox`; 2026-11-01: 13 of 57)
+## Tour gaps (19 of 52 tour examples pass in the self-hosted page, `test_in_browser.py --examples --firefox`; 2026-11-01: 13 of 57)
 Failing on 2026-11-02: constants, lazy ranges, linear arrays, matching, arguments, polyglot calls, broadcasting,
 closures, classes, properties, welcoming errors, signals, listeners, signals in lists, events, timers, system values,
 tasks, channels, markup, element events, fine updates, components, cleanup, keyed list, form binding, styles, routes,
@@ -68,7 +68,7 @@ web/playground/examples.js, run with `warp <file>`. Each example is extracted wi
 
 | markup | `div: {h2: {"Alice"} …}` | `div{h2:"Alice" …}`, the markup shown form | show |
 
-## Guide gaps (2026-11-02: 60 of 83 guide.md snippets hold in the page, `test_in_browser.py --examples --firefox --guide`; 2026-11-01: 54 of 82)
+## Guide gaps (60 of 83 guide.md snippets hold in the page, `test_in_browser.py --examples --firefox --guide`; 2026-11-01: 54 of 82)
 The page gives what the native warp gives for all 28. Each snippet is guide.md at its line.
 
 | guide.md line | snippet | native | the guide |

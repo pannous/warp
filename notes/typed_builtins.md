@@ -1,6 +1,6 @@
 # Typed builtins (card typed-builtins)
 
-User wish (2026-10-18, via the supervisor): every built-in word gets fully typed overloads in lib warp, with declared
+User wish (via the supervisor): every built-in word gets fully typed overloads in lib warp, with declared
 result types, so static dispatch picks the overload and the Rust kind tables go (inference.rs builtin_word_kind and
 library_call_kind, library_signatures.rs MEMBER_SIGNATURES, counting.rs COUNTING_WORDS) together with the run-time
 kind switches they stand for. Done in slices per word family, each with its net src/ delta.
@@ -14,7 +14,7 @@ kind switches they stand for. Done in slices per word family, each with its net 
 - library_signatures.rs library_types lists every overload's type (the typed-redefinition refusal names each).
 - `reverse.signature` shows the first line, `(xs:list) -> list` (was the untyped `(xs)`).
 
-## Landed (2026-10-18)
+## Landed
 - Slice 1 (reverse, sort, slice): overloaded `from warp` lines. An argument no line is typed for takes the first
   line's result (a list's); only a Node of run-time kind gives a Node (slice-twin: the analyzer twins agree on
   `b = a[0:2]`, words.warp call_kinds says list).
@@ -48,7 +48,7 @@ kind switches they stand for. Done in slices per word family, each with its net 
   declared result passed by name fails (card function-declared); an apostrophe-heavy # comment broke
   analyzer.warp's parse (card comment-three).
 
-## Typing core (decision compiler-typed, 2026-10-19)
+## Typing core (decision compiler-typed)
 Every core file declares parameter and result types, except the owners' analyzer.warp, emitter.warp,
 runtime.warp and the hot parser.warp. Types that are not usable yet stay `any`; each has a card:
 - a result that may be ø, `: text?`: "text? is no type" (card text-type; `int?` works)

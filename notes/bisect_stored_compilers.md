@@ -11,7 +11,7 @@ Every built compiler stays in the store, /Volumes/Build/compilers/<hash>/, and i
 data/full-suite/bisect.sh (ignored, in the main checkout) does this: `bisect.sh --find <expected> '<code>'`.
 Its worktree is /Volumes/Worktrees/regress-bisect.
 
-Pitfalls (2026-10-31):
+Pitfalls:
 - The store starts at 10-29 10:48. A case already red there can't be bisected this way: read the code instead
   (`warp lower '<code>'` shows the program after the passes, which found three causes).
 - The first run of each warp.wasm compiles its machine code (~1 min a run).

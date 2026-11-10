@@ -1,6 +1,6 @@
 # Beautify round (card beautify-round, Later; start after the hello-world milestone)
 
-Audit 2026-10-20 by warp-reviewer: the 95 non-merge commits since 2026-10-20 00:00 touching lib/**/*.warp, plus the
+Audit 2026-10-20 by warp-reviewer: the 95 non-merge commits touching lib/**/*.warp, plus the
 open branches pure-parser-rest, pure-field-slice, pure-field-defaults, pure-named-arguments, unicode-glyphs.
 Line numbers are origin/main at bac59bd016 unless a branch is named. Every form proposed below was tried with
 /Users/me/dev/bin/warp, plain and with WARP_SELF_HOSTED=pure: "works" means both lanes give the value.
