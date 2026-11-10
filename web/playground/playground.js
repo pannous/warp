@@ -475,14 +475,16 @@ function roomBelowPaintings(paneStyle) {
 function startsFrame(run, output) {
 	const starts = run.frame > 0 && run.framesShown[output] !== run.frame;
 	run.framesShown[output] = run.frame;
-	if (starts) animates(run);
+	if (starts) {
+		animates(run);
+		prepareStandby();
+	}
 	return starts;
 }
 // a run showing frames animates: it lives on past the limit, counted again from each frame
 function animates(run) {
 	run.animating = true;
 	stopAfterTimeout(run);
-	prepareStandby();
 }
 
 // ---- sound ----------------------------------------------------------------------------------------------------
@@ -702,6 +704,8 @@ function painted(run, painting) {
 	const last = run.paintings.at(-1);
 	if (startsFrame(run, "paintings")) run.paintings = [];
 	else if (last && sameSize(last, painting)) {
+		// (no standby Worker for it: one warming up its compiler while a finger paints took the stroke's frames on a slow
+		// machine, card register-fingers)
 		run.paintings.pop();
 		animates(run);
 	}
