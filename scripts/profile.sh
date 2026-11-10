@@ -43,7 +43,7 @@ else
 	run=$reported
 	if [ -z "$run" ]; then
 		[ $# -gt 0 ] || { sed -n '2,12p' "$0" >&2; exit 2; }
-		WARP_PROFILE=perfmap WARP_NO_WINDOW=1 "${WARP_BINARY:-warp}" "$@" >/dev/null &
+		WARP_PROFILE=perfmap WARP_WINDOW=0 "${WARP_BINARY:-warp}" "$@" >/dev/null &
 		run=$!
 		/usr/bin/sample "$run" "$seconds" 1 -mayDie -file "$samples_kept/$run.sample" >/dev/null 2>&1 || true
 		kill "$run" 2>/dev/null || true

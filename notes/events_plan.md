@@ -40,7 +40,7 @@ How it works:
 - C callbacks: lib/callbacks.warp and 16 trampolines in lib/native/foreign.c call the driver's c_callback_answered,
   which calls the export c_callback_fired, synchronously inside the C call (qsort works).
 
-What is broken (probed 2026-11-09 with the installed warp, WARP_NO_WINDOW=1, WARP_EVENTS_FOR=350):
+What is broken (probed 2026-11-09 with the installed warp, WARP_WINDOW=0, WARP_EVENTS_FOR=350):
 1. Five loops, none composes: driver events_run, frames_end, page_window_run, tasks_run_while, serve's accept.
    Whoever waits blocks the rest: no timer fires while a window is open or routes are served, a task's sleep fires
    no timer.

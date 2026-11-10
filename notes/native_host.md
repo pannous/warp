@@ -16,8 +16,8 @@ and native_host/gpu.warp (wgpu-native), over C libraries by plain FFI, no C wrap
   and hands gpu.warp its CAMetalLayer, `host_run_ended()` holds a still picture open and waits till the sounds are
   heard out. A host word `name` the driver doesn't know is answered by an export `host_<name>`: text_coverage,
   sound_played, sound_file_played, sound_file_decoded, midi_sent, midi_ports.
-- The driver's headless guard (headless_checked: a program's window-opening C import refused under WARP_NO_WINDOW) is
-  not applied to modules the driver links itself (`guarded` no); the module asks WARP_NO_WINDOW / CI itself
+- The driver's headless guard (headless_checked: a program's window-opening C import refused under --no-window) is
+  not applied to modules the driver links itself (`guarded` no); the module asks --no-window / CI itself
   (quiet_run: no window, no sound, no MIDI) and stays windowless and silent when SDL3 is missing.
 - Records made while linking inside a host word survive the host-word arena reset through `arena_kept()`
   (lib/native/foreign.c).

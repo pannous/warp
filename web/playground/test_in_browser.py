@@ -853,7 +853,7 @@ def built_site_wrong(folder=BUILT_SITE_FOLDER, options=(), reloads=False, expect
 	os.makedirs(os.path.dirname(program), exist_ok=True)
 	with open(program, "w") as file:
 		file.write(BUILT_SITE_CODE)
-	built = subprocess.run(["warp", "build", "--site", *options, program], capture_output=True, text=True, env={**os.environ, "WARP_NO_WINDOW": "1"})
+	built = subprocess.run(["warp", "build", "--site", *options, program], capture_output=True, text=True, env={**os.environ, "WARP_WINDOW": "0"})
 	if built.returncode:
 		return [f"warp build --site failed: {(built.stderr or built.stdout).strip()[-300:]}"]
 	browser("open", f"http://127.0.0.1:{PORT}/{folder}/site/index.html")

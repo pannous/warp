@@ -282,7 +282,7 @@ before asking a question). After a context swap, this file and your role file be
   short"): a failed build's log is read, never rebuilt to see the error or "to be sure"; never `--force` past a wait,
   never kill another session's build. A lib/-only change compiles nothing (a rebake, about a minute).
 - Kill only your own processes, by PID (the hook .claude/hooks/no-pattern-kill.sh refuses pkill/killall). Every CLI
-  run that might paint gets `WARP_WINDOW=0` (WARP_NO_WINDOW=1 until the new warp is installed). No browsers on the Mac.
+  run that might paint gets `WARP_WINDOW=0` (WARP_WINDOW=0 until the new warp is installed). No browsers on the Mac.
 - The wiki is the specification: a rewrite of what a wiki page says (a rule, an example's result, a dropped or new
   form; not typos, links or layout) goes to warp-interviewer first, with the old and the new text; the Interviewer
   approves it. A worker's wiki-only change otherwise lands as usual.

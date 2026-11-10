@@ -34,7 +34,7 @@ env:
   DRY: ${{ inputs.dry && '1' || '' }}
   WABT: 1.0.42     # wasm2c, which `warp build native` runs
   BINARYEN: 133    # wasm-opt, which `warp build` runs
-  WARP_NO_WINDOW: 1
+  WARP_WINDOW: 0
   WARP_HINTS: 0
   GLIBC_FLOOR: 2.35 # the oldest glibc the linux binaries run on (card linux-glibc-floor)
 

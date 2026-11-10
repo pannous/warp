@@ -67,19 +67,19 @@ way=$(echo "$built" | tail -1)
 if [ -z "$code_changed" ] && [ -n "$(changed_modules)" ]; then
 	fresh=$tree/data/smoke-modules
 	rm -rf "$fresh" && mkdir -p "$fresh" || exit 1
-	made=$(cd "$tree" && WARP_LIB=$tree/lib WARP_NO_WINDOW=1 "$INSTALLED" "$tree/lib/warp.wasm" modules "$fresh" "$tree/lib/runtime.wasm" 2>&1) ||
+	made=$(cd "$tree" && WARP_LIB=$tree/lib WARP_WINDOW=0 "$INSTALLED" "$tree/lib/warp.wasm" modules "$fresh" "$tree/lib/runtime.wasm" 2>&1) ||
 		{ echo "smoke: the standard modules don't prebuild of this lib/:" >&2; echo "$made" | grep -v '^warning: ' | tail -5 >&2; exit 1; }
 	for built in "$fresh"/*; do rm -f "$tree/lib/modules/${built##*/}" && cp "$built" "$tree/lib/modules/" || exit 1; done
 	way="$way; modules prebuilt of this lib/"
 fi
 peak=$tree/data/smoke-hello-footprint
 mkdir -p "$tree/data"
-got=$(cd "$tree" && WARP_LIB=$tree/lib WARP_NO_WINDOW=1 footprint_run "$peak" 120 "$INSTALLED" samples/hello/hello.warp 2>&1 | without_runtime_noise | tail -1)
+got=$(cd "$tree" && WARP_LIB=$tree/lib WARP_WINDOW=0 footprint_run "$peak" 120 "$INSTALLED" samples/hello/hello.warp 2>&1 | without_runtime_noise | tail -1)
 [[ $got == *$EXPECTED* ]] || { echo "smoke: hello got ${got:0:160}" >&2; exit 1; }
 footprint_checked "$(cat "$peak" 2>/dev/null)" "this branch's hello"
 # the native host module, which the driver links itself: an empty native_host.wasm failed every window, paint and
 # sound run while hello passed (card empty-native-host)
-host=$(cd "$tree" && WARP_LIB=$tree/lib WARP_NO_WINDOW=1 "$INSTALLED" 'window_possible()' 2>&1 | without_runtime_noise | tail -1)
+host=$(cd "$tree" && WARP_LIB=$tree/lib WARP_WINDOW=0 "$INSTALLED" 'window_possible()' 2>&1 | without_runtime_noise | tail -1)
 [[ $host == no ]] || { echo "smoke: the native host module did not answer window_possible(): ${host:0:160}" >&2; exit 1; }
 clashes_said
 echo "smoke: $got ($way, WARP_LIB=$tree/lib)"

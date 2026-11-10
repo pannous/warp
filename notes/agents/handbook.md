@@ -64,8 +64,8 @@ differ and holds every rule; this file holds only the procedures behind them.
   playground: first the dry run on pannous.com, `scripts/browser-dry-run.sh` in your worktree (`--tours [example…]`,
   `--chrome`, `--firefox`, `--suite [filter…]`, `--samples [sample…]`, `--again`) until green; then dispatch the
   Playground workflow on your branch once (`gh workflow run pages.yml --ref <branch>`), the final check plus Safari.
-- `WARP_NO_WINDOW=1` also mutes sound and prints MIDI as hex; never in try lines for the user.
-- Quick check first: `WARP_NO_WINDOW=1 WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp <scratchpad>/<x>.warp` catches
+- `WARP_WINDOW=0` also mutes sound and prints MIDI as hex; never in try lines for the user.
+- Quick check first: `WARP_WINDOW=0 WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp <scratchpad>/<x>.warp` catches
   undefined words, parse errors and wrong values in seconds; `WARP_HINTS=0` hides hints. Then the targeted
   `warp test <folders>`.
 - `warp` / `warp self` never build a compiler: a missing one is an error naming `warp rebuild`; a worktree's stale one

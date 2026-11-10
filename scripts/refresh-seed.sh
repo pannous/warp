@@ -27,7 +27,7 @@ compilers=$tree/lib
 built=$compilers/warp.wasm  # where `warp rebuild pure` writes, with WARP_LIB set
 [ -f "$seed" ] || { echo "refresh-seed: no seed at $seed" >&2; exit 2; }
 # a rebuild runs for minutes: an exported short limit (600 s) must not cut it
-export WARP_LIB=$tree/lib WARP_REBUILD_TIME_LIMIT=${WARP_SEED_TIME_LIMIT:-7200} WARP_NO_WINDOW=1 WARP_HINTS=0
+export WARP_LIB=$tree/lib WARP_REBUILD_TIME_LIMIT=${WARP_SEED_TIME_LIMIT:-7200} WARP_WINDOW=0 WARP_HINTS=0
 unset WARP_SELF_HOSTED WARP_EMITTER
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/refresh-seed.XXXXXX") || exit 2
 trap 'rm -rf "$scratch"' EXIT

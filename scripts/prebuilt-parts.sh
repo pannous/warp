@@ -13,7 +13,7 @@ trap 'rm -rf "$probe"' EXIT
 cp "$HELLO" "$probe/" || exit 1
 cd "$probe" || exit 1
 unset WARP_LIB
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 timeout 600 "$folder/warp" build hello.warp >build.log 2>&1 ||
 	{ echo "prebuilt-parts: warp build hello.warp failed in $folder: $(tail -1 build.log)" >&2; exit 1; }
 # the machine code of runtime.wasm and of each prebuilt module (modules/<m>.wasm, an empty one not prebuilt), which a

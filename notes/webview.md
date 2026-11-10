@@ -29,7 +29,7 @@ heard by web/playground/markup.js listenToElements as the built sites' site.js h
 focus, blur, submit) runs its handler (page_event), a key the program's `on key`; `next(ms)` ticks when no event comes,
 and lib/timers.warp fires its timers (`every`, `at 9:30`, `on every day at 9:30`) on each tick's local wall clock; the page rendered anew and morphed in (morphChildren).
 Closing the window ends the run.
-Refused under WARP_NO_WINDOW or CI. `check` prints the text the page shows from the hidden view: the headless test
+Refused under --no-window or CI. `check` prints the text the page shows from the hidden view: the headless test
 (test/web/test_webview.pairs.warp). Not yet: a window test without a screen.
 
 ## Sample checks (card scripts-samples, decision sample-checks)

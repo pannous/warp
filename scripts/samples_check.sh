@@ -52,7 +52,7 @@ cd "$tree" || exit 2
 if [ -f "$tree/lib/warp.wasm" ]; then
 	export WARP_LIB=${WARP_LIB:-$tree/lib}
 fi
-export WARP_NO_WINDOW=1 WARP_HINTS=${WARP_HINTS:-0}
+export WARP_WINDOW=0 WARP_HINTS=${WARP_HINTS:-0}
 
 # Ephemeral port when 0: pick one that is free right now.
 if [ "$PORT" = 0 ]; then

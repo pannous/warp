@@ -58,7 +58,7 @@ mkdir -p "$store" "$compilers" 2>/dev/null
 logged() { echo "$(date '+%Y-%m-%d %H:%M:%S %Z') tree=$tree hash=$hash $1 $2" >>"$store/rebuilds.log" 2>/dev/null; echo "rebuild.sh: $1 $2 ($hash)"; }
 # wasmtime's machine code of lib's warp.wasm cached before a measured self build: a cold cache costs ~110 G instructions
 # more (data: hello cold 112 G, warm 3 G), which made two records of one commit differ by 6% (card build-record-variance)
-compiler_warmed() { (cd "$tree" && WARP_NO_WINDOW=1 WARP_LIB=$lib "$warp" "$WARMING_PROGRAM" >/dev/null 2>&1); }
+compiler_warmed() { (cd "$tree" && WARP_WINDOW=0 WARP_LIB=$lib "$warp" "$WARMING_PROGRAM" >/dev/null 2>&1); }
 copied() { clone "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
 # the commit a build is of: the tree's HEAD, `<sha>+dirty` when its inputs hold uncommitted changes (inputs.txt lists
 # them), so a build of a worktree's edits is never taken for its base commit's ([--short])

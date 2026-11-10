@@ -216,7 +216,7 @@ helps no WebGL-only browser: its WGSL still needs WebGPU.
   system values and the shader built-ins. $key holds only the last key pressed.
 - Default canvas: lib/draw.warp sizes it from system values view_width / view_height (the playground's output pane
   via playground.js viewSize; natively 640×480). notes/web_playground.md "The default canvas is the output pane".
-- Quirks: run paint probes under WARP_NO_WINDOW=1, or windows pop up on the user's Mac; headless, paint writes PNGs
+- Quirks: run paint probes under WARP_WINDOW=0, or windows pop up on the user's Mac; headless, paint writes PNGs
   to $TMPDIR/warp-paint, shared by every session (filter frames by size and mtime). A headless 1080p animation is
   bound by PNG writing; the window path isn't. A shader built-in is skipped when the program assigns a variable of
   that name (gpu_visualizer keeps its own `time`, the song's clock). `sleep 16ms` takes a unit on its number.
