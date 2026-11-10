@@ -85,6 +85,9 @@ class Density extends Quantity {}
 // lib/timers comes in through an implicit use, card linked-method-conversion; back to q.in("ms") once that is fixed)
 q: Quantity as Duration := Duration(same_quantity(quantity(1, "ms"), q, "convert").amount * 1000)
 d: Duration as Quantity := quantity(d.ms / 1000, "s")
+// a quantity of time as the core duration it lasts (form 3, whole nanoseconds), any other value as it is: the operand
+// of a run-time time's + - * (extensions/time_values.warp), as linked lib/time sees no conversion of units (card since-time)
+quantity_lasting(q: any) := if measures(q, "duration") then time_of(3, round(same_quantity(quantity(1, "s"), q, "convert").amount * 1000000000) as int) else q
 // lib/time's Duration as the quantity of time it is, so `6s == time 6` and `1s + time 6` (decision one-duration)
 time_quantity(x) := if x is Duration then x as Quantity else x
 

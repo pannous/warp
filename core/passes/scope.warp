@@ -239,7 +239,7 @@ rewritten_by(n: Node, table: list): Node := {
 	for entry in table { n = rewritten_if(n, entry#1, entry#2) }
 	n
 }
-# TODO a function value in a local, `rewrite = entry#2; rewrite(n)`, once it is called (card function-value-read)
+# TODO (card function-value-read) a function value in a local, `rewrite = entry#2; rewrite(n)`, once it is called
 rewritten_if(n: Node, accepts: function, rewritten: function): Node := if has_own_word(n, accepts) then rewritten(n) else n
 # a node's own words: its items' words, a key's operator, a declaration head's name (`type of`)
 has_own_word(n: Node, accepts: function): bool := match n {

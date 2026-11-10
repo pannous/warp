@@ -278,7 +278,7 @@ time_literal_words(program: Node): list := {
 	nodes = nodes_in(program)
 	# a time literal, or a name typed time whose fields it reads, `zoned(t: time, …) := … t.form` (lib/time.warp)
 	if not nodes.any(n => is_time_view(n) or is_time_typed(n)) { return [] }
-	[time_field_word] + (if nodes.any(n => time_operator_symbols.any(symbol => is_operator(n, symbol))) then [time_operation_word, time_operand_word] else [])
+	[time_field_word] + (if nodes.any(n => time_operator_symbols.any(symbol => is_operator(n, symbol))) then [time_operation_word, time_operand_word, quantity_lasting_word] else [])
 }
 is_time_typed(n: Node): bool := is_operator(n, ":") and value_of(n) == symbol(time_module)
 # `x is time`, `x is duration`: lib/time's word the emitter asks (runtime_words.warp time_test_code)

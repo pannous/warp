@@ -35,6 +35,9 @@ const guestItems = (program, list) => Array.from({ length: guestCount(program, l
 // the first `count` items of a list of Ints, as numbers
 const guestInts = (program, list, count = guestCount(program, list)) =>
 	Array.from({ length: count }, (_, index) => Number(program.int_item_at(list, BigInt(index + 1))));
+// a list of numbers, as floats
+const guestFloats = (program, list) =>
+	Array.from({ length: guestCount(program, list) }, (_, index) => program.float_item_at(list, BigInt(index + 1)));
 
 const ENTRY_NAME = /^[\p{L}_][\p{L}\p{N}_]*$/u;
 // a map's entries [name, value], read item by item and never shown (a Key is two items, its name and its value:

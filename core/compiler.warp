@@ -99,7 +99,7 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	timed("checked_program done")
 	c_functions = with_used_c_functions(foreign#2)
 	found = checked_facts(known)
-	// TODO runtime_words Instead of work-based, should we create a class for (partial) modules?  (card runtime-words-modules)
+	// TODO (card runtime-words-modules) runtime_words Instead of work-based, should we create a class for (partial) modules?
 	timed("emit")
 	made = typed_wasm_module(program, Node.Empty, with_c_functions(host_words(), c_functions), emitter_kinds(program))
 	timed("emit done")
