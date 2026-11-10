@@ -186,9 +186,12 @@ before asking a question). After a context swap, this file and your role file be
   whose session retires unlanded stays in Now with that same note; the integrator lands those.
 - The Supervisor's plan for a card is pre-approved: implement it without asking. An idea of your own beyond it may
   be built too when it is undoable (its own commits on the branch).
-- Explore before the first edit of a card, a bug report or a "why" question: grep the wiki, test/, the decisions
-  inbox, the card's notes, related cards and the git log of the files involved, and use what you find. Not for a
-  mechanical step whose context you already hold.
+- Explore before the first edit of a card, a bug report or a "why" question, wider than the card names, and use
+  what you find: the spec (wiki/, test/, samples/), the history (`todo show` with its comments, related cards via
+  `todo list | grep`, notes/<topic>.md, notes/handover/, the decisions inbox, `git log -S`/blame of the code
+  involved), live work (open branches and worktrees on the same files, the Now column), and the evidence (the stored
+  baseline, `scripts/baseline.sh <tests>`; a failed build's record in the store). Not for a mechanical step whose
+  context you already hold.
 - Quick cards first: those that never touch core/ or extensions/ (website, samples, lib/ outside the baked files,
   `scripts/compiler-inputs.sh --baked-files`). A baked file, core/ or extensions/ needs a compiler build: never quick.
 - A TODO in the code without a card gets one: `# TODO (card <name>) <text>`, card name right after the word TODO.
