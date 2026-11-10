@@ -17,8 +17,8 @@ from main, not its name section: ~45 of the 64 prelude functions in warp.wasm ar
 std_module_text("prelude") is the core part, baked by module_source, then lib/prelude.warp; every read of a standard
 module's text goes through it (prelude.wasm's signature and hash, the index spans, prelude_text's readers: aliases,
 prelude_definitions, implicit uses), prelude_files() gives both files for positions, and the prelude module's stub
-uses the core file before `use prelude`. compiler.warp includes the core part for the current seed, which reads only
-lib/prelude.warp and so its copies of the 12 alias lines too, until the seed refresh (card builtins-seed-transition).
+uses the core file before `use prelude`. Seeds before 5b69b6aa (11-10) read only lib/prelude.warp: until then
+compiler.warp included the core part and lib/prelude.warp kept copies of its 12 aliases (card builtins-seed-transition).
 No operator in the core part while compiler.warp includes it: in the self build that operator and the prelude's same
 one are two overloads the dispatch cannot tell apart (a function replaces, an operator overloads), so the lexer's
 `(n + 1) times [n]` became a comprehension and `times` stays in lib/.
