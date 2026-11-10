@@ -1,7 +1,7 @@
 # An `it` expression given where a function is taken is the function of `it` (card it-expression-function, decision
 # declared-block-parameters): the callee's signature says which arguments are functions, the program's own definition
 # (`apply(f: function, x) := f(f(x)); apply(it + 3, 1)` is 7) or a builtin's typed line (`find(xs: list, f: function)`:
-# `[1 2 3].find(it > 1)` is 2); a block `{it * 10}` there too. It runs first, so such an `it` is never the last result.
+# `[1 2 3].find(it > 1)` is 2); a block `{it * 10}` is a function already. It runs first, so such an `it` is never the last result.
 function_arguments_extension = Extension{name: "function_arguments", passes_before: {"tries": function_arguments}}
 
 IT_WORD = "it"
@@ -48,10 +48,10 @@ is_function_place(signatures: list, place: int, arguments: list): bool := {
 # whether `it` occurs in n outside a function that binds it
 names_free_it(n: Node): bool := n == symbol(IT_WORD) or (not is_lambda(n) and parts_of(n).any(names_free_it))
 
-# `it + 3` → `it => it + 3`; a named argument keeps its name, `by: -it` → `by: it => -it`
+# `it + 3` → `it => it + 3`; a named argument keeps its name, `by: -it` → `by: it => -it`; a block `{it * 10}` already is one
 as_function_of_it(argument: Node): Node := {
 	if is_key(argument, Op.Colon) and key_of(argument) is symbol { return Key(key_of(argument), Op.Colon, as_function_of_it(value_of(argument))) }
-	if names_free_it(argument) then Key(symbol(IT_WORD), Op.Arrow, argument) else argument
+	if names_free_it(argument) and not is_block_argument(argument) then Key(symbol(IT_WORD), Op.Arrow, argument) else argument
 }
 
 # the arguments with each one at a function place made the function of `it`
