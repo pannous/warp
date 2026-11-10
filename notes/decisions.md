@@ -182,16 +182,9 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - module-alias: an `alias pw = power` line in a program or a directly run file adds a name and never shadows one (`alias exp = exponential` beside a builtin exp leaves exp the builtin).
 - own-name-not-builtin: a program wanting its own version of a builtin math word (a Taylor-series sin) defines it under its own name (`sin_test`), not by redefining `sin`.
 - (override-keyword governs redefining a library word; a foreign export is called qualified.) P39 no `id`/`square` builtins; P191 `square` lives in math.
-- markup-plain-library: glued attributes are dropped (`label{ for: name; "Name" }`); `form` is a plain function `form(method: symbol, action: text, body)`, so `form post "/todos" {…}` comes from function-words-consume; core rule: `name = value` inside any data block is a key, as `name: value` (`input{type="text"}`).
-- rewrite-general: `rewrite PATTERN => TEMPLATE [where $c = SHAPE]` stays as a general user-macro feature (`rewrite double $x => $x * 2`); the arrow may later become `as`/`with`. Channels are a plain Channel class (send/receive/close); `for v in ch` uses an iteration protocol for classes (core feature).
-- block-lazy-body: a `{…}` block passed to a function-typed parameter is its lazy body, a function of no parameters or of `it` when called with one (`get "/echo" { it.body }`); general core rule.
-- serve-plain: path parameters via text patterns (`get "/users/" + id: int { users#id }`, card route-path-patterns); `$field` dropped (`it.body.title`); default routes of `warp deploy` move into the library via a reflection word `functions()`.
-- transitions-data: markup tags take their body as `data`, so `li{ transition: opacity 200ms ease-out }` and the library kinds `fade/scale/slide 200ms` stay bare words, joined into CSS by the library.
-- data-names: inside a data argument a name the program binds is its value, spliced in at the call site (`color: theme` → red, `p{ "count " + n }` shows n); an unbound word stays a word (`ul > li`); quote it (`"red"`) to keep a word that is also a variable.
 - reflection-plain: one builtin `meta(x): map` gives what the compiler knows about a class, module or function; lib/reflection.warp builds typed views (`.name .fields .methods .parent`, `.words .doc`) and dir/fields/methods/help on it. `help(x)` gives the text; the REPL/program value prints it, mid-program `print help(x)`.
 
 - same-as-result: a result typed like an argument is spelled `same as <param>` (`shuffled(xs): same as xs`); an element of an argument is `element of xs`, `value of m`, `key of m` in type position (`first(xs): element of xs`); no type variables per P157.
-- music-plain-details: live loops take a function (`live_loop(drums, 4)`), a block once block-into-go lands; in-program redefinition dropped, the playground handover between runs stays. Sharps: constants `F♯4`, alias `Fs4`, note texts "F#4", and `F#4` itself by overloading the index of the note object F (no pass). Block-wise sound functions: interim `play_blocks(hum, linear_address(hum_block), 0.1s)` with a linear array; goal: `play` picks the block filler by the function's parameter type (`hum(block: samples, t)`). samples-type: `samples` is declared in lib/sound.warp as a linear block of 512 floats, independent of class Sample (a clip, lists of it are `list of Sample`); a declared type name wins over plural derivation.
 - P24 suffix forms (`4 doubled`) call user functions. P164 a type word after a parameter name is its type (`phone number`); `phone-number:text` is one hyphenated name in declarations.
 - P48 custom operators: `prefix operator ⁻ := …`, `suffix`, `infix operator ⊕ := left+right`, word operators `infix operator divides(d, n) := …`. P54 only declared operators are ranked (`has precedence above +`). P166 element-wise operators on plain numbers act plainly.
 - values-number: a system value is `$mouse.x`; `$mouse_x` hints `mouse.x`.
@@ -247,38 +240,15 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
   - nullish-default: `X ?? Y` and its keyword `X default Y` replace only an error or ø and keep falsy values (`0 default 10` 0, `parse_json("{oops") default []` []), the meaning of `stored visits default 0`; `default` canonical, `except`, `otherwise`, `failing` aliases with a note; the one-line `try X except Y` means exactly `X except Y` (errors and ø); the block `try: … except: …` stays the error handler; `else` only if's and try's; a bare `x else 5` is refused with the fix `x default 5` or `x or 5`. A match arm `default:` (key with a colon) stays the catch-all; `try X else Y` and `??` stay.
 
 ## Web, markup and server
-- markup-auto-render (user; also: keep-use-web-explicit overridden): an HTML element in a program's result switches on render mode by itself, natively and in the page: no `use web`, no `render page` needed (card html-render-mode).
-- instances-not-plural: no magic plural `counters` for a component's instances (the sugar goes); `Counter.instances` and `instances of Counter` (the same thing); card counters-sugar-removal.
-- click-by-id: a program or test clicks an element through page-ids: `button{ id: "plus", "+1", on click {…} }; click plus`. click-by-label: `click "+1"`, `fill "name" with "Ada"`, `check text is "Add1"` act on the page `render` last showed, finding the element by trimmed text, then placeholder, aria-label, name, id, with a handler for that event; none → "no element showing "+1" handles click; the page: …".
-- web-words: host plumbing words (page_render, page_event) never appear in programs, samples, docs or try lines; a simulated click gets a readable word (spelling to be proposed).
-- markup-keeps: interactive markup is library-first. Core: (1) a tag block's items are expressions like any block's (module rules walk them, a phrase headed by a bound function is a call, unbound words stay data), ~15–25 lines; (2) automatic liveness, ~20 lines: an item reading a variable written later is kept as code (`is varying`), so `p{ "count: " + count }` updates after a click. Library: `on(event, handler: block)` (comma allowed before it), live parts re-evaluated after a handler with only changed output patched, a Live class showing its current value natively, `input{ bind: name }` as an extensions/sugar rule, keyed instances by hand `instance(t, () => Counter(t))`. General, not web: any library (terminal UI, native canvas, sound, `on change`) uses the same live API; core names carry no web words. Rejected: React-style re-render.
   - live-word-items: a bare word item read from a variable written later is live too (`p{ greeting }` like `p{ "${greeting}" }`).
   - data-tag-words (user + interviewer): samples write markup elements glued, `head{ title: "My Page" }`; inside data, a prelude function before a block (head, first, last, sort) stays a tag; only words the program defines or `use`s make `word{…}` a call (`json{…}` with use json); head of a block in data is written head(…). One check in extensions/quotes.warp is_data_tag, no core.
-- markup-handler-comma: a handler inside a tag may be separated by a comma, `button{ "+1", on click { count += 1 } }`.
 - P188 stay close to HTML and CSS; only the basic machinery. web-keyframes: CSS's own `@keyframes`; warp adds only `leave:`.
-- html-meta: page facts are keys on html (`title:`, `description:`, `meta: {…}`).
-- key-if: inside `on key {…}` bare `key` reads event.key; named keys compare as words (ESC, ENTER, UP); held-key: `held_key` is the held key's name.
 - unknown-tag: an unknown element warns with the near name; custom elements and components are not flagged.
-- P186/P187 DOM morph, identity by order. P190 page-test words stand.
-- Web words: `local["k"]`, `session["k"]`, `database["k"]`, `clipboard.write`; reading the clipboard in a page is an error.
-- select-shorthand: a list inside select{} gives one option per item; `["a": "Apple"]` value + label. Form shorthand: `form post "/todos" {…}`.
-- P232 `$a` in data references the enclosing node (`$` contexts: dollar-interpolation; `$name` in a rewrite rule is a hole, `$dir` a word). P160 `@1` is the node with id 1, `ref 1`/`ref a` in words, `$<digits>` only positional.
-- P221 one route line serves both sides: server render first, then data fetches.
 - Served routes: a raising form route answers 400 and re-renders; missing field 400, unknown id 404; /api and /rpc give instances as plain objects. route-access: a route gives out only what it displays.
-- ORM: plain classes connect to the database by registering, no inheritance; filters run any warp expression; assigning a stored row's field writes through; `save bo` accepted (notes/orm.md).
-- site-budget: the hello-world site is ≤ 100 KB gzipped. tour-firefox-stall: a Worker-run site ships task-workers.js.
-- Hosting: our own login first, then deploy to one's own provider: Cloudflare Workers, Ferron on pannous.com (`<name>.lambda.pannous.com`), Fermyon/Akamai (notes/hosting.md).
-- P235 WGSL is a `shader { … }` block (alias `wgsl`); P235b no capture of warp variables, `$name` is an explicit hole; shader-untouched: WGSL stays as written otherwise; WGSL errors are reported at the .warp line and column. P234 `paint` takes a shader text; `use graphics` = `use draw`.
-- gpu-multipass: `waves = render(height_field, 256, 256)` paints off-screen, the image stays on the GPU (alias `texture`); another painted function reads it as a function, `waves(uv)`, like `$previous(at)` (notes/gpu.md "Several passes").
 
 ## Sound
-- mp3-true-length: an MP3's length excludes encoder padding (the browser's 0.5, not miniaudio's 0.5747): native trims too; `sound_seconds(tune.mp3) >= 0.5`.
-- play-dispatch: `play` dispatches on what it plays (signal, stereo pair, block function); `play(hum, 2s)` until prepositions-call.
 - sound-at: `at 2 beats play C4` places sounds from the voice's first sound.
-- note-value: note names are frequencies (`C4 * 2` = 523.25); `note(C4)` is a Note printing "C4", `note(445Hz)` "A4+20c".
 - shared-buses: a bus is a named effect chain `room = bus() |> reverb(0.4)`; `osc(C4, 1s) |> room`, `play(C4, 1s, bus: room)`; `room.reverb = 0.6` applies from that moment.
-- save-sound: audio goes to a file through the general `save` (`save sound as: "song.wav"`); render_sound gives an I-meant hint.
-- signal-samples: samples/signal*.warp are siren_sound/stereo_sound.
 
 ## Compiler internals (technical, decided by the Supervisor or Interviewer)
 - lib-oddities: `unwrap(n)` of a literal is no longer factorial; `click who` with an unbound name is refused with a fix naming `click(:who)`; `shared x = 0` keeps its word and means more than global: a shared variable is atomic (`shared n = 0; … n += 1` from several tasks never loses an update).
@@ -789,3 +759,10 @@ P169 → wiki/use.md, test/modules/test_module_rules.pairs.warp.
 host-callback-exports, packages-by-name, uniscript-on-literal, file-words-implicit, bare-append-file, P182, D15, P94, #14e, package-forms → wiki/use.md and the tests citing it.
 write-makes-folders → lib/file.warp (write makes folders). package-repos → github.com/pannous/warp-packages.
 P194, P88, P228 → historic (git). P146 → web/playground/lib.
+markup-handler-comma → wiki/html.md, test/web/test_markup_and_note_rules.pairs.warp.
+note-value → wiki/sound.md, test/web/test_markup_and_note_rules.pairs.warp.
+select-shorthand → wiki/html.md (select).
+markup-auto-render, instances-not-plural, click-by-id, markup-keeps, html-meta, key-if, Web, P232, ORM, P235, gpu-multipass, play-dispatch, save-sound, markup-plain-library, rewrite-general, block-lazy-body, serve-plain, transitions-data, data-names, music-plain-details → wiki (html, sound, shader, pattern-matching pages) and the tests citing it.
+web-words → AGENTS.md (canonical-output; host words stay internal). P186/P187, signal-samples → historic (git).
+P221 → wiki/html.md (routes). site-budget, Hosting → notes/hosting.md.
+mp3-true-length → lib/sound.warp (mp3 length).
