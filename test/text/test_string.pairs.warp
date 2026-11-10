@@ -10,10 +10,8 @@
 '"🍏"'	'🍏'
 
 # test_primitive_hello
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: 'hello'	'hello'
 
 # test_string_concatenation
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: 'a2'	'a2'
 
 # test_string_basics
 «'hello'»	'hello'

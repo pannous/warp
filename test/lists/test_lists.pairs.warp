@@ -5,7 +5,6 @@
 'pixel=[1 2 4];pixel size'	3
 'pixel=[1 2 4];pixel length'	3
 'pixel=[1 2 4];pixel count'	3
-# triage-held 2026-11-06: desk-invented `pixel number` :: 'pixel=[1 2 4];pixel number'	3
 'pixel=[1 2 4];pixel.size'	3
 'pixel=[1 2 4];pixel.length'	3
 'pixel=[1 2 4];pixel.count'	3
@@ -68,31 +67,12 @@
 # triage-held 2026-11-06: semicolons separate statements, the group is its last value :: '{1;2;3}'	[1, 2, 3]
 
 # test_root_list_strings
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '(a,b,c)'	['a', 'b', 'c']
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '(a;b;c)'	['a', 'b', 'c']
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: 'a;b;c'	'c'
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: 'a,b,c'	['a', 'b', 'c']
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '{a b c}'	['a', 'b', 'c']
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '{a,b,c}'	['a', 'b', 'c']
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '[a,b,c]'	['a', 'b', 'c']
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '(a b c)'	['a', 'b', 'c']
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '[a;b;c]'	['a', 'b', 'c']
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: 'a b c'	['a', 'b', 'c']
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '{a;b;c}'	['a', 'b', 'c']
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '[a b c]'	['a', 'b', 'c']
 
 # test_index
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '(a b c)#2'	'b'
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '{a b c}#2'	'b'
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '[a b c]#2'	'b'
 '{a:1 b:2}.a'	1
 'a of {a:1 b:2}'	1
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: 'a in {a:1 b:2}'	1
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '{a:1 b:2}[a]'	1
 '{a:1 b:2}.b'	2
 'b of {a:1 b:2}'	2
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: 'b in {a:1 b:2}'	2
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '{a:1 b:2}[b]'	2
 
 # test_field_assignment_to_undefined_variable
 'k={};k.x=3;k.x'	3
