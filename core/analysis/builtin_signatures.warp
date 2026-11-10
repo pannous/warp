@@ -123,13 +123,8 @@ compiler_lines = [
 	"caught_error(finished, value): error from emitter",
 	"placed_at(failure, position): error from emitter",
 	"trap_place(): int from emitter",
-	"byte_at(t, offset): int from emitter",
-	# todo Can we move all the uniscript to a later extension pass because the core compiler does not use any uniscript
-	"uniscript_error(values...): int from emitter",
-	"uniscript_warnings(values...): int from emitter",
-	"uniscript_to_unicode(values...): int from emitter",
-	"uniscript_to_uniscript(values...): int from emitter",
-	"uniscript_explicit(values...): int from emitter"
+	"byte_at(t, offset): int from emitter"
+	# DONE Can we move all the uniscript to a later extension pass because the core compiler does not use any uniscript
 ].map(line => typed_line(line, emitter_library))
 emitter_lines = library_lines(emitter_library) + compiler_lines
 typed_lines = runtime_lines + emitter_lines
