@@ -301,6 +301,8 @@ global brought_names = {}
 global brought_value_names = {}
 # those of them a library exports, which called_only keeps uncalled
 global exported_names = {}
+# the words whose recorded reach (prebuilt.warp linked_reaches) with_reached followed, of the compile at hand
+global linked_reached = {}
 # the reach's last step, once the passes ran (passes.warp lowered_reached): the program without the brought functions
 # nothing calls. What a sugar rule might write is brought before it fires (sugar_words_of: `each_any` for any call,
 # `count_in` for any count), and typing and emitting the unused ones cost each compile (card measure). A module being
@@ -400,6 +402,10 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	for name in exported { exported_names[name] = yes }
 	# (an alias the program writes where the sugar makes its call later, `3 squared`, wants its word: square)
 	wanted = exported + program_words + program_words.filter(word => written_aliases.has(word)).map(word => written_aliases[word]) + variant_words(program_words) + lowering_words(program) + sugar_words_of(program) + linked_needs() + (if callable_word in module_names and calls_a_value(program) then [callable_word] else []) + extension_value_settlers().values.filter(word => word in module_names)
+	# (and what the linked words reached so far reach, a used module's reaching the prelude's: their bodies, declared
+	# only, say none of it)
+	wanted += linked_reached.keys
+	reaches = linked_reaches()
 	uses = ø
 	origins = {}
 	# (the slices by name, made once: each wanted word compared with every slice's name was most of hello's reaching)
@@ -408,6 +414,10 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	while at < #wanted {
 		word = wanted[at]
 		at += 1
+		if not linked_reached.has(word) {
+			linked_reached[word] = yes
+			wanted += reaches.get(word) ?? []
+		}
 		for slice in named.get(word) ?? [] {
 			if slice#5 not in reached {
 				if slice#4 == ø and uses == ø { uses = use_lines(module) }
