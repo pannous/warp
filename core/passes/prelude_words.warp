@@ -231,7 +231,7 @@ names_within(n: Node, with_keys: bool): list := {
 			}
 		} else {
 			if with_keys and part is key { found[key_head(part)] = yes }
-			if with_keys and is_phrase(part) { found[PHRASE_TOKEN] = yes }
+			if with_keys and is_phrase_matchable(part) { found[PHRASE_TOKEN] = yes }
 			# a text's holes are code too: a slice is read before interpolation builds them (`"${f(x)}"` reaches f)
 			waiting += parts_within(part) + template_hole_codes(part).map(code => plain_node(parsed(code)))
 		}
