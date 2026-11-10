@@ -25,7 +25,8 @@ component_name(statement: Node): text := {
 	parts = definition_of(statement)
 	if parts == ø or not is_capitalized(parts.name) or not is_curly_group(parts.body) or #parts.body == 0 { return "" }
 	# (a function of markup without state, `Card(t) := div{…}`, is a plain function)
-	if #tag_parts(parts.body#(#parts.body)) == 2 and items_of(parts.body).any(is_state_assignment) then parts.name else ""
+	# (the element an Html as extensions/markup_values.warp made it)
+	if #tag_parts(markup_written(parts.body#(#parts.body))) == 2 and items_of(parts.body).any(is_state_assignment) then parts.name else ""
 }
 
 # `Counter(start) := {…}` as `Counter(start, key) := { this = component("Counter", key); component_state(this, "count", () => start); … }`
@@ -35,7 +36,10 @@ component_defined(statement: Node): Node := {
 	body = items_of(parts.body).map(item => if is_state_assignment(item) then state_set_once(item) else item)
 	for name in state { body = body.map(item => renamed(item, name, state_entry(name))) }
 	instance = Key(this_word, Op.Assign, call_node(symbol("component"), [parts.name, symbol(key_parameter)]))
-	signature = call_node(symbol(parts.name), parts.parameters + [symbol(key_parameter)])
+	called = call_node(symbol(parts.name), parts.parameters + [symbol(key_parameter)])
+	# (its result type kept: `def Counter(start): html {…}` is markup, extensions/markup_values.warp)
+	written = key_of(statement)
+	signature = if is_key(written, Op.Colon) then Key(called, Op.Colon, value_of(written)) else called
 	Key(signature, Op.Define, group_like(parts.body, [instance] + body))
 }
 is_state_assignment(item: Node): bool := is_key(item, Op.Assign) and key_of(item) is symbol
@@ -63,7 +67,7 @@ with_live_items(n: Node, names: list): Node := {
 	Key(parts#1, Op.Colon, group_like(parts#2, items_of(parts#2).map(item => if calls_component(item, names) then live_part(item) else item)))
 }
 # (reading the instances too, `p{ "sum " + sum(Counter.instances.map(c => c.count)) }`: they change as the page renders)
-calls_component(n: Node, names: list): bool := not is_lambda(n) and #tag_parts(n) == 0 and (is_component_call(n, names + [instances_word]) or parts_of(n).any(part => calls_component(part, names)))
+calls_component(n: Node, names: list): bool := not is_lambda(n) and #tag_parts(markup_written(n)) == 0 and (is_component_call(n, names + [instances_word]) or parts_of(n).any(part => calls_component(part, names)))
 live_part(item: Node): Node := call_node(symbol("live"), [deferred(item)])
 instances_named(n: Node, names: list): Node := {
 	if is_key(n, Op.Dot) and key_of(n) is symbol and name_of(key_of(n)) in names and value_of(n) == symbol(instances_field) { return instances_of(name_of(key_of(n))) }

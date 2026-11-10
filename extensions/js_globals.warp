@@ -71,7 +71,7 @@ is_page_global(name: text): bool := {
 page_ids(scopes: list, bound: any): list := {
 	found = {}
 	for n in scopes.flat_map(nodes_in) {
-		if is_markup_element(n) {
+		if is_markup_block(n) {
 			for item in items_of(value_of(n)) {
 				id = written_id(item)
 				if id != "" and bound.has(id) { raise "the id " + id + " of the page's markup and the program's own " + id + " share a name: rename one (decision page-ids)" }

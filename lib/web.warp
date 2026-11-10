@@ -24,8 +24,9 @@ rewrite server def $h($x) {$b...} => ($h($x) := {$b...}; route_add("POST", "/rpc
 
 DEFAULT_PORT = 8080
 HTML_TYPE = "text/html; charset=utf-8"
-// a page route's answer: the markup its block gives, as HTML
-page_answering(page: function) := request => {
+// a page route's answer: the markup its block gives, as HTML (typed html, so its block is markup:
+// extensions/markup_values.warp)
+page_answering(page: html) := request => {
 	header("Content-Type", HTML_TYPE)
 	to_html(page(request))
 }
