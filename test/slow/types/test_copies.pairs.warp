@@ -1,0 +1,4 @@
+# from test_copies.rs: edit the Rust test, then run the script again
+# a_copy_is_independent
+'m = {a: {b: 1}}; n = m.copy(); n.a.b = 2; m.a.b'	1
+'m = {a: {b: 1}}; n = m.copy(shallow: true); n.a.b = 2; m.a.b'	2

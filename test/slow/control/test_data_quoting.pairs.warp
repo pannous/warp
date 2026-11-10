@@ -1,0 +1,3 @@
+# from test_data_quoting.rs: edit the Rust test, then run the script again
+# data_takes_the_whole_expression_after_it
+'m = {a:{b:1}}; string m'	'{a: {b: 1}}'

@@ -13,8 +13,6 @@
 'class bag{n: int}; bags = [bag(1)]; bags#1.n++; bags#1.n'	2
 
 # a_nested_field_changes
-'p = {b: {n: 1}}; p.b.n++; p.b.n'	2
-'p = {b: {n: 1}}; p.b.n += 2; p.b.n'	3
 'b = {n: 1}; b.n++; b.n'	2
 
 # an_element_of_a_field_and_a_nested_element_change

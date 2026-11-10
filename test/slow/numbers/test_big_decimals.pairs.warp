@@ -1,0 +1,4 @@
+# decision exact-decimal-big: a decimal past 18 places stays exact, a ratio of a big denominator, never a float
+'use units; x = 100000000000000000000 m; x * 2'	200000000000000000000m
+'use units; x = 0.0000000000000000001 m; x * 2'	0.0000000000000000002m
+'use units; 100000000000000000000 m + 1 km'	100000000000000001000m

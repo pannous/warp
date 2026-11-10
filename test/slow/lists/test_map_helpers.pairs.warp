@@ -1,0 +1,8 @@
+# deep_merge, pick, omit, filter_entries, transform_keys, get_path and set_path (card lib-map-helpers)
+'deep_merge({a: {x: 1, y: 2}, b: 1}, {a: {y: 3, z: 4}, c: 5})'	{a: {x: 1, y: 3, z: 4}, b: 1, c: 5}
+'deep_merge({a: {x: 1}}, {a: 2})'	{a: 2}
+'a = {p: {q: 1}}; deep_merge(a, {p: {q: 2}}); a'	{p: {q: 1}}
+'get_path({a: {b: {c: 7}}}, ["a", "b", "c"])'	7
+'get_path({a: {b: 1}}, ["a", "x"])'	ø
+'set_path({a: {b: 1}}, ["a", "c"], 2)'	{a: {b: 1, c: 2}}
+'m = {a: {b: 1}}; set_path(m, ["a", "b"], 2); m'	{a: {b: 1}}

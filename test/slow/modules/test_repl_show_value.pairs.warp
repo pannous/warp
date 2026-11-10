@@ -1,0 +1,2 @@
+# console print gate: use/let/… stay silent; assignments and expressions still show (card repl-line)
+'use repl; should_show_repl_value("use os", "os")'	no
