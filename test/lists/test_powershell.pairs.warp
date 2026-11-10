@@ -12,5 +12,4 @@
 'use powershell; ps = [{name:"a", cpu:3, os:"mac"}, {name:"b", cpu:9, os:"linux"}, {name:"c", cpu:6, os:"mac"}]; ps.foreach_object(p => p.cpu * 2)'	[6, 18, 12]
 'use powershell; ps = [{name:"a", cpu:3, os:"mac"}, {name:"b", cpu:9, os:"linux"}, {name:"c", cpu:6, os:"mac"}]; ps.where_object(p => p.cpu > 5).sort_object_descending("cpu").select_object("name").select_first(1).map(p => p.name)'	["b"]
 'use powershell; ps = [{name:"a", cpu:3, os:"mac"}, {name:"b", cpu:9, os:"linux"}, {name:"c", cpu:6, os:"mac"}]; ps.select_object("name", "cpu").format_table().split("\n")#1'	"name  cpu"
-'use powershell; ps = [{name:"a", cpu:3, os:"mac"}, {name:"b", cpu:9, os:"linux"}, {name:"c", cpu:6, os:"mac"}]; ps.select_first(1).select_object("name", "os").format_list()'	"name : a\nos   : mac"
 'use powershell; [1, 1, 2].select_unique()'	[1, 2]

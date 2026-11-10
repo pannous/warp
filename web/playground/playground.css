@@ -199,6 +199,9 @@ output.located:hover { text-decoration: underline; }
 /* the assistant (assistant.js): the key field, completion in gray at the cursor, the chat under the output */
 .deploy-name { width: 9em; margin: 4px 0; }
 .api-key { box-sizing: border-box; width: 100%; margin: 4px 0; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.status { font-weight: 600; }
+.status.ok { color: var(--ok, #2a8a3c); }
+.status.rejected, .status.unreachable { color: var(--error); }
 .completion { color: var(--muted); opacity: 0.8; white-space: pre-wrap; }
 .completion-pending, .completion-failed { font-size: 0.85em; color: var(--muted); padding-left: 4px; }
 .completion-failed { color: var(--error); }

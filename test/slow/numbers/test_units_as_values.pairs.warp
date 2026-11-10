@@ -1,0 +1,3 @@
+# Units are values (decision units-as-values, lib/units.warp): 5km is 5 times the unit km, shown in the unit written,
+# equal by amount; dimensions are classes, quantities of different ones neither add nor compare
+'use units; quantity("1 min") == quantity("60 s")'	true

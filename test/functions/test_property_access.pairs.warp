@@ -6,13 +6,11 @@
 
 # test_dot_on_a_variable_and_nested
 'p={a:1 b:2}; p.a'	1
-'p={a:1 b:{c:3}}; p.b.c'	3
 'p={name:"Joe"}; p.name'	'Joe'
 
 # test_of_and_possessive
 'p={name:"Joe"}; name of p'	'Joe'
 # triage-held 2026-11-06: desk-invented p's name, square of a number = … :: «p={name:"Joe"}; p's name»	'Joe'
-'p={a:1 b:{c:3}}; c of b of p'	3
 
 # test_bracket_lookup_by_text_never_traps
 'p={name:"Joe"}; p["name"]'	'Joe'

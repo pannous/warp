@@ -1,0 +1,3 @@
+# from test_threads.rs: edit the Rust test, then run the script again
+# await_gives_the_result_of_the_thread
+'f(ms) := { sleep(ms / 1000); ms }; a = go f(5); x = await a * 2; x'	10

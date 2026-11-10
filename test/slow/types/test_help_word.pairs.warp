@@ -1,0 +1,2 @@
+# help(x) describes a class, a function or a module as text (wiki/reflection.md); a program's own help wins
+'use sound; help(sound.midi) == help(midi)'	yes

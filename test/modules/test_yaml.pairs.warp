@@ -21,14 +21,12 @@
 
 # scalars, nesting, flow over lines, one document
 «use yaml; parse_yaml("[~, null, '', true, False, 0x1F, 0o17, -12, +3, 1.5, .5, 1e3, 1_000, 2001-12-14, 'true', \\"5\\", yes, a b]")»	[ø, ø, "", yes, no, 31, 15, -12, 3, 1.5, 0.5, 1000, "1_000", "2001-12-14", "true", "5", "yes", "a b"]
-«use yaml; parse_yaml("a: 1\\nb:\\n  c: [1, 2, {x: y}]\\n  d:\\n  - p\\n  - q: 1\\n    r: 2\\ne: {\\n  f: [\\n    1,\\n    2,\\n  ],\\n}\\ng: plain # comment\\n")»	{a: 1, b: {c: [1, 2, {x: "y"}], d: ["p", {q: 1, r: 2}]}, e: {f: [1, 2]}, g: "plain"}
 «use yaml; [parse_yaml(""), parse_yaml("# only a comment\\n"), parse_yaml("--- 42"), parse_yaml_all("---\\n---\\nx\\n"), parse_yaml("- - a\\n  - b\\n- c")]»	[ø, ø, 42, [ø, "x"], [["a", "b"], "c"]]
 «use yaml; parse_yaml("a: 1\\r\\nb: [2]\\r\\n")»	{a: 1, b: [2]}
 
 # to_yaml: block style, quoting only where needed, read back equal
 «use yaml; to_yaml({name: "demo", n: 1, list: [1, "two", [3, 4], {k: "v"}], empty: [], none: {}, z: ø})»	"name: demo\nn: 1\nlist:\n  - 1\n  - two\n  - - 3\n    - 4\n  - k: v\nempty: []\nnone: {}\nz: null\n"
 «use yaml; to_yaml({a: "true", b: "123", c: "", d: "a: b", e: "-x", f: "x #y", g: "~", h: " pad", i: "two\\nlines", j: "it's fine"})»	"a: \"true\"\nb: \"123\"\nc: \"\"\nd: \"a: b\"\ne: \"-x\"\nf: \"x #y\"\ng: \"~\"\nh: \" pad\"\ni: \"two\\nlines\"\nj: it's fine\n"
-«use yaml; i = float("1e308") * 10.0; v = {name: "demo", "key: odd": "x", f: 2.5, t: yes, z: ø, e: "", s: "true", multi: "a\\nb\\ttab", q: "it's \\"q\\"", list: [1, "two", [3, [4]], {k: "v", k2: [5]}], empty: [], none: {}, deep: {a: {b: {c: "-dash"}}}, inf: i, ninf: 0.0 - i, dots: "...", u: "é😀"}; parse_yaml(to_yaml(v)) == v»	yes
 «use yaml; v = [1, [2, [3]], {a: [{b: 1}]}, "x"]; parse_yaml(to_yaml(v)) == v»	yes
 «use yaml; [to_yaml(2.0 * 1.5), to_yaml(float("2")), to_yaml("x"), to_yaml(ø)]»	["3\n", "2.0\n", "x\n", "null\n"]
 

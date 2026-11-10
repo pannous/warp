@@ -1,0 +1,4 @@
+# a chord's or scale's kind is a case of Chord or Scale, found by its name where the parameter wants one
+'use sound; chord(C4, major7) == [C4, E4, G4, B4]'	true
+'use sound; chord(A3, "minor") == [A3, C4, E4]'	true
+'use sound; h = chord([C4 E4 G4], 5ms); [h > 0, chord(C4, major) == [C4, E4, G4]]'	[true, true]

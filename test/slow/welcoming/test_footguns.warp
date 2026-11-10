@@ -1,0 +1,3 @@
+# from test_footguns.rs: edit the Rust test, then run the script again
+# test_newline_ends_statement
+is! '(zoned(2030-03-30T12:00, "Europe/Berlin") + 1 day) - zoned(2030-03-30T12:00, "Europe/Berlin") == 23 hours' true

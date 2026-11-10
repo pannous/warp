@@ -1,0 +1,2 @@
+# A program of one map is that map, as an assigned one reads it (card sample-gaps)
+'{a: 1, b: {c: 2}}'	{a: 1, b: {c: 2}}
