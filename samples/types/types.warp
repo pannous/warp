@@ -3,7 +3,7 @@
 # Structural typing with optional annotations
 
 # Simple type alias
-type Age = int
+type Age < int
 type Name < string
 
 # Record type (struct-like)
