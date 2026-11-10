@@ -68,9 +68,7 @@ lights = compute_toy(shader {
 		textureStore(screen, id.xy, float4(color, 1.0));
 	}
 })
-# run for ten seconds
-started = clock()
-while clock() - started < 10000 {
+# every frame until the window closes
+on frame {
 	paint(lights)
-	sleep(1 / 60)
 }
