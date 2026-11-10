@@ -1,6 +1,8 @@
 // The standard module tasks (decision N29, card go-cooperative): `go {…}` is a cooperative task, no thread: it starts
 // when main yields (its sleep, an await, a channel's receive, main's end) and gives the others their turn at its own
 // sleeps, natively and in a page alike, its block split there (extensions/rules/rule_words.warp task_steps); `go x` of an expression its value.
+// Only the block's own top-level sleeps split it: a sleep inside a function the task calls, or inside an if or a loop
+// of the block, holds every task until it wakes (the first said once as a warning).
 // `await job` runs the tasks until it is done and gives its value, `await all jobs` their values, `await any`/`first`
 // the first done's, `await job within t or d` its value if done within t, else d.
 // A task keeps what a module holds per task (task_context: sound's voice), its starter's when it was started

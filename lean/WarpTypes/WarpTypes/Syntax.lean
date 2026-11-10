@@ -191,7 +191,7 @@ inductive Expr where
   /-- `e is C`, the type test of a match arm `Shape::Circle(r)` (P178) -/
   | isA (e : Expr) (c : String)
   /-- `on ev {h} in {body}`: body runs with h answering the event ev; in h the local `event` is the emitted payload
-  (effect handlers, notes/effect_handlers.md: block-scoped, dynamically scoped, tail-resumptive) -/
+  (effect handlers, wiki/effects.md: block-scoped, dynamically scoped, tail-resumptive) -/
   | handle (ev : String) (h body : Expr)
   /-- `emit ev{payload}`: the innermost active handler of ev runs on the payload, and its value is emit's value; with no
   handler, a program-wide `on ev {…}`; with none, ø (P202) -/
@@ -199,7 +199,7 @@ inductive Expr where
   /-- a handler body running where its emit was, with only the k handlers outside the one answering: an emit inside
   a handler goes to the next handler outward (run time only) -/
   | scope (k : Nat) (e : Expr)
-  /-- `break v` in a block handler of ev (aborting handlers, notes/effect_handlers.md Step 3): the emit does not
+  /-- `break v` in a block handler of ev (aborting handlers, wiki/effects.md): the emit does not
   resume, the block `on ev {…} in {…}` whose handler ran ends with v. k is the depth of that block (the handlers
   outside it), unknown (none) until the abort leaves the handler's scope (run time) -/
   | abort (ev : String) (k : Option Nat) (e : Expr)

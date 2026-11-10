@@ -1,4 +1,4 @@
-# A program's calls of some words rewritten with its scopes respected (notes/dispatch.md: shadowing is scoped):
+# A program's calls of some words rewritten with its scopes respected (wiki/polymorphism.md: shadowing is scoped):
 # everywhere but on the right of `.` and inside a definition or lambda binding the word itself, so
 # `f(t) := { parse = x => 7; parse(t) }` and `parse => parse(t)` call their own
 words_rewritten(n: Node, rewrite: function, words: list): Node := {

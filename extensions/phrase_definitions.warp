@@ -1,4 +1,4 @@
-# Phrase definitions (card parser-cold-forms, decision core-is-self, notes/matching.md): `to add a to b: a + b`,
+# Phrase definitions (card parser-cold-forms, decision core-is-self, wiki/matching.md): `to add a to b: a + b`,
 # `To square a number: it * it` (an English sentence starts with a capital), read by their word `to` when it opens a
 # statement; the parser keeps at_to_header_end and known_type, which other forms read too
 read_phrase_definition(p: Parser, word: text): Node := if starts_statement(p) then to_definition(p) else ø
@@ -96,7 +96,7 @@ def shaped(parameter: Node, shapes: list): Node := {
 	parameter
 }
 
-# The parameters of a phrase head's words after its name (notes/matching.md):
+# The parameters of a phrase head's words after its name (wiki/matching.md):
 # - a preposition (`to of from …`) separates the slots and labels the one after it: `to add a to b` → `a`, `to b`
 # - an article starts a noun slot when a known type follows it or the body never names the article: `a number` →
 #   `number: number`, `a photo` → `photo` (typed once `class photo` is declared); `to add a b: a+b` keeps `a`
@@ -165,7 +165,7 @@ def phrase_slots(words: list, body: Node, types: list): list {
 def in_slot(words: list, at: int): bool := at <= #words and not phrase_prepositions.contains(words#at) and words#at != slot_comma
 slot_comma = ","
 
-# Whether the word at `at` is a type written before its parameter's name (notes/matching.md rule 3): a known type, no
+# Whether the word at `at` is a type written before its parameter's name (wiki/matching.md "The rule"): a known type, no
 # article, followed in its slot by a name that is no type; an article there is the name only when the slot ends with it
 def type_first(words: list, at: int, types: list): bool {
 	word = words#at

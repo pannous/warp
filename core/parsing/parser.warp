@@ -2930,11 +2930,12 @@ def number_atom(p: Parser): Node := {
 	}
 	number_start = p.at
 	written = decimal_number(p)
-	// a number with a suffix an extension reads, `0.1f`, `1 month` (core/extension.warp number_suffix_readers)
+	// a number with a suffix an extension reads, `0.1f`, `1 month`, `0.3̅` (core/extension.warp number_suffix_readers):
+	// still a number, so a glued name multiplies it as it does a plain one, `0.3̅x`, `3½x`
 	literal = p.code[number_start .. p.at]
 	for reader in number_suffix_readers() {
 		form = reader(p, written, literal)
-		if form != ø { return form }
+		if form != ø { return with_glued_factor(p, form) }
 	}
 	// `0.5:float`, `2.5:int`: a number type glued after a colon binds tightly, unlike the loose `as`
 	glued_type = if char_here(p) == ':' then p.code[p.at + 1 .. name_end(p.code, p.at + 1, p.n)] else ""

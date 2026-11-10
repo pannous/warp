@@ -1,0 +1,24 @@
+# Lists, maps and ranges: each-broadcast, range ends, pairs as items, size, growth, appending, spaced lists, where,
+# sharing, swizzles (wiki list, range, map; decisions each-field-broadcast, lazy-range-value, pair-items, bare-pair,
+# to-inclusive, #4/P40, P43, P34, D3, list-append-plus, reconsider-spaced, P175, P200b, P30, swizzles, curly-group)
+'counters=[{count:1},{count:2}]; sum(counters.each.count)'	3
+'r = 1..5; count r'	4
+'count(1 to 5)'	5
+'(1..10)#3'	3
+'a = 5; x = a:1; x is pair'	yes
+'size [1,2]'	2
+'len([1,2])'	2
+'xs=[1]; try { xs[5] = 2 } catch e { "caught" }'	"caught"
+'m = {}; m[1] = 5; m[1]'	5
+'3 times [1]'	[1, 1, 1]
+'[1,2] .+ [3,4]'	[4, 6]
+'[1,2] + [4]'	[1, 2, 4]
+'xs = [1]; xs += 3; xs'	[1, 3]
+'xs = 1 2 3; #xs'	3
+'v=[3,4]; v.y'	4
+'v=[3,4]; norm(v)'	5
+'v=[1,2,3]; v.zyx'	[3, 2, 1]
+'[1,2,3].length'	3
+'xs=[1,2,3]; xs.pop()'	3
+'pixels=[1,2]; pixels size'	2
+'x = {a: 1}; x is map'	yes

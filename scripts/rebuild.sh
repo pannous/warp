@@ -53,7 +53,7 @@ locked_seed() { [ -f "$tree/seed.lock" ] && "$scripts/seed.sh" "$tree"; }
 seed_beside() { local folder; for folder in "$(dirname "$warp")" "$(dirname "$(readlink -f "$warp" 2>/dev/null || echo "$warp")")"; do [ -f "$folder/warp-seed.wasm" ] && { echo "$folder/warp-seed.wasm"; return; }; done; }
 export WARP_SEED=${WARP_SEED:-$(locked_seed || seed_beside)}
 hash=$("$scripts/compiler-inputs.sh" "$lib") || exit 1
-baked=$("$scripts/compiler-inputs.sh" "$lib" --baked) || exit 1
+code_hash=$("$scripts/compiler-inputs.sh" "$lib" --code) || exit 1
 mkdir -p "$store" "$compilers" 2>/dev/null
 logged() { echo "$(date '+%Y-%m-%d %H:%M:%S %Z') tree=$tree hash=$hash $1 $2" >>"$store/rebuilds.log" 2>/dev/null; echo "rebuild.sh: $1 $2 ($hash)"; }
 # wasmtime's machine code of lib's warp.wasm cached before a measured self build: a cold cache costs ~110 G instructions
@@ -135,7 +135,7 @@ recorded_inputs() {
 	"$scripts/compiler-inputs.sh" "$lib" -v 2>"$record/files" >/dev/null
 	{
 		echo "hash $hash"
-		echo "baked $baked"
+		echo "code $code_hash"
 		echo "tree $tree"
 		echo "commit $(built_commit) $(git -C "$tree" branch --show-current 2>/dev/null)"
 		echo "seed $(sha "$WARP_SEED") $seed"
@@ -191,10 +191,10 @@ set_aside() {
 		echo "rebuild.sh: ${file#"$tree"/} moved aside to $(basename "$file").stale: lib/ has no compiler of these sources" >&2
 	done
 }
-# a self test passed for the baked inputs (compiler-inputs.sh --baked): another lib/ of them, a library change, compiles
+# a self test passed for the code inputs (compiler-inputs.sh --code): another lib/ of them, a library change, compiles
 # compiler.warp as well, so its warp.wasm is promoted without the compile (zero builds for a pushed library change)
-self_tested() { [ -f "$store/self-tested/$baked" ]; }
-self_passed() { mkdir -p "$store/self-tested" && inputs_line >"$store/self-tested/$baked"; }
+self_tested() { [ -f "$store/self-tested/$code_hash" ]; }
+self_passed() { mkdir -p "$store/self-tested" && inputs_line >"$store/self-tested/$code_hash"; }
 promoted_untested() {
 	local file=$compilers/warp-self.wasm part
 	[ -f "$compilers/warp.wasm" ] && [ "$(cut -d' ' -f1 "$compilers/warp.wasm.inputs" 2>/dev/null)" = "$hash" ] || return 1
@@ -245,15 +245,15 @@ modules_whole() {
 build_lock() { echo "$store/$hash/$1.building"; }
 building() { lock_taken "$(build_lock "$1")"; }
 released() { lock_released "$(build_lock "$1")"; }
-# the compile lock of this code (the baked hash): trees of one code and different libraries, a branch and the main it
+# the compile lock of this code (the code hash): trees of one code and different libraries, a branch and the main it
 # merged, compile compiler.warp once; the others wait for that compile and rebake (reused_stored), never queue for a
 # build slot to compile it again (card smoke-slot-queue: 10 such second compiles on 2026-11-07, 11-18 min each)
-code_lock() { echo "$store/code/$baked.building"; }
-# A compiler's code is core/**, extensions/**, the lib/ modules they use and the seed (the --baked hash,
+code_lock() { echo "$store/code/$code_hash.building"; }
+# A compiler's code is core/**, extensions/**, the lib/ modules they use and the seed (the --code hash,
 # compiler-inputs.sh code_files); the rest of lib/ it reads from disk (the sugar's rules packed beside the modules).
-# <store>/code/<baked> links the hash of a compiler of that code, so a lib/-only change takes that compiler as it is
+# <store>/code/<code hash> links the hash of a compiler of that code, so a lib/-only change takes that compiler as it is
 # and makes its runtime, modules and library index anew instead of compiling compiler.warp (decision lib-hash-rebake)
-code_kept() { mkdir -p "$store/code" && ln -sfn "../$hash" "$store/code/$baked"; }
+code_kept() { mkdir -p "$store/code" && ln -sfn "../$hash" "$store/code/$code_hash"; }
 # lib/modules holds only the standard modules (card stale-modules-kept): a stale one left there broke the build's
 # runtime step itself ("extended list unlisted", main 2026-11-08 06:34-07:29). Before the steps it keeps those of the
 # newest known set, <entry> (the reused compiler's, else main's); the modules step writes every standard module, the
@@ -270,12 +270,12 @@ modules_step_kept() {
 }
 # reused_stored <log>: 0 reused, 1 no stored compiler of this code, 2 failed (its output in the log, step runtime)
 reused_stored() {
-	local log=$1 stored=$store/code/$baked/warp.wasm new=$compilers/reusing-$$.wasm
+	local log=$1 stored=$store/code/$code_hash/warp.wasm new=$compilers/reusing-$$.wasm
 	[ -f "$stored" ] || return 1
-	logged warp "miss-reusing-$(basename "$(readlink "$store/code/$baked")")"
+	logged warp "miss-reusing-$(basename "$(readlink "$store/code/$code_hash")")"
 	copied "$stored" "$new" || return 1
 	echo "rebuild step runtime" >"$log"
-	modules_step_starts "$store/code/$baked"
+	modules_step_starts "$store/code/$code_hash"
 	if ! (cd "$tree" && export WARP_LIB=$lib && rm -f "$compilers/runtime.wasm.cwasm" && "$warp" "$new" runtime "$compilers/runtime.wasm" &&
 		"$warp" "$new" modules "$compilers/modules" "$compilers/runtime.wasm") >>"$log" 2>&1; then
 		rm -f "$new" "$new".* "$(modules_marked)"
@@ -328,7 +328,7 @@ one() {
 		return 0
 	fi
 	if [ -z "$force" ] && [ "$name" = warp-self ] && self_tested; then
-		promoted_untested && logged "$name" hit-baked && return 0
+		promoted_untested && logged "$name" hit-code && return 0
 	fi
 	if [ -z "$force" ] && [ -d "$(failure "$name")" ]; then logged "$name" failed-before; set_aside "$name"; failure_said "$name"; return 1; fi
 	if [ -n "$check" ]; then logged "$name" miss; return 3; fi
@@ -341,7 +341,7 @@ one() {
 	local lane=(pure) from log=$store/$hash/$name.building/log record=$store/$hash/$name.building/record
 	recorded_inputs "$record"
 	"$scripts/seed-bootstrap.sh" "$warp" "${WARP_SEED:-$(seed_beside)}" "$lib"
-	# a stored compiler of this code rebaked, else this tree compiles it, else it waits for the tree compiling it
+	# a stored compiler of this code reused, else this tree compiles it, else it waits for the tree compiling it
 	while [ -z "$force" ] && [ "$name" = warp ]; do
 		reused_stored "$log"
 		status=$?

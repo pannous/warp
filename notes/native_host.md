@@ -3,8 +3,7 @@
 What the playground answers in JavaScript beyond the driver's own words, the native warp answers in warp:
 lib/host/native_host.warp, one module of its parts, native_host/window.warp (SDL3's window, CoreText/FreeType text),
 native_host/sound.warp (SDL3's audio, AudioToolbox / libmpg123 decoding, CoreMIDI), native_host/webview.warp (WKWebView)
-and native_host/gpu.warp (wgpu-native), over C libraries by plain FFI. No C wrappers: crates/warp-window,
-crates/warp-sound, crates/warp-webview and crates/warp-gpu are gone.
+and native_host/gpu.warp (wgpu-native), over C libraries by plain FFI, no C wrappers.
 
 ## How the driver reaches it
 - modules/native_host.wasm is built by the rebuild (scripts/rebuild.sh) like every standard module (it is in
@@ -55,8 +54,7 @@ coverage list (width, height, rows) through `coverage_list`.
 - The page answers the same host words in web/playground/host-sound.js soundWords.
 
 ## The GPU (gpu.warp, card warp-gpu-source)
-crates/warp-gpu/warp_gpu.c (918 lines over wgpu-native's webgpu.h, statically linked into libwarp_gpu) became the part
-native_host/gpu.warp over libwgpu_native, the wgpu-native release's shared library, which scripts/wasmtime-c-api.sh
+native_host/gpu.warp runs over libwgpu_native, the wgpu-native release's shared library, which scripts/wasmtime-c-api.sh
 installs beside warp. Its mechanisms:
 1. Callbacks (card ffi-callbacks): lib/callbacks.warp `c_callback(f, types)` hands C one of 16 foreign.c trampolines
    (six integer registers each). gpu.warp makes three once (an adapter's or device's answer, an error scope's, a

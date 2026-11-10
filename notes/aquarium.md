@@ -50,9 +50,7 @@ With a window, `on frame` keeps swimming. Without one (`WARP_NO_WINDOW`), that f
 
 ## Not this slice
 
-Their reef is many compute and render passes: procedural meshes, 10–20k integrated fish, indirect draws, a caustic texture, terrain, shadow maps, volumetrics, SSAO, TAA, depth of field, bloom. `paint` has none of those targets. Tone mapping here is Reinhard and gamma, not their present-pass grade. Fog uses `fog_scale = 0.45` in place of `frame.misc.z`. Eight waves, not twelve. The seabed is a ripple, not their heightfield or voxels.
-
-A faithful multi-pass port needs a library call that dispatches a WGSL compute pass into a storage buffer and binds that buffer on a later pass. That lives in the shared GPU host (`lib/host/native_host/gpu.warp`, `web/playground/host-gpu.js`), which this card does not edit. The fragment picture does not need it.
+Their reef is many compute and render passes (meshes, 10–20k fish, shadows, volumetrics, post effects); a faithful port needs a library call that dispatches a WGSL compute pass into a storage buffer and binds it on a later pass, in the shared GPU host (`lib/host/native_host/gpu.warp`, `web/playground/host-gpu.js`).
 
 ## Tests
 

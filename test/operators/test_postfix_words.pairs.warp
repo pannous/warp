@@ -2,9 +2,7 @@
 
 # an_operator_word_after_its_value_applies_to_it
 '-7 abs'	7
-# triage-held 2026-11-06: desk-invented postfix function words (-7 abs, map xs abs) :: 'x = -7 abs; x'	7
 '16 sqrt'	4.0
-# triage-held 2026-11-06: desk-invented postfix function words (-7 abs, map xs abs) :: 'x = -3; x abs + 1'	4
 '27 cbrt'	3.0
 'abs -7'	7
 

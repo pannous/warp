@@ -568,7 +568,7 @@ relative_time(t: any, now: any): text := {
 }
 
 # Arithmetic on times and durations at run time (card day-hour; Rust twin:
-# rust-harness:src/wasm_emitter/time/time_arithmetic.rs, notes/dates_at_run_time.md): `d + 1 day`, `a - b`,
+# rust-harness:src/wasm_emitter/time/time_arithmetic.rs, wiki/time.md): `d + 1 day`, `a - b`,
 # `1 month + 2 days`, `3 * 1 day`, as calendar.rs `Time.add`, `since`, `Duration.plus` and `times` do for constants.
 # The emitter hands `+`, `-` and `*` of a run-time time to time_operation, a time as its form, position, months and
 # days (emitter/times.warp time_operation); a program writing a time literal brings this module

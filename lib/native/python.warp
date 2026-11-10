@@ -1,6 +1,7 @@
-// Python through its C library libpython (card ffi-python-adapter, notes/python_adapter.md): `use python` declares
+// Python through its C library libpython (card ffi-python-adapter): `use python` declares
 // these functions of the Python C API for the program and brings the warp words below. The native warp loads libpython
-// (Linux: the newest libpython3.X.so.1.0 of the library folders; elsewhere see the notes) and calls them; nothing of
+// (Linux: the newest libpython3.X.so.1.0 of the library folders, found by plain then version-named sonames;
+// macOS's framework Python is not found by the name `python` yet, Windows not handled) and calls them; nothing of
 // Python is in the host. The types are lib/c.warp's: a PyObject * is a handle, a C pointer held as an id.
 //   math = python_import("math")
 //   python_call(math, "sqrt", [16])               4.0
@@ -13,7 +14,8 @@
 // and back (a tuple too becomes a list). Any other Python object comes back as a reference, the map
 // {python: <handle>, type: "<its type name>"}, which python_call and python_get take as a target or an argument.
 // A Python exception is a warp Error: `python ZeroDivisionError: division by zero`, catchable with try.
-// Needs Python 3.13 or newer (Py_GetConstant).
+// Needs Python 3.13 or newer (Py_GetConstant). Limits: no callbacks into warp; the program's thread initializes
+// Python and holds the GIL, calls from other threads are not handled; ints past 64 bits overflow.
 Py_InitializeEx(signals: i32): void from 'python'
 Py_IsInitialized(): i32 from 'python'
 Py_GetConstant(constant: i32): handle from 'python'

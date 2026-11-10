@@ -1,4 +1,4 @@
-# The warp compiler as one warp program (card standalone, notes/standalone_compiler.md): source text in, wasm bytes out,
+# The warp compiler as one warp program (card standalone, notes/self_hosting.md): source text in, wasm bytes out,
 # its stages handing each other plain warp values. `warp core/compiler.warp app.warp app.wasm`, then
 # `warp app.wasm`; a form beyond the emitter's core is the compile's error ("outside the core: …")
 use "passes/passes.warp"

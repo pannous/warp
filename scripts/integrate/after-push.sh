@@ -323,9 +323,12 @@ playground_refreshed() {
 }
 
 # page_smoked: the refreshed playground runs PAGE_SMOKE as the native warp does (card after-push-playground); a host
-# import the page lacks fails every sample here, hello first (canonical_text), so this is the import check too
+# import the page lacks fails every sample here, hello first (canonical_text), so this is the import check too. The
+# native side runs anew first: the checkout's stored outputs were days old (component_totals before its html sweep
+# was DIFF from 1f11efe450 on, card after-push-page-smoke-1110)
 page_smoked() {
 	local got
+	nice -n 10 "$scripts/samples.sh" "$MAIN_CHECKOUT" "${PAGE_SMOKE[@]}" >/dev/null
 	got=$(nice -n 10 "$scripts/samples-web.sh" "$MAIN_CHECKOUT" "${PAGE_SMOKE[@]}" 2>&1 | tail -1)
 	[[ $got == *"${#PAGE_SMOKE[@]} of ${#PAGE_SMOKE[@]} print"* ]] || red "page smoke: ${got:0:160}"
 	return 0
