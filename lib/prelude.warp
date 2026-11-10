@@ -162,6 +162,13 @@ sorted_in_order(xs: list, before: function): list := {
 	}
 	out
 }
+// x rounded to that many digits after the point, `round(x, 2)` (core/passes/prelude_words.warp arity_variants)
+round_to(x, places) := round(x * ten_to(places)) / ten_to(places)
+// (a float's own, unboxed: the prelude is linked, its untyped words take nodes)
+round_to(x: float, places: int): float := round(x * ten_to(places)) / ten_to(places)
+// 10ⁿ of a whole n, exact, by multiplying (1/10ⁿ of a negative n): the prelude writes no power, which would link
+// big_numbers into every program
+ten_to(n: int) := if n < 0 then 1 / ten_to(-n) else if n == 0 then 1 else 10 * ten_to(n - 1)
 // The laws of the operators a fold combines with (card sum-plain-fold): each one is associative, so the compiler may
 // regroup, fuse and split any fold of it, whatever the word calling it is named, and the identity starts the fold
 operator_laws = {"+": {associative: yes, identity: 0}, "*": {associative: yes, identity: 1}, and: {associative: yes, identity: yes}, or: {associative: yes, identity: no}, max: {associative: yes}, min: {associative: yes}}

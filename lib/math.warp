@@ -331,7 +331,3 @@ rewrite euclidean_remainder($a, $b) => $a % $b
 rewrite euclidean_quotient($a, $b) => $a /! $b
 even(n: int) := is_even(n)
 odd(n: int) := is_odd(n)
-// x rounded to that many digits after the point (here, not in the prelude: a power links big_numbers)
-round_to(x, places) := round(x * 10 ^ places) / 10 ^ places
-// (a float's own, unboxed: a linked module's untyped words take nodes)
-round_to(x: float, places: int): float := round(x * 10 ^ places) / 10 ^ places
