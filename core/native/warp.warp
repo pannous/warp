@@ -8,7 +8,7 @@
 #   warp app.wasm args…   the module run
 #   warp app.warp args…   compiled by warp.wasm, then run with the arguments (a `--` before them left out)
 #   warp run app.…        the same; `warp pure …` and `warp eval <code>` too (warp.wasm is the pure compiler);
-#                         `warp fast …` at full precision yet; `warp fuel <steps> …` counting steps (WARP_FUEL)
+#                         `warp fast …` at full precision yet; `warp fuel <steps> …` counting steps
 #   warp self …           the same by warp-self.wasm, warp.wasm's build of itself
 #   warp                  on a terminal the version, the help and the console; a piped program run, its value shown
 #   warp beautify|fix …   lib/fix/command.warp with the words; warp format|lint … too, the layout only
@@ -622,28 +622,43 @@ documentation_opened(): nothing := {
 	command_output("open https://github.com/pannous/warp/ 2>/dev/null || xdg-open https://github.com/pannous/warp/ 2>/dev/null")
 }
 
-# the options warp takes before or after its command word (wiki/cli.md), each a setting of the environment the
-# compiler reads: `--no-hints` is WARP_HINTS=0 (wiki/warning.md). Words after the file or code are the program's
-option_set(word: text): bool := {
-	if same_text(word, "--no-hints") {
-		setenv(c_string("WARP_HINTS"), c_string("0"), 1)
-		return yes
+# the options warp takes before or after its command word (wiki/cli.md; `warp help options` describes them,
+# extensions/commands/commands.warp option_help), kept without their dashes for run_option (core/host_io.warp):
+# flags, and --lib <folder> with its value. Words after the file or code are the program's
+is_flag(word: text): bool := same_text(word, "--no-hints") or same_text(word, "--no-window") or same_text(word, "--backtrace") or same_text(word, "--profile")
+VALUED_OPTION = "--lib"
+# the words of the option at `at`, kept: 1 a flag, 2 an option with its value, 0 no option
+option_words(at: int): int := {
+	word = arg(at)
+	name = text_from(word.address + 2, word.length - 2)
+	if is_flag(word) {
+		option_given(name, "")
+		return 1
 	}
-	no
+	if not same_text(word, VALUED_OPTION) or at + 1 >= arg_count() { return 0 }
+	option_given(name, arg(at + 1))
+	2
 }
-# the first word from `at` on that is no option, the options before it set
+# the first word from `at` on that is no option, the options before it kept
 past_options(at: int): int := {
 	i = at
-	while i < arg_count() and option_set(arg(i)) { i = i + 1 }
+	taken = 1
+	while i < arg_count() and taken > 0 {
+		taken = option_words(i)
+		i = i + taken
+	}
 	i
 }
-# `warp fuel <steps> <file|code…>`: the program counts steps (WARP_FUEL), out of fuel after them
+# `warp fuel <steps> <file|code…>`: the program counts steps (the run's option fuel), out of fuel after them
 # WARP_RUN_TO is one warp's word to its own compiler (words_ran): a warp a command runs, `warp build --site`'s `warp
 # run` prerendering, ran its program into the caller's file instead
 unsetenv(c_string("WARP_RUN_TO"))
 start = past_options(1)
+# a CI machine runs without windows (its CI variable is the CI system's, not warp's)
+# TODO (card no-bash-exports) and WARP_NO_WINDOW until the scripts say --no-window (the second push), then it goes
+if getenv("CI").length > 0 or getenv("WARP_NO_WINDOW").length > 0 { option_given("no-window", "") }
 counting = arg_count() > start + 2 and same_text(arg(start), "fuel")
-if counting { setenv(c_string("WARP_FUEL"), c_string(arg(start + 1)), 1) }
+if counting { option_given("fuel", arg(start + 1)) }
 prefixed = counting or (arg_count() > start and is_prefix(arg(start)))
 first = past_options(if counting then start + 2 else if prefixed then start + 1 else start)
 # warp.wasm's own commands (build) read the same lib/ as this executable, and its stable name, the run path of the

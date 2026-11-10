@@ -48,8 +48,6 @@ tests_run(compiler: text, by_self: bool, first: int): nothing := {
 	file_ran(compiler, test_words(compiler, "test-list", work, first))
 	required(joined(work, "/runs"), work)
 	runs = read_file(joined(work, "/runs"))
-	setenv(c_string("WARP_NO_WINDOW"), c_string("1"), 1)
-	setenv(c_string("WARP_HINTS"), c_string("0"), 1)
 	setenv(c_string("WARP_VALUE_AS_DATA"), c_string("1"), 1)
 	setenv(c_string("WARP_ONE_THREAD"), c_string("1"), 1)
 	# a test checks what main gives: its timers fire none (core/native/driver.warp events; the samples sweep runs them)
@@ -164,6 +162,9 @@ started_run(work: text, run: text, prefix: text, children: pointer, slots: i32):
 	folder = c_string(field(run, 1, TAB))
 	given = arguments()
 	added(given, executable_path())
+	# a case opens no window and says no hints
+	added(given, "--no-window")
+	added(given, "--no-hints")
 	added(given, prefix)
 	added(given, read_file(joined(id, ".code")))
 	long_at(given.pointers + given.count * 8).value = 0

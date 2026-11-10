@@ -484,6 +484,8 @@ addHostPart({
 		};
 	},
 	adapters: {
+		// run_option (core/host_io.warp): a page is given none of warp's command-line options (`warp help options`)
+		warp: { option: () => null },
 		// a page has no command line, no input and runs no process; its environment is what the page sets (the stand-in of
 		// the playground's key), its folder the served root that relative paths start from
 		os: {

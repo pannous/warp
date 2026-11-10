@@ -1,7 +1,7 @@
 # `warp app [check] <file>` (cards app-webview, static-page-window): the program runs with the page it shows
 # (lib/markup.warp page_of, as `warp` prints it) in a window of the system's web view, its handlers live, till the
 # window is closed; `check` prints the text the page shows instead, read in a hidden web view, no window (tests,
-# WARP_NO_WINDOW). A program with check lines (`# check: click "+1", click "+1" → count: 2`, card scripts-samples,
+# --no-window). A program with check lines (`# check: click "+1", click "+1" → count: 2`, card scripts-samples,
 # decision sample-checks) is checked instead:
 # each line from a fresh run, its steps done by markup's page words, the page's text then holding the text after →
 use os

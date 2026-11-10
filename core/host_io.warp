@@ -16,3 +16,6 @@ home_folder(): text := started_env("HOME") ?? raise("~ is the home folder, and t
 # `started_env("HOME")`: the variable as the program's environment started with it, ø when unset (os.warp env adds
 # the ones the program set)
 started_env(name: any) := std_io("os", "env", [name])
+# an option of this run (`warp --no-window app.warp`, `warp help options`): its value, "" for a flag, ø when not given
+# (and under a host without the word: an older native warp running a newer compiler, as a rebuild's stages do)
+run_option(name: any) := { value = std_io("warp", "option", [name]); if value is text then value else ø }
