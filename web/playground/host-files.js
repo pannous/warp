@@ -49,8 +49,12 @@ function servedFileExists(path) {
 const isUnserved = url => typeof SERVED_FILES !== "undefined" && url.startsWith(FILE_ROOT)
 	&& !SERVED_FILES.has(decodeURIComponent(new URL(url).pathname.slice(new URL(FILE_ROOT).pathname.length)));
 
-// `://host/path` takes the page's protocol, as `//host/path` does in HTML (src/extensions/utils.rs with_default_scheme)
-const withPageProtocol = url => url.startsWith(SCHEME_MARK) ? self.location.protocol + url.slice(1) : url;
+// `://host/path` is fetched over https, as natively (core/native/driver.warp); the page's own host keeps the page's
+// protocol, so a local http server still serves its own files
+const DEFAULT_SCHEME = "https:";
+const hostOf = url => url.slice(SCHEME_MARK.length).split("/")[0];
+const withPageProtocol = url => url.startsWith(SCHEME_MARK)
+	? (hostOf(url) === self.location.host ? self.location.protocol : DEFAULT_SCHEME) + url.slice(1) : url;
 
 // a synchronous GET (host calls are synchronous, so this runs in a worker); `timeout` in ms
 function getSync(url, timeout, binary = false) {

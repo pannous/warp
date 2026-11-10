@@ -8,12 +8,12 @@
 'float is number'	yes
 'int is float'	no
 'name(t: type) := match t { int: "whole"; float: "real" }; name(float)'	"real"
-'str(int)'	"class int"
+'str(int)'	"int"
 'x: int or text = "a"; x'	"a"
 'f(): list := ø; f()'	[]
 'class P { x: int; y: int }; P(2, 3)#1'	2
 'x = [1]; x = 5'	error
-'str(type(ø))'	"class empty"
+'str(type(ø))'	"empty"
 'xs: list<int> = [1, 2]; xs'	[1, 2]
 'x : 3 int'	[0, 0, 0]
 'i: index = [5, 6, 7].index_of(6); i'	1

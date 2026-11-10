@@ -185,7 +185,7 @@ bit_operators = ["xor", "<<", ">>"]
 float_ops = {"+": 160, "-": 161, "*": 162, "/": 163, "==": 97, "!=": 98, "<": 99, ">": 100, "<=": 101, ">=": 102}
 # yes/no held as i32: only equal or not; any other operator takes it as the int 0 or 1 (operators.warp bools_as_ints)
 bool_ops = {"==": 70, "!=": 71}
-# the operators whose result of two 0/1 values is 0 or 1 again: on two yes/no values a yes/no (user 2026-11-02, bool-as-int)
+# the operators whose result of two 0/1 values is 0 or 1 again: on two yes/no values a yes/no (bool-as-int)
 zero_one_operators = ["xor", "&", "|", "min", "max"]
 # `xs.length`, `count xs`: `#xs`; a property also by count's other names, and `x.number` (not `number x`, a conversion)
 length_words = {length: yes, count: yes}
@@ -762,7 +762,7 @@ def page_printed(start: Function, main: Function, result: TypedCode, shown_kind:
 }
 # _start's printing of main's value, in local 0 as main gives it, as data after VALUE_MARK (value_as_data)
 def value_printed_as_data(result: TypedCode): list {
-	printed(text_value(VALUE_MARK)).code + printed(runtime_call("value_code", [TypedCode(ValueKind.Node, boxed(result))])).code
+	printed(text_value(VALUE_MARK)).code + printed(runtime_call("data_code", [TypedCode(ValueKind.Node, boxed(result))])).code
 }
 # a boxed value: a $Node of the kind code, its data from `payload`, no second value
 def node(kind_code: int, payload: list): list { node_code([op.i64_const] + sleb(kind_code), payload) }

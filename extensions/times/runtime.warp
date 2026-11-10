@@ -17,22 +17,43 @@ is_duration(t: Node): bool := time_form(t) == TimeFormCode.Duration
 # two durations yes when it holds on every date, no when on none, else a failure (`1 month < 28 days` is no,
 # `1 month < 30 days` depends on the month); times of different forms have no order
 time_holds(a: Node, b: Node, relation: int): bool := {
-	if time_form(a) != time_form(b) { return times_of_different_kinds_have_no_order() != 0 }
+	clocks = is_clock_of_day_pair(a, b)
+	if time_form(a) != time_form(b) and not clocks { return times_of_different_kinds_have_no_order(time_form_name(time_form(a)), time_form_name(time_form(b))) != 0 }
 	# `a > b` is `b < a`
 	smaller = if relation < 2 then a else b
 	larger = if relation < 2 then b else a
 	strict = relation % 2 == 0
-	durations = is_duration(a)
-	fewest = if durations then duration_difference_bound(smaller, larger, no) else time_position(smaller) - time_position(larger)
+	durations = is_duration(a) and not clocks
+	fewest = if clocks then nanos_of_day(smaller) - nanos_of_day(larger) else if durations then duration_difference_bound(smaller, larger, no) else time_position(smaller) - time_position(larger)
 	most = if durations then duration_difference_bound(smaller, larger, yes) else fewest
 	if most < 0 or (most == 0 and not strict) { return yes }
 	if fewest > 0 or (fewest == 0 and strict) { return no }
 	durations_compare_differently_on_different_dates() != 0
 }
-# the runtime error of time_holds, named to read off the trace
-times_of_different_kinds_have_no_order() := {
-	fail()
-	0
+# an instant, local time or time of day beside a duration without months or days compares by its time of day, `ref >= 6h`
+is_clock_of_day_pair(a: Node, b: Node): bool := {
+	if not is_time(a) or not is_time(b) { return no }
+	(has_clock(a) and is_plain_duration(b)) or (has_clock(b) and is_plain_duration(a))
+}
+has_clock(n: Node): bool := time_form(n) in [TimeFormCode.Instant, TimeFormCode.Local, TimeFormCode.Clock]
+is_plain_duration(n: Node): bool := is_duration(n) and duration_months(n) == 0 and duration_days(n) == 0
+# the nanoseconds since midnight of an instant or local time, a plain duration's own
+nanos_of_day(n: Node): int := {
+	if is_duration(n) { return duration_nanos(n) }
+	position = time_position(n)
+	position - floor_quotient(position, day_nanos()) * day_nanos()
+}
+time_form_name(form: int): text := {
+	if form == TimeFormCode.Instant { return "instant" }
+	if form == TimeFormCode.Date { return "date" }
+	if form == TimeFormCode.Local { return "local datetime" }
+	if form == TimeFormCode.Duration { return "duration" }
+	if form == TimeFormCode.Zoned { return "zoned time" }
+	"time of day"
+}
+# the runtime error of time_holds, naming both kinds
+times_of_different_kinds_have_no_order(left: text, right: text) := {
+	returned_error("a " + left + " and a " + right + " have no order; fix: compare its time of day, e.g. ref.time >= 6h")
 }
 # n as it is, unless n and other are durations of the two kinds: a calendar duration (`1 day`) beside an instance
 # (lib/units' `2 hours`), which are one kind only from card dates-times-extraction (decision one-duration)

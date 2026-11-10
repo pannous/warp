@@ -1,4 +1,4 @@
-## exact rounding: Rust's exact_floor … exact_div_assign (rust-harness:src/wasm_emitter/numbers/exact.rs) as words over an Int
+## exact rounding: exact_floor, exact_trunc and their kin as words over an Int
 ## $Node's numerator and denominator; a $Ratio n/0 is ±∞ by n's sign and 0/0 is NaN, as Rust reads them
 use "../../compiler/runtime/intrinsics.warp"
 use "../../compiler/analysis/kinds.warp"
@@ -41,11 +41,6 @@ exact_floor(x: Node): Node := {
 	whole = exact_trunc(x)
 	if exact_sign(x) < 0 { return exact_sub(whole, 1) }
 	whole
-}
-# x /= y: an int x stays an int, the Euclidean quotient (x - x % y) / y; a ratio x divides exactly
-exact_div_assign(x: Node, y: Node): Node := {
-	if is_ratio(x) { return exact_div(x, y) }
-	exact_div(exact_sub(x, exact_mod(x, y)), y)
 }
 # `floor x` of a boxed number: exact for an int or ratio, a float's floor as an int
 floored_node(n: Node): Node := {

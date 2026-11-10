@@ -988,7 +988,7 @@ class_methods_listed(name: Node, program: Node, source: text): any := {
 	outside = first_parameter_types.keys.filter(function => lineage.contains(first_parameter_types[function]) and not own.contains(function))
 	List((own + outside).map(symbol), Bracket.Square, Separator.Comma)
 }
-# `functions()` (card functions-list, user 2026-10-15): the program's own functions as function values, in their
+# `functions()` (card functions-list): the program's own functions as function values, in their
 # order, as written (the program holds the library words it reached by now), a list to filter
 # (`functions().filter(f => f.name.starts_with("test_"))`); ø where it has its own word. A function taking nothing is
 # `function f`, as its bare name calls it
@@ -1222,9 +1222,6 @@ widened_to_int(width: Node): bool := not lowering_primitive()
 # `math` of `math.gcd(4, 6)`, else ø (prelude_words.warp qualifies_by_module)
 module_named(module: Node, program: Node): any := if qualifies_by_module("${module}", program) then module else ø
 
-# the iteration words a trailing block is the function of (extensions/sugar/calls.warp): `xs.map { $0 * 10 }`
-trailing_block_words = ["map", "filter", "each", "for_each", "find", "any", "all", "reduce", "fold", "sorted"]
-takes_trailing_block(word: Node): bool := "${word}" in trailing_block_words
 
 # `let n = 5` is the assignment `n = 5`, where its name was written noted (core/passes/lambdas.warp
 # local_declarations): inside a lambda the name stays the lambda's own, not the scope's (card let-inside)
@@ -1309,7 +1306,6 @@ rule_words = {
 	missed_cases: missed_cases,
 	then_not_pipe: then_not_pipe,
 	function_value: function_value,
-	takes_trailing_block: takes_trailing_block,
 	then_without_if: then_without_if,
 	module_help: module_help,
 	module_named: module_named,

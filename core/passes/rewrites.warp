@@ -772,7 +772,7 @@ statements_ruled(statements: list, module: text, source: text): list := {
 	[rules, kept]
 }
 
-# Overloads of a built-in operator by its operands' kinds (decision rules-to-typed-operators, user OK 2026-10-31):
+# Overloads of a built-in operator by its operands' kinds (decision rules-to-typed-operators):
 # `infix operator |(x: any, g: function) := g(x)` is the rule `$x | $g => $g($x)`, its parameter types its conditions
 # (overload_conditions), so dispatch costs nothing at run time. The overloads of one operator are tried most specific
 # first (fewer `any`), one whose body is the operator itself, `infix operator |(a: type, b: type) := a | b`, keeps the

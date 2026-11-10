@@ -36,6 +36,9 @@ wants() { # wants <tier>: the tier is in --tiers (a range a-b or a list a,b)
 	done
 	return 1
 }
+written_lines() { # written_lines <files>: file:line of each line the diff since $from adds to them
+	git diff -U0 "$from" HEAD -- "$@" | awk '/^\+\+\+ b\//{f=substr($0,7)} /^@@/{split($3,a,","); s=substr(a[1],2); n=(a[2]==""?1:a[2]); for(i=0;i<n;i++) print f":"(s+i)}' | sort -u
+}
 logs=$tree/data/gate; mkdir -p "$logs"
 # a copy of the binary taken once: a refresh of the shared link mid-run never mixes two builds
 warp=$logs/warp; cp -L "$binary" "$warp" || exit 1
@@ -108,8 +111,18 @@ elif wants 2; then
 		# the files where they lie: warp test runs a file's pairs in its own folder, so a test's relative paths
 		# (../fixtures/…) hold (a copy into one folder of their own failed test_shell_find_typed, 11-05)
 		timeout 2400 "$warp" test $targets > "$logs/tests.log" 2>&1; status=$?
-		echo "tier 2 (pure warp test of $(echo "$files" | wc -l) changed test files$( ((folders)) && echo ", whole folders")): $( ((status == 0)) && echo ok || echo RED) $(since $t2): $(tail -1 "$logs/tests.log")"
-		((status == 0)) || { grep '^✗' "$logs/tests.log" | head -10 | cut -c1-200; red 2; }
+		# red: a line the baseline had ✓ that fails now, or a line this change wrote that fails; a line red before the
+		# change is a known red, counted, never the gate's failure (a touched file's old reds kept tier 2 red for days)
+		failing=$(grep -oE '^✗ [^ ]+:[0-9]+' "$logs/tests.log" | sed 's/^✗ //' | sort -u)
+		regressions=$("$(dirname "$0")/baseline.sh" --regressions "$logs/tests.log" 2>/dev/null | grep -oE '^[^ ]+:[0-9]+' | sort -u)
+		# a written line the baseline had red already (an expectation edited, still failing) stays a known red
+		red_before=$("$(dirname "$0")/baseline.sh" $files 2>/dev/null | grep -oE '^✗ [^ ]+:[0-9]+' | sed 's/^✗ //' | sort -u)
+		new_reds=$(comm -12 <(echo "$failing") <(written_lines $files) | comm -23 - <(echo "$red_before"))
+		bad=$(printf '%s\n%s\n' "$regressions" "$new_reds" | grep . | sort -u)
+		# a run that ended without a single ✗ yet failed (a crash, a timeout) is red too
+		[[ $status != 0 && -z $failing ]] && bad="warp test failed: $(tail -1 "$logs/tests.log")"
+		echo "tier 2 (pure warp test of $(echo "$files" | wc -l) changed test files$( ((folders)) && echo ", whole folders")): $([[ -z $bad ]] && echo ok || echo RED) $(since $t2): $(tail -1 "$logs/tests.log")$(known=$(comm -23 <(echo "$failing") <(echo "$bad") | grep -c .); ((known)) && echo ", $known of them red before this change")"
+		[[ -z $bad ]] || { echo "$bad" | while read -r red_line; do grep -m1 -F "✗ $red_line " "$logs/tests.log" || echo "$red_line"; done | head -10 | cut -c1-200; red 2; }
 	fi
 fi
 
