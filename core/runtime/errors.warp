@@ -113,6 +113,11 @@ too_big_for_int_of(value: Node): int := {
 	global trap_detail = value
 	too_big_for_int()
 }
+# the value a runtime error names, kept for its message: `no case for n = 4`
+held_detail(value: Node): int := {
+	global trap_detail = value
+	0
+}
 no_length_of(value: Node): int := {
 	if node_is_error(value) { raised(value) }
 	global trap_detail = value
