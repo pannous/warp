@@ -1,4 +1,35 @@
-# Tests triage 2026-11-09
+# Tests triage 2026-11-09, updated 2026-11-10
+
+## Update 2026-11-10: run 16:53 at 99d8f7f7a1 (1422 of 15481 failed, 2438 files)
+
+The 05:00 run on 11-10 was still running at 10:00, so this update counts the 11-09 16:53 results: 1024 errors, 398
+wrong values. The clusters below come from the error text, grouped (script: the error without position and `(no owner)`). Cards
+landed since that run: unknown-name-test, package-tests-registry (test_packages:4 green), library-typed-outcome.
+
+Biggest clusters by cause (new or grown against the table below in **bold**):
+
+| cases | cluster (error) | main files | card |
+|--|--|--|--|
+| 398 | wrong value, no common error: regex_malformed 9, code_type 8, one_dispatch 8, quasi_quote 6, big_int_bits 6, hyperreals 6, meta_attributes 6 | judge per file | (per file) |
+| 40 | wasm trap: cast failure | test_nearest 12, sound_spectrum 4, try_list_index 3, nearest_default 3 | cast-failure-traps |
+| 21 | `text_with_at` (text element write) | test_string 12, footguns 6, test_wasm 3 | triage-text-element-write |
+| 20 | a function value in `.` (charged fields) | charged_fields 5, object_functions 4, reflection_mode 4, on_error_of_function 3 | charged-field-values |
+| 20 | `x!` / `interpret(…)`: running a node as code (14 + 6 unknown interpret) | run_time_blocks, run_time_block_cache, object_blocks | fails-outside |
+| **18** | **not a list: `map reverse [[1 2] [3 4]]`, a library word mapped** | map_library_word_first, parameter_scope 3, path_after_function 3, property_definitions 3 | sorted-map-library |
+| **12** | **not a function: `twice(body: block) := { body!; body! }`, a block parameter run** | block_parameter_calls, block_parameters, function_objects, count_shadowed | block-values-forced |
+| **12** | **unknown name a: a lambda's own parameter or a sibling field, `(a: int, b = 1): int => a + b`, `{a: 3, f: x => x * a}`** | field_function_values, parameter_patterns, block_data_paths, arrow_defaults_and_types | lambda-own (new) |
+| 12 | operator . on int (`it` in nested blocks) + 11 unknown name it | nested_it 4, returned_blocks 4, versions 3, glued_method_block 3 | nested-it-blocks |
+| **12** | **`xs.insert(4, at: 0)`: insert·list·int·any called with 3 arguments** (was 5) | welcoming_sugar 5, position_meets_brackets 2, list_insert | library-labelled-args |
+| 11 | a variable declared fast | fast_scope 7, fast_int 3 | fast-declaration |
+| 10 | call stack exhausted | try_stack_overflow 3, numeric 2 | add-stack-overflow |
+| 10 | invalid number (`format 2.2 as int` pick) | argument_cast 4, exponent_texts 3 | argument-cast-overload |
+| 13 | `session[…]` / `use storage` words | test_storage, store_values | session-storage-words |
+| 10 | `•/test/fixtures/wasm/*.wasm`: no folder above . holds .git | wasm_modules, test_wasm, component_short_use | wasm-fixture-root |
+| **6** | **`sorted(xs, >)`, `.sort(by: -it)`: sorted_node called with 2 arguments** | relational_arms, it_arguments, named_function_argument, operator_arguments | sorted-comparator-syntax (new) |
+| **6** | **no case for value = 0: `match v { Circle => …; Square => … }` over classes** | class_destructuring 3, match_type_arms, structural_patterns | tree-patterns? |
+
+Unchanged since the table below: ∞ 7, divide by zero 7, `x as text?` 6, Color cases 6, calendar/clock durations 6,
+`time` defined twice 6, callable parameter 6, tuple returns 5, mixins 5, Array.from 5, display 5.
 
 Basis: test/results.txt (1475 native failures of 15401, run 07:12) and test/tests-web.txt (1398 BOTH, 51 PAGE, 34 EXP).
 **results.txt is partly stale**: the 6 "no module named sorted/ring/meshlets/forest/disjoint/aquarium" clusters
