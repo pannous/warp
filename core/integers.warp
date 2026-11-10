@@ -1,7 +1,8 @@
 # The whole-number words the compiler computes with (decision core-takes-what-it-uses); lib/integers.warp links here,
 # the module lib/math.warp builds on
-# Two ints. A value past 64 bits is unsupported: an int parameter is 64 bits, and that limit is the compiler's
-gcd(a: int, b: int): int := {
+# the greatest common divisor of two whole numbers, ints or past 64 bits (2^70), never below 0: the one gcd, the
+# compiler's and every program's (cards gcd-overflow-zero, three-gcds-generic: an int parameter wrapped 2^70 to 0)
+gcd(a, b) := {
 	x = if a < 0 then 0 - a else a
 	y = if b < 0 then 0 - b else b
 	while y != 0 { rest = x % y; x = y; y = rest }
