@@ -48,7 +48,7 @@ KEY_LINE_END = 5
 # the bytes of a key's escape sequence (card repl-editing-keys): ESC [ <number>;<modifier> <final>, ESC O <final>, ESC <key>
 KEY_APPLICATION = 79
 KEY_ALT_D = 100
-# Alt+←/→ as macOS Terminal sends them with Option as Meta: ESC b, ESC f (card repl-alt-arrows)
+# Alt+←/→ as macOS Terminal sends them with Option as Meta: ESC b, ESC f (cards repl-alt-arrows, alt-arrow-navigation)
 KEY_ALT_B = 98
 KEY_ALT_F = 102
 FINAL_HOME = 72
@@ -73,6 +73,8 @@ EDIT_DELETE = 262
 EDIT_WORD_AFTER = 263
 EDIT_WORD_BEFORE = 264
 EDIT_BACK = 265
+EDIT_WORD_LEFT = 266
+EDIT_WORD_RIGHT = 267
 
 # a compiler with this executable's words from `first` on: a command runs, code is compiled to WARP_RUN_TO and run after
 hosted(compiler: text, first: int): nothing := {
@@ -343,7 +345,7 @@ line_count(lines: text): i64 := {
 # the line is edited, ←/→ move the cursor, ↑/↓ step through the earlier lines, ⌫ deletes before the cursor, Ctrl+D on
 # an empty line ends the console (input_ended). Home/End (or Ctrl+A/E) go to the line's start and end, Delete removes
 # the character under the cursor, Alt+Delete the word after it and Alt+⌫ the word before it (card repl-editing-keys);
-# Alt+←/→ go to the start and end too, and ↑ reaches the earlier consoles' lines (history_path, card repl-alt-arrows).
+# Alt+←/→ move a word back and on (card alt-arrow-navigation), and ↑ reaches the earlier consoles' lines (history_path, card repl-alt-arrows).
 # The cursor steps over a character's UTF-8 bytes whole
 edited_line(history: text, lines: i64): text := {
 	settings = command_output("stty -g")
@@ -369,6 +371,8 @@ edited_line(history: text, lines: i64): text := {
 		}
 		if edit == EDIT_START { at = 0 }
 		if edit == EDIT_END { at = line.length }
+		if edit == EDIT_WORD_LEFT { at = word_before(line, at) }
+		if edit == EDIT_WORD_RIGHT { at = word_after(line, at) }
 		if edit == EDIT_DELETE and at < line.length { line = cut(line, at, character_after(line, at)) }
 		if edit == EDIT_WORD_AFTER { line = cut(line, at, word_after(line, at)) }
 		if edit == EDIT_WORD_BEFORE {
@@ -421,8 +425,8 @@ escaped_edit(): i32 := {
 	c = key()
 	if c == KEY_DELETE or c == KEY_BACKSPACE { return EDIT_WORD_BEFORE }
 	if c == KEY_ALT_D { return EDIT_WORD_AFTER }
-	if c == KEY_ALT_B { return EDIT_START }
-	if c == KEY_ALT_F { return EDIT_END }
+	if c == KEY_ALT_B { return EDIT_WORD_LEFT }
+	if c == KEY_ALT_F { return EDIT_WORD_RIGHT }
 	# ESC ESC [D, iTerm's Option+← (Option as Esc+): the arrow with Alt
 	if c == KEY_ESCAPE { return with_alt(escaped_edit()) }
 	if c != KEY_BRACKET and c != KEY_APPLICATION { return EDIT_NONE }
@@ -458,8 +462,8 @@ arrow_edit(c: i32): i32 := {
 	if c == ARROW_DOWN { return EDIT_DOWN }
 	EDIT_NONE
 }
-# an arrow with Alt: ← to the line's start, → to its end, as Home and End (user 11-09)
-with_alt(edit: i32): i32 := if edit == EDIT_LEFT then EDIT_START else if edit == EDIT_RIGHT then EDIT_END else edit
+# an arrow with Alt: ← a word back, → a word on (user 11-10, card alt-arrow-navigation)
+with_alt(edit: i32): i32 := if edit == EDIT_LEFT then EDIT_WORD_LEFT else if edit == EDIT_RIGHT then EDIT_WORD_RIGHT else edit
 # the line from byte at on
 after(line: text, at: i64): text := text_from(line.address + at, (line.length - at) as u32)
 # the line without its bytes from start until end
