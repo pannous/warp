@@ -520,8 +520,9 @@ declares_type(n: Node): bool := type(n) is key and key_of(n) == opaque_symbol an
 # `type Name = text`, `type View = list or int`: a declaration of no body naming another type or a union
 is_type_alias(n: Node): bool := is_key(n, Op.Assign) and declares_type(key_of(n)) and value_of(key_of(n))#3 == ø and aliased_spelling(value_of(n)) != ø
 # (a function type `T -> bool`, `(T, T) -> T` names function)
-aliased_spelling(type: Node): text? := if type is symbol then name_of(type) else if is_key(type, Op.Arrow) then "function" else if is_list_type_form(type) then "[" + name_of(items_of(type)#1) + "]" else type_phrase(type) ?? union_spelling(type)
-# `[int]`, `int[]` (the parser's [int]), `[Point]`: a list type as a parameter writes it, `xs: [int]` (card code-type-alias)
+aliased_spelling(type: Node): text? := if type is symbol then name_of(type) else if is_key(type, Op.Arrow) then "function" else if is_list_type_form(type) then "list of " + name_of(items_of(type)#1) else type_phrase(type) ?? union_spelling(type)
+# `[int]`, `int[]` (the parser's [int]), `[Point]`: the list type `list of int`, one spelling for every list alias (card
+# code-type-alias)
 is_list_type_form(type: Node): bool := is_group(type) and bracket_of(type) == "[" and #items_of(type) == 1 and items_of(type)#1 is symbol
 # `list of int`, `map of list of text` as a parameter spells it (sugar.warp of_phrase): words with `of` between them,
 # else ø (card type-code-alias: `type Code = list of int`)

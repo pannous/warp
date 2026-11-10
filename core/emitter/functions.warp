@@ -259,11 +259,10 @@ node_annotations = ["any", "Node", "function", "type", "map", "number", "rationa
 # the kind a parameter annotated `word` holds: a type alias's type's, a node for a class, a list for a type word's
 # plural (`ints`, `texts`, `Points`)
 annotated_kind(written: text): ValueKind := {
-	# (through an alias too: `type Code = [int]`, `type Check = int -> bool`)
-	word = aliased_type(written)
 	# `(samples, float) -> any`: a function, held as a node
-	if word.contains(" -> ") { return ValueKind.Node }
-	if word.starts_with("[") { return ValueKind.List }
+	if written.contains(" -> ") { return ValueKind.Node }
+	if written.starts_with("[") { return ValueKind.List }
+	word = aliased_type(written)
 	if is_union(word) { return shared_kind(union_members(word).map(annotated_kind)) }
 	if word in node_annotations or word in module.classes { return ValueKind.Node }
 	# `p: path`: a marked text, held as a text
