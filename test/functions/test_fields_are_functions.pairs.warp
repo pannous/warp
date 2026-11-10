@@ -28,3 +28,5 @@
 'class P{x:int; twice(v) := { x = v*2 }}; p = P(1); p.twice = 5; p.x'	10
 'class P{x:int}; p = P(1); p.x = 4; p.x'	4
 'm = {a:1}; m.merge = 3; m.merge'	3
+# a one-parameter method named like a stored field is refused: field write or setter (card class-setter-ignored)
+'class Box{w:int; w(v) := { w = v * 2 }}; b = Box(1); b.w = 5; b.w'	error

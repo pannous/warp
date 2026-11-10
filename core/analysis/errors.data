@@ -6,6 +6,8 @@ kind_change($name, $was, $now)	"{name} was {a was}, is given {a now}: use anothe
 charged_assignment($name)	"{name} is defined with `:=`, charged: evaluated at each use, it takes no assignment; define it with `{name} = …` for a variable"	"{name} = …"
 # decision block-definitions: a function defined inside an if, while or for block (extensions/block_definitions.warp)
 block_definition($name)	"{name} is defined inside a block: functions are not scoped to blocks yet; define {name} outside the block, or write {name} = y => …"	"{name} = y => …"
+# card class-setter-ignored: a class's one-parameter method named like its stored field, `w: int` beside `w(v) := …` (extensions/class_methods/methods.warp)
+setter_field_clash($name)	"{name}(v) clashes with the field {name}"	"rename the method, or keep the value in another field behind a getter {name} := …"
 # night decision parameter-named-fails: a parameter given a value with a colon, `f(a, b: 0)` (extensions/parameter_values.warp)
 parameter_value($name, $value)	"{name}: {value} gives {name} a value, not a type: a default is written {name} = {value}"	"{name} = {value}"
 # decision def-colon-body: a body after a definition's head colon, `def f(x): x * 2` (extensions/parameter_values.warp)
