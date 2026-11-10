@@ -22,6 +22,12 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 
 ---
 
+## Inbox
+- synonyms-are-aliases (card test-triage): synonym words of existing ones are aliases in lib/aliases.warp pointing at the canonical word, not deleted: properties/fields/attributes/members of (keys, members), clone (copy), warn (warning), require (use), forEach/for_each/foreach (each), invocable/runnable (callable), previous/was (old), ppi/density (dpi), maybe (optional), unit/nil/empty/string/integer as type names; their held test lines are restored.
+- definition-by-space: `square x := x*x` defines a one-parameter function like `square(x) := x*x` (the original wasp form, as call-by-space `square 2`); held lines restored, red ones carded.
+- typed-array-declaration: a typed declaration with a size and no value makes a zero-filled list of that type: `pixel: int[100]; pixel#1 = 5`, `x : int[100000]; count(x)` → 100000.
+- result-type-as: `as T` after a function head is the default way to write its result type: `def f(x) as text {…}`, `f(x) as int := …`, `area() as number := …`; it is the same meaning as the conversion `as` (the result is taken as T). `: T` stays readable but `warp fix` rewrites it to `as T` everywhere (lib, samples, tests, wiki, the compiler's own code; card result-type-as).
+
 ## Process
 
 
