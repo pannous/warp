@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# scripts/samples.sh [<tree>, default this checkout]: how many of the tree's samples/ run, the gap to 2.0 (decision
+# scripts/samples.sh [<tree>, default this checkout] [samples/….warp…]: given samples, only their runs, each one's line
+# and its output in data/samples/out/ (the page smoke's native side, never stale; no results file). Else: how many of the tree's samples/ run, the gap to 2.0 (decision
 # release-1-5-tonight). Each samples/**/*.warp runs from the tree's root through the installed warp (WARP_NO_WINDOW,
 # CPU_SECONDS of CPU each); one fails when the native warp exits other than 0, its error the first line it wrote to
 # stderr, and one that hits a limit is TIME, not FAIL. Writes test/samples.txt, tracked (status, sample and a failure's
@@ -38,6 +39,7 @@ CHECK_LINE='^# check: '
 HOST_LINE='^# host: '
 
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
+shift $(( $# > 0 ))
 results=$tree/data/samples
 # each sample runs in this folder, never the tree's root: a file a sample writes by a relative path (native/files'
 # greeting.txt) stayed in the tree untracked and blocked after-push's checkout once someone committed it (11-09)
@@ -86,6 +88,10 @@ one() {
 }
 export -f one wall_seconds
 export tree results run_folder WARP CPU_SECONDS WALL_SECONDS CPU_LIMIT_HIT WINDOW_LIBRARIES SERVING SERVER_PORT EXPECTED_FAILURE CHECK_LINE HOST_LINE
+if [ $# -gt 0 ]; then
+	for sample in "$@"; do one "$sample"; done
+	exit 0
+fi
 
 report=$results/report.txt
 (cd "$tree" && find samples -name '*.warp' | sort) | xargs -P"$PARALLEL" -I{} bash -c 'one "$@"' _ {} | sort -k2 >"$report"
