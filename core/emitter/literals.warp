@@ -46,6 +46,11 @@ def text_value(t: text): TypedCode {
 	if one_code_point(t) { return TypedCode(ValueKind.Char, [op.i32_const] + sleb(ord(t))) }
 	TypedCode(ValueKind.Text, text_bytes(t))
 }
-def text_bytes(t: text): list := [op.i32_const, 0, op.i32_const] + sleb(#t.bytes) + segment_read(t)
+def text_bytes(t: text): list {
+	code = [op.i32_const, 0, op.i32_const] + sleb(#t.bytes) + segment_read(t)
+	# (known as a literal's, so a node of it is made once: emitter.warp literal_node)
+	module.literal_texts["${code}"] = t
+	code
+}
 # a text of the bytes of t's segment, from the start and count the code before it leaves
 def segment_read(t: text): list := [gc_prefix] + uleb(gc_ops.array_new_data) + relocatable(relocated.types, gc_type(gc.text)) + relocatable(relocated.texts, text_segment(t))
