@@ -185,8 +185,10 @@ registration_unshown(program: Node): any := {
 	if #ending == 0 or not registers(statements[ending.last()]) { return ø }
 	separated(bracketed(statements + [nothing_statement()], ""), ";")
 }
-# a test check (extensions/rules/modules/laws.warp) and the tests' summary run where they stand: no value to read again
-is_test_line(statement: Node): bool := is_call_named(statement, test_check_word) or is_call_named(statement, tests_end_word)
+# a test check (extensions/rules/modules/laws.warp) and the tests' summary run where they stand: no value to read again;
+# also as written, the phrase `test C` the early sugar's program rules see before laws made it a call (card unknown-name-test)
+is_test_line(statement: Node): bool := is_call_named(statement, test_check_word) or is_call_named(statement, tests_end_word) or is_test_phrase(statement)
+is_test_phrase(statement: Node): bool := is_group(statement) and bracket_of(statement) == "" and #statement > 1 and statement#1 == symbol("test")
 # `test C` as lib/laws.warp's call: C as written, the rest of the line after the word `test`, as it reads when made
 test_check_word = "test_check"
 written_after(word: Node, code: Node, source: text): Node := Text(line_after(word, source) ?? "${code}".trim())
