@@ -71,12 +71,6 @@ big_exact_truncated(x: Node): int := {
 	if not is_plain_int(whole) { overflow_of_int64() }
 	unboxed_int(whole)
 }
-# the largest integer ≤ x: a negative ratio truncates up, so one less
-big_exact_floor(x: Node): Node := {
-	whole = big_exact_trunc(x)
-	if is_ratio(x) and big_exact_sign(x) < 0 { return big_int_difference(whole, 1) }
-	whole
-}
 # a - b · trunc(a / b), the sign of a as i64.rem_s
 big_exact_remainder(a: Node, b: Node): Node := {
 	if not either_ratio(a, b) { return big_int_remainder(a, b) }
