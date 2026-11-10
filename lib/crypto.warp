@@ -1,4 +1,4 @@
-// WebIDL Crypto (extensions/js_globals/web.webidl, card js-global-missing): `use crypto` or `use js crypto` — randomUUID as the
+// WebIDL Crypto (lib/web.webidl, card js-global-missing): `use crypto` or `use js crypto` — randomUUID as the
 // browser's crypto.randomUUID (RFC 9562 version 4), via lib/uuid.warp
 use uuid
 
