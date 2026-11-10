@@ -200,32 +200,12 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - D4 constructors: `T{…}` of a known type constructs and validates, `k:{…}` is plain data; missing fields are errors unless `?` or defaulted. #41 spaced `V { x: 1 }` constructs a declared V.
 
 ## Lists, maps and indexing
-- ordinal-dot-index: no core rule and no plural guessing (`1.friend` is not a form). A program that wants `1.friends` as `friends#1` writes one overload of the dot, `infix operator .(i: int, a: any) := a#i`; that works on int literals. The general hook would be an overridable attribute access (`attribute(of, name)`), not built.
-- each-field-broadcast: `xs.each.count` broadcasts a field or method over the items (`sum(counters.each.count)`); a list's own `.count` keeps its meaning; no field-wins-when-all-have-it (card xs-each).
-- lazy-range-value: `a..b` / `a to b` hold only their two ends (a list node marked KindUnit.Range, `range` a type word, ~28 core lines); count, #, sum, indexing and iteration answer from the ends; any other list operation makes the items once, so a range stays a list everywhere (range-dots: `..` excludes its end).
-- pair-items (user, ~4 core lines node_at/node_length): a key-value pair reads as two items, `p = (a: 1); p#1` → a (the name), `p#2` → 1 (the value), `#p` → 2; host item_count/item_at the same.
-- bare-pair: `a:1` as a value is a pair; a word key stays the word as written, as `{a:1}`'s keys (`a = 5; x = a:1` is a:1, `x is pair` yes); any other key is its value (`1:4`); a computed key is `(a):1` → 5:1.
-- to-inclusive: `a to b` always includes b, also when b is a length: walking 0-based indexes is `1 ..< #a` or `1 to #a - 1` (samples/lists/sorting.warp).
-- #4/P40 `size` = count; bytes via `byte_size` / `number of bytes`; `len(x)` counts with a hint `#x`.
-- P43 lists do not grow past the end: setting past it is a catchable `index out of range`.
-- P34 a number subscript on an empty `{}` keys it as a map. map-subscript-runtime: the same at run time: `m[1]` on a value that is a map when the program runs keys it (`f(m) := m[1] + 1; f({1: 5, 2: 6})` → 6), on a list or text it stays a position (`f([5, 6])` → 7). single-entry: `{a:1}` stays a pair and becomes a one-entry map where a map is needed.
-- stored-table-name: `stored people: [Person]` names its table after the variable; `… in "people_v2"` explicitly.
 - markup-needs-html (user 11-09, replaces element-named-pair, card data-key-brings-markup): markup is written inside `html{…}`, or in a function known to return html (its result typed html), where a plain `b{"bold"}` still works; anywhere else a tag-named key or tag form is data: `x = {p: {c: 1}}; x` → {p: {c: 1}}, `{i: 1}` stays {i: 1}. Tests and samples that write bare markup get the `html{…}` wrapper.
 - html-value (Interviewer, by markup-needs-html, card html-anywhere): markup is a value of `class Html { element: pair }` (a cheap class, not a subtype of pair: a pair would fill a subtype and data would count as markup), printed by its own `format` overload, rendered by dispatch on `is Html`. An element written inside html{…}, in an html-typed function, or as the argument of an html-typed parameter (to_html, render, page_render take `value: html`) becomes an Html; a data entry like `"a": "Apple"` stays a pair.
 - format-types-inline-html (user 11-10, refines jsx under html-value, card inline-div-format): `warp format` turns inline HTML into warp markup and adds the html type where the element is a whole value: `p = <p>Hi</p>` → `p: html = p{ "Hi" }`, `f() := <div/>` → `f(): html := div{}`; elsewhere (an argument, inside an expression) the inline HTML stays as written.
-- #25/#36 a space before `[` never indexes; only glued `a[..]`.
 - P29 `pair.0` counts from 0. P30 `xs.pop()` gives the last item, `m.remove(k)` the value or ø.
 - Word slices: `xs from #2 to #4`, `xs starting from #2`, `xs up to #2` or ordinals, both ends inclusive; a bare number is an error. P58 `xs#a..b` keeps the range with a strong warning naming `xs#(a..b)` and `(xs#a)..b`.
-- `[x]*n` / `[1 2]*2` are refused; `n times [x]` repeats. `xs.insert` never guesses: `insert(x, at: i)`, two Ints are an error. D3 `.+` is element-wise, `xs + [4]` concatenates.
-- list-append-plus: `xs + item` and `xs += item` append an item that is no list (`xs = [1]; xs += 3` → `[1 3]`, `[] += 3` → `[3]`); a list on the right still concatenates, and a one-item list literal (`xs += [3]`) gets a hint that the brackets are not needed (`xs += [p]` of a variable keeps its brackets silently). A list on the left wins over text joining (`[1 2] + "z"` → [1 2 "z"]; `"a" + [1]` still joins); a number on the left (`4 + [1 2 3]`) stays the too-ambiguous ask.
-- reconsider-spaced: spaced values are lists (`xs = 1 2 3`, `print 1+1 2+2` → 2 4); only a glued sign after a space (`x = 5 -2`) asks. list-sign: in a comma-less list a space plus a glued sign starts a new item (`[a -1]`); outside brackets `x -1` subtracts; never inside an index.
-- P175 `xs where it > 1` filters; P223 filters may name fields bare (`people where age > 20`), a variable in scope wins with a warning. people-where: no new `with`/`without` sugar.
-- P200b maps and lists share like instances (`n = m; n.a = 2` changes m); `x.copy()` copies; a typed list read from a field shares. P215 covariant list assignment is an error where the alias is visible, else a run-time check per write.
 - P176 repeated `key: value` in a named tag block are children; a plain `{…}` keeps the duplicate-key error.
-- `pixels size` works like `size of pixels`.
-- swizzles: `.x .y .z .w` and combinations (`.xy`, `.zyx`) read a list of 2–4 numbers everywhere; Euclidean length is `norm(v)` (alias `magnitude`), `length` stays the count.
-- curly-group: `{a; b}` is a list at every depth; `{a: b}` is a map literal at every depth, inside a parse() result too (`parse("f {a: b}")#2 is map`); walkers test groups with `n.bracket != ø`.
-- node-part-clash: part readers `key_of(n)`, `value_of(n)`, `op_of(n)`, `name_of(n)`, `bracket_of(n)`, `separator_of(n)` always read the node part at any depth; `.key` etc. keep field → meta → reflection for data.
 
 ## Control flow, matching and errors
 - comparison-after-arms: a comparison after a switch/match compares its value, never swallows the arms block: `switch 3 {1: "one" 3: "three"} == "three"` is yes, `match n {…} > 15` likewise; one general case in prefix_calls.warp fitted_comparison (~6 core lines), no per-operator rules.
@@ -843,3 +823,7 @@ music-plain-library, domains-plain-libraries → AGENTS.md (Plain warp first).
 definition-name-canonical → AGENTS.md (Word choices are aliases). batch → cards (to build).
 cleanup-cuts, int-overflow-shape, keywordless-def, builtins-name, self-hosting-focus, parser-first, standalone-compiler → historic (git).
 rename-clashes → card file-own-words. diagnostics-files → core/analysis/diagnostics.warp.
+each-field-broadcast, lazy-range-value, pair-items, bare-pair, to-inclusive, #4/P40, P43, P34, `[x]*n`, list-append-plus, reconsider-spaced, P175, P200b, swizzles, curly-group, #25/#36, `pixels size` → wiki/list.md, test/lists/test_list_rules.pairs.warp.
+ordinal-dot-index → wiki/indexing.md (no ordinal dot form; nothing to pin).
+node-part-clash → lib (key_of … readers), wiki/node.md.
+stored-table-name → wiki/keyword.md, test/modules/test_stored_relations.pairs.warp.
