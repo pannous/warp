@@ -94,6 +94,10 @@ syntax_words = phrase_prepositions + ["if", "then", "else", "while", "is", "as",
 names_syntax(method: text): bool := is_tested_type_word(method) or method in syntax_words
 # the function a bare call of a sibling method calls: the dispatcher of a routed one
 called_name(method: text, routes: list): text := if method in routes then routed_name(method) else method
+# the variables the program's top level assigns, by name: a method of that name, `hour()` beside `hour = 5`, is routed,
+# lifted as itself it would be a function sharing the variable's name (lib/time's Instant.minute() beside lib/units'
+# `minute = Unit("min")`, card units-build-failure)
+variables_assigned(top_statements: list): list := top_statements.filter(statement => is_key(statement, Op.Assign) and key_of(statement) is symbol).map(statement => name_of(key_of(statement)))
 # the functions the program defines, by name
 functions_defined(top_statements: list): list := top_statements.map(function_word).filter(found_word => found_word != ø)
 # the function a top statement defines, also one with a result type, `shown(x: any): text := …`
@@ -212,7 +216,8 @@ methods_lifted(program: Node): Node := {
 	if #constructed > 0 { rewritten = rewritten.map(top_statement => if class_view(top_statement) == ø then constructions(top_statement, constructed) else top_statement) }
 	methods = methods_of(classes, liftable).filter(method => method != constructor_method)
 	operator_methods = methods.filter(method => spelled_operator(operator_table, method) != ø and 1 in taken_counts(classes, liftable, method))
-	routes = methods.filter(method => module_routing(classes, liftable, method, operator_methods) ?? (is_library_word(method) or method in functions or method in operator_methods or names_syntax(method) or method in position_words))
+	variables = variables_assigned(top_statements)
+	routes = methods.filter(method => module_routing(classes, liftable, method, operator_methods) ?? (is_library_word(method) or method in functions or method in variables or method in operator_methods or names_syntax(method) or method in position_words))
 	# (a method only linked classes have, of one parameter count and no word of the program's own: its functions and
 	# dispatcher lowered once the lowered program calls them, passes.warp deferred_definitions)
 	deferred = methods.filter(method => #linked > 0 and owners_of(classes, liftable, method).all(owner => owner in linked) and #taken_counts(classes, liftable, method) == 1 and method not in functions and called_name(method, routes) not in functions)
@@ -771,6 +776,9 @@ class_dispatch(owners: list, called: map, call_arguments: list, fallback: Node, 
 # declaring it, then it stays as written; a call on a class, `T.of(2)`, calls the method of that class
 routed(n: Node, routing: Routing): Node := {
 	parts = (part => routed(part, routing))
+	# a definition's head, `add(xs, x) := …`, `take_while(xs, f): list := …`, names its parameters and calls nothing:
+	# only its body is routed
+	if is_key(n, Op.Define) and is_called_name(if is_key(key_of(n), Op.Colon) then key_of(key_of(n)) else key_of(n)) { return Key(key_of(n), Op.Define, parts(value_of(n))) }
 	if is_key(n, Op.Assign) and is_position(key_of(n)) and element_word(key_of(n)) + "·assigned" in routing.methods { return position_call(key_of(n), element_word(key_of(n)) + "·assigned", [parts(value_of(n))], parts) }
 	# `m[k] = v` of a class with set and no index: its set (decision map-protocol)
 	if is_key(n, Op.Assign) and is_key(key_of(n), Op.Hash) and keyed_by(key_of(key_of(n)), "set", routing) { return method_routed(map_form_call(n, routing), routing) }
@@ -890,7 +898,8 @@ method_routed(n: Node, routing: Routing): Node := match n {
 		call_of(routed_function(type, method, routing), [object] + (if member is symbol then [] else items_of(member)[1..]))
 	}
 	# `zoned(now, "UTC")` the same as `now.zoned("UTC")` where the first argument is statically an instance of a class
-	# declaring the routed method (decision zone-word); on any other value the function as written
+	# declaring the routed method (decision zone-word), through the dispatcher where only the run time knows it; on any
+	# other value the function as written
 	_: if operator_direct(n, routing) != ø then operator_direct(n, routing) else if is_instance_call(n, routing) then method_routed(Key(n#2, Op.Dot, call_of(name_of(n#1), items_of(n)[2..])), routing) else children(n, part => routed(part, routing))
 }
 # glyph → [the classes' functions of the operator, owner → function; those of its reflected methods]
@@ -945,7 +954,10 @@ static_function(routing: Routing, functions: map, type: text, glyph: text, other
 is_instance_call(n: Node, routing: Routing): bool := {
 	if not is_called_name(n) or #n < 2 or name_of(n#1) not in routing.methods { return no }
 	type = static_type(n#2, routing)
-	type != ø and type in routing.classes and may_own(type, name_of(n#1), routing) and (#n - 2) in taken_counts(routing.classes, routing.names, name_of(n#1))
+	# (a first argument known only at run time goes through the dispatcher, as its `x.m(…)` does: a getter's
+	# `clock := now; zoned(clock, "UTC")`, `now` of a linked module, whose result class the program does not hold;
+	# card clock-now)
+	(type == ø or type in routing.classes) and may_own(type, name_of(n#1), routing) and (#n - 2) in taken_counts(routing.classes, routing.names, name_of(n#1))
 }
 # the routed method a member `.sum` or `.sum(…)` calls, else ø
 routed_member(member: Node, routing: Routing): text? := {

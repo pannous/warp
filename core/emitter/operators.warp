@@ -19,7 +19,9 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 	if symbol == "#" and a.kind == pending { return element(body, TypedCode(ValueKind.Node, a.code), b) }
 	# a recursive call's result the first reading does not know yet is of the other operand's kind: `[n] + f(n - 1)`
 	if a.kind == pending and b.kind != pending { a = TypedCode(b.kind, a.code) }
-	if b.kind == pending and a.kind != pending { b = TypedCode(a.kind, b.code) }
+	# (an element's place not known yet is an int, never the list's kind: `[0, 1, 0, -1][(n) + 4]` in a cycle through
+	# a dispatcher still compiling, card complex-number-printing)
+	if b.kind == pending and a.kind != pending { b = TypedCode(if symbol == "#" then ValueKind.Int else a.kind, b.code) }
 	if symbol in identities { return identity_code(body, symbol, a, b) }
 	if symbol not in equalities and (a.kind == ValueKind.Bool or b.kind == ValueKind.Bool) and number_like(a.kind) and number_like(b.kind) { return bools_as_ints(body, symbol, a, b) }
 	kind = joint_kind(a.kind, b.kind)

@@ -4,3 +4,5 @@
 # a getter giving now's result is an Instant to the class methods (card zoned-clock-utc)
 'clock := now; zoned(clock, "UTC").year >= 2026'	true
 'clock() := now(); zoned(clock, "UTC").year >= 2026'	true
+# the function form on now itself, lib/time linked: its class's method, as now.zoned("UTC") (card clock-now)
+'zoned(now, "UTC").year >= 2026'	true

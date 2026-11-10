@@ -1,0 +1,2 @@
+# a listening program ending in a test line runs the test where it stands (card unknown-name-test)
+'n = 0; on alarm { n += 1 }; test n == 0'	"✓ 1 tests passed"

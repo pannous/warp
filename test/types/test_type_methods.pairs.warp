@@ -5,4 +5,4 @@
 'class P { v: int; twice() := v * 2 }; #P.functions'	1
 'text.shout() := upper(self); ["shout" in text.methods, "repeat" in text.methods]'	[true, true]
 'shout(s: text) := upper(s); "shout" in text.functions'	true
-'type Name = text; greet(n: Name) := "hi " + n; Name.methods'	["greet"]
+'type Name < text; greet(n: Name) := "hi " + n; Name.methods'	["greet"]

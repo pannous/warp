@@ -14,6 +14,8 @@ function stdCall(program_, module, member, argumentList, holder) {
 		return newGuestValue(program_, adapter.apply(context, Array.isArray(given) ? given : [given]));
 	} catch (error) {
 		// the program raises it (src/wasm_emitter/host/ffi_emitter.rs emit_ffi_result): `try` catches it
-		return newGuestError(program_, `${moduleName}.${memberName}: ${error.message}`);
+		return newGuestError(program_, error instanceof WholeError ? error.message : `${moduleName}.${memberName}: ${error.message}`);
 	}
 }
+// an adapter's error worded as the native host words it, its message whole: never prefixed with the module's word
+class WholeError extends Error {}

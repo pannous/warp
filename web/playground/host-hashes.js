@@ -58,7 +58,12 @@ function withoutClassTags(value, classes) {
 function regexOf(pattern, flags = "") {
 	const feature = /\(\?<?[=!]/.test(pattern) ? "look-around" : /\\[1-9]/.test(pattern) ? "a backreference" : null;
 	if (feature) throw new Error(`${feature} is not in warp's regex (one engine lacks it): ${pattern}`);
-	return new RegExp(posixInJs(pattern), flags + "u");
+	try {
+		return new RegExp(posixInJs(pattern), flags + "u");
+	} catch (error) {
+		// worded as driver.warp regex_answered words regerror's: "regex (a: …"
+		throw new WholeError(`regex ${pattern}: ${error.message.replace(/^Invalid regular expression: \/.*\/\w*: /, "")}`);
+	}
 }
 // POSIX's named classes (the native engine is regcomp's extended syntax, driver.warp regex_answered) as JavaScript's
 // ranges, in the C locale
@@ -69,13 +74,16 @@ const POSIX_CLASSES = {
 };
 // a pattern as the native engine reads it, in JavaScript's spelling (card samples-page-apps). Inside a bracket class:
 // a `]` first in it is a literal one (`[^]]`, which JavaScript reads as `[^]` and a stray `]`), a `[` a literal one
-// (`[^[]`), `[:alpha:]` a named class; the escapes JavaScript and the macOS engine share stay as written
+// (`[^[]`), `[:alpha:]` a named class; outside one a `)` no group opened is a literal one (`a)`); the escapes JavaScript
+// and the macOS engine share stay as written
 function posixInJs(pattern) {
-	let out = "", inside = false;
+	let out = "", inside = false, groups = 0;
 	for (let at = 0; at < pattern.length; at++) {
 		const c = pattern[at];
 		if (c === "\\") { out += c + (pattern[++at] ?? ""); continue; }
 		if (!inside) {
+			if (c === ")" && groups === 0) { out += "\\)"; continue; }
+			groups += c === "(" ? 1 : c === ")" ? -1 : 0;
 			out += c;
 			if (c !== "[") continue;
 			inside = true;

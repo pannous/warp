@@ -4,8 +4,10 @@
 # check: click "+1", click "+1" → count: 2
 # check: click "+1", click "reset" → count: 0
 count = 0
-div{
-	button{ "+1", on click { count += 1 } }
-	button{ "reset", on click { count = 0 } }
-	p{ "count: " + count }
+html{
+	div{
+		button{ "+1", on click { count += 1 } }
+		button{ "reset", on click { count = 0 } }
+		p{ "count: " + count }
+	}
 }
