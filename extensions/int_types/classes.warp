@@ -17,12 +17,14 @@ int_classes(program: Node): Node := {
 	converters = statements.map(statement => converted_type(statement, classes)).filter(name => name != ø)
 	statements_as(program, statements.flat_map(statement => int_class_statements(statement, classes, converters)))
 }
-# each subtype the statements declare and each alias reaching one, `type Years = Age` of `type Age < int`, written in
-# any order: name → [its class, the type it narrows]
-int_classes_named(statements: list): map := {
+# each subtype held as a class the statements declare and each alias reaching one, `type Years = Age` of `type Age <
+# int`, written in any order: name → [its class, the type it narrows]
+int_classes_named(statements: list): map := subtypes_named(statements, class_subtype_of)
+# each subtype the reader finds and each alias reaching one: name → [the subtype, the type it narrows]
+subtypes_named(statements: list, subtype_read: function): map := {
 	classes = {}
 	for statement in statements {
-		subtype = class_subtype_of(statement)
+		subtype = subtype_read(statement)
 		if subtype != ø { classes[subtype#1] = subtype }
 	}
 	aliases = statements.map(type_alias_of).filter(alias => alias != ø and alias#1 not in classes)
@@ -47,10 +49,10 @@ int_class_statements(statement: Node, classes: map, converters: list): list := {
 	if converted_type(statement, classes) != ø { return [Key(key_of(statement), Op.Define, bottom_up(value_of(statement), n => int_class_made(n, classes, [])))] }
 	[bottom_up(statement, n => int_class_made(n, classes, converters))]
 }
-# `type Age < int`: [Age, int], a subtype held as a class, every one but a float's
+# `type Age < int`: [Age, int], a subtype held as a class, every one but a marked float's or text's (marks.warp)
 class_subtype_of(statement: Node): list? := {
 	subtype = subtype_of(statement)
-	if subtype != ø and subtype#2 != "float" then subtype else ø
+	if subtype != ø and subtype#2 not in MARKED_ONLY_KINDS then subtype else ø
 }
 made_word(type_name: text): text := "made" + name_joiner + type_name
 subtype_declared(name: text, narrowed: text): list := {
@@ -70,7 +72,7 @@ global subtypes_tested = []
 # narrows reads as the rules give it (lib/units' `x is duration`); a used module's subtypes are widened later, by
 # int_class_made
 subtype_tests(program: Node): Node := {
-	classes = int_classes_named(statements_in(program))
+	classes = subtypes_named(statements_in(program), subtype_of)
 	subtypes_tested = classes.keys
 	if #classes == 0 then program else bottom_up(program, n => subtype_test_widened(n, classes))
 }
