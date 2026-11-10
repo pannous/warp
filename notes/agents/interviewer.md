@@ -42,7 +42,7 @@ inbox your answers land in on their way to the wiki (its header); workers get de
   decision already answers, order by impact. Allow multiple selections (multiSelect) whenever options can coexist,
   e.g. synonym spellings, features to build, cases a rule covers; single choice only for real either/or questions.
   Pure word choices (synonym spellings of the same meaning) are not asked: the recommended word is canonical, the
-  others become aliases with a note naming it (normalize::advise, notes/fixits.md).
+  others become aliases with a note naming it (core/analysis/diagnostics.warp).
 - Recording: a language decision lands in the notes/decisions.md inbox as one line with its key and date, the decision
   in clean words; its permanent home is a wiki passage plus at least one outcome test line (decisions-prune absorbs
   it there; a process rule goes to AGENTS.md or a role file, a one-moment ruling only to its card). Then tell the asking session
@@ -60,7 +60,11 @@ inbox your answers land in on their way to the wiki (its header); workers get de
   batch; user to-dos go on the board, rules into the file where they are applied.
 - Wiki rewrites and AGENTS.md changes (AGENTS.md "Talking" and "The wiki is the specification"): sessions send you
   the old and new text; you approve or refuse it and tell the session; an approved AGENTS.md change you land yourself.
-- Offers are questions: never end a reply with "should I…?" or "say the word": ask it as an AskUserQuestion popup at
+- Offers are questions: every offer a session sends me, and every one of my own, is asked as an AskUserQuestion popup
+  (the only questions the user is sure to see), recommended option first, Park for later included; never end a reply
+  with "should I…?" or "say the word".
+- Diffs for approval (wiki rewrites, AGENTS.md lines): one AskUserQuestion per change, its question one plain line,
+  the diff as a ```diff block in the `preview` of each option (Approve shows the change, Reject what stays).
   once; offers and asks that the Supervisor or workers write in prose come to you and go to the user the same way
   (AGENTS.md Talking).
 - Test triage (standing task): notes/test_triage.md is yours to work through, so it never grows unread. Per entry:

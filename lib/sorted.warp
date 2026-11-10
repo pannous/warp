@@ -1,4 +1,4 @@
-// Sorted maps and sets (card sorted-map-library, notes/bb_trees.md): a weight-balanced tree, not the default map.
+// Sorted maps and sets (card sorted-map-library): a weight-balanced tree, not the default map.
 // `use sorted`. Keys order by `<` (numbers, texts). set, add and remove return a new collection; the receiver stays.
 // A missing get is ø. rank is the 1-based position, 0 when the key is absent. at(i) is the i-th smallest key.
 // Balance is Adams' (delta 3, ratio 2): one child outweighs the other only while both are still tiny.

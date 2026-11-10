@@ -1,7 +1,7 @@
 # The system's web view natively (card app-webview, decisions native-js-webview, use-js-tests)
 
 The web view is warp (card warp-webview-removal): lib/host/native_host/webview.warp, a part of the native host module,
-drives macOS's WKWebView over the Objective-C runtime by plain FFI; crates/warp-webview is gone.
+drives macOS's WKWebView over the Objective-C runtime by plain FFI.
 - `use js` natively: the host word foreign_call is answered by the module's host_foreign_call. One hidden WKWebView per
   run, made at the first call, at https://localhost/ (a secure origin: crypto.randomUUID). Never shown, activation
   policy Prohibited: no Dock icon, no focus taken, safe in tests.
@@ -41,4 +41,3 @@ runs as one space, holds the text after →.
   scripts/samples.sh runs it for every sample that ran and has check lines, a failing check its FAIL
 - in the page web/playground/test_in_browser.py --samples (scripts/samples-web.sh) shows the sample anew per check,
   clicks and types in the rendered DOM, and a failing check is its DIFF
-- found so far: page_elements fails both ways (cards bare-name: `p{ greeting }` not live; who-focus natively)

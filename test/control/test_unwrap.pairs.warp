@@ -5,6 +5,6 @@
 'x:int?=5; x!*2'	10
 'x="a"; x!'	'a'
 
-# test_mutating_and_evaluating_bangs_keep_their_meaning
+# test_mutating_bang_keeps_its_meaning; a block runs by a call (decision blocks-run-by-call)
 'x="hi"; x.upper!; x'	'HI'
-'{1+2}!'	3
+'b = {1+2}; b()'	3

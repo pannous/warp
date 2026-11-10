@@ -4,7 +4,7 @@
 # made it (data/samples/out: the tree's, else the main checkout's). Writes test/samples-web.txt, tracked (status and
 # sample, one a line: ok, drew a C library's window drawn in the page (raylib, SDL: natively a window, no output to
 # compare), DIFF the page printed otherwise, FAIL an error, TIME no answer, ran no native output) when all ran, and data/samples-web/report.txt (each difference and error) and out/ (what the page
-# printed). The page runs one sample at a time (notes/playground_plan.md step 2).
+# printed). The page runs one sample at a time (notes/web_playground.md).
 set -uo pipefail
 source "$(dirname "$0")/lib/platform.sh"
 source "$(dirname "$0")/lib/results-header.sh"

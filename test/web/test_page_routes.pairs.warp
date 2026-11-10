@@ -1,5 +1,5 @@
 # a page route answers its block's markup as HTML, a server function is also POST /rpc/<name>, a form names its route
-# (notes/server_routes.md; card server-routes)
+# (lib/web.warp; card server-routes)
 'route "/" { div{ h1{"Hi"} } }; route_answer({method: "GET", path: "/"})'	'<div><h1>Hi</h1></div>'
 'route "/u/:id:int" { p{ "u" + id } }; route_answer({method: "GET", path: "/u/2"})'	'<p>u2</p>'
 'server def twice(x) { x + x }; route_answer({method: "POST", path: "/rpc/twice", body: "ab"})'	'abab'

@@ -6,7 +6,7 @@ use color
 // natively 640×480 
 global canvas_width: int = view_width
 global canvas_height: int = view_height
-// natively in a window the shapes are drawn on the GPU (rust-harness:src/graphics/gpu_canvas.rs; WARP_DRAW=cpu or gpu chooses): no pixels
+// natively in a window the shapes are drawn on the GPU: no pixels
 // here then, show() sends the shapes drawn since the last one
 global drawing_on_gpu = gpu_drawing
 global canvas_pixels = blank_pixels(pixels_for(view_width, view_height))

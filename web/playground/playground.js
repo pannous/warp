@@ -1,7 +1,7 @@
 // The page: the editor, the worker that compiles and runs (worker.js), and the report shown like the CLI prints it:
 // the value, printed output, errors, warnings, hints. An ambiguity is a warning naming its explicit form; "got it"
 // silences a warning's topic in this browser (it never changes the value) until "show again". Each reading the user
-// might have meant is an "I meant: …" button that rewrites the code at the warning and runs it again (notes/fixits.md).
+// might have meant is an "I meant: …" button that rewrites the code at the warning and runs it again (core/analysis/diagnostics.warp).
 
 const ACKNOWLEDGED_KEY = "warp-playground-acknowledged";
 const SHOWN_FROM_KEY = "warp-playground-shown-from"; // the least diagnostic level shown, hint by default (card warning-levels)

@@ -2,7 +2,7 @@
 // c_callback(compare, ["handle", "handle"]))`. c_callback hands C one of a fixed set of C functions (lib/native/foreign.c
 // trampolines); C calling it calls the driver (core/native/driver.warp c_callback_answered), which calls this module's
 // export c_callback_fired(slot, arguments…) during the C call that called back. Its arguments' C types, each "i32",
-// "i64" or "handle" (a pointer, held as a handle as every C pointer is, notes/ffi_handles.md), at most
+// "i64" or "handle" (a pointer, held as a handle as every C pointer is, wiki/c.md), at most
 // CALLBACK_ARGUMENTS; its result, a number or yes/no, goes back to C, anything else as 0
 CALLBACK_ARGUMENTS = 6
 CALLBACK_TYPES = ["i32", "i64", "handle"]

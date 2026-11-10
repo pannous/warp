@@ -28,9 +28,9 @@
 'i=0; i++ until i>=3; i'	3
 'i=5; i++ while i<3; i'	5
 
-# bang_evaluates_a_block
-'a=6; {a*a}!'	36
-'f:={1+2}; f!'	3
+# a_call_runs_a_block (decision blocks-run-by-call)
+'a=6; b = {a*a}; b()'	36
+'f:={1+2}; f()'	3
 
 # an_if_with_a_block_after_a_statement_starts_a_statement
 'x=0; if 1 { x+=1 } if 1 { x+=10 }; x'	11

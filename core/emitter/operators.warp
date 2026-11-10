@@ -71,7 +71,7 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 	if a.kind == ValueKind.Time and b.kind == ValueKind.Time and symbol in equalities { return equality(body, symbol, TypedCode(ValueKind.Node, a.code), TypedCode(ValueKind.Node, b.code)) }
 	if a.kind == ValueKind.Time and b.kind == ValueKind.Time and symbol in time_relations { return runtime_call("time_holds", [a, b, number_value(time_relations[symbol])]) }
 	if kind == ValueKind.Bool and symbol in bool_ops { return TypedCode(ValueKind.Bool, a.code + b.code + [bool_ops[symbol]]) }
-	# a yes/no no implementation above takes is the int 1 or 0 (notes/bool_type.md): `"Fizz" * (i % 3 == 0)` is "Fizz" * 1
+	# a yes/no no implementation above takes is the int 1 or 0 (wiki/bool.md): `"Fizz" * (i % 3 == 0)` is "Fizz" * 1
 	if a.kind == ValueKind.Bool or b.kind == ValueKind.Bool { return unmarked_operation(body, symbol, as_int(a), as_int(b)) }
 	if kind != ValueKind.Int and kind != ValueKind.Float { return refuse("the operator " + symbol + " on " + kind_spelling(a.kind) + " and " + kind_spelling(b.kind)) }
 	if symbol == "%" and kind == ValueKind.Int { return euclidean_remainder(body, a, b) }
@@ -87,7 +87,7 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 	TypedCode(result, converted(a, kind) + converted(b, kind) + [ops[symbol]])
 }
 
-# a yes/no is the int 0 or 1 underneath (notes/bool_type.md): any operator but equality takes it as that int, `yes + yes`
+# a yes/no is the int 0 or 1 underneath (wiki/bool.md): any operator but equality takes it as that int, `yes + yes`
 # is 2; of two yes/no values an operator that gives 0 or 1 again gives yes/no, `yes xor no` is yes (user 2026-11-02)
 number_like(kind: ValueKind): bool := kind == ValueKind.Bool or kind == ValueKind.Int or kind == ValueKind.Float
 as_int(value: TypedCode): TypedCode := if value.kind == ValueKind.Bool then TypedCode(ValueKind.Int, converted(value, ValueKind.Int)) else value

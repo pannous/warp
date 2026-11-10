@@ -1,9 +1,9 @@
 # One verb per action: two-word words become single words
 
-Roadmap card: single-verbs (board; the user asked for the plan on 2026-11-08 and said "don't start it yet")
+Roadmap card: single-verbs (board; the user said "don't start it yet")
 
 ## Why
-Multi-dispatch (notes/dispatch.md) already chooses a word's meaning by the receiver's type, which is the first
+Multi-dispatch (wiki/polymorphism.md) already chooses a word's meaning by the receiver's type, which is the first
 argument. A noun inside a name repeats what that argument's type already says: `read_file(f)`, `file_lines(f)`,
 `write_bytes(f, b)`, `save_picture(p, …)`, `play_sample(s)`, `format_date(t)`. So one verb per action is enough, and
 the type of the first argument picks the meaning: `read f`, `lines f`, `write f, bytes`, `save p as: "x.png"`,
@@ -15,7 +15,7 @@ the type of the first argument picks the meaning: `read f`, `lines f`, `write f,
 2. **A conversion or parse is `as`** (decision as-text-not-cast: `as` stays a cast): `t as json`, `t as date`,
    `t as duration`, `x as html`, `angle as degrees` (units, card length-pixels).
 3. **The distinguishing type must come first.** A run-time choice tests only the receiver's type, never another
-   argument's (dispatch.md). If two meanings differ only in a later argument, that difference becomes a named
+   argument's (wiki/polymorphism.md). If two meanings differ only in a later argument, that difference becomes a named
    parameter: `sort(xs, by: key)`, `split(t, at: 3)`.
 4. **Type words stay reserved** (`list`, `text`, `file` as a conversion), so they can't be verbs: `list_files` becomes
    `files(folder)`, not `list(folder)`.
@@ -72,7 +72,7 @@ and one outcome test of the new spelling. Existing tests stay as they are and pa
 | remove_prefix, remove_suffix | open: see question 4 |
 | copy_text, new_list | copy(t), list() |
 
-## Open questions: ANSWERED by the user 2026-11-08 (notes/decisions.md single-verbs questions): 1 yes as recommended, 2 as recommended, 3 surface now and helpers later as an optional card, 4 remove_prefix/remove_suffix stay, 5 size
+## Open questions: ANSWERED by the user (notes/decisions.md single-verbs questions): 1 yes as recommended, 2 as recommended, 3 surface now and helpers later as an optional card, 4 remove_prefix/remove_suffix stay, 5 size
 1. **Does text still name a file?** Recommendation: yes for `read`, `write`, `exists` and `delete`, as today, where
    text has no other meaning. Words where text already means something else (`lines`, `size`, `append`, `find`,
    `sort`) need a `File`.
