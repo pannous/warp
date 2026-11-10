@@ -224,7 +224,8 @@ before asking a question). After a context swap, this file and your role file be
 - JSON5 or warp notation for anything people or agents write; strict JSON only where a tool requires it.
 - No environment variables as an interface: a choice a program or user makes is written in code (a `use`, an
   annotation like `@cpu`, a call) or given as a CLI option; no wiki page, sample or message tells anyone to export a
-  `WARP_*` variable (card no-bash-exports); the one exception is `WARP_SOUND=0`, which mutes a run. Build and test
+  `WARP_*` variable (card no-bash-exports); the one exception is `WARP_SOUND=0` (set by `warp --mute`),
+  which mutes a run. Build and test
   plumbing inside scripts is not an interface.
 
 ## Talking
