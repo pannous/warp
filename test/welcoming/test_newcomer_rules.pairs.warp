@@ -1,0 +1,8 @@
+# Welcoming newcomer forms: skipped modifiers, R assignment, vector types, spaced definition heads, negated calls,
+# phrase calls with named arguments, null words (wiki welcoming, Footguns; decisions P78, P145, P241,
+# spaced-definition-head, negated-call, named-argument-phrases, constant-words)
+'public x = 3; x'	3
+'xs: Vec<int> = [1]; xs'	[1]
+'add a b := a + b; add 1 2'	3
+'give(v, to) := v + to; give 2 to: 40'	42
+'nil == ø'	yes

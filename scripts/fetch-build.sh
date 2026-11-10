@@ -31,7 +31,7 @@ take() {
 	done < "$got/SHA256SUMS"
 	rm "$got/SHA256SUMS"
 	mkdir -p "$store"
-	# the self test passed for these baked inputs on the publishing machine (rebuild.sh self_tested): kept unless here
+	# the self test passed for these code inputs on the publishing machine (rebuild.sh self_tested): kept unless here
 	if [ -d "$got/self-tested" ]; then
 		mkdir -p "$store/self-tested"
 		for mark in "$got"/self-tested/*; do [ -e "$store/self-tested/${mark##*/}" ] || cp "$mark" "$store/self-tested/${mark##*/}"; done

@@ -19,9 +19,9 @@ A self build takes 5-11 minutes and has been killed for lack of memory on the bo
   it was. `scripts/promote-self.sh [--background] [<tree>]` runs it (through
   rebuild.sh self, so the store's promoted warp-self.wasm of these inputs is reused) every once in a while, in
   parallel, and never fails its caller. The gate and the normal rebuild need only warp.wasm.
-  A passed self test is kept per baked hash (`compiler-inputs.sh --baked`: seed, core/, the lib/ files the compiler
+  A passed self test is kept per baked hash (`compiler-inputs.sh --code`: seed, core/, the lib/ files the compiler
   bakes in) as <store>/self-tested/<baked hash>; a tree of that baked hash, a library change, gets warp.wasm promoted
-  with no compile (rebuild.sh logs `warp-self hit-baked`).
+  with no compile (rebuild.sh logs `warp-self hit-code`).
 - To get them, run `scripts/rebuild.sh [pure|self|both] [<worktree>]` (pure by default; both: warp-self.wasm only from
   lib/ or the store, never promoted there). It keeps the file in lib/ when
   lib/<compiler>.wasm.inputs names the current inputs hash. Otherwise it copies the shared store's pair of that hash.
@@ -64,13 +64,13 @@ to compare two compilers, run each on the same fixed source, discard one warm-up
 (card compile-cost-drift).
 Records start with build-keeps; older store entries have only their one-line .inputs.
 
-## The inputs hash (scripts/compiler-inputs.sh <lib> [-v] [--baked])
+## The inputs hash (scripts/compiler-inputs.sh <lib> [-v] [--code])
 
 16 hex digits. Paths are hashed relative to lib/, so the same inputs give the same hash in any tree. It covers:
 - the seed (WARP_SEED, its SHA-256)
 - core/**, extensions/**
 - every .warp module of lib/ outside compiler/ and data/: the runtime, modules and library index are built beside the
-  compiler from them (the compiler reads lib/ from disk, notes/library_zero_bake.md). `--baked` hashes the compiler's
+  compiler from them (the compiler reads lib/ from disk, notes/library_zero_bake.md). `--code` hashes the compiler's
   code alone (seed, core/, extensions/, the lib/ files they compile in), so a lib/-only change reuses a stored compiler.
 
 ## The shared store

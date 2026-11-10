@@ -70,6 +70,8 @@ differ and holds every rule; this file holds only the procedures behind them.
   `warp test <folders>`.
 - `warp` / `warp self` never build a compiler: a missing one is an error naming `warp rebuild`; a worktree's stale one
   in lib/ gets a one-line notice. Nothing rebuilds a compiler because lib/ changed: no cron, no git hook, no watcher.
+- A test case over 1 s (`warp test` marks it ⏱) leaves the normal suite for test/slow/, run only when named
+  (`warp test test/slow`), as a concentrated probe of what it measures.
 - GitHub quota (5000 requests/h, shared): `gh run watch --interval 60` or more. A whole-board `todo list` costs ~12
   points, commands naming a card by its key ~1. Never `gh project item-list` (200-530 points, trips GitHub's
   secondary limit): `todo list [--json] [column]` is served from a 60 s machine-wide snapshot.

@@ -1,0 +1,16 @@
+# Lists: comma lists, each/all, membership, element-wise operators, insert, round-bracket lists, all/any in, add,
+# from notes/decisions.md: one-name-list, dir-map-keys-first, each-all-broadcast, no-count-membership, dot-operators-now, list-insert-one-order,
+# immutable-tuple, find-fallback, all-any-in, add-xs, text-words (wiki list)
+'x = 1, 2; x'	[1, 2]
+'length each ["ab", "c"]'	[2, 1]
+'length all ["ab", "c"]'	[2, 1]
+'2 in [1,2,2]'	yes
+'[1,2] .* [3,4]'	[3, 8]
+'xs=[1,3]; xs.insert(1, 2); xs'	[1, 2, 3]
+'a = (1, 2, 3); a#1 = 9; a'	[9, 2, 3]
+'"abc".find("x") or 0'	0
+'[1, 2] are in [1, 2, 3]'	yes
+'xs = [1]; xs.add(2); xs'	[1, 2]
+'"a b".words'	["a", "b"]
+'all [1, 2] in [1, 2, 3]'	yes
+'text(dir({a: 1})#1)'	"a"

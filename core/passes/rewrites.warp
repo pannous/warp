@@ -137,8 +137,6 @@ global early_keys_read = no
 global early_keys = {}
 # the standard modules whose rules fired during a rewrite
 global fired_modules = []
-# the fresh names made so far, numbering each one
-global fresh_names = 0
 # how many results are being rewritten again right now, one inside the other
 global rewrite_depth = 0
 # the names the program being rewritten binds, which `where $x is type` and its kin ask
@@ -2494,11 +2492,10 @@ copied_binding(bound: map): map := {
 	copy
 }
 
-# `$t` → `t·3`: a compiler temporary, apart from every other firing's
-fresh_name(hole: text): Node := {
-	fresh_names += 1
-	symbol(hole.remove_prefix(rule_hole_mark) + "·" + fresh_names)
-}
+# `$t` → `t·3`: a compiler temporary, apart from every other firing's and from every
+# name another pass makes: one count for all (walk.warp fresh_number), else `for 2 {…}`'s item·1 and an inlined
+# map's item·1 were one variable
+fresh_name(hole: text): Node := symbol(hole.remove_prefix(rule_hole_mark) + "·" + fresh_number())
 
 # the variables assigned code of the shape, then the parameters of the functions called with one, until none is new
 names_assigned_shape(program: Node, shape: Node): map := {
