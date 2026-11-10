@@ -201,17 +201,14 @@ function codeBuilt(program, encoding, cursor) {
 	return newGuestText(program, field);
 }
 
-// a timer's firing (lib/timers.warp): the program's timer_fired(id), what its block prints going out as it goes; a
-// fetch's answer {url, text} or {url, failure} (host-timers.js) its fetch_answered(id, answer), the failure an Error;
+// a timer's firing (lib/timers.warp): the program's timer_fired(id), what its block prints going out as it goes;
 // { value } the program's value anew by its VALUE_ANEW_EXPORT (main's last expression again, as _start shows it),
 // { failure } the sentence its trap or raise says, as a run's (raisedMessage)
 const VALUE_ANEW_EXPORT = "page_value";
-const fetchAnswerOf = (exports, { url, text, failure }) => failure === undefined ? newGuestText(exports, text) : newGuestError(exports, `fetch ${url} failed: ${failure}`);
-function timerFired(holder, id, answer) {
+function timerFired(holder, id) {
 	const { exports } = holder;
 	try {
-		if (answer) exports[FETCH_ANSWERED_EXPORT](BigInt(id), fetchAnswerOf(exports, answer));
-		else exports.timer_fired(BigInt(id));
+		exports.timer_fired(BigInt(id));
 		return exports[VALUE_ANEW_EXPORT] ? { value: shownValue(exports, exports[VALUE_ANEW_EXPORT]()) } : {};
 	} catch (failure) {
 		return { failure: failure instanceof WasiExit ? `the timer's block exited (status ${failure.code})` : raisedMessage(exports, failure) };
@@ -315,9 +312,8 @@ function evaluatedNatively(code, file, hooks) {
 		const events = html !== undefined && holder.exports.page_event ? pageEventsOf(html) : [];
 		// a page listens after main for its markup's events and its timers (lib/timers.warp, host-timers.js)
 		if (status === 0 && (events.length || holder.timers?.length)) hooks.listen?.(holder, events);
-		// fetching: the answers still out (lib/net.warp fetch_later), each rendering the page anew when it comes
 		// runtime_warnings: what the host words said once a run (host-gpu.js warnOnce, @gpu on the CPU, `warn`)
-		return { ...report(status === 0 ? value : said, status), html, warnings, runtime_warnings: holder?.warnings ?? [], fetching: holder?.fetchesLeft ?? 0 };
+		return { ...report(status === 0 ? value : said, status), html, warnings, runtime_warnings: holder?.warnings ?? [] };
 	});
 }
 
