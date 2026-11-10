@@ -92,7 +92,7 @@ dispatcher(arity: int): any := {
 # a function whose code is written once the module's closures and classes are known, made at its first call; behind
 # runtime.wasm a runtime word of that name is runtime.wasm's (the closure calls and late words, written there once)
 made_late(name: text, result: ValueKind, parameters: list): any := {
-	if prepended() and name in module.runtime { return module.runtime[name] }
+	if prepended() and has_runtime_word(name) { return runtime_word(name) }
 	# (a list: `name in module.dispatchers` of a map missed the name just set, card emitter-name)
 	for known in module.dispatchers { if known.name == name { return known } }
 	f = added_function(name, parameters.map(p => ValueKind.Node), result, parameters)
