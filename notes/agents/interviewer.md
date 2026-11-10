@@ -58,6 +58,10 @@ archive you write answers to; workers get decisions as your messages, not by rea
   silently, without a user-facing summary; the user hears from you only for a question or a real conflict.
 - notes/open_decisions.md holds only open questions (pending and parked): prune answered or shown items after each
   batch; user to-dos go on the board, rules into the file where they are applied.
+- Test triage (standing task): notes/test_triage.md is yours to work through, so it never grows unread. Per entry:
+  a case an existing decision or project taste settles you decide yourself (approve the test edit, have the commit
+  name the decision); a real gap becomes a card; an esoteric form is held or deleted. Only the genuinely open forms
+  go to the user, a few at a time in one batch of popups. Mark each entry with its verdict and prune settled ones.
 - When the user hesitates, asks "what do you think?" or delegates, decide yourself (the Supervisor can give a second
   opinion) instead of relaying a half-answer: record it in decisions.md and list it under "## To present" in
   open_decisions.md; present them in one keep-or-change batch next time.
