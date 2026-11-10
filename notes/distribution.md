@@ -1,7 +1,6 @@
 # Distribution
 
 Where to announce warp and post drafts; README.md carries the positioning.
-README examples are verified by probes/readme/*.warp (run each with `warp <file>`).
 
 ## Positioning
 One line: **a data format that is also a programming language, compiled straight to WebAssembly GC; try it in the
@@ -18,8 +17,7 @@ browser.** The hooks, strongest first:
 | 1 | r/ProgrammingLanguages | home audience for new languages; self-posts welcome | lead with a design question, not "check out my lang" |
 | 2 | awesome-wasm-langs (github.com/appcypher/awesome-wasm-langs) | permanent listing, steady trickle | PR adding a Warp entry |
 | 3 | Show HN | playground = instant try | weekday 8–10 am US Eastern, title without hype, author stays to answer for hours |
-| 4 | r/rust + This Week in Rust | wasm-encoder + wasmtime GC reading in Rust is the angle | TWiR: PR to this-week-in-rust repo, "Project/Tooling Updates" |
-| 5 | Bytecode Alliance Zulip #wasm / r/WebAssembly | Wasm GC producers are few, people are curious | technical: name sections, reflection getters for JS reading GC structs |
+| 4 | Bytecode Alliance Zulip #wasm / r/WebAssembly | Wasm GC producers are few, people are curious | technical: name sections, reflection getters for JS reading GC structs |
 
 Not worth it: Twitter/X blasts, Product Hunt, paid "promotion". Lobste.rs needs an invite (tags: plt, wasm).
 
@@ -42,14 +40,10 @@ https://github.com/pannous/warp. Which ambiguities would you add or remove?
 Title: Show HN: Warp – a data format that is also a language, compiled to Wasm GC in the browser
 
 Text: The notation is JSON-ish (`contact{name: James age: 33}`). The same syntax writes programs, which compile to
-WebAssembly GC structs with full name sections. The Rust compiler itself is compiled to wasm, so the playground runs
-everything locally. Rust rewrite of my older C++ project Wasp. Rough edges expected; I'd love "this surprised me"
+WebAssembly GC structs with full name sections. The compiler, written in warp and compiling itself, runs as wasm, so the
+playground runs everything locally. Successor of my older C++ project Wasp. Rough edges expected; I'd love "this surprised me"
 reports.
 
 ### awesome-wasm-langs entry
 `- [Warp](https://github.com/pannous/warp) - data format and language compiling to Wasm GC structs; the compiler runs in the browser ([playground](https://warp.pannous.com/)).`
-
-### r/rust
-Title: Reading Wasm GC structs back into Rust types: wasm_struct!/is! in a wasm-first language compiler
-Focus: gc_traits.rs, `GcObject`, wasm-encoder usage, playground built as a plain C-ABI cdylib without wasm-bindgen.
 

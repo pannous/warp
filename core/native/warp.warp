@@ -3,7 +3,7 @@
 
 # see extensions/commands/commands.warp
 
-# The native warp (decision native-warp-in-core, notes/roadmap_native_harness.md step 2): the warp command as a native
+# The native warp (decision native-warp-in-core, AGENTS.md "Native warp"): the warp command as a native
 # executable, warp.wasm hosted through driver.warp. It only tells apart what the words name:
 #   warp app.wasm args…   the module run
 #   warp app.warp args…   compiled by warp.wasm, then run with the arguments (a `--` before them left out)

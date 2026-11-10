@@ -866,7 +866,7 @@ sound_file(speakers, rate, channels, seconds) := {
 	said("sound " + hundredths(seconds) + " s: " + file)
 	file
 }
-// how far ahead of the speaker a voice may queue when heard (notes/sound.md PLAY_AHEAD). Offline (WARP_NO_WINDOW / CI)
+// how far ahead of the speaker a voice may queue when heard (wiki/sound.md). Offline (WARP_NO_WINDOW / CI)
 // never waits: save sound mixes by place, and tests stay fast. WARP_SOUND_NOPACE: the page before a click (sounds
 // stay silent) skips the wait without taking the WAV path (getpid / sound_file), so headless samples-web stays under
 // its run_seconds (card samples-page-sound-pipes)
@@ -1201,7 +1201,7 @@ decoded_sound(path: text, rate, channels) := {
 	decoded
 }
 sample_seconds(clip: Sample) := count(clip.frames) / clip.channels / clip.rate
-// plain seconds below; the words take si_amount once, as play does (notes/units_runtime.md)
+// plain seconds below; the words take si_amount once, as play does (wiki/unit.md)
 // where the frame at that many seconds starts among the interleaved values, at most the end
 sample_frame(clip: Sample, seconds) := min(round(seconds * clip.rate) as int, count(clip.frames) / clip.channels) * clip.channels
 sample_between(clip: Sample, from, to) := Sample(clip.rate, clip.channels, clip.frames[sample_frame(clip, from)..sample_frame(clip, to)])
@@ -1219,7 +1219,7 @@ sample_looped(clip: Sample, seconds, from, to) := sample_repeated(clip, si_amoun
 play_sample(clip: Sample, rate) := {
 	sounded(clip.frames, round(clip.rate * rate) as int, clip.channels)
 }
-// plain seconds: the unit check reads a quantity parameter in a loop as unsupported (notes/units_runtime.md)
+// plain seconds: the unit check reads a quantity parameter in a loop as unsupported (wiki/unit.md)
 public melody_samples(notes, seconds, shape = wave_shape) := {
 	samples = []
 	for pitch in notes { samples = samples + chord_samples(pitches_of(pitch), seconds, shape) }

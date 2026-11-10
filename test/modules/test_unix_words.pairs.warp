@@ -1,4 +1,4 @@
-# card unix-words-native; decisions use-script and unix-words (notes/decisions.md), notes/shell_words.md
+# card unix-words-native; decisions use-script and unix-words (notes/decisions.md), wiki/script.md
 # fixtures: test/fixtures/unix (poem.txt, configs/ with a.json, sub/b.json, .hidden/c.json, notes.txt)
 
 # ~ is the home folder wherever a path is used

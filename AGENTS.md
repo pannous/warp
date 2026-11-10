@@ -106,7 +106,7 @@ WASI, FFI) in warp; the value layout and the `Kind` enum are in notes/self_hosti
 warp.warp is the `warp` command, an `@primitive` warp program built to a native executable (wasm2c + cc); driver.warp
 runs warp.wasm and the programs through wasmtime's C API and answers their host words over libc; tests.warp is
 `warp test`. Library host words (graphics, sound, web) are libraries in lib/, not the core binary
-(notes/roadmap_native_harness.md).
+(notes/primitive.md).
 
 ## Build and Test Commands
 
@@ -192,7 +192,7 @@ node.warp via emitter.warp in notes/self_hosting.md "Value layout"
    - Key: `data = left node`, `value = right node`
    - List/Block: `data = $list` vector (length, items array)
    - TypeDef: `data = name node`, `value = body node`
-   - True/False: a bool, the Int 1/0 marked BOOL_INFO above the kind bits (kind = BOOL_KIND); prints yes/no (notes/bool_type.md)
+   - True/False: a bool, the Int 1/0 marked BOOL_INFO above the kind bits (kind = BOOL_KIND); prints yes/no (wiki/bool.md)
    - Meta is dropped during emission; Error currently emits the inner node
    - Data nodes currently serialize as `Symbol(type_name)` in the emitter
 
@@ -281,7 +281,7 @@ before asking a question). After a context swap, this file and your role file be
 - Never degrade the input to suit a tool (compiler stage, parser, harness): fix or card the tool. Warp source, the
   compiler's included, uses the full language and reads like a good sample program. A regression that comes with a
   clean restructuring is fixed the clean way on the new structure, never by bringing the old shape back.
-- Word choices are aliases: the recommended word is canonical, the others work with a got-it note (notes/fixits.md).
+- Word choices are aliases: the recommended word is canonical, the others work with a got-it note (core/analysis/diagnostics.warp).
   Only differences in meaning go to the Interviewer. Everything warp prints (errors, shown results, `warp format`,
   docs) uses the canonical word (canonical-output).
 - Refuse, never guess: where code reads two ways or a form is unknown, the compiler refuses with a
@@ -405,8 +405,8 @@ before asking a question). After a context swap, this file and your role file be
   (<store>/code/<code hash>) and makes lib/'s runtime, modules and index anew (`miss-rebaking-<hash>`, about a
   minute; decision lib-hash-rebake; a failed rebake is kept like a failed build, step rebake). So a library feature
   costs no compiler build, a core one does.
-- Long commands with `run_in_background`, no polling. Kill your own leftover processes by PID, never pkill or killall (the hook .claude/hooks/no-pattern-kill.sh refuses them since the 04:13 crash,
-  notes/postmortem_0413_crash.md); never wait with `until ! pgrep -f "<pattern>"`: the loop's own shell matches it and
+- Long commands with `run_in_background`, no polling. Kill your own leftover processes by PID, never pkill or killall (the hook .claude/hooks/no-pattern-kill.sh refuses them: a trailing -n
+  once read as a second pattern killed every session); never wait with `until ! pgrep -f "<pattern>"`: the loop's own shell matches it and
   never ends (warp-compile-speed sat 3½ h in one, 11-07), and
   stop only your own jobs. Every CLI run that might paint gets `WARP_NO_WINDOW=1`. No browsers on the Mac.
 - Outcome tests only ("Outcome tests only" above), and never pinning exit codes or wording.

@@ -4,7 +4,7 @@
 # and then `TAB topic@expression`, what "got it" silences:
 # the pattern a node whose `$name` parts take any node (`data(…)` quotes it), the message and fix texts whose
 # `{name}` holes give that part and `{a name}` it with its article. compiler.warp says
-# the warnings and fails on an error (notes/pure_diagnostics.md).
+# the warnings and fails on an error.
 use "../parsing/parser.warp"
 use "words.warp"
 

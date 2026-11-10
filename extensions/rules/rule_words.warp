@@ -1439,7 +1439,7 @@ type_data_text(field_type: text, program: Node, ancestors: list): text? := {
 	if field_type in CLASS_DATA_TYPES then "\"" + field_type + "\"" else class_data_text(field_type, program, ancestors)
 }
 
-# `law square(-x) == square(x)` (notes/laws.md, its tested level): the law as lib/laws.warp's law_holds tries it at run
+# `law square(-x) == square(x)` (wiki/laws.md, its tested level): the law as lib/laws.warp's law_holds tries it at run
 # time, the law shown, its variables and the proposition of their values: a named law, `law name:` with a `for x: int`
 # line each before it, takes those variables, else they are the names the law reads and neither calls nor finds
 # defined (the program's, the library's)

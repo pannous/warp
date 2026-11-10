@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
 @primitive
-# The native runner (notes/roadmap_native_harness.md milestone 3, notes/primitive.md "Driver"): a primitive file that
+# The native runner (notes/primitive.md "Driver"): a primitive file that
 # runs wasm modules through wasmtime's C API, called as any C library. `warp build native core/native/driver.warp`
 # makes the executable:
 #   driver app.warp args…   compiled by warp.wasm (of $WARP_LIB, else beside the driver), then run
@@ -916,7 +916,7 @@ lazily_linked(context: handle, module_name: text, flag: i64, name: text, functio
 	}
 	wasmtime_linker_get(long_at(run).value, context, module_name, module_name.length, name, name.length, function)
 }
-# `"é" == "e◌́"` (decisions nfc-tables, nfc-slot; notes/text_equality_nfc.md): the runtime's canonical_text, a text's
+# `"é" == "e◌́"` (decisions nfc-tables, nfc-slot; core/runtime/text.warp equal_texts): the runtime's canonical_text, a text's
 # NFC by lib/unicode, whose module (modules/unicode.wasm) the run links on this first call (lazily_linked), never a
 # silent byte compare
 canonical_text_answered(context: handle, given: pointer, result: pointer): nothing := {

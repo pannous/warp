@@ -19,19 +19,13 @@ module, beside the compiler; not embedded, user), and a program is the runtime w
 - Library modules (sound, units, markup…) are prebuilt the same way and appended between runtime and user code, each
   rewritten by its base offset through its padded calls (`use sound; midi(440Hz)` costs 2 s today, all of it compiling
   sound.warp).
-- What isn't wasm and needs it is pre-baked (card tables-as-constants, done): every bundled module's parse is packed
-  (pack) into the compiler beside its text, `LIBRARY_PARSES = library_parses()` in core/parsing/parser.warp, which uses.warp's
-  module_text fills in when the compiler is compiled; `source_parse(path, source)` unpacks it on first use when the
-  text is the bundled one (a WARP_LIB edit is parsed). Sugar rules, the alias table and the operator modules read it;
-  no os.kept for them. Packed text rather than constant GC globals: globals are built eagerly at instantiation and
-  would need the class layouts; a packed text is one data segment, unpacked lazily. The Rule, Operator and Spellings
-  instances are derived from the baked trees per run (O(rows)). Measured (hello-sized program, fresh
-  module cache): cold 7.1 s → 0.22 s, warm 0.55 s → 0.22 s; the cold 7 s were the sugar-rule parses. A compiler built
-  by a seed that bakes none parses at run time (the plain def library_parses), so the seed is refreshed after landing.
+- What isn't wasm and needs it is pre-baked: the sugar's rules and the standard modules' compile-time rules are
+  packed (pack) by the build into the modules folder (rewrites.warp sugar_rules_packed, sugar_rules.packed), a
+  module's words, kinds and rule patterns are its prebuilt signature (warp.signature); a compile reads no lib/ source.
 
-## runtime.wasm format (card runtime-prebuilt, owner: fixer; built by core/emitter/prebuilt.warp)
+## runtime.wasm format (card runtime-prebuilt; built by core/emitter/prebuilt.warp)
 `warp rebuild` writes it beside warp.wasm (compiler.warp's command `runtime [file]`); validated by wasm-tools.
-Every compile is behind a runtime.wasm, the compiler's own (src/compiler/standalone.rs runtime_of), its fifth argument
+Every compile is behind a runtime.wasm, the compiler's own, its fifth argument
 in a compile and in a repl-step: warp.wasm's and warp-self.wasm's beside them; the seed's is compiled by the seed from
 the sources being built in each rebuild's seed step and deleted after it (warp.warp rebuilt; card seed-compiles), so
 a seed never compiles behind the runtime of the warp.wasm sharing its folder, nothing but the seed is published, and a
@@ -86,19 +80,18 @@ made_case kind made, since no program decides any more what it makes.
     `rebased(code, relocations, shifts)` adding shifts[space][kind] to each operand in place, for a module appended
     behind others and for the runtime's functions behind a program's C imports.
 
-## Library modules (card modules-prebuilt; owner: tables-as-constants)
+## Library modules (card modules-prebuilt)
 - `<module>.wasm` beside the compiler, of runtime.wasm's shape: the canonical types, padded operands, `warp.runtime`
   (the module's own layout: function, global and data counts, each exported word's kinds) and `warp.relocations`.
   Its calls into the runtime hold the runtime's fixed indices; its own and other modules' are numbered from 0 and
   rebased by the module's base offset when it is appended between the runtime and the program.
 - Declared (card prebuilt-module-declarations): a linked module's functions come into the program as
-  their heads only (prelude_words.warp declared_only: `f(x) := ø`), from the slice parses baked into the compiler, so
+  their heads only (`f(x) := ø`), from the module's prebuilt signature, so
   nothing of their bodies is lowered or analyzed; the analyzer takes their kinds and results from warp.module
   (analyzer.warp declared_linked), the emitter binds them and refuses to compile one (functions.warp). Its classes and
   globals come in (linked_needs), a class with its methods declared alike, its fields whole; the program runs the globals' initializers. A module whose binding fails, that lacks
   its warp.signature or was built of another lib/ text is the compile's error ("units.wasm won't link: …"), never
   compiled from source (decision module-link-hard-error).
-  No separate warp.declarations section: the compiler already carries every bundled module's parse.
 - A linked name keeps all its variants (card module-export-arity): draw's own show() beside the show(x) builder the
   host calls, which the layout names by index, not by name. A program's call takes the variant whose count of values
   fits (prebuilt.warp linked_variant); one that none takes is refused naming theirs, never bound to another.
@@ -123,12 +116,10 @@ made_case kind made, since no program decides any more what it makes.
   list, text, shell and matrix link. test/modules gives the same
   results linked and from source. Measured: `use units; 3m + 2m` 0.64 s -> 0.56 s: the program still lowers the
   module's reached definitions (checked_program, 70 of 84 samples); declared: 0.36 s, 46 samples.
-- Since 2026-11-07 (card prelude-listener-globals) every module written links the prelude as a program does: its
+- Every module written links the prelude as a program does: its
   prelude words and globals are warp/prelude's, one instance per run (signals' listen and the program's unlisten edit
   one event_listeners). A with_reached pass applies only the aliases of the modules whose slices it brings, so the
   prelude's pass leaves math's `alias log2 => binary_log` off math's own text, whose log2 is C's.
-- Open: classes from warp.declarations into module.classes before late_code;
-  late_code once all modules are bound.
 
 - Load-time linking (L5c, card wasm-module-linking): a program whose uses link runs as its own module
   (linked_bytes), importing warp_runtime and each module word it calls from `warp/<m>` by name, each module global
@@ -139,10 +130,9 @@ made_case kind made, since no program decides any more what it makes.
   compile needs of it, its words with their kinds, globals, own class structs, builders and the runtime it was built
   behind, is its warp.signature (prebuilt.warp image_fields / library_image_of); no .splice.wasm. The compiler's own
   build and `warp build` (modules_linked) compile their modules in. prebuilt-parts.sh makes the machine code of
-  runtime.wasm and each module at install, which a first run would make. Until 2026-11-05 nothing linked at all: the bundle's comment blanking made the text compare fail
-  silently, and a plain `warp x.warp` compile had no runtime argument; an unlinked prebuilt module now warns.
+  runtime.wasm and each module at install, which a first run would make. An unlinked prebuilt module warns.
 
-## Separate modules (card runtime-separate-modules; owner: separate-modules)
+## Separate modules (card runtime-separate-modules)
 The same runtime.wasm, not copied into the program but instantiated once and imported, as a page or an AOT build
 combines modules natively. Nothing is rewritten: a program's runtime words are imports, and imports come first in
 the function index space anyway, so the program numbers only its own functions, as today.
@@ -154,7 +144,7 @@ the function index space anyway, so the program numbers only its own functions, 
   declared by an element segment, as ref.func needs.
 - **Library modules** the same way: each imports `warp_runtime`, exports its words; a program imports them as
   `warp_module.<module>.<word>`, so `use sound` costs an instantiate, not a compile.
-- **Hosts**: wasmtime (src/run): instantiate runtime.wasm once per store (from its .cwasm), then the program with a
+- **Hosts**: the native warp (core/native/driver.warp, wasmtime's C API): instantiate runtime.wasm once per store (from its .cwasm), then the program with a
   Linker that resolves `warp_runtime` to that instance; the browser (web/playground worker.js) the same with
   `WebAssembly.instantiate(program, { warp_runtime: runtime.exports, warp_host })`.
 - **Trimming** the shared runtime against one program's imports is where wasm-metadce fits (roots: the imported
@@ -173,17 +163,6 @@ the function index space anyway, so the program numbers only its own functions, 
   runtime function types used (behind the fixed GC types), its classes and own types behind them, its texts from
   segment 0. hello.mod.wasm 22823 -> 2727 bytes (imports 1074, code 844, types 271); x.wasm and x.full.wasm as before.
 
-## Steps (sub-cards of runtime-linking)
-| card | step |
-|---|---|
-| runtime-prebuilt | runtime.wasm emitted at rebuild beside warp.wasm, padded calls + canonical types + call-site list |
-| runtime-prepended | the emitter writes the runtime first and the user code behind it; no runtime words compiled per program |
-| modules-prebuilt | bundled modules prebuilt and appended by base offset; WARP_LIB overrides compiled from source |
-| tables-as-constants | sugar rules, alias/keyword tables, operator modules: their parses baked as packed texts (done) |
-| shaking-build-options | `warp build` options for trimming: none, Binaryen metadce/wasm-opt, own linker later |
-| runtime-separate-modules | runtime, modules and program linked by import/export (browser, AOT combining) |
-| runtime-shaking | our own warp linker (Later) |
-
 ## Removing the unused runtime (decided: all options open, user)
 All options stay open and are exposed to the build process (`warp build` options); none is the only way.
 - Higher priority: existing tools (Binaryen's wasm-metadce / wasm-opt) for trimmed artifacts (card
@@ -193,7 +172,7 @@ All options stay open and are exposed to the build process (`warp build` options
 - `warp build --trim=<way>` (core/commands/commands.warp trim; also `warp self build`): `optimize` (the default, and bare
   `--trim`), `unused`, `none`, `warp` (refused until runtime-shaking). Trimmed by default, the way
   picked by measurement: wasm-opt with wasmtime's feature list (never `-all`: custom descriptors write exact
-  references wasmtime refuses) and the name section kept. Measured 2026-10-28 on the seed-era modules:
+  references wasmtime refuses) and the name section kept. Measured:
 
   | module | compiled | `unused` (--remove-unused-module-elements) | `optimize` (-O2) |
   |---|---|---|---|
@@ -203,8 +182,7 @@ All options stay open and are exposed to the build process (`warp build` options
   | neural_net | 49098 | 46647, 26 ms | 29474, 72 ms |
   | snake | 86064 | 82755, 28 ms | 61172, 82 ms |
 
-  -O2 is about a third smaller for 30–60 ms more, so it is the default; outputs identical. Today's emitter already
-  writes only the reached runtime words; once the runtime is prepended whole (runtime-prepended), `unused` matters.
+  -O2 is about a third smaller for 30–60 ms more, so it is the default; outputs identical.
 - Low priority: our own clean linker in warp (card runtime-shaking, Later): reachability from the user's code over the
   baked call-site list, compact the function list, rewrite the padded operands; the same for globals, data and
   elements. From first principles, not a port of wasp's C++ linker.

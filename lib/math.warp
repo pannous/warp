@@ -27,7 +27,7 @@ global rough_tolerance = 0.01
 infix operator ≈(a: any, b: any) := alike(a, b, tolerance, no)
 infix operator ~(a: any, b: any) := alike(a, b, rough_tolerance, yes)
 infix operator ⋍(a: any, b: any) := alike(a, b, tolerance, no)
-// `a ≈ b`, and `a ~ b` when rough (notes/approximately.md): `{…}` maps key by key in any order, other lists item by item,
+// `a ≈ b`, and `a ~ b` when rough (wiki/operator.md): `{…}` maps key by key in any order, other lists item by item,
 // instances of one class field by field, pairs part by part, each with the same comparison again; two
 // other values by the runtime's values_similar or values_rough. Two plain numbers never get here: they compare inline
 alike(a: any, b: any, tolerance: float, rough: bool) := {
@@ -46,7 +46,7 @@ alike(a: any, b: any, tolerance: float, rough: bool) := {
 	}
 	values_alike(a, b, tolerance, rough)
 }
-// `a ≈ b` and the looser `a ~ b` (notes/approximately.md): lib/prelude.warp alike walks lists, maps and pairs, the
+// `a ≈ b` and the looser `a ~ b` (wiki/operator.md): lib/prelude.warp alike walks lists, maps and pairs, the
 // two below compare the leaves; tolerance 1e-9 for ≈, 0.01 for ~
 // two leaves alike: a yes/no by truth, numbers within tolerance of either (or 1e-12 near zero), texts and characters
 // folded (lower case without accents), the rough ones trimmed of blanks and punctuation at both ends first
@@ -308,8 +308,7 @@ remainder(a, b) := fmod(a, b)
 
 // The exact arithmetic the runtime emits in Rust (rust-harness:src/wasm_emitter/numbers/exact.rs int_gcd, ratio_new, exact_div,
 // int_mod, int_euclid_div) written in warp (card ratio-gcd-warp); gcd above is int_gcd's twin, never below 0. The
-// builtins stay until a measured step calls these late (notes/ratio_gcd_warp.md);
-// tests/numbers/test_ratio_gcd_warp.rs compares them with `/`, `%`, `/!` and `rem`.
+// builtins stay until a measured step calls these late; test/numbers/test_euclidean_operators pins `%` and `/!`.
 class RatioParts {
 	numerator: int
 	denominator: int
