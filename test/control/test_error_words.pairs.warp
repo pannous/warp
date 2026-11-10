@@ -11,3 +11,6 @@
 # a_program_may_define_the_words
 'fail(x) := x + 1; fail 2'	3
 'warn(x) := x * 2; warn 4'	8
+# a warning gives the empty text its signature promises, so it joins a text as nothing (cards string-concat-warn, warning)
+'warning("w") + "y"'	'y'
+'x = warn("c"); x + "!"'	'!'
