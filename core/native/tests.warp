@@ -219,9 +219,9 @@ started_run(work: text, run: text, prefix: text, children: pointer, slots: i32):
 }
 
 # the number of slots in the machine's pool: WARP_TEST_SLOTS, else the cores, each compiler build taking BUILD_CORES
-# of them and the tests one more back, at least WHILE_BUILDING (scripts/rebuild.sh's build slots; 2026-10-31: load 33 on 10
-# cores, tests beside 3 builds; user 2026-11-10, card shared-test-slot: one slot for every test run beside a build
-# starved them, so the count follows the builds as they start and end)
+# of them and the tests one more back, at least WHILE_BUILDING (scripts/rebuild.sh's build slots: a load of 33 on 10
+# cores came from tests beside 3 builds; card shared-test-slot: one slot for every test run beside a build starved
+# them, so the count follows the builds as they start and end)
 BUILD_CORES = 2
 WHILE_BUILDING = 2
 machine_cores(): i32 := number_of(trimmed_end(command_output("getconf _NPROCESSORS_ONLN")))

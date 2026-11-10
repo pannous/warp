@@ -1,8 +1,8 @@
 # from test_time_type_names.rs: edit the Rust test, then run the script again
 
 # test_time_type_names
-'type(now)'	'instant'
-'t = now; type(t)'	'instant'
+'type(now)'	'Instant'
+'t = now; type(t)'	'Instant'
 'type(2024-06-01T12:00Z)'	'instant'
 'type(2024-06-01)'	'date'
 'type(1 day)'	'duration'

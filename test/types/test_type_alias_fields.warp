@@ -38,3 +38,18 @@ is! 'type Age < int
 "a" is Age' false
 is! 'type Name < text
 "a" is a Name' true
+
+# a_variable_holding_a_type_is_tested_against_it (decision type-text)
+is! 'enum Color { red green }
+Paint = Color
+c = red
+c is Paint' true
+is! 't = type(3)
+5 is t' true
+is! 't = type(-3)
+5 is t' true
+is! 'enum Color { red green }
+Paint = Color
+Paint = 3
+c = red
+c is Paint' error

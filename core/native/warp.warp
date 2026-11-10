@@ -110,7 +110,7 @@ words_ran(compiler: text, given: Arguments): nothing := {
 # keeps those of a failed build in the store and resumes it, notes/compiler_rebuilds.md "Failed builds").
 # The last step, native, builds this executable anew (core/native/warp.warp, `warp build native`) by the new warp.wasm,
 # so a failed native build leaves warp.wasm as it was too; `warp rebuild pure` stops before it, the compilers alone
-# (scripts/rebuild.sh, the smoke test: user 2026-11-08, card rebuild-native)
+# (scripts/rebuild.sh, the smoke test: card rebuild-native)
 rebuilt(first: text, last: text): nothing := {
 	library = library_folder()
 	compiler = real_path(joined(library, "/compiler/compiler.warp"))
@@ -203,7 +203,7 @@ leb_written(at: pointer, n: i64): i64 := {
 }
 # `warp rebuild self` (scripts/promote-self.sh): warp.wasm compiles compiler.warp once more, and when it does it is
 # promoted to warp-self.wasm, with its machine code; whether that build is warp.wasm's own bytes (a fixpoint) is said,
-# not required (user 2026-10-26)
+# not required
 promoted(): nothing := {
 	library = library_folder()
 	compiler = compiler_path()
@@ -214,7 +214,7 @@ promoted(): nothing := {
 	unlink(next)
 	promoted_file = joined(library, "/warp-self.wasm")
 	copied(compiler, promoted_file)
-	machine_code_copied(compiler, promoted_file, machine_code_suffix(COMPILER_GC_HEAP_BYTES))
+	machine_code_copied(compiler, promoted_file, machine_code_suffix(RUN_GC_HEAP_BYTES))
 	machine_code_copied(compiler, promoted_file, machine_code_suffix(BUILDER_GC_HEAP_BYTES))
 	said = if fixpoint then " compiles compiler.warp once more (to its own bytes, a fixpoint), promoted to " else " compiles compiler.warp once more (to other bytes, no fixpoint), promoted to "
 	print(joined(joined(compiler, said), promoted_file))
@@ -229,7 +229,7 @@ seed_shipped(): nothing := {
 }
 # a build's machine code (the driver's .cwasm and its key) moved to another build file of the same bytes
 machine_code_moved(from: text, to: text): nothing := {
-	machine_code_renamed(from, to, machine_code_suffix(COMPILER_GC_HEAP_BYTES))
+	machine_code_renamed(from, to, machine_code_suffix(RUN_GC_HEAP_BYTES))
 	machine_code_renamed(from, to, machine_code_suffix(BUILDER_GC_HEAP_BYTES))
 }
 machine_code_renamed(from: text, to: text, suffix: text): nothing := {

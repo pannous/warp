@@ -1,4 +1,4 @@
-# `fast g(n) := n * n`: a function of machine arithmetic (user 2026-11-09, card fast-declaration). Each parameter is an
+# `fast g(n) := n * n`: a function of machine arithmetic (card fast-declaration). Each parameter is an
 # int, which wraps at 64 bits, when every call passes a whole number, else a float; `/` divides as floats; sin, cos,
 # exp, pow and atan2 are lib/machine_math's polynomials, fast_math's for this function alone. Before the rules, so
 # that modules_used brings machine_math for the words it writes

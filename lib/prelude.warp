@@ -731,8 +731,8 @@ fits_group(value: any, pattern: any, bound: map, code: bool): bool := {
 }
 // `Circle(r)`, `Rect(w, h)`: an enum case carrying data, or a class, with a pattern for each field
 is_case_with_fields(pattern: any): bool := bracket_of(pattern) == "(" and #pattern > 1 and is_type(pattern#1, "symbol")
-// the class of an instance, Circle of `Circle{r: 2}` (type shows as "class Circle")
-class_name(value: any): text := { shown = name_of(type(value)); if shown.starts_with("class ") then shown[6 ..< #shown] else "" }
+// the class of an instance, Circle of `Circle{r: 2}` (its type, shown by its name)
+class_name(value: any): text := name_of(type(value))
 // the instance's fields in order fit the patterns after the case name
 fits_fields(value: any, pattern: any, bound: map): bool := {
 	fields = value.keys

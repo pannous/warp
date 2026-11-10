@@ -24,7 +24,7 @@ ELEMENT_LOOKUP = "getElementById"
 PAGE_ELEMENT_TYPE = "HTMLElement"
 # the interfaces whose attributes and operations are the page's globals (`crypto`, `atob`)
 GLOBAL_INTERFACES = ["Window", "WindowOrWorkerGlobalScope", "WorkerGlobalScope", "WindowLocalStorage", "WindowSessionStorage"]
-# read from lib/ the first time a program reaches the page's js (user 2026-11-10, load on demand)
+# read from lib/ the first time a program reaches the page's js (load on demand)
 WEBIDL = "web.webidl"
 use "js_globals/webidl.warp"
 

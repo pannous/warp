@@ -112,8 +112,8 @@ held_result(n: Node): Node? := {
 }
 
 # A function that can answer ø declares `T?` (decision optional-result): `def f(x): int { … return ø … }` warns with
-# the `?` as its fix and holds its result as an `int?`, so the ø reaches the caller unchanged. A list result gives [] for ø instead, with no warning (user
-# 2026-10-22, card list-result-autocast: "ø can autocast to []")
+# the `?` as its fix and holds its result as an `int?`, so the ø reaches the caller unchanged. A list result gives [] for ø instead, with no warning
+# (card list-result-autocast: "ø can autocast to []")
 optional_when_answering_empty(head: Node, body: Node, result_type: Node): Node := {
 	written = name_of(result_type)
 	if not written or holds_empty(written) or is_list_type(written) or not can_answer_empty(body, optional_functions) { return result_type }
