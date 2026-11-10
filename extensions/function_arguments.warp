@@ -70,6 +70,12 @@ method_call(receiver: Node, word: Node, arguments: list, defined: map): Node? :=
 # `w(a, b)`, `w a b`, `x.w(a)` and `x.w a`; a spaced phrase given a function becomes the call, `map [1 2] (it * 10)` is
 # map([1 2], it => (it * 10)), `xs.map { it * 10 }` is xs.map(it => { it * 10 })
 with_function_arguments(n: Node, defined: map): Node := match n {
+	# a block on one line, `{ it.map { it * 10 } }`, holds its phrase's words itself (core/parsing/phrase_blocks.warp)
+	List(items, Bracket.Curly, Separator.Space): {
+		phrase = List(items, Bracket.None, Separator.Space)
+		call = with_function_arguments(phrase, defined)
+		if call == phrase then n else List([call], Bracket.Curly, Separator.Semicolon)
+	}
 	List(items, bracket, separator): {
 		if #items < 2 or not (bracket == Bracket.Round or (bracket == Bracket.None and separator == Separator.Space)) { return n }
 		head = items#1
