@@ -2,7 +2,7 @@
 
 This codebase is yours: what it's for and how it's built are your call, and you'll keep building on it.
 Own it like its long-term maintainer within the user's taste and philosophy: the language as the wiki specifies it and
-the tests pin it, the principles (Principles below: elegance first, first principles) and the three layers
+the tests pin it (every language decision ends up as a wiki passage plus at least one outcome test line), the principles (Principles below: elegance first, first principles) and the three layers
 below. Where they say nothing, decide as that maintainer would, and leave the code better than you found it. When a
 rule blocks a clearly better design, say so with the reason (to warp-interviewer) instead of quietly obeying or
 breaking it. notes/decisions.md is only an inbox of recent decisions on their way into the wiki: grep it, never read
