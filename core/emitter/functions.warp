@@ -64,7 +64,7 @@ def default_value(body: Body, f: Function, i: int, count: int): TypedCode {
 def call_values(f: Function, values: list): TypedCode {
 	# a marked number given an unannotated parameter is given boxed, where its static mark runs out (decision
 	# marks-unboxed-first): `k(x) := x` of an Angle keeps it an Angle
-	values = range_list(#values).map(i => if values[i].mark != 0 and f.signature != ø and i < #f.signature.parameters and f.signature.parameters[i].type_name == "" then TypedCode(ValueKind.Node, boxed(values[i])) else values[i])
+	values = range_list(#values).map(i => if values[i].mark != 0 and i < #f.signature.parameters and f.signature.parameters[i].type_name == "" then TypedCode(ValueKind.Node, boxed(values[i])) else values[i])
 	if f.kinds == ø { compile_function(f, values.map(v => v.kind)) }
 	# a function still compiling gives the kind it declares; without one its result is not known yet, and the caller
 	# is read again once every function is compiled
