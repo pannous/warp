@@ -112,8 +112,9 @@ node_floor_quotient(a: Node, b: Node): Node := {
 	truncated(float_floor(float_of_node(a) / divisor))
 }
 # `floor x` of a value known only at run time: an int itself, a float's floor, a ratio's or a big int's by the extended
-# runtime
+# runtime, an instance's by the number its float() gives (`floor(1 + √2)` of the prelude's nearest)
 node_floor(n: Node): Node := {
+	if converts_to_float(n) { return node_floor(number_held(n)) }
 	if kind_code(n) != Kind.Int { return truncated(float_floor(unboxed_float(n))) }
 	if is_plain_int(n) { return n }
 	extended_floor(n)
