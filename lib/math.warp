@@ -3,8 +3,6 @@
 // Its builtins, the math words warp computes itself and libm's (`from warp`, `from 'm'`), are the core's:
 // core/analysis/math_builtins.warp
 use reals
-// its powers (↑, round_to, …) are big_numbers' words (card runtime-bridge-slots)
-use big_numbers
 use integers
 use case_table
 
