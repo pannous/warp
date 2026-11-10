@@ -36,7 +36,6 @@
 '100000000000000000000 > 2^64'	true
 
 # test_explicit_wrap_inside_function
-# triage-held 2026-11-06: pins i64 wraparound, a flaw :: 'f(x) := (x*x) as i64; f(3037000500)'	-9223372036709301616
 
 # test_string_equality_is_by_value
 '"abc"=="abc"'	true
