@@ -2,10 +2,10 @@
 # Every standard module `warp rebuild` writes as modules/<name>.wasm links at load time (card wasm-module-linking,
 # notes/library_zero_bake.md "The module interface"): a program importing from `warp/<name>` runs, the module linked to
 # runtime.wasm's instance and its warp/start run first. Needs wat2wasm (wabt). Run it with
-# bash test/native/test_linked_modules.sh; the warp is WARP (default the warp on PATH), its lib/ WARP_LIB as usual
+# bash test/native/test_linked_modules.sh; the warp is WARP (default the warp on PATH), a tree's WARP=<tree>/data/gate/warp
 warp=${WARP:-warp}
 export WARP_WINDOW=0
-library=${WARP_LIB:-$("$warp" version | sed -n 's/.*(compiler.warp of \(.*\))$/\1/p')}
+library=$("$warp" version | sed -n 's/.*(compiler.warp of \(.*\))$/\1/p')
 command -v wat2wasm >/dev/null || { echo "skipped: no wat2wasm"; exit 0; }
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT

@@ -2,7 +2,7 @@
 # paint(s) and paint(s, values) paint at the program's own width and height where it assigns both, else at the view's
 # size; paint(shader, width, height) of a shader without holes paints it (wiki/graphics.md, cards paint-shader-dimensions,
 # paint-shader-values). Run it with bash test/gpu/test_paint_sizes.sh; the warp under test is WARP (default the warp on
-# PATH), its compiler from WARP_LIB as usual
+# PATH), a tree's WARP=<tree>/data/gate/warp
 warp=${WARP:-warp}
 export WARP_WINDOW=0
 stage=$(mktemp -d) || exit 1

@@ -6,7 +6,7 @@
 # - linearity: a generated program's cost from SHORT to LONG lines grows at most LINEAR_SLACK times as fast per line
 #   as from TINY to SHORT (a pass going over the whole program per statement grows it with the square).
 # Not part of smoke or `warp test`: run it after a change to the passes. macOS only (/usr/bin/time -l).
-# Usage: test/bench/compile_scaling.sh        WARP_LIB names the lib/ to measure (default: the one beside warp)
+# Usage: test/bench/compile_scaling.sh [<lib>]   the lib/ to measure (default: the one beside warp)
 set -eu
 EXTRA_WORDS=400
 FLAT_PERCENT=5
@@ -14,15 +14,15 @@ TINY=100 SHORT=1000 LONG=2000
 LINEAR_SLACK=1.3
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 hello=$checkout/samples/hello/hello.warp
-lib=${WARP_LIB:-$(dirname "$(realpath "$(command -v warp)")")}
+lib=${1:-$(dirname "$(realpath "$(command -v warp)")")}
 work=$(mktemp -d "$checkout/data/compile-scaling.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 export WARP_WINDOW=0
 
 # instructions <lib> <program>: the instructions a warm run of the program retires; a failing run ends the check
 instructions() {
-	WARP_LIB=$1 warp "$2" >/dev/null 2>"$work/run.log" || { echo "FAIL  $2 doesn't run with $1:" >&2; cat "$work/run.log" >&2; exit 1; }
-	WARP_LIB=$1 /usr/bin/time -l warp "$2" 2>&1 >/dev/null | awk '/instructions retired/ { print $1 }'
+	warp --lib "$1" "$2" >/dev/null 2>"$work/run.log" || { echo "FAIL  $2 doesn't run with $1:" >&2; cat "$work/run.log" >&2; exit 1; }
+	/usr/bin/time -l warp --lib "$1" "$2" 2>&1 >/dev/null | awk '/instructions retired/ { print $1 }'
 }
 
 # generated_program <lines>: statements of the four shapes a program is mostly made of, each using the ones before

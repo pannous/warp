@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 # csv-spectrum (test/csv/csv-spectrum) and RFC 4180 edge cases (test/csv/rfc4180) against lib/csv; not part of smoke.
-# usage: WARP_LIB=$PWD/lib test/csv/csv_test.py [--fails spectrum|rfc4180|roundtrip|all]
+# usage: [WARP="warp --lib $PWD/lib"] test/csv/csv_test.py [--fails spectrum|rfc4180|roundtrip|all]
 # spectrum: csv_maps(text) must equal the case's json (header row to maps); rfc4180: csv_rows(text) must equal the
 # rows, which come from python's csv.reader, except: a UTF-8 BOM before the first field is dropped (as Excel writes
 # it), and a blank line is a record of one empty field, as RFC 4180's grammar reads it (python's reader gives []);
 # roundtrip: csv_rows(csv_text(rows)) must give the rows back, for every case's rows.
-import json, os, subprocess, sys, tempfile, collections
+import json, os, subprocess, sys, tempfile, collections, shlex
+# the warp under test: WARP, a command (warp --lib <tree>/lib), else the warp on PATH
+WARP = shlex.split(os.environ.get("WARP", "warp"))
 here = os.path.dirname(os.path.abspath(__file__))
 W = lambda s: '"' + "".join({"\\": "\\\\", '"': '\\"', "\n": "\\n", "\r": "\\r", "\t": "\\t"}.get(c, c) if ord(c) >= 32 or c in "\n\r\t" else '" + chr(%d) + "' % ord(c) for c in s) + '"'
 def V(v):
@@ -32,7 +34,7 @@ for f in sorted(x for x in os.listdir(rf) if x.endswith(".csv")):
     if rows: cases.append(("roundtrip", f, "csv_rows(csv_text(%s))" % V(rows), rows))
 prog = "use csv\nuse json\n" + "".join('print(try { to_json(%s) } catch e { "ERR " + e.message })\nprint("@@")\n' % e for _, _, e, _ in cases)
 with tempfile.NamedTemporaryFile("w", suffix=".warp", delete=False, encoding="utf-8") as fh: fh.write(prog)
-outs = [o.strip("\n") for o in subprocess.run(["warp", fh.name], capture_output=True, text=True, errors="replace").stdout.split("@@\n")]
+outs = [o.strip("\n") for o in subprocess.run([*WARP, fh.name], capture_output=True, text=True, errors="replace").stdout.split("@@\n")]
 tot, ok, fails = collections.Counter(), collections.Counter(), []
 for i, (g, name, e, want) in enumerate(cases):
     o = outs[i] if i < len(outs) else "CRASH"

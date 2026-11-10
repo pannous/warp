@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # a call with an argument count its function does not take is the program's error naming the call the function takes,
 # never "outside the core" or an unknown name (card bad-error-message, samples/sound/harmony.warp's `beat 1 1/2`).
-# Run it with bash test/errors/test_argument_count.sh; the warp is WARP (default the warp on PATH), its lib/ WARP_LIB
+# Run it with bash test/errors/test_argument_count.sh; the warp is WARP (default the warp on PATH), a tree's WARP=<tree>/data/gate/warp
 warp=${WARP:-warp}
 export WARP_WINDOW=0
 failures=0

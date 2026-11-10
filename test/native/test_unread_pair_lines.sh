@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # A pairs line that reads as no case, an unescaped ' opening a text over the next lines, is a failure naming its line,
 # never silently dropped with the lines it swallows (card core-pairs-quote-drop). Run it with
-# bash test/native/test_unread_pair_lines.sh; the warp under test is WARP (default the warp on PATH), its compiler from
-# WARP_LIB as usual
+# bash test/native/test_unread_pair_lines.sh; the warp under test is WARP (default the warp on PATH), a tree's
+# WARP=<tree>/data/gate/warp
 warp=${WARP:-warp}
 export WARP_WINDOW=0
 cases=$(cd "$(dirname "$0")/../.." && pwd)/data/unread-pairs

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # decision literal-targets: a value where a variable changes, `1 ++ 3`, `1 = 2`, `"a"++`, is refused with a fix naming
 # its readings, never guessed. Run it with bash test/errors/test_literal_targets.sh; the warp is WARP (default the
-# warp on PATH), its lib/ WARP_LIB as usual
+# warp on PATH), a tree's WARP=<tree>/data/gate/warp
 warp=${WARP:-warp}
 export WARP_WINDOW=0
 failures=0

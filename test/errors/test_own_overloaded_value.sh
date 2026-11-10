@@ -2,7 +2,7 @@
 # A program's own definitions of a library word, by arity (`twice(x)`, `twice(x, y)` beside lib's twice), are one
 # overload set of the program's: each call takes the one of its arity, and the name as a value is refused as any
 # overloaded name is. Run it with bash test/errors/test_own_overloaded_value.sh; the warp under test is WARP (default
-# the warp on PATH), its compiler from WARP_LIB as usual
+# the warp on PATH), a tree's WARP=<tree>/data/gate/warp
 warp=${WARP:-warp}
 export WARP_WINDOW=0
 status=0

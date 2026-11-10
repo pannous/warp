@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # A value that does not fit a declared variable is reported where it is assigned, not at the declaration:
 # `x: int = 2; x = 2.5` names 1:13 (card int-reports). Run it with bash test/errors/test_int_report_place.sh; the warp
-# under test is WARP (default the warp on PATH), its compiler from WARP_LIB as usual
+# under test is WARP (default the warp on PATH), a tree's WARP=<tree>/data/gate/warp
 warp=${WARP:-warp}
 export WARP_WINDOW=0
 said=$("$warp" 'x: int = 2; x = 2.5' 2>&1 | tail -1)

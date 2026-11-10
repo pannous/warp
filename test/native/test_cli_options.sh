@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # the native warp's options before or after its command word (wiki/cli.md, wiki/warning.md: `--no-hints`), and
 # `warp version` saying when it was built with no PATH (no `date` to run). Run it with
-# bash test/native/test_cli_options.sh; the warp that builds it is WARP (default the warp on PATH), the native warp's
-# lib/ WARP_LIB as usual
+# bash test/native/test_cli_options.sh; the warp that builds it is WARP (default the warp on PATH); a tree's:
+# WARP=<tree>/data/gate/warp
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 warp=${WARP:-warp}
 export WARP_WINDOW=0
-unset WARP_HINTS
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
 failures=0

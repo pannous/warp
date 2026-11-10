@@ -3,7 +3,7 @@
 # headless twice, as its WGSL shader and, with `paint_on_gpu = no`, as warp code on the CPU, and the two pictures agree pixel
 # by pixel (within f32 rounding). A form the shader can't say is refused by name, so the GPU run paints nothing and the
 # case fails. Run it with bash test/gpu/test_gpu_matches_cpu.sh [name…]; the warp under test is WARP (default the warp
-# on PATH), its compiler from WARP_LIB as usual. Needs a GPU (wgpu) and python3.
+# on PATH), a tree's WARP=<tree>/data/gate/warp. Needs a GPU (wgpu) and python3.
 warp=${WARP:-warp}
 export WARP_WINDOW=0
 # the most a channel (of 255) may differ, and the share of pixels allowed to: f32 against f64 at an edge

@@ -5,7 +5,7 @@ tree=$(cd "${1:-$(dirname "$0")/../..}" && pwd)
 failed=0
 for want in "$tree"/test/modules/module_samples/*.txt; do
 	name=$(basename "$want" .txt)
-	got=$(cd "$tree" && WARP_LIB=$tree/lib WARP_WINDOW=0 timeout 120 "${WARP:-warp}" "samples/modules/$name.warp" 2>/dev/null | grep -v 'alternate stack')
+	got=$(cd "$tree" && WARP_WINDOW=0 timeout 120 "${WARP:-warp}" --lib "$tree/lib" "samples/modules/$name.warp" 2>/dev/null | grep -v 'alternate stack')
 	if [ "$got" == "$(cat "$want")" ]; then echo "ok   samples/modules/$name.warp"; else echo "FAIL samples/modules/$name.warp"; diff <(echo "$got") "$want" | head -20; failed=1; fi
 done
 exit $failed

@@ -2,7 +2,7 @@
 # A runtime error inside a library's function names the program's line that called it, never a line of the library
 # under the program's name (card wasm-trap: samples/sound/arrangement.warp failed "at arrangement.warp:34:56", a line
 # of lib/timers.warp). Run it with bash test/errors/test_library_trap_place.sh; the warp under test is WARP (default
-# the warp on PATH), its compiler from WARP_LIB as usual
+# the warp on PATH), a tree's WARP=<tree>/data/gate/warp
 warp=${WARP:-warp}
 export WARP_WINDOW=0
 stage=$(mktemp -d) || exit 1

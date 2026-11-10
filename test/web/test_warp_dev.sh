@@ -2,7 +2,7 @@
 # `warp dev page.warp port` (card dev-page) serves the page's site with web/playground/dev.js in it and its state at
 # /warp-dev/state: a change to the page is the next version, a failing build its error while the last good build
 # serves on. Headless: it opens no browser. Run it with bash test/web/test_warp_dev.sh; the warp under test is WARP
-# (default the warp on PATH), its compiler from WARP_LIB as usual
+# (default the warp on PATH), a tree's WARP=<tree>/data/gate/warp
 warp=${WARP:-warp}
 export WARP_WINDOW=0
 PORT=${WARP_DEV_TEST_PORT:-8791}

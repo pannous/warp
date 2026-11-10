@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # a whole number known when compiling that misfits an int, i64, warns where it enters an int place; a value known only
 # at run time, or one that fits, stays silent (extensions/int_misfits.warp, night decision int-wrap-declarations). Run
-# it with bash test/native/test_int_misfits.sh; the warp is WARP (default the warp on PATH), its lib/ WARP_LIB as usual
+# it with bash test/native/test_int_misfits.sh; the warp is WARP (default the warp on PATH), a tree's WARP=<tree>/data/gate/warp
 warp=${WARP:-warp}
 export WARP_WINDOW=0
-unset WARP_HINTS
 failures=0
 
 check() { # check <what> <got> <expected>
