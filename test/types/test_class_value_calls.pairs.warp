@@ -4,3 +4,6 @@
 'class P{n: int}; class Q{n: int}; k = Q; k(5)'	Q{n: 5}
 'class P{n: int; m: int = 7}; build(c: function) := c(1); build(P).m'	7
 'apply(g: function, v) := g(v); apply(x => x + 1, 4)'	5
+# each count of values given: the fields past them take their defaults, a set field and an extra one read back (card each-wasm)
+'class P{x: int; y: int = 7; s: text = "p"}; f = P; [f(1).y, f(1, 2).y, f(1, 2, "q").s]'	[7, 2, 'q']
+'class P{x: int; y: int = 7}; f = P; p = f(3); p.y = 5; p["x"] = 4; [p.x, p.y, p.keys]'	[4, 5, ['x', 'y']]
