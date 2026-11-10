@@ -1,15 +1,26 @@
 # When a program links big_numbers, the runtime module of powers, `x as rational` and long decimals
-# (extensions/big_numbers/big_numbers.warp, card runtime-bridge-slots): its code, comments left out, writes a power,
+# (extensions/big_numbers/big_numbers.warp, card runtime-bridge-slots): its code, comments left out, spells a power,
 # a cube root, rational or a decimal past 18 places. Read from the text, so it may link the module for a `^` that
 # never runs, but never misses one
 BIG_NUMBERS_MODULE = "big_numbers"
-POWER_SPELLINGS = ["^", "**", "cbrt", "∛", "rational"]
+# the power's row in lib/aliases.warp, whose word names a class's power method (`power(o) := …`, extensions/class_methods)
+POWER_WORD = "power"
+POWER_OPERATOR = "^"
+ROOT_AND_RATIO_SPELLINGS = ["cbrt", "∛", "rational"]
 # a decimal past this many places is an exact ratio of a big denominator (core/emitter/literals.warp big_decimal)
 DECIMAL_PLACES_HELD = 18
 
 big_number_uses(source: text, tree: Node, folder: text = "."): list := {
 	code = uncommented(source)
-	if POWER_SPELLINGS.any(spelling => code.contains(spelling)) or has_long_decimal(code) then [BIG_NUMBERS_MODULE] else []
+	if big_number_spellings().any(spelling => code.contains(spelling)) or has_long_decimal(code) then [BIG_NUMBERS_MODULE] else []
+}
+# every spelling of the power, as the alias table gives them (`**`, `power`), a superscript (`x²`), and the cube root's
+# and `as rational`'s
+big_number_spellings(): list := {
+	tables = alias_spellings()
+	symbols = tables.operator_symbols.filter(pair => pair#2 == POWER_OPERATOR).map(pair => pair#1)
+	words = tables.canonical.keys.filter(spelling => tables.canonical[spelling] == POWER_WORD)
+	[POWER_OPERATOR, POWER_WORD] + symbols + words + SUPERSCRIPT_DIGITS.chars() + ROOT_AND_RATIO_SPELLINGS
 }
 # whether a `.` is followed by more digits than a decimal holds exactly in 64 bits
 has_long_decimal(code: text): bool := {
