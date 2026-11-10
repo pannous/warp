@@ -209,7 +209,9 @@ function findFiles(folder, pattern) {
 	return [...new Set(below.filter(path => outsideHidden(path) && shown(path.slice(path.lastIndexOf("/") + 1))))].sort().map(path => asFolder(plainPath(folder)) + path);
 }
 
-// the shell's words on the page's files (lib/shell.warp, src/modules/std_adapters.rs): folders exist by the files in them
+// the shell's words on the page's files (lib/shell.warp, src/modules/std_adapters.rs): folders exist by the files in them,
+// and a folder made empty (mkdir, lib/file.warp temp_dir) among the run's made ones, which WASI lists (driver.js programFiles)
+const madeFolder = path => programFiles.made.add(filePath(path).replace(/\/+$/, ""));
 // "~" itself (wasi.js HOME_DIRECTORY), there before the page wrote a file into it
 const isHomeFolder = path => plainPath(path).replace(/\/+$/, "") === HOME_DIRECTORY;
 const isWrittenFolder = folder => [...writtenFiles.keys()].some(path => path.startsWith(plainPath(folder).replace(/\/?$/, "/")));
@@ -526,13 +528,13 @@ addHostPart({
 			// a list of ints 0 to 255, like src/modules/std_adapters.rs bytes_of
 			write_bytes: (path, bytes) => { keepWritten(path, Uint8Array.from(bytes, byteOf)); return null; },
 			read_bytes: path => Array.from(readBytes(path)),
-			exists: path => writtenFiles.has(filePath(path)) || isHomeFolder(path) || servedFileExists(path),
+			exists: path => writtenFiles.has(filePath(path)) || programFiles.made.has(filePath(path).replace(/\/+$/, "")) || isHomeFolder(path) || servedFileExists(path),
 			list: folder => {
 				const prefix = filePath(folder).replace(/\/?$/, "/");
 				return [...writtenFiles.keys()].filter(path => path.startsWith(prefix) && !path.slice(prefix.length).includes("/")).map(path => path.slice(prefix.length)).sort();
 			},
 			glob,
-			mkdir: () => null,
+			mkdir: path => (madeFolder(path), null),
 			copy: (from, to) => { keepWritten(intoFolder(from, to), writtenOrRead(from)); return null; },
 			move: (from, to) => { keepWritten(intoFolder(from, to), writtenOrRead(from)); return forgetWritten(from); },
 			touch: path => { if (!writtenFiles.has(filePath(path))) keepWritten(path, ""); return null; },
