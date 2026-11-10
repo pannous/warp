@@ -121,7 +121,7 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 
 ## Types and annotations
 
-- type-text (also: type-print, time-word's type clause, type-result-shown): a type value is `class int` in every text form; `type(int)` is class type; every type value prints `class X`, which reads back as a reference (`type(3)` → class nat); warp test reads `class X` back as the type.
+- type-text (also: type-print, time-word's type clause, type-result-shown; revised by real-type-display): a type value shows by its name in every text form (`type(π)` → real, `type(now)` → Instant, a class as declared); warp test prints it as its quoted name.
 - unknown-type: an unknown declared type is an error with the near type as fix.
 - return-as (also: union-return): return types are `def f(x) as int or text`; `->` works with a hint; no `returns`.
 - empty-field: ø needs `?` everywhere (`class Tree{left: Tree}` errs, fix `left: Tree?`).
