@@ -142,7 +142,9 @@ linked_libraries(source: text): list := {
 	# module written links those it uses, never itself
 	# (the prelude too, every program's and every module's, so a run holds one instance of its words and globals: signals'
 	# listen and the program's unlisten edit the same event_listeners)
-	names = (["prelude"] + used_modules(written_source(source))).filter(name => name != module_written)
+	# (and those it uses unwritten: a module's power links big_numbers, with_implicit_uses)
+	used = used_modules(written_source(source))
+	names = (["prelude"] + used + implicitly_used.filter(name => name not in used)).filter(name => name != module_written)
 	timed("linking from " + folder + ": " + names.join(", "))
 	dependencies_first(images_of(names, folder))
 }
