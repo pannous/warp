@@ -26,13 +26,9 @@ base=$(git -C "$tree" merge-base origin/main HEAD) || exit 2
 "$scripts/repeated-code.sh" "$tree" || exit 1
 changed=$({ git -C "$tree" diff --name-only "$base" HEAD; git -C "$tree" diff --name-only HEAD; } | sort -u)
 baked=$(echo "$changed" | grep -E "$BAKED" | grep -v '^core/native/')  # the native warp is no compiler input (compiler-inputs.sh)
-# whether it changes a top-level line of a lib/ module, one that may add, drop or rename a word other modules reach: a
-# changed line at column 0 that is no comment (a body line is indented; a comment, sample or test edit changes none)
+# the lib/ modules the branch changed: the prebuilt lib/modules/*.wasm run in place of their source, so any edit of one
+# (a body line too, card smoke-prebuild-body) needs them built anew before a probe sees it
 changed_modules() { echo "$changed" | grep -E '^lib/(host/)?[A-Za-z_0-9]+\.warp$'; }
-changes_module_words() {
-	local modules=$(changed_modules)
-	[ -n "$modules" ] && git -C "$tree" diff -U0 "$base" -- $modules | grep -vE '^(\+\+\+|---) ' | grep -qE '^[-+][^[:space:]#]'
-}
 # a function a lib module defines anew at its top level that another lib file defines too: every call of the word may
 # now reach the other definition (pattern-parameters' find(value: any, p: data) in text.warp made find("hello", "l")
 # ø in every program, card smoke-lib-shadow; the choice itself is card lib-module). Said loudly with the test files
@@ -66,10 +62,9 @@ way=$(echo "$built" | tail -1)
 # modules are built anew of this lib/ and taken, so a change that breaks a module's prebuild fails here (card
 # smoke-misses-prebuild: units.warp broke time.wasm past every smoke). All of them, in one run: a module reaches
 # others by their words too (time reaches units in no use line and no signature), and one run is cheaper than a run
-# per module, whose start dominates. Only for a change of a module's top-level lines (night decision
-# smoke-prebuilds-modules: about 2.5-5.5 min more under load; a changed body still breaks only its own module's prebuild,
-# which the smoke then misses)
-if [ -z "$baked" ] && changes_module_words; then
+# per module, whose start dominates. For any change of a module's source (night decision smoke-prebuilds-modules:
+# about 2.5-5.5 min more under load; card smoke-prebuild-body: a body-only edit left the stale module in place)
+if [ -z "$baked" ] && [ -n "$(changed_modules)" ]; then
 	fresh=$tree/data/smoke-modules
 	rm -rf "$fresh" && mkdir -p "$fresh" || exit 1
 	made=$(cd "$tree" && WARP_LIB=$tree/lib WARP_NO_WINDOW=1 "$INSTALLED" "$tree/lib/warp.wasm" modules "$fresh" "$tree/lib/runtime.wasm" 2>&1) ||

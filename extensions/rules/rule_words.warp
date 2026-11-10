@@ -131,6 +131,10 @@ sleep_of(statement: Node): any := if is_call_named(statement, "sleep") and #stat
 # defines page_value(), its last expression again, which the page shows anew after each firing
 # (web/playground/driver.js); ø for any other program, one ending in a declaration or a listener, or one that has it
 page_value_word = "page_value"
+# the closure page_value reads the ending through
+page_reader_word = "page_value_read"
+# the parameters of a lambda of none, `() => …`, as the parser reads them
+no_parameters() := key_of(statements_in(plain_node(parsed("() => 0")))#1)
 # (`on message from "chat" {…}` is lib/channels.warp's message_listened by the time this reads it)
 # the calls registering a listener, each giving its handle (notes/events_plan.md "Cancellation and lifetime")
 registering_words = ["timer_every", "timer_at", "listen", "variable_listen", "frame_listened", "exit_listened", "message_listened"]
@@ -227,8 +231,13 @@ page_valued(program: Node): any := {
 	# (a write, `x = 3` once signaled notifies its listeners, or an output, `print "done"`, is no value to read again:
 	# run again it would write or print anew)
 	if is_declaration(last) or listens(last) or is_test_line(last) or nodes_in(last).any(writes) or outputs(last) { return ø }
-	# (a value of any kind, as the page reads it: a text's too, never its bare bytes)
-	separated(bracketed(statements + [Key(Key(call_of(page_value_word, []), Op.Colon, symbol("any")), Op.Define, last)], ""), ";")
+	# (a value of any kind, as the page reads it: a text's too, never its bare bytes; its call stays the program's
+	# ending, `n = 1; on frame { n = 2 }; n` is 1, card program-event). The ending is read through a closure, which sees
+	# main's typed variables too (`level: int = 0`), as a definition does not (card level-int-unknown)
+	at = ending.last()
+	reading = Key(symbol(page_reader_word), Op.Assign, Key(no_parameters(), Op.Arrow, last))
+	shown = Key(Key(call_of(page_value_word, []), Op.Colon, symbol("any")), Op.Define, statements_in(plain_node(parsed(page_reader_word + "()")))#1)
+	separated(bracketed(statements[0 ..< at] + [reading, shown] + statements[at + 1 ..] + [call_of(page_value_word, [])], ""), ";")
 }
 # the program ended by a call of the ending word, when a statement of it calls the starting word and none calls the
 # ending one yet: its last statement but a `use` (with_implicit_uses appends some) the ending's value, after it when

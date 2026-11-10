@@ -1,28 +1,47 @@
 # Int types as classes (decision int-types-are-classes): `type Color = int` is a cheap class of one int field whose
 # float() is its number, so `c as int` reads it, and its `format Color c as text`, ==, `is` and dispatch are a class's;
-# `x as Color` makes one, a written number through the type's conversion `n: int as Color := …`. A float type, `type
-# Angle = float`, keeps its mark (marks.warp) until it moves too (card cheap-classes-everywhere)
+# `x as Color` makes one, a written number through the type's conversion `n: int as Color := …`. A plain int fills a
+# Color place and `3 is Color` holds, as `3 as Color` would, also through an alias `type Shade = Color` (decision
+# int-fits-named-int). A float type, `type Angle = float`, keeps its mark (marks.warp) until it moves too (card
+# cheap-classes-everywhere)
 
 # the program with its int types classes, then the classes' formats among their members
 classed_definitions(program: Node): Node := formatted_definitions(int_classes(program))
 int_classes(program: Node): Node := {
 	statements = statements_in(program)
-	classes = {}
-	for statement in statements { if int_class_name(statement) != ø { classes[int_class_name(statement)] = yes } }
+	classes = int_classes_named(statements)
 	if #classes == 0 { return program }
 	converters = statements.map(statement => converted_type(statement, classes)).filter(name => name != ø)
 	statements_as(program, statements.flat_map(statement => int_class_statements(statement, classes, converters)))
 }
-# `type Color = int`: Color, else ø
+# each int class the statements declare and each alias reaching one, `type Years = Age` of `type Age = int`, written in
+# any order: name → its class
+int_classes_named(statements: list): map := {
+	classes = {}
+	for statement in statements { if int_class_name(statement) != ø { classes[int_class_name(statement)] = int_class_name(statement) } }
+	aliases = statements.map(type_alias_of).filter(alias => alias != ø and alias#1 not in classes)
+	grown = #classes > 0
+	while grown {
+		grown = no
+		for alias in aliases {
+			if alias#1 not in classes and alias#2 in classes { classes[alias#1] = classes[alias#2]; grown = yes }
+		}
+	}
+	classes
+}
+# `type Color = int`: Color, else ø; a type word's other spelling, the prelude's `type Int = int`, `type Long = int`,
+# stays that type (decision int-fits-named-int)
 int_class_name(statement: Node): text? := {
 	name = int_type_name(statement)
-	if name != ø and value_of(statement) == symbol("int") then name else ø
+	if name != ø and value_of(statement) == symbol("int") and not is_type_word(name) then name else ø
 }
-# the class and its making of a value, `made·Color(x)`, a Color as it is, a number as Color(x)
+# the class and its making of a value, `made·Color(x)`, a Color as it is, a number as Color(x); the conversion a place
+# takes an int by, the program's own `n: int as Color := …` (lib/color), else made·Color's, an alias's place too (the
+# emitter reads `type Shade = Color` as Color)
 int_class_statements(statement: Node, classes: map, converters: list): list := {
 	name = int_class_name(statement)
-	if name != ø { return int_class_declared(name) }
-	if converted_type(statement, classes) != ø { return [converter_defined(statement, classes, n => int_class_made(n, classes, []))] }
+	if name != ø { return int_class_declared(name) + (if name in converters then [] else [int_conversion(name, made_word(name))]) }
+	if converted_type(statement, classes) != ø { return [Key(key_of(statement), Op.Define, bottom_up(value_of(statement), n => int_class_made(n, classes, [])))] }
 	[bottom_up(statement, n => int_class_made(n, classes, converters))]
 }
 made_word(type_name: text): text := "made" + name_joiner + type_name
@@ -30,9 +49,17 @@ int_class_declared(name: text): list := {
 	declared = statements_in(plain_node(parsed("class ${name} { value: int; float() := value }; made(x) := if x is ${name} then x else ${name}(x)")))
 	[declared#1, Key(renamed_target(key_of(declared#2), made_word(name)), Op.Define, value_of(declared#2))]
 }
-# `x as Color` as made·Color(x), a written number as the type's conversion gives it
+# `n: int as Color := maker(n)`, the conversion a Color place takes an int by
+int_conversion(type_name: text, maker: text): Node := {
+	n = symbol(conversion_parameter)
+	Key(Key(n, Op.Colon, Key(symbol("int"), Op.As, symbol(type_name))), Op.Define, call_of(maker, [n]))
+}
+conversion_parameter = "n"
+# `x as Color` as made·Color(x), a written number as the type's conversion gives it, also through an alias; `x is Color`
+# holds of an int too
 int_class_made(n: Node, classes: map, converters: list): Node := {
+	if is_key(n, Op.Is) and value_of(n) is symbol and name_of(value_of(n)) in classes { return Key(n, Op.Or, Key(key_of(n), Op.Is, symbol("int"))) }
 	if not (is_key(n, Op.As) and value_of(n) is symbol and name_of(value_of(n)) in classes) { return n }
-	name = name_of(value_of(n))
+	name = classes[name_of(value_of(n))]
 	if name in converters and key_of(n) is int then call_of(converter_word(name), [key_of(n)]) else call_of(made_word(name), [key_of(n)])
 }

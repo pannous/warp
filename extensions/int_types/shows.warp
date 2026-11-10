@@ -6,11 +6,16 @@
 MARKED_NUMBER_KINDS = {int: Kind.Int, float: Kind.Float}
 # `type Color = int`, `type Angle = float`: Color, Angle; ø for any other statement
 int_type_name(statement: Node): text? := {
-	if not is_key(statement, Op.Assign) or not (value_of(statement) is symbol) or name_of(value_of(statement)) not in MARKED_NUMBER_KINDS { return ø }
+	alias = type_alias_of(statement)
+	if alias != ø and alias#2 in MARKED_NUMBER_KINDS then alias#1 else ø
+}
+# `type Years = Age`: [Years, Age], the type declared and the one word it names; ø for any other statement
+type_alias_of(statement: Node): list? := {
+	if not is_key(statement, Op.Assign) or not (value_of(statement) is symbol) { return ø }
 	declared = key_of(statement)
 	if not (is_key(declared, Op.Colon) and key_of(declared) == opaque_symbol) { return ø }
 	view = value_of(declared)
-	if kind_of(view) == "type" and view#3 == ø then declared_type_name(view#2) else ø
+	if kind_of(view) == "type" and view#3 == ø then [declared_type_name(view#2), name_of(value_of(statement))] else ø
 }
 # each number type the statements declare, its marked kind: the number's Kind with the type's mark above it, the
 # marks numbered in order of declaration (int_types.warp marks the values, the emitter the values it holds unboxed)
