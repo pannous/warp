@@ -261,12 +261,14 @@ def possessive(source: text, at: int, n: int): bool {
 // `ø` is the empty value, never a name's start (an atom reads it before names)
 def is_name_start(c: text): bool := is_alpha(c) or (is_letter_beyond_ascii(c) and c != 'ø') or c == '_'
 
-// `π`, `σ`, `é`, `名`: a letter beyond ASCII names as a Latin one does, a cased one or one of
-// the CJK, kana and Hangul blocks
+// `π`, `σ`, `é`, `名`, `ℯ`: a letter beyond ASCII names as a Latin one does, a cased one, one of the CJK, kana and
+// Hangul blocks or a letterlike one (ℯ is lib/reals' constant, card euler-char-lexing)
 def is_letter_beyond_ascii(c: text): bool {
 	if c <= '~' { return false }
-	upper(c) != lower(c) or (c >= '\u{3040}' and c <= '\u{30ff}') or (c >= '\u{4e00}' and c <= '\u{9fff}') or (c >= '\u{ac00}' and c <= '\u{d7af}')
+	upper(c) != lower(c) or (c >= '\u{3040}' and c <= '\u{30ff}') or (c >= '\u{4e00}' and c <= '\u{9fff}') or (c >= '\u{ac00}' and c <= '\u{d7af}') or LETTERLIKE_LETTERS.contains(c)
 }
+// the letters of Unicode's letterlike symbols no case pairs (ⅈ is a glyph word, extensions/glyph_atoms.warp)
+LETTERLIKE_LETTERS = "ℂℇℊℋℌℍℎℏℐℑℒℓℕℙℚℛℜℝℤℨℬℭℯℰℱℳℴℹℼℽℾℿⅅⅆⅇⅉ"
 
 // `# note`, `#!`, `##`, `#use lib`: a comment; `#s`, `#a-1`, `#f(x)` count
 def hash_comment(source: text or list, at: int, n: int): bool {

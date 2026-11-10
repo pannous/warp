@@ -250,6 +250,28 @@ several_results(statements: list): map := {
 	}
 	without_keys(found, found.keys.filter(name => found[name] < 2))
 }
+# a name defined bare more than once, each with its result type, `sample: int := 7` beside `sample: text := "seven"`:
+# a function of no parameters of several results, `sample(): int := 7`, the type at its use choosing (card
+# duplicate-function-definitions); a single `x: T := e` stays as written
+result_heads(program: Node): Node := {
+	statements = statements_in(program)
+	names = statements.map(bare_result_name).filter(name => name != "")
+	several = names.filter(name => #names.filter(other => other == name) > 1)
+	if #several == 0 { return program }
+	statements_as(program, statements.map(statement => if bare_result_name(statement) in several then nullary_head(without_mark(statement)) else name_calls(statement, several)))
+}
+# n with each bare use of the names as their call, `sample` → `sample()`; a call written as one kept
+name_calls(n: Node, names: list): Node := {
+	if n is symbol and name_of(n) in names { return call_node(n, []) }
+	if is_call(n) and n#1 is symbol and name_of(n#1) in names { return call_node(n#1, items_of(n)[1 ..].map(item => name_calls(item, names))) }
+	children(n, child => name_calls(child, names))
+}
+# `name: T := e`'s name, else ""
+bare_result_name(statement: Node): text := {
+	plain = without_mark(statement)
+	if is_key(plain, Op.Define) and is_key(key_of(plain), Op.Colon) and key_of(key_of(plain)) is symbol and value_of(key_of(plain)) is symbol then name_of(key_of(key_of(plain))) else ""
+}
+nullary_head(definition: Node): Node := Key(Key(call_node(key_of(key_of(definition)), []), Op.Colon, value_of(key_of(definition))), Op.Define, value_of(definition))
 # the types of the program's `x: T = v`
 declared_types(program: Node): list := nodes_in(program).filter(n => is_key(n, Op.Assign) and is_key(key_of(n), Op.Colon) and key_of(key_of(n)) is symbol and value_of(key_of(n)) is symbol).map(n => name_of(value_of(key_of(n))))
 
@@ -509,4 +531,4 @@ forced_conversions(program: Node): Node := {
 	List(forced_functions(order, written, classes, patterns) + rewritten, Bracket.None, Separator.Newline)
 }
 
-conversions_extension = Extension{name: "conversions", passes: {"definition_heads": conversions}}
+conversions_extension = Extension{name: "conversions", passes_before: {"definition_heads": result_heads}, passes: {"definition_heads": conversions}}

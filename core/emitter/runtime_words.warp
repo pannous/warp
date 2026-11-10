@@ -21,7 +21,7 @@ def memory_instruction(body: Body, name: text): TypedCode {
 # a word runtime.warp's own functions call: theirs, even where the program defines a function of that name
 # (shapes.warp's keyed(op, left, right) is no intrinsic keyed(kind, left, right))
 def is_runtime_word(body: Body, name: text): bool {
-	body.intrinsics and (name in intrinsics or name in time_intrinsics or name in module.runtime)
+	body.intrinsics and (name in intrinsics or name in time_intrinsics or has_runtime_word(name))
 }
 # a call of a function of the program that takes its arguments, not of a runtime word: a call it can't take is a form
 # of the parser's or the lowering's of that name (`wasm f64.floor`, `try x`; emitter.warp compiling itself defines each)
@@ -360,10 +360,10 @@ def made_case(body: Body, arguments: list): TypedCode {
 	values = items_of(call)[1 ..].map(a => expression_code(body, a))
 	test = []
 	for i in 0..<#values {
-		test += condition(call_values(module.runtime[made_tests[made]], [values[i]]))
+		test += condition(call_values(runtime_word(made_tests[made]), [values[i]]))
 		if i > 0 { test += [op.i32_or] }
 	}
-	called = return_value(body, call_values(module.runtime[name_of(call#1)], values))
+	called = return_value(body, call_values(runtime_word(name_of(call#1)), values))
 	TypedCode(no_kind, test + [op.if, no_value] + called.code + [op.end])
 }
 # the code of a value of that kind (a case of kinds.warp Made), the program then making it
