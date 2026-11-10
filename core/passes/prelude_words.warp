@@ -223,11 +223,13 @@ names_within(n: Node, with_keys: bool): list := {
 		} else {
 			if with_keys and part is key { found[key_head(part)] = yes }
 			# a text's holes are code too: a slice is read before interpolation builds them (`"${f(x)}"` reaches f)
-			waiting += parts_within(part) + template_hole_codes(part).map(code => plain_node(parsed(code)))
+			waiting += parts_within(part).map(inner => free_part(part, inner, with_keys)) + template_hole_codes(part).map(code => plain_node(parsed(code)))
 		}
 	}
 	found.keys
 }
+# the part of an inner node that names words: a key of a map literal names nothing, `{random: […]}` reaches only its value
+free_part(outer: Node, inner: Node, with_keys: bool): Node := if not with_keys and is_map_literal(outer) and key_of(inner) is symbol then value_of(inner) else inner
 
 # the operator inside an element-wise one or a compound assignment, which a rule makes it into: `/!` of `x /!= 2`,
 # `max` of `x max= 5` (its library word), `*` of `.*=`
