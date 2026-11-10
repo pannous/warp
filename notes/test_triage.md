@@ -488,3 +488,15 @@ Groups batch 2 did not name (count, reason, one example, wiki pages holding the 
 | 1 | symbolic trig: sin(π/6) exactly 1/2 | `# triage-held 2026-11-06: symbolic real equalities (sin(π/6) == 1/2, ℯ^(ⅈπ) == -1, surds) ` (test/welcoming/test_footguns.pairs.warp:408) | – |
 | 1 | symbolic real equalities (sin(π/6) == 1/2, ℯ^(ⅈπ) == -1, surds) | `'sin(π/6) == 1/2'	true` (test/welcoming/test_footguns.pairs.warp:409) | Footguns.md |
 | 1 | renamed-params function equality (user hold) | `# is! 'fib(n) = n < 2 ? n : fib(n - 1) + fib(n - 2); fibo(m) = m < 2 ? m : fibo(m - 1) + f` (test/welcoming/test_footguns.warp:37) | – |
+
+## Batch 3 (card test-triage)
+
+Applied the Interviewer's batch 3. Restored: `!==` (green), `x be …` (red, card says-unknown), circa/approximately (red,
+card circa-approximately), `⅓x` (red, card fraction-literal-bug). Rewritten: `(1;2;3)` and `{1;2;3}` give 3; stored
+errors are declared `e: error? = error(…)` (errors-one-rule, green). Deleted: i64 wraparound, unknown names as 0 or
+data, modules that don't exist, assigning ℯ, s++ on a text, if as a call, matrix index notation, a block applied by
+brackets, mapping by extra arguments, `x as number = 9`, `for i=1..3;`, `$0`/`$1` lines, `def stop(): … after
+stopped`, rough_tolerance, text as bool, ¬ on ints (test_symbolism_object.pairs.warp had nothing left). Kept, by a wiki
+hit: the desk-invented loop heads, colon loops and filter loop heads (for.md:47 `for (it>2) in …`, iteration.md:59
+`each [1,2,3]: …`). Still open, with the user: the synonym words, wasp definition by space, typed declarations without
+a value, a return type after `as`, undo/redo, and/or as value operators, `n: int = true`, postfix type words.
