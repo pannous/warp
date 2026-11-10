@@ -1,0 +1,3 @@
+# a `for` over an instance of a linked module's class walks it by its next() (decision for-over-iterator)
+'use channels; ch = channel(); go { for i in 1 to 3 { ch.send(i) }; ch.close() }; total = 0; for v in ch { total += v }; total'	6
+'use channels; ch = channel(); ch.close(); n = 0; for v in ch { n += 1 }; n'	0

@@ -81,3 +81,24 @@ Records start with build-keeps; older store entries have only their one-line .in
   whose HEAD is origin/main with core unchanged.
 - The directories are write-once: a published file is never overwritten.
 - <store>/rebuilds.log gets one line per rebuild.sh hit or miss: time, tree, hash, result.
+
+## The store in short
+
+A compiler is built once per inputs hash, machine-wide, whether it builds or fails (ea5cb68f6b, card
+  build-failed-store): `scripts/rebuild.sh` asks the store /Volumes/Build/compilers/<hash>/ first and copies a hit in
+  seconds, whoever built it; while another tree builds the same hash (lock <store>/<hash>/warp.building, its pid) it
+  logs `waiting-for-<pid>` and takes that result. A failed build is kept there too (<hash>/warp.failed/: build.log,
+  the failing step, its half-built artifacts), and a request for that hash prints it at once: its last line names the
+  step (seed, stage-two, optimize, runtime, modules) and the log. Read that log, never rebuild to see an error; a
+  fixed source is a new hash and builds anew. `--force` builds the same hash again, from the failed step on, only
+  after a fix outside the sources (the warp binary, memory, disk). self-check's stage two is kept the same way
+  (<hash>/stage-two.passed or .failed/; `self-check.sh --rebuild` runs it again). So never copy compilers by hand,
+  never rebuild "to be sure", never use --force to get past a wait, and never kill another session's build.
+  Every build keeps its full record (<hash>/warp.record/: inputs and sources, build.log, CPU and memory, a function
+  profile; notes/compiler_rebuilds.md "Build records"): read a build's time and profile there, never build to measure. Every
+  hit, miss, wait and failure is a line of <store>/rebuilds.log.
+  Only core/**, extensions/** and the seed are a compiler's code (compiler-inputs.sh --code-files); lib/ is never
+  part of it. A lib/-only change compiles nothing: rebuild.sh takes the stored compiler of the same code
+  (<store>/code/<code hash>) and makes lib/'s runtime, modules and index anew (`miss-rebaking-<hash>`, about a
+  minute; decision lib-hash-rebake; a failed rebake is kept like a failed build, step rebake). So a library feature
+  costs no compiler build, a core one does.

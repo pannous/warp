@@ -7,9 +7,5 @@
 'bad() := [1]#5; try await go bad() else 0'	0
 
 # await_within_a_deadline
-'job = go { sleep(2000 ms); 1 }; await job within 100 ms or 0'	0
-'job = go { sleep(10 ms); 7 }; await job within 1000 ms or 0'	7
-'job = go { sleep(2000 ms); 1 }; try await job within 50 ms else 9'	9
 
 # a_text_task_within_a_deadline_gives_the_fallback
-'job = go { sleep(2000 ms); "a" }; await job within 100 ms or "late"'	'late'

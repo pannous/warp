@@ -15,8 +15,8 @@
 # test_declared_typed_arrays_keep_working
 'x : 100 int; count x'	100
 'x : 100 int; x#1'	0
-# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], numbers x =, x : 100 * int) :: 'pixel:int[100]; pixel#1=5; pixel#1'	5
-# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], numbers x =, x : 100 * int) :: 'pixel:int[100]; pixel.length'	100
+'pixel:int[100]; pixel#1=5; pixel#1'	5
+'pixel:int[100]; pixel.length'	100
 
 # test_bracketed_type_is_a_list_of_that_type
 'x:[number]=[1 2]; type(x)'	'list of number'
@@ -29,7 +29,7 @@
 'x:numbers=[1 2]; type(x)'	'list of number'
 
 # test_declaration_with_count_times_type
-# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], numbers x =, x : 100 * int) :: 'x : 100 * int; count x'	100
-# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], numbers x =, x : 100 * int) :: 'x : 100 * ints; count x'	100
-# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], numbers x =, x : 100 * int) :: 'x : 3 * char; count x'	3
-# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], numbers x =, x : 100 * int) :: 'x : 100 numbers; count x'	100
+'x : 100 * int; count x'	100
+'x : 100 * ints; count x'	100
+'x : 3 * char; count x'	3
+'x : 100 numbers; count x'	100

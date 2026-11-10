@@ -13,8 +13,8 @@ Typed values inside, a boxed $Node only at the edges. Where emitter.warp knows a
 | list | `(ref null $list)`, `$list = (struct (mut i32 length) (mut (ref $items)))`, `$items = (array (mut (ref null $Node)))` | a vector: `xs#i` O(1); items boxed |
 | any kind (a value of mixed branches, a list item, ø) | anyref holding a `$Node` | |
 
-Boxing (`boxed` in emitter.warp) makes a `$Node(kind i64, data anyref, value ref null $Node)` (CLAUDE.md
-"Serialization"): an int or yes/no in an `$i64box`, a float in an `$f64box`, a character as an i31, a text with data =
+Boxing (`boxed` in emitter.warp) makes a `$Node(kind i64, data anyref, value ref null $Node)` ("Node serialization"
+below): an int or yes/no in an `$i64box`, a float in an `$f64box`, a character as an i31, a text with data =
 its `$text`, a list with data = its `$list`. A value is boxed only where its kind is not known statically: a list item,
 a value of branches of different kinds, an `any` parameter, and main's result unless it is a number. Texts are GC
 arrays; linear memory holds one only at the host/FFI edge.
@@ -42,3 +42,66 @@ A word whose code can only be written once the module's closures and classes are
 instance words of `late_words`) is made at its first call with a placeholder body and filled in afterwards
 (`made_late`, `late_code` in core/emitter/closures.warp); behind runtime.wasm such a word is runtime.wasm's, written
 there once.
+
+## Node serialization
+
+=== Node Serialization Workflow (Current Spec) ===
+node.warp via emitter.warp in notes/self_hosting.md "Value layout"
+
+1. Core GC types emitted to WASM:
+
+   (type $Text (array (mut i8)))      ;; type 0: a text's UTF-8 bytes
+
+   (type $Node (struct
+     (field $kind i64)            ;; Kind tag + extra info in high bits
+     (field $data anyref)         ;; payload (boxed number, $Text, i31ref, list or node)
+     (field $value (ref null $Node)))) ;; secondary payload (node or null)
+
+   (type $i64box (struct (field $value i64)))
+   (type $f64box (struct (field $value f64)))
+
+   Text literals come from one passive data segment via array.new_data 
+   Linear memory holds a text only at the host/FFI edge, or in optimized algorithms, as 
+   (type $String (;0;) (struct (field $ptr i32) (field $len i32))) 
+   <!-- `text_address` copies a $Text there for a host
+   or C call, `text_from_memory` copies host bytes into a new $Text (`new_text(ptr, len)` makes a Text node so).
+   Lists held as arrays: `$IntList`, `$FloatList`, `$NodeList` (length, items array), maps `$NodeMap`; a program that
+   quotes code gets `$MetaNode`, a $Node subtype with line, column and comment. -->
+
+2. Kind encoding:
+
+   - Lower 8 bits are `Kind` (Empty=0, Int=1, Float=2, Text=3, Codepoint=4, Symbol=5, Key=6, Block=7, List=8, Data=9, Meta=10, Error=11, TypeDef=12, ... Time=18)
+   - For Key and List, extra info is stored in the high bits:
+     - key: `kind = (op_info << 8) | Kind::Key`
+     - list: `kind = (bracket_info << 8) | Kind::List`
+       bracket_info: Curly=0, Square=1, Round=2, Less=3, Other=4, None=5
+
+3. Data/value payload mapping:
+
+   - Empty: `data = null`, `value = null`
+   - Int: `data = ref $i64box(value)`, `value = null`
+   - Float: `data = ref $f64box(value)`, `value = null`
+   - Codepoint: `data = i31ref(char)`, `value = null`
+   - Text/Symbol: `data = ref $Text`, `value = null`
+   - Key: `data = left node`, `value = right node`
+   - List/Block: `data = $list` vector (length, items array)
+   - TypeDef: `data = name node`, `value = body node`
+   - True/False: a bool, the Int 1/0 marked BOOL_INFO above the kind bits (kind = BOOL_KIND); prints yes/no (wiki/bool.md)
+   - Meta is dropped during emission; Error currently emits the inner node
+   - Data nodes currently serialize as `Symbol(type_name)` in the emitter
+
+4. Round-trip:
+
+   code -> parse -> Node -> wasm emitter -> WASM GC object -> Node -> value
+
+
+## complete roundtrip test
+
+is! <code> <value>   in lib/prelude.warp
+
+is! invokes the whole machinery, to parse, analyze, emit to wasm, read back, run / convert to Node again
+
+is!("3+3",6); => parse("3+3") -> Node -> wasm_node -> test.wasm -> wasm_node -> Node == 6
+```
+is!("def fib:=it<1 ? 1 : fib(it-1) + fib it-2; fib(10)",55); 
+```

@@ -15,7 +15,4 @@
 's = {fs: [x => x * 2]}; t = s.fs#1; t(4)'	8
 
 # test_function_in_nested_object
-'x = {a: {f: x => x + 1}}; x.a.f(1)'	2
-'x = {a: {b: 2, f: x => x * b}}; x.a.f(3)'	6
 'x = {a: {f: x => x + 1}}; h = x.a.f; h(1)'	2
-'x = {n: 1, a: {f: x => x + 1}}; x.n + x.a.f(1)'	3

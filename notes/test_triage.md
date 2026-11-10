@@ -201,7 +201,8 @@ Groups:
 - Match and switch: alternatives, tuples, list and class patterns with `..`, text patterns `"v" + n: digits`, ranges. About 85 lines.
 - Stores: `storage`, `local`, `session`, `database`, `stored x default …`, values across runs. About 50 lines.
 - Quasi-quotes and code patterns: `data($a + 1)` splices, `$rest...`, `replace data(…) with …`, tree find/replace. About 45 lines.
-- Run-time blocks: `interpret`, `x!` charging a quoted block, `x : a+b` uncharged blocks. About 30 lines.
+- Run-time blocks (decision blocks-run-by-call): a block runs by `x()`, a data value by `interpret x`, `x!` only
+  unwraps; `x : a+b` uncharged blocks. About 30 lines.
 - `try … else` over traps: list index, division, named traps, stack overflow, host failure, `break`/`continue` inside try. 28 lines.
 - One-offs: `on every … at 9:00` timers, `undo x`/`redo x`, `for (even number) in`, `[x for x in xs where …]`, Rust `let mut`/`1..=5`/`loop`,
   `int? i`, `def f(x) as int or error`, pattern schemas `{port: int} is …`, soft `test`/`check` blocks, `exit`, the `is!` word in programs.
@@ -500,3 +501,74 @@ stopped`, rough_tolerance, text as bool, ¬ on ints (test_symbolism_object.pairs
 hit: the desk-invented loop heads, colon loops and filter loop heads (for.md:47 `for (it>2) in …`, iteration.md:59
 `each [1,2,3]: …`). Still open, with the user: the synonym words, wasp definition by space, typed declarations without
 a value, a return type after `as`, undo/redo, and/or as value operators, `n: int = true`, postfix type words.
+
+## Batch 4 (card test-triage)
+
+The user's decisions synonyms-are-aliases, definition-by-space, typed-array-declaration and result-type-as: their held
+lines are restored (139), rough_tolerance is back (operator.md:41). The synonyms are prelude alias lines
+(lib/prelude.warp: description, returns, was, previous, invocable, runnable, forEach, for_each, foreach, integer,
+string, unit, nil), not lib/aliases.warp entries: that table aliases operator and keyword spellings and changed none of
+the lines. A prelude alias reaches only a library call (`integer(3.7)`), a program's own alias line every use, so
+101 restored lines stay red, each group carded: prelude-alias-line (the mechanism, a core change for the Interviewer),
+square-add1-twice (definition by space), array-type-sizing, def-text (result types after `as`), maybe-int-refused, type-unit, twice-representation-fs,
+string-concat-warn, display-density, the reflection words (card reflection-dot-forms: p.fields
+itself is not built). Held still, outside the decisions' wording: `exact == real`, `numbers x = [1 2]`,
+`def f(x:int) -> int or text`, `f(x) := x + it`, `require math` with `effects of main`; `add1 x:=$0+1` deleted ($0).
+
+## Update after the sample fixes (run 16:53 at 99d8f7f7a1: 1422 of 15481 failed, 2438 files)
+
+The next run was still going, so this counts the 16:53 results: 1024 errors, 398
+wrong values. The clusters below come from the error text, grouped (script: the error without position and `(no owner)`). Cards
+landed since that run: unknown-name-test, package-tests-registry (test_packages:4 green), library-typed-outcome.
+
+Biggest clusters by cause (new or grown against the earlier triage in **bold**):
+
+| cases | cluster (error) | main files | card |
+|--|--|--|--|
+| 398 | wrong value, no common error: regex_malformed 9, code_type 8, one_dispatch 8, quasi_quote 6, big_int_bits 6, hyperreals 6, meta_attributes 6 | judge per file | (per file) |
+| 40 | wasm trap: cast failure | test_nearest 12, sound_spectrum 4, try_list_index 3, nearest_default 3 | cast-failure-traps |
+| 21 | `text_with_at` (text element write) | test_string 12, footguns 6, test_wasm 3 | triage-text-element-write |
+| 20 | a function value in `.` (charged fields) | charged_fields 5, object_functions 4, reflection_mode 4, on_error_of_function 3 | charged-field-values |
+| 20 | `x!` / `interpret(…)`: running a node as code (14 + 6 unknown interpret) | run_time_blocks, run_time_block_cache, object_blocks | fails-outside |
+| **18** | **not a list: `map reverse [[1 2] [3 4]]`, a library word mapped** | map_library_word_first, parameter_scope 3, path_after_function 3, property_definitions 3 | sorted-map-library |
+| **12** | **not a function: `twice(body: block) := { body!; body! }`, a block parameter run** | block_parameter_calls, block_parameters, function_objects, count_shadowed | block-values-forced |
+| **12** | **unknown name a: a lambda's own parameter or a sibling field, `(a: int, b = 1): int => a + b`, `{a: 3, f: x => x * a}`** | field_function_values, parameter_patterns, block_data_paths, arrow_defaults_and_types | lambda-own (new) |
+| 12 | operator . on int (`it` in nested blocks) + 11 unknown name it | nested_it 4, returned_blocks 4, versions 3, glued_method_block 3 | nested-it-blocks |
+| **12** | **`xs.insert(4, at: 0)`: insert·list·int·any called with 3 arguments** (was 5) | welcoming_sugar 5, position_meets_brackets 2, list_insert | library-labelled-args |
+| 11 | a variable declared fast | fast_scope 7, fast_int 3 | fast-declaration |
+| 10 | call stack exhausted | try_stack_overflow 3, numeric 2 | add-stack-overflow |
+| 10 | invalid number (`format 2.2 as int` pick) | argument_cast 4, exponent_texts 3 | argument-cast-overload |
+| 13 | `session[…]` / `use storage` words | test_storage, store_values | session-storage-words |
+| 10 | `•/test/fixtures/wasm/*.wasm`: no folder above . holds .git | wasm_modules, test_wasm, component_short_use | wasm-fixture-root |
+| **6** | **`sorted(xs, >)`, `.sort(by: -it)`: sorted_node called with 2 arguments** | relational_arms, it_arguments, named_function_argument, operator_arguments | sorted-comparator-syntax (new) |
+| **6** | **no case for value = 0: `match v { Circle => …; Square => … }` over classes** | class_destructuring 3, match_type_arms, structural_patterns | tree-patterns? |
+
+Unchanged since the earlier triage: ∞ 7, divide by zero 7, `x as text?` 6, Color cases 6, calendar/clock durations 6,
+`time` defined twice 6, callable parameter 6, tuple returns 5, mixins 5, Array.from 5, display 5.
+
+## numbers n–z (cloud worker numbers-n-z-lib, 2026-11-10, main 51b1e68)
+
+`warp test test/numbers/test_[n-z]*`: 61 of 627 ✗. No cluster has its cause in lib/ alone, so nothing changed.
+
+| lines | cluster | root cause | smallest shape |
+|---|---|---|---|
+| 16 | unit spellings as literals: `3 kilometers`, `str(3 meter)`, `1 Gs`, `1000 µg`, `1 dam`, `1 kK`, `1 Mg`, `1 mph`, `2dot`, `3 feet in inches` (unit_literals 4-6 11, unit_prefix_lines 4-6 9 13, unit_definitions 10 22 24 35, pixel_unit 10) | a unit word is a name lib/units declares as a `Unit` (rule_words is_unit_word); lib/unit_names reads every spelling, but only at run time (`quantity(3, "kilometers")` works). Declaring each spelling would repeat unit_names' tables | the rule engine reads an unbound word after an amount as a unit when unit_names knows its spelling (a module text word callable in a `where`), card headless-module-rules; or `$u is unbound` → `quantity($e, $name)` with a run-time refusal (question below) |
+| 8 | a program variable named like a unit: `m = 5; str(3m)` "3m", `s = 3; str(0.5s)`, `h = 2 inch; 3 km/h`, `s = 2; 9.8 m/s²` (unit_beside_variable 4 + .warp 4, units_after_numbers 4 7 16 20, units_arithmetic 4) | core/passes/rewrites.warp typed_as: a name the program binds hides the library's Unit, so glued `3m` multiplies the program's m; the glued literal is not told apart from `3*m` | the parser marks a glued number+word, and `$e * $u` of a glued one takes the library's unit |
+| 7 | a spaced unit inside `if … :`, `if … {` or a chain of comparisons: `x = 2 km; if x > 1500 m : …` (DimensionError 1500 plain), `2 h + 30 min == 150 min`, `now < 24h`, `now >= 0 ms and now < 1 day`, `if now < 0 h` ("0 what?") (time_of_day 4 5 6 14, unit_literals 9 10, unit_word_keys 13) | extensions/rules/rule_words.warp unit_bound walks only unit_binding_ops; the `if` head and a second unit in one comparison (card spaced-unit-comparison) leave the unit off its amount | unit_bound through the condition of if and through both sides of ==/< |
+| 5 | `nearest` of an exact real (nearest 4, nearest.warp 4 5, nearest_default 8 9) | lib/prelude nearest's steps turn √2 into floats after the first (`1/(rest - a)` of a real is a float); limit 0 of an irrational loops (Error "") | lib-only once the tests agree: x to enough exact digits (lib/reals decimal_digits' scaled total), limit 0 of a non-float irrational its float's. **Conflict**: nearest:4 wants 941664/665857 (exact √2) but the passing nearest:21 `x = sqrt(2); nearest(x, rational) == 665857/470832` wants the float's; `x = sqrt(2)` is the exact √2 now, so fixing 4 turns 21 ✓ → ✗ |
+| 3 | `type(3px)` "pixels", `type(2 m²)` "area", `type(5 Hz)` "frequency" (pixel_unit 5, unit_definitions 18 19) | type() shows the class, Pixels / Area / Frequency | question: lower-case dimension words canonical? |
+| 2 | `-0.0/0.0`, `(0.0/0.0) * -1.0` divide by zero (nan_observed 4 5) | core float division refuses 0.0/0.0 | core |
+| 2 | `1 << 100`, `(2^100) >> 98` (shift_operators 18 19) | shifts are i64 | core big_numbers |
+| 3 | `unit furlong := 201.168m; 1km as furlong` (operator as on int), `14 * 24 h` refused, `x = 2 hand; x as cm` (unit_definitions 29, .warp 4 9 15) | card module-rule-unnamed (lib/units comment); `14 * 24 h` is the intended unit-after-product refusal (decision unit-after-number) → wrong expectation | |
+| 2 | `unit rankine as kelvin := …`, `unit hand as inch := 4 * it` (unit_definitions.warp 19 21) | no `unit … as …` conversion form | esoteric? |
+| singles | `x.ceil` no field (number_methods 6: core emitter single_own_words has floor, not ceil); `gcd(2^70, 3·2^65)` 0 (core gcd is i64; lib/math wide_gcd exists); `√(4 m²)` stack exhausted (Quantity has no root()); `sqrt(2) as rational`, `"2.5 km" as quantity`, `"1 km" as unit` (no conversions); `type([π 1])`, `list of rational` (core types); `x : int[100000]` (core); `v: km/h = 3 km/h` (core) | | |
+
+Wrong expectations (approve to correct):
+| file:line | expected now | proposed | why |
+|---|---|---|---|
+| test/numbers/test_rounding_in_functions.pairs.warp:6 | 2 | 3 | decision round-halves: round rounds halves away from zero (banker's is round_even) |
+| test/numbers/test_unbounded_int.pairs.warp:57 | "too big for int: 9223372037000250000" | "too big for int; fix: `x as! int` keeps its low 64 bits" | the refusal now names the fix-it (decision checked-forced-conversions) |
+| test/numbers/test_unit_prefix_lines.pairs.warp:19 | `'a'   todo: …` (spaces, read as the expected) | a tab before the note | got "a" already; the note is glued to the expected value |
+| test/numbers/test_units_after_numbers.warp:30 | `s = 3; str(440Hz)` "440/s" | "440Hz" | Hz shows as written (canonical-output); Rust-era form |
+| test/numbers/test_unit_after_comma.pairs.warp:4 | `str([1, m])` "[1, 1m]" | "[1, m]" | a Unit shows by its symbol (lib/units Unit.text); esoteric |
+| test/numbers/test_unit_definitions.warp:9 | `14 * 24 h` as a unit's value | `(14 * 24) h` | decision unit-after-number refuses a unit after a product |

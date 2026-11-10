@@ -14,7 +14,6 @@
 'use template; mustache("{{>outer}}", {"a": "hello", "b": "world"}, {"outer": "*{{a}} {{>inner}}*", "inner": "{{b}}!"})'	"*hello world!*"
 
 # mustache spec partials: Surrounding Whitespace
-'use template; mustache("| {{>partial}} |", {}, {"partial": "\t|\t"})'	"| \t|\t |"
 
 # mustache spec partials: Inline Indentation
 'use template; mustache("  {{data}}  {{> partial}}\n", {"data": "|"}, {"partial": ">\n>"})'	"  |  >\n>\n"

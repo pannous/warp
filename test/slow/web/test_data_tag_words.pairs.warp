@@ -1,0 +1,2 @@
+# a prelude function glued to its block in data is the tag, not its call (decision data-tag-words: elements written glued)
+'label{ for: "email", "clamp" }'	label{ for: "email", "clamp" }

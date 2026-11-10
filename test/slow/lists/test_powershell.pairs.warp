@@ -1,0 +1,2 @@
+# Source: card powershell-semantics, lib/powershell.warp (PowerShell's object pipeline as list words)
+'use powershell; ps = [{name:"a", cpu:3, os:"mac"}, {name:"b", cpu:9, os:"linux"}, {name:"c", cpu:6, os:"mac"}]; ps.select_first(1).select_object("name", "os").format_list()'	"name : a\nos   : mac"

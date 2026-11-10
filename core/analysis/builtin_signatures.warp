@@ -123,13 +123,8 @@ compiler_lines = [
 	"caught_error(finished, value): error from emitter",
 	"placed_at(failure, position): error from emitter",
 	"trap_place(): int from emitter",
-	"byte_at(t, offset): int from emitter",
-	# todo Can we move all the uniscript to a later extension pass because the core compiler does not use any uniscript
-	"uniscript_error(values...): int from emitter",
-	"uniscript_warnings(values...): int from emitter",
-	"uniscript_to_unicode(values...): int from emitter",
-	"uniscript_to_uniscript(values...): int from emitter",
-	"uniscript_explicit(values...): int from emitter"
+	"byte_at(t, offset): int from emitter"
+	# DONE Can we move all the uniscript to a later extension pass because the core compiler does not use any uniscript
 ].map(line => typed_line(line, emitter_library))
 emitter_lines = library_lines(emitter_library) + compiler_lines
 typed_lines = runtime_lines + emitter_lines
@@ -145,8 +140,16 @@ alias_pairs(): list := {
 # `alias keys => map_keys` lines
 unaliased(written: text): text := {
 	word = canonical_word(written) ?? written
-	for pair in alias_pairs() { if pair#1 == word { return pair#2 } }
-	word
+	alias_targets().get(word) ?? word
+}
+# the word by each alias of alias_pairs, looked up once a rule compares a word (rewrites.warp rule_matches)
+global prelude_alias_targets = ø
+alias_targets(): map := {
+	if prelude_alias_targets == ø {
+		prelude_alias_targets = {}
+		for pair in alias_pairs() { prelude_alias_targets[pair#1] = pair#2 }
+	}
+	prelude_alias_targets
 }
 
 lines_of(lines: list, word: text): list := lines.filter(line => line.name == word)

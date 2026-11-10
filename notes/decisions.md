@@ -23,6 +23,31 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 ---
 
 ## Inbox
+- 2026-11-10 compile-only-metric: the Vitals page shows the compile alone (hello minus `warp version`, startup apart); `warp version` loads the whole machinery and is not optimized; fingerprint-by-stat parked, stamp-read-tail dropped.
+- 2026-11-10 runtime-words-lazy: per compile, runtime words are parsed on demand (a name → offset index over runtime.wasm's word table), library words are bound from the program's side, runtime imports are read from the import section.
+- 2026-11-10 text-representations: one text protocol with kinds (Ascii, Utf8 with a lazily cached code-point array) in one struct, landed in two steps with a stop gate at >3% build cost; internal, no AsciiText spelling.
+- 2026-11-10 block-call-parked: a glued `{…}(…)` is not a call yet (parked).
+- 2026-11-10 compiler-size-levers: the three size levers of notes/compiler_size.md are built in this order, each landing with before/after bytes: literal-nodes-inline (each distinct literal one global, ~460 KB), globals-constant-init (constant tables as packed data, ~198 KB), each-wasm (~190 KB); all core/emitter, by warp-sugar-program.
+- 2026-11-10 text-equality-ascii: text == skips the NFC check when both texts are ASCII or already NFC; results unchanged, measured on the build profile.
+- 2026-11-10 lambda-broadcast: a lambda applied to a list broadcasts like a named function (`g = x => x*2; g([1 2 3])` is [2, 4, 6]).
+- 2026-11-10 euler-glyph: ℯ (and ⅈ, π) read as the constants' names, not characters: `ln(ℯ) == 1`.
+- 2026-11-10 link-reach: linked words record their reach in warp.signature (step 1) and arrive already lowered (step 2), so the passes walk only the program.
+- 2026-11-10 compile-fixed-cost: the prelude signature is read packed, sugar rules are indexed by head word, and the GC heap start grows only if RSS stays acceptable.
+- 2026-11-10 warp-window-env: `WARP_WINDOW=0` (set by `warp --no-window`) is the twin of `WARP_SOUND=0` (set by `warp --mute`): the two machine switches kept as environment variables; it replaces WARP_NO_WINDOW=1.
+- 2026-11-10 warp-sound-env: `WARP_SOUND=0 warp app.warp` mutes a run (`warp --mute` sets it), the one environment variable kept as an interface (exception to no-bash-exports).
+- 2026-11-10 aliases-in-rules: a sugar rule's literal word matches every alias spelling of it (`xs.forEach {…}` through the `each` rule); aliases otherwise stay call-only, so data keys and type names never change; the full unification (aliases-unified) is parked: renaming everywhere would rename data keys.
+- 2026-11-10 x-bang-refusal: a block's `x!` is refused with "`x!` runs no code: x() runs a block, interpret x runs data".
+- 2026-11-10 bare-typed-overloads: `name: T := e` is `name(): T := e`, so `sample: int := 7; sample: text := "seven"` overload by result type.
+- 2026-11-10 fast-build: `fast` functions get machine arithmetic (i64 wrapping, fast_math), as extensions/fast.warp.
+- 2026-11-10 def-arrow-fixit: `def f(x) -> T: body` is refused with the fix "def f(x): T := body".
+- 2026-11-10 undo-planned: undo/redo stay a planned feature.
+- 2026-11-10 and-or-values: `and`/`or` carry their operands' values, as a general mechanism: `7 and "hi"` is "hi", `0 or 5` is 5.
+- 2026-11-10 bool-int-refused: `n: int = true` is refused with the fix `true as int`.
+- 2026-11-10 int-list-alias: `xs: int list` is an alias of `xs: [int]`.
+- 2026-11-10 it-expression-function: a parameter typed function takes an `it` expression as a lambda, generally.
+- 2026-11-10 aliases-unified: one alias mechanism everywhere: `alias a => b` lines (prelude, modules, program; the program's win) feed one table, applied wherever the program doesn't bind the word, class members included; the arrow's target is canonical; lib/aliases.warp keeps only operator and keyword spellings (card prelude-alias-line).
+- 2026-11-10 no-bash-exports: no environment variable is an interface; choices are code or CLI options (card no-bash-exports).
+- 2026-11-10 wiki: `test` lines are checked on every run; `width /height` is refused as ambiguous; `law` is marked planned; WARP_DRAW leaves graphics.md.
 - synonyms-are-aliases (card test-triage): synonym words of existing ones are aliases in lib/aliases.warp pointing at the canonical word, not deleted: properties/fields/attributes/members of (keys, members), clone (copy), warn (warning), require (use), forEach/for_each/foreach (each), invocable/runnable (callable), previous/was (old), ppi/density (dpi), maybe (optional), unit/nil/empty/string/integer as type names; their held test lines are restored.
 - definition-by-space: `square x := x*x` defines a one-parameter function like `square(x) := x*x` (the original wasp form, as call-by-space `square 2`); held lines restored, red ones carded.
 - typed-array-declaration: a typed declaration with a size and no value makes a zero-filled list of that type: `pixel: int[100]; pixel#1 = 5`, `x : int[100000]; count(x)` → 100000.

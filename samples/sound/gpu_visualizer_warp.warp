@@ -7,11 +7,13 @@ use sound
 use math
 use os
 use keys
+use file
 width = 1920
 height = 1080
 bands = 16
-# any wav, mp3, ogg, flac, aiff or m4a file plays and lights the bars the same
-song = "samples/sound/tune.mp3"
+# any wav, mp3, ogg, flac, aiff or m4a file plays and lights the bars the same; this one lies beside the program
+tune = "tune.mp3"
+song = program.folder + "/" + tune
 # how much the quiet spectrum is turned up before it lights the bars
 loudness = 15
 # the shortest frame: a frame that took less waits for the rest
@@ -147,4 +149,4 @@ while time < seconds or (count(args) == 0 and window_open()) {
 	sleep(max(0, frame_milliseconds - (clock() - frame_started)) / 1000)
 	time = float(clock() - started) / 1000
 }
-"${bands} bars lit along ${song}"
+"${bands} bars lit along ${tune}"
