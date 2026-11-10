@@ -3,8 +3,10 @@
 # its value, what was typed into it; `document` and `window` are the page's own. Run it in the playground.
 # check: type "name" "Ann", click "Greet" → Hello Ann
 greeting = "Type a name"
-div{
-	input{ id: "who" placeholder: "name" aria-label: "name" }
-	button{ on click { greeting = "Hello " + $who + ", from " + document.title; who.focus() } "Greet" }
-	p{ greeting }
+html{
+	div{
+		input{ id: "who" placeholder: "name" aria-label: "name" }
+		button{ on click { greeting = "Hello " + $who + ", from " + document.title; who.focus() } "Greet" }
+		p{ greeting }
+	}
 }

@@ -32,9 +32,10 @@ use "js_globals/webidl.warp"
 # The program with its `use js` lines taken out and the uses of their globals as foreign calls
 js_globals(program: Node): Node := {
 	names = flat_statements(program).filter(is_js_use).map(js_use_name)
-	markup = nodes_in(program).any(is_markup_element)
+	scopes = markup_scopes(program)
+	markup = #scopes > 0
 	if markup { names += page_globals_read(program, names) }
-	ids = if markup then page_ids(program) else []
+	ids = page_ids(scopes, names_bound_in(program))
 	elements = page_elements(program, ids)
 	if #names == 0 and #ids == 0 and #elements == 0 { return program }
 	scope = JsScope()
@@ -67,10 +68,9 @@ is_page_global(name: text): bool := {
 # The ids of the program's markup, each a name of its element (decision page-ids): `input{ id: "who" }` makes
 # `who.focus()` the page's element; a variable or function of the same name is a compile error naming both. An id with
 # a dash is no name (`$user-name` reads its value)
-page_ids(program: Node): list := {
-	bound = names_bound_in(program)
+page_ids(scopes: list, bound: any): list := {
 	found = {}
-	for n in nodes_in(program) {
+	for n in scopes.flat_map(nodes_in) {
 		if is_markup_element(n) {
 			for item in items_of(value_of(n)) {
 				id = written_id(item)
