@@ -2952,11 +2952,11 @@ def number_atom(p: Parser): Node := {
 	if number_start > 0 and p.code[number_start - 1] == '#' and char_here(p) == '(' { return amount }
 	with_glued_factor(p, amount)
 }
-// `.5` is 0.5, `...xs` spreads xs; Swift's `.north`, a member of the type the context expects (a match arm's case),
-// also a rule's `.$k`
+// `.5` is 0.5, a name glued to it multiplying it as after any number (`.16ⅈ` is 0.16ⅈ, card leading-dot-imaginary);
+// `...xs` spreads xs; Swift's `.north`, a member of the type the context expects (a match arm's case), also a rule's `.$k`
 def dot_atom(p: Parser): Node := {
 	next = char_ahead(p, 1)
-	if is_digit(next) { return decimal_value("0" + decimal_number(p)) }
+	if is_digit(next) { return with_glued_factor(p, decimal_value("0" + decimal_number(p))) }
 	if next == '.' { return starred_name(p) }
 	if not (is_name_start(next) or next == '$') { return ø }
 	advance(p)
