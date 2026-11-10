@@ -1,29 +1,8 @@
 # Weight of every node after cuts and mixed edits (lib/sorted.warp, card sorted-map-library).
 # One rotation is not enough when intersection or difference drops a whole side: 1..127 ∩ 120..127
-# used to leave a child heavier than delta 3. The check walks the tree; it is not a height bound.
+# used to leave a child heavier than delta 3. The checks (sorted_weight.warp) walk the tree; they are not a height bound.
 
-is! "use sorted
-
-node_size(t) := if t == ø then 0 else t.size
-weight_ok(t) := {
-	if t == ø { return yes }
-	sl = node_size(t.left)
-	sr = node_size(t.right)
-	if t.size != sl + sr + 1 { return no }
-	if not weight_ok(t.left) or not weight_ok(t.right) { return no }
-	if sl + sr <= 1 { return yes }
-	if sl > 3 * sr or sr > 3 * sl { return no }
-	yes
-}
-order_ok(s) := {
-	xs = s.values()
-	if count(xs) != s.size() { return no }
-	if count(xs) > 1 { for i in 1 to count(xs) - 1 { if not (xs#i < xs#(i + 1)) { return no } } }
-	for i in 1 to count(xs) { if s.at(i) != xs#i { return no } }
-	yes
-}
-whole(s) := weight_ok(s.root) and order_ok(s)
-nums(lo, hi) := [i for i in lo to hi]
+is! "use sorted; use \"sorted_weight.warp\"
 
 a = SortedSet(nums(1, 127))
 evens = a
