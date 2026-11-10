@@ -500,3 +500,16 @@ stopped`, rough_tolerance, text as bool, ¬ on ints (test_symbolism_object.pairs
 hit: the desk-invented loop heads, colon loops and filter loop heads (for.md:47 `for (it>2) in …`, iteration.md:59
 `each [1,2,3]: …`). Still open, with the user: the synonym words, wasp definition by space, typed declarations without
 a value, a return type after `as`, undo/redo, and/or as value operators, `n: int = true`, postfix type words.
+
+## Batch 4 (card test-triage)
+
+The user's decisions synonyms-are-aliases, definition-by-space, typed-array-declaration and result-type-as: their held
+lines are restored (139), rough_tolerance is back (operator.md:41). The synonyms are prelude alias lines
+(lib/prelude.warp: description, returns, was, previous, invocable, runnable, forEach, for_each, foreach, integer,
+string, unit, nil), not lib/aliases.warp entries: that table aliases operator and keyword spellings and changed none of
+the lines. A prelude alias reaches only a library call (`integer(3.7)`), a program's own alias line every use, so
+101 restored lines stay red, each group carded: prelude-alias-line (the mechanism, a core change for the Interviewer),
+square-add1-twice (definition by space), typed arrays, result types after `as`, maybe, the empty type's names, a
+function's representation, warn in a text, display.dpi, the reflection words (card reflection-dot-forms: p.fields
+itself is not built). Held still, outside the decisions' wording: `exact == real`, `numbers x = [1 2]`,
+`def f(x:int) -> int or text`, `f(x) := x + it`, `require math` with `effects of main`; `add1 x:=$0+1` deleted ($0).
