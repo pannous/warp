@@ -32,3 +32,4 @@
 'use collections; Queue([]); a = Set([1, 2, 3]); b = Set([3, 5]); a.union(b).equals(b.union(a)) and a.intersection(b).equals(b.intersection(a))'	yes
 'use collections; Queue([]); a = Set([1, 2, 3]); [Set([2, 3]).is_subset(a), a.is_subset(Set([2, 3])), a.is_superset(Set([1])), a.is_subset(a), a.has(2), a.has(7)]'	[yes, no, yes, yes, yes, no]
 'use collections; Queue([]); a = Set([1, 2]); a.intersection(Set([3])).is_empty() and a.difference(a).size() == 0'	yes
+'use collections; q = PriorityQueue([5, 3, 8]); out = []; while q.size() > 0 { out.add(q.pop()) }; out'	[3, 5, 8]
