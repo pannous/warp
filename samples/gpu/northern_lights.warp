@@ -10,39 +10,39 @@ lights = compute_toy(shader {
 	fn noise(p: float2) -> f32 {
 		let cell = floor(p);
 		let inside = fract(p);
-		let blend = inside * inside * (3.0 - 2.0 * inside);
-		let bottom = mix(hash(cell), hash(cell + float2(1.0, 0.0)), blend.x);
-		let top = mix(hash(cell + float2(0.0, 1.0)), hash(cell + float2(1.0, 1.0)), blend.x);
+		let blend = inside * inside * (3 - 2 * inside);
+		let bottom = mix(hash(cell), hash(cell + float2(1, 0)), blend.x);
+		let top = mix(hash(cell + float2(0, 1)), hash(cell + float2(1, 1)), blend.x);
 		return mix(bottom, top, blend.y);
 	}
 
 	// the hills' height at x: two octaves of noise
 	fn ridge(x: f32) -> f32 {
-		return -0.17 + 0.12 * noise(float2(x * 2.0, 3.0)) + 0.05 * noise(float2(x * 7.0, 9.0));
+		return -.17 + .12 * noise(float2(x * 2, 3)) + .05 * noise(float2(x * 7, 9));
 	}
 
 	// light of curtain number index at the point: brightest just above its wavy hem, fading upward
 	fn curtain(at: float2, index: f32, t: f32) -> f32 {
-		let drift = t * (0.05 + 0.02 * index);
-		let hem = 0.22 + 0.07 * index + 0.15 * sin(at.x * (1.5 + index * 0.4) + drift * 6.0)
-			+ 0.08 * noise(float2(at.x * 3.0 + drift * 4.0, index * 7.0));
+		let drift = t * (.05 + .02 * index);
+		let hem = .22 + .07 * index + .15 * sin(at.x * (1.5 + index * .4) + drift * 6)
+			+ .08 * noise(float2(at.x * 3 + drift * 4, index * 7));
 		let above = at.y - hem;
-		if (above < 0.0) { return exp(above * 40.0) * 0.4; }
-		let rays = 0.3 + 0.7 * noise(float2(at.x * 40.0 + index * 13.0, t * 0.6));
-		return exp(-above * (9.0 + 2.0 * index)) * rays;
+		if (above < 0) { return exp(above * 40) * .4; }
+		let rays = .3 + .7 * noise(float2(at.x * 40 + index * 13, t * .6));
+		return exp(-above * (9 + 2 * index)) * rays;
 	}
 
 	fn sky(at: float2, t: f32) -> float3 {
-		var color = mix(float3(0.01, 0.02, 0.06), float3(0.0, 0.0, 0.02), clamp(at.y, 0.0, 1.0));
+		var color = mix(float3(.01, .02, .06), float3(0, 0, .02), clamp(at.y, 0, 1));
 		// stars: one cell in a few holds one, twinkling at a pace of its own
-		let cell = floor(at * 300.0);
+		let cell = floor(at * 300);
 		let star = hash(cell);
-		if (star > 0.996) {
-			color += float3(0.8) * (0.6 + 0.4 * sin(t * 3.0 + star * 90.0));
+		if (star > .996) {
+			color += float3(.8) * (.6 + .4 * sin(t * 3 + star * 90));
 		}
-		let hues = array<float3, CURTAINS>(float3(0.1, 1.0, 0.45), float3(0.15, 0.8, 0.9), float3(0.6, 0.3, 1.0), float3(1.0, 0.25, 0.5));
+		let hues = array<float3, CURTAINS>(float3(.1, 1, .45), float3(.15, .8, .9), float3(.6, .3, 1), float3(1, .25, .5));
 		for (var i = 0; i < CURTAINS; i++) {
-			color += hues[i] * curtain(at, f32(i), t) * 0.6 * clamp(mouse.zoom, 0.2, 3.0);
+			color += hues[i] * curtain(at, f32(i), t) * .6 * clamp(mouse.zoom, .2, 3);
 		}
 		return color;
 	}
@@ -52,25 +52,22 @@ lights = compute_toy(shader {
 		let screen_size = textureDimensions(screen);
 		if (id.x >= screen_size.x || id.y >= screen_size.y) { return; }
 		// y counts up from the horizon, two thirds of the way down
-		let at = float2(f32(id.x) - 0.5 * f32(screen_size.x), 0.65 * f32(screen_size.y) - f32(id.y)) / f32(screen_size.y);
+		let at = float2(f32(id.x) - .5 * f32(screen_size.x), .65 * f32(screen_size.y) - f32(id.y)) / f32(screen_size.y);
 		let t = time.elapsed;
 		var color: float3;
-		if (at.y >= 0.0) {
+		if (at.y >= 0) {
 			color = sky(at, t);
-			if (at.y < ridge(at.x) + 0.2) { color = float3(0.005, 0.01, 0.02); }
+			if (at.y < ridge(at.x) + .2) { color = float3(.005, .01, .02); }
 		} else {
 			// the lake mirrors the sky, darker and rippled
-			let ripple = 0.004 * sin(at.y * 300.0 + t * 2.0);
+			let ripple = .004 * sin(at.y * 300 + t * 2);
 			let mirrored = float2(at.x + ripple, -at.y);
-			color = sky(mirrored, t) * 0.45;
-			if (mirrored.y < ridge(mirrored.x) + 0.2) { color = float3(0.004, 0.008, 0.015); }
+			color = sky(mirrored, t) * .45;
+			if (mirrored.y < ridge(mirrored.x) + .2) { color = float3(.004, .008, .015); }
 		}
-		textureStore(screen, id.xy, float4(color, 1.0));
+		textureStore(screen, id.xy, float4(color, 1));
 	}
 })
-# run for ten seconds
-started = clock()
-while clock() - started < 10000 {
-	paint(lights)
-	sleep(1 / 60)
-}
+# every frame until the window closes
+on frame: paint(lights)
+on key: exit

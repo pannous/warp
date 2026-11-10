@@ -1,0 +1,5 @@
+# from test_field_function_values.rs: edit the Rust test, then run the script again
+# test_function_in_object_field
+'x = {a: {f: x => x + 1}}; x.a.f(1)'	2
+'x = {a: {b: 2, f: x => x * b}}; x.a.f(3)'	6
+'x = {n: 1, a: {f: x => x + 1}}; x.n + x.a.f(1)'	3

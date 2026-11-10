@@ -1,0 +1,4 @@
+# Element handlers and live parts (wiki/html.md "Elements by id", card markup-keeps): a handler attribute holding a
+# function is numbered by page_render (data-warp-click="1") and run by page_event; a function among the markup is a
+# live part, its value now
+'count = 0; x = div{ button{ "+1", on click { count += 1 } } }; count'	0

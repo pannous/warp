@@ -1,0 +1,4 @@
+# a word of one standard module works without its `use` (decision implicit-standard-words)
+'div{ id: pwd }'	div:{id:pwd}
+'form{ label{ for: email } }; 1'	1
+'form{ guests: 2 }'	form:{guests:2}

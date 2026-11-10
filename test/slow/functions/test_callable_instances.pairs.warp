@@ -1,0 +1,2 @@
+# an instance whose class has call(self, …) is called like a function (trait Callable): a sound bus takes a signal
+'use sound; room = bus() |> delay(0.3, 0.5, 1); osc(A4, 0.1s) |> room; round(save(sound, temp_folder() + "/callable_bus.wav") * 10)'	29

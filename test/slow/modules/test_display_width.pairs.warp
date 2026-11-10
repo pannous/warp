@@ -1,0 +1,2 @@
+// lib/tables.warp display_width, truncate_display, pad_display: CJK, emoji clusters, combining and zero-width marks (card lib-text-tables)
+'use tables; try { pad_display("x", 3, "middle") } catch e { e.message }'	"pad_display: align is left, right or center, not middle"

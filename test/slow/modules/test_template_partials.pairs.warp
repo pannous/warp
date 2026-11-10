@@ -1,0 +1,2 @@
+# mustache spec partials: Basic Behavior
+'use template; mustache("| {{>partial}} |", {}, {"partial": "\t|\t"})'	"| \t|\t |"

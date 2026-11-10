@@ -1,0 +1,2 @@
+# a block of samples in linear memory (lib/sound.warp class samples): #b its count, b#p its cells, written in place
+'use sound; b = new_samples(4); b#2 = 1.5; [#b, b#2, b#1 == 0]'	[4, 1.5, true]

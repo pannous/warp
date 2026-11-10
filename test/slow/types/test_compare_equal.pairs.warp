@@ -1,0 +1,2 @@
+# == and != call a type's equal(other), compare(other) == 0 where it has none (decision compare-equal-hooks)
+'x = 2 hours; y = 120 minutes; x == y'	yes
