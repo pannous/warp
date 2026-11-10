@@ -54,7 +54,9 @@ before asking a question). After a context swap, this file and your role file be
 - Samples are not the spec: before making a failing sample run, ask whether it should be written more beautifully or
   more generally. Rewrite the sample (its own commit, saying why) rather than add special syntax for it; a special
   spelling may be given up for the general beauty of the compiler (user 2026-10-27). Dropping a spelling the wiki
-  promises goes to the Interviewer.
+  promises goes to the Interviewer. Old tests likewise: a failing one is evidence, not spec; before making it pass,
+  ask whether the form is one we want. Esoteric or wrong tests are listed for the user (notes/test_triage.md), never
+  silently changed; real gaps become cards.
 - Plain warp first: a feature is a function, an enum, a class, an overload or a block parameter in lib/ whenever
   plain warp can say it (`on Key.escape {…}` is a call of `on(event, handler: block)`, no rule). A `rewrite` rule
   only for a spelling plain warp cannot parse or mean; its commit names why a function would not do (user 2026-10-27).
