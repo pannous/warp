@@ -1,0 +1,5 @@
+// interpret x: data or a block run fully as code (decision blocks-run-by-call: x() runs a block one level, interpret x
+// all of it, x! only unwraps; wiki/full-evaluation.md). The code runs as a program of its own, as eval does (lib/prelude.warp):
+// it sees none of the caller's names (interpret(data a+1) of a = 5 is not yet 6: card x-bang-sweep, the caller-names rule
+// parked)
+global interpret(x: any) := eval_code(str(x))
