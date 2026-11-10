@@ -117,14 +117,14 @@ map_without_all(m: map, names: list): map := {
 	for name in m.keys.filter(name => name not in names) { kept[name] = m[name] }
 	kept
 }
-# WARP_TIMES set: `§T <milliseconds> <label>` printed where a phase of the compile starts, so a build's log (its
+# --times: `§T <milliseconds> <label>` printed where a phase of the compile starts, so a build's log (its
 # record's build.log) holds its phases; scripts/phase-times.py sums the spans (notes/compile_speed.md). Silent unset
-TIMES = started_env("WARP_TIMES") ?? ""
-def timed(label: text) := { if TIMES != "" { print "§T " + "${clock()}" + " " + label } }
+TIMES = run_option("times") != ø
+def timed(label: text) := { if TIMES { print "§T " + "${clock()}" + " " + label } }
 # and `§R <path>` for each file a compile reads (library.warp file_source): of lib/, none after the build should be
 # (decision no-lib-reads)
 # (asked of the host itself: the prelude is read before TIMES is set)
-def read_traced(path: text) := { if (started_env("WARP_TIMES") ?? "") != "" { print "§R " + path } }
+def read_traced(path: text) := { if run_option("times") != ø { print "§R " + path } }
 
 # the program as the passes leave it, from parser.warp's nodes (card rest-node), with the declarations of the files
 # it uses from `folder` (uses.warp) and the definitions they reach of the standard modules they use and of the
