@@ -12,7 +12,7 @@ WARNING_FACT = "inline_html"
 
 # The source pass: each inline element as markup, a warning where each was written
 inline_html_warned(source: text): list := {
-	converted = markup_of_inline_html(source)
+	converted = markup_of_inline_html(source, yes, yes)
 	for found in converted#3 {
 		said = said_fact(call_of(WARNING_FACT, [found#1])) + [found#2]
 		# (a source is parsed more than once: one warning a place)

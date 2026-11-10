@@ -2,6 +2,9 @@
 # (lib/fix) share, on the code points of a source, with the lexer's words (core/parsing/lexer.warp: the compiler has
 # them, lib/fix uses them)
 
+# lib/markup.warp's identity of a parameter typed html, which makes its argument markup
+MARKED_WORD = "html_written"
+
 ELEMENT_OPEN = '<'
 ELEMENT_CLOSE = '>'
 HOLE_OPEN = '{'
@@ -16,7 +19,9 @@ TRUE_WORD = "yes"
 NO_PARAMETERS = "()"
 IGNORED_PARAMETER = "_"
 # [the source with each inline element as markup, no shifts, [[tag, [line, column]] of each element]]
-markup_of_inline_html(source: text, lines_kept: bool = yes): list := {
+# (marked: each element given to lib/markup.warp html_written, so that literal HTML is markup wherever it stands,
+# decision html-value; `warp format` writes it unmarked)
+markup_of_inline_html(source: text, lines_kept: bool = yes, marked: bool = no): list := {
 	if not source.contains(END_TAG) and not source.contains(SELF_CLOSE) { return [source, [], []] }
 	points = code_points(source)
 	n = points.length
@@ -30,7 +35,7 @@ markup_of_inline_html(source: text, lines_kept: bool = yes): list := {
 		if skipped > at { at = skipped }
 		else if read == ø { at += 1 }
 		else {
-			parts += [points_text(points, copied, at), read#1]
+			parts += [points_text(points, copied, at), if marked then MARKED_WORD + "(" + read#1 + ")" else read#1]
 			found += [[read#3, place_of(points, at)]]
 			at = read#2
 			copied = at
