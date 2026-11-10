@@ -1,5 +1,5 @@
 // The routes of a page (a part of host.js, which says how parts work): a program serving the page's requests (lib/web.warp
-// page_serve, WARP_SERVE=page) answers HTTP text, which the page writes (requestText) and reads (answerOf), the
+// page_serve, the serve option "page") answers HTTP text, which the page writes (requestText) and reads (answerOf), the
 // playground's address bar, links and forms or a built site's (followSiteLinks, focusRoute). A built site loads this
 // file twice: the page for its requests, links and focus (without host.js), its Worker for the program's side
 
@@ -55,7 +55,7 @@ function focusRoute(root) {
 	target.focus();
 }
 
-// `serve` in the playground (lib/web.warp page_serve, WARP_SERVE=page): the program waits for the page's next request
+// `serve` in the playground (lib/web.warp page_serve, the serve option "page"): the program waits for the page's next request
 // (its address bar, a link, a form) as a server waits for its next client, however long, and gives the page its
 // answer; HTTP text both ways (requestText, answerOf)
 const PAGE_SERVING = {

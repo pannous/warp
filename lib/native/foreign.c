@@ -70,13 +70,12 @@ int32_t next_painting(void) { static int32_t painted; return ++painted; }
 int32_t last_error(void) { return errno; }
 void* library_function(char* library, char* name);
 // whether a shader paints on the GPU: libwgpu_native beside warp (lib/host/native_host/gpu.warp paints through it),
-// else (none, or WARP_GPU=off) its function on the CPU (lib/prelude.warp paint_shader)
+// else its function on the CPU (lib/prelude.warp paint_shader; a program says `paint_on_gpu = no`, lib/shaders.warp)
 int32_t gpu_paints(void) {
 	static int32_t asked, present;
 	if (!asked) {
 		asked = 1;
-		const char* chosen = getenv("WARP_GPU");
-		present = !(chosen && !strcmp(chosen, "off")) && library_function("wgpu_native", "wgpuCreateInstance");
+		present = library_function("wgpu_native", "wgpuCreateInstance") != 0;
 	}
 	return present;
 }

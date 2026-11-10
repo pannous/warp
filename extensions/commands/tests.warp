@@ -1,7 +1,7 @@
 # `warp test` on the native warp (card native-warp-test; twin of rust-harness:src/compiler/pure_tests.rs): warp.wasm lists the test
 # cases of the folders' test files into a work folder (test_listed), the native warp (core/native/tests.warp) runs each
 # case's code, and the code of an expected value that is no data, as a program of its own in the test file's folder
-# with WARP_VALUE_AS_DATA set, then warp.wasm judges what they gave (test_verdicts). The test files: `*.pairs.warp`
+# with --value-as-data, then warp.wasm judges what they gave (test_verdicts). The test files: `*.pairs.warp`
 # (code ⇥ expected, one a line) and the `is!` lines of `test_*.warp`, under each folder (default test/) or named
 # themselves. The work folder: `runs`, a line `<run>\t<folder>` for each program, its code in `<run>.code`; the native
 # warp writes `<run>.out`, `<run>.err` and `<run>.status` (its exit status, or `time ` and the limit it hit)

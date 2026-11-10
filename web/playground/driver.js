@@ -13,21 +13,22 @@ const SOURCES_URL = `../../${COMPILER_FOLDER}/sources.json`; // its library sour
 const COMPILED_PATH = "/tmp/warp-program.wasm";
 // the program typed in the page when it is no sample's file: at the repository root, as `warp playground.warp` there
 const TYPED_FILE = "playground.warp";
-// the compiler reads the standard modules of this lib/ (core/parsing/parser.warp warp_lib), as the native warp tells it
-const COMPILER_ENVIRONMENT = [...ENVIRONMENT, `WARP_LIB=${COMPILER_LIBRARY}`];
+// the run options (core/host_io.warp run_option, host-files.js warp.option), as the native warp gives them: the
+// compiler reads the standard modules of this lib/ (core/passes/library.warp warp_lib)
+const COMPILER_OPTIONS = { lib: COMPILER_LIBRARY };
 // a run of `warp test` (worker.js valueAsData): the compiler makes _start print main's value as data after a mark
 // (core/emitter/emitter.warp VALUE_MARK), which the native verdicts read (extensions/commands/tests.warp run_result), and
 // says no hints, as core/native/tests.warp has its runs
-const TEST_RUN_ENVIRONMENT = ["WARP_VALUE_AS_DATA=1", "WARP_HINTS=0"];
-const compilerEnvironment = () => self.valueAsData ? [...COMPILER_ENVIRONMENT, ...TEST_RUN_ENVIRONMENT] : COMPILER_ENVIRONMENT;
+const TEST_RUN_OPTIONS = { "value-as-data": "", "no-hints": "" };
+const compilerOptions = () => self.valueAsData ? { ...COMPILER_OPTIONS, ...TEST_RUN_OPTIONS } : COMPILER_OPTIONS;
 // a program runs as `warp <file>` runs it (core/native/warp.warp), which names the program (lib/storage.warp keeps its
-// tables beside it) and serves its routes: here the page's requests (lib/web.warp); a test run (valueAsData) does
-// neither, as core/native/tests.warp's `warp run <code>` does not: a program with routes gives its value, tables stay
-// in memory
-// WARP_SOUND_NOPACE when the page has not been clicked: sounds stay silent (playground.js heard), so lib/sound.warp
-// waited_till must not sleep on a silent clock (card samples-page-sound-pipes). Not WARP_NO_WINDOW: that forces the
+// tables beside it, host-files.js programFileOf) and serves its routes: here the page's requests (lib/web.warp); a
+// test run (valueAsData) serves none, as core/native/tests.warp's `warp run <code>` does not: a program with routes
+// gives its value
+// sound-nopace when the page has not been clicked: sounds stay silent (playground.js heard), so lib/sound.warp
+// waited_till must not sleep on a silent clock (card samples-page-sound-pipes). Not no-window: that forces the
 // WAV / getpid path the page lacks.
-const programEnvironment = file => [...ENVIRONMENT, ...(self.valueAsData ? [] : ["WARP_SERVE=page", `WARP_PROGRAM=${file}`]), ...(self.pageSystemValues?.heard ? [] : ["WARP_SOUND_NOPACE=1"])];
+const programOptions = () => ({ ...(self.valueAsData ? {} : { serve: "page" }), ...(self.pageSystemValues?.heard ? {} : { "sound-nopace": "" }) });
 const FAILURE_STATUS = 1;
 const STDOUT = 1;
 const FLOAT_DIGITS = 17; // driver.warp FLOAT_DIGITS
@@ -150,7 +151,7 @@ function codeEvaluated(program, code, hooks) {
 	return codeParsedFrom(program, data);
 }
 
-// the code compiled and run apart from the page's program, its value as data (WARP_VALUE_AS_DATA, no serving):
+// the code compiled and run apart from the page's program, its value as data (--value-as-data, no serving):
 // {printed, data} before and after the value mark, or {failure}
 function ranAsData(code) {
 	let printed = "";
@@ -222,7 +223,8 @@ function timerFired(holder, id, answer) {
 function compilerHostWords(exports) {
 	return {
 		host: {
-			std_io: (module, member) => newGuestError(exports(), `the host word ${guestText(exports(), module)}.${guestText(exports(), member)} is not in the browser yet`),
+			// the run's options (warp.option); any other is not the compiler's in a page
+			std_io: (module, member, argumentList) => guestText(exports(), module) === "warp" ? stdCall(exports(), module, member, argumentList, { warnings: [], options: compilerOptions() }) : newGuestError(exports(), `the host word ${guestText(exports(), module)}.${guestText(exports(), member)} is not in the browser yet`),
 			// the library index's source hashes, sha256 (core/passes/library.warp source_hash), by the page's adapters
 			std_pure: (module, member, argumentList) => stdCall(exports(), module, member, argumentList, { warnings: [] }),
 			paint: () => { throw new Error("the compiler paints nothing"); },
@@ -266,7 +268,7 @@ function ranSaying(exports, print, exitCode, valued = false) {
 // warp.wasm run with the words after its own path (driver.warp file_ran), each run a fresh instance: { status, said }
 function compilerRan(words, print) {
 	let exports;
-	const wasi = wasiImports(() => exports.memory, [COMPILER_LIBRARY + "/warp.wasm", ...words], print, programFiles, compilerEnvironment());
+	const wasi = wasiImports(() => exports.memory, [COMPILER_LIBRARY + "/warp.wasm", ...words], print, programFiles, ENVIRONMENT);
 	exports = new WebAssembly.Instance(compilerModule, withWasi(compilerHostWords(() => exports), wasi)).exports;
 	return ranSaying(exports, print);
 }
@@ -282,7 +284,7 @@ function compiledProgram(file, print) {
 
 // the compiled program run with the page's host words: { status, said }
 function programRan(bytes, file, hooks) {
-	const holder = runHolder({ warnings: [], pagePath: hooks.pagePath?.(), hooks, environment: programEnvironment(file) });
+	const holder = runHolder({ warnings: [], pagePath: hooks.pagePath?.(), hooks, environment: ENVIRONMENT, options: programOptions() });
 	const wasi = wasiImports(() => holder.exports.memory, [file, ...(self.programArguments ?? [])], hooks.print, programFiles, holder.environment, parentOf(file ?? ""));
 	try {
 		const module = new WebAssembly.Module(bytes);

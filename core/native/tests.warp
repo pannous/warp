@@ -4,7 +4,7 @@
 # warp.wasm lists the cases into a work folder (extensions/commands/tests.warp test-list), each
 # run of a case's code is a child process this warp forks (as `warp run <code>`, `warp self <code>` for --self, would
 # run it, card resident-wasm-instance: the engine and the machine code of the compiler and modules loaded once before,
-# resident_loaded; a trap, crash or hang ends only its own child) in the test file's folder with the value printed as data (WARP_VALUE_AS_DATA), its output, errors and exit status written beside
+# resident_loaded; a trap, crash or hang ends only its own child) in the test file's folder with the value printed as data (--value-as-data), its output, errors and exit status written beside
 # its code, and how long it took (<run>.ms); the children run in parallel, each in a slot of the machine's pool, each
 # with CPU_SECONDS of CPU, one still running after WALL_SECONDS killed (either a TIME, no failure); then warp.wasm
 # prints the verdicts, the cases over a second and the total (test-verdicts), the exit status 1 when one failed
@@ -23,6 +23,9 @@ getloadavg(loads: pointer, count: i32): i32 from "c"
 CPU_SECONDS = 30
 WALL_SECONDS = 120
 RLIMIT_CPU = 0
+# a case opens no window, sounds nothing, says no hints, prints its value as data and compiles on one thread (its slot
+# is one core)
+case_options(): text := "--no-window --mute --no-hints --value-as-data --one-thread"
 # 128 + SIGXCPU
 CPU_LIMIT_HIT = 152
 FILE_MODE = 420
@@ -48,19 +51,13 @@ tests_run(compiler: text, by_self: bool, first: int): nothing := {
 	command_output(joined(joined("rm -rf '", work), "'"))
 	mkdir(c_string(work), FOLDER_MODE)
 	# before any other engine: one with wasmtime's cache starts its worker thread, whose locks a fork can leave held
-	setenv(c_string("WARP_ONE_THREAD"), c_string("1"), 1)
+	option_given("one-thread", "")
 	resident_loaded(compiler)
 	listed_apart(compiler, test_words(compiler, "test-list", work, first))
 	required(joined(work, "/runs"), work)
 	runs = read_file(joined(work, "/runs"))
-	setenv(c_string("WARP_NO_WINDOW"), c_string("1"), 1)
-	setenv(c_string("WARP_HINTS"), c_string("0"), 1)
-	setenv(c_string("WARP_VALUE_AS_DATA"), c_string("1"), 1)
-	# a test checks what main gives: its timers fire none (core/native/driver.warp events; the samples sweep runs them)
-	setenv(c_string("WARP_EVENTS_FOR"), c_string("0"), 0)
 	all_ran(work, runs, if by_self then "self" else "run")
-	unsetenv(c_string("WARP_VALUE_AS_DATA"))
-	unsetenv(c_string("WARP_ONE_THREAD"))
+	option_dropped("one-thread")
 	required(compiler, work)
 	file_ran(compiler, test_words(compiler, "test-verdicts", work, first))
 	required(joined(work, "/failed"), work)
@@ -189,6 +186,14 @@ started_run(work: text, run: text, prefix: text, children: pointer, slots: i32):
 	folder = c_string(field(run, 1, TAB))
 	given = arguments()
 	added(given, executable_path())
+	for i in 0..field_count(case_options(), SPACE) { added(given, field(case_options(), i, SPACE)) }
+	# and checks what main gives: its timers fire none, unless this run gives them time (the samples sweep:
+	# --events-for <ms>; core/native/driver.warp events)
+	added(given, "--events-for")
+	added(given, if has_option("events-for") then option_of("events-for") else "0")
+	# and this run's lib/, resolved (the child runs in the case's folder)
+	added(given, "--lib")
+	added(given, option_of("lib"))
 	added(given, prefix)
 	added(given, read_file(joined(id, ".code")))
 	output = c_string(joined(id, ".out"))
