@@ -1,0 +1,3 @@
+# a class's own positions (card class-position-index): b#p its position(p) from 1, b[i] its index(i) from 0, either one
+# deriving the other; b#p = v the setter position(p, v); #b its count()
+'use sound; F#4'	F#4

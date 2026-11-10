@@ -24,3 +24,8 @@
 '1 month < 28 days'	false
 '1 month != 32 days'	true
 '1 day 1 hour >= 1 day'	true
+
+# a core duration beside a units quantity of time compares the duration it lasts (decision one-duration, card core-duration)
+'f(n: duration) := n; f(2 hours) > 1 hour'	true
+'f(n: duration) := n; f(2 hours) == 2 hours'	true
+'1 day < 26 hours'	true

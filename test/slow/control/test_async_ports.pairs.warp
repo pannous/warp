@@ -1,0 +1,6 @@
+# from test_async_ports.rs: edit the Rust test, then run the script again
+# await_all_of_started_tasks_gives_their_results
+'job = go { sleep(2000 ms); 1 }; await job within 100 ms or 0'	0
+'job = go { sleep(10 ms); 7 }; await job within 1000 ms or 0'	7
+'job = go { sleep(2000 ms); 1 }; try await job within 50 ms else 9'	9
+'job = go { sleep(2000 ms); "a" }; await job within 100 ms or "late"'	'late'

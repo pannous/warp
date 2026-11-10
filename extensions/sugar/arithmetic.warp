@@ -9,7 +9,7 @@ rewrite $a ÷ $b => floor_quotient($a, $b)
 rewrite ($xs[$i] $op= $v) => ($list = $xs; $at = $i; $list[$at] = ($list[$at] $op $v)) where $op is symbol
 rewrite ($o.$f $op= $v) => ($object = $o; $object.$f = ($object.$f $op $v)) where $op is symbol
 rewrite ($a $op= $b) => $a = ($a $op $b) where $op is symbol
-# The element-wise operators (decision dot-operators-now, notes/broadcasting.md): the `.op` of every operator, `[1, 2] .* 2`,
+# The element-wise operators (decision dot-operators-now, wiki/broadcasting.md): the `.op` of every operator, `[1, 2] .* 2`,
 # `xs .< 3`, `u .== v`, applies it to each element; a side that may be a list or a number decides at run time (prelude
 # element_wise_any): two lists pair their elements, a list and a number pair each element with it, two numbers are the
 # plain operator. `xs .*= 2` is `xs = xs .* 2`

@@ -4,13 +4,15 @@
 # count, `Counter.instances.map(c => c.count)` every one's.
 # Run it in the playground and click.
 use web
-def Counter(start) {
+def Counter(start): html {
 	count = start
 	div{ button{ on click { count += 1 }, "+" } p{ "n " + count } }
 }
-div{
-	Counter(0)
-	Counter(10)
-	button{ on click { Counter.instances#1.count = 0 }, "Reset the first" }
-	p{ "sum " + sum(Counter.instances.map(c => c.count)) }
+html{
+	div{
+		Counter(0)
+		Counter(10)
+		button{ on click { Counter.instances#1.count = 0 }, "Reset the first" }
+		p{ "sum " + sum(Counter.instances.map(c => c.count)) }
+	}
 }

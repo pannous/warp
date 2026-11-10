@@ -2,6 +2,9 @@
 # (lib/fix) share, on the code points of a source, with the lexer's words (core/parsing/lexer.warp: the compiler has
 # them, lib/fix uses them)
 
+# lib/markup.warp's identity of a parameter typed html, which makes its argument markup
+MARKED_WORD = "html_written"
+
 ELEMENT_OPEN = '<'
 ELEMENT_CLOSE = '>'
 HOLE_OPEN = '{'
@@ -15,8 +18,10 @@ HANDLER_PREFIX = "on"
 TRUE_WORD = "yes"
 NO_PARAMETERS = "()"
 IGNORED_PARAMETER = "_"
-# [the source with each inline element as markup, no shifts, [[tag, [line, column]] of each element]]
-markup_of_inline_html(source: text, lines_kept: bool = yes): list := {
+# [the source with each inline element as written by `written`, no shifts, [[tag, [line, column]] of each element
+# rewritten]]: written(points, at, read) gives [the index its text replaces the source from, the text], ø to leave the
+# element as written (read: element_read's [markup, the index after the element, tag])
+markup_of_inline_html(source: text, lines_kept: bool, written: function): list := {
 	if not source.contains(END_TAG) and not source.contains(SELF_CLOSE) { return [source, [], []] }
 	points = code_points(source)
 	n = points.length
@@ -27,10 +32,12 @@ markup_of_inline_html(source: text, lines_kept: bool = yes): list := {
 	while at < n {
 		skipped = span_end(points, at, n)
 		read = if skipped == at and points[at] == ELEMENT_OPEN and starts_expression(points, at) then element_read(points, at, n, lines_kept) else ø
+		rewritten = if read == ø then ø else written(points, at, read)
 		if skipped > at { at = skipped }
 		else if read == ø { at += 1 }
+		else if rewritten == ø { at = read#2 }
 		else {
-			parts += [points_text(points, copied, at), read#1]
+			parts += [points_text(points, copied, rewritten#1), rewritten#2]
 			found += [[read#3, place_of(points, at)]]
 			at = read#2
 			copied = at
@@ -38,6 +45,10 @@ markup_of_inline_html(source: text, lines_kept: bool = yes): list := {
 	}
 	[join(parts + [points_text(points, copied, n)], ""), [], found]
 }
+
+# the element given to lib/markup.warp html_written, so that literal HTML is markup wherever it stands (decision
+# html-value): how the compiler reads it
+marked_element(points: list, at: int, read: list): list := [at, MARKED_WORD + "(" + read#1 + ")"]
 
 # whether the `<` at `at` starts an expression: a letter glued after it, before it only blanks back to a start
 starts_expression(points: list, at: int): bool := {

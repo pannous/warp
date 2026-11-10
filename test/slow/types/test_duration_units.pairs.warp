@@ -1,0 +1,4 @@
+# from test_duration_units.rs: edit the Rust test, then run the script again
+# a_time_unit_compares_with_a_duration
+'90 min < 1 day'	true
+'2024-01-31T10:00 + 24 h == 2024-02-01T10:00'	true

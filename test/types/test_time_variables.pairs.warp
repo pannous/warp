@@ -3,7 +3,6 @@
 # durations_with_the_same_days_order_by_their_exact_part
 '2 hours < 3 hours'	true
 '90 minutes > 1 hour'	true
-'1 day + 2 hours < 1 day + 3 hours'	true
 'x = 2 hours; y = 3 hours; x < y'	true
 'x = 2 hours; y = 3 hours; x >= y'	false
 

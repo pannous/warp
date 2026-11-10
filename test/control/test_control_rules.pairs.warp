@@ -1,0 +1,11 @@
+# Control flow and matching: comparing a switch's value, iterating instances, rule sets, match alternatives, else,
+# try/catch, loop values, chained comparisons, normalized glyphs (wiki pattern-matching, if, while, try, operator;
+# decisions comparison-after-arms, for-over-iterator, rewrite-rules, match-alternatives, P21, P60, P67, P55, #39, #27)
+'switch 3 {1: "one" 3: "three"} == "three"'	yes
+'class Countdown{n:int; next() := { if n > 0 { n = n - 1; n + 1 } else ø }}; s = 0; for x in Countdown(3) { s += x }; s'	6
+'r = rules { data($a * 1) => a }; simplify = r; simplify(data(y * 1 * 1))'	y
+'n = 2; match n { 1 | 2: "small"; other: "big" }'	"small"
+'n = 5; match n { 1, 2: "small"; other: "big" }'	"big"
+'x = "a"; match x { int or text: "t" }'	"t"
+'if no {1} else 3+1'	4
+'i = 0; while i < 3 { i = i + 1 }'	3

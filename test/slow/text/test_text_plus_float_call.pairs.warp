@@ -1,0 +1,3 @@
+# from test_text_plus_float_call.rs: edit the Rust test, then run the script again
+# a_float_call_joins_a_text_by_its_value
+'f(x) := sqrt(x); y = "a" + f(4); y'	'a2'

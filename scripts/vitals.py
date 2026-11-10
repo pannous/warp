@@ -6,8 +6,8 @@ Weight: lines of code after every commit of origin/main, each by what it changed
 the core without extensions and the extensions apart. Tests: every committed version of each results file (TIERS),
 its pass count read from its summary or its status lines. Build time: the CPU seconds and peak memory of each
 landing's compiler builds, read from the build records in the store (STORE). All of it is reconstructed (seconds) into scripts/vitals.html. The nightly run
-(scripts/integrate/nightly.sh) calls it; a Claude session republishes the page to its artifact URL
-(notes/core_hygiene.md "Warp vitals").
+(scripts/integrate/nightly.sh) calls it; a Claude session (the Integrator after a landing) republishes the page to its
+artifact URL, https://claude.ai/code/artifact/b988ec61-123d-4e97-833b-0dd2342cac4c.
 """
 import collections, datetime, glob, json, os, re, subprocess, sys
 
@@ -19,11 +19,12 @@ CODE_SUFFIXES = (".warp", ".c", ".h", ".js", ".sh", ".py")
 CORE_GROUPS = [("parsing", ["core/parsing"]), ("passes", ["core/passes"]),
                ("analysis", ["core/analysis", "core/commands", "core/(top)"]), ("emitter", ["core/emitter"]),
                ("runtime", ["core/runtime"]), ("native", ["core/native"])]
-EXTENSIONS = "extensions"  # extensions/; extensions/ and lib/sugar/ before it moved there (2026-11-03)
+EXTENSIONS = "extensions"  # extensions/; extensions/ and lib/sugar/ before it moved there
 TIERS = [("native pairs and is! lines", "test/results.txt"),
          ("samples, native", "test/samples.txt"), ("samples, playground", "test/samples-web.txt"),
          ("tests, playground", "test/tests-web.txt")]
 SUMMARY = re.compile(r"(\d+) of (\d+) failed")
+RUN_MINUTES = re.compile(r" in (\d+) min$")  # a run's duration, which scripts/full-suite.sh ends its commit subject with
 HEADER = re.compile(r"^# \S+ \S+ \S+ (\d+)/(\d+)")
 STATUS = re.compile(r"^(ok|SRV|ran|✓|FAIL|✗|BOTH|PAGE|EXP|NONE|WIN|DIFF|TIME|ERR)\s")
 PASSING = ("ok", "SRV", "ran", "✓")  # ran: a sample without an expected output that ran without error
@@ -39,6 +40,8 @@ BUILDS = [("warp.wasm, built by the seed", "warp.record", True),
           ("self-compile: warp.wasm compiles itself", "warp-self.record", False)]
 HELLO = "samples/hello/hello.warp"
 HELLO_RUNS = 3  # the cheapest of these runs counts: instructions and wall time only ever gain from the machine's load
+# the startup a compile shares, warp.wasm loaded and started (notes/hello_startup.md): hello minus it is the compile
+STARTUP = ["version"]
 INSTALLS = os.path.expanduser("~/dev/bin/warp-builds")  # each install of a main tip (after-push.sh): warp and its compilers
 HELLO_SNAPSHOTS = os.path.join(REPO, "data/vitals/hello.jsonl")  # one line per measured install, kept as installs go
 # measured by hand before the series began: (label, revision, 10^9 instructions, seconds)
@@ -208,11 +211,12 @@ def latest_flips(path):
 
 def tier_history(path):
     points = []
-    for line in git("log", "--reverse", "--format=%H %ad", "--date=iso-strict", "--since=" + SINCE, TIP, "--", path).splitlines():
-        sha, date = line.split(" ")
+    for line in git("log", "--reverse", "--format=%H %ad %s", "--date=iso-strict", "--since=" + SINCE, TIP, "--", path).splitlines():
+        sha, date, subject = line.split(" ", 2)
         counts = pass_count(git("show", f"{sha}:{path}"))
         if counts and counts[1]:
-            points.append([date[:16].replace("T", " "), sha[:10], *counts])
+            minutes = RUN_MINUTES.search(subject)
+            points.append([date[:16].replace("T", " "), sha[:10], *counts, int(minutes[1]) if minutes else None])
     return points
 
 
@@ -367,19 +371,29 @@ def card_counts():
     return snapshots
 
 
-def hello_cost(warp):
-    """The cheapest of HELLO_RUNS runs of `<warp> HELLO` (compile and run): 10^9 instructions retired and wall
-    seconds, by /usr/bin/time -l; None when it doesn't say Hello."""
+def cheapest_cost(warp, arguments, said):
+    """The cheapest of HELLO_RUNS runs of `<warp> <arguments>`: 10^9 instructions retired and wall seconds, by
+    /usr/bin/time -l; None when its output doesn't say `said`."""
     runs = []
     for _ in range(HELLO_RUNS):
-        run = subprocess.run(["/usr/bin/time", "-l", warp, HELLO], capture_output=True, text=True, cwd=REPO,
+        run = subprocess.run(["/usr/bin/time", "-l", warp, *arguments], capture_output=True, text=True, cwd=REPO,
                              env={**os.environ, "WARP_NO_WINDOW": "1"})
         instructions, seconds = re.search(r"(\d+)\s+instructions retired", run.stderr), re.search(r"([\d.]+) real", run.stderr)
-        if "Hello" not in run.stdout or not instructions or not seconds:
-            print(f"vitals: {warp} {HELLO} failed: {(run.stdout + run.stderr).strip()[-200:]}", file=sys.stderr)
+        if said not in run.stdout or not instructions or not seconds:
+            print(f"vitals: {warp} {' '.join(arguments)} failed: {(run.stdout + run.stderr).strip()[-200:]}", file=sys.stderr)
             return None
         runs.append((int(instructions.group(1)) / 1e9, float(seconds.group(1))))
-    return round(min(r[0] for r in runs), 2), round(min(r[1] for r in runs), 2)
+    return min(r[0] for r in runs), min(r[1] for r in runs)
+
+
+def hello_cost(warp):
+    """hello compiled and run (10^9 instructions, seconds), and the compile alone: hello's instructions minus those of
+    STARTUP, the same warp loading and starting warp.wasm (still holding hello's own run, ~0.01 G); None when hello
+    doesn't say Hello."""
+    hello, startup = cheapest_cost(warp, [HELLO], "Hello"), cheapest_cost(warp, STARTUP, "Warp")
+    if not hello:
+        return None
+    return round(hello[0], 2), round(hello[1], 2), round(hello[0] - startup[0], 3) if startup else None
 
 
 def commit_date(revision):
@@ -389,24 +403,33 @@ def commit_date(revision):
 def hello_track():
     """hello's compile and run per main tip: each install in INSTALLS not measured yet is measured once (its
     compilers' commit, warp.wasm.inputs) and kept in HELLO_SNAPSHOTS; then HELLO_REFERENCES, measured by hand."""
-    measured = []
+    # a later line of a commit adds to its earlier one (the compile, measured since the series began)
+    points = {}
     if os.path.exists(HELLO_SNAPSHOTS):
         with open(HELLO_SNAPSHOTS) as kept:
-            measured = [json.loads(line) for line in kept if line.strip()]
-    known = {point["commit"] for point in measured}
+            for line in kept:
+                if line.strip():
+                    point = json.loads(line)
+                    points.setdefault(point["commit"], {}).update(point)
+    measured = list(points.values())
+    known = {point["commit"] for point in measured if "compile" in point}
     for folder in sorted(glob.glob(os.path.join(INSTALLS, "*"))):
         try:
             with open(os.path.join(folder, "warp.wasm.inputs")) as inputs:
                 commit = re.search(r"commit=(\w+)", inputs.read()).group(1)
         except (OSError, AttributeError):
             continue
-        if commit in known or not (cost := hello_cost(os.path.join(folder, "warp"))):
+        if commit[:10] in known or not (cost := hello_cost(os.path.join(folder, "warp"))):
             continue
-        known.add(commit)
-        measured.append({"time": commit_date(commit), "commit": commit[:10], "instructions": cost[0], "seconds": cost[1]})
+        known.add(commit[:10])
+        point = points.setdefault(commit[:10], {"time": commit_date(commit), "commit": commit[:10]})
+        if "instructions" not in point:
+            point.update({"instructions": cost[0], "seconds": cost[1]})
+            measured.append(point)
+        point["compile"] = cost[2]
         with open(HELLO_SNAPSHOTS, "a") as kept:
-            kept.write(json.dumps(measured[-1]) + "\n")
-    series = sorted([p["time"], p["commit"], p["instructions"], p["seconds"], ""] for p in measured)
+            kept.write(json.dumps(point) + "\n")
+    series = sorted([p["time"], p["commit"], p["instructions"], p["seconds"], "", p.get("compile")] for p in measured)
     references = [[commit_date(revision), git("rev-parse", "--short=10", revision).strip(), instructions, seconds, label]
                   for label, revision, instructions, seconds in HELLO_REFERENCES]
     return {"series": series, "references": references}

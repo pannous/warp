@@ -1,4 +1,4 @@
-# 7afcde9933 2026-11-10 03:24 255/265 96.2%
+# 0eee06d611 2026-11-10 12:05 262/265 98.9%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -7,6 +7,7 @@ ok   samples/advanced/circle.warp
 ok   samples/advanced/filled_circle.warp
 ok   samples/advanced/mandelbrot_canvas.warp
 ok   samples/advanced/neural_net.warp
+ok   samples/advanced/particles.warp
 ok   samples/advanced/raytracer.warp
 ok   samples/advanced/self_parser.warp
 ok   samples/advanced/snake.warp
@@ -46,8 +47,8 @@ ok   samples/functions/code_as_data.warp
 ok   samples/functions/fibonacci.warp
 ok   samples/functions/functions.warp
 ok   samples/functions/list_overloads.warp
-ok   samples/functions/queens.warp
 ok   samples/functions/queens_idiomatic.warp
+ok   samples/functions/queens.warp
 ok   samples/functions/sudoku.warp
 ok   samples/functions/warp_reads_warp.warp
 ok   samples/functions/y_combinator.warp
@@ -88,6 +89,7 @@ ok   samples/golf/quine.warp
 ok   samples/golf/rot13.short.warp
 ok   samples/golf/rot13.warp
 ok   samples/golf/sierpiński-triangle.short.warp
+ok   samples/golf/sierpiński-triangle.warp
 ok   samples/gpu/aquarium.warp
 ok   samples/gpu/gpu_visualizer.warp
 ok   samples/gpu/julia.warp
@@ -107,11 +109,11 @@ ok   samples/graphics/gaussian_splats.warp
 ok   samples/graphics/meshlet_grid.warp
 ok   samples/graphics/million_trees.warp
 ok   samples/graphics/paint_function.warp
-ok   samples/graphics/paint_text.warp
 ok   samples/graphics/paint_text_gpu.warp
-ok   samples/graphics/shader.warp
+ok   samples/graphics/paint_text.warp
 ok   samples/graphics/shader_brush.warp
 ok   samples/graphics/shader_trails.warp
+ok   samples/graphics/shader.warp
 ok   samples/graphics/webgpu.warp
 ok   samples/graphics/window_size.warp
 ok   samples/hello/comments.warp
@@ -120,12 +122,13 @@ ok   samples/hello/natural.warp
 ok   samples/hello/phrases.warp
 ok   samples/hello/sample.warp
 ok   samples/laws/basic_laws.warp
+ok   samples/laws/kitchensink.warp
 ok   samples/laws/project_laws.warp
 ok   samples/lists/primes.warp
 ok   samples/lists/quicksort.warp
 ok   samples/lists/sieve.warp
-ok   samples/lists/sorting.warp
 ok   samples/lists/sorting_idiomatic.warp
+ok   samples/lists/sorting.warp
 ok   samples/lists/typed_lists.warp
 ok   samples/loops/game_of_life.warp
 ok   samples/loops/iterators.warp
@@ -146,12 +149,13 @@ ok   samples/modules/javascript.warp
 ok   samples/modules/lib.warp
 ok   samples/modules/main.warp
 ok   samples/modules/modules.warp
+ok   samples/modules/packages.warp
 ok   samples/modules/rust_crates.warp
 ok   samples/modules/slug_paths.warp
 ok   samples/modules/square.warp
-ok   samples/modules/test_ffi.warp
 ok   samples/modules/test_ffi_comprehensive.warp
 ok   samples/modules/test_ffi_extended.warp
+ok   samples/modules/test_ffi.warp
 ok   samples/native/arguments.warp
 ok   samples/native/c_calls.warp
 ok   samples/native/doubling.warp
@@ -200,9 +204,11 @@ ok   samples/sound/sound_patterns.warp
 ok   samples/sound/sound_pipes.warp
 ok   samples/sound/stereo_sound.warp
 ok   samples/sound/synth.warp
+ok   samples/sound/visualizer.warp
 ok   samples/sound/voices.warp
-ok   samples/storage/orm.warp
 ok   samples/storage/orm_transaction.warp
+ok   samples/storage/orm_units.warp
+ok   samples/storage/orm.warp
 ok   samples/storage/store.warp
 ok   samples/system/c_lines.warp
 ok   samples/system/unix_commands.warp
@@ -211,8 +217,8 @@ ok   samples/tasks/parallel_let.warp
 ok   samples/tasks/threads.warp
 ok   samples/text/calculator.warp
 ok   samples/text/find_text.warp
-ok   samples/text/levenshtein.warp
 ok   samples/text/levenshtein_idiomatic.warp
+ok   samples/text/levenshtein.warp
 ok   samples/text/palindrome.warp
 ok   samples/text/regexes.warp
 ok   samples/text/replace_word.warp
@@ -225,6 +231,7 @@ ok   samples/types/polymorphism.warp
 ok   samples/types/reflection.warp
 ok   samples/types/return_polymorphism.warp
 ok   samples/types/return_polymorphism2.warp
+ok   samples/types/types.warp
 ok   samples/wasm/component_reflection.warp
 ok   samples/wasm/import_compiled.warp
 ok   samples/wasm/wasm_interop.warp
@@ -234,8 +241,8 @@ ok   samples/web/computed_tags.warp
 ok   samples/web/counter.warp
 ok   samples/web/form_submit.warp
 ok   samples/web/hello_div.warp
-ok   samples/web/html.warp
 ok   samples/web/html_dsl.warp
+ok   samples/web/html.warp
 ok   samples/web/keyed_counters.warp
 ok   samples/web/keyframes.warp
 ok   samples/web/leaving_list.warp
@@ -254,13 +261,6 @@ SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
-FAIL samples/advanced/particles.warp: samples/advanced/particles.warp:26:3 not an int
-FAIL samples/golf/sierpiński-triangle.warp: samples/golf/sierpiński-triangle.warp:33:116 not an int
-FAIL samples/laws/kitchensink.warp: samples/laws/kitchensink.warp:114:1 outside the core: the unknown name test
 TIME samples/lists/dot.warp: used its 30 s of CPU
-FAIL samples/modules/packages.warp: samples/modules/packages.warp:1:61 int of node
-TIME samples/sound/gpu_visualizer_warp.warp: used its 30 s of CPU
-FAIL samples/sound/visualizer.warp: shown is declared twice: a variable and a function share the name; give one another name
-FAIL samples/storage/orm_units.warp: samples/storage/orm_units.warp:1:1 unknown type kg
+FAIL samples/sound/gpu_visualizer_warp.warp: samples/sound/gpu_visualizer_warp.warp:133:1 samples/sound/tune.mp3: no such sound file
 FAIL samples/system/crontab.warp: samples/system/crontab.warp:44:23 outside the core: the unknown name pre-wrap
-FAIL samples/types/types.warp: samples/types/types.warp:36:7 outside the core: a int for a typed field of Person

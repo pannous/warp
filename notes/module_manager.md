@@ -3,11 +3,12 @@
 The module system sketched below is input for card module-manager (samples/modules/modules.warp shows the forms that
 work). Working: `use math`, `use { sin, cos } from math`, `use math as m; m.sqrt(16)`. Missing:
 - `module name { … }` blocks, nested ones, and `graphics.colors.red` into them (`module colors { red = 1 };
-  colors.red` is "no field red").
+  colors.red` is "outside the core: the unknown name module").
 - `use super.colors` inside a nested module.
-- `use * from utils`: "undefined variable: use".
-- `use geometry as geo`, `use platform.windows if os == "windows"`: taken as C libraries ("[FFI] No functions found").
-- `def _helper() := ...`: "Unexpected character '.'" (`...` as a placeholder body).
+- `use * from utils`: "outside the core: the unknown name use".
+- `use geometry as geo` of a module that does not exist is accepted silently; `use platform.windows if os ==
+  "windows"`: "outside the core: the unknown name os".
+- `def _helper() := ...`: "the operator .. with nothing after it" (`...` as a placeholder body).
 
 ```warp
 // Module system in warp

@@ -24,6 +24,7 @@ node_sum(a: Node, b: Node): Node := {
 	if is_null(a) { absent_start("start the sum at 0 (x = 0)") }
 	if is_null(b) { fail() }
 	if not (summable(a) and summable(b)) { no_sum(a, b) }
+	if converts_to_float(a) or converts_to_float(b) { return node_sum(number_held(a), number_held(b)) }
 	# two plain ints add here; a ratio or a big int on either side goes to the extended runtime
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and (is_plain_int(a) and is_plain_int(b)) { return grown_sum(unboxed_int(a), unboxed_int(b)) }
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return extended_sum(a, b) }
@@ -102,6 +103,7 @@ power(base: int, exponent: int): int := {
 # `a ÷ b` of values known only at run time, floored: two plain ints in i64, numbers with a float the float quotient's
 # floor, a ratio or a big int (and the one quotient past 64 bits) by the extended runtime (card node-floor-quotient)
 node_floor_quotient(a: Node, b: Node): Node := {
+	if converts_to_float(a) or converts_to_float(b) { return node_floor_quotient(number_held(a), number_held(b)) }
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and is_plain_int(a) and is_plain_int(b) and not (unboxed_int(a) == least_int() and unboxed_int(b) == -1) { return floored_quotient(unboxed_int(a), unboxed_int(b)) }
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return extended_floor_quotient(a, b) }
 	divisor = float_of_node(b)
@@ -110,8 +112,9 @@ node_floor_quotient(a: Node, b: Node): Node := {
 	truncated(float_floor(float_of_node(a) / divisor))
 }
 # `floor x` of a value known only at run time: an int itself, a float's floor, a ratio's or a big int's by the extended
-# runtime
+# runtime, an instance's by the number its float() gives (`floor(1 + √2)` of the prelude's nearest)
 node_floor(n: Node): Node := {
+	if converts_to_float(n) { return node_floor(number_held(n)) }
 	if kind_code(n) != Kind.Int { return truncated(float_floor(unboxed_float(n))) }
 	if is_plain_int(n) { return n }
 	extended_floor(n)

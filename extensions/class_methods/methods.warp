@@ -217,7 +217,9 @@ methods_lifted(program: Node): Node := {
 	methods = methods_of(classes, liftable).filter(method => method != constructor_method)
 	operator_methods = methods.filter(method => spelled_operator(operator_table, method) != ø and 1 in taken_counts(classes, liftable, method))
 	variables = variables_assigned(top_statements)
-	routes = methods.filter(method => module_routing(classes, liftable, method, operator_methods) ?? (is_library_word(method) or method in functions or method in variables or method in operator_methods or names_syntax(method) or method in position_words))
+	# (a method named as a variable the program assigns is routed, a linked module's too: lib/units' Quantity.shown()
+	# beside `shown = []` is no function of the program's, card visualizer-shown-twice)
+	routes = methods.filter(method => method in variables or (module_routing(classes, liftable, method, operator_methods) ?? (is_library_word(method) or method in functions or method in operator_methods or names_syntax(method) or method in position_words)))
 	# (a method only linked classes have, of one parameter count and no word of the program's own: its functions and
 	# dispatcher lowered once the lowered program calls them, passes.warp deferred_definitions)
 	deferred = methods.filter(method => #linked > 0 and owners_of(classes, liftable, method).all(owner => owner in linked) and #taken_counts(classes, liftable, method) == 1 and method not in functions and called_name(method, routes) not in functions)

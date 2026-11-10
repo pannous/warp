@@ -1,5 +1,7 @@
 # The compiler's domain types, shared by its stages (cards types-front, types-back): what a plain text or int means
 # where the stages hand it on. The node itself is node.warp's Node.
+# Every parameter, field and result in core is typed: `any` only where a value really is any; a domain type with
+# behaviour is a small class in its stage (analyzer's Scope, Usages, Flow; front-only classes in lexer/parser).
 
 # a word of the program: a variable's, function's, field's or type's name
 type Name = text

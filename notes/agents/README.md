@@ -19,9 +19,8 @@ Spawned sessions get generated names (warp-6c …). Find them with ListAgents: t
 (tmux `warp-<role>`). Two sessions can share a generated name; then address one by its `[ref]`.
 
 ## Files
-- common.md: the short core every session reads at start; handbook.md: the detailed procedures, looked up on demand.
-- supervisor.md, integrator.md, interviewer.md, fixer.md, worker.md, refactorer.md, reviewer.md: one prompt per role. The
-  refactorer is not a default service: `notes/agents/start.sh refactorer` when the Supervisor decides.
+- AGENTS.md: the short core every session reads at start; handbook.md: the detailed procedures, looked up on demand.
+- supervisor.md, integrator.md, interviewer.md, gatekeeper.md, fixer.md, worker.md: one prompt per role.
 - start.sh: spawns roles via ~/dev/bin/claude-remote.sh (refuses at high load; FORCE_SPAWN=1 overrides).
 - api_worker.sh: a worker headless on the Anthropic API key (ANTHROPIC_KEY_WARP) instead of the subscription:
   `notes/agents/api_worker.sh <name> "<task>"`. When the plan's weekly limit runs low, only the

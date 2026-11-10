@@ -1,0 +1,4 @@
+# a page route answers its block's markup as HTML, a server function is also POST /rpc/<name>, a form names its route
+# (lib/web.warp; card server-routes)
+'xs = [1, 2, 3]; get "/p" { count xs }; route_answer({method: "GET", path: "/p"})'	3
+'xs = [1, 2, 3]; get "/n" { last 2 of xs }; route_answer({method: "GET", path: "/n"})'	[2, 3]

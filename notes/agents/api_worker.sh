@@ -30,7 +30,7 @@ if awk -v s="$SPENT" -v w="$WORKER_BUDGET_USD" -v t="$TOTAL_BUDGET_USD" 'BEGIN {
 fi
 tmux has-session -t "$NAME:" 2>/dev/null && { echo "$NAME already runs (tmux attach -t $NAME)" >&2; exit 1; }
 
-PROMPT="You are the warp worker $NAME. Read notes/agents/common.md and notes/agents/worker.md (use \`git -C $REPO show origin/main:notes/agents/worker.md\` if the checkout is stale) and act as described there. Your Supervisor is warp-supervisor. You run headless on a pay-per-token API key: work efficiently, do your one task, report to warp-supervisor with SendMessage, then end. YOUR TASK: $TASK"
+PROMPT="You are the warp worker $NAME. Read notes/agents/worker.md (the fleet rules are AGENTS.md, loaded automatically) (use \`git -C $REPO show origin/main:notes/agents/worker.md\` if the checkout is stale) and act as described there. Your Supervisor is warp-supervisor. You run headless on a pay-per-token API key: work efficiently, do your one task, report to warp-supervisor with SendMessage, then end. YOUR TASK: $TASK"
 LOG=$LOG_DIR/$(date +%Y-%m-%d-%H%M)-$NAME.jsonl
 printf '%s\n' "$PROMPT" > "$LOG.prompt"
 

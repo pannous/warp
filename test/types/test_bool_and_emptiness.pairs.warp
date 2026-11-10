@@ -1,0 +1,16 @@
+# yes/no, truthiness and emptiness as wiki/bool.md, wiki/truthiness.md and wiki/null.md say (decisions bool-type, keys-of-empty, empty-is-not-missing, Truthiness, predicate-bool, branch-keeps-bool, text-bool, in-bool)
+'type(yes)'	bool
+'0 === false'	no
+'{}.keys'	[]
+'f(x: any): list := x.keys; f({})'	[]
+'str({})'	"{}"
+'ø + 1'	error
+'if [ø] then 1 else 2'	1
+'[].count'	0
+'is_even 4'	yes
+'"abc".starts_with("a")'	yes
+'c = no; if c then 2 else true'	yes
+'"no" as bool'	no
+'if "0" then 1 else 2'	1
+'2 in [1, 2]'	yes
+'[1, 2].has(2)'	yes

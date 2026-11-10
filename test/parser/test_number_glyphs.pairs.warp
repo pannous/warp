@@ -19,3 +19,11 @@
 'x=3;x²+1'	10
 '2³*2'	16
 '1+2³'	9
+
+# a_glued_name_multiplies_every_number_literal
+'x=9;⅓x'	3
+'x=9;½x'	4.5
+'x=9;⅓(x)'	3
+'x=9;0.3̅x'	3
+'x=2;3½x'	7
+'⅓9'	3

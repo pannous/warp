@@ -1,4 +1,4 @@
-# Translation outcomes: notes/i18n.md
+# Translation outcomes: lib/i18n.warp
 'use i18n; plural_category("pl", 22)'	"few"
 'use i18n; plural_category("en", 1)'	"one"
 'use i18n; translate({en: {hello: "Hello {name}"}}, "en", "hello", {name: "Ada"})'	"Hello Ada"

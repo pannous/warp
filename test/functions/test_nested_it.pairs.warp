@@ -13,7 +13,6 @@
 '[[1,2],[3]].map { it.map { it*10 } }'	[[10 20] [30]]
 
 # test_inner_dollar_zero_shadows_the_outer
-# triage-held 2026-11-06: $0 parameter / lambda spelling x -> … :: '[[1,2],[3]].map{ $0.map{ $0*10 } }'	[[10 20] [30]]
 
 # test_function_it_stops_at_an_inner_lambda
 'f(x) := { [1,2].map{ it + x } }; f(10)'	[11 12]

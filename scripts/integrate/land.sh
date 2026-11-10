@@ -3,13 +3,13 @@
 # tier 0 went green. Pushes exactly the tested hash to main, closes each merged card with its merge commit, deletes its
 # remote branch; the push starts after-push.sh like any other (the pre-push hook, on-push.sh).
 # --tree is required: a worker that ran land.sh bare from its own worktree landed the Integrator's tested batch
-# (warp-web-host, 2026-11-02); workers push with plain git.
+# (warp-web-host); workers push with plain git.
 # A refused push (main moved) is tried again up to LAND_RETRIES times: when the commits pushed meanwhile leave the
-# compiler's code alone (core/ and the files it bakes in, scripts/compiler-inputs.sh --baked-files) they are merged onto
+# compiler's code alone (core/ and the lib/ files it uses, scripts/compiler-inputs.sh --code-files) they are merged onto
 # the tested hash as they are (a library change needs no rebuild, its pusher smoke-tested it; after-push checks hello on
 # the result), else merge.sh merges and smoke-tests the batch anew, with no second self-check (the batch passed one, the
 # new commits were tested by their pushers; night decision 00:50 2026-11-03: a 45 min self-check per retry never won). Main moves every few minutes with library pushes, so
-# re-testing each of them kept a batch from ever landing (2026-11-02).
+# re-testing each of them kept a batch from ever landing.
 set -uo pipefail
 LAND_RETRIES=${LAND_RETRIES:-8}
 
@@ -19,7 +19,7 @@ shift 2
 tree=$(cd "$tree" && pwd) || exit 1
 batch=$tree/data/integrate/batch
 say() { echo "land: $*"; }
-COMPILER_PATHS=(core extensions $("$(dirname "$0")/../compiler-inputs.sh" --baked-files | sed 's|^|lib/|'))
+COMPILER_PATHS=(core extensions $("$(dirname "$0")/../compiler-inputs.sh" --code-files | sed 's|^|lib/|'))
 field() { sed -n "s/^$1 //p" "$batch"; }
 set_field() { sed -i '' "s/^$1 .*/$1 $2/" "$batch"; }
 

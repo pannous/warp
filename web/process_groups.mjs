@@ -1,6 +1,6 @@
 // Child process groups the web tests start (wrangler dev with its esbuild service and workerd): stopped whole, also
 // when the test dies by a signal. A wrangler killed alone left `esbuild --service --ping` orphans that each spun a CPU
-// core for days (user, 2026-10-13). Spawn the child with `detached: true` so it leads its own group.
+// core for days. Spawn the child with `detached: true` so it leads its own group.
 
 const groups = new Set();
 

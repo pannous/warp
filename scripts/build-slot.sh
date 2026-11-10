@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # scripts/build-slot.sh <log> <command…>: the command run in one of the machine's few build slots, its output appended
 # to the log; its exit status. Every compile of the compiler goes through it (rebuild.sh, self-check.sh's stage two),
-# shared by every session (user 2026-10-30: six rebuilds at once took the Mac): it runs in the first free slot of
+# shared by every session (six rebuilds at once took the Mac): it runs in the first free slot of
 # <store>/build-slots and waits for one when all are taken. WARP_BUILD_SLOTS names how many, WARP_COMPILER_STORE the store
-# WARP_BUILD_RECORD=<dir>: the run measured into that folder (user 2026-10-31: every build profiled, all of it kept):
+# WARP_BUILD_RECORD=<dir>: the run measured into that folder (every build profiled, all of it kept):
 # time (/usr/bin/time -l: CPU, wall, peak memory) and the function profile of scripts/profile.sh -a (WARP_PROFILE=perfmap),
 # and steps: when each `rebuild step` began (stamped below)
 set -uo pipefail
@@ -13,7 +13,7 @@ FIRST_IN_LINE_RETRY=2  # seconds between the oldest waiter's tries of the slots
 IN_LINE_RETRY=5  # seconds between the others' looks at the line
 source "$(dirname "$0")/lib/platform.sh"
 store=$warp_store
-# <store>/build-slots/count, when present, sets the slots for every session at once (user 2026-11-02: at night as many
+# <store>/build-slots/count, when present, sets the slots for every session at once (at night as many
 # as the load allows; the Supervisor raises and lowers it watching the load, notes/agents/night.md)
 build_slots() { echo "${WARP_BUILD_SLOTS:-$(cat "$store/build-slots/count" 2>/dev/null || echo "$DAY_BUILD_SLOTS")}"; }
 scripts=$(cd "$(dirname "$0")" && pwd)
@@ -22,13 +22,13 @@ shift
 record=${WARP_BUILD_RECORD:-}
 command -v lockf >/dev/null || { "$@" >>"$log" 2>&1; exit; }
 mkdir -p "$store/build-slots"
-# A fair line (2026-11-01: thirteen waiters each retrying every slot let a newcomer pass an hour-old waiter): each
+# A fair line (thirteen waiters each retrying every slot let a newcomer pass an hour-old waiter): each
 # waiter's ticket <seconds>.<pid> in the line, only the oldest live one tries the slots, and it leaves the line as soon
 # as it holds one (inside the lock), so the next moves up while its build runs. A dead waiter's ticket is dropped
 line=$store/build-slots/line
 mkdir -p "$line"
 # WARP_BUILD_FIRST=1 (after-push's build of main) goes to the head of the line: every branch merged with that main
-# reuses its stored compiler instead of building it once more while it waits (2026-11-07, one slot, 11 in line)
+# reuses its stored compiler instead of building it once more while it waits (one slot, 11 in line)
 ticket=$line/$([ -n "${WARP_BUILD_FIRST:-}" ] && echo 0 || date +%s).$$
 touch "$ticket"
 trap 'rm -f "$ticket"' EXIT
@@ -54,7 +54,7 @@ measured() {
 	return $status
 }
 # the command's output passed on unchanged, each `rebuild step <name>` line also noted in <record>/steps as "<name> <seconds
-# since the run started>", and "end <seconds>" last (user 2026-11-09: the vitals page's core, libraries and full build times)
+# since the run started>", and "end <seconds>" last (the vitals page's core, libraries and full build times)
 stamped() {
 	[ -n "$record" ] || { cat; return; }
 	mkdir -p "$record"

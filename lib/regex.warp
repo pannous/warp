@@ -1,5 +1,5 @@
-// The standard library module regex (notes/stdlib.md section 7): `use regex`, through the adapter std_pure: Rust's
-// regex natively, JS RegExp in the browser, held to what both do alike (no look-around, no backreferences)
+// The standard library module regex (notes/stdlib.md section 7): `use regex`, through the adapter std_pure: libc's
+// POSIX regcomp natively (core/native/driver.warp regex_answered), JS RegExp in the browser, held to what both do alike (no look-around, no backreferences)
 // `"abc" matches "a.c"` where regex is used (the parser scans a used module's operators), and `matches(s, p)`
 infix operator matches(subject: any, pattern: any) := std_pure("regex", "matches", [subject, pattern])
 public first_match(subject: any, pattern: any): any := std_pure("regex", "first", [subject, pattern])

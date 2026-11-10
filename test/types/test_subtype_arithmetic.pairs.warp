@@ -1,0 +1,5 @@
+# a subtype of int computes as the int it is: arithmetic on it is int arithmetic, an int place takes it (card samples-advanced)
+'use color; red % 256'	0
+'use color; f(c) := to_base(c % 256, 16); f(blue)'	"ff"
+'use color; f(c) := c /! 65536 % 256; f(red)'	255
+'use color; type P: { color: int }; P { color: blue }.color'	4278190335

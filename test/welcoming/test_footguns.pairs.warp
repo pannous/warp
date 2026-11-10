@@ -36,7 +36,6 @@
 '100000000000000000000 > 2^64'	true
 
 # test_explicit_wrap_inside_function
-# triage-held 2026-11-06: pins i64 wraparound, a flaw :: 'f(x) := (x*x) as i64; f(3037000500)'	-9223372036709301616
 
 # test_string_equality_is_by_value
 '"abc"=="abc"'	true
@@ -246,7 +245,7 @@
 'date(2024,2,29).day'	29
 
 # test_calendar_overflow_is_explicit
-# triage-held 2026-11-06: desk-invented add(…, overflow: clamp) :: 'add(2024-01-31, 1 month, overflow: clamp) == 2024-02-29'	true
+# triage-held 2026-11-06: desk-invented add(…, overflow: clamp) :: 'add(1 month, overflow: clamp) == 2024-02-29'	true
 '2024-01-15 + 1 month == 2024-02-15'	true
 '2024-03-01 - 2024-02-01'	29
 
@@ -394,9 +393,7 @@
 '2 * 1.5:int'	2
 
 # test_square_roots_multiply_exactly
-# triage-held 2026-10-28: symbolic surds: √2*√2 exactly 2 :: 
 '√2*√2 == 2'	true
-# triage-held 2026-10-28: symbolic surds: √2*√2 exactly 2 :: 
 '√2*√2'	2
 
 # test_square_roots_are_reduced
@@ -419,12 +416,10 @@
 'π < 355/113'	true
 
 # test_sum_of_different_roots_stays_exact
-# triage-held 2026-10-28: symbolic surd algebra :: 
-# triage-held 2026-11-06: symbolic real equalities (sin(π/6) == 1/2, ℯ^(ⅈπ) == -1, surds) :: '(sqrt(2)+sqrt(3))^2 == 5+2*√6'	true
+'(sqrt(2)+sqrt(3))^2 == 5+2*√6'	true
 
 # test_euler_identity
-# triage-held 2026-10-28: complex exponentials, Euler identity exactly :: 
-# triage-held 2026-11-06: symbolic real equalities (sin(π/6) == 1/2, ℯ^(ⅈπ) == -1, surds) :: 'ℯ^(ⅈ*π) == -1'	true
+'ℯ^(ⅈ*π) == -1'	true
 'ln(ℯ) == 1'	true
 'exp(0)'	1
 
@@ -438,16 +433,10 @@
 'f(x):=x+1; g(x,y):=x+1; f==g'	false
 
 # test_polynomial_function_equality
-# triage-held 2026-10-28: function equality by algebra, undecidable in general :: 
-# 'f(x):=(x+1)^2; g(x):=x^2+2*x+1; f==g'	true
 # Todo if it was undecidable in general, how did we decide it in the Rust version? Did we? 
 
 'f(x):=x*x; g(x):=x+x; f==g'	false
 'f(x):=x*x; g(x):=x+x; f!=g'	true
-# triage-held 2026-10-28: function equality by algebra, undecidable in general :: 
-# 'f(x,y):=(x - y)*(x+y); g(a,b):=a^2-b^2; f==g'	true
-# triage-held 2026-10-28: function equality by algebra, undecidable in general :: 
-# 'f(x):=x/2+x/2; g(x):=x; f==g'	true
 
 # test_finite_domain_function_equality
 'f(a:bool,b:bool):=a and b; g(a:bool,b:bool):=a or b; f==g'	false

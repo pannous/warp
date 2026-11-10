@@ -37,13 +37,18 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 	if symbol == "+" and textual { return runtime_call("text_join", [shown_text(a), shown_text(b)]) }
 	# `d + 1 day`, `a - b` of a time: lib/time.warp's time_operation
 	if (a.kind == ValueKind.Time or b.kind == ValueKind.Time) and symbol in time_operators and module.functions.has(time_operation_word) { return time_operation_call(body, symbol, a, b) }
-	# `1 day > 2 hours`, `90 min < 1 day`, `1 day == 24 hours`: a time beside a boxed value passes extensions/times
-	# one_duration_kind first, lib/units' time quantities another duration kind until card dates-times-extraction
-	# (decision one-duration); the right operand is held, so each is computed once, in order
+	# `1 day > 2 hours`, `90 min < 1 day`, `1 day == 24 hours`: a time beside a boxed value compares the duration a
+	# quantity of time lasts (lib/units quantity_lasting, as + - * do, decision one-duration, card core-duration); any
+	# other instance is refused by extensions/times one_duration_kind; the right operand is held, so each is computed
+	# once, in order
 	if symbol in comparisons and is_time_beside_node(a, b) {
+		a = lasting(a)
+		b = lasting(b)
 		held = fresh_local(body, b.kind)
 		a = TypedCode(a.kind, runtime_call("one_duration_kind", [a, TypedCode(b.kind, b.code + [op.local_tee] + uleb(held))]).code)
 		b = TypedCode(b.kind, [op.local_get] + uleb(held))
+		# (ordered as two times: the boxed one, now a core duration, read as the time it is)
+		if symbol in time_relations { return runtime_call("time_holds", [as_time(a), as_time(b), number_value(time_relations[symbol])]) }
 	}
 	structured = a.kind == ValueKind.List or b.kind == ValueKind.List or a.kind == ValueKind.Node or b.kind == ValueKind.Node
 	# a boxed operand may be an instance whose class defines the operator: its dispatcher (class_methods.warp's
@@ -71,7 +76,7 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 	if a.kind == ValueKind.Time and b.kind == ValueKind.Time and symbol in equalities { return equality(body, symbol, TypedCode(ValueKind.Node, a.code), TypedCode(ValueKind.Node, b.code)) }
 	if a.kind == ValueKind.Time and b.kind == ValueKind.Time and symbol in time_relations { return runtime_call("time_holds", [a, b, number_value(time_relations[symbol])]) }
 	if kind == ValueKind.Bool and symbol in bool_ops { return TypedCode(ValueKind.Bool, a.code + b.code + [bool_ops[symbol]]) }
-	# a yes/no no implementation above takes is the int 1 or 0 (notes/bool_type.md): `"Fizz" * (i % 3 == 0)` is "Fizz" * 1
+	# a yes/no no implementation above takes is the int 1 or 0 (wiki/bool.md): `"Fizz" * (i % 3 == 0)` is "Fizz" * 1
 	if a.kind == ValueKind.Bool or b.kind == ValueKind.Bool { return unmarked_operation(body, symbol, as_int(a), as_int(b)) }
 	if kind != ValueKind.Int and kind != ValueKind.Float { return refuse("the operator " + symbol + " on " + kind_spelling(a.kind) + " and " + kind_spelling(b.kind)) }
 	if symbol == "%" and kind == ValueKind.Int { return euclidean_remainder(body, a, b) }
@@ -87,7 +92,7 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 	TypedCode(result, converted(a, kind) + converted(b, kind) + [ops[symbol]])
 }
 
-# a yes/no is the int 0 or 1 underneath (notes/bool_type.md): any operator but equality takes it as that int, `yes + yes`
+# a yes/no is the int 0 or 1 underneath (wiki/bool.md): any operator but equality takes it as that int, `yes + yes`
 # is 2; of two yes/no values an operator that gives 0 or 1 again gives yes/no, `yes xor no` is yes (user 2026-11-02)
 number_like(kind: ValueKind): bool := kind == ValueKind.Bool or kind == ValueKind.Int or kind == ValueKind.Float
 as_int(value: TypedCode): TypedCode := if value.kind == ValueKind.Bool then TypedCode(ValueKind.Int, converted(value, ValueKind.Int)) else value
@@ -123,16 +128,22 @@ def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
 	if symbol in bit_operators { return operation_code(body, symbol, TypedCode(ValueKind.Int, converted(TypedCode(ValueKind.Node, a), ValueKind.Int)), TypedCode(ValueKind.Int, converted(TypedCode(ValueKind.Node, b), ValueKind.Int))) }
 	left = TypedCode(ValueKind.Node, fresh_node_local(body))
 	right = TypedCode(ValueKind.Node, fresh_node_local(body))
-	plain = [TypedCode(ValueKind.Int, unboxed(left.code, gc_type(gc.int_box))), TypedCode(ValueKind.Int, unboxed(right.code, gc_type(gc.int_box)))]
+	# each operand as the number it is, a subtype's instance as its float() gives it (`red % 256` an int, decision
+	# subtype-less-than); a class's own operator (by_class) and the marks still see the operands as given
+	numeric = module.runtime.has("number_held")
+	left_number = if numeric then TypedCode(ValueKind.Node, fresh_node_local(body)) else left
+	right_number = if numeric then TypedCode(ValueKind.Node, fresh_node_local(body)) else right
+	plain = [TypedCode(ValueKind.Int, unboxed(left_number.code, gc_type(gc.int_box))), TypedCode(ValueKind.Int, unboxed(right_number.code, gc_type(gc.int_box)))]
 	# two plain ints past 64 bits make a big int (D16): the runtime's grown words
 	ints = if symbol in grown_words then runtime_call(grown_words[symbol], plain) else operation_code(body, symbol, plain#1, plain#2)
-	floats = operation_code(body, symbol, runtime_call("float_of_node", [left]), runtime_call("float_of_node", [right]))
+	floats = operation_code(body, symbol, runtime_call("float_of_node", [left_number]), runtime_call("float_of_node", [right_number]))
 	kind = if ints.kind == ValueKind.Bool then ValueKind.Bool else ValueKind.Node
-	exact = exact_operation(body, symbol, left, right, floats)
+	exact = exact_operation(body, symbol, left_number, right_number, floats)
 	# two Ints in $i64boxes stay ints; a ratio or a big int on either side takes the exact word
-	integers = plain_int_test(boxed(left)) + plain_int_test(boxed(right)) + [op.i32_and] + if_else_code(kind, ints, exact)
-	numbers = by_class(body, symbol, left, right, kind, both_of_kind(left.code, right.code, Kind.Int) + if_else_code(kind, TypedCode(kind, integers), floats))
-	code = a + [op.local_set] + left.code[1..] + b + [op.local_set] + right.code[1..]
+	integers = plain_int_test(boxed(left_number)) + plain_int_test(boxed(right_number)) + [op.i32_and] + if_else_code(kind, ints, exact)
+	numbers = by_class(body, symbol, left, right, kind, both_of_kind(left_number.code, right_number.code, Kind.Int) + if_else_code(kind, TypedCode(kind, integers), floats))
+	unwrapped = if numeric then runtime_call("number_held", [left]).code + [op.local_set] + left_number.code[1..] + runtime_call("number_held", [right]).code + [op.local_set] + right_number.code[1..] else []
+	code = a + [op.local_set] + left.code[1..] + b + [op.local_set] + right.code[1..] + unwrapped
 	textual = x => condition(runtime_call("textual_node", [x]))
 	# (a runtime built before marks_kept, the seed's, keeps none)
 	computed = if symbol not in comparisons and module.runtime.has("marks_kept") then runtime_call("marks_kept", [TypedCode(kind, numbers), left, right]) else TypedCode(kind, numbers)
@@ -387,4 +398,5 @@ def euclidean_remainder(body: Body, a: TypedCode, b: TypedCode): TypedCode {
 	code = a.code + b.code + nonzero + [op.i64_rem_s, op.local_set] + rest + get_rest + zero + [op.i64_lt_s]
 	TypedCode(ValueKind.Int, code + [op.if, type_bytes.int] + get_rest + absolute + [op.i64_add, op.else] + get_rest + [op.end])
 }
+as_time(value: TypedCode): TypedCode := if value.kind == ValueKind.Time then value else TypedCode(ValueKind.Time, runtime_call("time_of_node", [value]).code)
 is_time_beside_node(a: TypedCode, b: TypedCode): bool := (a.kind == ValueKind.Time and b.kind == ValueKind.Node) or (a.kind == ValueKind.Node and b.kind == ValueKind.Time)

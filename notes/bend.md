@@ -7,10 +7,10 @@ Its runtime BendRT has no GC (a `match` frees the node it consumes, `+` values a
 interaction calculus) is a separate research runtime. For warp the value is in the ideas, not the code.
 
 ## Taken
-- **Parallel let** `a b = f(x) g(y)` (src/lowering/control/parallel.rs, notes/go_blocks.md "Parallel let"): lowered
+- **Parallel let** `a b = f(x) g(y)`: lowered
   onto go/await, the last call on the current thread, forks only down to a depth cutoff (BendRT: a fork met while
   draining runs as a plain call).
-- **Laws convention** (notes/laws.md): `for x: T` quantifier lines on named laws, samples/laws/project_laws.warp is the
+- **Laws convention** (wiki/laws.md): `for x: T` quantifier lines on named laws, samples/laws/project_laws.warp is the
   human-owned contract agents must not edit, `warp verify` exits successfully only when every law is proved ("all
   proofs check / some proofs fail"). Warp checks generated Lean directly, so no `PROOF.warp`.
 
@@ -26,7 +26,7 @@ interaction calculus) is a separate research runtime. For warp the value is in t
 - Proofs as warp defs for recursive laws (equality, rewrite, induction by a recursive call), checked by the Lean export.
 - Export pure annotated functions + laws to `LAWS.bend` for `bend PROOF.bend --verdict` as a cross-check.
 - A fixed-pool fork-join scheduler for `go` instead of a thread per task.
-- Longer term, an own proof kernel: notes/own_prover.md.
+- Longer term, an own proof kernel.
 
 ## Licenses (if code is ever copied)
 - Apache-2.0 (Bend 1+2, HVM2): porting allowed; ship the license, keep the copyright line, mark modified files, carry a

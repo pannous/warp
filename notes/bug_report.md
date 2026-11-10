@@ -24,12 +24,12 @@ program, its output, the version and the page address, and becomes a card on the
   (~/.config/warp/bug-report-owner-token, /etc/warp-bug-report.owner-token) has no limit: `scripts/bug_report.py token`
   prints the playground address that stores it in a browser. An owner token rather than an IP range: the user's home
   address changes, and a German ISP's range is shared with everyone else on it.
-- Origin (user 2026-11-09): an owner report's issue gets the label `from-owner`, which nobody opening an issue can
+- Origin: an owner report's issue gets the label `from-owner`, which nobody opening an issue can
   set; that label, not the card's "(user, …)" first line, proves a ticket is the user's. A report the Mac's pull adds
   has no label and counts as a visitor's. warp-gatekeeper (notes/agents/gatekeeper.md) judges every new 🐞 ticket.
   The labels stay unforgeable only while nothing lets an outsider's issue get them: no issue template or form naming
   from-owner, from-agent or gate-* in its `labels:`, no workflow or app that labels issues from their text or from
-  commands in comments, and no collaborator with Triage or higher (2026-11-09: none of these exist).
+  commands in comments, and no collaborator with Triage or higher (none of these exist).
 - Redeploy the server side after editing the script: `scripts/bug_report.py install` (copies itself, the unit, the
   token; restarts).
 - Test: test_in_browser.py check "(the bug button …)" sends a wrong token to the real endpoint (no card is made) and

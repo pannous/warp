@@ -117,10 +117,26 @@ same_bytes(a: text, b: text): bool := {
 	}
 	yes
 }
-# `a == b` of texts (decisions nfc-tables, nfc-slot; notes/text_equality_nfc.md): equal bytes, else equal NFC forms.
+# `a == b` of texts (decisions nfc-tables, nfc-slot; wiki/Footguns.md): equal bytes, else equal NFC forms.
 # Only a text holding a code point NFC may change asks the host: the compiler's own `→` == `≠` never does, so building
-# the runtime needs no modules/unicode.wasm, which the step after it builds
-equal_texts(a: text, b: text): bool := same_bytes(a, b) or ((maybe_decomposed(a) or maybe_decomposed(b)) and same_bytes(canonical(a), canonical(b)))
+# the runtime needs no modules/unicode.wasm, which the step after it builds. NFC reads code points, so a text that is
+# no whole UTF-8 (byte_slice cut a character) compares by its bytes alone
+equal_texts(a: text, b: text): bool := same_bytes(a, b) or (whole_utf8(a) and whole_utf8(b) and (maybe_decomposed(a) or maybe_decomposed(b)) and same_bytes(canonical(a), canonical(b)))
+# whether each lead byte of t is followed by all the continuation bytes its code point needs
+whole_utf8(t: text): bool := {
+	at = 0
+	while at < byte_count(t) {
+		lead = byte_at(t, at)
+		next = at + code_point_width(lead)
+		if is_continuation_byte(lead) or next > byte_count(t) { return no }
+		at += 1
+		while at < next {
+			if not is_continuation_byte(byte_at(t, at)) { return no }
+			at += 1
+		}
+	}
+	yes
+}
 maybe_decomposed(t: text): bool := {
 	at = 0
 	before = 0
@@ -131,7 +147,6 @@ maybe_decomposed(t: text): bool := {
 			at += 1
 		} else {
 			next = at + code_point_width(byte_at(t, at))
-			if next > byte_count(t) { return no }
 			c = code_point_at(t, at)
 			after = if next < byte_count(t) then code_point_at(t, next) else 0
 			if may_change_in_nfc(c) and not (lone_mark(c) and not may_change_in_nfc(before) and not may_change_in_nfc(after)) { return yes }

@@ -2,12 +2,12 @@
 
 The self-compiled compiler, warp-self.wasm, is an ordinary WASI preview 1 command: wasmtime runs it with no warp
 host, it compiles a .warp file to a .wasm file, and that module runs under wasmtime too (card standalone, decision
-wasm-standalone; design: notes/standalone_compiler.md).
+wasm-standalone; design: notes/self_hosting.md).
 
 ## How to
 
 ```bash
-# 1. build warp-self.wasm (prints `built <path>`: next to the warp binary, or <checkout>/data/ for a worktree)
+# 1. build warp-self.wasm (prints `… promoted to <path>`: next to the warp binary, or <worktree>/lib/ with WARP_LIB)
 /Users/me/dev/bin/warp rebuild self
 
 # 2. compile: <source> <output> <folder of the source's uses> <lib folder>
@@ -45,7 +45,5 @@ warp self repl           # the same REPL, each line's module run by the native w
 
 - Plain WASI has no way to instantiate a module, so under wasmtime `repl` compiles each line and says that running it
   needs the native warp; `run`, `eval`, `test` refuse the same way. `warp repl` / `warp self repl` runs each line.
-- Commands needing a host (serve, fetch, app, lsp …) and those not yet written in warp (format, lint, types, verify)
-  refuse naming the native warp.
-
-Outcome tests: test/host and test/launcher (shell tests of the harness).
+- Commands needing the native warp's host (serve, fetch, app, lsp, format, lint, types …; extensions/commands/
+  commands.warp native_commands) refuse naming the native warp.

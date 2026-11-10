@@ -61,7 +61,7 @@ check_lane() {
 }
 # main's binary is refreshed after each pushed batch: a warp.wasm built by the old binary and a self build by the
 # new one make a self compiler that traps on every program (card self-trap-function-param). The check runs its own copy
-# of the binary, taken once, so a refresh never overlaps it (retrying instead kept checks queued for hours, 2026-10-22)
+# of the binary, taken once, so a refresh never overlaps it (retrying instead kept checks queued for hours)
 scratch=$(mktemp -d /tmp/self-check.XXXXXX) && trap "rm -rf $scratch" EXIT
 warp=$scratch/warp
 cp $main_warp $warp || exit 1

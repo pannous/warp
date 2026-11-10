@@ -1,4 +1,4 @@
-# A law (notes/laws.md): `law square(-x) == square(x)` and a named one, `law name:` with a `for x: int` line each, are
+# A law (wiki/laws.md): `law square(-x) == square(x)` and a named one, `law name:` with a `for x: int` line each, are
 # tried for a few ints of each variable at run time (extensions/rules/rule_words.warp law_check hands law_holds below the law), a value one fails for raised.
 # the values a law is tried for, in each of its variables
 LAW_TRIAL_VALUES = [0, 1, -1, 2, -2, 3, -7, 10, -100, 1000]

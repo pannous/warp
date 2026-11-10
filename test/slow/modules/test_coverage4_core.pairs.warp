@@ -1,0 +1,2 @@
+# coverage audit 2, batch 4 (ranked 81-160): prelude, list, map, regex helpers, edge cases
+«use map; get_path({a: {b: [10, 20]}}, ["a", "b", 2]) == 20 and get_path({a: 1}, []) == {a: 1}»	true

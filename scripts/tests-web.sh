@@ -4,7 +4,7 @@
 # the native `warp test` judges (warp.wasm test-list and test-verdicts), against the stored native baseline
 # (scripts/baseline.sh). Writes test/tests-web.txt, tracked (status and case, one a line: ok, PAGE fails only in the
 # page, BOTH fails natively too, NONE fails with no native verdict stored) when all of test/ ran, and
-# data/tests-web/report.txt. The page runs one case at a time, beside scripts/samples-web.sh (notes/playground_plan.md).
+# data/tests-web/report.txt. The page runs one case at a time, beside scripts/samples-web.sh (notes/web_playground.md).
 set -uo pipefail
 source "$(dirname "$0")/lib/platform.sh"
 source "$(dirname "$0")/lib/results-header.sh"

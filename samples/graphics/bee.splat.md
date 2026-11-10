@@ -12,7 +12,7 @@ Japanese Bee by YUMA株式会社 (SuperSplat user yyouzhen).
 - Licence: Creative Commons Attribution 4.0 International (CC BY 4.0)
   https://creativecommons.org/licenses/by/4.0/
 
-Read on that scene page (2026-11-09): the page shows "CC BY 4.0" with the title Attribution, its HTML has
+Read on that scene page: the page shows "CC BY 4.0" with the title Attribution, its HTML has
 `<link rel="license" href="https://creativecommons.org/licenses/by/4.0/">`, and the published scene record has
 `"license": "by"`. The page names the author YUMA株式会社. The capture is a focus-stacked photogrammetry scan
 (Sony macro, Agisoft Metashape, Lichtfeld Studio), published as SOG (splat-transform v2.5.2): 978285 splats,

@@ -1,6 +1,6 @@
-# Night rules (user 2026-11-02)
+# Night rules
 
-How the fleet works while the user sleeps, until the user is back (usually 10:00). Read with common.md and your role file.
+How the fleet works while the user sleeps, until the user is back (usually 10:00). Read with AGENTS.md and your role file.
 
 ## Decisions
 - The Supervisor and the Interviewer decide themselves: meaning, spellings, core OKs, process. Courageous, not
@@ -23,8 +23,8 @@ How the fleet works while the user sleeps, until the user is back (usually 10:00
 - Use the cloud more at night than by day: cloud workers build and test in their own boxes, beside the Mac's slots, so
   they add throughput where the Mac's build line is the bottleneck. Fast mode where the agent's own work is the limit.
 - Cloud workers take lib/-only cards that need no page or Mac host words; core and page work stay on the Mac.
-- The full suite runs in the cloud routine (test/results-cloud.txt).
-- No Rust in the cloud (user 2026-11-02): a cloud box needs no cargo or rustc. It takes the latest release's
+- The full suite runs only in the cloud routine (test/results.txt), day and night.
+- No Rust in the cloud: a cloud box needs no cargo or rustc. It takes the latest release's
   warp-v*-<arch>-unknown-linux-gnu.tar.gz (warp with its wasmtime library) and the seed seed.lock names, then
   `WARP_LIB=<checkout>/lib warp rebuild`. gh in a cloud session: REST only (`gh api repos/pannous/warp/...`, assets via
   `Accept: application/octet-stream`); GraphQL, and with it `gh release download` and the `todo` board CLI, is refused.

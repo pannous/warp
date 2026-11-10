@@ -1,0 +1,4 @@
+// lib/money.warp: exact Money in minor units, rounding modes, allocation, mixed currencies, parsing and formatting;
+// the expected amounts from python's decimal module (test/money/gen_money_tests.py, card lib-money)
+// the four rounding modes on ties, near-ties and negatives (python's ROUND_HALF_EVEN, HALF_UP, DOWN, UP)
+'use money; [p.minor for p in money_allocate(Money(0, "EUR"), [3, 7])]'	[0, 0]

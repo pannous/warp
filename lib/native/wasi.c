@@ -120,6 +120,13 @@ char* crash_context_running(char** arguments, int32_t count) {
 	running_with(arguments, count);
 	return outer;
 }
+// the command line the program reads from now on (args_get), a forked child's own (core/native/tests.warp case_ran):
+// the array and its strings stay the caller's
+void arguments_replaced(char** arguments, int32_t count) {
+	running_wasi->argc = count;
+	running_wasi->argv = arguments;
+	running_with(arguments, count);
+}
 void crash_context_restored(char* outer) {
 	snprintf(activity, sizeof activity, "%s", outer);
 	free(outer);
@@ -161,7 +168,7 @@ int main(int argc, char** argv) {
 		abort();
 	}
 	run_main(&program);
-	wasm2c_program_free(&program);
-	wasm_rt_free();
+	// the process ends: its memory and signal handlers with it (wasm_rt_free would warn that wasmtime's signal
+	// handling replaced wasm2c's alternate stack, core/native/driver.warp uncached_config)
 	return 0;
 }

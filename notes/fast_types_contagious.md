@@ -1,6 +1,6 @@
-# Fast types contagious? (investigation 2026-11-03)
+# Fast types contagious?
 
-The user's question: tonight finger_paint was slow because one untyped index `at = row * w + col` (w a
+The user's question: finger_paint was slow because one untyped index `at = row * w + col` (w a
 `global w: int`) took the general path (boxed number, grown_product), 229 ms against 18 ms. What if fast types were
 contagious: everything a fast int touches becomes fast, unless the program asks for exact numbers explicitly? Which
 tests would need adapting?
@@ -31,8 +31,7 @@ wraps silently. The emitter decides per `+ - *` (core/emitter/operators.warp):
   declared result is int (`gives_declared_int`, decision declared-int-result), and `+ - *` of fast ints, recursively.
   Not fast: `/`, `//`, `%`, calls with an undeclared result, and every untyped local or global, whatever it holds.
 - `type(x)` follows the same predicate (`type_value_of`): an Int-kind value that is not `fast_int` says `nat`.
-- Globals: on main, a `global w: int` is **not** fast. The landing on branch `untyped-local` (d64fe90109, card
-  untyped-local, not on main yet) adds `module.int_globals`: a global declared int counts in `declared_int`.
+- Globals: `module.int_globals`: a global declared int counts in `declared_int`.
 - No analysis pass decides this: analyzer.warp has no growth notion; a local's kind comes from its first value, a
   boxed result of grown_product makes the local a Node, and every later use of it (an index included) runs the
   dynamic path (node_operation, keyed_assignment).
@@ -84,28 +83,15 @@ counter becomes fast and wraps.
 
 ## 3. Test overview
 
-### Method
-A prototype compiler in /Volumes/Worktrees/fast-types-probe (origin/main + the untyped-local int_globals landing +
-~12 lines: `WARP_FAST_CONTAGION=flow|strong` read at compile time; flow = rule 2 for untyped locals and main-level/
-`global` variables; strong = flow + rule "either side fast"). Same compiler for all three modes, so every
-difference is the rule. Full suite not run (fleet rule); instead:
-- 579 test files whose text mentions a fast source or an exactness topic (`: int`, `int(`, `i64`, `wrap`,
-  `type(`, `nat`, `factorial`, `*=`, range loops, numbers ≥ 2^63).
-- control/ (96 files) run whole; numbers/, operators/ (35 files) run whole; 62 more files of numbers, operators,
-  modules, lists, programs run whole; the rest (~270 files) with only their lines naming a fast source kept.
-- 2,799 test lines in today's mode and in strong mode; flow mode on the files that differed (and the numbers files
-  that pin wrapping and growth: test_nat_and_int, test_unbounded_int, test_int_global_wraps), with the same result as today.
+A prototype compiler (`WARP_FAST_CONTAGION=flow|strong` read at compile time, sketch at the end) ran 2,799 test
+lines touching a fast source or an exactness topic in each mode:
 
-### Result
 
 | folder | lines run | changed by flow | changed by strong | current → contagious |
 |---|---|---|---|---|
 | operators | test_factorial (3) | 0 | 1 | test_factorial.pairs.warp:2 `24!` 620448401733239439360000 → -7835185981329244160 (lib/math factorial: `out = 1; out = out * i`) |
 | numbers, control, functions, types, lists, modules, programs, text, parser, welcoming, web, … | 2,796 | 0 | 0 | — |
 | **total** | **2,799** | **0** | **1** | |
-
-Lines that fail today fail identically in all modes (about 650 lines across the three runs: outside-the-core forms, missing
-words; not related to this question).
 
 Why so few: the tests that pin wrapping already use declared ints (test_fast_int, test_nat_and_int,
 test_int_global_wraps, test_fixed_width_ints), and the tests that pin growth (test_unbounded_int,
@@ -141,7 +127,7 @@ at = row * w + col; pixels[at] = color` with `global w: int`, 1,024,000 dots):
 
 | mode | ms |
 |---|---|
-| today (+ int_globals) | 766 |
+| today | 766 |
 | flow | 23 |
 | strong | 24 |
 
@@ -160,7 +146,7 @@ No raytracer sample exists.
 Adopt **flow contagion** (rules 1–10 above), as a refinement of decision nat-and-int: "a value computed from ints
 stays an int wherever it goes, unless declared nat".
 - Core cost: small. The probe is ~12 lines in core/emitter (emitter.warp assignment hook, operators.warp
-  declared_int) plus the int_globals landing. The proper version wants "every assignment fast" instead of "first
+  declared_int). The proper version wants "every assignment fast" instead of "first
   assignment fast" (a local first given `#xs`, later a big nat, must stay nat or widen), and fast results of untyped
   functions; that is a small analysis, best in analyzer.warp's local kinds rather than a new pass. Needs the user's
   core OK (operators.warp/emitter.warp are core).
@@ -175,7 +161,7 @@ stays an int wherever it goes, unless declared nat".
 - Do **not** adopt strong contagion: it inverts nat-and-int-core's `int op nat → nat`, silently breaks lib/math
   factorial, bit_count, from_base and the accumulator idiom, and gains nothing measurable over flow on the probe.
 
-Prototype (branch deleted after this report; on top of d64fe90109's int_globals). The whole rule, as probed:
+Prototype (branch deleted). The whole rule, as probed:
 ```warp
 # emitter.warp: Body gets `fast_locals: map = {}`; before `if operator in assignment_operators …`:
 if operator == Op.Assign and left is symbol and contagion() != "" { caught_fast(body, name_of(left), right) }
