@@ -255,7 +255,7 @@ def own_word_code(body: Body, name: text, x: Node): TypedCode {
 byte_count_words = {bytecount: yes, byte_size: yes}
 def byte_size_code(value: TypedCode): TypedCode { runtime_call("node_bytes", [TypedCode(ValueKind.Node, boxed(value))]) }
 # the kinds `+` joins as texts
-comparisons = {"==": yes, "!=": yes, "<": yes, ">": yes, "<=": yes, ">=": yes} # todo yes?? 
+comparisons = {"==": yes, "!=": yes, "<": yes, ">": yes, "<=": yes, ">=": yes} # todo (card comparisons-yes-map) yes?? 
 equalities = {"==": yes, "!=": yes}
 # the order comparisons of two times, as extensions/times/runtime.warp time_holds reads them
 time_relations = {"<": 0, "<=": 1, ">": 2, ">=": 3}
@@ -587,7 +587,7 @@ def converted(value: TypedCode, to: ValueKind): list {
 	if from == ValueKind.Node and node_reader(to) != ø { return runtime_call(node_reader(to), [value]).code }
 	if from == ValueKind.Char and to == ValueKind.Text { return runtime_call("char_text", [value]).code }
 	# (a local holding a call still compiling, in a first reading of a cycle, whose code is not kept)
-	# todo Plug in the general convert mechanism that calls convert on any two types IF it is defined (dynamic lookup at runtime?)
+	# todo (card general-convert) Plug in the general convert mechanism that calls convert on any two types IF it is defined (dynamic lookup at runtime?)
 	if from != to and from != pending and to != pending { refuse("a " + kind_spelling(from) + " where a " + kind_spelling(to) + " is needed") }
 	value.code
 }
