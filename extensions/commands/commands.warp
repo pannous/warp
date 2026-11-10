@@ -75,8 +75,8 @@ command_words(): list := command_help.map(command_name).filter(word => not word.
 # the text of the file `target` names, else `target` itself as code
 source_of(target: text): text := try read(target) else target
 
-show_help() := {
-	if args#2 == "options" { return show_options() }
+show_help() := if args#2 == "options" then show_options() else show_commands()
+show_commands() := {
 	print "warp, the compiler written in warp (core/compiler.warp), its commands:"
 	for entry in command_help { print "  " + padded("warp " + entry#1, HELP_COLUMN) + entry#2 }
 	print "  options: warp help options"
