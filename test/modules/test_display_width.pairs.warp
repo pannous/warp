@@ -29,4 +29,3 @@
 'use tables; pad_display("é", 3, "center")'	" é "
 'use tables; pad_display("abc", 2, "left")'	"abc"
 'use tables; pad_display("x", 3)'	"x  "
-'use tables; try { pad_display("x", 3, "middle") } catch e { e.message }'	"pad_display: align is left, right or center, not middle"

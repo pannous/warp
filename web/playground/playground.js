@@ -1,7 +1,7 @@
 // The page: the editor, the worker that compiles and runs (worker.js), and the report shown like the CLI prints it:
 // the value, printed output, errors, warnings, hints. An ambiguity is a warning naming its explicit form; "got it"
 // silences a warning's topic in this browser (it never changes the value) until "show again". Each reading the user
-// might have meant is an "I meant: …" button that rewrites the code at the warning and runs it again (notes/fixits.md).
+// might have meant is an "I meant: …" button that rewrites the code at the warning and runs it again (core/analysis/diagnostics.warp).
 
 const ACKNOWLEDGED_KEY = "warp-playground-acknowledged";
 const SHOWN_FROM_KEY = "warp-playground-shown-from"; // the least diagnostic level shown, hint by default (card warning-levels)
@@ -920,7 +920,7 @@ function commentGotIt(line) {
 	runChanged();
 }
 
-// "got it" (user, 2026-10-05): for this expression (its `topic@expression` key), for all of the kind (the topic), or
+// "got it": for this expression (its `topic@expression` key), for all of the kind (the topic), or
 // as a `// got it` comment on its line; each keeps the code and never changes the value
 function gotIt(topic, expression, line) {
 	const button = (label, title, onclick) => element("button", { className: "got-it", title, onclick }, label);
@@ -1358,10 +1358,11 @@ async function sendBugReport() {
 	if (!report.comment.trim()) return showBugStatus("write what went wrong first", true);
 	showBugStatus("sending…");
 	try {
-		const answer = await fetch(BUG_REPORT_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report) });
+		const answer = await serviceFetch(BUG_REPORT_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report) });
 		const { card, board, queued, error } = await answer.json();
 		if (answer.status === FORBIDDEN) {
 			store(BUG_TOKEN_KEY, null);
+			showStatus("owner-token-status", "rejected", "the bug-report server refused the token");
 			$("bug-token").hidden = false;
 		}
 		if (!answer.ok) return showBugStatus(`not sent: ${error ?? answer.status}`, true);

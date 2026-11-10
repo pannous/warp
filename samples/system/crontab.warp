@@ -41,7 +41,7 @@ html{ lang: "en"
 		td, th { padding: 6px 14px; border-bottom: 1px solid silver; vertical-align: top }
 		td.when { white-space: nowrap; font-weight: 500 }
 		td.log { white-space: nowrap; color: gray }
-		code { white-space: pre-wrap; word-break: break-all }
+		td code { white-space: pre-wrap; word-break: break-all }
 	}
 	body{
 		h1{ "cron table" }

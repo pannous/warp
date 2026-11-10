@@ -1,0 +1,5 @@
+# time literals are values (card triage-time-values): dates, local times, instants and durations print, join texts and compare
+'d = 2024-02-29; d + 1 day'	2024-03-01
+'2024-01-31T10:00 + 1 day'	2024-02-01T10:00
+'1 month + 2 days'	1 month 2 days
+'2024-01-01 - 1 week'	2023-12-25

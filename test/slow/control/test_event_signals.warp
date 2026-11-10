@@ -1,0 +1,4 @@
+# from test_event_signals.rs: edit the Rust test, then run the script again
+# the_handler_reads_the_event_data
+is! 'why=""; on stop the machine {why=event.reason}; emit stop the machine{reason:"human"}; why' 'human'
+is! 'seen=0; def check(x){ if x>2 {emit too big{value:x}}; x }; on too big {seen=event.value}; check(4); seen' 4

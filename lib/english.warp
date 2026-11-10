@@ -1,4 +1,4 @@
-// English phrases as library code: `set field of object to value` (`set x to 5` is `x = 5`, user 2026-10-19) and
+// English phrases as library code: `set field of object to value` (`set x to 5` is `x = 5`) and
 // `add x to list`
 // (card set-set, decision setter-calls): rewrite rules (rust-harness:src/modules/rewrites.rs), so
 // every program mentioning their words gets them, no `use` needed, and a program defining `set` or `to` keeps its own.

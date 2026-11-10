@@ -1,0 +1,10 @@
+# comments, statement ends, soft keywords and operator glyphs as wiki/comments.md, wiki/keyword.md and wiki/operator.md say (decisions hash-comments, P165, P172, unicode-symbols, operator-alias)
+'3 # a comment'	3
+'s = "abc"; #s'	3
+'7 // 2'	7
+'print 1    print 2'	error
+'match = 3; match + 1'	4
+'fire(x) := x * 2; fire 3'	6
+'3 ⇔ 4'	error
+'3 × 4'	12
+'√16'	4

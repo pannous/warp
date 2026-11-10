@@ -3,7 +3,7 @@
 # (`name of people where …`). Not lookups: a type phrase `list of int` and a spaced definition `square of a number = …`.
 # `type of x` is the call `type(x)`. `in` and `from` select like `of` after a selector word the program does not bind:
 # `length of characters in text` is `text.characters.length`; else `x in xs` stays membership (decision sugar-triage).
-# Left out (notes/self_hosting_dropped.md): the walk `print words in t`, the unit count `byte count of t`.
+# Left out: the walk `print words in t`, the unit count `byte count of t`.
 
 of_word = "of"
 type_call_word = "type"

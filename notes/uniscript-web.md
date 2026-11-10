@@ -9,8 +9,6 @@ program + 10 MB library (brotli on the server).
 
 ```
 web/uniscript/build.sh           # warp compile → uniscript.wasm, its path imports → modules/ (uniscript_c.wasm), fonts → slices
-node probes/web_uniscript/page_in_node.mjs   # the page's own uniscript.js in node (stub DOM): three conversions
-probes/web_uniscript/page_in_safari_engine.sh  # the same in Safari's JavaScriptCore shell
 web/uniscript/build.sh deploy    # … and rsync to pannous.com:/var/www/pannous/uniscript/
 cd web/uniscript && python3 -m http.server 8765   # local
 ```
@@ -29,17 +27,15 @@ the uniscript repository's `fonts/dist` (`UNISCRIPT_FONTS`) or `~/Library/Fonts`
   the page fetches `modules/<file name>` and instantiates it (it imports nothing). The custom section warp.c_calls gives
   each call's letters: `t` parameters are copied NUL-terminated from the program's memory into the library's malloc and
   freed, a `t` result is read into a new_text and freed with uniscript_free (a reduced web/playground/host-foreign.js
-  callC; other letters are a loud error). Sites do the same with their imports renamed to `page:modules/<file>`
-  (src/web/site_modules.rs); a hand-made page like this one keeps the absolute path and matches by file name.
+  callC; other letters are a loud error). The page keeps the absolute path and matches by file name.
 - `host.read` is a synchronous XHR (charset `x-user-defined` keeps the bytes); the program reads no file.
 - Imports come from imports.js `importDescriptors`: `host.read`, `host.fetch`, `host.fetch_within`, `host.warn` are real
   (`warning(message)` in warp lists under the output of the conversion that raised it, cleared on the next one),
   `host.run` and anything unknown warn in the page and return 0 / -1.
-- Bytes go into memory by the rule of `src/host.rs write_bytes_to_caller` (the exported `text_heap` bump pointer, fresh
+- Bytes go into memory by the rule of core/native/driver.warp (the exported `text_heap` bump pointer, fresh
   pages when it is 0 or full), then `new_text(ptr, len)`.
 - Results: JS cannot read WASM GC struct fields, so warp exports `get_text_ptr` / `get_text_len` next to `get_kind`
   (a Text's, Symbol's or Error's $Text bytes copied into memory by `text_address`, and their count; 0 otherwise).
-  `tests/text/test_text_getters.rs` does the same in wasmtime.
 - After each conversion `text_heap` is reset to its value after init: `out += …` allocates a fresh text per append, and
   the results are copied out immediately, so memory does not grow with typing.
 

@@ -1,0 +1,2 @@
+# a class's method is compiled only for what may be its instance: a map write beside a class's position setter stays the map's
+'use sound; C4'	C4

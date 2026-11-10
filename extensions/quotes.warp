@@ -67,6 +67,9 @@ def spliced_code(body: Body, e: Node): list {
 	if is_group(e) and bracket_of(e) != "{" and separator_of(e) in statement_separators { return boxed(expression_code(body, e)) }
 	# `if c then a else b` is code, never split at its else; its branches are data in turn (`else ul{…}`)
 	if is_conditional(e) { return boxed(expression_code(body, e)) }
+	# a class's making is code, its arguments values: an element of markup, `Html(element: ul{ li all xs })`
+	# (extensions/markup_values.warp)
+	if is_class_made(e) { return boxed(expression_code(body, e)) }
 	if not is_curly_group(e) and not is_word_keyed(e) and #unbound_words(body, e) == 0 { return boxed(expression_code(body, e)) }
 	if is_group(e) and is_data_tag(body, e) { return spliced_code(body, Key(e#1, Op.Colon, e#2)) }
 	if is_word_keyed(e) {
@@ -83,6 +86,7 @@ def spliced_code(body: Body, e: Node): list {
 	}
 	quoted_code(body, e)
 }
+def is_class_made(e: Node): bool := is_group(e) and bracket_of(e) == "(" and #e > 0 and e#1 is symbol and name_of(e#1) in module.classes
 def spliced_key_code(body: Body, e: Node): list {
 	parts = [TypedCode(ValueKind.Node, spliced_code(body, key_of(e))), text_value(op_of(e)), TypedCode(ValueKind.Node, spliced_code(body, value_of(e)))]
 	runtime_call("key_node", parts).code

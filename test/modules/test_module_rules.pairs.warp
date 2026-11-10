@@ -1,0 +1,8 @@
+# Modules and foreign words: operators that load their module, errors held by try or an optional place, use math,
+# foreign signature lines (wiki use, Error, foreign; decisions implicit-operators, error-held-or-raises, errors-one-rule,
+# P169, foreign-signature)
+'x = 6.0 ± 0.3; x.value'	6
+'r = try error "neg"; r failed'	yes
+'f() := error "neg"; r: int? = f(); r failed'	yes
+'use math; floor 2.5'	2
+'sin(x: float): float from "m"; sin 0'	0

@@ -38,6 +38,7 @@ use "conversions.warp"
 use "implicit_uses.warp"
 use "test_lines.warp"
 use "scoped_words.warp"
+use "fast.warp"
 use "parse_words.warp"
 use "iteration_inlining.warp"
 use "block_inlining.warp"
@@ -53,6 +54,7 @@ use "text_lints.warp"
 use "int_misfits.warp"
 use "page_values.warp"
 use "dev_values.warp"
+use "markup_values.warp"
 use "fetch_signals.warp"
 use "js_globals.warp"
 use "dir_hints.warp"
@@ -129,6 +131,7 @@ EXTENSIONS = [
 	int_misfits_extension
 	page_values_extension
 	dev_values_extension
+	markup_values_extension
 	fetch_signals_extension
 	js_globals_extension
 	dir_hints_extension
@@ -136,6 +139,7 @@ EXTENSIONS = [
 	collection_type_tests_extension
 	block_definitions_extension
 	parameter_values_extension
+	fast_extension
 	local_shadows_extension
 	effects_extension
 	optional_unwraps_extension

@@ -3,13 +3,11 @@
 The goal: the core binary bakes the library zero times. No LIBRARY_FILES, no LIBRARY_PARSES. Each module publishes
 its signatures, and the compiler loads it as compiled wasm when a program uses it.
 
-## core-takes-what-it-uses (card baked-lib-split, 2026-11-09)
-The L4 statement below was not true: module_source baked prelude, math, c, primitive, web.webidl, entities.tsv and
-modes.data as text, and the compiler compiled os, file, path, math, reals and case_table(s) in through `use`
-(checked line by line against warp.wasm's bytes). Now the compiler `use`s no lib module and module_source names only
+## core-takes-what-it-uses (card baked-lib-split)
+The compiler `use`s no lib module and module_source names only
 core's and extensions' files: core/host_io.warp, core/integers.warp, core/runtime/case_tables.warp (lib/ links to them),
-the typed builtin lines in core/analysis/builtins.warp and math_builtins.warp, and prelude, math and c are read from
-disk when a compile first asks.
+the typed builtin lines in core/analysis/builtins.warp and math_builtins.warp, the data files errors, warnings and
+hints.data and core/passes/modes.data; prelude, math and c are read from disk when a compile first asks.
 P3: the prelude's core part, core/prelude_core.warp: the 16 prelude words the compiler really calls (its call graph
 from main, not its name section: ~45 of the 64 prelude functions in warp.wasm are reached only by name, a map key
 `random:`, a local `emitted`, and never called) and the 12 aliases its code writes (`.keys`, `.has`, `.index_of(x)`,
@@ -17,139 +15,53 @@ from main, not its name section: ~45 of the 64 prelude functions in warp.wasm ar
 std_module_text("prelude") is the core part, baked by module_source, then lib/prelude.warp; every read of a standard
 module's text goes through it (prelude.wasm's signature and hash, the index spans, prelude_text's readers: aliases,
 prelude_definitions, implicit uses), prelude_files() gives both files for positions, and the prelude module's stub
-uses the core file before `use prelude`. compiler.warp includes the core part for the current seed, which reads only
-lib/prelude.warp and so its copies of the 12 alias lines too, until the seed refresh (card builtins-seed-transition).
+uses the core file before `use prelude`.
 No operator in the core part while compiler.warp includes it: in the self build that operator and the prelude's same
 one are two overloads the dispatch cannot tell apart (a function replaces, an operator overloads), so the lexer's
 `(n + 1) times [n]` became a comprehension and `times` stays in lib/.
-Checked: smoke, self-check, gate tier 1; compiler.warp compiled against a lib/prelude.warp holding only the core part's
-text built a compiler that compiled and ran a program (before `times` left the core part). With lib/prelude.warp emptied
-the compile now stops in lib/text.warp's indent, which the compiler uses implicitly by name (its field and local
-`indent`) and which needs `times`. scripts/compiler-inputs.sh --baked-files lists no lib/ file. Left: the reach by name
+With lib/prelude.warp emptied
+the compile stops in lib/text.warp's indent, which the compiler uses implicitly by name (its field and local
+`indent`) and which needs `times`. scripts/compiler-inputs.sh --code-files lists no lib/ file. Left: the reach by name
 still compiles dead prelude words, and lib/text.warp's, in from lib/ (card baked-lib-split note).
+Data on demand (cards webidl-on-demand, entities-on-demand): lib/web.webidl and lib/entities.tsv are
+read through library_data (core/passes/library.warp, loud when missing) the first time a program reaches the page's js
+or writes an entity outside a text (`\:alpha`, or `\alpha` for its refusal; `"\:alpha"` reads it at the text escape).
 
-## Final state (main c25c72d181, 2026-11-06; card library-removal-core done)
-
-**Baked into warp.wasm** (2.15 MB, from 5.05 MB): SUGAR_RULES, the packed rules of extensions/sugar by file with each
-file's hash (rewrites.warp; parsing them each compile was ~0.3 s), and the data files `module_source("…")` reads at the
-compiler's own build: lib/entities.tsv, lib/modes.data, core/analysis/{errors,warnings,hints}.data. Everything else
+## State
+Nothing of lib/ is baked into warp.wasm. The sugar's rules (extensions/sugar), packed by file, are
+modules/sugar_rules.packed, written beside the index (library.warp write_library_index). Everything else
 of lib/ is read from disk once a compile (library.warp library_text) or linked as compiled wasm: every program links
-modules/prelude.wasm (171 KB, 222 words) and the modules it uses, each declared from its warp.signature.
-**Trusted, hashed only under WARP_LIB:** modules/index.tsv (its `slice` spans of the prelude and the type modules) and
-SUGAR_RULES, as rule_needs_by_module trusts the index; a linked module's text is checked by its length otherwise.
-**Numbers** (instructions retired, paired, against main before each landing): L4 hello −1.1 %, use units −4.4 %,
-self compile −2.0 %; step 2 (prelude linked) hello +0.8 %, use units −0.5 %, numeric loop −3.9 %, self compile
-−0.15 %; on the way, for every linked program, 2d.1 (lazy host words) hello −4.3 % and 2d.2 (no whole module first,
-warp.fingerprint) use units −18 %.
-**Measured, not done:**
-- signature-sha256 (own card): source_hash, djb2 in warp, ~1.3 K instructions a byte, is ~1 % of hello without
-  WARP_LIB but 5.3 % of `use units` under WARP_LIB (every agent and test run of a worktree; built_of_text 3.2 %).
-  The host's sha256 would make it free, but c_bytes reads a text through shown_at, whose scratch refuses long
-  texts ("a host word's argument too long to show", driver.warp shown_packed): it needs a text passed by its bytes
-  (text_address), not shown.
-- SUGAR_RULES unbaked: parsing extensions/sugar each compile costs ~0.3 s; a prebuilt rules file beside the modules
-  (like warp.signature's packed rules) would drop the last bake.
-- pixel-channel-sums (own card): the prelude compiled from source into a program summed pixel_channel differently
-  (25500128) from a typed or linked one (25500130, IEEE); linked, programs now give the latter.
+modules/prelude.wasm and the modules it uses, each declared from its warp.signature. A prebuilt module is checked
+against its source by `<length>-<sha256>` (library.warp source_hash).
 
-## Assessment (main c0a082, 2026-11-05)
+## Steps (L1-L5, all landed)
+- L1: lib/extensions is not bundled.
+- L2: modules/index.tsv (library.warp LIBRARY_INDEX), a cache of what a compile has to know before uses are resolved,
+  written by `warp rebuild` beside the modules (write_library_index), one line `<section>\t<key>\t<value>` of the
+  sections INDEX_SECTIONS; a missing index is scanned off lib/ per section. tsv, not warp notation: `warp parse` of
+  the same index as a 40 KB .warp is 0.47 s against 0.31 s for a whole hello compile, the tsv split ~1 ms.
+- L3: warp.signature (core/passes/signature.warp) goes right after the wasm header (a custom section may be first),
+  so reading a signature costs a few KB, not the whole module. pack() of {source hash, uses, slices [name, head line,
+  parse], rules, foreign}; unpacked, never parsed. linked_libraries links a module when the hash is its file's, else
+  warns one line why (no signature, or lib/<m>.warp differs) and compiles it from source. A linked module's words
+  reach the program as its signature's parses (prelude_words.warp with_reached), its rules from the signature: no
+  text of it is read. `warp signature <m>` shows one as warp text.
+- L4: the compiler bakes no library. lib/ is read from disk, once a file a compile (library.warp library_text,
+  file_source). What a bake had hidden, each found by scripts/profile.sh and moved:
+  - cutting the prelude and the type modules into definitions (~70 ms): their spans are the index's section `slice`
+    (prelude_words.warp spans_of), used while the text is the file the index was written of.
+  - a used module parsed whole for its `use` lines: use lines read off the lines a use may start (parser.warp
+    use_candidates), a linked module's uses off its signature (modules_used_by), its words off the index.
+  - parses of the prelude's reached definitions taken from its signature cost more than parsing the few reached.
+  Step 2, the prelude linked: prelude.wasm exports every word; every program links it (linked_libraries names it
+  first); a host word the driver doesn't answer finds its library at its first call; runtime.wasm carries
+  warp.fingerprint; a linked module's globals are imported, never brought in and re-run; link precedence program >
+  used module > prelude (`by_precedence`); only a refusal marked by link_refusal retries from source. The prelude's
+  hot numeric words have float/codepoint overloads: its untyped parameters, linked, would box.
+- L5 (wasm-module-linking): programs and modules import their modules' words (notes/runtime_linking.md "Load-time
+  linking"); the playground links them too; a module's image lives in its warp.signature.
 
-warp.wasm is 5.05 MB, and 3.04 MB of it (60%) is baked library tables:
-
-| table | bytes | what reads it |
-|---|---|---|
-| LIBRARY_FILES | 1 106 271 | everything below; the text of all of lib/ (comments blanked) |
-| LIBRARY_PARSES | 1 761 151 | slice_parse (reached prelude/module slices), source_parse (alias table, rules) |
-| LIBRARY_SLICES | 98 339 | definition_slices of bundled text |
-| LIBRARY_RULES | 70 568 | module_rules_of: rewrite rules of modules and of extensions/sugar |
-| STD_RULE_NEEDS | 1 639 | which module's rules a program's words need |
-| BLOCK_HEADS | 137 | parser: words taking a block last |
-
-LIBRARY_FILES also bundles lib/extensions, the link to the compiler's own extensions/: 487 KB of its 1.1 MB
-text, plus their parses. The compiler needs only extensions/sugar's rules (45 KB) from that folder.
-
-These compile-time uses need library source or parses today:
-1. **Reached definitions (the prelude).** with_reached parses each slice a program reaches and compiles it with the
-   program. The prelude is never linked ("every program's own"). 108 of its 289 definitions have untyped
-   parameters, which take the kind of their first call (functions.warp widen_parameter). That per-program
-   specialization is the only "generic" in the library: there are no templates, `inline` or macro words.
-2. **Linked modules.** declared_only takes each word's head from the slice parse, linked_slices and linked_needs
-   take classes and globals, and the program runs the module's global initializers. The analyzer already takes
-   kinds from the module's warp.module section (declared_linked).
-3. **Rewrite rules.** There are 123 `rewrite` lines in top-level modules and 295 in extensions/sugar.
-   module_rules_of reads the baked packed rules when the file text matches, and STD_RULE_NEEDS says which
-   module's rules a program needs.
-4. **Parse-time tables, needed before any `use` is known.** These are BLOCK_HEADS, the alias table
-   (aliases.warp, parsed through LIBRARY_PARSES), 65 `infix operator` declarations, and 87 `alias` lines
-   (module_aliases(source)).
-5. **Scans of all of LIBRARY_FILES at every compile.** declarations_scanned finds global words, classes and tags
-   by module, for implicit uses. with_library_host_words finds the `from host` lines of 9 files.
-   type_module_providers and bundled_slices find other words by module.
-6. **Small scattered readers.** These are protocols.warp module_words, foreign_types, sugar_module_names (which
-   lists sugar files from the bundle), write_modules (calls_c), and the linkability test
-   `bundled == file_text`.
-7. **The type checker.** It needs nothing beyond 1 and 2: library words reach it as parsed slices or declared heads.
-
-## Plan
-
-**What a module publishes.** modules/<name>.wasm gets a `warp.signature` custom section in warp notation,
-beside warp.module. It holds:
-- each exported word: its arity variants, parameter names and types, result type, and whether a block comes last;
-- classes: fields with types, method heads, parents;
-- globals: name and kind;
-- aliases, operator rows (spelling, precedence, function), foreign types, host lines;
-- its rewrite rules, packed as LIBRARY_RULES packs them today;
-- the hash of the source it was built from.
-
-The module runs its own global initializers (a start function), so a program no longer copies them.
-
-**One index for parse time.** `warp rebuild` writes modules/index.warp beside words.tsv, merging into it. It
-holds the union of what has to be known before uses are resolved: block heads, operator rows, the alias table,
-global words, classes and tags by module, host words, and rule heads by module (today's STD_RULE_NEEDS). The
-compiler reads it once per compile, as it reads words.tsv and runtime.wasm today.
-
-**How rules travel.** As data, never as wasm. A module's rules are in its signature section and load when the
-program uses the module, or when the index says a rule head appears in the program. The sugar rules
-(extensions/sugar) belong to the compiler, so they stay compiled into it as packed rules (45 KB of source, much
-less packed), and their texts and parses are no longer bundled.
-
-**Where modules are found.**
-- Compile time: beside runtime.wasm, in modules/, as now. For the native warp that is ~/dev/bin or the worktree's
-  lib/. For the playground it is warp-lib/modules/, fetched (build.sh already copies modules/*.wasm).
-- Run time: first the emitter splices the module in, as it does now. Later the host links the module instance at
-  load time (wasm-module-linking): wasmtime's linker in driver.warp, and WebAssembly.instantiate imports in the
-  playground. That deletes about 170 emitter lines.
-- A module whose source hash differs from its signature's (a WARP_LIB edit), or one that doesn't prebuild (the
-  C-calling ones), compiles from lib/ source read from disk. That path stays and is the only one that parses a
-  library file.
-
-**Seed and self build.** The order is unchanged: seed, then warp.wasm, then `warp runtime`, `warp modules` and
-the index (each module compiled from disk source), then the compiler compiles itself against those modules. A
-compiler that bakes nothing reads lib/ from disk only through the from-source path. That path already exists for
-WARP_LIB edits and older seeds, so the seed needs no new ability. The own build must link its own uses (math,
-file, os …) from modules/, or keep compiling them from source. The second is simpler for the first landings.
-
-**The prelude** is the real cost. Linking it means its 108 untyped words become Node-parameter words, so every
-`max(a, b)` of ints boxes. Before linking it, its hot untyped words get typed overloads (int/float/text, already
-supported: typed overloads and arity variants). Until then the prelude stays reached from source, read from
-lib/prelude.warp on disk (one file, about 3 ms to parse per compile, to be measured), not baked.
-
-**Order of landings, each small and measured:**
-1. Stop bundling lib/extensions except sugar (UNBUNDLED_FOLDERS). This saves about 0.5 MB of text and
-   proportionally of parses. No behavior changes.
-2. modules/index.warp. BLOCK_HEADS, STD_RULE_NEEDS, declarations_scanned, the host-word scan, the alias and
-   operator tables and sugar_module_names read it instead of LIBRARY_FILES.
-3. The warp.signature section. declared_only, linked_slices, linked_needs, module_rules_of, protocols'
-   module_words and foreign_types read it. Linkability is a hash compare instead of `bundled == file_text`.
-4. The prelude as above: typed overloads, then either linked or read from disk unbaked. The other remaining
-   readers of LIBRARY_FILES/PARSES/SLICES/RULES move to the disk path, and the tables go: warp.wasm loses about
-   3 MB.
-5. Load-time linking (wasm-module-linking) once 3 holds: the host links the instances, and the emitter's splice
-   and rebase code goes.
-
-node-wasm-type comes after 5.
-
-## The module interface (L3 writes it, L5 links by it; a draft to agree before either lands)
+## The module interface (L3 writes it, L5 links by it)
 A standard module `<name>` is modules/<name>.wasm, compiled once behind runtime.wasm (`warp module <name>`).
 
 **Imports.**
@@ -174,7 +86,7 @@ $Instance or anyref and are cast inside.
   and before the program's main.
 - `export f(…)` words (host callbacks) keep their names.
 - Each lifted lambda as `warp/closure/<n>`, numbered as the module's closure list. The program's closure
-  dispatcher calls it by number, as the splice path numbers `<module>·<target>` today.
+  dispatcher calls it by number.
 - Each class method as `Class.method`, which the program's text()/== hook dispatchers call.
 
 **`warp.signature`** is a custom section holding one warp-notation value, readable by the compiler's own parser:
@@ -186,7 +98,7 @@ $Instance or anyref and are cast inside.
   foreign_types: { … }, host: { word: [parameters, result] }, rules: <packed rules>, tags: [ … ],
   closures: [[n, target, captured, shown]…] }
 ```
-**Class group (agreed with L5, point 3).** Instance and a Class descriptor struct join the fixed gc_names types, so
+**Class group.** Instance and a Class descriptor struct join the fixed gc_names types, so
 there is no prelude class group. A module's classes form one rec group, directly after the fixed types and the
 function types its fields name. Each class is `sub Instance` or `sub` its parent, in classes_parents_first order
 (depth 0 first, then declaration order).
@@ -199,97 +111,13 @@ function types its fields name. Each class is `sub Instance` or `sub` its parent
   one shape canonicalize to one type.
 - `classes` (fields with warp types, method heads) stays beside it for the analyzer.
 
-`warp.module` (the binary layout: kinds, closures, relocations for the splicing path) stays until L5 removes the
-splice. The parse-time union of all modules' `aliases`, `operators`, `block_last` words, `words`→module, `classes`
-and `tags` is gathered from these sections or kept in an index file; L2 measures which (question (a)).
+`warp.module` (the binary layout: kinds, closures) stays beside it. The parse-time union of all modules' `aliases`,
+`operators`, `block_last` words, `words`→module, `classes` and `tags` is kept in the index file (L2).
 
-## Load-time linking: the probe (data/wasm-linking/: L.wat, P.wat, run.mjs)
-Dynamic linking of separately compiled wasm GC modules works in wasmtime 49.0.2 (`--preload`, with gc,
-function-references and exceptions) and in Node 26 / V8 14.6 (no flags). All 17 checks pass:
-- $Node passes both ways.
-- A $MetaNode subtype that only P defines passes into L and is cast there.
-- Shared mutable and immutable globals work.
-- funcref and typed tables work with call_ref.
-- Exception tags with i32 or $Node payloads are caught across modules.
-
-The emitter must guarantee these for L3–L5:
+The emitter must guarantee for linking:
 - Every shared type has the same rec-group shape in every module. A reordered or split group fails at link with
   "incompatible import type".
 - $Node stays open; $MetaNode stays final.
-- A library signature never names a program's own class types (module_layout.warp:62 type_entries differ per
+- A library signature never names a program's own class types (module_layout.warp type_entries differ per
   program). Those pass as $Node/$Instance/anyref and are cast inside.
 - The warp_error tag is declared once (in the runtime or the library) and imported everywhere.
-
-## Progress (warp-sugar)
-- L1 landed 6f3a15e394: lib/extensions unbundled but sugar/, uncertain/ (and rules/modules/ with 1b); warp.wasm 5.05 -> 4.22 MB.
-- 1b (card compile-time-rules): 21 rules ($program / where program, paint, shader_of, gpu_render, law, typed json)
-  in extensions/rules/modules/<module>.warp, taken with their module (rewrites.warp module_rule_paths,
-  rules_of_module); lib/rule_words.warp, lib/wgsl.warp -> extensions/rules/, still used as modules
-  (uses.warp std_module_path finds extensions/rules/<name>.warp; an include retyped the emitter: card
-  makes-compiling). warp.wasm 4.22 -> 4.01 MB.
-- L2 next: modules/index.warp written by `warp rebuild` (write_modules beside words.tsv): BLOCK_HEADS
-  (parser.warp block_heads_in), STD_RULE_NEEDS (rewrites.warp scanned_rule_needs), declarations_scanned
-  (parser.warp ~1750: global words/classes/tags by module), with_library_host_words (builtin_signatures.warp:53),
-  alias table (parser.warp ALIAS_TABLE, alias_table_tree), sugar_module_names; the readers read the index, the
-  scans of LIBRARY_FILES go. Question (a): measure gathering the union from the modules' sections instead.
-- L2 decided (a): index.warp is a cache of the union, derived by `warp modules` from the signatures in the same step,
-  each module's source hash beside it (reading the 45 modules, 15 MB, at each compile was too dear). L2a: block heads,
-  rule needs, words/classes/tags by module, host words; L2b: alias and operator tables, sugar_module_names.
-- L2a landed (aa5cbdf430): modules/index.tsv (library.warp LIBRARY_INDEX, library_index_section): sections block,
-  global, class, tag, word (absorbs words.tsv), needs, host, hash (djb2 of each module's file, `<length>-<hash>`: the
-  host's sha256 takes no module-long text from the compiler). Written first by the runtime and modules steps
-  (write_library_index), so no step reads an earlier build's; a missing index is scanned off lib/ per section. tsv, not
-  warp notation: `warp parse` of the same index as a 40 KB .warp is 0.47 s against 0.31 s for a whole hello compile,
-  the tsv split ~1 ms. BLOCK_HEADS and STD_RULE_NEEDS no longer baked. The seed compiles compiler.warp with its own
-  bundled pre-1b rule_words, so word_index/word_index_file stay in prelude_words.warp until the next seed (card
-  seed-compiles).
-- L3: warp.signature goes right after the wasm header (a custom section may be first), so reading a signature costs
-  a few KB, not the whole module.
-- L3 landed (core/passes/signature.warp): both forms of a module carry warp.signature, pack() of {source hash, uses,
-  slices [name, head line, parse], rules, foreign}; unpacked, never parsed. linked_libraries links a module when the
-  hash is its file's, else warns one line why (no signature, or lib/<m>.warp differs) and compiles it from source; the
-  hash test replaced L5c's same_but_comments. A linked module's words reach the program as its signature's parses
-  (prelude_words.warp with_reached), its rules from the signature: no text of it is read. `warp signature <m>` shows
-  one as warp text. The hash moves to sha256 once the host takes long texts (card signature-sha256). With `use units`
-  the compile went from 19.6 G to 19.3 G instructions.
-- Measured before L3 (2026-11-05): the prelude's untyped parameters compiled as nodes, as a linked prelude would
-  take them (a switch in emitter/functions.warp call_values, never committed; data/boxed-measurement.patch of the
-  worktree). The emitter types a function by its first call's argument kinds (call_values), not the analyzer's slots.
-  Instructions retired, compile and run:
-  - hello: 5.148 G either way.
-  - compiler.warp, built both ways, compiling compiler.warp: 3006.0 G vs 3006.2 G (+0.008%); the build +460 bytes.
-  - a numeric loop, 200 000 rounds of fourth_root, round_to, pixel_channel and is_digit: 9.59 G vs 10.51 G (+9.5%;
-    about +20% of its run, the compile being ~5.1 G).
-  So L4 stays small: typed overloads only for the prelude's numeric words a hot loop calls (fourth_root, round_to,
-  pixel_channel, is_digit and the like, random_*, mean); the compiler itself doesn't feel it.
-- L4 (L4b; L4a, typed overloads, left out: the prelude is reached from source, typed by its calls, so they buy
-  nothing until it links): the compiler bakes no library. lib/ is read from disk, once a file a compile (library.warp
-  library_text, file_source); LIBRARY_FILES/PARSES/SLICES/RULES, their readers and the comment blanking are gone.
-  warp.wasm 4.05 MB → 2.14 MB. What a bake had hidden, each found by scripts/profile.sh (paired runs, own and
-  callee time) and moved, never baked back but for one:
-  - the sugar's rules, parsed every compile (~0.3 s): the one bake left, SUGAR_RULES (rewrites.warp), by file with
-    its source hash; `baked-current`/`rebake` keep it current.
-  - cutting the prelude and the type modules into definitions (~70 ms): their spans are the index's section `slice`
-    (prelude_words.warp spans_of), used while the text is the file the index was written of.
-  - a used module parsed whole for its `use` lines; the prelude's statements all split for them; a used module cut
-    for the words it defines (implicit uses): use lines read off the lines a use may start (parser.warp
-    use_candidates), a linked module's uses off its signature (modules_used_by), its words off the index.
-  - parses of the prelude's reached definitions taken from its signature cost more than parsing the few reached.
-  Trust: the index and the sugar bake are trusted as rule_needs_by_module trusts the index, hashed only under
-  WARP_LIB (a lib/ edited since the build); djb2 in warp is ~1.3 K instructions a byte (by byte_at; 3.3 K over
-  source.bytes), so the host's sha256 (card signature-sha256) would make the hash free everywhere.
-  Paired against main (instructions retired): hello 5.20 G → 5.14 G (−1.1%; under WARP_LIB 5.15 → 5.03), `use units`
-  17.82 G → 17.03 G (−4.4%); compiler.warp compiling itself 2577.6 G → 2526.3 G (−2.0%).
-- L4 step 2 (2026-11-06), the prelude linked: 2a a signature's definitions packed one by one; 2b prelude.wasm
-  exports every word (built as `use prelude`, given the prelude, never reaching it twice; the dead kind_* words gone);
-  2d every program links it (linked_libraries names it first, with_used declares what it reaches from its signature),
-  with what that exposed fixed for every linked module: 2d.1 a host word the driver doesn't answer finds its library
-  at its first call (hello opened libwarp_gpu and libwarp_window every run); 2d.2 a program linked apart never builds
-  the whole module first, runtime.wasm carries warp.fingerprint (use units −18 %); 2d.3 a linked module's globals are
-  imported, never brought in and re-run (linked_needs, pre-L5c); link precedence program > used module > prelude
-  (link_libraries and bind_library_words, `by_precedence`); only a refusal marked by link_refusal retries from source.
-  2c float/codepoint overloads of the hot numeric words. Against main before step 2: hello +0.8 %, use units −0.5 %,
-  the numeric loop −3.9 % (+6 % without 2c), compiler.warp compiling itself −0.15 %; prelude.wasm 171 KB, 222 words.
-- L5 (wasm-module-linking): points 1 (closure funcref), 3 (Instance), 2 (class descriptors) landed; L5c programs and
-  modules import their modules' words (notes/runtime_linking.md "Load-time linking"); L5d the playground links them
-  too; L5e the splice path and .splice.wasm are gone, a module's image lives in its warp.signature.

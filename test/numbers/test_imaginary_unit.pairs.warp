@@ -2,3 +2,7 @@
 «ⅈ * ⅈ == Complex(-1, 0)»	yes
 «c = -0.8 + 0.156ⅈ; [c.re, c.im]»	[-0.8, 0.156]
 «z = 1 + 2ⅈ; w = z² + z; [w.re, w.im]»	[-2, 6]
+# a leading-dot number glues to a following name as 0.16 does (card leading-dot-imaginary)
+«-.8 + .16ⅈ == -0.8 + 0.16ⅈ»	yes
+«c = -.8 + .16ⅈ; [c.re, c.im]»	[-0.8, 0.16]
+«x = 4; .5x»	2

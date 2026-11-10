@@ -1,0 +1,6 @@
+# Tasks and signals: finish, cancelled tasks, awaiting into a value place, eval with values, change listeners, emit
+# (wiki async, event; decisions finish-await, stopped-no-result, task-to-value-awaits, eval-explicit-with, P109, P163)
+'f(x):=x*2; job = go f(3); finish job'	6
+'f(x):=x*2; job = go f(3); cancel job; try await job else -1'	-1
+'x = 1; on change x { print "c" }; x = 2; x'	2
+'on alarm { print "a" }; emit alarm{}; 1'	1

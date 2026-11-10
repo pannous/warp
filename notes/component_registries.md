@@ -37,7 +37,7 @@ warp doesn't adopt the long `ns:name` names: `use component http` looks the shor
 config.toml maps namespaces to registries. A short name is the package name (`http`); on a clash wasi wins and the
 others get `<ns>-<name>`. `use component wasi:http@0.2.1` and full OCI references stay possible for anything unlisted.
 
-## Which public components are useful for warp (supervisor overview 2026-10-19, session b1f5f0e7)
+## Which public components are useful for warp
 Asked: which public components could we easily use for networking, threads, windows, graphics, sound?
 Answer from components.warp (598 packages): almost none are ready-to-run implementations for these areas.
 
@@ -51,6 +51,6 @@ Answer from components.warp (598 packages): almost none are ready-to-run impleme
 
 Most "components" in these areas are interfaces, not implementations: the host or another component must provide them.
 What runs right away are self-contained components importing only wasi:* (parsers, codecs, LLM wrappers, MCP tools),
-none of which warp needs. Conclusion (user): none of them are really useful for us now; the per-area research and a
+none of which warp needs. Conclusion: none of them are really useful for us now; the per-area research and a
 run-time component loader were parked on card components-on-the-fly (Later), the loading part shared with
 module-linking (Soon).

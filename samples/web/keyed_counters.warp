@@ -4,13 +4,15 @@
 # check: click "apples", click "Reverse" → apples apples 1
 # check: click "bread", click "Drop the first" → bread 1
 use web
-def Counter(name) {
+def Counter(name): html {
 	count = 0
 	div{ button{ on click { count += 1 }, name } p{ name + " " + count } }
 }
 items = ["apples", "bread", "cheese"]
-div{
-	button{ on click { items = items.reverse() }, "Reverse" }
-	button{ on click { items = items[1..] }, "Drop the first" }
-	[Counter(item, key: item) for item in items]
+html{
+	div{
+		button{ on click { items = items.reverse() }, "Reverse" }
+		button{ on click { items = items[1..] }, "Drop the first" }
+		[Counter(item, key: item) for item in items]
+	}
 }

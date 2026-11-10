@@ -1,0 +1,9 @@
+# Markup values (extensions/markup_values.warp, decisions markup-needs-html, html-value): markup is what a markup scope
+# writes, html{…}, a place typed html, an argument for a parameter typed html, literal HTML; any other pair is data
+
+'use markup; to_html(html{ select{ ["a": "Apple"] } })'	'<html><select><option value="a">Apple</option></select></html>'
+'use markup; x = {p: {c: 1}}; html{ b{"x"} }; x.p.c'	1
+'use markup; f(): html := b{"bold"}; to_html(f())'	'<b>bold</b>'
+'use markup; x: html = div{"hi"}; to_html(x)'	'<div>hi</div>'
+'use markup; page = <div>one</div>; to_html(page)'	'<div>one</div>'
+'use markup; d = {p: {c: 1}}; to_html(d)'	'p: {c: 1}'

@@ -1,9 +1,8 @@
 # Uniscript entities (card parser-cold-forms, decision core-is-self): `\:alpha` is α, `\:world` 🌍, outside texts by a
 # source pass that keeps the columns as written, inside texts by a text escape; an unknown one stays as written
 ENTITY_MARK = "\\:"
-# `name TAB characters` lines, the table Rust include_str!s, built into the compiler as its other data
-# (module_source: user 2026-10-25, "These should all be built in")
-ENTITY_TABLE = module_source("extensions/entities.tsv")
+# `name TAB characters` lines, read from lib/ the first time a program writes an entity (user 2026-11-10, load on demand)
+ENTITY_TABLE = "entities.tsv"
 # the escape `\:name` in a text at `at`, ø where no letter follows the `:`
 entity_escape(source: any, at: int, n: int): list? := if source[at + 1] == ':' and at + 2 < n and is_alpha(source[at + 2]) then entity_read(source, at, n) else ø
 entities_extension = Extension{name: "entities", source_passes: [expanded_entities], text_escape_readers: {":": entity_escape}}
@@ -12,7 +11,7 @@ global entity_table = ø
 def entities(): map {
 	if entity_table == ø {
 		entity_table = {}
-		lines = ENTITY_TABLE.split("\n")
+		lines = library_data(ENTITY_TABLE).split("\n")
 		for line in lines {
 			columns = line.split("\t")
 			if columns.length == 2 { entity_table[columns#1] = columns#2 }
@@ -56,14 +55,13 @@ def expanded_entities(source: text): list {
 	}
 	[join(parts + [text_between(points, copied, n)], ""), shifts]
 }
-# whether a `\` stands before a known entity's name, `\:alpha` or `\alpha`, anywhere in the source
+# whether a `\` stands before a name, `\:alpha` or `\alpha`, anywhere in the source: the table is read only once the walk
+# meets one outside texts and comments (`"a\nb"` reads none)
 def names_an_entity(source: text): bool {
 	if not source.contains("\\") { return false }
-	for piece in source.split("\\") {
+	for piece in source.split("\\")[1 ..] {
 		start = if piece.starts_with(":") then 1 else 0
-		end = start
-		while end < piece.length and is_alpha(piece[end]) { end = end + 1 }
-		if end > start and piece[start .. end] in entities() { return true }
+		if start < piece.length and is_alpha(piece[start]) { return true }
 	}
 	false
 }

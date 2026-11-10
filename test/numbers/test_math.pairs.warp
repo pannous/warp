@@ -32,8 +32,6 @@
 'i:=10007.1;i%10000.1'	7
 
 # test_sinus_warp_import
-# triage-held 2026-11-06: `use sin`, a module named after a function :: 'use sin;sin π/2'	1
-# triage-held 2026-11-06: `use sin`, a module named after a function :: 'use sin;sin π'	0
 'use sin;sin 3*π/2'	-1
 'use sin;sin 2π'	0
 'use sin;sin -π/2'	-1

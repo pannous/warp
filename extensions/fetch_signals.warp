@@ -14,9 +14,6 @@ ERROR_FIELD = "error"
 ERROR_TYPE = "error"
 LIVE_ATTRIBUTE = "aria-live"
 LIVE_POLITENESS = "polite"
-MARKUP_MODULE = "markup"
-MARKUP_TYPE = "html"
-MARKUP_ELEMENTS = "html_elements = ["
 FETCH_LATER = "fetch_later"
 ANSWER = "answer"
 SIGNAL_SEPARATOR = "·"
@@ -72,9 +69,9 @@ signal_read(n: Node, fetched: list, later: list): Node := match n {
 }
 # each outermost markup element whose own content reads a fetched value, with aria-live="polite"
 live_regions(n: Node, fetched: list): Node := {
-	if not is_markup_element(n) { return children(n, child => live_regions(child, fetched)) }
+	if not is_markup_block(n) { return children(n, child => live_regions(child, fetched)) }
 	items = items_of(value_of(n))
-	if not items.any(item => not is_markup_element(item) and fetched.any(name => mentions(item, name))) {
+	if not items.any(item => not is_markup_block(item) and fetched.any(name => mentions(item, name))) {
 		return children(n, child => live_regions(child, fetched))
 	}
 	if items.any(item => is_key(item, Op.Colon) and key_of(item) == Text(LIVE_ATTRIBUTE)) { return n }
@@ -85,41 +82,15 @@ live_regions(n: Node, fetched: list): Node := {
 # pass, so it can't see the reply's writes
 live_reads(n: Node, later: list): Node := {
 	if #later == 0 { return n }
-	if not is_markup_element(n) { return children(n, child => live_reads(child, later)) }
+	if not is_markup_block(n) { return children(n, child => live_reads(child, later)) }
 	Key(key_of(n), Op.Colon, group_like(value_of(n), items_of(value_of(n)).map(item => live_item(item, later))))
 }
 live_item(item: Node, later: list): Node := {
-	if is_markup_element(item) { return live_reads(item, later) }
+	if is_markup_block(item) { return live_reads(item, later) }
 	if not later.any(name => mentions(item, name)) { return item }
 	if is_key(item, Op.Colon) and (key_of(item) is symbol or key_of(item) is text) { return Key(key_of(item), Op.Colon, kept_live(value_of(item))) }
 	kept_live(item)
 }
 kept_live(code: Node): Node := call_of(LIVE_WORD, [Key(Node.Empty, Op.Arrow, code)])
-# `div{ … }`: an element of lib/markup.warp with its block, markup only inside a markup scope
-is_markup_element(n: Node): bool := match n {
-	Key(Symbol(tag), Op.Colon, List(_, Bracket.Curly, _)): tag in markup_elements()
-	_: no
-}
-# Markup is written inside html{…} or in a function typed html, `f(): html := b{"bold"}` (decision markup-needs-html);
-# anywhere else a tag-named key is data: `{p: {c: 1}}` stays a map
-is_markup_scope(n: Node): bool := match n {
-	Key(Symbol(tag), Op.Colon, List(_, Bracket.Curly, _)): tag == MARKUP_TYPE
-	Key(Key(_, Op.Colon, Symbol(type)), Op.Define, _): type == MARKUP_TYPE
-	_: no
-}
-markup_scopes(program: Node): list := nodes_in(program).filter(is_markup_scope)
-# the program with each markup scope rewritten, the rest as written
-in_markup(n: Node, rewrite: function): Node := if is_markup_scope(n) then rewrite(n) else children(n, child => in_markup(child, rewrite))
-# the element names of lib/markup.warp, its list html_elements, read once
-global markup_elements_held = ø
-markup_elements(): list := {
-	if markup_elements_held == ø {
-		source = used_module_text(MARKUP_MODULE)
-		n = source.length
-		from = index_of(source, MARKUP_ELEMENTS, 0, n)
-		markup_elements_held = quoted_texts(source[from ..< index_of(source, "]", from, n)])
-	}
-	markup_elements_held
-}
 # `users.error`: `if users is error then str(users) else ø`
 failure_text(fetched: Node): Node := chosen(Key(fetched, Op.Is, symbol(ERROR_TYPE)), call_of("str", [fetched]), Node.Empty)

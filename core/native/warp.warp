@@ -3,7 +3,7 @@
 
 # see extensions/commands/commands.warp
 
-# The native warp (decision native-warp-in-core, notes/roadmap_native_harness.md step 2): the warp command as a native
+# The native warp (decision native-warp-in-core, AGENTS.md "Native warp"): the warp command as a native
 # executable, warp.wasm hosted through driver.warp. It only tells apart what the words name:
 #   warp app.wasm args…   the module run
 #   warp app.warp args…   compiled by warp.wasm, then run with the arguments (a `--` before them left out)
@@ -637,23 +637,27 @@ past_options(at: int): int := {
 	while i < arg_count() and option_set(arg(i)) { i = i + 1 }
 	i
 }
+# what this executable's words ask for, done: the process's own, and each `warp test` case's (tests.warp case_ran).
 # `warp fuel <steps> <file|code…>`: the program counts steps (WARP_FUEL), out of fuel after them
 # WARP_RUN_TO is one warp's word to its own compiler (words_ran): a warp a command runs, `warp build --site`'s `warp
 # run` prerendering, ran its program into the caller's file instead
-unsetenv(c_string("WARP_RUN_TO"))
-start = past_options(1)
-counting = arg_count() > start + 2 and same_text(arg(start), "fuel")
-if counting { setenv(c_string("WARP_FUEL"), c_string(arg(start + 1)), 1) }
-prefixed = counting or (arg_count() > start and is_prefix(arg(start)))
-first = past_options(if counting then start + 2 else if prefixed then start + 1 else start)
-# warp.wasm's own commands (build) read the same lib/ as this executable, and its stable name, the run path of the
-# executables `warp build native` makes (commands.warp native_links); WARP_LIB names it resolved, as the module's WASI
-# reaches it (no link to an absolute path)
-setenv(c_string("WARP_LIB_LINK"), c_string(library_found()), 0)
-setenv(c_string("WARP_LIB"), c_string(library_folder()), 1)
-# and know the native warp hosts them (commands.warp: what it runs itself, what it lacks yet)
-setenv(c_string("WARP_HOST"), c_string("the native warp"), 1)
-# and where it is, so a command runs a program by this warp (`warp build --site` prerenders its page)
-setenv(c_string("WARP_EXECUTABLE"), c_string(executable_path()), 1)
-if prefixed and same_text(arg(start), "fast") { complain("note: warp fast is not in the native warp yet; running at full precision") }
-dispatched(if prefixed and same_text(arg(start), "self") then joined(library_folder(), "/warp-self.wasm") else compiler_path(), prefixed, first)
+command_ran(): nothing := {
+	unsetenv(c_string("WARP_RUN_TO"))
+	start = past_options(1)
+	counting = arg_count() > start + 2 and same_text(arg(start), "fuel")
+	if counting { setenv(c_string("WARP_FUEL"), c_string(arg(start + 1)), 1) }
+	prefixed = counting or (arg_count() > start and is_prefix(arg(start)))
+	first = past_options(if counting then start + 2 else if prefixed then start + 1 else start)
+	# warp.wasm's own commands (build) read the same lib/ as this executable, and its stable name, the run path of the
+	# executables `warp build native` makes (commands.warp native_links); WARP_LIB names it resolved, as the module's WASI
+	# reaches it (no link to an absolute path)
+	setenv(c_string("WARP_LIB_LINK"), c_string(library_found()), 0)
+	setenv(c_string("WARP_LIB"), c_string(library_folder()), 1)
+	# and know the native warp hosts them (commands.warp: what it runs itself, what it lacks yet)
+	setenv(c_string("WARP_HOST"), c_string("the native warp"), 1)
+	# and where it is, so a command runs a program by this warp (`warp build --site` prerenders its page)
+	setenv(c_string("WARP_EXECUTABLE"), c_string(executable_path()), 1)
+	if prefixed and same_text(arg(start), "fast") { complain("note: warp fast is not in the native warp yet; running at full precision") }
+	dispatched(if prefixed and same_text(arg(start), "self") then joined(library_folder(), "/warp-self.wasm") else compiler_path(), prefixed, first)
+}
+command_ran()

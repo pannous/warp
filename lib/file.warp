@@ -49,7 +49,7 @@ program_folder(): text := {
 // `program.folder` / `program.file`: the decided words for that folder and file (card play-mozart-mp3)
 rewrite program.folder => program_folder()
 rewrite program.file => program_file()
-// `remove_file(path)`: a file or empty folder moved to the Trash with the unix-words rails (notes/shell_words.md);
+// `remove_file(path)`: a file or empty folder moved to the Trash with the unix-words rails (wiki/script.md);
 // natively over C rename/unlink/rmdir when the host has no file.remove (card file-remove-host-word). A page keeps
 // using std_io("file", "remove") from shell.rm
 global remove_file(path: any) := {

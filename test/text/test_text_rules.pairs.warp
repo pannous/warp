@@ -1,0 +1,20 @@
+# joining, repeating, showing and reading texts as wiki/string.md, wiki/char.md, wiki/uniscript.md and wiki/use.md say (decisions P1, brace-hole, P126, #26, result-keyword, chars-codepoints, letters, guillemets, Emoji, parse-json, used-module-bare-words, uniscript)
+'"a" + 3'	"a3"
+'"ab" * 2'	"abab"
+'"ab" * "cd"'	error
+'3 times "ab"'	"ababab"
+'x = 3; "v ${x}"'	"v 3"
+'x = 3; "v $x"'	"v $x"
+'str(["ab"])'	'["ab"]'
+'upper "straße"'	"STRASSE"
+'reverse "abc"'	"cba"
+'print 3; result'	3
+'count "שָלוֹם".chars'	4
+'count "שָלוֹם".codepoints'	6
+'letters of "a1 b!"'	['a', 'b']
+'count "abc".characters'	3
+'count "😀".chars'	1
+'str(«x + 1»)'	"x + 1"
+'(data a * (b + 1)).json'	'{"*":["a",{"+":["b",1]}]}'
+'use json; parse "[1, 2]"'	[1, 2]
+'"\\:alpha"'	'α'

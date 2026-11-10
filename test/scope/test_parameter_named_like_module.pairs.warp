@@ -1,5 +1,5 @@
 # A parameter or a lambda's parameter named like a standard module is the value, not the module: its method call
-# calls the method on it (notes/dispatch.md: shadowing is scoped; card rule-condition-scope)
+# calls the method on it (wiki/polymorphism.md: shadowing is scoped; card rule-condition-scope)
 
 # a_parameter_named_like_a_module_is_its_value
 'firsts(list) := list.first(); firsts([7, 8])'	7

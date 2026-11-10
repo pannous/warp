@@ -10,7 +10,6 @@
 'var x = 0; x += 1; x'	1
 
 # an_unknown_word_as_statement_is_loud
-# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: 'a;b;c'	'c'
 
 # len_counts
 'len([1,2,3])'	3

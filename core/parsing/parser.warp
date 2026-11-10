@@ -2930,11 +2930,12 @@ def number_atom(p: Parser): Node := {
 	}
 	number_start = p.at
 	written = decimal_number(p)
-	// a number with a suffix an extension reads, `0.1f`, `1 month` (core/extension.warp number_suffix_readers)
+	// a number with a suffix an extension reads, `0.1f`, `1 month`, `0.3̅` (core/extension.warp number_suffix_readers):
+	// still a number, so a glued name multiplies it as it does a plain one, `0.3̅x`, `3½x`
 	literal = p.code[number_start .. p.at]
 	for reader in number_suffix_readers() {
 		form = reader(p, written, literal)
-		if form != ø { return form }
+		if form != ø { return with_glued_factor(p, form) }
 	}
 	// `0.5:float`, `2.5:int`: a number type glued after a colon binds tightly, unlike the loose `as`
 	glued_type = if char_here(p) == ':' then p.code[p.at + 1 .. name_end(p.code, p.at + 1, p.n)] else ""
@@ -2951,11 +2952,11 @@ def number_atom(p: Parser): Node := {
 	if number_start > 0 and p.code[number_start - 1] == '#' and char_here(p) == '(' { return amount }
 	with_glued_factor(p, amount)
 }
-// `.5` is 0.5, `...xs` spreads xs; Swift's `.north`, a member of the type the context expects (a match arm's case),
-// also a rule's `.$k`
+// `.5` is 0.5, a name glued to it multiplying it as after any number (`.16ⅈ` is 0.16ⅈ, card leading-dot-imaginary);
+// `...xs` spreads xs; Swift's `.north`, a member of the type the context expects (a match arm's case), also a rule's `.$k`
 def dot_atom(p: Parser): Node := {
 	next = char_ahead(p, 1)
-	if is_digit(next) { return decimal_value("0" + decimal_number(p)) }
+	if is_digit(next) { return with_glued_factor(p, decimal_value("0" + decimal_number(p))) }
 	if next == '.' { return starred_name(p) }
 	if not (is_name_start(next) or next == '$') { return ø }
 	advance(p)

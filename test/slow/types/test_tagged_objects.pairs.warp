@@ -1,0 +1,4 @@
+# from test_tagged_objects.rs: edit the Rust test, then run the script again
+# a_field_of_a_tagged_object_is_read_from_its_fields
+'x = a:{b:1}; x.b'	1
+'x = a:{b:1}; x.a.b'	1

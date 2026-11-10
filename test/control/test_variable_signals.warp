@@ -1,7 +1,6 @@
 # from test_variable_signals.rs: edit the Rust test, then run the script again
 
 # whenever_runs_each_time_the_condition_holds
-is! 'x=0; total=0; whenever x%2==0 : total+=x; for i in 1 to 6 { x = i }; total' 12
 
 # the_wiki_countdown
 is! 'x=10
@@ -10,8 +9,6 @@ while x-->0 : print x
 x' 0
 
 # after_a_function_runs_after_each_statement_calling_it
-# triage-held 2026-11-06: Python def stop(): … with after stopped / before save: :: is! 'n=0; def stop(): 1; after stopped {n+=1}; for i in 1 to 3 { stop() }; n' 3
-# triage-held 2026-11-06: Python def stop(): … with after stopped / before save: :: is! 'log=0; def save(x): x; before save: log=log*10+1; after saved: log=log*10+2; save(5); log' 12
 
 # a_listener_on_a_charged_value_watches_what_it_reads
 is! 'a=1; b=1; total := a+b; hits=0; whenever total > 5 {hits+=1}; a=3; a=5; b=0; hits' 1

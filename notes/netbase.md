@@ -9,27 +9,10 @@ debug results where country is germany
 ```
 
 ## What pannous/netbase is
-- A C++ semantic graph database (github.com/pannous/netbase, local checkout ~/dev/netbase, last commit 2023-04-22).
-  Its data (Wikidata, Freebase, DBpedia, WordNet: ~600M statements) is imported into **shared memory**
-  (`./netbase :import wikidata`, the increase-shared-memory.sh scripts), then served over HTTP by `./netbase :server`
-  (port 81 by default, webserver.cpp).
-- The query language is already natural: query.cpp rewrites `with/which/who/that/of/in` to `where`, so
-  `all cities with population > 100000` is netbase's own syntax. HTTP: `/<format>/<query>`, format json, csv, xml,
-  txt, html… (`/json/query/<q>`, `/json/all/<q>`, `?q=`).
-- Clients exist for Python (netbase-python), Ruby, Node (node-netbase), Java; ~/dev/apps/netbase_wasm is an old
-  emscripten build (netbase.bc / netbase.js), with no data.
-- **No server is running**: netbase.pannous.com answers 301 → https with an empty body, and no netbase process runs on
-  pannous.com. The local data folder `import/` is empty (0 B) apart from small samples (cities1000.txt, facts.n3…).
-
-## Built
-- `lib/extra/netbase.warp`: `query(q)` / `query_at(server, q)` fetch `<server>/json/query/<q>` and parse the JSON (a
-  list of records); the server is env NETBASE, else http://localhost:8181. Without a server the error names the URL
-  (tests/modules/test_netbase_package.rs). `load wikidata` is not defined: loading is the server's import.
-- lib/extra/ is no module folder (`use x` looks beside the program, in lib/ and lib/native/), so the example uses the
-  module by its path, `use "../netbase.warp"`, until netbase is a package (decision P194); it stops
-  at `load`, the server it needs (card netbase-wikidata-load).
-- Also open: `where country is germany`, the field names of a record bare in a `where` (today
-  `where it.country is "germany"`).
+- A C++ semantic graph database (github.com/pannous/netbase, local checkout ~/dev/netbase): Wikidata, Freebase,
+  DBpedia, WordNet imported into shared memory (`./netbase :import wikidata`), served over HTTP by `./netbase :server`.
+- **No server is running** (netbase.pannous.com answers an empty 301), and the local data folder `import/` holds only
+  small samples (cities1000.txt, facts.n3…). The example stops at `load wikidata` (card netbase-wikidata-load).
 
 ## Open: a server
 Someone has to run netbase with data loaded: (a) revive netbase.pannous.com (build on pannous.com, import Wikidata:

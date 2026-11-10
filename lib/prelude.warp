@@ -3,76 +3,14 @@
 // spellings and method forms onto them (`isdigit(c)`, `xs.first()`, `round(x, 2)` → round_to)
 // The words and aliases the compiler itself is written with are the prelude's core part, core/prelude_core.warp,
 // which every program's prelude reads before this file (decision core-takes-what-it-uses).
-// Transition (card builtins-seed-transition): the typed builtin lines below (`from warp`, `from emitter`, `from 'm'`)
-// are the core's, core/analysis/builtins.warp and math_builtins.warp, which the compiler reads, and the core part's
-// aliases are written here too; they stay here only for the seed, which reads them off this file, until the next seed
-// refresh deletes them here
+// The builtins, the words no warp definition gives, are the core's: core/analysis/builtins.warp and math_builtins.warp.
 
-// The words warp computes itself, the emitter's runtime functions, with their signatures (decision
-// foreign-signature, `from warp`); a parameter with a default may be left out (`s.split` splits at spaces). A word
-// of several lines is overloaded by its first parameter's type, whose line gives the call's result (card typed-builtins)
-upper(t: text): text from warp
-lower(t: text): text from warp
-reverse(xs: list): list from warp
-reverse(t: text): text from warp
-sort(xs: list): list from warp
-sort(t: text): text from warp
-split(t: text, separator: text = ø): list of text from warp
-join(xs: list, separator: text): text from warp
-chars(t: text): list of text from warp
-code_point_list(t: text): list of int from warp
-ord(c: codepoint): int from warp
-map_keys(m: map): list from warp
-map_values(m: map): list from warp
-map_entries(m: map): list from warp
-map_without(m: map, key): list from warp
-map_of_entry(entry): same as entry from warp
-map_get_or(m: map, key, default = ø): value of m from warp
-collection_contains(xs: list, x): bool from warp
-collection_contains(t: text, part): bool from warp
-collection_contains(m: map, key): bool from warp
-collection_position(xs: list, x): int from warp
-collection_position(t: text, part): int from warp
-slice(xs: list, start, end = ø): list from warp
-slice(t: text, start, end = ø): text from warp
-field_with(object, name, value): same as object from warp
-instance_copy(x): same as x from warp
-wasi_environment(): text from warp
-// the line on standard error through WASI, natively and in the page (lib/os.warp eprint; warn and hint say theirs so)
-said_on_stderr(words: text): any from warp
-
-// The builtins the emitter expands in place, without a runtime function (card typed-builtins): their signatures and
-// results, as the analyzer reads them
-count(xs: list): int from emitter
-count(t: text): int from emitter
-count(m: map): int from emitter
-byte_size(x): int from emitter
-type(x): symbol from emitter
-print(values...): nothing from emitter
-// the builtin methods of lists, texts and maps (members.rs), each a function value like the others (card dir-lists)
-// over a text they take its characters; a map has no overload (`map(m, f)` would see its entries)
-map(xs: list, f: (any) -> any): list from emitter
-map(t: text, f: (any) -> any): list from emitter
-filter(xs: list, f: (any) -> bool): list from emitter
-filter(t: text, f: (any) -> bool): list from emitter
-// the first element, combined with every later one in turn: `[3, 1, 2].reduce((a, b) => a + b)` is 6
-fold(xs: list, start, f: (any, any) -> any): same as start from emitter
-any(xs: list, f: function): bool from emitter
-any(t: text, f: function): bool from emitter
-// all of any value: `f(all xs)` broadcasts (wiki/all.md), a typed `all` would nest as a call of two values
-all(xs, f: function): bool from emitter
-find(xs: list, f: function): element of xs from emitter
-find(t: text, f: function): element of t from emitter
-each(xs: list, f: (any) -> any) from emitter
-each(t: text, f: (any) -> any) from emitter
 // the call form of xs.add(x), which extensions/sugar/methods.warp appends in place (the emitter has no call add)
 add(xs, x) := { xs.add(x); xs }
 // xs.insert(x, at: i) at the 0-based position i, in place; of a map Rust's HashMap::insert (card rust-map-insert): the
 // key at set to x in place, the map back. One definition, so a call names its arguments (`at:`) as written (an
 // overload set by type passes them by position, card library-labelled-args)
 insert(xs, at, x) := if xs is map then { xs[at] = x; xs } else list_insert(xs, at, x)
-remove(xs: list, x) from emitter
-remove(m: map, key) from emitter
 pop(xs: list): any := list_pop(xs)
 // Python's xs.clear() and m.clear(): x emptied in place, so every alias sees it
 clear(x: any): any := { if x is map { for k in keys(x) { x.remove(k) } } else { while count(x) > 0 { x.pop() } }; x }
@@ -90,31 +28,10 @@ pop(x: any, k: any): any := {
 	x.pop()
 	v
 }
-number(x): number from emitter
-// the calls lowering passes write: a list changed in place, a removed map value or list, a list ordered by keys
-list_become(place, fresh): same as place from emitter
-list_drop_last(place): same as place from emitter
-removed_value(x, k): any from emitter
-list_sorted_by(xs, keys): any from emitter
-text(x): text from emitter
-text_form(x): text from emitter
-int(x): int from emitter
-float(x): float from emitter
 // bool(x), the truthiness of any value (wiki/bool.md; a call only, extensions/sugar/calls.warp, as a function named bool
 // would hide the type in `x: bool = …`): bool([]) is no, bool([0]) yes; a text or character is read as a word,
 // bool("0") and bool("no") are no
 truth_of(x) := if x is text or x is codepoint then text(x) as bool else if x then yes else no
-symbol(name): symbol from emitter
-// the emitter's text builtins
-trim(t: text): text from emitter
-starts_with(t: text, part): bool from emitter
-ends_with(t: text, part): bool from emitter
-byte_slice(t: text, start, end): text from emitter
-// a program's int type (core/passes/int_types.warp): `x as Color` marks x, `x is Color` reads its mark
-int_marked(x, kind: int): any from emitter
-int_mark_of(x): int from emitter
-chr(code): codepoint from emitter
-read(path): text from emitter
 // eval(code): the value of the code run as a program of its own, by the host word eval_code, which the host compiles
 // with its own warp.wasm (decision N31; core/native/driver.warp code_evaluated, the page's driver.js). It sees none of
 // the caller's names: eval(code, with: {x: 5}) names them, each bound to its value as data before the code (card
@@ -122,25 +39,6 @@ read(path): text from emitter
 eval(code) := eval_code(code)
 // each name bound to warp code giving its value back: text_form quotes the texts inside a list, not a text itself
 eval(code: text, with names: map) := eval_code(names.keys.map(name => "${name} = ${text_form([names[name]])}#1").join("\n") + "\n" + code)
-warning(message): text from emitter
-raise(message): same as message from emitter
-error(message): any from emitter
-is_error(x): bool from emitter
-is_type(x, type_name): bool from emitter
-// a node's parts and a node made of parts (wiki/node.md)
-key_of(n): any from emitter
-value_of(n): any from emitter
-op_of(n): any from emitter
-name_of(n): any from emitter
-bracket_of(n): any from emitter
-separator_of(n): any from emitter
-line_of(n): any from emitter
-column_of(n): any from emitter
-attributes_of(n): list from emitter
-with_attribute(n, word): any from emitter
-bracketed(n, bracket): list from emitter
-separated(n, separator): list from emitter
-string(x): text from emitter
 
 // Foreign type names (Kotlin, Java, Swift, C#): `x: Int`, `class P(val name: String)` read as warp's type; types, not
 // aliases, so only a type's place reads them (an alias would rename the enum case Kind.Int too); a program's own
@@ -159,37 +57,39 @@ alias warn => warning
 alias tuple => list
 // decision nat-and-int: a fraction is a rational
 type fraction = rational
-alias keys => map_keys
-alias values => map_values
-alias contains => collection_contains
 // JavaScript's names of the list tests
 alias every => all
 alias some => any
-alias has => collection_contains
 alias includes => collection_contains
-alias get => map_get_or
 // P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
-alias index_of => collection_position
 // card of-in-chain: `t.characters`, `characters in t`; a glyph is a character too; decision text-unit-plurals:
 // `t.graphemes`, `t.codepoints` are the lists
 alias characters => chars
 alias glyphs => chars
 alias graphemes => chars
-alias codepoints => code_point_list
 alias uppercase => upper
 alias lowercase => lower
 // the text builtin trim, Python's strip
 alias strip => trim
 // card fix-rewrites: we call it text; str stays as an alias
-alias str => text
 alias reversed => reverse
-alias size => count
-alias len => count
-alias length => count
-alias sorted => sort
 alias squared => square
 alias cubed => cube
 alias clone => copy
+// synonyms of the canonical words (decision synonyms-are-aliases)
+alias description => doc
+alias returns => return_type
+alias was => old
+alias previous => old
+alias invocable => callable
+alias runnable => callable
+alias forEach => each
+alias for_each => each
+alias foreach => each
+alias integer => int
+alias string => text
+alias unit => empty
+alias nil => empty
 alias ordinal => ord
 alias codepoint => ord
 alias isdigit => is_digit
@@ -209,6 +109,15 @@ first(xs: list or text) := xs#1
 // decision byte-index-of: a text names the unit it counts a part's place in: `"a👍🏽b".find "b"` is the position 3
 // (characters from 1, like t#p), `"a👍🏽b".byte_index_of "b"` the offset 9 (bytes from 0); a missing part is an error
 byte_index_of(t: text, part: text) := byte_size(split(t, present_part(t, part))#1)
+// `x#i = c` of a text (extensions/sugar/text_elements.warp): the text with its i-th character replaced (1-based, by
+// grapheme), a new text, as texts are values; c a character, a one-character text or a code point (97 → 'a'). A
+// prelude word, as a sugar rule's call brings the prelude's word along and no module (card text-element-assign)
+text_with_at(t: text, i: int, c: any): text := {
+	ch = if c is int then "" + chr(c) else "" + c
+	parts = chars(t)
+	parts#i = ch
+	join(parts, "")
+}
 // Python's `list(x)`: the list itself, a text's characters
 as_list(x) := x as list
 // `count x in y`, `y.count(x)`: how often x occurs as an item of a list or a character of a text, and how often part
@@ -321,7 +230,7 @@ fits_text_type(t: text, type: text) := match type {
 	"word" => consists_of(t, is_word_char)
 	_ => true
 }
-// text patterns (notes/matching.md): the texts of the holes between the pieces of `"0x" + rest`, [] when t doesn't
+// text patterns (wiki/pattern-matching.md): the texts of the holes between the pieces of `"0x" + rest`, [] when t doesn't
 // match (also when t is no text); the first piece is the prefix, the last the suffix, "" where the pattern starts or
 // ends with a hole; each hole's text fits its type, "" for any text
 text_holes(t, pieces: [text], types: [text]) := {
@@ -596,7 +505,7 @@ display.size := [display_width, display_height] px
 // the diagonal as a length: its nearest whole px at the density (quantities run as exact amounts, a run-time √ is a
 // float)
 display.diagonal := round(√(display_width² + display_height²)) * 1px / (display_dpi * 1dpi)
-// The fields of a time at run time (card time-fields-warp, notes/dates_at_run_time.md), called late by the emitter's
+// The fields of a time at run time (card time-fields-warp, wiki/time.md), called late by the emitter's
 // time_field with the time's form (TimeForm: 1 a date, its position in days; else nanoseconds since 1970), its
 // position, its zone's seconds east of UTC (a zoned time's, else 0; not `offset`: the index type's synonym) and the
 // index of the field in times.rs TIME_FIELDS. A zoned time's fields are those of its wall clock, its epoch seconds the instant's

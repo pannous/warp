@@ -1,0 +1,4 @@
+# from test_await_any_variables.rs: edit the Rust test, then run the script again
+# await_any_of_task_variables_gives_the_first_to_finish
+is! 'a = go { sleep(300 ms); 10 }; b = go { sleep(10 ms); 20 }; r = await any [a, b]; r * 2' 40
+is! 'a = go { sleep(300 ms); 10 }; b = go { sleep(10 ms); 20 }; started = clock(); r = await any [a, b]; clock() - started < 250' true

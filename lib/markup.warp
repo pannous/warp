@@ -1,15 +1,21 @@
 // The standard library module markup (card web-ssr, notes/web_framework.md "Built sites"): `use markup` (not `html`,
 // which samples/web/html.warp would shadow). to_html(value) is the HTML of a markup value,
 // `div{ class:"box" h1{"Hi"} }` → <div class="box"><h1>Hi</h1></div>, any other value as escaped text. Written in warp, so a page renders itself: the same function makes a built site's index.html at build
-// time and its updates in the browser (page·html). A key named after an HTML element is an element; inside it a key
-// named after an attribute with a plain value is an attribute (`style: { fontSize: 12 }` inline CSS), anything else a
-// child in order.
+// time and its updates in the browser (page·html). An element is an Html, what markup written in a markup scope makes
+// (extensions/markup_values.warp); inside it a key named after an attribute with a plain value is an attribute
+// (`style: { fontSize: 12 }` inline CSS), anything else a child in order.
 use html
-// Markup is written inside html{…} or in a function typed html, `f(): html := b{"bold"}` (decision markup-needs-html):
-// those bring this module without its use, the one tag of the global list; anywhere else a tag-named key is data,
-// `{p: {c: 1}}` stays {p: {c: 1}}
+// Markup is written inside html{…}, in a place typed html (`f(): html := b{"bold"}`) or as an argument for a
+// parameter typed html (to_html(div{…})) (decisions markup-needs-html, html-value): html{…} brings this module without
+// its use, the one tag of the global list; there each element is an Html, anywhere else a tag-named key is data,
+// `{p: {c: 1}}` stays {p: {c: 1}} beside a page
 global html_scopes = ["html"]
 type html = any
+// an element: its pair as written, `div: { class: "box" … }` (decision html-value: a cheap class, no mark)
+class Html { element: any }
+format h: Html as text := to_html(h)
+// an Html's pair, any other value as it is
+html_pair(value: any) := if value is Html then value.element else value
 html_elements = ["html", "head", "body", "title", "meta", "link", "style", "script", "base",
 	"header", "footer", "main", "nav", "section", "article", "aside", "div", "span", "p", "h1", "h2", "h3", "h4", "h5", "h6",
 	"a", "em", "strong", "b", "i", "u", "small", "code", "pre", "blockquote", "br", "hr", "img", "figure", "figcaption",
@@ -34,7 +40,9 @@ html_style_mark = "<style>"
 // CSS properties whose number has no unit; any other number is pixels
 html_unitless_properties = ["opacity", "z-index", "font-weight", "line-height", "flex", "flex-grow", "flex-shrink", "order", "zoom", "tab-size"]
 
-to_html(value: any): text := html_render(value, ø, ø)
+to_html(value: html): text := html_render(value, ø, ø)
+// literal HTML, `<div>one</div>`, as markup wherever it stands (extensions/inline_html.warp)
+html_written(value: html) := value
 
 // `ul{ li all fruits }`: a tag word before all/each makes that tag of each item; only the tags an item repeats in, so
 // `await all jobs` (lib/tasks.warp) stays the tasks' word
@@ -51,7 +59,7 @@ handler_attribute_prefix = "data-warp-"
 handler_body_shown = "{" + "…" + "}"
 
 // the HTML of the page's value, its handlers numbered anew from 1 in render order
-export page_render(value: any) := {
+export page_render(value: html) := {
 	page_handlers = []
 	page_handler_events = []
 	page_handler_labels = []
@@ -73,7 +81,7 @@ page_shown_in_js() := { page_in_js = yes }
 // handler n of the last page_render run with the event's detail (value, checked, fields, key …) as `event`
 // a program's value as the page it is, its HTML, when it is markup, else ø: how `warp` prints a program ending in
 // markup (decision html-render-mode; the emitter's _start)
-export page_of(value: any): any := if html_is_page(value) then page_after_steps(value) else ø
+export page_of(value: html): any := if html_is_page(value) then page_after_steps(value) else ø
 // the page after the steps of a sample's check line (`# check: click "+1", type "name" "Ann" → …`, card
 // scripts-samples), which `warp app check` gives in WARP_PAGE_STEPS, one a line, its words by tabs: click⇥+1
 PAGE_STEPS_VARIABLE = "WARP_PAGE_STEPS"
@@ -140,7 +148,7 @@ global page_handler_events = []
 global page_handler_labels = []
 handler_label_attributes = ["placeholder", "aria-label", "name", "id"]
 
-render(value: any) := {
+render(value: html) := {
 	page_shown = value
 	page_render(value)
 }
@@ -289,7 +297,7 @@ binding(read: function, write: function): Binding := Binding(read, write)
 // an element's handler: `on click {…}` among its items (a Handler), or HTML's own spelling
 // `onclick: (event => …)`
 html_is_handler(item: any): bool := item is Handler or html_is_handler_pair(item)
-html_is_handler_pair(item: any): bool := item is pair and html_is_handler_name(html_name(item)) and html_raw_content(item) is function
+html_is_handler_pair(item: any): bool := html_pair(item) is pair and html_is_handler_name(html_name(item)) and html_raw_content(item) is function
 html_is_handler_name(name: any): bool := name is text and starts_with(name, handler_prefix) and #name > #handler_prefix
 html_handler(item: any) := if item is Handler then html_handler_attribute(item.event, item.action) else html_handler_attribute(html_name(item)[#handler_prefix ..], html_raw_content(item))
 html_handler_attribute(event: text, action: function) := {
@@ -304,13 +312,19 @@ html_handler_attribute(event: text, action: function) := {
 }
 
 // a pair's name and content, `div{…}` or `class: "box"` (a one-entry map as Rust's pair)
-html_name(pair: any) := if pair is map then keys(pair)#1 else str(key_of(pair))
-html_raw_content(pair: any) := if pair is map then values(pair)#1 else value_of(pair)
+html_name(written: any) := {
+	pair = html_pair(written)
+	if pair is map then keys(pair)#1 else str(key_of(pair))
+}
+html_raw_content(written: any) := {
+	pair = html_pair(written)
+	if pair is map then values(pair)#1 else value_of(pair)
+}
 html_content(pair: any) := if html_is_handler_pair(pair) then html_raw_content(pair) else html_now(html_raw_content(pair))
 
 // `scope`: the component whose elements a style sheet styles (data-warp-scope, card web-scoped); `chosen`: the value
 // of the select around, whose option is selected (`select{ bind: fruit }`, card web-bind-select)
-html_render(live: any, scope: any, chosen: any) := {
+html_render(live: html, scope: any, chosen: any) := {
 	value = html_now(live)
 	if html_is_element(value) { return html_element(html_tag(html_name(value)), html_content(value), scope, chosen) }
 	if html_is_group(value) {
@@ -322,9 +336,10 @@ html_render(live: any, scope: any, chosen: any) := {
 	html_escaped(html_plain(value))
 }
 
-html_is_element(value: any): bool := html_is_listed_element(value) or (value is pair and html_is_custom_element(html_name(value)))
+// an Html named as an element (one of computed name, `("h" + level): title`, may name none: data)
+html_is_element(value: any): bool := value is Html and (html_is_listed_element(value) or html_is_custom_element(html_name(value)))
 
-html_is_listed_element(value: any): bool := value is pair and contains(html_elements, html_name(value))
+html_is_listed_element(value: any): bool := html_pair(value) is pair and contains(html_elements, html_name(value))
 
 // `my-card{…}`: a page's own element is named with a dash, unlike data-, aria- and the listed attributes (decision unknown-tag)
 // str(name): a one-letter key (`"s": "small"`) is a Char, which contains refuses (card contains-fails)
@@ -384,7 +399,7 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 	"<" + tag + attributes + ">" + children + "</" + tag + ">"
 }
 
-html_is_binding(item: any): bool := item is pair and html_name(item) == "bind" and html_content(item) is Binding
+html_is_binding(item: any): bool := html_pair(item) is pair and html_name(item) == "bind" and html_content(item) is Binding
 
 // a bound field's attributes: its kind and step from the variable's type unless the element names its type, the
 // value it shows and its input handler (card web-validate: the browser refuses 2.5 for an int, a bool is a checkbox)
@@ -413,7 +428,7 @@ html_options(listed: any, chosen: any) := {
 
 // `html{ title: "Shop" description: "…" meta: { author: "Ann" } }`: facts about the page, for its head (card html-meta)
 html_is_page_fact(item: any): bool := {
-	if not (item is pair) { return false }
+	if not (html_pair(item) is pair) { return false }
 	let name = html_name(item)
 	let value = html_content(item)
 	if name == "meta" { return (value is pair or html_is_group(value) and html_holds_pairs(value)) and not html_names_any(value, html_meta_attributes) }
@@ -452,7 +467,7 @@ html_is_group(value: any): bool := value is list or value is map
 
 // `class:"box"` inside an element: an attribute when its name is one and its value plain (or inline CSS for style)
 html_is_attribute(item: any, tag: any): bool := {
-	if not (item is pair) { return false }
+	if not (html_pair(item) is pair) { return false }
 	let name = html_name(item)
 	let value = html_content(item)
 	named = starts_with(name, "data-") or starts_with(name, "aria-") or name == "key" or name == "starting-style" or (contains(html_attributes, name) and not (tag == "head" and contains(html_elements, name)))
@@ -600,7 +615,8 @@ html_elements_in(item: any): list := {
 
 // `style{ .card { padding: 8px } }` a style sheet, `style: { color: theme }` an element's inline style: the element
 // with its selectors and lengths as the texts CSS writes, the tree as the parser read it (decisions.md data-parameter)
-style(sheet: data) := key(symbol("style"), ":", if sheet is text then sheet else style_body(sheet))
+// (an Html, decision html-value: wherever it stands it is the style element or attribute)
+style(sheet: data): html := Html(element: key(symbol("style"), ":", if sheet is text then sheet else style_body(sheet)))
 
 // `form post "/todos" { button{ "add" } }`: a form named by the route it sends to, as the route is written
 // (decisions.md markup-plain-library); `form{ method: "post" action: "/todos" … }` spells the attributes

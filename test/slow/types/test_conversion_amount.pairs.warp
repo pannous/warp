@@ -1,0 +1,2 @@
+# a conversion's body giving a number gives the target's amount (night decision length-pixels, extensions/conversions.warp)
+'length as pixels := it.amount * 2; 3m as pixels'	6px

@@ -186,10 +186,12 @@ symbol_words(n: Node): list := {
 # the words a class's body mentions but its own fields and methods: `class C{pi = 3; f() := pi * r}` names no library pi
 # a type named with no body, a field's `x: Int` (sugar.warp typed_fields): it uses the type, as a prelude alias
 is_named_type(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "type" and value_of(n)#3 == ø
-# (a method's parameters and locals are its own too: ListMap's init(m = {}) names no unit m)
+# (a method's parameters and locals are its own too: ListMap's init(m = {}) names no unit m; a field binds only its
+# name, its type `d: km` a word it uses, which brings lib/units' type km)
 class_words(view: Node): list := {
 	parts = parts_within(view)
-	own = parts.flat_map(part => if is_group(part) then items_of(part) else [part]).map(member_name) + parts.flat_map(part => names_bound_in(part).keys)
+	members = parts.flat_map(part => if is_group(part) then items_of(part) else [part])
+	own = members.map(member_name) + members.filter(member => is_key(member, Op.Define)).flat_map(member => names_bound_in(member).keys)
 	parts.flat_map(symbol_words).filter(word => word not in own)
 }
 
@@ -280,7 +282,7 @@ time_literal_words(program: Node): list := {
 	# place typed by a time word takes a quantity of time as the duration it lasts, `f(n: duration) := n; f(2 hours)`
 	# (emitter.warp lasting, card duration-hours)
 	if not nodes.any(n => is_time_view(n) or is_time_typed(n)) { return [] }
-	[time_field_word] + (if nodes.any(is_time_typed) then [quantity_lasting_word] else []) + (if nodes.any(n => time_operator_symbols.any(symbol => is_operator(n, symbol))) then [time_operation_word, time_operand_word, quantity_lasting_word] else [])
+	[time_field_word] + (if nodes.any(n => is_time_typed(n) or time_comparison_symbols.any(symbol => is_operator(n, symbol))) then [quantity_lasting_word] else []) + (if nodes.any(n => time_operator_symbols.any(symbol => is_operator(n, symbol))) then [time_operation_word, time_operand_word, quantity_lasting_word] else [])
 }
 is_time_typed(n: Node): bool := is_operator(n, ":") and value_of(n) is symbol and base_type(name_of(value_of(n))) in time_test_types
 # `x is time`, `x is duration`: lib/time's word the emitter asks (runtime_words.warp time_test_code)

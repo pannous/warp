@@ -12,17 +12,7 @@ use "../../compiler/emitter/byte_codes.warp"
 # durations.warp's duration_text and its nanosecond constants
 use "durations.warp"
 is_time(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Time
-is_instant(t: Node): bool := time_form(t) == TimeFormCode.Instant
-is_date(t: Node): bool := time_form(t) == TimeFormCode.Date
-is_local_time(t: Node): bool := time_form(t) == TimeFormCode.Local
 is_duration(t: Node): bool := time_form(t) == TimeFormCode.Duration
-is_zoned(t: Node): bool := time_form(t) == TimeFormCode.Zoned
-is_time_of_day(t: Node): bool := time_form(t) == TimeFormCode.Clock
-# the duration of months, days and nanoseconds: its days kept as 32 unsigned bits above the form, its months above them
-duration_of(months: int, days: int, nanos: int): Node := {
-	unsigned_days = if days < 0 then days + TimeInfoUnit.DayRange else days
-	time_of(TimeFormCode.Duration + unsigned_days * TimeInfoUnit.Days + months * TimeInfoUnit.Months, nanos)
-}
 # `a < b` (relation 0), `a <= b` (1), `a > b` (2), `a >= b` (3) of two times of one form: two times by their positions;
 # two durations yes when it holds on every date, no when on none, else a failure (`1 month < 28 days` is no,
 # `1 month < 30 days` depends on the month); times of different forms have no order
@@ -61,8 +51,6 @@ calendar_and_clock_durations_are_different_kinds() := {
 # and its position, a whole number's value
 operand_form(n: Node): int := if is_time(n) then time_form(n) else -1
 operand_position(n: Node): int := unboxed_int(n)
-# the wall clock of an instant in the environment's time zone, in seconds east of UTC (the host word local_offset)
-local_offset_at(t: Node): int := local_offset(floor_quotient(time_position(t), millisecond_nanos()))
 
 ## times (card time-text-warp): a $Node
 ## of kind Time, its form in the info bits, its position in an $i64box: days since 1970 for a

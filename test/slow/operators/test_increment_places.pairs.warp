@@ -1,0 +1,4 @@
+# from test_increment_places.rs: edit the Rust test, then run the script again
+# an_element_increments
+'p = {b: {n: 1}}; p.b.n++; p.b.n'	2
+'p = {b: {n: 1}}; p.b.n += 2; p.b.n'	3

@@ -1,4 +1,4 @@
-# card elementwise-operations (user 2026-11-02): a `.op` of plain values is the plain operator, a scalar is the one-element case
+# card elementwise-operations: a `.op` of plain values is the plain operator, a scalar is the one-element case
 
 # every element-wise operator on two numbers
 '3 .* 3'	9

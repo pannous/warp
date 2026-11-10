@@ -1,0 +1,5 @@
+# sqrt, cbrt and abs are plain functions, √ ∛ and ‖ ‖ their spellings (decision prefix-symbols-alias-functions):
+# broadcast by the general rule; Julia's dot call is no warp (decision no-dot-call-broadcast)
+'√[4, 9]'	[2 3]
+'sqrt(2)'	√2
+'sqrt(8)'	2√2

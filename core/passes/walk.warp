@@ -24,6 +24,8 @@ quantity_test_word = "measures"
 # lib/units' word making a quantity of time the core duration an operand of those is moved by (`t + 1 hour`)
 quantity_lasting_word = "quantity_lasting"
 time_operator_symbols = ["+", "-", "*"]
+# a time compared with a quantity of time compares the duration it lasts (`1 day > 2 hours`, card core-duration)
+time_comparison_symbols = ["==", "!=", "<", ">", "<=", ">="]
 
 # the arm of a match any value takes, `_: …`
 other_arm = "_"

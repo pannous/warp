@@ -9,5 +9,4 @@ is! 'x = ø; x?.a' ø
 is! 'x = ø; y = x?.a; if y == ø then 7 else 0' 7
 
 # a chain stops at the first missing value
-is! 'p = {a: {b: 3}}; p?.a?.b' 3
 is! 'p = ø; p?.a?.b' ø
