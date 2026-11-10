@@ -71,7 +71,7 @@ its kind as usage fallback. Traps found on the way:
 - "Given only Nodes → keep the usage guess" broke code matchers (usage guesses List for `match c { data(…) }`).
 - Bench compile time against a main debug build, never the branch's earlier tip; probes with WARP_MODULE_CACHE=off.
 
-## Focus from 2026-10-18 morning (user)
+## Focus from 2026-10-18 morning
 The big Rust reductions sit behind two pieces: compiler-modules (std modules extend the compiler, so ≈5k lines of
 domain passes leave src/lowering; warp-self-passes) and prelude-cache-runs (lowered modules cached on disk across
 runs, unblocking ≈5k lines of runtime moves to lib warp; warp-cache). Full focus on those two; typed-builtins

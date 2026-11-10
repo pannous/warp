@@ -2,7 +2,7 @@
 
 Roadmap card: runtime-linking
 
-Decision runtime-prepended (user): as in wasp, the runtime is built separately so the compiler stays small and clean.
+Decision runtime-prepended: as in wasp, the runtime is built separately so the compiler stays small and clean.
 A compile reads no runtime or library sources: it reads the prebuilt wasm modules (runtime.wasm, one per library
 module, beside the compiler; not embedded, user), and a program is the runtime with the user's code appended behind it. Build artifacts stay standalone.
 

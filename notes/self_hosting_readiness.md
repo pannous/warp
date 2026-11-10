@@ -1,5 +1,5 @@
 # Self-hosting readiness (survey 2026-10-17, card self-survey)
-Question (user): do we have all the parts for the compiler in warp, or do we first need macros so the code doesn't
+Question: do we have all the parts for the compiler in warp, or do we first need macros so the code doesn't
 bloat? Plan: notes/self_hosting.md. Probes: probes/self_hosting/readiness/ (release warp 617af7a75, WARP_NO_WINDOW=1).
 
 ## Verdict

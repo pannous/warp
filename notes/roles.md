@@ -46,7 +46,7 @@ After each batch of questions, and whenever idle, `todo try --new` lists finishe
   who built it; untouched ones stay in `todo try`.
 
 ## Integrator (also the Tester)
-Workers push their own tested merges to main (common.md "Done"); the Integrator repeats no test. It watches main:
+Workers push their own tested merges to main (AGENTS.md "Done"); the Integrator repeats no test. It watches main:
 installs the compilers beside ~/dev/bin/warp from main's tip, runs tiers 1-2 and promote-self in the background and
 the full suite at rare intervals, and turns what goes red into a card for the pusher (a red smoke test on main:
 urgent). It also lands branches whose session retired. How: notes/agents/integrator.md.
@@ -74,7 +74,7 @@ stating its net src/ delta. Feature cuts go to the Interviewer. Prompt: notes/ag
 
 ## Workers
 One task, one branch, one worktree; targeted tests (`warp test`); done = pushed to main and `todo done <card> <commit>`. Every rule:
-notes/agents/common.md (role prompts: worker.md, fixer.md, implementer.md).
+AGENTS.md (role prompts: worker.md, fixer.md, implementer.md).
 
 ## Enforcement
 - One local build (main's, the Integrator's); the Rust harness changes rarely. Warp tests (`warp test`) run locally with the shared binary, the whole suite only in the Integrator's gate.

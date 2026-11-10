@@ -1,4 +1,4 @@
-# decision dropped-error-raises (user): an Error value a statement drops raises it; a kept Error stays a value, try catches
+# decision dropped-error-raises: an Error value a statement drops raises it; a kept Error stays a value, try catches
 
 'write("/dev/null/x.txt", "hi"); 1'	error	a failed write used for its effect stops the run
 'for i in 1..2 { read("no such file") }; 2'	error	in a loop body too

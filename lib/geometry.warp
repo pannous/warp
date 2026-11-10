@@ -2,7 +2,7 @@
 // polygons as lists of [x, y] points (open: the last point is not repeated), geographic points as [latitude, longitude]
 // in degrees.
 // Decisions (card lib-geometry):
-// - reuse: the baked lib/math.warp already gives dot, norm, distance, cross (3D) and to_radians/to_degrees, and its
+// - reuse: lib/math.warp already gives dot, norm, distance, cross (3D) and to_radians/to_degrees, and its
 //   angle(x, y) is atan2; so this module's vector words carry a vec_ prefix (vec_add, vec_sub, vec_scale, vec_dot,
 //   vec_norm, vec_cross, vec_cross2, vec_angle, vec_rotate) and geo_distance; they check their inputs (numbers only,
 //   equal dimensions, a refusal rather than a guess) and then delegate to math's words where one exists
