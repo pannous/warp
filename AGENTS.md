@@ -324,6 +324,9 @@ before asking a question). After a context swap, this file and your role file be
 - Rare edge cases (∞/NaN literals, wording nits, odd feature pairs) go to `todo add Later`. A footgun constructed at the desk, never seen in the wild, gets no rule, refusal path or test list (wiki/Footguns.md "Beware of constructed footguns").
 - Emptiness is tested loosely: `is empty`, `if no x`, `if x`; `x is ø` only tests missing.
 - JSON5 or warp notation for anything people or agents write; strict JSON only where a tool requires it.
+- No environment variables as an interface: a choice a program or user makes is written in code (a `use`, an
+  annotation like `@cpu`, a call) or given as a CLI option; no wiki page, sample or message tells anyone to export a
+  `WARP_*` variable (card no-bash-exports). Build and test plumbing inside scripts is not an interface.
 
 ## Talking
 - A changed procedure is written into the notes the sessions read (this file, the role file) in the same

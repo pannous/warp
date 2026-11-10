@@ -23,6 +23,14 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 ---
 
 ## Inbox
+- 2026-11-10 undo-planned: undo/redo stay a planned feature.
+- 2026-11-10 and-or-values: `and`/`or` carry their operands' values, as a general mechanism: `7 and "hi"` is "hi", `0 or 5` is 5.
+- 2026-11-10 bool-int-refused: `n: int = true` is refused with the fix `true as int`.
+- 2026-11-10 int-list-alias: `xs: int list` is an alias of `xs: [int]`.
+- 2026-11-10 it-expression-function: a parameter typed function takes an `it` expression as a lambda, generally.
+- 2026-11-10 aliases-unified: one alias mechanism everywhere: `alias a => b` lines (prelude, modules, program; the program's win) feed one table, applied wherever the program doesn't bind the word, class members included; the arrow's target is canonical; lib/aliases.warp keeps only operator and keyword spellings (card prelude-alias-line).
+- 2026-11-10 no-bash-exports: no environment variable is an interface; choices are code or CLI options (card no-bash-exports).
+- 2026-11-10 wiki: `test` lines are checked on every run; `width /height` is refused as ambiguous; `law` is marked planned; WARP_DRAW leaves graphics.md.
 - synonyms-are-aliases (card test-triage): synonym words of existing ones are aliases in lib/aliases.warp pointing at the canonical word, not deleted: properties/fields/attributes/members of (keys, members), clone (copy), warn (warning), require (use), forEach/for_each/foreach (each), invocable/runnable (callable), previous/was (old), ppi/density (dpi), maybe (optional), unit/nil/empty/string/integer as type names; their held test lines are restored.
 - definition-by-space: `square x := x*x` defines a one-parameter function like `square(x) := x*x` (the original wasp form, as call-by-space `square 2`); held lines restored, red ones carded.
 - typed-array-declaration: a typed declaration with a size and no value makes a zero-filled list of that type: `pixel: int[100]; pixel#1 = 5`, `x : int[100000]; count(x)` → 100000.
