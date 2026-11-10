@@ -3,7 +3,7 @@
 All open cards of Core, Soon, Next and Later except topic cards, (visitor) cards and cards an agent has taken (@name): 690 cards, ranked easiest first. Rough guesses from the (truncated) titles, some are wrong; `todo show <key>` before starting.
 
 Format: key | size S/M/L | touches | why | column (now).
-Order: S on lib/ext/web, S on scripts/tests, S on core, S notes only, M on lib/ext/web, M on core, L. The top 30 of the first tier moved to Next (the fast lane); (user) drafts stay where they are.
+Order: S on lib/ext/web, S on scripts/tests, S on core, S notes only, M on lib/ext/web, M on core, L. The top 30 of the first tier moved to Next (the fast lane); drafts stay where they are.
 Cards marked 'old pure lane?' name the retired pure lane: check whether they still apply, probably closable.
 
 
@@ -45,7 +45,7 @@ Cards marked 'old pure lane?' name the retired pure lane: check whether they sti
 - color-shows-precision | S | lib | 1e-9 | Next
 - regex-error-messages | S | lib | messages | Next
 - unknown-from-hex | S | lib | from_hex | Next
-- user-sign | S | web | akamai signup (user) | Later
+- user-sign | S | web | akamai signup | Later
 - root-power-warning | S | ext | add a warning | Later
 - print-in-script | S | lib | cyrillic print | Later
 - cargo-version | S | lib | version in use | Later
@@ -295,9 +295,9 @@ Cards marked 'old pure lane?' name the retired pure lane: check whether they sti
 - protocol-default-methods | M | core | protocols | Soon
 - codepoint-return-type | M | core | codepoint type | Soon
 - block-value-extraction | M | core | x! of block | Soon
-- polish-notation | M | core | wat output (user) | Later
-- file-level-class | M | core | syntax (user) | Later
-- array-sum-block | M | core | block param syntax (user) | Later
+- polish-notation | M | core | wat output | Later
+- file-level-class | M | core | syntax | Later
+- array-sum-block | M | core | block param syntax | Later
 - errors-reads | M | core | labelled error | Later
 - unicode-enclosures | M | core | groups | Later
 - it-last-result | M | core | it semantics | Later
@@ -694,10 +694,10 @@ Cards marked 'old pure lane?' name the retired pure lane: check whether they sti
 - threaded-handlers | L | core | threads | Soon
 - cheap-classes-everywhere | L | core | replace marks | Soon
 - mixins-traits | L | core | mixins | Soon
-- package-manager | L | lib | not started (user) | Later
-- wasm-linker | L | core | linker (user) | Later
-- modular-integration | L | core | new backend (user) | Later
-- fung-friday | L | lib | math research (user) | Later
+- package-manager | L | lib | not started | Later
+- wasm-linker | L | core | linker | Later
+- modular-integration | L | core | new backend | Later
+- fung-friday | L | lib | math research | Later
 - purity-predicates | L | core | purity | Later
 - reference-value-of | L | core | references | Later
 - geometric-algebra | L | lib | library | Later

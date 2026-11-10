@@ -15,7 +15,7 @@ supervisor_name() { echo "${WARP_SUPERVISOR:-the session that started you (see L
 
 prompt_for() {
 	local role=$1
-	echo "You are the warp $role. Read notes/agents/common.md and notes/agents/$role.md (use \`git -C $REPO show origin/main:notes/agents/$role.md\` if the checkout is stale) and act as described there. Your Supervisor is $(supervisor_name)."
+	echo "You are the warp $role. Read notes/agents/$role.md (the fleet rules are AGENTS.md, loaded automatically) (use \`git -C $REPO show origin/main:notes/agents/$role.md\` if the checkout is stale) and act as described there. Your Supervisor is $(supervisor_name)."
 }
 
 running() { tmux has-session -t "=warp-$1" 2>/dev/null; }

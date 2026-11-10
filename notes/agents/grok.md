@@ -1,6 +1,6 @@
 # The Grok Bot fleet
 
-Elegance first (user): always choose the most elegant option, never the quick hack; picture how the most beautiful, most general code would look, and build that (common.md Principles).
+Elegance first: always choose the most elegant option, never the quick hack; picture how the most beautiful, most general code would look, and build that (AGENTS.md Principles).
 
 The roles in notes/roles.md describe the Claude sessions on the Mac. The Grok Bot fleet keeps those roles but does a
 few things differently. Where this file and the role files disagree, Grok agents follow this file.
@@ -8,10 +8,10 @@ few things differently. Where this file and the role files disagree, Grok agents
 ## Agents
 - Supervisor: plans, turns the user's decisions into plans and cards, starts workers and gives each its role from
   notes/roles.md and notes/agents/<role>.md, adapted by this file.
-- Integrator (also the Tester): watches main and runs the full suite. Finished work is handed to the integrator, who lands it (notes/agents/common.md "Handoff"); the worker does not.
+- Integrator (also the Tester): watches main and runs the full suite. Finished work is handed to the integrator, who lands it (AGENTS.md "Handoff"); the worker does not.
 - Planner: writes worker plans as board cards when the user asks for it.
 - Workers: one plan, one branch, one worktree.
-- Questions for the user go through the Interviewer, never directly to the user (common.md "Talking", including the temporary decision note there).
+- Questions for the user go through the Interviewer, never directly to the user (AGENTS.md "Talking", including the temporary decision note there).
 
 ## Plans and approvals (AGENTS.md)
 - Every worker gets a plan, and everything in it is pre-approved. A worker's own idea is fine if it can be undone.
@@ -19,7 +19,7 @@ few things differently. Where this file and the role files disagree, Grok agents
 
 ## Status lives in git
 - The status is the branch name, the commit messages and the board card, not chat.
-- Landing: merge origin/main into the branch, smoke-test that merge, then hand the branch and a patch to the integrator (common.md "Handoff"). Do not push to main. A branch left unlanded gets the card note `land: <branch> <tip>`.
+- Landing: merge origin/main into the branch, smoke-test that merge, then hand the branch and a patch to the integrator (AGENTS.md "Handoff"). Do not push to main. A branch left unlanded gets the card note `land: <branch> <tip>`.
 - Messages only for blocked or a decision; FYIs go out without waking the agent. The user hands out work between
   agents; agents keep messages to each other to a minimum.
 - An agent stops only its own helper jobs, never with a stop that reaches other agents.
@@ -36,7 +36,7 @@ few things differently. Where this file and the role files disagree, Grok agents
 - Routine builds and tests run at low effort with a step cap.
 
 ## Merging
-- Workers do not land their own branches (Status above, common.md "Handoff"): no Ready column. Finished work is handed to the integrator.
+- Workers do not land their own branches (Status above, AGENTS.md "Handoff"): no Ready column. Finished work is handed to the integrator.
 - Handovers of parked agents: /workspace/handover/<agent>.md.
 
 ## For the Supervisor
@@ -49,7 +49,7 @@ repo); it prints "sent to Grok Bot Supervisor" and wakes it through its fleet in
 changes only when the user regenerates it: a 401 means exactly that, so ask the user to have Grok refresh the file
 and write to data/grok-cards.md meanwhile (a 401 hid every message from 2026-11-02 to 11-03). Grok answers by typing
 into the warp-supervisor tmux pane. Hand its coders simple library-only cards: `todo take <card> <coder>`, write the task into data/grok-cards.md,
-ping with grok-msg; they hand the finished branch to the integrator (common.md "Handoff") and do not land it themselves. Temporary (user 2026-11-08, 13:07 CET, until Monday morning Nov 9 2026): Claude is asleep; the Supervisor is the main supervisor; nothing is routed through Claude; everything goes through the Supervisor. Grok is that Supervisor's helper until then (the 2026-11-06 "Claude Supervisor's helper" line resumes after): one owner per card: a coder may pick a free card itself
+ping with grok-msg; they hand the finished branch to the integrator (AGENTS.md "Handoff") and do not land it themselves. Temporary (user 2026-11-08, 13:07 CET, until Monday morning Nov 9 2026): Claude is asleep; the Supervisor is the main supervisor; nothing is routed through Claude; everything goes through the Supervisor. Grok is that Supervisor's helper until then (the 2026-11-06 "Claude Supervisor's helper" line resumes after): one owner per card: a coder may pick a free card itself
 only by `todo take <card> <coder>` at once (Now + owner), never one whose Agent field names someone else. At most 1 active + 1 queued card per Grok coder.
 Unexplained direct pushes to main with the user's identity (g-* cards) may be Grok Bot: ask the user.
 

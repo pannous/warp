@@ -1,4 +1,4 @@
-# decision nullish-default (user): x default y is x ?? y, y only when x raises or is ø, a falsy x kept; otherwise,
+# decision nullish-default: x default y is x ?? y, y only when x raises or is ø, a falsy x kept; otherwise,
 # failing and except spell it too; the one-line try x except y means x default y; `else` only after if or try
 '0 default 10'	0
 '"" default "anon"'	""

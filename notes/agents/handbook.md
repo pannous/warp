@@ -1,27 +1,29 @@
-# Handbook: the detailed procedures behind common.md
+# Handbook: the detailed procedures behind AGENTS.md
 
-Look things up here when a task needs them; never read it front to back at startup. common.md wins where they differ.
-Principles and Talking live only in common.md.
+Look things up here when a task needs them; never read it front to back at startup. AGENTS.md wins where they differ.
+Principles and Talking live only in AGENTS.md.
 
 ## Where to work
 - Quota wind-down : every Claude worker
-  finishes the card it is on; the finished work is handed to the integrator, who applies it on the user's Mac and pushes it (notes/agents/common.md "Handoff"). It writes its handover into the card (`todo release`), then retires. No new
+  finishes the card it is on; the finished work is handed to the integrator, who applies it on the user's Mac and pushes it (AGENTS.md "Handoff"). It writes its handover into the card (`todo release`), then retires. No new
   cards. Only warp-integrator and warp-layers keep running. The sugar passes outside parser.warp belong to the user's
   Grok Bot coders; warp-layers keeps
   parser.warp only.
 - Beautiful types (decision beautiful-types): every lib/ declaration a migration or cleanup branch touches leaves it
   fully and precisely typed. A type that doesn't exist yet is asked of warp-types-back (card beautiful-types), which
-  adds the shallow subclasses; don't invent parallel ones in your branch.
+  adds the shallow subclasses; don't invent parallel ones in your branch. Every function of the compiler and runtime
+  declares its parameter and result types; generic helpers are typed generically (T, element of xs); any stays only
+  for values that really are anything.
 - The sugar migration  keeps one line of history: warp-layers alone removes sugar
   from core/parsing/parser.warp and moves passes into extensions/sugar/, one module group per branch, branched from
   origin/main after the engine feature it needs has landed (never stacked on warp-rewrite-engine's branch), handed
-  off the same day (notes/agents/common.md "Handoff"). Other branches touching parser.warp or a pass on the migration list stay small and are handed off at once;
+  off the same day (AGENTS.md "Handoff"). Other branches touching parser.warp or a pass on the migration list stay small and are handed off at once;
   one older than a day merges origin/main or is closed. Folds and fusion (min_max.warp, broadcasting,
   lambdas.warp's fusion) are warp-folds' until its cards land; migration 3 skips them. Aliases are warp-signatures'
   lib/aliases.warp.
 - Small changes on main: only what nothing compiles (notes, docs, wiki, scripts, samples, playground text)
   in the main checkout /Users/me/dev/angles/warp, no worktree: commit your own
-  paths by name (`git commit -- <paths>`), `source scripts/lib/sync-main.sh; up_to_date_main` (fetches main by name, replays your commits, never stashes) (common.md). The finished work is handed to the integrator, who applies it on the user's Mac and pushes it (notes/agents/common.md "Handoff"); never leave unpushed commits on
+  paths by name (`git commit -- <paths>`), `source scripts/lib/sync-main.sh; up_to_date_main` (fetches main by name, replays your commits, never stashes) (AGENTS.md). The finished work is handed to the integrator, who applies it on the user's Mac and pushes it (AGENTS.md "Handoff"); never leave unpushed commits on
   main. A new root .warp data file (components.warp …): tell the Integrator the commit, tests read it.
 - Anything compiled (core/, the harness in src/ and crates/, Cargo.*) keeps its worktree, however small (a half-done
   edit there breaks every build of the main checkout): `cowtree add -b <branch> /Volumes/Worktrees/<branch> origin/main`
@@ -41,7 +43,7 @@ Principles and Talking live only in common.md.
 - Moving on demand: a change in the main checkout that grows (more than a few files, many build/test rounds, or
   another session's files) moves into a worktree while still uncommitted: `cowtree add -b <task> <worktree> HEAD`,
   `git diff -- <own paths> | git -C <worktree> apply`, then undo only your own paths in the main checkout. A worktree
-  branch that turns out small is finished work handed to the integrator, who applies it on the user's Mac and pushes it (notes/agents/common.md "Handoff") (`source scripts/lib/sync-main.sh; up_to_date_main` (fetches main by name, replays your commits, never stashes)).
+  branch that turns out small is finished work handed to the integrator, who applies it on the user's Mac and pushes it (AGENTS.md "Handoff") (`source scripts/lib/sync-main.sh; up_to_date_main` (fetches main by name, replays your commits, never stashes)).
 - Never stash (the user's rule; the stash list is shared by all worktrees) and no `--autostash`: commit first; a
   merge keeps uncommitted files nothing incoming touches, a rebase refuses a dirty tree loudly. Leftover stashes are
   dropped (the hook saves them under refs/dropped-stashes).
@@ -110,12 +112,12 @@ Principles and Talking live only in common.md.
   Interviewer's approval only, not a new question.
 - Outcome tests only (AGENTS.md "Outcome tests only"): new tests check what warp code produces, never an
   intermediate; a test pinning one may be deleted or rewritten as one is! line.
-- Tests are result-based (user): assert what a program computes, e.g. `is! '6*7' 42`, or its printed
+- Tests are result-based: assert what a program computes, e.g. `is! '6*7' 42`, or its printed
   output. Don't pin incidental details such as exit codes of successful runs, internal forms, pass names, error
   wording or timing. Exit codes are tested only when the feature itself is about them (e.g. `exit(5)`).
 - Acceptance (decision warp-only-acceptance): a branch is accepted when warp.wasm compiles
   compiler.warp itself and that self build compiles and runs hello world: `scripts/self-check.sh <worktree>` (main's
-  binary), run on the branch merged with origin/main; then the finished work is handed to the integrator, who applies it on the user's Mac and pushes it (notes/agents/common.md "Handoff"). While
+  binary), run on the branch merged with origin/main; then the finished work is handed to the integrator, who applies it on the user's Mac and pushes it (AGENTS.md "Handoff"). While
   main's own self build is red (its owner fixes it), a branch passes when its pure lane is green and its self check
   fails no worse than main's (the same error): a red main never blocks a landing.
   A change to core/ checks the self build before landing: `scripts/self-check.sh <worktree>` (with --rebuild it
@@ -205,12 +207,12 @@ Principles and Talking live only in common.md.
   HEAD:master`): commit only your pages by name, never `-a` (other sessions leave edits there); a refused pull is
   someone else's work. Write a branch's doc changes only with its landing, never leave them lying in wiki/ to be
   published early.
-- Forward crunch: the finished work is handed to the integrator, who applies it on the user's Mac and pushes it (notes/agents/common.md "Handoff"), once it builds and its smoke test passes; tests failing in its own area don't hold
+- Forward crunch: the finished work is handed to the integrator, who applies it on the user's Mac and pushes it (AGENTS.md "Handoff"), once it builds and its smoke test passes; tests failing in its own area don't hold
   it back: the Integrator's background tiers card them and you fix forward. More than ~20 failing tests of yours:
   fix those before new work.
 - Before the handoff: `warp format yes <files>` on the .warp files you wrote or changed (notes/warp_format.md),
   and commit what it moved. A change to the Rust harness is also `cargo fmt`ed and `cargo check`ed.
-- Handoff (notes/agents/common.md "Handoff"; no merge queue, no Ready column):
+- Handoff (AGENTS.md "Handoff"; no merge queue, no Ready column):
   1. Targeted tests, commit, formatted.
   2. Merge origin/main into the branch: `git fetch origin && git merge origin/main`, with a merge
      message summing up the change. You resolve conflicts. Take a side of a conflicted file only after `git diff
@@ -218,13 +220,13 @@ Principles and Talking live only in common.md.
      `git diff origin/main -- <file>` shows only your change.
      Keep merges real: one merge commit per branch, and never let a plain `git pull --rebase` flatten them (it replays
      a merged branch's commits onto main and conflicts): `source scripts/lib/sync-main.sh; up_to_date_main` (fetches main by name, replays your commits, never stashes) or `git merge origin/main`.
-  3. Smoke test on that merge (core/ changes: smoke + `scripts/self-check.sh`), then the finished work is handed to the integrator, who applies it on the user's Mac and pushes it (notes/agents/common.md "Handoff").
+  3. Smoke test on that merge (core/ changes: smoke + `scripts/self-check.sh`), then the finished work is handed to the integrator, who applies it on the user's Mac and pushes it (AGENTS.md "Handoff").
      The push is fast-forward only; rejected: merge origin/main again, rerun the smoke test only if the new commits touch core/
      or lib/). On the box, then `scripts/publish-build.sh <worktree>`: the build of the landed inputs goes to the
      `builds` pre-release, where rebuild.sh on the Mac (after-push) fetches it instead of compiling (scripts/fetch-build.sh).
      Then `todo done <card> <commit>`, with a `todo note` naming new tests, "docs: <page>" and the sample.
      When the user says "quickly", they expect about a minute: one targeted test or none, give the user a try line
-     with `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp`, hand it off right after (notes/agents/common.md "Handoff").
+     with `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp`, hand it off right after (AGENTS.md "Handoff").
   4. Report one line to the Supervisor.
   A finished branch whose session retires before the handoff stays in Now with the note `land: <branch> <tip>` for the
   Integrator. Something the background tiers find red comes back as a card: fix forward, never revert-and-wait.
