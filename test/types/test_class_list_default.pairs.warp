@@ -1,0 +1,7 @@
+# a list or map written where a field's type would be is its default; `[int]` stays a list type
+'class Q { a: [1] }; Q().a'	[1]
+'class Q { a: [1, 2] }; Q().a#2'	2
+'class Q { a: {b: 1} }; Q().a.b'	1
+'class Q { a: [1] }; q = Q(); r = q.copy(); r.a#1 = 9; [q.a#1, r.a#1]'	[1, 9]
+'class Q { a: [int] }; Q([3]).a'	[3]
+'class Q { a: [] }; Q().a'	[]
