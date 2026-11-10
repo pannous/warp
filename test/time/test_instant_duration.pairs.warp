@@ -11,3 +11,7 @@
 # a time moved by a quantity of time at run time, its kind a node: the core duration it lasts (card since-time)
 'd = 2 seconds; str(2030-03-30T12:00 + d)'	"2030-03-30T12:00:02"
 'str(2030-03-30T12:00 + 90 minutes)'	"2030-03-30T13:30"
+# a place typed by a time word takes a quantity of time as the duration it lasts (card duration-hours)
+'f(n: duration) := n; str(f(2 hours))'	"2 hours"
+'f(n: duration) := n; str(f(90 minutes))'	"1 hour 30 minutes"
+'f(n: time) := n; str(2030-03-30T12:00 + f(2h))'	"2030-03-30T14:00"
