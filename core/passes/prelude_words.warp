@@ -186,10 +186,12 @@ symbol_words(n: Node): list := {
 # the words a class's body mentions but its own fields and methods: `class C{pi = 3; f() := pi * r}` names no library pi
 # a type named with no body, a field's `x: Int` (sugar.warp typed_fields): it uses the type, as a prelude alias
 is_named_type(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "type" and value_of(n)#3 == ø
-# (a method's parameters and locals are its own too: ListMap's init(m = {}) names no unit m)
+# (a method's parameters and locals are its own too: ListMap's init(m = {}) names no unit m; a field binds only its
+# name, its type `d: km` a word it uses, which brings lib/units' type km)
 class_words(view: Node): list := {
 	parts = parts_within(view)
-	own = parts.flat_map(part => if is_group(part) then items_of(part) else [part]).map(member_name) + parts.flat_map(part => names_bound_in(part).keys)
+	members = parts.flat_map(part => if is_group(part) then items_of(part) else [part])
+	own = members.map(member_name) + members.filter(member => is_key(member, Op.Define)).flat_map(member => names_bound_in(member).keys)
 	parts.flat_map(symbol_words).filter(word => word not in own)
 }
 
