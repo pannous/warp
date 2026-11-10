@@ -69,6 +69,5 @@ lights = compute_toy(shader {
 	}
 })
 # every frame until the window closes
-on frame {
-	paint(lights)
-}
+on frame {paint(lights)}
+on key : exit
