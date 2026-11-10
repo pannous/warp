@@ -212,12 +212,22 @@ def spells_function(alias: OperatorAlias): bool := is_name_start(alias.target#1)
 // the operator statements among statements, read once
 def operator_statements(statements: list): list := statements.filter(statement => statement.contains(":=")).map(statement => operator_statement(blank_words(statement))).filter(statement => statement != ø)
 def source_operator_statements(source: text): list := if source.contains(":=") then operator_statements(code_statements(source)) else []
-// lib/math.warp's operator statements (its text built in), which every program reads (decision operator-alias), read the first time a
-// parse needs them
+// lib/math.warp's operator statements, which every program reads (decision operator-alias), read the first time a
+// parse needs them off the library index (library.warp "mathop"): splitting math's text and trying each of its
+// definitions as one was a few percent of a small program's compile (card compile-parses)
 global math_statements = ø
 def math_operator_statements(): list {
-	if math_statements == ø { math_statements = operator_statements(code_statements(math_text())) }
+	if math_statements == ø { math_statements = operator_statements(library_index_section("mathop").keys) }
 	math_statements
+}
+// math's operator statements, each its text, as the index keeps them (a line of the index holds no tab or line break)
+def math_operator_lines_scanned(): map {
+	found = {}
+	for statement in code_statements(math_text()).filter(statement => #operator_statements([statement]) > 0) {
+		if statement.contains("\t") or statement.contains("\n") { throw "lib/math.warp's operator statement spans lines or holds a tab, which the library index can't keep: " + statement }
+		found[statement] = ""
+	}
+	found
 }
 // the aliases among statements
 def aliases_among(statements: list): list := statements.map(alias_of).filter(alias => alias != ø)
@@ -1342,7 +1352,7 @@ def condition_has_branch(p: Parser, at: int): bool {
 }
 
 // `x if c` is `if c then x`, `x unless c` is `if not c then x`, `x while c` is `while c do x`, `x until c` is `while
-// not c do x`; a trailing `while` tests before the first round like the leading one 
+// not c do x`; a trailing `while` tests before the first round like the leading one
 def guarded_statement(statement: Node, word: text, condition: Node): Node := {
 	guard = control_condition(word, condition)
 	if CONTROL_WORDS[word] == "while" then Key(Key(ø, Op.While, guard), Op.Do, statement) else Key(Key(ø, Op.If, guard), Op.Then, statement)
@@ -1795,7 +1805,6 @@ def fixity_level(fixity: Fixity): int := match fixity {
 
 // The call of a declared operator's function: `2 ⊕ 3` is operator_⊕(2, 3)
 def operator_call(glyph: text, arguments: list): Node := call_of([symbol(OPERATOR_FUNCTION_PREFIX + glyph)] + arguments)
-
 
 // A glyph a declaration may define: one beyond ASCII, or one the aliases leave to a declaration (`~`, `declared: yes`)
 def is_definable_glyph(glyph: text): bool := is_operator_glyph(glyph) or alias_spellings().declared contains glyph
@@ -3645,7 +3654,6 @@ def without_case_word(case: Node): Node := {
 	words = group_parts(case)
 	if words != ø and words#1 == "" and #words#3 == 2 and words#3#1 == symbol("case") then words#3#2 else case
 }
-
 
 // A decimal number as written, read: digits (`_` between them dropped), a fraction unless `..` or a name follows the
 // point, an exponent

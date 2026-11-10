@@ -133,7 +133,9 @@ class Rule { pattern: Node; template: Node; hole: Node; shape: Node; conditions:
 # code must hold for it to fire (its pattern's words outside holes, and the operator of the key its pattern is: `$a ??
 # $b` fires only where code has a `??`), the tokens its result holds, which a rule may rewrite again, and its result's
 # words
-rule_made(pattern: Node, template: Node, hole: Node, shape: Node, conditions: list, place: Place, module: text, whole: bool, alias: bool, head: text): Rule := {
+# (`words`: the three as the packed rules keep them, rule_node)
+rule_made(pattern: Node, template: Node, hole: Node, shape: Node, conditions: list, place: Place, module: text, whole: bool, alias: bool, head: text, words: list? = ø): Rule := {
+	if words != ø { return Rule(pattern, template, hole, shape, conditions, place, module, whole, alias, head, words#1, words#2, words#3) }
 	needs = required_words(pattern) + (if pattern is key and head != "" then [head] else [])
 	Rule(pattern, template, hole, shape, conditions, place, module, whole, alias, head, needs, tokens_within(template), words_within(template))
 }
@@ -864,8 +866,12 @@ rule_node(rule: Rule): Node := {
 	place_word = "·"
 	for word in PLACE_WORDS.keys { if PLACE_WORDS[word] == rule.place { place_word = word } }
 	flags = [symbol(place_word), symbol(if rule.whole then "yes" else "no"), symbol(if rule.alias then "yes" else "no"), symbol(rule.head ?? "")]
-	List([rule.pattern, rule.template, rule.hole ?? Node.Empty, rule.shape ?? Node.Empty, List(rule.conditions, Bracket.Square, Separator.Comma)] + flags, Bracket.Square, Separator.Comma)
+	words = [rule.needs, rule.gives, rule.says].map(list => List(list.map(word => Text(word)), Bracket.Square, Separator.Comma))
+	List([rule.pattern, rule.template, rule.hole ?? Node.Empty, rule.shape ?? Node.Empty, List(rule.conditions, Bracket.Square, Separator.Comma)] + flags + words, Bracket.Square, Separator.Comma)
 }
+# a packed rule's needs, gives and says (rule_node), ø for a rule packed without them
+PACKED_WORDS_AT = 10
+packed_words(fields: list): list? := if #fields < PACKED_WORDS_AT + 2 then ø else fields[PACKED_WORDS_AT - 1 ..].map(words => if words == ø then [] else items_of(words).map(text_of_node))
 unpacked_rule(n: Node, module: text): Rule := {
 	fields = items_of(n)
 	hole = if fields#3 == ø then ø else fields#3
@@ -877,7 +883,7 @@ unpacked_rule(n: Node, module: text): Rule := {
 		hole = ø
 		shape = ø
 	}
-	rule_made(fields#1, fields#2, hole, shape, conditions, PLACE_WORDS.get(name_of(fields#6)) ?? Place.Anywhere, module, name_of(fields#7) == "yes", name_of(fields#8) == "yes", name_of(fields#9))
+	rule_made(fields#1, fields#2, hole, shape, conditions, PLACE_WORDS.get(name_of(fields#6)) ?? Place.Anywhere, module, name_of(fields#7) == "yes", name_of(fields#8) == "yes", name_of(fields#9), packed_words(fields))
 }
 
 # the rule's code with each hole written right before `(`, `$t($a...)`, the call it is, as the code's `P(1)` is: the
