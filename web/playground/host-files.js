@@ -8,7 +8,6 @@ const PAGE_PREFIX = "page:"; // src/web/mod.rs PAGE_PREFIX: a file of the page i
 const HTTP_NOT_FOUND = "HTTP status 404";
 const FILE_NOT_FOUND = "No such file or directory (os error 2)";
 const NO_PROCESSES = "not in the browser: a page runs no process or shell, natively only";
-const PROGRAM_VARIABLE = "WARP_PROGRAM"; // the program's file, as the native warp sets it (lib/file.warp program_file)
 
 // the files std's file module wrote (texts) and save sound rendered (bytes, a Uint8Array): read and the file words see
 // them before the served ones. A page keeps them in IndexedDB (keepWrittenFile), so they are still there after a reload
@@ -49,8 +48,12 @@ function servedFileExists(path) {
 const isUnserved = url => typeof SERVED_FILES !== "undefined" && url.startsWith(FILE_ROOT)
 	&& !SERVED_FILES.has(decodeURIComponent(new URL(url).pathname.slice(new URL(FILE_ROOT).pathname.length)));
 
-// `://host/path` takes the page's protocol, as `//host/path` does in HTML (src/extensions/utils.rs with_default_scheme)
-const withPageProtocol = url => url.startsWith(SCHEME_MARK) ? self.location.protocol + url.slice(1) : url;
+// `://host/path` is fetched over https, as natively (core/native/driver.warp); the page's own host keeps the page's
+// protocol, so a local http server still serves its own files
+const DEFAULT_SCHEME = "https:";
+const hostOf = url => url.slice(SCHEME_MARK.length).split("/")[0];
+const withPageProtocol = url => url.startsWith(SCHEME_MARK)
+	? (hostOf(url) === self.location.host ? self.location.protocol : DEFAULT_SCHEME) + url.slice(1) : url;
 
 // a synchronous GET (host calls are synchronous, so this runs in a worker); `timeout` in ms
 function getSync(url, timeout, binary = false) {
@@ -205,7 +208,9 @@ function findFiles(folder, pattern) {
 	return [...new Set(below.filter(path => outsideHidden(path) && shown(path.slice(path.lastIndexOf("/") + 1))))].sort().map(path => asFolder(plainPath(folder)) + path);
 }
 
-// the shell's words on the page's files (lib/shell.warp, src/modules/std_adapters.rs): folders exist by the files in them
+// the shell's words on the page's files (lib/shell.warp, src/modules/std_adapters.rs): folders exist by the files in them,
+// and a folder made empty (mkdir, lib/file.warp temp_dir) among the run's made ones, which WASI lists (driver.js programFiles)
+const madeFolder = path => programFiles.made.add(filePath(path).replace(/\/+$/, ""));
 // "~" itself (wasi.js HOME_DIRECTORY), there before the page wrote a file into it
 const isHomeFolder = path => plainPath(path).replace(/\/+$/, "") === HOME_DIRECTORY;
 const isWrittenFolder = folder => [...writtenFiles.keys()].some(path => path.startsWith(plainPath(folder).replace(/\/?$/, "/")));
@@ -484,11 +489,13 @@ addHostPart({
 		};
 	},
 	adapters: {
+		// run_option (core/host_io.warp): the run's options as driver.js gives them (programOptions, compilerOptions),
+		// its program the chosen sample's file, so program.folder names its folder as natively
+		warp: { option(name) { return (name === "program" ? programFileOf(this.holder.run) : this.holder.options?.[name]) ?? null; } },
 		// a page has no command line, no input and runs no process; its environment is what the page sets (the stand-in of
 		// the playground's key), its folder the served root that relative paths start from
 		os: {
-			// WARP_PROGRAM is the chosen sample's file, so program.folder names its folder as natively
-			env(name) { return (name === PROGRAM_VARIABLE ? programFileOf(this.holder.run) : self.pageEnvironment?.[name] ?? (name === "HOME" ? HOME_DIRECTORY : undefined)) ?? null; },
+			env(name) { return (self.pageEnvironment?.[name] ?? (name === "HOME" ? HOME_DIRECTORY : undefined)) ?? null; },
 			args: () => self.programArguments ?? [], // a sample's <name>.args (playground.js programArguments)
 			cwd: () => ".",
 			stdin: () => "",
@@ -522,13 +529,13 @@ addHostPart({
 			// a list of ints 0 to 255, like src/modules/std_adapters.rs bytes_of
 			write_bytes: (path, bytes) => { keepWritten(path, Uint8Array.from(bytes, byteOf)); return null; },
 			read_bytes: path => Array.from(readBytes(path)),
-			exists: path => writtenFiles.has(filePath(path)) || isHomeFolder(path) || servedFileExists(path),
+			exists: path => writtenFiles.has(filePath(path)) || programFiles.made.has(filePath(path).replace(/\/+$/, "")) || isHomeFolder(path) || servedFileExists(path),
 			list: folder => {
 				const prefix = filePath(folder).replace(/\/?$/, "/");
 				return [...writtenFiles.keys()].filter(path => path.startsWith(prefix) && !path.slice(prefix.length).includes("/")).map(path => path.slice(prefix.length)).sort();
 			},
 			glob,
-			mkdir: () => null,
+			mkdir: path => (madeFolder(path), null),
 			copy: (from, to) => { keepWritten(intoFolder(from, to), writtenOrRead(from)); return null; },
 			move: (from, to) => { keepWritten(intoFolder(from, to), writtenOrRead(from)); return forgetWritten(from); },
 			touch: path => { if (!writtenFiles.has(filePath(path))) keepWritten(path, ""); return null; },

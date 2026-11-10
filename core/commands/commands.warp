@@ -21,7 +21,7 @@ TRIM_WAYS = {none: "", unused: "--remove-unused-module-elements", optimize: "-O2
 # `warp rebuild` optimizes the compiler with it
 WASM_OPT = "wasm-opt --enable-gc --enable-reference-types --enable-bulk-memory --enable-multivalue --enable-sign-ext --enable-nontrapping-float-to-int --enable-mutable-globals --enable-tail-call --enable-simd --enable-extended-const --enable-multimemory --enable-exception-handling --debuginfo"
 BINARYEN_INSTALL = "brew install binaryen"
-# without Binaryen a build or rebuild keeps the unoptimized module and says so, never fails (user 2026-10-29)
+# without Binaryen a build or rebuild keeps the unoptimized module and says so, never fails
 has_wasm_opt(): bool := shell("command -v wasm-opt || true").trim() != ""
 
 # the module trimmed of what its exports never reach, as `way` says (notes/runtime_linking.md "Removing the unused

@@ -9,7 +9,7 @@
 'twice(body: block) := { body(); body() }; n = 0; twice { n += 1 }; n'	2
 '3 is a number'	yes
 '3 is an int'	yes
-'f(): int := 3; text(type(f()))'	"class int"
+'f(): int := 3; text(type(f()))'	"int"
 'f(a, b) := a - b; f b: 1 a: 5'	4
 'f(x) := x; f -2 + 1'	-1
 'x: Int = 3; x'	3

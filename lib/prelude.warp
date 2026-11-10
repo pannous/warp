@@ -731,8 +731,8 @@ fits_group(value: any, pattern: any, bound: map, code: bool): bool := {
 }
 // `Circle(r)`, `Rect(w, h)`: an enum case carrying data, or a class, with a pattern for each field
 is_case_with_fields(pattern: any): bool := bracket_of(pattern) == "(" and #pattern > 1 and is_type(pattern#1, "symbol")
-// the class of an instance, Circle of `Circle{r: 2}` (type shows as "class Circle")
-class_name(value: any): text := { shown = name_of(type(value)); if shown.starts_with("class ") then shown[6 ..< #shown] else "" }
+// the class of an instance, Circle of `Circle{r: 2}` (its type, shown by its name)
+class_name(value: any): text := name_of(type(value))
 // the instance's fields in order fit the patterns after the case name
 fits_fields(value: any, pattern: any, bound: map): bool := {
 	fields = value.keys
@@ -993,7 +993,6 @@ number_part(t: text): any := if is_digits(unsigned(t)) then int(t) else float_pa
 text_part(t: text): any := t
 // the name without its mark: `$a` → a, `*rest` → rest
 unmarked(name: text, mark: text): text := if starts_with(name, mark) then slice(name, #mark) else name
-
 
 // Named events (extensions/sugar/events.warp): each event's listeners in order, with their numbers (counted within the event
 // from 1) and whether they listen once, as three lists of the same length

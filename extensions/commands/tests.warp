@@ -1,7 +1,7 @@
 # `warp test` on the native warp (card native-warp-test; twin of rust-harness:src/compiler/pure_tests.rs): warp.wasm lists the test
 # cases of the folders' test files into a work folder (test_listed), the native warp (core/native/tests.warp) runs each
 # case's code, and the code of an expected value that is no data, as a program of its own in the test file's folder
-# with WARP_VALUE_AS_DATA set, then warp.wasm judges what they gave (test_verdicts). The test files: `*.pairs.warp`
+# with --value-as-data, then warp.wasm judges what they gave (test_verdicts). The test files: `*.pairs.warp`
 # (code ⇥ expected, one a line) and the `is!` lines of `test_*.warp`, under each folder (default test/) or named
 # themselves. The work folder: `runs`, a line `<run>\t<folder>` for each program, its code in `<run>.code`; the native
 # warp writes `<run>.out`, `<run>.err` and `<run>.status` (its exit status, or `time ` and the limit it hit)
@@ -20,7 +20,6 @@ LISTED = "cases"
 # a run that hit its CPU or wall-clock limit: a TIME with its reason, neither passed nor failed
 TIME_STATUS = "time "
 TIME_MARK = "⏲ TIME "
-TYPE_SHOWN = "class "
 NEVER_RAN = "·never ran"
 # a case slower than this is no part of `warp test` (decision no-slow-tests): said with its time, it belongs in
 # test/slow/<topic>/, which a folder's walk passes by: run when named (`warp test test/slow`), with --slow, and in the
@@ -133,11 +132,8 @@ limit_hit(run: text): text := {
 # how long a run took, 0 for a run there was none of
 run_milliseconds(work: text, run: text): int := int(try read(work + "/" + run + ".ms") else "0")
 last_line_of(t: text): text := t.trim().split("\n").last() ?? ""
-# a type value printed `class nat` reads back as the type's name, which compares as the symbol does (type-result-shown)
-value_view(printed: text): any := {
-	if printed.starts_with(TYPE_SHOWN) { return ["symbol", printed[#TYPE_SHOWN ..< #printed]] }
-	literals_folded(view_of(plain_node(parsed(printed))))
-}
+# a run's value as data (show.warp data_code: a type value its name as a text)
+value_view(printed: text): any := literals_folded(view_of(plain_node(parsed(printed))))
 # a float printed with an exponent, `9.007199254740994e15`, parses as `… as float`: the number it is; a repeating
 # decimal, 0.6̅, parses as the quotient 6/9: in lowest terms, so 0.6̅, 2/3 and a run's 2/3 compare equal (with ints
 # only: the compiler has no exact numbers of its own)

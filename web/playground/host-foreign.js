@@ -235,11 +235,11 @@ const pageStdio = (holder, hooks) => ({
 	write: (descriptor, data) => (hooks.print(data, descriptor), utf8.encode(data).length),
 	close: () => C_FAILED,
 	dlopen: () => 0, // no C library loads in the page
-	// lib/file.warp's file words over the page's written files (host-files.js), as C answers: 0 done, -1 failed; folders
-	// exist by the files in them
+	// lib/file.warp's file words over the page's written files (host-files.js), as C answers: 0 done, -1 failed; a folder
+	// exists by the files in it, or made (madeFolder)
 	unlink: path => writtenFiles.has(filePath(path)) ? (forgetWritten(path), 0) : C_FAILED,
 	rename: (from, to) => writtenFiles.has(filePath(from)) ? (keepWritten(to, writtenFiles.get(filePath(from))), forgetWritten(from), 0) : C_FAILED,
-	mkdir: () => 0,
+	mkdir: path => (madeFolder(path), 0),
 	rmdir: folder => isWrittenFolder(folder) ? C_FAILED : 0,
 });
 

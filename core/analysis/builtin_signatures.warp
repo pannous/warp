@@ -99,7 +99,7 @@ runtime_lines = library_lines(runtime_library)
 # the words only the compiler's passes write, which no program calls (closures, cells, memos, linear
 # arrays, the switch and extremum errors, times, Uniscript; ran·without·error, declared as the prelude declares the words programs call
 compiler_lines = [
-# Todo bring all of these for discussion And explanation to the interviewer 
+# Todo (card builtin-signatures-review) bring all of these for discussion And explanation to the interviewer 
 	"ran·without·error(statement): bool from emitter",
 	"positioned(n, line, column): any from emitter",
 	"closure_new(values...): function from emitter",

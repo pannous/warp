@@ -772,7 +772,7 @@ statements_ruled(statements: list, module: text, source: text): list := {
 	[rules, kept]
 }
 
-# Overloads of a built-in operator by its operands' kinds (decision rules-to-typed-operators, user OK 2026-10-31):
+# Overloads of a built-in operator by its operands' kinds (decision rules-to-typed-operators):
 # `infix operator |(x: any, g: function) := g(x)` is the rule `$x | $g => $g($x)`, its parameter types its conditions
 # (overload_conditions), so dispatch costs nothing at run time. The overloads of one operator are tried most specific
 # first (fewer `any`), one whose body is the operator itself, `infix operator |(a: type, b: type) := a | b`, keeps the
@@ -2159,11 +2159,11 @@ rule_applied(rule: Rule, origin: map, n: Node): Node := {
 	fired(rule, List(statements_in(rule_spliced(rule.template, bound, n)), Bracket.Curly, Separator.Semicolon))
 }
 
-# WARP_RULES_FIRED set: `§R <module> <pattern>` printed for each rule that fires, so a compile's log counts which
+# --rules-fired: `§R <module> <pattern>` printed for each rule that fires, so a compile's log counts which
 # rules (sugar, a library's) its program relies on (card core-extensions-roadmap). Silent unset
-RULES_FIRED = started_env("WARP_RULES_FIRED") ?? ""
+RULES_FIRED = run_option("rules-fired") != ø
 fired(rule: Rule, result: Node): Node := {
-	if RULES_FIRED != "" { print "§R " + rule.module + " " + "${rule.pattern}" }
+	if RULES_FIRED { print "§R " + rule.module + " " + "${rule.pattern}" }
 	# (the prelude is in every program already: a use of it once more is none, card prelude-rule)
 	if rule.module != "" and rule.module != "prelude" { fired_modules += [rule.module] }
 	if rule.alias { diagnose(call_of("alias_word", [symbol(first_word_of(rule.pattern)), symbol(first_word_of(rule.template))]), result) }

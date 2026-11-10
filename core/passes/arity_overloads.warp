@@ -61,8 +61,6 @@ overloaded_arities(program: Node): map := {
 	overloaded
 }
 
-
-
 # the definition's target naming its variant: `twice(a, b): int` as `twice·2(a, b): int`
 renamed_target(target: Node, name: text): Node := match target {
 	Key(head, op, result): Key(renamed_target(head, name), op, result)
@@ -451,7 +449,6 @@ library_variant(name: text, types: list): Node := {
 # the library word a name calls: its own lines' word, else the word an alias names, `size` the prelude's count
 # (`alias size => count`), so a program's `size(d: Deck)` joins count's variants and size("abc") still counts
 library_word_named(name: text): text := if word_lines().has(name) then name else unaliased(name)
-
 
 # [kind, element kind or ø] of an argument whose type the compile knows, a literal; ø for one only the run time knows
 static_kind(n: Node): list? := {

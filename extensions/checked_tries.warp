@@ -32,7 +32,7 @@ checked_try(value: Node, fallback: Node): Node? := match value {
 is_division(op: Op): bool := op == Op.Div or op == Op.Mod or op == Op.Rem
 
 # To do give one-line summaries to all functions where the meaning is not immediately clear from the context and name 
-# todo number: int  Generalize to other numbers 
+# todo (card checked-tries-numbers) number: int  Generalize to other numbers 
 divided(dividend: Node, op: Op, divisor: Node, fallback: Node): Node := {
 	held = try_name("divisor", fresh_number())
 	quotient = applied_to(HiddenWord.TryElse as text, [Key(dividend, op, held), fallback])
