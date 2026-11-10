@@ -1,0 +1,26 @@
+# Calls, definitions and types: shown objects, block heads, articles, declared results, named arguments, negative
+# arguments, foreign type names, letter aliases, C-style parameters, optional bang, let, it-definitions, class equality
+# (wiki function, variable, type; decisions shown-spaced, block-heads-from-signature, article-optional,
+# declared-int-result, named-args-colon, call-negative-plus-test, foreign-type-names, generic-letter-alias,
+# program-defining, optional-bang, let-local, map-function-definition, class-equality-glyph, key-statement-binds,
+# constant-define-operator, time-utc-property, purity-predicates, cancel-timer)
+'class P { n: int }; text(P{n: 3})'	"P{n: 3}"
+'twice(body: block) := { body(); body() }; n = 0; twice { n += 1 }; n'	2
+'3 is a number'	yes
+'3 is an int'	yes
+'f(): int := 3; text(type(f()))'	"class int"
+'f(a, b) := a - b; f b: 1 a: 5'	4
+'f(x) := x; f -2 + 1'	-1
+'x: Int = 3; x'	3
+'type T = int; f(x: T) := x + 1; f(2)'	3
+'constant x = 3; x'	3
+'f(double x) := x * 2; f(2)'	4
+'x: int? = 5; x! * 2'	10
+'x:2; x'	2
+'n = 1; f() := { let n = 2; n }; f() + n'	3
+'square := it * it; square 3'	9
+'class Point { x: int; ==(o) := x == o.x }; Point{x: 1} == Point{x: 1}'	yes
+'t = now; t.utc.hour >= 0'	yes
+'2/3'	2/3
+'f(x) := x; f.effects is empty'	yes
+'t = on every 1 second { 1 }; cancel t; 1'	1

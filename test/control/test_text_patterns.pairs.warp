@@ -22,13 +22,6 @@
 'p = "0x"; s = "0xff"; match s { p + "ff" => "same"; _ => "no" }'	'same'
 
 # text_holes_fit_their_types
-# triage-held 2026-10-28: internal text_holes helper; text patterns are tested by match lines :: 'text_holes("/users/42", ["/users/", ""], ["int"])#1'	'42'
-# triage-held 2026-10-28: internal text_holes helper; text patterns are tested by match lines :: 'count(text_holes("/users/bo", ["/users/", ""], ["int"]))'	0
-# triage-held 2026-10-28: internal text_holes helper; text patterns are tested by match lines :: 'text_holes("-3.25 m", ["", " m"], ["number"])#1'	'-3.25'
-# triage-held 2026-10-28: internal text_holes helper; text patterns are tested by match lines :: 'text_holes("0xff!", ["0x", "!"], ["hex"])#1'	'ff'
-# triage-held 2026-10-28: internal text_holes helper; text patterns are tested by match lines :: 'count(text_holes("0xfg!", ["0x", "!"], ["hex"]))'	0
-# triage-held 2026-10-28: internal text_holes helper; text patterns are tested by match lines :: 'text_holes("my_name", ["", ""], ["word"])#1'	'my_name'
-# triage-held 2026-10-28: internal text_holes helper; text patterns are tested by match lines :: 'count(text_holes("my-name", ["", ""], ["word"]))'	0
 's = "t-3"; match s { "t" + n: int => n; _ => "no" }'	-3
 's = "t-2.5"; match s { "t" + x: float => x; _ => "no" }'	-2.5
 's = "t-"; match s { "t" + n: int => n; _ => "no" }'	"no"

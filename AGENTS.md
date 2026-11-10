@@ -250,7 +250,7 @@ At night (until the user is back, usually 10:00) notes/agents/night.md applies t
 
 Startup reading is this file (loaded automatically) plus your role file, nothing more. Everything else is
 looked up when a task needs it: notes/agents/handbook.md (the detailed procedures: worktree build tweak,
-gate tiers, bisects, Grok box, try lines, the Done checklist), notes/welcoming.md (how warp treats unclear input),
+gate tiers, bisects, try lines, the Done checklist), notes/welcoming.md (how warp treats unclear input),
 wiki/Footguns.md (decided language rules: grep it, never read it whole), notes/decisions.md (grep a key or a topic
 before asking a question). After a context swap, this file and your role file beat the handover.
 
@@ -327,7 +327,9 @@ before asking a question). After a context swap, this file and your role file be
 
 ## Talking
 - A changed procedure is written into the notes the sessions read (this file, the role file) in the same
-  push, removing the lines it contradicts; a chat message alone is not enough.
+  push, removing the lines it contradicts; a chat message alone is not enough. This file itself changes only through
+  warp-interviewer: send the exact old and new lines, the Interviewer approves and lands them (a role file is its
+  owner's, like the wiki rule below for wiki pages).
 - One name per session, `warp-<role>`: claude.ai title, SendMessage address, tmux session. Address peers by it.
 - Swap notices ("Swap: … was replaced by me") get an EMPTY reply and are never reported to the user.
 - Never block on a decision: take the recommended default, mark it as an assumption (an existing-test edit in its
@@ -398,7 +400,7 @@ before asking a question). After a context swap, this file and your role file be
   Every build keeps its full record (<hash>/warp.record/: inputs and sources, build.log, CPU and memory, a function
   profile; notes/compiler_rebuilds.md "Build records"): read a build's time and profile there, never build to measure. Every
   hit, miss, wait and failure is a line of <store>/rebuilds.log.
-  Only core/**, extensions/** and the seed are a compiler's code (compiler-inputs.sh --baked-files); lib/ is never
+  Only core/**, extensions/** and the seed are a compiler's code (compiler-inputs.sh --code-files); lib/ is never
   part of it. A lib/-only change compiles nothing: rebuild.sh takes the stored compiler of the same code
   (<store>/code/<code hash>) and makes lib/'s runtime, modules and index anew (`miss-rebaking-<hash>`, about a
   minute; decision lib-hash-rebake; a failed rebake is kept like a failed build, step rebake). So a library feature
@@ -408,6 +410,9 @@ before asking a question). After a context swap, this file and your role file be
   never ends (warp-compile-speed sat 3½ h in one, 11-07), and
   stop only your own jobs. Every CLI run that might paint gets `WARP_NO_WINDOW=1`. No browsers on the Mac.
 - Outcome tests only ("Outcome tests only" above), and never pinning exit codes or wording.
+- The wiki is the specification: a rewrite of what a wiki page says (a rule, an example's result, a dropped or new
+  form; not typos, links or layout) goes to warp-interviewer first, with the old and the new text; the Interviewer
+  approves it. A worker's wiki-only change otherwise lands as usual.
 - Tests are spec only when backed: a test file's header names its source (a wiki page or a decision key); add cases
   only for forms a wiki page or decision shows. Taste by example: notes/taste.md. Tests are
   deduped without losing a distinct assertion.
@@ -418,7 +423,7 @@ before asking a question). After a context swap, this file and your role file be
   branch or worktree for it. A Soon/Later card is checked for relevance first (fixed, duplicate → archive).
   The column is the priority, for topic cards too; the user's own cards (drafts, issues not "Added by <session> with
   `todo add`") stay where the user put them.
-- Every branch has a card: comment branch, tip and state on it; a parked branch gets notes/handover/<branch>.md.
+- Every branch has a card: comment branch, tip and state on it; a parked branch gets its handover as a card note (`todo note`).
 - No Ready column, no merge queue. The worker does not land the branch. Finished work is handed
   to the integrator (Handoff, below), noted `land: <branch> <tip>` (`todo landing`). A finished branch
   whose session retires unlanded stays in Now with that same note; the integrator lands those.
@@ -426,7 +431,7 @@ before asking a question). After a context swap, this file and your role file be
   be built too when it is undoable (its own commits on the branch).
 - Explore before the first edit of a card, a bug report or a "why" question, wider than the card names, and use
   what you find: the spec (wiki/, test/, samples/), the history (`todo show` with its comments, related cards via
-  `todo list | grep`, notes/<topic>.md, notes/handover/, the decisions inbox, `git log -S`/blame of the code
+  `todo list | grep`, notes/<topic>.md, the decisions inbox, `git log -S`/blame of the code
   involved), live work (open branches and worktrees on the same files, the Now column), and the evidence (the stored
   baseline, `scripts/baseline.sh <tests>`; a failed build's record in the store). Not for a mechanical step whose
   context you already hold.
