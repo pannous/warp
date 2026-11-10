@@ -1,4 +1,4 @@
-// A million trees on a regular ground, placed from their index, culled by chunk.
+// A million trees (or any square of them) on a regular ground, placed from their index, culled by chunk.
 // `use forest`. Nothing here is stored per tree: a 1000 by 1000 grid, one tree a cell,
 // its shift and species a mix of the cell. A view keeps the chunks whose boxes meet the
 // frustum and draws only a budget of them, near ones as whole trees and far ones as a
@@ -44,8 +44,10 @@ forest_cells(index) := {
 
 tree_place(index: int): list := {
 	forest_cells(index)
-	ix = index % FOREST_SIDE
-	iy = index /! FOREST_SIDE
+	cell_place(index % FOREST_SIDE, index /! FOREST_SIDE)
+}
+
+cell_place(ix, iy) := {
 	mixed = forest_mix(ix, iy)
 	jx = (mixed % 1000) / 1000.0 - 0.5
 	jz = ((mixed /! 1000) % 1000) / 1000.0 - 0.5
@@ -170,7 +172,7 @@ tree_seen(index: int, glance: Glance): bool := {
 placed_at(cx, cz, local) := {
 	ix = cx * FOREST_CHUNK + local % FOREST_CHUNK
 	iy = cz * FOREST_CHUNK + local /! FOREST_CHUNK
-	tree_place(iy * FOREST_SIDE + ix)
+	cell_place(ix, iy)
 }
 
 forest_detail(reach) := if reach < NEAR_REACH then 0 else if reach < MID_REACH then 1 else 2
@@ -247,13 +249,22 @@ forest_ground(cx, cz) := {
 	[cx * CHUNK_SPAN + CHUNK_SPAN / 2.0, cz * CHUNK_SPAN + CHUNK_SPAN / 2.0, CHUNK_SPAN / 2.0, 0.0 + kind + 16]
 }
 
-forest_view(glance: Glance): Canopy := {
+forest_side(side) := {
+	if not (side is int) or side <= 0 or side % FOREST_CHUNK != 0 {
+		raise "forest: a side is a positive multiple of " + str(FOREST_CHUNK) + " trees, not " + str(side)
+	}
+}
+
+// side: trees along each edge of the square; the woods hold side * side of them.
+forest_view(glance: Glance, side: int = FOREST_SIDE): Canopy := {
 	forest_glance(glance)
+	forest_side(side)
+	chunk_count = side /! FOREST_CHUNK
 	axes = forest_basis(glance)
 	planes = forest_planes(glance)
 	chunks = []
-	for cz in 0 ..< FOREST_CHUNKS {
-		for cx in 0 ..< FOREST_CHUNKS {
+	for cz in 0 ..< chunk_count {
+		for cx in 0 ..< chunk_count {
 			reach = chunk_reach(cx, cz, glance)
 			if reach > glance.far { continue }
 			box = chunk_box(cx, cz)
@@ -286,5 +297,5 @@ forest_view(glance: Glance): Canopy := {
 	for tile in reverse(grounds) { sprites.add(tile) }
 	for tree in reverse(picked) { sprites.add(tree) }
 	nearest = if count(picked) == 0 then -1 else (int(picked#1#4) /! 4) % 4
-	Canopy(FOREST_TREES, candidate, count(picked), 1 + count(grounds), nearest, sprites, [glance.x, glance.y, glance.z], axes#2, axes#3, axes#1)
+	Canopy(side * side, candidate, count(picked), 1 + count(grounds), nearest, sprites, [glance.x, glance.y, glance.z], axes#2, axes#3, axes#1)
 }
