@@ -4,9 +4,11 @@
 guests: int = 2
 float budget = 12.5  # C style, the same as budget: float = 12.5
 vegetarian: bool = no
-form{
-	label{ "Guests " input{ bind: guests } }
-	label{ "Budget " input{ bind: budget } }
-	label{ "Vegetarian " input{ bind: vegetarian } }
-	p{ "" + guests + " guests, " + budget + " each" }
+html{
+	form{
+		label{ "Guests " input{ bind: guests } }
+		label{ "Budget " input{ bind: budget } }
+		label{ "Vegetarian " input{ bind: vegetarian } }
+		p{ "" + guests + " guests, " + budget + " each" }
+	}
 }
