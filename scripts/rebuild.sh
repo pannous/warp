@@ -12,7 +12,7 @@
 #      <store>/<hash>/: scripts/lib/platform.sh warp_store (WARP_COMPILER_STORE names another)
 #   3. else, unless --check, `warp rebuild`, the result published to the store; the store's `main` link moves to it only for a build of origin/main
 # --check: steps 1 and 2 only, exit 3 on a miss. --force: step 3 whatever the hash says.
-# A failed build is kept too, so every build of a hash happens once (user 2026-10-30): <store>/<hash>/<compiler>.failed/
+# A failed build is kept too, so every build of a hash happens once: <store>/<hash>/<compiler>.failed/
 # holds its log (build.log), the step it failed in (seed, optimize, runtime, modules; `warp rebuild` says each
 # before it runs), what was said (message) and the half-built warp.wasm.new and runtime.wasm. A request for that hash
 # prints the stored failure at once and exits 1; --force builds again, from the failed step on with the stored artifacts
@@ -120,7 +120,7 @@ resumed_step() {
 }
 
 sha() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -c1-64; }
-# recorded_inputs <record>: all a build of this hash starts from (user 2026-10-31: a build is self-contained, never
+# recorded_inputs <record>: all a build of this hash starts from (a build is self-contained, never
 # built twice): inputs.txt (tree, commit, uncommitted files, seed, warp binary, every input file's sha), the input
 # files themselves (sources.tar.gz) and the seed, kept once per seed in <store>/seeds/
 recorded_inputs() {

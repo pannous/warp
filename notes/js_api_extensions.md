@@ -11,7 +11,7 @@ Sources at the end, fetched 2026-10-28. "?" marks a value that is not verified.
   line 530). There are no `wasm:` builtin imports and no externref values.
 - Errors: inside a `try`, a runtime error throws the tag `warp_error(i32)`, which a `try_table` catches (final
   exnref EH). Outside a try it traps (core/emitter/emitter.warp about line 88).
-- The playground runs the self-hosted compiler since 2026-11-01 (decision playground-today, card `playground-compiles`
+- The playground runs the self-hosted compiler (decision playground-today, card `playground-compiles`
   done): build.sh copies the installed warp.wasm, runtime.wasm and modules into warp-lib/, driver.js runs them over
   wasi.js and the host-*.js parts (notes/playground_plan.md).
 - The playground already uses JSPI: `WebAssembly.Suspending`/`promising` (host.js:405, host-foreign.js:272,
@@ -98,6 +98,6 @@ Type Imports (1), Compilation Hints (2), Multibyte Array Access (2), FP16 (2).
   V8 https://issues.chromium.org/issues/403372470 , origin trial
   http://www.mail-archive.com/blink-dev@chromium.org/msg16076.html (2025-08)
 - wasmtime stack switching: https://github.com/bytecodealliance/wasmtime/issues/10248 ,
-  https://github.com/bytecodealliance/wasmtime/pull/14140 (2026-08-14)
+  https://github.com/bytecodealliance/wasmtime/pull/14140
 - Resizable buffers: https://caniuse.com/mdn-webassembly_api_memory_toresizablebuffer ,
   https://github.com/mdn/browser-compat-data/pull/30541

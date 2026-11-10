@@ -1,4 +1,4 @@
-# Test audit (2026-10-27)
+# Test audit
 
 Every test case (10,799) checked against wiki/*.md and notes/decisions.md by a workflow (8 classifiers + 1 synthesis,
 primed with notes/taste.md): 6,810 spec, 2,455 extensions, 965 unbacked, 569 of a forbidden kind. The unbacked and

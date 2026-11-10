@@ -1,4 +1,4 @@
-# Core hygiene: what in core/ the compiler itself does not need (card unused-core-relocation, 2026-11-01)
+# Core hygiene: what in core/ the compiler itself does not need (card unused-core-relocation)
 
 User's question: did we keep core, extensions and library apart? What could be an extension: everything in the core
 that the compiler itself does not use. Investigation only: nothing moved; every move below needs the user's OK
@@ -105,7 +105,7 @@ not yet the home it is meant to be: it holds sugar and an always-loaded mode.
 5. **Make extensions truly optional**: primitive.warp loaded only for a `@primitive` file; times (emitter/times.warp +
    runtime) and C FFI (c_imports) as extensions under the same switch — the compiler pays nothing for them.
 
-## Done: move D (user decision core-hygiene, 2026-11-01)
+## Done: move D (user decision core-hygiene)
 
 Plain relocation, no behaviour change: extensions/tuples.warp and safe_navigation.warp → extensions/sugar/ (first sugar,
 the same place as before); core/entities.tsv → lib/entities.tsv (read by module_source("entities.tsv"), hashed through
@@ -137,7 +137,7 @@ call sites) move under extensions/ and are reached only through that table: ~+30
 call sites touched (34 primitive, 42 C, 107 time). Benefit: honest folders and a scan skipped per source; size and
 risk high for times (spread through the emitter). Recommend: primitive and FFI via the table, times later or never.
 
-### lib/sugar/ moved to extensions/sugar/ (user 2026-11-03: "sugar is not a library, it is a compiler extension")
+### lib/sugar/ moved to extensions/sugar/ ("sugar is not a library, it is a compiler extension")
 
 Done on card sugar-under-extensions: the folder is bundled with extensions/ (parser.warp BUNDLED_CORE_FOLDERS),
 rewrites.warp names its files by `sugar(["…"])`. The accepted cost: a sugar edit is a compiler build, not a rebake.
@@ -160,12 +160,12 @@ extensions. Moving the folder is mechanical; what it changes is the cost of ever
   Recommended: (b) `lib/extensions/` — "extension" by name, rebaked like data; extensions/ keeps the
   extensions that need compiler code (primitive). Same for D: tuples and safe_navigation would sit in lib/extensions/.
 
-## Warp vitals (user 2026-11-03)
+## Warp vitals
 scripts/vitals.py draws the test pass rate of every lane over time (each committed version of test/results.txt,
-results-cloud.txt, samples.txt, samples-web.txt, tests-web.txt) and counts the lines of code for every landing on main since self-hosting began (2026-10-29),
+results-cloud.txt, samples.txt, samples-web.txt, tests-web.txt) and counts the lines of code for every landing on main since self-hosting began,
 reconstructed from git history in ~6 s: the core without extensions (parsing, passes, analysis, emitter, runtime,
 native) and the extensions (extensions/, and lib/sugar/ before it moved there) always separately, plus lib/ and
 test/. It fills scripts/vitals.html into data/vitals/vitals.html; the nightly run (nightly.sh) refreshes
 it. The page is the artifact https://claude.ai/code/artifact/b988ec61-123d-4e97-833b-0dd2342cac4c: the Integrator
-republishes it after each landing and the Supervisor's hourly watch round as well (user 2026-11-03). 2026-11-03: core 28,186 → 32,641 lines (+16%),
+republishes it after each landing and the Supervisor's hourly watch round as well. 2026-11-03: core 28,186 → 32,641 lines (+16%),
 extensions 1,211 → 1,477 (+22%) over 381 landings; the core almost only grows, the largest cut was −71.

@@ -2,7 +2,7 @@
 
 How to run it under plain wasmtime: notes/standalone.md.
 
-User decision standalone-compiler (2026-10-20): "we are no longer interested in Rust. Everything we try directly with
+User decision standalone-compiler: "we are no longer interested in Rust. Everything we try directly with
 warp. No more conversion to and fro. Of course, we need the Rust compiler to compile our compiler. But then the
 compiler should be completely independent."
 
@@ -71,7 +71,7 @@ then `warp app.wasm`. That is the independence the decision asks for; the Rust l
 ### `warp pure <program.warp> [arguments…]` (card warp-pure, user 2026-10-20: "put everything in the binary")
 src/compiler/standalone.rs: compiler.warp's module, the build file warp.wasm (decision compiler-build: a build
 output, no cache), runs as `compiler.warp <source> <wasm> <folder> <lib>`; the module it writes runs with the program's
-arguments. The Rust pipeline compiles compiler.warp, always (user 2026-10-21: "pure always is Rust's compiler.warp and
+arguments. The Rust pipeline compiles compiler.warp, always ("pure always is Rust's compiler.warp and
 `warp self` always uses the self-hosted, self-compiled"). `warp self <program.warp>` runs the program through
 compiler.warp compiled by the pure lane, itself, the build file warp-self.wasm; a refusal of that compile is a loud
 error, never a fallback to the Rust-compiled one. `warp pure` switches to the self-compiled compiler once more tests
@@ -99,7 +99,7 @@ program's first run it blew the 60 s turn limit (card cloud-lane-narrow), so a b
 build file) runs the new compiler once on `0` to keep it (standalone.rs `warm`).
 For compiler.warp to compile as one program the 11 cross-file clashes were renamed (user decision rename-clashes;
 list on card file-own-words, to undo once that rule lands).
-Card under-pure (2026-10-21): print([1, 2]) failed only here, not in the stage lane, because compiler.warp runs the
+Card under-pure: print([1, 2]) failed only here, not in the stage lane, because compiler.warp runs the
 WARP passes on the runtime words: runtime show.warp's match arm ø (node_matches.warp; main took True/False), and
 emitter.warp refusing a `the result: text` given a kind guessed from a call still compiling (node_text ↔ list_shown
 cycle; admitted() now holds it as the declared kind, the reread fixes the code). A refusal is now the compile's
@@ -124,7 +124,7 @@ module, input file, run it, read the wasm file. `pure_bytes` and its three stage
    analyzer×scope: parameters_of; analyzer×serializer: is_empty; analyzer×multiple_assignments: statements;
    emitter×parser: expression, global_declaration, statements_of; emitter×node_matches: chosen;
    emitter×definitions: definition; emitter×for_loops: is_entry; emitter×clauses: joined.
-   Decided (supervisor, 2026-10-20): the general rule wiki/use.md already promises between a program and a module
+   Decided (supervisor): the general rule wiki/use.md already promises between a program and a module
    ("the module's own code keeps calling its own play"), file and file alike: a used file's own code calls its own
    word; the error only when a file that sees both calls the word itself. No renames (card file-own-words).
 2. Runtime words lowered by warp: runtime.warp through `lowered_program` (folder lib/, so uses.warp splices its
@@ -146,7 +146,7 @@ module, input file, run it, read the wasm file. `pure_bytes` and its three stage
 4. self_hosted.rs: pure/pure-only run the compiler module; pure_bytes, JSON setups go; ladder counts ≥ before.
 5. build.rs: HOST_WORD_SIGNATURES from host_words.warp.
 
-## Progress (2026-10-20, branch standalone)
+## Progress (branch standalone)
 - Step 2 done by renames (user: rename for now): 14 emitter/analyzer helpers, and emitter.warp `length` → `length_code`
   (a text's `.length` in parser.warp called it). The general rule stays card file-own-words.
 - Composing the stages found six Rust scope bugs of one kind, all fixed with tests in
@@ -173,7 +173,7 @@ module, input file, run it, read the wasm file. `pure_bytes` and its three stage
 - warp-compiler-enums: the bare `Round`/`Add`/`Define` symbols in the warp-lowered runtime; walk.warp's `Op`,
   `Bracket`, `Separator` enums are no longer crossed through text views in this lane.
 
-## warp self runs hello (2026-10-21, card self-hello, branch self-hello)
+## warp self runs hello (card self-hello, branch self-hello)
 What stopped compiler.warp compiled by itself, in the order found (each a general fix with a probe and a test):
 - The pure-compiled parser read every call with comma arguments as Error("spelling code"), so runtime.warp's `use`
   files parsed into one statement and the runtime words lacked char_text ("no field char_text"). Cause: plain_enums.warp
@@ -194,7 +194,7 @@ What stopped compiler.warp compiled by itself, in the order found (each a genera
 ## warp.wasm under plain wasmtime (card standalone, reopened 2026-10-21, user: "build in the runtime itself.
 ## wasmtime warp.wasm should behave like the native binary")
 Today `wasmtime run -W gc=y,function-references=y,exceptions=y --dir . warp.wasm hello.warp h.wasm` stops at the
-first host import. Imports found (2026-10-21):
+first host import. Imports found:
 - warp.wasm (Rust-compiled): host.fetch, fetch_within, read, warn, run, std_io + wasi fd_write.
 - warp-self.wasm (self-compiled): all 69 host words + m.pow: emitter.warp imports a host word whenever the
   program `mentions` its name, and compiler.warp includes host_words.warp, whose map keys name every one.

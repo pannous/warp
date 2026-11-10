@@ -1,4 +1,4 @@
-# Unit spellings and unit rules (cards units-unknown-name, work-down, 2026-10-31)
+# Unit spellings and unit rules (cards units-unknown-name, work-down)
 
 - lib/unit_names.warp: the unit table, the SI prefixes (on m g s K Hz N L), the long names with long prefixes, one
   plural rule (-s/-es), °C/°F with their zero. lib/units.warp reads it: `quantity(3, "kilograms")` is 3kg,

@@ -108,7 +108,7 @@ Contents/MacOS/app (the executable `warp build` makes) with warp's libraries bes
 @executable_path), Contents/Info.plist (CFBundleExecutable app, identifier warp.app.app), ad-hoc signed on macOS. A
 word, not a flag (decision build-kinds-detected). The page's app in the web view is card page-app-build.
 
-State of the page kinds in the warp compiler (2026-11-06, cloud sprint 07; decision build-kinds-detected: detected,
+State of the page kinds in the warp compiler (cloud sprint 07; decision build-kinds-detected: detected,
 no flag, Later). The Rust page stub (wry) went with the Rust harness; `warp build --page|--site` is refused
 (extensions/commands/build.warp UNBUILT_OPTIONS) and `warp build --site` (extensions/commands/site.warp) builds a static site from the whole module.
 - Detection: a page is a program whose module exports `page_render` (lib/markup.warp's export, kept whenever markup is

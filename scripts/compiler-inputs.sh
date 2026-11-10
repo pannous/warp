@@ -46,7 +46,7 @@ for option in "$@"; do
 	esac
 done
 [ -d "$lib/compiler" ] || { echo "compiler-inputs.sh: no compiler/ in $lib" >&2; exit 1; }
-# a hash without the seed is no tree's: refused, never a quiet wrong hash (2026-10-30)
+# a hash without the seed is no tree's: refused, never a quiet wrong hash
 [ -f "${WARP_SEED-}" ] || { echo "compiler-inputs.sh: WARP_SEED names no seed (${WARP_SEED-unset}); rebuild.sh sets it, by hand: WARP_SEED=~/dev/bin/warp-seed.wasm" >&2; exit 1; }
 # `env LC_ALL=C cmd`, never bash's `LC_ALL=C cmd`: in a subshell, bash restoring its locale after the command calls
 # Homebrew libintl's setlocale, CoreFoundation in a forked child, which segfaults now and then (39 bash crash reports

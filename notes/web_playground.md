@@ -102,7 +102,7 @@ Markup values show as warp data there (`p{class:"note" "hello"}`), not as HTML l
   animates starts a standby worker (playground.js prepareStandby), which the stop takes at once: Hello 0.33 s
   (card playground-progressive-slowdown). Chrome and Firefox showed no growth over many runs otherwise.
 
-## Values of self-hosted modules (values.js, 2026-11-01)
+## Values of self-hosted modules (values.js)
 A module of the self-hosted compiler has no reflect_* exports: a host word reads its value arguments as driver.warp
 does natively, through exports (values.js): guestText (shown_at, packed address·2^32+length), isGuestText,
 guestCount/guestItem/guestInts (item_count, item_at, int_item_at), guestBytes; guestPlain reads any value from its

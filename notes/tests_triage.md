@@ -56,7 +56,7 @@ c_imports_run 2), test/web (fetch_signals 3, fetch_later 3), regex edges 4, shad
 Mostly C/FFI and file access the page cannot do: decide per file whether the test belongs to EXP.
 EXP: modules/test_shell_edges 6, test_exec_sh_runs 4, test_std_exec 3, ffi_float_results 3, webview 2.
 
-## Duplicates and unsure pairs (2026-11-09)
+## Duplicates and unsure pairs
 
 Closed: parameter-named-like and parameter-named → parameters-must (parameter must win over any global, library or
 other file's word).

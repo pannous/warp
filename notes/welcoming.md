@@ -38,7 +38,7 @@ of the doubt (a newcomer's untyped code runs), known types never mix silently (t
 fields are a decision the writer states once, in one line). Implemented in src/lowering/types/traits.rs (`Likeness`,
 `Dispatch::refused_argument`), tests/operators/test_like.rs, wiki/like.md.
 
-## Forms newcomers write (decided)
+## Forms newcomers write
 Samples of standard algorithms written in Python/JS style sit next to idiomatic ones (samples/<name>.warp,
 samples/<name>_idiomatic.warp).
 - text + number concatenates (`"F:" + 13` → "F:13")

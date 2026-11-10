@@ -14,7 +14,7 @@ Two kinds of entry:
 - Dropped form: a form the warp part leaves out (the cleanest, most minimal compiler, not a copy of the Rust one),
   with the sources that show it, why, and how to bring it back. The emitter twin (tests/common/twins.rs twin_sources)
   skips the named sources and refuses a dropped source this file does not name; the parser and pass twins are gone
-  (outcome tests only, 2026-10-19). A pass that looks like bloat as a whole goes to the Supervisor
+  (outcome tests only). A pass that looks like bloat as a whole goes to the Supervisor
   instead of being ported. `probes/self_hosting/parser/sort_differences.py` sorts remaining parser differences.
 - Deviation: where the warp part keeps a cleaner result than its Rust twin, with an example and the card or question
   for the Rust side. The differentials read them as expected.
@@ -38,7 +38,7 @@ Code and data are one: once the parser reads plain warp data correctly, these ne
 `$a` pattern holes are kept (the pattern roadmap in notes/matching.md is built on them).
 
 ## Parser: deviations
-None left (2026-10-18): the Rust parser builds the clean shapes parser.warp writes (`x²` is `x ^ 2`, a bare `return` the
+None left: the Rust parser builds the clean shapes parser.warp writes (`x²` is `x ^ 2`, a bare `return` the
 word, `f(x, y) { x }` the head `(f x y)`, a colon body of `for 1..3: x` bare; cards rust-square-cube, rust-bare-return,
 rust-definition-head, rust-colon-body), so the parser differential compares the trees as they are. A new quirk is fixed
 in the Rust parser instead of being listed here.
@@ -90,7 +90,7 @@ ported; drop = left out; merge = one warp pass with its neighbour.
 | 14 | scoped_handlers | 38 | 1 | dropped in both compilers (the error for a form dropped earlier; rust-cleanup-drops) |
 | 15 | component_worlds | 285 | 2 | library (wasm build; decided) |
 | 16 | channel_words | 189 | 3 | library (tasks; decided): done, lib/channels.warp rewrite rules (card compiler-modules) |
-| 17, 18, 45 | markup_tags (form routes, html attributes, tags) | 357 | 1, 1, 14 | library (markup), one pass (decided) |
+| 17, 18, 45 | markup_tags (form routes, html attributes, tags) | 357 | 1, 1, 14 | library (markup), one pass |
 | 19 | soft_keywords | 239 | 3 | keep |
 | 20 | parameter_patterns | 68 | 2 | keep |
 | 21 | index_positions | 284 | 0 | keep (check) |
@@ -99,14 +99,14 @@ ported; drop = left out; merge = one warp pass with its neighbour.
 | 24, 25 | plain_enums, sum_variants | 168, 135 | 5, 3 | keep, merge |
 | 26 | match_exhaustive | 185 | 0 | keep (check) |
 | 27 | late_binding global split | 603 | 0 | keep |
-| 28, 29, 30, 39 | serve (default routes, page routes, path parameters, serve) | 1123 | 0, 12, 8, 23 | library (web), one pass (decided) |
+| 28, 29, 30, 39 | serve (default routes, page routes, path parameters, serve) | 1123 | 0, 12, 8, 23 | library (web), one pass |
 | 31 | named_patterns | 224 | 2 | keep |
 | 32 | switch unit names | switch.rs | 0 | keep (check) |
 | 33 | tree_walks | 203 | 7 | keep |
 | 34 | quasi_quote | 102 | 6 | keep |
 | 35 | comprehensions where | 554 | 21 | keep |
 | 36 | music_words live loops | 636 | 1 | library (sound; decided) |
-| 37 | go_blocks | 259 | 24 | keep (decided) |
+| 37 | go_blocks | 259 | 24 | keep |
 | 38 | references | 193 | 0 | keep |
 | 40 | style_rules | 220 | 6 | library: lib/markup.warp style(sheet: data), done |
 | 41, 42 | lambdas infix iterations, member lambdas | lambdas.rs | 5, 0 | keep, merge |
@@ -162,13 +162,13 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
 - A parameter used as a list and passed on as a function (`play_signal(signal, seconds) := if signal is list then
   stereo_signal(signal[0], …) else mono_signal(signal, seconds)`, lib/sound.warp) is a function where its calls give one,
   where Rust says empty: probes/sound/signal_state.warp left the pinned list for it (card music-plain).
-- Closure parameters given a run-time number: Rust's flow (card src-analyzer, 2026-10-18) says a number decided at
+- Closure parameters given a run-time number: Rust's flow (card src-analyzer) says a number decided at
   run time (`apply(function, data) -> data`, `closure_lambda_1(data)`), warp keeps int / any value
   (`apply(function, int) -> empty`). Same program output. Left the pinned list: probes/cleanup/lambdas/
   {bench_higher_order,bench_hoisted}.warp, probes/functions/forward_param.warp, probes/generators/yield_from.warp,
   probes/ruby_yield/{do_block,twice}.warp, probes/self_hosting/readiness/ports/times_phrases.warp. Back: the warp flow
   joins a run-time number beside ints to data, as Rust's `joined` does.
-- Route lambdas (serve.rs route_entry, 2026-10-18): a route is `route_add(METHOD, path, request => {…})`, called by
+- Route lambdas (serve.rs route_entry): a route is `route_add(METHOD, path, request => {…})`, called by
   lib/router.warp route_answer through closure_call_1; Rust types the never-annotated `request` from the closure call
   (`closure_lambda_1(empty)`), warp keeps int. Same program output. Left the pinned list: probes/docs_sync/teapot.warp,
   probes/hosting/oauth_demo.warp, probes/route_position.warp, probes/server_routes/{one_source,rpc_everywhere,
@@ -220,7 +220,7 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
 - Big ints (card emitter-big-ints): an int is an i64 in emitter.warp's modules, and an int beyond 64 bits fails in
   runtime.warp int_overflow ("trap detail: 0"), where Rust's promotes it to a BigInt (`x = 2^62; x * 4`, factorial 25,
   Catalan numbers past the 35th). Sources: samples/golf/catalan-numbers.short.warp and
-  samples/golf/catalan-numbers.warp (inside the core since a body ending in a statement gives ø, 2026-10-19),
+  samples/golf/catalan-numbers.warp (inside the core since a body ending in a statement gives ø),
   probes/ratio_text.warp (`2^70 + 1`; inside the core since abs(x) emits, 2026-10-20). Back: runtime.warp ports src/wasm_emitter/numbers/big_int.rs (fixnums and
   handles into a big-number heap).
 - Sorting (card sort-warp): runtime.warp's node_order compares texts, characters and numbers only; instances (the
@@ -229,12 +229,12 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
   time words once emitter.warp lays those out; the result takes the kind of xs.
 - A recursive call in a comprehension inside a match arm (card match-arm-comprehension): warp's module prints the
   expected `[["s" "x"]]`, Rust's fails with "not an int at 4:28". Warp is right here; the twin is dropped until Rust's
-  lowering is fixed. Source: probes/self_hosting/match_arm_comprehension.warp (2026-10-19). Back: when the card is done.
+  lowering is fixed. Source: probes/self_hosting/match_arm_comprehension.warp. Back: when the card is done.
 - Not yet read (card emitter-twin): probes/self_hosting/readiness/scan_100k.warp, where warp's module traps
   ("trap detail: 0") and Rust's prints 40000 and 20000, and samples/web/select_binding.warp. Both differ on main
-  f9e2a9e6ba, without the changes of branch cache-fixes (2026-10-19). Back: once the card reads and fixes them.
+  f9e2a9e6ba, without the changes of branch cache-fixes. Back: once the card reads and fixes them.
 - Warp right, Rust frozen : the twin is
   dropped where emitter.warp gives the decided value and Rust's does not. probes/parser_rest/empty_keys.warp:
   `{}.keys` is [] (decision keys-of-empty), Rust's prints ø. probes/repeated_parameter_names.warp: `last_of(_, _, z)`
-  binds z to the third argument (6), Rust's binds the second `_`'s slot (4) (2026-10-22, card keys-of-empty). Back: never,
+  binds z to the third argument (6), Rust's binds the second `_`'s slot (4) (card keys-of-empty). Back: never,
   unless Rust is fixed; the warp lanes are checked by the suite's warp runs.

@@ -193,13 +193,13 @@ A source carries its own filter, so a program never chains `if`s inside a catch-
 once as the key goes down (a press is an event); a key held is a state, read by `whenever held_key == LEFT {…}` or in
 a frame (today lib/keys.warp runs `on Key.escape` each frame while held: card key-press-on).
 
-### Hooks are calls, never queued (user 2026-11-09)
+### Hooks are calls, never queued
 `before f {…}`, `after f {…}`, `on set x`, `on change x`, `whenever`, `once` and an in-program `emit` are synchronous
 calls at the place of the call or the write, in declaration order: `test() := print "ok"; before test { print "will
 be ok" }; test()` prints "will be ok", then "ok", always, natively and in the page. Only occurrences from outside go
 through the loop's queue. These hooks are never parallel (`before test go {…}` is refused).
 
-### Same thread and parallel (decided: threaded-handlers, user 2026-11-09)
+### Same thread and parallel (decided: threaded-handlers)
 A plain `on …` handler runs on the program's thread (its waits and loop starts) and sees every variable. A parallel
 handler is asked for with the decided task word, `shared n = 0; on every 50 ms go { n += 1 }` (card
 threaded-handlers; simple native cases first, the page stays cooperative), and runs on its own thread at once with main (decision tasks-parallel): its own instance and heap, so it touches
