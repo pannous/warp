@@ -24,11 +24,12 @@ scripts=$(cd "$(dirname "$0")" && pwd)
 warp=${WARP_BINARY:-warp}
 seed=${WARP_SEED:-$(dirname "$(command -v "$warp")")/warp-seed.wasm}
 compilers=$tree/lib
-built=$compilers/warp.wasm  # where `warp rebuild pure` writes, with WARP_LIB set
+built=$compilers/warp.wasm  # where `warp --lib <tree>/lib rebuild pure` writes
 [ -f "$seed" ] || { echo "refresh-seed: no seed at $seed" >&2; exit 2; }
 # a rebuild runs for minutes: an exported short limit (600 s) must not cut it
-export WARP_LIB=$tree/lib WARP_REBUILD_TIME_LIMIT=${WARP_SEED_TIME_LIMIT:-7200} WARP_WINDOW=0 WARP_HINTS=0
-unset WARP_SELF_HOSTED WARP_EMITTER
+export WARP_WINDOW=0
+# every run of warp here: the tree's lib/, no hints
+tree_options=(--lib "$tree/lib" --no-hints)
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/refresh-seed.XXXXXX") || exit 2
 trap 'rm -rf "$scratch"' EXIT
 # stage <compiler> <output>: `warp rebuild pure` with <compiler> as the seed, the one thing a seed is asked to do (a seed
@@ -46,7 +47,7 @@ in_slot() {
   return $status
 }
 stage() {
-  WARP_SEED=$1 in_slot "$scratch/warm.log" 2 "$warp" rebuild seed  # its machine code, outside the time
+  in_slot "$scratch/warm.log" 2 "$warp" "${tree_options[@]}" --seed "$1" rebuild seed  # its machine code, outside the time
   rm -f "$built"
   local start=$SECONDS record=$scratch/$(basename "$2" .wasm).record
   # the speed guard's measure is the instructions the rebuild retired (build-slot.sh's record, /usr/bin/time -l): the
@@ -55,7 +56,7 @@ stage() {
   # seconds (user + system) only where no record counts instructions (no lockf, no time -l)
   # a failed rebuild fails the stage even when it wrote warp.wasm (a runtime.wasm or the warming that failed)
   # the line's messages (stderr) go with the output: the cpu file holds only time's line
-  { time (WARP_SEED=$1 WARP_BUILD_RECORD=$record in_slot "$scratch/rebuild.log" 5 "$warp" rebuild pure 2>&1); } 2>"$scratch/cpu" &&
+  { time (WARP_BUILD_RECORD=$record in_slot "$scratch/rebuild.log" 5 "$warp" "${tree_options[@]}" --seed "$1" rebuild pure 2>&1); } 2>"$scratch/cpu" &&
     [ -f "$built" ] || { echo "refresh-seed: $(basename "$2" .wasm) FAILED: the rebuild by $(basename "$1") failed" >&2; exit 1; }
   cp "$built" "$2"
   local seconds instructions

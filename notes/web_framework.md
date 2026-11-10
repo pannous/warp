@@ -101,13 +101,13 @@ Each step is useful on its own and is what the next ones stand on.
 
 ## Built sites (`warp build --site`, extensions/commands/site.warp, cards blockcompiler-entries, build-site)
 - `warp build --site app.warp` (`--site=<folder>`) writes site/ beside the program: app.wasm is the program's whole
-  module, index.html its first markup prerendered (`warp run` by the same warp, WARP_EXECUTABLE) and the page's scripts, the
+  module, index.html its first markup prerendered (`warp run` by the same warp, warp_command) and the page's scripts, the
   folder mirrors the repository (web/playground/ holds the scripts) so file reads resolve against the site's root, and
   served-files.js lists the site's files. Any static host serves it; coi-serviceworker.js gives the isolation.
 - One path with the playground: site-worker.js runs app.wasm through driver.js programRan, renders it with
   lib/markup.warp page_render after main, each handler (page_event, the element's data-warp-<event>="n") and each timer
   (timerFired); site.js morphs the HTML in (markup.js morphChildren). A program serving requests (lib/web.warp
-  page_serve, WARP_SERVE=page) gets the page's address, then each link, back button and form, HTTP text both ways
+  page_serve, the run option serve page) gets the page's address, then each link, back button and form, HTTP text both ways
   (host-routes.js requestText, answerOf, shared with the playground's address bar).
 - Not yet: holes, route modules, server replies and `warp deploy`'s Cloudflare Worker for built sites; cards
   build-site-prerender, deploy-self.

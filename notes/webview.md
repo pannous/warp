@@ -22,7 +22,7 @@ drives macOS's WKWebView over the Objective-C runtime by plain FFI.
   forwarding of host-foreign.js FOREIGN_OPERATORS, WebKitGTK on Linux.
 
 `warp app [check] <file>` (lib/app/command.warp, dispatched by core/native/warp.warp): runs the program (`warp run`)
-with WARP_APP_WINDOW set, its page live in a window till it is closed (card static-page-window). After main, markup's
+with --app-window, its page live in a window till it is closed (card static-page-window). After main, markup's
 page_of (lib/markup.warp page_window_run) shows the run's web view in a window through `use js`'s channel
 (the module answers warpWindow itself: `show`, `next`) and loops: each event of the page (webview_bridge.js,
 heard by web/playground/markup.js listenToElements as the built sites' site.js hears them: click, input, change,
@@ -36,7 +36,7 @@ Refused under --no-window or CI. `check` prints the text the page shows from the
 A sample declares its interactions: `# check: click "+1", type "name" "Ann" → count: 2`, one check a line, each from a
 fresh run; the steps are lib/markup.warp's page words (click; type is type_into), the page's text, its white space
 runs as one space, holds the text after →.
-- natively `warp app check <file>` (lib/app/command.warp) runs the program with WARP_PAGE_STEPS (markup's
+- natively `warp app check <file>` (lib/app/command.warp) runs the program with --page-steps (markup's
   page_after_steps does the steps before the page is printed) and reads the text in the hidden web view;
   scripts/samples.sh runs it for every sample that ran and has check lines, a failing check its FAIL
 - in the page web/playground/test_in_browser.py --samples (scripts/samples-web.sh) shows the sample anew per check,

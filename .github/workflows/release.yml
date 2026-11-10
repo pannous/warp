@@ -35,7 +35,6 @@ env:
   WABT: 1.0.42     # wasm2c, which `warp build native` runs
   BINARYEN: 133    # wasm-opt, which `warp build` runs
   WARP_WINDOW: 0
-  WARP_HINTS: 0
   GLIBC_FLOOR: 2.35 # the oldest glibc the linux binaries run on (card linux-glibc-floor)
 
 permissions:
@@ -60,7 +59,6 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
-      WARP_TIME_LIMIT: 900
     steps:
     - uses: actions/checkout@v7
       with:
@@ -73,9 +71,8 @@ jobs:
       run: .workflow/scripts/ci-compilers.sh . "$RUNNER_TEMP/bootstrap"
     - name: self test
       run: |
-        export WARP_LIB=$PWD/lib
-        "$RUNNER_TEMP/bootstrap/warp" rebuild self
-        "$RUNNER_TEMP/bootstrap/warp" samples/hello/hello.warp | grep Hello
+        "$RUNNER_TEMP/bootstrap/warp" --lib "$PWD/lib" rebuild self
+        "$RUNNER_TEMP/bootstrap/warp" --lib "$PWD/lib" samples/hello/hello.warp | grep Hello
     - uses: actions/upload-artifact@v7
       with:
         name: compilers
@@ -137,7 +134,7 @@ jobs:
     - name: the previous release's native warp, brought up to the tag's host words
       run: .workflow/scripts/release-bootstrap.sh ${{ matrix.target }} "$RUNNER_TEMP/bootstrap" .
     - name: the native warp
-      run: WARP_LIB=$PWD/lib "$RUNNER_TEMP/bootstrap/warp" build native core/native/warp.warp
+      run: '"$RUNNER_TEMP/bootstrap/warp" --lib "$PWD/lib" build native core/native/warp.warp'
     - name: the glibc floor
       # no binary or library may ask a glibc newer than the promised floor (notes/packaging.md), whatever the runner;
       # weak symbols (Rust std's pidfd_*) bind to none

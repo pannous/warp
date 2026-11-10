@@ -36,7 +36,7 @@ read value by value so (~1 call a sample); a bulk copy into linear memory is the
 
 ## Text (text_coverage)
 macOS: CoreText over FFI (CTLineDraw into an alpha-only CGBitmapContext), native look, no dependency.
-Linux, or WARP_FONT set: FreeType over FFI (libfreetype.so.6), glyph slot fields by offset. Both give the same
+Linux, or a font file given (label's font): FreeType over FFI (libfreetype.so.6), glyph slot fields by offset. Both give the same
 coverage list (width, height, rows) through `coverage_list`.
 
 ## Sound

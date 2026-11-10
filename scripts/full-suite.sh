@@ -53,7 +53,7 @@ installed=$(dirname "$(readlink -f "$WARP")")
 mkdir -p "$(dirname "$pinned")" && cp -Rc "$installed" "$pinned" || { echo "full-suite: no copy of $installed" >&2; exit 1; }
 # the registry's packages, which tests use by path (`use "packages/colors/colors.warp"`, decision package-use-by-path)
 "$tree/scripts/link-packages.sh" "$snapshot" >/dev/null || echo "full-suite: no packages linked: the package tests fail" >&2
-(cd "$snapshot" && WARP_WINDOW=0 WARP_HINTS=0 "$pinned/$(basename "$(readlink -f "$WARP")")" test --each test) >"$scratch/results.txt" 2>"$scratch/errors.txt"
+(cd "$snapshot" && WARP_WINDOW=0 "$pinned/$(basename "$(readlink -f "$WARP")")" --no-hints test --each test) >"$scratch/results.txt" 2>"$scratch/errors.txt"
 summary=$(tail -1 "$scratch/results.txt" | grep "$SUMMARY")
 if [ -z "$summary" ]; then
 	echo "full-suite: the run at $tip died without its summary; test/results.txt kept. Last errors:" >&2

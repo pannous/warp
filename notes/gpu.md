@@ -55,7 +55,7 @@ WGSL has no f64 and no i64 (the shader-f64 feature is native-only and missing on
   `go xs.map(x => sin(x))` is that plain map too: tasks copying Node slices are ~50× slower
   than the CPU loop.
 - Exactness on demand: `@cpu` on a map (`xs.map(f) @cpu`, `@cpu xs.map(f)`), a block, a function or the program keeps
-  it on the CPU in f64 and overrides the switch; `@gpu` with `@cpu` on one map is a compile error. `WARP_GPU=off`
+  it on the CPU in f64 and overrides the switch; `@gpu` with `@cpu` on one map is a compile error. `paint_on_gpu = no`
   pins a whole run (tests, benchmarks) to the CPU, @gpu included.
 - Tests comparing GPU and CPU results use @cpu for the reference side and a tolerance.
 - Int lists: never automatic (the fused CPU loop always wins).
@@ -244,7 +244,7 @@ functions) runs there too.
 - **Precision**: P240 stands, math is exact by default except for mass computation. Small
   computations stay exact in f64; mass work (a heavy map from GPU_AUTO_MIN_COUNT items) goes to the GPU in f32 by
   itself, with the one-time notice. The functions such a map calls go with it, in f32 under the same notice.
-  `@gpu` and paint ask for the GPU outright; `@cpu` and WARP_GPU=off keep f64.
+  `@gpu` and paint ask for the GPU outright; `@cpu` and paint_on_gpu = no keep f64.
   On the GPU itself precision doesn't matter: every number is an f32, ints and `x as float`
   included, with no effort spent on exactness. Colors are the one exception and stay exact: a packed 0xAARRGGBB int
   in an f32 would garble its channels (alpha pushes it past 2^24). So a function giving rgb(…) (hsv and other callers
@@ -253,11 +253,11 @@ functions) runs there too.
 - **Fallback.** As for maps:
   - not translatable: runs on the CPU as written, warned once
   - no adapter: the CPU, silently
-  - `@cpu` / WARP_GPU=off: the CPU in f64
+  - `@cpu` / paint_on_gpu = no: the CPU in f64
   - the browser runs the same WGSL through host-gpu.js
 - **State**: `paint(f, width, height)` compiles f to a fragment shader at run time (lib/shaders.warp, its rules
   extensions/rules/modules/shaders.warp), the program's values f reads as its values; vectors are vec2f…vec4f; no
-  adapter or WARP_GPU=off: f of each pixel on the CPU (lib/shaders.warp paint_each). Map kernels calling user
+  adapter or paint_on_gpu = no: f of each pixel on the CPU (lib/shaders.warp paint_each). Map kernels calling user
   functions are card xs-map-gpu.
 - **Open**: the acceptance step, samples/gpu/gpu_visualizer.warp's tunnel shader written in warp giving the
   same frame as the WGSL one, needs arrays as values (`levels`).

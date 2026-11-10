@@ -50,12 +50,14 @@ if [[ -z $extension_words || -n $emitter_names_extension ]]; then
 fi
 
 cd $worktree || exit 1
-export WARP_WINDOW=0 WARP_HINTS=0 WARP_LIB=$worktree/lib
+export WARP_WINDOW=0
+# every run of the native warp here: the branch's lib/, no hints
+tree_options=(--lib $worktree/lib --no-hints)
 # the compilers of the branch's lib/: warp.wasm (plain `warp`'s, built by the seed) and warp-self.wasm (`warp self`,
 # warp.wasm once it compiles itself, self_lane below); a lib/ that passed self alone broke main's `warp rebuild pure`
 # twice on 2026-10-22
 check_lane() {
-  said=$($warp $1 samples/hello/hello.warp 2>&1 | without_runtime_noise | tail -1)
+  said=$($warp $tree_options $1 samples/hello/hello.warp 2>&1 | without_runtime_noise | tail -1)
   [[ $said == *$expected* ]] || { verdict="SELF CHECK RED: warp $1 hello said: $said"; return 1; }
   verdict="SELF CHECK ok: $said"
 }
@@ -95,7 +97,7 @@ print -r -- $pair
 # runs hello; a warp-self.wasm of these inputs in lib/ or the store is taken as it is (scripts/rebuild.sh self). Red
 # when the compile fails: the self lane was red unnoticed for hours while it was skipped here (card self-check-compile)
 self_lane() {
-  said=$(WARP_BINARY=$warp WARP_TIME_LIMIT=${WARP_PROMOTE_TIME_LIMIT:-7200} $worktree/scripts/rebuild.sh self $worktree 2>&1) || {
+  said=$(WARP_BINARY=$warp $worktree/scripts/rebuild.sh self $worktree 2>&1) || {
     verdict="SELF CHECK RED: warp.wasm does not compile compiler.warp:
 $said"; return 1; }
   check_lane self && stage_two
@@ -111,7 +113,7 @@ $said"; return 1; }
 # inputs (REBUILD NEEDED) runs stage 2 every time, its outcome only in the tree's data/self-check/ (a lib/ without
 # warp.wasm.inputs was answered "stage 2 of unhashed passed before" for every such tree, card scripts-self)
 stage_two() {
-  # the checked native warp: WARP_LIB first. The stage is no lib/ beside it: the native takes a lib/ beside itself as
+  # the checked native warp: --lib first. The stage is no lib/ beside it: the native takes a lib/ beside itself as
   # its installed one, whose runtime.wasm and modules canonical_text links (driver.warp installed_library), and the
   # stage has no runtime.wasm while it builds one
   local stage=$scratch/stage native=$warp
@@ -120,15 +122,15 @@ stage_two() {
   if [[ -z $rebuild && -n $pair_hash && -f $record.passed ]]; then verdict="SELF CHECK ok: stage 2 of $hash passed before ($record.passed)"; return 0; fi
   if [[ -z $rebuild && -n $pair_hash && -d $record.failed ]]; then verdict="SELF CHECK RED: $(<$record.failed/message)"; return 1; fi
   mkdir -p $stage && ln -s $worktree/lib/*(N) $stage/ && rm -f $stage/warp.wasm* $stage/warp-self.wasm* $stage/runtime.wasm*
-  WARP_BUILD_RECORD=$measured WARP_TIME_LIMIT=${WARP_PROMOTE_TIME_LIMIT:-7200} $worktree/scripts/build-slot.sh $log $native $worktree/lib/warp.wasm -- \
+  WARP_BUILD_RECORD=$measured $worktree/scripts/build-slot.sh $log $native $tree_options $worktree/lib/warp.wasm -- \
     $worktree/lib/compiler/compiler.warp $stage/warp.wasm $worktree/lib/compiler $worktree/lib $worktree/lib/runtime.wasm
   [[ -s $stage/warp.wasm ]] || { stage_two_failed "warp.wasm does not build stage 2"; return 1; }
-  $worktree/scripts/build-slot.sh $log.runtime $native $stage/warp.wasm -- runtime $stage/runtime.wasm
+  $worktree/scripts/build-slot.sh $log.runtime $native $tree_options $stage/warp.wasm -- runtime $stage/runtime.wasm
   local built=$?
   cat $log.runtime >>$log
   [[ $built == 0 && -s $stage/runtime.wasm ]] && ! grep -q Error $log.runtime ||
     { stage_two_failed "stage 2 (compiler.warp built by warp.wasm) does not build runtime.wasm"; return 1; }
-  said=$(WARP_LIB=$stage $native samples/hello/hello.warp 2>&1 | without_runtime_noise | tail -1)
+  said=$($native --lib $stage samples/hello/hello.warp 2>&1 | without_runtime_noise | tail -1)
   [[ $said == *$expected* ]] || { print -r -- "hello said: $said" >>$log; stage_two_failed "stage 2's hello said: $said"; return 1; }
   mkdir -p ${record:h} && mv $log $measured/build.log && { [[ -d $record.record ]] || mv $measured $record.record }
   print -r -- "$hash commit=$(git -C $worktree rev-parse --short HEAD) passed=$(date '+%Y-%m-%dT%H:%M:%S%z')" >$record.passed

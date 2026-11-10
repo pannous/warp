@@ -27,6 +27,8 @@ WINDOW_LIBRARIES='raylib|SDL|glfw'
 # port the system chooses (SERVER_PORT 0), so samples run at once, other runs and tests never collide
 SERVING='^serving http://'
 SERVER_PORT=0
+# how long a sample's timers run before its output is taken (warp --events-for; web/playground/test_in_browser.py the same)
+EVENTS_MILLISECONDS=3500
 # a sample that fails on purpose says why on a line of its own: EXP instead of FAIL (the page sweep reads it too,
 # web/playground/test_in_browser.py EXPECTED_FAILURE)
 EXPECTED_FAILURE='^# expected failure: '
@@ -47,7 +49,7 @@ run_folder=$results/cwd
 mkdir -p "$results/out" "$run_folder"
 # the tree's own compilers, else a count names the tree's commit but measures whichever compiler is installed (128 to
 # 122 at 08:12 was the installed one's, the trees' own went 131 to 132)
-[ -f "$tree/lib/warp.wasm" ] && export WARP_LIB=${WARP_LIB:-$tree/lib}
+[ -f "$tree/lib/warp.wasm" ] && WARP=$(launcher_of "$results" "$WARP" --lib "$tree/lib")
 # the registry's packages the package samples use by path (modules/packages, text/uniscript_text), as full-suite.sh links them
 "$tree/scripts/link-packages.sh" "$tree" >/dev/null || echo "samples: no packages linked: the package samples fail" >&2
 # the compiled module wasm/import_compiled links (samples/wasm/shapes.wasm, a link to it), built behind this runtime.wasm
@@ -71,7 +73,7 @@ one() {
 	# what a sample keeps (lib/storage.warp, <sample>.database.sqlite beside it) starts anew each run, as the page's
 	# storage does: a counter prints its first run's value, not the sweep count's
 	rm -f "$tree/${1%.warp}.database.sqlite"
-	(cd "$run_folder" && ulimit -t "$CPU_SECONDS" && WARP_WINDOW=0 WARP_EVENTS_FOR=${WARP_EVENTS_FOR:-3500} WARP_PORT=$SERVER_PORT timeout "$wall" "$WARP" "$tree/$1" </dev/null >"$out.txt" 2>"$out.err")
+	(cd "$run_folder" && ulimit -t "$CPU_SECONDS" && WARP_WINDOW=0 timeout "$wall" "$WARP" --events-for $EVENTS_MILLISECONDS "$tree/$1" --port $SERVER_PORT </dev/null >"$out.txt" 2>"$out.err")
 	local status=$? first verdict=FAIL
 	[ $status -eq 124 ] && grep -aq "$SERVING" "$out.txt" && { echo "SRV  $1"; return; }
 	if [ $status -eq 0 ] && grep -q "$CHECK_LINE" "$tree/$1"; then

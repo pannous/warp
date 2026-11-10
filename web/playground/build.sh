@@ -4,7 +4,7 @@
 # the example menu), keywords.js (the editor's hard and soft keywords) and version.js (the commit built, shown in the ⋯
 # menu). Serve the repository root and open the page:
 #   web/playground/build.sh && python3 -m http.server 8000   →   http://localhost:8000/web/playground/
-# Usage: build.sh [compiler|served <site>|site <site>]   (all when omitted)
+# Usage: build.sh [--lib <folder>] [compiler|served <site>|site <site>]   (all when omitted)
 #   compiler  → warp-lib/: the installed lib/ (its warp.wasm, runtime.wasm, modules/ and sources), no machine code
 #   site <site> → collects the built page into a fresh <site> folder, as deployed (pages.yml, scripts/browser-dry-run.sh)
 #   served <site> → <site>/served-files.js for a collected site; every build writes the repository's
@@ -13,11 +13,11 @@ set -euo pipefail
 page="$(cd "$(dirname "$0")" && pwd)"
 repository="$(cd "$page/../.." && pwd)"
 source "$repository/scripts/lib/packages.sh"
-# the compilers: WARP_LIB, else this checkout's own (scripts/rebuild.sh pure <tree> writes them into lib/), else the
-# installed ones beside the warp on $PATH (~/dev/bin/lib links to the current build)
-OWN_LIBRARY="$repository/lib"
-[ -f "$OWN_LIBRARY/warp.wasm.inputs" ] || OWN_LIBRARY="$(dirname "$(command -v warp)")/lib"
-INSTALLED_LIBRARY="${WARP_LIB:-$OWN_LIBRARY}"
+# the compilers: --lib <folder>, else this checkout's own (scripts/rebuild.sh pure <tree> writes them into lib/), else
+# the installed ones beside the warp on $PATH (~/dev/bin/lib links to the current build)
+INSTALLED_LIBRARY="$repository/lib"
+[ -f "$INSTALLED_LIBRARY/warp.wasm.inputs" ] || INSTALLED_LIBRARY="$(dirname "$(command -v warp)")/lib"
+if [ "${1:-}" = --lib ]; then INSTALLED_LIBRARY=$2; shift 2; fi
 # the sources a compiler bakes in: one built from a commit where they differ ships its lag to the page
 COMPILER_SOURCES=(core 'lib/*.warp')
 # what the browser cannot use of it: wasmtime's machine code, native libraries, kept values, stale compilers
@@ -65,7 +65,7 @@ built_of_changed() {
 }
 
 build_compiler() {
-	[ -f "$INSTALLED_LIBRARY/warp.wasm" ] || { echo "error: no warp.wasm in $INSTALLED_LIBRARY (warp rebuild, or WARP_LIB=<lib>)" >&2; exit 1; }
+	[ -f "$INSTALLED_LIBRARY/warp.wasm" ] || { echo "error: no warp.wasm in $INSTALLED_LIBRARY (warp rebuild, or build.sh --lib <lib>)" >&2; exit 1; }
 	refuse_lagging_compiler
 	rm -rf "$page/warp-lib"
 	rsync -aL "${NOT_FOR_THE_BROWSER[@]}" "$INSTALLED_LIBRARY/" "$page/warp-lib/"
@@ -263,7 +263,7 @@ esac
 
 # the compiled module samples/wasm/import_compiled.warp links (samples/wasm/shapes.wasm, a link to it), built behind the
 # page's runtime.wasm, as scripts/samples.sh builds it natively
-WARP_LIB="$INSTALLED_LIBRARY" warp build --module test/fixtures/compiled/shapes.warp || echo "warning: no test/fixtures/compiled/shapes.wasm: wasm/import_compiled fails in the page" >&2
+warp --lib "$INSTALLED_LIBRARY" build --module test/fixtures/compiled/shapes.warp || echo "warning: no test/fixtures/compiled/shapes.wasm: wasm/import_compiled fails in the page" >&2
 write_repository_served_files
 
 # a folder per guide chapter (notes/samples.md); golf/ and wit/ hold no menu samples, native/ only natively built ones
