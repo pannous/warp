@@ -24,7 +24,7 @@ WALL_SECONDS = 120
 RLIMIT_CPU = 0
 # a case opens no window, sounds nothing, says no hints, prints its value as data and compiles on one thread (its slot
 # is one core)
-CASE_OPTIONS = "--no-window --mute --no-hints --value-as-data --one-thread"
+case_options(): text := "--no-window --mute --no-hints --value-as-data --one-thread"
 # 128 + SIGXCPU
 CPU_LIMIT_HIT = 152
 FILE_MODE = 420
@@ -159,7 +159,7 @@ started_run(work: text, run: text, prefix: text, children: pointer, slots: i32):
 	folder = c_string(field(run, 1, TAB))
 	given = arguments()
 	added(given, executable_path())
-	for i in 0..field_count(CASE_OPTIONS, SPACE) { added(given, field(CASE_OPTIONS, i, SPACE)) }
+	for i in 0..field_count(case_options(), SPACE) { added(given, field(case_options(), i, SPACE)) }
 	# and checks what main gives: its timers fire none, unless this run gives them time (the samples sweep:
 	# --events-for <ms>; core/native/driver.warp events)
 	added(given, "--events-for")

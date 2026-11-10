@@ -32,8 +32,6 @@ execv(path: pointer, arguments: pointer): i32 from "c"
 read(descriptor: i32, data: pointer, size: i64): i64 from "c"
 STDIN = 0
 STDOUT = 1
-# the option one warp gives its own compiler (words_ran): the file a program's module goes to, run after
-RUN_TO = "run-to"
 DASH = 45
 # a lower-case ASCII letter less this is its capital
 CAPITAL_OFFSET = 32
@@ -94,12 +92,14 @@ piped_program(compiler: text): nothing := {
 	added(given, native_copy(printed.at, printed.size))
 	words_ran(compiler, given)
 }
+# the option one warp gives its own compiler: the file a program's module goes to (texts are words in primitive code)
+run_to_option(): text := "run-to"
 # the compiler run with the words; when they were code, the module it wrote to the run-to option run after
 words_ran(compiler: text, given: Arguments): nothing := {
 	output = compiled_path()
-	option_given(RUN_TO, output)
+	option_given(run_to_option(), output)
 	file_ran(compiler, given)
-	option_dropped(RUN_TO)
+	option_dropped(run_to_option())
 	if read_file(output).length > 0 { written_run(output, "code", arg_count()) }
 }
 # `warp rebuild`: warp.wasm built anew from lib/: the seed compiles compiler.warp
@@ -644,10 +644,10 @@ option_words(at: int): int := {
 }
 # TODO (card no-bash-exports) the scripts still export WARP_<OPTION> (the warp installed before took no options): each
 # is its option until the scripts give the options (the second push); then this goes, with host_io.warp legacy_option
-LEGACY_OPTIONS = "times value-as-data one-thread emit-survey rules-fired seed events-for fuel backtrace profile"
+legacy_options(): text := "times value-as-data one-thread emit-survey rules-fired seed events-for fuel backtrace profile"
 legacy_options_given(): nothing := {
-	for i in 0..field_count(LEGACY_OPTIONS, SPACE) {
-		name = field(LEGACY_OPTIONS, i, SPACE)
+	for i in 0..field_count(legacy_options(), SPACE) {
+		name = field(legacy_options(), i, SPACE)
 		value = getenv(legacy_variable(name))
 		if value.length > 0 and not has_option(name) { option_given(name, value) }
 	}

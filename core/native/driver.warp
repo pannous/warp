@@ -93,6 +93,8 @@ PROGRAM_MEMORY_SLOT = 5
 OPTIONS_SLOT = 6
 OPTION_BYTES = 32
 MAX_OPTIONS = 64
+# the table's bytes: 8 + MAX_OPTIONS * OPTION_BYTES
+OPTIONS_BYTES = 2056
 # whether the run linked unicode (canonical_text), the native host module (host_export), at these places of its block
 UNICODE_LINKED_AT = 32
 HOST_LINKED_AT = 40
@@ -1562,7 +1564,7 @@ call_failure(context: handle, instance: pointer, error: handle, trap: pointer, o
 }
 # the options table, made at its first option
 options_table(): pointer := {
-	if kept_value(OPTIONS_SLOT) == 0 { keep_value(OPTIONS_SLOT, native_pointer(allocate(8 + MAX_OPTIONS * OPTION_BYTES))) }
+	if kept_value(OPTIONS_SLOT) == 0 { keep_value(OPTIONS_SLOT, allocate(OPTIONS_BYTES) as i64) }
 	kept_value(OPTIONS_SLOT) as i32
 }
 # an option of the run given, "" for a flag: its value replaced when it was given before
@@ -1586,11 +1588,12 @@ option_given(name: text, value: text): nothing := {
 # an option no longer given: the last entry takes its place
 option_dropped(name: text): nothing := {
 	entry = option_entry(name)
-	if entry == 0 { return }
-	table = options_table()
-	count = long_at(table).value - 1
-	memcpy(entry, native_pointer(table + 8 + (count as i32) * OPTION_BYTES), OPTION_BYTES)
-	long_at(table).value = count
+	if entry != 0 {
+		table = options_table()
+		count = long_at(table).value - 1
+		memcpy(entry, native_pointer(table + 8 + (count as i32) * OPTION_BYTES), OPTION_BYTES)
+		long_at(table).value = count
+	}
 }
 # the option's entry, else 0
 option_entry(name: text): pointer := {
@@ -1650,9 +1653,9 @@ code_evaluated(caller: handle, context: handle, given: pointer, result: pointer)
 	added(compiling, ".")
 	added(compiling, library)
 	added(compiling, joined(library, "/runtime.wasm"))
-	option_given(VALUE_AS_DATA, "")
+	option_given(value_as_data_option(), "")
 	failure = run_into(read_file(compiler_path()), compiling, machine_code_file(compiler_path(), COMPILER_GC_HEAP_BYTES), COMPILER_GC_HEAP_BYTES, printed)
-	option_dropped(VALUE_AS_DATA)
+	option_dropped(value_as_data_option())
 	if failure.length == 0 { failure = run_into(read_file(module), program_arguments(source, arg_count()), "", PROGRAM_GC_HEAP_BYTES, printed) }
 	output = read_file(printed)
 	unlink(source)
@@ -1671,7 +1674,7 @@ code_evaluated(caller: handle, context: handle, given: pointer, result: pointer)
 }
 # an eval's program prints its value as data after a line of the mark (core/emitter/emitter.warp VALUE_MARK); a
 # primitive program's texts are words, not globals
-VALUE_AS_DATA = "value-as-data"
+value_as_data_option(): text := "value-as-data"
 value_mark(): text := "§warp value§"
 # where `part` first starts in t, -1 when nowhere
 text_found(t: text, part: text): i64 := {
