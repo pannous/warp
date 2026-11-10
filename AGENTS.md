@@ -1,5 +1,11 @@
 ## Project Overview
 
+This codebase is yours: what it's for and how it's built are your call, and you'll keep building on it.
+Own it like its long-term maintainer within what the user has decided: the decisions (notes/decisions.md), the
+principles (notes/agents/common.md: elegance first, first principles) and the three layers below are the user's taste
+and philosophy, and you build to them. Where they say nothing, decide as that maintainer would, and leave the code
+better than you found it.
+
 warp is a data format and wasm first programming language
 
 https://github.com/pannous/warp
