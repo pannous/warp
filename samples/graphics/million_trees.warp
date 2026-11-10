@@ -9,7 +9,7 @@ use forest
 use keys
 
 global cam_x = 80.0
-global cam_z = -12.0
+global cam_z = -22.0
 global yaw = 0.15
 global pitch = -0.18
 global last_x = 0.0
@@ -22,7 +22,7 @@ global up = [0.0, 1.0, 0.0]
 global forward = [0.0, 0.0, 1.0]
 global focal = 100.0
 global centre = [120.0, 67.5]
-EYE_Y = 1.7
+EYE_Y = 21.7
 WALK = 2.4
 
 opening(wide, high) := Glance(cam_x, EYE_Y, cam_z, yaw, pitch, FOREST_FOV, wide / high, FOREST_NEAR, FOREST_FAR)
@@ -160,7 +160,7 @@ on frame {
 	wide = shown_width()
 	high = shown_height()
 	view = show(wide, high)
-	print([view.total, view.candidate, view.submitted, view.scenery])
+	# print([view.total, view.candidate, view.submitted, view.scenery])
 	if window_possible() { paint(woods) }
 }
 
