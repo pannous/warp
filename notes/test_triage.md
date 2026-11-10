@@ -509,7 +509,7 @@ lines are restored (139), rough_tolerance is back (operator.md:41). The synonyms
 string, unit, nil), not lib/aliases.warp entries: that table aliases operator and keyword spellings and changed none of
 the lines. A prelude alias reaches only a library call (`integer(3.7)`), a program's own alias line every use, so
 101 restored lines stay red, each group carded: prelude-alias-line (the mechanism, a core change for the Interviewer),
-square-add1-twice (definition by space), typed arrays, result types after `as`, maybe, the empty type's names, a
-function's representation, warn in a text, display.dpi, the reflection words (card reflection-dot-forms: p.fields
+square-add1-twice (definition by space), array-type-sizing, def-text (result types after `as`), maybe-int-refused, type-unit, twice-representation-fs,
+string-concat-warn, display-density, the reflection words (card reflection-dot-forms: p.fields
 itself is not built). Held still, outside the decisions' wording: `exact == real`, `numbers x = [1 2]`,
 `def f(x:int) -> int or text`, `f(x) := x + it`, `require math` with `effects of main`; `add1 x:=$0+1` deleted ($0).
