@@ -106,7 +106,7 @@ compute_toys_kernel(code: text) := {
 	plain = replace_all(plain, "textureDimensions\\(\\s*screen\\s*\\)", "vec2u(values.size)")
 	plain = replace_all(plain, "\\bcustom\\.", "values.")
 	// textureStore(screen, where, color), where a vec2i or vec2u with parentheses two deep at most
-	replace_all(plain, "textureStore\\(\\s*screen\\s*,\\s*((?:[^,()]|\\((?:[^()]|\\([^()]*\\))*\\))+),", "warp_store(vec2i($1),")
+	replace_all(plain, "textureStore\\(\\s*screen\\s*,\\s*(([^,()]|\\(([^()]|\\([^()]*\\))*\\))+),", "warp_store(vec2i($1),")
 }
 
 compute_toy(code: text) := {
