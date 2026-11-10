@@ -1,4 +1,4 @@
-# 0eee06d611 2026-11-10 12:05 262/265 98.9%
+# a4957a43b6 2026-11-10 16:31 263/265 99.2%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -109,7 +109,6 @@ ok   samples/graphics/gaussian_splats.warp
 ok   samples/graphics/meshlet_grid.warp
 ok   samples/graphics/million_trees.warp
 ok   samples/graphics/paint_function.warp
-ok   samples/graphics/paint_text_gpu.warp
 ok   samples/graphics/paint_text.warp
 ok   samples/graphics/shader_brush.warp
 ok   samples/graphics/shader_trails.warp
@@ -190,6 +189,7 @@ ok   samples/python/python_modules.warp
 ok   samples/signals/signal_fields.warp
 ok   samples/sound/arrangement.warp
 ok   samples/sound/filters.warp
+ok   samples/sound/gpu_visualizer_warp.warp
 ok   samples/sound/harmony.warp
 ok   samples/sound/hum_blocks.warp
 ok   samples/sound/midi.warp
@@ -211,6 +211,7 @@ ok   samples/storage/orm_units.warp
 ok   samples/storage/orm.warp
 ok   samples/storage/store.warp
 ok   samples/system/c_lines.warp
+ok   samples/system/crontab.warp
 ok   samples/system/unix_commands.warp
 ok   samples/tasks/async.warp
 ok   samples/tasks/parallel_let.warp
@@ -261,6 +262,5 @@ SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
+FAIL samples/graphics/paint_text_gpu.warp: samples/graphics/paint_text_gpu.warp:9:25 outside the core: the call text_coverage(…)
 TIME samples/lists/dot.warp: used its 30 s of CPU
-FAIL samples/sound/gpu_visualizer_warp.warp: samples/sound/gpu_visualizer_warp.warp:133:1 samples/sound/tune.mp3: no such sound file
-FAIL samples/system/crontab.warp: samples/system/crontab.warp:44:23 outside the core: the unknown name pre-wrap

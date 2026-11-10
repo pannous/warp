@@ -20,6 +20,12 @@ head_body(n: Node, program: Node) := {
 	plain = without_mark(n)
 	if not (is_group(plain) and #plain == 2 and plain#1 == symbol(DEF_WORD)) { return ø }
 	defined = plain#2
+	# `def add(left: int) -> int: left`, read `add(left: int) -> (int: left)`: after `-> T` the colon can't name a type,
+	# so any body is one
+	if is_key(defined, Op.Arrow) and is_call(key_of(defined)) and is_key(value_of(defined), Op.Colon) {
+		typed = value_of(defined)
+		return diagnose(call_of("head_arrow_body", [head_code(key_of(defined)), "${key_of(typed)}", written_value(value_of(typed))]), defined)
+	}
 	if not (is_key(defined, Op.Colon) and is_call(key_of(defined)) and is_body_value(value_of(defined))) { return ø }
 	diagnose(call_of("head_body", [head_code(key_of(defined)), written_value(value_of(defined))]), defined)
 }

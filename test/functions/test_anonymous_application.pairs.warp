@@ -6,6 +6,8 @@
 
 # test_an_anonymous_function_broadcasts_over_a_list
 '{it*2}([1 2 3])'	[2 4 6]
+'(x => x*2)([1 2 3])'	[2 4 6]
+'g = x => x*2; g([1 2 3])'	[2 4 6]
 
 # test_a_data_block_is_not_applied
 'x = {1 2}; count x'	2
