@@ -461,7 +461,10 @@ code_heads(n: Node, written: any): map := {
 own_heads_of(code: Node, heads: map) := {
 	if code is key { heads[key_head(code)] = yes } else if is_group(code) {
 		heads[group_head(code, "")] = yes
-		if #code > 0 and code#1 is symbol { heads[group_head(code, name_of(code#1))] = yes }
+		if #code > 0 and code#1 is symbol {
+			heads[group_head(code, name_of(code#1))] = yes
+			heads[group_head(code, unaliased(name_of(code#1)))] = yes
+		}
 	} else { heads[atom_head] = yes }
 }
 fits_head(rule: Rule, heads: map): bool := rule.head == "" or heads.has(rule.head)
@@ -2165,8 +2168,11 @@ rule_matches(pattern: Node, code: Node, bound: map): bool := {
 	if spread != ø { return rule_matches(pattern, spread, bound) }
 	if is_group(pattern) { return is_group(code) and bracket_of(code) == bracket_of(pattern) and tuple_fits(pattern, code) and phrase_fits(pattern, code) and items_match(items_of(pattern), items_of(code), bound) and one_statement_kept(pattern, code, bound) }
 	if code is key or is_group(code) { return no }
-	pattern == code
+	pattern == code or spells_word(code, pattern)
 }
+# a word of the code another spelling of the pattern's, the program binding it nowhere: `xs.forEach {…}` matches
+# `$xs.each $body` as `xs.each {…}` does (card prelude-alias-line)
+spells_word(code: Node, pattern: Node): bool := pattern is symbol and code is symbol and unaliased(name_of(code)) == name_of(pattern) and not program_word(name_of(code))
 
 # a definition the parser gave its spaced words as a call head (decision spaced-definition-head: `unit hand := 4inch`
 # is unit(hand) := 4inch), as written for a pattern spelling it spaced, `unit $name := $value` (the phrase unit,

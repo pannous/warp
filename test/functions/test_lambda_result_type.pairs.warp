@@ -1,0 +1,4 @@
+# a lambda's result type after its parentheses is no parameter: its parameters are those inside (card lambda-own)
+'f = (a, b): int => a + b; f(3, 1)'	4
+'f = (a: int, b: int): int => a * b; f(3, 4)'	12
+'f = (a: int): int => a + 1; f(3)'	4
