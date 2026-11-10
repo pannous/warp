@@ -420,14 +420,14 @@ def linked_needs(): list {
 	names = []
 	# (never its globals: each is imported from the module, whose warp/start ran its initializer; brought, every
 	# program ran the prelude's tables again, half of hello's compile)
-	for image in module.linked_images.filter(image => not records_reaches(image.name)) { names += class_names_of(image) }
+	for image in module.linked_images.filter(image => not records_reaches(image.name)) { names += image_class_names(image) }
 	names
 }
 records_reaches(module_name: text): bool := {
 	signature = linked_signature(module_name)
 	signature != ø and signature.reaches != ø
 }
-class_names_of(image: LibraryImage): list := image.classes.map(entry => entry#1[#instance_struct_prefix ..])
+image_class_names(image: LibraryImage): list := image.classes.map(entry => entry#1[#instance_struct_prefix ..])
 # what each word of the linked modules reaches, by its name (word_reaches), all modules' merged
 linked_reaches(): map := {
 	reaches = {}
@@ -442,7 +442,7 @@ linked_reaches(): map := {
 # makes); a closure's under its own name, which its word's body says
 word_reaches(functions: list, classes: list): map := {
 	own = functions[1 ..].filter(f => not f.is_runtime and f.body != ø)
-	naming = word_set(concatenated(own.map(f => name_parts(f.name))) + classes + module.linked_words.keys + concatenated(module.linked_images.map(class_names_of)))
+	naming = word_set(concatenated(own.map(f => name_parts(f.name))) + classes + module.linked_words.keys + concatenated(module.linked_images.map(image_class_names)))
 	reached = {}
 	for f in own {
 		said = concatenated(words_within(f.body).map(name_parts)).filter(word => naming.has(word) and word != f.name)
