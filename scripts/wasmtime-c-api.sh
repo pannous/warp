@@ -39,7 +39,7 @@ patched_wasmtime() {
   echo "$stamp" >"$patched/wasmtime/.patches"
 }
 # the C API built once per set of inputs: a fresh worktree unpacks wasmtime at a new path, which cargo takes for a
-# new crate and rebuilds all of wasmtime from scratch (2026-11-01: a rustc in every landing's rebuild)
+# new crate and rebuilds all of wasmtime from scratch (a rustc in every landing's rebuild)
 wasmtime_inputs=$( (echo "$WASMTIME_VERSION"; cd "$checkout/crates/wasmtime-capi" && cat Cargo.toml Cargo.lock build.rs patches/*.patch $(find src -type f | sort)) | shasum -a 256 | cut -d' ' -f1)
 wasmtime_stamp=$CARGO_TARGET_DIR/release/warp_wasmtime.inputs
 if [ "$(cat "$wasmtime_stamp" 2>/dev/null)" != "$wasmtime_inputs" ] || ! ls "$CARGO_TARGET_DIR"/release/*warp_wasmtime.* >/dev/null 2>&1; then

@@ -1,4 +1,4 @@
-# lib/ consistency audit (card lib-consistency, report only, 2026-11-06)
+# lib/ consistency audit (card lib-consistency, report only)
 
 56 names are defined at the top of more than one lib/*.warp module (a regex over definition heads, `name(…) :=`,
 `name =`, `def name`). Sorted by what they are; nothing changed by this audit, each finding a candidate card.

@@ -6,7 +6,7 @@ The picture is `samples/gpu/aquarium.warp`, one self-contained program. It is no
 
 ## Reference
 
-[greggman/webgpu-aquarium](https://github.com/greggman/webgpu-aquarium) commit `055da77885a571e85970b2bb3807b0b504ce1a1c` (2026-10-01, "Mention Size README.md"). MIT, Copyright (c) 2026 Gregg Tavares. The full upstream `LICENSE.md` at that revision is reproduced below. No mesh or texture files are copied. The screenshots in that repo stay there.
+[greggman/webgpu-aquarium](https://github.com/greggman/webgpu-aquarium) commit `055da77885a571e85970b2bb3807b0b504ce1a1c` ("Mention Size README.md"). MIT, Copyright (c) 2026 Gregg Tavares. The full upstream `LICENSE.md` at that revision is reproduced below. No mesh or texture files are copied. The screenshots in that repo stay there.
 
 The formulas kept are the tiled travelling cosines and the Jacobian caustic (`src/shaders/waves.wgsl`, `src/render/caustics.ts`, alpha 5.5, fringe 0.94 / 1 / 1.06, compress `pow(·, 1.25) * 0.55`), the tropical absorption `[0.1, 0.034, 0.02]`, scattering `0.016`, sun and ambient (`src/world/world.ts`), and `sunAtDepth` / `ambientAtDepth` / the Henyey–Greenstein phase / view transmittance (`src/shaders/water.wgsl`). Schools use that sim's roaming home and the hashed slot in the leader's heading frame (`src/sim/fish.ts`). Followers are drawn on the slot the compute shader springs toward. The slot hash is a float hash; theirs is the uint `hashU`.
 

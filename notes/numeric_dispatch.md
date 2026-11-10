@@ -4,7 +4,7 @@ Decision operators-are-functions: `+ - * / ^ % < <= > >= == !=` are ordinary fun
 run-time types of *both* operands. A number class (Quantity, Interval, Gaussian, Real, Complex, Money, Matrix …)
 composes with any other without per-pair glue. The static int/float/text fast paths stay exactly as fast as today.
 
-## Today (2026-11-07)
+## Today
 - emitter/operators.warp `unmarked_operation`: static kinds (int, float, text, list, time) are compiled inline. Only
   when an operand is a boxed Node and a dispatcher `+·operator` exists does it call that dispatcher.
 - extensions/class_methods/methods.warp builds one dispatcher per operator, with **single dispatch on the left**
@@ -80,7 +80,7 @@ samples/numbers/*, and core size (scripts/vitals.py). Neither may get worse.
 
 Core: none expected; the emitter already calls `op·operator` for boxed operands.
 
-## Phase 2 carries the prebuilt-module closure (card prebuilt-module-links, 2026-11-07)
+## Phase 2 carries the prebuilt-module closure (card prebuilt-module-links)
 Decision no-lib-reads: every module that a prebuilt module links must be prebuilt itself. Today units, math and sound
 link reals, and file, hash, text, markup and wagi link path, bits, encoding, html, letter_ranges, slugs, unit_names
 and url; none of those is in std_module_names. The closure in core/compiler.warp write_modules is

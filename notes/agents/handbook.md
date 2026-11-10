@@ -62,7 +62,7 @@ Principles and Talking live only in AGENTS.md.
 ## Testing
 - Warp tests (`warp test`) run locally with the shared binary; the whole suite only at the
   Integrator's rare intervals (nightly), never in a gate.
-- Stored baseline (user, 2026-11-01): scripts/full-suite.sh copies its results into the store record of the compiler
+- Stored baseline: scripts/full-suite.sh copies its results into the store record of the compiler
   that ran (<store>/<hash>/warp.record/results.txt, results.commit = the tree's commit). A branch compares against
   the record of main's installed compiler, the one its merge base was built with: `scripts/baseline.sh <paths>` (stored
   lines), `scripts/baseline.sh --regressions <results file>` (✓ there, ✗ now; exit 1). Rerunning tests on main to

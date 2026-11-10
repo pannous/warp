@@ -1,4 +1,4 @@
-# Compile-time code in extensions/rules (measurement and proposal, 2026-11-06)
+# Compile-time code in extensions/rules (measurement and proposal)
 
 Commit 463dfdefa0 moved the compile-time rule code from lib/ to extensions/rules/. As a result the compiler carries
 extensions/rules/rule_words.warp (1017 lines) and extensions/rules/wgsl.warp (864 lines). Nothing has been built yet;
@@ -83,7 +83,7 @@ Lines by domain (counting non-blank lines):
 - In total, the compiler's 1880 lines become about 540: 415 that stay, about 30 for the three generic words, and the
   90-line GPU-lists tail. Without step 3, about 950.
 
-## Done (e799249b58, 2026-11-06)
+## Done (e799249b58)
 - (a) The translator is lib/shaders.warp (765 lines, a std module, at run time, once per painted function). The
   rules are in extensions/rules/modules/shaders.warp. The rule word definitions_reached quotes f, its callees and the
   names of the values it reads. A value's width comes from the value it holds at run time: `tint = [1, 2, 3].map(…)`

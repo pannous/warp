@@ -36,7 +36,7 @@ So caching sound's parse + module source passes saves ~200 of ~430 ms; the ~2.5 
 2. The same for a project's file modules (key adds the file's path).
 3. The prelude reach look-ahead and the parse of lib/prelude.warp.
 
-## A prelude word against a Rust builtin (card prelude-word, 2026-10-18)
+## A prelude word against a Rust builtin (card prelude-word)
 Measure: `probes/cache/proxy_times.sh <warp> [runs] [phase pattern]`, each phase's minimum over runs of `print [1 2 N]`
 (Rust list_text) and `print to_base(N, 2)` (a warp prelude word), fresh literals so the program cache misses. At load
 30-140 only minima mean anything; compare CPU time (rusage of the child) for settings, interleaved runs.
@@ -174,7 +174,7 @@ emit is the rerun.
 - Step 2 can cut part of it: a cached body carries the needs it discovered, so seeding them up front makes the
   library functions' share of reruns disappear (main's own needs, such as print_value, remain).
 
-### Unforeseen runtime functions emitted after main (card takes-next, 2026-10-18)
+### Unforeseen runtime functions emitted after main (card takes-next)
 emit_call gives a runtime function nothing required a stand-in index (UNFORESEEN_CALL_BASE + k); after main,
 emit_unforeseen_functions requires it (with runtime_dependencies and the float rule) and runs emit_constructors again:
 runtime_function returns the index of a function emitted already, Exports ignores the same export again, the global

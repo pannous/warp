@@ -1,6 +1,6 @@
 # Board triage 2026-10-30
 
-Session warp-card-triage (user's task, 2026-10-30): every open card of the board (Now/Next/Soon/Later, 1123 cards,
+Session warp-card-triage (user's task): every open card of the board (Now/Next/Soon/Later, 1123 cards,
 Done and Roadmaps untouched) read once and checked for being still open and still relevant. The per-card log
 (card, from, verdict, commit, reason) is data/cards/triage.md in the main checkout (ignored), with the board
 snapshot it worked from (board.json, issues.json).

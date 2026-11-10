@@ -1,6 +1,6 @@
 # Core growth audit, 2026-10-29 → 2026-10-30 (card diff-core)
 
-The question (user 2026-10-30): what did the core gain between the fast compiler (~140 s to compile compiler.warp) and
+The question: what did the core gain between the fast compiler (~140 s to compile compiler.warp) and
 main now (380–420 s), is each piece adequate for the core, and where did library code get pulled into what every
 compiler build compiles or bakes. Reading and git only: no builds, so every cost below is an **estimate to be
 confirmed by warp-speed's profile**, ranked by how the cost scales on the compiler's own compile (a ~29 k line program,

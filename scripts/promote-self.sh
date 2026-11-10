@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/promote-self.sh [--background] [<worktree>, default this checkout]: the self test of the tree's warp.wasm,
 # promoting it to warp-self.wasm (`warp self`'s compiler) on a pass. warp.wasm (stage N) compiles core/compiler.warp
-# again (stage N+1); when it does, warp.wasm is copied to lib/warp-self.wasm, a fixpoint or not (user 2026-10-26) (`warp rebuild self`, src/compiler/standalone.rs promote; through scripts/rebuild.sh self, so a
+# again (stage N+1); when it does, warp.wasm is copied to lib/warp-self.wasm, a fixpoint or not (`warp rebuild self`, src/compiler/standalone.rs promote; through scripts/rebuild.sh self, so a
 # promoted warp-self.wasm of these compiler inputs in data/ or the store is taken without running the test again, and a
 # new one is published to the store). A missing warp.wasm of these inputs is built first.
 # Never fails its caller: it prints PROMOTED, PROMOTED BUT BROKEN (no hello) or FAILED and exits 0. Meant to run every once in a while,

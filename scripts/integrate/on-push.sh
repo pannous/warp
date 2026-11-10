@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/integrate/on-push.sh: the pre-push hook of every warp checkout and worktree (.git/hooks/pre-push execs it).
 # A push to main starts after-push.sh once the pushed commit has arrived on origin's main, detached, so the push
-# itself never waits. This replaced the cron that polled main every 2 minutes and kept rebuilding (user 2026-11-04:
+# itself never waits. This replaced the cron that polled main every 2 minutes and kept rebuilding (
 # "make that part of the merge script"). after-push.sh holds a lock and installs main's newest tip, so pushes in quick
 # succession share one run. A refused push never reaches main and starts nothing.
 ARRIVAL_POLLS=36   # every 5 s: three minutes for the push to finish
@@ -13,7 +13,7 @@ AFTER_PUSH=$MAIN_CHECKOUT/scripts/integrate/after-push.sh
 NO_COMMIT=0000000000000000000000000000000000000000
 # the hook runs in the pusher's environment: its git variables (GIT_DIR, GIT_INDEX_FILE …) and its warp ones (WARP_LIB,
 # WARP_BINARY …) name the pushing worktree, gone a moment after its push. Left set, after-push.sh acts on that worktree
-# (2026-11-04 20:21: the tree stayed on the old tip, native-2ad9eb2dc got the old compilers, "unknown name protocol";
+# (the tree stayed on the old tip, native-2ad9eb2dc got the old compilers, "unknown name protocol";
 # 22:20: the installed compilers' hello looked for own-name-arity-overloads/lib/warp.wasm)
 unset $(git rev-parse --local-env-vars) $(compgen -e | grep '^WARP_')
 

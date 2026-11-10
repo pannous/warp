@@ -1,12 +1,12 @@
 # Enums instead of magic words in core (card compiler-enums)
 
-User (2026-10-20): "the warp compiler code has many magic strings, can we replace them all with enums?"
+User: "the warp compiler code has many magic strings, can we replace them all with enums?"
 User decision relayed the same day: the compiler is independent of Rust, no conversion to and fro: the stages pass
 warp values to each other directly (warp-standalone makes the pipeline one warp program). Only the wasm bytes and
 user-facing messages leave the compiler. So the enums are designed end to end inside warp: no case ↔ text mapping
 for a JSON boundary, no Rust spellings to match.
 
-Survey (2026-10-20, bare word literals outside comments): emitter 750, words 410, analyzer 353, parser 278,
+Survey (bare word literals outside comments): emitter 750, words 410, analyzer 353, parser 278,
 node_matches 124, runtime 57, serializer 52, the other 29 files 0-23 each. Top words: "int" 209, "node" 112,
 "list" 109, "empty" 108, "text" 100, "float" 96, "bool" 35, "data" 31, "codepoint" 31, "char" 31, "symbol" 29,
 "struct_get" 23, "struct_new" 15.
@@ -31,7 +31,7 @@ word to its Kind (`{int: Kind.Int, integer: Kind.Int, …}`), the only place a k
 analyzer's printed result (`f(int) -> float`, what test_self_analyzer reads) is a message: one `spelled(k: Kind)` in
 the shared file writes a case lowercase (`Kind.Codepoint` → codepoint), no table.
 
-## Kind and Node: the kinds are warp's types, no Kind enum (decided 2026-10-20)
+## Kind and Node: the kinds are warp's types, no Kind enum
 
 User's question: "enum Kind: how does that relate to Node?" A Kind enum would re-list Node's shapes (Empty, Text,
 Symbol, Key, List, Error, …) beside type-only cases (Int, Float, Rational, I32, F32, Function), two enums for one
@@ -55,7 +55,7 @@ types (one vocabulary: Held goes too). The printed analysis (`f(int) -> float`) 
 duplicated, and no case name collides with a type (R1 is fixed anyway: rust-lane, enum-case-names).
 A type value prints `class int` (decision type-text); the analysis text spells a kind with `t.name` → int.
 
-Needs, probes/compiler_enums/f_type_values*.warp, f_type_match.warp (2026-10-20):
+Needs, probes/compiler_enums/f_type_values*.warp, f_type_match.warp:
 - T1 pure lane: a built-in type as a value, `k = int`: "the unknown name int" (card pure-lane-reads).
 - T2 Rust lane (card rust-lane-int): a match on a value declared `type` with arms naming types (`match t { int: …;
   float: … }`) takes `_`, the arms test t's own type; `t: type = int` is "unknown type type". Membership
