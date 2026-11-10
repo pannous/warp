@@ -1,0 +1,20 @@
+# types, protocols and type values as wiki/type.md, wiki/class.md, wiki/optional.md and wiki/trait.md say (decisions real-canonical-core, parameter-typed, Duck typing, #30, type-equal, is-union, type-value-is, union-or, optional-result, instance-position, P45)
+'3 is real'	yes
+'f(x: int or text) := x; f("a")'	"a"
+'f(x: int or text) := x; f([1])'	error
+'f(p) := p.word; f({a: 1})'	error
+'3 is int or text'	yes
+'int == int'	yes
+'float is number'	yes
+'int is float'	no
+'name(t: type) := match t { int: "whole"; float: "real" }; name(float)'	"real"
+'str(int)'	"class int"
+'x: int or text = "a"; x'	"a"
+'f(): list := ø; f()'	[]
+'class P { x: int; y: int }; P(2, 3)#1'	2
+'x = [1]; x = 5'	error
+'str(type(ø))'	"class empty"
+'xs: list<int> = [1, 2]; xs'	[1, 2]
+'x : 3 int'	[0, 0, 0]
+'i: index = [5, 6, 7].index_of(6); i'	1
+'type(parse("1+1"))'	code
