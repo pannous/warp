@@ -46,6 +46,8 @@ c = red
 c is Paint' true
 is! 't = type(3)
 5 is t' true
+is! 't = type(-3)
+5 is t' true
 is! 'enum Color { red green }
 Paint = Color
 Paint = 3
