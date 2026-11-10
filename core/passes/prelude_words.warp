@@ -875,12 +875,27 @@ prelude_definitions(): list := {
 # `use x` takes one, decision implicit-use-lib-first)
 global implicitly_used = []
 with_implicit_uses(source: text, folder: text = "."): text := {
-	implicitly_used = if module_written == "" then implicit_modules_of(source, folder) else runtime_modules_of(module_written)
+	# (a module's compile has only module_source's stub: its own text is written_source's)
+	written = written_source(source)
+	found = if module_written == "" then implicit_modules_of(source, folder) else []
+	used = used_modules(written) + found
+	implicitly_used = found + runtime_modules_reached(written, used).filter(name => name != module_written and name not in used)
 	source + implicitly_used.map(module => "\nuse " + module).join("")
 }
-# the runtime modules a standard module's own text needs (its `^` links big_numbers as a program's does), but itself:
-# its compile's source is only module_source's stub
-runtime_modules_of(name: text): list := runtime_modules_needed(used_module_text(name)).filter(used => used != name)
+# the runtime modules a text needs, or any module it uses at any depth: units' `^` reached by a program's `3 km²`, a
+# module's own `^`, link big_numbers
+runtime_modules_reached(source: text, uses: list): list := {
+	modules = []
+	for used in uses { modules = modules_used_by(used, modules) }
+	needed = runtime_modules_needed(source) + modules.flat_map(module_runtime_modules)
+	hooks().runtime_modules.filter(name => name in needed)
+}
+# (each module's text read once a compile: the prelude's is long)
+global runtime_modules_by_module = {}
+module_runtime_modules(name: text): list := {
+	if not runtime_modules_by_module.has(name) { runtime_modules_by_module[name] = runtime_modules_needed(used_module_text(name)) }
+	runtime_modules_by_module[name]
+}
 # the standard modules defining a word, from the library index (library.warp library_index_section "word")
 defining_modules(word: text): list := {
 	found = library_index_section("word").get(word)
