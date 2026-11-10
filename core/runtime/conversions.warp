@@ -9,7 +9,7 @@ use "text_numbers.warp"
 use "types.warp"
 use "../emitter/byte_codes.warp"
 # whether n converts itself to a float, an instance whose class gives float() (an exact root √2, 2km): a call
-# dispatched on float or number takes it (user 2026-10-31: an irrational exact root counts as a float)
+# dispatched on float or number takes it (an irrational exact root counts as a float)
 converts_to_float(n: Node): bool := is_class_instance(n) and not is_null(instance_float(n))
 # an instance as the number its float() gives, any other value itself: a subtype of int, `red % 256`, computes as the
 # int it is, not a float (decision subtype-less-than)

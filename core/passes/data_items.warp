@@ -106,9 +106,11 @@ with_literal_items_marked(value: Node): Node := {
 
 # `{k: e}`: each value of a map literal marked as a field, nested maps through their own values
 with_map_values_marked(value: Node): Node := {
-	if not is_curly_group(value) or not items_of(value).all(entry => is_key(entry, Op.Colon) and not is_opaque(entry)) { return value }
+	if not is_map_literal(value) { return value }
 	group_like(value, items_of(value).map(entry => Key(key_of(entry), Op.Colon, field_marked(value_of(entry)))))
 }
+# `{k: e, …}`: a curly group of key-value entries only, data rather than a block
+is_map_literal(n: Node): bool := is_curly_group(n) and items_of(n).all(entry => is_key(entry, Op.Colon) and not is_opaque(entry))
 field_marked(value: Node): Node := if is_curly_group(value) then with_map_values_marked(value) else shown_written(value, field_mark)
 
 # `m["k"] = e` (shifted to `m#("k" + 1)` like a 0-based index): an entry of a map, no list item
