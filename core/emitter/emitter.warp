@@ -236,6 +236,8 @@ def is_own_word(name: text): bool {
 	name in length_words or name in byte_count_words or name in bit_casts or name in text_words or name in cast_words or name in single_own_words or (name in magnitude_words and name not in module.functions)
 }
 single_own_words = ["floor", "type", "ord", "chr", "number"]
+# whether a call names a type alias (`double`, `integer`, a program's `type Age = float`) the program binds to nothing else
+def calls_a_type_alias(body: Body, name: text): bool { name in module.aliases and name not in module.functions and name not in body.names }
 def own_word_code(body: Body, name: text, x: Node): TypedCode {
 	if name in length_words { return length_code(expression_code(body, x)) }
 	if name == "floor" { return floored(instance_number(x, expression_code(body, x))) }
@@ -570,6 +572,9 @@ node_reader(kind: ValueKind): text? := match kind {
 	ValueKind.Char: "char_of_node"
 	_: ø
 }
+# a value known only at run time as the core duration it lasts when it is a lib/units quantity of time
+# (quantity_lasting, kept where the program has it), else as it is: `f(n: duration) := n; f(2 hours)`, `d + 2 hours`
+lasting(value: TypedCode): TypedCode := if value.kind == ValueKind.Node and module.functions.has(quantity_lasting_word) then TypedCode(ValueKind.Node, boxed(call_values(module.functions[quantity_lasting_word], [value]))) else value
 def converted(value: TypedCode, to: ValueKind): list {
 	from = value.kind
 	if to == ValueKind.Node { return boxed(value) }
@@ -578,6 +583,7 @@ def converted(value: TypedCode, to: ValueKind): list {
 	if from == ValueKind.Int and to == ValueKind.Bool { return condition(value) }
 	if from == ValueKind.Node and to == ValueKind.Int { return runtime_call("int_of_node", [value]).code }
 	if from == ValueKind.Node and to == ValueKind.Float { return runtime_call("float_of_node", [value]).code }
+	if from == ValueKind.Node and to == ValueKind.Time { return runtime_call(node_reader(to), [lasting(value)]).code }
 	if from == ValueKind.Node and node_reader(to) != ø { return runtime_call(node_reader(to), [value]).code }
 	if from == ValueKind.Char and to == ValueKind.Text { return runtime_call("char_text", [value]).code }
 	# (a local holding a call still compiling, in a first reading of a cycle, whose code is not kept)
@@ -587,7 +593,7 @@ def converted(value: TypedCode, to: ValueKind): list {
 }
 # `text(x)`, `string(x)`: x as shown
 text_words = ["text", "string"]
-# (type $Text (array (mut i8)))   TODO differentiate with linear memory type:  (card text-type-memory)
+# (type $Text (array (mut i8)))   TODO (card text-type-memory) differentiate with linear memory type:
 # (type $String (struct (field $ptr i32) (field $len i32)))  # ONLY use at boundary (ffi) or for extreme speed algorithms / tasks
 
 # int(x) and float(x): a text spells the number, a float truncates toward zero
@@ -1236,6 +1242,9 @@ def group_expression(body: Body, n: Node): TypedCode {
 	# `count = 0; count(users)`: "`count` is a variable here"
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in length_words and name_of(n#1) in body.names { return refuse("the variable " + name_of(n#1) + " applied to a value") }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and is_own_word(name_of(n#1)) { return own_word_code(body, name_of(n#1), n#2) }
+	# `double(3)`, `integer(2.5)`, `Age(3)` of `type Age = float`: a type's other name is called as the type it names
+	# (decision old-reds-class-methods)
+	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and calls_a_type_alias(body, name_of(n#1)) { return expression_code(body, bracketed([symbol(aliased_type(name_of(n#1))), n#2], "(")) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("unwrap") { return unwrapped(body, n#2) }
 	if bracket_of(n) == "(" and #n == 1 { return expression_code(body, n#1) }
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("return") { return return_value(body, expression_code(body, n#2)) }
@@ -1257,6 +1266,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 	if is_curly_list(n) { return curly_list_value(body, items_of(n)) }
 	# a call of a program's function it can't take: refused naming the count
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.functions { return call(body, module.functions[name_of(n#1)], items_of(n)[1..]) }
+	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) not in body.names and is_unknown_word(name_of(n#1)) { return program_error("no function " + name_of(n#1), unknown_word_fix(name_of(n#1))) }
 	if not (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { refuse(form_of(n)) }
 	# `div { p{"x"} }`, a word nothing knows before a block, once every word the emitter knows (return, global …) is
 	# taken: the data tag `div{…}`, one form with it
@@ -1400,7 +1410,8 @@ def key_expression(body: Body, n: Node): TypedCode {
 	if operator == Op.As and (is_held_kind(target)) {
 		value = expression_code(body, left)
 		if text_reader(target) != ø { return instance_cast(left, value, target) }
-		if target == ValueKind.Text { return if value.kind == ValueKind.Node then shown_text(runtime_call("spelled_case", [value])) else shown_text(value) }
+		# (a text of a marked type, `n as text` of `type Name < text`, is its text, the mark dropped: never its format)
+		if target == ValueKind.Text { return if value.kind == ValueKind.Node then shown_text(runtime_call("spelled_case", [value])) else if value.kind == ValueKind.Text then TypedCode(ValueKind.Text, value.code) else shown_text(value) }
 		# `"ab" as list` is its characters
 		if target == ValueKind.List and value.kind == ValueKind.Text { return runtime_call("text_chars", [value]) }
 		# `65 as codepoint` is 'A', `2 as char` the digit '2'

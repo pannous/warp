@@ -1,17 +1,18 @@
 #!/usr/bin/env warp
-# The Julia set z → z² + c until |z| > 2, colored by the escape count through a cosine palette
+# The Julia set z → z² + c until |z| > 2, colored by the escape count through a cosine palette; 
+# z and c are complex numbers of lib/complex => vec2f on the GPU
 use math
 width = 1600
 height = 900
-c = [-0.8, 0.156]
+c = -0.8 + 0.16ⅈ
 julia(x, y) := {
-	z = [(x / width - 0.5) * 3.2, (y / height - 0.5) * 1.8]
+	z = (x / width - ½) * 3 + (y / height - ½) * 2 * ⅈ
 	n = 0.0
-	while n < 200 and norm(z) < 2 {
-		z = [z.x * z.x - z.y * z.y + c.x, 2 * z.x * z.y + c.y]
-		n += 1
+	while n < 200 and ‖z‖ < 2 {
+		z = z² + c
+		n++
 	}
 	t = n / 200
-	[0.5 + 0.5 * cosine(3 + t * 20), 0.5 + 0.5 * cosine(3.6 + t * 20), 0.5 + 0.5 * cosine(4 + t * 20)]
+	[½ + ½ * cosine(3 + t * 20), ½ + ½ * cosine(3.6 + t * 20), ½ + ½ * cosine(4 + t * 20)]
 }
 paint(julia, width, height)

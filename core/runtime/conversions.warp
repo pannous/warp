@@ -59,7 +59,9 @@ type_marked(n: Node): bool := {
 }
 # an Int node's int, a big one's low 64 bits
 whole_int(n: Node): int := if is_plain_int(n) then unboxed_int(n) else extended_wrapped(n)
+# (a subtype of int, `type Age < int`, is an int: its float() its number, decision subtype-less-than)
 int_of_node(n: Node): int := {
+	if converts_to_float(n) { return int_of_node(instance_float(n)) }
 	if is_null(n) or kind_code(n) != Kind.Int or is_ratio(n) { fail() }
 	whole_int(n)
 }

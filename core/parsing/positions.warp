@@ -1,5 +1,6 @@
 // Positions in a source text, as the lexer counts them (card self-differential)
-// todo code_points(line) These are probably calculated elsewhere too and can be optimized? (card code-points-once)
+// DONE code_points(line) These are probably calculated elsewhere too and can be optimized? (card code-points-once)
+// (line_widths is gone; each caller takes a source's code points once, the parser a single grapheme's)
 
 // The code points of a text as a list
 def code_points(text: text): list := [point for point in text.codepoints]

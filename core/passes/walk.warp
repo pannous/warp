@@ -21,6 +21,8 @@ time_operand_word = "time_operand"
 time_test_word = "time_valued"
 # lib/units' word testing a quantity's dimension, `x is duration` of 2 hours (runtime_words.warp time_valued_code)
 quantity_test_word = "measures"
+# lib/units' word making a quantity of time the core duration an operand of those is moved by (`t + 1 hour`)
+quantity_lasting_word = "quantity_lasting"
 time_operator_symbols = ["+", "-", "*"]
 
 # the arm of a match any value takes, `_: …`

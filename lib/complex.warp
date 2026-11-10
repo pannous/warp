@@ -19,16 +19,29 @@ class Complex {
 		if d == 0 { raise "complex: division by zero" }
 		Complex((re * b.re + im * b.im) / d, (im * b.re - re * b.im) / d)
 	}
+	// z² + c (card possible): a whole exponent by repeated multiplication, exact; any other through complex_pow
+	power(o: any): Complex := {
+		if o is int and o >= 0 {
+			result = Complex(1.0, 0.0)
+			for _ in 0..o { result = result * this }
+			return result
+		}
+		complex_pow(this, o)
+	}
+	// abs(z), its length, as on a number
+	abs(): float := sqrt(re * re + im * im)
 	equals(o: any): bool := (o is Complex or o is number) and re == as_complex(o).re and im == as_complex(o).im
 	text(): text := complex_text(this)
 }
 
+// ⅈ, the imaginary unit (extensions/glyph_atoms.warp GLYPH_WORDS): -0.8 + 0.156ⅈ
+imaginary_unit(): Complex := Complex(0.0, 1.0)
 // a Complex or a plain number as a Complex
 as_complex(x: any): Complex := if x is Complex then x else Complex(x * 1.0, 0.0)
 // r·e^(iθ)
 polar(r: number, theta: number): Complex := Complex(r * cos(theta), r * sin(theta))
 // |z|
-complex_abs(z: any): float := { c = as_complex(z); sqrt(c.re * c.re + c.im * c.im) }
+complex_abs(z: any): float := as_complex(z).abs()
 // the angle of z in (-π, π]
 complex_arg(z: any): float := { c = as_complex(z); atan2(c.im, c.re) }
 // the conjugate re - im·i

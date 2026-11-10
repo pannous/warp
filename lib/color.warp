@@ -3,7 +3,7 @@
 // writes it, #RRGGBB or #RRGGBBAA, and says `c as int` where its number is meant; the named colors, rgb, hsv,
 // with_alpha and alpha_of; draw paints them
 use math
-type Color = int
+type Color < int
 opaque = 0xFF000000
 // a number as a color, color(0xFF8000) or 0xFF8000 as Color, read as CSS reads hex (decision color-text-css): six
 // digits are opaque, eight end in their alpha (0xFF800080 is half transparent); a fully transparent one is

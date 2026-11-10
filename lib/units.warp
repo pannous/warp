@@ -85,6 +85,9 @@ class Density extends Quantity {}
 // lib/timers comes in through an implicit use, card linked-method-conversion; back to q.in("ms") once that is fixed)
 q: Quantity as Duration := Duration(same_quantity(quantity(1, "ms"), q, "convert").amount * 1000)
 d: Duration as Quantity := quantity(d.ms / 1000, "s")
+// a quantity of time as the core duration it lasts (form 3, whole nanoseconds), any other value as it is: the operand
+// of a run-time time's + - * (extensions/time_values.warp), as linked lib/time sees no conversion of units (card since-time)
+quantity_lasting(q: any) := if measures(q, "duration") then time_of(3, round(same_quantity(quantity(1, "s"), q, "convert").amount * 1000000000) as int) else q
 // lib/time's Duration as the quantity of time it is, so `6s == time 6` and `1s + time 6` (decision one-duration)
 time_quantity(x) := if x is Duration then x as Quantity else x
 
@@ -295,7 +298,7 @@ defined_unit(name: text, one: Quantity) := {
 // an angle is a number of radians, as SI's radian is dimensionless (decision degree-constant), marked as an Angle that
 // shows in degrees (decision marks-survive-arithmetic): `60°` is 1.0472 to sine and the GPU and prints 60°,
 // `30° * 2` too
-type Angle = float
+type Angle < float
 ° = 0.017453292519943295 as Angle # π / 180, a float as the GPU reads it (π is the exact Real of lib/reals)
 // 60°, rounded to 12 digits so that 60° shows no 59.99999999999999°
 format Angle a as text := "${round(float(a) / 0.017453292519943295 * 1e12) / 1e12}°"

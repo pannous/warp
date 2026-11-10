@@ -2,15 +2,34 @@
 # too, so a class's routed show() never falls back to a hook that int_types.warp renames away (card
 # module-arity-overloads)
 
-# the number types a marked type is held as: `type Color = int`, `type Angle = float`
-MARKED_NUMBER_KINDS = {int: Kind.Int, float: Kind.Float}
-# `type Color = int`, `type Angle = float`: Color, Angle; ø for any other statement
+# the types a marked type is held as: `type Angle < float`, `type Name < text` (an int's subtype is a class,
+# classes.warp)
+MARKED_KINDS = {int: Kind.Int, float: Kind.Float, text: Kind.Text, string: Kind.Text}
+# the types whose subtypes are only marked, never a class
+MARKED_ONLY_KINDS = ["float", "text", "string"]
+# `type Color < int`, `type Angle < float`: Color, Angle; ø for any other statement
 int_type_name(statement: Node): text? := {
-	if not is_key(statement, Op.Assign) or not (value_of(statement) is symbol) or name_of(value_of(statement)) not in MARKED_NUMBER_KINDS { return ø }
+	subtype = subtype_of(statement)
+	if subtype != ø and subtype#2 in MARKED_KINDS then subtype#1 else ø
+}
+# `type Years = Age`: [Years, Age], the type declared and the one word it names; ø for any other statement
+type_alias_of(statement: Node): list? := {
+	view = alias_view(statement)
+	if view != ø and base_of(view#2) == "" then [declared_type_name(view#2), name_of(value_of(statement))] else ø
+}
+# `type Color < int`: [Color, int], the subtype declared and its type, read as an alias whose name extends its type
+# (core/parsing/parser.warp subtype_read, decision subtype-less-than); ø for any other statement
+subtype_of(statement: Node): list? := {
+	view = alias_view(statement)
+	if view != ø and base_of(view#2) != "" then [declared_type_name(view#2), base_of(view#2)] else ø
+}
+# the view ["type", name, ø] of `type X = Y`; ø for any other statement
+alias_view(statement: Node): any := {
+	if not is_key(statement, Op.Assign) or not (value_of(statement) is symbol) { return ø }
 	declared = key_of(statement)
 	if not (is_key(declared, Op.Colon) and key_of(declared) == opaque_symbol) { return ø }
 	view = value_of(declared)
-	if kind_of(view) == "type" and view#3 == ø then declared_type_name(view#2) else ø
+	if kind_of(view) == "type" and view#3 == ø then view else ø
 }
 # each number type the statements declare, its marked kind: the number's Kind with the type's mark above it, the
 # marks numbered in order of declaration (int_types.warp marks the values, the emitter the values it holds unboxed)
@@ -18,7 +37,7 @@ int_type_kinds(statements: list): map := {
 	kinds = {}
 	for statement in statements {
 		name = int_type_name(statement)
-		if name != ø and name not in kinds { kinds[name] = MARKED_NUMBER_KINDS[name_of(value_of(statement))] + (TypeMark.First + #kinds) * KindUnit.Info }
+		if name != ø and name not in kinds { kinds[name] = MARKED_KINDS[name_of(value_of(statement))] + (TypeMark.First + #kinds) * KindUnit.Info }
 	}
 	kinds
 }

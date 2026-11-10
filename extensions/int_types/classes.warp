@@ -1,38 +1,94 @@
-# Int types as classes (decision int-types-are-classes): `type Color = int` is a cheap class of one int field whose
-# float() is its number, so `c as int` reads it, and its `format Color c as text`, ==, `is` and dispatch are a class's;
-# `x as Color` makes one, a written number through the type's conversion `n: int as Color := …`. A float type, `type
-# Angle = float`, keeps its mark (marks.warp) until it moves too (card cheap-classes-everywhere)
+# Subtypes as cheap classes (decision subtype-less-than, refining int-types-are-classes): `type Color < int` is a
+# class of one field, its value of the type it narrows, so its `format Color c as text`, ==, `is` and dispatch are a
+# class's; a number's subtype's float() is its number, so arithmetic and a number's words read it. `x as Color` makes
+# one, a written value through the type's conversion `n: int as Color := …`. A Color is an int and an int fills a Color
+# place: `3 is Color` holds, as `3 as Color` would, also through an alias `type Shade = Color` (decision
+# int-fits-named-int). A float's subtype, `type Angle < float`, stays a float marked so (marks.warp: its mark survives
+# arithmetic, `30° * 2` prints 60°). `type A = T` is a pure alias, the same type under another name (Int, Long …)
 
-# the program with its int types classes, then the classes' formats among their members
+NUMBER_TYPES = ["int", "float", "number"]
+
+# the program with its subtypes classes, then the classes' formats among their members
 classed_definitions(program: Node): Node := formatted_definitions(int_classes(program))
 int_classes(program: Node): Node := {
 	statements = statements_in(program)
-	classes = {}
-	for statement in statements { if int_class_name(statement) != ø { classes[int_class_name(statement)] = yes } }
+	classes = int_classes_named(statements)
 	if #classes == 0 { return program }
 	converters = statements.map(statement => converted_type(statement, classes)).filter(name => name != ø)
-	statements_as(program, statements.flat_map(statement => int_class_statements(statement, classes, converters)))
+	formatted = statements.map(statement => shower_of(formatted_definition(statement))).filter(name => name != ø)
+	statements_as(program, statements.flat_map(statement => int_class_statements(statement, classes, converters, formatted)))
 }
-# `type Color = int`: Color, else ø
-int_class_name(statement: Node): text? := {
-	name = int_type_name(statement)
-	if name != ø and value_of(statement) == symbol("int") then name else ø
+# each subtype held as a class the statements declare and each alias reaching one, `type Years = Age` of `type Age <
+# int`, written in any order: name → [its class, the type it narrows]
+int_classes_named(statements: list): map := subtypes_named(statements, class_subtype_of)
+# each subtype the reader finds and each alias reaching one: name → [the subtype, the type it narrows]
+subtypes_named(statements: list, subtype_read: function): map := {
+	classes = {}
+	for statement in statements {
+		subtype = subtype_read(statement)
+		if subtype != ø { classes[subtype#1] = subtype }
+	}
+	aliases = statements.map(type_alias_of).filter(alias => alias != ø and alias#1 not in classes)
+	grown = #classes > 0
+	while grown {
+		grown = no
+		for alias in aliases {
+			if alias#1 not in classes and alias#2 in classes { classes[alias#1] = classes[alias#2]; grown = yes }
+		}
+	}
+	classes
 }
-# the class and its making of a value, `made·Color(x)`, a Color as it is, a number as Color(x)
-int_class_statements(statement: Node, classes: map, converters: list): list := {
-	name = int_class_name(statement)
-	if name != ø { return int_class_declared(name) }
-	if converted_type(statement, classes) != ø { return [converter_defined(statement, classes, n => int_class_made(n, classes, []))] }
+# the class and its making of a value, `made·Color(x)`, a Color as it is, a value as Color(x); the conversion a place
+# takes a value of the narrowed type by, the program's own `n: int as Color := …` (lib/color), else made·Color's, an
+# alias's place too (the emitter reads `type Shade = Color` as Color)
+int_class_statements(statement: Node, classes: map, converters: list, formatted: list): list := {
+	subtype = class_subtype_of(statement)
+	if subtype != ø {
+		name = subtype#1
+		return subtype_declared(name, subtype#2, name in formatted) + (if name in converters then [] else [subtype_conversion(subtype, made_word(name))])
+	}
+	if converted_type(statement, classes) != ø { return [Key(key_of(statement), Op.Define, bottom_up(value_of(statement), n => int_class_made(n, classes, [])))] }
 	[bottom_up(statement, n => int_class_made(n, classes, converters))]
 }
+# `type Age < int`: [Age, int], a subtype held as a class, every one but a marked float's or text's (marks.warp)
+class_subtype_of(statement: Node): list? := {
+	subtype = subtype_of(statement)
+	if subtype != ø and subtype#2 not in MARKED_ONLY_KINDS then subtype else ø
+}
 made_word(type_name: text): text := "made" + name_joiner + type_name
-int_class_declared(name: text): list := {
-	declared = statements_in(plain_node(parsed("class ${name} { value: int; float() := value }; made(x) := if x is ${name} then x else ${name}(x)")))
+# a subtype with no format of its own shows as its value (is-a, not has-a: an Age of 3 prints 3)
+subtype_declared(name: text, narrowed: text, formats_itself: bool): list := {
+	number_value = if narrowed in NUMBER_TYPES then "; float() := value" else ""
+	shown = if formats_itself then "" else "; format as text := str(value)"
+	declared = statements_in(plain_node(parsed("class ${name} { value: ${narrowed}${number_value}${shown} }; made(x) := if x is ${name} then x else ${name}(x)")))
 	[declared#1, Key(renamed_target(key_of(declared#2), made_word(name)), Op.Define, value_of(declared#2))]
 }
-# `x as Color` as made·Color(x), a written number as the type's conversion gives it
+# `n: int as Color := maker(n)`, the conversion a Color place takes an int by
+subtype_conversion(subtype: list, maker: text): Node := {
+	n = symbol(conversion_parameter)
+	Key(Key(n, Op.Colon, Key(symbol(subtype#2), Op.As, symbol(subtype#1))), Op.Define, call_of(maker, [n]))
+}
+conversion_parameter = "n"
+# the program's own subtypes, whose `is` tests subtype_tests widened before the rewrite rules
+global subtypes_tested = []
+# `x is Age` of `type Age < duration` as `x is Age or x is duration`, before the rewrite rules, so a test of the type it
+# narrows reads as the rules give it (lib/units' `x is duration`); a used module's subtypes are widened later, by
+# int_class_made
+subtype_tests(program: Node): Node := {
+	classes = subtypes_named(statements_in(program), subtype_of)
+	subtypes_tested = classes.keys
+	if #classes == 0 then program else bottom_up(program, n => subtype_test_widened(n, classes))
+}
+# `x is Color` holds of an int too: `x is Color or x is int`
+subtype_test_widened(n: Node, classes: map): Node := {
+	if not (is_key(n, Op.Is) and value_of(n) is symbol and name_of(value_of(n)) in classes) { return n }
+	Key(n, Op.Or, Key(key_of(n), Op.Is, symbol(classes[name_of(value_of(n))]#2)))
+}
+# `x as Color` as made·Color(x), a written value as the type's conversion gives it, also through an alias; `x is Color`
+# of a used module's Color widened as subtype_tests widens the program's
 int_class_made(n: Node, classes: map, converters: list): Node := {
+	if is_key(n, Op.Is) { return if value_of(n) is symbol and name_of(value_of(n)) in subtypes_tested then n else subtype_test_widened(n, classes) }
 	if not (is_key(n, Op.As) and value_of(n) is symbol and name_of(value_of(n)) in classes) { return n }
-	name = name_of(value_of(n))
+	name = classes[name_of(value_of(n))]#1
 	if name in converters and key_of(n) is int then call_of(converter_word(name), [key_of(n)]) else call_of(made_word(name), [key_of(n)])
 }

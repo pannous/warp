@@ -119,7 +119,7 @@ comprehension_sugar_module_names = sugar_files(["comprehensions"])
 # the sugar of declarations (extensions/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
 declaration_sugar_module_names = sugar_files(["declarations"])
 # the standard modules: those with `rewrite` lines lend their rules to the programs mentioning them
-std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "host_io", "integers", "uncertain", "web", "storage", "frames", "native_host", "callbacks", "signals", "timers", "tasks", "shaders", "unicode_data", "unicode", "exact_values", "reals"]
+std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "host_io", "integers", "uncertain", "web", "storage", "frames", "native_host", "callbacks", "signals", "timers", "tasks", "shaders", "unicode_data", "unicode", "exact_values", "reals", "complex"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # the declarations sugar strips it, and the function keyword's rule rewrites the rest)
@@ -2085,6 +2085,9 @@ with_rightmost(n: Node, words: list): Node := {
 is_written_code(n: Node): bool := is_quote(n) or is_spliced_quote(n)
 # the rule's template for the node; a block of a statement the pattern matches keeps its block
 rule_applied(rule: Rule, origin: map, n: Node): Node := {
+	# `type Code = list of int` names a type and runs nothing: no rule takes it for the assignment `x = list of int`, an
+	# empty list (card type-code-alias)
+	if is_type_alias(n) { return ø }
 	if rule_defining != "" and first_word_of(rule.template) == rule_defining { return ø }
 	if is_written_code(n) and not is_written_code(rule.pattern) { return ø }
 	bound = {}
