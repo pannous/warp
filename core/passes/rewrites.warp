@@ -871,7 +871,11 @@ rule_node(rule: Rule): Node := {
 }
 # a packed rule's needs, gives and says (rule_node), ø for a rule packed without them
 PACKED_WORDS_AT = 10
-packed_words(fields: list): list? := if #fields < PACKED_WORDS_AT + 2 then ø else fields[PACKED_WORDS_AT - 1 ..].map(words => if words == ø then [] else items_of(words).map(text_of_node))
+packed_words(fields: list): list? := if #fields < PACKED_WORDS_AT + 2 then ø else fields[PACKED_WORDS_AT - 1 ..].map(words => if words == ø then [] else items_of(words).map(packed_word))
+packed_word(n: Node): text := match n {
+	Text(word): word
+	_: name_of(n)
+}
 unpacked_rule(n: Node, module: text): Rule := {
 	fields = items_of(n)
 	hole = if fields#3 == ø then ø else fields#3
