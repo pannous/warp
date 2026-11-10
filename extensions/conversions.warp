@@ -165,6 +165,29 @@ alias_resolved(type: text, aliases: map): text := {
 # a word the runtime or C also takes, `exp(x: real)` beside math's `exp(x: float)`: the overload passes choose among
 # them by the argument as written, so it stays unconverted
 has_builtin_variant(name: text): bool := #lines_of(typed_lines + foreign_math_lines, unaliased(name)) > 0
+# a class's making as a function of its fields (card class-field-takes): name → its fields' types in order, of each class
+# with a field of a type the program converts a value to, `class P { age: Age }` making P(3) of `type Age < int`
+constructor_parameters(classes: map, targets: map, aliases: map, typed: map): map := {
+	found = {}
+	for name in classes.keys.filter(name => not typed.has(name)) {
+		declared = classes[name]
+		# (the fields' types as the emitter reads them: a field `q: Q` is held as `q: type Q` by now)
+		written = field_types(class_view(declared.top_statement)#3)
+		types = signature_types(declared.fields.map(field => written.get(field) ?? any_word), aliases)
+		if types.any(type => union_members(type).any(member => #(targets.get(member) ?? []) > 0)) { found[name] = types }
+	}
+	found
+}
+# `P(q: 3)`, `P { q: 3 }` of a class taking a converted field: each named field's value passed to its type
+named_fields_passed(call: Node, places: Places, known: map): Node := group_like(call, [call#1] + items_of(call)[1 ..].map(argument => field_passed(argument, name_of(call#1), places, known)))
+braced_fields_passed(made: Node, places: Places, known: map): Node := Key(key_of(made), op_of(made), group_like(value_of(made), items_of(value_of(made)).map(argument => field_passed(argument, name_of(key_of(made)), places, known))))
+field_passed(argument: Node, class_name: text, places: Places, known: map): Node := {
+	fields = places.classes[class_name].fields
+	if not (is_key(argument, Op.Colon) and key_of(argument) is symbol and name_of(key_of(argument)) in fields) { return argument }
+	Key(key_of(argument), Op.Colon, passed(value_of(argument), places.typed[class_name]#(fields.index_of(name_of(key_of(argument)))), class_name, places, known))
+}
+# whether the node makes an instance of a class taking a converted field
+makes_converting_class(name: Node, places: Places): bool := name is symbol and places.classes.has(name_of(name)) and places.typed.has(name_of(name))
 # the parameter types a call of such a function passes its arguments to, one each, else ø (a named argument too)
 positional_types(call: Node, typed: map): list? := {
 	if not (is_call(call) and call#1 is symbol and typed.has(name_of(call#1))) { return ø }
@@ -187,6 +210,8 @@ converted_arguments(n: Node, places: Places, known: map): Node := {
 		return Key(key_of(walked), Op.Assign, passed(value_of(walked), name_of(value_of(key_of(walked))), name_of(key_of(key_of(walked))), places, known))
 	}
 	types = positional_types(walked, places.typed)
+	if types == ø and is_call(walked) and makes_converting_class(walked#1, places) { return named_fields_passed(walked, places, known) }
+	if walked is key and op_of(walked) in [Op.None, Op.Colon] and makes_converting_class(key_of(walked), places) and is_group(value_of(walked)) and bracket_of(value_of(walked)) == "{" { return braced_fields_passed(walked, places, known) }
 	if types == ø { return walked }
 	arguments = items_of(walked)[1 ..]
 	# (a method a dispatcher calls, `equal·method`, by a name no program writes: its dispatch tests the types, "" no taker)
@@ -268,7 +293,8 @@ conversions(program: Node): Node := {
 		# (a class checked with no conversions to it: a copy, `x as C` converts only to targets)
 		converting_to = entries_of_both(targets, {})
 		for name in classes.keys { if not targets.has(name) { converting_to[name] = [] } }
-		places = Places(typed_parameters(kept, converting_to, aliases), converting_to, classes, several_results(kept))
+		typed = typed_parameters(kept, converting_to, aliases)
+		places = Places(entries_of_both(constructor_parameters(classes, targets, aliases, typed), typed), converting_to, classes, several_results(kept))
 		converting = {}
 		for type in places.typed.values.flatten() + declared_types(program) { if converts_to(type, places.converting) { converting[type] = yes } }
 		functions += converting.keys.map(type => argument_conversion(type, places.converting, classes))

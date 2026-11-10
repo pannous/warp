@@ -64,10 +64,25 @@ subtype_conversion(subtype: list, maker: text): Node := {
 	Key(Key(n, Op.Colon, Key(symbol(subtype#2), Op.As, symbol(subtype#1))), Op.Define, call_of(maker, [n]))
 }
 conversion_parameter = "n"
+# the program's own subtypes, whose `is` tests subtype_tests widened before the rewrite rules
+global subtypes_tested = []
+# `x is Age` of `type Age < duration` as `x is Age or x is duration`, before the rewrite rules, so a test of the type it
+# narrows reads as the rules give it (lib/units' `x is duration`); a used module's subtypes are widened later, by
+# int_class_made
+subtype_tests(program: Node): Node := {
+	classes = int_classes_named(statements_in(program))
+	subtypes_tested = classes.keys
+	if #classes == 0 then program else bottom_up(program, n => subtype_test_widened(n, classes))
+}
+# `x is Color` holds of an int too: `x is Color or x is int`
+subtype_test_widened(n: Node, classes: map): Node := {
+	if not (is_key(n, Op.Is) and value_of(n) is symbol and name_of(value_of(n)) in classes) { return n }
+	Key(n, Op.Or, Key(key_of(n), Op.Is, symbol(classes[name_of(value_of(n))]#2)))
+}
 # `x as Color` as made·Color(x), a written value as the type's conversion gives it, also through an alias; `x is Color`
-# holds of an int too
+# of a used module's Color widened as subtype_tests widens the program's
 int_class_made(n: Node, classes: map, converters: list): Node := {
-	if is_key(n, Op.Is) and value_of(n) is symbol and name_of(value_of(n)) in classes { return Key(n, Op.Or, Key(key_of(n), Op.Is, symbol(classes[name_of(value_of(n))]#2))) }
+	if is_key(n, Op.Is) { return if value_of(n) is symbol and name_of(value_of(n)) in subtypes_tested then n else subtype_test_widened(n, classes) }
 	if not (is_key(n, Op.As) and value_of(n) is symbol and name_of(value_of(n)) in classes) { return n }
 	name = classes[name_of(value_of(n))]#1
 	if name in converters and key_of(n) is int then call_of(converter_word(name), [key_of(n)]) else call_of(made_word(name), [key_of(n)])
