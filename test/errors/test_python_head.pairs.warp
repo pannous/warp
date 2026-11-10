@@ -1,0 +1,3 @@
+# the Python head `def f(x) -> T: body` is refused with its fix `def f(x): T := body` (card wrong-value-params)
+'def plus(left: int) -> int: left; plus(3)'	error
+'def plus(left: int): int := left; plus(3)'	3
