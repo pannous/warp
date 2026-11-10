@@ -128,7 +128,15 @@ early_sugar_module_names = sugar_files(["functions", "declarations", "events", "
 # a rule: `where $hole = shape` its origin (ø both without one), `conditions` the other `where` conditions, `place`
 # the one Place it rewrites only, else Anywhere, `module` the standard module declaring it, else ""; `whole` for a
 # phrase pattern that matches only a whole phrase, not its runs; `alias` for a rule marked alias
-class Rule { pattern: Node; template: Node; hole: Node; shape: Node; conditions: list; place: Place; module: text; whole: bool; alias: bool; head: text }
+class Rule { pattern: Node; template: Node; hole: Node; shape: Node; conditions: list; place: Place; module: text; whole: bool; alias: bool; head: text; needs: list; gives: list; says: list }
+# a rule with what it reaches worked out once, never at each statement of each sugar pass (rules_reaching): the words
+# code must hold for it to fire (its pattern's words outside holes, and the operator of the key its pattern is: `$a ??
+# $b` fires only where code has a `??`), the tokens its result holds, which a rule may rewrite again, and its result's
+# words
+rule_made(pattern: Node, template: Node, hole: Node, shape: Node, conditions: list, place: Place, module: text, whole: bool, alias: bool, head: text): Rule := {
+	needs = required_words(pattern) + (if pattern is key and head != "" then [head] else [])
+	Rule(pattern, template, hole, shape, conditions, place, module, whole, alias, head, needs, tokens_within(template), words_within(template))
+}
 
 # the early sugar modules' rules once read (early_module_rules)
 global early_rules_read = no
@@ -351,9 +359,8 @@ sugar_walked(program: Node, rules: list): Node := {
 	# a program of one statement: that statement, so the rules `where statement` apply to it too
 	if not is_statement_sequence(program) { return sugar_at_place(placed_map_scoped(program, n => sugared_node(n, rules), maps), Place.Statement, rules) }
 	# each statement walked with the rules that can fire in it (rules_reaching), the program's runs with them all
-	needs = rules.map(needed_tokens)
-	results = rules.map(rule => tokens_within(rule.template))
-	walked = children(program, statement => sugared_statement(statement, rules_reaching(rules, needs, results, statement), maps))
+	index = rule_index(rules)
+	walked = children(program, statement => sugared_statement(statement, rules_reaching(index, statement), maps))
 	rule_maps = maps
 	sugared_node(walked, rules)
 }
@@ -365,32 +372,45 @@ sugared_statement(statement: Node, rules: list, maps: map): Node := {
 }
 
 # the words of the templates of the rules that can fire in the program
-reaching_template_words(program: Node, rules: list): list := rules_reaching(rules, rules.map(needed_tokens), rules.map(rule => tokens_within(rule.template)), program).flat_map(rule => words_within(rule.template))
+reaching_template_words(program: Node, rules: list): list := rules_reaching(rule_index(rules), program).flat_map(rule => rule.says)
 
 # the rules that can fire in the statement (card speed-module-cache): those whose pattern's words it mentions, or the
 # result of such a rule does (a result is rewritten again); a rule missing one matches nowhere in it, so walking it
-# with these alone gives what all the rules give, without trying the others at each node
-rules_reaching(rules: list, needs: list, results: list, statement: Node): list := {
+# with these alone gives what all the rules give, without trying the others at each node. Only the rules needing a
+# word mentioned are tried (rule_index), each again when another of its words comes in
+rules_reaching(index: RuleIndex, statement: Node): list := {
+	rules = index.rules
 	mentioned = word_set(tokens_within(statement))
 	# (a yes/no per rule: `index in picked` of a list compared each index with every picked one, node by node)
-	picked = range_list(#rules).map(index => no)
-	grew = yes
-	while grew {
-		grew = no
-		for index in 0 ..< #rules {
-			if not picked[index] and needs[index].all(word => mentioned.has(word)) {
-				picked[index] = yes
-				for word in results[index] { mentioned[word] = yes }
-				grew = yes
+	picked = range_list(#rules).map(each => no)
+	pending = index.free + mentioned.keys.flat_map(word => index.by_word.get(word) ?? [])
+	at = 0
+	while at < #pending {
+		tried = pending[at]
+		at += 1
+		if not picked[tried] and rules[tried].needs.all(word => mentioned.has(word)) {
+			picked[tried] = yes
+			for word in rules[tried].gives.filter(word => not mentioned.has(word)) {
+				mentioned[word] = yes
+				pending += index.by_word.get(word) ?? []
 			}
 		}
 	}
-	range_list(#rules).filter(index => picked[index]).map(index => rules[index])
+	range_list(#rules).filter(each => picked[each]).map(each => rules[each])
+}
+# rules by each word they need, made once for a walk of a program (rules_reaching), those needing none apart
+class RuleIndex { rules: list; free: list; by_word: map }
+rule_index(rules: list): RuleIndex := {
+	by_word = {}
+	free = []
+	for at in 0 ..< #rules {
+		needs = rules[at].needs
+		if #needs == 0 { free += [at] }
+		for word in needs { by_word[word] = (by_word.get(word) ?? []) + [at] }
+	}
+	RuleIndex(rules, free, by_word)
 }
 
-# what code must hold for the rule to fire in it (tokens_within): its pattern's words outside holes, and the operator
-# of the key its pattern is (`$a ?? $b` fires only where code has a `??`)
-needed_tokens(rule: Rule): list := required_words(rule.pattern) + (if rule.pattern is key and rule.head != "" then [rule.head] else [])
 # a hole of any form: `$x`, `$body: block`, `$xs...` or an affixed one; its words (a typed hole's kind) are no words of
 # the code it matches
 is_hole(pattern: Node): bool := rule_hole(pattern) != ø or typed_hole(pattern) != ø or rest_hole_name(pattern) != ø or affixed_hole(pattern) != ø
@@ -781,7 +801,7 @@ operator_rules(overloads: list, module: text): list := {
 			unfitting = [[]]
 			for arm in arms { unfitting = unfitting.flat_map(guards => arm_misfits(arm, overload).map(misfit => guards + misfit)) }
 			for alternative in operand_alternatives(overload) {
-				for guards in unfitting { rules += [Rule(overload.pattern, overload.template, ø, ø, alternative + guards, Place.Anywhere, module, no, no, pattern_head(overload.pattern))] }
+				for guards in unfitting { rules += [rule_made(overload.pattern, overload.template, ø, ø, alternative + guards, Place.Anywhere, module, no, no, pattern_head(overload.pattern))] }
 			}
 		}
 	}
@@ -842,7 +862,7 @@ unpacked_rule(n: Node, module: text): Rule := {
 		hole = ø
 		shape = ø
 	}
-	Rule(fields#1, fields#2, hole, shape, conditions, PLACE_WORDS.get(name_of(fields#6)) ?? Place.Anywhere, module, name_of(fields#7) == "yes", name_of(fields#8) == "yes", name_of(fields#9))
+	rule_made(fields#1, fields#2, hole, shape, conditions, PLACE_WORDS.get(name_of(fields#6)) ?? Place.Anywhere, module, name_of(fields#7) == "yes", name_of(fields#8) == "yes", name_of(fields#9))
 }
 
 # the rule's code with each hole written right before `(`, `$t($a...)`, the call it is, as the code's `P(1)` is: the
@@ -936,7 +956,7 @@ rule_of(statement: Node, module: text, source: text): Rule? := {
 	lines = if source.contains(rule_hole_mark) then lines_of(source) else []
 	pattern = with_called_holes(pattern, lines)
 	template = with_called_holes(template, lines)
-	if where_at == #after { return Rule(pattern, template, ø, ø, [], Place.Anywhere, module, whole, no, pattern_head(pattern)) }
+	if where_at == #after { return rule_made(pattern, template, ø, ø, [], Place.Anywhere, module, whole, no, pattern_head(pattern)) }
 	conditions = []
 	for run in split_at_word(after[where_at + 1 ..], and_word) { conditions += conjuncts(continued_key(run)) }
 	aliased = conditions.any(condition => condition == symbol(alias_mark))
@@ -950,8 +970,8 @@ rule_of(statement: Node, module: text, source: text): Rule? := {
 	place = if #places == 0 then Place.Anywhere else PLACE_WORDS[name_of(places#1)]
 	origins = conditions.filter(condition => is_key(condition, Op.Assign) and not is_computed_binding(condition))
 	if #origins > 1 { return ø }
-	if #origins == 0 { return Rule(pattern, template, ø, ø, conditions, place, module, whole, aliased, pattern_head(pattern)) }
-	Rule(pattern, template, key_of(origins#1), value_of(origins#1), conditions.filter(condition => condition != origins#1), place, module, whole, aliased, pattern_head(pattern))
+	if #origins == 0 { return rule_made(pattern, template, ø, ø, conditions, place, module, whole, aliased, pattern_head(pattern)) }
+	rule_made(pattern, template, key_of(origins#1), value_of(origins#1), conditions.filter(condition => condition != origins#1), place, module, whole, aliased, pattern_head(pattern))
 }
 
 # a rule source's lines, split once for all its rules (rule_of and glued ask at each rule)
