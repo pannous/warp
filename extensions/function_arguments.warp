@@ -21,8 +21,9 @@ own_signatures(program: Node): map := {
 	found
 }
 
-# the signatures a call of the word may take: the program's own, else the builtins' typed lines
-signatures_of(word: text, defined: map): list := defined.get(word) ?? lines_of(typed_lines, unaliased(word)).map(line => line.signature)
+# the signatures a call of the word may take: the definitions the program holds (the prelude's it reaches too: text's
+# `find(t, part)`) and the builtins' typed lines (a list's `find(xs, f: function)`)
+signatures_of(word: text, defined: map): list := (defined.get(word) ?? []) + lines_of(typed_lines, unaliased(word)).map(line => line.signature)
 
 # `f: function`, `body: block`, a bare `block`, `f: (any) -> bool`
 is_function_typed(parameter: Parameter): bool := parameter.type_name in ["function", "block"] or parameter.type_name.contains("->") or (parameter.name == "block" and parameter.type_name == "")
