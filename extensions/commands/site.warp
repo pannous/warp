@@ -58,9 +58,8 @@ site_scripts(): text := {
 # the page's first markup: what the program shows once it ran by this warp (`warp run` serves no routes), so the page
 # shows it before its Worker starts, whose first render morphs it in place; none when the program shows no markup
 prerendered(target: text): text := {
-	warp = started_env("WARP_EXECUTABLE") ?? "warp"
 	shown = ""
-	try { shown = shell(quoted_path(warp) + " --no-window run " + quoted_path(target) + " </dev/null 2>/dev/null | tail -1").trim() } catch failure { shown = "" }
+	try { shown = shell(warp_command("--no-window run ") + quoted_path(target) + " </dev/null 2>/dev/null | tail -1").trim() } catch failure { shown = "" }
 	if shown.starts_with("<") { return shown }
 	print "warp build --site: no markup to prerender, the page shows its markup once its Worker runs"
 	""

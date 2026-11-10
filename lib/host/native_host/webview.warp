@@ -16,8 +16,6 @@ APP_WINDOW_WIDTH = 900.0
 APP_WINDOW_HEIGHT = 700.0
 APP_WINDOW_FRAME = [0.0, 0.0, APP_WINDOW_WIDTH, APP_WINDOW_HEIGHT]
 JS_RUNTIME = "js"
-// `warp app` names the window so (lib/app/command.warp): the program's page shows there, live
-APP_WINDOW_VARIABLE = "WARP_APP_WINDOW"
 // web/playground/js-members.js (jsMember), markup.js (listenToElements, morphChildren) and markup-forms.js (submit),
 // shared with the page, and webview_bridge.js (warpForeignCall, the page's events), put into each page; read when the
 // module is built
@@ -262,12 +260,12 @@ window_shown(shown: int, shown_view: int) := {
 // the local wall clock's milliseconds since 1970 (lib/timers.warp); ø once the window is closed
 window_answered(called: text, member: text, arguments: any): any? := {
 	if member == "show" {
-		if quiet_run() { return error(called + ": no window under --no-window or CI") }
+		if windowless() { return error(called + ": no window under --no-window or CI") }
 		if app_window == 0 {
 			shown_view = hidden_view()
 			application_made(POLICY_ACCESSORY)
 			told(application(), "finishLaunching")
-			app_window = app_window_made(env(APP_WINDOW_VARIABLE) ?? "warp")
+			app_window = app_window_made(run_option("app-window") ?? "warp")
 			app_window_open = yes
 			window_shown(app_window, shown_view)
 		}

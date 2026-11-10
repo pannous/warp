@@ -21,7 +21,6 @@ parameter_names(target: Node): list := {
 	names
 }
 
-
 // `xs[i]` is the 1-based `xs#(i+1)`; a slice `xs[a:b]`, `xs[a..b]`, `xs[a...last]` is the method call `xs.slice(a, b)`,
 // so a variable named slice stays a value (`slice = "abc"; slice[1 ..]`)
 // A negative index is an error that names the way to the last element: warp never wraps around (Footguns.md)

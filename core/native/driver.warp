@@ -617,14 +617,14 @@ out_of_fuel(trap: pointer, fuel: i64): nothing := {
 # what warp's modules use beside the MVP: GC, typed function references, exceptions,
 # fuel metering when the run counts steps,
 # warp_wasmtime's copying collector with its initial heap; a program's machine code kept in wasmtime's own cache,
-# warp.wasm's beside it (compiled_module); compiled on one thread with WARP_ONE_THREAD (a `warp test` case: its slot
+# warp.wasm's beside it (compiled_module); compiled on one thread with --one-thread (a `warp test` case: its slot
 # is one core, else every case compiles on all of them, a load of 200 on 16 cores)
 # --profile writes each compiled function's address range to /tmp/perf-<pid>.map, which
 # scripts/profile.sh maps `sample`'s addresses through (notes/compile_speed.md)
 warp_config(fuel: bool, heap_bytes: i64): handle := {
 	config = wasm_config_new()
 	wasmtime_config_consume_fuel_set(config, fuel)
-	wasmtime_config_parallel_compilation_set(config, getenv("WARP_ONE_THREAD").length == 0)
+	wasmtime_config_parallel_compilation_set(config, not has_option("one-thread"))
 	warp_config_gc_heap_initial_size_set(config, heap_bytes)
 	wasmtime_config_wasm_gc_set(config, yes)
 	wasmtime_config_wasm_function_references_set(config, yes)
@@ -1435,7 +1435,7 @@ milliseconds_now(): i64 := {
 # The program tells each timer by signal_listen(kind, id, argument) while main runs (lib/timers.warp); once main
 # returned, the loop sleeps until the earliest is due and calls the program's export timer_fired(id). An `every` timer
 # keeps the run going, as a page's does, until exit() or Ctrl-C; a run whose timers are all once ends after the last
-# fired; WARP_EVENTS_FOR=<ms> ends it sooner (the test harness and the samples sweep set it). Channels' `on message
+# fired; --events-for <ms> ends it sooner (the test harness and the samples sweep give it). Channels' `on message
 # from` polls through a timer (lib/channels.warp), so it runs in this loop too.
 TIMER_EVERY = 0
 TIMER_FRAME = 1
@@ -1508,7 +1508,7 @@ events_run(linker: handle, context: handle, instance: pointer, output: text): te
 		}
 		return refused
 	}
-	limit = getenv("WARP_EVENTS_FOR")
+	limit = option_of("events-for")
 	ends = if limit.length > 0 then milliseconds_now() + atoll(limit) else 0
 	failure = ""
 	at = earliest_timer(table)
@@ -1565,16 +1565,32 @@ options_table(): pointer := {
 	if kept_value(OPTIONS_SLOT) == 0 { keep_value(OPTIONS_SLOT, native_pointer(allocate(8 + MAX_OPTIONS * OPTION_BYTES))) }
 	kept_value(OPTIONS_SLOT) as i32
 }
-# an option of the run given: "" for a flag
+# an option of the run given, "" for a flag: its value replaced when it was given before
 option_given(name: text, value: text): nothing := {
-	table = options_table()
-	count = long_at(table).value
-	entry = table + 8 + (count as i32) * OPTION_BYTES
-	long_at(entry).value = name.address as i64
-	long_at(entry + 8).value = name.length as i64
+	entry = option_entry(name)
+	if entry == 0 {
+		table = options_table()
+		count = long_at(table).value
+		if count == MAX_OPTIONS {
+			complain(joined(joined("more than ", text_of(MAX_OPTIONS)), " options"))
+			exit(1)
+		}
+		entry = table + 8 + (count as i32) * OPTION_BYTES
+		long_at(entry).value = name.address as i64
+		long_at(entry + 8).value = name.length as i64
+		long_at(table).value = count + 1
+	}
 	long_at(entry + 16).value = value.address as i64
 	long_at(entry + 24).value = value.length as i64
-	long_at(table).value = count + 1
+}
+# an option no longer given: the last entry takes its place
+option_dropped(name: text): nothing := {
+	entry = option_entry(name)
+	if entry == 0 { return }
+	table = options_table()
+	count = long_at(table).value - 1
+	memcpy(entry, native_pointer(table + 8 + (count as i32) * OPTION_BYTES), OPTION_BYTES)
+	long_at(table).value = count
 }
 # the option's entry, else 0
 option_entry(name: text): pointer := {
@@ -1634,9 +1650,9 @@ code_evaluated(caller: handle, context: handle, given: pointer, result: pointer)
 	added(compiling, ".")
 	added(compiling, library)
 	added(compiling, joined(library, "/runtime.wasm"))
-	setenv(value_as_data_variable(), c_string("1"), 1)
+	option_given(VALUE_AS_DATA, "")
 	failure = run_into(read_file(compiler_path()), compiling, machine_code_file(compiler_path(), COMPILER_GC_HEAP_BYTES), COMPILER_GC_HEAP_BYTES, printed)
-	unsetenv(value_as_data_variable())
+	option_dropped(VALUE_AS_DATA)
 	if failure.length == 0 { failure = run_into(read_file(module), program_arguments(source, arg_count()), "", PROGRAM_GC_HEAP_BYTES, printed) }
 	output = read_file(printed)
 	unlink(source)
@@ -1655,7 +1671,7 @@ code_evaluated(caller: handle, context: handle, given: pointer, result: pointer)
 }
 # an eval's program prints its value as data after a line of the mark (core/emitter/emitter.warp VALUE_MARK); a
 # primitive program's texts are words, not globals
-value_as_data_variable(): pointer := c_string("WARP_VALUE_AS_DATA")
+VALUE_AS_DATA = "value-as-data"
 value_mark(): text := "§warp value§"
 # where `part` first starts in t, -1 when nowhere
 text_found(t: text, part: text): i64 := {

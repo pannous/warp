@@ -409,14 +409,9 @@ function stopLoading() {
 
 const megabytes = bytes => (bytes / 1e6).toFixed(1);
 
-// the program's environment (assistant.js: the stand-in of the API key), sent again when the key changes.
-// WARP_SOUND_NOPACE before a click: lib/sound.warp env() reads pageEnvironment (host-files os.env), not WASI
-// (card samples-page-sound-pipes)
-const tellEnvironment = () => {
-	const payload = programEnvironment();
-	if (beforeUserActivation()) payload.environment = { ...payload.environment, WARP_SOUND_NOPACE: "1" };
-	worker.postMessage(payload);
-};
+// the program's environment (assistant.js: the stand-in of the API key), sent again when the key changes; before a
+// click its sound does not pace (driver.js programOptions sound-nopace, card samples-page-sound-pipes)
+const tellEnvironment = () => worker.postMessage(programEnvironment());
 
 // `notify "text"`: the browser's notification once the page may show them; until then (or when refused) a printed
 // line, so the text never goes missing; the first one asks for the permission

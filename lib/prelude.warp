@@ -393,8 +393,6 @@ paint(shader: text) := paint(shader_words(shader), shown_width(), shown_height()
 // else the view (the playground's pane, the terminal)
 painting_in_window() := painting_headless_frame or window_open() or window_possible()
 window_possible() := system_value("window_possible") != 0
-// a quiet run (a test, an agent's, a CI machine's: `warp --no-window`) opens no window and sounds nothing
-quiet_run() := run_option("no-window") != ø
 shown_width() := if painting_in_window() then window_width() else view_width()
 shown_height() := if painting_in_window() then window_height() else view_height()
 // sleep 0.2, sleep(t): a bare number is seconds (decision sleep-seconds); `sleep 20ms` the compiler folds into sleep_ms

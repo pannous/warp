@@ -20,7 +20,7 @@
 #   warp rebuild self     warp.wasm promoted to warp-self.wasm once it compiles itself (promoted)
 #   warp rebuild seed     the seed's machine code made (seed_shipped)
 #   warp <words…>         warp.wasm with the words: its own command (core/commands/commands.warp and extensions/commands/commands.warp), any
-#                         other words code it compiles to WARP_RUN_TO (compiler.warp), which then runs
+#                         other words code it compiles to its run-to option (compiler.warp), which then runs
 # The host words warp.wasm's commands call are answered by driver.warp host_word; library words (graphics, sound, web)
 # are not the core binary's (decision libraries-not-core) and say so
 use "driver.warp"
@@ -32,6 +32,11 @@ execv(path: pointer, arguments: pointer): i32 from "c"
 read(descriptor: i32, data: pointer, size: i64): i64 from "c"
 STDIN = 0
 STDOUT = 1
+# the option one warp gives its own compiler (words_ran): the file a program's module goes to, run after
+RUN_TO = "run-to"
+DASH = 45
+# a lower-case ASCII letter less this is its capital
+CAPITAL_OFFSET = 32
 KEY_ESCAPE = 27
 KEY_BRACKET = 91
 ARROW_UP = 65
@@ -76,7 +81,7 @@ EDIT_BACK = 265
 EDIT_WORD_LEFT = 266
 EDIT_WORD_RIGHT = 267
 
-# a compiler with this executable's words from `first` on: a command runs, code is compiled to WARP_RUN_TO and run after
+# a compiler with this executable's words from `first` on: a command runs, code is compiled to the run-to option's file and run after
 hosted(compiler: text, first: int): nothing := {
 	given = compiler_arguments(compiler)
 	for i in first..arg_count() { added(given, reachable_word(arg(i))) }
@@ -89,12 +94,12 @@ piped_program(compiler: text): nothing := {
 	added(given, native_copy(printed.at, printed.size))
 	words_ran(compiler, given)
 }
-# the compiler run with the words; when they were code, the module it wrote to WARP_RUN_TO run after
+# the compiler run with the words; when they were code, the module it wrote to the run-to option run after
 words_ran(compiler: text, given: Arguments): nothing := {
 	output = compiled_path()
-	setenv(c_string("WARP_RUN_TO"), c_string(output), 1)
+	option_given(RUN_TO, output)
 	file_ran(compiler, given)
-	unsetenv(c_string("WARP_RUN_TO"))
+	option_dropped(RUN_TO)
 	if read_file(output).length > 0 { written_run(output, "code", arg_count()) }
 }
 # `warp rebuild`: warp.wasm built anew from lib/: the seed compiles compiler.warp
@@ -261,12 +266,11 @@ rebuild_command(at: int): nothing := {
 }
 # the step named at `at`, the first one when none is
 step_given(at: int): text := if arg_count() > at then arg(at) else ""
-# the seed, the compiler that compiles compiler.warp: $WARP_SEED, else warp-seed.wasm beside this executable (as invoked,
+# the seed, the compiler that compiles compiler.warp: --seed <file>, else warp-seed.wasm beside this executable (as invoked,
 # then where its links lead), else beside the installed warp, the first on $PATH: a tree's core/native/warp has none
 # beside it (card tree-seed-lookup); none found names the one beside this executable
 seed_path(): text := {
-	given = getenv("WARP_SEED")
-	if given.length > 0 { return given }
+	if has_option("seed") { return option_of("seed") }
 	own = seed_beside(invoked_path())
 	if own.length > 0 { return own }
 	installed = path_found("warp")
@@ -329,11 +333,8 @@ console(compiler: text): nothing := {
 	unlink(state)
 }
 # where the lines typed on a terminal stay for the next console, ↑ reaching them as the shells' history does (card
-# repl-alt-arrows): ~/.warp_history, WARP_HISTORY names another file
-history_path(): text := {
-	given = getenv("WARP_HISTORY")
-	if given.length > 0 then given else joined(getenv("HOME"), "/.warp_history")
-}
+# repl-alt-arrows): ~/.warp_history
+history_path(): text := joined(getenv("HOME"), "/.warp_history")
 line_count(lines: text): i64 := {
 	count = 0
 	for i in 0..lines.length {
@@ -550,9 +551,9 @@ built_minute(): text := {
 	while month < 11 and memcmp(months.address + (month * 3) as u32, said.address, 3) != 0 { month = month + 1 }
 	shown = allocate(16)
 	memcpy(shown, native_pointer(said.address + 7), 4)
-	byte_at(shown + 4).value = 45
+	byte_at(shown + 4).value = DASH
 	memcpy(shown + 5, native_pointer("010203040506070809101112".address + (month * 2) as u32), 2)
-	byte_at(shown + 7).value = 45
+	byte_at(shown + 7).value = DASH
 	memcpy(shown + 8, native_pointer(said.address + 4), 2)
 	if byte_at(shown + 8).value == 32 { byte_at(shown + 8).value = 48 }
 	byte_at(shown + 10).value = 32
@@ -604,9 +605,9 @@ dispatched(compiler: text, prefixed: bool, first: int): nothing := {
 	if same_text(word, "repl-line") { return line_ran(compiler, arg(first + 1), arg(first + 2)) }
 	if same_text(word, "version") or same_text(word, "--version") { return versioned(compiler) }
 	# a plain `warp app.warp` serves its routes (lib/web.warp routes_end), `warp run app.warp` runs it once
-	if is_warp_file(word) and not prefixed { setenv(c_string("WARP_SERVE"), c_string("yes"), 1) }
+	if is_warp_file(word) and not prefixed { option_given("serve", "yes") }
 	# and the program knows its file (lib/storage.warp keeps its tables beside it)
-	if is_warp_file(word) { setenv(c_string("WARP_PROGRAM"), c_string(word), 1) }
+	if is_warp_file(word) { option_given("program", word) }
 	if is_warp_file(word) { return compiled_and_run(compiler, word, first + 1) }
 	hosted(compiler, first)
 }
@@ -624,9 +625,11 @@ documentation_opened(): nothing := {
 
 # the options warp takes before or after its command word (wiki/cli.md; `warp help options` describes them,
 # extensions/commands/commands.warp option_help), kept without their dashes for run_option (core/host_io.warp):
-# flags, and --lib <folder> with its value. Words after the file or code are the program's
-is_flag(word: text): bool := same_text(word, "--no-hints") or same_text(word, "--no-window") or same_text(word, "--backtrace") or same_text(word, "--profile")
-VALUED_OPTION = "--lib"
+# flags, and options with a value (--lib <folder>); the ones after the --profile and --lib are the tools' (the test
+# harness, the build scripts, `warp app check`), which `warp help options` leaves out. Words after the file or code are
+# the program's
+is_flag(word: text): bool := same_text(word, "--no-hints") or same_text(word, "--no-window") or same_text(word, "--mute") or same_text(word, "--backtrace") or same_text(word, "--profile") or same_text(word, "--times") or same_text(word, "--value-as-data") or same_text(word, "--one-thread") or same_text(word, "--emit-survey") or same_text(word, "--rules-fired")
+is_valued(word: text): bool := same_text(word, "--lib") or same_text(word, "--seed") or same_text(word, "--events-for") or same_text(word, "--page-steps") or same_text(word, "--app-window")
 # the words of the option at `at`, kept: 1 a flag, 2 an option with its value, 0 no option
 option_words(at: int): int := {
 	word = arg(at)
@@ -635,9 +638,30 @@ option_words(at: int): int := {
 		option_given(name, "")
 		return 1
 	}
-	if not same_text(word, VALUED_OPTION) or at + 1 >= arg_count() { return 0 }
+	if not is_valued(word) or at + 1 >= arg_count() { return 0 }
 	option_given(name, arg(at + 1))
 	2
+}
+# TODO (card no-bash-exports) the scripts still export WARP_<OPTION> (the warp installed before took no options): each
+# is its option until the scripts give the options (the second push); then this goes, with host_io.warp legacy_option
+LEGACY_OPTIONS = "no-window times value-as-data one-thread emit-survey rules-fired seed events-for fuel backtrace profile"
+legacy_options_given(): nothing := {
+	for i in 0..field_count(LEGACY_OPTIONS, SPACE) {
+		name = field(LEGACY_OPTIONS, i, SPACE)
+		value = getenv(legacy_variable(name))
+		if value.length > 0 and not has_option(name) { option_given(name, value) }
+	}
+	# (WARP_NO_WINDOW muted sound too)
+	if getenv("WARP_NO_WINDOW").length > 0 { option_given("mute", "") }
+}
+# WARP_ and the name in capitals, its dashes underscores: no-window's WARP_NO_WINDOW
+legacy_variable(name: text): text := {
+	variable = joined("WARP_", name)
+	for i in 5..variable.length {
+		letter = byte_at(variable.address + i).value
+		byte_at(variable.address + i).value = if letter == DASH then UNDERSCORE else letter - CAPITAL_OFFSET
+	}
+	variable
 }
 # the first word from `at` on that is no option, the options before it kept
 past_options(at: int): int := {
@@ -650,25 +674,27 @@ past_options(at: int): int := {
 	i
 }
 # `warp fuel <steps> <file|code…>`: the program counts steps (the run's option fuel), out of fuel after them
-# WARP_RUN_TO is one warp's word to its own compiler (words_ran): a warp a command runs, `warp build --site`'s `warp
-# run` prerendering, ran its program into the caller's file instead
-unsetenv(c_string("WARP_RUN_TO"))
 start = past_options(1)
-# a CI machine runs without windows (its CI variable is the CI system's, not warp's)
-# TODO (card no-bash-exports) and WARP_NO_WINDOW until the scripts say --no-window (the second push), then it goes
-if getenv("CI").length > 0 or getenv("WARP_NO_WINDOW").length > 0 { option_given("no-window", "") }
+# a CI machine runs without windows and sound (its CI variable is the CI system's, not warp's)
+if getenv("CI").length > 0 {
+	option_given("no-window", "")
+	option_given("mute", "")
+}
+legacy_options_given()
 counting = arg_count() > start + 2 and same_text(arg(start), "fuel")
 if counting { option_given("fuel", arg(start + 1)) }
 prefixed = counting or (arg_count() > start and is_prefix(arg(start)))
 first = past_options(if counting then start + 2 else if prefixed then start + 1 else start)
-# warp.wasm's own commands (build) read the same lib/ as this executable, and its stable name, the run path of the
-# executables `warp build native` makes (commands.warp native_links); WARP_LIB names it resolved, as the module's WASI
-# reaches it (no link to an absolute path)
-setenv(c_string("WARP_LIB_LINK"), c_string(library_found()), 0)
-setenv(c_string("WARP_LIB"), c_string(library_folder()), 1)
+# --mute is WARP_SOUND=0, the one variable warp reads (lib/prelude.warp muted): for the run and the warps it starts
+if has_option("mute") { setenv(c_string("WARP_SOUND"), c_string("0"), 1) }
+# warp.wasm's own commands (build) read the same lib/ as this executable, resolved, as the module's WASI reaches it
+# (no link to an absolute path), and its stable name, the run path of the executables `warp build native` makes
+# (commands.warp native_links)
+option_given("lib-link", library_found())
+option_given("lib", library_folder())
 # and know the native warp hosts them (commands.warp: what it runs itself, what it lacks yet)
-setenv(c_string("WARP_HOST"), c_string("the native warp"), 1)
-# and where it is, so a command runs a program by this warp (`warp build --site` prerenders its page)
-setenv(c_string("WARP_EXECUTABLE"), c_string(executable_path()), 1)
+option_given("host", "the native warp")
+# and where it is, so a command runs a program by this warp (`warp build --site` prerenders its page, warp_command)
+option_given("executable", executable_path())
 if prefixed and same_text(arg(start), "fast") { complain("note: warp fast is not in the native warp yet; running at full precision") }
 dispatched(if prefixed and same_text(arg(start), "self") then joined(library_folder(), "/warp-self.wasm") else compiler_path(), prefixed, first)

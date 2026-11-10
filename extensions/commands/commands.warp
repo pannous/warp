@@ -39,13 +39,16 @@ command_help = [
 ]
 # the options warp takes before its command or file (core/native/warp.warp is_flag knows them), `warp help options`
 option_help = [
-	["--no-window", "No window, no sound: a painting is written as a PNG (tests, agents; a CI machine runs so)"],
+	["--no-window", "No window: a painting is written as a PNG (tests, agents; a CI machine runs so)"],
+	["--mute", "No sound (or WARP_SOUND=0)"],
 	["--no-hints", "Warnings from weak up, no hints"],
 	["--lib <folder>", "Compile with this lib/ (a worktree's)"],
 	["--backtrace", "An error shows the wasm backtrace beside its sentence"],
 	["--profile", "Each compiled function's address range in /tmp/perf-<pid>.map, for perf"],
 	["fuel <steps>", "The program counts steps, out of fuel after them"]
 ]
+# the one environment variable warp reads (decision no-bash-exports), in `warp help options`
+environment_help = [["WARP_SOUND=0", "No sound, for the run and the warps it starts (warp --mute)"]]
 # the commands that run what they compile: plain WASI cannot instantiate the module
 # TODO (card commands-reduce) Drastically reduce all these internal commands, none of which are used by the user
 running_commands = ["run", "eval", "test", "verify", "fuel", "fast", "console"]
@@ -58,8 +61,7 @@ native_commands = ["pure", "self", "rebuild", "tool", "fetch", "dev", "serve", "
 # TODO (card commands-reduce) Drastically reduce all these internal commands, none of which are used by the user
 native_warp_commands = ["run", "pure", "self", "eval", "fast", "fuel", "rebuild", "test", "repl", "console", "start", "version", "beautify", "fix", "format", "lint", "docs", "wiki", "home", "app", "dev"]
 # set by the native warp for the compiler it hosts: the host's name
-HOST_VARIABLE = "WARP_HOST"
-natively_hosted(): bool := (started_env(HOST_VARIABLE) ?? "") != ""
+natively_hosted(): bool := run_option("host") != ø
 # what no host of these commands has yet: under the native warp, the commands it lacks
 NOT_YET = " is not in warp yet"
 
@@ -78,7 +80,7 @@ source_of(target: text): text := try read(target) else target
 show_help() := if args#2 == "options" then show_options() else show_commands()
 show_commands() := {
 	print "warp, the compiler written in warp (core/compiler.warp), its commands:"
-	for entry in command_help { print "  " + padded("warp " + entry#1, HELP_COLUMN) + entry#2 }
+	help_lines(command_help, "warp ")
 	print "  options: warp help options"
 	host_commands = running_commands + native_commands
 	if natively_hosted() {
@@ -89,9 +91,13 @@ show_commands() := {
 
 show_options() := {
 	print "warp's options, before its command or file (warp --no-window app.warp):"
-	for entry in option_help { print "  " + padded(entry#1, HELP_COLUMN) + entry#2 }
+	help_lines(option_help, "")
+	print "environment:"
+	help_lines(environment_help, "")
 }
 
+# each entry of a help table on its line: its words after the prefix, then what it does
+help_lines(entries: list, prefix: text) := { for entry in entries { print "  " + padded(prefix + entry#1, HELP_COLUMN) + entry#2 } }
 # words, then spaces up to width, at least one
 padded(words: text, width: int): text := {
 	line = words + " "

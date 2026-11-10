@@ -14,7 +14,7 @@ use "host_io.warp"
 # a command (commands.warp), else the source file of a compile
 command = if #args > 0 and is_command(args#1) then args#1 else ""
 
-# lib/: the fourth argument of a compile (the native `warp` gives it), else WARP_LIB, else the folder above this file's
+# lib/: the fourth argument of a compile (the native `warp` gives it), else the lib option, else the folder above this file's
 library_folder = if not command and #args > 3 then args#4 else run_library()
 # the parser's and the uses' standard modules from that lib/ too, never the folder this compiler was built in
 use_library(library_folder)
@@ -285,9 +285,8 @@ refusal_said(refusal: any): text := {
 	if said == "" then "an error without a message" else said
 }
 # where the native warp (core/native/warp.warp) wants the module of words that are neither a command nor a file:
-# they are code, compiled there for it to run; no other harness sets it
-RUN_TO_VARIABLE = "WARP_RUN_TO"
-run_to = started_env(RUN_TO_VARIABLE) ?? ""
+# they are code, compiled there for it to run (its run-to option); no other harness gives it
+run_to = run_option("run-to") ?? ""
 match command {
 	"": if run_to then compile_written(args.join(" ") + "\n", run_to, ".") else compile_file(args#1, args#2, if #args > 2 then args#3 else folder_of(args#1))
 	"compile": compile_file(args#2, if #args > 2 then args#3 else args#2 + ".wasm", folder_of(args#2))
