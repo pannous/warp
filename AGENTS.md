@@ -224,8 +224,8 @@ before asking a question). After a context swap, this file and your role file be
 - JSON5 or warp notation for anything people or agents write; strict JSON only where a tool requires it.
 - No environment variables as an interface: a choice a program or user makes is written in code (a `use`, an
   annotation like `@cpu`, a call) or given as a CLI option; no wiki page, sample or message tells anyone to export a
-  `WARP_*` variable (card no-bash-exports); the one exception is `WARP_SOUND=0` (set by `warp --mute`),
-  which mutes a run. Build and test
+  `WARP_*` variable (card no-bash-exports); the two exceptions are the machine switches `WARP_WINDOW=0`
+  (set by `warp --no-window`) and `WARP_SOUND=0` (set by `warp --mute`). Build and test
   plumbing inside scripts is not an interface.
 
 ## Talking
@@ -282,7 +282,7 @@ before asking a question). After a context swap, this file and your role file be
   short"): a failed build's log is read, never rebuilt to see the error or "to be sure"; never `--force` past a wait,
   never kill another session's build. A lib/-only change compiles nothing (a rebake, about a minute).
 - Kill only your own processes, by PID (the hook .claude/hooks/no-pattern-kill.sh refuses pkill/killall). Every CLI
-  run that might paint gets `WARP_NO_WINDOW=1`. No browsers on the Mac.
+  run that might paint gets `WARP_WINDOW=0` (WARP_NO_WINDOW=1 until the new warp is installed). No browsers on the Mac.
 - The wiki is the specification: a rewrite of what a wiki page says (a rule, an example's result, a dropped or new
   form; not typos, links or layout) goes to warp-interviewer first, with the old and the new text; the Interviewer
   approves it. A worker's wiki-only change otherwise lands as usual.
