@@ -436,17 +436,18 @@ linked_reaches(): map := {
 	}
 	reaches
 }
-# what each word of the module being built reaches: the words of its lowered body naming a function or a class, under
-# its name and each part of a lifted one (`next·Channel` under next and Channel too), so a program linking the module
-# brings what the words it reaches need, a body being declared only there (`str(6.0 ± 0.3)` the Interval its ±
-# makes); a closure's under its own name, which its word's body says
+# what each word of the module being built reaches: the words of its lowered body naming a function or a class (each
+# part of a lifted one, `text·Interval` says Interval), under its name and a lifted one's class too (`next·Channel`
+# under Channel, never under next, which every class's next would share), so a program linking the module brings what
+# the words it reaches need, a body being declared only there (`str(6.0 ± 0.3)` the Interval its ± makes); a
+# closure's under its own name, which its word's body says
 word_reaches(functions: list, classes: list): map := {
 	own = functions[1 ..].filter(f => not f.is_runtime and f.body != ø)
 	naming = word_set(concatenated(own.map(f => name_parts(f.name))) + classes + module.linked_words.keys + concatenated(module.linked_images.map(image_class_names)))
 	reached = {}
 	for f in own {
 		said = concatenated(words_within(f.body).map(name_parts)).filter(word => naming.has(word) and word != f.name)
-		if #said > 0 { for key in name_parts(f.name) { reached[key] = (reached.get(key) ?? []) + said } }
+		if #said > 0 { for key in owning_names(f.name) { reached[key] = (reached.get(key) ?? []) + said } }
 	}
 	reaches = {}
 	for key in reached.keys { reaches[key] = word_set(reached[key]).keys.join(" ") }
@@ -454,6 +455,11 @@ word_reaches(functions: list, classes: list): map := {
 }
 # a word's name and, lifted, its parts: next·Channel, next, Channel
 name_parts(name: text): list := if name.contains("·") then [name] + name.split("·") else [name]
+# a word's name and, lifted, its class's: next·Channel, Channel
+owning_names(name: text): list := {
+	parts = name.split("·")
+	if #parts > 1 then [name, parts[#parts - 1]] else [name]
+}
 # a linked module's image, the part of its warp.signature (signature.warp) its linked form's compile writes: its
 # words (each name, parameter kinds, result kind), its globals [name, kind, mark], its own class structs [name,
 # definition written], the host's builders it exports (by name) and the runtime it was built behind
