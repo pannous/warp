@@ -1,0 +1,9 @@
+# a text subtype is a text: it prints, joins and takes text words as one, unless it formats itself (card newtype-cheap-class)
+'type Name < text; n = "Al" as Name; "hi " + n'	"hi Al"
+'type Name < text; greet(n: Name) := "hi " + n; greet("Al")'	"hi Al"
+'type Name < text; n = "Al" as Name; n.upper()'	"AL"
+'type Name < text; "a" is a Name'	yes
+'type Name < text; 3 is Name'	no
+'type Name < text; n = "Al" as Name; n is Name'	yes
+'type Name < text; format Name n as text := "Mx " + (n as text); "" + ("Al" as Name)'	"Mx Al"
+'type Name < string; type P: { name: Name }; p = P{name: "Al"}; p.name'	"Al"
