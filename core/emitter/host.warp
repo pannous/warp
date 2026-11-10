@@ -175,13 +175,13 @@ exported_function(name: text, kinds: list, result: ValueKind): any := {
 }
 # a runtime word the host calls under its own name, of its own parameters and result
 def exported_runtime_word(name: text) {
-	word = module.runtime[name]
+	word = runtime_word(name)
 	f = exported_function(name, word.kinds, word.result)
 	f.code = runtime_call(name, range_list(#word.kinds).map(i => TypedCode(word.kinds[i], [op.local_get] + uleb(i)))).code
 }
 # … taking and giving nodes, a host that reads no GC objects: its texts as Text nodes
 def exported_node_word(name: text) {
-	word = module.runtime[name]
+	word = runtime_word(name)
 	nodes = range_list(#word.kinds).map(i => TypedCode(ValueKind.Node, [op.local_get] + uleb(i)))
 	f = exported_function(name, nodes.map(node => ValueKind.Node), ValueKind.Node)
 	f.code = boxed(runtime_call(name, nodes))
