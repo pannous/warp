@@ -520,8 +520,18 @@ word_reaches(functions: list, classes: list): map := {
 }
 # a word's name and, lifted, its parts: next·Channel, next, Channel
 name_parts(name: text): list := if name.contains("·") then [name] + name.split("·") else [name]
-# a word's name and its class's: next·Channel and Graph·new of Channel and Graph
-owning_names(name: text): list := if word_class(name) != ø then [name, word_class(name)] else [name]
+# a word's name, its written name and its class's: next·Channel, Graph·new, graph_of·2 of Channel, Graph, graph_of
+owning_names(name: text): list := {
+	written = arity_base(name)
+	owner = word_class(written ?? name)
+	[name] + (if written != ø then [written] else []) + (if owner != ø then [owner] else [])
+}
+# the word an arity overload was written as, graph_of of graph_of·2 (linked_variant), ø for another word
+arity_base(name: text): text? := {
+	parts = name.split("·")
+	last = parts[#parts - 1]
+	if #parts > 1 and is_digits(last) then parts[0..<#parts - 1].join("·") else ø
+}
 # a call and, of a constructor (classes.warp constructor_name, made_name), the class it makes: Graph·new, Graph
 # (a struct made in place names it, class·Graph)
 with_constructed_class(word: text): list := if made_by_constructor(word) or word.starts_with(instance_struct_prefix) then [word, word_class(word)] else [word]
