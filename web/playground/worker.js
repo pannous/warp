@@ -62,7 +62,7 @@ const hooks = {
 	dispatch: event => post({ type: "dispatch", event }), // playground.js dispatchToPage
 	listen: (holder, events) => {
 		live = holder;
-		startTimers(holder, (id, answer) => timerShown(holder, id, answer));
+		startTimers(holder, id => timerShown(holder, id));
 		post({ type: "listening", events: [...events.map(event => `on ${event}`), ...(holder.timers ?? []).map(timer => timerLabel(holder, timer))] });
 	},
 	panicked: message => { panicMessage = message; },
@@ -180,14 +180,13 @@ function showPageEvent({ value, html, error, events }) {
 	if (events) post({ type: "listening", events: events.map(event => `on ${event}`) });
 }
 
-// a timer fired or a fetch's answer came (driver.js timerFired): what it printed went out meanwhile, the program's value
-// shown anew (its page_value, main's last expression again), a page of markup rendered anew; a failing one is shown
-// and stops the timers. fetchesLeft: the answers still out (playground.js settled waits for none)
-function timerShown(holder, id, answer) {
-	const { failure, value } = timerFired(holder, id, answer);
-	if (failure === undefined && value === undefined && !answer) return;
+// a timer fired (driver.js timerFired): what it printed went out meanwhile, the program's value shown anew (its
+// page_value, main's last expression again), a page of markup rendered anew; a failing one is shown and stops the timers
+function timerShown(holder, id) {
+	const { failure, value } = timerFired(holder, id);
+	if (failure === undefined && value === undefined) return;
 	const html = failure === undefined ? pageHtml(holder) : undefined;
-	post({ type: "handled", value: failure ?? value, html, error: failure !== undefined, fetchesLeft: holder.fetchesLeft });
+	post({ type: "handled", value: failure ?? value, html, error: failure !== undefined });
 	if (failure !== undefined) holder.stopTimers();
 }
 

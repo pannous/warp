@@ -54,12 +54,11 @@ Each step is useful on its own and is what the next ones stand on.
   `POST /rpc/<name>` with the request's body as its argument. `/rpc/` is reserved for this.
 
 ## Async data (card web-async)
-- `users := fetch "/api/users"` at the main level does not wait: `users` is ø with `users.loading` true and
-  `users.error` ø; once the reply is in, `users.loading` is false, then `users.error` (the failure text, "fetch … failed:
-  HTTP status 404") or `users` (the parsed JSON, any other body the text) is set, so `on change users {…}` and a page
-  whose last line is `users` show it.
-- In warp: extensions/fetch_signals.warp, the reply set by lib/net.warp fetch_later; written later, the values are
-  varying, so the markup reading them renders anew when the reply comes (the page; the native warp answers at once).
+- `users := fetch "/api/users"` at the main level waits for the answer, in the page as natively (the user: fetch is
+  synchronous): `users` is the parsed JSON (any other body the text), or ø with `users.error` the failure text ("fetch …
+  failed: HTTP status 404"); `users.loading` is no. `go fetch url` is the fetch that does not wait: a task, its answer
+  `await`ed (wiki/async.md).
+- In warp: extensions/fetch_signals.warp lowers it to lib/net.warp fetch_into, whose reply sets `users` or its error.
 - Live regions (card web-a11y-live): the outermost element whose own content reads a fetched value gets
   aria-live="polite", so a screen reader announces it when it arrives; an element setting aria-live keeps its own.
   Sample samples/web/live_region.warp.
