@@ -2,12 +2,15 @@
 # too, so a class's routed show() never falls back to a hook that int_types.warp renames away (card
 # module-arity-overloads)
 
-# the number types a marked type is held as: `type Color = int`, `type Angle = float`
-MARKED_NUMBER_KINDS = {int: Kind.Int, float: Kind.Float}
+# the types a marked type is held as: `type Angle < float`, `type Name < text` (an int's subtype is a class,
+# classes.warp)
+MARKED_KINDS = {int: Kind.Int, float: Kind.Float, text: Kind.Text, string: Kind.Text}
+# the types whose subtypes are only marked, never a class
+MARKED_ONLY_KINDS = ["float", "text", "string"]
 # `type Color < int`, `type Angle < float`: Color, Angle; ø for any other statement
 int_type_name(statement: Node): text? := {
 	subtype = subtype_of(statement)
-	if subtype != ø and subtype#2 in MARKED_NUMBER_KINDS then subtype#1 else ø
+	if subtype != ø and subtype#2 in MARKED_KINDS then subtype#1 else ø
 }
 # `type Years = Age`: [Years, Age], the type declared and the one word it names; ø for any other statement
 type_alias_of(statement: Node): list? := {
@@ -34,7 +37,7 @@ int_type_kinds(statements: list): map := {
 	kinds = {}
 	for statement in statements {
 		name = int_type_name(statement)
-		if name != ø and name not in kinds { kinds[name] = MARKED_NUMBER_KINDS[name_of(value_of(statement))] + (TypeMark.First + #kinds) * KindUnit.Info }
+		if name != ø and name not in kinds { kinds[name] = MARKED_KINDS[name_of(value_of(statement))] + (TypeMark.First + #kinds) * KindUnit.Info }
 	}
 	kinds
 }
