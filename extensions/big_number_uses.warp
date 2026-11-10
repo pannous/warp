@@ -6,7 +6,8 @@ BIG_NUMBERS_MODULE = "big_numbers"
 # the power's row in lib/aliases.warp, whose word names a class's power method (`power(o) := …`, extensions/class_methods)
 POWER_WORD = "power"
 POWER_OPERATOR = "^"
-ROOT_AND_RATIO_SPELLINGS = ["cbrt", "∛", "rational"]
+# (`as rational`, not the type's name: the prelude's `type fraction = rational` converts nothing)
+ROOT_AND_RATIO_SPELLINGS = ["cbrt", "∛", "as rational"]
 # a decimal past this many places is an exact ratio of a big denominator (core/emitter/literals.warp big_decimal)
 DECIMAL_PLACES_HELD = 18
 
