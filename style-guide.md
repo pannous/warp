@@ -14,9 +14,10 @@ all_different(list variants) as bool := {...} =>
 def all_different(list variants) as bool {...}   SURE?? no ugly def everywhere
 (def my_fun) easier to grep, but LSP can handle?
 
-use "walk.warp" => IDK  import walk  Prefers local files over modules?
+use "walk.warp" => use ./walk.warp  
+use ./walk.warp => import walk  Prefers local files over modules?
 
 false => no
 true => yes
 
-dot => ∘ ( · • ° * also ok for inferred number vectors?)
+dot => ∘ ( ⋅ · • ° * also ok for inferred number vectors?)
