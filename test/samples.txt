@@ -1,4 +1,4 @@
-# 0ad9360a02 2026-11-09 23:39 252/265 95.1%
+# dede670d56 2026-11-10 03:47 255/265 96.2%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -67,9 +67,11 @@ ok   samples/golf/evil-numbers.short.warp
 ok   samples/golf/evil-numbers.warp
 ok   samples/golf/fibonacci.short.warp
 ok   samples/golf/fibonacci.warp
+ok   samples/golf/fizz-buzz.short.warp
 ok   samples/golf/fizz-buzz.warp
 ok   samples/golf/happy-numbers.short.warp
 ok   samples/golf/happy-numbers.warp
+ok   samples/golf/leap-years.short.warp
 ok   samples/golf/leap-years.warp
 ok   samples/golf/look-and-say.short.warp
 ok   samples/golf/look-and-say.warp
@@ -119,7 +121,6 @@ ok   samples/hello/phrases.warp
 ok   samples/hello/sample.warp
 ok   samples/laws/basic_laws.warp
 ok   samples/laws/project_laws.warp
-ok   samples/lists/dot.warp
 ok   samples/lists/primes.warp
 ok   samples/lists/quicksort.warp
 ok   samples/lists/sieve.warp
@@ -161,6 +162,7 @@ ok   samples/native/structs.warp
 ok   samples/native/uses.warp
 ok   samples/numbers/bits.warp
 ok   samples/numbers/collatz.warp
+ok   samples/numbers/dates.warp
 ok   samples/numbers/factorial.warp
 ok   samples/numbers/gcd.warp
 ok   samples/numbers/measurements.warp
@@ -231,6 +233,7 @@ ok   samples/web/component_totals.warp
 ok   samples/web/computed_tags.warp
 ok   samples/web/counter.warp
 ok   samples/web/form_submit.warp
+ok   samples/web/hello_div.warp
 ok   samples/web/html_dsl.warp
 ok   samples/web/html.warp
 ok   samples/web/keyed_counters.warp
@@ -252,15 +255,12 @@ SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
 FAIL samples/advanced/particles.warp: samples/advanced/particles.warp:26:3 not an int
-FAIL samples/golf/fizz-buzz.short.warp: samples/golf/fizz-buzz.short.warp:1:11 wasm trap: null reference
-FAIL samples/golf/leap-years.short.warp: samples/golf/leap-years.short.warp:1:18 wasm trap: null reference
 FAIL samples/golf/sierpiński-triangle.warp: samples/golf/sierpiński-triangle.warp:33:116 not an int
 FAIL samples/laws/kitchensink.warp: samples/laws/kitchensink.warp:114:1 outside the core: the unknown name test
+TIME samples/lists/dot.warp: used its 30 s of CPU
 FAIL samples/modules/packages.warp: samples/modules/packages.warp:1:61 int of node
-FAIL samples/numbers/dates.warp: hint: now is time's fix: use time
 FAIL samples/sound/gpu_visualizer_warp.warp: samples/sound/gpu_visualizer_warp.warp:133:1 samples/sound/tune.mp3: no such sound file
 FAIL samples/sound/visualizer.warp: shown is declared twice: a variable and a function share the name; give one another name
 FAIL samples/storage/orm_units.warp: samples/storage/orm_units.warp:1:1 unknown type kg
 FAIL samples/system/crontab.warp: samples/system/crontab.warp:44:23 outside the core: the unknown name pre-wrap
 FAIL samples/types/types.warp: samples/types/types.warp:36:7 outside the core: a int for a typed field of Person
-FAIL samples/web/hello_div.warp: samples/web/hello_div.warp:5:10 outside the core: an instance of div, a class not declared here
