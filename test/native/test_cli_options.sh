@@ -5,6 +5,8 @@
 # WARP=<tree>/data/gate/warp
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 warp=${WARP:-warp}
+# the lib/ that warp runs with (its version names it), given to the native warp built here
+library=$("$warp" version 2>/dev/null | sed -n 's/.*(compiler.warp of \(.*\))$/\1/p')
 export WARP_WINDOW=0
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
@@ -17,12 +19,12 @@ check() { # check <what> <got> <expected>
 cp "$checkout"/core/native/*.warp "$stage/"
 (cd "$stage" && "$warp" build native warp.warp >"$stage/build.log" 2>&1)
 [ -x "$stage/warp" ] || { echo "✗ warp build native warp.warp: $(tail -3 "$stage/build.log")"; exit 1; }
-native() { (cd "$stage" && ./warp "$@" 2>&1); }
+native() { (cd "$stage" && ./warp --lib "$library" "$@" 2>&1); }
 # a word of a standard module named without its use is a hint (`fix: use sound`)
 printf 'print A4\n' >"$stage/hinted.warp"
 check "hints by default" "$(native run hinted.warp | grep -c '^hint')" 1
 check "--no-hints before run" "$(native --no-hints run hinted.warp)" 440
 check "--no-hints after run" "$(native run --no-hints hinted.warp)" 440
 check "--no-hints before the file" "$(native --no-hints hinted.warp)" 440
-check "version's build time with no PATH" "$(cd "$stage" && env PATH= ./warp version 2>&1 | sed -n 's/^the native warp · built //p' | grep -cE '^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$')" 1
+check "version's build time with no PATH" "$(cd "$stage" && env PATH= ./warp --lib "$library" version 2>&1 | sed -n 's/^the native warp · built //p' | grep -cE '^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$')" 1
 [ $failures = 0 ]
