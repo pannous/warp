@@ -28,3 +28,16 @@ for i in 1 to 40 { m = m.set(i, i * 10) }
 for i in 1 to 20 { m = m.remove(i * 2) }
 map_ok = weight_ok(m.root) and m.keys() == [i * 2 - 1 for i in 1 to 20] and m.rank(7) == 4 and m.get(7) == 70
 [whole(a), whole(evens), whole(prefix), whole(mixed), whole(desc), whole(right), whole(kept), whole(top), whole(rest), whole(missed), right.values() == nums(120, 127), kept.values() == nums(120, 127), top.values() == nums(250, 255), rest.values() == nums(250, 255), map_ok]" [yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes]
+
+# Set algebra by split and join on size-skewed operands, both ways round: a few keys against thousands,
+# keys inside, beside and across the big set. Results match the plain list answers and every node stays in weight.
+is! "use sorted; use \"sorted_weight.warp\"
+
+big = SortedSet(nums(1, 1000))
+few = SortedSet([0, 7, 500, 999, 1001, 5000])
+side = SortedSet(nums(1001, 1010))
+evens = SortedSet([i * 2 for i in 1 to 500])
+inner = [7, 500, 999]
+results = [big.union(few), few.union(big), big.intersection(few), few.intersection(big), big.difference(few), few.difference(big), big.union(side), side.union(big), big.difference(evens), evens.intersection(big), big.difference(big), big.intersection(SortedSet())]
+expected = [[0] + nums(1, 1001) + [5000], [0] + nums(1, 1001) + [5000], inner, inner, [i for i in 1 to 1000 if not inner.has(i)], [0, 1001, 5000], nums(1, 1010), nums(1, 1010), [i * 2 - 1 for i in 1 to 500], [i * 2 for i in 1 to 500], [], []]
+[[r for r in results if not whole(r)] == [], [r.values() for r in results] == expected]" [yes, yes]
