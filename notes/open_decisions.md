@@ -5,7 +5,6 @@ the user; nothing here blocks. Answers move to notes/decisions.md, work goes on 
 they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## Pending
-(zero-bake hold, user via Supervisor 2026-11-05: only questions serving the library zero-bake plan are asked; others queue here.)
 
 ## To confirm (decided on the user's behalf; built as described, keep or undo)
 - data-tag-words: in data, glued `head{…}` / `first{…}` (prelude words) stay tags; only program-defined or used words call. Spaced `first {…}` stays the prelude call (spaced-tag keeps prelude words; only head is a tag via the library index). Keep, or make spaced prelude words tags too? (decisions.md)
@@ -13,9 +12,8 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## Parked
 - phrase-params (user: park for now; card definition-heads-phrases): in `send v to c := …` which words are parameters: (a) the body decides (used or typed words), () optional, unifying the older `to add a to b:` reader (an unused plain word there turns fixed); (b) always parentheses. Also: a phrase head starting with a keyword word (`send` is an emit word) refused aloud vs outranking the keyword. Provisional (a) on the branch only, not landed. Meanwhile phrases are written with named arguments (`give 2 to: 40`, named-argument-phrases).
 - note tests (decisions.md note-tests): discuss later.
-- event-handlers (prose discussion with the user, no popups; block-parameters-captures landed): proposed `on(event: Event, body: block)` in the prelude, `emit(event, data)` runs the listeners, no handler core. Open: (1) event data as `it`, a chosen name (`on key k {…}`) or both; (2) user events declared (`enum Event += ask`) or any symbol; (3) decided: on-frame-headless. Branch event-handlers-unknown (a4d0dde771) only a reference.
+- event-handlers (prose discussion with the user, no popups; branch function-events): `on(event, body: block)` and `emit(event, data)` run the listeners, no handler core. Open: (1) event data as `it`, a chosen name (`on key k {…}`) or both; (2) user events declared (`enum Event += ask`) or any symbol.
 - graphics-plain (warp-markup, parked): display alias table with notes; bare width/height as canvas sides with did-you-mean.
-- maybe-javascript (card in Later): typed `js "…"` / `wgsl "…"` templates like `sql` and `sh`, once glue code is needed that warp/wasm can't produce; until then `shader {…}` and `use js`.
 - body-statements: a function body looped as a list of statements, each with its kind (operation, call, assignment…); no `.kind` until then.
 - P69a: may a run-time block assign the `!` site's locals? Default (wiki/charged.md): no, it reads them as at `!` and assigns only declared globals. Until run-time `!` is built.
-- #10 Polish notation for .wat/.wast (`(module a b)` as nodes, a ParserOptions mode); test_wast stays ignored.
+- polish-notation (card polish-notation): Polish notation for .wat/.wast (`(module a b)` as nodes, a ParserOptions mode); test_wast stays ignored.
