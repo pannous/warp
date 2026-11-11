@@ -46,6 +46,11 @@ def bytes_int(bytes: list, order: text, signed_number: bool): int {
 }
 bytes_int(bytes: list, order: text): int := bytes_int(bytes, order, no)
 bytes_int(bytes: list): int := bytes_int(bytes, "big", no)
+// a number as its bytes, most significant first (big) or last; size counts bytes
+big_endian(n: int, size: int): list := int_bytes(n, size * 8, "big")
+little_endian(n: int, size: int): list := int_bytes(n, size * 8, "little")
+from_big_endian(bytes: list): int := bytes_int(bytes, "big")
+from_little_endian(bytes: list): int := bytes_int(bytes, "little")
 
 // an f64's bits rounded to an f32's, to nearest, ties to even; subnormals, ±0, ±infinity and NaN kept
 def f32_bits(x: float): int {
