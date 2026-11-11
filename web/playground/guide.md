@@ -434,6 +434,14 @@ friends = ["Alf", "Bob"]
 #friends # the number of friends
 ```
 
+Until we know what a person is, we can write these guys either as texts, in quotes as above, or as raw data:
+`data` keeps the names as they are written, unquoted and not evaluated.
+
+```warp => [Alf, Bob]
+friends = data [Alf, Bob]
+friends
+```
+
 `#1` is the first item.
 
 ```warp => "apple"
