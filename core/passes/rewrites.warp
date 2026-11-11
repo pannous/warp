@@ -750,13 +750,7 @@ written_rules(path: text, source: text, module: text): list := {
 	if #rules < #rule_lines { throw dropped_rules(path, lines, rule_lines, rules, module) }
 	rules
 }
-rules_parsed(parse: Node, module: text, source: text): list := {
-	outer = rule_module
-	rule_module = module
-	rules = statements_ruled(statements_in(parse), module, source)#1
-	rule_module = outer
-	rules
-}
+rules_parsed(parse: Node, module: text, source: text): list := in_rule_module(module, () => statements_ruled(statements_in(parse), module, source)#1)
 # [the rules the statements declare, the other statements]: each `rewrite` line's, and in place of the first overload
 # of a built-in operator those of all its overloads (operator_rules)
 statements_ruled(statements: list, module: text, source: text): list := {
@@ -868,9 +862,7 @@ rule_needs_by_module(): map := library_index_section("needs")
 scanned_rule_needs(): map := {
 	found = {}
 	for module in std_module_names {
-		rule_module = module
-		needs = module_rule_paths(module).flat_map(path => rule_needs(file_text(path) ?? ""))
-		rule_module = ""
+		needs = in_rule_module(module, () => module_rule_paths(module).flat_map(path => rule_needs(file_text(path) ?? "")))
 		if #needs > 0 { found[module] = needs.join(" ") }
 	}
 	found
@@ -897,7 +889,7 @@ unpacked_rule(n: Node, module: text): Rule := {
 	shape = if fields#4 == ø then ø else fields#4
 	conditions = items_of(fields#5)
 	# an origin the baking compiler (an older seed) took a call of a rule word it did not know yet for: a computed binding
-	if hole != ø and is_computed_binding(Key(hole, Op.Assign, shape)) {
+	if hole != ø and in_rule_module(module, () => is_computed_binding(Key(hole, Op.Assign, shape))) {
 		conditions += [Key(hole, Op.Assign, shape)]
 		hole = ø
 		shape = ø
@@ -1112,6 +1104,14 @@ is_rule_word_call(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n 
 # the module of the rules being read or checked, "" for the compiler's own: a word it defines that the compiler has not
 # is a rule word of the module's, run in the module's own wasm (module_word, card module-rule-words)
 global rule_module = ""
+# the work's value with the module's rules being read
+in_rule_module(module: text, work: function): any := {
+	outer = rule_module
+	rule_module = module
+	result = work()
+	rule_module = outer
+	result
+}
 is_module_rule_word(word: text): bool := rule_module != "" and not rule_words.has(word) and module_defines(rule_module, word)
 # the rule word run in the module's wasm by the host's warp.module_word (core/native/driver.warp module_word_answered),
 # its result built here
