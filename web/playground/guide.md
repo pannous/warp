@@ -559,7 +559,7 @@ Examples: matching; samples: matching, tree_patterns, code_templates, pattern_cl
 
 Every value has a type: a number, a text, a list...
 
-```warp => class nat
+```warp => nat
 type(3)
 ```
 
@@ -710,25 +710,25 @@ Examples: tasks, channels; samples: async, threads, parallel_let
 
 A web page is made of tags, written inside `html{…}`.
 
-```warp => <p>hello</p>
+```warp => <html><p>hello</p></html>
 html{ p{ "hello" } }
 ```
 
 Attributes look like HTML.
 
-```warp => <b class="fat">hello</b>
+```warp => <html><b class="fat">hello</b></html>
 html{ b{class:"fat" "hello" } }
 ```
 
 Tags hold other tags, like a page does.
 
-```warp => <h1>Fruit</h1><p>Fresh <b>pears</b> today</p>
+```warp => <html><h1>Fruit</h1><p>Fresh <b>pears</b> today</p></html>
 html{ h1{"Fruit"} p{ "Fresh " b{"pears"} " today" } }
 ```
 
 A list of values makes a list of tags.
 
-```warp => <ul><li>apple</li><li>pear</li></ul>
+```warp => <html><ul><li>apple</li><li>pear</li></ul></html>
 fruits = ["apple" "pear"]
 html{ ul{ li all fruits } }
 ```
