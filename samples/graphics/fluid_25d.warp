@@ -6,8 +6,9 @@
 # plane, and a short march accumulates emission, absorption and a few light samples. A detail field is written once
 # at startup, one value-noise octave per pass, and the shade samples that texture. Window y grows downward, so a
 # rising flame is a negative v. The grid is 384 by 216. The picture is 960 by 540, and on a Retina drawable the
-# shade pass fills that drawable. Mode 1, torch: a narrow licking flame and faint grey smoke. Mode 2, fog: a bank
-# of puffs carved by the baked detail, the pointer pushes it, a round pillar blocks the flow. f, 1, 2 or a click
+# shade pass fills that drawable. Mode 1, torch: a narrow licking flame and grey smoke where the fire cools.
+# Mode 2, fog: a soft veil whose thickness the baked detail modulates, the pointer pushes it, a round pillar
+# blocks the flow. f, 1, 2 or a click
 # switches. Headless: an argument fog or torch. short stops at 80 frames, snap paints the first frame, movie
 # writes every second frame, --times prints each frame's upload and draw in milliseconds.
 use os
@@ -69,7 +70,7 @@ fn wall(uv: vec2f) -> bool {
 	return values.mode < 1.5 && edge;
 }
 fn thin(uv: vec2f) -> f32 {
-	let up = mix(0.9, 1.0, smoothstep(0.0, 0.42, uv.y));
+	let up = mix(0.92, 1.0, smoothstep(0.06, 0.38, uv.y));
 	return select(1.0, up, values.mode < 1.5);
 }
 fn curl_noise(uv: vec2f, scale: vec2f, drift: vec2f) -> vec2f {
@@ -166,8 +167,9 @@ advect_heat = bounds + fragment(uv_of + '
 ')
 torch_dye = bounds + fragment(uv_of + '
 	if (wall(uv)) { return vec4f(0.0); }
-	let spark = 0.82 + 0.18 * hash(vec2f(floor(values.time * 15.0), 4.0));
-	let dye = min(field_density(uv).x + tongue(uv) * 0.1 * spark, 0.9);
+	let heat = field_temperature(uv).x;
+	let cooling = smoothstep(0.05, 0.22, heat) * (1.0 - smoothstep(0.38, 0.8, heat));
+	let dye = min(field_density(uv).x + tongue(uv) * 0.018 + cooling * 0.034, 0.58);
 	return vec4f(dye, 0.0, 0.0, 1.0);
 ')
 torch_heat = bounds + fragment(uv_of + '
@@ -175,21 +177,22 @@ torch_heat = bounds + fragment(uv_of + '
 	let heat = min(field_temperature(uv).x + tongue(uv) * 0.30, 1.35);
 	return vec4f(heat, 0.0, 0.0, 1.0);
 ')
-fog_coarse = bounds + fragment(uv_of + '
-	let p = uv * vec2f(6.4, 5.0) + vec2f(values.time * 0.04, values.time * 0.025);
-	let n = noise(p);
-	let dye = mix(field_density(uv).x, 0.7 + 0.5 * n, 0.07);
-	return vec4f(dye, 0.0, 0.0, 1.0);
+fog_coarse = fragment(uv_of + '
+	let pointer = values.mouse / values.view;
+	let away = (uv - pointer) * vec2f(values.aspect, 1.0);
+	let wake = exp(-dot(away, away) / 0.0035);
+	let base = mix(max(field_density(uv).x, 0.0), 0.92, 0.02);
+	return vec4f(base * (1.0 - 0.48 * wake), 0.0, 0.0, 1.0);
 ')
 bake = common + '
 fn wrap(p: vec2f) -> vec2f {
 	let period = vec2f(values.soft, values.gust);
 	return p - period * floor(p / period);
 }
+fn fade(t: vec2f) -> vec2f { return t * t * t * (t * (t * 6.0 - 15.0) + 10.0); }
 fn tiled(p: vec2f) -> f32 {
 	let i = floor(p);
-	let f = fract(p);
-	let u = f * f * (3.0 - 2.0 * f);
+	let u = fade(fract(p));
 	let a = hash(wrap(i));
 	let b = hash(wrap(i + vec2f(1.0, 0.0)));
 	let c = hash(wrap(i + vec2f(0.0, 1.0)));
@@ -197,7 +200,8 @@ fn tiled(p: vec2f) -> f32 {
 	return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 ' + fragment(uv_of + '
-	let n = tiled(uv * vec2f(values.soft, values.gust));
+	let skewed = vec2f(uv.x + uv.y * values.slope, uv.y + uv.x * values.confinement);
+	let n = tiled(skewed * vec2f(values.soft, values.gust));
 	let prev = field_detail(uv);
 	if (values.which < 1.5) { return vec4f(n, 0.0, 0.0, 1.0); }
 	if (values.which < 2.5) { return vec4f(prev.x, n, 0.0, 1.0); }
@@ -250,21 +254,20 @@ fn profile(z: f32, h: f32) -> f32 {
 	return max(1.0 - u * u, 0.0);
 }
 fn detail_at(p: vec2f) -> vec4f { return field_detail(fract(p)); }
-fn puff(uv: vec2f, flow: vec2f) -> f32 {
-	let drift = flow * 3.5;
-	let a = detail_at(uv + drift).x;
-	let b = detail_at(uv * 1.45 + drift + vec2f(0.17, 0.41)).y;
-	let c = detail_at(uv * 2.2 + vec2f(0.63, 0.12)).z;
-	let base = smoothstep(0.28, 0.58, a);
-	let wobble = (b - 0.5) * 0.42 + (c - 0.5) * 0.3;
-	return smoothstep(0.12, 0.82, base + wobble);
+fn veil(uv: vec2f, flow: vec2f) -> f32 {
+	let drift = flow * 1.4;
+	let wob = detail_at(uv * 1.05 + drift).z;
+	let warp = (wob - 0.5) * vec2f(0.055, 0.04);
+	let a = detail_at(uv + drift + warp).x;
+	let b = detail_at(uv * 1.17 + drift + warp * 0.6 + vec2f(0.19, 0.27)).y;
+	let n = a * 0.64 + b * 0.36;
+	return mix(0.6, 1.0, smoothstep(0.28, 0.74, n));
 }
 fn ground(uv: vec2f) -> vec3f {
-	let g = detail_at(uv * 1.7).y;
-	let g2 = detail_at(uv * 3.1 + vec2f(0.2, 0.45)).z;
-	let grass = mix(vec3f(0.11, 0.24, 0.08), vec3f(0.22, 0.34, 0.12), g2);
-	let dirt = mix(vec3f(0.20, 0.13, 0.06), vec3f(0.34, 0.23, 0.10), g);
-	return mix(dirt, grass, smoothstep(0.36, 0.64, g * 0.6 + g2 * 0.4));
+	let g = detail_at(uv * 0.72).x;
+	let dirt = vec3f(0.16, 0.12, 0.08);
+	let grass = vec3f(0.13, 0.20, 0.10);
+	return mix(dirt, grass, smoothstep(0.3, 0.7, g));
 }
 ' + fragment(uv_of + '
 	let t = values.texel * 2.2;
@@ -277,13 +280,11 @@ fn ground(uv: vec2f) -> vec3f {
 	let heat = max(field_temperature(uv).x, 0.0);
 	let torch = values.mode < 1.5;
 	let flow = field_velocity(uv).xy;
-	let amount = select(d * puff(uv, flow), d, torch);
+	let thick = veil(uv, flow);
+	let amount = select(d * thick, d, torch);
 	let h = mix(0.24, 1.0, smoothstep(0.0, 0.75, amount));
-	let sigma = select(5.4, 1.55, torch);
+	let sigma = select(1.72, 1.2, torch);
 	let light = select(normalize(vec3f(0.15, -0.78, 0.52)), normalize(vec3f(0.06, 0.74, 0.55)), torch);
-	let here = detail_at(uv * 1.8).y;
-	let ahead = detail_at((uv + vec2f(0.01, -0.035)) * 1.8).y;
-	let crest = clamp(0.4 + 6.0 * (here - ahead), 0.0, 1.0);
 	let steps = 8.0;
 	let dz = (2.0 * h) / steps;
 	var z = h - dz * 0.5;
@@ -295,20 +296,18 @@ fn ground(uv: vec2f) -> vec3f {
 		var shadow = 1.0;
 		var suv = uv;
 		var sz = z;
-		for (var j = 0; j < 3; j = j + 1) {
-			suv = suv + light.xy * 0.018;
-			sz = sz + light.z * 0.06;
-			let flake = select(detail_at(suv * 1.8).y, 1.0, torch);
-			shadow = shadow * exp(-rho(suv) * profile(sz, h) * flake * select(1.1, 0.12, torch));
+		for (var j = 0; j < 2; j = j + 1) {
+			suv = suv + light.xy * 0.02;
+			sz = sz + light.z * 0.07;
+			shadow = shadow * exp(-rho(suv) * profile(sz, h) * select(0.06, 0.1, torch));
 		}
-		let warm = smoothstep(0.02, 0.35, heat);
-		let grey = vec3f(0.50, 0.47, 0.45);
-		let from_flame = vec3f(1.0, 0.42, 0.16) * warm * shadow;
-		let smoke_col = grey * (0.55 + 0.45 * shadow) + from_flame;
-		let fog_col = vec3f(0.75, 0.82, 0.85) * (0.58 + 0.28 * shadow + 0.34 * crest);
+		let warm = smoothstep(0.28, 0.62, heat);
+		let smoke_col = vec3f(0.32, 0.30, 0.28) + vec3f(0.5, 0.18, 0.05) * warm;
+		let tone = clamp(0.93 + (thick - 0.8) * 0.28, 0.90, 1.04) * (0.97 + 0.03 * shadow);
+		let fog_col = vec3f(0.72, 0.80, 0.82) * tone;
 		let albedo = select(fog_col, smoke_col, torch);
 		let absorb = 1.0 - exp(-rho_z * sigma * dz);
-		let glow = ramp(heat) * max(heat * shape - 0.05, 0.0);
+		let glow = ramp(heat) * max(heat * shape - 0.2, 0.0);
 		let flame = glow * dz * 5.6 * mix(1.0, transmittance, 0.22);
 		rgb = rgb + flame + transmittance * albedo * absorb;
 		transmittance = transmittance * (1.0 - absorb);
@@ -317,7 +316,7 @@ fn ground(uv: vec2f) -> vec3f {
 	let px0 = (uv.x - 0.50) * values.aspect;
 	let pool_q = vec2f(px0 * 0.8, (uv.y - 0.80) * 2.4);
 	let pool = exp(-dot(pool_q, pool_q) / 0.09);
-	let sky = vec3f(0.012, 0.011, 0.014) + vec3f(0.26, 0.09, 0.025) * pool;
+	let sky = vec3f(0.10, 0.064, 0.070) + vec3f(0.18, 0.07, 0.02) * pool;
 	var behind = select(ground(uv), sky, torch);
 	if (torch) {
 		let px = (uv.x - 0.50) * values.aspect;
@@ -366,7 +365,7 @@ pointer() := {
 }
 stirring() := {
 	if mode != 2 { return 0.0 }
-	if windowless() { return if frame_i > 28 then 0.0014 else 0.0 }
+	if windowless() { return if frame_i > 28 then 0.0022 else 0.0 }
 	if system_value("mouse_down") == 1 { return 0.002 }
 	0.00035
 }
@@ -428,7 +427,7 @@ simulate(picture) := {
 	sim_pass(forces, "velocity", 1)
 	sim_pass(divergence, "divergence", 1)
 	project_pressure()
-	dye_keep = if mode == 1 then 0.988 else 0.996
+	dye_keep = if mode == 1 then 0.996 else 0.998
 	sim_pass(stash, "divergence", 1)
 	sim_pass(forward, "density", 1)
 	sim_pass(rewind, "pressure", 1)
@@ -442,16 +441,22 @@ bake_detail() := {
 	made = values_of(1)
 	made["size"] = [grid_w, grid_h]
 	made["which"] = 1
-	made["soft"] = 5.0
-	made["gust"] = 4.0
+	made["soft"] = 4.0
+	made["gust"] = 3.0
+	made["slope"] = 0.37
+	made["confinement"] = 0.14
 	gpu_pass(bake, fields, "detail", made)
 	made["which"] = 2
-	made["soft"] = 11.0
-	made["gust"] = 9.0
+	made["soft"] = 9.0
+	made["gust"] = 7.0
+	made["slope"] = -0.48
+	made["confinement"] = 0.26
 	gpu_pass(bake, fields, "detail", made)
 	made["which"] = 3
-	made["soft"] = 23.0
-	made["gust"] = 17.0
+	made["soft"] = 15.0
+	made["gust"] = 11.0
+	made["slope"] = 0.22
+	made["confinement"] = -0.16
 	gpu_pass(bake, fields, "detail", made)
 }
 bake_detail()
