@@ -322,13 +322,14 @@ is_runtime_module(name: text): bool := name in hooks().runtime_modules
 global runtime_module_words = ø
 global runtime_module_words_of = ø
 is_runtime_module_word(name: text): bool := {
-	compiled = hooks().runtime_modules.filter(module => module == module_written or not modules_linked)
+	compiled = compiled_runtime_modules()
 	if runtime_module_words_of != compiled {
 		runtime_module_words = word_set(compiled.flat_map(module => file_words(std_module_path(module))))
 		runtime_module_words_of = compiled
 	}
 	runtime_module_words.has(name)
 }
+compiled_runtime_modules(): list := hooks().runtime_modules.filter(module => module == module_written or not modules_linked)
 # the definitions of a file and of the files beside it that it uses
 file_words(file: text): list := {
 	source = file_text(file) ?? ""
@@ -376,6 +377,8 @@ path_text(n: Node): Node := if is_key(n, Op.As) and value_of(n) == symbol("path"
 file_used(statement: Node, folder: text): any := {
 	module = use_target(statement)
 	if module is text { return path_in(folder, rooted(module, folder)) }
+	# (a runtime module a build compiles in is its root file, whose own uses of the files beside it it brings)
+	if module is symbol and name_of(module) in compiled_runtime_modules() { return std_module_path(name_of(module)) }
 	if not (module is symbol) or name_of(module) in implicitly_used { return ø }
 	path = path_in(folder, name_of(module) + module_extension)
 	if file_text(path) != ø then path else package_file(name_of(module), folder)

@@ -21,8 +21,8 @@ per library, and nothing about a crate in the native warp. The libraries themsel
 
 - `scripts/warp-crate build <manifest>…` generates a cdylib crate: the fixed runtime scripts/crate_adapter/runtime.rs,
   and one `#[no_mangle] extern "C"` wrapper per line, named as the line. It builds it with cargo and caches the result.
-  Then it installs the .so into `$WARP_CRATES_CACHE/lib` (default ~/.cache/warp/crates). It writes the native file to
-  `$WARP_CRATES_CACHE/native`: the manifest with the `= rust` parts cut and settings commented out.
+  Then it installs the .so into `~/.cache/warp/crates/lib`. It writes the native file to
+  `~/.cache/warp/crates/native`: the manifest with the `= rust` parts cut and settings commented out.
 - Where the two folders are found:
   - the native warp (lib/native/foreign.c LIBRARY_PATHS) does not search the cache's lib/: the library is found by
     LD_LIBRARY_PATH / DYLD_LIBRARY_PATH

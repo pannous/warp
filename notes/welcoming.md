@@ -95,7 +95,7 @@ else `pi` stays the constant. errors.data constant_assignment, test/welcoming/te
 
 ## Warning levels (decisions warning-levels, hints-are-warnings)
 Three levels: error, warning, hint (core/analysis/errors.data, warnings.data, hints.data). Hints are shown unless the
-run asks for none (`--no-hints`, `WARP_HINTS=0`, `use relaxed`, `use script`; wiki/warning.md). Hints never fail.
+run asks for none (`--no-hints`, `use relaxed`, `use script`; wiki/warning.md). Hints never fail.
 The Rust compiler's weak/severe levels, `--warnings=<level>` and failing on warnings under `--strict` are not ported
 (`use strict` is a numbers and JSON mode, core/passes/modes.data); the playground's "show … and up" select still
 names hint/weak/normal/severe.

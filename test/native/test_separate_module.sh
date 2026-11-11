@@ -2,10 +2,10 @@
 # `warp build x.warp` writes x.mod.wasm, the program alone importing runtime.wasm (decision build-three-outputs,
 # notes/runtime_linking.md "Separate modules"): linked to an instance of the runtime.wasm it was built behind, it prints
 # what the program prints. Node links the two (as web/playground/host.js does), WASI from node:wasi. Run it with
-# bash test/native/test_separate_module.sh; the warp is WARP (default the warp on PATH), its lib/ WARP_LIB as usual
+# bash test/native/test_separate_module.sh; the warp is WARP (default the warp on PATH), a tree's WARP=<tree>/data/gate/warp
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
-library=${WARP_LIB:-$("$warp" version | sed -n 's/.*(compiler.warp of \(.*\))$/\1/p')}
+export WARP_WINDOW=0
+library=$("$warp" version | sed -n 's/.*(compiler.warp of \(.*\))$/\1/p')
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
 failures=0

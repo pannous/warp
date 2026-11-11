@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # What `warp <code>` shows of its result: a number of an int type as its type's `format … as text` gives it, as print
 # writes it (lib/color's red: red, not 4294901760). Run it with bash test/native/test_shown_results.sh; the warp is WARP
-# (default the warp on PATH), its lib/ WARP_LIB as usual
+# (default the warp on PATH), a tree's WARP=<tree>/data/gate/warp
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 failures=0
 check() { # check <code> <expected shown result>
 	got=$("$warp" "$1" 2>&1 | tail -1)

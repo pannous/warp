@@ -214,6 +214,8 @@ global shown_width = 0
 global shown_height = 0
 global first_painting_ms = 0
 global paintings = 0
+# storage buffers kept across frames, by name. A GPU-list upload writes the same buffer again
+global stored_buffers = []
 
 // --- memory for C
 struct_of(size: int): int := calloc(1, size)
@@ -335,14 +337,16 @@ values_laid_out(values: map): any := {
 }
 member_laid_out(layout: Layout, name: text, value: any): text := {
 	if value is list {
+		# a GPU list [f32] whose length is a whole number of vec4f is already the storage array's bytes
+		if gpu_list_place(value) >= 0 and gpu_list_cell(value) == 0 and #value >= 4 and #value % 4 == 0 {
+			return array_laid(layout, name, value)
+		}
 		vectors = value.any(item => item is list)
 		if vectors or #value > VECTOR_FLOATS {
-			if #layout.arrays == MOST_STORAGE_ARRAYS { return "is one list too many: paint's values hold at most 6" }
 			numbers = if vectors then [if i < #item then float(item[i]) else 0.0 for item in value for i in 0 ..< VECTOR_FLOATS] else [float(x) for x in value]
 			padded(numbers, VECTOR_FLOATS)
 			if #numbers == 0 { numbers = [0.0, 0.0, 0.0, 0.0] }
-			layout.arrays.add([name, numbers])
-			return ""
+			return array_laid(layout, name, numbers)
 		}
 		if #value < 1 { return "is one number or a list of two to four" }
 		return uniform_member(layout, name, [float(x) for x in value])
@@ -350,6 +354,11 @@ member_laid_out(layout: Layout, name: text, value: any): text := {
 	if not (value is number) { return "is a number or a list of numbers" }
 	if name == INSTANCES_NAME { layout.instances = int(value) }
 	uniform_member(layout, name, [float(value)])
+}
+array_laid(layout: Layout, name: text, cells: list): text := {
+	if #layout.arrays == MOST_STORAGE_ARRAYS { return "is one list too many: paint's values hold at most 6" }
+	layout.arrays.add([name, cells])
+	""
 }
 uniform_member(layout: Layout, name: text, numbers: list): text := {
 	count = #numbers
@@ -471,6 +480,34 @@ buffer_of(size: int, usage: int): int := {
 	set_field_i64(descriptor, 32, size)
 	wgpuDeviceCreateBuffer(device, descriptor)
 }
+class StoredBuffer { name: text, buffer: int, bytes: int }
+// the storage buffer kept for this name at this size. A later frame writes it again: an order list changes in place
+kept_storage(name: text, bytes: int): int := {
+	for kept in stored_buffers {
+		if kept.name == name {
+			if kept.bytes != bytes {
+				wgpuBufferRelease(kept.buffer)
+				kept.buffer = buffer_of(bytes, BUFFER_STORAGE + BUFFER_COPY_DST)
+				kept.bytes = bytes
+			}
+			return kept.buffer
+		}
+	}
+	buffer = buffer_of(bytes, BUFFER_STORAGE + BUFFER_COPY_DST)
+	stored_buffers.add(StoredBuffer(name, buffer, bytes))
+	buffer
+}
+// a GPU list [f32] copied from the program's memory in one write. 0 where this value is not one, or the program's
+// memory was never recorded (then the caller walks the numbers)
+gpu_storage(name: text, cells: list): int := {
+	place = gpu_list_place(cells)
+	base = system_value("program memory")
+	if place < 0 or base == 0 { return 0 }
+	bytes = #cells * 4
+	buffer = kept_storage(name, bytes)
+	wgpuQueueWriteBuffer(queue, buffer, 0, pointer_handle(base + shift_right(place, 32)), bytes)
+	buffer
+}
 // a buffer holding the cells (a GPU list's place, else numbers as f32 bits or int32s), bound so
 cells_buffer(cells: list, usage: int): int := {
 	size = #cells * 4
@@ -568,9 +605,13 @@ drawing_made(shader: text, values: map, width: int, height: int): any := {
 		entries.add([PREVIOUS_FRAME_BINDING, 0, 0, drawing.previous])
 	}
 	for i in 0 ..< #read_arrays {
-		storage = cells_buffer(f32_cells(read_arrays[i][1]), BUFFER_STORAGE)
-		drawing.buffers.add(storage)
-		entries.add([STORAGE_BINDING + i, storage, #read_arrays[i][1] * 4, 0])
+		cells = read_arrays[i][1]
+		storage = gpu_storage(read_arrays[i][0], cells)
+		if storage == 0 {
+			storage = cells_buffer(f32_cells(cells), BUFFER_STORAGE)
+			drawing.buffers.add(storage)
+		}
+		entries.add([STORAGE_BINDING + i, storage, #cells * 4, 0])
 	}
 	if #entries > 0 { drawing.bindings = bindings_of(wgpuRenderPipelineGetBindGroupLayout(drawing.pipeline, 0), entries) }
 	drawing
@@ -663,9 +704,13 @@ host_gpu_render(given_shader, width: int, height: int, values: any): any? := {
 	if not painted { return error(gpu_failure) }
 	[bytes_int([byte_at(bytes, PIXEL_BYTES * i + k) for k in WORD_BYTE_ORDER], "little") for i in 0 ..< width * height]
 }
+// upload and draw, in milliseconds, when the program asked (--times)
+paint_frame_noted(upload: int, draw: int) := { if paint_timing { eprint("splat-frame upload " + upload + " draw " + draw) } }
 // the shader painted into `pixels` as host_shader_painted says; no and gpu_failure where it fails
 shader_painted(shader: text, width: int, height: int, values: any, pixels: int): bool := {
+	t0 = wall_clock_ms()
 	drawing = drawing_of(shader, values, width, height)
+	t1 = wall_clock_ms()
 	if drawing == ø { return no }
 	encoder = wgpuDeviceCreateCommandEncoder(device, 0)
 	image = image_drawn(encoder, drawing, width, height)
@@ -688,6 +733,7 @@ shader_painted(shader: text, width: int, height: int, values: any, pixels: int):
 	wgpuBufferRelease(readback)
 	drawing_released(drawing)
 	image_done(drawing, image)
+	paint_frame_noted(t1 - t0, wall_clock_ms() - t1)
 	mapped != 0
 }
 said_failed(what: text): int := {
@@ -798,13 +844,16 @@ host_shader_shown(given_shader, width: int, height: int, values: any): int := {
 	shader = str(given_shader)
 	layer = painting_layer(width, height)
 	if layer == 0 { return 0 }
+	t0 = wall_clock_ms()
 	drawing = drawing_of(shader, values, width, height)
+	t1 = wall_clock_ms()
 	if drawing == ø or not surface_ready(layer) { return said_failed("paint into the window") }
 	encoder = wgpuDeviceCreateCommandEncoder(device, 0)
 	image = image_drawn(encoder, drawing, width, height)
 	shown = picture_presented(encoder, image, layer, width, height)
 	image_done(drawing, image)
 	drawing_released(drawing)
+	paint_frame_noted(t1 - t0, wall_clock_ms() - t1)
 	if shown then 1 else said_failed("paint into the window")
 }
 // host_pixels_shown(pixels, width, height): pixels (RGBA, a byte each, row by row, the driver's) shown in the

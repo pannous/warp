@@ -3,7 +3,7 @@
 # The native runner (notes/primitive.md "Driver"): a primitive file that
 # runs wasm modules through wasmtime's C API, called as any C library. `warp build native core/native/driver.warp`
 # makes the executable:
-#   driver app.warp args…   compiled by warp.wasm (of $WARP_LIB, else beside the driver), then run
+#   driver app.warp args…   compiled by warp.wasm (of --lib, else beside the driver), then run
 #   driver app.wasm args…   the module run
 #   a driver with a module appended (<module><its length, u64 little-endian><MODULE_MAGIC><zeros to a multiple of
 #   16>, as `warp build` writes it) runs that one
@@ -431,15 +431,16 @@ signature_offset(image: text): u32 := {
 	}
 	image.length
 }
-# warp's lib/, whose warp.wasm compiles a .warp file, in one search order: --lib <folder>, $WARP_LIB (the scripts'
-# worktrees), else the first folder holding a
-# lib/ (its prelude.warp) of this executable's folder (a tarball), its lib/ (~/dev/bin/lib, which the install keeps
+# warp's lib/, whose warp.wasm compiles a .warp file, in one search order: --lib <folder> (a worktree's), $WARP_LIB
+# (what `warp build` writes has no --lib yet), else the first folder holding a lib/ (its prelude.warp) of this
+# executable's folder (a tarball), its lib/ (~/dev/bin/lib, which the install keeps
 # linked to the current build), the folder its links lead to, and <prefix>/share/warp beside that folder's bin/ (brew,
 # deb, pip: bin/warp links to it); none is an error naming them. The folder as found, its links kept, is a stable
 # name for it (an install replaces the build behind the link): what a native build's executables find libraries by
 library_folder(): text := resolved_path(library_found())
 library_found(): text := {
 	if has_option("lib") { return option_of("lib") }
+	# TODO (card warp-lib-read-removal) gone once built executables are self-contained (card self-contained-executables)
 	given = getenv("WARP_LIB")
 	if given.length > 0 { return given }
 	found = installed_found()
@@ -450,7 +451,7 @@ library_found(): text := {
 	exit(1)
 	own
 }
-# the installed warp's lib/, whatever $WARP_LIB names: its runtime and modules of a finished build; a copy of the
+# the installed warp's lib/, whatever --lib names: its runtime and modules of a finished build; a copy of the
 # executable without one (self-check.sh runs one in a scratch folder) has the library folder
 installed_library(): text := {
 	found = installed_found()

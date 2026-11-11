@@ -75,7 +75,7 @@ page_ids(scopes: list, bound: any): list := {
 		if is_markup_block(n) {
 			for item in items_of(value_of(n)) {
 				id = written_id(item)
-				if id != "" and bound.has(id) { raise "the id " + id + " of the page's markup and the program's own " + id + " share a name: rename one (decision page-ids)" }
+				if id != "" and bound.has(id) { raise "the id " + id + " of the page's markup and the program's own " + id + " share a name: rename one" }
 				if id != "" { found[id] = yes }
 			}
 		}
