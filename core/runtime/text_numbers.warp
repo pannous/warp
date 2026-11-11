@@ -36,7 +36,7 @@ text_as_int(written: text): int := {
 	value = 0
 	for i in start..byte_count(t) {
 		digit = sign * digit_of(byte_at(t, i))
-		if value * sign > (bound - digit) ÷ 10 * sign { too_big_for_int() }
+		if value * sign > int_quotient(bound - digit, 10) * sign { too_big_for_int() }
 		value = value * 10 + digit
 	}
 	value
