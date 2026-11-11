@@ -430,11 +430,9 @@ def link_libraries(images: list, own_names: list) {
 		written = written_words(image.name)
 		for word in image.functions {
 			known = module.linked_words.get(word.name) ?? []
-			# (only by a word its module wrote: collections' pop is its classes' method, Stack's, which a list never
-			# reaches, so the prelude's pop stays the program's, before it; option (a) of card linked-module-brings)
-			shadowed = image.name == PRELUDE_MODULE and defined_in.has(word.name + "/" + #word.kinds)
+			shadowed = image.name == PRELUDE_MODULE and known.any(other => #other.kinds == #word.kinds)
 			if linkable(image, word) and word.name not in own_names and not is_lifted_lambda(word.name) and not shadowed {
-				module.linked_words[word.name] = if image.name == PRELUDE_MODULE then [word] + known else known + [word]
+				module.linked_words[word.name] = known + [word]
 				if image.name != PRELUDE_MODULE and written.has(word.name) {
 					arity = word.name + "/" + #word.kinds
 					if (defined_in.get(arity) ?? []).any(other => other != image.name) { linked_extended[word.name] = yes }
