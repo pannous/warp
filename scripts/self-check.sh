@@ -42,6 +42,10 @@ fi
 # values (runtime_words.warp made_case, shown_big_int)
 made_words=(holds_big_int holds_ratio big_int_text)
 extension_runtime=($worktree/extensions/big_numbers/*.warp $worktree/extensions/gpu_lists/runtime.warp)
+# (a runtime module's root, <name>/<name>.warp, gives hook bodies as the roots do: big_numbers' extended_power, linked
+# on demand, card runtime-bridge-slots)
+roots=(); for file in $extension_runtime; do [[ ${file:t} == ${file:h:t}.warp ]] && roots+=($file); done
+extension_runtime=(${extension_runtime:|roots})
 extension_words=$(grep -hv ' from runtime$' $extension_runtime | sed -n 's/^\([a-z_][a-z_0-9]*\)(.*:=.*/\1/p' | sort -u | grep -vxF -f <(print -l $made_words) | paste -sd'|' -)
 emitter_names_extension=$(grep -HnE "(runtime_call\(|runtime\[)\"($extension_words)\"" $worktree/core/emitter/*.warp)
 if [[ -z $extension_words || -n $emitter_names_extension ]]; then

@@ -5,3 +5,5 @@
 # a test line after a listener, the program's last, is tested where it stands
 'b = 1; on change b { print 1 }; test b == 1'	ø
 'b = 1; n = 0; on change b { n += 1 }; b = 2; n'	1
+# a `:=` value is a derived signal: on change runs after a write changed its value (wiki/signal.md, card playground-tour)
+'price = 3; count = 2; total := price * count; seen = 0; on change total { seen = value }; count = 5; seen'	15
