@@ -122,7 +122,7 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 # pure-self-ignores-errors)
 checked_facts(known: int): list := {
 	found = diagnosed_since(known)
-	failing = first_error(found, module.program_file)
+	failing = first_error(found, module.program_file, value_as_data)
 	if failing { throw failing }
 	found
 }
