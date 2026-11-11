@@ -103,9 +103,12 @@ HOST_LINKED_AT = 40
 HEAP_BYTES_AT = 48
 # its argument vector, the first its module's file (a compiler's path: compiler_library)
 ARGUMENTS_AT = 56
+# the module a host word without a caller works in, a text (address, length): module_word's lib module while it
+# builds there, else empty for the native host module (exported)
+GUEST_AT = 64
 # a run's channel listeners (lib/channels.warp), in its block past those: how many, then each one's
 # id, the bytes of its channel's file read so far, its name's length and the name
-LISTENERS_AT = 64
+LISTENERS_AT = 80
 LISTENERS_MAX = 32
 LISTENER_BYTES = 128
 LISTENER_NAME_BYTES = 104
@@ -837,14 +840,16 @@ instance_defined(linker: handle, engine: handle, context: handle, name: text, pa
 	instance = allocate(INSTANCE_BYTES)
 	checked(wasmtime_linker_instantiate(linker, context, compiled, instance, trap), trap)
 	checked(wasmtime_linker_define_instance(linker, context, name, name.length, instance), trap)
-	start = allocate(EXTERN_BYTES)
-	start_name = "warp/start"
-	if wasmtime_instance_export_get(context, instance, start_name, start_name.length, start) {
-		# (a module's start is its main: its value, if any, dropped)
-		results_count = native_long(wasm_functype_results(wasmtime_func_type(context, start + 8)))
-		checked(wasmtime_func_call(context, start + 8, 0, 0, allocate(VALUE_BYTES * MAX_RESULTS), results_count, trap), trap)
-	}
+	checked(started(context, instance, "warp/start", trap), trap)
 	instance
+}
+# the instance's start `name` run, its error given back (0 for none): a module's warp/start is its main, its value, if
+# any, dropped; its _start prints it as a program's does
+started(context: handle, instance: pointer, name: text, trap: pointer): handle := {
+	start = allocate(EXTERN_BYTES)
+	if not wasmtime_instance_export_get(context, instance, name, name.length, start) { return 0 }
+	results_count = native_long(wasm_functype_results(wasmtime_func_type(context, start + 8)))
+	wasmtime_func_call(context, start + 8, 0, 0, allocate(VALUE_BYTES * MAX_RESULTS), results_count, trap)
 }
 
 # the module run with the arguments and a GC heap starting at `heap_bytes`; its machine code kept in the file
@@ -856,37 +861,18 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	outer = crash_context_running(given.pointers, given.count)
 	fuel = fuel_of(module, machine_code)
 	engine = run_engine(fuel > 0, heap_bytes)
-	store = wasmtime_store_new(engine, 0, 0)
+	trap = allocate(8)
+	store = opened_store(engine, given, output, trap)
 	context = wasmtime_store_context(store)
 	if fuel > 0 { wasmtime_context_set_fuel(context, fuel) }
-	linker = wasmtime_linker_new(engine)
-	trap = allocate(8)
-	checked(wasmtime_linker_define_wasi(linker), trap)
-	config = wasi_config_new()
-	wasi_config_set_argv(config, given.count, given.pointers)
-	wasi_config_inherit_stdin(config)
-	output_to(config, output)
-	name_time_zone()
-	# PWD the real current folder, a module's cwd (wasi.warp std_os_cwd): a parent that changed folder without saying
-	# so (`warp test`'s runs, chdir before exec) left its own, and relative paths then resolved from the wrong one
-	setenv(c_string("PWD"), c_string(current_folder()), 1)
-	wasi_config_inherit_env(config)
-	# the current folder for relative paths and the root for absolute ones, as warp's own host opens them
-	wasi_config_preopen_dir(config, ".", ".", yes)
-	wasi_config_preopen_dir(config, "/", "/", yes)
-	checked(wasmtime_context_set_wasi(context, config), trap)
-	srand48(milliseconds_now() xor (getpid() as i64))
+	linker = opened_linker(engine, trap)
 	compiled = compiled_module(engine, module, machine_code, trap)
-	# (an instance it links and the program define the same host words)
-	wasmtime_linker_allow_shadowing(linker, yes)
 	linked = allocate(16)
 	text_kept(linked, "")
 	outer_run = kept_value(RUN_SLOT)
 	if outer_run == 0 { timers_forgotten() }
 	keep_value(RUN_SLOT, run_state(linker, engine, linked, context, heap_bytes, given) as i64)
-	instances_linked(linker, engine, context, compiled, linked, library_folder(), trap)
-	host_words_defined(linker, engine, context, compiled, module, yes, trap)
-	checked(wasmtime_linker_define_unknown_imports_as_traps(linker, compiled), trap)
+	checked(imports_defined(linker, engine, context, compiled, module, linked, trap), trap)
 	instance = allocate(INSTANCE_BYTES)
 	checked(wasmtime_linker_instantiate(linker, context, compiled, instance, trap), trap)
 	entry = allocate(EXTERN_BYTES)
@@ -916,6 +902,92 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	}
 	failure
 }
+# a store of the engine, WASI set up for it: the arguments, what it prints written to the file `output` when one is named
+opened_store(engine: handle, given: Arguments, output: text, trap: pointer): handle := {
+	store = wasmtime_store_new(engine, 0, 0)
+	config = wasi_config_new()
+	wasi_config_set_argv(config, given.count, given.pointers)
+	wasi_config_inherit_stdin(config)
+	output_to(config, output)
+	name_time_zone()
+	# PWD the real current folder, a module's cwd (wasi.warp std_os_cwd): a parent that changed folder without saying
+	# so (`warp test`'s runs, chdir before exec) left its own, and relative paths then resolved from the wrong one
+	setenv(c_string("PWD"), c_string(current_folder()), 1)
+	wasi_config_inherit_env(config)
+	# the current folder for relative paths and the root for absolute ones, as warp's own host opens them
+	wasi_config_preopen_dir(config, ".", ".", yes)
+	wasi_config_preopen_dir(config, "/", "/", yes)
+	checked(wasmtime_context_set_wasi(wasmtime_store_context(store), config), trap)
+	srand48(milliseconds_now() xor (getpid() as i64))
+	store
+}
+# a linker of the engine with WASI, where an instance it links and the program may define the same host words
+opened_linker(engine: handle, trap: pointer): handle := {
+	linker = wasmtime_linker_new(engine)
+	checked(wasmtime_linker_define_wasi(linker), trap)
+	wasmtime_linker_allow_shadowing(linker, yes)
+	linker
+}
+
+## the console's session (card warp-repl-instance)
+# One store and linker for all the lines of a console, each line a module of its own (extensions/commands repl_step)
+# whose instance stays, defined under its path for the lines after it: what a line declares, and its state, live on.
+# The session is a run's block (run_state)
+session_opened(): pointer := {
+	engine = run_engine(no, RUN_GC_HEAP_BYTES)
+	trap = allocate(8)
+	long_at(trap).value = 0
+	given = program_arguments("repl", arg_count())
+	store = opened_store(engine, given, "", trap)
+	linked = allocate(16)
+	text_kept(linked, "")
+	timers_forgotten()
+	run_state(opened_linker(engine, trap), engine, linked, wasmtime_store_context(store), RUN_GC_HEAP_BYTES, given)
+}
+# the line's module at `path` run in the session: linked, its instance defined, its _start run (it prints its value);
+# a failure said, the session going on. The status of the exit() it called, which ends the session, else -1
+session_line_run(session: pointer, path: text): i32 := {
+	outer_run = kept_value(RUN_SLOT)
+	keep_value(RUN_SLOT, session as i64)
+	context = long_at(session + 24).value
+	trap = allocate(8)
+	long_at(trap).value = 0
+	instance = allocate(INSTANCE_BYTES)
+	error = session_line_linked(session, path, instance, trap)
+	failure = ""
+	if error != 0 or long_at(trap).value != 0 { failure = failure_said(error, trap, "") } else {
+		error = started(context, instance, "_start", trap)
+		if error != 0 or long_at(trap).value != 0 { failure = failure_said(error, trap, raised_message(context, instance, trap)) }
+	}
+	keep_value(RUN_SLOT, outer_run)
+	status = allocate(4)
+	if error != 0 and wasmtime_error_exit_status(error, status) { return word_at(status).value as i32 }
+	if failure.length > 0 { complain(failure) }
+	-1
+}
+# the line's module linked to the session's instances and instantiated, defined under its path; the error, 0 for none
+session_line_linked(session: pointer, path: text, instance: pointer, trap: pointer): handle := {
+	linker = long_at(session).value
+	engine = long_at(session + 8).value
+	linked = long_at(session + 16).value as pointer
+	context = long_at(session + 24).value
+	module = read_file(path)
+	compiled = compiled_module(engine, module, "", trap)
+	error = imports_defined(linker, engine, context, compiled, module, linked, trap)
+	if error == 0 { error = wasmtime_linker_instantiate(linker, context, compiled, instance, trap) }
+	if error == 0 and long_at(trap).value == 0 { error = wasmtime_linker_define_instance(linker, context, path, path.length, instance) }
+	# (so a later line that imports it links this instance, never one made anew)
+	if error == 0 { text_kept(linked, joined(joined(cell_text(linked), path), "\n")) }
+	error
+}
+
+# what the module imports defined in the linker: the library's instances it links, the host words, a trap for any
+# other; the error, 0 for none
+imports_defined(linker: handle, engine: handle, context: handle, compiled: handle, module: text, linked: pointer, trap: pointer): handle := {
+	instances_linked(linker, engine, context, compiled, linked, library_folder(), trap)
+	host_words_defined(linker, engine, context, compiled, module, yes, trap)
+	wasmtime_linker_define_unknown_imports_as_traps(linker, compiled)
+}
 # a run's linker, engine, linked-instances cell, store context and GC heap size, and whether it linked unicode and the native host
 # module yet, kept in the run's block: what a host word allocates is given back when it returns (foreign.c
 # warp_host_callback)
@@ -929,6 +1001,7 @@ run_state(linker: handle, engine: handle, linked: pointer, context: handle, heap
 	long_at(run + UNICODE_LINKED_AT as i32).value = 0
 	long_at(run + HOST_LINKED_AT as i32).value = 0
 	long_at(run + HEAP_BYTES_AT as i32).value = heap_bytes
+	text_kept(run + GUEST_AT as i32, "")
 	long_at(run + ARGUMENTS_AT as i32).value = given.pointers as i64
 	run
 }
@@ -942,16 +1015,23 @@ run_heap_bytes(): i64 := long_at(kept_value(RUN_SLOT) as i32 + HEAP_BYTES_AT as 
 lazily_linked(context: handle, module_name: text, flag: i64, name: text, function: pointer): bool := {
 	run = kept_value(RUN_SLOT) as i32
 	if long_at(run + flag as i32).value == 0 {
-		trap = allocate(8)
-		long_at(trap).value = 0
 		linked = long_at(run + 16).value as i32
-		library = lazy_library(run)
-		instance_defined(long_at(run).value, long_at(run + 8).value, context, module_name, instance_path(module_name, library), linked, library, no, trap)
-		# (linked in a host word, its records kept past the word's end)
-		arena_kept()
+		run_linked(context, module_name, lazy_library(run))
 		long_at(run + flag as i32).value = 1
 	}
 	wasmtime_linker_get(long_at(run).value, context, module_name, module_name.length, name, name.length, function)
+}
+# the module linked into the run from the library folder, unless it is already
+run_linked(context: handle, module_name: text, library: text): nothing := {
+	run = kept_value(RUN_SLOT) as i32
+	linked = long_at(run + 16).value as i32
+	if not contains_line(cell_text(linked), module_name) {
+		trap = allocate(8)
+		long_at(trap).value = 0
+		instance_defined(long_at(run).value, long_at(run + 8).value, context, module_name, instance_path(module_name, library), linked, library, no, trap)
+		# (linked in a host word, its records kept past the word's end)
+		arena_kept()
+	}
 }
 # a compiler's library: <compiler>.library/ beside it, the runtime and unicode module made by the compiler that built
 # it, whose GC types it has (a new $Text type: card asciitext-compile); else, a compiler of the types its own lib/
@@ -974,6 +1054,8 @@ holds_companion(folder: text): bool := {
 # NFC by lib/unicode, whose module (modules/unicode.wasm) the run links on this first call (lazily_linked), never a
 # silent byte compare
 canonical_text_answered(context: handle, given: pointer, result: pointer): nothing := {
+	# (named before the link, which adds warp_runtime to the run's linked modules and so turns lazy_library's answer)
+	library = lazy_library(kept_value(RUN_SLOT) as i32)
 	function = allocate(EXTERN_BYTES)
 	if not lazily_linked(context, "warp/unicode", UNICODE_LINKED_AT, "canonical_text", function) {
 		complain("modules/unicode.wasm exports no canonical_text: warp rebuild writes it anew")
@@ -983,7 +1065,7 @@ canonical_text_answered(context: handle, given: pointer, result: pointer): nothi
 	long_at(trap).value = 0
 	error = wasmtime_func_call(context, function + 8, given, 1, result, 1, trap)
 	# a module of other GC types than the run's traps 'cast failure' deep inside: named, never silent
-	if error != 0 or long_at(trap).value != 0 { complain(joined(joined("warp: canonical_text of ", lazy_library(kept_value(RUN_SLOT) as i32)), "/modules/unicode.wasm failed; a compiler links the runtime and unicode module of the compiler that built it, <compiler>.library/ (`warp rebuild seed` makes the seed's, `warp rebuild` warp.wasm's)")) }
+	if error != 0 or long_at(trap).value != 0 { complain(joined(joined("warp: canonical_text of ", library), "/modules/unicode.wasm failed; a compiler links the runtime and unicode module of the compiler that built it, <compiler>.library/ (`warp rebuild seed` makes the seed's, `warp rebuild` warp.wasm's)")) }
 	checked(error, trap)
 }
 ## machine-wide channels (lib/channels.warp; the page's are BroadcastChannels, web/playground/host-tasks.js): every
@@ -1352,6 +1434,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if same_text(module, "os") and same_text(member, "run") { return os_run(caller, context, listed, results) }
 	if same_text(module, "net") and same_text(member, "get") { return url_got(caller, context, shown(caller, context, item_of(caller, context, listed, 1)), results) }
 	if same_text(module, "warp") and same_text(member, "option") { return option_answered(caller, context, listed, results) }
+	if same_text(module, "warp") and same_text(member, "module_word") { return module_word_answered(caller, context, listed, results) }
 	if same_text(module, "regex") { return regex_answered(caller, context, member, listed, results) }
 	if same_text(module, "hash") { return hash_answered(caller, context, member, listed, results) }
 	# a live loop's cycle starts: only the playground hands loops over between runs; a fade or stop save sound applies
@@ -1806,6 +1889,35 @@ code_parsed_from(caller: handle, context: handle, code: text, result: pointer): 
 	at = allocate(8)
 	long_at(at).value = 0
 	code_built(caller, context, encoding, at, result)
+}
+# warp.module_word(module, word, arguments) (card module-rule-words): the compiler's call of a rule word the lib module
+# defines, its three values the items of `listed`. The module is linked into the run at its first call; the arguments, a list the caller's node_encoding
+# encodes (runtime/builders.warp), are built there, its export `word` is called on them, and its result, encoded by
+# the module's node_encoding, is built again in the caller
+module_word_answered(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
+	module = joined("warp/", shown(caller, context, item_of(caller, context, listed, 1)))
+	word = shown(caller, context, item_of(caller, context, listed, 2))
+	encoded = allocate(VALUE_BYTES)
+	guest_call(caller, context, "node_encoding", item_of(caller, context, listed, 3), 1, encoded)
+	encoding = shown(caller, context, encoded)
+	run_linked(context, module, library_folder())
+	guest = kept_value(RUN_SLOT) as i32 + GUEST_AT as i32
+	text_kept(guest, module)
+	at = allocate(8)
+	long_at(at).value = 1
+	count = atoll(encoded_field(encoding, at))
+	# (the list's bracket and separator)
+	encoded_field(encoding, at)
+	encoded_field(encoding, at)
+	values = allocate((count as i32 + 1) * VALUE_BYTES)
+	for i in 0..count { code_built(0, context, encoding, at, values + (i as i32) * VALUE_BYTES) }
+	returned = allocate(VALUE_BYTES)
+	guest_call(0, context, word, values, count, returned)
+	guest_call(0, context, "node_encoding", returned, 1, returned)
+	answer = shown(0, context, returned)
+	text_kept(guest, "")
+	long_at(at).value = 0
+	code_built(caller, context, answer, at, result)
 }
 # the node encoded at `at` (advanced past it) built in the module into `result`
 code_built(caller: handle, context: handle, encoding: text, at: pointer, result: pointer): nothing := {
@@ -2503,7 +2615,14 @@ native_byte(at: handle): u8 := {
 	byte_at(cell).value
 }
 # an export of the module calling the host (caller), else (0) of the native host module (host_export)
-exported(caller: handle, context: handle, name: text, into: pointer): bool := if caller != 0 then wasmtime_caller_export_get(caller, name, name.length, into) else host_export(context, name, into)
+# an export of the module calling the host (caller), else (0) of the guest module a host word works in (GUEST_AT),
+# else of the native host module (host_export)
+exported(caller: handle, context: handle, name: text, into: pointer): bool := {
+	if caller != 0 { return wasmtime_caller_export_get(caller, name, name.length, into) }
+	guest = cell_text(kept_value(RUN_SLOT) as i32 + GUEST_AT as i32)
+	if guest.length == 0 { return host_export(context, name, into) }
+	wasmtime_linker_get(long_at(kept_value(RUN_SLOT) as i32).value, context, guest, guest.length, name, name.length, into)
+}
 # the module's export `name` called on the values, its result into `result`
 guest_call(caller: handle, context: handle, name: text, values: pointer, count: i64, result: pointer): nothing := {
 	function = allocate(EXTERN_BYTES)
@@ -2518,7 +2637,7 @@ guest_call(caller: handle, context: handle, name: text, values: pointer, count: 
 # where the module's memory starts, for the driver
 guest_memory(caller: handle, context: handle): handle := {
 	memory = allocate(EXTERN_BYTES)
-	wasmtime_caller_export_get(caller, "memory", 6, memory)
+	exported(caller, context, "memory", memory)
 	wasmtime_memory_data(context, memory + 8)
 }
 # the module's shown_at of a value: its address and length in the module's memory, packed
@@ -2536,7 +2655,7 @@ shown_packed(caller: handle, context: handle, value: pointer): i64 := {
 # shown_from), a whole file's text for sha256 too; a module built before shown_from shows it at once (shown_at)
 shown(caller: handle, context: handle, value: pointer): text := {
 	probe = allocate(EXTERN_BYTES)
-	if not wasmtime_caller_export_get(caller, "shown_from", 10, probe) { return text_in(guest_memory(caller, context), shown_packed(caller, context, value)) }
+	if not exported(caller, context, "shown_from", probe) { return text_in(guest_memory(caller, context), shown_packed(caller, context, value)) }
 	whole = ""
 	at = 0 as i64
 	part = SHOWN_PART

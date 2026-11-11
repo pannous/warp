@@ -67,8 +67,8 @@ def render() {
 	show()
 }
 
-canvas(width, height)
-clear(paper)
+canvas.resize(width, height)
+clear(canvas)
 spawn(30, 40, 25)
 spawn(60, 25, 25)
 spawn(90, 45, 25)

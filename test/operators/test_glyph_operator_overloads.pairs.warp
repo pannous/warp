@@ -4,12 +4,12 @@
 'class Q { a: int }; infix operator ⊕(q: Q, r: int) := q.a + r; infix operator ⊕(q: int, r: int) := q * r; [Q(1) ⊕ 2, 3 ⊕ 4]'	[3, 12]
 'class Q { a: int }; infix operator ⊕(q: Q, r: int) := q.a + r; infix operator ⊕(q: int, r: int) := q * r; f(x) := x ⊕ 2; [f(Q(1)), f(3)]'	[3, 6]
 # a standard module's glyph operator brings its module as its words do: ± is uncertain's (wiki/number.md)
-'str(6.0 ± 0.3)'	'6.00 ± 0.30'
+'text(6.0 ± 0.3)'	'6.00 ± 0.30'
 # on a quantity ± is units': a plain spread counts in the value's unit, a quantity's converts (P220)
-'str(6.0m ± 0.3)'	'6.00 ± 0.30m'
-'str(5m ± 1cm)'	'5.000 ± 0.010m'
-'str((5m ± 1cm) + 20cm)'	'5.200 ± 0.010m'
-'str((6m ± 0.3).low)'	'5.7m'
+'text(6.0m ± 0.3)'	'6.00 ± 0.30m'
+'text(5m ± 1cm)'	'5.000 ± 0.010m'
+'text((5m ± 1cm) + 20cm)'	'5.200 ± 0.010m'
+'text((6m ± 0.3).low)'	'5.7m'
 # a glyph definition on built-in types overloads the operator for them: `[1 2 3 4] > 2` asks whether all are greater (card greater-list-all)
 '>(a: list, b: int) := all a > b; [[1, 2, 3, 4] > 2, [3, 4] > 2, 5 > 2]'	[no, yes, yes]
 # so does its English word (decision operator-words-top-level); a definition of numbers stays a plain function

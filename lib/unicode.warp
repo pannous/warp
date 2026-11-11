@@ -60,7 +60,7 @@ def unicode_load(): bool {
 	excluded = {}
 	for n in unicode_numbers(unicode_exclusion_text(), " ") { excluded[n] = yes }
 	for written in UNICODE_DECOMPOSITION.keys {
-		k = int(str(written))
+		k = int(text(written))
 		d = UNICODE_DECOMPOSITION[k]
 		if count(d) == 2 and not (k in UNICODE_COMPATIBLE) and not (k in excluded) and not (k in UNICODE_CCC) and not (d[0] in UNICODE_CCC) { UNICODE_COMPOSITION[d[0] * 2097152 + d[1]] = k }
 	}
@@ -78,7 +78,7 @@ def unicode_load(): bool {
 combining_class(n: int): int := { unicode_load(); if n in UNICODE_CCC then UNICODE_CCC[n] else 0 }
 
 codepoint_numbers(t: text): list := [ord(c) for c in t.codepoints]
-text_of_codepoints(ns: list): text := join([str(chr(n)) for n in ns], "")
+text_of_codepoints(ns: list): text := join([text(chr(n)) for n in ns], "")
 
 // the full decomposition of one code point, memoized
 def unicode_full(n: int, compat: bool): list {
@@ -172,7 +172,7 @@ def normalization_check(columns: list): list {
 		for i in 0 ..< 5 {
 			d = unicode_decomposed(c[i], forms[f][1])
 			got = if forms[f][2] then unicode_composed(d) else d
-			if got != c[expected[f][i]] { failed.add(forms[f][0] + "(c" + str(i + 1) + ")") }
+			if got != c[expected[f][i]] { failed.add(forms[f][0] + "(c" + text(i + 1) + ")") }
 		}
 	}
 	failed

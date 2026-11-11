@@ -6,6 +6,6 @@ count(dir(is_square))' 4
 is! 'use math
 is_square.params#1' 'n'
 is! 'use math
-str(type(is_square))' 'function: (n: int) -> bool'
+text(type(is_square))' 'function: (n: int) -> bool'
 is! 'use math
 is_square(16)' true

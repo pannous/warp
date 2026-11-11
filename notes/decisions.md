@@ -23,6 +23,16 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 ---
 
 ## Inbox
+- 2026-11-11 build-ships-only: `warp build app.warp` leaves the executable, runtime.wasm and modules/ only; `--wasm` writes app.wasm, app.full.wasm, app.mod.wasm (replaces build-three-outputs).
+- 2026-11-11 no-str: `str` is gone as function and type word (lib/python keeps it); warp writes text.
+- 2026-11-11 hex-subtype: hex(n) / `n as hex` / `hex n` give a hex subtype of int shown as 0x7b (lowercase, no quotes); subtypes of number types equal their plain number by value (not Quantity, Angle); colours: argb_hex / rgba_hex.
+- 2026-11-11 canvas-value: canvas is a Canvas value (width, height, clear(), resize(w, h)); clear(canvas).
+- 2026-11-11 quiet-implicit-uses: runs don't hint implicit standard uses; warp lint/beautify write the use.
+- 2026-11-11 foreign-use: `use python json` canonical (source first, like use js / use cargo); `use json from python` an alias; one table of foreign runtimes.
+- 2026-11-11 console-shell: the console runs a line through sh only when warp's refusal is an unknown name, marked dim (sh).
+- 2026-11-11 complex-shows-imaginary: complex numbers show as 3+4ⅈ.
+- 2026-11-11 unit-beside-variable: after a number a unit expression stays units even when a variable has the unit's name (hint); `440Hz` shows as 440Hz.
+- 2026-11-11 parked: code spacing in printed code (refusal-spelling), painted typed-function core fix, rgb type shorthand.
 - 2026-11-11 executables-beside-modules: `warp build` ships the compiled modules beside the executable; it finds its own folder through the OS (its executable path) and loads them at run time; no merge, no env var.
 - 2026-11-11 markup-needs-html kept: a bare element (`div{…}`) outside html{} is data and gets a loud warning naming the fix (`x: html = …`).
 - 2026-11-11 public-samples-no-todo: the playground and site hide TODO/DONE comment lines of samples; the sources keep them.
@@ -483,7 +493,7 @@ core-lines-in-questions → AGENTS.md (Clean compiler first).
 egraph-outside-library → github.com/pannous/warp-packages. express-mode → AGENTS.md (Express mode).
 milestone-messages → notes/agents/supervisor.md. play-mozart-mp3 → samples. power-function → card power-function.
 quasi-text → card quasi-text. plural-singular-check → lib/units.warp.
-js-webidl-bindings → extensions/js_globals.warp. catch-blocks → card catch-blocks.
+js-webidl-bindings → extensions/foreign_globals.warp. catch-blocks → card catch-blocks.
 test-case-timeout → core/native/tests.warp. parallel-compilation → card parallel-compilation.
 easy-cards-first → AGENTS.md (Quick cards first). error-gaps → cards. inline-wasm → card inline-wasm.
 webgpu-shader-part, shader-hash → lib/graphics. smoked-merge-push, busy-main-landing → AGENTS.md (Done).

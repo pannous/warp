@@ -621,3 +621,32 @@ changed; most test files are Rust-era (`# from test_….rs`) with no wiki page b
   `[1 2] is ints` (type_tests 21 25 26).
 - Wrong expectation, parked (left red): `type(3)` "nat" (type_static 9, type_values 7 15, type_compared_with_text 5),
   `f 3 == 6` refused as two readings (nested_type_calls 15), "Point{x:6 y:4}" (struct_instances 13).
+## test/control/test_[n-z]* (cloud worker control-n-z-lib, main 51b1e68)
+
+166 of 848 failed in 187 files. No lib-only cluster of 5+ lines: every cluster below needs core/ or extensions/, so the
+run was report-only (nothing changed in lib/).
+
+| cases | cluster | root cause (layer) | smallest shape |
+|--|--|--|--|
+| 21 | `interpret x` / `x!` / `w()` of data reading the caller's names (run_time_blocks 13, run_time_block_cache 6, uncharged_blocks 3, object_blocks 2) | lib/interpret.warp runs `str(x)` as a program of its own (the caller-names rule parked, card x-bang-sweep); exact and big numbers lose their kind through the text (`7/2`, `2^70`) | extensions: `interpret $x` passes the names free in `$x` as `eval(…, with: {…})`, values not reprinted as text |
+| 16 | signal ports (reactive_ports 12, variable_signals, when_signals, signal_fields, time_of_day) | `on set p.age` (field ports) is no rule and a field write notifies nobody (emitter); `on change square` of a derived `:=` is refused by lib/signals.warp's `not $x is function`; `was`/`previous`/`before` as the handler's old value: a prelude alias reaches only calls | card prelude-alias-line (decision aliases-unified) for was/previous; a field-write notify hook in the emitter |
+| 13 | reflection synonyms and dot forms (reflection_words, reflection_synonyms, value_methods) | `p.properties`/`p.attributes`/`p.members`: prelude aliases reach no dot form; a run-time `fields` cannot be a library word: rule_words.warp `owns_word("fields", program)` counts library words reached as the program's own, so `fields(P)` / `P.fields` of a class turn red (tried: a prelude `fields`, and `alias fields => field_names_of`, both ✓→✗ on test_reflection_synonyms.warp:10 and test_reflection_words.pairs.warp:17) | card prelude-alias-line; `owns_word` tests the program's own definitions only |
+| 8 | `import •/test/fixtures/wasm/shapes` / `fourty_two`: "not a list", unknown name | extensions/c_imports/wasm_modules.warp | card wasm-fixture-root |
+| 6 | `switch v {1: x=5 2: x=7}`: the call pattern_bindings(…) has no owner | the switch lowering asks for the prelude matcher after the prelude's words were reached (core/passes/node_matches.warp); `match` with the same arms works | the switch rule names pattern_bindings as reached |
+| 10 | try around a trap or an exit (try_exits_and_naming 4, try_stack_overflow 3, try_named_traps 2, try_index_and_float) | the emitter refuses `#` on int / `.a` of int / return-break-continue out of a try at compile time instead of a catchable run-time trap | cards add-stack-overflow, cast-failure-traps |
+| 6 | events (reflection_words 3, reactive_ports 3): `alarm.listeners`, `clear listeners of alarm`, `h = on alarm {…}` then `listeners of alarm -= h` | extensions/sugar/events.warp has only `listeners of $e` | one `$e.listeners` rule; `clear` as `unlisten` of all |
+| 6 | shared values across tasks (shared_values 3, shared_signals 2, `atomic`) | a task's write to a `shared` global does not reach the caller | threads, core |
+| 5 | reflection mode `twice.line`, `.origin`, `.wasm_name` | "a function value in ." (emitter) | card charged-field-values |
+| 5 | stored values expecting a previous run (`stored visits_kept = 0` → 2) | the expectation depends on the runner running the file twice | harness |
+
+Triage (judge the form before building it):
+- test_print_empty_map:5-7: `{} as text` is "ø", `"a" + {}` is "aø": the empty map printed as ø.
+- test_object_blocks:13 `help = {print: "there is help"}; help!` → ø: an object run as code.
+- test_unit_tasks:4, 8: `go { 3 m }` awaited is 3, the unit dropped; 3 m (got) looks right.
+- test_reflection_words.pairs:22 `dir(m)` of a map is only its keys; lib/prelude.warp dir_of_value gives its keys then its words.
+- test_reflection_words.warp:59 `def add(left:int) -> int: left` is refused by decision result-type-as's head rule.
+- test_run_time_blocks.pairs:18 `def twice(x): x*2` likewise (`:` after a head names the type).
+- test_or_error_type:13 and .warp:7 `as int?` refused "int? is no type".
+- test_system_values:26, 27 `mouse_x`, `mouse_down` need a mocked mouse (1207); harness, not language.
+- test_test_line_after_tasks:2 expects ø where the runner prints "✓ 1 tests passed".
+- test_relational_arms:4 `sorted(xs, >)` (card sorted-comparator-syntax).

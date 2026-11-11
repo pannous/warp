@@ -17,7 +17,7 @@ ys#2#2' 3
 
 # replace_simplifies_code_children_first
 is! 'simplify(code) := code replace data($a * 1) with a
-str(simplify(data (n * 1 + k * 1)))' 'n+k'
+text(simplify(data (n * 1 + k * 1)))' 'n+k'
 
 # replace_takes_a_named_pattern
 is! 'pattern Pair = [x, y]

@@ -40,7 +40,7 @@ fetched_at_once(statement: Node): list := {
 	if url == ø { return [statement] }
 	name = name_of(key_of(statement))
 	answer = symbol(ANSWER)
-	settled = chosen(Key(answer, Op.Is, symbol(ERROR_TYPE)), set_to(fetch_signal(name, ERROR_FIELD), call_of("str", [answer])), set_to(symbol(name), answer))
+	settled = chosen(Key(answer, Op.Is, symbol(ERROR_TYPE)), set_to(fetch_signal(name, ERROR_FIELD), call_of("text", [answer])), set_to(symbol(name), answer))
 	[set_to(symbol(name), Node.Empty), set_to(fetch_signal(name, ERROR_FIELD), Node.Empty), call_of(FETCH_INTO, [url, Key(answer, Op.Arrow, settled)])]
 }
 # the name `name := …fetch…` defines, else ""
@@ -69,4 +69,4 @@ live_regions(n: Node, fetched: list): Node := {
 	Key(key_of(n), Op.Colon, List([Key(Text(LIVE_ATTRIBUTE), Op.Colon, Text(LIVE_POLITENESS))] + items, Bracket.Curly, Separator.Comma))
 }
 # `users.error`: `if users is error then str(users) else ø`
-failure_text(fetched: Node): Node := chosen(Key(fetched, Op.Is, symbol(ERROR_TYPE)), call_of("str", [fetched]), Node.Empty)
+failure_text(fetched: Node): Node := chosen(Key(fetched, Op.Is, symbol(ERROR_TYPE)), call_of("text", [fetched]), Node.Empty)

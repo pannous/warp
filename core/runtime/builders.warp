@@ -54,3 +54,29 @@ failure_of(message: text): Node := with_kind(error_of(message), Marked.FailedErr
 is_failure(n: Node): bool := not is_null(n) and marked_kind(n) == Marked.FailedError
 # a parse failure the program's `try` catches: the Error of the host's message
 built_error(message: Node): Node := error_of(node_text(message))
+# a node as the parse-code encoding writes it (extensions/parse_words.warp code_encoding), the builders' twin: what
+# the host reads a module's node back by, building it again elsewhere (core/native/driver.warp code_built), as the
+# compiler's call of a lib module's rule word gets its result (card module-rule-words). Each field ends with U+0001
+node_encoding(n: Node): text := {
+	if is_null(n) { return "e" }
+	if node_is_error(n) { return encoded_part("x", unboxed_text(n)) }
+	match n {
+		True: "T"
+		False: "F"
+		Number(_): encoded_part(if kind_code(n) == Kind.Int then "i" else "f", number_text(n))
+		Char(_): encoded_part("c", int_text(code_of(unboxed_char(n))))
+		Symbol(_): encoded_part("s", unboxed_text(n))
+		Text(_): encoded_part("t", unboxed_text(n))
+		Key(_, _, _): encoded_part("k", key_operator(n)) + node_encoding(key_left(n)) + node_encoding(key_right(n))
+		_: if kind_code(n) == Kind.List then list_node_encoding(n) else encoded_part("t", node_text(n))
+	}
+}
+# the export the host reads by: the encoding as a Text node
+encoded_node(n: Node): Node := held(node_encoding(n))
+list_node_encoding(n: Node): text := {
+	items = unboxed_list(n)
+	encoded = encoded_part("l", int_text(#items)) + encoded_part("", node_text(list_bracket(n))) + encoded_part("", node_text(list_separator(n)))
+	for item in items { encoded = encoded + node_encoding(item) }
+	encoded
+}
+encoded_part(tag: text, field: text): text := tag + field + char_text(char_of(1))

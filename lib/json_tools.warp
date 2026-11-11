@@ -52,13 +52,13 @@ def json_pointer_tokens(pointer: text): list {
 	[replace(replace(part, "~1", "/"), "~0", "~") for part in parts[1 ..< count(parts)]]
 }
 json_pointer_escape(token: text): text := replace(replace(token, "~", "~0"), "/", "~1")
-json_pointer_of(tokens: list): text := join(["/" + json_pointer_escape(str(t)) for t in tokens], "")
+json_pointer_of(tokens: list): text := join(["/" + json_pointer_escape(text(t)) for t in tokens], "")
 // an array index token: digits without a leading zero, below the array's count unless `end` allows it
 def json_index(token: text, size: int, end: bool, pointer: text): int {
 	if token == "-" and end { return size }
 	if token == "" or not is_digits(token) or (count(token) > 1 and token.starts_with("0")) { raise "json pointer " + pointer + ": " + token + " is no array index" }
 	n = int(token)
-	if n > size or (n == size and not end) { raise "json pointer " + pointer + ": index " + token + " is past the end of an array of " + str(size) }
+	if n > size or (n == size and not end) { raise "json pointer " + pointer + ": index " + token + " is past the end of an array of " + text(size) }
 	n
 }
 def json_pointer_walk(doc: any, tokens: list, pointer: text): any {
@@ -135,8 +135,8 @@ def json_patch(doc: any, ops: list): any {
 	result = doc
 	for i in 0 ..< count(ops) {
 		op = ops[i]
-		place = if json_is_object(op) and "path" in op then " (" + str(op["path"]) + ")" else ""
-		result = try { json_patch_step(result, op) } catch e { raise "json_patch: operation " + str(i) + place + ": " + e.message }
+		place = if json_is_object(op) and "path" in op then " (" + text(op["path"]) + ")" else ""
+		result = try { json_patch_step(result, op) } catch e { raise "json_patch: operation " + text(i) + place + ": " + e.message }
 	}
 	result
 }
@@ -157,7 +157,7 @@ public def json_merge_patch(target: any, patch: any): any {
 // exclusiveMaximum, multipleOf, allOf, anyOf, oneOf, not, and $ref to a place in the root schema ("#/$defs/x")
 json_place(tokens: list): text := if count(tokens) == 0 then "(root)" else json_pointer_of(tokens)
 json_type_holds(x: any, kind: text): bool := if kind == "integer" then json_whole(x) else json_kind(x) == kind
-json_types_text(kinds: any): text := if json_is_array(kinds) then join([str(k) for k in kinds], " or ") else kinds
+json_types_text(kinds: any): text := if json_is_array(kinds) then join([text(k) for k in kinds], " or ") else kinds
 def json_multiple(x: any, step: any): bool {
 	q = x / step
 	abs(q - floor(q + 0.5)) < 0.000000001
@@ -201,7 +201,7 @@ def json_check(x: any, schema: any, tokens: list, root: any): list {
 		if "minItems" in schema and count(x) < schema["minItems"] { errors.add(place + ": fewer than " + json_written(schema["minItems"], no) + " items") }
 		if "maxItems" in schema and count(x) > schema["maxItems"] { errors.add(place + ": more than " + json_written(schema["maxItems"], no) + " items") }
 		if "uniqueItems" in schema and schema["uniqueItems"] == yes {
-			for i in 0 ..< count(x) { for j in i + 1 ..< count(x) { if json_equal(x[i], x[j]) { errors.add(place + ": items " + str(i) + " and " + str(j) + " are equal") } } }
+			for i in 0 ..< count(x) { for j in i + 1 ..< count(x) { if json_equal(x[i], x[j]) { errors.add(place + ": items " + text(i) + " and " + text(j) + " are equal") } } }
 		}
 		prefix = if "prefixItems" in schema then schema["prefixItems"] else []
 		for i in 0 ..< count(x) {
@@ -230,7 +230,7 @@ def json_check(x: any, schema: any, tokens: list, root: any): list {
 	if "oneOf" in schema {
 		passing = 0
 		for part in schema["oneOf"] { if count(json_check(x, part, tokens, root)) == 0 { passing = passing + 1 } }
-		if passing != 1 { errors.add(place + ": matches " + str(passing) + " of oneOf, not exactly 1") }
+		if passing != 1 { errors.add(place + ": matches " + text(passing) + " of oneOf, not exactly 1") }
 	}
 	if "not" in schema and count(json_check(x, schema["not"], tokens, root)) == 0 { errors.add(place + ": must not match the not schema") }
 	errors

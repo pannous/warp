@@ -84,7 +84,7 @@ Grouped by what the row registers. Group sums are approximate (several small fil
 | 762 | sugar/ (rewrite lines, read as text, 0 compiled bytes) | 28 files |
 | 517 | emitter parts the core names directly | time_values 188 (time intrinsics, time_of), quotes 129, separate_module 187 (the linker: compiler.warp's linked_bytes, see "Side findings") … |
 | 505 | checks and lints | effects 174, match_patterns 171, text_lints 91, int_misfits 84 … |
-| 300 | `use js` (js_globals.warp 218, webidl.warp 82; its .webidl data in flight) | js_globals/ |
+| 300 | `use js` (foreign_globals.warp 218, webidl.warp 82; its .webidl data in flight) | js_globals/ |
 | 269 | int types | int_types/ |
 | 227 | typed templates (`sql "…"`, `sh "…"`: injection-safe lowering, a text pass) | typed_templates |
 | 225 | implicit uses (the on-demand trigger itself) | implicit_uses |

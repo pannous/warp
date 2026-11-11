@@ -1,12 +1,11 @@
 # The hints of the warp compiler (core/diagnostics.warp): pattern TAB message, the first match wins
 alias_word($written, $canonical)	"warp says {canonical}"	"{canonical}"	"alias-{written}@{written}"
-# a word of a standard module the program names without its use (extensions/implicit_uses.warp)
-implicit_use($word, $module)	"{word} is {module}'s"	"use {module}"
 # a foreign type name of the prelude (prelude_words.warp foreign_types): `x: Int`
 foreign_type($written, $canonical)	"{written} is {canonical} in warp"	"{canonical}"	"foreign-type-{written}@{written}"
 # dir of a module, the views of one kind of its words (extensions/dir_hints.warp, card dir-filters)
 dir_views($module)	"dir({module}) lists all its words; {module}.functions, {module}.attributes, {module}.classes and {module}.operators list one kind each"
 # `from list import zip` is `use list` (extensions/from_imports.warp, decision modules-triage)
 from_import($module)	"`from {module} import …` is `use {module}` in warp: every word of {module} is visible"
-# a library's typed name glued to a number though the program binds it, `m = 5; 3m` (rewrites.warp typed_as)
-glued_factor($word, $fix)	"glued to a number, {word} is the library's: write {fix} to multiply"	"{fix}"
+# a unit after a number though the program has a variable of its name, `m = 5; 3m`, `h = 2 inch; 3 km/h`
+# (rewrites.warp typed_as, extensions/rules/rule_words.warp unit_beside_variables)
+unit_beside_variable($word, $fix)	"after a number, {word} is the unit, not the variable {word}: write {fix} to use the variable"	"{fix}"

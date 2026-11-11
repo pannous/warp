@@ -26,13 +26,13 @@
 '(0.25 as float as rational) == 1/4'	yes
 '8 ↑ 2'	64
 '100 ↓ 10'	2
-'str(2h + 30min)'	"2.5h"
-'str(100 cm in m)'	"1m"
+'text(2h + 30min)'	"2.5h"
+'text(100 cm in m)'	"1m"
 '3 cm is length'	yes
-'str([3, 4] cm)'	"[3cm, 4cm]"
-'str(2L)'	"2L"
+'text([3, 4] cm)'	"[3cm, 4cm]"
+'text(2L)'	"2L"
 '3 cm as px'	error
-'str(90km/h)'	"90km/h"
-'str(π/2)'	"π/2"
-'str(2 h in minutes)'	"120min"
+'text(90km/h)'	"90km/h"
+'text(π/2)'	"π/2"
+'text(2 h in minutes)'	"120min"
 'class Person { name: text }; Person as text := it.name; p = Person("Al"); p as text'	"Al"
