@@ -1,0 +1,7 @@
+# a local variable shadows a prelude word from its assignment on, so its own value may be made by that word
+# (user decision 11-11, card prelude-word-variable)
+'f(t: text): int := { bytes = bytes(t); #bytes }; f("abc")'	3
+'f(t: text): int := { x = bytes(t); bytes = x; #bytes }; f("abc")'	3
+'f(t: text): int := { bytes = t.bytes; #bytes }; f("abc")'	3
+'f(t: text): int := { lines = lines(t); #lines }; f("a\nb")'	2
+'f(x: int): int := { g = y => y + x; g(1) }; f(2)'	3
