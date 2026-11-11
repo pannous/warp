@@ -1,4 +1,4 @@
-# 04e101b5aa 2026-11-11 15:16 264/272 97.1%
+# 1adc7f86f6 2026-11-11 19:30 255/272 93.8%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -29,7 +29,6 @@ ok   samples/apps/settings_cli.warp
 ok   samples/apps/site_generator.warp
 ok   samples/apps/todo_cli.warp
 ok   samples/apps/url_report.warp
-ok   samples/clustering/emeans.warp
 ok   samples/conditions/control_flow.warp
 ok   samples/conditions/fizzbuzz.warp
 ok   samples/crates/regex_and_sha2.warp
@@ -39,7 +38,6 @@ ok   samples/errors/raise_error.warp
 ok   samples/errors/try_catch.warp
 ok   samples/errors/try_else.warp
 ok   samples/errors/try_failed_json.warp
-ok   samples/events/arrow_keys.warp
 ok   samples/events/effects.warp
 ok   samples/events/ticks.warp
 ok   samples/functions/ackermann.warp
@@ -96,24 +94,19 @@ ok   samples/gpu/julia.warp
 ok   samples/gpu/kaleidoscope.warp
 ok   samples/gpu/lava_lamp.warp
 ok   samples/gpu/manual_3d_object_viewer.warp
-ok   samples/gpu/northern_lights.warp
-ok   samples/gpu/ocean.warp
 ok   samples/gpu/ringed_planet.warp
 ok   samples/gpu/scene_3d.warp
 ok   samples/gpu/sdf_scene.warp
 ok   samples/gpu/voronoi.warp
 ok   samples/gpu/warp_compiled_wgsl_shader.warp
 ok   samples/graphics/color_swatches.warp
-ok   samples/graphics/finger_paint.warp
 ok   samples/graphics/gaussian_splats.warp
 ok   samples/graphics/make_image.warp
 ok   samples/graphics/meshlet_grid.warp
-ok   samples/graphics/million_trees.warp
 ok   samples/graphics/paint_function.warp
 ok   samples/graphics/paint_text_gpu.warp
 ok   samples/graphics/paint_text.warp
 ok   samples/graphics/shader_brush.warp
-ok   samples/graphics/shader_trails.warp
 ok   samples/graphics/shader.warp
 ok   samples/graphics/webgpu.warp
 ok   samples/graphics/window_size.warp
@@ -193,7 +186,6 @@ ok   samples/python/python_modules.warp
 ok   samples/signals/signal_fields.warp
 ok   samples/sound/arrangement.warp
 ok   samples/sound/filters.warp
-ok   samples/sound/gpu_visualizer_warp.warp
 ok   samples/sound/hum_blocks.warp
 ok   samples/sound/midi.warp
 ok   samples/sound/music.warp
@@ -244,7 +236,6 @@ ok   samples/web/component_binding.warp
 ok   samples/web/component_totals.warp
 ok   samples/web/computed_tags.warp
 ok   samples/web/form_submit.warp
-ok   samples/web/hello_div.warp
 ok   samples/web/html_dsl.warp
 ok   samples/web/html.warp
 ok   samples/web/keyframes.warp
@@ -263,11 +254,20 @@ SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
+FAIL samples/clustering/emeans.warp: samples/clustering/emeans.warp:65:16 `i = …` inside draw_panel could make a new local of draw_panel or change the main-level i: write `let i = …` for draw_panel's own, or `global i = …` to change main
+FAIL samples/events/arrow_keys.warp: samples/events/arrow_keys.warp:1:7 outside the core: the unknown name Key: `use keys` defines it
 FAIL samples/golf/arabic-to-roman.warp: samples/golf/arabic-to-roman.warp:6:23 no + between key 1000: 'M' and int 1
+FAIL samples/gpu/northern_lights.warp: samples/gpu/northern_lights.warp:1:1 outside the core: the unknown name enum
+FAIL samples/gpu/ocean.warp: samples/gpu/ocean.warp:1:7 outside the core: the unknown name Key: `use keys` defines it
+FAIL samples/graphics/finger_paint.warp: samples/graphics/finger_paint.warp:25:12 `i = …` inside stroke could make a new local of stroke or change the main-level i: write `let i = …` for stroke's own, or `global i = …` to change main's; fix:
 FAIL samples/graphics/load_bmp.warp: samples/graphics/load_bmp.warp:1:19 read ./picture.bmp failed: No such file or directory
 FAIL samples/graphics/load_jpeg.warp: samples/graphics/load_jpeg.warp:1:19 read ./photo.jpg failed: No such file or directory
+FAIL samples/graphics/million_trees.warp: samples/graphics/million_trees.warp:1:1 outside the core: the unknown name enum
+FAIL samples/graphics/shader_trails.warp: samples/graphics/shader_trails.warp:1:1 outside the core: the unknown name enum
 TIME samples/lists/dot.warp: used its 30 s of CPU
+FAIL samples/sound/gpu_visualizer_warp.warp: samples/sound/gpu_visualizer_warp.warp:94:1 `n = …` inside surface could make a new local of surface or change the main-level n: write `let n = …` for surface's own, or `global n = …` to change main's
 FAIL samples/sound/harmony.warp: samples/sound/harmony.warp:9:14 outside the core: the unknown name major7
 FAIL samples/web/counter.warp: warp app [check] <file.warp>  the page a markup program shows, in a window of the system's web view (check: the text it shows, or its # check: lines checked, no window)
+FAIL samples/web/hello_div.warp: samples/web/hello_div.warp:1:1 outside the core: the unknown name enum
 FAIL samples/web/keyed_counters.warp: warp app [check] <file.warp>  the page a markup program shows, in a window of the system's web view (check: the text it shows, or its # check: lines checked, no window)
-FAIL samples/web/page_elements.warp: warp app [check] <file.warp>  the page a markup program shows, in a window of the system's web view (check: the text it shows, or its # check: lines checked, no window)
+FAIL samples/web/page_elements.warp: samples/web/page_elements.warp:9:63 outside the core: the unknown name document
