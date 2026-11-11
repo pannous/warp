@@ -498,7 +498,7 @@ addHostPart({
 		// the playground's key), its folder the served root that relative paths start from
 		os: {
 			env(name) { return environmentValue(this.holder.environment, name); }, // the run's (driver.js runEnvironment)
-			args: () => self.programArguments ?? [], // a sample's <name>.args (playground.js programArguments)
+			args: () => self.programArguments ?? [], // a sample's <name>.args (build.sh SAMPLE_ARGUMENTS, by the run's file)
 			cwd: () => ".",
 			stdin: () => "",
 			input: () => null,
