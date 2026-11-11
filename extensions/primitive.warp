@@ -69,8 +69,6 @@ ARENA_EXPORT = "arena"
 load_codes = {"i32 1": [44, 45], "i32 2": [46, 47], "i32 4": [40, 40], "i64 8": [41, 41], "f32 4": [42, 42], "f64 8": [43, 43]}
 store_codes = {"i32 1": 58, "i32 2": 59, "i32 4": 54, "i64 8": 55, "f32 4": 56, "f64 8": 57}
 alignment_exponents = {1: 0, 2: 1, 4: 2, 8: 3}
-global_get = 35
-global_set = 36
 import_function_kind = 0
 # a text is the address of its (address, length) pair, the $String layout of the host edge: a WASI iovec as it is
 TEXT_TYPE = "text"
@@ -109,6 +107,9 @@ global text_addresses = {}
 # the file's constants: each top-level name given a number literal once, which every function and main read as that
 # literal
 global primitive_constants = {}
+# the file's `global count = 0`: [name → [index, type, initial value's code]], each a mutable wasm global behind the
+# arena's, read and written by every function as `global` names one in a GC program
+global primitive_globals = {}
 
 # a source whose leading header, its `#!` line, comments and blank lines before the code, holds the mark builds whole
 # in primitive mode; the mark on its own line below the code is refused, the file would compile as GC warp unmarked
@@ -155,8 +156,10 @@ primitive_module(source: text, folder: text): list := {
 	}
 	for imported in c_functions { declare_c_function(imported#1, imported#2) }
 	primitive_constants = constants_of(statements)
+	primitive_globals = {}
+	for n in statements.filter(n => declared_global_name(n) != ø) { declare_global(n) }
 	main_statements = []
-	for n in statements.filter(n => not struct_declared(n) and foreign_import(n) == ø) {
+	for n in statements.filter(n => not struct_declared(n) and foreign_import(n) == ø and declared_global_name(n) == ø) {
 		head = function_head(n)
 		if head == ø { if not defines_constant(n) { main_statements += [n] } } else if not forwards_to_library(name_of(head#1), value_of(n)) { declare_primitive(head, value_of(n)) }
 	}
@@ -175,6 +178,13 @@ constants_of(statements: list): map := {
 		if is_key(n, Op.Assign) and key_of(n) is symbol and (value_of(n) is int or value_of(n) is float) and #assigned.filter(name => name == name_of(key_of(n))) == 1 { found[name_of(key_of(n))] = value_of(n) }
 	}
 	found
+}
+# `global count = 0`: a global of its number's type, as a local given it takes
+declare_global(n: Node) {
+	declaration = if is_group(n) then n#2 else value_of(n)
+	if not (is_key(declaration, Op.Assign) and (value_of(declaration) is int or value_of(declaration) is float)) { primitive_refusal(n, "a global not given a number") }
+	initial = mvp_literal(value_of(declaration), "")
+	primitive_globals[declared_global_name(n)] = [ARENA_TOP + 1 + #primitive_globals, initial.type, initial.code]
 }
 defines_constant(n: Node): bool := is_key(n, Op.Assign) and key_of(n) is symbol and name_of(key_of(n)) in primitive_constants
 # the body with each constant read as its literal, but where a parameter of that name hides it
@@ -380,6 +390,7 @@ as_i32(n: int): int := if n >= 1 << 31 then n - (1 << 32) else n
 mvp_variable(f: PrimitiveFunction, n: Node): PrimitiveCode := {
 	name = name_of(n)
 	if name == "break" { return mvp_breaking(f, n) }
+	if name not in f.locals and name in primitive_globals { return PrimitiveCode(primitive_globals[name]#2, [op.global_get] + uleb(primitive_globals[name]#1)) }
 	if name not in f.locals { primitive_refusal(n, "the unknown name " + name) }
 	PrimitiveCode(f.locals[name]#2, [op.local_get] + uleb(f.locals[name]#1))
 }
@@ -510,6 +521,7 @@ mvp_assigned(f: PrimitiveFunction, target: Node, value: Node, n: Node): Primitiv
 	if not (target is symbol) { primitive_refusal(n, "an assignment to " + form_of(target)) }
 	name = name_of(target)
 	if name in f.locals { return PrimitiveCode(NO_VALUE, mvp_typed(f, value, f.locals[name]#2) + [op.local_set] + uleb(f.locals[name]#1)) }
+	if name in primitive_globals { return PrimitiveCode(NO_VALUE, mvp_typed(f, value, primitive_globals[name]#2) + [op.global_set] + uleb(primitive_globals[name]#1)) }
 	given = mvp_emitted(f, value, "")
 	if given.type == NO_VALUE { primitive_refusal(n, "an assignment of a statement") }
 	PrimitiveCode(NO_VALUE, given.code + [op.local_set] + uleb(mvp_local_of(f, name, given.type)))
@@ -629,13 +641,14 @@ def primitive_bytes(functions: list): list {
 	imports = vector(imported.map(f => name_bytes(f.library) + name_bytes(written_name(f.name)) + [import_function_kind] + uleb(f.index)))
 	declared = vector(defined.map(f => uleb(f.index)))
 	memory = vector([[0] + uleb(MEMORY_PAGES)])
-	arena = vector([[value_bytes.i32, 1, op.i32_const] + sleb(aligned(DATA_START + #primitive_data, ARENA_ALIGNMENT)) + [op.end]])
+	declared_globals = primitive_globals.keys.map(name => [value_bytes[mvp_wasm_of(primitive_globals[name]#2)], 1] + primitive_globals[name]#3 + [op.end])
+	globals = vector([[value_bytes.i32, 1, op.i32_const] + sleb(aligned(DATA_START + #primitive_data, ARENA_ALIGNMENT)) + [op.end]] + declared_globals)
 	exports = vector([name_bytes("memory") + [export_memory_byte, 0], name_bytes(ARENA_EXPORT) + [export_global_byte, ARENA_TOP]] + defined.map(f => name_bytes(export_name(f)) + [export_function_byte] + uleb(f.index)))
 	code = vector(defined.map(primitive_body))
 	data = vector([[0, op.i32_const] + sleb(DATA_START) + [op.end] + vector(primitive_data.map(b => [b]))])
 	c_lines = imported.filter(f => f.library != WASI_LIBRARY).map(c_function_line).join("")
 	c_functions = if c_lines == "" then [] else section(section_ids.custom, name_bytes(PRIMITIVE_C_SECTION) + c_lines.bytes)
-	wasm_header + section(section_ids.type, vector(types)) + section(section_ids.import, imports) + section(section_ids.function, declared) + section(section_ids.memory, memory) + section(section_ids.globals, arena) + section(section_ids.export, exports) + section(section_ids.code, code) + section(section_ids.data, data) + c_functions
+	wasm_header + section(section_ids.type, vector(types)) + section(section_ids.import, imports) + section(section_ids.function, declared) + section(section_ids.memory, memory) + section(section_ids.globals, globals) + section(section_ids.export, exports) + section(section_ids.code, code) + section(section_ids.data, data) + c_functions
 }
 # the C functions a module imports, for the native driver to call under wasmtime as a native build's glue does
 # (c_function_glue; decision primitive-c-in-driver): a line each of the fields driver.warp reads of a GC module's
@@ -700,13 +713,13 @@ memory_argument(field: list): list := uleb(alignment_exponents[mvp_scalar(field#
 # to ARENA_ALIGNMENT
 arena_taken(size: list): list := {
 	rounded = size + [op.i32_const] + sleb(ARENA_ALIGNMENT - 1) + [op.i32_add, op.i32_const] + sleb(-ARENA_ALIGNMENT) + [op.i32_and]
-	[global_get, ARENA_TOP, global_get, ARENA_TOP] + rounded + [op.i32_add, global_set, ARENA_TOP] + arena_grown()
+	[op.global_get, ARENA_TOP, op.global_get, ARENA_TOP] + rounded + [op.i32_add, op.global_set, ARENA_TOP] + arena_grown()
 }
 # the memory grown by the pages it lacks when the arena's top passed its end (a failed grow traps at the next store)
 arena_grown(): list := {
 	memory_end = [memory_size, 0, op.i32_const, WASM_PAGE_BITS, arithmetic_codes.i32 + integer_arithmetic.shl]
-	missing = [global_get, ARENA_TOP] + memory_end + [op.i32_sub, op.i32_const] + sleb(WASM_PAGE_BYTES - 1) + [op.i32_add, op.i32_const, WASM_PAGE_BITS, arithmetic_codes.i32 + integer_arithmetic.shr + 1]
-	[global_get, ARENA_TOP] + memory_end + [comparison_codes.i32 + integer_comparisons.gt + 1, op.if, empty_block_type] + missing + [memory_grow, 0, op.drop, op.end]
+	missing = [op.global_get, ARENA_TOP] + memory_end + [op.i32_sub, op.i32_const] + sleb(WASM_PAGE_BYTES - 1) + [op.i32_add, op.i32_const, WASM_PAGE_BITS, arithmetic_codes.i32 + integer_arithmetic.shr + 1]
+	[op.global_get, ARENA_TOP] + memory_end + [comparison_codes.i32 + integer_comparisons.gt + 1, op.if, empty_block_type] + missing + [memory_grow, 0, op.drop, op.end]
 }
 
 # the address of a text literal's (address, length) pair in the data, its bytes in front of it; each text once
