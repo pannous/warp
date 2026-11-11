@@ -48,6 +48,8 @@ export_global_byte = 3
 # the globals the runner reads after a trap: the value a runtime error names,
 # the position of the statement it happened in, the name of the runtime word it failed in (trap_name: the runner no
 # longer needs that word's frame on the stack, which Cranelift's inlining takes away)
+# whether the run drops its runtime checks (a --fast program sets it at its start): the runtime's checks read it
+CHECKS_DROPPED = "checks_dropped"
 exported_globals = ["trap_detail", "text_heap", "trap_position", "trap_name", CHECKS_DROPPED]
 # trap_position holds line * columns_per_line + column
 columns_per_line = 4096
@@ -97,8 +99,6 @@ closure_call_type_prefix = "closure_call_type_"
 # tag warp_error(i32), which the try's try_table catches; otherwise it traps as before
 error_tag_name = "warp_error"
 try_depth_name = "try_depth"
-# whether the run drops its runtime checks (a --fast program sets it at its start): the runtime's checks read it
-CHECKS_DROPPED = "checks_dropped"
 trap_name_global = "trap_name"
 # the globals a runtime error sets, which a host reads after the run failed (exported_trap_message)
 raising_globals = [trap_name_global, "trap_detail"]
