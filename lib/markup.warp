@@ -334,7 +334,15 @@ html_render(live: html, scope: any, chosen: any) := {
 		return out
 	}
 	if value == ø { return "" }
+	if html_is_listed_element(value) { html_warning_once(html_name(value) + ": {…} here is data, shown as text: markup is made inside html{…} or in a place typed html (`bars: html = [div{…} for l in lengths]`, decision markup-needs-html)") }
 	html_escaped(html_plain(value))
+}
+
+// the warnings a render gave, each given once (a thousand data bars warn once)
+html_warned = []
+html_warning_once(message: text) := if not contains(html_warned, message) {
+	html_warned.add(message)
+	warning(message)
 }
 
 // an Html named as an element (one of computed name, `("h" + level): title`, may name none: data)
