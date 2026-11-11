@@ -2,7 +2,7 @@
 // paint (the playground's canvas, natively a PNG). A color is a number 0xAARRGGBB: the color module's (rgb, hsv, the named colors, with_alpha)
 use math
 use color
-// the canvas until canvas(width, height) sizes it: show() alone paints this one, the size of the playground's output pane,
+// the canvas until canvas.size(width, height) sizes it: show() alone paints this one, the size of the playground's output pane,
 // natively 640×480
 global canvas_width: int = view_width
 global canvas_height: int = view_height
@@ -10,8 +10,11 @@ global canvas_height: int = view_height
 // here then, show() sends the shapes drawn since the last one
 global drawing_on_gpu = gpu_drawing
 global canvas_pixels = blank_pixels(pixels_for(view_width, view_height))
-// paper: the canvas before anything is drawn, as paint shows 0 (rust-harness:src/graphics/pixels.rs PAPER; test_paint_shades)
-paper = 0xFFFAFAFA
+// the color of the canvas before anything is drawn, as paint shows 0 (rust-harness:src/graphics/pixels.rs PAPER;
+// test_paint_shades): clear(canvas) clears to it
+blank_color = 0xFFFAFAFA as Color
+// paper, the old word for the blank canvas: clear(paper) is clear(canvas)
+paper() := canvas()
 // the pixel a coordinate falls in
 cell(v: float): int := floor(v) as int
 
@@ -58,7 +61,8 @@ pixels_for(width, height) := if drawing_on_gpu then 0 else width * height
 // `canvas_pixels[4] == red`)
 blank_pixels(count: int) := filled_list(count, 0)
 
-// canvas(width, height) sizes the window too (card window-canvas-size), which then shows the canvas pixel for pixel
+// canvas.size(width, height), also canvas(width, height), sizes the window too (card window-canvas-size), which then
+// shows the canvas pixel for pixel
 def canvas(width, height) {
 	canvas_width = width
 	canvas_height = height
@@ -66,13 +70,13 @@ def canvas(width, height) {
 	window.width = width
 	window.height = height
 }
-// a window sized apart from the canvas (`window.width = 800` after canvas(200, 100)) shows it scaled: said once, a hint
+// a window sized apart from the canvas (`window.width = 800` after canvas.size(200, 100)) shows it scaled: said once, a hint
 // (on standard error as the page has it too: os's eprint is C's stdio, which no page has)
 global size_difference_said = no
 size_difference_told() := {
 	if size_difference_said or (window.width == canvas_width and window.height == canvas_height) { return ø }
 	size_difference_said = yes
-	hint "the canvas is ${canvas_width}×${canvas_height}, the window ${window.width}×${window.height}: the canvas is shown scaled; canvas(w, h) sizes both"
+	hint "the canvas is ${canvas_width}×${canvas_height}, the window ${window.width}×${window.height}: the canvas is shown scaled; canvas.size(w, h) sizes both"
 }
 // the canvas's size as properties (decision property-accessors): written, it is a new blank canvas, as an HTML canvas is
 canvas.width := canvas_width
@@ -80,7 +84,9 @@ canvas.width(new_width) := canvas(new_width, canvas_height)
 canvas.height := canvas_height
 canvas.height(new_height) := canvas(canvas_width, new_height)
 
-def clear(color) {
+// clear(red) fills the canvas with red; clear(canvas), canvas.clear(), clear it to its blank color
+def clear(what) {
+	color = if what is Canvas then blank_color else what
 	if drawing_on_gpu { draw_shape(clear_shape, 0, 0, 0, 0, color as int) }
 	else { for i in 0..canvas_width * canvas_height { canvas_pixels[i] = color as Color } }
 }
@@ -88,7 +94,7 @@ def clear(color) {
 // the color over what is there, mixed by its alpha
 def mixed(below: int, color: int): int {
 	a = alpha_of(color)
-	under = if below == 0 then paper else below
+	under = if below == 0 then blank_color else below
 	if a >= 255 { return color }
 	if a <= 0 { return under }
 	0xFF000000 + channel_mix(color, under, a, 65536) * 65536 + channel_mix(color, under, a, 256) * 256 + channel_mix(color, under, a, 1)
@@ -150,16 +156,18 @@ def show() {
 }
 
 // save canvas as: ./painting.png, save(canvas, ./painting.png) or canvas.save(./painting.png) (card save-painting;
-// decision save-picture-word: save is typed by the Picture, no bare save ./painting.png beside file's save): the canvas
+// decision save-picture-word: save is typed by the Canvas, no bare save ./painting.png beside file's save): the canvas
 // as drawn so far as a PNG, natively that file, in the playground a download. On the GPU the pixels are there, not
 // here: the host draws them again
-class Picture {
+class Canvas {
 	format as text := "canvas ${canvas_width}×${canvas_height}"
 }
 // the canvas as drawn so far (decision saved-words): canvas() beside canvas(width, height), so the bare word canvas,
-// its call, is a Picture
-canvas() := Picture()
-save(made: Picture, as file) := {
+// its call, is the Canvas
+canvas() := Canvas()
+// canvas.size(width, height): a blank canvas of that size, the window too
+size(made: Canvas, width: int, height: int) := canvas(width, height)
+save(made: Canvas, as file) := {
 	if drawing_on_gpu { draw_shader(shape_shader) }
 	failed = save_picture(painted_pixels(), canvas_width, canvas_height, file)
 	if failed { raise failed }
