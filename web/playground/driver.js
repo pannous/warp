@@ -87,12 +87,13 @@ function ranToEnd(exports, output, exitCode = () => undefined, shown) {
 // main's value as _start prints it (core/emitter/emitter.warp: show), "" for ø, which _start leaves unprinted
 const shownValue = (exports, value) => value === null ? "" : textOfArray(exports.show(value));
 
-// a $text (type 0 of every module the compiler writes, `(array (mut i8))` in no rec group) read from JavaScript by a
-// module of that one type, which wasm GC takes for the same type as the program's:
-//   (module (type $text (array (mut i8)))
+// a $text (type 0 of every module the compiler writes, `(sub (array (mut i8)))` in no rec group, open for its
+// $AsciiText subtype) read from JavaScript by a module of that one type, which wasm GC takes for the same type as the
+// program's (a final `(array (mut i8))` is another type: card page-hello-ref-type):
+//   (module (type $text (sub (array (mut i8))))
 //     (func (export "length") (param (ref null $text)) (result i32) local.get 0 array.len)
 //     (func (export "byte") (param (ref null $text) i32) (result i32) local.get 0 local.get 1 array.get_u $text))
-const TEXT_READER = "AGFzbQEAAAABEQNeeAFgAWMAAX9gAmMAfwF/AwMCAQIHEQIGbGVuZ3RoAAAEYnl0ZQABChICBgAgAPsPCwkAIAAgAfsNAAsADgRuYW1lBAcBAAR0ZXh0";
+const TEXT_READER = "AGFzbQEAAAABEwNQAF54AWABYwABf2ACYwB/AX8DAwIBAgcRAgZsZW5ndGgAAARieXRlAAEKEgIGACAA+w8LCQAgACAB+w0ACwAOBG5hbWUEBwEABHRleHQ=";
 let textReader;
 function textOfArray(text) {
 	textReader ??= new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(atob(TEXT_READER), letter => letter.charCodeAt(0)))).exports;

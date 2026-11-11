@@ -419,6 +419,7 @@ def folded_bytes(bytes: list): int {
 class LibraryImage { name: text; functions: list; globals: list; classes: list; builders: list; base: list }
 def link_libraries(images: list, own_names: list) {
 	module.linked_images = images
+	module.linked_places = linked_places_of(images)
 	module.linked_own_names = own_names
 	module.linked_words = {}
 	linked_extended = {}
@@ -686,16 +687,25 @@ written_definitions(code: Node): list := {
 # a linked module's word of that name, bound to it, else ø: a class's descriptor, a runtime module's word the emitter
 # calls (extension.warp runtime_modules)
 def linked_word(name: text): Function? {
-	for image in module.linked_images {
+	place = module.linked_places.get(name)
+	if place == ø { return ø }
+	image = place#1
+	k = place#2
+	f = Function(name, Signature(image.functions[k].kinds.map(kind => Parameter(""))), ø)
+	bound_to(f, image, k)
+	f
+}
+# each linked function's name → [its image, its place there], the first image's of a name (one walk a link, never one
+# a lookup)
+linked_places_of(images: list): map := {
+	places = {}
+	for image in images {
 		for k in 0..<#image.functions {
-			if image.functions[k].name == name {
-				f = Function(name, Signature(image.functions[k].kinds.map(kind => Parameter(""))), ø)
-				bound_to(f, image, k)
-				return f
-			}
+			name = image.functions[k].name
+			if not places.has(name) { places[name] = [image, k] }
 		}
 	}
-	ø
+	places
 }
 # a word the program declares (prelude_words.warp declared_only: its body ø, or kept for a block it takes) and binds
 # to no module's yet; a definition of its own stays its own though a module writes the name too: money's Money.compare,

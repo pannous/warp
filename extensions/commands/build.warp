@@ -70,11 +70,14 @@ is_macos(): bool := shell("uname") == "Darwin"
 # the folder a file's uses are read from: "." for a file named without one
 source_folder(file: text): text := if folder_of(file) == "" then "." else folder_of(file)
 # `warp build [--wasm|--exe] [--trim=<way>] app.warp` (wiki/cli.md; `warp compile` is build --wasm): a primitive file as a native executable (build_native),
-# with --wasm as its module app.wasm (which core/native/driver.warp runs); any other as app.full.wasm (behind the whole runtime), app.mod.wasm (importing runtime.wasm), app.wasm (app.full.wasm
-# trimmed by Binaryen's wasm-opt) and the executable app (the native driver carrying app.wasm). The native
-# warp adds where runtime.wasm lies, --runtime=<file> (and the old Rust stub's --stub=<file>, read no more)
+# with --wasm as its module app.wasm (which core/native/driver.warp runs); any other as the executable app (the native
+# driver carrying app.wasm) with the modules it loads beside it (modules_beside), or with --wasm as app.full.wasm (behind
+# the whole runtime), app.mod.wasm (importing runtime.wasm) and app.wasm (app.full.wasm trimmed by Binaryen's wasm-opt)
+# (decision build-three-outputs, user 11-11). The native warp adds where runtime.wasm lies, --runtime=<file> (and the
+# old Rust stub's --stub=<file>, read no more)
 OPTION_MARK = "--"
 WASM_ONLY = "--wasm"
+# (the default's former name)
 EXE_ONLY = "--exe"
 # what a build of inline code is called: out.wasm, the executable out
 INLINE_STEM = "out"
@@ -123,8 +126,9 @@ build(words: list) := {
 		modules_beside(stem + ".wasm", stem)
 	}
 	if routes_seen and not (WASM_ONLY in options) { print stem + " serves its routes at 8080, another port with --port <n>" }
-	if EXE_ONLY in options { shell("rm -f " + modules.map(quoted_path).join(" ")) } else {
-		for written in modules { print "compiled " + size_of(written) + " bytes to " + written }
+	if WASM_ONLY in options { for written in modules { print "compiled " + size_of(written) + " bytes to " + written } } else {
+		# (the executable carries app.wasm: the modules were its making)
+		shell("rm -f " + modules.map(quoted_path).join(" "))
 	}
 	ø
 }
@@ -232,20 +236,25 @@ write_executable(module: text, executable: text) := {
 # each module the native driver links at a host word's first call whose word the program imports (unicode's
 # canonical_text), the modules these import in turn, and the runtime.wasm they link; none for a program importing none
 LINKED_ON_DEMAND = ["unicode", "native_host"]
-LINKED_MODULE_PREFIX = "warp/"
 modules_beside(module: text, executable: text) := {
 	imported = wasm_imported(read_bytes(module)).names.filter(name => name#1 == host_module).map(name => name#2)
 	wanted = LINKED_ON_DEMAND.filter(name => wasm_export_names(read_bytes(library_module(name))).any(word => word in imported))
 	needed = modules_imported_by(wanted)
 	if #needed > 0 {
-		folder = source_folder(executable)
-		shell("mkdir -p " + quoted_path(folder + "/" + MODULES_FOLDER) + " && cp " + quoted_path(runtime_path()) + " " + quoted_path(folder + "/" + RUNTIME_WASM))
-		for name in needed { shell("cp " + quoted_path(library_module(name)) + " " + quoted_path(folder + "/" + MODULES_FOLDER + "/" + name + ".wasm")) }
-		print "linked at run time, beside " + executable + ": " + RUNTIME_WASM + ", " + needed.map(name => MODULES_FOLDER + "/" + name + ".wasm").join(", ")
+		# (a write into a missing folder makes it)
+		files = [RUNTIME_WASM] + needed.map(name => MODULES_FOLDER + "/" + name + ".wasm")
+		for file in files { write_bytes(source_folder(executable) + "/" + file, read_bytes(folder_of(runtime_path()) + "/" + file)) }
+		print "linked at run time, beside " + executable + ": " + files.join(", ")
 	}
 }
+# the modules a prebuilt module links, as its signature records them
+module_links(name: text): list := {
+	signature = prebuilt_signature(name)
+	if signature == ø or signature.links == ø { raise library_module(name) + " records no links: built before modules recorded them; warp rebuild" }
+	signature.links
+}
 library_module(name: text): text := folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + name + ".wasm"
-# the modules and those they import (`warp/<m>`), each once
+# the modules and those they link (their signature's links), each once
 modules_imported_by(names: list): list := {
 	found = []
 	waiting = names
@@ -254,7 +263,7 @@ modules_imported_by(names: list): list := {
 		waiting = waiting[1 ..]
 		if name not in found {
 			found += [name]
-			waiting += wasm_imported(read_bytes(library_module(name))).names.map(name => name#1).filter(from => from.starts_with(LINKED_MODULE_PREFIX)).map(from => from.remove_prefix(LINKED_MODULE_PREFIX))
+			waiting += module_links(name)
 		}
 	}
 	found
