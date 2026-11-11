@@ -173,19 +173,16 @@ with_text_passes(program: Node): Node := {
 	for pass in hooks().text_passes { passed = pass(passed) }
 	passed
 }
-# the standard modules a source uses without saying it, as the scanners given find them (Extension.implicit_uses), its
-# tree parsed once for all of them
-modules_found(source: text, folder: text, scanners: list): list := {
-	tree = parsed(source)
-	concatenated(scanners.map(found => found(source, tree, folder)))
-}
+# the standard modules a source uses without saying it, as the scanners given find them (Extension.implicit_uses), from
+# its tree, parsed once for all of them
+modules_found(source: text, tree: Node, folder: text, scanners: list): list := concatenated(scanners.map(found => found(source, tree, folder)))
 # a module brings implicitly only runtime modules: the implicit uses of the extensions that have some (a module's text
 # names words of several modules, `at`, which its own uses settle)
 runtime_module_scanners(): list := EXTENSIONS.filter(extension => #extension.runtime_modules > 0).flat_map(extension => extension.implicit_uses)
 # the standard modules a program uses without saying it, as every extension finds them (`warp uses`)
-implicit_modules_of(source: text, folder: text = "."): list := modules_found(source, folder, hooks().implicit_uses)
-# the runtime modules a module's or a used file's text needs
-runtime_modules_needed(source: text): list := modules_found(source, ".", runtime_module_scanners())
+implicit_modules_of(source: text, folder: text = "."): list := modules_found(source, parsed(source), folder, hooks().implicit_uses)
+# the runtime modules a module's or a used file's text needs, from its tree
+runtime_modules_needed(source: text, tree: Node): list := modules_found(source, tree, ".", runtime_module_scanners())
 # a match's arms through every extension's arm lowerings, in row order
 with_arm_lowerings(arms: list, subject: Node, variants: map): list := {
 	lowered = arms

@@ -924,8 +924,10 @@ with_implicit_uses(source: text, folder: text = "."): text := {
 	# extensions' implicit uses scan a program's)
 	written = written_source(source)
 	written_uses = used_modules(written)
-	found = modules_found(written, folder, implicit_scanners())
-	needed = found + runtime_modules_reached(written_uses + found, folder) + files_runtime_modules(written, folder)
+	tree = parsed(written)
+	found = modules_found(written, tree, folder, implicit_scanners())
+	# (a compile whose extension rows bring no runtime module, the compiler's own build, looks for none)
+	needed = if #hooks().runtime_modules == 0 then [] else found + runtime_modules_reached(written_uses + found, folder) + files_runtime_modules(tree, folder)
 	runtime = hooks().runtime_modules.filter(name => name in needed and name != module_written and name not in written_uses)
 	implicitly_used = found.filter(name => not is_runtime_module(name)) + runtime
 	# (a runtime module is linked as runtime.wasm is, linked_libraries, never a `use` of the program; only a `warp build`
@@ -951,24 +953,27 @@ module_runtime_modules(name: text): list := {
 	if not runtime_modules_by_module.has(name) {
 		# (a prebuilt module's signature says them, the modules it links; only one built before it did is read and scanned)
 		signature = prebuilt_signature(name)
-		runtime_modules_by_module[name] = if signature != ø and signature.links != ø then signature.links.filter(is_runtime_module) else runtime_modules_needed(used_module_text(name))
+		runtime_modules_by_module[name] = if signature != ø and signature.links != ø then signature.links.filter(is_runtime_module) else text_runtime_modules(used_module_text(name))
 	}
 	runtime_modules_by_module[name]
 }
+text_runtime_modules(source: text): list := runtime_modules_needed(source, parsed(source))
 # a file's and those it uses in turn, beside it (a file using itself is read once)
 file_runtime_modules(file: text): list := {
 	if not runtime_modules_by_module.has(file) {
 		runtime_modules_by_module[file] = []
-		written = file_text(file) ?? ""
-		runtime_modules_by_module[file] = runtime_modules_needed(written) + runtime_modules_reached(used_modules(written), folder_of(file)) + files_runtime_modules(written, folder_of(file))
+		written = file_text(file)
+		if written != ø {
+			tree = file_parsed(file)
+			runtime_modules_by_module[file] = runtime_modules_needed(written, tree) + runtime_modules_reached(used_modules(written), folder_of(file)) + files_runtime_modules(tree, folder_of(file))
+		}
 	}
 	runtime_modules_by_module[file]
 }
-# the runtime modules of the files a source uses by path, `use "../../packages/colors/colors.warp"`: used_modules reads
-# code only, its texts blanked, so these come from the parsed uses (only a source naming a .warp file is parsed)
-files_runtime_modules(source: text, folder: text): list := {
-	if not source.contains(module_extension) { return [] }
-	statements = statements_in(plain_node(parsed(source))).filter(statement => use_target(statement) is text)
+# the runtime modules of the files a tree uses by path, `use "../../packages/colors/colors.warp"`: used_modules reads
+# code only, its texts blanked, so these come from the parsed uses
+files_runtime_modules(tree: Node, folder: text): list := {
+	statements = statements_in(plain_node(tree)).filter(statement => use_target(statement) is text)
 	statements.map(statement => file_used(statement, folder)).filter(file => file != ø).flat_map(file_runtime_modules)
 }
 # the standard modules defining a word, from the library index (library.warp library_index_section "word")
