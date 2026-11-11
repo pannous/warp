@@ -273,7 +273,7 @@ write_repository_served_files
 
 # a folder per guide chapter (notes/samples.md); golf/ and wit/ hold no menu samples, native/ only natively built ones
 python3 - "$page/samples.js" $(ls samples/*/*.warp | grep -v '^samples/\(golf\|wit\|native\)/') <<'PYTHON'
-import collections, json, os, re, sys
+import collections, glob, json, os, re, sys
 # a sample a browser cannot run says so on a line of its own, `# host: native: <why>` (or none), and stays out of the
 # menu (test_in_browser.py HOST_LINE)
 NOT_IN_PAGE = re.compile(r"^# host: (native|none)\b", re.M)
@@ -307,9 +307,9 @@ with open(sys.argv[1], "w", encoding="utf-8") as script:
 	script.write("// each sample's file, which its runs name their neighbours beside (playground.js programFile)\n")
 	script.write("const SAMPLE_FILES = " + json.dumps(names, indent="\t") + ";\n")
 	# a sample's <name>.args beside it, one argument a line, as `use os; args` gives them natively in the tests
-	# (tests/common arguments_beside): a song visualizer plays its first seconds only (card playground-browser)
-	beside = {name: path[:-len(".warp")] + ".args" for name, path in names.items()}
-	arguments = {name: open(file, encoding="utf-8").read().splitlines() for name, file in beside.items() if os.path.exists(file)}
+	# (tests/common arguments_beside) and scripts/samples.sh, by its file: a song visualizer plays its first seconds
+	# only (card playground-browser), a golf sample gets its inputs though the menu leaves it out
+	arguments = {file[:-len(".args")] + ".warp": open(file, encoding="utf-8").read().splitlines() for file in sorted(glob.glob("samples/*/*.args"))}
 	script.write("const SAMPLE_ARGUMENTS = " + json.dumps(arguments, ensure_ascii=False) + ";\n")
 PYTHON
 echo "built $page/samples.js"
