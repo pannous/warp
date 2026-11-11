@@ -180,7 +180,6 @@ line_module_refusal(folder: text, name: text, lines: list, wasm_file: text): tex
 	try { module_compiled_behind(name, source, read_bytes(runtime_path()), wasm_file) } catch refused { refusal = refusal_said(refused) }
 	refusal
 }
-}
 # where a line's text is kept: never as <name>.warp, which would take a later line's `use <name>` as a file to compile
 # in, not the module to link (prelude_words.warp taken_as_file), its instance's state then not the one read
 line_text_file(folder: text, name: text): text := path_in(folder, name + ".line" + module_extension)
