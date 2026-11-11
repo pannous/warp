@@ -127,7 +127,7 @@ elif wants 2; then
 	else
 		targets=$files; ((folders)) && targets=$(dirname $files | sort -u)
 		# the files where they lie: warp test runs a file's pairs in its own folder, so a test's relative paths
-		# (../fixtures/…) hold (a copy into one folder of their own failed test_shell_find_typed, 11-05)
+		# (../fixtures/…) hold (a copy into one folder of their own failed test_shell, 11-05)
 		timeout 2400 "$warp" test $targets > "$logs/tests.log" 2>&1; status=$?
 		# red: a line the baseline had ✓ that fails now, or a line this change wrote that fails; a line red before the
 		# change is a known red, counted, never the gate's failure (a touched file's old reds kept tier 2 red for days)

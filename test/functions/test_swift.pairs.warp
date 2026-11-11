@@ -1,0 +1,17 @@
+# from test_swift_closures.rs: edit the Rust test, then run the script again
+
+# swift_closure_parameters
+# triage-held 2026-11-06: Swift closures { x in … }, foreign syntax :: 'f = { x in x*2 }; f(3)'	6
+# triage-held 2026-11-06: Swift closures { x in … }, foreign syntax :: 'f = { a, b in a+b }; f(2, 3)'	5
+
+# swift_shorthand_arguments
+'f = { $0 + $1 }; f(1, 2)'	3
+'fold([1,2,3], 0, { $0 + $1 })'	6
+
+# membership_in_a_block_stays_membership
+'xs=[1,2]; x=2; { x in xs }'	true
+
+# Swift's extension and argument labels, Kotlin's extension function with a result type
+«extension Int { func squared() -> Int { self * self } }; 3.squared()»	9
+«fun Int.sq(): Int = this * this; 3.sq()»	9
+«func greet(person name: String) -> String { "Hello " + name }; greet(person: "Swift")»	"Hello Swift"

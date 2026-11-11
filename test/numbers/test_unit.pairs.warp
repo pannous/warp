@@ -1,0 +1,21 @@
+# a list's items are each their own: a unit word after a comma is no amount's unit
+'match [1, "x"] { [1, s] => s; _ => "no" }'	'x'
+'count([2, km])'	2
+'str([1, m])'	'[1, 1m]'
+'[1 m, 2 m] == [1m, 2m]'	true
+
+# a unit after a comparison's right side binds to its number (card hour-minute-equality): x == (120 minutes)
+'x = 2 hours; x == 120 minutes'	yes
+'x = 2 hours; x != 120 minutes'	no
+'x = 2 hours; x == 2 minutes'	no
+'x = 90 seconds; 1.5 minutes == x'	yes
+
+# from test_unit_named_variable.rs: edit the Rust test, then run the script again
+
+# a_loop_variable_named_like_a_unit
+'sum = 0; for g in 1 to 3 { sum += g }; sum'	6
+'sum = 0; for m in [2 3] { sum += m * 10 }; sum'	50
+
+# an_assigned_variable_named_like_a_unit
+'g = 5; g + 1'	6
+'m = 3; m * 2'	6

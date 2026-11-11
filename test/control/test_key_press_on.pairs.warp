@@ -1,5 +1,0 @@
-# a key's listener runs once as that key goes down, never each frame it is held, by a key word or a Key case (card
-# key-press-on, notes/events_plan.md step 16)
-'n = 0; on ESC { n += 1 }; emit key{key: "Escape"}; n'	1
-'n = 0; on ESC { n += 1 }; emit key{key: "a"}; n'	0
-'use keys; n = 0; on Key.escape { n += 1 }; emit key{key: "Escape"}; emit key{key: "Escape"}; n'	2

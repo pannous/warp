@@ -366,7 +366,7 @@ least 50 ms of slack and never bound a count from above by a few milliseconds.
     the busy sleep only without JSPI. Takes card promise-await-page. Test: test_js_callbacks:4 and :7 green in the
     page lane.
 11. **deferred-callbacks** (core: foreign.c + lib/callbacks.warp, careful). Thread-aware trampolines and the ring;
-    `cancel cb` gives a slot back; overflow warns once. Test (test/ffi/test_c_callbacks.pairs.warp): a callback passed
+    `cancel cb` gives a slot back; overflow warns once. Test (test/ffi/test_c.pairs.warp): a callback passed
     to pthread_create as its start routine runs in the loop: `n = 0; f = c_callback(p => { n += 1; 0 }, ["handle"]);
     pthread_create(calloc(1, 8), 0, f, 0); sleep 100 ms; n` gives 1 (pthread_create declared from 'c').
 12. **cancel-handles** (lib, mechanical; Q2 decided). `cancel h` for timers and every source. Test: `'n = 0; t = on

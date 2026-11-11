@@ -1,0 +1,23 @@
+# from test_print_juxtaposed.rs: edit the Rust test, then run the script again
+
+# a_text_next_to_values_prints_joined
+'x=3; print "a " x'	ø
+'x=10; on set x {print "x changed to " value}; x=3'	ø
+
+# from test_print_lists.rs: edit the Rust test, then run the script again
+
+# print_of_a_list_gives_nothing
+'xs=[1,2]; y = print xs; y'	ø
+'print [[1,2],[3]]'	ø
+
+# from test_print_type_error.rs: edit the Rust test, then run the script again
+
+# text_times_number_says_how_to_repeat_a_text
+'"ab"*2'	'abab'
+'x="ab"; x*3'	'ababab'
+
+# from test_print_walk.rs: edit the Rust test, then run the script again
+
+# print_name_in_a_text_walks_it
+'print chars in "hello"'	ø
+'c = "e"; print c in "hello"'	ø
