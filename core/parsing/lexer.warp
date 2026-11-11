@@ -119,8 +119,8 @@ def comment_end(source: text, at: int, n: int): int {
 }
 
 // After the block comment `/* … */` (`/# … #/` with the mark #) opening at `at`; comments nest:
-// `/* outer /* inner */ still outer */`
-def block_comment_end(source: text, at: int, mark: text, n: int): int {
+// `/* outer /* inner */ still outer */`; one never closed as text_end's
+def block_comment_end(source: text, at: int, mark: text, n: int, refused: bool = no): int {
 	depth = 1
 	i = at + 2
 	while i < n {
@@ -136,7 +136,8 @@ def block_comment_end(source: text, at: int, mark: text, n: int): int {
 			i = i + 1
 		}
 	}
-	raise missing(mark + "/", "comment", source, at)
+	if refused { raise missing(mark + "/", "comment", source, at) }
+	n
 }
 
 // The gaps of a source, read once: for each position, where its code goes on after blanks and comments
@@ -214,8 +215,9 @@ def block_end(source: text, from: int, n: int): int {
 
 def is_hex_digit(c: text): bool := is_digit(c) or "abcdefABCDEF".contains(c)
 
-// After the text from `from` on that `closing` ends, a backslash escaping the character after it
-def text_end(source: text, from: int, closing: text, n: int): int {
+// After the text from `from` on that `closing` ends, a backslash escaping the character after it; one never closed
+// runs to the end, refused where the parser reads it (`refused`), a scan asking whether it stays open sees `n`
+def text_end(source: text, from: int, closing: text, n: int, refused: bool = no): int {
 	interpolates = closing == '"' or closing == '`'
 	at = from
 	while at < n and source[at] != closing {
@@ -228,8 +230,8 @@ def text_end(source: text, from: int, closing: text, n: int): int {
 			at = at + 1
 		}
 	}
-	if at == n { raise missing(closing, "text", source, from - 1) }
-	at + 1
+	if at == n and refused { raise missing(closing, "text", source, from - 1) }
+	if at < n then at + 1 else n
 }
 
 // After the `close` of an interpolation hole from `from` on, nested brackets and quoted text inside

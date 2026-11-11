@@ -3503,7 +3503,7 @@ def blank_end(p: Parser, from: int): int {
 		at = spaces_end(p, at)
 		following = char_at(p, at + 1)
 		if char_at(p, at) != '/' or not (following == '*' or following == '#') { return at }
-		at = block_comment_end(p.code, at, following, p.n)
+		at = block_comment_end(p.code, at, following, p.n, yes)
 	}
 }
 
@@ -3695,7 +3695,7 @@ def quoted(p: Parser): Node := {
 	opening = code_points("$(p.code[p.at])")
 	quote = opening#1
 	marks = opening[1 .. opening.length].join("")
-	end = text_end(p.code, p.at + 1, closing_of(quote), p.n)
+	end = text_end(p.code, p.at + 1, closing_of(quote), p.n, yes)
 	written = marks + p.code[p.at + 1 .. end - 1]
 	p.at = end
 	holed = if quote == '"' then template(written) else ø
