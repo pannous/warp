@@ -20,4 +20,6 @@ built hello "Hello 🌍2026" '"Hello " + "🌍" + (2000 + 26)'
 built printing "hi" 'print "hi"'
 built text_to_c 5 'use c\nstrlen("hello")'
 built handles warp "use sqlite3\ndb = sqlite3_open(\":memory:\")\nstmt = sqlite3_prepare_v2(db, \"select 'warp'\", -1)\nsqlite3_step(stmt)\nsqlite3_column_text(stmt, 0)"
+built power 1267650600228229401496703205376 'print 2 ^ 100'
+built distances 2.03km 'use units\nprint 2 km + 30 m'
 exit $((failures > 0))
