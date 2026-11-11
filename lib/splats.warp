@@ -60,6 +60,37 @@ depths_of(scene: list, eye: list, forward: list, depths: list): list := {
 // indices 0 ..< #depths of the depths at least nearest, the nearest first
 order_by_depth(depths: list, nearest: float): list := [i - 1 for i in 1 to #depths].filter(i => depths#(i + 1) >= nearest).sort_by(i => depths#(i + 1))
 
+// a .splat file laid into the three GPU lists a renderer uploads, without a Splat per record: centres xyz and opacity,
+// then the six covariance numbers (shapes, then the first two of shades) and the color's 24 bits. px is not kept apart
+// from centres. read_splats is the list of Splats; this is the same bytes for the GPU
+class SplatFrame { count: int; centres: list; shapes: list; shades: list }
+
+read_splat_frame(path: any): SplatFrame := splat_frame_of(read_bytes(path))
+splat_frame_of(bytes: list): SplatFrame := {
+	n = #bytes /! splat_record_size
+	centres: [f32] = float[n * 4]
+	shapes: [f32] = float[n * 4]
+	shades: [f32] = float[n * 4]
+	for i in 0 ..< n {
+		at = splat_record_size * i
+		base = i * 4
+		centres#(base + 1) = f32_at(bytes, at)
+		centres#(base + 2) = f32_at(bytes, at + 4)
+		centres#(base + 3) = f32_at(bytes, at + 8)
+		centres#(base + 4) = bytes[at + 27] / 255.0
+		c = covariance_terms(normalize(record_quaternion(bytes, at)), record_floats(bytes, at, 3, 6))
+		shapes#(base + 1) = c#1
+		shapes#(base + 2) = c#2
+		shapes#(base + 3) = c#3
+		shapes#(base + 4) = c#4
+		shades#(base + 1) = c#5
+		shades#(base + 2) = c#6
+		shades#(base + 3) = (bytes[at + 24] * 65536 + bytes[at + 25] * 256 + bytes[at + 26]) * 1.0
+		shades#(base + 4) = 0.0
+	}
+	SplatFrame(n, centres, shapes, shades)
+}
+
 splats_bytes(splats: list): list := {
 	bytes = []
 	for s in splats { bytes += splat_bytes(s) }
