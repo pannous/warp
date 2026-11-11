@@ -2,11 +2,11 @@
 
 # a_label_covers_pixels_in_its_color
 is! 'use draw
-canvas(60, 24)
+canvas.resize(60, 24)
 label(0, 0, "Hi", red, 20)
 count(canvas_pixels.filter(p => p == red)) > 20' true
 is! 'use draw
-canvas(60, 24)
+canvas.resize(60, 24)
 label(0, 0, "Hi", red, 20)
 count(canvas_pixels.filter(p => p != 0 and p != red)) > 0' true
 

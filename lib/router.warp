@@ -104,10 +104,10 @@ global answer_header_lines = ""
 status(code: int): any := answer_header("Status", code)
 header(name: text, value: any): any := answer_header(name, value)
 answer_header(name: any, value: any): any := {
-	let field = lower(str(name))
+	let field = lower(text(name))
 	if field == "status" { answer_status = value }
-	else if field == "content-type" { answer_content_type = str(value) }
-	else { answer_header_lines = answer_header_lines + "\n" + str(name) + ": " + str(value) }
+	else if field == "content-type" { answer_content_type = text(value) }
+	else { answer_header_lines = answer_header_lines + "\n" + text(name) + ": " + text(value) }
 }
 public answer_reset(): any := {
 	answer_status = 200

@@ -301,7 +301,7 @@ time_test_words(program: Node): list := if nodes_in(program).any(is_time_test) o
 has_time_field(statement: Node): bool := class_view(statement) != ø and words_within(statement).any(word => base_type(word) in time_test_types)
 # `x is time` as written, or as the type tests make it, is_type(x, "time") (core/analysis/type_tests.warp)
 # a place typed so, `d: date? = v`, a field `year: date?` (decision typed-places-check), tests it too
-is_time_test(n: Node): bool := ((is_key(n, Op.Is) or is_operator(n, ":")) and value_of(n) is symbol and base_type(name_of(value_of(n))) in time_test_types) or (is_group(n) and #n == 3 and n#1 == symbol("is_type") and n#3 is text and str(n#3) in time_test_types)
+is_time_test(n: Node): bool := ((is_key(n, Op.Is) or is_operator(n, ":")) and value_of(n) is symbol and base_type(name_of(value_of(n))) in time_test_types) or (is_group(n) and #n == 3 and n#1 == symbol("is_type") and n#3 is text and text(n#3) in time_test_types)
 time_test_types = ["time", "duration", "date", "instant"]
 # the module of the emitted words: lib/time.warp for a time's + - * and for `is time`
 emitted_modules(program: Node): list := if time_operation_word in time_literal_words(program) or #time_test_words(program) > 0 then [time_module] else []

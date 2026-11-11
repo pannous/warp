@@ -38,7 +38,7 @@ forest_mix(ix, iy) := {
 
 forest_cells(index) := {
 	if not (index is int) or index < 0 or index >= FOREST_TREES {
-		raise "forest: a tree index is 0 to 999999, not " + str(index)
+		raise "forest: a tree index is 0 to 999999, not " + text(index)
 	}
 }
 
@@ -58,18 +58,18 @@ cell_place(ix, iy) := {
 }
 
 forest_glance(glance) := {
-	if not (glance is Glance) { raise "forest: a view is a Glance, not " + str(glance) }
+	if not (glance is Glance) { raise "forest: a view is a Glance, not " + text(glance) }
 	if glance.fov <= 0.0 or glance.fov >= 3.141592653589793 {
-		raise "forest: fov must be between 0 and pi, not " + str(glance.fov)
+		raise "forest: fov must be between 0 and pi, not " + text(glance.fov)
 	}
-	if glance.aspect <= 0.0 { raise "forest: aspect must be positive, not " + str(glance.aspect) }
+	if glance.aspect <= 0.0 { raise "forest: aspect must be positive, not " + text(glance.aspect) }
 	if glance.near <= 0.0 or glance.far <= glance.near {
-		raise "forest: far must be past near, not " + str(glance.far) + " past " + str(glance.near)
+		raise "forest: far must be past near, not " + text(glance.far) + " past " + text(glance.near)
 	}
 }
 
 picture_focal(height: number): float := {
-	if height <= 0 { raise "forest: picture height must be positive, not " + str(height) }
+	if height <= 0 { raise "forest: picture height must be positive, not " + text(height) }
 	(height / 2.0) / tan(FOREST_FOV / 2.0)
 }
 
@@ -147,7 +147,7 @@ chunk_reach(cx, cz, glance) := {
 
 forest_chunk(cx, cz) := {
 	if not (cx is int) or not (cz is int) or cx < 0 or cz < 0 or cx >= FOREST_CHUNKS or cz >= FOREST_CHUNKS {
-		raise "forest: a chunk is 0 to 39, not " + str(cx) + " by " + str(cz)
+		raise "forest: a chunk is 0 to 39, not " + text(cx) + " by " + text(cz)
 	}
 }
 
@@ -251,7 +251,7 @@ forest_ground(cx, cz) := {
 
 forest_side(side) := {
 	if not (side is int) or side <= 0 or side % FOREST_CHUNK != 0 {
-		raise "forest: a side is a positive multiple of " + str(FOREST_CHUNK) + " trees, not " + str(side)
+		raise "forest: a side is a positive multiple of " + text(FOREST_CHUNK) + " trees, not " + text(side)
 	}
 }
 

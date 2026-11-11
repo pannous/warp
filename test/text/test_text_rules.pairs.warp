@@ -5,7 +5,7 @@
 '3 times "ab"'	"ababab"
 'x = 3; "v ${x}"'	"v 3"
 'x = 3; "v $x"'	"v $x"
-'str(["ab"])'	'["ab"]'
+'text(["ab"])'	'["ab"]'
 'upper "straße"'	"STRASSE"
 'reverse "abc"'	"cba"
 'print 3; result'	3
@@ -14,7 +14,7 @@
 'letters of "a1 b!"'	['a', 'b']
 'count "abc".characters'	3
 'count "😀".chars'	1
-'str(«x + 1»)'	"x + 1"
+'text(«x + 1»)'	"x + 1"
 '(data a * (b + 1)).json'	'{"*":["a",{"+":["b",1]}]}'
 'use json; parse "[1, 2]"'	[1, 2]
 '"\\:alpha"'	'α'

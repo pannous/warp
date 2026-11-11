@@ -20,14 +20,14 @@ song = melody_samples(tune, 0.25)
 seconds = count(song) / sample_rate
 sound(song)
 
-canvas(width, height)
+canvas.resize(width, height)
 shown = [0.0 as float for band in 0..bands]
 peaks = [0.0 as float for band in 0..bands]
 started = clock()
 elapsed = 0.0
 while elapsed < seconds {
 	levels = spectrum(song, elapsed, bands)
-	clear(paper)
+	clear(canvas)
 	for band in 0..bands {
 		shown[band] = max(min(1.0, levels[band] * gain) * height, shown[band] * bar_fall)
 		peaks[band] = max(shown[band], peaks[band] - peak_fall)

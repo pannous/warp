@@ -180,9 +180,9 @@ dark_mode(): bool := {
 }
 
 // whether a system value is answered here (the driver gives the name as a node)
-host_owns(name): bool := str(name) in OWNED_VALUES or (open_now and str(name) in SIDES)
+host_owns(name): bool := text(name) in OWNED_VALUES or (open_now and text(name) in SIDES)
 // a system value answered here (host_owns)
-host_value(name): int := value_of(str(name))
+host_value(name): int := value_of(text(name))
 value_of(name: text): int := {
 	if name == "window_open" {
 		if open_now { events_taken() }
@@ -204,7 +204,7 @@ value_of(name: text): int := {
 }
 // a system value set: window_open opens (1) or closes (0) the window, window_fullscreen fills the screen, both owned
 // here (yes); the window's size is the driver's and only followed here (no)
-host_value_set(name, value: int): bool := value_set(str(name), value)
+host_value_set(name, value: int): bool := value_set(text(name), value)
 value_set(name: text, value: int): bool := {
 	if name == "window_open" {
 		if value != 0 then window_opened() else window_closed()
@@ -271,7 +271,7 @@ window_run_ended() := {
 // sans-serif font, as [width, height, then how much each pixel is covered from 0 to 255, row by row], its height the
 // font's ascent and descent, as the playground's canvas sets them (web/playground/host-media.js). On macOS CoreText
 // sets them, as the system shows text; elsewhere, or with `font` naming a font file, FreeType
-host_text_coverage(words, size: int, font): any := if on_mac() and str(font) == "" then core_text_coverage(str(words), size) else free_type_coverage(str(words), size, str(font))
+host_text_coverage(words, size: int, font): any := if on_mac() and text(font) == "" then core_text_coverage(text(words), size) else free_type_coverage(text(words), size, text(font))
 
 CTFontCreateWithName(name: handle, size: f64, matrix: handle): handle from 'CoreText'
 CTLineCreateWithAttributedString(string: handle): handle from 'CoreText'

@@ -146,17 +146,17 @@ resolved(n: Node, overloaded: map): Node := {
 }
 
 arity_overloads(program: Node): Node := {
-	program = result_overloads(program)
 	overload_classes = declared_classes(program)
 	overload_bases = declared_bases(program)
 	overload_marks = declared_marks(program)
 	defined_twice = defined_more_than_once(program)
 	if #defined_twice > 0 { program = passed_lambdas(program, shadowed(defined_twice, names_bound(program, [])), called_parameters(program)) }
 	overloaded = overloaded_arities(program)
-	if #overloaded == 0 { return typed_overloads(program) }
+	# results group after the arity split, each arity's definitions (f·2) by themselves (decision default-variant)
+	if #overloaded == 0 { return typed_overloads(result_overloads(program)) }
 	resolved_program = resolved(program, overloaded)
 	refused_overload_values(resolved_program, without_bare_calls(overloaded), program)
-	typed_overloads(resolved_program)
+	typed_overloads(result_overloads(resolved_program))
 }
 
 # A function defined more than once passed where the call says how many arguments it gets, `xs.map(quoted)` (map
@@ -268,7 +268,7 @@ any_fit = 100
 list_fit = 2
 # the kind each type word an overload tells apart stands for
 overload_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", float: "float", double: "float",
-	f64: "float", f32: "float", number: "number", text: "text", str: "text", string: "text",
+	f64: "float", f32: "float", number: "number", text: "text", string: "text",
 	codepoint: "codepoint", char: "codepoint", character: "codepoint", bool: "bool", boolean: "bool", function: "function",
 	block: "function", path: "path"}
 # a marked text, `path`, is a text: it fits a text parameter, and a variant taking it is tested before one taking text

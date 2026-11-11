@@ -45,10 +45,13 @@ function_type_byte = 96
 export_function_byte = 0
 export_memory_byte = 2
 export_global_byte = 3
+# whether the run drops its runtime checks (a --fast program sets it at its start): the runtime's checks read it
+CHECKS_DROPPED = "checks_dropped"
 # the globals the runner reads after a trap: the value a runtime error names,
 # the position of the statement it happened in, the name of the runtime word it failed in (trap_name: the runner no
-# longer needs that word's frame on the stack, which Cranelift's inlining takes away)
-exported_globals = ["trap_detail", "text_heap", "trap_position", "trap_name"]
+# longer needs that word's frame on the stack, which Cranelift's inlining takes away); and checks_dropped, which a
+# --fast program sets in the runtime it links
+exported_globals = ["trap_detail", "text_heap", "trap_position", "trap_name", CHECKS_DROPPED]
 # trap_position holds line * columns_per_line + column
 columns_per_line = 4096
 import_function_byte = 0
@@ -118,7 +121,7 @@ mutable = 1
 # A module declares a type only once its code uses it, as it compiles a runtime word on its first call (decision
 # runtime-split): gc names each type by its name, and gc_type gives the index the module takes it under. A type
 # another type refers to is written as that type's name in gc_types (gc_bytes), and comes first
-gc = {text: "text", items: "items", list: "list", node: "Node", int_box: "i64box", float_box: "f64box", ratio: "Ratio", meta_node: "MetaNode", limbs: "Limbs", big_int: "BigInt", closure: "Closure", instance: "Instance", class: "Class"}
+gc = {text: "text", items: "items", list: "list", node: "Node", int_box: "i64box", float_box: "f64box", ratio: "Ratio", meta_node: "MetaNode", limbs: "Limbs", big_int: "BigInt", closure: "Closure", instance: "Instance", class: "Class", ascii_text: "AsciiText"}
 # the kinds held as a reference: a text, a list, a boxed value of any kind ("node", also ø) as a $Node, so passing
 # one costs no cast (wasmtime casts even a value statically a $Node, the subtype test of a $MetaNode or an instance a
 # libcall: decision node-wasm-type); a cast only where an anyref enters (entered_node)
@@ -127,16 +130,16 @@ any_reference = 110
 # a time, a $Node of Kind time like a node, is its own kind so that only what handles times takes one
 references = {text: [99, gc.text], list: [99, gc.list], node: [99, gc.node]}
 node_fields = [126, 0, any_reference, 0, 99, gc.node, 0]
-gc_types = [[94, 120, 1], [94, 99, gc.node, 1], [95, 2, 127, 1, 100, gc.items, 1], [80, 0, 95, 3] + node_fields, [95, 1, 126, 0], [95, 1, 124, 0], [95, 2, 110, 0, 110, 0],
+gc_types = [[80, 0, 94, 120, 1], [94, 99, gc.node, 1], [95, 2, 127, 1, 100, gc.items, 1], [80, 0, 95, 3] + node_fields, [95, 1, 126, 0], [95, 1, 124, 0], [95, 2, 110, 0, 110, 0],
 	[79, 1, gc.node, 95, 7] + node_fields + [126, 0, 126, 0, 99, gc.node, 0, 99, gc.node, 0], [94, 127, 1], [95, 2, 127, 0, 99, gc.limbs, 0],
 	[79, 1, gc.node, 95, 5] + node_fields + [funcref_byte, 0, 99, gc.text, 0], [80, 1, gc.node, 95, 4] + node_fields + [99, gc.node, 1],
-	[79, 1, gc.node, 95, 13] + node_fields + concatenated(range_list(10).map(i => [funcref_byte, 0]))] + range_list(hook_arities + 1).map(arity => [function_type_byte, arity + 1] + concatenated(range_list(arity + 1).map(i => references.node)) + [1, any_reference])
+	[79, 1, gc.node, 95, 13] + node_fields + concatenated(range_list(10).map(i => [funcref_byte, 0])), [79, 1, gc.text, 94, 120, 1]] + range_list(hook_arities + 1).map(arity => [function_type_byte, arity + 1] + concatenated(range_list(arity + 1).map(i => references.node)) + [1, any_reference])
 # a closure's entry (closures.warp), a $Node so it sits in the closure's items: the funcref it calls and the text it shows; $Instance, every class's struct's
 # supertype (instances.warp); $Class, a class's descriptor (instances.warp class_slots); the closure calls' function types, (closure, argument…) to a node. Each the same in every
 # module, so one module's instances and closures pass into another's code
 gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node", ["kind", "data", "value"]], ["i64box", ["value"]], ["f64box", ["value"]], ["Ratio", ["numerator", "denominator"]],
 	["MetaNode", ["kind", "data", "value", "line", "column", "comment", "attributes"]], ["Limbs", []], ["BigInt", ["negative", "limbs"]], ["Closure", ["kind", "data", "value", "entry", "shown"]], ["Instance", ["kind", "data", "value", "extra"]],
-	["Class", ["kind", "data", "value", "entries", "field_at", "place", "set", "construct", "show", "float", "call", "operate", "method"]],
+	["Class", ["kind", "data", "value", "entries", "field_at", "place", "set", "construct", "show", "float", "call", "operate", "method"]], ["AsciiText", []],
 	["closure_call_type_0", []], ["closure_call_type_1", []], ["closure_call_type_2", []], ["closure_call_type_3", []], ["closure_call_type_4", []],
 	["closure_call_type_5", []], ["closure_call_type_6", []], ["closure_call_type_7", []], ["closure_call_type_8", []]]
 # a kind's wasm value type: a number's, a yes/no's or a character's own byte, else its reference (decision kinds-as-cases)
@@ -785,6 +788,8 @@ def literal_node(kind_code: int, t: text, payload: list): list {
 	}
 	[op.global_get] + relocatable(relocated.globals, module.globals[name]#1)
 }
+# a --fast program's runtime checks dropped, before main's own code
+def checks_dropped_code(): list := if fast_build then [op.i32_const, 1, op.global_set] + relocatable(relocated.globals, declared_global(CHECKS_DROPPED, ValueKind.Bool)#1) else []
 # the literals' nodes made, before main's own code
 def literal_init_code(): list := module.literal_inits.flat_map(made => made#2 + [op.global_set] + relocatable(relocated.globals, module.globals[made#1]#1))
 # a $Node of the kind field the code gives
@@ -1667,6 +1672,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	if module.catches_errors { declared_global(try_depth_name, ValueKind.Int) }
 	# the name of the runtime word a run failed in, which error_sentences.warp reads
 	declared_global(trap_name_global, ValueKind.Node)
+	declared_global(CHECKS_DROPPED, ValueKind.Bool)
 	module.texts = {}
 	module.literal_texts = {}
 	module.literal_inits = []
@@ -1797,7 +1803,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		# carried its sentences and the whole node printer: 25 KB for 1.5)
 		if module.runtime_image == ø or not relocates() or can_raise(module.order) { exported_trap_message() }
 		# the literals made once, before main runs (literal_node)
-		main.code = literal_init_code() + main.code
+		main.code = literal_init_code() + checks_dropped_code() + main.code
 		# a reading that widened a parameter is read again: its bytes would be dropped
 		if module.widened_now { ø } else {
 			if #module.refusals > 0 { throw module.refusals.join("\n") }

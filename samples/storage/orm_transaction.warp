@@ -14,10 +14,10 @@ bo.balance = 0
 transfer(amount) := transaction {
 	al.balance -= amount
 	bo.balance += amount
-	if al.balance < 0 { raise "Al cannot pay " + str(amount) }
+	if al.balance < 0 { raise "Al cannot pay " + text(amount) }
 }
 
 transfer(30)
-print "after 30: Al " + str(al.balance) + ", Bo " + str(bo.balance)
+print "after 30: Al " + text(al.balance) + ", Bo " + text(bo.balance)
 try transfer(500) catch e { print e.message }
-print "after the refused 500: Al " + str(al.balance) + ", stored " + str((accounts where it.owner == "Al")#1.balance)
+print "after the refused 500: Al " + text(al.balance) + ", stored " + text((accounts where it.owner == "Al")#1.balance)

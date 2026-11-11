@@ -32,12 +32,12 @@ def char_width(c: any): int {
 }
 def display_width(t: any): int {
 	sum = 0
-	for c in str(t) { sum = sum + char_width(c) }
+	for c in text(t) { sum = sum + char_width(c) }
 	sum
 }
 // t cut to at most `width` columns, ending in … when cut; a wide character never splits
 def truncate_display(t: any, width: int): text {
-	written = str(t)
+	written = text(t)
 	if display_width(written) <= width { return written }
 	if width <= 0 { return "" }
 	out = ""
@@ -52,7 +52,7 @@ def truncate_display(t: any, width: int): text {
 }
 // t padded with spaces to `width` columns: align "left", "right" or "center" (its extra space on the right)
 def pad_display(t: any, width: int, align: text): text {
-	written = str(t)
+	written = text(t)
 	gap = width - display_width(written)
 	if gap <= 0 { return written }
 	if align == "right" { return repeat(" ", gap) + written }
@@ -71,7 +71,7 @@ def tables_spaceless(t: text): text {
 }
 tables_option(options: map, name: text, otherwise: any): any := if name in options then options[name] else otherwise
 tables_number(x: any): bool := x != ø and x is number and not (x is bool)
-tables_cell(x: any): text := if x == ø then "" else replace(replace(str(x), "\r\n", " "), "\n", " ")
+tables_cell(x: any): text := if x == ø then "" else replace(replace(text(x), "\r\n", " "), "\n", " ")
 // the headers of map rows: their keys in the order first seen
 def tables_keys(rows: list): list {
 	keys = []
@@ -87,7 +87,7 @@ def tables_row(row: any, headers: list, size: int): list {
 def tables_align(options: map, i: int, header: any, numeric: bool): text {
 	choice = tables_option(options, "align", ø)
 	picked = if choice == ø then ø else if choice is text then choice else if choice is map then (if header in choice then choice[header] else ø) else (if i < count(choice) then choice[i] else ø)
-	if picked != ø then str(picked) else if numeric then "right" else "left"
+	if picked != ø then text(picked) else if numeric then "right" else "left"
 }
 def tables_cap(options: map, i: int): int {
 	cap = tables_option(options, "max_width", ø)
@@ -113,14 +113,14 @@ def tables_markdown_rule(widths: list, aligns: list): text {
 }
 def table_text(rows: list, options: map): text {
 	style = tables_option(options, "style", "plain")
-	if not (style in ["plain", "box", "markdown"]) { raise "table_text: style is plain, box or markdown, not " + str(style) }
+	if not (style in ["plain", "box", "markdown"]) { raise "table_text: style is plain, box or markdown, not " + text(style) }
 	given = tables_option(options, "headers", ø)
 	headers = if given != ø then given else tables_keys(rows)
 	size = count(headers)
 	for row in rows { if row != ø and row is list and count(row) > size { size = count(row) } }
 	values = [tables_row(row, headers, size) for row in rows]
 	escape = (t => if style == "markdown" then replace(t, "|", "\\|") else t)
-	head = [escape(if i < count(headers) then str(headers[i]) else "") for i in 0 ..< size]
+	head = [escape(if i < count(headers) then text(headers[i]) else "") for i in 0 ..< size]
 	body = [[escape(tables_cell(v)) for v in row] for row in values]
 	aligns = []
 	widths = []
@@ -130,7 +130,7 @@ def table_text(rows: list, options: map): text {
 		for row in values { if tables_number(row[i]) { numeric = yes } else if row[i] != ø and tables_cell(row[i]) != "" { other = yes } }
 		header = if i < count(headers) then headers[i] else ø
 		a = tables_align(options, i, header, numeric and not other)
-		if not (a in ["left", "right", "center"]) { raise "table_text: align is left, right or center, not " + str(a) }
+		if not (a in ["left", "right", "center"]) { raise "table_text: align is left, right or center, not " + text(a) }
 		aligns.add(a)
 		w = if count(headers) > 0 then display_width(head[i]) else 0
 		for row in body { w = max(w, display_width(row[i])) }
