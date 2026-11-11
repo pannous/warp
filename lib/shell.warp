@@ -76,6 +76,14 @@ which(name: text): text? := {
 	}
 	ø
 }
+// `git status`, `ls -la` in `warp repl`: a console line warp refuses whose first word is a command on PATH runs by sh,
+// what it printed shown; any other line keeps warp's refusal. The console only, never a file (extensions/commands
+// repl_step, user OK 11-11, card repl-bash-commands)
+shell_line(line: text, refusal: text) := {
+	if which(words(line)#1) == ø { raise refusal }
+	ran = run(["sh", "-c", line])
+	for printed in [ran.out, ran.err] { if printed { print printed } }
+}
 // A path written without quotes is a path (decision path-type), a text marked as one: `sort ./names.txt` sorts the
 // file's lines, `sort [3 1 2]` stays the list's sort, `find ./src "x"` finds files while "abc".find("b") stays the
 // text's; the same for unique and size. Path(t) marks a text computed at run time

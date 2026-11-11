@@ -158,21 +158,35 @@ staying_lines(line: text): text := {
 	staying.map(statement => "${statement}").join("\n")
 }
 # one line of the REPL: its module written to wasm_file in the session's folder, its text beside it; its name kept for
-# the next lines once it compiled, when it declares something
+# the next lines once it compiled, when it declares something. A line the compiler refuses runs as a shell line when
+# its first word is a command on PATH, `git status`, `ls -la` (lib/shell.warp shell_line): else the refusal stands
+# (user OK 11-11, card repl-bash-commands)
 repl_step(folder: text, line: text, wasm_file: text) := {
 	kept = lines_kept(folder)
 	for earlier in kept { own_module(earlier, line_text_file(folder, earlier), path_in(folder, earlier + ".wasm")) }
 	name = wasm_file.split("/").last().remove_suffix(".wasm")
-	source = (kept.map(earlier => "use " + earlier) + [line]).join("\n")
+	uses = kept.map(earlier => "use " + earlier)
+	refusal = line_module_refusal(folder, name, uses + [line], wasm_file)
+	shell = uses + ["use shell", "shell_line(" + source_text(line) + ", " + source_text(refusal) + ")"]
+	if refusal and line_module_refusal(folder, name, shell, wasm_file) { raise refusal }
+	if not refusal and staying_lines(line) { write(path_in(folder, KEPT_LINES), (kept + [name]).join("\n")) }
+}
+# the line's module written from its source lines, its text kept beside it: "", else the compiler's refusal
+line_module_refusal(folder: text, name: text, lines: list, wasm_file: text): text := {
+	source = lines.join("\n")
 	write(line_text_file(folder, name), source)
 	own_module(name, line_text_file(folder, name), wasm_file)
-	module_compiled_behind(name, source, read_bytes(runtime_path()), wasm_file)
-	if staying_lines(line) { write(path_in(folder, KEPT_LINES), (kept + [name]).join("\n")) }
+	refusal = ""
+	try { module_compiled_behind(name, source, read_bytes(runtime_path()), wasm_file) } catch refused { refusal = refusal_said(refused) }
+	refusal
+}
 }
 # where a line's text is kept: never as <name>.warp, which would take a later line's `use <name>` as a file to compile
 # in, not the module to link (prelude_words.warp taken_as_file), its instance's state then not the one read
 line_text_file(folder: text, name: text): text := path_in(folder, name + ".line" + module_extension)
 lines_kept(folder: text): list := (try read(path_in(folder, KEPT_LINES)) else "").split("\n").filter(name => name != "")
+# a text as a warp literal that reads back as itself: quoted, its $ no hole
+source_text(t: text): text := quoted(t).replace("$", "\\$")
 # `warp repl` under plain WASI: each line compiled, its declarations kept; running it needs the native warp
 REPL_FOLDER = ".warp-repl"
 repl() := {

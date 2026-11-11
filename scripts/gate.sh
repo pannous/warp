@@ -2,7 +2,9 @@
 # The tiered gate of a tree (a merged batch, a branch, main), pure pipeline first, stopping at the first red tier:
 #   tier 0  rebuild pure (warp.wasm, scripts/rebuild.sh: a build of the same inputs is reused) + pure hello, + self hello when the tree has a warp-self.wasm   (minutes, the rebuild)
 #   tier 1  every test/gate/<name>.warp in the pure lane (and self, as tier 0), its stdout (else its first error line) against <name>.expected
-#           (seconds). warp-self.wasm is no gate build: scripts/promote-self.sh promotes warp.wasm once it compiles itself, apart
+#           (seconds), and the compile cost of three programs against main's (scripts/lib/compile-cost.sh: red over +5%
+#           unless HEAD's message says `speed-ok: <card>`). warp-self.wasm is no gate build: scripts/promote-self.sh
+#           promotes warp.wasm once it compiles itself, apart
 #   tier 2  `warp test` (pure) of the test files the tree changed since --base   (seconds to minutes)
 # usage: scripts/gate.sh [--tiers 0-2|0,1|1] [--no-rebuild] [--base <ref>] [--folders] [--tag-good]
 #                               [<tree>, default this checkout] [<binary>, default the native warp: ~/dev/bin/warp]
@@ -28,7 +30,10 @@ while (($#)); do
 done
 tree=$(cd "${args[0]:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 source "$(dirname "$0")/lib/platform.sh"
+source "$(dirname "$0")/lib/compile-cost.sh"
 binary=${args[1]:-${WARP_GATE_BINARY:-$warp_binary}}
+# the installed native warp's folder: its lib/, whose compiler is main's
+installed=$(dirname "$(readlink -f "$binary")")
 wants() { # wants <tier>: the tier is in --tiers (a range a-b or a list a,b)
 	local t
 	for t in ${tiers//,/ }; do
@@ -94,7 +99,20 @@ if wants 1; then
 			fi
 		done
 	done
-	echo "tier 1 (test/gate, $lanes): $( ((ok)) && echo ok || echo RED) $(since $t1)"
+	# the compile cost against main's installed compiler's (scripts/lib/compile-cost.sh), each kept in its store record
+	if ! compile_cost_counter; then echo "compile cost: not measured (no instruction counter here)"
+	elif ! costs=$(compile_costs "$tree/lib" "$warp") || ! main_costs=$(compile_costs "$installed" "$binary"); then
+		echo "FAIL compile cost: not measured (see the compile-cost lines above)"; ok=0
+	else
+		slower=$(compile_costs_slower "$costs" "$main_costs")
+		accepted=$(git log -1 --format=%B HEAD | grep -m1 '^speed-ok:')
+		against="main's compiler $(cut -d' ' -f1 "$installed/warp.wasm.inputs")"
+		if [[ -z $slower ]]; then echo "ok   compile cost: $(compile_costs_shown "$costs") (within +$COMPILE_COST_SLOWER_PERCENT% of $against)"
+		elif [[ -n $accepted ]]; then echo "ok   compile cost slower, $accepted: ${slower//$'\n'/; } (against $against)"
+		else echo "FAIL compile cost over +$COMPILE_COST_SLOWER_PERCENT%: ${slower//$'\n'/; } (against $against; a slowdown the user accepted: a 'speed-ok: <card>' line in the merge message)"; ok=0
+		fi
+	fi
+	echo "tier 1 (test/gate, compile cost, $lanes): $( ((ok)) && echo ok || echo RED) $(since $t1)"
 	((ok)) || red 1
 fi
 

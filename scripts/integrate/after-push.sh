@@ -14,6 +14,7 @@
 set -uo pipefail
 source "$(dirname "$0")/../lib/platform.sh"
 source "$(dirname "$0")/../lib/hello-footprint.sh"
+source "$(dirname "$0")/../lib/compile-cost.sh"
 source "$(dirname "$0")/../lib/site-scripts.sh"
 source "$(dirname "$0")/../lib/sync-main.sh"
 source "$(dirname "$0")/../lib/modules.sh"
@@ -368,6 +369,8 @@ slow_tiers() {
 	cost_watched warp.record
 	cost_watched warp-self.record
 	install_compilers
+	# the installed compiler's compile cost, the record every gate compares its tree with (scripts/lib/compile-cost.sh)
+	compile_costs "$(installed_folder)" "$MAIN_WARP" >/dev/null || say "compile cost of ${tip:0:10} not recorded"
 	"$scripts/gate.sh" --no-rebuild --tiers 1-2 --base "$since" --tag-good "$TREE" "$MAIN_WARP" >"$state/gate-${tip:0:10}.log" 2>&1 ||
 		red "tiers 1-2: $(gate_failures "$state/gate-${tip:0:10}.log")"
 	samples_committed "$tip"
