@@ -14,7 +14,7 @@
 #   warp beautify|fix …   lib/fix/command.warp with the words; warp format|lint … too, the layout only
 #   warp docs|wiki|home   where the documentation is, opened
 #   warp app [check] …    lib/app/command.warp: a markup program's page in the system's web view
-#   warp repl|start       the console: each line compiled by warp.wasm's repl-step after the lines that stay, then run
+#   warp repl|start       the console: each line a module of its own, linked to the earlier lines' kept instances
 #   warp rebuild [pure]   warp.wasm built anew from lib/ by the seed (rebuilt)
 #   warp rebuild from <step>  the same from that step on (seed, optimize, runtime, modules)
 #   warp rebuild self     warp.wasm promoted to warp-self.wasm once it compiles itself (promoted)
@@ -28,13 +28,10 @@ use "tests.warp"
 
 getline(line: pointer, capacity: pointer, stream: handle): i64 from "c"
 isatty(descriptor: i32): i32 from "c"
-execv(path: pointer, arguments: pointer): i32 from "c"
 read(descriptor: i32, data: pointer, size: i64): i64 from "c"
 STDIN = 0
 STDOUT = 1
 DASH = 45
-# a lower-case ASCII letter less this is its capital
-CAPITAL_OFFSET = 32
 KEY_ESCAPE = 27
 KEY_BRACKET = 91
 ARROW_UP = 65
@@ -119,8 +116,16 @@ rebuilt(first: text, last: text): nothing := {
 	modules = joined(library, "/modules")
 	start = step_number(first)
 	end = step_number(last)
+	seed = seed_path()
+	# the seed builds warp.wasm.new, which runs the later steps with the library the seed makes (driver
+	# compiler_library), whose GC types the seed's emitter gave it: a seed that compiled itself makes its own library's
+	# (copied: a published seed is older than the sources and can't compile today's lib/unicode); a stage its library
+	# marks as built by other emitter code (refresh-seed's stage A, built by the old seed) makes it anew
+	if start < step_number("native") {
+		own = seed_library(seed)
+		if access(c_string(other_types_mark(own)), READABLE) == 0 { library_made(seed, companion_library(built)) } else { companion_copied(own, companion_library(built)) }
+	}
 	if step_runs("seed", start, end) {
-		seed = seed_path()
 		# the seed's runtime in a folder of its own: a compile links the modules beside its runtime, and lib/modules/
 		# were built behind lib/runtime.wasm, whose words may sit elsewhere (an old seed checks only their counts)
 		seed_folder = joined(built, ".seed")
@@ -150,6 +155,7 @@ rebuilt(first: text, last: text): nothing := {
 	}
 	if compiled {
 		machine_code_moved(built, compiler_path())
+		companion_moved(companion_library(built), companion_library(compiler_path()))
 		rename(c_string(built), c_string(compiler_path()))
 		print(joined("rebuilt ", compiler_path()))
 	}
@@ -214,6 +220,7 @@ promoted(): nothing := {
 	unlink(next)
 	promoted_file = joined(library, "/warp-self.wasm")
 	copied(compiler, promoted_file)
+	companion_copied(companion_library(compiler), companion_library(promoted_file))
 	machine_code_copied(compiler, promoted_file, machine_code_suffix(RUN_GC_HEAP_BYTES))
 	machine_code_copied(compiler, promoted_file, machine_code_suffix(BUILDER_GC_HEAP_BYTES))
 	said = if fixpoint then " compiles compiler.warp once more (to its own bytes, a fixpoint), promoted to " else " compiles compiler.warp once more (to other bytes, no fixpoint), promoted to "
@@ -226,6 +233,45 @@ seed_shipped(): nothing := {
 	seed = seed_path()
 	machine_code_kept(seed)
 	print(joined("precompiled ", seed))
+	print(joined("its library ", seed_library(seed)))
+}
+# the empty file refresh-seed puts in a stage's library: the compiler beside it makes GC types other than the library's
+other_types_mark(library: text): text := joined(library, "/makes-other-types")
+# the seed's own runtime and unicode module, <seed>.library/, made once when missing (the published seed brings its own):
+# by the seed itself, so taken for a stage that compiled itself, whose output has its GC types
+seed_library(seed: text): text := {
+	folder = companion_library(seed)
+	if not holds_companion(folder) { library_made(seed, folder) }
+	folder
+}
+# the runtime and unicode module `maker` makes, into `folder` anew: the library of every compiler it builds. Made aside
+# and moved in whole, a rebuild beside this one never reads half of it
+library_made(maker: text, folder: text): nothing := {
+	aside = joined(joined(folder, ".new-"), text_of(getpid()))
+	companion_folders_made(aside)
+	runtime = joined(aside, companion_file(0))
+	file_ran(maker, words(maker, "runtime", runtime, "", "", ""))
+	file_ran(maker, words(maker, "module", "unicode", runtime, joined(aside, companion_file(1)), ""))
+	companion_moved(aside, folder)
+}
+# a compiler's library copied beside another compiler of the same builder
+companion_copied(from: text, to: text): nothing := {
+	if holds_companion(from) {
+		companion_folders_made(to)
+		for i in 0..COMPANION_FILES { copied(joined(from, companion_file(i)), joined(to, companion_file(i))) }
+	}
+}
+# … moved, the machine code made beside it with it
+companion_moved(from: text, to: text): nothing := {
+	folder_removed(to)
+	rename(c_string(from), c_string(to))
+}
+folder_removed(folder: text): nothing := {
+	command_output(joined(joined("rm -rf '", folder), "'"))
+}
+companion_folders_made(folder: text): nothing := {
+	mkdir(c_string(folder), FOLDER_MODE)
+	mkdir(c_string(joined(folder, "/modules")), FOLDER_MODE)
 }
 # a build's machine code (the driver's .cwasm and its key) moved to another build file of the same bytes
 machine_code_moved(from: text, to: text): nothing := {
@@ -295,14 +341,18 @@ words(module: text, a: text, b: text, c: text, d: text, e: text): Arguments := {
 	if e.length > 0 { added(list, e) }
 	list
 }
-# `warp repl`, the console: each line compiled by warp.wasm's repl-step after the lines that stayed (declarations,
-# uses: its state file), then run, in a child process of its own, so a line that fails ends only its child. The child
-# is this warp started anew (`warp repl-line <state> <line>`), never a fork that runs on: a forked copy of a process
-# whose libraries started threads (Cocoa, SDL) aborts (card repl-aborts)
+# `warp repl`, the console: each line compiled by warp.wasm's repl-step as a module of its own in the session's folder,
+# linked to the earlier lines' modules, and run in the console's session, which keeps every line's instance: what a
+# line declares and its values stay for the next lines (card warp-repl-instance). A line that fails ends only itself;
+# one that calls exit() ends the console. The engine and the machine code of the compiler and modules load once
 console(compiler: text): nothing := {
 	print("Interactive console (Ctrl+D to exit)")
-	state = joined(text_from(compiled_path().address, compiled_path().length - 5), ".repl.warp")
-	write_file(state, "")
+	folder = joined(text_from(compiled_path().address, compiled_path().length - 5), ".repl")
+	mkdir(c_string(folder), FOLDER_MODE)
+	resident_loaded(compiler)
+	session = session_opened()
+	number = 0
+	ended: i32 = -1
 	input = fdopen(STDIN, c_string("r"))
 	line_cell = allocate(8)
 	capacity = allocate(8)
@@ -324,13 +374,26 @@ console(compiler: text): nothing := {
 			history = joined(joined(history, line), "\n")
 			lines = lines + 1
 			if editing { write_file(history_path(), history) }
-			child = fork()
-			if child == 0 { line_started(state, line) }
-			waitpid(child, allocate(4), 0)
+			number = number + 1
+			module = joined(joined(joined(folder, "/line_"), text_of(number)), ".wasm")
+			if line_compiled(compiler, folder, line, module) { ended = session_line_run(session, module) }
+			if ended >= 0 then break
 		}
 	}
 	print("")
-	unlink(state)
+	command_output(joined(joined("rm -r '", folder), "'"))
+	if ended > 0 { exit(ended) }
+}
+# the console's line compiled to `module` by warp.wasm's repl-step, what the compile said shown; whether it compiled
+line_compiled(compiler: text, folder: text, line: text, module: text): bool := {
+	said = joined(folder, "/compile.out")
+	given = words(compiler, "repl-step", folder, line, module, joined(library_folder(), "/runtime.wasm"))
+	failure = run_into(read_file(compiler), given, machine_code_file(compiler, RUN_GC_HEAP_BYTES), RUN_GC_HEAP_BYTES, said)
+	output = read_file(said)
+	unlink(said)
+	fd_write(STDOUT, output, 1, allocate(4))
+	if failure.length > 0 { complain(failure) }
+	failure.length == 0
 }
 # where the lines typed on a terminal stay for the next console, ↑ reaching them as the shells' history does (card
 # repl-alt-arrows): ~/.warp_history
@@ -516,23 +579,6 @@ history_line(history: text, index: i64): text := {
 	}
 	""
 }
-# the forked child replaced by `warp repl-line <state> <line>` at once
-line_started(state: text, line: text): nothing := {
-	given = arguments()
-	added(given, executable_path())
-	added(given, "repl-line")
-	added(given, state)
-	added(given, line)
-	long_at(given.pointers + given.count * 8).value = 0
-	execv(c_string(executable_path()), given.pointers)
-	exit(1)
-}
-# one console line compiled after the state's lines (repl-step keeps its declarations there), then its module run
-line_ran(compiler: text, state: text, line: text): nothing := {
-	module = compiled_path()
-	file_ran(compiler, words(compiler, "repl-step", state, line, module, joined(library_folder(), "/runtime.wasm")))
-	written_run(module, "repl", arg_count())
-}
 # `warp version`: warp.wasm's version line, then when this executable and warp.wasm were built
 versioned(compiler: text): nothing := {
 	given = compiler_arguments(compiler)
@@ -602,7 +648,6 @@ dispatched(compiler: text, prefixed: bool, first: int): nothing := {
 	# `warp test`, and `warp self test` as `warp test --self`: the native warp runs the cases, each by the compiler named
 	if same_text(word, "test") and (not prefixed or self_named(compiler)) { return tests_run(compiler, flagged("--self") or self_named(compiler), first) }
 	if same_text(word, "repl") or same_text(word, "console") or same_text(word, "start") { return console(compiler) }
-	if same_text(word, "repl-line") { return line_ran(compiler, arg(first + 1), arg(first + 2)) }
 	if same_text(word, "version") or same_text(word, "--version") { return versioned(compiler) }
 	# a plain `warp app.warp` serves its routes (lib/web.warp routes_end), `warp run app.warp` runs it once
 	if is_warp_file(word) and not prefixed { option_given("serve", "yes") }
@@ -625,11 +670,11 @@ documentation_opened(): nothing := {
 
 # the options warp takes before or after its command word (wiki/cli.md; `warp help options` describes them,
 # extensions/commands/commands.warp option_help), kept without their dashes for run_option (core/host_io.warp):
-# flags, and options with a value (--lib <folder>); the ones after the --profile and --lib are the tools' (the test
+# flags, and options with a value (--lib <folder>); the ones after the --profile and --slots are the tools' (the test
 # harness, the build scripts, `warp app check`), which `warp help options` leaves out. Words after the file or code are
 # the program's
-is_flag(word: text): bool := same_text(word, "--no-hints") or same_text(word, "--no-window") or same_text(word, "--mute") or same_text(word, "--backtrace") or same_text(word, "--profile") or same_text(word, "--times") or same_text(word, "--value-as-data") or same_text(word, "--one-thread") or same_text(word, "--emit-survey") or same_text(word, "--rules-fired")
-is_valued(word: text): bool := same_text(word, "--lib") or same_text(word, "--seed") or same_text(word, "--events-for") or same_text(word, "--page-steps") or same_text(word, "--app-window")
+is_flag(word: text): bool := same_text(word, "--no-hints") or same_text(word, "--no-window") or same_text(word, "--mute") or same_text(word, "--backtrace") or same_text(word, "--profile") or same_text(word, "--times") or same_text(word, "--value-as-data") or same_text(word, "--one-thread") or same_text(word, "--emit-survey") or same_text(word, "--rules-fired") or same_text(word, "--fast")
+is_valued(word: text): bool := same_text(word, "--lib") or same_text(word, "--slots") or same_text(word, "--seed") or same_text(word, "--events-for") or same_text(word, "--page-steps") or same_text(word, "--app-window")
 # the words of the option at `at`, kept: 1 a flag, 2 an option with its value, 0 no option
 option_words(at: int): int := {
 	word = arg(at)
@@ -641,30 +686,6 @@ option_words(at: int): int := {
 	if not is_valued(word) or at + 1 >= arg_count() { return 0 }
 	option_given(name, arg(at + 1))
 	2
-}
-# TODO (card no-bash-exports) the scripts still export WARP_<OPTION> (the warp installed before took no options): each
-# is its option until the scripts give the options (the second push); then this goes, with host_io.warp legacy_option
-legacy_options(): text := "times value-as-data one-thread emit-survey rules-fired seed events-for fuel backtrace profile"
-legacy_options_given(): nothing := {
-	for i in 0..field_count(legacy_options(), SPACE) {
-		name = field(legacy_options(), i, SPACE)
-		value = getenv(legacy_variable(name))
-		if value.length > 0 and not has_option(name) { option_given(name, value) }
-	}
-	# WARP_NO_WINDOW=1, WARP_WINDOW=0's name before, which muted sound too
-	if getenv("WARP_NO_WINDOW").length > 0 {
-		option_given("no-window", "")
-		option_given("mute", "")
-	}
-}
-# WARP_ and the name in capitals, its dashes underscores: no-window's WARP_NO_WINDOW
-legacy_variable(name: text): text := {
-	variable = joined("WARP_", name)
-	for i in 5..variable.length {
-		letter = byte_at(variable.address + i).value
-		byte_at(variable.address + i).value = if letter == DASH then UNDERSCORE else letter - CAPITAL_OFFSET
-	}
-	variable
 }
 # warp's two machine switches (decision no-bash-exports): --no-window is WARP_WINDOW=0, --mute WARP_SOUND=0, either
 # spelling sets both, so the warps and programs this one starts are switched too (lib/os.warp windowless, muted)
@@ -691,7 +712,6 @@ command_ran(): nothing := {
 		option_given("no-window", "")
 		option_given("mute", "")
 	}
-	legacy_options_given()
 	counting = arg_count() > start + 2 and same_text(arg(start), "fuel")
 	if counting { option_given("fuel", arg(start + 1)) }
 	prefixed = counting or (arg_count() > start and is_prefix(arg(start)))

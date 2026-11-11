@@ -119,7 +119,7 @@ const ready = loadCompiler().then(() => stage("warming up the compiler") || warm
 
 // `use python` runs in Pyodide (host.js registers its call): loaded on first use, since a host call cannot wait for it
 const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v0.29.5/full/";
-const USES_PYTHON = /\buse\s+python\b/;
+const USES_PYTHON = /\buse\s+(?:\S+\s+from\s+)?python\b/; // use python, use python json, use json from python
 let python; // the loading or loaded Pyodide with the bridge (web/playground/foreign_python.py)
 function loadPython() {
 	python ??= (async () => {
@@ -196,12 +196,20 @@ self.onmessage = async ({ data }) => {
 	if (data.system) return Object.assign(self.pageSystemValues ??= {}, data.system); // host.js system_value
 	if (data.environment) return Object.assign(self, { pageEnvironment: data.environment, pageSecrets: data.secrets }); // host-files.js os.env, withPageSecret
 	if (data.stored) return Object.assign(storedValues, data.stored) && Object.assign(sessionValues, data.session); // host-files.js STD_ADAPTERS.store
-	stage("waiting for the compiler");
-	await ready;
-	stage("loading the database");
-	await globalThis.loadKept?.(); // host-files.js: `database[k]`'s values and the written files, once
+	await waitedFor("waiting for the compiler", ready);
+	await waitedFor("loading the database", globalThis.loadKept?.()); // host-files.js: `database[k]`'s values and the written files, once
 	return inTurn(() => handleMessage(data));
 };
+
+// a stage named only while the worker really waits: a message after the compiler loaded once must not log "waiting for
+// the compiler" again, which read as the compiler loading anew for every example (card compiler-reload-per-example)
+const awaited = new WeakSet();
+async function waitedFor(name, promise) {
+	if (!promise || awaited.has(promise)) return;
+	stage(name);
+	await promise;
+	awaited.add(promise);
+}
 
 async function handleMessage(data) {
 	if (data.warm) return warmUp();
@@ -216,8 +224,7 @@ async function handleMessage(data) {
 	}
 	if (live) stopListening(live);
 	live = undefined;
-	stage("checking the compiler");
-	if (!compiler) await loadCompiler();
+	if (!compiler) await loadCompiler(); // (it names its download as a stage)
 	stage("preparing foreign runtimes");
 	await prepareForeignRuntimes(data.code); // host.js: a runtime that loads asynchronously loads before the run
 	stage("waiting for the task workers");

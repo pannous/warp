@@ -11,12 +11,12 @@
 'type(now.date)'	'date'
 'now.time.minute == now.minute'	true
 'now.date.year == now.year'	true
-'str(2026-10-14T22:27:46.5.time)'	'22:27:46'
-'str(2026-10-14T22:27.time)'	'22:27:00'
-'str(2026-10-14T22:27.date)'	'2026-10-14'
+'text(2026-10-14T22:27:46.5.time)'	'22:27:46'
+'text(2026-10-14T22:27.time)'	'22:27:00'
+'text(2026-10-14T22:27.date)'	'2026-10-14'
 
 # test_a_time_of_day_goes_round_the_clock
-'str(2026-10-14T23:00.time + 2 hours)'	'01:00:00'
+'text(2026-10-14T23:00.time + 2 hours)'	'01:00:00'
 'later = now.time + 24 hours; later.hour == now.hour'	true
 
 # test_clock_reads_compare

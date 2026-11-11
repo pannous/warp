@@ -4,7 +4,7 @@
 # the example menu), keywords.js (the editor's hard and soft keywords) and version.js (the commit built, shown in the ⋯
 # menu). Serve the repository root and open the page:
 #   web/playground/build.sh && python3 -m http.server 8000   →   http://localhost:8000/web/playground/
-# Usage: build.sh [compiler|served <site>|site <site>]   (all when omitted)
+# Usage: build.sh [--lib <folder>] [compiler|served <site>|site <site>]   (all when omitted)
 #   compiler  → warp-lib/: the installed lib/ (its warp.wasm, runtime.wasm, modules/ and sources), no machine code
 #   site <site> → collects the built page into a fresh <site> folder, as deployed (pages.yml, scripts/browser-dry-run.sh)
 #   served <site> → <site>/served-files.js for a collected site; every build writes the repository's
@@ -13,11 +13,11 @@ set -euo pipefail
 page="$(cd "$(dirname "$0")" && pwd)"
 repository="$(cd "$page/../.." && pwd)"
 source "$repository/scripts/lib/packages.sh"
-# the compilers: WARP_LIB, else this checkout's own (scripts/rebuild.sh pure <tree> writes them into lib/), else the
-# installed ones beside the warp on $PATH (~/dev/bin/lib links to the current build)
-OWN_LIBRARY="$repository/lib"
-[ -f "$OWN_LIBRARY/warp.wasm.inputs" ] || OWN_LIBRARY="$(dirname "$(command -v warp)")/lib"
-INSTALLED_LIBRARY="${WARP_LIB:-$OWN_LIBRARY}"
+# the compilers: --lib <folder>, else this checkout's own (scripts/rebuild.sh pure <tree> writes them into lib/), else
+# the installed ones beside the warp on $PATH (~/dev/bin/lib links to the current build)
+INSTALLED_LIBRARY="$repository/lib"
+[ -f "$INSTALLED_LIBRARY/warp.wasm.inputs" ] || INSTALLED_LIBRARY="$(dirname "$(command -v warp)")/lib"
+if [ "${1:-}" = --lib ]; then INSTALLED_LIBRARY=$2; shift 2; fi
 # the sources a compiler bakes in: one built from a commit where they differ ships its lag to the page
 COMPILER_SOURCES=(core 'lib/*.warp')
 # what the browser cannot use of it: wasmtime's machine code, native libraries, kept values, stale compilers
@@ -70,7 +70,7 @@ built_of_changed() {
 }
 
 build_compiler() {
-	[ -f "$INSTALLED_LIBRARY/warp.wasm" ] || { echo "error: no warp.wasm in $INSTALLED_LIBRARY (warp rebuild, or WARP_LIB=<lib>)" >&2; exit 1; }
+	[ -f "$INSTALLED_LIBRARY/warp.wasm" ] || { echo "error: no warp.wasm in $INSTALLED_LIBRARY (warp rebuild, or build.sh --lib <lib>)" >&2; exit 1; }
 	refuse_lagging_compiler
 	rm -rf "$page/warp-lib"
 	rsync -aL "${NOT_FOR_THE_BROWSER[@]}" "$INSTALLED_LIBRARY/" "$page/warp-lib/"
@@ -268,30 +268,48 @@ esac
 
 # the compiled module samples/wasm/import_compiled.warp links (samples/wasm/shapes.wasm, a link to it), built behind the
 # page's runtime.wasm, as scripts/samples.sh builds it natively
-WARP_LIB="$INSTALLED_LIBRARY" warp build --module test/fixtures/compiled/shapes.warp || echo "warning: no test/fixtures/compiled/shapes.wasm: wasm/import_compiled fails in the page" >&2
+warp --lib "$INSTALLED_LIBRARY" build --module test/fixtures/compiled/shapes.warp || echo "warning: no test/fixtures/compiled/shapes.wasm: wasm/import_compiled fails in the page" >&2
 write_repository_served_files
 
 # a folder per guide chapter (notes/samples.md); golf/ and wit/ hold no menu samples, native/ only natively built ones
 python3 - "$page/samples.js" $(ls samples/*/*.warp | grep -v '^samples/\(golf\|wit\|native\)/') <<'PYTHON'
-import collections, json, os, re, sys
+import collections, glob, json, os, re, sys
 # a sample a browser cannot run says so on a line of its own, `# host: native: <why>` (or none), and stays out of the
 # menu (test_in_browser.py HOST_LINE)
 NOT_IN_PAGE = re.compile(r"^# host: (native|none)\b", re.M)
+# the authors' working notes stay in the source but not on the page: a comment holding TODO or DONE (or a `# todo`) is
+# left out, the whole line when it is a comment, else from its `#` or `//` on; a comment line that starts with the
+# marker opens a note block, which runs on through the comment lines after it, up to a blank line or code
+WORK_NOTE = re.compile(r"(?:^|\s)(?:#|//)(?:(?!\s#|\s//).)*?(?:\b(?:TODO|DONE)\b|(?:(?<=#)|(?<=//))\s*todo\b).*$")
+NOTE_BLOCK = re.compile(r"^\s*(?:#|//)\s*(?:TODO|DONE|todo)\b")
+COMMENT_LINE = re.compile(r"^\s*(?:#|//)")
+# and our card and decision keys, `(card finger-paint-slow)`: a reader gets the rule, never our bookkeeping
+KEY_ASIDE = re.compile(r"\s*\((?:card|decision)s? [a-z0-9]+(?:-[a-z0-9]+)+[^)]*\)")
+def shown(source):
+	if not any(WORK_NOTE.search(line) or KEY_ASIDE.search(line) for line in source.splitlines()): return source
+	kept, in_block = [], False
+	for line in map(lambda line: KEY_ASIDE.sub("", line), source.splitlines()):
+		in_block = bool(NOTE_BLOCK.match(line)) or (in_block and bool(COMMENT_LINE.match(line)))
+		if in_block: continue
+		note = WORK_NOTE.search(line)
+		before = line[:note.start()].rstrip() if note else line
+		if before or not note: kept.append(before)
+	return "\n".join(kept) + "\n"
 files = collections.defaultdict(list)
 for path in sys.argv[2:]: files[os.path.basename(path)[:-len(".warp")]].append(path)
 # the menu and the address (#fizzbuzz) name a sample by its file name: one name, one file
 twins = {name: paths for name, paths in files.items() if len(paths) > 1}
 if twins: sys.exit(f"samples sharing a name: {twins}")
 names = {name: paths[0] for name, paths in sorted(files.items()) if not NOT_IN_PAGE.search(open(paths[0], encoding="utf-8").read())}
-samples = {name: open(path, encoding="utf-8").read() for name, path in names.items()}
+samples = {name: shown(open(path, encoding="utf-8").read()) for name, path in names.items()}
 with open(sys.argv[1], "w", encoding="utf-8") as script:
 	script.write("// made by build.sh from samples/<chapter>/*.warp\nconst SAMPLES = " + json.dumps(samples, ensure_ascii=False, indent="\t") + ";\n")
 	script.write("// each sample's file, which its runs name their neighbours beside (playground.js programFile)\n")
 	script.write("const SAMPLE_FILES = " + json.dumps(names, indent="\t") + ";\n")
 	# a sample's <name>.args beside it, one argument a line, as `use os; args` gives them natively in the tests
-	# (tests/common arguments_beside): a song visualizer plays its first seconds only (card playground-browser)
-	beside = {name: path[:-len(".warp")] + ".args" for name, path in names.items()}
-	arguments = {name: open(file, encoding="utf-8").read().splitlines() for name, file in beside.items() if os.path.exists(file)}
+	# (tests/common arguments_beside) and scripts/samples.sh, by its file: a song visualizer plays its first seconds
+	# only (card playground-browser), a golf sample gets its inputs though the menu leaves it out
+	arguments = {file[:-len(".args")] + ".warp": open(file, encoding="utf-8").read().splitlines() for file in sorted(glob.glob("samples/*/*.args"))}
 	script.write("const SAMPLE_ARGUMENTS = " + json.dumps(arguments, ensure_ascii=False) + ";\n")
 PYTHON
 echo "built $page/samples.js"

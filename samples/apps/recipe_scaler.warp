@@ -18,10 +18,10 @@ scaled(target) := {
 }
 
 for target in [6, 1] {
-	print("for " + str(target) + " (x " + mixed_text(target / servings) + "):")
+	print("for " + text(target) + " (x " + mixed_text(target / servings) + "):")
 	print(table_text(scaled(target), {headers: ["ingredient", "amount", "unit"], align: ["left", "right", "left"]}))
 	print("")
 }
 total = parse_fraction("2 1/4") + parse_fraction("3/4") + parse_fraction("1/2")
 print("dry and fat cups for 4: " + mixed_text(total))
-print("as a decimal: " + str(float(total)))
+print("as a decimal: " + text(float(total)))

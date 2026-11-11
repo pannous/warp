@@ -1,0 +1,10 @@
+# lib/english.warp (card set-set, decisions setter-calls and mutation-phrases): English phrases as rewrite rules
+# `add x to list` is list.add(x)
+'use english; l = [1]; add 2 to l; l'	[1, 2]
+# `set field of object to value`
+'use english; p = {w: 1}; set w of p to 3; p.w'	3
+# increase, decrease, multiply, divide change the place, with or without the colon
+'use english; x = 3; increase x by 4; x'	7
+'use english; x = 3; decrease x by: 4; x'	-1
+'use english; x = 3; multiply x by 4; x'	12
+'use english; x = 12; divide x by: 4; x'	3

@@ -42,7 +42,7 @@ differ and holds every rule; this file holds only the procedures behind them.
   run` a line that rebuilds (`scripts/rebuild.sh --check`, exit 125 when that fails) and compares `warp <program>`
   with the expected output. No build needed: each <store>/<hash>/warp.wasm.inputs names its commit, so per
   first-parent commit a detached worktree + `scripts/rebuild.sh --check` takes the stored compiler, then runs the exact
-  failing line with WARP_LIB=<wt>/lib. The first run of each stored warp.wasm compiles machine code (~1 min).
+  failing line with `warp --lib <wt>/lib`. The first run of each stored warp.wasm compiles machine code (~1 min).
   `warp '<code>'` prints the shown value, `warp test` reads it back as data in the file's folder: they may differ
   (`type(ø)`).
 - Targeted runs only, filtered to the test files your change touches (grep test/ for the changed syntax to find the
@@ -64,9 +64,9 @@ differ and holds every rule; this file holds only the procedures behind them.
   playground: first the dry run on pannous.com, `scripts/browser-dry-run.sh` in your worktree (`--tours [example…]`,
   `--chrome`, `--firefox`, `--suite [filter…]`, `--samples [sample…]`, `--again`) until green; then dispatch the
   Playground workflow on your branch once (`gh workflow run pages.yml --ref <branch>`), the final check plus Safari.
-- `WARP_NO_WINDOW=1` also mutes sound and prints MIDI as hex; never in try lines for the user.
-- Quick check first: `WARP_NO_WINDOW=1 WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp <scratchpad>/<x>.warp` catches
-  undefined words, parse errors and wrong values in seconds; `WARP_HINTS=0` hides hints. Then the targeted
+- `--no-window` (WARP_WINDOW=0) opens no window, `--mute` (WARP_SOUND=0) plays nothing and prints MIDI as hex; never in try lines for the user.
+- Quick check first: `/Users/me/dev/bin/warp --no-window --lib <worktree>/lib <scratchpad>/<x>.warp` catches
+  undefined words, parse errors and wrong values in seconds; `--no-hints` hides hints. Then the targeted
   `warp test <folders>`.
 - `warp` / `warp self` never build a compiler: a missing one is an error naming `warp rebuild`; a worktree's stale one
   in lib/ gets a one-line notice. Nothing rebuilds a compiler because lib/ changed: no cron, no git hook, no watcher.
@@ -119,8 +119,8 @@ differ and holds every rule; this file holds only the procedures behind them.
   branch carries are your side too); otherwise resolve the hunk and check `git diff origin/main -- <file>` shows only
   your change. Keep merges real: `source scripts/lib/sync-main.sh; up_to_date_main` or `git merge origin/main`, never
   `git pull --rebase`. A pushed branch is never rebased or force-pushed.
-- "Quickly" means about a minute: one targeted test or none, a try line with `WARP_LIB=<worktree>/lib
-  /Users/me/dev/bin/warp`, hand off right after.
+- "Quickly" means about a minute: one targeted test or none, a try line with `/Users/me/dev/bin/warp
+  --lib <worktree>/lib`, hand off right after.
 - Post-hoc polish is a follow-up commit with its own card, never "hold my branch". Only real breakage holds a branch.
 - Try lines: `todo done <card> <commit> --try "…"` once it is on main: one concrete line, always
   `/Users/me/dev/bin/warp <full path>`; a program with quotes goes into a committed file (samples/ or test/<topic>/).

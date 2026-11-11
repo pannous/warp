@@ -301,7 +301,7 @@ time_test_words(program: Node): list := if nodes_in(program).any(is_time_test) o
 has_time_field(statement: Node): bool := class_view(statement) != ø and words_within(statement).any(word => base_type(word) in time_test_types)
 # `x is time` as written, or as the type tests make it, is_type(x, "time") (core/analysis/type_tests.warp)
 # a place typed so, `d: date? = v`, a field `year: date?` (decision typed-places-check), tests it too
-is_time_test(n: Node): bool := ((is_key(n, Op.Is) or is_operator(n, ":")) and value_of(n) is symbol and base_type(name_of(value_of(n))) in time_test_types) or (is_group(n) and #n == 3 and n#1 == symbol("is_type") and n#3 is text and str(n#3) in time_test_types)
+is_time_test(n: Node): bool := ((is_key(n, Op.Is) or is_operator(n, ":")) and value_of(n) is symbol and base_type(name_of(value_of(n))) in time_test_types) or (is_group(n) and #n == 3 and n#1 == symbol("is_type") and n#3 is text and text(n#3) in time_test_types)
 time_test_types = ["time", "duration", "date", "instant"]
 # the module of the emitted words: lib/time.warp for a time's + - * and for `is time`
 emitted_modules(program: Node): list := if time_operation_word in time_literal_words(program) or #time_test_words(program) > 0 then [time_module] else []
@@ -313,6 +313,41 @@ global brought_names = {}
 global brought_value_names = {}
 # those of them a library exports, which called_only keeps uncalled
 global exported_names = {}
+# the words whose recorded reach (prebuilt.warp linked_reaches) with_reached followed, and the linked classes it found,
+# of the compile at hand
+global linked_reached = {}
+global linked_classes_reached = {}
+# the variants of a linked class not reached yet, by that class: `format·text·Quantity` runs only on a Quantity, so the
+# `text` dispatcher reaching it brings Quantity's code only once something makes a Quantity
+global linked_variants_waiting = {}
+# the linked classes a word reaches through the words its body calls, each followed once a compile: only the classes
+# join the program, the words a linked body calls being its module's (decision link-modules-lazily)
+classes_reached(word: text, reaches: map, linked_classes: map): list := {
+	found = []
+	waiting = [word]
+	at = 0
+	while at < #waiting {
+		next_word = waiting[at]
+		at += 1
+		guard = unreached_variant_class(next_word, linked_classes)
+		if guard != ø { linked_variants_waiting[guard] = (linked_variants_waiting.get(guard) ?? []) + [next_word] }
+		else if not linked_reached.has(next_word) {
+			linked_reached[next_word] = yes
+			if linked_classes.has(next_word) {
+				found += [next_word]
+				linked_classes_reached[next_word] = yes
+				waiting += linked_variants_waiting.get(next_word) ?? []
+			}
+			waiting += reaches.get(next_word) ?? []
+		}
+	}
+	found
+}
+# the linked class a variant belongs to, `Quantity` of format·text·Quantity (prebuilt.warp word_owners), while nothing reached it
+unreached_variant_class(word: text, linked_classes: map): text? := {
+	owner = linked_owner(word)
+	if owner != ø and linked_classes.has(owner) and not linked_classes_reached.has(owner) then owner else ø
+}
 # the reach's last step, once the passes ran (passes.warp lowered_reached): the program without the brought functions
 # nothing calls. What a sugar rule might write is brought before it fires (sugar_words_of: `each_any` for any call,
 # `count_in` for any count), and typing and emitting the unused ones cost each compile (card measure). A module being
@@ -412,6 +447,11 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	for name in exported { exported_names[name] = yes }
 	# (an alias the program writes where the sugar makes its call later, `3 squared`, wants its word: square)
 	wanted = exported + program_words + program_words.filter(word => written_aliases.has(word)).map(word => written_aliases[word]) + variant_words(program_words) + lowering_words(program) + sugar_words_of(program) + linked_needs() + (if callable_word in module_names and calls_a_value(program) then [callable_word] else []) + extension_value_settlers().values.filter(word => word in module_names)
+	# (and the classes the linked words reached so far reach, a used module's reaching the prelude's: their bodies,
+	# declared only, say none of it)
+	wanted += linked_classes_reached.keys
+	reaches = linked_reaches()
+	linked_classes = linked_class_set()
 	uses = ø
 	origins = {}
 	# (the slices by name, made once: each wanted word compared with every slice's name was most of hello's reaching)
@@ -420,6 +460,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	while at < #wanted {
 		word = wanted[at]
 		at += 1
+		if not linked_reached.has(word) { wanted += classes_reached(word, reaches, linked_classes) }
 		for slice in named.get(word) ?? [] {
 			if slice#5 not in reached {
 				if slice#4 == ø and uses == ø { uses = use_lines(module) }
@@ -504,8 +545,12 @@ declared_only(n: Node): Node := {
 	}
 	# `A4 := midi_hertz(69)`, a value the module made a function of (charged, P71): its head, called at each use
 	if is_key(n, Op.Define) and head is symbol and name_of(head) in module.linked_words { return Key(call_of(name_of(head), []), Op.Define, Node.Empty) }
+	# a global the linked module declares: its start set it, the program reads and sets that one, never sets it anew (a
+	# console line re-running an earlier line's `count = 41` reset its count, card linked-own)
+	if is_value_definition(n) and linked_global(declared_name(n)) { return Node.Empty }
 	if is_key(n, Op.Colon) and is_declaration_keyword(head) then Key(head, Op.Colon, declared_only(value_of(n))) else n
 }
+linked_global(name: any): bool := name is text and module.linked_images.any(image => image.globals.any(entry => entry#1 == program_global_prefix + name))
 takes_block(head: Node): bool := items_of(head)[1 ..].any(parameter => parameter_type(parameter) == "block")
 # `name := …`, `name = …`, `global name = …`: a value's definition, no function's
 # a value, and a type the program's declarations name (`type fraction = rational`), whose statement is no program's
@@ -879,8 +924,8 @@ with_implicit_uses(source: text, folder: text = "."): text := {
 	# extensions' implicit uses scan a program's)
 	written = written_source(source)
 	written_uses = used_modules(written)
-	found = if module_written == "" then implicit_modules_of(source, folder) else runtime_modules_needed(written)
-	needed = found + runtime_modules_reached(written_uses + found, folder)
+	found = modules_found(written, folder, implicit_scanners())
+	needed = found + runtime_modules_reached(written_uses + found, folder) + files_runtime_modules(written, folder)
 	runtime = hooks().runtime_modules.filter(name => name in needed and name != module_written and name not in written_uses)
 	implicitly_used = found.filter(name => not is_runtime_module(name)) + runtime
 	# (a runtime module is linked as runtime.wasm is, linked_libraries, never a `use` of the program; only a `warp build`
@@ -904,9 +949,9 @@ runtime_modules_reached(uses: list, folder: text): list := {
 global runtime_modules_by_module = {}
 module_runtime_modules(name: text): list := {
 	if not runtime_modules_by_module.has(name) {
-		# (a prebuilt module's signature says them; only one built before it did is read and scanned)
+		# (a prebuilt module's signature says them, the modules it links; only one built before it did is read and scanned)
 		signature = prebuilt_signature(name)
-		runtime_modules_by_module[name] = if signature != ø and signature.runtime_modules != ø then signature.runtime_modules + signature.uses.filter(is_runtime_module) else runtime_modules_needed(used_module_text(name))
+		runtime_modules_by_module[name] = if signature != ø and signature.links != ø then signature.links.filter(is_runtime_module) else runtime_modules_needed(used_module_text(name))
 	}
 	runtime_modules_by_module[name]
 }
@@ -915,9 +960,16 @@ file_runtime_modules(file: text): list := {
 	if not runtime_modules_by_module.has(file) {
 		runtime_modules_by_module[file] = []
 		written = file_text(file) ?? ""
-		runtime_modules_by_module[file] = runtime_modules_needed(written) + runtime_modules_reached(used_modules(written), folder_of(file))
+		runtime_modules_by_module[file] = runtime_modules_needed(written) + runtime_modules_reached(used_modules(written), folder_of(file)) + files_runtime_modules(written, folder_of(file))
 	}
 	runtime_modules_by_module[file]
+}
+# the runtime modules of the files a source uses by path, `use "../../packages/colors/colors.warp"`: used_modules reads
+# code only, its texts blanked, so these come from the parsed uses (only a source naming a .warp file is parsed)
+files_runtime_modules(source: text, folder: text): list := {
+	if not source.contains(module_extension) { return [] }
+	statements = statements_in(plain_node(parsed(source))).filter(statement => use_target(statement) is text)
+	statements.map(statement => file_used(statement, folder)).filter(file => file != ø).flat_map(file_runtime_modules)
 }
 # the standard modules defining a word, from the library index (library.warp library_index_section "word")
 defining_modules(word: text): list := {

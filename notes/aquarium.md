@@ -46,7 +46,7 @@ SOFTWARE.
 warp samples/gpu/aquarium.warp
 ```
 
-With a window, `on frame` keeps swimming. Without one (`WARP_NO_WINDOW`), that frame runs once and the paint is a still (decision on-frame-headless). `view_color(x, y, t)` is the same picture at one pixel, which the tests call.
+With a window, `on frame` keeps swimming. Without one (`--no-window`), that frame runs once and the paint is a still (decision on-frame-headless). `view_color(x, y, t)` is the same picture at one pixel, which the tests call.
 
 ## Not this slice
 

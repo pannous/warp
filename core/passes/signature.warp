@@ -9,7 +9,7 @@ SIGNATURE_SECTION = "warp.signature"
 # the bytes of a module's header, its first section's id and size and that section's name: where its signature section
 # is placed, read without the rest (a module's whole text as a list of bytes was ~17 % of a one-line compile)
 SIGNATURE_PLACE_BYTES = 32
-class ModuleSignature { source: text; uses: list; slices: list; rules: list; foreign: map; aliases: map; words: list; globals: list; classes: list; builders: list; runtime: list; patterns: list; operators: list; c_lines: list?; c_uses: list?; runtime_modules: list? }
+class ModuleSignature { source: text; uses: list; slices: list; rules: list; foreign: map; aliases: map; words: list; globals: list; classes: list; builders: list; runtime: list; patterns: list; operators: list; c_lines: list?; c_uses: list?; reaches: map?; owners: map; links: list? }
 
 # the signature of the standard module `name` as lib/ lies now, a node; with the fields of its image (prebuilt.warp
 # image_fields) when its compile wrote them
@@ -28,11 +28,14 @@ module_signature_node(name: text, image: list): Node := {
 		field_node("patterns", square_list(rule_patterns(source).map(pattern => Text(pattern)))),
 		field_node("operators", square_list(declared_operators(source).map(operator => Text(written_operator(operator))))),
 		field_node("c_lines", square_list(module_c_lines(name).map(line => Text(line)))),
-		field_node("c_uses", square_list(module_c_used(name).map(module => Text(module)))),
-		# the runtime modules it links, at any depth (prelude_words.warp with_implicit_uses): a compile using it reads
-		# them here, never its text and its uses' again (card runtime-bridge)
-		field_node("runtime_modules", square_list(implicitly_used.filter(is_runtime_module).map(module => Text(module))))] + image)
+		field_node("c_uses", square_list(module_c_used(name).map(module => Text(module))))] + image)
 }
+# the standard modules a module's finished bytes import (`warp/<m>`), which link with it at load time: read off its
+# import section, the record and the module never disagree. A compile using it finds the runtime modules it needs
+# here (prelude_words.warp module_runtime_modules), `warp build` what an executable loads beside it
+LINKED_MODULE_PREFIX = "warp/"
+linked_modules(wasm: list): list := word_set(wasm_imported(wasm).names.map(name => name#1).filter(from => from.starts_with(LINKED_MODULE_PREFIX)).map(from => from.remove_prefix(LINKED_MODULE_PREFIX))).keys
+links_field(wasm: list): Node := field_node("links", square_list(linked_modules(wasm).map(module => Text(module))))
 # the module's bytes with its signature as their first section
 with_signature(wasm: list, name: text, image: list): list := wasm_header + section(section_ids.custom, name_bytes(SIGNATURE_SECTION) + pack(module_signature_node(name, image)).bytes) + wasm[#wasm_header ..]
 
@@ -45,7 +48,15 @@ module_signature(name: text, wasm: text): ModuleSignature? := {
 	fields = {}
 	for entry in items_of(unpack(byte_slice(wasm, place#1, place#2))) { fields[name_of(key_of(entry))] = value_of(entry) }
 	module_name = name
-	ModuleSignature(source: "${fields["source"]}", uses: items_of(fields["uses"]).map(module => "${module}"), slices: items_of(fields["slices"]).map(slice => ["${slice#1}", "${slice#2}", "${slice#3}", module_name]), rules: items_of(fields["rules"]).map(rule => unpacked_rule(rule, module_name)), foreign: texts_read(fields.get("foreign")), aliases: texts_read(fields.get("aliases")), words: listed(fields, "words"), globals: listed(fields, "globals"), classes: listed(fields, "classes"), builders: listed(fields, "builders"), runtime: listed(fields, "runtime"), patterns: listed(fields, "patterns").map(pattern => "${pattern}"), operators: listed(fields, "operators").map(operator => "${operator}"), c_lines: texts_listed(fields, "c_lines"), c_uses: texts_listed(fields, "c_uses"), runtime_modules: texts_listed(fields, "runtime_modules"))
+	ModuleSignature(source: "${fields["source"]}", uses: items_of(fields["uses"]).map(module => "${module}"), slices: items_of(fields["slices"]).map(slice => ["${slice#1}", "${slice#2}", "${slice#3}", module_name]), rules: items_of(fields["rules"]).map(rule => unpacked_rule(rule, module_name)), foreign: texts_read(fields.get("foreign")), aliases: texts_read(fields.get("aliases")), words: listed(fields, "words"), globals: listed(fields, "globals"), classes: listed(fields, "classes"), builders: listed(fields, "builders"), runtime: listed(fields, "runtime"), patterns: listed(fields, "patterns").map(pattern => "${pattern}"), operators: listed(fields, "operators").map(operator => "${operator}"), c_lines: texts_listed(fields, "c_lines"), c_uses: texts_listed(fields, "c_uses"), reaches: words_read(fields.get("reaches")), owners: texts_read(fields.get("owners")), links: texts_listed(fields, "links"))
+}
+# a map of word lists by name, each written as one text of its words (prebuilt.warp word_reaches); ø for a field an
+# older build left out
+words_read(n: any): map? := {
+	if n == ø { return ø }
+	words = {}
+	for entry in items_of(n) { words[name_of(key_of(entry))] = "${value_of(entry)}".split(" ") }
+	words
 }
 # a signature field's items, none for one an older build left out
 listed(fields: map, field: text): list := if fields.get(field) == ø then [] else items_of(fields[field])
@@ -56,7 +67,7 @@ texts_listed(fields: map, field: text): list? := if fields.get(field) == ø then
 show_signature(name: text) := {
 	signature = prebuilt_signature(name)
 	if signature == ø { raise name + ": no prebuilt module with a " + SIGNATURE_SECTION + " section" }
-	print "# " + name + ".wasm, built of lib/" + name + module_extension + " " + signature.source + ", using " + (if #signature.uses == 0 then "no module" else signature.uses.join(", ")) + "; ${#signature.rules} rewrite rules, ${#signature.words} words linked"
+	print "# " + name + ".wasm, built of lib/" + name + module_extension + " " + signature.source + ", using " + (if #signature.uses == 0 then "no module" else signature.uses.join(", ")) + ", linking " + (signature.links ?? []).join(", ") + "; ${#signature.rules} rewrite rules, ${#signature.words} words linked"
 	for slice in signature.slices { print slice#2 }
 }
 

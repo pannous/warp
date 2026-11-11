@@ -1,11 +1,14 @@
-// The standard library module complex (card lib-complex): `use complex`, then Complex(3, 4) + 1 is 4+4i. No literal
-// syntax: build values with Complex(re, im), polar(r, theta) or as_complex(x). + - * / and == are the class's operator
-// methods (as in uncertain.warp) and take a Complex or a plain number on the right; free functions are complex_… where
-// math already has the plain-number name (abs, arg, exp, log, sqrt, pow, sin, cos)
+// The standard library module complex (card lib-complex): `use complex`, then (3 + 4ⅈ) * (1 + 2ⅈ) is -5+10ⅈ. Build values
+// with ⅈ, Complex(re, im), polar(r, theta) or as_complex(x). + - * / and == are the class's operator methods (as in
+// uncertain.warp) and take a Complex or a plain number on the right; free functions are complex_… where math already
+// has the plain-number name (abs, arg, exp, log, sqrt, pow, sin, cos)
 //
 // Text form: each part prints as an integer when whole ("3", not "3.0"), else as the float. A zero part is left out
-// ("3", "4i") unless both are zero ("0"); an imaginary part of 1 or -1 prints as "i" or "-i"; a negative imaginary
-// part takes its own sign ("3-4i"), a positive one a "+" after a real part ("3+4i")
+// ("3", "4ⅈ") unless both are zero ("0"); an imaginary part of 1 or -1 prints as "ⅈ" or "-ⅈ"; a negative imaginary
+// part takes its own sign ("3-4ⅈ"), a positive one a "+" after a real part ("3+4ⅈ")
+
+// its text names the imaginary part with ⅈ, the unit's own glyph, so a shown 3+4ⅈ reads back as the same number
+IMAGINARY_UNIT_GLYPH = "ⅈ"
 
 class Complex {
 	re: float
@@ -31,8 +34,19 @@ class Complex {
 	// abs(z), its length, as on a number
 	abs(): float := sqrt(re * re + im * im)
 	equals(o: any): bool := (o is Complex or o is number) and re == as_complex(o).re and im == as_complex(o).im
-	text(): text := complex_text(this)
+	// it shows as 3+4ⅈ, 3-4ⅈ, ⅈ (its text(), print and the value shown)
+	format as text := complex_text(this)
 }
+
+// a plain number on the left: 3 - ⅈ, 1 / ⅈ, -ⅈ (+ and * take either order through the class's own operators)
+infix operator -(a: number, b: Complex) := as_complex(a) - b
+infix operator /(a: number, b: Complex) := as_complex(a) / b
+
+// `c: complex`, the type's lowercase name as the other number types are spelled
+type complex = Complex
+// its real and imaginary parts: re(z), im(z), as z.re, z.im
+re(z: Complex): float := z.re
+im(z: Complex): float := z.im
 
 // ⅈ, the imaginary unit (extensions/glyph_atoms.warp GLYPH_WORDS): -0.8 + 0.156ⅈ
 imaginary_unit(): Complex := Complex(0.0, 1.0)
@@ -71,10 +85,10 @@ complex_cos(z: any): Complex := { c = as_complex(z); Complex(cos(c.re) * cosh(c.
 // z within tolerance of w in both parts
 complex_near(z: any, w: any, tolerance: float): bool := complex_abs(as_complex(z) - as_complex(w)) <= tolerance
 
-complex_part(x: float): text := if x == floor(x) and abs(x) < 1000000000000000 then str(int(x)) else str(x)
+complex_part(x: float): text := if x == floor(x) and abs(x) < 1000000000000000 then text(int(x)) else text(x)
 complex_text(z: Complex): text := {
 	if z.im == 0 { return complex_part(z.re) }
-	imaginary = if z.im == 1 then "i" else if z.im == -1 then "-i" else complex_part(z.im) + "i"
+	imaginary = if z.im == 1 then IMAGINARY_UNIT_GLYPH else if z.im == -1 then "-" + IMAGINARY_UNIT_GLYPH else complex_part(z.im) + IMAGINARY_UNIT_GLYPH
 	if z.re == 0 { return imaginary }
 	complex_part(z.re) + (if z.im > 0 then "+" else "") + imaginary
 }

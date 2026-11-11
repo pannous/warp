@@ -2,6 +2,6 @@
 
 # str_of_a_field_read_is_its_value
 is! 'class Rope{length: m}
-str(Rope(5 m).length)' '5m'
+text(Rope(5 m).length)' '5m'
 is! 'class P{x:number}
-str(P(5).x)' '5'
+text(P(5).x)' '5'

@@ -289,7 +289,7 @@ window_answered(called: text, member: text, arguments: any): any? := {
 host_foreign_call(runtime, module, member, call, arguments): any? := {
 	pool = objc_autoreleasePoolPush()
 	// (a failure is the call's Error, a value the program may catch, as the page's foreignCall gives it)
-	answer: any? = foreign_answered(str(runtime), module, str(member), call == 1, arguments)
+	answer: any? = foreign_answered(text(runtime), module, text(member), call == 1, arguments)
 	objc_autoreleasePoolPop(pool)
 	answer
 }
@@ -310,7 +310,7 @@ foreign_answered(runtime: text, module: any, member: text, call: bool, arguments
 host_webview_page_text(html): any := {
 	pool = objc_autoreleasePoolPush()
 	shown_in = hidden_view()
-	answer = if page_loaded(shown_in, str(html)) then answered(shown_in, "return document.body?.innerText ?? ''", "", "") else [ø, ""]
+	answer = if page_loaded(shown_in, text(html)) then answered(shown_in, "return document.body?.innerText ?? ''", "", "") else [ø, ""]
 	if answer#1 == ø { eprint "the page did not load" + (if answer#2 != "" then ": " + answer#2 else "") }
 	objc_autoreleasePoolPop(pool)
 	answer#1 ?? ""

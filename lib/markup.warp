@@ -13,8 +13,11 @@ use host_io
 global html_scopes = ["html"]
 type html = any
 // an element: its pair as written, `div: { class: "box" … }` (decision html-value: a cheap class, no mark)
-class Html { element: any }
-format h: Html as text := to_html(h)
+class Html {
+	element: any
+	// its HTML wherever it shows: the value shown, print, text(h), "$h"
+	format as text := to_html(this)
+}
 // an Html's pair, any other value as it is
 html_pair(value: any) := if value is Html then value.element else value
 html_elements = ["html", "head", "body", "title", "meta", "link", "style", "script", "base",
@@ -73,7 +76,7 @@ export page_render(value: html) := {
 	if page_in_js { foreign_call("js", "globalThis", JS_PAGE_SHOWN, 1, [html]) }
 	html
 }
-// a program reaching the page's js (`who.focus()`, `document.title`, extensions/js_globals.warp) has its page in the js
+// a program reaching the page's js (`who.focus()`, `document.title`, extensions/foreign_globals.warp) has its page in the js
 // runtime's document after each render: natively the hidden web view's (lib/host/native_host/webview_bridge.js), the page
 // shows it itself (web/playground/host-foreign.js). Other programs never start the js runtime
 JS_PAGE_SHOWN = "warpShowPage"
@@ -178,7 +181,7 @@ page_value_set(id: text, value: any) := { page_values[id] = value }
 // ` value="…"` of a field whose id has a value written or typed, unless the markup writes its own
 html_page_value(items: list, tag: any, written: any): text := {
 	if written != ø { return "" }
-	for item in items { if html_is_attribute(item, tag) and html_name(item) == "id" and page_values.has(html_plain(html_content(item))) { return " value=\"" + html_escaped(str(page_values[html_plain(html_content(item))])) + "\"" } }
+	for item in items { if html_is_attribute(item, tag) and html_name(item) == "id" and page_values.has(html_plain(html_content(item))) { return " value=\"" + html_escaped(text(page_values[html_plain(html_content(item))])) + "\"" } }
 	""
 }
 // `click plus`: an id, a word the program binds nothing to
@@ -204,7 +207,7 @@ global component_order = []
 component(name: text, key: any): map := {
 	calls = (if component_calls.has(name) then component_calls[name] else 0) + 1
 	component_calls[name] = calls
-	id = name + "·" + str(key ?? calls)
+	id = name + "·" + text(key ?? calls)
 	if not component_states.has(id) { component_states[id] = {} }
 	instance = component_states[id]
 	component_order.add([name, instance, id])
@@ -281,7 +284,7 @@ handler(name: any, action: function): Handler := Handler(name_of(name), action)
 class Live {
 	compute: function
 	now() := { value = compute; value() }
-	format as text := str(now())
+	format as text := text(now())
 }
 live(compute: function): Live := Live(compute)
 
@@ -315,7 +318,7 @@ html_handler_attribute(event: text, action: function) := {
 // a pair's name and content, `div{…}` or `class: "box"` (a one-entry map as Rust's pair)
 html_name(written: any) := {
 	pair = html_pair(written)
-	if pair is map then keys(pair)#1 else str(key_of(pair))
+	if pair is map then keys(pair)#1 else text(key_of(pair))
 }
 html_raw_content(written: any) := {
 	pair = html_pair(written)
@@ -334,7 +337,15 @@ html_render(live: html, scope: any, chosen: any) := {
 		return out
 	}
 	if value == ø { return "" }
+	if html_is_listed_element(value) { html_warning_once(html_name(value) + ": {…} here is data, shown as text: markup is made inside html{…} or in a place typed html (`bars: html = [div{…} for l in lengths]`)") }
 	html_escaped(html_plain(value))
+}
+
+// the warnings a render gave, each given once (a thousand data bars warn once)
+html_warned = []
+html_warning_once(message: text) := if not contains(html_warned, message) {
+	html_warned.add(message)
+	warning(message)
 }
 
 // an Html named as an element (one of computed name, `("h" + level): title`, may name none: data)
@@ -343,8 +354,8 @@ html_is_element(value: any): bool := value is Html and (html_is_listed_element(v
 html_is_listed_element(value: any): bool := html_pair(value) is pair and contains(html_elements, html_name(value))
 
 // `my-card{…}`: a page's own element is named with a dash, unlike data-, aria- and the listed attributes (decision unknown-tag)
-// str(name): a one-letter key (`"s": "small"`) is a Char, which contains refuses (card contains-fails)
-html_is_custom_element(name: any): bool := name is text and contains(str(name), "-") and not starts_with(name, "data-") and not starts_with(name, "aria-") and not contains(html_attributes, name)
+// text(name): a one-letter key (`"s": "small"`) is a Char, which contains refuses (card contains-fails)
+html_is_custom_element(name: any): bool := name is text and contains(text(name), "-") and not starts_with(name, "data-") and not starts_with(name, "aria-") and not contains(html_attributes, name)
 
 html_element(tag: any, content: any, scope: any, chosen: any) := {
 	// a live item as it is now: `style: { color: (if dark …) }` live as a whole is an attribute again
@@ -473,13 +484,13 @@ html_is_attribute(item: any, tag: any): bool := {
 	let value = html_content(item)
 	named = starts_with(name, "data-") or starts_with(name, "aria-") or name == "key" or name == "starting-style" or (contains(html_attributes, name) and not (tag == "head" and contains(html_elements, name)))
 	if not named { return false }
-	if html_is_dotted_name(value) { raise "an attribute value has no dot: " + name + ": \"" + str(value_of(value)) + "\"; fix: write the class name as text" }
+	if html_is_dotted_name(value) { raise "an attribute value has no dot: " + name + ": \"" + text(value_of(value)) + "\"; fix: write the class name as text" }
 	if (name == "style" or html_attribute_name(name) == html_starting_style) and tag != "head" and html_is_declarations(value) { return true }
 	not html_is_nested(value) and (not html_is_group(value) or not html_holds_pairs(value))
 }
 
 // `class: .card`, the CSS selector's spelling of a class name: the parser's member `.card` of nothing
-html_is_dotted_name(value: any): bool := value is pair and str(value.op) == "." and key_of(value) == ø
+html_is_dotted_name(value: any): bool := value is pair and text(value.op) == "." and key_of(value) == ø
 
 // a pair nests markup; an instance of a class, a pair of its class and fields, is one value: `title: 200ms` an attribute
 // shown as its text (card quantity-element)
@@ -528,7 +539,7 @@ html_declaration(item: any): text := {
 
 // a number in pixels unless the property has no unit
 html_css_value(property: any, value: any): text := {
-	if value is number and not contains(html_unitless_properties, property) { return str(value) + "px" }
+	if value is number and not contains(html_unitless_properties, property) { return text(value) + "px" }
 	html_attribute_value(value)
 }
 
@@ -562,7 +573,7 @@ html_attribute_value(value: any): text := {
 }
 
 // a value as the text it shows: a text without quotes, anything else as warp writes it
-html_plain(value: any): text := if value is text then value else str(value)
+html_plain(value: any): text := if value is text then value else text(value)
 
 html_is_true(value: any): bool := value == true or (value is number and value != 0)
 
@@ -622,7 +633,7 @@ style(sheet: data): html := Html(element: key(symbol("style"), ":", if sheet is 
 // `form post "/todos" { button{ "add" } }`: a form named by the route it sends to, as the route is written
 // (decisions.md markup-plain-library); `form{ method: "post" action: "/todos" … }` spells the attributes
 form(method: symbol, action: text, body: any) := {
-	let route = [key(symbol("method"), ":", str(method)), key(symbol("action"), ":", action)]
+	let route = [key(symbol("method"), ":", text(method)), key(symbol("action"), ":", action)]
 	key(symbol("form"), ":", bracketed(route + html_items(body), "{"))
 }
 
@@ -631,13 +642,13 @@ style_units = ["px", "em", "rem", "vh", "vw", "vmin", "vmax", "pt", "ch", "ex", 
 // how a selector joins the parts the parser read as operators: `ul > li`, `a:hover`, `div.card`, `#main`
 style_combinators = {">": " > ", "+": " + ", "~": " ~ ", "≈": " ~ ", ".": ".", ":": ":", "#": "#"}
 
-style_combinator(node: any) := if contains(keys(style_combinators), str(node.op)) then style_combinators[str(node.op)] else ø
+style_combinator(node: any) := if contains(keys(style_combinators), text(node.op)) then style_combinators[text(node.op)] else ø
 
 style_body(body: any) := bracketed(style_items(if style_is_block(body) then body else [body]), "{")
 
-style_is_block(node: any): bool := not (node is pair) and str(node.bracket) == "{"
+style_is_block(node: any): bool := not (node is pair) and text(node.bracket) == "{"
 // a bracketless group of items (`li {…} .box {…}` as one value)
-style_is_group(node: any): bool := not (node is pair or node is symbol or node is text or node is number or node == ø) and str(node.bracket) is empty
+style_is_group(node: any): bool := not (node is pair or node is symbol or node is text or node is number or node == ø) and text(node.bracket) is empty
 // style_is_block for a node that may be a plain word, number or text (which have no bracket)
 style_is_block_node(node: any): bool := not (node is symbol or node is text or node is number or node == ø) and style_is_block(node)
 
@@ -679,12 +690,12 @@ style_items(block: any) := {
 // the items of a block with the joiner before each, a group's (`h1, .x { … }` is h1 and the group `.x { … }`) among
 // them: a selector started before the group continues in it
 style_entries(items: any, separator: any, leading: any) := {
-	let list_joiner = if str(separator) == "," then ", " else " "
+	let list_joiner = if text(separator) == "," then ", " else " "
 	var entries = []
 	for item in items {
 		for part in style_unchained(item) {
 			let joiner = if #entries == 0 and leading != ø then leading else list_joiner
-			if not (part is pair) and str(part.bracket) is empty { entries = entries + style_entries(part, part.separator, joiner) }
+			if not (part is pair) and text(part.bracket) is empty { entries = entries + style_entries(part, part.separator, joiner) }
 			else { entries.add([part, joiner]) }
 		}
 	}
@@ -695,8 +706,8 @@ style_entries(items: any, separator: any, leading: any) := {
 // its call, operator_~(a, b); a selector reads it as written, as it reads `a > b`
 style_as_written(node: any) := {
 	if node is pair { return key(style_as_written(node.key), node.op, style_as_written(node.value)) }
-	if node is symbol or node is text or node is number or node == ø or str(node.bracket) != "(" or count(node) != 3 { return node }
-	let head = str(node#1)
+	if node is symbol or node is text or node is number or node == ø or text(node.bracket) != "(" or count(node) != 3 { return node }
+	let head = text(node#1)
 	if head.starts_with("operator_") then key(style_as_written(node#2), head.remove_prefix("operator_"), style_as_written(node#3)) else node
 }
 
@@ -712,7 +723,7 @@ style_unchained(written: any) := {
 		if #parts < 2 or not style_is_block_node(parts#2) or style_selector_text(parts#1) == ø { return [node] }
 		return [key(node.key, node.op, key(parts#1, ":", parts#2))] + parts[2:]
 	}
-	if not (node is pair) or not (str(node.op) == "." or str(node.op) == "#") { return [node] }
+	if not (node is pair) or not (text(node.op) == "." or text(node.op) == "#") { return [node] }
 	var parts = style_unchained(node.key)
 	let last = parts.pop()
 	if style_rule_parts(last) != ø or style_is_block_node(last) {
@@ -733,15 +744,15 @@ style_joined(pending: any, last: any, last_joiner: any) := {
 style_rule(selector: any, body: any) := key(selector, ":", style_body(body))
 
 // `color: theme`: a property name and a value that is no block
-style_is_declaration(node: any): bool := node is pair and str(node.op) == ":" and (node.key is symbol or node.key is text) and not style_is_block(node.value)
+style_is_declaration(node: any): bool := node is pair and text(node.op) == ":" and (node.key is symbol or node.key is text) and not style_is_block(node.value)
 
 // `#done = "red"`, `.done: "red"`: a class or id selector and a value that is no block, nor the one declaration the
 // parser chains onto it (`.done{color:red}` reads `.done:color:red`)
 style_selector_value(node: any) := {
-	if not (node is pair) or not (str(node.op) == ":" or str(node.op) == "=") { return ø }
+	if not (node is pair) or not (text(node.op) == ":" or text(node.op) == "=") { return ø }
 	let selector = style_selector_text(node.key)
 	if selector == ø or not (starts_with(selector, ".") or starts_with(selector, "#")) { return ø }
-	if style_is_block(node.value) or (node.value is pair and str(node.value.op) == ":") { return ø }
+	if style_is_block(node.value) or (node.value is pair and text(node.value.op) == ":") { return ø }
 	[selector, node.value]
 }
 
@@ -754,14 +765,14 @@ style_continued(value: any, next: any) := {
 	first + " " + second
 }
 
-style_piece(node: any) := if node is number or node is text or node is symbol then str(node) else style_length(node)
+style_piece(node: any) := if node is number or node is text or node is symbol then text(node) else style_length(node)
 
 // `8px`, `1.5em`, `50%`, `-2px`: the length as CSS writes it
 style_length(node: any) := {
 	if not (node is pair) { return ø }
-	let op = str(node.op)
-	if op == "*" and node.key is number and node.value is symbol and contains(style_units, str(node.value)) { return str(node.key) + str(node.value) }
-	if op == "%" and node.value == ø and node.key is number { return str(node.key) + "%" }
+	let op = text(node.op)
+	if op == "*" and node.key is number and node.value is symbol and contains(style_units, text(node.value)) { return text(node.key) + text(node.value) }
+	if op == "%" and node.value == ø and node.key is number { return text(node.key) + "%" }
 	if op == "-" and node.key == ø {
 		let length = style_length(node.value)
 		if length != ø { return "-" + length }
@@ -772,7 +783,7 @@ style_length(node: any) := {
 // `ul > li`: a rule, its selector as CSS text and its block of declarations
 style_rule_parts(node: any) := {
 	if not (node is pair) { return ø }
-	if str(node.op) == ":" and style_is_block(node.value) {
+	if text(node.op) == ":" and style_is_block(node.value) {
 		let selector = style_selector_text(node.key)
 		return if selector == ø then ø else [selector, node.value]
 	}
@@ -785,7 +796,7 @@ style_rule_parts(node: any) := {
 
 // `ul`, `.card`, `#main`, `div.card`, `"@media …"`: the selector a node spells
 style_selector_text(node: any) := {
-	if node is symbol or node is text { return str(node) }
+	if node is symbol or node is text { return text(node) }
 	if node == ø { return "" }
 	if not (node is pair) { return ø }
 	let joiner = style_combinator(node)
@@ -857,18 +868,18 @@ css_parts(items: list) := {
 
 // a spec's items, its lines of words one by one
 css_items(spec: any) := {
-	if spec is pair or str(spec.bracket) { return [spec] }
+	if spec is pair or text(spec.bracket) { return [spec] }
 	var items = []
 	for item in spec { items = items + css_items(item) }
 	items
 }
 
 // `ease-out`, `200ms`, `2`, a measure held in a variable (`q = 400ms`)
-css_is_word(item: any) := item is symbol or item is number or (item is pair and str(item.op) == "*" and item.key is number and item.value is symbol) or css_is_measure(item)
+css_is_word(item: any) := item is symbol or item is number or (item is pair and text(item.op) == "*" and item.key is number and item.value is symbol) or css_is_measure(item)
 
 // a value of a unit, `400ms` or `3km` computed or held in a variable: no word, number or tree, its text a number
 // and a CSS unit (card css-shorthand-quantity)
-css_is_measure(item: any): bool := not (item is text or item is symbol or item is number or item is pair or html_is_group(item) or item == ø) and css_measure_unit(str(item)) != ø
+css_is_measure(item: any): bool := not (item is text or item is symbol or item is number or item is pair or html_is_group(item) or item == ø) and css_measure_unit(text(item)) != ø
 // the CSS unit a measure's text ends with, `ms` of "400ms", ø when the text before it is no number
 css_measure_unit(t: text) := {
 	for unit in style_units { if t.ends_with(unit) and #t > #unit and is_numeric(t[0: #t - #unit]) { return unit } }
@@ -876,7 +887,7 @@ css_measure_unit(t: text) := {
 }
 
 // `2s`, `200ms` as written: the page reads a transition's duration off the computed style, in any unit
-css_word(word: any) := if css_is_measure(word) or not (word is pair) or str(word.op) != "*" then str(word) else str(word.key) + str(word.value)
+css_word(word: any) := if css_is_measure(word) or not (word is pair) or text(word.op) != "*" then text(word) else text(word.key) + text(word.value)
 
 // the kind a spec's first word names, ø for CSS
 css_kind(words: any) := {
@@ -891,7 +902,7 @@ css_of_kind(words: any) := {
 	for word in split(words, " ") {
 		if css_kind(word) == ø {
 			timing.add(word)
-			if contains("0123456789", str(word#1)) { timed = true }
+			if contains("0123456789", text(word#1)) { timed = true }
 		}
 	}
 	let rest = join(if timed then timing else [css_default_duration] + timing, " ")

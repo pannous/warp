@@ -52,7 +52,7 @@ the team, crash resume), notes/roles.md (what the other roles do).
 - Talk to workers by SendMessage with `notify_when_idle: true`; tmux only to look at a screen.
 - Stale session without a handover: don't message it; build the handover from its worktree's git state and
   transcript (peek-session skill), kill its tmux by exact name, respawn.
-- Quick capability checks: `WARP_NO_WINDOW=1 /Users/me/dev/bin/warp 'use math; dir(math)'`; never rebuild for it.
+- Quick capability checks: `/Users/me/dev/bin/warp --no-window 'use math; dir(math)'`; never rebuild for it.
 - Side research goes to a background Agent-tool subagent returning a short answer with sources.
 - Never assign @copilot. Releases (version bump, tag, tap formula) need no approval; nothing waits for brew.
 

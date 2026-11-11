@@ -141,7 +141,7 @@ python_object(value: any): int := {
 		}
 		return created
 	}
-	raise "python: no Python value for " + str(value)
+	raise "python: no Python value for " + text(value)
 }
 
 // the warp value of a Python object (which stays the caller's): None ø, bool, int, float, str, list and tuple a list,
@@ -266,6 +266,10 @@ python_call(target: any, name: text, arguments: list): any := {
 	if held#2 { Py_DecRef(held#1) }
 	python_result(result)
 }
+
+// a member of a module or value as `use python json; json.dumps(x)` reaches it (extensions/foreign_globals.warp):
+// called with the arguments, else read
+python_member(target: any, member: text, called: int, arguments: list): any := if called == 1 then python_call(target, member, arguments) else python_get(target, member)
 
 // python_call with keyword arguments: python_call_with(json, "dumps", [data], {indent: 2})
 python_call_with(target: any, name: text, arguments: list, keywords: any): any := {

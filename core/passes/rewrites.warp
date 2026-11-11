@@ -195,6 +195,8 @@ global rule_item_block = ø
 # how many structures `div{…}` the walk is inside; whether in an attribute's value of one, `animation: pop 400ms`
 global rule_tag_depth = 0
 global rule_in_attribute = no
+# the glued product `3m` whose rules are tried (glued_rewritten), else ø
+global rule_glued = ø
 global rule_next_item = ø
 global rule_binding = []
 # the word whose definition the rules walk inside: a rule producing that word leaves its definition as written, so
@@ -207,7 +209,7 @@ global rule_matched = ø
 # stores assignments; `source` is the text the program was parsed from, which tells a template's `·` from `*`
 rewritten_program(program: Node, source: text): Node := {
 	rule_source = source
-	stored(own_rules_applied(program, source))
+	stored(without_glued_marks(own_rules_applied(program, source)))
 }
 # a spaced `word {…}` that is no tag (decision spaced-tag): a word a rule starts or needs (`do {…}`, `once {…}`) or a
 # library word that is no markup tag (`head {…}` is the element)
@@ -391,30 +393,40 @@ reaching_template_words(program: Node, rules: list): list := rules_reaching(rule
 
 # the rules that can fire in the statement (card speed-module-cache): those whose pattern's words it mentions, or the
 # result of such a rule does (a result is rewritten again); a rule missing one matches nowhere in it, so walking it
-# with these alone gives what all the rules give, without trying the others at each node. Only the rules needing a
-# word mentioned are tried (rule_index), each again when another of its words comes in
+# with these alone gives what all the rules give, without trying the others at each node. The rules every statement
+# reaches (RuleIndex.common) are worked out once per walk; a statement adds those its own words reach
 rules_reaching(index: RuleIndex, statement: Node): list := {
+	picked = reach_grown(index, index.common, tokens_within(statement), []).picked
+	range_list(#index.rules).filter(each => picked[each]).map(each => index.rules[each])
+}
+# the words mentioned and the rules picked, a yes/no per rule (`index in picked` of a list compared each index with
+# every picked one, node by node)
+class Reach { mentioned: map; picked: list }
+# the reach grown by the words and the rules pending: only the rules needing a word mentioned are tried (rule_index),
+# each again when another of its words comes in
+reach_grown(index: RuleIndex, start: Reach, words: list, pending: list): Reach := {
 	rules = index.rules
-	mentioned = word_set(tokens_within(statement))
-	# (a yes/no per rule: `index in picked` of a list compared each index with every picked one, node by node)
-	picked = range_list(#rules).map(each => no)
-	pending = index.free + mentioned.keys.flat_map(word => index.by_word.get(word) ?? [])
+	mentioned = word_set(start.mentioned.keys)
+	picked = start.picked.map(each => each)
+	queue = pending + words.filter(word => not mentioned.has(word)).flat_map(word => index.by_word.get(word) ?? [])
+	for word in words { mentioned[word] = yes }
 	at = 0
-	while at < #pending {
-		tried = pending[at]
+	while at < #queue {
+		tried = queue[at]
 		at += 1
 		if not picked[tried] and rules[tried].needs.all(word => mentioned.has(word)) {
 			picked[tried] = yes
 			for word in rules[tried].gives.filter(word => not mentioned.has(word)) {
 				mentioned[word] = yes
-				pending += index.by_word.get(word) ?? []
+				queue += index.by_word.get(word) ?? []
 			}
 		}
 	}
-	range_list(#rules).filter(each => picked[each]).map(each => rules[each])
+	Reach(mentioned, picked)
 }
-# rules by each word they need, made once for a walk of a program (rules_reaching), those needing none apart
-class RuleIndex { rules: list; free: list; by_word: map }
+# rules by each word they need, made once for a walk of a program (rules_reaching), and the rules reached whatever a
+# statement says: those needing no word, and what their results bring
+class RuleIndex { rules: list; by_word: map; common: Reach }
 rule_index(rules: list): RuleIndex := {
 	by_word = {}
 	free = []
@@ -423,7 +435,8 @@ rule_index(rules: list): RuleIndex := {
 		if #needs == 0 { free += [at] }
 		for word in needs { by_word[word] = (by_word.get(word) ?? []) + [at] }
 	}
-	RuleIndex(rules, free, by_word)
+	unreached = RuleIndex(rules, by_word, Reach({}, rules.map(each => no)))
+	RuleIndex(rules, by_word, reach_grown(unreached, unreached.common, [], free))
 }
 
 # a hole of any form: `$x`, `$body: block`, `$xs...` or an affixed one; its words (a typed hole's kind) are no words of
@@ -750,7 +763,7 @@ written_rules(path: text, source: text, module: text): list := {
 	if #rules < #rule_lines { throw dropped_rules(path, lines, rule_lines, rules, module) }
 	rules
 }
-rules_parsed(parse: Node, module: text, source: text): list := statements_ruled(statements_in(parse), module, source)#1
+rules_parsed(parse: Node, module: text, source: text): list := in_rule_module(module, () => statements_ruled(statements_in(parse), module, source)#1)
 # [the rules the statements declare, the other statements]: each `rewrite` line's, and in place of the first overload
 # of a built-in operator those of all its overloads (operator_rules)
 statements_ruled(statements: list, module: text, source: text): list := {
@@ -862,7 +875,7 @@ rule_needs_by_module(): map := library_index_section("needs")
 scanned_rule_needs(): map := {
 	found = {}
 	for module in std_module_names {
-		needs = module_rule_paths(module).flat_map(path => rule_needs(file_text(path) ?? ""))
+		needs = in_rule_module(module, () => module_rule_paths(module).flat_map(path => rule_needs(file_text(path) ?? "")))
 		if #needs > 0 { found[module] = needs.join(" ") }
 	}
 	found
@@ -889,7 +902,7 @@ unpacked_rule(n: Node, module: text): Rule := {
 	shape = if fields#4 == ø then ø else fields#4
 	conditions = items_of(fields#5)
 	# an origin the baking compiler (an older seed) took a call of a rule word it did not know yet for: a computed binding
-	if hole != ø and is_computed_binding(Key(hole, Op.Assign, shape)) {
+	if hole != ø and in_rule_module(module, () => is_computed_binding(Key(hole, Op.Assign, shape))) {
 		conditions += [Key(hole, Op.Assign, shape)]
 		hole = ø
 		shape = ø
@@ -1101,9 +1114,25 @@ is_condition(condition: Node): bool := {
 
 # `routed($program)`: a call of a word of extensions/rules/rule_words.warp, run at compile time (decision computed-hole)
 is_rule_word_call(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and is_rule_word(name_of(n#1))
+# the module of the rules being read or checked, "" for the compiler's own: a word it defines that the compiler has not
+# is a rule word of the module's, run in the module's own wasm (module_word, card module-rule-words)
+global rule_module = ""
+# the work's value with the module's rules being read
+in_rule_module(module: text, work: function): any := {
+	outer = rule_module
+	rule_module = module
+	result = work()
+	rule_module = outer
+	result
+}
+is_module_rule_word(word: text): bool := rule_module != "" and not rule_words.has(word) and module_defines(rule_module, word)
+# the rule word run in the module's wasm by the host's warp.module_word (core/native/driver.warp module_word_answered),
+# its result built here
+module_word(module: text, word: text, arguments: Node): Node := std_io("warp", "module_word", [module, word, arguments])
 # a word of extensions/rules/rule_words.warp: one this compiler has, or, when a rule names a word it lacks (an older seed building a
 # newer compiler, card rule-whose), one the library's file defines, read only then
-is_rule_word(word: text): bool := rule_words.has(word) or library_rule_word_names().has(word)
+# and in a module's rules a word the module defines (is_module_rule_word)
+is_rule_word(word: text): bool := rule_words.has(word) or library_rule_word_names().has(word) or is_module_rule_word(word)
 # the rule words' file under lib/, read only by a compiler lacking a word a rule names
 RULE_WORDS_FILE = "/extensions/rules/rule_words.warp"
 global library_rule_words = ø
@@ -1139,9 +1168,10 @@ is_computed_binding(n: Node): bool := is_key(n, Op.Assign) and (rule_hole(key_of
 program_hole = "$program"
 source_hole = "$source"
 computed(call: Node, bound: map): any := {
-	if not rule_words.has(name_of(call#1)) { return skipped_rule_word(name_of(call#1)) }
-	word = rule_words[name_of(call#1)]
+	name = name_of(call#1)
 	given = items_of(call)[1 ..].map(argument => if argument == symbol(program_hole) then rule_program else if argument == symbol(source_hole) then rule_source else rule_spliced(argument, bound, argument))
+	if not rule_words.has(name) { return if is_module_rule_word(name) then module_word(rule_module, name, List(given, Bracket.Round, Separator.Comma)) else skipped_rule_word(name) }
+	word = rule_words[name]
 	if #given == 0 { return word() }
 	if #given == 1 { return word(given#1) }
 	if #given == 2 { return word(given#1, given#2) }
@@ -1372,7 +1402,16 @@ has_property(code: Node, property: text): bool := {
 # `$u is Unit`: a name the program assigns an instance of the class, else, unbound by it, a library module's,
 # `km = Unit("km")` (parser.warp library_typed_constants)
 # (a program's value of that name hides a library's, never a field or a type written so: `class Run{distance: km}`)
-typed_as(word: text, class_name: text): bool := if binds_value(rule_scope, word) then program_typing()#2.get(word) == class_name else library_typed_constants().get(word) == class_name
+# (glued to a number, `m = 5; 3m`, the library's name though, with a hint: decision unit-after-number)
+typed_as(word: text, class_name: text): bool := {
+	library_typed = library_typed_constants().get(word) == class_name
+	if not binds_value(rule_scope, word) { return library_typed }
+	if rule_glued != ø and library_typed {
+		diagnose(call_of("unit_beside_variable", [word, "${key_of(attribute_marked(rule_glued))}*${word}"]), rule_glued)
+		return yes
+	}
+	program_typing()#2.get(word) == class_name
+}
 # [the classes, the program's and the library's; the program's names typed by them]
 program_typing(): list := {
 	if rule_types == ø {
@@ -1935,6 +1974,7 @@ is_run_pattern(pattern: Node): bool := match pattern {
 # runs rewritten, over its words as written (the parser nests `keep 1 past 3` as `keep 1 (past 3)`); the rules of a
 # place rewrite the node's parts standing there first
 rule_rewritten(n: Node, rules: list, origins: list): Node := {
+	if is_glued_product(n) { return glued_rewritten(n, rules, origins) }
 	if is_group(n) and separator_of(n) in statement_separators {
 		n = group_like(n, statement_runs(spliced_statements(items_of(n).map(statement => at_place(statement, Place.Statement, rules, origins))), rules, origins))
 	} else if is_group(n) and #n > 0 {
@@ -1952,6 +1992,10 @@ rule_rewritten(n: Node, rules: list, origins: list): Node := {
 	} else if n is key {
 		n = if key_of(n) == opaque_symbol then with_changed_members(n, member => at_place(member, Place.Member, rules, origins)) else with_placed_parts(n, (code, place) => at_place(code, place, rules, origins))
 	}
+	whole_rewritten(n, rules, origins)
+}
+# the node rewritten by the first rule of any place matching it as a whole
+whole_rewritten(n: Node, rules: list, origins: list): Node := {
 	for index in 0 ..< #rules {
 		if rules[index].place == Place.Anywhere and tried_whole(rules[index], n) {
 			result = rule_applied(rules[index], origins[index], n)
@@ -1960,6 +2004,18 @@ rule_rewritten(n: Node, rules: list, origins: list): Node := {
 	}
 	n
 }
+is_glued_product(n: Node): bool := n is key and key_of(n) == symbol(attribute_word) and value_of(n)#1 == GLUED_FACTOR_MARK
+# `3m` as written, its mark dropped: its words already rewritten as its parts, its rules read a name the program binds
+# as a library's too, `m = 5; 3m` the meters (decision unit-after-number)
+glued_rewritten(n: Node, rules: list, origins: list): Node := {
+	outer = rule_glued
+	rule_glued = n
+	result = whole_rewritten(attribute_marked(n), rules, origins)
+	rule_glued = outer
+	result
+}
+# the program's glued products, their marks dropped where no rule walked (a program without rules)
+without_glued_marks(n: Node): Node := bottom_up(n, part => if is_glued_product(part) then attribute_marked(part) else part)
 
 # the statements with each run a rule of several statements `($a; $b)` matches rewritten (F6), right to left (F13): a
 # run is rewritten after the runs that follow it, so a rule for the first two clauses of `fib(0) := 0; fib(1) := 1;
@@ -2209,6 +2265,7 @@ fired(rule: Rule, result: Node): Node := {
 # where the tests before it hold (a `.all` the seed lowers calls every one)
 conditions_hold(rule: Rule, origin: map, bound: map): bool := {
 	if not origin_holds(rule, origin, bound) { return no }
+	rule_module = rule.module
 	for condition in rule.conditions { if not condition_holds(condition, bound) { return no } }
 	yes
 }

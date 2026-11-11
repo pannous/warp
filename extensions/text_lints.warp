@@ -12,7 +12,7 @@ spelled_number_join(n: Node, program: Node) := {
 	conversion = if spelled.contains(".") then "float" else "int"
 	written = sum_written(left, right, spelled, "")
 	as_sum = sum_written(left, right, conversion + "(" + spelled + ")", "")
-	as_text = sum_written(left, right, spelled, "str")
+	as_text = sum_written(left, right, spelled, "text")
 	diagnose(call_of("spelled_number_join", [written, spelled, as_sum, as_text]), n)
 }
 # `left + right` with the text side written `spelling`, the number side as a numeral, inside `converter(…)` if any

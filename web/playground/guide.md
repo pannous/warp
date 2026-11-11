@@ -384,7 +384,7 @@ Complex numbers come with `use complex`: `ⅈ` is the imaginary unit, √-1.
 
 ```warp => "-5+10i"
 use complex
-str((3 + 4ⅈ) * (1 + 2ⅈ))
+text((3 + 4ⅈ) * (1 + 2ⅈ))
 ```
 
 Examples: numbers; samples: simple, factorial, power, gcd, collatz, quadratic, sum, sin, sine, measurements, units_dynamic, dates, bits, complex_numbers, complex_roots
@@ -432,6 +432,14 @@ A list keeps several values in order, like a shopping list.
 ```warp => 2
 friends = ["Alf", "Bob"]
 #friends # the number of friends
+```
+
+Until we know what a person is, we can write these guys either as texts, in quotes as above, or as raw data:
+`data` keeps the names as they are written, unquoted and not evaluated.
+
+```warp => [Alf, Bob]
+friends = data [Alf, Bob]
+friends
 ```
 
 `#1` is the first item.
@@ -559,7 +567,7 @@ Examples: matching; samples: matching, tree_patterns, code_templates, pattern_cl
 
 Every value has a type: a number, a text, a list...
 
-```warp => class nat
+```warp => nat
 type(3)
 ```
 
@@ -710,25 +718,25 @@ Examples: tasks, channels; samples: async, threads, parallel_let
 
 A web page is made of tags, written inside `html{…}`.
 
-```warp => <p>hello</p>
+```warp => <html><p>hello</p></html>
 html{ p{ "hello" } }
 ```
 
 Attributes look like HTML.
 
-```warp => <b class="fat">hello</b>
+```warp => <html><b class="fat">hello</b></html>
 html{ b{class:"fat" "hello" } }
 ```
 
 Tags hold other tags, like a page does.
 
-```warp => <h1>Fruit</h1><p>Fresh <b>pears</b> today</p>
+```warp => <html><h1>Fruit</h1><p>Fresh <b>pears</b> today</p></html>
 html{ h1{"Fruit"} p{ "Fresh " b{"pears"} " today" } }
 ```
 
 A list of values makes a list of tags.
 
-```warp => <ul><li>apple</li><li>pear</li></ul>
+```warp => <html><ul><li>apple</li><li>pear</li></ul></html>
 fruits = ["apple" "pear"]
 html{ ul{ li all fruits } }
 ```
@@ -781,7 +789,9 @@ Examples: forms; samples: server, route_headers, hosting, worker
 
 `use draw` paints pixels on a canvas, and `show()` shows it. A shader colors every pixel at once on the graphics card: [[#Shaders]] below.
 
-Examples: frames; samples: paint_text, color_swatches, finger_paint, paint_function, window_size
+`use image` loads a picture from a BMP or JPEG file, `image(./photo.jpg)`, or makes one from a function of the column and row, `image(64, 48, (x, y) => rgb(4 * x, 5 * y, 128))`. Its changes give a new picture: `flipped`, `mirrored`, `cropped`, `tinted`, `grayed`, `blurred`, `each_pixel`; `show()` paints it and `.save(./out.bmp)` writes it.
+
+Examples: frames; samples: paint_text, color_swatches, finger_paint, paint_function, window_size, load_jpeg, load_bmp, make_image
 
 ## Shaders
 

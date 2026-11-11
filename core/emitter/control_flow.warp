@@ -191,7 +191,8 @@ def position_code(body: Body, n: Node): list {
 	if stores_constant_data(n) and name_of(key_of(n)) not in body.declared { return [] }
 	# a catch's `e = placed_at(…, trap_place())` reads the failed statement's place, so it keeps it (passes/tries.warp)
 	if mentions(n, "trap_place") { return [] }
-	at = if body.intrinsics or module_written != "" or defined_origins.has(body.function.name) then ø else written_at(n)
+	# (a console line's module is the user's own code: its places are kept, `date + 1` fails at 1:1)
+	at = if body.intrinsics or (module_written != "" and not line_module) or defined_origins.has(body.function.name) then ø else written_at(n)
 	if not at { return [] }
 	line: int = at#1
 	column: int = min(at#2, columns_per_line - 1)
