@@ -34,4 +34,4 @@ gpu_pass(if kind == "two" then two else one, fields, "density", {size: [8, 8]})
 kind + " compiled"
 ```
 
-The same trap fires on the WGSL builtin `mod` (`mod(u, 0.2)` in a fragment that returns that value). A hand-written wrap, `p - period * floor(p / period)`, compiles. The fluid sample bakes its tiling noise with that wrap, one octave per pass, and does not call `noise` twice in one shader.
+The same trap fires on the WGSL builtin `mod` (`mod(u, 0.2)` in a fragment that returns that value). A hand-written wrap, `p - period * floor(p / period)`, compiles. The fluid sample bakes its tiling noise with that wrap, one octave per pass, and does not call `noise` twice in one shader. The period divides the grid and the shear of the sample coordinate is a whole number of cells, so the baked tile is periodic; the shade wraps the sample instead of clamping it.

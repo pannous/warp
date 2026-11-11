@@ -7,10 +7,11 @@
 # at startup, one value-noise octave per pass, and the shade samples that texture. Window y grows downward, so a
 # rising flame is a negative v. The grid is 384 by 216. The picture is 960 by 540, and on a Retina drawable the
 # shade pass fills that drawable. Mode 1, torch: a narrow licking flame and grey smoke where the fire cools.
-# Mode 2, fog: a soft veil whose thickness the baked detail modulates, the pointer pushes it, a round pillar
-# blocks the flow. f, 1, 2 or a click
-# switches. Headless: an argument fog or torch. short stops at 80 frames, snap paints the first frame, movie
-# writes every second frame, --times prints each frame's upload and draw in milliseconds.
+# Mode 2, fog: a soft veil. The detail field is periodic (each octave's period divides the grid, the hash wraps
+# on that period, and a shear of the sample coordinate is a whole number of cells, so the tile closes). The shade
+# samples it with a wrapped filter. Billows are lit from above with a short self-shadow. A soft hole sits on the
+# pillar. f, 1, 2 or a click switches. Headless: an argument fog, torch or detail. short stops at 80 frames, snap
+# paints the first frame, movie writes every second frame, --times prints each frame's upload and draw in milliseconds.
 use os
 use keys
 use gpu_passes
@@ -19,10 +20,12 @@ mode = 1
 timing = no
 steps = 240
 movie = no
+show_detail = no
 for arg in args {
 	if arg == "--times" { timing = yes }
 	else if arg == "fog" or arg == "2" { mode = 2 }
 	else if arg == "torch" or arg == "1" { mode = 1 }
+	else if arg == "detail" { show_detail = yes; mode = 2; steps = 1 }
 	else if arg == "short" { steps = 80 }
 	else if arg == "snap" { steps = 1 }
 	else if arg == "movie" { movie = yes }
@@ -82,14 +85,20 @@ fn curl_noise(uv: vec2f, scale: vec2f, drift: vec2f) -> vec2f {
 '
 bounds = common + '
 fn stopped(uv: vec2f) -> bool { return wall(uv) || pillar_hit(uv); }
+fn placed(p: vec2f) -> vec2f {
+	if (values.mode < 1.5) { return clamp(p, vec2f(0.0), vec2f(1.0)); }
+	let q = abs(p);
+	let w = q - 2.0 * floor(q * 0.5);
+	return select(w, 2.0 - w, w > vec2f(1.0));
+}
 '
 uv_of = "let uv = at.xy / values.size;\n"
 advect_velocity = bounds + fragment(uv_of + '
 	if (stopped(uv)) { return vec4f(0.0); }
 	let wind = field_velocity(uv).xy;
-	let carried = field_velocity(uv - wind * values.dt).xy;
+	let carried = field_velocity(placed(uv - wind * values.dt)).xy;
 	let t = values.texel;
-	let blur = (field_velocity(uv + vec2f(t.x, 0.0)).xy + field_velocity(uv - vec2f(t.x, 0.0)).xy + field_velocity(uv + vec2f(0.0, t.y)).xy + field_velocity(uv - vec2f(0.0, t.y)).xy) * 0.25;
+	let blur = (field_velocity(placed(uv + vec2f(t.x, 0.0))).xy + field_velocity(placed(uv - vec2f(t.x, 0.0))).xy + field_velocity(placed(uv + vec2f(0.0, t.y))).xy + field_velocity(placed(uv - vec2f(0.0, t.y))).xy) * 0.25;
 	return vec4f(mix(carried, blur, values.soft) * values.keep, 0.0, 0.0);
 ')
 buoyancy = bounds + fragment(uv_of + '
@@ -142,12 +151,12 @@ stash = common + fragment(uv_of + '
 ')
 forward = bounds + fragment(uv_of + '
 	if (wall(uv)) { return vec4f(0.0); }
-	let back = uv - field_velocity(uv).xy * values.dt;
+	let back = placed(uv - field_velocity(uv).xy * values.dt);
 	return vec4f(max(field_density(back).x, 0.0), 0.0, 0.0, 1.0);
 ')
 rewind = bounds + fragment(uv_of + '
 	if (wall(uv)) { return vec4f(0.0); }
-	let ahead = uv + field_velocity(uv).xy * values.dt;
+	let ahead = placed(uv + field_velocity(uv).xy * values.dt);
 	return vec4f(max(field_density(ahead).x, 0.0), 0.0, 0.0, 1.0);
 ')
 correct = bounds + fragment(uv_of + '
@@ -162,7 +171,7 @@ correct = bounds + fragment(uv_of + '
 ')
 advect_heat = bounds + fragment(uv_of + '
 	if (wall(uv)) { return vec4f(0.0); }
-	let back = uv - field_velocity(uv).xy * values.dt;
+	let back = placed(uv - field_velocity(uv).xy * values.dt);
 	return vec4f(max(field_temperature(back).x, 0.0) * values.keep, 0.0, 0.0, 1.0);
 ')
 torch_dye = bounds + fragment(uv_of + '
@@ -178,11 +187,12 @@ torch_heat = bounds + fragment(uv_of + '
 	return vec4f(heat, 0.0, 0.0, 1.0);
 ')
 fog_coarse = fragment(uv_of + '
-	let pointer = values.mouse / values.view;
-	let away = (uv - pointer) * vec2f(values.aspect, 1.0);
-	let wake = exp(-dot(away, away) / 0.0035);
-	let base = mix(max(field_density(uv).x, 0.0), 0.92, 0.02);
-	return vec4f(base * (1.0 - 0.48 * wake), 0.0, 0.0, 1.0);
+	let q = (uv - vec2f(0.50, 0.48)) * vec2f(values.aspect, 1.0);
+	let hole = exp(-dot(q, q) / 0.0026);
+	let base = mix(max(field_density(uv).x, 0.0), 0.94, 0.045);
+	let edge = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+	let sealed = mix(base, 0.94, 1.0 - smoothstep(0.0, 0.02, edge));
+	return vec4f(sealed * (1.0 - 0.46 * hole), 0.0, 0.0, 1.0);
 ')
 bake = common + '
 fn wrap(p: vec2f) -> vec2f {
@@ -200,8 +210,8 @@ fn tiled(p: vec2f) -> f32 {
 	return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 ' + fragment(uv_of + '
-	let skewed = vec2f(uv.x + uv.y * values.slope, uv.y + uv.x * values.confinement);
-	let n = tiled(skewed * vec2f(values.soft, values.gust));
+	let p = vec2f(uv.x * values.soft + uv.y * values.slope, uv.y * values.gust + uv.x * values.confinement);
+	let n = tiled(p);
 	let prev = field_detail(uv);
 	if (values.which < 1.5) { return vec4f(n, 0.0, 0.0, 1.0); }
 	if (values.which < 2.5) { return vec4f(prev.x, n, 0.0, 1.0); }
@@ -253,21 +263,38 @@ fn profile(z: f32, h: f32) -> f32 {
 	let u = z / max(h, 0.001);
 	return max(1.0 - u * u, 0.0);
 }
-fn detail_at(p: vec2f) -> vec4f { return field_detail(fract(p)); }
+fn fade5(t: vec2f) -> vec2f { return t * t * t * (t * (t * 6.0 - 15.0) + 10.0); }
+fn wrap_index(i: f32, size: f32) -> f32 { return i - size * floor(i / size); }
+fn detail_at(p: vec2f) -> vec4f {
+	if (values.mode < 1.5) { return field_detail(fract(p)); }
+	let size = vec2f(1.0) / values.texel;
+	let at = (p - floor(p)) * size - vec2f(0.5);
+	let low = floor(at);
+	let u = fade5(at - low);
+	let x0 = wrap_index(low.x, size.x);
+	let y0 = wrap_index(low.y, size.y);
+	let x1 = wrap_index(low.x + 1.0, size.x);
+	let y1 = wrap_index(low.y + 1.0, size.y);
+	let s00 = field_detail((vec2f(x0, y0) + vec2f(0.5)) / size);
+	let s10 = field_detail((vec2f(x1, y0) + vec2f(0.5)) / size);
+	let s01 = field_detail((vec2f(x0, y1) + vec2f(0.5)) / size);
+	let s11 = field_detail((vec2f(x1, y1) + vec2f(0.5)) / size);
+	return mix(mix(s00, s10, u.x), mix(s01, s11, u.x), u.y);
+}
 fn veil(uv: vec2f, flow: vec2f) -> f32 {
-	let drift = flow * 1.4;
-	let wob = detail_at(uv * 1.05 + drift).z;
-	let warp = (wob - 0.5) * vec2f(0.055, 0.04);
-	let a = detail_at(uv + drift + warp).x;
-	let b = detail_at(uv * 1.17 + drift + warp * 0.6 + vec2f(0.19, 0.27)).y;
-	let n = a * 0.64 + b * 0.36;
-	return mix(0.6, 1.0, smoothstep(0.28, 0.74, n));
+	let p = uv + flow * 0.55;
+	let wob = detail_at(p).z;
+	let warp = (wob - 0.5) * vec2f(0.07, 0.05);
+	let a = detail_at(p + warp).x;
+	let b = detail_at(p + warp * 0.45 + vec2f(0.17, 0.11)).y;
+	let n = a * 0.78 + b * 0.22;
+	return mix(0.55, 1.25, smoothstep(0.28, 0.78, n));
 }
 fn ground(uv: vec2f) -> vec3f {
-	let g = detail_at(uv * 0.72).x;
-	let dirt = vec3f(0.16, 0.12, 0.08);
-	let grass = vec3f(0.13, 0.20, 0.10);
-	return mix(dirt, grass, smoothstep(0.3, 0.7, g));
+	let g = detail_at(uv).y;
+	let dirt = vec3f(0.15, 0.11, 0.07);
+	let grass = vec3f(0.12, 0.18, 0.09);
+	return mix(dirt, grass, smoothstep(0.32, 0.68, g));
 }
 ' + fragment(uv_of + '
 	let t = values.texel * 2.2;
@@ -277,13 +304,18 @@ fn ground(uv: vec2f) -> vec3f {
 	let down = rho(uv + vec2f(0.0, t.y));
 	let up = rho(uv - vec2f(0.0, t.y));
 	let d = (c * 2.0 + right + left + down + up) / 6.0;
+	if (values.which > 3.5) {
+		let tile = fract(uv * 2.0);
+		let d = detail_at(tile);
+		return vec4f(d.x, d.y, d.z, 1.0);
+	}
 	let heat = max(field_temperature(uv).x, 0.0);
 	let torch = values.mode < 1.5;
 	let flow = field_velocity(uv).xy;
 	let thick = veil(uv, flow);
 	let amount = select(d * thick, d, torch);
 	let h = mix(0.24, 1.0, smoothstep(0.0, 0.75, amount));
-	let sigma = select(1.72, 1.2, torch);
+	let sigma = select(1.35, 1.2, torch);
 	let light = select(normalize(vec3f(0.15, -0.78, 0.52)), normalize(vec3f(0.06, 0.74, 0.55)), torch);
 	let steps = 8.0;
 	let dz = (2.0 * h) / steps;
@@ -299,11 +331,17 @@ fn ground(uv: vec2f) -> vec3f {
 		for (var j = 0; j < 2; j = j + 1) {
 			suv = suv + light.xy * 0.02;
 			sz = sz + light.z * 0.07;
-			shadow = shadow * exp(-rho(suv) * profile(sz, h) * select(0.06, 0.1, torch));
+			if (values.mode < 1.5) {
+				shadow = shadow * exp(-rho(suv) * profile(sz, h) * 0.1);
+			} else {
+				shadow = shadow * exp(-rho(suv) * detail_at(suv).x * profile(sz, h) * 0.28);
+			}
 		}
 		let warm = smoothstep(0.28, 0.62, heat);
 		let smoke_col = vec3f(0.32, 0.30, 0.28) + vec3f(0.5, 0.18, 0.05) * warm;
-		let tone = clamp(0.93 + (thick - 0.8) * 0.28, 0.90, 1.04) * (0.97 + 0.03 * shadow);
+		let ahead = detail_at(uv + light.xy * 0.04).x;
+		let face = clamp(0.9 + (detail_at(uv).x - ahead) * 1.6, 0.84, 1.05);
+		let tone = face * clamp(0.92 + 0.1 * shadow, 0.86, 1.02);
 		let fog_col = vec3f(0.72, 0.80, 0.82) * tone;
 		let albedo = select(fog_col, smoke_col, torch);
 		let absorb = 1.0 - exp(-rho_z * sigma * dz);
@@ -443,20 +481,20 @@ bake_detail() := {
 	made["which"] = 1
 	made["soft"] = 4.0
 	made["gust"] = 3.0
-	made["slope"] = 0.37
-	made["confinement"] = 0.14
+	made["slope"] = 0.0
+	made["confinement"] = 0.0
 	gpu_pass(bake, fields, "detail", made)
 	made["which"] = 2
-	made["soft"] = 9.0
-	made["gust"] = 7.0
-	made["slope"] = -0.48
-	made["confinement"] = 0.26
+	made["soft"] = 8.0
+	made["gust"] = 6.0
+	made["slope"] = 8.0
+	made["confinement"] = 0.0
 	gpu_pass(bake, fields, "detail", made)
 	made["which"] = 3
-	made["soft"] = 15.0
-	made["gust"] = 11.0
-	made["slope"] = 0.22
-	made["confinement"] = -0.16
+	made["soft"] = 12.0
+	made["gust"] = 9.0
+	made["slope"] = 12.0
+	made["confinement"] = 0.0
 	gpu_pass(bake, fields, "detail", made)
 }
 bake_detail()
@@ -482,7 +520,11 @@ on frame {
 	}
 }
 on click { mode = 3 - mode }
-if windowless() {
+if show_detail {
+	made = values_of(1)
+	made["which"] = 4
+	paint(gpu_picture_sized(shade, fields, view_w, view_h, made), view_w, view_h, [])
+} else if windowless() {
 	step = 0
 	while step < steps {
 		step = step + 1
