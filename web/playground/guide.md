@@ -495,7 +495,7 @@ square [1 2 3]
 [1 2 3].map(x => x * 2)
 ```
 
-Also see [[#Closures]] and [[#Acceleration]] below.
+Also see [[#Closures]] and [[#GPU]] below.
 
 Examples: lists, broadcasting, "lazy ranges", "linear arrays"; samples: sorting, quicksort, primes, sieve, sorting_idiomatic, dot, typed_lists
 
@@ -777,11 +777,11 @@ Examples: forms; samples: server, route_headers, hosting, worker
 
 # Graphics
 
-## Pictures
+## Paint
 
 `use draw` paints pixels on a canvas, and `show()` shows it. A shader colors every pixel at once on the graphics card: [[#Shaders]] below.
 
-Examples: frames, shader, "shader mouse"; samples: paint_text, color_swatches, paint_text_gpu, finger_paint, shader, webgpu, shader_brush, shader_trails, paint_function, window_size, raylib_circle, raylib_mouse_circle, raylib_sleep, sdl_red_square
+Examples: frames; samples: paint_text, color_swatches, finger_paint, paint_function, window_size
 
 ## Shaders
 
@@ -798,9 +798,9 @@ The function may call other functions; `shader_of(stripes)` shows the shader cod
 You can also write the shader yourself in WGSL, the web's shader language, inside `shader { … }`. In there `$name` reads the warp variable `name`.
 `use compute_toys` runs shaders from [compute.toys](https://compute.toys) as they are: `compute_toy(shader { … })`.
 
-Examples: shader, "shader mouse"; samples: warp_compiled_wgsl_shader, julia, voronoi, sdf_scene, ocean, scene_3d, kaleidoscope, lava_lamp, northern_lights, ringed_planet, manual_3d_object_viewer, gpu_visualizer, aquarium, gaussian_splats
+Examples: shader, "shader mouse"; samples: shader, webgpu, paint_text_gpu, shader_brush, shader_trails, warp_compiled_wgsl_shader, julia, voronoi, sdf_scene, ocean, scene_3d, kaleidoscope, lava_lamp, northern_lights, ringed_planet, manual_3d_object_viewer, gpu_visualizer, aquarium, gaussian_splats
 
-## Acceleration
+## GPU
 
 Warp parallelizes bulk operations *automatically*: lists of numbers run as [SIMD](https://en.wikipedia.org/wiki/Single_instruction,_multiple_data) loops, and maps heavy enough to pay for the transfer move to an accelerator such as the graphics card (GPU).
 
@@ -819,6 +819,14 @@ block or function when every digit counts; `@gpu` asks for the graphics card fro
 [[#Shaders]] above shows how to draw directly on the GPU.
 
 Examples: "gpu map"; samples: gpu_map, gpu_arrays, gpu_million, gpu_f16, meshlet_grid, million_trees
+
+## Raylib and SDL
+
+Warp calls C libraries directly, so a game library's window is a few `import` lines away: name the functions you use
+from [raylib](https://www.raylib.com) or [SDL](https://www.libsdl.org) and call them as warp functions. These open a
+window of their own, so they run with the native `warp`, not in this page.
+
+Examples: ; samples: raylib_circle, raylib_mouse_circle, raylib_sleep, sdl_red_square
 
 # Sound
 
