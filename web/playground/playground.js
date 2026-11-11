@@ -1562,7 +1562,7 @@ function initialize() {
 }
 
 // for headless runs (test_in_browser.py --examples): evaluate code as the page does and return the report
-window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress, bugReport, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
+window.playground = { evaluate, applyFix, chooseExample, exampleSource, runCode, reportAddress, bugReport, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
 	// an animation that runs until stopped (a raylib window's `while not WindowShouldClose()`) ends with its report, as
 	// the next run would end it (test_in_browser.py sample_answer); yes when one ran
 	stopAnimation: () => Boolean(pending?.animating && (stopRun(pending, ANIMATION_STOPPED), true)),
