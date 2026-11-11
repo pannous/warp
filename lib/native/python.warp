@@ -15,7 +15,7 @@
 // {python: <handle>, type: "<its type name>"}, which python_call and python_get take as a target or an argument.
 // A Python exception is a warp Error: `python ZeroDivisionError: division by zero`, catchable with try.
 // Needs Python 3.13 or newer (Py_GetConstant). Limits: no callbacks into warp; the program's thread initializes
-// Python and holds the GIL, calls from other threads are not handled; ints past 64 bits overflow.
+// Python and holds the GIL, calls from other threads are not handled.
 Py_InitializeEx(signals: i32): void from 'python'
 Py_IsInitialized(): i32 from 'python'
 Py_GetConstant(constant: i32): handle from 'python'
@@ -158,7 +158,11 @@ python_value(target: int): any := {
 	if kind == "bool" { return PyObject_IsTrue(target) == 1 }
 	if kind == "int" {
 		whole = PyLong_AsLongLong(target)
-		if PyErr_Occurred() != 0 { python_fail() }
+		// past 64 bits: the big int its digits spell, which warp's arithmetic grows into
+		if PyErr_Occurred() != 0 {
+			Py_DecRef(PyErr_GetRaisedException())
+			return python_big_int(python_text({python: target}))
+		}
 		return whole
 	}
 	if kind == "float" { return PyFloat_AsDouble(target) }
@@ -205,6 +209,13 @@ python_value(target: int): any := {
 	if python_instance(target, "str") { return PyUnicode_AsUTF8(target) }
 	Py_IncRef(target)
 	{python: target, type: kind}
+}
+
+// the int a text of decimal digits spells, with an optional -, at any size: "1267650600228229401496703205376" is 2^100
+python_big_int(digits: text): any := {
+	whole = 0
+	for c in digits { if c != '-' { whole = whole * 10 + (c as int) } }
+	if digits#1 == '-' then -whole else whole
 }
 
 // the builtins module (a new reference)

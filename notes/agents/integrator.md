@@ -81,6 +81,8 @@ skipped the question is refused and goes to warp-interviewer; there is no FYI pa
   `use units; 1` or `use storage` than main's compiler, measured again before it counts as red (the Mac may just have
   been busy), unless the message has a `speed-ok: <card>` line (a slowdown
   the user accepted); a core landing may carry red test and sample lines with `reds: <card>` (Landing, below).
+- One sweep: every handoff waiting with its OK on record goes into one merge.sh batch, never one batch per handoff
+  as it arrives (user 11-11); the tier 0 has the self-check, gate tier 1 and page smoke, so no private batch script.
 - A red batch is halved: merge.sh tries each half beside the cards already green and halves a red half again, so
   a red card alone is found in about log2 N extra tier 0 runs (page smoke included); the green cards land, each red
   one goes back to Now with its error as a card note. Only a batch with no green card is dropped whole.

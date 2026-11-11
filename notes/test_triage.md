@@ -35,6 +35,7 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 
 | file:line | reason | verdict |
 |---|---|---|
+| test/modules/test_wasm_modules.pairs.warp:34, 35 | a C module's out-pointer as the result: `strtol("42 apples", 10)` expected ' apples', `strtol("ff!", 16)` '!'; main gives the C meaning, 42 / 255 | keep for now: the user expects 42 (11-11 via warp-interviewer); the out-pointer form is card strtol-out-pointer (Later) |
 | test/text/test_count_in.pairs.warp:4-9; test/text/test_counts_in_warp.pairs.warp:4, 5, 10; test/functions/test_words_in_phrases.pairs.warp:11, 12 | `count x in y`, `count(x in y)`: the count of a membership's yes/no, refused with did-you-mean `y.count(x)` | delete: the refusal with its fix `y.count(x)` is the behaviour |
 | test/welcoming/test_footguns.pairs.warp:383 | `fast` floats that reassociate math | keep: wiki Footguns.md:764 promises `fast x=3.3` / `as fast`; gap |
 | test/welcoming/test_footguns.pairs.warp:395 | C float32 suffix `.1f` | keep: wiki Footguns.md:772, number.md:28 promise `0.1f`; gap |
