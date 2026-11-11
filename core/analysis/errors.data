@@ -24,6 +24,8 @@ literal_target($value, $op, $fix)	"{value} is a value, not a variable: {op} chan
 # assigned to a variable or not (arity_overloads.warp)
 ambiguous_result($name, $results, $first, $target, $written)	"{name} has several results ({results}): write {target}: {first} = {written}"	"{target}: {first} = {written}"
 ambiguous_result($name, $results, $first, $written)	"{name} has several results ({results}): write ({written}) as {first}"	"({written}) as {first}"
+# decision default-variant: the variant declaring no result gives a result a typed variant declares (arity_overloads.warp)
+default_result_taken($name, $type)	"the {name} declaring no result gives a {type}, as its {name}: {type} does: no call can tell them apart; declare its own result or drop one"	"declare its result"
 # decision path-after-operand: `width /height` with height a variable reads /height as a path (source_checks.warp)
 division_path($before, $name)	"{before} /{name} gives {before} the path /{name}: write {before} / {name} for division"	"{before} / {name}"
 # decision glued-binds-tighter: `[a + b c]` with b a value reads neither way silently (source_checks.warp spaced_operand)
