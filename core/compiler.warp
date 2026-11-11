@@ -142,7 +142,9 @@ linked_libraries(source: text): list := {
 	# module written links those it uses, never itself
 	# (the prelude too, every program's and every module's, so a run holds one instance of its words and globals: signals'
 	# listen and the program's unlisten edit the same event_listeners)
-	names = (["prelude"] + used_modules(written_source(source))).filter(name => name != module_written)
+	# (and those it uses unwritten: a module's power links big_numbers, with_implicit_uses)
+	used = used_modules(written_source(source))
+	names = (["prelude"] + used + implicitly_used.filter(name => name not in used)).filter(name => name != module_written)
 	timed("linking from " + folder + ": " + names.join(", "))
 	dependencies_first(images_of(names, folder))
 }
@@ -285,7 +287,10 @@ write_modules(folder: text, runtime_file: text) := {
 	write_library_index(folder)
 	runtime = read_bytes(runtime_file)
 	refused = []
-	for name in in_dependency_order(std_module_names) {
+	# (the prelude first, every module links it; then the runtime modules: any module's power links big_numbers, though
+	# it writes no `use` of it)
+	first = [PRELUDE_MODULE] + hooks().runtime_modules
+	for name in in_dependency_order(first + std_module_names.filter(name => name not in first)) {
 		file = folder + "/" + name + ".wasm"
 		try { module_written_behind(name, runtime, file) } catch refusal {
 			write_bytes(file, [])

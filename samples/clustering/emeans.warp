@@ -1,0 +1,96 @@
+#!/usr/bin/env warp
+# e-means against k-means (notes/emeans.md): the same points, the same random start, clustered side by side for the
+# same work, 3 epochs (passes over the points). Left Lloyd's k-means moves its centres once per pass; right e-means
+# moves them after every small batch, as moving averages whose step shrinks over time, so it settles in the epochs
+# Lloyd needs to get going. The trails are the paths of the centres, the error the mean squared distance of a point to
+# its centre. Space: new points; Esc: quit. Without a window it paints the finished race.
+use clustering
+use draw
+use keys
+use math
+use random
+
+width = 1280
+height = 720
+panel = width / 2
+top = 90 # the titles' band above the points
+margin = 40
+columns = 4 # the blobs sit on a jittered grid, so they stay apart
+rows = 2
+clusters = columns * rows
+points_per_blob = 75
+blob_spread = 26
+epochs = 3
+frames_per_step = 3
+hold_frames = 120 # the finished race stays this long before new points
+dot_size = 3
+centre_radius = 8
+colours = [hsv(360 * j / clusters, 0.75, 0.85) for j in 1 to clusters]
+
+global round_number = 1
+global points = []
+global lloyd = []
+global emeans = []
+global tick = 0
+
+def new_round() {
+	seed(round_number)
+	cell_width = (panel - 2 * margin) / columns
+	cell_height = (height - top - 2 * margin) / rows
+	points = []
+	for column in 1 to columns {
+		for row in 1 to rows {
+			x = margin + cell_width * (column - 0.5 + random_fraction(-0.25, 0.25))
+			y = top + margin + cell_height * (row - 0.5 + random_fraction(-0.25, 0.25))
+			for i in 1 to points_per_blob { points.add([x + normal(0, blob_spread), y + normal(0, blob_spread)]) }
+		}
+	}
+	# the same seed draws the same start for both
+	seed(round_number)
+	lloyd = kmeans_steps(points, clusters, epochs)
+	seed(round_number)
+	emeans = [lloyd#1] + emeans_steps(points, clusters, epochs)
+	tick = 0
+}
+
+# the steps after `done` of the race (0 to 1): e-means' batches and Lloyd's passes over the same share of the epochs
+def draw_race(done) {
+	clear(white)
+	draw_panel(0, "k-means (Lloyd)", lloyd, (1 + floor(done * epochs)) as int)
+	draw_panel(panel, "e-means", emeans, (1 + round(done * (count(emeans) - 1))) as int)
+	line(panel, 0, panel, height, gray)
+	show()
+}
+
+def draw_panel(left, title, steps, shown) {
+	centroids = steps#shown
+	labels = nearest_labels(points, centroids)
+	for i in 1 to count(points) { rect(left + points#i#1 - 1, points#i#2 - 1, dot_size, dot_size, colours#(labels#i)) }
+	for s in 2 to shown {
+		for j in 1 to clusters { line(left + steps#(s - 1)#j#1, steps#(s - 1)#j#2, left + steps#s#j#1, steps#s#j#2, black) }
+	}
+	for j in 1 to clusters {
+		circle(left + centroids#j#1, centroids#j#2, centre_radius + 2, black)
+		circle(left + centroids#j#1, centroids#j#2, centre_radius, colours#j)
+	}
+	label(left + 20, 14, title, black, 26)
+	label(left + 20, 50, "epoch ${round(10 * epochs * (shown - 1) / (count(steps) - 1)) / 10} of ${epochs}   error ${round(mean_error(points, centroids, labels))}", gray, 20)
+}
+
+canvas(width, height)
+new_round()
+
+on key {
+	if key == ESC: exit()
+	if key == SPACE { round_number += 1; new_round() }
+}
+
+on frame {
+	steps = count(emeans) - 1
+	if painting_headless_frame { draw_race(1) }
+	else {
+		if tick % frames_per_step == 0 and tick <= steps * frames_per_step { draw_race(tick / (steps * frames_per_step)) }
+		tick += 1
+		if tick > steps * frames_per_step + hold_frames { round_number += 1; new_round() }
+	}
+}

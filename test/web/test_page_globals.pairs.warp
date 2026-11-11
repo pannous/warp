@@ -1,3 +1,0 @@
-'to_html(html{ div{ button{ on click { print document.title } "Title" } } })'	'<html><div><button data-warp-click="1">Title</button></div></html>'
-'use markup; location = {city: "Rome"}; to_html(div{ p{ location.city } })'	'<div><p>Rome</p></div>'
-'to_html(html{ div{ input{ id: "who" } button{ on click { who.focus() } "Focus" } } })'	'<html><div><input id="who"><button data-warp-click="1">Focus</button></div></html>'

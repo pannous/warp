@@ -162,10 +162,25 @@ sorted_in_order(xs: list, before: function): list := {
 	}
 	out
 }
-// x rounded to that many digits after the point
-round_to(x, places) := round(x * 10 ^ places) / 10 ^ places
+// x rounded to that many digits after the point, `round(x, 2)` (core/passes/prelude_words.warp arity_variants)
+round_to(x, places) := round(x * repeated_product(10, places)) / repeated_product(10, places)
 // (a float's own, unboxed: the prelude is linked, its untyped words take nodes)
-round_to(x: float, places: int): float := round(x * 10 ^ places) / 10 ^ places
+round_to(x: float, places: int): float := round(x * repeated_product(10, places)) / repeated_product(10, places)
+// xⁿ of a whole n, exact, by multiplying (1/x⁻ⁿ of a negative n): the prelude writes no `^`, whose spellings link
+// big_numbers (card runtime-bridge-slots), which every program would then link. Squared and multiplied in a loop, so
+// n costs about log₂ n products and no stack (`2 ↑ 100000`); the last square is never taken, it could pass 64 bits
+repeated_product(x, n: int) := {
+	if n < 0 { return 1 / repeated_product(x, -n) }
+	product = 1
+	square = x
+	left = n
+	while left > 0 {
+		if left % 2 == 1 { product = product * square }
+		left = left ÷ 2
+		if left > 0 { square = square * square }
+	}
+	product
+}
 // The laws of the operators a fold combines with (card sum-plain-fold): each one is associative, so the compiler may
 // regroup, fuse and split any fold of it, whatever the word calling it is named, and the identity starts the fold
 operator_laws = {"+": {associative: yes, identity: 0}, "*": {associative: yes, identity: 1}, and: {associative: yes, identity: yes}, or: {associative: yes, identity: no}, max: {associative: yes}, min: {associative: yes}}
@@ -198,8 +213,9 @@ rewrite ($xs: [bf16] = $v) => ($xs = $packed) where $packed = gpu_packed_as(bf16
 // the arithmetic mean, also spelled average
 mean(xs) := if count(xs) == 0 then raise "mean of an empty list" else sum(xs) / count(xs)
 // x↑n, Knuth's up arrow, is the power and x↓b the log of x to base b (card easy-add): operators of numbers only, so
-// another type declares its own `infix operator ↑(v: V, n: int) := …`
-infix operator ↑(x: number, n: number) := x ^ n
+// another type declares its own `infix operator ↑(v: V, n: int) := …`. Knuth's arrow takes a whole n, multiplied out
+// exactly; x^y is the power of any y
+infix operator ↑(x: number, n: int) := repeated_product(x, n)
 infix operator ↓(x: number, b: number) := log(x, b)
 // the logarithm of x to the base: log(100, 10) is 2
 log(x: number, base: number): float := log(x) / log(base)
@@ -502,9 +518,9 @@ display.ppi := display_dpi * 1dpi
 display.ppi(density) := set_system_value("display_dpi", density / 1dpi)
 // width × height in px (other names display.dimensions and display.resolution)
 display.size := [display_width, display_height] px
-// the diagonal as a length: its nearest whole px at the density (quantities run as exact amounts, a run-time √ is a
-// float)
-display.diagonal := round(√(display_width² + display_height²)) * 1px / (display_dpi * 1dpi)
+// the diagonal as a length: its nearest whole px at the density (quantities run as exact amounts, a run-time hypot is
+// a float; the prelude writes no power, which would link big_numbers into every program)
+display.diagonal := round(hypot(display_width, display_height)) * 1px / (display_dpi * 1dpi)
 // The fields of a time at run time (card time-fields-warp, wiki/time.md), called late by the emitter's
 // time_field with the time's form (TimeForm: 1 a date, its position in days; else nanoseconds since 1970), its
 // position, its zone's seconds east of UTC (a zoned time's, else 0; not `offset`: the index type's synonym) and the

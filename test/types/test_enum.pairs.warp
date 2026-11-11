@@ -1,0 +1,13 @@
+'enum Shape { Circle(r: float), Square(side: float), Dot }; area(s) := match s { Circle(r): 3 * r * r; Square(a): a * a; Dot: 0.0 }; area(Circle(2.0)) + area(Square(3.0)) + area(Dot)'	21.0
+'enum Shape { Circle(r), Rect(w, h), Dot }; area(s) := match s { Shape::Circle(r) => 3 * r * r; Shape::Rect(w, h) => w * h; Dot => 0 }; [area(Circle(2)), area(Rect(2, 3)), area(Dot)]'	[12, 6, 0]
+
+# a case compared with == is that very node, past node_equal's every kind (card enum-case-speed); a runtime word's own
+# Kind is never the program's enum Kind
+'enum Coin { Penny, Dime }; c = Coin.Dime; [c == Coin.Dime, c == Dime, c == symbol("Dime"), c != Coin.Penny, Penny == c]'	[yes, yes, no, yes, no]
+'enum Coin { Penny, Dime }; x = ø; [x == Coin.Dime, x != Coin.Dime, 3 == Coin.Dime]'	[no, yes, no]
+'enum Level { Error, Warning }; enum Kind { Error, Int }; Level.Error == Kind.Error'	no
+'enum Kind { Error, Int }; Kind.Int'	Int
+
+# a case's text and the case of a text, through one lookup each however many cases an enum has (card stack-overflow-crash)
+'use keys; [Key.escape as text, Key.up as text, "ArrowDown" as Key == Key.down]'	["Escape", "ArrowUp", true]
+'enum Color { Red, Green }; [Color.Green as text, "" + Color.Red, "Green" as Color == Color.Green]'	["Green", "Red", true]
