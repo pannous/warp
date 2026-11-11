@@ -1,0 +1,169 @@
+// The library module clustering (`use clustering`, notes/emeans.md): k-means and e-means over points, each a list of
+// numbers. kmeans is Lloyd's algorithm. emeans is e-means (Bessa, Mazaré, Szilvasy, Touvron, Picard, Douze, Jégou,
+// "e-means: outperforming k-means (in one-tenth the epochs)", arXiv 2611.09501, 2026): mini-batch k-means whose
+// centroids are exponential moving averages of counts and sums, with a cosine-annealed step, dead clusters revived by
+// splitting a donor, the last epoch's means as the final centroids, and batch size and step from the paper's scaling
+// laws. Both start from k points drawn at random; seed(n) makes a run repeat.
+use math
+use random
+
+// e-means' constants, from the paper (section 3, Algorithm 1, Table 2, appendix H)
+INITIAL_WEIGHT = 0.0000000001 // the first centroids weigh next to nothing against the first batch
+STEP_FLOOR = 0.1 // ε: the step anneals from its peak α0 down to ε α0
+REVIVAL_PERIOD = 5 // batches between dead-cluster revivals
+DEAD_SHARE = 0.1 // τ: a cluster weighing less than τ times the mean count is dead
+SPLIT_NUDGE = 0.0078125 // δ, bf16's machine epsilon 2^-7: how far the two halves of a split donor move apart
+// power laws, scale first, then one exponent per variable
+STEP_LAW = [0.824, -0.46, 0.90, -0.45, -0.11] // α0 of k, batch, n, epochs; at most 1
+BATCH_LAW = [0.035, 0.13, 0.88, 0.81] // batch of k, n, epochs; the nearest power of 2, at most n
+LLOYD_ITERATIONS = 25
+EMEANS_EPOCHS = 3
+
+// labels: each point's cluster, 1 to k; error: the mean squared distance of a point to its centroid
+class Clustering { centroids: list; labels: list; error: float }
+
+kmeans(points: list, k: int): Clustering := clustered(points, kmeans_steps(points, k).last)
+emeans(points: list, k: int): Clustering := clustered(points, emeans_steps(points, k).last)
+
+// the steps with the default iterations and epochs (overloads: a default naming a constant fails inside a function,
+// card default-parameter-constant)
+kmeans_steps(points: list, k: int): list := kmeans_steps(points, k, LLOYD_ITERATIONS)
+emeans_steps(points: list, k: int): list := emeans_steps(points, k, EMEANS_EPOCHS)
+
+clustered(points: list, centroids: list): Clustering := {
+	labels = nearest_labels(points, centroids)
+	Clustering(centroids: centroids, labels: labels, error: mean_error(points, centroids, labels))
+}
+
+// Lloyd: each step moves every centroid to the mean of the points nearest to it; the list of centroids after each step
+kmeans_steps(points: list, k: int, iterations: int): list := {
+	centroids = sample(points, k)
+	steps = [centroids]
+	for i in 1 to iterations {
+		centroids = cluster_means(points, nearest_labels(points, centroids), centroids)
+		steps.add(centroids)
+	}
+	steps
+}
+
+// e-means, Algorithm 1: the centroids after each batch, then the last epoch's means
+emeans_steps(points: list, k: int, epochs: int): list := {
+	n = count(points)
+	batch = batch_size(k, n, epochs)
+	batches = n /! batch
+	updates = epochs * batches
+	peak = min(power_law(STEP_LAW, [k, batch, n, epochs]), 1.0)
+	counts = [INITIAL_WEIGHT for j in 1 to k]
+	sums = [scaled_vector(c, INITIAL_WEIGHT) for c in sample(points, k)]
+	labels = [0 for p in points]
+	steps = []
+	t = 0
+	for epoch in 1 to epochs {
+		order = shuffle([i for i in 1 to n])
+		for b in 0 to batches - 1 {
+			centroids = centroid_ratios(sums, counts)
+			batch_counts = [0.0 for j in 1 to k]
+			batch_sums = [scaled_vector(points#1, 0.0) for j in 1 to k]
+			for at in b * batch + 1 to (b + 1) * batch {
+				i = order#at
+				j = nearest_centroid(points#i, centroids)
+				labels#i = j
+				batch_counts#j = batch_counts#j + 1
+				batch_sums#j = blended(batch_sums#j, points#i, 1.0, 1.0)
+			}
+			step = annealed_step(peak, t, updates)
+			for j in 1 to k {
+				counts#j = (1 - step) * counts#j + step * batch_counts#j
+				sums#j = blended(sums#j, batch_sums#j, 1 - step, step)
+			}
+			t = t + 1
+			if t % REVIVAL_PERIOD == 0 { revive_dead(sums, counts) }
+			steps.add(centroid_ratios(sums, counts))
+		}
+		// the points past the last whole batch fall in no update; the last epoch still labels them for its means
+		centroids = centroid_ratios(sums, counts)
+		for at in batches * batch + 1 to n { labels#(order#at) = nearest_centroid(points#(order#at), centroids) }
+	}
+	steps.add(cluster_means(points, labels, steps.last))
+	steps
+}
+
+// α(t) = α0 (ε + (1 - ε) (1 + cos(π t / M)) / 2), equation 5
+annealed_step(peak: float, t: int, updates: int): float := peak * (STEP_FLOOR + (1 - STEP_FLOOR) * (1 + cos(pi * t / updates)) / 2)
+
+// equation 7: the knee of the batch size, rounded to a power of 2, from 1 up to n
+batch_size(k: int, n: int, epochs: int): int := {
+	knee = power_law(BATCH_LAW, [k, n, epochs])
+	min(max(2 ^ round(log(knee) / log(2.0)), 1), n) as int
+}
+
+power_law(law: list, variables: list): float := {
+	value = law#1
+	for i in 1 to count(variables) { value = value * variables#i ^ law#(i + 1) }
+	value
+}
+
+// Every dead cluster takes half of a donor drawn by weight, each donor once: the donor's centroid nudged two opposite
+// ways along (1 + δ, 1 - δ, …) becomes both centroids, and each keeps half the donor's count (appendix H.1)
+revive_dead(sums: list, counts: list) := {
+	k = count(counts)
+	dead_below = DEAD_SHARE * sum(counts) / k
+	weights = [counts#j for j in 1 to k]
+	for j in 1 to k {
+		if counts#j < dead_below {
+			weights#j = 0.0
+			donor = weighted_choice([i for i in 1 to k], weights)
+			weights#donor = 0.0
+			centroid = scaled_vector(sums#donor, 1 / counts#donor)
+			half = counts#donor / 2
+			counts#donor = half
+			counts#j = half
+			sums#donor = scaled_vector(nudged(centroid, -1), half)
+			sums#j = scaled_vector(nudged(centroid, 1), half)
+		}
+	}
+}
+
+nudged(centroid: list, sign: int): list := [centroid#i * (1 + sign * SPLIT_NUDGE * (-1) ^ (i + 1)) for i in 1 to count(centroid)]
+
+// the mean of each cluster's points; a cluster without points keeps its old centroid
+cluster_means(points: list, labels: list, old: list): list := {
+	k = count(old)
+	sizes = [0 for j in 1 to k]
+	sums = [scaled_vector(points#1, 0.0) for j in 1 to k]
+	for i in 1 to count(points) {
+		j = labels#i
+		sizes#j = sizes#j + 1
+		sums#j = blended(sums#j, points#i, 1.0, 1.0)
+	}
+	[if sizes#j == 0 then old#j else scaled_vector(sums#j, 1 / sizes#j) for j in 1 to k]
+}
+
+nearest_labels(points: list, centroids: list): list := [nearest_centroid(p, centroids) for p in points]
+
+nearest_centroid(point: list, centroids: list): int := {
+	best = 1
+	best_distance = squared_distance(point, centroids#1)
+	for j in 2 to count(centroids) {
+		d = squared_distance(point, centroids#j)
+		if d < best_distance { best = j; best_distance = d }
+	}
+	best
+}
+
+mean_error(points: list, centroids: list, labels: list): float := {
+	total = 0.0
+	for i in 1 to count(points) { total = total + squared_distance(points#i, centroids#(labels#i)) }
+	total / count(points)
+}
+
+squared_distance(a: list, b: list): float := {
+	total = 0.0
+	for i in 1 to count(a) { d = a#i - b#i; total = total + d * d }
+	total
+}
+
+centroid_ratios(sums: list, counts: list): list := [scaled_vector(sums#j, 1 / counts#j) for j in 1 to count(counts)]
+scaled_vector(v: list, factor: float): list := [x * factor for x in v]
+// a v + b w
+blended(v: list, w: list, a: float, b: float): list := [a * v#i + b * w#i for i in 1 to count(v)]
