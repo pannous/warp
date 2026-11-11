@@ -322,13 +322,17 @@ is_runtime_module(name: text): bool := name in hooks().runtime_modules
 global runtime_module_words = ø
 global runtime_module_words_of = ø
 is_runtime_module_word(name: text): bool := {
-	compiled = hooks().runtime_modules.filter(module => module == module_written or not modules_linked)
+	compiled = compiled_runtime_modules()
 	if runtime_module_words_of != compiled {
 		runtime_module_words = word_set(compiled.flat_map(module => file_words(std_module_path(module))))
 		runtime_module_words_of = compiled
 	}
 	runtime_module_words.has(name)
 }
+compiled_runtime_modules(): list := hooks().runtime_modules.filter(module => module == module_written or not modules_linked)
+# the entry words of the runtime modules a `warp build` compiles in, which only the emitter calls (extended_power): their
+# root file's own definitions, kept as runtime.wasm's root is; the files the root uses give what these reach
+runtime_module_entries(): list := compiled_runtime_modules().flat_map(module => definition_slices(file_text(std_module_path(module)) ?? "").map(slice => slice#1))
 # the definitions of a file and of the files beside it that it uses
 file_words(file: text): list := {
 	source = file_text(file) ?? ""
