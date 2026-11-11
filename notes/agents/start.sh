@@ -1,12 +1,12 @@
 #!/bin/bash
 # Spawns warp agent roles as Remote Control sessions in detached tmux (tmux name warp-<role>) and prints their URLs.
-#   notes/agents/start.sh                         integrator, interviewer and fixer (skips ones already running)
-#   notes/agents/start.sh <role>                  one of integrator, interviewer, fixer
+#   notes/agents/start.sh                         integrator, interviewer, fixer and reviewer (skips ones already running)
+#   notes/agents/start.sh <role>                  one of integrator, interviewer, fixer, reviewer
 #   notes/agents/start.sh worker <branch> "<task>"   a feature worker on that branch
 # The prompt of a role is notes/agents/<role>.md, read from origin/main by the session itself.
 REPO=/Users/me/dev/angles/warp
 SPAWN="$HOME/dev/bin/claude-remote.sh"
-SERVICES=(integrator interviewer fixer)
+SERVICES=(integrator interviewer fixer reviewer)
 
 supervisor_name() { echo "${WARP_SUPERVISOR:-the session that started you (see ListAgents)}"; }
 
