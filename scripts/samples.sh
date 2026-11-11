@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/samples.sh [<tree>, default this checkout] [samples/….warp…]: given samples, only their runs, each one's line
 # and its output in data/samples/out/ (the page smoke's native side, never stale; no results file). Else: how many of the tree's samples/ run, the gap to 2.0 (decision
-# release-1-5-tonight). Each samples/**/*.warp runs from the tree's root through the installed warp (--no-window,
+# release-1-5-tonight). Each samples/**/*.warp runs from the tree's root through the installed warp (--no-window, --mute,
 # CPU_SECONDS of CPU each); one fails when the native warp exits other than 0, its error the first line it wrote to
 # stderr, and one that hits a limit is TIME, not FAIL. Writes test/samples.txt, tracked (status, sample and a failure's
 # reason, its positions and quoted texts left out, one a line: after-push commits it when it changed, so git diff and
@@ -24,9 +24,8 @@ PARALLEL=${WARP_SAMPLES_PARALLEL:-1}  # user 2026-11-01: four warps at once, the
 # FFI windows honour --no-window, warp-native-harness)
 WINDOW_LIBRARIES='raylib|SDL|glfw'
 # a server sample serves until its timeout once it printed this (lib/web.warp serve): served, counted apart; each on a
-# port the system chooses (SERVER_PORT 0), so samples run at once, other runs and tests never collide
+# port the system chooses, `--port 0` in its <name>.args, so samples run at once, other runs and tests never collide
 SERVING='^serving http://'
-SERVER_PORT=0
 # how long a sample's timers run before its output is taken (warp --events-for; web/playground/test_in_browser.py the same)
 EVENTS_MILLISECONDS=3500
 # a sample that fails on purpose says why on a line of its own: EXP instead of FAIL (the page sweep reads it too,
@@ -70,14 +69,17 @@ one() {
 	[ "$host" = page ] && { echo "PAGE $1"; return; }
 	grep -qE "$WINDOW_LIBRARIES" "$tree/$1" && { echo "WIN  $1"; return; }
 	wall=$(wall_seconds)
+	# its arguments: its <name>.args beside it, one a line, as the page and warp test give them
+	local arguments=() argument
+	[ -f "$tree/${1%.warp}.args" ] && while IFS= read -r argument; do arguments+=("$argument"); done <"$tree/${1%.warp}.args"
 	# what a sample keeps (lib/storage.warp, <sample>.database.sqlite beside it) starts anew each run, as the page's
 	# storage does: a counter prints its first run's value, not the sweep count's
 	rm -f "$tree/${1%.warp}.database.sqlite"
-	(cd "$run_folder" && ulimit -t "$CPU_SECONDS" && WARP_WINDOW=0 timeout "$wall" "$WARP" --events-for $EVENTS_MILLISECONDS "$tree/$1" --port $SERVER_PORT </dev/null >"$out.txt" 2>"$out.err")
+	(cd "$run_folder" && ulimit -t "$CPU_SECONDS" && WARP_WINDOW=0 WARP_SOUND=0 timeout "$wall" "$WARP" --events-for $EVENTS_MILLISECONDS "$tree/$1" "${arguments[@]}" </dev/null >"$out.txt" 2>"$out.err")
 	local status=$? first verdict=FAIL
 	[ $status -eq 124 ] && grep -aq "$SERVING" "$out.txt" && { echo "SRV  $1"; return; }
 	if [ $status -eq 0 ] && grep -q "$CHECK_LINE" "$tree/$1"; then
-		(cd "$run_folder" && WARP_WINDOW=0 timeout "$wall" "$WARP" app check "$tree/$1" </dev/null >"$out.checks" 2>&1) || status=1
+		(cd "$run_folder" && WARP_WINDOW=0 WARP_SOUND=0 timeout "$wall" "$WARP" app check "$tree/$1" </dev/null >"$out.checks" 2>&1) || status=1
 		[ $status -ne 0 ] && { printf 'FAIL %s: %s\n' "$1" "$(grep -av '^ok ' "$out.checks" | grep -am1 . | cut -c1-200)"; return; }
 	fi
 	[ $status -eq 0 ] && { echo "ok   $1"; return; }
@@ -89,7 +91,7 @@ one() {
 	printf '%-4s %s: %s\n' "$verdict" "$1" "${first:-exit $status, nothing on stderr}"
 }
 export -f one wall_seconds
-export tree results run_folder WARP CPU_SECONDS WALL_SECONDS CPU_LIMIT_HIT WINDOW_LIBRARIES SERVING SERVER_PORT EXPECTED_FAILURE CHECK_LINE HOST_LINE
+export tree results run_folder WARP CPU_SECONDS WALL_SECONDS CPU_LIMIT_HIT WINDOW_LIBRARIES SERVING EVENTS_MILLISECONDS EXPECTED_FAILURE CHECK_LINE HOST_LINE
 if [ $# -gt 0 ]; then
 	for sample in "$@"; do one "$sample"; done
 	exit 0

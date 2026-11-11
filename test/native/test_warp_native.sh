@@ -36,8 +36,10 @@ if [ -x "$stage/warp" ]; then
 	printf 'raise "boom"\n' >"$stage/raising.warp"
 	check "what a program raised" "$(native raising.warp)" "boom at raising.warp:1:1"
 	check "the console, its lines staying" "$(printf 'a = 7\nx = [1\na * 6\n' | native repl | sed -n 4p)" "🌀42"
-	# a console line warp refuses whose first word is a command on PATH runs by sh; a typo keeps warp's refusal (card repl-bash-commands)
-	check "the console runs a shell line" "$(printf 'echo shell-ran | tr a-z A-Z\n' | native repl | sed -n 2p)" "🌀SHELL-RAN"
+	# a console line warp refuses for an unknown name whose first word is a command on PATH runs by sh, marked dim
+	# `(sh) <line>` first; a typo and a type error keep warp's refusal (card repl-bash-commands, user 11-11)
+	check "the console runs a shell line" "$(printf 'echo shell-ran | tr a-z A-Z\n' | native repl | sed -n 2,3p)" "$(printf '🌀\033[2m(sh) echo shell-ran | tr a-z A-Z\033[0m\nSHELL-RAN')"
+	check "the console keeps a type error warp's" "$(printf 'date + 1\n' | native repl | sed -n 2p)" "🌀no + between type date and int 1 at 2:1"
 	check "the console keeps a typo's refusal" "$(printf 'lsx -la\n' | native repl | sed -n 2p)" "🌀outside the core: the unknown name lsx at 2:1 (no owner)"
 	check "bare warp, a piped program" "$(printf 'a = 7\na * 6\n' | native)" 42
 	check "exit(code) ends the run" "$(native 'exit(3)'; echo $?)" 3

@@ -3068,9 +3068,11 @@ def with_glued_factor(p: Parser, amount: Node): Node := {
 	if not (is_name_start(c) or c == '(' or atom_reader(c) != ø) or ORDINAL_SUFFIXES.contains(p.code[p.at .. name_end(p.code, p.at, p.n)]) {
 		return amount
 	}
+	named = is_name_start(c)
 	factor = atom(p)
 	suffixed = read_suffix(p, factor, 0)
-	Key(amount, Op.Mul, if suffixed == ø then factor else suffixed)
+	product = Key(amount, Op.Mul, if suffixed == ø then factor else suffixed)
+	if named then attributed(GLUED_FACTOR_MARK, yes, product) else product
 }
 
 ORDINAL_SUFFIXES = ["st", "nd", "rd", "th"]

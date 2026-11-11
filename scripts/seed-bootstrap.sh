@@ -5,15 +5,15 @@
 # this lib/, as warp.wasm is built behind the seed's runtime, and the steps replace them (cards rebuild-fresh-worktree,
 # hGvh0A: a released warp's pair is too old, v1.7.0 has no unicode.wasm and its compiler can't build this lib/'s).
 # The seed itself compares texts by NFC too: run where no installed lib/ has a pair (a CI runner), it needs one in
-# <lib> before its first step, the pair it built of its own source, published beside it (warp-seed-runtime.wasm,
-# warp-seed-unicode.wasm; scripts/refresh-seed.sh), which its steps then replace with this lib/'s
+# <lib> before its first step, the pair it built of its own source, its library <seed>.library/ (published beside it,
+# scripts/refresh-seed.sh, fetched by scripts/seed.sh), which its steps then replace with this lib/'s
 usage="usage: seed-bootstrap.sh <warp> <seed> <lib>"
 warp=${1:?$usage} seed=${2:?$usage} lib=${3:?$usage}
 [ -f "$lib/runtime.wasm" ] && [ -f "$lib/modules/unicode.wasm" ] && exit 0
 mkdir -p "$lib/modules"
 borrow() { [ -f "$2" ] || [ ! -f "$1" ] || cp "$1" "$2"; }
-borrow "${seed%.wasm}-runtime.wasm" "$lib/runtime.wasm"
-borrow "${seed%.wasm}-unicode.wasm" "$lib/modules/unicode.wasm"
+borrow "$seed.library/runtime.wasm" "$lib/runtime.wasm"
+borrow "$seed.library/modules/unicode.wasm" "$lib/modules/unicode.wasm"
 "$warp" --lib "$lib" "$seed" runtime "$lib/runtime.wasm" &&
 	"$warp" --lib "$lib" "$seed" module unicode "$lib/runtime.wasm" "$lib/modules/unicode.wasm" ||
 	{ echo "seed-bootstrap.sh: $seed built no runtime.wasm and modules/unicode.wasm for $lib" >&2; exit 1; }
