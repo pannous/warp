@@ -263,7 +263,7 @@ is_quoted_arm(n: Node): bool := is_key(n, Op.Arrow) and is_quote(key_of(n))
 # data view) a time's fields (extensions/time_values.warp time_field), its + - * where the program writes one
 # (time_operation_call); the exact root of a program taking one (root_words); the library words the extension passes
 # write calls of (extension_writes)
-emitted_words(program: Node): list := time_literal_words(program) + time_test_words(program) + root_words(program) + runtime_module_entries() + extension_writes.flat_map(writes => writes(program))
+emitted_words(program: Node): list := time_literal_words(program) + time_test_words(program) + root_words(program) + extension_writes.flat_map(writes => writes(program))
 # each extension pass that writes calls of library words the program may never write declares them here, by its
 # function of the program giving them: the next such pass is one entry, no other edit
 # `x as! T` is a call of convert! written by extensions/conversions.warp, so the prelude's overloads are reached
