@@ -4,3 +4,18 @@
 
 // The code points of a text as a list
 def code_points(text: text): list := [point for point in text.codepoints]
+
+// `line:column` of the character at `at`, both from 1
+def line_and_column(code: text, at: int): text {
+	line = 1
+	start = 0
+	for i in 0 ..< at {
+		if code[i] == '\n' {
+			line += 1
+			start = i + 1
+		}
+	}
+	"$(line):$(at - start + 1)"
+}
+// a group, text or comment opened at `opener` that `closer` never closes (card missing-quotes-error)
+def missing(closer: text, what: text, code: text, opener: int): text := "`" + closer + "` is missing: the " + what + " opened at " + line_and_column(code, opener) + " runs to the end of the input"

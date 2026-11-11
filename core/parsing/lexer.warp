@@ -136,7 +136,7 @@ def block_comment_end(source: text, at: int, mark: text, n: int): int {
 			i = i + 1
 		}
 	}
-	n
+	raise missing(mark + "/", "comment", source, at)
 }
 
 // The gaps of a source, read once: for each position, where its code goes on after blanks and comments
@@ -228,7 +228,8 @@ def text_end(source: text, from: int, closing: text, n: int): int {
 			at = at + 1
 		}
 	}
-	if at < n then at + 1 else n
+	if at == n { raise missing(closing, "text", source, from - 1) }
+	at + 1
 }
 
 // After the `close` of an interpolation hole from `from` on, nested brackets and quoted text inside
