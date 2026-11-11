@@ -13,8 +13,11 @@ use host_io
 global html_scopes = ["html"]
 type html = any
 // an element: its pair as written, `div: { class: "box" … }` (decision html-value: a cheap class, no mark)
-class Html { element: any }
-format h: Html as text := to_html(h)
+class Html {
+	element: any
+	// its HTML wherever it shows: the value shown, print, text(h), "$h"
+	format as text := to_html(this)
+}
 // an Html's pair, any other value as it is
 html_pair(value: any) := if value is Html then value.element else value
 html_elements = ["html", "head", "body", "title", "meta", "link", "style", "script", "base",

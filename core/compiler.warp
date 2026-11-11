@@ -112,7 +112,7 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	if only_apart { made = linked_bytes(module.order) }
 	# the warnings once the module is made
 	for warning in said_at(found, Level.Warning, module.program_file) { warn warning }
-	# and its hints: `A4 is sound's; fix: use sound`, the use warp beautify writes
+	# and its hints
 	# unless the run asked for none (`warp --no-hints`: wiki/warning.md)
 	if run_option("no-hints") == ø { for said in said_at(found, Level.Hint, module.program_file) { hint said } }
 	made
