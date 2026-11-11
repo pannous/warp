@@ -152,6 +152,9 @@ with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 	brought_names = {}
 	brought_value_names = {}
 	exported_names = {}
+	linked_reached = {}
+	linked_classes_reached = {}
+	linked_variants_waiting = {}
 	defined_origins = {}
 	local_declarations = {}
 	timed("with_uses")
