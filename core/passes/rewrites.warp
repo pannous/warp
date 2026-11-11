@@ -1407,7 +1407,7 @@ typed_as(word: text, class_name: text): bool := {
 	library_typed = library_typed_constants().get(word) == class_name
 	if not binds_value(rule_scope, word) { return library_typed }
 	if rule_glued != ø and library_typed {
-		diagnose(call_of("glued_factor", [word, "${key_of(attribute_marked(rule_glued))}*${word}"]), rule_glued)
+		diagnose(call_of("unit_beside_variable", [word, "${key_of(attribute_marked(rule_glued))}*${word}"]), rule_glued)
 		return yes
 	}
 	program_typing()#2.get(word) == class_name
