@@ -119,7 +119,7 @@ const ready = loadCompiler().then(() => stage("warming up the compiler") || warm
 
 // `use python` runs in Pyodide (host.js registers its call): loaded on first use, since a host call cannot wait for it
 const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v0.29.5/full/";
-const USES_PYTHON = /\buse\s+python\b/;
+const USES_PYTHON = /\buse\s+(?:\S+\s+from\s+)?python\b/; // use python, use python json, use json from python
 let python; // the loading or loaded Pyodide with the bridge (web/playground/foreign_python.py)
 function loadPython() {
 	python ??= (async () => {
