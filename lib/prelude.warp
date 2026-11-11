@@ -1023,7 +1023,6 @@ global listener_counts = {}
 // a listener as a value: the event it listens to and its number there, so it is removed by itself, `h = on alarm {…}`
 // … `remove h`, short for `remove h from listeners of alarm` (card listener-address)
 class Listener { event: text; number: int }
-remove(listener: Listener) := unlisten(listener.event, listener)
 listen(name: any, listener: function, once: bool): Listener := {
 	key = name_of(name)
 	if not (key in event_listeners) {

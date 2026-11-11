@@ -395,8 +395,8 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	# front replaces the prelude's word as it is. A library module being built exports its words under their written
 	# names, which a program linking it calls (units' sleep beside the prelude's, card program-file): the prelude's word
 	# is the one set aside, as kept() sets it; beside a module it uses its word stays its own (storage's column_value
-	# beside sqlite3's)
-	if in_front or not building_a_module() { program = with_own_words(program, module_names + (if in_front then [] else runtime_words_of_math)) }
+	# beside sqlite3's). So is a built-in method's name: a program's remove(x) leaves `m.remove(k)` the map's
+	if in_front or not building_a_module() { program = with_own_words(program, module_names + in_place_methods + (if in_front then [] else runtime_words_of_math)) }
 	own_names = statements_in(program).map(declared_name)
 	own = with_c_heads(own_heads(program))
 	# (a linked module's aliases from its signature, its text being none)
