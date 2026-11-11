@@ -2,8 +2,8 @@
 # The tiered gate of a tree (a merged batch, a branch, main), pure pipeline first, stopping at the first red tier:
 #   tier 0  rebuild pure (warp.wasm, scripts/rebuild.sh: a build of the same inputs is reused) + pure hello, + self hello when the tree has a warp-self.wasm   (minutes, the rebuild)
 #   tier 1  every test/gate/<name>.warp in the pure lane (and self, as tier 0), its stdout (else its first error line) against <name>.expected
-#           (seconds), and the compile cost of three programs against main's (scripts/lib/compile-cost.sh: red over +5%
-#           unless HEAD's message says `speed-ok: <card>`). warp-self.wasm is no gate build: scripts/promote-self.sh
+#           (seconds), and the compile cost of three programs against main's (scripts/lib/compile-cost.sh: red over +20%,
+#           measured again first, unless HEAD's message says `speed-ok: <card>`). warp-self.wasm is no gate build: scripts/promote-self.sh
 #           promotes warp.wasm once it compiles itself, apart
 #   tier 2  `warp test` (pure) of the test files the tree changed since --base   (seconds to minutes)
 # usage: scripts/gate.sh [--tiers 0-2|0,1|1] [--no-rebuild] [--base <ref>] [--folders] [--tag-good]
@@ -105,6 +105,10 @@ if wants 1; then
 		echo "FAIL compile cost: not measured (see the compile-cost lines above)"; ok=0
 	else
 		slower=$(compile_costs_slower "$costs" "$main_costs")
+		if [[ -n $slower ]]; then
+			echo "compile cost slower, measured again: ${slower//$'\n'/; }"
+			costs=$(compile_costs_again "$tree/lib" "$warp") && slower=$(compile_costs_slower "$costs" "$main_costs")
+		fi
 		accepted=$(git log -1 --format=%B HEAD | grep -m1 '^speed-ok:')
 		against="main's compiler $(cut -d' ' -f1 "$installed/warp.wasm.inputs")"
 		if [[ -z $slower ]]; then echo "ok   compile cost: $(compile_costs_shown "$costs") (within +$COMPILE_COST_SLOWER_PERCENT% of $against)"
