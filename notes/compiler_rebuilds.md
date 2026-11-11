@@ -82,6 +82,18 @@ Records start with build-keeps; older store entries have only their one-line .in
 - The directories are write-once: a published file is never overwritten.
 - <store>/rebuilds.log gets one line per rebuild.sh hit or miss: time, tree, hash, result.
 
+## A compiler's library (card asciitext-compile, user OK 11-11)
+
+A compiler compares texts by NFC through lib/unicode's module, linked at run time. Its GC types are those of the
+compiler that built it, not of the lib/ beside it: warp.wasm has the seed's, the modules warp.wasm writes have
+warp.wasm's emitter's. So each compiler carries its builder's runtime.wasm and modules/unicode.wasm beside it,
+<compiler>.library/ (core/native/driver.warp compiler_library; scripts/lib/modules.sh companion_files), and links
+the installed warp's only when it has none. `warp rebuild seed` and the seed step make <seed>.library/ once, the
+seed's own (a seed is a stage that compiled itself), and hand it to warp.wasm; `warp rebuild self` to warp-self.wasm;
+refresh-seed.sh from stage to stage and to the new seed. The store, the install (after-push.sh) and published builds
+carry it. A failed NFC call names the folder it linked. Transitional: card unicode-module-linking takes the compiler's
+NFC into core, and the folders go.
+
 ## The store in short
 
 A compiler is built once per inputs hash, machine-wide, whether it builds or fails (ea5cb68f6b, card

@@ -52,7 +52,7 @@ warp=$(launcher_of "$logs" "$logs/warp-native" --lib "$tree/lib") || exit 1
 # the native warp's wasmtime beside the copy too: its rpath looks beside itself
 for library in "$(dirname "$(readlink -f "$binary")")"/libwarp_wasmtime.*; do [ -f "$library" ] && clone "$library" "$logs/"; done
 libraries_beside "$logs"
-export WARP_WINDOW=0 WARP=$warp
+export WARP_WINDOW=0 WARP_SOUND=0 WARP=$warp
 export WARP_GATE_PROBE=gate-ok
 cd "$tree" || exit 1
 started=$(date +%s)

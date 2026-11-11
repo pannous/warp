@@ -1,0 +1,118 @@
+// The standard library module image: pictures as pixels you can load, change, make and save. `image(./photo.jpg)`
+// reads a BMP or a baseline JPEG; `image(64, 48, pixel)` makes one from a function of the column and row. An Image's
+// pixels are Colors (lib/color.warp, 0xAARRGGBB), row by row from the top left. Its changes give a new Image:
+// flipped, mirrored, cropped, tinted, grayed, blurred, each_pixel; show() paints it, save writes a .bmp itself and any
+// other name as a PNG (natively the file, in the playground a download).
+use bits
+use color
+use file
+use jpeg
+use math
+
+class Image { width: int; height: int; pixels: list }
+
+// the BMP's and JPEG's first bytes, which say what a file holds
+bmp_signature = [66, 77]
+jpeg_signature = [255, 216]
+
+// the picture in the file, a BMP or a JPEG by its first bytes, never by its name
+image(path: any): Image := image_of(read_bytes(path), "${path}")
+image_of(bytes: list, name: text): Image := {
+	if starts_with_bytes(bytes, bmp_signature) { return bmp_image(bytes) }
+	if starts_with_bytes(bytes, jpeg_signature) { return jpeg_image(bytes) }
+	raise name + " is no BMP or JPEG: image reads those two"
+}
+starts_with_bytes(bytes: list, start: list): bool := count(bytes) >= count(start) and bytes[0 ..< count(start)] == start
+
+// a new picture: each pixel the color pixel(column, row) gives, or one color all over
+image(width: int, height: int, pixel: function): Image := Image(width, height, [pixel(i % width, i /! width) as Color for i in 0 ..< width * height])
+image(width: int, height: int, fill: Color): Image := Image(width, height, filled_list(width * height, fill))
+
+// the pixel at the column and row, counted from 0 at the top left
+pixel_at(picture: Image, x: int, y: int): Color := picture.pixels[y * picture.width + x]
+
+// the picture changed pixel by pixel: each pixel changed(color) or changed(color, column, row)
+each_pixel(picture: Image, changed: function): Image := image(picture.width, picture.height, (x, y) => changed(pixel_at(picture, x, y)))
+// upside down, and left to right
+flipped(picture: Image): Image := image(picture.width, picture.height, (x, y) => pixel_at(picture, x, picture.height - 1 - y))
+mirrored(picture: Image): Image := image(picture.width, picture.height, (x, y) => pixel_at(picture, picture.width - 1 - x, y))
+// the part of it width × height from the column and row
+cropped(picture: Image, left: int, top: int, width: int, height: int): Image := image(width, height, (x, y) => pixel_at(picture, left + x, top + y))
+// each pixel moved toward the color by the amount, 0 none, 1 all the way
+tinted(picture: Image, tint: Color, amount: float = 0.5): Image := each_pixel(picture, color => mix(color, tint, amount))
+// each pixel's brightness as gray, as the eye weighs red, green and blue
+grayed(picture: Image): Image := each_pixel(picture, color => gray_of(color))
+gray_of(color: Color): Color := {
+	parts = channels(color)
+	brightness = 255 * (0.299 * parts#1 + 0.587 * parts#2 + 0.114 * parts#3)
+	rgb(brightness, brightness, brightness)
+}
+// each pixel the mean of the square around it, radius pixels each way (a box blur, its edges clamped)
+blurred(picture: Image, radius: int = 2): Image := image(picture.width, picture.height, (x, y) => square_mean(picture, x, y, radius))
+square_mean(picture: Image, x: int, y: int, radius: int): Color := {
+	totals = [0, 0, 0]
+	taken = 0
+	for row in max(0, y - radius) to min(picture.height - 1, y + radius) {
+		for column in max(0, x - radius) to min(picture.width - 1, x + radius) {
+			color = pixel_at(picture, column, row)
+			totals = [totals#1 + channel_byte(color, 16), totals#2 + channel_byte(color, 8), totals#3 + channel_byte(color, 0)]
+			taken += 1
+		}
+	}
+	rgb(totals#1 / taken, totals#2 / taken, totals#3 / taken)
+}
+
+// shown in the playground's output pane, natively a window (or a PNG without one)
+show(picture: Image) := paint(picture.pixels.map(pixel => pixel as int), picture.width, picture.height)
+// written as the file's name says: a .bmp by this module, any other as a PNG by the host
+save(picture: Image, as file) := {
+	if lower("${file}").ends_with(".bmp") { return write_bytes(file, bmp_bytes(picture)) }
+	failed = save_picture(picture.pixels.map(pixel => pixel as int), picture.width, picture.height, file)
+	if failed { raise failed }
+}
+
+// BMP (Windows bitmap): a 14-byte file header, a 40-byte (or longer) info header, then the rows bottom up, 3 or 4 bytes
+// a pixel in blue, green, red order, each row padded to 4 bytes. Uncompressed 24- and 32-bit ones are read
+bmp_file_header = 14
+bmp_info_header = 40
+bmp_image(bytes: list): Image := {
+	little = (at, size) => from_little_endian(bytes[at ..< at + size])
+	start = little(10, 4)
+	width = little(18, 4)
+	stored_height = signed(little(22, 4), 32)
+	bits_per_pixel = little(28, 2)
+	if little(30, 4) != 0 or not (bits_per_pixel in [24, 32]) { raise "image reads uncompressed 24- and 32-bit BMPs, this one has ${bits_per_pixel} bits a pixel, compression ${little(30, 4)}" }
+	height = abs(stored_height)
+	per_pixel = bits_per_pixel /! 8
+	row_size = bmp_row_size(width, per_pixel)
+	// (a negative height stores the rows top down)
+	row_at = y => start + row_size * (if stored_height > 0 then height - 1 - y else y)
+	image(width, height, (x, y) => bmp_pixel(bytes, row_at(y) + per_pixel * x))
+}
+bmp_pixel(bytes: list, at: int): Color := rgb(bytes[at + 2], bytes[at + 1], bytes[at])
+bmp_row_size(width: int, per_pixel: int): int := (width * per_pixel + 3) /! 4 * 4
+
+// the picture as a 24-bit BMP's bytes, rows bottom up
+bmp_bytes(picture: Image): list := {
+	row_size = bmp_row_size(picture.width, 3)
+	size = bmp_file_header + bmp_info_header + row_size * picture.height
+	written = bmp_signature + little_endian(size, 4) + little_endian(0, 4) + little_endian(bmp_file_header + bmp_info_header, 4)
+	written += little_endian(bmp_info_header, 4) + little_endian(picture.width, 4) + little_endian(picture.height, 4) + little_endian(1, 2) + little_endian(24, 2) + filled_list(24, 0)
+	padding = filled_list(row_size - 3 * picture.width, 0)
+	for y in 0 ..< picture.height {
+		for x in 0 ..< picture.width { written += bmp_channels(pixel_at(picture, x, picture.height - 1 - y)) }
+		written += padding
+	}
+	written
+}
+bmp_channels(color: Color): list := [0, 8, 16].map(shift => channel_byte(color, shift))
+
+// a JPEG by lib/jpeg.warp
+jpeg_image(bytes: list): Image := {
+	read = jpeg_pixels(bytes)
+	Image(read[0], read[1], read[2])
+}
+
+// the host words of this module (natively core/native/driver.warp, the playground its JS)
+paint(picture: node, width: int, height: int, values: node) from host
+save_picture(picture: node, width: int, height: int, file: node): node from host
