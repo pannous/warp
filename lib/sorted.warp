@@ -137,7 +137,7 @@ sorted_select(t, i) := {
 
 sorted_at(t, i) := {
 	n = sorted_size(t)
-	if i < 1 or i > n { raise "at: rank " + str(i) + " is outside 1.." + str(n) }
+	if i < 1 or i > n { raise "at: rank " + text(i) + " is outside 1.." + text(n) }
 	sorted_select(t, i)
 }
 

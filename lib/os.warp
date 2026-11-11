@@ -3,7 +3,7 @@
 # and no command line (args gives [], or a playground sample's <name>.args)
 use host_io
 // `env("HOME")`: the variable as the program set it (set_env), else as its environment started with it
-env(name: any) := variables_set.get(str(name)) ?? started_env(name)
+env(name: any) := variables_set.get(text(name)) ?? started_env(name)
 // warp's two machine switches (decision no-bash-exports), which the processes a run starts inherit: a windowless run
 // (`warp --no-window`, WARP_WINDOW=0: a test, an agent's, a CI machine's) opens no window, a muted one (`warp --mute`,
 // WARP_SOUND=0) sounds nothing
@@ -48,8 +48,8 @@ stdin() := std_io("os", "stdin", [])
 setenv(name: text, value: text, overwrite: i32): i32 from 'c'
 global variables_set = {}
 set_env(name: any, value: any): bool := {
-	variables_set[str(name)] = str(value)
-	setenv(str(name), str(value), 1) == 0
+	variables_set[text(name)] = text(value)
+	setenv(text(name), text(value), 1) == 0
 }
 // `eprint "no such file"`: the value on standard error, a line of its own, through WASI natively and in the page
-eprint(value: any) := said_on_stderr(str(value))
+eprint(value: any) := said_on_stderr(text(value))

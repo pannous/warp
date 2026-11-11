@@ -31,13 +31,13 @@ def manifest(wanted: list): map {
 
 made = manifest(names)
 write(manifest_path, to_json(made))
-print("manifest of " + str(count(keys(made))) + " files:")
+print("manifest of " + text(count(keys(made))) + " files:")
 for name in keys(made) {
 	e = made[name]
-	print("  " + name + "  " + str(e.size) + " bytes  sha256 " + short(e.sha256) + "…  crc32 " + str(e.crc32))
+	print("  " + name + "  " + text(e.size) + " bytes  sha256 " + short(e.sha256) + "…  crc32 " + text(e.crc32))
 }
 print("empty text sha256: " + sha256(""))
-print("same content, same digest: " + str(sha256("buy milk\ncall Ada\n") == made["notes.txt"].sha256))
+print("same content, same digest: " + text(sha256("buy milk\ncall Ada\n") == made["notes.txt"].sha256))
 
 # the verify pass: each name of the saved manifest checked against the file on disk
 def verify(saved: map, present: list): list {
@@ -47,7 +47,7 @@ def verify(saved: map, present: list): list {
 		else {
 			now = entry(read(path_of(name)))
 			if now.sha256 == saved[name].sha256 { out = out + ["ok       " + name] }
-			else { out = out + ["changed  " + name + " (" + str(saved[name].size) + " -> " + str(now.size) + " bytes)"] }
+			else { out = out + ["changed  " + name + " (" + text(saved[name].size) + " -> " + text(now.size) + " bytes)"] }
 		}
 	}
 	for name in present { if not (name in saved) and exists(path_of(name)) { out = out + ["new      " + name] } }
@@ -64,4 +64,4 @@ print("$ verify (notes edited, data.csv deleted, todo.txt added)")
 for line in verify(parse_json(read(manifest_path)), names + ["todo.txt"]) { print(line) }
 
 cleaned = [delete_file(path_of(name)) for name in ["readme.txt", "notes.txt", "todo.txt"]] + [delete_file(manifest_path)]
-print("demo files removed: " + str(all(cleaned, c => c)))
+print("demo files removed: " + text(all(cleaned, c => c)))

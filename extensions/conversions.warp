@@ -34,7 +34,7 @@ conversion_of(n: Node, scope: map): list? := {
 }
 
 # the words showing a value as text, which show it through a program's conversion to text
-showing_words = ["print", "str", "text", "text_form"]
+showing_words = ["print", "text", "text_form"]
 # x as the program's conversion to text shows it; a text as it is
 shown_converted(x: Node): Node := if x is text then x else call_of(conversion_name("text"), [x])
 

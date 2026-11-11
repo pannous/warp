@@ -60,12 +60,12 @@ host_sound_played(pcm, rate: int, channels: int): int := {
 // an audio file sounding from now on, as decoded at its own rate: 0, else -1
 host_sound_file_played(path): int := {
 	if muted() { return 0 }
-	decoded = sound_file_decoded(str(path), 0, 0)
+	decoded = sound_file_decoded(text(path), 0, 0)
 	if decoded is text { return -1 }
 	host_sound_played([byte for value in decoded[2 ..] for byte in little_endian(value, 16)], decoded[0], decoded[1])
 }
 // [rate, channels, then the 16-bit values, the channels interleaved], else the reason it is not decoded (a text)
-host_sound_file_decoded(path, rate: int, channels: int): any := sound_file_decoded(str(path), rate, channels)
+host_sound_file_decoded(path, rate: int, channels: int): any := sound_file_decoded(text(path), rate, channels)
 sound_file_decoded(path: text, rate: int, channels: int): any := {
 	decoded = if on_mac() then toolbox_decoded(path, rate, channels) else sdl_decoded(path, rate, channels)
 	if decoded is text or not mp3_named(path) { return decoded }
@@ -333,8 +333,8 @@ host_midi_sent(port, message): int := {
 	if not midi_started() { return MIDI_FAILED }
 	packets = calloc(1, MIDI_PACKETS_BYTES)
 	MIDIPacketListAdd(packets, MIDI_PACKETS_BYTES, MIDIPacketListInit(packets), 0, count(message), message)
-	output = output_named(str(port))
-	sent = midi_packets_sent(str(port), output, packets)
+	output = output_named(text(port))
+	sent = midi_packets_sent(text(port), output, packets)
 	free(packets)
 	sent
 }

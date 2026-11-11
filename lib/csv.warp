@@ -59,7 +59,7 @@ def csv_maps(t: text): list {
 }
 
 csv_needs_quotes(f: text): bool := f.contains(",") or f.contains("\"") or f.contains("\n") or f.contains("\r")
-csv_field(value: any): text := { f = str(value); if f.contains("\"") then "\"" + replace(f, "\"", "\"\"") + "\"" else if f.contains(",") or f.contains("\n") or f.contains("\r") then "\"" + f + "\"" else f }
+csv_field(value: any): text := { f = text(value); if f.contains("\"") then "\"" + replace(f, "\"", "\"\"") + "\"" else if f.contains(",") or f.contains("\n") or f.contains("\r") then "\"" + f + "\"" else f }
 csv_line(row: list): text := join([csv_field(f) for f in row], ",")
 // rows of values as CSV text, lines ending in CRLF (RFC 4180)
 csv_text(rows: list): text := if rows.count == 0 then "" else join([csv_line(row) for row in rows], "\r\n") + "\r\n"

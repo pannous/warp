@@ -975,7 +975,7 @@ sound_folder() := {
 	temporary = env("TMPDIR") ?? /tmp
 	(if ends_with(temporary, "/") then temporary else temporary + "/") + SOUND_FOLDER
 }
-sound_file_name(process, handle) := "sound-" + str(process) + (if handle == 1 then "" else "-" + str(handle)) + ".wav"
+sound_file_name(process, handle) := "sound-" + text(process) + (if handle == 1 then "" else "-" + text(handle)) + ".wav"
 // the files of processes no longer running (kill(pid, 0) fails for them)
 swept_sound_files() := {
 	folder = sound_folder()
@@ -1001,7 +1001,7 @@ little_endian(n, width) := [(n / (256 ** i)) as int % 256 for i in 0..width]
 codes(t) := [ord(c) for c in t]
 hundredths(x) := {
 	n = round(x * 100) as int
-	str(n / 100 as int) + "." + (if n % 100 < 10 then "0" else "") + str(n % 100)
+	text(n / 100 as int) + "." + (if n % 100 < 10 then "0" else "") + text(n % 100)
 }
 // a line on stderr
 said(line) := {
@@ -1025,7 +1025,7 @@ public plain_hertz(pitch) := {
 	if pitch is Note { return pitch.hertz() }
 	if pitch is number { return pitch as float }
 	if pitch is text and is_note_name(pitch) { return note_hertz(pitch) }
-	raise "not a pitch: " + str(pitch)
+	raise "not a pitch: " + text(pitch)
 }
 // one word plays every sound (decision play-one-word; tone, melody and tune are its aliases), in `shape`: a note, a
 // frequency or a note name one tone `duration` long, `play(440Hz, 0.5s, "square")`; a Chord together,
@@ -1193,7 +1193,7 @@ DECODED_VALUES_AT = 2
 global decoded_sounds = {}
 decoded_sound(path: text, rate, channels) := {
 	if not exists(path) { raise path + ": no such sound file" }
-	key = path + "\t" + str(rate) + "\t" + str(channels)
+	key = path + "\t" + text(rate) + "\t" + text(channels)
 	if not decoded_sounds.has(key) { decoded_sounds[key] = sound_file_decoded(path, rate, channels) }
 	decoded = decoded_sounds[key]
 	if decoded is text { raise decoded }
@@ -1232,7 +1232,7 @@ rewrite play({$score...}) => score_played({$score...})
 rewrite tune {$score...} => score_played({$score...})
 rewrite tune({$score...}) => score_played({$score...})
 score_played(score: data) := play([score_pitch(item) for item in score])
-score_pitch(item) := if item is list then [score_pitch(pitch) for pitch in item] else if item is symbol then note_capitalized(str(item)) else item
+score_pitch(item) := if item is list then [score_pitch(pitch) for pitch in item] else if item is symbol then note_capitalized(text(item)) else item
 // capitalize is text.warp's; letter-range uses range_index so it does not meet this module's at(time, block)
 note_capitalized(name: text) := upper(name[0]) + name[1..]
 
@@ -1424,7 +1424,7 @@ midi_file(notes) := {
 	events = []
 	for note in notes {
 		key = midi(note#2)
-		if key < 0 or key > 127 { raise "MIDI keys are 0 to 127, got " + str(key) }
+		if key < 0 or key > 127 { raise "MIDI keys are 0 to 127, got " + text(key) }
 		on = midi_ticks(note#1)
 		events = events + [[on, 1, [MIDI_NOTE_ON, key, min(127, max(1, note#4))]], [max(on, midi_ticks(note#1 + si_amount(note#3))), 0, [MIDI_NOTE_OFF, key, 0]]]
 	}

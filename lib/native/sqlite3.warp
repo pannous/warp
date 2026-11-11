@@ -88,5 +88,5 @@ bound(statement: int, index: int, value: any) := {
 	if value is bool { return sqlite3_bind_int64(statement, index, if value then 1 else 0) }
 	if value is int { return sqlite3_bind_int64(statement, index, value) }
 	if value is float { return sqlite3_bind_double(statement, index, value) }
-	sqlite3_bind_text(statement, index, str(value), -1, SQLITE_TRANSIENT)
+	sqlite3_bind_text(statement, index, text(value), -1, SQLITE_TRANSIENT)
 }

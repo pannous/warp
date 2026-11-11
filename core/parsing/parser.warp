@@ -2196,7 +2196,7 @@ def with_finally(p: Parser, guard: Node): Node := {
 	skip_spaces(p)
 	cleanup = if at_char(p, ':') then colon_body(p, 1) else statement_words(p)
 	p.finally_blocks += 1
-	value = symbol("finally·" + str(p.finally_blocks))
+	value = symbol("finally·" + text(p.finally_blocks))
 	listed(Bracket.Round, Separator.Semicolon, [Key(value, Op.Assign, guard), cleanup, value])
 }
 

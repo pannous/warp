@@ -22,9 +22,9 @@ rewrite await any $xs => task_awaited_any($xs)
 rewrite await first $xs => task_awaited_any($xs)
 // a spaced time, `within 100 ms`, is two items of the phrase: its number and its unit
 rewrite await $x within $n $u or $d => task_awaited_within($x, $n $u, () => $d) where $u is symbol
-rewrite await $x within $n $u => task_awaited_within($x, $n $u, () => raise "the task took longer than " + str($n $u)) where $u is symbol
+rewrite await $x within $n $u => task_awaited_within($x, $n $u, () => raise "the task took longer than " + text($n $u)) where $u is symbol
 rewrite await $x within $t or $d => task_awaited_within($x, $t, () => $d)
-rewrite await $x within $t => task_awaited_within($x, $t, () => raise "the task took longer than " + str($t))
+rewrite await $x within $t => task_awaited_within($x, $t, () => raise "the task took longer than " + text($t))
 rewrite await $x => $awaited where $awaited = awaited_operand($x)
 // `finish job` is `await job` (decision finish-await), a word a program may define for itself
 rewrite finish $x => $awaited where $awaited = awaited_operand($x)
@@ -134,7 +134,7 @@ task_stepped(task: Task) := {
 	running_task = task
 	starter = task_context()
 	task_context_back(task.context)
-	value = try step() catch e { task.failed = str(e); failed_tasks = failed_tasks + [task]; ø }
+	value = try step() catch e { task.failed = text(e); failed_tasks = failed_tasks + [task]; ø }
 	task.context = task_context()
 	task_context_back(starter)
 	running_task = ø
@@ -153,7 +153,7 @@ task_value(x: Task): any := {
 	x.paused = no
 	tasks_run_while(() => not x.done, ø)
 	x.awaited = yes
-	if x.failed != ø { raise str(x.failed) }
+	if x.failed != ø { raise text(x.failed) }
 	x.value
 }
 // `await any jobs`: the value of the first to be done
@@ -216,6 +216,6 @@ task_handled(x: Task, handler: function) := {
 tasks_end(value: any = ø) := {
 	tasks_run_while(ø, ø)
 	unawaited = failed_tasks.filter(task => not task.awaited)
-	if #unawaited > 0 { raise "a task failed and nobody awaited it: " + str(unawaited#1.failed) }
+	if #unawaited > 0 { raise "a task failed and nobody awaited it: " + text(unawaited#1.failed) }
 	task_awaited(value)
 }
