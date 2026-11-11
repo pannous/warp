@@ -1,0 +1,40 @@
+# a block reading it applied to the value beside it, glued or spaced, as a lambda is called; a data block stays data
+'{it*2} 5'	10
+'{it*2}(5)'	10
+'k = 3; {it + k} 4'	7
+'(x => x*2) 4'	8
+
+# from test_block_function.rs: edit the Rust test, then run the script again
+
+# a_block_using_it_is_a_function
+'f={it*2}; f 3'	6
+'f={it*2}; f(4)'	8
+'f:={it*2}; f 3'	6
+
+'xs = [1, 2, 3]; xs.map { |x| x + 1 }'	[2, 3, 4]
+'ys = [1, 2, 3].map { |x| x * x }; ys#3'	9
+'[[1, 2], [3, 4]].map { |p| p#1 + p#2 }'	[3, 7]
+'try { raise "no" } catch e { 7 }'	7
+
+# A parameter named `block` is a block too, untyped (wiki/block.md, samples/functions/block_arguments.warp)
+
+'def repeats(n: int, block) := { for i in 1...n { block() } }; k = 0; repeats 4 { k += 1 }; k'	4
+'twice(block) := { block(); block() }; s = ""; twice { s += "a" }; s'	'aa'
+
+# a block-typed overload beside a number one: the block runs where the function calls it, a number takes the other (card block-typed)
+'f(b: block) := { v = b(); v }; f(n: number) := n * 2; f { sleep(0.01); 7 }'	7
+'f(b: block) := { v = b(); v }; f(n: number) := n * 2; f(3)'	6
+'f(b: block) := b(); f(n: number) := n * 2; f { a = 2; a + 5 }'	7
+'k = 0; twice(b: block) := { b(); b() }; twice { k += 1; k += 2 }; k'	6
+
+# `body!` runs a block parameter as `body()` does, and a block after a call argument is the outer word's (wiki/block.md)
+
+'repeats(n: int, body: block) := { for i in 1...n { body() } }; k = 0; repeats 3 { k += 1 }; k'	3
+'f(t, actions: block) := { actions(); actions() }; n = 0; f(1) { n += 2 }; n'	4
+'b(n) := n; at(t, actions: block) := { actions(); t }; s = ""; at b(5) { s += "a" }; s'	'a'
+'b(n) := n * 2; at(t, actions: block) := { actions(); t }; at b(5) { 0 }'	10
+
+'[1, 2, 3].count { |x| x > 1 }'	2
+'xs = [1, 2, 3, 4]; xs.count { |x| x % 2 == 0 }'	2
+'[1, 2, 1].count(1)'	2
+'[1, 2, 3].sum'	6

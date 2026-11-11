@@ -773,8 +773,8 @@ typed_overloads(program: Node): Node := {
 # --- by result type (decision cleanup-cuts; wiki/polymorphism.md "return type polymorphism") ---
 # `to render text as pdf: …` beside `to render text as docx: …` are the variants render·pdf and render·docx, each
 # declaring its result; a call takes the one its expected type names, `(render "x") as pdf`, `docx d = render "x"`,
-# `d: docx = render "x"`, an argument for a parameter declared docx; any other call the first declared, with a warning
-# naming the explicit form
+# `d: docx = render "x"`, an argument for a parameter declared docx; any other call the variant declaring no result,
+# else it is refused naming the explicit form
 
 # `pdf` of `f(t) as pdf := …` and `f(t): pdf := …`, which definitions.warp holds as `{the result: pdf = …; the result}`;
 # ø of a definition declaring no result
@@ -783,11 +783,14 @@ written_result(n: Node): text? := {
 	if definition_call(n) != ø and held is symbol then required_type(name_of(held)) else ø
 }
 
-# name → the result types of its definitions in declaration order, for each name defined with several, all written
-# and all different, all taking the same parameters (parameter types tell `f(x: int): int` and `f(x: float): float` apart)
+# name → the result types of its definitions in declaration order, for each name defined with several, all different,
+# all taking the same parameters (parameter types tell `f(x: int): int` and `f(x: float): float` apart); at most one
+# declares no result, ø here: the default, which a call no expected type tells apart takes (decision default-variant).
+# A default whose result the compile knows to be a typed variant's is refused: no call could tell the two apart
 overloaded_results(program: Node): map := {
 	results = {}
 	taken = {}
+	defaults = {}
 	for n in nodes_in(program).reverse() {
 		call = definition_call(n)
 		if call != ø {
@@ -798,14 +801,22 @@ overloaded_results(program: Node): map := {
 			}
 			results[name] = results[name] + [written_result(n)]
 			taken[name] = taken[name] + [parameter_types(call)]
+			if written_result(n) == ø { defaults[name] = value_of(n) }
 		}
 	}
 	overloaded = {}
 	for name in results.keys {
-		if #results[name] > 1 and results[name].all(type => type != ø) and all_distinct(results[name]) and taken[name].all(types => types == taken[name]#1) { overloaded[name] = results[name] }
+		typed = results[name].filter(type => type != ø)
+		if #typed > 0 and #results[name] - #typed <= 1 and #results[name] > 1 and all_distinct(typed) and taken[name].all(types => types == taken[name]#1) {
+			overloaded[name] = results[name]
+			known = if name in defaults then static_kind(defaults[name]) else ø
+			if known != ø and known#1 in typed { diagnose(call_of("default_result_taken", [name, known#1]), defaults[name]) }
+		}
 	}
 	overloaded
 }
+
+has_default(name: text, overloaded: map): bool := overloaded[name].any(type => type == ø)
 
 result_variant(name: text, type: text): text := name + "·" + type
 
@@ -839,7 +850,8 @@ result_resolved(n: Node, overloaded: map, parameters: map): Node := {
 	call = definition_call(n)
 	if call != ø {
 		name = name_of(call#1)
-		target = if name in overloaded then renamed_target(key_of(n), result_variant(name, written_result(n))) else key_of(n)
+		# the default keeps the plain name: a call no expected type tells apart stays as written
+		target = if name in overloaded and written_result(n) != ø then renamed_target(key_of(n), result_variant(name, written_result(n))) else key_of(n)
 		return Key(target, Op.Define, result_resolved(value_of(n), overloaded, parameters))
 	}
 	if is_key(n, Op.As) and overloaded_call(key_of(n), overloaded) != ø and returning(key_of(n), value_of(n), overloaded) != key_of(n) {
@@ -862,10 +874,10 @@ result_resolved(n: Node, overloaded: map, parameters: map): Node := {
 	children(n, x => result_resolved(x, overloaded, parameters))
 }
 
-# whether n is itself a call of an overloaded word, which nothing around it gave an expected type
+# whether n is itself a call of an overloaded word without a default, which nothing around it gave an expected type
 is_untold(n: Node, overloaded: map): bool := {
 	call = overloaded_call(n, overloaded)
-	call != ø and call == n
+	call != ø and call == n and not has_default(name_of(call#1), overloaded)
 }
 # a call no expected type tells apart refused, its fix naming the first variant (decision ambiguous-result-error); the
 # first variant's call stands in, so the compile goes on to say what else it finds

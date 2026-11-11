@@ -465,17 +465,22 @@ function roomBelowPaintings(paneStyle) {
 }
 
 // `loop { …; show(); sleep(16ms) }`: each sleep starts an animation's next frame, what the run paints in it replaces
-// the last frame's (printed text only at clear(), decision page-text-frames); frames keep the run alive past RUN_TIMEOUT_MS, the next run stops it (cards
+// the last frame's (printed text only at clear(), decision page-text-frames); frames keep the run alive past RUN_TIMEOUT_MS, the next run or Stop stops it (cards
 // drawing-frames, snake-frames)
 function startsFrame(run, output) {
 	const starts = run.frame > 0 && run.framesShown[output] !== run.frame;
 	run.framesShown[output] = run.frame;
 	if (starts) {
-		run.animating = true;
-		stopAfterTimeout(run);
+		animates(run);
 		prepareStandby();
 	}
 	return starts;
+}
+// a run showing frames animates: it lives until the next run or Stop, as a native window's loop does (user decision,
+// card example-native-mismatch)
+function animates(run) {
+	run.animating = true;
+	clearTimeout(run.timer);
 }
 
 // ---- sound ----------------------------------------------------------------------------------------------------
@@ -688,12 +693,18 @@ function handOver(run) {
 	finish(run, stoppedReport(run, LIVE_HANDED_OVER, false));
 }
 
-// each painting shows at once, while the program still runs: one the size of the last replaces it, as a frame (card
-// g_oldM: `if frame % 6 == 0 { render() }` animates without a sleep, as the native window does)
+// each painting shows at once, while the program still runs: one the size of the last replaces it, as a frame that
+// animates the run as natively each painting is the window's frame (card g_oldM: `if frame % 6 == 0 { render() }`
+// animates without a sleep; card example-native-mismatch: `on frame` never sleeps, and #ocean was stopped after 10 s)
 function painted(run, painting) {
 	const last = run.paintings.at(-1);
 	if (startsFrame(run, "paintings")) run.paintings = [];
-	else if (last && sameSize(last, painting)) run.paintings.pop();
+	else if (last && sameSize(last, painting)) {
+		// (no standby Worker for it: one warming up its compiler while a finger paints took the stroke's frames on a slow
+		// machine, card register-fingers)
+		run.paintings.pop();
+		animates(run);
+	}
 	run.paintings.push(painting);
 	clearPreviousRun();
 	showFrame(run.paintings);
@@ -710,11 +721,13 @@ function printedChunk(run, chunk) {
 	showPrinted(run.printed);
 }
 
-// the runaway limit counts running time only: a sleep moves the deadline on by its milliseconds (card sleep-run-limit)
+// the runaway limit counts running time only: a sleep moves the deadline on by its milliseconds (card sleep-run-limit);
+// an animating run has none
 function stopAfterTimeout(run, milliseconds = runLimitMs) {
 	clearTimeout(run.timer);
+	if (run.animating) return;
 	run.deadline = Date.now() + milliseconds;
-	run.timer = setTimeout(() => stopRun(run, `stopped after ${runLimitMs / 1000} s: the program may not terminate`, !run.animating, [hungWhere()], true), milliseconds);
+	run.timer = setTimeout(() => stopRun(run, `stopped after ${runLimitMs / 1000} s: the program may not terminate`, true, [hungWhere()], true), milliseconds);
 }
 // the run again, the limit LONGER_RUNS times longer
 function runLonger() {
@@ -1543,13 +1556,16 @@ function initialize() {
 	startAssistant(editor, tellEnvironment, startCompletion(editor, askMembers));
 	const reloadedCode = sessionStorage.getItem(RELOADED_CODE);
 	sessionStorage.removeItem(RELOADED_CODE);
-	if (reloadedCode !== null) runCode(reloadedCode);
-	else chooseExample(requestedExample() ?? DEFAULT_EXAMPLE);
+	// (the menu names the example the address names, as before the reload, never the first one, hello)
+	if (reloadedCode !== null) {
+		$("examples").value = requestedExample() ?? DEFAULT_EXAMPLE;
+		runCode(reloadedCode);
+	} else chooseExample(requestedExample() ?? DEFAULT_EXAMPLE);
 	addEventListener("hashchange", chooseExampleOfHash);
 }
 
 // for headless runs (test_in_browser.py --examples): evaluate code as the page does and return the report
-window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress, bugReport, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
+window.playground = { evaluate, applyFix, chooseExample, exampleSource, runCode, reportAddress, bugReport, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
 	// an animation that runs until stopped (a raylib window's `while not WindowShouldClose()`) ends with its report, as
 	// the next run would end it (test_in_browser.py sample_answer); yes when one ran
 	stopAnimation: () => Boolean(pending?.animating && (stopRun(pending, ANIMATION_STOPPED), true)),

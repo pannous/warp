@@ -1,4 +1,5 @@
-// The language guide beside the editor: guide.md, one chapter per `## title`, chapters from easy to advanced.
+// The language guide beside the editor: guide.md, one chapter per `## title`, chapters from easy to advanced, grouped
+// in parts by `# title` (Graphics: Pictures, Shaders, Acceleration; card playground-guide-chapters).
 // The open chapter (the page's #anchor) shows its text; `try ▶` runs a snippet, an `Examples:` line links the tour
 // examples and samples/ that show the chapter, and choosing such an example links back to its chapter.
 // The expert guide (guide-expert.md) has the same chapters in compact form; a toggle switches, keeping the open
@@ -13,9 +14,11 @@ const SAMPLES_SEPARATOR = "; samples: ";
 const SNIPPET_FENCE = /^```warp(?: => (.*))?$/;
 const PRINTED_FENCE = "```printed"; // right after a snippet: the lines it prints, shown above its value
 const SECTION_PREFIX = "### "; // a section inside a chapter: "### Whole lists at once" in Lists
+const PART_PREFIX = "guide-part-"; // a part's anchor: #guide-part-graphics
 
 const chapterOfExample = new Map();
 const examplesOfChapter = new Map(); // in the guide's order: the example menu's groups
+const partOfChapter = new Map(); // in guide.md's order: the expert guide's chapters go in the same parts
 const MORE_SAMPLES = "more samples";
 
 const escapeHtml = text => text.replace(/[&<>"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]);
@@ -106,18 +109,44 @@ function renderBody(lines, chapter) {
 	return blocks;
 }
 
-// guide.md → the intro and one <details> per chapter, with its anchor
+// guide.md → the intro, then one <details> per part holding one <details> per chapter, each with its anchor. A guide
+// without parts (guide-expert.md) puts its chapters in the parts guide.md gives them
 function renderGuide(markdown) {
-	const [head, ...sections] = markdown.split(/^## /m);
-	const introLines = head.split("\n").filter(line => !line.startsWith("# "));
-	const chapters = sections.map(section => {
-		const [title, ...lines] = section.split("\n");
-		const id = headingId(title);
-		// a chapter the reader clicks scrolls to the top once it opened (openedChapter)
-		const summary = element("summary", { onclick: click => { click.currentTarget.parentElement.dataset.clicked = ""; } }, element("a", { href: `#${id}` }, title));
-		return element("details", { id, className: "guide-chapter", ontoggle: openedChapter }, summary, ...renderBody(lines, title));
-	});
-	return [...renderBody(introLines, ""), ...chapters];
+	const [, titled, ...parts] = markdown.split(/^# /m);
+	const [intro, ...unparted] = titled.split(/^## /m);
+	const grouped = [["", unparted], ...parts.map(part => {
+		const [name, ...chapters] = part.split(/^## /m);
+		return [name.trim(), chapters];
+	})];
+	const chapters = grouped.flatMap(([part, sections]) => sections.map(section => renderChapter(section, part)));
+	return [...renderBody(intro.split("\n").slice(1), ""), ...inParts(chapters)];
+}
+
+function renderChapter(section, part) {
+	const [title, ...lines] = section.split("\n");
+	if (part) partOfChapter.set(title, part);
+	const id = headingId(title);
+	// a chapter the reader clicks scrolls to the top once it opened (openedChapter)
+	const summary = element("summary", { onclick: click => { click.currentTarget.parentElement.dataset.clicked = ""; } }, element("a", { href: `#${id}` }, title));
+	return { title, shown: element("details", { id, className: "guide-chapter", ontoggle: openedChapter }, summary, ...renderBody(lines, title)) };
+}
+
+// the chapters grouped by part, the parts in guide.md's order; a chapter of no part stays outside them
+function inParts(chapters) {
+	const byPart = new Map([...new Set(partOfChapter.values())].map(part => [part, []]));
+	for (const { title, shown } of chapters) {
+		const part = partOfChapter.get(title) ?? "";
+		byPart.set(part, [...byPart.get(part) ?? [], shown]);
+	}
+	return [...byPart].flatMap(([part, shown]) => !part ? shown : shown.length === 0 ? [] :
+		[element("details", { id: PART_PREFIX + slug(part), className: "guide-part" }, element("summary", {}, part), ...shown)]);
+}
+
+// a chapter opened with its part around it
+function openChapter(chapter) {
+	chapter.open = true;
+	const part = chapter.closest(".guide-part");
+	if (part) part.open = true;
 }
 
 const renderedGuides = {}; // level → its rendered intro and chapters
@@ -134,7 +163,7 @@ function showLevel(level) {
 	$("guide-chapters").replaceChildren(...renderedGuides[level]);
 	for (const button of document.querySelectorAll(".guide-level button")) button.setAttribute("aria-pressed", button.value === level);
 	store(LEVEL_KEY, level);
-	if (open) document.getElementById(open).open = true;
+	if (open) openChapter(document.getElementById(open));
 }
 
 function openedChapter(event) {
@@ -158,7 +187,7 @@ function openChapterOfAddress() {
 	const chapter = heading?.closest(".guide-chapter");
 	if (!chapter) return;
 	if (location.hash) $("guide").open = true;
-	chapter.open = true;
+	openChapter(chapter);
 	if (location.hash) heading.scrollIntoView({ block: heading === chapter ? "nearest" : "start" });
 }
 

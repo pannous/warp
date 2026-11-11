@@ -1,0 +1,38 @@
+# a used module's aliases reach the program, never another used module's body (card module-name-leak): math's
+# alias log2 => binary_log stays out of sound's midi
+'use sound; use math; midi(440)'	69
+'use math; use sound; log2([1, 8])'	[0, 3]
+
+# a used module's alias names its word in a spaced call too, as in a call with parentheses: math's
+# alias log2 => binary_log, sound's alias melody => play
+'use math; log2 [1, 8]'	[0, 3]
+'use sound; melody [C4 E4]; "played"'	"played"
+
+# fixtures under test/warp/ (was tests/warp/); pairs-relative ../warp/ so case_folder stays the pairs dir (root-relative test/warp/ still misses wasm exists → ".").
+# from test_module_classes.rs: edit the Rust test, then run the script again
+
+# a_used_modules_class_has_its_methods
+'../warp/module_class/main.warp'	41
+
+# the_programs_own_class_wins
+'../warp/module_class/own.warp'	7
+
+# a_used_modules_instance_reads_a_field_named_like_a_word
+'../warp/module_class/bus_fields.warp'	9
+
+# a_class_reaches_through_a_file_used_by_a_dotted_path
+'../warp/module_class/through/main.warp'	41
+
+# a bundled module's definition reaches past an unindented line while a text or bracket of it is open, and reads the
+# operators of the modules it uses (compute_toys: a text over lines, a list over lines, `use regex`'s matches)
+
+'use compute_toys; compute_toy("fn main_image(id: vec3u) {}") contains "struct Time"'	yes
+'use compute_toys; compute_toy("fn main_image(id: vec3u) { let a = channel0; }")'	error
+'dict([["a", 2]])["a"]'	2
+
+// card pi-unknown-name: a module's word brings its module wherever it stands, also in a ternary's branches
+'b = yes ? pi : 4; b'	π
+'b = no ? 4 : tau; b'	2π
+'b = (no ? 1 : pi) + 1; b'	4.141592653589793
+// a colon key outside a ternary still binds its name: the program's own pi
+'pi: int = 3; yes ? pi : 4'	3

@@ -2158,24 +2158,48 @@ holds_binding(n: Node): bool := is_key(n, Op.Assign) or (is_key(n, Op.Colon) and
 bound_value(n: Node): Node := if holds_binding(n) then bound_value(value_of(n)) else n
 # the bindings with the value innermost in them changed (bound_value)
 rebound(n: Node, value: Node): Node := if not holds_binding(n) then value else placed(Key(key_of(n), op_of(n), if holds_binding(value_of(n)) then rebound(value_of(n), value) else as_value(value)), n)
-# `2 km + 500 m`, which the parser keeps as `2 (km + 500) m`: a run whose last word stands as the leftmost operand of
-# an arithmetic or ordering operation; the run's rewrite takes that operand's place, and the words after the operation
-# join its rightmost operand: `(2 * km) + (500 m)` (card int-text)
+# `2 km + 500 m`, which the parser keeps as `2 (km + 500) m`, and `x > 1500 m`, kept as `(x > 1500) m`: a run whose
+# first word stands as the rightmost operand of an operation, or whose last word as the leftmost one; the run's rewrite
+# takes those operands' place, the operations around it nest by precedence, and the words after a last operation join
+# its rightmost operand: `(2 * km) + (500 m)`, `2 h + 30 m == 150 m` is (2h + 30m) == 150m (cards int-text,
+# spaced-unit-comparison)
 operand_run(rule: Rule, origin: map, items: list): list? := {
+	first = items#1
 	last = items[#rule.pattern - 1]
-	if not is_infix_operation(last) { return ø }
-	result = rule_applied(rule, origin, rule_phrase(items[0 ..< #rule.pattern - 1] + [leftmost_operand(last)]))
+	if not is_infix_operation(first) and not is_infix_operation(last) { return ø }
+	middle = items[1 ..< #rule.pattern - 1]
+	result = rule_applied(rule, origin, rule_phrase([rightmost_operand(first)] + middle + [leftmost_operand(last)]))
 	if result == ø { return ø }
-	[#items, with_rightmost(with_leftmost(last, as_value(result)), items[#rule.pattern ..])]
+	met = merged(first, as_value(result), last)
+	if not is_infix_operation(last) { return [#rule.pattern, met] }
+	[#items, with_rightmost(met, items[#rule.pattern ..])]
 }
-# a power binds tighter than a spaced unit: `4 m²` is 4 (m²), never (4 m)² (card str-str)
-is_infix_operation(n: Node): bool := n is key and key_of(n) != ø and op_of(n) != Op.Pow and (op_of(n) in arithmetic_operators or op_of(n) in ordering_operators)
+# the operators a spaced word meets an operand of; a power binds tighter than a spaced unit: `4 m²` is 4 (m²), never
+# (4 m)² (card str-str)
+joining_operators = arithmetic_operators + ordering_operators + ["==", "!=", "and", "or"]
+is_infix_operation(n: Node): bool := n is key and key_of(n) != ø and op_of(n) != Op.Pow and op_of(n) in joining_operators
 leftmost_operand(n: Node): Node := if is_infix_operation(n) then leftmost_operand(key_of(n)) else n
-with_leftmost(n: Node, operand: Node): Node := if is_infix_operation(n) then placed(Key(with_leftmost(key_of(n), operand), op_of(n), value_of(n)), n) else operand
+rightmost_operand(n: Node): Node := if is_infix_operation(n) then rightmost_operand(value_of(n)) else n
+# the operations left and right, joined where the rightmost operand of left meets the leftmost one of right, now operand;
+# the looser operation holds the tighter one, the left one at equal binding
+merged(left: Node, operand: Node, right: Node): Node := {
+	if is_infix_operation(left) and is_infix_operation(right) and binds_tighter(right, left) { return placed(Key(key_of(left), op_of(left), merged(value_of(left), operand, right)), left) }
+	if is_infix_operation(right) { return placed(Key(merged(left, operand, key_of(right)), op_of(right), value_of(right)), right) }
+	if is_infix_operation(left) { return placed(Key(key_of(left), op_of(left), merged(value_of(left), operand, right)), left) }
+	operand
+}
+binds_tighter(a: Node, b: Node): bool := binding_powers(op_of(a) as text)#1 > binding_powers(op_of(b) as text)#1
+# the words after an operation join its rightmost operand; an operation among them meets it at its own leftmost one
 with_rightmost(n: Node, words: list): Node := {
 	if #words == 0 { return n }
-	if is_infix_operation(n) { return placed(Key(key_of(n), op_of(n), with_rightmost(value_of(n), words)), n) }
-	rule_phrase([n] + words)
+	at = operation_at(words)
+	if at == #words { return merged(n, rule_phrase([rightmost_operand(n)] + words), ø) }
+	met = rule_phrase([rightmost_operand(n)] + words[0 ..< at] + [leftmost_operand(words[at])])
+	with_rightmost(merged(n, met, words[at]), words[at + 1 ..])
+}
+operation_at(words: list): int := {
+	for at in 0 ..< #words { if is_infix_operation(words[at]) { return at } }
+	#words
 }
 
 # `data e`, quoted code as written, which no rule rewrites as no pass does (walk.warp is_quote), but one about quotes:

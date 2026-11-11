@@ -1,4 +1,4 @@
-# A module a shader quotes through `use` (test/web/test_shader_of_imported). Not a picture.
+# A module a shader quotes through `use` (test/web/test_shader). Not a picture.
 quote_bias = 0.2
 quote_helper(x, y) := [quote_bias, 0.5, 0.8]
 quote_deeper(x, y) := quote_helper(x, y)
