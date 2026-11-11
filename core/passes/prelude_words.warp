@@ -343,8 +343,11 @@ classes_reached(word: text, reaches: map, linked_classes: map): list := {
 	}
 	found
 }
-# the first linked class a variant's name types, `Quantity` of format·text·Quantity, while none has reached it
-unreached_variant_class(word: text, linked_classes: map): text? := word.split("·")[1 ..].find(part => linked_classes.has(part) and not linked_classes_reached.has(part))
+# the linked class a variant belongs to, `Quantity` of format·text·Quantity (prebuilt.warp word_owners), while nothing reached it
+unreached_variant_class(word: text, linked_classes: map): text? := {
+	owner = module.linked_owners.get(word)
+	if owner != ø and linked_classes.has(owner) and not linked_classes_reached.has(owner) then owner else ø
+}
 # the reach's last step, once the passes ran (passes.warp lowered_reached): the program without the brought functions
 # nothing calls. What a sugar rule might write is brought before it fires (sugar_words_of: `each_any` for any call,
 # `count_in` for any count), and typing and emitting the unused ones cost each compile (card measure). A module being
@@ -447,8 +450,8 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	# (and the classes the linked words reached so far reach, a used module's reaching the prelude's: their bodies,
 	# declared only, say none of it)
 	wanted += linked_classes_reached.keys
-	reaches = linked_reaches()
-	linked_classes = linked_class_set()
+	reaches = module.linked_reach
+	linked_classes = module.linked_class_names
 	uses = ø
 	origins = {}
 	# (the slices by name, made once: each wanted word compared with every slice's name was most of hello's reaching)

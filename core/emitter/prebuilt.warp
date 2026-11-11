@@ -441,6 +441,7 @@ def link_libraries(images: list, own_names: list) {
 			}
 		}
 	}
+	read_linked_reaches()
 }
 # the words two linked modules wrote of as many values (whose kinds a signature holds alike, any and a class): the
 # program calls each module's as its typed variant, and a module's own calls reach the other's through its slot
@@ -491,61 +492,71 @@ records_reaches(module_name: text): bool := {
 	signature = linked_signature(module_name)
 	signature != ø and signature.reaches != ø
 }
-# the classes of the linked modules, by name
-linked_class_set(): map := word_set(concatenated(module.linked_images.map(image_class_names)))
 image_class_names(image: LibraryImage): list := image.classes.map(entry => entry#1[#instance_struct_prefix ..])
-# what each word of the linked modules reaches, by its name (word_reaches), all modules' merged
-linked_reaches(): map := {
-	reaches = {}
+# the classes of the linked modules by name; what each of their words reaches, by each name a program says it by
+# (word_reaches), all modules' merged; and the class each method belongs to (word_owners), which with_reached waits for:
+# read once a link
+def read_linked_reaches() {
+	module.linked_class_names = word_set(concatenated(module.linked_images.map(image_class_names)))
+	module.linked_reach = {}
+	module.linked_owners = {}
 	for signature in linked_signatures.values.filter(signature => signature.reaches != ø) {
-		# (an arity overload's under its written word too: the program says graph_of, the module recorded graph_of·2)
-		for name in signature.reaches.keys { for key in [name] + [arity_base(name)].filter(base => base != ø) { reaches[key] = (reaches.get(key) ?? []) + signature.reaches[name] } }
+		for name in signature.reaches.keys { module.linked_reach[name] = (module.linked_reach.get(name) ?? []) + signature.reaches[name] }
+		for name in signature.owners.keys { module.linked_owners[name] = signature.owners[name] }
 	}
-	reaches
 }
-# what each word of the module being built reaches: the words of its lowered body naming a function or a class (each
-# part of a lifted one, `text·Interval` says Interval), under its name and a lifted one's class too (`next·Channel`
-# under Channel, never under next, which every class's next would share), so a program linking the module brings what
-# the words it reaches need, a body being declared only there (`str(6.0 ± 0.3)` the Interval its ± makes); a
-# closure's under its own name, which its word's body says
+# what each word of the module being built reaches: the words of its lowered body naming a function or a class, a
+# constructor's class too (Graph·new says Graph), under each name the program reaches it by (word_names), so a program
+# linking the module brings what the words it reaches need, a body being declared only there (`str(6.0 ± 0.3)` the
+# Interval its ± makes); a closure's under its own name, which its word's body says
 word_reaches(functions: list, classes: list): map := {
-	own = functions[1 ..].filter(f => not f.is_runtime and f.body != ø)
-	naming = word_set(concatenated(own.map(f => name_parts(f.name))) + classes + module.linked_words.keys + concatenated(module.linked_images.map(image_class_names)))
+	own = reaching_words(functions)
+	known = word_set(classes + module.linked_class_names.keys)
+	makes = made_classes(known.keys)
+	naming = word_set(concatenated(own.map(f => word_names(f, known, makes))) + known.keys + module.linked_words.keys)
 	reached = {}
 	for f in own {
-		said = words_within(f.body).flat_map(with_constructed_class).filter(word => naming.has(word) and word != f.name)
-		if #said > 0 { for key in owning_names(f.name) { reached[key] = (reached.get(key) ?? []) + said } }
+		said = words_within(f.body).flat_map(word => [word] + [makes.get(word)].filter(made => made != ø)).filter(word => naming.has(word) and word != f.name)
+		if #said > 0 { for key in word_names(f, known, makes) { reached[key] = (reached.get(key) ?? []) + said } }
 	}
 	reaches = {}
 	for key in reached.keys { reaches[key] = word_set(reached[key]).keys.join(" ") }
 	reaches
 }
-# a word's name and, lifted, its parts: next·Channel, next, Channel
-name_parts(name: text): list := if name.contains("·") then [name] + name.split("·") else [name]
-# a word's name and its class's: next·Channel and Graph·new of Channel and Graph
-owning_names(name: text): list := if word_class(arity_base(name) ?? name) != ø then [name, word_class(arity_base(name) ?? name)] else [name]
-# the word an arity overload was written as, graph_of of graph_of·2 (linked_variant), ø for another word
-arity_base(name: text): text? := {
-	parts = name.split("·")
-	last = parts[#parts - 1]
-	if #parts > 1 and is_digits(last) then parts[0..<(#parts - 1)].join("·") else ø
+# the class each method of the module being built belongs to, its receiver's (pop·Stack, Stack; format·text·Quantity,
+# Quantity): a program's dispatcher reaches that variant only once it reaches the class
+word_owners(functions: list, classes: list): map := {
+	known = word_set(classes + module.linked_class_names.keys)
+	owners = {}
+	for f in reaching_words(functions) {
+		owner = receiver_class(f, known)
+		if owner != ø { owners[f.name] = owner }
+	}
+	owners
 }
-# a call and, of a constructor (classes.warp constructor_name, made_name), the class it makes: Graph·new, Graph
-# (a struct made in place names it, class·Graph)
-with_constructed_class(word: text): list := if made_by_constructor(word) or word.starts_with(instance_struct_prefix) then [word, word_class(word)] else [word]
-# the class a lifted word belongs to, the last part of next·Channel, the first of a constructor's Graph·new
-word_class(name: text): text? := {
-	parts = name.split("·")
-	if #parts < 2 { return ø }
-	if made_by_constructor(name) then parts#1 else parts[#parts - 1]
+reaching_words(functions: list): list := functions[1 ..].filter(f => not f.is_runtime and f.body != ø)
+# the names a program reaches a word by: its own, the word it was written as (graph_of of the arity overload
+# graph_of·2, walk.warp overload_variant_name), and its class's, a method's or a constructor's (next·Channel and Graph·new
+# under Channel and Graph)
+word_names(f: Function, known: map, makes: map): list := [f.name, written_word(f), receiver_class(f, known) ?? makes.get(f.name)].filter(name => name != ø and name != "")
+written_word(f: Function): text? := {
+	written = f.name.remove_suffix(overload_variant_name("", #f.signature.parameters))
+	if written != f.name then written else ø
 }
-made_by_constructor(name: text): bool := name.contains("·") and (constructor_name(name.split("·")#1) == name or made_name(name.split("·")#1) == name)
+receiver_class(f: Function, known: map): text? := if #f.signature.parameters > 0 and known.has(f.signature.parameters#1.type_name) then f.signature.parameters#1.type_name else ø
+# each class by the names that make one (classes.warp constructor_name, made_name, a struct made in place)
+made_classes(classes: list): map := {
+	makes = {}
+	for name in classes { for made in [constructor_name(name), made_name(name), instance_struct_prefix + name] { makes[made] = name } }
+	makes
+}
 # a linked module's image, the part of its warp.signature (signature.warp) its linked form's compile writes: its
 # words (each name, parameter kinds, result kind), its globals [name, kind, mark], its own class structs [name,
 # definition written], the host's builders it exports (by name) and the runtime it was built behind
 def image_fields(functions: list): list {
 	images_classes = concatenated(module.linked_images.map(image => image.classes.map(entry => entry#1)))
 	own_classes = module.gc_order[#gc_names ..].filter(name => name not in images_classes)
+	own_class_names = own_classes.map(name => name[#instance_struct_prefix ..])
 	own_globals = module.global_order[#module.runtime_image.globals + #linked_globals_imported() ..]
 	words = functions[1 ..].filter(f => not f.is_runtime and not f.name.starts_with(closure_entry_prefix))
 	[field_node("words", square_list(words.map(f => square_list([Text(f.name), square_list(f.kinds.map(kind => Number(held_code(kind)))), Number(held_code(f.result))])))),
@@ -553,7 +564,8 @@ def image_fields(functions: list): list {
 		field_node("classes", square_list(own_classes.map(name => square_list([Text(name), Text(struct_written(name))])))),
 		field_node("builders", square_list(module.builders.map(f => Text(f.name)))),
 		field_node("runtime", square_list(runtime_behind().map(n => Number(n)))),
-		field_node("reaches", texts_node(word_reaches(functions, own_classes.map(name => name[#instance_struct_prefix ..]))))]
+		field_node("reaches", texts_node(word_reaches(functions, own_class_names))),
+		field_node("owners", texts_node(word_owners(functions, own_class_names)))]
 }
 # the image of a linked module read back from its signature; why it is not linkable behind this runtime, a text
 def library_image_of(name: text, signature: ModuleSignature): any {

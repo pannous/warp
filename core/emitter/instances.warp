@@ -103,7 +103,7 @@ def class_struct(class_name: text): text {
 # module's class is open wherever it is declared, in the module and in each program linking it: any program may extend
 # it (`class ParseError: Error` of the prelude's Error), and a final struct has no subtype
 def subtype_prefix(class_name: text): int { if class_name in module.parents.values or is_module_class(class_name) then 80 else 79 }
-def is_module_class(class_name: text): bool { (module.relocating and not module.prebuilding) or linked_class_set().has(class_name) }
+def is_module_class(class_name: text): bool { (module.relocating and not module.prebuilding) or module.linked_class_names.has(class_name) }
 # $Instance, every class's struct's supertype, a fixed GC type (emitter.warp gc_types): a $Node with the map of its
 # extra fields
 instance_fields = ["kind", "data", "value", "extra"]
