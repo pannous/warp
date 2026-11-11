@@ -465,7 +465,7 @@ function roomBelowPaintings(paneStyle) {
 }
 
 // `loop { …; show(); sleep(16ms) }`: each sleep starts an animation's next frame, what the run paints in it replaces
-// the last frame's (printed text only at clear(), decision page-text-frames); frames keep the run alive past RUN_TIMEOUT_MS, the next run stops it (cards
+// the last frame's (printed text only at clear(), decision page-text-frames); frames keep the run alive past RUN_TIMEOUT_MS, the next run or Stop stops it (cards
 // drawing-frames, snake-frames)
 function startsFrame(run, output) {
 	const starts = run.frame > 0 && run.framesShown[output] !== run.frame;
@@ -476,10 +476,11 @@ function startsFrame(run, output) {
 	}
 	return starts;
 }
-// a run showing frames animates: it lives on past the limit, counted again from each frame
+// a run showing frames animates: it lives until the next run or Stop, as a native window's loop does (user decision,
+// card example-native-mismatch)
 function animates(run) {
 	run.animating = true;
-	stopAfterTimeout(run);
+	clearTimeout(run.timer);
 }
 
 // ---- sound ----------------------------------------------------------------------------------------------------
@@ -720,11 +721,13 @@ function printedChunk(run, chunk) {
 	showPrinted(run.printed);
 }
 
-// the runaway limit counts running time only: a sleep moves the deadline on by its milliseconds (card sleep-run-limit)
+// the runaway limit counts running time only: a sleep moves the deadline on by its milliseconds (card sleep-run-limit);
+// an animating run has none
 function stopAfterTimeout(run, milliseconds = runLimitMs) {
 	clearTimeout(run.timer);
+	if (run.animating) return;
 	run.deadline = Date.now() + milliseconds;
-	run.timer = setTimeout(() => stopRun(run, `stopped after ${runLimitMs / 1000} s: the program may not terminate`, !run.animating, [hungWhere()], true), milliseconds);
+	run.timer = setTimeout(() => stopRun(run, `stopped after ${runLimitMs / 1000} s: the program may not terminate`, true, [hungWhere()], true), milliseconds);
 }
 // the run again, the limit LONGER_RUNS times longer
 function runLonger() {
