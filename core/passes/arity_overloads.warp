@@ -271,6 +271,8 @@ and_listed(words: list): text := if #words < 2 then words.join("") else words[0 
 # how well a value fits `any`: worse than every typed fit; a list of known elements fits a plain `list` worse than a
 # list of its elements
 any_fit = 100
+# how well an exact number fits a float: after `any`, so it turns float only where no variant keeps it exact
+float_from_exact_fit = any_fit + 1
 list_fit = 2
 # the kind each type word an overload tells apart stands for
 overload_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", float: "float", double: "float",
@@ -460,7 +462,8 @@ library_word_named(name: text): text := if word_lines().has(name) then name else
 static_kind(n: Node): list? := {
 	if n is bool { return ["bool", ø] }
 	if n is int { return ["int", ø] }
-	if n is float { return ["float", ø] }
+	# a decimal literal is exact (wiki/number.md), a float only past 15 digits
+	if n is number { return [if number_kind(n) == ValueKind.Int then "rational" else "float", ø] }
 	if n is codepoint { return ["codepoint", ø] }
 	if n is text { return ["text", ø] }
 	# `./a` is `"./a" as path`
@@ -513,7 +516,7 @@ magnitude_kind(word: text, number: list?): list? := {
 	if word == "sqrt" { return if number != ø and number#1 == "float" then number else ø }
 	if number != ø then ["float", ø] else ø
 }
-numeric_kinds = ["int", "float"]
+numeric_kinds = ["int", "rational", "float"]
 known_kind(n: Node, judge: ArgumentJudge): list? := {
 	# a name assigned is a variable, its kind known only when all its values agree: the `rest = value` of the prelude's
 	# fits_text_cut beside text's Cursor.rest() is no function
@@ -536,10 +539,10 @@ declared_result(word: text, count: int): list? := {
 	[overload_kinds[results#1], ø]
 }
 numeric(kind: list?): list? := if kind != ø and kind#1 in numeric_kinds then kind else ø
-# an int with an int stays an int, a float makes a float
+# an int with an int stays an int, a rational makes a rational, a float a float
 joined_numbers(a: list?, b: list?): list? := {
 	if numeric(a) == ø or numeric(b) == ø { return ø }
-	[if a#1 == "float" or b#1 == "float" then "float" else "int", ø]
+	[numeric_kinds.filter(kind => kind == a#1 or kind == b#1).last, ø]
 }
 
 # the kind all the items share, ø when they differ, are lists or are not known
@@ -557,9 +560,10 @@ fit(kind: text, type: text): int? := {
 	if type in overload_classes { return class_distance(kind, type) }
 	# (a value the compile knows is never marked: only the run time tells a Color)
 	if type in overload_marks { return ø }
-	if type == "number" { return if kind == "int" or kind == "float" then 1 else ø }
+	if type == "number" { return if kind in numeric_kinds then 1 else ø }
 	wanted = overload_kind(type)
 	if kind == wanted { return 0 }
+	if kind == "rational" and wanted == "float" { return float_from_exact_fit }
 	if (kind == "int" and wanted == "float") or (kind == "codepoint" and wanted == "text") or marked_text_of(kind, type) then 1 else ø
 }
 
