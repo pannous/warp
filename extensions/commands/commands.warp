@@ -149,31 +149,38 @@ show_debug() := {
 	show_lowered()
 }
 
-# the REPL (`warp repl`): the lines that stay for the next ones, a program's declarations and uses, as warp text
-REPL_STATE = ".warp-repl-state.warp"
+# the REPL (`warp repl`): each line a module of its own in the session's folder (the console keeps its instance),
+# linked to the lines before it that declared something or used a module: their names in the folder's KEPT_LINES
+KEPT_LINES = "kept_lines.txt"
 staying_lines(line: text): text := {
 	statements = statements_in(plain_node(parsed(line)))
 	staying = statements.filter(statement => is_declaration(statement) or is_import(statement))
 	staying.map(statement => "${statement}").join("\n")
 }
-# one line of the REPL: its module written to wasm_file, compiled after the state file's lines; the line's
-# declarations added to the state once it compiled
-repl_step(state_file: text, line: text, wasm_file: text) := {
-	state = try read(state_file) else ""
-	compiled = compile(state + "\n" + line, ".")
-	if compiled is text { raise compiled }
-	write_bytes(wasm_file, compiled)
-	staying = staying_lines(line)
-	if staying { write(state_file, state + "\n" + staying) }
+# one line of the REPL: its module written to wasm_file in the session's folder, its text beside it; its name kept for
+# the next lines once it compiled, when it declares something
+repl_step(folder: text, line: text, wasm_file: text) := {
+	kept = lines_kept(folder)
+	for earlier in kept { own_module(earlier, path_in(folder, earlier + module_extension), path_in(folder, earlier + ".wasm")) }
+	name = wasm_file.split("/").last().remove_suffix(".wasm")
+	source = (kept.map(earlier => "use " + earlier) + [line]).join("\n")
+	text_file = path_in(folder, name + module_extension)
+	write(text_file, source)
+	own_module(name, text_file, wasm_file)
+	module_compiled_behind(name, source, read_bytes(runtime_path()), wasm_file)
+	if staying_lines(line) { write(path_in(folder, KEPT_LINES), (kept + [name]).join("\n")) }
 }
+lines_kept(folder: text): list := (try read(path_in(folder, KEPT_LINES)) else "").split("\n").filter(name => name != "")
 # `warp repl` under plain WASI: each line compiled, its declarations kept; running it needs the native warp
+REPL_FOLDER = ".warp-repl"
 repl() := {
-	write(REPL_STATE, "")
 	line = input(REPL_PROMPT)
+	number = 0
 	while line != ø {
 		if line.trim() {
+			number += 1
 			try {
-				repl_step(REPL_STATE, line, ".warp-repl-line.wasm")
+				repl_step(REPL_FOLDER, line, REPL_FOLDER + "/line_" + number + ".wasm")
 				print "compiled; running it needs the native warp (plain WASI has no instantiate): warp repl"
 			} catch failure { print failure }
 		}
