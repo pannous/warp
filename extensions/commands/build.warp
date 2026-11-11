@@ -95,7 +95,7 @@ build(words: list) := {
 	targets = words.filter(word => not word.starts_with(OPTION_MARK))
 	# (what it builds stands alone: the modules it uses compiled in, none linked at load time)
 	modules_linked = no
-	for option in options { if option in UNBUILT_OPTIONS { raise "warp build " + option + ": not in the warp compiler yet (card harness-diet)" } }
+	for option in options { if option in UNBUILT_OPTIONS { raise "warp build " + option + ": not in the warp compiler yet" } }
 	if targets#1 == NATIVE_WORD { return build_native(targets#2, library_folder) }
 	if targets#1 == APP_WORD { return build_app(targets#2, options) }
 	if options.any(option => option == OPTION_MARK + SITE_OPTION or option.starts_with(OPTION_MARK + SITE_OPTION + "=")) { return site_built(targets#1, options) }
