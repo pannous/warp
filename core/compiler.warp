@@ -261,6 +261,11 @@ global module_written = ""
 global module_written_folder = ""
 # whether a compile links the modules it uses: a `warp build` compiles them in, what it builds stands alone
 global modules_linked = yes
+# a compile with --fast (decision fast-mode, card fast-int-wrap; the compiler's own build is one): the run drops its
+# runtime checks, the program's code and every runtime word of the run alike (checks_dropped): every int + - * wraps at
+# 64 bits, no overflow check, as in a fast function. A value already big (a literal past 64 bits, a ratio) keeps its
+# exact arithmetic; only the promotion on overflow goes. Bounds and the other checks are to follow
+global fast_build = run_option("fast") != ø
 write_module(name: text, runtime_file: text, file: text) := module_written_behind(name, read_bytes(runtime_file), file)
 module_written_behind(name: text, runtime, file: text) := {
 	module_written = name

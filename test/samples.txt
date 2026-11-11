@@ -1,4 +1,4 @@
-# 616b1486dc 2026-11-11 11:16 266/268 99.3%
+# 04e101b5aa 2026-11-11 15:16 264/272 97.1%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -56,7 +56,6 @@ ok   samples/functions/y_combinator.warp
 ok   samples/golf/99-bottles-of-beer.short.warp
 ok   samples/golf/99-bottles-of-beer.warp
 ok   samples/golf/arabic-to-roman.short.warp
-ok   samples/golf/arabic-to-roman.warp
 ok   samples/golf/catalan-numbers.short.warp
 ok   samples/golf/catalan-numbers.warp
 ok   samples/golf/collatz.short.warp
@@ -107,6 +106,7 @@ ok   samples/gpu/warp_compiled_wgsl_shader.warp
 ok   samples/graphics/color_swatches.warp
 ok   samples/graphics/finger_paint.warp
 ok   samples/graphics/gaussian_splats.warp
+ok   samples/graphics/make_image.warp
 ok   samples/graphics/meshlet_grid.warp
 ok   samples/graphics/million_trees.warp
 ok   samples/graphics/paint_function.warp
@@ -150,6 +150,7 @@ ok   samples/modules/javascript.warp
 ok   samples/modules/lib.warp
 ok   samples/modules/main.warp
 ok   samples/modules/modules.warp
+ok   samples/modules/packages.warp
 ok   samples/modules/rust_crates.warp
 ok   samples/modules/slug_paths.warp
 ok   samples/modules/square.warp
@@ -193,7 +194,6 @@ ok   samples/signals/signal_fields.warp
 ok   samples/sound/arrangement.warp
 ok   samples/sound/filters.warp
 ok   samples/sound/gpu_visualizer_warp.warp
-ok   samples/sound/harmony.warp
 ok   samples/sound/hum_blocks.warp
 ok   samples/sound/midi.warp
 ok   samples/sound/music.warp
@@ -239,20 +239,18 @@ ok   samples/types/types.warp
 ok   samples/wasm/component_reflection.warp
 ok   samples/wasm/import_compiled.warp
 ok   samples/wasm/wasm_interop.warp
+ok   samples/web/collatz_bars.warp
 ok   samples/web/component_binding.warp
 ok   samples/web/component_totals.warp
 ok   samples/web/computed_tags.warp
-ok   samples/web/counter.warp
 ok   samples/web/form_submit.warp
 ok   samples/web/hello_div.warp
 ok   samples/web/html_dsl.warp
 ok   samples/web/html.warp
-ok   samples/web/keyed_counters.warp
 ok   samples/web/keyframes.warp
 ok   samples/web/leaving_list.warp
 ok   samples/web/live_region.warp
 ok   samples/web/page_custom_event.warp
-ok   samples/web/page_elements.warp
 ok   samples/web/select_binding.warp
 ok   samples/web/typed_form.warp
 EXP  samples/errors/errors.warp: `]` closes the group opened at 5:9, which needs `}`
@@ -265,5 +263,11 @@ SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
+FAIL samples/golf/arabic-to-roman.warp: samples/golf/arabic-to-roman.warp:6:23 no + between key 1000: 'M' and int 1
+FAIL samples/graphics/load_bmp.warp: samples/graphics/load_bmp.warp:1:19 read ./picture.bmp failed: No such file or directory
+FAIL samples/graphics/load_jpeg.warp: samples/graphics/load_jpeg.warp:1:19 read ./photo.jpg failed: No such file or directory
 TIME samples/lists/dot.warp: used its 30 s of CPU
-FAIL samples/modules/packages.warp: extended_power: its module isn't linked, nor the program's (extension.warp runtime_modules)
+FAIL samples/sound/harmony.warp: samples/sound/harmony.warp:9:14 outside the core: the unknown name major7
+FAIL samples/web/counter.warp: warp app [check] <file.warp>  the page a markup program shows, in a window of the system's web view (check: the text it shows, or its # check: lines checked, no window)
+FAIL samples/web/keyed_counters.warp: warp app [check] <file.warp>  the page a markup program shows, in a window of the system's web view (check: the text it shows, or its # check: lines checked, no window)
+FAIL samples/web/page_elements.warp: warp app [check] <file.warp>  the page a markup program shows, in a window of the system's web view (check: the text it shows, or its # check: lines checked, no window)
