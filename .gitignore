@@ -69,6 +69,9 @@ data/
 samples/**/*.database.sqlite
 # the values samples/storage/store.warp keeps (a run writes them beside it)
 samples/**/*.stored.json
+# the pictures samples/graphics/load_bmp.warp and make_image.warp save beside them
+samples/graphics/evening.bmp
+samples/graphics/sunset.bmp
 /tune.mid
 
 .wrangler
