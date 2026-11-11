@@ -1,34 +1,37 @@
 # When a program links big_numbers, the runtime module of powers, `x as rational` and long decimals
-# (extensions/big_numbers/big_numbers.warp, card runtime-bridge-slots): its code, comments left out, spells a power,
-# a cube root, rational or a decimal past 18 places. Read from the text, so it may link the module for a `^` that
-# never runs, but never misses one
+# (extensions/big_numbers/big_numbers.warp, card runtime-bridge-slots): its parsed tree holds a power (`x^y`, `x**y`,
+# `x²`, `2ⁿ`, `x ^= y`, `xs .^ 2`, a word the alias table reads as power), a cube root (`∛x`, `cbrt x`), `as rational` or a
+# decimal past 18 places. Read from the tree, so a `^` inside a text or a name like `empowered` links nothing; it may
+# still link the module for a power that never runs, but never misses one
 BIG_NUMBERS_MODULE = "big_numbers"
 # the power's row in lib/aliases.warp, whose word names a class's power method (`power(o) := …`, extensions/class_methods)
 POWER_WORD = "power"
 POWER_OPERATOR = "^"
+CUBE_ROOT_WORD = "cbrt"
 # (`as rational`, not the type's name: the prelude's `type fraction = rational` converts nothing)
-ROOT_AND_RATIO_SPELLINGS = ["cbrt", "∛", "as rational"]
-# a decimal past this many places is an exact ratio of a big denominator (core/emitter/literals.warp big_decimal)
-DECIMAL_PLACES_HELD = 18
+RATIONAL_WORD = "rational"
 
-big_number_uses(source: text, tree: Node, folder: text = "."): list := {
-	code = uncommented(source)
-	if big_number_spellings().any(spelling => code.contains(spelling)) or has_long_decimal(code) then [BIG_NUMBERS_MODULE] else []
+big_number_uses(source: text, tree: Node, folder: text = "."): list := if nodes_in(tree).any(needs_big_numbers) then [BIG_NUMBERS_MODULE] else []
+# whether the node is one of those forms (a long decimal as the parser keeps its digits, lints.warp is_big_decimal)
+needs_big_numbers(n: Node): bool := {
+	if is_big_decimal(n) { return yes }
+	if n is key { return op_of(n) == Op.Pow or (op_of(n) == Op.As and value_of(n) == symbol(RATIONAL_WORD)) }
+	n is symbol and spelled_operator(name_of(n)) in big_number_words()
 }
-# every spelling of the power, as the alias table gives them (`**`, `power`), a superscript (`x²`, `2ⁿ`), and the cube root's
-# and `as rational`'s
-big_number_spellings(): list := {
-	tables = alias_spellings()
-	symbols = tables.operator_symbols.filter(pair => pair#2 == POWER_OPERATOR).map(pair => pair#1)
-	words = tables.canonical.keys.filter(spelling => tables.canonical[spelling] == POWER_WORD)
-	[POWER_OPERATOR, POWER_WORD] + symbols + words + (SUPERSCRIPT_DIGITS + SUPERSCRIPT_LETTERS).chars() + ROOT_AND_RATIO_SPELLINGS
+# the operator a symbol spells, as the parser keeps the phrase forms of one (parser.warp operator_at): `^` of the
+# element-wise `.^` and of the compound `^=`, `.^=`; any other name itself
+spelled_operator(name: text): text := {
+	undotted = if #name > 1 and name.starts_with(".") then name[1 ..] else name
+	if #undotted > 1 and undotted.ends_with("=") then undotted[0 ..< #undotted - 1] else undotted
 }
-# whether a `.` is followed by more digits than a decimal holds exactly in 64 bits
-has_long_decimal(code: text): bool := {
-	run = -1
-	for c in code {
-		if c == '.' { run = 0 } else if run >= 0 and is_digit(c) { run += 1 } else { run = -1 }
-		if run > DECIMAL_PLACES_HELD { return yes }
+# every spelling of the power, as the alias table gives them (`**`, `power`), and the cube root's word: found once
+global big_number_word_list = ø
+big_number_words(): list := {
+	if big_number_word_list == ø {
+		tables = alias_spellings()
+		symbols = tables.operator_symbols.filter(pair => pair#2 == POWER_OPERATOR).map(pair => pair#1)
+		words = tables.canonical.keys.filter(spelling => tables.canonical[spelling] == POWER_WORD)
+		big_number_word_list = [POWER_OPERATOR, POWER_WORD, CUBE_ROOT_WORD] + symbols + words
 	}
-	no
+	big_number_word_list
 }

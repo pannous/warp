@@ -6,6 +6,10 @@ use file
 use regex
 use text
 use list
+// the console's shell fallback (shell_line): the refusal it takes over, its dim mark
+SHELL_FALLBACK_REFUSAL = "unknown name"
+SHELL_MARK = "\e[2m(sh) "
+SHELL_MARK_END = "\e[0m"
 // the names in a folder, the working directory by default, sorted and without the hidden ones, as ls shows them
 ls(folder: text = ".") := [name for name in list_files(folder) if not name.starts_with(".")]
 // the working directory, as cwd gives it
@@ -29,7 +33,7 @@ touch(path: text) := std_io("file", "touch", [path])
 // of a list so, the shell's rm `ls` without a shell (card shell-backtick-run); a command line of its own runs as
 // `exec sh "rm $file"` (lib/os.warp), a hole one whole argument, never a pasted text. The page's host has
 // file.remove; natively lib/file.remove_file moves to Trash over C (card file-remove-host-word)
-rm(path: any) := if path is list then [rm(item) for item in path] else try { std_io("file", "remove", [str(path)]) } catch e { remove_file(path) }
+rm(path: any) := if path is list then [rm(item) for item in path] else try { std_io("file", "remove", [text(path)]) } catch e { remove_file(path) }
 // a file's lines without their line ends: the first n, the last n
 file_lines(path: text) := split(remove_suffix(cat(path), "\n"), "\n")
 head(path: text, n: int = 10) := file_lines(path).first(n)
@@ -76,11 +80,13 @@ which(name: text): text? := {
 	}
 	ø
 }
-// `git status`, `ls -la` in `warp repl`: a console line warp refuses whose first word is a command on PATH runs by sh,
-// what it printed shown; any other line keeps warp's refusal. The console only, never a file (extensions/commands
-// repl_step, user OK 11-11, card repl-bash-commands)
+// `git status`, `ls -la` in `warp repl`: a console line warp refuses for an unknown name whose first word is a command
+// on PATH runs by sh, marked dim `(sh) git status` on stderr first, what it printed shown; any other line keeps warp's
+// refusal, so a type error such as `date + 1` stays warp's. The console only, never a file (extensions/commands
+// repl_step, user 11-11, card repl-bash-commands)
 shell_line(line: text, refusal: text) := {
-	if which(words(line)#1) == ø { raise refusal }
+	if not refusal.contains(SHELL_FALLBACK_REFUSAL) or which(words(line)#1) == ø { raise refusal }
+	eprint(SHELL_MARK + line + SHELL_MARK_END)
 	ran = run(["sh", "-c", line])
 	for printed in [ran.out, ran.err] { if printed { print printed } }
 }

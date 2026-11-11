@@ -34,7 +34,7 @@ conversion_of(n: Node, scope: map): list? := {
 }
 
 # the words showing a value as text, which show it through a program's conversion to text
-showing_words = ["print", "str", "text", "text_form"]
+showing_words = ["print", "text", "text_form"]
 # x as the program's conversion to text shows it; a text as it is
 shown_converted(x: Node): Node := if x is text then x else call_of(conversion_name("text"), [x])
 
@@ -448,7 +448,7 @@ forced_field_zero(type: text?): Node := {
 	if type == ø or type == "" or type != required_type(type) { return ø }
 	if type in ["int", "integer", "long", "i64", "i32", "nat", "byte", "int8", "int16", "int32", "int64", "uint8", "u8", "uint16", "uint32", "uint64", "hex", "binary", "octal"] { return 0 }
 	if type in ["float", "double", "f64", "f32", "float32", "float64"] { return 0.0 }
-	if type in ["text", "str", "string"] { return "" }
+	if type in ["text", "string"] { return "" }
 	if type in ["bool", "boolean"] { return no }
 	if type == "list" { return [] }
 	ø

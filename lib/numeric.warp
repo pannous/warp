@@ -13,7 +13,7 @@ find_root(f: function, a: number, b: number): float := {
 	f_low = f(low); f_high = f(high)
 	if f_low == 0 { return low }
 	if f_high == 0 { return high }
-	if (f_low > 0) == (f_high > 0) { raise "find_root: f(" + str(a) + ") and f(" + str(b) + ") have the same sign, so no root is bracketed between them" }
+	if (f_low > 0) == (f_high > 0) { raise "find_root: f(" + text(a) + ") and f(" + text(b) + ") have the same sign, so no root is bracketed between them" }
 	for step in 1 to ROOT_STEPS {
 		middle = (low + high) / 2
 		f_middle = f(middle)
@@ -28,12 +28,12 @@ newton(f: function, df: function, x0: number): float := {
 	x = x0 as float
 	for step in 1 to 100 {
 		slope = df(x)
-		if slope == 0 { raise "newton: the derivative is 0 at x = " + str(x) + ", no Newton step from there" }
+		if slope == 0 { raise "newton: the derivative is 0 at x = " + text(x) + ", no Newton step from there" }
 		next = x - f(x) / slope
 		if abs(next - x) <= ROOT_TOLERANCE * max(1.0, abs(next)) { return next }
 		x = next
 	}
-	raise "newton: no convergence from x0 = " + str(x0) + " within 100 steps"
+	raise "newton: no convergence from x0 = " + text(x0) + " within 100 steps"
 }
 // the integral of f from a to b by adaptive Simpson: each half refined until the estimates agree within 1e-10, at
 // most 50 halvings deep
@@ -57,7 +57,7 @@ simpson_adaptive(f: function, a: float, b: float, fa: float, fm: float, fb: floa
 // extrapolated
 linear_interpolate(xs: list, ys: list, x: number): float := {
 	if count(xs) != count(ys) or count(xs) < 2 { raise "linear_interpolate: xs and ys need the same length, at least 2" }
-	if x < xs#1 or x > xs.last { raise "linear_interpolate: x = " + str(x) + " is outside " + str(xs#1) + " … " + str(xs.last) }
+	if x < xs#1 or x > xs.last { raise "linear_interpolate: x = " + text(x) + " is outside " + text(xs#1) + " … " + text(xs.last) }
 	i = 1
 	while i < count(xs) - 1 and x > xs#(i + 1) { i += 1 }
 	t = (x - xs#i) / (xs#(i + 1) - xs#i)
@@ -77,7 +77,7 @@ poly_multiply(p: list, q: list): list := {
 // the real roots of a polynomial of degree 1 or 2, ascending ([] for none); higher degrees: find_root or newton
 poly_roots(p: list): list := {
 	if count(p) == 2 { if p#2 == 0 { raise "poly_roots: the polynomial is a constant" }; return [-p#1 / p#2] }
-	if count(p) != 3 { raise "poly_roots: degree 1 or 2 only, this one has " + str(count(p) - 1) + "; use find_root or newton" }
+	if count(p) != 3 { raise "poly_roots: degree 1 or 2 only, this one has " + text(count(p) - 1) + "; use find_root or newton" }
 	a = p#3; b = p#2; c = p#1
 	if a == 0 { return poly_roots([c, b]) }
 	d = b * b - 4 * a * c
@@ -89,7 +89,7 @@ poly_roots(p: list): list := {
 // matrix's solve
 polyfit(xs: list, ys: list, degree: int): list := {
 	if count(xs) != count(ys) { raise "polyfit: xs and ys need the same length" }
-	if count(xs) <= degree { raise "polyfit: a polynomial of degree " + str(degree) + " needs more than " + str(degree) + " points" }
+	if count(xs) <= degree { raise "polyfit: a polynomial of degree " + text(degree) + " needs more than " + text(degree) + " points" }
 	v = [[x ^ k for k in 0 to degree] for x in xs]
 	vt = transpose(v)
 	solve(matmul(vt, v), [sum([vt#i#j * ys#j for j in 1 to count(ys)]) for i in 1 to degree + 1])

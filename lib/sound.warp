@@ -5,6 +5,7 @@
 // WebAudio. Loaded when a program calls one of its words (rust-harness:src/modules.rs SOUND_WORDS)
 use units
 use reals
+use bits
 use os
 use file
 use tasks
@@ -975,7 +976,7 @@ sound_folder() := {
 	temporary = env("TMPDIR") ?? /tmp
 	(if ends_with(temporary, "/") then temporary else temporary + "/") + SOUND_FOLDER
 }
-sound_file_name(process, handle) := "sound-" + str(process) + (if handle == 1 then "" else "-" + str(handle)) + ".wav"
+sound_file_name(process, handle) := "sound-" + text(process) + (if handle == 1 then "" else "-" + text(handle)) + ".wav"
 // the files of processes no longer running (kill(pid, 0) fails for them)
 swept_sound_files() := {
 	folder = sound_folder()
@@ -993,15 +994,13 @@ wav_bytes(speakers, rate, channels) := {
 	format = little_endian(PCM_FORMAT, 2) + little_endian(channels, 2) + little_endian(rate, 4) + little_endian(rate * block, 4) + little_endian(block, 2) + little_endian(BITS_PER_SAMPLE, 2)
 	codes("RIFF") + little_endian(36 + count(data), 4) + codes("WAVEfmt ") + little_endian(count(format), 4) + format + codes("data") + little_endian(count(data), 4) + data
 }
-pcm_bytes(speakers) := [byte for sample in speakers for byte in pcm_pair(pcm_sample(sample))]
+pcm_bytes(speakers) := [byte for sample in speakers for byte in little_endian(pcm_sample(sample), 2)]
 // a sample crossing as amplitude + 32768, as the 16 bits of the signed amplitude, low byte first (typed: once a sample)
 pcm_sample(sample: int): int := (min(max(sample - sample_offset, -32768), 32767) + 65536) % 65536
-pcm_pair(code: int): list := [code % 256, code /! 256]
-little_endian(n, width) := [(n / (256 ** i)) as int % 256 for i in 0..width]
 codes(t) := [ord(c) for c in t]
 hundredths(x) := {
 	n = round(x * 100) as int
-	str(n / 100 as int) + "." + (if n % 100 < 10 then "0" else "") + str(n % 100)
+	text(n / 100 as int) + "." + (if n % 100 < 10 then "0" else "") + text(n % 100)
 }
 // a line on stderr
 said(line) := {
@@ -1025,7 +1024,7 @@ public plain_hertz(pitch) := {
 	if pitch is Note { return pitch.hertz() }
 	if pitch is number { return pitch as float }
 	if pitch is text and is_note_name(pitch) { return note_hertz(pitch) }
-	raise "not a pitch: " + str(pitch)
+	raise "not a pitch: " + text(pitch)
 }
 // one word plays every sound (decision play-one-word; tone, melody and tune are its aliases), in `shape`: a note, a
 // frequency or a note name one tone `duration` long, `play(440Hz, 0.5s, "square")`; a Chord together,
@@ -1193,7 +1192,7 @@ DECODED_VALUES_AT = 2
 global decoded_sounds = {}
 decoded_sound(path: text, rate, channels) := {
 	if not exists(path) { raise path + ": no such sound file" }
-	key = path + "\t" + str(rate) + "\t" + str(channels)
+	key = path + "\t" + text(rate) + "\t" + text(channels)
 	if not decoded_sounds.has(key) { decoded_sounds[key] = sound_file_decoded(path, rate, channels) }
 	decoded = decoded_sounds[key]
 	if decoded is text { raise decoded }
@@ -1232,7 +1231,7 @@ rewrite play({$score...}) => score_played({$score...})
 rewrite tune {$score...} => score_played({$score...})
 rewrite tune({$score...}) => score_played({$score...})
 score_played(score: data) := play([score_pitch(item) for item in score])
-score_pitch(item) := if item is list then [score_pitch(pitch) for pitch in item] else if item is symbol then note_capitalized(str(item)) else item
+score_pitch(item) := if item is list then [score_pitch(pitch) for pitch in item] else if item is symbol then note_capitalized(text(item)) else item
 // capitalize is text.warp's; letter-range uses range_index so it does not meet this module's at(time, block)
 note_capitalized(name: text) := upper(name[0]) + name[1..]
 
@@ -1406,8 +1405,6 @@ MIDI_TRACK_END = 47
 MIDI_SYSTEM_EXCLUSIVE = [240, 247]
 midi_ticks_per_second() := MIDI_TICKS_PER_QUARTER * 1000000 / MIDI_MICROSECONDS_PER_QUARTER
 midi_ticks(seconds) := round(max(0, seconds) * midi_ticks_per_second()) as int
-big_endian(n, width) := [(n / 256 ** (width - 1 - i)) as int % 256 for i in 0..width]
-big_endian_at(bytes, at, width) := sum([bytes[at + i] * 256 ** (width - 1 - i) for i in 0..width]) as int
 // a delay as MIDI writes it: seven bits a byte, the first ones marked by their high bit
 midi_variable_length(n) := {
 	groups = [n % 128]
@@ -1424,7 +1421,7 @@ midi_file(notes) := {
 	events = []
 	for note in notes {
 		key = midi(note#2)
-		if key < 0 or key > 127 { raise "MIDI keys are 0 to 127, got " + str(key) }
+		if key < 0 or key > 127 { raise "MIDI keys are 0 to 127, got " + text(key) }
 		on = midi_ticks(note#1)
 		events = events + [[on, 1, [MIDI_NOTE_ON, key, min(127, max(1, note#4))]], [max(on, midi_ticks(note#1 + si_amount(note#3))), 0, [MIDI_NOTE_OFF, key, 0]]]
 	}
@@ -1452,14 +1449,14 @@ midi_length_at(bytes, at) := {
 // key as its frequency, by their start and then their key; every track's, timed by the file's tempo changes
 midi_notes(bytes) := {
 	if count(bytes) < 14 or bytes[0..4] != codes("MThd") { raise "not a MIDI file (it does not start with MThd)" }
-	division = big_endian_at(bytes, 12, 2)
+	division = from_big_endian(bytes[12 ..< 14])
 	if division >= 32768 { raise "MIDI files timed in SMPTE frames are not supported, only ticks per quarter note" }
 	tempi = [[0, MIDI_MICROSECONDS_PER_QUARTER]]
 	// [tick, sounding, channel, key, velocity], each note's start and end
 	messages = []
-	at = 8 + big_endian_at(bytes, 4, 4)
-	for track in 0..big_endian_at(bytes, 10, 2) {
-		end = at + 8 + big_endian_at(bytes, at + 4, 4)
+	at = 8 + from_big_endian(bytes[4 ..< 8])
+	for track in 0..from_big_endian(bytes[10 ..< 12]) {
+		end = at + 8 + from_big_endian(bytes[at + 4 ..< at + 4 + 4])
 		in_track = bytes[at..at + 4] == codes("MTrk")
 		at = if in_track then at + 8 else end
 		tick = 0
@@ -1474,7 +1471,7 @@ midi_notes(bytes) := {
 			}
 			if status == MIDI_META {
 				size = midi_length_at(bytes, at + 1)
-				if bytes[at] == MIDI_TEMPO and size#1 == 3 { tempi = tempi + [[tick, big_endian_at(bytes, size#2, 3)]] }
+				if bytes[at] == MIDI_TEMPO and size#1 == 3 { tempi = tempi + [[tick, from_big_endian(bytes[size#2 ..< size#2 + 3])]] }
 				at = size#2 + size#1
 			} else if status in MIDI_SYSTEM_EXCLUSIVE {
 				size = midi_length_at(bytes, at)

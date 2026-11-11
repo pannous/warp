@@ -318,6 +318,7 @@ function newWorker(restarts = 0) {
 			if (data.type === "notify") data = notification(data.text);
 			if (data.type === "window") return resizeWindow(data, $("paintings")); // canvas.js
 			if (data.type === "full screen") return fullScreen(data.full);
+			if (data.type === "key answered") return keyAnswered(data.status); // assistant.js
 			if (data.type === "dispatch") return dispatchToPage(data.event); // markup.js, card page-custom-event
 			if (!data) return;
 			if (stalled) watchStart();
@@ -856,7 +857,7 @@ function startInWorker(run, code, file, asData) {
 	Object.assign(worker, { runId: run.id, liveLoops: new Map() });
 	paintingWindow = undefined; // canvas.js: each run's paintings at their own size until it sets window.width
 	tellSystemValues();
-	worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file, arguments: programArguments(), liveHandover, asData });
+	worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file, arguments: SAMPLE_ARGUMENTS[file] ?? [], liveHandover, asData });
 	liveHandover = {};
 }
 
@@ -1465,8 +1466,6 @@ function programFile() {
 	const name = $("examples").value;
 	return EXAMPLES[name] === undefined ? SAMPLE_FILES[name] : undefined;
 }
-// the chosen sample's arguments, from its <name>.args (build.sh SAMPLE_ARGUMENTS): `use os; args` gives them
-const programArguments = () => (programFile() && SAMPLE_ARGUMENTS[$("examples").value]) || [];
 
 // puts the code in the editor and runs it once; resolves once its report is shown
 function runCode(source) {
@@ -1556,13 +1555,16 @@ function initialize() {
 	startAssistant(editor, tellEnvironment, startCompletion(editor, askMembers));
 	const reloadedCode = sessionStorage.getItem(RELOADED_CODE);
 	sessionStorage.removeItem(RELOADED_CODE);
-	if (reloadedCode !== null) runCode(reloadedCode);
-	else chooseExample(requestedExample() ?? DEFAULT_EXAMPLE);
+	// (the menu names the example the address names, as before the reload, never the first one, hello)
+	if (reloadedCode !== null) {
+		$("examples").value = requestedExample() ?? DEFAULT_EXAMPLE;
+		runCode(reloadedCode);
+	} else chooseExample(requestedExample() ?? DEFAULT_EXAMPLE);
 	addEventListener("hashchange", chooseExampleOfHash);
 }
 
 // for headless runs (test_in_browser.py --examples): evaluate code as the page does and return the report
-window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress, bugReport, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
+window.playground = { evaluate, applyFix, chooseExample, exampleSource, runCode, reportAddress, bugReport, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
 	// an animation that runs until stopped (a raylib window's `while not WindowShouldClose()`) ends with its report, as
 	// the next run would end it (test_in_browser.py sample_answer); yes when one ran
 	stopAnimation: () => Boolean(pending?.animating && (stopRun(pending, ANIMATION_STOPPED), true)),

@@ -1,0 +1,20 @@
+# a variant declaring no result beside variants declaring one is the default: a call no expected type tells apart takes
+# it, a declared variable, a parameter, a declared result or `as` take the typed one (decision default-variant, user 11-11)
+'half(x) := x /! 2; half(x): float := x / 2; half 7'	3
+'half(x) := x /! 2; half(x): float := x / 2; y: float = half 7; y'	3.5
+'half(x) := x /! 2; half(x): float := x / 2; shown(v: float) := v; shown(half 7)'	3.5
+'half(x) := x /! 2; half(x): float := x / 2; g(n): float := half n; g 7'	3.5
+'half(x) := x /! 2; half(x): float := x / 2; (half 7) as float'	3.5
+# arithmetic tells nothing: the default's result times a float
+'half(x) := x /! 2; half(x): float := x / 2; half 7 * 1.0'	3
+# a told type no variant declares takes the default only where its result fits, else the usual type error
+'class pdf { body: text }; half(x) := x /! 2; half(x): float := x / 2; p: pdf = half 7; p'	error	decision default-variant: p takes a pdf, not 3
+# refused: two variants declaring no result, and a default whose known result a typed variant declares
+'h(x) := 1; h(x) := 2; h(x): float := x / 2; h 1'	error	decision default-variant: a second definition of h taking as many arguments can never run
+'k(x) := "a"; k(x): text := "b"; k 1'	error	decision default-variant: the k declaring no result gives a text, as its k: text does
+# each arity groups its own variants: another arity of the name beside them changes nothing
+'f(x: list or number) := 1; f(a, b) := a + b; f(a, b): float := a * 1.5; f(1, 2)'	3
+'f(a, b) := a + b; f(a, b): float := a * 1.5; f(x: list or number) := 1; f(1, 2)'	3
+'f(x: list or number) := 1; f(a, b) := a + b; f(a, b): float := (a + b) * 1.5; x: float = f(1, 2); x'	4.5
+# passed as a value, the word is its default
+'half(x) := x /! 2; half(x): float := x * 0.5; [2, 4].map(half)'	[1, 2]

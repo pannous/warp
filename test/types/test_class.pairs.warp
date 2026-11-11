@@ -28,10 +28,10 @@
 'class animal { name }; class dog extends animal { called := "dog " + super.name }; dog("Rex").called'	'dog Rex'
 
 # a class's text() is how str and as text show its instances, as print does (card class-text-coercion)
-'class P{x; text() := "P" + x}; str(P(3))'	'P3'
+'class P{x; text() := "P" + x}; text(P(3))'	'P3'
 'class P{x; text() := "P" + x}; P(3) as text'	'P3'
-'use units; str(5km) + " " + (300m as text)'	'5km 300m'
-'class P{x}; str(P(3))'	'P{x: 3}'
+'use units; text(5km) + " " + (300m as text)'	'5km 300m'
+'class P{x}; text(P(3))'	'P{x: 3}'
 
 # from test_class_unions.rs: edit the Rust test, then run the script again
 

@@ -2,11 +2,11 @@
 
 # every_text_type_word_gives_the_text_of_an_exact_real
 'π as text'	'π'
-'π as str'	'π'
+'π as str'	error	str is no type word: write text (user 11-11)
 'π as string'	'π'
 # triage-held 2026-11-06: Java/C type spellings (String, double) :: 'π as String'	'π'
 # triage-held 2026-11-06: Java/C type spellings (String, double) :: 'String(√2)'	'√2'
-'str(√2)'	'√2' # not important
+'text(√2)'	'√2' # not important
 
 # every_float_type_word_rounds_an_exact_real
 'π as float'	π

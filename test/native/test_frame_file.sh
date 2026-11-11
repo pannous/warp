@@ -2,9 +2,9 @@
 # A program FILE with `on frame` runs its frame (card frame-self-rule): a file links the prebuilt standard modules,
 # whose frames once called frame_listened from itself (its own rule rewrote its definition), so inline code, compiled
 # from source, never showed it. Run it with bash test/native/test_frame_file.sh; the warp under test is WARP (default
-# the warp on PATH), its compiler from WARP_LIB as usual
+# the warp on PATH), a tree's WARP=<tree>/data/gate/warp
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
 failures=0

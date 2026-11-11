@@ -377,7 +377,7 @@ def cheapest_cost(warp, arguments, said):
     runs = []
     for _ in range(HELLO_RUNS):
         run = subprocess.run(["/usr/bin/time", "-l", warp, *arguments], capture_output=True, text=True, cwd=REPO,
-                             env={**os.environ, "WARP_NO_WINDOW": "1"})
+                             env={**os.environ, "WARP_WINDOW": "0"})
         instructions, seconds = re.search(r"(\d+)\s+instructions retired", run.stderr), re.search(r"([\d.]+) real", run.stderr)
         if said not in run.stdout or not instructions or not seconds:
             print(f"vitals: {warp} {' '.join(arguments)} failed: {(run.stdout + run.stderr).strip()[-200:]}", file=sys.stderr)

@@ -50,4 +50,4 @@ tags = [{name: t, pages: [{slug: p["slug"], title: p["title"]} for p in pages if
 write(out + "/tags.html", mustache(tag_layout, {tags: tags}))
 print("=== tags.html")
 print(read(out + "/tags.html"))
-print("wrote " + str(count(pages) + 1) + " pages")
+print("wrote " + text(count(pages) + 1) + " pages")

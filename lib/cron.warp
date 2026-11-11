@@ -22,7 +22,7 @@ def cron_number(t: text, field: int): int {
 	if field == 4 and word in CRON_DAYS { return CRON_DAYS.index_of(word) - 1 }
 	if not is_digits(t) { raise "cron: " + t + " is no " + CRON_FIELDS[field] }
 	n = int(t)
-	if n < CRON_LOW[field] or n > CRON_HIGH[field] { raise "cron: " + t + " is out of the " + CRON_FIELDS[field] + "'s " + str(CRON_LOW[field]) + "-" + str(CRON_HIGH[field]) }
+	if n < CRON_LOW[field] or n > CRON_HIGH[field] { raise "cron: " + t + " is out of the " + CRON_FIELDS[field] + "'s " + text(CRON_LOW[field]) + "-" + text(CRON_HIGH[field]) }
 	n
 }
 // the values one field allows, ascending, day of week 7 as 0
@@ -57,14 +57,14 @@ def cron_parse(expression: text): map {
 		written = CRON_MACROS[lower(written)]
 	}
 	fields = [f for f in split(replace(written, "\t", " "), " ") if f != ""]
-	if count(fields) != 5 { raise "cron: " + expression + " has " + str(count(fields)) + " fields, not 5 (minute hour day-of-month month day-of-week)" }
+	if count(fields) != 5 { raise "cron: " + expression + " has " + text(count(fields)) + " fields, not 5 (minute hour day-of-month month day-of-week)" }
 	{minutes: cron_values(fields[0], 0), hours: cron_values(fields[1], 1), days: cron_values(fields[2], 2), months: cron_values(fields[3], 3), weekdays: cron_values(fields[4], 4), any_day: fields[2].starts_with("*"), any_weekday: fields[4].starts_with("*")}
 }
 cron_of(expression: any): map := if expression is text then cron_parse(expression) else expression
 
 // a time as seconds since 1970: an Instant, milliseconds, or a UTC text "yyyy-MM-dd HH:mm"
 cron_seconds(time: any): int := if time is Instant then time.ms /! 1000 else if time is text then parse_pattern(time, "yyyy-MM-dd HH:mm") /! 1000 else time /! 1000
-cron_zone(zone: any): Zone := if zone is Zone then zone else if zone is text then zone_named(zone) else Zone("UTC" + str(zone), zone, Dst.Never)
+cron_zone(zone: any): Zone := if zone is Zone then zone else if zone is text then zone_named(zone) else Zone("UTC" + text(zone), zone, Dst.Never)
 zone_offsets(zone: Zone): list := if zone.dst == Dst.Never then [zone.standard] else [zone.standard, zone.standard + 3600]
 
 // whether a day (its day number since 1970) is one of the expression's (the OR of Vixie cron when both are restricted)

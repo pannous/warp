@@ -39,7 +39,7 @@ def query_map(t: text): map {
 	m
 }
 // a map as a query string, keys and values percent-encoded
-query_text(m: map): text := join([url_encode(str(k)) + "=" + url_encode(str(m[k])) for k in keys(m)], "&")
+query_text(m: map): text := join([url_encode(text(k)) + "=" + url_encode(text(m[k])) for k in keys(m)], "&")
 
 // URLs as maps (RFC 3986): parse_url("https://u:p@example.com:8080/a?q=1#top") is {scheme: "https", user: "u",
 // password: "p", host: "example.com", port: 8080, path: "/a", query: "q=1", fragment: "top"}. A part the text does not
@@ -95,7 +95,7 @@ def url_text(u: map): text {
 		out = out + "//"
 		if u.user != nil { out = out + u.user + (if u.password != nil then ":" + u.password else "") + "@" }
 		out = out + (if u.host.contains(":") then "[" + u.host + "]" else u.host)
-		if u.port != nil { out = out + ":" + str(u.port) }
+		if u.port != nil { out = out + ":" + text(u.port) }
 	}
 	out = out + u.path
 	if u.query != nil { out = out + "?" + u.query }
@@ -218,9 +218,9 @@ hex_group(n: int): text := { if n == 0 { return "0" }; out = ""; rest = n; while
 // two or more zero groups (the first of equal ones) as ::, an IPv4-mapped address as ::ffff:a.b.c.d
 def ip_text(address: any): text {
 	bytes = if address is text then ip_bytes(address) else address
-	if count(bytes) == 4 { return join([str(b) for b in bytes], ".") }
+	if count(bytes) == 4 { return join([text(b) for b in bytes], ".") }
 	groups = [bytes[2 * i] * 256 + bytes[2 * i + 1] for i in 0 ..< 8]
-	if all([groups[i] for i in 0 ..< 5], g => g == 0) and groups[5] == 0xffff { return "::ffff:" + join([str(b) for b in bytes[12..]], ".") }
+	if all([groups[i] for i in 0 ..< 5], g => g == 0) and groups[5] == 0xffff { return "::ffff:" + join([text(b) for b in bytes[12..]], ".") }
 	best = -1; best_length = 1; i = 0
 	while i < 8 {
 		if groups[i] == 0 {
@@ -267,7 +267,7 @@ URL(text: text): map := {
 	parts = parse_url(text)
 	host = parts.host ?? ""
 	port = parts.port
-	port_text = if port == nil then "" else str(port)
+	port_text = if port == nil then "" else text(port)
 	{
 		href: text,
 		protocol: if parts.scheme == nil then "" else parts.scheme + ":",

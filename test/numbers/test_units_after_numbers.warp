@@ -3,10 +3,10 @@
 # a_unit_after_a_number_is_the_unit_though_a_variable_has_its_name
 is! 'use units
 s = 3
-str(0.5s)' '0.5s'
+text(0.5s)' '0.5s'
 is! 'use units
 s = 3
-str(2 * 0.5s)' '1s'
+text(2 * 0.5s)' '1s'
 is! 's = 3
 s * 2' 6
 is! 'm = 5
@@ -16,10 +16,10 @@ is! 's = 2
 is! 'use units
 h = 2 inch
 v = 3 km/h
-str(v)' '3km/h'
+text(v)' '3km/h'
 is! 'use units
 s = 2
-str(9.8 m/s²)' '9.8m/s²'
+text(9.8 m/s²)' '9.8m/s²'
 
 # a_parameter_named_like_a_unit_leaves_the_unit_to_the_rest
 is! 'use units
@@ -28,7 +28,7 @@ f(1) + (0.5s as ms) / 1ms' 502
 
 # an_alias_and_a_declared_unit_type_see_through_the_variable
 is! 's = 3
-str(440Hz)' '440/s'
+text(440Hz)' '440Hz'
 is! 'h = 2 m
 v: km/h = 3 km/h
-str(v)' '3km/h'
+text(v)' '3km/h'

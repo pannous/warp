@@ -8,8 +8,8 @@
 'use file; exists("")'	no
 'use file; delete_file("")'	no
 # relative_and_absolute_read_failures_name_the_path
-'use file; try { read("warp_fpe_no_such_relative.txt") } catch e { str(e).contains("warp_fpe_no_such_relative.txt") }'	yes
-'use file; try { read("/warp_fpe_no_such_absolute.txt") } catch e { str(e).contains("/warp_fpe_no_such_absolute.txt") }'	yes
+'use file; try { read("warp_fpe_no_such_relative.txt") } catch e { text(e).contains("warp_fpe_no_such_relative.txt") }'	yes
+'use file; try { read("/warp_fpe_no_such_absolute.txt") } catch e { text(e).contains("/warp_fpe_no_such_absolute.txt") }'	yes
 'use file; try { list_files(temp_folder() + "/warp_fpe_no_folder") } catch e { "caught" }'	"caught"
 # trailing_newline: shell's file_lines drops one final newline; with or without it the lines are the same
 'use file; use shell; p = temp_folder() + "/warp_fpe_lines_1.txt"; write(p, "a\nb\n"); r = file_lines(p); delete_file(p); r'	["a", "b"]

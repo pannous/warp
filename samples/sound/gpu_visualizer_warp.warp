@@ -142,7 +142,7 @@ while time < seconds or (count(args) == 0 and window_open()) {
 		play song
 		plays = plays + 1
 	}
-	levels = [min(1.0, sqrt(level * loudness)) for level in spectrum(song, time - (plays - 1) * song_seconds, bands)]
+	levels = [min(1.0, √(level * loudness)) for level in spectrum(song, time - (plays - 1) * song_seconds, bands)]
 	bass = (levels#1 + levels#2 + levels#3 + levels#4) / 4
 	treble = (levels#11 + levels#12 + levels#13 + levels#14) / 4
 	paint(tunnel, width, height)

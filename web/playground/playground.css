@@ -137,7 +137,7 @@ output.error { color: var(--error); }
 .output-pane:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
 .listening-note { color: var(--muted); font-size: 0.9em; margin-bottom: 6px; }
 .paintings { display: flex; flex-wrap: wrap; gap: 8px; }
-.painting { margin-top: 10px; background: var(--paper); max-width: 100%; image-rendering: pixelated; border: 1px solid var(--line); }
+.painting { margin-top: 10px; background: var(--paper); max-width: 100%; border: 1px solid var(--line); }
 /* ⛶ (playground.js toggleFullScreen): over the paintings' corner; full screen shows the last one, as large as fits.
    Top-aligned: no gap below for letters' descenders, which playground.js viewSize does not leave free */
 .painted { position: relative; display: inline-block; max-width: 100%; vertical-align: top; }
@@ -189,7 +189,7 @@ main.single { grid-template-columns: minmax(0, 1fr); }
 .guide-part > .guide-chapter { margin-left: 12px; }
 .guide-chapter { border-top: 1px solid var(--line); padding: 4px 0; }
 .guide-chapter > summary { cursor: pointer; font-weight: 600; }
-.guide-chapter > summary a { color: inherit; text-decoration: none; }
+.guide-part > summary a, .guide-chapter > summary a, .guide-section a { color: inherit; text-decoration: none; }
 .guide-chapter[open] > summary { color: var(--accent); }
 .guide-section { font-size: 1em; margin: 14px 0 4px; }
 .guide-snippet { position: relative; margin: 8px 0; background: var(--code-ground); border-radius: 6px; padding: 6px 8px; }

@@ -75,7 +75,7 @@ def render() {
 		}
 		print line
 	}
-	print "Score: " + str(score)
+	print "Score: " + text(score)
 }
 
 # each turn a frame: clear() shows it anew, in a terminal and in the playground

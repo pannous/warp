@@ -23,9 +23,24 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 ---
 
 ## Inbox
+- 2026-11-11 build-ships-only: `warp build app.warp` leaves the executable, runtime.wasm and modules/ only; `--wasm` writes app.wasm, app.full.wasm, app.mod.wasm (replaces build-three-outputs).
+- 2026-11-11 no-str: `str` is gone as function and type word (lib/python keeps it); warp writes text.
+- 2026-11-11 hex-subtype: hex(n) / `n as hex` / `hex n` give a hex subtype of int shown as 0x7b (lowercase, no quotes); subtypes of number types equal their plain number by value (not Quantity, Angle); colours: argb_hex / rgba_hex.
+- 2026-11-11 canvas-value: canvas is a Canvas value (width, height, clear(), resize(w, h)); clear(canvas).
+- 2026-11-11 quiet-implicit-uses: runs don't hint implicit standard uses; warp lint/beautify write the use.
+- 2026-11-11 foreign-use: `use python json` canonical (source first, like use js / use cargo); `use json from python` an alias; one table of foreign runtimes.
+- 2026-11-11 console-shell: the console runs a line through sh only when warp's refusal is an unknown name, marked dim (sh).
+- 2026-11-11 complex-shows-imaginary: complex numbers show as 3+4ⅈ.
+- 2026-11-11 unit-beside-variable: after a number a unit expression stays units even when a variable has the unit's name (hint); `440Hz` shows as 440Hz.
+- 2026-11-11 parked: code spacing in printed code (refusal-spelling), painted typed-function core fix, rgb type shorthand.
+- 2026-11-11 executables-beside-modules: `warp build` ships the compiled modules beside the executable; it finds its own folder through the OS (its executable path) and loads them at run time; no merge, no env var.
+- 2026-11-11 markup-needs-html kept: a bare element (`div{…}`) outside html{} is data and gets a loud warning naming the fix (`x: html = …`).
+- 2026-11-11 public-samples-no-todo: the playground and site hide TODO/DONE comment lines of samples; the sources keep them.
+- 2026-11-11 prelude-word-variable: parked (a binding hides a function only from the binding on).
+- 2026-11-11 menu-follows-example: the playground menu always shows the loaded example, never falls back to hello.
 - 2026-11-11 mutating-needs-bang (parked): `!` on a function that changes what it is given is only a hint for readers where it is not clear; the compiler does not enforce it (almost any function modifies something).
 - 2026-11-11 self-contained-executables: `warp build` makes an executable that carries the runtime and prelude it needs and reads no lib/.
-- 2026-11-11 whole-arrow: `↑` takes whole exponents only (refusal names `^`); the compiler itself carries no big numbers (extension-row-optional). fast-mode: a `--fast` compile argument drops overflow checks (ints wrap at 64 bits) for programs that want speed over checks; the compiler is built with it.
+- 2026-11-11 whole-arrow: `↑` takes whole exponents only (refusal names `^`); the compiler itself carries no big numbers (extension-row-optional). fast-mode: a `--fast` compile argument drops overflow checks (ints wrap at 64 bits) for programs that want speed over checks; the compiler is built with it. Scope: the program's code and every runtime word of the run (prelude and module runtime words share the switch; modules' own inline typed `a + b` stays checked, being compiled without --fast); a value already big keeps its exact arithmetic, only the promotion on overflow is dropped.
 - 2026-11-11 page-runs-live: an animating page run lives until the next Run or Stop, as natively.
 - 2026-11-11 sync-fetch: `fetch` waits everywhere, the page included; `go fetch` is the asynchronous form.
 - 2026-11-11 text-kind-fast-path: text comparison and indexing pick their path from the text's kind (text-representations), never by rescanning.
@@ -55,6 +70,7 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - 2026-11-10 aliases-in-rules: a sugar rule's literal word matches every alias spelling of it (`xs.forEach {…}` through the `each` rule); aliases otherwise stay call-only, so data keys and type names never change; the full unification (aliases-unified) is parked: renaming everywhere would rename data keys.
 - 2026-11-10 x-bang-refusal: a block's `x!` is refused with "`x!` runs no code: x() runs a block, interpret x runs data".
 - 2026-11-10 bare-typed-overloads: `name: T := e` is `name(): T := e`, so `sample: int := 7; sample: text := "seven"` overload by result type.
+- 2026-11-11 default-variant: among variants told apart by result type, the one declaring no result is the default: a call no expected type (declaration, typed parameter, declared result, `as`) tells apart takes it; arithmetic tells nothing; a told type no variant declares takes the default with the usual type check; refused: two defaults, a default whose known result a typed variant declares (user OK 11-11 with warp-reviewer's conditions; card float-literal-decimal).
 - 2026-11-10 fast-build: `fast` functions get machine arithmetic (i64 wrapping, fast_math), as extensions/fast.warp.
 - 2026-11-10 def-arrow-fixit: `def f(x) -> T: body` is refused with the fix "def f(x): T := body".
 - 2026-11-10 undo-planned: undo/redo stay a planned feature.
@@ -193,7 +209,7 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - match-exhaustive: a match on a known enum or sealed class missing a case is a compile error.
 - pattern-keyword: named patterns only with `pattern Adult = {age: >= 18}`; a plain `Name = …` is a value.
 - #31 a switch without a match reports the run-time value (`no case for n = 4`).
-- `when` by shape: `when click {…}` = `on click`, `when x > 3 {…}` = `whenever`, `when x {… -> …}` = `match`, `when {cond -> …}` = an if chain; each warns naming the word meant.
+- `when` by shape: `when click {…}` = `on click`, `when x > 3 {…}` is refused naming `if`, `once` and `whenever` (11-11, replaces = whenever), `when x {… -> …}` = `match`, `when {cond -> …}` = an if chain; each warns naming the word meant.
 - P46 type-name and condition patterns in `for` filter with a got-it warning (`for friend in xs`, `for (it>2) in xs`).
 - P61 `is` is always a comparison; with an undefined x it teaches `x be <value>`. #27 `be` is `:=`; `≤ ≥ ≠ × ÷ ¬ √` are accepted and normalized (÷ is floor division: julia-floor-divide).
 - fail-effect: the `Fail` effect tracks explicit raises, division by a value that may be 0, and library calls answering with an Error; index out of range, missing fields and failed casts are untracked bugs.
@@ -477,7 +493,7 @@ core-lines-in-questions → AGENTS.md (Clean compiler first).
 egraph-outside-library → github.com/pannous/warp-packages. express-mode → AGENTS.md (Express mode).
 milestone-messages → notes/agents/supervisor.md. play-mozart-mp3 → samples. power-function → card power-function.
 quasi-text → card quasi-text. plural-singular-check → lib/units.warp.
-js-webidl-bindings → extensions/js_globals.warp. catch-blocks → card catch-blocks.
+js-webidl-bindings → extensions/foreign_globals.warp. catch-blocks → card catch-blocks.
 test-case-timeout → core/native/tests.warp. parallel-compilation → card parallel-compilation.
 easy-cards-first → AGENTS.md (Quick cards first). error-gaps → cards. inline-wasm → card inline-wasm.
 webgpu-shader-part, shader-hash → lib/graphics. smoked-merge-push, busy-main-landing → AGENTS.md (Done).

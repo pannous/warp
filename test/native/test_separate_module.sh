@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# `warp build x.warp` writes x.mod.wasm, the program alone importing runtime.wasm (decision build-three-outputs,
+# `warp build --wasm x.warp` writes x.mod.wasm, the program alone importing runtime.wasm (decision build-three-outputs,
 # notes/runtime_linking.md "Separate modules"): linked to an instance of the runtime.wasm it was built behind, it prints
 # what the program prints. Node links the two (as web/playground/host.js does), WASI from node:wasi. Run it with
-# bash test/native/test_separate_module.sh; the warp is WARP (default the warp on PATH), its lib/ WARP_LIB as usual
+# bash test/native/test_separate_module.sh; the warp is WARP (default the warp on PATH), a tree's WARP=<tree>/data/gate/warp
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
-library=${WARP_LIB:-$("$warp" version | sed -n 's/.*(compiler.warp of \(.*\))$/\1/p')}
+export WARP_WINDOW=0
+library=$("$warp" version | sed -n 's/.*(compiler.warp of \(.*\))$/\1/p')
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
 failures=0
@@ -30,7 +30,7 @@ const runtime = instantiated(runtimeFile, { wasi_snapshot_preview1: wasi.wasiImp
 wasi.start(instantiated(programFile, { warp_runtime: runtime.exports, wasi_snapshot_preview1: wasi.wasiImport }));
 ' "$library/runtime.wasm" "$1" 2>&1
 }
-# check <name> <program> <expected>: built by `warp build`, its x.mod.wasm linked prints the expected
+# check <name> <program> <expected>: built by `warp build --wasm`, its x.mod.wasm linked prints the expected
 check() {
 	printf '%s\n' "$2" >"$stage/$1.warp"
 	(cd "$stage" && "$warp" build --wasm "$1.warp" >"$stage/$1.log" 2>&1)

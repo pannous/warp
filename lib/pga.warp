@@ -31,7 +31,7 @@ blade_grade(m: int): int := wasm i64.popcnt
 mv_zero(metric: list): Multivector := Multivector(metric, [0.0 for m in 1 to 1 << count(metric)])
 // coefficient times the blade of index m
 blade(metric: list, m: int, coefficient: number): Multivector := {
-	if m < 0 or m >= 1 << count(metric) { raise "pga: no blade " + str(m) + " in an algebra of " + str(count(metric)) + " basis vectors" }
+	if m < 0 or m >= 1 << count(metric) { raise "pga: no blade " + text(m) + " in an algebra of " + text(count(metric)) + " basis vectors" }
 	parts = [0.0 for i in 1 to 1 << count(metric)]
 	parts[m] = coefficient * 1.0
 	Multivector(metric, parts)
@@ -166,12 +166,12 @@ blade_name(m: int): text := {
 	name = "e"
 	i = 0
 	while m >> i != 0 {
-		if blade_and(m >> i, 1) == 1 { name = name + str(i) }
+		if blade_and(m >> i, 1) == 1 { name = name + text(i) }
 		i += 1
 	}
 	name
 }
-mv_part_text(x: float): text := if x == floor(x) and abs(x) < 1000000000000000 then str(int(x)) else str(x)
+mv_part_text(x: float): text := if x == floor(x) and abs(x) < 1000000000000000 then text(int(x)) else text(x)
 // "1 + 2e1 - e12": the nonzero parts by blade index, a coefficient of ±1 left out before a blade; "0" for zero
 multivector_text(a: Multivector): text := {
 	out = ""

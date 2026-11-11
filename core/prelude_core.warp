@@ -59,7 +59,6 @@ alias has => collection_contains
 alias get => map_get_or
 alias index_of => collection_position
 alias codepoints => code_point_list
-alias str => text
 alias size => count
 alias len => count
 alias length => count

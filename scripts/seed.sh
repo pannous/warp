@@ -30,6 +30,16 @@ if [ ! -f "$file" ]; then
 		{ rm -f "$file.part-$$"; fail "release $release could not be fetched"; }
 	mv "$file.part-$$" "$file"
 fi
+# and its library, the runtime and unicode module it links its NFC from (core/native/driver.warp compiler_library),
+# published beside it (refresh-seed.sh); a seed without one makes it in its first rebuild (warp.warp seed_library)
+fetched_part() {
+	[ -f "$file.library/$2" ] && return
+	mkdir -p "$(dirname "$file.library/$2")" &&
+		gh release download "$release" -R "$REPO" -p "$1" -O "$file.library/$2.part-$$" --clobber >/dev/null 2>&1 &&
+		mv "$file.library/$2.part-$$" "$file.library/$2"
+	rm -f "$file.library/$2.part-$$"
+}
+fetched_part warp-seed-runtime.wasm runtime.wasm && fetched_part warp-seed-unicode.wasm modules/unicode.wasm
 if [ -n "$sha" ]; then
 	got=$({ sha256sum "$file" 2>/dev/null || shasum -a 256 "$file"; } | cut -c1-64)
 	[ "$got" = "$sha" ] || fail "$file is $got, seed.lock says $sha"

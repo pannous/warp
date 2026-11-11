@@ -84,5 +84,5 @@ if count(args) > 0 {
 		act(parsed(argv))
 	}
 	print("stored: " + read(store))
-	print("demo file removed: " + str(delete_file(store)))
+	print("demo file removed: " + text(delete_file(store)))
 }

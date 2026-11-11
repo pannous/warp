@@ -43,6 +43,7 @@ option_help = [
 	["--mute", "No sound (or WARP_SOUND=0)"],
 	["--no-hints", "Warnings from weak up, no hints"],
 	["--lib <folder>", "Compile with this lib/ (a worktree's)"],
+	["--slots <n>", "warp test runs at most n cases at once"],
 	["--backtrace", "An error shows the wasm backtrace beside its sentence"],
 	["--profile", "Each compiled function's address range in /tmp/perf-<pid>.map, for perf"],
 	["fuel <steps>", "The program counts steps, out of fuel after them"]
@@ -149,46 +150,58 @@ show_debug() := {
 	show_lowered()
 }
 
-# the REPL (`warp repl`): the lines that stay for the next ones, a program's declarations and uses, as warp text
-REPL_STATE = ".warp-repl-state.warp"
+# the REPL (`warp repl`): each line a module of its own in the session's folder (the console keeps its instance),
+# linked to the lines before it that declared something or used a module: their names in the folder's KEPT_LINES
+KEPT_LINES = "kept_lines.txt"
 staying_lines(line: text): text := {
 	statements = statements_in(plain_node(parsed(line)))
 	staying = statements.filter(statement => is_declaration(statement) or is_import(statement))
 	staying.map(statement => "${statement}").join("\n")
 }
-# one line of the REPL: its module written to wasm_file, compiled after the state file's lines; the line's
-# declarations added to the state once it compiled
-repl_step(state_file: text, line: text, wasm_file: text) := {
-	state = try read(state_file) else ""
-	compiled = module_or_refusal(state + "\n" + line)
-	if compiled is text { compiled = shell_fallback(state, line, compiled) }
-	if compiled is text { raise compiled }
-	write_bytes(wasm_file, compiled)
-	staying = staying_lines(line)
-	if staying { write(state_file, state + "\n" + staying) }
+# one line of the REPL: its module written to wasm_file in the session's folder, its text beside it; its name kept for
+# the next lines once it compiled, when it declares something. A line the compiler refuses runs as a shell line when
+# its first word is a command on PATH, `git status`, `ls -la` (lib/shell.warp shell_line): else the refusal stands
+# (user OK 11-11, card repl-bash-commands)
+repl_step(folder: text, line: text, wasm_file: text) := {
+	kept = lines_kept(folder)
+	for earlier in kept { own_module(earlier, line_text_file(folder, earlier), path_in(folder, earlier + ".wasm")) }
+	name = wasm_file.split("/").last().remove_suffix(".wasm")
+	for earlier in kept { for word in defined_words(line) { if word in defined_words(read(line_text_file(folder, earlier))) { raise word + " is defined already (line " + earlier.remove_prefix(LINE_PREFIX) + "): the console keeps that one" } } }
+	# (the uses behind the line, so what the compiler says of it names the line's own place, 1:5)
+	uses = kept.map(earlier => "use " + earlier)
+	refusal = line_module_refusal(folder, name, [line] + uses, wasm_file)
+	shell = ["shell_line(" + source_text(line) + ", " + source_text(refusal) + ")", "use shell"] + uses
+	if refusal and line_module_refusal(folder, name, shell, wasm_file) { raise refusal }
+	if not refusal and staying_lines(line) { write(path_in(folder, KEPT_LINES), (kept + [name]).join("\n")) }
 }
-# a line the compiler refuses runs as a shell line when its first word is a command on PATH, `git status`, `ls -la`
-# (lib/shell.warp shell_line): the line's module, else the refusal unchanged (user OK 11-11, card repl-bash-commands)
-shell_fallback(state: text, line: text, refusal: text): any := {
-	fallback = module_or_refusal(state + "\nuse shell\nshell_line(" + source_text(line) + ", " + source_text(refusal) + ")")
-	if fallback is text then refusal else fallback
+# the line's module written from its source lines, its text kept beside it: "", else the compiler's refusal
+line_module_refusal(folder: text, name: text, lines: list, wasm_file: text): text := {
+	source = lines.join("\n")
+	write(line_text_file(folder, name), source)
+	own_module(name, line_text_file(folder, name), wasm_file)
+	refusal = ""
+	try { module_compiled_behind(name, source, read_bytes(runtime_path()), wasm_file) } catch refused { refusal = refusal_said(refused) }
+	refusal
 }
-# the source's module, else the compiler's refusal as a text, whether returned or thrown
-module_or_refusal(source: text): any := {
-	compiled = ""
-	try { compiled = compile(source, ".") } catch refusal { compiled = "${refusal}" }
-	compiled
-}
+# the functions and classes a text defines, by name: no variable, which a later line may set
+defined_words(source: text): list := definition_slices(source).filter(slice => not statements_in(plain_node(parsed(slice#2))).any(is_value_definition)).map(slice => slice#1)
+# where a line's text is kept: never as <name>.warp, which would take a later line's `use <name>` as a file to compile
+# in, not the module to link (prelude_words.warp taken_as_file), its instance's state then not the one read
+line_text_file(folder: text, name: text): text := path_in(folder, name + ".line" + module_extension)
+lines_kept(folder: text): list := (try read(path_in(folder, KEPT_LINES)) else "").split("\n").filter(name => name != "")
 # a text as a warp literal that reads back as itself: quoted, its $ no hole
 source_text(t: text): text := quoted(t).replace("$", "\\$")
 # `warp repl` under plain WASI: each line compiled, its declarations kept; running it needs the native warp
+REPL_FOLDER = ".warp-repl"
+LINE_PREFIX = "line_"
 repl() := {
-	write(REPL_STATE, "")
 	line = input(REPL_PROMPT)
+	number = 0
 	while line != ø {
 		if line.trim() {
+			number += 1
 			try {
-				repl_step(REPL_STATE, line, ".warp-repl-line.wasm")
+				repl_step(REPL_FOLDER, line, REPL_FOLDER + "/" + LINE_PREFIX + number + ".wasm")
 				print "compiled; running it needs the native warp (plain WASI has no instantiate): warp repl"
 			} catch failure { print failure }
 		}

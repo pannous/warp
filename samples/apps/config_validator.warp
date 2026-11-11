@@ -68,7 +68,7 @@ check(name: text, source: text) := {
 			print("valid; with defaults:")
 			print(to_json(json_merge_patch(defaults, config)))
 		} else {
-			print(str(count(problems)) + " problems:")
+			print(text(count(problems)) + " problems:")
 			for problem in problems { print("  " + problem) }
 		}
 	}

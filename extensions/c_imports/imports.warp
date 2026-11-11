@@ -197,10 +197,9 @@ c_catalog(native_paths: list): list := (c_catalog_texts() + native_paths.map(pat
 # lib/native/sqlite3.warp: the foreign lines of a C library and the warp words over them (card pure-c-imports)
 native_folder = "native"
 native_file(library: text): text := native_folder + "/" + library + ".warp"
-# where `scripts/warp-crate build` writes a crate's native file (notes/crate_adapter.md): $WARP_CRATES_CACHE, by default
-# ~/.cache/warp/crates
+# where `scripts/warp-crate build` writes a crate's native file (notes/crate_adapter.md): ~/.cache/warp/crates
 crates_cache_default = "/.cache/warp/crates"
-crates_cache(): text := started_env("WARP_CRATES_CACHE") ?? ((started_env("HOME") ?? "") + crates_cache_default)
+crates_cache(): text := (started_env("HOME") ?? "") + crates_cache_default
 # the file of a library's lines: lib/native/<library>.warp, else the crates cache's native/<library>.warp; ø for none
 native_path(library_folder: text, library: text): any := {
 	for folder in [library_folder, crates_cache()] {

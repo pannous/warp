@@ -226,7 +226,7 @@ def rebased(code: list, relocations: list, moves: list): list {
 class Move { shift: int; table: map; gap: list = [] }
 def moved(move: Move, index: int): int {
 	if move.table.has(index) { return move.table[index] }
-	if #move.gap == 2 and index >= move.gap#1 and index < move.gap#2 { throw "runtime function " + (index - move.gap#1) + " was shaken out of the module but is called (card runtime-shaking)" }
+	if #move.gap == 2 and index >= move.gap#1 and index < move.gap#2 { throw "runtime function " + (index - move.gap#1) + " was shaken out of the module but is called" }
 	index + move.shift
 }
 def shifted(shift: int): Move { Move(shift, {}) }

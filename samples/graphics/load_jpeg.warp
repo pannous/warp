@@ -1,0 +1,9 @@
+#!/usr/bin/env warp
+// Load a JPEG, make it gray, blur it, cut out its middle and show the result. The photo is a baseline JPEG, as
+// cameras and most programs write them; lib/image.warp reads it in plain warp.
+use image
+
+photo = image(./photo.jpg)
+print "the photo is ${photo.width}×${photo.height}"
+middle = photo.grayed().blurred(1).cropped(40, 30, 80, 60)
+middle.show()
