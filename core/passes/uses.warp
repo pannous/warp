@@ -239,10 +239,15 @@ declarations_used(statements: list, folder: text, seen: list, claimed: map): lis
 }
 
 # a used file's parse, parsed again each compile: keeping parses across runs saved about 1 % (card kept-values-retire)
+# (each file parsed once for all its readers, kept with the text it was parsed from: a host compiling again after an
+# edit, the repl or the page, parses the new text)
+global file_trees = {}
 file_parsed(file: text): Node := {
 	source = file_text(file)
 	if source is ø { raise working_relative(file) + ": no such file to use" }
-	with_imports_as_uses(checked_parse(file, without_primitive_mark(source)))
+	kept = file_trees.get(file)
+	if kept == ø or kept#1 != source { file_trees[file] = [source, with_imports_as_uses(checked_parse(file, without_primitive_mark(source)))] }
+	file_trees[file]#2
 }
 # a used file's tree; one that does not parse is the error naming the file, never a file of no declarations (card
 # unclosed-core: an unclosed ( in a core file hid its later definitions)
