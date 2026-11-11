@@ -450,7 +450,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	# (and the classes the linked words reached so far reach, a used module's reaching the prelude's: their bodies,
 	# declared only, say none of it)
 	wanted += linked_classes_reached.keys
-	reaches = module.linked_reach
+	reaches = linked_reaches()
 	linked_classes = linked_class_set()
 	uses = ø
 	origins = {}
