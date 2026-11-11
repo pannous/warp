@@ -103,9 +103,6 @@ operator ← := <-
 operator ⟵ := <-
 operator ⬅ := <-
 operator ⭠ := <-
-// x↑n, Knuth's up arrow, is the power (card easy-add); here, not in the prelude, because a power links big_numbers
-// (card runtime-bridge-slots): an operator of numbers only, another type declares its own `infix operator ↑(v: V, n: int)`
-infix operator ↑(x: number, n: number) := x ^ n
 operator ⬆ := ↑
 operator ⇧ := ↑
 operator ⭡ := ↑
