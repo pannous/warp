@@ -327,14 +327,14 @@ modules_in_build_order(): list := in_dependency_order(built_first() + library_mo
 modules_planned(folder: text) := {
 	write_library_index(folder)
 	names = modules_in_build_order()
-	print "library\t" + texts_hash(names.map(name => definition_heads(std_module_text(name))))
+	print "library\t" + texts_hash(names.map(name => first_lines_of_definitions(std_module_text(name))))
 	before = []
 	for name in names {
 		print name + "\t" + before.filter(other => other in built_first() or other in modules_used_by(name)).join(" ") + "\t" + texts_hash(built_of_texts(name))
 		before += [name]
 	}
 }
-definition_heads(source: text): text := definition_slices(source).map(slice => slice#2.split("\n")#1).join("\n")
+first_lines_of_definitions(source: text): text := definition_slices(source).map(slice => slice#2.split("\n")#1).join("\n")
 # what a caught refusal says: a text raised, else the message of the error caught (a trap under the try)
 refusal_said(refusal: any): text := {
 	if refusal is text { return refusal }
