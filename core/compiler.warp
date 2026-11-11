@@ -261,6 +261,9 @@ global module_written = ""
 global module_written_folder = ""
 # whether a compile links the modules it uses: a `warp build` compiles them in, what it builds stands alone
 global modules_linked = yes
+# a compile with --fast (the compiler's own build, card compiler-without-big-numbers): every int + - * wraps at 64
+# bits, as in a fast function, so the compile links no big int
+global fast_ints = run_option("fast") != ø
 write_module(name: text, runtime_file: text, file: text) := module_written_behind(name, read_bytes(runtime_file), file)
 module_written_behind(name: text, runtime, file: text) := {
 	module_written = name

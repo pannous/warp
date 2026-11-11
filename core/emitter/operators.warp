@@ -210,7 +210,8 @@ def tested_as(symbol: text, test: TypedCode): TypedCode := if symbol.starts_with
 # operators without one take the floats
 grown_words = {"+": "grown_sum", "-": "grown_difference", "*": "grown_product"}
 # `a + b`, `a - b`, `a * b` of two ints (decision nat-and-int): a whole number may grow past 64 bits, so the grown
-# words give it boxed, a big int past i64; two fast ints wrap as wasm's i64, as do the runtime's own words
+# words give it boxed, a big int past i64; two fast ints wrap as wasm's i64, as do the runtime's own words and every int
+# of a --fast compile
 def arithmetic(body: Body, symbol: text, left: Node, right: Node): TypedCode {
 	a = expression_code(body, left)
 	b = expression_code(body, right)
@@ -237,7 +238,7 @@ boxed_int_slot(body: Body, n: Node): bool := n is symbol and name_of(n) in body.
 int_member_slot(body: Body, n: Node): bool := boxed_int_slot(body, n) or (n is symbol and name_of(n) in body.int_members)
 unboxed_int_slot(body: Body, n: Node, value: TypedCode): TypedCode := if value.kind == ValueKind.Node and boxed_int_slot(body, n) then TypedCode(ValueKind.Int, converted(value, ValueKind.Int)) else value
 # a literal beside a fast int takes the int side: `i + 1` of a counter wraps
-wraps(body: Body, left: Node, right: Node): bool := body.function.is_runtime or (fast_int(body, left) and fast_int(body, right)) or (left is number and fast_int(body, right)) or (right is number and fast_int(body, left))
+wraps(body: Body, left: Node, right: Node): bool := body.function.is_runtime or fast_ints or (fast_int(body, left) and fast_int(body, right)) or (left is number and fast_int(body, right)) or (right is number and fast_int(body, left))
 # a fast int: a variable, parameter or global declared int (a loop's counter is), a call of a function declared int, `#xs`, + - * of fast ints
 fast_int(body: Body, n: Node): bool := {
 	if n is symbol { return declared_int(body, name_of(n)) }
