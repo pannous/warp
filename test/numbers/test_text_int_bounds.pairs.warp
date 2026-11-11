@@ -2,6 +2,6 @@
 '"9223372036854775807" as int'	9223372036854775807
 '("9223372036854775807" as int) is int'	yes
 '("-9223372036854775808" as int) is int'	yes
-'"9223372036854775808" as int'	error	a text spells an int only up to 64 bits
-'"-9223372036854775809" as int'	error	a text spells an int only up to 64 bits
-'int("1267650600228229401496703205376")'	error	a text spells an int only up to 64 bits
+'"9223372036854775808" as int'	error	too big for int
+'"-9223372036854775809" as int'	error	too big for int
+'int("1267650600228229401496703205376")'	error	too big for int
