@@ -386,4 +386,8 @@ case $which in
 	both) one warp || result=$?; [ $result = 1 ] || one warp-self check ;;
 esac
 [ $result = 0 ] && [ -f "$compilers/warp.wasm" ] && [ -f "$store/$hash/warp.wasm" ] && mark_main
+# the modules the build refused to prebuild, each an empty file: compiled from source with every program using them
+# (its build log says why), said on every run, a reused build's too (card whole-wasm-reads)
+not_prebuilt=$(cd "$compilers/modules" 2>/dev/null && find . -name '*.wasm' -empty | sed 's|^\./||; s|\.wasm$||' | sort | tr '\n' ' ')
+[ -n "$not_prebuilt" ] && echo "rebuild.sh: not prebuilt, compiled from source with each program using them: $not_prebuilt" >&2
 exit $result

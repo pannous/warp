@@ -134,7 +134,7 @@ MODULES_FOLDER = "modules"
 # where a module's prebuilt image is: the program's own module's, a standard module's in the folder; "" for a module
 # the rebuild no longer prebuilds, whose file may linger there (reals.wasm after 827309223b: math linked it and was
 # refused, card stale-module-wasm), so it is compiled from its source
-prebuilt_path(name: text, folder: text): text := own_module_wasm.get(name) ?? (if name in std_module_names then folder + name + ".wasm" else "")
+prebuilt_path(name: text, folder: text): text := own_module_wasm.get(name) ?? (if is_prebuilt_module(name) then folder + name + ".wasm" else "")
 linked_libraries(source: text): list := {
 	linked_signatures = {}
 	folder = linked_modules_folder()
@@ -280,13 +280,12 @@ module_written_behind(name: text, runtime, file: text) := {
 	write_bytes(file, with_signature(linked_bytes(module.order, MODULE_START), name, image_fields(module.order)))
 }
 MODULE_START = "warp/start"
-# every standard module (rewrites.warp std_module_names) as <name>.wasm in the folder, each after the modules it uses
-# (it links them), all behind the one runtime read once. One refusing to
-# prebuild keeps an empty file, never an older build linked in its place. A module calling C by its foreign lines
-# (`… from "c"`) may refuse to compile and stays compiled from source with the program; any other refusal fails the
-# rebuild, naming the module and why (decision prebuild-fails-loudly): one that won't link the modules it uses, and
-# any of lib/host/, which the native driver links itself and no program compiles (card empty-native-host: native_host
-# linked an older callbacks.wasm, was left empty, and every window, paint and sound run failed while hello passed)
+# every module of lib/ (library.warp library_modules) as <name>.wasm in the folder, each after the modules it uses
+# (it links them), all behind the one runtime read once. One refusing to prebuild keeps an empty file, never an older
+# build linked in its place: it is said here and in rebuild.sh's summary, and compiled from its source with the
+# programs using it (user OK 11-11, whole-wasm-reads). A refusal of lib/host/ fails the rebuild, naming the module and
+# why: the native driver links those itself and no program compiles them (card empty-native-host: native_host linked
+# an older callbacks.wasm, was left empty, and every window, paint and sound run failed while hello passed)
 write_modules(folder: text, runtime_file: text) := {
 	modules_rewritten = yes
 	write_library_index(folder)
@@ -295,13 +294,12 @@ write_modules(folder: text, runtime_file: text) := {
 	# (the prelude first, every module links it; then the runtime modules: any module's power links big_numbers, though
 	# it writes no `use` of it)
 	first = [PRELUDE_MODULE] + hooks().runtime_modules
-	for name in in_dependency_order(first + std_module_names.filter(name => name not in first)) {
+	for name in in_dependency_order(first + library_modules().filter(name => name not in first)) {
 		file = folder + "/" + name + ".wasm"
 		try { module_written_behind(name, runtime, file) } catch refusal {
 			write_bytes(file, [])
 			said = refusal_said(refusal)
-			compiled_with_program = #c_declarations_in(std_module_text(name)) > 0 and not is_host_module(name) and not said.contains(" won't link: ")
-			if compiled_with_program { print name + ".wasm not prebuilt (it calls C, compiled with the program): " + said } else { refused += [name + ".wasm: " + said] }
+			if is_host_module(name) { refused += [name + ".wasm: " + said] } else { print name + ".wasm not prebuilt (compiled from its source with the program): " + said }
 		}
 	}
 	if #refused > 0 { raise "standard modules that don't prebuild: " + refused.join("; ") }
