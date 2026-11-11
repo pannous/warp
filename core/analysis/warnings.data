@@ -1,5 +1,8 @@
 # The warnings of the warp compiler (core/diagnostics.warp): pattern TAB message, the first match wins
 
+# a function changing the items or fields of what it is given is named with ! (extensions/mutation_marks.warp, user
+# decision 11-11 scope B, card param-mutation-rules)
+unmarked_mutation($name, $parameter, $write)	"{name} changes {parameter}, which it is given ({write}): a function that changes what it is given is named with !"	"{name}!"
 # a whole number known when compiling that misfits an int, i64, which wraps it (extensions/int_misfits.warp,
 # night decision int-wrap-declarations)
 int_misfit($code)	"`{code}` does not fit an int (i64): it wraps"	"declare nat or number to keep it"

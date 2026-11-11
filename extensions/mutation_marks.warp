@@ -1,0 +1,27 @@
+# A function that changes the items or fields of what it is given, `p.at += 1`, `xs#2 = 0`, `xs[1] = 0`, is named
+# with `!`, `advance!(p)`, `qs!(xs, lo, hi)` (user decision 11-11, scope B, card param-mutation-rules); rebinding a
+# parameter, `xs = …`, changes nothing it was given. A warning until the compiler's own source is clean, then a
+# refusal; its message is in core/analysis/warnings.data. A `!` head, `qs!(xs) := …`, is no call head: definition_of
+# passes it by
+
+unmarked_mutation(n: Node, program: Node) := {
+	parts = definition_of(without_mark(n))
+	if parts == ø { return ø }
+	given = parts.parameters.map(parameter_name).filter(name => name != "")
+	write = nodes_in(parts.body).find(part => part is key and op_of(part) in assigning_operators and changed_part_of(key_of(part)) in given)
+	if write == ø { return ø }
+	diagnose(call_of("unmarked_mutation", [parts.name, changed_part_of(key_of(write)), "${without_mark(key_of(write))}"]), write)
+}
+# the variable whose part a write changes: p of `p.at` and of `p.items#2`, xs of `xs#2` and `xs[1]`; "" for a write
+# of a variable itself
+changed_part_of(target: Node): text := {
+	plain = without_mark(target)
+	if is_key(plain, Op.Dot) or is_key(plain, Op.Hash) then root_variable(key_of(plain)) else ""
+}
+root_variable(n: Node): text := {
+	plain = without_mark(n)
+	if is_key(plain, Op.Dot) or is_key(plain, Op.Hash) { return root_variable(key_of(plain)) }
+	if plain is symbol then name_of(plain) else ""
+}
+
+mutation_marks_extension = Extension{name: "mutation_marks", lints: [unmarked_mutation]}
