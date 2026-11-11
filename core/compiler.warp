@@ -299,15 +299,14 @@ MODULE_START = "warp/start"
 # programs using it (user OK 11-11, whole-wasm-reads). A refusal of lib/host/ fails the rebuild, naming the module and
 # why: the native driver links those itself and no program compiles them (card empty-native-host: native_host linked
 # an older callbacks.wasm, was left empty, and every window, paint and sound run failed while hello passed)
-write_modules(folder: text, runtime_file: text) := {
+# Named, only those, the index left as the plan wrote it: scripts/lib/modules.sh builds them so, each when the modules it
+# waits for are written (modules_planned)
+write_modules(folder: text, runtime_file: text, named: list) := {
 	modules_rewritten = yes
-	write_library_index(folder)
+	if #named == 0 { write_library_index(folder) }
 	runtime = read_bytes(runtime_file)
 	refused = []
-	# (the prelude first, every module links it; then the runtime modules: any module's power links big_numbers, though
-	# it writes no `use` of it)
-	first = [PRELUDE_MODULE] + hooks().runtime_modules
-	for name in in_dependency_order(first + library_modules().filter(name => name not in first)) {
+	for name in (if #named > 0 then named else modules_in_build_order()) {
 		file = folder + "/" + name + ".wasm"
 		try { module_written_behind(name, runtime, file) } catch refusal {
 			write_bytes(file, [])
@@ -317,6 +316,25 @@ write_modules(folder: text, runtime_file: text) := {
 	}
 	if #refused > 0 { raise "standard modules that don't prebuild: " + refused.join("; ") }
 }
+# (the prelude first, every module links it; then the runtime modules: any module's power links big_numbers, though
+# it writes no `use` of it)
+built_first(): list := [PRELUDE_MODULE] + hooks().runtime_modules
+modules_in_build_order(): list := in_dependency_order(built_first() + library_modules().filter(name => name not in built_first()))
+# the modules step as a plan, for scripts/lib/modules.sh to build the modules in parallel (user OK 11-11,
+# lazy-module-prebuild): the library index written into the folder, then `library ⇥ <hash>` of what each module's
+# build reads of every other (each definition's head: open_words extended_elsewhere), then each module in build order,
+# `<name> ⇥ <the modules it waits for> ⇥ <the hash of the texts it is built of>`
+modules_planned(folder: text) := {
+	write_library_index(folder)
+	names = modules_in_build_order()
+	print "library\t" + texts_hash(names.map(name => definition_heads(std_module_text(name))))
+	before = []
+	for name in names {
+		print name + "\t" + before.filter(other => other in built_first() or other in modules_used_by(name)).join(" ") + "\t" + texts_hash(built_of_texts(name))
+		before += [name]
+	}
+}
+definition_heads(source: text): text := definition_slices(source).map(slice => slice#2.split("\n")#1).join("\n")
 # what a caught refusal says: a text raised, else the message of the error caught (a trap under the try)
 refusal_said(refusal: any): text := {
 	if refusal is text { return refusal }
@@ -331,7 +349,8 @@ match command {
 	"compile": compile_file(args#2, if #args > 2 then args#3 else args#2 + ".wasm", folder_of(args#2))
 	"runtime": write_runtime(if #args > 1 then args#2 else RUNTIME_WASM)
 	"module": write_module(args#2, if #args > 2 then args#3 else RUNTIME_WASM, if #args > 3 then args#4 else args#2 + ".wasm")
-	"modules": write_modules(args#2, if #args > 2 then args#3 else RUNTIME_WASM)
+	"modules": write_modules(args#2, if #args > 2 then args#3 else RUNTIME_WASM, args[3 ..])
+	"modules-plan": modules_planned(args#2)
 	"optimize": trim(args#2, args#3, "optimize")
 	# a native warp from before rebake was dropped still asks, and skips its second compile when the answer is yes
 	# (decision rebake-tables, removed: nothing is baked)

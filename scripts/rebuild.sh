@@ -279,18 +279,44 @@ reused_stored() {
 	echo "rebuild step runtime" >"$log"
 	modules_step_starts "$store/code/$code_hash"
 	if ! (cd "$tree" && rm -f "$compilers/runtime.wasm.cwasm" && "$warp" --lib "$lib" "$new" runtime "$compilers/runtime.wasm" &&
-		"$warp" --lib "$lib" "$new" modules "$compilers/modules" "$compilers/runtime.wasm") >>"$log" 2>&1; then
+		modules_built "$warp" "$lib" "$new" "$compilers/modules" "$compilers/runtime.wasm") >>"$log" 2>&1; then
 		rm -rf "$new" "$new".* "$(modules_marked)"
 		return 2
 	fi
 	modules_step_kept
-	local part
-	for part in "" .driver.cwasm .driver.cwasm.key .driver.build.cwasm .driver.build.cwasm.key; do
-		[ -f "$new$part" ] && mv -f "$new$part" "$file$part"
-	done
-	companion_copied "$new" "$file" && rm -rf "$new.library"
+	compiler_moved "$new"
 	inputs_line >"$file.inputs"
 	code_kept
+}
+# compiler_moved <built>: a compiler built aside, with its machine code and library, moved to lib/warp.wasm
+compiler_moved() {
+	local part
+	for part in "" .driver.cwasm .driver.cwasm.key .driver.build.cwasm .driver.build.cwasm.key; do
+		[ -f "$1$part" ] && mv -f "$1$part" "$file$part"
+	done
+	companion_copied "$1" "$file" && rm -rf "$1.library"
+}
+# the modules step of a build stopped after the runtime (`warp rebuild pure … to runtime`), on its warp.wasm.new: the
+# modules built in parallel in build slots (modules_built), then that compiler moved into place; a native warp that
+# knows no `to` built them itself and moved it already
+modules_step() {
+	local log=$1 record=$2 new=$compilers/warp.wasm.new
+	[ -f "$new" ] || return 0
+	echo "rebuild step modules" >>"$log"
+	(cd "$tree" && "$scripts/build-slot.sh" "$log" /usr/bin/time -p -o "$record/modules.time" bash "$scripts/lib/modules.sh" modules_built "$warp" "$lib" "$new" "$compilers/modules" "$compilers/runtime.wasm") || return
+	step_recorded "$record" "$record/modules.time"
+	compiler_moved "$new"
+}
+# step_recorded <record> <its time>: a step run after the measured build added to its record: its time and CPU to the
+# build's (time), and its start (steps), which the vitals page's build times read
+step_recorded() {
+	local record=$1 timed=$2 end
+	[ -f "$record/time" ] && [ -f "$record/steps" ] && [ -f "$timed" ] || return 0
+	awk 'NR == FNR { added[$1] = $2; next } $1 in added { printf "%s %.2f\n", $1, $2 + added[$1]; next } { print }' "$timed" "$record/time" >"$record/time.new" && mv "$record/time.new" "$record/time"
+	end=$(awk '$1 == "end" { print $2 }' "$record/steps")
+	sed_in_place '/^end /d' "$record/steps"
+	printf 'modules %s\nend %s\n' "$end" "$(awk -v end="$end" '$1 == "real" { printf "%d", end + $2 }' "$timed")" >>"$record/steps"
+	rm -f "$timed"
 }
 # published <name>: lib/<name>.wasm and its companions into the store
 published() {
@@ -353,15 +379,17 @@ one() {
 		lock_taken "$(code_lock)" && break
 		lock_waited "$(code_lock)" "$name"
 	done
+	[ "$name" = warp ] && lane=(pure to runtime)  # the modules after, in parallel (modules_step)
 	[ "$name" = warp-self ] && lane=(self)
 	from=$(resumed_step "$name")
-	[ -n "$from" ] && lane=(pure from "$from")  # the compilers alone: a bare `warp rebuild` goes on to the native warp
+	[ -n "$from" ] && lane=(pure from "$from" to runtime)  # the compilers alone: a bare `warp rebuild` goes on to the native warp
 	logged "$name" "miss-building${from:+-from-$from}"
 	[ "$name" = warp-self ] && compiler_warmed
 	: >"$log"
 	[ "$name" = warp ] && modules_step_starts "$store/main"
 	(cd "$tree" && WARP_COMPILER_STORE=$store WARP_BUILD_RECORD=$record "$scripts/build-slot.sh" "$log" "$warp" --lib "$lib" --seed "$WARP_SEED" rebuild "${lane[@]}")
 	status=$?
+	[ $status = 0 ] && [ "$name" = warp ] && { modules_step "$log" "$record"; status=$?; }
 	[ $status != 0 ] && { rm -f "$(modules_marked)"; build_failed "$name" "$log" $status; return 1; }
 	[ "$name" = warp ] && modules_step_kept
 	[ -f "$file" ] || { cat "$log" >&2; released "$name"; echo "rebuild.sh: warp rebuild wrote no $file" >&2; return 1; }

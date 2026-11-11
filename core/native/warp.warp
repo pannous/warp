@@ -16,7 +16,7 @@
 #   warp app [check] …    lib/app/command.warp: a markup program's page in the system's web view
 #   warp repl|start       the console: each line a module of its own, linked to the earlier lines' kept instances
 #   warp rebuild [pure]   warp.wasm built anew from lib/ by the seed (rebuilt)
-#   warp rebuild from <step>  the same from that step on (seed, optimize, runtime, modules)
+#   warp rebuild from <step>  the same from that step on (seed, optimize, runtime, modules); pure … to <step>: through it
 #   warp rebuild self     warp.wasm promoted to warp-self.wasm once it compiles itself (promoted)
 #   warp rebuild seed     the seed's machine code made (seed_shipped)
 #   warp <words…>         warp.wasm with the words: its own command (core/commands/commands.warp and extensions/commands/commands.warp), any
@@ -147,7 +147,8 @@ rebuilt(first: text, last: text): nothing := {
 	if step_runs("native", start, end) {
 		file_ran(native_builder, words(native_builder, "build", "native", joined(library, "/compiler/native/warp.warp"), "", ""))
 	}
-	if compiled {
+	# (a rebuild stopped before the modules leaves warp.wasm.new for the one that goes on: scripts/rebuild.sh)
+	if compiled and end >= step_number("modules") {
 		machine_code_moved(built, compiler_path())
 		companion_moved(companion_library(built), companion_library(compiler_path()))
 		rename(c_string(built), c_string(compiler_path()))
@@ -285,14 +286,14 @@ copied(from: text, to: text): nothing := {
 	rename(c_string(aside), c_string(to))
 }
 # `warp rebuild [pure] [from <step>] | self | seed`, its word at `at`: bare, every step through native; pure, the
-# compilers alone (through modules)
+# compilers alone (through modules, or `to <step>`: scripts/rebuild.sh builds the modules itself, in parallel)
 rebuild_command(at: int): nothing := {
 	which = if arg_count() > at + 1 then arg(at + 1) else ""
 	if which.length == 0 { return rebuilt("", "native") }
 	if same_text(which, "from") { return rebuilt(step_given(at + 2), "native") }
 	if same_text(which, "pure") {
-		pure_from = arg_count() > at + 2 and same_text(arg(at + 2), "from")
-		return rebuilt(if pure_from then step_given(at + 3) else "", "modules")
+		last = step_after("to", at + 2)
+		return rebuilt(step_after("from", at + 2), if last.length > 0 then last else "modules")
 	}
 	if same_text(which, "self") { return promoted() }
 	if same_text(which, "seed") { return seed_shipped() }
@@ -301,6 +302,15 @@ rebuild_command(at: int): nothing := {
 }
 # the step named at `at`, the first one when none is
 step_given(at: int): text := if arg_count() > at then arg(at) else ""
+# the step after the word among the arguments from `at` on (`warp rebuild pure from runtime to runtime`), "" without it
+step_after(word: text, at: int): text := {
+	place = at
+	while place + 1 < arg_count() {
+		if same_text(arg(place), word) { return arg(place + 1) }
+		place = place + 1
+	}
+	""
+}
 # the seed, the compiler that compiles compiler.warp: --seed <file>, else warp-seed.wasm beside this executable (as invoked,
 # then where its links lead), else beside the installed warp, the first on $PATH: a tree's core/native/warp has none
 # beside it (card tree-seed-lookup); none found names the one beside this executable
