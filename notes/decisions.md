@@ -23,7 +23,7 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 ---
 
 ## Inbox
-- 2026-11-11 mutating-needs-bang: a function may change the caller's data (items or fields of a parameter) only when its name ends in `!` (operators are exempt); the compiler enforces it (warning first, refusal once the sources are clean).
+- 2026-11-11 mutating-needs-bang (parked): `!` on a function that changes what it is given is only a hint for readers where it is not clear; the compiler does not enforce it (almost any function modifies something).
 - 2026-11-11 self-contained-executables: `warp build` makes an executable that carries the runtime and prelude it needs and reads no lib/.
 - 2026-11-11 whole-arrow: `↑` takes whole exponents only (refusal names `^`); the compiler itself carries no big numbers (`--fast` compile argument wraps its ints).
 - 2026-11-11 page-runs-live: an animating page run lives until the next Run or Stop, as natively.
