@@ -9,7 +9,7 @@ def add(a, b) := vec(a.x + b.x, a.y + b.y, a.z + b.z)
 def sub(a, b) := vec(a.x - b.x, a.y - b.y, a.z - b.z)
 def mul(v, s) := vec(v.x * s, v.y * s, v.z * s)
 def dot(a, b) := a.x * b.x + a.y * b.y + a.z * b.z
-def length(v) := sqrt(dot(v, v))
+def length(v) := √dot(v, v)
 def normalize(v) := mul(v, 1.0 / length(v))
 
 type Sphere { center: Vec3, radius: float, color: Vec3 }
@@ -22,7 +22,7 @@ def intersect(ray, sphere) {
 	c = dot(oc, oc) - sphere.radius * sphere.radius
 	disc = b * b - 4 * a * c
 	if disc < 0 { return - 1.0 }
-	return (-b - sqrt(disc)) / (2.0 * a)
+	return (-b - √disc) / (2.0 * a)
 }
 
 # Scene setup

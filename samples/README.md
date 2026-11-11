@@ -16,7 +16,7 @@ These samples compile and run successfully:
 - **power.warp** - Exponentiation using recursion
 - **collatz.warp** - Collatz conjecture sequence
 - **ackermann.warp** - Ackermann function (recursive)
-- **quadratic.warp** - Quadratic formula with sqrt
+- **quadratic.warp** - Quadratic formula with √
 - **fizzbuzz.warp** - Classic FizzBuzz problem
 
 ## 🔧 Feature Requirements
