@@ -1,0 +1,51 @@
+# from test_type_compared_with_text.rs: edit the Rust test, then run the script again
+
+# type_compared_with_text_stays_no
+'x=3; type(x) == "int"'	0
+'x=3; type(x) == nat'	1
+'x=3; "" + type(x) == "int"'	0
+
+# from test_type_of.rs: edit the Rust test, then run the script again
+
+# test_type_as_a_method
+'x=3; x.type == type(x)'	true
+'e = {type: "click"}; e.type'	'click'
+
+# test_type_without_parentheses
+'type Point { x: int }; p = Point(1); p.x'	1
+
+# test_type_of_a_name_without_parentheses
+'type Shape; 5'	5
+
+# from test_type_of_consistency.rs: edit the Rust test, then run the script again
+
+# test_type_of_a_user_function
+'def a(x):=x; type of a'	'function: (x) -> int'
+'f:=it*2; type of f'	'function: (it) -> int'
+
+# test_type_of_a_library_function
+'use math; type of gcd'	'function: (a: int, b: int) -> int'
+
+# test_type_of_a_parameterless_function_calls_it
+
+# from test_type_value_name.rs: edit the Rust test, then run the script again
+
+# the_name_of_a_type_is_its_word
+'type(3).name'	'nat'
+'t = type("ab"); t.name'	'text'
+'f(x: any) := type(x).name; f([])'	'list'
+'f(x: any) := type(x).name; f(3)'	'nat'
+
+# from test_type_word_user_function.rs: edit the Rust test, then run the script again
+
+# a_function_with_another_name_is_no_clash
+'twice := it*2; twice 4'	8
+'square(x) := x*x; square(4)'	16
+
+# the_type_word_still_casts_without_a_definition
+# triage-held 2026-11-06: Java type words double/long as functions :: 'double 4'	4.0
+# triage-held 2026-11-06: Java type words double/long as functions :: 'x=4; double(x)'	4.0
+
+# the_number_dot_form_calls_a_user_function
+'square(x):=x*x; 4.square'	16
+'square(x):=x*x; 4.square()'	16

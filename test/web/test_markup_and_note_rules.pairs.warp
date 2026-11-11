@@ -1,6 +1,0 @@
-# Markup and notes: a handler after a comma in a tag, note values (wiki html, sound;
-# decisions markup-handler-comma, note-value)
-'str(note(C4))'	"C4"
-'str(note(445Hz))'	"A4+20c"
-'C4 * 2 > 523'	yes
-'count = 0; html{ button{ "+1", on click { count += 1 } } }; 1'	1

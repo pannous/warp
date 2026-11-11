@@ -1,0 +1,29 @@
+# from test_empty_items.rs: edit the Rust test, then run the script again
+
+# an_empty_item_reads_as_empty_in_the_text_of_a_list
+'xs = [1, ø]; str(xs)'	'[1, ø]'
+
+# from test_empty_list_argument.rs: edit the Rust test, then run the script again
+
+# a_function_receives_the_empty_list
+'f(x):=count(x); f([])'	0
+'both(a,b):=count(a)+count(b); both([],[7 8])'	2
+'both(a,b):=count(a)+count(b); both([7 8],[])'	2
+
+# an_empty_list_inside_a_list_is_an_item
+'count([[] 1])'	2
+
+# from test_empty_list_kept.rs: edit the Rust test, then run the script again
+
+# an_empty_list_passed_or_returned_is_not_nothing_itself
+'f(n: any) := n === ø; f([])'	false
+'f(n: any) := n !== ø; f([])'	true
+'f(n: any) := n === ø; f(ø)'	true
+'g(): any := { return [] }; type(g())'	'list'
+
+# from test_empty_results.rs: edit the Rust test, then run the script again
+
+# an_empty_result_is_a_list
+'xs = [1, 2]; type(xs[0..<0])'	'list'
+'xs = [1]; xs.pop(); type(xs)'	'list'
+'xs = [1, 2]; xs[0..<0] == ø'	false

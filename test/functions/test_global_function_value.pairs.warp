@@ -1,3 +1,0 @@
-'global f = ø; setf(g) := { f = g }; setf(x => x * 2); f(21)'	42
-'global f = ø; f = x => x * 2; f(21)'	42
-'global f = x => x * 2; h() := f(21); h()'	42
