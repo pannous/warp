@@ -278,14 +278,19 @@ import collections, json, os, re, sys
 # menu (test_in_browser.py HOST_LINE)
 NOT_IN_PAGE = re.compile(r"^# host: (native|none)\b", re.M)
 # the authors' working notes stay in the source but not on the page: a comment holding TODO or DONE (or a `# todo`) is
-# left out, the whole line when it is a comment, else from its `#` or `//` on
+# left out, the whole line when it is a comment, else from its `#` or `//` on; a comment line that starts with the
+# marker opens a note block, which runs on through the comment lines after it, up to a blank line or code
 WORK_NOTE = re.compile(r"(?:^|\s)(?:#|//)(?:(?!\s#|\s//).)*?(?:\b(?:TODO|DONE)\b|(?:(?<=#)|(?<=//))\s*todo\b).*$")
+NOTE_BLOCK = re.compile(r"^\s*(?:#|//)\s*(?:TODO|DONE|todo)\b")
+COMMENT_LINE = re.compile(r"^\s*(?:#|//)")
 # and our card and decision keys, `(card finger-paint-slow)`: a reader gets the rule, never our bookkeeping
 KEY_ASIDE = re.compile(r"\s*\((?:card|decision)s? [a-z0-9]+(?:-[a-z0-9]+)+[^)]*\)")
 def shown(source):
 	if not any(WORK_NOTE.search(line) or KEY_ASIDE.search(line) for line in source.splitlines()): return source
-	kept = []
+	kept, in_block = [], False
 	for line in map(lambda line: KEY_ASIDE.sub("", line), source.splitlines()):
+		in_block = bool(NOTE_BLOCK.match(line)) or (in_block and bool(COMMENT_LINE.match(line)))
+		if in_block: continue
 		note = WORK_NOTE.search(line)
 		before = line[:note.start()].rstrip() if note else line
 		if before or not note: kept.append(before)
