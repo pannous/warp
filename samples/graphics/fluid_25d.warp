@@ -24,23 +24,22 @@ high = if windowless() then 108 else 360
 frame_i = 0
 fields = gpu_fields(wide, high, ["velocity", "density", "temperature", "pressure", "divergence"])
 
+pillar = "values.mode > 1.5 && dot(uv - vec2f(0.50, 0.42), uv - vec2f(0.50, 0.42)) < 0.016"
+fragment(body) := "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {\n" + body + "\n}\n"
 sim = '
 fn blocked(uv: vec2f) -> bool {
 	let edge = uv.x < 0.012 || uv.y < 0.012 || uv.x > 0.988 || uv.y > 0.988;
-	let pillar = values.mode > 1.5 && dot(uv - vec2f(0.50, 0.42), uv - vec2f(0.50, 0.42)) < 0.016;
+	let pillar = ' + pillar + ';
 	return edge || pillar;
 }
 '
-advect(name) := sim + '
-@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+advect(name) := sim + fragment('
 	let uv = at.xy / values.size;
 	if (blocked(uv)) { return vec4f(0.0); }
 	let wind = field_velocity(uv).xy;
 	return field_' + name + '(uv - wind * values.dt) * values.keep;
-}
-'
-advect_velocity = sim + '
-@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+')
+advect_velocity = sim + fragment('
 	let uv = at.xy / values.size;
 	if (blocked(uv)) { return vec4f(0.0); }
 	let wind = field_velocity(uv).xy;
@@ -48,16 +47,13 @@ advect_velocity = sim + '
 	let t = values.texel;
 	let blur = (field_velocity(uv + vec2f(t.x, 0.0)).xy + field_velocity(uv - vec2f(t.x, 0.0)).xy + field_velocity(uv + vec2f(0.0, t.y)).xy + field_velocity(uv - vec2f(0.0, t.y)).xy) * 0.25;
 	return vec4f(mix(carried, blur, 0.12) * values.keep, 0.0, 0.0);
-}
-'
-buoyancy = sim + '
-@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+')
+buoyancy = sim + fragment('
 	let uv = at.xy / values.size;
 	if (blocked(uv)) { return vec4f(0.0); }
 	let v = field_velocity(uv).xy;
 	return vec4f(v.x, v.y - field_temperature(uv).x * values.lift, 0.0, 0.0);
-}
-'
+')
 vorticity = sim + '
 fn curl_at(uv: vec2f) -> f32 {
 	let t = values.texel;
@@ -67,7 +63,7 @@ fn curl_at(uv: vec2f) -> f32 {
 	let above = field_velocity(uv - vec2f(0.0, t.y)).x;
 	return 0.5 * ((right - left) - (below - above));
 }
-@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+' + fragment('
 	let uv = at.xy / values.size;
 	if (blocked(uv)) { return vec4f(0.0); }
 	let t = values.texel;
@@ -77,10 +73,8 @@ fn curl_at(uv: vec2f) -> f32 {
 	let len = sqrt(dx * dx + dy * dy) + 0.0001;
 	let force = vec2f(dy, -dx) / len * curl * values.confinement;
 	return vec4f(field_velocity(uv).xy + force, 0.0, 0.0);
-}
-'
-splat = sim + '
-@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+')
+splat = sim + fragment('
 	let uv = at.xy / values.size;
 	if (blocked(uv)) { return vec4f(0.0); }
 	let flame = vec2f(0.50, 0.86);
@@ -106,10 +100,8 @@ splat = sim + '
 	var warmed = select(0.0, hot * 0.6, values.mode < 1.5);
 	if (values.mode > 1.5 && values.frame < 24.0) { warmed = warmed + 0.015; }
 	return vec4f(min(heat.x + warmed, 1.6), 0.0, 0.0, 1.0);
-}
-'
-divergence = sim + '
-@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+')
+divergence = sim + fragment('
 	let uv = at.xy / values.size;
 	let t = values.texel;
 	let right = field_velocity(uv + vec2f(t.x, 0.0)).x;
@@ -117,28 +109,22 @@ divergence = sim + '
 	let below = field_velocity(uv + vec2f(0.0, t.y)).y;
 	let above = field_velocity(uv - vec2f(0.0, t.y)).y;
 	return vec4f(0.5 * (right - left + below - above), 0.0, 0.0, 1.0);
-}
-'
-jacobi = '
-@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+')
+jacobi = fragment('
 	let uv = at.xy / values.size;
 	let t = values.texel;
 	let pressure = field_pressure(uv + vec2f(t.x, 0.0)).x + field_pressure(uv - vec2f(t.x, 0.0)).x + field_pressure(uv + vec2f(0.0, t.y)).x + field_pressure(uv - vec2f(0.0, t.y)).x;
 	return vec4f((pressure - field_divergence(uv).x) * 0.25, 0.0, 0.0, 1.0);
-}
-'
-project = sim + '
-@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+')
+project = sim + fragment('
 	let uv = at.xy / values.size;
 	if (blocked(uv)) { return vec4f(0.0); }
 	let t = values.texel;
 	let gx = field_pressure(uv + vec2f(t.x, 0.0)).x - field_pressure(uv - vec2f(t.x, 0.0)).x;
 	let gy = field_pressure(uv + vec2f(0.0, t.y)).x - field_pressure(uv - vec2f(0.0, t.y)).x;
 	return vec4f(field_velocity(uv).xy - vec2f(gx, gy) * 0.5, 0.0, 0.0);
-}
-'
-shade = '
-@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+')
+shade = fragment('
 	let uv = at.xy / values.size;
 	let t = values.texel;
 	let height = field_density(uv).x;
@@ -179,7 +165,7 @@ shade = '
 	ground = mix(ground, vec3f(0.40, 0.34, 0.26), path);
 	let behind = select(vec3f(0.015, 0.012, 0.018), ground, values.mode > 1.5);
 	var color = mix(behind, body, alpha);
-	let pillar = values.mode > 1.5 && dot(uv - vec2f(0.50, 0.42), uv - vec2f(0.50, 0.42)) < 0.016;
+	let pillar = ' + pillar + ';
 	if (pillar) { color = vec3f(0.22, 0.24, 0.28) * (0.45 + 0.55 * lit); }
 	if (values.mode < 1.5) { color = color + torch * heat * 0.7; }
 	if (values.mode < 1.5) {
@@ -191,8 +177,7 @@ shade = '
 		color = color + vec3f(1.0, 0.92, 0.65) * spark;
 	}
 	return vec4f(color, 1.0);
-}
-'
+')
 
 pointer() := {
 	if windowless() and mode == 2 {
