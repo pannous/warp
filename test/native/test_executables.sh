@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # `warp build` of a GC program writes an executable, the warp-runtime stub carrying its machine code, which prints the
 # program's value and calls C as warp does (texts, handles). Run it with bash test/native/test_executables.sh; the warp
-# under test is WARP (default the warp on PATH), its stub beside it or in WARP_RUNTIME_STUB
+# under test is WARP (default the warp on PATH), its stub beside it
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
 failures=0

@@ -886,7 +886,7 @@ def built_site_wrong(folder=BUILT_SITE_FOLDER, options=(), reloads=False, expect
 	os.makedirs(os.path.dirname(program), exist_ok=True)
 	with open(program, "w") as file:
 		file.write(BUILT_SITE_CODE)
-	built = subprocess.run(["warp", "build", "--site", *options, program], capture_output=True, text=True, env={**os.environ, "WARP_NO_WINDOW": "1"})
+	built = subprocess.run(["warp", "build", "--site", *options, program], capture_output=True, text=True, env={**os.environ, "WARP_WINDOW": "0"})
 	if built.returncode:
 		return [f"warp build --site failed: {(built.stderr or built.stdout).strip()[-300:]}"]
 	browser("open", f"http://127.0.0.1:{PORT}/{folder}/site/index.html")
@@ -1514,7 +1514,7 @@ def check_examples(names, page_url=None, site=None):
 # only the fields the verdict reads: a sample's whole report holds its pictures too, and a full-HD frame (samples/gpu/
 # ringed_planet.warp) as JSON took this process past the dry run's memory cap
 REPORT_FIELDS = ["error", "errors", "message", "value", "html", "printed", "printedWhole", "text", "stream", "paintings", "width", "height"]
-# a sample's timers run this long before its output is taken, as scripts/samples.sh's WARP_EVENTS_FOR has them run
+# a sample's timers run this long before its output is taken, as scripts/samples.sh's --events-for has them run
 # natively (milliseconds)
 SAMPLE_EVENTS_MS = 3500
 START_SAMPLE = """window.sampleReport = undefined; playground.evaluate(%s, %s, { eventsFor: """ + str(SAMPLE_EVENTS_MS) + """ }).then(report => window.sampleReport = JSON.stringify(report, """ + json.dumps(REPORT_FIELDS) + """),

@@ -1,7 +1,7 @@
 #!/bin/bash
 # The Playground workflow's tours (.github/workflows/pages.yml), dry run on pannous.com over SSH: no browser starts on
 # the Mac and a trial run mails nothing. Builds the site here as the workflow does (web/playground/build.sh with the
-# installed warp's lib/, or WARP_LIB), copies it to the server and runs the same tour commands there:
+# installed warp's lib/, or its --lib), copies it to the server and runs the same tour commands there:
 #   scripts/browser-dry-run.sh                     the Chrome and the Firefox tour of the collected site
 #   scripts/browser-dry-run.sh --chrome [name…]    only the Chrome tour · --firefox [name…] only the Firefox one
 #   scripts/browser-dry-run.sh --guide             the guide's snippets (test_in_browser.py --guide), in Chrome

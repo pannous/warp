@@ -1,13 +1,13 @@
 #!/bin/bash
 # scripts/profile.sh [-s <seconds>] [-n <top>] <warp words…>: where one warp run spends its time, by wasm function,
 # each function's own time (its callees' not counted), most first (notes/compile_speed.md "Profiling").
-# The run gets WARP_PROFILE=perfmap, so the native driver writes each compiled function's address range to
+# The run gets --profile, so the native driver writes each compiled function's address range to
 # /tmp/perf-<pid>.map (core/native/driver.warp warp_config); macOS's sample takes the main thread's stacks for <seconds>
 # (else until it ends; asked every millisecond, it took one each ~1.4 ms on a compile), each frame named through
 # that map: a table of own time, one with the callees. The raw sample lands in data/profile/<pid>.sample; `-r <pid>`
 # reports that one again; `-f <function>` counts only the stacks through that function and names its callers (e.g. typed_wasm_module, the
 # emit). Example: scripts/profile.sh -s 60 rebuild pure
-# -a <pid> -o <dir>: attach to a running warp of WARP_PROFILE=perfmap until it ends (scripts/build-slot.sh does, for
+# -a <pid> -o <dir>: attach to a running warp of --profile until it ends (scripts/build-slot.sh does, for
 # every build): <dir>/profile.txt the report, sample.gz the raw sample, perf.map the function map; no output.
 # Its cost (notes/compile_speed.md): no CPU, ~10-15% wall at 1 ms; ATTACHED_SAMPLE_MS keeps a long build's cheaper.
 set -euo pipefail
@@ -34,7 +34,7 @@ if [ -n "$attached" ]; then
 	mkdir -p "$out"
 	run=$attached samples=$out/sample perf_map=$out/perf.map
 	/usr/bin/sample "$run" "$seconds" $ATTACHED_SAMPLE_MS -mayDie -file "$samples" >/dev/null 2>&1 || true
-	cp "/tmp/perf-$run.map" "$perf_map" 2>/dev/null || { echo "profile.sh: no /tmp/perf-$run.map (not WARP_PROFILE=perfmap?)" >"$out/profile.txt"; exit 0; }
+	cp "/tmp/perf-$run.map" "$perf_map" 2>/dev/null || { echo "profile.sh: no /tmp/perf-$run.map (not warp --profile?)" >"$out/profile.txt"; exit 0; }
 	[ -s "$samples" ] || { echo "profile.sh: sample took no stacks of $run" >"$out/profile.txt"; exit 0; }
 	exec >"$out/profile.txt"
 	trap 'gzip -f "$samples"' EXIT
@@ -43,7 +43,7 @@ else
 	run=$reported
 	if [ -z "$run" ]; then
 		[ $# -gt 0 ] || { sed -n '2,12p' "$0" >&2; exit 2; }
-		WARP_PROFILE=perfmap WARP_NO_WINDOW=1 "${WARP_BINARY:-warp}" "$@" >/dev/null &
+		WARP_WINDOW=0 "${WARP_BINARY:-warp}" --profile "$@" >/dev/null &
 		run=$!
 		/usr/bin/sample "$run" "$seconds" 1 -mayDie -file "$samples_kept/$run.sample" >/dev/null 2>&1 || true
 		kill "$run" 2>/dev/null || true

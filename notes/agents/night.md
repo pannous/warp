@@ -26,7 +26,7 @@ How the fleet works while the user sleeps, until the user is back (usually 10:00
 - The full suite runs only in the cloud routine (test/results.txt), day and night.
 - No Rust in the cloud: a cloud box needs no cargo or rustc. It takes the latest release's
   warp-v*-<arch>-unknown-linux-gnu.tar.gz (warp with its wasmtime library) and the seed seed.lock names, then
-  `WARP_LIB=<checkout>/lib warp rebuild`. gh in a cloud session: REST only (`gh api repos/pannous/warp/...`, assets via
+  `warp --lib <checkout>/lib rebuild`. gh in a cloud session: REST only (`gh api repos/pannous/warp/...`, assets via
   `Accept: application/octet-stream`); GraphQL, and with it `gh release download` and the `todo` board CLI, is refused.
 
 ## Morning
