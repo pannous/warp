@@ -12,30 +12,30 @@ alpha_of(with_alpha(blue, 0.5))' 128
 
 # shapes_set_the_pixels_they_cover
 is! 'use draw
-canvas.size(3, 3)
+canvas.resize(3, 3)
 dot(1, 1, red)
 canvas_pixels[4] == red' true
 is! 'use draw
-canvas.size(9, 9)
+canvas.resize(9, 9)
 circle(4.5, 4.5, 2, blue)
 [canvas_pixels[4 * 9 + 4] == blue, canvas_pixels[0]]' [1, 0]
 is! 'use draw
-canvas.size(4, 4)
+canvas.resize(4, 4)
 rect(1, 1, 2, 2, green)
 count(canvas_pixels.filter(p => p == green))' 4
 is! 'use draw
-canvas.size(5, 5)
+canvas.resize(5, 5)
 line(0, 0, 4, 4, black)
 count(canvas_pixels.filter(p => p == black))' 5
 
 # a_color_with_alpha_mixes_with_what_is_below
 is! 'use draw
-canvas.size(1, 1)
+canvas.resize(1, 1)
 clear(white)
 dot(0, 0, with_alpha(black, 0.5))
 canvas_pixels[0] == rgb(127, 127, 127)' true
 is! 'use draw
-canvas.size(1, 1)
+canvas.resize(1, 1)
 clear(red)
 dot(0, 0, with_alpha(blue, 0))
 canvas_pixels[0] == red' true

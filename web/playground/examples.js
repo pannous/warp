@@ -154,7 +154,7 @@ at 9:00 { print "good morning" }
 ticks` },
 	animation: { value: '"done"', canvases: 1, code: `// an animation: each show() draws the next frame
 use draw
-canvas.size(32, 16)
+canvas.resize(32, 16)
 for x in 0..32 {
   clear(canvas)
   circle(x, 8, 4, orange)
@@ -164,7 +164,7 @@ for x in 0..32 {
 "done"` },
 	frames: { value: '"done"', canvases: 1, code: `// without a sleep too: each show() replaces the picture of the same size
 use draw
-canvas.size(32, 16)
+canvas.resize(32, 16)
 for x in 0..32 {
   clear(canvas)
   circle(x, 8, 4, purple)
@@ -184,7 +184,7 @@ for frame in 0..20 {
 "done"` },
 	mouse: { value: '"done"', canvases: 1, code: `// move the mouse over the canvas: the dot follows
 use draw
-canvas.size(48, 24)
+canvas.resize(48, 24)
 for frame in 0..200 {
   clear(canvas)
   circle(mouse_x, mouse_y, 3, if mouse_down then red else blue)

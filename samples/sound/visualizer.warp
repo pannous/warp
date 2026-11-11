@@ -20,7 +20,7 @@ song = melody_samples(tune, 0.25)
 seconds = count(song) / sample_rate
 sound(song)
 
-canvas.size(width, height)
+canvas.resize(width, height)
 shown = [0.0 as float for band in 0..bands]
 peaks = [0.0 as float for band in 0..bands]
 started = clock()

@@ -2,7 +2,7 @@
 // paint (the playground's canvas, natively a PNG). A color is a number 0xAARRGGBB: the color module's (rgb, hsv, the named colors, with_alpha)
 use math
 use color
-// the canvas until canvas.size(width, height) sizes it: show() alone paints this one, the size of the playground's output pane,
+// the canvas until canvas.resize(width, height) sizes it: show() alone paints this one, the size of the playground's output pane,
 // natively 640×480
 global canvas_width: int = view_width
 global canvas_height: int = view_height
@@ -12,7 +12,7 @@ global drawing_on_gpu = gpu_drawing
 global canvas_pixels = blank_pixels(pixels_for(view_width, view_height))
 // the color of the canvas before anything is drawn, as paint shows 0 (rust-harness:src/graphics/pixels.rs PAPER;
 // test_paint_shades): clear(canvas) clears to it
-blank_color = 0xFFFAFAFA as Color
+blank_color = 0xFFFAFAFA
 // paper, the old word for the blank canvas: clear(paper) is clear(canvas)
 paper() := canvas()
 // the pixel a coordinate falls in
@@ -61,7 +61,7 @@ pixels_for(width, height) := if drawing_on_gpu then 0 else width * height
 // `canvas_pixels[4] == red`)
 blank_pixels(count: int) := filled_list(count, 0)
 
-// canvas.size(width, height), also canvas(width, height), sizes the window too (card window-canvas-size), which then
+// canvas.resize(width, height), also canvas(width, height), sizes the window too (card window-canvas-size), which then
 // shows the canvas pixel for pixel
 def canvas(width, height) {
 	canvas_width = width
@@ -70,13 +70,13 @@ def canvas(width, height) {
 	window.width = width
 	window.height = height
 }
-// a window sized apart from the canvas (`window.width = 800` after canvas.size(200, 100)) shows it scaled: said once, a hint
+// a window sized apart from the canvas (`window.width = 800` after canvas.resize(200, 100)) shows it scaled: said once, a hint
 // (on standard error as the page has it too: os's eprint is C's stdio, which no page has)
 global size_difference_said = no
 size_difference_told() := {
 	if size_difference_said or (window.width == canvas_width and window.height == canvas_height) { return ø }
 	size_difference_said = yes
-	hint "the canvas is ${canvas_width}×${canvas_height}, the window ${window.width}×${window.height}: the canvas is shown scaled; canvas.size(w, h) sizes both"
+	hint "the canvas is ${canvas_width}×${canvas_height}, the window ${window.width}×${window.height}: the canvas is shown scaled; canvas.resize(w, h) sizes both"
 }
 // the canvas's size as properties (decision property-accessors): written, it is a new blank canvas, as an HTML canvas is
 canvas.width := canvas_width
@@ -161,12 +161,13 @@ def show() {
 // here: the host draws them again
 class Canvas {
 	format as text := "canvas ${canvas_width}×${canvas_height}"
+	// canvas.resize(width, height): a blank canvas of that size, the window too (not size: a class's size() is its count,
+	// and a free size(…) would take the name from a program's own `size = …`)
+	resize(width: int, height: int) := canvas(width, height)
 }
 // the canvas as drawn so far (decision saved-words): canvas() beside canvas(width, height), so the bare word canvas,
 // its call, is the Canvas
 canvas() := Canvas()
-// canvas.size(width, height): a blank canvas of that size, the window too
-size(made: Canvas, width: int, height: int) := canvas(width, height)
 save(made: Canvas, as file) := {
 	if drawing_on_gpu { draw_shader(shape_shader) }
 	failed = save_picture(painted_pixels(), canvas_width, canvas_height, file)
