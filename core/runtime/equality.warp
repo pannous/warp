@@ -40,7 +40,7 @@ node_equal(a: Node, b: Node): bool := {
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return extended_order(a, b) == 0 }
 	# times: the same form at the same position; any other value besides a number is none of the numbers
 	if kind_code(a) == Kind.Time and kind_code(b) == Kind.Time { return marked_kind(a) == marked_kind(b) and unboxed_int(a) == unboxed_int(b) }
-	if not (numeric_node(a) and numeric_node(b)) { return no }
+	if not (numeric_node(subtype_number(a)) and numeric_node(subtype_number(b))) { return no }
 	float_of_node(a) == float_of_node(b)
 }
 # `a === b` of values known only at run time (decision same-multi-dispatch, emitter operators.warp identity_code): a list,
