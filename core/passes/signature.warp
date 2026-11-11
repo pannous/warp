@@ -67,7 +67,7 @@ texts_listed(fields: map, field: text): list? := if fields.get(field) == ø then
 show_signature(name: text) := {
 	signature = prebuilt_signature(name)
 	if signature == ø { raise name + ": no prebuilt module with a " + SIGNATURE_SECTION + " section" }
-	print "# " + name + ".wasm, built of lib/" + name + module_extension + " " + signature.source + ", using " + (if #signature.uses == 0 then "no module" else signature.uses.join(", ")) + "; ${#signature.rules} rewrite rules, ${#signature.words} words linked"
+	print "# " + name + ".wasm, built of lib/" + name + module_extension + " " + signature.source + ", using " + (if #signature.uses == 0 then "no module" else signature.uses.join(", ")) + ", linking " + (signature.links ?? []).join(", ") + "; ${#signature.rules} rewrite rules, ${#signature.words} words linked"
 	for slice in signature.slices { print slice#2 }
 }
 
