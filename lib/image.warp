@@ -5,6 +5,8 @@
 // other name as a PNG (natively the file, in the playground a download).
 use bits
 use color
+use file
+use jpeg
 use math
 
 class Image { width: int; height: int; pixels: list }
@@ -27,15 +29,15 @@ image(width: int, height: int, pixel: function): Image := Image(width, height, [
 image(width: int, height: int, fill: Color): Image := Image(width, height, filled_list(width * height, fill))
 
 // the pixel at the column and row, counted from 0 at the top left
-at(picture: Image, x: int, y: int): Color := picture.pixels[y * picture.width + x]
+pixel_at(picture: Image, x: int, y: int): Color := picture.pixels[y * picture.width + x]
 
 // the picture changed pixel by pixel: each pixel changed(color) or changed(color, column, row)
-each_pixel(picture: Image, changed: function): Image := image(picture.width, picture.height, (x, y) => changed(at(picture, x, y)))
+each_pixel(picture: Image, changed: function): Image := image(picture.width, picture.height, (x, y) => changed(pixel_at(picture, x, y)))
 // upside down, and left to right
-flipped(picture: Image): Image := image(picture.width, picture.height, (x, y) => at(picture, x, picture.height - 1 - y))
-mirrored(picture: Image): Image := image(picture.width, picture.height, (x, y) => at(picture, picture.width - 1 - x, y))
+flipped(picture: Image): Image := image(picture.width, picture.height, (x, y) => pixel_at(picture, x, picture.height - 1 - y))
+mirrored(picture: Image): Image := image(picture.width, picture.height, (x, y) => pixel_at(picture, picture.width - 1 - x, y))
 // the part of it width × height from the column and row
-cropped(picture: Image, left: int, top: int, width: int, height: int): Image := image(width, height, (x, y) => at(picture, left + x, top + y))
+cropped(picture: Image, left: int, top: int, width: int, height: int): Image := image(width, height, (x, y) => pixel_at(picture, left + x, top + y))
 // each pixel moved toward the color by the amount, 0 none, 1 all the way
 tinted(picture: Image, tint: Color, amount: float = 0.5): Image := each_pixel(picture, color => mix(color, tint, amount))
 // each pixel's brightness as gray, as the eye weighs red, green and blue
@@ -52,7 +54,7 @@ square_mean(picture: Image, x: int, y: int, radius: int): Color := {
 	taken = 0
 	for row in max(0, y - radius) to min(picture.height - 1, y + radius) {
 		for column in max(0, x - radius) to min(picture.width - 1, x + radius) {
-			color = at(picture, column, row)
+			color = pixel_at(picture, column, row)
 			totals = [totals#1 + channel_byte(color, 16), totals#2 + channel_byte(color, 8), totals#3 + channel_byte(color, 0)]
 			taken += 1
 		}
@@ -64,7 +66,7 @@ square_mean(picture: Image, x: int, y: int, radius: int): Color := {
 show(picture: Image) := paint(picture.pixels.map(pixel => pixel as int), picture.width, picture.height)
 // written as the file's name says: a .bmp by this module, any other as a PNG by the host
 save(picture: Image, as file) := {
-	if "${file}".to_lower().ends_with(".bmp") { return write_bytes(file, bmp_bytes(picture)) }
+	if lower("${file}").ends_with(".bmp") { return write_bytes(file, bmp_bytes(picture)) }
 	failed = save_picture(picture.pixels.map(pixel => pixel as int), picture.width, picture.height, file)
 	if failed { raise failed }
 }
@@ -94,16 +96,23 @@ bmp_row_size(width: int, per_pixel: int): int := (width * per_pixel + 3) /! 4 * 
 bmp_bytes(picture: Image): list := {
 	row_size = bmp_row_size(picture.width, 3)
 	size = bmp_file_header + bmp_info_header + row_size * picture.height
-	header = bmp_signature + int_bytes(size, 32, "little") + int_bytes(0, 32, "little") + int_bytes(bmp_file_header + bmp_info_header, 32, "little")
-	info = int_bytes(bmp_info_header, 32, "little") + int_bytes(picture.width, 32, "little") + int_bytes(picture.height, 32, "little") + int_bytes(1, 16, "little") + int_bytes(24, 16, "little") + filled_list(24, 0)
+	written = bmp_signature + little_endian(size, 32) + little_endian(0, 32) + little_endian(bmp_file_header + bmp_info_header, 32)
+	written += little_endian(bmp_info_header, 32) + little_endian(picture.width, 32) + little_endian(picture.height, 32) + little_endian(1, 16) + little_endian(24, 16) + filled_list(24, 0)
 	padding = filled_list(row_size - 3 * picture.width, 0)
-	rows = [bmp_row(picture, picture.height - 1 - y) + padding for y in 0 ..< picture.height]
-	header + info + rows.flat_map(row => row)
+	for y in 0 ..< picture.height {
+		for x in 0 ..< picture.width { written += bmp_channels(pixel_at(picture, x, picture.height - 1 - y)) }
+		written += padding
+	}
+	written
 }
-bmp_row(picture: Image, y: int): list := [bmp_channels(at(picture, x, y)) for x in 0 ..< picture.width].flat_map(channels => channels)
+little_endian(n: int, width: int): list := int_bytes(n, width, "little")
 bmp_channels(color: Color): list := [0, 8, 16].map(shift => channel_byte(color, shift))
 
-jpeg_image(bytes: list): Image := raise "JPEG decoding comes next"
+// a JPEG by lib/jpeg.warp
+jpeg_image(bytes: list): Image := {
+	read = jpeg_pixels(bytes)
+	Image(read[0], read[1], read[2])
+}
 
 // the host words of this module (natively core/native/driver.warp, the playground its JS)
 paint(picture: node, width: int, height: int, values: node) from host
