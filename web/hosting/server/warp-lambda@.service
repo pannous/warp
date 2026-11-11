@@ -7,7 +7,7 @@ After=network-online.target
 
 [Service]
 EnvironmentFile=/var/lib/warp-lambda/programs/%i/env
-Environment=WARP_SERVE_ADDRESS=127.0.0.2 WARP_NO_WINDOW=1 HOME=/var/lib/warp-lambda-data/%i
+Environment=WARP_SERVE_ADDRESS=127.0.0.2 WARP_WINDOW=0 HOME=/var/lib/warp-lambda-data/%i
 ExecStart=/usr/local/bin/warp --sandbox --no-ask --no-hints serve /var/lib/warp-lambda/programs/%i/app.warp ${PORT}
 StandardOutput=truncate:/var/lib/warp-lambda/programs/%i/log
 StandardError=inherit

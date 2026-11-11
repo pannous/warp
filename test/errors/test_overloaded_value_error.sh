@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # A function defined more than once, named as a value, means none of its definitions: the refusal names them and
 # the lambda that says which (card function-redefinition-error). Run it with bash test/errors/test_overloaded_value_error.sh;
-# the warp under test is WARP (default the warp on PATH), its compiler from WARP_LIB as usual
+# the warp under test is WARP (default the warp on PATH), a tree's WARP=<tree>/data/gate/warp
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 status=0
 says() {
 	local code=$1 expected=$2 said
