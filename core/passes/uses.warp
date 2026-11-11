@@ -334,7 +334,8 @@ is_runtime_module_word(name: text): bool := {
 # the definitions of a file and of the files beside it that it uses by path (never one above it, the core's runtime)
 file_words(file: text): list := {
 	source = file_text(file) ?? ""
-	beside = use_statements(used_modules(source)).filter(statement => use_target(statement) is text and not use_target(statement).contains(".."))
+	# (its parse's use statements: used_modules reads module names, a quoted path is no code to it)
+	beside = statements_in(plain_node(parsed(source))).filter(statement => use_target(statement) is text and not use_target(statement).contains(".."))
 	definition_slices(source).map(slice => slice#1) + beside.flat_map(statement => file_words(file_used(statement, folder_of(file))))
 }
 # a module of lib/host/: no program uses it, so none of its words brings it in (prelude_words.warp module_word_definers)
