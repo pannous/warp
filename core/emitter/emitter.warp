@@ -1179,6 +1179,8 @@ is_spaced_call(body: Body, n: Node): bool := {
 	if not (bracket_of(n) == "" and separator_of(n) == " " and #n > 1 and n#1 is symbol) { return no }
 	name = name_of(n#1)
 	if name in body.names { return no }
+	# a class's name before a value makes one, `hex 255`, `P 3`; before a block it is the class's literal, `P {x: 1}`
+	if name in module.classes { return not (is_group(n#2) and bracket_of(n#2) == "{") }
 	if name in module.functions { return takes_arguments(module.functions[name], items_of(n)[1..]) }
 	lines_of(typed_lines, unaliased(name)).any(line => takes(line.signature, #n - 1))
 }
