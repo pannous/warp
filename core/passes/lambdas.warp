@@ -243,7 +243,7 @@ lowered_lambdas(n: Node, locals: Locals, lowering: Lowering): Node := {
 		# `p as text` names a type, also where the program defines a function text()
 		Key(left, Op.As, type): Key(lowered_lambdas(left, locals, lowering), Op.As, type)
 		# a type's value names a type, `type P = int -> bool` a function type, no lambda
-		Key(left, Op.Assign, right): if is_type_view(left) then n else Key(lowered_lambdas(left, locals, lowering), Op.Assign, lowered_lambdas(assigned_values(right, locals, lowering), locals, lowering))
+		Key(left, Op.Assign, right): if is_type_view(left) then n else Key(if left is symbol then left else lowered_lambdas(left, locals, lowering), Op.Assign, lowered_lambdas(assigned_values(right, locals, lowering), locals, lowering))
 		# `x=5; -x 1` parses as -(x 1) (decision negated-call): a value heads no call, the minus negates it alone, [-5, 1]
 		Key(left, Op.Sub, right): if left == ø and are_values(right, locals, lowering) then List([Key(ø, Op.Sub, right#1)] + items_of(right)[1 ..], Bracket.Square, Separator.Comma) else Key(lowered_lambdas(left, locals, lowering), Op.Sub, lowered_lambdas(right, locals, lowering))
 		Key(left, op, right): Key(lowered_lambdas(left, locals, lowering), op, lowered_lambdas(right, locals, lowering))
@@ -252,9 +252,21 @@ lowered_lambdas(n: Node, locals: Locals, lowering: Lowering): Node := {
 		List(items, Bracket.Round, Separator.Space): lowered_phrase(items_of(n), n, locals, lowering)
 		List(items, Bracket.None, Separator.Comma): comma_call(n, locals, lowering)
 		List(items, Bracket.Curly, Separator.Comma): comma_call(n, locals, lowering)
-		List(items, bracket, separator): List(items.map(item => lowered_lambdas(item, locals, lowering)), bracket, separator)
+		List(items, bracket, separator): if is_statement_list(n) then lowered_statements(n, locals, lowering) else List(items.map(item => lowered_lambdas(item, locals, lowering)), bracket, separator)
 		_: n
 	}
+}
+
+# a name a statement binds is a variable from that statement on: before it, and in the value it binds, a call of the
+# name is the function's, `bytes = bytes(t)` (decision name-shadows-overload)
+is_statement_list(n: Node): bool := (bracket_of(n) == "{" or bracket_of(n) == "") and (separator_of(n) == ";" or separator_of(n) == "\n")
+lowered_statements(block: Node, locals: Locals, lowering: Lowering): Node := {
+	lowered = []
+	for statement in items_of(block) {
+		lowered += [lowered_lambdas(statement, locals, lowering)]
+		locals = with_locals(locals, names_bound(statement, []).filter(name => name not in lowering.main_globals))
+	}
+	group_like(block, lowered)
 }
 
 # a function of the program with parameters, named where a value goes: its closure; one without, or with each
@@ -645,7 +657,7 @@ lowered_statement(statement: Node, main_names: map, seen_by_functions: map, lowe
 	if parts == ø { return lowered_lambdas(statement, locals_of([], main_names), lowering) }
 	# (a main-level global the body assigns stays the global: `flag = no; turned(() => flag)` reads it, never a copy
 	# of then)
-	locals = locals_of(parts.parameters.map(parameter_name) + names_bound(parts.body, []).filter(name => name not in lowering.main_globals), seen_by_functions)
+	locals = locals_of(parts.parameters.map(parameter_name), seen_by_functions)
 	match statement {
 		Key(signature, Op.Define, body): Key(signature, Op.Define, lowered_lambdas(body, locals, lowering))
 		_: statement
