@@ -781,7 +781,9 @@ Examples: forms; samples: server, route_headers, hosting, worker
 
 `use draw` paints pixels on a canvas, and `show()` shows it. A shader colors every pixel at once on the graphics card: [[#Shaders]] below.
 
-Examples: frames; samples: paint_text, color_swatches, finger_paint, paint_function, window_size
+`use image` loads a picture from a BMP or JPEG file, `image(./photo.jpg)`, or makes one from a function of the column and row, `image(64, 48, (x, y) => rgb(4 * x, 5 * y, 128))`. Its changes give a new picture: `flipped`, `mirrored`, `cropped`, `tinted`, `grayed`, `blurred`, `each_pixel`; `show()` paints it and `.save(./out.bmp)` writes it.
+
+Examples: frames; samples: paint_text, color_swatches, finger_paint, paint_function, window_size, load_jpeg, load_bmp, make_image
 
 ## Shaders
 
