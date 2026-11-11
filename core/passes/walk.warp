@@ -69,6 +69,8 @@ written_index_mark = "written_index"
 # the `1` `xs[i]` adds to i for `xs#(i+1)` (Rust: warp_parser SubscriptOffset): a position i meets the brackets as it
 # is, `xs#i` (index_positions.warp); plain_node keeps it for a program's own code, index_positions drops it
 subscript_offset_mark = "subscript_offset"
+# the marks plain_node keeps in a program's own code for the passes reading them
+program_marks = [subscript_offset_mark, GLUED_FACTOR_MARK]
 
 # the view of `{}`, `[]`, `()`: no items
 is_empty_group(view: View): bool := kind_of(view) == "list" and #view == 3
