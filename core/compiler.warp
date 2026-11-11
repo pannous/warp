@@ -289,7 +289,8 @@ module_compiled_behind(name: text, source: text, runtime, file: text) := {
 	line_module = no
 	# a trap under the compile too (a runtime word's fail(), decision #34): never a half-built module written
 	if refused != "" { throw refused }
-	write_bytes(file, with_signature(linked_bytes(module.order, MODULE_START), name, image_fields(module.order)))
+	written = linked_bytes(module.order, MODULE_START)
+	write_bytes(file, with_signature(written, name, image_fields(module.order) + [links_field(written)]))
 }
 MODULE_START = "warp/start"
 # every standard module (rewrites.warp std_module_names) as <name>.wasm in the folder, each after the modules it uses
