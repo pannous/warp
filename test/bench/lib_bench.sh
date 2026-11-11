@@ -4,7 +4,7 @@
 # with clock() around the work only (compile and startup excluded), the median of 3 runs; python likewise
 # (time.perf_counter). A run past BENCH_TIMEOUT seconds (default 60) is reported as a timeout.
 # Usage: test/bench/lib_bench.sh [case-filter] [sizes]    e.g. test/bench/lib_bench.sh sort "1000 100000"
-# Heavy: run it through /workspace/box-slot.sh. Needs warp on PATH (WARP_LIB names the lib/ to measure).
+# Heavy: run it through /workspace/box-slot.sh. Needs warp on PATH; WARP names another (a tree's: WARP=<tree>/data/gate/warp).
 set -u
 filter="${1:-}"
 sizes="${2:-1000 100000}"
@@ -37,7 +37,7 @@ median() { sort -n | awk '{a[NR]=$1} END{if(NR==0){print "";exit} print a[int((N
 run_warp() { # name uses setup work N → ms or "timeout"/"error"
 	local f="$work/$1_$5.warp"
 	{ [ -n "$2" ] && echo "$2"; echo "N = $5"; echo "$3"; echo "bench_start = clock()"; echo "$4"; echo "print(clock() - bench_start)"; } > "$f"
-	local out; out=$(timeout "$timeout_s" warp "$f" 2>/dev/null); local rc=$?
+	local out; out=$(timeout "$timeout_s" "${WARP:-warp}" "$f" 2>/dev/null); local rc=$?
 	if [ $rc -eq 124 ]; then echo timeout; return; fi
 	local ms; ms=$(echo "$out" | tail -1 | tr -d '\r')
 	if [[ "$ms" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then echo "$ms"; else echo error; fi

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # a call of a word nothing defines is the program's error, `no function from_hex`, its fix the known words sharing a
 # part of its name, never "outside the core" (card unknown-from-hex).
-# Run it with bash test/errors/test_unknown_function.sh; the warp is WARP (default the warp on PATH), its lib/ WARP_LIB
+# Run it with bash test/errors/test_unknown_function.sh; the warp is WARP (default the warp on PATH), a tree's WARP=<tree>/data/gate/warp
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 failures=0
 
 # refused <code> <said…>: the run fails, says each part and no gap of the core

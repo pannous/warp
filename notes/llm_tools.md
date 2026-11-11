@@ -6,7 +6,7 @@ checker, a program corpus and API workers. Spend stops at $150 (budget check in 
 ## Tools
 - `scripts/llm/docs_check.py [--dry-run] [--limit N] [page.md …]`: every ```warp fence and inline `code` → `value`
   of web/playground/guide.md, guide-expert.md, primer.md and the wiki (read from the main checkout's wiki/) runs
-  through `/Users/me/dev/bin/warp --sandbox --no-ask run` (WARP_NO_WINDOW=1, 20 s timeout). An explicit value equal
+  through `/Users/me/dev/bin/warp --sandbox --no-ask run` (WARP_WINDOW=0, 20 s timeout). An explicit value equal
   to the last output line passes without a model; the rest go to Haiku 5.5 (triage), the non-ok ones to Sonnet 5.5.
   Wiki lines with "Warp before" / "before this change" record old behaviour on purpose and are skipped, so are
   fences marked ```warp compiles (servers, windows) and ```warp planned (unbuilt features with their own card).

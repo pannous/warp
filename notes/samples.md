@@ -7,7 +7,7 @@ runs in the page only, `# host: none` in neither sweep. A program that needs an 
 library's example (lib/extra/examples/netbase.warp).
 
 ## How to sweep
-- `scripts/samples.sh [<tree>]`: each sample under WARP_NO_WINDOW with a CPU budget; window-library samples (raylib,
+- `scripts/samples.sh [<tree>]`: each sample under --no-window with a CPU budget; window-library samples (raylib,
   SDL, glfw) are not run, server samples count as served, a sample with a `# expected failure: <why>` line is EXP.
 - Output filters: `grep -v '^      '` (to hide hint continuation lines) also hides indented program output.
 

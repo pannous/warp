@@ -24,4 +24,4 @@ echo "$tools/wabt-$WABT/bin" >>"${GITHUB_PATH:-/dev/null}"
 seed=$(gh release list --repo pannous/warp --limit 100 --json tagName -q '[.[] | select(.tagName | startswith("seed-"))][0].tagName')
 gh release download "$seed" --repo pannous/warp --pattern 'warp-seed*.wasm' --dir "$folder" --clobber
 "$(dirname "$0")/seed-bootstrap.sh" "$folder/warp" "$folder/warp-seed.wasm" "$tree/lib"
-cd "$tree" && WARP_LIB=$tree/lib "$folder/warp" rebuild pure
+cd "$tree" && "$folder/warp" --lib "$tree/lib" rebuild pure
