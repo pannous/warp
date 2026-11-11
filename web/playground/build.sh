@@ -277,13 +277,31 @@ import collections, json, os, re, sys
 # a sample a browser cannot run says so on a line of its own, `# host: native: <why>` (or none), and stays out of the
 # menu (test_in_browser.py HOST_LINE)
 NOT_IN_PAGE = re.compile(r"^# host: (native|none)\b", re.M)
+# the authors' working notes stay in the source but not on the page: a comment holding TODO or DONE (or a `# todo`) is
+# left out, the whole line when it is a comment, else from its `#` or `//` on; a comment line that starts with the
+# marker opens a note block, which runs on through the comment lines after it, up to a blank line or code
+WORK_NOTE = re.compile(r"(?:^|\s)(?:#|//)(?:(?!\s#|\s//).)*?(?:\b(?:TODO|DONE)\b|(?:(?<=#)|(?<=//))\s*todo\b).*$")
+NOTE_BLOCK = re.compile(r"^\s*(?:#|//)\s*(?:TODO|DONE|todo)\b")
+COMMENT_LINE = re.compile(r"^\s*(?:#|//)")
+# and our card and decision keys, `(card finger-paint-slow)`: a reader gets the rule, never our bookkeeping
+KEY_ASIDE = re.compile(r"\s*\((?:card|decision)s? [a-z0-9]+(?:-[a-z0-9]+)+[^)]*\)")
+def shown(source):
+	if not any(WORK_NOTE.search(line) or KEY_ASIDE.search(line) for line in source.splitlines()): return source
+	kept, in_block = [], False
+	for line in map(lambda line: KEY_ASIDE.sub("", line), source.splitlines()):
+		in_block = bool(NOTE_BLOCK.match(line)) or (in_block and bool(COMMENT_LINE.match(line)))
+		if in_block: continue
+		note = WORK_NOTE.search(line)
+		before = line[:note.start()].rstrip() if note else line
+		if before or not note: kept.append(before)
+	return "\n".join(kept) + "\n"
 files = collections.defaultdict(list)
 for path in sys.argv[2:]: files[os.path.basename(path)[:-len(".warp")]].append(path)
 # the menu and the address (#fizzbuzz) name a sample by its file name: one name, one file
 twins = {name: paths for name, paths in files.items() if len(paths) > 1}
 if twins: sys.exit(f"samples sharing a name: {twins}")
 names = {name: paths[0] for name, paths in sorted(files.items()) if not NOT_IN_PAGE.search(open(paths[0], encoding="utf-8").read())}
-samples = {name: open(path, encoding="utf-8").read() for name, path in names.items()}
+samples = {name: shown(open(path, encoding="utf-8").read()) for name, path in names.items()}
 with open(sys.argv[1], "w", encoding="utf-8") as script:
 	script.write("// made by build.sh from samples/<chapter>/*.warp\nconst SAMPLES = " + json.dumps(samples, ensure_ascii=False, indent="\t") + ";\n")
 	script.write("// each sample's file, which its runs name their neighbours beside (playground.js programFile)\n")
