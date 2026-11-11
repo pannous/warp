@@ -1,0 +1,7 @@
+# a spaced unit measures the amount before it, so it binds tighter than a comparison, a sum and and/or (wiki/unit.md, card spaced-unit-comparison)
+'2 km == 2000 m'	yes
+'2 h + 30 min == 150 min'	yes
+'2 h + 30 min == 140 min'	no
+'3010 m == 3km + 10m'	yes
+'x = 2 km; x > 1500 m and x < 3 km'	yes
+'x = 2 km; x > 1 km + 500 m'	yes

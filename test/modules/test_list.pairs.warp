@@ -1,0 +1,36 @@
+# Outcomes based on test/modules/test_std_list.pairs.warp and test/modules/test_std_list.warp
+'use list; flat_map([1, 2], x => [x, x])'	[1 1 2 2]
+'use list; partition([1, 2, 3], x => x > 1)'	[[2 3] [1]]
+'use list; zip_with([1, 2], [3, 4], (a, b) => a + b)'	[4 6]
+'use list; count_by([1, 2, 3], x => x > 1)'	2
+
+'use list; pairwise([1, 2, 3])'	[[1 2] [2 3]]
+'use list; split_at([1, 2, 3], 2)'	[[1 2] [3]]
+'use list; interleave([1, 2], [3, 4, 5])'	[1 3 2 4 5]
+'use list; dedupe([1, 1, 2, 1])'	[1 2 1]
+
+'use list; group_by([1, 2, 3], x => x % 2).get("1")'	[1 3]
+'use list; tally(["a", "b", "a"]).get("a")'	2
+'use list; extend([1, 2], [3, 4])'	[1 2 3 4]
+
+# Outcomes from test/modules/test_std_list.pairs.warp
+'use list; scan([1, 2, 3], 0, (a, b) => a + b)'	[1 3 6]
+'use list; take_while([1, 2, 5, 1], x => x < 3)'	[1 2]
+'use list; drop_while([1, 2, 5, 1], x => x < 3)'	[5 1]
+
+'use list; take([1, "x", 3], 2)'	[1 "x"]
+'use list; drop([1, "x", 3], 1)'	["x" 3]
+'use list; flatten([[1, 2], [3]])'	[1 2 3]
+'use list; chunk([1, 2, 3], 2)'	[[1 2] [3]]
+
+# Outcomes based on test/parser/test_operator_aliases.pairs.warp
+'use list; union([1, 2], [2, 3])'	[1 2 3]
+'use list; intersection([1, 2], [2, 3])'	[2]
+'use list; subset([1, 2], [1, 2, 3])'	true
+'use list; superset([1, 2, 3], [2, 3])'	true
+
+# List module outcomes: test/modules/test_std_list.pairs.warp
+'use list; unique(["a", "b", "a"])'	["a" "b"]
+'use list; zip([1, 2], ["a"])'	[[1 "a"]]
+'use list; enumerate(["a", "b"])'	[[1 "a"] [2 "b"]]
+'use list; product([2, 3, 4])'	24

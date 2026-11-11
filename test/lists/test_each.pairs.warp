@@ -1,0 +1,10 @@
+# `xs.each.<field>` and `xs.each.<method>(…)`: a field or method of every item, the list's own field unchanged
+# (decision each-field-broadcast, card xs-each)
+'xs = ["ab", "c"]; xs.each.count'	[2, 1]
+'class Counter{count: int}; counters = [Counter{count: 2}, Counter{count: 5}]; sum(counters.each.count)'	7
+'xs = ["abc", "cde"]; xs.each.contains("c")'	[yes, yes]
+'xs = ["ab", "c"]; xs.count'	2
+
+# the explicit broadcast maps any function, a library word's too (decision each-all-broadcast)
+'xs = ["a", "bb"]; count each xs'	[1, 2]
+'abs all [-1, 2]'	[1, 2]

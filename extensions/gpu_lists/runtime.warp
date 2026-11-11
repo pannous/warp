@@ -143,6 +143,121 @@ gpu_list_items(n: Node): list := {
 	out
 }
 gpu_list_refused(message: text): int := returned_error(message)
+# how many bins view_order_into quantizes a depth into, and the 0 .. 65535 keys those bins are (antimatter15/splat
+# runSort: depth · 4096, then 65535 / (max − min)). The two tables are allocated once: a GPU list's pages are never freed
+depth_bins(): int := 65536
+depth_levels(): int := 65535
+global depth_counts = ø
+global depth_starts = ø
+# the bins, made on the first sort and reused. Each call zeroes the counts; the starts are overwritten by the prefix
+depth_bins_ready() := {
+	if is_null(depth_counts) or not is_gpu_list(depth_counts) {
+		depth_counts = gpu_zeros(depth_bins(), GpuCell.I32)
+		depth_starts = gpu_zeros(depth_bins(), GpuCell.I32)
+	}
+}
+zero_words(address: int, count: int) := {
+	i = 0
+	while i < count {
+		memory_set_i32(address + i * word_bytes(), 0)
+		i = i + 1
+	}
+}
+# centres holds one splat per four floats, xyz then opacity. index is 0-based. depth is (position − eye) · forward
+view_depth(centres: Node, index: int, ex: float, ey: float, ez: float, fx: float, fy: float, fz: float): float := {
+	base = gpu_list_address(centres) + index * word_bytes() * 4
+	x = memory_f32(base)
+	y = memory_f32(base + word_bytes())
+	z = memory_f32(base + word_bytes() * 2)
+	(x - ex) * fx + (y - ey) * fy + (z - ez) * fz
+}
+# runSort's first quantization: trunc(depth · 4096), toward 0
+quantized_depth(depth: float): int := truncated(depth * 4096.0)
+# the 16-bit bin of a depth once low and the scale (65535 / (high − low), or 0 when every kept depth shares a bin) are known
+depth_key(depth: float, low: int, scale: float): int := {
+	key = truncated(float(quantized_depth(depth) - low) * scale)
+	if key < 0 { return 0 }
+	if key > depth_levels() { return depth_levels() }
+	key
+}
+listed_float(n: Node, index: int): float := float_of_node(unboxed_list(n)#index)
+# the index-th float of a GPU list [f32], or a refusal. what names the argument in the message
+f32_list(n: Node, what: text): int := {
+	if not is_gpu_list(n) or gpu_list_cell(n) != GpuCell.F32 { return gpu_list_refused("view_order_into reads a GPU list [f32] (" + what + ")") }
+	0
+}
+# indices of the splats in centres whose depth is at least nearest, nearest first, written into into as f32 and counted.
+# centres is xyzw per splat. The order is a stable 16-bit counting sort (antimatter15/splat runSort): equal bins keep
+# the lower index first, so it matches a stable mergesort except where two different depths share a bin. It always
+# sorts; a caller that skipped a still camera would be choosing that itself. 0 for none in front, or an empty centres
+view_order_into(centres: Node, eye: Node, forward: Node, nearest: Node, into: Node): int := {
+	f32_list(centres, "centres")
+	f32_list(into, "order")
+	if int_remainder(gpu_list_count(centres), 4) != 0 { gpu_list_refused("view_order_into: a centre is four floats") }
+	n = int_quotient(gpu_list_count(centres), 4)
+	if n == 0 { return 0 }
+	ex = listed_float(eye, 1)
+	ey = listed_float(eye, 2)
+	ez = listed_float(eye, 3)
+	fx = listed_float(forward, 1)
+	fy = listed_float(forward, 2)
+	fz = listed_float(forward, 3)
+	limit = float_of_node(nearest)
+	low = 0
+	high = 0
+	seen = no
+	kept = 0
+	i = 0
+	while i < n {
+		d = view_depth(centres, i, ex, ey, ez, fx, fy, fz)
+		if d >= limit {
+			k = quantized_depth(d)
+			if not seen or k < low { low = k }
+			if not seen or k > high { high = k }
+			seen = yes
+			kept = kept + 1
+		}
+		i = i + 1
+	}
+	if kept == 0 { return 0 }
+	if kept > gpu_list_count(into) { gpu_list_refused("view_order_into: the order list is shorter than the splats in front") }
+	depth_bins_ready()
+	counts = gpu_list_address(depth_counts)
+	starts = gpu_list_address(depth_starts)
+	zero_words(counts, depth_bins())
+	span = high - low
+	scale = if span > 0 then float(depth_levels()) / float(span) else 0.0
+	i = 0
+	while i < n {
+		d = view_depth(centres, i, ex, ey, ez, fx, fy, fz)
+		if d >= limit {
+			at = counts + depth_key(d, low, scale) * word_bytes()
+			memory_set_i32(at, memory_i32(at) + 1)
+		}
+		i = i + 1
+	}
+	run = 0
+	i = 0
+	while i < depth_bins() {
+		c = memory_i32(counts + i * word_bytes())
+		memory_set_i32(starts + i * word_bytes(), run)
+		run = run + c
+		i = i + 1
+	}
+	out = gpu_list_address(into)
+	i = 0
+	while i < n {
+		d = view_depth(centres, i, ex, ey, ez, fx, fy, fz)
+		if d >= limit {
+			slot_at = starts + depth_key(d, low, scale) * word_bytes()
+			slot = memory_i32(slot_at)
+			memory_set_i32(slot_at, slot + 1)
+			memory_set_f32(out + slot * word_bytes(), float(i))
+		}
+		i = i + 1
+	}
+	kept
+}
 # a list word given a GPU list, which would read or change a copy of it
 gpu_list_refused_as(n: Node): int := gpu_list_refused("a GPU list [" + gpu_cell_name(gpu_list_cell(n)) + "] takes only #, xs#i, xs#i = number, for, print and the GPU's words: copy it to a list with [x for x in xs] first")
 # the items a list word reads: none, it refuses

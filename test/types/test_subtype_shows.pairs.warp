@@ -1,3 +1,0 @@
-# a subtype with no format of its own shows as its value: is-a, not has-a (decision subtype-less-than)
-'type Age < int; x: Age = 3; "" + x'	"3"
-'type Age < int; class P { age: Age }; "" + P(3).age'	"3"

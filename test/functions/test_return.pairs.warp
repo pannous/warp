@@ -1,0 +1,15 @@
+'f(x) := { h = [x, x]; return h, x * 2 }; (h, o) = f(1.5); h[1] + o'	4.5
+'f() := { x = 0; return 1, 2 }; a, b = f(); a + b'	3
+'f() := { h = [1, 2]; return h, 3 }; h, o = f(); h[1] * o'	6
+
+# a function returning ø in one place and a text in another gives a node: its value held anywhere, ø included
+# (`return ø` parses as a bare `return`; card style-css-length)
+'f(n) := { if n == 6 { return ø }; "x" }; l = f(6); l == ø'	true
+'f(n) := { if n == 6 { return }; "x" }; l = f(1); l'	'x'
+'f(n) := { if n is int { return ø }; if not (n is pair) { return "s" }; l = f(n.key); if l == ø { return ø }; l + "!" }; f(data(a*b))'	's!'
+
+# from test_return_type_dispatch.rs: edit the Rust test, then run the script again
+
+# test_a_single_definition_with_a_result_type
+'class pdf{body}; make(t):pdf := pdf(t); m = make("a"); m.body'	'a'
+'class pdf{body}; make(t) := pdf(t); m = make("a"); m.body'	'a'

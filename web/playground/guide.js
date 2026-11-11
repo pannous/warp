@@ -1,4 +1,5 @@
-// The language guide beside the editor: guide.md, one chapter per `## title`, chapters from easy to advanced.
+// The language guide beside the editor: guide.md, one chapter per `## title`, chapters from easy to advanced, grouped
+// in parts by `# title` (Graphics: Pictures, Shaders, Acceleration; card playground-guide-chapters).
 // The open chapter (the page's #anchor) shows its text; `try ▶` runs a snippet, an `Examples:` line links the tour
 // examples and samples/ that show the chapter, and choosing such an example links back to its chapter.
 // The expert guide (guide-expert.md) has the same chapters in compact form; a toggle switches, keeping the open
@@ -13,9 +14,11 @@ const SAMPLES_SEPARATOR = "; samples: ";
 const SNIPPET_FENCE = /^```warp(?: => (.*))?$/;
 const PRINTED_FENCE = "```printed"; // right after a snippet: the lines it prints, shown above its value
 const SECTION_PREFIX = "### "; // a section inside a chapter: "### Whole lists at once" in Lists
+const PART_PREFIX = "guide-part-"; // a part's anchor: #guide-part-graphics
 
 const chapterOfExample = new Map();
 const examplesOfChapter = new Map(); // in the guide's order: the example menu's groups
+const partOfChapter = new Map(); // in guide.md's order: the expert guide's chapters go in the same parts
 const MORE_SAMPLES = "more samples";
 
 const escapeHtml = text => text.replace(/[&<>"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]);
@@ -54,8 +57,10 @@ function exampleLinks(line, chapter) {
 		} }, name);
 	};
 	const links = names => names.flatMap((name, index) => index ? [", ", link(name)] : [link(name)]);
-	const parts = [element("strong", {}, "Examples: "), ...links(exampleNames(tour))];
-	if (samples) parts.push(" · samples/: ", ...links(exampleNames(samples)));
+	// (a chapter of samples alone, Raylib and SDL, names no tour example)
+	const tourNames = exampleNames(tour);
+	const parts = tourNames.length ? [element("strong", {}, "Examples: "), ...links(tourNames)] : [];
+	if (samples) parts.push(parts.length ? " · samples/: " : element("strong", {}, "samples/: "), ...links(exampleNames(samples)));
 	return element("p", { className: "guide-examples" }, ...parts);
 }
 
@@ -98,7 +103,7 @@ function renderBody(lines, chapter) {
 		} else if (line.startsWith(SECTION_PREFIX)) {
 			flush();
 			const title = line.slice(SECTION_PREFIX.length);
-			blocks.push(element("h3", { id: headingId(title), className: "guide-section" }, title));
+			blocks.push(element("h3", { id: headingId(title), className: "guide-section" }, placeLink(headingId(title), title)));
 		} else if (line.trim()) text.push(line);
 		else flush();
 	}
@@ -106,18 +111,46 @@ function renderBody(lines, chapter) {
 	return blocks;
 }
 
-// guide.md → the intro and one <details> per chapter, with its anchor
+// guide.md → the intro, then one <details> per part holding one <details> per chapter, each with its anchor. A guide
+// without parts (guide-expert.md) puts its chapters in the parts guide.md gives them
 function renderGuide(markdown) {
-	const [head, ...sections] = markdown.split(/^## /m);
-	const introLines = head.split("\n").filter(line => !line.startsWith("# "));
-	const chapters = sections.map(section => {
-		const [title, ...lines] = section.split("\n");
-		const id = headingId(title);
-		// a chapter the reader clicks scrolls to the top once it opened (openedChapter)
-		const summary = element("summary", { onclick: click => { click.currentTarget.parentElement.dataset.clicked = ""; } }, element("a", { href: `#${id}` }, title));
-		return element("details", { id, className: "guide-chapter", ontoggle: openedChapter }, summary, ...renderBody(lines, title));
-	});
-	return [...renderBody(introLines, ""), ...chapters];
+	const [, titled, ...parts] = markdown.split(/^# /m);
+	const [intro, ...unparted] = titled.split(/^## /m);
+	const grouped = [["", unparted], ...parts.map(part => {
+		const [name, ...chapters] = part.split(/^## /m);
+		return [name.trim(), chapters];
+	})];
+	const chapters = grouped.flatMap(([part, sections]) => sections.map(section => renderChapter(section, part)));
+	return [...renderBody(intro.split("\n").slice(1), ""), ...inParts(chapters)];
+}
+
+function renderChapter(section, part) {
+	const [title, ...lines] = section.split("\n");
+	if (part) partOfChapter.set(title, part);
+	const id = headingId(title);
+	// a chapter the reader clicks scrolls to the top once it opened (openedChapter)
+	const summary = element("summary", { onclick: click => { click.currentTarget.parentElement.dataset.clicked = ""; } }, placeLink(id, title));
+	return { title, shown: element("details", { id, className: "guide-chapter", ontoggle: openedChapter }, summary, ...renderBody(lines, title)) };
+}
+
+// the chapters grouped by part, the parts in guide.md's order; a chapter of no part stays outside them
+function inParts(chapters) {
+	const byPart = new Map([...new Set(partOfChapter.values())].map(part => [part, []]));
+	for (const { title, shown } of chapters) {
+		const part = partOfChapter.get(title) ?? "";
+		byPart.set(part, [...byPart.get(part) ?? [], shown]);
+	}
+	return [...byPart].flatMap(([part, shown]) => !part ? shown : shown.length === 0 ? [] :
+		[element("details", { id: PART_PREFIX + slug(part), className: "guide-part" }, element("summary", {}, placeLink(PART_PREFIX + slug(part), part)), ...shown)]);
+}
+
+// a part's, chapter's or section's title as the link to its place: clicking it puts the place in the address, as an
+// address naming it opens it (card guide-section-url)
+const placeLink = (id, title) => element("a", { href: `#${id}` }, title);
+
+// a part, chapter or section opened, with the parts and chapter around it
+function openPlace(place) {
+	for (let at = place; at; at = at.parentElement?.closest("details")) if (at.matches("details")) at.open = true;
 }
 
 const renderedGuides = {}; // level → its rendered intro and chapters
@@ -134,7 +167,7 @@ function showLevel(level) {
 	$("guide-chapters").replaceChildren(...renderedGuides[level]);
 	for (const button of document.querySelectorAll(".guide-level button")) button.setAttribute("aria-pressed", button.value === level);
 	store(LEVEL_KEY, level);
-	if (open) document.getElementById(open).open = true;
+	if (open) openPlace(document.getElementById(open));
 }
 
 function openedChapter(event) {
@@ -151,15 +184,14 @@ function openedChapter(event) {
 	showChapterLink(chapter.querySelector("summary").textContent);
 }
 
-// the chapter or section the address names (its chapter opened), else the first chapter
+// the part, chapter or section the address names (opened with what is around it), else the first chapter
 function openChapterOfAddress() {
 	redirectOldChapterLink();
-	const heading = location.hash ? document.getElementById(location.hash.slice(1)) : document.querySelector(".guide-chapter");
-	const chapter = heading?.closest(".guide-chapter");
-	if (!chapter) return;
+	const place = location.hash ? document.getElementById(location.hash.slice(1)) : document.querySelector(".guide-chapter");
+	if (!place?.closest("#guide-chapters")) return;
 	if (location.hash) $("guide").open = true;
-	chapter.open = true;
-	if (location.hash) heading.scrollIntoView({ block: heading === chapter ? "nearest" : "start" });
+	openPlace(place);
+	if (location.hash) place.scrollIntoView({ block: place.matches(".guide-chapter") ? "nearest" : "start" });
 }
 
 // an old heading link #hello-world goes to #guide-hello-world, unless the name is an example's (#lists)

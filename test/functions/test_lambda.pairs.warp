@@ -1,0 +1,45 @@
+# a lambda with a defaulted parameter takes its default where a call leaves it out, as a definition does (card lambda-own)
+'f = (a, b = 1) => a + b; f(3)'	4
+'f = (a, b = 1) => a + b; f(3, 2)'	5
+
+# from test_lambda_global.rs: edit the Rust test, then run the script again
+
+# a_lambda_with_global_changes_mains_variable
+'n = 0; f = () => { global n; n += 1 }; f(); f(); n'	2
+'global n = 0; f = () => { global n; n += 1 }; f(); f(); f(); n'	3
+'n = 0; def f() { global n; n += 1 }; f(); f(); n'	2
+
+'global flag = no; set_flag() := { flag = yes }; check() := { flag = no; f = () => flag; set_flag(); f() }; check()'	yes
+'global n = 0; bump() := { n += 1 }; turned(done: function) := { bump(); bump(); done() }; check() := { n = 0; turned(() => n) }; check()'	2
+'f() := { x = 1; g = () => x; x = 5; g() }; f()'	5
+
+# a lambda's result type after its parentheses is no parameter: its parameters are those inside (card lambda-own)
+'f = (a, b): int => a + b; f(3, 1)'	4
+'f = (a: int, b: int): int => a * b; f(3, 4)'	12
+'f = (a: int): int => a + 1; f(3)'	4
+
+# from test_lambda_spellings.rs: edit the Rust test, then run the script again
+
+# pipe_parameters
+'f = |x| x*2; f(3)'	6
+'f = |a, b| a*b; f(2,3)'	6
+'f = |a b| a+b; f(2,3)'	5
+
+# ruby_block_parameters
+# triage-held 2026-11-06: lambda spellings of Ruby, Rust, Python, JS, foreign syntax :: 'fold([1,2,3], 0, { |acc, x| acc + x })'	6
+
+# other_lambda_keywords
+# triage-held 2026-11-06: lambda spellings of Ruby, Rust, Python, JS, foreign syntax :: 'f = fn(a, b) { a*b }; f(2,3)'	6
+# triage-held 2026-11-06: lambda spellings of Ruby, Rust, Python, JS, foreign syntax :: 'f = lambda x: x*2; f(4)'	8
+# triage-held 2026-11-06: lambda spellings of Ruby, Rust, Python, JS, foreign syntax :: 'f = function(a, b) { return a*b }; f(2,3)'	6
+'f = { x -> x*2 }; f(3)'	6
+
+# from test_lambda_tuple_arguments.rs: edit the Rust test, then run the script again
+
+# a_lambda_argument_of_an_immediately_called_lambda
+'((f, x) -> f(x))(y -> y + 3, 7)'	10
+'((f, x) -> f(f(x)))(y -> y + 3, 7)'	13
+
+# a_juxtaposed_lambda_still_applies
+'((x -> x * 2) 7)'	14
+'(x -> x * 2)(7)'	14

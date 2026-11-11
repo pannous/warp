@@ -374,7 +374,7 @@ pub unsafe extern "C" fn {lib}_bytes_free(bytes: *mut ByteList) {{
 		"""the warp.words section: the module's words in warp, over its raw exports (notes/wasm_words.md)"""
 		lib = self.library
 		return "\n".join([f"// {self.crate}'s words (scripts/warp-crate wasm {self.path.name}): texts cross through its memory",
-			f"{lib}__text_in(t: text): int := {{ bytes = t.bytes; at = {lib}__alloc(#bytes); for i in 0 ..< #bytes {{ {lib}__store(at + i, bytes[i]) }}; at }}",
+			f"{lib}__text_in(t: text): int := {{ codes = t.bytes; at = {lib}__alloc(#codes); for i in 0 ..< #codes {{ {lib}__store(at + i, codes[i]) }}; at }}",
 			f"{lib}__text_out(packed: int): text := {{ at = packed >> 32; from_utf8([{lib}__load(at + i) for i in 0 ..< packed % 4294967296]) }}"]
 			+ [function.warp_word(lib) for function in self.functions]) + "\n"
 
