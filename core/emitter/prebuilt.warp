@@ -613,6 +613,7 @@ def bind_library_words() {
 		for k in 0..<#image.functions {
 			word = image.functions[k]
 			f = module.functions.get(word.name)
+			if word.name.starts_with("random·2") { print "PROBE " + word.name + " f=" + text(f != ø) + " unbound=" + text(unbound_declaration(f)) + " linkable=" + text(linkable(image, word)) + " variant=" + text(linked_variant(word.name, if f != ø then #f.signature.parameters else -1) == word) + " body=" + (if f != ø then text(f.body) else "-") + " kinds=" + (if f != ø then text(f.kinds) else "-") + " own=" + text(module.functions.keys.filter(k => k.starts_with("random"))) }
 			if unbound_declaration(f) and linkable(image, word) and linked_variant(word.name, #f.signature.parameters) == word { bound_to(f, image, k) }
 			# (a word two modules write: the program's typed variant of it, arity_overloads' milliseconds_of·Quantity)
 			variant = if linked_extended.has(word.name) then module.functions.get(typed_variant_written(image.name, word)) else ø
