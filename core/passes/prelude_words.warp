@@ -1267,6 +1267,9 @@ used_module_sources(statements: any, folder: text, seen: any, within_module: boo
 				seen = inner#2
 				linked += inner#3 + signature.slices
 			} else if source != "" {
+				# (a module found late, by a global word, links the runtime modules it needs as a written use does: machine_math's
+				# big_numbers)
+				for runtime in module_runtime_modules(name_of(used)) { linked_late(runtime) }
 				inner = used_module_sources(use_statements(used_modules(source)), folder, seen, yes)
 				sources += inner#1 + [source]
 				seen = inner#2
