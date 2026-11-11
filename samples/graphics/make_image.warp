@@ -1,0 +1,13 @@
+#!/usr/bin/env warp
+// Make a picture from nothing: each pixel's color is a function of its column and row. A sun on a sky that fades
+// from blue to orange, saved as a BMP and shown.
+use image
+use color
+
+width = 160
+height = 100
+sun(x, y) := (x - 110) ^ 2 + (y - 40) ^ 2 < 18 ^ 2
+sky(x, y) := mix(rgb(70, 130, 220), rgb(250, 160, 90), y / height)
+picture = image(width, height, (x, y) => if sun(x, y) then rgb(255, 230, 120) else sky(x, y))
+picture.save(./sunset.bmp)
+picture.flipped().show()
