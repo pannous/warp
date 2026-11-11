@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
 # A torch, and the fog that drifts around a pillar (samples/graphics/fluid_25d.warp). The picture follows a visual
-# idea by @r4nM4_64; nothing here was copied (notices/fluid_25d.md). The fluid is Stam's stable fluids, on the GPU.
+# idea by @r4nM4_64; nothing here was copied (fluid_25d.NOTICE.md beside it). The fluid is Stam's stable fluids, on the GPU.
 # Density is sharpened with one MacCormack step. Pressure is two separable convolutions, the rank-1 Jacobi kernel
 # of Rabbani and Khiat, instead of a Jacobi loop. The picture ray-marches a slab: density is a thickness about the
 # plane, and a short march accumulates emission, absorption and a few light samples. A detail field is written once
