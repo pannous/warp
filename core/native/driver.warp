@@ -431,9 +431,9 @@ signature_offset(image: text): u32 := {
 	}
 	image.length
 }
-# warp's lib/, whose warp.wasm compiles a .warp file, in one search order: --lib <folder> (a worktree's), $WARP_LIB
-# (what `warp build` writes has no --lib yet), else the first folder holding a lib/ (its prelude.warp) of this
-# executable's folder (a tarball), its lib/ (~/dev/bin/lib, which the install keeps
+# warp's lib/, whose warp.wasm compiles a .warp file, in one search order: --lib <folder> (a worktree's; for an
+# executable `warp build` wrote, its own folder), $WARP_LIB (the scripts), else the first folder holding a lib/ (its
+# prelude.warp) of this executable's folder (a tarball), its lib/ (~/dev/bin/lib, which the install keeps
 # linked to the current build), the folder its links lead to, and <prefix>/share/warp beside that folder's bin/ (brew,
 # deb, pip: bin/warp links to it); none is an error naming them. The folder as found, its links kept, is a stable
 # name for it (an install replaces the build behind the link): what a native build's executables find libraries by
@@ -3062,7 +3062,12 @@ guest_bytes_built(caller: handle, context: handle, bytes: handle, length: i64, b
 }
 
 appended = appended_module()
-if appended.length > 0 { run(appended, given_from(0), "", RUN_GC_HEAP_BYTES) } else {
+if appended.length > 0 {
+	# what `warp build` wrote is its own library: the modules it links at run time (runtime.wasm, modules/unicode.wasm …)
+	# lie beside it, where the build put them
+	option_given("lib", folder_of(resolved_path(executable_path())))
+	run(appended, given_from(0), "", RUN_GC_HEAP_BYTES)
+} else {
 	if arg_count() < 2 {
 		complain("usage: driver <app.warp | app.wasm> [arguments…]")
 		exit(2)
