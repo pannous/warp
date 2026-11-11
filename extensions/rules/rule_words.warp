@@ -63,10 +63,16 @@ unit_written(code: Node, is_unit: function = is_unit_word): bool := {
 }
 # a unit word of lib/units though the program binds the name: `h` of `h = 2 inch; 3 km/h`
 is_library_unit(code: Node): bool := code is symbol and (library_typed_constants().get(name_of(code)) == "Unit" or "units" in defining_modules(name_of(code)))
-# `h = 2 inch; 3 km/h`: after a number, a unit written whole reads each of its words as lib/units' though the program
-# binds one (decision unit-after-number, user 11-11), its text as quantity reads it, "km/h"; ø when the program binds
-# none of them (the operators make the quantity) or the code is no unit
-unit_beside_variables(code: Node): any := if code is key and not unit_written(code) and unit_written(code, is_library_unit) then "${code}".replace(" ", "") else ø
+# `h = 2 inch; 3 km/h`: after the amount, a unit written whole reads each of its words as lib/units' though the program
+# binds one, with a hint naming the variable, its text as quantity reads it, "km/h"; ø when the program binds none of
+# them (the operators make the quantity) or the code is no unit
+unit_beside_variables(amount: Node, code: Node): any := {
+	if not (code is key and not unit_written(code) and unit_written(code, is_library_unit)) { return ø }
+	unit = "${code}".replace(" ", "")
+	leading = "${key_of(code)}".replace(" ", "")
+	for word in words_within(code).filter(word => binds_value(rule_scope, word)) { diagnose(call_of("unit_beside_variable", [word, "(${amount} ${leading})${unit[#leading ..]}"]), code) }
+	unit
+}
 # `km/h`, `m^2`: the text of a unit written whole of several parts, "km/h", as lib/units unit_named reads it; ø for a
 # single unit word or any other code
 compound_unit(code: Node): any := if code is key and unit_written(code) then "${code}".replace(" ", "") else ø

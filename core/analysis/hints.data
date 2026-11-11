@@ -8,5 +8,6 @@ foreign_type($written, $canonical)	"{written} is {canonical} in warp"	"{canonica
 dir_views($module)	"dir({module}) lists all its words; {module}.functions, {module}.attributes, {module}.classes and {module}.operators list one kind each"
 # `from list import zip` is `use list` (extensions/from_imports.warp, decision modules-triage)
 from_import($module)	"`from {module} import …` is `use {module}` in warp: every word of {module} is visible"
-# a library's typed name glued to a number though the program binds it, `m = 5; 3m` (rewrites.warp typed_as)
-glued_factor($word, $fix)	"glued to a number, {word} is the library's: write {fix} to multiply"	"{fix}"
+# a unit after a number though the program has a variable of its name, `m = 5; 3m`, `h = 2 inch; 3 km/h`
+# (rewrites.warp typed_as, extensions/rules/rule_words.warp unit_beside_variables)
+unit_beside_variable($word, $fix)	"after a number, {word} is the unit, not the variable {word}: write {fix} to use the variable"	"{fix}"

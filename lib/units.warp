@@ -262,7 +262,7 @@ rewrite $e * $u => quantity($e, $name) where $e is number and $u is Unit and $na
 rewrite $e * min => $e * minute where $e is number
 // `h = 2 inch; 3 km/h`: a unit written after a number stays the unit though the program has a variable of one of its
 // names (decision unit-after-number, as glued `3m` does)
-rewrite $e $u => quantity($e, $name) where $e is number and $name = unit_beside_variables($u)
+rewrite $e $u => quantity($e, $name) where $e is number and $name = unit_beside_variables($e, $u)
 rewrite $e min => $bound where $bound = unit_bound($e, minute)
 // `4 m²`, `2 m³`: a number before a unit's power multiplies the power
 rewrite $e $u^$n => $e * $u^$n where $e is number and $u is Unit
