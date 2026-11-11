@@ -497,7 +497,7 @@ addHostPart({
 		// a page has no command line, no input and runs no process; its environment is what the page sets (the stand-in of
 		// the playground's key), its folder the served root that relative paths start from
 		os: {
-			env(name) { return (self.pageEnvironment?.[name] ?? (name === "HOME" ? HOME_DIRECTORY : undefined)) ?? null; },
+			env(name) { return environmentValue(this.holder.environment, name); }, // the run's (driver.js runEnvironment)
 			args: () => self.programArguments ?? [], // a sample's <name>.args (playground.js programArguments)
 			cwd: () => ".",
 			stdin: () => "",
