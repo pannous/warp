@@ -25,7 +25,7 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 ## Inbox
 - 2026-11-11 mutating-needs-bang (parked): `!` on a function that changes what it is given is only a hint for readers where it is not clear; the compiler does not enforce it (almost any function modifies something).
 - 2026-11-11 self-contained-executables: `warp build` makes an executable that carries the runtime and prelude it needs and reads no lib/.
-- 2026-11-11 whole-arrow: `↑` takes whole exponents only (refusal names `^`); the compiler itself carries no big numbers (`--fast` compile argument wraps its ints).
+- 2026-11-11 whole-arrow: `↑` takes whole exponents only (refusal names `^`); the compiler itself carries no big numbers (extension-row-optional). fast-mode: a `--fast` compile argument drops overflow checks (ints wrap at 64 bits) for programs that want speed over checks; the compiler is built with it.
 - 2026-11-11 page-runs-live: an animating page run lives until the next Run or Stop, as natively.
 - 2026-11-11 sync-fetch: `fetch` waits everywhere, the page included; `go fetch` is the asynchronous form.
 - 2026-11-11 text-kind-fast-path: text comparison and indexing pick their path from the text's kind (text-representations), never by rescanning.
@@ -42,7 +42,7 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - 2026-11-10 time-of-day-order: a local datetime or a time of day orders against a duration by its time of day (`ref.time >= 6h`).
 - 2026-11-10 compile-only-metric: the Vitals page shows the compile alone (hello minus `warp version`, startup apart); `warp version` loads the whole machinery and is not optimized; fingerprint-by-stat parked, stamp-read-tail dropped.
 - 2026-11-10 runtime-words-lazy: per compile, runtime words are parsed on demand (a name → offset index over runtime.wasm's word table), library words are bound from the program's side, runtime imports are read from the import section.
-- 2026-11-10 text-representations: one text protocol with kinds (Ascii, Utf8 with a lazily cached code-point array) in one struct, landed in two steps with a stop gate at >3% build cost; internal, no AsciiText spelling.
+- 2026-11-10 text-representations (revised 11-11): an ASCII text is a wasm subtype of the text type, its kind set once when made (literals, joins of ASCII, numbers, host lines scanned once); a UTF-8 text's code points are cached lazily in the per-text cache; stop gate at >3% build cost; internal, no AsciiText spelling.
 - 2026-11-10 block-call-parked: a glued `{…}(…)` is not a call yet (parked).
 - 2026-11-10 compiler-size-levers: the three size levers of notes/compiler_size.md are built in this order, each landing with before/after bytes: literal-nodes-inline (each distinct literal one global, ~460 KB), globals-constant-init (constant tables as packed data, ~198 KB), each-wasm (~190 KB); all core/emitter, by warp-sugar-program.
 - 2026-11-10 text-equality-ascii: text == skips the NFC check when both texts are ASCII or already NFC; results unchanged, measured on the build profile.

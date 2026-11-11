@@ -652,6 +652,16 @@ def wait_for_first_run():
 	browser("eval", f"(async () => {{ {SHOWN_WAIT} return true; }})()")
 
 
+def stop_running():
+	"""the animation going on (the example the page ran as it loaded, the check before's sample) stopped, and the page's
+	fresh worker ready: an animating run lives until the next Run or Stop (card example-native-mismatch)"""
+	browser("eval", """(async () => {
+		playground.stopAnimation();
+		while (playground.state().ready === "starting") await new Promise(done => setTimeout(done, 50));
+		return true;
+	})()""")
+
+
 def run_code(code):
 	"""the playground's value once it ran `code`"""
 	script = f"""(async () => {{
@@ -684,6 +694,7 @@ def bug_button_wrong(page_url):
 	the wrong token, which the page then forgets"""
 	open_page(f"{page_url}{'&' if '?' in page_url else '?'}bug_token={BUG_TOKEN}")
 	wait_for_isolation()
+	stop_running()
 	run_code(REPORT_CODE)
 	shown = browser("eval", f"""(async () => {{
 		const address = location.href;
@@ -737,6 +748,7 @@ def report_wrong(page_url):
 	with_parameter = lambda parameter: f"{page_url}{'&' if '?' in page_url else '?'}{parameter}"
 	open_page(with_parameter("report"))
 	wait_for_isolation()
+	stop_running()
 	# running waits until the page's worker started its task Workers (host-tasks.js taskPoolReady): a page left before
 	# aborts their script loads, which Firefox logs as console errors (NS_BINDING_ABORTED for task-worker.js)
 	run_code(REPORT_CODE)
@@ -744,6 +756,7 @@ def report_wrong(page_url):
 	address = json.loads(browser("eval", "window.playground.reportAddress()") or '""')
 	open_page(with_parameter("report=off"))
 	wait_for_isolation()
+	stop_running()
 	run_code(REPORT_CODE)
 	hidden = browser("eval", 'document.getElementById("report").hidden')
 	open_page(page_url)  # last: its reloads to other addresses come after the checks that reload the page themselves
@@ -1098,6 +1111,7 @@ def fingers_wrong():
 	if webdriver:
 		print(f"skip {FINGERS}: touches go through Chrome's DevTools protocol only")
 		return []
+	stop_running()
 	browser("click", "#output")
 	browser("eval", f"void playground.chooseExample({json.dumps(FINGERS_SAMPLE)})")
 	pixel_painted = lambda share: browser("eval", f"""(async () => {{
