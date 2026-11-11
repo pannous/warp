@@ -16,11 +16,49 @@ read_splats(path: any): list := splats_of(read_bytes(path))
 write_splats(path: any, splats: list) := write_bytes(path, splats_bytes(splats))
 
 splats_of(bytes: list): list := [splat_at(bytes, splat_record_size * i) for i in 0 ..< count(bytes) /! splat_record_size]
-splat_at(bytes: list, at: int): Splat := {
-	numbers = [f32_at(bytes, at + 4 * k) for k in 0 ..< 6]
-	quaternion = [(bytes[at + 28 + k] - 128) / 128.0 for k in 0 ..< 4]
-	Splat(numbers[0 ..< 3], numbers[3 ..< 6], normalize(quaternion), rgb(bytes[at + 24], bytes[at + 25], bytes[at + 26]), bytes[at + 27] / 255.0)
+splat_at(bytes: list, at: int): Splat := Splat(record_floats(bytes, at, 0, 3), record_floats(bytes, at, 3, 6), normalize(record_quaternion(bytes, at)), rgb(bytes[at + 24], bytes[at + 25], bytes[at + 26]), bytes[at + 27] / 255.0)
+record_floats(bytes: list, at: int, from: int, to: int): list := [f32_at(bytes, at + 4 * k) for k in from ..< to]
+record_quaternion(bytes: list, at: int): list := [(bytes[at + 28 + k] - 128) / 128.0 for k in 0 ..< 4]
+
+// the six upper-triangle numbers of Σ = R S² Rᵀ, row-major c00 c01 c02 c11 c12 c22. R is the rotation matrix of the
+// unit quaternion [w, x, y, z], S the scales along the Gaussian's own axes
+covariance_terms(rotation: list, scale: list): list := {
+	w = rotation#1; x = rotation#2; y = rotation#3; z = rotation#4
+	r00 = 1 - 2 * (y * y + z * z)
+	r01 = 2 * (x * y - w * z)
+	r02 = 2 * (x * z + w * y)
+	r10 = 2 * (x * y + w * z)
+	r11 = 1 - 2 * (x * x + z * z)
+	r12 = 2 * (y * z - w * x)
+	r20 = 2 * (x * z - w * y)
+	r21 = 2 * (y * z + w * x)
+	r22 = 1 - 2 * (x * x + y * y)
+	sx = scale#1 * scale#1
+	sy = scale#2 * scale#2
+	sz = scale#3 * scale#3
+	[r00 * r00 * sx + r01 * r01 * sy + r02 * r02 * sz,
+		r00 * r10 * sx + r01 * r11 * sy + r02 * r12 * sz,
+		r00 * r20 * sx + r01 * r21 * sy + r02 * r22 * sz,
+		r10 * r10 * sx + r11 * r11 * sy + r12 * r12 * sz,
+		r10 * r20 * sx + r11 * r21 * sy + r12 * r22 * sz,
+		r20 * r20 * sx + r21 * r21 * sy + r22 * r22 * sz]
 }
+
+// one depth per splat, the dot of (position − eye) with forward, written into depths when it already has one cell a
+// splat (a GPU list [f32] included), else into a new list. The list written
+depths_of(scene: list, eye: list, forward: list, depths: list): list := {
+	ex = eye#1; ey = eye#2; ez = eye#3
+	fx = forward#1; fy = forward#2; fz = forward#3
+	n = #scene
+	out = if #depths == n then depths else [0.0 for i in 1 to n]
+	for i in 1 to n {
+		p = scene#i.position
+		out#i = (p#1 - ex) * fx + (p#2 - ey) * fy + (p#3 - ez) * fz
+	}
+	out
+}
+// indices 0 ..< #depths of the depths at least nearest, the nearest first
+order_by_depth(depths: list, nearest: float): list := [i - 1 for i in 1 to #depths].filter(i => depths#(i + 1) >= nearest).sort_by(i => depths#(i + 1))
 
 splats_bytes(splats: list): list := {
 	bytes = []
