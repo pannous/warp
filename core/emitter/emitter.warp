@@ -45,10 +45,13 @@ function_type_byte = 96
 export_function_byte = 0
 export_memory_byte = 2
 export_global_byte = 3
+# whether the run drops its runtime checks (a --fast program sets it at its start): the runtime's checks read it
+CHECKS_DROPPED = "checks_dropped"
 # the globals the runner reads after a trap: the value a runtime error names,
 # the position of the statement it happened in, the name of the runtime word it failed in (trap_name: the runner no
-# longer needs that word's frame on the stack, which Cranelift's inlining takes away)
-exported_globals = ["trap_detail", "text_heap", "trap_position", "trap_name"]
+# longer needs that word's frame on the stack, which Cranelift's inlining takes away); and checks_dropped, which a
+# --fast program sets in the runtime it links
+exported_globals = ["trap_detail", "text_heap", "trap_position", "trap_name", CHECKS_DROPPED]
 # trap_position holds line * columns_per_line + column
 columns_per_line = 4096
 import_function_byte = 0
@@ -321,7 +324,7 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # program defines itself, never the module's; linked_words: each linked module word by name, its kinds and result,
 # which the program declares (prelude_words.warp declared_only) and the analyzer takes as they are
 # Every compile starts with a fresh Module (fresh_module): nothing of one compile reaches the next
-class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; runtime_bound: bool = no; texts: map = {}; first_text_segment: int = 0; globals: map = {}; global_order: list = []; global_firsts: map = {}; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; case_spellings: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: map = {}; class_words: map = {}; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; main_globals: map = {}; early_globals: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; literal_texts: map = {}; literal_inits: list = []; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; relocating: bool = no; relocations: list = []; own_from: list = []; left_out: map = {}; runtime_types: int = 0; runtime_image: any = ø; runtime_calls: any = ø; runtime_sites: any = ø; relocates_program: bool = no; shakes_runtime: bool = no; shaking: any = ø; linked_images: list = []; linked_own_names: list = []; linked_words: map = {}; marks: map = {}; global_marks: map = {}; int_globals: map = {}; warned: map = {} }
+class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; runtime_bound: bool = no; texts: map = {}; first_text_segment: int = 0; globals: map = {}; global_order: list = []; global_firsts: map = {}; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; case_spellings: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: map = {}; class_words: map = {}; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; main_globals: map = {}; early_globals: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; literal_texts: map = {}; literal_inits: list = []; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; relocating: bool = no; relocations: list = []; own_from: list = []; left_out: map = {}; runtime_types: int = 0; runtime_image: any = ø; runtime_calls: any = ø; runtime_sites: any = ø; relocates_program: bool = no; shakes_runtime: bool = no; shaking: any = ø; linked_images: list = []; linked_own_names: list = []; linked_words: map = {}; linked_class_names: map = {}; linked_reach: map = {}; linked_owners: map = {}; marks: map = {}; global_marks: map = {}; int_globals: map = {}; warned: map = {} }
 
 module = Module({}, [])
 # a new compile's module, emitting the same file
@@ -785,6 +788,8 @@ def literal_node(kind_code: int, t: text, payload: list): list {
 	}
 	[op.global_get] + relocatable(relocated.globals, module.globals[name]#1)
 }
+# a --fast program's runtime checks dropped, before main's own code
+def checks_dropped_code(): list := if fast_build then [op.i32_const, 1, op.global_set] + relocatable(relocated.globals, declared_global(CHECKS_DROPPED, ValueKind.Bool)#1) else []
 # the literals' nodes made, before main's own code
 def literal_init_code(): list := module.literal_inits.flat_map(made => made#2 + [op.global_set] + relocatable(relocated.globals, module.globals[made#1]#1))
 # a $Node of the kind field the code gives
@@ -1443,6 +1448,8 @@ def key_expression(body: Body, n: Node): TypedCode {
 	# `t as codepoint`, `x as integer`: a type word's other names are its kind's; `255 as byte`, `5 as hex` an int's
 	target = if not (right is symbol) then ø else if name_of(right) in core_type_words then core_type_words[name_of(right)] else if name_of(right) in int_spellings then ValueKind.Int else name_of(right)
 	if operator == Op.As and target == "number" { return as_number(expression_code(body, left)) }
+	# `x as any`, also through an alias (`type html = any`): x as it is, held as a node
+	if operator == Op.As and target == "any" { return TypedCode(ValueKind.Node, boxed(expression_code(body, left))) }
 	# `"./a" as path`: the text marked, held unboxed with its mark (TextMark)
 	if operator == Op.As and target in marked_text_types { return TypedCode(ValueKind.Text, converted(expression_code(body, left), ValueKind.Text), marked_text_types[target]) }
 	if operator == Op.As and (is_held_kind(target)) {
@@ -1665,6 +1672,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	if module.catches_errors { declared_global(try_depth_name, ValueKind.Int) }
 	# the name of the runtime word a run failed in, which error_sentences.warp reads
 	declared_global(trap_name_global, ValueKind.Node)
+	declared_global(CHECKS_DROPPED, ValueKind.Bool)
 	module.texts = {}
 	module.literal_texts = {}
 	module.literal_inits = []
@@ -1795,7 +1803,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		# carried its sentences and the whole node printer: 25 KB for 1.5)
 		if module.runtime_image == ø or not relocates() or can_raise(module.order) { exported_trap_message() }
 		# the literals made once, before main runs (literal_node)
-		main.code = literal_init_code() + main.code
+		main.code = literal_init_code() + checks_dropped_code() + main.code
 		# a reading that widened a parameter is read again: its bytes would be dropped
 		if module.widened_now { ø } else {
 			if #module.refusals > 0 { throw module.refusals.join("\n") }
