@@ -192,6 +192,8 @@ draw_shape(kind: int, x: float, y: float, width: float, height: float, color: in
 draw_show(width: int, height: int) from host
 draw_shader(shader: node) from host
 text_coverage(words: node, size: int, font: node): node from host
+// in the system font when none is named (a host line takes no default value yet)
+text_coverage(words, size) := text_coverage(words, size, "")
 paint(picture: node, width: int, height: int, values: node) from host
 // why the picture could not be saved, else ""
 save_picture(picture: node, width: int, height: int, file: node): node from host
