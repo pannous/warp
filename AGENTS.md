@@ -58,7 +58,7 @@ one command table.
 - `warp rebuild`: builds warp.wasm anew from lib/ (nothing rebuilds it automatically); the gate needs only warp.wasm.
   `warp rebuild self` runs that self test and promotes; `scripts/promote-self.sh [--background] [<tree>]` does that
   every once in a while, in parallel, and never fails its caller. A worktree's compilers live in <worktree>/lib/
-  itself (`WARP_LIB=<worktree>/lib`), main's beside the binary
+  itself (`warp --lib <worktree>/lib`), main's beside the binary
 - A form outside the emitter's core is refused loudly (`outside the core: …`)
 
 ### Node AST (the enum in `core/node.warp`)
@@ -192,6 +192,7 @@ before asking a question). After a context swap, this file and your role file be
 - Word choices are aliases: the recommended word is canonical, the others work with a got-it note (core/analysis/diagnostics.warp).
   Only differences in meaning go to the Interviewer. Everything warp prints (errors, shown results, `warp format`,
   docs) uses the canonical word (canonical-output).
+  Users never see decision keys or card names: say the rule itself.
 - Refuse, never guess: where code reads two ways or a form is unknown, the compiler refuses with a
   fix-it naming the readings; a plausible wrong value is the worst bug. A reading decided by spacing or by a
   parameter's type is printed explicitly by `warp format` and in compiler notes (`[a -1]` → `[a, -1]`).
@@ -262,7 +263,9 @@ before asking a question). After a context swap, this file and your role file be
   files a change touches is the worker's feedback, in the background, never a merge condition; the full suite only
   in the cloud, never on the Mac: the routine "warp full suite (cloud)" runs it twice a day (and on demand before a
   release) and commits test/results.txt. Tests that passed before and fail after your
-  change: fix them or roll the change back.
+  change: fix them or roll the change back, except for a core/ compiler change, which may land with some tests and
+  samples red when a card names the red lines and how they get adjusted (`reds: <card>` in the merge message).
+  Smoke, self-check and the playground deploy stay green.
 - Start from the clean baseline: don't rebuild or retest main before your change; whoever pushes keeps main green (a red main: fix it at once or revert your push).
 - The baseline is stored with its compiler: rely on it, never rerun your touched tests on main to compare . `scripts/baseline.sh <test paths>` prints their stored lines; `scripts/baseline.sh --regressions
   <your results>` names what was ✓ there and is ✗ in your `warp test <paths>` output. The full suite stores its results in
@@ -274,7 +277,7 @@ before asking a question). After a context swap, this file and your role file be
   the compiler bakes in (a library change needs no rebuild): lib/ only (modules; the sugar rules are core)
   runs hello on the installed compilers in seconds; core/ or prelude.warp, aliases.warp, math.warp, rule_words.warp
   make it say REBUILDING and run `scripts/rebuild.sh pure <worktree>` first (published to the shared store, so the
-  install after the landing push reuses it). Then `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp <program>` / `warp test
+  install after the landing push reuses it). Then `/Users/me/dev/bin/warp --lib <worktree>/lib <program>` / `warp --lib … test
   <folders>`. A core change also runs `scripts/self-check.sh <worktree>`. Never rebuild in the main checkout. One
   heavy job (rebuild, self-check) of yours at a time. Machine-wide, rebuild.sh runs at most 5 compiler builds at once
   (<store>/build-slots, WARP_BUILD_SLOTS); "all 5 build slots taken, waiting" is normal, never work around it.
@@ -282,7 +285,8 @@ before asking a question). After a context swap, this file and your role file be
   short"): a failed build's log is read, never rebuilt to see the error or "to be sure"; never `--force` past a wait,
   never kill another session's build. A lib/-only change compiles nothing (a rebake, about a minute).
 - Kill only your own processes, by PID (the hook .claude/hooks/no-pattern-kill.sh refuses pkill/killall). Every CLI
-  run that might paint gets `WARP_WINDOW=0` (WARP_NO_WINDOW=1 until the new warp is installed). No browsers on the Mac.
+  run that might paint gets `--no-window` (or `WARP_WINDOW=0`). No visible browsers on the Mac; a single headless page
+  check (web/playground/test_in_browser.py, agent-browser Chrome, nice, one at a time) is fine; whole tours stay in CI.
 - The wiki is the specification: a rewrite of what a wiki page says (a rule, an example's result, a dropped or new
   form; not typos, links or layout) goes to warp-interviewer first, with the old and the new text; the Interviewer
   approves it. A worker's wiki-only change otherwise lands as usual.

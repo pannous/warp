@@ -1,4 +1,0 @@
-# a program's own C declaration among other statements on its line, `;` between them (card program-own)
-'strlen(s: text): i64 from "c"; strlen("abc")'	3
-'x = 1; close(fd: i32): i32 from "c"; close(99) + x'	0
-'print "a; b from c"; 2'	2

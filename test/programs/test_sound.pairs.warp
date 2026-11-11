@@ -2,3 +2,26 @@
 
 # play_inside_a_def_body_before_the_value
 'def h(value) { play(440Hz, 0.05s); value + 1 }; h(2)'	3
+
+# play, beep, stop_sound and wait_sound work without `use sound`, which they bring in (decision bizarre-global)
+
+'play(440Hz, 5ms); wait_sound; 7'	7
+'beep(); stop_sound(); 8'	8
+'play(x) := x * 2; play(3)'	6
+'display = 3; display'	3
+
+# a floor of a value whose kind a cycle of functions still compiles reads it as a node (midi → note_name → Note.octave)
+'use sound; [midi(C4), midi(440Hz), note_name(Eb4)]'	[60, 69, "D#4"]
+'use sound; si_amount(5ms)'	0.005
+
+# a note played pure: a test the argument's kind answers leaves its other branch uncompiled (plain_hertz of a float),
+# a module definition over several lines, `else if …` at a line's start, is reached whole (lib/sound.warp wave)
+'use sound; plain_hertz(C4)'	261.63
+'use sound; wave("sine", 0.25, 0.01) > 0.99'	true
+'use sound; play(C4, 0.05s); 1'	1
+
+# a signal plays whatever number it gives (0.3 * t of an exact 0.3), a block filler by its two parameters
+'use sound; hum(t: float) := 0.3 * t; play_signal(hum, 0.03); 1'	1
+'use sound; hum(t) := 0.3 * sin(2 * pi * 220 * t); play(hum, 0.03s); 1'	1
+'use sound; l(t) := 0.3 * t; r(t) := 0.2; play([l, r], 0.03); 1'	1
+'use sound; hum(block: samples, t) := for i in 1 to #block { block#i = t }; play(hum, 0.03s); 1'	1

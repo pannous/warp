@@ -17,13 +17,7 @@ home_folder(): text := started_env("HOME") ?? raise("~ is the home folder, and t
 # the ones the program set)
 started_env(name: any) := std_io("os", "env", [name])
 # an option of this run (`warp --no-window app.warp`, `warp help options`): its value, "" for a flag, ø when not given
-run_option(name: any) := {
-	value = std_io("warp", "option", [name])
-	if value is text or value == ø then value else legacy_option(name)
-}
-# TODO (card no-bash-exports) an older native warp lacks warp.option (a rebuild's stages run the installed one): its
-# WARP_ variable then, until every installed warp answers it
-legacy_option(name: text) := started_env("WARP_" + name.upper().replace("-", "_"))
+run_option(name: any) := std_io("warp", "option", [name])
 # a shell line running this warp on the words, with this run's lib/ and, in a windowless run, --no-window: how a
 # command or a program starts warp
 warp_command(words: text): text := {

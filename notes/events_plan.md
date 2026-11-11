@@ -26,7 +26,7 @@ How it works:
   Both stay as they are.
 - Timers: lib/timers.warp keeps each handler and tells the host by `signal_listen(kind, id, argument)`; the driver
   keeps a second table (core/native/driver.warp TIMERS_SLOT, next_due, weekday_now) and, once main returned, sleeps
-  (nanosleep) until the earliest is due and calls the export timer_fired(id) by name (events_run). WARP_EVENTS_FOR
+  (nanosleep) until the earliest is due and calls the export timer_fired(id) by name (events_run). --events-for
   bounds it for tests and sweeps.
 - Frames: a program with `on frame` ends in lib/frames.warp frames_end, `while window_open() { emitted(frame) }`,
   inside main; `on exit` ends main with exits_end (extensions/rules/rule_words.warp framed, exited).
@@ -40,7 +40,7 @@ How it works:
 - C callbacks: lib/callbacks.warp and 16 trampolines in lib/native/foreign.c call the driver's c_callback_answered,
   which calls the export c_callback_fired, synchronously inside the C call (qsort works).
 
-What is broken (probed 2026-11-09 with the installed warp, WARP_NO_WINDOW=1, WARP_EVENTS_FOR=350):
+What is broken (probed 2026-11-09 with the installed warp, WARP_WINDOW=0, --events-for 350):
 1. Five loops, none composes: driver events_run, frames_end, page_window_run, tasks_run_while, serve's accept.
    Whoever waits blocks the rest: no timer fires while a window is open or routes are served, a task's sleep fires
    no timer.
@@ -317,7 +317,7 @@ least 50 ms of slack and never bound a count from above by a few milliseconds.
    events.warp answers `events_wait` (poll() with no descriptors yet, the timeout the deadline); natively lib/timers.warp
    registers with the loop instead of signal_listen; prelude `slept` turns the loop while anything listens; one
    ending `events_end` (extensions/rules/rule_words.warp exited and framed's endings join it) runs the loop, then
-   `on exit`; one call however late; monotonic periods; WARP_EVENTS_FOR read in warp; the listening line. The page
+   `on exit`; one call however late; monotonic periods; --events-for read in warp; the listening line. The page
    keeps signal_listen and timer_fired until page-turns. Out of scope: signals, descriptors, windows, tasks.
    Tests (test/control/test_event_loop.pairs.warp):
    `'n = 0; on every 100 ms { n += 1 }; sleep 350 ms; n'	3` (0 now);
@@ -366,7 +366,7 @@ least 50 ms of slack and never bound a count from above by a few milliseconds.
     the busy sleep only without JSPI. Takes card promise-await-page. Test: test_js_callbacks:4 and :7 green in the
     page lane.
 11. **deferred-callbacks** (core: foreign.c + lib/callbacks.warp, careful). Thread-aware trampolines and the ring;
-    `cancel cb` gives a slot back; overflow warns once. Test (test/ffi/test_c_callbacks.pairs.warp): a callback passed
+    `cancel cb` gives a slot back; overflow warns once. Test (test/ffi/test_c.pairs.warp): a callback passed
     to pthread_create as its start routine runs in the loop: `n = 0; f = c_callback(p => { n += 1; 0 }, ["handle"]);
     pthread_create(calloc(1, 8), 0, f, 0); sleep 100 ms; n` gives 1 (pthread_create declared from 'c').
 12. **cancel-handles** (lib, mechanical; Q2 decided). `cancel h` for timers and every source. Test: `'n = 0; t = on

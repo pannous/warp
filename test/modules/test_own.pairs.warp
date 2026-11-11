@@ -1,0 +1,7 @@
+'def r(width, height, m) { width + height }; r(8, 4, 10)'	12
+'fun f(width) { width * 2 }; f(3)'	6
+'def area(width, height) { print width * height; 7 }; area(2, 3)'	7
+
+# a program's own definition of a linked module's name of another arity adds to it: the module's word stays linked
+'use math; clamp(x) := 9; clamp(5, 0, 3) + clamp(1)'	12
+'use units; m(x) := 7; m(1)'	7

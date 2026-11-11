@@ -1,0 +1,38 @@
+# from test_algo_dijkstra.rs: edit the Rust test, then run the script again
+
+# test_dijkstra
+'samples/objects/dijkstra.warp'	'ACBDEF:13'
+
+# from test_algo_levenshtein.rs: edit the Rust test, then run the script again
+
+# test_levenshtein: the sample prints its five distances (card bug-levenshtein-total, faf3345b4b), the test reads them
+'use "../../samples/text/levenshtein.warp"; [levenshtein("kitten", "sitting"), levenshtein("flaw", "lawn"), levenshtein("", "abc"), levenshtein("abc", "abc"), levenshtein("saturday", "sunday")]'	[3, 2, 3, 0, 3]
+
+# test_levenshtein_idiomatic
+'use "../../samples/text/levenshtein_idiomatic.warp"; [levenshtein("kitten", "sitting"), levenshtein("flaw", "lawn"), levenshtein("", "abc"), levenshtein("abc", "abc"), levenshtein("saturday", "sunday")]'	[3, 2, 3, 0, 3]
+
+# from test_algo_life.rs: edit the Rust test, then run the script again
+
+# test_life
+'samples/loops/game_of_life.warp'	3736
+
+# test_life_idiomatic
+'samples/loops/life_idiomatic.warp'	131
+
+# from test_algo_queens.rs: edit the Rust test, then run the script again
+
+# test_queens
+'samples/functions/queens.warp'	1119
+
+# test_queens_idiomatic
+'samples/functions/queens_idiomatic.warp'	1119
+
+# from test_algo_sieve.rs: edit the Rust test, then run the script again
+
+# test_sieve
+'samples/lists/sieve.warp'	1083
+
+# from test_algo_sorting.rs: edit the Rust test, then run the script again
+
+# test_sorting
+'samples/lists/sorting.warp'	'-3,0,1,2,5,5,6,7,8,9'

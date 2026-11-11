@@ -60,7 +60,7 @@ tested=$(git -C "$tree" rev-parse HEAD)
 { echo "tested $tested"; echo "base $base"; for card in "${merged[@]+"${merged[@]}"}"; do echo "card $card"; done; } >"$batch"
 
 "$scripts/rebuild.sh" pure "$tree" || red "rebuild pure failed"
-got=$(cd "$tree" && WARP_NO_WINDOW=1 WARP_LIB=$tree/lib timeout 300 "$MAIN_WARP" pure samples/hello/hello.warp 2>&1 | tail -1)
+got=$(cd "$tree" && WARP_WINDOW=0 timeout 300 "$MAIN_WARP" --lib "$tree/lib" pure samples/hello/hello.warp 2>&1 | tail -1)
 [[ $got == *$EXPECTED* ]] || red "pure hello got ${got:0:160}"
 if [ -z "$smoke_only" ] && ! git -C "$tree" diff --quiet "$base" HEAD -- core extensions; then
 	"$scripts/self-check.sh" "$tree" || red self-check
