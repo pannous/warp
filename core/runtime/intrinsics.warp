@@ -76,10 +76,6 @@ new_text(length: int): text from runtime
 # knows it: == compares its bytes, #t counts them, t#i reads one
 new_ascii_text(length: int): text from runtime
 is_ascii_text(t: text): bool from runtime
-# a text of that many bytes, an $AsciiText when its maker knows they are all ASCII
-made_text(length: int, ascii: bool): text := if ascii then new_ascii_text(length) else new_text(length)
-# the byte offset of an $AsciiText's index-th character, counted from 1: its byte, the byte count past the last
-ascii_offset(t: text, index: int): int := if index < 1 then 0 else if index > byte_count(t) then byte_count(t) else index - 1
 copy_text(to: text, at: int, source: text, start: int, count: int) from runtime
 byte_count(t: text): int from runtime
 byte_at(t: text, at: int): int from runtime

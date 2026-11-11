@@ -3,6 +3,11 @@ use "intrinsics.warp"
 use "characters.warp"
 use "walks.warp"
 use "../emitter/byte_codes.warp"
+# (runtime words, never intrinsics.warp's: a module using that file would compile them as its own, without intrinsics)
+# a text of that many bytes, an $AsciiText when its maker knows they are all ASCII
+made_text(length: int, ascii: bool): text := if ascii then new_ascii_text(length) else new_text(length)
+# the byte offset of an $AsciiText's index-th character, counted from 1: its byte, the byte count past the last
+ascii_offset(t: text, index: int): int := if index < 1 then 0 else if index > byte_count(t) then byte_count(t) else index - 1
 text_join(a: text, b: text): text := {
 	out = made_text(byte_count(a) + byte_count(b), ascii_joined(a, b))
 	copy_text(out, 0, a, 0, byte_count(a))

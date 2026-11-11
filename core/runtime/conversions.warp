@@ -6,6 +6,7 @@ use "bridge.warp"
 use "instructions.warp"
 use "lists.warp"
 use "text_numbers.warp"
+use "text.warp"
 use "types.warp"
 use "../emitter/byte_codes.warp"
 # whether n converts itself to a float, an instance whose class gives float() (an exact root √2, 2km): a call
