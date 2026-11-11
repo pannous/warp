@@ -483,7 +483,7 @@ core-lines-in-questions → AGENTS.md (Clean compiler first).
 egraph-outside-library → github.com/pannous/warp-packages. express-mode → AGENTS.md (Express mode).
 milestone-messages → notes/agents/supervisor.md. play-mozart-mp3 → samples. power-function → card power-function.
 quasi-text → card quasi-text. plural-singular-check → lib/units.warp.
-js-webidl-bindings → extensions/js_globals.warp. catch-blocks → card catch-blocks.
+js-webidl-bindings → extensions/foreign_globals.warp. catch-blocks → card catch-blocks.
 test-case-timeout → core/native/tests.warp. parallel-compilation → card parallel-compilation.
 easy-cards-first → AGENTS.md (Quick cards first). error-gaps → cards. inline-wasm → card inline-wasm.
 webgpu-shader-part, shader-hash → lib/graphics. smoked-merge-push, busy-main-landing → AGENTS.md (Done).
