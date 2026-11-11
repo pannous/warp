@@ -76,7 +76,7 @@ save(picture: Image, as file) := {
 bmp_file_header = 14
 bmp_info_header = 40
 bmp_image(bytes: list): Image := {
-	little = (at, size) => bytes_int(bytes[at ..< at + size], "little")
+	little = (at, size) => from_little_endian(bytes[at ..< at + size])
 	start = little(10, 4)
 	width = little(18, 4)
 	stored_height = signed(little(22, 4), 32)
@@ -96,8 +96,8 @@ bmp_row_size(width: int, per_pixel: int): int := (width * per_pixel + 3) /! 4 * 
 bmp_bytes(picture: Image): list := {
 	row_size = bmp_row_size(picture.width, 3)
 	size = bmp_file_header + bmp_info_header + row_size * picture.height
-	written = bmp_signature + little_endian(size, 32) + little_endian(0, 32) + little_endian(bmp_file_header + bmp_info_header, 32)
-	written += little_endian(bmp_info_header, 32) + little_endian(picture.width, 32) + little_endian(picture.height, 32) + little_endian(1, 16) + little_endian(24, 16) + filled_list(24, 0)
+	written = bmp_signature + little_endian(size, 4) + little_endian(0, 4) + little_endian(bmp_file_header + bmp_info_header, 4)
+	written += little_endian(bmp_info_header, 4) + little_endian(picture.width, 4) + little_endian(picture.height, 4) + little_endian(1, 2) + little_endian(24, 2) + filled_list(24, 0)
 	padding = filled_list(row_size - 3 * picture.width, 0)
 	for y in 0 ..< picture.height {
 		for x in 0 ..< picture.width { written += bmp_channels(pixel_at(picture, x, picture.height - 1 - y)) }
@@ -105,7 +105,6 @@ bmp_bytes(picture: Image): list := {
 	}
 	written
 }
-little_endian(n: int, width: int): list := int_bytes(n, width, "little")
 bmp_channels(color: Color): list := [0, 8, 16].map(shift => channel_byte(color, shift))
 
 // a JPEG by lib/jpeg.warp
