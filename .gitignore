@@ -31,7 +31,7 @@ notes/session
 data/
 /data
 !src/lowering/data/
-# the compilers `warp rebuild` builds in a lib/ (WARP_LIB's folder itself), with their machine code, inputs and kept values
+# the compilers `warp rebuild` builds in a lib/ (--lib's folder itself), with their machine code, inputs and kept values
 /lib/warp.wasm*
 /lib/warp-self.wasm*
 /lib/runtime.wasm.cwasm

@@ -65,14 +65,14 @@ fmin(3.5, 2.1)  # Expected: 2.1
 # Combined Tests: Using multiple FFI functions together
 # ==============================================================================
 
-sqrt(abs(-16))  # Expected: 4.0 (sqrt of abs(-16) = sqrt(16) = 4)
+√abs(-16)  # Expected: 4.0 (√ of abs(-16) = √16 = 4)
 
 # Floor the result of fmin
 floor(fmin(3.7, 2.9))  # Expected: 2 (fmin(3.7, 2.9) = 2.9, floor(2.9) = 2)
 
-# Get length of a number converted to string, then use that in sqrt
-# strlen("test") => 4, sqrt(4) => 2.0
-# This would require: sqrt(strlen("test"))
+# Get length of a number converted to string, then use that in √
+# strlen("test") => 4, √4 => 2.0
+# This would require: √strlen("test")
 
 # ==============================================================================
 # Signature Pattern Examples

@@ -27,7 +27,7 @@ has_wasm_opt(): bool := shell("command -v wasm-opt || true").trim() != ""
 # the module trimmed of what its exports never reach, as `way` says (notes/runtime_linking.md "Removing the unused
 # runtime"): by default also optimized (-O2: a third smaller for 30–60 ms more)
 trim(module: text, trimmed: text, way: text) := {
-	if not (way in TRIM_WAYS) { raise "warp build --trim=" + way + ": no such way, the ways are " + TRIM_WAYS.keys.join(", ") + " (warp, our own linker, is card runtime-shaking)" }
+	if not (way in TRIM_WAYS) { raise "warp build --trim=" + way + ": no such way, the ways are " + TRIM_WAYS.keys.join(", ") + " (warp, our own linker, is not built yet)" }
 	if way == "none" { return write_bytes(trimmed, read_bytes(module)) }
 	if not has_wasm_opt() {
 		warn "wasm-opt not found (" + BINARYEN_INSTALL + "), " + trimmed + " stays unoptimized"
