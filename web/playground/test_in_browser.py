@@ -329,6 +329,11 @@ GUIDE_RELOAD_WAIT_SECONDS = 20
 GUIDE_PLACES = "(clicking a part's, chapter's or section's title puts it in the address, and its address opens it, scrolled to)"  # card guide-section-url
 GUIDE_PLACES_CLICKED = ["guide-part-web", "guide-servers", "guide-logic"]  # a part, a chapter in it, a section
 GUIDE_PLACES_OPENED = ["guide-part-sound", "guide-servers", "guide-warp-reads-warp"]
+# card compiler-reload-per-example: picking examples in the menu reuses the page's worker and its loaded compiler
+EXAMPLE_SWITCH = "(picking examples in the menu keeps the page and its loaded compiler: no reload, no new worker, no stage of loading)"
+EXAMPLE_SWITCH_NAMES = ["sound_features", "hello", "circle", "hello"]
+EXAMPLE_SWITCH_RUN_MS = 15000  # each example's run ends by then
+EXAMPLE_SWITCH_LOADING = "compiler|database|loading its scripts|downloading"  # a stage that means a start or a load
 GUIDE_PARTS_SHOWN = {"parts": ["Basics", "Numbers and text", "Data", "Events and tasks", "Web", "Graphics", "Sound", "Bigger programs", "Under the hood"], "part": "Graphics", "opened": True}
 KEPT_OUTPUT = "(a run keeps the last output, dimmed, until its own shows; an error replaces it)"  # card pressing-try-run
 KEPT_OUTPUT_SLOW = "sleep(1500ms)\n7"
@@ -1055,6 +1060,30 @@ def guide_places_wrong():
 	return [f"{part}: {shown.get(part)!r}, expected {value!r}" for part, value in expected.items() if shown.get(part) != value]
 
 
+def example_switch_wrong():
+	"""each example picked in the menu runs in the worker that loaded the compiler: the page not reloaded, the worker's
+	stages after the first pick naming no start or load, the loading note hidden"""
+	shown = browser("eval", f"""(async () => {{
+		const pause = milliseconds => new Promise(done => setTimeout(done, milliseconds));
+		const started = performance.timeOrigin, menu = document.getElementById("examples");
+		const from = playground.state().stages.length, began = playground.state().stages[0]?.at;
+		for (const name of {json.dumps(EXAMPLE_SWITCH_NAMES)}) {{
+			menu.value = name;
+			menu.dispatchEvent(new Event("change"));
+			for (let waited = 0; waited < {EXAMPLE_SWITCH_RUN_MS} && (await pause(200), playground.state().pending !== undefined || !/ms$/.test(document.getElementById("status").textContent)); waited += 200);
+		}}
+		const stages = playground.state().stages;
+		return JSON.stringify({{
+			"page kept": performance.timeOrigin === started,
+			"worker kept": stages[0]?.at === began,
+			"loading stages": stages.slice(stages.length < from ? 0 : from).map(entry => entry.stage).filter(stage => new RegExp({json.dumps(EXAMPLE_SWITCH_LOADING)}).test(stage)),
+			"loading note": document.getElementById("loading").hidden ? "" : document.getElementById("loading").textContent,
+		}});
+	}})()""")
+	shown = json.loads(json.loads(shown)) if shown.startswith('"') else {"page": f"(page gave no answer: {shown or browser_complaint})"}
+	expected = {"page kept": True, "worker kept": True, "loading stages": [], "loading note": ""}
+	return [f"{part}: {shown.get(part)!r}, expected {value!r}" for part, value in expected.items() if shown.get(part) != value]
+
 def guide_address_wrong():
 	"""each example's #name loads it into the editor, as picking it in the menu does, whichever part its chapter is in"""
 	shown = browser("eval", f"""(async () => {{
@@ -1493,7 +1522,7 @@ def check_examples(names, page_url=None, site=None):
 	snippets = guide_snippets() if GUIDE in names else []
 	for line, code, value, printed in snippets:
 		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (KEPT_OUTPUT, kept_output_wrong), (GUIDE_PARTS, guide_parts_wrong), (GUIDE_ADDRESS, guide_address_wrong), (GUIDE_PLACES, guide_places_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), (STALE_DEPLOY, stale_deploy_wrong), (DEFINED_NAMES, defined_names_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (KEPT_OUTPUT, kept_output_wrong), (GUIDE_PARTS, guide_parts_wrong), (GUIDE_ADDRESS, guide_address_wrong), (GUIDE_PLACES, guide_places_wrong), (EXAMPLE_SWITCH, example_switch_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), (STALE_DEPLOY, stale_deploy_wrong), (DEFINED_NAMES, defined_names_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
