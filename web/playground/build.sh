@@ -280,10 +280,12 @@ NOT_IN_PAGE = re.compile(r"^# host: (native|none)\b", re.M)
 # the authors' working notes stay in the source but not on the page: a comment holding TODO or DONE (or a `# todo`) is
 # left out, the whole line when it is a comment, else from its `#` or `//` on
 WORK_NOTE = re.compile(r"(?:^|\s)(?:#|//)(?:(?!\s#|\s//).)*?(?:\b(?:TODO|DONE)\b|(?:(?<=#)|(?<=//))\s*todo\b).*$")
+# and our card and decision keys, `(card finger-paint-slow)`: a reader gets the rule, never our bookkeeping
+KEY_ASIDE = re.compile(r"\s*\((?:card|decision)s? [a-z0-9]+(?:-[a-z0-9]+)+[^)]*\)")
 def shown(source):
-	if not any(WORK_NOTE.search(line) for line in source.splitlines()): return source
+	if not any(WORK_NOTE.search(line) or KEY_ASIDE.search(line) for line in source.splitlines()): return source
 	kept = []
-	for line in source.splitlines():
+	for line in map(lambda line: KEY_ASIDE.sub("", line), source.splitlines()):
 		note = WORK_NOTE.search(line)
 		before = line[:note.start()].rstrip() if note else line
 		if before or not note: kept.append(before)
