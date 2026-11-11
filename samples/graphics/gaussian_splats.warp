@@ -11,6 +11,7 @@ use math
 use file
 use os
 use splats
+use draw
 
 capture = program.folder + "/bee.splat"
 timing = no
@@ -134,6 +135,10 @@ yaw = 0.0
 pitch = 0.35
 last_x = mouse_x
 last_y = mouse_y
+# one host word records this program's memory, which a GPU-list upload reads. The driver's paint word does not.
+# A dot at 8px is enough; its raster is thrown away. --times asks the host to print upload and draw.
+text_coverage(".", 8, "")
+if timing { set_system_value("paint timing", 1) }
 # each frame of the window, until it closes (headless: one frame, as a PNG)
 on frame {
 	if mouse_down {
