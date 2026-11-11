@@ -5,6 +5,7 @@ use "../analysis/kinds.warp"
 use "lists.warp"
 use "nodes.warp"
 use "show.warp"
+use "../emitter/byte_codes.warp"
 built_empty(): Node := ø
 built_int(n: int): Node := held(n)
 built_bool(truth: int): Node := held(truth != 0)
@@ -12,7 +13,9 @@ built_float(x: float): Node := held(x)
 built_codepoint(code: int): Node := held(char_of(code))
 # the bytes the host left in linear memory, as a text of the program's
 text_from_memory(address: int, length: int): text := {
-	t = new_text(length)
+	ascii = yes
+	for i in 0..<length { ascii = ascii and memory_byte(address + i) < Utf8.Continuation }
+	t = made_text(length, ascii)
 	for i in 0..<length { set_byte(t, i, memory_byte(address + i)) }
 	t
 }

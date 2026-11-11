@@ -4,7 +4,7 @@ use "characters.warp"
 use "walks.warp"
 use "../emitter/byte_codes.warp"
 text_join(a: text, b: text): text := {
-	out = new_text(byte_count(a) + byte_count(b))
+	out = made_text(byte_count(a) + byte_count(b), is_ascii_text(a) and is_ascii_text(b))
 	copy_text(out, 0, a, 0, byte_count(a))
 	copy_text(out, byte_count(a), b, 0, byte_count(b))
 	# a walk over a stays good on out, which starts with a's bytes: `t += …` keeps t's cursor
@@ -16,9 +16,13 @@ text_join(a: text, b: text): text := {
 # all bytes so far each time (card list-display-slowness)
 texts_joined(parts: list, between: text): text := {
 	size = 0
-	for i in 1 to #parts { size += byte_count(unboxed_text(parts#i)) }
+	ascii = is_ascii_text(between)
+	for i in 1 to #parts {
+		size += byte_count(unboxed_text(parts#i))
+		ascii = ascii and is_ascii_text(unboxed_text(parts#i))
+	}
 	if #parts > 1 { size += byte_count(between) * (#parts - 1) }
-	out = new_text(size)
+	out = made_text(size, ascii)
 	at = 0
 	for i in 1 to #parts {
 		if i > 1 {

@@ -2,6 +2,8 @@
 # a decimal literal: exact, a rational, when it has at most 15 significant digits (0.1 is 1/10, so
 # 0.1 + 0.2 == 0.3; 3.0 is the int 3); π's 16 stay a float
 exact_decimal_digits = 15
+# a byte below it is ASCII
+ascii_limit = 128
 # a decimal stays a ratio of ints while its denominator, 10 to its fraction digits, fits an int64 (10^18); past that the
 # parser keeps its digits and big_decimal makes it exact all the same
 exact_fraction_digits = 18
@@ -53,4 +55,6 @@ def text_bytes(t: text): list {
 	code
 }
 # a text of the bytes of t's segment, from the start and count the code before it leaves
-def segment_read(t: text): list := [gc_prefix] + uleb(gc_ops.array_new_data) + relocatable(relocated.types, gc_type(gc.text)) + relocatable(relocated.texts, text_segment(t))
+def segment_read(t: text): list := [gc_prefix] + uleb(gc_ops.array_new_data) + relocatable(relocated.types, gc_type(text_type_of(t))) + relocatable(relocated.texts, text_segment(t))
+# a literal's kind, known here once: an $AsciiText when every byte is ASCII (decision text-representations)
+text_type_of(t: text): text := if t.bytes.all(b => b < ascii_limit) then gc.ascii_text else gc.text
