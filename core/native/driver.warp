@@ -858,9 +858,7 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	outer_run = kept_value(RUN_SLOT)
 	if outer_run == 0 { timers_forgotten() }
 	keep_value(RUN_SLOT, run_state(linker, engine, linked, context, heap_bytes) as i64)
-	instances_linked(linker, engine, context, compiled, linked, library_folder(), trap)
-	host_words_defined(linker, engine, context, compiled, module, yes, trap)
-	checked(wasmtime_linker_define_unknown_imports_as_traps(linker, compiled), trap)
+	checked(imports_defined(linker, engine, context, compiled, module, linked, trap), trap)
 	instance = allocate(INSTANCE_BYTES)
 	checked(wasmtime_linker_instantiate(linker, context, compiled, instance, trap), trap)
 	entry = allocate(EXTERN_BYTES)
@@ -960,9 +958,7 @@ session_line_linked(session: pointer, path: text, instance: pointer, trap: point
 	context = long_at(session + 24).value
 	module = read_file(path)
 	compiled = compiled_module(engine, module, "", trap)
-	instances_linked(linker, engine, context, compiled, linked, library_folder(), trap)
-	host_words_defined(linker, engine, context, compiled, module, yes, trap)
-	error = wasmtime_linker_define_unknown_imports_as_traps(linker, compiled)
+	error = imports_defined(linker, engine, context, compiled, module, linked, trap)
 	if error == 0 { error = wasmtime_linker_instantiate(linker, context, compiled, instance, trap) }
 	if error == 0 and long_at(trap).value == 0 { error = wasmtime_linker_define_instance(linker, context, path, path.length, instance) }
 	# (so a later line that imports it links this instance, never one made anew)
@@ -970,6 +966,13 @@ session_line_linked(session: pointer, path: text, instance: pointer, trap: point
 	error
 }
 
+# what the module imports defined in the linker: the library's instances it links, the host words, a trap for any
+# other; the error, 0 for none
+imports_defined(linker: handle, engine: handle, context: handle, compiled: handle, module: text, linked: pointer, trap: pointer): handle := {
+	instances_linked(linker, engine, context, compiled, linked, library_folder(), trap)
+	host_words_defined(linker, engine, context, compiled, module, yes, trap)
+	wasmtime_linker_define_unknown_imports_as_traps(linker, compiled)
+}
 # a run's linker, engine, linked-instances cell, store context and GC heap size, and whether it linked unicode and the native host
 # module yet, kept in the run's block: what a host word allocates is given back when it returns (foreign.c
 # warp_host_callback)
