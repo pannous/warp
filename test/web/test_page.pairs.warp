@@ -1,0 +1,23 @@
+# from test_page_custom_events.rs: edit the Rust test, then run the script again
+
+# a_plain_program_s_unhandled_emit_does_nothing
+'emit saved{id: 7}; 3'	3
+
+# `$id.member`: an element of the page by its id, its members checked as an HTMLElement's (decision
+# dollar-any-element; it runs in the playground: `$paintings.className` is "paintings"); a bare `$who` stays the
+# value of the field (test_page_values.warp)
+'$paintings.classNam'	error	through the parents: HTMLElement, Element
+'use web; $who'	""
+
+'to_html(html{ div{ button{ on click { print document.title } "Title" } } })'	'<html><div><button data-warp-click="1">Title</button></div></html>'
+'use markup; location = {city: "Rome"}; to_html(div{ p{ location.city } })'	'<div><p>Rome</p></div>'
+'to_html(html{ div{ input{ id: "who" } button{ on click { who.focus() } "Focus" } } })'	'<html><div><input id="who"><button data-warp-click="1">Focus</button></div></html>'
+
+# a host word's failure is the program's error, which try catches, in the page as natively (card playground-host-word)
+'try read_bytes("no/such/file.bin") else "caught"'	"caught"
+'try { read_bytes("no/such/file.bin") } catch e { "no such file" in "${e}".lower() }'	yes
+# a host word takes a text of any length (card page-host)
+'use file; big = temp_folder() + "/big.txt"; write(big, "a" * 70000); byte_size(read(big))'	70000
+
+# a sample's check steps (card scripts-samples, lib/markup.warp type_into): text typed into the field showing a label
+'use web; page: html = div{ input{ id: "who" placeholder: "name" } }; render page; type_into("name", "Ann")'	'<div><input id="who" placeholder="name" value="Ann"></div>'

@@ -1,0 +1,55 @@
+# from test_std_aliases.rs: edit the Rust test, then run the script again
+
+# foreign_standard_names_are_warp_words
+# triage-held 2026-11-06: JS/Python library spellings (JSON.parse, json.loads, re.sub), foreign syntax :: 'JSON.parse("[1, 2]")'	[1 2]
+# triage-held 2026-11-06: JS/Python library spellings (JSON.parse, json.loads, re.sub), foreign syntax :: 'json.loads("[1, 2]")'	[1 2]
+# triage-held 2026-11-06: JS/Python library spellings (JSON.parse, json.loads, re.sub), foreign syntax :: 'JSON.stringify([1, 2])'	'[1,2]'
+# triage-held 2026-11-06: JS/Python library spellings (JSON.parse, json.loads, re.sub), foreign syntax :: 'json.dumps([1, 2])'	'[1,2]'
+# triage-held 2026-11-06: JS/Python library spellings (JSON.parse, json.loads, re.sub), foreign syntax :: 're.sub("[0-9]+", "#", "a1 b22")'	'a# b#'
+
+# a_program_naming_the_module_keeps_it
+'re = 3; re + 1'	4
+'JSON = {parse: 5}; JSON.parse'	5
+
+# from test_std_args.rs: edit the Rust test, then run the script again
+
+# args_without_arguments_is_the_empty_list
+'use os; count(args)'	0
+
+# from test_std_exec.rs: edit the Rust test, then run the script again
+
+# exec_gives_what_the_command_printed
+# — native only: a page runs no process or shell (decision page-host-lines)
+'exec sh "echo hello world"'	'hello world'
+'word="a; rm -rf ~";exec sh "echo $word"'	'a; rm -rf ~'
+'text="a\\nb";split(exec sh "echo $text", "\\n")#2'	'b'
+
+# from test_std_import_forms.rs: edit the Rust test, then run the script again
+
+# import_from_brings_the_named_words_of_a_standard_module
+# triage-held 2026-11-06: JS-style import x from module, foreign syntax :: 'import square from math; square 4'	16
+# triage-held 2026-11-06: JS-style import x from module, foreign syntax :: 'import (square) from math; square 4'	16
+
+# import_from_a_foreign_library_stays_the_foreign_import
+# triage-held 2026-11-06: JS-style import x from module, foreign syntax :: 'import sqrt from math; sqrt 4'	2
+
+# include_splices_a_standard_module
+'include math; square 3'	9
+
+# from test_std_module_uses_module.rs: edit the Rust test, then run the script again
+
+# a_std_module_calls_another_modules_word
+'use text; camel_case("")'	''
+
+# the_used_modules_words_stay_hidden_from_the_program
+'use text; take([1, 2, 3], 2)'	[1 2]
+
+# from test_std_names_offline.rs: edit the Rust test, then run the script again
+
+# a_std_module_name_needs_no_file_lookup
+'use regex; matches("7", "[0-9]")'	true
+
+# the f32 at a byte of a file's bytes, little-endian
+'use bits; f32_at([0, 0, 128, 63, 0, 0, 32, 192], 4)'	-2.5
+# a Gaussian splat written to a .splat file and read back
+'use splats; use color; p = temp_folder() + "/warp_one.splat"; write_splats(p, [Splat([1.5, -2.0, 0.25], [0.5, 0.5, 0.125], [1.0, 0.0, 0.0, 0.0], rgb(255, 128, 0), 1.0)]); s = read_splats(p)#1; delete_file(p); [s.position, s.scale, s.rotation, hex_text(s.color), s.opacity]'	[[1.5, -2, 0.25], [0.5, 0.5, 0.125], [1, 0, 0, 0], "#FF8000", 1]

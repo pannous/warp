@@ -1,0 +1,9 @@
+# from test_count_after_function.rs: edit the Rust test, then run the script again
+
+# a_count_after_a_function
+'f(n) := n * 2; f #[1 2 3]'	6
+'xs = [5 6 7]; xs #2'	6
+
+# count of a yes/no question (card count-xs): `count(2 in xs)` is refused, naming the count it means; `xs.count(2)` counts
+'count(2 in [1, 2, 2])'	error
+'[1, 2, 2].count(2)'	2

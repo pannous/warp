@@ -49,6 +49,8 @@ global down_y = 0.0
 global frames = 0
 global frames_since_title = 0
 global title_ns = 0
+# samples/graphics/gaussian_splats.warp --times sets this. The upload and the draw then print their milliseconds
+global paint_timing = no
 // the blocks SDL fills: an event, a rectangle, the window's two sides
 global event = 0
 global rectangle = 0
@@ -216,6 +218,10 @@ value_set(name: text, value: int): bool := {
 		if name == "window_width" then width = value else height = value
 		sized_by_program = yes
 		if open_now { SDL_SetWindowSize(sdl_window, width, height) }
+	}
+	if name == "paint timing" {
+		paint_timing = value != 0
+		return yes
 	}
 	no
 }

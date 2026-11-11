@@ -14,3 +14,4 @@
 
 # a_class_overloads_the_up_arrow_beside_the_numbers
 'class V { x: int }; infix operator ↑(v: V, n: int) := V(v.x * n); 2↑5'	32
+'#str(2↑100000)'	30103

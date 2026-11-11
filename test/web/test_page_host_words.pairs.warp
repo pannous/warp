@@ -1,5 +1,0 @@
-# a host word's failure is the program's error, which try catches, in the page as natively (card playground-host-word)
-'try read_bytes("no/such/file.bin") else "caught"'	"caught"
-'try { read_bytes("no/such/file.bin") } catch e { "no such file" in "${e}".lower() }'	yes
-# a host word takes a text of any length (card page-host)
-'use file; big = temp_folder() + "/big.txt"; write(big, "a" * 70000); byte_size(read(big))'	70000

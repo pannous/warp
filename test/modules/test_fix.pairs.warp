@@ -1,0 +1,46 @@
+# clearly-wrong fixes, lib-coverage-audit-2 batch 3: mean([]) (Supervisor-approved message, like median), to_base with a base outside 2-36 (looped forever), floor_mod by zero (uncatchable trap), truncate to a width below 1 (index error), two_digits of a negative ("0-5")
+«a(f: function) := try { str(f()) } catch e { "" + e }; [a(() -> mean([])), a(() -> to_base(5, 1)), a(() -> to_base(5, 37)), a(() -> floor_mod(1, 0))] == ["mean of an empty list", "to_base: the base 1 is not 2 to 36", "to_base: the base 37 is not 2 to 36", "floor_mod by zero"]»	true
+«use text; r = try { truncate("abc", 0) } catch e { "" + e }; r == "truncate needs a width of at least 1, not 0"»	true
+«use time; two_digits(-5) == "-05" and two_digits(-12) == "-12"»	true
+
+# chunk refuses a size below 1 (chunk([1], 0) gave [[1]]): fix(lib), card lib-coverage-audit
+«use list; attempt(f: function) := try { str(f()) } catch e { "" + e }; [attempt(() -> chunk([1, 2], 0)), attempt(() -> chunk([1, 2], -1)), chunk([1, 2, 3], 1)] == ["chunk needs a size of at least 1, not 0", "chunk needs a size of at least 1, not -1", [[1], [2], [3]]]»	true
+
+# Supervisor decisions, lib-coverage-audit-2: a negative duration is formatted like the positive one with a minus sign; percentile of an empty list names percentile
+«use time; [format_duration(-5000), format_duration(-500), format_duration(-90061000), format_duration(5000)] == ["-5s", "-500ms", "-1d 1h 1m 1s", "5s"]»	true
+«use list; r = try { percentile([], 50) } catch e { "" + e }; r == "percentile of an empty list"»	true
+
+# floor_mod: the remainder takes the divisor's sign (Python's %): fix(lib), card lib-coverage-audit
+«[floor_mod(7, 3), floor_mod(-7, 3), floor_mod(7, -3), floor_mod(-7, -3), floor_mod(0, 5), floor_mod(6, 3), floor_mod(-6, 3), floor_mod(-1, 86400)] == [1, 2, -2, -1, 0, 0, 0, 86399]»	true
+
+# from_base refuses a digit outside its base (from_base("9", 8) gave 9), an empty text and a base outside 2..36; is_integer works without use text (it called text's remove_prefix): fix(lib), card lib-coverage-audit
+«attempt(f: function) := try { str(f()) } catch e { "" + e }; [from_base("777", 8), from_base("Zz", 36), attempt(() -> from_base("9", 8)), attempt(() -> from_base("", 10)), attempt(() -> from_base("10", 37))] == [511, 1295, "from_base: 9 is not a base-8 digit in 9", "from_base of an empty text", "from_base: the base 37 is not 2 to 36"]»	true
+«[is_integer("42"), is_integer("-42"), is_integer("-"), is_integer(""), is_integer("4.2")] == [yes, yes, no, no, no]»	true
+
+# from_utf8 refuses invalid UTF-8 (a lone continuation byte, a cut-off character, overlong forms, surrogates, non-bytes) instead of an index error or a wrong character; repeat refuses a negative count (it trapped with divide by zero): fix(lib), card lib-coverage-audit-2
+«use text; attempt(f: function) := try { str(f()) } catch e { "" + e }; [attempt(() -> from_utf8([128])), attempt(() -> from_utf8([65, 195])), attempt(() -> from_utf8([192, 128])), attempt(() -> from_utf8([237, 160, 128])), attempt(() -> from_utf8([300]))] == ["from_utf8: the byte 128 at position 0 cannot start a character (invalid UTF-8)", "from_utf8: the character starting at position 1 is cut off (invalid UTF-8)", "from_utf8: the byte 192 at position 0 cannot start a character (invalid UTF-8)", "from_utf8: an overlong or out-of-range sequence at position 0 (invalid UTF-8)", "from_utf8: 300 at position 0 is not a byte"]»	true
+«use text; [from_utf8([195, 169, 240, 159, 152, 128, 65]), from_utf8(to_utf8("ünï😀")), from_utf8([])] == ["é😀A", "ünï😀", ""]»	true
+«use text; attempt(f: function) := try { str(f()) } catch e { "" + e }; [attempt(() -> repeat("x", -1)), repeat("ab", 0), repeat("😀", 2)] == ["repeat needs a count of at least 0, not -1", "", "😀😀"]»	true
+
+# lines strips the carriage return of CRLF line endings (Supervisor-approved fix, lib-coverage-audit-2 batch 4)
+«use text; lines("a" + chr(13) + chr(10) + "b") == ["a", "b"] and lines("a" + chr(13) + chr(10)) == ["a", ""] and lines("x" + chr(13) + "y") == ["x" + chr(13) + "y"]»	true
+
+# merge gives a new map and leaves both inputs alone; update (Python's dict.update) changes its first map in place: fix(lib), card lib-coverage-audit
+«use map; a = {"x": 1, "y": 2}; b = {"y": 3, "z": 4}; m = merge(a, b); [a, b, m] == [{"x": 1, "y": 2}, {"y": 3, "z": 4}, {"x": 1, "y": 3, "z": 4}]»	true
+«use map; a = {"x": 1}; r = update(a, {"x": 3, "y": 2}); [a, r] == [{"x": 3, "y": 2}, {"x": 3, "y": 2}]»	true
+«use map; [merge({}, {}), merge({"a": 1}, {}), merge({}, {"a": 1})] == [{}, {"a": 1}, {"a": 1}]»	true
+
+# snake_case: an acronym stays one word ("HTTPServer" gave "h_t_t_p_server") and non-ASCII letters are kept ("ÄpfelBaum" lost its Ä): fix(lib), card lib-coverage-audit
+«use text; [snake_case("HTTPServer"), snake_case("getHTTPResponseCode"), snake_case("ABC"), snake_case("version2Update"), snake_case("ÄpfelBaum"), snake_case("helloWorld"), snake_case("Hello World"), snake_case("a--b"), snake_case("")] == ["http_server", "get_http_response_code", "abc", "version2_update", "äpfel_baum", "hello_world", "hello_world", "a_b", ""]»	true
+«use text; [kebab_case("HTTPServer"), camel_case("HTTPServer"), kebab_case("straßeName")] == ["http-server", "httpServer", "straße-name"]»	true
+
+# use text and use json together (the prelude's text-cut pattern called find with an untyped part): fix(lib), card lib-coverage-audit
+«use text; use json; [json_text({"a": [1, "x"]}), snake_case("helloWorld")] == ["{\\"a\\":[1,\\"x\\"]}", "hello_world"]»	true
+«use json; use text; use list; use map; use time; use file; use regex; json_text([1, 2])»	"[1,2]"
+
+# days_in_month refuses a month outside 1..12 (it gave 31 for 13); padded keeps a minus sign in front (it gave "0-5"): fix(lib), card lib-coverage-audit
+«use time; attempt(f: function) := try { str(f()) } catch e { "" + e }; [attempt(() -> days_in_month(2024, 13)), attempt(() -> days_in_month(2024, 0)), attempt(() -> days_in_month(2024, -1))] == ["days_in_month: the month 13 is not 1 to 12", "days_in_month: the month 0 is not 1 to 12", "days_in_month: the month -1 is not 1 to 12"]»	true
+«use time; [padded(5, 3), padded(-5, 3), padded(-123, 2), padded(0, 2), padded(1234, 2), padded(7, 0)] == ["005", "-05", "-123", "00", "1234", "7"]»	true
+
+# window refuses a size below 1, as chunk does (window([1, 2, 3], 0) gave [[], [], [], []]): fix(lib), card window-empty-windows
+«use list; attempt(f: function) := try { str(f()) } catch e { "" + e }; [attempt(() -> window([1, 2, 3], 0)), attempt(() -> window([1, 2], -1)), window([1, 2, 3], 1), window([1, 2, 3], 3), window([1, 2, 3], 5)] == ["window needs a size of at least 1, not 0", "window needs a size of at least 1, not -1", [[1], [2], [3]], [[1, 2, 3]], []]»	true

@@ -315,6 +315,14 @@ STALE_VALUE_CODE = "use draw\ncanvas(40, 40)\nloop {\n\tclear(paper)\n\tshow()\n
 STALE_VALUE_FIRST = "4242"
 STALE_VALUE_WAIT_MS = 3000
 GUIDE_PARTS = "(the guide groups its chapters in parts; a chapter's address opens it inside its part)"  # card playground-guide-chapters
+GUIDE_ADDRESS = "(an example's address and the example menu load it into the editor, in any part of the guide; the menu keeps naming it after a try and a reload)"  # card guide-url-sync
+GUIDE_ADDRESS_EXAMPLES = {"#loops": "loops", "#lists": "lists", "#signals": "signals"}  # Basics, Data, Events and tasks
+GUIDE_ADDRESS_CHOSEN = "text"  # Numbers and text, picked in the menu
+GUIDE_RELOADED_KEY = "warp code over a reload"  # playground.js RELOADED_CODE
+GUIDE_RELOAD_WAIT_SECONDS = 20
+GUIDE_PLACES = "(clicking a part's, chapter's or section's title puts it in the address, and its address opens it, scrolled to)"  # card guide-section-url
+GUIDE_PLACES_CLICKED = ["guide-part-web", "guide-servers", "guide-logic"]  # a part, a chapter in it, a section
+GUIDE_PLACES_OPENED = ["guide-part-sound", "guide-servers", "guide-warp-reads-warp"]
 GUIDE_PARTS_SHOWN = {"parts": ["Basics", "Numbers and text", "Data", "Events and tasks", "Web", "Graphics", "Sound", "Bigger programs", "Under the hood"], "part": "Graphics", "opened": True}
 KEPT_OUTPUT = "(a run keeps the last output, dimmed, until its own shows; an error replaces it)"  # card pressing-try-run
 KEPT_OUTPUT_SLOW = "sleep(1500ms)\n7"
@@ -1013,6 +1021,71 @@ def guide_parts_wrong():
 	return [f"{part}: {shown.get(part)!r}, expected {value!r}" for part, value in GUIDE_PARTS_SHOWN.items() if shown.get(part) != value]
 
 
+def guide_places_wrong():
+	"""each place's title link sets the address to it; each place's address opens it and what is around it, in view"""
+	shown = browser("eval", f"""(async () => {{
+		const pause = () => new Promise(done => setTimeout(done, 300));
+		const shown = {{}};
+		for (const id of {json.dumps(GUIDE_PLACES_CLICKED)}) {{
+			const place = document.getElementById(id);
+			for (let at = place; at; at = at.parentElement?.closest("details")) if (at.matches("details")) at.open = true;
+			await pause();
+			place.querySelector("a").click();
+			await pause();
+			shown["clicked " + id] = location.hash === "#" + id;
+		}}
+		for (const id of {json.dumps(GUIDE_PLACES_OPENED)}) {{
+			for (const open of document.querySelectorAll("#guide-chapters details[open]")) open.open = false;
+			location.hash = "#" + id;
+			await pause();
+			const place = document.getElementById(id), top = place.getBoundingClientRect().top;
+			const around = [place, ...(function* () {{ for (let at = place.parentElement?.closest("details"); at; at = at.parentElement?.closest("details")) yield at; }})()];
+			shown["opened " + id] = around.every(at => !at.matches("details") || at.open) && top >= 0 && top < innerHeight;
+		}}
+		return JSON.stringify(shown);
+	}})()""")
+	shown = json.loads(json.loads(shown)) if shown.startswith('"') else {"page": f"(page gave no answer: {shown or browser_complaint})"}
+	expected = {**{"clicked " + id: True for id in GUIDE_PLACES_CLICKED}, **{"opened " + id: True for id in GUIDE_PLACES_OPENED}}
+	return [f"{part}: {shown.get(part)!r}, expected {value!r}" for part, value in expected.items() if shown.get(part) != value]
+
+
+def guide_address_wrong():
+	"""each example's #name loads it into the editor, as picking it in the menu does, whichever part its chapter is in"""
+	shown = browser("eval", f"""(async () => {{
+		const pause = () => new Promise(done => setTimeout(done, 300));
+		const shown = {{}};
+		for (const [hash, name] of Object.entries({json.dumps(GUIDE_ADDRESS_EXAMPLES)})) {{
+			location.hash = hash;
+			await pause();
+			shown[hash] = playground.code() === examplesSource(name) && document.getElementById("examples").value === name;
+		}}
+		const menu = document.getElementById("examples");
+		menu.value = {json.dumps(GUIDE_ADDRESS_CHOSEN)};
+		menu.dispatchEvent(new Event("change"));
+		await pause();
+		shown.menu = playground.code() === examplesSource(menu.value) && location.hash === "#" + menu.value;
+		// a guide snippet's try loads its code, the menu still naming the example chosen
+		location.hash = "#loops";
+		await pause();
+		document.querySelector("#guide-loops .guide-try").click();
+		await pause();
+		shown.tried = menu.value === "loops" && playground.code() !== examplesSource("loops");
+		// a reload for a newer deploy keeps the code typed (reloadWhenStale), and the menu the example the address names
+		sessionStorage.setItem({json.dumps(GUIDE_RELOADED_KEY)}, playground.code());
+		return JSON.stringify(shown);
+	}})()""".replace("examplesSource", "playground.exampleSource"))
+	shown = json.loads(json.loads(shown)) if shown.startswith('"') else {"menu": f"(page gave no answer: {shown or browser_complaint})"}
+	browser("eval", "location.reload()")
+	deadline = time.time() + GUIDE_RELOAD_WAIT_SECONDS
+	reloaded = ""
+	while time.time() < deadline and reloaded != '"loops"':
+		time.sleep(0.5)
+		reloaded = browser("eval", 'window.playground?.code() ? document.getElementById("examples").value : ""')
+	shown["reloaded"] = reloaded == '"loops"' or reloaded
+	expected = {**{hash: True for hash in GUIDE_ADDRESS_EXAMPLES}, "menu": True, "tried": True, "reloaded": True}
+	return [f"{part}: {shown.get(part)!r}, expected {value!r}" for part, value in expected.items() if shown.get(part) != value]
+
+
 def kept_output_wrong():
 	"""while a slow run goes on, the last run's value stays, dimmed, and the status says it runs; its value then replaces
 	it; a failing run's error replaces it too"""
@@ -1414,7 +1487,7 @@ def check_examples(names, page_url=None, site=None):
 	snippets = guide_snippets() if GUIDE in names else []
 	for line, code, value, printed in snippets:
 		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (KEPT_OUTPUT, kept_output_wrong), (GUIDE_PARTS, guide_parts_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), (STALE_DEPLOY, stale_deploy_wrong), (DEFINED_NAMES, defined_names_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (KEPT_OUTPUT, kept_output_wrong), (GUIDE_PARTS, guide_parts_wrong), (GUIDE_ADDRESS, guide_address_wrong), (GUIDE_PLACES, guide_places_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), (STALE_DEPLOY, stale_deploy_wrong), (DEFINED_NAMES, defined_names_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()

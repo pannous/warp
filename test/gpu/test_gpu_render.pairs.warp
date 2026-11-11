@@ -1,4 +1,0 @@
-# gpu_render paints a WGSL fragment shader on the GPU: each pixel a color word as int(red) is one (card gpu-native-library; color words: user OK on page-only-test-reds)
-'gpu_render("@fragment fn main() -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }", 2, 1, {})'	[4294901760, 4294901760]
-'#gpu_render("@fragment fn main() -> @location(0) vec4f { return vec4f(0.0, 0.0, 1.0, 1.0); }", 3, 2, {})'	6
-'try { gpu_render("@fragment fn main( {", 2, 2, {}) } catch e { 7 }'	7

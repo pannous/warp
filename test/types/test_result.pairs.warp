@@ -1,0 +1,14 @@
+# a name defined bare twice, each with its result type, is a function of no parameters of several results: the type at its use picks one (card duplicate-function-definitions, the user's bug button)
+'sample: int := 7; sample: text := "seven"; "hi" + (sample as text)'	"hiseven"
+'sample: int := 7; sample: text := "seven"; x: int = sample; x + 1'	8
+'sample: int := 7; sample + 1'	8
+
+# definitions without parameters told apart by their result type, the call's expected type picking one (card sample-return-polymorphism)
+'sample() as int := 7; sample() as text := "seven"; x: int = sample(); y: text = sample(); [x, y]'	[7, "seven"]
+'sample(): int := 7; sample(): text := "seven"; sample() as text'	"seven"
+'sample() as int := 7; sample() as text := "seven"; twice(n: int) := n * 2; twice(sample())'	14
+'sample() as int := 7; sample() as text := "seven"; y = sample(); y'	error	decision ambiguous-result-error: no expected type tells the results apart
+
+# a result's type must be a type: an undeclared word after as in a head is refused, with the fix (card render-pdf-string, Interviewer screen 11-08)
+'render(t) as pdf := "pdf:"+t; render("x") as pdf'	error	pdf is no type: declare type pdf = text
+'type pdf = text; render(t) as pdf := "pdf:"+t; render("x")'	"pdf:x"

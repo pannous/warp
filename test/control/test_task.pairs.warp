@@ -1,0 +1,33 @@
+# First completed task retains its value (notes/threads.md; decision N29).
+'use tasks; jobs = [go { 7 }, go { 9 }]; await any jobs'	7
+'use tasks; jobs = [go { "first" }, go { "second" }]; await any jobs'	"first"
+
+# Awaiting tasks and ordinary values, and testing when they are done (notes/threads.md; decision task-to-value-awaits).
+'use tasks; t = go { 7 }; before = is_done(t); value = await t; [before, is_done(t), value, is_done("hi"), await "hi"]'	[no, yes, 7, yes, "hi"]
+
+# Task controls preserve pause/resume and cancellation behavior (decisions stopped-no-result and task-handlers).
+'use tasks; job = go { 12 }; pause job; resume job; await job'	12
+'use tasks; job = go { 3 }; cancel job; try await job else 9'	9
+
+# from test_task_globals.rs: edit the Rust test, then run the script again
+
+# a_task_reads_an_exact_global
+'global g = 2.5; f() := g * 2; await go f()'	5
+'global big = 10^30; f() := big + 1 - big; await go f()'	1
+
+# a_go_block_plays_notes
+'use sound; job = go { C4 * 100 }; await job'	26163
+
+# A task is pending before await and done afterwards (notes/threads.md; decision N29).
+'use tasks; job = go { 3 * 4 }; [is_done(job), await job, is_done(job)]'	[no, 12, yes]
+
+# Tasks and signals: finish, cancelled tasks, awaiting into a value place, eval with values, change listeners, emit
+# (wiki async, event; decisions finish-await, stopped-no-result, task-to-value-awaits, eval-explicit-with, P109, P163)
+'f(x):=x*2; job = go f(3); finish job'	6
+'f(x):=x*2; job = go f(3); cancel job; try await job else -1'	-1
+'x = 1; on change x { print "c" }; x = 2; x'	2
+'on alarm { print "a" }; emit alarm{}; 1'	1
+
+# stopping or cancelling a finished task does nothing (card task-stop)
+'f(x) := x; t = go f(1); stop t; 3'	3
+'f(x) := x; t = go f(2); cancel t; await t'	2

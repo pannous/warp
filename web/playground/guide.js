@@ -57,8 +57,10 @@ function exampleLinks(line, chapter) {
 		} }, name);
 	};
 	const links = names => names.flatMap((name, index) => index ? [", ", link(name)] : [link(name)]);
-	const parts = [element("strong", {}, "Examples: "), ...links(exampleNames(tour))];
-	if (samples) parts.push(" · samples/: ", ...links(exampleNames(samples)));
+	// (a chapter of samples alone, Raylib and SDL, names no tour example)
+	const tourNames = exampleNames(tour);
+	const parts = tourNames.length ? [element("strong", {}, "Examples: "), ...links(tourNames)] : [];
+	if (samples) parts.push(parts.length ? " · samples/: " : element("strong", {}, "samples/: "), ...links(exampleNames(samples)));
 	return element("p", { className: "guide-examples" }, ...parts);
 }
 
@@ -101,7 +103,7 @@ function renderBody(lines, chapter) {
 		} else if (line.startsWith(SECTION_PREFIX)) {
 			flush();
 			const title = line.slice(SECTION_PREFIX.length);
-			blocks.push(element("h3", { id: headingId(title), className: "guide-section" }, title));
+			blocks.push(element("h3", { id: headingId(title), className: "guide-section" }, placeLink(headingId(title), title)));
 		} else if (line.trim()) text.push(line);
 		else flush();
 	}
@@ -127,7 +129,7 @@ function renderChapter(section, part) {
 	if (part) partOfChapter.set(title, part);
 	const id = headingId(title);
 	// a chapter the reader clicks scrolls to the top once it opened (openedChapter)
-	const summary = element("summary", { onclick: click => { click.currentTarget.parentElement.dataset.clicked = ""; } }, element("a", { href: `#${id}` }, title));
+	const summary = element("summary", { onclick: click => { click.currentTarget.parentElement.dataset.clicked = ""; } }, placeLink(id, title));
 	return { title, shown: element("details", { id, className: "guide-chapter", ontoggle: openedChapter }, summary, ...renderBody(lines, title)) };
 }
 
@@ -139,14 +141,16 @@ function inParts(chapters) {
 		byPart.set(part, [...byPart.get(part) ?? [], shown]);
 	}
 	return [...byPart].flatMap(([part, shown]) => !part ? shown : shown.length === 0 ? [] :
-		[element("details", { id: PART_PREFIX + slug(part), className: "guide-part" }, element("summary", {}, part), ...shown)]);
+		[element("details", { id: PART_PREFIX + slug(part), className: "guide-part" }, element("summary", {}, placeLink(PART_PREFIX + slug(part), part)), ...shown)]);
 }
 
-// a chapter opened with its part around it
-function openChapter(chapter) {
-	chapter.open = true;
-	const part = chapter.closest(".guide-part");
-	if (part) part.open = true;
+// a part's, chapter's or section's title as the link to its place: clicking it puts the place in the address, as an
+// address naming it opens it (card guide-section-url)
+const placeLink = (id, title) => element("a", { href: `#${id}` }, title);
+
+// a part, chapter or section opened, with the parts and chapter around it
+function openPlace(place) {
+	for (let at = place; at; at = at.parentElement?.closest("details")) if (at.matches("details")) at.open = true;
 }
 
 const renderedGuides = {}; // level → its rendered intro and chapters
@@ -163,7 +167,7 @@ function showLevel(level) {
 	$("guide-chapters").replaceChildren(...renderedGuides[level]);
 	for (const button of document.querySelectorAll(".guide-level button")) button.setAttribute("aria-pressed", button.value === level);
 	store(LEVEL_KEY, level);
-	if (open) openChapter(document.getElementById(open));
+	if (open) openPlace(document.getElementById(open));
 }
 
 function openedChapter(event) {
@@ -180,15 +184,14 @@ function openedChapter(event) {
 	showChapterLink(chapter.querySelector("summary").textContent);
 }
 
-// the chapter or section the address names (its chapter opened), else the first chapter
+// the part, chapter or section the address names (opened with what is around it), else the first chapter
 function openChapterOfAddress() {
 	redirectOldChapterLink();
-	const heading = location.hash ? document.getElementById(location.hash.slice(1)) : document.querySelector(".guide-chapter");
-	const chapter = heading?.closest(".guide-chapter");
-	if (!chapter) return;
+	const place = location.hash ? document.getElementById(location.hash.slice(1)) : document.querySelector(".guide-chapter");
+	if (!place?.closest("#guide-chapters")) return;
 	if (location.hash) $("guide").open = true;
-	openChapter(chapter);
-	if (location.hash) heading.scrollIntoView({ block: heading === chapter ? "nearest" : "start" });
+	openPlace(place);
+	if (location.hash) place.scrollIntoView({ block: place.matches(".guide-chapter") ? "nearest" : "start" });
 }
 
 // an old heading link #hello-world goes to #guide-hello-world, unless the name is an example's (#lists)
