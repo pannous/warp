@@ -868,7 +868,9 @@ rule_needs_by_module(): map := library_index_section("needs")
 scanned_rule_needs(): map := {
 	found = {}
 	for module in std_module_names {
+		rule_module = module
 		needs = module_rule_paths(module).flat_map(path => rule_needs(file_text(path) ?? ""))
+		rule_module = ""
 		if #needs > 0 { found[module] = needs.join(" ") }
 	}
 	found
@@ -1106,7 +1108,7 @@ is_condition(condition: Node): bool := {
 }
 
 # `routed($program)`: a call of a word of extensions/rules/rule_words.warp, run at compile time (decision computed-hole)
-is_rule_word_call(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and (is_rule_word(name_of(n#1)) or is_module_rule_word(name_of(n#1)))
+is_rule_word_call(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and is_rule_word(name_of(n#1))
 # the module of the rules being read or checked, "" for the compiler's own: a word it defines that the compiler has not
 # is a rule word of the module's, run in the module's own wasm (module_word, card module-rule-words)
 global rule_module = ""
@@ -1116,7 +1118,8 @@ is_module_rule_word(word: text): bool := rule_module != "" and not rule_words.ha
 module_word(module: text, word: text, arguments: Node): Node := std_io("warp", "module_word", [module, word, arguments])
 # a word of extensions/rules/rule_words.warp: one this compiler has, or, when a rule names a word it lacks (an older seed building a
 # newer compiler, card rule-whose), one the library's file defines, read only then
-is_rule_word(word: text): bool := rule_words.has(word) or library_rule_word_names().has(word)
+# and in a module's rules a word the module defines (is_module_rule_word)
+is_rule_word(word: text): bool := rule_words.has(word) or library_rule_word_names().has(word) or is_module_rule_word(word)
 # the rule words' file under lib/, read only by a compiler lacking a word a rule names
 RULE_WORDS_FILE = "/extensions/rules/rule_words.warp"
 global library_rule_words = ø
