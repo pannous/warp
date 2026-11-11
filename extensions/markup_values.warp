@@ -12,6 +12,7 @@ MARKUP_MODULE = "markup"
 MARKUP_TYPE = "html"
 MARKUP_CLASS = "Html"
 MARKUP_FIELD = "element"
+BARE_MARKUP_FACT = "bare_markup"
 ELEMENTS_LIST = "html_elements = ["
 ATTRIBUTES_LIST = "html_attributes = ["
 RAW_TEXT_ELEMENTS = ["script", "js"]
@@ -23,7 +24,11 @@ HEAD_ELEMENT = "head"
 # a dashed name is the page's own element (decision unknown-tag), unless it is one of these attributes
 DASHED_ATTRIBUTES = ["data-", "aria-"]
 
-markup_values(program: Node): Node := in_markup(program, scope => marked_markup(scope, ""))
+markup_values(program: Node): Node := {
+	# a statement that is an element, `div{"hi"}`, stands outside every markup scope: data, though surely meant as markup
+	for statement in flat_statements(program).filter(statement => is_markup_block(statement) and not is_markup_scope(statement)) { diagnose(call_of(BARE_MARKUP_FACT, [key_of(statement)]), statement) }
+	in_markup(program, scope => marked_markup(scope, ""))
+}
 # each element of a markup scope an Html, within the element named so; a style sheet's rules (`p: { color: red }`) and
 # a script's text as written
 marked_markup(n: Node, within: text): Node := {
