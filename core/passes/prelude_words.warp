@@ -1059,10 +1059,12 @@ module_hint(word: text): text := {
 	definers = defining_modules(word)
 	if #definers == 1 then ": `use " + definers#1 + "` defines it" else ""
 }
-# a word nothing defines, no prelude's, module's or language's: its call, `from_hex(…)`, is the program's mistake
-is_unknown_word(word: text): bool := not has_meaning(word) and #defining_modules(word) == 0
-# the fix of an unknown word: the known words sharing a part of its name, `from_hex` gives is_hex, hex_text …
+# the fix of a word with no meaning where it is called: the use of each module defining it, `use list or use text` (a
+# module states its own uses; a program's are implied), else the known words sharing a part of its name, `from_hex`
+# gives is_hex, hex_text …
 unknown_word_fix(word: text): text := {
+	definers = defining_modules(word)
+	if #definers > 0 { return definers.map(module => "use " + module).join(" or ") }
 	parts = word.split("_").filter(part => #part >= 3)
 	related = (prelude_definitions() + library_index_section("word").keys).filter(known => parts.any(part => known.contains(part)))
 	if #related > 4 { related = related[0 ..< 4] }
