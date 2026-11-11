@@ -3,7 +3,6 @@
 # cc, so the same source checks x86-64 (the struct on the stack) and ARM64 (a pointer to a copy).
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
 cc -shared -fPIC -o "$stage/libbyvalue.so" "$checkout/test/ffi/byvalue.c" || exit 1
@@ -17,7 +16,7 @@ set_field_i64(p, 8, 32)
 set_field_i64(p, 16, 1)
 [sum24(1, p), pair24(p, 0, p)]
 EOF
-got=$("$warp" "$stage/call.warp" 2>/dev/null)
+got=$("$warp" --no-window "$stage/call.warp" 2>/dev/null)
 if [ "$got" = "[44, 44]" ]; then echo "✓ struct by value"; exit 0; fi
 echo "✗ struct by value: got $got, expected [44, 44]"
 exit 1
