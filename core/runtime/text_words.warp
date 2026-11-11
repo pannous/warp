@@ -9,6 +9,7 @@ text_slice(t: text, from: int, to: int): text := {
 }
 # the byte offset of t's index-th character, counted from 1; past the last, the byte count
 character_offset(t: text, index: int): int := {
+	if is_ascii_text(t) { return ascii_offset(t, index) }
 	at = 0
 	for counted in 1..<index {
 		if at < byte_count(t) { at += 1 }

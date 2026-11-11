@@ -14,7 +14,7 @@ built_codepoint(code: int): Node := held(char_of(code))
 # the bytes the host left in linear memory, as a text of the program's
 text_from_memory(address: int, length: int): text := {
 	ascii = yes
-	for i in 0..<length { ascii = ascii and memory_byte(address + i) < Utf8.Continuation }
+	for i in 0..<length { ascii = ascii and memory_byte(address + i) < Utf8.Continuation and not (i > 0 and memory_byte(address + i - 1) == Ascii.Return and memory_byte(address + i) == Ascii.Newline) }
 	t = made_text(length, ascii)
 	for i in 0..<length { set_byte(t, i, memory_byte(address + i)) }
 	t

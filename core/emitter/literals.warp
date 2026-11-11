@@ -56,5 +56,6 @@ def text_bytes(t: text): list {
 }
 # a text of the bytes of t's segment, from the start and count the code before it leaves
 def segment_read(t: text): list := [gc_prefix] + uleb(gc_ops.array_new_data) + relocatable(relocated.types, gc_type(text_type_of(t))) + relocatable(relocated.texts, text_segment(t))
-# a literal's kind, known here once: an $AsciiText when every byte is ASCII (decision text-representations)
-text_type_of(t: text): text := if t.bytes.all(b => b < ascii_limit) then gc.ascii_text else gc.text
+# a literal's kind, known here once: an $AsciiText when every byte is an ASCII character of its own (decision
+# text-representations; CR LF is one character)
+text_type_of(t: text): text := if t.bytes.all(b => b < ascii_limit) and not t.contains("\r\n") then gc.ascii_text else gc.text
