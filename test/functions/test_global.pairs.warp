@@ -1,0 +1,12 @@
+# a name main declares global stays the module's in every function, however often main assigns it
+'global hue = 220.0; def g() { hue }; def f(c) { hue = c; g() }; x = f(55); hue = 1.0; x'	55
+'global n = 0; def bump() { n = n + 1 }; bump(); n = n + 10; bump(); n'	12
+
+'global f = ø; setf(g) := { f = g }; setf(x => x * 2); f(21)'	42
+'global f = ø; f = x => x * 2; f(21)'	42
+'global f = x => x * 2; h() := f(21); h()'	42
+
+# a global holding a function value is called as one inside a function
+'global g = ø; g = (x => x * 2); h(t: float) := g(t); h(3.0)'	6
+'global g = ø; f(x) := x + 1; g = f; h(t) := g(t); h(3)'	4
+'g = (x => x * 2); h(t) := g(t); h(4)'	8

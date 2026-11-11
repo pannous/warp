@@ -1,0 +1,40 @@
+'class V{x:int; ==(o) := x == o.x}; V(1) == V(1)'	yes
+'class V{x:int; ==(o) := x == o.x}; V(1) == V(2)'	no
+'class V{x:int; ==(o) := yes}; V(1) == V(2)'	yes
+
+# a class field takes a value through the program's conversion to its type, as a typed parameter does (card class-field-takes)
+'class Q { v: int }; n: int as Q := Q(n); class P { q: Q }; P(3).q.v'	3
+'class Q { v: int }; n: int as Q := Q(n); class P { q: Q }; P(q: 3).q.v'	3
+'type Age < int; class P { age: Age }; P(3).age + 1'	4
+'type Age < int; type Years = Age; class P { age: Years }; P(3).age + 1'	4
+
+'class V{x:int; def ==(o) := x == o.x}; V(1) == V(2)'	error	def names no operator: its English name, equal(o) := …
+'class V{x:int; def +(o) := V(x + o.x)}; V(1) + V(2)'	error
+'class V{x:int; operator ==(o) := x == o.x}; V(1) == V(1)'	yes
+'class V{x:int; operator ==(o) := x == o.x}; V(1) == V(2)'	no
+
+'class note{pitch:int}; class file{name:text}; play(xs: notes) := "playing \\(count xs) notes"; play(xs: files) := "playing \\(count xs) files"; [play([note(60), note(64), note(67)]), play([file("intro.mid")])]'	["playing 3 notes", "playing 1 files"]
+
+# super in a method is the parent class: its method called on the instance (wiki/keyword.md super; the tour's classes
+# example; card pure-class-super)
+
+# a_property_calls_the_parents_property_with_super
+'class animal { name; speak := name + " makes a sound" }; class dog extends animal { speak := super.speak + ": woof" }; dog("Rex").speak'	'Rex makes a sound: woof'
+
+# super_reaches_the_nearest_ancestor_declaring_the_method
+'class a { n; shown := "a" + n }; class b extends a { size := 1 }; class c extends b { shown := super.shown + "c" }; c("1").shown'	'a1c'
+
+# a_parent_field_through_super_is_the_instances
+'class animal { name }; class dog extends animal { called := "dog " + super.name }; dog("Rex").called'	'dog Rex'
+
+# a class's text() is how str and as text show its instances, as print does (card class-text-coercion)
+'class P{x; text() := "P" + x}; str(P(3))'	'P3'
+'class P{x; text() := "P" + x}; P(3) as text'	'P3'
+'use units; str(5km) + " " + (300m as text)'	'5km 300m'
+'class P{x}; str(P(3))'	'P{x: 3}'
+
+# from test_class_unions.rs: edit the Rust test, then run the script again
+
+# a_union_of_a_class_and_a_builtin_type
+'class Point{x:int}; p: Point | text = "ab"; p'	'ab'
+'class Point{x:int}; p: text | Point = Point(2); p.x'	2

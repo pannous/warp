@@ -1,0 +1,31 @@
+# Text collections and repetition: notes/stdlib.md and lib/text.warp
+'use text; words("one  two")'	["one", "two"]
+'use text; lines("a\nb")'	['a', 'b']
+'use text; letters("a1 b!")'	['a', 'b']
+'use text; repeat("ab", 2)'	"abab"
+
+# from test_text_plus_anything.rs: edit the Rust test, then run the script again
+
+# a_text_spelling_a_number_plus_a_number_warns
+'"a"+3'	'a3'
+
+// Public text helpers: notes/stdlib.md and lib/text.warp
+«use text; [is_blank(" \t"), is_upper("ABC"), is_lower("abc")]»	[yes, yes, yes]
+«use text; [is_palindrome("Never odd or even"), word_count("one two"), is_unicode_letter("名")]»	[yes, 2, yes]
+
+// Public text helpers: notes/stdlib.md and lib/text.warp
+«use text; snake_case("Hello World")»	"hello_world"
+«use text; is_numeric("-12.5")»	yes
+«use text; is_numeric("hello")»	no
+«use text; wrap("one two three", 7)»	"one two\nthree"
+
+'f(x) := x * 2; [f(3), f("ab")]'	[6, "abab"]
+'z = ["ab", 3]; [z[0] * 2, 2 * z[0], z[0] * z[1]]'	["abab", "abab", "ababab"]
+
+# from test_text_unit_lists.rs: edit the Rust test, then run the script again
+
+# bytes_are_the_byte_list_and_count_as_the_byte_size
+'t = "é!"; t.bytes'	[195 169 33]
+'t = "👍🏽"; count t.bytes'	8
+'t = "👍🏽"; t.bytecount'	8
+'for byte in "äb" { byte }'	98

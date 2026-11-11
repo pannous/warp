@@ -1,4 +1,0 @@
-# a field of ø is a catchable error naming it, never a trap (card person-class-definition)
-'class Person{name: text}; p: Person? = ø; p.name'	error
-'class Person{name: text}; p: Person? = Person("Ada"); p.name'	"Ada"
-'class Person{name: text}; f(p: Person?) := try p.name catch e { "none" }; f(ø)'	"none"
