@@ -23,6 +23,11 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 ---
 
 ## Inbox
+- 2026-11-11 executables-beside-modules: `warp build` ships the compiled modules beside the executable; it finds its own folder through the OS (its executable path) and loads them at run time; no merge, no env var.
+- 2026-11-11 markup-needs-html kept: a bare element (`div{…}`) outside html{} is data and gets a loud warning naming the fix (`x: html = …`).
+- 2026-11-11 public-samples-no-todo: the playground and site hide TODO/DONE comment lines of samples; the sources keep them.
+- 2026-11-11 prelude-word-variable: parked (a binding hides a function only from the binding on).
+- 2026-11-11 menu-follows-example: the playground menu always shows the loaded example, never falls back to hello.
 - 2026-11-11 mutating-needs-bang (parked): `!` on a function that changes what it is given is only a hint for readers where it is not clear; the compiler does not enforce it (almost any function modifies something).
 - 2026-11-11 self-contained-executables: `warp build` makes an executable that carries the runtime and prelude it needs and reads no lib/.
 - 2026-11-11 whole-arrow: `↑` takes whole exponents only (refusal names `^`); the compiler itself carries no big numbers (extension-row-optional). fast-mode: a `--fast` compile argument drops overflow checks (ints wrap at 64 bits) for programs that want speed over checks; the compiler is built with it.
@@ -55,6 +60,7 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - 2026-11-10 aliases-in-rules: a sugar rule's literal word matches every alias spelling of it (`xs.forEach {…}` through the `each` rule); aliases otherwise stay call-only, so data keys and type names never change; the full unification (aliases-unified) is parked: renaming everywhere would rename data keys.
 - 2026-11-10 x-bang-refusal: a block's `x!` is refused with "`x!` runs no code: x() runs a block, interpret x runs data".
 - 2026-11-10 bare-typed-overloads: `name: T := e` is `name(): T := e`, so `sample: int := 7; sample: text := "seven"` overload by result type.
+- 2026-11-11 default-variant: among variants told apart by result type, the one declaring no result is the default: a call no expected type (declaration, typed parameter, declared result, `as`) tells apart takes it; arithmetic tells nothing; a told type no variant declares takes the default with the usual type check; refused: two defaults, a default whose known result a typed variant declares (user OK 11-11 with warp-reviewer's conditions; card float-literal-decimal).
 - 2026-11-10 fast-build: `fast` functions get machine arithmetic (i64 wrapping, fast_math), as extensions/fast.warp.
 - 2026-11-10 def-arrow-fixit: `def f(x) -> T: body` is refused with the fix "def f(x): T := body".
 - 2026-11-10 undo-planned: undo/redo stay a planned feature.
