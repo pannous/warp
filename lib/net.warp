@@ -14,5 +14,5 @@ fetched_value(answer) := if answer is text and is_json_shaped(answer) then json(
 is_json_shaped(answer: text): bool := trim(answer).starts_with("[") or trim(answer).starts_with("{")
 // `users := fetch url` at the main level (extensions/fetch_signals.warp): the answer given to reply at once, a failure
 // as the Error it is, which reply keeps apart from the value
-global fetch_into(url: text, reply: function) := reply(fetched_value(std_io("net", "get", [url])))
+global fetch_into(url: text, reply: function) := reply(fetch(url))
 
