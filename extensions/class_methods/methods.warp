@@ -543,13 +543,19 @@ equality_derived(class_name: text, methods: list, operator_table: map): list := 
 	methods + [Key(call_of(equality_method, [other]), Op.Define, Key(instance_test(other, class_name), Op.And, compared))]
 }
 # a class giving only one of two methods that may answer for each other, approximately(o) or similar(o), answers both
-# operators by it: `similar(o) := approximately(o)` (test_rough_similarity: a class method serves ≈ and ~)
-stand_ins = {"approximately": "similar", "similar": "approximately"}
+# operators by it: `similar(o) := approximately(o)` (test_rough_similarity: a class method serves ≈ and ~); text() and
+# `format as text` are one text form, a list showing its items by it too (user 11-11)
+stand_in_pairs = [["approximately", "similar"], [showing_method, form_method]]
+# the method that answers for this one, ø for none
+stand_in(word: text?): text? := {
+	for pair in stand_in_pairs { if word == pair#1 { return pair#2 } else if word == pair#2 { return pair#1 } }
+	ø
+}
 stand_ins_derived(methods: list): list := {
 	words = methods.map(defined_word)
 	derived = []
-	for method in methods.filter(method => stand_ins.has(defined_word(method) ?? "") and stand_ins[defined_word(method)] not in words) {
-		derived += [forwarding(stand_ins[defined_word(method)], method)]
+	for method in methods.filter(method => stand_in(defined_word(method)) != ø and stand_in(defined_word(method)) not in words) {
+		derived += [forwarding(stand_in(defined_word(method)), method)]
 	}
 	methods + derived
 }
