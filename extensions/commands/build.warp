@@ -70,11 +70,14 @@ is_macos(): bool := shell("uname") == "Darwin"
 # the folder a file's uses are read from: "." for a file named without one
 source_folder(file: text): text := if folder_of(file) == "" then "." else folder_of(file)
 # `warp build [--wasm|--exe] [--trim=<way>] app.warp` (wiki/cli.md; `warp compile` is build --wasm): a primitive file as a native executable (build_native),
-# with --wasm as its module app.wasm (which core/native/driver.warp runs); any other as app.full.wasm (behind the whole runtime), app.mod.wasm (importing runtime.wasm), app.wasm (app.full.wasm
-# trimmed by Binaryen's wasm-opt) and the executable app (the native driver carrying app.wasm). The native
-# warp adds where runtime.wasm lies, --runtime=<file> (and the old Rust stub's --stub=<file>, read no more)
+# with --wasm as its module app.wasm (which core/native/driver.warp runs); any other as the executable app (the native
+# driver carrying app.wasm) with the modules it loads beside it (modules_beside), or with --wasm as app.full.wasm (behind
+# the whole runtime), app.mod.wasm (importing runtime.wasm) and app.wasm (app.full.wasm trimmed by Binaryen's wasm-opt)
+# (decision build-three-outputs, user 11-11). The native warp adds where runtime.wasm lies, --runtime=<file> (and the
+# old Rust stub's --stub=<file>, read no more)
 OPTION_MARK = "--"
 WASM_ONLY = "--wasm"
+# (the default's former name)
 EXE_ONLY = "--exe"
 # what a build of inline code is called: out.wasm, the executable out
 INLINE_STEM = "out"
@@ -123,8 +126,9 @@ build(words: list) := {
 		modules_beside(stem + ".wasm", stem)
 	}
 	if routes_seen and not (WASM_ONLY in options) { print stem + " serves its routes at 8080, another port with --port <n>" }
-	if EXE_ONLY in options { shell("rm -f " + modules.map(quoted_path).join(" ")) } else {
-		for written in modules { print "compiled " + size_of(written) + " bytes to " + written }
+	if WASM_ONLY in options { for written in modules { print "compiled " + size_of(written) + " bytes to " + written } } else {
+		# (the executable carries app.wasm: the modules were its making)
+		shell("rm -f " + modules.map(quoted_path).join(" "))
 	}
 	ø
 }
