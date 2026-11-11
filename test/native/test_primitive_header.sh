@@ -3,7 +3,7 @@
 # code; on its own line below the code it is refused (card primitive-comment-header). Run it with
 # bash test/native/test_primitive_header.sh; the warp under test is WARP (default the warp on PATH)
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
 failures=0

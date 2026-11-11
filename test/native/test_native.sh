@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Primitive files (notes/primitive.md, decision primitive-annotation) built by `warp build native` (wasm2c and cc, the
 # WASI calls answered by lib/native/wasi.c) run natively and print what they should; those without files also run by
-# warp itself. Run it with bash test/native/test_native.sh; the warp under test is WARP (default the warp on PATH), its
-# compiler from WARP_LIB as usual
+# warp itself. Run it with bash test/native/test_native.sh; the warp under test is WARP (default the warp on PATH); a tree's:
+# WARP=<tree>/data/gate/warp
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
 failures=0

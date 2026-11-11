@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""scripts/phase-times.py <log>…: the phases of a compile run with WARP_TIMES=1, from its `§T <milliseconds> <label>`
+"""scripts/phase-times.py <log>…: the phases of a compile run with warp --times, from its `§T <milliseconds> <label>`
 lines (a build record's build.log, notes/compiler_rebuilds.md "Build records"): each label's wall seconds until the
 next mark, summed over its marks, the biggest first; a log's marks stop at its first `emit done`. Several logs (a
 build and its stage two) are reported one after the other."""

@@ -58,7 +58,7 @@ mkdir -p "$store" "$compilers" 2>/dev/null
 logged() { echo "$(date '+%Y-%m-%d %H:%M:%S %Z') tree=$tree hash=$hash $1 $2" >>"$store/rebuilds.log" 2>/dev/null; echo "rebuild.sh: $1 $2 ($hash)"; }
 # wasmtime's machine code of lib's warp.wasm cached before a measured self build: a cold cache costs ~110 G instructions
 # more (data: hello cold 112 G, warm 3 G), which made two records of one commit differ by 6% (card build-record-variance)
-compiler_warmed() { (cd "$tree" && WARP_NO_WINDOW=1 WARP_LIB=$lib "$warp" "$WARMING_PROGRAM" >/dev/null 2>&1); }
+compiler_warmed() { (cd "$tree" && WARP_WINDOW=0 "$warp" --lib "$lib" "$WARMING_PROGRAM" >/dev/null 2>&1); }
 copied() { clone "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
 # the commit a build is of: the tree's HEAD, `<sha>+dirty` when its inputs hold uncommitted changes (inputs.txt lists
 # them), so a build of a worktree's edits is never taken for its base commit's ([--short])
@@ -175,7 +175,7 @@ words_kept() {
 	local entry=$store/$hash scratch
 	[ -f "$entry/warp.wasm" ] && [ -f "$entry/runtime.wasm" ] && [ ! -f "$entry/modules/index.tsv" ] || return 0
 	scratch=$(mktemp -d)
-	(cd "$tree" && WARP_LIB=$lib "$warp" "$entry/warp.wasm" modules "$scratch" "$entry/runtime.wasm") >/dev/null 2>&1
+	(cd "$tree" && "$warp" --lib "$lib" "$entry/warp.wasm" modules "$scratch" "$entry/runtime.wasm") >/dev/null 2>&1
 	[ -f "$scratch/index.tsv" ] && publish "$scratch/index.tsv" modules/index.tsv && logged warp words-index-made
 	rm -rf "$scratch"
 }
@@ -276,8 +276,8 @@ reused_stored() {
 	copied "$stored" "$new" || return 1
 	echo "rebuild step runtime" >"$log"
 	modules_step_starts "$store/code/$code_hash"
-	if ! (cd "$tree" && export WARP_LIB=$lib && rm -f "$compilers/runtime.wasm.cwasm" && "$warp" "$new" runtime "$compilers/runtime.wasm" &&
-		"$warp" "$new" modules "$compilers/modules" "$compilers/runtime.wasm") >>"$log" 2>&1; then
+	if ! (cd "$tree" && rm -f "$compilers/runtime.wasm.cwasm" && "$warp" --lib "$lib" "$new" runtime "$compilers/runtime.wasm" &&
+		"$warp" --lib "$lib" "$new" modules "$compilers/modules" "$compilers/runtime.wasm") >>"$log" 2>&1; then
 		rm -f "$new" "$new".* "$(modules_marked)"
 		return 2
 	fi
@@ -357,7 +357,7 @@ one() {
 	[ "$name" = warp-self ] && compiler_warmed
 	: >"$log"
 	[ "$name" = warp ] && modules_step_starts "$store/main"
-	(cd "$tree" && WARP_LIB=$lib WARP_INPUTS_HASH=$hash WARP_COMPILER_STORE=$store WARP_BUILD_RECORD=$record "$scripts/build-slot.sh" "$log" "$warp" rebuild "${lane[@]}")
+	(cd "$tree" && WARP_COMPILER_STORE=$store WARP_BUILD_RECORD=$record "$scripts/build-slot.sh" "$log" "$warp" --lib "$lib" --seed "$WARP_SEED" rebuild "${lane[@]}")
 	status=$?
 	[ $status != 0 ] && { rm -f "$(modules_marked)"; build_failed "$name" "$log" $status; return 1; }
 	[ "$name" = warp ] && modules_step_kept

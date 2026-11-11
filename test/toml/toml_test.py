@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # toml-test (TOML 1.0 case list, vendored in test/toml/toml-test) against lib/toml's parse_toml; not part of smoke.
-# usage: WARP_LIB=$PWD/lib test/toml/toml_test.py [--fails valid|invalid|GROUP] [--json FILE]
+# usage: [WARP="warp --lib $PWD/lib"] test/toml/toml_test.py [--fails valid|invalid|GROUP] [--json FILE]
 # valid: parse_toml's value, typed as toml-test's JSON ({"type", "value"}), must equal the case's .json;
 # invalid: parse_toml must raise. Groups are the case's first folder (valid/string, invalid/table, ...).
 # Cases that are not UTF-8 can't be a warp text: counted apart as skipped.
-import re, json, os, subprocess, sys, tempfile, collections, math
+import re, json, os, subprocess, sys, tempfile, collections, math, shlex
+# the warp under test: WARP, a command (warp --lib <tree>/lib), else the warp on PATH
+WARP = shlex.split(os.environ.get("WARP", "warp"))
 here = os.path.dirname(os.path.abspath(__file__)); base = os.path.join(here, "toml-test")
 files = [l.strip() for l in open(os.path.join(base, "files-toml-1.0.0")) if l.strip().endswith(".toml")]
 def W(s):
@@ -36,7 +38,7 @@ check(source: text): text := try { "OK " + to_json(typed(parse_toml(source))) } 
 def run(batch):
     prog = PRELUDE + "".join('print(check(%s))\nprint("@@")\n' % W(s) for _, s in batch)
     with tempfile.NamedTemporaryFile("w", suffix=".warp", delete=False, encoding="utf-8") as f: f.write(prog)
-    r = subprocess.run(["warp", f.name], capture_output=True, text=True, errors="replace", timeout=900)
+    r = subprocess.run([*WARP, f.name], capture_output=True, text=True, errors="replace", timeout=900)
     outs = [o.strip() for o in r.stdout.split("@@\n")][:len(batch)]
     return outs if len(outs) == len(batch) else None
 def results(cases):
