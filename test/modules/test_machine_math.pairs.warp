@@ -1,0 +1,14 @@
+# lib/machine_math.warp (cards fast-declaration, switch-rebinds): the C library's sin, cos, exp, pow and atan2 as
+# polynomials, fast_sin … fast_atan2, each word global; their precision is fast_math's, said in lib/fast_math.warp
+'abs(fast_sin(1.0) - sin(1.0)) < 1e-10'	yes
+'abs(fast_cos(2.0) - cos(2.0)) < 1e-10'	yes
+'abs(fast_exp(3.5) - exp(3.5)) < 1e-9'	yes
+'fast_exp(-800.0)'	0
+'abs(fast_pow(2.0, 10.0) - 1024) < 1e-9'	yes
+# a whole exponent of a negative base keeps its sign
+'abs(fast_pow(-2.0, 3.0) + 8) < 1e-9'	yes
+'fast_pow(5.0, 0.0)'	1
+# atan2 takes y first, as C's does, and gives the angle in (-π, π]
+'abs(fast_atan2(1.0, -1.0) - atan2(1.0, -1.0)) < 1e-10'	yes
+'abs(fast_atan2(-1.0, 0.0) - atan2(-1.0, 0.0)) < 1e-10'	yes
+'fast_atan2(0.0, 0.0)'	0

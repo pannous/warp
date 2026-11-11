@@ -117,18 +117,17 @@ rebuilt(first: text, last: text): nothing := {
 	start = step_number(first)
 	end = step_number(last)
 	seed = seed_path()
-	# the seed builds warp.wasm.new, which runs the later steps with the seed's library (driver compiler_library)
-	if start < step_number("native") { companion_copied(seed_library(seed), companion_library(built)) }
+	# the seed builds warp.wasm.new, which runs the later steps with the library the seed makes (driver
+	# compiler_library): the seed's emitter gave warp.wasm.new its GC types, which equal the seed's own only when the
+	# seed compiled itself (refresh-seed's stage A, built by the old seed, does not)
+	if start < step_number("native") {
+		seed_library(seed)
+		library_made(seed, companion_library(built))
+	}
 	if step_runs("seed", start, end) {
-		# the seed's runtime in a folder of its own: a compile links the modules beside its runtime, and lib/modules/
+		# behind the seed's runtime in that library: a compile links the modules beside its runtime, and lib/modules/
 		# were built behind lib/runtime.wasm, whose words may sit elsewhere (an old seed checks only their counts)
-		seed_folder = joined(built, ".seed")
-		mkdir(c_string(seed_folder), FOLDER_MODE)
-		seed_runtime = joined(seed_folder, "/runtime.wasm")
-		file_ran(seed, words(seed, "runtime", seed_runtime, "", "", ""))
-		builder_ran(seed, words(seed, compiler, built, folder_of(compiler), library, seed_runtime))
-		unlink(seed_runtime)
-		rmdir(seed_folder)
+		builder_ran(seed, words(seed, compiler, built, folder_of(compiler), library, joined(companion_library(built), companion_file(0))))
 	}
 	if step_runs("optimize", start, end) {
 		optimized = joined(built, ".optimized")
@@ -229,19 +228,22 @@ seed_shipped(): nothing := {
 	print(joined("precompiled ", seed))
 	print(joined("its library ", seed_library(seed)))
 }
-# the seed's own runtime and unicode module, <seed>.library/, made once: a seed is a stage that compiled itself, so
-# what it makes has its GC types. Made aside and moved in whole, a rebuild beside this one never reads half of it
+# the seed's own runtime and unicode module, <seed>.library/, made once when missing (the published seed brings its own):
+# by the seed itself, so taken for a stage that compiled itself, whose output has its GC types
 seed_library(seed: text): text := {
 	folder = companion_library(seed)
-	if holds_companion(folder) { return folder }
+	if not holds_companion(folder) { library_made(seed, folder) }
+	folder
+}
+# the runtime and unicode module `maker` makes, into `folder` anew: the library of every compiler it builds. Made aside
+# and moved in whole, a rebuild beside this one never reads half of it
+library_made(maker: text, folder: text): nothing := {
 	aside = joined(joined(folder, ".new-"), text_of(getpid()))
 	companion_folders_made(aside)
 	runtime = joined(aside, companion_file(0))
-	file_ran(seed, words(seed, "runtime", runtime, "", "", ""))
-	file_ran(seed, words(seed, "module", "unicode", runtime, joined(aside, companion_file(1)), ""))
-	# (a rebuild beside this one made it first: its folder stays)
-	if rename(c_string(aside), c_string(folder)) != 0 { folder_removed(aside) }
-	folder
+	file_ran(maker, words(maker, "runtime", runtime, "", "", ""))
+	file_ran(maker, words(maker, "module", "unicode", runtime, joined(aside, companion_file(1)), ""))
+	companion_moved(aside, folder)
 }
 # a compiler's library copied beside another compiler of the same builder
 companion_copied(from: text, to: text): nothing := {

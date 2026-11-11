@@ -246,6 +246,9 @@ unit_text(u: any): text := if u is Unit then u.unit else u
 // (rules try a phrase's runs in their order); `3 km as m`, parsed 3 (km as m), takes its amount first too
 rewrite $e $u in $t => ($e $u) in $t where $e is number and unit_led($u) and $t is Unit
 rewrite $e $u as $t => ($e $u) as $t where $e is number and unit_led($u) and $t is Unit
+// `h = 2 inch; 3 km/h`: after a number, a unit written whole stays the unit though the program has a variable of one of
+// its names, as glued `3m` does
+rewrite $e $u => $quantity where $e is number and $w = leading_unit($u) and $w is Unit and $quantity = unit_beside_variables($e, $u)
 // `[3, 4] cm`, `sizes() cm`: a unit after a list, written out or given by a call or a name, measures each of its items
 rewrite $xs $u => $xs.map(item => item * $u) where $u is Unit and list_valued($xs, $program)
 // `sleep 5 ms`, `x = 3 kg`, `1 minute`: a number and a unit spaced is their product, as glued `5ms` is; a unit

@@ -45,3 +45,10 @@
 # a complex shows as 3+4ⅈ; complex names its type; re and im read its parts (user card complex-format-fix)
 'use complex; text((3 + 4ⅈ) * (1 + 2ⅈ))'	"-5+10ⅈ"
 'use complex; x: complex = Complex(3, -4); [re(x), im(x)]'	[3, -4]
+# complex numbers are numbers (wiki/complex.md): · of two complex numbers is their product, a plain number on either side (user, card complex-dot-product)
+'ⅈ·ⅈ'	-1
+'text((1+2ⅈ)·(3-ⅈ))'	"5+5ⅈ"
+'text(2·ⅈ)'	"2ⅈ"
+'text(3 - ⅈ)'	"3-ⅈ"
+'text(-ⅈ)'	"-ⅈ"
+'text(1 / ⅈ)'	"-ⅈ"
