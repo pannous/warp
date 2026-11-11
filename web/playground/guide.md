@@ -2,6 +2,8 @@
 
 Learn Warp one small step at a time. Press **try ▶** to run a snippet, then change it.
 
+# Basics
+
 ## Hello, world
 
 A program tells the computer what to do. The simplest program is just a value.
@@ -36,104 +38,6 @@ A comment is a note for people. The computer skips it.
 ```
 
 Examples: hello; samples: comments, sample, natural, phrases
-
-## Numbers
-
-warp works like a calculator.
-
-```warp => 3
-1 + 2
-```
-
-Parentheses go first.
-
-```warp => 8
-2 * (3 + 1)
-```
-
-`/` divides.
-
-```warp => 5/2
-10 / 4
-```
-
-`^` raises to a power. Numbers never get too big.
-
-```warp => 1267650600228229401496703205376
-2 ^ 100
-```
-
-Numbers stay exact. Fractions and decimals are exact numbers: no rounding, ever.
-
-```warp => 1/2
-1/3 + 1/6
-```
-
-```warp => yes
-0.1 + 0.2 == 0.3
-```
-
-Roots and π are real numbers, and warp keeps them exact too: the square root of 2, squared, is exactly 2.
-
-```warp => 2
-√2 * √2
-```
-
-Fast numbers (floats) are what the computer's chip calculates with: quick, but rounded. Ask for one with the suffix `f`
-or `as float`; compare them with `≈`, not `==`.
-
-```warp => 0.30000000000000004
-0.1f + 0.2
-```
-
-`mod` gives the remainder.
-
-```warp => 1
-7 mod 2
-```
-
-Numbers can have units.
-
-```warp => 2.5h
-2h + 30min
-```
-
-Complex numbers come with `use complex`: `ⅈ` is the imaginary unit, √-1.
-
-```warp => "-5+10i"
-use complex
-str((3 + 4ⅈ) * (1 + 2ⅈ))
-```
-
-Examples: numbers; samples: simple, factorial, power, gcd, collatz, quadratic, sum, sin, sine, measurements, units_dynamic, dates, bits, complex_numbers, complex_roots
-
-## Text
-
-Text is anything in quotes: a word, a name, a sentence.
-
-```warp => "hello"
-"hello"
-```
-
-`+` joins texts.
-
-```warp => "abcd"
-"ab" + "cd"
-```
-
-`.length` counts the letters.
-
-```warp => 4
-"wow🤞🏽".length
-```
-
-`$(…)` puts a value inside a text.
-
-```warp => "1 + 1 = 2"
-"1 + 1 = $(1 + 1)"
-```
-
-Examples: text; samples: levenshtein, palindrome, word_count, sort_words, word_lengths, replace_word, find_text, levenshtein_idiomatic, calculator, regexes, uniscript_text
 
 ## Variables
 
@@ -170,41 +74,6 @@ x
 Some names, like `pi`, are constants. They never change.
 
 Examples: constants, "changing variables", "counting up and down", "typed variables", "let and var", swap
-
-## Values that follow
-
-Like a spreadsheet cell, a value can follow other values.
-
-`=` copies a value once.
-
-```warp => 6
-x = 3
-y = x * 2
-x = 4
-y
-```
-
-`:=` keeps following.
-
-```warp => 8
-x = 3
-y := x * 2
-x = 4
-y
-```
-
-`whenever` runs code each time something becomes true.
-
-```warp
-x = 1
-whenever x > 2 : print "big"
-x = 3
-```
-```printed
-big
-```
-
-Examples: "derived values", signals, listeners, "signals in lists"; samples: signal_fields
 
 ## Truth
 
@@ -280,143 +149,6 @@ sure
 ```
 
 Examples: conditions; samples: control_flow, fizzbuzz
-
-## Matching
-
-`match` picks the first case that fits the value. `other` takes the rest.
-
-```warp => "teen"
-age = 15
-match age { 0 to 12 => "child"; 13 to 19 => "teen"; other => "adult" }
-```
-
-A case can list several values, or name a type. Here `day` is today's weekday, Monday … Sunday.
-
-```warp
-day = today.weekday
-match day { Saturday | Sunday => "weekend"; other => "workday" }
-```
-
-A case can also describe the shape of a list or a map, and name its parts.
-
-```warp => 3
-match [1, 2] { [a, b] => a + b; other => 0 }
-```
-
-Patterns reach into data nested at any depth: `find` collects every match, here the `src` of each image.
-
-```warp => ["logo.png", "cat.jpg"]
-page = {logo: {type: "image", src: "logo.png"}, body: [{type: "text"}, {type: "image", src: "cat.jpg"}]}
-page find {type: "image", src}
-```
-
-Examples: matching; samples: matching, tree_patterns, code_templates, pattern_clauses, pattern_values, text_patterns
-
-## Lists
-
-A list keeps several values in order, like a shopping list.
-
-```warp => [1, 2, 3]
-[1 2 3]
-```
-
-`#` counts the items.
-
-```warp => 2
-friends = ["Alf", "Bob"]
-#friends # the number of friends
-```
-
-`#1` is the first item.
-
-```warp => "apple"
-["apple" "pear"]#1
-```
-
-`sum` adds them up.
-
-```warp => 6
-sum 1 2 3
-```
-
-`sort` puts them in order.
-
-```warp => [1, 2, 3]
-sort [3 1 2]
-```
-
-`+=` adds items.
-
-```warp => [1, 2, 3]
-xs = [1 2]
-xs += [3]
-xs
-```
-
-Make a new list from another one.
-
-```warp => [1, 4, 9, 16]
-[x² for x in [1 2 3 4]]
-```
-
-With a function, `square [1 2 3 4]` does the same: see "Whole lists at once" below.
-
-`where` keeps only some items.
-
-```warp => [3, 4]
-[1 2 3 4] where it > 2
-```
-
-`it` works in a block too: `{it.length}` is a function of one item. Given one, `sort` orders the items by its value,
-here the shortest word first.
-
-```warp => ["fig", "kiwi", "apple", "banana"]
-sort(["banana" "fig" "apple" "kiwi"], {it.length})
-```
-
-### Whole lists at once
-
-A function for one number also works on a whole list.
-
-```warp => [1, 4, 9]
-square := it * it
-square [1 2 3]
-```
-
-`map` spells the same out, handy for a function written in place.
-
-```warp => [2, 4, 6]
-[1 2 3].map(x => x * 2)
-```
-
-Also see [[#Closures]] and [[#Acceleration]] below.
-
-Examples: lists, broadcasting, "lazy ranges", "linear arrays"; samples: sorting, quicksort, primes, sieve, sorting_idiomatic, dot, typed_lists
-
-## Objects
-
-An object keeps values that belong together, each with a name, like a contact card.
-
-```warp => {name: "Ada", age: 36}
-{name: "Ada" age: 36}
-```
-
-A dot reads one value.
-
-```warp => "Ada"
-ada = {name: "Ada"}
-ada.name
-```
-
-Change it like a variable.
-
-```warp => 37
-ada = {age: 36}
-ada.age += 1
-ada.age
-```
-
-Examples: data; samples: data_structures, json_parser, binary_tree, dijkstra, references, disjoint_groups, ring_log, sorted_leaderboard
 
 ## Loops
 
@@ -536,6 +268,294 @@ add3(4)
 
 Examples: closures
 
+## Errors
+
+Things go wrong sometimes. In warp an error is a value that says what happened.
+
+```warp => divide by zero at playground.warp:1:1
+1 / 0
+```
+
+`raise` makes your own error.
+
+```warp => boom at playground.warp:1:1
+raise "boom"
+```
+
+A function can also hand an error back as its value. The caller keeps it in an optional place (`number?`) and asks
+`failed`: no try, no catch. In a plain variable the error stops the program, as a raised one does.
+
+```warp => negative number!
+f(x) := if x < 0 then error "negative number!" else x
+r: number? = f(-1) # question mark means the result can be absent or failed.
+if not r failed then "all positive" else r
+```
+
+A raised error stops the program, even inside `r = 10/0`. A bare `try` keeps it as the value instead, so `failed` works
+the same way.
+
+```warp => 1
+r = try 10/0
+if r failed then 1 else 2
+```
+
+When a line could mean two things, warp asks which one you meant.
+
+Some lines work but look like a slip. Then warp prints a warning and goes on. `use strict` at the top of a program
+makes warnings stop it, as errors do.
+
+Examples: "welcoming errors", ambiguity; samples: try_catch, try_else, parse_number, raise_error, assertions, try_failed_json, errors
+
+## Modules
+
+A module is a ready-made toolbox. `use` opens it.
+
+```warp => √2
+use math
+max(√2 arc_cosine(π/4))
+```
+
+Examples: "C libraries"; samples: lib, square, main, test_ffi, test_ffi_comprehensive, test_ffi_extended, modules, javascript, agent, csv_report, config_patch, slug_paths, free_slots, ask_claude, packages, c_lines, python_modules, numpy_matrix, rust_crates, regex_and_sha2
+
+# Numbers and text
+
+## Numbers
+
+warp works like a calculator.
+
+```warp => 3
+1 + 2
+```
+
+Parentheses go first.
+
+```warp => 8
+2 * (3 + 1)
+```
+
+`/` divides.
+
+```warp => 5/2
+10 / 4
+```
+
+`^` raises to a power. Numbers never get too big.
+
+```warp => 1267650600228229401496703205376
+2 ^ 100
+```
+
+Numbers stay exact. Fractions and decimals are exact numbers: no rounding, ever.
+
+```warp => 1/2
+1/3 + 1/6
+```
+
+```warp => yes
+0.1 + 0.2 == 0.3
+```
+
+Roots and π are real numbers, and warp keeps them exact too: the square root of 2, squared, is exactly 2.
+
+```warp => 2
+√2 * √2
+```
+
+Fast numbers (floats) are what the computer's chip calculates with: quick, but rounded. Ask for one with the suffix `f`
+or `as float`; compare them with `≈`, not `==`.
+
+```warp => 0.30000000000000004
+0.1f + 0.2
+```
+
+`mod` gives the remainder.
+
+```warp => 1
+7 mod 2
+```
+
+Numbers can have units.
+
+```warp => 2.5h
+2h + 30min
+```
+
+Complex numbers come with `use complex`: `ⅈ` is the imaginary unit, √-1.
+
+```warp => "-5+10i"
+use complex
+str((3 + 4ⅈ) * (1 + 2ⅈ))
+```
+
+Examples: numbers; samples: simple, factorial, power, gcd, collatz, quadratic, sum, sin, sine, measurements, units_dynamic, dates, bits, complex_numbers, complex_roots
+
+## Text
+
+Text is anything in quotes: a word, a name, a sentence.
+
+```warp => "hello"
+"hello"
+```
+
+`+` joins texts.
+
+```warp => "abcd"
+"ab" + "cd"
+```
+
+`.length` counts the letters.
+
+```warp => 4
+"wow🤞🏽".length
+```
+
+`$(…)` puts a value inside a text.
+
+```warp => "1 + 1 = 2"
+"1 + 1 = $(1 + 1)"
+```
+
+Examples: text; samples: levenshtein, palindrome, word_count, sort_words, word_lengths, replace_word, find_text, levenshtein_idiomatic, calculator, regexes, uniscript_text
+
+# Data
+
+## Lists
+
+A list keeps several values in order, like a shopping list.
+
+```warp => [1, 2, 3]
+[1 2 3]
+```
+
+`#` counts the items.
+
+```warp => 2
+friends = ["Alf", "Bob"]
+#friends # the number of friends
+```
+
+`#1` is the first item.
+
+```warp => "apple"
+["apple" "pear"]#1
+```
+
+`sum` adds them up.
+
+```warp => 6
+sum 1 2 3
+```
+
+`sort` puts them in order.
+
+```warp => [1, 2, 3]
+sort [3 1 2]
+```
+
+`+=` adds items.
+
+```warp => [1, 2, 3]
+xs = [1 2]
+xs += [3]
+xs
+```
+
+Make a new list from another one.
+
+```warp => [1, 4, 9, 16]
+[x² for x in [1 2 3 4]]
+```
+
+With a function, `square [1 2 3 4]` does the same: see "Whole lists at once" below.
+
+`where` keeps only some items.
+
+```warp => [3, 4]
+[1 2 3 4] where it > 2
+```
+
+`it` works in a block too: `{it.length}` is a function of one item. Given one, `sort` orders the items by its value,
+here the shortest word first.
+
+```warp => ["fig", "kiwi", "apple", "banana"]
+sort(["banana" "fig" "apple" "kiwi"], {it.length})
+```
+
+### Whole lists at once
+
+A function for one number also works on a whole list.
+
+```warp => [1, 4, 9]
+square := it * it
+square [1 2 3]
+```
+
+`map` spells the same out, handy for a function written in place.
+
+```warp => [2, 4, 6]
+[1 2 3].map(x => x * 2)
+```
+
+Also see [[#Closures]] and [[#Acceleration]] below.
+
+Examples: lists, broadcasting, "lazy ranges", "linear arrays"; samples: sorting, quicksort, primes, sieve, sorting_idiomatic, dot, typed_lists
+
+## Objects
+
+An object keeps values that belong together, each with a name, like a contact card.
+
+```warp => {name: "Ada", age: 36}
+{name: "Ada" age: 36}
+```
+
+A dot reads one value.
+
+```warp => "Ada"
+ada = {name: "Ada"}
+ada.name
+```
+
+Change it like a variable.
+
+```warp => 37
+ada = {age: 36}
+ada.age += 1
+ada.age
+```
+
+Examples: data; samples: data_structures, json_parser, binary_tree, dijkstra, references, disjoint_groups, ring_log, sorted_leaderboard
+
+## Matching
+
+`match` picks the first case that fits the value. `other` takes the rest.
+
+```warp => "teen"
+age = 15
+match age { 0 to 12 => "child"; 13 to 19 => "teen"; other => "adult" }
+```
+
+A case can list several values, or name a type. Here `day` is today's weekday, Monday … Sunday.
+
+```warp
+day = today.weekday
+match day { Saturday | Sunday => "weekend"; other => "workday" }
+```
+
+A case can also describe the shape of a list or a map, and name its parts.
+
+```warp => 3
+match [1, 2] { [a, b] => a + b; other => 0 }
+```
+
+Patterns reach into data nested at any depth: `find` collects every match, here the `src` of each image.
+
+```warp => ["logo.png", "cat.jpg"]
+page = {logo: {type: "image", src: "logo.png"}, body: [{type: "text"}, {type: "image", src: "cat.jpg"}]}
+page find {type: "image", src}
+```
+
+Examples: matching; samples: matching, tree_patterns, code_templates, pattern_clauses, pattern_values, text_patterns
+
 ## Types and classes
 
 Every value has a type: a number, a text, a list...
@@ -617,54 +637,42 @@ json('{"age": 36}').age
 
 Examples: data; samples: orm, orm_transaction, orm_units, todo_app, json_parser, store
 
-## Errors
+# Events and tasks
 
-Things go wrong sometimes. In warp an error is a value that says what happened.
+## Values that follow
 
-```warp => divide by zero at playground.warp:1:1
-1 / 0
+Like a spreadsheet cell, a value can follow other values.
+
+`=` copies a value once.
+
+```warp => 6
+x = 3
+y = x * 2
+x = 4
+y
 ```
 
-`raise` makes your own error.
+`:=` keeps following.
 
-```warp => boom at playground.warp:1:1
-raise "boom"
+```warp => 8
+x = 3
+y := x * 2
+x = 4
+y
 ```
 
-A function can also hand an error back as its value. The caller keeps it in an optional place (`number?`) and asks
-`failed`: no try, no catch. In a plain variable the error stops the program, as a raised one does.
+`whenever` runs code each time something becomes true.
 
-```warp => negative number!
-f(x) := if x < 0 then error "negative number!" else x
-r: number? = f(-1) # question mark means the result can be absent or failed.
-if not r failed then "all positive" else r
+```warp
+x = 1
+whenever x > 2 : print "big"
+x = 3
+```
+```printed
+big
 ```
 
-A raised error stops the program, even inside `r = 10/0`. A bare `try` keeps it as the value instead, so `failed` works
-the same way.
-
-```warp => 1
-r = try 10/0
-if r failed then 1 else 2
-```
-
-When a line could mean two things, warp asks which one you meant.
-
-Some lines work but look like a slip. Then warp prints a warning and goes on. `use strict` at the top of a program
-makes warnings stop it, as errors do.
-
-Examples: "welcoming errors", ambiguity; samples: try_catch, try_else, parse_number, raise_error, assertions, try_failed_json, errors
-
-## Modules
-
-A module is a ready-made toolbox. `use` opens it.
-
-```warp => √2
-use math
-max(√2 arc_cosine(π/4))
-```
-
-Examples: "C libraries"; samples: lib, square, main, test_ffi, test_ffi_comprehensive, test_ffi_extended, modules, javascript, agent, csv_report, config_patch, slug_paths, free_slots, ask_claude, packages, c_lines, python_modules, numpy_matrix, rust_crates, regex_and_sha2
+Examples: "derived values", signals, listeners, "signals in lists"; samples: signal_fields
 
 ## Events and timers
 
@@ -696,6 +704,8 @@ print("first!")
 Channels pass messages between programs.
 
 Examples: tasks, channels; samples: async, threads, parallel_let
+
+# Web
 
 ## Web pages
 
@@ -766,6 +776,8 @@ You can share such an app with one click by pressing <a onclick='()=>deploy("nat
 
 Examples: forms; samples: server, route_headers, hosting, worker
 
+# Graphics
+
 ## Pictures
 
 `use draw` paints pixels on a canvas, and `show()` shows it. A shader colors every pixel at once on the graphics card: [[#Shaders]] below.
@@ -809,6 +821,8 @@ block or function when every digit counts; `@gpu` asks for the graphics card fro
 
 Examples: "gpu map"; samples: gpu_map, gpu_arrays, gpu_million, gpu_f16, meshlet_grid, million_trees
 
+# Sound
+
 ## Sound and music
 
 `use sound` plays notes by name, chords, rhythms and whole songs. A function can also compute the sound itself.
@@ -822,6 +836,23 @@ play ./samples/sound/tune.mp3
 ```
 
 Examples: melody; samples: play_mp3, music, rhythm, harmony, synth, filters, voices, arrangement, sound_patterns, signal_graph, siren_sound, stereo_sound, midi, visualizer, sound_features, sound_kick_samples, sound_pipes, gpu_visualizer_warp, hum_blocks
+
+# Bigger programs
+
+## Everyday programs
+
+Small programs of the kind people write every week: reports from a CSV or a log, a planner, a todo list on the command
+line, a site built from markdown. Each puts the chapters together and runs as it stands.
+
+Examples: "kitchen sink"; samples: todo_cli, settings_cli, invoice_report, inventory_report, checksum_inventory, log_analyzer, url_report, mail_merge, meeting_planner, open_hours, deadlines, recipe_scaler, name_matcher, config_validator, dependency_resolver, comment_board, site_generator
+
+## Advanced
+
+Bigger programs that put the chapters together: a neural net, a ray tracer, a game, pictures painted on the canvas.
+
+Examples: "kitchen sink"; samples: neural_net, raytracer, snake, particles, circle, filled_circle, mandelbrot_canvas, test
+
+# Under the hood
 
 ## WebAssembly
 
@@ -843,19 +874,6 @@ This way, you can prove that your program always does the correct thing.
 
 Examples: "kitchen sink"; samples: laws, kitchensink, basic_laws, project_laws
 
-
-## Everyday programs
-
-Small programs of the kind people write every week: reports from a CSV or a log, a planner, a todo list on the command
-line, a site built from markdown. Each puts the chapters together and runs as it stands.
-
-Examples: "kitchen sink"; samples: todo_cli, settings_cli, invoice_report, inventory_report, checksum_inventory, log_analyzer, url_report, mail_merge, meeting_planner, open_hours, deadlines, recipe_scaler, name_matcher, config_validator, dependency_resolver, comment_board, site_generator
-
-## Advanced
-
-Bigger programs that put the chapters together: a neural net, a ray tracer, a game, pictures painted on the canvas.
-
-Examples: "kitchen sink"; samples: neural_net, raytracer, snake, particles, circle, filled_circle, mandelbrot_canvas, test
 
 ## Warp reads itself
 
