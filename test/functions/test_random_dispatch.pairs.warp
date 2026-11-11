@@ -22,3 +22,8 @@
 'random 1..4 < 4'	true
 'xs = [1, 2]; random xs < 3'	true
 'random 2.5 < 2.5 and yes'	true
+
+# random_asked_as_a_float_draws_a_fraction (decision default-variant, user 11-11): plain calls stay whole
+'x: float = random(50, 550); x > 50 and x < 550 and x != round(x)'	true
+'random(50, 550) is int'	true
+'(random(50, 550) * 1.0) is int'	true

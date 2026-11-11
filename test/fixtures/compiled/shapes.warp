@@ -4,3 +4,6 @@ def greet(name:text) { "hi " + name }
 def width(p:P) { p.x }
 def origin() { P(0, 7) }
 def moved(p:P) { p.x = 9; 0 }
+// half of a whole number, whole by default and a fraction where a float is asked (card float-literal-decimal)
+half(n: int) := n /! 2
+half(n: int): float := n / 2

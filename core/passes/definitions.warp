@@ -95,7 +95,8 @@ is_runtime_declaration(n: Node): bool := {
 result_word = "the result"
 result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
 	Key(head, Op.Colon, result_type): {
-		if not is_call(head) { return n }
+		# (a declaration, a linked module's word without its body, holds no result: random(a, b): float of the prelude)
+		if not is_call(head) or (body == Node.Empty and brought_names.has(name_of(head#1))) { return n }
 		result = symbol(result_word)
 		held = optional_when_answering_empty(head, body, result_type)
 		if name_of(held).ends_with("?") { body = with_empty_otherwise(body) }
