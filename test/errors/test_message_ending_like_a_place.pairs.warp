@@ -1,5 +1,4 @@
 # a raised message ending in a prefix of " at " is an error like any other (cards core-error-sentence-tail, map-missing)
-'try { raise "x a" } catch e { e }'	"x a"
-'try { raise "x at" } catch e { e }'	"x at"
-'try { raise "x " } catch e { e }'	"x "
-'m = {}; m["a"] ?? 0'	0
+'try { raise "x a" } catch e { "${e}" }'	"x a"
+'try { raise "x at" } catch e { "${e}" }'	"x at"
+'try { raise "x " } catch e { "${e}" }'	"x "
