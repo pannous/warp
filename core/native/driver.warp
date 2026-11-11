@@ -954,6 +954,8 @@ session_line_run(session: pointer, path: text): i32 := {
 		# (a Ctrl+C moves the epoch on: this line, never the console, stops at the next one)
 		wasmtime_context_set_epoch_deadline(context, 1)
 		error = started(context, instance, "_start", trap)
+		# (its message is read by running the store's code again: past a Ctrl+C, to the next epoch)
+		wasmtime_context_set_epoch_deadline(context, 1)
 		if error != 0 or long_at(trap).value != 0 { failure = failure_said(error, trap, raised_message(context, instance, trap)) }
 	}
 	keep_value(RUN_SLOT, outer_run)
