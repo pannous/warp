@@ -14,7 +14,7 @@ mkdir -p "$lib/modules"
 borrow() { [ -f "$2" ] || [ ! -f "$1" ] || cp "$1" "$2"; }
 borrow "${seed%.wasm}-runtime.wasm" "$lib/runtime.wasm"
 borrow "${seed%.wasm}-unicode.wasm" "$lib/modules/unicode.wasm"
-WARP_LIB=$lib "$warp" "$seed" runtime "$lib/runtime.wasm" &&
-	WARP_LIB=$lib "$warp" "$seed" module unicode "$lib/runtime.wasm" "$lib/modules/unicode.wasm" ||
+"$warp" --lib "$lib" "$seed" runtime "$lib/runtime.wasm" &&
+	"$warp" --lib "$lib" "$seed" module unicode "$lib/runtime.wasm" "$lib/modules/unicode.wasm" ||
 	{ echo "seed-bootstrap.sh: $seed built no runtime.wasm and modules/unicode.wasm for $lib" >&2; exit 1; }
 echo "seed-bootstrap.sh: a fresh $lib: its runtime and unicode module are the seed's, until the build replaces them"

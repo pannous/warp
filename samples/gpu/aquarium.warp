@@ -32,7 +32,7 @@ sun_vector() := {
 	x = 0.35
 	y = 0.86
 	z = 0.28
-	length = sqrt(x * x + y * y + z * z)
+	length = √(x * x + y * y + z * z)
 	[float(x / length), float(y / length), float(z / length)]
 }
 
@@ -68,7 +68,7 @@ wave_lattice(i) := {
 wave_vector(i) := {
 	flat = wave_lattice(i) .* (2 * pi_value / wave_tile)
 	span = norm(flat)
-	[flat.x, flat.y, 0.026 / span, sqrt(9.81 * span) * 0.95]
+	[flat.x, flat.y, 0.026 / span, √(9.81 * span) * 0.95]
 }
 wave_angle(w, i, xz, t) := dot(w.xy, xz) - w.w * t + i * 2.39996 + phase_seed
 wave_height(xz, t) := {

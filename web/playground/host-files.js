@@ -85,6 +85,8 @@ function postSync(url, body, headers = {}) {
 	request.setRequestHeader("Content-Type", "text/plain; charset=utf-8");
 	for (const [name, value] of Object.entries(headers)) request.setRequestHeader(name, withPageSecret(url, value));
 	request.send(body);
+	// the page marks its key by each answer to a request carrying it (assistant.js keyAnswered)
+	if (Object.values(headers).some(value => self.pageSecrets?.[value])) self.postMessage({ type: "key answered", status: request.status });
 	if (request.status === 0) throw new Error("network error (blocked by CORS?)");
 	if (request.status >= 400) throw new Error(`HTTP status ${request.status}: ${request.responseText}`);
 	return request.responseText;
@@ -495,7 +497,7 @@ addHostPart({
 		// a page has no command line, no input and runs no process; its environment is what the page sets (the stand-in of
 		// the playground's key), its folder the served root that relative paths start from
 		os: {
-			env(name) { return (self.pageEnvironment?.[name] ?? (name === "HOME" ? HOME_DIRECTORY : undefined)) ?? null; },
+			env(name) { return environmentValue(this.holder.environment, name); }, // the run's (driver.js runEnvironment)
 			args: () => self.programArguments ?? [], // a sample's <name>.args (playground.js programArguments)
 			cwd: () => ".",
 			stdin: () => "",

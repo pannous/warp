@@ -5,4 +5,4 @@ def Greeter(start): html {
 	name = start
 	div{ input{ bind: name aria-label: "name" } p{ "Hi " + name } }
 }
-html{ div{ Greeter("Ann") Greeter("Bob") } }
+html{ Greeter("Ann") Greeter("Bob") }

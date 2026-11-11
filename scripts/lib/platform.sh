@@ -22,6 +22,15 @@ esac
 warp_binary=${WARP_BINARY:-$HOME/dev/bin/warp}
 # (neither there: the path stays, so an error names where the binary was looked for, never an empty one)
 [ -e "$warp_binary" ] || warp_binary=$(command -v warp || echo "$warp_binary")
+# launcher_of <folder> <binary> <option…>: <folder>/warp, a warp that runs <binary> with these options first (warp
+# reads no variable for them, decision no-bash-exports: `--lib <tree>/lib --no-hints`), so a script hands its tests
+# one WARP for its tree; prints its path
+launcher_of() {
+	local folder=$1 binary=$2 option options=
+	shift 2
+	for option in "$@"; do options="$options \"$option\""; done
+	printf '#!/bin/sh\nexec "%s"%s "$@"\n' "$binary" "$options" > "$folder/warp" && chmod +x "$folder/warp" && echo "$folder/warp"
+}
 # the main checkout and the compiler store (scripts/rebuild.sh)
 warp_main_checkout=${WARP_MAIN_CHECKOUT:-$HOME/dev/angles/warp}
 # packages_linked <tree>: a worktree's packages/ the main checkout's, which git ignores, so a cowtree worktree has none

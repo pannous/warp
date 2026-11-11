@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 # A subset of yaml-test-suite (vendored in test/yaml/yaml-test-suite) against lib/yaml's parse_yaml_all; not part of smoke.
-# usage: WARP_LIB=$PWD/lib test/yaml/yaml_test.py [--fails TAG|all]
+# usage: [WARP="warp --lib $PWD/lib"] test/yaml/yaml_test.py [--fails TAG|all]
 # Each case's documents, as JSON, must equal its in.json (one JSON value per document). Counts are by tag: a case counts
 # under each of its tags; the total counts each case once.
 # Selection (see README): valid cases with an in.json, tagged with at least one of sequence mapping flow scalar anchor
 # alias comment document simple spec literal folded double single indent whitespace empty header footer, and none of
 # complex-key explicit-key tag local-tag unknown-tag directive 1.3-err 1.3-mod libyaml-err error duplicate-key
 # empty-key edge upto-1.2; no line starting with % ? or !, no " !" tag, no tab characters.
-import json, os, subprocess, sys, tempfile, collections, math
+import json, os, subprocess, sys, tempfile, collections, math, shlex
+# the warp under test: WARP, a command (warp --lib <tree>/lib), else the warp on PATH
+WARP = shlex.split(os.environ.get("WARP", "warp"))
 here = os.path.dirname(os.path.abspath(__file__)); base = os.path.join(here, "yaml-test-suite")
 cases = []
 for root, dirs, files in os.walk(base):
@@ -17,7 +19,7 @@ W = lambda s: '"' + "".join('\\\\' if c == "\\" else '\\"' if c == '"' else "\\n
 prog = 'use yaml\nuse json\ncheck(s: text): text := try { "OK " + to_json(parse_yaml_all(s)) } catch e { "ERR " + e.message.replace("\\n", " ") }\n'
 for c in cases: prog += 'print(check(%s))\nprint("@@")\n' % W(open(os.path.join(base, c, "in.yaml"), encoding="utf-8").read())
 with tempfile.NamedTemporaryFile("w", suffix=".warp", delete=False, encoding="utf-8") as f: f.write(prog)
-outs = [o.strip() for o in subprocess.run(["warp", f.name], capture_output=True, text=True, errors="replace").stdout.split("@@\n")]
+outs = [o.strip() for o in subprocess.run([*WARP, f.name], capture_output=True, text=True, errors="replace").stdout.split("@@\n")]
 def docs(t):
     d, out, at = json.JSONDecoder(), [], 0
     t = t.strip()

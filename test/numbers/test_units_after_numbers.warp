@@ -28,7 +28,7 @@ f(1) + (0.5s as ms) / 1ms' 502
 
 # an_alias_and_a_declared_unit_type_see_through_the_variable
 is! 's = 3
-str(440Hz)' '440/s'
+str(440Hz)' '440Hz'
 is! 'h = 2 m
 v: km/h = 3 km/h
 str(v)' '3km/h'

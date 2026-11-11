@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # core/native/warp.warp, the native warp (decision native-warp-in-core), built by `warp build native`: it runs a file
 # with its arguments, a module, code, and warp.wasm's own commands (`warp build`). Run it with
-# bash test/native/test_warp_native.sh; the warp that builds it is WARP (default the warp on PATH), the native warp's
-# lib/ WARP_LIB as usual
+# bash test/native/test_warp_native.sh; the warp that builds it is WARP (default the warp on PATH); a tree's:
+# WARP=<tree>/data/gate/warp
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+# the lib/ that warp runs with (its version names it), given to the native warp built here
+library=$("$warp" version 2>/dev/null | sed -n 's/.*(compiler.warp of \(.*\))$/\1/p')
+export WARP_WINDOW=0
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
 failures=0
@@ -17,7 +19,7 @@ check() { # check <what> <got> <expected>
 cp "$checkout"/core/native/*.warp "$checkout/samples/hello/hello.warp" "$stage/"
 (cd "$stage" && "$warp" build native warp.warp >"$stage/build.log" 2>&1)
 if [ -x "$stage/warp" ]; then
-	native() { (cd "$stage" && ./warp "$@" 2>&1); }
+	native() { (cd "$stage" && ./warp --lib "$library" "$@" 2>&1); }
 	check "a file" "$(native hello.warp)" '"Hello 🌍2026"'
 	printf 'use os\nprint args\n' >"$stage/arguments.warp"
 	check "a file's arguments" "$(native arguments.warp eins zwei)" '["eins", "zwei"]'
@@ -26,7 +28,7 @@ if [ -x "$stage/warp" ]; then
 	check "code" "$(native '3 + 3')" 6
 	check "help, warp.wasm's command" "$(native help | head -1)" "warp, the compiler written in warp (core/compiler.warp), its commands:"
 	mkdir "$stage/built" && cp "$stage/hello.warp" "$stage/built/"
-	(cd "$stage/built" && ../warp build hello.warp >/dev/null 2>&1)
+	(cd "$stage/built" && ../warp --lib "$library" build hello.warp >/dev/null 2>&1)
 	check "warp build by the native warp" "$("$stage/built/hello" 2>&1)" '"Hello 🌍2026"'
 	check "run, a file" "$(native run hello.warp)" '"Hello 🌍2026"'
 	check "the arguments after --" "$(native arguments.warp -- eins zwei)" '["eins", "zwei"]'
@@ -52,8 +54,8 @@ if [ -x "$stage/warp" ]; then
 	check "eval, code" "$(native eval '3 * 4')" 12
 	check "a command the native warp lacks yet" "$(native verify 1)" "warp verify is not in warp yet"
 	mkdir "$stage/below"
-	check "a file above the current folder" "$(cd "$stage/below" && ../warp ../hello.warp 2>&1)" '"Hello 🌍2026"'
-	check "a command's path above the current folder" "$(cd "$stage/below" && ../warp compile ../hello.warp ../above.wasm >/dev/null 2>&1; ls "$stage/above.wasm" 2>&1)" "$stage/above.wasm"
+	check "a file above the current folder" "$(cd "$stage/below" && ../warp --lib "$library" ../hello.warp 2>&1)" '"Hello 🌍2026"'
+	check "a command's path above the current folder" "$(cd "$stage/below" && ../warp --lib "$library" compile ../hello.warp ../above.wasm >/dev/null 2>&1; ls "$stage/above.wasm" 2>&1)" "$stage/above.wasm"
 	printf 'i = 0\nwhile yes { i += 1 }\n' >"$stage/endless.warp"
 	check "fuel, out of it" "$(native fuel 1_000_000 endless.warp | cut -c1-31)" "out of fuel after 1000000 steps"
 	check "rebuild of no compiler" "$(native rebuild nonsense | cut -c1-34)" "warp rebuild: no compiler nonsense"
@@ -66,10 +68,10 @@ if [ -x "$stage/warp" ]; then
 	check "a system value of a library's" "$(native 'battery()')" "the system value battery is not in warp yet"
 	# an install as ~/dev/bin has it: bin/warp and bin/lib links to a build; what that warp builds keeps running after
 	# the next install moves bin/lib to another build and removes the old one
-	library=$(cd "${WARP_LIB:-$(dirname "$(command -v "$warp")")}" && pwd -P)
+	library=$(cd "$library" && pwd -P)
 	mkdir -p "$stage/install/bin" "$stage/install/app" && ln -s "$library" "$stage/install/old" && ln -s ../old "$stage/install/bin/lib"
 	ln -s "$stage/warp" "$stage/install/bin/warp" && cp "$checkout"/core/native/*.warp "$stage/install/app/"
-	(cd "$stage/install/app" && env -u WARP_LIB ../bin/warp build native warp.warp >/dev/null 2>&1)
+	(cd "$stage/install/app" && ../bin/warp build native warp.warp >/dev/null 2>&1)
 	ln -s "$library" "$stage/install/new" && ln -sfn ../new "$stage/install/bin/lib" && rm "$stage/install/old"
 	played=$(native 'use sound; play(440Hz, 0.5s)')
 	check "a sound, its line" "$(sed -n 1p <<<"$played" | cut -d: -f1)" "sound 0.50 s"
@@ -86,9 +88,9 @@ if [ -x "$stage/warp" ]; then
 	check "sounds through the player, each when its voice reaches it" "$paced $(wc -l <"$stage/played.log" | tr -d ' ') $(sed -n 2p "$stage/played.log")" "yes 2 $stage/recorder.sh 2.wav"
 	check "a signal, sample by sample" "$(native $'use sound\nhum(t: float) := 0.5 * sin(2 * pi * 220 * t)\nplay(hum, 0.5s)' 2>&1 | head -1 | cut -d: -f1)" "sound 0.50 s"
 	check "a signal in blocks" "$(native $'use sound\nhum(block: samples, t) := for i in 1 to #block { block#i = 0.3 }\nplay(hum, 0.1s)' 2>&1 | head -1 | cut -d: -f1)" "sound 0.10 s"
-	check "a sound file" "$(cd "$stage" && ./warp $'use sound\nplay "a.wav"' 2>&1 | head -1)" "sound file: a.wav"
+	check "a sound file" "$(cd "$stage" && ./warp --lib "$library" $'use sound\nplay "a.wav"' 2>&1 | head -1)" "sound file: a.wav"
 	check "the view outside a window: the terminal's, else COLUMNS and LINES" "$(COLUMNS=133 LINES=41 native '[view_width(), view_height()]')" "[133, 41]"
-	check "the view of a terminal" "$(script -q /dev/null sh -c 'stty cols 101 rows 31; cd "$1" && ./warp "[view_width(), view_height()]"' sh "$stage" </dev/null | grep -o '\[[0-9]*, [0-9]*\]')" "[101, 31]"
+	check "the view of a terminal" "$(script -q /dev/null sh -c 'stty cols 101 rows 31; cd "$1" && ./warp --lib "$2" "[view_width(), view_height()]"' sh "$stage" "$library" </dev/null | grep -o '\[[0-9]*, [0-9]*\]')" "[101, 31]"
 	painting=$(native 'paint([0, 1, 0xFF00FF00, 0], 2, 2)')
 	check "paint, a PNG" "${painting%%:*} $(file -b "${painting#*: }")" "painted 2×2 PNG image data, 2 x 2, 8-bit/color RGB, non-interlaced"
 	shaded=$(native 'paint("@fragment fn main(@builtin(position) position: vec4f) -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }", 2, 2, ø)')
@@ -97,10 +99,10 @@ if [ -x "$stage/warp" ]; then
 0"
 	# never called, so no window even if the refusal failed
 	printf 'import InitWindow from "raylib"\nprint "reached"\n' >"$stage/window.warp"
-	check "a window opener under WARP_NO_WINDOW" "$(native window.warp)" "InitWindow from raylib opens a window: refused under WARP_NO_WINDOW or CI"
+	check "a window opener under --no-window" "$(native window.warp)" "InitWindow from raylib opens a window: refused under --no-window or CI"
 	# an installed lib/ this user can't write: the machine code goes to the user's cache folder, a file only read opens
 	(cp -Rc "$library" "$stage/readonly" 2>/dev/null || cp -R "$library" "$stage/readonly") && rm -f "$stage"/readonly/*.cwasm* && chmod a-w "$stage/readonly"
-	check "a read-only lib/, its machine code in the user's cache" "$(XDG_CACHE_HOME="$stage/cache" WARP_LIB="$stage/readonly" native '6 * 7'; ls "$stage/cache/warp" | grep -c 'cwasm$')" "42
+	check "a read-only lib/, its machine code in the user's cache" "$(XDG_CACHE_HOME="$stage/cache" native --lib "$stage/readonly" '6 * 7'; ls "$stage/cache/warp" | grep -c 'cwasm$')" "42
 1"
 	chmod u+w "$stage/readonly"
 	printf hi >"$stage/kept.txt" && chmod a-w "$stage/kept.txt"
@@ -114,10 +116,10 @@ frame at 240x135
 7"
 	check "a painted function in that frame, sampled down to it" "$(native $'on frame { paint((x, y) => [x / 960, y / 540, 0.5], 960, 540) }' | head -1 | cut -d: -f1)" "painted 240×135"
 	printf 'sleep_ms(5000)\n' >"$stage/slow.warp"
-	(cd "$stage" && exec ./warp slow.warp >"$stage/crash.log" 2>&1) & crashing=$!
+	(cd "$stage" && exec ./warp --lib "$library" slow.warp >"$stage/crash.log" 2>&1) & crashing=$!
 	sleep 2.5; kill -ABRT $crashing; wait $crashing; crash_status=$?
 	check "a crash says what was running" "$(cat "$stage/crash.log") $crash_status" "warp: Abort trap: 6 while running slow.warp 134"
-	check "a built executable after the next install" "$(cd "$stage/install/app" && WARP_LIB="$stage/install/bin/lib" ./warp '6 * 7' 2>&1)" 42
+	check "a built executable after the next install" "$(cd "$stage/install/app" && ./warp --lib "$stage/install/bin/lib" '6 * 7' 2>&1)" 42
 else
 	echo "✗ warp: no executable"; head -5 "$stage/build.log"; failures=$((failures + 1))
 fi
