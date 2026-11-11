@@ -596,10 +596,10 @@ def bind_library_words() {
 		for k in 0..<#image.functions {
 			word = image.functions[k]
 			f = module.functions.get(word.name)
-			if f != ø and f.kinds == ø and linkable(image, word) and linked_variant(word.name, #f.signature.parameters) == word { bound_to(f, image, k) }
+			if unbound_declaration(f) and linkable(image, word) and linked_variant(word.name, #f.signature.parameters) == word { bound_to(f, image, k) }
 			# (a word two modules write: the program's typed variant of it, arity_overloads' milliseconds_of·Quantity)
 			variant = if linked_extended.has(word.name) then module.functions.get(typed_variant_written(image.name, word)) else ø
-			if variant != ø and variant.kinds == ø { bound_to(variant, image, k) }
+			if unbound_declaration(variant) { bound_to(variant, image, k) }
 		}
 		bind_written_variants(image)
 	}
@@ -610,7 +610,7 @@ def bind_library_words() {
 # left the lifted method of its bodiless declaration, answering ø (card linked-dynamic-method)
 def bound_by_class(f: Function) {
 	parts = f.name.split("·")
-	if f.kinds != ø or #parts != 2 { return }
+	if not unbound_declaration(f) or #parts != 2 { return }
 	for image in by_precedence(module.linked_images) {
 		if image.classes.any(entry => entry#1 == instance_struct_prefix + parts#2) {
 			for k in 0..<#image.functions { if image.functions[k].name == parts#1 and #image.functions[k].kinds == #f.signature.parameters and linkable(image, image.functions[k]) {
@@ -639,7 +639,7 @@ def bind_written_variants(image: LibraryImage) {
 				if image.functions[k].name in [name, name + "·" + "${#types}"] and #image.functions[k].kinds == #types {
 					for variant in [typed_variant(name + "·" + "${#types}", types), typed_variant(name, types), name + "·" + "${#types}"] {
 						f = module.functions.get(variant)
-						if f != ø and f.kinds == ø { bound_to(f, image, k) }
+						if unbound_declaration(f) { bound_to(f, image, k) }
 					}
 				}
 			}
@@ -681,6 +681,9 @@ def linked_word(name: text): Function? {
 	}
 	ø
 }
+# a word the program declares without a body and binds to no module's yet: a definition of its own, money's Money.compare
+# compiled from its source, stays its own though a linked module writes the name too
+unbound_declaration(f: any): bool := f != ø and f.kinds == ø and f.body == Node.Empty
 def bound_to(f: Function, image: LibraryImage, k: int) {
 	f.index = linked_index(image, k)
 	f.kinds = image.functions[k].kinds
