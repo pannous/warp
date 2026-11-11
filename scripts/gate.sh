@@ -44,6 +44,9 @@ wants() { # wants <tier>: the tier is in --tiers (a range a-b or a list a,b)
 written_lines() { # written_lines <files>: file:line of each line the diff since $from adds to them
 	git diff -U0 "$from" HEAD -- "$@" | awk '/^\+\+\+ b\//{f=substr($0,7)} /^@@/{split($3,a,","); s=substr(a[1],2); n=(a[2]==""?1:a[2]); for(i=0;i<n;i++) print f":"(s+i)}' | sort -u
 }
+case_text() { # case_text: a ✗ result line's case without its place or what it got: `"code" expected`
+	sed -E 's/^✗ [^ ]+:[0-9]+:? //; s/: got .*//'
+}
 logs=$tree/data/gate; mkdir -p "$logs"
 # a copy of the binary taken once: a refresh of the shared link mid-run never mixes two builds; run as the tree's warp
 # (its lib/), the tests' WARP too
@@ -139,9 +142,13 @@ elif wants 2; then
 		# change is a known red, counted, never the gate's failure (a touched file's old reds kept tier 2 red for days)
 		failing=$(grep -oE '^✗ [^ ]+:[0-9]+' "$logs/tests.log" | sed 's/^✗ //' | sort -u)
 		regressions=$("$(dirname "$0")/baseline.sh" --regressions "$logs/tests.log" 2>/dev/null | grep -oE '^[^ ]+:[0-9]+' | sort -u)
-		# a written line the baseline had red already (an expectation edited, still failing) stays a known red
-		red_before=$("$(dirname "$0")/baseline.sh" $files 2>/dev/null | grep -oE '^✗ [^ ]+:[0-9]+' | sed 's/^✗ //' | sort -u)
-		new_reds=$(comm -12 <(echo "$failing") <(written_lines $files) | comm -23 - <(echo "$red_before"))
+		# a written line the baseline had red already stays a known red: at its place (an expectation edited, still
+		# failing), or as the same case anywhere in the baseline (a case moved to another file: joined files, 11-11)
+		red_places=$("$(dirname "$0")/baseline.sh" $files 2>/dev/null | grep -oE '^✗ [^ ]+:[0-9]+' | sed 's/^✗ //' | sort -u)
+		red_cases=$("$(dirname "$0")/baseline.sh" test 2>/dev/null | grep '^✗' | case_text | sort -u)
+		new_reds=$(comm -12 <(echo "$failing") <(written_lines $files) | comm -23 - <(echo "$red_places") | while read -r place; do
+			grep -m1 -F "✗ $place " "$logs/tests.log" | case_text | grep -qxF -f <(echo "$red_cases") || echo "$place"
+		done)
 		bad=$(printf '%s\n%s\n' "$regressions" "$new_reds" | grep . | sort -u)
 		# a run that ended without a single ✗ yet failed (a crash, a timeout) is red too
 		[[ $status != 0 && -z $failing ]] && bad="warp test failed: $(tail -1 "$logs/tests.log")"

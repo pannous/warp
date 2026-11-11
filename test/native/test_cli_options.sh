@@ -27,4 +27,13 @@ check "--no-hints before run" "$(native --no-hints run hinted.warp)" 440
 check "--no-hints after run" "$(native run --no-hints hinted.warp)" 440
 check "--no-hints before the file" "$(native --no-hints hinted.warp)" 440
 check "version's build time with no PATH" "$(cd "$stage" && env PATH= ./warp --lib "$library" version 2>&1 | sed -n 's/^the native warp · built //p' | grep -cE '^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$')" 1
+# --fast drops the run's runtime checks (decision fast-mode): an int past 64 bits wraps, the written and the boxed one
+# alike; without it the int grows, and a value already big keeps its exact arithmetic either way
+printf '9223372036854775807 + 1\n' >"$stage/past.warp"
+printf 'xs = [9223372036854775807]\nxs#1 + 1\n' >"$stage/boxed.warp"
+printf '18446744073709551616 + 1\n' >"$stage/big.warp"
+check "--fast wraps a written int" "$(native --fast past.warp)" -9223372036854775808
+check "--fast wraps a boxed int" "$(native --fast boxed.warp)" -9223372036854775808
+check "without --fast it grows" "$(native boxed.warp)" 9223372036854775808
+check "--fast keeps a big value exact" "$(native --fast big.warp)" 18446744073709551617
 [ $failures = 0 ]

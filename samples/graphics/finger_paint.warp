@@ -14,7 +14,7 @@ brush = 8
 spacing = 3 # a brush dab every this many pixels along a stroke: dabs overlap into a smooth line
 degrees_per_dab = 0.5
 
-canvas(width, height)
+canvas.resize(width, height)
 clear(white)
 show()
 global turn = 0.0
