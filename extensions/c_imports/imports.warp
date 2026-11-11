@@ -22,8 +22,8 @@
 #   texts    a list of warp texts as a NULL-terminated `char *[]` of their copies (argv: posix_spawn, execv)
 #   sN       N bytes at a handle, the last parameter, passed as one struct by value (N is 17 to 128): on x86-64 the
 #            bytes go on the stack, on ARM64 as a pointer to a copy. At most six integer arguments before it, and no
-#            float beside it (a parameter or the result). Anything else is refused at the compile. `info: s40` is a
-#            WGPU callback info
+#            float beside it (a parameter or the result), and no all-float struct (ARM64 passes one of up to four
+#            floats in float registers). Anything else is refused at the compile. `info: s40` is a WGPU callback info
 #   void     no result
 
 # the names the libraries go by in a program: `use libm` is `use m`, as `use cmath` (C++'s header) is
@@ -56,6 +56,13 @@ c_enum_of(word: text): text := if word.trim() in c_enum_types then word.trim() e
 # the parameters the host fills, which take no argument
 c_filled_types = ["out", "length"]
 UNSIGNED_TYPE = "u32"
+# a by-value struct `sN`: the letter s, then the byte count in digits, 17 to 128 (core/native/driver.warp reads the same)
+STRUCT_MARK = 115
+DIGIT_ZERO = 48
+DIGIT_NINE = 57
+STRUCT_LEAST = 17
+STRUCT_MOST = 128
+STRUCT_INTEGERS_MOST = 6
 # the types only a parameter has
 c_parameter_only_types = ["out", "length", "texts", "f32s", "i32s"]
 
@@ -93,17 +100,17 @@ c_declaration(line: text): any := {
 # the bytes `sN` names, -1 when the word is not `s` and digits (`s0` is 0, `s40` is 40)
 struct_size(word: text): int := {
 	bytes = word.bytes
-	if #bytes < 2 or bytes#1 != 115 { return -1 }
+	if #bytes < 2 or bytes#1 != STRUCT_MARK { return -1 }
 	n = 0
 	for i in 1 .. #bytes {
 		b = bytes#(i + 1)
-		if b < 48 or b > 57 { return -1 }
-		n = n * 10 + (b - 48)
+		if b < DIGIT_ZERO or b > DIGIT_NINE { return -1 }
+		n = n * 10 + (b - DIGIT_ZERO)
 	}
 	n
 }
 # a by-value struct the call can pass: 17 to 128 bytes
-legal_struct(type: text): bool := { n = struct_size(type); n > 16 and n <= 128 }
+legal_struct(type: text): bool := { n = struct_size(type); n >= STRUCT_LEAST and n <= STRUCT_MOST }
 # a handle id when the word is a by-value struct, else the kind the map names
 c_argument_kind(type: text): ValueKind := if legal_struct(type) then ValueKind.I32 else c_parameter_kinds[type]
 c_argument_name(type: text): text := if legal_struct(type) then type else c_parameter_names[type]
@@ -117,10 +124,10 @@ struct_checked(declaration: list) := {
 	if #words == 0 { return }
 	if #words > 1 { throw name + ": one struct by value, the last parameter" }
 	word = words#1
-	if not legal_struct(word) { throw name + ": a struct by value is s17 to s128 (" + word + ")" }
+	if not legal_struct(word) { throw name + ": a struct by value is s" + text(STRUCT_LEAST) + " to s" + text(STRUCT_MOST) + " (" + word + ")" }
 	if types#(#types) != word { throw name + ": a struct by value is the last parameter" }
 	if types.any(t => t == "f32" or t == "f64") or result == "f32" or result == "f64" { throw name + ": a struct by value beside a float" }
-	if #types.filter(t => t != word and t != "f32" and t != "f64") > 6 { throw name + ": a struct by value follows at most 6 integer arguments" }
+	if #types.filter(t => t != word and t != "f32" and t != "f64") > STRUCT_INTEGERS_MOST { throw name + ": a struct by value follows at most " + text(STRUCT_INTEGERS_MOST) + " integer arguments" }
 }
 # a type word → its type; "" is no type, which no C function takes ("?")
 c_type_of(word: text): text := {
