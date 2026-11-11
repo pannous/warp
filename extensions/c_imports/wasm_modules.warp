@@ -153,7 +153,7 @@ header_foreign_line(prototype: text, library: text): text := {
 # a C declaration's words, each `*` one of them: `const char *text` → [const, char, *, text]
 c_words(code: text): list := code.replace("*", " * ").split(" ").map(word => word.trim()).filter(word => word != "")
 # a parameter's name, its last word, or p1, p2 … where the header names none (`int abs(int);`)
-header_parameter_name(words: list, index: int): text := if #words > 1 and words#(#words) != "*" and not is_c_type_word(words#(#words)) then words#(#words) else "p" + str(index + 1)
+header_parameter_name(words: list, index: int): text := if #words > 1 and words#(#words) != "*" and not is_c_type_word(words#(#words)) then words#(#words) else "p" + text(index + 1)
 C_TYPE_WORDS = ["void", "char", "short", "int", "long", "unsigned", "signed", "float", "double", "size_t", "const", "struct"]
 is_c_type_word(word: text): bool := word in C_TYPE_WORDS
 # a C type's words (a parameter's name among them, which no rule reads) → a foreign line's type word

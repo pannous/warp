@@ -55,8 +55,8 @@ solve(a: list, b: list): list := {
 // extra turned into a⁻¹·extra], [0, ø] for a singular a; the row with the largest pivot comes up each column
 eliminated(a: list, extra: list, what: text): list := {
 	n = rows(a)
-	if n == 0 or any_row_length(a, n) { raise what + ": the matrix must be square, it has " + str(n) + " rows of " + str(if n == 0 then 0 else cols(a)) }
-	if rows(extra) != n { raise what + ": the right side has " + str(rows(extra)) + " rows, the matrix " + str(n) }
+	if n == 0 or any_row_length(a, n) { raise what + ": the matrix must be square, it has " + text(n) + " rows of " + text(if n == 0 then 0 else cols(a)) }
+	if rows(extra) != n { raise what + ": the right side has " + text(rows(extra)) + " rows, the matrix " + text(n) }
 	m = [[x as float for x in a#i] + [x as float for x in extra#i] for i in 1 to n]
 	width = n + cols(extra)
 	det = 1.0

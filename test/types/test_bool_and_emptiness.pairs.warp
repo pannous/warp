@@ -3,7 +3,7 @@
 '0 === false'	no
 '{}.keys'	[]
 'f(x: any): list := x.keys; f({})'	[]
-'str({})'	"{}"
+'text({})'	"{}"
 'ø + 1'	error
 'if [ø] then 1 else 2'	1
 '[].count'	0

@@ -75,7 +75,7 @@ quoted(t: text) := "\"" + replace(replace(replace(t, "\\", "\\\\"), "\"", "\\\""
 // history file to load it; else the prompt and the history file: the line typed, ø at the input's end (Ctrl+D)
 editor_source() := {
 	// the library's name built from its quotes: a `from '…'` line inside a text literal is lost (card to file)
-	edit = str(chr(39)) + "edit" + str(chr(39))
+	edit = text(chr(39)) + "edit" + text(chr(39))
 	lines = [
 		"use os",
 		"readline(prompt: text): text from " + edit,
@@ -100,7 +100,7 @@ line_editor() := {
 	setlocale(0, "")
 	editor = compile_wasm(editor_source())
 	if is_error(editor) { return ø }
-	history = str(env("HOME")) + "/.warp_history"
+	history = text(env("HOME")) + "/.warp_history"
 	loaded = try run_wasm(editor, ["history", history]) catch e { e }
 	if is_error(loaded) { return ø }
 	{bytes: editor, history: history}
@@ -163,7 +163,7 @@ evaluated(source: text) := {
 // an Error's message as the entry's: without the os.compile_wasm prefix and the scratch file the compiler read, its
 // line counted from the entry's first (the session's `kept` lines come before it) when the compiler's is past them
 message(error: any, kept: int) := {
-	m = replace(str(error), "os.compile_wasm: ", "")
+	m = replace(text(error), "os.compile_wasm: ", "")
 	parts = split(m, " at /")
 	if count(parts) < 2 { return m }
 	place = split(parts[count(parts) - 1], ".warp:")
@@ -171,7 +171,7 @@ message(error: any, kept: int) := {
 	if count(place) < 2 or count(position) != 2 { return m }
 	line = int(position[0]) - kept
 	if line < 1 { line = int(position[0]) }
-	parts[0] + " at line " + str(line) + ":" + position[1]
+	parts[0] + " at line " + text(line) + ":" + position[1]
 }
 
 // the value as warp source that gives it back, ø when there's none: a text quoted, a number or yes/no as shown, a
@@ -221,7 +221,7 @@ repl() := {
 		else if entry == ":direct" { symbolic = false }
 		else if symbolic and assigned_expression(entry) != "" {
 			assigned = try symbolic_assigned(symbols, assigned_name(entry), assigned_expression(entry)) catch e { e }
-			if is_error(assigned) { print "Error: " + str(assigned) } else { symbols = assigned }
+			if is_error(assigned) { print "Error: " + text(assigned) } else { symbols = assigned }
 		}
 		else if symbolic and mentions_symbol(entry, symbols) { show_steps(entry, symbols, session, kept) }
 		else if entry != "" {

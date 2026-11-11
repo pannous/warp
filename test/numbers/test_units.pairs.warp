@@ -1,7 +1,7 @@
 # from test_units_arithmetic.rs: edit the Rust test, then run the script again
 
 # test_variable_shadows_the_unit
-'use units;m=5;str(3m)'	'3m'
+'use units;m=5;text(3m)'	'3m'
 'm=5;m*3'	15
 
 # A program's own s or m leaves the units as they are (lib/units.warp): each unit carries its own SI amount

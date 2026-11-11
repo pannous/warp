@@ -91,5 +91,5 @@ def parse_json(text) {
 json = "{\"name\": \"Alice\", \"age\": 30, \"scores\": [95, 87, 92], \"active\": true}"
 parsed = parse_json(json)
 print parsed.name           # Alice
-print str(parsed.scores)    # [95 87 92]
+print text(parsed.scores)    # [95 87 92]
 (parsed.age as float) + (parsed.scores#1 as float) # values of unknown kind: arithmetic assumes Ints unless converted

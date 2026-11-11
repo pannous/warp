@@ -83,8 +83,8 @@
 # triage-held 2026-11-06: undo word :: 'o = {undo: 5}; x = 1; x = 2; undo x; x + o.undo'	6
 
 # a_unit_named_by_a_local_is_the_unit_elsewhere
-'f(s) := s + 1; str(2000ms as s) + str(f(1))'	'2s2'
-'f() := { m = 2; m }; str(300 cm as m)'	'3m'
+'f(s) := s + 1; text(2000ms as s) + text(f(1))'	'2s2'
+'f() := { m = 2; m }; text(300 cm as m)'	'3m'
 
 # a_local_named_like_a_store_word_is_the_variable
 'f() := { local = 3; local + 1 }; f()'	4

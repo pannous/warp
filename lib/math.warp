@@ -54,7 +54,7 @@ values_alike(a: any, b: any, tolerance: float, rough: bool): bool := {
 	if a is bool or b is bool { return truthy(a) == truthy(b) }
 	# real: an exact value too, π or 2π, which `is number` leaves out
 	if a is real and b is real { return numbers_alike(a as float, b as float, tolerance) }
-	if (a is text or a is char) and (b is text or b is char) { return text_alike(str(a), rough) == text_alike(str(b), rough) }
+	if (a is text or a is char) and (b is text or b is char) { return text_alike(text(a), rough) == text_alike(text(b), rough) }
 	a == b
 }
 numbers_alike(a: float, b: float, tolerance: float): bool := {
@@ -217,7 +217,7 @@ to_degrees(radians) := radians * 180 / pi
 isqrt(n: int) := { r = floor(sqrt(n as float)) as int; while r * r > n { r = r - 1 }; while (r + 1) * (r + 1) <= n { r = r + 1 }; r }
 is_square(n: int) := n >= 0 and isqrt(n) * isqrt(n) == n
 divisors(n: int) := [d for d in 1..n + 1 if n % d == 0]
-prime_factors(n: int) := { if n < 1 { raise "prime_factors needs a positive whole number, not " + str(n) }; out = []; rest = n; d = 2; while d * d <= rest { while rest % d == 0 { out = out + [d]; rest = rest /! d }; d++ }; if rest > 1 { out = out + [rest] }; out }
+prime_factors(n: int) := { if n < 1 { raise "prime_factors needs a positive whole number, not " + text(n) }; out = []; rest = n; d = 2; while d * d <= rest { while rest % d == 0 { out = out + [d]; rest = rest /! d }; d++ }; if rest > 1 { out = out + [rest] }; out }
 // the primes up to and including n, by the sieve of Eratosthenes: primes(10) is [2, 3, 5, 7]
 primes(n: int): list := {
 	if n < 2 { return [] }

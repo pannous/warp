@@ -160,7 +160,7 @@ request_of(raw: text) := {
 http_answer(value: any) := {
 	reason = if answer_status in STATUS_REASONS then STATUS_REASONS[answer_status] else ""
 	body = wagi_body(value)
-	answer = "HTTP/1.1 " + str(answer_status) + " " + reason + LINE_END + wagi_headers(value).replace("\n", LINE_END) + LINE_END + "Content-Length: " + byte_size(body) + LINE_END + "Connection: close" + HEAD_END + body
+	answer = "HTTP/1.1 " + text(answer_status) + " " + reason + LINE_END + wagi_headers(value).replace("\n", LINE_END) + LINE_END + "Content-Length: " + byte_size(body) + LINE_END + "Connection: close" + HEAD_END + body
 	answer_reset()
 	answer
 }
@@ -172,7 +172,7 @@ http_failure(message: text) := {
 // the HTTP answer of the program's routes to a request as the client sent it
 http_served(raw: text) := try http_answer(form_redirected(request_of(raw))) catch e { http_failure(placed_words(e)) }
 # a caught error's words and the place of the program's statement it happened in, `not a function at 3:5`
-placed_words(e) := if e.line then str(e) + " at " + str(e.line) + ":" + str(e.column) else str(e)
+placed_words(e) := if e.line then text(e) + " at " + text(e.line) + ":" + text(e.column) else text(e)
 // the route's answer to the request; after a form's POST whose route set no status of its own the browser's
 // post/redirect/get: 303 See Other, back to the page the form was on (its Referer, else "/")
 form_redirected(request: any) := {
