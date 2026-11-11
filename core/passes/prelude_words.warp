@@ -530,7 +530,7 @@ told_apart(types: list, others: list, classes: list): bool := #types == #others 
 # class with its methods so; a value, whose initializer the program runs, and a field as they are
 declared_only(n: Node, typed: bool = no): Node := {
 	if is_group(n) { return children(n, part => declared_only(part, typed)) }
-	if class_view(n) != ø { return with_members(n, declared_only) }
+	if class_view(n) != ø { return with_members(n, member => declared_only(member)) }
 	head = if n is key then key_of(n) else ø
 	# (a head with its result type, `now(): Instant := …`, is declared without its body as a bare one is: with it every
 	# typed word a linked module's reached word called came along, compiled anew, lib/time's calendar behind `use time`;
