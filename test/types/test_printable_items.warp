@@ -5,7 +5,7 @@ is! 'class N { k: int; text() := "n" + string(k) }
 xs = [N(1)]
 "\\(xs)"' '[n1]'
 is! 'class N { k: int; text() := "n" + string(k) }
-text([N(1), N(2)])' '[n1 n2]'
+text([N(1), N(2)])' '[n1, n2]'
 is! 'class N { k: int; text() := "n" + string(k) }
 count([N(1), N(2)])' 2
 

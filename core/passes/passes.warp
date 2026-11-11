@@ -155,6 +155,7 @@ with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 	linked_reached = {}
 	linked_classes_reached = {}
 	linked_variants_waiting = {}
+	variant_written_names = {}
 	defined_origins = {}
 	local_declarations = {}
 	timed("with_uses")

@@ -37,10 +37,10 @@ out = temp_folder() + "/warp_site"
 for page in pages {
 	page["site"] = "warp notes"
 	page["pages"] = nav
-	html = mustache(layout, page)
-	write(out + "/" + page["slug"] + ".html", html)
+	page_html = mustache(layout, page)
+	write(out + "/" + page["slug"] + ".html", page_html)
 	print("=== " + page["slug"] + ".html")
-	print(html)
+	print(page_html)
 }
 
 # a tag index: every tag with the pages that carry it, alphabetically
@@ -49,5 +49,5 @@ names = sort(unique(flatten([p["tags"] for p in pages])))
 tags = [{name: t, pages: [{slug: p["slug"], title: p["title"]} for p in pages if t in p["tags"]]} for t in names]
 write(out + "/tags.html", mustache(tag_layout, {tags: tags}))
 print("=== tags.html")
-print(read(out + "/tags.html"))
+print(read(out + "/tags.html") as html)
 print("wrote " + text(count(pages) + 1) + " pages")
