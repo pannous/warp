@@ -1,0 +1,54 @@
+#!/usr/bin/env warp
+# A red sea bream swimming. The mesh, the pose and the ray test live in lib/fish_mesh.warp (notes/fish.md).
+# samples/gpu/madai.fish is the Fish Kit's low mesh with a colour baked on each vertex. There is no vertex
+# stage, so this frame poses the mesh once and the shader ray-tests those triangles. Part ids are the kit's:
+# 0 body, 1 dorsal, 2 anal, 3 tail, 4 pectoral, 5 pelvic, 6 eye, 7 gill, 8 lower jaw, 9 upper jaw.
+use graphics
+use math
+use file
+use fish_mesh
+
+# the camera turns around the fish, which stays at the origin, heading along its own +X
+frame_width = 320
+frame_height = 180
+angle = 0.9
+fish = ø
+started = clock()
+
+fish_view(v, turn) := {
+	tilt = 0.5
+	ct = cosine(tilt)
+	st = sine(tilt)
+	x = v#1
+	y = ct * v#2 - st * v#3
+	z = st * v#2 + ct * v#3
+	cs = cosine(turn)
+	sn = sine(turn)
+	[cs * x + sn * z, y, -sn * x + cs * z]
+}
+
+# one fish, scale 1, the posed corners already in fish_corners. The window orbits; the mesh does not spin.
+fish_color(x, y) := {
+	uvx = (x + 0.5) / frame_width - 0.5
+	uvy = 0.5 - (y + 0.5) / frame_height
+	origin = fish_view([0.0, 0.04, 0.95], angle)
+	ray = fish_view([uvx * 0.85, uvy * 0.85, -1.0], angle)
+	ray = ray ./ norm(ray)
+	hit = fish_nearest(origin, ray)
+	if hit#2 < 0 { return [0.05, 0.18, 0.28 + 0.15 * uvy] }
+	n = fish_normal(origin, ray, hit)
+	sun = normalize([0.45, 0.85, 0.35])
+	light = max(dot(n, sun), 0.0) + 0.35 * max(dot(n, [0.0, 0.0, 0.0] .- sun), 0.0)
+	fish_tint(hit) .* (0.28 + 0.72 * light)
+}
+
+# `use` brings the functions, not this frame. Headless, one still; in a window, the fish swims
+on frame {
+	global fish, angle
+	if no fish { fish = fish_mesh(read(fish_beside(program_folder()))) }
+	seconds = float(clock() - started) / 1000 + 0.35
+	posed = fish_pose(fish, seconds)
+	fish_show(posed.corners, posed.colors, [[0.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 0.0]], fish_radius(posed.corners))
+	angle = 0.9 + seconds * 0.45
+	paint(fish_color, frame_width, frame_height)
+}
