@@ -370,9 +370,20 @@ paint_each(f: function, width, height) := {
 	rows = columns * height /! width
 	paint([pixel_color(f(float((i % columns) * width /! columns), float((i /! columns) * height /! rows))) for i in 0..columns * rows], columns, rows)
 }
+// f painted on the CPU where a GPU shader was wanted, said once a run with why: its pixels are width × height, which
+// a window shows scaled where a shader paints every pixel of it
+global cpu_painting_said = no
+cpu_painted(f: function, width, height, why: text) := {
+	if not cpu_painting_said {
+		cpu_painting_said = yes
+		hint "painted on the CPU at ${width}×${height}: " + why
+	}
+	paint_each(f, width, height)
+}
 // paint(pixels, width, height) of a list of pixels, row by row, as the host paints them; of a WGSL shader text, as the
-// host renders it; of a function, f(column, row) of each pixel on the CPU (paint_each)
-paint(picture, width, height) := if picture is list or picture is text then paint(shader_words(picture), width, height, ø) else paint_each(picture, width, height)
+// host renders it; of a function value, f(column, row) of each pixel on the CPU (paint_each): only a function the
+// program names is translated to a shader (lib/shaders.warp paint_function)
+paint(picture, width, height) := if picture is list or picture is text then paint(shader_words(picture), width, height, ø) else cpu_painted(picture, width, height, "only a function the program defines and names, `paint(stripes, 64, 32)`, becomes a GPU shader")
 // the program values a shader reads as the plain floats it takes: a quantity by its amount in SI base units, an angle in
 // radians, each item of a vector (decision no-units-in-shaders: a shader ignores units)
 shader_floats(values) := {
