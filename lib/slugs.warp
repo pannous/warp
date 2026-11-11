@@ -5,7 +5,6 @@
 // an upper-case letter that follows a lower-case letter or a digit ("parseURL" → parse URL, "v2Beta" → v2 Beta) and
 // before the last upper-case letter of an acronym that a lower-case letter follows ("HTTPServer" → HTTP Server).
 // Digits stay with the letters before them: "parseURL2Text" → parse URL2 Text, so to_snake gives parse_url2_text
-use text
 
 // single letters and their ASCII letters, position for position
 FOLD_FROM = "ÀÁÂÃÄÅàáâãäåĀāĂăĄąÇçĆćĈĉĊċČčĎďĐđÈÉÊËèéêëĒēĔĕĖėĘęĚěĜĝĞğĠġĢģĤĥĦħÌÍÎÏìíîïĨĩĪīĬĭĮįİıĴĵĶķĹĺĻļĽľĿŀŁłÑñŃńŅņŇňÒÓÔÕÖØòóôõöøŌōŎŏŐőŔŕŖŗŘřŚśŜŝŞşŠšŢţŤťŦŧÙÚÛÜùúûüŨũŪūŬŭŮůŰűŲųŴŵÝýÿŶŷŸŹźŻżŽžÐð"
