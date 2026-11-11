@@ -442,6 +442,7 @@ def link_libraries(images: list, own_names: list) {
 			}
 		}
 	}
+	read_linked_reaches()
 }
 # the words two linked modules wrote of as many values (whose kinds a signature holds alike, any and a class): the
 # program calls each module's as its typed variant, and a module's own calls reach the other's through its slot
@@ -478,13 +479,81 @@ def own_words_unlinked(names: list) {
 		}
 	}
 }
-# the names the program needs of each linked module even when it never says them: its classes
+# the names the program needs of a linked module even when it never says them: all its classes, of a module built
+# before its words' reaches were recorded; of any other only what the words the program reaches reach (linked_reaches,
+# decision link-modules-lazily: `use units; 1` brings none of units' 37 classes)
 def linked_needs(): list {
 	names = []
 	# (never its globals: each is imported from the module, whose warp/start ran its initializer; brought, every
 	# program ran the prelude's tables again, half of hello's compile)
-	for image in module.linked_images { names += image.classes.map(entry => entry#1[#instance_struct_prefix ..]) }
+	for image in module.linked_images.filter(image => not records_reaches(image.name)) { names += image_class_names(image) }
 	names
+}
+records_reaches(module_name: text): bool := {
+	signature = linked_signature(module_name)
+	signature != ø and signature.reaches != ø
+}
+image_class_names(image: LibraryImage): list := image.classes.map(entry => entry#1[#instance_struct_prefix ..])
+# the classes of the linked modules by name; what each of their words reaches, by each name a program says it by
+# (word_reaches), all modules' merged; and the class each method belongs to (word_owners), which with_reached waits for:
+# read once a link
+# (read where a parameter named module hides the module: prelude_words.warp with_reached)
+linked_class_set(): map := module.linked_class_names
+linked_reaches(): map := module.linked_reach
+linked_owner(word: text): text? := module.linked_owners.get(word)
+def read_linked_reaches() {
+	module.linked_class_names = word_set(concatenated(module.linked_images.map(image_class_names)))
+	module.linked_reach = {}
+	module.linked_owners = {}
+	for signature in linked_signatures.values.filter(signature => signature.reaches != ø) {
+		for name in signature.reaches.keys { module.linked_reach[name] = (module.linked_reach.get(name) ?? []) + signature.reaches[name] }
+		for name in signature.owners.keys { module.linked_owners[name] = signature.owners[name] }
+	}
+}
+# what each word of the module being built reaches: the words of its lowered body naming a function or a class, a
+# constructor's class too (Graph·new says Graph), under each name the program reaches it by (word_names), so a program
+# linking the module brings what the words it reaches need, a body being declared only there (`str(6.0 ± 0.3)` the
+# Interval its ± makes); a closure's under its own name, which its word's body says
+word_reaches(functions: list, classes: list): map := {
+	own = reaching_words(functions)
+	known = word_set(classes + module.linked_class_names.keys)
+	makes = made_classes(known.keys)
+	naming = word_set(concatenated(own.map(f => word_names(f, known, makes))) + known.keys + module.linked_words.keys)
+	reached = {}
+	for f in own {
+		said = words_within(f.body).flat_map(word => [word] + [makes.get(word)].filter(made => made != ø)).filter(word => naming.has(word) and word != f.name)
+		if #said > 0 { for key in word_names(f, known, makes) { reached[key] = (reached.get(key) ?? []) + said } }
+	}
+	reaches = {}
+	for key in reached.keys { reaches[key] = word_set(reached[key]).keys.join(" ") }
+	reaches
+}
+# the class each method of the module being built belongs to, its receiver's (pop·Stack, Stack; format·text·Quantity,
+# Quantity): a program's dispatcher reaches that variant only once it reaches the class
+word_owners(functions: list, classes: list): map := {
+	known = word_set(classes + module.linked_class_names.keys)
+	owners = {}
+	for f in reaching_words(functions) {
+		owner = method_class(f, known)
+		if owner != ø { owners[f.name] = owner }
+	}
+	owners
+}
+reaching_words(functions: list): list := functions[1 ..].filter(f => not f.is_runtime and f.body != ø)
+# the names a program reaches a word by: its own, the word it was written as (graph_of of the arity overload
+# graph_of·2, walk.warp overload_variant_name), and its class's, a method's or a constructor's (next·Channel and Graph·new
+# under Channel and Graph)
+word_names(f: Function, known: map, makes: map): list := [f.name, written_word(f), method_class(f, known) ?? makes.get(f.name)].filter(name => name != ø and name != "")
+written_word(f: Function): text? := {
+	written = f.name.remove_suffix(overload_variant_name("", #f.signature.parameters))
+	if written != f.name then written else ø
+}
+method_class(f: Function, known: map): text? := if #f.signature.parameters > 0 and known.has(f.signature.parameters#1.type_name) then f.signature.parameters#1.type_name else ø
+# each class by the names that make one (classes.warp constructor_name, made_name, a struct made in place)
+made_classes(classes: list): map := {
+	makes = {}
+	for name in classes { for made in [constructor_name(name), made_name(name), instance_struct_prefix + name] { makes[made] = name } }
+	makes
 }
 # a linked module's image, the part of its warp.signature (signature.warp) its linked form's compile writes: its
 # words (each name, parameter kinds, result kind), its globals [name, kind, mark], its own class structs [name,
@@ -492,13 +561,16 @@ def linked_needs(): list {
 def image_fields(functions: list): list {
 	images_classes = concatenated(module.linked_images.map(image => image.classes.map(entry => entry#1)))
 	own_classes = module.gc_order[#gc_names ..].filter(name => name not in images_classes)
+	own_class_names = own_classes.map(name => name[#instance_struct_prefix ..])
 	own_globals = module.global_order[#module.runtime_image.globals + #linked_globals_imported() ..]
 	words = functions[1 ..].filter(f => not f.is_runtime and not f.name.starts_with(closure_entry_prefix))
 	[field_node("words", square_list(words.map(f => square_list([Text(f.name), square_list(f.kinds.map(kind => Number(held_code(kind)))), Number(held_code(f.result))])))),
 		field_node("globals", square_list(own_globals.map(name => square_list([Text(name), Number(held_code(module.globals[name]#2)), Number(module.global_marks.get(name) ?? 0)])))),
 		field_node("classes", square_list(own_classes.map(name => square_list([Text(name), Text(struct_written(name))])))),
 		field_node("builders", square_list(module.builders.map(f => Text(f.name)))),
-		field_node("runtime", square_list(runtime_behind().map(n => Number(n))))]
+		field_node("runtime", square_list(runtime_behind().map(n => Number(n)))),
+		field_node("reaches", texts_node(word_reaches(functions, own_class_names))),
+		field_node("owners", texts_node(word_owners(functions, own_class_names)))]
 }
 # the image of a linked module read back from its signature; why it is not linkable behind this runtime, a text
 def library_image_of(name: text, signature: ModuleSignature): any {
@@ -541,10 +613,10 @@ def bind_library_words() {
 		for k in 0..<#image.functions {
 			word = image.functions[k]
 			f = module.functions.get(word.name)
-			if f != ø and f.kinds == ø and linkable(image, word) and linked_variant(word.name, #f.signature.parameters) == word { bound_to(f, image, k) }
+			if unbound_declaration(f) and linkable(image, word) and linked_variant(word.name, #f.signature.parameters) == word { bound_to(f, image, k) }
 			# (a word two modules write: the program's typed variant of it, arity_overloads' milliseconds_of·Quantity)
 			variant = if linked_extended.has(word.name) then module.functions.get(typed_variant_written(image.name, word)) else ø
-			if variant != ø and variant.kinds == ø { bound_to(variant, image, k) }
+			if unbound_declaration(variant) { bound_to(variant, image, k) }
 		}
 		bind_written_variants(image)
 	}
@@ -555,7 +627,7 @@ def bind_library_words() {
 # left the lifted method of its bodiless declaration, answering ø (card linked-dynamic-method)
 def bound_by_class(f: Function) {
 	parts = f.name.split("·")
-	if f.kinds != ø or #parts != 2 { return }
+	if not unbound_declaration(f) or #parts != 2 { return }
 	for image in by_precedence(module.linked_images) {
 		if image.classes.any(entry => entry#1 == instance_struct_prefix + parts#2) {
 			for k in 0..<#image.functions { if image.functions[k].name == parts#1 and #image.functions[k].kinds == #f.signature.parameters and linkable(image, image.functions[k]) {
@@ -573,8 +645,9 @@ def bind_written_variants(image: LibraryImage) {
 	if signature == ø { return }
 	varied = {}
 	for name in module.functions.keys { if name.contains("·") { varied[name.split("·")#1] = yes } }
-	# (a class's methods are in its slice, whose text is its head line only)
-	for slice in signature.slices.filter(slice => varied.has(slice#1) or is_class_slice(slice#2)) {
+	# (a class's methods are in its slice, whose text is its head line only; only a class the program reached: Stack's
+	# pop() of collections never binds the program's pop·1 of a list, option (a) of card linked-module-brings)
+	for slice in signature.slices.filter(slice => varied.has(slice#1) or (is_class_slice(slice#2) and class_slice_reached(slice))) {
 		for written in written_definitions(unpack(slice#3)) {
 			name = written#1
 			types = written#2
@@ -583,7 +656,7 @@ def bind_written_variants(image: LibraryImage) {
 				if image.functions[k].name in [name, name + "·" + "${#types}"] and #image.functions[k].kinds == #types {
 					for variant in [typed_variant(name + "·" + "${#types}", types), typed_variant(name, types), name + "·" + "${#types}"] {
 						f = module.functions.get(variant)
-						if f != ø and f.kinds == ø { bound_to(f, image, k) }
+						if unbound_declaration(f) { bound_to(f, image, k) }
 					}
 				}
 			}
@@ -593,6 +666,7 @@ def bind_written_variants(image: LibraryImage) {
 # a slice of a class's head line, `class Instant {…}`: its text tested whole only when it starts so (leading_name counts
 # a text's characters at each of its own)
 class_head = "class"
+class_slice_reached(slice: list): bool := building_a_module() or linked_classes_reached.has("${slice#1}")
 is_class_slice(text: text): bool := text.starts_with(class_head) and leading_name(text) == class_head
 # [name, parameter types] of each definition a module's statement writes, a class's methods with their receiver first
 written_definitions(code: Node): list := {
@@ -633,6 +707,12 @@ linked_places_of(images: list): map := {
 	}
 	places
 }
+# a word the program declares (prelude_words.warp declared_only: its body ø, or kept for a block it takes) and binds
+# to no module's yet; a definition of its own stays its own though a module writes the name too: money's Money.compare,
+# compiled from its source, never reals' compare, which calls an instance's compare back
+unbound_declaration(f: any): bool := f != ø and f.kinds == ø and (is_declared_body(f.body) or takes_block_parameter(f))
+is_declared_body(body: any): bool := body == Node.Empty or (is_group(body) and #body == 1 and body#1 == Node.Empty)
+takes_block_parameter(f: Function): bool := f.signature.parameters.any(parameter => parameter.type_name == "block")
 def bound_to(f: Function, image: LibraryImage, k: int) {
 	f.index = linked_index(image, k)
 	f.kinds = image.functions[k].kinds

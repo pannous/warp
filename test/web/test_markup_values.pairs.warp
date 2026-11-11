@@ -7,3 +7,9 @@
 'use markup; x: html = div{"hi"}; to_html(x)'	'<div>hi</div>'
 'use markup; page = <div>one</div>; to_html(page)'	'<div>one</div>'
 'use markup; d = {p: {c: 1}}; to_html(d)'	'p: {c: 1}'
+# a list literal of elements inside markup holds the elements (card html-div-syntax); a list built outside, in a place typed html
+'use markup; to_html(ul{[li{"a"}, li{"b"}]})'	'<ul><li>a</li><li>b</li></ul>'
+'use markup; bars: html = [div{l} for l in [1, 2]]; to_html(html{ div{ bars } })'	'<html><div><div>1</div><div>2</div></div></html>'
+# a conversion to html makes markup, as a place typed html does (user OK 11-11, card html-output-fix)
+'use markup; to_html(p{"hello"} as html)'	'<p>hello</p>'
+'p{"hello"} as html'	'<p>hello</p>'

@@ -857,7 +857,7 @@ function startInWorker(run, code, file, asData) {
 	Object.assign(worker, { runId: run.id, liveLoops: new Map() });
 	paintingWindow = undefined; // canvas.js: each run's paintings at their own size until it sets window.width
 	tellSystemValues();
-	worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file, arguments: programArguments(), liveHandover, asData });
+	worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file, arguments: SAMPLE_ARGUMENTS[file] ?? [], liveHandover, asData });
 	liveHandover = {};
 }
 
@@ -1466,8 +1466,6 @@ function programFile() {
 	const name = $("examples").value;
 	return EXAMPLES[name] === undefined ? SAMPLE_FILES[name] : undefined;
 }
-// the chosen sample's arguments, from its <name>.args (build.sh SAMPLE_ARGUMENTS): `use os; args` gives them
-const programArguments = () => (programFile() && SAMPLE_ARGUMENTS[$("examples").value]) || [];
 
 // puts the code in the editor and runs it once; resolves once its report is shown
 function runCode(source) {
