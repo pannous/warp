@@ -1,0 +1,20 @@
+# GPU lists [bf16]: two-byte floats of an f32's range and 7 fraction bits, rounded to nearest, ties to even (card gpu-lists)
+'xs: [bf16] = [0.1, 2]; xs#1'	0.10009765625
+'xs: [bf16] = float[2]; xs#2 = 1/3; xs#2'	0.333984375
+'xs: [bf16] = [300.5, 4294967296]; [x for x in xs]'	[300, 4294967296]
+'xs: [bf16] = [1, 2]; try { gpu_compute("@group(0) @binding(0) var<storage, read_write> xs: array<f32>; @compute @workgroup_size(1) fn main() { xs[0] = 1.0; }", xs, 1) } catch e { "has no WGSL array type" in e.message }'	yes
+
+# a number literal past int64 in a GPU list's literal reads back as that number, not as the parser's view of it (card exponent-literal-reparse)
+'xs: [f32] = [1e38, 2]; xs#1 > 9.9e37 and xs#1 < 1.1e38'	yes
+'xs: [f32] = [100000000000000000000, 1]; xs#1 > 9.9e19 and xs#1 < 1.1e20'	yes
+
+# gpu_compute runs a WGSL compute shader over a list; a shader that fails to compile raises with the WGSL error
+'gpu_compute("@group(0) @binding(0) var<storage, read_write> cells: array<f32>; @compute @workgroup_size(1) fn main() { cells[0] = 2.0; }", [1.0], 1)'	[2]
+'try { gpu_compute("@group(0) @binding(0) var<storage, read_write> cells: array<f32>; fn get() {} @compute @workgroup_size(1) fn main() { cells[0] = 2.0; }", [1.0], 1) } catch e { "reserved keyword" in e.message }'	yes
+'left = gpu_compute("@group(0) @binding(0) var<storage, read_write> cells: array<f32>; fn get() {} @compute @workgroup_size(1) fn main() { cells[0] = 2.0; }", [1.0], 1); 3'	error	a shader that fails to compile raises, as on the page, even when its answer is kept
+'cells = 4; size = 2; one = float[cells * size]; gpu_compute("@group(0) @binding(0) var<storage, read_write> one: array<f32>; @compute @workgroup_size(1) fn main() { one[7] = 3.0; }", {one: one}, 1); one#8'	3
+
+# gpu_render paints a WGSL fragment shader on the GPU: each pixel a color word as int(red) is one (card gpu-native-library; color words: user OK on page-only-test-reds)
+'gpu_render("@fragment fn main() -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }", 2, 1, {})'	[4294901760, 4294901760]
+'#gpu_render("@fragment fn main() -> @location(0) vec4f { return vec4f(0.0, 0.0, 1.0, 1.0); }", 3, 2, {})'	6
+'try { gpu_render("@fragment fn main( {", 2, 2, {}) } catch e { 7 }'	7

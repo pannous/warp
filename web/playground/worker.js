@@ -36,7 +36,7 @@ const post = (message, transfer) => warming || self.postMessage(message, transfe
 const LOADING_WARM_UP_CODE = '"warp"';
 // the first markup program compiles the markup renderer (lib/markup.warp's to_html) once: ~0.5 s in Chrome, seconds in
 // Safari. The page asks for it while idle after its first run (card guide-warmup), so a guide's first ▶ is quick too
-const WARM_UP_CODE = 'p{ "" }';
+const WARM_UP_CODE = 'html{ p{ "" } }';
 self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host-files.js STD_ADAPTERS.store
 self.writeClipboard = text => post({ type: "clipboard", text }); // host-files.js STD_ADAPTERS.clipboard
 self.askPageClipboard = shared => self.postMessage({ type: "clipboard read", shared }); // host.js clipboard_text

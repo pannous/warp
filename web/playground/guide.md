@@ -463,7 +463,7 @@ xs
 Make a new list from another one.
 
 ```warp => [1, 4, 9, 16]
-[x² for x in [1 2 3 4]]
+[x² for x in 1 2 3 4]
 ```
 
 With a function, `square [1 2 3 4]` does the same: see "Whole lists at once" below.
@@ -474,11 +474,10 @@ With a function, `square [1 2 3 4]` does the same: see "Whole lists at once" bel
 [1 2 3 4] where it > 2
 ```
 
-`it` works in a block too: `{it.length}` is a function of one item. Given one, `sort` orders the items by its value,
-here the shortest word first.
+`sort` orders the items by its value which may be dynamically computed
 
-```warp => ["fig", "kiwi", "apple", "banana"]
-sort(["banana" "fig" "apple" "kiwi"], {it.length})
+```warp => ["fig", "kiwi", "banana"]
+sort(["banana" "fig" "kiwi"], {it.length})
 ```
 
 ### Whole lists at once
@@ -496,7 +495,7 @@ square [1 2 3]
 [1 2 3].map(x => x * 2)
 ```
 
-Also see [[#Closures]] and [[#Acceleration]] below.
+Also see [[#Closures]] and [[#GPU]] below.
 
 Examples: lists, broadcasting, "lazy ranges", "linear arrays"; samples: sorting, quicksort, primes, sieve, sorting_idiomatic, dot, typed_lists
 
@@ -709,29 +708,29 @@ Examples: tasks, channels; samples: async, threads, parallel_let
 
 ## Web pages
 
-A web page is made of tags. In warp, tags are values.
+A web page is made of tags, written inside `html{…}`.
 
 ```warp => <p>hello</p>
-p{ "hello" }
+html{ p{ "hello" } }
 ```
 
 Attributes look like HTML.
 
 ```warp => <b class="fat">hello</b>
-b{class:"fat" "hello" }
+html{ b{class:"fat" "hello" } }
 ```
 
 Tags hold other tags, like a page does.
 
-```warp => <div><h1>Fruit</h1><p>Fresh <b>pears</b> today</p></div>
-div{ h1{"Fruit"} p{ "Fresh " b{"pears"} " today" } }
+```warp => <h1>Fruit</h1><p>Fresh <b>pears</b> today</p>
+html{ h1{"Fruit"} p{ "Fresh " b{"pears"} " today" } }
 ```
 
 A list of values makes a list of tags.
 
 ```warp => <ul><li>apple</li><li>pear</li></ul>
 fruits = ["apple" "pear"]
-ul{ li all fruits }
+html{ ul{ li all fruits } }
 ```
 
 `on click { … }` inside a button makes it do something. `local["key"]` remembers a value in the browser.
@@ -740,7 +739,7 @@ An id makes an element a name: `who` is the element, `$who` what was typed into 
 
 ```warp
 greeting = "Type a name"
-div{
+html{
 	input{ id: "who" }
 	button{ on click { greeting = "Hello " + $who } "Greet" }
 	p{ greeting }
@@ -778,11 +777,11 @@ Examples: forms; samples: server, route_headers, hosting, worker
 
 # Graphics
 
-## Pictures
+## Paint
 
 `use draw` paints pixels on a canvas, and `show()` shows it. A shader colors every pixel at once on the graphics card: [[#Shaders]] below.
 
-Examples: frames, shader, "shader mouse"; samples: paint_text, color_swatches, paint_text_gpu, finger_paint, shader, webgpu, shader_brush, shader_trails, paint_function, window_size, raylib_circle, raylib_mouse_circle, raylib_sleep, sdl_red_square
+Examples: frames; samples: paint_text, color_swatches, finger_paint, paint_function, window_size
 
 ## Shaders
 
@@ -799,9 +798,9 @@ The function may call other functions; `shader_of(stripes)` shows the shader cod
 You can also write the shader yourself in WGSL, the web's shader language, inside `shader { … }`. In there `$name` reads the warp variable `name`.
 `use compute_toys` runs shaders from [compute.toys](https://compute.toys) as they are: `compute_toy(shader { … })`.
 
-Examples: shader, "shader mouse"; samples: warp_compiled_wgsl_shader, julia, voronoi, sdf_scene, ocean, scene_3d, kaleidoscope, lava_lamp, northern_lights, ringed_planet, manual_3d_object_viewer, gpu_visualizer, aquarium, gaussian_splats
+Examples: shader, "shader mouse"; samples: shader, webgpu, paint_text_gpu, shader_brush, shader_trails, warp_compiled_wgsl_shader, julia, voronoi, sdf_scene, ocean, scene_3d, kaleidoscope, lava_lamp, northern_lights, ringed_planet, manual_3d_object_viewer, gpu_visualizer, aquarium, gaussian_splats
 
-## Acceleration
+## GPU
 
 Warp parallelizes bulk operations *automatically*: lists of numbers run as [SIMD](https://en.wikipedia.org/wiki/Single_instruction,_multiple_data) loops, and maps heavy enough to pay for the transfer move to an accelerator such as the graphics card (GPU).
 
@@ -820,6 +819,14 @@ block or function when every digit counts; `@gpu` asks for the graphics card fro
 [[#Shaders]] above shows how to draw directly on the GPU.
 
 Examples: "gpu map"; samples: gpu_map, gpu_arrays, gpu_million, gpu_f16, meshlet_grid, million_trees
+
+## Raylib and SDL
+
+Warp calls C libraries directly, so a game library's window is a few `import` lines away: name the functions you use
+from [raylib](https://www.raylib.com) or [SDL](https://www.libsdl.org) and call them as warp functions. These open a
+window of their own, so they run with the native `warp`, not in this page.
+
+Examples: ; samples: raylib_circle, raylib_mouse_circle, raylib_sleep, sdl_red_square
 
 # Sound
 
