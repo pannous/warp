@@ -141,13 +141,12 @@ a + b` },
 on overheat { print "cooling down from " + event.degrees }
 emit overheat{degrees: 97}
 "still running"` },
-	events: { value: "0", code: `// click or type in the result area
+	events: { value: '<button data-warp-click="1">+1</button><button data-warp-click="2">price 10</button><p>total: 0</p>', clicks: ["+1", "+1", "price 10"], clicked: '<button data-warp-click="1">+1</button><button data-warp-click="2">price 10</button><p>total: 20</p>', code: `// click the buttons below the code: total := … follows count and price
+use web
 count = 0
 price = 3
 total := price * count
-on click { count += 1; print "click at " + event.x + "," + event.y }
-on key { price = 10 }
-total` },
+html{ button{ "+1", on click { count += 1 } } button{ "price 10", on click { price = 10 } } p{ "total: " + total } }` },
 	timers: { value: "3", wait: 3500, printed: "tick 1\ntick 2\ntick 3\n", code: `// a timer ticks every second
 ticks = 0
 on every 1 second { ticks += 1; if ticks <= 3 { print "tick " + ticks } }

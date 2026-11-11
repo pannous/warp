@@ -21,8 +21,7 @@ audio_started() := {
 	if audio_state == 0 { audio_state = if library_function("SDL3", "SDL_Init") != 0 and sdl_started(SDL_INIT_AUDIO) then 1 else -1 }
 	audio_state == 1
 }
-little_endian(value: int, width: int): list := int_bytes(value, width, "little")
-audio_spec(rate: int, channels: int): list := little_endian(SDL_AUDIO_S16LE, 32) + little_endian(channels, 32) + little_endian(rate, 32)
+audio_spec(rate: int, channels: int): list := little_endian(SDL_AUDIO_S16LE, 4) + little_endian(channels, 4) + little_endian(rate, 4)
 still_sounding() := {
 	for stream in sound_streams { if SDL_GetAudioStreamQueued(stream) > 0 { return yes } }
 	no
@@ -62,7 +61,7 @@ host_sound_file_played(path): int := {
 	if muted() { return 0 }
 	decoded = sound_file_decoded(str(path), 0, 0)
 	if decoded is text { return -1 }
-	host_sound_played([byte for value in decoded[2 ..] for byte in little_endian(value, 16)], decoded[0], decoded[1])
+	host_sound_played([byte for value in decoded[2 ..] for byte in little_endian(value, SAMPLE_BYTES)], decoded[0], decoded[1])
 }
 // [rate, channels, then the 16-bit values, the channels interleaved], else the reason it is not decoded (a text)
 host_sound_file_decoded(path, rate: int, channels: int): any := sound_file_decoded(str(path), rate, channels)

@@ -1,0 +1,3 @@
+# a value as any is itself, also through an alias of any (user OK 11-11, card html-output-fix)
+'3 as any'	3
+'type t = any; "a" as t'	'a'
