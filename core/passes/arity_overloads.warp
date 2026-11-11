@@ -854,7 +854,7 @@ result_resolved(n: Node, overloaded: map, parameters: map): Node := {
 		# (a linked module's variant, declared without its body, binds to the module's word by its name alone, which says
 		# its result: random·2·float)
 		head = if value_of(n) == Node.Empty and is_key(key_of(n), Op.Colon) then key_of(key_of(n)) else key_of(n)
-		target = if name in overloaded and written_result(n) != ø then renamed_target(head, result_variant(name, written_result(n))) else key_of(n)
+		target = if name in overloaded and written_result(n) != ø then renamed_target(head, result_variant(name, written_result(n))) else head
 		return Key(target, Op.Define, result_resolved(value_of(n), overloaded, parameters))
 	}
 	if is_key(n, Op.As) and overloaded_call(key_of(n), overloaded) != ø and returning(key_of(n), value_of(n), overloaded) != key_of(n) {
