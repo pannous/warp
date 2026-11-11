@@ -45,12 +45,14 @@ written_lines() { # written_lines <files>: file:line of each line the diff since
 	git diff -U0 "$from" HEAD -- "$@" | awk '/^\+\+\+ b\//{f=substr($0,7)} /^@@/{split($3,a,","); s=substr(a[1],2); n=(a[2]==""?1:a[2]); for(i=0;i<n;i++) print f":"(s+i)}' | sort -u
 }
 logs=$tree/data/gate; mkdir -p "$logs"
-# a copy of the binary taken once: a refresh of the shared link mid-run never mixes two builds
-warp=$logs/warp; cp -L "$binary" "$warp" || exit 1
+# a copy of the binary taken once: a refresh of the shared link mid-run never mixes two builds; run as the tree's warp
+# (its lib/), the tests' WARP too
+cp -L "$binary" "$logs/warp-native" || exit 1
+warp=$(launcher_of "$logs" "$logs/warp-native" --lib "$tree/lib") || exit 1
 # the native warp's wasmtime beside the copy too: its rpath looks beside itself
 for library in "$(dirname "$(readlink -f "$binary")")"/libwarp_wasmtime.*; do [ -f "$library" ] && clone "$library" "$logs/"; done
 libraries_beside "$logs"
-export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_LIB=$tree/lib WARP_MODULE_CACHE=${WARP_MODULE_CACHE:-$logs/module-cache}
+export WARP_WINDOW=0 WARP=$warp
 export WARP_GATE_PROBE=gate-ok
 cd "$tree" || exit 1
 started=$(date +%s)
@@ -69,15 +71,15 @@ for compiler in warp warp-self; do
 	[ -f "$tree/lib/$compiler.wasm" ] && clone "$tree/lib/$compiler.wasm" "$logs/$compiler.wasm"
 done
 
-# the lanes judged: pure, and self when the tree's lib/ (WARP_LIB, where the binary finds it) holds a promoted warp-self.wasm
+# the lanes judged: pure, and self when the tree's lib/ holds a promoted warp-self.wasm
 lanes=pure
-if [ -f "$WARP_LIB/warp-self.wasm" ]; then lanes="pure self"
+if [ -f "$tree/lib/warp-self.wasm" ]; then lanes="pure self"
 else echo "gate: no warp-self.wasm: self lane skipped (scripts/promote-self.sh promotes warp.wasm once it compiles itself)"; fi
 
 if wants 0; then
 	t0=$(date +%s) ok=1
 	for lane in $lanes; do
-		got=$(timeout 300 "$warp" $lane samples/hello/hello.warp 2>&1 | without_runtime_noise | tail -1)
+		got=$(timeout 300 "$warp" --no-hints $lane samples/hello/hello.warp 2>&1 | without_runtime_noise | tail -1)
 		[[ $got == *Hello* ]] || { echo "FAIL $lane hello: got ${got:0:160}"; red 0; }
 	done
 	echo "tier 0 (rebuild + hello, $lanes): $( ((ok)) && echo ok || echo RED) $(since $t0)"
@@ -89,7 +91,7 @@ if wants 1; then
 	for probe in test/gate/*.warp; do
 		name=${probe%.warp}; want=$(cat "$name.expected" 2>/dev/null) || { echo "FAIL ${name##*/}: no $name.expected"; ok=0; continue; }
 		for lane in $lanes; do
-			timeout 120 "$warp" $lane "$probe" > "$logs/probe.out" 2> "$logs/probe.err"
+			timeout 120 "$warp" --no-hints $lane "$probe" > "$logs/probe.out" 2> "$logs/probe.err"
 			# what the probe printed, else (a refused program: no output, exit 1) its first error line
 			got=$(cat "$logs/probe.out")
 			[[ -n $got ]] || got=$(said "$logs/probe.err")

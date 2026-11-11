@@ -114,7 +114,7 @@ angle = 0.785398  # π/4 radians (45 degrees)
 distance = 10.0
 x_component = cos(angle) * distance
 y_component = sin(angle) * distance
-actual_distance = sqrt(x_component * x_component + y_component * y_component)
+actual_distance = √(x_component * x_component + y_component * y_component)
 floor(actual_distance)  # Should be close to 10
 
 # Example 3: Parse numbers from strings and compute

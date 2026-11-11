@@ -8,7 +8,7 @@
 set -euo pipefail
 dist=$1
 EXPECTED=Hello
-in_dist() { (cd "$dist" && unset WARP_LIB && sh -c "$1"); }
+in_dist() { (cd "$dist" && sh -c "$1"); }
 
 ls lib/*warp_wasmtime.* >/dev/null || { echo "native_dist: no libwarp_wasmtime in lib/ (crates/wasmtime-capi)" >&2; exit 1; }
 cp -RL lib "$dist"

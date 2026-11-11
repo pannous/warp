@@ -86,7 +86,7 @@ heading(angle) := [sine(angle), -cosine(angle)]
 # one sharp-crested wave, an exp(sin − 1) profile, at p after time: [height, slope along x, slope along z, rise]
 wave_at(p, direction, length, amplitude) := {
 	frequency = tau / length
-	speed = sqrt(9.81 / frequency)
+	speed = √(9.81 / frequency)
 	phase = dot(p, direction) * frequency - time * speed * frequency
 	crest = exponential(sine(phase) - 1)
 	rise = crest * cosine(phase)
@@ -208,7 +208,7 @@ water(ray, distance) := {
 	facing = max(dot(normalize(mix(n, [0, 1, 0], 0.45)), view), 0)
 	fresnel = 0.02 + 0.98 * (1 - facing) ^ 5
 	# the facets' slopes: the glitter's roughness, rougher where the waves too fine for a pixel tilt them
-	roughness = sqrt(0.09 * 0.09 + surface.w)
+	roughness = √(0.09 * 0.09 + surface.w)
 	mirrored = reflect(ray, n)
 	lifted = normalize([mirrored.x, abs(mirrored.y) * 0.4 + max(mirrored.y, 0) * 0.6, mirrored.z])
 	reflection = sky(lifted, pixel_angle + roughness * reflection_blur)

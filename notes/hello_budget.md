@@ -3,12 +3,12 @@
 `print "Hello"` retires ~1.58 G instructions in 0.15 s (macOS `/usr/bin/time -l`, 75 MB footprint); `/bin/echo` retires
 ~9 M. Phases below: instructions from `/usr/bin/time -l` on whole runs, shares inside the compile from
 warp-test-loop's sampled profiles of 15 one-liners (~1200 samples, ~/Library/Logs/warp/warp-test-loop/prof/,
-card compile-setup-overhead), wall marks from `WARP_TIMES=1` (which overstate setup: they are wall spans).
+card compile-setup-overhead), wall marks from `--times` (which overstate setup: they are wall spans).
 
 | phase | costs | minimal need | over 10x? | card |
 |--|--|--|--|--|
 | process, dyld, wasmtime engine, warp.wasm's machine code mapped (`warp version`) | 145-180 M | ~10-20 M (echo 9 M + one mmap) | yes, ~10x | version-retires |
-| implicit uses + C functions + prepend_runtime | <1% each sampled (WARP_TIMES 23+28 ms are wall gaps) | ~1 M | no | - |
+| implicit uses + C functions + prepend_runtime | <1% each sampled (--times 23+28 ms are wall gaps) | ~1 M | no | - |
 | linking the prelude (linked_libraries + link_libraries) | ~8%, ~125 M | read a packed signature, ~5 M | yes | compile-setup-overhead 1) packed prelude signature |
 | lowering passes over the program + its reached module words (checked_program / lowered_reached) | ~45%, ~700 M | a one-call program: ~5 M | yes, >100x | sugar part: compile-setup-overhead 2); the rest: non-sugar-lowering |
 | emit (typed_wasm_module) for a 3 KB module | ~10%, ~160 M | ~2 M | yes | kb-costs |
