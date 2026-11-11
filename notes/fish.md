@@ -1,6 +1,6 @@
 # Fish
 
-A swimming red sea bream, `samples/gpu/fish.warp`. One photo mesh, posed on the CPU and ray-tested by the same fragment shader as `samples/gpu/manual_3d_object_viewer.warp`. No compiler or core change: `paint` still has no vertex stage, and a texture binding is still `gpu-multipass`.
+A swimming red sea bream, `samples/gpu/fish.warp`. One photo mesh, posed on the CPU. `paint` still has no vertex stage, and a texture binding is still `gpu-multipass`, so the fragment shader ray-tests the posed triangles. The loader, the pose and that ray live in `lib/fish_mesh.warp`, which the aquarium instances too (`notes/aquarium.md`). No compiler or core change.
 
 ## The mesh
 
@@ -31,7 +31,7 @@ The atlas is inside the glb. ffmpeg reads the WebP. v = 0 is the top row, which 
 
 ## The picture
 
-`fish_point(mesh, index, seconds)` is one posed vertex. `fish_pose` drops triangles whose average alpha is below one half (the kit's cutout) and hands the corners to the shader. The cruise is the kit's steady swim for this species: 0.4 m/s, the model's own 1.6 Hz, the envelope from the glb. The window orbits. Headless, `on frame` paints one still.
+`fish_point(mesh, index, seconds)` is one posed vertex. `fish_pose` drops triangles whose average alpha is below one half (the kit's cutout). The frame poses that mesh once, `fish_show` hands the corners to the shader, and `fish_nearest` ray-tests them. The cruise is the kit's steady swim for this species: 0.4 m/s, the model's own 1.6 Hz, the envelope from the glb. The window orbits. Headless, `on frame` paints one still.
 
 ```bash
 warp samples/gpu/fish.warp
