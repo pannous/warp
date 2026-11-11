@@ -385,9 +385,9 @@ called_only(program: Node): Node := {
 # module's definitions in front of it too) will say once the sugar rewrote it are reached too (sugar_words_of), and
 # those the program doesn't call after all dropped once the passes ran (called_only)
 with_reached(program: Node, module: text, in_front: bool, files: list = [], linked: list = []): Node := {
-	# [name, text, parse, identity] of each definition: a linked module's from its signature, its head line and parse
+	# [name, text, parse, identity, linked module] of each definition: a linked module's from its signature, its head line and parse
 	# (signature.warp), declared only; else a slice of the text, parsed when reached
-	given = linked.map(slice => [slice#1, slice#2, slice#3, slice#4 + " " + slice#1 + " " + slice#2]) + definition_slices(module).map(slice => [slice#1, slice#2, ø, slice#2])
+	given = linked.map(slice => [slice#1, slice#2, slice#3, slice#4 + " " + slice#1 + " " + slice#2, slice#4]) + definition_slices(module).map(slice => [slice#1, slice#2, ø, slice#2, ø])
 	module_names = given.map(slice => slice#1)
 	# a program's function named as a library word is the program's own (decision library-words-lexical): the program's
 	# calls it takes reach it, under its own name, any other call and every library body the library's word, so
@@ -432,9 +432,9 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	# the program's globals, `global hue = 10`, which every function of its own shares, are no module's: hsv's `hue`
 	# stays its local
 	program_globals = statements_in(program).filter(is_global_declaration).map(declared_name).filter(name => name != ø and name not in module_names)
-	# [name, text, the name written, parse, identity] of each slice: a replaced one under its library_word, for an
+	# [name, text, the name written, parse, identity, linked module] of each slice: a replaced one under its library_word, for an
 	# alias's call
-	slices = given.map(slice => [if kept(slice) then slice#1 else library_word(slice#1), slice#2, slice#1, slice#3, slice#4])
+	slices = given.map(slice => [if kept(slice) then slice#1 else library_word(slice#1), slice#2, slice#1, slice#3, slice#4, slice#5])
 	# the statements of each reached slice, by its identity
 	reached = {}
 	if in_front { own_words_unlinked(own_names) }
@@ -468,7 +468,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 				slice_node = early_sugared(if slice#4 != ø then unpack(slice#4) else plain_node(parsed(slice#2, uses)))
 				# (a linked module's word under its library_word is compiled here: the module exports its written name)
 				if slice#1 != slice#3 { slice_node = renamed(slice_node, slice#3, symbol(slice#1)) }
-				else if slice#4 != ø { slice_node = declared_only(slice_node) }
+				else if slice#4 != ø { slice_node = linked_declared_only(slice_node, slice#6) }
 				slice_node = with_own_locals(slice_node, program_globals)
 				reached[slice#5] = statements_in(slice_node)
 				if slice#4 == ø {
@@ -545,12 +545,16 @@ declared_only(n: Node): Node := {
 	}
 	# `A4 := midi_hertz(69)`, a value the module made a function of (charged, P71): its head, called at each use
 	if is_key(n, Op.Define) and head is symbol and name_of(head) in module.linked_words { return Key(call_of(name_of(head), []), Op.Define, Node.Empty) }
-	# a global the linked module declares: its start set it, the program reads and sets that one, never sets it anew (a
-	# console line re-running an earlier line's `count = 41` reset its count, card linked-own)
-	if is_value_definition(n) and linked_global(declared_name(n)) { return Node.Empty }
 	if is_key(n, Op.Colon) and is_declaration_keyword(head) then Key(head, Op.Colon, declared_only(value_of(n))) else n
 }
-linked_global(name: any): bool := name is text and module.linked_images.any(image => image.globals.any(entry => entry#1 == program_global_prefix + name))
+# a linked slice's statements declared: a global its own module declares, which the module's start set, is the one the
+# program reads and sets, never set anew (a console line re-running an earlier line's `count = 41` reset its count, card
+# linked-own); only a statement's, never a case of a declaration (keys' `enum Key { h = "h" }` beside units' h)
+linked_declared_only(n: Node, module_name: text): Node := {
+	if is_statement_sequence(n) { return children(n, statement => linked_declared_only(statement, module_name)) }
+	if is_value_definition(n) and linked_global(module_name, declared_name(n)) then Node.Empty else declared_only(n)
+}
+linked_global(module_name: text, name: any): bool := name is text and module.linked_images.any(image => image.name == module_name and image.globals.any(entry => entry#1 == program_global_prefix + name))
 takes_block(head: Node): bool := items_of(head)[1 ..].any(parameter => parameter_type(parameter) == "block")
 # `name := …`, `name = …`, `global name = …`: a value's definition, no function's
 # a value, and a type the program's declarations name (`type fraction = rational`), whose statement is no program's
