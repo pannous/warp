@@ -61,10 +61,16 @@ overloaded_arities(program: Node): map := {
 	overloaded
 }
 
+# each variant's name → the name programs write it by, `twice·2` → `twice`, of the compile at hand (prebuilt.warp
+# word_reaches files a linked word under it)
+global variant_written_names = {}
 # the definition's target naming its variant: `twice(a, b): int` as `twice·2(a, b): int`
 renamed_target(target: Node, name: text): Node := match target {
 	Key(head, op, result): Key(renamed_target(head, name), op, result)
-	_: group_like(target, [symbol(name)] + items_of(target)[1 ..])
+	_: {
+		variant_written_names[name] = name_of(target#1)
+		group_like(target, [symbol(name)] + items_of(target)[1 ..])
+	}
 }
 
 # `f(a, b)` or the words side by side, `play C4`

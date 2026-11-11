@@ -184,7 +184,8 @@ symbol_words(n: Node): list := {
 		else if is_named_type(part) { found[declared_type_name(value_of(part)#2)] = yes }
 		else if part is key and key_of(part) == opaque_symbol { for word in class_words(part) { found[word] = yes } }
 		else if part is key { waiting += [key_of(part), value_of(part)] }
-		else if is_group(part) { for item in part { waiting += [if is_curly_group(part) and is_map_entry(item) and key_of(item) is symbol and not is_block_argument(value_of(item)) then value_of(item) else item] } }
+		# (a `use` line names a module, no word of it: `use time` reaches no time(b: block), whose kept body brought its classes)
+		else if is_group(part) and not (#part > 0 and part#1 is symbol and name_of(part#1) in import_keywords) { for item in part { waiting += [if is_curly_group(part) and is_map_entry(item) and key_of(item) is symbol and not is_block_argument(value_of(item)) then value_of(item) else item] } }
 	}
 	found.keys
 }
@@ -1059,10 +1060,12 @@ module_hint(word: text): text := {
 	definers = defining_modules(word)
 	if #definers == 1 then ": `use " + definers#1 + "` defines it" else ""
 }
-# a word nothing defines, no prelude's, module's or language's: its call, `from_hex(…)`, is the program's mistake
-is_unknown_word(word: text): bool := not has_meaning(word) and #defining_modules(word) == 0
-# the fix of an unknown word: the known words sharing a part of its name, `from_hex` gives is_hex, hex_text …
+# the fix of a word with no meaning where it is called: the use of each module defining it, `use list or use text` (a
+# module states its own uses; a program's are implied), else the known words sharing a part of its name, `from_hex`
+# gives is_hex, hex_text …
 unknown_word_fix(word: text): text := {
+	definers = defining_modules(word)
+	if #definers > 0 { return definers.map(module => "use " + module).join(" or ") }
 	parts = word.split("_").filter(part => #part >= 3)
 	related = (prelude_definitions() + library_index_section("word").keys).filter(known => parts.any(part => known.contains(part)))
 	if #related > 4 { related = related[0 ..< 4] }
@@ -1265,6 +1268,9 @@ used_module_sources(statements: any, folder: text, seen: any, within_module: boo
 				seen = inner#2
 				linked += inner#3 + signature.slices
 			} else if source != "" {
+				# (a module found late, by a global word, links the runtime modules it needs as a written use does: machine_math's
+				# big_numbers)
+				for runtime in module_runtime_modules(name_of(used)) { linked_late(runtime) }
 				inner = used_module_sources(use_statements(used_modules(source)), folder, seen, yes)
 				sources += inner#1 + [source]
 				seen = inner#2

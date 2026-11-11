@@ -1,0 +1,24 @@
+madai.fish is a baked red sea bream (マダイ) from the Fish Kit.
+
+Author: なちゃっと (@nachat_dayo)
+Post: https://x.com/nachat_dayo/status/2119312018633273714
+Gallery: https://cda-social.github.io/fish/gallery.html
+Kit: https://cda-social.github.io/fish/kit/fish-kit.zip
+License file: https://cda-social.github.io/fish/kit/LICENSE.txt
+
+The mesh is madai_lo.glb (408 vertices, 722 triangles, no bones). scripts/fish-mesh.py
+sampled its WebP atlas into per-vertex colour and wrote the positions, normals, part
+ids and pivots. The swim is a re-expression of the kit's part-id motion, not a copy
+of example.html (that file embeds three.js, which is MIT and is not included here).
+
+The kit's own terms:
+
+Fish Kit — CC0 1.0 Universal
+
+The models, photos, code and scripts in this kit are dedicated to the public domain.
+You may copy, modify, redistribute and use them, including for commercial purposes,
+without permission and without credit.
+https://creativecommons.org/publicdomain/zero/1.0/legalcode
+
+このキットのモデル・写真・プログラム・スクリプトは CC0 1.0（パブリックドメイン）です。
+改変・再配布・商用利用を含め、許可もクレジット表記もなく自由に使えます。
