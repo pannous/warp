@@ -1556,13 +1556,16 @@ function initialize() {
 	startAssistant(editor, tellEnvironment, startCompletion(editor, askMembers));
 	const reloadedCode = sessionStorage.getItem(RELOADED_CODE);
 	sessionStorage.removeItem(RELOADED_CODE);
-	if (reloadedCode !== null) runCode(reloadedCode);
-	else chooseExample(requestedExample() ?? DEFAULT_EXAMPLE);
+	// (the menu names the example the address names, as before the reload, never the first one, hello)
+	if (reloadedCode !== null) {
+		$("examples").value = requestedExample() ?? DEFAULT_EXAMPLE;
+		runCode(reloadedCode);
+	} else chooseExample(requestedExample() ?? DEFAULT_EXAMPLE);
 	addEventListener("hashchange", chooseExampleOfHash);
 }
 
 // for headless runs (test_in_browser.py --examples): evaluate code as the page does and return the report
-window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress, bugReport, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
+window.playground = { evaluate, applyFix, chooseExample, exampleSource, runCode, reportAddress, bugReport, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
 	// an animation that runs until stopped (a raylib window's `while not WindowShouldClose()`) ends with its report, as
 	// the next run would end it (test_in_browser.py sample_answer); yes when one ran
 	stopAnimation: () => Boolean(pending?.animating && (stopRun(pending, ANIMATION_STOPPED), true)),
