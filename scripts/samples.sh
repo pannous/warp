@@ -89,7 +89,7 @@ one() {
 	printf '%-4s %s: %s\n' "$verdict" "$1" "${first:-exit $status, nothing on stderr}"
 }
 export -f one wall_seconds
-export tree results run_folder WARP CPU_SECONDS WALL_SECONDS CPU_LIMIT_HIT WINDOW_LIBRARIES SERVING SERVER_PORT EXPECTED_FAILURE CHECK_LINE HOST_LINE
+export tree results run_folder WARP CPU_SECONDS WALL_SECONDS CPU_LIMIT_HIT WINDOW_LIBRARIES SERVING SERVER_PORT EVENTS_MILLISECONDS EXPECTED_FAILURE CHECK_LINE HOST_LINE
 if [ $# -gt 0 ]; then
 	for sample in "$@"; do one "$sample"; done
 	exit 0
