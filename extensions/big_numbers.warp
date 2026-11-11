@@ -1,13 +1,12 @@
 # Big numbers (card big-numbers-extension): ints past 64 bits, exact ratios, exact rounding and float pow. Its runtime
 # root, which its Extension row in extensions/extensions.warp names: compiler.warp joins it after the core's runtime roots.
 # The core reaches these words only through the hooks core/runtime/bridge.warp declares, whose bodies for big ints and
-# ratios are here; the emitter calls exact_pow, float_pow and the exact rounding words by name where a program needs them.
+# ratios are here; the emitter calls the exact rounding words by name where a program needs them. Powers, `as rational`
+# and the long decimals are big_numbers/big_numbers.warp, a module linked on demand (card runtime-bridge-slots).
 # Its parts use the core's runtime files as lib/ links them (lib/compiler is core/).
 use "big_numbers/big_ints.warp"
 use "big_numbers/exact.warp"
 use "big_numbers/big_ratios.warp"
-use "big_numbers/pow_tables.warp"
-use "big_numbers/pow.warp"
 use "big_numbers/exact_rounding.warp"
 use "../compiler/runtime/intrinsics.warp"
 use "../compiler/analysis/kinds.warp"
@@ -29,13 +28,7 @@ extended_quotient(a: Node, b: Node): Node := exact_div(a, b)
 extended_modulo(a: Node, b: Node): Node := exact_mod(a, b)
 extended_remainder(a: Node, b: Node): Node := exact_rem(a, b)
 extended_floor(n: Node): Node := exact_floor(n)
-# (2/3)^2 is 4/9 (decision exact-power); a ratio exponent has no exact power, (2/3)^(1/2) is the float one
-extended_power(base: Node, exponent: Node): Node := if is_ratio(exponent) then held(float_pow(float_of_node(base), float_of_node(exponent))) else exact_pow(base, exponent)
-extended_exact_float(x: float): Node := float_as_exact(x)
 extended_big_literal(digits: text): Node := big_int_of_digits(digits)
-extended_decimal(digits: text, places: int): Node := decimal_ratio(digits, places)
-extended_float_power(x: float, y: float): float := float_pow(x, y)
-extended_cube_root(x: float): float := float_cbrt(x)
 extended_float(n: Node): float := {
 	made_case(Made.BigInt, big_exact_float(n))
 	float(exact_numerator(n)) / float(exact_denominator(n))

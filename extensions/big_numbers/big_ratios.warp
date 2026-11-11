@@ -29,8 +29,6 @@ lowest_ratio(n: Node, d: Node): Node := {
 	if big_int_order(d, plain_denominator_limit()) > 0 { return ratio_of_parts(as_big_int(n), as_big_int(d)) }
 	ratio_of_parts(n, d)
 }
-# the digits of a decimal past 18 places over 10^places (emitter literals.warp big_decimal)
-decimal_ratio(digits: text, places: int): Node := big_ratio(big_int_of_digits(digits), big_int_power(10, places))
 either_ratio(a: Node, b: Node): bool := is_ratio(a) or is_ratio(b)
 # a·d of one exact number's numerator by the other's denominator, the cross products of a sum and an order
 cross(a: Node, b: Node): Node := big_int_product(numerator(a), denominator(b))

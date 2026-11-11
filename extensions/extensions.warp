@@ -2,6 +2,7 @@
 # parser brings it in)
 use "gpu_lists/gpu_lists.warp"
 use "commands.warp"
+use "big_number_uses.warp"
 use "degrees.warp"
 use "glyph_atoms.warp"
 use "pipe_lambdas.warp"
@@ -152,7 +153,8 @@ EXTENSIONS = [
 	# extensions/primitive.warp, which the compiler uses itself: its attribute `@primitive`
 	Extension{name: "primitive", attributes: [PRIMITIVE_ATTRIBUTE]}
 	Extension{name: "commands", commands: command_words(), runs: extension_command}
-	Extension{name: "big_numbers", runtime: "big_numbers.warp"}
+	# (its powers, `x as rational` and long decimals a module apart, linked when a program writes one: card runtime-bridge-slots)
+	Extension{name: "big_numbers", runtime: "big_numbers.warp", runtime_modules: [BIG_NUMBERS_MODULE], implicit_uses: [big_number_uses]}
 ]
 # the rows the compiler's own build carries (decision extension-row-optional): all but big numbers, so an int past 64
 # bits in the compiler traps instead of growing; every program it compiles carries them all
