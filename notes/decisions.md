@@ -23,6 +23,13 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 ---
 
 ## Inbox
+- 2026-11-11 night (user to review): method-let-local: a let/var/const name in a method body stays local, never bound to a field (`fresh() := { let body = 99; body }` leaves f.body 42).
+- 2026-11-11 night (user to review): member-before-library: a receiver whose keys are known at compile time (map literal, class) reads its own member before a library word (`p = {first: 1}; p.first()` → 1); untyped receivers keep the library word, no run-time member check.
+- 2026-11-11 night (user to review): constructor-spaces-refused: `person("Ann" 40)` is refused with the fix-it `person("Ann", 40)`, as `f(1 2)` is; constructors read spaces as functions do; old spreading tests go to the triage list.
+- 2026-11-11 struct-byte-array: a C struct by value is `bytes40` for now; later the array type `byte[40]` (card struct-value); general libffi version parked (c-imports-libffi).
+- 2026-11-11 big-sample-assets-ignored: big regenerable sample assets (ez_trees, 42 MB) are git-ignored in place; only scripts and test-pinned small files are committed.
+- 2026-11-11 list-separator-indifferent: a test line differing only by list commas vs spaces is no failure; never edited, parked (card test-lines-differing).
+- 2026-11-11 primitive-global: `global x = 0` in a @primitive file is a mutable wasm global, type from declaration or literal.
 - 2026-11-11 underscore-is-it: `_` is an alias of `it`, the last result at the top level (`3+4` then `_ * 2` → 14, got-it note naming `it`); seeded random sequences are not spec, only "the same seed repeats the numbers".
 - 2026-11-11 build-ships-only: `warp build app.warp` leaves the executable, runtime.wasm and modules/ only; `--wasm` writes app.wasm, app.full.wasm, app.mod.wasm (replaces build-three-outputs).
 - 2026-11-11 no-str: `str` is gone as function and type word (lib/python keeps it); warp writes text.
