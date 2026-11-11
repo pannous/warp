@@ -6,6 +6,7 @@
 // `:symbolic` keeps assignments symbolic and shows an evaluation step by step (lib/symbolic.warp, wiki/shell.md),
 // `:direct` (the default; `warp lib/repl.warp --symbolic` starts symbolic) evaluates them at once
 use os
+use text
 use symbolic
 
 // the option that starts the console symbolic
