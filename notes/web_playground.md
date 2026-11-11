@@ -137,6 +137,11 @@ gpu/warp_compiled_wgsl_shader end with a while loop whose printed value is a mea
 - Gate: `test_in_browser.py --examples [--site D | --url U]` runs the tour and every sample and fails on any console
   error/warning/failed request of the page and its Workers. agent-browser's `console`/`network` see only the page, so
   console_watch.mjs attaches over CDP (`agent-browser get cdp-url`) to every target: Runtime + Log + Network.
+  The browser is the newest Chrome for Testing of `agent-browser install` (~/.agent-browser/browsers), passed as
+  --executable-path: agent-browser alone picks /Applications/Chromium.app (ungoogled-chromium 156), and something on
+  the user's Mac sends that one a SIGTERM 32 s after each launch (its log: "Handling shutdown for signal 15"; every flag
+  variant, an unquarantined copy too; a stand-in binary named Chromium is left alone). The page then reads about:blank
+  and the tour "playground is not defined". Sender not found (no log or dtrace without root).
   `--firefox` drives headless Firefox over WebDriver BiDi (firefox_driver.mjs: log.entryAdded +
   network.responseCompleted, workers included; a fresh profile per run; on macOS started with `open -n -g`, since a
   terminal's child may not read Firefox's profile folder). On a timeout firefox_driver.mjs reports the page's state
