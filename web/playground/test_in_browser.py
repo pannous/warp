@@ -314,6 +314,8 @@ STALE_VALUE = "(a run started without Run leaves no old value above an animation
 STALE_VALUE_CODE = "use draw\ncanvas(40, 40)\nloop {\n\tclear(paper)\n\tshow()\n\tsleep(16ms)\n}"
 STALE_VALUE_FIRST = "4242"
 STALE_VALUE_WAIT_MS = 3000
+GUIDE_PARTS = "(the guide groups its chapters in parts; a chapter's address opens it inside its part)"  # card playground-guide-chapters
+GUIDE_PARTS_SHOWN = {"parts": ["Basics", "Numbers and text", "Data", "Events and tasks", "Web", "Graphics", "Sound", "Bigger programs", "Under the hood"], "part": "Graphics", "opened": True}
 KEPT_OUTPUT = "(a run keeps the last output, dimmed, until its own shows; an error replaces it)"  # card pressing-try-run
 KEPT_OUTPUT_SLOW = "sleep(1500ms)\n7"
 KEPT_OUTPUT_FAILING = "4242 + no_such_name"
@@ -998,6 +1000,19 @@ def stale_value_wrong():
 	return [f"while the animation runs the value line shows {shown}, the last run's"] if STALE_VALUE_FIRST in shown else []
 
 
+def guide_parts_wrong():
+	"""the guide's parts in guide.md's order; #guide-shaders opens Shaders and the Graphics part around it"""
+	shown = browser("eval", """(async () => {
+		location.hash = "#guide-shaders";
+		await new Promise(done => setTimeout(done, 300));
+		const chapter = document.getElementById("guide-shaders"), part = chapter.closest(".guide-part");
+		return JSON.stringify({ parts: [...document.querySelectorAll(".guide-part > summary")].map(summary => summary.textContent),
+			part: part?.querySelector("summary").textContent, opened: chapter.open && part.open });
+	})()""")
+	shown = json.loads(json.loads(shown)) if shown.startswith('"') else {"parts": f"(page gave no answer: {shown or browser_complaint})"}
+	return [f"{part}: {shown.get(part)!r}, expected {value!r}" for part, value in GUIDE_PARTS_SHOWN.items() if shown.get(part) != value]
+
+
 def kept_output_wrong():
 	"""while a slow run goes on, the last run's value stays, dimmed, and the status says it runs; its value then replaces
 	it; a failing run's error replaces it too"""
@@ -1399,7 +1414,7 @@ def check_examples(names, page_url=None, site=None):
 	snippets = guide_snippets() if GUIDE in names else []
 	for line, code, value, printed in snippets:
 		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (KEPT_OUTPUT, kept_output_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), (STALE_DEPLOY, stale_deploy_wrong), (DEFINED_NAMES, defined_names_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (KEPT_OUTPUT, kept_output_wrong), (GUIDE_PARTS, guide_parts_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), (STALE_DEPLOY, stale_deploy_wrong), (DEFINED_NAMES, defined_names_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
