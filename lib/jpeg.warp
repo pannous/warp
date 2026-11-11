@@ -94,11 +94,11 @@ huffman_read(segment: list, tables: list) := {
 		slot = 4 * (segment[at] >> 4) + segment[at] % 16
 		counts = segment[at + 1 ..< at + 17]
 		symbols = segment[at + 17 ..< at + 17 + sum(counts)]
-		tables[slot] = huffman_of(counts, symbols)
+		tables[slot] = huffman_table(counts, symbols)
 		at += 17 + count(symbols)
 	}
 }
-huffman_of(counts: list, symbols: list): Huffman := {
+huffman_table(counts: list, symbols: list): Huffman := {
 	lowest = []
 	highest = []
 	first = []
