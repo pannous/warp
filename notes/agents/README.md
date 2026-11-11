@@ -13,6 +13,7 @@ way.
    - warp-integrator (merge, full suite, push to main)
    - warp-interviewer (the only one who asks you decision questions; talk to it when you have a minute)
    - warp-fixer (small to-dos from the board `todo list`, ignored "next"/"soon" tests)
+   - warp-reviewer (reads core/extensions plans before the user's OK and merges after landing; revived 11-11)
 3. At most TWO feature workers at a time (a fleet of eight stalls on the usage limit). Workers are spawned per task by the supervisor with `notes/agents/start.sh worker <name> "<task>"`.
 
 Spawned sessions get generated names (warp-6c …). Find them with ListAgents: the tmux column shows the role
@@ -20,7 +21,7 @@ Spawned sessions get generated names (warp-6c …). Find them with ListAgents: t
 
 ## Files
 - AGENTS.md: the short core every session reads at start; handbook.md: the detailed procedures, looked up on demand.
-- supervisor.md, integrator.md, interviewer.md, gatekeeper.md, fixer.md, worker.md: one prompt per role.
+- supervisor.md, integrator.md, interviewer.md, gatekeeper.md, fixer.md, reviewer.md, worker.md: one prompt per role.
 - start.sh: spawns roles via ~/dev/bin/claude-remote.sh (refuses at high load; FORCE_SPAWN=1 overrides).
 - api_worker.sh: a worker headless on the Anthropic API key (ANTHROPIC_KEY_WARP) instead of the subscription:
   `notes/agents/api_worker.sh <name> "<task>"`. When the plan's weekly limit runs low, only the
