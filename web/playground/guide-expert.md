@@ -204,10 +204,10 @@ pong
 
 ## Web pages
 
-Tags are values: `tag{attributes children}`, `li all xs` repeats a tag over a list.
+Markup is written inside `html{…}`: `tag{attributes children}`, `li all xs` repeats a tag over a list.
 
-```warp => div{h1:"Fruit" ul{li:"apple" li:"pear"}}
-fruits = ["apple" "pear"]; div{ h1{"Fruit"} ul{ li all fruits } }
+```warp => <h1>Fruit</h1><ul><li>apple</li><li>pear</li></ul>
+fruits = ["apple" "pear"]; html{ h1{"Fruit"} ul{ li all fruits } }
 ```
 
 ## Servers

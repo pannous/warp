@@ -199,7 +199,7 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - match-exhaustive: a match on a known enum or sealed class missing a case is a compile error.
 - pattern-keyword: named patterns only with `pattern Adult = {age: >= 18}`; a plain `Name = …` is a value.
 - #31 a switch without a match reports the run-time value (`no case for n = 4`).
-- `when` by shape: `when click {…}` = `on click`, `when x > 3 {…}` = `whenever`, `when x {… -> …}` = `match`, `when {cond -> …}` = an if chain; each warns naming the word meant.
+- `when` by shape: `when click {…}` = `on click`, `when x > 3 {…}` is refused naming `if`, `once` and `whenever` (11-11, replaces = whenever), `when x {… -> …}` = `match`, `when {cond -> …}` = an if chain; each warns naming the word meant.
 - P46 type-name and condition patterns in `for` filter with a got-it warning (`for friend in xs`, `for (it>2) in xs`).
 - P61 `is` is always a comparison; with an undefined x it teaches `x be <value>`. #27 `be` is `:=`; `≤ ≥ ≠ × ÷ ¬ √` are accepted and normalized (÷ is floor division: julia-floor-divide).
 - fail-effect: the `Fail` effect tracks explicit raises, division by a value that may be 0, and library calls answering with an Error; index out of range, missing fields and failed casts are untracked bugs.

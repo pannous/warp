@@ -12,7 +12,7 @@ use memory
 export add(a: i32, b: i32): i32 := a + b
 
 # Export with explicit wasm type
-export compute(x: f64, y: f64): f64 := sqrt(x * x + y * y)
+export compute(x: f64, y: f64): f64 := √(x * x + y * y)
 
 # Strings as bytes, the way they lie in linear memory: memory.copy(bytes, ptr) writes them, memory.slice(ptr, end) reads
 read_string(bytes): text := from_utf8(bytes)

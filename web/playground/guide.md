@@ -463,7 +463,7 @@ xs
 Make a new list from another one.
 
 ```warp => [1, 4, 9, 16]
-[x² for x in [1 2 3 4]]
+[x² for x in 1 2 3 4]
 ```
 
 With a function, `square [1 2 3 4]` does the same: see "Whole lists at once" below.
@@ -474,11 +474,10 @@ With a function, `square [1 2 3 4]` does the same: see "Whole lists at once" bel
 [1 2 3 4] where it > 2
 ```
 
-`it` works in a block too: `{it.length}` is a function of one item. Given one, `sort` orders the items by its value,
-here the shortest word first.
+`sort` orders the items by its value which may be dynamically computed
 
-```warp => ["fig", "kiwi", "apple", "banana"]
-sort(["banana" "fig" "apple" "kiwi"], {it.length})
+```warp => ["fig", "kiwi", "banana"]
+sort(["banana" "fig" "kiwi"], {it.length})
 ```
 
 ### Whole lists at once
@@ -709,29 +708,29 @@ Examples: tasks, channels; samples: async, threads, parallel_let
 
 ## Web pages
 
-A web page is made of tags. In warp, tags are values.
+A web page is made of tags, written inside `html{…}`.
 
 ```warp => <p>hello</p>
-p{ "hello" }
+html{ p{ "hello" } }
 ```
 
 Attributes look like HTML.
 
 ```warp => <b class="fat">hello</b>
-b{class:"fat" "hello" }
+html{ b{class:"fat" "hello" } }
 ```
 
 Tags hold other tags, like a page does.
 
-```warp => <div><h1>Fruit</h1><p>Fresh <b>pears</b> today</p></div>
-div{ h1{"Fruit"} p{ "Fresh " b{"pears"} " today" } }
+```warp => <h1>Fruit</h1><p>Fresh <b>pears</b> today</p>
+html{ h1{"Fruit"} p{ "Fresh " b{"pears"} " today" } }
 ```
 
 A list of values makes a list of tags.
 
 ```warp => <ul><li>apple</li><li>pear</li></ul>
 fruits = ["apple" "pear"]
-ul{ li all fruits }
+html{ ul{ li all fruits } }
 ```
 
 `on click { … }` inside a button makes it do something. `local["key"]` remembers a value in the browser.
@@ -740,7 +739,7 @@ An id makes an element a name: `who` is the element, `$who` what was typed into 
 
 ```warp
 greeting = "Type a name"
-div{
+html{
 	input{ id: "who" }
 	button{ on click { greeting = "Hello " + $who } "Greet" }
 	p{ greeting }

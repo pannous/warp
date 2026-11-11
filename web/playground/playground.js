@@ -318,6 +318,7 @@ function newWorker(restarts = 0) {
 			if (data.type === "notify") data = notification(data.text);
 			if (data.type === "window") return resizeWindow(data, $("paintings")); // canvas.js
 			if (data.type === "full screen") return fullScreen(data.full);
+			if (data.type === "key answered") return keyAnswered(data.status); // assistant.js
 			if (data.type === "dispatch") return dispatchToPage(data.event); // markup.js, card page-custom-event
 			if (!data) return;
 			if (stalled) watchStart();
