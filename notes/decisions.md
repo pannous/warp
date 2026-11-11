@@ -55,6 +55,7 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - 2026-11-10 aliases-in-rules: a sugar rule's literal word matches every alias spelling of it (`xs.forEach {…}` through the `each` rule); aliases otherwise stay call-only, so data keys and type names never change; the full unification (aliases-unified) is parked: renaming everywhere would rename data keys.
 - 2026-11-10 x-bang-refusal: a block's `x!` is refused with "`x!` runs no code: x() runs a block, interpret x runs data".
 - 2026-11-10 bare-typed-overloads: `name: T := e` is `name(): T := e`, so `sample: int := 7; sample: text := "seven"` overload by result type.
+- 2026-11-11 default-variant: among variants told apart by result type, the one declaring no result is the default: a call no expected type (declaration, typed parameter, declared result, `as`) tells apart takes it; arithmetic tells nothing; a told type no variant declares takes the default with the usual type check; refused: two defaults, a default whose known result a typed variant declares (user OK 11-11 with warp-reviewer's conditions; card float-literal-decimal).
 - 2026-11-10 fast-build: `fast` functions get machine arithmetic (i64 wrapping, fast_math), as extensions/fast.warp.
 - 2026-11-10 def-arrow-fixit: `def f(x) -> T: body` is refused with the fix "def f(x): T := body".
 - 2026-11-10 undo-planned: undo/redo stay a planned feature.
