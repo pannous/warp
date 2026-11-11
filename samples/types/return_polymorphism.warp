@@ -1,7 +1,9 @@
 #!/usr/bin/env warp
-# one function name, two definitions: the type the result is asked as chooses which runs
-sample() as int := 7
-sample() as text := "seven"
-x:int = sample()
-y:text = sample()
-x y
+# one name, two definitions: the type the result is asked as chooses which runs
+sample: int := 7
+sample: text := "seven"
+
+print "hi " + (sample as text)   # hi seven
+print "hi " + (sample as int)    # hi 7
+x: int = sample
+x + 1                            # 8
