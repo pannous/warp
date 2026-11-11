@@ -2708,7 +2708,7 @@ TAB = 9
 NEWLINE = 10
 COMMA = 44
 REGISTERS = 8
-# a parameter `sN`: N bytes at a handle, passed as one aggregate after the integer arguments. The compile
+# a parameter `bytesN`: N bytes at a handle, passed as one aggregate after the integer arguments. The compile
 # (extensions/c_imports) refused every other placement, native_call_struct a size it cannot place
 STRUCT_BASE = 32
 WASM_PAGE_BYTES = 65536
@@ -2807,11 +2807,12 @@ CROSSING_BYTES = 8
 FAILURE_NONE = 1
 FAILURE_NOT_NULL = 2
 FAILURE_FALSE = 3
-# `s40` is 40, another `s` and digits too; 0 when it is not that spelling
+# `bytes40` is 40, another `bytes` and digits too; 0 when it is not that spelling (plain `bytes` is a text's bytes)
+STRUCT_PREFIX = "bytes"
 struct_size(name: text): i32 := {
-	if name.length < 2 or byte_at(name.address).value != 115 { return 0 }
+	if name.length <= STRUCT_PREFIX.length or not starts_with(name, STRUCT_PREFIX) { return 0 }
 	n = 0
-	for i in 1..name.length {
+	for i in STRUCT_PREFIX.length..name.length {
 		digit = byte_at(name.address + i).value
 		if digit < ZERO or digit > ZERO + 9 { return 0 }
 		n = n * 10 + (digit - ZERO)

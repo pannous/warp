@@ -20,10 +20,10 @@
 #            written from a list at once, `wgpuQueueWriteBuffer(queue: handle, buffer: handle, at: i64, data: f32s, size: length)`
 #   length   the byte count of the bytes, f32s or i32s parameter before it: no argument
 #   texts    a list of warp texts as a NULL-terminated `char *[]` of their copies (argv: posix_spawn, execv)
-#   sN       N bytes at a handle, the last parameter, passed as one struct by value (N is 17 to 128): on x86-64 the
+#   bytesN   N bytes at a handle, the last parameter, passed as one struct by value (N is 17 to 128): on x86-64 the
 #            bytes go on the stack, on ARM64 as a pointer to a copy. At most six integer arguments before it, and no
 #            float beside it (a parameter or the result), and no all-float struct (ARM64 passes one of up to four
-#            floats in float registers). Anything else is refused at the compile. `info: s40` is a WGPU callback info
+#            floats in float registers). Anything else is refused at the compile. `info: bytes40` is a WGPU callback info
 #   void     no result
 
 # the names the libraries go by in a program: `use libm` is `use m`, as `use cmath` (C++'s header) is
@@ -56,8 +56,8 @@ c_enum_of(word: text): text := if word.trim() in c_enum_types then word.trim() e
 # the parameters the host fills, which take no argument
 c_filled_types = ["out", "length"]
 UNSIGNED_TYPE = "u32"
-# a by-value struct `sN`: the letter s, then the byte count in digits, 17 to 128 (core/native/driver.warp reads the same)
-STRUCT_MARK = 115
+# a by-value struct `bytesN`: the word bytes, then the byte count in digits, 17 to 128 (core/native/driver.warp reads the same)
+STRUCT_PREFIX = "bytes"
 DIGIT_ZERO = 48
 DIGIT_NINE = 57
 STRUCT_LEAST = 17
@@ -97,13 +97,13 @@ c_declaration(line: text): any := {
 	result = tail#2.trim().remove_prefix(":").trim()
 	[name, library, type_words.map(c_type_of), names, c_type_of(result), type_words.map(c_enum_of), c_enum_of(result)]
 }
-# the bytes `sN` names, -1 when the word is not `s` and digits (`s0` is 0, `s40` is 40)
+# the bytes `bytesN` names, -1 when the word is not `bytes` and digits (`bytes0` is 0, `bytes40` is 40; plain `bytes` is -1)
 struct_size(word: text): int := {
-	bytes = word.bytes
-	if #bytes < 2 or bytes#1 != STRUCT_MARK { return -1 }
+	if not word.starts_with(STRUCT_PREFIX) { return -1 }
+	digits = word.remove_prefix(STRUCT_PREFIX).bytes
+	if #digits == 0 { return -1 }
 	n = 0
-	for i in 1 .. #bytes {
-		b = bytes#(i + 1)
+	for b in digits {
 		if b < DIGIT_ZERO or b > DIGIT_NINE { return -1 }
 		n = n * 10 + (b - DIGIT_ZERO)
 	}
@@ -124,7 +124,7 @@ struct_checked(declaration: list) := {
 	if #words == 0 { return }
 	if #words > 1 { throw name + ": one struct by value, the last parameter" }
 	word = words#1
-	if not legal_struct(word) { throw name + ": a struct by value is s" + text(STRUCT_LEAST) + " to s" + text(STRUCT_MOST) + " (" + word + ")" }
+	if not legal_struct(word) { throw name + ": a struct by value is bytes" + text(STRUCT_LEAST) + " to bytes" + text(STRUCT_MOST) + " (" + word + ")" }
 	if types#(#types) != word { throw name + ": a struct by value is the last parameter" }
 	if types.any(t => t == "f32" or t == "f64") or result == "f32" or result == "f64" { throw name + ": a struct by value beside a float" }
 	if #types.filter(t => t != word and t != "f32" and t != "f64") > STRUCT_INTEGERS_MOST { throw name + ": a struct by value follows at most " + text(STRUCT_INTEGERS_MOST) + " integer arguments" }

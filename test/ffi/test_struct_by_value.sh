@@ -8,8 +8,8 @@ trap 'rm -rf "$stage"' EXIT
 cc -shared -fPIC -o "$stage/libbyvalue.so" "$checkout/test/ffi/byvalue.c" || exit 1
 cat > "$stage/call.warp" << EOF
 import (calloc, set_field_i64) from "c"
-sum24(n: i64, block: s24): i64 from "$stage/libbyvalue.so"
-pair24(left: handle, right: handle, block: s24): i64 from "$stage/libbyvalue.so"
+sum24(n: i64, block: bytes24): i64 from "$stage/libbyvalue.so"
+pair24(left: handle, right: handle, block: bytes24): i64 from "$stage/libbyvalue.so"
 p = calloc(1, 24)
 set_field_i64(p, 0, 10)
 set_field_i64(p, 8, 32)
