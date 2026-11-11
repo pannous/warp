@@ -945,12 +945,13 @@ lazily_linked(context: handle, module_name: text, flag: i64, name: text, functio
 run_linked(context: handle, module_name: text, library: text): nothing := {
 	run = kept_value(RUN_SLOT) as i32
 	linked = long_at(run + 16).value as i32
-	if contains_line(cell_text(linked), module_name) { return }
-	trap = allocate(8)
-	long_at(trap).value = 0
-	instance_defined(long_at(run).value, long_at(run + 8).value, context, module_name, instance_path(module_name, library), linked, library, no, trap)
-	# (linked in a host word, its records kept past the word's end)
-	arena_kept()
+	if not contains_line(cell_text(linked), module_name) {
+		trap = allocate(8)
+		long_at(trap).value = 0
+		instance_defined(long_at(run).value, long_at(run + 8).value, context, module_name, instance_path(module_name, library), linked, library, no, trap)
+		# (linked in a host word, its records kept past the word's end)
+		arena_kept()
+	}
 }
 # `"é" == "e◌́"` (decisions nfc-tables, nfc-slot; core/runtime/text.warp equal_texts): the runtime's canonical_text, a text's
 # NFC by lib/unicode, whose module (modules/unicode.wasm) the run links on this first call (lazily_linked), never a
