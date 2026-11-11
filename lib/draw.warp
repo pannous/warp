@@ -57,9 +57,10 @@ shape_shader = shader {
 
 // the pixels the canvas keeps here: none when they are on the GPU
 pixels_for(width, height) := if drawing_on_gpu then 0 else width * height
-// the canvas's pixels before anything is drawn, each 0; a drawn one is a Color (decision int-types-are-classes:
-// `canvas_pixels[4] == red`)
-blank_pixels(count: int) := filled_list(count, 0)
+// the canvas's pixels before anything is drawn, each 0: ints 0xAARRGGBB as the host paints them, so show() hands them
+// over as they are (a list of Colors converted 1M pixels a frame, 1.4 s, card finger-paint-demo); a Color equals its
+// number, so `canvas_pixels[4] == red` holds (decision int-types-are-classes)
+blank_pixels(count: int) := int[count]
 
 // canvas.resize(width, height), also canvas(width, height), sizes the window too (card window-canvas-size), which then
 // shows the canvas pixel for pixel
@@ -88,7 +89,7 @@ canvas.height(new_height) := canvas(canvas_width, new_height)
 def clear(what) {
 	color = if what is Canvas then blank_color else what
 	if drawing_on_gpu { draw_shape(clear_shape, 0, 0, 0, 0, color as int) }
-	else { for i in 0..canvas_width * canvas_height { canvas_pixels[i] = color as Color } }
+	else { for i in 0..canvas_width * canvas_height { canvas_pixels[i] = color as int } }
 }
 
 // the color over what is there, mixed by its alpha
@@ -111,7 +112,7 @@ def dot(x: float, y: float, color: any) {
 		// an int, not a number: int * int may grow past 64 bits, and an index of a number runs every write dynamically
 		// (1.8 µs a dot against 0.27, card circle-dot-allocation)
 		at: int = row * canvas_width + col
-		canvas_pixels[at] = mixed(canvas_pixels[at] as int, color as int) as Color
+		canvas_pixels[at] = mixed(canvas_pixels[at], color as int)
 	}
 }
 
@@ -143,16 +144,13 @@ def line(x1, y1, x2, y2, color) {
 	for i in 0 to cell(steps) { dot(x1 + (x2 - x1) * i / steps, y1 + (y2 - y1) * i / steps, color) }
 }
 
-// the pixels as the host paints them, numbers 0xAARRGGBB
-painted_pixels() := canvas_pixels.map(pixel => pixel as int)
-
 def show() {
 	size_difference_told()
 	if drawing_on_gpu {
 		draw_shader(shape_shader)
 		draw_show(canvas_width, canvas_height)
 	}
-	else { paint(painted_pixels(), canvas_width, canvas_height) }
+	else { paint(canvas_pixels, canvas_width, canvas_height) }
 }
 
 // save canvas as: ./painting.png, save(canvas, ./painting.png) or canvas.save(./painting.png) (card save-painting;
@@ -170,7 +168,7 @@ class Canvas {
 canvas() := Canvas()
 save(made: Canvas, as file) := {
 	if drawing_on_gpu { draw_shader(shape_shader) }
-	failed = save_picture(painted_pixels(), canvas_width, canvas_height, file)
+	failed = save_picture(canvas_pixels, canvas_width, canvas_height, file)
 	if failed { raise failed }
 }
 
