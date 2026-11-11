@@ -688,7 +688,6 @@ unbound_declaration(f: any): bool := f != ø and f.kinds == ø and (is_declared_
 is_declared_body(body: any): bool := body == Node.Empty or (is_group(body) and #body == 1 and body#1 == Node.Empty)
 takes_block_parameter(f: Function): bool := f.signature.parameters.any(parameter => parameter.type_name == "block")
 def bound_to(f: Function, image: LibraryImage, k: int) {
-	if (started_env("WARP_TIMES") ?? "") != "" { print "§B " + f.name + " [" + "${f.body}"[0 ..< 40] + "] <- " + image.name + "." + image.functions[k].name + "/" + #image.functions[k].kinds }
 	f.index = linked_index(image, k)
 	f.kinds = image.functions[k].kinds
 	f.result = image.functions[k].result

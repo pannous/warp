@@ -106,3 +106,6 @@ skipped the question is refused and goes to warp-interviewer; there is no FYI pa
   compilers of the pushed tip beside ~/dev/bin/warp from your build in the store (seconds), so the user's warp matches
   main right away. Then `todo done <card> <commit>`. The full suite runs
   only in the cloud routine.
+- Reds with a path forward (user 11-11): a core change may land with some test and sample lines red when a card names
+  the owner, the red lines and how they get adjusted, and the merge message says `reds: <card>`. Smoke, self-check,
+  hello and the playground deploy stay green; tier 2 and the page samples don't refuse such a landing.
