@@ -232,7 +232,6 @@ write_executable(module: text, executable: text) := {
 # each module the native driver links at a host word's first call whose word the program imports (unicode's
 # canonical_text), the modules these import in turn, and the runtime.wasm they link; none for a program importing none
 LINKED_ON_DEMAND = ["unicode", "native_host"]
-LINKED_MODULE_PREFIX = "warp/"
 modules_beside(module: text, executable: text) := {
 	imported = wasm_imported(read_bytes(module)).names.filter(name => name#1 == host_module).map(name => name#2)
 	wanted = LINKED_ON_DEMAND.filter(name => wasm_export_names(read_bytes(library_module(name))).any(word => word in imported))
@@ -244,8 +243,14 @@ modules_beside(module: text, executable: text) := {
 		print "linked at run time, beside " + executable + ": " + RUNTIME_WASM + ", " + needed.map(name => MODULES_FOLDER + "/" + name + ".wasm").join(", ")
 	}
 }
+# the modules a prebuilt module links, as its signature records them
+module_links(name: text): list := {
+	signature = prebuilt_signature(name)
+	if signature == ø or signature.links == ø { raise library_module(name) + " records no links: built before modules recorded them; warp rebuild" }
+	signature.links
+}
 library_module(name: text): text := folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + name + ".wasm"
-# the modules and those they import (`warp/<m>`), each once
+# the modules and those they link (their signature's links), each once
 modules_imported_by(names: list): list := {
 	found = []
 	waiting = names
@@ -254,7 +259,7 @@ modules_imported_by(names: list): list := {
 		waiting = waiting[1 ..]
 		if name not in found {
 			found += [name]
-			waiting += wasm_imported(read_bytes(library_module(name))).names.map(name => name#1).filter(from => from.starts_with(LINKED_MODULE_PREFIX)).map(from => from.remove_prefix(LINKED_MODULE_PREFIX))
+			waiting += module_links(name)
 		}
 	}
 	found
