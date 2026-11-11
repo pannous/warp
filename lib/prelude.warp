@@ -271,10 +271,14 @@ text_holes(t, pieces: [text], types: [text]) := {
 // symbols, which needs the grapheme runtime
 to_base(n: int, base: int, upper = false) := { if base < 2 or base > 36 { raise "to_base: the base " + text(base) + " is not 2 to 36" }; if n == 0 { return "0" }; out = ""; rest = abs(n); while rest > 0 { digit = rest % base; out = (digit + (if digit < 10 then 48 else if upper then 55 else 87)) as char + out; rest = rest /! base }; if n < 0 then "-" + out else out }
 from_base(t: text, base: int) := { if base < 2 or base > 36 { raise "from_base: the base " + text(base) + " is not 2 to 36" }; if t == "" { raise "from_base of an empty text" }; out = 0; for c in lower(t) { code = ord(c); digit = if code >= 48 and code < 58 then code - 48 else if code >= 97 and code <= 122 then code - 87 else 99; if digit >= base { raise "from_base: " + c + " is not a base-" + text(base) + " digit in " + t }; out = out * base + digit }; out }
-// how an int shown in hex or binary prints (cards hex-printing, binary-int): hex_text(255) is "0xFF", binary_text(-5)
+// how an int shown in hex or binary prints (cards hex-printing, binary-int): hex_text(255) is "0xff", binary_text(-5)
 // "-0b101"; the printer of such values calls them (wasm_emitter/numbers/radix.rs)
-radix_text(n: int, base: int, prefix: text) := (if n < 0 then "-" else "") + prefix + to_base(abs(n), base, upper: true)
+radix_text(n: int, base: int, prefix: text) := (if n < 0 then "-" else "") + prefix + to_base(abs(n), base)
 hex_text(n: int) := radix_text(n, 16, "0x")
+// a number shown in hex: hex(123), `123 as hex` and `[1, 256].map hex` show 0x7b, 0x1, 0x100, read back as the literals
+// they show; arithmetic on one gives a plain int (user 11-11)
+type hex < int
+format hex h as text := hex_text(h)
 binary_text(n: int) := radix_text(n, 2, "0b")
 // n copies of value, ø for none (list.warp fill): `n times [x]` and `int[n]` where no typed array holds them; the
 // compiler calls it (wasm_emitter/lists/list_emitter.rs), so a fractional count is the error the runtime gives

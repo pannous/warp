@@ -131,6 +131,8 @@ wasmtime_config_parallel_compilation_set(config: handle, enabled: bool) from "wa
 wasmtime_config_profiler_set(config: handle, strategy: i32) from "warp_wasmtime"
 wasmtime_config_macos_use_mach_ports_set(config: handle, enabled: bool) from "warp_wasmtime"
 wasmtime_context_set_fuel(context: handle, fuel: i64): handle from "warp_wasmtime"
+wasmtime_config_epoch_interruption_set(config: handle, enabled: bool) from "warp_wasmtime"
+wasmtime_context_set_epoch_deadline(context: handle, ticks: i64) from "warp_wasmtime"
 wasmtime_trap_code(trap: handle, code: pointer): bool from "warp_wasmtime"
 wasmtime_config_cache_config_load(config: handle, path: handle): handle from "warp_wasmtime"
 wasm_engine_new_with_config(config: handle): handle from "warp_wasmtime"
@@ -151,6 +153,7 @@ wasi_config_new(): handle from "warp_wasmtime"
 wasi_config_set_argv(config: handle, count: i64, arguments: pointer): bool from "warp_wasmtime"
 # what a crash says the process was running (lib/native/wasi.c): a module's arguments while it runs
 crash_context_running(arguments: pointer, count: i32): handle from "c"
+interrupts_engine(engine: handle): nothing from "c"
 crash_context_restored(outer: handle): nothing from "c"
 # the command line the executable reads from now on (lib/native/wasi.c): a forked child's own
 arguments_replaced(arguments: pointer, count: i32): nothing from "c"
@@ -644,15 +647,16 @@ out_of_fuel(trap: pointer, fuel: i64): nothing := {
 # --profile writes each compiled function's address range to /tmp/perf-<pid>.map, which
 # scripts/profile.sh maps `sample`'s addresses through (notes/compile_speed.md)
 warp_config(fuel: bool, heap_bytes: i64): handle := {
-	config = uncached_config(fuel, heap_bytes)
+	config = uncached_config(fuel, heap_bytes, no)
 	wasmtime_config_cache_config_load(config, 0)
 	config
 }
 # so without wasmtime's cache, whose worker thread a forked child lacks (its first compile crashed waking it): the
 # resident engine's (resident_loaded)
-uncached_config(fuel: bool, heap_bytes: i64): handle := {
+uncached_config(fuel: bool, heap_bytes: i64, interruptible: bool): handle := {
 	config = wasm_config_new()
 	wasmtime_config_consume_fuel_set(config, fuel)
+	wasmtime_config_epoch_interruption_set(config, interruptible)
 	wasmtime_config_parallel_compilation_set(config, not has_option("one-thread"))
 	warp_config_gc_heap_initial_size_set(config, heap_bytes)
 	wasmtime_config_wasm_gc_set(config, yes)
@@ -905,6 +909,8 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 # a store of the engine, WASI set up for it: the arguments, what it prints written to the file `output` when one is named
 opened_store(engine: handle, given: Arguments, output: text, trap: pointer): handle := {
 	store = wasmtime_store_new(engine, 0, 0)
+	# (an epoch engine's store traps at once at its first deadline, 0; a store runs to the next epoch, a Ctrl+C)
+	wasmtime_context_set_epoch_deadline(wasmtime_store_context(store), 1)
 	config = wasi_config_new()
 	wasi_config_set_argv(config, given.count, given.pointers)
 	wasi_config_inherit_stdin(config)
@@ -956,7 +962,11 @@ session_line_run(session: pointer, path: text): i32 := {
 	error = session_line_linked(session, path, instance, trap)
 	failure = ""
 	if error != 0 or long_at(trap).value != 0 { failure = failure_said(error, trap, "") } else {
+		# (a Ctrl+C moves the epoch on: this line, never the console, stops at the next one)
+		wasmtime_context_set_epoch_deadline(context, 1)
 		error = started(context, instance, "_start", trap)
+		# (its message is read by running the store's code again: past a Ctrl+C, to the next epoch)
+		wasmtime_context_set_epoch_deadline(context, 1)
 		if error != 0 or long_at(trap).value != 0 { failure = failure_said(error, trap, raised_message(context, instance, trap)) }
 	}
 	keep_value(RUN_SLOT, outer_run)
@@ -1295,7 +1305,7 @@ run_engine(fuel: bool, heap_bytes: i64): handle := {
 # may link; what runs later loads anything else itself, never adding to the block (a host word's allocations end with it)
 resident_loaded(compiler: text): nothing := {
 	block = allocate((16 + RESIDENT_MAX * RESIDENT_ENTRY_BYTES) as i32)
-	engine = wasm_engine_new_with_config(uncached_config(no, RUN_GC_HEAP_BYTES))
+	engine = wasm_engine_new_with_config(uncached_config(no, RUN_GC_HEAP_BYTES, yes))
 	long_at(block).value = engine
 	long_at(block + 8).value = 0
 	trap = allocate(8)
@@ -1306,15 +1316,15 @@ resident_loaded(compiler: text): nothing := {
 		count = long_at(block + 8).value as i32
 		if path.length > 0 and count < RESIDENT_MAX {
 			entry = block + 16 + count * RESIDENT_ENTRY_BYTES
-			machine_code = machine_code_file(path, RUN_GC_HEAP_BYTES)
-			text_kept(entry, machine_code)
-			long_at(entry + 16).value = loaded_module(engine, read_file(path), machine_code, trap)
+			# (found by a run's machine code name, loaded from the resident engine's own)
+			text_kept(entry, machine_code_file(path, RUN_GC_HEAP_BYTES))
+			long_at(entry + 16).value = loaded_module(engine, read_file(path), machine_code_at(path, machine_code_suffix_of(RESIDENT_MACHINE_CODE)), trap)
 			long_at(block + 8).value = (count + 1) as i64
 		}
 	}
 	keep_value(RESIDENT_SLOT, block as i64)
 }
-# a module's resident machine code, else the module loaded
+# a module's resident machine code, else the module compiled, never from or into a run's machine code (no epoch checks)
 resident_module(engine: handle, module: text, machine_code: text, trap: pointer): handle := {
 	block = resident_block()
 	count = long_at(block + 8).value as i32
@@ -1322,7 +1332,7 @@ resident_module(engine: handle, module: text, machine_code: text, trap: pointer)
 		entry = block + 16 + k * RESIDENT_ENTRY_BYTES
 		if same_text(cell_text(entry), machine_code) { return long_at(entry + 16).value }
 	}
-	loaded_module(engine, module, machine_code, trap)
+	loaded_module(engine, module, "", trap)
 }
 
 # the machine code of the module at `path` kept beside it, current for this wasmtime, nothing run
@@ -1334,15 +1344,20 @@ machine_code_kept(path: text): nothing := {
 # where a module's machine code is kept: beside it, else (an installed lib/ this user can't write) in the user's cache
 # folder under the module's whole path; "" when neither can be written: compiled anew each run, never failing. A
 # builder's heap has its own (machine code holds the heap size)
-machine_code_file(path: text, heap_bytes: i64): text := {
-	suffix = machine_code_suffix(heap_bytes)
+machine_code_file(path: text, heap_bytes: i64): text := machine_code_at(path, machine_code_suffix(heap_bytes))
+machine_code_at(path: text, suffix: text): text := {
 	if access(c_string(folder_of(path)), WRITABLE) == 0 { return joined(path, suffix) }
 	cache = cache_folder()
 	if cache.length == 0 { return "" }
 	joined(joined(cache, flattened(resolved_path(path))), suffix)
 }
-# a compiler's machine code beside it, and a builder's (primitive mode has no text constants)
-machine_code_suffix(heap_bytes: i64): text := if heap_bytes == BUILDER_GC_HEAP_BYTES then ".driver.build.cwasm" else ".driver.cwasm"
+# the kinds of machine code, each a file of its own beside the module: a run's, a builder's (the heap size is in the
+# code), the resident engine's (its epoch checks, by which Ctrl+C stops a console line); primitive mode has no text constants
+MACHINE_CODE_KINDS = 3
+BUILDER_MACHINE_CODE = 1
+RESIDENT_MACHINE_CODE = 2
+machine_code_suffix_of(kind: i64): text := if kind == BUILDER_MACHINE_CODE then ".driver.build.cwasm" else if kind == RESIDENT_MACHINE_CODE then ".driver.resident.cwasm" else ".driver.cwasm"
+machine_code_suffix(heap_bytes: i64): text := machine_code_suffix_of(if heap_bytes == BUILDER_GC_HEAP_BYTES then BUILDER_MACHINE_CODE else 0)
 
 # $XDG_CACHE_HOME/warp, else ~/Library/Caches/warp (macOS), else ~/.cache/warp, made when missing, ending in a slash;
 # "" when it can't be written

@@ -221,8 +221,7 @@ promoted(): nothing := {
 	promoted_file = joined(library, "/warp-self.wasm")
 	copied(compiler, promoted_file)
 	companion_copied(companion_library(compiler), companion_library(promoted_file))
-	machine_code_copied(compiler, promoted_file, machine_code_suffix(RUN_GC_HEAP_BYTES))
-	machine_code_copied(compiler, promoted_file, machine_code_suffix(BUILDER_GC_HEAP_BYTES))
+	for kind in 0..MACHINE_CODE_KINDS { machine_code_copied(compiler, promoted_file, machine_code_suffix_of(kind)) }
 	said = if fixpoint then " compiles compiler.warp once more (to its own bytes, a fixpoint), promoted to " else " compiles compiler.warp once more (to other bytes, no fixpoint), promoted to "
 	print(joined(joined(compiler, said), promoted_file))
 }
@@ -275,8 +274,7 @@ companion_folders_made(folder: text): nothing := {
 }
 # a build's machine code (the driver's .cwasm and its key) moved to another build file of the same bytes
 machine_code_moved(from: text, to: text): nothing := {
-	machine_code_renamed(from, to, machine_code_suffix(RUN_GC_HEAP_BYTES))
-	machine_code_renamed(from, to, machine_code_suffix(BUILDER_GC_HEAP_BYTES))
+	for kind in 0..MACHINE_CODE_KINDS { machine_code_renamed(from, to, machine_code_suffix_of(kind)) }
 }
 machine_code_renamed(from: text, to: text, suffix: text): nothing := {
 	rename(c_string(joined(from, suffix)), c_string(joined(to, suffix)))
@@ -351,6 +349,8 @@ console(compiler: text): nothing := {
 	mkdir(c_string(folder), FOLDER_MODE)
 	resident_loaded(compiler)
 	session = session_opened()
+	# Ctrl+C stops the running line or its compile, never the console (lib/native/foreign.c)
+	interrupts_engine(long_at(resident_block()).value)
 	number = 0
 	ended: i32 = -1
 	input = fdopen(STDIN, c_string("r"))

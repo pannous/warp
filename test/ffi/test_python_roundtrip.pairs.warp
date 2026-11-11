@@ -1,0 +1,38 @@
+# data to and from Python and errors both ways (user request 11-11: "create tests to see if we can pass more complicated data to and fro Python, and if we can catch their errors, or maybe even the other way around"; card python-roundtrip-tests)
+# nested lists, maps as dicts, both ways
+'use python json; json.loads(«[1, [2, 3], {"a": [4]}]»)'	[1, [2, 3], {a: [4]}]
+'use python json; json.loads(json.dumps({name: "Ada", tags: ["x", "y"], n: 2}))'	{name: "Ada", tags: ["x", "y"], n: 2}
+'use python builtins; builtins.dict([["a", 1], ["b", [2, 3]]])'	{a: 1, b: [2, 3]}
+'use python json; m = json.loads(«{"a": {"b": [1, 2.5, true, null]}}»); m.a.b'	[1, 2.5, yes, ø]
+# unicode texts, a one-letter one a text too
+'use python json; json.loads(json.dumps("héllo 🌍"))'	"héllo 🌍"
+'use python builtins; builtins.len("héllo 🌍")'	7
+'use python builtins; type(builtins.chr(97)).name'	"text"
+# floats and ints, also past 64 bits
+'use python math; math.fsum([0.1, 0.2, 0.3])'	0.6
+'use python operator; operator.truediv(7, 2)'	3.5
+'use python operator; operator.add(2^100, 1)'	2^100 + 1
+'use python math; math.factorial(25)'	15511210043330985984000000
+# ø and None
+'use python json; json.dumps(ø)'	"null"
+'use python json; json.loads("[1, null]")'	[1, ø]
+# tuples and sets come back as lists
+'use python builtins; builtins.divmod(7, 2)'	[3, 1]
+'use python builtins; builtins.sorted(builtins.set([2, 1, 2]))'	[1, 2]
+'use python builtins; builtins.list(builtins.set([1, 1]))'	[1]
+'use python builtins; builtins.set([1, 1])'	[1]
+# a Python object: its fields and methods, a value it gives stays Python's
+'use python fractions; f = fractions.Fraction(3, 4); [f.numerator, f.denominator]'	[3, 4]
+'use python fractions; fractions.Fraction(3, 4).limit_denominator(2).numerator'	1
+'use python collections; collections.Counter("banana").most_common(1)'	[["a", 3]]
+# a warp list given to Python is changed there as a Python function changes its argument
+'use python random; xs = [1, 2, 3]; random.shuffle(xs); sort(xs)'	[1, 2, 3]
+'use python bisect; xs = [1, 3]; bisect.insort(xs, 2); xs'	[1, 2, 3]
+# a Python exception caught in warp, its message readable
+'use python json; try json.loads("{bad") else "caught"'	"caught"
+'use python math; try { math.sqrt(-1) } catch e { e.message }'	"python ValueError: expected a nonnegative input, got -1.0"
+'use python json; json.nosuch(1)'	error	the AttributeError of Python
+# a warp function given to Python as a callback, and its error back through Python
+'use python builtins; builtins.list(builtins.map(x => x * 2, [1, 2]))'	[2, 4]
+'use python builtins; builtins.sorted([3, 1, 2], key: x => -x)'	[3, 2, 1]
+'use python builtins; try { builtins.list(builtins.map(x => 1 / 0, [1])) } catch e { "caught" }'	"caught"

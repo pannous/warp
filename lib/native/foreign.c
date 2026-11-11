@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <dlfcn.h>
 #include <netinet/in.h>
+#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -314,4 +315,23 @@ void* warp_host_callback(void* word, void* caller, const void* values, size_t co
 	memcpy(results, at(wasi, answered), results_count * VALUE_BYTES);
 	arena_given_back(wasi, before);
 	return NULL;
+}
+
+// Ctrl+C in the console (core/native/warp.warp console): a SIGINT ends the running line, never the console. It moves
+// the engine's epoch on, and the line's store, whose deadline is the next epoch, traps with an interrupt. The handler
+// only calls wasmtime_engine_increment_epoch, found before (dlsym is not safe in a signal handler)
+static void* interrupted_engine;
+static void (*epoch_increment)(void*);
+static void engine_interrupted(int signal) {
+	(void)signal;
+	epoch_increment(interrupted_engine);
+}
+void interrupts_engine(void* engine) {
+	struct sigaction action = { 0 };
+	interrupted_engine = engine;
+	epoch_increment = (void (*)(void*))native_function("wasmtime_engine_increment_epoch");
+	action.sa_handler = engine_interrupted;
+	action.sa_flags = SA_RESTART;
+	sigemptyset(&action.sa_mask);
+	sigaction(SIGINT, &action, NULL);
 }
