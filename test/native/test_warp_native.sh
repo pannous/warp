@@ -36,7 +36,7 @@ if [ -x "$stage/warp" ]; then
 	check "the console, its lines staying" "$(printf 'a = 7\nx = [1\na * 6\n' | native repl | sed -n 4p)" "🌀42"
 	# a console line warp refuses whose first word is a command on PATH runs by sh; a typo keeps warp's refusal (card repl-bash-commands)
 	check "the console runs a shell line" "$(printf 'echo shell-ran | tr a-z A-Z\n' | native repl | sed -n 2p)" "🌀SHELL-RAN"
-	check "the console keeps a typo's refusal" "$(printf 'lsx -la\n' | native repl | sed -n 2p)" "🌀outside the core: the unknown name lsx at 2:1 (no owner)"
+	check "the console keeps a typo's refusal" "$(printf 'lsx -la\n' | native repl | sed -n 2p)" "🌀outside the core: the unknown name lsx at 1:1 (no owner)"
 	check "bare warp, a piped program" "$(printf 'a = 7\na * 6\n' | native)" 42
 	check "exit(code) ends the run" "$(native 'exit(3)'; echo $?)" 3
 	printf 'x  =  1\n' >"$stage/spaced.warp"
