@@ -57,8 +57,10 @@ function exampleLinks(line, chapter) {
 		} }, name);
 	};
 	const links = names => names.flatMap((name, index) => index ? [", ", link(name)] : [link(name)]);
-	const parts = [element("strong", {}, "Examples: "), ...links(exampleNames(tour))];
-	if (samples) parts.push(" · samples/: ", ...links(exampleNames(samples)));
+	// (a chapter of samples alone, Raylib and SDL, names no tour example)
+	const tourNames = exampleNames(tour);
+	const parts = tourNames.length ? [element("strong", {}, "Examples: "), ...links(tourNames)] : [];
+	if (samples) parts.push(parts.length ? " · samples/: " : element("strong", {}, "samples/: "), ...links(exampleNames(samples)));
 	return element("p", { className: "guide-examples" }, ...parts);
 }
 
