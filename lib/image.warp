@@ -1,7 +1,7 @@
 // The standard library module image: pictures as pixels you can load, change, make and save. `image(./photo.jpg)`
 // reads a BMP or a baseline JPEG; `image(64, 48, pixel)` makes one from a function of the column and row. An Image's
 // pixels are Colors (lib/color.warp, 0xAARRGGBB), row by row from the top left. Its changes give a new Image:
-// flipped, mirrored, cropped, tinted, gray, blurred, each_pixel; show() paints it, save writes a .bmp itself and any
+// flipped, mirrored, cropped, tinted, grayed, blurred, each_pixel; show() paints it, save writes a .bmp itself and any
 // other name as a PNG (natively the file, in the playground a download).
 use bits
 use color
@@ -41,7 +41,7 @@ cropped(picture: Image, left: int, top: int, width: int, height: int): Image := 
 // each pixel moved toward the color by the amount, 0 none, 1 all the way
 tinted(picture: Image, tint: Color, amount: float = 0.5): Image := each_pixel(picture, color => mix(color, tint, amount))
 // each pixel's brightness as gray, as the eye weighs red, green and blue
-gray(picture: Image): Image := each_pixel(picture, color => gray_of(color))
+grayed(picture: Image): Image := each_pixel(picture, color => gray_of(color))
 gray_of(color: Color): Color := {
 	parts = channels(color)
 	brightness = 255 * (0.299 * parts#1 + 0.587 * parts#2 + 0.114 * parts#3)
