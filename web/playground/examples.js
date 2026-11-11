@@ -29,8 +29,8 @@ i++
 i++
 i--
 i` },
-	"typed variables": { value: "4", code: `// a type after the name: x only ever holds an int
-x: int = 3
+	"typed variables": { value: "4", code: `// a type after the name: our x only ever holds a number
+x: number = 3
 x = 4
 x` },
 	"let and var": { value: "2", code: `// let binds a name once, var is a variable that can change
