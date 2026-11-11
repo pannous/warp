@@ -1443,6 +1443,8 @@ def key_expression(body: Body, n: Node): TypedCode {
 	# `t as codepoint`, `x as integer`: a type word's other names are its kind's; `255 as byte`, `5 as hex` an int's
 	target = if not (right is symbol) then ø else if name_of(right) in core_type_words then core_type_words[name_of(right)] else if name_of(right) in int_spellings then ValueKind.Int else name_of(right)
 	if operator == Op.As and target == "number" { return as_number(expression_code(body, left)) }
+	# `x as any`, also through an alias (`type html = any`): x as it is, held as a node
+	if operator == Op.As and target == "any" { return TypedCode(ValueKind.Node, boxed(expression_code(body, left))) }
 	# `"./a" as path`: the text marked, held unboxed with its mark (TextMark)
 	if operator == Op.As and target in marked_text_types { return TypedCode(ValueKind.Text, converted(expression_code(body, left), ValueKind.Text), marked_text_types[target]) }
 	if operator == Op.As and (is_held_kind(target)) {

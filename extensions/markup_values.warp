@@ -69,12 +69,15 @@ is_markup_scope(n: Node): bool := match n {
 	Key(Symbol(tag), Op.Colon, List(_, Bracket.Curly, _)): tag == MARKUP_TYPE
 	Key(Key(_, Op.Colon, Symbol(type)), Op.Define, _): type == MARKUP_TYPE
 	Key(Key(_, Op.Colon, Symbol(type)), Op.Assign, _): type == MARKUP_TYPE
+	# `p{"hello"} as html`: what is converted to html, the expression sibling of `x: html = …`
+	Key(_, Op.As, Symbol(type)): type == MARKUP_TYPE
 	_: no
 }
 # the program with each markup scope rewritten, the rest as written
 in_markup(program: Node, rewrite: function): Node := markup_walk(program, html_parameters(program), rewrite)
 markup_walk(n: Node, parameters: map, rewrite: function): Node := {
 	# (a typed place's value, its head no markup: `f(): html` is no pair of computed name)
+	if is_markup_scope(n) and is_key(n, Op.As) { return Key(rewrite(key_of(n)), Op.As, value_of(n)) }
 	if is_markup_scope(n) { return if is_key(n, Op.Define) or is_key(n, Op.Assign) then Key(key_of(n), op_of(n), rewrite(value_of(n))) else rewrite(n) }
 	positions = html_argument_positions(n, parameters)
 	if #positions == 0 { return children(n, child => markup_walk(child, parameters, rewrite)) }
