@@ -87,6 +87,12 @@ wasm_words(bytes: list): list := {
 }
 # the name a definition line defines
 wasm_word_name(line: text): text := line.split("(")#1.trim()
+# the names a module exports
+wasm_export_names(bytes: list): list := wasm_vector(bytes, section_ids.export, reader => {
+	name = read_name(reader)
+	next_number(reader)
+	name
+})
 wasm_exports(path: text, folder: text): WasmExports := {
 	bytes = bytes_if_there(wasm_file(path, folder))
 	types = wasm_types(bytes)
@@ -206,16 +212,16 @@ wasm_value_types(reader: ByteReader): list := {
 	types
 }
 # the module's own imports, which come first in the index spaces: the types of its imported functions, an unknown
-# value for each imported global
+# value for each imported global; and each import's [module, name]
 class WasmImported {
 	functions: list = []
 	globals: list = []
+	names: list = []
 }
 wasm_imported(bytes: list): WasmImported := {
 	imported = WasmImported()
 	wasm_vector(bytes, section_ids.import, reader => {
-		read_name(reader)
-		read_name(reader)
+		imported.names += [[read_name(reader), read_name(reader)]]
 		kind = reader.bytes[reader.offset]
 		reader.offset += 1
 		if kind == IMPORTED_FUNCTION { imported.functions += [read_number(reader)] }

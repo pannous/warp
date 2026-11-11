@@ -118,7 +118,10 @@ build(words: list) := {
 	trim(stem + ".full.wasm", stem + ".wasm", option_of(options, "trim") ?? DEFAULT_TRIM)
 	modules = [stem + ".full.wasm", stem + ".mod.wasm", stem + ".wasm"]
 	if wagi { return wagi_built(stem, modules) }
-	if not (WASM_ONLY in options) { write_executable(stem + ".wasm", stem) }
+	if not (WASM_ONLY in options) {
+		write_executable(stem + ".wasm", stem)
+		modules_beside(stem + ".wasm", stem)
+	}
 	if routes_seen and not (WASM_ONLY in options) { print stem + " serves its routes at 8080, another port with --port <n>" }
 	if EXE_ONLY in options { shell("rm -f " + modules.map(quoted_path).join(" ")) } else {
 		for written in modules { print "compiled " + size_of(written) + " bytes to " + written }
@@ -168,6 +171,9 @@ build_app(target: text, options: list) := {
 	contents = bundle + "/Contents"
 	shell("rm -rf " + quoted_path(bundle) + " && mkdir -p " + quoted_path(contents + "/MacOS") + " " + quoted_path(contents + "/Resources"))
 	shell("mv " + quoted_path(executable) + " " + quoted_path(contents + "/MacOS/" + name))
+	# (and the modules it links at run time, which lie beside it: modules_beside)
+	beside = [RUNTIME_WASM, MODULES_FOLDER].map(file => source_folder(executable) + "/" + file).filter(exists)
+	if #beside > 0 { shell("mv " + beside.map(quoted_path).join(" ") + " " + quoted_path(contents + "/MacOS")) }
 	shell("for f in " + quoted_path(library_folder) + "/libwarp_*.dylib " + quoted_path(library_folder) + "/libwarp_*.so; do if [ -f \"$f\" ]; then cp \"$f\" " + quoted_path(contents + "/MacOS") + "; fi; done")
 	write(contents + "/Info.plist", info_plist(name))
 	if is_macos() { shell("codesign --sign - --force --deep " + quoted_path(bundle)) }
@@ -220,6 +226,37 @@ write_executable(module: text, executable: text) := {
 	if signed { shell("codesign --sign - --force " + quoted_path(executable)) }
 	carried_size = #carried
 	print "wrote " + executable + " (" + size_of(executable) + " bytes, carrying ${carried_size})"
+}
+
+# The modules an executable links at run time lie beside it as in lib/, its own library (core/native/driver.warp):
+# each module the native driver links at a host word's first call whose word the program imports (unicode's
+# canonical_text), the modules these import in turn, and the runtime.wasm they link; none for a program importing none
+LINKED_ON_DEMAND = ["unicode", "native_host"]
+LINKED_MODULE_PREFIX = "warp/"
+modules_beside(module: text, executable: text) := {
+	imported = wasm_imported(read_bytes(module)).names.filter(name => name#1 == host_module).map(name => name#2)
+	wanted = LINKED_ON_DEMAND.filter(name => wasm_export_names(read_bytes(library_module(name))).any(word => word in imported))
+	needed = modules_imported_by(wanted)
+	if #needed == 0 { return ø }
+	folder = source_folder(executable)
+	shell("mkdir -p " + quoted_path(folder + "/" + MODULES_FOLDER) + " && cp " + quoted_path(runtime_path()) + " " + quoted_path(folder + "/" + RUNTIME_WASM))
+	for name in needed { shell("cp " + quoted_path(library_module(name)) + " " + quoted_path(folder + "/" + MODULES_FOLDER + "/" + name + ".wasm")) }
+	print "linked at run time, beside " + executable + ": " + RUNTIME_WASM + ", " + needed.map(name => MODULES_FOLDER + "/" + name + ".wasm").join(", ")
+}
+library_module(name: text): text := folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + name + ".wasm"
+# the modules and those they import (`warp/<m>`), each once
+modules_imported_by(names: list): list := {
+	found = []
+	waiting = names
+	while #waiting > 0 {
+		name = waiting#1
+		waiting = waiting[1 ..]
+		if name not in found {
+			found += [name]
+			waiting += wasm_imported(read_bytes(library_module(name))).names.map(name => name#1).filter(from => from.starts_with(LINKED_MODULE_PREFIX)).map(from => from.remove_prefix(LINKED_MODULE_PREFIX))
+		}
+	}
+	found
 }
 
 # Just enough of 64-bit Mach-O (rust-harness:crates/warp-runtime macho.rs): codesign wants every byte of the file inside a segment, so
