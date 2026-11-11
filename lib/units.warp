@@ -277,9 +277,9 @@ rewrite $a * $b => $converted where raw and $u = converted_unit($a) and $u is Un
 rewrite $a ^ $b => $converted where raw and $u = converted_unit($a) and $u is Unit and $converted = unit_regrouped($a ^ $b)
 // `h = 2 inch; 3 km/h` binds as (3 km) / h: after a number, a unit written whole stays the unit though the program has a
 // variable of one of its names, as glued `3m` does, taken top-down before its parts multiply
-rewrite $a / $b => $quantity where raw and $quantity = unit_beside_variables($a / $b)
-rewrite $a * $b => $quantity where raw and $quantity = unit_beside_variables($a * $b)
-rewrite $a ^ $b => $quantity where raw and $quantity = unit_beside_variables($a ^ $b)
+rewrite $a / $b => $quantity where raw and $u = amount_unit_word($a) and $u is Unit and $quantity = unit_beside_variables($a / $b)
+rewrite $a * $b => $quantity where raw and $u = amount_unit_word($a) and $u is Unit and $quantity = unit_beside_variables($a * $b)
+rewrite $a ^ $b => $quantity where raw and $u = amount_unit_word($a) and $u is Unit and $quantity = unit_beside_variables($a ^ $b)
 // `3 cm is Length` and `2 km/h is speed` parse as 3 (cm is Length): the unit goes with its amount first
 rewrite $e $u is $t => ($e $u) is $t where $e is number and unit_led($u) and $t in [length, area, volume, mass, duration, time, temperature, speed, frequency, force, density, Quantity, Length, Mass, Time, Temperature, Pixels, Area, Volume, Speed, Frequency, Force, Density]
 // `3 cm is length`, `2 km/h is speed`: a quantity measures a named dimension, after its unit went with its amount (no

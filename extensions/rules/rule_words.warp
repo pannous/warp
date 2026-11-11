@@ -79,6 +79,8 @@ unit_beside_variables(code: Node): any := {
 }
 # the number a unit written whole follows, 3 of (3 km) / h; ø for other code
 unit_amount(code: Node): any := if is_unit_operation(code) then unit_amount(key_of(code)) else if is_amount_phrase(code) then code#1 else ø
+# the unit word right after it, km of (3 km) / h
+amount_unit_word(code: Node): any := if is_unit_operation(code) then amount_unit_word(key_of(code)) else if is_amount_phrase(code) then code#2 else ø
 # the unit written after it, km / h of (3 km) / h
 amount_unit(code: Node): Node := if is_unit_operation(code) then Key(amount_unit(key_of(code)), op_of(code), value_of(code)) else code#2
 is_unit_operation(code: Node): bool := code is key and op_of(code) in [Op.Div, Op.Mul, Op.Pow]
@@ -1367,6 +1369,7 @@ rule_words = {
 	unit_led: unit_led,
 	unit_regrouped: unit_regrouped,
 	unit_beside_variables: unit_beside_variables,
+	amount_unit_word: amount_unit_word,
 	value_definitions: value_definitions,
 	value_dir_words: value_dir_words,
 	value_helps: value_helps,
