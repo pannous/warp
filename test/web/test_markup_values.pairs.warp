@@ -13,3 +13,7 @@
 # a conversion to html makes markup, as a place typed html does (user OK 11-11, card html-output-fix)
 'use markup; to_html(p{"hello"} as html)'	'<p>hello</p>'
 'p{"hello"} as html'	'<p>hello</p>'
+# a text as html is the page's own HTML, written as it is (user OK 11-11, card read-tags-html)
+'page = "<h1>Tags</h1>"; to_html(page as html)'	"<h1>Tags</h1>"
+'to_html("<b>a & b</b>" as html)'	"<b>a & b</b>"
+'to_html(div{ "<b>" })'	"<div>&lt;b&gt;</div>"

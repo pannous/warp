@@ -268,7 +268,8 @@ html_shown_text(html: text): text := {
 }
 
 // a live part's value as it is now
-html_now(value: any) := if value is Live then html_now(value.now()) else if value is function then html_now(value()) else value
+// (`x as html` is an Html holding x, extensions/markup_values.warp: `p{"hi"} as html` the markup itself)
+html_now(value: any) := if value is Live then html_now(value.now()) else if value is function then html_now(value()) else if value is Html and value.element is Html then html_now(value.element) else value
 
 // `button{ "+1", on click {…} }`: an item `on e {…}` of an element is that element's own handler, kept in it as a
 // value (no listener of the whole program); markup's own class, which its module sees when built on its own
@@ -330,6 +331,8 @@ html_content(pair: any) := if html_is_handler_pair(pair) then html_raw_content(p
 // of the select around, whose option is selected (`select{ bind: fruit }`, card web-bind-select)
 html_render(live: html, scope: any, chosen: any) := {
 	value = html_now(live)
+	# `read("tags.html") as html`: a text as html is the page's own HTML, written as it is (card read-tags-html)
+	if value is Html and value.element is text { return value.element }
 	if html_is_element(value) { return html_element(html_tag(html_name(value)), html_content(value), scope, chosen) }
 	if html_is_group(value) {
 		var out = ""

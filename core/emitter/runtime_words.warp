@@ -237,6 +237,8 @@ def type_test_code(body: Body, subject: Node, written: text): TypedCode { value_
 def value_type_test(body: Body, value: TypedCode, written: text): TypedCode {
 	# `x is Q` of `type Q = P` tests a P
 	spec = aliased_type(written)
+	# `x is any`, also through an alias (`x is html` of `type html = any`): yes, as `x as any` is x
+	if spec == "any" { return TypedCode(ValueKind.Bool, value.code + [op.drop, op.i32_const, 1]) }
 	if spec in module.sum_types and module.sum_types[spec] == "cases" { return refuse("a test of the type " + spec + ", which has cases") }
 	# `x is real` (REAL_CLASS) also of any number (decision real-canonical)
 	# an instance of the class or of one extending it, whatever the subject: `(5ms) is Quantity` of a Time
