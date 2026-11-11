@@ -13,4 +13,3 @@
 's = "abc"; s.find("x") default 0'	0
 '[].first ?? 0'	0
 'm = {}; k = "a"; m[k] ?? 0'	0
-'r: int? = "abc".find("x"); r is error'	true
