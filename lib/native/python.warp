@@ -141,7 +141,7 @@ python_object(value: any): int := {
 		}
 		return created
 	}
-	raise "python: no Python value for " + str(value)
+	raise "python: no Python value for " + text(value)
 }
 
 // the warp value of a Python object (which stays the caller's): None ø, bool, int, float, str, list and tuple a list,
