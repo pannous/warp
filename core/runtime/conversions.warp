@@ -14,9 +14,7 @@ converts_to_float(n: Node): bool := is_class_instance(n) and not is_null(instanc
 # an instance as the number its float() gives, any other value itself: a subtype of int, `red % 256`, computes as the
 # int it is, not a float (decision subtype-less-than)
 number_held(n: Node): Node := if converts_to_float(n) then instance_float(n) else n
-# the field of a number's subtype's instance (extensions/int_types/classes.warp): `hex(123) == 123` by it, a Quantity's
-# `5 m == 5` never (user 11-11)
-subtype_field() := "subtype_value"
+# a number's subtype's instance as its number, `hex(123) == 123`, a Quantity's `5 m == 5` never (user 11-11)
 subtype_number(n: Node): Node := if is_class_instance(n) and instance_place(n, subtype_field()) > 0 then number_held(n) else n
 # a boxed int (kind code 1), exact rational or float as a float
 # an instance as its class's float() gives it (decision no-units-in-shaders: `sin(2km)` of the amount in metres)
