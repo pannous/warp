@@ -440,8 +440,10 @@ shader_module(code: text): int := {
 	set_field_pointer(descriptor, 0, source)
 	wgpuDeviceCreateShaderModule(device, descriptor)
 }
-// the code's pipeline drawing into the format, compiled anew; 0 and gpu_failure where it does not compile
-pipeline_compiled(code: text, format: int): int := {
+// the code's pipeline drawing into the format, compiled anew; 0 and gpu_failure where it does not compile.
+// a quad blends over the one before it; a pass stores the fragment as the shader wrote it
+pipeline_compiled(code: text, format: int): int := pipeline_made(code, format, own_vertex_stage(code) != "")
+pipeline_made(code: text, format: int, blended: bool): int := {
 	wgpuDevicePushErrorScope(device, ERROR_FILTER_VALIDATION)
 	compiled = shader_module(code)
 	vertex = own_vertex_stage(code)
@@ -450,7 +452,7 @@ pipeline_compiled(code: text, format: int): int := {
 	set_field_i32(target, 8, format)
 	set_field_i64(target, 24, WRITE_ALL)
 	// a quad's color over the ones drawn before it: source alpha, as `vec4f(color, alpha)` says
-	if quads {
+	if blended {
 		over = struct_of(BLEND_STATE)
 		for at in [0, 12] { set_field_i32(over, at, BLEND_ADD) }
 		set_field_i32(over, 4, BLEND_SRC_ALPHA)
@@ -1167,7 +1169,7 @@ pass_code(shader: text, declarations: text, reads: list): text := {
 pass_pipeline(code: text, format: int): int := {
 	key = text(format) + "\n" + code
 	if pass_pipelines.has(key) { return pass_pipelines[key] }
-	made = pipeline_compiled(code, format)
+	made = pipeline_made(code, format, no)
 	if made == 0 { return 0 }
 	pass_pipelines[key] = made
 	made
@@ -1291,8 +1293,8 @@ field_swapped(field: FluidField) := {
 	field.front = field.back
 	field.back = kept
 }
-fields_set(id: int): any := {
-	if id < 1 or id > #field_sets { return error("no fields " + text(id)) }
+fields_set(id: int): FieldSet := {
+	if id < 1 or id > #field_sets { raise "no fields " + text(id) }
 	field_sets[id - 1]
 }
 fields_read(shader: text, set: FieldSet): list := set.fields.filter(field => names(shader, FIELD_PREFIX + field.name))
@@ -1300,16 +1302,16 @@ host_gpu_fields_format(): any := {
 	if not fields_format_chosen() { return error(gpu_failure) }
 	fields_format_name
 }
-host_gpu_fields(width: int, height: int, given: any): any := {
-	if width < 1 or height < 1 { return error("gpu_fields needs a positive width and height") }
+host_gpu_fields(width: int, height: int, given: any): int := {
+	if width < 1 or height < 1 { raise "gpu_fields needs a positive width and height" }
 	names = field_names(given)
-	if names is text { return error(names) }
+	if names is text { raise names }
 	label = names.join(",")
 	for i in 0 ..< #field_sets {
 		set = field_sets[i]
 		if set.width == width and set.height == height and set.label == label { return i + 1 }
 	}
-	if not fields_format_chosen() { return error(gpu_failure) }
+	if not fields_format_chosen() { raise gpu_failure }
 	fields = []
 	for name in names {
 		front = texture_probed(width, height, fields_format)
@@ -1317,7 +1319,7 @@ host_gpu_fields(width: int, height: int, given: any): any := {
 		if front == 0 or back == 0 {
 			if front != 0 { wgpuTextureRelease(front) }
 			if back != 0 { wgpuTextureRelease(back) }
-			return error("gpu_fields: this GPU cannot render " + fields_format_name)
+			raise "gpu_fields: this GPU cannot render " + fields_format_name
 		}
 		fields.add(FluidField(name, front, back))
 	}
@@ -1326,15 +1328,16 @@ host_gpu_fields(width: int, height: int, given: any): any := {
 	field_sets.add(set)
 	#field_sets
 }
-host_gpu_pass(given_shader, id: int, into: any, given: any): any := {
+// -1 where `into` names no field: the library word raises that, so a program can catch it
+host_gpu_pass_recorded(given_shader, id: int, into: any, given: any): int := {
 	started = wall_clock_ms()
 	set = fields_set(id)
 	name = text(into)
 	found = set.fields.filter(field => field.name == name)
-	if #found == 0 { return error("no field " + name) }
+	if #found == 0 { return -1 }
 	shader = text(given_shader)
 	reads = fields_read(shader, set)
-	if not pass_drawn(shader, given, set.width, set.height, reads, found[0].back, fields_format) { return error(gpu_failure) }
+	if not pass_drawn(shader, given, set.width, set.height, reads, found[0].back, fields_format) { raise gpu_failure }
 	field_swapped(found[0])
 	pass_ms += wall_clock_ms() - started
 	0
@@ -1349,7 +1352,7 @@ shade_image(shader: text, set: FieldSet, given: any): int := {
 	}
 	image
 }
-host_gpu_show(given_shader, id: int, given: any): any := {
+host_gpu_show(given_shader, id: int, given: any): int := {
 	set = fields_set(id)
 	layer = painting_layer(set.width, set.height)
 	upload = pass_ms
@@ -1366,7 +1369,7 @@ host_gpu_show(given_shader, id: int, given: any): any := {
 	image = shade_image(shader, set, given)
 	if image == 0 {
 		passes_finished()
-		return error(gpu_failure)
+		raise gpu_failure
 	}
 	encoder = pass_encoder
 	pass_encoder = 0
@@ -1376,7 +1379,8 @@ host_gpu_show(given_shader, id: int, given: any): any := {
 	wgpuTextureRelease(image)
 	frame_closed()
 	paint_frame_noted(upload, wall_clock_ms() - started)
-	if shown then 1 else error(gpu_failure)
+	if not shown { raise gpu_failure }
+	1
 }
 host_gpu_picture(given_shader, id: int, given: any): any := {
 	set = fields_set(id)

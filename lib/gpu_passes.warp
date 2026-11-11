@@ -5,7 +5,13 @@
 // allows. gpu_show draws the last shader into the window (or the page canvas) and gpu_picture reads that
 // one image back. Values are numbers and short vectors, the same holes paint fills ($width, $mouse, …).
 gpu_fields(width: int, height: int, names: node): int from host
-gpu_pass(shader: node, fields: int, into: node, values: node): int from host
+gpu_pass_recorded(shader: node, fields: int, into: node, values: node): int from host
 gpu_show(shader: node, fields: int, values: node): int from host
 gpu_picture(shader: node, fields: int, values: node): node from host
 gpu_fields_format(): node from host
+// the pass, or a catchable "no field" where `into` is not one of the fields
+gpu_pass(shader: node, fields: int, into: node, values: node): int := {
+	recorded = gpu_pass_recorded(shader, fields, into, values)
+	if recorded < 0 { raise "no field " + text(into) }
+	recorded
+}

@@ -574,7 +574,7 @@ async function passPipeline(device, code, format, ownVertex) {
 	const pipeline = device.createRenderPipeline({
 		layout: "auto",
 		vertex: { module, entryPoint: ownVertex ?? VERTEX_ENTRY_POINT },
-		fragment: { module, entryPoint: GPU_ENTRY_POINT, targets: [{ format, ...ownVertex && format.includes("8") ? { blend: OVER } : {} }] },
+		fragment: { module, entryPoint: GPU_ENTRY_POINT, targets: [{ format }] },
 		...ownVertex ? { primitive: { topology: "triangle-strip" } } : {},
 	});
 	const error = await device.popErrorScope();
@@ -651,13 +651,14 @@ async function gpuPass(job) {
 	const device = await theGpuDevice();
 	const set = setOf(device, job.id);
 	const field = set.fields[job.into];
-	if (!field) throw new Error(`no field ${job.into}`);
+	if (!field) return -1;
 	const choice = await fieldsChoiceOf(device);
 	const values = fieldValues(job.shader, set.width, set.height, job.values);
 	await drawInto(device, job.shader, values, set, field.back, choice.name);
 	const kept = field.front;
 	field.front = field.back;
 	field.back = kept;
+	return 0;
 }
 async function finishPasses(device) {
 	if (!openEncoder) return;
@@ -716,7 +717,7 @@ const GPU_JOBS = {
 	gpu_kernel: async job => ({ words: await gpuComputedFloats(job) }),
 	gpu_render: async job => ({ words: await gpuRendered(job) }),
 	gpu_fields: async job => ({ values: await gpuFields(job) }),
-	gpu_pass: async job => (await gpuPass(job), { values: 0 }),
+	gpu_pass: async job => ({ values: await gpuPass(job) }),
 	gpu_show: async job => ({ values: await gpuShow(job) }),
 	gpu_picture: async job => ({ words: await gpuPicture(job) }),
 	gpu_fields_format: async () => ({ values: (await fieldsChoiceOf(await theGpuDevice())).name }),
@@ -941,8 +942,8 @@ addHostPart({
 		};
 		const passRecorded = (shader, fields, into, values) => {
 			metaOf(fields);
-			gpuJob("gpu_pass", { shader: String(plain(shader)), id: Number(fields), into: String(plain(into)), values: plainValues(values) });
-			return 0n;
+			const recorded = gpuJob("gpu_pass", { shader: String(plain(shader)), id: Number(fields), into: String(plain(into)), values: plainValues(values) });
+			return BigInt(recorded);
 		};
 		const fieldJob = (shader, fields, values) => {
 			const meta = metaOf(fields);
@@ -978,7 +979,7 @@ addHostPart({
 			gpu_computed: computed,
 			gpu_render: rendered,
 			gpu_fields: fieldsMade,
-			gpu_pass: passRecorded,
+			gpu_pass_recorded: passRecorded,
 			gpu_show: shown,
 			gpu_picture: pictured,
 			gpu_fields_format: fieldsFormat,
