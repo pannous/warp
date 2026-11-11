@@ -9,14 +9,14 @@ SYSTEM_VALUE_POLL = 250ms
 // define, read every SYSTEM_VALUE_POLL by a timer (lib/timers.warp: the page runs it, natively none starts)
 rewrite on change dark mode $body: block => on change dark_mode $body
 rewrite on set $x $body: block => variable_listen([$n], no, (value, old) => $body) where $x is symbol and $n = spelled($x)
-rewrite on change $x $body: block => variable_listen([$n], yes, (value, old) => $body) where $x is symbol and not $x is function and $n = spelled($x)
+rewrite on change $x $body: block => variable_listen([$n], yes, (value, old) => $body) where $x is symbol and not polled_word($x, $program, $source) and $n = spelled($x)
 // `on change b + c {…}`: the block runs when a write of a name it reads changed the expression's value
 rewrite on change $x $body: block => $listens where not $x is symbol and $listens = change_listens($x, $body)
 rewrite whenever $c $body: block => $listens where $listens = whenever_listens($c, $body)
 rewrite once $c $body: block => $listens where $listens = once_listens($c, $body)
 // the same with the block after a colon, `whenever x > 2: print "big"`
 rewrite on set $x: $body => variable_listen([$n], no, (value, old) => $body) where $x is symbol and $n = spelled($x)
-rewrite on change $x: $body => variable_listen([$n], yes, (value, old) => $body) where $x is symbol and not $x is function and $n = spelled($x)
+rewrite on change $x: $body => variable_listen([$n], yes, (value, old) => $body) where $x is symbol and not polled_word($x, $program, $source) and $n = spelled($x)
 rewrite on change $x: $body => $listens where not $x is symbol and $listens = change_listens($x, $body)
 rewrite whenever $c: $body => $listens where $listens = whenever_listens($c, $body)
 rewrite once $c: $body => $listens where $listens = once_listens($c, $body)
