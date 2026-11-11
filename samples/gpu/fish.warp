@@ -1,0 +1,250 @@
+#!/usr/bin/env warp
+# A red sea bream swimming. samples/gpu/madai.fish is the Fish Kit's low mesh with a colour baked on each vertex
+# (notes/fish.md). There is no vertex stage, so the pose is computed here and the shader ray-tests the triangles,
+# the same way samples/gpu/manual_3d_object_viewer.warp draws a model. Part ids are the kit's: 0 body, 1 dorsal,
+# 2 anal, 3 tail, 4 pectoral, 5 pelvic, 6 eye, 7 gill, 8 lower jaw, 9 upper jaw.
+use graphics
+use math
+use file
+
+BODY = 0
+DORSAL = 1
+ANAL = 2
+TAIL = 3
+PECTORAL = 4
+PELVIC = 5
+EYE = 6
+GILL = 7
+JAW = 8
+UPPER = 9
+
+# the kit's cruise for this species: 0.4 m/s, a breath and a mouth at 0.8 Hz. The glb's amplitude cancels
+# against the tail swing, so the wave uses the swing. The mouth hinge is the kit's, in metres.
+CRUISE_SPEED = 0.4
+BREATH = 0.8
+GILL_MOST = 0.35
+MOUTH_MOST = 0.21
+MOUTH_JOINT = [0.19, -0.034]
+UPPER_SLIDE = 0.00542
+TURN = 6.283185307179586
+
+# `v` lines are corners, `f` lines triangles from 1, `swim` the kit's body wave
+fish_mesh(text) := {
+	positions = []
+	normals = []
+	parts = []
+	weights = []
+	folds = []
+	pivots = []
+	colors = []
+	jaws = []
+	triangles = []
+	snout = 0.0
+	reach = 1.0
+	wavelength = 1.0
+	frequency = 1.0
+	amplitude = 1.0
+	envelope = [0.0, 0.0, 0.0]
+	for line in text.split("\n") {
+		words = line.split(" ").filter(word => word)
+		if #words == 0 or words#1.starts_with("#") { continue }
+		if words#1 == "swim" {
+			snout = float(words#2)
+			reach = float(words#3)
+			wavelength = float(words#4)
+			frequency = float(words#5)
+			amplitude = float(words#6)
+			envelope = [float(words#7), float(words#8), float(words#9)]
+		}
+		if words#1 == "v" {
+			positions = positions + [[float(words#2), float(words#3), float(words#4)]]
+			normals = normals + [[float(words#5), float(words#6), float(words#7)]]
+			parts = parts + [int(words#8)]
+			weights = weights + [float(words#9)]
+			folds = folds + [float(words#10)]
+			pivots = pivots + [[float(words#11), float(words#12), float(words#13)]]
+			colors = colors + [[float(words#14), float(words#15), float(words#16), float(words#17)]]
+			jaws = jaws + [float(words#18)]
+		}
+		if words#1 == "f" { triangles = triangles + [[int(words#2), int(words#3), int(words#4)]] }
+	}
+	{
+		positions: positions, normals: normals, parts: parts, weights: weights, folds: folds, pivots: pivots,
+		colors: colors, jaws: jaws, triangles: triangles, snout: snout, reach: reach, wavelength: wavelength,
+		frequency: frequency, amplitude: amplitude, envelope: envelope
+	}
+}
+
+swim_envelope(envelope, along) := envelope#1 + envelope#2 * along + envelope#3 * along * along
+
+# tail swing and how much the fins rest open, at the species' cruise
+cruise(fish, time) := {
+	tail = 0.035 + min(CRUISE_SPEED / fish.reach / 6, 1) * 0.09
+	{cycle: fish.frequency * time, wave: tail / swim_envelope(fish.envelope, 1), slow: clamp(1 - (tail - 0.04) / 0.06, 0, 1)}
+}
+
+# rotate about a unit axis through the pivot (the kit's fin hinges)
+turned(point, pivot, axis, angle) := {
+	if angle == 0 { return point }
+	c = cosine(angle)
+	s = sine(angle)
+	bend = 1 - c
+	x = axis#1
+	y = axis#2
+	z = axis#3
+	arm = point .- pivot
+	row1 = [c + x * x * bend, x * y * bend - z * s, x * z * bend + y * s]
+	row2 = [y * x * bend + z * s, c + y * y * bend, y * z * bend - x * s]
+	row3 = [z * x * bend - y * s, z * y * bend + x * s, c + z * z * bend]
+	pivot .+ [dot(row1, arm), dot(row2, arm), dot(row3, arm)]
+}
+
+# a fin, an eye, about its pivot. A pivot at the origin is none, which is this mesh's dorsal fin: it rides the wave
+fin_point(point, part, weight, fold, pivot, pose, time) := {
+	if norm(pivot) <= 0.0000001 { return point }
+	if part == DORSAL or part == ANAL { return turned(point, pivot, [0, 0, 1], fold * (1 - (0.15 + pose.slow * 0.6))) }
+	if part == TAIL { return turned(point, pivot, [0, 0, 1], fold * 0.22 * (1 - clamp(pose.wave * 1.5, 0, 1))) }
+	if part == PECTORAL {
+		beat = 0.5 - 0.5 * cosine(TURN * pose.cycle - weight * 0.9)
+		angle = max(0.03 + pose.slow * 0.08 + pose.slow * 0.3 * beat, 0)
+		return turned(point, pivot, normalize([0.2, 1, 0]), sign(pivot#3) * weight * angle)
+	}
+	if part == PELVIC {
+		angle = -0.12 + 0.67 * pose.slow * 0.5 + 0.04 * sine(4.4 * time)
+		return turned(point, pivot, [1, 0, 0], -sign(pivot#3) * weight * angle)
+	}
+	if part == EYE {
+		side = sign(pivot#3)
+		looked = turned(point, pivot, [0, 1, 0], side * 0.35 * sine(time * 1.7))
+		return turned(looked, pivot, [1, 0, 0], -side * 0.18 * sine(time * 2.3 + 1.1))
+	}
+	point
+}
+
+gill_open(time) := GILL_MOST * (0.5 - 0.5 * cosine(TURN * BREATH * time))
+mouth_open(time) := MOUTH_MOST * (0.5 - 0.5 * cosine(TURN * BREATH * time + 1.4))
+
+# the cover swings out. The weight is small: these are the head's own vertices, not a plate cut from the photo
+gill_point(point, part, weight, time) := {
+	if part != GILL { return point }
+	opened = gill_open(time)
+	[point#1 + weight * (1 - cosine(opened)), point#2, point#3 + sign(point#3) * weight * sine(opened)]
+}
+
+# the lower jaw, and a body vertex that carries a jaw weight, about the mouth hinge
+jaw_point(point, part, jaw, time) := {
+	amount = if part == JAW then 1 else if part == BODY then jaw else 0
+	if amount == 0 { return point }
+	angle = -mouth_open(time) * amount
+	c = cosine(angle)
+	s = sine(angle)
+	hinge = [point#1 - MOUTH_JOINT#1, point#2 - MOUTH_JOINT#2]
+	[MOUTH_JOINT#1 + hinge#1 * c - hinge#2 * s, MOUTH_JOINT#2 + hinge#1 * s + hinge#2 * c, point#3]
+}
+
+# the upper jaw slides forward as the mouth opens. This low mesh has none; the motion is the kit's
+upper_point(point, part, time) := {
+	if part != UPPER { return point }
+	opened = clamp(mouth_open(time) / 0.4, 0, 1)
+	slide = UPPER_SLIDE * opened * opened
+	[point#1 + 0.94 * slide, point#2 - 0.34 * slide, point#3]
+}
+
+# the body wave, sideways, growing toward the tail. `along` is 0 at the snout and 1 at the tail
+waved(fish, point, pose) := {
+	along = (fish.snout - point#1) / fish.reach
+	offset = fish.reach * pose.wave * swim_envelope(fish.envelope, along) * sine(TURN * (along / fish.wavelength - pose.cycle))
+	[point#1, point#2, point#3 + offset]
+}
+
+# one posed vertex. Fins and eyes first, then the mouth, then the wave, which is the kit's order
+fish_point(fish, index, time) := {
+	pose = cruise(fish, time)
+	point = fish.positions#index
+	part = fish.parts#index
+	weight = fish.weights#index
+	point = fin_point(point, part, weight, fish.folds#index, fish.pivots#index, pose, time)
+	point = gill_point(point, part, weight, time)
+	point = jaw_point(point, part, fish.jaws#index, time)
+	waved(fish, upper_point(point, part, time), pose)
+}
+
+# corners and a colour a triangle, dropping a triangle whose average alpha is below the kit's cutout
+fish_pose(fish, time) := {
+	posed = []
+	for i in 1 to #fish.positions { posed = posed + [fish_point(fish, i, time)] }
+	corners = []
+	colors = []
+	for tri in fish.triangles {
+		color = (fish.colors#(tri#1) .+ fish.colors#(tri#2) .+ fish.colors#(tri#3)) ./ 3
+		if color#4 >= 0.5 {
+			corners = corners + [posed#(tri#1), posed#(tri#2), posed#(tri#3)]
+			colors = colors + [[color#1, color#2, color#3]]
+		}
+	}
+	{corners: corners, colors: colors}
+}
+
+mesh_beside() := {
+	beside = program_folder() + "/madai.fish"
+	if exists(beside) then beside else "madai.fish"
+}
+
+frame_width = 320
+frame_height = 180
+fish = ø
+started = clock()
+
+# the camera turns around the fish. `$mesh` is the posed corners, `$colors` one colour a triangle
+viewer = shader {
+@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+	let uv = (at.xy / $size - 0.5) * vec2f(1.0, -1.0);
+	let turn = $angle;
+	let tilt = 0.5;
+	let spin = mat3x3f(cos(turn), 0.0, sin(turn), 0.0, 1.0, 0.0, -sin(turn), 0.0, cos(turn));
+	let lean = mat3x3f(1.0, 0.0, 0.0, 0.0, cos(tilt), -sin(tilt), 0.0, sin(tilt), cos(tilt));
+	let view = spin * lean;
+	let origin = view * vec3f(0.0, 0.04, 0.95);
+	let ray = normalize(view * vec3f(uv * 0.85, -1.0));
+	var nearest = 1e9;
+	var normal = vec3f(0.0);
+	var base = vec3f(0.0);
+	for (var i = 0u; i < u32($count); i += 3u) {
+		let a = $mesh[i].xyz;
+		let ab = $mesh[i + 1u].xyz - a;
+		let ac = $mesh[i + 2u].xyz - a;
+		let p = cross(ray, ac);
+		let det = dot(ab, p);
+		if (abs(det) < 1e-6) { continue; }
+		let s = origin - a;
+		let u = dot(s, p) / det;
+		let q = cross(s, ab);
+		let v = dot(ray, q) / det;
+		let t = dot(ac, q) / det;
+		if (u >= 0.0 && v >= 0.0 && u + v <= 1.0 && t > 0.0 && t < nearest) {
+			nearest = t;
+			normal = normalize(cross(ab, ac));
+			base = $colors[i / 3u].xyz;
+		}
+	}
+	if (nearest > 1e8) { return vec4f(0.05, 0.18, 0.28 + 0.15 * uv.y, 1.0); }
+	let facing = select(normal, -normal, dot(normal, ray) > 0.0);
+	let sun = normalize(vec3f(0.45, 0.85, 0.35));
+	let light = max(dot(facing, sun), 0.0) + 0.35 * max(dot(facing, -sun), 0.0);
+	return vec4f(base * (0.28 + 0.72 * light), 1.0);
+	}
+}
+
+# `use` brings the functions, not this frame. Headless, one still; in a window, the fish swims
+on frame {
+	global fish
+	if no fish { fish = fish_mesh(read(mesh_beside())) }
+	seconds = float(clock() - started) / 1000 + 0.35
+	pose = fish_pose(fish, seconds)
+	mesh = pose.corners
+	colors = pose.colors
+	count = #mesh
+	angle = 0.9 + seconds * 0.45
+	size = [frame_width, frame_height]
+	paint(viewer, frame_width, frame_height, {size: size})
+}
