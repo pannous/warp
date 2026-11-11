@@ -42,3 +42,6 @@
 'use complex; (Complex(0, 1) ^ 3).text()'	"-ⅈ"
 'use complex; (Complex(3, 4) ^ 0).text()'	"1"
 'use complex; complex_near(Complex(0, 1) ^ 0.5, Complex(0.7071067811865476, 0.7071067811865476), 0.000000001)'	yes
+# a complex shows as 3+4ⅈ; complex names its type; re and im read its parts (user card complex-format-fix)
+'use complex; str((3 + 4ⅈ) * (1 + 2ⅈ))'	"-5+10ⅈ"
+'use complex; x: complex = Complex(3, -4); [re(x), im(x)]'	[3, -4]
