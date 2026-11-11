@@ -23,6 +23,7 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 ---
 
 ## Inbox
+- 2026-11-11 underscore-is-it: `_` is an alias of `it`, the last result at the top level (`3+4` then `_ * 2` → 14, got-it note naming `it`); seeded random sequences are not spec, only "the same seed repeats the numbers".
 - 2026-11-11 build-ships-only: `warp build app.warp` leaves the executable, runtime.wasm and modules/ only; `--wasm` writes app.wasm, app.full.wasm, app.mod.wasm (replaces build-three-outputs).
 - 2026-11-11 no-str: `str` is gone as function and type word (lib/python keeps it); warp writes text.
 - 2026-11-11 hex-subtype: hex(n) / `n as hex` / `hex n` give a hex subtype of int shown as 0x7b (lowercase, no quotes); subtypes of number types equal their plain number by value (not Quantity, Angle); colours: argb_hex / rgba_hex.

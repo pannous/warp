@@ -5,7 +5,7 @@
 # one merge commit each,
 # then runs tier 0 on the result: the compiler of the merged lib (scripts/rebuild.sh pure: taken from data/ or the
 # store when its inputs were built before, so a tip already built is never built twice), hello through it,
-# scripts/self-check.sh when the batch touches core/ and the page smoke (--smoke-only: neither; land.sh's retry of a
+# scripts/self-check.sh and gate tier 1 when the batch touches core/ or extensions/, and the page smoke (--smoke-only: neither; land.sh's retry of a
 # batch already checked, the new main commits being tested by their pushers, night decision 00:50 2026-11-03).
 # A card whose merge conflicts is left out and named.
 # A red batch is split in halves (card red-batch-split): each half is tried beside the cards already green, a red half
@@ -45,6 +45,8 @@ tier0() {
 	[ -n "$smoke_only" ] && return 0
 	if ! git -C "$tree" diff --quiet "$base" HEAD -- core extensions; then
 		"$scripts/self-check.sh" "$tree" || { failure=self-check; return 1; }
+		got=$("$scripts/gate.sh" --tiers 1 "$tree" 2>&1 | tail -1)
+		[[ $got == *green* ]] || { failure="gate tier 1: ${got:0:160}"; return 1; }
 	fi
 	got=$("$scripts/page-smoke.sh" "$tree") || { failure=${got:0:180}; return 1; }
 }
