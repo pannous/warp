@@ -26,7 +26,11 @@
   cost is bisected in seconds.
 - The wasmtime CLI profiler trapped on the compiler (card wasmtime-cli-refusal); the markers need no profiler.
 - Profiling hello: `sample` attaches ~0.2 s late, so profile.sh catches only a hello's tail; use --times phases
-  for it, or a longer program.
+  for it, or a longer program. Profiling `warp test` doesn't help either: each case runs in a forked child, and the
+  sampled main thread only waits (usleep). For a short compile, compare the --times phases per millisecond against
+  hello's, averaged over a few runs, and read its §R lines: a linked module whose .warp source shows up there is
+  being read twice (use-units-cost: `use units; 1` +128 ms over hello, mostly implicit uses' signature reads).
+  profile.sh takes the run's own options after `--`: `scripts/profile.sh -- --one-thread test <folder>`.
 - Exact call counts per function aren't measurable today: wasmtime counts nothing, and binaryen's --log-execution
   needs an import the driver doesn't answer. Summed samples over many runs stand in.
 
