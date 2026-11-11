@@ -288,24 +288,28 @@ reused_stored() {
 	inputs_line >"$file.inputs"
 	code_kept
 }
-# compiler_moved <built>: a compiler built aside, with its machine code and library, moved to lib/warp.wasm
+# compiler_moved <from> [<to>]: a compiler, with its machine code and library, moved (to lib/warp.wasm)
 compiler_moved() {
-	local part
+	local part to=${2:-$file}
 	for part in "" .driver.cwasm .driver.cwasm.key .driver.build.cwasm .driver.build.cwasm.key; do
-		[ -f "$1$part" ] && mv -f "$1$part" "$file$part"
+		[ -f "$1$part" ] && mv -f "$1$part" "$to$part"
 	done
-	companion_copied "$1" "$file" && rm -rf "$1.library"
+	companion_copied "$1" "$to" && rm -rf "$1.library"
 }
 # the modules step of a build stopped after the runtime (`warp rebuild pure … to runtime`), on its warp.wasm.new: the
-# modules built in parallel in build slots (modules_built), then that compiler moved into place; a native warp that
-# knows no `to` built them itself and moved it already
+# modules built in parallel in build slots (modules_built), then that compiler moved into place; failed, it stays
+# warp.wasm.new for the failure's record. A native warp that knows no `to` built them itself and moved it already
 modules_step() {
-	local log=$1 record=$2 new=$compilers/warp.wasm.new
+	local log=$1 record=$2 new=$compilers/warp.wasm.new building=$compilers/warp.new.wasm status
 	[ -f "$new" ] || return 0
 	echo "rebuild step modules" >>"$log"
-	(cd "$tree" && "$scripts/build-slot.sh" "$log" /usr/bin/time -p -o "$record/modules.time" bash "$scripts/lib/modules.sh" modules_built "$warp" "$lib" "$new" "$compilers/modules" "$compilers/runtime.wasm") || return
+	# (run by the name of a compiler: the native warp takes any other file for warp source)
+	compiler_moved "$new" "$building"
+	(cd "$tree" && "$scripts/build-slot.sh" "$log" /usr/bin/time -p -o "$record/modules.time" bash "$scripts/lib/modules.sh" modules_built "$warp" "$lib" "$building" "$compilers/modules" "$compilers/runtime.wasm")
+	status=$?
+	[ $status = 0 ] || { compiler_moved "$building" "$new"; return $status; }
 	step_recorded "$record" "$record/modules.time"
-	compiler_moved "$new"
+	compiler_moved "$building"
 }
 # step_recorded <record> <its time>: a step run after the measured build added to its record: its time and CPU to the
 # build's (time), and its start (steps), which the vitals page's build times read
