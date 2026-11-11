@@ -237,11 +237,12 @@ modules_beside(module: text, executable: text) := {
 	imported = wasm_imported(read_bytes(module)).names.filter(name => name#1 == host_module).map(name => name#2)
 	wanted = LINKED_ON_DEMAND.filter(name => wasm_export_names(read_bytes(library_module(name))).any(word => word in imported))
 	needed = modules_imported_by(wanted)
-	if #needed == 0 { return ø }
-	folder = source_folder(executable)
-	shell("mkdir -p " + quoted_path(folder + "/" + MODULES_FOLDER) + " && cp " + quoted_path(runtime_path()) + " " + quoted_path(folder + "/" + RUNTIME_WASM))
-	for name in needed { shell("cp " + quoted_path(library_module(name)) + " " + quoted_path(folder + "/" + MODULES_FOLDER + "/" + name + ".wasm")) }
-	print "linked at run time, beside " + executable + ": " + RUNTIME_WASM + ", " + needed.map(name => MODULES_FOLDER + "/" + name + ".wasm").join(", ")
+	if #needed > 0 {
+		folder = source_folder(executable)
+		shell("mkdir -p " + quoted_path(folder + "/" + MODULES_FOLDER) + " && cp " + quoted_path(runtime_path()) + " " + quoted_path(folder + "/" + RUNTIME_WASM))
+		for name in needed { shell("cp " + quoted_path(library_module(name)) + " " + quoted_path(folder + "/" + MODULES_FOLDER + "/" + name + ".wasm")) }
+		print "linked at run time, beside " + executable + ": " + RUNTIME_WASM + ", " + needed.map(name => MODULES_FOLDER + "/" + name + ".wasm").join(", ")
+	}
 }
 library_module(name: text): text := folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + name + ".wasm"
 # the modules and those they import (`warp/<m>`), each once
