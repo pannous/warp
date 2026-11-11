@@ -459,6 +459,7 @@ shared_names(statements: list) := {
 	for s in statements {
 		if type(s) is key and op_of(s) in assignment_operators and key_of(s) is symbol and name_of(key_of(s)) not in declared { assigned[name_of(key_of(s))] = yes }
 	}
+	if line_module { return assigned }
 	read_free = {}
 	if assigned {
 		functions = module.functions.keys.map(f_name => module.functions[f_name])
