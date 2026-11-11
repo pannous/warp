@@ -1171,11 +1171,21 @@ computed(call: Node, bound: map): any := {
 	name = name_of(call#1)
 	given = items_of(call)[1 ..].map(argument => if argument == symbol(program_hole) then rule_program else if argument == symbol(source_hole) then rule_source else rule_spliced(argument, bound, argument))
 	if not rule_words.has(name) { return if is_module_rule_word(name) then module_word(rule_module, name, List(given, Bracket.Round, Separator.Comma)) else skipped_rule_word(name) }
+	rule_word_called(name, given)
+}
+rule_word_called(name: text, given: list): any := {
 	word = rule_words[name]
 	if #given == 0 { return word() }
 	if #given == 1 { return word(given#1) }
 	if #given == 2 { return word(given#1, given#2) }
 	word(given#1, given#2, given#3)
+}
+# a module's rule word asking for one of the compiler's (warp.rule_word, core/native/driver.warp rule_word_answered):
+# its walkers and tables, as its own rules compute them
+asked_rule_word(word: Node, arguments: Node): Node := {
+	name = "${word}"
+	if not rule_words.has(name) { raise "no rule word " + name + " for a module to ask" }
+	rule_word_called(name, items_of(arguments))
 }
 # `$f takes value`, `$f takes int`
 is_takes(condition: Node): bool := is_group(condition) and bracket_of(condition) == "" and separator_of(condition) == " " and #condition == 3 and rule_hole(condition#1) != ø and condition#2 == symbol(takes_word) and condition#3 is symbol

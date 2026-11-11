@@ -1294,6 +1294,7 @@ evident_text(name: Node, program: Node): any := {
 
 rule_words = {
 	are_arms: are_arms,
+	as_code: as_code,
 	awaited_operand: awaited_operand,
 	bare_fields_read: bare_fields_read,
 	body_of: body_of,
@@ -1306,6 +1307,7 @@ rule_words = {
 	converted_unit: converted_unit,
 	counted_question: counted_question,
 	counted_results: counted_results,
+	declared_name: declared_name,
 	end_refused: end_refused,
 	declared_local: declared_local,
 	definitions_reached: definitions_reached,
@@ -1326,8 +1328,12 @@ rule_words = {
 	class_fields_listed: class_fields_listed,
 	class_methods_listed: class_methods_listed,
 	class_setter: class_setter,
+	is_declared_word: is_declared_word,
+	level_statements: level_statements,
 	program_functions: program_functions,
 	qualified: qualified,
+	renamed: renamed,
+	statements_in: statements_in,
 	widened_to_int: widened_to_int,
 	it_read_as: it_read_as,
 	it_as_lambda: it_as_lambda,

@@ -154,13 +154,13 @@ function moduleWord(compiler, imports, linked, module, word, argumentList) {
 		runningGuest = outer;
 	}
 }
-// warp.compiler_word(word, arguments) (driver.warp compiler_word_answered): a module's rule word asking the compiler
-// running it, a word of the compiler's called there on the values, its result built again in the module
-function compilerWord(guest, compiler, word, argumentList) {
+// warp.rule_word(word, arguments) (driver.warp rule_word_answered): a module's rule word asking the compiler running it
+// for one of its rule words (rewrites.warp asked_rule_word), its result built again in the module
+function ruleWord(guest, compiler, argumentList) {
 	const outer = runningGuest;
 	runningGuest = undefined;
 	try {
-		return encodedCall(guest, compiler, guestText(guest, word), argumentList);
+		return encodedCall(guest, compiler, "asked_rule_word", argumentList);
 	} finally {
 		runningGuest = outer;
 	}
@@ -263,9 +263,9 @@ function compilerStdIo(compiler, imports, linked, module, member, argumentList) 
 	if (guestText(compiler, member) === "module_word") return moduleWord(compiler, imports, linked, ...guestItems(compiler, argumentList));
 	return stdCall(compiler, module, member, argumentList, { warnings: [], options: compilerOptions() });
 }
-// the std_io of a lib module running a rule word for the compiler: warp.compiler_word only
+// the std_io of a lib module running a rule word for the compiler: warp.rule_word only
 function guestStdIo(guest, compiler, module, member, argumentList) {
-	if (guestText(guest, module) === "warp" && guestText(guest, member) === "compiler_word") return compilerWord(guest, compiler, ...guestItems(guest, argumentList));
+	if (guestText(guest, module) === "warp" && guestText(guest, member) === "rule_word") return ruleWord(guest, compiler, argumentList);
 	return newGuestError(guest, `the host word ${guestText(guest, module)}.${guestText(guest, member)} is not a rule word's in the browser`);
 }
 // the host words warp.wasm calls itself (driver.warp answered_word): no window, no system values, paths as given
