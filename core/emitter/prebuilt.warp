@@ -710,7 +710,7 @@ linked_places_of(images: list): map := {
 # a word the program declares (prelude_words.warp declared_only: its body ø, or kept for a block it takes) and binds
 # to no module's yet; a definition of its own stays its own though a module writes the name too: money's Money.compare,
 # compiled from its source, never reals' compare, which calls an instance's compare back
-unbound_declaration(f: any): bool := f != ø and f.kinds == ø and (is_declared_body(f.body) or takes_block_parameter(f))
+unbound_declaration(f: any): bool := f != ø and f.kinds == ø and (is_declared_body(f.body) or takes_block_parameter(f) or brought_names.has(f.name))
 is_declared_body(body: any): bool := body == Node.Empty or (is_group(body) and #body == 1 and body#1 == Node.Empty)
 takes_block_parameter(f: Function): bool := f.signature.parameters.any(parameter => parameter.type_name == "block")
 def bound_to(f: Function, image: LibraryImage, k: int) {
