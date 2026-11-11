@@ -27,5 +27,22 @@ is! 'use gpu_passes
 fields = gpu_fields(2, 2, ["dye"])
 try { gpu_pass("@fragment fn main() -> @location(0) vec4f { return vec4f(1.0); }", fields, "pressure", {}) } catch e { "no field" in e.message }' yes
 
+# a picture can be larger than its fields: the shader still samples them in 0..1
+is! 'use gpu_passes
+fields = gpu_fields(1, 1, ["dye"])
+pixels = gpu_picture_sized("@fragment fn main() -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }", fields, 3, 2, {})
+red = int(pixels[0] / 65536) % 256
+last = int(pixels[5] / 65536) % 256
+red == 255 and last == 255' yes
+
+is! 'use gpu_passes
+fields = gpu_fields(2, 1, ["dye"])
+gpu_pass("@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(select(0.0, 1.0, at.x > 1.0), 0.0, 0.0, 1.0); }", fields, "dye", {})
+pixels = gpu_picture_sized("@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return field_dye(at.xy / values.size); }", fields, 4, 1, {})
+mid = int(pixels[1] / 65536) % 256
+format = gpu_fields_format()
+linear = mid > 40 and mid < 220
+format == "rgba32float" or linear' yes
+
 # the older one-shot render still paints, beside the passes
 is! 'gpu_render("@fragment fn main() -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }", 1, 1, {})[0] == 4294901760' yes

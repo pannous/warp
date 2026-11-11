@@ -684,7 +684,7 @@ async function gpuShow(job) {
 	}
 	const painted = paintCanvases.get(job.canvas);
 	if (!painted) throw new Error(CANVAS_MISSING);
-	const values = fieldValues(job.shader, set.width, set.height, job.values);
+	const values = fieldValues(job.shader, job.width ?? set.width, job.height ?? set.height, job.values);
 	const canvasImage = painted.context.getCurrentTexture();
 	await drawInto(device, job.shader, values, set, canvasImage, painted.format);
 	const encoder = takeEncoder(device);
@@ -697,18 +697,19 @@ async function gpuShow(job) {
 async function gpuPicture(job) {
 	const device = await theGpuDevice();
 	const set = setOf(device, job.id);
-	const values = fieldValues(job.shader, set.width, set.height, job.values);
-	const image = device.createTexture({ size: [set.width, set.height], format: "rgba8unorm", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+	const width = job.width ?? set.width, height = job.height ?? set.height;
+	const values = fieldValues(job.shader, width, height, job.values);
+	const image = device.createTexture({ size: [width, height], format: "rgba8unorm", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
 	await drawInto(device, job.shader, values, set, image, "rgba8unorm");
 	const encoder = takeEncoder(device);
-	const rowBytes = Math.ceil(set.width * PIXEL_BYTES / ROW_ALIGNMENT) * ROW_ALIGNMENT;
-	const readback = readbackBuffer(device, rowBytes * set.height);
-	encoder.copyTextureToBuffer({ texture: image }, { buffer: readback, bytesPerRow: rowBytes, rowsPerImage: set.height }, [set.width, set.height]);
+	const rowBytes = Math.ceil(width * PIXEL_BYTES / ROW_ALIGNMENT) * ROW_ALIGNMENT;
+	const readback = readbackBuffer(device, rowBytes * height);
+	encoder.copyTextureToBuffer({ texture: image }, { buffer: readback, bytesPerRow: rowBytes, rowsPerImage: height }, [width, height]);
 	const bytes = new Uint8Array(await gpuReadBack(device, encoder, readback));
 	image.destroy();
 	closePassFrame();
 	releasePending();
-	return packedPixels(bytes, set.width, set.height, rowBytes);
+	return packedPixels(bytes, width, height, rowBytes);
 }
 const GPU_JOBS = {
 	gpu_compute: async job => ({ values: job.arrays ? plainArrays(await gpuComputedArrays(job)) : Array.from(await gpuComputedFloats(job)) }),
@@ -961,8 +962,7 @@ addHostPart({
 				}
 			}
 		};
-		const shown = (shader, fields, values) => {
-			const job = fieldJob(shader, fields, values);
+		const shownAt = (job) => {
 			if (hooks.gpuCanvas && !canvasFailure) {
 				try { return BigInt(fieldShown(job)); }
 				catch (failure) {
@@ -972,7 +972,20 @@ addHostPart({
 			}
 			return BigInt(gpuJob("gpu_show", job));
 		};
+		const shown = (shader, fields, values) => shownAt(fieldJob(shader, fields, values));
+		const shownSized = (shader, fields, width, height, values) => {
+			const job = fieldJob(shader, fields, values);
+			job.width = Number(width);
+			job.height = Number(height);
+			return shownAt(job);
+		};
 		const pictured = (shader, fields, values) => newGuestInts(program(), gpuJob("gpu_picture", fieldJob(shader, fields, values), [], Uint32Array));
+		const picturedSized = (shader, fields, width, height, values) => {
+			const job = fieldJob(shader, fields, values);
+			job.width = Number(width);
+			job.height = Number(height);
+			return newGuestInts(program(), gpuJob("gpu_picture", job, [], Uint32Array));
+		};
 		const fieldsFormat = () => newGuestValue(program(), gpuJob("gpu_fields_format", {}));
 		// a WGSL error inside a `try` is the program's to catch, as every host word's failure (host.js raisedInProgram)
 		return {
@@ -982,6 +995,8 @@ addHostPart({
 			gpu_pass_recorded: passRecorded,
 			gpu_show: shown,
 			gpu_picture: pictured,
+			gpu_show_sized: shownSized,
+			gpu_picture_sized: picturedSized,
 			gpu_fields_format: fieldsFormat,
 			// use draw on the GPU (src/graphics/gpu_canvas.rs) is native only: lib/draw.warp asks gpu_drawing first
 			draw_shape: () => { throw new Error(NO_GPU_DRAWING); },

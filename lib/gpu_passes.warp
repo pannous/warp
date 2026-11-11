@@ -8,6 +8,10 @@ gpu_fields(width: int, height: int, names: node): int from host
 gpu_pass_recorded(shader: node, fields: int, into: node, values: node): int from host
 gpu_show(shader: node, fields: int, values: node): int from host
 gpu_picture(shader: node, fields: int, values: node): node from host
+// the shading pass at width × height, the fields still sampled in 0..1. gpu_show_sized opens the window at
+// that point size and, where the drawable is a larger same-aspect image, shades that drawable one pixel for one
+gpu_show_sized(shader: node, fields: int, width: int, height: int, values: node): int from host
+gpu_picture_sized(shader: node, fields: int, width: int, height: int, values: node): node from host
 gpu_fields_format(): node from host
 // the pass, or a catchable "no field" where `into` is not one of the fields
 gpu_pass(shader: node, fields: int, into: node, values: node): int := {

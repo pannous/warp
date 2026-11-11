@@ -178,7 +178,10 @@ web-ocean renders its sea in passes (FFT spectra, a height-field texture, then t
 shader per paint covers only the last pass. The host half is built, as library words in lib/gpu_passes.warp (no new
 syntax): `gpu_fields(width, height, names)` keeps a pair of rgba16float targets per name (rgba32float, then
 rgba8unorm, where that format cannot be a target), `gpu_pass(shader, fields, into, values)` draws the shader into
-that field and swaps the pair, and `gpu_show` / `gpu_picture` draw the shading pass. The passes of one frame share
+that field and swaps the pair, and `gpu_show` / `gpu_picture` draw the shading pass at the fields' size.
+`gpu_show_sized` / `gpu_picture_sized` draw that same pass at another size (a window, a picture), the fields still
+sampled in 0..1, so a coarse grid can shade at the drawable. `gpu_show_sized` opens the window at the given point
+size and shades the drawable itself when that is a larger image of the same aspect. The passes of one frame share
 one command encoder and nothing is read back until `gpu_picture`. A shader reads a field as `field_<name>(uv)` with
 uv in 0..1, linearly when the format filters. `gpu_fields_format()` says which format. The `render()` / `waves(p.xz)`
 spelling below stays a design: it needs the compiler to see an image value, and that is not built.
