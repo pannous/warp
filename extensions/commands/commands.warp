@@ -165,9 +165,10 @@ repl_step(folder: text, line: text, wasm_file: text) := {
 	kept = lines_kept(folder)
 	for earlier in kept { own_module(earlier, line_text_file(folder, earlier), path_in(folder, earlier + ".wasm")) }
 	name = wasm_file.split("/").last().remove_suffix(".wasm")
+	# (the uses behind the line, so what the compiler says of it names the line's own place, 1:5)
 	uses = kept.map(earlier => "use " + earlier)
-	refusal = line_module_refusal(folder, name, uses + [line], wasm_file)
-	shell = uses + ["use shell", "shell_line(" + source_text(line) + ", " + source_text(refusal) + ")"]
+	refusal = line_module_refusal(folder, name, [line] + uses, wasm_file)
+	shell = ["shell_line(" + source_text(line) + ", " + source_text(refusal) + ")", "use shell"] + uses
 	if refusal and line_module_refusal(folder, name, shell, wasm_file) { raise refusal }
 	if not refusal and staying_lines(line) { write(path_in(folder, KEPT_LINES), (kept + [name]).join("\n")) }
 }
