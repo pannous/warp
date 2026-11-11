@@ -195,6 +195,8 @@ global rule_item_block = ø
 # how many structures `div{…}` the walk is inside; whether in an attribute's value of one, `animation: pop 400ms`
 global rule_tag_depth = 0
 global rule_in_attribute = no
+# the glued product `3m` whose rules are tried (glued_rewritten), else ø
+global rule_glued = ø
 global rule_next_item = ø
 global rule_binding = []
 # the word whose definition the rules walk inside: a rule producing that word leaves its definition as written, so
@@ -207,7 +209,7 @@ global rule_matched = ø
 # stores assignments; `source` is the text the program was parsed from, which tells a template's `·` from `*`
 rewritten_program(program: Node, source: text): Node := {
 	rule_source = source
-	stored(own_rules_applied(program, source))
+	stored(without_glued_marks(own_rules_applied(program, source)))
 }
 # a spaced `word {…}` that is no tag (decision spaced-tag): a word a rule starts or needs (`do {…}`, `once {…}`) or a
 # library word that is no markup tag (`head {…}` is the element)
@@ -1383,7 +1385,16 @@ has_property(code: Node, property: text): bool := {
 # `$u is Unit`: a name the program assigns an instance of the class, else, unbound by it, a library module's,
 # `km = Unit("km")` (parser.warp library_typed_constants)
 # (a program's value of that name hides a library's, never a field or a type written so: `class Run{distance: km}`)
-typed_as(word: text, class_name: text): bool := if binds_value(rule_scope, word) then program_typing()#2.get(word) == class_name else library_typed_constants().get(word) == class_name
+# (glued to a number, `m = 5; 3m`, the library's name though, with a hint: decision unit-after-number)
+typed_as(word: text, class_name: text): bool := {
+	library_typed = library_typed_constants().get(word) == class_name
+	if not binds_value(rule_scope, word) { return library_typed }
+	if rule_glued != ø and library_typed {
+		diagnose(call_of("glued_factor", [word, "${key_of(attribute_marked(rule_glued))}*${word}"]), rule_glued)
+		return yes
+	}
+	program_typing()#2.get(word) == class_name
+}
 # [the classes, the program's and the library's; the program's names typed by them]
 program_typing(): list := {
 	if rule_types == ø {
@@ -1946,6 +1957,7 @@ is_run_pattern(pattern: Node): bool := match pattern {
 # runs rewritten, over its words as written (the parser nests `keep 1 past 3` as `keep 1 (past 3)`); the rules of a
 # place rewrite the node's parts standing there first
 rule_rewritten(n: Node, rules: list, origins: list): Node := {
+	if is_glued_product(n) { return glued_rewritten(n, rules, origins) }
 	if is_group(n) and separator_of(n) in statement_separators {
 		n = group_like(n, statement_runs(spliced_statements(items_of(n).map(statement => at_place(statement, Place.Statement, rules, origins))), rules, origins))
 	} else if is_group(n) and #n > 0 {
@@ -1963,6 +1975,10 @@ rule_rewritten(n: Node, rules: list, origins: list): Node := {
 	} else if n is key {
 		n = if key_of(n) == opaque_symbol then with_changed_members(n, member => at_place(member, Place.Member, rules, origins)) else with_placed_parts(n, (code, place) => at_place(code, place, rules, origins))
 	}
+	whole_rewritten(n, rules, origins)
+}
+# the node rewritten by the first rule of any place matching it as a whole
+whole_rewritten(n: Node, rules: list, origins: list): Node := {
 	for index in 0 ..< #rules {
 		if rules[index].place == Place.Anywhere and tried_whole(rules[index], n) {
 			result = rule_applied(rules[index], origins[index], n)
@@ -1971,6 +1987,18 @@ rule_rewritten(n: Node, rules: list, origins: list): Node := {
 	}
 	n
 }
+is_glued_product(n: Node): bool := n is key and key_of(n) == symbol(attribute_word) and value_of(n)#1 == GLUED_FACTOR_MARK
+# `3m` as written, its mark dropped: its words already rewritten as its parts, its rules read a name the program binds
+# as a library's too, `m = 5; 3m` the meters (decision unit-after-number)
+glued_rewritten(n: Node, rules: list, origins: list): Node := {
+	outer = rule_glued
+	rule_glued = n
+	result = whole_rewritten(attribute_marked(n), rules, origins)
+	rule_glued = outer
+	result
+}
+# the program's glued products, their marks dropped where no rule walked (a program without rules)
+without_glued_marks(n: Node): Node := bottom_up(n, part => if is_glued_product(part) then attribute_marked(part) else part)
 
 # the statements with each run a rule of several statements `($a; $b)` matches rewritten (F6), right to left (F13): a
 # run is rewritten after the runs that follow it, so a rule for the first two clauses of `fib(0) := 0; fib(1) := 1;
