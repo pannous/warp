@@ -68,10 +68,11 @@ is_library_unit(code: Node): bool := code is symbol and (library_typed_constants
 # binds one, the quantity of its text, quantity(3, "km/h"), with a hint naming the variable; ø when the program binds
 # none of them (the operators make the quantity) or the code is no unit
 unit_beside_variables(amount: Node, unit: Node): any := {
-	if not (unit is key and not unit_written(unit) and written_of(unit, word => is_library_unit(word))) { return ø }
+	variables = words_within(unit).filter(word => binds_value(rule_scope, word))
+	if not (unit is key and #variables > 0 and written_of(unit, word => is_library_unit(word))) { return ø }
 	written = "${unit}".replace(" ", "")
 	leading = "${leading_unit(unit)}"
-	for word in words_within(unit).filter(word => binds_value(rule_scope, word)) { diagnose(call_of("unit_beside_variable", [word, "(${amount} ${leading})${written[#leading ..]}"]), unit) }
+	for word in variables { diagnose(call_of("unit_beside_variable", [word, "(${amount} ${leading})${written[#leading ..]}"]), unit) }
 	call_of("quantity", [amount, Text(written)])
 }
 # `km/h`, `m^2`: the text of a unit written whole of several parts, "km/h", as lib/units unit_named reads it; ø for a
