@@ -243,7 +243,7 @@ seed_library(seed: text): text := {
 	file_ran(seed, words(seed, "runtime", runtime, "", "", ""))
 	file_ran(seed, words(seed, "module", "unicode", runtime, joined(aside, companion_file(1)), ""))
 	# (a rebuild beside this one made it first: its folder stays)
-	if rename(c_string(aside), c_string(folder)) != 0 { command_output(joined(joined("rm -rf '", aside), "'")) }
+	if rename(c_string(aside), c_string(folder)) != 0 { folder_removed(aside) }
 	folder
 }
 # a compiler's library copied beside another compiler of the same builder
@@ -253,12 +253,13 @@ companion_copied(from: text, to: text): nothing := {
 		for i in 0..COMPANION_FILES { copied(joined(from, companion_file(i)), joined(to, companion_file(i))) }
 	}
 }
-# … moved, file by file, so a run beside this one finds the old or the new one whole
+# … moved, the machine code made beside it with it
 companion_moved(from: text, to: text): nothing := {
-	companion_folders_made(to)
-	for i in 0..COMPANION_FILES { rename(c_string(joined(from, companion_file(i))), c_string(joined(to, companion_file(i)))) }
-	rmdir(joined(from, "/modules"))
-	rmdir(from)
+	folder_removed(to)
+	rename(c_string(from), c_string(to))
+}
+folder_removed(folder: text): nothing := {
+	command_output(joined(joined("rm -rf '", folder), "'"))
 }
 companion_folders_made(folder: text): nothing := {
 	mkdir(c_string(folder), FOLDER_MODE)
