@@ -119,7 +119,7 @@ comprehension_sugar_module_names = sugar_files(["comprehensions"])
 # the sugar of declarations (extensions/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
 declaration_sugar_module_names = sugar_files(["declarations"])
 # the standard modules: those with `rewrite` lines lend their rules to the programs mentioning them
-std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "host_io", "integers", "uncertain", "web", "storage", "frames", "native_host", "callbacks", "signals", "timers", "tasks", "shaders", "unicode_data", "unicode", "exact_values", "reals", "complex"]
+std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "host_io", "integers", "uncertain", "web", "storage", "frames", "native_host", "callbacks", "signals", "timers", "tasks", "shaders", "unicode_data", "unicode", "exact_values", "reals", "complex", "big_numbers"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # the declarations sugar strips it, and the function keyword's rule rewrites the rest)
@@ -133,7 +133,9 @@ class Rule { pattern: Node; template: Node; hole: Node; shape: Node; conditions:
 # code must hold for it to fire (its pattern's words outside holes, and the operator of the key its pattern is: `$a ??
 # $b` fires only where code has a `??`), the tokens its result holds, which a rule may rewrite again, and its result's
 # words
-rule_made(pattern: Node, template: Node, hole: Node, shape: Node, conditions: list, place: Place, module: text, whole: bool, alias: bool, head: text): Rule := {
+# (`words`: the three as the packed rules keep them, rule_node)
+rule_made(pattern: Node, template: Node, hole: Node, shape: Node, conditions: list, place: Place, module: text, whole: bool, alias: bool, head: text, words: list? = ø): Rule := {
+	if words != ø { return Rule(pattern, template, hole, shape, conditions, place, module, whole, alias, head, words#1, words#2, words#3) }
 	needs = required_words(pattern) + (if pattern is key and head != "" then [head] else [])
 	Rule(pattern, template, hole, shape, conditions, place, module, whole, alias, head, needs, tokens_within(template), words_within(template))
 }
@@ -434,8 +436,15 @@ required_words(pattern: Node): list := {
 	if is_hole(pattern) { return [] }
 	if pattern is symbol { return [name_of(pattern)] }
 	if pattern is key { return required_words(key_of(pattern)) + required_words(value_of(pattern)) }
-	if is_group(pattern) then items_of(pattern).flat_map(item => required_words(item)) else []
+	if not is_group(pattern) { return [] }
+	items_of(pattern).flat_map(item => required_words(item)) + (if is_phrase(pattern) then [PHRASE_TOKEN] else [])
 }
+# what code a phrase pattern can match mentions (tokens_within), what a rule whose pattern is a phrase needs
+# (required_words): `$f $x` matches only a group of words, bracketed too where a block or parentheses hold one
+# statement (`{remove b from xs}`, `(ps where age > 18)`), never statements (phrase_fits) nor `1`, so a rule of holes
+# alone reaches only code with one
+PHRASE_TOKEN = "⟨phrase⟩"
+is_phrase_matchable(n: Node): bool := is_group(n) and separator_of(n) not in statement_separators
 
 # `[a, b]`: a list literal, whose items are rewritten by the rules `where element`
 is_element_list(n: Node): bool := is_group(n) and bracket_of(n) == "["
@@ -864,7 +873,15 @@ rule_node(rule: Rule): Node := {
 	place_word = "·"
 	for word in PLACE_WORDS.keys { if PLACE_WORDS[word] == rule.place { place_word = word } }
 	flags = [symbol(place_word), symbol(if rule.whole then "yes" else "no"), symbol(if rule.alias then "yes" else "no"), symbol(rule.head ?? "")]
-	List([rule.pattern, rule.template, rule.hole ?? Node.Empty, rule.shape ?? Node.Empty, List(rule.conditions, Bracket.Square, Separator.Comma)] + flags, Bracket.Square, Separator.Comma)
+	words = [rule.needs, rule.gives, rule.says].map(list => List(list.map(word => Text(word)), Bracket.Square, Separator.Comma))
+	List([rule.pattern, rule.template, rule.hole ?? Node.Empty, rule.shape ?? Node.Empty, List(rule.conditions, Bracket.Square, Separator.Comma)] + flags + words, Bracket.Square, Separator.Comma)
+}
+# a packed rule's needs, gives and says (rule_node), ø for a rule packed without them
+PACKED_WORDS_AT = 10
+packed_words(fields: list): list? := if #fields < PACKED_WORDS_AT + 2 then ø else fields[PACKED_WORDS_AT - 1 ..].map(words => if words == ø then [] else items_of(words).map(packed_word))
+packed_word(n: Node): text := match n {
+	Text(word): word
+	_: name_of(n)
 }
 unpacked_rule(n: Node, module: text): Rule := {
 	fields = items_of(n)
@@ -877,7 +894,7 @@ unpacked_rule(n: Node, module: text): Rule := {
 		hole = ø
 		shape = ø
 	}
-	rule_made(fields#1, fields#2, hole, shape, conditions, PLACE_WORDS.get(name_of(fields#6)) ?? Place.Anywhere, module, name_of(fields#7) == "yes", name_of(fields#8) == "yes", name_of(fields#9))
+	rule_made(fields#1, fields#2, hole, shape, conditions, PLACE_WORDS.get(name_of(fields#6)) ?? Place.Anywhere, module, name_of(fields#7) == "yes", name_of(fields#8) == "yes", name_of(fields#9), packed_words(fields))
 }
 
 # the rule's code with each hole written right before `(`, `$t($a...)`, the call it is, as the code's `P(1)` is: the
@@ -2152,11 +2169,11 @@ rule_applied(rule: Rule, origin: map, n: Node): Node := {
 	fired(rule, List(statements_in(rule_spliced(rule.template, bound, n)), Bracket.Curly, Separator.Semicolon))
 }
 
-# WARP_RULES_FIRED set: `§R <module> <pattern>` printed for each rule that fires, so a compile's log counts which
+# --rules-fired: `§R <module> <pattern>` printed for each rule that fires, so a compile's log counts which
 # rules (sugar, a library's) its program relies on (card core-extensions-roadmap). Silent unset
-RULES_FIRED = started_env("WARP_RULES_FIRED") ?? ""
+RULES_FIRED = run_option("rules-fired") != ø
 fired(rule: Rule, result: Node): Node := {
-	if RULES_FIRED != "" { print "§R " + rule.module + " " + "${rule.pattern}" }
+	if RULES_FIRED { print "§R " + rule.module + " " + "${rule.pattern}" }
 	# (the prelude is in every program already: a use of it once more is none, card prelude-rule)
 	if rule.module != "" and rule.module != "prelude" { fired_modules += [rule.module] }
 	if rule.alias { diagnose(call_of("alias_word", [symbol(first_word_of(rule.pattern)), symbol(first_word_of(rule.template))]), result) }

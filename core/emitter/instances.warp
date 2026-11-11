@@ -280,9 +280,8 @@ def slot_arity(slot: text): int := match slot {
 # instances and the program's are one class only so)
 def descriptor_code(class_name: text): list := call_code(linked_descriptor(class_name) ?? descriptor_word(class_name).index)
 def linked_descriptor(class_name: text): any {
-	name = descriptor_prefix + class_name
-	for image in module.linked_images { for k in 0..<#image.functions { if image.functions[k].name == name { return linked_index(image, k) } } }
-	ø
+	word = linked_word(descriptor_prefix + class_name)
+	if word == ø then ø else word.index
 }
 def descriptor_word(class_name: text): Function {
 	name = descriptor_prefix + class_name

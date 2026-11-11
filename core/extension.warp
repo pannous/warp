@@ -78,6 +78,10 @@ class Extension {
 	# its runtime root under extensions/, whose definitions (the bridge hooks' bodies) are trapping stubs in a build
 	# leaving the row out (decision extension-row-optional, compiler.warp left_out_runtime_words)
 	runtime: text = ""
+	# standard modules of runtime words built apart from runtime.wasm and linked when a program needs them (its
+	# implicit_uses say when), each extensions/<name>/<name>.warp, its functions compiled as runtime words are
+	# (card runtime-bridge-slots)
+	runtime_modules: list = []
 }
 
 # every extension's operator rows, as one text per extension
@@ -103,7 +107,7 @@ claimed_once(maps: list): map := {
 	joined
 }
 # the Extension fields every row's entries join into one: lists as one list, maps as one map
-JOINED_LISTS = ["number_readers", "number_suffix_readers", "type_readers", "infix_readers", "prefix_readers", "glyph_owners", "block_words", "text_passes", "arm_lowerings", "implicit_uses", "lints", "attributes", "commands", "host_exports"]
+JOINED_LISTS = ["number_readers", "number_suffix_readers", "type_readers", "infix_readers", "prefix_readers", "glyph_owners", "block_words", "text_passes", "arm_lowerings", "implicit_uses", "lints", "attributes", "commands", "host_exports", "runtime_modules"]
 JOINED_MAPS = ["atom_readers", "suffix_readers", "keyword_readers", "text_escape_readers", "value_settlers"]
 # every row joined as one row, once: a hot path (the parser's readers, the lints on every node) reads its typed field
 # and looks no field up by its name
@@ -173,6 +177,12 @@ with_text_passes(program: Node): Node := {
 implicit_modules_of(source: text, folder: text = "."): list := {
 	tree = parsed(source)
 	concatenated(hooks().implicit_uses.map(modules_found => modules_found(source, tree, folder)))
+}
+# the runtime modules a text needs, as the extensions bringing them find them (only theirs: a module's text names words
+# of several modules, `at`, which the program's own uses settle)
+runtime_modules_needed(source: text): list := {
+	tree = parsed(source)
+	concatenated(EXTENSIONS.filter(extension => #extension.runtime_modules > 0).flat_map(extension => extension.implicit_uses.map(found => found(source, tree, "."))))
 }
 # a match's arms through every extension's arm lowerings, in row order
 with_arm_lowerings(arms: list, subject: Node, variants: map): list := {

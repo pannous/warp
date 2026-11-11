@@ -91,9 +91,6 @@ const GPU_DEVICE_WAIT_MS = 5000;
 // silent this long it fails naming itself, still before the program's side stops waiting (GPU_JOB_WAIT_MS)
 const GPU_WORK_WAIT_MS = 25000;
 const GPU_JOB_WAIT_MS = 30000; // the program's side: a task Worker that gives no answer in this time is said to
-// a painting into the page's canvas waits for the GPU to draw it at most this long: frames keep pace with a heavy shader,
-// and a browser whose WebGPU never says its work is done (CI's software adapters) still paints on
-const FRAME_DRAWN_WAIT_MS = 100;
 const LOSS_WAIT_MS = 100; // the program's side: why painting into the page's canvas failed, after which pixels are painted
 const paintCanvases = new Map(); // the task Worker's: canvas id → {context, format}
 let paintCanvasCount = 0; // the program's side: the canvases asked of the page, which names them by this count
@@ -240,7 +237,7 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 	// a painting into the page's canvas answers once the GPU drew it, as the native window's surface waits for the
 	// display: a program painting each frame no faster than its shader draws (card example-native-mismatch: #ocean queued
 	// frames far ahead of its heavy shader and showed two)
-	if (painted) return gpuSubmitted(device, encoder).then(() => Promise.race([device.queue.onSubmittedWorkDone(), new Promise(done => setTimeout(done, FRAME_DRAWN_WAIT_MS))])).finally(released);
+	if (painted) return gpuSubmitted(device, encoder).then(() => answeredWithin(device.queue.onSubmittedWorkDone(), "drawn frame", GPU_WORK_WAIT_MS)).finally(released);
 	const rowBytes = Math.ceil(width * PIXEL_BYTES / ROW_ALIGNMENT) * ROW_ALIGNMENT;
 	const readback = readbackBuffer(device, rowBytes * height);
 	encoder.copyTextureToBuffer({ texture: image }, { buffer: readback, bytesPerRow: rowBytes, rowsPerImage: height }, [width, height]);

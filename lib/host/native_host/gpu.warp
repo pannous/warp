@@ -649,8 +649,10 @@ buffer_mapped(buffer: int, size: int): int := {
 // each, row by row into `pixels` (the driver's, width × height × 4 bytes); 0, else -1 and why on standard error
 host_shader_painted(given_shader, width: int, height: int, values: any, pixels: int): int :=
 	if shader_painted(str(given_shader), width, height, values, pixels) then 0 else said_failed("paint of a shader")
-// gpu_render(shader, width, height, values): the shader's pixels, each an int of its RGBA bytes, red the lowest (as the
-// page's Uint32Array of them reads); a shader that fails raises with why
+// gpu_render(shader, width, height, values): the shader's pixels, each a color word as `red` is one (alpha, red, green,
+// blue from the highest byte, as the page gives them); a shader that fails raises with why
+// the RGBA bytes of a pixel, lowest first, in a color word's order: blue, green, red, alpha
+WORD_BYTE_ORDER = [2, 1, 0, 3]
 host_gpu_render(given_shader, width: int, height: int, values: any): any? := {
 	gpu_failure = ""
 	size = width * height * PIXEL_BYTES
@@ -659,7 +661,7 @@ host_gpu_render(given_shader, width: int, height: int, values: any): any? := {
 	bytes = field_bytes(pixels, 0, size)
 	free(pixels)
 	if not painted { return error(gpu_failure) }
-	[bytes_int([byte_at(bytes, PIXEL_BYTES * i + k) for k in 0 ..< PIXEL_BYTES], "little") for i in 0 ..< width * height]
+	[bytes_int([byte_at(bytes, PIXEL_BYTES * i + k) for k in WORD_BYTE_ORDER], "little") for i in 0 ..< width * height]
 }
 // the shader painted into `pixels` as host_shader_painted says; no and gpu_failure where it fails
 shader_painted(shader: text, width: int, height: int, values: any, pixels: int): bool := {

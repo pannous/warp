@@ -314,6 +314,10 @@ STALE_VALUE = "(a run started without Run leaves no old value above an animation
 STALE_VALUE_CODE = "use draw\ncanvas(40, 40)\nloop {\n\tclear(paper)\n\tshow()\n\tsleep(16ms)\n}"
 STALE_VALUE_FIRST = "4242"
 STALE_VALUE_WAIT_MS = 3000
+KEPT_OUTPUT = "(a run keeps the last output, dimmed, until its own shows; an error replaces it)"  # card pressing-try-run
+KEPT_OUTPUT_SLOW = "sleep(1500ms)\n7"
+KEPT_OUTPUT_FAILING = "4242 + no_such_name"
+KEPT_OUTPUT_LOOK_MS = 500
 # card run-during-load-feedback: while the worker still loads (?slow_start; 7.5 s on the user's iPad), the page's run is
 # pending as any run is: Run becomes Stop after the grace, and Stop cancels the run before it starts
 STOP_WHILE_LOADING = "(Stop shows while the compiler loads, and cancels the run)"
@@ -981,6 +985,25 @@ def stale_value_wrong():
 	return [f"while the animation runs the value line shows {shown}, the last run's"] if STALE_VALUE_FIRST in shown else []
 
 
+def kept_output_wrong():
+	"""while a slow run goes on, the last run's value stays, dimmed, and the status says it runs; its value then replaces
+	it; a failing run's error replaces it too"""
+	run_code(STALE_VALUE_FIRST)
+	shown = browser("eval", f"""(async () => {{
+		const pane = document.getElementById("output"), status = document.getElementById("status"), value = document.getElementById("value");
+		playground.runCode({json.dumps(KEPT_OUTPUT_SLOW)});
+		await new Promise(done => setTimeout(done, {KEPT_OUTPUT_LOOK_MS}));
+		const during = {{ value: value.textContent, dimmed: pane.getAttribute("aria-busy") === "true", running: status.classList.contains("running") }};
+		{SHOWN_WAIT}
+		return JSON.stringify({{ ...during, after: value.textContent, dimmedAfter: pane.getAttribute("aria-busy") === "true" }});
+	}})()""")
+	shown = json.loads(json.loads(shown)) if shown.startswith('"') else {"value": f"(page gave no answer: {shown or browser_complaint})"}
+	expected = {"value": STALE_VALUE_FIRST, "dimmed": True, "running": True, "after": "7", "dimmedAfter": False}
+	wrong = [f"{part}: {shown.get(part)!r}, expected {value!r}" for part, value in expected.items() if shown.get(part) != value]
+	failed = run_code(KEPT_OUTPUT_FAILING)
+	return wrong + ([f"a failing run left {failed!r}, the last run's value"] if failed == STALE_VALUE_FIRST else [])
+
+
 def previous_frame_wrong():
 	"""a shader reading $previous adds to what its last render left; skipped loudly without WebGPU"""
 	rendered = run_code(PREVIOUS_FRAME_CODE)
@@ -1362,7 +1385,7 @@ def check_examples(names, page_url=None, site=None):
 	snippets = guide_snippets() if GUIDE in names else []
 	for line, code, value, printed in snippets:
 		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), (STALE_DEPLOY, stale_deploy_wrong), (DEFINED_NAMES, defined_names_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (KEPT_OUTPUT, kept_output_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), (STALE_DEPLOY, stale_deploy_wrong), (DEFINED_NAMES, defined_names_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
@@ -1378,7 +1401,7 @@ def check_examples(names, page_url=None, site=None):
 
 
 # one sample started in the page as its own file (%s: path and source as JSON), its report kept as JSON in
-# window.sampleReport, once the fetches it started are answered (playground.js settled); asked for in short evals, since a long one loses agent-browser's channel ("CDP response channel
+# window.sampleReport; asked for in short evals, since a long one loses agent-browser's channel ("CDP response channel
 # closed" for gpu_visualizer under load)
 # only the fields the verdict reads: a sample's whole report holds its pictures too, and a full-HD frame (samples/gpu/
 # ringed_planet.warp) as JSON took this process past the dry run's memory cap
@@ -1386,7 +1409,7 @@ REPORT_FIELDS = ["error", "errors", "message", "value", "html", "printed", "prin
 # a sample's timers run this long before its output is taken, as scripts/samples.sh's WARP_EVENTS_FOR has them run
 # natively (milliseconds)
 SAMPLE_EVENTS_MS = 3500
-START_SAMPLE = """window.sampleReport = undefined; playground.evaluate(%s, %s, { eventsFor: """ + str(SAMPLE_EVENTS_MS) + """ }).then(playground.settled).then(report => window.sampleReport = JSON.stringify(report, """ + json.dumps(REPORT_FIELDS) + """),
+START_SAMPLE = """window.sampleReport = undefined; playground.evaluate(%s, %s, { eventsFor: """ + str(SAMPLE_EVENTS_MS) + """ }).then(report => window.sampleReport = JSON.stringify(report, """ + json.dumps(REPORT_FIELDS) + """),
 	failure => window.sampleReport = JSON.stringify({ error: true, value: String(failure) })); "started";"""
 
 

@@ -1,7 +1,7 @@
 # from test_host_word_failures.rs: edit the Rust test, then run the script again
 
-# a_failed_save_is_caught
+# a_failed_save_is_caught — native only: a save in the page is a download, which no folder refuses
 is! 'use draw; try { save(canvas, "/nonexistent/dir/x.png") } catch e { "caught " + e }' 'caught save: cannot write /nonexistent/dir/x.png: No such file or directory (os error 2)'
 
-# a_save_in_an_if_branch_keeps_its_as_argument
+# a_save_in_an_if_branch_keeps_its_as_argument — native only: a save in the page is a download, which no folder refuses
 is! 'use draw; k = "s"; try { if k == "s": save canvas as: "/nonexistent/dir/x.png" } catch e { "caught " + e }' 'caught save: cannot write /nonexistent/dir/x.png: No such file or directory (os error 2)'

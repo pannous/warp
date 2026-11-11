@@ -46,7 +46,7 @@ sounds_heard_out() := {
 // little-endian 16-bit samples (a list of bytes), the channels interleaved, sounding from now on: 0, else -1 (no SDL3,
 // no audio device here)
 host_sound_played(pcm, rate: int, channels: int): int := {
-	if quiet_run() { return 0 }
+	if muted() { return 0 }
 	if not audio_started() { return -1 }
 	finished_closed()
 	stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, audio_spec(rate, channels), 0, 0)
@@ -59,7 +59,7 @@ host_sound_played(pcm, rate: int, channels: int): int := {
 }
 // an audio file sounding from now on, as decoded at its own rate: 0, else -1
 host_sound_file_played(path): int := {
-	if quiet_run() { return 0 }
+	if muted() { return 0 }
 	decoded = sound_file_decoded(str(path), 0, 0)
 	if decoded is text { return -1 }
 	host_sound_played([byte for value in decoded[2 ..] for byte in little_endian(value, 16)], decoded[0], decoded[1])
@@ -329,7 +329,7 @@ output_named(port: text): int := {
 }
 host_midi_sent(port, message): int := {
 	if not on_mac() { return MIDI_UNSUPPORTED }
-	if quiet_run() { return 0 }
+	if muted() { return 0 }
 	if not midi_started() { return MIDI_FAILED }
 	packets = calloc(1, MIDI_PACKETS_BYTES)
 	MIDIPacketListAdd(packets, MIDI_PACKETS_BYTES, MIDIPacketListInit(packets), 0, count(message), message)

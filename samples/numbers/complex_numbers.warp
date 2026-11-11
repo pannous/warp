@@ -1,0 +1,15 @@
+#!/usr/bin/env warp
+# Complex numbers (lib/complex.warp, wiki/library-complex.md): ⅈ is the imaginary unit, √-1, so 3 + 4ⅈ is a complex
+# number. A complex number goes on the left of - and /: write z - 1, or csub(1, z) for 1 - z
+use complex
+use reals
+z = 3 + 4ⅈ
+w = 1 + 2ⅈ
+print "z + w = \(z + w)"
+print "z * w = \(z * w)"
+print "z / w = \(z / w)"
+print "|z| = \(abs(z))"
+print "ⅈ² = \(ⅈ ^ 2)"
+print "√-4 = \(complex_sqrt(-4))"
+# Euler's identity: e^(ⅈπ) = -1, up to the last digit of a float
+complex_near(complex_exp(ⅈ * pi), -1, 1e-9)

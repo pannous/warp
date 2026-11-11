@@ -1,5 +1,5 @@
 // The standard module storage (card storage-words-unknown): a class's instances kept as the rows of a
-// table in <program>.database.sqlite beside the program (WARP_PROGRAM, as the native warp names it), else in memory.
+// table in <program>.database.sqlite beside the program (the program option, as the native warp names it), else in memory.
 // Loaded whole and written whole for now: `users = stored_table("users", User)` gives the rows as instances, the table
 // made or widened from User's fields first; `stored_add("users", u)` inserts u; `stored_save("users", users)` makes the
 // list the table's rows. `stored users: [User]` declares users so, its table named as it is, or `in "people"`.
@@ -34,7 +34,6 @@ rewrite $store.$name => session_values[$key] where $store in [session] and $stor
 rewrite $store[$key] => session_values[$key] where $store in [session] and $store is unbound
 rewrite $listing($store) => $listing(session_values) where $listing in [keys, values, entries] and $store in [session] and $store is unbound
 
-PROGRAM_VARIABLE = "WARP_PROGRAM"
 PROGRAM_EXTENSION = ".warp"
 DATABASE_EXTENSION = ".database.sqlite"
 IN_MEMORY = ":memory:"
@@ -62,7 +61,7 @@ class Relation{table: text; model: any; back_key: text}
 // the program's database, opened at its first use
 opened_database() := {
 	if storage_database == ø {
-		program = env(PROGRAM_VARIABLE)
+		program = run_option("program")
 		storage_database = sqlite3_open(if program == ø then IN_MEMORY else without_extension(program) + DATABASE_EXTENSION)
 	}
 	storage_database

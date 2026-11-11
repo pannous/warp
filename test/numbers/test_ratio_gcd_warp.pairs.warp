@@ -14,3 +14,9 @@
 'use math; n = -(2^70); euclidean_remainder(n, 1000)'	576
 'use math; n = -(2^70); euclidean_quotient(n, 3) == n /! 3'	true
 'use math; euclidean_quotient(-7, 2)'	-4
+# gcd and lcm of whole numbers past 64 bits, one gcd for every caller (cards gcd-overflow-zero, three-gcds-generic)
+'gcd(2^70, 2^65) == 2^65'	yes
+'gcd(2^70, 6)'	2
+'gcd(-2^70, 2^69) == 2^69'	yes
+'use math; lcm(2^40, 2^50) == 2^50'	yes
+'use math; lcm(4, 6)'	12

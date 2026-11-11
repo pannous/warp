@@ -14,7 +14,7 @@ use "host_io.warp"
 # a command (commands.warp), else the source file of a compile
 command = if #args > 0 and is_command(args#1) then args#1 else ""
 
-# lib/: the fourth argument of a compile (the native `warp` gives it), else WARP_LIB, else the folder above this file's
+# lib/: the fourth argument of a compile (the native `warp` gives it), else the lib option, else the folder above this file's
 library_folder = if not command and #args > 3 then args#4 else run_library()
 # the parser's and the uses' standard modules from that lib/ too, never the folder this compiler was built in
 use_library(library_folder)
@@ -113,8 +113,8 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	# the warnings once the module is made
 	for warning in said_at(found, Level.Warning, module.program_file) { warn warning }
 	# and its hints: `A4 is sound's; fix: use sound`, the use warp beautify writes
-	# unless the run asked for none (`warp --no-hints`, WARP_HINTS=0: wiki/warning.md)
-	if started_env("WARP_HINTS") != "0" { for said in said_at(found, Level.Hint, module.program_file) { hint said } }
+	# unless the run asked for none (`warp --no-hints`: wiki/warning.md)
+	if run_option("no-hints") == ø { for said in said_at(found, Level.Hint, module.program_file) { hint said } }
 	made
 }
 
@@ -142,7 +142,9 @@ linked_libraries(source: text): list := {
 	# module written links those it uses, never itself
 	# (the prelude too, every program's and every module's, so a run holds one instance of its words and globals: signals'
 	# listen and the program's unlisten edit the same event_listeners)
-	names = (["prelude"] + used_modules(written_source(source))).filter(name => name != module_written)
+	# (and those it uses unwritten: a module's power links big_numbers, with_implicit_uses)
+	used = used_modules(written_source(source))
+	names = (["prelude"] + used + implicitly_used.filter(name => name not in used)).filter(name => name != module_written)
 	timed("linking from " + folder + ": " + names.join(", "))
 	dependencies_first(images_of(names, folder))
 }
@@ -285,7 +287,10 @@ write_modules(folder: text, runtime_file: text) := {
 	write_library_index(folder)
 	runtime = read_bytes(runtime_file)
 	refused = []
-	for name in in_dependency_order(std_module_names) {
+	# (the prelude first, every module links it; then the runtime modules: any module's power links big_numbers, though
+	# it writes no `use` of it)
+	first = [PRELUDE_MODULE] + hooks().runtime_modules
+	for name in in_dependency_order(first + std_module_names.filter(name => name not in first)) {
 		file = folder + "/" + name + ".wasm"
 		try { module_written_behind(name, runtime, file) } catch refusal {
 			write_bytes(file, [])
@@ -303,9 +308,8 @@ refusal_said(refusal: any): text := {
 	if said == "" then "an error without a message" else said
 }
 # where the native warp (core/native/warp.warp) wants the module of words that are neither a command nor a file:
-# they are code, compiled there for it to run; no other harness sets it
-RUN_TO_VARIABLE = "WARP_RUN_TO"
-run_to = started_env(RUN_TO_VARIABLE) ?? ""
+# they are code, compiled there for it to run (its run-to option); no other harness gives it
+run_to = run_option("run-to") ?? ""
 match command {
 	"": if run_to then compile_written(args.join(" ") + "\n", run_to, ".") else compile_file(args#1, args#2, if #args > 2 then args#3 else folder_of(args#1))
 	"compile": compile_file(args#2, if #args > 2 then args#3 else args#2 + ".wasm", folder_of(args#2))

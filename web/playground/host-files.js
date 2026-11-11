@@ -8,7 +8,6 @@ const PAGE_PREFIX = "page:"; // src/web/mod.rs PAGE_PREFIX: a file of the page i
 const HTTP_NOT_FOUND = "HTTP status 404";
 const FILE_NOT_FOUND = "No such file or directory (os error 2)";
 const NO_PROCESSES = "not in the browser: a page runs no process or shell, natively only";
-const PROGRAM_VARIABLE = "WARP_PROGRAM"; // the program's file, as the native warp sets it (lib/file.warp program_file)
 
 // the files std's file module wrote (texts) and save sound rendered (bytes, a Uint8Array): read and the file words see
 // them before the served ones. A page keeps them in IndexedDB (keepWrittenFile), so they are still there after a reload
@@ -209,7 +208,9 @@ function findFiles(folder, pattern) {
 	return [...new Set(below.filter(path => outsideHidden(path) && shown(path.slice(path.lastIndexOf("/") + 1))))].sort().map(path => asFolder(plainPath(folder)) + path);
 }
 
-// the shell's words on the page's files (lib/shell.warp, src/modules/std_adapters.rs): folders exist by the files in them
+// the shell's words on the page's files (lib/shell.warp, src/modules/std_adapters.rs): folders exist by the files in them,
+// and a folder made empty (mkdir, lib/file.warp temp_dir) among the run's made ones, which WASI lists (driver.js programFiles)
+const madeFolder = path => programFiles.made.add(filePath(path).replace(/\/+$/, ""));
 // "~" itself (wasi.js HOME_DIRECTORY), there before the page wrote a file into it
 const isHomeFolder = path => plainPath(path).replace(/\/+$/, "") === HOME_DIRECTORY;
 const isWrittenFolder = folder => [...writtenFiles.keys()].some(path => path.startsWith(plainPath(folder).replace(/\/?$/, "/")));
@@ -488,11 +489,13 @@ addHostPart({
 		};
 	},
 	adapters: {
+		// run_option (core/host_io.warp): the run's options as driver.js gives them (programOptions, compilerOptions),
+		// its program the chosen sample's file, so program.folder names its folder as natively
+		warp: { option(name) { return (name === "program" ? programFileOf(this.holder.run) : this.holder.options?.[name]) ?? null; } },
 		// a page has no command line, no input and runs no process; its environment is what the page sets (the stand-in of
 		// the playground's key), its folder the served root that relative paths start from
 		os: {
-			// WARP_PROGRAM is the chosen sample's file, so program.folder names its folder as natively
-			env(name) { return (name === PROGRAM_VARIABLE ? programFileOf(this.holder.run) : self.pageEnvironment?.[name] ?? (name === "HOME" ? HOME_DIRECTORY : undefined)) ?? null; },
+			env(name) { return (self.pageEnvironment?.[name] ?? (name === "HOME" ? HOME_DIRECTORY : undefined)) ?? null; },
 			args: () => self.programArguments ?? [], // a sample's <name>.args (playground.js programArguments)
 			cwd: () => ".",
 			stdin: () => "",
@@ -526,13 +529,13 @@ addHostPart({
 			// a list of ints 0 to 255, like src/modules/std_adapters.rs bytes_of
 			write_bytes: (path, bytes) => { keepWritten(path, Uint8Array.from(bytes, byteOf)); return null; },
 			read_bytes: path => Array.from(readBytes(path)),
-			exists: path => writtenFiles.has(filePath(path)) || isHomeFolder(path) || servedFileExists(path),
+			exists: path => writtenFiles.has(filePath(path)) || programFiles.made.has(filePath(path).replace(/\/+$/, "")) || isHomeFolder(path) || servedFileExists(path),
 			list: folder => {
 				const prefix = filePath(folder).replace(/\/?$/, "/");
 				return [...writtenFiles.keys()].filter(path => path.startsWith(prefix) && !path.slice(prefix.length).includes("/")).map(path => path.slice(prefix.length)).sort();
 			},
 			glob,
-			mkdir: () => null,
+			mkdir: path => (madeFolder(path), null),
 			copy: (from, to) => { keepWritten(intoFolder(from, to), writtenOrRead(from)); return null; },
 			move: (from, to) => { keepWritten(intoFolder(from, to), writtenOrRead(from)); return forgetWritten(from); },
 			touch: path => { if (!writtenFiles.has(filePath(path))) keepWritten(path, ""); return null; },
@@ -544,9 +547,7 @@ addHostPart({
 		},
 		// a filter compiled natively is an SQL query (a page compiled by the browser keeps filters as comprehensions)
 		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: tablePage, count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, delete: deleteRow, update: updateRow, begin: beginTransaction, commit: file => { delete tablesBefore[file]; return null; }, rollback: rollBack, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
-		// start (lib/net.warp fetch_later): the request goes out after main and its answer comes as the program's
-		// fetch_answered (host-timers.js startTimers); a host that listens to nothing answers at once
-		net: { get: url => getSync(url), post: (url, body, headers) => postSync(url, contentText(body), headers ?? {}), start(url, id) { return fetchLater(this.holder, url, id); } },
+		net: { get: url => getSync(url), post: (url, body, headers) => postSync(url, contentText(body), headers ?? {}) },
 		// `clipboard.write(text)` (lowering/signals/system_values.rs): a page writes it (markup.js copyText), a Worker has no
 		// clipboard and hands the text to its page (self.writeClipboard: worker.js)
 		clipboard: { write: text => { (self.writeClipboard ?? copyText)(contentText(text)); return null; } },

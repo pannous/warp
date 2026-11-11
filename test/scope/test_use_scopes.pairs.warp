@@ -4,5 +4,5 @@
 # use_package_sees_every_file_below_the_package_folder
 '../warp/shapes_package/app/main.warp'	13
 
-# use_project_sees_every_file_below_the_project_root
+# use_project_sees_every_file_below_the_project_root — native only: the page serves no project folder (.git) to find
 '../warp/project_scope/main.warp'	42

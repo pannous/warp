@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
 # A swimming reef: sand, kelp, rocks, bubbles and a school, lit through waves.
 # This file is the picture. The window keeps painting; without one
-# (WARP_NO_WINDOW) this frame runs once and that paint is the still.
+# (--no-window) this frame runs once and that paint is the still.
 
 # A reef you can paint (samples/gpu/aquarium.warp).
 #
