@@ -1,0 +1,7 @@
+# lib/exact_values.warp (decision exact-sums): `e as exact`, `exact e`, `precise e` keep a value exact as it is
+'use exact_values; exact 1/3 + 1/6'	1/2
+'use exact_values; precise 2/4'	1/2
+'use exact_values; (1/3 + 1/6) as exact'	1/2
+'use exact_values; exact 7'	7
+# a float has no exact value
+'use exact_values; exact sqrt(2.0)'	error	a float has no exact value
