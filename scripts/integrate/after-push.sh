@@ -242,7 +242,7 @@ install_native() {
 			rsync -aL "$TREE/lib/compiler/native/" "$folder.new/compiler/native/"
 	else
 		rsync -aL --exclude /data "$TREE/lib/" "$folder.new/"
-	fi || { "${failed[@]}" "native warp: lib/ did not copy" --urgent; rm -rf "$folder.new"; return 1; }
+	fi && cp "$TREE/scripts/warp-crate" "$folder.new/" || { "${failed[@]}" "native warp: lib/ did not copy" --urgent; rm -rf "$folder.new"; return 1; }
 	native_built "$folder.new" "$MAIN_WARP" ||
 		{ "${failed[@]}" "native warp: warp build native core/native/warp.warp failed" --urgent; rm -rf "$folder.new"; return 1; }
 	# a folder of this tip already there (the installed one, a second install of one tip) is set aside and put back when

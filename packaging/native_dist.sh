@@ -16,6 +16,8 @@ source "$(dirname "$0")/../scripts/lib/site-scripts.sh"
 site_scripts_copied . "$dist"
 rm -rf "$dist/data" "$dist"/*.cwasm "$dist"/*.inputs  # this machine's builds and machine code
 cp core/native/warp "$dist/warp"
+# `warp build crate` runs it from beside the binary (extensions/commands/build.warp CRATE_TOOL_PLACES)
+cp scripts/warp-crate "$dist/warp-crate"
 
 cp samples/hello/hello.warp "$dist/hello.warp"
 in_dist './warp "$PWD/hello.warp"' | grep -q "$EXPECTED"
