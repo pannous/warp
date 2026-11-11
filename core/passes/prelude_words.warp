@@ -903,7 +903,11 @@ runtime_modules_reached(uses: list, folder: text): list := {
 # (each module's and file's text read once a compile: the prelude's is long)
 global runtime_modules_by_module = {}
 module_runtime_modules(name: text): list := {
-	if not runtime_modules_by_module.has(name) { runtime_modules_by_module[name] = runtime_modules_needed(used_module_text(name)) }
+	if not runtime_modules_by_module.has(name) {
+		# (a prebuilt module's signature says them; only one built before it did is read and scanned)
+		signature = prebuilt_signature(name)
+		runtime_modules_by_module[name] = if signature != ø and signature.runtime_modules != ø then signature.runtime_modules + signature.uses.filter(is_runtime_module) else runtime_modules_needed(used_module_text(name))
+	}
 	runtime_modules_by_module[name]
 }
 # a file's and those it uses in turn, beside it (a file using itself is read once)
