@@ -545,8 +545,12 @@ declared_only(n: Node): Node := {
 	}
 	# `A4 := midi_hertz(69)`, a value the module made a function of (charged, P71): its head, called at each use
 	if is_key(n, Op.Define) and head is symbol and name_of(head) in module.linked_words { return Key(call_of(name_of(head), []), Op.Define, Node.Empty) }
+	# a global the linked module declares: its start set it, the program reads and sets that one, never sets it anew (a
+	# console line re-running an earlier line's `count = 41` reset its count, card linked-own)
+	if is_value_definition(n) and linked_global(declared_name(n)) { return Node.Empty }
 	if is_key(n, Op.Colon) and is_declaration_keyword(head) then Key(head, Op.Colon, declared_only(value_of(n))) else n
 }
+linked_global(name: any): bool := name is text and module.linked_images.any(image => image.globals.any(entry => entry#1 == program_global_prefix + name))
 takes_block(head: Node): bool := items_of(head)[1 ..].any(parameter => parameter_type(parameter) == "block")
 # `name := …`, `name = …`, `global name = …`: a value's definition, no function's
 # a value, and a type the program's declarations name (`type fraction = rational`), whose statement is no program's
@@ -920,7 +924,7 @@ with_implicit_uses(source: text, folder: text = "."): text := {
 	# extensions' implicit uses scan a program's)
 	written = written_source(source)
 	written_uses = used_modules(written)
-	found = if module_written == "" then implicit_modules_of(source, folder) else runtime_modules_needed(written)
+	found = modules_found(written, folder, implicit_scanners())
 	needed = found + runtime_modules_reached(written_uses + found, folder) + files_runtime_modules(written, folder)
 	runtime = hooks().runtime_modules.filter(name => name in needed and name != module_written and name not in written_uses)
 	implicitly_used = found.filter(name => not is_runtime_module(name)) + runtime
@@ -945,9 +949,9 @@ runtime_modules_reached(uses: list, folder: text): list := {
 global runtime_modules_by_module = {}
 module_runtime_modules(name: text): list := {
 	if not runtime_modules_by_module.has(name) {
-		# (a prebuilt module's signature says them; only one built before it did is read and scanned)
+		# (a prebuilt module's signature says them, the modules it links; only one built before it did is read and scanned)
 		signature = prebuilt_signature(name)
-		runtime_modules_by_module[name] = if signature != ø and signature.runtime_modules != ø then signature.runtime_modules + signature.uses.filter(is_runtime_module) else runtime_modules_needed(used_module_text(name))
+		runtime_modules_by_module[name] = if signature != ø and signature.links != ø then signature.links.filter(is_runtime_module) else runtime_modules_needed(used_module_text(name))
 	}
 	runtime_modules_by_module[name]
 }

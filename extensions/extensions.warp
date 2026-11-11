@@ -59,7 +59,7 @@ use "page_values.warp"
 use "dev_values.warp"
 use "markup_values.warp"
 use "fetch_signals.warp"
-use "js_globals.warp"
+use "foreign_globals.warp"
 use "dir_hints.warp"
 use "from_imports.warp"
 use "collection_type_tests.warp"
@@ -139,7 +139,7 @@ EXTENSIONS = [
 	dev_values_extension
 	markup_values_extension
 	fetch_signals_extension
-	js_globals_extension
+	foreign_globals_extension
 	dir_hints_extension
 	from_imports_extension
 	collection_type_tests_extension

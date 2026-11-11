@@ -837,14 +837,16 @@ instance_defined(linker: handle, engine: handle, context: handle, name: text, pa
 	instance = allocate(INSTANCE_BYTES)
 	checked(wasmtime_linker_instantiate(linker, context, compiled, instance, trap), trap)
 	checked(wasmtime_linker_define_instance(linker, context, name, name.length, instance), trap)
-	start = allocate(EXTERN_BYTES)
-	start_name = "warp/start"
-	if wasmtime_instance_export_get(context, instance, start_name, start_name.length, start) {
-		# (a module's start is its main: its value, if any, dropped)
-		results_count = native_long(wasm_functype_results(wasmtime_func_type(context, start + 8)))
-		checked(wasmtime_func_call(context, start + 8, 0, 0, allocate(VALUE_BYTES * MAX_RESULTS), results_count, trap), trap)
-	}
+	checked(started(context, instance, "warp/start", trap), trap)
 	instance
+}
+# the instance's start `name` run, its error given back (0 for none): a module's warp/start is its main, its value, if
+# any, dropped; its _start prints it as a program's does
+started(context: handle, instance: pointer, name: text, trap: pointer): handle := {
+	start = allocate(EXTERN_BYTES)
+	if not wasmtime_instance_export_get(context, instance, name, name.length, start) { return 0 }
+	results_count = native_long(wasm_functype_results(wasmtime_func_type(context, start + 8)))
+	wasmtime_func_call(context, start + 8, 0, 0, allocate(VALUE_BYTES * MAX_RESULTS), results_count, trap)
 }
 
 # the module run with the arguments and a GC heap starting at `heap_bytes`; its machine code kept in the file
@@ -856,37 +858,18 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	outer = crash_context_running(given.pointers, given.count)
 	fuel = fuel_of(module, machine_code)
 	engine = run_engine(fuel > 0, heap_bytes)
-	store = wasmtime_store_new(engine, 0, 0)
+	trap = allocate(8)
+	store = opened_store(engine, given, output, trap)
 	context = wasmtime_store_context(store)
 	if fuel > 0 { wasmtime_context_set_fuel(context, fuel) }
-	linker = wasmtime_linker_new(engine)
-	trap = allocate(8)
-	checked(wasmtime_linker_define_wasi(linker), trap)
-	config = wasi_config_new()
-	wasi_config_set_argv(config, given.count, given.pointers)
-	wasi_config_inherit_stdin(config)
-	output_to(config, output)
-	name_time_zone()
-	# PWD the real current folder, a module's cwd (wasi.warp std_os_cwd): a parent that changed folder without saying
-	# so (`warp test`'s runs, chdir before exec) left its own, and relative paths then resolved from the wrong one
-	setenv(c_string("PWD"), c_string(current_folder()), 1)
-	wasi_config_inherit_env(config)
-	# the current folder for relative paths and the root for absolute ones, as warp's own host opens them
-	wasi_config_preopen_dir(config, ".", ".", yes)
-	wasi_config_preopen_dir(config, "/", "/", yes)
-	checked(wasmtime_context_set_wasi(context, config), trap)
-	srand48(milliseconds_now() xor (getpid() as i64))
+	linker = opened_linker(engine, trap)
 	compiled = compiled_module(engine, module, machine_code, trap)
-	# (an instance it links and the program define the same host words)
-	wasmtime_linker_allow_shadowing(linker, yes)
 	linked = allocate(16)
 	text_kept(linked, "")
 	outer_run = kept_value(RUN_SLOT)
 	if outer_run == 0 { timers_forgotten() }
 	keep_value(RUN_SLOT, run_state(linker, engine, linked, context, heap_bytes, given) as i64)
-	instances_linked(linker, engine, context, compiled, linked, library_folder(), trap)
-	host_words_defined(linker, engine, context, compiled, module, yes, trap)
-	checked(wasmtime_linker_define_unknown_imports_as_traps(linker, compiled), trap)
+	checked(imports_defined(linker, engine, context, compiled, module, linked, trap), trap)
 	instance = allocate(INSTANCE_BYTES)
 	checked(wasmtime_linker_instantiate(linker, context, compiled, instance, trap), trap)
 	entry = allocate(EXTERN_BYTES)
@@ -915,6 +898,92 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 		wasm_engine_delete(engine)
 	}
 	failure
+}
+# a store of the engine, WASI set up for it: the arguments, what it prints written to the file `output` when one is named
+opened_store(engine: handle, given: Arguments, output: text, trap: pointer): handle := {
+	store = wasmtime_store_new(engine, 0, 0)
+	config = wasi_config_new()
+	wasi_config_set_argv(config, given.count, given.pointers)
+	wasi_config_inherit_stdin(config)
+	output_to(config, output)
+	name_time_zone()
+	# PWD the real current folder, a module's cwd (wasi.warp std_os_cwd): a parent that changed folder without saying
+	# so (`warp test`'s runs, chdir before exec) left its own, and relative paths then resolved from the wrong one
+	setenv(c_string("PWD"), c_string(current_folder()), 1)
+	wasi_config_inherit_env(config)
+	# the current folder for relative paths and the root for absolute ones, as warp's own host opens them
+	wasi_config_preopen_dir(config, ".", ".", yes)
+	wasi_config_preopen_dir(config, "/", "/", yes)
+	checked(wasmtime_context_set_wasi(wasmtime_store_context(store), config), trap)
+	srand48(milliseconds_now() xor (getpid() as i64))
+	store
+}
+# a linker of the engine with WASI, where an instance it links and the program may define the same host words
+opened_linker(engine: handle, trap: pointer): handle := {
+	linker = wasmtime_linker_new(engine)
+	checked(wasmtime_linker_define_wasi(linker), trap)
+	wasmtime_linker_allow_shadowing(linker, yes)
+	linker
+}
+
+## the console's session (card warp-repl-instance)
+# One store and linker for all the lines of a console, each line a module of its own (extensions/commands repl_step)
+# whose instance stays, defined under its path for the lines after it: what a line declares, and its state, live on.
+# The session is a run's block (run_state)
+session_opened(): pointer := {
+	engine = run_engine(no, RUN_GC_HEAP_BYTES)
+	trap = allocate(8)
+	long_at(trap).value = 0
+	given = program_arguments("repl", arg_count())
+	store = opened_store(engine, given, "", trap)
+	linked = allocate(16)
+	text_kept(linked, "")
+	timers_forgotten()
+	run_state(opened_linker(engine, trap), engine, linked, wasmtime_store_context(store), RUN_GC_HEAP_BYTES, given)
+}
+# the line's module at `path` run in the session: linked, its instance defined, its _start run (it prints its value);
+# a failure said, the session going on. The status of the exit() it called, which ends the session, else -1
+session_line_run(session: pointer, path: text): i32 := {
+	outer_run = kept_value(RUN_SLOT)
+	keep_value(RUN_SLOT, session as i64)
+	context = long_at(session + 24).value
+	trap = allocate(8)
+	long_at(trap).value = 0
+	instance = allocate(INSTANCE_BYTES)
+	error = session_line_linked(session, path, instance, trap)
+	failure = ""
+	if error != 0 or long_at(trap).value != 0 { failure = failure_said(error, trap, "") } else {
+		error = started(context, instance, "_start", trap)
+		if error != 0 or long_at(trap).value != 0 { failure = failure_said(error, trap, raised_message(context, instance, trap)) }
+	}
+	keep_value(RUN_SLOT, outer_run)
+	status = allocate(4)
+	if error != 0 and wasmtime_error_exit_status(error, status) { return word_at(status).value as i32 }
+	if failure.length > 0 { complain(failure) }
+	-1
+}
+# the line's module linked to the session's instances and instantiated, defined under its path; the error, 0 for none
+session_line_linked(session: pointer, path: text, instance: pointer, trap: pointer): handle := {
+	linker = long_at(session).value
+	engine = long_at(session + 8).value
+	linked = long_at(session + 16).value as pointer
+	context = long_at(session + 24).value
+	module = read_file(path)
+	compiled = compiled_module(engine, module, "", trap)
+	error = imports_defined(linker, engine, context, compiled, module, linked, trap)
+	if error == 0 { error = wasmtime_linker_instantiate(linker, context, compiled, instance, trap) }
+	if error == 0 and long_at(trap).value == 0 { error = wasmtime_linker_define_instance(linker, context, path, path.length, instance) }
+	# (so a later line that imports it links this instance, never one made anew)
+	if error == 0 { text_kept(linked, joined(joined(cell_text(linked), path), "\n")) }
+	error
+}
+
+# what the module imports defined in the linker: the library's instances it links, the host words, a trap for any
+# other; the error, 0 for none
+imports_defined(linker: handle, engine: handle, context: handle, compiled: handle, module: text, linked: pointer, trap: pointer): handle := {
+	instances_linked(linker, engine, context, compiled, linked, library_folder(), trap)
+	host_words_defined(linker, engine, context, compiled, module, yes, trap)
+	wasmtime_linker_define_unknown_imports_as_traps(linker, compiled)
 }
 # a run's linker, engine, linked-instances cell, store context and GC heap size, and whether it linked unicode and the native host
 # module yet, kept in the run's block: what a host word allocates is given back when it returns (foreign.c
