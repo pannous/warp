@@ -352,9 +352,10 @@ unreached_variant_class(word: text, linked_classes: map): text? := {
 # the reach's last step, once the passes ran (passes.warp lowered_reached): the program without the brought functions
 # nothing calls. What a sugar rule might write is brought before it fires (sugar_words_of: `each_any` for any call,
 # `count_in` for any count), and typing and emitting the unused ones cost each compile (card measure). A module being
-# built keeps all of its words
+# built keeps all of its own words and drops the brought ones too: web compiled in every word of each file it uses
+# (976 functions, not 146)
 called_only(program: Node): Node := {
-	if module.relocating or #brought_names == 0 { return program }
+	if #brought_names == 0 { return program }
 	statements = statements_in(program)
 	names = statements.map(statement => declared_name(statement) ?? "")
 	# the brought definitions by name, each word's found at once (a scan of every statement per word was 10% of
