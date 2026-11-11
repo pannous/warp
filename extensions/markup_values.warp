@@ -110,14 +110,18 @@ html_parameters(program: Node): map := {
 }
 html_positions(head: Node): list := (0 ..< #head - 1).filter(i => is_html_parameter(head#(i + 2)))
 is_html_parameter(parameter: Node): bool := is_key(parameter, Op.Colon) and value_of(parameter) == symbol(MARKUP_TYPE)
-# the heads of a module's definitions taking a parameter typed html, read once a module
+# the heads of a module's definitions naming html, read once a module (html_positions picks the parameters typed html)
 global module_html_heads_held = {}
 module_html_heads(module: text): list := {
-	if not module_html_heads_held.has(module) {
-		slices = definition_slices(used_module_text(module)).filter(slice => slice#2.split(":=")#1.contains(": " + MARKUP_TYPE))
-		module_html_heads_held[module] = slices.map(slice => definition_head_of(statements_in(plain_node(parsed(slice#2)))#1)).filter(is_named_head)
-	}
+	if not module_html_heads_held.has(module) { module_html_heads_held[module] = html_definitions(module).map(definition_head_of).filter(is_named_head) }
 	module_html_heads_held[module]
+}
+# a module's definitions naming html: off its prebuilt signature, never its source (decision no-lib-reads); parsed
+# from the source only for a module not prebuilt, a program's own
+html_definitions(module: text): list := {
+	signature = prebuilt_signature(module)
+	if signature != ø { return signature.slices.filter(slice => slice#3.contains(MARKUP_TYPE)).map(slice => statements_in(unpack(slice#3))#1) }
+	definition_slices(used_module_text(module)).filter(slice => slice#2.contains(MARKUP_TYPE)).map(slice => statements_in(plain_node(parsed(slice#2)))#1)
 }
 # `f(a, b)`: a head naming its function
 is_named_head(head: any): bool := head != ø and is_group(head) and #head > 1 and head#1 is symbol
