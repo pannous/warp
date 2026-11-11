@@ -1918,17 +1918,21 @@ module_word_answered(caller: handle, context: handle, listed: pointer, result: p
 	encoding = node_encoded(caller, context, item_of(caller, context, listed, 3))
 	run_linked(context, module, library_folder())
 	run = kept_value(RUN_SLOT) as i32
+	outer_guest = cell_text(run + GUEST_AT as i32)
+	outer_asker = long_at(run + ASKER_AT as i32).value
 	text_kept(run + GUEST_AT as i32, module)
 	long_at(run + ASKER_AT as i32).value = caller
 	answer = encoded_call(0, context, word, encoding)
-	long_at(run + ASKER_AT as i32).value = 0
-	text_kept(run + GUEST_AT as i32, "")
+	long_at(run + ASKER_AT as i32).value = outer_asker
+	text_kept(run + GUEST_AT as i32, outer_guest)
 	code_built(caller, context, answer, counter_at(0), result)
 }
 # warp.rule_word(word, arguments): a module's rule word asking the compiler running it for one of its rule words
-# (rewrites.warp asked_rule_word), called there on the values, its result built again in the module
+# (rewrites.warp asked_rule_word), called there on the values, its result built again in the module. Each call encodes
+# its values both ways: pass small ones
 rule_word_answered(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
 	compiler = long_at(kept_value(RUN_SLOT) as i32 + ASKER_AT as i32).value
+	if compiler == 0 { return guest_error(caller, context, "warp.rule_word answers only inside a module's rule word", result) }
 	code_built(caller, context, encoded_call(compiler, context, "asked_rule_word", node_encoded(caller, context, listed)), counter_at(0), result)
 }
 # the caller's value in the parse-code encoding (runtime/builders.warp node_encoding)
