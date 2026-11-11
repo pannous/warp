@@ -1,0 +1,10 @@
+#!/usr/bin/env warp
+// Load a BMP, mirror it, give it an evening tint and save it as a new BMP beside the old one.
+use image
+use color
+
+picture = image(./picture.bmp)
+evening = picture.mirrored().tinted(rgb(255, 120, 60), 0.3)
+evening.save(./evening.bmp)
+print "saved evening.bmp, ${evening.width}×${evening.height}"
+evening.show()
