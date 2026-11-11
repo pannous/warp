@@ -201,7 +201,7 @@ js_assigned(n: Node, scope: JsScope): Node := {
 }
 
 # [receiver, interface] of a global: a library runtime's is its import, a js global its name as foreign_call takes it
-global_receiver(name: text, interface: text): list := [if is_library_runtime(interface) then call_of(interface + IMPORT_SUFFIX, [Text(name)]) else name, interface]
+global_receiver(name: text, interface: text): list := [if is_library_runtime(interface) then call_of(interface + IMPORT_SUFFIX, [Text(name)]) else Text(name), interface]
 is_library_runtime(interface: text): bool := interface in LIBRARY_RUNTIMES
 is_js_global(name: text, scope: JsScope): bool := scope.globals.has(name) and not is_library_runtime(scope.globals[name])
 
