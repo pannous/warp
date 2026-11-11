@@ -334,7 +334,7 @@ html_render(live: html, scope: any, chosen: any) := {
 		return out
 	}
 	if value == ø { return "" }
-	if html_is_listed_element(value) { html_warning_once(html_name(value) + ": {…} here is data, shown as text: markup is made inside html{…} or in a place typed html (`bars: html = [div{…} for l in lengths]`, decision markup-needs-html)") }
+	if html_is_listed_element(value) { html_warning_once(html_name(value) + ": {…} here is data, shown as text: markup is made inside html{…} or in a place typed html (`bars: html = [div{…} for l in lengths]`)") }
 	html_escaped(html_plain(value))
 }
 
