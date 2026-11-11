@@ -4,7 +4,7 @@ use "characters.warp"
 use "walks.warp"
 use "../emitter/byte_codes.warp"
 text_join(a: text, b: text): text := {
-	out = new_text(byte_count(a) + byte_count(b))
+	out = made_text(byte_count(a) + byte_count(b), ascii_joined(a, b))
 	copy_text(out, 0, a, 0, byte_count(a))
 	copy_text(out, byte_count(a), b, 0, byte_count(b))
 	# a walk over a stays good on out, which starts with a's bytes: `t += …` keeps t's cursor
@@ -16,9 +16,20 @@ text_join(a: text, b: text): text := {
 # all bytes so far each time (card list-display-slowness)
 texts_joined(parts: list, between: text): text := {
 	size = 0
-	for i in 1 to #parts { size += byte_count(unboxed_text(parts#i)) }
+	ascii = is_ascii_text(between)
+	last = -1
+	for i in 1 to #parts {
+		part = unboxed_text(parts#i)
+		size += byte_count(part)
+		if i > 1 {
+			ascii = ascii and not meets_newline(last, between)
+			last = seam_end(last, between)
+		}
+		ascii = ascii and is_ascii_text(part) and not meets_newline(last, part)
+		last = seam_end(last, part)
+	}
 	if #parts > 1 { size += byte_count(between) * (#parts - 1) }
-	out = new_text(size)
+	out = made_text(size, ascii)
 	at = 0
 	for i in 1 to #parts {
 		if i > 1 {
@@ -34,9 +45,16 @@ texts_joined(parts: list, between: text): text := {
 global other_index = 0
 global other_at = 0
 global other_before = -1
+# whether a joined to b stays an $AsciiText: both are, and no CR of a's end meets an LF of b's start
+ascii_joined(a: text, b: text): bool := is_ascii_text(a) and is_ascii_text(b) and not meets_newline(seam_end(-1, a), b)
+# the last byte of a text joined so far (-1 for none) once t follows it
+seam_end(last: int, t: text): int := if byte_count(t) > 0 then byte_at(t, byte_count(t) - 1) else last
+# a CR last before t starts with an LF: the two join into one character
+meets_newline(last: int, t: text): bool := last == Ascii.Return and byte_count(t) > 0 and byte_at(t, 0) == Ascii.Newline
 # the characters (grapheme clusters) of a text; a short one stays out of the count kept, so a lexer's words leave its
 # source's count (card text-cache-lru)
 text_count(t: text): int := {
+	if is_ascii_text(t) { return byte_count(t) }
 	if byte_count(t) < short_text() { return characters_counted(t) }
 	if same(t, counted_text) and byte_count(t) == counted_bytes { return counted }
 	count = characters_counted(t)
@@ -125,6 +143,7 @@ same_bytes(a: text, b: text): bool := {
 # alone; a slice cuts only at its ends, so the shared start is checked at its first byte only
 equal_texts(a: text, b: text): bool := {
 	if same_bytes(a, b) { return yes }
+	if is_ascii_text(a) and is_ascii_text(b) { return no }
 	shared = shared_bytes(a, b)
 	# parting where each holds an ASCII byte or has ended, their NFC forms part there too: an ASCII byte starts a
 	# code point NFC keeps first (nothing before it composes with it), so it stays what NFC holds at that place

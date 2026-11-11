@@ -27,7 +27,7 @@ is_ascii(t: text): bool := {
 	yes
 }
 ascii_case(t: text, first: int, last: int, shift: int): text := {
-	out = new_text(byte_count(t))
+	out = made_text(byte_count(t), is_ascii_text(t))
 	for i in 0..byte_count(t) {
 		b = byte_at(t, i)
 		set_byte(out, i, if b >= first and b <= last then b + shift else b)

@@ -52,7 +52,7 @@ text_of_textual(n: Node): text := {
 is_space_byte(b: int): bool := b == Ascii.Space or b == Ascii.Tab or b == Ascii.Newline or b == Ascii.Return
 # the bytes start..<stop of t
 bytes_between(t: text, start: int, stop: int): text := {
-	out = new_text(stop - start)
+	out = made_text(stop - start, is_ascii_text(t))
 	copy_text(out, 0, t, start, stop - start)
 	out
 }
@@ -69,7 +69,7 @@ joined(xs: list, separator: Node): text := {
 # `n times "ab"`: t n times over
 repeated_text(n: int, t: Node): text := {
 	piece = node_text(t)
-	out = new_text(n * byte_count(piece))
+	out = made_text(n * byte_count(piece), ascii_joined(piece, piece))
 	for i in 0..<n { copy_text(out, i * byte_count(piece), piece, 0, byte_count(piece)) }
 	out
 }

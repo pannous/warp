@@ -64,7 +64,7 @@ text_code(t: text): text := if code_point_count(t) == 1 then "'" + t + "'" else 
 quoted_text(t: text): text := {
 	escapes = 0
 	for i in 0..byte_count(t) { if is_escaped_byte(byte_at(t, i)) { escapes += 1 } }
-	out = new_text(byte_count(t) + escapes + 2)
+	out = made_text(byte_count(t) + escapes + 2, is_ascii_text(t))
 	set_byte(out, 0, Ascii.Quote)
 	at = 1
 	for i in 0..byte_count(t) {
