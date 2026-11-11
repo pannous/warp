@@ -1054,6 +1054,8 @@ holds_companion(folder: text): bool := {
 # NFC by lib/unicode, whose module (modules/unicode.wasm) the run links on this first call (lazily_linked), never a
 # silent byte compare
 canonical_text_answered(context: handle, given: pointer, result: pointer): nothing := {
+	# (named before the link, which adds warp_runtime to the run's linked modules and so turns lazy_library's answer)
+	library = lazy_library(kept_value(RUN_SLOT) as i32)
 	function = allocate(EXTERN_BYTES)
 	if not lazily_linked(context, "warp/unicode", UNICODE_LINKED_AT, "canonical_text", function) {
 		complain("modules/unicode.wasm exports no canonical_text: warp rebuild writes it anew")
@@ -1063,7 +1065,7 @@ canonical_text_answered(context: handle, given: pointer, result: pointer): nothi
 	long_at(trap).value = 0
 	error = wasmtime_func_call(context, function + 8, given, 1, result, 1, trap)
 	# a module of other GC types than the run's traps 'cast failure' deep inside: named, never silent
-	if error != 0 or long_at(trap).value != 0 { complain(joined(joined("warp: canonical_text of ", lazy_library(kept_value(RUN_SLOT) as i32)), "/modules/unicode.wasm failed; a compiler links the runtime and unicode module of the compiler that built it, <compiler>.library/ (`warp rebuild seed` makes the seed's, `warp rebuild` warp.wasm's)")) }
+	if error != 0 or long_at(trap).value != 0 { complain(joined(joined("warp: canonical_text of ", library), "/modules/unicode.wasm failed; a compiler links the runtime and unicode module of the compiler that built it, <compiler>.library/ (`warp rebuild seed` makes the seed's, `warp rebuild` warp.wasm's)")) }
 	checked(error, trap)
 }
 ## machine-wide channels (lib/channels.warp; the page's are BroadcastChannels, web/playground/host-tasks.js): every
