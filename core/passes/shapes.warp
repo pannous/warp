@@ -35,9 +35,6 @@ PATH_AFTER_OPERAND_MARK = "path_after_operand"
 UNEVEN_SPACING_MARK = "uneven_spacing"
 # the mark of `[a + b c]`, a spaced operator in a square list before a phrase: [its left, the operator, the phrase as written] (parser.warp spaced_operand_in_list)
 SPACED_OPERAND_MARK = "spaced_operand"
-# the mark of a name glued to a number, `3m`: the rules read the name as the library's where the program binds it too
-# (decision unit-after-number); plain_node keeps it for a program's own code, the rewrite rules drop it
-GLUED_FACTOR_MARK = "glued_factor"
 
 // [bracket, separator, items] of a group, an empty one too; ø for any other node
 def group_parts(node: Node): list? := match node {
