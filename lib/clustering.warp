@@ -21,6 +21,7 @@ EMEANS_EPOCHS = 3
 
 // labels: each point's cluster, 1 to k; error: the mean squared distance of a point to its centroid
 class Clustering { centroids: list; labels: list; error: float }
+class Totals { sizes: list; sums: list }
 
 kmeans(points: list, k: int): Clustering := clustered(points, kmeans_steps(points, k).last)
 emeans(points: list, k: int): Clustering := clustered(points, emeans_steps(points, k).last)
@@ -61,28 +62,20 @@ emeans_steps(points: list, k: int, epochs: int): list := {
 	for epoch in 1 to epochs {
 		order = shuffle([i for i in 1 to n])
 		for b in 0 to batches - 1 {
-			centroids = centroid_ratios(sums, counts)
-			batch_counts = [0.0 for j in 1 to k]
-			batch_sums = [scaled_vector(points#1, 0.0) for j in 1 to k]
-			for at in b * batch + 1 to (b + 1) * batch {
-				i = order#at
-				j = nearest_centroid(points#i, centroids)
-				labels#i = j
-				batch_counts#j = batch_counts#j + 1
-				batch_sums#j = blended(batch_sums#j, points#i, 1.0, 1.0)
-			}
+			members = [order#at for at in b * batch + 1 to (b + 1) * batch]
+			relabel(points, members, centroid_ratios(sums, counts), labels)
+			totals = cluster_totals(points, labels, members, k)
 			step = annealed_step(peak, t, updates)
 			for j in 1 to k {
-				counts#j = (1 - step) * counts#j + step * batch_counts#j
-				sums#j = blended(sums#j, batch_sums#j, 1 - step, step)
+				counts#j = (1 - step) * counts#j + step * totals.sizes#j
+				sums#j = blended(sums#j, totals.sums#j, 1 - step, step)
 			}
 			t = t + 1
 			if t % REVIVAL_PERIOD == 0 { revive_dead(sums, counts) }
 			steps.add(centroid_ratios(sums, counts))
 		}
 		// the points past the last whole batch fall in no update; the last epoch still labels them for its means
-		centroids = centroid_ratios(sums, counts)
-		for at in batches * batch + 1 to n { labels#(order#at) = nearest_centroid(points#(order#at), centroids) }
+		relabel(points, [order#at for at in batches * batch + 1 to n], centroid_ratios(sums, counts), labels)
 	}
 	steps.add(cluster_means(points, labels, steps.last))
 	steps
@@ -128,16 +121,23 @@ nudged(centroid: list, sign: int): list := [centroid#i * (1 + sign * SPLIT_NUDGE
 
 // the mean of each cluster's points; a cluster without points keeps its old centroid
 cluster_means(points: list, labels: list, old: list): list := {
-	k = count(old)
-	sizes = [0 for j in 1 to k]
-	sums = [scaled_vector(points#1, 0.0) for j in 1 to k]
-	for i in 1 to count(points) {
-		j = labels#i
-		sizes#j = sizes#j + 1
-		sums#j = blended(sums#j, points#i, 1.0, 1.0)
-	}
-	[if sizes#j == 0 then old#j else scaled_vector(sums#j, 1 / sizes#j) for j in 1 to k]
+	totals = cluster_totals(points, labels, [i for i in 1 to count(points)], count(old))
+	[if totals.sizes#j == 0 then old#j else scaled_vector(totals.sums#j, 1 / totals.sizes#j) for j in 1 to count(old)]
 }
+
+// how many of the member points each cluster has, and their sum
+cluster_totals(points: list, labels: list, members: list, k: int): Totals := {
+	totals = Totals(sizes: [0.0 for j in 1 to k], sums: [scaled_vector(points#1, 0.0) for j in 1 to k])
+	for i in members {
+		j = labels#i
+		totals.sizes#j = totals.sizes#j + 1
+		totals.sums#j = blended(totals.sums#j, points#i, 1.0, 1.0)
+	}
+	totals
+}
+
+// each member point labelled with its nearest centroid
+relabel(points: list, members: list, centroids: list, labels: list) := { for i in members { labels#i = nearest_centroid(points#i, centroids) } }
 
 nearest_labels(points: list, centroids: list): list := [nearest_centroid(p, centroids) for p in points]
 
