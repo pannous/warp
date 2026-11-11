@@ -3,6 +3,10 @@
 'canvas.height = 50; [canvas.height, window.height]'	[50, 50]
 'canvas.width = 60; canvas.height = 40; "${canvas}"'	"canvas 60×40"
 
-# use draw: canvas(w, h) sizes the window too (card window-canvas-size)
-'use draw; canvas(30, 20); [window.width, window.height]'	[30, 20]
+# use draw: canvas.size(w, h) sizes the window too (card window-canvas-size)
+'use draw; canvas.size(30, 20); [window.width, window.height]'	[30, 20]
 'use draw; canvas.width = 50; window.width'	50
+# the canvas is a value: clear(canvas) and canvas.clear() blank it, paper is canvas (user card canvas-clear-fix)
+'use draw; canvas.size(4, 4); clear(red); clear(canvas); canvas_pixels[0] as int == blank_color'	true
+'use draw; canvas.size(4, 4); clear(red); canvas.clear(); canvas_pixels[0] as int == blank_color'	true
+'use draw; canvas(4, 4); clear(red); clear(paper); [canvas.width, canvas_pixels[0] as int == blank_color]'	[4, true]

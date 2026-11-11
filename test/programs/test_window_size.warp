@@ -2,14 +2,14 @@
 
 # canvas_size_is_a_property
 is! 'use draw
-canvas(30, 20)
+canvas.size(30, 20)
 [canvas.width, canvas.height]' [30, 20]
 is! 'use draw
 canvas.width = 300
 canvas.height = 200
 [canvas.width, canvas.height, count(canvas_pixels)]' [300, 200, 60000]
 is! 'use draw
-canvas(10, 10)
+canvas.size(10, 10)
 canvas.width += 5
 canvas.width' 15
 is! 'canvas.width = 30
