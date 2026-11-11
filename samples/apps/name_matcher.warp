@@ -8,7 +8,7 @@ names = ["Zoë Müller", "Zoe" + chr(776) + " Mu" + chr(776) + "ller", "ZOË MÜ
 key(name) := casefold(nfkc(name))
 
 rows = []
-for name in names { rows = rows + [[name, str(count(codepoint_numbers(name))), str(count(codepoint_numbers(nfc(name)))), key(name)]] }
+for name in names { rows = rows + [[name, text(count(codepoint_numbers(name))), text(count(codepoint_numbers(nfc(name)))), key(name)]] }
 print(table_text(rows, {headers: ["as typed", "code points", "after NFC", "match key"]}))
 print("")
 groups = {}
@@ -18,6 +18,6 @@ for name in names {
 	if not (k in groups) { groups[k] = []; order = order + [k] }
 	groups[k] = groups[k] + [name]
 }
-print(str(count(order)) + " people among " + str(count(names)) + " entries")
+print(text(count(order)) + " people among " + text(count(names)) + " entries")
 for k in order { if count(groups[k]) > 1 { print("same person: " + join(groups[k], " | ")) } }
-print("already NFC? " + str(is_normalized(names#2, "NFC")) + ", after nfc: " + str(is_normalized(nfc(names#2), "NFC")))
+print("already NFC? " + text(is_normalized(names#2, "NFC")) + ", after nfc: " + text(is_normalized(nfc(names#2), "NFC")))

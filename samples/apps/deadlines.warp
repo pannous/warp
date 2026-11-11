@@ -24,6 +24,6 @@ for d in deadlines {
 	if left < 0 { shown = format_duration(0 - left) + " ago" }
 	rows = rows + [[d["name"], format_date(parse_date(d["due"])), state, shown, days_between(today, parse_date(d["due"]))]]
 }
-print("as of " + format_date(today) + ": " + str(count(deadlines)) + " deadlines, " + str(late) + " overdue")
+print("as of " + format_date(today) + ": " + text(count(deadlines)) + " deadlines, " + text(late) + " overdue")
 print("")
 print(table_text(rows, {headers: ["deadline", "due", "status", "remaining", "days"], align: ["left", "left", "left", "right", "right"]}))

@@ -2,7 +2,7 @@
 
 # a_hole_is_an_operand_of_a_phrase
 is! 'match data(3 times {print 1}) {
-	data($n times $b) => str(n)
+	data($n times $b) => text(n)
 	_ => "no"
 }' '3'
 is! 'match data(3 times {print 1}) {
@@ -19,10 +19,10 @@ g(x) := f(x)
 g(data(q + 0)) == data(q + 1)' true
 is! 'x = data(q + 0)
 x is data($m + 0)
-str(m)' 'q'
+text(m)' 'q'
 is! 'x = data(q + 0)
 x is data($h + 0)
-str(h)' 'q'
+text(h)' 'q'
 
 # a_template_splices_a_variable
 is! 'a = data(y)
@@ -34,7 +34,7 @@ data([$n, 2]) == data([k, 2])' true
 
 # a_template_splices_an_expression
 is! 'k = data(width)
-data(m.pop($(str(k)))) == data(m.pop("width"))' true
+data(m.pop($(text(k)))) == data(m.pop("width"))' true
 
 # a_replacement_template_splices_the_holes
 is! '(data(y * 2 * 1 + 2) replace data($a * 1) with data($a + 10)) == data(y * 2 + 10 + 2)' true

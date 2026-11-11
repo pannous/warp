@@ -17,6 +17,6 @@ for c in comments {
 page = page + "\n</ul>"
 print(page)
 print("")
-print("no live script tag: " + str(not page.contains("<script>")))
+print("no live script tag: " + text(not page.contains("<script>")))
 print("decoded again: " + html_unescape(html_escape(comments#2#2)))
 print("numeric references: " + html_unescape("&#72;&#x69;&#33; &#128512;"))

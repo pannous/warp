@@ -51,7 +51,7 @@ covered_type_words(type: text): list := {
 		"rational": rationals
 		"float": floats
 		"number": rationals + floats + ["number"]
-		"text": ["text", "str", "string", "path"] + chars
+		"text": ["text", "string", "path"] + chars
 		"path": ["path"]
 		"char": chars
 		"bool": ["bool", "boolean"]

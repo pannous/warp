@@ -4,7 +4,7 @@
 't = zoned(2030-07-01T10:00, "Europe/Berlin"); print t; t.tzdata'	'warp-2026a'
 
 # a_duration_in_a_unit_is_its_quantity_in_a_running_program
-'print 1; str(1 day in h)'	'24h'
+'print 1; text(1 day in h)'	'24h'
 
 # a_placement_in_parentheses_has_fields
 't = 2030-07-01T10:00Z; print t; zoned(t, "Europe/Berlin").hour'	12

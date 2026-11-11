@@ -22,7 +22,7 @@ parse_line(line: text): any := {
 }
 
 requests = [r for r in [parse_line(l) for l in log.split("\n")] if r != ø]
-print("parsed " + str(count(requests)) + " of " + str(count(log.split("\n"))) + " lines")
+print("parsed " + text(count(requests)) + " of " + text(count(log.split("\n"))) + " lines")
 
 # hits, bytes and errors per path
 rows = []
@@ -35,11 +35,11 @@ rows = sort_by(rows, row => -row[1])
 print(table_text(rows, {headers: ["path", "hits", "bytes", "errors"]}))
 
 # status classes and latency
-print("status codes: " + str(tally([r.status for r in requests])))
+print("status codes: " + text(tally([r.status for r in requests])))
 times = [r.seconds for r in requests]
-print("latency mean " + str(round_to(mean(times), 3)) + " s, median " + str(round_to(median(times), 3)) + " s, p90 " + str(round_to(percentile(times, 90), 3)) + " s")
+print("latency mean " + text(round_to(mean(times), 3)) + " s, median " + text(round_to(median(times), 3)) + " s, p90 " + text(round_to(percentile(times, 90), 3)) + " s")
 slowest = sort_by(requests, r => -r.seconds)[0]
-print("slowest: " + slowest.method + " " + slowest.path + " (" + str(slowest.seconds) + " s, status " + str(slowest.status) + ")")
+print("slowest: " + slowest.method + " " + slowest.path + " (" + text(slowest.seconds) + " s, status " + text(slowest.status) + ")")
 print("busiest client: " + sort_by(frequencies([r.ip for r in requests]), f => -f[1])[0][0])
 
 # requests per minute: the hour and minute out of each time stamp, as a bar per minute

@@ -242,7 +242,7 @@ converted_kind(n: Node, scope: Scope): ValueKind := {
 	target = if value_of(n) is symbol then name_of(value_of(n)).lower() else ""
 	if target == "codepoint" or target == "char" or target == "character" { return ValueKind.Codepoint }
 	if target == "list" { return ValueKind.List }
-	if target == "text" or target == "string" or target == "str" or target == "decimal" { return ValueKind.Text }
+	if target == "text" or target == "string" or target == "decimal" { return ValueKind.Text }
 	if target == "hex" or target == "binary" or target == "octal" or target == "byte" { return ValueKind.Int }
 	if target == "number" and inferred_kind(key_of(n), scope) != ValueKind.Float { return ValueKind.Data }
 	if type_kinds.get(target) == ValueKind.Float { return ValueKind.Float }

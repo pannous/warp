@@ -16,7 +16,7 @@ class Extent {
 	lo: any
 	hi: any
 	closed: bool
-	text(): text := "[" + str(lo) + ", " + str(hi) + (if closed then "]" else ")")
+	text(): text := "[" + text(lo) + ", " + text(hi) + (if closed then "]" else ")")
 }
 
 // [lo, hi)

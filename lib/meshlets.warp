@@ -19,18 +19,18 @@ class MeshLevel { triangles: list; clusters: list; error: float }
 
 meshlet_cells(cells_x, cells_y) := {
 	if not (cells_x is int) or not (cells_y is int) or cells_x < 2 or cells_y < 2 or cells_x % 2 != 0 or cells_y % 2 != 0 {
-		raise "meshlets: a grid needs even cell counts of at least 2, not " + str(cells_x) + " by " + str(cells_y)
+		raise "meshlets: a grid needs even cell counts of at least 2, not " + text(cells_x) + " by " + text(cells_y)
 	}
 }
 
 meshlet_heights(cells_x, cells_y, heights) := {
 	meshlet_cells(cells_x, cells_y)
 	wanted = (cells_x + 1) * (cells_y + 1)
-	if not (heights is list) { raise "meshlets: heights must be a list, not " + str(heights) }
+	if not (heights is list) { raise "meshlets: heights must be a list, not " + text(heights) }
 	if count(heights) != wanted {
-		raise "meshlets: a " + str(cells_x) + " by " + str(cells_y) + " grid needs " + str(wanted) + " heights, not " + str(count(heights))
+		raise "meshlets: a " + text(cells_x) + " by " + text(cells_y) + " grid needs " + text(wanted) + " heights, not " + text(count(heights))
 	}
-	for h in heights { if not (h is number) { raise "meshlets: a height must be a number, not " + str(h) } }
+	for h in heights { if not (h is number) { raise "meshlets: a height must be a number, not " + text(h) } }
 }
 
 grid_height(cells_x, heights, i, j) := heights#(j * (cells_x + 1) + i + 1)
@@ -88,12 +88,12 @@ grid_error(cells_x, cells_y, heights) := {
 }
 
 meshlet_point(name, p) := {
-	if not (p is list) or count(p) != 3 { raise name + " needs 3D points, not " + str(p) }
-	for x in p { if not (x is number) { raise name + " needs numbers, not " + str(x) } }
+	if not (p is list) or count(p) != 3 { raise name + " needs 3D points, not " + text(p) }
+	for x in p { if not (x is number) { raise name + " needs numbers, not " + text(x) } }
 }
 
 meshlet_triangle(name, triangle) := {
-	if not (triangle is list) or count(triangle) != 3 { raise name + " needs a triangle of 3 points, not " + str(triangle) }
+	if not (triangle is list) or count(triangle) != 3 { raise name + " needs a triangle of 3 points, not " + text(triangle) }
 	for p in triangle { meshlet_point(name, p) }
 }
 
@@ -146,7 +146,7 @@ cluster_of(triangles) := {
 
 // Consecutive triangles, 64 to a cluster. Not a spatial partition.
 cluster_triangles(triangles: list): list := {
-	if not (triangles is list) { raise "meshlets: triangles must be a list, not " + str(triangles) }
+	if not (triangles is list) { raise "meshlets: triangles must be a list, not " + text(triangles) }
 	for triangle in triangles { meshlet_triangle("meshlets", triangle) }
 	clusters = []
 	bucket = []
@@ -181,23 +181,23 @@ grid_levels(cells_x: int, cells_y: int, heights: list): list := {
 
 // Perspective pixels: error / distance * cot(half fov) * screen height / 2. Orthographic is not this.
 projected_error(error: number, distance: number, cot_half_fov: number, screen_height: number): float := {
-	if error < 0 { raise "meshlets: error must not be negative, not " + str(error) }
-	if distance <= 0 { raise "meshlets: distance must be positive, not " + str(distance) }
+	if error < 0 { raise "meshlets: error must not be negative, not " + text(error) }
+	if distance <= 0 { raise "meshlets: distance must be positive, not " + text(distance) }
 	if cot_half_fov < 0 or screen_height < 0 {
-		raise "meshlets: cot(half fov) and screen height must not be negative, not " + str(cot_half_fov) + " and " + str(screen_height)
+		raise "meshlets: cot(half fov) and screen height must not be negative, not " + text(cot_half_fov) + " and " + text(screen_height)
 	}
 	error / distance * cot_half_fov * screen_height / 2.0
 }
 
 // The last level whose projected error is within the threshold. Levels are fine first, errors do not fall.
 chosen_level(levels: list, distance: number, cot_half_fov: number, screen_height: number, threshold: number): int := {
-	if not (levels is list) or count(levels) == 0 { raise "meshlets: levels must be a non-empty list, not " + str(levels) }
-	if threshold < 0 { raise "meshlets: threshold must not be negative, not " + str(threshold) }
+	if not (levels is list) or count(levels) == 0 { raise "meshlets: levels must be a non-empty list, not " + text(levels) }
+	if threshold < 0 { raise "meshlets: threshold must not be negative, not " + text(threshold) }
 	previous = 0.0
 	started = no
 	for level in levels {
-		if not (level is MeshLevel) { raise "meshlets: a level must be a MeshLevel, not " + str(level) }
-		if level.error < 0 { raise "meshlets: error must not be negative, not " + str(level.error) }
+		if not (level is MeshLevel) { raise "meshlets: a level must be a MeshLevel, not " + text(level) }
+		if level.error < 0 { raise "meshlets: error must not be negative, not " + text(level.error) }
 		if started and level.error < previous { raise "meshlets: level errors must not decrease" }
 		previous = level.error
 		started = yes
@@ -213,8 +213,8 @@ chosen_level(levels: list, distance: number, cot_half_fov: number, screen_height
 }
 
 meshlet_plane(plane) := {
-	if not (plane is list) or count(plane) != 4 { raise "meshlets: a plane is nx, ny, nz, d, not " + str(plane) }
-	for x in plane { if not (x is number) { raise "meshlets: a plane needs numbers, not " + str(x) } }
+	if not (plane is list) or count(plane) != 4 { raise "meshlets: a plane is nx, ny, nz, d, not " + text(plane) }
+	for x in plane { if not (x is number) { raise "meshlets: a plane needs numbers, not " + text(x) } }
 }
 
 // Inside is n·p + d >= 0. A sphere that only touches the plane stays inside.
@@ -238,16 +238,16 @@ cone_faces_away(cone, sphere, camera) := {
 }
 
 meshlet_clusters(clusters) := {
-	if not (clusters is list) { raise "meshlets: clusters must be a list, not " + str(clusters) }
+	if not (clusters is list) { raise "meshlets: clusters must be a list, not " + text(clusters) }
 }
 
 meshlet_one(cluster) := {
-	if not (cluster is Cluster) { raise "meshlets: a cluster must be a Cluster, not " + str(cluster) }
+	if not (cluster is Cluster) { raise "meshlets: a cluster must be a Cluster, not " + text(cluster) }
 }
 
 visible_clusters(clusters: list, planes: list, camera: list): list := {
 	meshlet_clusters(clusters)
-	if not (planes is list) { raise "meshlets: planes must be a list, not " + str(planes) }
+	if not (planes is list) { raise "meshlets: planes must be a list, not " + text(planes) }
 	meshlet_point("meshlets", camera)
 	kept = []
 	for cluster in clusters {
