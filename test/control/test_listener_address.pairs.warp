@@ -1,0 +1,5 @@
+# a listener knows what it listens to: `remove alarm` alone removes it, short for `remove alarm from listeners of t` (user, card listener-address; wiki/Footguns.md "Removing an anonymous listener")
+'t = 20; alarm = whenever t > 30 { print "hot: " + value }; on change t { print "t = " + value }; t = 35; remove alarm; t = 40; count listeners of t'	1
+'n = 0; h = on alarm { n += 1 }; emit alarm; remove h; emit alarm; n'	1
+'x = 0; n = 0; h = on change x { n += 1 }; x = 1; remove h; x = 2; n'	1
+'t = 0; a = on set t {print 1}; b = on set t {print 2}; remove b; count listeners of t'	1
