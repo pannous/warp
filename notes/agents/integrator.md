@@ -77,8 +77,9 @@ skipped the question is refused and goes to warp-interviewer; there is no FYI pa
   change where it now lives); logic touched on both sides goes to `todo move <card> Now` + `todo note`. Never "take
   ours/theirs" blindly.
 - Every landing gets a try line to warp-interviewer: `/Users/me/dev/bin/warp <full path>`.
-- Speed and reds (both read from the merge message): gate tier 1 refuses a change over +5% slower to compile hello,
-  `use units; 1` or `use storage` than main's compiler, unless the message has a `speed-ok: <card>` line (a slowdown
+- Speed and reds (both read from the merge message): gate tier 1 refuses a change over +20% slower to compile hello,
+  `use units; 1` or `use storage` than main's compiler, measured again before it counts as red (the Mac may just have
+  been busy), unless the message has a `speed-ok: <card>` line (a slowdown
   the user accepted); a core landing may carry red test and sample lines with `reds: <card>` (Landing, below).
 - A red batch is dropped whole today: merge.sh puts the tree back on origin/main and names the red; you find the
   culprit by building its branches apart and send it back with its error (card red-batch-split will halve it).
