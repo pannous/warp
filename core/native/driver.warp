@@ -38,7 +38,8 @@ INSTANCE_BYTES = 16
 VALUE_BYTES = 32
 VECTOR_BYTES = 16
 MAX_RESULTS = 8
-MAX_ARGUMENTS = 256
+# a program's argument list's first room, doubled whenever it fills (`warp test` named 300 files)
+ARGUMENTS_ROOM = 256
 FLOAT_DIGITS = 17
 PATH_BYTES = 4096
 SLASH = 47
@@ -434,9 +435,9 @@ signature_offset(image: text): u32 := {
 	}
 	image.length
 }
-# warp's lib/, whose warp.wasm compiles a .warp file, in one search order: --lib <folder> (a worktree's), $WARP_LIB
-# (what `warp build` writes has no --lib yet), else the first folder holding a lib/ (its prelude.warp) of this
-# executable's folder (a tarball), its lib/ (~/dev/bin/lib, which the install keeps
+# warp's lib/, whose warp.wasm compiles a .warp file, in one search order: --lib <folder> (a worktree's; for an
+# executable `warp build` wrote, its own folder), $WARP_LIB (the scripts), else the first folder holding a lib/ (its
+# prelude.warp) of this executable's folder (a tarball), its lib/ (~/dev/bin/lib, which the install keeps
 # linked to the current build), the folder its links lead to, and <prefix>/share/warp beside that folder's bin/ (brew,
 # deb, pip: bin/warp links to it); none is an error naming them. The folder as found, its links kept, is a stable
 # name for it (an install replaces the build behind the link): what a native build's executables find libraries by
@@ -537,11 +538,18 @@ temporary_folder(): text := {
 
 ## a module's run
 # the WASI arguments of a module: C strings, an array of their pointers
-struct Arguments { pointers: pointer; count: i32 }
-arguments(): Arguments := Arguments(allocate(MAX_ARGUMENTS * 8), 0)
+struct Arguments { pointers: pointer; count: i32; room: i32 }
+arguments(): Arguments := Arguments(allocate(ARGUMENTS_ROOM * 8), 0, ARGUMENTS_ROOM)
 added(list: Arguments, t: text): nothing := {
+	# (+1: an execv list ends in a 0 after its words, line_started)
+	if list.count + 1 >= list.room { list.pointers = pointers_moved(list, list.room * 2); list.room = list.room * 2 }
 	long_at(list.pointers + list.count * 8).value = native_pointer(c_string(t))
 	list.count = list.count + 1
+}
+pointers_moved(list: Arguments, room: i32): pointer := {
+	moved = allocate(room * 8)
+	memcpy(moved, native_pointer(list.pointers), (list.count * 8) as i64)
+	moved
 }
 # the driver's own arguments from `first` on
 given_from(first: int): Arguments := {
@@ -1145,8 +1153,14 @@ compiler_arguments(compiler: text): Arguments := {
 }
 # the module of a file (a compiler) run with the arguments, its machine code kept beside it (compiled_module)
 file_ran(path: text, given: Arguments): nothing := heap_file_ran(path, given, RUN_GC_HEAP_BYTES)
-# the compiler at `path` run to build the compiler (warp rebuild), with the builder's heap and machine code
-builder_ran(path: text, given: Arguments): nothing := heap_file_ran(path, given, BUILDER_GC_HEAP_BYTES)
+# the compiler at `path` run to build the compiler (warp rebuild), with the builder's heap and machine code: a --fast
+# compile, so the compiler's own ints wrap and it links no big int (compiler.warp fast_ints); the later steps, the
+# runtime and the modules programs link, without it
+builder_ran(path: text, given: Arguments): nothing := {
+	option_given("fast", "")
+	heap_file_ran(path, given, BUILDER_GC_HEAP_BYTES)
+	option_dropped("fast")
+}
 heap_file_ran(path: text, given: Arguments, heap_bytes: i64): nothing := {
 	module = read_file(path)
 	if module.length == 0 {
@@ -3104,7 +3118,12 @@ guest_bytes_built(caller: handle, context: handle, bytes: handle, length: i64, b
 }
 
 appended = appended_module()
-if appended.length > 0 { run(appended, given_from(0), "", RUN_GC_HEAP_BYTES) } else {
+if appended.length > 0 {
+	# what `warp build` wrote is its own library: the modules it links at run time (runtime.wasm, modules/unicode.wasm …)
+	# lie beside it, where the build put them
+	option_given("lib", folder_of(resolved_path(executable_path())))
+	run(appended, given_from(0), "", RUN_GC_HEAP_BYTES)
+} else {
 	if arg_count() < 2 {
 		complain("usage: driver <app.warp | app.wasm> [arguments…]")
 		exit(2)

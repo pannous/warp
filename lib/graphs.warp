@@ -4,15 +4,15 @@
 // Order: nodes keep their insertion order (first appearance in the edges), neighbours keep edge insertion order;
 // every result follows that order. Equal priorities in dijkstra/a_star settle in PriorityQueue heap order
 // (deterministic for the same input); a path keeps the predecessor that first reached its best distance.
-// Node identity is its str() plus int-vs-text kind, so 1 and "1" are different nodes. Maps given to graph_of have
+// Node identity is its text() plus int-vs-text kind, so 1 and "1" are different nodes. Maps given to graph_of have
 // text keys (warp map keys), so their nodes are texts.
 use collections
 
 class Graph { directed = false; nodes = []; index = {}; adjacency = []; edge_list = [] }
 
-graph_key(n) := { if n is text { "t:" + n } else { "v:" + str(n) } }
+graph_key(n) := { if n is text { "t:" + n } else { "v:" + text(n) } }
 graph_find(g, n) := { k = graph_key(n); if k in g.index { g.index[k] } else { 0 } }
-graph_id(g, n) := { i = graph_find(g, n); if i == 0 { raise "graphs: no node " + str(n) }; i }
+graph_id(g, n) := { i = graph_find(g, n); if i == 0 { raise "graphs: no node " + text(n) }; i }
 
 graph_new(directed) := { g = Graph(); g.directed = directed; g }
 graph_add_node(g, n) := {
@@ -102,7 +102,7 @@ public shortest_path(g, a, b) := {
 	}
 	[]
 }
-graph_check_weights(g, who) := { for e in g.edge_list { if e#3 < 0 { raise who + ": negative weight " + str(e#3) + " on " + str(e#1) + " -> " + str(e#2) } } }
+graph_check_weights(g, who) := { for e in g.edge_list { if e#3 < 0 { raise who + ": negative weight " + text(e#3) + " on " + text(e#1) + " -> " + text(e#2) } } }
 // the core of dijkstra and a_star: [dist, prev, done] over node numbers; target 0 means all nodes
 graph_search(g, s, t, h: function, who) := {
 	graph_check_weights(g, who)
@@ -168,7 +168,7 @@ public topological_sort(g) := {
 		while pos#i == 0 { walk.add(i); pos#i = count(walk); i = into#i }
 		loop = walk[pos#i - 1:]
 		loop = loop.reverse()
-		names = [str(g.nodes#k) for k in loop] + [str(g.nodes#(loop#1))]
+		names = [text(g.nodes#k) for k in loop] + [text(g.nodes#(loop#1))]
 		raise "topological_sort: cycle " + names.join(" -> ")
 	}
 	order

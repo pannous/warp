@@ -48,7 +48,7 @@ checks_failed(file: text, lines: list): int := {
 	for line in lines {
 		parts = line[#CHECK_PREFIX ..].split(CHECK_ARROW)
 		html = page_html(file, step_lines(parts[0]))
-		shown = spaced(if is_page(html) then webview_page_text(html) else str(html))
+		shown = spaced(if is_page(html) then webview_page_text(html) else text(html))
 		if #parts == 2 and shown.contains(spaced(parts[1])) { print "ok   " + line } else {
 			print "FAIL " + line + ": the page shows " + shown
 			failed += 1
@@ -79,7 +79,7 @@ app_command(arguments: list): int := {
 	if is_page(shown) or shown.trim() == "" then 0 else shows_no_page(file, shown)
 }
 shows_no_page(file: text, shown: any): int := {
-	print "warp app: " + file + " shows no page: " + str(shown).trim()
+	print "warp app: " + file + " shows no page: " + text(shown).trim()
 	1
 }
 

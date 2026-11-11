@@ -327,7 +327,7 @@ const ROW_MARK = " #";
 const ROW_KEY = /^(table .*) #(\d+)$/;
 const rowKey = (file, table, id) => `${tableKey(file, table)}${ROW_MARK}${id}`;
 // field types by column (src/host/database.rs column_of), each holding every value of the ones before it
-const LOSSLESS_ORDER = [["int", "i64", "i32", "bool"], ["float", "f64", "f32", "number"], ["text", "string", "str", "char"]];
+const LOSSLESS_ORDER = [["int", "i64", "i32", "bool"], ["float", "f64", "f32", "number"], ["text", "string", "char"]];
 const REAL = 1;
 // `text?`, an optional field: a column of its type that may hold null
 const plainType = type => type.replace(/\?$/, "");
@@ -498,7 +498,7 @@ addHostPart({
 		// the playground's key), its folder the served root that relative paths start from
 		os: {
 			env(name) { return environmentValue(this.holder.environment, name); }, // the run's (driver.js runEnvironment)
-			args: () => self.programArguments ?? [], // a sample's <name>.args (playground.js programArguments)
+			args: () => self.programArguments ?? [], // a sample's <name>.args (build.sh SAMPLE_ARGUMENTS, by the run's file)
 			cwd: () => ".",
 			stdin: () => "",
 			input: () => null,

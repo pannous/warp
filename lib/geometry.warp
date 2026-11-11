@@ -25,19 +25,19 @@ use math
 GEO_EPSILON = 0.000000001
 
 def geo_check(name: text, u: any) {
-	if not (u is list) or count(u) == 0 { raise name + " needs a vector, a list of numbers, not " + str(u) }
-	for x in u { if not (x is number) { raise name + " needs numbers, not " + str(x) + " in " + str(u) } }
+	if not (u is list) or count(u) == 0 { raise name + " needs a vector, a list of numbers, not " + text(u) }
+	for x in u { if not (x is number) { raise name + " needs numbers, not " + text(x) + " in " + text(u) } }
 }
 
 def geo_pair(name: text, u: any, v: any) {
 	geo_check(name, u)
 	geo_check(name, v)
-	if count(u) != count(v) { raise name + ": mismatched dimensions " + count(u) + " and " + count(v) + " (" + str(u) + ", " + str(v) + ")" }
+	if count(u) != count(v) { raise name + ": mismatched dimensions " + count(u) + " and " + count(v) + " (" + text(u) + ", " + text(v) + ")" }
 }
 
 def geo_dims(name: text, u: any, n: int) {
 	geo_check(name, u)
-	if count(u) != n { raise name + " needs " + n + "D vectors, not " + str(u) }
+	if count(u) != n { raise name + " needs " + n + "D vectors, not " + text(u) }
 }
 
 global vec_add(u: any, v: any): list := {
@@ -94,7 +94,7 @@ global vec_angle(u: any, v: any): float := {
 	geo_pair("vec_angle", u, v)
 	nu = vec_norm(u)
 	nv = vec_norm(v)
-	if nu == 0 or nv == 0 { raise "vec_angle of a zero-length vector (" + str(u) + ", " + str(v) + ") has no angle" }
+	if nu == 0 or nv == 0 { raise "vec_angle of a zero-length vector (" + text(u) + ", " + text(v) + ") has no angle" }
 	c = vec_dot(u, v) / (nu * nv)
 	if c > 1 { c = 1 }
 	if c < -1 { c = -1 }
@@ -124,7 +124,7 @@ global bounding_box(points: list): list := {
 }
 
 def geo_polygon(name: text, polygon: any) {
-	if not (polygon is list) or count(polygon) < 3 { raise name + " needs a polygon of at least 3 points, not " + str(polygon) }
+	if not (polygon is list) or count(polygon) < 3 { raise name + " needs a polygon of at least 3 points, not " + text(polygon) }
 	for p in polygon { geo_dims(name, p, 2) }
 }
 
@@ -144,7 +144,7 @@ global polygon_area(polygon: list): float := abs(polygon_signed_area(polygon))
 
 global polygon_centroid(polygon: list): list := {
 	a = polygon_signed_area(polygon)
-	if abs(a) < GEO_EPSILON { raise "polygon_centroid of a polygon with no area " + str(polygon) }
+	if abs(a) < GEO_EPSILON { raise "polygon_centroid of a polygon with no area " + text(polygon) }
 	n = count(polygon)
 	cx = 0.0
 	cy = 0.0
@@ -253,7 +253,7 @@ global convex_hull(points: list): list := {
 
 def geo_latlon(name: text, p: any) {
 	geo_dims(name, p, 2)
-	if p#1 < -90 or p#1 > 90 { raise name + ": latitude " + str(p#1) + " is not within -90..90" }
+	if p#1 < -90 or p#1 > 90 { raise name + ": latitude " + text(p#1) + " is not within -90..90" }
 }
 
 global haversine_km(a: list, b: list): float := {

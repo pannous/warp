@@ -1,0 +1,7 @@
+# `when` with a condition reads three ways, refused naming if, once and whenever (user, card should-offer; notes/decisions.md "`when` by shape")
+'x = 1; when x > 2 { print "big" }; x = 3'	error	refused: if, once or whenever x > 2
+'x = 1; when x > 2: print "big"; x = 3'	error	the colon form too
+'x = 1; y = yes; when x > 2 and y { print "big" }; x = 3'	error	a logical condition too
+# an event after `when` stays `on`
+'n = 0; when ping { n += 1 }; emit ping; emit ping; n'	2
+'use keys; n = 0; when Key.escape { n += 1 }; emit key{key: "Escape"}; n'	1
