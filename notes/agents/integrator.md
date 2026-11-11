@@ -81,8 +81,9 @@ skipped the question is refused and goes to warp-interviewer; there is no FYI pa
   `use units; 1` or `use storage` than main's compiler, measured again before it counts as red (the Mac may just have
   been busy), unless the message has a `speed-ok: <card>` line (a slowdown
   the user accepted); a core landing may carry red test and sample lines with `reds: <card>` (Landing, below).
-- A red batch is dropped whole today: merge.sh puts the tree back on origin/main and names the red; you find the
-  culprit by building its branches apart and send it back with its error (card red-batch-split will halve it).
+- A red batch is halved: merge.sh tries each half beside the cards already green and halves a red half again, so
+  a red card alone is found in about log2 N extra tier 0 runs (page smoke included); the green cards land, each red
+  one goes back to Now with its error as a card note. Only a batch with no green card is dropped whole.
 
 ## Playground
 - web/playground (pages.yml) is stage 2, hourly on main; a red run is carded and fixed forward, the last good site

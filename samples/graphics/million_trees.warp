@@ -131,12 +131,6 @@ fn ray(spot: vec2f) -> vec3f {
 		out.at = vec4f(side, 0.0, 1.0);
 		return out;
 	}
-	if (part == 1u) {
-		let p = vec3f(s.x + side.x * s.z, 0.0, s.y + side.y * s.z);
-		out.at = project(p);
-		out.world = p;
-		return out;
-	}
 	let seed = hash(vec2f(s.x, s.y));
 	let tall = s.z * TREE_SCALE * (0.9 + 0.2 * fract(seed * 7.0));
 	let slender = SLENDER[kind] * (0.85 + 0.3 * seed);
@@ -252,9 +246,6 @@ fn tree(q: vec2f, kind: u32, seed: f32, light: vec3f) -> Paint {
 		return vec4f(sky(look), 1.0);
 	}
 	let reach = length(here.world - $eye);
-	if (here.mark.x < 1.5) {
-		return vec4f(hazed(meadow(here.world.xz, reach), reach), 1.0);
-	}
 	let sun = normalize(SUN);
 	let light = normalize(vec3f(dot(sun, $right), sun.y, -dot(sun, $forward)));
 	let q = vec2f((here.spot.x - 0.5) * 2.0 * here.tree.y, here.spot.y);

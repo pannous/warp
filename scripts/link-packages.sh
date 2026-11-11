@@ -4,10 +4,11 @@
 # The registry github.com/pannous/warp-packages is cloned once to ~/.cache/warp/packages/.registry and pulled when
 # older than an hour. A packages/<name> that is a real folder stays; a link is pointed at the registry's folder.
 # A proxy (its package.warp names a `repository` and a `version`) has that tag cloned once into
-# ~/.cache/warp/packages/<name>@<version> (a tag never changes); one whose `library: "dir/name"` has a native twin
-# lib/native/<name>.c (uniscript's uniscript_c, card uniscript-ownership) gets that C library built of the clone, the
-# crate in dir/ by cargo and the twin over it, into <clone>/native, and linked beside warp (where the native warp's
-# dlopen looks first, as for libwgpu_native): `use uniscript` (lib/uniscript.warp) then calls it.
+# ~/.cache/warp/packages/<name>@<version> (a tag never changes); one whose `library: "dir/name"` gets that C library
+# built of the clone: the crate in dir/ by cargo, its library named lib<name> (uniscript's libuniscript_ffi as
+# libuniscript_c, the name its WebAssembly twin dir/name.wasm has in the browser), into <clone>/native, and linked
+# beside warp (where the native warp's dlopen looks first, as for libwgpu_native): `use uniscript` (lib/uniscript.warp)
+# then calls it.
 # usage: scripts/link-packages.sh [<tree>]   (default: this checkout)
 set -u
 registry_url=https://github.com/pannous/warp-packages.git
@@ -32,7 +33,7 @@ echo "link-packages: $tree/packages linked to $registry"
 
 # the folder of the warp binary on PATH, where the native warp looks for a library first
 warp_folder() { local warp; warp=$(command -v warp) && dirname "$(readlink -f "$warp")"; }
-case $(uname) in Darwin) extension=dylib origin=@loader_path ;; *) extension=so origin='$ORIGIN' ;; esac
+case $(uname) in Darwin) extension=dylib ;; *) extension=so ;; esac
 
 # native_library <clone> <crate folder> <library name>: lib<name> built of the clone into <clone>/native, once
 native_library() {
@@ -43,9 +44,7 @@ native_library() {
   mkdir -p "$out"
   built=$(ls "$clone"/target/release/lib*."$extension" | head -1)
   [[ -n $built ]] || return 1
-  cp "$built" "$out/"
-  cc -shared -fPIC -O2 -I"$clone/c" -I"$clone/$crate" "$tree/lib/native/$name.c" -L"$out" -l"$(basename "${built%.*}" | sed 's/^lib//')" \
-    -Wl,-rpath,"$origin" -o "$out/lib$name.$extension"
+  cp "$built" "$out/lib$name.$extension"
 }
 
 for manifest in "$tree"/packages/*/package.warp; do
@@ -54,7 +53,7 @@ for manifest in "$tree"/packages/*/package.warp; do
   version=$(manifest_field "$manifest" version)
   clone=$(package_clone "$manifest") || continue
   library=$(manifest_field "$manifest" library)
-  [[ -n $library && -f $tree/lib/native/$(basename "$library").c ]] || continue
+  [[ -n $library ]] || continue
   library_name=$(basename "$library")
   native_library "$clone" "$(dirname "$library")" "$library_name" || { echo "link-packages: lib$library_name of $name did not build" >&2; continue; }
   beside=$(warp_folder) || continue
