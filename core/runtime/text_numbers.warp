@@ -8,7 +8,10 @@ use "instructions.warp"
 use "library_words.warp"
 use "text.warp"
 use "text_words.warp"
+use "arithmetic.warp"
+use "builders.warp"
 use "../emitter/byte_codes.warp"
+PAST_64_BITS = "a text spells an int only up to 64 bits, -9223372036854775808 to 9223372036854775807"
 # 1 for a leading - or + of t, else 0: the byte offset of what follows the sign
 sign_length(t: text): int := if byte_count(t) > 0 and (byte_at(t, 0) == Ascii.Minus or byte_at(t, 0) == Ascii.Plus) then 1 else 0
 # t starts with -
@@ -29,9 +32,16 @@ text_as_int(written: text): int := {
 	count = digit_run(t, start)
 	if count > 0 and start + count < byte_count(t) and byte_at(t, start + count) == Ascii.Point { a_fraction_is_no_int() }
 	if count == 0 or start + count != byte_count(t) { invalid_number() }
+	# toward its sign, so -9223372036854775808 is one; past 64 bits a loud error, never a wrapped value (user, card
+	# int-text-overflow)
+	sign = if is_negative_text(t) then -1 else 1
 	value = 0
-	for i in start..byte_count(t) { value = value * 10 + digit_of(byte_at(t, i)) }
-	if is_negative_text(t) then -value else value
+	for i in start..byte_count(t) {
+		digit = sign * digit_of(byte_at(t, i))
+		if product_overflows(value, 10) or sum_overflows(value * 10, digit) { raised(failure_of(PAST_64_BITS)) }
+		value = value * 10 + digit
+	}
+	value
 }
 # `t as float`: a sign, digits with an optional point among them, an optional exponent (e or E, a sign, digits): the
 # nearest float, correctly rounded also beyond 10^±22
