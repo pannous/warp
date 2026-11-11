@@ -22,6 +22,9 @@ EXPORTED_GLOBAL = 3
 I32_CONST = 65
 I64_CONST = 66
 LIMITS_WITH_MAXIMUM = 1
+# the value types a heap type follows: (ref null t) 0x63, (ref t) 0x64
+NULLABLE_REFERENCE = 99
+REFERENCE = 100
 
 # the module name of the core wasm module a `use`, `import`, `require` or `include` statement names, as written or with
 # .wasm: its path in the program's folder, a `•/` path as written, which the native warp roots at the project root
@@ -87,6 +90,12 @@ wasm_words(bytes: list): list := {
 }
 # the name a definition line defines
 wasm_word_name(line: text): text := line.split("(")#1.trim()
+# the names a module exports
+wasm_export_names(bytes: list): list := wasm_vector(bytes, section_ids.export, reader => {
+	name = read_name(reader)
+	next_number(reader)
+	name
+})
 wasm_exports(path: text, folder: text): WasmExports := {
 	bytes = bytes_if_there(wasm_file(path, folder))
 	types = wasm_types(bytes)
@@ -206,26 +215,28 @@ wasm_value_types(reader: ByteReader): list := {
 	types
 }
 # the module's own imports, which come first in the index spaces: the types of its imported functions, an unknown
-# value for each imported global
+# value for each imported global; and each import's [module, name]
 class WasmImported {
 	functions: list = []
 	globals: list = []
+	names: list = []
 }
 wasm_imported(bytes: list): WasmImported := {
 	imported = WasmImported()
 	wasm_vector(bytes, section_ids.import, reader => {
-		read_name(reader)
-		read_name(reader)
+		imported.names += [[read_name(reader), read_name(reader)]]
 		kind = reader.bytes[reader.offset]
 		reader.offset += 1
 		if kind == IMPORTED_FUNCTION { imported.functions += [read_number(reader)] }
 		if kind == IMPORTED_TABLE {
-			reader.offset += 1
+			skip_value_type(reader)
 			skip_limits(reader)
 		}
 		if kind == IMPORTED_MEMORY { skip_limits(reader) }
 		if kind == IMPORTED_GLOBAL {
-			reader.offset += 2
+			skip_value_type(reader)
+			# (its mutability)
+			reader.offset += 1
 			imported.globals += [ø]
 		}
 		if kind == IMPORTED_TAG {
@@ -235,6 +246,12 @@ wasm_imported(bytes: list): WasmImported := {
 		kind
 	})
 	imported
+}
+# a value type: one byte, a reference type's heap type after it (a GC module's `(ref null 1)`)
+skip_value_type(reader: ByteReader) := {
+	written = reader.bytes[reader.offset]
+	reader.offset += 1
+	if written == NULLABLE_REFERENCE or written == REFERENCE { read_number(reader) }
 }
 skip_limits(reader: ByteReader) := {
 	flags = read_number(reader)

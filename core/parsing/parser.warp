@@ -552,7 +552,7 @@ def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 			break
 		}
 		if p.at >= p.n {
-			if enclosed { raise "`" + closer + "` is missing: the group opened at " + line_and_column(p.code, opener) + " runs to the end of the input" }
+			if enclosed { raise missing(closer, "group", p.code, opener) }
 			break
 		}
 		c = p.code[p.at]
@@ -733,19 +733,6 @@ def ends_with_clause_word(node: Node): bool := match node {
 	Symbol(word): keyword_form(word) == "clause"
 	List(parts, Bracket.None, separator): parts.length > 0 and ends_with_clause_word(parts#(parts.length))
 	_: false
-}
-
-// `line:column` of the character at `at`, both from 1
-def line_and_column(code: text, at: int): text {
-	line = 1
-	start = 0
-	for i in 0 ..< at {
-		if code[i] == '\n' {
-			line += 1
-			start = i + 1
-		}
-	}
-	"$(line):$(at - start + 1)"
 }
 
 // The indent of the parser's position on its line: its tabs, its spaces too inside a block indented by spaces
@@ -3518,7 +3505,7 @@ def blank_end(p: Parser, from: int): int {
 		at = spaces_end(p, at)
 		following = char_at(p, at + 1)
 		if char_at(p, at) != '/' or not (following == '*' or following == '#') { return at }
-		at = block_comment_end(p.code, at, following, p.n)
+		at = block_comment_end(p.code, at, following, p.n, yes)
 	}
 }
 
@@ -3710,7 +3697,7 @@ def quoted(p: Parser): Node := {
 	opening = code_points("$(p.code[p.at])")
 	quote = opening#1
 	marks = opening[1 .. opening.length].join("")
-	end = text_end(p.code, p.at + 1, closing_of(quote), p.n)
+	end = text_end(p.code, p.at + 1, closing_of(quote), p.n, yes)
 	written = marks + p.code[p.at + 1 .. end - 1]
 	p.at = end
 	holed = if quote == '"' then template(written) else ø

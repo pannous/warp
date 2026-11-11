@@ -23,6 +23,16 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 ---
 
 ## Inbox
+- 2026-11-11 build-ships-only: `warp build app.warp` leaves the executable, runtime.wasm and modules/ only; `--wasm` writes app.wasm, app.full.wasm, app.mod.wasm (replaces build-three-outputs).
+- 2026-11-11 no-str: `str` is gone as function and type word (lib/python keeps it); warp writes text.
+- 2026-11-11 hex-subtype: hex(n) / `n as hex` / `hex n` give a hex subtype of int shown as 0x7b (lowercase, no quotes); subtypes of number types equal their plain number by value (not Quantity, Angle); colours: argb_hex / rgba_hex.
+- 2026-11-11 canvas-value: canvas is a Canvas value (width, height, clear(), resize(w, h)); clear(canvas).
+- 2026-11-11 quiet-implicit-uses: runs don't hint implicit standard uses; warp lint/beautify write the use.
+- 2026-11-11 foreign-use: `use python json` canonical (source first, like use js / use cargo); `use json from python` an alias; one table of foreign runtimes.
+- 2026-11-11 console-shell: the console runs a line through sh only when warp's refusal is an unknown name, marked dim (sh).
+- 2026-11-11 complex-shows-imaginary: complex numbers show as 3+4ⅈ.
+- 2026-11-11 unit-beside-variable: after a number a unit expression stays units even when a variable has the unit's name (hint); `440Hz` shows as 440Hz.
+- 2026-11-11 parked: code spacing in printed code (refusal-spelling), painted typed-function core fix, rgb type shorthand.
 - 2026-11-11 executables-beside-modules: `warp build` ships the compiled modules beside the executable; it finds its own folder through the OS (its executable path) and loads them at run time; no merge, no env var.
 - 2026-11-11 markup-needs-html kept: a bare element (`div{…}`) outside html{} is data and gets a loud warning naming the fix (`x: html = …`).
 - 2026-11-11 public-samples-no-todo: the playground and site hide TODO/DONE comment lines of samples; the sources keep them.
@@ -30,7 +40,7 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 - 2026-11-11 menu-follows-example: the playground menu always shows the loaded example, never falls back to hello.
 - 2026-11-11 mutating-needs-bang (parked): `!` on a function that changes what it is given is only a hint for readers where it is not clear; the compiler does not enforce it (almost any function modifies something).
 - 2026-11-11 self-contained-executables: `warp build` makes an executable that carries the runtime and prelude it needs and reads no lib/.
-- 2026-11-11 whole-arrow: `↑` takes whole exponents only (refusal names `^`); the compiler itself carries no big numbers (extension-row-optional). fast-mode: a `--fast` compile argument drops overflow checks (ints wrap at 64 bits) for programs that want speed over checks; the compiler is built with it.
+- 2026-11-11 whole-arrow: `↑` takes whole exponents only (refusal names `^`); the compiler itself carries no big numbers (extension-row-optional). fast-mode: a `--fast` compile argument drops overflow checks (ints wrap at 64 bits) for programs that want speed over checks; the compiler is built with it. Scope: the program's code and every runtime word of the run (prelude and module runtime words share the switch; modules' own inline typed `a + b` stays checked, being compiled without --fast); a value already big keeps its exact arithmetic, only the promotion on overflow is dropped.
 - 2026-11-11 page-runs-live: an animating page run lives until the next Run or Stop, as natively.
 - 2026-11-11 sync-fetch: `fetch` waits everywhere, the page included; `go fetch` is the asynchronous form.
 - 2026-11-11 text-kind-fast-path: text comparison and indexing pick their path from the text's kind (text-representations), never by rescanning.
