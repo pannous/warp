@@ -208,6 +208,18 @@ the fix "declare it shared" (it knows a block's reads and writes, function_reads
 channels as copies (share by communicating). An `atomic {…}` block over several shared variables comes only when a
 program needs it. In the page a parallel handler is a Web Worker, its shared variables in a SharedArrayBuffer.
 
+### Events are objects; functions are events (user 2026-11-09)
+Every function can be observed by the decided hooks `before foo {…}` and `after foo {…}` (synchronous, only observed
+functions pay; a listener runs on each call, recursive ones included).
+- `on foo {…}` for a function is refused with a fix-it naming the readings: "foo is a function: say when, `before
+  foo {…}`, `after foo {…}` or `once foo {…}`" (refuse, never guess).
+- Without a block, `after foo` (and `before foo`, a named event, a timer's handle) is the event itself: an object of
+  the class Event in lib/events.warp (its name, its kind, its listeners), held by reference, so whatever is done to
+  it is done to the event: `after foo += { print "ok" }` adds a listener, `-= h` removes one, C# style. How it shows
+  is an ordinary overload the program may give: `format(e: Event) := e.name + " " + e.listeners`; `print(after foo)`
+  uses it. `listeners of e` is then simply `e.listeners`.
+- Never a copy: an event value that silently dropped a `+=` would be the quiet footgun the rules forbid.
+
 ### Event streams of a complex system, and where warp stands
 | stream | events | state |
 |---|---|---|
@@ -386,13 +398,20 @@ least 50 ms of slack and never bound a count from above by a few milliseconds.
 23. **process-events** (lib, careful; after os-signals). A child process ending, power, online, locale and time zone
     as sources (`on child exit`, `on online change` …). Test per source.
 
+24. **function-events** (ext + lib, careful; after one-on). The class Event (name, kind, listeners) behind every
+    event, `before foo` / `after foo` / a named event without a block giving it by reference, `+=` and `-=` adding and
+    removing listeners, `on foo {…}` of a function refused with the fix-it. Tests: `'n = 0; f() := 1; after f +=
+    { n += 1 }; f(); f(); n'	2`; `'f() := 1; after f { 2 }; count((after f).listeners)'	1`; `'f() := 1; on f { 2 }'`
+    refused naming before, after and once.
+
 ### Roadmap: the order agents take the cards
 A card starts once the cards it names are done; cards on one line may run in parallel (different files).
 1. listener-value, events-loop, cancel-handles (cancel-handles builds on events-loop's handles: start it right after).
 2. one-on, then key-press-on and samples-direct-events; tasks-on-loop beside them.
 3. frames-in-loop, routes-in-loop, file-watch, stdin-lines (all need events-loop's wait).
 4. page-turns, then page-jspi-waits.
-5. key-events, pointer-events, window-events, text-input (vocabulary, after one-on and frames-in-loop).
+5. key-events, pointer-events, window-events, text-input (vocabulary, after one-on and frames-in-loop);
+   function-events (after one-on).
 6. Core, each after the user's OK through the Supervisor: os-signals, then process-events; deferred-callbacks;
    driver-timers-gone (after events-loop and page-turns); loop-start (core OK given); threaded-handlers; busy-loop-events
    (optional); gui-wake last.
