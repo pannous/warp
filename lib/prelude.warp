@@ -201,8 +201,9 @@ rewrite ($xs: [bf16] = $v) => ($xs = $packed) where $packed = gpu_packed_as(bf16
 // the arithmetic mean, also spelled average
 mean(xs) := if count(xs) == 0 then raise "mean of an empty list" else sum(xs) / count(xs)
 // x↑n, Knuth's up arrow, is the power and x↓b the log of x to base b (card easy-add): operators of numbers only, so
-// another type declares its own `infix operator ↑(v: V, n: int) := …`. A whole n multiplies, exact; any other is libm's
-infix operator ↑(x: number, n: number) := if n is int then repeated_product(x, n) else pow(x, n)
+// another type declares its own `infix operator ↑(v: V, n: int) := …`. Knuth's arrow takes a whole n, multiplied out
+// exactly; x^y is the power of any y
+infix operator ↑(x: number, n: int) := repeated_product(x, n)
 infix operator ↓(x: number, b: number) := log(x, b)
 // the logarithm of x to the base: log(100, 10) is 2
 log(x: number, base: number): float := log(x) / log(base)
