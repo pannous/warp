@@ -24,9 +24,6 @@ rewrite once $c: $body => $listens where $listens = once_listens($c, $body)
 // a watched name's listeners are the listeners of the event of that name (lib/prelude.warp listen), so a listener is
 // numbered as an event's: `h = on set x {…}`, `listeners of x`, `remove h from listeners of x`, `remove h`; the
 // listener of the last name it listens to
-// `remove alarm`: the listener removed from the event it listens to, `remove alarm from listeners of t` (card
-// listener-address); a call of remove with more values, `m.remove(k)`, stays the built-in method's
-remove(listener: Listener) := unlisten(listener.event, listener)
 variable_listen(names: list, changes_only: bool, listener: function): Listener? := {
 	last = ø
 	for name in names { last = listen(if name is Signal then name.name else name, written => if not changes_only or written#1 != written#2 { listener(written#1, written#2) }, no) }

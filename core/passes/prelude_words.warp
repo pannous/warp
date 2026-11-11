@@ -395,8 +395,9 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	# front replaces the prelude's word as it is. A library module being built exports its words under their written
 	# names, which a program linking it calls (units' sleep beside the prelude's, card program-file): the prelude's word
 	# is the one set aside, as kept() sets it; beside a module it uses its word stays its own (storage's column_value
-	# beside sqlite3's). So is a built-in method's name: a program's remove(x) leaves `m.remove(k)` the map's
-	if in_front or not building_a_module() { program = with_own_words(program, module_names + in_place_methods + (if in_front then [] else runtime_words_of_math)) }
+	# beside sqlite3's). A built-in method's name is a library word too, also in a module being built: a remove(x) of
+	# its own leaves `m.remove(k)` the map's
+	program = with_own_words(program, in_place_methods + (if in_front or not building_a_module() then module_names + (if in_front then [] else runtime_words_of_math) else []))
 	own_names = statements_in(program).map(declared_name)
 	own = with_c_heads(own_heads(program))
 	# (a linked module's aliases from its signature, its text being none)
@@ -769,7 +770,7 @@ c_head(declaration: list): Node := List([symbol(declaration#1)] + (0 ..< #declar
 # takes; a call none takes keeps the library's word
 with_own_words(program: Node, library: list): Node := {
 	heads = own_heads(program)
-	owned = heads.keys.filter(name => is_group(heads[name]) and name in library and not brought_names.has(name) and not name.starts_with(OPERATOR_FUNCTION_PREFIX) and not is_typed_overload(name, heads[name]))
+	owned = heads.keys.filter(name => is_group(heads[name]) and name in library and not brought_names.has(name) and not name.starts_with(OPERATOR_FUNCTION_PREFIX) and (name in in_place_methods or not is_typed_overload(name, heads[name])))
 	for name in owned {
 		mine = own_word(name)
 		arities = heads_defining(program, name).map(head => signature_of(items_of(head)))
