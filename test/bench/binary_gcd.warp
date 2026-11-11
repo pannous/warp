@@ -1,0 +1,74 @@
+# Euclid against Stein's binary gcd (notes/binary_gcd.md). Not part of `warp test`:
+# clock() around the calls only, three passes, median is the stable reading.
+# small: eight pairs under 1000. random: 32 values below 2^63. powers: eight power-of-two-heavy
+# pairs that still fit a signed machine word. wide: eight pairs past 2^63, where binary gcd
+# halves by division because a shift is not the bits.
+use integers
+
+small_a = [12, 18, 48, 180, 7, 100, 999, 35]
+small_b = [18, 30, 18, 48, 13, 64, 27, 21]
+pow_a = [2^10, 2^20, 2^30, 2^40, 2^50, 2^60, 3 * 2^20, 9 * 2^15]
+pow_b = [2^4, 2^20, 6, 2^10, 2^49, 2^8, 2^20, 2^7]
+wide_a = [2^70, 2^100, 2^70 + 6, 3 * 2^80, 2^90, 2^65 * 15, 2^120, 2^200]
+wide_b = [6, 2^40, 2^65, 2^40, 9 * 2^30, 2^65, 2^60 + 4, 3 * 2^80]
+limit = 2^63
+state = 4101842887655102017
+next_word() := {
+	global state
+	state = state xor (state >> 12)
+	state = state xor (state << 25)
+	state = state xor (state >> 27)
+	if state < 0 { state = 0 - state }
+	if state == 0 { state = 1 }
+	state % limit
+}
+rand_a = []
+rand_b = []
+k = 0
+while k < 32 {
+	rand_a = rand_a + [next_word()]
+	rand_b = rand_b + [next_word()]
+	k = k + 1
+}
+sink = 0
+
+# which 0 is Euclid, 1 is binary. kind selects the eight or 32 pairs.
+measure(kind, which, rounds) := {
+	start = clock()
+	i = 0
+	s = 0
+	n = if kind == 1 then 32 else 8
+	while i < rounds {
+		j = 1
+		while j <= n {
+			a = if kind == 0 then small_a#j else if kind == 1 then rand_a#j else if kind == 2 then pow_a#j else wide_a#j
+			b = if kind == 0 then small_b#j else if kind == 1 then rand_b#j else if kind == 2 then pow_b#j else wide_b#j
+			s = s + (if which == 0 then gcd_euclid(a, b) else gcd_binary(a, b))
+			j = j + 1
+		}
+		i = i + 1
+	}
+	global sink
+	sink = sink + s
+	clock() - start
+}
+median_of(p, q, r) := {
+	if p > q { held = p; p = q; q = held }
+	if q > r { held = q; q = r; r = held }
+	if p > q { held = p; p = q; q = held }
+	q
+}
+report(name, kind, rounds) := {
+	e1 = measure(kind, 0, rounds)
+	e2 = measure(kind, 0, rounds)
+	e3 = measure(kind, 0, rounds)
+	b1 = measure(kind, 1, rounds)
+	b2 = measure(kind, 1, rounds)
+	b3 = measure(kind, 1, rounds)
+	print(name + " rounds " + str(rounds) + " euclid " + str(median_of(e1, e2, e3)) + " ms binary " + str(median_of(b1, b2, b3)) + " ms (" + str(e1) + " " + str(e2) + " " + str(e3) + " vs " + str(b1) + " " + str(b2) + " " + str(b3) + ")")
+}
+report("small", 0, 20000)
+report("random", 1, 400)
+report("powers", 2, 15000)
+report("wide", 3, 200)
+print("sink " + str(sink))
