@@ -1,0 +1,51 @@
+# samples/gpu/aquarium.warp swims the Fish Kit madai (lib/fish_mesh.warp, notes/aquarium.md, notes/fish.md).
+# The school is several sizes of one posed mesh. A ray through a moved, turned, scaled copy
+# hits at the single mesh's distance times the scale, and takes that triangle's colour.
+
+# eight fish, no two the same size, the largest more than twice the smallest
+is! 'use "../../samples/gpu/aquarium.warp"
+same = no
+for i in 0..fish_count {
+	for j in 0..i {
+		if fish_scale(i) == fish_scale(j) { same = yes }
+	}
+}
+fish_count >= 5 and fish_count <= 12 and same == no and fish_scale(fish_count - 1) > fish_scale(0) * 2' yes
+
+# one triangle, then the same triangle scaled, moved and turned. The second fish is the one on the ray;
+# the first sits behind it. The phase slot reads the second copy of the triangle.
+is! 'use "../../samples/gpu/aquarium.warp"
+use math
+tri = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
+fish_show(tri + tri, [[0.8, 0.2, 0.1]], [[100.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 0.0], [3.0, 1.0, 0.0, 2.0], [0.0, 0.0, 1.0, 1.0]], 3.0)
+single = triangle_hit([0.25, 0.25, 2.0], [0.0, 0.0, -1.0], tri#1, tri#2, tri#3)
+hit = fish_nearest([-1.0, 1.5, 0.5], [1.0, 0.0, 0.0])
+tint = fish_tint(hit)
+single ~ 2 and hit#2 == 1 and abs(hit#1 - single * 2) < 0.001 and abs(tint#1 - 0.8) < 0.001 and abs(tint#2 - 0.2) < 0.001 and abs(tint#3 - 0.1) < 0.001' yes
+
+# the baked bream: the ray through one posed fish, and through a larger copy of that same pose, agree
+is! 'use "../../samples/gpu/aquarium.warp"
+use math
+mesh = fish_mesh(read("../../samples/gpu/madai.fish"))
+posed = fish_pose(mesh, 0.4)
+fish_show(posed.corners, posed.colors, [[0.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 0.0]], fish_radius(posed.corners))
+# triangle 7, just outside its centre: the nearer faces are slivers, and this one is the first the ray meets
+at = 7 * 3
+a = fish_corners#(at + 1)
+b = fish_corners#(at + 2)
+c = fish_corners#(at + 3)
+n = cross(b .- a, c .- a)
+n = n ./ norm(n)
+origin = (a .+ b .+ c) ./ 3 .+ n .* 0.25
+direction = [0.0, 0.0, 0.0] .- n
+straight = fish_nearest(origin, direction)
+scale = 2.5
+place = [4.0, -1.0, 2.0]
+heading = [0.0, 0.0, 1.0]
+right = heading_right(heading)
+up = fish_up(heading)
+world = place .+ (heading .* origin#1 .+ up .* origin#2 .+ right .* origin#3) .* scale
+dir = heading .* direction#1 .+ up .* direction#2 .+ right .* direction#3
+fish_show(posed.corners, posed.colors, [[place#1, place#2, place#3, scale], [heading#1, heading#2, heading#3, 0.0]], fish_radius(posed.corners))
+turned = fish_nearest(world, dir)
+straight#2 == 0 and turned#2 == 0 and straight#3 == turned#3 and abs(turned#1 - straight#1 * scale) < 0.001 and norm(fish_tint(turned) .- fish_tint(straight)) < 0.001' yes
