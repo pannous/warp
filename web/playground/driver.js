@@ -138,7 +138,7 @@ function codeParsedFrom(program, code) {
 	if (status !== 0 || !encoding) return newGuestError(program, said.trim() || `parse-code wrote nothing (status ${status})`);
 	return codeBuilt(program, typeof encoding === "string" ? utf8.encode(encoding) : encoding, { at: 0 });
 }
-// module_word(module, word, arguments) (card module-rule-words, driver.warp module_word_answered): the compiler's call
+// warp.module_word(module, word, arguments) (card module-rule-words, driver.warp module_word_answered): the compiler's call
 // of a rule word the lib module defines. The module is linked at its first call; the arguments, a list the compiler's
 // node_encoding encodes, are built there, its export `word` is called on them, and its result, encoded by the module's
 // node_encoding, is built again in the compiler
@@ -232,14 +232,19 @@ function timerFired(holder, id) {
 	}
 }
 
+// the compiler's std_io: warp.module_word runs a lib module's rule word (moduleWord), warp.option answers the run's
+// options; any other is not the compiler's in a page
+function compilerStdIo(compiler, imports, linked, module, member, argumentList) {
+	if (guestText(compiler, module) !== "warp") return newGuestError(compiler, `the host word ${guestText(compiler, module)}.${guestText(compiler, member)} is not in the browser yet`);
+	if (guestText(compiler, member) === "module_word") return moduleWord(compiler, imports, linked, ...guestItems(compiler, argumentList));
+	return stdCall(compiler, module, member, argumentList, { warnings: [], options: compilerOptions() });
+}
 // the host words warp.wasm calls itself (driver.warp answered_word): no window, no system values, paths as given
 function compilerHostWords(exports, imports, linked) {
 	return {
 		host: {
-			// a rule word a lib module defines, run in that module's instance, linked once per compile (moduleWord)
-			module_word: (module, word, argumentList) => moduleWord(exports(), imports(), linked, module, word, argumentList),
-			// the run's options (warp.option); any other is not the compiler's in a page
-			std_io: (module, member, argumentList) => guestText(exports(), module) === "warp" ? stdCall(exports(), module, member, argumentList, { warnings: [], options: compilerOptions() }) : newGuestError(exports(), `the host word ${guestText(exports(), module)}.${guestText(exports(), member)} is not in the browser yet`),
+			// the run's options (warp.option) and warp.module_word; any other is not the compiler's in a page
+			std_io: (module, member, argumentList) => compilerStdIo(exports(), imports(), linked, module, member, argumentList),
 			// the library index's source hashes, sha256 (core/passes/library.warp source_hash), by the page's adapters
 			std_pure: (module, member, argumentList) => stdCall(exports(), module, member, argumentList, { warnings: [] }),
 			paint: () => { throw new Error("the compiler paints nothing"); },

@@ -73,7 +73,6 @@ CHANNEL_PENDING_WORD = 19
 CHANNEL_NEXT_WORD = 20
 CHANNEL_SEND_WORD = 21
 SAVE_PICTURE_WORD = 22
-MODULE_WORD = 23
 # the end of a field in warp.wasm's parse-code encoding (extensions/parse_words.warp FIELD_END)
 FIELD_END = 1
 # the system values a program sets (set_system_value), kept by foreign.c by slot; before that, the size a window opens
@@ -712,7 +711,6 @@ answered_word(name: text): i64 := {
 	if same_text(name, "set_system_value") { return SET_SYSTEM_VALUE_WORD }
 	if same_text(name, "parse_code") { return PARSE_CODE_WORD }
 	if same_text(name, "eval_code") { return EVAL_CODE_WORD }
-	if same_text(name, "module_word") { return MODULE_WORD }
 	if same_text(name, "real_path") { return REAL_PATH_WORD }
 	if same_text(name, "std_pure") { return STD_PURE_WORD }
 	if same_text(name, "paint") { return PAINT_WORD }
@@ -1311,7 +1309,6 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if word == SYSTEM_VALUE_WORD { return int_result(system_value(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64)), results) }
 	if word == PARSE_CODE_WORD { return code_parsed(caller, context, given, results) }
 	if word == EVAL_CODE_WORD { return code_evaluated(caller, context, given, results) }
-	if word == MODULE_WORD { return module_word_answered(caller, context, given, results) }
 	if word == CANONICAL_TEXT_WORD { return canonical_text_answered(context, given, results) }
 	if word == CHANNEL_LISTEN_WORD { return channel_listened(caller, context, given) }
 	if word == CHANNEL_PENDING_WORD { return int_result(frames_in(unread_of(listener_entry(number))), results) }
@@ -1328,6 +1325,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if same_text(module, "os") and same_text(member, "run") { return os_run(caller, context, listed, results) }
 	if same_text(module, "net") and same_text(member, "get") { return url_got(caller, context, shown(caller, context, item_of(caller, context, listed, 1)), results) }
 	if same_text(module, "warp") and same_text(member, "option") { return option_answered(caller, context, listed, results) }
+	if same_text(module, "warp") and same_text(member, "module_word") { return module_word_answered(caller, context, listed, results) }
 	if same_text(module, "regex") { return regex_answered(caller, context, member, listed, results) }
 	if same_text(module, "hash") { return hash_answered(caller, context, member, listed, results) }
 	# a live loop's cycle starts: only the playground hands loops over between runs; a fade or stop save sound applies
@@ -1783,15 +1781,15 @@ code_parsed_from(caller: handle, context: handle, code: text, result: pointer): 
 	long_at(at).value = 0
 	code_built(caller, context, encoding, at, result)
 }
-# module_word(module, word, arguments) (card module-rule-words): the compiler's call of a rule word the lib module
-# defines. The module is linked into the run at its first call; the arguments, a list the caller's node_encoding
+# warp.module_word(module, word, arguments) (card module-rule-words): the compiler's call of a rule word the lib module
+# defines, its three values the items of `listed`. The module is linked into the run at its first call; the arguments, a list the caller's node_encoding
 # encodes (runtime/builders.warp), are built there, its export `word` is called on them, and its result, encoded by
 # the module's node_encoding, is built again in the caller
-module_word_answered(caller: handle, context: handle, given: pointer, result: pointer): nothing := {
-	module = joined("warp/", shown(caller, context, given))
-	word = shown(caller, context, given + VALUE_BYTES)
+module_word_answered(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
+	module = joined("warp/", shown(caller, context, item_of(caller, context, listed, 1)))
+	word = shown(caller, context, item_of(caller, context, listed, 2))
 	encoded = allocate(VALUE_BYTES)
-	guest_call(caller, context, "node_encoding", given + 2 * VALUE_BYTES, 1, encoded)
+	guest_call(caller, context, "node_encoding", item_of(caller, context, listed, 3), 1, encoded)
 	encoding = shown(caller, context, encoded)
 	run_linked(context, module, library_folder())
 	guest = kept_value(RUN_SLOT) as i32 + GUEST_AT as i32

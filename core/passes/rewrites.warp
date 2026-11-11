@@ -1111,8 +1111,9 @@ is_rule_word_call(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n 
 # is a rule word of the module's, run in the module's own wasm (module_word, card module-rule-words)
 global rule_module = ""
 is_module_rule_word(word: text): bool := rule_module != "" and not rule_words.has(word) and module_defines(rule_module, word)
-# the rule word run in the module's wasm by the host (core/native/driver.warp module_word_answered), its result built here
-module_word(module: node, word: node, arguments: node): node from host
+# the rule word run in the module's wasm by the host's warp.module_word (core/native/driver.warp module_word_answered),
+# its result built here
+module_word(module: text, word: text, arguments: Node): Node := std_io("warp", "module_word", [module, word, arguments])
 # a word of extensions/rules/rule_words.warp: one this compiler has, or, when a rule names a word it lacks (an older seed building a
 # newer compiler, card rule-whose), one the library's file defines, read only then
 is_rule_word(word: text): bool := rule_words.has(word) or library_rule_word_names().has(word)
