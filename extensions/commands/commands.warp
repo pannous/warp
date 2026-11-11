@@ -161,11 +161,20 @@ staying_lines(line: text): text := {
 repl_step(state_file: text, line: text, wasm_file: text) := {
 	state = try read(state_file) else ""
 	compiled = compile(state + "\n" + line, ".")
+	if compiled is text { compiled = shell_fallback(state, line, compiled) }
 	if compiled is text { raise compiled }
 	write_bytes(wasm_file, compiled)
 	staying = staying_lines(line)
 	if staying { write(state_file, state + "\n" + staying) }
 }
+# a line the compiler refuses runs as a shell line when its first word is a command on PATH, `git status`, `ls -la`
+# (lib/shell.warp shell_line): the line's module, else the refusal unchanged (user OK 11-11, card repl-bash-commands)
+shell_fallback(state: text, line: text, refusal: text): any := {
+	fallback = compile(state + "\nuse shell\nshell_line(" + source_text(line) + ", " + source_text(refusal) + ")", ".")
+	if fallback is text then refusal else fallback
+}
+# a text as a warp literal that reads back as itself: quoted, its $ no hole
+source_text(t: text): text := quoted_text(t.replace("$", "\\$"))
 # `warp repl` under plain WASI: each line compiled, its declarations kept; running it needs the native warp
 repl() := {
 	write(REPL_STATE, "")
