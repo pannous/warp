@@ -14,3 +14,15 @@ modules_kept_only() {
 		grep -qxF "$(basename "$file")" <<<"$kept" || grep -qxF "$(module_of "$file")" <<<"$kept" || rm -rf "$file"
 	done
 }
+# companion_files <compiler file name>: the library a compiler links its NFC from, beside it (core/native/driver.warp
+# compiler_library): the runtime and unicode module its builder made, of the GC types it has (card asciitext-compile)
+companion_files() { echo "$1.library/runtime.wasm $1.library/modules/unicode.wasm"; }
+# companion_copied <from compiler> <to compiler>: that library, when the first has one, beside the second
+# each file moved into place whole (a run beside this finds the old or the new one)
+companion_copied() {
+	local file
+	for file in $(companion_files ""); do
+		[ -f "$1$file" ] || continue
+		mkdir -p "$(dirname "$2$file")" && cp "$1$file" "$2$file.new-$$" && mv -f "$2$file.new-$$" "$2$file" || return 1
+	done
+}

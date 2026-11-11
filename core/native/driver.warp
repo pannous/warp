@@ -100,9 +100,11 @@ UNICODE_LINKED_AT = 32
 HOST_LINKED_AT = 40
 # the GC heap the run's engine starts with: a module it links keeps its machine code for that heap (instance_defined)
 HEAP_BYTES_AT = 48
+# its argument vector, the first its module's file (a compiler's path: compiler_library)
+ARGUMENTS_AT = 56
 # a run's channel listeners (lib/channels.warp), in its block past those: how many, then each one's
 # id, the bytes of its channel's file read so far, its name's length and the name
-LISTENERS_AT = 56
+LISTENERS_AT = 64
 LISTENERS_MAX = 32
 LISTENER_BYTES = 128
 LISTENER_NAME_BYTES = 104
@@ -873,7 +875,7 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	text_kept(linked, "")
 	outer_run = kept_value(RUN_SLOT)
 	if outer_run == 0 { timers_forgotten() }
-	keep_value(RUN_SLOT, run_state(linker, engine, linked, context, heap_bytes) as i64)
+	keep_value(RUN_SLOT, run_state(linker, engine, linked, context, heap_bytes, given) as i64)
 	instances_linked(linker, engine, context, compiled, linked, library_folder(), trap)
 	host_words_defined(linker, engine, context, compiled, module, yes, trap)
 	checked(wasmtime_linker_define_unknown_imports_as_traps(linker, compiled), trap)
@@ -909,7 +911,7 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 # a run's linker, engine, linked-instances cell, store context and GC heap size, and whether it linked unicode and the native host
 # module yet, kept in the run's block: what a host word allocates is given back when it returns (foreign.c
 # warp_host_callback)
-run_state(linker: handle, engine: handle, linked: pointer, context: handle, heap_bytes: i64): pointer := {
+run_state(linker: handle, engine: handle, linked: pointer, context: handle, heap_bytes: i64, given: Arguments): pointer := {
 	run = allocate((LISTENERS_AT + 8 + LISTENERS_MAX * LISTENER_BYTES) as i32)
 	long_at(run + LISTENERS_AT as i32).value = 0
 	long_at(run).value = linker
@@ -919,6 +921,7 @@ run_state(linker: handle, engine: handle, linked: pointer, context: handle, heap
 	long_at(run + UNICODE_LINKED_AT as i32).value = 0
 	long_at(run + HOST_LINKED_AT as i32).value = 0
 	long_at(run + HEAP_BYTES_AT as i32).value = heap_bytes
+	long_at(run + ARGUMENTS_AT as i32).value = given.pointers as i64
 	run
 }
 run_context(): handle := long_at(kept_value(RUN_SLOT) as i32 + 24).value
@@ -926,22 +929,38 @@ run_heap_bytes(): i64 := long_at(kept_value(RUN_SLOT) as i32 + HEAP_BYTES_AT as 
 # the export `name` of the standard module `module_name` into `function`, no when it has none: the module linked into
 # the run at the first ask, never at its start, so a run that never asks links none; whether it did is kept at `flag`
 # of the run's block. A program linked to a runtime gets the module of that runtime's library; a module without one
-# (the compiler) the installed warp's, both of a finished build: a `warp rebuild` runs its compilers beside a lib/ whose
-# runtime.wasm and modules/ it is writing, which do not fit together until it ends. A library folder without the module
-# ends the run naming the file (instance_defined)
+# (a compiler) its compiler_library, never the lib/ a `warp rebuild` is writing, whose runtime.wasm and modules/ do not
+# fit together until it ends. A library folder without the module ends the run naming the file (instance_defined)
 lazily_linked(context: handle, module_name: text, flag: i64, name: text, function: pointer): bool := {
 	run = kept_value(RUN_SLOT) as i32
 	if long_at(run + flag as i32).value == 0 {
 		trap = allocate(8)
 		long_at(trap).value = 0
 		linked = long_at(run + 16).value as i32
-		library = if contains_line(cell_text(linked), "warp_runtime") then library_folder() else installed_library()
+		library = lazy_library(run)
 		instance_defined(long_at(run).value, long_at(run + 8).value, context, module_name, instance_path(module_name, library), linked, library, no, trap)
 		# (linked in a host word, its records kept past the word's end)
 		arena_kept()
 		long_at(run + flag as i32).value = 1
 	}
 	wasmtime_linker_get(long_at(run).value, context, module_name, module_name.length, name, name.length, function)
+}
+# a compiler's library: <compiler>.library/ beside it, the runtime and unicode module made by the compiler that built
+# it, whose GC types it has (a new $Text type: card asciitext-compile); else, a compiler of the types its own lib/
+# writes, the installed warp's
+lazy_library(run: pointer): text := if contains_line(cell_text(long_at(run + 16).value as i32), "warp_runtime") then library_folder() else compiler_library(run)
+compiler_library(run: pointer): text := {
+	module = long_at(long_at(run + ARGUMENTS_AT as i32).value as i32).value
+	own = companion_library(native_copy(module, strlen(module)))
+	if holds_companion(own) then own else installed_library()
+}
+# the folder beside a compiler holding its builder's runtime and unicode module, these files of it
+companion_library(compiler: text): text := joined(compiler, ".library")
+COMPANION_FILES = 2
+companion_file(i: int): text := if i == 0 then "/runtime.wasm" else "/modules/unicode.wasm"
+holds_companion(folder: text): bool := {
+	for i in 0..COMPANION_FILES { if access(c_string(joined(folder, companion_file(i))), READABLE) != 0 { return false } }
+	true
 }
 # `"é" == "e◌́"` (decisions nfc-tables, nfc-slot; core/runtime/text.warp equal_texts): the runtime's canonical_text, a text's
 # NFC by lib/unicode, whose module (modules/unicode.wasm) the run links on this first call (lazily_linked), never a
@@ -954,7 +973,10 @@ canonical_text_answered(context: handle, given: pointer, result: pointer): nothi
 	}
 	trap = allocate(8)
 	long_at(trap).value = 0
-	checked(wasmtime_func_call(context, function + 8, given, 1, result, 1, trap), trap)
+	error = wasmtime_func_call(context, function + 8, given, 1, result, 1, trap)
+	# a module of other GC types than the run's traps 'cast failure' deep inside: named, never silent
+	if error != 0 or long_at(trap).value != 0 { complain(joined(joined("warp: canonical_text of ", lazy_library(kept_value(RUN_SLOT) as i32)), "/modules/unicode.wasm failed; a compiler links the runtime and unicode module of the compiler that built it, <compiler>.library/ (`warp rebuild seed` makes the seed's, `warp rebuild` warp.wasm's)")) }
+	checked(error, trap)
 }
 ## machine-wide channels (lib/channels.warp; the page's are BroadcastChannels, web/playground/host-tasks.js): every
 # sender appends to the channel's file, each listener reads it from where it was when it began listening
