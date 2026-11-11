@@ -61,6 +61,9 @@ def intrinsic_of(body: Body, name: text, values: list): TypedCode {
 	if name in late_words { return call_values(late_word(name), values) }
 	match name {
 		"new_text": TypedCode(ValueKind.Text, index_code(values#1) + gc_code(gc_ops.array_new_default, [gc_type(gc.text)]))
+		# a text known to hold only ASCII bytes, its kind for good (decision text-representations): the $AsciiText subtype
+		"new_ascii_text": TypedCode(ValueKind.Text, index_code(values#1) + gc_code(gc_ops.array_new_default, [gc_type(gc.ascii_text)]))
+		"is_ascii_text": TypedCode(ValueKind.Bool, converted(values#1, ValueKind.Text) + gc_code(gc_ops.ref_test, [gc_type(gc.ascii_text)]))
 		"byte_count": TypedCode(ValueKind.Int, converted(values#1, ValueKind.Text) + gc_code(gc_ops.array_len, []) + [op.i64_extend_i32_u])
 		"byte_at": TypedCode(ValueKind.Int, converted(values#1, ValueKind.Text) + index_code(values#2) + gc_code(gc_ops.array_get_u, [gc_type(gc.text)]) + [op.i64_extend_i32_u])
 		"kind_code": TypedCode(ValueKind.Int, kind_code_of(boxed(values#1)))
