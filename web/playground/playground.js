@@ -1556,8 +1556,11 @@ function initialize() {
 	startAssistant(editor, tellEnvironment, startCompletion(editor, askMembers));
 	const reloadedCode = sessionStorage.getItem(RELOADED_CODE);
 	sessionStorage.removeItem(RELOADED_CODE);
-	if (reloadedCode !== null) runCode(reloadedCode);
-	else chooseExample(requestedExample() ?? DEFAULT_EXAMPLE);
+	// (the menu names the example the address names, as before the reload, never the first one, hello)
+	if (reloadedCode !== null) {
+		$("examples").value = requestedExample() ?? DEFAULT_EXAMPLE;
+		runCode(reloadedCode);
+	} else chooseExample(requestedExample() ?? DEFAULT_EXAMPLE);
 	addEventListener("hashchange", chooseExampleOfHash);
 }
 

@@ -315,9 +315,11 @@ STALE_VALUE_CODE = "use draw\ncanvas(40, 40)\nloop {\n\tclear(paper)\n\tshow()\n
 STALE_VALUE_FIRST = "4242"
 STALE_VALUE_WAIT_MS = 3000
 GUIDE_PARTS = "(the guide groups its chapters in parts; a chapter's address opens it inside its part)"  # card playground-guide-chapters
-GUIDE_ADDRESS = "(an example's address and the example menu load it into the editor, in any part of the guide)"  # card guide-url-sync
+GUIDE_ADDRESS = "(an example's address and the example menu load it into the editor, in any part of the guide; the menu keeps naming it after a try and a reload)"  # card guide-url-sync
 GUIDE_ADDRESS_EXAMPLES = {"#loops": "loops", "#lists": "lists", "#signals": "signals"}  # Basics, Data, Events and tasks
 GUIDE_ADDRESS_CHOSEN = "text"  # Numbers and text, picked in the menu
+GUIDE_RELOADED_KEY = "warp code over a reload"  # playground.js RELOADED_CODE
+GUIDE_RELOAD_WAIT_SECONDS = 20
 GUIDE_PARTS_SHOWN = {"parts": ["Basics", "Numbers and text", "Data", "Events and tasks", "Web", "Graphics", "Sound", "Bigger programs", "Under the hood"], "part": "Graphics", "opened": True}
 KEPT_OUTPUT = "(a run keeps the last output, dimmed, until its own shows; an error replaces it)"  # card pressing-try-run
 KEPT_OUTPUT_SLOW = "sleep(1500ms)\n7"
@@ -1031,10 +1033,25 @@ def guide_address_wrong():
 		menu.dispatchEvent(new Event("change"));
 		await pause();
 		shown.menu = playground.code() === examplesSource(menu.value) && location.hash === "#" + menu.value;
+		// a guide snippet's try loads its code, the menu still naming the example chosen
+		location.hash = "#loops";
+		await pause();
+		document.querySelector("#guide-loops .guide-try").click();
+		await pause();
+		shown.tried = menu.value === "loops" && playground.code() !== examplesSource("loops");
+		// a reload for a newer deploy keeps the code typed (reloadWhenStale), and the menu the example the address names
+		sessionStorage.setItem({json.dumps(GUIDE_RELOADED_KEY)}, playground.code());
 		return JSON.stringify(shown);
 	}})()""".replace("examplesSource", "playground.exampleSource"))
 	shown = json.loads(json.loads(shown)) if shown.startswith('"') else {"menu": f"(page gave no answer: {shown or browser_complaint})"}
-	expected = {**{hash: True for hash in GUIDE_ADDRESS_EXAMPLES}, "menu": True}
+	browser("eval", "location.reload()")
+	deadline = time.time() + GUIDE_RELOAD_WAIT_SECONDS
+	reloaded = ""
+	while time.time() < deadline and reloaded != '"loops"':
+		time.sleep(0.5)
+		reloaded = browser("eval", 'window.playground?.code() ? document.getElementById("examples").value : ""')
+	shown["reloaded"] = reloaded == '"loops"' or reloaded
+	expected = {**{hash: True for hash in GUIDE_ADDRESS_EXAMPLES}, "menu": True, "tried": True, "reloaded": True}
 	return [f"{part}: {shown.get(part)!r}, expected {value!r}" for part, value in expected.items() if shown.get(part) != value]
 
 
