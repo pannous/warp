@@ -11,3 +11,20 @@
 # print_shows_radix_through_the_prelude
 'to_base(255, 16, upper: true)'	'FF'
 'to_base(255, 16)'	'ff'
+
+# hex(n) is n shown in hex, lowercase, a number still: it equals its int both ways, arithmetic gives a plain int (user 11-11)
+'text(hex(123))'	"0x7b"
+'text([1, 256].map hex)'	"[0x1, 0x100]"
+'123 == hex(123)'	true
+'hex(1) == 2'	false
+'text(hex(255) + 1)'	"256"
+# a colour as a hex number and back, its alpha first or last (user 11-11)
+'use color; text(argb_hex(red))'	"0xffff0000"
+'use color; text(rgba_hex(red))'	"0xff0000ff"
+'use color; from_rgba_hex(rgba_hex(blue)) == blue'	true
+'use color; red == 0xffff0000'	true
+'hex(123) == 123'	true
+'hex(123) != 123'	false
+# only a number's subtype equals its number: a class giving float() does not (user 11-11)
+'use units; 5 m == 5'	false
+'class Money{amount: float; float() := amount}; Money(5) == 5'	false

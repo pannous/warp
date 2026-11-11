@@ -37,3 +37,5 @@ TimeFormCode = {Instant: 0, Date: 1, Local: 2, Duration: 3, Zoned: 4, Clock: 5}
 # the units of a time's info bits above its form: a duration's days
 # at 1 << 3 as 32 unsigned bits (DayRange), its months at 1 << 35 above them
 TimeInfoUnit = {Days: 8, Months: 34359738368, DayRange: 4294967296}
+# the one field of a number's subtype's class (extensions/int_types/classes.warp), which the runtime knows one by
+subtype_field() := "subtype_value"
