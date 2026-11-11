@@ -596,7 +596,7 @@ def bind_library_words() {
 		for k in 0..<#image.functions {
 			word = image.functions[k]
 			f = module.functions.get(word.name)
-			if unbound_declaration(f) and linkable(image, word) and linked_variant(word.name, #f.signature.parameters) == word { bound_to(f, image, k) }
+			if f != ø and f.kinds == ø and linkable(image, word) and linked_variant(word.name, #f.signature.parameters) == word { bound_to(f, image, k) }
 			# (a word two modules write: the program's typed variant of it, arity_overloads' milliseconds_of·Quantity)
 			variant = if linked_extended.has(word.name) then module.functions.get(typed_variant_written(image.name, word)) else ø
 			if variant != ø and variant.kinds == ø { bound_to(variant, image, k) }
@@ -681,9 +681,6 @@ def linked_word(name: text): Function? {
 	}
 	ø
 }
-# a word the program declares without a body and binds to no module's yet: a definition of its own, money's Money.compare
-# compiled from its source, stays its own though a linked module writes the name too
-unbound_declaration(f: any): bool := f != ø and f.kinds == ø and f.body == Node.Empty
 def bound_to(f: Function, image: LibraryImage, k: int) {
 	f.index = linked_index(image, k)
 	f.kinds = image.functions[k].kinds
