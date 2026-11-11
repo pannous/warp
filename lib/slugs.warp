@@ -72,11 +72,3 @@ to_kebab(t: text): text := join(case_words(t).map(w => lower(w)), "-")
 to_constant(t: text): text := join(case_words(t).map(w => upper(w)), "_")
 to_pascal(t: text): text := join(case_words(t).map(w => upper(w[0:1]) + lower(w[1:])), "")
 to_camel(t: text): text := { p = to_pascal(t); if p == "" then "" else lower(p[0]) + p[1:] }
-// runs of whitespace one space, none at the ends
-normalize_whitespace(t: text): text := join(words(t), " ")
-// the first n words, whitespace normalized, and "…" when words were cut; t itself when it has no more than n
-truncate_words(t: text, n: int): text := {
-	ws = words(t)
-	if count(ws) <= n { return t }
-	join(ws[0: n], " ") + "…"
-}

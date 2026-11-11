@@ -1222,11 +1222,13 @@ resident_loaded(compiler: text): nothing := {
 	for i in 0..field_count(paths, NEWLINE) {
 		path = field(paths, i, NEWLINE)
 		count = long_at(block + 8).value as i32
-		if path.length > 0 and count < RESIDENT_MAX {
+		# (a module the rebuild didn't prebuild is an empty file: compiled from its source with each program, never loaded)
+		module = if path.length > 0 then read_file(path) else ""
+		if module.length > 0 and count < RESIDENT_MAX {
 			entry = block + 16 + count * RESIDENT_ENTRY_BYTES
 			machine_code = machine_code_file(path, RUN_GC_HEAP_BYTES)
 			text_kept(entry, machine_code)
-			long_at(entry + 16).value = loaded_module(engine, read_file(path), machine_code, trap)
+			long_at(entry + 16).value = loaded_module(engine, module, machine_code, trap)
 			long_at(block + 8).value = (count + 1) as i64
 		}
 	}
