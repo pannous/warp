@@ -262,6 +262,9 @@ linked_modules_folder(): text := if module_written != "" and not own_module_file
 # the module a compile writes, and the folder of the modules it links: its own never linked
 global module_written = ""
 global module_written_folder = ""
+# whether the module written is a console line's, its own source: each variable its main assigns is a global, which
+# the next lines read and set (emitter.warp shared_names)
+global line_module = no
 # whether a compile links the modules it uses: a `warp build` compiles them in, what it builds stands alone
 global modules_linked = yes
 # a compile with --fast (decision fast-mode, card fast-int-wrap; the compiler's own build is one): the run drops its
@@ -270,14 +273,20 @@ global modules_linked = yes
 # exact arithmetic; only the promotion on overflow goes. Bounds and the other checks are to follow
 global fast_build = run_option("fast") != ø
 write_module(name: text, runtime_file: text, file: text) := module_written_behind(name, read_bytes(runtime_file), file)
-module_written_behind(name: text, runtime, file: text) := {
+module_written_behind(name: text, runtime, file: text) := module_compiled_behind(name, "", runtime, file)
+# so, compiled from the source given: a console line's own text (extensions/commands repl_step), whose `_start` runs its
+# statements and prints its value as a program's does; else, "", a standard module's source, which only `use`s it, its
+# start setting its globals
+module_compiled_behind(name: text, source: text, runtime, file: text) := {
 	module_written = name
 	module_written_folder = folder_of(file) + "/"
+	line_module = source != ""
 	refused = ""
 	# (its `use` brings its file whole, found in the folder it is in: lib/, lib/host/, or a program's own module's)
 	folder = folder_of(std_module_path(name))
-	try { compile(module_source(name), folder, runtime, yes) } catch refusal { refused = refusal_said(refusal) }
+	try { compile(if line_module then source else module_source(name), folder, runtime, yes) } catch refusal { refused = refusal_said(refusal) }
 	module_written = ""
+	line_module = no
 	# a trap under the compile too (a runtime word's fail(), decision #34): never a half-built module written
 	if refused != "" { throw refused }
 	write_bytes(file, with_signature(linked_bytes(module.order, MODULE_START), name, image_fields(module.order)))

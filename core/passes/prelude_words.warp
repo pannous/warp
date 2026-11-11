@@ -545,8 +545,12 @@ declared_only(n: Node): Node := {
 	}
 	# `A4 := midi_hertz(69)`, a value the module made a function of (charged, P71): its head, called at each use
 	if is_key(n, Op.Define) and head is symbol and name_of(head) in module.linked_words { return Key(call_of(name_of(head), []), Op.Define, Node.Empty) }
+	# a global the linked module declares: its start set it, the program reads and sets that one, never sets it anew (a
+	# console line re-running an earlier line's `count = 41` reset its count, card linked-own)
+	if is_value_definition(n) and linked_global(declared_name(n)) { return Node.Empty }
 	if is_key(n, Op.Colon) and is_declaration_keyword(head) then Key(head, Op.Colon, declared_only(value_of(n))) else n
 }
+linked_global(name: any): bool := name is text and module.linked_images.any(image => image.globals.any(entry => entry#1 == program_global_prefix + name))
 takes_block(head: Node): bool := items_of(head)[1 ..].any(parameter => parameter_type(parameter) == "block")
 # `name := …`, `name = …`, `global name = …`: a value's definition, no function's
 # a value, and a type the program's declarations name (`type fraction = rational`), whose statement is no program's
