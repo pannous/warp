@@ -5,3 +5,5 @@
 'f(t: text): int := { bytes = t.bytes; #bytes }; f("abc")'	3
 'f(t: text): int := { lines = lines(t); #lines }; f("a\nb")'	2
 'f(x: int): int := { g = y => y + x; g(1) }; f(2)'	3
+'f(t: text): int := { n = 0; for i in 1..2 { y = bytes(t); n += #y; bytes = 3 }; n }; f("abc")'	6
+'f(n: int): int := { fact = k => if k < 2 then 1 else k * fact(k - 1); fact(n) }; f(4)'	24
