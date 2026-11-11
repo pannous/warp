@@ -129,7 +129,11 @@ same_bytes(a: text, b: text): bool := {
 # alone; a slice cuts only at its ends, so the shared start is checked at its first byte only
 equal_texts(a: text, b: text): bool := {
 	if same_bytes(a, b) { return yes }
-	from = stable_start(a, shared_bytes(a, b))
+	shared = shared_bytes(a, b)
+	# parting where each holds an ASCII byte or has ended, their NFC forms part there too: an ASCII byte starts a
+	# code point NFC keeps first (nothing before it composes with it), so it stays what NFC holds at that place
+	if ascii_or_end(a, shared) and ascii_or_end(b, shared) { return no }
+	from = stable_start(a, shared)
 	first_a = first_suspect(a, from)
 	first_b = first_suspect(b, from)
 	if first_a < 0 or first_b < 0 { return no }
@@ -141,6 +145,7 @@ shared_bytes(a: text, b: text): int := {
 	while i < byte_count(a) and i < byte_count(b) and byte_at(a, i) == byte_at(b, i) { i += 1 }
 	i
 }
+ascii_or_end(t: text, at: int): bool := at >= byte_count(t) or byte_at(t, at) < Utf8.Continuation
 # the last ASCII byte of t before its byte shared, or 0: a place where NFC starts over
 stable_start(t: text, shared: int): int := {
 	at = shared - 1
