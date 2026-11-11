@@ -135,7 +135,7 @@ def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
 	right_number = if numeric then TypedCode(ValueKind.Node, fresh_node_local(body)) else right
 	plain = [TypedCode(ValueKind.Int, unboxed(left_number.code, gc_type(gc.int_box))), TypedCode(ValueKind.Int, unboxed(right_number.code, gc_type(gc.int_box)))]
 	# two plain ints past 64 bits make a big int (D16): the runtime's grown words
-	ints = if symbol in grown_words then runtime_call(grown_words[symbol], plain) else operation_code(body, symbol, plain#1, plain#2)
+	ints = if symbol in grown_words and not fast_ints then runtime_call(grown_words[symbol], plain) else operation_code(body, symbol, plain#1, plain#2)
 	floats = operation_code(body, symbol, runtime_call("float_of_node", [left_number]), runtime_call("float_of_node", [right_number]))
 	kind = if ints.kind == ValueKind.Bool then ValueKind.Bool else ValueKind.Node
 	exact = exact_operation(body, symbol, left_number, right_number, floats)
