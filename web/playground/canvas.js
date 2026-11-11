@@ -47,8 +47,8 @@ function paintingElement(painting) {
 	const canvas = document.createElement("canvas");
 	Object.assign(canvas, { width: painting.width, height: painting.height, className: "painting" });
 	canvas.style.width = `${painting.width * Math.max(1, Math.floor(PAINT_SHOWN_SIDE / Math.max(painting.width, painting.height, 1)))}px`;
-	// pixels painted one by one stay sharp squares; a shader's render scales smoothly (card make-shader)
-	canvas.style.imageRendering = painting.shaded ? "auto" : "pixelated";
+	// every painting scales smoothly, a shader's render (card make-shader) as pixels painted one by one: no blocks
+	canvas.style.imageRendering = "auto";
 	canvas.style.setProperty("--aspect", painting.width / Math.max(painting.height, 1));
 	// a finger on it paints instead of scrolling, zooming or selecting the page: else Safari takes the touch over and
 	// cancels its pointer events after the first (card register-fingers)
