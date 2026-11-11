@@ -80,6 +80,8 @@ SESSION = f"warp-browser-tests-{os.getpid()}"
 # one SIGTERM 32 s after every launch, the page turns about:blank and the tour reads "playground is not defined"
 # (card playground-headless-tour)
 CHROME_FOR_TESTING = max(glob.glob(os.path.expanduser("~/.agent-browser/browsers/chrome-*/*.app/Contents/MacOS/*")), key=os.path.getmtime, default=None)
+# a sample playing sound stays silent: the browser runs on the user's Mac (CI sets its own GPU flags beside it)
+os.environ["AGENT_BROWSER_ARGS"] = ",".join(filter(None, [os.environ.get("AGENT_BROWSER_ARGS"), "--mute-audio"]))
 AGENT_BROWSER = ["agent-browser", "--session", SESSION] + (["--executable-path", CHROME_FOR_TESTING] if CHROME_FOR_TESTING else [])
 LAUNCH_ATTEMPTS = 3
 LAUNCH_SECONDS = 90  # a page that is not loaded by then did not start: relaunch, loudly
