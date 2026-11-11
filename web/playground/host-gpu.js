@@ -333,8 +333,8 @@ const theGpuDevice = async () => gpuDevice ??= await gpuDeviceOrFailure();
 async function gpuDeviceOrFailure() {
 	const adapter = await answeredWithin(self.navigator.gpu?.requestAdapter(), "adapter");
 	if (!adapter) throw new Error("this browser offers no WebGPU adapter");
-	// f16 shaders where the adapter has them (array<f16> after `enable f16`)
-	const requiredFeatures = adapter.features.has(HALF_FEATURE) ? [HALF_FEATURE] : [];
+	// f16 shaders where the adapter has them, and float32-filterable where an rgba32float field needs linear samples
+	const requiredFeatures = [HALF_FEATURE, "float32-filterable"].filter(feature => adapter.features.has(feature));
 	const device = await answeredWithin(adapter.requestDevice({ requiredFeatures }), "device");
 	// a lost device (the GPU process restarted) is asked for anew by the next job, with all made on it
 	device.lost.then(() => forgetDevice(device));
@@ -453,12 +453,273 @@ const GPU_CELL_NAMES = ["f32", "i32", "u32", "f16", "bf16"];
 const plainArrays = arrays => Object.fromEntries(Object.entries(arrays).map(([name, array]) => [name, Array.from(array)]));
 // gpu_compute's {values} as a list; a kernel's floats and an image's pixels as {words}, given back as raw bytes
 // (writeSharedWords), not as JSON
+// gpu_fields / gpu_pass / gpu_show / gpu_picture (card gpu-multipass): ping-pong targets that stay on the GPU.
+// One command encoder holds every pass of a frame; nothing is read back until gpu_picture. field_<name>(uv), uv in 0..1.
+const MOST_FIELDS = 8;
+const FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const fieldSets = new Map();
+const passPipelines = new Map();
+let nextFieldId = 0;
+let fieldsDevice = null;
+let fieldsChoice = null;
+let fieldSampler = null;
+let openEncoder = null;
+let passFrame = 0;
+let passFrameOpen = false;
+const pendingBuffers = [];
+const releasePending = () => { pendingBuffers.splice(0).forEach(buffer => buffer.destroy()); };
+const encoderOf = device => {
+	if (!openEncoder) {
+		device.pushErrorScope("validation");
+		openEncoder = device.createCommandEncoder();
+	}
+	return openEncoder;
+};
+const takeEncoder = device => {
+	const encoder = encoderOf(device);
+	openEncoder = null;
+	return encoder;
+};
+const openPassFrame = () => { if (!passFrameOpen) { passFrame++; passFrameOpen = true; } };
+const closePassFrame = () => { passFrameOpen = false; };
+function fieldsOn(device) {
+	if (fieldsDevice && fieldsDevice !== device) {
+		fieldSets.clear();
+		passPipelines.clear();
+		fieldSampler = null;
+		fieldsChoice = null;
+		openEncoder = null;
+		releasePending();
+	}
+	fieldsDevice = device;
+}
+async function textureRenderable(device, format) {
+	device.pushErrorScope("validation");
+	let texture;
+	try {
+		texture = device.createTexture({ size: [1, 1], format, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+	} catch (failure) {
+		await device.popErrorScope();
+		return false;
+	}
+	const error = await device.popErrorScope();
+	texture.destroy();
+	return !error;
+}
+async function fieldsChoiceOf(device) {
+	fieldsOn(device);
+	if (fieldsChoice) return fieldsChoice;
+	const float32 = device.features.has("float32-filterable");
+	const candidates = [
+		{ name: "rgba16float", filterable: true },
+		{ name: "rgba32float", filterable: float32 },
+		{ name: "rgba8unorm", filterable: true },
+	];
+	for (const candidate of candidates) {
+		if (await textureRenderable(device, candidate.name)) { fieldsChoice = candidate; return candidate; }
+	}
+	throw new Error("gpu_fields: this GPU has no render target for a field");
+}
+const samplerOf = (device, filterable) => fieldSampler ??= device.createSampler({
+	addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge", addressModeW: "clamp-to-edge",
+	magFilter: filterable ? "linear" : "nearest", minFilter: filterable ? "linear" : "nearest",
+});
+function fieldNames(names) {
+	if (!Array.isArray(names) || names.length < 1 || names.length > MOST_FIELDS) throw new Error("gpu_fields takes 1 to 8 names");
+	const kept = [];
+	for (const name of names) {
+		if (!FIELD_NAME.test(name)) throw new Error(`gpu_fields: ${name} is not a field name`);
+		if (kept.includes(name)) throw new Error(`gpu_fields: ${name} is named twice`);
+		kept.push(name);
+	}
+	return kept;
+}
+function fieldValues(shader, width, height, given) {
+	openPassFrame();
+	const shared = name => {
+		const at = self.pagePointer?.names.indexOf(name) ?? -1;
+		return at >= 0 ? Atomics.load(self.pagePointer.values, at) : 0;
+	};
+	firstRender ??= performance.now();
+	const value = {
+		width, height, size: [width, height], time: (performance.now() - firstRender) / 1000, frame: passFrame,
+		mouse: [shared("mouse_x"), shared("mouse_y")], mouse_down: shared("mouse_down"), mouse_wheel: shared("mouse_wheel"), key: shared("key"),
+	};
+	const holes = Object.fromEntries(BUILTIN_HOLES.filter(name => new RegExp(`\\b${VALUES_NAME}\\.${name}\\b`).test(shader)).map(name => [name, value[name]]));
+	return { ...holes, ...(given ?? {}) };
+}
+function fieldSample(name, binding, filterable) {
+	const tex = `field_${name}_tex`;
+	const declared = `\n@group(0) @binding(${binding}) var ${tex}: texture_2d<f32>;`;
+	if (filterable) return `${declared}\nfn field_${name}(uv: vec2f) -> vec4f {\n\tlet placed = clamp(uv, vec2f(0.0), vec2f(1.0));\n\treturn textureSampleLevel(${tex}, field_sampler, placed, 0.0);\n}`;
+	return `${declared}\nfn field_${name}(uv: vec2f) -> vec4f {\n\tlet size = vec2f(textureDimensions(${tex}));\n\tlet at = clamp(uv, vec2f(0.0), vec2f(1.0)) * size - vec2f(0.5);\n\tlet low = vec2i(floor(at));\n\tlet f = fract(at);\n\tlet last = vec2i(size) - vec2i(1);\n\tlet s00 = textureLoad(${tex}, clamp(low, vec2i(0), last), 0);\n\tlet s10 = textureLoad(${tex}, clamp(low + vec2i(1, 0), vec2i(0), last), 0);\n\tlet s01 = textureLoad(${tex}, clamp(low + vec2i(0, 1), vec2i(0), last), 0);\n\tlet s11 = textureLoad(${tex}, clamp(low + vec2i(1, 1), vec2i(0), last), 0);\n\treturn mix(mix(s00, s10, f.x), mix(s01, s11, f.x), f.y);\n}`;
+}
+function passShader(shader, declarations, reads, filterable) {
+	let code = shader;
+	if (!OWN_VERTEX_STAGE.test(shader)) code += FULL_IMAGE_VERTICES;
+	code += declarations;
+	let binding = 1;
+	if (filterable && reads.length) {
+		code += "\n@group(0) @binding(1) var field_sampler: sampler;";
+		binding = 2;
+	}
+	for (const name of reads) code += fieldSample(name, binding++, filterable);
+	return code;
+}
+async function passPipeline(device, code, format, ownVertex) {
+	const key = `${format}\n${ownVertex ? 1 : 0}\n${code}`;
+	if (passPipelines.has(key)) return passPipelines.get(key);
+	const module = await gpuModule(device, code);
+	device.pushErrorScope("validation");
+	const pipeline = device.createRenderPipeline({
+		layout: "auto",
+		vertex: { module, entryPoint: ownVertex ?? VERTEX_ENTRY_POINT },
+		fragment: { module, entryPoint: GPU_ENTRY_POINT, targets: [{ format, ...ownVertex && format.includes("8") ? { blend: OVER } : {} }] },
+		...ownVertex ? { primitive: { topology: "triangle-strip" } } : {},
+	});
+	const error = await device.popErrorScope();
+	if (error) throw new Error(`${SHADER_SUBJECT}${error.message}`);
+	passPipelines.set(key, pipeline);
+	return pipeline;
+}
+function setOf(device, id) {
+	fieldsOn(device);
+	const set = fieldSets.get(id);
+	if (!set) throw new Error(`no fields ${id}`);
+	return set;
+}
+async function drawInto(device, shader, values, set, target, format) {
+	const choice = await fieldsChoiceOf(device);
+	const laid = valuesLayout(values);
+	if (laid.arrays.length) throw new Error("gpu_pass takes numbers and short vectors, not a long list");
+	const reads = set.order.filter(name => new RegExp(`\\bfield_${name}\\b`).test(shader));
+	const code = passShader(shader, laid.declarations, reads, choice.filterable);
+	const ownVertex = shader.match(OWN_VERTEX_STAGE)?.[1];
+	const pipeline = await passPipeline(device, code, format, ownVertex);
+	const entries = [];
+	if (laid.declarations) {
+		const buffer = device.createBuffer({ size: laid.bytes.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+		device.queue.writeBuffer(buffer, 0, laid.bytes);
+		pendingBuffers.push(buffer);
+		entries.push({ binding: VALUES_BINDING, resource: { buffer } });
+	}
+	let binding = 1;
+	if (choice.filterable && reads.length) {
+		entries.push({ binding: 1, resource: samplerOf(device, true) });
+		binding = 2;
+	}
+	for (const name of reads) entries.push({ binding: binding++, resource: set.fields[name].front.createView() });
+	const group = entries.length ? device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries }) : undefined;
+	const pass = encoderOf(device).beginRenderPass({ colorAttachments: [{ view: target.createView(), loadOp: "clear", storeOp: "store", clearValue: { r: 0, g: 0, b: 0, a: 0 } }] });
+	pass.setPipeline(pipeline);
+	if (group) pass.setBindGroup(0, group);
+	const instances = Math.max(1, Math.trunc(values?.[INSTANCES_NAME] ?? 1));
+	pass.draw(ownVertex ? QUAD_CORNERS : TRIANGLE_CORNERS, ownVertex ? instances : 1);
+	pass.end();
+}
+async function gpuFields(job) {
+	const device = await theGpuDevice();
+	const names = fieldNames(job.names);
+	const width = job.width, height = job.height;
+	if (width < 1 || height < 1) throw new Error("gpu_fields needs a positive width and height");
+	const choice = await fieldsChoiceOf(device);
+	const label = names.join(",");
+	for (const set of fieldSets.values()) {
+		if (set.width === width && set.height === height && set.label === label) return { id: set.id, width, height, format: choice.name };
+	}
+	const fields = {};
+	const usage = GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING;
+	for (const name of names) {
+		fields[name] = {
+			front: device.createTexture({ size: [width, height], format: choice.name, usage }),
+			back: device.createTexture({ size: [width, height], format: choice.name, usage }),
+		};
+	}
+	const encoder = device.createCommandEncoder();
+	for (const field of Object.values(fields)) {
+		for (const texture of [field.front, field.back]) {
+			const pass = encoder.beginRenderPass({ colorAttachments: [{ view: texture.createView(), loadOp: "clear", storeOp: "store", clearValue: { r: 0, g: 0, b: 0, a: 0 } }] });
+			pass.end();
+		}
+	}
+	device.queue.submit([encoder.finish()]);
+	const set = { id: ++nextFieldId, width, height, label, order: names, fields };
+	fieldSets.set(set.id, set);
+	return { id: set.id, width, height, format: choice.name };
+}
+async function gpuPass(job) {
+	const device = await theGpuDevice();
+	const set = setOf(device, job.id);
+	const field = set.fields[job.into];
+	if (!field) throw new Error(`no field ${job.into}`);
+	const choice = await fieldsChoiceOf(device);
+	const values = fieldValues(job.shader, set.width, set.height, job.values);
+	await drawInto(device, job.shader, values, set, field.back, choice.name);
+	const kept = field.front;
+	field.front = field.back;
+	field.back = kept;
+}
+async function finishPasses(device) {
+	if (!openEncoder) return;
+	const encoder = openEncoder;
+	openEncoder = null;
+	await gpuSubmitted(device, encoder);
+	releasePending();
+}
+function packedPixels(bytes, width, height, rowBytes) {
+	const pixels = new Uint32Array(width * height);
+	for (let row = 0, pixel = 0; row < height; row++)
+		for (let at = row * rowBytes; at < row * rowBytes + width * PIXEL_BYTES; at += PIXEL_BYTES)
+			pixels[pixel++] = (OPAQUE | bytes[at] << 16 | bytes[at + 1] << 8 | bytes[at + 2]) >>> 0;
+	return pixels;
+}
+async function gpuShow(job) {
+	const device = await theGpuDevice();
+	const set = setOf(device, job.id);
+	if (job.canvas === undefined) {
+		await finishPasses(device);
+		closePassFrame();
+		return 0;
+	}
+	const painted = paintCanvases.get(job.canvas);
+	if (!painted) throw new Error(CANVAS_MISSING);
+	const values = fieldValues(job.shader, set.width, set.height, job.values);
+	const canvasImage = painted.context.getCurrentTexture();
+	await drawInto(device, job.shader, values, set, canvasImage, painted.format);
+	const encoder = takeEncoder(device);
+	await gpuSubmitted(device, encoder);
+	await answeredWithin(device.queue.onSubmittedWorkDone(), "drawn frame", GPU_WORK_WAIT_MS);
+	closePassFrame();
+	releasePending();
+	return 1;
+}
+async function gpuPicture(job) {
+	const device = await theGpuDevice();
+	const set = setOf(device, job.id);
+	const values = fieldValues(job.shader, set.width, set.height, job.values);
+	const image = device.createTexture({ size: [set.width, set.height], format: "rgba8unorm", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+	await drawInto(device, job.shader, values, set, image, "rgba8unorm");
+	const encoder = takeEncoder(device);
+	const rowBytes = Math.ceil(set.width * PIXEL_BYTES / ROW_ALIGNMENT) * ROW_ALIGNMENT;
+	const readback = readbackBuffer(device, rowBytes * set.height);
+	encoder.copyTextureToBuffer({ texture: image }, { buffer: readback, bytesPerRow: rowBytes, rowsPerImage: set.height }, [set.width, set.height]);
+	const bytes = new Uint8Array(await gpuReadBack(device, encoder, readback));
+	image.destroy();
+	closePassFrame();
+	releasePending();
+	return packedPixels(bytes, set.width, set.height, rowBytes);
+}
 const GPU_JOBS = {
 	gpu_compute: async job => ({ values: job.arrays ? plainArrays(await gpuComputedArrays(job)) : Array.from(await gpuComputedFloats(job)) }),
 	// gpu_compute over GPU lists (changed in place): the arrays left as one run of words, in the order given
 	gpu_arrays: async job => ({ words: joinedWords(Object.values(await gpuComputedArrays(job))) }),
 	gpu_kernel: async job => ({ words: await gpuComputedFloats(job) }),
 	gpu_render: async job => ({ words: await gpuRendered(job) }),
+	gpu_fields: async job => ({ values: await gpuFields(job) }),
+	gpu_pass: async job => (await gpuPass(job), { values: 0 }),
+	gpu_show: async job => ({ values: await gpuShow(job) }),
+	gpu_picture: async job => ({ words: await gpuPicture(job) }),
+	gpu_fields_format: async () => ({ values: (await fieldsChoiceOf(await theGpuDevice())).name }),
 	gpu_canvas: async job => ({ values: await gpuCanvas(job) }),
 	gpu_paint: async job => ({ values: (await gpuRendered(job), job.canvas) }),
 	gpu_paints: async () => ({ values: [await theGpuDevice().then(() => 1, failure => failureText(failure))] }),
@@ -665,10 +926,62 @@ addHostPart({
 			const pixels = holder.gpuRendered(plain(shader), width, height, values);
 			return newGuestInts(program(), pixels);
 		};
+		// the field sets this program made, so a show knows the canvas size before the worker draws
+		const fieldMeta = new Map();
+		const metaOf = id => {
+			const meta = fieldMeta.get(Number(id));
+			if (!meta) throw new Error(`no fields ${id}`);
+			return meta;
+		};
+		const plainValues = values => values == null ? {} : plain(values);
+		const fieldsMade = (width, height, names) => {
+			const made = gpuJob("gpu_fields", { width: Number(width), height: Number(height), names: [...plain(names)] });
+			fieldMeta.set(made.id, made);
+			return BigInt(made.id);
+		};
+		const passRecorded = (shader, fields, into, values) => {
+			metaOf(fields);
+			gpuJob("gpu_pass", { shader: String(plain(shader)), id: Number(fields), into: String(plain(into)), values: plainValues(values) });
+			return 0n;
+		};
+		const fieldJob = (shader, fields, values) => {
+			const meta = metaOf(fields);
+			return { shader: String(plain(shader)), id: Number(fields), values: plainValues(values), width: meta.width, height: meta.height };
+		};
+		// the page canvas, as paint of a shader draws into it (paintedInCanvas): one canvas of this size
+		const fieldShown = job => {
+			for (const retry of [false, true]) {
+				if (paintCanvas?.width !== job.width || paintCanvas?.height !== job.height) paintCanvas = newPaintCanvas(job.width, job.height, paintCanvas?.id);
+				try {
+					return gpuJob("gpu_show", { ...job, canvas: paintCanvas.id });
+				} catch (failure) {
+					paintCanvas = undefined;
+					if (retry || !failure.message.endsWith(CANVAS_MISSING)) throw failure;
+				}
+			}
+		};
+		const shown = (shader, fields, values) => {
+			const job = fieldJob(shader, fields, values);
+			if (hooks.gpuCanvas && !canvasFailure) {
+				try { return BigInt(fieldShown(job)); }
+				catch (failure) {
+					canvasFailure = failure.message;
+					warnOnce(CANVAS_FAILED, canvasFailure);
+				}
+			}
+			return BigInt(gpuJob("gpu_show", job));
+		};
+		const pictured = (shader, fields, values) => newGuestInts(program(), gpuJob("gpu_picture", fieldJob(shader, fields, values), [], Uint32Array));
+		const fieldsFormat = () => newGuestValue(program(), gpuJob("gpu_fields_format", {}));
 		// a WGSL error inside a `try` is the program's to catch, as every host word's failure (host.js raisedInProgram)
 		return {
 			gpu_computed: computed,
 			gpu_render: rendered,
+			gpu_fields: fieldsMade,
+			gpu_pass: passRecorded,
+			gpu_show: shown,
+			gpu_picture: pictured,
+			gpu_fields_format: fieldsFormat,
 			// use draw on the GPU (src/graphics/gpu_canvas.rs) is native only: lib/draw.warp asks gpu_drawing first
 			draw_shape: () => { throw new Error(NO_GPU_DRAWING); },
 			draw_show: () => { throw new Error(NO_GPU_DRAWING); },
