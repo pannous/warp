@@ -1,17 +1,20 @@
 # A function that changes the items or fields of what it is given, `p.at += 1`, `xs#2 = 0`, `xs[1] = 0`, is named
 # with `!`, `advance!(p)`, `qs!(xs, lo, hi)` (user decision 11-11, scope B, card param-mutation-rules); rebinding a
-# parameter, `xs = …`, changes nothing it was given. A warning until the compiler's own source is clean, then a
+# parameter, `xs = …`, changes nothing it was given. Operators need no `!` (user 11-11): `operator_<<(xs, x)` and the
+# method form `+(a, b)` may change their operands. A warning until the compiler's own source is clean, then a
 # refusal; its message is in core/analysis/warnings.data. A `!` head, `qs!(xs) := …`, is no call head: definition_of
 # passes it by
 
 unmarked_mutation(n: Node, program: Node) := {
 	parts = definition_of(without_mark(n))
-	if parts == ø { return ø }
+	if parts == ø or names_operator(parts.name) { return ø }
 	given = parts.parameters.map(parameter_name).filter(name => name != "")
 	write = nodes_in(parts.body).find(part => part is key and op_of(part) in assigning_operators and changed_part_of(key_of(part)) in given)
 	if write == ø { return ø }
 	diagnose(call_of("unmarked_mutation", [parts.name, changed_part_of(key_of(write)), "${without_mark(key_of(write))}"]), write)
 }
+# an operator's definition name: `operator_<<`, or a glyph alone, `+`
+names_operator(name: text): bool := name.starts_with(OPERATOR_FUNCTION_PREFIX) or first_alphabetic_word(name) == ""
 # the variable whose part a write changes: p of `p.at` and of `p.items#2`, xs of `xs#2` and `xs[1]`; "" for a write
 # of a variable itself
 changed_part_of(target: Node): text := {
