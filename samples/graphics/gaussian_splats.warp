@@ -1,11 +1,12 @@
 #!/usr/bin/env warp
 # Gaussian splatting (Kerbl et al. 2023, "3D Gaussian Splatting for Real-Time Radiance Field Rendering"): a scene made
 # of fuzzy 3D ellipsoids, each a position, a scale and a rotation (its covariance), a color and an opacity: here a
-# capture, a .splat file (lib/splats.warp), the one given or the bee beside this program (bee.splat.md).
+# capture, a .splat file (lib/splats.warp): the one given, --full for the whole bee (bee.splat.md, scripts/bee-full.sh),
+# or the 24000-splat bee beside this program.
 # Every frame warp sorts them by their depth before the camera, and the GPU draws each as a quad around its ellipse on
 # the screen (its covariance through the camera's Jacobian), the farthest first, each blended over the ones behind it
 # (a shader with its own vertex stage: one quad an instance; the scene a storage array each of its parts).
-# The camera orbits a little every frame; drag the mouse to turn it yourself.
+# The camera orbits a little every frame; drag the mouse to turn it yourself. The sort runs every frame, orbit included.
 # --times prints each frame's sort, in milliseconds, before paint (the host adds upload and draw when it can).
 use math
 use file
@@ -16,7 +17,9 @@ use draw
 capture = program.folder + "/bee.splat"
 timing = no
 for arg in args {
-	if arg == "--times" { timing = yes } else { capture = arg }
+	if arg == "--times" { timing = yes }
+	else if arg == "--full" { capture = program.folder + "/../../data/splat-speed/bee-full.splat" }
+	else { capture = arg }
 }
 zoom = 1.5 # the focal length, in picture heights
 backed_off = 3.0 # the camera's distance from the scene's middle, in the scene's sizes
@@ -27,35 +30,25 @@ background = [0.05, 0.06, 0.10]
 pixel_blur = 0.3
 orbit_step = 0.01 # radians a frame
 
-scene = read_splats(capture)
+# the scene as the shader reads it, straight from the file's bytes: four floats a Gaussian, a vec4f each, its centre
+# and opacity, then the six numbers of its covariance and its color's 24 bits. GPU lists [f32], so the host can hand
+# the GPU those bytes in one copy. No Splat is built
+frame = read_splat_frame(capture)
+n = frame.count
+centres: [f32] = frame.centres
+shapes: [f32] = frame.shapes
+shades: [f32] = frame.shades
 # its middle and its size, both of the bulk of it: a capture's stray Gaussians far out do not count
-middle = [median(scene.map(s => s.position#k)) for k in 1 to 3]
-size = 2 * median(scene.map(s => norm(s.position .- middle)))
-
-# the scene as the shader reads it, four floats a Gaussian, a vec4f each: its centre and opacity, then the six numbers
-# of its covariance and its color's 24 bits. A GPU list [f32], so the host can hand the GPU those bytes in one copy
-n = #scene
-centres: [f32] = float[n * 4]
-shapes: [f32] = float[n * 4]
-shades: [f32] = float[n * 4]
-for i in 1 to n {
-	s = scene#i
-	base = (i - 1) * 4
-	p = s.position
-	centres#(base + 1) = p#1
-	centres#(base + 2) = p#2
-	centres#(base + 3) = p#3
-	centres#(base + 4) = s.opacity
-	c = covariance_terms(s.rotation, s.scale)
-	shapes#(base + 1) = c#1
-	shapes#(base + 2) = c#2
-	shapes#(base + 3) = c#3
-	shapes#(base + 4) = c#4
-	shades#(base + 1) = c#5
-	shades#(base + 2) = c#6
-	shades#(base + 3) = int(s.color) % 16777216
-	shades#(base + 4) = 0.0
+axis_at(k: int): list := [centres#(4 * (i - 1) + k) for i in 1 to n]
+middle = if n == 0 then [0.0, 0.0, 0.0] else [median(axis_at(k)) for k in 1 to 3]
+reach(i: int): float := {
+	b = 4 * (i - 1)
+	dx = centres#(b + 1) - middle#1
+	dy = centres#(b + 2) - middle#2
+	dz = centres#(b + 3) - middle#3
+	sqrt(dx * dx + dy * dy + dz * dz)
 }
+size = if n == 0 then 1.0 else 2 * median([reach(i) for i in 1 to n])
 
 # the camera looking at the scene's middle from yaw and pitch: its place and axes, its focal length in pixels and the
 # picture's centre, as the shader reads them
@@ -70,7 +63,6 @@ if pad % 4 != 0 { pad = pad + 4 - pad % 4 }
 if pad < 4 { pad = 4 }
 order_cells: [f32] = float[pad]
 global order = order_cells # the Gaussians in front of the camera, nearest first, 0-based indices
-global depths = []
 global instances = 1 # the sky, then every Gaussian in front of the camera
 look(yaw: float, pitch: float, width: float, height: float) := {
 	back = upward .* sin(pitch) .+ cross(upward, [1, 0, 0]) .* (cos(pitch) * cos(yaw)) .+ [1, 0, 0] .* (cos(pitch) * sin(yaw))
@@ -80,10 +72,8 @@ look(yaw: float, pitch: float, width: float, height: float) := {
 	up = cross(right, forward)
 	focal = zoom * height
 	centre = [width / 2, height / 2]
-	depths = depths_of(scene, eye, forward, depths)
-	ranked = order_by_depth(depths, nearest * size)
-	drawn = #ranked
-	if drawn > 0 { for i in 1 to drawn { order#i = float(ranked#i) } }
+	# every frame, including a small orbit: the 16-bit order, nearest first. The shader draws that list back to front
+	drawn = view_order_into(centres, eye, forward, nearest * size, order)
 	instances = 1 + drawn
 }
 
