@@ -22,7 +22,8 @@ edge is not dropped with its chunk. A box that only touches a plane stays.
 `TREE_BUDGET` is 2400 tree quads. Near chunks (closer than 56 metres) and mid chunks (closer than 180) submit
 their trees closest to the eye first, until the budget is spent. Farther chunks submit 4 of their own trees,
 spread across the cells: real placements, not one picture standing in for the chunk. The draw is those quads
-plus one sky quad and at most 12 ground tiles under the nearest chunks.
+plus one sky quad, which also paints the meadow per pixel where its ray meets the ground (no ground quads:
+projected per corner, a quad with a corner behind the eye folds into a wall).
 
 Counters on a view:
 
@@ -30,22 +31,22 @@ Counters on a view:
 - `candidate` is the trees whose chunks meet the view (every tree of a chunk that is fully inside, and each
   tree that itself meets the view when the chunk is clipped)
 - `submitted` is the tree quads in the draw, at most 2400
-- `scenery` is the sky and ground quads
+- `scenery` is the sky quad
 - `nearest` is the detail of the closest submitted tree: 0 near, 1 mid, 2 far, or -1 when no tree was drawn
 
 The sample prints `[total, candidate, submitted, scenery]` for the opening view, and again each frame.
 It paints only when a window can open. With no GPU, `paint` of any shader faults, so a headless run
 selects the view and does not draw it.
 That opening view (x 80, z -12, yaw 0.15, pitch -0.18, aspect 240/135) is
-`[1000000, 5797, 2400, 13]`: 5797 trees meet the view, 2400 of them are drawn, plus the sky and 12 ground tiles.
+`[1000000, 5797, 2400, 1]`: 5797 trees meet the view, 2400 of them are drawn, plus the sky.
 Drag looks around. W, A, S, D and the arrows walk. Headless, one frame is painted and the program value is
 that same list for the opening camera (aspect 240 by 135, the headless frame).
 
 ## GPU
 
 The sample uses `paint` of a shader with its own vertex stage, which draws `instances` quads from one storage
-array (`lib/host/native_host/gpu.warp`, the existing instanced-quad path). Each quad is one sprite: sky,
-a ground tile, or a tree billboard. The fragment draws each tree lit by a low sun in the billboard's frame:
+array (`lib/host/native_host/gpu.warp`, the existing instanced-quad path). Each quad is one sprite: sky
+or a tree billboard. The fragment draws each tree lit by a low sun in the billboard's frame:
 tiered ragged pines, oak and autumn crowns of seven clumps (backlit rims when the sun is behind), airy birches with
 scarred white bark, each tinted by a hash of its position; the sky quad paints sky, sun, clouds and, below the horizon,
 the meadow per pixel; everything hazes with distance. The sample starts at SIDE = 100 (10,000 trees). There is no depth buffer; far sprites are
