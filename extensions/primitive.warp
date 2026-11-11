@@ -157,7 +157,7 @@ primitive_module(source: text, folder: text): list := {
 	for imported in c_functions { declare_c_function(imported#1, imported#2) }
 	primitive_constants = constants_of(statements)
 	primitive_globals = {}
-	for n in statements.filter(n => declared_global_name(n) != ø) { declare_global(n) }
+	for n in statements.filter(n => declared_global_name(n) != ø) { declare_primitive_global(n) }
 	main_statements = []
 	for n in statements.filter(n => not struct_declared(n) and foreign_import(n) == ø and declared_global_name(n) == ø) {
 		head = function_head(n)
@@ -180,7 +180,7 @@ constants_of(statements: list): map := {
 	found
 }
 # `global count = 0`: a global of its number's type, as a local given it takes
-declare_global(n: Node) {
+declare_primitive_global(n: Node) {
 	declaration = if is_group(n) then n#2 else value_of(n)
 	if not (is_key(declaration, Op.Assign) and (value_of(declaration) is int or value_of(declaration) is float)) { primitive_refusal(n, "a global not given a number") }
 	initial = mvp_literal(value_of(declaration), "")
