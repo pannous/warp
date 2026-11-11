@@ -1450,6 +1450,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if same_text(module, "net") and same_text(member, "get") { return url_got(caller, context, shown(caller, context, item_of(caller, context, listed, 1)), results) }
 	if same_text(module, "warp") and same_text(member, "option") { return option_answered(caller, context, listed, results) }
 	if same_text(module, "warp") and same_text(member, "module_word") { return module_word_answered(caller, context, listed, results) }
+	if same_text(module, "warp") and same_text(member, "compiler_word") { return compiler_word_answered(caller, context, listed, results) }
 	if same_text(module, "regex") { return regex_answered(caller, context, member, listed, results) }
 	if same_text(module, "hash") { return hash_answered(caller, context, member, listed, results) }
 	# a live loop's cycle starts: only the playground hands loops over between runs; a fade or stop save sound applies
@@ -1906,20 +1907,45 @@ code_parsed_from(caller: handle, context: handle, code: text, result: pointer): 
 	code_built(caller, context, encoding, at, result)
 }
 # warp.module_word(module, word, arguments) (card module-rule-words): the compiler's call of a rule word the lib module
-# defines, its three values the items of `listed`. The module is linked into the run at its first call; the arguments, a list the caller's node_encoding
-# encodes (runtime/builders.warp), are built there, its export `word` is called on them, and its result, encoded by
-# the module's node_encoding, is built again in the caller
+# defines, its three values the items of `listed`. The module is linked into the run at its first call, the word called
+# there (encoded_call), its result built again in the caller
 module_word_answered(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
 	module = joined("warp/", shown(caller, context, item_of(caller, context, listed, 1)))
 	word = shown(caller, context, item_of(caller, context, listed, 2))
-	encoded = allocate(VALUE_BYTES)
-	guest_call(caller, context, "node_encoding", item_of(caller, context, listed, 3), 1, encoded)
-	encoding = shown(caller, context, encoded)
+	encoding = node_encoded(caller, context, item_of(caller, context, listed, 3))
 	run_linked(context, module, library_folder())
+	answer = encoded_call(context, module, word, encoding)
+	code_built(caller, context, answer, counter_at(0), result)
+}
+# warp.compiler_word(word, arguments): a module's rule word asking the compiler running it, a word of the compiler's
+# (its walkers, its tables) called there on the values, its result built again in the module
+compiler_word_answered(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
+	word = shown(caller, context, item_of(caller, context, listed, 1))
+	encoding = node_encoded(caller, context, item_of(caller, context, listed, 2))
+	guest = kept_value(RUN_SLOT) as i32 + GUEST_AT as i32
+	module = cell_text(guest)
+	answer = encoded_call(context, "", word, encoding)
+	text_kept(guest, module)
+	code_built(caller, context, answer, counter_at(0), result)
+}
+# the caller's value in the parse-code encoding (runtime/builders.warp node_encoding)
+node_encoded(caller: handle, context: handle, value: pointer): text := {
+	encoded = allocate(VALUE_BYTES)
+	guest_call(caller, context, "node_encoding", value, 1, encoded)
+	shown(caller, context, encoded)
+}
+# a cell counting through an encoding, at `at`
+counter_at(at: i64): pointer := {
+	counter = allocate(8)
+	long_at(counter).value = at
+	counter
+}
+# the word of the module the run's host words work in (GUEST_AT; "" the compiler) called on the arguments the encoding
+# lists, built there, the result's encoding; the host words work in the compiler again after it
+encoded_call(context: handle, module: text, word: text, encoding: text): text := {
 	guest = kept_value(RUN_SLOT) as i32 + GUEST_AT as i32
 	text_kept(guest, module)
-	at = allocate(8)
-	long_at(at).value = 1
+	at = counter_at(1)
 	count = atoll(encoded_field(encoding, at))
 	# (the list's bracket and separator)
 	encoded_field(encoding, at)
@@ -1928,11 +1954,9 @@ module_word_answered(caller: handle, context: handle, listed: pointer, result: p
 	for i in 0..count { code_built(0, context, encoding, at, values + (i as i32) * VALUE_BYTES) }
 	returned = allocate(VALUE_BYTES)
 	guest_call(0, context, word, values, count, returned)
-	guest_call(0, context, "node_encoding", returned, 1, returned)
-	answer = shown(0, context, returned)
+	answer = node_encoded(0, context, returned)
 	text_kept(guest, "")
-	long_at(at).value = 0
-	code_built(caller, context, answer, at, result)
+	answer
 }
 # the node encoded at `at` (advanced past it) built in the module into `result`
 code_built(caller: handle, context: handle, encoding: text, at: pointer, result: pointer): nothing := {

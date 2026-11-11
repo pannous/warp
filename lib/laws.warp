@@ -1,7 +1,10 @@
 # A law (wiki/laws.md): `law square(-x) == square(x)` and a named one, `law name:` with a `for x: int` line each, are
-# tried for a few ints of each variable at run time (extensions/rules/rule_words.warp law_check hands law_holds below the law), a value one fails for raised.
+# tried for a few ints of each variable at run time (law_check below, the rule word of its rule in
+# extensions/rules/modules/laws.warp, hands law_holds the law), a value one fails for raised.
 # the values a law is tried for, in each of its variables
 LAW_TRIAL_VALUES = [0, 1, -1, 2, -2, 3, -7, 10, -100, 1000]
+# the name of those values in the proposition law_holds is given
+LAW_VALUES = "law_values"
 # a law tried for each LAW_TRIAL_VALUES of each variable, the proposition given their values as a list in the
 # variables' order (its rule, extensions/rules/modules/laws.warp): the first values it fails for raised with the law
 law_holds(shown: text, names: list, proposition: function) := law_tried(shown, names, proposition, [])
@@ -12,6 +15,43 @@ law_tried(shown: text, names: list, proposition: function, chosen: list) := {
 	}
 	for value in LAW_TRIAL_VALUES { law_tried(shown, names, proposition, chosen + [value]) }
 }
+
+# The law's rule word, run by the compiler in this module (card module-rule-words): the law as law_holds tries it, the
+# law shown, its variables and the proposition of their values. A named law, `law name:` with a `for x: int` line each
+# before it, takes those variables, else they are the names the law reads and neither calls nor finds defined, by the
+# program or the compiler
+law_check(law: Node, program: Node): Node := {
+	is_named_law = law is key and op_of(law) == ":" and key_of(law) is symbol
+	lines = if is_named_law then compiler_word("statements_in", [value_of(law)]) else [law]
+	if is_named_law and #lines == 1 and lines#1 is list { lines = [line for line in lines#1] }
+	proposition = lines.last
+	given = lines[0 ..< #lines - 1].map(law_given).filter(name => name != "")
+	defined = compiler_word("level_statements", [program]).map(statement => compiler_word("declared_name", [statement]))
+	variables = if #given > 0 then given else law_variables(proposition, []).filter(name => name not in defined and not compiler_word("is_declared_word", [name]))
+	shown = (if is_named_law then name_of(key_of(law)) else compiler_word("as_code", [proposition]).replace("ø-", "-")).replace("\"", "'")
+	# each variable an item of the values tried, which no rule of a library word takes (c, m)
+	for i in 0 ..< #variables { proposition = compiler_word("renamed", [proposition, variables[i], key(symbol(LAW_VALUES), "#", i + 1)]) }
+	bracketed([symbol("law_holds"), text(shown), bracketed(variables.map(text), "["), key(symbol(LAW_VALUES), "->", proposition)], "(")
+}
+# `for x: int` of a named law: x
+law_given(line: Node): text := {
+	written = compiler_word("as_code", [line])
+	if not written.starts_with("for ") { return "" }
+	written[4 ..].replace(":", " ").split(" ").filter(word => word != "")#1
+}
+# the names a law reads, in order, each once: none a call's head (`square` of `square(x)`)
+law_variables(n: Node, found: list): list := {
+	if n is symbol { return if name_of(n) in found then found else found + [name_of(n)] }
+	if n is key { return law_variables(value_of(n), law_variables(key_of(n), found)) }
+	if not (n is list) { return found }
+	items = [item for item in n]
+	read_items = if #items > 1 and items#1 is symbol then items[1 ..] else items
+	for item in read_items { found = law_variables(item, found) }
+	found
+}
+# a word of the compiler running this module's rule word, called on the values (core/native/driver.warp
+# compiler_word_answered): its walkers and its tables, as the compiler's own rule words have them
+compiler_word(word: text, arguments: list) := std_io("warp", "compiler_word", [word, arguments])
 
 # A program's own tests, `test C` lines (decisions test-soft, program-test), checks as its laws are: each checked where
 # it stands, a raise failing it, and a program with tests ending in their summary, as `warp test` words it: "✓ 3 tests
