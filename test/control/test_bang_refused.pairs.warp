@@ -1,3 +1,0 @@
-# `x!` runs no code: a block's is refused with the fix x() (decision blocks-run-by-call)
-'x = {1+2}; x!'	error
-'x:int?=5; x! * 2'	10

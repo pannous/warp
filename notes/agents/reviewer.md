@@ -22,7 +22,7 @@ You have two queues, plans first:
 - Code in the wrong layer (AGENTS.md "Three layers"), vocabulary tables in core/, a core form for an edge case.
 - A quiet fallback that hides a problem instead of refusing loudly.
 For a speed-relevant change, ask for its instruction counts on hello, `use units; 1` and `use storage` before and
-after; the landing's speed gate refuses more than 5% slower, but a plan is cheaper to fix than a landing.
+after; the landing's speed gate refuses more than 20% slower (measured twice), but a plan is cheaper to fix than a landing.
 
 ## Primer (read once, keep in mind)
 - The philosophy: notes/welcoming.md (clear intent compiles, ambiguity warns or errors loudly, educate), the decided

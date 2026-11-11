@@ -192,6 +192,7 @@ before asking a question). After a context swap, this file and your role file be
 - Word choices are aliases: the recommended word is canonical, the others work with a got-it note (core/analysis/diagnostics.warp).
   Only differences in meaning go to the Interviewer. Everything warp prints (errors, shown results, `warp format`,
   docs) uses the canonical word (canonical-output).
+  Users never see decision keys or card names: say the rule itself.
 - Refuse, never guess: where code reads two ways or a form is unknown, the compiler refuses with a
   fix-it naming the readings; a plausible wrong value is the worst bug. A reading decided by spacing or by a
   parameter's type is printed explicitly by `warp format` and in compiler notes (`[a -1]` → `[a, -1]`).

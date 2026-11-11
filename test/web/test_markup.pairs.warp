@@ -1,0 +1,43 @@
+# Markup and notes: a handler after a comma in a tag, note values (wiki html, sound;
+# decisions markup-handler-comma, note-value)
+'str(note(C4))'	"C4"
+'str(note(445Hz))'	"A4+20c"
+'C4 * 2 > 523'	yes
+'count = 0; html{ button{ "+1", on click { count += 1 } } }; 1'	1
+
+# Markup attributes and style declarations, as in markup.warp's element examples
+'use markup; to_html(input{disabled: true})'	'<input disabled>'
+'use markup; to_html(input{disabled: false})'	'<input>'
+'use markup; to_html(div{style: {color: "red"}, "Hi"})'	'<div style="color: red">Hi</div>'
+
+# CSS declarations preserve units and camel-case conversion
+'use markup; to_html(div{style: {backgroundColor: "red", width: "2px"}, "Hi"})'	'<div style="background-color: red; width: 2px">Hi</div>'
+'use markup; to_html(label{for: "name", "Name"})'	'<label for="name">Name</label>'
+
+# Outcome forms: notes/decisions.md, click-by-label
+'use markup; count = 0; page: html = div{ button{ "+1", on click { count += 1 } } }; page_render(page); page_event(1, ø); count'	1
+
+# on mount / on cleanup of a component (lib/markup.warp component_moments, card mount-cleanup-handlers):
+# mount when an instance first renders, cleanup when a later render drops it (tour cleanup)
+
+'use web; seen = []; def Fruit(label) { name = label; on mount { seen.add("hello " + name) }; on cleanup { seen.add("bye " + name) }; span{ name + " " } }; pears = true; page = div{ button{ on click { pears = false }, "hide pears" } Fruit("apples") (if pears then Fruit("pears") else []) }; render page; seen'	["hello apples", "hello pears"]
+'use web; seen = []; def Fruit(label): html { name = label; on mount { seen.add("hello " + name) }; on cleanup { seen.add("bye " + name) }; span{ name + " " } }; pears = true; page: html = div{ button{ on click { pears = false }, "hide pears" } Fruit("apples") (if pears then Fruit("pears") else []) }; render page; click "hide pears"; seen'	["hello apples", "hello pears", "bye pears"]
+'use web; seen = []; def Fruit(label): html { name = label; on mount { seen.add("hello " + name) }; on cleanup { seen.add("bye " + name) }; span{ name + " " } }; pears = true; page: html = div{ button{ on click { pears = false }, "hide pears" } Fruit("apples") (if pears then Fruit("pears") else []) }; render page; click "hide pears"'	'<div><button data-warp-click="1">hide pears</button><span>apples </span></div>'
+'use web; seen = []; def Box(label): html { name = label; span{ on mount { seen.add("hi " + name) }, on cleanup { seen.add("bye " + name) }, name } }; show = true; page: html = div{ button{ on click { show = false }, "hide" } (if show then Box("x") else []) }; render page; click "hide"; seen'	["hi x", "bye x"]
+
+# Page metadata and groups: decisions html-render-mode, html-meta
+'use markup; to_html(html{title:"Shop", description:"Books", body{p{"Hi"}}})'	'<html><head><title>Shop</title><meta name="description" content="Books"></head><body><p>Hi</p></body></html>'
+'use markup; page_of([div{"one"}, p{"two"}])'	'<div>one</div><p>two</p>'
+
+# a tag word before all/each makes that tag of each item (decision: guide Web pages)
+'use markup; fruits = ["apple" "pear"]; to_html(ul{ li all fruits })'	'<ul><li>apple</li><li>pear</li></ul>'
+'use markup; to_html(ol{ li each [1 2] })'	'<ol><li>1</li><li>2</li></ol>'
+
+# Outcome forms: notes/stdlib.md, markup
+'use markup; to_html(div{title: "A & B", "<x>"})'	'<div title="A &amp; B">&lt;x&gt;</div>'
+'use markup; to_html(div{42})'	'<div>42</div>'
+
+# Outcome forms: notes/stdlib.md, markup
+'use markup; to_html("hello")'	'hello'
+'use markup; to_html("<hi>")'	'&lt;hi&gt;'
+'use markup; to_html(div{p{"Hi"}})'	'<div><p>Hi</p></div>'

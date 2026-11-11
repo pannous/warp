@@ -1,0 +1,14 @@
+# from test_from_import.rs: edit the Rust test, then run the script again
+
+# from_import_brings_the_named_words
+'from list import zip; zip([1], [2])'	[[1, 2]]
+'from list import zip, unique; unique([1, 2, 1])'	[1, 2]
+'from text import repeat; repeat("a", 2)'	'aa'
+
+# a_program_word_of_an_unimported_name_is_its_own
+'from list import zip; unique(x) := 7; unique(1)'	7
+
+# `from X import a, b` is `use X` (decision modules-triage); a used file's passes X on (test_selective_package.pairs.warp)
+'from list import zip; zip([1, 2], [3, 4])'	[[1, 3], [2, 4]]
+'from math import floor, ceil; ceil(2.5)'	3
+'x = 1; from list import zip; zip([x], [2])'	[[1, 2]]

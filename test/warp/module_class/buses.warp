@@ -1,2 +1,2 @@
-// a module with a class of plain fields, for tests/modules/test_module_classes.rs
+// a module with a class of plain fields, for test/modules/test_module.pairs.warp
 class Bus{id:int; effects:list}

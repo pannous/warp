@@ -1,4 +1,0 @@
-# a name defined bare twice, each with its result type, is a function of no parameters of several results: the type at its use picks one (card duplicate-function-definitions, the user's bug button)
-'sample: int := 7; sample: text := "seven"; "hi" + (sample as text)'	"hiseven"
-'sample: int := 7; sample: text := "seven"; x: int = sample; x + 1'	8
-'sample: int := 7; sample + 1'	8

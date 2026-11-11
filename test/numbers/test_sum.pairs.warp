@@ -1,0 +1,18 @@
+# the sum of a list before a comparison is compared, not the comparison summed, a range's too (card xs-sum)
+'xs = [1, 2]; sum xs == 3'	yes
+'r = 1..5; sum r > 9'	yes
+'sum 5'	5
+
+# sum of the numbers given, as max takes them (guide `sum 1 2 3`); sum of a list stays
+'sum 1 2 3'	6
+'sum(1.5, 2, 3)'	6.5
+'sum 1.5 2 3'	6.5
+'sum [1.5, 2]'	3.5
+
+# from test_sum_of_decimals.rs: edit the Rust test, then run the script again
+
+# the_sum_of_decimal_elements
+'sum [1.5 2.5]'	4
+'sum([1.5 2.5])'	4
+'xs=[1.5 2.5]; sum(xs)'	4
+'xs=[0.1 0.2]; sum(xs) == 0.3'	true
