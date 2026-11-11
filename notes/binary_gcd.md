@@ -1,34 +1,35 @@
 # Binary gcd (Stein's algorithm)
 
-`gcd` is Euclid's algorithm, `gcd_euclid`. `gcd_binary` is Stein's binary gcd in the trailing-zero form: strip the
-common power of two, then subtract and shift until the odd parts meet. The idea is the one in the Linux kernel's
-`lib/math/gcd.c` (https://github.com/torvalds/linux/blob/master/lib/math/gcd.c, GPL-2.0). That file was the
-algorithm reference only. No Linux code was copied. Both functions live in `core/integers.warp` (`lib/integers.warp`
-links there), which is the one gcd of the compiler and of every program (`use math` or `use integers`).
+`gcd` is unchanged. It is the core's Euclid (`core/integers.warp`), of any whole numbers, values past 64 bits
+included, and `gcd_euclid` is that function's name. `gcd_binary` (lib/math.warp) is Stein's trailing-zero form
+for a signed machine word: strip the common power of two, then subtract and shift. The idea is the one in the
+Linux kernel's `lib/math/gcd.c` (https://github.com/torvalds/linux/blob/master/lib/math/gcd.c, GPL-2.0). That
+file was the algorithm reference only. No Linux code was copied.
 
-## Why the wide path divides
+A value past a signed machine word is not counted with `trailing_zeros`. `gcd_binary` gives it to `gcd`, so
+`gcd(2^70, 6)` and the other past-64-bit results stay exactly what they were. `gcd` itself was not replaced.
 
-A count of trailing zeros for a signed machine word is `wasm i64.ctz` (`gcd_word_zeros`), the same instruction
-`lib/bits.warp`'s `trailing_zeros` already uses. No new compiler intrinsic.
+## Trailing zeros
 
-Past a signed machine word the bitwise operators are not the number's bits, and a shift is not a power of two.
-`test/results.txt` records it: `2^70 | 1` is 1, `(2^100) >> 98` is 0. Fixing that is a compiler change, and this
-work does not make one. `gcd_binary` therefore keeps the machine-word path on shifts, and for a whole number of
-`2^63` or more it halves by exact division (`/!`), 32 bits at a time and then one bit. The results match Euclid,
-including `gcd(0, 0)`, negatives, and `2^70`.
+`lib/bits.warp` already has `trailing_zeros(n: int) := wasm i64.ctz`. `gcd_binary_word` calls it. No new
+compiler intrinsic, and no core change. A machine that had no such word would count the zeros with a shift
+loop; this one has the word. The native bench cannot emit that wasm body (`primitive code calls only
+primitive code`), so it calls libc `ffsll`, the same bit counted from one.
 
-## Why Euclid stays the default
+## Why Euclid stays `gcd`
 
-Measured by `test/bench/binary_gcd.warp` on the callable functions (`clock()` around the calls only, three passes,
-the median). `gcd_binary` is slower on every class, so Euclid stays `gcd` and `gcd_binary` stays opt-in.
+The native bench is `test/bench/binary_gcd.warp`, an `@primitive` file built with `warp build native` (wasm2c
+and `cc -O2`, not the wasm runner). `clock()` is C's, and the figure is that count divided by 1000
+(microseconds to milliseconds). Three runs, the median. Binary is slower on every class, so it stays opt-in
+and `gcd` stays the core's Euclid.
 
 | class | what is timed | Euclid | binary |
 |---|---|---|---|
-| small | 20000 × 8 pairs under 1000 | 73 ms | 122 ms |
-| random | 400 × 32 values below 2^63 | 40 ms | 97 ms |
-| powers | 15000 × 8 power-of-two-heavy pairs | 32 ms | 42 ms |
-| wide | 200 × 8 pairs past 2^63 | 13 ms | 189 ms |
+| small | 2000000 × 8 pairs under 1000 | 106 ms | 235 ms |
+| random | 80000 × 32 values across a signed word | 100 ms | 277 ms |
+| powers | 2000000 × 8 power-of-two-heavy pairs | 78 ms | 143 ms |
+| large | 1500000 × 8 values near the top of a signed word | 100 ms | 453 ms |
 
-The three passes, on the compiler built with this file, were 74 73 73 vs 128 122 120 (small), 40 40 40 vs 97 96 97
-(random), 33 32 32 vs 42 42 42 (powers), 13 14 13 vs 189 190 189 (wide). Wide is the slow class because each
-"shift" is an exact division. Re-run `warp test/bench/binary_gcd.warp` to read them again.
+The three runs were 106 106 98 vs 235 240 232 (small), 100 104 99 vs 277 281 273 (random), 78 82 76 vs
+143 150 143 (powers), 100 103 96 vs 453 457 446 (large). Each class printed `1` first: the two algorithms
+agreed on every pair.

@@ -1,95 +1,10 @@
 # The whole-number words the compiler computes with (decision core-takes-what-it-uses); lib/integers.warp links here,
 # the module lib/math.warp builds on
 # the greatest common divisor of two whole numbers, ints or past 64 bits (2^70), never below 0: the one gcd, the
-# compiler's and every program's (cards gcd-overflow-zero, three-gcds-generic: an int parameter wrapped 2^70 to 0).
-# Euclid stays the default: on this compiler it is faster overall than Stein's binary form (notes/binary_gcd.md).
-# The body is the original remainder loop, so `gcd`'s signature stays that definition's.
+# compiler's and every program's (cards gcd-overflow-zero, three-gcds-generic: an int parameter wrapped 2^70 to 0)
 gcd(a, b) := {
 	x = if a < 0 then 0 - a else a
 	y = if b < 0 then 0 - b else b
 	while y != 0 { rest = x % y; x = y; y = rest }
 	x
-}
-# the same algorithm under its name, for a program that wants Euclid beside `gcd_binary`
-gcd_euclid(a, b) := gcd(a, b)
-# |n|, the same subtraction `gcd` uses, so a most-negative machine word overflows the same way
-gcd_whole(n) := if n < 0 then 0 - n else n
-
-# the largest signed machine word. One past it is 2^63, and a power written here calls extended_power,
-# which the compiler's own build does not link (it builds without big numbers).
-gcd_word_limit = 9223372036854775807
-# 2^32: one chunk of a wider whole number
-gcd_chunk = 4294967296
-# trailing zeros of a positive machine word (wasm i64.ctz). Wider numbers never reach it.
-gcd_word_zeros(n: int): int := wasm i64.ctz
-
-# Stein's binary gcd (trailing-zero form). The idea is the one in Linux lib/math/gcd.c
-# (https://github.com/torvalds/linux/blob/master/lib/math/gcd.c, GPL-2.0, algorithm only, no code copied).
-# A signed machine word uses the hardware trailing-zero count and shifts. A wider whole number cannot:
-# `&` `|` `>>` past 64 bits are not its bits, so that path halves by division (notes/binary_gcd.md).
-gcd_binary(a, b) := {
-	x = gcd_whole(a)
-	y = gcd_whole(b)
-	if x == 0 or y == 0 { return x + y }
-	if x <= gcd_word_limit and y <= gcd_word_limit {
-		return gcd_binary_word(x, y)
-	}
-	gcd_binary_wide(x, y)
-}
-
-# both arguments positive and below 2^63. Common factors of two come off by the trailing-zero count,
-# then subtract-and-shift until the odd parts meet.
-gcd_binary_word(a, b) := {
-	x = a
-	y = b
-	common = gcd_word_zeros(x | y)
-	y = y >> gcd_word_zeros(y)
-	if y == 1 { return 1 << common }
-	while true {
-		x = x >> gcd_word_zeros(x)
-		if x == 1 { return 1 << common }
-		if x == y { return x << common }
-		if x < y { held = x; x = y; y = held }
-		x = x - y
-	}
-}
-
-# the odd part of a positive wide whole number: drop factors of 2^32, then of 2
-gcd_wide_odd(n) := {
-	while n % gcd_chunk == 0 { n = n /! gcd_chunk }
-	while n % 2 == 0 { n = n /! 2 }
-	n
-}
-
-# n * 2^by, by division's inverse, because a left shift of a wide whole number is not that product
-gcd_wide_scale(n, by) := {
-	while by >= 32 { n = n * gcd_chunk; by = by - 32 }
-	while by > 0 { n = n * 2; by = by - 1 }
-	n
-}
-
-# Stein again, for a whole number past a signed machine word: halve by exact division
-gcd_binary_wide(a, b) := {
-	x = a
-	y = b
-	common = 0
-	while x % gcd_chunk == 0 and y % gcd_chunk == 0 {
-		x = x /! gcd_chunk
-		y = y /! gcd_chunk
-		common = common + 32
-	}
-	while x % 2 == 0 and y % 2 == 0 {
-		x = x /! 2
-		y = y /! 2
-		common = common + 1
-	}
-	y = gcd_wide_odd(y)
-	if y == 1 { return gcd_wide_scale(1, common) }
-	while true {
-		x = gcd_wide_odd(x)
-		if x == 1 { return gcd_wide_scale(1, common) }
-		if x == y { return gcd_wide_scale(x, common) }
-		if x < y { held = x; x = y; y = held }
-		x = x - y
-	}
 }
