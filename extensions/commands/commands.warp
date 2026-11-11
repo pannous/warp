@@ -161,15 +161,17 @@ staying_lines(line: text): text := {
 # the next lines once it compiled, when it declares something
 repl_step(folder: text, line: text, wasm_file: text) := {
 	kept = lines_kept(folder)
-	for earlier in kept { own_module(earlier, path_in(folder, earlier + module_extension), path_in(folder, earlier + ".wasm")) }
+	for earlier in kept { own_module(earlier, line_text_file(folder, earlier), path_in(folder, earlier + ".wasm")) }
 	name = wasm_file.split("/").last().remove_suffix(".wasm")
 	source = (kept.map(earlier => "use " + earlier) + [line]).join("\n")
-	text_file = path_in(folder, name + module_extension)
-	write(text_file, source)
-	own_module(name, text_file, wasm_file)
+	write(line_text_file(folder, name), source)
+	own_module(name, line_text_file(folder, name), wasm_file)
 	module_compiled_behind(name, source, read_bytes(runtime_path()), wasm_file)
 	if staying_lines(line) { write(path_in(folder, KEPT_LINES), (kept + [name]).join("\n")) }
 }
+# where a line's text is kept: never as <name>.warp, which would take a later line's `use <name>` as a file to compile
+# in, not the module to link (prelude_words.warp taken_as_file), its instance's state then not the one read
+line_text_file(folder: text, name: text): text := path_in(folder, name + ".line" + module_extension)
 lines_kept(folder: text): list := (try read(path_in(folder, KEPT_LINES)) else "").split("\n").filter(name => name != "")
 # `warp repl` under plain WASI: each line compiled, its declarations kept; running it needs the native warp
 REPL_FOLDER = ".warp-repl"
