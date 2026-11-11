@@ -694,7 +694,9 @@ function_definition(name: Node, program: Node): any := {
 	found = level_statements(program).filter(statement => defines(statement, "${name}"))
 	if #found == 0 then ø else found#1
 }
-defines(statement: Node, name: text): bool := defined_name(statement) == name or (is_key(statement, Op.Assign) and key_of(statement) == symbol(name) and is_lambda(value_of(statement)))
+# (a head with its result type, `f(x): T := …`, `f(x) as T := …`, by its call, arity_overloads.warp definition_call)
+defines(statement: Node, name: text): bool := defined_name(statement) == name or call_named(definition_call(statement), name) or (is_key(statement, Op.Assign) and key_of(statement) == symbol(name) and is_lambda(value_of(statement)))
+call_named(call: Node, name: text): bool := call != ø and call#1 == symbol(name)
 # the modules a shader may quote: the program's `use`s and the modules those use, never a standard module (math's
 # cosine is a WGSL word; quoting its body would hide that word). Their bodies are not in the program yet:
 # rules_rewritten runs before modules_used (passes.warp used_passes)

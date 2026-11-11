@@ -14,6 +14,9 @@ use complex
 use math
 
 VECTOR_TYPES = ["f32", "vec2f", "vec3f", "vec4f"]
+# the widths a declared result type allows a painted or called function: a Color is 3 channels, a number 1, yes/no 0,
+# a list a vector of 2 to 4 (its type holds no length); a type not named here is not checked
+RESULT_WIDTHS = {Color: [3], float: [1], int: [1], number: [1], bool: [0], list: [2, 3, 4]}
 # a complex number's width: a mark of its own beside the vectors' 2 to 4, a vec2f [re, im] in WGSL
 COMPLEX_WIDTH = 5
 COMPLEX_TYPE = "vec2f"
@@ -119,16 +122,23 @@ is_lambda(n): bool := keyed(n, "->") or (n is list and bracket_of(n) == "(" and 
 is_shown_item(n): bool := keyed(n, ":") and key_of(n) is symbol and name_of(key_of(n)) in SHOWN_MARKS
 is_big_number_view(n): bool := keyed(n, ":") and key_of(n) == symbol(OPAQUE_MARK)
 form_of(n): text := if n is key then "`… ${op_of(n)} …`" else "`${n}`"
-# `f(a, b) := …`: f; `f = x => …`: f
+# `f(a, b) := …`, `f(a, b): T := …`, `f(a, b) as T := …`: f; `f = x => …`: f
 definition_name(definition): text := {
-	head = key_of(definition)
+	head = call_head(key_of(definition))
 	name_of(if head is list then head#1 else head)
+}
+# the call a definition's head names, its result type left out: `f(a, b)` of `f(a, b): T` and `f(a, b) as T`
+call_head(head): any := if keyed(head, ":") or keyed(head, "as") then call_head(key_of(head)) else head
+# the result type a definition's head declares, ø for none
+declared_result(definition): any := {
+	head = key_of(definition)
+	if keyed(definition, ":=") and (keyed(head, ":") or keyed(head, "as")) then value_of(head) else ø
 }
 function_definition(name): any := if shading.definitions.has(name_of(name)) then shading.definitions[name_of(name)] else ø
 # the parameters as the definition writes them, `a: int` of `f(a: int) := …`, `x` of `f = x => …`
 function_parameters_written(definition): list := {
 	if keyed(definition, ":=") {
-		head = key_of(definition)
+		head = call_head(key_of(definition))
 		return if head is list then items_of(head)[1 ..] else []
 	}
 	taken = key_of(value_of(definition))
@@ -621,6 +631,11 @@ wgsl_function(word: text, widths: list, signature: text, n: Node) := {
 	}
 	if scope.returned < 0 {
 		wgsl_refused(n, "${word} gives no value")
+		return
+	}
+	declared_type = declared_result(defined)
+	if declared_type is symbol and RESULT_WIDTHS.has(name_of(declared_type)) and not (scope.returned in RESULT_WIDTHS[name_of(declared_type)]) {
+		wgsl_refused(n, "${word} declares its result ${declared_type} but gives " + wgsl_type(scope.returned))
 		return
 	}
 	declared = []
