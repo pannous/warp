@@ -101,7 +101,7 @@ def start(name, port):
         return
     stop(name)
     folder = program_folder(name)
-    environment = {**os.environ, "WARP_SERVE_ADDRESS": PROGRAM_ADDRESS, "WARP_NO_WINDOW": "1"}
+    environment = {**os.environ, "WARP_SERVE_ADDRESS": PROGRAM_ADDRESS, "WARP_WINDOW": "0"}
     log = open(os.path.join(folder, LOG), "w")
     children[name] = subprocess.Popen([WARP, *WARP_ARGUMENTS, os.path.join(folder, SOURCE), str(port)],
                                       cwd=folder, env=environment, stdout=log, stderr=subprocess.STDOUT)

@@ -20,7 +20,7 @@ cases, the page runs them, warp.wasm gives the verdicts), against the native ver
 `test_in_browser.py --serve` only serves (http://127.0.0.1:PORT/web/playground/), for any browser.
 Besides the repository it serves /__stub__?status=…&body=… (that response, for fetch tests) and /__include__/<header>: the C header of that name from the first include directory of
 src/formats/ffi_parser.rs INCLUDE_DIRS that holds it (the page sets WARP_INCLUDE=/include), nothing else of the machine."""
-import functools, http.server, json, os, re, subprocess, sys, threading, time, urllib.parse, urllib.request
+import functools, glob, http.server, json, os, re, subprocess, sys, threading, time, urllib.parse, urllib.request
 
 # --samples (scripts/samples-web.sh): every samples/**/*.warp in the page, its output against the native run's
 SAMPLES_WEB_RESULTS = "test/samples-web.txt"  # tracked: status and sample, one a line, like test/samples.txt
@@ -75,6 +75,12 @@ PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "0"))
 SLOW_START_MS = 2000
 # one browser per run: runs at the same time (the suite, a tour check) must never drive or close each other's page
 SESSION = f"warp-browser-tests-{os.getpid()}"
+# the browser agent-browser launches: the newest Chrome for Testing of `agent-browser install`, else agent-browser's own
+# pick, which on the user's Mac is /Applications/Chromium.app (ungoogled-chromium 156): something outside it sends that
+# one SIGTERM 32 s after every launch, the page turns about:blank and the tour reads "playground is not defined"
+# (card playground-headless-tour)
+CHROME_FOR_TESTING = max(glob.glob(os.path.expanduser("~/.agent-browser/browsers/chrome-*/*.app/Contents/MacOS/*")), key=os.path.getmtime, default=None)
+AGENT_BROWSER = ["agent-browser", "--session", SESSION] + (["--executable-path", CHROME_FOR_TESTING] if CHROME_FOR_TESTING else [])
 LAUNCH_ATTEMPTS = 3
 LAUNCH_SECONDS = 90  # a page that is not loaded by then did not start: relaunch, loudly
 # `--url … --site _site`: the deployed site is checked once it serves the built files, every one of them (card
@@ -440,7 +446,7 @@ def open_page(url):
 		return webdriver.command("open", url) or sys.exit(f"error: {webdriver.NAME} could not open {url}")
 	for attempt in range(1, LAUNCH_ATTEMPTS + 1):
 		try:
-			opened = subprocess.run(["agent-browser", "--session", SESSION, "open", url], capture_output=True, text=True, timeout=LAUNCH_SECONDS)
+			opened = subprocess.run([*AGENT_BROWSER, "open", url], capture_output=True, text=True, timeout=LAUNCH_SECONDS)
 			reason = opened.stderr.strip() or opened.stdout.strip()
 			deadline = time.time() + LAUNCH_SECONDS
 			while opened.returncode == 0 and time.time() < deadline:
@@ -451,7 +457,7 @@ def open_page(url):
 		except subprocess.TimeoutExpired:
 			reason = f"agent-browser open did not return in {LAUNCH_SECONDS} s"
 		print(f"error: the browser did not start (attempt {attempt} of {LAUNCH_ATTEMPTS}): {reason}", file=sys.stderr)
-		subprocess.run(["agent-browser", "--session", SESSION, "close"], capture_output=True, timeout=60)
+		subprocess.run([*AGENT_BROWSER, "close"], capture_output=True, timeout=60)
 	sys.exit(f"error: the browser did not start after {LAUNCH_ATTEMPTS} attempts (agent-browser, session {SESSION})")
 
 
@@ -463,7 +469,7 @@ def browser(*arguments):
 		return webdriver.command(*arguments)
 	global browser_complaint
 	try:
-		ran = subprocess.run(["agent-browser", "--session", SESSION, *arguments], capture_output=True, text=True, timeout=60)
+		ran = subprocess.run([*AGENT_BROWSER, *arguments], capture_output=True, text=True, timeout=60)
 	except subprocess.TimeoutExpired:
 		browser_complaint = f"agent-browser {arguments[0]} took over 60 s"
 		return ""  # a busy or crashed page: the stall check decides
@@ -880,7 +886,7 @@ def built_site_wrong(folder=BUILT_SITE_FOLDER, options=(), reloads=False, expect
 	os.makedirs(os.path.dirname(program), exist_ok=True)
 	with open(program, "w") as file:
 		file.write(BUILT_SITE_CODE)
-	built = subprocess.run(["warp", "build", "--site", *options, program], capture_output=True, text=True, env={**os.environ, "WARP_NO_WINDOW": "1"})
+	built = subprocess.run(["warp", "build", "--site", *options, program], capture_output=True, text=True, env={**os.environ, "WARP_WINDOW": "0"})
 	if built.returncode:
 		return [f"warp build --site failed: {(built.stderr or built.stdout).strip()[-300:]}"]
 	browser("open", f"http://127.0.0.1:{PORT}/{folder}/site/index.html")
@@ -1508,7 +1514,7 @@ def check_examples(names, page_url=None, site=None):
 # only the fields the verdict reads: a sample's whole report holds its pictures too, and a full-HD frame (samples/gpu/
 # ringed_planet.warp) as JSON took this process past the dry run's memory cap
 REPORT_FIELDS = ["error", "errors", "message", "value", "html", "printed", "printedWhole", "text", "stream", "paintings", "width", "height"]
-# a sample's timers run this long before its output is taken, as scripts/samples.sh's WARP_EVENTS_FOR has them run
+# a sample's timers run this long before its output is taken, as scripts/samples.sh's --events-for has them run
 # natively (milliseconds)
 SAMPLE_EVENTS_MS = 3500
 START_SAMPLE = """window.sampleReport = undefined; playground.evaluate(%s, %s, { eventsFor: """ + str(SAMPLE_EVENTS_MS) + """ }).then(report => window.sampleReport = JSON.stringify(report, """ + json.dumps(REPORT_FIELDS) + """),

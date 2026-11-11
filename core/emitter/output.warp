@@ -110,7 +110,7 @@ def runtime_call(name: text, values: list): TypedCode {
 # two ints is an exact ratio: warp test trapped; card after-push-tiers-1-2-1105). Not a refusal: a library the build
 # brings may hold such a word no run of it calls (math.warp percent)
 def needed_call(name: text, values: list): TypedCode {
-	warning = name + " traps here, its extension is left out of this build (decision extension-row-optional)" + module.emitting_at
+	warning = name + " traps here, its extension is left out of this build" + module.emitting_at
 	if cut_names.has(name) and not module.warned.has(warning) { module.warned[warning] = yes; warn warning }
 	runtime_call(name, values)
 }
