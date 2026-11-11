@@ -1,0 +1,9 @@
+#!/usr/bin/env warp
+# Collatz conjecture as a bar chart: one bar per number, its height the steps to reach 1
+def collatz(n) = if n == 1 then 0 else 1 + collatz(if n % 2 == 0 then n / 2 else 3 * n + 1)
+
+lengths = [collatz(n) for n in 1 to 1000]
+
+# markup outside html{…} is made in a place typed html; a bare div{…} there is data
+bars: html = [div{style: "width:1px;height:$(l * 2)px;background:#c00"} for l in lengths]
+html{div{style: "display:flex;align-items:flex-end;height:360px;border-bottom:1px solid black" bars}}
