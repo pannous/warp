@@ -123,8 +123,7 @@ fn ray(spot: vec2f) -> vec3f {
 	out.mark = vec3f(f32(part), f32(kind), f32(detail));
 	out.world = vec3f(0.0);
 	out.tree = vec2f(0.0);
-	// ground tiles stay undrawn: the sky quad paints the meadow per pixel, and a tile corner behind the eye would fold it into a wall
-	if (drawn >= u32($instances) || part == 1u) {
+	if (drawn >= u32($instances)) {
 		out.at = vec4f(0.0, 2.0, 0.0, 1.0);
 		return out;
 	}
