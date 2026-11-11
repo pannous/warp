@@ -463,6 +463,8 @@ random_codepoint() := { n = random_below(0x110000 - 0x800); if n >= 0xD800 then 
 // random(x), random(a, b): the dispatch above; random() itself is the host's float in [0, 1)
 random(x: list or number) := random_of(x)
 random(a, b) := random_between(a, b)
+// asked as a float, `x: float = random(50, 550)`, a fraction from a up to b however a and b are written (decision default-variant)
+random(a, b): float := random_fraction(a, b)
 // the machine's readings, read now by the host word system_value (Rust: lowering/signals/system_values.rs,
 // rust-harness:crates/warp-runtime host_words.rs SYSTEM_VALUES): a yes/no one is a reading other than 0, the mouse's place a float; a
 // program's own name of the same word wins
