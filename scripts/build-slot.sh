@@ -4,7 +4,7 @@
 # shared by every session (six rebuilds at once took the Mac): it runs in the first free slot of
 # <store>/build-slots and waits for one when all are taken. WARP_BUILD_SLOTS names how many, WARP_COMPILER_STORE the store
 # WARP_BUILD_RECORD=<dir>: the run measured into that folder (every build profiled, all of it kept):
-# time (/usr/bin/time -l: CPU, wall, peak memory) and the function profile of scripts/profile.sh -a (WARP_PROFILE=perfmap),
+# time (/usr/bin/time -l: CPU, wall, peak memory) and the function profile of scripts/profile.sh -a (warp --profile),
 # and steps: when each `rebuild step` began (stamped below)
 set -uo pipefail
 DAY_BUILD_SLOTS=3  # user 2026-11-01: four warps at once, 3 builds plus 1 test run (warp test while building, core/native/tests.warp WHILE_BUILDING); 5 drove the load to ~460
@@ -39,11 +39,11 @@ drop_dead_tickets() {
 }
 place_in_line() { tickets_in_order | grep -nx "$(basename "$ticket")" | cut -d: -f1; }
 
-# the measured command: under /usr/bin/time, the run profiled from its start until it ends
+# the measured command, a warp and its words: under /usr/bin/time, the run profiled (--profile) from its start until it ends
 measured() {
 	[ -n "$record" ] || { "$@"; return; }
 	mkdir -p "$record"
-	WARP_PROFILE=perfmap /usr/bin/time -lp -o "$record/time" "$@" &
+	/usr/bin/time -lp -o "$record/time" "$1" --profile "${@:2}" &
 	local timer=$! run=
 	while [ -z "$run" ] && kill -0 $timer 2>/dev/null; do run=$(pgrep -P $timer | head -1) || sleep 0.05; done
 	[ -n "$run" ] && "$scripts/profile.sh" -a "$run" -o "$record" &

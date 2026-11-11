@@ -206,7 +206,7 @@ pong
 
 Markup is written inside `html{…}`: `tag{attributes children}`, `li all xs` repeats a tag over a list.
 
-```warp => <h1>Fruit</h1><ul><li>apple</li><li>pear</li></ul>
+```warp => <html><h1>Fruit</h1><ul><li>apple</li><li>pear</li></ul></html>
 fruits = ["apple" "pear"]; html{ h1{"Fruit"} ul{ li all fruits } }
 ```
 

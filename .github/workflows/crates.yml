@@ -39,8 +39,6 @@ jobs:
     - uses: actions/checkout@v7
     - uses: dtolnay/rust-toolchain@stable
     - name: build the shims
-      env:
-        WARP_CRATES_CACHE: ${{ runner.temp }}/crates
       run: python3 scripts/warp-crate publish dist lib/crates/*.warp
     - name: the target is the one the matrix names
       run: test -f "dist/crates-${{ matrix.target }}.json"

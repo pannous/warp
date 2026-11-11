@@ -16,6 +16,8 @@ gh release download "$tag" --repo pannous/warp --pattern "$archive" --dir "$prev
 tar -xzf "$previous/$archive" -C "$previous" && rm "$previous/$archive"
 echo "bootstrap: the native warp of $tag for $target: $("$previous/warp" version 2>&1 | head -1)"
 cp "$tree"/lib/native/* "$previous/native/"
+# TODO (card no-bash-exports) the published release's warp predates --lib and reads WARP_LIB: `--lib "$previous"` once
+# a release takes it
 (cd "$tree/core/native" && WARP_LIB=$previous "$previous/warp" build native warp.warp)
 mv "$tree/core/native/warp" "$folder/warp"
 cp "$previous"/libwarp_wasmtime.* "$folder/"
