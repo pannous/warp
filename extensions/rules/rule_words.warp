@@ -64,16 +64,25 @@ written_of(code: Node, is_unit: function): bool := {
 }
 # a unit word of lib/units though the program binds the name: `h` of `h = 2 inch; 3 km/h`
 is_library_unit(code: Node): bool := code is symbol and (library_typed_constants().get(name_of(code)) == "Unit" or "units" in defining_modules(name_of(code)))
-# `h = 2 inch; 3 km/h`: after the amount, a unit written whole reads each of its words as lib/units' though the program
-# binds one, with a hint naming the variable, its text as quantity reads it, "km/h"; ø when the program binds none of
-# them (the operators make the quantity) or the code is no unit
-unit_beside_variables(amount: Node, code: Node): any := {
-	if not (code is key and not unit_written(code) and written_of(code, word => is_library_unit(word))) { return ø }
-	unit = "${code}".replace(" ", "")
-	leading = "${key_of(code)}".replace(" ", "")
-	for word in words_within(code).filter(word => binds_value(rule_scope, word)) { diagnose(call_of("unit_beside_variable", [word, "(${amount} ${leading})${unit[#leading ..]}"]), code) }
-	unit
+# `h = 2 inch; 3 km/h`, parsed (3 km) / h: after a number, a unit written whole reads each of its words as lib/units'
+# though the program binds one, the quantity of its text, quantity(3, "km/h"), with a hint naming the variable; ø when
+# the program binds none of them (the operators make the quantity) or the code is no amount and unit
+unit_beside_variables(code: Node): any := {
+	amount = unit_amount(code)
+	if amount == ø { return ø }
+	unit = amount_unit(code)
+	if unit_written(unit) or not written_of(unit, word => is_library_unit(word)) { return ø }
+	written = "${unit}".replace(" ", "")
+	leading = "${leading_unit(unit)}"
+	for word in words_within(unit).filter(word => binds_value(rule_scope, word)) { diagnose(call_of("unit_beside_variable", [word, "(${amount} ${leading})${written[#leading ..]}"]), code) }
+	call_of("quantity", [amount, Text(written)])
 }
+# the number a unit written whole follows, 3 of (3 km) / h; ø for other code
+unit_amount(code: Node): any := if is_unit_operation(code) then unit_amount(key_of(code)) else if is_amount_phrase(code) then code#1 else ø
+# the unit written after it, km / h of (3 km) / h
+amount_unit(code: Node): Node := if is_unit_operation(code) then Key(amount_unit(key_of(code)), op_of(code), value_of(code)) else code#2
+is_unit_operation(code: Node): bool := code is key and op_of(code) in [Op.Div, Op.Mul, Op.Pow]
+is_amount_phrase(code: Node): bool := is_group(code) and bracket_of(code) == "" and #code == 2 and is_number_literal(code#1) and code#2 is symbol
 # `km/h`, `m^2`: the text of a unit written whole of several parts, "km/h", as lib/units unit_named reads it; ø for a
 # single unit word or any other code
 compound_unit(code: Node): any := if code is key and unit_written(code) then "${code}".replace(" ", "") else ø
