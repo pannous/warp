@@ -3,4 +3,4 @@
 'use json from python; json.dumps([1, 2])'	"[1, 2]"
 'use python "math"; math.factorial(5)'	120
 'use python fractions; f = fractions.Fraction(1, 2); f.numerator'	1
-'use python json; json.dumpz(1)'	error	Python's AttributeError, never ø
+'use python json; json.dumpz(1)'	error	the AttributeError of Python, never ø
