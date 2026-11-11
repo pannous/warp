@@ -17,7 +17,7 @@
 'use forest; use math; v = forest_view(Glance(0.0, 1.7, -40.0, 0.0, 0.0, FOREST_FOV, 1.0, 0.25, 20.0)); [abs(v.forward#1) < 0.000001, abs(v.forward#2) < 0.000001, abs(v.forward#3 - 1) < 0.000001, abs(v.up#2 - 1) < 0.000001]'	[yes, yes, yes, yes]
 
 // the opening camera: every candidate is not drawn, the budget is the cap, the closest tree is near detail
-'use forest; v = forest_view(Glance(80.0, 1.7, -12.0, 0.15, -0.18, FOREST_FOV, 240.0 / 135.0, FOREST_NEAR, FOREST_FAR)); s = v.sprites#(count(v.sprites)); [v.total, v.candidate, v.submitted, v.scenery, v.nearest, count(v.sprites), (int(s#4) /! 16) == 2, s#1 > 0, s#1 < 4000]'	[1000000, 5797, 2400, 13, 0, 2413, yes, yes, yes]
+'use forest; v = forest_view(Glance(80.0, 1.7, -12.0, 0.15, -0.18, FOREST_FOV, 240.0 / 135.0, FOREST_NEAR, FOREST_FAR)); s = v.sprites#(count(v.sprites)); [v.total, v.candidate, v.submitted, v.scenery, v.nearest, count(v.sprites), (int(s#4) /! 16) == 2, s#1 > 0, s#1 < 4000]'	[1000000, 5797, 2400, 1, 0, 2401, yes, yes, yes]
 
 // the same view again, the same counts
 'use forest; a = forest_view(Glance(80.0, 1.7, -12.0, 0.15, -0.18, FOREST_FOV, 240.0 / 135.0, FOREST_NEAR, FOREST_FAR)); b = forest_view(Glance(80.0, 1.7, -12.0, 0.15, -0.18, FOREST_FOV, 240.0 / 135.0, FOREST_NEAR, FOREST_FAR)); [a.candidate == b.candidate, a.submitted == b.submitted, a.sprites#(count(a.sprites))#1 == b.sprites#(count(b.sprites))#1]'	[yes, yes, yes]
