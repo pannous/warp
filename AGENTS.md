@@ -262,7 +262,9 @@ before asking a question). After a context swap, this file and your role file be
   files a change touches is the worker's feedback, in the background, never a merge condition; the full suite only
   in the cloud, never on the Mac: the routine "warp full suite (cloud)" runs it twice a day (and on demand before a
   release) and commits test/results.txt. Tests that passed before and fail after your
-  change: fix them or roll the change back.
+  change: fix them or roll the change back, except for a core/ compiler change, which may land with some tests and
+  samples red when a card names the red lines and how they get adjusted (`reds: <card>` in the merge message).
+  Smoke, self-check and the playground deploy stay green.
 - Start from the clean baseline: don't rebuild or retest main before your change; whoever pushes keeps main green (a red main: fix it at once or revert your push).
 - The baseline is stored with its compiler: rely on it, never rerun your touched tests on main to compare . `scripts/baseline.sh <test paths>` prints their stored lines; `scripts/baseline.sh --regressions
   <your results>` names what was ✓ there and is ✗ in your `warp test <paths>` output. The full suite stores its results in
