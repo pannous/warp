@@ -606,3 +606,17 @@ changed; most test files are Rust-era (`# from test_….rs`) with no wiki page b
 | 5 | unpacking: `a, b = f()` of `return 1, 2`, `(a, b) = 1, 2`, `(a, b), c = …`, `_, b = f()`, `for a, b in [[1,2],…]` (unpacking 16 28 50 56 59) | the assignment of a list to a pattern only takes plain names | core destructuring pass |
 | 3 | a comprehension inside `where`, or `to#i` in its filter: `#[i for i in idx where to#i == 0]` (nested_comprehension 7 8 14) | the comprehension's name is unbound in its `where` when the filter indexes another list | core/extension comprehension scope |
 | singles | `sqrt (1 to 4)` exact `(sqrt 2)` where the test wants floats (range_broadcast 2: wrong expectation, user 11-11: exact reals are right); `{r = 1..100001}; o.r` no field (range_in_structure 10); `f(xs) := {xs#1 = 9; xs#1}; f(1..5000)` gives 1 (range_arguments 16: a range argument is not a list to write into); `qs(xs…)` sorts the caller's xs in place (node_lists 9: user 11-11: a function may change the caller's list but must be named with `!`; card param-mutation-rules, the line then calls qs! or expects the refusal); `values(pair)` "not a map" (pair_values 4: values of a pair is its value?) | | |
+
+### types n–z: the user's verdicts (2026-11-11, via the Interviewer)
+
+- Cards: union-return-types, protocol-default-methods (with structural `is shape`, Comparable), optional-cast-text,
+  time-literal-values, variant-payloads, untyped-record-fields, type-call-cast (`T(x)` as the cast; hex's meaning is
+  decided on that card; `char(code)` may be a prelude function now).
+- Held, not cards: typed JSON init effects (typed_parse_constructor_effect 2-4, _guard 2, _flat_guards 2); a list
+  showing each item's own text() (printable_items 4 7 21, printable 5).
+- Held as esoteric: months as values (partial_time_comparisons 4-6), `type(f)` with a signature (type_of_consistency,
+  type_of_lambda_variable, type_values 11), sized `x : 10 float` / `16 int` (sized_array_values, typed_arrays 11 12 21),
+  `gc struct` (recursive_fields 8 9 12), `parse(…) is operation` (operation_type 14 15 17), plural type words
+  `[1 2] is ints` (type_tests 21 25 26).
+- Wrong expectation, parked (left red): `type(3)` "nat" (type_static 9, type_values 7 15, type_compared_with_text 5),
+  `f 3 == 6` refused as two readings (nested_type_calls 15), "Point{x:6 y:4}" (struct_instances 13).
