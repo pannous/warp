@@ -13,8 +13,11 @@ use host_io
 global html_scopes = ["html"]
 type html = any
 // an element: its pair as written, `div: { class: "box" … }` (decision html-value: a cheap class, no mark)
-class Html { element: any }
-format h: Html as text := to_html(h)
+class Html {
+	element: any
+	// its HTML wherever it shows: the value shown, print, text(h), "$h"
+	format as text := to_html(this)
+}
 // an Html's pair, any other value as it is
 html_pair(value: any) := if value is Html then value.element else value
 html_elements = ["html", "head", "body", "title", "meta", "link", "style", "script", "base",
@@ -73,7 +76,7 @@ export page_render(value: html) := {
 	if page_in_js { foreign_call("js", "globalThis", JS_PAGE_SHOWN, 1, [html]) }
 	html
 }
-// a program reaching the page's js (`who.focus()`, `document.title`, extensions/js_globals.warp) has its page in the js
+// a program reaching the page's js (`who.focus()`, `document.title`, extensions/foreign_globals.warp) has its page in the js
 // runtime's document after each render: natively the hidden web view's (lib/host/native_host/webview_bridge.js), the page
 // shows it itself (web/playground/host-foreign.js). Other programs never start the js runtime
 JS_PAGE_SHOWN = "warpShowPage"

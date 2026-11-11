@@ -28,12 +28,23 @@ nonlocal_word = "nonlocal"
 kind_changes(program: Node): Node := {
 	results = evident_results(program)
 	global_names = global_variables(program)
-	for body in [program] + definition_bodies(program) {
-		change = first_kind_change(body, {}, results, global_names)
-		if change != ø { return diagnose(change, changed_value) }
-	}
-	program
+	change = first_kind_change(program, linked_kinds(), results, global_names)
+	for body in definition_bodies(program) { if change == ø { change = first_kind_change(body, {}, results, global_names) } }
+	if change != ø then diagnose(change, changed_value) else program
 }
+# the kinds of the globals the modules it links hold, as the program had given them: a console's earlier line said
+# `x = 1`, so this line's `x = "a"` is a change (card warp-repl-instance)
+linked_kinds(): map := {
+	kinds = {}
+	for image in module.linked_images {
+		for entry in image.globals {
+			shown = kinds_held.filter(pair => pair#1 == entry#2).map(pair => pair#2)
+			if #shown > 0 and entry#1.starts_with(program_global_prefix) { kinds[entry#1[#program_global_prefix ..]] = shown#1 }
+		}
+	}
+	kinds
+}
+kinds_held = [[ValueKind.Int, "Int"], [ValueKind.Float, "Float"], [ValueKind.Text, "Text"], [ValueKind.List, "List"], [ValueKind.Bool, bool_kind]]
 
 is_define_statement(n: Node): bool := is_operator(n, ":=")
 # `(f x) := …`: the name it defines, else ""

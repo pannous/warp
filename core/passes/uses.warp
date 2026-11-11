@@ -324,22 +324,25 @@ is_runtime_module(name: text): bool := name in hooks().runtime_modules
 # the words of the runtime modules a compile brings the source of: their functions compile as runtime words do
 # (intrinsics, the runtime's own words). Only the module being written, or any a `warp build` compiles in: a program
 # links them, and hello reads none of their files
+# (found again only when the compile they depend on changes: the module written, whether modules are linked)
 global runtime_module_words = ø
-global runtime_module_words_of = ø
+global runtime_module_words_for = ø
 is_runtime_module_word(name: text): bool := {
-	compiled = compiled_runtime_modules()
-	if runtime_module_words_of != compiled {
+	compile = [module_written, modules_linked]
+	if runtime_module_words_for != compile {
+		compiled = compiled_runtime_modules()
 		runtime_module_words = word_set(compiled.flat_map(module => file_words(std_module_path(module))))
-		runtime_module_words_of = compiled
+		runtime_module_words_for = compile
 	}
 	runtime_module_words.has(name)
 }
 compiled_runtime_modules(): list := hooks().runtime_modules.filter(module => module == module_written or not modules_linked)
-# the definitions of a file and of the files beside it that it uses
+# the definitions of a file and of the files beside it that it uses by path (never one above it, the core's runtime)
 file_words(file: text): list := {
 	source = file_text(file) ?? ""
-	beside = source.split("\n").filter(line => line.starts_with("use \"") and not line.contains("..")).map(line => folder_of(file) + "/" + line.split("\"")#2)
-	definition_slices(source).map(slice => slice#1) + beside.flat_map(file_words)
+	# (its parse's use statements: used_modules reads module names, a quoted path is no code to it)
+	beside = statements_in(plain_node(parsed(source))).filter(statement => use_target(statement) is text and not use_target(statement).contains(".."))
+	definition_slices(source).map(slice => slice#1) + beside.flat_map(statement => file_words(file_used(statement, folder_of(file))))
 }
 # a module of lib/host/: no program uses it, so none of its words brings it in (prelude_words.warp module_word_definers)
 is_host_module(name: text): bool := modules_in(HOST_MODULES).has(name)
