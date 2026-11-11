@@ -21,6 +21,7 @@ check=
 [ "${1-}" = --check ] && { check=1; shift; }
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 scripts=$(cd "$(dirname "$0")" && pwd)
+source "$scripts/lib/modules.sh"
 warp=${WARP_BINARY:-warp}
 seed=${WARP_SEED:-$(dirname "$(command -v "$warp")")/warp-seed.wasm}
 compilers=$tree/lib
@@ -57,7 +58,8 @@ stage() {
   # the line's messages (stderr) go with the output: the cpu file holds only time's line
   { time (WARP_SEED=$1 WARP_BUILD_RECORD=$record in_slot "$scratch/rebuild.log" 5 "$warp" rebuild pure 2>&1); } 2>"$scratch/cpu" &&
     [ -f "$built" ] || { echo "refresh-seed: $(basename "$2" .wasm) FAILED: the rebuild by $(basename "$1") failed" >&2; exit 1; }
-  cp "$built" "$2"
+  # with its builder's library, which the stage links its NFC from as the next stage's seed (card asciitext-compile)
+  cp "$built" "$2" && companion_copied "$built" "$2"
   local seconds instructions
   seconds=$(awk '{ printf "%d", $1 + $2 }' "$scratch/cpu")
   instructions=$(awk '/instructions retired/ { print $1 }' "$record/time" 2>/dev/null)
@@ -97,7 +99,7 @@ if [ -n "$check" ]; then
   cmp -s "$chosen" "$seed" && echo "refresh-seed: the seed is that stage" || echo "refresh-seed: the seed differs from that stage (--check: kept)"
   exit 0
 fi
-cp "$chosen" "$seed" && echo "refresh-seed: replaced $seed"
+cp "$chosen" "$seed" && rm -rf "$seed.library" && companion_copied "$chosen" "$seed" && echo "refresh-seed: replaced $seed"
 # the old seed's machine code goes with it, and a warp-seed.runtime.wasm an older native warp kept (it wrote one only
 # when missing, so a stale one kept the old runtime words: no field built_spelled_list, 2026-10-29; now each rebuild
 # compiles the seed's runtime anew, card seed-compiles)
