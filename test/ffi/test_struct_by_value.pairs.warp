@@ -1,0 +1,9 @@
+# a trailing aggregate `sN` on a foreign line (notes/native_host.md): 17 to 128 bytes, last, no float beside it
+
+'f(a: s8): i64 from "c"; f(0)'	error
+'f(a: s16): i64 from "c"; f(0)'	error
+'f(a: s200): i64 from "c"; f(0)'	error
+'f(a: s40, b: i64): i64 from "c"; f(0, 1)'	error
+'f(a: f64, b: s40): i64 from "c"; f(1, 0)'	error
+'f(a: s40): f64 from "c"; f(0)'	error
+'f(a: s24, b: s24): i64 from "c"; f(0, 0)'	error

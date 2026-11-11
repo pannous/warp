@@ -95,6 +95,9 @@ twice(ft) + half(5.0)                   // 86.5
 5. Note the module's size and source version here.
 
 - Not yet: output buffers whose length is a plain count rather than a pointer (`uint8_t *out, size_t out_len`,
-  blake3's finalize), callbacks (function pointers), structs by value.
+  blake3's finalize), callbacks (function pointers), a struct by value into a wasm module (the driver refuses it).
+  A native C foreign line can pass one trailing aggregate as `sN`, 17 to 128 bytes, last, with no float beside it
+  and at most six integer arguments before it (notes/native_host.md). x86-64 puts those bytes on the stack; ARM64
+  passes a pointer to a copy.
 - Not yet: `help m.f` for an imported module's function (`warp help <module>` covers standard modules) (P144).
 - WebAssembly components (`use lib.wasm`, long form `use wasm "lib.wasm" as lib`; `lib.f(x)`) are the other road: notes/stdlib_connectors.md.
