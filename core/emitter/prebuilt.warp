@@ -513,7 +513,7 @@ word_reaches(functions: list, classes: list): map := {
 	naming = word_set(concatenated(own.map(f => name_parts(f.name))) + classes + module.linked_words.keys + concatenated(module.linked_images.map(image_class_names)))
 	reached = {}
 	for f in own {
-		said = words_within(f.body).flat_map(name_parts).filter(word => naming.has(word) and word != f.name)
+		said = words_within(f.body).flat_map(with_constructed_class).filter(word => naming.has(word) and word != f.name)
 		if #said > 0 { for key in owning_names(f.name) { reached[key] = (reached.get(key) ?? []) + said } }
 	}
 	reaches = {}
@@ -530,6 +530,9 @@ arity_base(name: text): text? := {
 	last = parts[#parts - 1]
 	if #parts > 1 and is_digits(last) then parts[0..<(#parts - 1)].join("·") else ø
 }
+# a call and, of a constructor (classes.warp constructor_name, made_name), the class it makes: Graph·new, Graph
+# (a struct made in place names it, class·Graph)
+with_constructed_class(word: text): list := if made_by_constructor(word) or word.starts_with(instance_struct_prefix) then [word, word_class(word)] else [word]
 # the class a lifted word belongs to, the last part of next·Channel, the first of a constructor's Graph·new
 word_class(name: text): text? := {
 	parts = name.split("·")
