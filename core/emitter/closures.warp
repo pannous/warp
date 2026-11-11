@@ -114,7 +114,7 @@ closure_shown(name: text, captured: int): text := {
 	if not is_lifted_lambda(name) { return function_name(name) }
 	f = module.functions[name]
 	names = taken_names(f.signature)[captured..]
-	(if #names == 1 then names#1 else "(" + names.join(", ") + ")") + " => " + str(f.body)
+	(if #names == 1 then names#1 else "(" + names.join(", ") + ")") + " => " + text(f.body)
 }
 # the name a function value shows, as written (`twice` of the program's own `twice·own`): `len` of a class's
 # method that became the witness `len·Point`, the last part of a nested `outer·inner`

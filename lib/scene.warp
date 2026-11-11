@@ -54,10 +54,10 @@ shapes = {
 
 // the names a scene mentions: a text `{car, tree, tree}` (or `car tree tree`), or a list of names
 scene_names(things: any): list := {
-	if things is list { return things.map(t => str(t)) }
-	words = parse(if str(things).starts_with("{") then str(things) else "{" + str(things) + "}")
+	if things is list { return things.map(t => text(t)) }
+	words = parse(if text(things).starts_with("{") then text(things) else "{" + text(things) + "}")
 	out = []
-	for w in words { out = out + [str(w)] }
+	for w in words { out = out + [text(w)] }
 	out
 }
 
@@ -65,7 +65,7 @@ scene_names(things: any): list := {
 scene_kind(name: text): text := {
 	if name in natural_sizes { return name }
 	if name in families { return choice(families[name]) }
-	raise "scene: no thing named " + name + " (things: " + str(natural_sizes.keys()) + ", families: " + str(families.keys()) + ")"
+	raise "scene: no thing named " + name + " (things: " + text(natural_sizes.keys()) + ", families: " + text(families.keys()) + ")"
 }
 
 // every thing of a scene placed: [{name, kind, size, color, position}], side by side along x on the ground

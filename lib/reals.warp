@@ -79,8 +79,8 @@ simplest_term(term: any) := if exact_real(term) then real_of(term.coefficient, t
 alike_terms(a: any, b: any): bool := if exact_real(a) then a.alike(b) else not exact_real(b)
 # 2 + 2π, √2 - π/2: a negative term after the first written with a minus
 sum_text(terms: list): text := {
-	shown = str(terms#1)
-	for term in terms[1 ..] { shown += if term < 0 then " - " + str(term * -1) else " + " + str(term) }
+	shown = text(terms#1)
+	for term in terms[1 ..] { shown += if term < 0 then " - " + text(term * -1) else " + " + text(term) }
 	shown
 }
 
@@ -98,7 +98,7 @@ decimal_digits(x: any, count: int): text := {
 	decimals = count - 1 - magnitude
 	sign = if total < 0 then "-" else ""
 	shown = rounded_shifted(abs(total), scale_digits - decimals)
-	sign + (if decimals > 0 then point_placed(shown, decimals) else str(shown * 10 ^ (-decimals)))
+	sign + (if decimals > 0 then point_placed(shown, decimals) else text(shown * 10 ^ (-decimals)))
 }
 # the power of ten of a positive float's leading digit: 8.28 is 0, 0.05 is -2, 314.1 is 2
 decimal_magnitude(f: float): int := {
@@ -134,7 +134,7 @@ term_times(rational: number, whole: number): number := numerator(rational) * who
 # ⌊√n⌋ of a whole number, by Newton's steps from above
 whole_root(n: number): number := {
 	if n < 2 { return n }
-	guess = 10 ^ ((#str(n) + 1) /! 2)
+	guess = 10 ^ ((#text(n) + 1) /! 2)
 	next = newton_step(guess, n)
 	while next < guess { guess = next; next = newton_step(guess, n) }
 	guess
@@ -144,7 +144,7 @@ newton_step(guess: number, n: number): number := (guess + n /! guess) /! 2
 rounded_shifted(n: number, shift: int): number := if shift <= 0 then n * 10 ^ (-shift) else (n + 5 * 10 ^ (shift - 1)) /! 10 ^ shift
 # the digits of n with a decimal point before its last `decimals`: 828318 with 5 is 8.28318
 point_placed(n: number, decimals: int): text := {
-	written = str(n)
+	written = text(n)
 	while #written <= decimals { written = "0" + written }
 	written[0 ..< #written - decimals] + "." + written[#written - decimals ..]
 }
@@ -197,11 +197,11 @@ exact_root(x: any) := if x is float then √(x as float) else if x is number the
 real_text(coefficient: number, pi_power: number, radicand: int) := {
 	half = not (pi_power is int)
 	whole = if half then pi_power - 1 / 2 else pi_power
-	inside = (if radicand == 1 then "" else str(radicand)) + (if half then "π" else "")
+	inside = (if radicand == 1 then "" else text(radicand)) + (if half then "π" else "")
 	radical = if inside == "" then "" else if radicand != 1 and half then "√(" + inside + ")" else "√" + inside
 	if whole < 0 { return inverse_text(coefficient, pi_power_text(-whole), radical) }
 	power = (if whole == 0 then "" else pi_power_text(whole)) + radical
-	if power == "" then str(coefficient) else coefficient_text(coefficient, power)
+	if power == "" then text(coefficient) else coefficient_text(coefficient, power)
 }
 pi_power_text(pi_power: int) := power_text("π", pi_power)
 # a base raised to a power as written, in superscript digits: π, π², m⁻¹ (lib/units.warp shows its units so too)
@@ -224,20 +224,20 @@ superscript_digit(c: any): int := {
 inverse_text(coefficient: number, power: text, radical: text) := {
 	denominator = denominator_of(coefficient)
 	numerator = coefficient * denominator
-	above = if radical == "" then str(numerator) else if numerator == 1 then radical else if numerator == -1 then "-" + radical else str(numerator) + radical
-	below = if denominator == 1 then power else "(" + str(denominator) + power + ")"
+	above = if radical == "" then text(numerator) else if numerator == 1 then radical else if numerator == -1 then "-" + radical else text(numerator) + radical
+	below = if denominator == 1 then power else "(" + text(denominator) + power + ")"
 	above + "/" + below
 }
 # 2π, -π, 3π/4: the coefficient as the fraction it is, its numerator before the power, its denominator after it
 coefficient_text(coefficient: number, power: text) := {
 	denominator = denominator_of(coefficient)
 	numerator = coefficient * denominator
-	over = if denominator == 1 then "" else "/" + str(denominator)
+	over = if denominator == 1 then "" else "/" + text(denominator)
 	# a fraction of a larger denominator kept whole ahead of the power: (3481/41375)π, not 3481/41375π
-	if not (numerator is int) { return "(" + str(coefficient) + ")" + power }
+	if not (numerator is int) { return "(" + text(coefficient) + ")" + power }
 	if numerator == 1 { return power + over }
 	if numerator == -1 { return "-" + power + over }
-	str(numerator) + power + over
+	text(numerator) + power + over
 }
 largest_shown_denominator = 10000
 # the least whole number making x whole, 1 for a float or a fraction of a larger denominator

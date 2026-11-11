@@ -2,7 +2,7 @@
 
 # as_text_str_and_text_call_the_printable_operation
 is! 'class person{name:text}; text(p:person) := "P " + p.name; x = person{name:"a"}; x as text' 'P a'
-is! 'class person{name:text}; text(p:person) := "P " + p.name; x = person{name:"a"}; str(x)' 'P a'
+is! 'class person{name:text}; text(p:person) := "P " + p.name; x = person{name:"a"}; text(x)' 'P a'
 is! 'class person{name:text}; text(p:person) := "P " + p.name; x = person{name:"a"}; text(x)' 'P a'
 is! 'class person{name:text}; text(p:person) := "P " + p.name; x = person{name:"a"}; 3 as text' '3'
 
