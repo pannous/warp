@@ -52,8 +52,8 @@ dlopen(file: text, flags: i32): handle from 'python'
 // Py_GetConstant's None
 PY_CONSTANT_NONE = 0
 // a C long long's ints, which cross as one; any other int crosses by its digits, builtins.int(text)
-LONG_LONG_MIN = -2^63
-LONG_LONG_MAX = 2^63 - 1
+LONG_LONG_MAX = 9223372036854775807
+LONG_LONG_MIN = -LONG_LONG_MAX - 1
 // Python's unordered collections, which come back as lists
 PYTHON_SETS = ["set", "frozenset"]
 // dlopen's RTLD_NOW | RTLD_GLOBAL | RTLD_NOLOAD (Linux): the loaded library's symbols made global
