@@ -345,7 +345,7 @@ classes_reached(word: text, reaches: map, linked_classes: map): list := {
 }
 # the linked class a variant belongs to, `Quantity` of format·text·Quantity (prebuilt.warp word_owners), while nothing reached it
 unreached_variant_class(word: text, linked_classes: map): text? := {
-	owner = module.linked_owners.get(word)
+	owner = linked_owner(word)
 	if owner != ø and linked_classes.has(owner) and not linked_classes_reached.has(owner) then owner else ø
 }
 # the reach's last step, once the passes ran (passes.warp lowered_reached): the program without the brought functions
@@ -451,7 +451,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	# declared only, say none of it)
 	wanted += linked_classes_reached.keys
 	reaches = module.linked_reach
-	linked_classes = module.linked_class_names
+	linked_classes = linked_class_set()
 	uses = ø
 	origins = {}
 	# (the slices by name, made once: each wanted word compared with every slice's name was most of hello's reaching)

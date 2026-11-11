@@ -496,6 +496,10 @@ image_class_names(image: LibraryImage): list := image.classes.map(entry => entry
 # the classes of the linked modules by name; what each of their words reaches, by each name a program says it by
 # (word_reaches), all modules' merged; and the class each method belongs to (word_owners), which with_reached waits for:
 # read once a link
+# (read where a parameter named module hides the module: prelude_words.warp with_reached)
+linked_class_set(): map := module.linked_class_names
+linked_reaches(): map := module.linked_reach
+linked_owner(word: text): text? := module.linked_owners.get(word)
 def read_linked_reaches() {
 	module.linked_class_names = word_set(concatenated(module.linked_images.map(image_class_names)))
 	module.linked_reach = {}
