@@ -21,12 +21,13 @@ known_zone(name: text): text := {
 // (CLOCK_REALTIME, 0), a millisecond's precision asked for. It writes the u64 nanoseconds since 1970 into linear
 // memory's first 8 bytes (the scratch fd_write takes only within its call), read back little-endian
 wall_clock_ms(): int := {
-	nanos_per_milli = 1000000
 	clock_time_get(0, nanos_per_milli, 0)
 	nanos = 0
 	for i in 0..<8 { nanos = nanos * 256 + memory_byte(7 - i) }
 	nanos /! nanos_per_milli
 }
+// -1, 0 or 1 as the time a comes before, with or after b, by the core's order of times
+time_order(a: time, b: time): int := if a < b then -1 else if a > b then 1 else 0
 
 // a span of time in milliseconds, which moves an Instant: a plain number is one (`Instant(0) + 2`), lib/units converts
 // its quantities of time (`Instant(0) + 2 seconds`), one of another dimension a DimensionError (card instant-typed-duration)
@@ -72,8 +73,12 @@ class Instant {
 	ms: int
 	zone: text = "UTC"
 	// another Instant: the earlier first. A duration (`now > 9.hours`, `now > 17h`) compares the matching part
-	// (decision time-word, Interviewer REVISION 2026-11-05): under a day the time of day, else the day of the month
-	compare(other: Instant or number or Duration) := if other is Instant then ms - other.ms else if other is number then bare_number_refused(other) else instant_part_compare(wall(), other)
+	// (decision time-word, Interviewer REVISION 2026-11-05): under a day the time of day, else the day of the month.
+	// A time the core holds compares as this Instant in its form: a date its day, a time of day its time of day,
+	// a local time its wall clock, an instant itself (`now > 1970-01-01`, `now < 17:30`)
+	compare(other: Instant or number or Duration or time) := if other is Instant then ms - other.ms else if other is number then bare_number_refused(other) else if other is Duration then instant_part_compare(wall(), other) else time_order(in_form(other.form), other)
+	// this Instant as a time the core holds of that form (lib/time.warp TimeForm): what compare sets beside one
+	in_form(form: int) := if form == date_form then date() else if form == clock_form then time() else if form == local_form then time_of(local_form, wall() * nanos_per_milli) else time_of(instant_form, ms * nanos_per_milli)
 	// seconds east of UTC its zone has then
 	offset(): int := zone_offset(zone_named(zone), ms /! 1000)
 	// its milliseconds on its zone's wall clock, which its calendar fields read: now.year, now.month, now.day,
@@ -360,6 +365,8 @@ zone_instant(zone: Zone, wall: int, choice: Disambiguation): int := {
 // nanoseconds, its info the zone's index and offset in minutes above the form (extensions/time_values.warp), its zone's
 // name beside them
 nanos_per_second = 1000000000
+nanos_per_milli = 1000000
+instant_form = 0
 date_form = 1
 local_form = 2
 zoned_form = 4
