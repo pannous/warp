@@ -138,6 +138,22 @@ function codeParsedFrom(program, code) {
 	if (status !== 0 || !encoding) return newGuestError(program, said.trim() || `parse-code wrote nothing (status ${status})`);
 	return codeBuilt(program, typeof encoding === "string" ? utf8.encode(encoding) : encoding, { at: 0 });
 }
+// module_word(module, word, arguments) (card module-rule-words, driver.warp module_word_answered): the compiler's call
+// of a rule word the lib module defines. The module is linked at its first call; the arguments, a list the compiler's
+// node_encoding encodes, are built there, its export `word` is called on them, and its result, encoded by the module's
+// node_encoding, is built again in the compiler
+function moduleWord(compiler, imports, linked, module, word, argumentList) {
+	const name = LINKED_MODULE_PREFIX + guestText(compiler, module);
+	const guest = linkedInstance(name, linkedUrl(name), imports, linked);
+	const encoding = utf8.encode(guestText(compiler, compiler.node_encoding(argumentList)));
+	const cursor = { at: 1 };
+	const count = Number(encodedField(encoding, cursor));
+	encodedField(encoding, cursor); // (the list's bracket and separator)
+	encodedField(encoding, cursor);
+	const given = Array.from({ length: count }, () => codeBuilt(guest, encoding, cursor));
+	const result = guest[guestText(compiler, word)](...given);
+	return codeBuilt(compiler, utf8.encode(guestText(guest, guest.node_encoding(result))), { at: 0 });
+}
 // eval_code(t) (decision N31, driver.warp code_evaluated): warp.wasm compiles t as a program of its own, beside the
 // typed program; it runs with its value printed as data after the value mark, what it printed before that goes on to
 // the run's output, and the value is built again in the program as parse_code builds a tree. A text that fails to
@@ -217,9 +233,11 @@ function timerFired(holder, id) {
 }
 
 // the host words warp.wasm calls itself (driver.warp answered_word): no window, no system values, paths as given
-function compilerHostWords(exports) {
+function compilerHostWords(exports, imports, linked) {
 	return {
 		host: {
+			// a rule word a lib module defines, run in that module's instance, linked once per compile (moduleWord)
+			module_word: (module, word, argumentList) => moduleWord(exports(), imports(), linked, module, word, argumentList),
 			// the run's options (warp.option); any other is not the compiler's in a page
 			std_io: (module, member, argumentList) => guestText(exports(), module) === "warp" ? stdCall(exports(), module, member, argumentList, { warnings: [], options: compilerOptions() }) : newGuestError(exports(), `the host word ${guestText(exports(), module)}.${guestText(exports(), member)} is not in the browser yet`),
 			// the library index's source hashes, sha256 (core/passes/library.warp source_hash), by the page's adapters
@@ -265,8 +283,10 @@ function ranSaying(exports, print, exitCode, valued = false) {
 // warp.wasm run with the words after its own path (driver.warp file_ran), each run a fresh instance: { status, said }
 function compilerRan(words, print) {
 	let exports;
+	const linked = new Map(); // the lib modules its module_word linked, by name
 	const wasi = wasiImports(() => exports.memory, [COMPILER_LIBRARY + "/warp.wasm", ...words], print, programFiles, ENVIRONMENT);
-	exports = new WebAssembly.Instance(compilerModule, withWasi(compilerHostWords(() => exports), wasi)).exports;
+	const imports = withWasi(compilerHostWords(() => exports, () => imports, linked), wasi);
+	exports = new WebAssembly.Instance(compilerModule, imports).exports;
 	return ranSaying(exports, print);
 }
 
