@@ -44,7 +44,7 @@ operator_written(e: Node): Node := {
 	if name.starts_with(OPERATOR_FUNCTION_PREFIX) and #name > #OPERATOR_FUNCTION_PREFIX then Key(e#2, name[#OPERATOR_FUNCTION_PREFIX ..], e#3) else e
 }
 # a node the parser marked for the passes (walk.warp passes_read_marks: glued `4px`, a subscript's offset) is written as
-# the node it marks: the passes drop the mark after reading it, and no pass walks into a quote
+# the node it marks, quoted or spliced: the passes drop the mark after reading it, and no pass walks into data
 pass_mark_dropped(n: Node): Node := if n is key and key_of(n) == symbol(attribute_word) and value_of(n)#1 in passes_read_marks then value_of(n)#3 else n
 def written_quote_code(body: Body, written: Node): list {
 	e = operator_written(pass_mark_dropped(written))
@@ -65,7 +65,8 @@ def written_quote_code(body: Body, written: Node): list {
 # Data with its names spliced in (decisions data-names, data-parameters): a part naming only what the program binds is
 # its value (`"Hi " + name`, `theme`, `Greeter("Ann")`), any other part is rebuilt as written, its parts so in turn;
 # an entry's key stays a word, a block stays a block of its items
-def spliced_code(body: Body, e: Node): list {
+def spliced_code(body: Body, written: Node): list {
+	e = pass_mark_dropped(written)
 	# statements the passes made, a comprehension's loop: code, its value spliced in
 	if is_group(e) and bracket_of(e) != "{" and separator_of(e) in statement_separators { return boxed(expression_code(body, e)) }
 	# `if c then a else b` is code, never split at its else; its branches are data in turn (`else ul{…}`)
