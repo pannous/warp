@@ -174,7 +174,7 @@ shell_fallback(state: text, line: text, refusal: text): any := {
 	if fallback is text then refusal else fallback
 }
 # a text as a warp literal that reads back as itself: quoted, its $ no hole
-source_text(t: text): text := quoted_text(t.replace("$", "\\$"))
+source_text(t: text): text := quoted(t).replace("$", "\\$")
 # `warp repl` under plain WASI: each line compiled, its declarations kept; running it needs the native warp
 repl() := {
 	write(REPL_STATE, "")
