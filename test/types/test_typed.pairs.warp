@@ -1,0 +1,51 @@
+# Card typed-parse: JSON booleans are checked as booleans without numeric coercion.
+'class Settings { enabled: bool }; parse("{enabled:true}", Settings).enabled'	yes
+'class Settings { enabled: bool }; try { parse("{enabled:1}", Settings) } catch e { e.message }'	'enabled must be bool, received number'
+
+# Card typed-parse: accept a computed JSON source.
+'class User { id: number }; source = "{id:7}"; parse(source, User).id'	7
+
+# a typed parse constructs its result once, through the class's init (card typed-parse-constructor)
+'global hits = 0; class Counter { value: number; init() { hits = hits + 1 } }; c = parse("{value:7}", Counter); c.value + hits'	8
+'global hits = 0; class Inner { n: number; init() { hits += 1 } }; class Outer { inner: Inner }; o = parse("{inner:{n:1}}", Outer); hits'	1
+'class P { x: int; init(a) { x = a } }; try { parse("{x:1}", P) } catch e { e.message }'	'typed JSON takes no class whose init has parameters'
+
+# Typed parse first slice: unsupported constructors must fail instead of skipping init.
+'global hits = 0; class Counter { value: number; init() { hits = hits + 1 } }; try { parse("{value:7}", Counter) } catch e { e.message }'	Counter{value:7}
+
+# Card typed-parse: present false and zero values satisfy required fields without coercion.
+'class Settings { enabled: bool; count: number }; parse("{enabled:false,count:0}", Settings).enabled'	no
+'class Settings { enabled: bool; count: number }; parse("{enabled:false,count:0}", Settings).count'	0
+
+# Card typed-parse: missing and unknown JSON fields are rejected.
+'class User { id: number; name: string }; try { parse("{id:7}", User) } catch e { e.message }'	'name is required'
+'class User { id: number }; try { parse("{id:7,extra:1}", User) } catch e { e.message }'	'unknown field extra'
+
+# Typed parse refuses optional fields and constructs nested classes.
+'class User { name: string? }; try { parse("{}", User) } catch e { e.message }'	'typed JSON supports only required flat fields yet'
+'class Address { city: string }; class User { address: Address }; parse("{address:{city:\\"Berlin\\"}}", User).address.city'	'Berlin'
+
+# Card typed-parse: typed JSON parsing validates against the declared class.
+'class User { id: number; name: string }; parse("{\\"id\\":7,\\"name\\":\\"Ada\\"}", User).id'	7
+'class User { id: number; name: string }; parse("{\\"id\\":\\"7\\",\\"name\\":\\"Ada\\"}", User)'	error
+'class User { id: number; name: string }; try { parse("{\\"id\\":\\"7\\",\\"name\\":\\"Ada\\"}", User) } catch e { e.message }'	'id must be number, received text'
+
+# Typed JSON constructs classes inside lists and reports paths within them.
+'class Address { city: text }; class User { addresses: list of Address }; parse("{addresses:[{city:\\\"Berlin\\\"}]}", User).addresses#1.city'	'Berlin'
+'class Address { city: text }; class User { addresses: list of Address }; try { parse("{addresses:[{city:\\\"Berlin\\\"},{city:7}]}", User) } catch e { e.message }'	'addresses[2].city must be text, received number'
+
+# Typed JSON recursively rejects unknown fields and constructors.
+'class Address { city: text }; class User { address: Address }; try { parse("{address:{city:7, extra:1}}", User) } catch e { e.message }'	'unknown field address.extra'
+'global hits = 0; class Address { city: text; init() { hits = hits + 1 } }; class User { address: Address }; try { parse("{address:{city:7}}", User) } catch e { e.message }'	'typed JSON supports only required flat fields yet'
+
+# Card typed-parse-nested: typed JSON validates list elements without coercion.
+'class User { scores: list of number }; parse("{\\"scores\\":[1,2]}", User).scores#2'	2
+'class User { scores: list of number }; try { parse("{\\"scores\\":[1,\\"2\\"]}", User) } catch e { e.message }'	'scores[2] must be number, received text'
+
+# Typed JSON validates and constructs nested classes with field paths.
+'class Address { city: text }; class User { address: Address }; parse("{address:{city:\\"Berlin\\"}}", User).address.city'	'Berlin'
+'class Address { city: text }; class User { address: Address }; try { parse("{address:{city:7}}", User) } catch e { e.message }'	'address.city must be text, received number'
+'class Address { city: text }; class User { address: Address }; try { parse("{address:{}}", User) } catch e { e.message }'	'address.city is required'
+
+# Card typed-parse: a class requires a JSON object, not another JSON value.
+'class User { id: number }; try { parse("[1,2]", User) } catch e { e.message }'	'expected object, received list of int'

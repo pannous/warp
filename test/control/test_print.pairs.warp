@@ -1,0 +1,15 @@
+# from test_print_empty.rs: edit the Rust test, then run the script again
+
+# print_empty_gives_nothing
+'print ø'	ø
+# triage-held 2026-11-06: nil, a foreign spelling of ø :: 'print nil'	ø
+'print(ø)'	ø
+'print ø; 3'	3
+
+# from test_print_empty_map.rs: edit the Rust test, then run the script again
+
+# an_empty_map_joins_as_empty
+'print({})'	ø
+'{} as text'	'ø'
+'"a" + {}'	'aø'
+'x = {}; "a" + x'	'aø'

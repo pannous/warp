@@ -8,3 +8,8 @@
 # test_mutating_bang_keeps_its_meaning; a block runs by a call (decision blocks-run-by-call)
 'x="hi"; x.upper!; x'	'HI'
 'b = {1+2}; b()'	3
+
+# from test_unwrap_message.rs: edit the Rust test, then run the script again
+
+# test_unwrapping_an_empty_optional_in_arithmetic_names_it
+'x:int?=5; x!+1'	6
