@@ -463,7 +463,7 @@ xs
 Make a new list from another one.
 
 ```warp => [1, 4, 9, 16]
-[x² for x in [1 2 3 4]]
+[x² for x in 1 2 3 4]
 ```
 
 With a function, `square [1 2 3 4]` does the same: see "Whole lists at once" below.
@@ -474,11 +474,10 @@ With a function, `square [1 2 3 4]` does the same: see "Whole lists at once" bel
 [1 2 3 4] where it > 2
 ```
 
-`it` works in a block too: `{it.length}` is a function of one item. Given one, `sort` orders the items by its value,
-here the shortest word first.
+`sort` orders the items by its value which may be dynamically computed
 
-```warp => ["fig", "kiwi", "apple", "banana"]
-sort(["banana" "fig" "apple" "kiwi"], {it.length})
+```warp => ["fig", "kiwi", "banana"]
+sort(["banana" "fig" "kiwi"], {it.length})
 ```
 
 ### Whole lists at once
