@@ -51,6 +51,11 @@ dlopen(file: text, flags: i32): handle from 'python'
 
 // Py_GetConstant's None
 PY_CONSTANT_NONE = 0
+// a C long long's ints, which cross as one; any other int crosses by its digits, builtins.int(text)
+LONG_LONG_MAX = 9223372036854775807
+LONG_LONG_MIN = -LONG_LONG_MAX - 1
+// Python's unordered collections, which come back as lists
+PYTHON_SETS = ["set", "frozenset"]
 // dlopen's RTLD_NOW | RTLD_GLOBAL | RTLD_NOLOAD (Linux): the loaded library's symbols made global
 RTLD_GLOBAL_AGAIN = 262
 
@@ -118,7 +123,8 @@ python_object(value: any): int := {
 		return value.get("python")
 	}
 	if value is bool { return PyBool_FromLong(if value then 1 else 0) }
-	if value is int { return python_checked(PyLong_FromLongLong(value)) }
+	if value is int and LONG_LONG_MIN <= value and value <= LONG_LONG_MAX { return python_checked(PyLong_FromLongLong(value)) }
+	if value is int { return python_builtin_call("int", [text(value)]) }
 	if value is number { return python_checked(PyFloat_FromDouble(value)) }
 	if value is text { return python_checked(PyUnicode_FromString(value)) }
 	if value is map {
@@ -157,6 +163,12 @@ python_value(target: int): any := {
 	}
 	if kind == "float" { return PyFloat_AsDouble(target) }
 	if kind == "str" { return PyUnicode_AsUTF8(target) }
+	if kind in PYTHON_SETS {
+		listed = python_builtin_call("list", [{python: target, type: kind}])
+		items = python_value(listed)
+		Py_DecRef(listed)
+		return items
+	}
 	if kind == "list" or kind == "tuple" {
 		items = []
 		size = PyObject_Size(target)
@@ -200,6 +212,14 @@ python_builtins(): int := python_checked(PyImport_ImportModule("builtins"))
 // __main__'s __dict__ (a new reference)
 python_main_scope(main: int): int := python_checked(PyObject_GetAttrString(main, "__dict__"))
 
+// the builtin function `name` called with the arguments: a new object
+python_builtin_call(name: text, arguments: list): int := {
+	builtins = python_builtins()
+	result = python_call_handle(builtins, name, arguments, {})
+	Py_DecRef(builtins)
+	result
+}
+
 // whether the target is an instance of the builtin type `name`
 python_instance(target: int, name: text): bool := {
 	builtins = python_builtins()
@@ -222,10 +242,13 @@ python_result(target: int): any := {
 // a new object
 python_call_handle(target: int, name: text, arguments: list, keywords: any): int := {
 	method = python_checked(PyObject_GetAttrString(target, name))
+	objects = arguments.map(python_object)
 	tuple = PyTuple_New(#arguments)
 	i = 0
 	while i < #arguments {
-		PyTuple_SetItem(tuple, i, python_object(arguments[i]))
+		// (the tuple takes a reference of its own: the object stays readable after the call)
+		Py_IncRef(objects[i])
+		PyTuple_SetItem(tuple, i, objects[i])
 		i += 1
 	}
 	table = if #keys(keywords) == 0 then 0 else python_object(keywords)
@@ -233,7 +256,18 @@ python_call_handle(target: int, name: text, arguments: list, keywords: any): int
 	if table != 0 { Py_DecRef(table) }
 	Py_DecRef(tuple)
 	Py_DecRef(method)
+	// a warp list given is changed as Python changed its twin: random.shuffle(xs), bisect.insort(xs, 2)
+	if result != 0 { for i in 0 ..< #arguments { python_copied_back(arguments[i], objects[i]) } }
+	for o in objects { Py_DecRef(o) }
 	python_checked(result)
+}
+
+// a warp list holding what its Python twin holds now, in place, so every alias sees it
+python_copied_back(value: any, twin: int) := {
+	if not (value is list) { return }
+	now = python_value(twin)
+	clear(value)
+	for item in now { value.add(item) }
 }
 
 // the Python object of a call's target, and whether it is a new one to release: a reference's object, else the
@@ -269,7 +303,11 @@ python_call(target: any, name: text, arguments: list): any := {
 
 // a member of a module or value as `use python json; json.dumps(x)` reaches it (extensions/foreign_globals.warp):
 // called with the arguments, else read
-python_member(target: any, member: text, called: int, arguments: list): any := if called == 1 then python_call(target, member, arguments) else python_get(target, member)
+// a value Python gave, converted, reads as warp's: `m.a.b` of a dict json.loads made
+python_member(target: any, member: text, called: int, arguments: list): any := {
+	if called == 0 and target is map and not python_is_reference(target) and target.has(member) { return target.get(member) }
+	if called == 1 then python_call(target, member, arguments) else python_get(target, member)
+}
 
 // python_call with keyword arguments: python_call_with(json, "dumps", [data], {indent: 2})
 python_call_with(target: any, name: text, arguments: list, keywords: any): any := {
