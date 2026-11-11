@@ -2,6 +2,5 @@
 # plays the mp3 file beside this program
 use sound
 use file
-# beside this program (decision source-relative-prefix: play ^/tune.mp3 once path literals take ^/;
-# program.folder is the same folder $dir names)
+# beside this program: program.folder is the folder of this file, the same one $dir names
 play(program.folder + "/tune.mp3")

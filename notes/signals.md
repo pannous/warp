@@ -124,6 +124,6 @@ Ported cases of Svelte, Vue, Solid, RxJS, C#, Node, Qt and the DOM: test/control
   tour example `events`).
 - An emit no handler receives, in a program compiled for a page, is `dispatch_event(name, data)` (lib/signals.warp): a
   `CustomEvent(name, {detail})` on the document (markup.js dispatchToPage; a Worker posts it to its page)
-  (test/web/test_page_custom_events.pairs.warp, samples/web/page_custom_event.warp). A handler body inside an element
+  (test/web/test_page.pairs.warp, samples/web/page_custom_event.warp). A handler body inside an element
   stays code.
 - `broadcast` / channel listeners: natively (wiki/signal.md); the stdlib side is open.

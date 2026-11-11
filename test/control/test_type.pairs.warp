@@ -1,0 +1,10 @@
+# from test_type_field_fallback.rs: edit the Rust test, then run the script again
+
+# a_type_key_is_read_as_written
+'def f(o) { o.type }; f({type: 5})'	5
+
+# `real x` alone declares x as `x: real` does, its value assigned later (card comment-description-hold)
+'real x; x = 3; x * x'	9
+'int n; n = 4; n + 1'	5
+'text s; s = "ab"; s'	'ab'
+'x = 2.5; int x'	2

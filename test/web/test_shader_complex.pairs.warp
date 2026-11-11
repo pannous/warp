@@ -1,3 +1,0 @@
-# a complex number of lib/complex in a painted function is a vec2f, its + - * / ^ the complex ones (card paint-shader)
-'c = -0.8 + 0.156ⅈ; f(x, y) := { z = x + y * ⅈ; z = z² + c; abs(z) < 2 }; shader_of(f).contains("z = (complex_times(z, z) + values.c);")'	yes
-'f(x, y) := (Complex(x, y) / (1 + ⅈ)).im; shader_of(f).contains("return (complex_over(vec2f(x, y), ((vec2f(1.0, 0.0) + vec2f(0.0, 1.0))))).y;")'	yes

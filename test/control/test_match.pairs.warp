@@ -1,0 +1,35 @@
+'p = [1, 2]; t = match p { [1, t] => t; _ => 0 }; describe(v) := match v { t: text => t + "!"; _ => "?" }; describe("hi")'	'hi!'
+
+'number_of(t) := match t { "0x" + h: hex => from_base(h, 16); "0b" + b: digits => from_base(b, 2); n: digits => int(n); _ => 0 }; [number_of("0xff"), number_of("0b101"), number_of("12"), number_of("x")]'	[255, 5, 12, 0]
+'kind(t) := match t { c: letter => "letter"; d: digit => "digit"; _ => "other" }; [kind("a"), kind("7"), kind("ab")]'	["letter", "digit", "other"]
+
+# a comparison after a match's arms compares the match's value: the arms are a block, never a comparison (decision comparison-after-arms)
+'switch 3 {1: "one" 3: "three" default: "many"} == "three"'	yes
+'match 3 {1: "one" 3: "three"} != "one"'	yes
+'switch 2 {1: "one" default: "many"}'	"many"
+'n = 2; match n {1: 10 2: 20} > 15'	yes
+
+# a match is a value inside a phrase, a call and a list too
+'x = 3; "is " + match x { 3 => "three"; _ => "other" }'	'is three'
+'str(match 2 { 1 => "a"; _ => "b" })'	'b'
+'[match 1 { 1 => "one"; _ => "?" }, 5]'	["one", 5]
+
+'g(age) := match age { 0 to 12 => "child"; 13 to 19 => "teen"; 65.. => "senior"; other => "adult" }; [g(5), g(15), g(70), g(40)]'	["child", "teen", "senior", "adult"]
+'r(path) := match path { name + ".html" => name; _ => "?" }; [r("about.html"), r("x.txt")]'	["about", "?"]
+'n(t) := match t { "0x" + h => from_base(h, 16); _ => 0 }; [n("0xff"), n("12")]'	[255, 0]
+'[from_base("ff", 16), from_base("101", 2), from_base("Zz", 36)]'	[255, 5, 1295]
+
+# from test_match_rest_arm.rs: edit the Rust test, then run the script again
+
+# rest_catches_the_rest_with_a_note
+'match [3, 4] { [a, _] => a + 1; rest => 0 }'	4
+
+# rest_the_arm_reads_is_the_matched_value
+'match 3 { 1 => 0; rest => rest + 1 }'	4
+
+# a_variable_named_rest_stays_a_variable
+'rest = 2; match 2 { rest => "two"; _ => "no" }'	'two'
+'rest = 2; match 3 { rest => "two"; _ => "no" }'	'no'
+
+'match (1, 2) { (1, t) => t; _ => 0 }'	2
+'f(x) := match (x, 0) { (0, 0) => "origin"; (a, 0) => "on x " + a; _ => "?" }; [f(0), f(4)]'	["origin", "on x 4"]

@@ -1,2 +1,0 @@
-# Awaiting tasks and ordinary values, and testing when they are done (notes/threads.md; decision task-to-value-awaits).
-'use tasks; t = go { 7 }; before = is_done(t); value = await t; [before, is_done(t), value, is_done("hi"), await "hi"]'	[no, yes, 7, yes, "hi"]

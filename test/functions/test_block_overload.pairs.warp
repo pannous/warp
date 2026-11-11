@@ -1,5 +1,0 @@
-# a block-typed overload beside a number one: the block runs where the function calls it, a number takes the other (card block-typed)
-'f(b: block) := { v = b(); v }; f(n: number) := n * 2; f { sleep(0.01); 7 }'	7
-'f(b: block) := { v = b(); v }; f(n: number) := n * 2; f(3)'	6
-'f(b: block) := b(); f(n: number) := n * 2; f { a = 2; a + 5 }'	7
-'k = 0; twice(b: block) := { b(); b() }; twice { k += 1; k += 2 }; k'	6
