@@ -10,3 +10,9 @@
 'x = 3; m = {x: x}; m.x'	3
 'def f(x) { k = {x: x}; return k.x }; f(3)'	3
 'class V { x: float, y: float }; def vec(x, y) := V(x, y); vec(3, 4).y'	4
+
+# a class's name before a value makes one, as a function's before its argument calls it; before a block it is the literal (card space-call-data)
+'class P { x: int }; [P 3, P 4].map(p => p.x)'	[3, 4]
+'class P { x: int }; p = P {x: 1}; p.x'	1
+'int x = 3; x'	3
+'text(hex 255)'	"0xff"

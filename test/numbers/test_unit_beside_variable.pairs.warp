@@ -8,3 +8,5 @@
 'm = 5; m * 3'	15
 'x = 5; 3x'	15
 'text(3m + 2m)'	'5m'
+'use units; h = 2 inch; text(3 km/h)'	'3km/h'
+'use units; s = 2; text(9.8 m/s²)'	'9.8m/s²'

@@ -236,9 +236,12 @@ write_executable(module: text, executable: text) := {
 # each module the native driver links at a host word's first call whose word the program imports (unicode's
 # canonical_text), the modules these import in turn, and the runtime.wasm they link; none for a program importing none
 LINKED_ON_DEMAND = ["unicode", "native_host"]
+# the prefix of the native host module's export answering a host word (core/native/driver.warp host_word_answered:
+# `sound_played` is its `host_sound_played`)
+HOST_EXPORT_PREFIX = "host_"
 modules_beside(module: text, executable: text) := {
 	imported = wasm_imported(read_bytes(module)).names.filter(name => name#1 == host_module).map(name => name#2)
-	wanted = LINKED_ON_DEMAND.filter(name => wasm_export_names(read_bytes(library_module(name))).any(word => word in imported))
+	wanted = LINKED_ON_DEMAND.filter(name => wasm_export_names(read_bytes(library_module(name))).any(word => word.remove_prefix(HOST_EXPORT_PREFIX) in imported))
 	needed = modules_imported_by(wanted)
 	if #needed > 0 {
 		# (a write into a missing folder makes it)

@@ -118,16 +118,23 @@ rebuilt(first: text, last: text): nothing := {
 	end = step_number(last)
 	seed = seed_path()
 	# the seed builds warp.wasm.new, which runs the later steps with the library the seed makes (driver
-	# compiler_library): the seed's emitter gave warp.wasm.new its GC types, which equal the seed's own only when the
-	# seed compiled itself (refresh-seed's stage A, built by the old seed, does not)
+	# compiler_library), whose GC types the seed's emitter gave it: a seed that compiled itself makes its own library's
+	# (copied: a published seed is older than the sources and can't compile today's lib/unicode); a stage its library
+	# marks as built by other emitter code (refresh-seed's stage A, built by the old seed) makes it anew
 	if start < step_number("native") {
-		seed_library(seed)
-		library_made(seed, companion_library(built))
+		own = seed_library(seed)
+		if access(c_string(other_types_mark(own)), READABLE) == 0 { library_made(seed, companion_library(built)) } else { companion_copied(own, companion_library(built)) }
 	}
 	if step_runs("seed", start, end) {
-		# behind the seed's runtime in that library: a compile links the modules beside its runtime, and lib/modules/
+		# the seed's runtime in a folder of its own: a compile links the modules beside its runtime, and lib/modules/
 		# were built behind lib/runtime.wasm, whose words may sit elsewhere (an old seed checks only their counts)
-		builder_ran(seed, words(seed, compiler, built, folder_of(compiler), library, joined(companion_library(built), companion_file(0))))
+		seed_folder = joined(built, ".seed")
+		mkdir(c_string(seed_folder), FOLDER_MODE)
+		seed_runtime = joined(seed_folder, "/runtime.wasm")
+		file_ran(seed, words(seed, "runtime", seed_runtime, "", "", ""))
+		builder_ran(seed, words(seed, compiler, built, folder_of(compiler), library, seed_runtime))
+		unlink(seed_runtime)
+		rmdir(seed_folder)
 	}
 	if step_runs("optimize", start, end) {
 		optimized = joined(built, ".optimized")
@@ -214,8 +221,7 @@ promoted(): nothing := {
 	promoted_file = joined(library, "/warp-self.wasm")
 	copied(compiler, promoted_file)
 	companion_copied(companion_library(compiler), companion_library(promoted_file))
-	machine_code_copied(compiler, promoted_file, machine_code_suffix(RUN_GC_HEAP_BYTES))
-	machine_code_copied(compiler, promoted_file, machine_code_suffix(BUILDER_GC_HEAP_BYTES))
+	for kind in 0..MACHINE_CODE_KINDS { machine_code_copied(compiler, promoted_file, machine_code_suffix_of(kind)) }
 	said = if fixpoint then " compiles compiler.warp once more (to its own bytes, a fixpoint), promoted to " else " compiles compiler.warp once more (to other bytes, no fixpoint), promoted to "
 	print(joined(joined(compiler, said), promoted_file))
 }
@@ -228,6 +234,8 @@ seed_shipped(): nothing := {
 	print(joined("precompiled ", seed))
 	print(joined("its library ", seed_library(seed)))
 }
+# the empty file refresh-seed puts in a stage's library: the compiler beside it makes GC types other than the library's
+other_types_mark(library: text): text := joined(library, "/makes-other-types")
 # the seed's own runtime and unicode module, <seed>.library/, made once when missing (the published seed brings its own):
 # by the seed itself, so taken for a stage that compiled itself, whose output has its GC types
 seed_library(seed: text): text := {
@@ -266,8 +274,7 @@ companion_folders_made(folder: text): nothing := {
 }
 # a build's machine code (the driver's .cwasm and its key) moved to another build file of the same bytes
 machine_code_moved(from: text, to: text): nothing := {
-	machine_code_renamed(from, to, machine_code_suffix(RUN_GC_HEAP_BYTES))
-	machine_code_renamed(from, to, machine_code_suffix(BUILDER_GC_HEAP_BYTES))
+	for kind in 0..MACHINE_CODE_KINDS { machine_code_renamed(from, to, machine_code_suffix_of(kind)) }
 }
 machine_code_renamed(from: text, to: text, suffix: text): nothing := {
 	rename(c_string(joined(from, suffix)), c_string(joined(to, suffix)))
@@ -342,6 +349,8 @@ console(compiler: text): nothing := {
 	mkdir(c_string(folder), FOLDER_MODE)
 	resident_loaded(compiler)
 	session = session_opened()
+	# Ctrl+C stops the running line or its compile, never the console (lib/native/foreign.c)
+	interrupts_engine(long_at(resident_block()).value)
 	number = 0
 	ended: i32 = -1
 	input = fdopen(STDIN, c_string("r"))

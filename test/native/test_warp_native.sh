@@ -49,6 +49,19 @@ if [ -x "$stage/warp" ]; then
 	check "a console line keeps a variable's kind" "$(printf 'x = 1\nx = "a"\n' | native repl | sed -n 3p)" "🌀x was an Int, is given a Text: use another name at 1:5"
 	check "a console line keeps the first definition" "$(printf 'def f() { 1 }\ndef f() { 2 }\nf()\n' | native repl | sed -n 2,3p | tr '\n' ' ')" "🌀🌀f is defined already (line 1): the console keeps that one 🌀1 "
 	check "exit() ends the console with its status" "$(printf 'exit(3)\nprint 1\n' | native repl >/dev/null; echo $?)" "3"
+	# Ctrl+C stops the running line, never the console: a looping line gets SIGINT, the next line answers (card
+	# warp-repl-instance, user 11-11; the first console start compiles the resident machine code, so it gets its time)
+	mkfifo "$stage/console-input"
+	(cd "$stage" && exec ./warp repl <"$stage/console-input" >"$stage/console-output" 2>&1) &
+	console=$!
+	exec 3>"$stage/console-input"
+	echo 'while yes { 1 }' >&3
+	sleep 5
+	kill -INT "$console"
+	echo '1 + 1' >&3
+	exec 3>&-
+	wait "$console"
+	check "Ctrl+C stops a console line, the console goes on" "$(sed -n 2,3p "$stage/console-output" | tr '\n' ' ')" "🌀stopped by Ctrl+C at 1:13 🌀2 "
 	check "bare warp, a piped program" "$(printf 'a = 7\na * 6\n' | native)" 42
 	check "exit(code) ends the run" "$(native 'exit(3)'; echo $?)" 3
 	printf 'x  =  1\n' >"$stage/spaced.warp"
