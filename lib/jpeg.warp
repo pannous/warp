@@ -154,7 +154,7 @@ restarted(bits: JpegBits, components: list) := {
 block_decoded(bits: JpegBits, component: JpegComponent, steps: list, tables: list, left: int, top: int) := {
 	coefficients = filled_list(64, 0.0)
 	size = decoded(bits, tables[component.dc_table])
-	component.previous_dc += extended(received(bits, size), size)
+	component.previous_dc += extended(bits_received(bits, size), size)
 	coefficients[0] = component.previous_dc * steps[0]
 	k = 1
 	while k < 64 {
@@ -163,7 +163,7 @@ block_decoded(bits: JpegBits, component: JpegComponent, steps: list, tables: lis
 		size = symbol % 16
 		if size == 0 { k = if run == 15 then k + 16 else 64 } else {
 			k += run
-			coefficients[zigzag[k]] = extended(received(bits, size), size) * steps[k]
+			coefficients[zigzag[k]] = extended(bits_received(bits, size), size) * steps[k]
 			k += 1
 		}
 	}
@@ -183,12 +183,12 @@ inverse_dct(coefficients: list): list := {
 decoded(bits: JpegBits, table: Huffman): int := {
 	code = 0
 	for length in 0 ..< 16 {
-		code = code * 2 + next_bit(bits)
+		code = code * 2 + scan_bit(bits)
 		if code <= table.highest[length] { return table.symbols[table.first[length] + code - table.lowest[length]] }
 	}
 	raise "a JPEG Huffman code past 16 bits at byte ${bits.at}: the file is damaged"
 }
-next_bit(bits: JpegBits): int := {
+scan_bit(bits: JpegBits): int := {
 	if bits.left == 0 {
 		bits.byte = bits.bytes[bits.at]
 		bits.at += if bits.byte == 0xFF and bits.bytes[bits.at + 1] == 0 then 2 else 1
@@ -198,9 +198,9 @@ next_bit(bits: JpegBits): int := {
 	(bits.byte >> bits.left) % 2
 }
 // the next size bits as a number, the high bit first
-received(bits: JpegBits, size: int): int := {
+bits_received(bits: JpegBits, size: int): int := {
 	value = 0
-	for i in 0 ..< size { value = value * 2 + next_bit(bits) }
+	for i in 0 ..< size { value = value * 2 + scan_bit(bits) }
 	value
 }
 // a size-bit value as the signed number it codes: below half its range a negative one
