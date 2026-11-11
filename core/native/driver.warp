@@ -826,14 +826,14 @@ instance_defined(linker: handle, engine: handle, context: handle, name: text, pa
 	instance = allocate(INSTANCE_BYTES)
 	checked(wasmtime_linker_instantiate(linker, context, compiled, instance, trap), trap)
 	checked(wasmtime_linker_define_instance(linker, context, name, name.length, instance), trap)
-	checked(started(context, instance, trap), trap)
+	checked(started(context, instance, "warp/start", trap), trap)
 	instance
 }
-# the instance's start run, its error given back (0 for none): a module's start is its main, its value, if any, dropped
-started(context: handle, instance: pointer, trap: pointer): handle := {
+# the instance's start `name` run, its error given back (0 for none): a module's warp/start is its main, its value, if
+# any, dropped; its _start prints it as a program's does
+started(context: handle, instance: pointer, name: text, trap: pointer): handle := {
 	start = allocate(EXTERN_BYTES)
-	start_name = "warp/start"
-	if not wasmtime_instance_export_get(context, instance, start_name, start_name.length, start) { return 0 }
+	if not wasmtime_instance_export_get(context, instance, name, name.length, start) { return 0 }
 	results_count = native_long(wasm_functype_results(wasmtime_func_type(context, start + 8)))
 	wasmtime_func_call(context, start + 8, 0, 0, allocate(VALUE_BYTES * MAX_RESULTS), results_count, trap)
 }
@@ -931,7 +931,7 @@ session_opened(): pointer := {
 	timers_forgotten()
 	run_state(opened_linker(engine, trap), engine, linked, wasmtime_store_context(store), RUN_GC_HEAP_BYTES)
 }
-# the line's module at `path` run in the session: linked, its instance defined, its start run (it shows its value);
+# the line's module at `path` run in the session: linked, its instance defined, its _start run (it prints its value);
 # a failure said, the session going on. The status of the exit() it called, which ends the session, else -1
 session_line_run(session: pointer, path: text): i32 := {
 	outer_run = kept_value(RUN_SLOT)
@@ -943,7 +943,7 @@ session_line_run(session: pointer, path: text): i32 := {
 	error = session_line_linked(session, path, instance, trap)
 	failure = ""
 	if error != 0 or long_at(trap).value != 0 { failure = failure_said(error, trap, "") } else {
-		error = started(context, instance, trap)
+		error = started(context, instance, "_start", trap)
 		if error != 0 or long_at(trap).value != 0 { failure = failure_said(error, trap, raised_message(context, instance, trap)) }
 	}
 	keep_value(RUN_SLOT, outer_run)
@@ -965,6 +965,8 @@ session_line_linked(session: pointer, path: text, instance: pointer, trap: point
 	error = wasmtime_linker_define_unknown_imports_as_traps(linker, compiled)
 	if error == 0 { error = wasmtime_linker_instantiate(linker, context, compiled, instance, trap) }
 	if error == 0 and long_at(trap).value == 0 { error = wasmtime_linker_define_instance(linker, context, path, path.length, instance) }
+	# (so a later line that imports it links this instance, never one made anew)
+	if error == 0 { text_kept(linked, joined(joined(cell_text(linked), path), "\n")) }
 	error
 }
 

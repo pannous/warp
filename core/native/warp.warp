@@ -305,7 +305,7 @@ console(compiler: text): nothing := {
 	resident_loaded(compiler)
 	session = session_opened()
 	number = 0
-	ended = -1
+	ended: i32 = -1
 	input = fdopen(STDIN, c_string("r"))
 	line_cell = allocate(8)
 	capacity = allocate(8)
