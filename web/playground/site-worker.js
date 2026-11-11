@@ -28,12 +28,12 @@ const hooks = {
 	print: (text, stream) => post({ print: { text, stream } }),
 	dispatch: event => post({ dispatch: event }), // site.js: markup.js dispatchToPage
 	paint: (frame, width, height, canvas, shaded) => post({ paint: { frame, width, height, shaded } }, frame && [frame.words.buffer]), // shown by the page (site.js)
-	listen: holder => startTimers(holder, (id, answer) => timerShown(holder, id, answer)), // host-timers.js
+	listen: holder => startTimers(holder, id => timerShown(holder, id)), // host-timers.js
 };
 
 // a timer fired (driver.js timerFired): the page anew, or the failure, which stops the timers
-function timerShown(holder, id, answer) {
-	const { failure } = timerFired(holder, id, answer);
+function timerShown(holder, id) {
+	const { failure } = timerFired(holder, id);
 	if (failure === undefined) return post({ html: pageHtml(holder) });
 	post({ failure });
 	holder.stopTimers();

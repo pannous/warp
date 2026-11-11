@@ -42,7 +42,8 @@ const LOADING_STALL_MS = 30000; // the compiler's download shows a note when it 
 // the origin a link of the shown program resolves against: "/about" is a page of the program, "https://…" is not
 const PROGRAM_ORIGIN = "http://program.invalid";
 const TYPING_DELAY_MS = 300;
-const PENDING_VALUE = "…"; // the value shown from Run until the new one arrives
+const PENDING_VALUE = "…"; // the value shown from the new run's first output until its value arrives
+const RUNNING = "running…"; // the status while a run goes on
 const DEFAULT_EXAMPLE = "hello";
 const COMMIT_URL = "https://github.com/pannous/warp/commit/";
 const SHORT_COMMIT = 9;
@@ -357,7 +358,6 @@ function newWorker(restarts = 0) {
 			if (data.type === "serving") return servingRequests(data);
 			if (data.type === "served") return showServed(data.response);
 			if (listened) eventHeard(data);
-			if (data.type === "handled" && data.fetchesLeft !== undefined) lastAnswered = data;
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
 			if (data.type === "print") printedChunk(pending, data);
@@ -695,6 +695,7 @@ function painted(run, painting) {
 	if (startsFrame(run, "paintings")) run.paintings = [];
 	else if (last && sameSize(last, painting)) run.paintings.pop();
 	run.paintings.push(painting);
+	clearPreviousRun();
 	showFrame(run.paintings);
 }
 
@@ -704,7 +705,9 @@ function painted(run, painting) {
 function printedChunk(run, chunk) {
 	(run.printedWhole ??= []).push(chunk); // for the report (scripts/samples-web.sh compares it with the native run's)
 	run.printed.push(chunk);
-	if (!run.animating) showPrinted(run.printed);
+	if (run.animating) return;
+	clearPreviousRun();
+	showPrinted(run.printed);
 }
 
 // the runaway limit counts running time only: a sleep moves the deadline on by its milliseconds (card sleep-run-limit)
@@ -811,20 +814,7 @@ function evaluate(code, file = programFile(), { asData = false, eventsFor = 0 } 
 	return run;
 }
 
-// the shown run's last fetch answer (lib/net.warp fetch_later), each rendering the page anew: settled(report) is the
-// run's report once no answer is out, with the value and page of the last (test_in_browser.py --samples compares that)
-let lastAnswered;
-const SETTLE_MILLISECONDS = 15000, SETTLE_POLL_MILLISECONDS = 50;
-async function settled(report) {
-	const deadline = Date.now() + SETTLE_MILLISECONDS;
-	const out = () => lastAnswered?.fetchesLeft ?? report.fetching;
-	while (report.fetching && out() > 0 && Date.now() < deadline) await new Promise(done => setTimeout(done, SETTLE_POLL_MILLISECONDS));
-	if (!report.fetching || !lastAnswered) return report;
-	return { ...report, value: lastAnswered.value ?? report.value, html: lastAnswered.html ?? report.html, error: lastAnswered.error };
-}
-
 function runInWorker(code, file, asData, eventsFor) {
-	lastAnswered = undefined;
 	// a program serving requests waits for them (lib/web.warp page_serve): the next run starts in a fresh Worker
 	if (worker.serving) {
 		worker.terminate();
@@ -862,6 +852,7 @@ function startInWorker(run, code, file, asData) {
 function setStatus(text, failed = false) {
 	$("status").textContent = text;
 	$("status").classList.toggle("failed", failed);
+	$("status").classList.toggle("running", text === RUNNING);
 }
 
 const at = (line, column) => line ? `${line}:${column}` : "";
@@ -1220,15 +1211,24 @@ function showEventOutput(data) {
 	if (data.html !== undefined) showRendered(data.html);
 }
 
-// a run starting, however it was started (Run, auto-run, an example chosen, a queued run): the old value gives way to
-// "…", and the old errors, warnings, underlines and printed text go, so none is taken for the new run's, nor stays
-// above an animation as long as it runs (cards g_oc54, playground-stale-value)
-function clearPreviousRun() {
-	showValue(PENDING_VALUE);
+// a run starting, however it was started (Run, auto-run, an example chosen, a queued run): the last run's output stays,
+// dimmed, until the new run shows something of its own, so the pane never flashes blank (card pressing-try-run); the
+// editor's underlines go at once, the code they marked has changed
+function dimPreviousRun() {
+	$("output").setAttribute("aria-busy", "true");
+	markPositions({});
+}
+
+// the new run's first output (a print, a frame, its report, its failure): the dimmed value, errors, warnings and printed
+// text of the run before go, so none is taken for the new run's, nor stays above an animation as long as it runs (cards
+// g_oc54, playground-stale-value)
+function clearPreviousRun(value = PENDING_VALUE) {
+	if ($("output").getAttribute("aria-busy") !== "true") return;
+	$("output").removeAttribute("aria-busy");
+	showValue(value);
 	$("value").classList.remove("located");
 	$("value").onclick = null;
 	$("diagnostics").replaceChildren();
-	markPositions({});
 	showPrinted([]);
 }
 
@@ -1240,11 +1240,14 @@ async function show(code) {
 		return;
 	}
 	showing = true;
-	clearPreviousRun();
-	setStatus("running…");
+	dimPreviousRun();
+	setStatus(RUNNING);
 	try {
-		showReport(await evaluate(code));
+		const report = await evaluate(code);
+		clearPreviousRun();
+		showReport(report);
 	} catch (failure) {
+		clearPreviousRun("");
 		setStatus(failure.message, true);
 	}
 	showing = false;
@@ -1546,7 +1549,7 @@ function initialize() {
 }
 
 // for headless runs (test_in_browser.py --examples): evaluate code as the page does and return the report
-window.playground = { evaluate, settled, applyFix, chooseExample, runCode, reportAddress, bugReport, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
+window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress, bugReport, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
 	// an animation that runs until stopped (a raylib window's `while not WindowShouldClose()`) ends with its report, as
 	// the next run would end it (test_in_browser.py sample_answer); yes when one ran
 	stopAnimation: () => Boolean(pending?.animating && (stopRun(pending, ANIMATION_STOPPED), true)),
