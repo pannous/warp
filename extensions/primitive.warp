@@ -180,7 +180,7 @@ constants_of(statements: list): map := {
 	found
 }
 # `global count = 0`: a global of its number's type, as a local given it takes
-declare_primitive_global(n: Node) {
+declare_primitive_global(n: Node) := {
 	declaration = if is_group(n) then n#2 else value_of(n)
 	if not (is_key(declaration, Op.Assign) and (value_of(declaration) is int or value_of(declaration) is float)) { primitive_refusal(n, "a global not given a number") }
 	initial = mvp_literal(value_of(declaration), "")
