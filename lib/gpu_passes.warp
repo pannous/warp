@@ -1,0 +1,21 @@
+// GPU-resident passes (card gpu-multipass). A field is a pair of targets that stay on the GPU: rgba16float
+// where the device can render it, else rgba32float, else rgba8unorm. gpu_pass draws a fullscreen fragment
+// into one field and swaps the pair. The passes of a frame share one command encoder, so nothing comes
+// back to the CPU until gpu_picture. A shader reads field_<name>(uv), uv in 0..1, filtered when the format
+// allows. gpu_show draws the last shader into the window (or the page canvas) and gpu_picture reads that
+// one image back. Values are numbers and short vectors, the same holes paint fills ($width, $mouse, …).
+gpu_fields(width: int, height: int, names: node): int from host
+gpu_pass_recorded(shader: node, fields: int, into: node, values: node): int from host
+gpu_show(shader: node, fields: int, values: node): int from host
+gpu_picture(shader: node, fields: int, values: node): node from host
+// the shading pass at width × height, the fields still sampled in 0..1. gpu_show_sized opens the window at
+// that point size and, where the drawable is a larger same-aspect image, shades that drawable one pixel for one
+gpu_show_sized(shader: node, fields: int, width: int, height: int, values: node): int from host
+gpu_picture_sized(shader: node, fields: int, width: int, height: int, values: node): node from host
+gpu_fields_format(): node from host
+// the pass, or a catchable "no field" where `into` is not one of the fields
+gpu_pass(shader: node, fields: int, into: node, values: node): int := {
+	recorded = gpu_pass_recorded(shader, fields, into, values)
+	if recorded < 0 { raise "no field " + text(into) }
+	recorded
+}

@@ -1,0 +1,551 @@
+#!/usr/bin/env warp
+# A torch, and the fog that drifts around a pillar (samples/graphics/fluid_25d.warp). The picture follows a visual
+# idea by @r4nM4_64; nothing here was copied (notices/fluid_25d.md). The fluid is Stam's stable fluids, on the GPU.
+# Density is sharpened with one MacCormack step. Pressure is two separable convolutions, the rank-1 Jacobi kernel
+# of Rabbani and Khiat, instead of a Jacobi loop. The picture ray-marches a slab: density is a thickness about the
+# plane, and a short march accumulates emission, absorption and a few light samples. A detail field is written once
+# at startup, one value-noise octave per pass, and the shade samples that texture. Window y grows downward, so a
+# rising flame is a negative v. The grid is 384 by 216. The picture is 960 by 540, and on a Retina drawable the
+# shade pass fills that drawable. Mode 1, torch: a narrow licking flame and grey smoke where the fire cools.
+# Mode 2, fog: a soft veil. The detail field is periodic (each octave's period divides the grid, the hash wraps
+# on that period, and a shear of the sample coordinate is a whole number of cells, so the tile closes). The shade
+# samples it with a wrapped filter. The shade slides that detail by a two-phase flow map, so it moves with the
+# wind and resets before it can stretch. Billows are lit from above with a short self-shadow. A soft hole sits on the
+# pillar. f, 1, 2 or a click switches. Headless: an argument fog, torch or detail. short stops at 80 frames, snap
+# paints the first frame, movie writes every second frame, --times prints each frame's upload and draw in milliseconds.
+use os
+use keys
+use gpu_passes
+
+mode = 1
+timing = no
+steps = 240
+movie = no
+show_detail = no
+for arg in args {
+	if arg == "--times" { timing = yes }
+	else if arg == "fog" or arg == "2" { mode = 2 }
+	else if arg == "torch" or arg == "1" { mode = 1 }
+	else if arg == "detail" { show_detail = yes; mode = 2; steps = 1 }
+	else if arg == "short" { steps = 80 }
+	else if arg == "snap" { steps = 1 }
+	else if arg == "movie" { movie = yes }
+}
+if timing { set_system_value("paint timing", 1) }
+
+grid_w = 384
+grid_h = 216
+view_w = 960
+view_h = 540
+frame_i = 0
+aspect = grid_w * 1.0 / grid_h
+fields = gpu_fields(grid_w, grid_h, ["velocity", "density", "temperature", "pressure", "divergence", "detail"])
+
+fragment(body) := "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {\n" + body + "\n}\n"
+common = '
+fn hash(p: vec2f) -> f32 { return fract(sin(dot(p, vec2f(127.1, 311.7))) * 43758.5453); }
+fn noise(p: vec2f) -> f32 {
+	let i = floor(p);
+	let f = fract(p);
+	let u = f * f * (3.0 - 2.0 * f);
+	let a = hash(i);
+	let b = hash(i + vec2f(1.0, 0.0));
+	let c = hash(i + vec2f(0.0, 1.0));
+	let d = hash(i + vec2f(1.0, 1.0));
+	return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+fn fbm(p: vec2f) -> f32 { return noise(p) * 0.62 + noise(p * 2.1 + vec2f(1.7, 9.2)) * 0.38; }
+fn wobble() -> vec2f { return vec2f(sin(values.time * 3.1) * 0.008, cos(values.time * 2.4) * 0.004); }
+fn pillar_q(uv: vec2f) -> vec2f { return (uv - vec2f(0.50, 0.48)) * vec2f(values.aspect, 1.0); }
+fn pillar_hit(uv: vec2f) -> bool { return false; }
+fn flame_q(uv: vec2f) -> vec2f { return (uv - vec2f(0.50, 0.62) - wobble()) * vec2f(values.aspect, 1.0); }
+fn tongue(uv: vec2f) -> f32 {
+	let q = flame_q(uv) + vec2f(0.0, 0.03);
+	let wag = sin(values.time * 7.4) * 0.06 + sin(values.time * 3.1) * 0.03;
+	let flick = 0.7 + 0.3 * hash(vec2f(floor(values.time * 11.0), 2.0));
+	let main = q - vec2f(wag * max(-q.y, 0.0), 0.0);
+	let a = exp(-dot(main / vec2f(0.58, 1.05), main / vec2f(0.58, 1.05)) / 0.0048);
+	let side = q - vec2f(sin(values.time * 9.0) * 0.09, -0.05);
+	let b = exp(-dot(side / vec2f(0.28, 0.62), side / vec2f(0.28, 0.62)) / 0.0032);
+	return (a + b * 0.75) * flick;
+}
+fn wall(uv: vec2f) -> bool {
+	let edge = uv.x < 0.008 || uv.x > 0.992 || uv.y > 0.992;
+	return values.mode < 1.5 && edge;
+}
+fn thin(uv: vec2f) -> f32 {
+	let up = mix(0.92, 1.0, smoothstep(0.06, 0.38, uv.y));
+	return select(1.0, up, values.mode < 1.5);
+}
+fn curl_noise(uv: vec2f, scale: vec2f, drift: vec2f) -> vec2f {
+	let p = uv * scale + drift;
+	let dx = noise(p + vec2f(0.15, 0.0)) - noise(p - vec2f(0.15, 0.0));
+	let dy = noise(p + vec2f(0.0, 0.15)) - noise(p - vec2f(0.0, 0.15));
+	return vec2f(dy, -dx);
+}
+'
+bounds = common + '
+fn stopped(uv: vec2f) -> bool { return wall(uv) || pillar_hit(uv); }
+fn placed(p: vec2f) -> vec2f {
+	if (values.mode < 1.5) { return clamp(p, vec2f(0.0), vec2f(1.0)); }
+	let q = abs(p);
+	let w = q - 2.0 * floor(q * 0.5);
+	return select(w, 2.0 - w, w > vec2f(1.0));
+}
+'
+uv_of = "let uv = at.xy / values.size;\n"
+advect_velocity = bounds + fragment(uv_of + '
+	if (stopped(uv)) { return vec4f(0.0); }
+	let wind = field_velocity(uv).xy;
+	let carried = field_velocity(placed(uv - wind * values.dt)).xy;
+	let t = values.texel;
+	let blur = (field_velocity(placed(uv + vec2f(t.x, 0.0))).xy + field_velocity(placed(uv - vec2f(t.x, 0.0))).xy + field_velocity(placed(uv + vec2f(0.0, t.y))).xy + field_velocity(placed(uv - vec2f(0.0, t.y))).xy) * 0.25;
+	return vec4f(mix(carried, blur, values.soft) * values.keep, 0.0, 0.0);
+')
+buoyancy = bounds + fragment(uv_of + '
+	if (stopped(uv)) { return vec4f(0.0); }
+	let v = field_velocity(uv).xy;
+	let hot = max(field_temperature(uv).x - 0.05, 0.0);
+	return vec4f(v.x, v.y - hot * values.lift, 0.0, 0.0);
+')
+vorticity = bounds + '
+fn curl_at(uv: vec2f) -> f32 {
+	let t = values.texel;
+	let right = field_velocity(uv + vec2f(t.x, 0.0)).y;
+	let left = field_velocity(uv - vec2f(t.x, 0.0)).y;
+	let down = field_velocity(uv + vec2f(0.0, t.y)).x;
+	let up = field_velocity(uv - vec2f(0.0, t.y)).x;
+	return 0.5 * ((right - left) - (down - up));
+}
+' + fragment(uv_of + '
+	if (stopped(uv)) { return vec4f(0.0); }
+	let t = values.texel;
+	let curl = curl_at(uv);
+	let dx = abs(curl_at(uv + vec2f(t.x, 0.0))) - abs(curl_at(uv - vec2f(t.x, 0.0)));
+	let dy = abs(curl_at(uv + vec2f(0.0, t.y))) - abs(curl_at(uv - vec2f(0.0, t.y)));
+	let len = max(length(vec2f(dx, dy)), 0.0001);
+	let force = vec2f(dy, -dx) / len * curl * values.confinement;
+	return vec4f(field_velocity(uv).xy + force, 0.0, 0.0);
+')
+forces = bounds + fragment(uv_of + '
+	if (stopped(uv)) { return vec4f(0.0); }
+	var v = field_velocity(uv).xy;
+	let gust = curl_noise(uv, vec2f(5.0, 4.0), vec2f(values.time * 0.07, -values.time * 0.05));
+	v = v + gust * values.gust;
+	if (values.mode < 1.5) {
+		let near = tongue(uv);
+		let puff = curl_noise(uv, vec2f(30.0, 42.0), vec2f(1.0, -values.time * 0.9));
+		let wag = sin(values.time * 6.5) * 0.45 + sin(values.time * 2.7) * 0.2;
+		v = v + vec2f(0.0, -0.0005) + puff * (0.006 + near * 0.02);
+		v = v + vec2f(wag, -1.0) * near * 0.00105;
+	}
+	let pointer = values.mouse / values.view;
+	let away = (uv - pointer) * vec2f(values.aspect, 1.0);
+	let reach = exp(-dot(away, away) / 0.012);
+	let spin = vec2f(-away.y, away.x) / vec2f(values.aspect, 1.0);
+	v = v + spin * reach * values.stir_force;
+	v = clamp(v, vec2f(-0.08), vec2f(0.08));
+	return vec4f(v, 0.0, 0.0);
+')
+stash = common + fragment(uv_of + '
+	return vec4f(field_density(uv).x, 0.0, 0.0, 1.0);
+')
+forward = bounds + fragment(uv_of + '
+	if (wall(uv)) { return vec4f(0.0); }
+	let back = placed(uv - field_velocity(uv).xy * values.dt);
+	return vec4f(max(field_density(back).x, 0.0), 0.0, 0.0, 1.0);
+')
+rewind = bounds + fragment(uv_of + '
+	if (wall(uv)) { return vec4f(0.0); }
+	let ahead = placed(uv + field_velocity(uv).xy * values.dt);
+	return vec4f(max(field_density(ahead).x, 0.0), 0.0, 0.0, 1.0);
+')
+correct = bounds + fragment(uv_of + '
+	if (wall(uv)) { return vec4f(0.0); }
+	let hat = field_density(uv).x;
+	let orig = field_divergence(uv).x;
+	let back = field_pressure(uv).x;
+	let gain = select(0.0, 0.5, values.mode < 1.5);
+	let sharpened = hat + gain * (orig - back);
+	let dye = clamp(sharpened, 0.0, max(hat, orig));
+	return vec4f(dye * values.keep * thin(uv), 0.0, 0.0, 1.0);
+')
+advect_heat = bounds + fragment(uv_of + '
+	if (wall(uv)) { return vec4f(0.0); }
+	let back = placed(uv - field_velocity(uv).xy * values.dt);
+	return vec4f(max(field_temperature(back).x, 0.0) * values.keep, 0.0, 0.0, 1.0);
+')
+torch_dye = bounds + fragment(uv_of + '
+	if (wall(uv)) { return vec4f(0.0); }
+	let heat = field_temperature(uv).x;
+	let cooling = smoothstep(0.05, 0.22, heat) * (1.0 - smoothstep(0.38, 0.8, heat));
+	let dye = min(field_density(uv).x + tongue(uv) * 0.018 + cooling * 0.034, 0.58);
+	return vec4f(dye, 0.0, 0.0, 1.0);
+')
+torch_heat = bounds + fragment(uv_of + '
+	if (wall(uv)) { return vec4f(0.0); }
+	let heat = min(field_temperature(uv).x + tongue(uv) * 0.30, 1.35);
+	return vec4f(heat, 0.0, 0.0, 1.0);
+')
+fog_coarse = fragment(uv_of + '
+	let q = (uv - vec2f(0.50, 0.48)) * vec2f(values.aspect, 1.0);
+	let hole = exp(-dot(q, q) / 0.0013);
+	let base = mix(max(field_density(uv).x, 0.0), 0.94, 0.07);
+	let edge = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+	let sealed = mix(base, 0.94, 1.0 - smoothstep(0.0, 0.02, edge));
+	return vec4f(sealed * (1.0 - 0.46 * hole), 0.0, 0.0, 1.0);
+')
+bake = common + '
+fn wrap(p: vec2f) -> vec2f {
+	let period = vec2f(values.soft, values.gust);
+	return p - period * floor(p / period);
+}
+fn fade(t: vec2f) -> vec2f { return t * t * t * (t * (t * 6.0 - 15.0) + 10.0); }
+fn tiled(p: vec2f) -> f32 {
+	let i = floor(p);
+	let u = fade(fract(p));
+	let a = hash(wrap(i));
+	let b = hash(wrap(i + vec2f(1.0, 0.0)));
+	let c = hash(wrap(i + vec2f(0.0, 1.0)));
+	let d = hash(wrap(i + vec2f(1.0, 1.0)));
+	return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+' + fragment(uv_of + '
+	let p = vec2f(uv.x * values.soft + uv.y * values.slope, uv.y * values.gust + uv.x * values.confinement);
+	let n = tiled(p);
+	let prev = field_detail(uv);
+	if (values.which < 1.5) { return vec4f(n, 0.0, 0.0, 0.0); }
+	if (values.which < 2.5) { return vec4f(prev.x, n, 0.0, 0.0); }
+	if (values.which < 3.5) { return vec4f(prev.x, prev.y, n, 0.0); }
+	return vec4f(prev.x, prev.y, prev.z, n);
+')
+divergence = bounds + fragment(uv_of + '
+	if (stopped(uv)) { return vec4f(0.0); }
+	let t = values.texel;
+	let right = field_velocity(uv + vec2f(t.x, 0.0)).x;
+	let left = field_velocity(uv - vec2f(t.x, 0.0)).x;
+	let down = field_velocity(uv + vec2f(0.0, t.y)).y;
+	let up = field_velocity(uv - vec2f(0.0, t.y)).y;
+	return vec4f(0.5 * (right - left + down - up), 0.0, 0.0, 1.0);
+')
+poisson = '
+fn weight(i: i32) -> f32 {
+	let w = array<f32, 11>(0.057610, 0.097961, 0.161440, 0.257644, 0.405773, 0.642708, 0.405773, 0.257644, 0.161440, 0.097961, 0.057610);
+	return w[i];
+}
+' + fragment(uv_of + '
+	var sum = 0.0;
+	let across = select(vec2f(0.0, values.texel.y), vec2f(values.texel.x, 0.0), values.which < 1.5);
+	let sign = select(-1.0, 1.0, values.which < 1.5);
+	for (var i = 0; i < 11; i = i + 1) {
+		let p = uv + across * f32(i - 5);
+		let inside = step(0.0, p.x) * step(p.x, 1.0) * step(0.0, p.y) * step(p.y, 1.0);
+		let sample = select(field_pressure(p).x, field_divergence(p).x, values.which < 1.5);
+		sum = sum + weight(i) * sign * sample * inside;
+	}
+	return vec4f(sum, 0.0, 0.0, 1.0);
+')
+project = bounds + fragment(uv_of + '
+	if (stopped(uv)) { return vec4f(0.0); }
+	let t = values.texel;
+	let gx = field_pressure(uv + vec2f(t.x, 0.0)).x - field_pressure(uv - vec2f(t.x, 0.0)).x;
+	let gy = field_pressure(uv + vec2f(0.0, t.y)).x - field_pressure(uv - vec2f(0.0, t.y)).x;
+	let v = clamp(field_velocity(uv).xy - vec2f(gx, gy) * 0.5, vec2f(-0.08), vec2f(0.08));
+	return vec4f(v, 0.0, 0.0);
+')
+shade = common + '
+fn rho(uv: vec2f) -> f32 { return max(field_density(uv).x, 0.0); }
+fn ramp(heat: f32) -> vec3f {
+	var fire = vec3f(0.55, 0.05, 0.08);
+	fire = mix(fire, vec3f(0.95, 0.22, 0.05), smoothstep(0.15, 0.40, heat));
+	fire = mix(fire, vec3f(1.0, 0.62, 0.12), smoothstep(0.38, 0.70, heat));
+	return mix(fire, vec3f(1.0, 0.96, 0.82), smoothstep(0.68, 1.05, heat));
+}
+fn profile(z: f32, h: f32) -> f32 {
+	let u = z / max(h, 0.001);
+	return max(1.0 - u * u, 0.0);
+}
+fn wrap_index(i: f32, size: f32) -> f32 { return i - size * floor(i / size); }
+fn detail_at(p: vec2f) -> vec4f {
+	if (values.mode < 1.5) { return field_detail(fract(p)); }
+	let size = vec2f(1.0) / values.texel;
+	let at = (p - floor(p)) * size - vec2f(0.5);
+	let low = floor(at);
+	let u = at - low;
+	let x0 = wrap_index(low.x, size.x);
+	let y0 = wrap_index(low.y, size.y);
+	let x1 = wrap_index(low.x + 1.0, size.x);
+	let y1 = wrap_index(low.y + 1.0, size.y);
+	let s00 = field_detail((vec2f(x0, y0) + vec2f(0.5)) / size);
+	let s10 = field_detail((vec2f(x1, y0) + vec2f(0.5)) / size);
+	let s01 = field_detail((vec2f(x0, y1) + vec2f(0.5)) / size);
+	let s11 = field_detail((vec2f(x1, y1) + vec2f(0.5)) / size);
+	return mix(mix(s00, s10, u.x), mix(s01, s11, u.x), u.y);
+}
+fn billow(p: vec2f) -> f32 {
+	let a = detail_at(p).x;
+	let b = detail_at(p + vec2f(0.13, 0.07)).y;
+	let c = detail_at(p + vec2f(0.29, 0.17)).z;
+	let d = detail_at(p + vec2f(0.05, 0.23)).w;
+	let broad = a * 0.64 + b * 0.36;
+	let fine = (c - 0.5) * 0.2 + (d - 0.5) * 0.12;
+	return broad + fine;
+}
+fn veil(uv: vec2f, flow: vec2f) -> f32 {
+	let t = fract(values.time / 2.5);
+	let t2 = fract(t + 0.5);
+	let weight = abs(1.0 - 2.0 * t);
+	let reach = flow * 4.0;
+	let n = mix(billow(uv + reach * t2), billow(uv + reach * t), weight);
+	let u = clamp(0.5 + (n - 0.5) * 1.15, 0.0, 1.0);
+	return mix(0.38, 1.05, u * u * (3.0 - 2.0 * u));
+}
+fn ground(uv: vec2f) -> vec3f {
+	let g = detail_at(uv).y;
+	let dirt = vec3f(0.22, 0.16, 0.09);
+	let grass = vec3f(0.15, 0.26, 0.11);
+	return mix(dirt, grass, smoothstep(0.34, 0.66, g));
+}
+' + fragment(uv_of + '
+	let t = values.texel * 2.2;
+	let c = rho(uv);
+	let right = rho(uv + vec2f(t.x, 0.0));
+	let left = rho(uv - vec2f(t.x, 0.0));
+	let down = rho(uv + vec2f(0.0, t.y));
+	let up = rho(uv - vec2f(0.0, t.y));
+	let d = (c * 2.0 + right + left + down + up) / 6.0;
+	if (values.which > 3.5) {
+		let tile = fract(uv * 2.0);
+		let d = detail_at(tile);
+		return vec4f(d.x, d.y, d.z, 1.0);
+	}
+	let heat = max(field_temperature(uv).x, 0.0);
+	let torch = values.mode < 1.5;
+	let flow = field_velocity(uv).xy;
+	let thick = veil(uv, flow);
+	let amount = select(d * thick, d, torch);
+	let h = mix(0.24, 1.0, smoothstep(0.0, 0.75, amount));
+	let sigma = select(1.48, 1.2, torch);
+	let light = select(normalize(vec3f(0.15, -0.78, 0.52)), normalize(vec3f(0.06, 0.74, 0.55)), torch);
+	let steps = 8.0;
+	let dz = (2.0 * h) / steps;
+	var z = h - dz * 0.5;
+	var transmittance = 1.0;
+	var rgb = vec3f(0.0);
+	for (var i = 0; i < 8; i = i + 1) {
+		let shape = profile(z, h);
+		let rho_z = amount * shape;
+		var shadow = 1.0;
+		var suv = uv;
+		var sz = z;
+		for (var j = 0; j < 2; j = j + 1) {
+			suv = suv + light.xy * 0.02;
+			sz = sz + light.z * 0.07;
+			if (values.mode < 1.5) {
+				shadow = shadow * exp(-rho(suv) * profile(sz, h) * 0.1);
+			} else {
+				shadow = shadow * exp(-rho(suv) * detail_at(suv).x * profile(sz, h) * 0.28);
+			}
+		}
+		let warm = smoothstep(0.28, 0.62, heat);
+		let smoke_col = vec3f(0.32, 0.30, 0.28) + vec3f(0.5, 0.18, 0.05) * warm;
+		let ahead = detail_at(uv + light.xy * 0.04).x;
+		let face = clamp(0.9 + (detail_at(uv).x - ahead) * 1.6, 0.84, 1.05);
+		let tone = face * clamp(0.92 + 0.1 * shadow, 0.86, 1.02);
+		let fog_col = vec3f(0.72, 0.80, 0.82) * tone;
+		let albedo = select(fog_col, smoke_col, torch);
+		let absorb = 1.0 - exp(-rho_z * sigma * dz);
+		let glow = ramp(heat) * max(heat * shape - 0.2, 0.0);
+		let flame = glow * dz * 5.6 * mix(1.0, transmittance, 0.22);
+		rgb = rgb + flame + transmittance * albedo * absorb;
+		transmittance = transmittance * (1.0 - absorb);
+		z = z - dz;
+	}
+	let px0 = (uv.x - 0.50) * values.aspect;
+	let pool_q = vec2f(px0 * 0.8, (uv.y - 0.80) * 2.4);
+	let pool = exp(-dot(pool_q, pool_q) / 0.09);
+	let sky = vec3f(0.10, 0.064, 0.070) + vec3f(0.18, 0.07, 0.02) * pool;
+	var behind = select(ground(uv), sky, torch);
+	if (torch) {
+		let px = (uv.x - 0.50) * values.aspect;
+		let shaft = abs(px) < 0.026 && uv.y > 0.64;
+		if (shaft) {
+			let metal = 0.25 + 0.75 * smoothstep(-0.026, 0.026, px);
+			behind = vec3f(0.025, 0.018, 0.014) * metal;
+			let band = fract((uv.y - 0.64) * 14.0);
+			if (band > 0.72 && uv.y < 0.92) { behind = vec3f(0.45, 0.14, 0.05) * metal; }
+		}
+		let cup = vec2f(px, uv.y - 0.635);
+		let rim = abs(length(cup / vec2f(0.055, 0.016)) - 1.0);
+		if (rim < 0.18 && abs(cup.y) < 0.02) { behind = vec3f(0.10, 0.07, 0.05); }
+	}
+	var color = behind * transmittance + rgb;
+	if (torch) {
+		let spark_uv = uv * vec2f(18.0, 42.0) + vec2f(0.0, -values.frame * 0.95);
+		let ember = step(0.984, hash(floor(spark_uv))) * smoothstep(0.42, 0.0, length(fract(spark_uv) - 0.5));
+		let plume = smoothstep(0.16, 0.0, abs((uv.x - 0.5) * values.aspect));
+		let risen = smoothstep(0.68, 0.12, uv.y);
+		color = color + vec3f(1.0, 0.62, 0.22) * ember * plume * risen * 0.85;
+	}
+	let q = pillar_q(uv);
+	let along = clamp(q.y, -0.026, 0.026);
+	let capsule = length(vec2f(q.x, q.y - along)) - 0.024;
+	if (!torch && capsule < 0.02) {
+		let lit_p = 0.62 + 0.38 * clamp(0.15 + q.x * 16.0, 0.0, 1.0);
+		color = mix(color, vec3f(0.80, 0.82, 0.80) * lit_p, smoothstep(0.02, 0.0, capsule));
+	}
+	let grain = hash(vec2f(at.x, at.y) + vec2f(values.frame, 0.0));
+	color = color + (grain - 0.5) / 255.0;
+	return vec4f(color, 1.0);
+')
+
+pointer() := {
+	if windowless() and mode == 2 {
+		if frame_i < 28 { return [view_w * 0.84, view_h * 0.62] }
+		if frame_i < 150 {
+			u = (frame_i - 28) / 122.0
+			return [view_w * (0.16 + 0.68 * u), view_h * (0.50 + 0.06 * sin(u * 6.2832))]
+		}
+		angle = (frame_i - 150) * 0.08
+		return [view_w * (0.50 + 0.16 * cos(angle)), view_h * (0.48 + 0.12 * sin(angle))]
+	}
+	[system_value("mouse_x"), system_value("mouse_y")]
+}
+stirring() := {
+	if mode != 2 { return 0.0 }
+	if windowless() { return 0.0 }
+	if system_value("mouse_down") == 1 { return 0.002 }
+	0.00035
+}
+values_of(kept) := {
+	made = {}
+	made["mouse"] = pointer()
+	made["view"] = [view_w, view_h]
+	made["mouse_down"] = system_value("mouse_down")
+	made["frame"] = frame_i
+	made["mode"] = mode
+	made["dt"] = 1.0
+	made["texel"] = [1.0 / grid_w, 1.0 / grid_h]
+	made["lift"] = if mode == 1 then 0.00055 else 0.0
+	made["confinement"] = if mode == 1 then 0.05 else 0.02
+	made["stir_force"] = stirring()
+	made["slope"] = if mode == 1 then 1.0 else 0.85
+	made["keep"] = kept
+	made["which"] = 0
+	made["soft"] = 0
+	made["aspect"] = aspect
+	made["gust"] = if mode == 1 then 0.0016 else 0.003
+	made["time"] = frame_i / 60.0
+	made
+}
+sim_pass(shader, into, kept) := {
+	made = values_of(kept)
+	made["size"] = [grid_w, grid_h]
+	gpu_pass(shader, fields, into, made)
+}
+project_pressure() := {
+	made = values_of(1)
+	made["size"] = [grid_w, grid_h]
+	made["which"] = 1
+	gpu_pass(poisson, fields, "pressure", made)
+	made["which"] = 2
+	gpu_pass(poisson, fields, "pressure", made)
+	sim_pass(project, "velocity", 1)
+}
+feed() := {
+	if mode == 2 {
+		made = values_of(1)
+		made["size"] = [grid_w, grid_h]
+		gpu_pass(fog_coarse, fields, "density", made)
+	} else {
+		made = values_of(1)
+		made["size"] = [grid_w, grid_h]
+		gpu_pass(torch_dye, fields, "density", made)
+		gpu_pass(torch_heat, fields, "temperature", made)
+	}
+}
+simulate(picture) := {
+	vel_keep = if mode == 1 then 0.97 else 0.99
+	wind = values_of(vel_keep)
+	wind["soft"] = 0.16
+	wind["size"] = [grid_w, grid_h]
+	gpu_pass(advect_velocity, fields, "velocity", wind)
+	sim_pass(buoyancy, "velocity", 1)
+	sim_pass(vorticity, "velocity", 1)
+	sim_pass(forces, "velocity", 1)
+	sim_pass(divergence, "divergence", 1)
+	project_pressure()
+	dye_keep = if mode == 1 then 0.996 else 0.998
+	sim_pass(stash, "divergence", 1)
+	sim_pass(forward, "density", 1)
+	sim_pass(rewind, "pressure", 1)
+	sim_pass(correct, "density", dye_keep)
+	sim_pass(advect_heat, "temperature", if mode == 1 then 0.88 else 0.99)
+	feed()
+	if picture { gpu_picture_sized(shade, fields, view_w, view_h, values_of(1)) }
+	else { gpu_show_sized(shade, fields, view_w, view_h, values_of(1)) }
+}
+bake_detail() := {
+	made = values_of(1)
+	made["size"] = [grid_w, grid_h]
+	made["which"] = 1
+	made["soft"] = 4.0
+	made["gust"] = 3.0
+	made["slope"] = 0.0
+	made["confinement"] = 0.0
+	gpu_pass(bake, fields, "detail", made)
+	made["which"] = 2
+	made["soft"] = 6.0
+	made["gust"] = 4.0
+	made["slope"] = 0.0
+	made["confinement"] = 0.0
+	gpu_pass(bake, fields, "detail", made)
+	made["which"] = 3
+	made["soft"] = 12.0
+	made["gust"] = 9.0
+	made["slope"] = 0.0
+	made["confinement"] = 0.0
+	gpu_pass(bake, fields, "detail", made)
+	made["which"] = 4
+	made["soft"] = 24.0
+	made["gust"] = 18.0
+	made["slope"] = 0.0
+	made["confinement"] = 0.0
+	gpu_pass(bake, fields, "detail", made)
+}
+bake_detail()
+shot(step) := {
+	if not windowless() { return no }
+	if movie and step % 2 == 0 { return yes }
+	step == steps or step == 60 or step == 120 or step == 240
+}
+
+if not windowless() {
+	set_system_value("window_width", view_w)
+	set_system_value("window_height", view_h)
+}
+on frame {
+	if not windowless() {
+		name = key_name(system_value("key code pressed"))
+		if name == "f" or name == "F" { mode = 3 - mode }
+		else if name == "1" or name == "t" or name == "T" { mode = 1 }
+		else if name == "2" { mode = 2 }
+		else if name == "Escape" or name == "q" or name == "Q" { exit() }
+		frame_i = frame_i + 1
+		simulate(no)
+	}
+}
+on click { mode = 3 - mode }
+if show_detail {
+	made = values_of(1)
+	made["which"] = 4
+	paint(gpu_picture_sized(shade, fields, view_w, view_h, made), view_w, view_h, [])
+} else if windowless() {
+	step = 0
+	while step < steps {
+		step = step + 1
+		frame_i = step
+		if shot(step) { paint(simulate(yes), view_w, view_h, []) }
+		else { simulate(no) }
+	}
+}

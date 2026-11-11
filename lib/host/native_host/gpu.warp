@@ -177,6 +177,8 @@ wgpuSurfaceConfigure(surface: handle, configuration: handle): void from 'wgpu_na
 wgpuSurfaceGetCurrentTexture(surface: handle, texture: handle): void from 'wgpu_native'
 wgpuSurfacePresent(surface: handle): i32 from 'wgpu_native'
 wgpuSurfaceRelease(surface: handle): void from 'wgpu_native'
+wgpuDeviceCreateSampler(device: handle, descriptor: handle): handle from 'wgpu_native'
+wgpuSamplerRelease(sampler: handle): void from 'wgpu_native'
 memcpy(into: handle, from: i32s, size: length): handle from 'c'
 memmove(into: handle, from: handle, size: i64): handle from 'c'
 
@@ -187,6 +189,8 @@ global queue = 0
 global gpu_failure = ""
 // whether the device took shader-f16, which a shader's `enable f16` needs
 global halves_offered = no
+// whether the device took float32-filterable, which an rgba32float field samples linearly with
+global float_filter_offered = no
 // what the last callback answered: done, its status, the object it gave, its message
 global answer_done = no
 global answer_status = 0
@@ -282,14 +286,19 @@ device_ready(): bool := {
 	queue = wgpuDeviceGetQueue(device)
 	yes
 }
-// the device asked for: f16 shaders where the adapter has them (requiredFeatureCount at 24, requiredFeatures at 32)
+// the device asked for: f16 shaders where the adapter has them, and float32-filterable where it has it
+// (requiredFeatureCount at 24, requiredFeatures at 32). 14 is WGPUFeatureName_Float32Filterable.
 device_descriptor(adapter: int): int := {
 	descriptor = struct_of(DEVICE_DESCRIPTOR)
 	halves_offered = wgpuAdapterHasFeature(adapter, FEATURE_SHADER_F16) != 0
-	if halves_offered {
-		features = struct_of(WORD_BYTES)
-		set_field_i32(features, 0, FEATURE_SHADER_F16)
-		set_field_i64(descriptor, 24, 1)
+	float_filter_offered = wgpuAdapterHasFeature(adapter, 14) != 0
+	asked = []
+	if halves_offered { asked.add(FEATURE_SHADER_F16) }
+	if float_filter_offered { asked.add(14) }
+	if #asked > 0 {
+		features = struct_of(#asked * WORD_BYTES)
+		for i in 0 ..< #asked { set_field_i32(features, i * WORD_BYTES, asked[i]) }
+		set_field_i64(descriptor, 24, #asked)
 		set_field_pointer(descriptor, 32, features)
 	}
 	descriptor
@@ -371,7 +380,7 @@ uniform_member(layout: Layout, name: text, numbers: list): text := {
 }
 padded(numbers: list, alignment: int) := { while #numbers % alignment != 0 { numbers.add(0.0) } }
 // the program's values with the built-in holes its shader reads and it gave none
-values_filled(shader: text, given: any, width: int, height: int): map := {
+values_copied(shader: text, given: any, width: int, height: int): map := {
 	values = {}
 	if given is map { for name in given.keys { values[name] = given[name] } }
 	if first_painting_ms == 0 { first_painting_ms = wall_clock_ms() }
@@ -379,8 +388,12 @@ values_filled(shader: text, given: any, width: int, height: int): map := {
 		if not names(shader, VALUES_NAME + "." + hole) or values.has(hole) { continue }
 		values[hole] = hole_value(hole, width, height)
 	}
-	paintings += 1
 	values
+}
+values_filled(shader: text, given: any, width: int, height: int): map := {
+	filled = values_copied(shader, given, width, height)
+	paintings += 1
+	filled
 }
 hole_value(hole: text, width: int, height: int): any := {
 	if hole == "width" { return width }
@@ -426,8 +439,10 @@ shader_module(code: text): int := {
 	set_field_pointer(descriptor, 0, source)
 	wgpuDeviceCreateShaderModule(device, descriptor)
 }
-// the code's pipeline drawing into the format, compiled anew; 0 and gpu_failure where it does not compile
-pipeline_compiled(code: text, format: int): int := {
+// the code's pipeline drawing into the format, compiled anew; 0 and gpu_failure where it does not compile.
+// a quad blends over the one before it; a pass stores the fragment as the shader wrote it
+pipeline_compiled(code: text, format: int): int := pipeline_made(code, format, own_vertex_stage(code) != "")
+pipeline_made(code: text, format: int, blended: bool): int := {
 	wgpuDevicePushErrorScope(device, ERROR_FILTER_VALIDATION)
 	compiled = shader_module(code)
 	vertex = own_vertex_stage(code)
@@ -436,7 +451,7 @@ pipeline_compiled(code: text, format: int): int := {
 	set_field_i32(target, 8, format)
 	set_field_i64(target, 24, WRITE_ALL)
 	// a quad's color over the ones drawn before it: source alpha, as `vec4f(color, alpha)` says
-	if quads {
+	if blended {
 		over = struct_of(BLEND_STATE)
 		for at in [0, 12] { set_field_i32(over, at, BLEND_ADD) }
 		set_field_i32(over, 4, BLEND_SRC_ALPHA)
@@ -530,6 +545,7 @@ bindings_of(layout: int, entries: list): int := {
 		set_field_pointer(array, at + 16, entry[1])
 		set_field_i64(array, at + 32, entry[2])
 		set_field_pointer(array, at + 48, entry[3])
+		if #entry > 4 { set_field_pointer(array, at + 40, entry[4]) }
 	}
 	descriptor = struct_of(BIND_GROUP)
 	set_field_pointer(descriptor, 24, layout)
@@ -651,10 +667,12 @@ submitted(encoder: int) := {
 	wgpuCommandBufferRelease(commands)
 	wgpuCommandEncoderRelease(encoder)
 }
+// an RGBA8 image a pass can draw and a later copy or bind can read
+rgba_target(width: int, height: int): int := texture_of(width, height, TEXTURE_RENDER_ATTACHMENT + TEXTURE_COPY_SRC + TEXTURE_BINDING)
 // the drawing drawn into an image of its own (RGBA8) by the encoder; one a later frame reads as previous can be bound.
 // texture_view, not view: view is the window's Metal view, a global of this module (window.warp)
 image_drawn(encoder: int, drawing: Drawing, width: int, height: int): int := {
-	image = texture_of(width, height, TEXTURE_RENDER_ATTACHMENT + TEXTURE_COPY_SRC + TEXTURE_BINDING)
+	image = rgba_target(width, height)
 	texture_view = wgpuTextureCreateView(image, 0)
 	drawn_into(encoder, texture_view, drawing, [])
 	wgpuTextureViewRelease(texture_view)
@@ -804,9 +822,11 @@ presented(encoder: int, drawing: Drawing, viewport: list): bool := {
 	free(current)
 	yes
 }
+// how many times the painting fits in the drawable, the smaller of the two sides
+surface_scale(width: int, height: int): float := min(surface_width / width, surface_height / height) as float
 // the painting's place in the surface: as large as fits whole, centered
 letterboxed(width: int, height: int): list := {
-	scale = min(surface_width / width, surface_height / height) as float
+	scale = surface_scale(width, height)
 	wide = width * scale
 	high = height * scale
 	[(surface_width - wide) / 2, (surface_height - high) / 2, wide, high].map(x => float(x))
@@ -1024,4 +1044,433 @@ host_gpu_computed(given_shader, arrays: any, workgroups: int): any? := {
 	answer = {}
 	for a in 0 ..< #order { answer[order[a].name] = left[a] }
 	answer
+}
+
+// --- gpu_fields, gpu_pass, gpu_show, gpu_picture (card gpu-multipass): ping-pong targets that stay on the GPU.
+// One command encoder holds every pass of a frame; nothing is read back until gpu_picture. A shader reads
+// field_<name>(uv) with uv in 0..1. rgba16float where the device can render it, else rgba32float, else rgba8unorm.
+FORMAT_RGBA16_FLOAT = 40
+FORMAT_RGBA32_FLOAT = 41
+FILTER_NEAREST = 1
+FILTER_LINEAR = 2
+SAMPLER_DESCRIPTOR = 64
+MOST_FIELDS = 8
+FIELD_PREFIX = "field_"
+global fields_format = 0
+global fields_filterable = no
+global fields_format_name = ""
+global field_sampler = 0
+global field_sets = []
+global pass_encoder = 0
+global pass_pipelines = {}
+global pass_views = []
+global pass_buffers = []
+global pass_groups = []
+global pass_ms = 0
+global pass_frame_open = no
+class FluidField { name: text, front: int, back: int }
+class FieldSet { width: int, height: int, label: text, fields: list }
+
+good_field_name(name: text): bool := {
+	if name == "" or "0123456789".contains(name[0]) { return no }
+	for c in chars(name) { if not NAME_BYTES.contains(c) { return no } }
+	yes
+}
+// the names, or a text saying why they are not
+field_names(given: any): any := {
+	if not (given is list) { return "gpu_fields takes a list of names" }
+	if #given < 1 or #given > MOST_FIELDS { return "gpu_fields takes 1 to 8 names" }
+	kept = []
+	for item in given {
+		name = text(item)
+		if not good_field_name(name) { return "gpu_fields: " + name + " is not a field name" }
+		for earlier in kept { if earlier == name { return "gpu_fields: " + name + " is named twice" } }
+		kept.add(name)
+	}
+	kept
+}
+// a texture of this format; 0 where the device refuses it (the failure is cleared)
+texture_probed(width: int, height: int, format: int): int := {
+	wgpuDevicePushErrorScope(device, ERROR_FILTER_VALIDATION)
+	descriptor = struct_of(TEXTURE_DESCRIPTOR)
+	set_field_i64(descriptor, 24, TEXTURE_RENDER_ATTACHMENT + TEXTURE_BINDING)
+	set_field_i32(descriptor, 32, TEXTURE_2D)
+	set_field_i32(descriptor, 36, width)
+	set_field_i32(descriptor, 40, height)
+	set_field_i32(descriptor, 44, 1)
+	set_field_i32(descriptor, 48, format)
+	set_field_i32(descriptor, 52, 1)
+	set_field_i32(descriptor, 56, 1)
+	made = wgpuDeviceCreateTexture(device, descriptor)
+	free(descriptor)
+	if scope_clean() and made != 0 { return made }
+	if made != 0 { wgpuTextureRelease(made) }
+	gpu_failure = ""
+	0
+}
+fields_format_chosen(): bool := {
+	if fields_format != 0 { return yes }
+	if not device_ready() { return no }
+	probe = texture_probed(1, 1, FORMAT_RGBA16_FLOAT)
+	if probe != 0 {
+		wgpuTextureRelease(probe)
+		fields_format = FORMAT_RGBA16_FLOAT
+		fields_filterable = yes
+		fields_format_name = "rgba16float"
+		return yes
+	}
+	probe = texture_probed(1, 1, FORMAT_RGBA32_FLOAT)
+	if probe != 0 {
+		wgpuTextureRelease(probe)
+		fields_format = FORMAT_RGBA32_FLOAT
+		fields_filterable = float_filter_offered
+		fields_format_name = "rgba32float"
+		return yes
+	}
+	fields_format = FORMAT_RGBA8
+	fields_filterable = yes
+	fields_format_name = "rgba8unorm"
+	yes
+}
+field_sampler_made(): int := {
+	if field_sampler != 0 { return field_sampler }
+	descriptor = struct_of(SAMPLER_DESCRIPTOR)
+	mode = if fields_filterable then FILTER_LINEAR else FILTER_NEAREST
+	for at in [24, 28, 32] { set_field_i32(descriptor, at, 1) }
+	set_field_i32(descriptor, 36, mode)
+	set_field_i32(descriptor, 40, mode)
+	set_field_i32(descriptor, 44, FILTER_NEAREST)
+	set_field_i32(descriptor, 60, 1)
+	field_sampler = wgpuDeviceCreateSampler(device, descriptor)
+	free(descriptor)
+	field_sampler
+}
+// field_<name>(uv), linearly sampled where the format filters, else the same blend from the four texels
+field_sample(name: text, binding: int, filterable: bool): text := {
+	tex = FIELD_PREFIX + name + "_tex"
+	declared = "\n@group(0) @binding(" + binding + ") var " + tex + ": texture_2d<f32>;"
+	if filterable {
+		return declared + "\nfn " + FIELD_PREFIX + name + "(uv: vec2f) -> vec4f {\n\tlet placed = clamp(uv, vec2f(0.0), vec2f(1.0));\n\treturn textureSampleLevel(" + tex + ", field_sampler, placed, 0.0);\n}"
+	}
+	declared + "\nfn " + FIELD_PREFIX + name + "(uv: vec2f) -> vec4f {\n\tlet size = vec2f(textureDimensions(" + tex + "));\n\tlet at = clamp(uv, vec2f(0.0), vec2f(1.0)) * size - vec2f(0.5);\n\tlet low = vec2i(floor(at));\n\tlet f = fract(at);\n\tlet last = vec2i(size) - vec2i(1);\n\tlet s00 = textureLoad(" + tex + ", clamp(low, vec2i(0), last), 0);\n\tlet s10 = textureLoad(" + tex + ", clamp(low + vec2i(1, 0), vec2i(0), last), 0);\n\tlet s01 = textureLoad(" + tex + ", clamp(low + vec2i(0, 1), vec2i(0), last), 0);\n\tlet s11 = textureLoad(" + tex + ", clamp(low + vec2i(1, 1), vec2i(0), last), 0);\n\treturn mix(mix(s00, s10, f.x), mix(s01, s11, f.x), f.y);\n}"
+}
+pass_code(shader: text, declarations: text, reads: list): text := {
+	code = shader
+	if own_vertex_stage(shader) == "" { code += FULL_IMAGE_VERTICES }
+	code += declarations
+	binding = 1
+	if fields_filterable and #reads > 0 {
+		code += "\n@group(0) @binding(1) var field_sampler: sampler;"
+		binding = 2
+	}
+	for field in reads {
+		code += field_sample(field.name, binding, fields_filterable)
+		binding += 1
+	}
+	code
+}
+pass_pipeline(code: text, format: int): int := {
+	key = text(format) + "\n" + code
+	if pass_pipelines.has(key) { return pass_pipelines[key] }
+	made = pipeline_made(code, format, no)
+	if made == 0 { return 0 }
+	pass_pipelines[key] = made
+	made
+}
+// a fullscreen draw into the view, or only a clear where there is no pipeline yet
+color_pass(encoder: int, view: int, pipeline: int, bindings: int) := {
+	attachment = struct_of(COLOR_ATTACHMENT)
+	set_field_pointer(attachment, 8, view)
+	set_field_i32(attachment, 16, DEPTH_SLICE_UNDEFINED)
+	set_field_i32(attachment, 32, LOAD_CLEAR)
+	set_field_i32(attachment, 36, STORE_STORE)
+	descriptor = struct_of(RENDER_PASS)
+	set_field_i64(descriptor, 24, 1)
+	set_field_pointer(descriptor, 32, attachment)
+	recorded = wgpuCommandEncoderBeginRenderPass(encoder, descriptor)
+	if pipeline != 0 {
+		wgpuRenderPassEncoderSetPipeline(recorded, pipeline)
+		if bindings != 0 { wgpuRenderPassEncoderSetBindGroup(recorded, 0, bindings, 0, 0) }
+		wgpuRenderPassEncoderDraw(recorded, TRIANGLE_CORNERS, 1, 0, 0)
+	}
+	wgpuRenderPassEncoderEnd(recorded)
+	wgpuRenderPassEncoderRelease(recorded)
+	free(attachment)
+	free(descriptor)
+}
+passes_begun(): int := {
+	if pass_encoder == 0 { pass_encoder = wgpuDeviceCreateCommandEncoder(device, 0) }
+	pass_encoder
+}
+passes_released() := {
+	for group in pass_groups { if group != 0 { wgpuBindGroupRelease(group) } }
+	for view in pass_views { if view != 0 { wgpuTextureViewRelease(view) } }
+	for buffer in pass_buffers { if buffer != 0 { wgpuBufferRelease(buffer) } }
+	pass_groups = []
+	pass_views = []
+	pass_buffers = []
+}
+passes_finished() := {
+	if pass_encoder == 0 { return }
+	encoder = pass_encoder
+	pass_encoder = 0
+	submitted(encoder)
+	wgpuDevicePoll(device, 1, 0)
+	passes_released()
+}
+fields_cleared(set: FieldSet) := {
+	encoder = wgpuDeviceCreateCommandEncoder(device, 0)
+	views = []
+	for field in set.fields {
+		for texture in [field.front, field.back] {
+			view = wgpuTextureCreateView(texture, 0)
+			color_pass(encoder, view, 0, 0)
+			views.add(view)
+		}
+	}
+	submitted(encoder)
+	wgpuDevicePoll(device, 1, 0)
+	for view in views { wgpuTextureViewRelease(view) }
+}
+// the rows of a copy, 256 bytes each, as WebGPU aligns them
+copy_stride(width: int): int := {
+	raw = width * PIXEL_BYTES
+	((raw + ROW_ALIGNMENT - 1) /! ROW_ALIGNMENT) * ROW_ALIGNMENT
+}
+color_words(mapped: int, width: int, height: int, stride: int): list := {
+	bytes = field_bytes(mapped, 0, stride * height)
+	words = []
+	for row in 0 ..< height {
+		for col in 0 ..< width {
+			at = row * stride + col * PIXEL_BYTES
+			words.add(bytes_int([byte_at(bytes, at + k) for k in WORD_BYTE_ORDER], "little"))
+		}
+	}
+	words
+}
+// draw the shader into `target` (a texture), reading `reads`. no, and gpu_failure, where it cannot
+frame_opened() := { pass_frame_open = yes }
+frame_closed() := {
+	if not pass_frame_open { return }
+	paintings += 1
+	pass_frame_open = no
+}
+pass_drawn(shader: text, given: any, width: int, height: int, reads: list, target: int, format: int): bool := {
+	frame_opened()
+	values = values_copied(shader, given, width, height)
+	layout = values_laid_out(values)
+	if layout is bool { return no }
+	if #layout.arrays > 0 { return failed("gpu_pass takes numbers and short vectors, not a long list") }
+	decl = ""
+	if #layout.declarations > 0 { decl = "\nstruct WarpValues { " + layout.declarations.join(", ") + " }\n@group(0) @binding(" + VALUES_BINDING + ") var<uniform> " + VALUES_NAME + ": WarpValues;" }
+	code = pass_code(shader, decl, reads)
+	pipeline = pass_pipeline(code, format)
+	if pipeline == 0 { return no }
+	entries = []
+	if #layout.declarations > 0 {
+		uniform_buffer = cells_buffer(f32_cells(layout.floats), BUFFER_UNIFORM)
+		pass_buffers.add(uniform_buffer)
+		entries.add([VALUES_BINDING, uniform_buffer, #layout.floats * WORD_BYTES, 0])
+	}
+	binding = 1
+	if fields_filterable and #reads > 0 {
+		entries.add([1, 0, 0, 0, field_sampler_made()])
+		binding = 2
+	}
+	for field in reads {
+		view = wgpuTextureCreateView(field.front, 0)
+		pass_views.add(view)
+		entries.add([binding, 0, 0, view])
+		binding += 1
+	}
+	group = 0
+	if #entries > 0 { group = bindings_of(wgpuRenderPipelineGetBindGroupLayout(pipeline, 0), entries) }
+	if group != 0 { pass_groups.add(group) }
+	target_view = wgpuTextureCreateView(target, 0)
+	pass_views.add(target_view)
+	color_pass(passes_begun(), target_view, pipeline, group)
+	yes
+}
+field_swapped(field: FluidField) := {
+	kept = field.front
+	field.front = field.back
+	field.back = kept
+}
+fields_set(id: int): FieldSet := {
+	if id < 1 or id > #field_sets { raise "no fields " + text(id) }
+	field_sets[id - 1]
+}
+fields_read(shader: text, set: FieldSet): list := set.fields.filter(field => names(shader, FIELD_PREFIX + field.name))
+host_gpu_fields_format(): any := {
+	if not fields_format_chosen() { return error(gpu_failure) }
+	fields_format_name
+}
+host_gpu_fields(width: int, height: int, given: any): int := {
+	if width < 1 or height < 1 { raise "gpu_fields needs a positive width and height" }
+	names = field_names(given)
+	if names is text { raise names }
+	label = names.join(",")
+	for i in 0 ..< #field_sets {
+		set = field_sets[i]
+		if set.width == width and set.height == height and set.label == label { return i + 1 }
+	}
+	if not fields_format_chosen() { raise gpu_failure }
+	fields = []
+	for name in names {
+		front = texture_probed(width, height, fields_format)
+		back = texture_probed(width, height, fields_format)
+		if front == 0 or back == 0 {
+			if front != 0 { wgpuTextureRelease(front) }
+			if back != 0 { wgpuTextureRelease(back) }
+			raise "gpu_fields: this GPU cannot render " + fields_format_name
+		}
+		fields.add(FluidField(name, front, back))
+	}
+	set = FieldSet(width, height, label, fields)
+	fields_cleared(set)
+	field_sets.add(set)
+	#field_sets
+}
+// -1 where `into` names no field: the library word raises that, so a program can catch it
+host_gpu_pass_recorded(given_shader, id: int, into: any, given: any): int := {
+	started = wall_clock_ms()
+	set = fields_set(id)
+	name = text(into)
+	found = set.fields.filter(field => field.name == name)
+	if #found == 0 { return -1 }
+	shader = text(given_shader)
+	reads = fields_read(shader, set)
+	if not pass_drawn(shader, given, set.width, set.height, reads, found[0].back, fields_format) { raise gpu_failure }
+	field_swapped(found[0])
+	pass_ms += wall_clock_ms() - started
+	0
+}
+// the shading pass into an RGBA8 image of width × height, after the passes already encoded. 0 where it fails.
+// The fields stay at their own size: the shader samples them in 0..1, so the picture can be larger than the grid
+shade_image(shader: text, set: FieldSet, given: any, width: int, height: int): int := {
+	reads = fields_read(shader, set)
+	image = rgba_target(width, height)
+	if not pass_drawn(shader, given, width, height, reads, image, FORMAT_RGBA8) {
+		wgpuTextureRelease(image)
+		return 0
+	}
+	image
+}
+// the drawable's largest same-aspect image of at least width × height, so a Retina surface is shaded one pixel
+// for one pixel. The window's point size stays width × height, which is the pointer's coordinate system
+shade_fitted(width: int, height: int): list := {
+	scale = surface_scale(width, height)
+	if surface_width < width or surface_height < height or scale <= 1.01 { return [width, height] }
+	[round(width * scale) as int, round(height * scale) as int]
+}
+host_gpu_show(given_shader, id: int, given: any): int := {
+	set = fields_set(id)
+	layer = painting_layer(set.width, set.height)
+	upload = pass_ms
+	pass_ms = 0
+	if layer == 0 {
+		started = wall_clock_ms()
+		passes_finished()
+		frame_closed()
+		paint_frame_noted(upload, wall_clock_ms() - started)
+		return 0
+	}
+	started = wall_clock_ms()
+	shader = text(given_shader)
+	image = shade_image(shader, set, given, set.width, set.height)
+	if image == 0 {
+		passes_finished()
+		raise gpu_failure
+	}
+	encoder = pass_encoder
+	pass_encoder = 0
+	shown = picture_presented(encoder, image, layer, set.width, set.height)
+	wgpuDevicePoll(device, 1, 0)
+	passes_released()
+	wgpuTextureRelease(image)
+	frame_closed()
+	paint_frame_noted(upload, wall_clock_ms() - started)
+	if not shown { raise gpu_failure }
+	1
+}
+host_gpu_show_sized(given_shader, id: int, width: int, height: int, given: any): int := {
+	if width < 1 or height < 1 { raise "gpu_show needs a positive width and height" }
+	set = fields_set(id)
+	layer = painting_layer(width, height)
+	upload = pass_ms
+	pass_ms = 0
+	if layer == 0 {
+		started = wall_clock_ms()
+		passes_finished()
+		frame_closed()
+		paint_frame_noted(upload, wall_clock_ms() - started)
+		return 0
+	}
+	shade_w = width
+	shade_h = height
+	if surface_ready(layer) {
+		fitted = shade_fitted(width, height)
+		shade_w = fitted[0]
+		shade_h = fitted[1]
+	}
+	started = wall_clock_ms()
+	shader = text(given_shader)
+	image = shade_image(shader, set, given, shade_w, shade_h)
+	if image == 0 {
+		passes_finished()
+		raise gpu_failure
+	}
+	encoder = pass_encoder
+	pass_encoder = 0
+	shown = picture_presented(encoder, image, layer, shade_w, shade_h)
+	wgpuDevicePoll(device, 1, 0)
+	passes_released()
+	wgpuTextureRelease(image)
+	frame_closed()
+	paint_frame_noted(upload, wall_clock_ms() - started)
+	if not shown { raise gpu_failure }
+	1
+}
+host_gpu_picture(given_shader, id: int, given: any): any := {
+	set = fields_set(id)
+	host_gpu_picture_sized(given_shader, id, set.width, set.height, given)
+}
+host_gpu_picture_sized(given_shader, id: int, width: int, height: int, given: any): any := {
+	if width < 1 or height < 1 { return error("gpu_picture needs a positive width and height") }
+	set = fields_set(id)
+	shader = text(given_shader)
+	image = shade_image(shader, set, given, width, height)
+	if image == 0 {
+		passes_finished()
+		return error(gpu_failure)
+	}
+	stride = copy_stride(width)
+	readback = buffer_of(stride * height, BUFFER_MAP_READ + BUFFER_COPY_DST)
+	source = struct_of(COPY_TEXTURE)
+	set_field_pointer(source, 0, image)
+	set_field_i32(source, 24, ASPECT_ALL)
+	dest = struct_of(COPY_BUFFER)
+	set_field_i32(dest, 8, stride)
+	set_field_i32(dest, 12, height)
+	set_field_pointer(dest, 16, readback)
+	wgpuCommandEncoderCopyTextureToBuffer(pass_encoder, source, dest, extent_of(width, height))
+	free(source)
+	free(dest)
+	encoder = pass_encoder
+	pass_encoder = 0
+	submitted(encoder)
+	wgpuDevicePoll(device, 1, 0)
+	passes_released()
+	wgpuTextureRelease(image)
+	mapped = buffer_mapped(readback, stride * height)
+	if mapped == 0 {
+		wgpuBufferRelease(readback)
+		return error(gpu_failure)
+	}
+	words = color_words(mapped, width, height, stride)
+	wgpuBufferUnmap(readback)
+	wgpuBufferRelease(readback)
+	frame_closed()
+	pass_ms = 0
+	words
 }
