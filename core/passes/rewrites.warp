@@ -750,7 +750,13 @@ written_rules(path: text, source: text, module: text): list := {
 	if #rules < #rule_lines { throw dropped_rules(path, lines, rule_lines, rules, module) }
 	rules
 }
-rules_parsed(parse: Node, module: text, source: text): list := statements_ruled(statements_in(parse), module, source)#1
+rules_parsed(parse: Node, module: text, source: text): list := {
+	outer = rule_module
+	rule_module = module
+	rules = statements_ruled(statements_in(parse), module, source)#1
+	rule_module = outer
+	rules
+}
 # [the rules the statements declare, the other statements]: each `rewrite` line's, and in place of the first overload
 # of a built-in operator those of all its overloads (operator_rules)
 statements_ruled(statements: list, module: text, source: text): list := {
@@ -1100,7 +1106,11 @@ is_condition(condition: Node): bool := {
 }
 
 # `routed($program)`: a call of a word of extensions/rules/rule_words.warp, run at compile time (decision computed-hole)
-is_rule_word_call(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and is_rule_word(name_of(n#1))
+is_rule_word_call(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and (is_rule_word(name_of(n#1)) or is_module_rule_word(name_of(n#1)))
+# the module of the rules being read or checked, "" for the compiler's own: a word it defines that the compiler has not
+# is a rule word of the module's, run in the module's own wasm (module_word, card module-rule-words)
+global rule_module = ""
+is_module_rule_word(word: text): bool := rule_module != "" and not rule_words.has(word) and module_defines(rule_module, word)
 # a word of extensions/rules/rule_words.warp: one this compiler has, or, when a rule names a word it lacks (an older seed building a
 # newer compiler, card rule-whose), one the library's file defines, read only then
 is_rule_word(word: text): bool := rule_words.has(word) or library_rule_word_names().has(word)
@@ -1139,9 +1149,10 @@ is_computed_binding(n: Node): bool := is_key(n, Op.Assign) and (rule_hole(key_of
 program_hole = "$program"
 source_hole = "$source"
 computed(call: Node, bound: map): any := {
-	if not rule_words.has(name_of(call#1)) { return skipped_rule_word(name_of(call#1)) }
-	word = rule_words[name_of(call#1)]
+	name = name_of(call#1)
 	given = items_of(call)[1 ..].map(argument => if argument == symbol(program_hole) then rule_program else if argument == symbol(source_hole) then rule_source else rule_spliced(argument, bound, argument))
+	if not rule_words.has(name) { return if is_module_rule_word(name) then module_word(rule_module, name, List(given, Bracket.Round, Separator.Comma)) else skipped_rule_word(name) }
+	word = rule_words[name]
 	if #given == 0 { return word() }
 	if #given == 1 { return word(given#1) }
 	if #given == 2 { return word(given#1, given#2) }
@@ -2185,6 +2196,7 @@ fired(rule: Rule, result: Node): Node := {
 # where the tests before it hold (a `.all` the seed lowers calls every one)
 conditions_hold(rule: Rule, origin: map, bound: map): bool := {
 	if not origin_holds(rule, origin, bound) { return no }
+	rule_module = rule.module
 	for condition in rule.conditions { if not condition_holds(condition, bound) { return no } }
 	yes
 }

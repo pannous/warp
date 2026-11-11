@@ -73,6 +73,7 @@ CHANNEL_PENDING_WORD = 19
 CHANNEL_NEXT_WORD = 20
 CHANNEL_SEND_WORD = 21
 SAVE_PICTURE_WORD = 22
+MODULE_WORD = 23
 # the end of a field in warp.wasm's parse-code encoding (extensions/parse_words.warp FIELD_END)
 FIELD_END = 1
 # the system values a program sets (set_system_value), kept by foreign.c by slot; before that, the size a window opens
@@ -100,9 +101,12 @@ UNICODE_LINKED_AT = 32
 HOST_LINKED_AT = 40
 # the GC heap the run's engine starts with: a module it links keeps its machine code for that heap (instance_defined)
 HEAP_BYTES_AT = 48
+# the module a host word without a caller works in, a text (address, length): module_word's lib module while it
+# builds there, else empty for the native host module (exported)
+GUEST_AT = 56
 # a run's channel listeners (lib/channels.warp), in its block past those: how many, then each one's
 # id, the bytes of its channel's file read so far, its name's length and the name
-LISTENERS_AT = 56
+LISTENERS_AT = 72
 LISTENERS_MAX = 32
 LISTENER_BYTES = 128
 LISTENER_NAME_BYTES = 104
@@ -708,6 +712,7 @@ answered_word(name: text): i64 := {
 	if same_text(name, "set_system_value") { return SET_SYSTEM_VALUE_WORD }
 	if same_text(name, "parse_code") { return PARSE_CODE_WORD }
 	if same_text(name, "eval_code") { return EVAL_CODE_WORD }
+	if same_text(name, "module_word") { return MODULE_WORD }
 	if same_text(name, "real_path") { return REAL_PATH_WORD }
 	if same_text(name, "std_pure") { return STD_PURE_WORD }
 	if same_text(name, "paint") { return PAINT_WORD }
@@ -918,6 +923,7 @@ run_state(linker: handle, engine: handle, linked: pointer, context: handle, heap
 	long_at(run + UNICODE_LINKED_AT as i32).value = 0
 	long_at(run + HOST_LINKED_AT as i32).value = 0
 	long_at(run + HEAP_BYTES_AT as i32).value = heap_bytes
+	text_kept(run + GUEST_AT as i32, "")
 	run
 }
 run_context(): handle := long_at(kept_value(RUN_SLOT) as i32 + 24).value
@@ -931,16 +937,22 @@ run_heap_bytes(): i64 := long_at(kept_value(RUN_SLOT) as i32 + HEAP_BYTES_AT as 
 lazily_linked(context: handle, module_name: text, flag: i64, name: text, function: pointer): bool := {
 	run = kept_value(RUN_SLOT) as i32
 	if long_at(run + flag as i32).value == 0 {
-		trap = allocate(8)
-		long_at(trap).value = 0
 		linked = long_at(run + 16).value as i32
-		library = if contains_line(cell_text(linked), "warp_runtime") then library_folder() else installed_library()
-		instance_defined(long_at(run).value, long_at(run + 8).value, context, module_name, instance_path(module_name, library), linked, library, no, trap)
-		# (linked in a host word, its records kept past the word's end)
-		arena_kept()
+		run_linked(context, module_name, if contains_line(cell_text(linked), "warp_runtime") then library_folder() else installed_library())
 		long_at(run + flag as i32).value = 1
 	}
 	wasmtime_linker_get(long_at(run).value, context, module_name, module_name.length, name, name.length, function)
+}
+# the module linked into the run from the library folder, unless it is already
+run_linked(context: handle, module_name: text, library: text): nothing := {
+	run = kept_value(RUN_SLOT) as i32
+	linked = long_at(run + 16).value as i32
+	if contains_line(cell_text(linked), module_name) { return }
+	trap = allocate(8)
+	long_at(trap).value = 0
+	instance_defined(long_at(run).value, long_at(run + 8).value, context, module_name, instance_path(module_name, library), linked, library, no, trap)
+	# (linked in a host word, its records kept past the word's end)
+	arena_kept()
 }
 # `"é" == "e◌́"` (decisions nfc-tables, nfc-slot; core/runtime/text.warp equal_texts): the runtime's canonical_text, a text's
 # NFC by lib/unicode, whose module (modules/unicode.wasm) the run links on this first call (lazily_linked), never a
@@ -1299,6 +1311,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if word == SYSTEM_VALUE_WORD { return int_result(system_value(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64)), results) }
 	if word == PARSE_CODE_WORD { return code_parsed(caller, context, given, results) }
 	if word == EVAL_CODE_WORD { return code_evaluated(caller, context, given, results) }
+	if word == MODULE_WORD { return module_word_answered(caller, context, given, results) }
 	if word == CANONICAL_TEXT_WORD { return canonical_text_answered(context, given, results) }
 	if word == CHANNEL_LISTEN_WORD { return channel_listened(caller, context, given) }
 	if word == CHANNEL_PENDING_WORD { return int_result(frames_in(unread_of(listener_entry(number))), results) }
@@ -1769,6 +1782,35 @@ code_parsed_from(caller: handle, context: handle, code: text, result: pointer): 
 	at = allocate(8)
 	long_at(at).value = 0
 	code_built(caller, context, encoding, at, result)
+}
+# module_word(module, word, arguments) (card module-rule-words): the compiler's call of a rule word the lib module
+# defines. The module is linked into the run at its first call; the arguments, a list the caller's node_encoding
+# encodes (runtime/builders.warp), are built there, its export `word` is called on them, and its result, encoded by
+# the module's node_encoding, is built again in the caller
+module_word_answered(caller: handle, context: handle, given: pointer, result: pointer): nothing := {
+	module = joined("warp/", shown(caller, context, given))
+	word = shown(caller, context, given + VALUE_BYTES)
+	encoded = allocate(VALUE_BYTES)
+	guest_call(caller, context, "node_encoding", given + 2 * VALUE_BYTES, 1, encoded)
+	encoding = shown(caller, context, encoded)
+	run_linked(context, module, library_folder())
+	guest = kept_value(RUN_SLOT) as i32 + GUEST_AT as i32
+	text_kept(guest, module)
+	at = allocate(8)
+	long_at(at).value = 1
+	count = atoll(encoded_field(encoding, at))
+	# (the list's bracket and separator)
+	encoded_field(encoding, at)
+	encoded_field(encoding, at)
+	values = allocate((count as i32 + 1) * VALUE_BYTES)
+	for i in 0..count { code_built(0, context, encoding, at, values + (i as i32) * VALUE_BYTES) }
+	returned = allocate(VALUE_BYTES)
+	guest_call(0, context, word, values, count, returned)
+	guest_call(0, context, "node_encoding", returned, 1, returned)
+	answer = shown(0, context, returned)
+	text_kept(guest, "")
+	long_at(at).value = 0
+	code_built(caller, context, answer, at, result)
 }
 # the node encoded at `at` (advanced past it) built in the module into `result`
 code_built(caller: handle, context: handle, encoding: text, at: pointer, result: pointer): nothing := {
@@ -2466,7 +2508,14 @@ native_byte(at: handle): u8 := {
 	byte_at(cell).value
 }
 # an export of the module calling the host (caller), else (0) of the native host module (host_export)
-exported(caller: handle, context: handle, name: text, into: pointer): bool := if caller != 0 then wasmtime_caller_export_get(caller, name, name.length, into) else host_export(context, name, into)
+# an export of the module calling the host (caller), else (0) of the guest module a host word works in (GUEST_AT),
+# else of the native host module (host_export)
+exported(caller: handle, context: handle, name: text, into: pointer): bool := {
+	if caller != 0 { return wasmtime_caller_export_get(caller, name, name.length, into) }
+	guest = cell_text(kept_value(RUN_SLOT) as i32 + GUEST_AT as i32)
+	if guest.length == 0 { return host_export(context, name, into) }
+	wasmtime_linker_get(long_at(kept_value(RUN_SLOT) as i32).value, context, guest, guest.length, name, name.length, into)
+}
 # the module's export `name` called on the values, its result into `result`
 guest_call(caller: handle, context: handle, name: text, values: pointer, count: i64, result: pointer): nothing := {
 	function = allocate(EXTERN_BYTES)
@@ -2481,7 +2530,7 @@ guest_call(caller: handle, context: handle, name: text, values: pointer, count: 
 # where the module's memory starts, for the driver
 guest_memory(caller: handle, context: handle): handle := {
 	memory = allocate(EXTERN_BYTES)
-	wasmtime_caller_export_get(caller, "memory", 6, memory)
+	exported(caller, context, "memory", memory)
 	wasmtime_memory_data(context, memory + 8)
 }
 # the module's shown_at of a value: its address and length in the module's memory, packed
@@ -2499,7 +2548,7 @@ shown_packed(caller: handle, context: handle, value: pointer): i64 := {
 # shown_from), a whole file's text for sha256 too; a module built before shown_from shows it at once (shown_at)
 shown(caller: handle, context: handle, value: pointer): text := {
 	probe = allocate(EXTERN_BYTES)
-	if not wasmtime_caller_export_get(caller, "shown_from", 10, probe) { return text_in(guest_memory(caller, context), shown_packed(caller, context, value)) }
+	if not exported(caller, context, "shown_from", probe) { return text_in(guest_memory(caller, context), shown_packed(caller, context, value)) }
 	whole = ""
 	at = 0 as i64
 	part = SHOWN_PART
