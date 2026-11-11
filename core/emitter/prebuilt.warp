@@ -529,7 +529,7 @@ word_owners(functions: list, classes: list): map := {
 	known = word_set(classes + module.linked_class_names.keys)
 	owners = {}
 	for f in reaching_words(functions) {
-		owner = receiver_class(f, known)
+		owner = method_class(f, known)
 		if owner != ø { owners[f.name] = owner }
 	}
 	owners
@@ -538,12 +538,12 @@ reaching_words(functions: list): list := functions[1 ..].filter(f => not f.is_ru
 # the names a program reaches a word by: its own, the word it was written as (graph_of of the arity overload
 # graph_of·2, walk.warp overload_variant_name), and its class's, a method's or a constructor's (next·Channel and Graph·new
 # under Channel and Graph)
-word_names(f: Function, known: map, makes: map): list := [f.name, written_word(f), receiver_class(f, known) ?? makes.get(f.name)].filter(name => name != ø and name != "")
+word_names(f: Function, known: map, makes: map): list := [f.name, written_word(f), method_class(f, known) ?? makes.get(f.name)].filter(name => name != ø and name != "")
 written_word(f: Function): text? := {
 	written = f.name.remove_suffix(overload_variant_name("", #f.signature.parameters))
 	if written != f.name then written else ø
 }
-receiver_class(f: Function, known: map): text? := if #f.signature.parameters > 0 and known.has(f.signature.parameters#1.type_name) then f.signature.parameters#1.type_name else ø
+method_class(f: Function, known: map): text? := if #f.signature.parameters > 0 and known.has(f.signature.parameters#1.type_name) then f.signature.parameters#1.type_name else ø
 # each class by the names that make one (classes.warp constructor_name, made_name, a struct made in place)
 made_classes(classes: list): map := {
 	makes = {}
