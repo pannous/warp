@@ -54,6 +54,8 @@ unit_binding_ops = [Op.Assign, Op.Define, Op.AddAssign, Op.SubAssign, Op.MulAssi
 # a unit after a product, a quotient or a power reads two ways, `10 / 2 ms`: refused with a fix-it naming both
 # (decision unit-after-number)
 unit_ambiguous_ops = [Op.Mul, Op.Div, Op.FloorDiv, Op.Mod, Op.Pow]
+# the operations giving yes or no: the comparisons and logic of the Op table (yes_or_no)
+yes_no_ops = [Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Is, Op.Ne, Op.Identical, Op.NotIdentical, Op.Similar, Op.Rough, Op.And, Op.Or, Op.Xor, Op.Not]
 unit_ambiguous(amounted: Node, unit: Node): text := "DimensionError: a unit binds only after a number: write (${as_code(amounted)}) ${unit} to measure the whole amount, or glue the unit to the number it measures"
 # `km/h`, `kg·m/s^2`, `cm^2`: a unit written whole, each part a unit word, each power a number (`km/2` is no unit)
 unit_written(code: Node): bool := {
@@ -942,6 +944,22 @@ then_not_pipe(value: Node, function: Node): Node := {
 	if is_key(value, Op.If) or is_key(value, Op.While) { return ø }
 	throw "`${spelled(value)} then ${spelled(function)}` is no pipe: `then` is only the branch word, pipe with `${spelled(value)} |> ${spelled(function)}`"
 }
+# a condition: an operation giving yes or no, `x > 2`, `x > 2 and y` (events.warp: `when` with one is refused, with
+# anything else, an event, it is `on`)
+yes_or_no(code: Node): bool := code is key and op_of(code) in yes_no_ops
+# `when x > 2 {…}` (user, card should-offer): a condition after `when` reads three ways, refused naming each
+when_readings(condition: Node): Node := {
+	c = spelled(condition)
+	readings_refused(condition, "when ${c} …", [["if ${c} …", "now"], ["once ${c} …", "the first time it holds"], ["whenever ${c} …", "each time it becomes true"]])
+}
+# code that reads several ways, refused naming each reading [form, meaning] (AGENTS.md "Refuse, never guess";
+# errors.data readings_refused), the fix its forms; nothing is left of it to compile
+readings_refused(about: Node, written: text, readings: list): Node := {
+	diagnose(call_of("readings_refused", [written, either(readings.map(reading => "${reading#1} (${reading#2})")), either(readings.map(reading => reading#1))]), about)
+	Node.Empty
+}
+# `a, b or c`
+either(texts: list): text := texts[0 ..< #texts - 1].join(", ") + " or " + texts[#texts - 1]
 # `x > 2 then 5` (decision then-not-pipe): a branch needs its `if`, refused naming `if x > 2 then 5`; ø where `if c`
 # or `while c` heads it already
 then_without_if(condition: Node, value: Node): Node := {
@@ -1307,6 +1325,8 @@ rule_words = {
 	then_not_pipe: then_not_pipe,
 	function_value: function_value,
 	then_without_if: then_without_if,
+	when_readings: when_readings,
+	yes_or_no: yes_or_no,
 	module_help: module_help,
 	module_named: module_named,
 	module_view: module_view,

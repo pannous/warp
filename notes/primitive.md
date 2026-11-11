@@ -77,6 +77,12 @@ copied in with memcpy). `warp build native core/native/driver.warp` makes `drive
 the module, then signed): about 100 KB beside the module. The driver is built once per lib/ into lib/data/native/
 (again when driver.warp changes), in the same run as the program: every compile starts with a fresh Module
 (emitter.warp fresh_module, card module-inheritance).
+An executable is its own library (user decision 11-11, card self-contained-executables): the driver sets the run's
+`lib` option to its own folder (its path's links resolved), and the build copies there what it links at run time, in
+lib/'s layout: the modules the driver links at a host word's first call whose word the program imports (unicode for
+canonical_text: hello's runtime.wasm, modules/unicode.wasm, unicode_data.wasm, prelude.wasm), their links in turn,
+nothing for a program importing none. It runs in any folder, no lib/ installed; a missing module ends the run naming
+its file. `warp build app` moves them into Contents/MacOS.
 Tests: test/native/test_executables.sh.
 A module gets WASI (stdin/out/err and the environment inherited, "." and "/" preopened), GC, typed references and
 exceptions, wasmtime's machine-code cache. warp.wasm's machine code is the driver's own, beside it as

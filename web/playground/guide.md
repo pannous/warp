@@ -384,7 +384,7 @@ Complex numbers come with `use complex`: `ⅈ` is the imaginary unit, √-1.
 
 ```warp => "-5+10i"
 use complex
-str((3 + 4ⅈ) * (1 + 2ⅈ))
+text((3 + 4ⅈ) * (1 + 2ⅈ))
 ```
 
 Examples: numbers; samples: simple, factorial, power, gcd, collatz, quadratic, sum, sin, sine, measurements, units_dynamic, dates, bits, complex_numbers, complex_roots
@@ -432,6 +432,14 @@ A list keeps several values in order, like a shopping list.
 ```warp => 2
 friends = ["Alf", "Bob"]
 #friends # the number of friends
+```
+
+Until we know what a person is, we can write these guys either as texts, in quotes as above, or as raw data:
+`data` keeps the names as they are written, unquoted and not evaluated.
+
+```warp => [Alf, Bob]
+friends = data [Alf, Bob]
+friends
 ```
 
 `#1` is the first item.

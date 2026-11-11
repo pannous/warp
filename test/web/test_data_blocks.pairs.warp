@@ -9,5 +9,8 @@
 # a `for` among the items gives its items
 'use markup; gs = ["a", "b"]; to_html(ul{ for g in gs { li{ g } } })'	'<ul><li>a</li><li>b</li></ul>'
 'use markup; to_html(style{ .box { color: red } })'	'<style>.box { color: red }</style>'
-'theme = "red"; f(x: data) := x; str(f{ color: theme ul })'	'{color: "red" ul}'
-'f(x: data) := x; str(f{ a: 1 b })'	'{a: 1 b}'
+'theme = "red"; f(x: data) := x; text(f{ color: theme ul })'	'{color: "red" ul}'
+'f(x: data) := x; text(f{ a: 1 b })'	'{a: 1 b}'
+# an instance written into a list inside a block is the instance (card html-div-syntax)
+'class H { n: int }; v = (k: {[H(1)]}); v'	'k: {[H{n: 1}]}'
+'class H { n: int }; v = (k: {f: H(1)}); v'	'k: {f: H{n: 1}}'

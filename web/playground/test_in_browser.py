@@ -319,7 +319,7 @@ PREVIOUS_FRAME_SHOWN = str(0xFFC0_0000)
 # card playground-stale-value: a run started without the Run button (an example chosen, auto-run, runCode) clears the
 # last run's value as Run does: an animation running long showed the value before it above itself
 STALE_VALUE = "(a run started without Run leaves no old value above an animation)"
-STALE_VALUE_CODE = "use draw\ncanvas(40, 40)\nloop {\n\tclear(paper)\n\tshow()\n\tsleep(16ms)\n}"
+STALE_VALUE_CODE = "use draw\ncanvas(40, 40)\nloop {\n\tclear(canvas)\n\tshow()\n\tsleep(16ms)\n}"
 STALE_VALUE_FIRST = "4242"
 STALE_VALUE_WAIT_MS = 3000
 GUIDE_PARTS = "(the guide groups its chapters in parts; a chapter's address opens it inside its part)"  # card playground-guide-chapters

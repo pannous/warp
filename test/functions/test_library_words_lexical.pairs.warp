@@ -6,3 +6,4 @@
 'first(x) := x * 2; [first(4), first([5,6,7], 2)]'	[8, [5, 6]]
 'use math; clamp(x) := 9; clamp(5, 0, 3) + clamp(1)'	12
 'double(x) := x * 2; round(x) := 7; map([1.4], round)'	[7]
+'class Box { v: int; compare(o: any): int := 42 }; Box(1).compare(Box(2)) + 0 * compare(1.5, 2)'	42

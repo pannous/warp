@@ -59,7 +59,7 @@ made_word(type_name: text): text := "made" + name_joiner + type_name
 # a subtype with no format of its own shows as its value (is-a, not has-a: an Age of 3 prints 3)
 subtype_declared(name: text, narrowed: text, formats_itself: bool): list := {
 	number_value = if narrowed in NUMBER_TYPES then "; float() := ${subtype_field()}" else ""
-	shown = if formats_itself then "" else "; format as text := str(${subtype_field()})"
+	shown = if formats_itself then "" else "; format as text := text(${subtype_field()})"
 	# its one field named subtype_field(), which the runtime knows a number's subtype by (`hex(123) == 123`)
 	declared = statements_in(plain_node(parsed("class ${name} { ${subtype_field()}: ${narrowed}${number_value}${shown} }; made(x) := if x is ${name} then x else ${name}(x)")))
 	[declared#1, Key(renamed_target(key_of(declared#2), made_word(name)), Op.Define, value_of(declared#2))]

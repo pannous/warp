@@ -39,7 +39,7 @@ def cli_short(spec: list, letter: text): any {
 // a value text as the option's kind wants it, one of its choices when it has them
 def cli_value(o: map, t: text): any {
 	v = cli_converted(o, t)
-	if "choices" in o and not (v in o["choices"]) { raise "cli: " + cli_shown(o) + " is one of " + join([str(c) for c in o["choices"]], ", ") + ", not " + t }
+	if "choices" in o and not (v in o["choices"]) { raise "cli: " + cli_shown(o) + " is one of " + join([text(c) for c in o["choices"]], ", ") + ", not " + t }
 	v
 }
 def cli_converted(o: map, t: text): any {
@@ -164,7 +164,7 @@ def cli_help(program: text, spec: list): text {
 	usage = "usage: " + program + " [-h]"
 	lines = ["", "options:", "  -h, --help            show this help"]
 	for o in spec {
-		metavar = if "choices" in o then "{" + join([str(c) for c in o["choices"]], ",") + "}" else upper(o["name"])
+		metavar = if "choices" in o then "{" + join([text(c) for c in o["choices"]], ",") + "}" else upper(o["name"])
 		if cli_is(o, "positional") {
 			shown = if "choices" in o then metavar else o["name"]
 			usage = usage + " " + (if cli_is(o, "many") then "[" + shown + " ...]" else shown)
@@ -172,7 +172,7 @@ def cli_help(program: text, spec: list): text {
 			value = if cli_is_flag(o) then "" else " " + metavar
 			part = (if "short" in o then "-" + o["short"] + ", " else "") + "--" + o["name"] + value
 			if cli_is_flag(o) { part = part + ", --no-" + o["name"] }
-			notes = [if "help" in o then o["help"] else "", if "default" in o and not cli_is_flag(o) then "(default " + str(o["default"]) + ")" else "", if cli_is(o, "required") then "(required)" else ""]
+			notes = [if "help" in o then o["help"] else "", if "default" in o and not cli_is_flag(o) then "(default " + text(o["default"]) + ")" else "", if cli_is(o, "required") then "(required)" else ""]
 			lines = lines + [cli_line(part, join([n for n in notes if n != ""], " "))]
 			usage = usage + " " + (if cli_is(o, "required") then "" else "[") + "--" + o["name"] + value + (if cli_is(o, "required") then "" else "]")
 		}
