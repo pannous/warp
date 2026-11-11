@@ -391,30 +391,40 @@ reaching_template_words(program: Node, rules: list): list := rules_reaching(rule
 
 # the rules that can fire in the statement (card speed-module-cache): those whose pattern's words it mentions, or the
 # result of such a rule does (a result is rewritten again); a rule missing one matches nowhere in it, so walking it
-# with these alone gives what all the rules give, without trying the others at each node. Only the rules needing a
-# word mentioned are tried (rule_index), each again when another of its words comes in
+# with these alone gives what all the rules give, without trying the others at each node. The rules every statement
+# reaches (RuleIndex.common) are worked out once per walk; a statement adds those its own words reach
 rules_reaching(index: RuleIndex, statement: Node): list := {
+	picked = reach_grown(index, index.common, tokens_within(statement), []).picked
+	range_list(#index.rules).filter(each => picked[each]).map(each => index.rules[each])
+}
+# the words mentioned and the rules picked, a yes/no per rule (`index in picked` of a list compared each index with
+# every picked one, node by node)
+class Reach { mentioned: map; picked: list }
+# the reach grown by the words and the rules pending: only the rules needing a word mentioned are tried (rule_index),
+# each again when another of its words comes in
+reach_grown(index: RuleIndex, start: Reach, words: list, pending: list): Reach := {
 	rules = index.rules
-	mentioned = word_set(tokens_within(statement))
-	# (a yes/no per rule: `index in picked` of a list compared each index with every picked one, node by node)
-	picked = range_list(#rules).map(each => no)
-	pending = index.free + mentioned.keys.flat_map(word => index.by_word.get(word) ?? [])
+	mentioned = word_set(start.mentioned.keys)
+	picked = start.picked.map(each => each)
+	queue = pending + words.filter(word => not mentioned.has(word)).flat_map(word => index.by_word.get(word) ?? [])
+	for word in words { mentioned[word] = yes }
 	at = 0
-	while at < #pending {
-		tried = pending[at]
+	while at < #queue {
+		tried = queue[at]
 		at += 1
 		if not picked[tried] and rules[tried].needs.all(word => mentioned.has(word)) {
 			picked[tried] = yes
 			for word in rules[tried].gives.filter(word => not mentioned.has(word)) {
 				mentioned[word] = yes
-				pending += index.by_word.get(word) ?? []
+				queue += index.by_word.get(word) ?? []
 			}
 		}
 	}
-	range_list(#rules).filter(each => picked[each]).map(each => rules[each])
+	Reach(mentioned, picked)
 }
-# rules by each word they need, made once for a walk of a program (rules_reaching), those needing none apart
-class RuleIndex { rules: list; free: list; by_word: map }
+# rules by each word they need, made once for a walk of a program (rules_reaching), and the rules reached whatever a
+# statement says: those needing no word, and what their results bring
+class RuleIndex { rules: list; by_word: map; common: Reach }
 rule_index(rules: list): RuleIndex := {
 	by_word = {}
 	free = []
@@ -423,7 +433,8 @@ rule_index(rules: list): RuleIndex := {
 		if #needs == 0 { free += [at] }
 		for word in needs { by_word[word] = (by_word.get(word) ?? []) + [at] }
 	}
-	RuleIndex(rules, free, by_word)
+	unreached = RuleIndex(rules, by_word, Reach({}, rules.map(each => no)))
+	RuleIndex(rules, by_word, reach_grown(unreached, unreached.common, [], free))
 }
 
 # a hole of any form: `$x`, `$body: block`, `$xs...` or an affixed one; its words (a typed hole's kind) are no words of
