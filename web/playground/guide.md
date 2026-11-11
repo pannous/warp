@@ -709,29 +709,29 @@ Examples: tasks, channels; samples: async, threads, parallel_let
 
 ## Web pages
 
-A web page is made of tags. In warp, tags are values.
+A web page is made of tags, written inside `html{…}`.
 
 ```warp => <p>hello</p>
-p{ "hello" }
+html{ p{ "hello" } }
 ```
 
 Attributes look like HTML.
 
 ```warp => <b class="fat">hello</b>
-b{class:"fat" "hello" }
+html{ b{class:"fat" "hello" } }
 ```
 
 Tags hold other tags, like a page does.
 
-```warp => <div><h1>Fruit</h1><p>Fresh <b>pears</b> today</p></div>
-div{ h1{"Fruit"} p{ "Fresh " b{"pears"} " today" } }
+```warp => <h1>Fruit</h1><p>Fresh <b>pears</b> today</p>
+html{ h1{"Fruit"} p{ "Fresh " b{"pears"} " today" } }
 ```
 
 A list of values makes a list of tags.
 
 ```warp => <ul><li>apple</li><li>pear</li></ul>
 fruits = ["apple" "pear"]
-ul{ li all fruits }
+html{ ul{ li all fruits } }
 ```
 
 `on click { … }` inside a button makes it do something. `local["key"]` remembers a value in the browser.
@@ -740,7 +740,7 @@ An id makes an element a name: `who` is the element, `$who` what was typed into 
 
 ```warp
 greeting = "Type a name"
-div{
+html{
 	input{ id: "who" }
 	button{ on click { greeting = "Hello " + $who } "Greet" }
 	p{ greeting }
