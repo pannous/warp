@@ -16,10 +16,10 @@ built() { # built <name> <expected> <code>: the program built as an executable p
 	if [ "$got" = "$2" ]; then echo "✓ $1"; else echo "✗ $1: got $got, expected $2"; failures=$((failures + 1)); fi
 }
 
-built hello "Hello 🌍2026" '"Hello " + "🌍" + (2000 + 26)'
+built hello '"Hello 🌍2026"' '"Hello " + "🌍" + (2000 + 26)'
 built printing "hi" 'print "hi"'
 built text_to_c 5 'use c\nstrlen("hello")'
-built handles warp "use sqlite3\ndb = sqlite3_open(\":memory:\")\nstmt = sqlite3_prepare_v2(db, \"select 'warp'\", -1)\nsqlite3_step(stmt)\nsqlite3_column_text(stmt, 0)"
+built handles '"warp"' "use sqlite3\ndb = sqlite3_open(\":memory:\")\nstmt = sqlite3_prepare_v2(db, \"select 'warp'\", -1)\nsqlite3_step(stmt)\nsqlite3_column_text(stmt, 0)"
 built power 1267650600228229401496703205376 'print 2 ^ 100'
 built distances 2.03km 'use units\nprint 2 km + 30 m'
 built accents yes 'print "\0303\0251" == "e\0314\0201"'
