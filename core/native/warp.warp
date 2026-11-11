@@ -662,7 +662,7 @@ documentation_opened(): nothing := {
 # flags, and options with a value (--lib <folder>); the ones after the --profile and --slots are the tools' (the test
 # harness, the build scripts, `warp app check`), which `warp help options` leaves out. Words after the file or code are
 # the program's
-is_flag(word: text): bool := same_text(word, "--no-hints") or same_text(word, "--no-window") or same_text(word, "--mute") or same_text(word, "--backtrace") or same_text(word, "--profile") or same_text(word, "--times") or same_text(word, "--value-as-data") or same_text(word, "--one-thread") or same_text(word, "--emit-survey") or same_text(word, "--rules-fired")
+is_flag(word: text): bool := same_text(word, "--no-hints") or same_text(word, "--no-window") or same_text(word, "--mute") or same_text(word, "--backtrace") or same_text(word, "--profile") or same_text(word, "--times") or same_text(word, "--value-as-data") or same_text(word, "--one-thread") or same_text(word, "--emit-survey") or same_text(word, "--rules-fired") or same_text(word, "--fast")
 is_valued(word: text): bool := same_text(word, "--lib") or same_text(word, "--slots") or same_text(word, "--seed") or same_text(word, "--events-for") or same_text(word, "--page-steps") or same_text(word, "--app-window")
 # the words of the option at `at`, kept: 1 a flag, 2 an option with its value, 0 no option
 option_words(at: int): int := {

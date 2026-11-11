@@ -31,7 +31,7 @@ add_todo(title: text) := {
 	items = load()
 	item = {id: next_id(items), title: title, done: no}
 	keep(items + [item])
-	print("added #" + str(item.id) + ": " + title)
+	print("added #" + text(item.id) + ": " + title)
 }
 
 finish(id: int) := {
@@ -40,17 +40,17 @@ finish(id: int) := {
 	for item in items {
 		if item.id == id { item.done = yes; found = yes }
 	}
-	if found { keep(items); print("done #" + str(id)) } else { print("no todo #" + str(id)) }
+	if found { keep(items); print("done #" + text(id)) } else { print("no todo #" + text(id)) }
 }
 
 show() := {
 	items = load()
 	for item in items {
 		mark = if item.done then "[x]" else "[ ]"
-		print(mark + " " + str(item.id) + ". " + item.title)
+		print(mark + " " + text(item.id) + ". " + item.title)
 	}
 	open = count([item for item in items if not item.done])
-	print(if count(items) == 0 then "nothing to do" else str(open) + " open, " + str(count(items) - open) + " done")
+	print(if count(items) == 0 then "nothing to do" else text(open) + " open, " + text(count(items) - open) + " done")
 }
 
 command(o: map) := {
@@ -77,5 +77,5 @@ if count(args) > 0 {
 		act(parsed(argv))
 	}
 	print("stored: " + read(store))
-	print("demo file removed: " + str(delete_file(store)))
+	print("demo file removed: " + text(delete_file(store)))
 }

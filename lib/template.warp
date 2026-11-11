@@ -120,7 +120,7 @@ def template_lookup(stack: list, name: text): any {
 	value
 }
 is_falsey(value: any): bool := value == nil or (value is bool and not value) or (value is list and count(value) == 0)
-template_value_text(value: any): text := if value == nil then "" else if value is text then value else str(value)
+template_value_text(value: any): text := if value == nil then "" else if value is text then value else text(value)
 // a partial's lines each after the indentation of its standalone tag
 indented(t: text, indent: text): text := if indent == "" then t else {
 	lines = split(t, "\n")

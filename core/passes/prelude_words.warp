@@ -301,7 +301,7 @@ time_test_words(program: Node): list := if nodes_in(program).any(is_time_test) o
 has_time_field(statement: Node): bool := class_view(statement) != ø and words_within(statement).any(word => base_type(word) in time_test_types)
 # `x is time` as written, or as the type tests make it, is_type(x, "time") (core/analysis/type_tests.warp)
 # a place typed so, `d: date? = v`, a field `year: date?` (decision typed-places-check), tests it too
-is_time_test(n: Node): bool := ((is_key(n, Op.Is) or is_operator(n, ":")) and value_of(n) is symbol and base_type(name_of(value_of(n))) in time_test_types) or (is_group(n) and #n == 3 and n#1 == symbol("is_type") and n#3 is text and str(n#3) in time_test_types)
+is_time_test(n: Node): bool := ((is_key(n, Op.Is) or is_operator(n, ":")) and value_of(n) is symbol and base_type(name_of(value_of(n))) in time_test_types) or (is_group(n) and #n == 3 and n#1 == symbol("is_type") and n#3 is text and text(n#3) in time_test_types)
 time_test_types = ["time", "duration", "date", "instant"]
 # the module of the emitted words: lib/time.warp for a time's + - * and for `is time`
 emitted_modules(program: Node): list := if time_operation_word in time_literal_words(program) or #time_test_words(program) > 0 then [time_module] else []
@@ -924,7 +924,7 @@ with_implicit_uses(source: text, folder: text = "."): text := {
 	# extensions' implicit uses scan a program's)
 	written = written_source(source)
 	written_uses = used_modules(written)
-	found = if module_written == "" then implicit_modules_of(source, folder) else runtime_modules_needed(written)
+	found = modules_found(written, folder, implicit_scanners())
 	needed = found + runtime_modules_reached(written_uses + found, folder) + files_runtime_modules(written, folder)
 	runtime = hooks().runtime_modules.filter(name => name in needed and name != module_written and name not in written_uses)
 	implicitly_used = found.filter(name => not is_runtime_module(name)) + runtime
@@ -949,9 +949,9 @@ runtime_modules_reached(uses: list, folder: text): list := {
 global runtime_modules_by_module = {}
 module_runtime_modules(name: text): list := {
 	if not runtime_modules_by_module.has(name) {
-		# (a prebuilt module's signature says them; only one built before it did is read and scanned)
+		# (a prebuilt module's signature says them, the modules it links; only one built before it did is read and scanned)
 		signature = prebuilt_signature(name)
-		runtime_modules_by_module[name] = if signature != ø and signature.runtime_modules != ø then signature.runtime_modules + signature.uses.filter(is_runtime_module) else runtime_modules_needed(used_module_text(name))
+		runtime_modules_by_module[name] = if signature != ø and signature.links != ø then signature.links.filter(is_runtime_module) else runtime_modules_needed(used_module_text(name))
 	}
 	runtime_modules_by_module[name]
 }

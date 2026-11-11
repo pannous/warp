@@ -384,7 +384,7 @@ Complex numbers come with `use complex`: `ⅈ` is the imaginary unit, √-1.
 
 ```warp => "-5+10i"
 use complex
-str((3 + 4ⅈ) * (1 + 2ⅈ))
+text((3 + 4ⅈ) * (1 + 2ⅈ))
 ```
 
 Examples: numbers; samples: simple, factorial, power, gcd, collatz, quadratic, sum, sin, sine, measurements, units_dynamic, dates, bits, complex_numbers, complex_roots

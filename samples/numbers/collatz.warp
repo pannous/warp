@@ -6,8 +6,8 @@ def collatz(n) = if n == 1 then 0 else 1 + collatz(if n % 2 == 0 then n / 2 else
 lengths = [collatz(n) for n in 1 to 1000]
 
 # one dot per number: its x the number, its height the steps it takes
-canvas(1000, 400)
-clear(paper)
+canvas.resize(1000, 400)
+clear(canvas)
 for n in 1 to 1000 { circle(n, 400 - 2 * lengths#n, 1.5, red) }
 show()
 

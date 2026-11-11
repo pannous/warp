@@ -5,7 +5,7 @@
 'class Counter { c: 0; inc() := { c = c + 1 } }; k = Counter(); k.inc(); k.c'	1
 'class C { pi = 3 }; C().pi'	3
 'class P { x: int; init(a) := { x = a } }; P(4).x'	4
-'class Point { x: int; y: int }; str(Point{x:1 y:2})'	"Point{x: 1, y: 2}"
+'class Point { x: int; y: int }; text(Point{x:1 y:2})'	"Point{x: 1, y: 2}"
 'enum Coin { Penny, Nickel, Dime }; Coin.Dime as int'	2
 'enum Coin { Penny, Nickel, Dime }; 2 as Coin'	Dime
 'enum W { A = "a·b", B }; W.A as text'	"a·b"

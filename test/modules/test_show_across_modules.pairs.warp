@@ -1,5 +1,5 @@
 # same-named functions of different arity coexist across modules: draw's show(), color's `format Color c as text`, the
 # `format as text` of units and reals (card module-arity-overloads)
 'use sound; use color; 1'	1
-'use color; str(red)'	"red"
-'class N { x: int; format as text := "n" }; def show() { 7 }; [str([N(1)]), show()]'	["[n]" 7]
+'use color; text(red)'	"red"
+'class N { x: int; format as text := "n" }; def show() { 7 }; [text([N(1)]), show()]'	["[n]" 7]

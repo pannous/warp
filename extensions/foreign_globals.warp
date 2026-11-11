@@ -8,10 +8,22 @@
 #   Name(a)            the constructor, `new Name(a)` (member ""); a function of the global scope (`atob(t)`) is called
 #   x.member = v       member "set member"
 # A global WebIDL does not declare (Math, JSON) is reached unchecked, and so is what its members give.
-js_globals_extension = Extension{name: "js_globals", passes_before: {"rules_rewritten": js_globals}}
+# `use python json` (card rewrite-example-hide; `use json from python` says the same): a module of another runtime,
+# reached through that runtime's library, which works natively and in the page (lib/native/python.warp: libpython,
+# Pyodide's C API); its members go unchecked, a missing one failing as the runtime's own error (AttributeError)
+#   json                 python_import("json")
+#   json.dumps(a)        python_member(python_import("json"), "dumps", 1, [a])
+foreign_globals_extension = Extension{name: "foreign_globals", passes_before: {"rules_rewritten": foreign_globals}}
 
 JS_RUNTIME = "js"
+# the runtimes reached through their library, <runtime>_import(name) and <runtime>_member(target, member, called,
+# arguments); every value they give is typed by the runtime's name, so its members go there too
+LIBRARY_RUNTIMES = ["python"]
+FOREIGN_RUNTIMES = [JS_RUNTIME] + LIBRARY_RUNTIMES
+IMPORT_SUFFIX = "_import"
+MEMBER_SUFFIX = "_member"
 USE_WORD = "use"
+FROM_WORD = "from"
 FOREIGN_CALL = "foreign_call"
 SETTER_PREFIX = "set "
 GLOBAL_SCOPE = "globalThis"
@@ -30,9 +42,11 @@ use "js_globals/webidl.warp"
 
 # --- the program ---
 
-# The program with its `use js` lines taken out and the uses of their globals as foreign calls
-js_globals(program: Node): Node := {
-	names = flat_statements(program).filter(is_js_use).map(js_use_name)
+# The program with its `use js` lines taken out (a library runtime's become `use python`) and the uses of their globals
+# as foreign calls
+foreign_globals(program: Node): Node := {
+	uses = foreign_uses(program)
+	names = uses.map(used => used#2)
 	scopes = markup_scopes(program)
 	markup = #scopes > 0
 	if markup { names += page_globals_read(program, names) }
@@ -40,7 +54,7 @@ js_globals(program: Node): Node := {
 	elements = page_elements(program, ids)
 	if #names == 0 and #ids == 0 and #elements == 0 { return program }
 	scope = JsScope()
-	for name in names { scope.globals[name] = js_global_type(name) }
+	for used in uses { scope.globals[used#2] = if used#1 == JS_RUNTIME then js_global_type(used#2) else used#1 }
 	for id in ids { scope.elements[id] = yes }
 	for id in elements { scope.dollar_elements[PAGE_MARK + id] = id }
 	lowered = bottom_up(program, n => js_lowered(n, scope))
@@ -115,16 +129,31 @@ class JsScope {
 	elements: map = {}
 	dollar_elements: map = {}
 }
-# `use js Math`, `use js "path"`
-is_js_use(statement: Node): bool := is_group(statement) and #statement == 3 and statement#1 == symbol(USE_WORD) and statement#2 == symbol(JS_RUNTIME)
-js_use_name(statement: Node): text := if statement#3 is symbol then name_of(statement#3) else "" + statement#3
+# [runtime, name, aliased] of `use js Math`, `use js "path"`, `use python json`, `use json from python` (the alias);
+# ø for another statement
+foreign_use(statement: Node): list? := {
+	if not is_group(statement) or #statement < 3 or statement#1 != symbol(USE_WORD) { return ø }
+	if #statement == 3 and is_runtime(statement#2) { return [name_of(statement#2), used_name(statement#3), no] }
+	if #statement == 4 and statement#3 == symbol(FROM_WORD) and is_runtime(statement#4) { return [name_of(statement#4), used_name(statement#2), yes] }
+	ø
+}
+# the foreign uses of a program, whose names are its own (implicit_uses.warp)
+foreign_uses(program: Node): list := flat_statements(program).map(foreign_use).filter(used => used != ø)
+is_runtime(n: Node): bool := n is symbol and name_of(n) in FOREIGN_RUNTIMES
+used_name(n: Node): text := if n is symbol then name_of(n) else "" + n
 
 js_lowered(n: Node, scope: JsScope): Node := {
-	if is_js_use(n) { return Node.Empty }
+	used = foreign_use(n)
+	if used != ø { return use_lowered(n, used) }
 	if is_key(n, Op.Assign) { return js_assigned(n, scope) }
 	if is_key(n, Op.Dot) { return js_member(n, scope) }
-	if is_group(n) and bracket_of(n) == "(" and n#1 is symbol and scope.globals.has(name_of(n#1)) { return js_global_called(n, scope) }
+	if is_group(n) and bracket_of(n) == "(" and n#1 is symbol and is_js_global(name_of(n#1), scope) { return js_global_called(n, scope) }
 	n
+}
+# a foreign use taken out, a library runtime's left as the use of its library (`use python`); the alias said
+use_lowered(n: Node, used: list): Node := {
+	if used#3 { diagnose(call_of("alias_word", [symbol("${n}"), symbol("use ${used#1} ${used#2}")]), n) }
+	if used#1 == JS_RUNTIME then Node.Empty else use_statements([used#1])#1
 }
 # `receiver.member`, `receiver.member(…)` of a js receiver
 js_member(n: Node, scope: JsScope): Node := {
@@ -144,7 +173,7 @@ js_global_called(n: Node, scope: JsScope): Node := {
 }
 # [the receiver as foreign_call takes it, its interface] of a js value, ø where the node is none
 js_receiver(n: Node, scope: JsScope): list? := {
-	if n is symbol and scope.globals.has(name_of(n)) { return [name_of(n), scope.globals[name_of(n)]] }
+	if n is symbol and scope.globals.has(name_of(n)) { return global_receiver(name_of(n), scope.globals[name_of(n)]) }
 	if n is symbol and scope.elements.has(name_of(n)) { return [page_element(name_of(n), scope), PAGE_ELEMENT_TYPE] }
 	if n is symbol and scope.dollar_elements.has(name_of(n)) { return [page_element(scope.dollar_elements[name_of(n)], scope), PAGE_ELEMENT_TYPE] }
 	if n is symbol and scope.variables.has(name_of(n)) { return [n, scope.variables[name_of(n)]] }
@@ -154,7 +183,8 @@ js_receiver(n: Node, scope: JsScope): list? := {
 # the foreign call of a member checked by its interface, the interface it gives noted when it is one
 js_call(receiver: list, member: text, called: int, arguments: list, scope: JsScope): Node := {
 	given = js_member_type(receiver#2, member)
-	call = call_of(FOREIGN_CALL, [JS_RUNTIME, receiver#1, member, called, bracketed(arguments, "[")])
+	given_arguments = [receiver#1, member, called, bracketed(arguments, "[")]
+	call = if is_library_runtime(receiver#2) then call_of(receiver#2 + MEMBER_SUFFIX, given_arguments) else call_of(FOREIGN_CALL, [JS_RUNTIME] + given_arguments)
 	if given != UNCHECKED { scope.calls["${call}"] = given }
 	call
 }
@@ -169,6 +199,11 @@ js_assigned(n: Node, scope: JsScope): Node := {
 	if target is symbol and scope.calls.has(written) { scope.variables[name_of(target)] = scope.calls[written] }
 	n
 }
+
+# [receiver, interface] of a global: a library runtime's is its import, a js global its name as foreign_call takes it
+global_receiver(name: text, interface: text): list := [if is_library_runtime(interface) then call_of(interface + IMPORT_SUFFIX, [Text(name)]) else Text(name), interface]
+is_library_runtime(interface: text): bool := interface in LIBRARY_RUNTIMES
+is_js_global(name: text, scope: JsScope): bool := scope.globals.has(name) and not is_library_runtime(scope.globals[name])
 
 # --- the types WebIDL gives ---
 
@@ -193,7 +228,7 @@ webidl_global_member(name: text): WebIdlMember? := {
 # the interface the member gives (UNCHECKED for a text, a number, a promise or a type WebIDL does not define); a
 # member its interface lacks is refused, naming the interface
 js_member_type(interface: text, member: text): text := {
-	if interface == UNCHECKED { return UNCHECKED }
+	if interface == UNCHECKED or is_library_runtime(interface) { return interface }
 	found = webidl_member_of(interface, member)
 	if member == CONSTRUCTOR_MEMBER and found != ø { return interface }
 	if found == ø { raise "js: " + interface + " has no " + (if member == CONSTRUCTOR_MEMBER then "constructor" else member) + " (lib/web.webidl)" }

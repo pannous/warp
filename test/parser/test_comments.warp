@@ -9,7 +9,7 @@ is! «# Rust's
 class Point { x: int }
 # it's
 /# don't #/
-str(Point{x: 1})» 'Point{x:1}'
+text(Point{x: 1})» 'Point{x:1}'
 is! 'f(t) := type
 changed = yes
 n = 0

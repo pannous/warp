@@ -1,7 +1,6 @@
 #!/usr/bin/env warp
-// Python's modules from warp: import one, call its functions, get its values back as warp values
-use python
-math = python_import("math")
-print python_call(math, "sqrt", [16])
-json = python_import("json")
-print python_call(json, "dumps", [{name: "Alice", age: 30}])
+// Python's modules from warp: use one, call its functions, get its values back as warp values
+use python math
+print math.sqrt(16)
+use python json
+print json.dumps({name: "Alice", age: 30})

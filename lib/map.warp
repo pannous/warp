@@ -56,7 +56,7 @@ set_path(m: any, path: list, value: any): any := {
 	step = path#1
 	rest = path[1:]
 	if m is list and not is_map(m) {
-		if not (step is int) or step < 1 or step > count(m) { raise "set_path: no position " + str(step) + " in a list of " + str(count(m)) }
+		if not (step is int) or step < 1 or step > count(m) { raise "set_path: no position " + text(step) + " in a list of " + text(count(m)) }
 		return [if i == step then set_path(m#i, rest, value) else m#i for i in 1 to count(m)]
 	}
 	out = if is_map(m) then merge({}, m) else {}

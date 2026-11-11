@@ -9,7 +9,7 @@ alias CircularBuffer => Ring
 
 class Ring { slots = []; capacity = 0; head = 1; filled = 0
 	init(n) := {
-		if n != floor(n) or n < 1 { raise "Ring needs a whole capacity >= 1, not " + str(n) }
+		if n != floor(n) or n < 1 { raise "Ring needs a whole capacity >= 1, not " + text(n) }
 		n = (floor(n)) as int
 		slots = []
 		for i in 1 to n { slots.add(ø) }

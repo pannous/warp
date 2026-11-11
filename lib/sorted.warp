@@ -2,7 +2,7 @@
 // `use sorted`. Keys order by `<` (numbers, texts). set, add and remove return a new collection; the receiver stays.
 // A missing get is ø. rank is the 1-based position, 0 when the key is absent. at(i) is the i-th smallest key.
 // Balance is Adams' (delta 3, ratio 2): one child outweighs the other only while both are still tiny.
-// Insert and delete use one rotation. Intersection and difference build a complete tree instead.
+// Insert and delete use one rotation; union, intersection and difference split and join (sorted_combine).
 
 alias TreeMap => SortedMap
 alias BTreeMap => SortedMap
@@ -137,7 +137,7 @@ sorted_select(t, i) := {
 
 sorted_at(t, i) := {
 	n = sorted_size(t)
-	if i < 1 or i > n { raise "at: rank " + str(i) + " is outside 1.." + str(n) }
+	if i < 1 or i > n { raise "at: rank " + text(i) + " is outside 1.." + text(n) }
 	sorted_select(t, i)
 }
 
@@ -160,26 +160,45 @@ sorted_between(t, lo, hi) := {
 
 sorted_height(t) := if t == ø then 0 else 1 + max(sorted_height(t.left), sorted_height(t.right))
 
-# One rotation restores the weight bound only after a single insert or delete. Intersection and
-# difference throw away whole subtrees, so the survivors are placed again as a complete tree:
-# sibling sizes then differ by at most one. `keep` yes is intersection, no is difference.
-sorted_filter(t, other, keep) := sorted_from_entries(sorted_kept(sorted_entries(t), other, keep))
+# Split and join (Adams; Blelloch, Ferizovic, Sun "Just Join"): every cut and every set operation is built from
+# them, so each result is in weight wherever the keys go, and m keys against n cost O(m log(n/m + 1)).
 
-sorted_kept(entries, other, keep) := {
-	kept = []
-	for e in entries {
-		if (other.has(e#1)) == keep { kept.add(e) }
-	}
-	kept
+# join l, mid, r whose keys are already apart (l < mid < r); mid is a node whose key and value go between, or ø.
+# The lighter side walks down the heavier side's spine until the two weigh alike.
+sorted_join(l, mid, r) := {
+	if l == ø and mid == ø { return r }
+	if r == ø and mid == ø { return l }
+	if l == ø { return sorted_put(r, mid.key, mid.value) }
+	if r == ø { return sorted_put(l, mid.key, mid.value) }
+	if 3 * l.size < r.size { return sorted_balance(r.key, r.value, sorted_join(l, mid, r.left), r.right) }
+	if 3 * r.size < l.size { return sorted_balance(l.key, l.value, l.left, sorted_join(l.right, mid, r)) }
+	if mid == ø then sorted_glue(l, r) else sorted_node(mid.key, mid.value, l, r)
 }
 
-sorted_from_entries(entries) := sorted_build(entries, 1, count(entries))
+# [keys below k, the node of k or ø, keys above k]
+sorted_split(t, k) := {
+	if t == ø { return [ø, ø, ø] }
+	if k < t.key {
+		view = sorted_split(t.left, k)
+		return [view#1, view#2, sorted_join(view#3, t, t.right)]
+	}
+	if t.key < k {
+		view = sorted_split(t.right, k)
+		return [sorted_join(t.left, t, view#1), view#2, view#3]
+	}
+	[t.left, t, t.right]
+}
 
-sorted_build(entries, lo, hi) := {
-	if lo > hi { return ø }
-	mid = (lo + hi) /! 2
-	e = entries#mid
-	sorted_node(e#1, e#2, sorted_build(entries, lo, mid - 1), sorted_build(entries, mid + 1, hi))
+# One walk for union, intersection and difference: which keys stay, those only in a, those in both (a's value),
+# those only in b. b is split by a's root, the halves combine, a's root joins them, its key between them if it stays.
+sorted_combine(a, b, only_a, both, only_b) := {
+	if a == ø { return if only_b then b else ø }
+	if b == ø { return if only_a then a else ø }
+	view = sorted_split(b, a.key)
+	l = sorted_combine(a.left, view#1, only_a, both, only_b)
+	r = sorted_combine(a.right, view#3, only_a, both, only_b)
+	keep = if view#2 == ø then only_a else both
+	sorted_join(l, if keep then a else ø, r)
 }
 
 sorted_within(t, other) := {
@@ -227,13 +246,9 @@ class SortedSet { root = ø
 	max() := sorted_max_key(root, "sorted set")
 	at(i) := sorted_at(root, i)
 	values() := [e#1 for e in sorted_entries(root)]
-	union(other) := {
-		r = root
-		for x in other.values() { r = sorted_put(r, x, yes) }
-		sorted_set_of(r)
-	}
-	intersection(other) := sorted_set_of(sorted_filter(root, other, yes))
-	difference(other) := sorted_set_of(sorted_filter(root, other, no))
+	union(other) := sorted_set_of(sorted_combine(root, other.root, yes, yes, yes))
+	intersection(other) := sorted_set_of(sorted_combine(root, other.root, no, yes, no))
+	difference(other) := sorted_set_of(sorted_combine(root, other.root, yes, no, no))
 	is_subset(other) := sorted_within(root, other)
 	equals(other) := sorted_size(root) == other.size() and sorted_within(root, other)
 	height() := sorted_height(root)

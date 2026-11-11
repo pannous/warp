@@ -112,7 +112,7 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	if only_apart { made = linked_bytes(module.order) }
 	# the warnings once the module is made
 	for warning in said_at(found, Level.Warning, module.program_file) { warn warning }
-	# and its hints: `A4 is sound's; fix: use sound`, the use warp beautify writes
+	# and its hints
 	# unless the run asked for none (`warp --no-hints`: wiki/warning.md)
 	if run_option("no-hints") == ø { for said in said_at(found, Level.Hint, module.program_file) { hint said } }
 	made
@@ -254,6 +254,9 @@ module_source(name: text): text := (if name == PRELUDE_MODULE then "use \"${prel
 # the text a compile defines its words in: the module's own when it writes one (its source is only module_source's
 # stub), else the source
 written_source(source: text): text := if module_written != "" then std_module_text(module_written) else source
+# the scanners finding what the source written uses unsaid: a program's every extension's, a module's only those
+# bringing runtime modules (extension.warp runtime_module_scanners)
+implicit_scanners(): list := if module_written != "" then runtime_module_scanners() else hooks().implicit_uses
 # where the modules a compile links are: beside runtime.wasm, or where the module written goes
 linked_modules_folder(): text := if module_written != "" and not own_module_files.has(module_written) then module_written_folder else folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/"
 # the module a compile writes, and the folder of the modules it links: its own never linked
@@ -264,6 +267,11 @@ global module_written_folder = ""
 global line_module = no
 # whether a compile links the modules it uses: a `warp build` compiles them in, what it builds stands alone
 global modules_linked = yes
+# a compile with --fast (decision fast-mode, card fast-int-wrap; the compiler's own build is one): the run drops its
+# runtime checks, the program's code and every runtime word of the run alike (checks_dropped): every int + - * wraps at
+# 64 bits, no overflow check, as in a fast function. A value already big (a literal past 64 bits, a ratio) keeps its
+# exact arithmetic; only the promotion on overflow goes. Bounds and the other checks are to follow
+global fast_build = run_option("fast") != ø
 write_module(name: text, runtime_file: text, file: text) := module_written_behind(name, read_bytes(runtime_file), file)
 module_written_behind(name: text, runtime, file: text) := module_compiled_behind(name, "", runtime, file)
 # so, compiled from the source given: a console line's own text (extensions/commands repl_step), whose `_start` runs its
@@ -281,7 +289,8 @@ module_compiled_behind(name: text, source: text, runtime, file: text) := {
 	line_module = no
 	# a trap under the compile too (a runtime word's fail(), decision #34): never a half-built module written
 	if refused != "" { throw refused }
-	write_bytes(file, with_signature(linked_bytes(module.order, MODULE_START), name, image_fields(module.order)))
+	written = linked_bytes(module.order, MODULE_START)
+	write_bytes(file, with_signature(written, name, image_fields(module.order) + [links_field(written)]))
 }
 MODULE_START = "warp/start"
 # every standard module (rewrites.warp std_module_names) as <name>.wasm in the folder, each after the modules it uses

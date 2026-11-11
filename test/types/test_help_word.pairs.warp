@@ -4,4 +4,4 @@
 'help(x) := 7; class P { a: int }; help(P)'	7
 'class Point { x: int; length() := 1 }; help(Point) == "class Point\nfields: x\nmethods: length"'	yes
 # a module's word through the module's name, help(draw.save): the word's help
-'use draw; help(draw.save).starts_with("save(made: Picture, as file)")'	yes
+'use draw; help(draw.save).starts_with("save(made: Canvas, as file)")'	yes

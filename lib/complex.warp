@@ -81,7 +81,7 @@ complex_cos(z: any): Complex := { c = as_complex(z); Complex(cos(c.re) * cosh(c.
 // z within tolerance of w in both parts
 complex_near(z: any, w: any, tolerance: float): bool := complex_abs(as_complex(z) - as_complex(w)) <= tolerance
 
-complex_part(x: float): text := if x == floor(x) and abs(x) < 1000000000000000 then str(int(x)) else str(x)
+complex_part(x: float): text := if x == floor(x) and abs(x) < 1000000000000000 then text(int(x)) else text(x)
 complex_text(z: Complex): text := {
 	if z.im == 0 { return complex_part(z.re) }
 	imaginary = if z.im == 1 then IMAGINARY_UNIT_GLYPH else if z.im == -1 then "-" + IMAGINARY_UNIT_GLYPH else complex_part(z.im) + IMAGINARY_UNIT_GLYPH
