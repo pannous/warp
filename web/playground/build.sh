@@ -50,14 +50,19 @@ cd "$repository"
 # the modules a lib/ source's use lines name (core/parsing/parser.warp used_modules: `use x` leading a line)
 used_modules() { [ -f "$1" ] && sed -nE 's/^(use|import|require) ([a-z_0-9]+)[[:space:]]*$/\2/p' "$1" | sort -u; }
 
+# module_source <library> <module>: the module's source there, lib/<module>.warp, or a runtime module's root
+# extensions/<module>/<module>.warp (core/passes/uses.warp module_folder), else nothing
+module_source() { local found; for found in "$1/$2.warp" "$1/extensions/$2/$2.warp"; do [ -f "$found" ] && { echo "$found"; return; }; done; }
+
 # built_of_changed <module> <seen>: whether lib/<module>.warp or one of the modules it uses, transitively, differs
 # from the installed library's, the text its prebuilt image was built of
 built_of_changed() {
-	local name=$1 seen=$2 used
+	local name=$1 seen=$2 used source
+	source=$(module_source "$repository/lib" "$name")
 	# (a used library of no lib/ source, `use sqlite3`'s lib/native/sqlite3.warp, is not built in)
-	[ -f "$repository/lib/$name.warp" ] || return 1
-	cmp -s "$repository/lib/$name.warp" "$INSTALLED_LIBRARY/$name.warp" || return 0
-	for used in $(used_modules "$repository/lib/$name.warp"); do
+	[ -n "$source" ] || return 1
+	cmp -s "$source" "$INSTALLED_LIBRARY/${source#$repository/lib/}" || return 0
+	for used in $(used_modules "$source"); do
 		[[ $seen == *" $used "* ]] && continue
 		built_of_changed "$used" "$seen$name " && return 0
 	done
@@ -78,7 +83,7 @@ build_compiler() {
 		[ -f "$module" ] || continue
 		name=$(basename "$module" .wasm)
 		# (an image of no lib/ source, a module's .splice.wasm, the page never reads)
-		[ -f "$repository/lib/$name.warp" ] || { rm "$module"; continue; }
+		[ -n "$(module_source "$repository/lib" "$name")" ] || { rm "$module"; continue; }
 		built_of_changed "$name" " " || continue
 		rm "$module"
 		echo "lib/$name.warp or a module it uses changed: compiled from its source"
