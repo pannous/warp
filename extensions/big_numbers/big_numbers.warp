@@ -1,10 +1,10 @@
 # Big numbers linked on demand (card runtime-bridge-slots, user decision (c)): float and int powers, the cube root,
-# `x as rational` and the decimals past 18 places (a literal past 64 bits stays in runtime.wasm: the
-# prelude writes one, u64's range). A standard module of runtime code (its row's
-# runtime_modules, extensions/extensions.warp): `warp rebuild` builds it behind runtime.wasm, where the rest of big
-# numbers stays (overflow, ÷, show), and a program links it when its source can make one of these values
-# (big_number_uses.warp). Only the emitter calls its extended_ words, so runtime.wasm never needs it. Its functions
-# compile as runtime words do: intrinsics and the runtime's own words
+# `x as rational` and the decimals past 18 places. A standard module of runtime code (its row's runtime_modules,
+# extensions/extensions.warp): `warp rebuild` builds it behind runtime.wasm, where the rest of big numbers stays
+# (overflow, ÷, show, and a literal past 64 bits: the prelude writes one, u64's range), and a compile links it when
+# its source, or a module or file it uses, can make one of these values (big_number_uses.warp). Only the emitter
+# calls its extended_ words, never a program by name. Its functions compile as runtime words do: intrinsics and the
+# runtime's own words
 use "../../compiler/runtime/intrinsics.warp"
 use "pow.warp"
 # `x as rational` of a run-time float (decision float-as-rational; Rust twin float_as_exact in
