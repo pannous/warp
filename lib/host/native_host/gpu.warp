@@ -690,7 +690,7 @@ buffer_mapped(buffer: int, size: int): int := {
 // host_shader_painted(shader, width, height, values, pixels): the shader painted on the GPU, its pixels RGBA, a byte
 // each, row by row into `pixels` (the driver's, width × height × 4 bytes); 0, else -1 and why on standard error
 host_shader_painted(given_shader, width: int, height: int, values: any, pixels: int): int :=
-	if shader_painted(str(given_shader), width, height, values, pixels) then 0 else said_failed("paint of a shader")
+	if shader_painted(text(given_shader), width, height, values, pixels) then 0 else said_failed("paint of a shader")
 // gpu_render(shader, width, height, values): the shader's pixels, each a color word as `red` is one (alpha, red, green,
 // blue from the highest byte, as the page gives them); a shader that fails raises with why
 // the RGBA bytes of a pixel, lowest first, in a color word's order: blue, green, red, alpha
@@ -699,7 +699,7 @@ host_gpu_render(given_shader, width: int, height: int, values: any): any? := {
 	gpu_failure = ""
 	size = width * height * PIXEL_BYTES
 	pixels = struct_of(size)
-	painted = shader_painted(str(given_shader), width, height, values, pixels)
+	painted = shader_painted(text(given_shader), width, height, values, pixels)
 	bytes = field_bytes(pixels, 0, size)
 	free(pixels)
 	if not painted { return error(gpu_failure) }
@@ -842,7 +842,7 @@ painting_layer(width: int, height: int): int := if device_ready() then host_wind
 // driver paints its PNG), -1 failed, why on standard error. It draws into an image of the painting's size first (kept
 // for the next frame by a shader reading its previous one), then shown scaled
 host_shader_shown(given_shader, width: int, height: int, values: any): int := {
-	shader = str(given_shader)
+	shader = text(given_shader)
 	layer = painting_layer(width, height)
 	if layer == 0 { return 0 }
 	t0 = wall_clock_ms()
@@ -1010,7 +1010,7 @@ array_left(array: StorageArray, mapped: int): any := {
 	array.given
 }
 host_gpu_computed(given_shader, arrays: any, workgroups: int): any? := {
-	shader = str(given_shader)
+	shader = text(given_shader)
 	gpu_failure = ""
 	order = arrays_given(arrays, storage_arrays(shader))
 	if order is text { return error(order) }

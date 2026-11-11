@@ -25,7 +25,7 @@ puny_threshold(k: int, bias: int): int := if k <= bias then PUNY_TMIN else if k 
 puny_points(subject: text or list): list := if subject is list then subject else codepoint_numbers(subject)
 def punycode_encode(subject: text or list): text {
 	input = puny_points(subject)
-	out = join([str(chr(c)) for c in input if c < 128], "")
+	out = join([text(chr(c)) for c in input if c < 128], "")
 	basic = count(out)
 	handled = basic
 	if basic > 0 { out = out + "-" }

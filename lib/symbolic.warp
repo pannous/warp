@@ -160,7 +160,7 @@ symbolic_steps(expression: text, table: any, evaluate: any): any := {
 	}
 	while n < SYMBOLIC_STEPS and e.contains("(") {
 		next = symbolic_reduced(e, evaluate)
-		if is_error(next) { return {steps: steps, error: str(next)} }
+		if is_error(next) { return {steps: steps, error: text(next)} }
 		if next == e { break }
 		steps += [next]
 		e = next
@@ -168,7 +168,7 @@ symbolic_steps(expression: text, table: any, evaluate: any): any := {
 	}
 	if symbolic_atomic(e) and #steps > 0 and not symbolic_names(e).any(name => name in table) { return {steps: steps, error: ""} }
 	value = try evaluate(e) catch err { err }
-	if is_error(value) { return {steps: steps, error: str(value)} }
+	if is_error(value) { return {steps: steps, error: text(value)} }
 	shown = symbolic_shown(value)
 	if #steps == 0 or steps#(#steps) != shown { steps += [shown] }
 	{steps: steps, error: ""}

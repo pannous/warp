@@ -3,7 +3,7 @@
 # command_failures_throw
 'use os; try { command("exit 3") } catch e { "caught" }'	"caught"
 # — native only: a page runs no process or shell (decision page-host-lines)
-'use os; try { command("exit 3") } catch e { str(e).contains("exit status: 3") }'	yes
+'use os; try { command("exit 3") } catch e { text(e).contains("exit status: 3") }'	yes
 'use os; try { command("") } catch e { "caught" }'	"caught"
 'use os; command("true")'	""
 

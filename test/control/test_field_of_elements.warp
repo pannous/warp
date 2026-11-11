@@ -3,7 +3,7 @@
 # with_filters_an_untyped_list_of_instances
 is! 'class P{name: text; age: int}
 people = [P("Al", 30), P("Bo", 10), P("Cy", 40)]
-str(name of people with age > 20)' '["Al" "Cy"]'
+text(name of people with age > 20)' '["Al" "Cy"]'
 is! 'class P{name: text; age: int}
 people = [P("Al", 30), P("Bo", 10), P("Cy", 40)]
 count(people where age > 20)' 2

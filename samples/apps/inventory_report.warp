@@ -13,13 +13,13 @@ C-300,Pallet wrap,Dock,4,1899,6
 C-301,Cardboard box L,Dock,150,120,50"
 
 def cents(n: int): text {
-	t = str(n)
+	t = text(n)
 	while #t < 3 { t = "0" + t }
 	t[0..<#t - 2] + "." + t[#t - 2..<#t]
 }
 
 rows = csv_maps(stock)
-print(str(count(rows)) + " SKUs")
+print(text(count(rows)) + " SKUs")
 
 lines = []
 total = 0
@@ -45,6 +45,6 @@ print(table_text(places, {headers: ["location", "skus", "value"], align: ["left"
 # at or below the reorder level: order back up to twice that level
 low = [row for row in rows if int(row["qty"]) <= int(row["reorder"])]
 print("")
-print(str(count(low)) + " to reorder:")
+print(text(count(low)) + " to reorder:")
 print("sku,name,order_qty")
-for row in low { print(row["sku"] + "," + row["name"] + "," + str(2 * int(row["reorder"]) - int(row["qty"]))) }
+for row in low { print(row["sku"] + "," + row["name"] + "," + text(2 * int(row["reorder"]) - int(row["qty"]))) }

@@ -23,7 +23,7 @@ def fraction_fail(message: text) {
 }
 
 def fraction_check(name: text, x: any) {
-	if not (x is int or x is rational) { fraction_fail(name + " needs an exact number (an int or a ratio), not " + str(x)) }
+	if not (x is int or x is rational) { fraction_fail(name + " needs an exact number (an int or a ratio), not " + text(x)) }
 }
 
 // a * b, refused when it leaves the 64-bit range
@@ -123,7 +123,7 @@ global from_float(x: float): any := {
 	negative = b < 0
 	exponent = both_bits(shift_right(b, 52), 0x7ff)
 	fraction = low_bits(b, 52)
-	if exponent == 0x7ff { fraction_fail("from_float of " + str(x) + ": infinities and NaN have no fraction") }
+	if exponent == 0x7ff { fraction_fail("from_float of " + text(x) + ": infinities and NaN have no fraction") }
 	m = if exponent == 0 then fraction else fraction + (1 << 52)
 	e = (if exponent == 0 then 1 else exponent) - 1075
 	if m == 0 { return 0 }
@@ -132,7 +132,7 @@ global from_float(x: float): any := {
 	if e >= 0 {
 		for i in 1 to e { value = fraction_times(value, 2, "from_float") }
 	} else {
-		if -e > 62 { fraction_fail("from_float of " + str(x) + ": its exact denominator 2^" + (-e) + " leaves the 64-bit range of the core's ints") }
+		if -e > 62 { fraction_fail("from_float of " + text(x) + ": its exact denominator 2^" + (-e) + " leaves the 64-bit range of the core's ints") }
 		value = m / (1 << -e)
 	}
 	if negative then -value else value
@@ -176,7 +176,7 @@ global mixed_text(x: any): text := {
 	fraction_check("mixed_text", x)
 	n = numerator(x)
 	d = denominator(x)
-	if d == 1 { return str(n) }
+	if d == 1 { return text(n) }
 	sign = if n < 0 then "-" else ""
 	a = abs(n)
 	whole = a /! d
@@ -202,11 +202,11 @@ global continued_fraction(x: any): list := {
 
 global from_continued_fraction(terms: list): any := {
 	if count(terms) == 0 { fraction_fail("from_continued_fraction of an empty list") }
-	for t in terms { if not (t is int) { fraction_fail("from_continued_fraction needs whole-number terms, not " + str(t)) } }
+	for t in terms { if not (t is int) { fraction_fail("from_continued_fraction needs whole-number terms, not " + text(t)) } }
 	k = count(terms)
 	value = terms#k
 	while k > 1 {
-		if value == 0 { fraction_fail("from_continued_fraction: a tail of value 0 to divide by in " + str(terms)) }
+		if value == 0 { fraction_fail("from_continued_fraction: a tail of value 0 to divide by in " + text(terms)) }
 		k = k - 1
 		value = terms#k + 1 / value
 	}

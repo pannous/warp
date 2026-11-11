@@ -20,7 +20,7 @@ adler32(subject: text or list): int := { a = 1; b = 0; for x in compress_bytes(s
 // --- reading bits (least significant first) and canonical Huffman codes (as in zlib's puff)
 class BitReader { input: list; pos: int; buf: int; left: int; out: list }
 def next_byte(r: BitReader): int {
-	if r.pos >= count(r.input) { raise "inflate: the input is truncated at byte " + str(r.pos) }
+	if r.pos >= count(r.input) { raise "inflate: the input is truncated at byte " + text(r.pos) }
 	r.pos = r.pos + 1
 	r.input[r.pos - 1]
 }
@@ -64,12 +64,12 @@ def inflate_codes(r: BitReader, literals: Huffman, distances: Huffman) {
 		else if sym == 256 { return }
 		else {
 			sym = sym - 257
-			if sym >= 29 { raise "inflate: length code " + str(sym + 257) + " is invalid" }
+			if sym >= 29 { raise "inflate: length code " + text(sym + 257) + " is invalid" }
 			length = COMPRESS_LENGTH_BASE[sym] + take_bits(r, COMPRESS_LENGTH_EXTRA[sym])
 			d = decode(r, distances)
-			if d >= 30 { raise "inflate: distance code " + str(d) + " is invalid" }
+			if d >= 30 { raise "inflate: distance code " + text(d) + " is invalid" }
 			distance = COMPRESS_DISTANCE_BASE[d] + take_bits(r, COMPRESS_DISTANCE_EXTRA[d])
-			if distance > count(r.out) { raise "inflate: distance " + str(distance) + " reaches before the start of the output (" + str(count(r.out)) + " bytes)" }
+			if distance > count(r.out) { raise "inflate: distance " + text(distance) + " reaches before the start of the output (" + text(count(r.out)) + " bytes)" }
 			begin = count(r.out) - distance
 			for i in 0 ..< length { r.out.add(r.out[begin + i]) }
 		}
@@ -79,7 +79,7 @@ def inflate_stored(r: BitReader) {
 	r.left = 0
 	length = next_byte(r) + next_byte(r) * 256
 	inverse = next_byte(r) + next_byte(r) * 256
-	if length + inverse != 65535 { raise "inflate: a stored block's length " + str(length) + " does not match its complement " + str(inverse) }
+	if length + inverse != 65535 { raise "inflate: a stored block's length " + text(length) + " does not match its complement " + text(inverse) }
 	if r.pos + length > count(r.input) { raise "inflate: the input is truncated inside a stored block" }
 	for i in 0 ..< length { r.out.add(r.input[r.pos + i]) }
 	r.pos = r.pos + length
@@ -211,7 +211,7 @@ zlib_compress(subject: text or list): list := { input = compress_bytes(subject);
 def zlib_decompress(subject: text or list): list {
 	input = compress_bytes(subject)
 	if count(input) < 6 { raise "zlib: the input is too short for a zlib stream" }
-	if input[0] % 16 != 8 or input[0] /! 16 > 7 { raise "zlib: compression method " + str(input[0] % 16) + " is not deflate" }
+	if input[0] % 16 != 8 or input[0] /! 16 > 7 { raise "zlib: compression method " + text(input[0] % 16) + " is not deflate" }
 	if (input[0] * 256 + input[1]) % 31 != 0 { raise "zlib: the header check fails" }
 	if input[1] /! 32 % 2 == 1 { raise "zlib: a preset dictionary is not supported" }
 	r = inflate_from(input, 2)
@@ -241,8 +241,8 @@ def gunzip(subject: text or list): list {
 	while offset < count(input) {
 		if offset > 0 { if zeros_from(input, offset) { return out } }
 		if offset + 10 > count(input) { raise "gunzip: the input is truncated inside a header" }
-		if input[offset] != 31 or input[offset + 1] != 139 { raise "gunzip: not a gzip member at byte " + str(offset) }
-		if input[offset + 2] != 8 { raise "gunzip: compression method " + str(input[offset + 2]) + " is not deflate" }
+		if input[offset] != 31 or input[offset + 1] != 139 { raise "gunzip: not a gzip member at byte " + text(offset) }
+		if input[offset + 2] != 8 { raise "gunzip: compression method " + text(input[offset + 2]) + " is not deflate" }
 		flags = input[offset + 3]
 		p = offset + 10
 		if flags /! 4 % 2 == 1 { if p + 2 > count(input) { raise "gunzip: the input is truncated inside FEXTRA" }; p = p + 2 + input[p] + input[p + 1] * 256 }
