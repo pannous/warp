@@ -123,18 +123,13 @@ fn ray(spot: vec2f) -> vec3f {
 	out.mark = vec3f(f32(part), f32(kind), f32(detail));
 	out.world = vec3f(0.0);
 	out.tree = vec2f(0.0);
-	if (drawn >= u32($instances)) {
+	// ground tiles stay undrawn: the sky quad paints the meadow per pixel, and a tile corner behind the eye would fold it into a wall
+	if (drawn >= u32($instances) || part == 1u) {
 		out.at = vec4f(0.0, 2.0, 0.0, 1.0);
 		return out;
 	}
 	if (part == 0u) {
 		out.at = vec4f(side, 0.0, 1.0);
-		return out;
-	}
-	if (part == 1u) {
-		let p = vec3f(s.x + side.x * s.z, 0.0, s.y + side.y * s.z);
-		out.at = project(p);
-		out.world = p;
 		return out;
 	}
 	let seed = hash(vec2f(s.x, s.y));
@@ -252,9 +247,6 @@ fn tree(q: vec2f, kind: u32, seed: f32, light: vec3f) -> Paint {
 		return vec4f(sky(look), 1.0);
 	}
 	let reach = length(here.world - $eye);
-	if (here.mark.x < 1.5) {
-		return vec4f(hazed(meadow(here.world.xz, reach), reach), 1.0);
-	}
 	let sun = normalize(SUN);
 	let light = normalize(vec3f(dot(sun, $right), sun.y, -dot(sun, $forward)));
 	let q = vec2f((here.spot.x - 0.5) * 2.0 * here.tree.y, here.spot.y);
