@@ -6,7 +6,7 @@
 'π as string'	'π'
 # triage-held 2026-11-06: Java/C type spellings (String, double) :: 'π as String'	'π'
 # triage-held 2026-11-06: Java/C type spellings (String, double) :: 'String(√2)'	'√2'
-'str(√2)'	'√2' # not important
+'text(√2)'	'√2' # not important
 
 # every_float_type_word_rounds_an_exact_real
 'π as float'	π

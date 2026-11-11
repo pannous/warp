@@ -12,7 +12,7 @@ check() { # check <what> <got> <expected>
 }
 warning_of() { "$warp" "$1" 2>&1 | grep '^warning' ; }
 
-check '"3" + 3 warns' "$(warning_of 'x = "3" + 3; x')" 'warning: "3" + 3 joins the texts; "3" spells a number at 1:5; fix: int("3") + 3 or "3" + str(3)'
+check '"3" + 3 warns' "$(warning_of 'x = "3" + 3; x')" 'warning: "3" + 3 joins the texts; "3" spells a number at 1:5; fix: int("3") + 3 or "3" + text(3)'
 check '"a" + 3 does not warn' "$(warning_of 'x = "a" + 3; x')" ''
 check "a text's index_of warns" "$(warning_of 't = "abc"; t.index_of("b")')" 'warning: index_of of a text names no unit: it counts characters from 1, as find does; byte_index_of gives the byte offset from 0 at 1:12; fix: find'
 check "a list's index_of does not warn" "$(warning_of 'xs = [1, 2]; xs.index_of(2)')" ''
