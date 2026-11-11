@@ -127,6 +127,8 @@ wasmtime_config_parallel_compilation_set(config: handle, enabled: bool) from "wa
 wasmtime_config_profiler_set(config: handle, strategy: i32) from "warp_wasmtime"
 wasmtime_config_macos_use_mach_ports_set(config: handle, enabled: bool) from "warp_wasmtime"
 wasmtime_context_set_fuel(context: handle, fuel: i64): handle from "warp_wasmtime"
+wasmtime_config_epoch_interruption_set(config: handle, enabled: bool) from "warp_wasmtime"
+wasmtime_context_set_epoch_deadline(context: handle, ticks: i64) from "warp_wasmtime"
 wasmtime_trap_code(trap: handle, code: pointer): bool from "warp_wasmtime"
 wasmtime_config_cache_config_load(config: handle, path: handle): handle from "warp_wasmtime"
 wasm_engine_new_with_config(config: handle): handle from "warp_wasmtime"
@@ -147,6 +149,7 @@ wasi_config_new(): handle from "warp_wasmtime"
 wasi_config_set_argv(config: handle, count: i64, arguments: pointer): bool from "warp_wasmtime"
 # what a crash says the process was running (lib/native/wasi.c): a module's arguments while it runs
 crash_context_running(arguments: pointer, count: i32): handle from "c"
+interrupts_engine(engine: handle): nothing from "c"
 crash_context_restored(outer: handle): nothing from "c"
 # the command line the executable reads from now on (lib/native/wasi.c): a forked child's own
 arguments_replaced(arguments: pointer, count: i32): nothing from "c"
@@ -945,6 +948,8 @@ session_line_run(session: pointer, path: text): i32 := {
 	error = session_line_linked(session, path, instance, trap)
 	failure = ""
 	if error != 0 or long_at(trap).value != 0 { failure = failure_said(error, trap, "") } else {
+		# (a Ctrl+C moves the epoch on: this line, never the console, stops at the next one)
+		wasmtime_context_set_epoch_deadline(context, 1)
 		error = started(context, instance, "_start", trap)
 		if error != 0 or long_at(trap).value != 0 { failure = failure_said(error, trap, raised_message(context, instance, trap)) }
 	}
