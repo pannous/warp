@@ -45,11 +45,12 @@ function_type_byte = 96
 export_function_byte = 0
 export_memory_byte = 2
 export_global_byte = 3
-# the globals the runner reads after a trap: the value a runtime error names,
-# the position of the statement it happened in, the name of the runtime word it failed in (trap_name: the runner no
-# longer needs that word's frame on the stack, which Cranelift's inlining takes away)
 # whether the run drops its runtime checks (a --fast program sets it at its start): the runtime's checks read it
 CHECKS_DROPPED = "checks_dropped"
+# the globals the runner reads after a trap: the value a runtime error names,
+# the position of the statement it happened in, the name of the runtime word it failed in (trap_name: the runner no
+# longer needs that word's frame on the stack, which Cranelift's inlining takes away); and checks_dropped, which a
+# --fast program sets in the runtime it links
 exported_globals = ["trap_detail", "text_heap", "trap_position", "trap_name", CHECKS_DROPPED]
 # trap_position holds line * columns_per_line + column
 columns_per_line = 4096
