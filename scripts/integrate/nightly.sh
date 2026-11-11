@@ -44,7 +44,7 @@ say "sweeps of $tip in $SNAPSHOT"
 
 "$scripts/rebuild.sh" pure "$SNAPSHOT" >/dev/null || { say "RED: rebuild pure of $tip failed, no sweeps"; todo add Now "nightly: rebuild pure of $tip failed, no sweeps ran" --no-topic >/dev/null; exit 1; }
 "$scripts/samples.sh" "$SNAPSHOT" | head -1
-(cd "$SNAPSHOT" && WARP_LIB=$SNAPSHOT/lib web/playground/build.sh >/dev/null) || say "web/playground/build.sh failed: the page sweeps keep their old results"
+(cd "$SNAPSHOT" && web/playground/build.sh --lib "$SNAPSHOT/lib" >/dev/null) || say "web/playground/build.sh failed: the page sweeps keep their old results"
 "$scripts/samples-web.sh" "$SNAPSHOT" | tail -1
 "$scripts/tests-web.sh" "$SNAPSHOT" | tail -1
 

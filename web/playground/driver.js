@@ -304,9 +304,13 @@ function compiledProgram(file, print) {
 	return { module };
 }
 
+// the run's environment: the page's own, then what the page sets (worker.js pageEnvironment: the stand-in of the
+// playground's key, assistant.js programEnvironment), which env, getenv and agent "…" read (card program-env)
+const runEnvironment = () => [...ENVIRONMENT, ...Object.entries(self.pageEnvironment ?? {}).map(([name, value]) => `${name}=${value}`)];
+
 // the compiled program run with the page's host words: { status, said }
 function programRan(bytes, file, hooks) {
-	const holder = runHolder({ warnings: [], pagePath: hooks.pagePath?.(), hooks, environment: ENVIRONMENT, options: programOptions() });
+	const holder = runHolder({ warnings: [], pagePath: hooks.pagePath?.(), hooks, environment: runEnvironment(), options: programOptions() });
 	const wasi = wasiImports(() => holder.exports.memory, [file, ...(self.programArguments ?? [])], hooks.print, programFiles, holder.environment, parentOf(file ?? ""));
 	try {
 		const module = new WebAssembly.Module(bytes);

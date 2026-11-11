@@ -33,8 +33,6 @@ read(descriptor: i32, data: pointer, size: i64): i64 from "c"
 STDIN = 0
 STDOUT = 1
 DASH = 45
-# a lower-case ASCII letter less this is its capital
-CAPITAL_OFFSET = 32
 KEY_ESCAPE = 27
 KEY_BRACKET = 91
 ARROW_UP = 65
@@ -119,8 +117,10 @@ rebuilt(first: text, last: text): nothing := {
 	modules = joined(library, "/modules")
 	start = step_number(first)
 	end = step_number(last)
+	seed = seed_path()
+	# the seed builds warp.wasm.new, which runs the later steps with the seed's library (driver compiler_library)
+	if start < step_number("native") { companion_copied(seed_library(seed), companion_library(built)) }
 	if step_runs("seed", start, end) {
-		seed = seed_path()
 		# the seed's runtime in a folder of its own: a compile links the modules beside its runtime, and lib/modules/
 		# were built behind lib/runtime.wasm, whose words may sit elsewhere (an old seed checks only their counts)
 		seed_folder = joined(built, ".seed")
@@ -150,6 +150,7 @@ rebuilt(first: text, last: text): nothing := {
 	}
 	if compiled {
 		machine_code_moved(built, compiler_path())
+		companion_moved(companion_library(built), companion_library(compiler_path()))
 		rename(c_string(built), c_string(compiler_path()))
 		print(joined("rebuilt ", compiler_path()))
 	}
@@ -214,6 +215,7 @@ promoted(): nothing := {
 	unlink(next)
 	promoted_file = joined(library, "/warp-self.wasm")
 	copied(compiler, promoted_file)
+	companion_copied(companion_library(compiler), companion_library(promoted_file))
 	machine_code_copied(compiler, promoted_file, machine_code_suffix(RUN_GC_HEAP_BYTES))
 	machine_code_copied(compiler, promoted_file, machine_code_suffix(BUILDER_GC_HEAP_BYTES))
 	said = if fixpoint then " compiles compiler.warp once more (to its own bytes, a fixpoint), promoted to " else " compiles compiler.warp once more (to other bytes, no fixpoint), promoted to "
@@ -226,6 +228,40 @@ seed_shipped(): nothing := {
 	seed = seed_path()
 	machine_code_kept(seed)
 	print(joined("precompiled ", seed))
+	print(joined("its library ", seed_library(seed)))
+}
+# the seed's own runtime and unicode module, <seed>.library/, made once: a seed is a stage that compiled itself, so
+# what it makes has its GC types. Made aside and moved in whole, a rebuild beside this one never reads half of it
+seed_library(seed: text): text := {
+	folder = companion_library(seed)
+	if holds_companion(folder) { return folder }
+	aside = joined(joined(folder, ".new-"), text_of(getpid()))
+	companion_folders_made(aside)
+	runtime = joined(aside, companion_file(0))
+	file_ran(seed, words(seed, "runtime", runtime, "", "", ""))
+	file_ran(seed, words(seed, "module", "unicode", runtime, joined(aside, companion_file(1)), ""))
+	# (a rebuild beside this one made it first: its folder stays)
+	if rename(c_string(aside), c_string(folder)) != 0 { folder_removed(aside) }
+	folder
+}
+# a compiler's library copied beside another compiler of the same builder
+companion_copied(from: text, to: text): nothing := {
+	if holds_companion(from) {
+		companion_folders_made(to)
+		for i in 0..COMPANION_FILES { copied(joined(from, companion_file(i)), joined(to, companion_file(i))) }
+	}
+}
+# … moved, the machine code made beside it with it
+companion_moved(from: text, to: text): nothing := {
+	folder_removed(to)
+	rename(c_string(from), c_string(to))
+}
+folder_removed(folder: text): nothing := {
+	command_output(joined(joined("rm -rf '", folder), "'"))
+}
+companion_folders_made(folder: text): nothing := {
+	mkdir(c_string(folder), FOLDER_MODE)
+	mkdir(c_string(joined(folder, "/modules")), FOLDER_MODE)
 }
 # a build's machine code (the driver's .cwasm and its key) moved to another build file of the same bytes
 machine_code_moved(from: text, to: text): nothing := {
@@ -520,6 +556,7 @@ history_line(history: text, index: i64): text := {
 line_started(state: text, line: text): nothing := {
 	given = arguments()
 	added(given, executable_path())
+	options_added(given)
 	added(given, "repl-line")
 	added(given, state)
 	added(given, line)
@@ -625,11 +662,11 @@ documentation_opened(): nothing := {
 
 # the options warp takes before or after its command word (wiki/cli.md; `warp help options` describes them,
 # extensions/commands/commands.warp option_help), kept without their dashes for run_option (core/host_io.warp):
-# flags, and options with a value (--lib <folder>); the ones after the --profile and --lib are the tools' (the test
+# flags, and options with a value (--lib <folder>); the ones after the --profile and --slots are the tools' (the test
 # harness, the build scripts, `warp app check`), which `warp help options` leaves out. Words after the file or code are
 # the program's
 is_flag(word: text): bool := same_text(word, "--no-hints") or same_text(word, "--no-window") or same_text(word, "--mute") or same_text(word, "--backtrace") or same_text(word, "--profile") or same_text(word, "--times") or same_text(word, "--value-as-data") or same_text(word, "--one-thread") or same_text(word, "--emit-survey") or same_text(word, "--rules-fired")
-is_valued(word: text): bool := same_text(word, "--lib") or same_text(word, "--seed") or same_text(word, "--events-for") or same_text(word, "--page-steps") or same_text(word, "--app-window")
+is_valued(word: text): bool := same_text(word, "--lib") or same_text(word, "--slots") or same_text(word, "--seed") or same_text(word, "--events-for") or same_text(word, "--page-steps") or same_text(word, "--app-window")
 # the words of the option at `at`, kept: 1 a flag, 2 an option with its value, 0 no option
 option_words(at: int): int := {
 	word = arg(at)
@@ -642,35 +679,21 @@ option_words(at: int): int := {
 	option_given(name, arg(at + 1))
 	2
 }
-# TODO (card no-bash-exports) the scripts still export WARP_<OPTION> (the warp installed before took no options): each
-# is its option until the scripts give the options (the second push); then this goes, with host_io.warp legacy_option
-legacy_options(): text := "times value-as-data one-thread emit-survey rules-fired seed events-for fuel backtrace profile"
-legacy_options_given(): nothing := {
-	for i in 0..field_count(legacy_options(), SPACE) {
-		name = field(legacy_options(), i, SPACE)
-		value = getenv(legacy_variable(name))
-		if value.length > 0 and not has_option(name) { option_given(name, value) }
-	}
-	# WARP_NO_WINDOW=1, WARP_WINDOW=0's name before, which muted sound too
-	if getenv("WARP_NO_WINDOW").length > 0 {
-		option_given("no-window", "")
-		option_given("mute", "")
-	}
-}
-# WARP_ and the name in capitals, its dashes underscores: no-window's WARP_NO_WINDOW
-legacy_variable(name: text): text := {
-	variable = joined("WARP_", name)
-	for i in 5..variable.length {
-		letter = byte_at(variable.address + i).value
-		byte_at(variable.address + i).value = if letter == DASH then UNDERSCORE else letter - CAPITAL_OFFSET
-	}
-	variable
-}
 # warp's two machine switches (decision no-bash-exports): --no-window is WARP_WINDOW=0, --mute WARP_SOUND=0, either
 # spelling sets both, so the warps and programs this one starts are switched too (lib/os.warp windowless, muted)
 switched(option: text, variable: text): nothing := {
 	if same_text(getenv(variable), "0") { option_given(option, "") }
 	if has_option(option) { setenv(c_string(variable), c_string("0"), 1) }
+}
+# the option words this run was given, added to the words of a warp it starts anew, which so runs the same way (the
+# console's lines, line_started)
+options_added(given: Arguments): nothing := {
+	i = 1
+	while i < arg_count() {
+		taken = if is_flag(arg(i)) then 1 else if is_valued(arg(i)) and i + 1 < arg_count() then 2 else 0
+		for k in 0..taken { added(given, arg(i + k)) }
+		i = i + (if taken > 0 then taken else 1)
+	}
 }
 # the first word from `at` on that is no option, the options before it kept
 past_options(at: int): int := {
@@ -691,7 +714,6 @@ command_ran(): nothing := {
 		option_given("no-window", "")
 		option_given("mute", "")
 	}
-	legacy_options_given()
 	counting = arg_count() > start + 2 and same_text(arg(start), "fuel")
 	if counting { option_given("fuel", arg(start + 1)) }
 	prefixed = counting or (arg_count() > start and is_prefix(arg(start)))

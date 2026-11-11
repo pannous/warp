@@ -7,7 +7,7 @@ wasm-standalone; design: notes/self_hosting.md).
 ## How to
 
 ```bash
-# 1. build warp-self.wasm (prints `… promoted to <path>`: next to the warp binary, or <worktree>/lib/ with WARP_LIB)
+# 1. build warp-self.wasm (prints `… promoted to <path>`: next to the warp binary, or <worktree>/lib/ with --lib)
 /Users/me/dev/bin/warp rebuild self
 
 # 2. compile: <source> <output> <folder of the source's uses> <lib folder>

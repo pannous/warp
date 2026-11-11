@@ -1,4 +1,4 @@
-# f1ff52550d 2026-11-11 07:03 264/267 98.9%
+# 616b1486dc 2026-11-11 11:16 266/268 99.3%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -29,6 +29,7 @@ ok   samples/apps/settings_cli.warp
 ok   samples/apps/site_generator.warp
 ok   samples/apps/todo_cli.warp
 ok   samples/apps/url_report.warp
+ok   samples/clustering/emeans.warp
 ok   samples/conditions/control_flow.warp
 ok   samples/conditions/fizzbuzz.warp
 ok   samples/crates/regex_and_sha2.warp
@@ -149,6 +150,7 @@ ok   samples/modules/javascript.warp
 ok   samples/modules/lib.warp
 ok   samples/modules/main.warp
 ok   samples/modules/modules.warp
+ok   samples/modules/rust_crates.warp
 ok   samples/modules/slug_paths.warp
 ok   samples/modules/square.warp
 ok   samples/modules/test_ffi_comprehensive.warp
@@ -265,4 +267,3 @@ SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
 TIME samples/lists/dot.warp: used its 30 s of CPU
 FAIL samples/modules/packages.warp: extended_power: its module isn't linked, nor the program's (extension.warp runtime_modules)
-FAIL samples/modules/rust_crates.warp: samples/modules/rust_crates.warp:6:49 bytes(t) is called with 0 arguments; fix: bytes(t)

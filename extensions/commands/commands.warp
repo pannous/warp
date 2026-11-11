@@ -43,6 +43,7 @@ option_help = [
 	["--mute", "No sound (or WARP_SOUND=0)"],
 	["--no-hints", "Warnings from weak up, no hints"],
 	["--lib <folder>", "Compile with this lib/ (a worktree's)"],
+	["--slots <n>", "warp test runs at most n cases at once"],
 	["--backtrace", "An error shows the wasm backtrace beside its sentence"],
 	["--profile", "Each compiled function's address range in /tmp/perf-<pid>.map, for perf"],
 	["fuel <steps>", "The program counts steps, out of fuel after them"]

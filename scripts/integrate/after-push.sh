@@ -129,7 +129,7 @@ copy_compilers() {
 	inputs=$(cut -d' ' -f1 "$from/warp.wasm.inputs")
 	for name in runtime.wasm warp.wasm warp-self.wasm; do
 		if [ $name = warp-self.wasm ] && [ "$(cut -d' ' -f1 "$from/$name.inputs" 2>/dev/null)" != "$inputs" ]; then
-			rm -f "$folder/$name" "$folder/$name.cwasm"  # an older pair's: `warp self` says it is missing instead of running it
+			rm -rf "$folder/$name" "$folder/$name.cwasm" "$folder/$name.library"  # an older pair's: `warp self` says it is missing instead of running it
 			continue
 		fi
 		[ -d "$from/$name.kept" ] && mkdir -p "$folder/$name.kept" && cp -R "$from/$name.kept/." "$folder/$name.kept/"
@@ -137,6 +137,7 @@ copy_compilers() {
 			[ -f "$from/$part" ] || continue
 			cp "$from/$part" "$folder/$part.new" && mv "$folder/$part.new" "$folder/$part" || return 1
 		done
+		companion_copied "$from/$name" "$folder/$name" || return 1
 	done
 	# the prebuilt standard modules programs link to, the library index and the sugar's packed rules a compile reads (a
 	# module missing or older than its text is compiled from source, the rules without their file parsed)
@@ -171,7 +172,7 @@ install_compilers() {
 			"$TREE/lib/" "$folder/" && site_scripts_copied "$TREE" "$folder" || red "compilers of ${tip:0:10}: the copy into $folder failed" --urgent
 	for lane in pure self; do
 		[ $lane = self ] && [ ! -f "$folder/warp-self.wasm" ] && continue
-		got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 footprint_run "$TREE/data/hello-footprint" 300 "$MAIN_WARP" $lane samples/hello/hello.warp 2>&1 | tail -1)
+		got=$(cd "$MAIN_CHECKOUT" && WARP_WINDOW=0 footprint_run "$TREE/data/hello-footprint" 300 "$MAIN_WARP" $lane samples/hello/hello.warp 2>&1 | tail -1)
 		[[ $got == *$EXPECTED* ]] || { red "installed $lane compiler: hello got ${got:0:120}"; continue; }
 		# main's hello is the record every smoke compares its branch's with (scripts/lib/hello-footprint.sh)
 		[ $lane = pure ] && footprint_recorded "$(cat "$TREE/data/hello-footprint" 2>/dev/null)" "$tip"
@@ -214,7 +215,7 @@ NATIVE_PREFIX=native-
 # put_back <folder>: the folder set aside as <folder>.old in its place again, the failed new one gone
 put_back() { [ -d "$1.old" ] || { rm -rf "$1"; return; }; rm -rf "$1" && mv "$1.old" "$1"; }
 native_built() {
-	(cd "$1/compiler/native" && WARP_NO_WINDOW=1 WARP_LIB=$1 "$2" build native warp.warp >/dev/null 2>&1) &&
+	(cd "$1/compiler/native" && WARP_WINDOW=0 "$2" --lib "$1" build native warp.warp >/dev/null 2>&1) &&
 		mv "$1/compiler/native/warp" "$1/warp"
 }
 # install_native [early]: early, before the tip's compilers are built, with the tree's compilers of the last install
@@ -249,7 +250,7 @@ install_native() {
 	# the new one fails its checks: removed, ~/dev/bin/warp would point nowhere (card after-push-leave)
 	rm -rf "$folder.old" && { [ ! -d "$folder" ] || mv "$folder" "$folder.old"; } && mv "$folder.new" "$folder" ||
 		{ put_back "$folder"; return 1; }
-	got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 timeout 300 "$folder/warp" samples/hello/hello.warp 2>&1 | tail -1)
+	got=$(cd "$MAIN_CHECKOUT" && WARP_WINDOW=0 timeout 300 "$folder/warp" samples/hello/hello.warp 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { "${failed[@]}" "native warp: hello got ${got:0:120}" --urgent; put_back "$folder"; return 1; }
 	made=$("$scripts/prebuilt-parts.sh" "$folder" 2>&1) || { "${failed[@]}" "native warp: ${made:0:200}" --urgent; put_back "$folder"; return 1; }
 	rm -rf "$folder.old"
@@ -301,7 +302,7 @@ watch() {
 	echo "$built"
 	# the card names the failed step and its log in the store (rebuild.sh), so nobody builds the hash again to read it
 	[ $status = 0 ] || { red "rebuild pure failed: $(echo "$built" | tail -1)" --urgent; return 1; }
-	got=$(cd "$TREE" && WARP_NO_WINDOW=1 WARP_LIB=$TREE/lib timeout 300 "$MAIN_WARP" pure samples/hello/hello.warp 2>&1 | tail -1)
+	got=$(cd "$TREE" && WARP_WINDOW=0 timeout 300 "$MAIN_WARP" --lib "$TREE/lib" pure samples/hello/hello.warp 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { red "smoke test: pure hello got ${got:0:120}" --urgent; return 1; }
 	# stage two: its compilers beside it, else the whole native warp
 	{ if [ -n "$early" ]; then install_compilers; else install_native; fi; } && { installed_compilers_are_trees || red "the installed warp.wasm is not the one built from ${tip:0:10}" --urgent; }
@@ -320,7 +321,7 @@ watch() {
 playground_refreshed() {
 	local folder log=$state/playground-build.log built=$TREE/web/playground/warp-lib page=$MAIN_CHECKOUT/web/playground/warp-lib
 	folder=$(installed_folder) || return 1
-	WARP_LIB=$TREE/lib "$TREE/web/playground/build.sh" compiler >"$log" 2>&1 &&
+	"$TREE/web/playground/build.sh" --lib "$TREE/lib" compiler >"$log" 2>&1 &&
 		rm -rf "$folder/playground-lib" && mv "$built" "$folder/playground-lib" &&
 		{ [ -L "$page" ] || rm -rf "$page"; } && linked "$folder/playground-lib" "$page" &&
 		page_smoked ||
