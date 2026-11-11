@@ -15,6 +15,12 @@ built() { # built <name> <expected> <code>: the program built as an executable p
 	got=$("$stage/$1")
 	if [ "$got" = "$2" ]; then echo "✓ $1"; else echo "✗ $1: got $got, expected $2"; failures=$((failures + 1)); fi
 }
+# ships <name> <module> <code>: the built executable has the module it loads at run time beside it, in a folder of its own
+ships() {
+	mkdir -p "$stage/$1" && printf '%b\n' "$3" >"$stage/$1/$1.warp"
+	(cd "$stage/$1" && "$warp" build "$1.warp" >build.log 2>&1)
+	if [ -s "$stage/$1/modules/$2.wasm" ]; then echo "✓ $1 ships $2"; else echo "✗ $1: no modules/$2.wasm beside it"; tail -2 "$stage/$1/build.log"; failures=$((failures + 1)); fi
+}
 
 built hello '"Hello 🌍2026"' '"Hello " + "🌍" + (2000 + 26)'
 built printing "hi" 'print "hi"'
@@ -23,4 +29,6 @@ built handles '"warp"' "use sqlite3\ndb = sqlite3_open(\":memory:\")\nstmt = sql
 built power 1267650600228229401496703205376 'print 2 ^ 100'
 built distances 2.03km 'use units\nprint 2 km + 30 m'
 built accents yes 'print "\0303\0251" == "e\0314\0201"'
+ships comparing unicode 'print "\0303\0251" == "e\0314\0201"'
+ships sounding native_host 'use sound\nif no 1 { play A4 }'
 exit $((failures > 0))
