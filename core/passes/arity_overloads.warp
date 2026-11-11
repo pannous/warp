@@ -779,7 +779,8 @@ typed_overloads(program: Node): Node := {
 # `pdf` of `f(t) as pdf := …` and `f(t): pdf := …`, which definitions.warp holds as `{the result: pdf = …; the result}`;
 # ø of a definition declaring no result
 written_result(n: Node): text? := {
-	held = held_result(n)
+	# (a linked word's declaration holds none: its head says it, `random(a, b): float`)
+	held = held_result(n) ?? (if is_key(n, Op.Define) and is_key(key_of(n), Op.Colon) then value_of(key_of(n)) else ø)
 	if definition_call(n) != ø and held is symbol then required_type(name_of(held)) else ø
 }
 
