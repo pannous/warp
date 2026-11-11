@@ -37,6 +37,14 @@ if [ -x "$stage/warp" ]; then
 	# a console line warp refuses whose first word is a command on PATH runs by sh; a typo keeps warp's refusal (card repl-bash-commands)
 	check "the console runs a shell line" "$(printf 'echo shell-ran | tr a-z A-Z\n' | native repl | sed -n 2p)" "🌀SHELL-RAN"
 	check "the console keeps a typo's refusal" "$(printf 'lsx -la\n' | native repl | sed -n 2p)" "🌀outside the core: the unknown name lsx at 1:1 (no owner)"
+	# each console line a module of its own, its instance kept: a function changes an earlier line's variable, a class
+	# and its instance cross lines, a value is made once, exit() ends the console (card warp-repl-instance)
+	check "the console keeps a line's variable for the next lines" "$(printf 'global count = 41\ndef bump() { count += 1; count }\nbump()\nbump()\ncount\n' | native repl | sed -n 5p)" "🌀43"
+	check "a class and its instance cross console lines" "$(printf 'class Point{x:int; y:int}\np = Point(1, 2)\np.x + p.y\n' | native repl | sed -n 3p)" "🌀3"
+	check "a console line's value is made once" "$(printf 'r = random()\nr == r\n' | native repl | sed -n 3p)" "🌀yes"
+	check "a console line keeps a variable's kind" "$(printf 'x = 1\nx = "a"\n' | native repl | sed -n 3p)" "🌀x was an Int, is given a Text: use another name at 1:5"
+	check "a console line keeps the first definition" "$(printf 'def f() { 1 }\ndef f() { 2 }\nf()\n' | native repl | sed -n 2,3p | tr '\n' ' ')" "🌀🌀f is defined already (line 1): the console keeps that one 🌀1 "
+	check "exit() ends the console with its status" "$(printf 'exit(3)\nprint 1\n' | native repl >/dev/null; echo $?)" "3"
 	check "bare warp, a piped program" "$(printf 'a = 7\na * 6\n' | native)" 42
 	check "exit(code) ends the run" "$(native 'exit(3)'; echo $?)" 3
 	printf 'x  =  1\n' >"$stage/spaced.warp"
