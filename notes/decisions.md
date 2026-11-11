@@ -23,6 +23,11 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 ---
 
 ## Inbox
+- 2026-11-11 executables-beside-modules: `warp build` ships the compiled modules beside the executable; it finds its own folder through the OS (its executable path) and loads them at run time; no merge, no env var.
+- 2026-11-11 markup-needs-html kept: a bare element (`div{…}`) outside html{} is data and gets a loud warning naming the fix (`x: html = …`).
+- 2026-11-11 public-samples-no-todo: the playground and site hide TODO/DONE comment lines of samples; the sources keep them.
+- 2026-11-11 prelude-word-variable: parked (a binding hides a function only from the binding on).
+- 2026-11-11 menu-follows-example: the playground menu always shows the loaded example, never falls back to hello.
 - 2026-11-11 mutating-needs-bang (parked): `!` on a function that changes what it is given is only a hint for readers where it is not clear; the compiler does not enforce it (almost any function modifies something).
 - 2026-11-11 self-contained-executables: `warp build` makes an executable that carries the runtime and prelude it needs and reads no lib/.
 - 2026-11-11 whole-arrow: `↑` takes whole exponents only (refusal names `^`); the compiler itself carries no big numbers (extension-row-optional). fast-mode: a `--fast` compile argument drops overflow checks (ints wrap at 64 bits) for programs that want speed over checks; the compiler is built with it.
