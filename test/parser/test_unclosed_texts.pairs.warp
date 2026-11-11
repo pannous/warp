@@ -1,6 +1,6 @@
 # a text, character or comment its closer never ends is refused, naming where it opened, as an unclosed group is (user, card missing-quotes-error)
 "\"hi\"\\:world\""	error	the last quote opens a text that never closes
-"\"hi"	error	`"` is missing: the text opened at 1:1
+"\"hi"	error	the closing quote is missing: the text opened at 1:1
 "print \"hi"	error	refused, not printed
 "'a"	error	an unclosed character
 "«hi"	error	an unclosed guillemet text
