@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# A swimming reef: sand, kelp, rocks, bubbles and a school, lit through waves.
+# A swimming reef: sand, kelp, rocks, bubbles and a school of red sea bream, lit through waves.
 # This file is the picture. The window keeps painting; without one
 # (--no-window) this frame runs once and that paint is the still.
 
@@ -9,9 +9,11 @@
 # 055da77885a571e85970b2bb3807b0b504ce1a1c (MIT, Copyright (c) 2026 Gregg Tavares):
 # travelling cosines whose Jacobian focuses light, tropical absorption, and a
 # leader whose followers hold hashed slots in its heading frame.
-# paint() is one fragment shader, so this file is that picture as warp functions:
-# the meshes, the compute passes and the post chain are named in notes/aquarium.md.
+# The fish are the Fish Kit's madai mesh (CC0, なちゃっと), one posed mesh shared
+# by every fish (lib/fish_mesh.warp, notes/aquarium.md). paint() is one fragment shader.
 use math
+use file
+use fish_mesh
 
 # the clock the sample advances; a still is second 0
 global aquarium_time = 0.0
@@ -48,7 +50,9 @@ march_far = 26
 view_width = 320
 view_height = 180
 camera_at = [0, -3.05, 3.4]
-fish_count = 6
+fish_count = 8
+# four poses of the one mesh, a quarter of a tail-beat apart. Eight fish share them.
+fish_phases = 4
 rock_count = 3
 kelp_count = 2
 bubble_count = 4
@@ -214,51 +218,53 @@ fish_place(i, t) := {
 		return school_leader(0, t) .+ follower_offset(i, heading, t, 1.35, 1.7, 0.4)
 	}
 	if i < 5 { return school_leader(1, t) }
-	school_leader(2, t)
+	if i < 6 { return school_leader(2, t) }
+	if i < 7 {
+		heading = school_heading(1, t)
+		return school_leader(1, t) .+ follower_offset(i, heading, t, 1.6, 1.5, 0.45)
+	}
+	heading = school_heading(2, t)
+	school_leader(2, t) .+ follower_offset(i, heading, t, 1.8, 1.4, 0.5)
 }
 fish_heading(i, t) := {
 	if i < 4 { return school_heading(0, t) }
 	if i < 5 { return school_heading(1, t) }
+	if i < 6 { return school_heading(2, t) }
+	if i < 7 { return school_heading(1, t) }
 	school_heading(2, t)
 }
-fish_radii(i) := {
-	if i < 4 { return [0.09, 0.14, 0.42] }
-	if i < 5 { return [0.55, 0.04, 0.36] }
-	[0.16, 0.2, 0.72]
+# lengths from a handspan to longer than the kelp, each one its own. The mesh itself is about half a metre.
+fish_scale(i) := [0.55, 0.82, 1.15, 1.55, 2.0, 2.55, 3.15, 3.8]#(i + 1)
+fish_phase(i) := fract((i + 1) * 0.37)
+fish_pace(i) := 0.72 + i * 0.08
+# which posed phase this fish wears. The pace shifts it through the four beats as time moves.
+fish_slot(i, t, frequency) := min(floor(fract(fish_phase(i) + t * frequency * (fish_pace(i) - 1)) * fish_phases), fish_phases - 1)
+# inside the instance sphere the ray uses to skip a fish; well clear of it, positive
+fish_distance(i, p, t) := norm(p .- fish_place(i, t)) - fish_bound * fish_scale(i)
+madai = ø
+madai_mesh() := {
+	global madai
+	if no madai { madai = fish_mesh(read(fish_beside(program_folder()))) }
+	madai
 }
-fish_top(i) := {
-	if i < 4 { return [0.12, 0.42, 0.7] }
-	if i < 5 { return [0.45, 0.5, 0.52] }
-	[0.75, 0.78, 0.8]
-}
-fish_belly(i) := {
-	if i < 4 { return [0.92, 0.84, 0.62] }
-	if i < 5 { return [0.72, 0.68, 0.58] }
-	[0.95, 0.9, 0.75]
-}
-ellipsoid(local, radii) := {
-	q = [local.x / radii.x, local.y / radii.y, local.z / radii.z]
-	(norm(q) - 1) * min(radii.x, min(radii.y, radii.z))
-}
-fish_distance(i, p, t) := {
-	place = fish_place(i, t)
-	heading = fish_heading(i, t)
-	d = p .- place
-	along = dot(d, heading)
-	bend = sine(t * 5.5 + i * 1.3) * 0.22 * max(-along, 0)
-	side = dot(d, basis_right(heading)) + bend
-	lifted = dot(d, basis_up(heading))
-	radii = fish_radii(i)
-	body = ellipsoid([side, lifted, along], radii)
-	tail = ellipsoid([side, lifted * 0.8, along + radii.z * 0.95], [radii.x * 0.35, radii.y * 0.5, radii.z * 0.48])
-	min(body, tail)
-}
-fish_albedo(i, p, n) := {
-	shade = clamp(0.5 - n.y, 0, 1)
-	base = mix(fish_top(i), fish_belly(i), shade)
-	if i < 4.5 { return base }
-	band = 0.5 + 0.5 * sine(p.x * 7 + p.z * 11)
-	mix(base, fish_belly(i), band * 0.35)
+# pose the four phases once, then one place, heading, scale and phase a fish. The shader reads those.
+show_school(t) := {
+	mesh = madai_mesh()
+	span = (1 / mesh.frequency) / fish_phases
+	corners = []
+	colors = []
+	for k in 0..fish_phases {
+		posed = fish_pose(mesh, t + k * span)
+		corners = corners + posed.corners
+		if k < 1 { colors = posed.colors }
+	}
+	frames = []
+	for i in 0..fish_count {
+		place = fish_place(i, t)
+		heading = fish_heading(i, t)
+		frames = frames + [[place#1, place#2, place#3, fish_scale(i)], [heading#1, heading#2, heading#3, fish_slot(i, t, mesh.frequency)]]
+	}
+	fish_show(corners, colors, frames, fish_radius(corners))
 }
 
 # --- the reef around the school ---
@@ -297,7 +303,7 @@ bubble_place(i, t) := {
 	[sine(i * 2.2) * 1.1, -6.1 + rise * 5.8, cosine(i * 1.6) * 0.9]
 }
 bubble_radius(i) := 0.04 + 0.025 * fract(i * 1.37)
-# distance, kind, which. Kinds: 2 rock, 3 kelp, 4 bubble, 5 fish.
+# distance, kind, which. Kinds: 2 rock, 3 kelp, 4 bubble. The fish are ray-tested, not marched.
 cover(p, t) := {
 	best = 80
 	kind = 2
@@ -313,10 +319,6 @@ cover(p, t) := {
 	for i in 0..bubble_count {
 		gap = norm(p .- bubble_place(i, t)) - bubble_radius(i)
 		if gap < best { best = gap; kind = 4; which = i }
-	}
-	for i in 0..fish_count {
-		gap = fish_distance(i, p, t)
-		if gap < best { best = gap; kind = 5; which = i }
 	}
 	[best, kind, which]
 }
@@ -344,32 +346,30 @@ material(p, t) := {
 	if solids.x < best { return [solids.y, solids.z] }
 	[kind, which]
 }
-albedo_at(p, n, kind, which) := {
+albedo_at(p, kind) := {
 	if kind < 0.5 { return sand_color(p.xz) }
 	if kind < 2.5 { return [0.34, 0.33, 0.31] }
 	if kind < 3.5 { return [0.08, 0.32, 0.14] }
-	if kind < 4.5 { return [0.75, 0.88, 0.92] }
-	fish_albedo(which, p, n)
+	[0.75, 0.88, 0.92]
 }
 caustic_weight(kind) := {
-	if kind > 4.5 { return 0.3 }
 	if kind > 3.5 { return 0.45 }
 	1
 }
-light_point(p, n, t, kind, which) := {
+sunlit(p, n, t, weight, albedo) := {
 	diffuse = clamp(dot(n, sun_vector()), 0, 1)
-	weight = caustic_weight(kind)
 	pattern = mix([1, 1, 1], caustic_color(p.xz, t), weight)
 	sun = sun_at_depth(p.y) .* diffuse .* pattern
 	amb = ambient_at_depth(p.y) .* 0.35
-	albedo_at(p, n, kind, which) .* (sun .+ amb)
+	albedo .* (sun .+ amb)
 }
+light_point(p, n, t, kind) := sunlit(p, n, t, caustic_weight(kind), albedo_at(p, kind))
 shade(origin, direction, p, t) := {
 	found = material(p, t)
 	kind = found.x
 	if kind > 0.5 and kind < 1.5 { return apply_water(surface_from_below(direction, p.xz, t), origin, p) }
 	n = scene_normal(p, t)
-	apply_water(light_point(p, n, t, kind, found.y), origin, p)
+	apply_water(light_point(p, n, t, kind), origin, p)
 }
 grade(color) := {
 	lifted = [max(float(color#1), 0), max(float(color#2), 0), max(float(color#3), 0)]
@@ -399,7 +399,13 @@ view_color(x, y, t) := {
 	origin = camera_at
 	travel = march(origin, direction, t)
 	p = origin .+ direction .* travel
-	if travel > march_far or scene(p, t) > 0.05 { return grade(water_backdrop(origin, direction)) }
+	missed = travel > march_far or scene(p, t) > 0.05
+	hit = fish_nearest(origin, direction)
+	if hit#2 >= 0 and (missed or hit#1 < travel) {
+		at = origin .+ direction .* hit#1
+		return grade(apply_water(sunlit(at, fish_normal(origin, direction, hit), t, 0.3, fish_tint(hit)), origin, at))
+	}
+	if missed { return grade(water_backdrop(origin, direction)) }
 	grade(shade(origin, direction, p, t))
 }
 aquarium_color(x, y) := view_color(x, y, aquarium_time)
@@ -407,5 +413,6 @@ aquarium_color(x, y) := view_color(x, y, aquarium_time)
 started = clock()
 on frame {
 	aquarium_time = float(clock() - started) / 1000
+	show_school(aquarium_time)
 	paint(aquarium_color, view_width, view_height)
 }
