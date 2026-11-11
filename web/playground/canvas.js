@@ -57,11 +57,12 @@ function paintingElement(painting) {
 	return canvas;
 }
 
-// a painting in the window the run set, if it set one
+// a painting in the window the run set, if it set one; narrowed to the pane (.painting max-width), it keeps the window's
+// shape, so a pointer's x and y scale alike (pointOn): a fixed height squeezed a 1280×800 window sideways only, and a
+// finger painted lower than it touched
 function framed(canvas) {
 	if (!paintingWindow) return;
-	canvas.style.width = `${paintingWindow.width}px`;
-	canvas.style.height = `${paintingWindow.height}px`;
+	Object.assign(canvas.style, { width: `${paintingWindow.width}px`, height: "auto", aspectRatio: `${paintingWindow.width} / ${paintingWindow.height}` });
 }
 
 // window.width = …: the paintings shown take that size, and the ones to come
