@@ -126,7 +126,8 @@ def linked_bytes(functions: list, entry: text = "main"): list {
 	first_own_global = runtime_globals + #linked_globals
 	own_globals = module.global_order[first_own_global ..]
 	global_uses = relocated_operands(functions, relocated.globals)
-	used_globals = range_list(first_own_global).filter(index => global_uses.has(index) or module.global_order[index] in exported_globals)
+	exported = exported_globals.filter(name => name in module.globals).map(name => module.globals[name]#1)
+	used_globals = range_list(first_own_global).filter(index => global_uses.has(index) or index in exported)
 	globals_used = used_globals.map(index => if index < runtime_globals then [module.global_order[index], ø] else linked_globals[index - runtime_globals])
 	global_numbering = {}
 	for k in 0..<#used_globals { global_numbering[used_globals[k]] = k }
