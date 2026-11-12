@@ -56,6 +56,9 @@ host_sound_played(pcm, rate: int, channels: int): int := {
 	sound_streams += [stream]
 	0
 }
+// the page's voice clock kept around a task (lib/sound.warp voice_kept): natively the voice is lib/sound.warp's alone
+host_sound_voice_kept(): int := 0
+host_sound_voice_back(voice: int): int := 0
 // an audio file sounding from now on, as decoded at its own rate: 0, else -1
 host_sound_file_played(path): int := {
 	if muted() { return 0 }
@@ -116,12 +119,12 @@ mp3_tagged_length(bytes: list): list := {
 trimmed_to_length(decoded: list, tagged: list): list := {
 	if count(tagged) == 0 { return decoded }
 	channels = decoded[1]
-	frames = (count(decoded) - 2) /! channels
+	frame_count = (count(decoded) - 2) /! channels
 	scale = decoded[0] / (tagged[2] as float)
 	kept = round(tagged[0] * scale) as int
 	tail = round(tagged[1] * scale) as int
-	if kept + tail > frames { return decoded }
-	start = 2 + (frames - kept - tail) * channels
+	if kept + tail > frame_count { return decoded }
+	start = 2 + (frame_count - kept - tail) * channels
 	[decoded[0], channels] + decoded[start ..< start + kept * channels]
 }
 // the values of `count` 16-bit samples in C memory
@@ -178,18 +181,18 @@ toolbox_decoded(path: text, rate: int, channels: int): any := {
 	ExtAudioFileSetProperty(file, CLIENT_DATA_FORMAT, FORMAT_BYTES, format)
 	chunk = calloc(DECODE_CHUNK_FRAMES, frame_bytes)
 	buffers = calloc(1, BUFFER_LIST_BYTES)
-	frames = calloc(1, POINTER_CELL_BYTES)
+	frames_read = calloc(1, POINTER_CELL_BYTES)
 	chunks = []
 	read = DECODE_CHUNK_FRAMES
 	while read > 0 {
 		fields_set(buffers, [[BUFFER_COUNT_AT, 1], [BUFFER_CHANNELS_AT, channels], [BUFFER_SIZE_AT, DECODE_CHUNK_FRAMES * frame_bytes]])
 		set_field_pointer(buffers, BUFFER_DATA_AT, chunk)
-		set_field_i32(frames, 0, DECODE_CHUNK_FRAMES)
-		read = if ExtAudioFileRead(file, frames, buffers) == 0 then field_u32(frames, 0) else 0
+		set_field_i32(frames_read, 0, DECODE_CHUNK_FRAMES)
+		read = if ExtAudioFileRead(file, frames_read, buffers) == 0 then field_u32(frames_read, 0) else 0
 		chunks += [values_at(chunk, read * channels)]
 	}
 	ExtAudioFileDispose(file)
-	for memory in [format, size, chunk, buffers, frames] { free(memory) }
+	for memory in [format, size, chunk, buffers, frames_read] { free(memory) }
 	decoded_of(rate, channels, chunks)
 }
 
@@ -262,11 +265,11 @@ converted(decoded: list, rate: int, channels: int): list := {
 	own_rate = decoded[0]
 	own_channels = decoded[1]
 	values = decoded[2 ..]
-	frames = count(values) /! own_channels
-	mixed = if channels == own_channels then values else [frame_mixed(values, frame * own_channels, own_channels, channels, channel) for frame in 0 ..< frames for channel in 0 ..< channels]
+	frame_count = count(values) /! own_channels
+	mixed = if channels == own_channels then values else [frame_mixed(values, frame * own_channels, own_channels, channels, channel) for frame in 0 ..< frame_count for channel in 0 ..< channels]
 	if rate == own_rate { return [rate, channels] + mixed }
-	made = frames * rate /! own_rate
-	[rate, channels] + [resampled_at(mixed, frame * own_rate / (rate as float), channels, channel, frames - 1) for frame in 0 ..< made for channel in 0 ..< channels]
+	made = frame_count * rate /! own_rate
+	[rate, channels] + [resampled_at(mixed, frame * own_rate / (rate as float), channels, channel, frame_count - 1) for frame in 0 ..< made for channel in 0 ..< channels]
 }
 // one value of a frame remixed: the frame's channels averaged into one, else its channel, the last one repeated
 frame_mixed(values: list, start: int, own_channels: int, channels: int, channel: int): int := {

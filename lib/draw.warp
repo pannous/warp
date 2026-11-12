@@ -4,14 +4,13 @@ use math
 use color
 // the paper and the ink of the system's theme as the program starts, dark_mode (the page's prefers-color-scheme,
 // natively the system's appearance): clear(paper) clears to the paper, `ink` draws what stands out on it. The light
-// paper is what paint shows 0 as (core/native/driver.warp PAPER, host-media.js PAINT_PAPER; test_paint_shades)
-LIGHT_PAPER = 0xFFFAFAFA
-LIGHT_INK = 0xFF1D1D1D
-DARK_PAPER = 0xFF1D1D1F
-DARK_INK = 0xFFF2F2F2
+// paper is what paint shows 0 as (core/native/driver.warp PAPER, host-media.js PAINT_PAPER; test_paint_shades); dark
+// mode swaps paper and ink, as the page shades paint's numbers and lib/shaders.warp a painted number
+PALE = 0xFFFAFAFA
+DARK = 0xFF1D1D1D
 dark_theme = dark_mode
-blank_color = if dark_theme then DARK_PAPER else LIGHT_PAPER
-ink = if dark_theme then DARK_INK else LIGHT_INK
+blank_color = if dark_theme then DARK else PALE
+ink = if dark_theme then PALE else DARK
 // the canvas until canvas.resize(width, height) sizes it: show() alone paints this one, the size of the playground's output pane,
 // natively 640×480
 global canvas_width: int = view_width

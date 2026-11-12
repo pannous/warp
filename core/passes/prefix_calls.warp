@@ -116,7 +116,7 @@ fitted(word: Node, left: Node, op: Op, right: Node, written: Node, own_types: ma
 comparing_ops = [Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne]
 # `all xs > 0`: the words that compare each element of their list (extensions/sugar/broadcasting.warp, decision
 # each-all-broadcast), their rules matching `all (xs > 0)`
-element_comparing_words = []
+element_comparing_words = ["all", "any"]
 is_word_phrase(n: Node): bool := is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n == 2 and n#1 is symbol
 # each function of the program taking a value by name, the type its first parameter is declared ("" untyped)
 own_parameter_types(program: Node): map := {
@@ -134,6 +134,7 @@ takes_condition(type: text): bool := union_members(type).any(member => member in
 # another declared type, ambiguous_fit for a program's function of an untyped parameter, ø for a word of no typed line
 condition_fit(word: Node, own_types: map): any := {
 	name = unaliased(name_of(word))
+	if name in element_comparing_words { return yes }
 	if own_types.has(name) { return if own_types[name] == "" then ambiguous_fit else takes_condition(own_types[name]) }
 	lines = lines_of(typed_lines, name) + (word_lines().get(name) ?? [])
 	firsts = lines.filter(line => #line.signature.parameters > 0).map(line => line.signature.parameters#1)

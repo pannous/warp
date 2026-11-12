@@ -5,11 +5,12 @@
 // of the block, holds every task until it wakes (the first said once as a warning).
 // `await job` runs the tasks until it is done and gives its value, `await all jobs` their values, `await any`/`first`
 // the first done's, `await job within t or d` its value if done within t, else d.
-// A task keeps what a module holds per task (task_context: sound's voice), its starter's when it was started
+// A task keeps what a module holds per task (sound's voice), its starter's when it was started: each such module gives
+// its part with task_part_kept
 use units
 // (`await go …` is one rule: `await $x` taking the go would leave it unrewritten)
 rewrite await go $body: block => task_awaited(task_go(() => $steps)) where $steps = task_steps($body)
-rewrite await go $x => ($context = task_context(); $value = $x; task_context_back($context); $value)
+rewrite await go $x => ($context = task_parts(); $value = $x; task_parts_back($context); $value)
 // `go for x in xs {…}`: each iteration a task, the loop done when all of them are (a parallel for)
 rewrite go for $x in $xs {$body...} => ($jobs = $xs.map($x => task_go(() => $steps)); $jobs.map(task_awaited); ø) where $steps = task_steps({$body...})
 rewrite go $body: block => task_go(() => $steps) where $steps = task_steps($body)
@@ -76,10 +77,22 @@ global failed_tasks = []
 global task_sleep_said = no
 // the last task each function's `go f(…)` started, by the function's name
 global named_tasks = {}
+// what modules hold per task (sound's voice), each a [kept, back] pair given by task_part_kept: kept() its part of the
+// running context, back(part) that part set again. A module of its own (prebuilt, linked by name), tasks calls them
+// through this list: a word of the same name in the module holding the part would never be reached from here
+global context_parts = []
+public task_part_kept(kept: function, back: function) := { context_parts += [[kept, back]] }
+public task_parts() := context_parts.map(part => part#1())
+task_parts_back(context: list) := {
+	for i in 0..#context {
+		back = context_parts#(i + 1)#2
+		back(context#(i + 1))
+	}
+}
 // the task of a step, queued to start at main's next yield, its starter's context its own (sound's voice)
 task_go(first: function): Task := {
 	task = Task(clock(), first)
-	task.context = task_context()
+	task.context = task_parts()
 	task_queue = task_queue + [task]
 	task
 }
@@ -132,11 +145,11 @@ task_stepped(task: Task) := {
 	step = task.next
 	task.next = ø
 	running_task = task
-	starter = task_context()
-	task_context_back(task.context)
+	starter = task_parts()
+	task_parts_back(task.context)
 	value = try step() catch e { task.failed = text(e); failed_tasks = failed_tasks + [task]; ø }
-	task.context = task_context()
-	task_context_back(starter)
+	task.context = task_parts()
+	task_parts_back(starter)
 	running_task = ø
 	if task.next == ø {
 		task.done = yes

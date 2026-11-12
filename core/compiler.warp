@@ -135,10 +135,11 @@ checked_facts(known: int): list := {
 # when its signature's source hash is its file's (signature.warp); one built of another text or that won't link is the
 # compile's error, never compiled from its source; a module that calls C is not prebuilt, its file left empty
 MODULES_FOLDER = "modules"
-# where a module's prebuilt image is: the program's own module's, a standard module's in the folder; "" for a module
+# where a module's prebuilt image is: the program's own module's, a prebuilt one's in the folder (the index's hash
+# section names them, library.warp prebuilt_module_names); "" for a module
 # the rebuild no longer prebuilds, whose file may linger there (reals.wasm after 827309223b: math linked it and was
 # refused, card stale-module-wasm), so it is compiled from its source
-prebuilt_path(name: text, folder: text): text := own_module_wasm.get(name) ?? (if name in std_module_names then folder + name + ".wasm" else "")
+prebuilt_path(name: text, folder: text): text := own_module_wasm.get(name) ?? (if library_index_section("hash").has(name) then folder + name + ".wasm" else "")
 linked_libraries(source: text): list := {
 	linked_signatures = {}
 	folder = linked_modules_folder()
@@ -297,7 +298,7 @@ module_compiled_behind(name: text, source: text, runtime, file: text) := {
 	write_bytes(file, with_signature(written, name, image_fields(module.order) + [links_field(written)]))
 }
 MODULE_START = "warp/start"
-# every standard module (rewrites.warp std_module_names) as <name>.wasm in the folder, each after the modules it uses
+# every prebuilt module (library.warp prebuilt_module_names: the standard ones and those they use) as <name>.wasm in the folder, each after the modules it uses
 # (it links them), all behind the one runtime read once. One refusing to
 # prebuild keeps an empty file, never an older build linked in its place. A module calling C by its foreign lines
 # (`… from "c"`) may refuse to compile and stays compiled from source with the program; any other refusal fails the
@@ -312,7 +313,7 @@ write_modules(folder: text, runtime_file: text) := {
 	# (the prelude first, every module links it; then the runtime modules: any module's power links big_numbers, though
 	# it writes no `use` of it)
 	first = [PRELUDE_MODULE] + hooks().runtime_modules
-	for name in in_dependency_order(first + std_module_names.filter(name => name not in first)) {
+	for name in in_dependency_order(first + prebuilt_module_names().filter(name => name not in first)) {
 		file = folder + "/" + name + ".wasm"
 		try { module_written_behind(name, runtime, file) } catch refusal {
 			write_bytes(file, [])
