@@ -52,6 +52,8 @@ jobs:
         sudo apt-get install -y -qq zsh
         npm install -g agent-browser && agent-browser install --with-deps
         scripts/ci-compilers.sh . "$RUNNER_TEMP/bootstrap"
+        # main's compilers beside the warp binary, as installed on the Mac: gate tier 1 measures the compile cost against them
+        cp -R lib/warp.wasm lib/runtime.wasm lib/modules "$RUNNER_TEMP/bootstrap/"
         echo "$RUNNER_TEMP/bootstrap" >>"$GITHUB_PATH"
         echo "WARP_BINARY=$RUNNER_TEMP/bootstrap/warp" >>"$GITHUB_ENV"
         echo "WARP_COMPILER_STORE=$RUNNER_TEMP/store" >>"$GITHUB_ENV"
