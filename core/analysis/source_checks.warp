@@ -20,6 +20,7 @@ source_checks(program: Node, prelude: text): Node := {
 		for lint in hooks().lints { lint(n, program) }
 		bare_sleep(n)
 		spaced_sign(n)
+		imaginary_i(n, program)
 		division_path(n, program)
 		uneven_spacing(n)
 		spaced_operand(n, program)
@@ -110,10 +111,20 @@ located_error(n: Node) := {
 	ø
 }
 
+# a node parser.warp wraps in an attribute layer of that mark, holding the written parts and the node it marks
+marked_with(n: Node, mark: text): bool := n is key and key_of(n) == symbol(attribute_word) and value_of(n)#1 == mark
+# `.16i`, `2i`: a number glued to an `i` the program never binds means ⅈ, the imaginary unit; the unknown name's error
+# stays and gains this hint
+imaginary_i(n: Node, program: Node) := {
+	if not marked_with(n, GLUED_FACTOR_MARK) { return ø }
+	product = value_of(n)#3
+	if value_of(product) == symbol(IMAGINARY_LOOKALIKE) and not scope_of(program).has(IMAGINARY_LOOKALIKE) { diagnose(call_of("imaginary_i", [key_of(product)]), n) }
+}
+IMAGINARY_LOOKALIKE = "i"
 # `1 +1`, `x -1`: a sign spaced before but not after starts an item of its own (parser.warp signed_item_at), which
 # reads as an operation spaced unevenly: the fix spaces it evenly, `1 + 1`
 spaced_sign(n: Node) := {
-	if not (n is key and key_of(n) == symbol(attribute_word) and value_of(n)#1 == SPACED_SIGN_MARK) { return ø }
+	if not marked_with(n, SPACED_SIGN_MARK) { return ø }
 	written = items_of(value_of(n)#2)
 	item = written#2
 	diagnose(call_of("spaced_sign", [written#1, item, written#1 + " " + item[0 ..< 1] + " " + item[1 ..]]), n)
@@ -121,21 +132,21 @@ spaced_sign(n: Node) := {
 # `width /height` (decision path-after-operand): a path after an operand, the name one the program binds or reads (a
 # variable, a parameter), means a division; `show /tmp` stays the path
 division_path(n: Node, program: Node) := {
-	if not (n is key and key_of(n) == symbol(attribute_word) and value_of(n)#1 == PATH_AFTER_OPERAND_MARK) { return ø }
+	if not marked_with(n, PATH_AFTER_OPERAND_MARK) { return ø }
 	written = items_of(value_of(n)#2)
 	name = written#2[1 ..]
 	if name.all(c => is_name_char(c)) and nodes_in(program).any(part => part == symbol(name)) { diagnose(call_of("division_path", [written#1, name]), n) }
 }
 # `a *b`: an operator spaced on one side only computes; the fix spaces it evenly, `a * b`
 uneven_spacing(n: Node) := {
-	if not (n is key and key_of(n) == symbol(attribute_word) and value_of(n)#1 == UNEVEN_SPACING_MARK) { return ø }
+	if not marked_with(n, UNEVEN_SPACING_MARK) { return ø }
 	written = items_of(value_of(n)#2)
 	diagnose(call_of("uneven_spacing", [written#1, written#2, written#3 + " " + written#2 + " " + written#4]), n)
 }
 # `[a + b c]` with b a value: one item `a + [b c]` or two, `[a+b c]`, `[a + b, c]`, is never guessed (decision
 # glued-binds-tighter); `[a + f 3]` of a function f calls it
 spaced_operand(n: Node, program: Node) := {
-	if not (n is key and key_of(n) == symbol(attribute_word) and value_of(n)#1 == SPACED_OPERAND_MARK) { return ø }
+	if not marked_with(n, SPACED_OPERAND_MARK) { return ø }
 	written = items_of(value_of(n)#2)
 	phrase = written#3
 	head = phrase.split(" ")#1
