@@ -405,7 +405,7 @@ path_text(n: Node): Node := if is_key(n, Op.As) and value_of(n) == symbol("path"
 # the path of the file of the folder a `use` statement names, ø for another statement or a module of no such file
 file_used(statement: Node, folder: text): any := {
 	module = use_target(statement)
-	if module is text { return path_in(folder, rooted(module, folder)) }
+	if module is text { return rooted(module, folder) }
 	# (a runtime module a build compiles in is its root file, whose own uses of the files beside it it brings)
 	if module is symbol and name_of(module) in compiled_runtime_modules() { return std_module_path(name_of(module)) }
 	if not (module is symbol) or name_of(module) in implicitly_used { return ø }
@@ -429,22 +429,25 @@ working_relative(file: text): text := {
 	if file.starts_with(below) then file.replace(below, "") else file
 }
 # `use "•/lib/x.warp"` (alias `@/`): the project root, the nearest folder above `folder` holding `.git`, plus the
-# rest; no such folder refuses (decision project-root-paths)
+# rest; no such folder refuses (decision project-root-paths). Any other name is relative to `folder`: a relative root
+# (the page's `.`) is never joined to it
 root_markers = ["•/", "@/"]
 rooted(name: text, folder: text): text := {
 	marker = root_markers.filter(m => name.starts_with(m))
-	if #marker == 0 { return name }
+	if #marker == 0 { return path_in(folder, name) }
 	root = project_root(folder)
 	if root == ø { raise name + ": no folder above " + working_relative(folder) + " holds .git; run `git init` at the project root or use a relative path" }
-	root + "/" + name[#marker#1 ..< #name]
+	without_steps_up(root + "/" + name[#marker#1 ..< #name])
 }
 project_root(folder: text): any := {
 	# from the absolute folder: a relative one (`samples/wasm` of `warp samples/wasm/x.warp`) ran out before the
 	# working folder that holds .git
-	for at in folders_upward(without_steps_up(absolute_folder(folder))) {
+	start = without_steps_up(absolute_folder(folder))
+	for at in folders_upward(start) {
 		if file_text(at + "/.git") != ø or file_text(at + "/.git/HEAD") != ø { return at }
 	}
-	ø
+	# a relative working folder (the page's `.`, the served repository) is its own project when the climb ends at it
+	if start == "." or start.starts_with("./") then "." else ø
 }
 # the folder and each above it: an absolute one up to /, a relative one up to its top, as the page's working folder
 # is `.` (`./samples/wasm`, `./samples`), never on past it into `./..`
