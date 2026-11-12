@@ -271,8 +271,9 @@ and_listed(words: list): text := if #words < 2 then words.join("") else words[0 
 # how well a value fits `any`: worse than every typed fit; a list of known elements fits a plain `list` worse than a
 # list of its elements
 any_fit = 100
-# how well an exact number fits a float: after `any`, so it turns float only where no variant keeps it exact
-float_from_exact_fit = any_fit + 1
+# how well an exact number fits a float: worse than `any` in every other argument together (variant_fit sums them),
+# so it turns float only where no variant keeps it exact
+float_from_exact_fit = any_fit * any_fit
 list_fit = 2
 # the kind each type word an overload tells apart stands for
 overload_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", float: "float", double: "float",
