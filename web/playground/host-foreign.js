@@ -100,6 +100,29 @@ function callOnPage(receiver, memberName, argumentValues) {
 	return fromPage(value);
 }
 
+// a function of the program ({$callback: slot}, lib/callbacks.warp js_function) as a JS function calling it back
+// directly through the export js_called_back, its arguments and result crossing as plain values. One living function
+// a slot a run; once it is collected the run hears the slot is free (js_released), as webview_bridge.js does natively
+const programFunctions = new WeakMap(); // the run's exports → slot → WeakRef(function)
+const programReleased = new FinalizationRegistry(({ program, slot }) => {
+	const functions = programFunctions.get(program);
+	if (functions?.get(slot)?.deref()) return; // a newer function of the slot lives
+	functions?.delete(slot);
+	program.js_released(BigInt(slot));
+});
+function calledBack(program, value) {
+	if (value === null || typeof value !== "object" || !("$callback" in value)) return value;
+	const slot = Number(value.$callback);
+	if (!programFunctions.has(program)) programFunctions.set(program, new Map());
+	const functions = programFunctions.get(program);
+	const living = functions.get(slot)?.deref();
+	if (living) return living;
+	const called = (...given) => guestPlain(program, program.js_called_back(BigInt(slot), newGuestValue(program, given)));
+	functions.set(slot, new WeakRef(called));
+	programReleased.register(called, { program, slot });
+	return called;
+}
+
 // the NUL-terminated bytes at `address` of a linear memory
 function cText(memory, address) {
 	const bytes = new Uint8Array(memory.buffer, address);
@@ -397,7 +420,7 @@ addHostPart({
 			const foreign = foreignRuntimes.get(runtimeName);
 			if (!foreign) throw new Error(`${runtimeName} ${moduleName}.${memberName}: ${runtimeName} runs only in the native host (the warp CLI)`);
 			const given = guestPlain(program_, call) === 1 ? guestPlain(program_, argumentList) : undefined;
-			const argumentValues = given === undefined ? null : given === null ? [] : Array.isArray(given) ? given : [given];
+			const argumentValues = given === undefined ? null : (given === null ? [] : Array.isArray(given) ? given : [given]).map(value => calledBack(program_, value));
 			const valueOf = result => newGuestValue(program_, result);
 			const result = foreign.call(moduleName, memberName, argumentValues, hooks);
 			const called = `${runtimeName} ${typeof moduleName === "string" ? moduleName : "value"}.${memberName}`;

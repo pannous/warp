@@ -38,3 +38,25 @@ called_with(f: function, given: list): any := {
 	if n == 5 { return f(given#1, given#2, given#3, given#4, given#5) }
 	f(given#1, given#2, given#3, given#4, given#5, given#6)
 }
+
+// The program's functions JavaScript is given (`use js`, card js-array-from-callback): `Array.from(xs, x => x * 2)`
+// hands JS js_function(f, 1), as extensions/foreign_globals.warp lowers a function argument whose parameters it knows.
+// A slot each, the same function its old one, a slot JS let go (js_released) taken again. JS calls it back through
+// js_called_back (natively lib/host/native_host/webview.warp, in the page web/playground/host-foreign.js) with as
+// many of its arguments as the function takes, as JS drops the others (Array.from gives each item's index too)
+global js_functions = []
+global js_arities = []
+js_function(f: function, arity: int): map := {
+	slot = 1
+	while slot <= #js_functions and js_functions#slot !== f and js_functions#slot != ø { slot += 1 }
+	if slot > #js_functions {
+		js_functions += [f]
+		js_arities += [arity]
+	} else if js_functions#slot == ø {
+		js_functions#slot = f
+		js_arities#slot = arity
+	}
+	{"$callback": slot}
+}
+export js_called_back(slot: int, given: list): any := called_with(js_functions#slot, given[0..<min(#given, js_arities#slot)])
+export js_released(slot: int) := { js_functions#slot = ø }
