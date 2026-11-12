@@ -1,4 +1,4 @@
-# 344e0cc959 2026-11-11 14:03 260/265 98.1%
+# e007182b18 2026-11-12 03:36 266/273 97.4%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -25,9 +25,9 @@ ok   samples/apps/meeting_planner.warp
 ok   samples/apps/name_matcher.warp
 ok   samples/apps/open_hours.warp
 ok   samples/apps/recipe_scaler.warp
-DIFF samples/apps/settings_cli.warp
+ok   samples/apps/settings_cli.warp
 ok   samples/apps/site_generator.warp
-DIFF samples/apps/todo_cli.warp
+ok   samples/apps/todo_cli.warp
 ok   samples/apps/url_report.warp
 ok   samples/clustering/emeans.warp
 ok   samples/conditions/control_flow.warp
@@ -56,8 +56,8 @@ ok   samples/functions/warp_reads_warp.warp
 ok   samples/functions/y_combinator.warp
 ok   samples/golf/99-bottles-of-beer.short.warp
 ok   samples/golf/99-bottles-of-beer.warp
-ran  samples/golf/arabic-to-roman.short.warp
-ran  samples/golf/arabic-to-roman.warp
+ok   samples/golf/arabic-to-roman.short.warp
+FAIL samples/golf/arabic-to-roman.warp
 ok   samples/golf/catalan-numbers.short.warp
 ok   samples/golf/catalan-numbers.warp
 ok   samples/golf/collatz.short.warp
@@ -88,11 +88,12 @@ ok   samples/golf/prime-numbers.short.warp
 ok   samples/golf/prime-numbers.warp
 ok   samples/golf/quine.short.warp
 ok   samples/golf/quine.warp
-DIFF samples/golf/rot13.short.warp
-DIFF samples/golf/rot13.warp
+ok   samples/golf/rot13.short.warp
+ok   samples/golf/rot13.warp
 ok   samples/golf/sierpiński-triangle.short.warp
 ok   samples/golf/sierpiński-triangle.warp
 ok   samples/gpu/aquarium.warp
+ok   samples/gpu/fish.warp
 ok   samples/gpu/gpu_visualizer.warp
 ok   samples/gpu/julia.warp
 ok   samples/gpu/kaleidoscope.warp
@@ -106,8 +107,13 @@ ok   samples/gpu/sdf_scene.warp
 ok   samples/gpu/voronoi.warp
 ok   samples/gpu/warp_compiled_wgsl_shader.warp
 ok   samples/graphics/color_swatches.warp
+FAIL samples/graphics/ez_forest.warp
 ok   samples/graphics/finger_paint.warp
-ran  samples/graphics/gaussian_splats.warp
+ok   samples/graphics/fluid_25d.warp
+ok   samples/graphics/gaussian_splats.warp
+ran  samples/graphics/load_bmp.warp
+ran  samples/graphics/load_jpeg.warp
+ok   samples/graphics/make_image.warp
 ok   samples/graphics/meshlet_grid.warp
 ok   samples/graphics/million_trees.warp
 ok   samples/graphics/paint_function.warp
@@ -120,6 +126,7 @@ drew samples/graphics/sdl_red_square.warp
 ok   samples/graphics/shader.warp
 ok   samples/graphics/shader_brush.warp
 ok   samples/graphics/shader_trails.warp
+FAIL samples/graphics/tree_study.warp
 ok   samples/graphics/webgpu.warp
 ok   samples/graphics/window_size.warp
 ok   samples/hello/comments.warp
@@ -163,7 +170,7 @@ ok   samples/modules/square.warp
 ok   samples/modules/test_ffi.warp
 ok   samples/modules/test_ffi_comprehensive.warp
 ok   samples/modules/test_ffi_extended.warp
-DIFF samples/native/arguments.warp
+ok   samples/native/arguments.warp
 ok   samples/native/doubling.warp
 ok   samples/native/fib.warp
 ok   samples/native/files.warp
@@ -172,7 +179,7 @@ ok   samples/native/structs.warp
 ok   samples/native/uses.warp
 ok   samples/numbers/bits.warp
 ok   samples/numbers/collatz.warp
-ok   samples/numbers/complex_numbers.warp
+FAIL samples/numbers/complex_numbers.warp
 ok   samples/numbers/complex_roots.warp
 ok   samples/numbers/dates.warp
 ok   samples/numbers/factorial.warp
@@ -202,8 +209,8 @@ ran  samples/servers/worker.warp
 ok   samples/signals/signal_fields.warp
 ok   samples/sound/arrangement.warp
 ok   samples/sound/filters.warp
-ran  samples/sound/gpu_visualizer_warp.warp
-ok   samples/sound/harmony.warp
+ok   samples/sound/gpu_visualizer_warp.warp
+FAIL samples/sound/harmony.warp
 ok   samples/sound/hum_blocks.warp
 ok   samples/sound/midi.warp
 ok   samples/sound/music.warp
@@ -225,7 +232,7 @@ ok   samples/storage/orm_units.warp
 ok   samples/storage/store.warp
 ran  samples/storage/todo_app.warp
 ok   samples/system/c_lines.warp
-ok   samples/tasks/async.warp
+FAIL samples/tasks/async.warp
 ok   samples/tasks/parallel_let.warp
 ok   samples/tasks/threads.warp
 ok   samples/text/calculator.warp
@@ -248,6 +255,7 @@ ok   samples/types/types.warp
 ok   samples/wasm/component_reflection.warp
 ok   samples/wasm/import_compiled.warp
 ok   samples/wasm/wasm_interop.warp
+ok   samples/web/collatz_bars.warp
 ok   samples/web/component_binding.warp
 ok   samples/web/component_totals.warp
 ok   samples/web/computed_tags.warp
@@ -261,6 +269,6 @@ ok   samples/web/keyframes.warp
 ok   samples/web/leaving_list.warp
 ok   samples/web/live_region.warp
 ok   samples/web/page_custom_event.warp
-ran  samples/web/page_elements.warp
+FAIL samples/web/page_elements.warp
 ok   samples/web/select_binding.warp
 ok   samples/web/typed_form.warp
