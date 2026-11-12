@@ -1,3 +1,6 @@
 # a value as any is itself, also through an alias of any (user OK 11-11, card html-output-fix)
 '3 as any'	3
 'type t = any; "a" as t'	'a'
+# a value is any, also through an alias of any: the sibling of x as any (user OK 11-11, card read-tags-html)
+'3 is any'	yes
+'type t = any; "a" is t'	yes

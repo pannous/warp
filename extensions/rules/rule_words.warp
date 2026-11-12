@@ -57,11 +57,25 @@ unit_ambiguous_ops = [Op.Mul, Op.Div, Op.FloorDiv, Op.Mod, Op.Pow]
 # the operations giving yes or no: the comparisons and logic of the Op table (yes_or_no)
 yes_no_ops = [Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Is, Op.Ne, Op.Identical, Op.NotIdentical, Op.Similar, Op.Rough, Op.And, Op.Or, Op.Xor, Op.Not]
 unit_ambiguous(amounted: Node, unit: Node): text := "DimensionError: a unit binds only after a number: write (${as_code(amounted)}) ${unit} to measure the whole amount, or glue the unit to the number it measures"
-# `km/h`, `kg·m/s^2`, `cm^2`: a unit written whole, each part a unit word, each power a number (`km/2` is no unit)
-unit_written(code: Node): bool := {
-	if code is key and op_of(code) == Op.Pow { return unit_written(key_of(code)) and is_number_literal(value_of(code)) }
-	if code is key and op_of(code) in [Op.Div, Op.Mul] { return unit_written(key_of(code)) and unit_written(value_of(code)) }
-	is_unit_word(code)
+# `km/h`, `kg·m/s^2`, `cm^2`: a unit written whole, each part a unit word (`is_unit`), each power a number (`km/2` is no unit)
+unit_written(code: Node): bool := written_of(code, word => is_unit_word(word))
+written_of(code: Node, is_unit: function): bool := {
+	if code is key and op_of(code) == Op.Pow { return written_of(key_of(code), is_unit) and is_number_literal(value_of(code)) }
+	if code is key and op_of(code) in [Op.Div, Op.Mul] { return written_of(key_of(code), is_unit) and written_of(value_of(code), is_unit) }
+	is_unit(code)
+}
+# a unit word of lib/units though the program binds the name: `h` of `h = 2 inch; 3 km/h`
+is_library_unit(code: Node): bool := code is symbol and (library_typed_constants().get(name_of(code)) == "Unit" or "units" in defining_modules(name_of(code)))
+# `h = 2 inch; 3 km/h`: after the amount, a unit written whole reads each of its words as lib/units' though the program
+# binds one, the quantity of its text, quantity(3, "km/h"), with a hint naming the variable; ø when the program binds
+# none of them (the operators make the quantity) or the code is no unit
+unit_beside_variables(amount: Node, unit: Node): any := {
+	variables = words_within(unit).filter(word => binds_value(rule_scope, word))
+	if not (unit is key and #variables > 0 and written_of(unit, word => is_library_unit(word))) { return ø }
+	written = "${unit}".replace(" ", "")
+	leading = "${leading_unit(unit)}"
+	for word in variables { diagnose(call_of("unit_beside_variable", [word, "(${amount} ${leading})${written[#leading ..]}"]), unit) }
+	call_of("quantity", [amount, Text(written)])
 }
 # `km/h`, `m^2`: the text of a unit written whole of several parts, "km/h", as lib/units unit_named reads it; ø for a
 # single unit word or any other code
@@ -1280,6 +1294,7 @@ evident_text(name: Node, program: Node): any := {
 
 rule_words = {
 	are_arms: are_arms,
+	as_code: as_code,
 	awaited_operand: awaited_operand,
 	bare_fields_read: bare_fields_read,
 	body_of: body_of,
@@ -1292,6 +1307,7 @@ rule_words = {
 	converted_unit: converted_unit,
 	counted_question: counted_question,
 	counted_results: counted_results,
+	declared_name: declared_name,
 	end_refused: end_refused,
 	declared_local: declared_local,
 	definitions_reached: definitions_reached,
@@ -1312,12 +1328,15 @@ rule_words = {
 	class_fields_listed: class_fields_listed,
 	class_methods_listed: class_methods_listed,
 	class_setter: class_setter,
+	is_declared_word: is_declared_word,
+	level_statements: level_statements,
 	program_functions: program_functions,
 	qualified: qualified,
+	renamed: renamed,
+	statements_in: statements_in,
 	widened_to_int: widened_to_int,
 	it_read_as: it_read_as,
 	it_as_lambda: it_as_lambda,
-	law_check: law_check,
 	leading_unit: leading_unit,
 	list_valued: list_valued,
 	misnamed: misnamed,
@@ -1364,6 +1383,7 @@ rule_words = {
 	unit_of_type: unit_of_type,
 	unit_led: unit_led,
 	unit_regrouped: unit_regrouped,
+	unit_beside_variables: unit_beside_variables,
 	value_definitions: value_definitions,
 	value_dir_words: value_dir_words,
 	value_helps: value_helps,
@@ -1448,42 +1468,6 @@ type_data_text(field_type: text, program: Node, ancestors: list): text? := {
 	if field_type in CLASS_DATA_TYPES then "\"" + field_type + "\"" else class_data_text(field_type, program, ancestors)
 }
 
-# `law square(-x) == square(x)` (wiki/laws.md, its tested level): the law as lib/laws.warp's law_holds tries it at run
-# time, the law shown, its variables and the proposition of their values: a named law, `law name:` with a `for x: int`
-# line each before it, takes those variables, else they are the names the law reads and neither calls nor finds
-# defined (the program's, the library's)
-LAW_VALUES = "law_values"
-LAW_PLACEHOLDER = "law_proposition_placeholder"
-law_check(law: Node, program: Node): Node := {
-	is_named_law = is_key(law, Op.Colon) and key_of(law) is symbol
-	lines = if is_named_law then statements_in(value_of(law)) else [law]
-	if is_named_law and #lines == 1 and is_group(lines#1) { lines = items_of(lines#1) }
-	proposition = lines.last
-	given = lines[0 ..< #lines - 1].map(law_given).filter(name => name != "")
-	defined = level_statements(program).map(declared_name)
-	variables = if #given > 0 then given else law_variables(proposition, []).filter(name => name not in defined and not is_declared_word(name))
-	law_shown = (if is_named_law then name_of(key_of(law)) else as_code(proposition).replace("ø-", "-")).replace("\"", "'")
-	# each variable an item of the values tried, which no rule of a library word takes (c, m)
-	for i in 0 ..< #variables { proposition = renamed(proposition, variables[i], plain_node(parsed(LAW_VALUES + "#${i + 1}"))) }
-	names = variables.map(name => "\"" + name + "\"").join(", ")
-	renamed(plain_node(parsed("law_holds(\"" + law_shown + "\", [" + names + "], " + LAW_VALUES + " => " + LAW_PLACEHOLDER + ")")), LAW_PLACEHOLDER, proposition)
-}
-# `for x: int` of a named law: x
-law_given(line: Node): text := {
-	line_code = as_code(line)
-	if not line_code.starts_with("for ") { return "" }
-	line_code[4 ..].replace(":", " ").split(" ").filter(word => word != "")#1
-}
-# the names a law reads, in order, each once: none a call's head (`square` of `square(x)`)
-law_variables(n: Node, found: list): list := {
-	if n is symbol { return if name_of(n) in found then found else found + [name_of(n)] }
-	if n is key { return law_variables(value_of(n), law_variables(key_of(n), found)) }
-	if not is_group(n) { return found }
-	items = items_of(n)
-	read_items = if #items > 1 and items#1 is symbol then items[1 ..] else items
-	for item in read_items { found = law_variables(item, found) }
-	found
-}
 # `{$0 > $1}` → `(shorthand·0, shorthand·1) => {shorthand·0 > shorthand·1}`: a block reading Swift's shorthand
 # arguments as the lambda of as many as it reads, up to the highest, renamed since `$0` in a rule's result would be a
 # hole; ø for a block reading none

@@ -4,6 +4,7 @@
 // core/analysis/math_builtins.warp
 use reals
 use integers
+use bits
 use case_table
 
 // The math spellings of operators (decision operator-alias), every program reads them: each keeps the precedence
@@ -121,7 +122,36 @@ round_half_even(x: number): int := {
 	if rest > 1/2 or (rest == 1/2 and below % 2 != 0) then below + 1 else below
 }
 
-// gcd(a, b) is the core's (core/integers.warp), of any whole numbers
+// gcd(a, b) is the core's Euclid (core/integers.warp), of any whole numbers, past 64 bits included.
+// gcd_euclid names that function. gcd_binary is Stein's trailing-zero form for a signed machine word
+// (notes/binary_gcd.md). It is not gcd: a value past that word stays on Euclid.
+gcd_euclid(a, b) := gcd(a, b)
+// the largest signed machine word. One past it does not fit the word trailing_zeros counts.
+gcd_word_limit = 9223372036854775807
+gcd_binary(a, b) := {
+	x = if a < 0 then 0 - a else a
+	y = if b < 0 then 0 - b else b
+	if x == 0 or y == 0 { return x + y }
+	if x > gcd_word_limit or y > gcd_word_limit { return gcd(x, y) }
+	gcd_binary_word(x, y)
+}
+// both arguments positive and at most the largest signed word. Common factors of two come off by
+// trailing_zeros (wasm i64.ctz, lib/bits.warp), then subtract and shift.
+gcd_binary_word(a: int, b: int): int := {
+	x = a
+	y = b
+	common = trailing_zeros(x | y)
+	y = y >> trailing_zeros(y)
+	if y == 1 { return 1 << common }
+	while true {
+		x = x >> trailing_zeros(x)
+		if x == 1 { return 1 << common }
+		if x == y { return x << common }
+		if x < y { held = x; x = y; y = held }
+		x = x - y
+	}
+	0
+}
 lcm(a, b) := a /! gcd(a, b) * b
 // x within low and high: of vectors each component (min and max of a vector, card min-max)
 clamp(x, low, high) := each_any(x, e -> min(max(e, low), high))
@@ -139,7 +169,7 @@ fract(x) := each_any(x, e -> e - floor(e))
 step(edge, x) := if x < edge then 0 else 1
 smoothstep(low, high, x) := { var t = clamp((x - low) / (high - low), 0, 1); t * t * (3 - 2 * t) }
 // `norm x`, `‖x‖`: a number's absolute value, a list's Euclidean length (decision S3: `count`/`length` stay the number
-// of items); magnitude is its other name (card compile-shaders); here since `use math` brings it 
+// of items); magnitude is its other name (card compile-shaders); here since `use math` brings it
 norm(x: any) := if x is list then { var total = 0; for i in 1 to count(x) { total = total + x#i * x#i }; sqrt(total) } else abs(x)
 magnitude(x: any) := norm(x)
 // vectors are lists of numbers: their dot product, their distance, the vector of length 1 along v, the cross product of
@@ -192,8 +222,9 @@ dot(u: list, v: list) := {
 	for i in 1 to n { total = total + u#i * v#i }
 	total
 }
-// of two numbers their product: `x·y` of numbers multiplies (decision middot-scalars)
-dot(u: number, v: number) := u * v
+// of two values that are no lists their product: `x·y` multiplies numbers (decision middot-scalars), complex numbers
+// (`ⅈ·ⅈ` is -1) and any value that multiplies
+dot(u: any, v: any) := u * v
 // `u ∘ v`, the dot product's canonical spelling, and `u·v` (decision dot-glyphs); `u * v` of two lists stays refused
 infix operator ∘(u, v) := dot(u, v)
 infix operator ·(u, v) := dot(u, v)
@@ -233,15 +264,10 @@ primes(n: int): list := {
 next_prime(n: int): int := { candidate = max(n + 1, 2); while not is_prime(candidate) { candidate += 1 }; candidate }
 // the one bits of whole numbers ≥ 0 (`&` and `|` are logical, `xor` is bitwise already): bit_count(6) is 2
 bit_count(n: int) := { out = 0; rest = n; while rest > 0 { out = out + rest % 2; rest = rest /! 2 }; out }
-// two's-complement bits of any whole numbers, by a + b = (a xor b) + 2 * bit_and(a, b): bit_and(-129, 127) is 127;
-// on the halves a >> 1 and b >> 1 and the lowest bits, so no sum leaves 64 bits (bit_and(9223372036854775807, 127))
-bit_and(a: int, b: int) := {
-	high_a = a >> 1
-	high_b = b >> 1
-	(high_a + high_b - (high_a xor high_b)) + (a % 2) * (b % 2)
-}
-// the bits of a xor b and of bit_and(a, b) are apart: their sum carries nothing
-bit_or(a: int, b: int) := (a xor b) + bit_and(a, b)
+// two's-complement bits of any whole numbers: the wasm instructions, as the runtime's own bits_and and bits_or
+// (decision wasm-instruction-body): bit_and(-129, 127) is 127, bit_or(-128, 1) is -127
+bit_and(a: int, b: int): int := wasm i64.and
+bit_or(a: int, b: int): int := wasm i64.or
 // P169/P191: descriptive names; they forward to the C library (use cmath) until warp has its own implementations.
 // The C names still work after `use math`, each with a note naming the word here: the alias lines (wiki/alias.md)
 // Each broadcasts, decided at run time (prelude each_any): binary_log([1, 8]) is [0 3], as a list may reach a word of

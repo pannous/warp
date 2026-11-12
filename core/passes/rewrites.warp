@@ -555,13 +555,20 @@ sugar_at_place(n: Node, place: Place, rules: list): Node := {
 early_sugared(program: Node): Node := {
 	rules = early_module_rules()
 	words = phrase_words(program, early_pair_keys())
-	if not rules.any(rule => needed_words(rule).any(word => words.has(word))) { return program }
+	if not early_needed_words().keys.any(word => words.has(word)) { return program }
 	kept = unbound_rules(rules, program)
 	once = sugared(program, kept)
 	# a rule a pair's key starts may write a variable later, `bind: name`'s setter: the items reading it are live, so
 	# once more; only then, as the two looks for later writes cost as much as the pass (self-compile 1.8 T → 12.9 T)
 	if not early_pair_keys().keys.any(key => words.has(key)) { return once }
 	if written_later(once, no).any(name => name not in written_later(program, no)) then sugared(once, kept) else once
+}
+# the words the early rules need, made once as the rules are (asked per class member and reached definition, each
+# rule's needed_words scanned the library's typed constants: 12% of a `100ms` compile)
+global early_words = ø
+early_needed_words(): map := {
+	if early_words == ø { early_words = word_set(early_module_rules().flat_map(needed_words)) }
+	early_words
 }
 # the keys of the early rules that rewrite a pair into code writing a variable later, `bind: $v`'s setter, read once:
 # such a key starts the early pass and its second run; any other key is a field name (`once: yes` in lib/prelude.warp)
@@ -763,7 +770,7 @@ written_rules(path: text, source: text, module: text): list := {
 	if #rules < #rule_lines { throw dropped_rules(path, lines, rule_lines, rules, module) }
 	rules
 }
-rules_parsed(parse: Node, module: text, source: text): list := statements_ruled(statements_in(parse), module, source)#1
+rules_parsed(parse: Node, module: text, source: text): list := in_rule_module(module, () => statements_ruled(statements_in(parse), module, source)#1)
 # [the rules the statements declare, the other statements]: each `rewrite` line's, and in place of the first overload
 # of a built-in operator those of all its overloads (operator_rules)
 statements_ruled(statements: list, module: text, source: text): list := {
@@ -875,7 +882,7 @@ rule_needs_by_module(): map := library_index_section("needs")
 scanned_rule_needs(): map := {
 	found = {}
 	for module in std_module_names {
-		needs = module_rule_paths(module).flat_map(path => rule_needs(file_text(path) ?? ""))
+		needs = in_rule_module(module, () => module_rule_paths(module).flat_map(path => rule_needs(file_text(path) ?? "")))
 		if #needs > 0 { found[module] = needs.join(" ") }
 	}
 	found
@@ -902,7 +909,7 @@ unpacked_rule(n: Node, module: text): Rule := {
 	shape = if fields#4 == ø then ø else fields#4
 	conditions = items_of(fields#5)
 	# an origin the baking compiler (an older seed) took a call of a rule word it did not know yet for: a computed binding
-	if hole != ø and is_computed_binding(Key(hole, Op.Assign, shape)) {
+	if hole != ø and in_rule_module(module, () => is_computed_binding(Key(hole, Op.Assign, shape))) {
 		conditions += [Key(hole, Op.Assign, shape)]
 		hole = ø
 		shape = ø
@@ -1114,9 +1121,25 @@ is_condition(condition: Node): bool := {
 
 # `routed($program)`: a call of a word of extensions/rules/rule_words.warp, run at compile time (decision computed-hole)
 is_rule_word_call(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and is_rule_word(name_of(n#1))
+# the module of the rules being read or checked, "" for the compiler's own: a word it defines that the compiler has not
+# is a rule word of the module's, run in the module's own wasm (module_word, card module-rule-words)
+global rule_module = ""
+# the work's value with the module's rules being read
+in_rule_module(module: text, work: function): any := {
+	outer = rule_module
+	rule_module = module
+	result = work()
+	rule_module = outer
+	result
+}
+is_module_rule_word(word: text): bool := rule_module != "" and not rule_words.has(word) and module_defines(rule_module, word)
+# the rule word run in the module's wasm by the host's warp.module_word (core/native/driver.warp module_word_answered),
+# its result built here
+module_word(module: text, word: text, arguments: Node): Node := std_io("warp", "module_word", [module, word, arguments])
 # a word of extensions/rules/rule_words.warp: one this compiler has, or, when a rule names a word it lacks (an older seed building a
 # newer compiler, card rule-whose), one the library's file defines, read only then
-is_rule_word(word: text): bool := rule_words.has(word) or library_rule_word_names().has(word)
+# and in a module's rules a word the module defines (is_module_rule_word)
+is_rule_word(word: text): bool := rule_words.has(word) or library_rule_word_names().has(word) or is_module_rule_word(word)
 # the rule words' file under lib/, read only by a compiler lacking a word a rule names
 RULE_WORDS_FILE = "/extensions/rules/rule_words.warp"
 global library_rule_words = ø
@@ -1152,13 +1175,24 @@ is_computed_binding(n: Node): bool := is_key(n, Op.Assign) and (rule_hole(key_of
 program_hole = "$program"
 source_hole = "$source"
 computed(call: Node, bound: map): any := {
-	if not rule_words.has(name_of(call#1)) { return skipped_rule_word(name_of(call#1)) }
-	word = rule_words[name_of(call#1)]
+	name = name_of(call#1)
 	given = items_of(call)[1 ..].map(argument => if argument == symbol(program_hole) then rule_program else if argument == symbol(source_hole) then rule_source else rule_spliced(argument, bound, argument))
+	if not rule_words.has(name) { return if is_module_rule_word(name) then module_word(rule_module, name, List(given, Bracket.Round, Separator.Comma)) else skipped_rule_word(name) }
+	rule_word_called(name, given)
+}
+rule_word_called(name: text, given: list): any := {
+	word = rule_words[name]
 	if #given == 0 { return word() }
 	if #given == 1 { return word(given#1) }
 	if #given == 2 { return word(given#1, given#2) }
 	word(given#1, given#2, given#3)
+}
+# a module's rule word asking for one of the compiler's (warp.rule_word, core/native/driver.warp rule_word_answered):
+# its walkers and tables, as its own rules compute them
+asked_rule_word(word: Node, arguments: Node): Node := {
+	name = "${word}"
+	if not rule_words.has(name) { raise "no rule word " + name + " for a module to ask" }
+	rule_word_called(name, items_of(arguments))
 }
 # `$f takes value`, `$f takes int`
 is_takes(condition: Node): bool := is_group(condition) and bracket_of(condition) == "" and separator_of(condition) == " " and #condition == 3 and rule_hole(condition#1) != ø and condition#2 == symbol(takes_word) and condition#3 is symbol
@@ -1390,7 +1424,7 @@ typed_as(word: text, class_name: text): bool := {
 	library_typed = library_typed_constants().get(word) == class_name
 	if not binds_value(rule_scope, word) { return library_typed }
 	if rule_glued != ø and library_typed {
-		diagnose(call_of("glued_factor", [word, "${key_of(attribute_marked(rule_glued))}*${word}"]), rule_glued)
+		diagnose(call_of("unit_beside_variable", [word, "${key_of(attribute_marked(rule_glued))}*${word}"]), rule_glued)
 		return yes
 	}
 	program_typing()#2.get(word) == class_name
@@ -2248,6 +2282,7 @@ fired(rule: Rule, result: Node): Node := {
 # where the tests before it hold (a `.all` the seed lowers calls every one)
 conditions_hold(rule: Rule, origin: map, bound: map): bool := {
 	if not origin_holds(rule, origin, bound) { return no }
+	rule_module = rule.module
 	for condition in rule.conditions { if not condition_holds(condition, bound) { return no } }
 	yes
 }

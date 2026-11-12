@@ -25,8 +25,6 @@ present_part(t: text, part: text) := { if not (part in t) { raise "ValueError: \
 // A list sums from its first item, so a class's own + adds its items (decision class-operators-generic):
 // `sum([5km, 1500m])` is 6.5km; an empty list sums to 0
 sum(xs: list or number) := if is_range(xs) then range_sum(xs) else if xs is number then xs else if count(xs) == 0 then 0 else fold(xs[1 ..], xs#1, +)
-// the UTF-8 bytes of a text, `t.bytes` (decision text-unit-plurals)
-bytes(t: text) := (0..byte_size(t)).map(at => byte_at(t, at))
 // `for byte in t` (decision loop-variable): the value walked by that unit when its type has one, a text's bytes,
 // chars or code points, a map's [key, value] pairs; else by its own items, a map's keys, a list's items (a list of bytes
 // stays one), so the loop needs no type at the sugar

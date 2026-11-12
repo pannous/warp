@@ -1,0 +1,5 @@
+// play gives the sound's handle, which stop and fade take (wiki/standard-library.md stop, fade)
+'use sound; text(play(C4, 0.5s))'	"♪ 0.5 s"
+'use sound; h = play(C4, 1s); fade(h, 0, 0.5); stop(h); h.duration'	1
+'use sound; play(C4, 50ms); h = play(E4, 50ms); h.number'	2
+'use sound; h = play(C4, 50ms); stop(sound); 3'	3

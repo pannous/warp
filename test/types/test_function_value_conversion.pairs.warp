@@ -1,0 +1,5 @@
+# A function named as a value converts its arguments as its call does (card function-value-call, decision as-promotes)
+'class C { n: int }; k: int as C := C(k * 10); f(c: C) := c.n; g = f; g(1)'	10
+'class C { n: int }; k: int as C := C(k * 10); f(c: C) := c.n; [1, 2].map(f)'	[10, 20]
+'class C { n: int }; k: int as C := C(k * 10); f(c: C) := c.n; g = f; g == f'	yes
+'class C { n: int }; k: int as C := C(k * 10); f(c: C) := c.n; f(t: text) := 7; [1].map(f)'	error	fits no single variant

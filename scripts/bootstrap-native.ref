@@ -1,0 +1,1 @@
+674d0ff07f77e432cb03e0ac1eda51fe41c6b08f  the last commit whose core/native the v1.10.0 compiler builds (before fixed arrays, 3d4864c0a9); the full hash: a shallow checkout fetches a commit only by it

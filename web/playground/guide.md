@@ -754,7 +754,29 @@ html{
 }
 ```
 
-Examples: markup, "element events", "fine updates", components, cleanup, "keyed list", "form binding", styles, routes, transitions; samples: html, html_dsl, hello_div, component_binding, component_totals, keyed_counters, computed_tags, live_region, form_submit, typed_form, select_binding, page_elements, page_custom_event, keyframes, leaving_list, counter
+### Tags and styles
+
+Tags can be computed from data, and a style sheet and CSS transitions style them.
+
+Examples: markup, styles, transitions; samples: html, html_dsl, hello_div, computed_tags, keyframes, leaving_list
+
+### Events
+
+A click, a key or typed text runs the program's handler, and only what changed is drawn again.
+
+Examples: "element events", "fine updates"; samples: counter, page_elements, page_custom_event, live_region
+
+### Components
+
+A component is a piece of page with its own state.
+
+Examples: components, cleanup, "keyed list"; samples: component_binding, component_totals, keyed_counters
+
+### Forms and routes
+
+Fields bind to variables, a form hands its fields over, and routes give a page several addresses.
+
+Examples: "form binding", routes; samples: form_submit, typed_form, select_binding
 
 ## Servers
 
@@ -791,7 +813,7 @@ Examples: forms; samples: server, route_headers, hosting, worker
 
 `use image` loads a picture from a BMP or JPEG file, `image(./photo.jpg)`, or makes one from a function of the column and row, `image(64, 48, (x, y) => rgb(4 * x, 5 * y, 128))`. Its changes give a new picture: `flipped`, `mirrored`, `cropped`, `tinted`, `grayed`, `blurred`, `each_pixel`; `show()` paints it and `.save(./out.bmp)` writes it.
 
-Examples: frames; samples: paint_text, color_swatches, finger_paint, paint_function, window_size, load_jpeg, load_bmp, make_image
+Examples: frames; samples: paint_text, color_swatches, finger_paint, paint_function, window_size, load_jpeg, load_bmp, make_image, circle, filled_circle, mandelbrot_canvas, particles
 
 ## Shaders
 
@@ -808,7 +830,7 @@ The function may call other functions; `shader_of(stripes)` shows the shader cod
 You can also write the shader yourself in WGSL, the web's shader language, inside `shader { … }`. In there `$name` reads the warp variable `name`.
 `use compute_toys` runs shaders from [compute.toys](https://compute.toys) as they are: `compute_toy(shader { … })`.
 
-Examples: shader, "shader mouse"; samples: shader, webgpu, paint_text_gpu, shader_brush, shader_trails, warp_compiled_wgsl_shader, julia, voronoi, sdf_scene, ocean, scene_3d, kaleidoscope, lava_lamp, northern_lights, ringed_planet, manual_3d_object_viewer, gpu_visualizer, aquarium, gaussian_splats
+Examples: shader, "shader mouse"; samples: shader, webgpu, paint_text_gpu, shader_brush, shader_trails, warp_compiled_wgsl_shader, julia, voronoi, sdf_scene, ocean, scene_3d, kaleidoscope, lava_lamp, northern_lights, ringed_planet, manual_3d_object_viewer, gpu_visualizer, aquarium, gaussian_splats, fish, fluid_25d
 
 ## GPU
 
@@ -844,15 +866,84 @@ Examples: ; samples: raylib_circle, raylib_mouse_circle, raylib_sleep, sdl_red_s
 
 `use sound` plays notes by name, chords, rhythms and whole songs. A function can also compute the sound itself.
 
+### Notes and chords
+
+A note is its name and octave, `C4` the middle C; `+` sounds notes together as a chord, a list plays them one after another. `chord` and `scale` build them by name.
+
+```warp
+use sound
+play C4
+play(C4+E4+G4, 1s)
+play(chord(A3, minor), 1s)
+play(scale(D4, dorian), 150ms)
+```
+
+Examples: melody; samples: music, harmony
+
+### Rhythm
+
+`tempo` sets the beats per minute and `beat` counts in them, so a whole tune changes speed with one line. A `Pattern` writes a rhythm as text, which play plays: `~` is a rest, brackets squeeze notes into one step.
+
+```warp
+use sound
+tempo = 120
+play([C4 E4 G4 E4], beat(1/2))
+play(Pattern("c3 ~ [c3 c3] e3"))
+```
+
+Examples: ; samples: rhythm, sound_patterns
+
+### Songs
+
+A song is several voices at once: `go` plays a part along with the program and `await` waits for it to end. `at` places parts on the beat clock, and `write_midi` saves a song for other music programs.
+
+```warp
+use sound
+tempo = 100
+bass = go { play([C3 G2 A2 F2], beat 1) }
+play([E4 D4 C4 D4 E4 E4 E4], beat(1/2))
+await bass
+```
+
+Examples: ; samples: voices, arrangement, midi
+
+### Computed sound
+
+`play` also takes a function of the time in seconds and plays its values as the sound wave. For long sounds a function can fill a whole block of samples at a time.
+
+```warp
+use sound
+siren(t: float) := 0.3 * sin(2π * t * (440 + 200 * sin(2π * t)))
+play(siren, 2s)
+```
+
+Examples: ; samples: siren_sound, hum_blocks, stereo_sound
+
 ### Music files
 
-`play` plays a music file in the background. A relative name is relative to the current folder, so the samples name their files from the repository's root, as here.
+`play` plays a music file in the background. A relative name is relative to the current folder, so the samples name their files from the repository's root, as here. `sample` reads a WAV to play faster, slower, sliced or looped.
 
 ```warp
 play ./samples/sound/tune.mp3
 ```
 
-Examples: melody; samples: play_mp3, music, rhythm, harmony, synth, filters, voices, arrangement, sound_patterns, signal_graph, siren_sound, stereo_sound, midi, visualizer, sound_features, sound_kick_samples, sound_pipes, gpu_visualizer_warp, hum_blocks
+Examples: ; samples: play_mp3, sound_kick_samples
+
+### Effects
+
+Settings shape every following note: `wave_shape`, the envelope (`attack`, `decay`, `sustain`, `release`), a filter's `cutoff` and `resonance`, `pan`, delay and reverb. A sound is also a value, piped through effects to the output.
+
+```warp
+use sound
+wave_shape = "square"
+attack = 20ms
+release = 400ms
+cutoff = 1200Hz
+play([C3 G3 C4], 300ms)
+osc(C3, 1s, "saw") |> lowpass(900) |> delay(0.25) |> out
+```
+
+Examples: ; samples: synth, filters, signal_graph, sound_pipes, visualizer, gpu_visualizer_warp, sound_features
 
 # Bigger programs
 
@@ -865,9 +956,9 @@ Examples: "kitchen sink"; samples: todo_cli, settings_cli, invoice_report, inven
 
 ## Advanced
 
-Bigger programs that put the chapters together: a neural net, a ray tracer, a game, pictures painted on the canvas.
+Bigger programs that put the chapters together: a neural net, a ray tracer, a game.
 
-Examples: "kitchen sink"; samples: neural_net, raytracer, snake, particles, circle, filled_circle, mandelbrot_canvas, test
+Examples: "kitchen sink"; samples: neural_net, raytracer, snake, test
 
 # Under the hood
 

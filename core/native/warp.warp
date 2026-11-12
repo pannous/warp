@@ -117,8 +117,14 @@ rebuilt(first: text, last: text): nothing := {
 	start = step_number(first)
 	end = step_number(last)
 	seed = seed_path()
-	# the seed builds warp.wasm.new, which runs the later steps with the seed's library (driver compiler_library)
-	if start < step_number("native") { companion_copied(seed_library(seed), companion_library(built)) }
+	# the seed builds warp.wasm.new, which runs the later steps with the library the seed makes (driver
+	# compiler_library), whose GC types the seed's emitter gave it: a seed that compiled itself makes its own library's
+	# (copied: a published seed is older than the sources and can't compile today's lib/unicode); a stage its library
+	# marks as built by other emitter code (refresh-seed's stage A, built by the old seed) makes it anew
+	if start < step_number("native") {
+		own = seed_library(seed)
+		if access(c_string(other_types_mark(own)), READABLE) == 0 { library_made(seed, companion_library(built)) } else { companion_copied(own, companion_library(built)) }
+	}
 	if step_runs("seed", start, end) {
 		# the seed's runtime in a folder of its own: a compile links the modules beside its runtime, and lib/modules/
 		# were built behind lib/runtime.wasm, whose words may sit elsewhere (an old seed checks only their counts)
@@ -216,8 +222,7 @@ promoted(): nothing := {
 	promoted_file = joined(library, "/warp-self.wasm")
 	copied(compiler, promoted_file)
 	companion_copied(companion_library(compiler), companion_library(promoted_file))
-	machine_code_copied(compiler, promoted_file, machine_code_suffix(RUN_GC_HEAP_BYTES))
-	machine_code_copied(compiler, promoted_file, machine_code_suffix(BUILDER_GC_HEAP_BYTES))
+	for kind in 0..MACHINE_CODE_KINDS { machine_code_copied(compiler, promoted_file, machine_code_suffix_of(kind)) }
 	said = if fixpoint then " compiles compiler.warp once more (to its own bytes, a fixpoint), promoted to " else " compiles compiler.warp once more (to other bytes, no fixpoint), promoted to "
 	print(joined(joined(compiler, said), promoted_file))
 }
@@ -230,19 +235,24 @@ seed_shipped(): nothing := {
 	print(joined("precompiled ", seed))
 	print(joined("its library ", seed_library(seed)))
 }
-# the seed's own runtime and unicode module, <seed>.library/, made once: a seed is a stage that compiled itself, so
-# what it makes has its GC types. Made aside and moved in whole, a rebuild beside this one never reads half of it
+# the empty file refresh-seed puts in a stage's library: the compiler beside it makes GC types other than the library's
+other_types_mark(library: text): text := joined(library, "/makes-other-types")
+# the seed's own runtime and unicode module, <seed>.library/, made once when missing (the published seed brings its own):
+# by the seed itself, so taken for a stage that compiled itself, whose output has its GC types
 seed_library(seed: text): text := {
 	folder = companion_library(seed)
-	if holds_companion(folder) { return folder }
+	if not holds_companion(folder) { library_made(seed, folder) }
+	folder
+}
+# the runtime and unicode module `maker` makes, into `folder` anew: the library of every compiler it builds. Made aside
+# and moved in whole, a rebuild beside this one never reads half of it
+library_made(maker: text, folder: text): nothing := {
 	aside = joined(joined(folder, ".new-"), text_of(getpid()))
 	companion_folders_made(aside)
 	runtime = joined(aside, companion_file(0))
-	file_ran(seed, words(seed, "runtime", runtime, "", "", ""))
-	file_ran(seed, words(seed, "module", "unicode", runtime, joined(aside, companion_file(1)), ""))
-	# (a rebuild beside this one made it first: its folder stays)
-	if rename(c_string(aside), c_string(folder)) != 0 { folder_removed(aside) }
-	folder
+	file_ran(maker, words(maker, "runtime", runtime, "", "", ""))
+	file_ran(maker, words(maker, "module", "unicode", runtime, joined(aside, companion_file(1)), ""))
+	companion_moved(aside, folder)
 }
 # a compiler's library copied beside another compiler of the same builder
 companion_copied(from: text, to: text): nothing := {
@@ -265,8 +275,7 @@ companion_folders_made(folder: text): nothing := {
 }
 # a build's machine code (the driver's .cwasm and its key) moved to another build file of the same bytes
 machine_code_moved(from: text, to: text): nothing := {
-	machine_code_renamed(from, to, machine_code_suffix(RUN_GC_HEAP_BYTES))
-	machine_code_renamed(from, to, machine_code_suffix(BUILDER_GC_HEAP_BYTES))
+	for kind in 0..MACHINE_CODE_KINDS { machine_code_renamed(from, to, machine_code_suffix_of(kind)) }
 }
 machine_code_renamed(from: text, to: text, suffix: text): nothing := {
 	rename(c_string(joined(from, suffix)), c_string(joined(to, suffix)))
@@ -348,8 +357,10 @@ console(compiler: text): nothing := {
 	print("Interactive console (Ctrl+D to exit)")
 	folder = joined(text_from(compiled_path().address, compiled_path().length - 5), ".repl")
 	mkdir(c_string(folder), FOLDER_MODE)
-	resident_loaded(compiler)
+	resident_loaded(compiler, yes)
 	session = session_opened()
+	# Ctrl+C stops the running line or its compile, never the console (lib/native/foreign.c)
+	interrupts_engine(long_at(resident_block()).value)
 	number = 0
 	ended: i32 = -1
 	input = fdopen(STDIN, c_string("r"))
@@ -639,10 +650,10 @@ dispatched(compiler: text, prefixed: bool, first: int): nothing := {
 	if ends_with(word, ".wasm") { return module_ran(first) }
 	if not prefixed {
 		if same_text(word, "rebuild") { return rebuild_command(first) }
-		if same_text(word, "beautify") or same_text(word, "fix") or same_text(word, "format") or same_text(word, "lint") { return compiled_and_run(compiler, joined(library_folder(), "/fix/command.warp"), 1) }
+		if same_text(word, "beautify") or same_text(word, "fix") or same_text(word, "format") or same_text(word, "lint") { return compiled_and_run(compiler, joined(library_folder(), "/fix/command.warp"), first) }
 		if same_text(word, "docs") or same_text(word, "wiki") or same_text(word, "home") { return documentation_opened() }
-		if same_text(word, "app") { return compiled_and_run(compiler, joined(library_folder(), "/app/command.warp"), 1) }
-		if same_text(word, "dev") { return compiled_and_run(compiler, joined(library_folder(), "/dev/command.warp"), 1) }
+		if same_text(word, "app") { return compiled_and_run(compiler, joined(library_folder(), "/app/command.warp"), first) }
+		if same_text(word, "dev") { return compiled_and_run(compiler, joined(library_folder(), "/dev/command.warp"), first) }
 	}
 	# `warp test`, and `warp self test` as `warp test --self`: the native warp runs the cases, each by the compiler named
 	if same_text(word, "test") and (not prefixed or self_named(compiler)) { return tests_run(compiler, flagged("--self") or self_named(compiler), first) }
@@ -726,7 +737,11 @@ command_ran(): nothing := {
 	option_given("host", "the native warp")
 	# and where it is, so a command runs a program by this warp (`warp build --site` prerenders its page, warp_command)
 	option_given("executable", executable_path())
-	if prefixed and same_text(arg(start), "fast") { complain("note: warp fast is not in the native warp yet; running at full precision") }
+	# `warp fast <program>` is `warp --fast <program>`: untyped whole numbers as i64, wrapping, with no overflow checks
+	if prefixed and same_text(arg(start), "fast") {
+		option_given("fast", "")
+		complain("note: warp fast is written warp --fast; untyped whole numbers wrap as i64")
+	}
 	dispatched(if prefixed and same_text(arg(start), "self") then joined(library_folder(), "/warp-self.wasm") else compiler_path(), prefixed, first)
 }
 command_ran()

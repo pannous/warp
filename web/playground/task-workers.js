@@ -49,11 +49,16 @@ function serveTaskWorkers(programWorker) {
 
 // a failure without an Error (Firefox's bare "uncaught exception: undefined") at the page or one of its Workers is said
 // with where it happened; a Worker's error event never carries the Error (errors do not cross threads), only its message
+// A script of another origin loaded without CORS gives the page only "Script error." and no place: said so, naming the
+// page's scripts of other origins, none of them meaning one a browser extension put in
 const reportBareErrors = (target, label) => target.addEventListener("error", event => {
 	if (event.error instanceof Error) return;
-	const what = target instanceof Worker ? "a Worker error" : `an error without an Error (${event.error})`;
+	const what = target instanceof Worker ? "a Worker error" : event.filename ? `an error without an Error (${event.error})` : hiddenError();
 	console.error(`warp ${label}: ${what} at ${event.filename}:${event.lineno}:${event.colno}: ${event.message}`);
 });
+
+const foreignScripts = () => [...document.scripts].map(script => script.src).filter(src => src && new URL(src).origin !== location.origin);
+const hiddenError = () => `an error of a script of another origin, its details hidden by the browser (the page's: ${foreignScripts().join(", ") || "none, so a browser extension's?"})`;
 
 // `clipboard` in a Worker (host-tasks.js askPage): the page's text into the Worker's shared buffer. A browser that reads
 // the clipboard only right after the user acted (Firefox; Chrome when the page has no focus) refuses a run's read: a

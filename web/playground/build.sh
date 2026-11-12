@@ -18,8 +18,9 @@ source "$repository/scripts/lib/packages.sh"
 INSTALLED_LIBRARY="$repository/lib"
 [ -f "$INSTALLED_LIBRARY/warp.wasm.inputs" ] || INSTALLED_LIBRARY="$(dirname "$(command -v warp)")/lib"
 if [ "${1:-}" = --lib ]; then INSTALLED_LIBRARY=$2; shift 2; fi
-# the sources a compiler bakes in: one built from a commit where they differ ships its lag to the page
-COMPILER_SOURCES=(core 'lib/*.warp')
+# the sources a compiler bakes in (scripts/compiler-inputs.sh: core/ and extensions/ but not core/native/, the native
+# warp's own, and lib/'s modules): one built from a commit where they differ ships its lag to the page
+COMPILER_SOURCES=(core extensions ':(exclude)core/native' 'lib/*.warp')
 # what the browser cannot use of it: wasmtime's machine code, native libraries, kept values, stale compilers
 NOT_FOR_THE_BROWSER=(--exclude='*.cwasm' --exclude='*.cwasm.key' --exclude='*.dylib' --exclude='*.so' --exclude='*.kept'
 	--exclude='*.stale' --exclude='*.inputs' --exclude='warp-self.wasm*' --exclude='data/')
@@ -39,7 +40,7 @@ PRELOADED_SOURCES=('*.warp' 'extensions/sugar/*.warp' 'modules/index.tsv' 'modul
 COMPILER_EXPORTS=(main _start memory text_heap trap_detail trap_position trap_name show trap_message shown_at shown_from returned_error
 	error_of new_empty new_int new_bool new_float new_codepoint new_text new_symbol new_key new_list new_type new_bytes new_ints
 	new_floats new_spelled_key new_spelled_list item_count item_at int_item_at float_item_at gpu_list_place gpu_list_cell
-	is_textual)
+	is_textual node_encoding asked_rule_word)
 # core/commands/commands.warp WASM_OPT's features: Binaryen's -all would add exact references Firefox refuses
 WASM_OPT_FEATURES=(--enable-gc --enable-reference-types --enable-bulk-memory --enable-multivalue --enable-sign-ext
 	--enable-nontrapping-float-to-int --enable-mutable-globals --enable-tail-call --enable-simd --enable-extended-const

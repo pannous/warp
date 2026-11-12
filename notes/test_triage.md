@@ -35,6 +35,7 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 
 | file:line | reason | verdict |
 |---|---|---|
+| test/modules/test_wasm_modules.pairs.warp:34, 35 | a C module's out-pointer as the result: `strtol("42 apples", 10)` expected ' apples', `strtol("ff!", 16)` '!'; main gives the C meaning, 42 / 255 | keep for now: the user expects 42 (11-11 via warp-interviewer); the out-pointer form is card strtol-out-pointer (Later) |
 | test/text/test_count_in.pairs.warp:4-9; test/text/test_counts_in_warp.pairs.warp:4, 5, 10; test/functions/test_words_in_phrases.pairs.warp:11, 12 | `count x in y`, `count(x in y)`: the count of a membership's yes/no, refused with did-you-mean `y.count(x)` | delete: the refusal with its fix `y.count(x)` is the behaviour |
 | test/welcoming/test_footguns.pairs.warp:383 | `fast` floats that reassociate math | keep: wiki Footguns.md:764 promises `fast x=3.3` / `as fast`; gap |
 | test/welcoming/test_footguns.pairs.warp:395 | C float32 suffix `.1f` | keep: wiki Footguns.md:772, number.md:28 promise `0.1f`; gap |
@@ -650,3 +651,8 @@ Triage (judge the form before building it):
 - test_system_values:26, 27 `mouse_x`, `mouse_down` need a mocked mouse (1207); harness, not language.
 - test_test_line_after_tasks:2 expects ø where the runner prints "✓ 1 tests passed".
 - test_relational_arms:4 `sorted(xs, >)` (card sorted-comparator-syntax).
+
+## test/ffi/test_js_callbacks.warp natively (card js-array-from-callback, night decision 2026-11-12)
+- :9 and :10, a warp function called back by JS that calls JS itself (`Array.from(xs, x => Math.max(x, 2))`), are
+  refused natively: the web view's one JS thread waits for the callback's answer. In the page (its own phase) they can work; natively a
+  second view or JavaScriptCore in process would (option B on the card, waits for the user).

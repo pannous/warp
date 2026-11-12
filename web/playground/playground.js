@@ -80,7 +80,9 @@ const BUG_REPORT_URL = "https://pannous.com/warp-bug-report";
 const BUG_TOKEN_PARAMETER = "bug_token";
 const BUG_TOKEN_KEY = "warp-playground-bug-token";
 const BUG_TOKEN = "ON4YlqHqAtviYPgPzSeqx3QS_gSPFlY5";
-const FORBIDDEN = 403; // a wrong token: it is forgotten and the field asks again
+const FORBIDDEN = 403; // a wrong token: the field asks for the right one, the report is not sent
+// how the owner gets the token that files reports as theirs (bug_report.py token prints the address that stores it)
+const OWNER_TOKEN_HINT = "open the page once with ?bug_token=<token> (python3 scripts/bug_report.py token)";
 // a page event, or one element's (`on click·1`: the markup's data-warp-click="1", lib/markup.warp page_render)
 const PAGE_EVENT = /^on ((?:click|key|input)|\w+·\d+)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
@@ -269,7 +271,7 @@ function startWorker(restarts = 0) {
 	// a slow start (the CI runner) finishes after the first run began: "ready" then must not hide its "running…"
 	workerReady.then(() => stopLoading() || showing || setStatus("ready"), failure => stopLoading() || setStatus(failure.message, true));
 	workerSettled = "starting";
-	workerReady.then(() => workerSettled = "ready", failure => workerSettled = `failed: ${failure.message}`);
+	workerReady.then(() => workerSettled = "ready", failure => workerSettled = `${WORKER_FAILED}${failure.message}`);
 	tellSystemValues();
 	sharePointer();
 	worker.postMessage({ stored: keptValues(), session: keptValues([SESSION_STORE]) });
@@ -309,7 +311,7 @@ function newWorker(restarts = 0) {
 		// worker.js or a script it imports failed to load: without this the first run waits for "ready" forever (card firefox-hello-hang)
 		// once ready, an error event is the worker ending under a run: the browser's word for it, else what a bare one
 		// means (iPad Safari ends a Worker so when it runs out of memory or stack, card ipad-storage-bug)
-		starting.onerror = event => starting.isReady ? workerEnded(starting, event.message || WORKER_ENDED) : failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
+		starting.onerror = event => starting.isReady ? workerEnded(starting, event.message || WORKER_ENDED) : failed(new Error(`the compiler's worker failed to start: ${event.message || WORKER_NOT_STARTED}`));
 		starting.onmessage = ({ data }) => {
 			starting.heard = { type: data?.type, at: Math.round(performance.now()) }; // playground.js hungWhere
 			if (!FREQUENT_WORKER_MESSAGES.has(data?.type)) keepConsoleEntry("worker", [data?.type ?? String(data), ...(data?.stage ? [data.stage] : data?.message ? [data.message] : [])]);
@@ -352,9 +354,9 @@ function newWorker(restarts = 0) {
 			if (data.type === "file") return offerFile(data.path, data.bytes);
 			if (data.type === "picture") return savePicture(data);
 			if (data.type === "midi") return sendMidi(data.port, data.message, data.at);
-			if (data.type === "stop sound files") return silence(); // stop_sound: the queued sounds and the music files
-			if (data.type === "stop sound") return silenced(data.handle); // stop_sound(handle): that one alone
-			if (data.type === "fade sound") return faded(data.handle, data.gain, data.seconds); // fade_sound
+			if (data.type === "stop sound files") return silence(); // stop(sound): the queued sounds and the music files
+			if (data.type === "stop sound") return silenced(data.handle); // stop(h): that one alone
+			if (data.type === "fade sound") return faded(data.handle, data.gain, data.seconds); // fade
 			if (data.type === "gpu canvas") return sendPaintCanvas(data);
 			if (data.type === "serving") return servingRequests(data);
 			if (data.type === "served") return showServed(data.response);
@@ -528,7 +530,7 @@ function playSound({ samples, rate, channels, at, handle, loop }, from) {
 		buffer.getChannelData(channel).set(Float32Array.from({ length: frames }, (_, frame) => ((samples[frame * channels + channel] ?? SOUND_OFFSET) - SOUND_OFFSET) / SOUND_OFFSET));
 	const source = audio.createBufferSource();
 	source.buffer = buffer;
-	source.gainNode = audio.createGain(); // fade_sound ramps it
+	source.gainNode = audio.createGain(); // fade ramps it
 	source.connect(source.gainNode).connect(audio.destination);
 	if (sounding.length === 0) clockOffset = audio.currentTime - soundClock();
 	source.startsAt = Math.max(audio.currentTime, at + clockOffset);
@@ -610,7 +612,7 @@ function fadeOut(source, from, seconds) {
 	source.stop(from + seconds);
 }
 
-// fade_sound(handle, gain, seconds): the sounds of that handle (0 all) ramp from their gain now to `gain`
+// fade(h, gain, seconds): the sounds of that handle (0 all) ramp from their gain now to `gain`
 function faded(handle, gain, seconds) {
 	for (const source of sounding.filter(source => handle === 0 || source.handle === handle)) {
 		const level = source.gainNode.gain;
@@ -751,6 +753,9 @@ const slept = (run, milliseconds) => stopAfterTimeout(run, run.deadline - Date.n
 // a program that does not stop blocks the worker: replace it
 const ANIMATION_STOPPED = "animation stopped";
 const WORKER_ENDED = "the browser ended it without a message (out of memory or stack?)";
+// a worker's error before it was ready, of no message: the browser ended it, or one of its scripts did not load
+const WORKER_NOT_STARTED = "the browser ended it before it was ready (out of memory?), or worker.js did not load";
+const WORKER_FAILED = "failed: "; // workerSettled of a worker that failed to start
 // the shown worker ended under the pending run: the run fails saying so, a fresh worker takes the next
 function workerEnded(ended, why) {
 	if (ended !== worker) return;
@@ -842,6 +847,8 @@ function runInWorker(code, file, asData, eventsFor) {
 	const reported = new Promise((resolve, reject) => Object.assign(run, { resolve, reject }));
 	run.stopTimer = setTimeout(() => pending === run && showStop(true), STOP_GRACE_MS);
 	pending = run;
+	// a worker that failed to start, its failure shown, is not asked again: each run after it starts a new one
+	if (workerSettled.startsWith(WORKER_FAILED)) startWorker();
 	workerReady.then(() => pending === run && startInWorker(run, code, file, asData), failure => {
 		clearTimeout(run.stopTimer);
 		if (pending === run) pending = undefined;
@@ -1246,6 +1253,109 @@ function clearPreviousRun(value = PENDING_VALUE) {
 	showPrinted([]);
 }
 
+
+// card slider-ui: `c = slider(-2 to 2)` is a UI value. The page shows a range control for each call and reruns
+// with the new value (the editor keeps the program as written). A value already in the call is the start.
+const SLIDER_CALL = /\bslider\(\s*(-?(?:\d+\.?\d*|\.\d+))\s*(?:to|,)\s*(-?(?:\d+\.?\d*|\.\d+))(?:\s*,\s*(-?(?:\d+\.?\d*|\.\d+)))?\s*\)/g;
+const SLIDER_NAME = /([A-Za-z_][A-Za-z_0-9]*)\s*=\s*$/;
+const SLIDER_DELAY_MS = 80; // live while dragging, without a compile on every pointer tick
+let sliderValues = [];
+let sliderKey = "";
+let sliderTimer;
+
+function sliderNumber(n) {
+	return String(Number.parseFloat(Number(n).toFixed(10)));
+}
+
+function sliderCommented(source, index) {
+	const lineStart = source.lastIndexOf("\n", index - 1) + 1;
+	const prefix = source.slice(lineStart, index);
+	return /#|\/\//.test(prefix);
+}
+
+function parseSliders(source) {
+	const found = [];
+	SLIDER_CALL.lastIndex = 0;
+	let match;
+	while ((match = SLIDER_CALL.exec(source))) {
+		if (sliderCommented(source, match.index)) continue;
+		const lo = Number(match[1]), hi = Number(match[2]);
+		const named = SLIDER_NAME.exec(source.slice(0, match.index));
+		found.push({
+			start: match.index,
+			end: match.index + match[0].length,
+			lo, hi,
+			value: match[3] !== undefined ? Number(match[3]) : (lo + hi) / 2,
+			name: named ? named[1].replace(/_/g, " ") : `slider ${found.length + 1}`,
+		});
+	}
+	return found;
+}
+
+function sliderPanel() {
+	let panel = $("sliders");
+	if (panel) return panel;
+	if (!document.getElementById("slider-style")) {
+		document.head.append(element("style", { id: "slider-style" },
+			`.sliders { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 12px; font-size: 0.9em; color: var(--muted); }
+.sliders[hidden] { display: none; }
+.sliders label { display: grid; grid-template-columns: 7em 1fr 4em; gap: 8px; align-items: center; }
+.sliders input[type=range] { width: 100%; accent-color: var(--accent); }
+.sliders .slider-value { font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace; color: var(--ink); text-align: right; }`));
+	}
+	panel = element("div", { id: "sliders", className: "sliders", hidden: true });
+	const output = $("output");
+	const painted = $("painted");
+	if (output && painted) output.insertBefore(panel, painted);
+	else (output ?? document.body).append(panel);
+	return panel;
+}
+
+function showSliders(sliders) {
+	// keep values while this program's sliders stay the same; a different program takes its starts
+	const key = sliders.map(slider => `${slider.name}:${slider.lo}:${slider.hi}`).join("|");
+	if (key !== sliderKey) {
+		sliderKey = key;
+		sliderValues = sliders.map(slider => slider.value);
+	} else {
+		sliderValues = sliders.map((slider, i) => {
+			const kept = sliderValues[i];
+			return kept !== undefined && kept >= slider.lo && kept <= slider.hi ? kept : slider.value;
+		});
+	}
+	const panel = sliderPanel();
+	panel.hidden = sliders.length === 0;
+	panel.replaceChildren(...sliders.map((slider, i) => {
+		const value = element("span", { className: "slider-value" }, sliderNumber(sliderValues[i]));
+		const input = element("input", {
+			type: "range",
+			min: slider.lo,
+			max: slider.hi,
+			step: (slider.hi - slider.lo) / 400 || 0.01,
+			value: sliderValues[i],
+			oninput: () => {
+				sliderValues[i] = Number(input.value);
+				value.textContent = sliderNumber(sliderValues[i]);
+				clearTimeout(sliderTimer);
+				sliderTimer = setTimeout(runChanged, SLIDER_DELAY_MS);
+			},
+		});
+		return element("label", {}, slider.name, input, value);
+	}));
+}
+
+function withSliderValues(source) {
+	const sliders = parseSliders(source);
+	showSliders(sliders);
+	if (sliders.length === 0) return source;
+	let out = source;
+	for (let i = sliders.length - 1; i >= 0; i--) {
+		const slider = sliders[i];
+		out = out.slice(0, slider.start) + `slider(${sliderNumber(slider.lo)}, ${sliderNumber(slider.hi)}, ${sliderNumber(sliderValues[i])})` + out.slice(slider.end);
+	}
+	return out;
+}
+
 async function show(code) {
 	if (showing) {
 		queued = code; // only the newest code is worth running next
@@ -1257,7 +1367,7 @@ async function show(code) {
 	dimPreviousRun();
 	setStatus(RUNNING);
 	try {
-		const report = await evaluate(code);
+		const report = await evaluate(withSliderValues(code));
 		clearPreviousRun();
 		showReport(report);
 	} catch (failure) {
@@ -1336,8 +1446,11 @@ function startBugButton() {
 		history.replaceState(null, "", url.href); // the token leaves the address bar and the history
 	}
 	$("bug").ontoggle = () => {
-		if ($("bug").open) $("bug-comment").focus();
+		if (!$("bug").open) return;
+		showBugSender();
+		$("bug-comment").focus();
 	};
+	$("bug-token").oninput = showBugSender;
 	// a press outside an open menu (the bug report, ⋯) closes it, as Escape does; a comment begun stays (card clicking-outside)
 	const openMenus = () => [...document.querySelectorAll("details.tools[open]")];
 	addEventListener("pointerdown", press => openMenus().filter(menu => !menu.contains(press.target)).forEach(menu => menu.open = false));
@@ -1362,8 +1475,12 @@ function bugReport() {
 	const run = reportedRun();
 	const source = $("bug-source").checked ? { code: run.code, output: run.output } : { code: "", output: "" };
 	return { ...run, ...source, comment: $("bug-comment").value, express: $("bug-express").checked, quick: $("bug-quick").checked, console: consoleReport(),
-		token: stored(BUG_TOKEN_KEY) ?? ($("bug-token").value.trim() || BUG_TOKEN) };
+		token: $("bug-token").value.trim() || stored(BUG_TOKEN_KEY) || BUG_TOKEN };
 }
+
+// who the report goes out as, said before it is sent: a browser without the owner token files a visitor's ticket
+const showBugSender = () => $("bug-sender").textContent = $("bug-token").value.trim() || stored(BUG_TOKEN_KEY)
+	? "as the owner" : "as a visitor: no owner token in this browser";
 
 async function sendBugReport() {
 	const report = bugReport();
@@ -1372,13 +1489,19 @@ async function sendBugReport() {
 	try {
 		const answer = await serviceFetch(BUG_REPORT_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report) });
 		const { card, board, queued, error } = await answer.json();
-		if (answer.status === FORBIDDEN) {
-			store(BUG_TOKEN_KEY, null);
+		// a refused owner token stays refused until a new one is pasted: never quietly the shared token, which files the
+		// owner's report as a visitor's ticket
+		if (answer.status === FORBIDDEN && report.token !== BUG_TOKEN) {
 			showStatus("owner-token-status", "rejected", "the bug-report server refused the token");
 			$("bug-token").hidden = false;
+			return showBugStatus(`not sent: the bug-report server refused this browser's owner token; paste the new one, or ${OWNER_TOKEN_HINT}`, true);
 		}
 		if (!answer.ok) return showBugStatus(`not sent: ${error ?? answer.status}`, true);
-		if (report.token !== BUG_TOKEN) store(BUG_TOKEN_KEY, report.token);
+		if (report.token !== BUG_TOKEN) {
+			store(BUG_TOKEN_KEY, report.token);
+			showStatus("owner-token-status", "ok");
+			Object.assign($("bug-token"), { value: "", hidden: true });
+		}
 		$("bug-comment").value = "";
 		$("bug-express").checked = $("bug-quick").checked = false;
 		if (card) showBugStatus("card made: ", false, card, board);
@@ -1541,6 +1664,7 @@ function initialize() {
 	$("address").onkeydown = goToAddress;
 	$("rendered").onclick = click => followLink(click) || sendElementEvent("click", click, clickDetail(click));
 	$("rendered").oninput = input => sendElementEvent("input", input, inputDetail(input.composedPath()[0]));
+	$("rendered").onkeydown = pressed => sendElementEvent(keyEventName(pressed), pressed, inputDetail(pressed.composedPath()[0]));
 	$("output").onclick = click => sendPageEvent("click", clickDetail(click));
 	$("output").onkeydown = key => sendPageEvent("key", { key: key.key });
 	followPointer($("output"));
@@ -1565,6 +1689,12 @@ function initialize() {
 
 // for headless runs (test_in_browser.py --examples): evaluate code as the page does and return the report
 window.playground = { evaluate, applyFix, chooseExample, exampleSource, runCode, reportAddress, bugReport, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
+	sliders: () => sliderValues.slice(),
+	// set a slider and rerun (headless page check, card slider-ui)
+	setSlider: (index, value) => {
+		sliderValues[index] = Number(value);
+		return runChanged();
+	},
 	// an animation that runs until stopped (a raylib window's `while not WindowShouldClose()`) ends with its report, as
 	// the next run would end it (test_in_browser.py sample_answer); yes when one ran
 	stopAnimation: () => Boolean(pending?.animating && (stopRun(pending, ANIMATION_STOPPED), true)),

@@ -1,0 +1,18 @@
+# lib/laws.warp (wiki/laws.md, decisions test-soft and program-test): laws tried for a few ints, a program's test lines
+# a law holding for every trial value leaves the program's value
+'law x - x == 0; 2'	2
+'law x + y == y + x; 4'	4
+# a failing law names the first values it fails for
+'law x / 1 == x + 1; 4'	error	fails for x = 0
+'law broken:
+	for a: int
+	a * 2 == a
+3'	error	law broken fails for a = 1
+# a program ending in a test line ends with the tests' summary, a raise failing its test
+'use laws; test 1 + 1 == 2; test 2 * 2 == 4'	"✓ 2 tests passed"
+'use laws; test 1 == 1; test 1 == 1; test 1 == 2'	"1 of 3 failed"
+'use laws; test raise "x"; test 1 == 1'	"1 of 2 failed"
+# a program ending in another value keeps it
+'use laws; test 1 + 1 == 2; 7'	7
+# a law shows its numbers as written: the 1 of x + 1 stays 1
+'law x + 1 == x; 2'	error	law x+1==x fails for x = 0

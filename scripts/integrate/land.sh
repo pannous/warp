@@ -19,9 +19,10 @@ shift 2
 tree=$(cd "$tree" && pwd) || exit 1
 batch=$tree/data/integrate/batch
 say() { echo "land: $*"; }
+source "$(dirname "$0")/../lib/platform.sh"
 COMPILER_PATHS=(core extensions $("$(dirname "$0")/../compiler-inputs.sh" --code-files | sed 's|^|lib/|'))
 field() { sed -n "s/^$1 //p" "$batch"; }
-set_field() { sed -i '' "s/^$1 .*/$1 $2/" "$batch"; }
+set_field() { sed_in_place "s/^$1 .*/$1 $2/" "$batch"; }
 
 # main moved past base: take its new commits onto the tested hash, re-testing only when they touch the compiler's paths
 catch_up() {
@@ -33,7 +34,7 @@ catch_up() {
 		say "main moved without compiler changes: merged, no new smoke test"
 	else
 		say "main moved with compiler changes: merge.sh again"
-		"$(dirname "$0")/merge.sh" --tree "$tree" --smoke-only $(field card | cut -d' ' -f1)
+		"$(dirname "$0")/merge.sh" --tree "$tree" --smoke-only $(field queue) $(field card | cut -d' ' -f1)
 	fi
 }
 
@@ -52,6 +53,7 @@ say "pushed ${tested:0:10} to main"
 while read -r key branch ref; do
 	git -C "$tree" merge-base --is-ancestor "$ref" "$tested" || { say "NOT MERGED $key ($ref)"; continue; }
 	commit=$(git -C "$tree" log --merges --format=%H --grep="(card $key)" -1 "$base..$tested")
-	todo done "$key" "$commit" >/dev/null && say "done $key"
+	# the cloud has no board: after-push.sh closes the card on the Mac once it installs this main
+	if command -v todo >/dev/null; then todo done "$key" "$commit" >/dev/null && say "done $key"; else say "landed $key in ${commit:0:10}"; fi
 	git -C "$tree" push -q origin --delete "$branch" 2>/dev/null
 done < <(field card)

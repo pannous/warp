@@ -1,0 +1,23 @@
+#!/usr/bin/env warp
+# The Julia set z → z² + c until |z| > 2, colored by the escape count through a cosine palette;
+# c (real and imaginary parts) and zoom are sliders (card slider-ui). The playground shows the
+# controls and reruns with the new value; natively the start values paint one frame.
+use math
+use ui
+width = 1600
+height = 900
+c_re = slider(-2 to 2, -.8)
+c_im = slider(-2 to 2, .16)
+zoom = slider(0.5 to 8, 1)
+c = c_re + c_im * ⅈ
+julia(x, y) := {
+	z = ((x / width - ½) * 3 + (y / height - ½) * 2 * ⅈ) / zoom
+	n = 0
+	while n < 200 and ‖z‖ < 2 {
+		z = z² + c
+		n++
+	}
+	t = n / 200
+	½ .+ ½ .* cosine([3, 3.6, 4] .+ t * 20) # palette
+}
+paint(julia, width, height)

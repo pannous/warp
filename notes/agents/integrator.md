@@ -14,7 +14,7 @@ compiler `use`s no lib/ module. A misplaced file (a demo in extensions/, a featu
 refused: send it back to the worker saying where it belongs, and tell the Supervisor. Growth of core/ always gets a
 second look: is it needed for self-compilation, or a feature that belongs in an extension?
 A change to core/ or extensions/ (sugar rules and small extensions included) lands only with the user's OK given
-before the work (AGENTS.md "Core and extensions"): find it as a card note or a notes/decisions.md key. A worker's word
+before the work (AGENTS.md "Core and extensions"): find it as a card note ("OK <date> via warp-interviewer: …"). A worker's word
 alone is not the record: without one, ask warp-interviewer to confirm and note it, and hold the branch. One that
 skipped the question is refused and goes to warp-interviewer; there is no FYI path.
 
@@ -67,7 +67,7 @@ skipped the question is refused and goes to warp-interviewer; there is no FYI pa
 ## Branches of retired sessions
 - Now cards noted `land: <branch> <tip>` (`todo landing`; `todo stray` lists every unmerged branch): their session
   retired, you land them, in /Volumes/Worktrees/integrate.
-  `scripts/integrate/merge.sh [<card>…]` merges them onto origin/main, one merge commit per branch with the summary of
+  `scripts/integrate/merge.sh [--queue] [<card>…]` merges them onto origin/main, one merge commit per branch with the summary of
   its commits, leaves conflicting cards out and names them, then runs the smoke test
   <!-- GO TO worktree / branch which wants to be merged.  -->
   (`scripts/rebuild.sh pure`, hello, self-check.sh when core/ changed); `merge.sh --tip <commit>` runs only the smoke
@@ -81,8 +81,22 @@ skipped the question is refused and goes to warp-interviewer; there is no FYI pa
   `use units; 1` or `use storage` than main's compiler, measured again before it counts as red (the Mac may just have
   been busy), unless the message has a `speed-ok: <card>` line (a slowdown
   the user accepted); a core landing may carry red test and sample lines with `reds: <card>` (Landing, below).
-- A red batch is dropped whole today: merge.sh puts the tree back on origin/main and names the red; you find the
-  culprit by building its branches apart and send it back with its error (card red-batch-split will halve it).
+- One sweep: every handoff waiting with its OK on record goes into one merge.sh batch, never one batch per handoff
+  as it arrives (user 11-11); the tier 0 has the self-check, gate tier 1 and page smoke, so no private batch script.
+- A red batch is halved: merge.sh tries each half beside the cards already green and halves a red half again, so
+  a red card alone is found in about log2 N extra tier 0 runs (page smoke included); the green cards land, each red
+  one goes back to Now with its error as a card note. Only a batch with no green card is dropped whole.
+- The cloud merge queue (user 11-12, card landings-github-actions) replaces the Mac sweeps for compiled changes: an
+  OK'd handoff is pushed to `land/<card>` (`git push origin <tip>:refs/heads/land/<card>`, by the worker or by you),
+  and .github/workflows/land.yml merges every waiting land/* branch with `merge.sh --queue`, checks the batch
+  (compilers, hello, self-check + gate tier 1 for core/ and extensions/, page smoke), halves a red batch, pushes the
+  green cards to main and deletes their land/ branches. A red card's tip moves to land/red/<card> and the run fails:
+  read its RED line (`gh run list -w Land`), note it on the card, tell the worker. The workflow pushes only main
+  and land/*; it has no board, so after-push.sh closes the landed cards on the Mac. Your part: check the OK on record
+  before a branch enters the queue, watch failed Land runs, and the Mac's install (after-push.log).
+- A Mac sweep stays for what the cloud cannot check (a GPU or window change) and when the queue is down: its builds
+  go first in the machine's build line (merge.sh sets WARP_BUILD_FIRST), and a build of compiler inputs a worker
+  already built is taken from the store, so a worker's tested merge of the current main costs no build.
 
 ## Playground
 - web/playground (pages.yml) is stage 2, hourly on main; a red run is carded and fixed forward, the last good site

@@ -129,7 +129,7 @@ function raisedMessage(exports, failure) {
 // the tree it encodes is built again in the program, node by node through its builders
 const PARSED_CODE_PATH = "/tmp/warp-parsed.code";
 const FIELD_END = 1; // driver.warp FIELD_END
-const ENCODED = { empty: 101, yes: 84, no: 70, int: 105, float: 102, codepoint: 99, symbol: 115, error: 120, key: 107, list: 108 };
+const ENCODED = { empty: 101, yes: 84, no: 70, int: 105, float: 102, codepoint: 99, symbol: 115, error: 120, key: 107, list: 108, placed: 112 };
 const codeParsed = (program, code) => codeParsedFrom(program, guestText(program, code));
 function codeParsedFrom(program, code) {
 	let said = "";
@@ -138,6 +138,44 @@ function codeParsedFrom(program, code) {
 	programFiles.written.delete(PARSED_CODE_PATH);
 	if (status !== 0 || !encoding) return newGuestError(program, said.trim() || `parse-code wrote nothing (status ${status})`);
 	return codeBuilt(program, typeof encoding === "string" ? utf8.encode(encoding) : encoding, { at: 0 });
+}
+// warp.module_word(module, word, arguments) (card module-rule-words, driver.warp module_word_answered): the compiler's call
+// of a rule word the lib module defines. The module is linked at its first call, the word called there (encodedCall),
+// its result built again in the compiler. While it runs, the host words it calls are the module's (runningGuest)
+let runningGuest;
+function moduleWord(compiler, imports, linked, module, word, argumentList) {
+	const name = LINKED_MODULE_PREFIX + guestText(compiler, module);
+	const guest = linkedInstance(name, linkedUrl(name), imports, linked);
+	const outer = runningGuest;
+	runningGuest = guest;
+	try {
+		return encodedCall(compiler, guest, guestText(compiler, word), argumentList);
+	} finally {
+		runningGuest = outer;
+	}
+}
+// warp.rule_word(word, arguments) (driver.warp rule_word_answered): a module's rule word asking the compiler running it
+// for one of its rule words (rewrites.warp asked_rule_word), its result built again in the module
+function ruleWord(guest, compiler, argumentList) {
+	const outer = runningGuest;
+	runningGuest = undefined;
+	try {
+		return encodedCall(guest, compiler, "asked_rule_word", argumentList);
+	} finally {
+		runningGuest = outer;
+	}
+}
+// the word of `called` on the arguments `caller`'s list holds, each built in `called` from caller's node_encoding, its
+// result built again in the caller
+function encodedCall(caller, called, word, argumentList) {
+	const encoding = utf8.encode(guestText(caller, caller.node_encoding(argumentList)));
+	const cursor = { at: 1 };
+	const count = Number(encodedField(encoding, cursor));
+	encodedField(encoding, cursor); // (the list's bracket and separator)
+	encodedField(encoding, cursor);
+	const given = Array.from({ length: count }, () => codeBuilt(called, encoding, cursor));
+	const result = called[word](...given);
+	return codeBuilt(caller, utf8.encode(guestText(called, called.node_encoding(result))), { at: 0 });
 }
 // eval_code(t) (decision N31, driver.warp code_evaluated): warp.wasm compiles t as a program of its own, beside the
 // typed program; it runs with its value printed as data after the value mark, what it printed before that goes on to
@@ -190,6 +228,7 @@ function codeBuilt(program, encoding, cursor) {
 	if (tag === ENCODED.codepoint) return program.new_codepoint(Number(field));
 	if (tag === ENCODED.symbol) return newGuestBytes(program, field, "new_symbol");
 	if (tag === ENCODED.error) return newGuestError(program, field);
+	if (tag === ENCODED.placed) return program.new_placed(codeBuilt(program, encoding, cursor), BigInt(field));
 	if (tag === ENCODED.key) {
 		const key = codeBuilt(program, encoding, cursor);
 		return program.new_spelled_key(key, newGuestText(program, field), codeBuilt(program, encoding, cursor));
@@ -217,12 +256,25 @@ function timerFired(holder, id) {
 	}
 }
 
+// the compiler's std_io: warp.module_word runs a lib module's rule word (moduleWord), warp.option answers the run's
+// options; any other is not the compiler's in a page
+function compilerStdIo(compiler, imports, linked, module, member, argumentList) {
+	if (runningGuest) return guestStdIo(runningGuest, compiler, module, member, argumentList);
+	if (guestText(compiler, module) !== "warp") return newGuestError(compiler, `the host word ${guestText(compiler, module)}.${guestText(compiler, member)} is not in the browser yet`);
+	if (guestText(compiler, member) === "module_word") return moduleWord(compiler, imports, linked, ...guestItems(compiler, argumentList));
+	return stdCall(compiler, module, member, argumentList, { warnings: [], options: compilerOptions() });
+}
+// the std_io of a lib module running a rule word for the compiler: warp.rule_word only
+function guestStdIo(guest, compiler, module, member, argumentList) {
+	if (guestText(guest, module) === "warp" && guestText(guest, member) === "rule_word") return ruleWord(guest, compiler, argumentList);
+	return newGuestError(guest, `the host word ${guestText(guest, module)}.${guestText(guest, member)} is not a rule word's in the browser`);
+}
 // the host words warp.wasm calls itself (driver.warp answered_word): no window, no system values, paths as given
-function compilerHostWords(exports) {
+function compilerHostWords(exports, imports, linked) {
 	return {
 		host: {
-			// the run's options (warp.option); any other is not the compiler's in a page
-			std_io: (module, member, argumentList) => guestText(exports(), module) === "warp" ? stdCall(exports(), module, member, argumentList, { warnings: [], options: compilerOptions() }) : newGuestError(exports(), `the host word ${guestText(exports(), module)}.${guestText(exports(), member)} is not in the browser yet`),
+			// the run's options (warp.option) and warp.module_word; any other is not the compiler's in a page
+			std_io: (module, member, argumentList) => compilerStdIo(exports(), imports(), linked, module, member, argumentList),
 			// the library index's source hashes, sha256 (core/passes/library.warp source_hash), by the page's adapters
 			std_pure: (module, member, argumentList) => stdCall(exports(), module, member, argumentList, { warnings: [] }),
 			paint: () => { throw new Error("the compiler paints nothing"); },
@@ -266,8 +318,10 @@ function ranSaying(exports, print, exitCode, valued = false) {
 // warp.wasm run with the words after its own path (driver.warp file_ran), each run a fresh instance: { status, said }
 function compilerRan(words, print) {
 	let exports;
+	const linked = new Map(); // the lib modules its module_word linked, by name
 	const wasi = wasiImports(() => exports.memory, [COMPILER_LIBRARY + "/warp.wasm", ...words], print, programFiles, ENVIRONMENT);
-	exports = new WebAssembly.Instance(compilerModule, withWasi(compilerHostWords(() => exports), wasi)).exports;
+	const imports = withWasi(compilerHostWords(() => exports, () => imports, linked), wasi);
+	exports = new WebAssembly.Instance(compilerModule, imports).exports;
 	return ranSaying(exports, print);
 }
 
@@ -278,6 +332,32 @@ function compiledProgram(file, print) {
 	programFiles.written.delete(COMPILED_PATH);
 	if (status !== 0 || !module?.length) return { failure: said || `warp.wasm wrote no module of ${file} (status ${status})` };
 	return { module };
+}
+
+// the latest compiles, so Run on unchanged code starts at once (card rerun-cached): by file and code, each with the
+// other program files it could have read (by their bytes: one a run wrote anew compiles again), what it said and what it
+// gave; a few, so the markup warm-up or a switch between two examples keeps the program's own
+const COMPILES_KEPT = 4;
+const compilesKept = new Map();
+const otherFiles = file => [...programFiles.written.entries()].filter(([path]) => path !== file && path !== COMPILED_PATH);
+const sameFiles = (kept, now) => kept.length === now.length && kept.every(([path, bytes], at) => now[at][0] === path && now[at][1] === bytes);
+function compiledOnce(code, file, print) {
+	const key = `${file}\n${code}`;
+	const kept = compilesKept.get(key);
+	compilesKept.delete(key); // kept again as the newest
+	if (kept && sameFiles(kept.files, otherFiles(file))) {
+		compilesKept.set(key, kept);
+		kept.said.forEach(([text, stream]) => print(text, stream));
+		return kept.compiled;
+	}
+	const said = [];
+	const compiled = compiledProgram(file, (text, stream) => {
+		said.push([text, stream]);
+		print(text, stream);
+	});
+	compilesKept.set(key, { files: otherFiles(file), said, compiled });
+	if (compilesKept.size > COMPILES_KEPT) compilesKept.delete(compilesKept.keys().next().value);
+	return compiled;
 }
 
 // the run's environment: the page's own, then what the page sets (worker.js pageEnvironment: the stand-in of the
@@ -311,7 +391,7 @@ function evaluatedNatively(code, file, hooks) {
 	const source = file || TYPED_FILE;
 	return withSource(code, source, () => {
 		const warnings = [];
-		const compiled = compiledProgram(source, withWarnings(code, warnings, hooks.print));
+		const compiled = compiledOnce(code, source, withWarnings(code, warnings, hooks.print));
 		if (compiled.failure) return { ...report(compiled.failure, FAILURE_STATUS), warnings };
 		hooks.module?.(compiled.module);
 		const { status, said, value, holder } = programRan(compiled.module, source, hooks);

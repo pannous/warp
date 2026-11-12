@@ -10,7 +10,7 @@
 «[unsigned("-12"), unsigned("12"), unsigned(""), int_part("12"), int_part("-12"), int_part("1.5"), int_part(""), float_part("-0.25"), float_part("3"), float_part("1.2.3"), float_part(".5"), unmarked("$a", "$"), unmarked("a", "$")] == ["12", "12", "", 12, -12, nil, nil, -0.25, 3, nil, nil, "a", "a"]»	true
 
 # radix texts and bases (from_base refuses a digit outside the base)
-«[radix_text(255, 16, "0x"), radix_text(-10, 2, "0b"), radix_text(0, 8, "0o"), binary_text(5), binary_text(0), binary_text(-3), from_base("ff", 16), from_base("FF", 16), from_base("z", 36), to_base(255, 16), to_base(0, 2)] == ["0xFF", "-0b1010", "0o0", "0b101", "0b0", "-0b11", 255, 255, 35, "ff", "0"]»	true
+«[radix_text(255, 16, "0x"), radix_text(-10, 2, "0b"), radix_text(0, 8, "0o"), binary_text(5), binary_text(0), binary_text(-3), from_base("ff", 16), from_base("FF", 16), from_base("z", 36), to_base(255, 16), to_base(0, 2)] == ["0xff", "-0b1010", "0o0", "0b101", "0b0", "-0b11", 255, 255, 35, "ff", "0"]»	true
 «attempt(f: function) := try { text(f()) } catch e { "" + e }; [attempt(() -> from_base("9", 8)), attempt(() -> from_base("", 10)), attempt(() -> from_base("1g", 16)), attempt(() -> from_base("1", 1))] == ["from_base: 9 is not a base-8 digit in 9", "from_base of an empty text", "from_base: g is not a base-16 digit in 1g", "from_base: the base 1 is not 2 to 36"]»	true
 
 # maps as entries, sorting by a key (stable), counting, roots, decimals

@@ -17,7 +17,7 @@
 'use forest; use math; v = forest_view(Glance(0.0, 1.7, -40.0, 0.0, 0.0, FOREST_FOV, 1.0, 0.25, 20.0)); [abs(v.forward#1) < 0.000001, abs(v.forward#2) < 0.000001, abs(v.forward#3 - 1) < 0.000001, abs(v.up#2 - 1) < 0.000001]'	[yes, yes, yes, yes]
 
 // the opening camera: every candidate is not drawn, the budget is the cap, the closest tree is near detail
-'use forest; v = forest_view(Glance(80.0, 1.7, -12.0, 0.15, -0.18, FOREST_FOV, 240.0 / 135.0, FOREST_NEAR, FOREST_FAR)); s = v.sprites#(count(v.sprites)); [v.total, v.candidate, v.submitted, v.scenery, v.nearest, count(v.sprites), (int(s#4) /! 16) == 2, s#1 > 0, s#1 < 4000]'	[1000000, 5797, 2400, 13, 0, 2413, yes, yes, yes]
+'use forest; v = forest_view(Glance(80.0, 1.7, -12.0, 0.15, -0.18, FOREST_FOV, 240.0 / 135.0, FOREST_NEAR, FOREST_FAR)); s = v.sprites#(count(v.sprites)); [v.total, v.candidate, v.submitted, v.scenery, v.nearest, count(v.sprites), (int(s#4) /! 16) == 2, s#1 > 0, s#1 < 4000]'	[1000000, 5797, 2400, 1, 0, 2401, yes, yes, yes]
 
 // the same view again, the same counts
 'use forest; a = forest_view(Glance(80.0, 1.7, -12.0, 0.15, -0.18, FOREST_FOV, 240.0 / 135.0, FOREST_NEAR, FOREST_FAR)); b = forest_view(Glance(80.0, 1.7, -12.0, 0.15, -0.18, FOREST_FOV, 240.0 / 135.0, FOREST_NEAR, FOREST_FAR)); [a.candidate == b.candidate, a.submitted == b.submitted, a.sprites#(count(a.sprites))#1 == b.sprites#(count(b.sprites))#1]'	[yes, yes, yes]
@@ -36,3 +36,24 @@
 
 // a smaller square of the same woods: 100 trees a side are 10000, a side off the chunk grid is refused
 'use forest; v = forest_view(Glance(80.0, 21.7, -22.0, 0.15, -0.18, FOREST_FOV, 240.0 / 135.0, FOREST_NEAR, FOREST_FAR), 100); e = try { forest_view(Glance(0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.25, 10.0), 30) } catch x { "" + x }; [v.total, v.submitted <= TREE_BUDGET, v.candidate <= 10000, e]'	[10000, yes, yes, "forest: a side is a positive multiple of 25 trees, not 30"]
+
+// near trees of a small woods become EZ Tree clusters, inside the budget, and the billboards left are the rest
+'use forest; folder = "../../samples/graphics/ez_trees/"; names = ["pine.eztree", "oak.eztree", "birch.eztree", "autumn.eztree"]; kits = [read_tree_mesh(folder + name) for name in names]; pack_tree_meshes(kits); g = Glance(8.0, 1.7, -6.0, 0.0, -0.05, FOREST_FOV, 1.6, FOREST_NEAR, FOREST_FAR); v = forest_view(g, 25); grove = forest_grove(v, g, kits, 135.0, 8000, 4); far = grove.draws#1; near = grove.draws#(count(grove.draws)); [grove.meshed >= 1, grove.meshed <= 4, grove.triangles > 0, grove.triangles <= 8000, v.submitted <= TREE_BUDGET, count(grove.sprites) == v.scenery + v.submitted - grove.meshed, count(grove.draws) == grove.kept, grove_distance(v.eye, far#1, far#4 * 0.5, far#2) >= grove_distance(v.eye, near#1, near#4 * 0.5, near#2)]'	[yes, yes, yes, yes, yes, yes, yes, yes]
+
+// the level table's first tree picks the level the grove already chose
+'use forest; use math; folder = "../../samples/graphics/ez_trees/"; names = ["pine.eztree", "oak.eztree", "birch.eztree", "autumn.eztree"]; kits = [read_tree_mesh(folder + name) for name in names]; pack_tree_meshes(kits); g = Glance(8.0, 1.7, -6.0, 0.0, -0.05, FOREST_FOV, 1.6, FOREST_NEAR, FOREST_FAR); v = forest_view(g, 25); grove = forest_grove(v, g, kits, 135.0, 8000, 4); table = grove_lod(grove, kits, v.eye); tree = table#6#1; first = int(tree#1); n = int(tree#2); errors = [table#5#(first + i)#3 for i in 1 to n]; cot = 1.0 / tan(g.fov / 2.0); [count(table#6) == grove.meshed, lod_picked(errors, tree#3, cot, 135.0, FOREST_PIXEL_ERROR) == int(grove.spans#1#4) + 1]'	[yes, yes]
+
+// the horizon draw keeps a near tree and one past 700 m, inside its own budget
+'use forest; g = Glance(500.0, 21.7, -22.0, 0.0, -0.18, FOREST_FOV, 1.6, FOREST_NEAR, 900.0); v = forest_horizon(g, 250, 4000, 135.0); far = v.sprites.any(s => sprite_tree(s) and s#2 > 700.0); [v.total, v.nearest, v.submitted > 0, v.submitted <= 4000, v.candidate > v.submitted, far]'	[62500, 0, yes, yes, yes, yes]
+
+// a horizon budget and a picture height are refused rather than guessed
+'use forest; attempt(f: function) := try { text(f()) } catch e { "" + e }; g = Glance(0.0, 1.0, -10.0, 0.0, 0.0, 1.0, 1.0, 0.25, 20.0); [attempt(() -> forest_horizon(g, 25, -1, 135.0)), attempt(() -> forest_horizon(g, 25, 10, 0))]'	["forest: a horizon budget must not be negative, not -1", "forest: picture height must be positive, not 0"]
+
+// a grove that is not four packed meshes is refused
+'use forest; attempt(f: function) := try { text(f()) } catch e { "" + e }; g = Glance(8.0, 1.7, -6.0, 0.0, -0.05, FOREST_FOV, 1.6, FOREST_NEAR, FOREST_FAR); v = forest_view(g, 25); bare = TreeLevel(MeshLevel([], [], 0.0), [], [], -1, -1); kits = [TreeMesh([bare]), TreeMesh([bare]), TreeMesh([bare]), TreeMesh([bare])]; [attempt(() -> forest_grove(v, g, [], 135.0, 100, 1)), attempt(() -> forest_grove(v, g, kits, 0, 100, 1)), attempt(() -> forest_grove(v, g, kits, 135.0, 100, 1))]'	["forest: a grove needs 4 tree meshes, not []", "forest: picture height must be positive, not 0", "forest: pack the tree meshes before drawing a grove"]
+
+// a front distance keeps the near band as meshes and leaves the mid band as billboards
+'use forest; folder = "../../samples/graphics/ez_trees/"; names = ["pine.eztree", "oak.eztree", "birch.eztree", "autumn.eztree"]; kits = [read_tree_mesh(folder + name) for name in names]; pack_tree_meshes(kits); g = Glance(8.0, 1.7, -6.0, 0.0, -0.05, FOREST_FOV, 1.6, FOREST_NEAR, FOREST_FAR); v = forest_view(g, 25); whole = forest_grove(v, g, kits, 135.0, 500000, 400); front = forest_grove(v, g, kits, 135.0, 500000, 400, 0.0, NEAR_REACH); far = front.draws#1; past = whole.draws#1; [front.meshed >= 1, front.meshed < whole.meshed, grove_distance(v.eye, far#1, far#4 * 0.5, far#2) < NEAR_REACH, grove_distance(v.eye, past#1, past#4 * 0.5, past#2) > NEAR_REACH]'	[yes, yes, yes, yes]
+
+// a wider front meshes past the near band and stays inside the distance it was given
+'use forest; folder = "../../samples/graphics/ez_trees/"; names = ["pine.eztree", "oak.eztree", "birch.eztree", "autumn.eztree"]; kits = [read_tree_mesh(folder + name) for name in names]; pack_tree_meshes(kits); g = Glance(8.0, 1.7, -6.0, 0.0, -0.05, FOREST_FOV, 1.6, FOREST_NEAR, FOREST_FAR); v = forest_view(g, 25); near = forest_grove(v, g, kits, 135.0, 500000, 400, 0.0, NEAR_REACH); wide = forest_grove(v, g, kits, 135.0, 500000, 400, 0.0, 200.0); far = wide.draws#1; reach = grove_distance(v.eye, far#1, far#4 * 0.5, far#2); [wide.meshed > near.meshed, reach > NEAR_REACH, reach < 200.0]'	[yes, yes, yes]

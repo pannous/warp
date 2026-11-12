@@ -38,6 +38,10 @@ class Complex {
 	format as text := complex_text(this)
 }
 
+// a plain number on the left: 3 - ⅈ, 1 / ⅈ, -ⅈ (+ and * take either order through the class's own operators)
+infix operator -(a: number, b: Complex) := as_complex(a) - b
+infix operator /(a: number, b: Complex) := as_complex(a) / b
+
 // `c: complex`, the type's lowercase name as the other number types are spelled
 type complex = Complex
 // its real and imaginary parts: re(z), im(z), as z.re, z.im
