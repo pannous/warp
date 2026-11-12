@@ -43,7 +43,7 @@ KEY_EVENT = "key"
 global pressed_key = Key.none
 global presses_seen = 0
 key(): Key := pressed_key
-key_listened(listener: function): int := {
+key_listened(listener: function): Listener := {
 	// the presses before the program listened (the page counts them across runs) are not its own
 	if count(listeners_of(KEY_EVENT)) == 0 {
 		presses_seen = system_value("keys pressed")
