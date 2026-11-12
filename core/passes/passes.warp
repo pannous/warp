@@ -139,7 +139,7 @@ lowered_reached(program: Node, source: text, folder: text, prelude: text): Node 
 	if TIMES {
 		for statement in statements_in(used) {
 			shown_statement = "${statement}"
-			print "§S " + (declared_name(statement) ?? "-") + " " + "${#shown_statement}"
+			print "§S " + (declared_name(statement) ?? "-") + " " + "${#shown_statement}" + " " + shown_statement[0 .. min(#shown_statement, 70)].replace("\n", " ")
 		}
 	}
 	lowered = lowered_node(used)
