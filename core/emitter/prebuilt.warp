@@ -416,7 +416,7 @@ def folded_bytes(bytes: list): int {
 ## module's, at its index, of its kinds: never compiled again
 # a module's warp.module read back: its own functions (index, kinds, result, signature), globals [name, kind], text
 # segments, what it was built behind, and where each kind of its items lands here (base: placed, type, text)
-class LibraryImage { name: text; functions: list; globals: list; classes: list; builders: list; base: list }
+class LibraryImage { name: text; functions: list; globals: list; classes: list; builders: list; base: list; global_names: map }
 def link_libraries(images: list, own_names: list) {
 	module.linked_images = images
 	module.linked_places = linked_places_of(images)
@@ -576,7 +576,9 @@ def library_image_of(name: text, signature: ModuleSignature): any {
 	functions = signature.words.map(entry => image_word(entry))
 	globals = signature.globals.map(entry => [text_read(entry#1), held_kinds[number_read(entry#2)], number_read(entry#3)])
 	classes = signature.classes.map(entry => [text_read(entry#1), text_read(entry#2)])
-	LibraryImage(name, functions, globals, classes, signature.builders.map(text_read), [])
+	global_names = {}
+	for entry in globals { global_names[entry#1] = yes }
+	LibraryImage(name, functions, globals, classes, signature.builders.map(text_read), [], global_names)
 }
 def image_word(entry: Node): Function {
 	word = Function(text_read(entry#1), ø, ø)
