@@ -182,8 +182,10 @@ constants_of(statements: list): map := {
 # `global count = 0`: a global of its number's type, as a local given it takes
 declare_primitive_global(n: Node) := {
 	declaration = if is_group(n) then n#2 else value_of(n)
-	if not (is_key(declaration, Op.Assign) and (value_of(declaration) is int or value_of(declaration) is float)) { primitive_refusal(n, "a global not given a number") }
-	initial = mvp_literal(value_of(declaration), "")
+	value = if is_key(declaration, Op.Assign) then value_of(declaration) else ø
+	made = if is_key(value, Op.Hash) then array_made(key_of(value), value_of(value)) else ø
+	if made == ø and not (value is int or value is float) { primitive_refusal(n, "a global not given a number or an array") }
+	initial = if made then PrimitiveCode(made, [op.i32_const] + sleb(zeros_reserved(array_bytes(made)))) else mvp_literal(value, "")
 	primitive_globals[declared_global_name(n)] = [ARENA_TOP + 1 + #primitive_globals, initial.type, initial.code]
 }
 defines_constant(n: Node): bool := is_key(n, Op.Assign) and key_of(n) is symbol and name_of(key_of(n)) in primitive_constants
@@ -467,6 +469,8 @@ mvp_keyed(f: PrimitiveFunction, left: Node, operator: Op, right: Node, n: Node, 
 	if operator == Op.Then or operator == Op.Else { return mvp_conditional(f, n, expected) }
 	if operator == Op.Do and is_key(left, Op.While) { return mvp_looped(f, value_of(left), right) }
 	if operator == Op.Dot { return mvp_field_read(f, left, right) }
+	if operator == Op.Hash and array_made(left, right) { return PrimitiveCode(array_made(left, right), arena_taken([op.i32_const] + sleb(array_bytes(array_made(left, right))))) }
+	if operator == Op.Hash { return mvp_loaded(mvp_item(f, left, right)) }
 	if operator == Op.As { return mvp_cast_as(f, left, right) }
 	if operator == Op.And or operator == Op.Or { return mvp_logical(f, left, operator, right) }
 	if operator == Op.Not { return PrimitiveCode(BOOL_TYPE, mvp_condition(f, right) + [op.i32_eqz]) }
@@ -518,6 +522,7 @@ mvp_assigned_operation(op: Op): any := match op {
 mvp_assigned(f: PrimitiveFunction, target: Node, value: Node, n: Node): PrimitiveCode := {
 	if is_key(target, Op.Colon) { return mvp_declared(f, key_of(target), value_of(target), n, value) }
 	if is_key(target, Op.Dot) { return mvp_field_written(f, key_of(target), value_of(target), value) }
+	if is_key(target, Op.Hash) { return mvp_stored_at(f, mvp_item(f, key_of(target), value_of(target)), value) }
 	if not (target is symbol) { primitive_refusal(n, "an assignment to " + form_of(target)) }
 	name = name_of(target)
 	if name in f.locals { return PrimitiveCode(NO_VALUE, mvp_typed(f, value, f.locals[name]#2) + [op.local_set] + uleb(f.locals[name]#1)) }
@@ -691,16 +696,38 @@ mvp_field(f: PrimitiveFunction, owner: Node, field: Node): list := {
 	if not (field is symbol and name_of(field) in layout.fields) { primitive_refusal(field, value.type + " has no field " + form_of(field)) }
 	[value.code, layout.fields[name_of(field)]]
 }
-mvp_field_read(f: PrimitiveFunction, owner: Node, field: Node): PrimitiveCode := {
-	found = mvp_field(f, owner, field)
-	type = found#2#2
-	scalar = mvp_scalar(type)
+mvp_field_read(f: PrimitiveFunction, owner: Node, field: Node): PrimitiveCode := mvp_loaded(mvp_field(f, owner, field))
+mvp_field_written(f: PrimitiveFunction, owner: Node, field: Node, value: Node): PrimitiveCode := mvp_stored_at(f, mvp_field(f, owner, field), value)
+# [address code, [offset, type]]: the value there, read; `value` stored there
+mvp_loaded(found: list): PrimitiveCode := {
+	scalar = mvp_scalar(found#2#2)
 	codes = load_codes[scalar.wasm + " " + scalar.width]
-	PrimitiveCode(type, found#1 + [if scalar.signed then codes#1 else codes#2] + memory_argument(found#2))
+	PrimitiveCode(found#2#2, found#1 + [if scalar.signed then codes#1 else codes#2] + memory_argument(found#2))
 }
-mvp_field_written(f: PrimitiveFunction, owner: Node, field: Node, value: Node): PrimitiveCode := {
-	found = mvp_field(f, owner, field)
-	PrimitiveCode(NO_VALUE, found#1 + mvp_stored(f, found#2, value))
+mvp_stored_at(f: PrimitiveFunction, found: list, value: Node): PrimitiveCode := PrimitiveCode(NO_VALUE, found#1 + mvp_stored(f, found#2, value))
+
+# a fixed array `i64[8]` (wiki/array.md; the parser reads it as `i64#9`): its items' type and count in its type, its
+# items in memory one after another, zeros at first: a global's in the data, any other taken from the arena
+array_made(type: Node, counted: Node): text? := if type is symbol and name_of(type) in scalars and counted is int then name_of(type) + "[" + (counted - 1) + "]" else ø
+array_item(type: text): text := type.split("[")#1
+array_count(type: text): int := int(type.split("[")#2.split("]")#1)
+array_bytes(type: text): int := array_count(type) * mvp_scalar(array_item(type)).width
+# the address and [0, item type] of an array's item counted from 1 (`kept#3`, the parser's `kept[2]`), trapping outside it
+mvp_item(f: PrimitiveFunction, array: Node, index: Node): list := {
+	held = mvp_emitted(f, array, "")
+	if not held.type.ends_with("]") { primitive_refusal(array, "an item of a " + (held.type or "statement") + ", not an array") }
+	item = array_item(held.type)
+	f.scratch += 1
+	at = uleb(mvp_local_of(f, "·item" + f.scratch, "i32"))
+	outside = [op.local_tee] + at + [op.i32_const] + sleb(array_count(held.type)) + [comparison_codes.i32 + integer_comparisons.ge + 1, op.if, empty_block_type, op.unreachable, op.end]
+	offset = mvp_typed(f, index, "i32") + [op.i32_const, 1, arithmetic_codes.i32 + integer_arithmetic.sub] + outside
+	[offset + held.code + [op.local_get] + at + [op.i32_const] + sleb(mvp_scalar(item).width) + [arithmetic_codes.i32 + integer_arithmetic.mul, op.i32_add], [0, item]]
+}
+# the address of `count` zero bytes in the data, at a multiple of ARENA_ALIGNMENT
+zeros_reserved(count: int): int := {
+	start = aligned(DATA_START + #primitive_data, ARENA_ALIGNMENT)
+	primitive_data += range_list(start - DATA_START - #primitive_data + count).map(i => 0)
+	start
 }
 # with the address on the stack: the value stored into the field [offset, type]
 mvp_stored(f: PrimitiveFunction, field: list, value: Node): list := {
