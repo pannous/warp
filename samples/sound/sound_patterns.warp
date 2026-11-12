@@ -4,11 +4,11 @@
 use sound
 
 tempo = 180
-bass() := pattern "c3 ~ [c3 c3] <~ c3?>"           # the bass: a bar; the last step alternates
-low() := pattern "c2 _ _ e2"                         # c2 holds three steps
-offbeat() := pattern("~ g4 ~ g4*2", bar 1)           # the offbeat chords' root
-euclid() := pattern("c5(3,8) e5(2,8)", bars 2)       # Euclidean rhythms, 3 and 2 of 8
-tune() := pattern "c4 e4 <g4 a4> [b4 c5?]"           # the swung tune, c5 in about half the cycles (pattern_seed)
+bass() := play(Pattern("c3 ~ [c3 c3] <~ c3?>"))     # the bass: a bar; the last step alternates
+low() := play(Pattern("c2 _ _ e2"))                 # c2 holds three steps
+offbeat() := play(Pattern("~ g4 ~ g4*2"), bar 1)    # the offbeat chords' root
+euclid() := play(Pattern("c5(3,8) e5(2,8)"), bars 2) # Euclidean rhythms, 3 and 2 of 8
+tune() := play(Pattern("c4 e4 <g4 a4> [b4 c5?]"))   # the swung tune, c5 in about half the cycles (pattern_seed)
 bass_voice = live_loop(bass, 4)                      # each loop a voice of its own, four bars of the bass
 live_loop(low, 4)
 live_loop(offbeat, 4)
