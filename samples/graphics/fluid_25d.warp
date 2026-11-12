@@ -521,8 +521,8 @@ shot(step) := {
 }
 
 if not windowless() {
-	set_system_value("window_width", view_w)
-	set_system_value("window_height", view_h)
+	window.width = view_w
+	window.height = view_h
 }
 on frame {
 	if not windowless() {
