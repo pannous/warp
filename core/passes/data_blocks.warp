@@ -95,11 +95,15 @@ is_worded_value(value: Node, scope: map): bool := is_spaced(value) and #value > 
 # a value or function of the program's own
 is_own_word(scope: map, name: text): bool := binds_value(scope, name) or binds_as(scope, name, Meaning.Function)
 spliced(argument: Node): Node := if is_spliced_quote(argument) then argument else List([spliced_quote_symbol, argument], Bracket.Round, Separator.None)
-# `f{…}` and `f(a, b)` of an f taking data: those arguments spliced quotes
+# the word and the block of `f{…}` and of spaced `f {…}` (decision spaced-tag: one thing in both spellings), else ø
+word_and_block(n: Node): list? := {
+	parts = if is_key(n, Op.Colon) or is_key(n, Op.None) then [key_of(n), value_of(n)] else if is_spaced(n) and #n == 2 then items_of(n) else []
+	if parts and parts#1 is symbol and is_curly_group(parts#2) then parts else ø
+}
+# `f{…}`, `f {…}` and `f(a, b)` of an f taking data: those arguments spliced quotes
 data_argued(n: Node, positions: map): Node := {
-	if is_key(n, Op.Colon) and key_of(n) is symbol and positions.has(name_of(key_of(n))) and is_curly_group(value_of(n)) {
-		n = call_node(key_of(n), [value_of(n)])
-	}
+	found = word_and_block(n)
+	if found != ø and positions.has(name_of(found#1)) { n = call_node(found#1, [found#2]) }
 	if not (is_round(n) and #n > 1 and n#1 is symbol and positions.has(name_of(n#1))) { return n }
 	taken = positions[name_of(n#1)]
 	group_like(n, (1 to #n).map(i => if i - 1 in taken then spliced(n#i) else n#i))
@@ -107,8 +111,8 @@ data_argued(n: Node, positions: map): Node := {
 
 # `div{…}` of a word the program gives no value, function or type
 is_free_tag(n: Node, scope: map): bool := {
-	if not ((is_key(n, Op.Colon) or is_key(n, Op.None)) and key_of(n) is symbol and is_curly_group(value_of(n))) { return no }
-	is_tag_name(name_of(key_of(n)), scope)
+	# (spaced_tags made a spaced tag a pair before)
+	n is key and word_and_block(n) != ø and is_tag_name(name_of(key_of(n)), scope)
 }
 with_loops_as_items(n: Node, scope: map, positions: map): Node := if is_free_tag(n, scope) then Key(key_of(n), op_of(n), group_like(value_of(n), tag_items(value_of(n), scope).map(item => data_argued(as_call(loop_as_items(item), scope), positions)))) else n
 # a tag's items; a block that is one phrase headed by a function, `p{ greet "Ann" }`, is that one item (decision

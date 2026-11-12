@@ -14,3 +14,9 @@
 # an instance written into a list inside a block is the instance (card html-div-syntax)
 'class H { n: int }; v = (k: {[H(1)]}); v'	'k: {[H{n: 1}]}'
 'class H { n: int }; v = (k: {f: H(1)}); v'	'k: {f: H{n: 1}}'
+# a data parameter takes its block spaced as glued (decision spaced-tag): a word stays CSS, a selector a selector
+'use markup; to_html(style { p { display: flex } })'	'<style>p { display: flex }</style>'
+'use markup; done = 1; to_html(style { .done = "green" })'	'<style>.done { color: green }</style>'
+'use markup; to_html(style { p { color: red } })'	'<style>p { color: red }</style>'
+'f(x: data) := x; text(f { a: flex })'	'{a: flex}'
+'f(x: data) := x; text(f { p { a: flex } })'	'{p: {a: flex}}'

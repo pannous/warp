@@ -334,6 +334,32 @@ function compiledProgram(file, print) {
 	return { module };
 }
 
+// the latest compiles, so Run on unchanged code starts at once (card rerun-cached): by file and code, each with the
+// other program files it could have read (by their bytes: one a run wrote anew compiles again), what it said and what it
+// gave; a few, so the markup warm-up or a switch between two examples keeps the program's own
+const COMPILES_KEPT = 4;
+const compilesKept = new Map();
+const otherFiles = file => [...programFiles.written.entries()].filter(([path]) => path !== file && path !== COMPILED_PATH);
+const sameFiles = (kept, now) => kept.length === now.length && kept.every(([path, bytes], at) => now[at][0] === path && now[at][1] === bytes);
+function compiledOnce(code, file, print) {
+	const key = `${file}\n${code}`;
+	const kept = compilesKept.get(key);
+	compilesKept.delete(key); // kept again as the newest
+	if (kept && sameFiles(kept.files, otherFiles(file))) {
+		compilesKept.set(key, kept);
+		kept.said.forEach(([text, stream]) => print(text, stream));
+		return kept.compiled;
+	}
+	const said = [];
+	const compiled = compiledProgram(file, (text, stream) => {
+		said.push([text, stream]);
+		print(text, stream);
+	});
+	compilesKept.set(key, { files: otherFiles(file), said, compiled });
+	if (compilesKept.size > COMPILES_KEPT) compilesKept.delete(compilesKept.keys().next().value);
+	return compiled;
+}
+
 // the run's environment: the page's own, then what the page sets (worker.js pageEnvironment: the stand-in of the
 // playground's key, assistant.js programEnvironment), which env, getenv and agent "…" read (card program-env)
 const runEnvironment = () => [...ENVIRONMENT, ...Object.entries(self.pageEnvironment ?? {}).map(([name, value]) => `${name}=${value}`)];
@@ -365,7 +391,7 @@ function evaluatedNatively(code, file, hooks) {
 	const source = file || TYPED_FILE;
 	return withSource(code, source, () => {
 		const warnings = [];
-		const compiled = compiledProgram(source, withWarnings(code, warnings, hooks.print));
+		const compiled = compiledOnce(code, source, withWarnings(code, warnings, hooks.print));
 		if (compiled.failure) return { ...report(compiled.failure, FAILURE_STATUS), warnings };
 		hooks.module?.(compiled.module);
 		const { status, said, value, holder } = programRan(compiled.module, source, hooks);

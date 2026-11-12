@@ -2,7 +2,8 @@
 # scripts/ci-compilers.sh <tree> <folder>: <tree>'s own compilers in <tree>/lib (warp.wasm, runtime.wasm, modules/), built
 # on a linux x86_64 runner, for the Release workflow and the Playground (pages.yml: the page must run the compiler of
 # the lib/ it serves, not the last release's, card safari-painting-checks). Installs wabt and binaryen on the PATH,
-# builds a native warp into <folder> (scripts/release-bootstrap.sh) and has the newest seed rebuild the compilers.
+# builds a runner warp into <folder> (scripts/release-bootstrap.sh), has the newest seed rebuild the compilers, and builds
+# the tree's own native warp with them.
 set -euo pipefail
 WABT=${WABT:-1.0.42}     # wasm2c, which `warp build native` runs
 BINARYEN=${BINARYEN:-133}    # wasm-opt, which `warp build` runs
@@ -29,3 +30,8 @@ mv "$folder/warp-seed-runtime.wasm" "$folder/warp-seed.wasm.library/runtime.wasm
 mv "$folder/warp-seed-unicode.wasm" "$folder/warp-seed.wasm.library/modules/unicode.wasm"
 "$(dirname "$0")/seed-bootstrap.sh" "$folder/warp" "$folder/warp-seed.wasm" "$tree/lib"
 cd "$tree" && "$folder/warp" --lib "$tree/lib" rebuild pure
+# the native warp of this tree itself, built with the compilers just made: the runner above came from the source the
+# previous release could emit (scripts/bootstrap-native.ref), and lacks the host words this tree imports
+# it links the runner's wasmtime C API from <tree>/lib ("cannot find -lwarp_wasmtime")
+cp "$folder"/libwarp_wasmtime.* "$tree/lib/"
+(cd "$tree/core/native" && "$folder/warp" --lib "$tree/lib" build native warp.warp) && mv "$tree/core/native/warp" "$folder/warp"
