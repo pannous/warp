@@ -56,6 +56,7 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 	# on any other values this builtin, which its own body keeps
 	dispatcher = "${symbol}·operator"
 	if (a.kind == ValueKind.Node or b.kind == ValueKind.Node) and dispatcher in module.functions and body.function.name != dispatcher { return call_values(module.functions[dispatcher], as_nodes(a, b)) }
+	if int_firsts(symbol, a, b) { return int_first(body, symbol, a, b, (left, right) => if symbol in equalities then equality(body, symbol, left, right) else node_operation(body, symbol, left.code, right.code)) }
 	if structured and symbol in equalities { return equality(body, symbol, a, b) }
 	# `"ab" * 3`, `3 * " "`, `" " * (9 - w)`: the text repeated, as `3 times "ab"`; a count known only at run time
 	# that is no int traps (int_of_node)
@@ -155,6 +156,23 @@ def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
 	if symbol not in comparisons { return TypedCode(kind, code + computed.code) }
 	texts = operation_code(body, symbol, runtime_call("node_text", [left]), runtime_call("node_text", [right]))
 	TypedCode(kind, code + textual(left) + textual(right) + [op.i32_and] + if_else_code(kind, texts, TypedCode(kind, numbers)))
+}
+# + - * and the comparisons of a value known only at run time beside an int or another such value: the int first
+# (int_first) when either is one
+int_firsts(symbol: text, a: TypedCode, b: TypedCode): bool := (symbol in grown_words or symbol in comparisons) and (a.kind == ValueKind.Node or b.kind == ValueKind.Node) and a.kind in [ValueKind.Int, ValueKind.Node] and b.kind in [ValueKind.Int, ValueKind.Node] and has_runtime_word("exact_int")
+# the operands held in locals; each one known only at run time that holds a plain whole number (exact_int) makes the
+# operation the int one at once: the grown words for + - *, exact past 2^63, an i64 comparison, the int side never
+# boxed; anything else takes `general` of the two as nodes (card untyped-counter-boxes)
+def int_first(body: Body, symbol: text, a: TypedCode, b: TypedCode, general: function): TypedCode {
+	left = TypedCode(a.kind, [op.local_get] + uleb(fresh_local(body, a.kind)))
+	right = TypedCode(b.kind, [op.local_get] + uleb(fresh_local(body, b.kind)))
+	held = a.code + [op.local_set] + left.code[1..] + b.code + [op.local_set] + right.code[1..]
+	plain = x => if x.kind == ValueKind.Int then x else TypedCode(ValueKind.Int, unboxed(x.code, gc_type(gc.int_box)))
+	tests = [x for x in [left, right] if x.kind == ValueKind.Node].map(x => runtime_call("exact_int", [x]).code)
+	tested = if #tests == 2 then tests#1 + tests#2 + [op.i32_and] else tests#1
+	kind = if symbol in comparisons then ValueKind.Bool else ValueKind.Node
+	ints = if symbol in grown_words then runtime_call(grown_words[symbol], [plain(left), plain(right)]) else operation_code(body, symbol, plain(left), plain(right))
+	TypedCode(kind, held + tested + if_else_code(kind, ints, general(TypedCode(ValueKind.Node, boxed(left)), TypedCode(ValueKind.Node, boxed(right)))))
 }
 # `a + b`, `a - b`, `a * b`, `a / b` of a class instance: its class's own operator through its descriptor
 # (decision class-operators-generic: the prelude's sum of quantities keeps their unit), else the code given
