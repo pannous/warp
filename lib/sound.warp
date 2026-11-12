@@ -1168,8 +1168,10 @@ save(made: Recording, as file) := rendered(file)
 at(time, actions: block) := { sound_at(time); actions(); sound_at_end() }
 public sound_at(seconds) := clock_at(si_amount(seconds))
 public sound_at_end() := clock_at_end()
-// silence of that length on the voice's clock: the next sound or MIDI message follows (host sound.silence; card sound-native-clock)
-public silence(seconds) := scheduled(si_amount(seconds))
+// a rest of that length on the voice's clock: the next sound or MIDI message follows (card sound-native-clock; the
+// musician's word, card rest-keyword); silence(seconds) says the same
+public rest(seconds) := scheduled(si_amount(seconds))
+alias silence => rest
 // a live loop says this first each cycle: the playground hands the loop over to the next run at its next cycle (card
 // playground-live), natively it does nothing
 live_cycle_started(name) := std_io("sound", "live_cycle", [name])
@@ -1405,7 +1407,7 @@ public midi_off(pitch, channel = 1) := midi_send(127 + channel, midi(pitch), 0)
 // a note of that length: on at the voice's place, off after it; the next sound or message follows (card midi-clock)
 public midi_note(pitch, duration, velocity = 100, channel = 1) := {
 	midi_on(pitch, velocity, channel)
-	silence(duration)
+	rest(duration)
 	midi_off(pitch, channel)
 }
 midi_outputs() := midi_devices(midi_ports(0))
