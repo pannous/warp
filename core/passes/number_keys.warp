@@ -8,7 +8,7 @@ use "walk.warp"
 use "scope.warp"
 
 # the word that makes a key of a value known only at run time
-key_text_word = "name_text"
+key_text_word = "lookup_name"
 # the words `word(map, key, …)` that find an entry by its key
 key_words = ["collection_contains", "collection_position", "map_get_or", "map_without", "removed_value"]
 # the declared types a map variable may carry, `m: map = {}`
