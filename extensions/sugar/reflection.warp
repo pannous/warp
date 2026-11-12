@@ -39,6 +39,9 @@ rewrite $t.functions => [$names...] where $t is symbol and $names = type_methods
 # among them) as function values (extensions/rules/rule_words.warp class_fields_listed, class_methods_listed)
 rewrite $w($c) => [$names...] where $f = field_word($w, $program) and $c is symbol and $names = class_fields_listed($c, $program, $source)
 rewrite methods($c) => [$functions...] where $c is symbol and $functions = class_methods_listed($c, $program, $source)
+rewrite functions($c) => [$functions...] where $c is symbol and $functions = class_methods_listed($c, $program, $source)
+# `fields(p)` of an instance the program makes, as p.fields
+rewrite $w($p) => [$names...] where $f = field_word($w, $program) and $p is symbol and $names = instance_members($p, $f, $source)
 # `functions()`: the program's own functions as function values (extensions/rules/rule_words.warp program_functions)
 rewrite functions() => [$functions...] where not method and $functions = program_functions($program, $source)
 # `type(sqrt)`: a library word's signature, `builtin: (x:number) -> number` (extensions/rules/rule_words.warp builtin_type)
