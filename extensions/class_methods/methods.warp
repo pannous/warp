@@ -173,15 +173,17 @@ covered_classes(dispatchers: list, classes: map): map := {
 	covered
 }
 dispatched_classes(dispatcher: Node, classes: map): list := nodes_in(dispatcher).filter(is_instance_test).map(test => "${test#3}") + words_within(dispatcher).map(word => word.split("·")).filter(parts => #parts == 2 and classes.has(parts#2)).map(parts => parts#2)
-is_instance_test(n: Node): bool :=is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(HiddenWord.InstanceOf as text) and n#3 is text
+is_instance_test(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(HiddenWord.InstanceOf as text) and n#3 is text
 # each dispatcher name bound to the first linked module whose dispatcher of the name covers its classes, when no
 # dispatcher of the name calls a word of the program's own: a name's arities (`-x` beside `a - b`) bind together or not;
-# a name reaching no class known stays the program's own
+# a name reaching no class known stays the program's own; each counted under --times
 stand_in_images(dispatchers: list, covered: map, own: map) := {
-	calling_own = word_set(dispatchers.filter(dispatcher => words_within(dispatcher).any(word => own.has(word))).map(defined_word))
-	for name in covered.keys.filter(name => not calling_own.has(name) and #covered[name] > 0) {
-		image = covering_image(name, covered[name])
+	calling_own = {}
+	for dispatcher in dispatchers { for word in words_within(dispatcher).filter(word => own.has(word)) { calling_own[defined_word(dispatcher)] = word } }
+	for name in covered.keys {
+		image = if calling_own.has(name) or #covered[name] == 0 then ø else covering_image(name, covered[name])
 		if image != ø { module.dispatcher_images[name] = image }
+		if TIMES { print "§D " + (if image != ø then "linked dispatcher " + name + " of " + image else "own dispatcher " + name + " (" + (if calling_own.has(name) then "calls " + calling_own[name] else "classes " + covered[name].join(" ")) + ")") }
 	}
 }
 covering_image(name: text, classes: list): text? := {
@@ -192,12 +194,8 @@ covering_image(name: text, classes: list): text? := {
 	}
 	ø
 }
-# the dispatcher declared only when its name is bound to a linked module's; else itself, counted under --times
-linked_stand_in(dispatcher: Node): Node := {
-	if module.dispatcher_images.has(defined_word(dispatcher)) { return declared_only(dispatcher) }
-	if TIMES { print "§D own dispatcher " + defined_word(dispatcher) }
-	dispatcher
-}
+# the dispatcher declared only when its name is bound to a linked module's, else itself
+linked_stand_in(dispatcher: Node): Node := if module.dispatcher_images.has(defined_word(dispatcher)) then declared_only(dispatcher) else dispatcher
 # the words defined more than once
 repeated_words(words: list): map := {
 	seen = {}
