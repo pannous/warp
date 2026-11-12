@@ -623,7 +623,8 @@ method_function(classes: map, names: list, owning_class: text, declared: Node, n
 	parameters = method_parameters(declared)
 	taken = parameters.map(parameter_name)
 	body = on_parent(value_of(declared), Parent(classes, names, owning_class, routes))
-	fields = fields_reaching(classes, owning_class).filter(field => field not in taken)
+	# `let body = 99` in a method is a local of its own, never the field body (wiki/function.md)
+	fields = fields_reaching(classes, owning_class).filter(field => field not in taken and not declares_local(body, field))
 	siblings = methods_reaching(classes, owning_class).filter(sibling => sibling not in taken and not assigns_name(body, sibling) and not overcalled(body, sibling, taking(classes, owning_class, sibling)))
 	Key(call_of(name, [self_node] + parameters), Op.Define, on_instance(body, fields, siblings, routes))
 }
