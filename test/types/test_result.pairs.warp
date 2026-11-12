@@ -12,3 +12,7 @@
 # a result's type must be a type: an undeclared word after as in a head is refused, with the fix (card render-pdf-string, Interviewer screen 11-08)
 'render(t) as pdf := "pdf:"+t; render("x") as pdf'	error	pdf is no type: declare type pdf = text
 'type pdf = text; render(t) as pdf := "pdf:"+t; render("x")'	"pdf:x"
+# an optional result names its type without the ?: as int? is the type int, ø or an int (card native-regression-def)
+'f(x) as int? := x; f(2)'	2
+'f(x) as int? := x; f(ø) is ø'	yes
+'render(t) as pdf? := t; render("x")'	error	pdf? is no type: declare type pdf? = text
