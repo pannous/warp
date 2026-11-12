@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # test/time/rfc3339_cases.tsv (gen_rfc3339_cases.py) through lib/time's parse_date: the milliseconds, or a refusal;
-# every accepted case also round trips, parse_date(Instant(ms).text()) == ms, its text the UTC RFC 3339 python writes
+# every accepted case also round trips, (Instant(ms).text() as Instant).ms == ms, its text the UTC RFC 3339 python writes
 # (milliseconds without trailing zeros). Counts by group; --fails GROUP. Outside smoke; run from the repo root.
 import os, subprocess, sys, tempfile, collections, datetime as dt
 here = os.path.dirname(os.path.abspath(__file__))
 cases = [l.rstrip("\n").split("\t") for l in open(os.path.join(here, "rfc3339_cases.tsv"))]
-prog = "use time\n" + "".join('print((try { "" + parse_date("%s") } catch e { "ERR" }) + " " + (try { Instant(parse_date("%s")).text() } catch e { "ERR" }) + " " + (try { "" + parse_date(Instant(parse_date("%s")).text()) } catch e { "ERR" }))\n' % ((x.replace("\\", "\\\\").replace('"', '\\"'),) * 3) for g, x, w in cases)
+prog = "use time\n" + "".join('print((try { "" + ("%s" as Instant).ms } catch e { "ERR" }) + " " + (try { ("%s" as Instant).text() } catch e { "ERR" }) + " " + (try { "" + (("%s" as Instant).text() as Instant).ms } catch e { "ERR" }))\n' % ((x.replace("\\", "\\\\").replace('"', '\\"'),) * 3) for g, x, w in cases)
 with tempfile.NamedTemporaryFile("w", suffix=".warp", delete=False) as fh: fh.write(prog)
 out = subprocess.run(["warp", fh.name], capture_output=True, text=True).stdout.splitlines()
 os.unlink(fh.name)

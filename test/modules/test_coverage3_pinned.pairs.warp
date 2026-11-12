@@ -2,4 +2,4 @@
 # deliberate: an empty part is counted 0 times (not Python's len+1)
 «count("abc", "") == 0»	true
 # deliberate: format_duration is coarse and drops milliseconds
-«use time; format_duration(1500) == "1s"»	true
+«use time; text(Duration(1500)) == "1s"»	true
