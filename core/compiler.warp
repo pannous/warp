@@ -294,8 +294,9 @@ module_compiled_behind(name: text, source: text, runtime, file: text) := {
 }
 MODULE_START = "warp/start"
 # every module of lib/ (library.warp library_modules) as <name>.wasm in the folder, each after the modules it uses
-# (it links them), all behind the one runtime read once. One refusing to prebuild keeps an empty file, never an older
-# build linked in its place: it is said here and in rebuild.sh's summary, and compiled from its source with the
+# (it links them), all behind the one runtime read once. One refusing to prebuild leaves no file, as a module never
+# prebuilt has none (scripts/lib/modules.sh removes an older build first; an empty one failed every run that preloads
+# the folder): it is said here and in rebuild.sh's summary, and compiled from its source with the
 # programs using it (user OK 11-11, whole-wasm-reads). A refusal of lib/host/ fails the rebuild, naming the module and
 # why: the native driver links those itself and no program compiles them (card empty-native-host: native_host linked
 # an older callbacks.wasm, was left empty, and every window, paint and sound run failed while hello passed)
@@ -309,7 +310,6 @@ write_modules(folder: text, runtime_file: text, named: list) := {
 	for name in (if #named > 0 then named else modules_in_build_order()) {
 		file = folder + "/" + name + ".wasm"
 		try { module_written_behind(name, runtime, file) } catch refusal {
-			write_bytes(file, [])
 			said = refusal_said(refusal)
 			if is_host_module(name) { refused += [name + ".wasm: " + said] } else { print name + ".wasm not prebuilt (compiled from its source with the program): " + said }
 		}

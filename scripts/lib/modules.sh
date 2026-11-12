@@ -62,7 +62,7 @@ modules_of_files() {
 # those are written. Run in a build slot (scripts/build-slot.sh), it adds a worker for each other slot free right now,
 # never waiting for one. A module whose key (the native warp running the build, the compiler, the runtime, the index
 # and sugar rules, what the plan says it is built of, its waited-for modules' keys) is its file's, <m>.wasm.built-of,
-# is kept as it is. A refused lib/ module leaves an empty file, as the sequential step does; a refused lib/host/ one
+# is kept as it is. A refused lib/ module leaves no file, as the sequential step does; a refused lib/host/ one
 # fails the step once every module is done
 MODULE_WAIT=0.2  # seconds a worker waits when no module is ready
 digest() { { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-64; }
@@ -127,9 +127,10 @@ module_made() {
 	local warp=$1 lib=$2 compiler=$3 folder=$4 runtime=$5 name=$6 work=$4/.modules-step file=$4/$6.wasm
 	if [ -f "$file" ] && [ "$(cat "$file.built-of" 2>/dev/null)" = "$(module_key "$work/$name.key" "$file")" ]; then
 		touch "$file" "$file.built-of" "$work/$name.kept"
-	elif rm -f "$file.built-of" && "$warp" --no-window --lib "$lib" "$compiler" modules "$folder" "$runtime" "$name" >"$work/$name.log" 2>&1; then
+	elif rm -f "$file" "$file.built-of" && "$warp" --no-window --lib "$lib" "$compiler" modules "$folder" "$runtime" "$name" >"$work/$name.log" 2>&1; then
 		cat "$work/$name.log"
-		module_key "$work/$name.key" "$file" >"$file.built-of"
+		# (a lib/ module refusing to prebuild leaves no file: compiled from its source with each program, said again next step)
+		[ ! -f "$file" ] || module_key "$work/$name.key" "$file" >"$file.built-of"
 	else
 		cat "$work/$name.log" >>"$work/refused"
 	fi
