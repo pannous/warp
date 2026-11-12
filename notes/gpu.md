@@ -308,7 +308,7 @@ Checking a window by eye: capture it by window id (Quartz CGWindowList by the ru
 to the front with System Events `set frontmost of (first process whose unix id is <pid>)`; SIGTERM does not end a
 held still picture, kill -9 by pid.
 
-## One shader (card shader-unify, plan 2026-11-12)
+## One shader (card shader-value, plan 2026-11-12)
 Today six ways write GPU code: shader blocks with `$holes`, warp functions translated by lib/shaders.warp,
 compute_toy kernels, raw gpu_compute, GPU lists, gpu_fields/gpu_pass multipass (and `@gpu` maps, broken since the
 Rust emitter left). They all end in one place: WGSL text plus a values map handed to a host. The plan makes that the
