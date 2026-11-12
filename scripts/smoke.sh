@@ -12,6 +12,7 @@
 set -uo pipefail
 source "$(dirname "$0")/lib/platform.sh"
 source "$(dirname "$0")/lib/hello-footprint.sh"
+source "$(dirname "$0")/lib/modules.sh"
 INSTALLED=$warp_binary
 COMPILERS=(warp.wasm warp.wasm.inputs warp.wasm.cwasm warp.wasm.driver.cwasm warp.wasm.driver.cwasm.key warp.wasm.driver.build.cwasm warp.wasm.driver.build.cwasm.key runtime.wasm runtime.wasm.cwasm modules)
 EXPECTED=Hello
@@ -27,8 +28,9 @@ base=$(git -C "$tree" merge-base origin/main HEAD) || exit 2
 changed=$({ git -C "$tree" diff --name-only "$base" HEAD; git -C "$tree" diff --name-only HEAD; } | sort -u)
 code_changed=$(echo "$changed" | grep -E "$CODE_PATHS" | grep -v '^core/native/')  # the native warp is no compiler input (compiler-inputs.sh)
 # the lib/ modules the branch changed: the prebuilt lib/modules/*.wasm run in place of their source, so any edit of one
-# (a body line too, card smoke-prebuild-body) needs them built anew before a probe sees it
-changed_modules() { echo "$changed" | grep -E '^lib/(host/)?[A-Za-z_0-9]+\.warp$'; }
+# (a body line too, card smoke-prebuild-body) needs them built anew before a probe sees it. A file under a module's
+# folder, including a .js companion, is that module (modules.sh modules_of_files; card smoke-sh-misses)
+changed_modules() { echo "$changed" | modules_of_files "$tree"; }
 # a function a lib module defines anew at its top level that another lib file defines too: every call of the word may
 # now reach the other definition (pattern-parameters' find(value: any, p: data) in text.warp made find("hello", "l")
 # ø in every program, card smoke-lib-shadow; the choice itself is card lib-module). Said loudly with the test files
