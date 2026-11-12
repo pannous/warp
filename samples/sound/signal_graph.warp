@@ -20,4 +20,4 @@ play(chord(A3, minor), bar 1)
 reverb_mix = 0
 distortion = 0.8                        # a soft clipper
 play(A2, beat 1)
-wait_sound()
+wait(sound)

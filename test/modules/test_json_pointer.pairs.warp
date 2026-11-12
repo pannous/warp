@@ -31,3 +31,6 @@
 'use json_tools; try { json_pointer_get(json(\'{"foo": ["bar", "baz"], "": 0, "a/b": 1, "c%d": 2, "e^f": 3, "g|h": 4, "i\\\\\\\\j": 5, "k\\\\"l": 6, " ": 7, "m~n": 8}\'), \'/foo/-\') } catch e { e.message }'	"json pointer /foo/-: - is no array index"
 'use json_tools; try { json_pointer_get(json(\'{"foo": ["bar", "baz"], "": 0, "a/b": 1, "c%d": 2, "e^f": 3, "g|h": 4, "i\\\\\\\\j": 5, "k\\\\"l": 6, " ": 7, "m~n": 8}\'), \'/foo/0/x\') } catch e { e.message }'	"json pointer /foo/0/x: x reaches into a string"
 'use json_tools; try { json_pointer_get(json(\'{"foo": ["bar", "baz"], "": 0, "a/b": 1, "c%d": 2, "e^f": 3, "g|h": 4, "i\\\\\\\\j": 5, "k\\\\"l": 6, " ": 7, "m~n": 8}\'), \'foo\') } catch e { e.message }'	"json pointer foo does not start with /"
+// json_pointer_has: yes for an existing pointer, no for a missing one (card json-tools-prebuild)
+'use json_tools; json_pointer_has(json(\'{"foo": ["bar"]}\'), \'/foo/0\')'	true
+'use json_tools; json_pointer_has(json(\'{"foo": ["bar"]}\'), \'/nope\')'	false

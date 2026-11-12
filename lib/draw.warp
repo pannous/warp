@@ -2,6 +2,15 @@
 // paint (the playground's canvas, natively a PNG). A color is a number 0xAARRGGBB: the color module's (rgb, hsv, the named colors, with_alpha)
 use math
 use color
+// the paper and the ink of the system's theme as the program starts, dark_mode (the page's prefers-color-scheme,
+// natively the system's appearance): clear(paper) clears to the paper, `ink` draws what stands out on it. The light
+// paper is what paint shows 0 as (core/native/driver.warp PAPER, host-media.js PAINT_PAPER; test_paint_shades); dark
+// mode swaps paper and ink, as the page shades paint's numbers and lib/shaders.warp a painted number
+PALE = 0xFFFAFAFA
+DARK = 0xFF1D1D1D
+dark_theme = dark_mode
+blank_color = if dark_theme then DARK else PALE
+ink = if dark_theme then PALE else DARK
 // the canvas until canvas.resize(width, height) sizes it: show() alone paints this one, the size of the playground's output pane,
 // natively 640×480
 global canvas_width: int = view_width
@@ -10,9 +19,6 @@ global canvas_height: int = view_height
 // here then, show() sends the shapes drawn since the last one
 global drawing_on_gpu = gpu_drawing
 global canvas_pixels = blank_pixels(pixels_for(view_width, view_height))
-// the color of the canvas before anything is drawn, as paint shows 0 (rust-harness:src/graphics/pixels.rs PAPER;
-// test_paint_shades): clear(canvas) clears to it
-blank_color = 0xFFFAFAFA
 // paper, the old word for the blank canvas: clear(paper) is clear(canvas)
 paper() := canvas()
 // the pixel a coordinate falls in
@@ -59,8 +65,12 @@ shape_shader = shader {
 pixels_for(width, height) := if drawing_on_gpu then 0 else width * height
 // the canvas's pixels before anything is drawn, each 0: ints 0xAARRGGBB as the host paints them, so show() hands them
 // over as they are (a list of Colors converted 1M pixels a frame, 1.4 s, card finger-paint-demo); a Color equals its
-// number, so `canvas_pixels[4] == red` holds (decision int-types-are-classes)
-blank_pixels(count: int) := int[count]
+// number, so `canvas_pixels[4] == red` holds (decision int-types-are-classes). A dark theme's paper is drawn on them
+blank_pixels(count: int) := {
+	pixels = int[count]
+	if dark_theme { covered(pixels, blank_color) }
+	pixels
+}
 
 // canvas.resize(width, height), also canvas(width, height), sizes the window too (card window-canvas-size), which then
 // shows the canvas pixel for pixel
@@ -89,12 +99,13 @@ canvas.height(new_height) := canvas(canvas_width, new_height)
 def clear(what) {
 	// converted once: `as int` of a Color inside the loop cost 1 µs a pixel, a second a clear (card finger-paint-demo)
 	color: int = if what is Canvas then blank_color else what as int
+	covered(canvas_pixels, color)
+}
+// the pixels all one color, on the GPU one clear shape; written through the parameter, a local: a global list written
+// a million times cost 10× (14 against 141 ms)
+covered(pixels, color: int) := {
 	if drawing_on_gpu { draw_shape(clear_shape, 0, 0, 0, 0, color) }
-	else {
-		// written through a local: a global list written a million times cost 10× (14 against 141 ms)
-		pixels = canvas_pixels
-		for i in 0..#pixels { pixels[i] = color }
-	}
+	else { for i in 0..#pixels { pixels[i] = color } }
 }
 
 // the color over what is there, mixed by its alpha

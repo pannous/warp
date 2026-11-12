@@ -4,7 +4,9 @@
 # whose nodes know the line and column they were written at. Go to definition and hover find a name's definition in
 # the open file, then in the files of its folder, then in the modules it `use`s, where the compiler finds them.
 use c
+use file
 use json
+use os
 use path
 use url
 read(file: i32, buffer: handle, count: i64): i64 from 'c'
@@ -15,6 +17,11 @@ LENGTH_HEADER = "Content-Length: "
 HEADER_END = "\r\n\r\n"
 FILE_SCHEME = "file://"
 WARP_EXTENSION = ".warp"
+# the text a diagnostic checks, written beside its file for the length of one compile
+CHECK_SUFFIX = ".lsp-check.warp"
+ERROR_SEVERITY = 1
+# a refused compile exits nonzero, which `command` raises: its report is the output, so the exit status is dropped
+COMPILE_REFUSAL_IS_OUTPUT = " || true"
 # what the server answers: the whole text of a file at each change (textDocumentSync 1)
 CAPABILITIES = {"textDocumentSync": 1, "definitionProvider": yes, "hoverProvider": yes}
 # the operators of a definition, `sq(a) := a * a`, `x = 1`, `count: 3`, and the words before a defined name,
@@ -56,13 +63,44 @@ answer(message: map): any := {
 	method = message["method"]
 	parameters = message.get("params") ?? {}
 	if method == "initialize" { return {"capabilities": CAPABILITIES, "serverInfo": {"name": "warp"}} }
-	if method == "textDocument/didOpen" { documents[parameters["textDocument"]["uri"]] = parameters["textDocument"]["text"] }
-	if method == "textDocument/didChange" { documents[parameters["textDocument"]["uri"]] = parameters["contentChanges"].last["text"] }
-	if method == "textDocument/didClose" { documents.remove(parameters["textDocument"]["uri"]) }
+	if method == "textDocument/didOpen" { changed(parameters["textDocument"]["uri"], parameters["textDocument"]["text"]) }
+	if method == "textDocument/didChange" { changed(parameters["textDocument"]["uri"], parameters["contentChanges"].last["text"]) }
+	if method == "textDocument/didClose" {
+		documents.remove(parameters["textDocument"]["uri"])
+		published(parameters["textDocument"]["uri"], [])
+	}
 	if method == "textDocument/definition" { return found(parameters, location_of) }
 	if method == "textDocument/hover" { return found(parameters, hover_of) }
 	if method == "exit" { exit(0) }
 	ø
+}
+
+# a file's new text, and what the compiler says of it
+changed(uri: text, source: text) := {
+	documents[uri] = source
+	published(uri, diagnostics_of(uri, source))
+}
+# the diagnostics of a file the editor shows, `[]` clearing them
+published(uri: text, diagnostics: list) := {
+	sent({"jsonrpc": "2.0", "method": "textDocument/publishDiagnostics", "params": {"uri": uri, "diagnostics": diagnostics}})
+}
+# the compiler's refusal of a text, none when it compiles: the text is written beside its file, so that its `use`s
+# resolve from the file's folder, compiled without running (`warp compile`) and removed again. The compiler's first
+# line reads `<file as written>:<line>:<column> <sentence>`, the file named from the folder the compile runs in
+# (a folder with a space in its path makes the compiler word its line the other way round)
+diagnostics_of(uri: text, source: text): list := {
+	checked = path_of(uri) + CHECK_SUFFIX
+	write(checked, source)
+	report = command("cd " + quoted_path(dirname(checked)) + " && " + warp_command("compile " + quoted_path(basename(checked)) + " /dev/null 2>&1") + COMPILE_REFUSAL_IS_OUTPUT)
+	unlink(checked)
+	refusal = lines(report).find(line => line.contains(CHECK_SUFFIX + ":"))
+	if refusal == ø { return [] }
+	place = refusal.split(CHECK_SUFFIX + ":")#2
+	position = place.split(" ")#1
+	at = position.split(":")
+	line = int(at#1) - 1
+	column = int(at#2) - 1
+	[{"range": {"start": {"line": line, "character": column}, "end": {"line": line, "character": column + 1}}, "severity": ERROR_SEVERITY, "source": "warp", "message": place.split(" ")[1 ..].join(" ").trim}]
 }
 
 # the definition of the name at the place `parameters` names, as `shown` gives it; ø when there is none
@@ -146,7 +184,7 @@ used_modules(source: text, folder: text): list := {
 }
 # where the compiler finds `use name`: beside the file, else in lib/
 module_path(name: text, folder: text): text? := [path_join(folder, name + WARP_EXTENSION), path_join(library_folder(), name + WARP_EXTENSION)].find(exists)
-library_folder(): text := run_option("lib") ?? path_join(dirname(program_folder()), "lib")
+library_folder(): text := run_option("lib") ?? dirname(program_folder())
 
 # an open file's text as the editor has it, else as it is on disk
 document_text(uri: text): text := documents.get(uri) ?? (try read(path_of(uri)) else "")

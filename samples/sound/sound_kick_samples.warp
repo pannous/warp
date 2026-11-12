@@ -18,4 +18,4 @@ play(kick, 2)                               # twice as fast, an octave up
 play(kick, 0.5)                             # half as fast, an octave down
 for part in sample_slices(kick, 2) { play(part) }
 play(sample_looped(kick, 1s, 60ms, 120ms))  # up to 120 ms, then 60 to 120 ms again for a second
-wait_sound()
+wait(sound)

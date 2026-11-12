@@ -1,0 +1,7 @@
+#!/usr/bin/env warp
+// load a photo, change it, save the result and show it
+use image
+photo = image(./photo.jpg)
+postcard = photo.cropped(20, 10, 120, 90).mirrored.tinted(orange, 0.3)
+postcard.save(./postcard.bmp)
+postcard.show()

@@ -118,7 +118,11 @@ def float_power(body: Body, base: list, exponent: list): TypedCode {
 def is_count(n: TypedCode): bool := n.kind == ValueKind.Int or n.kind == ValueKind.Node
 def repeated(piece: TypedCode, count: TypedCode): TypedCode := runtime_call("repeated_text", [TypedCode(ValueKind.Int, converted(count, ValueKind.Int)), TypedCode(ValueKind.Node, boxed(piece))])
 
+# the orderings in the place the runtime's node_compared takes them
+ORDERINGS = ["<", "<=", ">", ">="]
 def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
+	if symbol in ORDERINGS and has_runtime_word("node_compared") { return runtime_call("node_compared", [TypedCode(ValueKind.Node, a), TypedCode(ValueKind.Node, b), number_value(ORDERINGS.index_of(symbol) - 1)]) }
+	if symbol == "+" and has_runtime_word("node_plus") { return runtime_call("node_plus", [TypedCode(ValueKind.Node, a), TypedCode(ValueKind.Node, b)]) }
 	if symbol == "+" {
 		left = TypedCode(ValueKind.Node, fresh_node_local(body))
 		right = TypedCode(ValueKind.Node, fresh_node_local(body))
@@ -158,8 +162,8 @@ def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
 	TypedCode(kind, code + textual(left) + textual(right) + [op.i32_and] + if_else_code(kind, texts, TypedCode(kind, numbers)))
 }
 # + - * and the comparisons of a value known only at run time beside an int or another such value: the int first
-# (int_first) when either is one; not in the runtime's own words, whose values known only at run time are mostly no
-# ints (the test made the compiler 5% slower there)
+# (int_first) when either is one, inline, as a call of the runtime words boxed the int side and the result each time
+# (20% slower loops); not in the runtime's own words, whose values known only at run time are mostly no ints
 int_firsts(body: Body, symbol: text, a: TypedCode, b: TypedCode): bool := not body.function.is_runtime and (symbol in grown_words or symbol in comparisons) and (a.kind == ValueKind.Node or b.kind == ValueKind.Node) and a.kind in [ValueKind.Int, ValueKind.Node] and b.kind in [ValueKind.Int, ValueKind.Node] and has_runtime_word("exact_int")
 # the operands held in locals; each one known only at run time that holds a plain whole number (exact_int) makes the
 # operation the int one at once: the grown words for + - *, exact past 2^63, an i64 comparison, the int side never
@@ -184,12 +188,9 @@ def fresh_node_local(body: Body): list := [op.local_get] + uleb(fresh_local(body
 def by_class(body: Body, symbol: text, left: TypedCode, right: TypedCode, kind: ValueKind, otherwise: list): list {
 	if not class_operator_numbers.has(symbol) { return otherwise }
 	held = fresh_node_local(body)
-	number = TypedCode(ValueKind.Node, boxed(TypedCode(ValueKind.Int, [op.i64_const] + sleb(class_operator_numbers[symbol]))))
-	operated_by = (instance => call_values(late_word(instance_operated_name), [instance, left, right, number]))
-	instance_test = (operand => call_values(late_word(is_class_instance_name), [operand]).code)
-	# (the right one's too: `x * q` in a module that never saw q's class, reals' `float() * other`, card reals-prebuilt)
-	by_right = TypedCode(ValueKind.Node, instance_test(right) + if_else_code(ValueKind.Node, operated_by(right), TypedCode(ValueKind.Node, [ref_null, gc_type(gc.node)])))
-	tested = instance_test(left) + if_else_code(ValueKind.Node, operated_by(left), by_right)
+	# a's class, else b's (the right one's too: `x * q` in a module that never saw q's class, reals' `float() * other`,
+	# card reals-prebuilt), the runtime's class_operated
+	tested = runtime_call("class_operated", [left, right, TypedCode(ValueKind.Int, [op.i64_const] + sleb(class_operator_numbers[symbol]))]).code
 	tested + [op.local_set] + held[1..] + held + [op.ref_is_null] + if_else_code(kind, TypedCode(kind, otherwise), TypedCode(ValueKind.Node, held))
 }
 # `x == ø`, `x === ø` and their negations (a match's `ø:` case): x is ø itself, missing; an empty list, text or map

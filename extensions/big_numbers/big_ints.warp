@@ -89,14 +89,7 @@ big_int_power(base: int, exponent: int): Node := {
 	signed_limbs(magnitude, limb_count(magnitude), negative)
 }
 # how many bits |x| takes
-bit_length(x: int): int := {
-	bits = 0
-	while x != 0 {
-		x = int_quotient(x, 2)
-		bits += 1
-	}
-	bits
-}
+bit_length(x: int): int := 64 - leading_zeros(if x < 0 then -x else x)
 # a big int's decimal digits: its magnitude divided by 10^9 until nothing is left, each rest nine digits (the last its
 # own); a limb has fewer than ten digits
 big_int_text(n: Node): text := {

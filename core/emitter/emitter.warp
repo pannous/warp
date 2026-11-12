@@ -327,7 +327,7 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # program defines itself, never the module's; linked_words: each linked module word by name, its kinds and result,
 # which the program declares (prelude_words.warp declared_only) and the analyzer takes as they are
 # Every compile starts with a fresh Module (fresh_module): nothing of one compile reaches the next
-class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; runtime_bound: bool = no; texts: map = {}; first_text_segment: int = 0; globals: map = {}; global_order: list = []; global_firsts: map = {}; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; case_spellings: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: map = {}; class_words: map = {}; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; main_globals: map = {}; early_globals: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; literal_texts: map = {}; literal_inits: list = []; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; relocating: bool = no; relocations: list = []; own_from: list = []; left_out: map = {}; runtime_types: int = 0; runtime_image: any = ø; runtime_calls: any = ø; runtime_sites: any = ø; relocates_program: bool = no; shakes_runtime: bool = no; shaking: any = ø; linked_images: list = []; linked_places: map = {}; linked_own_names: list = []; linked_words: map = {}; linked_class_names: map = {}; linked_reach: map = {}; linked_owners: map = {}; marks: map = {}; global_marks: map = {}; declared_globals: map = {}; warned: map = {} }
+class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; runtime_bound: bool = no; texts: map = {}; first_text_segment: int = 0; globals: map = {}; global_order: list = []; global_firsts: map = {}; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; case_spellings: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: map = {}; class_words: map = {}; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; main_globals: map = {}; early_globals: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; literal_texts: map = {}; literal_inits: list = []; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; relocating: bool = no; relocations: list = []; own_from: list = []; left_out: map = {}; runtime_types: int = 0; runtime_image: any = ø; runtime_calls: any = ø; runtime_sites: any = ø; relocates_program: bool = no; shakes_runtime: bool = no; shaking: any = ø; linked_images: list = []; linked_places: map = {}; linked_own_names: list = []; linked_words: map = {}; linked_class_names: map = {}; linked_reach: map = {}; linked_owners: map = {}; class_dispatchers: map = {}; dispatcher_images: map = {}; marks: map = {}; global_marks: map = {}; declared_globals: map = {}; warned: map = {} }
 
 module = Module({}, [])
 # a new compile's module, emitting the same file
@@ -392,7 +392,7 @@ opaque_form(view: View): text := {
 	"a " + kind
 }
 opening_of(bracket: text): text := if bracket == "" then "(" else bracket
-bracket_pair(bracket: text): text := {"(": "()", "[": "[]", "{": "{}"}[opening_of(bracket)] ?? "()"
+bracket_pair(bracket: text): text := {"(": "()", "[": "[]", "{": "{}"}.get(opening_of(bracket)) ?? "()"
 
 # a function made with no parameters, its body given later or its code written by the caller
 # `: any` until card class-named
@@ -843,12 +843,16 @@ is_global(body: Body, name: text): bool := name not in body.names and global_key
 names_a_type_value(name: text): bool := is_tested_type_word(name) or name == "type" or name in module.classes
 # a name with its first letter capitalized, `later` → Later, the case a lowercase bare name may mean
 folded_case(name: text): text := if name == "" then name else name[0 ..< 1].upper() + name[1 ..]
+# a main-level value a function meets before main's statement declares it: its global, declared then
+def declared_before_main(body: Body, name: text) {
+	if name not in body.names and name not in body.globals and body.function.name != "main" { declared_early(global_key(body, name)) }
+}
 def local_value(body: Body, n: Node): TypedCode {
 	name = name_of(n)
 	# a main-level value read by a function compiled before main's assignment declares it, one an earlier value's
 	# call reaches (`cells = int[cell_count(3, 4)]` in front of reals' largest_exact_radicand): its global, a node
 	# until a reading learns its kind (later_kinds), which main's assignment then sets
-	if name not in body.names and is_main_value(name) and name not in body.globals and body.function.name != "main" { declared_early(global_key(body, name)) }
+	if is_main_value(name) { declared_before_main(body, name) }
 	if is_global(body, name) {
 		entry = module.globals[global_key(body, name)]
 		return TypedCode(entry#2, [op.global_get] + relocatable(relocated.globals, entry#1), module.global_marks.get(global_key(body, name)) ?? 0)
@@ -933,6 +937,8 @@ def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	# a shared main-level variable is main's to assign: a function's assignment of that name makes its own local,
 	# unless the function declared it `global`
 	is_shared = name in module.shared and name not in body.globals
+	# (a global main declares, assigned by a function compiled first: task_stepped's running_task, never a local)
+	if name in module.main_globals { declared_before_main(body, name) }
 	if name not in body.names and is_shared and body.function.name == "main" { return declare_global(global_key(body, name), value) }
 	if is_global(body, name) and not is_shared { return global_assignment(global_key(body, name), value) }
 	if name not in body.names and name in body.function.widened { kind = body.function.widened[name] }
@@ -1412,7 +1418,8 @@ def key_expression(body: Body, n: Node): TypedCode {
 	if operator == Op.Hash and left != ø and subscript_name(right) != ø { return field_read(body, expression_code(body, left), subscript_name(right)) }
 	if operator == Op.Hash and left != ø and is_shifted_index(right) {
 		target = expression_code(body, left)
-		if target.kind == ValueKind.Node { return runtime_call("node_get", [target, TypedCode(ValueKind.Node, boxed(expression_code(body, key_of(right))))]) }
+		# (a recursive call's result not yet known, pending, as the node it may be, as length_code counts it)
+		if target.kind == ValueKind.Node or target.kind == pending { return runtime_call("node_get", [target, TypedCode(ValueKind.Node, boxed(expression_code(body, key_of(right))))]) }
 	}
 	if operator == Op.AddAssign {
 		target = expression_code(body, left)

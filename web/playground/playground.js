@@ -354,9 +354,9 @@ function newWorker(restarts = 0) {
 			if (data.type === "file") return offerFile(data.path, data.bytes);
 			if (data.type === "picture") return savePicture(data);
 			if (data.type === "midi") return sendMidi(data.port, data.message, data.at);
-			if (data.type === "stop sound files") return silence(); // stop_sound: the queued sounds and the music files
-			if (data.type === "stop sound") return silenced(data.handle); // stop_sound(handle): that one alone
-			if (data.type === "fade sound") return faded(data.handle, data.gain, data.seconds); // fade_sound
+			if (data.type === "stop sound files") return silence(); // stop(sound): the queued sounds and the music files
+			if (data.type === "stop sound") return silenced(data.handle); // stop(h): that one alone
+			if (data.type === "fade sound") return faded(data.handle, data.gain, data.seconds); // fade
 			if (data.type === "gpu canvas") return sendPaintCanvas(data);
 			if (data.type === "serving") return servingRequests(data);
 			if (data.type === "served") return showServed(data.response);
@@ -500,11 +500,12 @@ let sounding = []; // the playing and queued sounds, silenced when the next run 
 // then cannot start and the browser warns
 // missing userActivation (some headless builds): treat as before a click, so heard stays 0 and sound does not pace (card samples-page-sound-pipes)
 const beforeUserActivation = () => !navigator.userActivation || !navigator.userActivation.hasBeenActive;
-// a run's sounds so far, in seconds, which the page names below its result (showSounded): a program that only plays
+// a run's sound so far, in seconds, which the page names below its result (showSounded): where its last sound ends
+// on its voices, so sounds of tasks playing together count once, as save sound mixes them. A program that only plays
 // shows nothing else, and one run before the first click or key press stays silent
-function soundMade(run, { samples, rate, channels }) {
+function soundMade(run, { samples, rate, channels, place = run.sounded ?? 0 }) {
 	stopAfterTimeout(run);
-	run.sounded = (run.sounded ?? 0) + samples.length / Math.max(channels, 1) / rate;
+	run.sounded = Math.max(run.sounded ?? 0, place + samples.length / Math.max(channels, 1) / rate);
 }
 const SILENT_BEFORE_ACTIVATION = "silent: a browser plays sound only after a click or key press on the page, then run it again";
 function showSounded(seconds) {
@@ -530,7 +531,7 @@ function playSound({ samples, rate, channels, at, handle, loop }, from) {
 		buffer.getChannelData(channel).set(Float32Array.from({ length: frames }, (_, frame) => ((samples[frame * channels + channel] ?? SOUND_OFFSET) - SOUND_OFFSET) / SOUND_OFFSET));
 	const source = audio.createBufferSource();
 	source.buffer = buffer;
-	source.gainNode = audio.createGain(); // fade_sound ramps it
+	source.gainNode = audio.createGain(); // fade ramps it
 	source.connect(source.gainNode).connect(audio.destination);
 	if (sounding.length === 0) clockOffset = audio.currentTime - soundClock();
 	source.startsAt = Math.max(audio.currentTime, at + clockOffset);
@@ -612,7 +613,7 @@ function fadeOut(source, from, seconds) {
 	source.stop(from + seconds);
 }
 
-// fade_sound(handle, gain, seconds): the sounds of that handle (0 all) ramp from their gain now to `gain`
+// fade(h, gain, seconds): the sounds of that handle (0 all) ramp from their gain now to `gain`
 function faded(handle, gain, seconds) {
 	for (const source of sounding.filter(source => handle === 0 || source.handle === handle)) {
 		const level = source.gainNode.gain;
@@ -1253,6 +1254,109 @@ function clearPreviousRun(value = PENDING_VALUE) {
 	showPrinted([]);
 }
 
+
+// card slider-ui: `c = slider(-2 to 2)` is a UI value. The page shows a range control for each call and reruns
+// with the new value (the editor keeps the program as written). A value already in the call is the start.
+const SLIDER_CALL = /\bslider\(\s*(-?(?:\d+\.?\d*|\.\d+))\s*(?:to|,)\s*(-?(?:\d+\.?\d*|\.\d+))(?:\s*,\s*(-?(?:\d+\.?\d*|\.\d+)))?\s*\)/g;
+const SLIDER_NAME = /([A-Za-z_][A-Za-z_0-9]*)\s*=\s*$/;
+const SLIDER_DELAY_MS = 80; // live while dragging, without a compile on every pointer tick
+let sliderValues = [];
+let sliderKey = "";
+let sliderTimer;
+
+function sliderNumber(n) {
+	return String(Number.parseFloat(Number(n).toFixed(10)));
+}
+
+function sliderCommented(source, index) {
+	const lineStart = source.lastIndexOf("\n", index - 1) + 1;
+	const prefix = source.slice(lineStart, index);
+	return /#|\/\//.test(prefix);
+}
+
+function parseSliders(source) {
+	const found = [];
+	SLIDER_CALL.lastIndex = 0;
+	let match;
+	while ((match = SLIDER_CALL.exec(source))) {
+		if (sliderCommented(source, match.index)) continue;
+		const lo = Number(match[1]), hi = Number(match[2]);
+		const named = SLIDER_NAME.exec(source.slice(0, match.index));
+		found.push({
+			start: match.index,
+			end: match.index + match[0].length,
+			lo, hi,
+			value: match[3] !== undefined ? Number(match[3]) : (lo + hi) / 2,
+			name: named ? named[1].replace(/_/g, " ") : `slider ${found.length + 1}`,
+		});
+	}
+	return found;
+}
+
+function sliderPanel() {
+	let panel = $("sliders");
+	if (panel) return panel;
+	if (!document.getElementById("slider-style")) {
+		document.head.append(element("style", { id: "slider-style" },
+			`.sliders { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 12px; font-size: 0.9em; color: var(--muted); }
+.sliders[hidden] { display: none; }
+.sliders label { display: grid; grid-template-columns: 7em 1fr 4em; gap: 8px; align-items: center; }
+.sliders input[type=range] { width: 100%; accent-color: var(--accent); }
+.sliders .slider-value { font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace; color: var(--ink); text-align: right; }`));
+	}
+	panel = element("div", { id: "sliders", className: "sliders", hidden: true });
+	const output = $("output");
+	const painted = $("painted");
+	if (output && painted) output.insertBefore(panel, painted);
+	else (output ?? document.body).append(panel);
+	return panel;
+}
+
+function showSliders(sliders) {
+	// keep values while this program's sliders stay the same; a different program takes its starts
+	const key = sliders.map(slider => `${slider.name}:${slider.lo}:${slider.hi}`).join("|");
+	if (key !== sliderKey) {
+		sliderKey = key;
+		sliderValues = sliders.map(slider => slider.value);
+	} else {
+		sliderValues = sliders.map((slider, i) => {
+			const kept = sliderValues[i];
+			return kept !== undefined && kept >= slider.lo && kept <= slider.hi ? kept : slider.value;
+		});
+	}
+	const panel = sliderPanel();
+	panel.hidden = sliders.length === 0;
+	panel.replaceChildren(...sliders.map((slider, i) => {
+		const value = element("span", { className: "slider-value" }, sliderNumber(sliderValues[i]));
+		const input = element("input", {
+			type: "range",
+			min: slider.lo,
+			max: slider.hi,
+			step: (slider.hi - slider.lo) / 400 || 0.01,
+			value: sliderValues[i],
+			oninput: () => {
+				sliderValues[i] = Number(input.value);
+				value.textContent = sliderNumber(sliderValues[i]);
+				clearTimeout(sliderTimer);
+				sliderTimer = setTimeout(runChanged, SLIDER_DELAY_MS);
+			},
+		});
+		return element("label", {}, slider.name, input, value);
+	}));
+}
+
+function withSliderValues(source) {
+	const sliders = parseSliders(source);
+	showSliders(sliders);
+	if (sliders.length === 0) return source;
+	let out = source;
+	for (let i = sliders.length - 1; i >= 0; i--) {
+		const slider = sliders[i];
+		out = out.slice(0, slider.start) + `slider(${sliderNumber(slider.lo)}, ${sliderNumber(slider.hi)}, ${sliderNumber(sliderValues[i])})` + out.slice(slider.end);
+	}
+	return out;
+}
+
 async function show(code) {
 	if (showing) {
 		queued = code; // only the newest code is worth running next
@@ -1264,7 +1368,7 @@ async function show(code) {
 	dimPreviousRun();
 	setStatus(RUNNING);
 	try {
-		const report = await evaluate(code);
+		const report = await evaluate(withSliderValues(code));
 		clearPreviousRun();
 		showReport(report);
 	} catch (failure) {
@@ -1586,6 +1690,12 @@ function initialize() {
 
 // for headless runs (test_in_browser.py --examples): evaluate code as the page does and return the report
 window.playground = { evaluate, applyFix, chooseExample, exampleSource, runCode, reportAddress, bugReport, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
+	sliders: () => sliderValues.slice(),
+	// set a slider and rerun (headless page check, card slider-ui)
+	setSlider: (index, value) => {
+		sliderValues[index] = Number(value);
+		return runChanged();
+	},
 	// an animation that runs until stopped (a raylib window's `while not WindowShouldClose()`) ends with its report, as
 	// the next run would end it (test_in_browser.py sample_answer); yes when one ran
 	stopAnimation: () => Boolean(pending?.animating && (stopRun(pending, ANIMATION_STOPPED), true)),
@@ -1606,11 +1716,19 @@ addEventListener("unhandledrejection", event => {
 // ("math.wasm won't link: built behind another runtime.wasm", card math-wasm-link); the code typed stays over the reload
 const STALE_RELOAD = "warp stale reload";
 const RELOADED_CODE = "warp code over a reload";
+// a headless sweep (test_in_browser.py --examples --guide) sets this so a version.js poll cannot
+// reload the page mid-batch and drop the playground API (card guide-sweep-crash). The stale-deploy
+// check leaves it unset and still stubs version.js, so that reload stays a real one.
+function noStaleReload() {
+	return self.PLAYGROUND_NO_STALE_RELOAD || new URLSearchParams(location.search).has("no_stale_reload");
+}
 async function reloadWhenStale() {
 	if (!PLAYGROUND_VERSION) return;
 	try {
 		const served = await (await fetch("version.js", { cache: "no-store" })).text();
 		if (served.includes(PLAYGROUND_VERSION.built)) return sessionStorage.removeItem(STALE_RELOAD);
+		self.PLAYGROUND_STALE = { built: PLAYGROUND_VERSION.built, served: served.slice(0, 240) };
+		if (noStaleReload()) return;
 		if (sessionStorage.getItem(STALE_RELOAD) === PLAYGROUND_VERSION.built) return console.error(`warp page: built ${PLAYGROUND_VERSION.built}, the server has a newer build, and a reload kept this page`);
 		sessionStorage.setItem(STALE_RELOAD, PLAYGROUND_VERSION.built);
 		if (editor) sessionStorage.setItem(RELOADED_CODE, editor.getValue());

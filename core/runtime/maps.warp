@@ -13,9 +13,9 @@ use "text.warp"
 use "types.warp"
 # map is a protocol
 # NodeMap is implements map as a curly list of `name:value` keys eg {a:1, b:{c:2}}
-# (Marked.Map and Marked.Entry); 
-# a class instance `Point{x:1}` is its class's struct, whose fields read as such a map 
-# (instance_entries: a new one at each call, for iteration, printing and comparison); 
+# (Marked.Map and Marked.Entry);
+# a class instance `Point{x:1}` is its class's struct, whose fields read as such a map
+# (instance_entries: a new one at each call, for iteration, printing and comparison);
 fields_of(m: Node): Node := {
 	if marked_kind(m) != Marked.Instance { return m }
 	entries = instance_entries(m)
@@ -200,7 +200,11 @@ collection_contains(c: Node, x: Node): bool := {
 	if is_null(c) { return no } # `[]` is the null node
 	# ø names no entry: `ø in m` is no (card pure-nil-in-any-map: name_text(ø) trapped on the null node)
 	if marked_kind(c) == Marked.Map or kind_code(c) == Kind.Key { return not is_null(x) and map_index(c, name_text(x)) > 0 }
-	if kind_code(c) == Kind.Text { return text_index(unboxed_text(c), node_text(x)) >= 0 }
+	if kind_code(c) == Kind.Text {
+		# a list is never a text's part: each of its items is asked about (decision all-any-in)
+		if kind_code(x) == Kind.List { raised(failure_of("a list is no part of a text: ask about its items, all xs in t, any xs in t or count(xs where it in t)")) }
+		return text_index(unboxed_text(c), node_text(x)) >= 0
+	}
 	for item in unboxed_list(c) { if node_equal(item, x) { return yes } }
 	no
 }
@@ -236,10 +240,10 @@ node_get(n: Node, key: Node): Node := {
 	if kind_code(key) == Kind.Int and marked_kind(n) != Marked.Map { return node_at(n, unboxed_int(key) + 1) }
 	map_get(n, name_text(key))
 }
-# `n[key] = value` of a value known only at run time: an int key sets the item key+1, any other key the entry named
-# by its text (field_with); n, or the map made of ø
+# `n[key] = value` of a value known only at run time: an int key of a list sets the item key+1, any other key the
+# entry named by its text (field_with), as node_get reads it; n, or the map made of ø
 node_put(n: Node, key: Node, value: Node): Node := {
-	if kind_code(key) == Kind.Int {
+	if kind_code(key) == Kind.Int and marked_kind(n) != Marked.Map {
 		node_set_at(n, unboxed_int(key) + 1, value)
 		return n
 	}

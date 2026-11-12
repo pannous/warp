@@ -53,7 +53,12 @@ const soundClock = () => (performance.timeOrigin + performance.now()) / 1000;
 const LIVE_GRID_SLACK = 1e-6;
 self.soundsQueued = () => Math.max(0, (voice.end ?? 0) - soundClock()); // sound_queued()
 self.voiceStopped = () => { voice = { ...voice, end: undefined }; };
-self.joinVoice = starters => { voice = { ...starters }; }; // a task Worker's: its starter's; none: a run's fresh one
+self.joinVoice = starters => { voice = { ...starters }; keptVoices = []; }; // a task Worker's: its starter's; none: a run's fresh one
+// the voices kept around a run's tasks (lib/sound.warp voice_kept), each by its number from 1: a task's sounds queue on
+// its own voice, which starts where its starter's stood, as natively
+let keptVoices = [];
+self.keptVoice = () => keptVoices.push(voice);
+self.voiceBack = number => { voice = keptVoices[number - 1] ?? {}; };
 self.currentVoice = () => voice;
 // a sound of that many seconds behind the voice's sounds, never before now: its place and its start on the clock
 self.voiceSounded = seconds => {
@@ -68,7 +73,6 @@ self.voiceAt = seconds => {
 	const origin = voice.origin ?? soundClock();
 	voice = { loop: voice.loop, end: origin + seconds, seconds, origin };
 };
-self.insideAt = () => voicesBeforeAt.length > 0;
 // where this voice's next sound would start: its queued sounds' end, never before now
 self.voiceMoment = () => Math.max(voice.end ?? 0, soundClock());
 // card playground-live: a named live loop's cycle starts (lib live_cycle_started). The voice is that loop's from now on,
@@ -103,8 +107,8 @@ function addPageSoundWords(post) {
 	self.playSoundFile = (url, bytes) => post({ type: "sound file", url, bytes, handle: nextSoundHandle() }); // host-files.js STD_ADAPTERS.sound: a worker has no <audio>
 	self.stopSoundFiles = () => { self.voiceStopped(); post({ type: "stop sound files" }); };
 	self.sendMidi = (port, message, at) => post({ type: "midi", port, message, at }); // host-files.js STD_ADAPTERS.midi
-	self.stopSound = handle => post({ type: "stop sound", handle }); // stop_sound(handle)
-	self.fadeSound = (handle, gain, seconds) => post({ type: "fade sound", handle, gain, seconds }); // fade_sound
+	self.stopSound = handle => post({ type: "stop sound", handle }); // stop(h)
+	self.fadeSound = (handle, gain, seconds) => post({ type: "fade sound", handle, gain, seconds }); // fade
 	// a worker has no AudioContext: the page plays it at its start on the shared clock (voiceSounded); a signal's blocks
 	// share one handle
 	self.playSamples = sound => post({ type: "sound", ...sound, handle: sound.handle || nextSoundHandle() });

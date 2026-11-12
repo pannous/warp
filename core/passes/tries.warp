@@ -11,21 +11,36 @@ use "walk.warp"
 use "../parsing/phrase_blocks.warp"
 use "../analysis/words.warp"
 
+# the root of the error classes (lib/prelude.warp `class Error`)
+ERROR_CLASS = "Error"
 applied_to(word: text, arguments: list): Node := List([symbol(word)] + arguments, Bracket.Round, Separator.None)
 # `{n}`, a block of one item
 braced(n: Node): Node := List([n], Bracket.Curly, Separator.Space)
 try_assigned(name: Node, value: Node): Node := Key(name, Op.Assign, value)
 
 try_name(role: text, number: int): Node := fresh_name("try·" + role, number)
+# the block guarded, the result given its value: `{s1; s2}` runs s1, its value s2's; any other value whole
+assigned_block(result: Node, value: Node): Node := {
+	if not (is_curly_group(value) and #value > 1 and separator_of(value) in statement_separators) { return braced(try_assigned(result, value)) }
+	statements = items_of(value)
+	List(statements[0 ..< #statements - 1] + [try_assigned(result, statements.last)], Bracket.Curly, Separator.Semicolon)
+}
 
 # `try x else y`; with a catch binding (a name, else ø) the else branch binds it to the error before y
 guarded_try(value: Node, fallback: Node, binding: Node?, number: int): Node := {
 	finished = try_name("finished", number)
 	result = try_name("value", number)
-	ran = try_assigned(finished, applied_to(HiddenWord.RanWithoutError as text, [braced(try_assigned(result, value))]))
+	ran = try_assigned(finished, applied_to(HiddenWord.RanWithoutError as text, [assigned_block(result, value)]))
 	succeeded = Key(finished, Op.And, Key(ø, Op.Not, applied_to("is_error", [result])))
 	# the caught Error's name is a handler's place, `e: error`, where it raises no more (decision errors-one-rule)
 	caught = try_assigned(Key(binding, Op.Colon, symbol("error")), applied_to("placed_at", [applied_to("caught_error", [finished, result]), applied_to("trap_place", [])]))
+	# `except T as e { y }` (the binding `e: T`): e is the raised instance, y runs for a T (a subclass too), any other
+	# error raises on
+	if is_key(binding, Op.Colon) {
+		name = key_of(binding)
+		caught = try_assigned(name, applied_to("caught_instance", [finished, result]))
+		fallback = chosen(Key(name, Op.Is, value_of(binding)), braced(fallback), braced(applied_to(raise_word, [name])))
+	}
 	otherwise = if binding == ø then braced(fallback) else List([caught, fallback], Bracket.Curly, Separator.Semicolon)
 	statements([ran, chosen(succeeded, braced(result), otherwise)])
 }
@@ -34,7 +49,8 @@ guarded_try(value: Node, fallback: Node, binding: Node?, number: int): Node := {
 lowered_try(value: Node, fallback: Node, binding: Node?): Node := {
 	number = fresh_number()
 	match value {
-		Key(target, Op.Assign, assigned_value): { if is_name(target) and binding == ø then try_assigned(target, lowered_try(assigned_value, fallback, binding)) else guarded_try(value, fallback, binding, number) }
+		# `try u = x else y` and `try f() := x else y` guard the value
+		Key(target, op, assigned_value): { if binding == ø and ((op == Op.Assign and is_name(target)) or op == Op.Define) then Key(target, op, lowered_try(assigned_value, fallback, binding)) else guarded_try(value, fallback, binding, number) }
 		# `try { x } …`: a block of one statement guards the statement (held as a value, `{x}` would be data)
 		List(statements, Bracket.Curly, separator): {
 			if #statements == 1 and not is_key(statements#1, Op.Colon) { return guarded_try(statements#1, fallback, binding, number) }
@@ -55,8 +71,8 @@ may_raise(v: Node): bool := not (v == ø or is_name(v) or is_literal(v))
 # `a or b`, emitter.warp logical, too)
 handled_form(n: Node): Node := match n {
 	Key(Key(target, Op.Colon, declared), Op.Assign, v): if admits_errors_type(declared) and is_name(target) and may_raise(v) then Key(key_of(n), Op.Assign, kept_raise(v)) else n
-	# `x ?? y`, `x default y` (decision nullish-default): y when x raises or is ø, a falsy x kept
-	Key(x, Op.Coalesce, y): if may_raise(x) then Key(lowered_try(x, ø, ø), Op.Coalesce, y) else n
+	# `u = x default y`, whose phrase takes the assignment whole: the fallback is the value's, as the try is (lowered_try)
+	Key(Key(target, op, value), Op.Coalesce, fallback): if op == Op.Assign or op == Op.Define then Key(target, op, Key(value, Op.Coalesce, fallback)) else n
 	_: n
 }
 
@@ -67,6 +83,8 @@ try_form(n: Node): Node := match n {
 		if #parts < 3 or parts#1 != symbol(HiddenWord.TryElse as text) { return n }
 		if #parts == 3 { return lowered_try(parts#2, parts#3, ø) }
 		if #parts == 4 and is_name(parts#4) { return lowered_try(parts#2, parts#3, parts#4) }
+		# `except Error as e` catches every error, as `catch e` does
+		if #parts == 4 and is_key(parts#4, Op.Colon) { return lowered_try(parts#2, parts#3, if value_of(parts#4) == symbol(ERROR_CLASS) then key_of(parts#4) else parts#4) }
 		n
 	}
 	_: handled_form(n)

@@ -8,6 +8,8 @@ use gpu_packing
 
 # the mark of a program's function named as a library word, its own (core/passes/prelude_words.warp own_word)
 own_mark = "·own"
+# the words for a class's fields in reflection: `p.fields`, `p.properties`, `fields(P)`, `attributes(P)`
+field_words = ["fields", "properties", "attributes", "members"]
 
 # where a path parameter's name ends: its type `:id:int`, a pattern `:id(\d+)`, a mark `:tab?` `:path*` `:path+`
 parameter_ends = ":(?*+"
@@ -1058,8 +1060,11 @@ instance_members(variable: Node, part: Node, source: text): any := {
 	members = if made == ø then ø else class_members(made, source)
 	if members == ø or spelled(part) in members#1 + members#2 { return ø }
 	fields = members#1.map(field => "${field}")
-	texts_list(if spelled(part) == "fields" then fields else if spelled(part) == "methods" then members#2 else fields + members#2)
+	texts_list(if spelled(part) in field_words then fields else if spelled(part) == "methods" then members#2 else fields + members#2)
 }
+# `fields` and the words that say it (decision synonyms-are-aliases): the word, else ø, also where the program has its
+# own word of that name
+field_word(word: Node, program: Node): any := if word is symbol and spelled(word) in field_words and not owns_word(spelled(word), program) then word else ø
 # the names as a list of texts, parsed: a one-letter name in List(…) would be a character, and the compiler compiling
 # itself has no node constructors
 texts_list(names: list): Node := if #names == 0 then List([], Bracket.Square, Separator.Comma) else plain_node(parsed("[" + names.map(name => "\"" + name + "\"").join(", ") + "]"))
@@ -1325,6 +1330,7 @@ rule_words = {
 	gpu_packed: gpu_packed,
 	gpu_packed_as: gpu_packed_as,
 	instance_members: instance_members,
+	field_word: field_word,
 	class_fields_listed: class_fields_listed,
 	class_methods_listed: class_methods_listed,
 	class_setter: class_setter,
@@ -1363,8 +1369,8 @@ rule_words = {
 	route_verb: route_verb,
 	path_parameters: path_parameters,
 	served: served,
+	compute_toys_made: compute_toys_made,
 	shader_values: shader_values,
-	shader_values_of: shader_values_of,
 	shader_words_of: shader_words_of,
 	shader_place_of: shader_place_of,
 	shorthand_closure: shorthand_closure,

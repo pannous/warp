@@ -42,7 +42,7 @@ print climbers.name + ": " + count(climbers.players)
 print "on no team: " + count(people where it.team == ø)
 
 # sorting by a key of each row, the first rows
-print "oldest first: " + text(people.sort_by(p => -p.age).map(p => p.name))
+print "oldest first: " + text(people.sort(by: p => -p.age).map(p => p.name))
 print "first two: " + text(people.slice(0, 2).map(p => p.name))
 
 # remove deletes the row

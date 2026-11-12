@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Turns the release tarballs into PyPI wheels of warp-language (`pip install warp-language`), one per platform.
 
-A wheel holds no Python: the release folder (packaging/native_dist.sh: warp's lib/ with the native warp, its compilers
+A wheel holds one small Python package, warp_language.node (reads and writes warp data as Python values), and
+the release folder (packaging/native_dist.sh: warp's lib/ with the native warp, its compilers
 and libwarp_wasmtime in it) goes whole in warp_language-<version>.data/data/share/warp/, which lands in
 <environment>/share/warp, its modes kept; the native warp reads its lib/ as its own folder, so the environment's bin gets
 a launcher (.data/scripts/warp) running that warp, as deb/rpm and Homebrew link bin/warp to it (card packaging-pypi).
@@ -57,6 +58,10 @@ def platform_tag(target: str, native_warp: bytes) -> str:
     return f"manylinux_{major}_{minor}_{LINUX_ARCHITECTURES[target]}"
 
 
+# the pure-Python package beside this script, importable as `warp_language.node` (it needs no warp binary)
+PYTHON_PACKAGE = Path(__file__).resolve().parent / DISTRIBUTION
+
+
 # the folder's files by path, each with its mode: executable when the tarball says so
 def read_files(archive: Path) -> dict[str, tuple[bytes, int]]:
     with tarfile.open(archive) as tar:
@@ -89,6 +94,7 @@ def write_wheel(version: str, target: str, files: dict[str, tuple[bytes, int]], 
     dist_info = f"{DISTRIBUTION}-{version}.dist-info"
     data = f"{DISTRIBUTION}-{version}.data"
     entries = [(f"{data}/data/{SHARED_FOLDER}/{name}", content, mode) for name, (content, mode) in files.items()]
+    entries += [(f"{DISTRIBUTION}/{source.name}", source.read_bytes(), PLAIN) for source in sorted(PYTHON_PACKAGE.glob("*.py"))]
     entries += [
         (f"{data}/scripts/{NATIVE_WARP}", LAUNCHER.encode(), EXECUTABLE),
         (f"{dist_info}/METADATA", metadata(version, readme).encode(), PLAIN),

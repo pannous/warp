@@ -42,3 +42,6 @@
 
 # a_constant_text_that_fails_to_parse_fails_where_try_catches
 'try { parse("f(a, a") } else "bad"'	'bad'
+
+# a_text_past_one_memory_page_parses_whole: 10k floats are about 67 KB of text (card list-display-slowness)
+'xs = [i * 0.5 for i in 1 to 10000]; #parse(text(xs))'	10000

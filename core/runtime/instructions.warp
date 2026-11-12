@@ -16,3 +16,5 @@ bits_xor(a: int, b: int): int := wasm i64.xor
 shifted_left(a: int, by: int): int := wasm i64.shl
 shifted_right(a: int, by: int): int := wasm i64.shr_u
 shifted_right_signed(a: int, by: int): int := wasm i64.shr_s
+# the zero bits above an int's highest one
+leading_zeros(a: int): int := wasm i64.clz

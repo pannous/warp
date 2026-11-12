@@ -22,17 +22,38 @@ wgsl_assigned_name(target: Node): text := {
 }
 
 # --- a shader's holes (decision P235b, card shader-holes; Rust twin graphics/shader_holes.rs): each `$name` of a
-# shader block the parser wrote values.name; every paint of a shader the program assigns gets `name: name` in its
-# values for each hole its map lacks, so the variable is read at each paint. A built-in hole (lib/native/foreign.c
-# values_filled, host-gpu.js builtinValues) gets one only where the program assigns that name; $previous never ---
+# shader block the parser wrote values.name; every paint or render of a shader the program assigns gets `name: name`
+# in its values for each hole its map lacks, so the variable is read at each paint. A built-in hole (the table
+# SHADER_HOLES below, filled by the hosts) gets one only where the program assigns that name;
+# $previous never ---
 
-SHADER_BUILTIN_HOLES = ["width", "height", "size", "time", "frame", "mouse", "mouse_down", "mouse_wheel", "key"]
+# The holes every shader has (card shader-value, notes/gpu.md "One shader"): each as the shader reads it, with the
+# other spellings that read it too (wiki/graphics.md; the Book of Shaders' u_ names). The one table: the shader
+# block's `$name` reads it (extensions/shader_blocks.warp), the rule below knows the built-in holes by it, and the hosts fill
+# these (lib/host/native_host/gpu.warp hole_value, web/playground/host-gpu.js builtinValues)
+SHADER_HOLES = {"width": [], "height": [], "size": ["u_resolution"], "time": ["u_time"], "frame": [], "mouse": ["u_mouse"],
+	"mouse.x": ["mouse_x"], "mouse.y": ["mouse_y"], "mouse_down": [], "mouse_wheel": ["wheel"], "key": []}
+# how the shader reads the hole a `$name` names: the hole an alias stands for, else the name itself
+hole_read(written: text): text := SHADER_HOLES.keys.find(read => written in SHADER_HOLES[read]) ?? written
+
+# the entry point of a shader written in compute.toys' dialect (lib/compute_toys.warp), and of one already a WGSL
+# fragment shader
+COMPUTE_TOYS_ENTRY = "fn main_image"
+FRAGMENT_ENTRY = "@fragment"
+# compute_toy(s) of a shader the program assigns written in compute.toys' dialect (its kernel fn main_image, no
+# fragment entry point of its own), which makes it a fragment shader; ø for any other
+compute_toys_made(s: Node, program: Node): any := {
+	shader = main_level_value(name_of(s), program)
+	if not (shader is text) or not "${shader}".contains(COMPUTE_TOYS_ENTRY) or "${shader}".contains(FRAGMENT_ENTRY) { return ø }
+	call_of("compute_toy", [s])
+}
+
+# the built-in holes by name: the table's, a component's (mouse.x) its vector's
+SHADER_BUILTIN_HOLES = SHADER_HOLES.keys.filter(read => not read.contains("."))
 SHADER_FRAME_HOLE = "previous"
-# the values of a paint of shader s with the given map: its entries, then the holes it lacks; ø where s is no shader
-# the program assigns or the map has every hole
-shader_values(s: Node, given: Node, program: Node): any := shader_holes_added(s, if is_group(given) then items_of(given) else [], program)
-# the values of a paint of shader s given none
-shader_values_of(s: Node, program: Node): any := shader_holes_added(s, [], program)
+# the values of a paint or render of shader s with the given map, if any (the rule's rest hole: [] or [map]): its
+# entries, then the holes it lacks; ø where s is no shader the program assigns or the map has every hole
+shader_values(s: Node, given: list, program: Node): any := shader_holes_added(s, if #given == 1 and is_group(given#1) then items_of(given#1) else [], program)
 # the size paint(s) paints at (wiki/graphics.md): the program's width and height where its main level assigns both,
 # else the size of where it shows (prelude.warp shown_width: a window's, else the view's)
 paint_size(program: Node): list := {
