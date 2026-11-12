@@ -259,7 +259,7 @@ js_member_type(interface: text, member: text): text := {
 	if interface == UNCHECKED or is_library_runtime(interface) { return interface }
 	found = webidl_member_of(interface, member)
 	if member == CONSTRUCTOR_MEMBER and found != ø { return interface }
-	if found == ø { raise "js: " + interface + " has no " + (if member == CONSTRUCTOR_MEMBER then "constructor" else member) + " (lib/web.webidl)" }
+	if found == ø { raise "js: " + interface + " has no " + (if member == CONSTRUCTOR_MEMBER then "constructor" else member) + " (lib/*.webidl)" }
 	if webidl().has(found.type) then found.type else UNCHECKED
 }
 # the member of a definition, its parents' and its mixins' included
