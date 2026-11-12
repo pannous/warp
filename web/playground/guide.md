@@ -382,7 +382,7 @@ Numbers can have units.
 
 Complex numbers come with `use complex`: `ⅈ` is the imaginary unit, √-1.
 
-```warp => "-5+10i"
+```warp => "-5+10ⅈ"
 use complex
 text((3 + 4ⅈ) * (1 + 2ⅈ))
 ```
