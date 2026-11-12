@@ -487,9 +487,6 @@ assigned_kinds(program: Node): map := {
 			kind = static_kind(value_of(n))
 			kinds[name] = if kind == ø or (name in kinds and kinds[name] != kind) then [] else kind
 		}
-		# a parameter takes any value, whatever a variable of its name is given: the `e` of `e -> tan(e)` beside the
-		# case `e = "e"` of keys.warp
-		for name in parameters_bound(n) { kinds[name] = [] }
 	}
 	kinds
 }
@@ -742,14 +739,17 @@ names_a_field(name: text, program: Node): bool := {
 	if statements_in(program).any(statement => class_view(statement) != ø and class_declared(statement, class_view(statement)).fields.any(field => field == name)) { return yes }
 	nodes_in(program).any(n => is_key(n, Op.Colon) and key_of(n) == symbol(name))
 }
+# inside a definition or a lambda its parameters take any value, whatever a variable of their name is given elsewhere
+# (the `e` of `e -> tan(e)` beside the case `e = "e"` of keys.warp); outside they hide no variable's kind
+within(judge: ArgumentJudge, n: Node): ArgumentJudge := ArgumentJudge(without_keys(judge.variables, parameters_bound(n)), judge.own, judge.least, judge.program)
 # top-down, so a definition is renamed by its own parameter types
 typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	call = definition_call(n)
 	if call != ø {
 		head = if name_of(call#1) in overloaded then renamed_target(key_of(n), typed_variant(name_of(call#1), parameter_types(call))) else key_of(n)
-		return Key(head, Op.Define, typed_resolved(value_of(n), shadowed(overloaded, bound_at(n)), judge))
+		return Key(head, Op.Define, typed_resolved(value_of(n), shadowed(overloaded, bound_at(n)), within(judge, n)))
 	}
-	if is_key(n, Op.Arrow) { return Key(key_of(n), Op.Arrow, typed_resolved(value_of(n), shadowed(overloaded, bound_at(n)), judge)) }
+	if is_key(n, Op.Arrow) { return Key(key_of(n), Op.Arrow, typed_resolved(value_of(n), shadowed(overloaded, bound_at(n)), within(judge, n))) }
 	# a method call `xs.find(f)` is the call find(xs, f), its receiver the first argument; a module's word called through
 	# its name, `memory.copy(bytes, at)`, the word's own call, copy(bytes, at)
 	method = if is_key(n, Op.Dot) then value_of(n) else ø
