@@ -166,12 +166,13 @@ pointer_value(name: text): int := {
 }
 full_screen() := open_now and both_bits(SDL_GetWindowFlags(sdl_window), SDL_WINDOW_FULLSCREEN) != 0
 // whether the system shows dark mode, asked without a window (SDL's theme needs its video started): macOS keeps it as
-// the global preference AppleInterfaceStyle "Dark"; elsewhere not known, light
+// the global preference AppleInterfaceStyle "Dark"; elsewhere not known, light. A run with no window (`--no-window`,
+// every `warp test` case) shows nothing on the screen, so it follows no theme: light, its pictures documents on paper
 CFPreferencesCopyAppValue(key: handle, application: handle): handle from 'CoreFoundation'
 CFStringCompare(a: handle, b: handle, options: i64): i64 from 'CoreFoundation'
 CF_CASE_INSENSITIVE = 1
 dark_mode(): bool := {
-	if not on_mac() { return no }
+	if not on_mac() or run_option("no-window") != ø { return no }
 	style = CFPreferencesCopyAppValue(cf_text("AppleInterfaceStyle"), cf_text("kCFPreferencesAnyApplication"))
 	if style == 0 { return no }
 	dark = CFStringCompare(style, cf_text("Dark"), CF_CASE_INSENSITIVE) == 0
