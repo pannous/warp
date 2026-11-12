@@ -12,6 +12,9 @@ rewrite $f($s, $w, $h, $v...) => $f($s, $w, $h, $filled) where $f in [paint, gpu
 rewrite paint($s, $w, $h) => paint($s, $w, $h, ø) where $s is symbol and $place = shader_place_of($s, $program, $source)
 // gpu_render(s, width, height) of a shader without holes: no values of its own
 rewrite gpu_render($s, $w, $h) => gpu_render($s, $w, $h, [])
+// a shader the program assigns in compute.toys' dialect, its entry point fn main_image (decision: the dialect is read off
+// the entry point, notes/gpu.md "One shader"), paints and renders as compute_toy makes it a fragment shader
+rewrite $f($s, $w, $h, $v) => $f($made, $w, $h, $v) where $f in [paint, gpu_render] and $s is symbol and $made = compute_toys_made($s, $program)
 // a list the program makes for the GPU (gpu_compute takes it) is made as a GPU list [f32] (decision gpu-bound-floats,
 // extensions/rules/rule_words.warp gpu_lists_packed): f32 cells in linear memory the GPU reads and writes where they are; `xs: [f32] = …` asks
 // for one outright, `xs: [i32] = …` and `xs: [u32] = …` for one of integer cells

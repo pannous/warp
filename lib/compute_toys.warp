@@ -126,7 +126,10 @@ compute_toys_refused(code: text, allow_channels: bool) := {
 	if not (code contains "fn main_image") { raise "compute_toy takes a compute.toys shader: its kernel is fn main_image(@builtin(global_invocation_id) id: vec3u)" }
 }
 
+// of a shader already a WGSL fragment shader, that shader: paint and gpu_render read the dialect off the entry point
+// (card shader-value), so compute_toy(s) of one they made is s
 compute_toy(code: text) := {
+	if code contains "@fragment" { return code }
 	compute_toys_refused(code, no)
 	compute_toys_prelude + compute_toys_kernel(code) + compute_toys_main
 }
