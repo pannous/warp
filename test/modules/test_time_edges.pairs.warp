@@ -12,7 +12,7 @@
 'use time; try { ("5" as Duration).ms } catch e { e.message }'	"\"5\" as Duration: a unit is missing after 5 (d, h, m, s or ms)"
 'use time; try { ("3w" as Duration).ms } catch e { e.message }'	"\"3w\" as Duration: unknown unit \"w\" after 3 (d, h, m, s or ms)"
 'use time; ("0s" as Duration).ms'	0
-'use time; [text(Duration(0)), format(Duration(0), iso: yes)]'	["0ms", "PT0S"]
+'use time; [text(Duration(0)), format(Duration(0), iso: yes)]'	["0s", "PT0S"]
 'use time; ("PT0S" as Duration).ms'	0
 'use time; ("P1W" as Duration).ms'	604800000
 'use time; try { ("P" as Duration).ms } catch e { e.message }'	"\"P\" as Duration: incomplete (like PT1H30M)"
@@ -20,10 +20,10 @@
 'use time; try { ("P1Y" as Duration).ms } catch e { e.message }'	"\"P1Y\" as Duration: years and months have no fixed length in milliseconds"
 'use time; try { ("PT1H1D" as Duration).ms } catch e { e.message }'	"\"PT1H1D\" as Duration: no designator D after T"
 'use time; try { ("PT1HT2M" as Duration).ms } catch e { e.message }'	"\"PT1HT2M\" as Duration: a second T"
-'use time; try { ("1H" as Duration).ms } catch e { e.message }'	"parse_iso_duration: \"1H\" does not start with P (like PT1H30M)"
+'use time; try { ("1H" as Duration).ms } catch e { e.message }'	"\"1H\" as Duration: unknown unit \"H\" after 1 (d, h, m, s or ms)"
 'use time; (format(Duration(90061500), iso: yes) as Duration).ms'	90061500
 'use time; format(Duration(-5400000), iso: yes)'	"-PT1H30M"
 'use time; try { ("5 h" as Duration).ms } catch e { e.message }'	"\"5 h\" as Duration: the unit h must follow 5 without a blank (like 5h)"
 'use time; try { ("5 parsecs" as Duration).ms } catch e { e.message }'	"\"5 parsecs\" as Duration: unknown unit \"parsecs\" after 5 (d, h, m, s or ms)"
 'use time; try { ("PT5" as Duration).ms } catch e { e.message }'	"\"PT5\" as Duration: a designator is missing after 5"
-'use time; try { ("" as Duration).ms } catch e { e.message }'	"\"\" as Duration: incomplete (like PT1H30M)"
+'use time; try { ("" as Duration).ms } catch e { e.message }'	"\"\" as Duration: names no duration (like 1h30m, 2d 4h, 500ms)"

@@ -420,7 +420,7 @@ pattern_parts(pattern: text): list := {
 }
 padded(n: int, width: int): text := { t = text(abs(n)); sign = if n < 0 then "-" else ""; while #t + #sign < width { t = "0" + t }; sign + t }
 // the time written in the pattern: format(Instant(0), Pattern("d MMM yyyy")) is "1 Jan 1970"
-format(time: Instant, pattern: Pattern): text := pattern_text(time.ms, pattern.written)
+public format(time: Instant, pattern: Pattern): text := pattern_text(time.ms, pattern.written)
 pattern_text(ms: int, pattern: text): text := {
 	d = date_of(ms)
 	s = (ms % 86400000) /! 1000
@@ -478,7 +478,7 @@ t: text as Duration := Duration(written_duration_ms(t))
 // the ISO 8601 form when it starts with P, else the short one
 written_duration_ms(t: text): int := if #t > 0 and t#1 == 'P' then iso_duration_ms(t) else short_duration_ms(t)
 // a duration styled: format(d, long: yes) "1 hour 30 minutes", format(d, iso: yes) "PT1H30M"; its plain text is d as text
-format(d: Duration, long = no, iso = no): text := {
+public format(d: Duration, long = no, iso = no): text := {
 	ms = int(round(d.ms))
 	if long { return long_duration_text(ms) }
 	if iso { return iso_duration_text(ms) }

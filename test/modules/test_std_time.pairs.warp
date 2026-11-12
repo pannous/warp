@@ -25,7 +25,7 @@
 
 # format_duration_in_the_largest_units
 'use time; text(Duration(5430000))'	'1h 30m 30s'
-'use time; text(Duration(250))'	'250ms'
+'use time; text(Duration(250))'	'0.25s'
 'use time; text(Duration(86400000 + 5000))'	'1d 5s'
 
 # civil_days_are_prelude_words

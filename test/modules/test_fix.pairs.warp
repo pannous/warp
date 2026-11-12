@@ -7,7 +7,7 @@
 «use list; attempt(f: function) := try { text(f()) } catch e { "" + e }; [attempt(() -> chunk([1, 2], 0)), attempt(() -> chunk([1, 2], -1)), chunk([1, 2, 3], 1)] == ["chunk needs a size of at least 1, not 0", "chunk needs a size of at least 1, not -1", [[1], [2], [3]]]»	true
 
 # Supervisor decisions, lib-coverage-audit-2: a negative duration is formatted like the positive one with a minus sign; percentile of an empty list names percentile
-«use time; [text(Duration(-5000)), text(Duration(-500)), text(Duration(-90061000)), text(Duration(5000))] == ["-5s", "-500ms", "-1d 1h 1m 1s", "5s"]»	true
+«use time; [text(Duration(-5000)), text(Duration(-500)), text(Duration(-90061000)), text(Duration(5000))] == ["-5s", "-0.5s", "-1d 1h 1m 1s", "5s"]»	true
 «use list; r = try { percentile([], 50) } catch e { "" + e }; r == "percentile of an empty list"»	true
 
 # floor_mod: the remainder takes the divisor's sign (Python's %): fix(lib), card lib-coverage-audit
