@@ -22,6 +22,7 @@ node_order(a: Node, b: Node): int := {
 # ORDERINGS: texts and characters by their bytes, ints and exact rationals exactly, anything else as the floats it
 # holds, an instance as its float() (card emitter-inlines: one call where the emitter wrote the whole of it at each)
 node_compared(a: Node, b: Node, ordering: int): bool := {
+	if exact_ints(a, b) { return ordered_as(int_order_of(unboxed_int(a), unboxed_int(b)), ordering) }
 	if textual_node(a) and textual_node(b) { return ordered_as(text_order(node_text(a), node_text(b)), ordering) }
 	x = number_held(a)
 	y = number_held(b)
