@@ -320,10 +320,17 @@ one shape: **one Shader value, one hole table, one resource model, two words.**
    their aliases (u_time, Time, iTime …) as aliases in the same table. One compile-time scanner; the hosts receive
    the hole list and stop keeping their own (gpu.warp hole_value, host-gpu.js builtinValues, compute_toys Time/Mouse).
    One rule fills the holes of any call whose argument is a Shader, instead of one rule per entry word.
-3. Fields are the one resource: a named GPU buffer or texture that lasts across frames. `$previous` is the field
-   previous, storage arrays and GPU lists are 1-D fields. A list of shaders is a pipeline run in order, as a list of
-   notes is a melody: `paint([advect, pressure, show])`; gpu_fields/gpu_pass/gpu_show go into it.
-4. Two words: `paint(s)` draws; computing is `xs.map(f)` on a GPU list or under `@gpu`, through the same translator
+3. Fields are the one resource (Taichi's field, Halide's Func): shape, element type, lifetime. The compiler picks
+   buffer or texture from the use (sampled or drawn into → texture; atomics, structs, scatter → buffer) and refuses
+   loudly where uses conflict. A list of shaders runs in list order, as a list of notes is a melody:
+   `paint([advect, pressure, show])`; the reads/writes graph is only checked (a read nobody wrote this frame or last
+   is refused with a fix-it), never used to reorder. Shadertoy's rule: a read sees the latest write earlier in the
+   frame, else last frame's value; so `$previous` is just a read-before-write, persistence follows from the dataflow,
+   and a pass reading and writing one field gets two copies swapped (never read_write textures, which core WebGPU
+   allows only for r32 formats). gpu_fields/gpu_pass/gpu_show go into it. Culling, aliasing, async can come later
+   behind the same list. Sources: Frostbite FrameGraph GDC 2017, shadertoy.com/howto, docs.isf.video multipass,
+   docs.taichi-lang.org, usegpu.live.
+4. Two words: `paint(s)` draws; computing is `xs.map/reduce/scan(f)` (Futhark's forms, neighbours may fuse) on a GPU list or under `@gpu`, through the same translator
    grown to compute kernels (this brings back the broken `@gpu` maps, wiki/graphics.md:95); a raw WGSL kernel runs
    with `run(kernel, lists)`. gpu_compute, gpu_render, gpu_pass, gpu_show become aliases, then leave.
 5. The values layout is written down once (here) and both hosts implement it.

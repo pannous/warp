@@ -1,0 +1,61 @@
+#!/usr/bin/env warp
+# Concentric rings from the distance to the centre, sliding outward with time.
+# Their colour is sampled from two generated textures bound as channel0 and channel1.
+# Move the window, or run a few frames with --no-window.
+# More of them: https://github.com/pannous/shaders (folder warp/compute_toys)
+use compute_toys
+use image
+use os
+
+# channel0: a hashed colour field the rings pick from as they travel
+noise_at(x: int, y: int): Color := {
+	n = (x * 374761393 + y * 668265263) % 2147483647
+	if n < 0 { n = 0 - n }
+	return rgb(n % 256, (n /! 256) % 256, (n /! 65536) % 256)
+}
+
+# channel1: a slower, smoother tint, so the gaps between rings are not the same as the bands
+tint_at(x: int, y: int): Color := {
+	return rgb((x * 2) % 256, 40 + (y * 3) % 180, 160 + (x + y) % 80)
+}
+
+noise = image(128, 128, noise_at)
+tint = image(64, 64, tint_at)
+rings = compute_toy(shader {
+	@compute @workgroup_size(16, 16)
+	fn main_image(@builtin(global_invocation_id) id: vec3u) {
+		let screen_size = textureDimensions(screen);
+		if (id.x >= screen_size.x || id.y >= screen_size.y) { return; }
+
+		// coordinates with the origin at the centre, y up, one unit = half the short side
+		let mid = 0.5 * float2(screen_size);
+		let p = (float2(id.xy) - mid) * float2(1.0, -1.0) / mid.y;
+		let radius = length(p);
+		let angle = atan2(p.y, p.x);
+
+		// bright bands where a sine of the radius, travelling outward, is high
+		let traveling = radius * 16.0 - time.elapsed * 1.25;
+		let band = 0.5 + 0.5 * sin(traveling);
+		let on_ring = smoothstep(0.35, 0.8, band);
+
+		// colour along each ring from channel0 (polar wrap so the texture follows the circle)
+		let along = float2(angle / 6.2831853, radius - time.elapsed * 0.12);
+		let from0 = textureSampleLevel(channel0, bilinear_repeat, along, 0.0).rgb;
+
+		// the space between rings takes a slower sample from channel1
+		let behind = float2(p.x * 0.35 + 0.5, p.y * 0.35 + 0.5);
+		let from1 = textureSampleLevel(channel1, bilinear_repeat, behind, 0.0).rgb;
+
+		var color = mix(from1 * 0.28, from0, on_ring);
+		// a little light in the middle so the origin of the rings is visible
+		color += float3(0.18, 0.14, 0.12) * exp(-radius * 4.0);
+		textureStore(screen, id.xy, float4(color, 1.0));
+	}
+}, noise, tint)
+# a few frames with --no-window; otherwise run for ten seconds, as the other compute_toys samples do
+started = clock()
+limit = if windowless() then 2000 else 10000
+while clock() - started < limit {
+	paint(rings.shader, shown_width(), shown_height(), rings.values)
+	sleep(1 / 60)
+}
