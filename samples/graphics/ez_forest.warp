@@ -488,9 +488,7 @@ walk(ahead, side) := {
 	cam_z = cam_z + forward#3 * ahead + right#3 * side
 }
 
-on key {
-	if key == Key.escape { exit() }
-}
+on ESC { exit }
 
 on frame {
 	if mouse_down {

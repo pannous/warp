@@ -125,9 +125,7 @@ tunnel(x, y) := {
 	(vignetted ./ (1 .+ vignetted)) .^ 0.85
 }
 
-on key {
-	if key == ESC { exit() }
-}
+on ESC { exit }
 
 # the song over and over while the window is open (headless once), or as many seconds as the command line gives:
 # `warp samples/sound/gpu_visualizer_warp.warp 3`; measuring it decodes the song before it plays, so the first frame

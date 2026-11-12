@@ -1044,9 +1044,9 @@ play(tone, for duration) := music_played(tone, duration, wave_shape)
 play(tone, for duration, shape: text) := music_played(tone, duration, shape)
 // the overloads call it by this name, an untyped music would take play(fill: …) (card overload-untyped-function)
 music_played(music, duration, shape) := {
-	if is_signal(music) { return play_signal(music, duration) }
-	if music is Sample { return play_sample(music, 1) }
-	if music is text and not is_note_name(music) { return play_file(music) }
+	if is_signal(music) { return signal_played(music, duration) }
+	if music is Sample { return sample_played(music, 1) }
+	if music is text and not is_note_name(music) { return file_played(music) }
 	if music is list { return sound(melody_samples(music, si_amount(duration), shape)) }
 	sound(chord_samples(pitches_of(music), si_amount(duration), shape))
 }
@@ -1100,7 +1100,8 @@ is_signal(tone) := tone is function or tone is list and count(tone) == 2 and ton
 play(tone, for duration, bus: Bus) := sent_back(sent_to(bus), music_played(tone, duration, wave_shape))
 // a music file in the background (wav, mp3, ogg, flac, aiff, m4a): play ./song.mp3, through the system's player as
 // it is, its line on stderr `sound file: song.mp3`
-public play_file(path) := {
+alias play_file => play
+file_played(path) := {
 	if not exists(path) { raise "no sound file " + path }
 	said("sound file: " + path)
 	played(path)
@@ -1129,9 +1130,10 @@ faded_gain(fades, place) := {
 }
 ramped_gain(fade, from, at) := from + (fade[2] - from) * (if fade[3] > 0 then min(1, max(0, (at - fade[1]) / fade[3])) else 1)
 // a signal (card real-time): hum(t) := 0.3 * sin(2 * pi * 220 * t), of a float to a float by the parameter's type;
-// play(hum, 2s) (play([left, right], 2s) in stereo, or play_signal) calls hum for every sample in turn, t its time in
+// play(hum, 2s) (play([left, right], 2s) in stereo) calls hum for every sample in turn, t its time in
 // seconds, 1 the loudest; its handle
-public play_signal(signal, seconds) := if signal is list then stereo_signal(signal[0], signal[1], seconds) else mono_signal(signal, seconds)
+alias play_signal => play
+signal_played(signal, seconds) := if signal is list then stereo_signal(signal[0], signal[1], seconds) else mono_signal(signal, seconds)
 mono_signal(signal: (float) -> float, seconds) := signal_sound([signal(t) as float for t in sample_times(seconds)], 1)
 // left and right interleaved, each sample's left first
 stereo_signal(left: (float) -> float, right: (float) -> float, seconds) := signal_sound([side(t) for t in sample_times(seconds) for side in [left, right]], 2)
@@ -1139,11 +1141,12 @@ sample_times(seconds) := [(i / sample_rate) as float for i in 0 ..< round(si_amo
 // amplitudes of a signal, 1 the loudest, as a sound of the channels
 signal_sound(amplitudes, channels) := sounded(clamped_samples([a * loudest_sample for a in amplitudes]), sample_rate, channels)
 // block-wise: `linear hum_block = float[512]`, hum(t) := { for i in 1 to #hum_block { hum_block#i = 0.3 * sin(2 * pi *
-// 220 * (t + (i - 1) / sample_rate)) }; 0 }; play_blocks(hum, linear_address(hum_block), 2s) calls hum
+// 220 * (t + (i - 1) / sample_rate)) }; 0 }; play(hum, linear_address(hum_block), 2s) calls hum
 // once a block to fill the program's linear float array, t its first sample's time; [left, right] addresses in stereo.
 // A linear array (extensions/sugar/declarations.warp) is a list of floats, its address the list itself (card linear-parameters)
 public linear_address(block) := block
-play_blocks(fill: (float) -> any, blocks, seconds) := played_blocks(fill, if blocks is list and count(blocks) > 0 and blocks[0] is list then blocks else [blocks], seconds)
+alias play_blocks => play
+play(fill: (float) -> any, blocks: list, seconds) := played_blocks(fill, if blocks is list and count(blocks) > 0 and blocks[0] is list then blocks else [blocks], seconds)
 
 // play returns at once, its sound queued behind those before it: sound_queued() is how many seconds its voice still sounds,
 // wait_sound waits for them (a program's end does too)
@@ -1179,7 +1182,7 @@ live_cycle_started(name) := std_io("sound", "live_cycle", [name])
 live_loop(cycle: function, cycles) := { name = cycle.name; go { for counted in 0..cycles { live_cycle_started(name); cycle() } } }
 live_loop(cycle: function) := { name = cycle.name; go { for counted in 0.. { live_cycle_started(name); cycle() } } }
 // an audio file's samples to play (card sound-samples): kick = sample(./kick.wav) (wav, mp3, ogg, flac, aiff, m4a; the
-// playground reads wav), play(kick); play_sample(kick, 2) twice as fast and an octave up, as a sampler plays it;
+// playground reads wav), play(kick); play(kick, 2) twice as fast and an octave up, as a sampler plays it;
 // sample_slice(kick, 0.1s, 0.3s) the part between, sample_slices(kick, 4) four equal parts, sample_looped(kick, 4s, 0.5s,
 // 1s) four seconds: up to 1 s, then from 0.5 s to 1 s again and again. Its frames are whole numbers as sound_samples
 // takes them, channels interleaved. Not through the effects: a sample sounds as recorded
@@ -1222,7 +1225,11 @@ def sample_repeated(clip: Sample, seconds, from, to) {
 	Sample(clip.rate, clip.channels, frames[0..end])
 }
 sample_looped(clip: Sample, seconds, from, to) := sample_repeated(clip, si_amount(seconds), si_amount(from), si_amount(to))
-play_sample(clip: Sample, rate) := {
+// a clip at a rate, `play(kick, 2)` twice as fast and an octave up (one-play: play is the only playing word)
+alias play_sample => play
+play(clip: Sample) := sample_played(clip, 1)
+play(clip: Sample, rate) := sample_played(clip, rate)
+sample_played(clip: Sample, rate) := {
 	sounded(clip.frames, round(clip.rate * rate) as int, clip.channels)
 }
 // plain seconds: the unit check reads a quantity parameter in a loop as unsupported (wiki/unit.md)
@@ -1362,8 +1369,20 @@ def pattern_samples(events) {
 	}
 	samples
 }
-pattern(text, duration) := sound(pattern_samples(pattern_events(parse_pattern(text, 0)[0], si_amount(duration), pattern_cycle(text), 0, 1.0 as float)))
-pattern(text) := pattern(text, bar_seconds(1))
+// a pattern is a value play plays (decision one-play): play(Pattern("~ g4 ~ g4*2"), 1 bar), a bar without the length
+class Pattern { steps: text }
+play(cycle: Pattern, for duration) := sound(pattern_samples(pattern_events(parse_pattern(cycle.steps, 0)[0], si_amount(duration), pattern_cycle(cycle.steps), 0, 1.0 as float)))
+play(cycle: Pattern) := play(cycle, bar_seconds(1))
+// the old word plays it too, said once: pattern("c4 e4", 2 bars) is play(Pattern("c4 e4"), 2 bars)
+global pattern_word_said = no
+pattern(steps, duration) := {
+	if not pattern_word_said {
+		pattern_word_said = yes
+		warning("pattern(…) plays through play: write play(Pattern(\"" + steps + "\"), …)")
+	}
+	play(Pattern(steps), duration)
+}
+pattern(steps) := pattern(steps, bar_seconds(1))
 
 // MIDI (card midi-out): midi_on C4, midi_off C4, midi_send(144, 60, 100) to the first output device (or the browser's
 // Web MIDI output), midi_outputs() their names; channels count from 1, velocity 1 to 127. The native warp sends over

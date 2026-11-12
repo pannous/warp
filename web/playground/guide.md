@@ -882,13 +882,13 @@ Examples: melody; samples: music, harmony
 
 ### Rhythm
 
-`tempo` sets the beats per minute and `beat` counts in them, so a whole tune changes speed with one line. A `pattern` writes a rhythm as text: `~` is a rest, brackets squeeze notes into one step.
+`tempo` sets the beats per minute and `beat` counts in them, so a whole tune changes speed with one line. A `Pattern` writes a rhythm as text, which play plays: `~` is a rest, brackets squeeze notes into one step.
 
 ```warp
 use sound
 tempo = 120
 play([C4 E4 G4 E4], beat(1/2))
-pattern "c3 ~ [c3 c3] e3"
+play(Pattern("c3 ~ [c3 c3] e3"))
 ```
 
 Examples: ; samples: rhythm, sound_patterns
