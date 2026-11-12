@@ -131,10 +131,11 @@ checked_facts(known: int): list := {
 # when its signature's source hash is its file's (signature.warp); one built of another text or that won't link is the
 # compile's error, never compiled from its source; a module that calls C is not prebuilt, its file left empty
 MODULES_FOLDER = "modules"
-# where a module's prebuilt image is: the program's own module's, a standard module's in the folder; "" for a module
+# where a module's prebuilt image is: the program's own module's, a prebuilt one's in the folder (the index's hash
+# section names them, library.warp prebuilt_module_names); "" for a module
 # the rebuild no longer prebuilds, whose file may linger there (reals.wasm after 827309223b: math linked it and was
 # refused, card stale-module-wasm), so it is compiled from its source
-prebuilt_path(name: text, folder: text): text := own_module_wasm.get(name) ?? (if name in prebuilt_module_names() then folder + name + ".wasm" else "")
+prebuilt_path(name: text, folder: text): text := own_module_wasm.get(name) ?? (if library_index_section("hash").has(name) then folder + name + ".wasm" else "")
 linked_libraries(source: text): list := {
 	linked_signatures = {}
 	folder = linked_modules_folder()
