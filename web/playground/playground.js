@@ -354,9 +354,9 @@ function newWorker(restarts = 0) {
 			if (data.type === "file") return offerFile(data.path, data.bytes);
 			if (data.type === "picture") return savePicture(data);
 			if (data.type === "midi") return sendMidi(data.port, data.message, data.at);
-			if (data.type === "stop sound files") return silence(); // stop_sound: the queued sounds and the music files
-			if (data.type === "stop sound") return silenced(data.handle); // stop_sound(handle): that one alone
-			if (data.type === "fade sound") return faded(data.handle, data.gain, data.seconds); // fade_sound
+			if (data.type === "stop sound files") return silence(); // stop(sound): the queued sounds and the music files
+			if (data.type === "stop sound") return silenced(data.handle); // stop(h): that one alone
+			if (data.type === "fade sound") return faded(data.handle, data.gain, data.seconds); // fade
 			if (data.type === "gpu canvas") return sendPaintCanvas(data);
 			if (data.type === "serving") return servingRequests(data);
 			if (data.type === "served") return showServed(data.response);
@@ -530,7 +530,7 @@ function playSound({ samples, rate, channels, at, handle, loop }, from) {
 		buffer.getChannelData(channel).set(Float32Array.from({ length: frames }, (_, frame) => ((samples[frame * channels + channel] ?? SOUND_OFFSET) - SOUND_OFFSET) / SOUND_OFFSET));
 	const source = audio.createBufferSource();
 	source.buffer = buffer;
-	source.gainNode = audio.createGain(); // fade_sound ramps it
+	source.gainNode = audio.createGain(); // fade ramps it
 	source.connect(source.gainNode).connect(audio.destination);
 	if (sounding.length === 0) clockOffset = audio.currentTime - soundClock();
 	source.startsAt = Math.max(audio.currentTime, at + clockOffset);
@@ -612,7 +612,7 @@ function fadeOut(source, from, seconds) {
 	source.stop(from + seconds);
 }
 
-// fade_sound(handle, gain, seconds): the sounds of that handle (0 all) ramp from their gain now to `gain`
+// fade(h, gain, seconds): the sounds of that handle (0 all) ramp from their gain now to `gain`
 function faded(handle, gain, seconds) {
 	for (const source of sounding.filter(source => handle === 0 || source.handle === handle)) {
 		const level = source.gainNode.gain;

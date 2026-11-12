@@ -42,7 +42,7 @@ rewrite (constant $d) => $own where $own = declared_local($d)
 rewrite (final $d) => $own where $own = declared_local($d)
 rewrite (val $d) => $own where $own = declared_local($d)
 # `linear xs = float[512]` (Rust's linear-memory arrays): the typed list of zeros, a main-level global a function writes
-# in place (sound's play_blocks fills one a block at a time)
+# in place (sound's play(fill, blocks, seconds) fills one a block at a time)
 rewrite (linear $d) => global: $d
 
 # `global play(tone) := …`: a module's word that works without its `use` (decision bizarre-global, which the library index

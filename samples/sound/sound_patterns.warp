@@ -16,4 +16,4 @@ live_loop(euclid, 2)
 swing = 0.6
 live_loop(tune, 2)
 await bass_voice
-wait_sound()
+wait(sound)
