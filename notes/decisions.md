@@ -7,7 +7,7 @@ in AGENTS.md or a role file. Under 40 lines, nothing older than 7 days (card dec
 Grep a key or topic, never read it whole. Open questions: notes/open_decisions.md.
 
 ## Inbox
-- loop-locals: a loop variable is always a fresh local; a function's plain assignment writes only its own file's global, another file's needs `global x` (card loop-variable-shadowing).
+- loop-locals: a loop variable is always a fresh local; a function's plain assignment to another file's global is refused: `global x` or `let x` (card loop-variable-shadowing).
 - 2026-11-12 of-form-canonical: a one-argument function is `name of type`, `it` the argument (`double of int := it * 2`), all types (card of-form-canonical).
 - 2026-11-12 answer-or-act: a function returns a value or changes its arguments, not both; `sort!(xs: list)` returns nothing, a `!` with a result type warns (card answer-or-act).
 - 2026-11-12 mutating-needs-bang: `!` marks a changing function for readers; not enforced, functions may change their arguments (card answer-or-act).
