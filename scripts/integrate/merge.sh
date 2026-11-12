@@ -52,8 +52,9 @@ tier0() {
 	[ -n "$smoke_only" ] && return 0
 	if ! git -C "$tree" diff --quiet "$base" HEAD -- core extensions; then
 		"$scripts/self-check.sh" "$tree" || { failure=self-check; return 1; }
-		got=$("$scripts/gate.sh" --tiers 1 "$tree" 2>&1 | tail -1)
-		[[ $got == *green* ]] || { failure="gate tier 1: ${got:0:160}"; return 1; }
+		got=$("$scripts/gate.sh" --tiers 1 "$tree" 2>&1)
+		# the red names what failed: the gate's FAIL lines, its last line only says RED
+		[[ $(tail -1 <<<"$got") == *green* ]] || { failure="gate tier 1: $(grep -m3 '^FAIL' <<<"$got" | paste -sd ';' - | cut -c1-300)"; return 1; }
 	fi
 	got=$("$scripts/page-smoke.sh" "$tree") || { failure=${got:0:180}; return 1; }
 }
