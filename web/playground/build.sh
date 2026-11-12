@@ -18,8 +18,9 @@ source "$repository/scripts/lib/packages.sh"
 INSTALLED_LIBRARY="$repository/lib"
 [ -f "$INSTALLED_LIBRARY/warp.wasm.inputs" ] || INSTALLED_LIBRARY="$(dirname "$(command -v warp)")/lib"
 if [ "${1:-}" = --lib ]; then INSTALLED_LIBRARY=$2; shift 2; fi
-# the sources a compiler bakes in: one built from a commit where they differ ships its lag to the page
-COMPILER_SOURCES=(core 'lib/*.warp')
+# the sources a compiler bakes in (scripts/compiler-inputs.sh: core/ and extensions/ but not core/native/, the native
+# warp's own, and lib/'s modules): one built from a commit where they differ ships its lag to the page
+COMPILER_SOURCES=(core extensions ':(exclude)core/native' 'lib/*.warp')
 # what the browser cannot use of it: wasmtime's machine code, native libraries, kept values, stale compilers
 NOT_FOR_THE_BROWSER=(--exclude='*.cwasm' --exclude='*.cwasm.key' --exclude='*.dylib' --exclude='*.so' --exclude='*.kept'
 	--exclude='*.stale' --exclude='*.inputs' --exclude='warp-self.wasm*' --exclude='data/')

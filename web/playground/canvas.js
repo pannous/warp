@@ -12,7 +12,9 @@ const KEYS_HELD_KEPT = 8;
 // view_width, view_height: the room the paintings show in, the screen's in full screen (playground.js viewSize), shared
 // so a running animation's paint(shader) follows a resize or full screen at once (card shader-examples)
 const VIEW_NAMES = ["view_width", "view_height"];
-const POINTER_NAMES = ["mouse_x", "mouse_y", "mouse_down", "mouse_down_x", "mouse_down_y", "mouse_wheel", "key", ...Array.from({ length: KEYS_HELD_KEPT }, (_, at) => `held ${at}`), "keys pressed", "key code pressed", ...VIEW_NAMES];
+// "mouse buttons": the buttons held, as PointerEvent.buttons gives them (left 1, right 2, middle 4: raylib's button n is
+// bit 1 << n, host-media.js IsMouseButtonDown); mouse_down is the left one or a finger
+const POINTER_NAMES = ["mouse_x", "mouse_y", "mouse_down", "mouse_down_x", "mouse_down_y", "mouse_wheel", "mouse buttons", "key", ...Array.from({ length: KEYS_HELD_KEPT }, (_, at) => `held ${at}`), "keys pressed", "key code pressed", ...VIEW_NAMES];
 // a shader's $key (host-gpu.js builtinValues): the held key's code point, the arrows as a Mac's function keys
 // the held key's code for key_down and held_key, as the native window gives it (src/graphics/paint_window.rs key_code)
 const KEY_CODES = { ArrowUp: 0xF700, ArrowDown: 0xF701, ArrowLeft: 0xF702, ArrowRight: 0xF703, Enter: 13, Escape: 27, Backspace: 8, Tab: 9, Shift: 0xF750, Control: 0xF751, Alt: 0xF752, Meta: 0xF753 };
@@ -120,11 +122,20 @@ function trackPointer(event) {
 	if (!pointer || !canvas || laterFinger(event)) return;
 	const { x, y } = pointOn(canvas, event);
 	[x, y, event.buttons & 1].forEach((value, index) => Atomics.store(pointer, index, value));
+	Atomics.store(pointer, POINTER_NAMES.indexOf("mouse buttons"), event.buttons);
 	if (event.type === "pointerdown") [x, y].forEach((value, index) => Atomics.store(pointer, POINTER_NAMES.indexOf("mouse_down_x") + index, value));
 }
 
-// the button or first finger lifted, or the touch taken over by the browser (pointercancel)
-const releasePointer = event => pointer && !laterFinger(event) && Atomics.store(pointer, POINTER_NAMES.indexOf("mouse_down"), 0);
+// the button or first finger lifted, or the touch taken over by the browser (pointercancel): the buttons still held
+function releasePointer(event) {
+	if (!pointer || laterFinger(event)) return;
+	Atomics.store(pointer, POINTER_NAMES.indexOf("mouse_down"), event.buttons & 1);
+	Atomics.store(pointer, POINTER_NAMES.indexOf("mouse buttons"), event.buttons);
+}
+
+// a right click over a painting is the program's, as over a native window, not the browser's menu (shift + right click
+// still opens it in Firefox)
+const programsClick = event => event.target.closest?.("canvas") && event.preventDefault();
 
 // the wheel over a painting turns the program's mouse_wheel, not the page; a trackpad's scroll in fractions of a step
 let wheelTurned = 0;
@@ -171,6 +182,7 @@ function pointOn(target, event) {
 function followPointer(element) {
 	for (const event of ["pointermove", "pointerdown", "pointerup"]) element.addEventListener(event, trackPointer);
 	element.addEventListener("wheel", trackWheel, { passive: false });
+	element.addEventListener("contextmenu", programsClick);
 	for (const event of ["pointerup", "pointercancel"]) document.addEventListener(event, releasePointer);
 	for (const event of ["keydown", "keyup"]) document.addEventListener(event, trackKey);
 	globalThis.addEventListener("blur", releaseKeys);

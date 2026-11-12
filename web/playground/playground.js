@@ -271,7 +271,7 @@ function startWorker(restarts = 0) {
 	// a slow start (the CI runner) finishes after the first run began: "ready" then must not hide its "running…"
 	workerReady.then(() => stopLoading() || showing || setStatus("ready"), failure => stopLoading() || setStatus(failure.message, true));
 	workerSettled = "starting";
-	workerReady.then(() => workerSettled = "ready", failure => workerSettled = `failed: ${failure.message}`);
+	workerReady.then(() => workerSettled = "ready", failure => workerSettled = `${WORKER_FAILED}${failure.message}`);
 	tellSystemValues();
 	sharePointer();
 	worker.postMessage({ stored: keptValues(), session: keptValues([SESSION_STORE]) });
@@ -311,7 +311,7 @@ function newWorker(restarts = 0) {
 		// worker.js or a script it imports failed to load: without this the first run waits for "ready" forever (card firefox-hello-hang)
 		// once ready, an error event is the worker ending under a run: the browser's word for it, else what a bare one
 		// means (iPad Safari ends a Worker so when it runs out of memory or stack, card ipad-storage-bug)
-		starting.onerror = event => starting.isReady ? workerEnded(starting, event.message || WORKER_ENDED) : failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
+		starting.onerror = event => starting.isReady ? workerEnded(starting, event.message || WORKER_ENDED) : failed(new Error(`the compiler's worker failed to start: ${event.message || WORKER_NOT_STARTED}`));
 		starting.onmessage = ({ data }) => {
 			starting.heard = { type: data?.type, at: Math.round(performance.now()) }; // playground.js hungWhere
 			if (!FREQUENT_WORKER_MESSAGES.has(data?.type)) keepConsoleEntry("worker", [data?.type ?? String(data), ...(data?.stage ? [data.stage] : data?.message ? [data.message] : [])]);
@@ -753,6 +753,9 @@ const slept = (run, milliseconds) => stopAfterTimeout(run, run.deadline - Date.n
 // a program that does not stop blocks the worker: replace it
 const ANIMATION_STOPPED = "animation stopped";
 const WORKER_ENDED = "the browser ended it without a message (out of memory or stack?)";
+// a worker's error before it was ready, of no message: the browser ended it, or one of its scripts did not load
+const WORKER_NOT_STARTED = "the browser ended it before it was ready (out of memory?), or worker.js did not load";
+const WORKER_FAILED = "failed: "; // workerSettled of a worker that failed to start
 // the shown worker ended under the pending run: the run fails saying so, a fresh worker takes the next
 function workerEnded(ended, why) {
 	if (ended !== worker) return;
@@ -844,6 +847,8 @@ function runInWorker(code, file, asData, eventsFor) {
 	const reported = new Promise((resolve, reject) => Object.assign(run, { resolve, reject }));
 	run.stopTimer = setTimeout(() => pending === run && showStop(true), STOP_GRACE_MS);
 	pending = run;
+	// a worker that failed to start, its failure shown, is not asked again: each run after it starts a new one
+	if (workerSettled.startsWith(WORKER_FAILED)) startWorker();
 	workerReady.then(() => pending === run && startInWorker(run, code, file, asData), failure => {
 		clearTimeout(run.stopTimer);
 		if (pending === run) pending = undefined;
