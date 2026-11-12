@@ -114,7 +114,8 @@ if wants 1; then
 			echo "compile cost slower, measured again: ${slower//$'\n'/; }"
 			costs=$(compile_costs_again "$tree/lib" "$warp") && slower=$(compile_costs_slower "$costs" "$main_costs")
 		fi
-		accepted=$(git log -1 --format=%B HEAD | grep -m1 '^speed-ok:')
+		# any commit not yet on main may carry it: a landing batch's own merge commits only list the cards' subjects
+		accepted=$(git log --format=%B origin/main..HEAD | grep -m1 '^speed-ok:')
 		against="main's compiler $(cut -d' ' -f1 "$installed/warp.wasm.inputs")"
 		if [[ -z $slower ]]; then echo "ok   compile cost: $(compile_costs_shown "$costs") (within +$COMPILE_COST_SLOWER_PERCENT% of $against)"
 		elif [[ -n $accepted ]]; then echo "ok   compile cost slower, $accepted: ${slower//$'\n'/; } (against $against)"

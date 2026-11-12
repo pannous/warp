@@ -24,6 +24,11 @@ STORAGE_BINDING = 2
 TRIANGLE_CORNERS = 3
 QUAD_CORNERS = 4
 PIXEL_BYTES = 4
+// a color word's alpha and green bytes, and one byte (color_word)
+ALPHA_GREEN = 0xFF00FF00
+BYTE = 0xFF
+// the kept buffer pixels are read back through (pixels_mapped)
+READBACK_NAME = "pixels"
 ROW_ALIGNMENT = 256
 VECTOR_FLOATS = 4
 // 64 KB, the uniform every WebGPU device binds (maxUniformBufferBindingSize), as the playground's
@@ -269,8 +274,8 @@ global shown_width = 0
 global shown_height = 0
 global first_painting_ms = 0
 global paintings = 0
-# storage buffers kept across frames, by name. A GPU-list upload writes the same buffer again
-global stored_buffers = []
+# the buffers kept across frames by name and use (kept_buffer)
+global stored_buffers = {}
 
 // --- memory for C
 struct_of(size: int): int := calloc(1, size)
@@ -465,7 +470,7 @@ member_laid_out(layout: Layout, name: text, value: any): text := {
 	}
 	uniform_member(layout, name, [float(value)])
 }
-array_laid(layout: Layout, name: text, cells: list): text := {
+array_laid(layout: Layout, name: text, cells: any): text := {
 	why = array_room(layout)
 	if why != "" { return why }
 	layout.arrays.add([name, cells])
@@ -620,41 +625,42 @@ buffer_of(size: int, usage: int): int := {
 	set_field_i64(descriptor, 32, size)
 	wgpuDeviceCreateBuffer(device, descriptor)
 }
-class StoredBuffer { name: text, buffer: int, bytes: int }
-// the storage buffer kept for this name at this size. A later frame writes it again: an order list changes in place
-kept_storage(name: text, bytes: int): int := {
-	for kept in stored_buffers {
-		if kept.name == name {
-			if kept.bytes != bytes {
-				wgpuBufferRelease(kept.buffer)
-				kept.buffer = buffer_of(bytes, BUFFER_STORAGE + BUFFER_COPY_DST)
-				kept.bytes = bytes
-			}
-			return kept.buffer
-		}
-	}
-	buffer = buffer_of(bytes, BUFFER_STORAGE + BUFFER_COPY_DST)
-	stored_buffers.add(StoredBuffer(name, buffer, bytes))
+class StoredBuffer { buffer: int, bytes: int }
+// the buffer kept for this name and use, which each later frame or call writes again rather than making its own (an
+// order list changes in place); one of another size replaces it
+kept_buffer(name: text, bytes: int, usage: int): int := {
+	key = name + " " + usage
+	kept = stored_buffers.get(key)
+	if kept != ø and kept.bytes == bytes { return kept.buffer }
+	if kept != ø { wgpuBufferRelease(kept.buffer) }
+	buffer = buffer_of(bytes, usage + BUFFER_COPY_DST)
+	stored_buffers[key] = StoredBuffer(buffer, bytes)
 	buffer
 }
-// a GPU list [f32] copied from the program's memory in one write. 0 where this value is not one, or the program's
-// memory was never recorded (then the caller walks the numbers)
-gpu_storage(name: text, cells: list): int := {
+// a GPU list [f32] copied from the program's memory in one write, 0 where this value is not one (the caller walks
+// its numbers)
+gpu_storage(name: text, cells: any): int := {
 	place = gpu_list_place(cells)
-	base = system_value("program memory")
-	if place < 0 or base == 0 {
-		slow("the storage array " + name + " is not a GPU list (or the program memory was never recorded): its numbers are walked on every upload", "make it as " + name + ": [f32] = …")
-		return 0
-	}
+	if place < 0 { return 0 }
 	bytes = #cells * 4
-	buffer = kept_storage(name, bytes)
-	wgpuQueueWriteBuffer(queue, buffer, 0, pointer_handle(base + shift_right(place, 32)), bytes)
+	buffer = kept_buffer(name, bytes, BUFFER_STORAGE)
+	wgpuQueueWriteBuffer(queue, buffer, 0, program_cells(place), bytes)
 	buffer
 }
-// a buffer holding the cells (a GPU list's place, else numbers as f32 bits or int32s), bound so
-cells_buffer(cells: list, usage: int): int := {
+// where a GPU list's cells start in the program's memory, as C sees them; never a walk number by number where the
+// driver recorded no memory (the run's start records it)
+program_cells(place: int): int := {
+	base = system_value("program memory")
+	if base == 0 { raise "a GPU list's cells: the driver recorded no program memory to copy them from" }
+	pointer_handle(base + shift_right(place, 32))
+}
+// a buffer of its own holding the cells (numbers as f32 bits or int32s), bound so: one of several in one command
+// encoder (gpu_pass)
+cells_buffer(cells: list, usage: int): int := cells_written(buffer_of(#cells * 4, usage + BUFFER_COPY_DST), cells)
+// the buffer kept for this name and use (kept_buffer), the cells written into it
+cells_kept(name: text, cells: list, usage: int): int := cells_written(kept_buffer(name, #cells * 4, usage), cells)
+cells_written(buffer: int, cells: list): int := {
 	size = #cells * 4
-	buffer = buffer_of(size, usage + BUFFER_COPY_DST)
 	staged = calloc(1, size)
 	memcpy(staged, cells)
 	wgpuQueueWriteBuffer(queue, buffer, 0, staged, size)
@@ -762,17 +768,21 @@ atlas_pixels(spec: text): int := {
 	atlas_span = raw
 	dest
 }
-// a storage buffer of a baked atlas, or of a list of numbers
-stored_array(value: any, usage: int): any := {
+// the storage buffer kept for the array's name (kept_buffer) and its bytes: a baked atlas, a GPU list copied in one
+// write, else a list of numbers
+stored_array(name: text, value: any, usage: int): any := {
 	if value is text {
 		pixels = atlas_pixels(value)
 		if pixels == 0 { return ø }
-		buffer = buffer_of(atlas_span, usage + BUFFER_COPY_DST)
+		buffer = kept_buffer(name, atlas_span, usage)
 		wgpuQueueWriteBuffer(queue, buffer, 0, pixels, atlas_span)
 		return [buffer, atlas_span]
 	}
+	listed = gpu_storage(name, value)
+	if listed != 0 { return [listed, #value * 4] }
+	slow("the storage array " + name + " is not a GPU list: its numbers are walked to f32 bits on every upload", "make it as " + name + ": [f32] = …")
 	cells = f32_cells(value)
-	[cells_buffer(cells, usage), count(cells) * 4]
+	[cells_kept(name, cells, usage), #cells * 4]
 }
 // bind group entries, each [binding, buffer or 0, its size, texture view or 0]
 bindings_of(layout: int, entries: list): int := {
@@ -837,7 +847,7 @@ previous_kept(image: int) := {
 
 // --- a drawing: the shader's pipeline for a target format, its values bound; corners and instances: a full image's
 // triangle once, or the quads of a shader with its own vertex stage
-class Drawing { pipeline: int, bindings: int, buffers: list, previous: int, reads_previous: bool, corners: int, instances: int, depth: bool, index_buffer: int, index_count: int, width: int, height: int, named: list, compute: text, workgroups: list, indirect_buffer: int, indirect_words: int, compute_pipeline: int, compute_bindings: int }
+class Drawing { pipeline: int, bindings: int, previous: int, reads_previous: bool, corners: int, instances: int, depth: bool, index_buffer: int, index_count: int, width: int, height: int, named: list, compute: text, workgroups: list, indirect_buffer: int, indirect_words: int, compute_pipeline: int, compute_bindings: int }
 drawing_made(shader: text, values: map, width: int, height: int): any := {
 	gpu_failure = ""
 	if not device_ready() { return ø }
@@ -857,7 +867,7 @@ drawing_made(shader: text, values: map, width: int, height: int): any := {
 		failed("an indexed indirect draw is five numbers")
 		return ø
 	}
-	drawing = Drawing(0, 0, [], 0, names(shader, PREVIOUS_HOLE), if quads then QUAD_CORNERS else TRIANGLE_CORNERS, if quads or indexed then layout.instances else 1, layout.depth, 0, #layout.indices, width, height, [], layout.compute, layout.workgroups, 0, #layout.indirect, 0, 0)
+	drawing = Drawing(0, 0, 0, names(shader, PREVIOUS_HOLE), if quads then QUAD_CORNERS else TRIANGLE_CORNERS, if quads or indexed then layout.instances else 1, layout.depth, 0, #layout.indices, width, height, [], layout.compute, layout.workgroups, 0, #layout.indirect, 0, 0)
 	body = if drawing.reads_previous then renamed(shader, PREVIOUS_HOLE, PREVIOUS_FUNCTION) else shader
 	// each storage array the shader reads: `values.mesh` its own array warp_values_mesh
 	read_arrays = []
@@ -879,8 +889,7 @@ drawing_made(shader: text, values: map, width: int, height: int): any := {
 	if drawing.pipeline == 0 { return ø }
 	entries = []
 	if #layout.declarations > 0 {
-		uniform = cells_buffer(f32_cells(layout.floats), BUFFER_UNIFORM)
-		drawing.buffers.add(uniform)
+		uniform = cells_kept(VALUES_NAME, f32_cells(layout.floats), BUFFER_UNIFORM)
 		entries.add([VALUES_BINDING, uniform, #layout.floats * 4, 0])
 	}
 	if drawing.reads_previous {
@@ -889,19 +898,11 @@ drawing_made(shader: text, values: map, width: int, height: int): any := {
 	}
 	stored = {}
 	for array in layout.arrays {
-		// a GPU list keeps its own buffer, written in one go (gpu_storage); anything else is a buffer of this drawing
-		kept = if array[1] is list then gpu_storage(array[0], array[1]) else 0
-		if kept != 0 {
-			stored[array[0]] = [kept, #array[1] * 4]
-			drawing.named.add([array[0], kept, #array[1] * 4])
-			continue
-		}
-		made = stored_array(array[1], BUFFER_STORAGE)
+		made = stored_array(array[0], array[1], BUFFER_STORAGE)
 		if made == ø {
 			drawing_released(drawing)
 			return ø
 		}
-		drawing.buffers.add(made[0])
 		stored[array[0]] = made
 		drawing.named.add([array[0], made[0], made[1]])
 	}
@@ -913,14 +914,12 @@ drawing_made(shader: text, values: map, width: int, height: int): any := {
 	if indexed {
 		usage = BUFFER_INDEX
 		if layout.compute != "" { usage = usage + BUFFER_STORAGE }
-		drawing.index_buffer = cells_buffer([low_bits(int(x), 32) for x in layout.indices], usage)
-		drawing.buffers.add(drawing.index_buffer)
+		drawing.index_buffer = cells_kept(INDICES_NAME, [low_bits(int(x), 32) for x in layout.indices], usage)
 		drawing.named.add([INDICES_NAME, drawing.index_buffer, drawing.index_count * WORD_BYTES])
 	}
 	if #layout.indirect > 0 {
 		words = [low_bits(int(x), 32) for x in layout.indirect]
-		drawing.indirect_buffer = cells_buffer(words, BUFFER_INDIRECT + BUFFER_STORAGE)
-		drawing.buffers.add(drawing.indirect_buffer)
+		drawing.indirect_buffer = cells_kept(INDIRECT_NAME, words, BUFFER_INDIRECT + BUFFER_STORAGE)
 		drawing.named.add([INDIRECT_NAME, drawing.indirect_buffer, #words * WORD_BYTES])
 	}
 	drawing
@@ -929,7 +928,6 @@ drawing_released(drawing: Drawing) := {
 	if drawing.bindings != 0 { wgpuBindGroupRelease(drawing.bindings) }
 	if drawing.compute_bindings != 0 { wgpuBindGroupRelease(drawing.compute_bindings) }
 	if drawing.compute_pipeline != 0 { wgpuComputePipelineRelease(drawing.compute_pipeline) }
-	for buffer in drawing.buffers { wgpuBufferRelease(buffer) }
 	if drawing.previous != 0 { wgpuTextureViewRelease(drawing.previous) }
 }
 compute_pipeline_made(compiled: int): int := {
@@ -1160,17 +1158,38 @@ host_shader_painted(given_shader, width: int, height: int, values: any, pixels: 
 	if shader_painted(text(given_shader), width, height, values, pixels) then 0 else said_failed("paint of a shader")
 // gpu_render(shader, width, height, values): the shader's pixels, each a color word as `red` is one (alpha, red, green,
 // blue from the highest byte, as the page gives them); a shader that fails raises with why
-// the RGBA bytes of a pixel, lowest first, in a color word's order: blue, green, red, alpha
-WORD_BYTE_ORDER = [2, 1, 0, 3]
 host_gpu_render(given_shader, width: int, height: int, values: any): any? := {
 	gpu_failure = ""
 	size = width * height * PIXEL_BYTES
 	pixels = struct_of(size)
 	painted = shader_painted(text(given_shader), width, height, values, pixels)
-	bytes = field_bytes(pixels, 0, size)
+	words = if painted then pixel_words(pixels, width, height, width * PIXEL_BYTES) else []
 	free(pixels)
-	if not painted { return error(gpu_failure) }
-	[bytes_int([byte_at(bytes, PIXEL_BYTES * i + k) for k in WORD_BYTE_ORDER], "little") for i in 0 ..< width * height]
+	if painted then words else error(gpu_failure)
+}
+// the color words of RGBA pixels in memory, rows `stride` bytes apart, one C read a pixel
+pixel_words(memory: int, width: int, height: int, stride: int): list := [color_word(field_u32(memory, row * stride + col * PIXEL_BYTES)) for row in 0 ..< height for col in 0 ..< width]
+// a pixel's RGBA bytes read as one little-endian word, as a color word (alpha, red, green, blue from the highest byte):
+// red and blue change places
+color_word(rgba: int): int := both_bits(rgba, ALPHA_GREEN) + (both_bits(rgba, BYTE) << 16) + both_bits(shift_right(rgba, 16), BYTE)
+// the image's pixels copied into the kept readback buffer by the encoder, which is then submitted: [that buffer, the
+// address of its rows (copy_stride(width) bytes apart), mapped until the caller unmaps it], the address 0 and
+// gpu_failure where they cannot be read
+pixels_mapped(encoder: int, image: int, width: int, height: int): list := {
+	stride = copy_stride(width)
+	readback = kept_buffer(READBACK_NAME, stride * height, BUFFER_MAP_READ)
+	source = struct_of(COPY_TEXTURE)
+	set_field_pointer(source, 0, image)
+	set_field_i32(source, 24, ASPECT_ALL)
+	target = struct_of(COPY_BUFFER)
+	set_field_i32(target, 8, stride)
+	set_field_i32(target, 12, height)
+	set_field_pointer(target, 16, readback)
+	wgpuCommandEncoderCopyTextureToBuffer(encoder, source, target, extent_of(width, height))
+	free(source)
+	free(target)
+	submitted(encoder)
+	[readback, buffer_mapped(readback, stride * height)]
 }
 // upload and draw, in milliseconds, when the program asked (--times)
 paint_frame_noted(upload: int, draw: int) := { if paint_timing { eprint("splat-frame upload " + upload + " draw " + draw) } }
@@ -1187,23 +1206,13 @@ shader_painted(shader: text, width: int, height: int, values: any, pixels: int):
 		wgpuCommandEncoderRelease(encoder)
 		return no
 	}
-	row_bytes = (width * PIXEL_BYTES + ROW_ALIGNMENT - 1) /! ROW_ALIGNMENT * ROW_ALIGNMENT
-	readback = buffer_of(row_bytes * height, BUFFER_MAP_READ + BUFFER_COPY_DST)
-	copied_from = struct_of(COPY_TEXTURE)
-	set_field_pointer(copied_from, 0, image)
-	set_field_i32(copied_from, 24, ASPECT_ALL)
-	copied_into = struct_of(COPY_BUFFER)
-	set_field_i32(copied_into, 8, row_bytes)
-	set_field_i32(copied_into, 12, height)
-	set_field_pointer(copied_into, 16, readback)
-	wgpuCommandEncoderCopyTextureToBuffer(encoder, copied_from, copied_into, extent_of(width, height))
-	submitted(encoder)
-	mapped = buffer_mapped(readback, row_bytes * height)
+	read = pixels_mapped(encoder, image, width, height)
+	mapped = read[1]
 	if mapped != 0 {
-		for row in 0 ..< height { memmove(pointer_moved(pixels, row * width * PIXEL_BYTES), pointer_moved(mapped, row * row_bytes), width * PIXEL_BYTES) }
-		wgpuBufferUnmap(readback)
+		stride = copy_stride(width)
+		for row in 0 ..< height { memmove(pointer_moved(pixels, row * width * PIXEL_BYTES), pointer_moved(mapped, row * stride), width * PIXEL_BYTES) }
+		wgpuBufferUnmap(read[0])
 	}
-	wgpuBufferRelease(readback)
 	drawing_released(drawing)
 	image_done(drawing, image)
 	paint_frame_noted(t1 - t0, wall_clock_ms() - t1)
@@ -1305,7 +1314,7 @@ picture_presented(encoder: int, picture: int, layer: int, width: int, height: in
 		return no
 	}
 	texture_view = wgpuTextureCreateView(picture, 0)
-	drawing = Drawing(picture_pipeline, bindings_of(wgpuRenderPipelineGetBindGroupLayout(picture_pipeline, 0), [[0, 0, 0, texture_view]]), [], 0, no, TRIANGLE_CORNERS, 1, no, 0, 0, 0, 0, [], "", [1, 1, 1], 0, 0, 0, 0)
+	drawing = Drawing(picture_pipeline, bindings_of(wgpuRenderPipelineGetBindGroupLayout(picture_pipeline, 0), [[0, 0, 0, texture_view]]), 0, no, TRIANGLE_CORNERS, 1, no, 0, 0, 0, 0, [], "", [1, 1, 1], 0, 0, 0, 0)
 	shown = presented(encoder, drawing, letterboxed(width, height))
 	wgpuBindGroupRelease(drawing.bindings)
 	wgpuTextureViewRelease(texture_view)
@@ -1419,8 +1428,6 @@ array_given(array: StorageArray, numbers: any) := {
 	array.place = gpu_list_place(numbers)
 	array.cell = if array.place < 0 then "" else GPU_CELLS[gpu_list_cell(numbers)]
 }
-// a GPU list's cells: their address in the program's memory, as C sees it
-cells_address(array: StorageArray): int := pointer_handle(system_value("program memory") + shift_right(array.place, 32))
 // a C pointer `by` bytes on
 pointer_moved(pointer: int, by: int): int := pointer_handle(handle_pointer(pointer) + by)
 // an array's cells as the shader reads them: a GPU list of its type where it is, else the numbers as its type's bits
@@ -1428,12 +1435,12 @@ array_buffer(array: StorageArray): int := {
 	usage = BUFFER_STORAGE + BUFFER_COPY_SRC
 	if array.cell == array.element {
 		size = buffer_bytes(array)
-		buffer = buffer_of(size, usage + BUFFER_COPY_DST)
-		wgpuQueueWriteBuffer(queue, buffer, 0, cells_address(array), size)
+		buffer = kept_buffer(array.name, size, usage)
+		wgpuQueueWriteBuffer(queue, buffer, 0, program_cells(array.place), size)
 		return buffer
 	}
 	slow("the storage array " + array.name + " is not a GPU list: each number is walked to its bits on every upload", "make it as " + array.name + ": [" + array.element + "] = …")
-	cells_buffer([cell_bits(array.element, x) for x in array.given], usage)
+	cells_kept(array.name, [cell_bits(array.element, x) for x in array.given], usage)
 }
 // why an array cannot bind what it is given, ø where it can (as host-gpu.js cellsUnfit says it): an array<f16> takes
 // only a GPU list [f16], whose cells it binds as they are, and a GPU list [f16] only one; a GPU list [bf16] has no
@@ -1460,7 +1467,7 @@ arrays_computed(shader: text, order: list, workgroups: int): any := {
 	}
 	storages = order.map(array => array_buffer(array))
 	sizes = order.map(array => buffer_bytes(array))
-	readbacks = sizes.map(size => buffer_of(size, BUFFER_MAP_READ + BUFFER_COPY_DST))
+	readbacks = [kept_buffer(order[a].name, sizes[a], BUFFER_MAP_READ) for a in 0 ..< #order]
 	bindings = bindings_of(wgpuComputePipelineGetBindGroupLayout(pipeline, 0), [[order[a].binding, storages[a], sizes[a], 0] for a in 0 ..< #order])
 	encoder = wgpuDeviceCreateCommandEncoder(device, 0)
 	pass = wgpuCommandEncoderBeginComputePass(encoder, 0)
@@ -1478,7 +1485,6 @@ arrays_computed(shader: text, order: list, workgroups: int): any := {
 		left.add(array_left(order[a], mapped))
 		wgpuBufferUnmap(readbacks[a])
 	}
-	for buffer in storages + readbacks { wgpuBufferRelease(buffer) }
 	wgpuBindGroupRelease(bindings)
 	wgpuComputePipelineRelease(pipeline)
 	left
@@ -1486,14 +1492,13 @@ arrays_computed(shader: text, order: list, workgroups: int): any := {
 // what the shader left in an array: a GPU list's cells written where they are (the list itself), else a list of numbers
 array_left(array: StorageArray, mapped: int): any := {
 	if array.cell == array.element {
-		memmove(cells_address(array), mapped, cells_bytes(array))
+		memmove(program_cells(array.place), mapped, cells_bytes(array))
 		return array.given
 	}
-	cells = field_bytes(mapped, 0, #array.given * 4)
-	numbers = [cell_number(array.element, bytes_int([byte_at(cells, 4 * i + k) for k in 0 ..< 4], "little")) for i in 0 ..< #array.given]
+	numbers = [cell_number(array.element, field_u32(mapped, WORD_BYTES * i)) for i in 0 ..< #array.given]
 	if array.place < 0 { return numbers }
 	// (a GPU list of another cell type takes the numbers into its own cells)
-	memcpy(cells_address(array), [cell_bits(array.cell, x) for x in numbers])
+	memcpy(program_cells(array.place), [cell_bits(array.cell, x) for x in numbers])
 	array.given
 }
 host_gpu_computed(given_shader, arrays: any, workgroups: int): any? := {
@@ -1682,7 +1687,6 @@ passes_finished() := {
 	encoder = pass_encoder
 	pass_encoder = 0
 	submitted(encoder)
-	wgpuDevicePoll(device, 1, 0)
 	passes_released()
 }
 fields_cleared(set: FieldSet) := {
@@ -1696,24 +1700,12 @@ fields_cleared(set: FieldSet) := {
 		}
 	}
 	submitted(encoder)
-	wgpuDevicePoll(device, 1, 0)
 	for texture_view in views { wgpuTextureViewRelease(texture_view) }
 }
 // the rows of a copy, 256 bytes each, as WebGPU aligns them
 copy_stride(width: int): int := {
 	raw = width * PIXEL_BYTES
 	((raw + ROW_ALIGNMENT - 1) /! ROW_ALIGNMENT) * ROW_ALIGNMENT
-}
-color_words(mapped: int, width: int, height: int, stride: int): list := {
-	bytes = field_bytes(mapped, 0, stride * height)
-	words = []
-	for row in 0 ..< height {
-		for col in 0 ..< width {
-			at = row * stride + col * PIXEL_BYTES
-			words.add(bytes_int([byte_at(bytes, at + k) for k in WORD_BYTE_ORDER], "little"))
-		}
-	}
-	words
 }
 // draw the shader into `target` (a texture), reading `reads`. no, and gpu_failure, where it cannot
 frame_opened() := { pass_frame_open = yes }
@@ -1852,7 +1844,6 @@ host_gpu_show(given_shader, id: int, given: any): int := {
 	encoder = pass_encoder
 	pass_encoder = 0
 	shown = picture_presented(encoder, image, layer, set.width, set.height)
-	wgpuDevicePoll(device, 1, 0)
 	passes_released()
 	wgpuTextureRelease(image)
 	frame_closed()
@@ -1890,7 +1881,6 @@ host_gpu_show_sized(given_shader, id: int, width: int, height: int, given: any):
 	encoder = pass_encoder
 	pass_encoder = 0
 	shown = picture_presented(encoder, image, layer, shade_w, shade_h)
-	wgpuDevicePoll(device, 1, 0)
 	passes_released()
 	wgpuTextureRelease(image)
 	frame_closed()
@@ -1911,32 +1901,14 @@ host_gpu_picture_sized(given_shader, id: int, width: int, height: int, given: an
 		passes_finished()
 		return error(gpu_failure)
 	}
-	stride = copy_stride(width)
-	readback = buffer_of(stride * height, BUFFER_MAP_READ + BUFFER_COPY_DST)
-	source = struct_of(COPY_TEXTURE)
-	set_field_pointer(source, 0, image)
-	set_field_i32(source, 24, ASPECT_ALL)
-	dest = struct_of(COPY_BUFFER)
-	set_field_i32(dest, 8, stride)
-	set_field_i32(dest, 12, height)
-	set_field_pointer(dest, 16, readback)
-	wgpuCommandEncoderCopyTextureToBuffer(pass_encoder, source, dest, extent_of(width, height))
-	free(source)
-	free(dest)
 	encoder = pass_encoder
 	pass_encoder = 0
-	submitted(encoder)
-	wgpuDevicePoll(device, 1, 0)
+	read = pixels_mapped(encoder, image, width, height)
 	passes_released()
 	wgpuTextureRelease(image)
-	mapped = buffer_mapped(readback, stride * height)
-	if mapped == 0 {
-		wgpuBufferRelease(readback)
-		return error(gpu_failure)
-	}
-	words = color_words(mapped, width, height, stride)
-	wgpuBufferUnmap(readback)
-	wgpuBufferRelease(readback)
+	if read[1] == 0 { return error(gpu_failure) }
+	words = pixel_words(read[1], width, height, copy_stride(width))
+	wgpuBufferUnmap(read[0])
 	frame_closed()
 	pass_ms = 0
 	words
