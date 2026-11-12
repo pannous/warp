@@ -51,9 +51,9 @@ const OVER = { color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha"
 const PIXEL_BYTES = 4;
 const ROW_ALIGNMENT = 256; // a copied row is padded to 256 bytes
 const OPAQUE = 0xFF000000;
-// what a painting shows before a shader colored it: the paper of lib/draw.warp (host-media.js PAINT_PAPER), not black
-const PAPER_SHADE = 250 / 255;
-const PAPER = { r: PAPER_SHADE, g: PAPER_SHADE, b: PAPER_SHADE, a: 1 };
+// what a painting shows before a shader colored it: the paper of lib/draw.warp (host-media.js PAINT_PAPER, in dark mode
+// PAINT_INK), not black
+const paperColor = () => { const shade = (darkTheme() ? PAINT_INK : PAINT_PAPER) / 255; return { r: shade, g: shade, b: shade, a: 1 }; };
 const VALUES_NAME = "values"; // gpu_render's values as the shader names them
 const VALUES_BINDING = 0;
 // `$previous(at)` (card shader-read): the color the shader left at pixel `at` in its previous frame of this size, black
@@ -198,7 +198,7 @@ async function gpuCanvas({ id, replaces }) {
 	return id;
 }
 
-const paperAttachment = image => ({ view: image.createView(), loadOp: "clear", clearValue: PAPER, storeOp: "store" });
+const paperAttachment = image => ({ view: image.createView(), loadOp: "clear", clearValue: paperColor(), storeOp: "store" });
 
 // the pixels the fragment shader colored, row by row; given a `canvas` id, drawn into that page canvas instead
 async function gpuRendered({ shader, width, height, values, canvas }) {
