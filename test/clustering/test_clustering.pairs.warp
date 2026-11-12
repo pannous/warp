@@ -1,14 +1,14 @@
 # use clustering: k-means (Lloyd) and e-means (arXiv 2611.09501), notes/emeans.md. Two square blobs of four points:
 # both find each blob's centre, and every point lies 2 (squared) from its centre
 
-'use clustering; use random; seed(1); c = emeans([[0, 0], [0, 2], [2, 0], [2, 2], [10, 10], [10, 12], [12, 10], [12, 12]], 2); [sort_by(c.centroids, p => p#1), c.error]'	[[[1, 1], [11, 11]], 2]
-'use clustering; use random; seed(1); c = kmeans([[0, 0], [0, 2], [2, 0], [2, 2], [10, 10], [10, 12], [12, 10], [12, 12]], 2); [sort_by(c.centroids, p => p#1), c.error]'	[[[1, 1], [11, 11]], 2]
+'use clustering; use random; seed(1); c = emeans([[0, 0], [0, 2], [2, 0], [2, 2], [10, 10], [10, 12], [12, 10], [12, 12]], 2); [sort(c.centroids, by: p => p#1), c.error]'	[[[1, 1], [11, 11]], 2]
+'use clustering; use random; seed(1); c = kmeans([[0, 0], [0, 2], [2, 0], [2, 2], [10, 10], [10, 12], [12, 10], [12, 12]], 2); [sort(c.centroids, by: p => p#1), c.error]'	[[[1, 1], [11, 11]], 2]
 
 # the labels name each point's cluster: one for each blob
 'use clustering; use random; seed(2); l = emeans([[0, 0], [0, 2], [2, 0], [2, 2], [10, 10], [10, 12], [12, 10], [12, 12]], 2).labels; [l#1 == l#2, l#1 == l#4, l#5 == l#8, l#1 != l#5]'	[yes, yes, yes, yes]
 
 # any dimension: points on a line
-'use clustering; use random; seed(3); sort_by(emeans([[0], [1], [10], [11]], 2).centroids, p => p#1)'	[[0.5], [10.5]]
+'use clustering; use random; seed(3); sort(emeans([[0], [1], [10], [11]], 2).centroids, by: p => p#1)'	[[0.5], [10.5]]
 
 # the same seed gives the same clustering
 'use clustering; use random; points = [[0, 0], [3, 1], [1, 4], [9, 9], [8, 2], [5, 5]]; seed(4); a = emeans(points, 3); seed(4); a.centroids == emeans(points, 3).centroids'	yes
