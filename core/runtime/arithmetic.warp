@@ -12,6 +12,9 @@ use "errors.warp"
 use "builders.warp"
 # `a + b` of values known only at run time: lists and texts join, numbers add, a marked number's mark kept
 node_add(a: Node, b: Node): Node := marks_kept(node_sum(a, b), a, b)
+# n holds a plain whole number with no type mark (no yes/no, hex or unit): the emitter's int-first operations take it
+# as the i64 it is (card untyped-counter-boxes)
+exact_int(n: Node): bool := not is_null(n) and marked_kind(n) == Kind.Int and is_plain_int(n)
 node_sum(a: Node, b: Node): Node := {
 	# ø, also `[]` in the lowered program, beside a list is a copy of that list (ø + ø the empty list), so a later
 	# `+=` growing the sum in place leaves the list untouched; a text after it shows ø ("a" + ø); ø is no start of a

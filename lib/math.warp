@@ -4,6 +4,7 @@
 // core/analysis/math_builtins.warp
 use reals
 use integers
+use bits
 use case_table
 
 // The math spellings of operators (decision operator-alias), every program reads them: each keeps the precedence
@@ -121,7 +122,36 @@ round_half_even(x: number): int := {
 	if rest > 1/2 or (rest == 1/2 and below % 2 != 0) then below + 1 else below
 }
 
-// gcd(a, b) is the core's (core/integers.warp), of any whole numbers
+// gcd(a, b) is the core's Euclid (core/integers.warp), of any whole numbers, past 64 bits included.
+// gcd_euclid names that function. gcd_binary is Stein's trailing-zero form for a signed machine word
+// (notes/binary_gcd.md). It is not gcd: a value past that word stays on Euclid.
+gcd_euclid(a, b) := gcd(a, b)
+// the largest signed machine word. One past it does not fit the word trailing_zeros counts.
+gcd_word_limit = 9223372036854775807
+gcd_binary(a, b) := {
+	x = if a < 0 then 0 - a else a
+	y = if b < 0 then 0 - b else b
+	if x == 0 or y == 0 { return x + y }
+	if x > gcd_word_limit or y > gcd_word_limit { return gcd(x, y) }
+	gcd_binary_word(x, y)
+}
+// both arguments positive and at most the largest signed word. Common factors of two come off by
+// trailing_zeros (wasm i64.ctz, lib/bits.warp), then subtract and shift.
+gcd_binary_word(a: int, b: int): int := {
+	x = a
+	y = b
+	common = trailing_zeros(x | y)
+	y = y >> trailing_zeros(y)
+	if y == 1 { return 1 << common }
+	while true {
+		x = x >> trailing_zeros(x)
+		if x == 1 { return 1 << common }
+		if x == y { return x << common }
+		if x < y { held = x; x = y; y = held }
+		x = x - y
+	}
+	0
+}
 lcm(a, b) := a /! gcd(a, b) * b
 // x within low and high: of vectors each component (min and max of a vector, card min-max)
 clamp(x, low, high) := each_any(x, e -> min(max(e, low), high))
