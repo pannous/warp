@@ -154,7 +154,12 @@ Examples: conditions; samples: control_flow, fizzbuzz
 
 A loop repeats work, so you write it only once.
 
-`for` runs once for each number.
+Do something repeatedly:
+```warp
+3 times: print("hi")
+```
+
+`for` runs once for each number:
 
 ```warp
 for i in 1 to 3 { print i }
@@ -384,7 +389,7 @@ Complex numbers come with `use complex`: `ⅈ` is the imaginary unit, √-1.
 
 ```warp => "-5+10ⅈ"
 use complex
-text((3 + 4ⅈ) * (1 + 2ⅈ))
+(3 + 4ⅈ) * (1 + 2ⅈ)
 ```
 
 Examples: numbers; samples: simple, factorial, power, gcd, collatz, quadratic, sum, sin, sine, measurements, units_dynamic, dates, bits, complex_numbers, complex_roots
@@ -815,7 +820,6 @@ use draw
 canvas(200, 120)
 circle(60, 60, 40, red)
 rect(110, 30, 70, 60, blue)
-line(0, 110, 200, 10, black)
 show()
 ```
 
@@ -825,7 +829,7 @@ sunset = image(160, 90, (x, y) => rgb(255, 2 * y, 90 + x))
 sunset.mirrored.blurred.show()
 ```
 
-Pictures also load, change (`flipped`, `cropped`, `tinted`, `grayed`, `each_pixel`) and save, `.save(./out.bmp)`:
+Pictures also load, change: `flipped`, `cropped`, `tinted`, `grayed`, `each_pixel` and save
 
 ```warp
 use image
@@ -898,8 +902,20 @@ use sound
 play C4
 play(C4+E4+G4, 1s)
 play(chord(A3, minor), 1s)
-play(scale(D4, dorian), 150ms)
+🎶
 ```
+
+As always, to see everything that a module provides, you can use 
+```warp
+help(sound)
+```
+
+To find gems such as 
+```warp
+use sound
+play(scale(D4, dorian), 150ms) 
+```
+
 
 Examples: melody; samples: music, harmony
 
@@ -911,7 +927,6 @@ Examples: melody; samples: music, harmony
 use sound
 tempo = 120
 play([C4 E4 G4 E4], beat(1/2))
-play(Pattern("c3 ~ [c3 c3] e3"))
 ```
 
 Examples: ; samples: rhythm, sound_patterns
