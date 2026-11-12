@@ -437,6 +437,16 @@ element_list_type(map: Node, scope: Scope): TypeWord := {
 # a scope's slots: the kinds of its variables (parameters among them) and their list types by name, its parameters,
 # the kinds of the main scope a body sees, the slots a declaration pinned, the globals main declares
 class Scope { kinds: map = {}; types: map = {}; parameters: map = {}; globals: map = {}; pinned: map = {}; declared_globals: map = {} }
+# the types of the globals the linked modules hold, as their compiles found them (prebuilt.warp global_type): the
+# program reads those globals and never declares them again (prelude_words.warp declared_only), so `for p in
+# canvas_pixels` of use draw reads ints
+linked_global_types(): map := {
+	types = {}
+	for image in module.linked_images {
+		for entry in image.globals { if entry#5 != "" and entry#1.starts_with(program_global_prefix) { types[entry#1[#program_global_prefix ..]] = entry#5 } }
+	}
+	types
+}
 
 # `(f a b) := body`, `(f a b) = body`, and `f := body` of a body reading `it` or `$0` or of a block of statements
 is_definition(n: Node): bool := count(defined_name(n)) > 0
@@ -961,7 +971,7 @@ analyze(program: Node): Node := {
 	results = {}
 	result_types = {}
 	scopes = {}
-	scopes[""] = Scope()
+	scopes[""] = Scope(types: linked_global_types())
 	for statement in flat_statements(program) {
 		if is_definition(statement) {
 			defined_functions[defined_name(statement)] = statement
