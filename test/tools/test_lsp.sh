@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# scripts/lsp.warp, warp's language server (card language-server): a scripted session over its standard input checks
+# lib/lsp/lsp.warp, warp's language server (card language-server): a scripted session over its standard input checks
 # what an editor gets back, go to definition and hover. Run it with bash test/tools/test_lsp.sh; the warp under test
 # is WARP (default the warp on PATH), its lib LIB (default its own; a tree's: LIB=<tree>/lib)
 source "$(dirname "$0")/../native/checks.sh"
 lib=${LIB:-$(dirname "$(readlink -f "$(command -v "$warp")")")}
-server=$(dirname "$0")/../../scripts/lsp.warp
+server=$(dirname "$0")/../../lib/lsp/lsp.warp
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
 framed() { # framed <json>: the message with its header

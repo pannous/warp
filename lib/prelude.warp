@@ -121,11 +121,11 @@ text_with_at(t: text, i: int, c: any): text := {
 // Python's `list(x)`: the list itself, a text's characters
 as_list(x) := x as list
 // `count x in y`, `y.count(x)`: how often x occurs as an item of a list or a character of a text, and how often part
-// occurs in a text, not overlapping: count_of("banana", "an") is 2; # counts, so a program's own count leaves them be
-count_item(xs, x) := #filter(xs, item => item == x)
+// occurs in a text, not overlapping: count("banana", "an") is 2; # counts, so a program's own count leaves them be
+occurrences(xs, x) := #filter(xs, item => item == x)
 // (a walk over the bytes, nothing allocated: split made a list of every piece only to count them, card count-of-split;
 // its counters are declared int, an untyped `at = 0` is an unbounded nat and walked 70x slower, card byte-walk)
-count_of(t: text, part: text): int := {
+occurrences(t: text, part: text): int := {
 	size: int = byte_size(part)
 	if size == 0 { return #split(t, part) - 1 }
 	last: int = byte_size(t) - size
@@ -141,14 +141,12 @@ count_of(t: text, part: text): int := {
 // the count of x in y, written `count(y, x)` or `y.count(x)` (arity_variants; `count x in y` counts a yes/no, refused): of a text its parts,
 // else its items, and of a function the items it holds for, `xs.count { |x| x > 1 }`; its own name, so `count xs`
 // stays the emitter's count
-count_in(y, x) := if y is text then count_of(y, "" + x) else if x is function then #filter(y, x) else count_item(y, x)
+count_in(y, x) := if y is text then occurrences(y, "" + x) else if x is function then #filter(y, x) else occurrences(y, x)
 // the first or last n items (fewer when xs has fewer): `xs.first(3)`, `first 3 of xs`
 first_items(xs, n) := xs[0: min(n, count(xs))]
 last_items(xs, n) := xs[max(count(xs) - n, 0): count(xs)]
 // `sort(words, {it.length})`: the items ordered by the key the function gives each (extensions/sugar/calls.warp)
 sorted_by_key(xs: list, key: function): list := list_sorted_by(xs, xs.map(key))
-// `people.sort_by(p => -p.age)`
-sort_by(xs: list, key: function): list := sorted_by_key(xs, key)
 // `sort(xs, (a, b) => a > b)`: the items in the order the function of two gives, yes where a goes before b; equal
 // items keep their order (a merge sort)
 sorted_in_order(xs: list, before: function): list := {
@@ -337,14 +335,14 @@ dict(pairs) := { out = {}; for pair in pairs { out[pair#1] = pair#2 }; out }
 // copy(x), clone(x): a value of its own that a change to x no longer reaches (decisions P205-P207): deep, each
 // field, item and entry copied too; copy(x, shallow: yes) is a new one sharing what x holds. A copy keeps its class
 copy(x, shallow: bool = no) := {
-	if x is list { return x.map(item => copy_item(item, shallow)) }
+	if x is list { return x.map(item => copied(item, shallow)) }
 	made = if x is map then {} else instance_copy(x)
 	# (neither a map nor an instance: a number, a text, … is a value of its own)
 	if made === x { return x }
-	for name in keys(x) { made[name] = copy_item(x[name], shallow) }
+	for name in keys(x) { made[name] = copied(x[name], shallow) }
 	made
 }
-copy_item(item, shallow: bool) := if shallow then item else copy(item)
+copied(item, shallow: bool) := if shallow then item else copy(item)
 // Python's dict.fromkeys(ks, value) (card python-aliases): a map of each key with the one value
 fromkeys(ks, value) := { out = {}; for k in ks { out[k] = value }; out }
 // Python's xs.pop(i) and m.pop(k) (card python-aliases, declaration_lowering removed_key): the element at the 0-based

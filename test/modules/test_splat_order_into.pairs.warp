@@ -1,0 +1,7 @@
+# order_by_depth of GPU-list centres into an order list (card gaussian-splats-sample, lib/splats.warp)
+# the same three centres as test_splat_view_order: depths 1, 5, 3, nearest first
+'use splats; c: [f32] = [0, 0, 1, 1, 0, 0, 5, 1, 0, 0, 3, 1]; o: [f32] = float[4]; n = order_by_depth(c, [0, 0, 0], [0, 0, 1], 0, o); [n, o#1, o#2, o#3]'	[3, 0, 2, 1]
+'use splats; c: [f32] = [0, 0, 2, 1, 0, 0, 2, 1]; o: [f32] = float[4]; n = order_by_depth(c, [0, 0, 0], [0, 0, 1], 0, o); [n, o#1, o#2]'	[2, 0, 1]
+'use splats; c: [f32] = [1, 2, 3, 1]; o: [f32] = float[4]; n = order_by_depth(c, [0, 0, 0], [0, 0, 1], 0, o); [n, o#1]'	[1, 0]
+'use splats; c: [f32] = float[0]; o: [f32] = float[4]; order_by_depth(c, [0, 0, 0], [0, 0, 1], 0, o)'	0
+'use splats; c: [f32] = [0, 0, 1, 1, 0, 0, 0.01, 1]; o: [f32] = float[4]; n = order_by_depth(c, [0, 0, 0], [0, 0, 1], 0.5, o); [n, o#1]'	[1, 0]
