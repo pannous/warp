@@ -3,3 +3,5 @@
 'use image; p = image("https://warp.pannous.com/samples/graphics/picture.bmp"); [p.width, p.height]'	[128, 96]
 'use image; p = image("://warp.pannous.com/samples/graphics/photo.jpg"); [p.width, p.height]'	[160, 120]
 'read_bytes("https://warp.pannous.com/no-such-file.jpg") failed'	yes
+'read("https://warp.pannous.com/assistant.json").contains("What the assistant")'	yes
+'read("://warp.pannous.com/no-such-file.json") failed'	yes
