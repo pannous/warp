@@ -42,6 +42,8 @@ PAGE_ELEMENT_TYPE = "HTMLElement"
 GLOBAL_INTERFACES = ["Window", "WindowOrWorkerGlobalScope", "WorkerGlobalScope", "WindowLocalStorage", "WindowSessionStorage"]
 # read from lib/ the first time a program reaches the page's js (load on demand)
 WEBIDL = "web.webidl"
+# ECMAScript's own globals (Math, JSON, Reflect), written as WebIDL beside the web's
+ECMASCRIPT_WEBIDL = "ecmascript.webidl"
 use "js_globals/webidl.warp"
 
 # --- the program ---
@@ -275,6 +277,6 @@ webidl_member_of(name: text, member: text): WebIdlMember? := {
 # name → WebIdlDefinition: the interfaces, mixins, namespaces and dictionaries with their partials, read once
 global webidl_definitions = ø
 webidl(): map := {
-	if webidl_definitions == ø { webidl_definitions = webidl_read(library_data(WEBIDL)) }
+	if webidl_definitions == ø { webidl_definitions = webidl_read(library_data(WEBIDL) + library_data(ECMASCRIPT_WEBIDL)) }
 	webidl_definitions
 }

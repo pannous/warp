@@ -31,3 +31,6 @@
 'use js URLSearchParams; p = URLSearchParams("a=1&b=2"); p.get("b")'	'2'
 'use js Blob; b = Blob(["abc"]); b.size'	3
 'use js Date; d = Date(0); d.getTime()'	0
+# decision js-math-nonsense (user 2026-11-12): ECMAScript's Math, JSON and Reflect are declared, a member they lack is refused at compile time
+'use js Math; Math.nonsense(2)'	error	Math has no nonsense
+'use js JSON; JSON.stringify([1, 2])'	'[1,2]'
