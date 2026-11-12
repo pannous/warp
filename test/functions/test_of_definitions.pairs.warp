@@ -9,3 +9,5 @@
 'double of int := it * 2; double 3'	6
 'double of an int := it * 2; double(3)'	6
 'canvas = {width: 1}; width of canvas := 12; canvas'	{width: 12}
+# a pronoun in a spaced definition head is no parameter: the definition reads it as the argument
+'twice it := it * 2; twice 3'	6
