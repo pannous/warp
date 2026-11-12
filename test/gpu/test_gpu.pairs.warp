@@ -20,3 +20,6 @@
 'try { gpu_render("@fragment fn main( {", 2, 2, {}) } catch e { 7 }'	7
 # a shader block's holes read the program's values in a render with values of its own too, as in paint's (card shader-value)
 'c = 1.0; s = shader { @fragment fn main() -> @location(0) vec4f { return vec4f($c, 0.0, 0.0, 1.0); } }; gpu_render(s, 1, 1, {})'	[4294901760]
+# a shader block in compute.toys' dialect, read off its entry point fn main_image, renders as compute_toy makes it (with compute_toys used); compute_toy of a fragment shader is that shader (card shader-value)
+'use compute_toys; s = shader { @compute @workgroup_size(16, 16) fn main_image(@builtin(global_invocation_id) id: vec3u) { textureStore(screen, id.xy, vec4f(1.0, 0.0, 0.0, 1.0)); } }; gpu_render(s, 1, 1)'	[4294901760]
+'toy = compute_toy("fn main_image(id: vec3u) {}"); compute_toy(toy) == toy'	yes
