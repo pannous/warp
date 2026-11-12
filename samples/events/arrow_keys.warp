@@ -11,8 +11,8 @@ on frame {
 	if held_key == RIGHT { x += 4 }
 	if held_key == UP { y -= 4 }
 	if held_key == DOWN { y += 4 }
-	clear(white)
+	clear(paper)
 	circle(x, y, 10, red)
-	label(10, 20, "held: " + held_key, black)
+	label(10, 20, "held: " + held_key, ink)
 	show()
 }
