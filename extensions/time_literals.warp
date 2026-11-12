@@ -10,7 +10,7 @@ read_time_literal(p: Parser): Node := {
 	parts = written.split("[")
 	unzoned = opaque(["data", parts#1])
 	# RFC 9557 suffixes: the zone's name, then `[key=value]` ones like `[_tzdata=warp-2026a]`, `!` marking one critical
-	suffixes = parts[1 ..].map(suffix => suffix.remove_suffix("]").remove_prefix("!"))
+	suffixes = parts[1 ..].map(suffix => suffix.remove(suffix: "]").remove(prefix: "!"))
 	named = suffixes.filter(suffix => not suffix.contains("="))
 	if #named == 0 then unzoned else List([symbol(zoned_word), unzoned, named#1], Bracket.Round, Separator.None)
 }

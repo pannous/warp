@@ -50,7 +50,7 @@ c_parameter_names = {bool: "i32", i32: "i32", u32: "i32", i64: "i64", f64: "f64"
 # case's int, an i32 (card enum-parameters, extensions/c_enums.warp): `IsKeyDown(key: KeyboardKey): bool from 'raylib'`
 global c_enum_types = []
 enum_mark = "enum "
-c_enums_declared(source: text): list := c_statements(source).filter(s => s.starts_with(enum_mark)).map(s => s.remove_prefix(enum_mark).split("{")#1.trim()).filter(name => name != "" and not name.contains(" "))
+c_enums_declared(source: text): list := c_statements(source).filter(s => s.starts_with(enum_mark)).map(s => s.remove(prefix: enum_mark).split("{")#1.trim()).filter(name => name != "" and not name.contains(" "))
 # a type word naming such an enum → its name, else ""
 c_enum_of(word: text): text := if word.trim() in c_enum_types then word.trim() else ""
 # the parameters the host fills, which take no argument
@@ -69,9 +69,9 @@ c_parameter_only_types = ["out", "length", "texts", "f32s", "i32s"]
 # a library as written, `'m'`, `"c"`, `sqlite3`, `libm` → its name; ø for none or a library of warp's
 c_library_of(written: text, quoted: bool): any := {
 	word = written.trim()
-	if word.ends_with(";") { word = word.remove_suffix(";").trim() }
+	if word.ends_with(";") { word = word.remove(suffix: ";").trim() }
 	bare = word
-	for quote in c_quotes { if word.starts_with(quote) and word.ends_with(quote) and #word > 2 { bare = word.remove_prefix(quote).remove_suffix(quote) } }
+	for quote in c_quotes { if word.starts_with(quote) and word.ends_with(quote) and #word > 2 { bare = word.remove(prefix: quote).remove(suffix: quote) } }
 	if quoted and bare == word { return ø }
 	if bare == "" or bare.contains(" ") or bare.contains("(") or bare in not_c_libraries { return ø }
 	c_library_aliases.get(bare) ?? bare
@@ -94,13 +94,13 @@ c_declaration(line: text): any := {
 	parameters = if written == "" then [] else written.split(",")
 	type_words = parameters.map(p => if p.contains(":") then p.split(":")#2 else "")
 	names = parameters.map(p => p.split(":")#1.trim())
-	result = tail#2.trim().remove_prefix(":").trim()
+	result = tail#2.trim().remove(prefix: ":").trim()
 	[name, library, type_words.map(c_type_of), names, c_type_of(result), type_words.map(c_enum_of), c_enum_of(result)]
 }
 # the bytes `bytesN` names, -1 when the word is not `bytes` and digits (`bytes0` is 0, `bytes40` is 40; plain `bytes` is -1)
 struct_size(word: text): int := {
 	if not word.starts_with(STRUCT_PREFIX) { return -1 }
-	digits = word.remove_prefix(STRUCT_PREFIX).bytes
+	digits = word.remove(prefix: STRUCT_PREFIX).bytes
 	if #digits == 0 { return -1 }
 	n = 0
 	for b in digits {
@@ -168,7 +168,7 @@ parts_joined(content: text, folder: text, seen: list): text := {
 }
 # a standard module's text with its parts, beside it in its own folder (lib/host/native_host/window.warp)
 library_module_with_parts(module: text): text := module_with_parts(file_source(std_module_path(module)) ?? "", folder_of(std_module_path(module)))
-module_part(statement: text): any := if statement.starts_with("use \"") and statement.ends_with(".warp\"") then statement.remove_prefix("use \"").remove_suffix("\"") else ø
+module_part(statement: text): any := if statement.starts_with("use \"") and statement.ends_with(".warp\"") then statement.remove(prefix: "use \"").remove(suffix: "\"") else ø
 # the C functions a used module's text declares: its foreign lines and the catalog's lines its imports name
 # (`import (calloc, field_u32) from 'c'`), as a program's own are (c_functions_of)
 c_declarations_used(content: text, catalog: list): list := {
@@ -219,9 +219,9 @@ native_path(library_folder: text, library: text): any := {
 crate_library_prefix = "rs_"
 c_crate_use(statement: text): any := {
 	if not statement.starts_with("use crate ") { return ø }
-	written = statement.remove_prefix("use crate ").trim()
+	written = statement.remove(prefix: "use crate ").trim()
 	bare = written
-	for quote in c_quotes { if written.starts_with(quote) and written.ends_with(quote) and #written > 2 { bare = written.remove_prefix(quote).remove_suffix(quote) } }
+	for quote in c_quotes { if written.starts_with(quote) and written.ends_with(quote) and #written > 2 { bare = written.remove(prefix: quote).remove(suffix: quote) } }
 	if bare == written { return ø }
 	crate_library_prefix + bare.split("@")#1.replace("-", "_")
 }
@@ -250,7 +250,7 @@ c_statements(source: text): list := {
 # `import (sin, floor) from 'm'` → [library, [names]]; ø for another statement
 c_import(statement: text): any := {
 	if not statement.starts_with("import ") { return ø }
-	parts = statement.remove_prefix("import ").split(c_foreign_mark)
+	parts = statement.remove(prefix: "import ").split(c_foreign_mark)
 	if #parts != 2 { return ø }
 	library = c_library_of(parts#2, no)
 	if library == ø { return ø }
@@ -262,7 +262,7 @@ c_import(statement: text): any := {
 used_word(statement: text): any := {
 	for keyword in USE_KEYWORDS {
 		if statement.starts_with(keyword + " ") {
-			words = statement.remove_prefix(keyword + " ").trim().split(" ")
+			words = statement.remove(prefix: keyword + " ").trim().split(" ")
 			commented = #words > 1 and comment_marks.any(mark => words#2.starts_with(mark))
 			return if commented then words#1 else words.join(" ")
 		}
@@ -522,7 +522,7 @@ with_c_functions(host: map, functions: map): map := {
 c_refused_form(refusal: text, functions: map, library_folder: text): any := {
 	start = outside_the_core + "the call "
 	if not refusal.starts_with(start) { return ø }
-	name = refusal.remove_prefix(start).split("(")#1
+	name = refusal.remove(prefix: start).split("(")#1
 	if functions.has(name) or c_catalog([]).any(d => d#1 == name) { return "foreign C call" }
 	ø
 }

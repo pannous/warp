@@ -31,7 +31,7 @@ site_files(): list := PAGE_SCRIPTS + WORKER_SCRIPTS.filter(script => script not 
 
 site_built(target: text, options: list) := {
 	if not (exists(target) and target.ends_with(".warp")) { raise "warp build --site builds a program file, app.warp, into a site/ beside it" }
-	stem = target.remove_suffix(".warp")
+	stem = target.remove(suffix: ".warp")
 	folder = option_of(options, SITE_OPTION) ?? (source_folder(target) + "/" + SITE_FOLDER)
 	scripts = site_scripts()
 	shell("mkdir -p " + quoted_path(folder + "/" + SCRIPT_FOLDER + "/lib"))
@@ -73,5 +73,5 @@ site_page(title: text, shown: text): text := {
 
 served_files(folder: text): text := {
 	files = shell("cd " + quoted_path(folder) + " && find . -type f ! -name " + SERVED_FILES + " | sort").trim().split("\n").filter(file => file != "")
-	"const SERVED_FILES = new Set([" + files.map(file => "\"" + file.remove_prefix("./") + "\"").join(",") + "]);\n"
+	"const SERVED_FILES = new Set([" + files.map(file => "\"" + file.remove(prefix: "./") + "\"").join(",") + "]);\n"
 }

@@ -34,7 +34,7 @@ module_signature_node(name: text, image: list): Node := {
 # import section, the record and the module never disagree. A compile using it finds the runtime modules it needs
 # here (prelude_words.warp module_runtime_modules), `warp build` what an executable loads beside it
 LINKED_MODULE_PREFIX = "warp/"
-linked_modules(wasm: list): list := word_set(wasm_imported(wasm).names.map(name => name#1).filter(from => from.starts_with(LINKED_MODULE_PREFIX)).map(from => from.remove_prefix(LINKED_MODULE_PREFIX))).keys
+linked_modules(wasm: list): list := word_set(wasm_imported(wasm).names.map(name => name#1).filter(from => from.starts_with(LINKED_MODULE_PREFIX)).map(from => from.remove(prefix: LINKED_MODULE_PREFIX))).keys
 links_field(wasm: list): Node := field_node("links", square_list(linked_modules(wasm).map(module => Text(module))))
 # the module's bytes with its signature as their first section
 with_signature(wasm: list, name: text, image: list): list := wasm_header + section(section_ids.custom, name_bytes(SIGNATURE_SECTION) + pack(module_signature_node(name, image)).bytes) + wasm[#wasm_header ..]

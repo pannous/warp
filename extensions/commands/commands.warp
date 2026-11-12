@@ -165,8 +165,8 @@ staying_lines(line: text): text := {
 repl_step(folder: text, line: text, wasm_file: text) := {
 	kept = lines_kept(folder)
 	for earlier in kept { own_module(earlier, line_text_file(folder, earlier), path_in(folder, earlier + ".wasm")) }
-	name = wasm_file.split("/").last().remove_suffix(".wasm")
-	for earlier in kept { for word in defined_words(line) { if word in defined_words(read(line_text_file(folder, earlier))) { raise word + " is defined already (line " + earlier.remove_prefix(LINE_PREFIX) + "): the console keeps that one" } } }
+	name = wasm_file.split("/").last().remove(suffix: ".wasm")
+	for earlier in kept { for word in defined_words(line) { if word in defined_words(read(line_text_file(folder, earlier))) { raise word + " is defined already (line " + earlier.remove(prefix: LINE_PREFIX) + "): the console keeps that one" } } }
 	# (the uses behind the line, so what the compiler says of it names the line's own place, 1:5)
 	uses = kept.map(earlier => "use " + earlier)
 	refusal = line_module_refusal(folder, name, [line] + uses, wasm_file)

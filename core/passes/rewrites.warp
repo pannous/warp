@@ -683,7 +683,7 @@ rule_needs(source: text): list := {
 }
 
 # the plain words a rule word is given, as written: `qualified($g, possibly)` names possibly
-words_given_in_text(call: text): list := if not call.contains("(") then [] else call[#call.split("(")#1 + 1 ..].split(",").map(argument => argument.trim().remove_suffix(")").trim()).filter(argument => argument != "" and is_alpha(argument[0]) and first_alphabetic_word(argument) == argument)
+words_given_in_text(call: text): list := if not call.contains("(") then [] else call[#call.split("(")#1 + 1 ..].split(",").map(argument => argument.trim().remove(suffix: ")").trim()).filter(argument => argument != "" and is_alpha(argument[0]) and first_alphabetic_word(argument) == argument)
 
 # the words of a rule's `in [a, b]` listing, as written
 listed_in_text(rule: text): list := {
@@ -730,7 +730,7 @@ module_rules_of(path: text, module: text): list := {
 # only a build before its rules are packed parses them)
 module_rules_read(path: text, module: text): list := {
 	packed = sugar_rules_packed_beside()
-	within = path.remove_prefix(run_library() + "/")
+	within = path.remove(prefix: run_library() + "/")
 	baked = packed.get(within)
 	place = if baked != ø then baked.find("\n") else ø
 	if place != ø { return items_of(unpack(baked[place ..])).map(packed => unpacked_rule(packed, module)) }
@@ -2673,7 +2673,7 @@ copied_binding(bound: map): map := {
 # `$t` → `t·3`: a compiler temporary, apart from every other firing's and from every
 # name another pass makes: one count for all (walk.warp fresh_number), else `for 2 {…}`'s item·1 and an inlined
 # map's item·1 were one variable
-fresh_name(hole: text): Node := symbol(hole.remove_prefix(rule_hole_mark) + "·" + fresh_number())
+fresh_name(hole: text): Node := symbol(hole.remove(prefix: rule_hole_mark) + "·" + fresh_number())
 
 # the variables assigned code of the shape, then the parameters of the functions called with one, until none is new
 names_assigned_shape(program: Node, shape: Node): map := {

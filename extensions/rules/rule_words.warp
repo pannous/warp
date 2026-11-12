@@ -24,7 +24,7 @@ path_parameter(part: text): text := {
 }
 
 # `users` → "users": a name as the text it is spelled by, a program's own word as written (twice·own → "twice")
-spelled(name: Node): text := "${name}".remove_suffix(own_mark)
+spelled(name: Node): text := "${name}".remove(suffix: own_mark)
 
 # `x > 1500` and m → `x > 1500 * m`: a unit after an expression multiplies its last amount, through the operators
 # a unit binds tighter than (lib/units.warp's rules); ø when the expression ends in no amount, or starts with a unit

@@ -1012,7 +1012,7 @@ def union_declaration(body: Body, name: text, type_name: text, value: TypedCode)
 	if members.all(member => is_int_member(member)) { body.boxed_ints[name] = yes }
 	assignment(body, symbol(name), TypedCode(ValueKind.Node, boxed(value)))
 }
-is_int_member(member: text): bool := aliased_type(member.remove_suffix("?")) == "int"
+is_int_member(member: text): bool := aliased_type(member.remove(suffix: "?")) == "int"
 # `x: int? = v` (`line: int? = try n.line else ø`): a T or ø, so x holds a node; a value known
 # only at run time is not checked yet, a value of another kind is refused; `x: Node? = v` (any node
 # annotation, a class too: an object or ø) holds the node as it is

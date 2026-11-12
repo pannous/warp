@@ -855,7 +855,7 @@ c_libraries(foreign: list): list := {
 # and the function's name: w2c_c_getenv
 wasm2c_name(module_name: text): text := "w2c_" + module_name.replace("_", "__")
 # an import's name as wasm2c writes it: a leading underscore escaped (_NSGetExecutablePath → 0x5FNSGetExecutablePath)
-wasm2c_function_name(name: text): text := if name.starts_with("_") then "0x5F" + name.remove_prefix("_") else name
+wasm2c_function_name(name: text): text := if name.starts_with("_") then "0x5F" + name.remove(prefix: "_") else name
 # what run_main prints of each kind of value main gives
 printed_main = {"": "w2c_program_main(program);", signed: "printf(\"%lld\\n\", (long long)w2c_program_main(program));",
 	unsigned: "printf(\"%llu\\n\", (unsigned long long)w2c_program_main(program));", float: "printf(\"%g\\n\", (double)w2c_program_main(program));"}

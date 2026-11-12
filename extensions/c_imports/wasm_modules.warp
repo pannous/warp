@@ -42,11 +42,11 @@ wasm_module_named(statement: text, folder: text): text? := {
 	if bare == ø or bare == module_written { return ø }
 	# (only a .wasm file is read: `use compute_toys` beside a folder compute_toys read the folder, which never ended, card hit)
 	# (`fourty_two.wat` is the binary beside it, fourty_two.wasm: WAT text needs the native build, notes/wasm_modules.md)
-	written = bare.remove_suffix(WAT_EXTENSION).remove_suffix(WASM_EXTENSION) + WASM_EXTENSION
+	written = bare.remove(suffix: WAT_EXTENSION).remove(suffix: WASM_EXTENSION) + WASM_EXTENSION
 	name = if rooted(written, folder) == written then path_in(folder, written) else written
 	if is_core_wasm(bytes_if_there(wasm_file(name, folder))) { return name }
 	# `use cargo semver` of a crate no module was built for is refused, naming how to build it (refuse, never guess)
-	if used_word(statement) != ø and used_word(statement).starts_with(CARGO_WORD) { raise unbuilt_crate(used_word(statement).remove_prefix(CARGO_WORD).trim(), name) }
+	if used_word(statement) != ø and used_word(statement).starts_with(CARGO_WORD) { raise unbuilt_crate(used_word(statement).remove(prefix: CARGO_WORD).trim(), name) }
 	ø
 }
 # the module as a use statement writes it, unquoted, ø for no use: `use wasm "rust_demo.wasm"` (decision
@@ -56,12 +56,12 @@ WASM_WORD = "wasm "
 CARGO_WORD = "cargo "
 CRATES_FOLDER = "/crates/"
 wasm_use_written(statement: text): text? := {
-	word = if statement.starts_with(INCLUDE_WORD + " ") then statement.remove_prefix(INCLUDE_WORD + " ").trim() else used_word(statement)
+	word = if statement.starts_with(INCLUDE_WORD + " ") then statement.remove(prefix: INCLUDE_WORD + " ").trim() else used_word(statement)
 	if word == ø or word == "" { return ø }
 	# `use cargo strsim`: the crate built as a module beside its manifest, lib/crates/strsim.wasm (scripts/warp-crate wasm)
-	if word.starts_with(CARGO_WORD) { return run_library() + CRATES_FOLDER + word.remove_prefix(CARGO_WORD).trim() + WASM_EXTENSION }
-	written = if word.starts_with(WASM_WORD) then word.remove_prefix(WASM_WORD).trim() else word
-	for quote in c_quotes { if written.starts_with(quote) and written.ends_with(quote) and #written > 2 { written = written.remove_prefix(quote).remove_suffix(quote) } }
+	if word.starts_with(CARGO_WORD) { return run_library() + CRATES_FOLDER + word.remove(prefix: CARGO_WORD).trim() + WASM_EXTENSION }
+	written = if word.starts_with(WASM_WORD) then word.remove(prefix: WASM_WORD).trim() else word
+	for quote in c_quotes { if written.starts_with(quote) and written.ends_with(quote) and #written > 2 { written = written.remove(prefix: quote).remove(suffix: quote) } }
 	written
 }
 unbuilt_crate(crate: text, module: text): text := "use cargo " + crate + ": no module " + module + " was built for the crate; describe its items in lib/crates/" + crate + ".warp (scripts/warp-crate scan " + crate + " drafts them), then build it: scripts/warp-crate wasm lib/crates/" + crate + ".warp"
@@ -116,7 +116,7 @@ wasm_exports(path: text, folder: text): WasmExports := {
 # `zlibVersion(): text from "zlib.wasm"`, say which cross as texts (a copy in the module's memory, its malloc's), which
 # give one back, which are unsigned (web/playground/host-foreign.js callC; natively card native-driver)
 with_c_types(functions: list, path: text, folder: text): list := {
-	beside = path.remove_suffix(WASM_EXTENSION)
+	beside = path.remove(suffix: WASM_EXTENSION)
 	header = file_text(wasm_file(beside + C_HEADER_EXTENSION, folder)) ?? ""
 	# (its foreign lines first: they say what the header cannot, zlib's unsigned long being 32 bits)
 	typed = c_declarations_in((file_text(wasm_file(beside + module_extension, folder)) ?? "") + "\n" + header_foreign_lines(header, path))
@@ -138,7 +138,7 @@ header_foreign_lines(header: text, library: text): text := {
 }
 header_foreign_line(prototype: text, library: text): text := {
 	head = c_words(prototype.split("(")#1)
-	parameters = prototype.split("(")#2.remove_suffix(")").split(",").map(c_words).filter(words => #words > 0 and words != ["void"])
+	parameters = prototype.split("(")#2.remove(suffix: ")").split(",").map(c_words).filter(words => #words > 0 and words != ["void"])
 	types = parameters.map(header_type)
 	for index in 1 ..< #types {
 		if types[index] == "u32" and types[index - 1] == "text" {

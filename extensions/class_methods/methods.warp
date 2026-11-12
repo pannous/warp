@@ -121,7 +121,7 @@ module_routing(classes: map, names: list, method: text, operator_methods: list):
 	is_library_word(method) or library_index_section("word").has(method) or method in operator_methods or names_syntax(method) or method in position_words
 }
 # the classes of the linked modules, by name
-linked_class_names(): list := concatenated(linked_signatures.values.map(signature => signature.classes.map(entry => "${entry#1}".remove_prefix(instance_struct_prefix))))
+linked_class_names(): list := concatenated(linked_signatures.values.map(signature => signature.classes.map(entry => "${entry#1}".remove(prefix: instance_struct_prefix))))
 # A linked module's class gives the program only the methods it may call (card linked-module): those it names, those
 # of the operators it writes (compare for `<`, equal for `==`) and its constructor once it names the class. Its
 # instances show, convert and operate (+ - * /) through the descriptor its module made (notes/runtime_linking.md), so
@@ -340,8 +340,8 @@ methods_lifted(program: Node): Node := {
 	}
 	# an operator only reflected methods give, `*(k: number, v: V)` of a class with no `*` of its own
 	own_glyphs = operator_methods.map(method => spelled_operator(operator_table, method)#2)
-	for method in methods.filter(method => method.ends_with(REFLECTED_MARK) and method.remove_suffix(REFLECTED_MARK) not in own_glyphs) {
-		glyph = method.remove_suffix(REFLECTED_MARK)
+	for method in methods.filter(method => method.ends_with(REFLECTED_MARK) and method.remove(suffix: REFLECTED_MARK) not in own_glyphs) {
+		glyph = method.remove(suffix: REFLECTED_MARK)
 		operands = [self_node, symbol("other")]
 		builtin = promoted(Key(operands#1, glyph as Op, operands#2), promotions, operator_dispatcher(glyph))
 		dispatchers += [Key(call_of(operator_dispatcher(glyph), operands.map(operand => Key(operand, Op.Colon, symbol(ANY_TYPE)))), Op.Define, reflected_dispatch(classes, owners_of(classes, liftable, method), glyph, operands, builtin))]
@@ -971,7 +971,7 @@ operator_functions(classes: map, names: list, methods: list, operator_table: map
 	for method in methods {
 		spelled = spelled_operator(operator_table, method)
 		is_reflected = method.ends_with(REFLECTED_MARK)
-		glyph = if is_reflected then method.remove_suffix(REFLECTED_MARK) else if spelled != ø then spelled#2 else ""
+		glyph = if is_reflected then method.remove(suffix: REFLECTED_MARK) else if spelled != ø then spelled#2 else ""
 		if glyph == "" { continue }
 		if glyph not in own { own[glyph] = {} }
 		if glyph not in reflected { reflected[glyph] = {} }

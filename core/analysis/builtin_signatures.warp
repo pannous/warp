@@ -32,7 +32,7 @@ written_parameter(written: text): Parameter := {
 	name = declared#1.trim()
 	type_name = if #declared > 1 then declared#2.trim() else ""
 	defaulted_to = if #parts > 1 then [parts[1..].join("=").trim()] else ø
-	Parameter(name: name.remove_suffix(rest_mark), type_name: type_name, defaulted_to: defaulted_to, rest: name.ends_with(rest_mark))
+	Parameter(name: name.remove(suffix: rest_mark), type_name: type_name, defaulted_to: defaulted_to, rest: name.ends_with(rest_mark))
 }
 
 # `upper(t: text): text from warp` → Builtin; ø for a line of another library
@@ -40,7 +40,7 @@ typed_line(line: text, library: text): Builtin? := {
 	line = line.trim()
 	suffix = " from " + library
 	if not line.ends_with(suffix) { return ø }
-	signature = line.remove_suffix(suffix)
+	signature = line.remove(suffix: suffix)
 	# split, not index_of: it counts bytes where slices count characters (a name with `·`)
 	head = signature.split("(")
 	if #head < 2 { return ø }
@@ -48,7 +48,7 @@ typed_line(line: text, library: text): Builtin? := {
 	if #tail < 2 { return ø }
 	written = tail[0 ..< #tail - 1].join(")").trim()
 	parameters = if count(written) == 0 then [] else outer_parts(written).map(part => written_parameter(part))
-	result = tail#(#tail).trim().remove_prefix(":").trim()
+	result = tail#(#tail).trim().remove(prefix: ":").trim()
 	Builtin(name: head#1, signature: Signature(parameters: parameters, result: result))
 }
 
@@ -132,7 +132,7 @@ typed_lines = runtime_lines + emitter_lines
 # `alias size => count` → ["size", "count"], the prelude's, read the first time a compile asks
 global prelude_alias_pairs = ø
 alias_pairs(): list := {
-	if prelude_alias_pairs == ø { prelude_alias_pairs = prelude_text().split("\n").filter(line => line.starts_with(alias_start)).map(line => alias_pair(line.remove_prefix(alias_start))) }
+	if prelude_alias_pairs == ø { prelude_alias_pairs = prelude_text().split("\n").filter(line => line.starts_with(alias_start)).map(line => alias_pair(line.remove(prefix: alias_start))) }
 	prelude_alias_pairs
 }
 
@@ -192,7 +192,7 @@ argument_result(word: text): list? := {
 	line = lines#1
 	for spelling in argument_results.keys() {
 		if line.signature.result.starts_with(spelling) {
-			followed = line.signature.result.remove_prefix(spelling)
+			followed = line.signature.result.remove(prefix: spelling)
 			names = taken_names(line.signature)
 			return if names contains followed then [argument_results[spelling], names.index_of(followed)] else ø
 		}
@@ -340,7 +340,7 @@ one_typed_definitions(): map := {
 }
 # `square(x: number): … := …` of the word: one parameter, typed, no rest
 takes_one_typed(word: text, written: text): bool := {
-	head = written.trim().remove_prefix("def ").trim()
+	head = written.trim().remove(prefix: "def ").trim()
 	if not head.starts_with(word + "(") or not head.contains(")") { return no }
 	parameters = outer_parts(head[#word + 1 ..].split(")")#1)
 	#parameters == 1 and parameters#1.contains(":") and not parameters#1.contains("...") and parameters#1.split(":")#2.trim() != ""

@@ -7,7 +7,7 @@
 # aliases declare (lib/aliases.warp `declared: yes`), operator_· as ·; a glyph word's by its glyph, imaginary_unit as ⅈ
 spelling_of(word: text): text := {
 	for written in GLYPH_WORDS.keys { if GLYPH_WORDS[written] == word { return written } }
-	glyph = word.remove_prefix(OPERATOR_FUNCTION_PREFIX)
+	glyph = word.remove(prefix: OPERATOR_FUNCTION_PREFIX)
 	if glyph != word and (is_operator_glyph(glyph) or glyph in alias_spellings().declared) then glyph else word
 }
 # whether the source writes an indexed word: a glyph wherever it stands, `3·4` and `3∘4` too, a name as a whole word
