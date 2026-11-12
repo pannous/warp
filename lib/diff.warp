@@ -1,7 +1,7 @@
 // The standard library module diff (card lib-diff): `use diff`. A diff is a list of edits, each [op, item] with op
 // "keep", "delete" or "insert": diff([1, 2, 3], [1, 3, 4]) is [["keep", 1], ["delete", 2], ["keep", 3], ["insert", 4]].
 // It is a longest common subsequence's (deletions before insertions where both are possible). Texts are lines split
-// at "\n", the empty text no lines; unified_diff writes git's format and apply_patch reads it back
+// at "\n", the empty text no lines; unified_diff writes git's format and patched reads it back
 
 // the edits that turn the list a into the list b
 diff(a: list, b: list): list := {
@@ -65,7 +65,7 @@ unified_diff(old: text, new: text, context = 3): text := {
 }
 // the text with a unified diff applied: each hunk's kept and deleted lines must be the text's lines where its header
 // says, else it raises naming the hunk and the line
-apply_patch(t: text, patch: text): text := {
+patched(t: text, patch: text): text := {
 	old = text_lines(t)
 	out = []
 	at = 0
@@ -75,7 +75,7 @@ apply_patch(t: text, patch: text): text := {
 	while k <= count(lines) {
 		line = lines#k
 		if line.starts_with("---") or line.starts_with("+++") or line == "" { k += 1; continue }
-		if not line.starts_with("@@") { raise "apply_patch: a line outside a hunk: " + line }
+		if not line.starts_with("@@") { raise "patched: a line outside a hunk: " + line }
 		number += 1
 		header = line
 		ranges = split(line, " ")
@@ -83,7 +83,7 @@ apply_patch(t: text, patch: text): text := {
 		old_start = int(old_range#1)
 		old_count = if count(old_range) > 1 then int(old_range#2) else 1
 		start = if old_count == 0 then old_start else old_start - 1
-		if start < at or start > count(old) { raise "apply_patch: hunk " + text(number) + " (" + header + ") starts outside the text" }
+		if start < at or start > count(old) { raise "patched: hunk " + text(number) + " (" + header + ") starts outside the text" }
 		out += old[at: start]
 		at = start
 		k += 1
@@ -93,7 +93,7 @@ apply_patch(t: text, patch: text): text := {
 			content = if body == "" then "" else body[1:]
 			if mark == "+" { out += [content] }
 			else if mark == " " or mark == "-" {
-				if at >= count(old) or old#(at + 1) != content { raise "apply_patch: hunk " + text(number) + " (" + header + ") does not match line " + text(at + 1) + ": expected \"" + content + "\", found " + (if at >= count(old) then "the end" else "\"" + old#(at + 1) + "\"") }
+				if at >= count(old) or old#(at + 1) != content { raise "patched: hunk " + text(number) + " (" + header + ") does not match line " + text(at + 1) + ": expected \"" + content + "\", found " + (if at >= count(old) then "the end" else "\"" + old#(at + 1) + "\"") }
 				if mark == " " { out += [content] }
 				at += 1
 			}
