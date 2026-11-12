@@ -134,7 +134,13 @@ lowered_program(source: text, folder: text, prelude: text): Node := {
 	lowered_reached(plain_node(parsed(rules_ended(source)), passes_read_marks), source, folder, prelude)
 }
 # the program with the definitions it reaches, after every pure pass, those it doesn't call after all dropped
-lowered_reached(program: Node, source: text, folder: text, prelude: text): Node := called_only(lowered_node(with_used(program, source, folder, prelude)))
+lowered_reached(program: Node, source: text, folder: text, prelude: text): Node := {
+	used = with_used(program, source, folder, prelude)
+	if TIMES { for statement in statements_in(used) { print "§S " + (declared_name(statement) ?? "-") + " " + "${#node_text(statement)}" } }
+	lowered = lowered_node(used)
+	if TIMES { for statement in statements_in(lowered) { print "§L " + (declared_name(statement) ?? "-") } }
+	called_only(lowered)
+}
 # the sugar rules the program at hand keeps (with_used), of each sugar step
 global kept_first_sugar = []
 global kept_sugar = []
