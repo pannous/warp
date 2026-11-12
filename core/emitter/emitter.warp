@@ -1415,7 +1415,8 @@ def key_expression(body: Body, n: Node): TypedCode {
 	if operator == Op.Hash and left != ø and subscript_name(right) != ø { return field_read(body, expression_code(body, left), subscript_name(right)) }
 	if operator == Op.Hash and left != ø and is_shifted_index(right) {
 		target = expression_code(body, left)
-		if target.kind == ValueKind.Node { return runtime_call("node_get", [target, TypedCode(ValueKind.Node, boxed(expression_code(body, key_of(right))))]) }
+		# (a recursive call's result not yet known, pending, as the node it may be, as length_code counts it)
+		if target.kind == ValueKind.Node or target.kind == pending { return runtime_call("node_get", [target, TypedCode(ValueKind.Node, boxed(expression_code(body, key_of(right))))]) }
 	}
 	if operator == Op.AddAssign {
 		target = expression_code(body, left)

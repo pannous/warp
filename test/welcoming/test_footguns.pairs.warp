@@ -441,3 +441,11 @@
 
 # test_finite_domain_function_equality
 'f(a:bool,b:bool):=a and b; g(a:bool,b:bool):=a or b; f==g'	false
+
+# test_equals_in_condition_compares: also in a while, inside the condition's parentheses; a call's named argument stays one (wiki/Footguns.md "Assignment in a condition")
+'x=1; while x=2 { x = 3 }; x'	1
+'x=1; if (x=2) {3} else {4}'	4
+'f(x=0) := x; if f(x=2) == 2 {3} else {4}'	3
+# test_colon_branch_assigns: the `:` branch after a condition assigns again (wiki/Footguns.md "Assignment in a condition")
+'x=1; if x==1: x=5; x'	5
+'x=1; if x=1: x=5; x'	5
