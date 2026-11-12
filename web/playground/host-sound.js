@@ -14,8 +14,6 @@ const WITHOUT_PLAYGROUND = "decoded in the playground and by the warp CLI, not o
 // checked every SIGNAL_POLL_MS (src/sound/mod.rs SIGNAL_AHEAD, SIGNAL_POLL)
 const SIGNAL_AHEAD_SECONDS = 0.1;
 const SIGNAL_POLL_MS = 10;
-// heard, a voice queues at most this far ahead of the speaker before its next sound waits (src/sound/mod.rs PLAY_AHEAD)
-const PLAY_AHEAD_SECONDS = 0.5;
 // a linear float array's block: [count: i64][count f64 cells] (src/wasm_emitter/lists/linear_arrays.rs)
 const LINEAR_CELL_BYTES = 8;
 
@@ -192,6 +190,9 @@ function soundWords(holder, program) {
 			holder.sounded(Array.from({ length: bytes.length >> 1 }, (_, at) => view.getInt16(2 * at, true) + SAMPLE_OFFSET), Number(rate), Number(channels));
 			return 0n;
 		},
+		// the page's voice kept around a task and set again (host-tasks.js keptVoice, lib/sound.warp voice_kept)
+		sound_voice_kept: () => BigInt(self.keptVoice?.() ?? 0),
+		sound_voice_back: voice => { self.voiceBack?.(Number(voice)); return 0n; },
 		sound_file_played: path => {
 			STD_ADAPTERS.sound.play_file.call({ holder }, guestText(program(), path));
 			return 0n;
@@ -246,10 +247,9 @@ function resampled({ rate: own, channels, values }, rate) {
 addHostPart({
 	words: (holder, hooks, { program }) => {
 		// samples (amplitude + SAMPLE_OFFSET, stereo interleaved) queued on the voice, for the page and save sound; a
-		// signal's blocks keep its first one's handle. Heard, once the voice is within PLAY_AHEAD_SECONDS of the speaker
-		// (but in an `at`, which places its sounds itself). The handle
+		// signal's blocks keep its first one's handle. lib/sound.warp paces them (waited_till), main only, as a task's
+		// wait would hold main. The handle
 		holder.sounded = (samples, rate, channels, handle) => {
-			while (self.pageSystemValues?.heard && !self.insideAt?.() && (self.soundsQueued?.() ?? 0) > PLAY_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
 			const { place, at } = self.voiceSounded?.(samples.length / channels / rate) ?? {};
 			const sound = { samples, rate, channels };
 			hooks.sound?.({ ...sound, at, handle, loop: self.currentVoice?.().loop }); // a live loop's (card playground-live)

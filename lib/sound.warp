@@ -877,11 +877,12 @@ sound_file(speakers, rate, channels, seconds) := {
 // stay silent) skips the wait without taking the WAV path (getpid / sound_file), so headless samples-web stays under
 // its run_seconds (card samples-page-sound-pipes)
 PLAY_AHEAD_SECONDS = 0.5 as float
+// main waits running the tasks due meanwhile, so a task's sounds join main's as they start; a task queues its sounds
+// unwaited, as its wait would hold main and the other tasks too (a task's wait splits it only at its own sleeps)
 def waited_till(start) {
-	if not muted() and run_option("sound-nopace") == ø {
-		ahead = start - (round(PLAY_AHEAD_SECONDS * 1000) as int)
-		if ahead > clock() { sleep_ms(ahead - clock()) }
-	}
+	if muted() or run_option("sound-nopace") != ø or running_task != ø { return ø }
+	ahead = start - (round(PLAY_AHEAD_SECONDS * 1000) as int)
+	if ahead > clock() { tasks_run_while(ø, ahead) }
 }
 
 // Playing (decision sound-system-player): a sound starts when its voice reaches it (the clock paces the program till
@@ -913,15 +914,20 @@ played(file) := {
 
 // The voice's clock (card sound-native-clock): where its queued sounds end in real time (clock() milliseconds) and its
 // place, the seconds of sound since its first, which save sound mixes by; `at` moves both for its block
-// a task's voice (extensions/sugar/tasks.warp): it starts where its starter's stands, which goes on after it as before
-task_context() := [voice_end, voice_place]
-task_context_back(context) := {
-	voice_end = context#1
-	voice_place = context#2
-}
 global voice_end = 0
 global voice_place = 0.0 as float
 global voice_origin = 0
+// a task's voice (lib/tasks.warp task_part_kept): it starts where its starter's stands, which goes on after it as before;
+// the page keeps a voice clock of its own, which goes along (web/playground/host-tasks.js keptVoice; natively none)
+sound_voice_kept(): int from host
+sound_voice_back(voice: int): int from host
+voice_kept() := [voice_end, voice_place, sound_voice_kept()]
+voice_back(voice: list) := {
+	voice_end = voice#1
+	voice_place = voice#2
+	sound_voice_back(voice#3)
+}
+task_part_kept(voice_kept, voice_back)
 global before_at = []
 // the seconds added behind the voice's queued sounds: [their start in real time, their place]
 scheduled(seconds) := {

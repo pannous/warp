@@ -5,7 +5,8 @@
 // of the block, holds every task until it wakes (the first said once as a warning).
 // `await job` runs the tasks until it is done and gives its value, `await all jobs` their values, `await any`/`first`
 // the first done's, `await job within t or d` its value if done within t, else d.
-// A task keeps what a module holds per task (task_context: sound's voice), its starter's when it was started
+// A task keeps what a module holds per task (sound's voice), its starter's when it was started: each such module gives
+// its part with task_part_kept
 use units
 // (`await go …` is one rule: `await $x` taking the go would leave it unrewritten)
 rewrite await go $body: block => task_awaited(task_go(() => $steps)) where $steps = task_steps($body)
@@ -76,6 +77,18 @@ global failed_tasks = []
 global task_sleep_said = no
 // the last task each function's `go f(…)` started, by the function's name
 global named_tasks = {}
+// what modules hold per task (sound's voice), each a [kept, back] pair given by task_part_kept: kept() its part of the
+// running context, back(part) that part set again. A module of its own (prebuilt, linked by name), tasks calls them
+// through this list: a word of the same name in the module holding the part would never be reached from here
+global context_parts = []
+public task_part_kept(kept: function, back: function) := { context_parts += [[kept, back]] }
+task_context() := context_parts.map(part => part#1())
+task_context_back(context: list) := {
+	for i in 0..#context {
+		back = context_parts#(i + 1)#2
+		back(context#(i + 1))
+	}
+}
 // the task of a step, queued to start at main's next yield, its starter's context its own (sound's voice)
 task_go(first: function): Task := {
 	task = Task(clock(), first)
