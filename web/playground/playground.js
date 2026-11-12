@@ -1260,6 +1260,7 @@ const SLIDER_CALL = /\bslider\(\s*(-?(?:\d+\.?\d*|\.\d+))\s*(?:to|,)\s*(-?(?:\d+
 const SLIDER_NAME = /([A-Za-z_][A-Za-z_0-9]*)\s*=\s*$/;
 const SLIDER_DELAY_MS = 80; // live while dragging, without a compile on every pointer tick
 let sliderValues = [];
+let sliderKey = "";
 let sliderTimer;
 
 function sliderNumber(n) {
@@ -1311,11 +1312,17 @@ function sliderPanel() {
 }
 
 function showSliders(sliders) {
-	// keep a value still in its range; otherwise take the program's start
-	sliderValues = sliders.map((slider, i) => {
-		const kept = sliderValues[i];
-		return kept !== undefined && kept >= slider.lo && kept <= slider.hi ? kept : slider.value;
-	});
+	// keep values while this program's sliders stay the same; a different program takes its starts
+	const key = sliders.map(slider => `${slider.name}:${slider.lo}:${slider.hi}`).join("|");
+	if (key !== sliderKey) {
+		sliderKey = key;
+		sliderValues = sliders.map(slider => slider.value);
+	} else {
+		sliderValues = sliders.map((slider, i) => {
+			const kept = sliderValues[i];
+			return kept !== undefined && kept >= slider.lo && kept <= slider.hi ? kept : slider.value;
+		});
+	}
 	const panel = sliderPanel();
 	panel.hidden = sliders.length === 0;
 	panel.replaceChildren(...sliders.map((slider, i) => {
