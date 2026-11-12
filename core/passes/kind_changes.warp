@@ -38,13 +38,13 @@ linked_kinds(): map := {
 	kinds = {}
 	for image in module.linked_images {
 		for entry in image.globals {
-			shown = kinds_held.filter(pair => pair#1 == entry#2).map(pair => pair#2)
-			if #shown > 0 and entry#1.starts_with(program_global_prefix) { kinds[entry#1[#program_global_prefix ..]] = shown#1 }
+			if entry#2 in linked_kinds_checked and entry#1.starts_with(program_global_prefix) { kinds[entry#1[#program_global_prefix ..]] = text(entry#2) }
 		}
 	}
 	kinds
 }
-kinds_held = [[ValueKind.Int, "Int"], [ValueKind.Float, "Float"], [ValueKind.Text, "Text"], [ValueKind.List, "List"], [ValueKind.Bool, bool_kind]]
+# the kinds a linked global is checked for, each shown by its own name
+linked_kinds_checked = [ValueKind.Int, ValueKind.Float, ValueKind.Text, ValueKind.List, ValueKind.Bool]
 
 is_define_statement(n: Node): bool := is_operator(n, ":=")
 # `(f x) := …`: the name it defines, else ""

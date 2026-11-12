@@ -785,7 +785,8 @@ typed_overloads(program: Node): Node := {
 # `pdf` of `f(t) as pdf := …` and `f(t): pdf := …`, which definitions.warp holds as `{the result: pdf = …; the result}`;
 # ø of a definition declaring no result
 written_result(n: Node): text? := {
-	held = held_result(n)
+	# (a linked word's declaration holds none: its head says it, `random(a, b): float`)
+	held = held_result(n) ?? (if is_key(n, Op.Define) and is_key(key_of(n), Op.Colon) then value_of(key_of(n)) else ø)
 	if definition_call(n) != ø and held is symbol then required_type(name_of(held)) else ø
 }
 
@@ -857,7 +858,10 @@ result_resolved(n: Node, overloaded: map, parameters: map): Node := {
 	if call != ø {
 		name = name_of(call#1)
 		# the default keeps the plain name: a call no expected type tells apart stays as written
-		target = if name in overloaded and written_result(n) != ø then renamed_target(key_of(n), result_variant(name, written_result(n))) else key_of(n)
+		# (a linked module's variant, declared without its body, binds to the module's word by its name alone, which says
+		# its result: random·2·float)
+		head = if value_of(n) == Node.Empty and is_key(key_of(n), Op.Colon) then key_of(key_of(n)) else key_of(n)
+		target = if name in overloaded and written_result(n) != ø then renamed_target(head, result_variant(name, written_result(n))) else head
 		return Key(target, Op.Define, result_resolved(value_of(n), overloaded, parameters))
 	}
 	if is_key(n, Op.As) and overloaded_call(key_of(n), overloaded) != ø and returning(key_of(n), value_of(n), overloaded) != key_of(n) {
