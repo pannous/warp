@@ -13,7 +13,7 @@ use "types.warp"
 node_equal(a: Node, b: Node): bool := {
 	if is_null(a) or is_null(b) { return is_null(a) == is_null(b) }
 	if same(a, b) { return yes }
-	if exact_int(a) and exact_int(b) { return unboxed_int(a) == unboxed_int(b) }
+	if exact_ints(a, b) { return unboxed_int(a) == unboxed_int(b) }
 	# two texts, the common case of a match on spellings (`Op·case`): equal as texts (equal_texts), past none of the other kinds' tests
 	if kind_code(a) == Kind.Text and kind_code(b) == Kind.Text { return equal_texts(unboxed_text(a), unboxed_text(b)) }
 	# a number's subtype as its number, `hex(123) == 123` (user 11-11)
