@@ -2,4 +2,4 @@
 use math
 use text
 for n in 0 to 50:
-	if to_base(n, 2).count_of("1") % 2 == 0 then print n
+	if to_base(n, 2).count("1") % 2 == 0 then print n

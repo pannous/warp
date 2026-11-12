@@ -8,12 +8,12 @@ ROOT_TOLERANCE = 0.000000000001
 ROOT_STEPS = 200
 // a root of f between a and b by bisection, f(a) and f(b) of opposite signs (or one of them 0); the interval halves
 // until it is narrower than 1e-12 or 200 halvings were made
-find_root(f: function, a: number, b: number): float := {
+root(f: function, a: number, b: number): float := {
 	low = a as float; high = b as float
 	f_low = f(low); f_high = f(high)
 	if f_low == 0 { return low }
 	if f_high == 0 { return high }
-	if (f_low > 0) == (f_high > 0) { raise "find_root: f(" + text(a) + ") and f(" + text(b) + ") have the same sign, so no root is bracketed between them" }
+	if (f_low > 0) == (f_high > 0) { raise "root: f(" + text(a) + ") and f(" + text(b) + ") have the same sign, so no root is bracketed between them" }
 	for step in 1 to ROOT_STEPS {
 		middle = (low + high) / 2
 		f_middle = f(middle)
@@ -74,10 +74,10 @@ poly_multiply(p: list, q: list): list := {
 	for i in 1 to count(p) { for j in 1 to count(q) { out#(i + j - 1) = out#(i + j - 1) + p#i * q#j } }
 	out
 }
-// the real roots of a polynomial of degree 1 or 2, ascending ([] for none); higher degrees: find_root or newton
+// the real roots of a polynomial of degree 1 or 2, ascending ([] for none); higher degrees: root or newton
 poly_roots(p: list): list := {
 	if count(p) == 2 { if p#2 == 0 { raise "poly_roots: the polynomial is a constant" }; return [-p#1 / p#2] }
-	if count(p) != 3 { raise "poly_roots: degree 1 or 2 only, this one has " + text(count(p) - 1) + "; use find_root or newton" }
+	if count(p) != 3 { raise "poly_roots: degree 1 or 2 only, this one has " + text(count(p) - 1) + "; use root or newton" }
 	a = p#3; b = p#2; c = p#1
 	if a == 0 { return poly_roots([c, b]) }
 	d = b * b - 4 * a * c

@@ -38,6 +38,8 @@ big_decimal_in_loop($digits)	"{digits} is exact, a ratio of a big denominator pa
 arithmetic_conversion($whole, $target, $tight)	"`{whole} as {target}` converts the whole `{whole}`, not only its last operand"	"({whole}) as {target} or {tight}"	"arithmetic-conversion@{whole} as {target}"
 # definitions.warp: a function declared `: T` that can answer ø (decision optional-result)
 optional_result($function, $type)	"{function} can answer ø; declare `: {type}?`"	"{type} → {type}?"	"optional-result@{function}"
+# definitions.warp: a bang function declared with a result type (decision answer-or-act)
+bang_result($function)	"{function} declares a result; a changing (bang) function returns nothing"	"drop the result type"
 # inline HTML read as warp markup (extensions/inline_html.warp, decision jsx)
 inline_html($tag)	"inline HTML <{tag}> reads as warp markup; `warp format` writes it so"	"warp format"
 # a function of the program with the name and argument count of a used module's (core/passes/uses.warp warn_replaced)

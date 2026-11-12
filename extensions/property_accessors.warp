@@ -3,7 +3,7 @@
 # getter `canvas.width := canvas_width`, its setter the one-parameter overload `canvas.width(w) := canvas(w,
 # canvas_height)` or a getter-shaped body reading `it`. A use is the definition's body in place: `canvas.width = 300`,
 # `canvas.width(300)`, `+=` and its kin call the setter; writing a property without one fails loudly. The standard ones
-# are lines of lib/prelude.warp (window, display) and lib/draw.warp (the canvas, whose `use` comes along); a program
+# are lines of lib/prelude.warp (window), lib/display.warp (display) and lib/draw.warp (the canvas, whose `use` comes along); a program
 # defines its own the same way, and an object the program binds as a value keeps its own fields.
 # Runs on the program and the files it uses, before the standard modules and the prelude are reached, so the words a
 # body calls (canvas_width, set_system_value) bring their definitions.
@@ -12,7 +12,7 @@
 # the parameter of a setter written getter-shaped: `canvas.width := canvas(it, canvas_height)`
 setter_word = "it"
 # the standard modules defining properties: the prelude's are always there, another's come with its `use`
-property_modules = ["prelude", "draw"]
+property_modules = ["prelude", "display", "draw"]
 prelude_module = "prelude"
 # the compound assignments the parser keeps as operators, by their text, and the operator each applies; every other
 # `x ⨷= y`, `canvas.width max= 500` too, arrives as `x = x ⨷ y` (extensions/sugar/arithmetic.warp, decision
