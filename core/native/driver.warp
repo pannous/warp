@@ -106,9 +106,11 @@ ARGUMENTS_AT = 56
 # the module a host word without a caller works in, a text (address, length): module_word's lib module while it
 # builds there, else empty for the native host module (exported)
 GUEST_AT = 64
+# the compiler's caller while one of its module_word calls runs, the module's rule_word asking it, else 0
+ASKER_AT = 80
 # a run's channel listeners (lib/channels.warp), in its block past those: how many, then each one's
 # id, the bytes of its channel's file read so far, its name's length and the name
-LISTENERS_AT = 80
+LISTENERS_AT = 88
 LISTENERS_MAX = 32
 LISTENER_BYTES = 128
 LISTENER_NAME_BYTES = 104
@@ -1012,6 +1014,7 @@ run_state(linker: handle, engine: handle, linked: pointer, context: handle, heap
 	long_at(run + HOST_LINKED_AT as i32).value = 0
 	long_at(run + HEAP_BYTES_AT as i32).value = heap_bytes
 	text_kept(run + GUEST_AT as i32, "")
+	long_at(run + ASKER_AT as i32).value = 0
 	long_at(run + ARGUMENTS_AT as i32).value = given.pointers as i64
 	run
 }
@@ -1450,6 +1453,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if same_text(module, "net") and same_text(member, "get") { return url_got(caller, context, shown(caller, context, item_of(caller, context, listed, 1)), results) }
 	if same_text(module, "warp") and same_text(member, "option") { return option_answered(caller, context, listed, results) }
 	if same_text(module, "warp") and same_text(member, "module_word") { return module_word_answered(caller, context, listed, results) }
+	if same_text(module, "warp") and same_text(member, "rule_word") { return rule_word_answered(caller, context, listed, results) }
 	if same_text(module, "regex") { return regex_answered(caller, context, member, listed, results) }
 	if same_text(module, "hash") { return hash_answered(caller, context, member, listed, results) }
 	# a live loop's cycle starts: only the playground hands loops over between runs; a fade or stop save sound applies
@@ -1906,33 +1910,56 @@ code_parsed_from(caller: handle, context: handle, code: text, result: pointer): 
 	code_built(caller, context, encoding, at, result)
 }
 # warp.module_word(module, word, arguments) (card module-rule-words): the compiler's call of a rule word the lib module
-# defines, its three values the items of `listed`. The module is linked into the run at its first call; the arguments, a list the caller's node_encoding
-# encodes (runtime/builders.warp), are built there, its export `word` is called on them, and its result, encoded by
-# the module's node_encoding, is built again in the caller
+# defines, its three values the items of `listed`. The module is linked into the run at its first call, the word called
+# there (encoded_call), its result built again in the caller
 module_word_answered(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
 	module = joined("warp/", shown(caller, context, item_of(caller, context, listed, 1)))
 	word = shown(caller, context, item_of(caller, context, listed, 2))
-	encoded = allocate(VALUE_BYTES)
-	guest_call(caller, context, "node_encoding", item_of(caller, context, listed, 3), 1, encoded)
-	encoding = shown(caller, context, encoded)
+	encoding = node_encoded(caller, context, item_of(caller, context, listed, 3))
 	run_linked(context, module, library_folder())
-	guest = kept_value(RUN_SLOT) as i32 + GUEST_AT as i32
-	text_kept(guest, module)
-	at = allocate(8)
-	long_at(at).value = 1
+	run = kept_value(RUN_SLOT) as i32
+	outer_guest = cell_text(run + GUEST_AT as i32)
+	outer_asker = long_at(run + ASKER_AT as i32).value
+	text_kept(run + GUEST_AT as i32, module)
+	long_at(run + ASKER_AT as i32).value = caller
+	answer = encoded_call(0, context, word, encoding)
+	long_at(run + ASKER_AT as i32).value = outer_asker
+	text_kept(run + GUEST_AT as i32, outer_guest)
+	code_built(caller, context, answer, counter_at(0), result)
+}
+# warp.rule_word(word, arguments): a module's rule word asking the compiler running it for one of its rule words
+# (rewrites.warp asked_rule_word), called there on the values, its result built again in the module. Each call encodes
+# its values both ways: pass small ones
+rule_word_answered(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
+	compiler = long_at(kept_value(RUN_SLOT) as i32 + ASKER_AT as i32).value
+	if compiler == 0 { return guest_error(caller, context, "warp.rule_word answers only inside a module's rule word", result) }
+	code_built(caller, context, encoded_call(compiler, context, "asked_rule_word", node_encoded(caller, context, listed)), counter_at(0), result)
+}
+# the caller's value in the parse-code encoding (runtime/builders.warp node_encoding)
+node_encoded(caller: handle, context: handle, value: pointer): text := {
+	encoded = allocate(VALUE_BYTES)
+	guest_call(caller, context, "node_encoding", value, 1, encoded)
+	shown(caller, context, encoded)
+}
+# a cell counting through an encoding, at `at`
+counter_at(at: i64): pointer := {
+	counter = allocate(8)
+	long_at(counter).value = at
+	counter
+}
+# the word of the module `called` names (exported) on the arguments the encoding lists, each built there, its
+# result's encoding
+encoded_call(called: handle, context: handle, word: text, encoding: text): text := {
+	at = counter_at(1)
 	count = atoll(encoded_field(encoding, at))
 	# (the list's bracket and separator)
 	encoded_field(encoding, at)
 	encoded_field(encoding, at)
 	values = allocate((count as i32 + 1) * VALUE_BYTES)
-	for i in 0..count { code_built(0, context, encoding, at, values + (i as i32) * VALUE_BYTES) }
+	for i in 0..count { code_built(called, context, encoding, at, values + (i as i32) * VALUE_BYTES) }
 	returned = allocate(VALUE_BYTES)
-	guest_call(0, context, word, values, count, returned)
-	guest_call(0, context, "node_encoding", returned, 1, returned)
-	answer = shown(0, context, returned)
-	text_kept(guest, "")
-	long_at(at).value = 0
-	code_built(caller, context, answer, at, result)
+	guest_call(called, context, word, values, count, returned)
+	node_encoded(called, context, returned)
 }
 # the node encoded at `at` (advanced past it) built in the module into `result`
 code_built(caller: handle, context: handle, encoding: text, at: pointer, result: pointer): nothing := {

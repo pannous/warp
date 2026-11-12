@@ -140,20 +140,42 @@ function codeParsedFrom(program, code) {
 	return codeBuilt(program, typeof encoding === "string" ? utf8.encode(encoding) : encoding, { at: 0 });
 }
 // warp.module_word(module, word, arguments) (card module-rule-words, driver.warp module_word_answered): the compiler's call
-// of a rule word the lib module defines. The module is linked at its first call; the arguments, a list the compiler's
-// node_encoding encodes, are built there, its export `word` is called on them, and its result, encoded by the module's
-// node_encoding, is built again in the compiler
+// of a rule word the lib module defines. The module is linked at its first call, the word called there (encodedCall),
+// its result built again in the compiler. While it runs, the host words it calls are the module's (runningGuest)
+let runningGuest;
 function moduleWord(compiler, imports, linked, module, word, argumentList) {
 	const name = LINKED_MODULE_PREFIX + guestText(compiler, module);
 	const guest = linkedInstance(name, linkedUrl(name), imports, linked);
-	const encoding = utf8.encode(guestText(compiler, compiler.node_encoding(argumentList)));
+	const outer = runningGuest;
+	runningGuest = guest;
+	try {
+		return encodedCall(compiler, guest, guestText(compiler, word), argumentList);
+	} finally {
+		runningGuest = outer;
+	}
+}
+// warp.rule_word(word, arguments) (driver.warp rule_word_answered): a module's rule word asking the compiler running it
+// for one of its rule words (rewrites.warp asked_rule_word), its result built again in the module
+function ruleWord(guest, compiler, argumentList) {
+	const outer = runningGuest;
+	runningGuest = undefined;
+	try {
+		return encodedCall(guest, compiler, "asked_rule_word", argumentList);
+	} finally {
+		runningGuest = outer;
+	}
+}
+// the word of `called` on the arguments `caller`'s list holds, each built in `called` from caller's node_encoding, its
+// result built again in the caller
+function encodedCall(caller, called, word, argumentList) {
+	const encoding = utf8.encode(guestText(caller, caller.node_encoding(argumentList)));
 	const cursor = { at: 1 };
 	const count = Number(encodedField(encoding, cursor));
 	encodedField(encoding, cursor); // (the list's bracket and separator)
 	encodedField(encoding, cursor);
-	const given = Array.from({ length: count }, () => codeBuilt(guest, encoding, cursor));
-	const result = guest[guestText(compiler, word)](...given);
-	return codeBuilt(compiler, utf8.encode(guestText(guest, guest.node_encoding(result))), { at: 0 });
+	const given = Array.from({ length: count }, () => codeBuilt(called, encoding, cursor));
+	const result = called[word](...given);
+	return codeBuilt(caller, utf8.encode(guestText(called, called.node_encoding(result))), { at: 0 });
 }
 // eval_code(t) (decision N31, driver.warp code_evaluated): warp.wasm compiles t as a program of its own, beside the
 // typed program; it runs with its value printed as data after the value mark, what it printed before that goes on to
@@ -236,9 +258,15 @@ function timerFired(holder, id) {
 // the compiler's std_io: warp.module_word runs a lib module's rule word (moduleWord), warp.option answers the run's
 // options; any other is not the compiler's in a page
 function compilerStdIo(compiler, imports, linked, module, member, argumentList) {
+	if (runningGuest) return guestStdIo(runningGuest, compiler, module, member, argumentList);
 	if (guestText(compiler, module) !== "warp") return newGuestError(compiler, `the host word ${guestText(compiler, module)}.${guestText(compiler, member)} is not in the browser yet`);
 	if (guestText(compiler, member) === "module_word") return moduleWord(compiler, imports, linked, ...guestItems(compiler, argumentList));
 	return stdCall(compiler, module, member, argumentList, { warnings: [], options: compilerOptions() });
+}
+// the std_io of a lib module running a rule word for the compiler: warp.rule_word only
+function guestStdIo(guest, compiler, module, member, argumentList) {
+	if (guestText(guest, module) === "warp" && guestText(guest, member) === "rule_word") return ruleWord(guest, compiler, argumentList);
+	return newGuestError(guest, `the host word ${guestText(guest, module)}.${guestText(guest, member)} is not a rule word's in the browser`);
 }
 // the host words warp.wasm calls itself (driver.warp answered_word): no window, no system values, paths as given
 function compilerHostWords(exports, imports, linked) {
