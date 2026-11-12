@@ -33,8 +33,9 @@ SOCKET_ADDRESS_BYTES = 16
 RESOLVER_PORT = 53
 # struct utsname at its largest (macOS: 5 fields of 256 bytes)
 UNAME_BYTES = 1280
-# the framework that tells the main display's extent; CGDirectDisplayID is 32 bits wide
-CORE_GRAPHICS = "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics"
+# the framework that tells the main display's extent (a function: a primitive file's constants are numbers);
+# CGDirectDisplayID is 32 bits wide
+core_graphics(): text := "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics"
 DISPLAY_ID_MASK = 4294967295
 COLON = 58
 # wasmtime_val_t's kinds, its value 8 bytes in; the sizes of the C structs the calls fill
@@ -257,8 +258,8 @@ on_darwin(): bool := {
 }
 # the main screen's width, else its height, in points; 0 where none shows (a headless Mac, Linux without CoreGraphics)
 display_extent(height: i32): i64 := {
-	main_display = library_function(c_string(CORE_GRAPHICS), c_string("CGMainDisplayID"))
-	extent = library_function(c_string(CORE_GRAPHICS), c_string(if height != 0 then "CGDisplayPixelsHigh" else "CGDisplayPixelsWide"))
+	main_display = library_function(c_string(core_graphics()), c_string("CGMainDisplayID"))
+	extent = library_function(c_string(core_graphics()), c_string(if height != 0 then "CGDisplayPixelsHigh" else "CGDisplayPixelsWide"))
 	if main_display == 0 or extent == 0 { return 0 }
 	integers = allocate(REGISTERS * 8)
 	floats = allocate(REGISTERS * 8)
