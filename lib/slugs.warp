@@ -81,3 +81,9 @@ truncate_words(t: text, n: int): text := {
 	if count(ws) <= n { return t }
 	join(ws[0: n], " ") + "…"
 }
+// the words text gave these by before (it used slugs and slugs used it, a cycle no prebuilt module can link, card
+// prebuilt-module-links): "Hello, World!" → "hello-world", "helloWorld" → "hello_world", "hello_world" → "helloWorld"
+alias slug => slugify
+alias snake_case => to_snake
+alias kebab_case => to_kebab
+alias camel_case => to_camel
