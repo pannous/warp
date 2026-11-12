@@ -1017,8 +1017,7 @@ class_methods_listed(name: Node, program: Node, source: text): any := {
 	lineage = written_lineage(name, source)
 	if owns_word("methods", program) or #lineage == 0 { return ø }
 	own = lineage.flat_map(owner => (class_members(owner, source) ?? [[], []])#2)
-	# by its written name: a typed variant joining a library word's, length·P of `length(p: P)`, is length
-	outside = first_parameter_types.keys.filter(function => lineage.contains(first_parameter_types[function])).map(function => function.split("·")#1).filter(function => not own.contains(function)).unique()
+	outside = first_parameter_types.keys.filter(function => lineage.contains(first_parameter_types[function]) and not own.contains(function))
 	List((own + outside).map(symbol), Bracket.Square, Separator.Comma)
 }
 # `functions()` (card functions-list): the program's own functions as function values, in their
