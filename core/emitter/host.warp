@@ -97,6 +97,10 @@ host_builders = [["new_map", [ValueKind.Node], "built_map"], ["new_empty", [], "
 # module defining it exports them though it reaches no host word of nodes
 page_event_word = "page_event"
 def page_builders() { if page_event_word in module.functions.keys { exported_builders() } }
+# the runtime words that call a host word with nodes (read_file's net.get of a URL): a program reaching one exports
+# the builders the host reads those nodes through
+node_host_runtime_words = ["read_file"]
+def runtime_builders(name: text) { if name in node_host_runtime_words and not module.prebuilding { exported_builders() } }
 # made once: each builder calls its runtime word, an i32 widened to the int it takes; returned_error fails the run with
 # the trap detail the host left
 def exported_builders(): any {

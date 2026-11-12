@@ -243,6 +243,7 @@ def runtime_word(name: text): Function? {
 	f.result = word#3
 	f.is_runtime = yes
 	module.runtime[name] = f
+	runtime_builders(name)
 	f
 }
 def has_runtime_word(name: text): bool := runtime_word(name) != ø
