@@ -7,17 +7,8 @@
 // the classes WebKit calls back (a page loaded, a page's message, the window closing) are made at run time, their
 // methods warp functions (lib/callbacks.warp), as is the block an answer comes back to
 
-// the page's origin, the scheme the run answers itself: a warp function given to js calls back through it, the page's
-// same origin (webview_bridge.js warpCalledBack), and a secure one, so crypto.randomUUID and the like are there
-CALLBACK_SCHEME = "warp"
-PAGE_ORIGIN = CALLBACK_SCHEME + "://localhost/"
-// a JS object standing for the program's function of that slot (webview_bridge.js warpUnhandled)
-CALLBACK_KEY = "$callback"
-NESTED_CALL = "a warp function JS calls back can't call JS itself natively: the web view waits for its answer"
-UTF8_ENCODING = 4
-HTTP_OK = 200
-HTTP_FAILED = 500
-WRONG_ARITY = "wrong number of arguments"
+// a secure origin, so the page's crypto.randomUUID and the like are there
+PAGE_ORIGIN = "https://localhost/"
 EMPTY_PAGE = "<!doctype html><meta charset=utf-8><title>warp</title>"
 ANSWER_MS = 10000
 SPIN_SECONDS = 0.005
@@ -161,39 +152,6 @@ page_message(receiver, selector, controller, message) := {
 	if is_kind(body, "NSString") { page_events += [ns_text(body)] }
 }
 global web_view = 0
-// the program's functions js was given, by slot; whether one runs for js now
-global js_functions = []
-global calling_back = no
-// a function among the arguments crosses as {$callback: slot}, which the page makes a JS function of
-handed_over(argument: any): any := {
-	if argument is not function { return argument }
-	js_functions += [argument]
-	standing = {}
-	standing[CALLBACK_KEY] = #js_functions
-	standing
-}
-// the function called with as many of JS's arguments as it takes, as JS drops the others (Array.from's mapper is given
-// each item's index too): a call of the wrong arity fails before the function runs (TODO (card runtime-function-parameters)
-// read its parameters instead)
-taking_what_it_takes(f: function, given: list): any := {
-	result = try called_with(f, given) catch failure { failure }
-	if result is error and text(result) == WRONG_ARITY and #given > 0 { return taking_what_it_takes(f, given[0..<#given - 1]) }
-	result
-}
-// the page calling warp://localhost/<slot>?<its arguments as JSON> back: the function's result as JSON, a failure's
-// message with HTTP_FAILED, which the page throws
-called_back(receiver, selector, view, task) := {
-	url = told(told(task, "request"), "URL")
-	given = parse_json(ns_text(told(told(url, "query"), "stringByRemovingPercentEncoding")))
-	calling_back = yes
-	result = try taking_what_it_takes(js_functions#int(ns_text(told(url, "lastPathComponent"))), given) catch failure { failure }
-	calling_back = no
-	failed = result is error
-	response = sent(told(class_named("NSHTTPURLResponse"), "alloc"), "initWithURL:statusCode:HTTPVersion:headerFields:", [url, if failed then HTTP_FAILED else HTTP_OK, 0, 0])
-	sent(task, "didReceiveResponse:", [response])
-	sent(task, "didReceiveData:", [sent(ns_string(if failed then text(result) else to_json(result)), "dataUsingEncoding:", [UTF8_ENCODING])])
-	told(task, "didFinish")
-}
 view_made(width: float, height: float) := {
 	configuration = instance_of(class_named("WKWebViewConfiguration"))
 	contents = told(configuration, "userContentController")
@@ -201,8 +159,6 @@ view_made(width: float, height: float) := {
 	sent(contents, "addUserScript:", [bridge])
 	messages = instance_of(class_made("WarpHostEvents", [["userContentController:didReceiveScriptMessage:", "v@:@@", page_message]]))
 	sent(contents, "addScriptMessageHandler:name:", [messages, ns_string(EVENT_MESSAGE)])
-	callbacks = instance_of(class_made("WarpHostCallbacks", [["webView:startURLSchemeTask:", "v@:@@", called_back], ["webView:stopURLSchemeTask:", "v@:@@", (receiver, selector, view, task) => ø]]))
-	sent(configuration, "setURLSchemeHandler:forURLScheme:", [callbacks, ns_string(CALLBACK_SCHEME)])
 	sent_with_floats(told(class_named("WKWebView"), "alloc"), "initWithFrame:configuration:", [configuration], [0.0, 0.0, width, height])
 }
 // the HTML shown in the view, waited for: no when it did not load in time
@@ -344,8 +300,7 @@ foreign_answered(runtime: text, module: any, member: text, call: bool, arguments
 	if runtime != JS_RUNTIME { return error(called + ": " + runtime + " is not in the native warp yet") }
 	if (named_module and not is_name(module)) or not member_named(member) { return error(called + ": not a name js has") }
 	if named_module and module == APP_WINDOW { return window_answered(called, member, arguments) }
-	if calling_back { return error(called + ": " + NESTED_CALL) }
-	request = to_json({module: module, member: member, arguments: if call then arguments.map(handed_over) else ø})
+	request = to_json({module: module, member: member, arguments: if call then arguments else ø})
 	answer = answered(hidden_view(), "return await warpForeignCall(request)", "request", request)
 	if answer#2 != ø { return error(failure_said(called, answer#2)) }
 	parse_json(answer#1)

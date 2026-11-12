@@ -651,8 +651,3 @@ Triage (judge the form before building it):
 - test_system_values:26, 27 `mouse_x`, `mouse_down` need a mocked mouse (1207); harness, not language.
 - test_test_line_after_tasks:2 expects ø where the runner prints "✓ 1 tests passed".
 - test_relational_arms:4 `sorted(xs, >)` (card sorted-comparator-syntax).
-
-## test/ffi/test_js_callbacks.warp natively (card js-array-from-callback, night decision 2026-11-12)
-- :9 and :10, a warp function called back by JS that calls JS itself (`Array.from(xs, x => Math.max(x, 2))`), are
-  refused natively: the web view's one JS thread waits for the callback's answer. In the page (its own phase) they can work; natively a
-  second view or JavaScriptCore in process would (option B on the card, waits for the user).
