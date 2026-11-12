@@ -102,20 +102,24 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	timed("emit")
 	made = typed_wasm_module(program, Node.Empty, with_c_functions(host_words(), c_functions), emitter_kinds(program))
 	timed("emit done")
-	# a linked module whose words won't take the program's values is the compile's error, never compiled from its
-	# source instead (decision module-link-hard-error: "this must never happen")
-	if made is text and link_refused {
-		throw module.linked_images.map(image => image.name).join(", ") + ": the linked module doesn't bind (" + made + ")"
+	if made is text {
+		# the warnings and hints before a refusal, which they may explain (`.16i`'s unknown i: did you mean ⅈ?)
+		said_aloud(found)
+		# a linked module whose words won't take the program's values is the compile's error, never compiled from its
+		# source instead (decision module-link-hard-error: "this must never happen")
+		if link_refused { throw module.linked_images.map(image => image.name).join(", ") + ": the linked module doesn't bind (" + made + ")" }
+		# a form beyond the emitter's core gives the refusal's text, the compile's error
+		throw owned_refusal(made, c_refused_form(made, foreign#2, library_folder))
 	}
-	# a form beyond the emitter's core gives the refusal's text, the compile's error
-	if made is text { throw owned_refusal(made, c_refused_form(made, foreign#2, library_folder)) }
 	if only_apart { made = linked_bytes(module.order) }
-	# the warnings once the module is made
-	for warning in said_at(found, Level.Warning, module.program_file) { warn warning }
-	# and its hints
-	# unless the run asked for none (`warp --no-hints`: wiki/warning.md)
-	if run_option("no-hints") == ø { for said in said_at(found, Level.Hint, module.program_file) { hint said } }
+	said_aloud(found)
 	made
+}
+
+# the warnings once the module is made, and its hints unless the run asked for none (`warp --no-hints`: wiki/warning.md)
+said_aloud(found: list) := {
+	for warning in said_at(found, Level.Warning, module.program_file) { warn warning }
+	if run_option("no-hints") == ø { for said in said_at(found, Level.Hint, module.program_file) { hint said } }
 }
 
 # what the checks diagnosed past the first `known` facts; an error among them fails the compile with its text (card
