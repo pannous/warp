@@ -2078,7 +2078,7 @@ def guarded(p: Parser, word: text): Node := {
 	skip_spaces(p)
 	// the one-line `try x except y`, y when x raises or is ø (decision nullish-split): `(try x else ø) ?? y`; the block
 	// `try: … except: …` handles errors
-	if word == "try" and not python_block and fallback_word_ahead(p) == "except" {
+	if word == "try" and not python_block and fallback_word_ahead(p) == "except" and not handler_ahead(p) {
 		p.at = p.resumes[p.at] + 6
 		skip_spaces(p)
 		return Key(guarded_by(marker, guarded_part, ø, ["", ""]), Op.Coalesce, guarded_phrase(p))
@@ -2146,6 +2146,16 @@ def fallback_word_ahead(p: Parser): text {
 	""
 }
 
+// `except T as e {…}`, `except T {…}` ahead: a handler, not the one-line `try x except y`
+def handler_ahead(p: Parser): bool {
+	start = p.at
+	p.at = p.resumes[p.at] + "except".length
+	skip_spaces(p)
+	caught = caught_parts(p, "except")
+	handler = caught#2 != "" and (caught#1 != "" or at_char(p, '{') or at_char(p, ':'))
+	p.at = start
+	handler
+}
 // `catch e`, `except ZeroDivisionError`, `except ValueError as e`: [the name the Error is bound to, the class it must
 // be], "" for none
 def caught_parts(p: Parser, fallback_word: text): list {

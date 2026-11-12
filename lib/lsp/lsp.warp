@@ -184,7 +184,7 @@ used_modules(source: text, folder: text): list := {
 }
 # where the compiler finds `use name`: beside the file, else in lib/
 module_path(name: text, folder: text): text? := [path_join(folder, name + WARP_EXTENSION), path_join(library_folder(), name + WARP_EXTENSION)].find(exists)
-library_folder(): text := run_option("lib") ?? path_join(dirname(program_folder()), "lib")
+library_folder(): text := run_option("lib") ?? dirname(program_folder())
 
 # an open file's text as the editor has it, else as it is on disk
 document_text(uri: text): text := documents.get(uri) ?? (try read(path_of(uri)) else "")
