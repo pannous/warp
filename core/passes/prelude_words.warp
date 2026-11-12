@@ -451,6 +451,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	# (and the classes the linked words reached so far reach, a used module's reaching the prelude's: their bodies,
 	# declared only, say none of it)
 	wanted += linked_classes_reached.keys
+	if TIMES { print "§I program " + program_words.join(" ") + " | lowering " + lowering_words(program).join(" ") + " | sugar " + sugar_words_of(program).join(" ") + " | needs " + linked_needs().join(" ") + " | classes " + linked_classes_reached.keys.join(" ") }
 	reaches = linked_reaches()
 	linked_classes = linked_class_set()
 	uses = ø
@@ -461,7 +462,11 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	while at < #wanted {
 		word = wanted[at]
 		at += 1
-		if not linked_reached.has(word) { wanted += classes_reached(word, reaches, linked_classes) }
+		if not linked_reached.has(word) {
+			classes_found = classes_reached(word, reaches, linked_classes)
+			if TIMES and #classes_found > 0 { print "§C " + word + " → " + classes_found.join(" ") }
+			wanted += classes_found
+		}
 		for slice in named.get(word) ?? [] {
 			if slice#5 not in reached {
 				if slice#4 == ø and uses == ø { uses = use_lines(module) }
@@ -477,6 +482,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 					origin = origins.get(slice#2)
 					if origin != ø { defined_origins[slice#1] = origin }
 				}
+				if TIMES { print "§W " + word + " → " + slice#1 }
 				wanted += words_within(slice_node) + lowering_words(slice_node)
 			}
 		}
