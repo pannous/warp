@@ -727,7 +727,11 @@ command_ran(): nothing := {
 	option_given("host", "the native warp")
 	# and where it is, so a command runs a program by this warp (`warp build --site` prerenders its page, warp_command)
 	option_given("executable", executable_path())
-	if prefixed and same_text(arg(start), "fast") { complain("note: warp fast is not in the native warp yet; running at full precision") }
+	# `warp fast <program>` is `warp --fast <program>`: untyped whole numbers as i64, wrapping, with no overflow checks
+	if prefixed and same_text(arg(start), "fast") {
+		option_given("fast", "")
+		complain("note: warp fast is written warp --fast; untyped whole numbers wrap as i64")
+	}
 	dispatched(if prefixed and same_text(arg(start), "self") then joined(library_folder(), "/warp-self.wasm") else compiler_path(), prefixed, first)
 }
 command_ran()
