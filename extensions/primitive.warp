@@ -27,6 +27,9 @@ scalars = {i8: signed_byte, int8: signed_byte, u8: unsigned_byte, uint8: unsigne
 	u64: unsigned_long, uint64: unsigned_long, f32: single_float, float32: single_float, f64: double_float,
 	float: double_float, double: double_float, number: double_float}
 NO_VALUE = ""
+# the GC program's checked cast, `x as u8` once the sugar of calls.warp ran over a @primitive function in it: primitive
+# code casts plainly, wrapping, as a whole primitive file does (the rule's widened_to_int)
+FITTED_INT_WORD = "fitted_int"
 INT_TYPE = "int"
 FLOAT_TYPE = "float"
 BOOL_TYPE = "bool"
@@ -370,6 +373,7 @@ mvp_emitted(f: PrimitiveFunction, n: Node, expected: text): PrimitiveCode := {
 	if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in primitive_structs { return mvp_constructed(f, name_of(n#1), items_of(n)[1 ..< #n], n) }
 	if is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol(ALLOCATE_WORD) and primitive_callee(ALLOCATE_WORD) == ø { return PrimitiveCode(POINTER_TYPE, arena_taken(mvp_typed(f, n#2, "i32"))) }
 	if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and primitive_callee(name_of(n#1)) != ø { return mvp_call(f, n#1, items_of(n)[1 ..< #n], n) }
+	if is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(FITTED_INT_WORD) { return mvp_cast(mvp_emitted(f, n#2, ""), "${n#3}") }
 	if is_group(n) and bracket_of(n) == "(" and #n > 1 and n#1 is symbol and name_of(n#1) not in f.locals { primitive_refusal(n, form_of(n) + ", not a primitive function: primitive code calls only primitive code") }
 	if is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1 and n#1 is symbol { return mvp_spaced(f, n) }
 	if is_group(n) and (bracket_of(n) == "{" or bracket_of(n) == "" or bracket_of(n) == "(") { return mvp_block(f, items_of(n), expected) }
