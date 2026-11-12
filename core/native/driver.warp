@@ -191,6 +191,7 @@ wasmtime_memory_data_size(context: handle, memory: pointer): i64 from "warp_wasm
 wasmtime_memory_grow(context: handle, memory: pointer, delta: i64, previous: pointer): handle from "warp_wasmtime"
 library_function(library: pointer, name: pointer): handle from "c"
 native_call(function: handle, integers: pointer, floats: pointer, float_result: i32): i64 from "c"
+native_call_struct(function: handle, integers: pointer, count: i32, bytes: handle, size: i32): i64 from "c"
 handle_id(pointer: handle): i32 from "c"
 terminal_size(rows: i32): i32 from "c"
 kept_value(slot: i64): i64 from "c"
@@ -2726,14 +2727,17 @@ guest_error(caller: handle, context: handle, message: text, result: pointer): no
 ## C calls
 # a module calling C describes each C function in its warp.c_functions section, a line of tab-separated fields each:
 # import module, library, name, parameters, C result register, what the result
-# crosses as, the first out-pointer's pointee, struct layouts, how a failure shows. One the driver can't make (bytes,
-# structs) stops the run saying so
+# crosses as, the first out-pointer's pointee, struct layouts, how a failure shows. A struct the compile already
+# refused, or one passed into a wasm module, stops the run saying so
 WASM_HEADER = 8
 CUSTOM_SECTION = 0
 TAB = 9
 NEWLINE = 10
 COMMA = 44
 REGISTERS = 8
+# a parameter `bytesN`: N bytes at a handle, passed as one aggregate after the integer arguments. The compile
+# (extensions/c_imports) refused every other placement, native_call_struct a size it cannot place
+STRUCT_BASE = 32
 WASM_PAGE_BYTES = 65536
 # the section `name` of a wasm module, else the empty text
 custom_section(module: text, name: text): text := {
@@ -2830,6 +2834,18 @@ CROSSING_BYTES = 8
 FAILURE_NONE = 1
 FAILURE_NOT_NULL = 2
 FAILURE_FALSE = 3
+# `bytes40` is 40, another `bytes` and digits too; 0 when it is not that spelling (plain `bytes` is a text's bytes)
+struct_prefix(): text := "bytes"
+struct_size(name: text): i32 := {
+	if name.length <= struct_prefix().length or not starts_with(name, struct_prefix()) { return 0 }
+	n = 0
+	for i in struct_prefix().length..name.length {
+		digit = byte_at(name.address + i).value
+		if digit < ZERO or digit > ZERO + 9 { return 0 }
+		n = n * 10 + (digit - ZERO)
+	}
+	n as i32
+}
 parameter_kind(name: text): i32 := {
 	if same_text(name, "i32") { return PARAMETER_I32 }
 	if same_text(name, "i64") { return PARAMETER_I64 }
@@ -2889,13 +2905,16 @@ foreign_of(line: text, wasm: pointer): i64 := {
 	count = field_count(parameters, COMMA)
 	kinds = allocate(count as i32)
 	floats = 0
+	integers = 0
 	for p in 0..count {
 		type = field(parameters, p, COMMA)
-		kind = known(parameter_kind(type), name, "a parameter ", type)
+		size = struct_size(type)
+		kind = if size > 0 then STRUCT_BASE + size else known(parameter_kind(type), name, "a parameter ", type)
 		byte_at(kinds + p).value = kind as u8
 		if kind == PARAMETER_F32 or kind == PARAMETER_F64 { floats = floats + 1 }
+		if kind < STRUCT_BASE and kind != PARAMETER_F32 and kind != PARAMETER_F64 { integers = integers + 1 }
 	}
-	if floats > REGISTERS or count - floats > REGISTERS { failed_call(joined(name, ": more than 8 integer or float parameters, not in the native driver yet")) }
+	if floats > REGISTERS or integers > REGISTERS { failed_call(joined(name, ": more than 8 integer or float parameters, not in the native driver yet")) }
 	register = known(register_of(field(line, 4, TAB)), name, "a result register ", field(line, 4, TAB))
 	crossing = known(crossing_of(field(line, 5, TAB)), name, "a result crossing as ", field(line, 5, TAB))
 	failure = known(failure_of(field(line, 8, TAB)), name, "a failure shown as ", field(line, 8, TAB))
@@ -2927,10 +2946,15 @@ library_called(c: Foreign, caller: handle, context: handle, given: pointer, resu
 	passed = 0
 	outs = 0
 	bytes_length = 0
+	memory = 0 as i64
+	memory_size = 0
 	for p in 0..c.count {
 		kind = byte_at(c.kinds + p).value as i32
 		value = given + passed * VALUE_BYTES + VALUE_OFFSET
-		if kind == PARAMETER_F32 or kind == PARAMETER_F64 {
+		if kind >= STRUCT_BASE {
+			memory_size = kind - STRUCT_BASE
+			memory = c_argument(caller, context, name, PARAMETER_HANDLE, value, 0)
+		} else if kind == PARAMETER_F32 or kind == PARAMETER_F64 {
 			long_at(floats + float_count * 8).value = if kind == PARAMETER_F64 then long_at(value).value else word_at(value).value as i64
 			float_count = float_count + 1
 		} else {
@@ -2941,7 +2965,7 @@ library_called(c: Foreign, caller: handle, context: handle, given: pointer, resu
 		if kind == PARAMETER_OUT { outs = outs + 1 }
 		passed = passed + program_argument(kind)
 	}
-	returned = native_call(c.function, integers, floats, if c.register == REGISTER_F32 or c.register == REGISTER_F64 then 1 else 0)
+	returned = if memory_size != 0 then native_call_struct(c.function, integers, integer_count as i32, memory, memory_size as i32) else native_call(c.function, integers, floats, if c.register == REGISTER_F32 or c.register == REGISTER_F64 then 1 else 0)
 	c_finished(c, caller, context, returned, long_at(out).value, results, results_count)
 }
 ## C functions of a wasm module (card wasm-instance-c-calls)
@@ -3028,6 +3052,7 @@ wasm_called(c: Foreign, caller: handle, context: handle, given: pointer, results
 		kind = byte_at(c.kinds + p).value as i32
 		value = given + passed * VALUE_BYTES + VALUE_OFFSET
 		argument = arguments + p * VALUE_BYTES
+		if kind >= STRUCT_BASE { failed_call(joined(name, ": a struct by value into a wasm module, not in the native driver yet")) }
 		if kind == PARAMETER_HANDLE or kind == PARAMETER_TEXTS { failed_call(joined(name, ": a handle or a list of texts into a wasm module, not in the native driver yet")) }
 		if kind == PARAMETER_TEXT or is_array(kind) or kind == PARAMETER_OUT {
 			# (a later out-pointer is NULL, as for a C library)

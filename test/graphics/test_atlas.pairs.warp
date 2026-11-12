@@ -1,0 +1,9 @@
+// The baked EZ Tree atlas (samples/graphics/ez_trees/NOTICE.md, notes/forest.md).
+// A stamp that matches the source images names the grove and ash sizes. A missing
+// folder is none, so the caller builds the floats itself.
+
+'use forest; baked_atlas("../../samples/graphics/no-such-atlas", GROVE_ATLAS) == ø'	yes
+
+'use forest; g = baked_atlas("../../samples/graphics/ez_trees", GROVE_ATLAS); a = baked_atlas("../../samples/graphics/ez_trees", ASH_ATLAS); [g[1], g[2], a[1], a[2], g[0].contains("atlas.bin#1#"), a[0].contains("atlas.bin#2#"), g[0].ends_with(a[0].split("#")[2])]'	[2048, 1024, 1280, 1024, yes, yes, yes]
+
+'use forest; n = baked_atlas("../../samples/graphics/ez_trees", NEAR_ATLAS); [n[1], n[2], n[0].contains("atlas.bin#3#")]'	[4096, 1536, yes]

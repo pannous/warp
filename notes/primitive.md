@@ -97,10 +97,11 @@ shows it, in linear memory) and builds answers with new_text/new_empty/error_of:
 driver lacks is an Error saying so. A C function the module's
 warp.c_functions section describes (one tab-separated line each, extensions/c_imports/section.warp) is the same
 callback, its data the line and the function (foreign.c library_function: lib<name>.dylib/.so, libc and libm the
-process's): numbers go in registers (foreign.c native_call, up to 8 integers and 8 floats), a text NUL-terminated
-through shown_at, a handle id through foreign.c's handle table, the first out-pointer to a slot that becomes the
-result; a text result is written at the module's text_heap and made by new_text. Bytes, structs and a failed call stop
-the run with one line naming the function. Every other host word is a trap naming it. The executable's path is _NSGetExecutablePath's (macOS; Linux needs /proc/self/exe).
+process's): numbers go in registers (foreign.c native_call, up to 8 integers and 8 floats), a trailing `bytesN` aggregate
+through native_call_struct (17 to 128 bytes, last, no float beside it, at most six integer arguments before it), a
+text NUL-terminated through shown_at, a handle id through foreign.c's handle table, the first out-pointer to a slot
+that becomes the result; a text result is written at the module's text_heap and made by new_text. A struct the line
+cannot pass, and a failed call, stop the run with one line naming the function. Every other host word is a trap naming it. The executable's path is _NSGetExecutablePath's (macOS; Linux needs /proc/self/exe).
 warp.wasm has the shown_at export once the seed that builds it has it. Tests: test/native/test_native.sh "by the
 driver".
 
