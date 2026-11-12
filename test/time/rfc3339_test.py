@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# test/time/rfc3339_cases.tsv (gen_rfc3339_cases.py) through lib/time's parse_date: the milliseconds, or a refusal;
+# test/time/rfc3339_cases.tsv (gen_rfc3339_cases.py) through lib/time's `as Instant`: the milliseconds, or a refusal;
 # every accepted case also round trips, (Instant(ms).text() as Instant).ms == ms, its text the UTC RFC 3339 python writes
 # (milliseconds without trailing zeros). Counts by group; --fails GROUP. Outside smoke; run from the repo root.
 import os, subprocess, sys, tempfile, collections, datetime as dt
