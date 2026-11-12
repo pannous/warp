@@ -59,8 +59,8 @@ Three layers, each with one place in the source:
 
 ## 4. Implicit modules
 core/extension.warp implicit_modules_of, "module → when the program needs it" (`warp uses <file>` lists them): file
-URL → file (P183), a page → markup, routes → router, a route's regular expression → regex; play, beep, stop_sound,
-wait_sound → sound (P171). No `use` text is inserted.
+URL → file (P183), a page → markup, routes → router, a route's regular expression → regex; play, beep, stop,
+wait → sound (P171). No `use` text is inserted.
 
 ## 5. How a module is loaded
 - `use math` resolves: a local `math.warp` (the file wins, except warp's own lib/<name>.warp) → `lib/math.warp` → an
