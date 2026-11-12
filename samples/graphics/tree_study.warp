@@ -239,12 +239,11 @@ global atlas_packed = 0.0
 atlas_id = if grove then GROVE_ATLAS else if portrait == "" then ASH_ATLAS else NEAR_ATLAS
 baked = baked_atlas(program_folder() + "/ez_trees", atlas_id)
 if baked == ø {
-	eprint("atlas built")
 	rgba_name = if grove then "grove.rgba" else if portrait == "" then "ash.rgba" else "near.rgba"
+	eprint("no baked atlas.bin, reading " + folder + rgba_name + " (python3 scripts/ez_tree/atlas.py bakes it)")
 	rgba = read_bytes(folder + rgba_name)
 	atlas = [(0.0 + rgba[i]) / 255.0 for i in 0 ..< count(rgba)]
 } else {
-	eprint("atlas file")
 	atlas = baked[0]
 	atlas_w = baked[1]
 	atlas_h = baked[2]
