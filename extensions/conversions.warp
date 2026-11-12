@@ -205,7 +205,7 @@ class Places { typed: map; converting: map; classes: map; results: map }
 converted_arguments(n: Node, places: Places, known: map): Node := {
 	call = definition_call(n)
 	if call != ø { return Key(key_of(n), Op.Define, converted_arguments(value_of(n), unshadowed(places, bound_at(n)), parameters_typed(call))) }
-	walked = children(n, x => converted_arguments(x, places, known))
+	walked = children(called_values(n, places), x => converted_arguments(x, places, known))
 	if is_key(walked, Op.Assign) and is_key(key_of(walked), Op.Colon) and key_of(key_of(walked)) is symbol and value_of(key_of(walked)) is symbol {
 		return Key(key_of(walked), Op.Assign, passed(value_of(walked), name_of(value_of(key_of(walked))), name_of(key_of(key_of(walked))), places, known))
 	}
@@ -217,6 +217,22 @@ converted_arguments(n: Node, places: Places, known: map): Node := {
 	# (a method a dispatcher calls, `equal·method`, by a name no program writes: its dispatch tests the types, "" no taker)
 	taker = if name_of(walked#1).contains("·") then "" else name_of(walked#1)
 	group_like(walked, [walked#1] + (1 to #arguments).map(at => passed(arguments#at, types#at, taker, places, known)))
+}
+# a function converting its arguments named as a value, `g = f`, `xs.map(f)`, `[f]` (value_parts), or compared, `g == f`,
+# is its entry f·value, which calls it, so the call converts them as any call does (card function-value-call)
+value_entry_suffix = "·value"
+called_values(n: Node, places: Places): Node := {
+	named = (value_parts(n) + compared_parts(n)).filter(part => part is symbol and places.typed.has(name_of(part)) and not places.classes.has(name_of(part)))
+	if not named then n else children(n, child => if child in named then symbol(name_of(child) + value_entry_suffix) else child)
+}
+compared_parts(n: Node): list := if is_key(n, Op.Eq) or is_key(n, Op.Ne) then [key_of(n), value_of(n)] else []
+# `f·value(argument·1) := f(argument·1)` of each such function the program names as a value
+value_entries(program: list, places: Places): list := {
+	named = nodes_in(List(program, Bracket.None, Separator.Newline)).filter(n => n is symbol and name_of(n).ends_with(value_entry_suffix)).map(name_of)
+	places.typed.keys.filter(name => name + value_entry_suffix in named).map(name => {
+		calling = lambda_calling(name, #places.typed[name])
+		Key(call_of(name + value_entry_suffix, parameters_of(key_of(calling)).map(symbol)), Op.Define, value_of(calling))
+	})
 }
 passed(value: Node, type: text, taker: text, places: Places, known: map): Node := if converts_to(type, places.converting) and not known_as(value, type, places, known) then call_of(argument_conversion_name(type), [value, Text(taker)]) else value
 # the places without the functions a parameter or variable of the definition shadows, `apply: function` called
@@ -323,7 +339,8 @@ conversions(program: Node): Node := {
 		# (a program's conversions are its own, seeing every module's: never a linked module's of the same name, time's
 		# passed·Duration knowing no Quantity)
 		if module_written == "" { own_words_unlinked(functions.map(f => name_of(definition_call(f)#1))) }
-		List(functions + kept.map(statement => converted_arguments(converting_uses(statement, targets), places, {})), Bracket.None, Separator.Newline)
+		converted = kept.map(statement => converted_arguments(converting_uses(statement, targets), places, {}))
+		List(functions + value_entries(converted, places).map(entry => converted_arguments(entry, places, {})) + converted, Bracket.None, Separator.Newline)
 	}
 	forced_conversions(checked)
 }
