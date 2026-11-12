@@ -19,13 +19,13 @@ SIGNAL_SEPARATOR = "·"
 fetch_signals(program: Node): Node := {
 	fetched = flat_statements(program).map(fetched_name).filter(name => name != "")
 	if #fetched == 0 { return program }
-	held = statements_in(program).map(held_fetch_name).filter(name => name != "")
+	held = flat_statements(program).map(held_fetch_name).filter(name => name != "")
 	read = bottom_up(in_markup(program, scope => live_regions(scope, fetched)), n => signal_read(n, fetched, held))
 	if #held == 0 { return read }
-	separated(bracketed(statements_in(read).flat_map(fetched_at_once), ""), ";")
+	separated(bracketed(flat_statements(read).flat_map(fetched_at_once), ""), ";")
 }
 # the library word the lowering calls, which the program never writes (core/passes/prelude_words.warp extension_writes)
-fetch_into_words(program: Node): list := if statements_in(program).any(statement => held_url(statement) != ø) then [FETCH_INTO] else []
+fetch_into_words(program: Node): list := if flat_statements(program).any(statement => held_url(statement) != ø) then [FETCH_INTO] else []
 # the name of `name := fetch url` at the main level, held as a variable with its error beside it, else ""
 held_fetch_name(statement: Node): text := if held_url(statement) == ø then "" else name_of(key_of(statement))
 held_url(statement: Node): Node? := match statement {
