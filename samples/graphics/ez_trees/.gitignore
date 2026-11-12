@@ -1,0 +1,6 @@
+# large generated or third-party assets, kept out of git (user 11-11): regenerate them with
+# scripts/ez_tree/export.mjs, hero.mjs and atlas.py (NOTICE.md); the small two-level meshes beside this file stay tracked
+hero/
+canopy/
+textures/
+atlas.bin
