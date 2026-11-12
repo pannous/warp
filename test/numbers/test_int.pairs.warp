@@ -9,3 +9,9 @@
 'int(sqrt(8) * 9)'	25
 '(-2 * π) as int'	-6
 'int(√2 + 1)'	2
+
+# a typed global keeps its declared type as a typed local does: a value of another kind is refused, at compile time when
+# known, at run time naming its kind when it comes untyped (card inside-linked, interviewer OK 11-12)
+'global cw: int = 1280; cw = "x"; cw'	error
+'global cw: int = 1280; def size(w) { cw = w }; size("x"); cw'	error
+'global cw: int = 1280; global ch: int = 800; def size(w, h) { cw = w; ch = h }; size(640, 480); cw * ch'	307200

@@ -944,22 +944,24 @@ with_implicit_uses(source: text, folder: text = "."): text := {
 # the runtime modules the modules and files used need, at any depth: units' `^` reached by a program's `3 km²`, the
 # colors package's `^ 2.4` by its `use ../../packages/colors/colors.warp`, link big_numbers
 runtime_modules_reached(uses: list, folder: text): list := {
-	modules = []
 	needed = []
 	# (a runtime module used is needed already, its own text never read)
 	for used in uses.filter(name => not is_runtime_module(name)) {
 		file = file_used(use_statements([used])#1, folder)
-		if file == ø { modules = modules_used_by(used, modules) } else { needed += file_runtime_modules(file) }
+		needed += if file == ø then module_runtime_modules(used) else file_runtime_modules(file)
 	}
-	needed + modules.flat_map(module_runtime_modules)
+	needed
 }
 # (each module's and file's text read once a compile: the prelude's is long)
 global runtime_modules_by_module = {}
 module_runtime_modules(name: text): list := {
 	if not runtime_modules_by_module.has(name) {
-		# (a prebuilt module's signature says them, the modules it links; only one built before it did is read and scanned)
+		runtime_modules_by_module[name] = []
+		# (a prebuilt module's signature says them, the modules it links, those of the files built into it too (units'
+		# unit_names): nothing below it is read; only one built before it did and a module not prebuilt are read and
+		# scanned, with the modules they use in turn)
 		signature = prebuilt_signature(name)
-		runtime_modules_by_module[name] = if signature != ø and signature.links != ø then signature.links.filter(is_runtime_module) else text_runtime_modules(used_module_text(name))
+		runtime_modules_by_module[name] = if signature != ø and signature.links != ø then signature.links.filter(is_runtime_module) else text_runtime_modules(used_module_text(name)) + module_uses(name).flat_map(module_runtime_modules)
 	}
 	runtime_modules_by_module[name]
 }
@@ -1269,8 +1271,8 @@ used_module_sources(statements: any, folder: text, seen: any, within_module: boo
 				linked += inner#3 + signature.slices
 			} else if source != "" {
 				# (a module found late, by a global word, links the runtime modules it needs as a written use does: machine_math's
-				# big_numbers)
-				for runtime in module_runtime_modules(name_of(used)) { linked_late(runtime) }
+				# big_numbers; asked only while one is unlinked, since asking parses the module's text)
+				if hooks().runtime_modules.any(runtime => linked_signature(runtime) == ø) { for runtime in module_runtime_modules(name_of(used)) { linked_late(runtime) } }
 				inner = used_module_sources(use_statements(used_modules(source)), folder, seen, yes)
 				sources += inner#1 + [source]
 				seen = inner#2
