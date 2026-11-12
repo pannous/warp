@@ -66,8 +66,8 @@ other_file_global(definition: Node, function: text, own_names: list, global_name
 # (prelude_words.warp defined_origins)
 written_file(name: text, own_names: list): text? := if name in own_names then module.program_file else (defined_origins.get(name) ?? [ø])#1
 # the names the body binds anew, `n = …`, `n: int = …`, `n += 1`, `n++`; never a part changed in place, `xs#i = …`
-rebound_names(body: Node): list := nodes_in(body).filter(n => n is key and (op_of(n) in assigning_operators or op_of(n) in counting_operators)).map(n => bound_name(key_of(n))).filter(name => name != ø)
-bound_name(target: Node): text? := if target is symbol then name_of(target) else if is_operator(target, ":") and key_of(target) is symbol then name_of(key_of(target)) else ø
+rebound_names(body: Node): list := nodes_in(body).filter(n => n is key and (op_of(n) in assigning_operators or op_of(n) in counting_operators)).map(n => rebound_name(key_of(n))).filter(name => name != ø)
+rebound_name(target: Node): text? := if target is symbol then name_of(target) else if is_operator(target, ":") and key_of(target) is symbol then name_of(key_of(target)) else ø
 
 # the variables main assigns, outside the function definitions; a loop's or comprehension's variable belongs to its
 # loop, a function binding that name is its own: an item variable the lowering binds from made names
