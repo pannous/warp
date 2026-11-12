@@ -93,6 +93,23 @@ jobs:
         path: _site
         retention-days: 1
 
+  # the one gate of a deploy, on every run but an urgent one: the tour's first example shows its value in headless
+  # Chrome, so a page whose hello throws is never deployed (pushes deployed one for an hour: card pages-ci)
+  hello:
+    needs: build
+    if: ${{ !inputs.skip_checks }}
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
+    steps:
+    - uses: actions/checkout@v7
+    - uses: actions/download-artifact@v8
+      with:
+        name: site
+        path: _site
+    - name: Install agent-browser (headless Chrome)
+      run: npm install -g agent-browser && agent-browser install --with-deps
+    - name: The tour's hello shows its value in headless Chrome
+      run: python3 web/playground/test_in_browser.py --examples hello --site _site
+
   # every tour example shows what it promises (examples.js) and no example or sample writes an error or warning to the
   # console, in the collected site, else no deploy
   tour-chrome:
@@ -163,14 +180,14 @@ jobs:
     - name: The painting checks in Safari
       run: python3 web/playground/test_in_browser.py --examples --safari --site _site webgpu shader_trails "(the view's size stays as paintings of that size are shown)" "(many GPU jobs in one run)" "(many tasks in one run)" async "(named GPU arrays, a shader painted into the page's canvas)"
 
-  # only main may deploy (the github-pages environment). The deploy follows the build at once; the tours run beside it
-  # as checks whose failures are fixed forward, never a gate (a red tour held every deploy for a day)
-  # A push deploys only (about 6 minutes); the tours and verify run on the schedule and by hand, so pushes every few
-  # minutes don't queue browser runs. Deploys run one at a time per ref, never cancelled: GitHub keeps one pending
-  # deploy, the newest, so the site follows main's latest push
+  # only main may deploy (the github-pages environment). The deploy follows the build and its hello; the tours run
+  # beside it as checks whose failures are fixed forward, never a gate (a red tour held every deploy for a day)
+  # A push runs no tour, so pushes every few minutes don't queue browser runs; verify checks its live hello. Deploys
+  # run one at a time per ref, never cancelled: GitHub keeps one pending deploy, the newest, so the site follows main's
+  # latest push. An urgent run (skip_checks) deploys without the hello
   deploy:
-    needs: build
-    if: github.ref == 'refs/heads/main'
+    needs: [build, hello]
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.build.result == 'success' && needs.hello.result != 'failure' }}
     concurrency:
       group: pages-deploy-${{ github.ref }}
       cancel-in-progress: false
@@ -182,10 +199,11 @@ jobs:
     - id: deployment
       uses: actions/deploy-pages@v5
 
-  # the same check against the deployed page: its console stays clean too (card console-errors)
+  # the same check against the deployed page: its console stays clean too (card console-errors); a push checks its
+  # hello only, red when the live page shows another value (card pages-ci)
   verify:
     needs: deploy
-    if: github.event_name != 'push'
+    if: ${{ !cancelled() && needs.deploy.result == 'success' }}
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
     - uses: actions/checkout@v7
@@ -197,13 +215,14 @@ jobs:
         path: _site
     - name: Install agent-browser
       run: npm install -g agent-browser && agent-browser install --with-deps
-    - name: The live playground shows the tour and its console stays clean
+    - name: The live playground shows the tour (a push its hello) and its console stays clean
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: python3 web/playground/test_in_browser.py --examples --url https://warp.pannous.com/ --site _site
+      run: python3 web/playground/test_in_browser.py --examples ${{ github.event_name == 'push' && 'hello' || '' }} --url https://warp.pannous.com/ --site _site
     # the page is deployed by now: a Firefox failure here (the intermittent worker-start hang, card firefox-hello) is a
-    # warning annotation on the run, not a failed run mailing the user 
+    # warning annotation on the run, not a failed run mailing the user
     - name: The same in headless Firefox (a warning, not a failure)
+      if: github.event_name != 'push'
       timeout-minutes: 15
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
