@@ -18,3 +18,4 @@
 'use time; try parse("12:30:00.1000", Pattern("HH:mm:ss.S")) else "no time"'	"no time"
 'use time; try parse("2026-13-01", Pattern("yyyy-MM-dd")) else "no date"'	"no date"
 'use time; format(parse("2026-11-04 23:59:59", Pattern("yyyy-MM-dd HH:mm:ss")), Pattern("HH:mm:ss"))'	"23:59:59"
+'use time; [parse("2026-10-07", Pattern("yyyy-MM-dd")) as text, parse("a + b") is key]'	["2026-10-07T00:00:00Z", true]
