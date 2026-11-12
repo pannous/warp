@@ -1105,12 +1105,6 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				continue
 			}
 			powers = binding_powers(op#2)
-			// `if x=2 {…}`: in a condition `=` compares (wiki/Footguns.md "Assignment in a condition"); a block, a list or
-			// a call's arguments inside it assign again (arguments_read, group_atom)
-			if op#2 == "=" and p.comparing {
-				op = [op#1, "=="]
-				powers = binding_powers("==")
-			}
 			// one arrow, but `=>` binds as written: its body takes an assignment
 			if op#1 == "=>" { powers = binding_powers("=>") }
 			if op#1 == ":" and glued_time_at(p, left) {
@@ -1667,6 +1661,9 @@ def operator_at(p: Parser): list {
 	if spelled.length == 0 { spelled = spelled_operator_at(p) }
 	written = if spelled.length > 0 then spelled#1 else operand_word_at(p)
 	if written != "" and assigns_after(p, written.length) and (if spelled.length == 0 then not declares_before(p) else computes(spelled#2)) { return [written + "=", COMPOUND_ASSIGNMENT] }
+	// `if x=2 {…}`: in a condition `=` compares (wiki/Footguns.md "Assignment in a condition"); a block, a list or a
+	// call's arguments inside it assign again (arguments_read, group_atom)
+	if p.comparing and spelled.length > 0 and spelled#2 == "=" { return [spelled#1, "=="] }
 	spelled
 }
 // the word before the operand is one declaring it, `const x=5`, `let n=5`, or its type, `int i=2*3`: its `x=` an
