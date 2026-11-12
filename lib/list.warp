@@ -44,7 +44,7 @@ argmin(xs: any): int := { best = 1; for i in 1 to count(xs) { if xs#i < xs#best 
 // the neighbours: pairwise([1, 2, 3]) is [[1 2] [2 3]]
 pairwise(xs: any): list := [[xs#i, xs#(i + 1)] for i in 1 to count(xs) - 1]
 // [the first n, the rest]
-split(xs: list, at: int): list := [take(xs, at), drop(xs, at)]
+split_at(xs: any, n: any): list := [take(xs, n), drop(xs, n)]
 // every pair of an element of a and one of b
 cartesian(a: any, b: any): list := [[x, y] for x in a for y in b]
 // the most frequent element, the first of equally frequent ones
