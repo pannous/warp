@@ -4,3 +4,4 @@
 'parse(" x" + "") == data x'	true
 'text(parse("b := 1" + "")) == text(data (b := 1))'	true
 'parse("a\nb := " + "1")#2.line'	2
+'parse("f := {\n\ta\n\tø\n}" + "").op'	':='
