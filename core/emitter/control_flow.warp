@@ -222,6 +222,7 @@ appended(body: Body, target_name: Node, addition: Node): TypedCode? := {
 	# beside a class's `+` a list held as a node still grows in place, so `xs += [o]` reaches the caller's list: decided
 	# by the value at run time, any other value added by the class's `+`
 	if target.kind == ValueKind.Node and adds_by_dispatcher(body) { return if target_name is symbol then appended_or_added(body, target_name, addition) else ø }
+	if target.kind == ValueKind.Node and int_firsts(body, "+", target, added) { return assignment(body, target_name, int_first(body, "+", target, added, (left, right) => runtime_call("node_append", [left, right]))) }
 	if target.kind == ValueKind.Node { return assignment(body, target_name, runtime_call("node_append", [target, added])) }
 	ø
 }
