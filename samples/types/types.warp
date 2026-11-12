@@ -27,7 +27,6 @@ type Predicate[T] = T -> bool
 type BinaryOp[T] = (T, T) -> T
 
 # Union types: each case carries its own data, or none
-type Shape = circle(radius: float) | rectangle(width: float, height: float)
 type Weather = sunny | rain(mm: int) | snow(cm: int)
 
 # Instantiation
