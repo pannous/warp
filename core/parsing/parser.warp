@@ -2079,7 +2079,7 @@ def guarded(p: Parser, word: text): Node := {
 	if word == "try" and not python_block and fallback_word_ahead(p) == "except" {
 		p.at = p.resumes[p.at] + 6
 		skip_spaces(p)
-		return Key(guarded_by(marker, guarded_part, ø, ["", ""]), Op.Coalesce, guarded_phrase(p))
+		return fallen_back(guarded_part, guarded_phrase(p))
 	}
 	if fallback_word_ahead(p) {
 		// `except A: a except B: b`: an Error A does not catch passes on to the next one; an `else` after the
@@ -2112,6 +2112,12 @@ def guarded(p: Parser, word: text): Node := {
 
 // The marker call `marker(X, Y)`, with the name Y reads the caught Error by as a fourth item (`catch e { … }`);
 // `except ParseError as e` binds `e: ParseError`, which lowering tests before Y runs
+// `(try x else ø) ?? y`; an assignment guards its value, so `u = x default y` gives u the fallback
+def fallen_back(guarded_part: Node, fallback: Node): Node := match guarded_part {
+	Key(target, op, value): if op == Op.Assign or op == Op.Define then Key(target, op, fallen_back(value, fallback)) else fallen_back_value(guarded_part, fallback)
+	_: fallen_back_value(guarded_part, fallback)
+}
+def fallen_back_value(guarded_part: Node, fallback: Node): Node := Key(guarded_by(GUARD_MARKERS["try"], guarded_part, ø, ["", ""]), Op.Coalesce, fallback)
 def guarded_by(marker: text, guarded_part: Node, fallback: Node, caught: list): Node := {
 	parts = [symbol(marker), guarded_part, fallback]
 	name = caught#1
