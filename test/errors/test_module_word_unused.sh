@@ -12,7 +12,7 @@ failures=0
 probe_lib=$(mktemp -d "${TMPDIR:-/tmp}/module-word-unused.XXXXXX")
 trap 'rm -rf "$probe_lib"' EXIT
 for entry in "$lib"/*; do ln -s "$entry" "$probe_lib/$(basename "$entry")"; done
-printf 'cut(t) := t.remove_prefix("a")\n' >"$probe_lib/probe_text_word.warp"
+printf 'cut(t) := t.capitalize()\n' >"$probe_lib/probe_text_word.warp"
 printf 'once_each(xs) := unique(xs)\n' >"$probe_lib/probe_shared_word.warp"
 
 # refused <code> <said…>: the run fails, says each part and no gap of the core
@@ -26,8 +26,8 @@ refused() {
 	echo "✓ $code"
 }
 
-# a word of one module (text's remove_prefix), called as a method
-refused 'use probe_text_word; cut("abc")' 'no function remove_prefix' 'use text'
+# a word of one module (text's capitalize), called as a method
+refused 'use probe_text_word; cut("abc")' 'no function capitalize' 'use text'
 # a word two modules define (shell's and list's unique): both named, never one guessed
 refused 'use probe_shared_word; once_each([1, 1])' 'no function unique' 'use shell or use list'
 [ $failures = 0 ]
