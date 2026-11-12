@@ -3,7 +3,7 @@
 The web view is warp (card warp-webview-removal): lib/host/native_host/webview.warp, a part of the native host module,
 drives macOS's WKWebView over the Objective-C runtime by plain FFI.
 - `use js` natively: the host word foreign_call is answered by the module's host_foreign_call. One hidden WKWebView per
-  run, made at the first call, at https://localhost/ (a secure origin: crypto.randomUUID). Never shown, activation
+  run, made at the first call, at warp://localhost/, a scheme the run answers itself (a secure origin: crypto.randomUUID). Never shown, activation
   policy Prohibited: no Dock icon, no focus taken, safe in tests.
 - Objective-C from warp: `sent(receiver, selector, arguments)` calls objc_msgSend through foreign.c native_call (any
   signature: integers in x0…, `sent_with_floats` puts floats in d0…, so a CGRect by value is four doubles, arm64's way).
@@ -18,7 +18,13 @@ drives macOS's WKWebView over the Objective-C runtime by plain FFI.
 - Lessons (cards): a lambda reading a module global keeps its value of when it was made (prebuilt-module): the states
   a run loop waits for are read through words; a list item to a C i64 goes through a float (list-item): int() first.
 - A promise is awaited (callAsyncJavaScript), unlike the page, which refuses. No answer in 10 s is a loud error.
-- Not yet: warp functions given to js (callbacks: `Array.from(xs, x => …)`), `use js "module"` (npm), the operator
+- A warp function given to js (`Array.from(xs, x => x * 2)`) crosses as {$callback: slot}, which webview_bridge.js
+  makes a JS function: each call is a synchronous XMLHttpRequest to warp://localhost/<slot>?<arguments as JSON> at the
+  page's own origin (a custom scheme from https:// never reaches the handler), answered by the WKURLSchemeHandler
+  while the run spins for the call's answer. It takes as many arguments as it takes, as JS drops the others. A
+  callback that calls js itself is refused: the view's one JS thread waits for it (a second view, or JavaScriptCore in
+  process, would lift that).
+- Not yet: warp functions given to js in the page, `use js "module"` (npm), the operator
   forwarding of host-foreign.js FOREIGN_OPERATORS, WebKitGTK on Linux.
 
 `warp app [check] <file>` (lib/app/command.warp, dispatched by core/native/warp.warp): runs the program (`warp run`)
