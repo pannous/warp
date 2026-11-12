@@ -42,7 +42,6 @@ value_function(n: Node): any := match n {
 	_: ø
 }
 
-
 takes_value(word: Node, takers: list): bool := word is symbol and name_of(word) in takers
 
 # `counters`: the takers of a count (count_takers)
