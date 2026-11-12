@@ -783,7 +783,8 @@ le_word(n: int): list := le64(n)[0 ..< 4]
 
 ## primitive functions in a GC program
 # a function the program marks `@primitive`, called from GC code (decision primitive-annotation)
-is_primitive_function(f: Function): bool := written_name(f.name) in (marked_names.get(PRIMITIVE_ATTRIBUTE) ?? [])
+is_primitive_function(f: Function): bool := is_primitive_name(written_name(f.name))
+is_primitive_name(name: text): bool := name in (marked_names.get(PRIMITIVE_ATTRIBUTE) ?? [])
 
 # a primitive function the code may call: one of the file, or in a GC program one marked, compiled at its first call
 primitive_callee(name: text): any := {
