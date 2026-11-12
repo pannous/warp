@@ -1864,6 +1864,8 @@ def tests_judged(paths, tree):
 
 
 WEBDRIVERS = {"--firefox": FirefoxDriver, "--safari": SafariDriver}
+# where --examples runs: a deployed URL, a collected site folder (each followed by its value)
+PLACE_OPTIONS = ("--url", "--site")
 
 
 def chrome_allowed():
@@ -1905,12 +1907,16 @@ def main():
 		return
 	if sys.argv[1:2] == ["--examples"]:
 		global webdriver
-		names = [name for name in sys.argv[2:] if name not in WEBDRIVERS]
+		given = [name for name in sys.argv[2:] if name not in WEBDRIVERS]
 		chosen = [WEBDRIVERS[name] for name in sys.argv[2:] if name in WEBDRIVERS]
 		webdriver = chosen[0]() if chosen else None
-		place = {}
-		while names[:1] in (["--url"], ["--site"]):
-			place[names[0]], names = names[1], names[2:]
+		# --url and --site, each with its value, anywhere among the example names
+		place, names = {}, []
+		while given:
+			if given[0] in PLACE_OPTIONS:
+				place[given[0]], given = given[1], given[2:]
+			else:
+				names, given = names + [given[0]], given[1:]
 		if "--url" in place and "--site" in place:
 			wait_until_deployed(place["--url"], place.pop("--site"))
 		check_examples(names, place.get("--url"), place.get("--site"))
