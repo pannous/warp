@@ -1,0 +1,7 @@
+# Projective geometric algebra of space (wiki/3d.md Algebra, card geometric-algebra, lib/pga.warp)
+# the meet of two planes is their line
+'use pga; meet(plane(0, 1, 0, 0), plane(0, 0, 1, 0)) == join(point(0, 0, 0), point(1, 0, 0))'	yes
+# reflecting a point twice gives the point back
+'use pga; p = point(1, 2, 3); m = plane(1, 0, 0, 0); m.reflect(m.reflect(p)) == p'	yes
+# a rotor by 90° turns (1,0,0) into (0,1,0)
+'use pga; [round(c) for c in coordinates(apply(rotor(pi / 2, 0, 0, 1), point(1, 0, 0)))]'	[0, 1, 0]

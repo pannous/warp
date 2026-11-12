@@ -12,6 +12,25 @@ set -uo pipefail
 source "$(dirname "$0")/lib/platform.sh"
 source "$(dirname "$0")/lib/sync-main.sh"
 WARP=${WARP:-$warp_binary}
+# Keep NULs out of the results file: a test's text or its "got" can carry them, and grep then
+# treats the file as binary and silently undercounts (card results-nul-bytes). Each NUL becomes \0.
+escape_results_nuls() {
+	python3 -c '
+import os, sys
+path = sys.argv[1]
+data = open(path, "rb").read()
+if b"\0" not in data:
+    raise SystemExit(0)
+open(path + ".new", "wb").write(data.replace(b"\0", b"\\0"))
+os.replace(path + ".new", path)
+' "$1"
+}
+# dry run: scripts/full-suite.sh --escape-nuls <file>
+if [ "${1:-}" = --escape-nuls ]; then
+	[ -f "${2:-}" ] || { echo "usage: $0 --escape-nuls <results file>" >&2; exit 2; }
+	escape_results_nuls "$2"
+	exit
+fi
 LOCK=$HOME/.cache/warp/full-suite.lock
 STORE=$warp_store
 SUMMARY='failed in [0-9]* files\|tests passed in [0-9]* files'
@@ -54,6 +73,7 @@ mkdir -p "$(dirname "$pinned")" && cp -Rc "$installed" "$pinned" || { echo "full
 # the registry's packages, which tests use by path (`use "packages/colors/colors.warp"`, decision package-use-by-path)
 "$tree/scripts/link-packages.sh" "$snapshot" >/dev/null || echo "full-suite: no packages linked: the package tests fail" >&2
 (cd "$snapshot" && WARP_WINDOW=0 WARP_SOUND=0 "$pinned/$(basename "$(readlink -f "$WARP")")" --no-hints test --each test) >"$scratch/results.txt" 2>"$scratch/errors.txt"
+escape_results_nuls "$scratch/results.txt"
 summary=$(tail -1 "$scratch/results.txt" | grep "$SUMMARY")
 if [ -z "$summary" ]; then
 	echo "full-suite: the run at $tip died without its summary; test/results.txt kept. Last errors:" >&2
