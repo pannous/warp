@@ -66,8 +66,8 @@ function withWasi(imports, wasi) {
 
 // a module's entry run: its exit status, 0 when it returned (exitCode: the code its host word exit ended it with); a
 // trap's sentence to stderr. A program exporting show runs main, and its value goes to `shown` as the text _start would
-// print (the page's value line, apart from what it printed); else _start, else a primitive module's main. A main that
-// `awaits` runs through WebAssembly.promising, its status then a promise
+// print (the page's value line, apart from what it printed); else _start, else a primitive module's main. A run that
+// `awaits` enters through WebAssembly.promising, its status then a promise
 function ranToEnd(exports, output, exitCode = () => undefined, shown, awaits = false) {
 	const failed = failure => {
 		if (failure instanceof WasiExit) return failure.code;
@@ -75,17 +75,15 @@ function ranToEnd(exports, output, exitCode = () => undefined, shown, awaits = f
 		output(`${raisedMessage(exports, failure)}\n`, STDERR);
 		return FAILURE_STATUS;
 	};
+	const showing = shown && exports.show && exports.main;
+	const entry = showing || !exports._start ? exports.main : exports._start;
 	const ended = value => {
-		if (shown && exports.show) shown(shownValue(exports, value), value);
-		else printedResult(value, output);
+		if (showing) shown(shownValue(exports, value), value);
+		else if (entry === exports.main) printedResult(value, output);
 		return 0;
 	};
 	try {
-		if (!exports.main || (exports._start && !(shown && exports.show))) {
-			exports._start();
-			return 0;
-		}
-		const value = (awaits ? WebAssembly.promising(exports.main) : exports.main)();
+		const value = (awaits ? WebAssembly.promising(entry) : entry)();
 		return value instanceof Promise ? value.then(ended).catch(failed) : ended(value);
 	} catch (failure) {
 		return failed(failure);
