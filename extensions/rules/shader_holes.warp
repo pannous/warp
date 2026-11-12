@@ -1,6 +1,7 @@
 # A shader's holes and paint's size, read off the program at compile time (lib/prelude.warp's paint rules in
 # extensions/rules/modules/prelude.warp); the WGSL a program function paints is made at run time (lib/shaders.warp)
 use rule_words
+use "../shader_blocks.warp"
 
 VALUES_NAME = "values"
 IDENTIFIER_LETTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
@@ -22,17 +23,17 @@ wgsl_assigned_name(target: Node): text := {
 }
 
 # --- a shader's holes (decision P235b, card shader-holes; Rust twin graphics/shader_holes.rs): each `$name` of a
-# shader block the parser wrote values.name; every paint of a shader the program assigns gets `name: name` in its
-# values for each hole its map lacks, so the variable is read at each paint. A built-in hole (lib/native/foreign.c
-# values_filled, host-gpu.js builtinValues) gets one only where the program assigns that name; $previous never ---
+# shader block the parser wrote values.name; every paint or render of a shader the program assigns gets `name: name`
+# in its values for each hole its map lacks, so the variable is read at each paint. A built-in hole (the table
+# extensions/shader_blocks.warp SHADER_HOLES, filled by the hosts) gets one only where the program assigns that name;
+# $previous never ---
 
-SHADER_BUILTIN_HOLES = ["width", "height", "size", "time", "frame", "mouse", "mouse_down", "mouse_wheel", "key"]
+# the built-in holes by name: the table's, a component's (mouse.x) its vector's
+SHADER_BUILTIN_HOLES = SHADER_HOLES.keys.filter(read => not read.contains("."))
 SHADER_FRAME_HOLE = "previous"
-# the values of a paint of shader s with the given map: its entries, then the holes it lacks; ø where s is no shader
-# the program assigns or the map has every hole
-shader_values(s: Node, given: Node, program: Node): any := shader_holes_added(s, if is_group(given) then items_of(given) else [], program)
-# the values of a paint of shader s given none
-shader_values_of(s: Node, program: Node): any := shader_holes_added(s, [], program)
+# the values of a paint or render of shader s with the given map, if any (the rule's rest hole: [] or [map]): its
+# entries, then the holes it lacks; ø where s is no shader the program assigns or the map has every hole
+shader_values(s: Node, given: list, program: Node): any := shader_holes_added(s, if #given == 1 and is_group(given#1) then items_of(given#1) else [], program)
 # the size paint(s) paints at (wiki/graphics.md): the program's width and height where its main level assigns both,
 # else the size of where it shows (prelude.warp shown_width: a window's, else the view's)
 paint_size(program: Node): list := {

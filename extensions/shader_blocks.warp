@@ -109,12 +109,18 @@ def without_trailing_blanks(line: text): text {
 	line[0 .. end]
 }
 
-# A shader's WGSL with each hole `$name` read from the uniform values (`values.name`), the holes listed in its
-# shader_holes attribute; Book of Shaders names and `$mouse_x` read warp's own holes
+# The holes every shader has (card shader-value, notes/gpu.md "One shader"): each as the shader reads it, with the
+# other spellings that read it too (wiki/graphics.md; the Book of Shaders' u_ names). The one table: the shader
+# block's `$name` reads it here, extensions/rules/shader_holes.warp knows the built-in holes by it, and the hosts fill
+# these (lib/host/native_host/gpu.warp hole_value, web/playground/host-gpu.js builtinValues)
+SHADER_HOLES = {"width": [], "height": [], "size": ["u_resolution"], "time": ["u_time"], "frame": [], "mouse": ["u_mouse"],
+	"mouse.x": ["mouse_x"], "mouse.y": ["mouse_y"], "mouse_down": [], "mouse_wheel": ["wheel"], "key": []}
+# how the shader reads the hole a `$name` names: the hole an alias stands for, else the name itself
+def hole_read(written: text): text := SHADER_HOLES.keys.find(read => written in SHADER_HOLES[read]) ?? written
+
+# A shader's WGSL with each hole `$name` read from the uniform values (`values.name`)
 # Rust twin: graphics/shader_holes.rs shader_text, written
-HOLE_ALIASES = {"mouse_x": "mouse.x", "mouse_y": "mouse.y", "u_time": "time", "u_resolution": "size", "u_mouse": "mouse", "wheel": "mouse_wheel"}
 def shader_text(wgsl: text): Node := {
-	names = []
 	# the pieces between holes are copied whole, joined once: one `+` per character copied the text each time
 	parts = []
 	copied = 0
@@ -129,16 +135,10 @@ def shader_text(wgsl: text): Node := {
 		if end == at + 1 or is_digit(wgsl[at + 1]) {
 			at += 1
 		} else {
-			written_name = wgsl[at + 1 .. end]
-			read = if HOLE_ALIASES.contains(written_name) then HOLE_ALIASES[written_name] else written_name
-			parts += [wgsl[copied .. at], "values." + read]
-			hole_name = read.split(".")#1
-			if not names.contains(hole_name) { names += [hole_name] }
+			parts += [wgsl[copied .. at], "values." + hole_read(wgsl[at + 1 .. end])]
 			at = end
 			copied = at
 		}
 	}
-	text = join(parts + [wgsl[copied .. n]], "")
-	if #names == 0 { return text }
-	attributed("shader_hole_names", listed(Bracket.Square, Separator.Space, [symbol(hole_name) for hole_name in names]), text)
+	join(parts + [wgsl[copied .. n]], "")
 }
