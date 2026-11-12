@@ -38,6 +38,9 @@ global other_before = -1
 # the characters (grapheme clusters) of a text; a short one stays out of the count kept, so a lexer's words leave its
 # source's count (card text-cache-lru)
 text_count(t: text): int := {
+	global counted_text
+	global counted_bytes
+	global counted
 	if byte_count(t) < short_text() { return characters_counted(t) }
 	if same(t, counted_text) and byte_count(t) == counted_bytes { return counted }
 	count = characters_counted(t)

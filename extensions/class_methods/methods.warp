@@ -130,6 +130,7 @@ linked_class_names(): list := concatenated(linked_signatures.values.map(signatur
 # (`for v in ch {…}` a `.next()`, extensions/sugar/iteration.warp), and those the kept methods say in turn
 # (toString·real calls text·method)
 def linked_methods_called(classes: map, linked: list, top_statements: list, operator_table: map) {
+	global said
 	own = top_statements.filter(statement => not is_linked_class(statement, linked))
 	said = word_set(own.flat_map(tokens_within) + sugar_words_of(separated(bracketed(own, ""), ";")))
 	kept = {}
@@ -166,6 +167,7 @@ is_deferrable(definition: Node, program_words: map): bool := (declared_name(defi
 # it calls (`abs·Complex`, which a dispatcher of one class calls untested) and those of the dispatchers it calls,
 # `!=·operator`'s of `==·operator`
 covered_classes(dispatchers: list, classes: map): map := {
+	global said
 	said = dispatchers.map(words_within)
 	tested = {}
 	for i in 0..<#dispatchers { tested[defined_word(dispatchers[i])] = (tested.get(defined_word(dispatchers[i])) ?? []) + dispatched_classes(dispatchers[i], said[i], classes) }
@@ -217,6 +219,7 @@ is_linked_class(statement: Node, linked: list): bool := {
 }
 # the program with the methods of its classes lifted out as functions
 methods_lifted(program: Node): Node := {
+	global deferred_definitions
 	# (a one-line program, `class P{…}; P(1) + P(5)`, is one `;` statement among the linked modules' definitions)
 	top_statements = flat_statements(program)
 	classes = {}
@@ -318,16 +321,16 @@ methods_lifted(program: Node): Node := {
 	}
 	spelled_ordering = {}
 	for word in entry_words {
-		spellings = operator_methods.filter(method => spelled_operator(operator_table, method)#1 == word)
+		word_methods = operator_methods.filter(method => spelled_operator(operator_table, method)#1 == word)
 		owners = []
 		owned_spellings = []
-		for spelling in spellings {
+		for spelling in word_methods {
 			for owning_class in owners_taking(classes, liftable, spelling, 1) {
 				owners += [owning_class]
 				owned_spellings += [spelling]
 			}
 		}
-		operator = spelled_operator(operator_table, spellings#1)
+		operator = spelled_operator(operator_table, word_methods#1)
 		# a class's own `<` (its less(o)) beside another's compare(o): the one dispatcher of the glyph orders each class
 		# by its own (derived_dispatchers)
 		if operator#2 in ordering_operators and #orderers_of(classes, liftable) > 0 {

@@ -102,6 +102,8 @@ WAGI_ENDING = "routes_wagi"
 DEFAULT_TRIM = "optimize"
 
 build(words: list) := {
+	global modules_linked
+	global separate_module_wanted
 	options = words.filter(word => word.starts_with(OPTION_MARK))
 	targets = words.filter(word => not word.starts_with(OPTION_MARK))
 	# (what it builds stands alone: the modules it uses compiled in, none linked at load time)

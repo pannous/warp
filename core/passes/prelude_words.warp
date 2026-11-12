@@ -512,6 +512,7 @@ slices_by_name(slices: list): map := {
 # prelude's hex_text(n: int) too (decision int-type-overloads); a definition of another parameter count replaces it, which a
 # name passed as a function could no longer tell (the compiler's shader_values(s, given, program))
 overloads_brought(slice: list, program: Node): bool := {
+	global overload_marks
 	if not brought_names.has(slice#1) { return no }
 	heads = statements_in(program).filter(statement => declared_name(statement) == slice#1).map(definition_head_of)
 	if heads.any(head => head == ø) { return no }

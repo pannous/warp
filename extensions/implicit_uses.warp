@@ -170,6 +170,7 @@ definition_arities(module: text, word: text): list := {
 # the statement's own, `on every 1 second {…}` timers' rule, `on change x {…}` signals'; a hole with a member after it
 # goes on only as a member of that name, `on job.stop {…}` tasks' `on $x.stop`, never as `on alarm {…}`
 rule_fits(module: text, word: text, program: Node): bool := {
+	global said
 	seconds = flat_statements(program).filter(n => is_group(n) and #n > 1 and n#1 == symbol(word)).map(n => said_second(n#2))
 	module_patterns(module).filter(pattern => leading_word(pattern) == word).any(pattern => {
 		said = hole_dropped(second_word(pattern))

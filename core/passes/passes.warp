@@ -149,6 +149,16 @@ global kept_comprehension_sugar = []
 # bring their definitions; the source tells a rule's `·` from `*`; the early sugar before all of them, the function keywords gone). The sugar rules the program keeps are chosen here,
 # by its own bindings, before the definitions it reaches join it.
 with_used(program: Node, source: text, folder: text, prelude: text): Node := {
+	global brought_names
+	global brought_value_names
+	global exported_names
+	global linked_reached
+	global linked_classes_reached
+	global linked_variants_waiting
+	global variant_written_names
+	global defined_origins
+	global local_declarations
+	global writes_templates
 	brought_names = {}
 	brought_value_names = {}
 	exported_names = {}
