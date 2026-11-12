@@ -2,15 +2,11 @@
 # scripts/lsp.warp, warp's language server (card language-server): a scripted session over its standard input checks
 # what an editor gets back, go to definition and hover. Run it with bash test/tools/test_lsp.sh; the warp under test
 # is WARP (default the warp on PATH), its lib LIB (default its own; a tree's: LIB=<tree>/lib)
-warp=${WARP:-warp}
+source "$(dirname "$0")/../native/checks.sh"
 lib=${LIB:-$(dirname "$(readlink -f "$(command -v "$warp")")")}
 server=$(dirname "$0")/../../scripts/lsp.warp
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
-failures=0
-check() { # check <what> <got> <expected>
-	if [ "$2" = "$3" ]; then echo "✓ $1"; else echo "✗ $1: got $2, expected $3"; failures=$((failures + 1)); fi
-}
 framed() { # framed <json>: the message with its header
 	printf 'Content-Length: %d\r\n\r\n%s' "$(printf '%s' "$1" | wc -c)" "$1"
 }
