@@ -465,7 +465,7 @@ member_laid_out(layout: Layout, name: text, value: any): text := {
 	}
 	uniform_member(layout, name, [float(value)])
 }
-array_laid(layout: Layout, name: text, cells: list): text := {
+array_laid(layout: Layout, name: text, cells: any): text := {
 	why = array_room(layout)
 	if why != "" { return why }
 	layout.arrays.add([name, cells])
@@ -639,7 +639,7 @@ kept_storage(name: text, bytes: int): int := {
 }
 // a GPU list [f32] copied from the program's memory in one write, 0 where this value is not one (the caller walks
 // its numbers)
-gpu_storage(name: text, cells: list): int := {
+gpu_storage(name: text, cells: any): int := {
 	place = gpu_list_place(cells)
 	if place < 0 { return 0 }
 	bytes = #cells * 4
