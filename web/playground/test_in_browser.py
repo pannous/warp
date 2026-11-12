@@ -1432,6 +1432,13 @@ class MemoryWatch:
 					resident = next((int(line.split()[1]) for line in status if line.startswith("VmRSS:")), 0)
 				with open(f"/proc/{pid}/cmdline") as command:
 					words = command.read().replace("\0", " ").split()  # Chrome rewrites its arguments as one
+				if not words:
+					# kernel threads and zombies have an empty cmdline; use the comm name
+					with open(f"/proc/{pid}/comm") as comm:
+						name = comm.read().strip()
+					if not name:
+						continue
+					words = [name]
 			except OSError:
 				continue  # ended meanwhile
 			kind = next((word.split("=", 1)[1] for word in words if word.startswith("--type=")), os.path.basename(words[0]))
