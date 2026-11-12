@@ -20,3 +20,7 @@
 'use markup; to_html(style { p { color: red } })'	'<style>p { color: red }</style>'
 'f(x: data) := x; text(f { a: flex })'	'{a: flex}'
 'f(x: data) := x; text(f { p { a: flex } })'	'{p: {a: flex}}'
+# and inside a block, beside a tag (decision spaced-tag)
+'use markup; to_html(html { style { p { display: flex } } })'	'<html><style>p { display: flex }</style></html>'
+'use markup; to_html(html { style { p { display: flex } } body { p { "hi" } } })'	'<html><style>p { display: flex }</style><body><p>hi</p></body></html>'
+'f(d: data) := d; text(div { f { a: flex } })'	'div: {{a: flex}}'
