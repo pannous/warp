@@ -1,4 +1,4 @@
-# deep_merge, pick, omit, filter, transform_keys, get_path and set_path (card lib-map-helpers)
+# deep_merge, pick, omit, filter_entries, transform_keys, get_path and set_path (card lib-map-helpers)
 'deep_merge({a: [1, 2]}, {a: [3]})'	{a: [3]}
 'deep_merge({}, {})'	{}
 'pick({a: 1, b: 2, c: 3}, ["a", "c", "zz"])'	{a: 1, c: 3}
