@@ -36,6 +36,9 @@ const sharedValue = name => {
 	return at >= 0 ? Atomics.load(self.pagePointer.values, at) || undefined : undefined;
 };
 const toldValue = name => sharedValue(name) ?? self.pageSystemValues?.[name] ?? VIEW_DEFAULTS[name];
+// whether the page shows dark mode: its own media query where there is one, else as the page told the worker (a Worker
+// has no matchMedia: playground.js tellSystemValues)
+const darkTheme = () => Boolean(globalThis.matchMedia ? matchMedia(DARK_MODE_QUERY).matches : toldValue("dark mode"));
 // the standard library's adapters (src/modules/std_adapters.rs, notes/stdlib.md section 7): module → member → function of
 // plain values (values.js guestPlain / newGuestValue, as for foreign_call); the parts add them (host-hashes.js, host-files.js)
 const STD_ADAPTERS = {};
@@ -160,8 +163,7 @@ function programImports(holder, hooks) {
 				if (value === "display_dpi") return BigInt(holder.displayDpi ?? toldValue(value) ?? Math.round((globalThis.devicePixelRatio ?? 1) * DEFAULT_DPI));
 				const pointerIndex = self.pagePointer?.names.indexOf(value) ?? -1; // canvas.js trackPointer
 				if (pointerIndex >= 0) return BigInt(Atomics.load(self.pagePointer.values, pointerIndex));
-				// a Worker has no matchMedia: the page tells it (playground.js tellSystemValues)
-				const known = value === "dark mode" && globalThis.matchMedia ? matchMedia(DARK_MODE_QUERY).matches : toldValue(value);
+				const known = value === "dark mode" ? darkTheme() : toldValue(value);
 				if (known !== undefined) return BigInt(known);
 				throw new Error(`${value}: the playground cannot read it yet`);
 			},
