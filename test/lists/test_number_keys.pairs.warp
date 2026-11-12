@@ -23,3 +23,4 @@
 'def f(g) { k = 37; g[k] = yes; g }; m = {2: yes}; f(m)'	{2: yes, 37: yes}
 'def f(xs) { k = 1; xs[k] = 5; xs }; f([1, 2])'	[1, 5]
 '[{2: yes}, {3: no}]#1'	{2: yes}
+'def lt(d: int): map { found = {}; if d < 1 { inner = lt(d + 1); for p in inner.keys { found[p] = inner[p] } } else { found["x"] = "y" }; found }; lt(0)'	{x: 'y'}
