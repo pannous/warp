@@ -603,6 +603,7 @@ def behind_libraries() {
 def bind_library_words() {
 	# (in link_libraries' order: two variants alike, the prelude's clear(x) and draw's clear(color), compare equal)
 	for image in by_precedence(module.linked_images) {
+		files = modules_used_by(image.name, [])
 		for entry in image.classes {
 			# (a class the program never reached: its struct declared as the module wrote it)
 			if entry#1 not in module.class_structs { module.class_structs[entry#1] = [struct_read(entry#2), instance_fields] }
@@ -612,7 +613,7 @@ def bind_library_words() {
 		for k in 0..<#image.functions {
 			word = image.functions[k]
 			f = module.functions.get(word.name)
-			if unbound_declaration(f) and linkable(image, word) and linked_variant(word.name, #f.signature.parameters) == word { bound_to(f, image, k) }
+			if (unbound_declaration(f) or held_by(f, files)) and linkable(image, word) and linked_variant(word.name, #f.signature.parameters) == word { bound_to(f, image, k) }
 			# (a word two modules write: the program's typed variant of it, arity_overloads' milliseconds_of·Quantity)
 			variant = if linked_extended.has(word.name) then module.functions.get(typed_variant_written(image.name, word)) else ø
 			if unbound_declaration(variant) { bound_to(variant, image, k) }
@@ -710,6 +711,9 @@ linked_places_of(images: list): map := {
 # to no module's yet; a definition of its own stays its own though a module writes the name too: money's Money.compare,
 # compiled from its source, never reals' compare, which calls an instance's compare back
 unbound_declaration(f: any): bool := f != ø and f.kinds == ø and (is_declared_body(f.body) or takes_block_parameter(f))
+# a word written in a library file the linked module uses too, compiled into it already: web's url words, wagi's
+# (a word the compile generates, a class's method dispatcher, has no file and stays its own)
+held_by(f: any, files: list): bool := f != ø and f.kinds == ø and defined_origins.has(f.name) and module_of_path(defined_origins[f.name]#1) in files
 is_declared_body(body: any): bool := body == Node.Empty or (is_group(body) and #body == 1 and body#1 == Node.Empty)
 takes_block_parameter(f: Function): bool := f.signature.parameters.any(parameter => parameter.type_name == "block")
 def bound_to(f: Function, image: LibraryImage, k: int) {

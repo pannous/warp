@@ -14,3 +14,5 @@
 'use laws; test raise "x"; test 1 == 1'	"1 of 2 failed"
 # a program ending in another value keeps it
 'use laws; test 1 + 1 == 2; 7'	7
+# a law shows its numbers as written: the 1 of x + 1 stays 1
+'law x + 1 == x; 2'	error	law x+1==x fails for x = 0
