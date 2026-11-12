@@ -142,9 +142,10 @@ async function openProxySession() {
 	return (await replyOf(await postJson(`${PROXY_ORIGIN}/session`, credential))).session;
 }
 
+// (loaded for CORS, which Cloudflare allows: an error of its script then says what failed, not a bare "Script error.")
 let turnstileLoaded;
 const loadTurnstile = () => turnstileLoaded ??= new Promise((resolve, reject) => document.head.append(element("script", {
-	src: TURNSTILE_SCRIPT, onload: resolve, onerror: () => { turnstileLoaded = undefined; reject(new Error("The bot check (Cloudflare Turnstile) did not load.")); },
+	src: TURNSTILE_SCRIPT, crossOrigin: "anonymous", onload: resolve, onerror: () => { turnstileLoaded = undefined; reject(new Error("The bot check (Cloudflare Turnstile) did not load.")); },
 })));
 
 // Turnstile's token, invisible unless Cloudflare wants the visitor to click
