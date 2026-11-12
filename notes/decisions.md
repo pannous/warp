@@ -7,7 +7,7 @@ in AGENTS.md or a role file. Under 40 lines, nothing older than 7 days (card dec
 Grep a key or topic, never read it whole. Open questions: notes/open_decisions.md.
 
 ## Inbox
-- 2026-11-12 int-is-i64: a plain int is wasm i64, overflow wraps, no checks; big integers are number/exact/nat; a warning may suggest number (card int-is-i64).
+- 2026-11-12 fast-flag: typed int is wasm i64 (wraps), untyped numbers unbounded, as built; new: --fast makes untyped ints plain i64, no checks (card int-is-i64).
 - 2026-11-12 spaced-data-call: `style { … }` and `f { a: flex }` with a space give the same data call as the glued `f{…}` (spaced-tag: the two spellings are one); warp-reviewer: sound.
 - 2026-11-12 js-builtins-declared: JavaScript's own globals (Math, JSON, Array) get declarations so `Math.nonsense(2)` is refused at compile time like `document.nonsense()` (card js-math-nonsense).
 - 2026-11-12 user-approved: remove-alarm-rule: `remove h` drops a listener (`on alarm {1}; h = on alarm {2}; remove h; emit alarm` → 1); a listener handle shows as Listener{event, number}. Undo: revert the sugar rule.
