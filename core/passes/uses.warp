@@ -284,7 +284,7 @@ claim_signatures(declarations: list, file: text, claimed: map) := {
 # `f(x: int, y)` → "f(int, any)", the name and parameter types a declaration claims; a value's name alone, ø for
 # another statement
 declared_signature(statement: Node): any := {
-	conversion = declared_conversion(statement)
+	conversion = declared_conversion(statement) ?? shown_conversion(statement)
 	if conversion != ø { return name_of(key_of(conversion)) + " as " + name_of(value_of(conversion)) }
 	name = declared_name(statement)
 	if name == ø { return ø }
@@ -488,12 +488,13 @@ declared_conversion(statement: Node): any := {
 	if is_key(conversion, Op.As) and key_of(conversion) is symbol and value_of(conversion) is symbol then conversion else ø
 }
 # `Person as text` heading a definition, which the parser reads as a phrase of three words (`fib i as int := …` names a
-# result so), as the conversion `Person as text`; `format Color c as text` as `Color as text` too, one per type, so two
-# modules each formatting their own type don't clash; any other head as it is
-as_phrase_read(head: Node): Node := {
-	if is_group(head) and #head == 3 and head#2 == symbol("as") { return Key(head#1, Op.As, head#3) }
-	if is_group(head) and #head == 5 and head#1 == symbol("format") and head#4 == symbol("as") { return Key(head#2, Op.As, head#5) }
-	head
+# result so), as the conversion `Person as text`; any other head as it is
+as_phrase_read(head: Node): Node := if is_group(head) and #head == 3 and head#2 == symbol("as") then Key(head#1, Op.As, head#3) else head
+# `format Color c as text := …`: the conversion `Color as text` it claims, one per type, so two modules each formatting
+# their own type don't clash; else ø
+shown_conversion(statement: Node): any := {
+	head = if is_key(statement, Op.Define) then key_of(statement) else ø
+	if is_group(head) and #head == 5 and head#1 == symbol("format") and head#4 == symbol("as") then Key(head#2, Op.As, head#5) else ø
 }
 # `sqrt(x: f64): f64 from "c"`: a foreign line, whose word is the program's own (a library's sqrt is not the one called)
 is_foreign_line(n: Node): bool := is_group(n) and bracket_of(n) == "" and #n == 3 and n#2 == symbol("from")
