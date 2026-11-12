@@ -331,3 +331,7 @@ Phases, each landing alone: (a) hole table + one scanner + one rule; (b) dialect
 (c) fields subsume $previous and gpu_passes, paint(list); (d) compute kernels from warp functions, @gpu maps;
 (e) remove the duplicates, samples written the canonical way, wiki graphics.md (wiki text to the Interviewer).
 Core cost: none in core/; extensions/shader_blocks and the hole rules shrink; lib/shaders.warp grows.
+- (a) done: the table is SHADER_HOLES in extensions/rules/shader_holes.warp, not lib/shaders.warp: the block reader
+  and the rule both run inside the compiler, which uses no lib module. The block reader keeps no hole list of its own;
+  one rule `$f($s, $w, $h, $v...)` for paint and gpu_render fills the holes (gpu_render(s, w, h, values) did not).
+  The hosts still list the built-in holes they fill; that list goes when (c) changes what they receive.
