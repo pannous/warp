@@ -164,6 +164,8 @@ sorted_in_order(xs: list, before: function): list := {
 	}
 	out
 }
+// the nearest int, half to even (the runtime's rounded), beside the overload with decimals
+round(x) := rounded(x)
 // x rounded to that many digits after the point, `round(x, decimals: 2)` or `round(x, 2)`
 round(x, decimals) := round(x * repeated_product(10, decimals)) / repeated_product(10, decimals)
 // (a float's own, unboxed: the prelude is linked, its untyped words take nodes)
