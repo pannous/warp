@@ -16,13 +16,12 @@ flat_map(xs: any, f: any): list := { out = []; for x in xs { out += f(x) }; out 
 partition(xs: any, f: any): list := { kept = []; rest = []; for x in xs { if f(x) { kept = kept + [x] } else { rest = rest + [x] } }; [kept, rest] }
 public max_by(xs: any, f: any): any := { best = xs#1; for x in xs { if f(x) > f(best) { best = x } }; best }
 public min_by(xs: any, f: any): any := { best = xs#1; for x in xs { if f(x) < f(best) { best = x } }; best }
-// {key: [elements]}: the elements by the text of f's value
-public group_by(xs: any, f: any): any := { out = {}; for x in xs { k = "" + f(x); if out.has(k) { out[k] = out.get(k) + [x] } else { out[k] = [x] } }; out }
+// {key: [elements]}: the elements by the text of the value `by` gives each: group(words, by: w => w[0])
+public group(xs: list, by: function): any := { out = {}; for x in xs { k = "" + by(x); if out.has(k) { out[k] = out.get(k) + [x] } else { out[k] = [x] } }; out }
 // {element: how often}
 tally(xs: any): any := { out = {}; for x in xs { k = "" + x; if out.has(k) { out[k] = out.get(k) + 1 } else { out[k] = 1 } }; out }
 zip_with(a: any, b: any, f: any): list := [f(a#i, b#i) for i in 1 to min(count(a), count(b))]
 public sum_by(xs: any, f: any): any := sum([f(x) for x in xs])
-count_by(xs: any, f: any): int := count([x for x in xs if f(x)])
 // the elements moved n places to the left
 public rotate(xs: any, n: any): any := { k = n % count(xs); xs[k:] + xs[:k] }
 interleave(a: any, b: any): list := { out = []; for i in 1 to max(count(a), count(b)) { if i <= count(a) { out = out + [a#i] }; if i <= count(b) { out = out + [b#i] } }; out }
@@ -45,11 +44,11 @@ argmin(xs: any): int := { best = 1; for i in 1 to count(xs) { if xs#i < xs#best 
 // the neighbours: pairwise([1, 2, 3]) is [[1 2] [2 3]]
 pairwise(xs: any): list := [[xs#i, xs#(i + 1)] for i in 1 to count(xs) - 1]
 // [the first n, the rest]
-split_at(xs: any, n: any): list := [take(xs, n), drop(xs, n)]
+split(xs: list, at: int): list := [take(xs, at), drop(xs, at)]
 // every pair of an element of a and one of b
 cartesian(a: any, b: any): list := [[x, y] for x in a for y in b]
 // the most frequent element, the first of equally frequent ones
-mode(xs: any): any := { best = xs#1; most = 0; for x in xs { n = count_by(xs, y => y == x); if n > most { best = x; most = n } }; best }
+mode(xs: any): any := { best = xs#1; most = 0; for x in xs { n = count(xs, y => y == x); if n > most { best = x; most = n } }; best }
 // the population variance and standard deviation
 variance(xs: any): number := { m = mean(xs); sum_by(xs, x => (x - m) * (x - m)) / count(xs) }
 stdev(xs: any): number := sqrt(variance(xs))
@@ -104,7 +103,7 @@ correlation(xs: any, ys: any): number := {
 }
 // a count per distinct value as [value, count] pairs in first-seen order: a list of pairs keeps each value's own type
 // (tally's map keys are texts) and an order, frequencies([3, 1, 3]) is [[3 2] [1 1]]
-frequencies(xs: any): list := [[x, count_by(xs, y => y == x)] for x in unique(xs)]
+frequencies(xs: any): list := [[x, count(xs, y => y == x)] for x in unique(xs)]
 // counts of xs in bins equal-width bins from min to max: bin i holds [lo + (i-1)w, lo + iw), the last also the max;
 // all values equal put every one in the first bin. bins <= 0 and an empty list are refused
 histogram(xs: any, bins: any): list := {
