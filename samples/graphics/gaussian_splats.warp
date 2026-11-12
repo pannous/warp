@@ -41,16 +41,9 @@ orbit_step = 0.01 # radians a frame
 # named scene, not frame: `frame = …` would steal the `on frame` event (card gaussian-splats-sample)
 scene = splat_frame(capture)
 n = scene.count
-# plain lists, not [f32]: paint of a GPU list currently traps in the host (lib/host/native_host/gpu.warp
-# member_laid_out:403, values_laid_out:388) via gpu_list_refused_as (extensions/gpu_lists/runtime.warp:262)
-copied(xs) := {
-	out = [0.0 for i in 1 to #xs]
-	for i in 1 to #xs { out#i = xs#i }
-	out
-}
-centres = copied(scene.centres)
-shapes = copied(scene.shapes)
-shades = copied(scene.shades)
+centres = scene.centres
+shapes = scene.shapes
+shades = scene.shades
 # its middle and its size, both of the bulk of it: a capture's stray Gaussians far out do not count
 axis_at(k: int): list := [centres#(4 * (i - 1) + k) for i in 1 to n]
 middle = if n == 0 then [0.0, 0.0, 0.0] else [median(axis_at(k)) for k in 1 to 3]
@@ -74,7 +67,7 @@ global centre = [0.0, 0.0]
 pad = n
 if pad % 4 != 0 { pad = pad + 4 - pad % 4 }
 if pad < 4 { pad = 4 }
-order_cells = [0.0 for i in 1 to pad]
+order_cells: [f32] = float[pad]
 global order = order_cells # the Gaussians in front of the camera, nearest first, 0-based indices
 global instances = 1 # the sky, then every Gaussian in front of the camera
 look(yaw: float, pitch: float, width: float, height: float) := {
@@ -139,9 +132,7 @@ yaw = 0.0
 pitch = 0.35
 last_x = mouse_x
 last_y = mouse_y
-# one host word records this program's memory, which a GPU-list upload reads. The driver's paint word does not.
-# A dot at 8px is enough; its raster is thrown away. --times asks the host to print upload and draw.
-text_coverage(".", 8, "")
+# --times asks the host to print upload and draw
 if timing { set_system_value("paint timing", 1) }
 # each frame of the window, until it closes (headless: one frame, as a PNG)
 on frame {

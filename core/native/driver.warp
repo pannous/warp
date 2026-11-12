@@ -809,6 +809,13 @@ unanswered_word(name: text): i64 := {
 	word_at(cell + 4).value = name.length
 	0 - (cell as i64)
 }
+# where the program's memory starts, as a GPU list's upload reads it (lib/host/native_host/gpu.warp gpu_storage)
+# whichever word reaches the host, the driver's paint word too; wasmtime reserves a 32-bit memory whole, so growing it
+# never moves it
+program_memory_kept(context: handle, instance: pointer): nothing := {
+	memory = allocate(EXTERN_BYTES)
+	keep_value(PROGRAM_MEMORY_SLOT, if wasmtime_instance_export_get(context, instance, "memory", 6, memory) then wasmtime_memory_data(context, memory + 8) else 0)
+}
 # a host word the driver doesn't answer, answered by the native host module's
 # host_<word> (host_text_coverage) with the values as they are; one it lacks ends the run naming it
 host_word_answered(caller: handle, name: text, given: pointer, count: i64, results: pointer, results_count: i64): nothing := {
@@ -946,6 +953,8 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	checked(imports_defined(linker, engine, context, compiled, module, linked, trap), trap)
 	instance = allocate(INSTANCE_BYTES)
 	checked(wasmtime_linker_instantiate(linker, context, compiled, instance, trap), trap)
+	outer_memory = kept_value(PROGRAM_MEMORY_SLOT)
+	program_memory_kept(context, instance)
 	entry = allocate(EXTERN_BYTES)
 	# a GC program's _start runs main and prints its value itself (the stub's ENTRY_POINTS), a primitive one has main
 	if not wasmtime_instance_export_get(context, instance, "_start", 6, entry) and not wasmtime_instance_export_get(context, instance, "main", 4, entry) {
@@ -963,6 +972,7 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	if failure.length == 0 and outer_run == 0 { host_run_ended(context) }
 	crash_context_restored(outer)
 	keep_value(RUN_SLOT, outer_run)
+	keep_value(PROGRAM_MEMORY_SLOT, outer_memory)
 	# the run's GC heap, instance and machine code given back: `warp rebuild` runs four compilers in one process, each
 	# behind the last (it peaked at 4.8 GB with all of them kept)
 	wasmtime_store_delete(store)
