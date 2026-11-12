@@ -15,6 +15,7 @@ node_add(a: Node, b: Node): Node := marks_kept(node_sum(a, b), a, b)
 # `a + b` of values known only at run time as the emitter writes it: an instance's class's own + first (decision
 # class-operators-generic), else node_add (card emitter-inlines: one call where the emitter wrote the class test at each)
 node_plus(a: Node, b: Node): Node := {
+	if exact_int(a) and exact_int(b) { return grown_sum(unboxed_int(a), unboxed_int(b)) }
 	operated = class_operated(a, b, 0)
 	if is_null(operated) then node_add(a, b) else operated
 }
@@ -104,6 +105,7 @@ appends_in_place(a: Node, b: Node): bool := {
 }
 # `a += b` of values known only at run time: a list grows in place as list_append, anything else is a + b
 node_append(a: Node, b: Node) := {
+	if exact_int(a) and exact_int(b) { return grown_sum(unboxed_int(a), unboxed_int(b)) }
 	if not is_null(a) and not is_null(b) and kind_code(a) == Kind.List and kind_code(b) == Kind.List {
 		return list_append(unboxed_list(a), unboxed_list(b))
 	}
