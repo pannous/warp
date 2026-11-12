@@ -172,25 +172,33 @@ covered_classes(dispatchers: list, classes: map): map := {
 	for dispatcher in dispatchers { covered[defined_word(dispatcher)] = word_set((covered.get(defined_word(dispatcher)) ?? []) + tested[defined_word(dispatcher)] + words_within(dispatcher).filter(word => tested.has(word)).flat_map(word => tested[word])).keys }
 	covered
 }
-dispatched_classes(dispatcher: Node, classes: map): list := nodes_in(dispatcher).filter(is_instance_test).map(test => "${test#3}") + words_within(dispatcher).map(word => word.split("·")).filter(parts => #parts == 2 and classes.has(parts#2)).map(parts => parts#2)
+# (a module's dispatcher handing another class's instance to that class's own module, foreign_first, says so by the
+# word that tests for one: it answers ø where the program's own falls back)
+dispatched_classes(dispatcher: Node, classes: map): list := {
+	words = words_within(dispatcher)
+	owners = words.map(word => word.split("·")).filter(parts => #parts == 2 and classes.has(parts#2)).map(parts => parts#2)
+	nodes_in(dispatcher).filter(is_instance_test).map(test => "${test#3}") + owners + (if instance_test_word in words then [instance_test_word] else [])
+}
 is_instance_test(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(HiddenWord.InstanceOf as text) and n#3 is text
 # each dispatcher name bound to the first linked module whose dispatcher of the name covers its classes, when no
 # dispatcher of the name calls a word of the program's own: a name's arities (`-x` beside `a - b`) bind together or not;
 # a name reaching no class known stays the program's own; each counted under --times
-stand_in_images(dispatchers: list, covered: map, own: map) := {
+stand_in_images(dispatchers: list, covered: map, own: map, every_class: list) := {
 	calling_own = {}
 	for dispatcher in dispatchers { for word in words_within(dispatcher).filter(word => own.has(word)) { calling_own[defined_word(dispatcher)] = word } }
 	for name in covered.keys {
-		image = if calling_own.has(name) or #covered[name] == 0 then ø else covering_image(name, covered[name])
+		image = if calling_own.has(name) or #covered[name] == 0 then ø else covering_image(name, covered[name], every_class)
 		if image != ø { module.dispatcher_images[name] = image }
 		if TIMES { print "§D " + (if image != ø then "linked dispatcher " + name + " of " + image else "own dispatcher " + name + " (" + (if calling_own.has(name) then "calls " + calling_own[name] else "classes " + covered[name].join(" ")) + ")") }
 	}
 }
-covering_image(name: text, classes: list): text? := {
+# (a module's dispatcher answering another class's instance by that class's module, instance·tested in its classes,
+# only when every class the program knows is one it covers)
+covering_image(name: text, classes: list, every_class: list): text? := {
 	for image in by_precedence(module.linked_images) {
 		signature = linked_signature(image.name)
 		linked_covered = if signature == ø or signature.dispatched == ø then ø else signature.dispatched.get(name)
-		if linked_covered != ø and classes.all(class_name => class_name in linked_covered) { return image.name }
+		if linked_covered != ø and classes.all(class_name => class_name in linked_covered) and (instance_test_word not in linked_covered or every_class.all(class_name => class_name in classes)) { return image.name }
 	}
 	ø
 }
@@ -360,7 +368,7 @@ methods_lifted(program: Node): Node := {
 	# (a program adding no class of its own declares a dispatcher a linked module made over the same classes or more, bound
 	# to that module's, so neither the dispatcher nor the methods only it calls go through the passes)
 	if not module.relocating and liftable.all(name => name in linked) {
-		stand_in_images(dispatchers + deferred_dispatchers, covered, word_set(functions.filter(name => not module.linked_words.has(name))))
+		stand_in_images(dispatchers + deferred_dispatchers, covered, word_set(functions.filter(name => not module.linked_words.has(name))), classes.keys)
 		dispatchers = dispatchers.map(linked_stand_in)
 		deferred_dispatchers = deferred_dispatchers.map(linked_stand_in)
 	}
