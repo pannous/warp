@@ -154,7 +154,11 @@ function cCalls(run) {
 // text or list of bytes (bytes) its bytes and their count for a following length, the first out-pointer a NULL slot
 // there, all freed after the call; a text result (text, owned_text) is read back as a text of the program (NULL is ø)
 const NULL_POINTER = 0;
-function callC(holder, exports, member, call, values, what) {
+// the length a call adds after bytes, a size_t: an i64 of a library natively shared (libc.wasm takes it so), an i32 of
+// a wasm32 module the program imports (driver.warp c_called and wasm_called)
+const SHARED_LIBRARY_LENGTH = BigInt;
+const WASM_MODULE_LENGTH = Number;
+function callC(holder, exports, member, call, values, what, lengthOf) {
 	const program = holder.exports;
 	const blocks = [];
 	const malloc = bytes => {
@@ -170,7 +174,7 @@ function callC(holder, exports, member, call, values, what) {
 	const remaining = [...values];
 	const moduleArguments = (call?.parameters ?? values.map(() => "i64")).map(kind => {
 		if (kind === "out") return out === undefined ? out = malloc(new Uint8Array(4)) : NULL_POINTER; // a later out-pointer NULL
-		if (kind === "length") return BigInt(bytesLength);
+		if (kind === "length") return lengthOf(bytesLength);
 		const value = remaining.shift();
 		if (kind === "ptr") return textBlock(value);
 		if (kind === "texts") {
@@ -314,7 +318,7 @@ function wasmLibraryImports(holder, library, exportsOf, missing = "") {
 			const exports = exportsOf();
 			const member = exports[name];
 			if (typeof member !== "function") throw new Error(`${library}.${name} is not available in the browser${missing && ` (${missing})`}`);
-			return callC(holder, exports, member, cCalls(holder.run).get(`${library}\t${name}`), values, `${library}.${name}`);
+			return callC(holder, exports, member, cCalls(holder.run).get(`${library}\t${name}`), values, `${library}.${name}`, SHARED_LIBRARY_LENGTH);
 		},
 	});
 }
@@ -406,7 +410,7 @@ function moduleImports(holder, hooks, path) {
 			if (member instanceof WebAssembly.Global) return member.value;
 			if (!member) throw new Error(`${path} exports no ${name}`);
 			const call = cCalls(holder.run).get(`${path}\t${name}`);
-			if (call) return callC(holder, exports, member, call, values, `${path} ${name}`);
+			if (call) return callC(holder, exports, member, call, values, `${path} ${name}`, WASM_MODULE_LENGTH);
 			return member(...values);
 		},
 	});
