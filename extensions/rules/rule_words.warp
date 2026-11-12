@@ -1010,9 +1010,9 @@ class_members(class_name: text, source: text): any := {
 # names of its fields and those of the classes it extends; its methods as function values, the methods of those
 # classes and every function whose first parameter is typed with one of them (`def x(a: A)` of B extends A). ø where
 # the program has its own word or declares no class of that name
-class_fields_listed(name: Node, word: Node, program: Node, source: text): any := {
+class_fields_listed(name: Node, program: Node, source: text): any := {
 	lineage = written_lineage(name, source)
-	if owns_word(spelled(word), program) or #lineage == 0 { return ø }
+	if owns_word("fields", program) or #lineage == 0 { return ø }
 	texts_list(lineage.reverse().flat_map(owner => (class_members(owner, source) ?? [[], []])#1.map(field => "${field}")))
 }
 class_methods_listed(name: Node, program: Node, source: text): any := {
@@ -1060,10 +1060,11 @@ instance_members(variable: Node, part: Node, source: text): any := {
 	members = if made == ø then ø else class_members(made, source)
 	if members == ø or spelled(part) in members#1 + members#2 { return ø }
 	fields = members#1.map(field => "${field}")
-	texts_list(if field_word(part) != ø then fields else if spelled(part) == "methods" then members#2 else fields + members#2)
+	texts_list(if spelled(part) in field_words then fields else if spelled(part) == "methods" then members#2 else fields + members#2)
 }
-# `fields` and the words that say it (decision synonyms-are-aliases): the word, else ø
-field_word(word: Node): any := if word is symbol and spelled(word) in field_words then word else ø
+# `fields` and the words that say it (decision synonyms-are-aliases): the word, else ø, also where the program has its
+# own word of that name
+field_word(word: Node, program: Node): any := if word is symbol and spelled(word) in field_words and not owns_word(spelled(word), program) then word else ø
 # the names as a list of texts, parsed: a one-letter name in List(…) would be a character, and the compiler compiling
 # itself has no node constructors
 texts_list(names: list): Node := if #names == 0 then List([], Bracket.Square, Separator.Comma) else plain_node(parsed("[" + names.map(name => "\"" + name + "\"").join(", ") + "]"))
