@@ -20,6 +20,10 @@
 #            written from a list at once, `wgpuQueueWriteBuffer(queue: handle, buffer: handle, at: i64, data: f32s, size: length)`
 #   length   the byte count of the bytes, f32s or i32s parameter before it: no argument
 #   texts    a list of warp texts as a NULL-terminated `char *[]` of their copies (argv: posix_spawn, execv)
+#   bytesN   N bytes at a handle, the last parameter, passed as one struct by value (N is 17 to 128): on x86-64 the
+#            bytes go on the stack, on ARM64 as a pointer to a copy. At most six integer arguments before it, and no
+#            float beside it (a parameter or the result), and no all-float struct (ARM64 passes one of up to four
+#            floats in float registers). Anything else is refused at the compile. `info: bytes40` is a WGPU callback info
 #   void     no result
 
 # the names the libraries go by in a program: `use libm` is `use m`, as `use cmath` (C++'s header) is
@@ -52,6 +56,13 @@ c_enum_of(word: text): text := if word.trim() in c_enum_types then word.trim() e
 # the parameters the host fills, which take no argument
 c_filled_types = ["out", "length"]
 UNSIGNED_TYPE = "u32"
+# a by-value struct `bytesN`: the word bytes, then the byte count in digits, 17 to 128 (core/native/driver.warp reads the same)
+STRUCT_PREFIX = "bytes"
+DIGIT_ZERO = 48
+DIGIT_NINE = 57
+STRUCT_LEAST = 17
+STRUCT_MOST = 128
+STRUCT_INTEGERS_MOST = 6
 # the types only a parameter has
 c_parameter_only_types = ["out", "length", "texts", "f32s", "i32s"]
 
@@ -86,11 +97,44 @@ c_declaration(line: text): any := {
 	result = tail#2.trim().remove_prefix(":").trim()
 	[name, library, type_words.map(c_type_of), names, c_type_of(result), type_words.map(c_enum_of), c_enum_of(result)]
 }
+# the bytes `bytesN` names, -1 when the word is not `bytes` and digits (`bytes0` is 0, `bytes40` is 40; plain `bytes` is -1)
+struct_size(word: text): int := {
+	if not word.starts_with(STRUCT_PREFIX) { return -1 }
+	digits = word.remove_prefix(STRUCT_PREFIX).bytes
+	if #digits == 0 { return -1 }
+	n = 0
+	for b in digits {
+		if b < DIGIT_ZERO or b > DIGIT_NINE { return -1 }
+		n = n * 10 + (b - DIGIT_ZERO)
+	}
+	n
+}
+# a by-value struct the call can pass: 17 to 128 bytes
+legal_struct(type: text): bool := { n = struct_size(type); n >= STRUCT_LEAST and n <= STRUCT_MOST }
+# a handle id when the word is a by-value struct, else the kind the map names
+c_argument_kind(type: text): ValueKind := if legal_struct(type) then ValueKind.I32 else c_parameter_kinds[type]
+c_argument_name(type: text): text := if legal_struct(type) then type else c_parameter_names[type]
+# a struct the call cannot pass is refused here, before a run could place it in the wrong registers
+struct_checked(declaration: list) := {
+	types = declaration#3
+	name = declaration#1
+	words = types.filter(t => struct_size(t) >= 0)
+	result = declaration#5
+	if struct_size(result) >= 0 { throw name + ": a struct by value is a parameter, not a result" }
+	if #words == 0 { return }
+	if #words > 1 { throw name + ": one struct by value, the last parameter" }
+	word = words#1
+	if not legal_struct(word) { throw name + ": a struct by value is bytes" + text(STRUCT_LEAST) + " to bytes" + text(STRUCT_MOST) + " (" + word + ")" }
+	if types#(#types) != word { throw name + ": a struct by value is the last parameter" }
+	if types.any(t => t == "f32" or t == "f64") or result == "f32" or result == "f64" { throw name + ": a struct by value beside a float" }
+	if #types.filter(t => t != word and t != "f32" and t != "f64") > STRUCT_INTEGERS_MOST { throw name + ": a struct by value follows at most " + text(STRUCT_INTEGERS_MOST) + " integer arguments" }
+}
 # a type word → its type; "" is no type, which no C function takes ("?")
 c_type_of(word: text): text := {
 	written = word.trim()
 	if written == "" { return "?" }
 	if written in c_enum_types { return "i32" }
+	if struct_size(written) >= 0 { return written }
 	c_type_words.get(written) ?? "?"
 }
 
@@ -439,10 +483,11 @@ native_uses(line: text, native: list): text := {
 # the host word of a C function: [parameter kinds, result kinds, its library, its warp.c_functions line]; ø for a
 # type it can't take (f32, an untyped parameter)
 c_host_word(declaration: list): any := {
+	struct_checked(declaration)
 	types = declaration#3
 	result = declaration#5
 	if "?" in types or "owned_text" in types or result == "?" or result in c_parameter_only_types { return ø }
-	kinds = types.filter(t => t not in c_filled_types).map(t => c_parameter_kinds[t])
+	kinds = types.filter(t => t not in c_filled_types).map(t => c_argument_kind(t))
 	gives_text = result in ["text", "owned_text", "bytes"]
 	# (an unsigned 32-bit result crosses as the int it means, 3400449319 never -894517977: zlib's crc32)
 	unsigned = result == UNSIGNED_TYPE
@@ -457,7 +502,7 @@ c_host_word(declaration: list): any := {
 	returned = if gives_text or unsigned then "i64" else if result == "handle" then (if pointee != "" then "i32" else "i64") else result
 	crossing = if gives_text or result == "handle" or unsigned then result else "number"
 	if result != "handle" { pointee = "" }
-	fields = [declaration#2, declaration#2, declaration#1, types.map(t => c_parameter_names[t]).join(","), returned, crossing, pointee, "", ""]
+	fields = [declaration#2, declaration#2, declaration#1, types.map(t => c_argument_name(t)).join(","), returned, crossing, pointee, "", ""]
 	[kinds, results, declaration#2, fields.join("\t")]
 }
 

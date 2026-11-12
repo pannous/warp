@@ -347,7 +347,7 @@ console(compiler: text): nothing := {
 	print("Interactive console (Ctrl+D to exit)")
 	folder = joined(text_from(compiled_path().address, compiled_path().length - 5), ".repl")
 	mkdir(c_string(folder), FOLDER_MODE)
-	resident_loaded(compiler)
+	resident_loaded(compiler, yes)
 	session = session_opened()
 	# Ctrl+C stops the running line or its compile, never the console (lib/native/foreign.c)
 	interrupts_engine(long_at(resident_block()).value)
