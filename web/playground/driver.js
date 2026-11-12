@@ -129,7 +129,7 @@ function raisedMessage(exports, failure) {
 // the tree it encodes is built again in the program, node by node through its builders
 const PARSED_CODE_PATH = "/tmp/warp-parsed.code";
 const FIELD_END = 1; // driver.warp FIELD_END
-const ENCODED = { empty: 101, yes: 84, no: 70, int: 105, float: 102, codepoint: 99, symbol: 115, error: 120, key: 107, list: 108 };
+const ENCODED = { empty: 101, yes: 84, no: 70, int: 105, float: 102, codepoint: 99, symbol: 115, error: 120, key: 107, list: 108, placed: 112 };
 const codeParsed = (program, code) => codeParsedFrom(program, guestText(program, code));
 function codeParsedFrom(program, code) {
 	let said = "";
@@ -228,6 +228,7 @@ function codeBuilt(program, encoding, cursor) {
 	if (tag === ENCODED.codepoint) return program.new_codepoint(Number(field));
 	if (tag === ENCODED.symbol) return newGuestBytes(program, field, "new_symbol");
 	if (tag === ENCODED.error) return newGuestError(program, field);
+	if (tag === ENCODED.placed) return program.new_placed(codeBuilt(program, encoding, cursor), BigInt(field));
 	if (tag === ENCODED.key) {
 		const key = codeBuilt(program, encoding, cursor);
 		return program.new_spelled_key(key, newGuestText(program, field), codeBuilt(program, encoding, cursor));

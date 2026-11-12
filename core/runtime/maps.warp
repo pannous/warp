@@ -29,7 +29,7 @@ map_index(m: Node, name: text): int := {
 	if is_class_instance(m) { return instance_place(m, name) }
 	entries = unboxed_list(fields_of(m))
 	if #entries < index_least() {
-		for i in 1 to #entries { if kind_code(entries#i) == Kind.Key and same_bytes(entry_name(entries#i), name) { return i } }
+		for i in 1 to #entries { if is_keyed(entries#i) and same_bytes(entry_name(entries#i), name) { return i } }
 		return 0
 	}
 	hashed_place(entries, map_table(entries), name)
@@ -86,7 +86,7 @@ name_code(name: text): int := {
 # the entry at place goes in the table, unless it is no key or an earlier entry has its name (map_index finds the first)
 add_place(entries: list, table: list, place: int): int := {
 	entry = entries#place
-	if kind_code(entry) != Kind.Key { return 0 }
+	if not is_keyed(entry) { return 0 }
 	name = entry_name(entry)
 	at = name_hash(name, #table)
 	while not is_null(table#(at + 1)) {
