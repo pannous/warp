@@ -157,17 +157,17 @@ def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
 	texts = operation_code(body, symbol, runtime_call("node_text", [left]), runtime_call("node_text", [right]))
 	TypedCode(kind, code + textual(left) + textual(right) + [op.i32_and] + if_else_code(kind, texts, TypedCode(kind, numbers)))
 }
-# + - * and the comparisons of a value known only at run time beside an int or another such value: the int first
-# (int_first) when either is one
-int_firsts(symbol: text, a: TypedCode, b: TypedCode): bool := (symbol in grown_words or symbol in comparisons) and (a.kind == ValueKind.Node or b.kind == ValueKind.Node) and a.kind in [ValueKind.Int, ValueKind.Node] and b.kind in [ValueKind.Int, ValueKind.Node] and has_runtime_word("exact_int")
-# the operands held in locals; each one known only at run time that holds a plain whole number (exact_int) makes the
+# + - * and the comparisons of a value known only at run time beside an int take the int first (int_first); two such
+# values the general way, which an int-first test would only slow where they hold anything else
+int_firsts(symbol: text, a: TypedCode, b: TypedCode): bool := (symbol in grown_words or symbol in comparisons) and ((a.kind == ValueKind.Int and b.kind == ValueKind.Node) or (a.kind == ValueKind.Node and b.kind == ValueKind.Int)) and has_runtime_word("exact_int")
+# the operands held in locals; the one known only at run time holding a plain whole number (exact_int) makes the
 # operation the int one at once: the grown words for + - *, exact past 2^63, an i64 comparison, the int side never
 # boxed; anything else takes `general` of the two as nodes (card untyped-counter-boxes)
 def int_first(body: Body, symbol: text, a: TypedCode, b: TypedCode, general: function): TypedCode {
 	left = TypedCode(a.kind, [op.local_get] + uleb(fresh_local(body, a.kind)))
 	right = TypedCode(b.kind, [op.local_get] + uleb(fresh_local(body, b.kind)))
 	held = a.code + [op.local_set] + left.code[1..] + b.code + [op.local_set] + right.code[1..]
-	tested = if a.kind == b.kind then exact_int_test(left) + exact_int_test(right) + [op.i32_and] else exact_int_test(if a.kind == ValueKind.Node then left else right)
+	tested = exact_int_test(if a.kind == ValueKind.Node then left else right)
 	kind = if symbol in comparisons then ValueKind.Bool else ValueKind.Node
 	ints = if symbol in grown_words then runtime_call(grown_words[symbol], [int_read(left), int_read(right)]) else operation_code(body, symbol, int_read(left), int_read(right))
 	TypedCode(kind, held + tested + if_else_code(kind, ints, general(TypedCode(ValueKind.Node, boxed(left)), TypedCode(ValueKind.Node, boxed(right)))))
