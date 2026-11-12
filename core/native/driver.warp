@@ -33,10 +33,8 @@ SOCKET_ADDRESS_BYTES = 16
 RESOLVER_PORT = 53
 # struct utsname at its largest (macOS: 5 fields of 256 bytes)
 UNAME_BYTES = 1280
-# the framework that tells the main display's extent (a function: a primitive file's constants are numbers);
-# CGDirectDisplayID is 32 bits wide
+# the framework that tells the main display's extent (a function: a primitive file's constants are numbers)
 core_graphics(): text := "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics"
-DISPLAY_ID_MASK = 4294967295
 COLON = 58
 # wasmtime_val_t's kinds, its value 8 bytes in; the sizes of the C structs the calls fill
 KIND_I32 = 0
@@ -263,7 +261,8 @@ display_extent(height: i32): i64 := {
 	if main_display == 0 or extent == 0 { return 0 }
 	integers = allocate(REGISTERS * 8)
 	floats = allocate(REGISTERS * 8)
-	long_at(integers).value = native_call(main_display, integers, floats, 0) & DISPLAY_ID_MASK
+	# (CGDirectDisplayID is 32 bits wide, the register's upper half undefined)
+	long_at(integers).value = native_call(main_display, integers, floats, 0) as u32
 	native_call(extent, integers, floats, 0)
 }
 mkdir(path: pointer, mode: i32): i32 from "c"
