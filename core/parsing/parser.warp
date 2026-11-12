@@ -3132,7 +3132,14 @@ def named(p: Parser): Node := {
 	name_or_call(p, name)
 }
 // a call's arguments, `f(x=2)` naming one even inside a condition
-def arguments_read(p: Parser): list := with_field(p, "comparing", no, () => items_until(p, Bracket.Round, ItemsEnd.Closer))
+def arguments_read(p: Parser): list := {
+	// (not with_field: its any result would let spread take `5 ms` apart)
+	outer = p.comparing
+	p.comparing = no
+	items = items_until(p, Bracket.Round, ItemsEnd.Closer)
+	p.comparing = outer
+	items
+}
 // the name, or its call `name(x, y)` when a round group follows it, with the block side by side after it
 // (`f(x) {…}`)
 def name_or_call(p: Parser, name: Node): Node := {
