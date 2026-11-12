@@ -5,7 +5,7 @@
 const SAMPLE_OFFSET = 32768;
 const DEFAULT_SAMPLE_RATE = 22050;
 const WAV_HEADER_BYTES = 44;
-// play of a signal (src/sound/mod.rs play_signal): computed this many samples at a time
+// play of a signal (lib/sound.warp, play(hum, 2s)): computed this many samples at a time
 const SIGNAL_BLOCK = 512;
 const FULL_SCALE = 32767;
 // a published site has no page that decodes a sound file
@@ -181,7 +181,7 @@ function pageDecoded(name) {
 }
 
 // lib/sound.warp's host words in the page (natively lib/host/native_host/sound.warp; card sound-direct): samples go to the
-// run's voice as sound_samples' do, a file plays on the page as play_file's, a decoded file's 16-bit values come from
+// run's voice as sound_samples' do, a file plays on the page as play's, a decoded file's 16-bit values come from
 // wavFrames or the page's decoder, at the rate and channel count asked (0: the file's), linearly resampled. A sound
 // played answers 0 as natively; MIDI goes to the page's Web MIDI on the voice's clock, the device lists stay the page's
 function soundWords(holder, program) {
@@ -333,7 +333,7 @@ addHostPart({
 					return blocks;
 				});
 			},
-			// play_blocks(fill, addresses, 2s) (lib/sound.warp): the program's fill(t)
+			// play(fill, addresses, 2s) (lib/sound.warp): the program's fill(t)
 			// fills the linear float arrays at `addresses` (one, or left and right), read from its memory; a
 			// fill(block: samples, t) is handed its block, the Int naming it
 			blocks(caller, addresses, seconds, rate) {
