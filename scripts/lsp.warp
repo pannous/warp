@@ -23,6 +23,7 @@ DEFINING_OPERATORS = [":=", "=", ":"]
 DEFINING_WORDS = ["def", "fn", "fun", "function", "global", "class", "struct", "enum", "trait", "type", "interface"]
 NAME_PUNCTUATION = "_·"
 BLOCK = "{"
+STATEMENT_SEPARATORS = ["\n", ";"]
 
 global input = calloc(1, CHUNK_BYTES)
 # the open files' texts by their uri
@@ -95,11 +96,15 @@ name_at(source: text, line: int, column: int): text := {
 }
 is_name_character(c: text): bool := is_alphanumeric(c) or c in NAME_PUNCTUATION
 
+# a text's statements: a parse of several is their list, of one that statement; a text that does not parse has none
+statements_of(source: text): list := {
+	code = try parse(source) else []
+	if type(code) is list and code.separator in STATEMENT_SEPARATORS then [statement for statement in code] else [code]
+}
 # the definitions of a text: each top-level statement's [name, line, column], its name the first word of its head,
 # its place the innermost one on the way there (a call's place is its group's, `square(x)`)
 definitions(source: text): list := {
-	statements = try parse(source) else []
-	paths = statements.map(statement => [statement] + defined_path(statement)).filter(path => #path > 1 and path.last is symbol and path.any(is_placed))
+	paths = statements_of(source).map(statement => [statement] + defined_path(statement)).filter(path => #path > 1 and path.last is symbol and path.any(is_placed))
 	paths.map(path => {
 		placed = path.filter(is_placed).last
 		[path.last.name, line_of(placed), column_of(placed)]
@@ -125,7 +130,7 @@ searched(uri: text): list := {
 	[uri] + neighbours.filter(file => file != uri) + used_modules(document_text(uri), folder)
 }
 used_modules(source: text, folder: text): list := {
-	uses = (try parse(source) else []).filter(statement => type(statement) is list and #statement > 1 and statement#1 == data use)
+	uses = statements_of(source).filter(statement => type(statement) is list and #statement > 1 and statement#1 == data use)
 	names = uses.flat_map(statement => [part.name for part in statement[1 ..] if part is symbol])
 	names.map(name => module_path(name, folder)).filter(path => path != ø).map(uri_of)
 }
