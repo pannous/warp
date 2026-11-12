@@ -23,13 +23,13 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 ---
 
 ## Inbox
-- 2026-11-12 night (user to review): remove-alarm-rule: `remove h` drops a listener (`on alarm {1}; h = on alarm {2}; remove h; emit alarm` → 1); a listener handle shows as Listener{event, number}. Undo: revert the sugar rule.
-- 2026-11-12 night (user to review): nullish-default: `a ?? b` / `a default b` give b when a is ø or raises (`m["a"] ?? 0` → 0); without it the error stays loud. Undo: revert 674d0ff07f.
+- 2026-11-12 user-approved: remove-alarm-rule: `remove h` drops a listener (`on alarm {1}; h = on alarm {2}; remove h; emit alarm` → 1); a listener handle shows as Listener{event, number}. Undo: revert the sugar rule.
+- 2026-11-12 under discussion (user: default/?? should not catch errors, rescue should): nullish-default: `a ?? b` / `a default b` give b when a is ø or raises (`m["a"] ?? 0` → 0); without it the error stays loud. Undo: revert 674d0ff07f.
 - 2026-11-12 night (user to review): primitive-arrays: @primitive files get fixed arrays as wiki/array.md spells them (`i64[8]`); later `byte[40]` for C structs. Undo: revert.
-- 2026-11-12 night (user to review): typed-globals: a typed global keeps its type everywhere (`global cw: int = 1280; cw = "xy"` refused; `level: int = 0; f() := level` reads it). Undo: revert.
+- 2026-11-12 user-approved: typed-globals: a typed global keeps its type everywhere (`global cw: int = 1280; cw = "xy"` refused; `level: int = 0; f() := level` reads it). Undo: revert.
 - 2026-11-12 night (user to review): comment-in-else: a comment line between `}` and `else` keeps the chain. Undo: revert.
 - 2026-11-12 night (user to review): class-bodies: class bodies keep source positions (errors inside classes name their line). Undo: revert.
-- 2026-11-12 night (user to review): core-round-untyped-half: a decimal literal is exact, so round_to(1.005, 2) → 1.01 and round_to(-1.005, 2) → -1.01. Undo: revert ec1a1535bd.
+- 2026-11-12 user-approved, renamed: core-round-untyped-half: kept, and round_to becomes `round(x, decimals: 2)` (`round(x, 2)` works too; card round-decimals). a decimal literal is exact, so round_to(1.005, 2) → 1.01 and round_to(-1.005, 2) → -1.01. Undo: revert ec1a1535bd.
 - 2026-11-12 night (user to review): assigned-kinds-forget: a parameter name counts only inside its own function (`x = 1.005; round_to(x, 2)` no longer depends on other functions' parameter x). Undo: revert.
 - 2026-11-12 night (user to review): untyped-counter-boxes: an untyped counter takes an int-first fast path, exact past 2^63 (loops 2x faster). Undo: revert.
 - 2026-11-12 night (user to review): startup-slowdown: rule words computed once, smaller startup work (`use sound; 1` 1080 → 960 ms). Undo: revert.
