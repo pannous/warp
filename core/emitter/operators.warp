@@ -118,7 +118,10 @@ def float_power(body: Body, base: list, exponent: list): TypedCode {
 def is_count(n: TypedCode): bool := n.kind == ValueKind.Int or n.kind == ValueKind.Node
 def repeated(piece: TypedCode, count: TypedCode): TypedCode := runtime_call("repeated_text", [TypedCode(ValueKind.Int, converted(count, ValueKind.Int)), TypedCode(ValueKind.Node, boxed(piece))])
 
+# the orderings in the place the runtime's node_compared takes them
+ORDERINGS = ["<", "<=", ">", ">="]
 def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
+	if symbol in ORDERINGS and has_runtime_word("node_compared") { return runtime_call("node_compared", [TypedCode(ValueKind.Node, a), TypedCode(ValueKind.Node, b), number_value(ORDERINGS.index_of(symbol) - 1)]) }
 	if symbol == "+" {
 		left = TypedCode(ValueKind.Node, fresh_node_local(body))
 		right = TypedCode(ValueKind.Node, fresh_node_local(body))
