@@ -151,7 +151,6 @@ const WINDOW_FONT = TEXT_FONT;
 const RAYLIB_EXIT_KEY = 256; // KEY_ESCAPE: WindowShouldClose turns yes while it is held, as natively
 // raylib's key codes for the keys canvas.js KEY_CODES names; a letter is its capital (KEY_A 65), held as typed
 const RAYLIB_PAGE_KEYS = { 256: 27, 257: 13, 258: 9, 259: 8, 262: 0xF703, 263: 0xF702, 264: 0xF701, 265: 0xF700 };
-const RAYLIB_LEFT_BUTTON = 0;
 const SDL_WINDOW = 1, SDL_RENDERER = 2; // the handles of the one window and its renderer
 const rgbaOf = color => `rgba(${color & 0xFF}, ${color >> 8 & 0xFF}, ${color >> 16 & 0xFF}, ${(color >>> 24) / 255})`;
 const pointerValue = name => self.pagePointer ? Atomics.load(self.pagePointer.values, self.pagePointer.names.indexOf(name)) : 0;
@@ -228,7 +227,7 @@ const raylibWords = (holder, hooks) => ({
 	GetMouseX: () => pointerValue("mouse_x"),
 	GetMouseY: () => pointerValue("mouse_y"),
 	SetMouseOffset: () => {},
-	IsMouseButtonDown: button => Number(button) === RAYLIB_LEFT_BUTTON && pointerValue("mouse_down") !== 0,
+	IsMouseButtonDown: button => (pointerValue("mouse buttons") & 1 << Number(button)) !== 0,
 	IsKeyDown: key => pageKeysOf(Number(key)).some(code => heldKeys().includes(code)),
 	IsKeyPressed: key => pageKeysOf(Number(key)).includes(keyPressed(holder)),
 	GetKeyPressed: () => raylibKeyOf(keyPressed(holder)),

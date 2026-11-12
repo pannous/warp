@@ -754,7 +754,29 @@ html{
 }
 ```
 
-Examples: markup, "element events", "fine updates", components, cleanup, "keyed list", "form binding", styles, routes, transitions; samples: html, html_dsl, hello_div, component_binding, component_totals, keyed_counters, computed_tags, live_region, form_submit, typed_form, select_binding, page_elements, page_custom_event, keyframes, leaving_list, counter
+### Tags and styles
+
+Tags can be computed from data, and a style sheet and CSS transitions style them.
+
+Examples: markup, styles, transitions; samples: html, html_dsl, hello_div, computed_tags, keyframes, leaving_list
+
+### Events
+
+A click, a key or typed text runs the program's handler, and only what changed is drawn again.
+
+Examples: "element events", "fine updates"; samples: counter, page_elements, page_custom_event, live_region
+
+### Components
+
+A component is a piece of page with its own state.
+
+Examples: components, cleanup, "keyed list"; samples: component_binding, component_totals, keyed_counters
+
+### Forms and routes
+
+Fields bind to variables, a form hands its fields over, and routes give a page several addresses.
+
+Examples: "form binding", routes; samples: form_submit, typed_form, select_binding
 
 ## Servers
 

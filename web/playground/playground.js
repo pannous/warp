@@ -80,7 +80,9 @@ const BUG_REPORT_URL = "https://pannous.com/warp-bug-report";
 const BUG_TOKEN_PARAMETER = "bug_token";
 const BUG_TOKEN_KEY = "warp-playground-bug-token";
 const BUG_TOKEN = "ON4YlqHqAtviYPgPzSeqx3QS_gSPFlY5";
-const FORBIDDEN = 403; // a wrong token: it is forgotten and the field asks again
+const FORBIDDEN = 403; // a wrong token: the field asks for the right one, the report is not sent
+// how the owner gets the token that files reports as theirs (bug_report.py token prints the address that stores it)
+const OWNER_TOKEN_HINT = "open the page once with ?bug_token=<token> (python3 scripts/bug_report.py token)";
 // a page event, or one element's (`on click·1`: the markup's data-warp-click="1", lib/markup.warp page_render)
 const PAGE_EVENT = /^on ((?:click|key|input)|\w+·\d+)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
@@ -269,7 +271,7 @@ function startWorker(restarts = 0) {
 	// a slow start (the CI runner) finishes after the first run began: "ready" then must not hide its "running…"
 	workerReady.then(() => stopLoading() || showing || setStatus("ready"), failure => stopLoading() || setStatus(failure.message, true));
 	workerSettled = "starting";
-	workerReady.then(() => workerSettled = "ready", failure => workerSettled = `failed: ${failure.message}`);
+	workerReady.then(() => workerSettled = "ready", failure => workerSettled = `${WORKER_FAILED}${failure.message}`);
 	tellSystemValues();
 	sharePointer();
 	worker.postMessage({ stored: keptValues(), session: keptValues([SESSION_STORE]) });
@@ -309,7 +311,7 @@ function newWorker(restarts = 0) {
 		// worker.js or a script it imports failed to load: without this the first run waits for "ready" forever (card firefox-hello-hang)
 		// once ready, an error event is the worker ending under a run: the browser's word for it, else what a bare one
 		// means (iPad Safari ends a Worker so when it runs out of memory or stack, card ipad-storage-bug)
-		starting.onerror = event => starting.isReady ? workerEnded(starting, event.message || WORKER_ENDED) : failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
+		starting.onerror = event => starting.isReady ? workerEnded(starting, event.message || WORKER_ENDED) : failed(new Error(`the compiler's worker failed to start: ${event.message || WORKER_NOT_STARTED}`));
 		starting.onmessage = ({ data }) => {
 			starting.heard = { type: data?.type, at: Math.round(performance.now()) }; // playground.js hungWhere
 			if (!FREQUENT_WORKER_MESSAGES.has(data?.type)) keepConsoleEntry("worker", [data?.type ?? String(data), ...(data?.stage ? [data.stage] : data?.message ? [data.message] : [])]);
@@ -751,6 +753,9 @@ const slept = (run, milliseconds) => stopAfterTimeout(run, run.deadline - Date.n
 // a program that does not stop blocks the worker: replace it
 const ANIMATION_STOPPED = "animation stopped";
 const WORKER_ENDED = "the browser ended it without a message (out of memory or stack?)";
+// a worker's error before it was ready, of no message: the browser ended it, or one of its scripts did not load
+const WORKER_NOT_STARTED = "the browser ended it before it was ready (out of memory?), or worker.js did not load";
+const WORKER_FAILED = "failed: "; // workerSettled of a worker that failed to start
 // the shown worker ended under the pending run: the run fails saying so, a fresh worker takes the next
 function workerEnded(ended, why) {
 	if (ended !== worker) return;
@@ -842,6 +847,8 @@ function runInWorker(code, file, asData, eventsFor) {
 	const reported = new Promise((resolve, reject) => Object.assign(run, { resolve, reject }));
 	run.stopTimer = setTimeout(() => pending === run && showStop(true), STOP_GRACE_MS);
 	pending = run;
+	// a worker that failed to start, its failure shown, is not asked again: each run after it starts a new one
+	if (workerSettled.startsWith(WORKER_FAILED)) startWorker();
 	workerReady.then(() => pending === run && startInWorker(run, code, file, asData), failure => {
 		clearTimeout(run.stopTimer);
 		if (pending === run) pending = undefined;
@@ -1336,8 +1343,11 @@ function startBugButton() {
 		history.replaceState(null, "", url.href); // the token leaves the address bar and the history
 	}
 	$("bug").ontoggle = () => {
-		if ($("bug").open) $("bug-comment").focus();
+		if (!$("bug").open) return;
+		showBugSender();
+		$("bug-comment").focus();
 	};
+	$("bug-token").oninput = showBugSender;
 	// a press outside an open menu (the bug report, ⋯) closes it, as Escape does; a comment begun stays (card clicking-outside)
 	const openMenus = () => [...document.querySelectorAll("details.tools[open]")];
 	addEventListener("pointerdown", press => openMenus().filter(menu => !menu.contains(press.target)).forEach(menu => menu.open = false));
@@ -1362,8 +1372,12 @@ function bugReport() {
 	const run = reportedRun();
 	const source = $("bug-source").checked ? { code: run.code, output: run.output } : { code: "", output: "" };
 	return { ...run, ...source, comment: $("bug-comment").value, express: $("bug-express").checked, quick: $("bug-quick").checked, console: consoleReport(),
-		token: stored(BUG_TOKEN_KEY) ?? ($("bug-token").value.trim() || BUG_TOKEN) };
+		token: $("bug-token").value.trim() || stored(BUG_TOKEN_KEY) || BUG_TOKEN };
 }
+
+// who the report goes out as, said before it is sent: a browser without the owner token files a visitor's ticket
+const showBugSender = () => $("bug-sender").textContent = $("bug-token").value.trim() || stored(BUG_TOKEN_KEY)
+	? "as the owner" : "as a visitor: no owner token in this browser";
 
 async function sendBugReport() {
 	const report = bugReport();
@@ -1372,13 +1386,19 @@ async function sendBugReport() {
 	try {
 		const answer = await serviceFetch(BUG_REPORT_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report) });
 		const { card, board, queued, error } = await answer.json();
-		if (answer.status === FORBIDDEN) {
-			store(BUG_TOKEN_KEY, null);
+		// a refused owner token stays refused until a new one is pasted: never quietly the shared token, which files the
+		// owner's report as a visitor's ticket
+		if (answer.status === FORBIDDEN && report.token !== BUG_TOKEN) {
 			showStatus("owner-token-status", "rejected", "the bug-report server refused the token");
 			$("bug-token").hidden = false;
+			return showBugStatus(`not sent: the bug-report server refused this browser's owner token; paste the new one, or ${OWNER_TOKEN_HINT}`, true);
 		}
 		if (!answer.ok) return showBugStatus(`not sent: ${error ?? answer.status}`, true);
-		if (report.token !== BUG_TOKEN) store(BUG_TOKEN_KEY, report.token);
+		if (report.token !== BUG_TOKEN) {
+			store(BUG_TOKEN_KEY, report.token);
+			showStatus("owner-token-status", "ok");
+			Object.assign($("bug-token"), { value: "", hidden: true });
+		}
 		$("bug-comment").value = "";
 		$("bug-express").checked = $("bug-quick").checked = false;
 		if (card) showBugStatus("card made: ", false, card, board);
