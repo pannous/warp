@@ -1226,6 +1226,7 @@ def sample_repeated(clip: Sample, seconds, from, to) {
 sample_looped(clip: Sample, seconds, from, to) := sample_repeated(clip, si_amount(seconds), si_amount(from), si_amount(to))
 // a clip at a rate, `play(kick, 2)` twice as fast and an octave up (one-play: play is the only playing word)
 alias play_sample => play
+play(clip: Sample) := sample_played(clip, 1)
 play(clip: Sample, rate) := sample_played(clip, rate)
 sample_played(clip: Sample, rate) := {
 	sounded(clip.frames, round(clip.rate * rate) as int, clip.channels)
