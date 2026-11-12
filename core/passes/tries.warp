@@ -49,12 +49,14 @@ kept_raise(v: Node): Node := {
 	number = fresh_number()
 	guarded_try(v, try_name("error", number), try_name("error", number), number)
 }
+# a value that can raise as it is worked out: anything but a name or a literal (a call, a method or member, an index)
+may_raise(v: Node): bool := not (v == ø or is_name(v) or is_literal(v))
 # where an Error stops the run no more (decision errors-one-rule): an optional place `r: T? = v` keeps it (a value's
 # `a or b`, emitter.warp logical, too)
 handled_form(n: Node): Node := match n {
-	Key(Key(target, Op.Colon, declared), Op.Assign, v): if admits_errors_type(declared) and is_name(target) and is_call(v) then Key(key_of(n), Op.Assign, kept_raise(v)) else n
+	Key(Key(target, Op.Colon, declared), Op.Assign, v): if admits_errors_type(declared) and is_name(target) and may_raise(v) then Key(key_of(n), Op.Assign, kept_raise(v)) else n
 	# `x ?? y`, `x default y` (decision nullish-default): y when x raises or is ø, a falsy x kept
-	Key(x, Op.Coalesce, y): if is_call(x) then Key(lowered_try(x, ø, ø), Op.Coalesce, y) else n
+	Key(x, Op.Coalesce, y): if may_raise(x) then Key(lowered_try(x, ø, ø), Op.Coalesce, y) else n
 	_: n
 }
 
