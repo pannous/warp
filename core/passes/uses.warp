@@ -47,6 +47,8 @@ with_module_directory(n: Node, folder: text): Node := bottom_up(n, x => if x == 
 used_in(program: Node, folder: text): any := {
 	written = flat_statements(program)
 	statements = with_scope_declarations(written, folder)
+	modules = written.map(use_target).filter(target => target is symbol and not names_no_module(name_of(target))).map(name_of)
+	for statement in written { warn_replaced(statement, modules) }
 	brought = declarations_used(statements, folder, [], {})
 	if #brought#1 == 0 and not written.any(s => scope_used(s) != ø) { return program }
 	kept = statements.filter(s => file_used(s, folder) == ø)
@@ -261,6 +263,25 @@ checked_parse(file: text, source: text): Node := {
 	timed("after parsing")
 	tree
 }
+
+# `use sound; play(x) := …`: a function of the program with the name and argument count of a module it uses replaces
+# that module's in the program, and says so (wiki/use.md "your own function of the same name"); another count adds to
+# the module's word, and a module the program needs without a `use` never warns
+warn_replaced(statement: Node, modules: list) := {
+	head = declared_head(statement)
+	if head == ø { return }
+	name = declared_name(statement)
+	for module in modules {
+		replaced = module_definitions(module, name).filter(definition => declared_head(definition) != ø and #declared_head(definition) == #head)
+		if #replaced > 0 {
+			diagnose(call_of(REPLACED_FACT, [name, module, written_head(declared_head(replaced#1))]), statement)
+			return
+		}
+	}
+}
+REPLACED_FACT = "replaces_module_word"
+# `(play tone)` as its definition writes it, play(tone)
+written_head(head: Node): text := name_of(head#1) + "(" + items_of(head)[1..].map(parameter => "${parameter}").join(", ") + ")"
 
 # A used file's declarations claim their signatures: another file declaring one already, differently, is the error
 # naming both, since the later would silently replace the earlier (card module-name-clash); the same declaration in

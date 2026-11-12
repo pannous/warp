@@ -162,10 +162,11 @@ sorted_in_order(xs: list, before: function): list := {
 	}
 	out
 }
-// x rounded to that many digits after the point, `round(x, 2)` (core/passes/prelude_words.warp arity_variants)
-round_to(x, places) := round(x * repeated_product(10, places)) / repeated_product(10, places)
+// x rounded to that many digits after the point, `round(x, decimals: 2)` or `round(x, 2)` (core/passes/prelude_words.warp
+// arity_variants: a prelude word can't overload the runtime's round(x) yet)
+round_to(x, decimals) := round(x * repeated_product(10, decimals)) / repeated_product(10, decimals)
 // (a float's own, unboxed: the prelude is linked, its untyped words take nodes)
-round_to(x: float, places: int): float := round(x * repeated_product(10, places)) / repeated_product(10, places)
+round_to(x: float, decimals: int): float := round(x * repeated_product(10, decimals)) / repeated_product(10, decimals)
 // xⁿ of a whole n, exact, by multiplying (1/x⁻ⁿ of a negative n): the prelude writes no `^`, whose spellings link
 // big_numbers (card runtime-bridge-slots), which every program would then link. Squared and multiplied in a loop, so
 // n costs about log₂ n products and no stack (`2 ↑ 100000`); the last square is never taken, it could pass 64 bits
