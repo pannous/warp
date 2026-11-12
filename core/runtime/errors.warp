@@ -155,6 +155,13 @@ caught_error(finished: bool, value: Node): Node := {
 	name = unboxed_text(trap_name)
 	if name == "returned_error" or name == "missing_field" or text_starts_with(name, "no_case_") then failure_of(error_sentence(name)) else failure_of(error_words(name))
 }
+# `except T as e`: the instance the run raised, which the handler tests for its class, else the caught Error
+caught_instance(finished: bool, value: Node): Node := {
+	global trap_name
+	global trap_detail
+	if not finished and same_bytes(unboxed_text(trap_name), "returned_error") and is_class_instance(trap_detail) { return trap_detail }
+	caught_error(finished, value)
+}
 # the caught error at the program's statement it happened in (passes/tries.warp gives trap_place, 0 for none known):
 # `e.line`, `e.column` name it; also any node parse_code builds (its `p` tag), where ø, `()` or `{}` written, holds no place
 placed_at(failure: Node, position: int): Node := if position == 0 or is_null(failure) then failure else meta_node(failure, int_quotient(position, 4096), int_remainder(position, 4096))
