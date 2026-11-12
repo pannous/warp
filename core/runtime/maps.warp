@@ -200,7 +200,11 @@ collection_contains(c: Node, x: Node): bool := {
 	if is_null(c) { return no } # `[]` is the null node
 	# ø names no entry: `ø in m` is no (card pure-nil-in-any-map: name_text(ø) trapped on the null node)
 	if marked_kind(c) == Marked.Map or kind_code(c) == Kind.Key { return not is_null(x) and map_index(c, name_text(x)) > 0 }
-	if kind_code(c) == Kind.Text { return text_index(unboxed_text(c), node_text(x)) >= 0 }
+	if kind_code(c) == Kind.Text {
+		# a list is never a text's part: each of its items is asked about (decision all-any-in)
+		if kind_code(x) == Kind.List { raised(failure_of("a list is no part of a text: ask about its items, all xs in t, any xs in t or count(xs where it in t)")) }
+		return text_index(unboxed_text(c), node_text(x)) >= 0
+	}
 	for item in unboxed_list(c) { if node_equal(item, x) { return yes } }
 	no
 }

@@ -34,7 +34,8 @@ guarded_try(value: Node, fallback: Node, binding: Node?, number: int): Node := {
 lowered_try(value: Node, fallback: Node, binding: Node?): Node := {
 	number = fresh_number()
 	match value {
-		Key(target, Op.Assign, assigned_value): { if is_name(target) and binding == ø then try_assigned(target, lowered_try(assigned_value, fallback, binding)) else guarded_try(value, fallback, binding, number) }
+		# `try u = x else y` and `try f() := x else y` guard the value
+		Key(target, op, assigned_value): { if binding == ø and ((op == Op.Assign and is_name(target)) or op == Op.Define) then Key(target, op, lowered_try(assigned_value, fallback, binding)) else guarded_try(value, fallback, binding, number) }
 		# `try { x } …`: a block of one statement guards the statement (held as a value, `{x}` would be data)
 		List(statements, Bracket.Curly, separator): {
 			if #statements == 1 and not is_key(statements#1, Op.Colon) { return guarded_try(statements#1, fallback, binding, number) }
@@ -55,8 +56,8 @@ may_raise(v: Node): bool := not (v == ø or is_name(v) or is_literal(v))
 # `a or b`, emitter.warp logical, too)
 handled_form(n: Node): Node := match n {
 	Key(Key(target, Op.Colon, declared), Op.Assign, v): if admits_errors_type(declared) and is_name(target) and may_raise(v) then Key(key_of(n), Op.Assign, kept_raise(v)) else n
-	# `x ?? y`, `x default y` (decision nullish-default): y when x raises or is ø, a falsy x kept
-	Key(x, Op.Coalesce, y): if may_raise(x) then Key(lowered_try(x, ø, ø), Op.Coalesce, y) else n
+	# `u = x default y`, whose phrase takes the assignment whole: the fallback is the value's, as the try is (lowered_try)
+	Key(Key(target, op, value), Op.Coalesce, fallback): if op == Op.Assign or op == Op.Define then Key(target, op, Key(value, Op.Coalesce, fallback)) else n
 	_: n
 }
 

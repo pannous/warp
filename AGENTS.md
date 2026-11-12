@@ -300,6 +300,8 @@ before asking a question). After a context swap, this file and your role file be
   branch or worktree for it. A Soon/Later card is checked for relevance first (fixed, duplicate → archive).
   The column is the priority, for topic cards too; the user's own cards (drafts, issues not "Added by <session> with
   `todo add`") stay where the user put them.
+- When idle, take the next card of your roadmap yourself (`todo pick --topic <roadmap>`, then `todo take`); the Supervisor
+  names your roadmap and may hand you an urgent card first.
 - Every branch has a card: comment branch, tip and state on it; a parked branch gets its handover as a card note (`todo note`).
 - No Ready column, no merge queue. The worker does not land the branch. Finished work is handed
   to the integrator (Handoff, below), noted `land: <branch> <tip>` (`todo landing`). A finished branch

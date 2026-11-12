@@ -103,8 +103,8 @@ function addPageSoundWords(post) {
 	self.playSoundFile = (url, bytes) => post({ type: "sound file", url, bytes, handle: nextSoundHandle() }); // host-files.js STD_ADAPTERS.sound: a worker has no <audio>
 	self.stopSoundFiles = () => { self.voiceStopped(); post({ type: "stop sound files" }); };
 	self.sendMidi = (port, message, at) => post({ type: "midi", port, message, at }); // host-files.js STD_ADAPTERS.midi
-	self.stopSound = handle => post({ type: "stop sound", handle }); // stop_sound(handle)
-	self.fadeSound = (handle, gain, seconds) => post({ type: "fade sound", handle, gain, seconds }); // fade_sound
+	self.stopSound = handle => post({ type: "stop sound", handle }); // stop(h)
+	self.fadeSound = (handle, gain, seconds) => post({ type: "fade sound", handle, gain, seconds }); // fade
 	// a worker has no AudioContext: the page plays it at its start on the shared clock (voiceSounded); a signal's blocks
 	// share one handle
 	self.playSamples = sound => post({ type: "sound", ...sound, handle: sound.handle || nextSoundHandle() });

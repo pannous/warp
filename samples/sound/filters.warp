@@ -23,4 +23,4 @@ vibrato = 0.5                   # half a semitone up and down
 vibrato_rate = 6                # six times a second
 tremolo = 0.4                   # the gain dips by 40 %
 play(E5, bar 1)
-wait_sound()
+wait(sound)

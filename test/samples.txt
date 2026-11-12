@@ -1,4 +1,4 @@
-# b8e05367d9 2026-11-12 07:57 264/276 95.7%
+# c4f215db58 2026-11-12 12:11 266/276 96.4%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -243,10 +243,12 @@ ok   samples/web/collatz_bars.warp
 ok   samples/web/component_binding.warp
 ok   samples/web/component_totals.warp
 ok   samples/web/computed_tags.warp
+ok   samples/web/counter.warp
 ok   samples/web/form_submit.warp
 ok   samples/web/hello_div.warp
 ok   samples/web/html_dsl.warp
 ok   samples/web/html.warp
+ok   samples/web/keyed_counters.warp
 ok   samples/web/keyframes.warp
 ok   samples/web/leaving_list.warp
 ok   samples/web/live_region.warp
@@ -272,6 +274,4 @@ TIME samples/lists/dot.warp: used its 30 s of CPU
 FAIL samples/numbers/complex_numbers.warp: samples/numbers/complex_numbers.warp:8:1 text of node
 FAIL samples/sound/harmony.warp: samples/sound/harmony.warp:9:14 outside the core: the unknown name major7
 FAIL samples/tasks/async.warp: samples/tasks/async.warp:40:1 receive on a channel no task sends to: every task has ended
-FAIL samples/web/counter.warp: warp app [check] <file.warp>  the page a markup program shows, in a window of the system's web view (check: the text it shows, or its # check: lines checked, no window)
-FAIL samples/web/keyed_counters.warp: warp app [check] <file.warp>  the page a markup program shows, in a window of the system's web view (check: the text it shows, or its # check: lines checked, no window)
 FAIL samples/web/page_elements.warp: samples/web/page_elements.warp:9:63 outside the core: the unknown name document
