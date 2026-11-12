@@ -25,7 +25,9 @@ f64), narrowing is `x as u8`, which cuts the bits (masked or sign-spread). `%` i
 plus or minus any integer is a pointer, as in C (`p + i * 8`). `handle` is a C pointer outside the module's memory, an
 i64 id. A top-level name given a number literal once (`STDERR = 2`) is a constant: every function and main read it as
 that literal, so it takes the type its place wants. `global painted = 0` is one mutable wasm global of its number's
-type, as a local given it takes, which every function reads and writes (test/native/test_primitive_globals.sh).
+type, as a local given it takes, which every function reads and writes (test/native/test_primitive_globals.sh). A fixed array `i64[8]` (wiki/array.md)
+holds zeros of its item type, `kept[slot]` and `kept#n` read and write an item, an index outside it traps, a size known
+only as it runs is refused; a global array lives in the data, any other is taken from the arena.
 
 ## Structs
 `struct Header { len: u32; tag: u8; total: i64 }` (or `class`) in a primitive file is a C layout: each field at a
@@ -108,6 +110,6 @@ driver".
 ## Not yet (cards)
 - f32 in a primitive function of a GC program (no ValueKind with an f32 wasm type there): refused, card
   f32-primitive-refused.
-- (card primitive-class-gc) `@primitive class` in a GC program; lists, texts as (pointer, length), `use` of other primitive files,
-  `continue`, globals of other than a number.
+- (card primitive-class-gc) `@primitive class` in a GC program; lists other than fixed arrays, texts as (pointer, length),
+  `use` of other primitive files, `continue`, globals of other than a number or an array.
 - A primitive file's refusal of a struct field has no line: declarations reach the passes as opaque views.
