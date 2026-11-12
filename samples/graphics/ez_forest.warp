@@ -560,11 +560,11 @@ global atlas_h = 1536.0
 global atlas_packed = 0.0
 baked = baked_atlas(program.folder + "/ez_trees", NEAR_ATLAS)
 if baked == ø {
-	eprint("atlas built")
-	atlas_bytes = read_bytes(program.folder + "/ez_trees/hero/near.rgba")
+	atlas_file = program.folder + "/ez_trees/hero/near.rgba"
+	eprint("no baked atlas.bin, reading " + atlas_file + " (python3 scripts/ez_tree/atlas.py bakes it)")
+	atlas_bytes = read_bytes(atlas_file)
 	atlas = [(0.0 + atlas_bytes[i]) / 255.0 for i in 0 ..< count(atlas_bytes)]
 } else {
-	eprint("atlas file")
 	atlas = baked[0]
 	atlas_w = baked[1]
 	atlas_h = baked[2]
