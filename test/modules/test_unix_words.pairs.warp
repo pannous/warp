@@ -20,7 +20,7 @@
 'use script; grep("^v", "../fixtures/unix/poem.txt")'	["violets are blue"]
 'use script; grep("are", "../fixtures/unix/poem.txt")'	["roses are red", "violets are blue"]
 'use script; grep("^w", "red\nwarp\nblue".split("\n"))'	["warp"]
-# find_files: the paths below a folder matching the wildcards, sorted, hidden folders skipped
-'use script; find_files("../fixtures/unix/configs", "*.json")'	["../fixtures/unix/configs/a.json", "../fixtures/unix/configs/sub/b.json"]
-'use script; find_files("../fixtures/unix/configs", "?.txt")'	[]
+# find: the paths below a folder matching the wildcards, sorted, hidden folders skipped
+'use script; find(Path("../fixtures/unix/configs"), "*.json")'	["../fixtures/unix/configs/a.json", "../fixtures/unix/configs/sub/b.json"]
+'use script; find(Path("../fixtures/unix/configs"), "?.txt")'	[]
 'use script; file_size "../fixtures/unix/poem.txt"'	43

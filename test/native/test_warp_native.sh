@@ -72,7 +72,7 @@ if [ -x "$stage/warp" ]; then
 	check "sleep_ms and clock" "$(native 'c = clock(); sleep_ms(50); clock() - c >= 50')" yes
 	check "random, the same after the same seed" "$(native 'random_seed(7); a = random(); random_seed(7); a == random() and a < 1')" yes
 	check "regex replace with groups" "$(native 'use regex; replace_all("john smith", "(\\w+) (\\w+)", "$2 $1")')" '"smith john"'
-	check "regex all" "$(native 'use regex; find_all("x12y345", "[0-9]+")')" '["12", "345"]'
+	check "regex all" "$(native 'use regex; find("x12y345", Regex("[0-9]+"))')" '["12", "345"]'
 	check "sha256" "$(native 'use hash; sha256("abc")')" '"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"'
 	check "crc32" "$(native 'use hash; crc32("abc")')" 891568578
 	check "a system value of a library's" "$(native 'battery()')" "the system value battery is not in warp yet"

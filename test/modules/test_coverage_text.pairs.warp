@@ -2,7 +2,7 @@
 
 «use text; [indentation("\\t  x y"), indentation("x"), indentation(""), common_start("interstellar", "internet"), common_start("ab😀c", "ab😀d"), common_start("", "abc")] == ["\\t  ", "", "", "inter", "ab😀", ""]»	true
 «use text; [center("ab", 6), center("abc", 6), center("abcdef", 3), center("", 2), center("😀", 3), pad_left("😀", 3), pad_right("ab", 4), pad_left("abcdef", 2)] == ["  ab  ", " abc  ", "abcdef", "  ", " 😀 ", "  😀", "ab  ", "abcdef"]»	true
-«use text; [truncate("hello world", 5), truncate("hi", 5), truncate("hello", 5), truncate("😀😀😀", 2), remove_suffix("file.txt", ".txt"), remove_suffix("file", ".txt"), remove_suffix("", "x"), remove_suffix("aa", "aa")] == ["hell…", "hi", "hello", "😀…", "file", "file", "", ""]»	true
+«use text; [truncate("hello world", 5), truncate("hi", 5), truncate("hello", 5), truncate("😀😀😀", 2), remove("file.txt", suffix: ".txt"), remove("file", suffix: ".txt"), remove("", suffix: "x"), remove("aa", suffix: "aa")] == ["hell…", "hi", "hello", "😀…", "file", "file", "", ""]»	true
 «use text; [between("a [b] c", "[", "]"), between("no", "[", "]"), between("x(1)(2)", "(", ")"), between("[open", "[", "]"), between("‹é›", "‹", "›")] == ["b", "", "1", "", "é"]»	true
 «use text; [is_upper("ABC"), is_upper("AbC"), is_upper("123"), is_upper(""), is_upper("ÄÖ"), is_blank(""), is_blank("  \\t\\n"), is_blank(" a "), is_palindrome("A man, a plan, a canal: Panama"), is_palindrome(""), is_palindrome("ab")] == [yes, no, no, no, yes, yes, yes, no, yes, yes, no]»	true
 «use text; [is_numeric("12"), is_numeric("-1.5"), is_numeric(" 3 "), is_numeric("1."), is_numeric(".5"), is_numeric(""), is_numeric("1e5"), is_numeric("abc")] == [yes, yes, yes, no, no, no, no, no]»	true

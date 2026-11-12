@@ -42,9 +42,9 @@
 'use math; mod_pow(2, 10, 1000)'	24
 
 # use_text_cases_prefixes_counts_palindromes
-'use text; remove_prefix("foobar", "foo")'	'bar'
-'use text; remove_suffix("foobar", "bar")'	'foo'
-'use text; remove_prefix("foobar", "x")'	'foobar'
+'use text; remove("foobar", prefix: "foo")'	'bar'
+'use text; remove("foobar", suffix: "bar")'	'foo'
+'use text; remove("foobar", prefix: "x")'	'foobar'
 'use text; count_of("banana", "an")'	2
 
 # use_math_percent_angles_roots_factors_bases

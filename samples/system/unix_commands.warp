@@ -13,4 +13,4 @@ if exists(profile) {
 	print grep("^export", profile)
 }
 config = ~/.config
-if exists(config) { print "json files in ~/.config:", count(find_files(config, "*.json")) }
+if exists(config) { print "json files in ~/.config:", count(find(Path(config), "*.json")) }

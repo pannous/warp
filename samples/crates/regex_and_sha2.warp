@@ -4,7 +4,7 @@
 // then run it under warp-host, which finds them in ~/.cache/warp/crates
 use crate "regex@1"
 use crate "sha2@0.10"
-words = find_all("the quick brown fox", "[a-z]{5}")
+words = find("the quick brown fox", Regex("[a-z]{5}"))
 print words
 print sha256("hello")
 print replace_all("2026-10-23", "-", "/")

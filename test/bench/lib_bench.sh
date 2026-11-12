@@ -25,7 +25,7 @@ json_write|use json|v = [{"id": i, "name": "n" + text(i)} for i in 0 ..< N]|r = 
 json_read|use json|t = to_json([{"id": i, "name": "n" + text(i)} for i in 0 ..< N])|r = json(t)|import json\n    t = json.dumps([{"id": i, "name": "n" + str(i)} for i in range(N)])|r = json.loads(t)
 csv_write|use csv|rows = [[text(i), "x" + text(i), "a,b"] for i in 0 ..< N]|r = csv_text(rows)|import csv, io\n    rows = [[str(i), "x" + str(i), "a,b"] for i in range(N)]|b = io.StringIO(); csv.writer(b).writerows(rows); r = b.getvalue()
 csv_read|use csv|t = join([text(i) + ",x" + text(i) + ",\"a,b\"\r\n" for i in 0 ..< N], "")|r = csv_rows(t)|import csv, io\n    t = "".join(str(i) + ",x" + str(i) + ',"a,b"\\r\\n' for i in range(N))|r = list(csv.reader(io.StringIO(t)))
-regex_find_all|use regex|t = join(["a" + text(i) for i in 0 ..< N], " ")|r = find_all(t, "[0-9]+")|import re\n    t = " ".join("a" + str(i) for i in range(N))|r = re.findall("[0-9]+", t)
+regex_find_all|use regex|t = join(["a" + text(i) for i in 0 ..< N], " ")|r = find(t, Regex("[0-9]+"))|import re\n    t = " ".join("a" + str(i) for i in range(N))|r = re.findall("[0-9]+", t)
 json_write_long|use json|t = join(["abcdefghi\\n" for i in 0 ..< N /! 10], "")|r = to_json(t)|import json\n    t = "abcdefghi\\n" * (N // 10)|r = json.dumps(t)
 json_read_long|use json|t = to_json(join(["abcdefghi\\n" for i in 0 ..< N /! 10], ""))|r = json(t)|import json\n    t = json.dumps("abcdefghi\\n" * (N // 10))|r = json.loads(t)
 string_build||n = N|s = ""; for i in 0 ..< n { s = s + "x" }; r = s|n = N|s = ""\n    for i in range(n): s = s + "x"\n    r = s
