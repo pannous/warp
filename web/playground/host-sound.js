@@ -5,7 +5,7 @@
 const SAMPLE_OFFSET = 32768;
 const DEFAULT_SAMPLE_RATE = 22050;
 const WAV_HEADER_BYTES = 44;
-// play of a signal (src/sound/mod.rs play_signal): computed this many samples at a time
+// play of a signal (lib/sound.warp, play(hum, 2s)): computed this many samples at a time
 const SIGNAL_BLOCK = 512;
 const FULL_SCALE = 32767;
 // a published site has no page that decodes a sound file
@@ -333,7 +333,7 @@ addHostPart({
 					return blocks;
 				});
 			},
-			// play_blocks(fill, addresses, 2s) (lib/sound.warp): the program's fill(t)
+			// play(fill, addresses, 2s) (lib/sound.warp): the program's fill(t)
 			// fills the linear float arrays at `addresses` (one, or left and right), read from its memory; a
 			// fill(block: samples, t) is handed its block, the Int naming it
 			blocks(caller, addresses, seconds, rate) {
