@@ -392,7 +392,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	module_names = given.map(slice => slice#1)
 	# a program's function named as a library word is the program's own (decision library-words-lexical): the program's
 	# calls it takes reach it, under its own name, any other call and every library body the library's word, so
-	# round(x, decimals)'s round stays math's beside a program's round(x), and round(2.345, 2) the prelude's; a module brought in
+	# round_to's round stays math's beside a program's round(x), and round(2.345, 2) is round_to; a module brought in
 	# front replaces the prelude's word as it is. A library module being built exports its words under their written
 	# names, which a program linking it calls (units' sleep beside the prelude's, card program-file): the prelude's word
 	# is the one set aside, as kept() sets it; beside a module it uses its word stays its own (storage's column_value
@@ -726,13 +726,14 @@ with_own_locals(definition: Node, program_globals: list): Node := {
 	for name in program_globals.filter(name => name in bound) { definition = renamed(definition, name, symbol(name + name_joiner + "local")) }
 	definition
 }
-# the module's own definition of a word the program defines too, which an alias or variant means: `xs.first(2)` calls
-# the prelude's first_items beside a program's first_items (card module-hygiene); an operator's function is overloaded
+# the module's own definition of a word the program defines too, which an alias or variant means: `round(x, 2)` calls
+# the prelude's round_to beside a program's round_to (card module-hygiene); an operator's function is overloaded
 # beside the module's, never replaced (with_reached's kept), so its alias calls it as it is (shell's matches)
 library_word(word: text): text := word + name_joiner + "library"
 
-# words that mean another word with that many arguments, the receiver counted: `xs.first(3)` is first_items
-arity_variants = [["first", 2, "first_items"], ["count", 2, "count_in"], ["last", 2, "last_items"], ["list", 1, "as_list"], ["tuple", 1, "as_list"]]
+# words that mean another word with that many arguments, the receiver counted: `round(x, 3)` is round_to,
+# `xs.first(3)` first_items
+arity_variants = [["round", 2, "round_to"], ["first", 2, "first_items"], ["count", 2, "count_in"], ["last", 2, "last_items"], ["list", 1, "as_list"], ["tuple", 1, "as_list"]]
 # the variants of the words a program names, which of_lookups may call (`last 2 of xs` is last_items)
 variant_words(words: list): list := arity_variants.filter(variant => variant#1 in words).map(variant => variant#3)
 arity_variant(name: text, count: int): any := {
