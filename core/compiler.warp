@@ -323,15 +323,17 @@ modules_in_build_order(): list := in_dependency_order(built_first() + library_mo
 # the modules step as a plan, for scripts/lib/modules.sh to build the modules in parallel (user OK 11-11,
 # lazy-module-prebuild): the library index written into the folder, then `library ⇥ <hash>` of what each module's
 # build reads of every other (each definition's head: open_words extended_elsewhere), then each module in build order,
-# `<name> ⇥ <the modules it waits for> ⇥ <the hash of the texts it is built of>`
+# `<name> ⇥ <the hash of the texts it is built of> ⇥ <the modules it waits for>` (last: a field read empty in
+# the middle would shift; the print last: the command shows no value)
 modules_planned(folder: text) := {
 	write_library_index(folder)
 	names = modules_in_build_order()
 	print "library\t" + texts_hash(names.map(name => first_lines_of_definitions(std_module_text(name))))
 	before = []
 	for name in names {
-		print name + "\t" + before.filter(other => other in built_first() or other in modules_used_by(name)).join(" ") + "\t" + texts_hash(built_of_texts(name))
+		waits = before.filter(other => other in built_first() or other in modules_used_by(name))
 		before += [name]
+		print name + "\t" + texts_hash(built_of_texts(name)) + "\t" + waits.join(" ")
 	}
 }
 first_lines_of_definitions(source: text): text := definition_slices(source).map(slice => slice#2.split("\n")#1).join("\n")

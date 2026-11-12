@@ -42,7 +42,7 @@ modules_built() {
 	rm -rf "$work" && mkdir -p "$work" || return 1
 	"$warp" --no-window --lib "$lib" "$compiler" modules-plan "$folder" >"$work/plan" || return 1
 	{ cat "$compiler" "$runtime" "$folder/sugar_rules.packed"; grep -v -e '^hash	' -e '^slice	' "$folder/index.tsv"; grep '^library	' "$work/plan"; } | digest >"$work/common"
-	while IFS=$'\t' read -r name waits texts; do
+	while IFS=$'\t' read -r name texts waits; do
 		[ "$name" = library ] && continue
 		{ cat "$work/common"; echo "$texts"; for name_waited in $waits; do cat "$work/$name_waited.key"; done; } | digest >"$work/$name.key"
 	done <"$work/plan"
@@ -61,21 +61,33 @@ modules_built() {
 # a worker of modules_built: the first module in the plan whose waited-for ones are written, claimed and built, until
 # every module is
 modules_worker() {
-	local warp=$1 lib=$2 compiler=$3 folder=$4 runtime=$5 work=$4/.modules-step name waits texts waited left
+	local warp=$1 lib=$2 compiler=$3 folder=$4 runtime=$5 work=$4/.modules-step name texts waits waited left stalled=
 	touch "$work/worker-$$"
 	while :; do
 		left=
-		while IFS=$'\t' read -r name waits texts; do
+		while IFS=$'\t' read -r name texts waits; do
 			[ "$name" = library ] || [ -e "$work/$name.done" ] && continue
 			left=yes
 			for waited in $waits; do [ -e "$work/$waited.done" ] || continue 2; done
 			mkdir "$work/$name.claimed" 2>/dev/null || continue
 			module_made "$@" "$name"
+			stalled=
 			continue 2
 		done <"$work/plan"
 		[ -n "$left" ] || return 0
+		# (twice: a module done between the scan and this check makes another ready)
+		if modules_in_flight "$work"; then stalled=; elif [ -z "$stalled" ]; then stalled=yes; continue; else
+			echo "modules: none ready and none building: the plan waits for a module it never builds ($work/plan)" | tee -a "$work/refused" >&2
+			return 1
+		fi
 		sleep $MODULE_WAIT
 	done
+}
+# whether a module is claimed and not yet done (being built by some worker)
+modules_in_flight() {
+	local claim
+	for claim in "$1"/*.claimed; do [ -e "${claim%.claimed}.done" ] || [ ! -e "$claim" ] || return 0; done
+	return 1
 }
 # (a module's key file holds its key and its own file's sha: one written by anything else, a store hit, a sequential
 # `warp rebuild`, is never taken for the key's)
