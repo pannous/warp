@@ -39,4 +39,6 @@ check "--fast wraps a written int" "$(native --fast past.warp)" -922337203685477
 check "--fast wraps a boxed int" "$(native --fast boxed.warp)" -9223372036854775808
 check "without --fast it grows" "$(native boxed.warp)" 9223372036854775808
 check "--fast keeps a big value exact" "$(native --fast big.warp)" 18446744073709551617
+# a misspelt test path is refused, naming it, never a pass of 0 tests
+check "warp test of a missing folder" "$(native test no_such_folder; echo "exit $?")" "$(printf 'warp test: no such test folder or file: no_such_folder\nexit 1')"
 [ $failures = 0 ]
