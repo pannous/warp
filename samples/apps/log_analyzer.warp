@@ -28,19 +28,19 @@ print("parsed " + text(count(requests)) + " of " + text(count(log.split("\n"))) 
 rows = []
 for path in unique([r.path for r in requests]) {
 	hits = [r for r in requests if r.path == path]
-	errors = count_by(hits, r => r.status >= 400)
+	errors = count(hits, r => r.status >= 400)
 	rows = rows + [[path, count(hits), sum([r.bytes for r in hits]), errors]]
 }
-rows = sort_by(rows, row => -row[1])
+rows = sort(rows, by: row => -row[1])
 print(table_text(rows, {headers: ["path", "hits", "bytes", "errors"]}))
 
 # status classes and latency
 print("status codes: " + text(tally([r.status for r in requests])))
 times = [r.seconds for r in requests]
 print("latency mean " + text(round_to(mean(times), 3)) + " s, median " + text(round_to(median(times), 3)) + " s, p90 " + text(round_to(percentile(times, 90), 3)) + " s")
-slowest = sort_by(requests, r => -r.seconds)[0]
+slowest = sort(requests, by: r => -r.seconds)[0]
 print("slowest: " + slowest.method + " " + slowest.path + " (" + text(slowest.seconds) + " s, status " + text(slowest.status) + ")")
-print("busiest client: " + sort_by(frequencies([r.ip for r in requests]), f => -f[1])[0][0])
+print("busiest client: " + sort(frequencies([r.ip for r in requests]), by: f => -f[1])[0][0])
 
 # requests per minute: the hour and minute out of each time stamp, as a bar per minute
 per_minute = tally([join(match_groups(r.time, ":([0-9]{2}):([0-9]{2}):"), ":") for r in requests])

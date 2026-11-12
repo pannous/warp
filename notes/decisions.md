@@ -7,7 +7,6 @@ in AGENTS.md or a role file. Under 40 lines, nothing older than 7 days (card dec
 Grep a key or topic, never read it whole. Open questions: notes/open_decisions.md.
 
 ## Inbox
-- 2026-11-12 definition-prepositions: in a spaced definition head, prepositions (of, in, to, from, with …), pronouns and articles are never parameter names (card spaced-definition-pronouns).
 - 2026-11-12 of-form-canonical: a one-argument function is `name of type`, `it` the argument (`double of int := it * 2`), all types (card of-form-canonical).
 - 2026-11-12 answer-or-act: a function returns a value or changes its arguments, not both; `sort!(xs: list)` returns nothing, a `!` with a result type warns (card answer-or-act).
 - 2026-11-12 mutating-needs-bang: `!` marks a changing function for readers; not enforced, functions may change their arguments (card answer-or-act).
@@ -82,7 +81,7 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 ## Numbers
 
 - gpu-f32 (also: P240): heavy float maps (from 10× the measured break-even) run on the GPU in f32 with a one-time notice; `@cpu` and `WARP_GPU=off` keep f64; `@gpu @cpu` together is an error; `@gpu` warns when the GPU doesn't apply; int lists fitting i32 may use the GPU with an overflow flag. go-heavy-map: a `go` map of a heavy kernel runs as the plain map.
-- round-halves: `round` rounds halves away from zero; banker's rounding is `round_even`; an exact half seen at compile time gets a hint about Python. `⌊x⌋` floor, `⌈x⌉` ceil, `⌊x⌉` round. `x as int` truncates toward zero.
+- round-halves: `round` of an exact half may go either way; tests never pin it; `round_even` when it matters. `⌊x⌋` floor, `⌈x⌉` ceil, `⌊x⌉` round. `x as int` truncates toward zero.
 
 ## Units and quantities
 - unit-definitions: `quantity length meter` declares a base and its SI anchor; `unit cm := meter / 100`, `unit N := kg*m/s²` (derived quantities follow from the expression); offsets `unit °F := (it + 459.67) * 5/9 K`; SI prefixes only for SI-anchored/derived units. unit-target: `unit °C as K := it + 273.15`. unit-prefix-lines: `prefix k := 10^3`, `SI dimension length meter`.
