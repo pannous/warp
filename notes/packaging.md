@@ -14,7 +14,7 @@ pattern; Wasp (C++) has its own tap pannous/homebrew-wasp).
   of release.yml after `binaries`; `gh workflow run release.yml -f tag=v<version> -f repackage=true` reruns only them
   from the existing tarballs (their sha256 stay, so the formula stays valid).
   - PyPI `pip install warp-language` (warp-lang is NVIDIA's Warp on PyPI):
-    packaging/pypi/build_wheels.py writes one wheel per target, no Python inside: the release folder whole in
+    packaging/pypi/build_wheels.py writes one wheel per target, its only Python the pure package warp_language/ (`import warp_language.node`: warp data text <-> Python values, no binary needed; test/tools/test_warp_node.py; named warp_language, not warp, which warp-lang's NVIDIA Warp owns): the release folder whole in
     `.data/data/share/warp/` (modes kept; zip mode needs S_IFREG or pip drops the exec bit) and a launcher
     `.data/scripts/warp` running its warp, which reads its lib/ as its own folder (card packaging-pypi). Tags
     macosx_11_0_arm64, macosx_10_12_x86_64, manylinux_2_<glibc>_<arch> from the newest GLIBC_ symbol in the native warp

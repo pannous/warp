@@ -58,7 +58,7 @@ depths_of(scene: list, eye: list, forward: list, depths: list): list := {
 	out
 }
 // indices 0 ..< #depths of the depths at least nearest, the nearest first
-order_by_depth(depths: list, nearest: float): list := [i - 1 for i in 1 to #depths].filter(i => depths#(i + 1) >= nearest).sort_by(i => depths#(i + 1))
+order_by_depth(depths: list, nearest: float): list := [i - 1 for i in 1 to #depths].filter(i => depths#(i + 1) >= nearest).sort(by: i => depths#(i + 1))
 // the same order of a GPU list [f32] of centres (xyzw per splat), written into `into` as f32, the count of indices
 // written. The sample uses this because view_order_into (extensions/gpu_lists/runtime.warp:193) currently refuses on
 // the [i32] bin tables it allocates (gpu_list_refused_as at :262; test/modules/test_splat_view_order.pairs.warp)
