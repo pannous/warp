@@ -5,6 +5,7 @@
 # the open file, then in the files of its folder, then in the modules it `use`s, where the compiler finds them.
 use c
 use json
+use path
 use url
 read(file: i32, buffer: handle, count: i64): i64 from 'c'
 
@@ -101,24 +102,21 @@ definitions(source: text): list := {
 	paths = statements.map(statement => [statement] + defined_path(statement)).filter(path => #path > 1 and path.last is symbol and path.any(is_placed))
 	paths.map(path => {
 		placed = path.filter(is_placed).last
-		[path.last.name, placed.line, placed.column]
+		[path.last.name, line_of(placed), column_of(placed)]
 	})
 }
-is_placed(n: any): bool := (try n.line else 0) > 0
+is_placed(n: any): bool := line_of(n) != ø
 # the nodes from a definition down to its name; a head before a block defines it, `def f(x) {…}`, a call before
 # anything else does not, `print twice(3)`
 defined_path(statement: any): list := {
-	if type(statement) is key and statement.op in DEFINING_OPERATORS { return named_path(head_path(statement.key), statement.value) }
+	if type(statement) is key and statement.op in DEFINING_OPERATORS { return named_path(head_path(statement#1), statement#2) }
 	if type(statement) is list and #statement == 2 and statement#2.bracket == BLOCK { return named_path(head_path(statement#1), statement#2) }
 	[]
 }
 # a defining word is followed by the name: `global g = 2`, `def f(x) {…}`
 named_path(path: list, rest: any): list := if path.last is symbol and path.last.name in DEFINING_WORDS then head_path(rest) else path
-head_path(n: any): list := {
-	if type(n) is key { return [n] + head_path(n.key) }
-	if type(n) is list and #n > 0 { return [n] + head_path(n#1) }
-	[n]
-}
+# a key's first part is its left side, `(square x)` of `square(x) := …`, a list's its first item
+head_path(n: any): list := if (type(n) is key or type(n) is list) and #n > 0 then [n] + head_path(n#1) else [n]
 
 # the files a name of `uri` is looked for in: the file, the other files of its folder, then the modules it uses
 searched(uri: text): list := {
