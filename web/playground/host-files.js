@@ -553,7 +553,8 @@ addHostPart({
 		},
 		// a filter compiled natively is an SQL query (a page compiled by the browser keeps filters as comprehensions)
 		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: tablePage, count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, delete: deleteRow, update: updateRow, begin: beginTransaction, commit: file => { delete tablesBefore[file]; return null; }, rollback: rollBack, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
-		net: { get: url => getSync(url), post: (url, body, headers) => postSync(url, contentText(body), headers ?? {}) },
+		// `get(url, "bytes")`, core/host_io.warp url_bytes: the answer's bytes, ints 0 to 255
+		net: { get: (url, as) => as === "bytes" ? Array.from(getSync(url, 0, true)) : getSync(url), post: (url, body, headers) => postSync(url, contentText(body), headers ?? {}) },
 		// `clipboard.write(text)` (lowering/signals/system_values.rs): a page writes it (markup.js copyText), a Worker has no
 		// clipboard and hands the text to its page (self.writeClipboard: worker.js)
 		clipboard: { write: text => { (self.writeClipboard ?? copyText)(contentText(text)); return null; } },
