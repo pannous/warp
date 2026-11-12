@@ -1,5 +1,6 @@
 # Texts byte by byte: joining, counting characters, code points, order, search, printing
 use "intrinsics.warp"
+use "instructions.warp"
 use "characters.warp"
 use "walks.warp"
 use "../emitter/byte_codes.warp"
@@ -73,9 +74,11 @@ output_bytes(at: int, t: text, start: int, stop: int) := {
 }
 # linear memory grown until the output area holds that many bytes (a long program argument, a big C text)
 memory_holding(bytes: int) := {
-	missing = floor_quotient(output_address() + bytes + page_bytes() - 1, page_bytes()) - memory_grown(0)
+	missing = pages_holding(output_address() + bytes) - memory_grown(0)
 	if missing > 0 { memory_grown(missing) }
 }
+# the pages of linear memory that many bytes take
+pages_holding(bytes: int): int := int_quotient(bytes + page_bytes() - 1, page_bytes())
 page_bytes(): int := 65536
 # where a text goes as a C string for a host word: past the output area's scratch bytes (runtime/extended/wasi.warp
 # scratch_bytes)
