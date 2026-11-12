@@ -16,19 +16,6 @@ rewrite $f all $xs => $xs.map($e -> $f($e)) where $f is function
 # list's own `xs.count` keeps its meaning
 rewrite $xs.each.$f($a...) => $xs.map($e -> $e.$f($a...)) where $f is symbol
 rewrite $xs.each.$f => $xs.map($e -> $e.$f) where $f is symbol
-# `all xs > 0` (parsed `all (xs > 0)`): whether every element compares so, `any xs > 0` whether one does
-rewrite (all $xs == $y) => all($xs, $e -> $e == $y)
-rewrite (all $xs != $y) => all($xs, $e -> $e != $y)
-rewrite (all $xs < $y) => all($xs, $e -> $e < $y)
-rewrite (all $xs > $y) => all($xs, $e -> $e > $y)
-rewrite (all $xs <= $y) => all($xs, $e -> $e <= $y)
-rewrite (all $xs >= $y) => all($xs, $e -> $e >= $y)
-rewrite (any $xs == $y) => any($xs, $e -> $e == $y)
-rewrite (any $xs != $y) => any($xs, $e -> $e != $y)
-rewrite (any $xs < $y) => any($xs, $e -> $e < $y)
-rewrite (any $xs > $y) => any($xs, $e -> $e > $y)
-rewrite (any $xs <= $y) => any($xs, $e -> $e <= $y)
-rewrite (any $xs >= $y) => any($xs, $e -> $e >= $y)
 # `all xs are even`, `are all xs even`: whether every element holds (decision map-all-canonical: `f all xs` maps)
 rewrite (all $xs are $p) => all($xs, $e -> $p($e)) where $p is function
 rewrite (are all $xs $p) => all($xs, $e -> $p($e)) where $p is function

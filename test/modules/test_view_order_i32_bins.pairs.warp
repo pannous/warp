@@ -1,0 +1,3 @@
+# view_order_into writes the same nearest-first indices into a GPU list [i32] as it does into [f32]
+# (extensions/gpu_lists/runtime.warp, card view-order-i32-bins)
+'c: [f32] = [0, 0, 1, 1, 0, 0, 5, 1, 0, 0, 3, 1]; o: [i32] = int[4]; n = view_order_into(c, [0, 0, 0], [0, 0, 1], 0, o); [n, o#1, o#2, o#3]'	[3, 0, 2, 1]
