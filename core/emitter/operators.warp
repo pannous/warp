@@ -56,7 +56,7 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 	# on any other values this builtin, which its own body keeps
 	dispatcher = "${symbol}·operator"
 	if (a.kind == ValueKind.Node or b.kind == ValueKind.Node) and dispatcher in module.functions and body.function.name != dispatcher { return call_values(module.functions[dispatcher], as_nodes(a, b)) }
-	if int_firsts(symbol, a, b) { return int_first(body, symbol, a, b, (left, right) => if symbol in equalities then equality(body, symbol, left, right) else node_operation(body, symbol, left.code, right.code)) }
+	if int_firsts(body, symbol, a, b) { return int_first(body, symbol, a, b, (left, right) => if symbol in equalities then equality(body, symbol, left, right) else node_operation(body, symbol, left.code, right.code)) }
 	if structured and symbol in equalities { return equality(body, symbol, a, b) }
 	# `"ab" * 3`, `3 * " "`, `" " * (9 - w)`: the text repeated, as `3 times "ab"`; a count known only at run time
 	# that is no int traps (int_of_node)
@@ -158,8 +158,9 @@ def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
 	TypedCode(kind, code + textual(left) + textual(right) + [op.i32_and] + if_else_code(kind, texts, TypedCode(kind, numbers)))
 }
 # + - * and the comparisons of a value known only at run time beside an int or another such value: the int first
-# (int_first) when either is one
-int_firsts(symbol: text, a: TypedCode, b: TypedCode): bool := (symbol in grown_words or symbol in comparisons) and (a.kind == ValueKind.Node or b.kind == ValueKind.Node) and a.kind in [ValueKind.Int, ValueKind.Node] and b.kind in [ValueKind.Int, ValueKind.Node] and has_runtime_word("exact_int")
+# (int_first) when either is one; not in the runtime's own words, whose values known only at run time are mostly no
+# ints (the test made the compiler 5% slower there)
+int_firsts(body: Body, symbol: text, a: TypedCode, b: TypedCode): bool := not body.function.is_runtime and (symbol in grown_words or symbol in comparisons) and (a.kind == ValueKind.Node or b.kind == ValueKind.Node) and a.kind in [ValueKind.Int, ValueKind.Node] and b.kind in [ValueKind.Int, ValueKind.Node] and has_runtime_word("exact_int")
 # the operands held in locals; each one known only at run time that holds a plain whole number (exact_int) makes the
 # operation the int one at once: the grown words for + - *, exact past 2^63, an i64 comparison, the int side never
 # boxed; anything else takes `general` of the two as nodes (card untyped-counter-boxes)
