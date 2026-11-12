@@ -317,12 +317,47 @@ function runHolder(fields) {
 }
 // (proxies, never copies: an import object may answer only through get, as withWasi's does)
 function withLinkedInstances(descriptors, imports, instances) {
+	const hooks = taskContextHooks(instances);
 	const linked = {};
 	for (const name of new Set(descriptors.map(entry => entry.module))) {
 		const url = linkedUrl(name);
 		if (url) linked[name] = linkedInstance(name, url, imports, instances);
 	}
-	return new Proxy(imports, { get: (modules, module) => linked[module] ?? modules[module] });
+	return new Proxy(imports, { get: (modules, module) => taskContextImports(module, linked[module] ?? modules[module], hooks) });
+}
+
+// prebuilt tasks.wasm imports task_context from warp/prelude (a no-op). lib/sound.warp defines the real ones, which
+// snapshot the voice so a go { play(...) } mixes with the starter (card parallel-background-base). sound's exports
+// have a different wasm-gc signature than the prelude hook (a list vs a Node, and a float vs a Node), so a JS
+// function cannot sit on that import. This adapter uses the same Node/list types, boxes sound's list as a Node
+// (tag 264), and late-binds sound through a table so the sound↔tasks instantiate cycle does not matter.
+const PRELUDE_MODULE = "warp/prelude";
+const SOUND_MODULE = "warp/sound";
+const TASK_CONTEXT_ADAPTER = Uint8Array.from(atob("AGFzbQEAAAABLgdQAF8DfgBuAGMAAGABYwABfF5jAAFfAn8BZAIBYAABYwNgAAFjAGABYwABYwADAwIFBgQEAXAAAgcsAwx0YXNrX2NvbnRleHQAABF0YXNrX2NvbnRleHRfYmFjawABBWhvb2tzAQAKQwIjAQFwQQAlACEAIADRBGMA0HEFQogCIAD7FgQUBNBx+wAACwsdAQFwQQElACEBIAHRBEAFIAAgAfsWARQBGgvQcQs="), c => c.charCodeAt(0));
+function taskContextHooks(instances) {
+	if (!instances.taskContextHooks) {
+		const exported = new WebAssembly.Instance(new WebAssembly.Module(TASK_CONTEXT_ADAPTER)).exports;
+		instances.taskContextHooks = {
+			task_context: exported.task_context,
+			task_context_back: exported.task_context_back,
+			bind(name, moduleExports) {
+				if (name !== SOUND_MODULE) return;
+				try {
+					if (moduleExports.task_context) exported.hooks.set(0, moduleExports.task_context);
+					if (moduleExports.task_context_back) exported.hooks.set(1, moduleExports.task_context_back);
+				} catch { /* leave the prelude no-op if the signatures do not match */ }
+			},
+		};
+	}
+	return instances.taskContextHooks;
+}
+function taskContextImports(module, exports, hooks) {
+	if (module !== PRELUDE_MODULE || !exports) return exports;
+	const namespace = Object.create(null);
+	for (const name of Object.keys(exports)) namespace[name] = exports[name];
+	namespace.task_context = hooks.task_context;
+	namespace.task_context_back = hooks.task_context_back;
+	return namespace;
 }
 // a module linked by its import's name: a standard one's file, or a program's own module warp built (`import shapes`
 // beside shapes.wasm, imported by its path), which imports runtime.wasm's words as a standard module does
@@ -345,6 +380,7 @@ function linkedInstance(name, url, imports, instances) {
 	const { module, descriptors } = compiledLibrary(url);
 	const exports = new WebAssembly.Instance(module, withUnlinkedTrapping(descriptors, withLinkedInstances(descriptors, imports, instances))).exports;
 	instances.set(name, exports);
+	taskContextHooks(instances).bind(name, exports);
 	exports[MODULE_START]?.();
 	return exports;
 }

@@ -501,10 +501,17 @@ let sounding = []; // the playing and queued sounds, silenced when the next run 
 // missing userActivation (some headless builds): treat as before a click, so heard stays 0 and sound does not pace (card samples-page-sound-pipes)
 const beforeUserActivation = () => !navigator.userActivation || !navigator.userActivation.hasBeenActive;
 // a run's sounds so far, in seconds, which the page names below its result (showSounded): a program that only plays
-// shows nothing else, and one run before the first click or key press stays silent
-function soundMade(run, { samples, rate, channels }) {
+// shows nothing else, and one run before the first click or key press stays silent. Mixed at their start times on the
+// shared clock (a task's play along with the starter's), not added end to end: `go { play(bass) }` under a melody is
+// the longer part, not the sum (card parallel-background-base)
+function soundMade(run, { samples, rate, channels, at }) {
 	stopAfterTimeout(run);
-	run.sounded = (run.sounded ?? 0) + samples.length / Math.max(channels, 1) / rate;
+	const duration = samples.length / Math.max(channels, 1) / rate;
+	const start = at == null || !Number.isFinite(Number(at)) ? (run.soundUntil ?? 0) : Number(at);
+	const end = start + duration;
+	run.soundFrom = Math.min(run.soundFrom ?? start, start);
+	run.soundUntil = Math.max(run.soundUntil ?? end, end);
+	run.sounded = run.soundUntil - run.soundFrom;
 }
 const SILENT_BEFORE_ACTIVATION = "silent: a browser plays sound only after a click or key press on the page, then run it again";
 function showSounded(seconds) {

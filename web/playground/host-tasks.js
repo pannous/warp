@@ -62,6 +62,11 @@ self.voiceSounded = seconds => {
 	voice = { ...voice, end: at + seconds, seconds: place + seconds, origin: voice.origin ?? at - place };
 	return { place, at };
 };
+// the library already scheduled this sound (lib/sound.warp scheduled, before sound_played): put the JS voice there,
+// so a task that restored its starter's voice (task_context_back) is not queued behind the starter's later plays
+self.voicePlaced = (place, at, seconds) => {
+	voice = { ...voice, end: at + seconds, seconds: place + seconds, origin: voice.origin ?? at - place };
+};
 // `at time …`: the voice placed that many seconds after its place 0; its end puts it back, keeping that origin
 self.voiceAt = seconds => {
 	voicesBeforeAt.push(voice);

@@ -243,6 +243,32 @@ function resampled({ rate: own, channels, values }, rate) {
 	return { rate, channels, values: result };
 }
 
+// the sound module's voice, already advanced by scheduled() before sound_played (lib/sound.warp): its end on clock()
+// (milliseconds) and its place (seconds), exported as the other modules read them (host.js holder.exports)
+const VOICE_END_EXPORT = "global/program·voice_end";
+const VOICE_PLACE_EXPORT = "global/program·voice_place";
+// an exported wasm global's number: a raw i64/f64, or a Node (JS cannot Number a GC value)
+function numberOfGlobal(holder, name) {
+	const exported = holder.exports?.[name];
+	if (exported === undefined) return undefined;
+	const raw = exported && typeof exported === "object" && "value" in exported ? exported.value : exported;
+	if (typeof raw === "number" || typeof raw === "bigint") return Number(raw);
+	if (raw == null || typeof guestPlain !== "function") return undefined;
+	const plain = guestPlain(holder.exports, raw);
+	if (plain !== null && typeof plain === "object") return undefined;
+	const number = Number(plain);
+	return Number.isFinite(number) ? number : undefined;
+}
+function libraryVoice(holder, seconds) {
+	try {
+		const endMs = numberOfGlobal(holder, VOICE_END_EXPORT), placeEnd = numberOfGlobal(holder, VOICE_PLACE_EXPORT);
+		if (!Number.isFinite(endMs) || !Number.isFinite(placeEnd)) return undefined;
+		return { place: placeEnd - seconds, at: (endMs - Math.round(seconds * 1000)) / 1000 };
+	} catch {
+		return undefined;
+	}
+}
+
 addHostPart({
 	words: (holder, hooks, { program }) => {
 		// samples (amplitude + SAMPLE_OFFSET, stereo interleaved) queued on the voice, for the page and save sound; a
@@ -250,9 +276,14 @@ addHostPart({
 		// (but in an `at`, which places its sounds itself). The handle
 		holder.sounded = (samples, rate, channels, handle) => {
 			while (self.pageSystemValues?.heard && !self.insideAt?.() && (self.soundsQueued?.() ?? 0) > PLAY_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
-			const { place, at } = self.voiceSounded?.(samples.length / channels / rate) ?? {};
+			const seconds = samples.length / channels / rate;
+			// a task's play uses the library voice, snapshotted when it was started: the JS voice alone would queue it
+			// behind the starter's later sounds, so the page summed 4.5 s for two overlapping parts (card parallel-background-base)
+			const fromLibrary = libraryVoice(holder, seconds);
+			if (fromLibrary) self.voicePlaced?.(fromLibrary.place, fromLibrary.at, seconds);
+			const { place, at } = fromLibrary ?? self.voiceSounded?.(seconds) ?? {};
 			const sound = { samples, rate, channels };
-			hooks.sound?.({ ...sound, at, handle, loop: self.currentVoice?.().loop }); // a live loop's (card playground-live)
+			hooks.sound?.({ ...sound, at, place, handle, loop: self.currentVoice?.().loop }); // a live loop's (card playground-live)
 			const own = handle ?? self.lastSoundHandle?.() ?? 0;
 			(holder.run.unrenderedSounds ??= []).push({ ...sound, place, handle: own });
 			return own;
