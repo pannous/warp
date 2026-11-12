@@ -1,0 +1,47 @@
+# Stein's binary gcd matches Euclid (notes/binary_gcd.md). The default gcd stays Euclid.
+
+# zeros and ones
+'use math; gcd_binary(0, 0)'	0
+'use math; gcd_binary(0, 1)'	1
+'use math; gcd_binary(1, 0)'	1
+'use math; gcd_binary(1, 1)'	1
+'use math; gcd_binary(0, 0) == gcd_euclid(0, 0)'	yes
+
+# negatives, the same absolute value as Euclid
+'use math; gcd_binary(-12, 18)'	6
+'use math; gcd_binary(12, -18)'	6
+'use math; gcd_binary(-12, -18)'	6
+'use math; gcd_binary(-4, 0)'	4
+'use math; gcd_binary(0, -4)'	4
+'use math; gcd_binary(-4, 0) == gcd_euclid(-4, 0)'	yes
+
+# equal values, coprimes, and a swapped pair
+'use math; gcd_binary(17, 17)'	17
+'use math; gcd_binary(17, 19)'	1
+'use math; gcd_binary(18, 12)'	6
+'use math; gcd_binary(55, 89) == gcd_euclid(55, 89)'	yes
+
+# powers of two, including the signed machine-word edge
+'use math; gcd_binary(8, 12)'	4
+'use math; gcd_binary(2^10, 2^10) == 2^10'	yes
+'use math; gcd_binary(2^40, 2^20) == 2^20'	yes
+'use math; gcd_binary(2^62, 2^61) == 2^61'	yes
+'use math; gcd_binary(2^62, 6)'	2
+'use math; gcd_binary((1 << 62) - 1, (1 << 62) - 1) == (1 << 62) - 1'	yes
+'use math; gcd_binary((1 << 62) - 1, (1 << 61) - 1)'	1
+'use math; gcd_binary(9223372036854775807, 9223372036854775807) == 9223372036854775807'	yes
+'use math; gcd_binary(9223372036854775807, 6) == gcd_euclid(9223372036854775807, 6)'	yes
+
+# the first wide whole number, and values past 64 bits
+'use math; gcd_binary(2^63, 2^62) == 2^62'	yes
+'use math; gcd_binary(2^63, 2^63) == 2^63'	yes
+'use math; gcd_binary(2^70, 6)'	2
+'use math; gcd_binary(2^70, 3 * 2^65) == 2^65'	yes
+'use math; gcd_binary(-2^70, 2^69) == 2^69'	yes
+'use math; gcd_binary(2^100, 2^40) == 2^40'	yes
+'use math; gcd_binary(2^70 + 6, 2^65) == gcd_euclid(2^70 + 6, 2^65)'	yes
+
+# the default gcd is Euclid
+'use math; gcd(12, 18) == gcd_euclid(12, 18)'	yes
+'use math; gcd(2^70, 6) == gcd_euclid(2^70, 6)'	yes
+'use math; gcd_binary(48, 18)'	6

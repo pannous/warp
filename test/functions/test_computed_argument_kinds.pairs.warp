@@ -6,3 +6,7 @@
 'f(x: int) := "int"; f(x: float) := "float"; f(-sqrt(9))'	'int'
 'f(x: int) := "int"; f(x: float) := "float"; f(2 * -3)'	'int'
 'f(x: int) := "int"; f(x: float) := "float"; f(floor(2.5))'	'float'
+
+# a variable keeps its kind whatever another function names its parameters; inside, a parameter is any value
+'f(x: int) := "int"; f(x: float) := "float"; h(n) := n; n = 2 * 3; f(n)'	'int'
+'g(x) := "any"; g(x: int) := "int"; k(x) := g(x); x = 2; k("a")'	'any'

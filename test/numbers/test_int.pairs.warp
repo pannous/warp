@@ -15,3 +15,6 @@
 'global cw: int = 1280; cw = "x"; cw'	error
 'global cw: int = 1280; def size(w) { cw = w }; size("x"); cw'	error
 'global cw: int = 1280; global ch: int = 800; def size(w, h) { cw = w; ch = h }; size(640, 480); cw * ch'	307200
+'f(step: int) := { x = 0; x += step; x += step; x }; f(9223372036854775807)'	18446744073709551614
+'f(step: int) := { x = 0; while x < 10 { x += step }; x }; f(3)'	12
+'f(step: int) := { x = 0.5; x += step; x }; f(2)'	2.5
