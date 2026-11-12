@@ -181,7 +181,11 @@ called_back(receiver, selector, view, task) := {
 	sent(task, "didReceiveData:", [sent(ns_string(if failed then text(result) else to_json(result)), "dataUsingEncoding:", [UTF8_ENCODING])])
 	told(task, "didFinish")
 }
+// WebKit's helper processes never answer a process forked without exec (a `warp test` case, run with the option
+// `forked`): such a run asks for a process of its own, in which it runs again (core/native/tests.warp)
+FRESH_PROCESS_WANTED = 75
 view_made(width: float, height: float) := {
+	if run_option("forked") != ø { exit(FRESH_PROCESS_WANTED) }
 	configuration = instance_of(class_named("WKWebViewConfiguration"))
 	contents = told(configuration, "userContentController")
 	bridge = sent(told(class_named("WKUserScript"), "alloc"), "initWithSource:injectionTime:forMainFrameOnly:", [ns_string(PAGE_BRIDGE), DOCUMENT_START, 1])
