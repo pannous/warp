@@ -27,7 +27,7 @@ outside = [[1, 0, 0, -10]]
 near = chosen_level(peak, 2, 1, 2, 0)
 far = chosen_level(peak, 2, 1, 2, 0.5)
 
-oak = read_tree_mesh(program.folder + "/ez_trees/oak.eztree")
+oak = tree_mesh(program.folder + "/ez_trees/oak.eztree")
 oak_levels = [level.mesh for level in oak.levels]
 oak_near = chosen_level(oak_levels, 2, 1, 135, 1)
 oak_far = chosen_level(oak_levels, 40, 1, 135, 1)
