@@ -14,9 +14,12 @@ failures=0
 check() { # check <what> <got> <expected>
 	if [ "$2" = "$3" ]; then echo "✓ $1"; else echo "✗ $1: got $2, expected $3"; failures=$((failures + 1)); fi
 }
-ran() { # ran <name> <program>: the primitive file's last printed line
+said() { # said <name> <program>: all the primitive file prints
 	printf '@primitive\n%s\n' "$2" >"$stage/$1.warp"
-	"$warp" --lib "$lib" "$stage/$1.warp" 2>&1 | tail -1
+	"$warp" --lib "$lib" "$stage/$1.warp" 2>&1
+}
+ran() { # ran <name> <program>: the primitive file's last printed line
+	said "$@" | tail -1
 }
 
 check "a counter bumped twice" "$(ran counter 'global painted = 0
@@ -52,7 +55,7 @@ check "a local array counted from 1" "$(ran local 'f(): i32 := {
 	bytes[1] + bytes#4
 }
 f()')" 255
-check "an index outside the array traps" "$(ran outside 'global kept = i64[8]
+check "an index outside the array traps" "$(said outside 'global kept = i64[8]
 kept[8] = 1
 1' | grep -c -i 'unreachable\|trap')" 1
 check "an array sized as it runs refused" "$(ran sized 'f(n: i64): i64 := {

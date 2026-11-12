@@ -729,7 +729,7 @@ mvp_item(f: PrimitiveFunction, array: Node, index: Node): list := {
 	f.scratch += 1
 	at = uleb(mvp_local_of(f, "·item" + f.scratch, "i32"))
 	outside = [op.local_tee] + at + [op.i32_const] + sleb(layout.count) + [comparison_codes.i32 + integer_comparisons.ge + 1, op.if, empty_block_type, op.unreachable, op.end]
-	offset = mvp_typed(f, index, "i32") + [op.i32_const, 1, arithmetic_codes.i32 + integer_arithmetic.sub] + outside
+	offset = mvp_cast(mvp_emitted(f, index, "i32"), "i32").code + [op.i32_const, 1, arithmetic_codes.i32 + integer_arithmetic.sub] + outside
 	[offset + held.code + [op.local_get] + at + [op.i32_const] + sleb(mvp_scalar(item).width) + [arithmetic_codes.i32 + integer_arithmetic.mul, op.i32_add], [0, item]]
 }
 # `i64#9`, the parser's `i64[8]`: a local array taken from the arena; `kept#3`: an item read
