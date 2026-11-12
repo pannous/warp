@@ -86,17 +86,15 @@ skipped the question is refused and goes to warp-interviewer; there is no FYI pa
 - A red batch is halved: merge.sh tries each half beside the cards already green and halves a red half again, so
   a red card alone is found in about log2 N extra tier 0 runs (page smoke included); the green cards land, each red
   one goes back to Now with its error as a card note. Only a batch with no green card is dropped whole.
-- The cloud merge queue (user 11-12, card landings-github-actions) replaces the Mac sweeps for compiled changes: an
-  OK'd handoff is pushed to `land/<card>` (`git push origin <tip>:refs/heads/land/<card>`, by the worker or by you),
-  and .github/workflows/land.yml merges every waiting land/* branch with `merge.sh --queue`, checks the batch
-  (compilers, hello, self-check + gate tier 1 for core/ and extensions/, page smoke), halves a red batch, pushes the
-  green cards to main and deletes their land/ branches. A red card's tip moves to land/red/<card> and the run fails:
-  read its RED line (`gh run list -w Land`), note it on the card, tell the worker. The workflow pushes only main
-  and land/*; it has no board, so after-push.sh closes the landed cards on the Mac. Your part: check the OK on record
-  before a branch enters the queue, watch failed Land runs, and the Mac's install (after-push.log).
-- A Mac sweep stays for what the cloud cannot check (a GPU or window change) and when the queue is down: its builds
-  go first in the machine's build line (merge.sh sets WARP_BUILD_FIRST), and a build of compiler inputs a worker
-  already built is taken from the store, so a worker's tested merge of the current main costs no build.
+- The queue is the `land/<card>` branches (`git push origin <tip>:refs/heads/land/<card>`, by the worker or by you),
+  swept on the Mac: `merge.sh --tree /Volumes/Worktrees/integrate --queue [<card>…] && land.sh --tree …`. A red
+  card's tip moves to land/red/<card>; note it on the card, tell the worker. Its builds go first in the machine's
+  build line (merge.sh sets WARP_BUILD_FIRST), and a build of compiler inputs a worker already built is taken from the
+  store. The cloud workflow .github/workflows/land.yml runs the same scripts but is disabled: a 2-core runner took
+  over 1.5 h a batch (card landings-github-actions).
+- Big sweeps (user 11-12): batches are green almost always (sweeps 18-31 on 11-12, about 30 cards, none halved), so a
+  sweep takes every land/ branch waiting; never start one for a single card while another sweep runs, the next one
+  takes all that arrived meanwhile. Name the cards (`--queue <card>…`) only to leave out one being reworked.
 
 ## Playground
 - web/playground (pages.yml) is stage 2, hourly on main; a red run is carded and fixed forward, the last good site
