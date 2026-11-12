@@ -1203,7 +1203,8 @@ first_parameter_fits(code: Node, wanted: text): bool := {
 	if given != ø { return wanted == number_word and takes_numbers(given.parameters) }
 	if not (code is symbol) or locally_bound(code) { return no }
 	word = name_of(code)
-	if wanted == one_word { return not rule_scope.has(word) and takes_one_typed_value(unaliased(word)) }
+	# a library word the program leaves free, or a function of the program's own of exactly one value, `bars(n: int)`
+	if wanted == one_word { return if rule_scope.has(word) then (rule_signatures.get(word) ?? []).any(signature => #signature.parameters == 1 and not signature.parameters#1.rest) else takes_one_typed_value(unaliased(word)) }
 	if wanted == number_word { return takes_only_numbers(word, matched_arity(code)) }
 	typed = if first_parameter_types.has(word) then first_parameter_types[word] else library_first_type(word)
 	if typed == ø or typed == "" { typed = conversion_type(word) }
