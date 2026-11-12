@@ -1291,6 +1291,10 @@ letterboxed(width: int, height: int): list := {
 }
 // the picture (an RGBA8 texture) shown in the window's surface, scaled to it, after what the encoder holds, and kept
 picture_presented(encoder: int, picture: int, layer: int, width: int, height: int): bool := {
+	if not surface_ready(layer) {
+		submitted(encoder)
+		return no
+	}
 	shown_kept(picture, layer, width, height)
 	if picture_pipeline == 0 { picture_pipeline = pipeline_compiled(PICTURE_SHADER, FORMAT_BGRA8, no, no) }
 	if picture_pipeline == 0 {
@@ -1326,7 +1330,7 @@ host_shader_shown(given_shader, width: int, height: int, values: any): int := {
 	t0 = wall_clock_ms()
 	drawing = drawing_of(shader, values, width, height)
 	t1 = wall_clock_ms()
-	if drawing == ø or not surface_ready(layer) { return said_failed("paint into the window") }
+	if drawing == ø { return said_failed("paint into the window") }
 	encoder = wgpuDeviceCreateCommandEncoder(device, 0)
 	image = image_drawn(encoder, drawing, width, height)
 	if image == 0 {
@@ -1345,7 +1349,6 @@ host_shader_shown(given_shader, width: int, height: int, values: any): int := {
 host_pixels_shown(pixels: int, width: int, height: int): int := {
 	layer = painting_layer(width, height)
 	if layer == 0 { return 0 }
-	if not surface_ready(layer) { return said_failed("paint into the window") }
 	picture = texture_of(width, height, TEXTURE_BINDING + TEXTURE_COPY_DST)
 	copied_into = struct_of(COPY_TEXTURE)
 	set_field_pointer(copied_into, 0, picture)
@@ -1360,7 +1363,7 @@ host_pixels_shown(pixels: int, width: int, height: int): int := {
 }
 // the last painting shown again, at the window's size now, as the window comes into sight or changes size
 shown_again() := {
-	if shown_picture == 0 or not surface_ready(shown_layer) { return }
+	if shown_picture == 0 { return }
 	picture_presented(wgpuDeviceCreateCommandEncoder(device, 0), shown_picture, shown_layer, shown_width, shown_height)
 }
 
@@ -1664,7 +1667,7 @@ passes_begun(): int := {
 }
 passes_released() := {
 	for group in pass_groups { if group != 0 { wgpuBindGroupRelease(group) } }
-	for view in pass_views { if view != 0 { wgpuTextureViewRelease(view) } }
+	for texture_view in pass_views { if texture_view != 0 { wgpuTextureViewRelease(texture_view) } }
 	for buffer in pass_buffers { if buffer != 0 { wgpuBufferRelease(buffer) } }
 	pass_groups = []
 	pass_views = []
@@ -1683,14 +1686,14 @@ fields_cleared(set: FieldSet) := {
 	views = []
 	for field in set.fields {
 		for texture in [field.front, field.back] {
-			view = wgpuTextureCreateView(texture, 0)
-			color_pass(encoder, view, 0, 0)
-			views.add(view)
+			texture_view = wgpuTextureCreateView(texture, 0)
+			color_pass(encoder, texture_view, 0, 0)
+			views.add(texture_view)
 		}
 	}
 	submitted(encoder)
 	wgpuDevicePoll(device, 1, 0)
-	for view in views { wgpuTextureViewRelease(view) }
+	for texture_view in views { wgpuTextureViewRelease(texture_view) }
 }
 // the rows of a copy, 256 bytes each, as WebGPU aligns them
 copy_stride(width: int): int := {
@@ -1738,9 +1741,9 @@ pass_drawn(shader: text, given: any, width: int, height: int, reads: list, targe
 		binding = 2
 	}
 	for field in reads {
-		view = wgpuTextureCreateView(field.front, 0)
-		pass_views.add(view)
-		entries.add([binding, 0, 0, view])
+		texture_view = wgpuTextureCreateView(field.front, 0)
+		pass_views.add(texture_view)
+		entries.add([binding, 0, 0, texture_view])
 		binding += 1
 	}
 	group = 0
