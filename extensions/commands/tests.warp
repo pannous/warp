@@ -154,6 +154,7 @@ common_divisor(a: int, b: int): int := if b == 0 then a else common_divisor(b, a
 test_files_of(words: list): list := {
 	named = words.filter(word => not word.starts_with("--"))
 	slow = SLOW_FLAG in words or EACH_FLAG in words
+	for path in named { if not exists(path) { raise "warp test: no such test folder or file: " + path } }
 	(if #named == 0 then [TEST_FOLDER] else named).flat_map(path => test_files_in(path, slow))
 }
 # a path ending in .warp is a file (listing one is no error a try catches), any other a folder; a slow folder inside
