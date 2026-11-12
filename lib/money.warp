@@ -64,6 +64,7 @@ class Money {
 	minus(o: any): Money := Money(money_sum(minor, -money_same(currency, o, "-").minor), currency)
 	times(k: any): Money := money_times(Money(minor, currency), k, "half_even")
 	equals(o: any): bool := o is Money and o.minor == minor and o.currency == currency
+	# (should this ever clash with a linked module's compare again, core/emitter/prebuilt.warp held_by: rename or drop it)
 	compare(o: any): int := minor - money_same(currency, o, "compared with").minor
 	text(): text := currency + " " + money_decimal(minor, currency_minor_units(currency), ".", "")
 }
