@@ -21,6 +21,7 @@ CAPABILITIES = {"textDocumentSync": 1, "definitionProvider": yes, "hoverProvider
 DEFINING_OPERATORS = [":=", "=", ":"]
 DEFINING_WORDS = ["def", "fn", "fun", "function", "global", "class", "struct", "enum", "trait", "type", "interface"]
 NAME_PUNCTUATION = "_·"
+BLOCK = "{"
 
 global input = calloc(1, CHUNK_BYTES)
 # the open files' texts by their uri
@@ -93,23 +94,30 @@ name_at(source: text, line: int, column: int): text := {
 }
 is_name_character(c: text): bool := is_alphanumeric(c) or c in NAME_PUNCTUATION
 
-# the definitions of a text: each top-level statement's [name, line, column], its name the first word of its head
+# the definitions of a text: each top-level statement's [name, line, column], its name the first word of its head,
+# its place the innermost one on the way there (a call's place is its group's, `square(x)`)
 definitions(source: text): list := {
 	statements = try parse(source) else []
-	heads = statements.map(defined_head).filter(head => head is symbol)
-	heads.map(head => [head.name, head.line, head.column])
+	paths = statements.map(statement => [statement] + defined_path(statement)).filter(path => #path > 1 and path.last is symbol and path.any(is_placed))
+	paths.map(path => {
+		placed = path.filter(is_placed).last
+		[path.last.name, placed.line, placed.column]
+	})
 }
-defined_head(statement: any): any := {
-	if type(statement) is key and statement.op in DEFINING_OPERATORS { return named_head(head_of(statement.key), statement.value) }
-	if type(statement) is list and #statement == 2 { return named_head(head_of(statement#1), statement#2) }
-	ø
+is_placed(n: any): bool := (try n.line else 0) > 0
+# the nodes from a definition down to its name; a head before a block defines it, `def f(x) {…}`, a call before
+# anything else does not, `print twice(3)`
+defined_path(statement: any): list := {
+	if type(statement) is key and statement.op in DEFINING_OPERATORS { return named_path(head_path(statement.key), statement.value) }
+	if type(statement) is list and #statement == 2 and statement#2.bracket == BLOCK { return named_path(head_path(statement#1), statement#2) }
+	[]
 }
 # a defining word is followed by the name: `global g = 2`, `def f(x) {…}`
-named_head(head: any, rest: any): any := if head is symbol and head.name in DEFINING_WORDS then head_of(rest) else head
-head_of(n: any): any := {
-	if type(n) is key { return head_of(n.key) }
-	if type(n) is list and #n > 0 { return head_of(n#1) }
-	n
+named_path(path: list, rest: any): list := if path.last is symbol and path.last.name in DEFINING_WORDS then head_path(rest) else path
+head_path(n: any): list := {
+	if type(n) is key { return [n] + head_path(n.key) }
+	if type(n) is list and #n > 0 { return [n] + head_path(n#1) }
+	[n]
 }
 
 # the files a name of `uri` is looked for in: the file, the other files of its folder, then the modules it uses
