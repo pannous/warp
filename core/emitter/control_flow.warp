@@ -194,9 +194,7 @@ def position_code(body: Body, n: Node): list {
 	# (a console line's module is the user's own code: its places are kept, `date + 1` fails at 1:1)
 	at = if body.intrinsics or (module_written != "" and not line_module) or defined_origins.has(body.function.name) then ø else written_at(n)
 	if not at { return [] }
-	line: int = at#1
-	column: int = min(at#2, columns_per_line - 1)
-	[op.i32_const] + sleb(line * columns_per_line + column) + [op.global_set] + relocatable(relocated.globals, declared_global("trap_position", ValueKind.I32)#1)
+	[op.i32_const] + sleb(packed_place(at)) + [op.global_set] + relocatable(relocated.globals, declared_global("trap_position", ValueKind.I32)#1)
 }
 # `x = data`, a statement that cannot fail, so no runtime error names it: what it stores is written without a call that
 # can, a number, a text and lists, maps and pairs of them (card main-constant-tables). A number past 64 bits or 18
