@@ -252,7 +252,7 @@ addHostPart({
 		holder.sounded = (samples, rate, channels, handle) => {
 			const { place, at } = self.voiceSounded?.(samples.length / channels / rate) ?? {};
 			const sound = { samples, rate, channels };
-			hooks.sound?.({ ...sound, at, handle, loop: self.currentVoice?.().loop }); // a live loop's (card playground-live)
+			hooks.sound?.({ ...sound, at, place, handle, loop: self.currentVoice?.().loop }); // a live loop's (card playground-live)
 			const own = handle ?? self.lastSoundHandle?.() ?? 0;
 			(holder.run.unrenderedSounds ??= []).push({ ...sound, place, handle: own });
 			return own;
