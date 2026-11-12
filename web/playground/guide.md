@@ -809,6 +809,7 @@ Examples: forms; samples: server, route_headers, hosting, worker
 
 ## Paint
 
+To draw on the canvas 
 ```warp
 use draw
 canvas(200, 120)
@@ -824,9 +825,18 @@ sunset = image(160, 90, (x, y) => rgb(255, 2 * y, 90 + x))
 sunset.mirrored.blurred.show()
 ```
 
-Pictures also load, `image(./photo.jpg)`, change (`flipped`, `cropped`, `tinted`, `grayed`, `each_pixel`) and save, `.save(./out.bmp)`. Every pixel at once on the graphics card: [[#Shaders]].
+Pictures also load, change (`flipped`, `cropped`, `tinted`, `grayed`, `each_pixel`) and save, `.save(./out.bmp)`:
 
-Examples: frames; samples: paint_text, color_swatches, finger_paint, paint_function, window_size, load_jpeg, load_bmp, make_image, circle, filled_circle, mandelbrot_canvas, particles
+```warp
+use image
+photo = image(./samples/graphics/photo.jpg)
+postcard = photo.cropped(20, 10, 120, 90).mirrored.tinted(orange, 0.3)
+postcard.show()
+```
+
+Every pixel at once on the graphics card: [[#Shaders]].
+
+Examples: frames; samples: postcard, paint_text, color_swatches, finger_paint, paint_function, window_size, load_jpeg, load_bmp, make_image, circle, filled_circle, mandelbrot_canvas, particles
 
 ## Shaders
 
