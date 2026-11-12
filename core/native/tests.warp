@@ -52,7 +52,7 @@ tests_run(compiler: text, by_self: bool, first: int): nothing := {
 	mkdir(c_string(work), FOLDER_MODE)
 	# before any other engine: one with wasmtime's cache starts its worker thread, whose locks a fork can leave held
 	option_given("one-thread", "")
-	resident_loaded(compiler)
+	resident_loaded(compiler, no)
 	listed_apart(compiler, test_words(compiler, "test-list", work, first))
 	required(joined(work, "/runs"), work)
 	runs = read_file(joined(work, "/runs"))

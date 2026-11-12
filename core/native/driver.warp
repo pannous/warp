@@ -1294,8 +1294,11 @@ loaded_module(engine: handle, module: text, machine_code: text, trap: pointer): 
 # One engine and the machine code of warp.wasm, runtime.wasm and the prebuilt modules, loaded once and shared by every
 # run of the process that fits them (no fuel, the compiler's heap: a compile and its program alike): `warp test` loads
 # them before its cases fork, so a case starts no process, engine or machine code of its own (0.10 s a case before).
-# The block: the engine, the count of modules, then each module's machine code file (a cell) and handle
+# Only the console's engine checks epochs, by which Ctrl+C stops a line: they cost `warp test` 7% of its instructions.
+# The block: the engine, the count of modules, whether it checks epochs, then each module's machine code file (a cell)
+# and handle
 RESIDENT_SLOT = 6
+RESIDENT_HEADER_BYTES = 24
 RESIDENT_MAX = 256
 RESIDENT_ENTRY_BYTES = 24
 resident_block(): pointer := kept_value(RESIDENT_SLOT) as i32
@@ -1307,11 +1310,12 @@ run_engine(fuel: bool, heap_bytes: i64): handle := {
 }
 # the resident engine made, with the machine code of the compiler and of every module of the library folder a program
 # may link; what runs later loads anything else itself, never adding to the block (a host word's allocations end with it)
-resident_loaded(compiler: text): nothing := {
-	block = allocate((16 + RESIDENT_MAX * RESIDENT_ENTRY_BYTES) as i32)
-	engine = wasm_engine_new_with_config(uncached_config(no, RUN_GC_HEAP_BYTES, yes))
+resident_loaded(compiler: text, interruptible: bool): nothing := {
+	block = allocate((RESIDENT_HEADER_BYTES + RESIDENT_MAX * RESIDENT_ENTRY_BYTES) as i32)
+	engine = wasm_engine_new_with_config(uncached_config(no, RUN_GC_HEAP_BYTES, interruptible))
 	long_at(block).value = engine
 	long_at(block + 8).value = 0
+	long_at(block + 16).value = interruptible as i64
 	trap = allocate(8)
 	library = library_folder()
 	paths = joined(joined(joined(joined(compiler, "\n"), library), "/runtime.wasm\n"), command_output(joined(joined(joined(joined("ls '", library), "/modules' | grep -E '^[^.]+[.]wasm$' | sed 's|^|"), library), "/modules/|'")))
@@ -1319,24 +1323,25 @@ resident_loaded(compiler: text): nothing := {
 		path = field(paths, i, NEWLINE)
 		count = long_at(block + 8).value as i32
 		if path.length > 0 and count < RESIDENT_MAX {
-			entry = block + 16 + count * RESIDENT_ENTRY_BYTES
+			entry = block + RESIDENT_HEADER_BYTES + count * RESIDENT_ENTRY_BYTES
 			# (found by a run's machine code name, loaded from the resident engine's own)
 			text_kept(entry, machine_code_file(path, RUN_GC_HEAP_BYTES))
-			long_at(entry + 16).value = loaded_module(engine, read_file(path), machine_code_at(path, machine_code_suffix_of(RESIDENT_MACHINE_CODE)), trap)
+			long_at(entry + 16).value = loaded_module(engine, read_file(path), machine_code_at(path, machine_code_suffix_of(if interruptible then RESIDENT_MACHINE_CODE else 0)), trap)
 			long_at(block + 8).value = (count + 1) as i64
 		}
 	}
 	keep_value(RESIDENT_SLOT, block as i64)
 }
-# a module's resident machine code, else the module compiled, never from or into a run's machine code (no epoch checks)
+# a module's resident machine code, else the module compiled: kept as a run's when the engine checks no epochs, else
+# never (a run's machine code has no epoch checks, and a console line's module is new each line)
 resident_module(engine: handle, module: text, machine_code: text, trap: pointer): handle := {
 	block = resident_block()
 	count = long_at(block + 8).value as i32
 	for k in 0..count {
-		entry = block + 16 + k * RESIDENT_ENTRY_BYTES
+		entry = block + RESIDENT_HEADER_BYTES + k * RESIDENT_ENTRY_BYTES
 		if same_text(cell_text(entry), machine_code) { return long_at(entry + 16).value }
 	}
-	loaded_module(engine, module, "", trap)
+	loaded_module(engine, module, if long_at(block + 16).value != 0 then "" else machine_code, trap)
 }
 
 # the machine code of the module at `path` kept beside it, current for this wasmtime, nothing run
