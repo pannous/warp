@@ -19,4 +19,4 @@ play(C3, beat 1)                 # the message waits for this sound to end
 midi_note(C4, beat(1/2))          # on now, off half a beat later
 midi_note(E4, beat(1/2), 90)
 at beats(3) { midi_note(G4, beat 1) }
-wait_sound()
+wait(sound)

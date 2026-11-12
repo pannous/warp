@@ -1,0 +1,20 @@
+// The standard library module ui (card slider-ui): `use ui`, then `c = slider(-2 to 2)` is a UI value. Its start is
+// the middle of the range; `slider(-2, 2)` and `slider(-2 to 2, -0.8)` are the same verb, the last a value in the
+// range. A value outside is refused. The playground shows a control and reruns with the new value.
+
+slider(lo: float, hi: float, value: float): float := {
+	if hi < lo { raise "slider: " + text(lo) + " to " + text(hi) + " is empty" }
+	if value < lo or value > hi { raise "slider: " + text(value) + " is outside " + text(lo) + " to " + text(hi) }
+	value
+}
+slider(lo: float, hi: float): float := slider(lo, hi, (lo + hi) / 2)
+slider(span: list, value: float): float := {
+	if count(span) == 0 { raise "slider: empty range" }
+	slider(span#1, span#(count(span)), value)
+}
+slider(span: list): float := {
+	if count(span) == 0 { raise "slider: empty range" }
+	lo = span#1
+	hi = span#(count(span))
+	slider(lo, hi, (lo + hi) / 2)
+}
