@@ -1,5 +1,6 @@
 # The whole-number words the compiler computes with (decision core-takes-what-it-uses); lib/integers.warp links here,
 # the module lib/math.warp builds on
+
 # the greatest common divisor of two whole numbers, ints or past 64 bits (2^70), never below 0: the one gcd, the
 # compiler's and every program's (cards gcd-overflow-zero, three-gcds-generic: an int parameter wrapped 2^70 to 0)
 gcd(a, b) := {
