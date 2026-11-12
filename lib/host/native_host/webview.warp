@@ -318,6 +318,10 @@ window_answered(called: text, member: text, arguments: any): any? := {
 	happened
 }
 
+// a promise the view gave is awaited there (callAsyncJavaScript), so none is ever pending for the program to wait for
+// (lib/prelude.warp foreign_settled; the page keeps one: host-foreign.js)
+host_foreign_pending(): int := 0
+host_foreign_await(): any? := ø
 // foreign_call(runtime, module, member, call, arguments), as the page's host-foreign.js foreignCall answers it
 host_foreign_call(runtime, module, member, call, arguments): any? := {
 	pool = objc_autoreleasePoolPush()

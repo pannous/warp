@@ -425,6 +425,8 @@ sleep(amount) := slept(amount * 1000)
 
 // the wait of a sleep, ms: the tasks module's runs the tasks due meanwhile, which replaces this
 slept(ms) := sleep_ms(ms)
+// a `use js` call's value (extensions/foreign_globals.warp): a promise it gave, which the host keeps, waited for
+foreign_settled(value: any?): any? := if foreign_pending() != 0 then foreign_await() else value
 // what a module holds per task, kept around a task and given back after it (extensions/sugar/tasks.warp): nothing here, a
 // module holding some (sound's voice) defines both, which replace these
 task_context() := ø

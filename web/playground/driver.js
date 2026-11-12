@@ -66,21 +66,29 @@ function withWasi(imports, wasi) {
 
 // a module's entry run: its exit status, 0 when it returned (exitCode: the code its host word exit ended it with); a
 // trap's sentence to stderr. A program exporting show runs main, and its value goes to `shown` as the text _start would
-// print (the page's value line, apart from what it printed); else _start, else a primitive module's main
-function ranToEnd(exports, output, exitCode = () => undefined, shown) {
-	try {
-		if (shown && exports.show && exports.main) {
-			const value = exports.main();
-			shown(shownValue(exports, value), value);
-		}
-		else if (exports._start) exports._start();
-		else printedResult(exports.main(), output);
-		return 0;
-	} catch (failure) {
+// print (the page's value line, apart from what it printed); else _start, else a primitive module's main. A main that
+// `awaits` runs through WebAssembly.promising, its status then a promise
+function ranToEnd(exports, output, exitCode = () => undefined, shown, awaits = false) {
+	const failed = failure => {
 		if (failure instanceof WasiExit) return failure.code;
 		if (exitCode() !== undefined) return exitCode();
 		output(`${raisedMessage(exports, failure)}\n`, STDERR);
 		return FAILURE_STATUS;
+	};
+	const ended = value => {
+		if (shown && exports.show) shown(shownValue(exports, value), value);
+		else printedResult(value, output);
+		return 0;
+	};
+	try {
+		if (!exports.main || (exports._start && !(shown && exports.show))) {
+			exports._start();
+			return 0;
+		}
+		const value = (awaits ? WebAssembly.promising(exports.main) : exports.main)();
+		return value instanceof Promise ? value.then(ended).catch(failed) : ended(value);
+	} catch (failure) {
+		return failed(failure);
 	}
 }
 
@@ -294,25 +302,35 @@ function compilerHostWords(exports, imports, linked) {
 // writtenFiles), as natively they stay on disk from run to run
 const programFiles = { ...newOverlay(), written: writtenFiles, kept: (path, bytes) => { keepWrittenFile(path, bytes); }, forgotten: forgetKeptFile };
 
-// the code as the file while `work` runs, the file's own content back after it
+// `then` of a step's result, which is a promise when the run waits for one (JSPI, host-foreign.js), else at once
+const afterwards = (result, then) => result instanceof Promise ? result.then(then) : then(result);
+
+// the code as the file while `work` runs (a run that waits: until it ends), the file's own content back after it
 function withSource(code, file, work) {
 	const before = programFiles.written.get(file);
 	programFiles.written.set(file, utf8.encode(code));
+	const restore = () => before === undefined ? programFiles.written.delete(file) : programFiles.written.set(file, before);
+	let result;
 	try {
-		return work();
-	} finally {
-		if (before === undefined) programFiles.written.delete(file);
-		else programFiles.written.set(file, before);
+		result = work();
+	} catch (failure) {
+		restore();
+		throw failure;
 	}
+	if (result instanceof Promise) return result.finally(restore);
+	restore();
+	return result;
 }
 
 // what a run said on stderr, printed when it ended well, its failure when not, and its value when `valued`:
-// { status, said, value }
-function ranSaying(exports, print, exitCode, valued = false) {
+// { status, said, value }; `awaits`: its main waits for promises (JSPI)
+function ranSaying(exports, print, exitCode, valued = false, awaits = false) {
 	let said = "", value = "", result;
-	const status = ranToEnd(exports, (text, stream) => stream === STDERR ? said += text : print(text, stream), exitCode, valued ? (shown, node) => { value = shown; result = node; } : undefined);
-	if (status === 0 && said) print(said, STDERR);
-	return { status, said: said.trimEnd(), value, result };
+	const status = ranToEnd(exports, (text, stream) => stream === STDERR ? said += text : print(text, stream), exitCode, valued ? (shown, node) => { value = shown; result = node; } : undefined, awaits);
+	return afterwards(status, status => {
+		if (status === 0 && said) print(said, STDERR);
+		return { status, said: said.trimEnd(), value, result };
+	});
 }
 
 // warp.wasm run with the words after its own path (driver.warp file_ran), each run a fresh instance: { status, said }
@@ -364,7 +382,8 @@ function compiledOnce(code, file, print) {
 // playground's key, assistant.js programEnvironment), which env, getenv and agent "…" read (card program-env)
 const runEnvironment = () => [...ENVIRONMENT, ...Object.entries(self.pageEnvironment ?? {}).map(([name, value]) => `${name}=${value}`)];
 
-// the compiled program run with the page's host words: { status, said }
+// the compiled program run with the page's host words: { status, said }; a promise of it when hooks.waits and its main
+// waits for a promise (host-foreign.js run.awaits), else such a promise is refused
 function programRan(bytes, file, hooks) {
 	const holder = runHolder({ warnings: [], pagePath: hooks.pagePath?.(), hooks, environment: runEnvironment(), options: programOptions() });
 	const wasi = wasiImports(() => holder.exports.memory, [file, ...(self.programArguments ?? [])], hooks.print, programFiles, holder.environment, parentOf(file ?? ""));
@@ -373,16 +392,19 @@ function programRan(bytes, file, hooks) {
 		holder.run = { module, bytes };
 		self.joinVoice?.();
 		eachHostPart("started", holder.run);
+		holder.run.awaits &&= Boolean(hooks.waits);
 		// (kept: a module the run links on a host word's first call, unicode for canonical_text, takes the same imports)
 		holder.imports = withWasi(programImports(holder, hooks), wasi);
 		holder.exports = new WebAssembly.Instance(module, withRuntime(bytes, holder.imports, holder.linked)).exports;
 	} catch (failure) {
 		return { status: FAILURE_STATUS, said: String(failure.message ?? failure) };
 	}
-	const ran = ranSaying(holder.exports, hooks.print, () => holder.exitCode, !self.valueAsData);
-	eachHostPart("finished", holder, hooks);
-	holder.value = ran.result;
-	return { ...ran, holder };
+	const ran = ranSaying(holder.exports, hooks.print, () => holder.exitCode, !self.valueAsData, holder.run.awaits);
+	return afterwards(ran, ran => {
+		eachHostPart("finished", holder, hooks);
+		holder.value = ran.result;
+		return { ...ran, holder };
+	});
 }
 
 // the code compiled and run as `warp <file>` runs it: what the page shows of it (playground.js showReport), a failure's
@@ -394,13 +416,14 @@ function evaluatedNatively(code, file, hooks) {
 		const compiled = compiledOnce(code, source, withWarnings(code, warnings, hooks.print));
 		if (compiled.failure) return { ...report(compiled.failure, FAILURE_STATUS), warnings };
 		hooks.module?.(compiled.module);
-		const { status, said, value, holder } = programRan(compiled.module, source, hooks);
-		const html = status === 0 ? pageHtml(holder) : undefined;
-		const events = html !== undefined && holder.exports.page_event ? pageEventsOf(html) : [];
-		// a page listens after main for its markup's events and its timers (lib/timers.warp, host-timers.js)
-		if (status === 0 && (events.length || holder.timers?.length)) hooks.listen?.(holder, events);
-		// runtime_warnings: what the host words said once a run (host-gpu.js warnOnce, @gpu on the CPU, `warn`)
-		return { ...report(status === 0 ? value : said, status), html, warnings, runtime_warnings: holder?.warnings ?? [] };
+		return afterwards(programRan(compiled.module, source, hooks), ({ status, said, value, holder }) => {
+			const html = status === 0 ? pageHtml(holder) : undefined;
+			const events = html !== undefined && holder.exports.page_event ? pageEventsOf(html) : [];
+			// a page listens after main for its markup's events and its timers (lib/timers.warp, host-timers.js)
+			if (status === 0 && (events.length || holder.timers?.length)) hooks.listen?.(holder, events);
+			// runtime_warnings: what the host words said once a run (host-gpu.js warnOnce, @gpu on the CPU, `warn`)
+			return { ...report(status === 0 ? value : said, status), html, warnings, runtime_warnings: holder?.warnings ?? [] };
+		});
 	});
 }
 
