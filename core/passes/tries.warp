@@ -55,8 +55,6 @@ may_raise(v: Node): bool := not (v == ø or is_name(v) or is_literal(v))
 # `a or b`, emitter.warp logical, too)
 handled_form(n: Node): Node := match n {
 	Key(Key(target, Op.Colon, declared), Op.Assign, v): if admits_errors_type(declared) and is_name(target) and may_raise(v) then Key(key_of(n), Op.Assign, kept_raise(v)) else n
-	# `x ?? y`, `x default y` (decision nullish-default): y when x raises or is ø, a falsy x kept
-	Key(x, Op.Coalesce, y): if may_raise(x) then Key(lowered_try(x, ø, ø), Op.Coalesce, y) else n
 	_: n
 }
 
