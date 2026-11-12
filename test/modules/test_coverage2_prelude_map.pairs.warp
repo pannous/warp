@@ -4,6 +4,6 @@
 «[count("banana", "a"), count("aaaa", "aa"), count("", "a")] == [3, 2, 0]»	true
 «[round_to(3.14159, 2), round_to(-3.14159, 2), round_to(7, 0)] == [3.14, -3.14, 7]»	true
 «mean([1, 2, 3, 4]) == 2.5 and mean([1/3, 2/3]) == 0.5»	true
-«sort(["ccc", "a", "bb"], by: s -> count(s)) == ["a", "bb", "ccc"] and sort([], by: s -> s) == []»	true
+«sort(["ccc", "a", "bb"], by: s => count(s)) == ["a", "bb", "ccc"] and sort([], by: s => s) == []»	true
 «use map; a = {x: {y: 1}}; b = deep_merge(a, {x: {z: 2}}); b.x.z == 2 and b.x.y == 1 and not has(a.x, "z")»	true
 «use map; r = try { set_path({a: [1]}, ["a", 5], 9) } catch e { "" + e }; r == "set_path: no position 5 in a list of 1"»	true
