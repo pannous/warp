@@ -14,7 +14,7 @@ compiler `use`s no lib/ module. A misplaced file (a demo in extensions/, a featu
 refused: send it back to the worker saying where it belongs, and tell the Supervisor. Growth of core/ always gets a
 second look: is it needed for self-compilation, or a feature that belongs in an extension?
 A change to core/ or extensions/ (sugar rules and small extensions included) lands only with the user's OK given
-before the work (AGENTS.md "Core and extensions"): find it as a card note or a notes/decisions.md key. A worker's word
+before the work (AGENTS.md "Core and extensions"): find it as a card note ("OK <date> via warp-interviewer: …"). A worker's word
 alone is not the record: without one, ask warp-interviewer to confirm and note it, and hold the branch. One that
 skipped the question is refused and goes to warp-interviewer; there is no FYI path.
 

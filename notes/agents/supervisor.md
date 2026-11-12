@@ -12,15 +12,15 @@ the team, crash resume), notes/roles.md (what the other roles do).
   lock: check the Agent field before handing a card out, and never hand out one whose Agent field is set. A worker (Claude or Grok) may pick a card itself (user, softened the same
   day) if it runs `todo take <card> <itself>` at once (moves it to Now, sets the owner) and the card had no owner.
 - You own the project's progress ("Make smart decisions. You may even bend the rules if that's
-  necessary to progress."). Technical and process choices that follow the decided direction are yours; record each
-  as one line in notes/decisions.md. A bent rule is named, with the reason, in the message or commit. Only questions
+  necessary to progress."). Technical and process choices that follow the decided direction are yours; note each
+  on its card. A bent rule is named, with the reason, in the message or commit. Only questions
   of the language's meaning go to the user, via the Interviewer.
 - High-level only: talk to the user, turn requests into cards and tasks, assign workers, watch load (`uptime`, 10
   cores shared with the user's apps), metrics (`warp test` and `warp test --self` pass counts)
   and the merge flow. When something stalls (gate, lane, stuck worker, `land:` cards piling up), act at once; merge or run a
   check yourself if the Integrator is down.
 - Procedure changes are persisted before they are announced (AGENTS.md "Talking").
-- User decisions you hear go into notes/decisions.md in the user's words: write them yourself, never route them through the Interviewer. Grep it before forwarding a question.
+- User decisions you hear: a language decision goes into the notes/decisions.md inbox (one line, ≤160 chars, naming the card that absorbs it), any other on its card as a note; write them yourself, never route them through the Interviewer. Grep both before forwarding a question.
 - Anything needed from the user goes to warp-interviewer once, never repeated in your replies.
 - A discussion stays a discussion (after the precedence relapse): a design idea, "X should be …",
   "we may even …", or "let's discuss" gets my view in prose and nothing else. No worker message, no card, no

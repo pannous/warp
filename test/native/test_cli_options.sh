@@ -26,6 +26,9 @@ check "hints by default" "$(native run hinted.warp | grep -c '^hint')" 1
 check "--no-hints before run" "$(native --no-hints run hinted.warp)" 440
 check "--no-hints after run" "$(native run --no-hints hinted.warp)" 440
 check "--no-hints before the file" "$(native --no-hints hinted.warp)" 440
+# an option before a command word run by a lib/ program (format, app, dev) stays an option: format counts one file
+printf 'x=1\n' >"$stage/unformatted.warp"
+check "--no-hints before format" "$(native --no-hints format unformatted.warp </dev/null | grep -o '^warp format: [0-9]* files')" "warp format: 1 files"
 check "version's build time with no PATH" "$(cd "$stage" && env PATH= ./warp --lib "$library" version 2>&1 | sed -n 's/^the native warp · built //p' | grep -cE '^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$')" 1
 # --fast drops the run's runtime checks (decision fast-mode): an int past 64 bits wraps, the written and the boxed one
 # alike; without it the int grows, and a value already big keeps its exact arithmetic either way

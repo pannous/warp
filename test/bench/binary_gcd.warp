@@ -1,0 +1,95 @@
+#!/usr/bin/env warp
+@primitive
+# Euclid against Stein's binary gcd, compiled natively (notes/binary_gcd.md).
+# `warp build native test/bench/binary_gcd.warp` then run the executable.
+# clock() is C's, microseconds. The pairs are the same ones the library's gcd_binary covers:
+# a signed machine word. Values past that word stay on the core's Euclid and are not timed here.
+clock(): i64 from "c"
+# primitive code cannot call wasm i64.ctz. The library calls trailing_zeros, that instruction.
+# ffsll is libc's count of the same bit (one-based), so this executable times that count.
+ffsll(n: i64): i32 from "c"
+zeros(n: i64): i64 := ffsll(n) - 1
+
+euclid(a: i64, b: i64): i64 := {
+	x = if a < 0 then 0 - a else a
+	y = if b < 0 then 0 - b else b
+	while y != 0 { rest = x % y; x = y; y = rest }
+	x
+}
+binary(a: i64, b: i64): i64 := {
+	x = if a < 0 then 0 - a else a
+	y = if b < 0 then 0 - b else b
+	result = x + y
+	if x != 0 and y != 0 {
+		common = zeros(x | y)
+		y = y >> zeros(y)
+		done = 0
+		if y == 1 { result = 1 << common; done = 1 }
+		while done == 0 {
+			x = x >> zeros(x)
+			if x == 1 { result = 1 << common; done = 1 }
+			else if x == y { result = x << common; done = 1 }
+			else {
+				if x < y { held = x; x = y; y = held }
+				x = x - y
+			}
+		}
+	}
+	result
+}
+small_a(j: i64): i64 := if j == 0 then 12 else if j == 1 then 18 else if j == 2 then 48 else if j == 3 then 180 else if j == 4 then 7 else if j == 5 then 100 else if j == 6 then 999 else 35
+small_b(j: i64): i64 := if j == 0 then 18 else if j == 1 then 30 else if j == 2 then 18 else if j == 3 then 48 else if j == 4 then 13 else if j == 5 then 64 else if j == 6 then 27 else 21
+pow_a(j: i64): i64 := if j == 0 then 1 << 10 else if j == 1 then 1 << 20 else if j == 2 then 1 << 30 else if j == 3 then 1 << 40 else if j == 4 then 1 << 50 else if j == 5 then 1 << 60 else if j == 6 then 3 * (1 << 20) else 9 * (1 << 15)
+pow_b(j: i64): i64 := if j == 0 then 1 << 4 else if j == 1 then 1 << 20 else if j == 2 then 6 else if j == 3 then 1 << 10 else if j == 4 then 1 << 49 else if j == 5 then 1 << 8 else if j == 6 then 1 << 20 else 1 << 7
+large_a(j: i64): i64 := if j == 0 then (1 << 62) - 1 else if j == 1 then 1 << 62 else if j == 2 then (1 << 61) + 3 else if j == 3 then (1 << 62) - 9 else if j == 4 then 1 << 55 else if j == 5 then (1 << 62) - 1 else if j == 6 then 1 << 48 else (1 << 62) - 7
+large_b(j: i64): i64 := if j == 0 then (1 << 61) - 1 else if j == 1 then 1 << 40 else if j == 2 then 1 << 20 else if j == 3 then 6 else if j == 4 then (1 << 40) + 15 else if j == 5 then 9223372036854775807 else if j == 6 then 1 << 16 else 35
+word(n: i64): i64 := {
+	x = n + 4101842887655102017
+	x = x xor (x >> 12)
+	x = x xor (x << 25)
+	x = x xor (x >> 27)
+	if x < 0 { x = 0 - x }
+	if x == 0 { 1 } else { x }
+}
+left(kind: i64, j: i64): i64 := if kind == 0 then small_a(j) else if kind == 1 then word(j * 2 + 1) else if kind == 2 then pow_a(j) else large_a(j)
+right(kind: i64, j: i64): i64 := if kind == 0 then small_b(j) else if kind == 1 then word(j * 2 + 2) else if kind == 2 then pow_b(j) else large_b(j)
+measure(kind: i64, which: i64, rounds: i64): i64 := {
+	start = clock()
+	i = 0
+	s = 0
+	n = if kind == 1 then 32 else 8
+	while i < rounds {
+		j = 0
+		while j < n {
+			a = left(kind, j)
+			b = right(kind, j)
+			s = s + (if which == 0 then euclid(a, b) else binary(a, b))
+			j = j + 1
+		}
+		i = i + 1
+	}
+	spent = (clock() - start) / 1000
+	if s == 0 then -1 else spent
+}
+agree(kind: i64): i64 := {
+	j = 0
+	n = if kind == 1 then 32 else 8
+	same = 1
+	while j < n {
+		a = left(kind, j)
+		b = right(kind, j)
+		if euclid(a, b) != binary(a, b) { same = 0 }
+		j = j + 1
+	}
+	same
+}
+line(name: text, kind: i64, rounds: i64) := {
+	print name
+	print text_of(agree(kind))
+	print text_of(measure(kind, 0, rounds))
+	print text_of(measure(kind, 1, rounds))
+}
+line("small", 0, 2000000)
+line("random", 1, 80000)
+line("powers", 2, 2000000)
+line("large", 3, 1500000)
