@@ -42,7 +42,6 @@ value_function(n: Node): any := match n {
 	_: ø
 }
 
-
 takes_value(word: Node, takers: list): bool := word is symbol and name_of(word) in takers
 
 # `counters`: the takers of a count (count_takers)
@@ -79,9 +78,18 @@ fitted_comparison(n: Node, own_types: map): Node := {
 	arms = compared_arms(n)
 	if arms != ø { return arms }
 	if n is key and op_of(n) in comparing_ops and is_word_phrase(key_of(n)) { return fitted(key_of(n)#1, key_of(n)#2, op_of(n), value_of(n), n, own_types) }
-	if (is_word_phrase(n) or is_round_word_phrase(n)) and n#2 is key and op_of(n#2) in comparing_ops { return fitted(n#1, key_of(n#2), op_of(n#2), value_of(n#2), n, own_types) }
+	if is_word_phrase(n) or is_round_word_phrase(n) { return chain_fitted(n#1, n#2, n, own_types) }
 	n
 }
+# `sq 2 == 4 and yes`: the word fitted against the comparison its phrase's logical chain starts with, which it reads
+# two ways as `sq 2 == 4` does: (sq 2) == 4 and yes, or sq(2 == 4 and yes); the written phrase for no comparison
+chain_fitted(word: Node, chain: Node, written: Node, own_types: map): Node := {
+	if chain is key and op_of(chain) in comparing_ops { return fitted(word, key_of(chain), op_of(chain), value_of(chain), written, own_types) }
+	if not (chain is key and op_of(chain) in logical_ops) { return written }
+	first = chain_fitted(word, key_of(chain), written, own_types)
+	if first is key then Key(first, op_of(chain), value_of(chain)) else written
+}
+logical_ops = [Op.And, Op.Or, Op.Xor]
 # `switch 3 {1: "one" 3: "three"} == "three"`: the spaced phrase reads the comparison as its last item's, `{…} == "three"`;
 # a clause word's arms are a block, never a comparison, so the match is compared (decision comparison-after-arms);
 # ø for any other node
