@@ -1046,7 +1046,7 @@ play(tone, for duration, shape: text) := music_played(tone, duration, shape)
 music_played(music, duration, shape) := {
 	if is_signal(music) { return signal_played(music, duration) }
 	if music is Sample { return sample_played(music, 1) }
-	if music is text and not is_note_name(music) { return play_file(music) }
+	if music is text and not is_note_name(music) { return file_played(music) }
 	if music is list { return sound(melody_samples(music, si_amount(duration), shape)) }
 	sound(chord_samples(pitches_of(music), si_amount(duration), shape))
 }
@@ -1100,7 +1100,8 @@ is_signal(tone) := tone is function or tone is list and count(tone) == 2 and ton
 play(tone, for duration, bus: Bus) := sent_back(sent_to(bus), music_played(tone, duration, wave_shape))
 // a music file in the background (wav, mp3, ogg, flac, aiff, m4a): play ./song.mp3, through the system's player as
 // it is, its line on stderr `sound file: song.mp3`
-public play_file(path) := {
+alias play_file => play
+file_played(path) := {
 	if not exists(path) { raise "no sound file " + path }
 	said("sound file: " + path)
 	played(path)
