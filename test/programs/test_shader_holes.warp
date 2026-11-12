@@ -5,3 +5,9 @@ is! 's = shader { let x = $size * size; }
 s' 'let x = values.size * size;'
 is! 's = shader { let x = $1; }
 s' 'let x = $1;'
+
+# a_hole_is_read_through_its_alias (wiki/graphics.md: $wheel, $mouse_x; the Book of Shaders' u_ names)
+is! 's = shader { let t = $u_time + $wheel; }
+s' 'let t = values.time + values.mouse_wheel;'
+is! 's = shader { let x = $mouse_x; }
+s' 'let x = values.mouse.x;'
