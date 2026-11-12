@@ -23,6 +23,25 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 ---
 
 ## Inbox
+- 2026-11-12 user-approved: remove-alarm-rule: `remove h` drops a listener (`on alarm {1}; h = on alarm {2}; remove h; emit alarm` → 1); a listener handle shows as Listener{event, number}. Undo: revert the sugar rule.
+- 2026-11-12 user decision, supersedes 11-10 nullish-default: nullish-split: `??` replaces only ø, as in C#/JS/Swift/Kotlin (`m["a"] ?? 0` raises); the words default, otherwise, failing, except and new alias rescue give the fallback on ø or a raise; `or` stays truthiness (card nullish-split). Was: `a ?? b` / `a default b` give b when a is ø or raises (`m["a"] ?? 0` → 0); without it the error stays loud. Undo: revert 674d0ff07f.
+- 2026-11-12 user-approved: primitive-arrays: @primitive files get fixed arrays as wiki/array.md spells them (`i64[8]`); later `byte[40]` for C structs. Undo: revert.
+- 2026-11-12 user-approved: typed-globals: a typed global keeps its type everywhere (`global cw: int = 1280; cw = "xy"` refused; `level: int = 0; f() := level` reads it). Undo: revert.
+- 2026-11-12 user-approved: comment-in-else: a comment line between `}` and `else` keeps the chain. Undo: revert.
+- 2026-11-12 user-approved: class-bodies: class bodies keep source positions (errors inside classes name their line). Undo: revert.
+- 2026-11-12 user-approved, renamed: core-round-untyped-half: kept, and round_to becomes `round(x, decimals: 2)` (`round(x, 2)` works too; card round-decimals). a decimal literal is exact, so round_to(1.005, 2) → 1.01 and round_to(-1.005, 2) → -1.01. Undo: revert ec1a1535bd.
+- 2026-11-12 user-approved: assigned-kinds-forget: a parameter name counts only inside its own function (`x = 1.005; round_to(x, 2)` no longer depends on other functions' parameter x). Undo: revert.
+- 2026-11-12 user-approved: untyped-counter-boxes: an untyped counter takes an int-first fast path, exact past 2^63 (loops 2x faster). Undo: revert.
+- 2026-11-12 user-approved: startup-slowdown: rule words computed once, smaller startup work (`use sound; 1` 1080 → 960 ms). Undo: revert.
+- 2026-11-12 user-approved: js-callbacks: warp functions passed to js go as js_function(f, arity), the arity read by the lowering; an unknown arity is refused (`use js Array; Array.from([1,2,3], x => x*2)` → [2, 4, 6]). Native use js runs at origin warp://localhost. Nested native callbacks: refused, JavaScriptCore in-process parked. Landed 5c5fb74717 + f6a20f4c66 (callback slots). Undo: revert those.
+- 2026-11-12 user-approved: js-globals-checked-when-called: members of the web's interfaces are checked at compile time, JavaScript's own globals (Math, JSON) only when called (wiki/use.md). Undo: revert the wiki line.
+- 2026-11-12 user-approved: function-value-call: a function called through a value converts its arguments like a direct call (`g = f; g(1)`, `xs.map(f)`). Undo: revert.
+- 2026-11-12 user-approved: play-gives-sound: `play(C4, 0.5s)` gives a Sound shown ♪ 0.5 s. Undo: revert.
+- 2026-11-12 user-approved: bytes-runtime-word: `t.bytes` is the runtime's text_byte_list (prelude_core's map version deleted), landing only at equal or lower compile cost; count_of walks bytes. Undo: revert.
+- 2026-11-12 night (user to review): language-server: scripts/lsp.warp (definition, hover); Sublime wiring pushed to warp-sublime-text; run-time parse keeps positions; is_keyed skips written ø entries. Undo: revert.
+- 2026-11-12 user-approved: options-before-command: app/dev/format read their arguments after the command word (`warp --no-window format yes f`). Undo: revert.
+- 2026-11-12 user-approved: loop-in-html: a loop directly inside html{…} gives every item, as in any tag. Undo: revert.
+- 2026-11-12 night (user to review): page-key-state: the playground shows whether the bug-button key is accepted and says loudly when it is rejected (no silent visitor ticket). Undo: revert.
 - 2026-11-11 night (user to review): method-let-local: a let/var/const name in a method body stays local, never bound to a field (`fresh() := { let body = 99; body }` leaves f.body 42).
 - 2026-11-11 night (user to review): member-before-library: a receiver whose keys are known at compile time (map literal, class) reads its own member before a library word (`p = {first: 1}; p.first()` → 1); untyped receivers keep the library word, no run-time member check.
 - 2026-11-11 night (user to review): constructor-spaces-refused: `person("Ann" 40)` is refused with the fix-it `person("Ann", 40)`, as `f(1 2)` is; constructors read spaces as functions do; old spreading tests go to the triage list.
