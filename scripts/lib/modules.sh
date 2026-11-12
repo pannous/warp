@@ -31,17 +31,18 @@ companion_copied() {
 # lazy-module-prebuild). The compiler's plan (modules-plan) writes the library index and names each module with the
 # modules it waits for; each module is then built by a process of its own (`modules <folder> <runtime> <name>`) once
 # those are written. Run in a build slot (scripts/build-slot.sh), it adds a worker for each other slot free right now,
-# never waiting for one. A module whose key (the compiler, the runtime, the index and sugar rules, what the plan says
-# it is built of, its waited-for modules' keys) is its file's, <m>.wasm.built-of, is kept as it is. A refused lib/ module
-# leaves an empty file, as the sequential step does; a refused lib/host/ one fails the step once every module is done
+# never waiting for one. A module whose key (the native warp running the build, the compiler, the runtime, the index
+# and sugar rules, what the plan says it is built of, its waited-for modules' keys) is its file's, <m>.wasm.built-of,
+# is kept as it is. A refused lib/ module leaves an empty file, as the sequential step does; a refused lib/host/ one
+# fails the step once every module is done
 MODULE_WAIT=0.2  # seconds a worker waits when no module is ready
 digest() { { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-64; }
 modules_built() {
-	local warp=$1 lib=$2 compiler=$3 folder=$4 runtime=$5 work=$4/.modules-step name waits texts slot workers
+	local warp=$1 lib=$2 compiler=$3 folder=$4 runtime=$5 work=$4/.modules-step name texts waits slot workers kept
 	# (a killed step's claims go: they'd leave its modules unclaimable)
 	rm -rf "$work" && mkdir -p "$work" || return 1
 	"$warp" --no-window --lib "$lib" "$compiler" modules-plan "$folder" >"$work/plan" || return 1
-	{ cat "$compiler" "$runtime" "$folder/sugar_rules.packed"; grep -v -e '^hash	' -e '^slice	' "$folder/index.tsv"; grep '^library	' "$work/plan"; } | digest >"$work/common"
+	{ cat "$warp" "$compiler" "$runtime" "$folder/sugar_rules.packed"; grep -v -e '^hash	' -e '^slice	' "$folder/index.tsv"; grep '^library	' "$work/plan"; } | digest >"$work/common"
 	while IFS=$'\t' read -r name texts waits; do
 		[ "$name" = library ] && continue
 		{ cat "$work/common"; echo "$texts"; for name_waited in $waits; do cat "$work/$name_waited.key"; done; } | digest >"$work/$name.key"
@@ -54,7 +55,8 @@ modules_built() {
 	modules_worker "$@"
 	wait
 	workers=$(ls "$work" | grep -c '^worker-')
-	echo "modules: $(grep -vc '^library	' "$work/plan") built by $workers worker$([ "$workers" = 1 ] || echo s)$(command -v lockf >/dev/null || echo ' (no lockf: one)'), $(ls "$work" | grep -c '\.kept$') kept as they were"
+	kept=$(ls "$work" | grep -c '\.kept$')
+	echo "modules: $(($(grep -vc '^library	' "$work/plan") - kept)) built by $workers worker$([ "$workers" = 1 ] || echo s)$(command -v lockf >/dev/null || echo ' (no lockf: one)'), $kept kept as they were"
 	[ ! -e "$work/refused" ] || { cat "$work/refused" >&2; return 1; }
 	rm -rf "$work"
 }
