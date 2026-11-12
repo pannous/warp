@@ -166,12 +166,13 @@ pointer_value(name: text): int := {
 }
 full_screen() := open_now and both_bits(SDL_GetWindowFlags(sdl_window), SDL_WINDOW_FULLSCREEN) != 0
 // whether the system shows dark mode, asked without a window (SDL's theme needs its video started): macOS keeps it as
-// the global preference AppleInterfaceStyle "Dark"; elsewhere not known, light
+// the global preference AppleInterfaceStyle "Dark"; elsewhere not known, light. A run with no window (`--no-window`,
+// every `warp test` case) shows nothing on the screen, so it follows no theme: light, its pictures documents on paper
 CFPreferencesCopyAppValue(key: handle, application: handle): handle from 'CoreFoundation'
 CFStringCompare(a: handle, b: handle, options: i64): i64 from 'CoreFoundation'
 CF_CASE_INSENSITIVE = 1
 dark_mode(): bool := {
-	if not on_mac() { return no }
+	if not on_mac() or run_option("no-window") != ø { return no }
 	style = CFPreferencesCopyAppValue(cf_text("AppleInterfaceStyle"), cf_text("kCFPreferencesAnyApplication"))
 	if style == 0 { return no }
 	dark = CFStringCompare(style, cf_text("Dark"), CF_CASE_INSENSITIVE) == 0
@@ -254,7 +255,9 @@ host_window_layer(painting_width: int, painting_height: int): int := {
 window_pixels(): list := {
 	sides = calloc(2, 4)
 	SDL_GetWindowSizeInPixels(sdl_window, sides, pointer_handle(handle_pointer(sides) + 4))
-	[field_i32(sides, 0), field_i32(sides, 4)]
+	pixels = [field_i32(sides, 0), field_i32(sides, 4)]
+	free(sides)
+	pixels
 }
 // a run that painted one picture leaves it in the window until the window is closed (or Escape), shown again as the
 // window comes into sight (it opens behind the app in front) or changes size; an animation's window closes with its run
@@ -315,14 +318,14 @@ core_text_coverage(words: text, size: int): list := {
 	line = CTLineCreateWithAttributedString(attributed)
 	across = CTLineGetTypographicBounds(line, ascent_cell, descent_cell, leading_cell)
 	descent = field_f64(descent_cell, 0)
-	width = max(ceil(across) as int, 1)
-	height = max(ceil(field_f64(ascent_cell, 0) + descent) as int, 1)
-	bitmap = CGBitmapContextCreate(0, width, height, 8, width, 0, ALPHA_ONLY)
+	bitmap_width = max(ceil(across) as int, 1)
+	bitmap_height = max(ceil(field_f64(ascent_cell, 0) + descent) as int, 1)
+	bitmap = CGBitmapContextCreate(0, bitmap_width, bitmap_height, 8, bitmap_width, 0, ALPHA_ONLY)
 	// (the baseline above the bottom by the descent; the bitmap's rows from the top)
 	CGContextSetTextPosition(bitmap, 0, descent)
 	CTLineDraw(line, bitmap)
 	data = CGBitmapContextGetData(bitmap)
-	covered = coverage_list(width, height, [field_u8(data, i) for i in 0 ..< width * height])
+	covered = coverage_list(bitmap_width, bitmap_height, [field_u8(data, i) for i in 0 ..< bitmap_width * bitmap_height])
 	for made in [bitmap, line, font, attributed, string] { CFRelease(made) }
 	covered
 }
@@ -373,7 +376,7 @@ free_type_coverage(words: text, size: int, file: text): list := {
 	FT_Set_Pixel_Sizes(font, 0, size)
 	metrics = field_pointer(font, FT_FACE_SIZE_AT)
 	ascent = field_i64(metrics, FT_SIZE_ASCENDER_AT) / FT_UNITS
-	height = max(ceil(ascent - field_i64(metrics, FT_SIZE_DESCENDER_AT) / FT_UNITS) as int, 1)
+	bitmap_height = max(ceil(ascent - field_i64(metrics, FT_SIZE_DESCENDER_AT) / FT_UNITS) as int, 1)
 	slot = field_pointer(font, FT_FACE_GLYPH_AT)
 	// each glyph's [left, top, columns, rows, coverage], left and top on the line's bitmap
 	glyphs = []
@@ -395,14 +398,14 @@ free_type_coverage(words: text, size: int, file: text): list := {
 		caret += field_i64(slot, FT_GLYPH_ADVANCE_AT)
 		previous = glyph
 	}
-	width = max(ceil(caret / FT_UNITS) as int, 1)
-	cells = int[width * height]
+	bitmap_width = max(ceil(caret / FT_UNITS) as int, 1)
+	cells = int[bitmap_width * bitmap_height]
 	for g in glyphs {
 		for k in 0 ..< g[2] * g[3] {
 			column = g[0] + k % g[2]
 			row = g[1] + k /! g[2]
-			if column >= 0 and column < width and row >= 0 and row < height { cells[row * width + column] = min(cells[row * width + column] + g[4][k], 255) }
+			if column >= 0 and column < bitmap_width and row >= 0 and row < bitmap_height { cells[row * bitmap_width + column] = min(cells[row * bitmap_width + column] + g[4][k], 255) }
 		}
 	}
-	coverage_list(width, height, [cells[i] for i in 0 ..< width * height])
+	coverage_list(bitmap_width, bitmap_height, [cells[i] for i in 0 ..< bitmap_width * bitmap_height])
 }

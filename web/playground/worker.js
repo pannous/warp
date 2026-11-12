@@ -48,6 +48,8 @@ self.servingPage = (shared, port) => self.postMessage({ type: "serving", shared,
 self.servedPage = response => self.postMessage({ type: "served", response });
 addPageSoundWords(post); // host-tasks.js
 const hooks = {
+	// a program's main may wait for a JS promise (driver.js programRan): evaluate awaits its run
+	waits: true,
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	// host-media.js paintFrame: its words move to the page, not copied
@@ -96,7 +98,7 @@ async function loadCompiler() {
 async function evaluate(code) {
 	panicMessage = undefined;
 	try {
-		return evaluatedNatively(code, self.programFile, hooks);
+		return await evaluatedNatively(code, self.programFile, hooks);
 	} catch (crash) {
 		compiler = undefined;
 		return { value: `compiler crashed: ${crash.message}`, error: true, crashed: true, warnings: [], runtime_warnings: [], hints: [], notes: [] };

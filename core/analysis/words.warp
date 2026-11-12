@@ -56,6 +56,8 @@ is_collection_head(word: text): bool := collection_words contains word or foreig
 # noun slot, `to square a number`
 phrase_prepositions = ["to", "of", "from", "with", "in", "into", "at", "by", "for", "on", "each"]
 phrase_articles = ["a", "an", "the"]
+# the pronouns standing for an argument, `double of int := it * 2`: never a parameter's name
+phrase_pronouns = ["it"]
 
 # the words opening a definition, `def f(x) {…}`
 function_keywords = ["fun", "fn", "def", "define", "function", "func"]

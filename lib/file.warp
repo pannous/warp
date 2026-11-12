@@ -81,7 +81,7 @@ global remove_file(path: any) := {
 	if raw.contains("*") or raw.contains("?") { raise "file.remove: refusing a pattern " + raw }
 	expanded = text(home_expanded(raw))
 	absolute = absolute_path(expanded)
-	why = remove_refused(absolute)
+	why = removal_refusal(absolute)
 	if why != "" { raise why }
 	if folder_path(absolute) {
 		if count(list_files(absolute)) > 0 { raise "file.remove: " + absolute + ": Directory not empty" }
@@ -90,7 +90,7 @@ global remove_file(path: any) := {
 		trashed(absolute, no)
 	}
 }
-remove_refused(path: text): text := {
+removal_refusal(path: text): text := {
 	trimmed = path_trimmed(path)
 	if trimmed == "" or trimmed == "/" { return "file.remove: refusing to remove " + (if trimmed == "" then "an empty path" else trimmed) }
 	home = path_trimmed(text(std_io("os", "env", ["HOME"]) ?? ""))

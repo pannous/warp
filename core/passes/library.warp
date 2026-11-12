@@ -146,10 +146,25 @@ library_on_disk(): map := {
 	if library_on_disk_held == ø { library_on_disk_held = library_texts(run_library(), "") }
 	library_on_disk_held
 }
-# each standard module's source hash, against which a prebuilt module is checked
+# the standard modules and every module they use, all prebuilt: a prebuilt module links the modules it uses, which
+# must be prebuilt too (decision no-lib-reads: units links unit_names, text letter_ranges, file path)
+global prebuilt_names_held = ø
+prebuilt_module_names(): list := {
+	if prebuilt_names_held == ø {
+		names = std_module_names
+		at = 0
+		while at < #names {
+			for used in used_modules(std_module_text(names[at])) { if used not in names and std_module_text(used) != "" { names += [used] } }
+			at += 1
+		}
+		prebuilt_names_held = names
+	}
+	prebuilt_names_held
+}
+# each prebuilt module's source hash, against which its image is checked
 module_hashes(): map := {
 	hashes = {}
-	for module in std_module_names { hashes[module] = source_hash(std_module_text(module)) }
+	for module in prebuilt_module_names() { hashes[module] = source_hash(std_module_text(module)) }
 	hashes
 }
 # a text's length and the host's sha256 of its bytes (djb2 in warp, ~1.3 K instructions a byte, was 5 % of a compile
