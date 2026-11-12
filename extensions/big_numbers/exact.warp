@@ -49,14 +49,12 @@ exact_denominator(n: Node): int := if is_ratio(n) then ratio_denominator(n) else
 holds_big_int(n: Node): bool := if is_ratio(n) then not has_plain_parts(n) else not is_plain_int(n)
 # what made_case(Made.Ratio, …) tests
 holds_ratio(n: Node): bool := is_ratio(n)
-# whether an exact number's parts are below 2^31, so that a sum of two products of them stays within 64 bits; the
+# whether every product of a part of a and a part of b takes below 62 bits, so that a sum of two stays within 64; the
 # words below go on in big_ratios.warp past that, an Int being unbounded (D16): twelve divisions by 1.18 are 59^12
 # over 50^12
-small_parts(n: Node): bool := {
-	numerator = exact_numerator(n)
-	numerator < 2147483648 and numerator > -2147483648 and exact_denominator(n) < 2147483648
-}
-fit_together(a: Node, b: Node): bool := small_parts(a) and small_parts(b)
+fit_together(a: Node, b: Node): bool := part_bits(a) + part_bits(b) < 63
+# the bits the larger part of an exact number takes
+part_bits(n: Node): int := max_int(bit_length(exact_numerator(n)), bit_length(exact_denominator(n)))
 # a's numerator times b's denominator
 cross_product(a: Node, b: Node): int := exact_numerator(a) * exact_denominator(b)
 common_product(a: Node, b: Node): int := exact_denominator(a) * exact_denominator(b)

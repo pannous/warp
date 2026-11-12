@@ -102,20 +102,24 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	timed("emit")
 	made = typed_wasm_module(program, Node.Empty, with_c_functions(host_words(), c_functions), emitter_kinds(program))
 	timed("emit done")
-	# a linked module whose words won't take the program's values is the compile's error, never compiled from its
-	# source instead (decision module-link-hard-error: "this must never happen")
-	if made is text and link_refused {
-		throw module.linked_images.map(image => image.name).join(", ") + ": the linked module doesn't bind (" + made + ")"
+	if made is text {
+		# the warnings and hints before a refusal, which they may explain (`.16i`'s unknown i: did you mean ⅈ?)
+		said_aloud(found)
+		# a linked module whose words won't take the program's values is the compile's error, never compiled from its
+		# source instead (decision module-link-hard-error: "this must never happen")
+		if link_refused { throw module.linked_images.map(image => image.name).join(", ") + ": the linked module doesn't bind (" + made + ")" }
+		# a form beyond the emitter's core gives the refusal's text, the compile's error
+		throw owned_refusal(made, c_refused_form(made, foreign#2, library_folder))
 	}
-	# a form beyond the emitter's core gives the refusal's text, the compile's error
-	if made is text { throw owned_refusal(made, c_refused_form(made, foreign#2, library_folder)) }
 	if only_apart { made = linked_bytes(module.order) }
-	# the warnings once the module is made
-	for warning in said_at(found, Level.Warning, module.program_file) { warn warning }
-	# and its hints
-	# unless the run asked for none (`warp --no-hints`: wiki/warning.md)
-	if run_option("no-hints") == ø { for said in said_at(found, Level.Hint, module.program_file) { hint said } }
+	said_aloud(found)
 	made
+}
+
+# the warnings once the module is made, and its hints unless the run asked for none (`warp --no-hints`: wiki/warning.md)
+said_aloud(found: list) := {
+	for warning in said_at(found, Level.Warning, module.program_file) { warn warning }
+	if run_option("no-hints") == ø { for said in said_at(found, Level.Hint, module.program_file) { hint said } }
 }
 
 # what the checks diagnosed past the first `known` facts; an error among them fails the compile with its text (card
@@ -131,10 +135,11 @@ checked_facts(known: int): list := {
 # when its signature's source hash is its file's (signature.warp); one built of another text or that won't link is the
 # compile's error, never compiled from its source; a module that calls C is not prebuilt, its file left empty
 MODULES_FOLDER = "modules"
-# where a module's prebuilt image is: the program's own module's, a standard module's in the folder; "" for a module
+# where a module's prebuilt image is: the program's own module's, a prebuilt one's in the folder (the index's hash
+# section names them, library.warp prebuilt_module_names); "" for a module
 # the rebuild no longer prebuilds, whose file may linger there (reals.wasm after 827309223b: math linked it and was
 # refused, card stale-module-wasm), so it is compiled from its source
-prebuilt_path(name: text, folder: text): text := own_module_wasm.get(name) ?? (if name in std_module_names then folder + name + ".wasm" else "")
+prebuilt_path(name: text, folder: text): text := own_module_wasm.get(name) ?? (if library_index_section("hash").has(name) then folder + name + ".wasm" else "")
 linked_libraries(source: text): list := {
 	linked_signatures = {}
 	folder = linked_modules_folder()
@@ -293,7 +298,7 @@ module_compiled_behind(name: text, source: text, runtime, file: text) := {
 	write_bytes(file, with_signature(written, name, image_fields(module.order) + [links_field(written)]))
 }
 MODULE_START = "warp/start"
-# every standard module (rewrites.warp std_module_names) as <name>.wasm in the folder, each after the modules it uses
+# every prebuilt module (library.warp prebuilt_module_names: the standard ones and those they use) as <name>.wasm in the folder, each after the modules it uses
 # (it links them), all behind the one runtime read once. One refusing to
 # prebuild keeps an empty file, never an older build linked in its place. A module calling C by its foreign lines
 # (`… from "c"`) may refuse to compile and stays compiled from source with the program; any other refusal fails the
@@ -308,7 +313,7 @@ write_modules(folder: text, runtime_file: text) := {
 	# (the prelude first, every module links it; then the runtime modules: any module's power links big_numbers, though
 	# it writes no `use` of it)
 	first = [PRELUDE_MODULE] + hooks().runtime_modules
-	for name in in_dependency_order(first + std_module_names.filter(name => name not in first)) {
+	for name in in_dependency_order(first + prebuilt_module_names().filter(name => name not in first)) {
 		file = folder + "/" + name + ".wasm"
 		try { module_written_behind(name, runtime, file) } catch refusal {
 			write_bytes(file, [])

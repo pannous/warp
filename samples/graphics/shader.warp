@@ -10,7 +10,7 @@ rings = shader {
 		return vec4f(uv.x, wave, uv.y, 1.0);
 	}
 }
-for frame in 1..30 {
-	paint(rings, size, size, {frame: frame, size: [size, size]})
+on frame{
+	paint(rings)
 	sleep 40ms
 }
