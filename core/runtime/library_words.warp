@@ -127,7 +127,7 @@ text_chars(t: text): list := {
 	}
 	out
 }
-# `t.bytes`: t's UTF-8 bytes, ints; `for b in t.bytes` reads them one by one, `byte_at(t, i)`
+# `t.bytes`: t's UTF-8 bytes, ints (decision text-unit-plurals); `for b in t.bytes` reads them one by one, `byte_at(t, i)`
 text_byte_list(t: text): list := {
 	out = new_list(byte_count(t))
 	for i in 1 to #out { out#i = byte_at(t, i - 1) }
