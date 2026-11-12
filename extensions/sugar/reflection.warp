@@ -15,6 +15,9 @@ rewrite $f.effects => [$effects...] where $f is symbol and $f is function and $e
 rewrite $f.signature => $s where $f is symbol and $s = signature_text($f, $program)
 rewrite $f.signatures => [$s...] where $f is symbol and $s = signatures_listed($f, $program)
 rewrite $f.return_type => $r where $f is symbol and $f is function and $r = return_kind($f, $program)
+# the prelude's aliases of doc and return_type (decision synonyms-are-aliases), which a member word doesn't take
+rewrite $f.description => $f.doc where $f is symbol and $f is function
+rewrite $f.returns => $f.return_type where $f is symbol and $f is function
 rewrite $f.representation => $refused where $f is symbol and $f is function and $refused = misnamed($f, representation, body)
 rewrite $f.definition => $d where $f is symbol and $f is function and $d = definition_text($f, $program, $source)
 rewrite $f.full => $d where $f is symbol and $f is function and $d = full_definition($f, $program, $source)
