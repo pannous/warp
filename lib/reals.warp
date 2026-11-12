@@ -73,8 +73,11 @@ real_sum_of(terms: list) := {
 		if not merged { kept += [term] }
 	}
 	left = kept.filter(term => term != 0 and not exact_real(term)) + kept.filter(term => exact_real(term))
-	if #left == 0 then 0 else if #left == 1 then left#1 else real_sum(left)
+	if #left == 0 then 0 else if #left == 1 then left#1 else if #left > largest_exact_terms then real_sum(left).float() else real_sum(left)
 }
+# a sum of more unlike terms than this is the float's, as a root past largest_exact_radicand is: a loop adding roots,
+# `s = s + √i`, would grow its sum a term a step, each step slower
+largest_exact_terms = 32
 simplest_term(term: any) := if exact_real(term) then real_of(term.coefficient, term.pi_power, term.radicand) else term
 alike_terms(a: any, b: any): bool := if exact_real(a) then a.alike(b) else not exact_real(b)
 # 2 + 2π, √2 - π/2: a negative term after the first written with a minus

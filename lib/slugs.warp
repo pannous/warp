@@ -5,6 +5,7 @@
 // an upper-case letter that follows a lower-case letter or a digit ("parseURL" → parse URL, "v2Beta" → v2 Beta) and
 // before the last upper-case letter of an acronym that a lower-case letter follows ("HTTPServer" → HTTP Server).
 // Digits stay with the letters before them: "parseURL2Text" → parse URL2 Text, so to_snake gives parse_url2_text
+use text
 
 // single letters and their ASCII letters, position for position
 FOLD_FROM = "ÀÁÂÃÄÅàáâãäåĀāĂăĄąÇçĆćĈĉĊċČčĎďĐđÈÉÊËèéêëĒēĔĕĖėĘęĚěĜĝĞğĠġĢģĤĥĦħÌÍÎÏìíîïĨĩĪīĬĭĮįİıĴĵĶķĹĺĻļĽľĿŀŁłÑñŃńŅņŇňÒÓÔÕÖØòóôõöøŌōŎŏŐőŔŕŖŗŘřŚśŜŝŞşŠšŢţŤťŦŧÙÚÛÜùúûüŨũŪūŬŭŮůŰűŲųŴŵÝýÿŶŷŸŹźŻżŽžÐð"
@@ -72,3 +73,17 @@ to_kebab(t: text): text := join(case_words(t).map(w => lower(w)), "-")
 to_constant(t: text): text := join(case_words(t).map(w => upper(w)), "_")
 to_pascal(t: text): text := join(case_words(t).map(w => upper(w[0:1]) + lower(w[1:])), "")
 to_camel(t: text): text := { p = to_pascal(t); if p == "" then "" else lower(p[0]) + p[1:] }
+// runs of whitespace one space, none at the ends
+normalize_whitespace(t: text): text := join(words(t), " ")
+// the first n words, whitespace normalized, and "…" when words were cut; t itself when it has no more than n
+truncate_words(t: text, n: int): text := {
+	ws = words(t)
+	if count(ws) <= n { return t }
+	join(ws[0: n], " ") + "…"
+}
+// the words text gave these by before (it used slugs and slugs used it, a cycle no prebuilt module can link, card
+// prebuilt-module-links): "Hello, World!" → "hello-world", "helloWorld" → "hello_world", "hello_world" → "helloWorld"
+alias slug => slugify
+alias snake_case => to_snake
+alias kebab_case => to_kebab
+alias camel_case => to_camel

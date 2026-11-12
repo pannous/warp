@@ -14,3 +14,8 @@ to_html(html{ p{ if people.loading then "Loading…" else "loaded" } })' '<html>
 is! 'job = go fetch("://warp.pannous.com/assistant.json")
 answer = await job
 answer.about.starts_with("What the assistant")' yes
+
+# a `;` separates statements as a newline does, a `;` line among lines too (card missing-fetch)
+is! 'missing := fetch "://warp.pannous.com/no-such-file.json"; [missing, missing.loading, missing.error.contains("404")]' [ø, no, yes]
+is! 'n = 1
+gone := fetch "://warp.pannous.com/no-such-file.json"; [gone, n]' [ø, 1]
