@@ -25,9 +25,11 @@ VALUES_NAME = "values"
 # a painted function's color: three numbers from 0 to 1
 COLOR_WIDTH = 3
 # a painted number or yes/no is ink where it is not 0, paper where it is, as the native PNG writer shades it
-# (core/native/driver.warp INK 29, PAPER 250 of 255)
+# (core/native/driver.warp INK 29, PAPER 250 of 255); dark mode swaps them (lib/draw.warp paper and ink)
 INK_GRAY = "vec3f(0.11372549)"
 PAPER_GRAY = "vec3f(0.98039216)"
+# select's two first arguments for a painted number: the paper, then the ink
+painted_grays() := if dark_mode then INK_GRAY + ", " + PAPER_GRAY else PAPER_GRAY + ", " + INK_GRAY
 # translations of a function until its variables' widths settle: one assigned a number, later a vector
 MOST_ATTEMPTS = 3
 # the words WGSL keeps: a program's name among them gets a `_` after it
@@ -204,8 +206,8 @@ wgsl_painted_call(reached: map): text := {
 	shading.refusal = ""
 	shading.calling = []
 	called = wgsl_program_call(name_of(f), [["position.x - 0.5", 1], ["position.y - 0.5", 1]], f)
-	if called#2 == 0 { return "select(" + PAPER_GRAY + ", " + INK_GRAY + ", " + called#1 + ")" }
-	if called#2 == 1 { return "select(" + PAPER_GRAY + ", " + INK_GRAY + ", " + called#1 + " != 0.0)" }
+	if called#2 == 0 { return "select(" + painted_grays() + ", " + called#1 + ")" }
+	if called#2 == 1 { return "select(" + painted_grays() + ", " + called#1 + " != 0.0)" }
 	if shading.refusal == "" and called#2 != COLOR_WIDTH { wgsl_refused(f, "a painted function gives a color [r, g, b], a number or yes/no; ${f} gives " + wgsl_type(called#2)) }
 	called#1
 }

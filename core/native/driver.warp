@@ -108,8 +108,9 @@ OPTIONS_BYTES = 2056
 # whether the run linked unicode (canonical_text), the native host module (host_export), at these places of its block
 UNICODE_LINKED_AT = 32
 HOST_LINKED_AT = 40
-# the GC heap the run's engine starts with: a module it links keeps its machine code for that heap (instance_defined)
-HEAP_BYTES_AT = 48
+# the kind of machine code the run's engine makes (its heap, its fuel): a module it links keeps its machine code of
+# that kind (instance_defined)
+MACHINE_CODE_KIND_AT = 48
 # its argument vector, the first its module's file (a compiler's path: compiler_library)
 ARGUMENTS_AT = 56
 # the module a host word without a caller works in, a text (address, length): module_word's lib module while it
@@ -903,7 +904,7 @@ instance_defined(linker: handle, engine: handle, context: handle, name: text, pa
 		complain(joined(joined(joined("the program links ", name), ", but there is no "), path))
 		exit(1)
 	}
-	compiled = compiled_module(engine, module, machine_code_file(path, run_heap_bytes()), trap)
+	compiled = compiled_module(engine, module, machine_code_at(path, machine_code_suffix_of(run_machine_code_kind())), trap)
 	instances_linked(linker, engine, context, compiled, linked, library, trap)
 	host_words_defined(linker, engine, context, compiled, module, guarded, trap)
 	checked(wasmtime_linker_define_unknown_imports_as_traps(linker, compiled), trap)
@@ -941,7 +942,7 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	text_kept(linked, "")
 	outer_run = kept_value(RUN_SLOT)
 	if outer_run == 0 { timers_forgotten() }
-	keep_value(RUN_SLOT, run_state(linker, engine, linked, context, heap_bytes, given) as i64)
+	keep_value(RUN_SLOT, run_state(linker, engine, linked, context, machine_code_kind(heap_bytes, fuel > 0), given) as i64)
 	checked(imports_defined(linker, engine, context, compiled, module, linked, trap), trap)
 	instance = allocate(INSTANCE_BYTES)
 	checked(wasmtime_linker_instantiate(linker, context, compiled, instance, trap), trap)
@@ -1014,7 +1015,7 @@ session_opened(): pointer := {
 	linked = allocate(16)
 	text_kept(linked, "")
 	timers_forgotten()
-	run_state(opened_linker(engine, trap), engine, linked, wasmtime_store_context(store), RUN_GC_HEAP_BYTES, given)
+	run_state(opened_linker(engine, trap), engine, linked, wasmtime_store_context(store), machine_code_kind(RUN_GC_HEAP_BYTES, no), given)
 }
 # the line's module at `path` run in the session: linked, its instance defined, its _start run (it prints its value);
 # a failure said, the session going on. The status of the exit() it called, which ends the session, else -1
@@ -1067,7 +1068,7 @@ imports_defined(linker: handle, engine: handle, context: handle, compiled: handl
 # a run's linker, engine, linked-instances cell, store context and GC heap size, and whether it linked unicode and the native host
 # module yet, kept in the run's block: what a host word allocates is given back when it returns (foreign.c
 # warp_host_callback)
-run_state(linker: handle, engine: handle, linked: pointer, context: handle, heap_bytes: i64, given: Arguments): pointer := {
+run_state(linker: handle, engine: handle, linked: pointer, context: handle, machine_code: i64, given: Arguments): pointer := {
 	run = allocate((LISTENERS_AT + 8 + LISTENERS_MAX * LISTENER_BYTES) as i32)
 	long_at(run + LISTENERS_AT as i32).value = 0
 	long_at(run).value = linker
@@ -1076,14 +1077,14 @@ run_state(linker: handle, engine: handle, linked: pointer, context: handle, heap
 	long_at(run + 24).value = context
 	long_at(run + UNICODE_LINKED_AT as i32).value = 0
 	long_at(run + HOST_LINKED_AT as i32).value = 0
-	long_at(run + HEAP_BYTES_AT as i32).value = heap_bytes
+	long_at(run + MACHINE_CODE_KIND_AT as i32).value = machine_code
 	text_kept(run + GUEST_AT as i32, "")
 	long_at(run + ASKER_AT as i32).value = 0
 	long_at(run + ARGUMENTS_AT as i32).value = given.pointers as i64
 	run
 }
 run_context(): handle := long_at(kept_value(RUN_SLOT) as i32 + 24).value
-run_heap_bytes(): i64 := long_at(kept_value(RUN_SLOT) as i32 + HEAP_BYTES_AT as i32).value
+run_machine_code_kind(): i64 := long_at(kept_value(RUN_SLOT) as i32 + MACHINE_CODE_KIND_AT as i32).value
 # the export `name` of the standard module `module_name` into `function`, no when it has none: the module linked into
 # the run at the first ask, never at its start, so a run that never asks links none; whether it did is kept at `flag`
 # of the run's block. A program linked to a runtime gets the module of that runtime's library; a module without one
@@ -1424,12 +1425,16 @@ machine_code_at(path: text, suffix: text): text := {
 	joined(joined(cache, flattened(resolved_path(path))), suffix)
 }
 # the kinds of machine code, each a file of its own beside the module: a run's, a builder's (the heap size is in the
-# code), the resident engine's (its epoch checks, by which Ctrl+C stops a console line); primitive mode has no text constants
-MACHINE_CODE_KINDS = 3
+# code), the resident engine's (its epoch checks, by which Ctrl+C stops a console line), a run counting its steps
+# (warp fuel: its fuel checks); primitive mode has no text constants
+MACHINE_CODE_KINDS = 4
 BUILDER_MACHINE_CODE = 1
 RESIDENT_MACHINE_CODE = 2
-machine_code_suffix_of(kind: i64): text := if kind == BUILDER_MACHINE_CODE then ".driver.build.cwasm" else if kind == RESIDENT_MACHINE_CODE then ".driver.resident.cwasm" else ".driver.cwasm"
-machine_code_suffix(heap_bytes: i64): text := machine_code_suffix_of(if heap_bytes == BUILDER_GC_HEAP_BYTES then BUILDER_MACHINE_CODE else 0)
+FUEL_MACHINE_CODE = 3
+machine_code_suffix_of(kind: i64): text := if kind == BUILDER_MACHINE_CODE then ".driver.build.cwasm" else if kind == RESIDENT_MACHINE_CODE then ".driver.resident.cwasm" else if kind == FUEL_MACHINE_CODE then ".driver.fuel.cwasm" else ".driver.cwasm"
+machine_code_suffix(heap_bytes: i64): text := machine_code_suffix_of(machine_code_kind(heap_bytes, no))
+# the kind of machine code an engine with that heap and fuel makes
+machine_code_kind(heap_bytes: i64, fuel: bool): i64 := if fuel then FUEL_MACHINE_CODE else if heap_bytes == BUILDER_GC_HEAP_BYTES then BUILDER_MACHINE_CODE else 0
 
 # $XDG_CACHE_HOME/warp, else ~/Library/Caches/warp (macOS), else ~/.cache/warp, made when missing, ending in a slash;
 # "" when it can't be written

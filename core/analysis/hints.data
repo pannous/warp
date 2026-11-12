@@ -9,3 +9,5 @@ from_import($module)	"`from {module} import …` is `use {module}` in warp: ever
 # a unit after a number though the program has a variable of its name, `m = 5; 3m`, `h = 2 inch; 3 km/h`
 # (rewrites.warp typed_as, extensions/rules/rule_words.warp unit_beside_variables)
 unit_beside_variable($word, $fix)	"after a number, {word} is the unit, not the variable {word}: write {fix} to use the variable"	"{fix}"
+# a number glued to an i the program never binds, `.16i` (source_checks.warp imaginary_i)
+imaginary_i($amount)	"did you mean ⅈ, the imaginary unit?"	"{amount}ⅈ"

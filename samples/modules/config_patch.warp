@@ -9,5 +9,5 @@ production = set_path(production, ["workers"], 8)
 old = config_text(base)
 new = config_text(production)
 patch = unified_diff(old, new)
-if apply_patch(old, patch) != new { raise "the patch did not apply" }
+if patched(old, patch) != new { raise "the patch did not apply" }
 patch + "similarity " + text(round_to(similarity(old, new), 2))

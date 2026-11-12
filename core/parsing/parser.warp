@@ -17,7 +17,7 @@ class GroupContext { bracket: Bracket = Bracket.None; grouped: bool = no; in_bra
 // `then` block's `else` (kept for the branch), or, for the rest of an enclosing group or block, whatever closes that one
 enum ItemsEnd { Source, Closer, End, EndOrElse, Rest }
 
-class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indexing: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; scans: map = {}; aliases: map; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list; shifts: list = []; pipe_stops: bool = no }
+class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indexing: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; scans: map = {}; aliases: map; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list; shifts: list = []; pipe_stops: bool = no; comparing: bool = no }
 // What stands at the parser's position (card parser-checklist-idioms): its character, the one k further, the one at
 // any offset, each a line break past the end; whether the character or a text stands there
 def char_here(p: Parser): text := peek(p.code, p.at, p.n)
@@ -905,11 +905,11 @@ PRINT = symbol("print")
 OF = symbol("of")
 
 // `of` binds tighter than `=`: `width of canvas = 12` and `square of int = it * it` assign to the phrase, not to its
-// last word
+// last word; `:=` there is that `=` (decision of-form-canonical: `double of int := it * 2`)
 def of_assignment(nodes: list): Node? := {
 	if nodes.length < 3 or not nodes[0 ..< nodes.length - 1].contains(OF) { return ø }
 	match nodes#(nodes.length) {
-		Key(target, Op.Assign, value): Key(listed(Bracket.None, Separator.Space, nodes[0 ..< nodes.length - 1] + [target]), Op.Assign, value)
+		Key(target, op, value): if op == Op.Assign or op == Op.Define then Key(listed(Bracket.None, Separator.Space, nodes[0 ..< nodes.length - 1] + [target]), Op.Assign, value) else ø
 		_: ø
 	}
 }
@@ -1045,7 +1045,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			left = subscript(left, index, written_offset())
 		} else if c == '(' and p.at > 0 and not is_blank(p.code[p.at - 1]) and INDEX_POWER >= min_power and is_callee(left) {
 			advance(p)
-			left = call_of([left] + spread(items_until(p, Bracket.Round, ItemsEnd.Closer)))
+			left = call_of([left] + spread(arguments_read(p)))
 		} else if membership_at(p).length > 0 and not counts_units(left) {
 			membership = membership_at(p)
 			if MEMBERSHIP_POWERS#1 < min_power { break }
@@ -1661,6 +1661,9 @@ def operator_at(p: Parser): list {
 	if spelled.length == 0 { spelled = spelled_operator_at(p) }
 	written = if spelled.length > 0 then spelled#1 else operand_word_at(p)
 	if written != "" and assigns_after(p, written.length) and (if spelled.length == 0 then not declares_before(p) else computes(spelled#2)) { return [written + "=", COMPOUND_ASSIGNMENT] }
+	// `if x=2 {…}`: in a condition `=` compares (wiki/Footguns.md "Assignment in a condition"); a block, a list or a
+	// call's arguments inside it assign again (arguments_read, group_atom)
+	if p.comparing and spelled.length > 0 and spelled#2 == "=" { return [spelled#1, "=="] }
 	spelled
 }
 // the word before the operand is one declaring it, `const x=5`, `let n=5`, or its type, `int i=2*3`: its `x=` an
@@ -1957,9 +1960,13 @@ def spaced_definition(p: Parser): Node {
 	names = blank_words(head)
 	// (no keyword: `def f x := …` stays the def rule's)
 	if names.length < 2 or not names.all(name => is_plain_name(name) and keyword_form(name) == "") or names#1 == "def" { return ø }
+	// (a preposition is no parameter: `double of int := it * 2` is the of form's, wiki/matching.md)
+	if names.any(name => phrase_prepositions.contains(name)) { return ø }
+	// (nor is a pronoun: `twice it := it * 2` is `twice := it * 2`)
+	defined = names.filter(name => not phrase_pronouns.contains(name)).map(name => symbol(name))
 	p.at += head.length + 4
 	skip_spaces(p)
-	Key(call_of(names.map(name => symbol(name))), Op.Define, expression(p, 0))
+	Key(if defined.length == 1 then defined#1 else call_of(defined), Op.Define, expression(p, 0))
 }
 // whether only blanks stand between the parser and its statement's start: the input's, a line's, after `;` or `{`
 def at_statement_start(p: Parser): bool {
@@ -2452,7 +2459,7 @@ def returned(p: Parser): Node := {
 CONDITION_POWER = 81
 // The condition of `if` and `while`: a braceless call takes a variable argument as in a branch (`if area certainly > 10
 // then`, `while square i < 10`)
-def condition_expression(p: Parser): Node := with_field(p, "branch_power", CONDITION_POWER, () => header_expression(p, CONDITION_POWER))
+def condition_expression(p: Parser): Node := with_field(p, "branch_power", CONDITION_POWER, () => with_field(p, "comparing", yes, () => header_expression(p, CONDITION_POWER)))
 
 // Rust's `loop { … }` as `while true { … }`, ø when no block follows the word
 def endless_loop(p: Parser): Node := {
@@ -2982,7 +2989,8 @@ def group_atom(p: Parser): Node := {
 	c = p.code[p.at]
 	advance(p)
 	round = c == '('
-	group = with_field(p, "header", p.header and round, () => with_field(p, "iterable", p.iterable and round, () => if c == '{' then braced_items(p) else items_until(p, c as Bracket, ItemsEnd.Closer)))
+	// (a condition's `=` compares inside its parentheses, never in a block or list of it)
+	group = with_field(p, "header", p.header and round, () => with_field(p, "iterable", p.iterable and round, () => with_field(p, "comparing", p.comparing and round, () => if c == '{' then braced_items(p) else items_until(p, c as Bracket, ItemsEnd.Closer))))
 	// `(int or text)?`: an optional union, the one type word `int or text?` (a member ø joins is the union's)
 	union = if c == '(' and #group == 1 and optional_mark_follows(p, "") then union_spelling(group#1) else ø
 	if union == ø { return group }
@@ -3137,12 +3145,14 @@ def named(p: Parser): Node := {
 	}
 	name_or_call(p, name)
 }
+// a call's arguments, `f(x=2)` naming one even inside a condition
+def arguments_read(p: Parser): Node := with_field(p, "comparing", no, () => items_until(p, Bracket.Round, ItemsEnd.Closer))
 // the name, or its call `name(x, y)` when a round group follows it, with the block side by side after it
 // (`f(x) {…}`)
 def name_or_call(p: Parser, name: Node): Node := {
 	if not at_char(p, '(') { return name }
 	advance(p)
-	written = items_until(p, Bracket.Round, ItemsEnd.Closer)
+	written = arguments_read(p)
 	arguments = typed_parameters(written)
 	skip_spaces(p)
 	if at_char(p, '{') and not p.header {

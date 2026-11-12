@@ -338,3 +338,11 @@ Phases, each landing alone: (a) hole table + one scanner + one rule; (b) dialect
 (c) fields subsume $previous and gpu_passes, paint(list); (d) compute kernels from warp functions, @gpu maps;
 (e) remove the duplicates, samples written the canonical way, wiki graphics.md (wiki text to the Interviewer).
 Core cost: none in core/; extensions/shader_blocks and the hole rules shrink; lib/shaders.warp grows.
+- (a) done: the table is SHADER_HOLES in extensions/rules/shader_holes.warp, not lib/shaders.warp: the block reader
+  and the rule both run inside the compiler, which uses no lib module. The block reader keeps no hole list of its own;
+  one rule `$f($s, $w, $h, $v...)` for paint and gpu_render fills the holes (gpu_render(s, w, h, values) did not).
+  The hosts still list the built-in holes they fill; that list goes when (c) changes what they receive.
+- (b) done: a rule reads the dialect off the entry point where a shader the program assigns is painted or rendered:
+  `fn main_image` without `@fragment` becomes compute_toy(s); compute_toy of a fragment shader is that shader. The
+  block itself stays the kernel as written, which compute_toy(code, picture) needs. The program still says `use
+  compute_toys` (a word a rule writes brings no module; without it the compile says "fix: use compute_toys").

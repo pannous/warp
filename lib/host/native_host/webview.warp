@@ -133,8 +133,8 @@ instance_of(made: int) := told(told(made, "alloc"), "init")
 spun(done: function, milliseconds: int): bool := turned(done, milliseconds, () => sent(told(class_named("NSRunLoop"), "currentRunLoop"), "runMode:beforeDate:", [framework_object("Foundation", "NSDefaultRunLoopMode"), soon()]))
 // the app's events (clicks, keys) handed to its windows until done() or the milliseconds are over, as [NSApp run] would
 pumped(done: function, milliseconds: int): bool := turned(done, milliseconds, () => {
-	event = sent(application(), "nextEventMatchingMask:untilDate:inMode:dequeue:", [ANY_EVENT, soon(), framework_object("Foundation", "NSDefaultRunLoopMode"), 1])
-	if event != 0 { sent(application(), "sendEvent:", [event]) }
+	app_event = sent(application(), "nextEventMatchingMask:untilDate:inMode:dequeue:", [ANY_EVENT, soon(), framework_object("Foundation", "NSDefaultRunLoopMode"), 1])
+	if app_event != 0 { sent(application(), "sendEvent:", [app_event]) }
 })
 turned(done: function, milliseconds: int, turn: function): bool := {
 	deadline = wall_clock_ms() + milliseconds
@@ -181,7 +181,11 @@ called_back(receiver, selector, view, task) := {
 	sent(task, "didReceiveData:", [sent(ns_string(if failed then text(result) else to_json(result)), "dataUsingEncoding:", [UTF8_ENCODING])])
 	told(task, "didFinish")
 }
+// WebKit's helper processes never answer a process forked without exec (a `warp test` case, run with the option
+// `forked`): such a run asks for a process of its own, in which it runs again (core/native/tests.warp)
+FRESH_PROCESS_WANTED = 75
 view_made(width: float, height: float) := {
+	if run_option("forked") != ø { exit(FRESH_PROCESS_WANTED) }
 	configuration = instance_of(class_named("WKWebViewConfiguration"))
 	contents = told(configuration, "userContentController")
 	bridge = sent(told(class_named("WKUserScript"), "alloc"), "initWithSource:injectionTime:forMainFrameOnly:", [ns_string(PAGE_BRIDGE), DOCUMENT_START, 1])
@@ -318,6 +322,10 @@ window_answered(called: text, member: text, arguments: any): any? := {
 	happened
 }
 
+// a promise the view gave is awaited there (callAsyncJavaScript), so none is ever pending for the program to wait for
+// (lib/prelude.warp foreign_settled; the page keeps one: host-foreign.js)
+host_foreign_pending(): int := 0
+host_foreign_await(): any? := ø
 // foreign_call(runtime, module, member, call, arguments), as the page's host-foreign.js foreignCall answers it
 host_foreign_call(runtime, module, member, call, arguments): any? := {
 	pool = objc_autoreleasePoolPush()

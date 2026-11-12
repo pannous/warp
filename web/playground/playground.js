@@ -500,11 +500,12 @@ let sounding = []; // the playing and queued sounds, silenced when the next run 
 // then cannot start and the browser warns
 // missing userActivation (some headless builds): treat as before a click, so heard stays 0 and sound does not pace (card samples-page-sound-pipes)
 const beforeUserActivation = () => !navigator.userActivation || !navigator.userActivation.hasBeenActive;
-// a run's sounds so far, in seconds, which the page names below its result (showSounded): a program that only plays
+// a run's sound so far, in seconds, which the page names below its result (showSounded): where its last sound ends
+// on its voices, so sounds of tasks playing together count once, as save sound mixes them. A program that only plays
 // shows nothing else, and one run before the first click or key press stays silent
-function soundMade(run, { samples, rate, channels }) {
+function soundMade(run, { samples, rate, channels, place = run.sounded ?? 0 }) {
 	stopAfterTimeout(run);
-	run.sounded = (run.sounded ?? 0) + samples.length / Math.max(channels, 1) / rate;
+	run.sounded = Math.max(run.sounded ?? 0, place + samples.length / Math.max(channels, 1) / rate);
 }
 const SILENT_BEFORE_ACTIVATION = "silent: a browser plays sound only after a click or key press on the page, then run it again";
 function showSounded(seconds) {
