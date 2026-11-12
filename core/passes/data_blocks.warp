@@ -40,8 +40,8 @@ data_positions_called(program: Node): map := {
 	}
 	found
 }
-# the words keying a block, `f{…}`
-block_heads(written: list): list := written.filter(n => word_and_block(n) != ø).map(n => name_of(key_of(n)))
+# the words keying a block, glued `f{…}` and spaced `f {…}`, a statement or an item of a block
+block_heads(written: list): list := written.flat_map(n => if word_and_block(n) != ø then [key_of(n)] else if is_group(n) and #n > 1 then (1 to #n - 1).filter(i => is_curly_group(n#(i + 1))).map(i => n#i) else []).filter(word => word is symbol).map(word => name_of(word))
 # the program with the arguments of its data parameters and its tags' worded attributes spliced quotes, which no rule
 # or pass rewrites
 data_spliced(program: Node, keeps_meaning: function): Node := {
