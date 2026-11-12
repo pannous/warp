@@ -27,8 +27,11 @@ DASHED_ATTRIBUTES = ["data-", "aria-"]
 markup_values(program: Node): Node := {
 	# a statement that is an element, `div{"hi"}`, stands outside every markup scope: data, though surely meant as markup
 	for statement in flat_statements(program).filter(statement => is_markup_block(statement) and not is_markup_scope(statement)) { diagnose(call_of(BARE_MARKUP_FACT, [key_of(statement)]), statement) }
-	in_markup(program, scope => marked_markup(scope, ""))
+	in_markup(program, scope => marked_markup(loops_as_items(scope), ""))
 }
+# `html{ for x in xs { p{x} } }`: a loop among html's own items makes an item each, as among a tag's
+# (core/passes/data_blocks.warp with_loops_as_items, which leaves html, the markup type, alone)
+loops_as_items(scope: Node): Node := if is_key(scope, Op.Colon) and key_of(scope) == symbol(MARKUP_TYPE) and is_curly_group(value_of(scope)) then Key(key_of(scope), op_of(scope), group_like(value_of(scope), items_of(value_of(scope)).map(loop_as_items))) else scope
 # each element of a markup scope an Html, within the element named so; a style sheet's rules (`p: { color: red }`) and
 # a script's text as written
 marked_markup(n: Node, within: text): Node := {
