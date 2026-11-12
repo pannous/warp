@@ -3,10 +3,10 @@
 # play_inside_a_def_body_before_the_value
 'def h(value) { play(440Hz, 0.05s); value + 1 }; h(2)'	3
 
-# play, beep, stop_sound and wait_sound work without `use sound`, which they bring in (decision bizarre-global)
+# play, beep, stop and wait work without `use sound`, which they bring in (decision bizarre-global)
 
-'play(440Hz, 5ms); wait_sound; 7'	7
-'beep(); stop_sound(); 8'	8
+'play(440Hz, 5ms); wait(sound); 7'	7
+'beep(); stop(sound); 8'	8
 'play(x) := x * 2; play(3)'	6
 'display = 3; display'	3
 
@@ -21,8 +21,9 @@
 'use sound; play(C4, 0.05s); 1'	1
 
 # a signal plays whatever number it gives (0.3 * t of an exact 0.3), a block filler by its two parameters
-'use sound; hum(t: float) := 0.3 * t; play_signal(hum, 0.03); 1'	1
 'use sound; hum(t) := 0.3 * sin(2 * pi * 220 * t); play(hum, 0.03s); 1'	1
 'use sound; l(t) := 0.3 * t; r(t) := 0.2; play([l, r], 0.03); 1'	1
 'use sound; hum(block: samples, t) := for i in 1 to #block { block#i = t }; play(hum, 0.03s); 1'	1
 'use sound; hum(t: float) := 0.3 * t; play(hum, 0.03); 1'	1
+'use sound; play(./no_such_song.wav)'	error
+'use sound; play("no_such_song.wav")'	error

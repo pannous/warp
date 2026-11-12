@@ -425,7 +425,7 @@ Risks:
 - Timing tests under a loaded Mac (five builds at once): generous slack, counts that do not hang on wake-up times.
 - A handler that sleeps now lets other handlers run in between, so what it read before the sleep may have changed
   (the interleaving every await has); the held source stops only its own re-entry. The wiki says so with the step.
-- One sleep: prelude's `slept`, tasks' main sleep and sound's waits (lib/sound.warp wait_sound, functions.warp retry
+- One sleep: prelude's `slept`, tasks' main sleep and sound's waits (lib/sound.warp wait(sound), functions.warp retry
   call sleep_ms directly) must all wait through the loop, or a timer starves while they block.
 - The program runs on the process's main thread, which SDL and the web view need; the ring keeps foreign threads out
   of wasm. SDL_HINT_NO_SIGNAL_HANDLERS stays "1" (native_host/platform.warp), so SIGINT stays ours.
