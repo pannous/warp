@@ -307,3 +307,27 @@ animation needs nothing: its next frame shows. SDL_RaiseWindow/SyncWindow don't 
 Checking a window by eye: capture it by window id (Quartz CGWindowList by the run's pid, screencapture -l), bring it
 to the front with System Events `set frontmost of (first process whose unix id is <pid>)`; SIGTERM does not end a
 held still picture, kill -9 by pid.
+
+## One shader (card shader-value, plan 2026-11-12)
+Today six ways write GPU code: shader blocks with `$holes`, warp functions translated by lib/shaders.warp,
+compute_toy kernels, raw gpu_compute, GPU lists, gpu_fields/gpu_pass multipass (and `@gpu` maps, broken since the
+Rust emitter left). They all end in one place: WGSL text plus a values map handed to a host. The plan makes that the
+one shape: **one Shader value, one hole table, one resource model, two words.**
+1. Shader value: every form yields one. Its sources are a warp function (canonical: `paint(julia)`) or a
+   `shader { … }` block (the WGSL escape hatch). The block reader detects the dialect by its entry point: `@fragment
+   fn main` WGSL, `main_image` compute.toys (compute_toy becomes an identity alias), later `mainImage` Shadertoy.
+2. One hole table in lib/shaders.warp: time, frame, width, height, size, mouse, mouse_down, mouse_wheel, key, with
+   their aliases (u_time, Time, iTime …) as aliases in the same table. One compile-time scanner; the hosts receive
+   the hole list and stop keeping their own (gpu.warp hole_value, host-gpu.js builtinValues, compute_toys Time/Mouse).
+   One rule fills the holes of any call whose argument is a Shader, instead of one rule per entry word.
+3. Fields are the one resource: a named GPU buffer or texture that lasts across frames. `$previous` is the field
+   previous, storage arrays and GPU lists are 1-D fields. A list of shaders is a pipeline run in order, as a list of
+   notes is a melody: `paint([advect, pressure, show])`; gpu_fields/gpu_pass/gpu_show go into it.
+4. Two words: `paint(s)` draws; computing is `xs.map(f)` on a GPU list or under `@gpu`, through the same translator
+   grown to compute kernels (this brings back the broken `@gpu` maps, wiki/graphics.md:95); a raw WGSL kernel runs
+   with `run(kernel, lists)`. gpu_compute, gpu_render, gpu_pass, gpu_show become aliases, then leave.
+5. The values layout is written down once (here) and both hosts implement it.
+Phases, each landing alone: (a) hole table + one scanner + one rule; (b) dialect detection, compute_toy alias;
+(c) fields subsume $previous and gpu_passes, paint(list); (d) compute kernels from warp functions, @gpu maps;
+(e) remove the duplicates, samples written the canonical way, wiki graphics.md (wiki text to the Interviewer).
+Core cost: none in core/; extensions/shader_blocks and the hole rules shrink; lib/shaders.warp grows.
