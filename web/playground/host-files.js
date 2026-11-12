@@ -14,8 +14,12 @@ const NO_PROCESSES = "not in the browser: a page runs no process or shell, nativ
 const writtenFiles = new Map();
 const plainPath = path => path.replace(/^\.\//, "");
 // a path as the served root names it: a relative one of a run from a program file names that file's neighbour when it
-// is there (besideProgram), so a test's `../fixtures/unix/poem.txt` reads as natively from its folder
-const filePath = path => besideProgram(plainPath(path), self.programFile);
+// is there (besideProgram), so a test's `../fixtures/unix/poem.txt` reads as natively from its folder; a project-root
+// path, `•/test/fixtures/wasm/shout.wasm` (or `@/…`), names the served repository's file, as the page's project is
+// the served repository (natively core/native/driver.warp rooted_path)
+const PROJECT_ROOT_MARK = /^[•@]\//;
+const withoutProjectMark = path => path.replace(PROJECT_ROOT_MARK, "");
+const filePath = path => PROJECT_ROOT_MARK.test(path) ? withoutProjectMark(path) : besideProgram(plainPath(path), self.programFile);
 const textOf = written => typeof written === "string" ? written : utf8Decoder.decode(written);
 
 // a file written (a text) or rendered (bytes, which the page offers for download: worker.js self.keepFile)
