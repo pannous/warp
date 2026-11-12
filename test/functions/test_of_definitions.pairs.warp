@@ -5,3 +5,7 @@
 'foo of any = 1; foo(3)'	1
 'foo of int = it+it; foo of text = it.length; foo of any = 1; foo("abc") + foo(2) + foo(2.5)'	8
 'p = {name: "Bo"}; name of p'	"Bo"
+# := spells the of form too (decision of-form-canonical); a preposition or pronoun in a head is never a parameter (wiki/matching.md)
+'double of int := it * 2; double 3'	6
+'double of an int := it * 2; double(3)'	6
+'canvas = {width: 1}; width of canvas := 12; canvas'	{width: 12}
