@@ -1045,7 +1045,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			left = subscript(left, index, written_offset())
 		} else if c == '(' and p.at > 0 and not is_blank(p.code[p.at - 1]) and INDEX_POWER >= min_power and is_callee(left) {
 			advance(p)
-			left = call_of([left] + spread(items_until(p, Bracket.Round, ItemsEnd.Closer)))
+			left = call_of([left] + spread(call_items(p)))
 		} else if membership_at(p).length > 0 and not counts_units(left) {
 			membership = membership_at(p)
 			if MEMBERSHIP_POWERS#1 < min_power { break }
@@ -1105,6 +1105,12 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				continue
 			}
 			powers = binding_powers(op#2)
+			// `if x=2 {…}`: in a condition `=` compares (wiki/Footguns.md "Assignment in a condition"); a block, a list or
+			// a call's arguments inside it assign again (call_items, group_atom)
+			if op#2 == "=" and p.branch_power == CONDITION_POWER {
+				op = [op#1, "=="]
+				powers = binding_powers("==")
+			}
 			// one arrow, but `=>` binds as written: its body takes an assignment
 			if op#1 == "=>" { powers = binding_powers("=>") }
 			if op#1 == ":" and glued_time_at(p, left) {
@@ -2972,7 +2978,8 @@ def group_atom(p: Parser): Node := {
 	c = p.code[p.at]
 	advance(p)
 	round = c == '('
-	group = with_field(p, "header", p.header and round, () => with_field(p, "iterable", p.iterable and round, () => if c == '{' then braced_items(p) else items_until(p, c as Bracket, ItemsEnd.Closer)))
+	// (a condition's `=` compares inside its parentheses, never in a block or list of it)
+	group = with_field(p, "header", p.header and round, () => with_field(p, "iterable", p.iterable and round, () => with_field(p, "branch_power", if round then p.branch_power else 0, () => if c == '{' then braced_items(p) else items_until(p, c as Bracket, ItemsEnd.Closer))))
 	// `(int or text)?`: an optional union, the one type word `int or text?` (a member ø joins is the union's)
 	union = if c == '(' and #group == 1 and optional_mark_follows(p, "") then union_spelling(group#1) else ø
 	if union == ø { return group }
@@ -3127,12 +3134,14 @@ def named(p: Parser): Node := {
 	}
 	name_or_call(p, name)
 }
+// a call's arguments, `f(x=2)` naming one even inside a condition
+def call_items(p: Parser): list := with_field(p, "branch_power", 0, () => items_until(p, Bracket.Round, ItemsEnd.Closer))
 // the name, or its call `name(x, y)` when a round group follows it, with the block side by side after it
 // (`f(x) {…}`)
 def name_or_call(p: Parser, name: Node): Node := {
 	if not at_char(p, '(') { return name }
 	advance(p)
-	written = items_until(p, Bracket.Round, ItemsEnd.Closer)
+	written = call_items(p)
 	arguments = typed_parameters(written)
 	skip_spaces(p)
 	if at_char(p, '{') and not p.header {
