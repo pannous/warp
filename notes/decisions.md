@@ -24,7 +24,7 @@ Open and parked questions: notes/open_decisions.md. Keys: P = interview question
 
 ## Inbox
 - 2026-11-12 user-approved: remove-alarm-rule: `remove h` drops a listener (`on alarm {1}; h = on alarm {2}; remove h; emit alarm` → 1); a listener handle shows as Listener{event, number}. Undo: revert the sugar rule.
-- 2026-11-12 under discussion (user: default/?? should not catch errors, rescue should): nullish-default: `a ?? b` / `a default b` give b when a is ø or raises (`m["a"] ?? 0` → 0); without it the error stays loud. Undo: revert 674d0ff07f.
+- 2026-11-12 user decision, supersedes 11-10 nullish-default: nullish-split: `??` replaces only ø, as in C#/JS/Swift/Kotlin (`m["a"] ?? 0` raises); the words default, otherwise, failing, except and new alias rescue give the fallback on ø or a raise; `or` stays truthiness (card nullish-split). Was: `a ?? b` / `a default b` give b when a is ø or raises (`m["a"] ?? 0` → 0); without it the error stays loud. Undo: revert 674d0ff07f.
 - 2026-11-12 night (user to review): primitive-arrays: @primitive files get fixed arrays as wiki/array.md spells them (`i64[8]`); later `byte[40]` for C structs. Undo: revert.
 - 2026-11-12 user-approved: typed-globals: a typed global keeps its type everywhere (`global cw: int = 1280; cw = "xy"` refused; `level: int = 0; f() := level` reads it). Undo: revert.
 - 2026-11-12 night (user to review): comment-in-else: a comment line between `}` and `else` keeps the chain. Undo: revert.
