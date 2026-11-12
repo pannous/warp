@@ -19,3 +19,4 @@
 'to_html(div{ "<b>" })'	"<div>&lt;b&gt;</div>"
 # a text as html beside a module that uses html (lib/template.warp): markup's html, as without it (user OK 11-11, card read-tags-html)
 'use template; to_html("<b>x</b>" as html)'	"<b>x</b>"
+'use markup; to_html(html{ for x in [1, 2] { p{x} } })'	'<html><p>1</p><p>2</p></html>'
