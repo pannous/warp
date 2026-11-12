@@ -844,15 +844,84 @@ Examples: ; samples: raylib_circle, raylib_mouse_circle, raylib_sleep, sdl_red_s
 
 `use sound` plays notes by name, chords, rhythms and whole songs. A function can also compute the sound itself.
 
+### Notes and chords
+
+A note is its name and octave, `C4` the middle C; `+` sounds notes together as a chord, a list plays them one after another. `chord` and `scale` build them by name.
+
+```warp
+use sound
+play C4
+play(C4+E4+G4, 1s)
+play(chord(A3, minor), 1s)
+play(scale(D4, dorian), 150ms)
+```
+
+Examples: melody; samples: music, harmony
+
+### Rhythm
+
+`tempo` sets the beats per minute and `beat` counts in them, so a whole tune changes speed with one line. A `pattern` writes a rhythm as text: `~` is a rest, brackets squeeze notes into one step.
+
+```warp
+use sound
+tempo = 120
+play([C4 E4 G4 E4], beat(1/2))
+pattern "c3 ~ [c3 c3] e3"
+```
+
+Examples: ; samples: rhythm, sound_patterns
+
+### Songs
+
+A song is several voices at once: `go` plays a part along with the program and `await` waits for it to end. `at` places parts on the beat clock, and `write_midi` saves a song for other music programs.
+
+```warp
+use sound
+tempo = 100
+bass = go { play([C3 G2 A2 F2], beat 1) }
+play([E4 D4 C4 D4 E4 E4 E4], beat(1/2))
+await bass
+```
+
+Examples: ; samples: voices, arrangement, midi
+
+### Computed sound
+
+`play` also takes a function of the time in seconds and plays its values as the sound wave. For long sounds a function can fill a whole block of samples at a time.
+
+```warp
+use sound
+siren(t: float) := 0.3 * sin(2π * t * (440 + 200 * sin(2π * t)))
+play(siren, 2s)
+```
+
+Examples: ; samples: siren_sound, hum_blocks, stereo_sound
+
 ### Music files
 
-`play` plays a music file in the background. A relative name is relative to the current folder, so the samples name their files from the repository's root, as here.
+`play` plays a music file in the background. A relative name is relative to the current folder, so the samples name their files from the repository's root, as here. `sample` reads a WAV to play faster, slower, sliced or looped.
 
 ```warp
 play ./samples/sound/tune.mp3
 ```
 
-Examples: melody; samples: play_mp3, music, rhythm, harmony, synth, filters, voices, arrangement, sound_patterns, signal_graph, siren_sound, stereo_sound, midi, visualizer, sound_features, sound_kick_samples, sound_pipes, gpu_visualizer_warp, hum_blocks
+Examples: ; samples: play_mp3, sound_kick_samples
+
+### Effects
+
+Settings shape every following note: `wave_shape`, the envelope (`attack`, `decay`, `sustain`, `release`), a filter's `cutoff` and `resonance`, `pan`, delay and reverb. A sound is also a value, piped through effects to the output.
+
+```warp
+use sound
+wave_shape = "square"
+attack = 20ms
+release = 400ms
+cutoff = 1200Hz
+play([C3 G3 C4], 300ms)
+osc(C3, 1s, "saw") |> lowpass(900) |> delay(0.25) |> out
+```
+
+Examples: ; samples: synth, filters, signal_graph, sound_pipes, visualizer, gpu_visualizer_warp, sound_features
 
 # Bigger programs
 

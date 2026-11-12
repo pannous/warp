@@ -2522,9 +2522,9 @@ def at_body_start(p: Parser): bool {
 // no else follows
 def else_branch(p: Parser): list {
 	skip_spaces(p)
-	at = p.at
-	while at < p.n and is_blank(p.code[at]) { at += 1 }
-	if at > p.at and p.code[p.at .. at].contains("\n") and keyword_at_position(p, "else", at) { p.at = at }
+	// (past blanks and comments, as the fallback words: a comment line between the arms keeps the chain)
+	at = p.resumes[p.at]
+	if at > p.at and line_breaks_after(p, p.at) and keyword_at_position(p, "else", at) { p.at = at }
 	if else_if_at(p) {
 		p.at += word_at(p).length
 		skip_spaces(p)

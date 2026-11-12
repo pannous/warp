@@ -106,9 +106,11 @@ ARGUMENTS_AT = 56
 # the module a host word without a caller works in, a text (address, length): module_word's lib module while it
 # builds there, else empty for the native host module (exported)
 GUEST_AT = 64
+# the compiler's caller while one of its module_word calls runs, the module's rule_word asking it, else 0
+ASKER_AT = 80
 # a run's channel listeners (lib/channels.warp), in its block past those: how many, then each one's
 # id, the bytes of its channel's file read so far, its name's length and the name
-LISTENERS_AT = 80
+LISTENERS_AT = 88
 LISTENERS_MAX = 32
 LISTENER_BYTES = 128
 LISTENER_NAME_BYTES = 104
@@ -1013,6 +1015,7 @@ run_state(linker: handle, engine: handle, linked: pointer, context: handle, heap
 	long_at(run + HOST_LINKED_AT as i32).value = 0
 	long_at(run + HEAP_BYTES_AT as i32).value = heap_bytes
 	text_kept(run + GUEST_AT as i32, "")
+	long_at(run + ASKER_AT as i32).value = 0
 	long_at(run + ARGUMENTS_AT as i32).value = given.pointers as i64
 	run
 }
@@ -1291,8 +1294,11 @@ loaded_module(engine: handle, module: text, machine_code: text, trap: pointer): 
 # One engine and the machine code of warp.wasm, runtime.wasm and the prebuilt modules, loaded once and shared by every
 # run of the process that fits them (no fuel, the compiler's heap: a compile and its program alike): `warp test` loads
 # them before its cases fork, so a case starts no process, engine or machine code of its own (0.10 s a case before).
-# The block: the engine, the count of modules, then each module's machine code file (a cell) and handle
+# Only the console's engine checks epochs, by which Ctrl+C stops a line: they cost `warp test` 7% of its instructions.
+# The block: the engine, the count of modules, whether it checks epochs, then each module's machine code file (a cell)
+# and handle
 RESIDENT_SLOT = 6
+RESIDENT_HEADER_BYTES = 24
 RESIDENT_MAX = 256
 RESIDENT_ENTRY_BYTES = 24
 resident_block(): pointer := kept_value(RESIDENT_SLOT) as i32
@@ -1304,11 +1310,12 @@ run_engine(fuel: bool, heap_bytes: i64): handle := {
 }
 # the resident engine made, with the machine code of the compiler and of every module of the library folder a program
 # may link; what runs later loads anything else itself, never adding to the block (a host word's allocations end with it)
-resident_loaded(compiler: text): nothing := {
-	block = allocate((16 + RESIDENT_MAX * RESIDENT_ENTRY_BYTES) as i32)
-	engine = wasm_engine_new_with_config(uncached_config(no, RUN_GC_HEAP_BYTES, yes))
+resident_loaded(compiler: text, interruptible: bool): nothing := {
+	block = allocate((RESIDENT_HEADER_BYTES + RESIDENT_MAX * RESIDENT_ENTRY_BYTES) as i32)
+	engine = wasm_engine_new_with_config(uncached_config(no, RUN_GC_HEAP_BYTES, interruptible))
 	long_at(block).value = engine
 	long_at(block + 8).value = 0
+	long_at(block + 16).value = interruptible as i64
 	trap = allocate(8)
 	library = library_folder()
 	paths = joined(joined(joined(joined(compiler, "\n"), library), "/runtime.wasm\n"), command_output(joined(joined(joined(joined("ls '", library), "/modules' | grep -E '^[^.]+[.]wasm$' | sed 's|^|"), library), "/modules/|'")))
@@ -1316,24 +1323,25 @@ resident_loaded(compiler: text): nothing := {
 		path = field(paths, i, NEWLINE)
 		count = long_at(block + 8).value as i32
 		if path.length > 0 and count < RESIDENT_MAX {
-			entry = block + 16 + count * RESIDENT_ENTRY_BYTES
+			entry = block + RESIDENT_HEADER_BYTES + count * RESIDENT_ENTRY_BYTES
 			# (found by a run's machine code name, loaded from the resident engine's own)
 			text_kept(entry, machine_code_file(path, RUN_GC_HEAP_BYTES))
-			long_at(entry + 16).value = loaded_module(engine, read_file(path), machine_code_at(path, machine_code_suffix_of(RESIDENT_MACHINE_CODE)), trap)
+			long_at(entry + 16).value = loaded_module(engine, read_file(path), machine_code_at(path, machine_code_suffix_of(if interruptible then RESIDENT_MACHINE_CODE else 0)), trap)
 			long_at(block + 8).value = (count + 1) as i64
 		}
 	}
 	keep_value(RESIDENT_SLOT, block as i64)
 }
-# a module's resident machine code, else the module compiled, never from or into a run's machine code (no epoch checks)
+# a module's resident machine code, else the module compiled: kept as a run's when the engine checks no epochs, else
+# never (a run's machine code has no epoch checks, and a console line's module is new each line)
 resident_module(engine: handle, module: text, machine_code: text, trap: pointer): handle := {
 	block = resident_block()
 	count = long_at(block + 8).value as i32
 	for k in 0..count {
-		entry = block + 16 + k * RESIDENT_ENTRY_BYTES
+		entry = block + RESIDENT_HEADER_BYTES + k * RESIDENT_ENTRY_BYTES
 		if same_text(cell_text(entry), machine_code) { return long_at(entry + 16).value }
 	}
-	loaded_module(engine, module, "", trap)
+	loaded_module(engine, module, if long_at(block + 16).value != 0 then "" else machine_code, trap)
 }
 
 # the machine code of the module at `path` kept beside it, current for this wasmtime, nothing run
@@ -1451,6 +1459,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if same_text(module, "net") and same_text(member, "get") { return url_got(caller, context, shown(caller, context, item_of(caller, context, listed, 1)), results) }
 	if same_text(module, "warp") and same_text(member, "option") { return option_answered(caller, context, listed, results) }
 	if same_text(module, "warp") and same_text(member, "module_word") { return module_word_answered(caller, context, listed, results) }
+	if same_text(module, "warp") and same_text(member, "rule_word") { return rule_word_answered(caller, context, listed, results) }
 	if same_text(module, "regex") { return regex_answered(caller, context, member, listed, results) }
 	if same_text(module, "hash") { return hash_answered(caller, context, member, listed, results) }
 	# a live loop's cycle starts: only the playground hands loops over between runs; a fade or stop save sound applies
@@ -1907,33 +1916,56 @@ code_parsed_from(caller: handle, context: handle, code: text, result: pointer): 
 	code_built(caller, context, encoding, at, result)
 }
 # warp.module_word(module, word, arguments) (card module-rule-words): the compiler's call of a rule word the lib module
-# defines, its three values the items of `listed`. The module is linked into the run at its first call; the arguments, a list the caller's node_encoding
-# encodes (runtime/builders.warp), are built there, its export `word` is called on them, and its result, encoded by
-# the module's node_encoding, is built again in the caller
+# defines, its three values the items of `listed`. The module is linked into the run at its first call, the word called
+# there (encoded_call), its result built again in the caller
 module_word_answered(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
 	module = joined("warp/", shown(caller, context, item_of(caller, context, listed, 1)))
 	word = shown(caller, context, item_of(caller, context, listed, 2))
-	encoded = allocate(VALUE_BYTES)
-	guest_call(caller, context, "node_encoding", item_of(caller, context, listed, 3), 1, encoded)
-	encoding = shown(caller, context, encoded)
+	encoding = node_encoded(caller, context, item_of(caller, context, listed, 3))
 	run_linked(context, module, library_folder())
-	guest = kept_value(RUN_SLOT) as i32 + GUEST_AT as i32
-	text_kept(guest, module)
-	at = allocate(8)
-	long_at(at).value = 1
+	run = kept_value(RUN_SLOT) as i32
+	outer_guest = cell_text(run + GUEST_AT as i32)
+	outer_asker = long_at(run + ASKER_AT as i32).value
+	text_kept(run + GUEST_AT as i32, module)
+	long_at(run + ASKER_AT as i32).value = caller
+	answer = encoded_call(0, context, word, encoding)
+	long_at(run + ASKER_AT as i32).value = outer_asker
+	text_kept(run + GUEST_AT as i32, outer_guest)
+	code_built(caller, context, answer, counter_at(0), result)
+}
+# warp.rule_word(word, arguments): a module's rule word asking the compiler running it for one of its rule words
+# (rewrites.warp asked_rule_word), called there on the values, its result built again in the module. Each call encodes
+# its values both ways: pass small ones
+rule_word_answered(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
+	compiler = long_at(kept_value(RUN_SLOT) as i32 + ASKER_AT as i32).value
+	if compiler == 0 { return guest_error(caller, context, "warp.rule_word answers only inside a module's rule word", result) }
+	code_built(caller, context, encoded_call(compiler, context, "asked_rule_word", node_encoded(caller, context, listed)), counter_at(0), result)
+}
+# the caller's value in the parse-code encoding (runtime/builders.warp node_encoding)
+node_encoded(caller: handle, context: handle, value: pointer): text := {
+	encoded = allocate(VALUE_BYTES)
+	guest_call(caller, context, "node_encoding", value, 1, encoded)
+	shown(caller, context, encoded)
+}
+# a cell counting through an encoding, at `at`
+counter_at(at: i64): pointer := {
+	counter = allocate(8)
+	long_at(counter).value = at
+	counter
+}
+# the word of the module `called` names (exported) on the arguments the encoding lists, each built there, its
+# result's encoding
+encoded_call(called: handle, context: handle, word: text, encoding: text): text := {
+	at = counter_at(1)
 	count = atoll(encoded_field(encoding, at))
 	# (the list's bracket and separator)
 	encoded_field(encoding, at)
 	encoded_field(encoding, at)
 	values = allocate((count as i32 + 1) * VALUE_BYTES)
-	for i in 0..count { code_built(0, context, encoding, at, values + (i as i32) * VALUE_BYTES) }
+	for i in 0..count { code_built(called, context, encoding, at, values + (i as i32) * VALUE_BYTES) }
 	returned = allocate(VALUE_BYTES)
-	guest_call(0, context, word, values, count, returned)
-	guest_call(0, context, "node_encoding", returned, 1, returned)
-	answer = shown(0, context, returned)
-	text_kept(guest, "")
-	long_at(at).value = 0
-	code_built(caller, context, answer, at, result)
+	guest_call(called, context, word, values, count, returned)
+	node_encoded(called, context, returned)
 }
 # the node encoded at `at` (advanced past it) built in the module into `result`
 code_built(caller: handle, context: handle, encoding: text, at: pointer, result: pointer): nothing := {
