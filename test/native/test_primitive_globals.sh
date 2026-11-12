@@ -55,4 +55,9 @@ f()')" 255
 check "an index outside the array traps" "$(ran outside 'global kept = i64[8]
 kept[8] = 1
 1' | grep -c -i 'unreachable\|trap')" 1
+check "an array sized as it runs refused" "$(ran sized 'f(n: i64): i64 := {
+	xs = i64[n]
+	1
+}
+f(3)' | grep -c 'an array of a size known only as it runs')" 1
 exit $((failures > 0))

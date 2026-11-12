@@ -100,6 +100,9 @@ global primitive_functions = {}
 # whether primitive functions are compiled into a GC program (else a primitive file is the module)
 global primitive_hosted = no
 global primitive_structs = {}
+# each fixed array type made, by its name `i64[8]`, as a struct type is named: its item type and count
+class ArrayLayout { item: text; count: int }
+global primitive_arrays = {}
 global primitive_place = ""
 # the bytes of the text literals from DATA_START on, and each text's address there
 global primitive_data = []
@@ -145,6 +148,7 @@ primitive_module(source: text, folder: text): list := {
 	primitive_functions = {}
 	primitive_hosted = no
 	primitive_structs = {text: text_layout}
+	primitive_arrays = {}
 	primitive_data = []
 	text_addresses = {}
 	statements = statements_in(program)
@@ -469,8 +473,7 @@ mvp_keyed(f: PrimitiveFunction, left: Node, operator: Op, right: Node, n: Node, 
 	if operator == Op.Then or operator == Op.Else { return mvp_conditional(f, n, expected) }
 	if operator == Op.Do and is_key(left, Op.While) { return mvp_looped(f, value_of(left), right) }
 	if operator == Op.Dot { return mvp_field_read(f, left, right) }
-	if operator == Op.Hash and array_made(left, right) { return PrimitiveCode(array_made(left, right), arena_taken([op.i32_const] + sleb(array_bytes(array_made(left, right))))) }
-	if operator == Op.Hash { return mvp_loaded(mvp_item(f, left, right)) }
+	if operator == Op.Hash { return mvp_hashed(f, left, right) }
 	if operator == Op.As { return mvp_cast_as(f, left, right) }
 	if operator == Op.And or operator == Op.Or { return mvp_logical(f, left, operator, right) }
 	if operator == Op.Not { return PrimitiveCode(BOOL_TYPE, mvp_condition(f, right) + [op.i32_eqz]) }
@@ -708,20 +711,32 @@ mvp_stored_at(f: PrimitiveFunction, found: list, value: Node): PrimitiveCode := 
 
 # a fixed array `i64[8]` (wiki/array.md; the parser reads it as `i64#9`): its items' type and count in its type, its
 # items in memory one after another, zeros at first: a global's in the data, any other taken from the arena
-array_made(type: Node, counted: Node): text? := if type is symbol and name_of(type) in scalars and counted is int then name_of(type) + "[" + (counted - 1) + "]" else ø
-array_item(type: text): text := type.split("[")#1
-array_count(type: text): int := int(type.split("[")#2.split("]")#1)
-array_bytes(type: text): int := array_count(type) * mvp_scalar(array_item(type)).width
+# (a size known only as it runs is refused: the array's place is fixed when it is compiled)
+array_made(type: Node, counted: Node): text? := {
+	if not (type is symbol and name_of(type) in scalars) { return ø }
+	if not (counted is int) { primitive_refusal(type, "an array of a size known only as it runs: write `" + name_of(type) + "[8]`") }
+	name = name_of(type) + "[" + (counted - 1) + "]"
+	primitive_arrays[name] = ArrayLayout(name_of(type), counted - 1)
+	name
+}
+array_bytes(type: text): int := primitive_arrays[type].count * mvp_scalar(primitive_arrays[type].item).width
 # the address and [0, item type] of an array's item counted from 1 (`kept#3`, the parser's `kept[2]`), trapping outside it
 mvp_item(f: PrimitiveFunction, array: Node, index: Node): list := {
 	held = mvp_emitted(f, array, "")
-	if not held.type.ends_with("]") { primitive_refusal(array, "an item of a " + (held.type or "statement") + ", not an array") }
-	item = array_item(held.type)
+	layout = primitive_arrays.get(held.type)
+	if layout == ø { primitive_refusal(array, "an item of a " + (held.type or "statement") + ", not an array") }
+	item = layout.item
 	f.scratch += 1
 	at = uleb(mvp_local_of(f, "·item" + f.scratch, "i32"))
-	outside = [op.local_tee] + at + [op.i32_const] + sleb(array_count(held.type)) + [comparison_codes.i32 + integer_comparisons.ge + 1, op.if, empty_block_type, op.unreachable, op.end]
+	outside = [op.local_tee] + at + [op.i32_const] + sleb(layout.count) + [comparison_codes.i32 + integer_comparisons.ge + 1, op.if, empty_block_type, op.unreachable, op.end]
 	offset = mvp_typed(f, index, "i32") + [op.i32_const, 1, arithmetic_codes.i32 + integer_arithmetic.sub] + outside
 	[offset + held.code + [op.local_get] + at + [op.i32_const] + sleb(mvp_scalar(item).width) + [arithmetic_codes.i32 + integer_arithmetic.mul, op.i32_add], [0, item]]
+}
+# `i64#9`, the parser's `i64[8]`: a local array taken from the arena; `kept#3`: an item read
+mvp_hashed(f: PrimitiveFunction, left: Node, right: Node): PrimitiveCode := {
+	made = array_made(left, right)
+	if made { return PrimitiveCode(made, arena_taken([op.i32_const] + sleb(array_bytes(made)))) }
+	mvp_loaded(mvp_item(f, left, right))
 }
 # the address of `count` zero bytes in the data, at a multiple of ARENA_ALIGNMENT
 zeros_reserved(count: int): int := {
