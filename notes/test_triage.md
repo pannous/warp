@@ -565,7 +565,7 @@ Unchanged since the earlier triage: ∞ 7, divide by zero 7, `x as text?` 6, Col
 Wrong expectations (approve to correct):
 | file:line | expected now | proposed | why |
 |---|---|---|---|
-| test/numbers/test_rounding_in_functions.pairs.warp:6 | 2 | drop | decision round-halves: a half may round either way; tests never pin it |
+| test/numbers/test_rounding_in_functions.pairs.warp:6 | 2 | f(2.7) → 3 | decision round-halves: a half may round either way; tests never pin it |
 | test/numbers/test_unbounded_int.pairs.warp:57 | "too big for int: 9223372037000250000" | "too big for int; fix: `x as! int` keeps its low 64 bits" | the refusal now names the fix-it (decision checked-forced-conversions) |
 | test/numbers/test_unit_prefix_lines.pairs.warp:19 | `'a'   todo: …` (spaces, read as the expected) | a tab before the note | got "a" already; the note is glued to the expected value |
 | test/numbers/test_units_after_numbers.warp:30 | `s = 3; str(440Hz)` "440/s" | "440Hz" | Hz shows as written (canonical-output); Rust-era form |
