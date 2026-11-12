@@ -11,6 +11,8 @@ use "walk.warp"
 use "../parsing/phrase_blocks.warp"
 use "../analysis/words.warp"
 
+# the root of the error classes (lib/prelude.warp `class Error`)
+ERROR_CLASS = "Error"
 applied_to(word: text, arguments: list): Node := List([symbol(word)] + arguments, Bracket.Round, Separator.None)
 # `{n}`, a block of one item
 braced(n: Node): Node := List([n], Bracket.Curly, Separator.Space)
@@ -26,6 +28,13 @@ guarded_try(value: Node, fallback: Node, binding: Node?, number: int): Node := {
 	succeeded = Key(finished, Op.And, Key(ø, Op.Not, applied_to("is_error", [result])))
 	# the caught Error's name is a handler's place, `e: error`, where it raises no more (decision errors-one-rule)
 	caught = try_assigned(Key(binding, Op.Colon, symbol("error")), applied_to("placed_at", [applied_to("caught_error", [finished, result]), applied_to("trap_place", [])]))
+	# `except T as e { y }` (the binding `e: T`): e is the raised instance, y runs for a T (a subclass too), any other
+	# error raises on
+	if is_key(binding, Op.Colon) {
+		name = key_of(binding)
+		caught = try_assigned(name, applied_to("caught_instance", [finished, result]))
+		fallback = chosen(Key(name, Op.Is, value_of(binding)), braced(fallback), braced(applied_to(raise_word, [name])))
+	}
 	otherwise = if binding == ø then braced(fallback) else List([caught, fallback], Bracket.Curly, Separator.Semicolon)
 	statements([ran, chosen(succeeded, braced(result), otherwise)])
 }
@@ -68,6 +77,8 @@ try_form(n: Node): Node := match n {
 		if #parts < 3 or parts#1 != symbol(HiddenWord.TryElse as text) { return n }
 		if #parts == 3 { return lowered_try(parts#2, parts#3, ø) }
 		if #parts == 4 and is_name(parts#4) { return lowered_try(parts#2, parts#3, parts#4) }
+		# `except Error as e` catches every error, as `catch e` does
+		if #parts == 4 and is_key(parts#4, Op.Colon) { return lowered_try(parts#2, parts#3, if value_of(parts#4) == symbol(ERROR_CLASS) then key_of(parts#4) else parts#4) }
 		n
 	}
 	_: handled_form(n)

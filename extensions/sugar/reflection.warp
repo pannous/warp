@@ -15,17 +15,19 @@ rewrite $f.effects => [$effects...] where $f is symbol and $f is function and $e
 rewrite $f.signature => $s where $f is symbol and $s = signature_text($f, $program)
 rewrite $f.signatures => [$s...] where $f is symbol and $s = signatures_listed($f, $program)
 rewrite $f.return_type => $r where $f is symbol and $f is function and $r = return_kind($f, $program)
-rewrite $f.description => $refused where $f is symbol and $f is function and $refused = misnamed($f, description, doc)
-rewrite $f.returns => $refused where $f is symbol and $f is function and $refused = misnamed($f, returns, return_type)
+# the prelude's aliases of doc and return_type (decision synonyms-are-aliases), which a member word doesn't take
+rewrite $f.description => $f.doc where $f is symbol and $f is function
+rewrite $f.returns => $f.return_type where $f is symbol and $f is function
 rewrite $f.representation => $refused where $f is symbol and $f is function and $refused = misnamed($f, representation, body)
 rewrite $f.definition => $d where $f is symbol and $f is function and $d = definition_text($f, $program, $source)
 rewrite $f.full => $d where $f is symbol and $f is function and $d = full_definition($f, $program, $source)
-# `P.fields`, `P.methods` of a class the program declares: fields(P), methods(P) below (decision: one reflection set)
-rewrite $c.fields => [$names...] where $c is symbol and $names = class_fields_listed($c, $program, $source)
+# `P.fields`, `P.methods` of a class the program declares: fields(P), methods(P) below (decision: one reflection set);
+# properties, attributes and members say fields too, unless the class has a member of that name (field_word)
+rewrite $c.$w => [$names...] where $c is symbol and $f = field_word($w, $program) and $names = class_fields_listed($c, $program, $source)
 rewrite $c.methods => [$functions...] where $c is symbol and $functions = class_methods_listed($c, $program, $source)
 # `p.fields`, `p.methods` of an instance the program makes of a class, `p = Point(3, 4)` (extensions/rules/rule_words.warp
 # instance_members)
-rewrite $p.fields => [$names...] where $p is symbol and $names = instance_members($p, fields, $source)
+rewrite $p.$w => [$names...] where $p is symbol and $f = field_word($w, $program) and $names = instance_members($p, $f, $source)
 rewrite $p.methods => [$names...] where $p is symbol and $names = instance_members($p, methods, $source)
 # `functions` is a synonym of methods (decision methods-declared); a type word's or alias's methods, `text.methods`
 # (extensions/rules/rule_words.warp type_methods)
@@ -35,8 +37,11 @@ rewrite $t.methods => [$names...] where $t is symbol and $names = type_methods($
 rewrite $t.functions => [$names...] where $t is symbol and $names = type_methods($t, $program, $source)
 # `fields(B)`, `methods(B)` of a class the program declares: its field names, its methods (inherited and outside ones
 # among them) as function values (extensions/rules/rule_words.warp class_fields_listed, class_methods_listed)
-rewrite fields($c) => [$names...] where $c is symbol and $names = class_fields_listed($c, $program, $source)
+rewrite $w($c) => [$names...] where $f = field_word($w, $program) and $c is symbol and $names = class_fields_listed($c, $program, $source)
 rewrite methods($c) => [$functions...] where $c is symbol and $functions = class_methods_listed($c, $program, $source)
+rewrite functions($c) => [$functions...] where $c is symbol and $functions = class_methods_listed($c, $program, $source)
+# `fields(p)` of an instance the program makes, as p.fields
+rewrite $w($p) => [$names...] where $f = field_word($w, $program) and $p is symbol and $names = instance_members($p, $f, $source)
 # `functions()`: the program's own functions as function values (extensions/rules/rule_words.warp program_functions)
 rewrite functions() => [$functions...] where not method and $functions = program_functions($program, $source)
 # `type(sqrt)`: a library word's signature, `builtin: (x:number) -> number` (extensions/rules/rule_words.warp builtin_type)

@@ -33,6 +33,7 @@ BOARD_CARD = "https://github.com/users/pannous/projects/1?pane=issue&itemId=%s"
 RECENTLY_DONE = 8
 FLIPS_SHOWN = 8  # named tests per lane that started or stopped passing
 CARD_SNAPSHOTS = os.path.join(REPO, "data/vitals/cards.jsonl")  # one line per snapshot of the board's columns
+BUILD_TIMES_SINCE = "2026-11-06"  # rebuild seconds before this date are outliers of the old build steps (user 11-12)
 STORE = os.environ.get("WARP_STORE", "/Volumes/Build/compilers")  # build records (notes/compiler_rebuilds.md)
 # (name, record, whether one compiler, the seed, runs many of them: its first run is cold; warp-self's compiler is the
 # record's own warp.wasm, run once, so its records are alike)
@@ -274,7 +275,7 @@ def build_times(landed):
             continue
         best = leanest.setdefault(commit, [None] * len(parts))
         leanest[commit] = [part if best[i] is None or (part is not None and part < best[i]) else best[i] for i, part in enumerate(parts)]
-    return sorted([landed[commit], commit[:10], *(None if part is None else round(part, 1) for part in parts)] for commit, parts in leanest.items())
+    return sorted([landed[commit], commit[:10], *(None if part is None else round(part, 1) for part in parts)] for commit, parts in leanest.items() if landed[commit] >= BUILD_TIMES_SINCE)
 
 
 def build_history(record, by_seed, landed):

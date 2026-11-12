@@ -513,23 +513,6 @@ window_fullscreen() := system_value("window_fullscreen") != 0
 window.fullscreen := window_fullscreen
 window.fullscreen(full) := set_system_value("window_fullscreen", if full then 1 else 0)
 // a program cannot resize the display: set window.width or canvas.width instead
-display.width := display_width
-display.height := display_height
-// the device pixels per length (decision display-names, other names display.dpi and display.ppi), a quantity in dpi
-// that turns lengths into px, `3 cm * display.density`; a program sets it in dpi, `display.density = 300 dpi`
-display.density := display_dpi * 1dpi
-display.density(density) := set_system_value("display_dpi", density / 1dpi)
-// its other names repeat its body: a dotted definition cannot name another (`display.dpi := display.density` reads
-// display as a value) and alias takes no dotted name (card dotted-definition-naming)
-display.dpi := display_dpi * 1dpi
-display.dpi(density) := set_system_value("display_dpi", density / 1dpi)
-display.ppi := display_dpi * 1dpi
-display.ppi(density) := set_system_value("display_dpi", density / 1dpi)
-// width × height in px (other names display.dimensions and display.resolution)
-display.size := [display_width, display_height] px
-// the diagonal as a length: its nearest whole px at the density (quantities run as exact amounts, a run-time hypot is
-// a float; the prelude writes no power, which would link big_numbers into every program)
-display.diagonal := round(hypot(display_width, display_height)) * 1px / (display_dpi * 1dpi)
 // The fields of a time at run time (card time-fields-warp, wiki/time.md), called late by the emitter's
 // time_field with the time's form (TimeForm: 1 a date, its position in days; else nanoseconds since 1970), its
 // position, its zone's seconds east of UTC (a zoned time's, else 0; not `offset`: the index type's synonym) and the
@@ -1102,3 +1085,81 @@ items_written(left: any, given: any): any := {
 	for i in 1 to #given { given#i = left#i }
 	given
 }
+
+# card quantifier-values: `all xs < y` and `any xs == y` compare each item, AllOf and AnyOf holding the list;
+# the two-argument all(xs, f) and any(xs, f) stay the builtins
+class AllOf {
+	items: any
+	less(other) := all(items, e => e < other)
+	greater(other) := all(items, e => e > other)
+	less_or_equal(other) := all(items, e => e <= other)
+	greater_or_equal(other) := all(items, e => e >= other)
+	equal(other) := all(items, e => e == other)
+	not_equal(other) := all(items, e => e != other)
+}
+class AnyOf {
+	items: any
+	less(other) := any(items, e => e < other)
+	greater(other) := any(items, e => e > other)
+	less_or_equal(other) := any(items, e => e <= other)
+	greater_or_equal(other) := any(items, e => e >= other)
+	equal(other) := any(items, e => e == other)
+	not_equal(other) := any(items, e => e != other)
+}
+# one-argument all(xs) / any(xs) cannot be prelude functions: any(xs) breaks the type any, and all(xs) makes the new
+# compiler leave the runtime without a length of symbol xs. A general `all $xs` constructor rewrite would also eat
+# `all xs in t` and `3 in all xs`, so only the comparison forms construct AllOf / AnyOf.
+# `3 in all xs` is not membership of the quantified items; keep a clear error. `where raw` so the pattern is tried
+# before `all $xs` or `x in xs` inside it rewrites.
+rewrite ($x in all $xs) => raise "unknown name all" where raw
+rewrite ($x in any $xs) => raise "unknown name any" where raw
+rewrite (all $xs < $y) => AllOf{items: $xs} < $y
+rewrite (all $xs > $y) => AllOf{items: $xs} > $y
+rewrite (all $xs <= $y) => AllOf{items: $xs} <= $y
+rewrite (all $xs >= $y) => AllOf{items: $xs} >= $y
+rewrite (all $xs == $y) => AllOf{items: $xs} == $y
+rewrite (all $xs != $y) => AllOf{items: $xs} != $y
+rewrite (any $xs < $y) => AnyOf{items: $xs} < $y
+rewrite (any $xs > $y) => AnyOf{items: $xs} > $y
+rewrite (any $xs <= $y) => AnyOf{items: $xs} <= $y
+rewrite (any $xs >= $y) => AnyOf{items: $xs} >= $y
+rewrite (any $xs == $y) => AnyOf{items: $xs} == $y
+rewrite (any $xs != $y) => AnyOf{items: $xs} != $y
+rewrite ((all $xs) < $y) => AllOf{items: $xs} < $y
+rewrite ((all $xs) > $y) => AllOf{items: $xs} > $y
+rewrite ((all $xs) <= $y) => AllOf{items: $xs} <= $y
+rewrite ((all $xs) >= $y) => AllOf{items: $xs} >= $y
+rewrite ((all $xs) == $y) => AllOf{items: $xs} == $y
+rewrite ((all $xs) != $y) => AllOf{items: $xs} != $y
+rewrite ((any $xs) < $y) => AnyOf{items: $xs} < $y
+rewrite ((any $xs) > $y) => AnyOf{items: $xs} > $y
+rewrite ((any $xs) <= $y) => AnyOf{items: $xs} <= $y
+rewrite ((any $xs) >= $y) => AnyOf{items: $xs} >= $y
+rewrite ((any $xs) == $y) => AnyOf{items: $xs} == $y
+rewrite ((any $xs) != $y) => AnyOf{items: $xs} != $y
+
+# `ok = all xs > 0` and `if all xs > 0 {..} else {..}`: the comparison as a value or condition, not a statement
+rewrite ($a = all $xs < $y) => $a = AllOf{items: $xs} < $y
+rewrite ($a = all $xs > $y) => $a = AllOf{items: $xs} > $y
+rewrite ($a = all $xs <= $y) => $a = AllOf{items: $xs} <= $y
+rewrite ($a = all $xs >= $y) => $a = AllOf{items: $xs} >= $y
+rewrite ($a = all $xs == $y) => $a = AllOf{items: $xs} == $y
+rewrite ($a = all $xs != $y) => $a = AllOf{items: $xs} != $y
+rewrite ($a = any $xs < $y) => $a = AnyOf{items: $xs} < $y
+rewrite ($a = any $xs > $y) => $a = AnyOf{items: $xs} > $y
+rewrite ($a = any $xs <= $y) => $a = AnyOf{items: $xs} <= $y
+rewrite ($a = any $xs >= $y) => $a = AnyOf{items: $xs} >= $y
+rewrite ($a = any $xs == $y) => $a = AnyOf{items: $xs} == $y
+rewrite ($a = any $xs != $y) => $a = AnyOf{items: $xs} != $y
+rewrite (if all $xs < $y {$yes} else {$no}) => if AllOf{items: $xs} < $y {$yes} else {$no}
+rewrite (if all $xs > $y {$yes} else {$no}) => if AllOf{items: $xs} > $y {$yes} else {$no}
+rewrite (if all $xs <= $y {$yes} else {$no}) => if AllOf{items: $xs} <= $y {$yes} else {$no}
+rewrite (if all $xs >= $y {$yes} else {$no}) => if AllOf{items: $xs} >= $y {$yes} else {$no}
+rewrite (if all $xs == $y {$yes} else {$no}) => if AllOf{items: $xs} == $y {$yes} else {$no}
+rewrite (if all $xs != $y {$yes} else {$no}) => if AllOf{items: $xs} != $y {$yes} else {$no}
+rewrite (if any $xs < $y {$yes} else {$no}) => if AnyOf{items: $xs} < $y {$yes} else {$no}
+rewrite (if any $xs > $y {$yes} else {$no}) => if AnyOf{items: $xs} > $y {$yes} else {$no}
+rewrite (if any $xs <= $y {$yes} else {$no}) => if AnyOf{items: $xs} <= $y {$yes} else {$no}
+rewrite (if any $xs >= $y {$yes} else {$no}) => if AnyOf{items: $xs} >= $y {$yes} else {$no}
+rewrite (if any $xs == $y {$yes} else {$no}) => if AnyOf{items: $xs} == $y {$yes} else {$no}
+rewrite (if any $xs != $y {$yes} else {$no}) => if AnyOf{items: $xs} != $y {$yes} else {$no}

@@ -809,9 +809,22 @@ Examples: forms; samples: server, route_headers, hosting, worker
 
 ## Paint
 
-`use draw` paints pixels on a canvas, and `show()` shows it. A shader colors every pixel at once on the graphics card: [[#Shaders]] below.
+```warp
+use draw
+canvas(200, 120)
+circle(60, 60, 40, red)
+rect(110, 30, 70, 60, blue)
+line(0, 110, 200, 10, black)
+show()
+```
 
-`use image` loads a picture from a BMP or JPEG file, `image(./photo.jpg)`, or makes one from a function of the column and row, `image(64, 48, (x, y) => rgb(4 * x, 5 * y, 128))`. Its changes give a new picture: `flipped`, `mirrored`, `cropped`, `tinted`, `grayed`, `blurred`, `each_pixel`; `show()` paints it and `.save(./out.bmp)` writes it.
+```warp
+use image
+sunset = image(160, 90, (x, y) => rgb(255, 2 * y, 90 + x))
+sunset.mirrored.blurred.show()
+```
+
+Pictures also load, `image(./photo.jpg)`, change (`flipped`, `cropped`, `tinted`, `grayed`, `each_pixel`) and save, `.save(./out.bmp)`. Every pixel at once on the graphics card: [[#Shaders]].
 
 Examples: frames; samples: paint_text, color_swatches, finger_paint, paint_function, window_size, load_jpeg, load_bmp, make_image, circle, filled_circle, mandelbrot_canvas, particles
 
