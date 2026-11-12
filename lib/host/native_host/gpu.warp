@@ -637,16 +637,22 @@ kept_storage(name: text, bytes: int): int := {
 	stored_buffers.add(StoredBuffer(name, buffer, bytes))
 	buffer
 }
-// a GPU list [f32] copied from the program's memory in one write. 0 where this value is not one, or the program's
-// memory was never recorded (then the caller walks the numbers)
+// a GPU list [f32] copied from the program's memory in one write, 0 where this value is not one (the caller walks
+// its numbers)
 gpu_storage(name: text, cells: list): int := {
 	place = gpu_list_place(cells)
-	base = system_value("program memory")
-	if place < 0 or base == 0 { return 0 }
+	if place < 0 { return 0 }
 	bytes = #cells * 4
 	buffer = kept_storage(name, bytes)
-	wgpuQueueWriteBuffer(queue, buffer, 0, pointer_handle(base + shift_right(place, 32)), bytes)
+	wgpuQueueWriteBuffer(queue, buffer, 0, program_cells(place), bytes)
 	buffer
+}
+// where a GPU list's cells start in the program's memory, as C sees them; never a walk number by number where the
+// driver recorded no memory (the run's start records it)
+program_cells(place: int): int := {
+	base = system_value("program memory")
+	if base == 0 { raise "a GPU list's cells: the driver recorded no program memory to copy them from" }
+	pointer_handle(base + shift_right(place, 32))
 }
 // a buffer holding the cells (a GPU list's place, else numbers as f32 bits or int32s), bound so
 cells_buffer(cells: list, usage: int): int := {
@@ -1416,8 +1422,6 @@ array_given(array: StorageArray, numbers: any) := {
 	array.place = gpu_list_place(numbers)
 	array.cell = if array.place < 0 then "" else GPU_CELLS[gpu_list_cell(numbers)]
 }
-// a GPU list's cells: their address in the program's memory, as C sees it
-cells_address(array: StorageArray): int := pointer_handle(system_value("program memory") + shift_right(array.place, 32))
 // a C pointer `by` bytes on
 pointer_moved(pointer: int, by: int): int := pointer_handle(handle_pointer(pointer) + by)
 // an array's cells as the shader reads them: a GPU list of its type where it is, else the numbers as its type's bits
@@ -1426,7 +1430,7 @@ array_buffer(array: StorageArray): int := {
 	if array.cell == array.element {
 		size = buffer_bytes(array)
 		buffer = buffer_of(size, usage + BUFFER_COPY_DST)
-		wgpuQueueWriteBuffer(queue, buffer, 0, cells_address(array), size)
+		wgpuQueueWriteBuffer(queue, buffer, 0, program_cells(array.place), size)
 		return buffer
 	}
 	cells_buffer([cell_bits(array.element, x) for x in array.given], usage)
@@ -1482,14 +1486,14 @@ arrays_computed(shader: text, order: list, workgroups: int): any := {
 // what the shader left in an array: a GPU list's cells written where they are (the list itself), else a list of numbers
 array_left(array: StorageArray, mapped: int): any := {
 	if array.cell == array.element {
-		memmove(cells_address(array), mapped, cells_bytes(array))
+		memmove(program_cells(array.place), mapped, cells_bytes(array))
 		return array.given
 	}
 	cells = field_bytes(mapped, 0, #array.given * 4)
 	numbers = [cell_number(array.element, bytes_int([byte_at(cells, 4 * i + k) for k in 0 ..< 4], "little")) for i in 0 ..< #array.given]
 	if array.place < 0 { return numbers }
 	// (a GPU list of another cell type takes the numbers into its own cells)
-	memcpy(cells_address(array), [cell_bits(array.cell, x) for x in numbers])
+	memcpy(program_cells(array.place), [cell_bits(array.cell, x) for x in numbers])
 	array.given
 }
 host_gpu_computed(given_shader, arrays: any, workgroups: int): any? := {
