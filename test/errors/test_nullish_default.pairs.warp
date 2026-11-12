@@ -13,3 +13,7 @@
 's = "abc"; s.find("x") default 0'	0
 '[].first ?? 0'	0
 'm = {}; k = "a"; m[k] ?? 0'	0
+# decision nullish-split: ?? replaces only ø (C#, JS, Swift); the fallback words also catch a raise, rescue among them
+'x = ø; x ?? 5'	5
+'m = {}; m["a"] ?? 0'	error	no field a
+'m = {}; m["a"] rescue 0'	0
