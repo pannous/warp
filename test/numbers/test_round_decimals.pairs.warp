@@ -1,0 +1,4 @@
+# decision round-decimals (user 2026-11-12): round(x, decimals: n) is an overload of round, positionally too
+'round(2.345, decimals: 2)'	2.35
+'round(2.345, 2)'	2.35
+'round(2.5)'	2

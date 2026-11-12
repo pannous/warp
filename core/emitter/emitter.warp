@@ -287,7 +287,7 @@ ending_host_word = "exit"
 # the code of a TypedCode(kind, code) value that ends the run, nothing after it reached (read through a parameter as converted
 # reads its value: `host_call(…).code + […]` written in place is read as a text's character)
 def ended_code(value: TypedCode): list { value.code + [op.unreachable] }
-# the names of the helpers the lowering adds to a program (prelude·round_to)
+# the names of the helpers the lowering adds to a program (prelude·first_items)
 prelude_prefix = "prelude·"
 # --emit-survey: a refused function is recorded and taken as giving a node, the others compiled on, and the
 # refusal names each refused function's first refused form, a line each
