@@ -1253,6 +1253,109 @@ function clearPreviousRun(value = PENDING_VALUE) {
 	showPrinted([]);
 }
 
+
+// card slider-ui: `c = slider(-2 to 2)` is a UI value. The page shows a range control for each call and reruns
+// with the new value (the editor keeps the program as written). A value already in the call is the start.
+const SLIDER_CALL = /\bslider\(\s*(-?(?:\d+\.?\d*|\.\d+))\s*(?:to|,)\s*(-?(?:\d+\.?\d*|\.\d+))(?:\s*,\s*(-?(?:\d+\.?\d*|\.\d+)))?\s*\)/g;
+const SLIDER_NAME = /([A-Za-z_][A-Za-z_0-9]*)\s*=\s*$/;
+const SLIDER_DELAY_MS = 80; // live while dragging, without a compile on every pointer tick
+let sliderValues = [];
+let sliderKey = "";
+let sliderTimer;
+
+function sliderNumber(n) {
+	return String(Number.parseFloat(Number(n).toFixed(10)));
+}
+
+function sliderCommented(source, index) {
+	const lineStart = source.lastIndexOf("\n", index - 1) + 1;
+	const prefix = source.slice(lineStart, index);
+	return /#|\/\//.test(prefix);
+}
+
+function parseSliders(source) {
+	const found = [];
+	SLIDER_CALL.lastIndex = 0;
+	let match;
+	while ((match = SLIDER_CALL.exec(source))) {
+		if (sliderCommented(source, match.index)) continue;
+		const lo = Number(match[1]), hi = Number(match[2]);
+		const named = SLIDER_NAME.exec(source.slice(0, match.index));
+		found.push({
+			start: match.index,
+			end: match.index + match[0].length,
+			lo, hi,
+			value: match[3] !== undefined ? Number(match[3]) : (lo + hi) / 2,
+			name: named ? named[1].replace(/_/g, " ") : `slider ${found.length + 1}`,
+		});
+	}
+	return found;
+}
+
+function sliderPanel() {
+	let panel = $("sliders");
+	if (panel) return panel;
+	if (!document.getElementById("slider-style")) {
+		document.head.append(element("style", { id: "slider-style" },
+			`.sliders { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 12px; font-size: 0.9em; color: var(--muted); }
+.sliders[hidden] { display: none; }
+.sliders label { display: grid; grid-template-columns: 7em 1fr 4em; gap: 8px; align-items: center; }
+.sliders input[type=range] { width: 100%; accent-color: var(--accent); }
+.sliders .slider-value { font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace; color: var(--ink); text-align: right; }`));
+	}
+	panel = element("div", { id: "sliders", className: "sliders", hidden: true });
+	const output = $("output");
+	const painted = $("painted");
+	if (output && painted) output.insertBefore(panel, painted);
+	else (output ?? document.body).append(panel);
+	return panel;
+}
+
+function showSliders(sliders) {
+	// keep values while this program's sliders stay the same; a different program takes its starts
+	const key = sliders.map(slider => `${slider.name}:${slider.lo}:${slider.hi}`).join("|");
+	if (key !== sliderKey) {
+		sliderKey = key;
+		sliderValues = sliders.map(slider => slider.value);
+	} else {
+		sliderValues = sliders.map((slider, i) => {
+			const kept = sliderValues[i];
+			return kept !== undefined && kept >= slider.lo && kept <= slider.hi ? kept : slider.value;
+		});
+	}
+	const panel = sliderPanel();
+	panel.hidden = sliders.length === 0;
+	panel.replaceChildren(...sliders.map((slider, i) => {
+		const value = element("span", { className: "slider-value" }, sliderNumber(sliderValues[i]));
+		const input = element("input", {
+			type: "range",
+			min: slider.lo,
+			max: slider.hi,
+			step: (slider.hi - slider.lo) / 400 || 0.01,
+			value: sliderValues[i],
+			oninput: () => {
+				sliderValues[i] = Number(input.value);
+				value.textContent = sliderNumber(sliderValues[i]);
+				clearTimeout(sliderTimer);
+				sliderTimer = setTimeout(runChanged, SLIDER_DELAY_MS);
+			},
+		});
+		return element("label", {}, slider.name, input, value);
+	}));
+}
+
+function withSliderValues(source) {
+	const sliders = parseSliders(source);
+	showSliders(sliders);
+	if (sliders.length === 0) return source;
+	let out = source;
+	for (let i = sliders.length - 1; i >= 0; i--) {
+		const slider = sliders[i];
+		out = out.slice(0, slider.start) + `slider(${sliderNumber(slider.lo)}, ${sliderNumber(slider.hi)}, ${sliderNumber(sliderValues[i])})` + out.slice(slider.end);
+	}
+	return out;
+}
+
 async function show(code) {
 	if (showing) {
 		queued = code; // only the newest code is worth running next
@@ -1264,7 +1367,7 @@ async function show(code) {
 	dimPreviousRun();
 	setStatus(RUNNING);
 	try {
-		const report = await evaluate(code);
+		const report = await evaluate(withSliderValues(code));
 		clearPreviousRun();
 		showReport(report);
 	} catch (failure) {
@@ -1586,6 +1689,12 @@ function initialize() {
 
 // for headless runs (test_in_browser.py --examples): evaluate code as the page does and return the report
 window.playground = { evaluate, applyFix, chooseExample, exampleSource, runCode, reportAddress, bugReport, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
+	sliders: () => sliderValues.slice(),
+	// set a slider and rerun (headless page check, card slider-ui)
+	setSlider: (index, value) => {
+		sliderValues[index] = Number(value);
+		return runChanged();
+	},
 	// an animation that runs until stopped (a raylib window's `while not WindowShouldClose()`) ends with its report, as
 	// the next run would end it (test_in_browser.py sample_answer); yes when one ran
 	stopAnimation: () => Boolean(pending?.animating && (stopRun(pending, ANIMATION_STOPPED), true)),
