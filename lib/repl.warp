@@ -144,7 +144,7 @@ mentions_symbol(entry: text, symbols: any) := symbolic_names(entry).any(name => 
 interpret_prefix = "interpret "
 show_steps(entry: text, symbols: any, session: text, kept: int) := {
 	final = entry.starts_with(interpret_prefix)
-	expression = if final then trim(entry.remove_prefix(interpret_prefix)) else entry
+	expression = if final then trim(entry.remove(prefix: interpret_prefix)) else entry
 	shown = symbolic_steps(expression, symbols, e => evaluated(session + e))
 	if final {
 		if shown.error == "" and count(shown.steps) > 0 { print shown.steps[count(shown.steps) - 1] }

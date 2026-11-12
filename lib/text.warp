@@ -16,7 +16,7 @@ public format(template, values) := {
 }
 // the words between runs of whitespace: spaces, tabs, newlines (Python's split())
 words(t: text): list := [w for w in split(join([if not is_space(c) then c else " " for c in t], ""), " ") if w]
-lines(t: text): list := [remove_suffix(l, chr(13)) for l in split(t, "\n")]
+lines(t: text): list := [remove(l, suffix: chr(13)) for l in split(t, "\n")]
 // the letters of a text, no digits, spaces or punctuation: letters of "a1 b!" is ['a' 'b'] (decision 2026-10-15),
 // of any script: letters of "x، ب٣" is ['x' 'ب']
 letters(t): list := [c for c in chars(t) if is_unicode_letter(c)]
@@ -87,8 +87,12 @@ is_blank(t): bool := trim(t) is empty
 // has letters, all upper (or lower) case
 is_upper(t): bool := upper(t) == t and lower(t) != t
 is_lower(t): bool := lower(t) == t and upper(t) != t
-remove_prefix(t, prefix) := if starts_with(t, prefix) then t[count(prefix):] else t
-remove_suffix(t, suffix) := if ends_with(t, suffix) then t[0: count(t) - count(suffix)] else t
+remove(t: text, prefix: text = "", suffix: text = "") := {
+	out = t
+	if prefix != "" and starts_with(out, prefix) { out = out[count(prefix):] }
+	if suffix != "" and ends_with(out, suffix) { out = out[0: count(out) - count(suffix)] }
+	out
+}
 is_palindrome(t): bool := { s = lower(join([c for c in t if is_alphanumeric(c)], "")); s == reverse(s) }
 word_count(t): int := count(words(t))
 // "helloWorld", "Hello World", "hello-world" → "hello_world"; one implementation in slugs (acronyms stay whole:
@@ -100,7 +104,7 @@ camel_case(t): text := to_camel(t)
 // each line indented by n spaces
 indent(t, n): text := join([n times " " + line for line in lines(t)], "\n")
 // a whole or decimal number, optionally signed: "12.5", "-3"
-is_numeric(t): bool := { parts = split(remove_prefix(trim(t), "-"), "."); if count(parts) > 2 { return false }; for p in parts { if p is empty { return false }; for c in p { if not is_digit(c) { return false } } }; true }
+is_numeric(t): bool := { parts = split(remove(trim(t), prefix: "-"), "."); if count(parts) > 2 { return false }; for p in parts { if p is empty { return false }; for c in p { if not is_digit(c) { return false } } }; true }
 // the text between the first opening and the next closing after it, "" when either is missing
 between(t, opening, closing) := { from = index_of(t, opening); if from == 0 { return "" }; rest = t[from - 1 + count(opening):]; to = index_of(rest, closing); if to == 0 then "" else rest[0: to - 1] }
 // the words in lines of at most width characters

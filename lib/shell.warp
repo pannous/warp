@@ -29,13 +29,13 @@ mv(from: text, to: text) := std_io("file", "move", [from, to])
 // an empty file made if missing, else its time of change set to now
 touch(path: text) := std_io("file", "touch", [path])
 // `rm ./old.txt`: a file or an empty folder moved to the Trash; never a pattern, a full folder, the root, the home
-// folder or the working directory and the folders above it. `rm ls("old")`, `rm find_files(".", "*.tmp")`: each path
+// folder or the working directory and the folders above it. `rm ls("old")`, `rm find(Path("."), "*.tmp")`: each path
 // of a list so, the shell's rm `ls` without a shell (card shell-backtick-run); a command line of its own runs as
 // `exec sh "rm $file"` (lib/os.warp), a hole one whole argument, never a pasted text. The page's host has
 // file.remove; natively lib/file.remove_file moves to Trash over C (card file-remove-host-word)
 rm(path: any) := if path is list then [rm(item) for item in path] else try { std_io("file", "remove", [text(path)]) } catch e { remove_file(path) }
 // a file's lines without their line ends: the first n, the last n
-file_lines(path: text) := split(remove_suffix(cat(path), "\n"), "\n")
+file_lines(path: text) := split(remove(cat(path), suffix: "\n"), "\n")
 head(path: text, n: int = 10) := file_lines(path).first(n)
 tail(path: text, n: int = 10) := file_lines(path).last(n)
 // `wc ./a.txt` → {lines: 3, words: 5, bytes: 20}
@@ -44,20 +44,18 @@ wc(path: text) := {
 	{"lines": count(all), "words": sum([count(words(line)) for line in all]), "bytes": file_size(path)}
 }
 // a file's lines sorted, without repeats
-sort_lines(path: text) := sort(file_lines(path))
 unique_lines(path: text) := unique(file_lines(path))
 // `grep "fn " "main.rs"`: the lines of a file the regular expression matches; `grep("^a", lines)` the texts of a list,
 // so a text's own lines are `grep("^a", text.split("\n"))`
 grep(pattern: text, source: any): list := [line for line in (if source is list then source else file_lines(source)) if line matches pattern]
 // whether the path is a folder: one that lists
 is_folder(path: text): bool := list_files(path) is list
-// `find_files(~/dev, "*.warp")`: the paths below a folder whose name matches the wildcards * and ?, sorted, hidden
-// folders skipped (find itself searches a list)
-find_files(folder: text, pattern: text): list := sort(paths_named(folder, wildcard_regex(pattern)))
+// `find ~/dev "*.warp"`: the paths below a folder whose name matches the wildcards * and ?, sorted, hidden
+// folders skipped (find on a list or a text stays the list's or the text's)
 paths_named(folder: text, wanted: text): list := {
 	found = []
 	for name in list_files(folder) {
-		path = folder.remove_suffix("/") + "/" + name
+		path = folder.remove(suffix: "/") + "/" + name
 		if name matches wanted { found += [path] }
 		if not name.starts_with(".") and is_folder(path) { found += paths_named(path, wanted) }
 	}
@@ -67,7 +65,7 @@ paths_named(folder: text, wanted: text): list := {
 wildcard_regex(pattern: text): text := "^" + [wildcard_piece(c) for c in pattern].join("") + "$"
 wildcard_piece(c: text): text := if c == "*" then "[^/]*" else if c == "?" then "[^/]" else if c in ".+^$()[]{}|\\" then "\\" + c else c
 // the bytes of a file or of all files below a folder, as du counts them (size itself is a list's)
-file_size(path: text): int := if is_folder(path) then sum([file_size(path.remove_suffix("/") + "/" + name) for name in list_files(path)]) else count(read_bytes(path))
+file_size(path: text): int := if is_folder(path) then sum([file_size(path.remove(suffix: "/") + "/" + name) for name in list_files(path)]) else count(read_bytes(path))
 // `info ./a.txt` → {size: 20, modified: 1760536980000, kind: "file"}, modified in milliseconds as clock() counts
 info(path: text) := std_io("file", "info", [path])
 // `open ./photo.png`: the file in its app; natively only
@@ -94,7 +92,7 @@ shell_line(line: text, refusal: text) := {
 // file's lines, `sort [3 1 2]` stays the list's sort, `find ./src "x"` finds files while "abc".find("b") stays the
 // text's; the same for unique and size. Path(t) marks a text computed at run time
 Path(name: text): any := name as path
-sort(file: path) := sort_lines(file)
+sort(file: path) := sort(file_lines(file))
 unique(file: path) := unique_lines(file)
-find(folder: path, pattern: text) := find_files(folder, pattern)
+find(folder: path, pattern: text): list := sort(paths_named(folder, wildcard_regex(pattern)))
 size(file: path) := file_size(file)

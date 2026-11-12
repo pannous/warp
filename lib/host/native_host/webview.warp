@@ -258,12 +258,12 @@ answered(shown_in: int, body: text, name: text, value: text): list := {
 is_name(name: text): bool := #name > 0 and NAME_STARTS.contains(name[0]) and name.chars().all(c => NAME_GOES_ON.contains(c))
 // a member `use js` may name: an identifier, or as js-members.js reads it "" (construct), "set x", "a.b"
 member_named(member: text): bool := {
-	name = member.remove_prefix("set ")
+	name = member.remove(prefix: "set ")
 	name == "" or name.split(".").all(is_name)
 }
 // the failure as the page says it: "js Math.nope: ReferenceError: …", the call named once, without WebKit's "Error: "
 failure_said(called: text, failure: text): text := {
-	plain = failure.remove_prefix("Error: ")
+	plain = failure.remove(prefix: "Error: ")
 	if plain.starts_with(called) then plain else called + ": " + plain
 }
 

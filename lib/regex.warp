@@ -9,10 +9,14 @@ def regex_raised(answer: any): any {
 	if answer is error { raise answer }
 	answer
 }
-find_all(subject: any, pattern: any): list := regex_raised(std_pure("regex", "all", [subject, pattern]))
+// a text marked as a regular expression, so find(t, Regex(p)) is every match, while find(t, part) stays the text's
+// index. A find defined only on Regex would hide that text find (overload sets do not merge across modules), so it is restated.
+class Regex { source: text }
+find(subject: text, pattern: Regex): list := regex_raised(std_pure("regex", "all", [subject, pattern.source]))
+find(t: text, part: text) := count(split(t, present_part(t, part))#1) + 1
 replace_all(subject: any, pattern: any, replacement: any): text := regex_raised(std_pure("regex", "replace", [subject, pattern, replacement]))
 // Capture groups (card lib-regex-groups-tempfiles), through the host's replace and its $1 … $9: every match replaced by
-// its groups between marker characters, read back in order, so each match keeps its context (^, \b) exactly as find_all
+// its groups between marker characters, read back in order, so each match keeps its context (^, \b) exactly as find(t, Regex(p))
 // sees it. The native host is POSIX extended regex: at most 9 groups, no named groups (a group that took no part is "")
 REGEX_OPEN = chr(2)
 REGEX_BETWEEN = chr(1)
@@ -38,7 +42,7 @@ def find_all_groups(t: text, re: text): list {
 	n = regex_group_count(re)
 	if n > 9 { raise "find_all_groups: " + text(n) + " groups in " + re + ", the host captures at most 9" }
 	if REGEX_OPEN in t or REGEX_CLOSE in t { raise "find_all_groups: the text holds the marker characters chr(2) or chr(3)" }
-	if n == 0 { return [[] for m in find_all(t, re)] }
+	if n == 0 { return [[] for m in find(t, Regex(re))] }
 	marked = replace_all(t, re, REGEX_OPEN + join(["$" + text(i) for i in 1 to n], REGEX_BETWEEN) + REGEX_CLOSE)
 	pieces = marked.split(REGEX_OPEN)
 	[pieces[k].split(REGEX_CLOSE)[0].split(REGEX_BETWEEN) for k in 1 ..< count(pieces)]

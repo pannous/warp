@@ -2,7 +2,7 @@
 
 // a new map: a's entries, then b's (b wins); neither a nor b changes
 public merge(a: any, b: any): any := { out = {}; for k in keys(a) { out[k] = a.get(k) }; for k in keys(b) { out[k] = b.get(k) }; out }
-map_values(m: any, f: any): any := { out = {}; ks = keys(m); for k in ks { out[k] = f(m.get(k)) }; out }
+map(m: map, f: any): any := { out = {}; ks = keys(m); for k in ks { out[k] = f(m.get(k)) }; out }
 // {a:1 b:2} → {1:"a" 2:"b"}: the values become the keys
 public invert(m: any): any := { out = {}; ks = keys(m); for k in ks { out["" + m.get(k)] = k }; out }
 // only the entries of the given keys that m has
@@ -35,7 +35,7 @@ public deep_merge(a: any, b: any): any := {
 }
 is_map(x: any): bool := bracket_of(x) == "{"
 // the entries that f(key, value) holds for
-filter_entries(m: any, f: any): any := { out = {}; for k in keys(m) { if f(k, m.get(k)) { out[k] = m.get(k) } }; out }
+filter(m: map, f: any): any := { out = {}; for k in keys(m) { if f(k, m.get(k)) { out[k] = m.get(k) } }; out }
 // the same values under the keys f gives (keys, map_keys, already lists the keys); a later entry wins a clash
 transform_keys(m: any, f: any): any := { out = {}; for k in keys(m) { out[f(k)] = m.get(k) }; out }
 // the value at the path, a list of keys of maps and 1-based positions of lists: get_path({a:[{b:5}]}, ["a", 1, "b"])

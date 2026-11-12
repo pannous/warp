@@ -33,12 +33,14 @@ first_match(subject: text, pattern: text) := {
 	regex_free(re)
 	found
 }
-find_all(subject: text, pattern: text) := {
-	re = regex_of(pattern)
+class Regex { source: text }
+find(subject: text, pattern: Regex) := {
+	re = regex_of(pattern.source)
 	found = regex_find_all(re, subject)
 	regex_free(re)
 	found
 }
+find(t: text, part: text) := count(split(t, present_part(t, part))#1) + 1
 replace_all(subject: text, pattern: text, replacement: text) := {
 	re = regex_of(pattern)
 	replaced = regex_replace_all(re, subject, replacement)

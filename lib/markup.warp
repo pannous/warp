@@ -711,7 +711,7 @@ style_as_written(node: any) := {
 	if node is pair { return key(style_as_written(node.key), node.op, style_as_written(node.value)) }
 	if node is symbol or node is text or node is number or node == ø or text(node.bracket) != "(" or count(node) != 3 { return node }
 	let head = text(node#1)
-	if head.starts_with("operator_") then key(style_as_written(node#2), head.remove_prefix("operator_"), style_as_written(node#3)) else node
+	if head.starts_with("operator_") then key(style_as_written(node#2), head.remove(prefix: "operator_"), style_as_written(node#3)) else node
 }
 
 // `ul li { … }` and `.a { … }` on the next line: the parser chains the leading dot onto the rule before it
