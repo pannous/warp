@@ -461,7 +461,9 @@ shared_names(statements: list) := {
 	declared = main_global_names(statements)
 	assigned = {}
 	for s in statements {
-		if type(s) is key and op_of(s) in assignment_operators and key_of(s) is symbol and name_of(key_of(s)) not in declared { assigned[name_of(key_of(s))] = yes }
+		# (a typed one too, `level: int = 0`)
+		target = if type(s) is key and op_of(s) in assignment_operators then assigned_variable(key_of(s)) else ø
+		if target is symbol and name_of(target) not in declared { assigned[name_of(target)] = yes }
 	}
 	if line_module { return assigned }
 	read_free = {}

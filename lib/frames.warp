@@ -8,8 +8,8 @@ rewrite listen(data frame, $listener, $once) => frame_listened($listener, $once)
 // `on exit {…}` runs once the program and its frames are done, the program's value kept
 rewrite listen(data exit, $listener, $once) => exit_listened($listener, $once)
 
-frame_listened(listener: function, once: bool): int := listen(data frame, listener, once)
-exit_listened(listener: function, once: bool): int := listen(data exit, listener, once)
+frame_listened(listener: function, once: bool): Listener := listen(data frame, listener, once)
+exit_listened(listener: function, once: bool): Listener := listen(data exit, listener, once)
 exits_end(value: any = ø) := {
 	emitted(data exit, ø)
 	value

@@ -1,0 +1,48 @@
+# GPU-resident passes (notes/gpu.md "Several passes", card gpu-multipass): float targets keep a small
+# addition, which rgba8 would round to nothing, and a linear sample of a step is the value between the texels.
+is! 'use gpu_passes
+format = gpu_fields_format()
+format == "rgba16float" or format == "rgba32float" or format == "rgba8unorm"' yes
+
+is! 'use gpu_passes
+fields = gpu_fields(4, 4, ["dye"])
+add = "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return field_dye(at.xy / values.size) + vec4f(0.002, 0.0, 0.0, 0.0); }"
+n = 0
+while n < 20 { gpu_pass(add, fields, "dye", {}); n = n + 1 }
+pixels = gpu_picture("@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return field_dye(at.xy / values.size); }", fields, {})
+red = int(pixels[0] / 65536) % 256
+format = gpu_fields_format()
+if format == "rgba8unorm" then red == 0 else red >= 8 and red <= 14' yes
+
+is! 'use gpu_passes
+fields = gpu_fields(2, 1, ["dye"])
+gpu_pass("@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(select(0.0, 1.0, at.x > 1.0), 0.0, 0.0, 1.0); }", fields, "dye", {})
+pixels = gpu_picture("@fragment fn main() -> @location(0) vec4f { return field_dye(vec2f(0.5, 0.5)); }", fields, {})
+mid = int(pixels[0] / 65536) % 256
+format = gpu_fields_format()
+linear = mid > 90 and mid < 170
+format == "rgba32float" or linear' yes
+
+is! 'use gpu_passes
+fields = gpu_fields(2, 2, ["dye"])
+try { gpu_pass("@fragment fn main() -> @location(0) vec4f { return vec4f(1.0); }", fields, "pressure", {}) } catch e { "no field" in e.message }' yes
+
+# a picture can be larger than its fields: the shader still samples them in 0..1
+is! 'use gpu_passes
+fields = gpu_fields(1, 1, ["dye"])
+pixels = gpu_picture_sized("@fragment fn main() -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }", fields, 3, 2, {})
+red = int(pixels[0] / 65536) % 256
+last = int(pixels[5] / 65536) % 256
+red == 255 and last == 255' yes
+
+is! 'use gpu_passes
+fields = gpu_fields(2, 1, ["dye"])
+gpu_pass("@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(select(0.0, 1.0, at.x > 1.0), 0.0, 0.0, 1.0); }", fields, "dye", {})
+pixels = gpu_picture_sized("@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return field_dye(at.xy / values.size); }", fields, 4, 1, {})
+mid = int(pixels[1] / 65536) % 256
+format = gpu_fields_format()
+linear = mid > 40 and mid < 220
+format == "rgba32float" or linear' yes
+
+# the older one-shot render still paints, beside the passes
+is! 'gpu_render("@fragment fn main() -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }", 1, 1, {})[0] == 4294901760' yes
