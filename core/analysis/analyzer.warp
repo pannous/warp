@@ -377,9 +377,6 @@ list_type(n: Node, scope: Scope): TypeWord := {
 		if declared == ValueKind.List and name_of(n) in scope.parameters { return "list of node" }
 		if declared != ø { return declared }
 		if name_of(n) in scope.parameters { return "list of node" }
-		# a linked module's global, which the program never declares again (prelude_words.warp linked_declared_only): its
-		# elements as the module made them, read as they come (use draw; for p in canvas_pixels)
-		if binding(scope, name_of(n)) == ø and module.linked_images.any(image => holds_global(image, name_of(n))) { return "list" }
 		if binding(scope, name_of(n)) == ø and results.get(name_of(n)) == ValueKind.List { return result_types.get(name_of(n)) ?? "list of node" }
 		return "list"
 	}
@@ -964,7 +961,7 @@ analyze(program: Node): Node := {
 	results = {}
 	result_types = {}
 	scopes = {}
-	scopes[""] = Scope()
+	scopes[""] = Scope(kinds: linked_global_kinds())
 	for statement in flat_statements(program) {
 		if is_definition(statement) {
 			defined_functions[defined_name(statement)] = statement
