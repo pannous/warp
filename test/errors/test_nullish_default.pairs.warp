@@ -17,3 +17,5 @@
 'x = ø; x ?? 5'	5
 'm = {}; m["a"] ?? 0'	error	no field a
 'm = {}; m["a"] rescue 0'	0
+'m = {}; u = m["a"] default 0; u'	0
+'f() := parse_json("{x") rescue 3; f()'	3
