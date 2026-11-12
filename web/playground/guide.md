@@ -813,7 +813,7 @@ Examples: forms; samples: server, route_headers, hosting, worker
 
 `use image` loads a picture from a BMP or JPEG file, `image(./photo.jpg)`, or makes one from a function of the column and row, `image(64, 48, (x, y) => rgb(4 * x, 5 * y, 128))`. Its changes give a new picture: `flipped`, `mirrored`, `cropped`, `tinted`, `grayed`, `blurred`, `each_pixel`; `show()` paints it and `.save(./out.bmp)` writes it.
 
-Examples: frames; samples: paint_text, color_swatches, finger_paint, paint_function, window_size, load_jpeg, load_bmp, make_image
+Examples: frames; samples: paint_text, color_swatches, finger_paint, paint_function, window_size, load_jpeg, load_bmp, make_image, circle, filled_circle, mandelbrot_canvas, particles
 
 ## Shaders
 
@@ -956,9 +956,9 @@ Examples: "kitchen sink"; samples: todo_cli, settings_cli, invoice_report, inven
 
 ## Advanced
 
-Bigger programs that put the chapters together: a neural net, a ray tracer, a game, pictures painted on the canvas.
+Bigger programs that put the chapters together: a neural net, a ray tracer, a game.
 
-Examples: "kitchen sink"; samples: neural_net, raytracer, snake, particles, circle, filled_circle, mandelbrot_canvas, test
+Examples: "kitchen sink"; samples: neural_net, raytracer, snake, test
 
 # Under the hood
 
