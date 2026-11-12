@@ -327,13 +327,16 @@ watch() {
 
 # the user's playground (web/playground/warp-lib) runs the compilers of the tip just installed, not the ones of its last
 # manual build (card after-push-refresh): built in the tree at that tip, so main moving meanwhile cannot make build.sh
-# refuse it, kept in the installed folder (pruned with it) and linked from the user's checkout
+# refuse it, kept in the installed folder (pruned with it) and linked from the user's checkout, whose served-files.js is
+# written anew: a lib file newer than its last full build was unserved, "the library … has no ecmascript.webidl" (card
+# after-push-page-smoke-1112)
 playground_refreshed() {
 	local folder log=$state/playground-build.log built=$TREE/web/playground/warp-lib page=$MAIN_CHECKOUT/web/playground/warp-lib
 	folder=$(installed_folder) || return 1
 	"$TREE/web/playground/build.sh" --lib "$TREE/lib" compiler >"$log" 2>&1 &&
 		rm -rf "$folder/playground-lib" && mv "$built" "$folder/playground-lib" &&
 		{ [ -L "$page" ] || rm -rf "$page"; } && linked "$folder/playground-lib" "$page" &&
+		"$MAIN_CHECKOUT/web/playground/build.sh" served >>"$log" 2>&1 &&
 		page_smoked ||
 		say "the user's playground not refreshed: $(tail -1 "$log" | cut -c1-160)"
 }
