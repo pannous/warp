@@ -420,10 +420,12 @@ rooted(name: text, folder: text): text := {
 project_root(folder: text): any := {
 	# from the absolute folder: a relative one (`samples/wasm` of `warp samples/wasm/x.warp`) ran out before the
 	# working folder that holds .git
-	for at in folders_upward(without_steps_up(absolute_folder(folder))) {
+	start = without_steps_up(absolute_folder(folder))
+	for at in folders_upward(start) {
 		if file_text(at + "/.git") != ø or file_text(at + "/.git/HEAD") != ø { return at }
 	}
-	ø
+	# a relative working folder (the page's `.`, the served repository) is its own project when the climb ends at it
+	if start == "." or start.starts_with("./") then "." else ø
 }
 # the folder and each above it: an absolute one up to /, a relative one up to its top, as the page's working folder
 # is `.` (`./samples/wasm`, `./samples`), never on past it into `./..`
