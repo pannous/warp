@@ -216,6 +216,30 @@ uint64_t native_call(void* function, uint64_t* i, double* f, int32_t float_resul
 	memcpy(&bits, &result, sizeof bits);
 	return bits;
 }
+// One trailing aggregate, after `count` integer arguments (0 to 6) and no floats. `bytes` is `size` bytes, 17 to 128.
+// The carrier is 128 bytes and 16-aligned, which is the same MEMORY class as any aggregate over 16 bytes: on x86-64
+// SysV the C compiler puts it on the stack, and the callee reads its own prefix; on AAPCS64 the compiler passes a
+// pointer to this copy in the next integer register. A pointer in a register is not that aggregate.
+enum { BYVALUE_MOST = 128 };
+typedef struct { uint64_t words[BYVALUE_MOST / 8]; } byvalue __attribute__((aligned(16)));
+uint64_t native_call_struct(void* function, uint64_t* i, int32_t count, void* bytes, int32_t size) {
+	if (!function || count < 0 || count > 6 || size <= 16 || size > BYVALUE_MOST) {
+		fprintf(stderr, "native_call_struct: %d bytes after %d integers is outside what this call places\n", size, count);
+		exit(1);
+	}
+	byvalue copy;
+	memset(&copy, 0, sizeof copy);
+	if (bytes) memcpy(&copy, bytes, (size_t)size);
+	switch (count) {
+	case 0: return ((uint64_t (*)(byvalue))function)(copy);
+	case 1: return ((uint64_t (*)(uint64_t, byvalue))function)(i[0], copy);
+	case 2: return ((uint64_t (*)(uint64_t, uint64_t, byvalue))function)(i[0], i[1], copy);
+	case 3: return ((uint64_t (*)(uint64_t, uint64_t, uint64_t, byvalue))function)(i[0], i[1], i[2], copy);
+	case 4: return ((uint64_t (*)(uint64_t, uint64_t, uint64_t, uint64_t, byvalue))function)(i[0], i[1], i[2], i[3], copy);
+	case 5: return ((uint64_t (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, byvalue))function)(i[0], i[1], i[2], i[3], i[4], copy);
+	default: return ((uint64_t (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, byvalue))function)(i[0], i[1], i[2], i[3], i[4], i[5], copy);
+	}
+}
 // the C pointers a run got, handed to the module as ids: id n is the n-th pointer, 0 is NULL, the same pointer keeps
 // its id, found again through a table of ids by pointer (open addressing, at most half full)
 static void** handles;

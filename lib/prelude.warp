@@ -385,7 +385,9 @@ shader_floats(values) := {
 	for name in values.keys { plain[name] = shader_value(values[name]) }
 	plain
 }
-shader_value(value) := if value is list then value.map(shader_value) else float(value)
+// a text is kept: a storage array may be a file the host reads straight into the
+// GPU buffer (the baked atlas), which a float list of its bytes would rebuild
+shader_value(value) := if value is list then value.map(shader_value) else if value is text then value else float(value)
 // the words warp gives every shader, as WGSL: hash(cell), a number 0 ..< 1 that stays the same for a cell (decision
 // shader-hash); the cell taken modulo 289 keeps the sine's argument small enough for f32
 SHADER_WORDS_WGSL = {hash: "fn hash(cell: vec2f) -> f32 {\n\tlet wrapped = cell - 289.0 * floor(cell / 289.0);\n\treturn fract(sin(dot(wrapped, vec2f(127.1, 311.7))) * 43758.5453);\n}"}

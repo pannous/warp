@@ -64,11 +64,8 @@ landing=$(todo landing --json) || exit 1
 rows=()
 while IFS= read -r row; do rows+=("$row"); done < <(jq -r '.[] | [.key, .branch, .tip, .title] | @tsv' <<<"$landing")
 
-# the ref a card lands at: origin/<branch> when it descends from the tip the card names, else that tip
-landing_ref() {
-	local branch=$1 tip=$2
-	git -C "$tree" merge-base --is-ancestor "$tip" "origin/$branch" 2>/dev/null && echo "origin/$branch" || echo "$tip"
-}
+# a card lands at exactly the tip its land note names, never its branch's later commits: those were not handed over
+# (sweep 3 of 11-12 landed a step pushed after the handoff, because origin/<branch> descended from the noted tip)
 
 # merges the given rows onto base, one merge commit each; a card that conflicts is named and left out for good
 conflicted=()
@@ -79,7 +76,7 @@ merge_rows() {
 	for i in "$@"; do
 		[[ " ${conflicted[*]-} " == *" $i "* ]] && continue
 		IFS=$'\t' read -r key branch card_tip title <<<"${rows[i]}"
-		ref=$(landing_ref "$branch" "$card_tip")
+		ref=$card_tip
 		summary=$(git -C "$tree" log --no-merges --format='- %s' "HEAD..$ref")
 		if git -C "$tree" merge -q --no-ff -m "Merge branch '$branch' (card $key): $title" -m "$summary" "$ref"; then
 			merged_rows+=("$i")
@@ -125,7 +122,7 @@ fi
 	echo "base $base"
 	for i in "${green[@]}"; do
 		IFS=$'\t' read -r key branch card_tip title <<<"${rows[i]}"
-		echo "card $key $branch $(git -C "$tree" rev-parse "$(landing_ref "$branch" "$card_tip")")"
+		echo "card $key $branch $(git -C "$tree" rev-parse "$card_tip")"
 	done
 } >"$batch"
 ((${#culprits[@]})) && say "sent back: $(row_keys "${culprits[@]}")"
