@@ -15,3 +15,9 @@ is! 'class A { a: int }
 class P extends A { x: int }
 length(p: P) := p.x
 type(P(1, 2)).fields == ["a" "x"]' true
+
+# a_typed_overload_named_as_written (card native-regression)
+is! 'class P { x: int }
+area(p: P) := p.x
+area(p: int) := 0
+P.methods#1.name' 'area'
