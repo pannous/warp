@@ -26,6 +26,15 @@ STDERR = 2
 READABLE = 4
 WRITABLE = 2
 EXECUTABLE = 1
+# socket()'s AF_INET and SOCK_DGRAM; sockaddr_in's size; the public resolver's DNS port (53, its low byte, big-endian)
+INTERNET = 2
+DATAGRAM = 2
+SOCKET_ADDRESS_BYTES = 16
+RESOLVER_PORT = 53
+# struct utsname at its largest (macOS: 5 fields of 256 bytes)
+UNAME_BYTES = 1280
+# the framework that tells the main display's extent (a function: a primitive file's constants are numbers)
+core_graphics(): text := "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics"
 COLON = 58
 # wasmtime_val_t's kinds, its value 8 bytes in; the sizes of the C structs the calls fill
 KIND_I32 = 0
@@ -194,15 +203,69 @@ native_call(function: handle, integers: pointer, floats: pointer, float_result: 
 native_call_struct(function: handle, integers: pointer, count: i32, bytes: handle, size: i32): i64 from "c"
 handle_id(pointer: handle): i32 from "c"
 terminal_size(rows: i32): i32 from "c"
-kept_value(slot: i64): i64 from "c"
-keep_value(slot: i64, value: i64) from "c"
-route_online(): i32 from "c"
-display_extent(height: i32): i64 from "c"
-next_painting(): i32 from "c"
 last_error(): i32 from "c"
 strerror(code: i32): handle from "c"
-gpu_paints(): i32 from "c"
 arena_kept(): nothing from "c"
+socket(domain: i32, kind: i32, protocol: i32): i32 from "c"
+connect(socket: i32, address: pointer, length: i32): i32 from "c"
+uname(names: pointer): i32 from "c"
+
+# what the driver keeps between host calls, by slot (the *_SLOT constants: the system values a program set), 0 unset
+global kept_values = i64[8]
+kept_value(slot: i64): i64 := kept_values[slot]
+keep_value(slot: i64, value: i64): nothing := {
+	kept_values[slot] = value
+}
+# paint's count in this run, from 1: its PNG's number (painted)
+global paintings = 0
+next_painting(): i32 := {
+	paintings += 1
+	paintings as i32
+}
+# whether a shader paints on the GPU: libwgpu_native beside warp (lib/host/native_host/gpu.warp paints through it),
+# else its function on the CPU (lib/prelude.warp paint_shader; a program says `paint_on_gpu = no`, lib/shaders.warp);
+# looked up once
+global gpu_asked = 0
+global gpu_present = 0
+gpu_paints(): i32 := {
+	if gpu_asked == 0 {
+		gpu_asked = 1
+		gpu_present = if library_function(c_string("wgpu_native"), c_string("wgpuCreateInstance")) != 0 then 1 else 0
+	}
+	gpu_present as i32
+}
+# whether a route to the internet exists: a UDP connect to a public resolver, which sends nothing. sockaddr_in leads
+# with its length and family bytes on macOS, with a 16-bit family on Linux
+route_online(): i32 := {
+	udp = socket(INTERNET, DATAGRAM, 0)
+	if udp < 0 { return 0 }
+	address = allocate(SOCKET_ADDRESS_BYTES)
+	for i in 0..SOCKET_ADDRESS_BYTES { byte_at(address + i).value = 0 }
+	darwin = on_darwin()
+	byte_at(address).value = if darwin then SOCKET_ADDRESS_BYTES else INTERNET
+	if darwin { byte_at(address + 1).value = INTERNET }
+	byte_at(address + 3).value = RESOLVER_PORT
+	for i in 0..4 { byte_at(address + 4 + i).value = 8 }
+	routed = connect(udp, address, SOCKET_ADDRESS_BYTES) == 0
+	close(udp)
+	if routed then 1 else 0
+}
+# whether this is macOS: uname's system name, the first of its fields on every system
+on_darwin(): bool := {
+	names = allocate(UNAME_BYTES)
+	uname(names) == 0 and memcmp(names, c_string("Darwin"), 7) == 0
+}
+# the main screen's width, else its height, in points; 0 where none shows (a headless Mac, Linux without CoreGraphics)
+display_extent(height: i32): i64 := {
+	main_display = library_function(c_string(core_graphics()), c_string("CGMainDisplayID"))
+	extent = library_function(c_string(core_graphics()), c_string(if height != 0 then "CGDisplayPixelsHigh" else "CGDisplayPixelsWide"))
+	if main_display == 0 or extent == 0 { return 0 }
+	integers = allocate(REGISTERS * 8)
+	floats = allocate(REGISTERS * 8)
+	# (CGDirectDisplayID is 32 bits wide, the register's upper half undefined)
+	long_at(integers).value = native_call(main_display, integers, floats, 0) as u32
+	native_call(extent, integers, floats, 0)
+}
 mkdir(path: pointer, mode: i32): i32 from "c"
 atoll(digits: text): i64 from "c"
 atof(digits: pointer): f64 from "c"
