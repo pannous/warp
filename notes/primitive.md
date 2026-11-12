@@ -24,7 +24,8 @@ untyped int literal; a literal takes the width its expected type asks for (`x: i
 f64), narrowing is `x as u8`, which cuts the bits (masked or sign-spread). `%` is C's remainder (rem_s). A pointer
 plus or minus any integer is a pointer, as in C (`p + i * 8`). `handle` is a C pointer outside the module's memory, an
 i64 id. A top-level name given a number literal once (`STDERR = 2`) is a constant: every function and main read it as
-that literal, so it takes the type its place wants.
+that literal, so it takes the type its place wants. `global painted = 0` is one mutable wasm global of its number's
+type, as a local given it takes, which every function reads and writes (test/native/test_primitive_globals.sh).
 
 ## Structs
 `struct Header { len: u32; tag: u8; total: i64 }` (or `class`) in a primitive file is a C layout: each field at a
@@ -96,10 +97,11 @@ shows it, in linear memory) and builds answers with new_text/new_empty/error_of:
 driver lacks is an Error saying so. A C function the module's
 warp.c_functions section describes (one tab-separated line each, extensions/c_imports/section.warp) is the same
 callback, its data the line and the function (foreign.c library_function: lib<name>.dylib/.so, libc and libm the
-process's): numbers go in registers (foreign.c native_call, up to 8 integers and 8 floats), a text NUL-terminated
-through shown_at, a handle id through foreign.c's handle table, the first out-pointer to a slot that becomes the
-result; a text result is written at the module's text_heap and made by new_text. Bytes, structs and a failed call stop
-the run with one line naming the function. Every other host word is a trap naming it. The executable's path is _NSGetExecutablePath's (macOS; Linux needs /proc/self/exe).
+process's): numbers go in registers (foreign.c native_call, up to 8 integers and 8 floats), a trailing `bytesN` aggregate
+through native_call_struct (17 to 128 bytes, last, no float beside it, at most six integer arguments before it), a
+text NUL-terminated through shown_at, a handle id through foreign.c's handle table, the first out-pointer to a slot
+that becomes the result; a text result is written at the module's text_heap and made by new_text. A struct the line
+cannot pass, and a failed call, stop the run with one line naming the function. Every other host word is a trap naming it. The executable's path is _NSGetExecutablePath's (macOS; Linux needs /proc/self/exe).
 warp.wasm has the shown_at export once the seed that builds it has it. Tests: test/native/test_native.sh "by the
 driver".
 
@@ -107,5 +109,5 @@ driver".
 - f32 in a primitive function of a GC program (no ValueKind with an f32 wasm type there): refused, card
   f32-primitive-refused.
 - (card primitive-class-gc) `@primitive class` in a GC program; lists, texts as (pointer, length), `use` of other primitive files,
-  `continue`, globals beyond number constants.
+  `continue`, globals of other than a number.
 - A primitive file's refusal of a struct field has no line: declarations reach the passes as opaque views.

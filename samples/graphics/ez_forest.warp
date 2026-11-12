@@ -1,0 +1,687 @@
+#!/usr/bin/env warp
+# A million trees on a 4 km square, the near ones EZ Tree meshes (million_trees.warp is the same woods as billboards,
+# which runs anywhere; these meshes and textures are generated locally, samples/graphics/ez_trees/NOTICE.md). The camera stands on the south edge, looking north, and the draw
+# reaches the horizon: near trees are whole, farther chunks keep enough of their own trees to read as
+# a canopy, and haze takes the last of them. The opening value is
+# [total, candidate, submitted, scenery, meshed, triangles].
+# submitted still counts every tree the budget kept, including the ones drawn as meshes.
+# Drag the pointer to look. W A S D and the arrows walk.
+# A crown that would be larger than about 40 px is the coarse stride of the medium tree
+# tree_study draws. Mid and far billboards stay the lit clumps and the tiered pines.
+# A paint asks for a depth target, and a compute pass picks each tree's level, drops clusters the
+# frustum, the cone, or last frame's depth pyramid rejects, then an indirect draw shows the rest.
+# The frame is painted twice so the second one sees that pyramid.
+# `fps` prints a rate on stderr. `still` paints one frame at 240×135 with no window; `still large`
+# paints it at 1280×720. Without `still`, and with no window, the frame selects the view and does
+# not paint: a paint with no GPU faults.
+use bits
+use file
+use forest
+use keys
+use meshlets
+use os
+use time
+
+SIDE = 1000
+EYE_Y = 21.7
+WALK = 2.4
+VIEW_FAR = 2000.0
+HORIZON_BUDGET = 12000
+CROWN_PX = 40.0
+CROWN_CAP = 400
+// Tallest billboard (5.04 m, the scale, the jitter) and the share of it the crown fills.
+crown_reach(high) := {
+	focal = (high / 2.0) / tan(FOREST_FOV / 2.0)
+	(5.04 * FOREST_TREE_SCALE * 1.1 * 0.9) / CROWN_PX * focal
+}
+MESH_REACH = 520.0
+
+global cam_x = 2000.0
+global cam_z = -22.0
+global yaw = 0.0
+global pitch = -0.18
+global last_x = 0.0
+global last_y = 0.0
+global instances = 1
+global sprites = [[0.0, 0.0, 0.0, 0.0]]
+global eye = [80.0, EYE_Y, -22.0]
+global right = [1.0, 0.0, 0.0]
+global up = [0.0, 1.0, 0.0]
+global forward = [0.0, 0.0, 1.0]
+global focal = 100.0
+global centre = [120.0, 67.5]
+
+opening(wide, high) := Glance(cam_x, EYE_Y, cam_z, yaw, pitch, FOREST_FOV, wide / high, FOREST_NEAR, VIEW_FAR)
+
+woods = shader {
+struct Corner {
+	@builtin(position) at: vec4f,
+	@location(0) spot: vec2f,
+	@location(1) world: vec3f,
+	@location(2) mark: vec3f,
+	@location(3) tree: vec2f,
+	@location(4) normal: vec3f,
+}
+
+// world units: metres; the sun stands low ahead of the opening camera
+const SUN = vec3f(-0.42, 0.38, 0.82);
+const STUDY_SUN = vec3f(-0.424, 0.848, 0.318);
+const STUDY_SKY = vec3f(0.620, 0.765, 0.918);
+const STUDY_GROUND = vec3f(0.435, 0.561, 0.271);
+const HORIZON = vec3f(0.78, 0.82, 0.84);
+const ZENITH = vec3f(0.27, 0.47, 0.80);
+const HAZE_REACH = 240.0;
+// each species' half width against its height: pine, oak, birch, autumn
+const SLENDER = array<f32, 4>(0.30, 0.58, 0.40, 0.56);
+
+fn hash(p: vec2f) -> f32 {
+	return fract(sin(dot(p, vec2f(127.1, 311.7))) * 43758.5453);
+}
+
+fn noise(p: vec2f) -> f32 {
+	let i = floor(p);
+	let f = fract(p);
+	let w = f * f * (3.0 - 2.0 * f);
+	let a = hash(i);
+	let b = hash(i + vec2f(1.0, 0.0));
+	let c = hash(i + vec2f(0.0, 1.0));
+	let d = hash(i + vec2f(1.0, 1.0));
+	return mix(mix(a, b, w.x), mix(c, d, w.x), w.y);
+}
+
+fn fbm(p: vec2f) -> f32 {
+	return 0.5 * noise(p) + 0.3 * noise(p * 2.03 + 1.7) + 0.2 * noise(p * 4.01 + 3.3);
+}
+
+fn hazed(color: vec3f, reach: f32) -> vec3f {
+	return mix(color, HORIZON, clamp(1.0 - exp(-reach / HAZE_REACH), 0.0, 0.88));
+}
+
+fn project(p: vec3f) -> vec4f {
+	let d = p - $eye;
+	let z = dot(d, $forward);
+	if (z < select(0.2, 0.05, $study > 0.5)) {
+		return vec4f(0.0, 2.0, 0.0, 1.0);
+	}
+	let px = $centre.x + dot(d, $right) / z * $focal;
+	let py = $centre.y - dot(d, $up) / z * $focal;
+	let depth = clamp((z - $near) / ($far - $near), 0.0, 1.0);
+	return vec4f(px / $width * 2.0 - 1.0, 1.0 - py / $height * 2.0, depth, 1.0);
+}
+
+// blades show only up close; farther they would shimmer
+fn meadow(xz: vec2f, reach: f32) -> vec3f {
+	let lush = mix(vec3f(0.24, 0.40, 0.14), vec3f(0.44, 0.56, 0.21), fbm(xz * 0.02));
+	let dry = smoothstep(0.58, 0.78, fbm(xz * 0.006 + 3.1));
+	let grass = mix(lush, vec3f(0.56, 0.53, 0.31), dry * 0.7);
+	let blades = mix(0.84 + 0.32 * noise(xz * vec2f(9.0, 23.0)), 1.0, smoothstep(4.0, 30.0, reach));
+	return grass * (0.86 + 0.26 * noise(xz * 0.7)) * blades;
+}
+
+fn sky(look: vec3f) -> vec3f {
+	let sun = normalize(SUN);
+	let h = clamp(look.y, 0.0, 1.0);
+	var color = mix(HORIZON, ZENITH, pow(h, 0.55));
+	let toward = max(dot(look, sun), 0.0);
+	color = color + vec3f(1.0, 0.82, 0.55) * (pow(toward, 6.0) * 0.28) + vec3f(1.0, 0.96, 0.85) * pow(toward, 900.0) * 2.5;
+	let drift = look.xz / (look.y + 0.12);
+	let cloud = smoothstep(0.52, 0.78, fbm(drift * 1.4 + vec2f(5.2, 1.3)));
+	return mix(color, vec3f(0.97, 0.97, 0.95), cloud * 0.75 * smoothstep(0.0, 0.2, h));
+}
+
+// the pixel's ray from the eye, through the same pinhole as project
+fn ray(spot: vec2f) -> vec3f {
+	let px = spot.x * $width;
+	let py = (1.0 - spot.y) * $height;
+	return normalize($forward + $right * ((px - $centre.x) / $focal) + $up * (($centre.y - py) / $focal));
+}
+
+fn mesh_corner(corner: u32, mesh_at: u32) -> Corner {
+	let draw_i = mesh_at / u32($meshlet);
+	let tri_in = mesh_at % u32($meshlet);
+	let span = $spans[draw_i];
+	let place = $draws[draw_i];
+	var out: Corner;
+	out.spot = vec2f(0.0);
+	out.world = vec3f(0.0);
+	out.tree = place.xy;
+	out.mark = vec3f(3.0, span.z, 0.0);
+	out.normal = vec3f(0.0, 1.0, 0.0);
+	out.at = vec4f(0.0, 2.0, 0.0, 1.0);
+	if (tri_in >= u32(span.y)) { return out; }
+	let tri = $triangles[u32(span.x) + tri_in];
+	var index = u32(tri.z);
+	if (corner == 0u) { index = u32(tri.x); }
+	if (corner == 1u) { index = u32(tri.y); }
+	let vertex = $vertices[index];
+	let uv = vec2f(vertex.w, $texels[index].x);
+	let c = cos(place.z);
+	let s = sin(place.z);
+	let spun = vec3f(c * vertex.x - s * vertex.z, vertex.y, s * vertex.x + c * vertex.z);
+	let world = vec3f(place.x, 0.0, place.y) + spun * place.w;
+	let nrm = $texels[index].yzw;
+	out.at = project(world);
+	out.world = world;
+	out.spot = uv;
+	out.mark = vec3f(3.0, span.z, tri.w);
+	out.normal = vec3f(c * nrm.x - s * nrm.z, nrm.y, s * nrm.x + c * nrm.z);
+	return out;
+}
+
+@vertex fn forest_quad(@builtin(vertex_index) corner: u32, @builtin(instance_index) drawn: u32) -> Corner {
+	if (drawn >= u32($sprite_count)) {
+		return mesh_corner(corner, drawn - u32($sprite_count));
+	}
+	let s = $sprites[drawn];
+	let flags = u32(s.w);
+	let part = flags / 16u;
+	let kind = flags % 4u;
+	let detail = (flags / 4u) % 4u;
+	let uv = vec2f(f32(corner & 1u), f32((corner >> 1u) & 1u));
+	let side = uv * 2.0 - 1.0;
+	var out: Corner;
+	out.spot = uv;
+	out.mark = vec3f(f32(part), f32(kind), f32(detail));
+	out.world = vec3f(0.0);
+	out.tree = vec2f(0.0);
+	out.normal = vec3f(0.0, 1.0, 0.0);
+	if (drawn >= u32($instances)) {
+		out.at = vec4f(0.0, 2.0, 0.0, 1.0);
+		return out;
+	}
+	if (part == 0u) {
+		out.at = vec4f(side, 1.0, 1.0);
+		return out;
+	}
+	let seed = hash(vec2f(s.x, s.y));
+	let tall = s.z * $tree_scale * (0.9 + 0.2 * fract(seed * 7.0));
+	let slender = SLENDER[kind] * (0.85 + 0.3 * seed);
+	let p = vec3f(s.x, uv.y * tall, s.y) + $right * side.x * tall * slender;
+	out.at = project(p);
+	out.world = p;
+	out.tree = vec2f(seed, slender);
+	return out;
+}
+
+// a crown or a trunk in the billboard's own frame: q.x across, q.y up, both in tree heights
+struct Paint { color: vec3f, solid: bool }
+
+fn lit(n: vec3f, light: vec3f) -> f32 {
+	return 0.32 + 0.82 * max(dot(n, light), 0.0) + 0.12 * n.y;
+}
+
+fn leaf_color(kind: u32, seed: f32) -> vec3f {
+	if (kind == 0u) {
+		return mix(vec3f(0.05, 0.19, 0.10), vec3f(0.13, 0.31, 0.15), seed);
+	}
+	if (kind == 2u) {
+		return mix(vec3f(0.40, 0.56, 0.18), vec3f(0.56, 0.66, 0.24), seed);
+	}
+	var green = mix(vec3f(0.14, 0.32, 0.09), vec3f(0.30, 0.46, 0.13), seed);
+	if (kind == 3u) {
+		// late summer: most of these crowns are only turning, a few are fully red or gold
+		let turned = vec3f(0.36, 0.44, 0.12);
+		let fall = mix(mix(vec3f(0.72, 0.20, 0.06), vec3f(0.86, 0.48, 0.08), seed), vec3f(0.88, 0.70, 0.16), fract(seed * 5.0));
+		green = mix(turned, fall, smoothstep(0.35, 0.9, fract(seed * 3.0)));
+	}
+	return green;
+}
+
+fn bark_color(kind: u32) -> vec3f {
+	if (kind == 0u) { return vec3f(0.30, 0.18, 0.10); }
+	if (kind == 2u) { return vec3f(0.88, 0.88, 0.84); }
+	return vec3f(0.32, 0.22, 0.13);
+}
+
+fn trunk(q: vec2f, top: f32, bark: vec3f, light: vec3f) -> Paint {
+	let half = 0.035 * (1.0 - 0.45 * q.y);
+	let across = q.x / half;
+	if (abs(across) > 1.0 || q.y > top) {
+		return Paint(vec3f(0.0), false);
+	}
+	let n = vec3f(across, 0.0, sqrt(1.0 - across * across));
+	return Paint(bark * lit(n, light), true);
+}
+
+fn pine(q: vec2f, seed: f32, light: vec3f) -> Paint {
+	let t = (q.y - 0.12) / 0.88;
+	if (t < 0.0 || t > 1.0) {
+		return Paint(vec3f(0.0), false);
+	}
+	let tiers = 4.0 + floor(seed * 3.0);
+	let f = fract(t * tiers);
+	let reach = ((1.0 - t) * 0.27 + 0.01) * (0.5 + 0.5 * (1.0 - f));
+	let ragged = 0.82 + 0.18 * noise(vec2f(q.x * 60.0 + seed * 20.0, q.y * 90.0));
+	let across = q.x / (reach * ragged);
+	if (abs(across) > 1.0) {
+		return Paint(vec3f(0.0), false);
+	}
+	let n = normalize(vec3f(across, 0.55 * (1.0 - f), sqrt(1.0 - across * across)));
+	let overhang = 1.0 - 0.4 * smoothstep(0.65, 1.0, f);
+	let needles = 0.82 + 0.3 * noise(q * vec2f(140.0, 70.0) + seed * 9.0);
+	return Paint(leaf_color(0u, seed) * lit(n, light) * overhang * needles, true);
+}
+
+// a crown of clumps around one centre; airy crowns let the trunk show through their gaps
+fn crown(q: vec2f, seed: f32, light: vec3f, green: vec3f, middle: f32, size: f32, airy: f32) -> Paint {
+	let core = vec2f(0.0, middle);
+	var best = 9.0;
+	var near = core;
+	var radius = size;
+	for (var i = 0; i < 7; i = i + 1) {
+		let angle = f32(i) * 0.898 + seed * 6.283;
+		let spread = select(size * (0.5 + 0.25 * hash(vec2f(f32(i), seed))), 0.0, i == 0);
+		let r = size * select(0.5 + 0.18 * hash(vec2f(seed, f32(i))), 0.62, i == 0);
+		let c = core + vec2f(cos(angle) * 0.85, sin(angle)) * spread;
+		let d = length(q - c) / r;
+		if (d < best) {
+			best = d;
+			near = c;
+			radius = r;
+		}
+	}
+	let leaves = noise(q * 55.0 + seed * 13.0);
+	if (best > 1.0 - 0.22 * leaves || noise(q * 26.0 + seed * 5.0) < airy) {
+		return Paint(vec3f(0.0), false);
+	}
+	let leaf_at = (q - near) / radius;
+	let whole = (q - core) / (size * 1.25);
+	let bump = vec3f(leaf_at, sqrt(max(1.0 - dot(leaf_at, leaf_at), 0.0)));
+	let round = vec3f(whole, sqrt(max(1.0 - dot(whole, whole), 0.0)));
+	let n = normalize(bump * 0.6 + round);
+	let shade = lit(n, light) * (0.8 + 0.35 * leaves) * mix(0.55, 1.0, smoothstep(middle - size, middle + size * 0.4, q.y));
+	let glow = pow(1.0 - n.z, 2.0) * max(-light.z, 0.0) * 0.6;
+	return Paint(green * shade + vec3f(0.55, 0.6, 0.2) * glow, true);
+}
+
+fn tree(q: vec2f, kind: u32, seed: f32, light: vec3f) -> Paint {
+	if (kind == 0u) {
+		let needles = pine(q, seed, light);
+		if (needles.solid) { return needles; }
+		return trunk(q, 0.3, bark_color(0u), light);
+	}
+	if (kind == 2u) {
+		let leaves = crown(q, seed, light, leaf_color(2u, seed), 0.64, 0.24, 0.3);
+		if (leaves.solid) { return leaves; }
+		let bark = trunk(q, 0.86, bark_color(2u), light);
+		let scar = step(0.78, noise(vec2f(q.x * 40.0, q.y * 60.0 + seed * 10.0)));
+		return Paint(bark.color * (1.0 - 0.8 * scar), bark.solid);
+	}
+	let leaves = crown(q, seed, light, leaf_color(kind, seed), 0.57, 0.33, 0.0);
+	if (leaves.solid) { return leaves; }
+	return trunk(q, 0.6, bark_color(kind), light);
+}
+
+fn texel(x: i32, y: i32) -> vec4f {
+	let xx = clamp(x, 0, i32($atlas_w) - 1);
+	let yy = clamp(y, 0, i32($atlas_h) - 1);
+	let pixel = u32(yy) * u32($atlas_w) + u32(xx);
+	if ($atlas_packed < 0.5) {
+		return $atlas[pixel];
+	}
+	let v = $atlas[pixel >> 2u];
+	let lane = pixel & 3u;
+	let bits = select(select(bitcast<u32>(v.x), bitcast<u32>(v.y), lane == 1u), select(bitcast<u32>(v.z), bitcast<u32>(v.w), lane == 3u), lane > 1u);
+	return vec4f(f32(bits & 255u), f32((bits >> 8u) & 255u), f32((bits >> 16u) & 255u), f32(bits >> 24u)) / 255.0;
+}
+
+fn sample_rect(uv: vec2f, origin: vec2f, size: vec2f) -> vec4f {
+	let px = origin.x + fract(uv.x) * (size.x - 1.0);
+	let py = origin.y + (1.0 - fract(uv.y)) * (size.y - 1.0);
+	let x = i32(floor(px));
+	let y = i32(floor(py));
+	let fx = fract(px);
+	let fy = fract(py);
+	let x1 = min(x + 1, i32(origin.x + size.x) - 1);
+	let y1 = min(y + 1, i32(origin.y + size.y) - 1);
+	return mix(mix(texel(x, y), texel(x1, y), fx), mix(texel(x, y1), texel(x1, y1), fx), fy);
+}
+
+// Four bilinear taps across the pixel footprint. A hard cut of the top mip is what
+// made the needle cards sparkle; the average is the coverage a mip would store.
+fn sample_leaf(uv: vec2f, origin: vec2f, size: vec2f) -> vec4f {
+	let span = max(length(dpdx(uv)), length(dpdy(uv))) * max(size.x, size.y);
+	if (span <= 1.5) { return sample_rect(uv, origin, size); }
+	let step = span / (2.0 * max(size.x, size.y));
+	let a = sample_rect(uv + vec2f(-step, -step), origin, size);
+	let b = sample_rect(uv + vec2f(step, -step), origin, size);
+	let c = sample_rect(uv + vec2f(-step, step), origin, size);
+	let d = sample_rect(uv + vec2f(step, step), origin, size);
+	return (a + b + c + d) * 0.25;
+}
+
+fn keeps_leaf(alpha: f32, limit: f32) -> bool {
+	let band = max(fwidth(alpha), 0.02);
+	return smoothstep(limit - band, limit + band, alpha) >= 0.5;
+}
+
+fn to_linear(c: vec3f) -> vec3f { return pow(max(c, vec3f(0.0)), vec3f(2.2)); }
+
+fn to_display(c: vec3f) -> vec3f { return pow(clamp(c, vec3f(0.0), vec3f(1.0)), vec3f(0.4545)); }
+
+fn studied(albedo: vec3f, n: vec3f, reach: f32) -> vec3f {
+	let sun = normalize(select(SUN, STUDY_SUN, $study > 0.5));
+	let ndl = max(dot(n, sun), 0.0);
+	let hemi = mix(vec3f(0.20, 0.22, 0.14), vec3f(0.62, 0.70, 0.82), n.y * 0.5 + 0.5);
+	let direct = vec3f(1.05, 0.98, 0.86) * ndl;
+	let color = to_display(albedo * (hemi * 0.85 + direct) * 0.40);
+	if ($study > 0.5) {
+		return mix(color, STUDY_SKY, clamp(1.0 - exp(-reach * 0.08), 0.0, 0.35));
+	}
+	return hazed(color, reach);
+}
+
+fn study_ground(spot: vec2f) -> vec4f {
+	let look = ray(spot);
+	if (look.y < -0.001) {
+		let reach = -$eye.y / look.y;
+		let hit = $eye + look * reach;
+		if (length(hit.xz) < $ground) {
+			let edge = smoothstep($ground * 0.72, $ground, length(hit.xz));
+			let n = normalize(vec3f(hit.x, $ground * 1.6, hit.z));
+			let green = to_linear(STUDY_GROUND) * mix(1.0, 0.62, edge);
+			return vec4f(studied(green, n, reach), 1.0);
+		}
+	}
+	return vec4f(STUDY_SKY, 1.0);
+}
+
+@fragment fn main(here: Corner) -> @location(0) vec4f {
+	if (here.mark.x < 0.5) {
+		if ($study > 0.5) { return study_ground(here.spot); }
+		let look = ray(here.spot);
+		if (look.y < -0.0005) {
+			let reach = -$eye.y / look.y;
+			let ground = $eye + look * reach;
+			return vec4f(hazed(meadow(ground.xz, reach), reach), 1.0);
+		}
+		return vec4f(sky(look), 1.0);
+	}
+	if (here.mark.x > 2.5) {
+		let toward = normalize($eye - here.world);
+		let dx = dpdx(here.world);
+		let dy = dpdy(here.world);
+		let crossed = cross(dx, dy);
+		let span = length(crossed);
+		var facing = here.normal;
+		if (length(facing) < 0.2) {
+			facing = select(vec3f(0.0, 1.0, 0.0), crossed / span, span > 0.000001);
+		}
+		facing = normalize(select(-facing, facing, dot(facing, toward) > 0.0));
+		let kind = u32(here.mark.y + 0.5);
+		let bark = $shades[kind * 2u];
+		let leaf_shade = $shades[kind * 2u + 1u];
+		let tile_at = 8u + kind * 3u;
+		var albedo: vec3f;
+		if (here.mark.z > 0.5) {
+			let tile = $shades[tile_at];
+			let leaf = sample_leaf(here.spot, tile.xy, tile.zw);
+			if (!keeps_leaf(leaf.a, leaf_shade.w)) { discard; }
+			albedo = to_linear(leaf.rgb * leaf_shade.rgb);
+		} else {
+			let uv = vec2f(here.spot.x, here.spot.y * bark.w);
+			let tile = $shades[tile_at + 1u];
+			let color = sample_rect(uv, tile.xy, tile.zw);
+			let ntile = $shades[tile_at + 2u];
+			let mapped = sample_rect(uv, ntile.xy, ntile.zw).xyz * 2.0 - 1.0;
+			let q1 = dx;
+			let q2 = dy;
+			let st1 = dpdx(uv);
+			let st2 = dpdy(uv);
+			let t = normalize(q1 * st2.y - q2 * st1.y);
+			let b = normalize(cross(facing, t));
+			facing = normalize(t * mapped.x + b * mapped.y + facing * mapped.z);
+			albedo = to_linear(color.rgb * bark.rgb);
+		}
+		return vec4f(studied(albedo, facing, length(here.world - $eye)), 1.0);
+	}
+	let reach = length(here.world - $eye);
+	let sun = normalize(SUN);
+	let light = normalize(vec3f(dot(sun, $right), sun.y, -dot(sun, $forward)));
+	let q = vec2f((here.spot.x - 0.5) * 2.0 * here.tree.y, here.spot.y);
+	let kind = u32(here.mark.y + 0.5);
+	let found = tree(q, kind, here.tree.x, light);
+	if (!found.solid) { discard; }
+	return vec4f(hazed(found.color, reach), 1.0);
+}
+}
+
+// Grove sprites are far-first. Drawn near-first, the depth test drops the trees behind them.
+near_first(list) := {
+	front = []
+	trees = []
+	for sprite in list {
+		if sprite_tree(sprite) { trees.add(sprite) } else { front.add(sprite) }
+	}
+	for sprite in reverse(trees) { front.add(sprite) }
+	front
+}
+
+show(wide, high) := {
+	same = have_grove and cam_x == grove_x and cam_z == grove_z and yaw == grove_yaw and pitch == grove_pitch and high == grove_high
+	if not same {
+		canopy = forest_horizon(opening(wide, high), SIDE, HORIZON_BUDGET, high)
+		grove = forest_grove(canopy, opening(wide, high), kits, high, MESH_TRIANGLE_BUDGET, CROWN_CAP, 0.0, crown_reach(high))
+		have_grove = yes
+		grove_x = cam_x
+		grove_z = cam_z
+		grove_yaw = yaw
+		grove_pitch = pitch
+		grove_high = high
+	}
+	sprite_count = count(grove.sprites)
+	instances = sprite_count + count(grove.draws) * MESHLET_TRIANGLES
+	sprites = near_first(grove.sprites)
+	draws = if count(grove.draws) == 0 then [[0.0, 0.0, 0.0, 1.0]] else grove.draws
+	spans = if count(grove.spans) == 0 then [[0.0, 1.0, 0.0, 0.0]] else grove.spans
+	eye = canopy.eye
+	right = canopy.right
+	up = canopy.up
+	forward = canopy.forward
+	focal = picture_focal(high)
+	centre = [wide / 2.0, high / 2.0]
+	canopy
+}
+
+walk(ahead, side) := {
+	cam_x = cam_x + forward#1 * ahead + right#1 * side
+	cam_z = cam_z + forward#3 * ahead + right#3 * side
+}
+
+on key {
+	if key == Key.escape { exit() }
+}
+
+on frame {
+	if mouse_down {
+		yaw = yaw - (mouse_x - last_x) * 0.006
+		pitch = clamp(pitch + (mouse_y - last_y) * 0.006, -0.55, 0.35)
+	}
+	last_x = mouse_x
+	last_y = mouse_y
+	held = held_key()
+	ahead = 0.0
+	side = 0.0
+	if held == Key.w or held == Key.up { ahead = WALK }
+	if held == Key.s or held == Key.down { ahead = -WALK }
+	if held == Key.d or held == Key.right { side = WALK }
+	if held == Key.a or held == Key.left { side = -WALK }
+	walk(ahead, side)
+	if window_possible() or not ("still" in args) { view = painted(shown_width(), shown_height()) }
+}
+
+// The near band is the medium preset tree_study draws. Birch is aspen, autumn is ash.
+tree_folder = program.folder + "/ez_trees/hero/"
+stems = ["pine_medium", "oak_medium", "aspen_medium", "ash_medium"]
+kits = []
+norms = []
+for stem in stems {
+	fine = read_tree_mesh(tree_folder + stem + ".eztree")
+	coarse = read_tree_mesh(tree_folder + stem + "_coarse.eztree")
+	far = read_tree_mesh(tree_folder + stem + "_far.eztree")
+	// Both stay inside one pixel, so the last level (the far stride) is the one the draw picks.
+	coarse.levels#1.mesh.error = 0.0001
+	far.levels#1.mesh.error = 0.0001
+	for cluster in far.levels#1.mesh.clusters {
+		cluster.cone.cutoff = 1.01
+		cluster.cone.cullable = no
+	}
+	bytes = read_bytes(tree_folder + stem + ".nrm")
+	byte_at = 0
+	while byte_at < count(bytes) {
+		norms.add([f32_at(bytes, byte_at), f32_at(bytes, byte_at + 4), f32_at(bytes, byte_at + 8)])
+		byte_at = byte_at + 12
+	}
+	gap = 0
+	while gap < count(coarse.levels#1.vertices) + count(far.levels#1.vertices) {
+		norms.add([0.0, 0.0, 0.0])
+		gap = gap + 1
+	}
+	fine.levels.add(coarse.levels#1)
+	fine.levels.add(far.levels#1)
+	kits.add(fine)
+}
+packed = pack_tree_meshes(kits)
+global vertices = packed.vertices
+global triangles = packed.triangles
+if count(norms) != count(packed.texels) { raise "ez_forest: normals and vertices differ" }
+global texels = []
+vert_at = 0
+while vert_at < count(packed.texels) {
+	if vert_at < count(norms) {
+		norm = norms#(vert_at + 1)
+		texels.add([packed.texels#(vert_at + 1)#1, norm#1, norm#2, norm#3])
+	} else { texels.add([packed.texels#(vert_at + 1)#1, 0.0, 0.0, 0.0]) }
+	vert_at = vert_at + 1
+}
+global atlas = ""
+global atlas_w = 4096.0
+global atlas_h = 1536.0
+global atlas_packed = 0.0
+baked = baked_atlas(program.folder + "/ez_trees", NEAR_ATLAS)
+if baked == ø {
+	eprint("atlas built")
+	atlas_bytes = read_bytes(program.folder + "/ez_trees/hero/near.rgba")
+	atlas = [(0.0 + atlas_bytes[i]) / 255.0 for i in 0 ..< count(atlas_bytes)]
+} else {
+	eprint("atlas file")
+	atlas = baked[0]
+	atlas_w = baked[1]
+	atlas_h = baked[2]
+	atlas_packed = 1.0
+}
+// pine, oak, aspen, ash. Eight tints, then each kind's leaf, bark and normal rect.
+global shades = [
+	[1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 0.3],
+	[1.0, 0.953, 0.820, 0.1], [0.835, 0.835, 0.804, 0.5],
+	[1.0, 1.0, 1.0, 1.0], [1.0, 0.980, 0.384, 0.5],
+	[0.808, 0.800, 0.745, 0.2], [1.0, 1.0, 1.0, 0.5],
+	[0.0, 0.0, 1024.0, 1024.0], [1024.0, 1024.0, 256.0, 512.0], [1280.0, 1024.0, 256.0, 512.0],
+	[1024.0, 0.0, 1024.0, 1024.0], [0.0, 1024.0, 256.0, 512.0], [256.0, 1024.0, 256.0, 512.0],
+	[3072.0, 0.0, 1024.0, 1024.0], [512.0, 1024.0, 256.0, 512.0], [768.0, 1024.0, 256.0, 512.0],
+	[2048.0, 0.0, 1024.0, 1024.0], [0.0, 1024.0, 256.0, 512.0], [256.0, 1024.0, 256.0, 512.0]
+]
+global study = 0.0
+global ground = 1.0
+global tree_scale = FOREST_TREE_SCALE
+global near = FOREST_NEAR
+global far = VIEW_FAR
+global meshlet = MESHLET_TRIANGLES
+global sprite_count = 1
+global draws = [[0.0, 0.0, 0.0, 1.0]]
+global spans = [[0.0, 1.0, 0.0, 0.0]]
+global have_grove = no
+global grove_x = 0.0
+global grove_z = 0.0
+global grove_yaw = 0.0
+global grove_pitch = 0.0
+global grove_high = 0.0
+global grove = Grove([[0.0, 0.0, 0.0, 0.0]], [[0.0, 0.0, 0.0, 1.0]], [[0.0, 1.0, 0.0, 0.0]], 0, 0, 0, 0, [], [])
+global canopy = Canopy(0, 0, 0, 0, -1, [[0.0, 0.0, 0.0, 0.0]], [0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0])
+
+paint_grove(wide, high) := {
+	width = wide
+	height = high
+	table = grove_lod(grove, kits, eye)
+	if count(table#1) == 0 { paint(woods, {depth: 1}) } else {
+		glance = opening(wide, high)
+		cot = 1.0 / tan(glance.fov / 2.0)
+		planes = forest_planes(glance)
+		seen = [[eye#1, eye#2, eye#3, 0.0 + sprite_count], [cot, high, FOREST_PIXEL_ERROR, 0.0 + count(planes)]]
+		for plane in planes { seen.add(plane) }
+		seen.add([forward#1, forward#2, forward#3, focal])
+		seen.add([right#1, right#2, right#3, centre#1])
+		seen.add([up#1, up#2, up#3, centre#2])
+		seen.add([near, far, wide, high])
+		seen.add([0.0 + count(table#6), 0.0, 0.0, 0.0])
+		n = count(table#6)
+		lods = [[tree#1 + n, tree#2, tree#3, tree#4] for tree in table#6] + table#5
+		paint(woods, {depth: 1, compute: LOD_INSTANCE, workgroups: [1], indirect: [4, 0, 0, 0], draws: table#1, spans: table#2, bounds: table#3, cones: table#4, lods: lods, view: seen, instances: sprite_count + count(table#1) * MESHLET_TRIANGLES})
+	}
+}
+
+painted(wide, high) := {
+	view = show(wide, high)
+	if window_possible() or ("still" in args) {
+		paint_grove(wide, high)
+		paint_grove(wide, high)
+	}
+	view
+}
+
+// One ash, tree_study's camera, through this mesh shader. The print is clusters and triangles.
+paint_match() := {
+	study = 1.0
+	width = 1280.0
+	height = 720.0
+	ash = kits#4.levels#1
+	draws = []
+	spans = []
+	for cluster in ash.mesh.clusters {
+		draws.add([0.0, 0.0, 0.0, 1.0])
+		spans.add([0.0 + ash.base + cluster.at, 0.0 + count(cluster.triangles), 3.0, 0.0])
+	}
+	eye = [70.0 / 83.6902, 28.0 / 83.6902, 46.0 / 83.6902]
+	look = [0.0, 22.0 / 83.6902, 0.0]
+	forward = normalize([look#1 - eye#1, look#2 - eye#2, look#3 - eye#3])
+	right = normalize(cross(forward, [0.0, 1.0, 0.0]))
+	up = cross(right, forward)
+	near = 0.02
+	far = 6.0
+	ground = 80.0 / 83.6902
+	focal = (height / 2.0) / tangent(50.0 * 3.141592653589793 / 180.0 / 2.0)
+	centre = [width / 2.0, height / 2.0]
+	sprite_count = 1
+	sprites = [[0.0, 0.0, 0.0, 0.0]]
+	instances = 1 + count(draws) * MESHLET_TRIANGLES
+	paint(woods, {depth: 1, instances: instances})
+	[count(draws), count(ash.indices)]
+}
+
+picture_wide = 240.0
+picture_high = 135.0
+width = picture_wide
+height = picture_high
+if "large" in args {
+	picture_wide = 1280.0
+	picture_high = 720.0
+	width = picture_wide
+	height = picture_high
+}
+if "match" in args {
+	paint_match()
+} else {
+first = painted(picture_wide, picture_high)
+if "fps" in args {
+	started = wall_clock_ms()
+	frames = 8
+	i = 0
+	while i < frames {
+		have_grove = no
+		painted(picture_wide, picture_high)
+		i = i + 1
+	}
+	eprint("fps " + text(frame_rate(frames, wall_clock_ms() - started)))
+}
+[first.total, first.candidate, first.submitted, first.scenery, grove.meshed, grove.triangles]
+}

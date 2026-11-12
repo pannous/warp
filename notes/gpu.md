@@ -173,9 +173,19 @@ into a new texture and keeps it per shader text (native gpu.warp previous_kept; 
 previousFrames); a canvas paint then copies it into the canvas texture (configured COPY_DST). Kept as 8 bits per
 channel, so small fades round: subtract a step (≥ 1/255) rather than multiply by 0.99, which stalls at ~33/255.
 
-## Several passes (card gpu-multipass, design, not built)
+## Several passes (card gpu-multipass)
 web-ocean renders its sea in passes (FFT spectra, a height-field texture, then the sea that samples it); one fragment
-shader per paint covers only the last pass. The plan, in warp's words, with $previous as the model:
+shader per paint covers only the last pass. The host half is built, as library words in lib/gpu_passes.warp (no new
+syntax): `gpu_fields(width, height, names)` keeps a pair of rgba16float targets per name (rgba32float, then
+rgba8unorm, where that format cannot be a target), `gpu_pass(shader, fields, into, values)` draws the shader into
+that field and swaps the pair, and `gpu_show` / `gpu_picture` draw the shading pass at the fields' size.
+`gpu_show_sized` / `gpu_picture_sized` draw that same pass at another size (a window, a picture), the fields still
+sampled in 0..1, so a coarse grid can shade at the drawable. `gpu_show_sized` opens the window at the given point
+size and shades the drawable itself when that is a larger image of the same aspect. The passes of one frame share
+one command encoder and nothing is read back until `gpu_picture`. A shader reads a field as `field_<name>(uv)` with
+uv in 0..1, linearly when the format filters. `gpu_fields_format()` says which format. The `render()` / `waves(p.xz)`
+spelling below stays a design: it needs the compiler to see an image value, and that is not built.
+The plan, in warp's words, with $previous as the model:
 - **A pass is a painted function whose image stays on the GPU.** `waves = render(height_field, 256, 256)` (decision
   gpu-multipass: render, alias texture) gives an image value: a texture handle, no readback, never shown. Calling it again each frame renders into the same texture (kept by name like the previous frames).
 - **Another painted function reads it** as a function of a position (decision gpu-multipass): `waves(p.xz)` in

@@ -87,9 +87,14 @@ canvas.height(new_height) := canvas(canvas_width, new_height)
 
 // clear(red) fills the canvas with red; clear(canvas), canvas.clear(), clear it to its blank color
 def clear(what) {
-	color = if what is Canvas then blank_color else what
-	if drawing_on_gpu { draw_shape(clear_shape, 0, 0, 0, 0, color as int) }
-	else { for i in 0..canvas_width * canvas_height { canvas_pixels[i] = color as int } }
+	// converted once: `as int` of a Color inside the loop cost 1 µs a pixel, a second a clear (card finger-paint-demo)
+	color: int = if what is Canvas then blank_color else what as int
+	if drawing_on_gpu { draw_shape(clear_shape, 0, 0, 0, 0, color) }
+	else {
+		// written through a local: a global list written a million times cost 10× (14 against 141 ms)
+		pixels = canvas_pixels
+		for i in 0..#pixels { pixels[i] = color }
+	}
 }
 
 // the color over what is there, mixed by its alpha
