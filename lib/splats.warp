@@ -58,7 +58,7 @@ depths_of(scene: list, eye: list, forward: list, depths: list): list := {
 	out
 }
 // indices 0 ..< #depths of the depths at least nearest, the nearest first
-order_by_depth(depths: list, nearest: float): list := [i - 1 for i in 1 to #depths].filter(i => depths#(i + 1) >= nearest).sort_by(i => depths#(i + 1))
+order_by_depth(depths: list, nearest: float): list := [i - 1 for i in 1 to #depths].filter(i => depths#(i + 1) >= nearest).sort(by: i => depths#(i + 1))
 
 // a .splat file laid into the three GPU lists a renderer uploads, without a Splat per record: centres xyz and opacity,
 // then the six covariance numbers (shapes, then the first two of shades) and the color's 24 bits. px is not kept apart

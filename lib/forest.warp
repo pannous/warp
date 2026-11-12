@@ -209,7 +209,7 @@ forest_fill(cx, cz, detail, room, picked, ex, ez) := {
 		dz = spot#2 - ez
 		found.add([spot, (dx * dx + dz * dz) as float])
 	}
-	found = sort_by(found, item => item#2 as float)
+	found = sort(found, by: item => item#2 as float)
 	for item in found {
 		if room <= 0 { break }
 		room = forest_spend(picked, item#1, detail, room)
@@ -257,7 +257,7 @@ forest_clip(cx, cz, detail, room, picked, planes, ex, ez, take: int = FAR_TAKE) 
 		dz = spot#2 - ez
 		found.add([spot, (dx * dx + dz * dz) as float])
 	}
-	found = sort_by(found, item => item#2 as float)
+	found = sort(found, by: item => item#2 as float)
 	for item in found {
 		if room <= 0 { break }
 		room = forest_spend(picked, item#1, detail, room)
@@ -288,7 +288,7 @@ forest_chunks(glance, side) := {
 			chunks.add([cx, cz, reach, full])
 		}
 	}
-	sort_by(chunks, chunk => (chunk#3 * 100000.0 + chunk#2 * 40.0 + chunk#1) as float)
+	sort(chunks, by: chunk => (chunk#3 * 100000.0 + chunk#2 * 40.0 + chunk#1) as float)
 }
 
 forest_canopy(side, glance, candidate, picked) := {
@@ -453,7 +453,7 @@ grove_emit(visible, camera, scale, place, level, kind, level_index, room, draws,
 // Far draws first, so a blend without depth still paints the nearer tree last.
 grove_far_first(draws, spans, bounds, cones, distances) := {
 	if count(draws) < 2 { return [draws, spans, bounds, cones] }
-	order = reverse(sort_by([i for i in 1 to count(draws)], i => distances#i))
+	order = reverse(sort([i for i in 1 to count(draws)], by: i => distances#i))
 	[[draws#i for i in order], [spans#i for i in order], [bounds#i for i in order], [cones#i for i in order]]
 }
 
@@ -502,7 +502,7 @@ forest_grove(canopy: Canopy, glance: Glance, kits: list, screen_height: number, 
 			meshable.add(i)
 		}
 	}
-	if front > 0.0 { meshable = [item#1 for item in sort_by(sized, item => item#2)] }
+	if front > 0.0 { meshable = [item#1 for item in sort(sized, by: item => item#2)] }
 	draws = []
 	spans = []
 	bounds = []
