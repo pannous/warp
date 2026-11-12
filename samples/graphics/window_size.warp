@@ -8,6 +8,6 @@ window.width = 640
 window.height = 360
 clear(canvas)
 circle(canvas.width / 2, canvas.height / 2, 30, purple)
-label(4, 4, "\(canvas.width)×\(canvas.height)", black)
-label(4, 74, "window \(window.width)×\(window.height)", black)
+label(4, 4, "\(canvas.width)×\(canvas.height)", ink)
+label(4, 74, "window \(window.width)×\(window.height)", ink)
 show() // DONE I only see black  (card show-black-native)

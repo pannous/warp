@@ -58,7 +58,8 @@ function halvesOf(values) {
 
 // the gray levels of paint: a nonzero pixel, a zero pixel; from PAINT_COLOR_FROM on a value is a color 0xAARRGGBB
 // (src/graphics/pixels.rs, which tests/programs/test_paint_shades.rs holds these to; lib/draw.warp). A pixel shown is
-// one opaque word of ImageData's R, G, B, A bytes read little-endian, a signed 32-bit int like the Int32Array it is kept in
+// one opaque word of ImageData's R, G, B, A bytes read little-endian, a signed 32-bit int like the Int32Array it is kept in.
+// Dark mode swaps paper and ink (host.js darkTheme; lib/draw.warp paper and ink)
 const PAINT_INK = 29;
 const PAINT_PAPER = 250;
 const PAINT_COLOR_FROM = 2 ** 24;
@@ -66,8 +67,9 @@ const OPAQUE_WORD = 0xFF000000;
 const grayWord = level => OPAQUE_WORD | level << 16 | level << 8 | level;
 const PAPER_WORD = grayWord(PAINT_PAPER);
 const INK_WORD = grayWord(PAINT_INK);
-function shadeWord(low, high) {
-	if (high === 0 && low >>> 0 < PAINT_COLOR_FROM) return low === 0 ? PAPER_WORD : INK_WORD;
+const themeWords = () => darkTheme() ? [INK_WORD, PAPER_WORD] : [PAPER_WORD, INK_WORD];
+function shadeWord(low, high, paper, ink) {
+	if (high === 0 && low >>> 0 < PAINT_COLOR_FROM) return low === 0 ? paper : ink;
 	return OPAQUE_WORD | (low & 0xFF) << 16 | low & 0xFF00 | low >>> 16 & 0xFF;
 }
 
@@ -77,8 +79,8 @@ function shadeWord(low, high) {
 // hundreds of milliseconds each in Safari (card abysmally-slow). {x, y, columns, rows, words}, words row by row
 const paintFrame = (holder, halves, width, height) => changedFrame(holder, shadedWords(halves, width * height), width, height);
 function shadedWords(halves, count) {
-	const words = new Int32Array(count);
-	for (let at = 0; at < count; at++) words[at] = shadeWord(halves[2 * at], halves[2 * at + 1]);
+	const words = new Int32Array(count), [paper, ink] = themeWords();
+	for (let at = 0; at < count; at++) words[at] = shadeWord(halves[2 * at], halves[2 * at + 1], paper, ink);
 	return words;
 }
 // the frame of the words shown (a painting's, a window's) against the frame before: whole when the size changed, else

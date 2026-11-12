@@ -121,6 +121,7 @@ compiler_lines = [
 	"zero_fill(count, filler): list from emitter",
 	"instance_of(x, class_name): bool from emitter",
 	"caught_error(finished, value): error from emitter",
+	"caught_instance(finished, value): any from emitter",
 	"placed_at(failure, position): error from emitter",
 	"trap_place(): int from emitter",
 	"byte_at(t, offset): int from emitter"

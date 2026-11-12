@@ -10,3 +10,6 @@
 'use draw; canvas.resize(4, 4); clear(red); clear(canvas); canvas_pixels[0] as int == blank_color'	true
 'use draw; canvas.resize(4, 4); clear(red); canvas.clear(); canvas_pixels[0] as int == blank_color'	true
 'use draw; canvas(4, 4); clear(red); clear(paper); [canvas.width, canvas_pixels[0] as int == blank_color]'	[4, true]
+# the canvas starts on the theme's paper, ink stands out on it (wiki graphics.md, card dark-mode-demos)
+'use draw; canvas(2, 2); canvas_pixels[0] == (if dark_mode then blank_color else 0)'	true
+'use draw; ink == blank_color'	false

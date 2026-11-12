@@ -33,7 +33,7 @@ while elapsed < seconds {
 		peaks[band] = max(shown[band], peaks[band] - peak_fall)
 		x = band * bar_width + gap / 2
 		rect(x, height - shown[band], bar_width - gap, shown[band], hsv(band * 280 / bands, 1, 1))
-		rect(x, height - peaks[band] - 2, bar_width - gap, 2, black)
+		rect(x, height - peaks[band] - 2, bar_width - gap, 2, ink)
 	}
 	show()
 	sleep(frame_milliseconds / 1000)

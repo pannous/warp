@@ -11,7 +11,7 @@
 	--keyword: #7b3fbf;
 	--soft-keyword: #a06bd6;
 	--code-ground: #f2f0ea;
-	/* a painting's paper, in both themes: lib/draw.warp paper, host-media.js PAINT_PAPER */
+	/* a painting's paper: lib/draw.warp paper, host-media.js PAINT_PAPER; dark mode swaps it with the ink, PAINT_INK */
 	--paper: #fafafa;
 	color-scheme: light;
 }
@@ -30,6 +30,7 @@
 		--keyword: #c49bff;
 		--soft-keyword: #a98fd6;
 		--code-ground: #2a2a30;
+		--paper: #1d1d1d;
 		color-scheme: dark;
 	}
 }
