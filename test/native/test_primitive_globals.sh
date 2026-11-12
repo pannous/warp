@@ -5,15 +5,10 @@
 # index outside it a trap (OK 11-12). Run it
 # with bash test/native/test_primitive_globals.sh; the warp under test is WARP (default the warp on PATH), its lib LIB
 # (default its own; a tree's: LIB=<tree>/lib)
-warp=${WARP:-warp}
+source "$(dirname "$0")/checks.sh"
 lib=${LIB:-$(dirname "$(readlink -f "$(command -v "$warp")")")}
-export WARP_WINDOW=0
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
-failures=0
-check() { # check <what> <got> <expected>
-	if [ "$2" = "$3" ]; then echo "✓ $1"; else echo "✗ $1: got $2, expected $3"; failures=$((failures + 1)); fi
-}
 said() { # said <name> <program>: all the primitive file prints
 	printf '@primitive\n%s\n' "$2" >"$stage/$1.warp"
 	"$warp" --lib "$lib" "$stage/$1.warp" 2>&1

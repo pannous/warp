@@ -2,14 +2,7 @@
 # a whole number known when compiling that misfits an int, i64, warns where it enters an int place; a value known only
 # at run time, or one that fits, stays silent (extensions/int_misfits.warp, night decision int-wrap-declarations). Run
 # it with bash test/native/test_int_misfits.sh; the warp is WARP (default the warp on PATH), a tree's WARP=<tree>/data/gate/warp
-warp=${WARP:-warp}
-export WARP_WINDOW=0
-failures=0
-
-check() { # check <what> <got> <expected>
-	if [ "$2" = "$3" ]; then echo "✓ $1"; else echo "✗ $1: got $2, expected $3"; failures=$((failures + 1)); fi
-}
-warning_of() { "$warp" "$1" 2>&1 | grep '^warning' ; }
+source "$(dirname "$0")/checks.sh"
 fix='; fix: declare nat or number to keep it'
 
 check "a declared int of 10^30 warns" "$(warning_of 'x: int = 10^30; x')" "warning: \`10^30\` does not fit an int (i64): it wraps at 1:10$fix"

@@ -87,7 +87,7 @@ task_named(task: Task, name: text): Task := {
 	named_tasks[name] = task
 	task
 }
-task_named_by(name: text): Task := named_tasks[name] ?? raise "no task of " + name + " was started: `go " + name + "(…)` starts one"
+task_named_by(name: text): Task := named_tasks.get(name) ?? raise "no task of " + name + " was started: `go " + name + "(…)` starts one"
 // the task of `after`: each turn it checks the condition, giving the others their turn until it holds
 task_when(holds: function, value: function): Task := task_go(() => task_polled(holds, value))
 task_polled(holds: function, value: function) := if holds() then value() else task_sleep(1, () => task_polled(holds, value))

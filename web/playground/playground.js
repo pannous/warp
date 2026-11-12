@@ -1715,11 +1715,19 @@ addEventListener("unhandledrejection", event => {
 // ("math.wasm won't link: built behind another runtime.wasm", card math-wasm-link); the code typed stays over the reload
 const STALE_RELOAD = "warp stale reload";
 const RELOADED_CODE = "warp code over a reload";
+// a headless sweep (test_in_browser.py --examples --guide) sets this so a version.js poll cannot
+// reload the page mid-batch and drop the playground API (card guide-sweep-crash). The stale-deploy
+// check leaves it unset and still stubs version.js, so that reload stays a real one.
+function noStaleReload() {
+	return self.PLAYGROUND_NO_STALE_RELOAD || new URLSearchParams(location.search).has("no_stale_reload");
+}
 async function reloadWhenStale() {
 	if (!PLAYGROUND_VERSION) return;
 	try {
 		const served = await (await fetch("version.js", { cache: "no-store" })).text();
 		if (served.includes(PLAYGROUND_VERSION.built)) return sessionStorage.removeItem(STALE_RELOAD);
+		self.PLAYGROUND_STALE = { built: PLAYGROUND_VERSION.built, served: served.slice(0, 240) };
+		if (noStaleReload()) return;
 		if (sessionStorage.getItem(STALE_RELOAD) === PLAYGROUND_VERSION.built) return console.error(`warp page: built ${PLAYGROUND_VERSION.built}, the server has a newer build, and a reload kept this page`);
 		sessionStorage.setItem(STALE_RELOAD, PLAYGROUND_VERSION.built);
 		if (editor) sessionStorage.setItem(RELOADED_CODE, editor.getValue());
