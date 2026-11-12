@@ -20,7 +20,7 @@ play(Box(1))' 7
 is! 'use sound
 class Box{v}
 play(b: Box) := "box"
-play(C4, 0.01) is int' true
+play(C4, 0.01) is Sound' true
 is! 'use sound
 play(x, d, b: Bus) := "bus"
-play(C4, 0.01) is int' true
+play(C4, 0.01) is Sound' true
