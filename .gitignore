@@ -3,8 +3,6 @@ target
 *.wasm
 # … but the test fixtures, which need clang, wasi-libc or wasm-tools to build (card wasm-fixtures-ignored)
 !/test/fixtures/wasm/*.wasm
-# (shapes.wasm is a warp-compiled module an older compiler wrote, no fixture source of its own)
-/test/fixtures/wasm/shapes.wasm
 # the library index `warp rebuild` writes beside the prebuilt modules
 lib/modules/index.tsv
 lib/modules/sugar_rules.packed
