@@ -161,13 +161,12 @@ def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
 	texts = operation_code(body, symbol, runtime_call("node_text", [left]), runtime_call("node_text", [right]))
 	TypedCode(kind, code + textual(left) + textual(right) + [op.i32_and] + if_else_code(kind, texts, TypedCode(kind, numbers)))
 }
-# - and * of a value known only at run time beside an int or another such value: the int first (int_first) when either
-# is one, their general path being inline; + and the comparisons test it at the head of their runtime words (node_plus,
-# node_compared, node_equal); not in the runtime's own words, whose values known only at run time are mostly no ints
-INT_FIRST_WORDS = ["-", "*"]
-int_firsts(body: Body, symbol: text, a: TypedCode, b: TypedCode): bool := not body.function.is_runtime and symbol in INT_FIRST_WORDS and (a.kind == ValueKind.Node or b.kind == ValueKind.Node) and a.kind in [ValueKind.Int, ValueKind.Node] and b.kind in [ValueKind.Int, ValueKind.Node] and has_runtime_word("exact_int")
+# + - * and the comparisons of a value known only at run time beside an int or another such value: the int first
+# (int_first) when either is one, inline, as a call of the runtime words boxed the int side and the result each time
+# (20% slower loops); not in the runtime's own words, whose values known only at run time are mostly no ints
+int_firsts(body: Body, symbol: text, a: TypedCode, b: TypedCode): bool := not body.function.is_runtime and (symbol in grown_words or symbol in comparisons) and (a.kind == ValueKind.Node or b.kind == ValueKind.Node) and a.kind in [ValueKind.Int, ValueKind.Node] and b.kind in [ValueKind.Int, ValueKind.Node] and has_runtime_word("exact_int")
 # the operands held in locals; each one known only at run time that holds a plain whole number (exact_int) makes the
-# operation the int one at once: the grown words, exact past 2^63, the int side never
+# operation the int one at once: the grown words for + - *, exact past 2^63, an i64 comparison, the int side never
 # boxed; anything else takes `general` of the two as nodes (card untyped-counter-boxes)
 def int_first(body: Body, symbol: text, a: TypedCode, b: TypedCode, general: function): TypedCode {
 	left = TypedCode(a.kind, [op.local_get] + uleb(fresh_local(body, a.kind)))
