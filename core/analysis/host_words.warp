@@ -19,6 +19,10 @@ core_host_words = {
 	real_path: [[ValueKind.I32, ValueKind.I32, ValueKind.I32, ValueKind.I32], [ValueKind.I32]]
 	"block·value": [[ValueKind.Int], [ValueKind.Node]]
 	foreign_call: [[ValueKind.Node, ValueKind.Node, ValueKind.Node, ValueKind.Node, ValueKind.Node], [ValueKind.Node]]
+	# a foreign call that gave a promise the host keeps (1) and the value it settles to, waited for (lib/prelude.warp
+	# foreign_settled; the page's JSPI, natively never pending)
+	foreign_pending: [[], [ValueKind.Int]]
+	foreign_await: [[], [ValueKind.Node]]
 	sleep_ms: [[ValueKind.Int], []]
 	random: [[], [ValueKind.Float]]
 	random_below: [[ValueKind.Int], [ValueKind.Int]]
