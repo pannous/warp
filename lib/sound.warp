@@ -927,7 +927,7 @@ voice_back(voice: list) := {
 	voice_place = voice#2
 	sound_voice_back(voice#3)
 }
-task_part_kept(voice_kept, voice_back)
+global voice_kept_by_tasks = task_part_kept(voice_kept, voice_back)
 global before_at = []
 // the seconds added behind the voice's queued sounds: [their start in real time, their place]
 scheduled(seconds) := {
