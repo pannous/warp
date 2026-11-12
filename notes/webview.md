@@ -20,14 +20,15 @@ drives macOS's WKWebView over the Objective-C runtime by plain FFI.
 - A promise is awaited (callAsyncJavaScript), unlike the page, which refuses. No answer in 10 s is a loud error.
 - A warp function given to js (`Array.from(xs, x => x * 2)`) is lowered to js_function(f, its parameters' count)
   (extensions/foreign_globals.warp; lib/callbacks.warp keeps it in a slot, the page's and the view's one table) and
-  crosses as {$callback: slot}, which webview_bridge.js makes a JS function: each call is a synchronous XMLHttpRequest
+  crosses as {$callback: slot, handed: n}, which webview_bridge.js makes a JS function: each call is a synchronous XMLHttpRequest
   to warp://localhost/<slot>?<arguments as JSON> at the page's own origin (a custom scheme from https:// never reaches
   the handler), answered by the WKURLSchemeHandler while the run spins for the call's answer, with as many arguments
   as the function takes. A function whose parameters the lowering can't see (held as `any`) is refused; a slot is
-  freed once its JS function is collected (FinalizationRegistry, the message warpReleased). A
+  freed once its JS function is collected (FinalizationRegistry, the message warpReleased with [slot, handed]),
+  unless the slot was handed again since (n counts the handings, so a release arriving late frees nothing). A
   callback that calls js itself is refused: the view's one JS thread waits for it (a second view, or JavaScriptCore in
   process, would lift that).
-- Not yet: warp functions given to js in the page, `use js "module"` (npm), the operator
+- Not yet: `use js "module"` (npm), the operator
   forwarding of host-foreign.js FOREIGN_OPERATORS, WebKitGTK on Linux.
 
 `warp app [check] <file>` (lib/app/command.warp, dispatched by core/native/warp.warp): runs the program (`warp run`)

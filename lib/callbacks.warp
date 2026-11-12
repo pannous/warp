@@ -43,20 +43,33 @@ called_with(f: function, given: list): any := {
 // hands JS js_function(f, 1), as extensions/foreign_globals.warp lowers a function argument whose parameters it knows.
 // A slot each, the same function its old one, a slot JS let go (js_released) taken again. JS calls it back through
 // js_called_back (natively lib/host/native_host/webview.warp, in the page web/playground/host-foreign.js) with as
-// many of its arguments as the function takes, as JS drops the others (Array.from gives each item's index too)
+// many of its arguments as the function takes, as JS drops the others (Array.from gives each item's index too).
+// Each handing counts (`handed`): JS tells which handing it let go of, so a release that arrives after the slot was
+// handed again frees nothing
+// TODO (card callbacks-js-function) the slot of a function handed before is found by a scan of all slots
 global js_functions = []
 global js_arities = []
+global js_handed = []
+global js_free_slots = []
 js_function(f: function, arity: int): map := {
 	slot = 1
-	while slot <= #js_functions and js_functions#slot !== f and js_functions#slot != ø { slot += 1 }
-	if slot > #js_functions {
-		js_functions += [f]
-		js_arities += [arity]
-	} else if js_functions#slot == ø {
+	while slot <= #js_functions and js_functions#slot !== f { slot += 1 }
+	if slot > #js_functions and js_free_slots {
+		slot = js_free_slots.pop()
 		js_functions#slot = f
 		js_arities#slot = arity
+	} else if slot > #js_functions {
+		js_functions += [f]
+		js_arities += [arity]
+		js_handed += [0]
 	}
-	{"$callback": slot}
+	js_handed#slot += 1
+	{"$callback": slot, "handed": js_handed#slot}
 }
 export js_called_back(slot: int, given: list): any := called_with(js_functions#slot, given[0..<min(#given, js_arities#slot)])
-export js_released(slot: int) := { js_functions#slot = ø }
+export js_released(slot: int, handed: int) := {
+	if js_handed#slot == handed and js_functions#slot != ø {
+		js_functions#slot = ø
+		js_free_slots += [slot]
+	}
+}
