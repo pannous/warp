@@ -12,6 +12,10 @@ name: Land
 on:
   push:
     branches: [ "land/**", "!land/red/**" ]
+  # a push starts the workflow of the pushed commit, so a tip older than this file starts nothing: the schedule (main's
+  # copy) takes it within minutes; a run with nothing waiting ends after one ls-remote
+  schedule:
+    - cron: "*/10 * * * *"
   workflow_dispatch:
 
 # one batch at a time; a push while one runs waits and then takes every branch waiting
