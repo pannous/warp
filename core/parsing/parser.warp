@@ -17,7 +17,7 @@ class GroupContext { bracket: Bracket = Bracket.None; grouped: bool = no; in_bra
 // `then` block's `else` (kept for the branch), or, for the rest of an enclosing group or block, whatever closes that one
 enum ItemsEnd { Source, Closer, End, EndOrElse, Rest }
 
-class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indexing: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; scans: map = {}; aliases: map; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list; shifts: list = []; pipe_stops: bool = no }
+class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indexing: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; scans: map = {}; aliases: map; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list; shifts: list = []; pipe_stops: bool = no; comparing: bool = no }
 // What stands at the parser's position (card parser-checklist-idioms): its character, the one k further, the one at
 // any offset, each a line break past the end; whether the character or a text stands there
 def char_here(p: Parser): text := peek(p.code, p.at, p.n)
@@ -1107,7 +1107,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			powers = binding_powers(op#2)
 			// `if x=2 {…}`: in a condition `=` compares (wiki/Footguns.md "Assignment in a condition"); a block, a list or
 			// a call's arguments inside it assign again (arguments_read, group_atom)
-			if op#2 == "=" and p.branch_power == CONDITION_POWER {
+			if op#2 == "=" and p.comparing {
 				op = [op#1, "=="]
 				powers = binding_powers("==")
 			}
@@ -2448,7 +2448,7 @@ def returned(p: Parser): Node := {
 CONDITION_POWER = 81
 // The condition of `if` and `while`: a braceless call takes a variable argument as in a branch (`if area certainly > 10
 // then`, `while square i < 10`)
-def condition_expression(p: Parser): Node := with_field(p, "branch_power", CONDITION_POWER, () => header_expression(p, CONDITION_POWER))
+def condition_expression(p: Parser): Node := with_field(p, "branch_power", CONDITION_POWER, () => with_field(p, "comparing", yes, () => header_expression(p, CONDITION_POWER)))
 
 // Rust's `loop { … }` as `while true { … }`, ø when no block follows the word
 def endless_loop(p: Parser): Node := {
@@ -2979,7 +2979,7 @@ def group_atom(p: Parser): Node := {
 	advance(p)
 	round = c == '('
 	// (a condition's `=` compares inside its parentheses, never in a block or list of it)
-	group = with_field(p, "header", p.header and round, () => with_field(p, "iterable", p.iterable and round, () => with_field(p, "branch_power", if round then p.branch_power else 0, () => if c == '{' then braced_items(p) else items_until(p, c as Bracket, ItemsEnd.Closer))))
+	group = with_field(p, "header", p.header and round, () => with_field(p, "iterable", p.iterable and round, () => with_field(p, "comparing", p.comparing and round, () => if c == '{' then braced_items(p) else items_until(p, c as Bracket, ItemsEnd.Closer))))
 	// `(int or text)?`: an optional union, the one type word `int or text?` (a member ø joins is the union's)
 	union = if c == '(' and #group == 1 and optional_mark_follows(p, "") then union_spelling(group#1) else ø
 	if union == ø { return group }
@@ -3135,7 +3135,7 @@ def named(p: Parser): Node := {
 	name_or_call(p, name)
 }
 // a call's arguments, `f(x=2)` naming one even inside a condition
-def arguments_read(p: Parser): list := with_field(p, "branch_power", 0, () => items_until(p, Bracket.Round, ItemsEnd.Closer))
+def arguments_read(p: Parser): list := with_field(p, "comparing", no, () => items_until(p, Bracket.Round, ItemsEnd.Closer))
 // the name, or its call `name(x, y)` when a round group follows it, with the block side by side after it
 // (`f(x) {…}`)
 def name_or_call(p: Parser, name: Node): Node := {
