@@ -144,16 +144,17 @@ SURFACE_TEXTURE = 24
 DEVICE_DESCRIPTOR = 144
 
 // wgpu-native's functions, and C's copies: memcpy of a list's int32 cells, memmove of C memory
+// A callback info is 40 bytes passed by value (`bytes40`): a handle would be a pointer in a register, and this library reads the struct from the stack on x86-64.
 wgpuCreateInstance(descriptor: handle): handle from 'wgpu_native'
-wgpuInstanceRequestAdapter(instance: handle, options: handle, info: handle): i64 from 'wgpu_native'
+wgpuInstanceRequestAdapter(instance: handle, options: handle, info: bytes40): i64 from 'wgpu_native'
 wgpuInstanceProcessEvents(instance: handle): void from 'wgpu_native'
 wgpuInstanceCreateSurface(instance: handle, descriptor: handle): handle from 'wgpu_native'
-wgpuAdapterRequestDevice(adapter: handle, descriptor: handle, info: handle): i64 from 'wgpu_native'
+wgpuAdapterRequestDevice(adapter: handle, descriptor: handle, info: bytes40): i64 from 'wgpu_native'
 wgpuAdapterHasFeature(adapter: handle, feature: i32): i32 from 'wgpu_native'
 wgpuDeviceGetQueue(device: handle): handle from 'wgpu_native'
 wgpuDevicePoll(device: handle, wait: i32, index: handle): i32 from 'wgpu_native'
 wgpuDevicePushErrorScope(device: handle, filter: i32): void from 'wgpu_native'
-wgpuDevicePopErrorScope(device: handle, info: handle): i64 from 'wgpu_native'
+wgpuDevicePopErrorScope(device: handle, info: bytes40): i64 from 'wgpu_native'
 wgpuDeviceCreateShaderModule(device: handle, descriptor: handle): handle from 'wgpu_native'
 wgpuDeviceCreateRenderPipeline(device: handle, descriptor: handle): handle from 'wgpu_native'
 wgpuDeviceCreateComputePipeline(device: handle, descriptor: handle): handle from 'wgpu_native'
@@ -169,7 +170,7 @@ wgpuComputePipelineGetBindGroupLayout(pipeline: handle, group: i32): handle from
 wgpuBindGroupLayoutRelease(layout: handle): void from 'wgpu_native'
 wgpuBindGroupRelease(group: handle): void from 'wgpu_native'
 wgpuBufferRelease(buffer: handle): void from 'wgpu_native'
-wgpuBufferMapAsync(buffer: handle, mode: i64, offset: i64, size: i64, info: handle): i64 from 'wgpu_native'
+wgpuBufferMapAsync(buffer: handle, mode: i64, offset: i64, size: i64, info: bytes40): i64 from 'wgpu_native'
 wgpuBufferGetConstMappedRange(buffer: handle, offset: i64, size: i64): handle from 'wgpu_native'
 wgpuBufferUnmap(buffer: handle): void from 'wgpu_native'
 wgpuQueueWriteBuffer(queue: handle, buffer: handle, offset: i64, data: handle, size: i64): void from 'wgpu_native'
