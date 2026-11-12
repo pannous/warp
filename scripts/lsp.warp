@@ -72,7 +72,9 @@ found(parameters: map, shown: function): any := {
 	name = name_at(document_text(uri), place["line"] + 1, place["character"] + 1)
 	if not name { return ø }
 	for file in searched(uri) {
-		definition = definitions(document_text(file)).find(d => d#1 == name)
+		source = document_text(file)
+		# only a file that mentions the name is parsed
+		definition = if source.contains(name) then definitions_of(file, source).find(d => d#1 == name) else ø
 		if definition { return shown(file, definition) }
 	}
 	ø
@@ -100,6 +102,14 @@ is_name_character(c: text): bool := is_alphanumeric(c) or c in NAME_PUNCTUATION
 statements_of(source: text): list := {
 	code = try parse(source) else []
 	if type(code) is list and code.separator in STATEMENT_SEPARATORS then [statement for statement in code] else [code]
+}
+# a file's definitions, parsed again only when its text changed
+global parsed = {}
+definitions_of(uri: text, source: text): list := {
+	kept = parsed.get(uri)
+	if kept and kept#1 == source { return kept#2 }
+	parsed[uri] = [source, definitions(source)]
+	parsed[uri]#2
 }
 # the definitions of a text: each top-level statement's [name, line, column], its name the first word of its head,
 # its place the innermost one on the way there (a call's place is its group's, `square(x)`)
