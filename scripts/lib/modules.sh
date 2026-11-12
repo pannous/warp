@@ -26,6 +26,35 @@ companion_copied() {
 		mkdir -p "$(dirname "$2$file")" && cp "$1$file" "$2$file.new-$$" && mv -f "$2$file.new-$$" "$2$file" || return 1
 	done
 }
+# standard_module_files <tree>: the standard module entry files, relative to the tree. The same list modules_in
+# walks in uses.warp: a .warp file of lib/ or of lib/host/ (decision host-folder)
+standard_module_files() {
+	local tree=$1 file
+	for file in "$tree"/lib/*.warp "$tree"/lib/host/*.warp; do
+		[ -f "$file" ] && printf '%s\n' "${file#"$tree"/}"
+	done
+}
+# module_file_of <tree> <path>: the entry a lib file belongs to, if any. A file under that module's folder
+# (lib/host/native_host/webview.warp, webview_bridge.js, …) is that module (card smoke-sh-misses)
+module_file_of() {
+	local tree=$1 file=$2 entry stem
+	for entry in $(standard_module_files "$tree"); do
+		stem=${entry%.warp}
+		if [ "$file" = "$entry" ] || [[ $file == "$stem"/* ]]; then
+			printf '%s\n' "$entry"
+			return 0
+		fi
+	done
+	return 1
+}
+# modules_of_files <tree>: unique module entries of the paths on stdin
+modules_of_files() {
+	local tree=$1 file entry
+	while IFS= read -r file; do
+		[ -n "$file" ] || continue
+		entry=$(module_file_of "$tree" "$file") && printf '%s\n' "$entry"
+	done | sort -u
+}
 
 # modules_built <warp> <lib> <compiler> <folder> <runtime>: `warp rebuild`'s modules step in parallel (user 11-11, card
 # lazy-module-prebuild). The compiler's plan (modules-plan) writes the library index and names each module with the

@@ -1,0 +1,8 @@
+# a program's method calls answer the same whether it reuses a linked module's dispatcher or makes its own
+# (card startup-slowdown, OK 11-12 night via warp-interviewer: a program with a class of its own keeps its own)
+
+# a class of the program's own beside a units value
+'class Box { n: int; text() := "box " + text(n) }; d = 3 km + 200 m; text(Box(2)) + ", " + text(d)'	"box 2, 3.2km"
+'class Box { n: int; text() := "box " + text(n) }; [Box(2), 3 km].map(text)'	["box 2", "3km"]
+# no class of its own: units' dispatchers
+'d = 3 km + 200 m; text(d)'	"3.2km"

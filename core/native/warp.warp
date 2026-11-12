@@ -12,6 +12,7 @@
 #   warp self …           the same by warp-self.wasm, warp.wasm's build of itself
 #   warp                  on a terminal the version, the help and the console; a piped program run, its value shown
 #   warp beautify|fix …   lib/fix/command.warp with the words; warp format|lint … too, the layout only
+#   warp lsp              lib/lsp/lsp.warp: the language server over standard input and output, for an editor
 #   warp docs|wiki|home   where the documentation is, opened
 #   warp app [check] …    lib/app/command.warp: a markup program's page in the system's web view
 #   warp repl|start       the console: each line a module of its own, linked to the earlier lines' kept instances
@@ -652,6 +653,7 @@ dispatched(compiler: text, prefixed: bool, first: int): nothing := {
 		if same_text(word, "rebuild") { return rebuild_command(first) }
 		if same_text(word, "beautify") or same_text(word, "fix") or same_text(word, "format") or same_text(word, "lint") { return compiled_and_run(compiler, joined(library_folder(), "/fix/command.warp"), first) }
 		if same_text(word, "docs") or same_text(word, "wiki") or same_text(word, "home") { return documentation_opened() }
+		if same_text(word, "lsp") { return compiled_and_run(compiler, joined(library_folder(), "/lsp/lsp.warp"), first) }
 		if same_text(word, "app") { return compiled_and_run(compiler, joined(library_folder(), "/app/command.warp"), first) }
 		if same_text(word, "dev") { return compiled_and_run(compiler, joined(library_folder(), "/dev/command.warp"), first) }
 	}

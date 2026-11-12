@@ -6,3 +6,4 @@
 'xs = [1, 2]; are xs in [3, 2, 1]'	yes
 'words = ["ab", "cd"]; all words in "abcd"'	yes
 'total = 0; for x in [1, 2] { total += x }; total'	3
+'words = ["the", "fox"]; words in "the quick brown fox"'	error

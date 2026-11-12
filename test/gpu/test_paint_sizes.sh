@@ -3,15 +3,10 @@
 # size; paint(shader, width, height) of a shader without holes paints it (wiki/graphics.md, cards paint-shader-dimensions,
 # paint-shader-values). Run it with bash test/gpu/test_paint_sizes.sh; the warp under test is WARP (default the warp on
 # PATH), a tree's WARP=<tree>/data/gate/warp
-warp=${WARP:-warp}
-export WARP_WINDOW=0
+source "$(dirname "$0")/../native/checks.sh"
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
-failures=0
 
-check() { # check <what> <got> <expected>
-	if [ "$2" = "$3" ]; then echo "✓ $1"; else echo "✗ $1: got $2, expected $3"; failures=$((failures + 1)); fi
-}
 sizes() { # sizes <name> <code>: the code as a file, run, the sizes it painted, one a line
 	printf '%s\n' "$2" >"$stage/$1.warp"
 	"$warp" "$stage/$1.warp" 2>&1 | sed -n 's/^painted \([0-9]*×[0-9]*\):.*/\1/p' | tr '\n' ' '

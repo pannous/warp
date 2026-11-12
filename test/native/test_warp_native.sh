@@ -4,17 +4,12 @@
 # bash test/native/test_warp_native.sh; the warp that builds it is WARP (default the warp on PATH); a tree's:
 # WARP=<tree>/data/gate/warp
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
-warp=${WARP:-warp}
+source "$(dirname "$0")/checks.sh"
 # the lib/ that warp runs with (its version names it), given to the native warp built here
 library=$("$warp" version 2>/dev/null | sed -n 's/.*(compiler.warp of \(.*\))$/\1/p')
-export WARP_WINDOW=0
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
-failures=0
 
-check() { # check <what> <got> <expected>
-	if [ "$2" = "$3" ]; then echo "✓ $1"; else echo "✗ $1: got $2, expected $3"; failures=$((failures + 1)); fi
-}
 
 cp "$checkout"/core/native/*.warp "$checkout/samples/hello/hello.warp" "$stage/"
 (cd "$stage" && "$warp" build native warp.warp >"$stage/build.log" 2>&1)

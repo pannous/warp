@@ -1,15 +1,21 @@
-# decision nullish-default: x default y is x ?? y, y only when x raises or is ø, a falsy x kept; otherwise,
+# decision nullish-default, nullish-split: x default y, y only when x raises or is ø, a falsy x kept; otherwise,
 # failing and except spell it too; the one-line try x except y means x default y; `else` only after if or try
 '0 default 10'	0
 '"" default "anon"'	""
 'x = ø; x default 5'	5
 'parse_json("{oops") default []'	[]
-'parse_json("{oops") ?? 3'	3
+'parse_json("{oops") ?? 3'	error	is no json
 '0 otherwise 10'	0
 'x = ø; try x except 7'	7
 'match 2 { 1: "one", default: "many" }'	"many"
 'x = 3; x else 5'	error	a bare else names x default 5 and x or 5
-'"abc".find("x") ?? 0'	0
+'"abc".find("x") ?? 0'	error	ValueError
 's = "abc"; s.find("x") default 0'	0
-'[].first ?? 0'	0
-'m = {}; k = "a"; m[k] ?? 0'	0
+'[].first default 0'	0
+'m = {}; k = "a"; m[k] default 0'	0
+# decision nullish-split: ?? replaces only ø (C#, JS, Swift); the fallback words also catch a raise, rescue among them
+'x = ø; x ?? 5'	5
+'m = {}; m["a"] ?? 0'	error	no field a
+'m = {}; m["a"] rescue 0'	0
+'m = {}; u = m["a"] default 0; u'	0
+'f() := parse_json("{x") rescue 3; f()'	3

@@ -77,7 +77,7 @@ test atof("2.71828") ≈ 2.71828
 # Combined: parse and calculate
 x = atoi("10")
 y = atoi("20")
-test 30 == x + y ≈ 30
+test x + y == 30
 
 # ==============================================================================
 # Zero-Parameter Functions (void -> int32/float64)
