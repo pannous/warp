@@ -12,6 +12,7 @@ WARNING_FACT = "inline_html"
 
 # The source pass: each inline element as markup, a warning where each was written
 inline_html_warned(source: text): list := {
+	global diagnosed
 	global said
 	converted = markup_of_inline_html(source, yes, marked_element)
 	for found in converted#3 {
