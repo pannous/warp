@@ -382,7 +382,7 @@ function exportedParameters(bytes) {
 // one file however the path is spelled; a path in the compiler's repository folder (a `use cargo` crate in
 // /warp/web/playground/warp-lib/crates) is that file of the served repository
 function servedModuleUrl(path) {
-	const served = path.startsWith(REPOSITORY_DIRECTORY + "/") ? path.slice(REPOSITORY_DIRECTORY.length + 1) : path;
+	const served = path.startsWith(REPOSITORY_DIRECTORY + "/") ? path.slice(REPOSITORY_DIRECTORY.length + 1) : withoutProjectMark(path);
 	return new URL(served, FILE_ROOT).href;
 }
 function moduleImports(holder, hooks, path) {

@@ -18,7 +18,8 @@ const plainPath = path => path.replace(/^\.\//, "");
 // path, `•/test/fixtures/wasm/shout.wasm` (or `@/…`), names the served repository's file, as the page's project is
 // the served repository (natively core/native/driver.warp rooted_path)
 const PROJECT_ROOT_MARK = /^[•@]\//;
-const filePath = path => PROJECT_ROOT_MARK.test(path) ? path.replace(PROJECT_ROOT_MARK, "") : besideProgram(plainPath(path), self.programFile);
+const withoutProjectMark = path => path.replace(PROJECT_ROOT_MARK, "");
+const filePath = path => PROJECT_ROOT_MARK.test(path) ? withoutProjectMark(path) : besideProgram(plainPath(path), self.programFile);
 const textOf = written => typeof written === "string" ? written : utf8Decoder.decode(written);
 
 // a file written (a text) or rendered (bytes, which the page offers for download: worker.js self.keepFile)
