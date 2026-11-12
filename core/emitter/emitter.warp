@@ -392,7 +392,7 @@ opaque_form(view: View): text := {
 	"a " + kind
 }
 opening_of(bracket: text): text := if bracket == "" then "(" else bracket
-bracket_pair(bracket: text): text := {"(": "()", "[": "[]", "{": "{}"}[opening_of(bracket)] ?? "()"
+bracket_pair(bracket: text): text := {"(": "()", "[": "[]", "{": "{}"}.get(opening_of(bracket)) ?? "()"
 
 # a function made with no parameters, its body given later or its code written by the caller
 # `: any` until card class-named

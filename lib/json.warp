@@ -336,7 +336,7 @@ typed_json_value(value: any, described: map, path: text): any := {
 	if type(value).name != "map" { raise (if path == "" then "expected object" else path + " must be object") + ", received " + type(value).name }
 	order = described["order"]
 	for field in keys(value) { if not order.contains(field) { raise "unknown field " + typed_json_path(path, field) } }
-	defaults = described["defaults"] ?? {}
+	defaults = described.get("defaults") ?? {}
 	given = {}
 	for field in order {
 		at = typed_json_path(path, field)
