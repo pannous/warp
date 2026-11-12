@@ -360,7 +360,9 @@ result_type_checked(statement: Node, scope: map, aliases: map): Node := {
 	head = key_of(key_of(statement))
 	type = value_of(key_of(statement))
 	if not (is_group(head) and bracket_of(head) == "(" and #head > 0 and head#1 is symbol and type is symbol) { return statement }
-	if names_type(type, scope) or aliases.has(name_of(type)) { return statement }
+	# (an optional result, `as int?`, names its type without the `?`)
+	name = required_type(name_of(type))
+	if names_type(symbol(name), scope) or aliases.has(name) { return statement }
 	diagnose(call_of("result_type_unknown", [name_of(type)]), statement)
 }
 # the classes the program declares that an `x as P` names, its declarations `x as P = v` too; not its enums, whose
