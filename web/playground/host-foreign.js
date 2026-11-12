@@ -100,6 +100,36 @@ function callOnPage(receiver, memberName, argumentValues) {
 	return fromPage(value);
 }
 
+// a function of the program ({$callback: slot}, lib/callbacks.warp js_function) as a JS function calling it back
+// directly through the export js_called_back, its arguments and result crossing as plain values. One living function
+// a slot a run; once it is collected the run hears which handing of the slot it let go of (js_released), as
+// webview_bridge.js does natively
+const programFunctions = new WeakMap(); // the run's exports → slot → WeakRef(function)
+const programHandings = new WeakMap(); // function → { program, slot, handed }, the last handing it stands for
+const programReleased = new FinalizationRegistry(({ program, slot, handed }) => {
+	const functions = programFunctions.get(program);
+	if (!functions?.get(slot)?.deref()) functions?.delete(slot);
+	program.js_released(BigInt(slot), BigInt(handed));
+});
+function calledBack(program, value) {
+	if (value === null || typeof value !== "object" || !("$callback" in value)) return value;
+	const slot = Number(value.$callback);
+	const handed = Number(value.handed);
+	if (!programFunctions.has(program)) programFunctions.set(program, new Map());
+	const functions = programFunctions.get(program);
+	const living = functions.get(slot)?.deref();
+	if (living) {
+		programHandings.get(living).handed = handed;
+		return living;
+	}
+	const called = (...given) => guestPlain(program, program.js_called_back(BigInt(slot), newGuestValue(program, given)));
+	const handing = { program, slot, handed };
+	functions.set(slot, new WeakRef(called));
+	programHandings.set(called, handing);
+	programReleased.register(called, handing);
+	return called;
+}
+
 // the NUL-terminated bytes at `address` of a linear memory
 function cText(memory, address) {
 	const bytes = new Uint8Array(memory.buffer, address);
@@ -397,7 +427,7 @@ addHostPart({
 			const foreign = foreignRuntimes.get(runtimeName);
 			if (!foreign) throw new Error(`${runtimeName} ${moduleName}.${memberName}: ${runtimeName} runs only in the native host (the warp CLI)`);
 			const given = guestPlain(program_, call) === 1 ? guestPlain(program_, argumentList) : undefined;
-			const argumentValues = given === undefined ? null : given === null ? [] : Array.isArray(given) ? given : [given];
+			const argumentValues = given === undefined ? null : (given === null ? [] : Array.isArray(given) ? given : [given]).map(value => calledBack(program_, value));
 			const valueOf = result => newGuestValue(program_, result);
 			const result = foreign.call(moduleName, memberName, argumentValues, hooks);
 			const called = `${runtimeName} ${typeof moduleName === "string" ? moduleName : "value"}.${memberName}`;

@@ -2063,6 +2063,12 @@ code_built(caller: handle, context: handle, encoding: text, at: pointer, result:
 		return guest_call(caller, context, "new_spelled_key", parts, 3, result)
 	}
 	if tag == 108 { return code_list_built(caller, context, encoding, at, atoll(field), result) }
+	if tag == 112 {
+		parts = allocate(2 * VALUE_BYTES)
+		code_built(caller, context, encoding, at, parts)
+		int_result(atoll(field), parts + VALUE_BYTES)
+		return guest_call(caller, context, "new_placed", parts, 2, result)
+	}
 	guest_text_of(caller, context, field, result)
 }
 # a list of `count` items encoded after its bracket and separator: its items a square list built from the last one

@@ -91,7 +91,8 @@ host_builders = [["new_map", [ValueKind.Node], "built_map"], ["new_empty", [], "
 	["new_list", [ValueKind.Node, ValueKind.Node, ValueKind.Int], "built_list"], ["new_type", [ValueKind.Node, ValueKind.Node], "built_type"], ["error_of", [ValueKind.Node], "built_error"],
 	["new_bytes", MEMORY_LIST_PARTS, "built_bytes"], ["new_ints", MEMORY_LIST_PARTS, "built_ints"],
 	["new_floats", MEMORY_LIST_PARTS, "built_floats"], ["new_spelled_key", THREE_NODES, "key_node"],
-	["new_spelled_list", THREE_NODES, "built_spelled_list"], ["node_encoding", [ValueKind.Node], "encoded_node"]]
+	["new_spelled_list", THREE_NODES, "built_spelled_list"], ["node_encoding", [ValueKind.Node], "encoded_node"],
+	["new_placed", [ValueKind.Node, ValueKind.Int], "placed_at"]]
 # a page's handler entry (lib/markup.warp page_event): the host builds the event's detail with the builders, so a
 # module defining it exports them though it reaches no host word of nodes
 page_event_word = "page_event"

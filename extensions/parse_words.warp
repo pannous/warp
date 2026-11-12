@@ -41,10 +41,15 @@ parse_words(program: Node): Node := {
 # its builders (core/native/driver.warp code_built), a node before its parts: a tag, its fields each ended by
 # FIELD_END. `e` nothing, `T`/`F` yes/no, `i`/`f` a number, `c` a character's code, `t`/`s` a text, a symbol, `k` a key's
 # operator (its two sides after it), `l` a list's count, bracket and separator (its items after it), `x` the message of
-# code that does not parse; any other node as its text
+# code that does not parse, `p` the packed place a node was written at (the node after it); any other node as its text
 FIELD_END = "${chr(1)}"
 write_parse_code(code: text, file: text) := write(file, code_encoding(plain_node(parsed(code))))
+# placed as a quote written in the program is (quotes.warp quoted_code), so its `.line` and `.column` read the same
 code_encoding(n: Node): text := {
+	at = written_at(n)
+	(if at then encoded_field("p", "${packed_place(at)}") else "") + placeless_encoding(n)
+}
+placeless_encoding(n: Node): text := {
 	if n is bool { return if n then "T" else "F" }
 	if n is int { return encoded_field("i", "${n}") }
 	if n is number { return encoded_field("f", "${float(n)}") }

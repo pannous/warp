@@ -555,13 +555,20 @@ sugar_at_place(n: Node, place: Place, rules: list): Node := {
 early_sugared(program: Node): Node := {
 	rules = early_module_rules()
 	words = phrase_words(program, early_pair_keys())
-	if not rules.any(rule => needed_words(rule).any(word => words.has(word))) { return program }
+	if not early_needed_words().keys.any(word => words.has(word)) { return program }
 	kept = unbound_rules(rules, program)
 	once = sugared(program, kept)
 	# a rule a pair's key starts may write a variable later, `bind: name`'s setter: the items reading it are live, so
 	# once more; only then, as the two looks for later writes cost as much as the pass (self-compile 1.8 T → 12.9 T)
 	if not early_pair_keys().keys.any(key => words.has(key)) { return once }
 	if written_later(once, no).any(name => name not in written_later(program, no)) then sugared(once, kept) else once
+}
+# the words the early rules need, made once as the rules are (asked per class member and reached definition, each
+# rule's needed_words scanned the library's typed constants: 12% of a `100ms` compile)
+global early_words = ø
+early_needed_words(): map := {
+	if early_words == ø { early_words = word_set(early_module_rules().flat_map(needed_words)) }
+	early_words
 }
 # the keys of the early rules that rewrite a pair into code writing a variable later, `bind: $v`'s setter, read once:
 # such a key starts the early pass and its second run; any other key is a field name (`once: yes` in lib/prelude.warp)
