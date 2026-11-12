@@ -77,7 +77,7 @@ for line in open(samples):
 	if in_graph and not line.strip(): break
 	found = re.match(r"([\s+!:|]*)(\d+) (.*)", line) if in_graph else None
 	if not found: continue
-	if len(found.group(1)) <= 4: in_main = "main-thread" in found.group(3); continue
+	if len(found.group(1)) <= 4: in_main = "main-thread" in found.group(3) or "Main Thread" in found.group(3); continue
 	if in_main: frames.append((len(found.group(1)), int(found.group(2)), found.group(3)))
 own, within, called_from = {}, {}, {}
 callers = []

@@ -215,7 +215,7 @@ portrait = ""
 if "pine" in args { portrait = "pine" }
 if "aspen" in args { portrait = "aspen" }
 names = if grove then ["pine_medium", "oak_medium", "ash_medium", "aspen_medium"] else if portrait == "pine" then ["pine_medium"] else if portrait == "aspen" then ["aspen_medium"] else ["ash_medium"]
-meshes = [read_tree_mesh(folder + name + ".eztree") for name in names]
+meshes = [tree_mesh(folder + name + ".eztree") for name in names]
 packed = pack_tree_meshes(meshes)
 global vertices = packed.vertices
 global texels = packed.texels

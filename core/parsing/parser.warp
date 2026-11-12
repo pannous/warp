@@ -905,11 +905,11 @@ PRINT = symbol("print")
 OF = symbol("of")
 
 // `of` binds tighter than `=`: `width of canvas = 12` and `square of int = it * it` assign to the phrase, not to its
-// last word
+// last word; `:=` there is that `=` (decision of-form-canonical: `double of int := it * 2`)
 def of_assignment(nodes: list): Node? := {
 	if nodes.length < 3 or not nodes[0 ..< nodes.length - 1].contains(OF) { return ø }
 	match nodes#(nodes.length) {
-		Key(target, Op.Assign, value): Key(listed(Bracket.None, Separator.Space, nodes[0 ..< nodes.length - 1] + [target]), Op.Assign, value)
+		Key(target, op, value): if op == Op.Assign or op == Op.Define then Key(listed(Bracket.None, Separator.Space, nodes[0 ..< nodes.length - 1] + [target]), Op.Assign, value) else ø
 		_: ø
 	}
 }
@@ -1960,9 +1960,13 @@ def spaced_definition(p: Parser): Node {
 	names = blank_words(head)
 	// (no keyword: `def f x := …` stays the def rule's)
 	if names.length < 2 or not names.all(name => is_plain_name(name) and keyword_form(name) == "") or names#1 == "def" { return ø }
+	// (a preposition is no parameter: `double of int := it * 2` is the of form's, wiki/matching.md)
+	if names.any(name => phrase_prepositions.contains(name)) { return ø }
+	// (nor is a pronoun: `twice it := it * 2` is `twice := it * 2`)
+	defined = names.filter(name => not phrase_pronouns.contains(name)).map(name => symbol(name))
 	p.at += head.length + 4
 	skip_spaces(p)
-	Key(call_of(names.map(name => symbol(name))), Op.Define, expression(p, 0))
+	Key(if defined.length == 1 then defined#1 else call_of(defined), Op.Define, expression(p, 0))
 }
 // whether only blanks stand between the parser and its statement's start: the input's, a line's, after `;` or `{`
 def at_statement_start(p: Parser): bool {
