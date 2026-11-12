@@ -22,7 +22,6 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - 2026-11-12 user-approved: loop-in-html: a loop directly inside html{…} gives every item, as in any tag. Undo: revert.
 - 2026-11-11 night, user-approved 11-12: constructor-spaces-refused: `person("Ann" 40)` is refused with the fix-it `person("Ann", 40)`, as `f(1 2)` is; constructors read spaces as functions do; old spreading tests go to the triage list.
 - 2026-11-11 primitive-global: `global x = 0` in a @primitive file is a mutable wasm global, type from declaration or literal.
-- 2026-11-11 underscore-is-it: `_` is an alias of `it`, the last result at the top level (`3+4` then `_ * 2` → 14, got-it note naming `it`); seeded random sequences are not spec, only "the same seed repeats the numbers".
 - 2026-11-11 no-str: `str` is gone as function and type word (lib/python keeps it); warp writes text.
 - 2026-11-11 hex-subtype: hex(n) / `n as hex` / `hex n` give a hex subtype of int shown as 0x7b (lowercase, no quotes); subtypes of number types equal their plain number by value (not Quantity, Angle); colours: argb_hex / rgba_hex.
 - 2026-11-11 canvas-value: canvas is a Canvas value (width, height, clear(), resize(w, h)); clear(canvas).
@@ -40,7 +39,6 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - 2026-11-10 lambda-scope-cells: a lambda's block body is a scope; its blocks share its names (handler-blocks-share holds there too).
 - 2026-11-10 is-type-variable: `x is v` tests the type a variable holds; a name assigned again is refused (`type Paint = Color`); no wiki text.
 - 2026-11-10 time-of-day-order: a local datetime or a time of day orders against a duration by its time of day (`ref.time >= 6h`).
-- 2026-11-10 block-call-parked: a glued `{…}(…)` is not a call yet (parked).
 - 2026-11-10 lambda-broadcast: a lambda applied to a list broadcasts like a named function (`g = x => x*2; g([1 2 3])` is [2, 4, 6]).
 - 2026-11-10 aliases-in-rules: a sugar rule's literal word matches every alias spelling of it (`xs.forEach {…}` through the `each` rule); aliases otherwise stay call-only, so data keys and type names never change; the full unification (aliases-unified) is parked: renaming everywhere would rename data keys.
 - 2026-11-10 bare-typed-overloads: `name: T := e` is `name(): T := e`, so `sample: int := 7; sample: text := "seven"` overload by result type.
@@ -65,7 +63,6 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 
 ## Welcoming, diagnostics and newcomer forms
 
-  - julia-pair-range: `1:4` stays a pair; iterated (for, sum, comprehensions) a pair of two numbers is the range.
   - julia-text-times-hint: `"a" * "b"` concatenates with a got-it warning naming `+`; an error only when a text holds a number (`"3" * "4"`).
 - foreign-spellings: foreign names are cheap aliases of existing words, not lowering code. Kept: Rust `<T>`/`let mut`, Enum.map/List.map/Seq.sum, Python lambda, variadic lambdas, JS destructured parameters, Ruby lambda/proc/blocks/to_s, C# LINQ, C++ `auto x`. Dropped: OCaml let-in and `fun`, Elixir `def …, do:`, C++ `[](…){…}`. R/PHP forms live in `use R` / `use PHP`. Kotlin `when x { 1 -> … }` = `match` with a warning; `match` takes `->` arms and `else`; `case` is optional before any arm.
 - P157 no generic syntax: ported `fn id<T>(x: T)` compiles untyped with a note. P161 no Swift argument labels; ported labels compile with a note.
@@ -73,7 +70,6 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 
 ## Comments, separators and lexing
 - floor-division: `//` is always a comment; floor division is `/!` (`7 /! 2` = 3, `x /!= 2`); where `//` was clearly meant as division (`n = 7//2`), a strong warning names `/!` and `warp fix` rewrites it; `div` warns with the fix `/!` (`div` stays the html tag). A comment hiding a closing bracket is a parse error naming the `//`.
-- P68 a braceless call whose argument holds an operator (`square 3 + square(4)`) warns naming both groupings. The prelude signature decides it: a word giving nothing (`: nothing`) has no second grouping and never warns. output-words-nothing: the output words (print, puts, puti, putl, putf) all give nothing.
 - P143 `f x == y` is an error naming both groupings only when both type-check; P149 an untyped parameter's type is inferred from the body first. Statement words (print, return) take the whole expression.
 - call-as-grouping: `f x as T` is `f(x as T)`, with a warning naming `f(x as T)` and `(f x) as T`.
 - P189 extra control-flow words stay display-only keywords; ambiguous names need quoting.
@@ -86,7 +82,6 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 
 ## Units and quantities
 - unit-definitions: `quantity length meter` declares a base and its SI anchor; `unit cm := meter / 100`, `unit N := kg*m/s²` (derived quantities follow from the expression); offsets `unit °F := (it + 459.67) * 5/9 K`; SI prefixes only for SI-anchored/derived units. unit-target: `unit °C as K := it + 273.15`. unit-prefix-lines: `prefix k := 10^3`, `SI dimension length meter`.
-- Unit symbols bind only after a number, never as bare names; a variable gets a unit by `x * 1 m`.
 - unit-after-number (also: variable-named-like): `m = 5; 3m` is 3 meters with a hint "write 3*m to multiply".
 - display-names: display.density (aliases dpi, ppi) in dpi; display.size width × height in px (alias dimensions, with a hint); display.diagonal in inch; display.resolution is an ambiguous alias reading display.size, with a hint.
 - unit-types: a unit can type a field (`display { density: dpi }`): it fixes the kind of quantity, converts other units, refuses other quantities. unit-field-plain-number: a plain number there warns with a fix adding the unit.
@@ -97,9 +92,6 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 
 - type-text (also: type-print, time-word's type clause, type-result-shown; revised by real-type-display): a type value shows by its name in every text form (`type(π)` → real, `type(now)` → Instant, a class as declared); warp test prints it as its quoted name.
 - P179 sum types auto-unwrap like optionals; payload fields by position `rgb(1,2,3)#1`; a payload-free variant is its symbol and `red is Color`. P178 enum cases with values are sealed classes.
-- type-words-reserved (also: P23, P20): every type word is reserved as a function name (`double(x) := …` errs, "name it to_double"), except P31's `text(p)`. type-word-local-warns: binding a variable to a type word (`symbol = ":"`) warns, since it shadows the type in `is`/`as`.
-- D10/P17 dispatch on return type (`render "hello" as pdf`); ambiguous → got-it warning (notes/dispatch.md).
-- function-type: `type(gcd)` prints `function: (a, b) -> int`. parse-type / body-code: quoted program parts (`parse("1+1")`, `f.body`) have type `code`, print their source, keep `.op`.
 
 ## Variables, binding and charged definitions
 - P69b a block arriving at run time is pure by default. P69c `warp compile` with run-time `!` warns and loads a shared compiler lazily.
@@ -116,7 +108,6 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - same-as-result: a result typed like an argument is spelled `same as <param>` (`shuffled(xs): same as xs`); an element of an argument is `element of xs`, `value of m`, `key of m` in type position (`first(xs): element of xs`); no type variables per P157.
 - P24 suffix forms (`4 doubled`) call user functions. P164 a type word after a parameter name is its type (`phone number`); `phone-number:text` is one hyphenated name in declarations.
 - P48 custom operators: `prefix operator ⁻ := …`, `suffix`, `infix operator ⊕ := left+right`, word operators `infix operator divides(d, n) := …`. P54 only declared operators are ranked (`has precedence above +`). P166 element-wise operators on plain numbers act plainly.
-- values-number: a system value is `$mouse.x`; `$mouse_x` hints `mouse.x`.
 - D6 `|` is one operator dispatched on types: logical or, or pipe (`2|square|root`). operator-shall: `&`/`|` of two whole numbers combine bits; `and`/`or`/`&&`/`||` stay logical. amp-compose: `&` of two functions composes in reading order, `∘` alias. P158 `then` pipes only into a stage missing its argument with no `else`.
 - `root` is an alias of sqrt. P2 tuple returns `return a, b` / `x, y = f()` as wasm multi-value. P3 closures keep boxing.
 
@@ -171,7 +162,6 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 
 - cast-checks (user, refines nat-and-int; generalised by checked-forced-conversions): `x as int` (as i64, every fixed-width int) raises a catchable Error when x does not fit ("too big for int: …"); `x as! int` converts no matter what (wraps); the compiler warns when it knows a value will not fit. Int arithmetic keeps wrapping silently. No `wrapped` word. Warp's `as!` forces the conversion (Swift's traps).
 - checked-forced-conversions: `x as T` is a checked conversion, exact or a catchable refusal; `x as! T` a forced conversion, the target type's one declared lossy rule (library: a `forced` overload beside convert), refused where a type has none (enums, parsing text). Ints and bytes wrap; colour channels and audio samples saturate (300 → 255); bytes → text replaces invalid UTF-8 with U+FFFD; map → class drops unknown fields. Floats approximate in both variants (`1/3 as float` rounds). The compiler warns where it knows a checked conversion will refuse.
-- degree-constant: `°` in lib/units.warp is the plain number π/180 (radians are dimensionless): `60°` is 1.0472, `sine(30°)` works everywhere, shaders included; it shows as the number. No Angle quantity class.
 - units-ignored-by-shaders (user, reinterprets no-units-in-shaders): values a painted (shader) function reads are written with their units (`wind_speed = 7 m/s`); the shader (and the CPU fallback) ignores the unit, receiving the quantity's base SI amount (20 km → 20000); the WGSL pass drops the unit, the CPU fallback pulls units through (math words read a Quantity's SI number through a float() hook).
 - root-dispatch-float: with f(int) and f(float), an irrational exact root (sqrt(2)) picks the float variant; a whole root (√9) counts as int.
 - rational-not-dispatched: `f(x: int)` and `f(x: rational)` stay the loud refusal "cannot be told apart"; branch inside one f with `if x is rational` (card fails-unknown).
@@ -182,18 +172,14 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - loop-scoped-it: a for loop's implicit `it` is its own, gone after the loop.
 - typed-parse-message: parse's mismatch says the warp type, "expected object, received list of int".
 
-- word-arithmetic-infix: `plus`, `divided by` are aliases only, not infix words; `one plus two` is not arithmetic. word-arithmetic-parked: test lines expecting `3 plus 4` → 7, `5 subtract 2`, `2 add 3` (test_add_subtract_words, test_operator_spellings) stay parked until those words are declared as infix operators (`infix operator plus := +` in a library or the program), never as core language.
 - arm-symbols: an undeclared capitalised word in a match arm is an unknown name; matching.warp declares enum Day.
 - regex-error-from-os (user, "leave as is"): a malformed regex passes the OS's regcomp text through; tests expecting older wording stay red; no warp-owned message table.
 - backtick-strings: inside backticks `$x` interpolates the expression `$x`, as outside (a page element's value on a page); a plain variable is `${who}`; `\$` escapes. extensions/, no core.
 - markup-attr-call: in markup a call to a known warp word is evaluated (`div(class: join(xs, " "))` → class="a b"); CSS functions (min, max, calc, var, rgb) inside style{} stay text; refused when both fit.
 - core-if-branch-float-widening: mixed int/float branches widen to float.
-- verify-function: a program may not name a function after a type word: `double(x) := …` refuses ("double is a type").
 
-- clock-plain: clock() returns a Time quantity, so `clock() - started < 2s` works.
 - it-last-result: inside a lambda `it` is the implicit parameter; outside one, `it` is the last statement's value (`3 + 4; it * 2` → 14).
 - render-pdf-string: `x = 3 as pdf` with pdf undeclared refuses, "unknown type pdf: use a library that defines it"; an unknown type name is never invented.
-- dollar-interpolation (user, card julia-dollar-interpolation): `"x is $x"` interpolates globally in double quotes, as `"${x}"` does, no `use julia` toggle; single quotes never interpolate (`'$HOME'` stays "$HOME"). In double quotes `$` before a digit is never interpolated (money "$1,234.56"); `$0` warns with did-you-mean `${$0}`; a `$name` with no variable or element of that name is a compile error with a fix-it (write '…' or \$). Data files never interpolate. The context decides: `$x` in a text interpolates, `$name` in a rewrite rule is a hole, `$dir` is a word (taste call). "$ref" (lib/json_tools.warp:171) and shell texts move to single quotes.
 
 - rough-fallback (user, card instances-compared): a class that defines only one of approximately(o) / similar(o) uses it for both ≈ and ~; with both defined each serves its own operator.
 - signature-defaults (user, card reflection-dot-forms): help(f) and f.signature show default values (`nearest(x, kind, limit = 1000000, within = 0) -> node`); Rust-era expectations are upgraded to the typed lib signatures (`(y:float, x:float) -> float`); an alias answers with its target's signature.
@@ -214,4 +200,3 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
   - dot-call answers (user, core OK for notes/dot-call-plan.md steps 1–5, then 8): `o.f(3)` with a function-valued field f calls that field (fields first; the global is `f(o, 3)`); on untyped data the field wins (`{"count": 3}.count` is 3, the word is `count(m)`; keeps_word goes); any function in scope works by dot, local closures included (`g = x => x*2; 3.g` is 6); `x.w = v` without a field w calls a setter overload `w(x, v)` if one takes x, else a map gets the entry and an instance a warned extra field. Dot on a whole number (`16.sqrt`, `3.type`) falls out of the rule and stays (Interviewer, the user unsure: refusing would be a special case); `1.e5`-style exponents stay numbers.
   - map-methods-first: own methods first, then fields, then functions: a map's protocol methods (keys, values, entries, get, has, set, remove) beat an entry of that name (`m.keys` is the key list even when m holds "keys"; that entry is `m["keys"]`); other entries stay field-first (`{"count": 3}.count` is 3).
   - setters-declared (Interviewer, narrows the dot-call Q4 setter answer): `x.w = v` calls a setter only where x is statically an instance of a class with its own one-parameter method `w(v)` or a function whose first parameter is declared that class (`double(p: P, v)`); maps and untyped values keep the entry write (`m.merge = 3` adds an entry, never merge(m, 3)). An extension rule, no core. Step 8 (canonical w(x, …) for dot calls) parked on card dot-call-canonical until the rule engine matches a call and its dot form in one pattern; step 5 (node parts as global words) dropped.
-- name-shadows-overload (FYI, card color-power-variant): any name a definition or lambda binds hides an overloaded library function of that name, as parameters already did.

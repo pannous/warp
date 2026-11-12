@@ -1,0 +1,74 @@
+# .github/workflows/land.yml
+name: Land
+
+# The cloud merge queue (card landings-github-actions, user 2026-11-12): a worker hands its finished branch over by
+# pushing its tip to land/<card> (`git push origin <tip>:refs/heads/land/<card>`). This workflow merges every waiting
+# land/* branch onto main as one batch and checks it as the Mac's landing does (scripts/integrate/merge.sh --queue: the
+# compilers built, hello, self-check and gate tier 1 when core/ or extensions/ changed, the page smoke), halves a red
+# batch, pushes the green cards to main and deletes their land/ branches (scripts/integrate/land.sh). A red card's tip
+# moves to land/red/<card> and its RED line is in the run's log; the run then fails, so it is seen.
+# It pushes only main and land/* branches. The Mac installs main after it (scripts/integrate/after-push.sh, which also
+# closes the landed cards: the cloud has no board).
+on:
+  push:
+    branches: [ "land/**", "!land/red/**" ]
+  # a push starts the workflow of the pushed commit, so a tip older than this file starts nothing: the schedule (main's
+  # copy) takes it within minutes; a run with nothing waiting ends after one ls-remote
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+# one batch at a time; a push while one runs waits and then takes every branch waiting
+concurrency:
+  group: land
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: write  # starts the Playground, which a push by this token does not
+
+env:
+  WARP_WINDOW: 0
+  WARP_SOUND: 0
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  land:
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        ref: main
+        fetch-depth: 0
+    - name: waiting branches
+      id: waiting
+      run: |
+        waiting=$(git ls-remote origin 'refs/heads/land/*' | grep -v 'refs/heads/land/red/' | wc -l)
+        echo "count=$waiting" >>"$GITHUB_OUTPUT"
+        echo "$waiting branches waiting"
+    - name: tools (zsh for self-check, headless Chrome for the page smoke) and main's compilers
+      if: steps.waiting.outputs.count != '0'
+      run: |
+        sudo apt-get install -y -qq zsh
+        npm install -g agent-browser && agent-browser install --with-deps
+        scripts/ci-compilers.sh . "$RUNNER_TEMP/bootstrap"
+        echo "$RUNNER_TEMP/bootstrap" >>"$GITHUB_PATH"
+        echo "WARP_BINARY=$RUNNER_TEMP/bootstrap/warp" >>"$GITHUB_ENV"
+        echo "WARP_COMPILER_STORE=$RUNNER_TEMP/store" >>"$GITHUB_ENV"
+    - name: merge, check, land
+      if: steps.waiting.outputs.count != '0'
+      run: |
+        set +e
+        git config user.name "warp merge queue"
+        git config user.email "info@pannous.com"
+        scripts/integrate/merge.sh --tree . --queue 2>&1 | tee "$RUNNER_TEMP/land.log"
+        status=${PIPESTATUS[0]}
+        if [ "$status" = 0 ]; then
+          scripts/integrate/land.sh --tree . 2>&1 | tee -a "$RUNNER_TEMP/land.log"
+          status=${PIPESTATUS[0]}
+          # the Playground of the new main: a push by this token starts no workflow itself
+          [ "$status" = 0 ] && gh workflow run pages.yml --ref main
+        fi
+        { echo '```'; grep -E '^(merge|land): ' "$RUNNER_TEMP/land.log"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+        grep -q '^merge: RED' "$RUNNER_TEMP/land.log" && status=1
+        exit "$status"
