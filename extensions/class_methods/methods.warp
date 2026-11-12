@@ -166,16 +166,16 @@ is_deferrable(definition: Node, program_words: map): bool := (declared_name(defi
 # it calls (`abs·Complex`, which a dispatcher of one class calls untested) and those of the dispatchers it calls,
 # `!=·operator`'s of `==·operator`
 covered_classes(dispatchers: list, classes: map): map := {
+	said = dispatchers.map(words_within)
 	tested = {}
-	for dispatcher in dispatchers { tested[defined_word(dispatcher)] = (tested.get(defined_word(dispatcher)) ?? []) + dispatched_classes(dispatcher, classes) }
+	for i in 0..<#dispatchers { tested[defined_word(dispatchers[i])] = (tested.get(defined_word(dispatchers[i])) ?? []) + dispatched_classes(dispatchers[i], said[i], classes) }
 	covered = {}
-	for dispatcher in dispatchers { covered[defined_word(dispatcher)] = word_set((covered.get(defined_word(dispatcher)) ?? []) + tested[defined_word(dispatcher)] + words_within(dispatcher).filter(word => tested.has(word)).flat_map(word => tested[word])).keys }
+	for i in 0..<#dispatchers { covered[defined_word(dispatchers[i])] = word_set((covered.get(defined_word(dispatchers[i])) ?? []) + tested[defined_word(dispatchers[i])] + said[i].filter(word => tested.has(word)).flat_map(word => tested[word])).keys }
 	covered
 }
 # (a module's dispatcher handing another class's instance to that class's own module, foreign_first, says so by the
 # word that tests for one: it answers ø where the program's own falls back)
-dispatched_classes(dispatcher: Node, classes: map): list := {
-	words = words_within(dispatcher)
+dispatched_classes(dispatcher: Node, words: list, classes: map): list := {
 	owners = words.map(word => word.split("·")).filter(parts => #parts == 2 and classes.has(parts#2)).map(parts => parts#2)
 	nodes_in(dispatcher).filter(is_instance_test).map(test => "${test#3}") + owners + (if instance_test_word in words then [instance_test_word] else [])
 }
