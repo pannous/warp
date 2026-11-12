@@ -162,21 +162,24 @@ method_said(word: text, said: map, operator_table: map): bool := {
 # no word only the whole program's passes read: an overloaded one, whose variants they tell apart (`sum` of the
 # prelude's), or a class's name, which their scope holds (`o is Quantity` of a promotion, `duration: Duration`)
 is_deferrable(definition: Node, program_words: map): bool := (declared_name(definition) ?? "").contains("·") and not words_within(definition).any(word => program_words.has(word))
-# each dispatcher's name → the classes it tells apart: those its instance tests name (value_dispatch) and those of the
-# dispatchers it calls, `!=·operator`'s of `==·operator`
-covered_classes(dispatchers: list): map := {
+# each dispatcher's name → the classes it reaches: those its instance tests name (value_dispatch), those whose methods
+# it calls (`abs·Complex`, which a dispatcher of one class calls untested) and those of the dispatchers it calls,
+# `!=·operator`'s of `==·operator`
+covered_classes(dispatchers: list, classes: map): map := {
 	tested = {}
-	for dispatcher in dispatchers { tested[defined_word(dispatcher)] = (tested.get(defined_word(dispatcher)) ?? []) + nodes_in(dispatcher).filter(is_instance_test).map(test => "${test#3}") }
+	for dispatcher in dispatchers { tested[defined_word(dispatcher)] = (tested.get(defined_word(dispatcher)) ?? []) + dispatched_classes(dispatcher, classes) }
 	covered = {}
 	for dispatcher in dispatchers { covered[defined_word(dispatcher)] = word_set((covered.get(defined_word(dispatcher)) ?? []) + tested[defined_word(dispatcher)] + words_within(dispatcher).filter(word => tested.has(word)).flat_map(word => tested[word])).keys }
 	covered
 }
-is_instance_test(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(HiddenWord.InstanceOf as text) and n#3 is text
+dispatched_classes(dispatcher: Node, classes: map): list := nodes_in(dispatcher).filter(is_instance_test).map(test => "${test#3}") + words_within(dispatcher).map(word => word.split("·")).filter(parts => #parts == 2 and classes.has(parts#2)).map(parts => parts#2)
+is_instance_test(n: Node): bool :=is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(HiddenWord.InstanceOf as text) and n#3 is text
 # each dispatcher name bound to the first linked module whose dispatcher of the name covers its classes, when no
-# dispatcher of the name calls a word of the program's own: a name's arities (`-x` beside `a - b`) bind together or not
+# dispatcher of the name calls a word of the program's own: a name's arities (`-x` beside `a - b`) bind together or not;
+# a name reaching no class known stays the program's own
 stand_in_images(dispatchers: list, covered: map, own: map) := {
 	calling_own = word_set(dispatchers.filter(dispatcher => words_within(dispatcher).any(word => own.has(word))).map(defined_word))
-	for name in covered.keys.filter(name => not calling_own.has(name)) {
+	for name in covered.keys.filter(name => not calling_own.has(name) and #covered[name] > 0) {
 		image = covering_image(name, covered[name])
 		if image != ø { module.dispatcher_images[name] = image }
 	}
@@ -354,7 +357,7 @@ methods_lifted(program: Node): Node := {
 		dispatchers = dispatchers.map(dispatcher => declared_fallback(dispatcher, glyph))
 		deferred_dispatchers = deferred_dispatchers.map(dispatcher => declared_fallback(dispatcher, glyph))
 	}
-	covered = covered_classes(dispatchers + deferred_dispatchers)
+	covered = covered_classes(dispatchers + deferred_dispatchers, classes)
 	for name in covered.keys { module.class_dispatchers[name] = covered[name] }
 	# (a program adding no class of its own declares a dispatcher a linked module made over the same classes or more, bound
 	# to that module's, so neither the dispatcher nor the methods only it calls go through the passes)
