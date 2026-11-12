@@ -1561,6 +1561,7 @@ function initialize() {
 	$("address").onkeydown = goToAddress;
 	$("rendered").onclick = click => followLink(click) || sendElementEvent("click", click, clickDetail(click));
 	$("rendered").oninput = input => sendElementEvent("input", input, inputDetail(input.composedPath()[0]));
+	$("rendered").onkeydown = pressed => sendElementEvent(keyEventName(pressed), pressed, inputDetail(pressed.composedPath()[0]));
 	$("output").onclick = click => sendPageEvent("click", clickDetail(click));
 	$("output").onkeydown = key => sendPageEvent("key", { key: key.key });
 	followPointer($("output"));
