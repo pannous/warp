@@ -35,7 +35,7 @@ public deep_merge(a: any, b: any): any := {
 }
 is_map(x: any): bool := bracket_of(x) == "{"
 // the entries that f(key, value) holds for
-filter(m: map, f: any): any := { out = {}; for k in keys(m) { if f(k, m.get(k)) { out[k] = m.get(k) } }; out }
+filter(m: any, f: any): any := { out = {}; for k in keys(m) { if f(k, m.get(k)) { out[k] = m.get(k) } }; out }
 // the same values under the keys f gives (keys, map_keys, already lists the keys); a later entry wins a clash
 transform_keys(m: any, f: any): any := { out = {}; for k in keys(m) { out[f(k)] = m.get(k) }; out }
 // the value at the path, a list of keys of maps and 1-based positions of lists: get_path({a:[{b:5}]}, ["a", 1, "b"])
