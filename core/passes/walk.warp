@@ -163,14 +163,17 @@ node_from(view: View, keeps_maps: bool): Node := {
 is_type_view(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "type"
 # the view of a node (`[]` equals ø but is not ø itself: the empty list, square bracketed as parser.warp's grouped
 # builds it)
-view_of(n: Node): View := if n == ø and n !== ø then ["list", "[", ""] else match n {
-	Key(left, op, right): key_view(left, op as text, right)
-	Symbol(name): ["symbol", name]
-	Char(c): ["char", c]
-	Text(t): ["text", t]
-	List(items, bracket, separator): ["list", bracket as text, separator as text] + items.map(view_of)
+view_of(n: Node, placed: bool = no): View := if n == ø and n !== ø then ["list", "[", ""] else match n {
+	Key(left, op, right): key_view(left, op as text, right, placed)
+	Symbol(name): placed_atom(["symbol", name], n, placed)
+	Char(c): placed_atom(["char", c], n, placed)
+	Text(t): placed_atom(["text", t], n, placed)
+	List(items, bracket, separator): ["list", bracket as text, separator as text] + items.map(item => view_of(item, placed))
 	_: n
 }
+# an atom's view, placed: ["at", line, column, view], where it was written, which node_from places back (a class's
+# method code: errors and position-keyed passes inside a class know their place)
+placed_atom(view: View, n: Node, placed: bool): View := if placed and is_positioned(n) then ["at", line_of(n), column_of(n), view] else view
 
 # the members of a union type, `list or text`, `int | text` (decision union-or); a single type is its own one member
 union_members(type: text): list := type.split(" or ").flat_map(part => part.split("|")).map(member => member.trim())
@@ -193,10 +196,10 @@ declared_type_name(name: any): text? := {
 }
 
 # the view of a key: an opaque view and an attribute layer as they were written
-key_view(left: Node, op: text, right: Node): View := {
+key_view(left: Node, op: text, right: Node, placed: bool = no): View := {
 	if left == opaque_symbol { return right }
-	if left == symbol(attribute_word) { return ["attribute", right#1, view_of(right#2), view_of(right#3)] }
-	["key", op, view_of(left), view_of(right)]
+	if left == symbol(attribute_word) { return ["attribute", right#1, view_of(right#2, placed), view_of(right#3, placed)] }
+	["key", op, view_of(left, placed), view_of(right, placed)]
 }
 
 # whether a and b have the same view, compared as they are walked, no view built (the sugar passes ask it of every

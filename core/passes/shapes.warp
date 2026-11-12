@@ -19,7 +19,11 @@ def spaced(nodes: list): Node := listed(Bracket.None, Separator.Space, nodes)
 def keyed(op: text, left: Node, right: Node): Node := Key(left, op as Op, right)
 
 def opaque(view: list): Node := Key(symbol(opaque_word), Op.Colon, view)
-def type_node(name: Node, body: Node): Node := opaque(["type", view_of(name), view_of(body)])
+def type_node(name: Node, body: Node): Node := opaque(["type", view_of(name), class_body_view(body)])
+// a class body's view, its methods' code placed (walk.warp view_of): the compiler reads it only as code, while its
+// fields are read as the view they are
+def class_body_view(body: Node): View := if is_group(body) then view_of(body)[0..<3] + items_of(body).map(member_view) else view_of(body)
+def member_view(member: Node): View := if is_key(member, Op.Define) then ["key", Op.Define as text, view_of(key_of(member)), view_of(value_of(member), yes)] else view_of(member)
 def error_node(message: text): Node := opaque(["error", ["text", message]])
 // the message of an error a parse wrote into the tree as error_node did, ø of any other node
 def parse_error_message(n: Node): text? := if n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "error" then value_of(n)#2#2 else ø
