@@ -875,19 +875,17 @@ global_word_modules(program: Node, own: any, used: list): list := {
 # the runtime words lib/math.warp declares, `max(a, b, more...) from warp`, which a program calls without its use
 runtime_words_of_math = math_runtime_lines.map(line => line.name)
 # the source with a `use` line of each module it uses without saying it, after its last line (no position moves)
-# a used module's source: lib/<module>.warp, else a C library's words, lib/native/<module>.warp (`use sqlite3`'s rows)
-# read once a module: a rule word asks it at each call site it tries (extensions/rules/rule_words.warp module_named)
+# a used module's file: lib/<module>.warp, else a C library's words, lib/native/<module>.warp (`use sqlite3`'s rows),
+# only for a name no module file has; the place a refusal in its code names
+used_module_file(module: text): text := {
+	path = std_module_path(module)
+	if exists(path) then path else native_path(run_library(), module) ?? path
+}
+# a used module's source, read once a module: a rule word asks it at each call site it tries
+# (extensions/rules/rule_words.warp module_named)
 global used_module_texts = {}
 used_module_text(module: text): text := {
-	if not used_module_texts.has(module) {
-		source = file_text(std_module_path(module))
-		# (a C library's lines, lib/native/<m>.warp, only for a name no module file has)
-		if source == ø {
-			native = native_path(run_library(), module)
-			source = if native == ø then "" else file_text(native) ?? ""
-		}
-		used_module_texts[module] = source
-	}
+	if not used_module_texts.has(module) { used_module_texts[module] = file_text(used_module_file(module)) ?? "" }
 	used_module_texts[module]
 }
 # whether a module of the name is there to use: a standard module's file (asked of the disk, not read), else a C
@@ -1250,7 +1248,7 @@ called_words(n: Node): list := {
 with_used_modules(program: Node, folder: text): Node := {
 	sources = used_module_sources(flat_statements(program), folder, [])
 	for source in sources#1 { for d in c_declarations_in(source) { used_c_functions[d#1] = d } }
-	if #sources#1 == 0 and #sources#3 == 0 then program else with_reached(program, sources#1.join("\n"), yes, sources#2.map(std_module_path), sources#3)
+	if #sources#1 == 0 and #sources#3 == 0 then program else with_reached(program, sources#1.join("\n"), yes, sources#2.map(used_module_file), sources#3)
 }
 # [the sources of the standard modules the statements use, each after those it uses, the module names seen, the
 # slices of the linked ones (signature.warp), whose text is never read]; a file in the program's folder takes a use of
