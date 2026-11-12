@@ -336,23 +336,30 @@ const SOUND_MODULE = "warp/sound";
 const TASK_CONTEXT_ADAPTER = Uint8Array.from(atob("AGFzbQEAAAABLgdQAF8DfgBuAGMAAGABYwABfF5jAAFfAn8BZAIBYAABYwNgAAFjAGABYwABYwADAwIFBgQEAXAAAgcsAwx0YXNrX2NvbnRleHQAABF0YXNrX2NvbnRleHRfYmFjawABBWhvb2tzAQAKQwIjAQFwQQAlACEAIADRBGMA0HEFQogCIAD7FgQUBNBx+wAACwsdAQFwQQElACEBIAHRBEAFIAAgAfsWARQBGgvQcQs="), c => c.charCodeAt(0));
 function taskContextHooks(instances) {
 	if (!instances.taskContextHooks) {
-		const exported = new WebAssembly.Instance(new WebAssembly.Module(TASK_CONTEXT_ADAPTER)).exports;
-		instances.taskContextHooks = {
-			task_context: exported.task_context,
-			task_context_back: exported.task_context_back,
-			bind(name, moduleExports) {
-				if (name !== SOUND_MODULE) return;
-				try {
-					if (moduleExports.task_context) exported.hooks.set(0, moduleExports.task_context);
-					if (moduleExports.task_context_back) exported.hooks.set(1, moduleExports.task_context_back);
-				} catch { /* leave the prelude no-op if the signatures do not match */ }
-			},
-		};
+		try {
+			const exported = new WebAssembly.Instance(new WebAssembly.Module(TASK_CONTEXT_ADAPTER)).exports;
+			instances.taskContextHooks = {
+				task_context: exported.task_context,
+				task_context_back: exported.task_context_back,
+				bind(name, moduleExports) {
+					if (name !== SOUND_MODULE) return;
+					try {
+						if (moduleExports.task_context) exported.hooks.set(0, moduleExports.task_context);
+						if (moduleExports.task_context_back) exported.hooks.set(1, moduleExports.task_context_back);
+					} catch (failure) {
+						console.warn("task context adapter could not bind sound's hooks; leaving the prelude no-op hook:", failure);
+					}
+				},
+			};
+		} catch (failure) {
+			console.warn("task context adapter could not compile; leaving the prelude no-op hook:", failure);
+			instances.taskContextHooks = { bind() {} };
+		}
 	}
 	return instances.taskContextHooks;
 }
 function taskContextImports(module, exports, hooks) {
-	if (module !== PRELUDE_MODULE || !exports) return exports;
+	if (module !== PRELUDE_MODULE || !exports || !hooks.task_context) return exports;
 	const namespace = Object.create(null);
 	for (const name of Object.keys(exports)) namespace[name] = exports[name];
 	namespace.task_context = hooks.task_context;
