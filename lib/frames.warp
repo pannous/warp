@@ -4,6 +4,9 @@
 // painting each frame paints one PNG at that size (the prelude's paint_each samples a painted function down to it)
 HEADLESS_FRAME_WIDTH = 240
 HEADLESS_FRAME_HEIGHT = 135
+// while debugging: Escape closes the window of an `on frame` program (lib/keys.warp KEY_NAMES)
+ESCAPE_CLOSES_WINDOW = yes
+ESCAPE_KEY_CODE = 27
 rewrite listen(data frame, $listener, $once) => frame_listened($listener, $once)
 // `on exit {…}` runs once the program and its frames are done, the program's value kept
 rewrite listen(data exit, $listener, $once) => exit_listened($listener, $once)
@@ -18,7 +21,15 @@ exits_end(value: any = ø) := {
 frames_end(value: any = ø) := {
 	set_system_value("window_open", 1)
 	if window_open() {
-		while window_open() { emitted(data frame, ø) }
+		presses_before_frame = system_value("keys pressed")
+		while window_open() {
+			emitted(data frame, ø)
+			presses_after_frame = system_value("keys pressed")
+			if ESCAPE_CLOSES_WINDOW and presses_after_frame != presses_before_frame and system_value("key code pressed") == ESCAPE_KEY_CODE {
+				set_system_value("window_open", 0)
+			}
+			presses_before_frame = presses_after_frame
+		}
 		return value
 	}
 	set_system_value("window_width", HEADLESS_FRAME_WIDTH)
