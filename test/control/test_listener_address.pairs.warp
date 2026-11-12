@@ -3,3 +3,5 @@
 'n = 0; h = on alarm { n += 1 }; emit alarm; remove h; emit alarm; n'	1
 'x = 0; n = 0; h = on change x { n += 1 }; x = 1; remove h; x = 2; n'	1
 't = 0; a = on set t {print 1}; b = on set t {print 2}; remove b; count listeners of t'	1
+# remove of a value that is no listener refuses loudly, naming the Listener it takes
+'foo = 3; remove foo'	error	takes a Listener, not 3
