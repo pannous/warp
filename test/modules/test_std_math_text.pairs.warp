@@ -45,7 +45,7 @@
 'use text; remove_prefix("foobar", "foo")'	'bar'
 'use text; remove_suffix("foobar", "bar")'	'foo'
 'use text; remove_prefix("foobar", "x")'	'foobar'
-'use text; count_of("banana", "an")'	2
+'use text; count("banana", "an")'	2
 
 # use_math_percent_angles_roots_factors_bases
 'use math; percent(1, 4)'	25

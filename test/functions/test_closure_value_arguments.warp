@@ -2,4 +2,4 @@
 
 # a_lambda_of_the_loop_variable_given_to_a_function_sees_each_turn
 is! 'g(xs, p: function) := { n = 0; for y in xs { if p(y) { n = n + 1 } }; n }; xs = [1, 2, 2]; out = []; for x in xs { out = out + [g(xs, z => z == x)] }; out' [1, 2, 2]
-is! 'use list; xs = [1, 2, 2, 3]; [count_by(xs, y => y == x) for x in xs]' [1, 2, 2, 1]
+is! 'use list; xs = [1, 2, 2, 3]; [count(xs, y => y == x) for x in xs]' [1, 2, 2, 1]

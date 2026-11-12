@@ -12,7 +12,6 @@ use "../../compiler/runtime/errors.warp"
 use "../../compiler/runtime/conversions.warp"
 use "../../compiler/runtime/instructions.warp"
 use "../../compiler/runtime/lists.warp"
-page_bytes(): int := 65536
 word_bytes(): int := 4
 # the bytes of a cell of that type
 cell_bytes(cell: int): int := if is_narrow_cell(cell) then 2 else word_bytes()
@@ -39,7 +38,7 @@ is_float_cell(cell: int): bool := cell == GpuCell.F32 or is_narrow_cell(cell)
 gpu_list_place(n: Node): int := if is_gpu_list(n) then unboxed_int(n) else -1
 # count zeros of the cell type in pages grown for them (a grown page is zero)
 gpu_zeros(count: int, cell: int): Node := {
-	pages = int_quotient(count * cell_bytes(cell) + page_bytes() - 1, page_bytes())
+	pages = pages_holding(count * cell_bytes(cell))
 	before = memory_grown(if pages > 0 then pages else 1)
 	if before < 0 { gpu_list_refused("no memory left for a GPU list of this size") }
 	with_kind(fresh_int_node(shifted_left(before * page_bytes(), 32) + count), gpu_list_kind(cell))

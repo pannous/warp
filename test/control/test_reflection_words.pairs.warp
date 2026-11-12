@@ -30,11 +30,11 @@
 'import •/test/fixtures/wasm/fourty_two; fourty_two.exports#1'	'add32'
 
 # a_warp_modules_functions_and_their_params
-'import •/test/fixtures/wasm/shapes; twice(21)'	42
-'import •/test/fixtures/wasm/shapes; twice(a: 21)'	42
-'import •/test/fixtures/wasm/shapes; shapes.twice.params'	['a']
+'import •/test/fixtures/compiled/reflected; twice(21)'	42
+'import •/test/fixtures/compiled/reflected; twice(a: 21)'	42
+'import •/test/fixtures/compiled/reflected; reflected.twice.params'	['a']
 
 # a_warp_modules_classes
-'import •/test/fixtures/wasm/shapes; shapes.P.fields'	['x', 'y']
-'import •/test/fixtures/wasm/shapes; shapes.P.methods'	['sq']
-'import •/test/fixtures/wasm/shapes; dir(shapes.P)'	['x', 'y', 'sq']
+'import •/test/fixtures/compiled/reflected; reflected.P.fields'	['x', 'y']
+'import •/test/fixtures/compiled/reflected; reflected.P.methods'	['sq']
+'import •/test/fixtures/compiled/reflected; dir(reflected.P)'	['x', 'y', 'sq']
