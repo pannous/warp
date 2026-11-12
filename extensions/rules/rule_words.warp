@@ -1363,7 +1363,7 @@ rule_words = {
 	route_verb: route_verb,
 	path_parameters: path_parameters,
 	served: served,
-	compute_toys_dialect: compute_toys_dialect,
+	compute_toys_made: compute_toys_made,
 	shader_values: shader_values,
 	shader_words_of: shader_words_of,
 	shader_place_of: shader_place_of,

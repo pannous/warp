@@ -40,11 +40,12 @@ hole_read(written: text): text := SHADER_HOLES.keys.find(read => written in SHAD
 # fragment shader
 COMPUTE_TOYS_ENTRY = "fn main_image"
 FRAGMENT_ENTRY = "@fragment"
-# whether the shader the program assigns the name is written in compute.toys' dialect: its kernel fn main_image, no
-# fragment entry point of its own
-compute_toys_dialect(s: Node, program: Node): bool := {
+# compute_toy(s) of a shader the program assigns written in compute.toys' dialect (its kernel fn main_image, no
+# fragment entry point of its own), which makes it a fragment shader; ø for any other
+compute_toys_made(s: Node, program: Node): any := {
 	shader = main_level_value(name_of(s), program)
-	shader is text and "${shader}".contains(COMPUTE_TOYS_ENTRY) and not "${shader}".contains(FRAGMENT_ENTRY)
+	if not (shader is text) or not "${shader}".contains(COMPUTE_TOYS_ENTRY) or "${shader}".contains(FRAGMENT_ENTRY) { return ø }
+	call_of("compute_toy", [s])
 }
 
 # the built-in holes by name: the table's, a component's (mouse.x) its vector's
