@@ -129,7 +129,8 @@ spaced_sign(n: Node) := {
 division_path(n: Node, program: Node) := {
 	if not (n is key and key_of(n) == symbol(attribute_word) and value_of(n)#1 == PATH_AFTER_OPERAND_MARK) { return ø }
 	written = items_of(value_of(n)#2)
-	name = written#2[1 ..]
+	# the path node, neither text nor list: its spelling is what follows the slash
+	name = text(written#2)[1 ..]
 	if name.all(c => is_name_char(c)) and nodes_in(program).any(part => part == symbol(name)) { diagnose(call_of("division_path", [written#1, name]), n) }
 }
 # `a *b`: an operator spaced on one side only computes; the fix spaces it evenly, `a * b`
