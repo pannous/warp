@@ -193,8 +193,9 @@ map_values(m: Node): list := {
 	for entry in unboxed_list(fields_of(m)) { out += [key_value(entry)] }
 	out
 }
-# the name a key looks up an entry by: a symbol's letters, so the type value `float` names the entry `float:`
-name_text(key: Node): text := if kind_code(key) == Kind.Symbol then unboxed_text(key) else node_text(key)
+# the name a key looks up an entry by: a symbol's letters, so the type value `float` names the entry `float:`; a
+# number's subtype its number, so `hex(123)` names the entry 123 as `hex(123) == 123`
+name_text(key: Node): text := if kind_code(key) == Kind.Symbol then unboxed_text(key) else node_text(subtype_number(key))
 # `x in c`, `c.contains(x)`: a map's entry named x, a list's item equal to x, a text's part x
 collection_contains(c: Node, x: Node): bool := {
 	if is_null(c) { return no } # `[]` is the null node
