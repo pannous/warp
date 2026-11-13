@@ -32,6 +32,11 @@ node_sum(a: Node, b: Node): Node := {
 	# sum or a text, which says where to start (decisions xs-ys, empty-plus-text)
 	if is_null(a) and is_null(b) { return a }
 	if is_null(a) and not is_null(b) and kind_code(b) == Kind.List { return list_join(unboxed_list(b), new_list(0)) }
+	# a GPU list and a list: a GPU list of both (an extension's list kind joins a list to its own)
+	if is_extended_list(a) and not is_null(b) and kind_code(b) == Kind.List {
+		joined = extended_list_joined(a, b)
+		if not is_null(joined) { return joined }
+	}
 	if not is_null(a) and kind_code(a) == Kind.List { return list_join(unboxed_list(a), appended_items(b)) }
 	if is_null(a) and textual_node(b) { absent_start("start the text at \"\" (t = \"\")") }
 	if textual_node(a) or textual_node(b) { return node_text(a) + node_text(b) }

@@ -5,12 +5,13 @@ use rule_words
 # --- GPU lists (decision gpu-bound-floats; extensions/gpu_lists/runtime.warp): a list the program makes for the GPU is
 # packed as f32 cells from its creation, which the GPU's library reads and writes where they are. lib/prelude.warp's
 # rule packs the creating forms of the program's (extensions/rules/rule_words.warp gpu_lists_packed), `xs: [f32] = …` asks for one outright
-GPU_LIST_WORDS = ["gpu_compute"]
-# the names found once a program: name → [GPU uses, assignments, other mentions, its creating form or ø]
+GPU_LIST_WORDS = ["gpu_compute", "paint", "gpu_render"]
+# the names found once a program: name → [GPU uses, assignments, other mentions, its creating form or ø, growths]
 class GpuLists { program: Node; uses: map }
 gpu_lists = GpuLists(Node.Empty, {})
 # whether xs is made for the GPU (a GPU word takes it: gpu_compute's arrays, itself or a map's value), made once by a
-# form gpu_packed packs, and mentioned otherwise only as a GPU list serves it: #xs, xs#i, xs#i = v, for x in xs, print xs
+# form gpu_packed packs and else only grown, `xs = xs + more`, and mentioned otherwise only as a GPU list serves it:
+# #xs, xs#i, xs#i = v, for x in xs, print xs
 gpu_bound(xs: Node, program: Node): bool := {
 	if not (xs is symbol) { return no }
 	if not same(program, gpu_lists.program) {
@@ -19,15 +20,20 @@ gpu_bound(xs: Node, program: Node): bool := {
 		gpu_uses_counted(program)
 	}
 	uses = gpu_lists.uses.get(name_of(xs))
-	uses != ø and uses#1 > 0 and uses#2 == 1 and uses#3 == 0 and uses#4 != ø
+	uses != ø and uses#1 > 0 and uses#2 == 1 + uses#5 and uses#3 == 0 and uses#4 != ø
 }
 gpu_use_added(name: text, at: int) := {
-	uses = gpu_lists.uses.get(name) ?? [0, 0, 0, ø]
+	uses = gpu_lists.uses.get(name) ?? [0, 0, 0, ø, 0]
 	uses[at] = uses[at] + 1
 	gpu_lists.uses[name] = uses
 }
 gpu_uses_counted(n: Node) := {
 	if n is symbol { return gpu_use_added(name_of(n), 2) }
+	if is_key(n, Op.Assign) and key_of(n) is symbol and is_key(value_of(n), Op.Add) and key_of(value_of(n)) is symbol and name_of(key_of(value_of(n))) == name_of(key_of(n)) {
+		gpu_use_added(name_of(key_of(n)), 1)
+		gpu_use_added(name_of(key_of(n)), 4)
+		return gpu_uses_counted(value_of(value_of(n)))
+	}
 	if is_key(n, Op.Assign) and key_of(n) is symbol {
 		gpu_use_added(name_of(key_of(n)), 1)
 		uses = gpu_lists.uses[name_of(key_of(n))]
@@ -46,8 +52,10 @@ gpu_uses_counted(n: Node) := {
 	head = if #items > 0 and items#1 is symbol then name_of(items#1) else ""
 	if head == "print" and #items == 2 and items#2 is symbol { return ø }
 	if head == "for" and #items == 5 and items#4 is symbol { return gpu_uses_counted(items#5) }
+	# a GPU word's first argument is its shader, or paint's pixels, which the CPU reads: its other arguments are the GPU's
 	if head in GPU_LIST_WORDS {
-		for argument in items[1..] { gpu_sink_counted(argument) }
+		if #items > 1 { gpu_uses_counted(items#2) }
+		for argument in items[2..] { gpu_sink_counted(argument) }
 		return ø
 	}
 	for item in items { gpu_uses_counted(item) }
@@ -93,4 +101,21 @@ gpu_packed_code(v: Node, cell: text): text := {
 	written = "gpu_zeros(" + #v + ", " + code + ")"
 	for i in 1 to #v { written = "gpu_put(" + written + ", " + i + ", " + as_code(v#i) + ")" }
 	written
+}
+# --- a list made for the GPU alone (gpu_bound) declares its cells, which the gpu_lists pass makes it of
+# (extensions/gpu_lists/gpu_lists.warp): [vec4] where each item is four numbers, [f32] for numbers, no GPU list where
+# its items are lists of another width (the slow path's note then says how to make it)
+gpu_inferred_cell(v: Node): text? := {
+	# `float[n]` f32 zeros, `int[n]` no floats at all
+	if gpu_zeros_count(v) != ø { return if name_of(key_of(v)) == "float" then "f32" else ø }
+	items = if gpu_comprehension(v) then [v#1] else items_of(v)
+	if #items > 0 and items.all(item => is_number_list(item) and #item == 4) { return "vec4" }
+	if items.any(is_number_list) then ø else "f32"
+}
+is_number_list(item: Node): bool := is_group(item) and bracket_of(item) == "["
+# a main-level `xs = v` made for the GPU alone as `xs: [vec4] = v`, any other statement as it is
+gpu_inferred_declaration(statement: Node, program: Node): Node := {
+	if not (is_key(statement, Op.Assign) and gpu_bound(key_of(statement), program)) { return statement }
+	cell = gpu_inferred_cell(value_of(statement))
+	if cell == ø then statement else Key(Key(key_of(statement), Op.Colon, bracketed([symbol(cell)], "[")), Op.Assign, value_of(statement))
 }

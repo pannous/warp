@@ -166,6 +166,15 @@ narrow_float(bits: int, exponent_bits: int, fraction_bits: int): float := {
 # 2 to the k, exactly, for k from -1022 to 1023
 power_of_two(k: int): float := float_of_bits(shifted_left(k + 1023, 52))
 # the numbers as a list, for the list words that read a list
+# `a + b` of a GPU list and a list: a GPU list of a's cell type holding both, b's items made of those cells
+gpu_lists_joined(a: Node, b: Node): Node := {
+	cell = gpu_list_cell(a)
+	tail = gpu_list_of(b, cell)
+	out = gpu_zeros(gpu_list_count(a) + gpu_list_count(tail), cell)
+	for i in 1 to gpu_list_count(a) { gpu_list_set(out, i, gpu_list_at(a, i)) }
+	for i in 1 to gpu_list_count(tail) { gpu_list_set(out, gpu_list_count(a) + i, gpu_list_at(tail, i)) }
+	out
+}
 gpu_list_items(n: Node): list := {
 	out = new_list(gpu_list_count(n))
 	for i in 1 to #out { out#i = gpu_list_at(n, i) }

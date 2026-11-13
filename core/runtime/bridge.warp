@@ -48,3 +48,4 @@ extended_list_count(n: Node): int from runtime
 extended_list_set(n: Node, index: int, value: Node): Node from runtime
 extended_list_items(n: Node): list from runtime
 extended_list_unlisted(n: Node): list from runtime
+extended_list_joined(a: Node, b: Node): Node from runtime

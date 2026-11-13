@@ -43,7 +43,7 @@ diff -ru a/wasmtime-internal-cranelift/src/func_environ.rs b/wasmtime-internal-c
 +            if !func_ref.is_reserved_value() {
 +                let vmctx = self.vmctx_val(&mut pos);
 +                let offset = self.offsets.func_refs().at(func_ref);
-+                return Ok(pos.ins().iadd_imm(vmctx, i64::from(offset)));
++                return Ok(pos.ins().iadd_imm_u(vmctx, i64::from(offset)));
 +            }
 +        }
          let func_index = pos.ins().iconst(I32, func_index.as_u32() as i64);
