@@ -3,6 +3,7 @@
 // has no answer for is missing here on purpose: a program calling it stops loudly ("no C function fork …")
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <ctype.h>
 #include <direct.h>
 #include <io.h>
 #include <psapi.h>
@@ -63,14 +64,39 @@ __attribute__((constructor)) static void files_in_bytes(void) {
 // answered here before any module's: Windows's C runtime lacks them, or has them by another layout (its timespec's
 // nanoseconds are 32 bits, its POSIX names carry an underscore)
 
-// a path as POSIX writes it: forward slashes, which Windows takes as well as backslashes and warp's path words split
-// on, and on the current drive no drive letter, "/a/b" as Windows reads it too: the folder the native warp preopens as
-// "/" for its modules (core/native/driver.warp) is that drive's root, so the module's WASI reaches the path (another
-// drive's "C:/x" it does not yet: card windows-native-modules)
+// a path as POSIX writes it, Git Bash's (MSYS's) way: forward slashes, a drive as a folder of the root ("D:\a\b" is
+// "/d/a/b"), so a path warp shows works in the sh lines it runs (popen) and in WASI, where the native warp's root
+// preopen is each drive's under that name (posix_wasi_config_preopen_dir); and back for the C runtime
 static void posix_path(char* path) {
 	for (char* c = path; *c; c++) if (*c == '\\') *c = '/';
-	if (path[0] && path[1] == ':' && path[2] == '/' && (path[0] | 0x20) - 'a' + 1 == _getdrive()) memmove(path, path + 2, strlen(path + 2) + 1);
+	if (isalpha((unsigned char)path[0]) && path[1] == ':') {
+		path[1] = (char)tolower((unsigned char)path[0]);
+		path[0] = '/';
+	}
 }
+static int is_drive_path(const char* path) { return path[0] == '/' && isalpha((unsigned char)path[1]) && (path[2] == '/' || !path[2]); }
+// the path as Windows takes it, in the buffer when it changes: "/d/a/b" is "D:/a/b", "/d" "D:/"
+static const char* windows_path(const char* path, char buffer[MAX_PATH]) {
+	if (!path || !is_drive_path(path)) return path;
+	snprintf(buffer, MAX_PATH, "%c:%s", toupper((unsigned char)path[1]), path[2] ? path + 2 : "/");
+	return buffer;
+}
+// the C runtime's calls of one path, the path given as Windows takes it
+#define ON_WINDOWS_PATH(result, name, call, ...) static result posix_##name(const char* path, ##__VA_ARGS__) { char buffer[MAX_PATH]; path = windows_path(path, buffer); return call; }
+ON_WINDOWS_PATH(int, access, _access(path, mode), int mode)
+ON_WINDOWS_PATH(int, chdir, _chdir(path))
+ON_WINDOWS_PATH(int, creat, _creat(path, mode), int mode)
+ON_WINDOWS_PATH(FILE*, fopen, fopen(path, mode), const char* mode)
+ON_WINDOWS_PATH(int, mkdir, _mkdir(path), int mode)
+ON_WINDOWS_PATH(int, rmdir, _rmdir(path))
+ON_WINDOWS_PATH(int, unlink, _unlink(path))
+ON_WINDOWS_PATH(int, open_path, _open(path, flags, mode), int flags, int mode)
+static int posix_rename(const char* from, const char* to) {
+	char from_buffer[MAX_PATH], to_buffer[MAX_PATH];
+	return rename(windows_path(from, from_buffer), windows_path(to, to_buffer));
+}
+// lib/native/wasi.c's own open
+#define open posix_open_path
 // the one link a Windows program can read: Linux's /proc/self/exe, this executable
 static const char SELF_LINK[] = "/proc/self/exe";
 static ssize_t posix_readlink(const char* path, char* buffer, size_t size) {
@@ -89,6 +115,8 @@ static ssize_t posix_readlink(const char* path, char* buffer, size_t size) {
 }
 // a path made absolute, NULL for one that names nothing; resolved NULL: a copy the caller frees
 static char* posix_realpath(const char* path, char* resolved) {
+	char buffer[MAX_PATH];
+	path = windows_path(path, buffer);
 	if (GetFileAttributesA(path) == INVALID_FILE_ATTRIBUTES) {
 		errno = ENOENT;
 		return NULL;
@@ -251,9 +279,10 @@ static char* command_line(char* const words[]) {
 	for (int i = 0; words[i]; i++) room += 2 * strlen(words[i]) + 3;
 	char* line = malloc(room);
 	size_t at = 0;
+	char program[MAX_PATH];
 	for (int i = 0; words[i]; i++) {
 		if (i) line[at++] = ' ';
-		at += argument_quoted(line + at, words[i]);
+		at += argument_quoted(line + at, i ? words[i] : windows_path(words[i], program));
 	}
 	line[at] = 0;
 	return line;
@@ -348,6 +377,24 @@ static int posix_pclose(FILE* stream) {
 	return status;
 }
 
+// the root a module's WASI reaches (core/native/driver.warp preopens "/" as "/"): each drive under its POSIX name,
+// "C:/" as "/c", wasmtime's own preopen called for each
+static void* modules_symbol(const char* name);
+typedef bool (*preopen_t)(void* config, const char* host, const char* guest, bool mutable);
+static bool wasi_config_preopen_dir(void* config, const char* host, const char* guest, bool mutable) {
+	static preopen_t preopened;
+	if (!preopened) preopened = (preopen_t)modules_symbol("wasi_config_preopen_dir");
+	if (strcmp(host, "/") || strcmp(guest, "/")) return preopened(config, host, guest, mutable);
+	bool any = false;
+	DWORD drives = GetLogicalDrives();
+	for (int letter = 0; letter < 26; letter++) {
+		if (!(drives & (1u << letter))) continue;
+		char drive[] = {(char)('A' + letter), ':', '/', 0}, name[] = {'/', (char)('a' + letter), 0};
+		any |= preopened(config, drive, name, mutable);
+	}
+	return any;
+}
+
 #define POSIX_CALL(name) {#name, (void*)posix_##name}
 // (POSIX's own posix_ calls, under their names)
 #define POSIX_NAMED(name) {#name, (void*)name}
@@ -357,7 +404,9 @@ static const struct { const char* name; void* function; } POSIX_CALLS[] = {
 	POSIX_CALL(nanosleep), POSIX_CALL(usleep), POSIX_CALL(localtime_r), POSIX_CALL(getloadavg), POSIX_CALL(flock),
 	POSIX_CALL(pipe), POSIX_NAMED(posix_spawn_file_actions_init), POSIX_NAMED(posix_spawn_file_actions_destroy),
 	POSIX_NAMED(posix_spawn_file_actions_adddup2), POSIX_NAMED(posix_spawn_file_actions_addclose), POSIX_NAMED(posix_spawnp),
-	POSIX_CALL(waitpid), POSIX_CALL(popen), POSIX_CALL(pclose),
+	POSIX_CALL(waitpid), POSIX_CALL(popen), POSIX_CALL(pclose), POSIX_CALL(access), POSIX_CALL(chdir), POSIX_CALL(creat),
+	POSIX_CALL(fopen), POSIX_CALL(mkdir), POSIX_CALL(rmdir), POSIX_CALL(unlink), POSIX_CALL(rename),
+	POSIX_NAMED(wasi_config_preopen_dir),
 };
 
 // ## dlopen and dlsym, which find them
@@ -371,7 +420,8 @@ enum { RTLD_LAZY = 1, RTLD_NOW = 2, RTLD_GLOBAL = 0x100 };
 static char process_handle;
 static void* dlopen(const char* path, int flags) {
 	(void)flags;
-	return path ? (void*)LoadLibraryA(path) : (void*)&process_handle;
+	char buffer[MAX_PATH];
+	return path ? (void*)LoadLibraryA(windows_path(path, buffer)) : (void*)&process_handle;
 }
 static void* module_symbol(HMODULE module, const char* name) {
 	char runtime_name[256];
@@ -380,10 +430,8 @@ static void* module_symbol(HMODULE module, const char* name) {
 	snprintf(runtime_name, sizeof runtime_name, "%s%s", CRT_PREFIX, name);
 	return (void*)GetProcAddress(module, runtime_name);
 }
-static void* dlsym(void* handle, const char* name) {
-	if (handle != &process_handle) return module_symbol((HMODULE)handle, name);
-	for (size_t i = 0; i < sizeof POSIX_CALLS / sizeof *POSIX_CALLS; i++)
-		if (!strcmp(name, POSIX_CALLS[i].name)) return POSIX_CALLS[i].function;
+// a symbol of a module loaded, the executable first
+static void* modules_symbol(const char* name) {
 	HMODULE modules[1024];
 	DWORD bytes;
 	if (!K32EnumProcessModules(GetCurrentProcess(), modules, sizeof modules, &bytes)) return NULL;
@@ -392,4 +440,10 @@ static void* dlsym(void* handle, const char* name) {
 		if (found) return found;
 	}
 	return NULL;
+}
+static void* dlsym(void* handle, const char* name) {
+	if (handle != &process_handle) return module_symbol((HMODULE)handle, name);
+	for (size_t i = 0; i < sizeof POSIX_CALLS / sizeof *POSIX_CALLS; i++)
+		if (!strcmp(name, POSIX_CALLS[i].name)) return POSIX_CALLS[i].function;
+	return modules_symbol(name);
 }
