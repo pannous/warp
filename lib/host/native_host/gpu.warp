@@ -60,7 +60,10 @@ DEPTH_ATTACHMENT_AT = 40
 VALUE_TYPES = ["f32", "vec2f", "vec3f", "vec4f"]
 VALUE_ALIGNMENTS = [1, 2, 4, 4]
 // a GPU list's cell types, by extensions/gpu_lists GpuCell
-GPU_CELLS = ["f32", "i32", "u32", "f16", "bf16"]
+GPU_CELLS = ["f32", "i32", "u32", "f16", "bf16", "vec2", "vec3", "vec4"]
+// the GPU lists whose cells are already a values array<vec4f>'s bytes: f32 ones, vec3 (padded to four) and vec4
+VEC4F_CELLS = ["f32", "vec3", "vec4"]
+VEC4F_BYTES = 16
 // WGSL's 16-bit float, a device feature (webgpu.h WGPUFeatureName_ShaderF16): an array<f16> holds two to a word
 HALF = "f16"
 BRAIN = "bf16"
@@ -458,8 +461,8 @@ member_laid_out(layout: Layout, name: text, value: any): text := {
 		return ""
 	}
 	if value is list {
-		# a GPU list [f32] whose length is a whole number of vec4f is already the storage array's bytes
-		if gpu_list_place(value) >= 0 and gpu_list_cell(value) == 0 and #value >= 4 and #value % 4 == 0 {
+		# a GPU list [f32] whose length is a whole number of vec4f, or one [vec4], is already the storage array's bytes
+		if gpu_list_place(value) >= 0 and GPU_CELLS[gpu_list_cell(value)] in VEC4F_CELLS and #value > 0 and gpu_list_bytes(value) % VEC4F_BYTES == 0 {
 			return array_laid(layout, name, value)
 		}
 		vectors = value.any(item => item is list)
@@ -652,12 +655,12 @@ kept_buffer(name: text, bytes: int, usage: int): int := {
 	stored_buffers[key] = StoredBuffer(buffer, bytes)
 	buffer
 }
-// a GPU list [f32] copied from the program's memory in one write, 0 where this value is not one (the caller walks
+// a GPU list copied from the program's memory in one write, 0 where this value is not one (the caller walks
 // its numbers)
 gpu_storage(name: text, cells: any): int := {
 	place = gpu_list_place(cells)
 	if place < 0 { return 0 }
-	bytes = #cells * 4
+	bytes = gpu_list_bytes(cells)
 	buffer = kept_buffer(name, bytes, BUFFER_STORAGE)
 	wgpuQueueWriteBuffer(queue, buffer, 0, program_cells(place), bytes)
 	buffer
@@ -794,7 +797,7 @@ stored_array(name: text, value: any, usage: int): any := {
 		return [buffer, atlas_span]
 	}
 	listed = gpu_storage(name, value)
-	if listed != 0 { return [listed, #value * 4] }
+	if listed != 0 { return [listed, gpu_list_bytes(value)] }
 	slow("the storage array " + name + " is not a GPU list: its numbers are walked to f32 bits on every upload", "make it as " + name + ": [f32] = …")
 	cells = f32_cells(value)
 	[cells_kept(name, cells, usage), #cells * 4]
@@ -1539,6 +1542,7 @@ array_buffer(array: StorageArray): int := {
 // WGSL array type yet (card gpu-lists)
 cells_unfit(array: StorageArray): text? := {
 	if array.cell == BRAIN { return "the GPU list [bf16] " + array.name + " has no WGSL array type to bind as yet" }
+	if array.cell.starts_with("vec") { return "the GPU list [" + array.cell + "] " + array.name + " binds in paint's values; gpu_compute's arrays take lists of numbers" }
 	if (array.element == HALF) == (array.cell == HALF) { return ø }
 	if array.element == HALF then "the shader's array<f16> " + array.name + " takes a GPU list [f16]: make it as " + array.name + ": [f16] = …" else "the GPU list [f16] " + array.name + " needs the shader's array<f16>, not array<" + array.element + ">"
 }
