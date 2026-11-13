@@ -1,5 +1,7 @@
-# a GPU list joined to a GPU list of its cell type stays a GPU list (card gpu-list-inference: color_swatches, meshlet_grid join theirs with +)
+# a GPU list joined to a list stays a GPU list of its cell type (card gpu-list-inference: color_swatches, meshlet_grid join theirs with +)
 'xs: [vec4] = [[1, 2, 3, 4]]; ys: [vec4] = [[5, 6, 7, 8]]; zs = xs + ys; [gpu_list_place(zs) >= 0, #zs, zs#2]'	[yes, 2, [5.0, 6.0, 7.0, 8.0]]
 'xs: [f32] = [1, 2]; ys: [f32] = [0.5]; zs = xs + ys; [gpu_list_place(zs) >= 0, zs#3]'	[yes, 0.5]
-# of two cell types it is refused: copy one to a list first
-'xs: [f32] = [1, 2]; ys: [i32] = [3]; xs + ys'	error	copy it to a list
+# a list joined to a GPU list takes its cells: color_swatches grows one, meshlet_grid joins a list to one
+'xs: [f32] = [1, 2]; ys: [i32] = [3]; zs = xs + ys; [gpu_list_place(zs) >= 0, zs#3]'	[yes, 3.0]
+'xs: [vec4] = [[1, 2, 3, 4]]; zs = xs + [[5, 6, 7, 8]]; [gpu_list_place(zs) >= 0, zs#2]'	[yes, [5.0, 6.0, 7.0, 8.0]]
+'xs = [1, 2]; ys: [f32] = [3]; zs = xs + ys; gpu_list_place(zs) >= 0'	no
