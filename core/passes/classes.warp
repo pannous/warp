@@ -139,9 +139,12 @@ defined_word(n: Node): text? := match n {
 is_called_name(method_head: Node): bool := bracket_of(method_head) == "(" and #method_head > 0 and method_head#1 is symbol
 # the parameters of a method, as its head lists them
 method_parameters(method: Node): list := if key_of(method) is symbol then [] else items_of(key_of(method))[1..]
-# a field `name`, `name: T`, `name: T = v`, `name = v`, `name?`: its name, else ø
+# a field `name`, `name: T`, `name: T = v`, `name = v`, `name?`, `name!` (unwrap(name)), `address { street }`: its
+# name, else ø
 field_name(member: Node): text? := match member {
 	Symbol(name): { if name.ends_with("?") then name[0..<(#name - 1)] else name }
+	List(items, Bracket.Round, _): { if #items == 2 and items#1 == symbol("unwrap") then field_name(items#2) else ø }
+	List(items, Bracket.None, _): { if #items == 2 and is_braced(items#2) then field_name(items#1) else ø }
 	Key(left, key_op, right): { if key_op == Op.Colon or key_op == Op.Assign then field_name(left) else ø }
 	_: ø
 }

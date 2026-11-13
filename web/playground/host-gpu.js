@@ -237,11 +237,10 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 	}
 	const { declarations, bytes: valueBytes, arrays } = valuesLayout(values);
 	const kept = compute ? keptFields(device, compute, values, canvas ?? shader) : [];
-	const read = [...arrays, ...kept].filter(({ name }) => holeRead(shader, name));
+	const [renamed, read] = arraysRenamed(shader, [...arrays, ...kept]);
 	if (read.length > MOST_BOUND_ARRAYS) throw new Error("a paint binds at most 8 arrays");
-	shader = read.reduce((code, { name }) => code.replace(holePattern(name), STORAGE_PREFIX + name), shader);
-	// a field read by the draw: its own type, an atomic read as its plain number
-	const storages = read.map(({ name, type = "array<vec4f>" }, at) => `\n@group(0) @binding(${STORAGE_BINDING + at}) var<storage, read> ${STORAGE_PREFIX}${name}: ${type.replaceAll(/atomic<(\w+)>/g, "$1")};`).join("");
+	shader = renamed;
+	const storages = read.map((array, at) => storageDeclared(STORAGE_BINDING + at, array)).join("");
 	const ownVertexStage = shader.match(OWN_VERTEX_STAGE)?.[1];
 	if (indexed && !ownVertexStage) throw new Error("indexed draw needs the shader's own vertex stage");
 	const vertices = ownVertexStage ? "" : FULL_IMAGE_VERTICES;
@@ -794,6 +793,14 @@ function fieldSample(name, binding, filterable) {
 	if (filterable) return `${declared}\nfn field_${name}(uv: vec2f) -> vec4f {\n\tlet placed = clamp(uv, vec2f(0.0), vec2f(1.0));\n\treturn textureSampleLevel(${tex}, field_sampler, placed, 0.0);\n}`;
 	return `${declared}\nfn field_${name}(uv: vec2f) -> vec4f {\n\tlet size = vec2f(textureDimensions(${tex}));\n\tlet at = clamp(uv, vec2f(0.0), vec2f(1.0)) * size - vec2f(0.5);\n\tlet low = vec2i(floor(at));\n\tlet f = fract(at);\n\tlet last = vec2i(size) - vec2i(1);\n\tlet s00 = textureLoad(${tex}, clamp(low, vec2i(0), last), 0);\n\tlet s10 = textureLoad(${tex}, clamp(low + vec2i(1, 0), vec2i(0), last), 0);\n\tlet s01 = textureLoad(${tex}, clamp(low + vec2i(0, 1), vec2i(0), last), 0);\n\tlet s11 = textureLoad(${tex}, clamp(low + vec2i(1, 1), vec2i(0), last), 0);\n\treturn mix(mix(s00, s10, f.x), mix(s01, s11, f.x), f.y);\n}`;
 }
+// each storage array of these the shader reads, `values.mesh` its own array warp_values_mesh: [the shader so renamed,
+// those it reads]
+function arraysRenamed(shader, arrays) {
+	const read = arrays.filter(({ name }) => holeRead(shader, name));
+	return [read.reduce((code, { name }) => code.replace(holePattern(name), STORAGE_PREFIX + name), shader), read];
+}
+// a storage array's declaration: a field read by the draw its own type, an atomic read as its plain number
+const storageDeclared = (binding, { name, type = "array<vec4f>" }) => `\n@group(0) @binding(${binding}) var<storage, read> ${STORAGE_PREFIX}${name}: ${type.replaceAll(/atomic<(\w+)>/g, "$1")};`;
 function passShader(shader, declarations, reads, filterable) {
 	let code = shader;
 	if (!OWN_VERTEX_STAGE.test(shader)) code += FULL_IMAGE_VERTICES;
@@ -831,24 +838,28 @@ function setOf(device, id) {
 async function drawInto(device, shader, values, set, target, format) {
 	const choice = await fieldsChoiceOf(device);
 	const laid = valuesLayout(values);
-	if (laid.arrays.length) throw new Error("gpu_pass takes numbers and short vectors, not a long list");
+	// (a list it reads is a storage array, bound after the fields as paint binds its own)
+	const [renamed, arrays] = arraysRenamed(shader, laid.arrays);
 	const reads = set.order.filter(name => new RegExp(`\\bfield_${name}\\b`).test(shader));
-	const code = passShader(shader, laid.declarations, reads, choice.filterable);
+	const firstArray = (choice.filterable && reads.length ? 2 : 1) + reads.length;
+	const code = passShader(renamed, laid.declarations, reads, choice.filterable) + arrays.map((array, at) => storageDeclared(firstArray + at, array)).join("");
 	const ownVertex = shader.match(OWN_VERTEX_STAGE)?.[1];
 	const pipeline = await passPipeline(device, code, format, ownVertex);
 	const entries = [];
-	if (laid.declarations) {
-		const buffer = device.createBuffer({ size: laid.bytes.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-		device.queue.writeBuffer(buffer, 0, laid.bytes);
+	const written = (data, usage) => {
+		const buffer = device.createBuffer({ size: data.byteLength, usage: usage | GPUBufferUsage.COPY_DST });
+		device.queue.writeBuffer(buffer, 0, data);
 		pendingBuffers.push(buffer);
-		entries.push({ binding: VALUES_BINDING, resource: { buffer } });
-	}
+		return { buffer };
+	};
+	if (laid.declarations) entries.push({ binding: VALUES_BINDING, resource: written(laid.bytes, GPUBufferUsage.UNIFORM) });
 	let binding = 1;
 	if (choice.filterable && reads.length) {
 		entries.push({ binding: 1, resource: samplerOf(device, true) });
 		binding = 2;
 	}
 	for (const name of reads) entries.push({ binding: binding++, resource: set.fields[name].front.createView() });
+	for (const array of arrays) entries.push({ binding: binding++, resource: written(array.file ? await atlasBytes(array.file) : array.numbers, GPUBufferUsage.STORAGE) });
 	const group = entries.length ? device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries }) : undefined;
 	const pass = encoderOf(device).beginRenderPass({ colorAttachments: [{ view: target.createView(), loadOp: "clear", storeOp: "store", clearValue: { r: 0, g: 0, b: 0, a: 0 } }] });
 	pass.setPipeline(pipeline);
