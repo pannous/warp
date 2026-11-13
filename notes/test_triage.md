@@ -674,3 +674,5 @@ Dropped, old Rust-era lines no wiki page backs:
 Rewritten to today's values: test_print.pairs.warp:5 (3), test_change_of_expression.pairs.warp:6 (the test summary);
 test/modules/test_keys.pairs.warp:2 `key_name(65)` is "a", key names lowercase as the Key enum's cases.
 Parked: test_colon_handlers.warp:10 `at 9pm:` on the time library's card.
+Key names (warp-interviewer 2026-11-13): test_key_names.warp `key == ArrowDown` dropped (the browser's spelling, the
+Key case is down); test/modules/test_keys.pairs.warp:4 `[held_key == ESC, LEFT]` is [no, left], the Key case shown.
