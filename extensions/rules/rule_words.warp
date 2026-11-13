@@ -54,7 +54,9 @@ unit_led(code: Node): bool := if code is key and op_of(code) in [Op.Div, Op.Mul,
 is_unit_word(code: Node): bool := code is symbol and (typed_as(name_of(code), "Unit") or "units" in defining_modules(name_of(code)))
 # `1 + 2 bars` → 1 + bars(2), `x = 2 bars` → x = bars(2): a word of one value after an expression calls its last
 # amount, binding tighter than any operator, as a unit does (decision postfix-words)
-call_bound(code: Node, word: Node): Node := if code is key and op_of(code) in unit_binding_ops + unit_ambiguous_ops then Key(key_of(code), op_of(code), call_bound(value_of(code), word)) else call_of(name_of(word), [code])
+# ø after a statement's word, no amount: `use shader_holes` names a module, `return f` returns the function
+call_bound(code: Node, word: Node): any := if code is symbol and (name_of(code) in import_keywords or keyword_form(name_of(code)) != "") then ø else last_called(code, word)
+last_called(code: Node, word: Node): Node := if code is key and op_of(code) in unit_binding_ops + unit_ambiguous_ops then Key(key_of(code), op_of(code), last_called(value_of(code), word)) else call_of(name_of(word), [code])
 unit_binding_ops = [Op.Assign, Op.Define, Op.AddAssign, Op.SubAssign, Op.MulAssign, Op.DivAssign, Op.Add, Op.Sub, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne]
 # a unit after a product, a quotient or a power reads two ways, `10 / 2 ms`: refused with a fix-it naming both
 # (decision unit-after-number)
