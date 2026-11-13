@@ -128,7 +128,7 @@ copy_compilers() {
 	inputs=$(cut -d' ' -f1 "$from/warp.wasm.inputs")
 	for name in runtime.wasm warp.wasm warp-self.wasm; do
 		if [ $name = warp-self.wasm ] && [ "$(cut -d' ' -f1 "$from/$name.inputs" 2>/dev/null)" != "$inputs" ]; then
-			rm -rf "$folder/$name" "$folder/$name.cwasm" "$folder/$name.library"  # an older pair's: `warp self` says it is missing instead of running it
+			rm -rf "$folder/$name" "$folder/$name.cwasm"  # an older pair's: `warp self` says it is missing instead of running it
 			continue
 		fi
 		[ -d "$from/$name.kept" ] && mkdir -p "$folder/$name.kept" && cp -R "$from/$name.kept/." "$folder/$name.kept/"
@@ -136,7 +136,6 @@ copy_compilers() {
 			[ -f "$from/$part" ] || continue
 			cp "$from/$part" "$folder/$part.new" && mv "$folder/$part.new" "$folder/$part" || return 1
 		done
-		companion_copied "$from/$name" "$folder/$name" || return 1
 	done
 	# the prebuilt standard modules programs link to, the library index and the sugar's packed rules a compile reads (a
 	# module missing or older than its text is compiled from source, the rules without their file parsed)

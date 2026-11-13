@@ -21,12 +21,10 @@ check=
 [ "${1-}" = --check ] && { check=1; shift; }
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 scripts=$(cd "$(dirname "$0")" && pwd)
-source "$scripts/lib/modules.sh"
 warp=${WARP_BINARY:-warp}
 seed=${WARP_SEED:-$(dirname "$(command -v "$warp")")/warp-seed.wasm}
 compilers=$tree/lib
 built=$compilers/warp.wasm  # where `warp --lib <tree>/lib rebuild pure` writes
-OTHER_TYPES_MARK=makes-other-types  # core/native/warp.warp other_types_mark
 [ -f "$seed" ] || { echo "refresh-seed: no seed at $seed" >&2; exit 2; }
 # a rebuild runs for minutes: an exported short limit (600 s) must not cut it
 export WARP_WINDOW=0
@@ -60,10 +58,7 @@ stage() {
   # the line's messages (stderr) go with the output: the cpu file holds only time's line
   { time (WARP_BUILD_RECORD=$record in_slot "$scratch/rebuild.log" 5 "$warp" "${tree_options[@]}" --seed "$1" rebuild pure 2>&1); } 2>"$scratch/cpu" &&
     [ -f "$built" ] || { echo "refresh-seed: $(basename "$2" .wasm) FAILED: the rebuild by $(basename "$1") failed" >&2; exit 1; }
-  # with its builder's library, which the stage links its NFC from as the next stage's seed (card asciitext-compile),
-  # marked: a stage may make other GC types than that library's (stage A, the old seed's build of new emitter code),
-  # so its own rebuild makes warp.wasm.new's library itself (core/native/warp.warp other_types_mark)
-  cp "$built" "$2" && companion_copied "$built" "$2" && touch "$2.library/$OTHER_TYPES_MARK"
+  cp "$built" "$2"
   local seconds instructions
   seconds=$(awk '{ printf "%d", $1 + $2 }' "$scratch/cpu")
   instructions=$(awk '/instructions retired/ { print $1 }' "$record/time" 2>/dev/null)
@@ -72,14 +67,12 @@ stage() {
 }
 previous=$seed
 chosen=
-chosen_made=
 old_cost=
 new_cost=
 for name in $STAGES; do
   stage "$previous" "$scratch/$name.wasm"
   if [ -z "$old_cost" ]; then old_cost=$stage_cost old_unit=$stage_unit; elif [ -z "$new_cost" ]; then new_cost=$stage_cost new_unit=$stage_unit; fi
-  # (with the library it made: that of the stage it built, whose GC types are the ones it makes)
-  [ "$previous" != "$seed" ] && chosen=$previous chosen_made=$scratch/$name.wasm
+  [ "$previous" != "$seed" ] && chosen=$previous
   if [ "$previous" != "$seed" ] && cmp -s "$previous" "$scratch/$name.wasm"; then
     echo "refresh-seed: $name is the same bytes as the stage before: a fixpoint"
     break
@@ -105,7 +98,7 @@ if [ -n "$check" ]; then
   cmp -s "$chosen" "$seed" && echo "refresh-seed: the seed is that stage" || echo "refresh-seed: the seed differs from that stage (--check: kept)"
   exit 0
 fi
-cp "$chosen" "$seed" && rm -rf "$seed.library" && companion_copied "$chosen_made" "$seed" && echo "refresh-seed: replaced $seed"
+cp "$chosen" "$seed" && rm -rf "$seed.library" && echo "refresh-seed: replaced $seed"
 # the old seed's machine code goes with it, and a warp-seed.runtime.wasm an older native warp kept (it wrote one only
 # when missing, so a stale one kept the old runtime words: no field built_spelled_list, 2026-10-29; now each rebuild
 # compiles the seed's runtime anew, card seed-compiles)
@@ -114,11 +107,7 @@ release=seed-$(date +%Y-%m-%d)-$(shasum -a 256 "$seed" | cut -c1-8)
 # the release's tag on the very commit the seed was built from, and seed.lock committed beside it, so every later commit
 # names its seed and any commit's compiler can be built again (scripts/seed.sh)
 source_commit=$(git -C "$tree" rev-parse HEAD)
-# the pair the seed builds of its own source goes with it: the seed links them on a lib/ without any (seed-bootstrap.sh)
-pair=("$scratch/warp-seed-runtime.wasm" "$scratch/warp-seed-unicode.wasm")
-"$warp" "$seed" runtime "${pair[0]}" && "$warp" "$seed" module unicode "${pair[0]}" "${pair[1]}" ||
-  { echo "refresh-seed: the new seed built no runtime.wasm and unicode.wasm to publish beside it" >&2; exit 1; }
-gh release create "$release" "$seed" "${pair[@]}" --repo pannous/warp --prerelease --title "$release" --target "$source_commit" \
+gh release create "$release" "$seed" --repo pannous/warp --prerelease --title "$release" --target "$source_commit" \
   --notes "The seed compiler: core/compiler.warp of ${source_commit:0:10} compiled by a stage that compiles itself once more." &&
   echo "refresh-seed: published $release"
 echo "$release $(shasum -a 256 "$seed" | cut -d' ' -f1)" >"$tree/seed.lock"

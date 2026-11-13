@@ -8,6 +8,10 @@ Darwin)
 	sed_in_place() { sed -i '' "$@"; }
 	mtime_of() { stat -f %m "$@"; }
 	size_of() { stat -f %z "$@"; }
+	# instruction_counter <file> <command…>: the command run, the instructions it retired (its own, not its
+	# children's) written to the file; instructions_counted <file>: that number
+	instruction_counter=(/usr/bin/time -l -o)
+	instructions_counted() { awk '/instructions retired/ { print $1 }' "$1"; }
 	;;
 *)
 	warp_platform=linux
@@ -16,6 +20,11 @@ Darwin)
 	sed_in_place() { sed -i "$@"; }
 	mtime_of() { stat -c %Y "$@"; }
 	size_of() { stat -c %s "$@"; }
+	instruction_counter=(perf stat -x, -e instructions:u -o)
+	instructions_counted() { awk -F, '/instructions/ { print $1 }' "$1"; }
+	# (no perf: nothing counted, the file left empty)
+	instructions_uncounted() { : >"$1"; shift; "$@"; }
+	command -v perf >/dev/null || instruction_counter=(instructions_uncounted)
 	;;
 esac
 # the shared native warp: WARP_BINARY, else ~/dev/bin/warp (the Mac), else the warp on PATH (the box: ~/bin/warp)
