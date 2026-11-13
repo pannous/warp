@@ -44,6 +44,7 @@ option_help = [
 	["--no-hints", "Warnings from weak up, no hints"],
 	["--lib <folder>", "Compile with this lib/ (a worktree's)"],
 	["--slots <n>", "warp test runs at most n cases at once"],
+	["--strict", "A library's slow fallback (slow(reason, fix) in lib/os.warp) is an error, not a note on standard error"],
 	["--backtrace", "An error shows the wasm backtrace beside its sentence"],
 	["--profile", "Each compiled function's address range in /tmp/perf-<pid>.map, for perf"],
 	["fuel <steps>", "The program counts steps, out of fuel after them"]

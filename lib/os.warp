@@ -50,3 +50,12 @@ set_env(name: any, value: any): bool := {
 }
 // `eprint "no such file"`: the value on standard error, a line of its own, through WASI natively and in the page
 eprint(value: any) := said_on_stderr(text(value))
+// a slow path taken where a fast one was meant (a library's fallback): said once per reason on standard error, its fix
+// named; `warp --strict` refuses it instead, so a program that must stay fast fails loudly where it would only crawl
+global slow_reasons_said = {}
+slow(reason: text, fix: text) := {
+	if run_option("strict") != ø { raise "slow path: " + reason + "; fix: " + fix }
+	if slow_reasons_said.get(reason) != ø { return ø }
+	slow_reasons_said[reason] = yes
+	eprint("slow path: " + reason + " (" + (run_option("program") ?? "") + "); fix: " + fix)
+}
