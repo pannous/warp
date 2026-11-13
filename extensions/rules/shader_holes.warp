@@ -80,16 +80,17 @@ shader_passes(items: list, program: Node, source: text): any := {
 	passes = []
 	for at in 1 to #items {
 		s = shaders#at
-		entries = if items#at is symbol then [] else items_of(value_of((items#at)#2))
+		entries = if items#at is symbol then [] else items_of(value_of(items#at))
 		values = shader_holes_added(s, entries, program, fields) ?? List(entries, Bracket.Curly, Separator.Comma)
 		passes += [listed(Bracket.Square, Separator.Comma, [Text(name_of(s)), shader_words_of(s, program, source), values])]
 	}
 	passes
 }
-# the shader an item of the list names: `show`, `poisson with {which: 1}`
+# the shader an item of the list names: `show`, `poisson with {which: 1}` (parsed as the tag `poisson with: {…}`)
 passed_shader(item: Node): any := {
 	if item is symbol { return item }
-	if is_group(item) and #item == 2 and item#1 is symbol and item#2 is key and key_of(item#2) == symbol(PASS_VALUES_WORD) and is_group(value_of(item#2)) { return item#1 }
+	head = if item is key then key_of(item) else ø
+	if head != ø and is_group(head) and #head == 2 and head#1 is symbol and head#2 == symbol(PASS_VALUES_WORD) and is_group(value_of(item)) { return head#1 }
 	ø
 }
 # shader_words(s) (lib/prelude.warp) of a shader the program assigns, given its place in the program where a shader
