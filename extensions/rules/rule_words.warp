@@ -556,14 +556,12 @@ signaled(program: Node): any := {
 	}
 	separated(bracketed(written, ""), ";")
 }
-# the program with each list it makes for the GPU (extensions/rules/gpu_packing.warp gpu_bound) made as a GPU list, else ø: a main-level assignment's
-# creating form packed (same-scope flow only, decision gpu-bound-floats)
+# the program with each list it makes for the GPU alone (extensions/rules/gpu_packing.warp gpu_bound) declared of the
+# GPU cell type its items take, which the gpu_lists pass makes it of; ø where it makes none (decision gpu-bound-floats)
 gpu_lists_packed(program: Node): any := {
 	statements = level_statements(program)
-	bound = statements.filter(statement => is_key(statement, Op.Assign) and gpu_bound(key_of(statement), program))
-	if #bound == 0 { return ø }
-	packed = statements.map(statement => if statement in bound then plain_node(parsed(as_code(key_of(statement)) + " = " + gpu_packed_code(value_of(statement), "f32"))) else statement)
-	separated(bracketed(packed, ""), ";")
+	typed = statements.map(statement => gpu_inferred_declaration(statement, program))
+	if typed == statements then ø else separated(bracketed(typed, ""), ";")
 }
 # a list made right in a GPU word's call made as a GPU list, else ø
 gpu_list_made(v: Node): any := if gpu_creating(v) then gpu_packed(v) else ø

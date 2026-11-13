@@ -8,14 +8,39 @@ GpuCell = {F32: 0, I32: 1, U32: 2, F16: 3, BF16: 4, VEC2: 5, VEC3: 6, VEC4: 7}
 GpuListKind = {Row: 2}
 # `xs: [f32] = …`, `xs: [vec4] = …`: the value made as a GPU list of those cells (extensions/rules/gpu_packing.warp
 # gpu_packed_as), a pass over the program and the library modules it uses alike: lib/splats.warp's `centres: [f32]`
-# is a GPU list as the same line in the program is one
-gpu_lists_declared(n: Node): Node := bottom_up(n, declared_packed)
-declared_packed(n: Node): Node := {
-	if not (is_key(n, Op.Assign) and is_key(key_of(n), Op.Colon)) { return n }
+# is a GPU list as the same line in the program is one. A name declared so keeps its cells in every later `xs = …` of
+# its scope: a global's in every function, a main-level name's at the main level, a function's local in its body
+gpu_lists_declared(n: Node): Node := {
+	statements = statements_in(n)
+	globals = declared_cells(statements.filter(is_global_statement).map(value_of))
+	main_level = entries_of_both(declared_cells(statements.filter(statement => not is_key(statement, Op.Define))), globals)
+	if #main_level == 0 and not nodes_in(n).any(part => declared_cell(part) != ø) { return n }
+	scoped = statements.map(statement => cells_packed(statement, if is_key(statement, Op.Define) then entries_of_both(globals, declared_cells(nodes_in(value_of(statement)))) else main_level))
+	separated(bracketed(scoped, ""), ";")
+}
+is_global_statement(statement: Node): bool := is_key(statement, Op.Colon) and key_of(statement) == symbol("global")
+# [name, cell] of `xs: [vec4] = v`, else ø
+declared_cell(n: Node): list? := {
+	if not (is_key(n, Op.Assign) and is_key(key_of(n), Op.Colon) and key_of(key_of(n)) is symbol) { return ø }
 	cells = value_of(key_of(n))
-	if not (is_group(cells) and bracket_of(cells) == "[" and #cells == 1) { return n }
-	packed = gpu_packed_as(cells#1, value_of(n))
-	if packed == ø then n else Key(key_of(key_of(n)), Op.Assign, packed)
+	if is_group(cells) and bracket_of(cells) == "[" and #cells == 1 and cells#1 is symbol and GPU_CELLS.has(name_of(cells#1)) then [name_of(key_of(key_of(n))), cells#1] else ø
+}
+# name → cell of the declarations among these nodes
+declared_cells(nodes: list): map := {
+	cells = {}
+	for n in nodes {
+		declared = declared_cell(n)
+		if declared != ø { cells[declared#1] = declared#2 }
+	}
+	cells
+}
+cells_packed(n: Node, cells: map): Node := bottom_up(n, part => declared_packed(part, cells))
+# a declaration made as a GPU list of its cells, `xs = v` of a name declared so too
+declared_packed(n: Node, cells: map): Node := {
+	if not is_key(n, Op.Assign) { return n }
+	declared = declared_cell(n)
+	if declared != ø { return Key(key_of(key_of(n)), Op.Assign, gpu_packed_as(declared#2, value_of(n))) }
+	if key_of(n) is symbol and cells.has(name_of(key_of(n))) then Key(key_of(n), Op.Assign, gpu_packed_as(cells[name_of(key_of(n))], value_of(n))) else n
 }
 gpu_lists_extension = Extension{name: "gpu_lists", passes_before: {"tries": gpu_lists_declared}, library_words: {gpu_zeros: "gpu_zeros", gpu_put: "gpu_put", gpu_list_of: "gpu_list_of", gpu_list_place: "gpu_list_place", gpu_list_cell: "gpu_list_cell", gpu_list_bytes: "gpu_list_bytes", view_order_into: "view_order_into"},
 	host_exports: ["gpu_list_place", "gpu_list_cell", "gpu_list_bytes"], constant_tables: {GpuCell: GpuCell}}
