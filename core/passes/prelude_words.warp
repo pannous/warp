@@ -376,6 +376,8 @@ called_only(program: Node): Node := {
 	if pending.any(word => word.starts_with(closure_call_word)) { pending += [callable_word] }
 	settlers = extension_value_settlers()
 	pending += pending.filter(word => settlers.has(word)).map(word => settlers[word])
+	# `photo.mirror`, a member read naming a module's alias, calls the word it means (emitter.warp member_read)
+	pending += pending.filter(word => member_aliases.has(word)).map(word => member_aliases[word])
 	called = {}
 	at = 0
 	while at < #pending {
@@ -394,6 +396,8 @@ called_only(program: Node): Node := {
 # module's in front of the program, the prelude's after it. The words the program (a used
 # module's definitions in front of it too) will say once the sugar rewrote it are reached too (sugar_words_of), and
 # those the program doesn't call after all dropped once the passes ran (called_only)
+# the modules' aliases a program reaches, which a member read without parentheses says too (emitter.warp member_read)
+global member_aliases = {}
 with_reached(program: Node, module: text, in_front: bool, files: list = [], linked: list = []): Node := {
 	# [name, text, parse, identity, linked module] of each definition: a linked module's from its signature, its head line and parse
 	# (signature.warp), declared only; else a slice of the text, parsed when reached
@@ -428,6 +432,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	# HashSet => Set` (card class-module-name); a module's own class, brought in front, is no such word
 	own_classes = statements_in(program).filter(is_type_declaration).map(statement => declared_type_name(value_of(statement)#2))
 	aliases = without_keys(with_call_forms(written_aliases, module_names + own.keys), own_classes)
+	for name in aliases.keys { member_aliases[name] = aliases[name] }
 	program = aliased_in_scope(program, aliases, own, owners)
 	# a program's operator declaration overloads the module's beside it (`infix operator ↑(v: V, n: int)` beside the
 	# numbers' ↑), a program's assignment to a module's global sets it (`tuning = 442` retunes sound's notes), any other
