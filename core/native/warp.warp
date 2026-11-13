@@ -442,9 +442,8 @@ key_awaited(session: pointer): nothing := {
 	word_at(descriptor).value = STDIN
 	# (a pollfd: the descriptor, then the events asked and those that came as two 16-bit halves, these none yet)
 	word_at(descriptor + 4).value = POLL_INPUT
-	while poll(descriptor, 1, WINDOW_EVENTS_EVERY_MS) == 0 {
-		if not session_waited(session) { return }
-	}
+	window_linked = yes
+	while window_linked and poll(descriptor, 1, WINDOW_EVENTS_EVERY_MS) == 0 { window_linked = session_waited(session) }
 }
 # the next byte the terminal gives, -1 at its end
 key(): i32 := {
