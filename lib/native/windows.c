@@ -7,6 +7,7 @@
 #include <direct.h>
 #include <io.h>
 #include <psapi.h>
+#include <sys/stat.h>
 
 // ## the calls lib/native/*.c make itself
 
