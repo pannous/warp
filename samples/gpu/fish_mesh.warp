@@ -186,7 +186,6 @@ fish_pose(fish, time) := {
 	{corners: corners, colors: colors}
 }
 
-
 # one posed mesh, shared. corners are three a triangle, variants laid end to end; colors one a triangle,
 # the same for every phase. frames are two vec4 a fish: place and scale, then heading and phase slot.
 # fish_shown 0 draws none. The sphere radius is the posed mesh's, plus a little for the wave.
