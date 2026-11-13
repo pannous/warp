@@ -27,8 +27,8 @@ scalars = {i8: signed_byte, int8: signed_byte, u8: unsigned_byte, uint8: unsigne
 	u64: unsigned_long, uint64: unsigned_long, f32: single_float, float32: single_float, f64: double_float,
 	float: double_float, double: double_float, number: double_float}
 NO_VALUE = ""
-# the GC program's checked cast, `x as u8` once the sugar of calls.warp ran over a @primitive function in it: primitive
-# code casts plainly, wrapping, as a whole primitive file does (the rule's widened_to_int)
+# the GC program's checked cast (extensions/sugar/calls.warp), which the sugar makes of a @primitive function's
+# `x as u8` and of its fixed-width declarations, `the result: u8 = e` its result too
 FITTED_INT_WORD = "fitted_int"
 INT_TYPE = "int"
 FLOAT_TYPE = "float"
@@ -373,7 +373,6 @@ mvp_emitted(f: PrimitiveFunction, n: Node, expected: text): PrimitiveCode := {
 	if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in primitive_structs { return mvp_constructed(f, name_of(n#1), items_of(n)[1 ..< #n], n) }
 	if is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol(ALLOCATE_WORD) and primitive_callee(ALLOCATE_WORD) == ø { return PrimitiveCode(POINTER_TYPE, arena_taken(mvp_typed(f, n#2, "i32"))) }
 	if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and primitive_callee(name_of(n#1)) != ø { return mvp_call(f, n#1, items_of(n)[1 ..< #n], n) }
-	if is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(FITTED_INT_WORD) { return mvp_cast(mvp_emitted(f, n#2, ""), "${n#3}") }
 	if is_group(n) and bracket_of(n) == "(" and #n > 1 and n#1 is symbol and name_of(n#1) not in f.locals { primitive_refusal(n, form_of(n) + ", not a primitive function: primitive code calls only primitive code") }
 	if is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1 and n#1 is symbol { return mvp_spaced(f, n) }
 	if is_group(n) and (bracket_of(n) == "{" or bracket_of(n) == "" or bracket_of(n) == "(") { return mvp_block(f, items_of(n), expected) }
@@ -783,8 +782,7 @@ le_word(n: int): list := le64(n)[0 ..< 4]
 
 ## primitive functions in a GC program
 # a function the program marks `@primitive`, called from GC code (decision primitive-annotation)
-is_primitive_function(f: Function): bool := is_primitive_name(written_name(f.name))
-is_primitive_name(name: text): bool := name in (marked_names.get(PRIMITIVE_ATTRIBUTE) ?? [])
+is_primitive_function(f: Function): bool := written_name(f.name) in (marked_names.get(PRIMITIVE_ATTRIBUTE) ?? [])
 
 # a primitive function the code may call: one of the file, or in a GC program one marked, compiled at its first call
 primitive_callee(name: text): any := {
@@ -802,7 +800,8 @@ primitive_compiled(f: Function) := {
 	parameters = f.signature.parameters
 	types = parameters.map(p => primitive_type_name(symbol(if p.type_name then p.type_name else "?")))
 	inner = added_function(f.name + "·primitive", types.map(hosted_kind), ValueKind.Int, [])
-	primitive = PrimitiveFunction(f.name, parameters.map(p => p.name), types, primitive_result(f.body), giving_body(f.body), inner.index)
+	body = bottom_up(f.body, unchecked_cast)
+	primitive = PrimitiveFunction(f.name, parameters.map(p => p.name), types, primitive_result(body), giving_body(body), inner.index)
 	primitive_functions[f.name] = primitive
 	f.kinds = types.map(boundary_kind)
 	f.locals = []
@@ -820,6 +819,14 @@ primitive_compiled(f: Function) := {
 	called = passed + call_code(inner.index)
 	f.code = if f.gives_nothing then called + [ref_null, gc_type(gc.node)] else mvp_cast(PrimitiveCode(primitive.result, called), if primitive.result == BOOL_TYPE then BOOL_TYPE else result).code
 }
+# a primitive function's code as written, before the GC program's sugar checked its casts: `x: int = fitted_int(e, "u8")`
+# is `x: u8 = e` again, `fitted_int(e, "u8")` the plain `e as u8`, as a primitive file has them (the rules' widened_to_int)
+unchecked_cast(n: Node): Node := {
+	if is_key(n, Op.Assign) and is_key(key_of(n), Op.Colon) and value_of(key_of(n)) == symbol(INT_TYPE) and is_fitted(value_of(n)) { return Key(Key(key_of(key_of(n)), Op.Colon, fitted_type(value_of(n))), Op.Assign, value_of(n)#2) }
+	if is_fitted(n) then Key(n#2, Op.As, fitted_type(n)) else n
+}
+is_fitted(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(FITTED_INT_WORD)
+fitted_type(fitted: Node): Node := symbol("${fitted#3}")
 # the kind a primitive type is held as inside the GC module; f32 has none there yet
 hosted_kind(type: text): ValueKind := match mvp_wasm_of(type) {
 	"i32": ValueKind.I32

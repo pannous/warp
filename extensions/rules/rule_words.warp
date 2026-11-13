@@ -1255,8 +1255,6 @@ value_dir_words(program: Node): any := if owns_dir(program) then ø else List(["
 # @primitive code, lowered with the primitive prelude (extensions/primitive.warp), emits the width itself, `start: u32 = …`
 # a wasm i32
 widened_to_int(width: Node): bool := not lowering_primitive()
-# `narrow(x: i64)` of `@primitive narrow(x: i64): u8 := x`: a primitive function's head, whose declared types are its own
-primitive_head(head: Node): bool := is_group(head) and #head > 0 and head#1 is symbol and is_primitive_name(name_of(head#1))
 
 # `math` of `math.gcd(4, 6)`, else ø (prelude_words.warp qualifies_by_module)
 module_named(module: Node, program: Node): any := if qualifies_by_module("${module}", program) then module else ø
@@ -1343,7 +1341,6 @@ rule_words = {
 	renamed: renamed,
 	statements_in: statements_in,
 	widened_to_int: widened_to_int,
-	primitive_head: primitive_head,
 	it_read_as: it_read_as,
 	it_as_lambda: it_as_lambda,
 	leading_unit: leading_unit,

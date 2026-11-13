@@ -38,7 +38,7 @@ rewrite ($f $g $x) => $f(($g $x)) where $f is function and $g takes one
 rewrite ($t $x = $v) => ($x: $t = $v) where $t is type and $x is symbol
 # a variable of a fixed-width int, `x: int8 = v` and `int8 x = v`, holds an int its value is cast to, the cast checking
 # that it fits (decision cast-checks); @primitive code keeps the width, a u32 is a wasm i32 there
-rewrite ($x: $t = $v) => ($x: int = ($v as $t)) where $t in [byte, int8, uint8, int16, uint16, int32, uint32, int64, uint64, i8, u8, i16, u16, i32, u32, i64, u64] and widened_to_int($t) and not primitive_head($x)
+rewrite ($x: $t = $v) => ($x: int = ($v as $t)) where $t in [byte, int8, uint8, int16, uint16, int32, uint32, int64, uint64, i8, u8, i16, u16, i32, u32, i64, u64] and widened_to_int($t)
 # the cast to a narrower width than int checks its range, `300 as u8` a catchable error (lib/prelude.warp fitted_int)
 rewrite ($v as $t) => fitted_int($v, $n) where $t in [byte, int8, uint8, int16, uint16, int32, uint32, uint64, i8, u8, i16, u16, i32, u32, u64] and widened_to_int($t) and $n = spelled($t)
 rewrite bool($x) => truth_of($x)
