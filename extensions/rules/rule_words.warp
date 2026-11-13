@@ -884,6 +884,22 @@ definitions_reached(f: Node, program: Node): any := {
 	quoted = List([symbol(quote_word), List(definitions, Bracket.Square, Separator.Comma)], Bracket.None, Separator.Space)
 	List([Key(symbol("name"), Op.Colon, Text(name_of(f))), Key(symbol("code"), Op.Colon, quoted), Key(symbol("values"), Op.Colon, read)], Bracket.Curly, Separator.Comma)
 }
+# paint([velocity: advect, show]) of program functions (wiki/graphics.md "Fields and passes"): each pass the run-time
+# function_pass (lib/shaders.warp) of the function quoted with what it reaches and, before the last, the field it draws
+# by name and value; ø where an item is no such function (a list of shaders is shader_passes')
+function_passes(items: list, program: Node): any := {
+	passes = []
+	for item in items {
+		into = field_drawn(item)
+		f = if into == ø then item else value_of(item)
+		reached = if f is symbol then definitions_reached(f, program) else ø
+		if reached == ø { return ø }
+		passes += [call_of("function_pass", if into == ø then [reached] else [reached, Text(name_of(into)), into])]
+	}
+	passes
+}
+# `velocity` of the item `velocity: advect`; ø for any other item
+field_drawn(item: Node): any := if is_key(item, Op.Colon) and key_of(item) is symbol then key_of(item) else ø
 # `["a", "b"]`: the names of the function's parameters as a list; ø when the program defines no such function
 parameters_named(name: Node, program: Node): any := {
 	definition = function_definition(name, program)
@@ -1528,6 +1544,7 @@ rule_words = {
 	compute_toys_made: compute_toys_made,
 	shader_values: shader_values,
 	shader_passes: shader_passes,
+	function_passes: function_passes,
 	shader_words_of: shader_words_of,
 	shader_place_of: shader_place_of,
 	shorthand_closure: shorthand_closure,

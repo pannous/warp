@@ -10,11 +10,15 @@
 # prints the verdicts, the cases over a second and the total (test-verdicts), the exit status 1 when one failed
 
 creat(path: pointer, mode: i32): i32 from "c"
+fork(): i32 from "c"
+execvp(file: pointer, arguments: pointer): i32 from "c"
+dup2(from: i32, to: i32): i32 from "c"
 flock(descriptor: i32, operation: i32): i32 from "c"
 kill(child: i32, signal: i32): i32 from "c"
 usleep(microseconds: i32): i32 from "c"
 setrlimit(resource: i32, limit: pointer): i32 from "c"
 getloadavg(loads: pointer, count: i32): i32 from "c"
+posix_spawn_file_actions_addchdir_np(actions: pointer, folder: pointer): i32 from "c"
 
 # a case's budget is CPU time, which a loaded machine doesn't shrink; the wall clock only ends a case that waits
 # forever, WALL_SECONDS stretched by the runnable processes per core (load 40 on 10 cores gave a case a quarter of one,
@@ -73,6 +77,8 @@ tests_run(compiler: text, by_self: bool, first: int): nothing := {
 # the cases listed by the compiler in a child, this process waiting for it, its failure the run's: a module's WASI
 # calls start wasmtime's tokio threads, which a case forked later would wait on forever (they stay behind in a fork)
 listed_apart(compiler: text, given: Arguments): nothing := {
+	# (a machine without fork, Windows, has no such threads to leave behind: listed here)
+	if not forks() { return file_ran(compiler, given) }
 	pid = fork()
 	if pid == 0 {
 		file_ran(compiler, given)
@@ -212,6 +218,7 @@ started_run(work: text, run: text, prefix: text, children: pointer, slots: i32, 
 	added(given, read_file(joined(id, ".code")))
 	output = c_string(joined(id, ".out"))
 	errors = c_string(joined(id, ".err"))
+	if not forks() { return spawned_run(given, folder, output, errors) }
 	budget = allocate(16)
 	long_at(budget).value = CPU_SECONDS
 	long_at(budget + 8).value = CPU_SECONDS
@@ -235,6 +242,26 @@ started_run(work: text, run: text, prefix: text, children: pointer, slots: i32, 
 		exit(0)
 	}
 	pid
+}
+
+# whether this machine forks: Windows has no fork, its cases are this warp started anew, by posix_spawnp, with no CPU
+# budget (the wall clock still ends one)
+forks(): bool := library_function(c_string("c"), c_string("fork")) != 0
+# the run started as this warp anew in the case's folder, its output and errors into the run's files: its pid, else -1
+spawned_run(given: Arguments, folder: pointer, output: pointer, errors: pointer): i32 := {
+	out = creat(output, FILE_MODE)
+	err = creat(errors, FILE_MODE)
+	actions = allocate(SPAWN_ACTIONS_BYTES)
+	posix_spawn_file_actions_init(actions)
+	posix_spawn_file_actions_adddup2(actions, out, 1)
+	posix_spawn_file_actions_adddup2(actions, err, 2)
+	posix_spawn_file_actions_addchdir_np(actions, folder)
+	child_at = allocate(4)
+	failed = posix_spawnp(child_at, c_string(executable_path()), actions, 0, given.pointers, process_environment())
+	posix_spawn_file_actions_destroy(actions)
+	close(out)
+	close(err)
+	if failed != 0 then -1 else word_at(child_at).value as i32
 }
 
 # the number of slots in the machine's pool: `warp test --slots <n>`, else the cores, each compiler build taking BUILD_CORES
