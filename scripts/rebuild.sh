@@ -25,6 +25,7 @@
 # memory) and its function profile (profile.txt, sample.gz, perf.map: scripts/build-slot.sh WARP_BUILD_RECORD).
 set -uo pipefail
 STEPS=(seed optimize runtime modules)  # core/native/warp.warp rebuilt, in order
+COMPILER_PARTS=("" .driver.cwasm .driver.cwasm.key .driver.build.cwasm .driver.build.cwasm.key)  # a compiler file, then its machine code
 WARMING_PROGRAM=samples/hello/hello.warp  # run once before a measured self build (compiler_warmed)
 SHOWN_LINES=60  # of a failed step's output, printed before its log's path
 ERROR_LINE='[Ee]rror|refus|trap|panic|is missing|failed'  # the line of a longer failed step's output printed first
@@ -198,8 +199,8 @@ self_passed() { mkdir -p "$store/self-tested" && inputs_line >"$store/self-teste
 promoted_untested() {
 	local file=$compilers/warp-self.wasm part
 	[ -f "$compilers/warp.wasm" ] && [ "$(cut -d' ' -f1 "$compilers/warp.wasm.inputs" 2>/dev/null)" = "$hash" ] || return 1
-	for part in "" .driver.cwasm .driver.cwasm.key .driver.build.cwasm .driver.build.cwasm.key; do
-		[ -f "$compilers/warp.wasm$part" ] && copied "$compilers/warp.wasm$part" "$file$part"
+	for part in "${COMPILER_PARTS[@]}"; do
+		[ ! -f "$compilers/warp.wasm$part" ] || copied "$compilers/warp.wasm$part" "$file$part" || return 1
 	done
 	inputs_line >"$file.inputs"
 	published warp-self
@@ -286,11 +287,13 @@ reused_stored() {
 	inputs_line >"$file.inputs"
 	code_kept
 }
-# compiler_moved <from> [<to>]: a compiler, with its machine code, moved (to lib/warp.wasm)
+# compiler_moved <from> [<to>]: a compiler, with its machine code, moved (to lib/warp.wasm); fails only when a move
+# does (a part it lacks is no failure: it ended a modules step that built every module with exit 1, card
+# modules-silent-failure)
 compiler_moved() {
 	local part to=${2:-$file}
-	for part in "" .driver.cwasm .driver.cwasm.key .driver.build.cwasm .driver.build.cwasm.key; do
-		[ -f "$1$part" ] && mv -f "$1$part" "$to$part"
+	for part in "${COMPILER_PARTS[@]}"; do
+		[ ! -f "$1$part" ] || mv -f "$1$part" "$to$part" || return 1
 	done
 }
 # the modules step of a build stopped after the runtime (`warp rebuild pure … to runtime`), on its warp.wasm.new: the
