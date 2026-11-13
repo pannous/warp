@@ -16,10 +16,18 @@ CRATE_TOOL_PLACES = ["/warp-crate", "/../scripts/warp-crate"]
 # what warp-crate runs with, each with how to get it
 CRATE_NEEDS = {python3: "brew install python, or python.org", cargo: "curl https://sh.rustup.rs -sSf | sh, or rustup.rs"}
 WASM2C_MODULE = "program"
-C_COMPILER = "cc -O2"
-# a macOS executable's main thread stack, where the program runs: wasm's own limit and the host's frames beneath it
-# (lib/native/wasi.c PROGRAM_STACK_BYTES; Linux's program gets it from a thread of its own)
-MACOS_STACK = " -Wl,-stack_size,0x10000000"
+# how each system links a native build, by uname's name (Windows's Git Bash or MSYS2 says MINGW64_NT-…): its C compiler;
+# the flags exporting the build's own C functions (foreign.c's native_pointer, the glue's), found by name at run time
+# (dlsym), which macOS exports always; the main thread's stack, where the program runs: wasm's own limit and the host's
+# frames beneath it (lib/native/wasi.c PROGRAM_STACK_BYTES; Linux's program gets it from a thread of its own); where
+# the executable finds its libraries at run time (rpath; Windows looks beside it and on the PATH); flags keeping a
+# library its C reaches only through dlsym (GNU ld's --as-needed, Debian's default, drops it)
+NATIVE_SYSTEMS = {
+	Darwin: {compiler: "cc -O2", exported: "", stack: " -Wl,-stack_size,0x10000000", itself: "@executable_path", kept: ""},
+	Linux: {compiler: "cc -O2", exported: " -rdynamic", stack: "", itself: "'$ORIGIN'", kept: " -Wl,--no-as-needed"},
+	Windows: {compiler: "clang -O2 -static -pthread", exported: " -Wl,--export-all-symbols", stack: " -Wl,--stack,0x10000000", itself: "", kept: ""}
+}
+WINDOWS_UNAMES = ["MINGW", "MSYS", "CYGWIN"]
 # wasm2c's runtime and headers, in these folders of the wabt whose wasm2c runs
 WASM2C_RUNTIME = "/share/wabt/wasm2c"
 # the oldest wasm2c writing the w2c_ names and taking -n (an old /usr/local/bin/wasm2c 1.0.13 before Homebrew's 1.0.42
@@ -44,7 +52,8 @@ build_native(source_file: text, library: text, options: list) := {
 		print "wrote " + C_FILES.map(suffix => stem + suffix).join(", ") + ", the C of " + executable + " for a C compiler with wasm2c's runtime and -I <warp's lib>"
 	} else {
 		files = [stem + ".c", stem + ".main.c", runtime + "/wasm-rt-impl.c", runtime + "/wasm-rt-mem-impl.c"].map(quoted_path).join(" ")
-		shell(C_COMPILER + " -I" + quoted_path(runtime) + " -I" + quoted_path(wabt + WABT_HEADERS) + " -I" + quoted_path(library) + " -o " + quoted_path(executable) + " " + files + " -lm" + exported_symbols() + main_stack() + native_links(wabt, library))
+		system = native_system()
+		shell(system.compiler + " -I" + quoted_path(runtime) + " -I" + quoted_path(wabt + WABT_HEADERS) + " -I" + quoted_path(library) + " -o " + quoted_path(executable) + " " + files + " -lm" + system.exported + system.stack + native_links(wabt, library, system))
 		removed(stem, [".wasm"] + C_FILES)
 		print "built " + executable
 	}
@@ -72,19 +81,19 @@ version_at_least(version: text, oldest: list): bool := {
 # or the system's; the executable finds them at run time beside itself, in ../lib (a package's <prefix>/bin and
 # <prefix>/lib), else in that library folder by its stable name (rpath): the native warp's lib-link option, a link the
 # next install moves to its own build, never the build folder behind it (card native-rpath-builds-folder)
-native_links(wabt: text, library: text): text := {
+native_links(wabt: text, library: text, system: map): text := {
 	libraries = c_libraries(c_functions_imported()).filter(l => l not in c_and_m)
 	if #libraries == 0 { return "" }
-	itself = if is_macos() then "@executable_path" else "'$ORIGIN'"
-	run_paths = [itself, itself + "/../lib", quoted_path(run_option("lib-link") ?? library)].map(path => " -Wl,-rpath," + path).join("")
-	# GNU ld's --as-needed (Debian's default) drops a library the C calls reach only through dlsym
-	kept = if is_macos() then "" else " -Wl,--no-as-needed"
-	" -L" + quoted_path(library) + " -L" + quoted_path(wabt + "/lib") + run_paths + kept + libraries.map(l => " -l" + l).join("")
+	itself = system.itself
+	run_paths = if itself == "" then "" else [itself, itself + "/../lib", quoted_path(run_option("lib-link") ?? library)].map(path => " -Wl,-rpath," + path).join("")
+	" -L" + quoted_path(library) + " -L" + quoted_path(wabt + "/lib") + run_paths + system.kept + libraries.map(l => " -l" + l).join("")
 }
-# a native build's own C functions (foreign.c's native_pointer, the glue's) are found by name at run time (dlsym):
-# Linux executables export them only when told; macOS's always do
-exported_symbols(): text := if is_macos() then "" else " -rdynamic"
-main_stack(): text := if is_macos() then MACOS_STACK else ""
+# how this system links a native build (NATIVE_SYSTEMS), loudly none for a system not listed
+native_system(): map := {
+	name = shell("uname")
+	known = if WINDOWS_UNAMES.any(prefix => name.starts_with(prefix)) then "Windows" else name
+	NATIVE_SYSTEMS[known] ?? raise "warp build native knows how to link on " + NATIVE_SYSTEMS.keys().join(", ") + ", not on " + name
+}
 is_macos(): bool := shell("uname") == "Darwin"
 # the folder a file's uses are read from: "." for a file named without one
 source_folder(file: text): text := if folder_of(file) == "" then "." else folder_of(file)
