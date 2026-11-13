@@ -344,5 +344,6 @@ Core cost: none in core/; extensions/shader_blocks and the hole rules shrink; li
   The hosts still list the built-in holes they fill; that list goes when (c) changes what they receive.
 - (b) done: a rule reads the dialect off the entry point where a shader the program assigns is painted or rendered:
   `fn main_image` without `@fragment` becomes compute_toy(s); compute_toy of a fragment shader is that shader. The
-  block itself stays the kernel as written, which compute_toy(code, picture) needs. The program still says `use
-  compute_toys` (a word a rule writes brings no module; without it the compile says "fix: use compute_toys").
+  block itself stays the kernel as written. compute_toy lives in lib/shaders.warp (card compute-toys-own): no `use`;
+  the pictures channel0/channel1 are paint values, `paint(toy, w, h, {channel0: picture})`, made [vec4] GPU lists by
+  pictured_values, which the dialect rule wraps around the values.

@@ -222,7 +222,7 @@ Routes answer requests; `warp serve` serves them, `warp deploy` deploys them (Cl
 
 `paint(f, width, height)` compiles a warp function of (x, y) returning [r, g, b] to a WGSL fragment shader
 (`shader_of(f)` shows it); `shader { … }` is WGSL written in place, `$name` a warp variable read at each paint;
-`compute_toy(shader { … })` of `use compute_toys` runs a compute.toys kernel. WebGPU in the page.
+a compute.toys kernel (`fn main_image`) paints as it is, its pictures as `{channel0: picture}`. WebGPU in the page.
 
 ## GPU
 
