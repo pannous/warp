@@ -127,3 +127,7 @@ skipped the question is refused and goes to warp-interviewer; there is no FYI pa
 - Reds with a path forward (user 11-11): a core change may land with some test and sample lines red when a card names
   the owner, the red lines and how they get adjusted, and the merge message says `reds: <card>`. Smoke, self-check,
   hello and the playground deploy stay green; tier 2 and the page samples don't refuse such a landing.
+- Routes (user 11-13): express is the default. Super-express (urgent cards, user 🐞 cards, or any small change the
+  worker marks so) hands over with a green smoke only, core/ included: sweep it with `merge.sh --smoke-only` and land on
+  that smoke; then run `scripts/self-check.sh` and `scripts/gate.sh --tiers 1` on the pushed tip, and send their reds to
+  the branch owner to fix forward at once.
