@@ -51,7 +51,6 @@ first_load_size() {
 
 build() {
 	mkdir -p "$local_dir"
-	scripts/sample-assets.sh fetch
 	web/playground/build.sh
 	web/playground/build.sh site "$site"
 	first_load_size
