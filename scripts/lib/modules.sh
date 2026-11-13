@@ -56,7 +56,7 @@ modules_of_files() {
 MODULE_WAIT=0.2  # seconds a worker waits when no module is ready
 digest() { { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-64; }
 modules_built() {
-	local warp=$1 lib=$2 compiler=$3 folder=$4 runtime=$5 count_file=$6 work=$4/.modules-step name texts waits slot workers kept counted_file
+	local warp=$1 lib=$2 compiler=$3 folder=$4 runtime=$5 count_file=${6-} work=$4/.modules-step name texts waits slot workers kept counted_file
 	set -- "$1" "$2" "$3" "$4" "$5"
 	# (a killed step's claims go: they'd leave its modules unclaimable)
 	rm -rf "$work" && mkdir -p "$work" || return 1
@@ -133,9 +133,20 @@ modules_made() {
 		# (a lib/ module refusing to prebuild leaves no file: compiled from its source with each program, said again next step)
 		for name; do [ ! -f "$folder/$name.wasm" ] || module_key "$work/$name.key" "$folder/$name.wasm" >"$folder/$name.wasm.built-of"; done
 	else
-		cat "$log" >>"$work/refused"
+		modules_failure $? "$log" "$@" >>"$work/refused"
 	fi
 	for name; do touch "$work/$name.done"; done
+}
+# modules_failure <status> <log> <name>…: a batch's failure said whole, never an empty refusal: its modules, its exit
+# (a signal's name: a crash or a kill prints nothing itself), its output and what its timer saw (/usr/bin/time puts
+# "terminated abnormally" in its own file, not the log)
+modules_failure() {
+	local status=$1 log=$2 signal=
+	shift 2
+	[ "$status" -gt 128 ] && signal=", signal $(kill -l $((status - 128)) 2>/dev/null || echo $((status - 128)))"
+	echo "modules: the process building $* failed (exit $status$signal)$([ -s "$log" ] || echo ', printing nothing')"
+	cat "$log"
+	grep -v -E '^ *[0-9]' "$log.count" 2>/dev/null
 }
 # run, not sourced: the function named (a worker in another build slot, modules_built)
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then source "$(dirname "$0")/platform.sh"; "$@"; fi
