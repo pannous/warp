@@ -52,10 +52,11 @@ CHECKS_DROPPED = "checks_dropped"
 # longer needs that word's frame on the stack, which Cranelift's inlining takes away); and checks_dropped, which a
 # --fast program sets in the runtime it links
 exported_globals = ["trap_detail", "text_heap", "trap_position", "trap_name", CHECKS_DROPPED]
-# trap_position holds line * columns_per_line + column
+# trap_position (an i64) holds line * columns_per_line + column, its line holding the file as a node's does
+# (positions.warp file_line: a library's statement names its own file)
 columns_per_line = 4096
-# a place [line, column] as one int, its column 0 (unknown) past columns_per_line rather than a plausible wrong one
-packed_place(at: list): int := at#1 * columns_per_line + (if at#2 < columns_per_line then at#2 else 0)
+# a place [line, column, file] as one int, its column 0 (unknown) past columns_per_line rather than a plausible wrong one
+packed_place(at: list): int := file_line(if #at > 2 then at#3 else 0, at#1) * columns_per_line + (if at#2 < columns_per_line then at#2 else 0)
 import_function_byte = 0
 # the export WASI hosts run a module by
 wasi_start = "_start"

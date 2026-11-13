@@ -255,7 +255,7 @@ file_parsed(file: text): Node := {
 # unclosed-core: an unclosed ( in a core file hid its later definitions)
 checked_parse(file: text, source: text): Node := {
 	timed("parse " + working_relative(file))
-	tree = plain_node(parsed_from(source, working_relative(file), 1))
+	tree = plain_node(parsed_from(source, shown_file(file), 1))
 	for n in nodes_in(tree) {
 		message = parse_error_message(n)
 		if message != ø { raise working_relative(file) + ": " + message }
@@ -427,6 +427,13 @@ package_file(name: text, folder: text): any := {
 working_relative(file: text): text := {
 	below = cwd + "/"
 	if file.starts_with(below) then file.replace(below, "") else file
+}
+# a source file as a message names it: below the library folder `lib/…`, else working_relative, without `./` steps
+shown_file(file: text): text := {
+	library = run_library() + "/"
+	if file.starts_with(library) { return "lib/" + file[#library ..] }
+	shown = working_relative(file).replace("/./", "/")
+	if shown.starts_with("./") then shown[2 ..] else shown
 }
 # `use "•/lib/x.warp"` (alias `@/`): the project root, the nearest folder above `folder` holding `.git`, plus the
 # rest; no such folder refuses (decision project-root-paths). Any other name is relative to `folder`: a relative root
