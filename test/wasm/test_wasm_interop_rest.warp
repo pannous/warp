@@ -1,7 +1,7 @@
 # from test_wasm_interop_rest.rs: edit the Rust test, then run the script again
 
 # optional_fields_on_one_line
-is! 'type Node: gc struct { tag: i32 left: ref Node? right: ref Node? }; n = Node{tag: 1 left: Node{tag: 2 left: None right: None} right: None}; n.left.tag' 2
+is! 'struct Node { tag: i32 left: Node? right: Node? }; n = Node{tag: 1 left: Node{tag: 2 left: None right: None} right: None}; n.left.tag' 2
 
 # linear_memory_by_its_bytes
 is! 'use memory; memory.copy([104, 105], 60000); memory.slice(60000, 60002)' [104 105]
@@ -14,9 +14,9 @@ memory.copy([7, 8], 100)
 memory.slice(100, 102)' [7 8]
 
 # a_row_of_fields_among_lines
-is! 'type Node: gc struct {
+is! 'struct Node {
     tag: i32
-    left: ref Node? right: ref Node?
+    left: Node? right: Node?
 }
 n = Node { tag: 1 left: Node { tag: 2 left: None right: None } right: None }
 n.left.tag' 2
