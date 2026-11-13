@@ -38,6 +38,10 @@ script_sum=$(shasum <"$0")
 [ "${1-}" = --slow ] && { slow=1; shift; }
 scripts=$(cd "$(dirname "$0")/.." && pwd)
 cd "$MAIN_CHECKOUT" || exit 1  # todo finds the board through the checkout's repo (the cron starts in ~)
+# cron has no keychain, so gh would go unauthenticated (60 calls an hour) and each todo waits out the rate limit,
+# holding the install for hours (11-13): the cron token, as the vitals cron uses it
+GH_TOKEN_FILE=$HOME/.config/gh/cron-token
+[ -z "${GH_TOKEN-}" ] && [ -r "$GH_TOKEN_FILE" ] && export GH_TOKEN=$(<"$GH_TOKEN_FILE")
 installed_state=$TREE/data/integrate
 state=$installed_state
 [ -n "$slow" ] && { TREE=$SLOW_TREE; state=$SLOW_TREE/data/integrate; }
