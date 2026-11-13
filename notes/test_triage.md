@@ -663,6 +663,21 @@ Triage (judge the form before building it):
   item's name, ['a', 'b']. Only the plural, `people().names` (:6), reads every item; whether the singular does too
   is a parked decision (it reads two ways: the list's own field or each item's). Left red and untouched until decided.
 
+## Events and signals, cluster 11 (warp-interviewer 2026-11-13)
+Dropped, old Rust-era lines no wiki page backs:
+- test/control/test_reactive_ports.pairs.warp `value - was`, `value - before` and test_reactive_ports.warp
+  `previous`: `old` is the one word for the value before a write; more names would take ordinary names in every
+  listener block.
+- test/control/test_on.pairs.warp `y = x--` → 2 with `on set x`: x-- gives the value before the step, 3, as everywhere.
+- test/control/test_broadcast.pairs.warp `broadcast {…} on "test-nobody"` and test_named_broadcast.pairs.warp
+  `send stop the machine{…} to: "test-nobody"`: an event sent to a channel named by a string is no form; `send … to:`
+  is lib/channels' call.
+Rewritten to today's values: test_print.pairs.warp:5 (3), test_change_of_expression.pairs.warp:6 (the test summary);
+test/modules/test_keys.pairs.warp:2 `key_name(65)` is "a", key names lowercase as the Key enum's cases.
+Parked: test_colon_handlers.warp:10 `at 9pm:` on the time library's card.
+Key names (warp-interviewer 2026-11-13): test_key_names.warp `key == ArrowDown` dropped (the browser's spelling, the
+Key case is down); test/modules/test_keys.pairs.warp:4 `[held_key == ESC, LEFT]` is [no, Key.left], the Key case.
+
 ## Error values and try (cluster error-values-try, decided by the user via warp-interviewer 2026-11-13)
 
 | file:line | expected now | proposed | why |

@@ -5,11 +5,9 @@
 # Near trees are drawn one each, farther chunks as a few of their own trees, never as one stand-in picture.
 # Each tree is a lit billboard: tiered pines, clumped oaks, airy birches and autumn crowns, each with its own tint,
 # over a meadow and a sky with sun and clouds that are painted per pixel.
-# Headless, the frame selects that view and does not paint, unless the run is given `still`:
-# `warp million_trees.warp still` paints one frame with no window. A window paints the trees.
+# Each frame paints the trees: in a window, in the playground's pane, and with no window one frame, the still.
 use forest
 use keys
-use os
 
 SIDE = 100
 EYE_Y = 21.7
@@ -292,7 +290,7 @@ on frame {
 	if held == Key.a or held == Key.left { side = -WALK }
 	walk(ahead, side)
 	view = show(shown_width(), shown_height())
-	if window_possible() or ("still" in args) { paint(woods) }
+	paint(woods)
 }
 
 first = show(240.0, 135.0)

@@ -492,6 +492,8 @@ online() := system_value("online") != 0
 // whether the system shows dark mode (the page: the browser's prefers-color-scheme; natively the window library asks
 // the system); `on change dark mode {…}` hears it switch (lib/signals.warp)
 dark_mode() := system_value("dark mode") != 0
+// the system value as said, `whenever dark mode {…}`, `not dark mode`
+rewrite dark mode => dark_mode
 mouse_x() := system_value("mouse_x") as float
 mouse_y() := system_value("mouse_y") as float
 mouse_down() := system_value("mouse_down") != 0
@@ -1028,6 +1030,9 @@ global listener_counts = {}
 // a listener as a value: the event it listens to and its number there, so it is removed by itself, `h = on alarm {…}`
 // … `remove h`, short for `remove h from listeners of alarm` (card listener-address)
 class Listener { event: text; number: int }
+// `listeners of alarm -= h` (wiki Footguns "Event handlers"), in parentheses, as `=>` binds tighter than `-=`; a rule
+// of the prelude, as the event sugar's walk never takes such a write
+rewrite (listeners of $e -= $h) => unlisten(data $e, $h) where $e is symbol
 // `remove alarm` (extensions/sugar/events.warp): the listener removed from the event it listens to
 listener_removed(listener: Listener) := unlisten(listener.event, listener)
 listen(name: any, listener: function, once: bool): Listener := {
@@ -1059,6 +1064,11 @@ unlisten(name: any, listener: any): any := {
 	key = name_of(name)
 	number = if listener is Listener then listener.number else listener
 	if key in event_listeners { kept_listeners(key, i => listener_numbers[key]#i != number) }
+	ø
+}
+// `clear listeners of alarm`: none listen any more
+listeners_cleared(name: any): any := {
+	if name_of(name) in event_listeners { kept_listeners(name_of(name), i => no) }
 	ø
 }
 // the listeners of an event at the positions keep holds for
