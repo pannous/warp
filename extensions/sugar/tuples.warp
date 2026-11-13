@@ -13,11 +13,6 @@ rewrite (($a, $b, $rest...) = $value) => ([$a, $b, $rest...] = $value)
 rewrite ([$names...] = $value) => ($t = $value; ($n = $t#$i) for $n at $i in $names...)
 # braces before `=` take fields by their names, `{x, y} = p` of a Point or a map, each name its field
 rewrite ({$names...} = $value) => ($t = $value; ($n = $t.$n) for $n in $names...)
-# a parameter written as such a pattern takes its argument apart the same way: `add_pair([a, b]) := a + b`,
-# `greet({name}) := "hi " + name`, `sum(Point{x, y}) := x + y` (its argument typed Point)
-rewrite ($f($a..., [$names...], $b...) := $body) => ($f($a..., $p, $b...) := ([$names...] = $p; $body))
-rewrite ($f($a..., {$names...}, $b...) := $body) => ($f($a..., $p, $b...) := ({$names...} = $p; $body))
-rewrite ($f($a..., $c{$names...}, $b...) := $body) => ($f($a..., $p: $c, $b...) := ({$names...} = $p; $body)) where $c is type
 rewrite ($a, $b, $rest...) => [$a, $b, $rest...] where statement
 # a list's item: `[(1, 0), (2, 1)]` is the list of two lists
 rewrite ($a, $b, $rest...) => [$a, $b, $rest...] where element
