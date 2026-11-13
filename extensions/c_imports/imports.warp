@@ -444,6 +444,7 @@ module_c_functions(module: text): list := {
 	if signature != ø and signature.c_lines != ø then signature.c_lines.map(c_declaration) else c_functions_called(library_module_with_parts(module), module + module_extension in c_catalog_files, c_catalog([]))
 }
 module_c_uses(module: text): list := {
+	timed("DEBUG c_uses " + module + " sig=" + text(prebuilt_signature(module) != ø) + " path=" + std_module_path(module) + " text=" + (file_source(std_module_path(module)) ?? "none") + " got=" + used_modules(library_module_with_parts(module)).join(","))
 	signature = prebuilt_signature(module)
 	if signature != ø and signature.c_uses != ø then signature.c_uses else used_modules(library_module_with_parts(module))
 }
