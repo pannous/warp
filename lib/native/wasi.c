@@ -3,6 +3,7 @@
 // "program" and the definitions of instantiate, which hands wasm2c the instance of each module the program imports, and
 // run_main, which calls the program's main and prints what it gives (extensions/primitive.warp native_main).
 #include <fcntl.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
@@ -152,7 +153,16 @@ static void crash_reported(void) {
 	for (size_t i = 0; i < sizeof CRASH_SIGNALS / sizeof *CRASH_SIGNALS; i++) signal(CRASH_SIGNALS[i], crashed_by);
 }
 
-int main(int argc, char** argv) {
+// the stack the program runs on: a thread's, as deep as wasm's own limit (core/native/driver.warp WASM_STACK_BYTES) and
+// room for the host's frames beneath it; a process's main thread has 8 MB, wasm's limit then a few thousand calls deep
+// (card linux-deep-recursion)
+enum { PROGRAM_STACK_BYTES = 256 << 20 };
+static int program_argc;
+static char** program_argv;
+static void* program_ran(void* unused) {
+	(void)unused;
+	int argc = program_argc;
+	char** argv = program_argv;
 	wasm_rt_init();
 	crash_reported();
 	running_with(argv, argc);
@@ -170,5 +180,17 @@ int main(int argc, char** argv) {
 	run_main(&program);
 	// the process ends: its memory and signal handlers with it (wasm_rt_free would warn that wasmtime's signal
 	// handling replaced wasm2c's alternate stack, core/native/driver.warp uncached_config)
+	return NULL;
+}
+int main(int argc, char** argv) {
+	program_argc = argc;
+	program_argv = argv;
+	pthread_attr_t attributes;
+	pthread_t thread;
+	pthread_attr_init(&attributes);
+	pthread_attr_setstacksize(&attributes, PROGRAM_STACK_BYTES);
+	// (no thread to be had: the program runs on the main thread's stack)
+	if (pthread_create(&thread, &attributes, program_ran, NULL) != 0) program_ran(NULL);
+	else pthread_join(thread, NULL);
 	return 0;
 }

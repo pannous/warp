@@ -221,7 +221,7 @@ appended(body: Body, target_name: Node, addition: Node): TypedCode? := {
 	# an instance whose class defines `+` adds by it, `total += run.distance` (the compound operators' arithmetic)
 	# beside a class's `+` a list held as a node still grows in place, so `xs += [o]` reaches the caller's list: decided
 	# by the value at run time, any other value added by the class's `+`
-	if target.kind == ValueKind.Node and adds_by_dispatcher(body) { return if target_name is symbol then appended_or_added(body, target_name, addition) else ø }
+	if target.kind == ValueKind.Node and adds_by_dispatcher(body) { return if read_again(target_name) then appended_or_added(body, target_name, addition) else ø }
 	if target.kind == ValueKind.Node and int_firsts(body, "+", target, added) { return assignment(body, target_name, int_first(body, "+", target, added, (left, right) => runtime_call("node_append", [left, right]))) }
 	if target.kind == ValueKind.Node { return assignment(body, target_name, runtime_call("node_append", [target, added])) }
 	ø
@@ -233,6 +233,8 @@ appended_or_added(body: Body, name: Node, addition: Node): TypedCode := {
 	chosen = Key(Key(appends, Op.Then, name), Op.Else, Key(name, Op.Assign, Key(name, Op.Add, added)))
 	expression_code(body, separated(bracketed([Key(added, Op.Assign, addition), chosen], ""), ";"))
 }
+# a name or a field of one, `xs`, `r.out`: read again without an effect, so appended_or_added may read it twice
+read_again(n: Node): bool := n is symbol or (is_key(n, Op.Dot) and read_again(key_of(n)) and value_of(n) is symbol)
 adds_by_dispatcher(body: Body): bool := plus_dispatcher in module.functions and body.function.name != plus_dispatcher
 # the statements in order, the value that of the last
 def sequence(body: Body, items: list): TypedCode {

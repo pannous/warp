@@ -156,14 +156,29 @@ library_on_disk(): map := {
 # each prebuilt module's source hash, against which it is checked: its keys are the modules `warp rebuild` prebuilt
 module_hashes(): map := {
 	hashes = {}
-	for module in library_modules() { hashes[module] = source_hash(std_module_text(module)) }
+	for module in prebuilt_module_names() { hashes[module] = source_hash(std_module_text(module)) }
 	hashes
 }
-# the modules `warp rebuild` prebuilds, as lib/ holds them: each file of lib/ defining something (aliases.warp, a
-# table, defines nothing), of lib/host/, and the runtime modules; never a hand-kept list (card whole-wasm-reads)
-library_modules(): list := {
-	top = modules_in("/").keys.filter(name => #definition_slices(std_module_text(name)) > 0)
-	top + modules_in(HOST_MODULES).keys + hooks().runtime_modules.filter(name => name not in top)
+# the modules `warp rebuild` prebuilds: the standard ones, lib/host/'s and the runtime modules, with every module they
+# use (a prebuilt module links those, decision no-lib-reads); any other module is compiled from its source with the
+# program using it, so a core change rebuilds only these (card module-prebuild-step: all of lib/ cost the build +32 %)
+global prebuilt_modules_held = ø
+prebuilt_module_names(): list := {
+	if prebuilt_modules_held == ø {
+		names = []
+		at = 0
+		pending = std_module_names + modules_in(HOST_MODULES).keys + hooks().runtime_modules
+		while at < #pending {
+			name = pending[at]
+			at += 1
+			if name not in names and std_module_text(name) != "" {
+				names += [name]
+				pending += used_modules(std_module_text(name))
+			}
+		}
+		prebuilt_modules_held = names
+	}
+	prebuilt_modules_held
 }
 # whether `warp rebuild` prebuilt the module, as the index's hashes say
 is_prebuilt_module(name: text): bool := library_index_section("hash").has(name)
