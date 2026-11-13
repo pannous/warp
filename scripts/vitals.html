@@ -370,7 +370,7 @@ function columnLines(snapshots, columns, container) {
   const hours = DATA.pace, container = document.getElementById("pace");
   const sum = (list, i) => list.reduce((a, h) => a + h[i], 0);
   const lastDay = hours.slice(-24);
-  document.getElementById("pace-note").textContent = `Pushes to main, from GitHub's record of the branch, and the commits reaching main, per hour. Last 24 hours: ${sum(lastDay, 1)} pushes, ${sum(lastDay, 2)} commits; since ${shortDay(hours[0][0].slice(0, 10))}: ${format(sum(hours, 1))} pushes, ${format(sum(hours, 2))} commits. Hover a bar for its hour.`;
+  document.getElementById("pace-note").textContent = `Pushes to main, from GitHub's record of the branch, and the commits each push brought, both by the hour of the push. Last 24 hours: ${sum(lastDay, 1)} pushes, ${sum(lastDay, 2)} commits; since ${shortDay(hours[0][0].slice(0, 10))}: ${format(sum(hours, 1))} pushes, ${format(sum(hours, 2))} commits. Hover a bar for its hour.`;
   const height = 200, top = Math.max(5, Math.ceil(Math.max(...hours.map(h => h[2])) / 5) * 5);
   const svg = element("svg", { viewBox: `0 0 ${WIDTH} ${height}`, role: "img", "aria-label": "landings and commits per hour" }, container);
   const plotWidth = WIDTH - PAD.left - PAD.right, plotHeight = height - PAD.top - PAD.bottom;
