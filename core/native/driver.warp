@@ -1539,6 +1539,8 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if same_text(module, "os") and same_text(member, "command") { return os_command(caller, context, listed, results) }
 	if same_text(module, "os") and same_text(member, "exec") { return os_exec(caller, context, listed, results) }
 	if same_text(module, "os") and same_text(member, "run") { return os_run(caller, context, listed, results) }
+	if same_text(module, "os") and same_text(member, "compile_wasm") { return os_wasm_compiled(caller, context, listed, results) }
+	if same_text(module, "os") and same_text(member, "run_wasm") { return os_wasm_ran(caller, context, listed, results) }
 	if same_text(module, "net") and same_text(member, "get") { return url_got(caller, context, shown(caller, context, item_of(caller, context, listed, 1)), results) }
 	if same_text(module, "warp") and same_text(member, "option") { return option_answered(caller, context, listed, results) }
 	if same_text(module, "warp") and same_text(member, "module_word") { return module_word_answered(caller, context, listed, results) }
@@ -1933,16 +1935,40 @@ system_value(name: text): i64 := {
 	exit(1)
 	0
 }
-# eval_code(t) (decision N31, the prelude's eval): warp.wasm compiles t as a program of its own,
-# beside the compiled program, its value printed as data after the value mark; it runs with what it prints written to a
-# file, what it printed before the value goes on to this run's output, and the value is built again in the module as
-# parse_code builds a tree. A text that fails to compile or run gives an Error saying why
+# eval_code(t) (decision N31, the prelude's eval): t compiled as a program of its own (module_of) and run, its value
+# given back (module_answered). A text that fails to compile or run gives an Error saying why
 code_evaluated(caller: handle, context: handle, given: pointer, result: pointer): nothing := {
-	stem = joined(compiled_path(), ".eval")
-	source = joined(stem, ".warp")
-	module = joined(stem, ".wasm")
-	printed = joined(stem, ".out")
-	write_file(source, shown(caller, context, given))
+	module = module_of(caller, context, shown(caller, context, given), "eval: ", result)
+	if module.length > 0 { module_answered(caller, context, module, program_arguments(eval_file(".warp"), arg_count()), "eval: ", result) }
+}
+# os.compile_wasm(code) (lib/os.warp compile): the module's bytes, as a text, of the code compiled as eval compiles it,
+# so os.run_wasm gives its value back
+os_wasm_compiled(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
+	module = module_of(caller, context, shown(caller, context, item_of(caller, context, listed, 1)), "os.compile_wasm: ", result)
+	unlink(eval_file(".out"))
+	if module.length > 0 { guest_text_of(caller, context, module, result) }
+}
+# os.run_wasm(bytes, arguments?) (lib/os.warp run(module: Wasm)): the module run in this process, the arguments its args
+os_wasm_ran(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
+	given = arguments()
+	added(given, "wasm")
+	if guest_number(caller, context, "item_count", listed) > 1 {
+		words = item_of(caller, context, listed, 2)
+		for i in 1..(guest_number(caller, context, "item_count", words) + 1) { added(given, shown(caller, context, item_of(caller, context, words, i))) }
+	}
+	bytes = item_of(caller, context, listed, 1)
+	module = if guest_flag(caller, context, "is_textual", bytes) then shown(caller, context, bytes) else text_from(c_bytes(caller, context, bytes), c_bytes_length(caller, context, bytes) as u32)
+	module_answered(caller, context, module, given, "os.run_wasm: ", result)
+}
+# eval's files, beside the compiled program
+eval_file(ending: text): text := joined(joined(compiled_path(), ".eval"), ending)
+# the code compiled by warp.wasm as a program of its own, of the current folder, whose run prints its value as data
+# after the value mark, its module's bytes; "" with the Error saying why (after `said`) in `result` when it fails.
+# What the compiler printed waits in eval_file(".out") for the run
+module_of(caller: handle, context: handle, code: text, said: text, result: pointer): text := {
+	source = eval_file(".warp")
+	module = eval_file(".wasm")
+	write_file(source, code)
 	library = library_folder()
 	compiling = compiler_arguments(compiler_path())
 	added(compiling, source)
@@ -1951,21 +1977,29 @@ code_evaluated(caller: handle, context: handle, given: pointer, result: pointer)
 	added(compiling, library)
 	added(compiling, joined(library, "/runtime.wasm"))
 	option_given(value_as_data_option(), "")
-	failure = run_into(read_file(compiler_path()), compiling, machine_code_file(compiler_path(), RUN_GC_HEAP_BYTES), RUN_GC_HEAP_BYTES, printed)
+	failure = run_into(read_file(compiler_path()), compiling, machine_code_file(compiler_path(), RUN_GC_HEAP_BYTES), RUN_GC_HEAP_BYTES, eval_file(".out"))
 	option_dropped(value_as_data_option())
-	if failure.length == 0 { failure = run_into(read_file(module), program_arguments(source, arg_count()), "", RUN_GC_HEAP_BYTES, printed) }
-	output = read_file(printed)
+	bytes = read_file(module)
 	unlink(source)
 	unlink(module)
+	if failure.length == 0 { return bytes }
+	unlink(eval_file(".out"))
+	guest_error(caller, context, joined(said, failure), result)
+	""
+}
+# a module run with the arguments `given`, what it prints written to eval_file(".out"): what it printed before its
+# value goes on to this run's output, the value built again in the caller as parse_code builds a tree; a module that
+# prints no value (not compiled by module_of) gives what it printed and ø. A trap gives an Error saying why (after `said`)
+module_answered(caller: handle, context: handle, module: text, given: Arguments, said: text, result: pointer): nothing := {
+	printed = eval_file(".out")
+	failure = run_into(module, given, "", RUN_GC_HEAP_BYTES, printed)
+	output = read_file(printed)
 	unlink(printed)
+	if failure.length > 0 { return guest_error(caller, context, joined(said, failure), result) }
 	mark = text_found(output, value_mark())
-	if failure.length > 0 or mark < 0 {
-		if failure.length == 0 { failure = output }
-		guest_text_of(caller, context, joined("eval: ", failure), result)
-		return guest_call(caller, context, "error_of", result, 1, result)
-	}
-	before: u32 = mark as u32
+	before: u32 = if mark < 0 then output.length else mark as u32
 	fd_write(1, text_from(output.address, before), 1, allocate(4))
+	if mark < 0 { return guest_call(caller, context, "new_empty", 0, 0, result) }
 	start: u32 = before + value_mark().length + 1
 	code_parsed_from(caller, context, text_from(output.address + start as i32, output.length - start), result)
 }
