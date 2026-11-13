@@ -298,7 +298,7 @@ methods_lifted(program: Node): Node := {
 	floaters = float_converters(classes, liftable, routes)
 	dispatchers = []
 	deferred_dispatchers = []
-	for name in methods.filter(method => method in routes or #owners_of(classes, liftable, method) > 1) {
+	for name in methods.filter(method => is_dispatched(classes, liftable, method, routes)) {
 		# a dispatcher for each parameter count the classes take the method with (Channel.more(), Interval.more(o)):
 		# the arity overloads tell the calls apart
 		for count in taken_counts(classes, liftable, name) {
@@ -532,8 +532,15 @@ value_dispatch(owners: list, values: map, fallback: Node): Node := {
 # whether the value is an instance of the class or of one extending it: the dispatchers' test, which `x is real` of
 # any number (decision real-canonical) does not answer
 instance_test(subject: Node, class_name: text): Node := call_of(HiddenWord.InstanceOf as text, [subject, class_name])
-# the function a class's method was lifted to: its own name when one class declares it and it is not routed
-lifted_name(classes: map, names: list, method: text, owning_class: text, routes: list): text := if #owners_of(classes, names, method) == 1 and method not in routes then method else owned_name(method, owning_class)
+# the function a class's method was lifted to: its own name when it has no dispatcher
+lifted_name(classes: map, names: list, method: text, owning_class: text, routes: list): text := if is_dispatched(classes, names, method, routes) then owned_name(method, owning_class) else method
+# whether calls of the method go through a dispatcher to each owner's function: a routed one, one several classes
+# declare, and every one of a module's class, which the module and each program linking it name alike whatever classes
+# the program adds (lib/complex's format·text·Complex beside a program's class formatting itself)
+is_dispatched(classes: map, names: list, method: text, routes: list): bool := {
+	owners = owners_of(classes, names, method)
+	method in routes or #owners > 1 or module.relocating or owners.any(owner => owner in linked_class_names())
+}
 
 # a class, its parent, the parent's parent… among the program's classes
 lineage(classes: map, name: text): list := if name in classes and classes[name].parent in classes then [name] + lineage(classes, classes[name].parent) else [name]
@@ -664,12 +671,11 @@ without_methods(top_statement: Node, view: list): Node := {
 	}
 }
 
-# the functions of the method `name`: the method itself when one class declares it, else each owner's (its dispatcher
+# the functions of the method `name`: the method itself when it has no dispatcher, else each owner's (its dispatcher
 # methods_lifted adds once the program is routed)
 functions_of(classes: map, names: list, method: text, routes: list): list := {
 	owners = owners_of(classes, names, method)
-	single = #owners == 1 and method not in routes
-	owners.flat_map(owning_class => methods_named(classes[owning_class], method).map(declared => method_function(classes, names, owning_class, declared, if single then method else owned_name(method, owning_class), routes)))
+	owners.flat_map(owning_class => methods_named(classes[owning_class], method).map(declared => method_function(classes, names, owning_class, declared, lifted_name(classes, names, method, owning_class, routes), routes)))
 }
 owned_name(method: text, owning_class: text): text := method + "·" + owning_class
 # the class's method as the function `name(self, parameters…)` of its instance
