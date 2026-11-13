@@ -44,6 +44,8 @@ MACHINE_PROBES = {
 	"gpu": "[ \"$(uname)\" = Darwin ]",
 	"display": "[ \"$(uname)\" = Darwin ]",
 	"cargo": "command -v cargo",
+	"packages": "[ -d packages/colors ]",
+	"uniscript": "[ -d packages/uniscript ]",
 	"network": "curl -sSf -m 5 -o /dev/null https://github.com",
 	"raylib": "ls /opt/homebrew/lib/libraylib* /usr/local/lib/libraylib* /usr/lib/*/libraylib* /usr/lib64/libraylib*"
 }
@@ -224,7 +226,16 @@ cases_in(file: text, source: text): list := {
 		parts = pair_parts(view) ?? check_parts(view)
 		if parts != ø { cases += [TestCase(file, statement_line(statement), parts#1, parts#2, whole_file + pair_needs(view))] }
 	}
-	cases
+	if file.ends_with(PAIRS_SUFFIX) { return cases }
+	lines = source.split("\n")
+	marked = []
+	for at in 1 to #cases {
+		case = cases#at
+		span_end = if at < #cases then cases#(at + 1).line - 1 else #lines
+		trailing = lines[case.line - 1 ..< span_end].filter(line => line.contains("// " + NEEDS_MARK)).flat_map(needs_in)
+		marked += [TestCase(case.file, case.line, case.code, case.expected, case.needs + trailing)]
+	}
+	marked
 }
 # the pair lines of a pairs file no case starts on: `'"I'm"'⇥"I'm"`'s unescaped ' opens a text that runs over the
 # next lines, which then are one statement and no pair; each such line fails loudly, never silently dropped. A case
