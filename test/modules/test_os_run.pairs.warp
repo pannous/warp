@@ -4,3 +4,9 @@
 'use os; run(["echo", "hi"])'	{status: 0, out: "hi", err: ""}
 'use os; r = run(["sh", "-c", "echo out; echo err >&2; exit 3"]); [r.out, r.err, r.status]'	["out", "err", 3]
 'use os; setenv("WARP_SET", "1"); env("WARP_SET")'	"1"
+
+# card native-serves: compile(code) is a Wasm the native warp runs in this process, run gives its value back
+'use os; run(compile("6*7"))'	42
+«use os; run(compile("print 'hi'; [1, 'x']"))»	[1, "x"]
+'use os; run(Wasm(compile("args").bytes, ["a", "b"]))'	["a", "b"]
+'use os; is_error(compile("1 +"))'	yes

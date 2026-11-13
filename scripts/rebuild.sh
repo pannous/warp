@@ -25,6 +25,7 @@
 # memory) and its function profile (profile.txt, sample.gz, perf.map: scripts/build-slot.sh WARP_BUILD_RECORD).
 set -uo pipefail
 STEPS=(seed optimize runtime modules)  # core/native/warp.warp rebuilt, in order
+COMPILER_PARTS=("" .driver.cwasm .driver.cwasm.key .driver.build.cwasm .driver.build.cwasm.key)  # a compiler file, then its machine code
 WARMING_PROGRAM=samples/hello/hello.warp  # run once before a measured self build (compiler_warmed)
 SHOWN_LINES=60  # of a failed step's output, printed before its log's path
 ERROR_LINE='[Ee]rror|refus|trap|panic|is missing|failed'  # the line of a longer failed step's output printed first
@@ -167,9 +168,8 @@ mark_main() {
 # the files `warp rebuild` writes beside a compiler, kept and fetched with it, as found in the folder: runtime.wasm
 # beside warp.wasm (card runtime-prebuilt) with its machine code, which linked runs load (card runtime-cwasm-shipped),
 # the standard modules in modules/ (card modules-prebuilt) and the library index, which a compile reads
-# (library.warp LIBRARY_INDEX; card store-hit-words-index) with the sugar's rules packed (rewrites.warp SUGAR_RULES_FILE);
-# and each compiler's own library, its builder's runtime and unicode module (modules.sh companion_files)
-companions() { (cd "$2" && ls $(companion_files "$1.wasm") $([ "$1" = warp ] && echo runtime.wasm.cwasm runtime.wasm 'modules/*.wasm' modules/index.tsv modules/sugar_rules.packed) 2>/dev/null); }
+# (library.warp LIBRARY_INDEX; card store-hit-words-index) with the sugar's rules packed (rewrites.warp SUGAR_RULES_FILE)
+companions() { [ "$1" = warp ] && (cd "$2" && ls runtime.wasm.cwasm runtime.wasm modules/*.wasm modules/index.tsv modules/sugar_rules.packed 2>/dev/null); }
 # an entry stored or fetched before index.tsv was kept with its modules gets it once, as `warp rebuild` writes it:
 # the modules step of its own compiler into a scratch folder, only the index taken (store-hit-words-index)
 words_kept() {
@@ -199,10 +199,9 @@ self_passed() { mkdir -p "$store/self-tested" && inputs_line >"$store/self-teste
 promoted_untested() {
 	local file=$compilers/warp-self.wasm part
 	[ -f "$compilers/warp.wasm" ] && [ "$(cut -d' ' -f1 "$compilers/warp.wasm.inputs" 2>/dev/null)" = "$hash" ] || return 1
-	for part in "" .driver.cwasm .driver.cwasm.key .driver.build.cwasm .driver.build.cwasm.key; do
-		[ -f "$compilers/warp.wasm$part" ] && copied "$compilers/warp.wasm$part" "$file$part"
+	for part in "${COMPILER_PARTS[@]}"; do
+		[ ! -f "$compilers/warp.wasm$part" ] || copied "$compilers/warp.wasm$part" "$file$part" || return 1
 	done
-	companion_copied "$compilers/warp.wasm" "$file"
 	inputs_line >"$file.inputs"
 	published warp-self
 }
@@ -275,7 +274,7 @@ reused_stored() {
 	local log=$1 stored=$store/code/$code_hash/warp.wasm new=$compilers/reusing-$$.wasm
 	[ -f "$stored" ] || return 1
 	logged warp "miss-reusing-$(basename "$(readlink "$store/code/$code_hash")")"
-	copied "$stored" "$new" && companion_copied "$stored" "$new" || return 1
+	copied "$stored" "$new" || return 1
 	echo "rebuild step runtime" >"$log"
 	modules_step_starts "$store/code/$code_hash"
 	if ! (cd "$tree" && rm -f "$compilers/runtime.wasm.cwasm" && "$warp" --lib "$lib" "$new" runtime "$compilers/runtime.wasm" &&
@@ -288,13 +287,14 @@ reused_stored() {
 	inputs_line >"$file.inputs"
 	code_kept
 }
-# compiler_moved <from> [<to>]: a compiler, with its machine code and library, moved (to lib/warp.wasm)
+# compiler_moved <from> [<to>]: a compiler, with its machine code, moved (to lib/warp.wasm); fails only when a move
+# does (a part it lacks is no failure: it ended a modules step that built every module with exit 1, card
+# modules-silent-failure)
 compiler_moved() {
 	local part to=${2:-$file}
-	for part in "" .driver.cwasm .driver.cwasm.key .driver.build.cwasm .driver.build.cwasm.key; do
-		[ -f "$1$part" ] && mv -f "$1$part" "$to$part"
+	for part in "${COMPILER_PARTS[@]}"; do
+		[ ! -f "$1$part" ] || mv -f "$1$part" "$to$part" || return 1
 	done
-	companion_copied "$1" "$to" && rm -rf "$1.library"
 }
 # the modules step of a build stopped after the runtime (`warp rebuild pure … to runtime`), on its warp.wasm.new: the
 # modules built in parallel in build slots (modules_built), then that compiler moved into place; failed, it stays
@@ -305,18 +305,26 @@ modules_step() {
 	echo "rebuild step modules" >>"$log"
 	# (run by the name of a compiler: the native warp takes any other file for warp source)
 	compiler_moved "$new" "$building"
-	(cd "$tree" && "$scripts/build-slot.sh" "$log" /usr/bin/time -p -o "$record/modules.time" bash "$scripts/lib/modules.sh" modules_built "$warp" "$lib" "$building" "$compilers/modules" "$compilers/runtime.wasm")
+	(cd "$tree" && "$scripts/build-slot.sh" "$log" /usr/bin/time -p -o "$record/modules.time" bash "$scripts/lib/modules.sh" modules_built "$warp" "$lib" "$building" "$compilers/modules" "$compilers/runtime.wasm" "$record/modules.counted")
 	status=$?
 	[ $status = 0 ] || { compiler_moved "$building" "$new"; return $status; }
+	# (the step's instructions, which its timer misses: they were retired by the processes it started)
+	[ ! -f "$record/modules.counted" ] || { cat "$record/modules.counted" >>"$record/modules.time"; rm -f "$record/modules.counted"; }
 	step_recorded "$record" "$record/modules.time"
 	compiler_moved "$building"
 }
-# step_recorded <record> <its time>: a step run after the measured build added to its record: its time and CPU to the
-# build's (time), and its start (steps), which the vitals page's build times read
+# step_recorded <record> <its time>: a step run after the measured build added to its record: its time, CPU and
+# instructions to the build's (time: `name value` lines of time -p, `value name` ones of time -l), and its start
+# (steps), which the vitals page's build times read
 step_recorded() {
 	local record=$1 timed=$2 end
 	[ -f "$record/time" ] && [ -f "$record/steps" ] && [ -f "$timed" ] || return 0
-	awk 'NR == FNR { added[$1] = $2; next } $1 in added { printf "%s %.2f\n", $1, $2 + added[$1]; next } { print }' "$timed" "$record/time" >"$record/time.new" && mv "$record/time.new" "$record/time"
+	awk 'function counted() { return $1 ~ /^[0-9]+$/ }
+		function name() { if (!counted()) return $1; n = $2; for (i = 3; i <= NF; i++) n = n " " $i; return n }
+		NR == FNR { added[name()] = counted() ? $1 : $2; next }
+		!(name() in added) { print; next }
+		counted() { printf "%20d  %s\n", $1 + added[name()], name(); next }
+		{ printf "%s %.2f\n", $1, $2 + added[$1] }' "$timed" "$record/time" >"$record/time.new" && mv "$record/time.new" "$record/time"
 	end=$(awk '$1 == "end" { print $2 }' "$record/steps")
 	sed_in_place '/^end /d' "$record/steps"
 	printf 'modules %s\nend %s\n' "$end" "$(awk -v end="$end" '$1 == "real" { printf "%d", end + $2 }' "$timed")" >>"$record/steps"
@@ -373,7 +381,6 @@ one() {
 	fi
 	local lane=(pure) from log=$store/$hash/$name.building/log record=$store/$hash/$name.building/record
 	recorded_inputs "$record"
-	"$scripts/seed-bootstrap.sh" "$warp" "${WARP_SEED:-$(seed_beside)}" "$lib"
 	# a stored compiler of this code reused, else this tree compiles it, else it waits for the tree compiling it
 	while [ -z "$force" ] && [ "$name" = warp ]; do
 		reused_stored "$log"
@@ -409,7 +416,7 @@ one() {
 
 # warp's wasmtime C API in lib/, which `warp build native` links the driver from (card wasmtime-bundled); a no-op when current;
 # first, so a failed build's last line is its step and log
-"$scripts/wasmtime-c-api.sh" "$lib" || echo "rebuild.sh: warp's wasmtime C API did not build (scripts/wasmtime-c-api.sh): native builds of the driver fail" >&2
+"$scripts/wasmtime-c-api.sh" --from "$tree" "$lib" || echo "rebuild.sh: warp's wasmtime C API did not build (scripts/wasmtime-c-api.sh): native builds of the driver fail" >&2
 result=0
 case $which in
 	pure) one warp || result=$? ;;

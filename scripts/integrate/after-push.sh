@@ -104,6 +104,7 @@ red() {
 # neither compared nor kept as a baseline. Clean builds of one stretch stay within ±3%.
 COST_JUMP_PERCENT=10
 COST_HISTORY=10
+COST_SINCE=f1de0e5d93  # a record before it counts no instructions of the modules step (card module-prebuild-step): no baseline
 cost_watched() {
 	local record=$1 hash timing now lowest history
 	history=$state/cost-$record
@@ -112,11 +113,19 @@ cost_watched() {
 	now=$(awk '/instructions retired/ {print $1}' "$timing" 2>/dev/null)
 	[ -n "$now" ] || return
 	grep -q '^commit .*+dirty' "$warp_store/$hash/$record/inputs.txt" 2>/dev/null && return
-	lowest=$(sort -n "$history" 2>/dev/null | head -1 | cut -d' ' -f1)
+	lowest=$(cost_comparable "$history" | sort -n | head -1)
 	{ echo "$now ${tip:0:10}"; head -n $((COST_HISTORY - 1)) "$history" 2>/dev/null; true; } >"$history.new" && mv "$history.new" "$history"
 	if [ -n "${lowest:-}" ] && [ $((now * 100)) -gt $((lowest * (100 + COST_JUMP_PERCENT))) ]; then
 		red "build cost: $record $(cost_in_tera "$lowest") T (lowest of the last $COST_HISTORY) → $(cost_in_tera "$now") T at ${tip:0:10} (+$(((now - lowest) * 100 / lowest))%)" --urgent
 	fi
+}
+# cost_comparable <history>: the counts of its builds of COST_SINCE or later
+cost_comparable() {
+	local count commit
+	[ -f "$1" ] || return 0
+	while read -r count commit; do
+		git -C "$TREE" merge-base --is-ancestor "$COST_SINCE" "$commit" 2>/dev/null && echo "$count"
+	done <"$1"
 }
 cost_in_tera() { awk -v n="$1" 'BEGIN {printf "%.2f", n / 1e12}'; }
 
@@ -128,7 +137,7 @@ copy_compilers() {
 	inputs=$(cut -d' ' -f1 "$from/warp.wasm.inputs")
 	for name in runtime.wasm warp.wasm warp-self.wasm; do
 		if [ $name = warp-self.wasm ] && [ "$(cut -d' ' -f1 "$from/$name.inputs" 2>/dev/null)" != "$inputs" ]; then
-			rm -rf "$folder/$name" "$folder/$name.cwasm" "$folder/$name.library"  # an older pair's: `warp self` says it is missing instead of running it
+			rm -rf "$folder/$name" "$folder/$name.cwasm"  # an older pair's: `warp self` says it is missing instead of running it
 			continue
 		fi
 		[ -d "$from/$name.kept" ] && mkdir -p "$folder/$name.kept" && cp -R "$from/$name.kept/." "$folder/$name.kept/"
@@ -136,7 +145,6 @@ copy_compilers() {
 			[ -f "$from/$part" ] || continue
 			cp "$from/$part" "$folder/$part.new" && mv "$folder/$part.new" "$folder/$part" || return 1
 		done
-		companion_copied "$from/$name" "$folder/$name" || return 1
 	done
 	# the prebuilt standard modules programs link to, the library index and the sugar's packed rules a compile reads (a
 	# module missing or older than its text is compiled from source, the rules without their file parsed)
@@ -238,8 +246,9 @@ install_native() {
 	# after-push-stage: 677282ce44's reals.warp on b5eb834c40's compilers made π / 2 'no field coefficient' for 30 min)
 	if [ -n "$early" ]; then
 		local installed
+		# (and the tip's wasmtime C API, which its native warp may call more of)
 		installed=$(installed_folder) && rsync -aL --exclude /warp "$installed/" "$folder.new/" &&
-			rsync -aL "$TREE/lib/compiler/native/" "$folder.new/compiler/native/"
+			rsync -aL "$TREE/lib/compiler/native/" "$folder.new/compiler/native/" && cp "$TREE/lib"/libwarp_wasmtime.* "$folder.new/"
 	else
 		rsync -aL --exclude /data "$TREE/lib/" "$folder.new/"
 	fi && cp "$TREE/scripts/warp-crate" "$folder.new/" || { "${failed[@]}" "native warp: lib/ did not copy" --urgent; rm -rf "$folder.new"; return 1; }
@@ -299,9 +308,9 @@ watch() {
 	# every stage builds with the installed native warp: without one, nothing installs (relink ~/dev/bin/warp by hand)
 	local missing
 	missing=$(installed_folder 2>&1 >/dev/null) || { red "$missing" --urgent; return 1; }
-	# warp's wasmtime C API in the user's lib/ too, where native builds link it from (card wasmtime-bundled); the tree's
-	# lib/ gets it from rebuild.sh
-	"$scripts/wasmtime-c-api.sh" "$MAIN_CHECKOUT/lib" ||
+	# warp's wasmtime C API of the tip, in the user's lib/, where native builds link it from (card wasmtime-bundled), and
+	# in the tree's, which stage one's native warp links before rebuild.sh runs
+	"$scripts/wasmtime-c-api.sh" --from "$TREE" "$MAIN_CHECKOUT/lib" "$TREE/lib" ||
 		red "wasmtime C API: scripts/wasmtime-c-api.sh failed" --urgent
 	# stage one: the native warp at once, when the tip's compilers are not in the store yet
 	local early=

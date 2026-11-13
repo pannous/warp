@@ -147,6 +147,8 @@ read_file(path: Node): Node := {
 	answer
 }
 
+# std_io("file", "read", [path]): core/host_io.warp read, as read_file
+std_file_read(path: Node): Node := read_file(path)
 # `use file; read_bytes(path)`: the file's bytes, ints 0 to 255; the Error of why not
 std_file_read_bytes(path: Node): Node := {
 	content = read_file(path)
