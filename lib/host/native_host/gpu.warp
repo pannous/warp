@@ -132,6 +132,9 @@ BLEND_STATE = 24
 FRAGMENT_STATE = 64
 RENDER_PIPELINE = 168
 COMPUTE_PIPELINE = 80
+BIND_GROUP_LAYOUT = 40
+LAYOUT_ENTRY = 120
+PIPELINE_LAYOUT = 48
 BUFFER_DESCRIPTOR = 48
 BIND_ENTRY = 56
 BIND_GROUP = 48
@@ -147,6 +150,14 @@ SURFACE_DESCRIPTOR = 24
 SURFACE_CONFIGURATION = 64
 SURFACE_TEXTURE = 24
 DEVICE_DESCRIPTOR = 144
+STAGE_COMPUTE = 4
+BUFFER_BINDING_STORAGE = 3
+BUFFER_BINDING_READ_ONLY = 4
+// a field (wiki graphics.md "Fields and passes"): a compute shader's fixed-length read_write array that no value names,
+// `var<storage, read_write> particles: array<vec4f, 4096>`, zeroed on the first frame and kept across the program's
+// frames; the draw reads it as values.particles (web/playground/host-gpu.js keptFields). Its elements' strides
+FIELD_STRIDES = [["f32", 4], ["i32", 4], ["u32", 4], ["atomic<", 4], ["vec2", 8], ["vec3", 16], ["vec4", 16]]
+FIELD_KEY = "field "
 
 // wgpu-native's functions, and C's copies: memcpy of a list's int32 cells, memmove of C memory
 // A callback info is 40 bytes passed by value (`bytes40`): a handle would be a pointer in a register, and this library reads the struct from the stack on x86-64.
@@ -164,6 +175,9 @@ wgpuDeviceCreateShaderModule(device: handle, descriptor: handle): handle from 'w
 wgpuDeviceCreateRenderPipeline(device: handle, descriptor: handle): handle from 'wgpu_native'
 wgpuDeviceCreateComputePipeline(device: handle, descriptor: handle): handle from 'wgpu_native'
 wgpuDeviceCreateBindGroup(device: handle, descriptor: handle): handle from 'wgpu_native'
+wgpuDeviceCreateBindGroupLayout(device: handle, descriptor: handle): handle from 'wgpu_native'
+wgpuDeviceCreatePipelineLayout(device: handle, descriptor: handle): handle from 'wgpu_native'
+wgpuPipelineLayoutRelease(layout: handle): void from 'wgpu_native'
 wgpuDeviceCreateBuffer(device: handle, descriptor: handle): handle from 'wgpu_native'
 wgpuDeviceCreateTexture(device: handle, descriptor: handle): handle from 'wgpu_native'
 wgpuDeviceCreateCommandEncoder(device: handle, descriptor: handle): handle from 'wgpu_native'
@@ -423,10 +437,11 @@ member_laid_out(layout: Layout, name: text, value: any): text := {
 		return ""
 	}
 	if name == WORKGROUPS_NAME {
-		if not (value is list) or value.any(item => item is list) { return "is one to three counts" }
-		if #value < 1 or #value > 3 { return "is one to three counts" }
+		// a count alone is one count, as the page reads it (host-gpu.js [asked].flat())
+		counts = if value is list then value else [value]
+		if counts.any(item => item is list) or #counts < 1 or #counts > 3 { return "is one to three counts" }
 		groups = []
-		for x in value {
+		for x in counts {
 			if not (x is int) or x < 1 { return "needs positive ints" }
 			groups.add(x)
 		}
@@ -847,7 +862,7 @@ previous_kept(image: int) := {
 
 // --- a drawing: the shader's pipeline for a target format, its values bound; corners and instances: a full image's
 // triangle once, or the quads of a shader with its own vertex stage
-class Drawing { pipeline: int, bindings: int, previous: int, reads_previous: bool, corners: int, instances: int, depth: bool, index_buffer: int, index_count: int, width: int, height: int, named: list, compute: text, workgroups: list, indirect_buffer: int, indirect_words: int, compute_pipeline: int, compute_bindings: int }
+class Drawing { pipeline: int, bindings: int, previous: int, reads_previous: bool, corners: int, instances: int, depth: bool, index_buffer: int, index_count: int, width: int, height: int, named: list, compute: text, workgroups: list, indirect_buffer: int, indirect_words: int, compute_pipelines: list, compute_bindings: int }
 drawing_made(shader: text, values: map, width: int, height: int): any := {
 	gpu_failure = ""
 	if not device_ready() { return ø }
@@ -867,15 +882,17 @@ drawing_made(shader: text, values: map, width: int, height: int): any := {
 		failed("an indexed indirect draw is five numbers")
 		return ø
 	}
-	drawing = Drawing(0, 0, 0, names(shader, PREVIOUS_HOLE), if quads then QUAD_CORNERS else TRIANGLE_CORNERS, if quads or indexed then layout.instances else 1, layout.depth, 0, #layout.indices, width, height, [], layout.compute, layout.workgroups, 0, #layout.indirect, 0, 0)
+	drawing = Drawing(0, 0, 0, names(shader, PREVIOUS_HOLE), if quads then QUAD_CORNERS else TRIANGLE_CORNERS, if quads or indexed then layout.instances else 1, layout.depth, 0, #layout.indices, width, height, [], layout.compute, layout.workgroups, 0, #layout.indirect, [], 0)
 	body = if drawing.reads_previous then renamed(shader, PREVIOUS_HOLE, PREVIOUS_FUNCTION) else shader
+	fields = compute_fields(layout.compute, values)
+	if fields is bool { return ø }
 	// each storage array the shader reads: `values.mesh` its own array warp_values_mesh
 	read_arrays = []
-	for array in layout.arrays {
-		hole = VALUES_NAME + "." + array[0]
+	for name in layout.arrays.map(array => array[0]) + fields.map(field => field.name) {
+		hole = VALUES_NAME + "." + name
 		if not names(body, hole) { continue }
-		body = renamed(body, hole, STORAGE_PREFIX + array[0])
-		read_arrays.add(array)
+		body = renamed(body, hole, STORAGE_PREFIX + name)
+		read_arrays.add(name)
 	}
 	if #read_arrays > MOST_COMPUTE_ARRAYS {
 		failed("a paint binds at most 8 arrays")
@@ -883,7 +900,7 @@ drawing_made(shader: text, values: map, width: int, height: int): any := {
 	}
 	code = body + (if own_vertex_stage(shader) != "" then "" else FULL_IMAGE_VERTICES)
 	if #layout.declarations > 0 { code += "\nstruct WarpValues { " + layout.declarations.join(", ") + " }\n@group(0) @binding(" + VALUES_BINDING + ") var<uniform> " + VALUES_NAME + ": WarpValues;" }
-	for i in 0 ..< #read_arrays { code += "\n@group(0) @binding(" + (STORAGE_BINDING + i) + ") var<storage, read> " + STORAGE_PREFIX + read_arrays[i][0] + ": array<vec4f>;" }
+	for i in 0 ..< #read_arrays { code += "\n@group(0) @binding(" + (STORAGE_BINDING + i) + ") var<storage, read> " + STORAGE_PREFIX + read_arrays[i] + ": " + read_type(read_arrays[i], fields) + ";" }
 	if drawing.reads_previous { code += PREVIOUS_FRAME }
 	drawing.pipeline = pipeline_of(code, FORMAT_RGBA8, drawing.depth, indexed)
 	if drawing.pipeline == 0 { return ø }
@@ -906,8 +923,12 @@ drawing_made(shader: text, values: map, width: int, height: int): any := {
 		stored[array[0]] = made
 		drawing.named.add([array[0], made[0], made[1]])
 	}
+	for field in fields {
+		stored[field.name] = [field.buffer, field.bytes]
+		drawing.named.add([field.name, field.buffer, field.bytes, FIELD_KEY])
+	}
 	for i in 0 ..< #read_arrays {
-		item = stored[read_arrays[i][0]]
+		item = stored[read_arrays[i]]
 		entries.add([STORAGE_BINDING + i, item[0], item[1], 0])
 	}
 	if #entries > 0 { drawing.bindings = bindings_of(wgpuRenderPipelineGetBindGroupLayout(drawing.pipeline, 0), entries) }
@@ -927,14 +948,80 @@ drawing_made(shader: text, values: map, width: int, height: int): any := {
 drawing_released(drawing: Drawing) := {
 	if drawing.bindings != 0 { wgpuBindGroupRelease(drawing.bindings) }
 	if drawing.compute_bindings != 0 { wgpuBindGroupRelease(drawing.compute_bindings) }
-	if drawing.compute_pipeline != 0 { wgpuComputePipelineRelease(drawing.compute_pipeline) }
+	for pipeline in drawing.compute_pipelines { wgpuComputePipelineRelease(pipeline) }
 	if drawing.previous != 0 { wgpuTextureViewRelease(drawing.previous) }
 }
-compute_pipeline_made(compiled: int): int := {
+// the pipeline of one entry point, laid out as `layout` says (0: as the shader's bindings say, gpu_compute's `main`)
+compute_pipeline_made(compiled: int, layout: int, entry_point: text): int := {
 	descriptor = struct_of(COMPUTE_PIPELINE)
+	set_field_pointer(descriptor, 24, layout)
 	set_field_pointer(descriptor, 40, compiled)
-	string_set(descriptor, 48, COMPUTE_ENTRY_POINT)
+	string_set(descriptor, 48, entry_point)
 	wgpuDeviceCreateComputePipeline(device, descriptor)
+}
+// gpu_compute's one pipeline, its entry point `main`
+main_pipeline_made(compiled: int): int := compute_pipeline_made(compiled, 0, COMPUTE_ENTRY_POINT)
+// the entry points of a compute shader, `@compute @workgroup_size(64) fn step(…)`, in source order: its passes
+compute_entry_points(shader: text): list := {
+	parts = shader.split("@compute")
+	[leading(part.split("fn ")[1].trim(), NAME_BYTES) for part in parts[1 ..] if part.contains("fn ")]
+}
+// one bind group layout for every pass of a compute shader, so each binds all its arrays, those it leaves unread too
+compute_group_layout(declared: list): int := {
+	entries = calloc(#declared, LAYOUT_ENTRY)
+	for i in 0 ..< #declared {
+		at = i * LAYOUT_ENTRY
+		set_field_i32(entries, at + 8, declared[i].binding)
+		set_field_i64(entries, at + 16, STAGE_COMPUTE)
+		set_field_i32(entries, at + 40, if declared[i].writes then BUFFER_BINDING_STORAGE else BUFFER_BINDING_READ_ONLY)
+	}
+	descriptor = struct_of(BIND_GROUP_LAYOUT)
+	set_field_i64(descriptor, 24, #declared)
+	set_field_pointer(descriptor, 32, entries)
+	layout = wgpuDeviceCreateBindGroupLayout(device, descriptor)
+	free(entries)
+	free(descriptor)
+	layout
+}
+pipeline_layout_of(group: int): int := {
+	groups = calloc(1, 8)
+	set_field_pointer(groups, 0, group)
+	descriptor = struct_of(PIPELINE_LAYOUT)
+	set_field_i64(descriptor, 24, 1)
+	set_field_pointer(descriptor, 32, groups)
+	layout = wgpuDeviceCreatePipelineLayout(device, descriptor)
+	free(groups)
+	free(descriptor)
+	layout
+}
+class Field { name: text, type: text, buffer: int, bytes: int }
+// the compute shader's fields, each its kept buffer; no where one holds what a field cannot (said through failed)
+compute_fields(compute: text, values: map): any := {
+	fields = []
+	for array in storage_arrays(compute) {
+		length = field_length(array.type)
+		if not array.writes or length == 0 or values.get(array.name) != ø { continue }
+		element = array.type.split("<")[1 ..].join("<").split(",")[0].trim()
+		strides = FIELD_STRIDES.filter(stride => element.starts_with(stride[0]))
+		if #strides == 0 {
+			failed("the field " + array.name + " holds " + element + ": a field's elements are numbers or vectors of them")
+			return no
+		}
+		bytes = strides[0][1] * length
+		fields.add(Field(array.name, array.type, kept_buffer(FIELD_KEY + array.name + ": " + array.type, bytes, BUFFER_STORAGE), bytes))
+	}
+	fields
+}
+// the length of a fixed-length array type, `array<f32, 64>` 64; 0 for one sized at run time
+field_length(type: text): int := {
+	parts = type.split(",")
+	digits = if #parts < 2 then "" else leading(parts.last().trim(), "0123456789")
+	if digits == "" then 0 else int(digits)
+}
+// how the draw declares an array it reads: a field its own type, an atomic read as its plain number; a value's vec4fs
+read_type(name: text, fields: list): text := {
+	found = fields.filter(field => field.name == name)
+	if #found == 0 then "array<vec4f>" else found[0].type.replace("atomic<u32>", "u32").replace("atomic<i32>", "i32")
 }
 // the compute shader writes the buffers the draw then reads, including the indirect words
 compute_dispatched(encoder: int, drawing: Drawing): bool := {
@@ -942,17 +1029,8 @@ compute_dispatched(encoder: int, drawing: Drawing): bool := {
 		failed("the compute shader needs @compute fn main")
 		return no
 	}
-	wgpuDevicePushErrorScope(device, ERROR_FILTER_VALIDATION)
-	compiled = shader_module(drawing.compute)
-	pipeline = compute_pipeline_made(compiled)
-	wgpuShaderModuleRelease(compiled)
-	if not scope_clean() {
-		if pipeline != 0 { wgpuComputePipelineRelease(pipeline) }
-		return no
-	}
 	declared = storage_arrays(drawing.compute)
 	if #declared > MOST_COMPUTE_ARRAYS {
-		wgpuComputePipelineRelease(pipeline)
 		failed("a compute shader binds at most 8 arrays")
 		return no
 	}
@@ -965,29 +1043,41 @@ compute_dispatched(encoder: int, drawing: Drawing): bool := {
 		}
 		found = drawing.named.filter(item => item[0] == array.name)
 		if #found == 0 {
-			wgpuComputePipelineRelease(pipeline)
 			failed("the compute shader's array " + array.name + " has no values")
 			return no
 		}
+		// a field holds what its shader says; the program's values are floats
 		integer = array.element == "u32" or array.element == "i32"
-		if integer and array.name != INDICES_NAME and array.name != INDIRECT_NAME {
-			wgpuComputePipelineRelease(pipeline)
+		named = found[0]
+		if integer and #named < 4 and array.name != INDICES_NAME and array.name != INDIRECT_NAME {
 			failed(array.name + " is float values, and the compute shader asks for " + array.element)
 			return no
 		}
 		entries.add([array.binding, found[0][1], found[0][2], 0])
 	}
 	if #entries == 0 {
-		wgpuComputePipelineRelease(pipeline)
 		failed("the compute shader declares no storage array")
 		return no
 	}
-	drawing.compute_pipeline = pipeline
-	drawing.compute_bindings = bindings_of(wgpuComputePipelineGetBindGroupLayout(pipeline, 0), entries)
+	// each @compute entry point a pass, in source order, over the same bindings
+	group_layout = compute_group_layout(declared)
+	layout = pipeline_layout_of(group_layout)
+	wgpuDevicePushErrorScope(device, ERROR_FILTER_VALIDATION)
+	compiled = shader_module(drawing.compute)
+	drawing.compute_pipelines = [compute_pipeline_made(compiled, layout, entry_point) for entry_point in compute_entry_points(drawing.compute)]
+	wgpuShaderModuleRelease(compiled)
+	wgpuPipelineLayoutRelease(layout)
+	if not scope_clean() {
+		wgpuBindGroupLayoutRelease(group_layout)
+		return no
+	}
+	drawing.compute_bindings = bindings_of(group_layout, entries)
 	pass = wgpuCommandEncoderBeginComputePass(encoder, 0)
-	wgpuComputePassEncoderSetPipeline(pass, pipeline)
-	wgpuComputePassEncoderSetBindGroup(pass, 0, drawing.compute_bindings, 0, 0)
-	wgpuComputePassEncoderDispatchWorkgroups(pass, drawing.workgroups[0], drawing.workgroups[1], drawing.workgroups[2])
+	for pipeline in drawing.compute_pipelines {
+		wgpuComputePassEncoderSetPipeline(pass, pipeline)
+		wgpuComputePassEncoderSetBindGroup(pass, 0, drawing.compute_bindings, 0, 0)
+		wgpuComputePassEncoderDispatchWorkgroups(pass, drawing.workgroups[0], drawing.workgroups[1], drawing.workgroups[2])
+	}
 	wgpuComputePassEncoderEnd(pass)
 	wgpuComputePassEncoderRelease(pass)
 	yes
@@ -1023,7 +1113,7 @@ pyramid_reduced(encoder: int, depth_view: int, width: int, height: int): bool :=
 		if pyramid_pipeline != 0 { wgpuComputePipelineRelease(pyramid_pipeline) }
 		wgpuDevicePushErrorScope(device, ERROR_FILTER_VALIDATION)
 		compiled = shader_module(code)
-		pipeline = compute_pipeline_made(compiled)
+		pipeline = main_pipeline_made(compiled)
 		wgpuShaderModuleRelease(compiled)
 		if not scope_clean() {
 			if pipeline != 0 { wgpuComputePipelineRelease(pipeline) }
@@ -1384,7 +1474,7 @@ shown_again() := {
 // declares the storage array of that name, f32 unless array<i32> or array<u32>; the arrays it left come back as a map,
 // in the order given. `arrays` a list: the numbers at @binding(0), they come back as a list. A GPU list's cells
 // (extensions/gpu_lists) are the program's memory, read and written where they are
-class StorageArray { name: text, binding: int, element: text, given: any, place: int, cell: text }
+class StorageArray { name: text, binding: int, element: text, given: any, place: int, cell: text, writes: bool, type: text }
 // the storage arrays the shader declares: `@binding(1) var<storage, read_write> counts: array<i32>`
 storage_arrays(shader: text): list := {
 	declared = []
@@ -1398,7 +1488,8 @@ storage_arrays(shader: text): list := {
 		name = leading(declaration, NAME_BYTES)
 		element = "f32"
 		for cell in ["i32", "u32", HALF] { if declaration.contains("array<" + cell) { element = cell } }
-		declared.add(StorageArray(name, binding, element, ø, -1, ""))
+		type = declaration.split(":")[1 ..].join(":").split(";")[0].trim()
+		declared.add(StorageArray(name, binding, element, ø, -1, "", parts[i].split(">")[0].contains("read_write"), type))
 	}
 	declared
 }
@@ -1459,7 +1550,7 @@ cell_number(element: text, bits: int): any := if element == "f32" then f32_float
 arrays_computed(shader: text, order: list, workgroups: int): any := {
 	wgpuDevicePushErrorScope(device, ERROR_FILTER_VALIDATION)
 	compiled = shader_module(shader)
-	pipeline = compute_pipeline_made(compiled)
+	pipeline = main_pipeline_made(compiled)
 	wgpuShaderModuleRelease(compiled)
 	if not scope_clean() {
 		if pipeline != 0 { wgpuComputePipelineRelease(pipeline) }

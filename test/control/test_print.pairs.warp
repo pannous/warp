@@ -10,6 +10,6 @@
 
 # an_empty_map_joins_as_empty
 'print({})'	ø
-'{} as text'	'ø'
-'"a" + {}'	'aø'
-'x = {}; "a" + x'	'aø'
+'{} as text'	'{}'
+'"a" + {}'	'a{}'
+'x = {}; "a" + x'	'a{}'
