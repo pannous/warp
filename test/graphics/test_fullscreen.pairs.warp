@@ -1,0 +1,5 @@
+// fullscreen(): the window fills the screen, fullscreen(no) back, as window.fullscreen = yes does (card allow-2, the
+// playground's bug button: the page grants it only right after the viewer's run key or click). Without a window, or
+// after fullscreen(no), the window does not fill the screen
+'fullscreen(no); window.fullscreen'	no
+'fullscreen(); fullscreen(no); window.fullscreen'	no
