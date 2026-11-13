@@ -81,13 +81,13 @@ migrated(name: text, model: any) := {
 	fields = column_fields(name, blank)
 	types = fields.map(field => value_type(blank[field]))
 	columns = (1 to count(fields)).map(i => quoted_name(fields#i) + " " + COLUMN_TYPES[types#i])
-	run_query(opened_database(), "create table if not exists " + quoted_name(name) + " (" + columns.join(", ") + ")")
+	run(opened_database(), "create table if not exists " + quoted_name(name) + " (" + columns.join(", ") + ")")
 	present = rows(opened_database(), "select name from pragma_table_info(" + "'" + name.replace("'", "''") + "')").map(row => row#1)
 	defaults = fields.map(field => blank[field])
 	for i in 1 to count(fields) {
 		if fields#i not in present {
-			run_query(opened_database(), "alter table " + quoted_name(name) + " add column " + columns#i)
-			run_bound(opened_database(), "update " + quoted_name(name) + " set " + quoted_name(fields#i) + " = ?", [defaults#i])
+			run(opened_database(), "alter table " + quoted_name(name) + " add column " + columns#i)
+			run(opened_database(), "update " + quoted_name(name) + " set " + quoted_name(fields#i) + " = ?", [defaults#i])
 		}
 	}
 	fields
@@ -163,7 +163,7 @@ stored_count(name: text, model: any) := {
 stored_selected(name: text, model: any, tail: text, values: list) := {
 	fields = migrated(name, model)
 	units = units_of(name)
-	rows_bound(opened_database(), "select " + selected(fields) + " from " + quoted_name(name) + tail, values).map(row => loaded_row(name, model, fields, row, units))
+	rows(opened_database(), "select " + selected(fields) + " from " + quoted_name(name) + tail, values).map(row => loaded_row(name, model, fields, row, units))
 }
 // the instance of a row read, the one read before if any: kept for a rollback, known before its foreign keys are read
 loaded_row(name: text, model: any, fields: list, row: list, units: map) := {
@@ -182,7 +182,7 @@ kept_instance(instance: any) := {
 stored_add(name: text, instance: any) := {
 	fields = migrated(name, type(instance))
 	marks = fields.map(field => "?").join(", ")
-	run_bound(opened_database(), "insert into " + quoted_name(name) + " (" + fields.map(quoted_name).join(", ") + ") values (" + marks + ")", column_values(name, instance, fields))
+	run(opened_database(), "insert into " + quoted_name(name) + " (" + fields.map(quoted_name).join(", ") + ") values (" + marks + ")", column_values(name, instance, fields))
 	if has_row_id(instance) {
 		instance[ROW_ID] = sqlite3_last_insert_rowid(opened_database())
 		loaded_rows[loaded_key(name, instance[ROW_ID])] = instance
@@ -194,7 +194,7 @@ stored_written(instance: any, value: any) := {
 	name = kept_tables["${type(instance)}"]
 	if name == ø or not has_row_id(instance) or instance[ROW_ID] == 0 { return value }
 	fields = column_fields(name, instance)
-	run_bound(opened_database(), "update " + quoted_name(name) + " set " + fields.map(field => quoted_name(field) + " = ?").join(", ") + " where " + ROWID + " = ?", column_values(name, instance, fields) + [instance[ROW_ID]])
+	run(opened_database(), "update " + quoted_name(name) + " set " + fields.map(field => quoted_name(field) + " = ?").join(", ") + " where " + ROWID + " = ?", column_values(name, instance, fields) + [instance[ROW_ID]])
 	value
 }
 // the fields' values as their columns hold them: a quantity as its amount in SI units, a float (REAL), its unit kept for the column
@@ -202,7 +202,7 @@ column_values(name: text, instance: any, fields: list) := fields.map(field => co
 column_value(name: text, field: text, value: any) := {
 	if relation_of(name, field) != ø and value != ø { return value[ROW_ID] }
 	if not (value is Quantity) { return value }
-	run_bound(units_database(), "insert or replace into " + quoted_name(UNITS_TABLE) + " (tbl, field, unit) values (?, ?, ?)", [name, field, value.unit])
+	run(units_database(), "insert or replace into " + quoted_name(UNITS_TABLE) + " (tbl, field, unit) values (?, ?, ?)", [name, field, value.unit])
 	column_amount(value.amount)
 }
 // a quantity's amount in SI units as its column holds it: a float, a tolerance (lib/uncertain's Interval) its value and
@@ -214,13 +214,13 @@ amount_of(stored: any) := {
 	Interval(stored.split(" ± ")#1 as float, bounds#1 as float, bounds#2 as float)
 }
 units_database() := {
-	run_query(opened_database(), "create table if not exists " + quoted_name(UNITS_TABLE) + " (tbl TEXT, field TEXT, unit TEXT, primary key (tbl, field))")
+	run(opened_database(), "create table if not exists " + quoted_name(UNITS_TABLE) + " (tbl TEXT, field TEXT, unit TEXT, primary key (tbl, field))")
 	opened_database()
 }
 // the unit of each of the table's columns holding quantities, by field
 units_of(name: text) := {
 	found = {}
-	for row in rows_bound(units_database(), "select field, unit from " + quoted_name(UNITS_TABLE) + " where tbl = ?", [name]) { found[row#1] = row#2 }
+	for row in rows(units_database(), "select field, unit from " + quoted_name(UNITS_TABLE) + " where tbl = ?", [name]) { found[row#1] = row#2 }
 	found
 }
 // an amount in SI units as the quantity shown in the unit
@@ -231,7 +231,7 @@ quantity_in(amount: any, unit: text) := {
 // the instance's row deleted, the instance keeping its fields with id 0; the instance
 stored_removed(name: text, instance: any) := {
 	if has_row_id(instance) and instance[ROW_ID] != 0 {
-		run_bound(opened_database(), "delete from " + quoted_name(name) + " where " + ROWID + " = ?", [instance[ROW_ID]])
+		run(opened_database(), "delete from " + quoted_name(name) + " where " + ROWID + " = ?", [instance[ROW_ID]])
 		loaded_rows.remove(loaded_key(name, instance[ROW_ID]))
 		instance[ROW_ID] = 0
 	}
@@ -241,13 +241,13 @@ stored_removed(name: text, instance: any) := {
 // `transaction { … }`: every write of the block lands, or none: a failure rolls the database back, gives each kept
 // instance its row's values again and is raised again; the block's value
 stored_transaction(block: function) := {
-	run_query(opened_database(), "begin")
+	run(opened_database(), "begin")
 	try {
 		value = block()
-		run_query(opened_database(), "commit")
+		run(opened_database(), "commit")
 		value
 	} catch failure {
-		run_query(opened_database(), "rollback")
+		run(opened_database(), "rollback")
 		for instance in kept_instances { row_restored(instance) }
 		raise failure
 	}
@@ -256,7 +256,7 @@ row_restored(instance: any) := {
 	name = kept_tables["${type(instance)}"]
 	if name == ø or not has_row_id(instance) or instance[ROW_ID] == 0 { return instance }
 	fields = column_fields(name, instance)
-	found = rows_bound(opened_database(), "select " + selected(fields) + " from " + quoted_name(name) + " where " + ROWID + " = ?", [instance[ROW_ID]])
+	found = rows(opened_database(), "select " + selected(fields) + " from " + quoted_name(name) + " where " + ROWID + " = ?", [instance[ROW_ID]])
 	if count(found) == 0 { instance[ROW_ID] = 0 } else { row_read(instance, name, fields, found#1, units_of(name)) }
 	instance
 }
@@ -264,7 +264,7 @@ row_restored(instance: any) := {
 // the table's rows made those of the list, each instance a row in its order; the list
 stored_save(name: text, instances: list) := {
 	if count(instances) > 0 { migrated(name, type(instances#1)) }
-	if table_exists(name) { run_query(opened_database(), "delete from " + quoted_name(name)) }
+	if table_exists(name) { run(opened_database(), "delete from " + quoted_name(name)) }
 	for instance in instances { stored_add(name, instance) }
 	instances
 }
@@ -272,10 +272,10 @@ table_exists(name: text) := rows(opened_database(), "select name from sqlite_mas
 
 // the program's database with its table of named values, made at the first use
 values_database() := {
-	run_query(opened_database(), "create table if not exists " + quoted_name(VALUES_TABLE) + " (name TEXT PRIMARY KEY, value)")
+	run(opened_database(), "create table if not exists " + quoted_name(VALUES_TABLE) + " (name TEXT PRIMARY KEY, value)")
 	opened_database()
 }
-kept_rows(name: text) := rows_bound(values_database(), "select value from " + quoted_name(VALUES_TABLE) + " where name = ?", [name])
+kept_rows(name: text) := rows(values_database(), "select value from " + quoted_name(VALUES_TABLE) + " where name = ?", [name])
 // the value kept under the name, the default the first time, which is kept then
 stored_value(name: text, default: any) := {
 	found = kept_rows(name)
@@ -288,7 +288,7 @@ stored_got(name: text) := {
 }
 // the value under the name forgotten; ø
 stored_forgot(name: text) := {
-	run_bound(values_database(), "delete from " + quoted_name(VALUES_TABLE) + " where name = ?", [name])
+	run(values_database(), "delete from " + quoted_name(VALUES_TABLE) + " where name = ?", [name])
 	ø
 }
 // the values of `session[k]`, kept while the run lasts
@@ -301,6 +301,6 @@ storage() := {
 }
 // the value kept under the name; the value
 stored_put(name: text, value: any) := {
-	run_bound(values_database(), "insert or replace into " + quoted_name(VALUES_TABLE) + " (name, value) values (?, ?)", [name, value])
+	run(values_database(), "insert or replace into " + quoted_name(VALUES_TABLE) + " (name, value) values (?, ?)", [name, value])
 	value
 }

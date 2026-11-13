@@ -35,3 +35,17 @@ the rest; not measured apart yet).
 `s = 0.0; for i in 1..n { s = s + sqrt(i) }` keeps an exact radical sum (`.0` is exact, roots stay exact): 1000 steps
 ~55 s, 2000 past a minute. `as float` puts such a loop on floats (wiki/Footguns.md); the warning decision
 exact-decimal-big promises is missing (card loop-summing).
+
+## Constant tables cost milliseconds (2026-11-13, card constant-data)
+The Unicode case tables (core/runtime/case_tables.warp, 9636 ints in three texts) are parsed when first used:
+`upper(…)` builds its table lazily, `use case_table` builds all three when the module loads. Measured end to end:
+
+| program | seconds |
+|---|---|
+| `print "straße"` | 0.07–0.09 |
+| `print upper("straße")` (builtin, one table) | 0.08 |
+| `use case_table; print "x"` (module linked, three tables built) | 0.09–0.10 |
+| `use case_tables`, all three tables parsed once more | 0.11 |
+
+About 15 ms for all three: a bytes or int-array literal emitted as a data segment (array.new_data) would save that,
+for core emitter work, so none is built until a table is large enough to show in a program's time.
