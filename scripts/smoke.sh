@@ -31,12 +31,12 @@ base=$(git -C "$tree" merge-base origin/main HEAD) || exit 2
 changed=$({ git -C "$tree" diff --name-only "$base" HEAD; git -C "$tree" diff --name-only HEAD; } | sort -u)
 code_changed=$(echo "$changed" | grep -E "$CODE_PATHS" | grep -v '^core/native/')  # the native warp is no compiler input (compiler-inputs.sh)
 # the native driver's sources (card smoke-sh): a change here cannot be seen by the installed driver
-native_changed=$(echo "$changed" | grep '^core/native/' || true)
-# 16 hex digits of the tree's core/native/*.warp, the way compiler-inputs.sh hashes a compiler's inputs
+native_changed=$(echo "$changed" | grep -E '^(core/native/|lib/native/.*\.c$)' || true)
+# 16 hex digits of the tree's core/native/*.warp and lib/native/*.c (the C main every native build has), the way compiler-inputs.sh hashes a compiler's inputs
 native_inputs_hash() {
 	local tree=$1
 	{
-		(cd "$tree" && find core/native -type f -name '*.warp' | env LC_ALL=C sort) | while IFS= read -r file; do
+		(cd "$tree" && { find core/native -type f -name '*.warp'; find lib/native -type f -name '*.c'; } | env LC_ALL=C sort) | while IFS= read -r file; do
 			printf '%s\0' "$file"
 			cat "$tree/$file"
 			printf '\0'
