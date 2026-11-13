@@ -57,15 +57,19 @@ class real_sum {
 }
 # whether x is a value kept exact: a whole number or a fraction, a real, a sum of them; never a float
 exact_value_is(x: any): bool := (x is number and not (x is float)) or exact_real(x) or x is real_sum
-# x to a whole power, exact by multiplying (√3^2 is 3, π² is π², √π² is π); to any other power, or one past
-# largest_exact_power, the float's
-largest_exact_power = 64
+# x to a whole power, exact by squaring as an int's (√3^2 is 3, π² is π², √π² is π, √2^100 is 2^50); to any other
+# power, or of an exact base to a real one (2^π), the float's
 exact_power(x: any, n: any) := {
-	if not (n is int) or abs(n) > largest_exact_power { return real_float(x) ^ n }
+	if not (n is int) { return (real_float(x) as float) ^ (real_float(n) as float) }
 	if n < 0 { return 1 / exact_power(x, -n) }
-	if n == 0 { return 1 }
-	power = x
-	for _ in 1 ..< n { power = power * x }
+	power = 1
+	square = x
+	left = n
+	while left > 0 {
+		if left % 2 == 1 { power = square * power }
+		left = left ÷ 2
+		if left > 0 { square = square * square }
+	}
 	power
 }
 terms_of(x: any): list := if x is real_sum then x.terms else [x]
