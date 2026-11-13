@@ -227,6 +227,8 @@ modules_reached(module: text, seen: list): list := {
 # the index and the sugar's rules packed as lib/ lies now, written into the modules folder; this run goes on with
 # them, the host words made anew
 write_library_index(folder: text) := {
+	global host_words_held
+	global sugar_rules_held
 	# (each section scanned, none read off an earlier index: the word section asks the host words)
 	index_sections_held = {}
 	host_words_held = ø

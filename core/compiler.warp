@@ -58,6 +58,9 @@ left_out_runtime_words(kept: list): list := {
 # runtime.wasm, a library module behind it, its operands relocatable (write_module), linking the modules it uses when
 # `links`; a program links them unless a `warp build` compiles them in (modules_linked)
 compile(source: text, folder: text, library_runtime: any = ø, links: any = ø): any := {
+	global linked_signatures
+	global whole_module_wanted
+	global used_c_functions
 	fresh_module()
 	module.relocating = library_runtime != ø
 	if is_primitive_file(source) { return primitive_module(source, folder) }
@@ -141,6 +144,7 @@ MODULES_FOLDER = "modules"
 # refused, card stale-module-wasm), so it is compiled from its source
 prebuilt_path(name: text, folder: text): text := own_module_wasm.get(name) ?? (if is_prebuilt_module(name) then folder + name + ".wasm" else "")
 linked_libraries(source: text): list := {
+	global linked_signatures
 	linked_signatures = {}
 	folder = linked_modules_folder()
 	# the modules it uses and those they use in turn (sound's units): each one's words declared, not brought whole; a
@@ -308,6 +312,8 @@ MODULE_START = "warp/start"
 # Named, only those, the index left as the plan wrote it: scripts/lib/modules.sh builds them so, each when the modules it
 # waits for are written (modules_planned)
 write_modules(folder: text, runtime_file: text, named: list) := {
+	global modules_rewritten
+	global said
 	modules_rewritten = yes
 	if #named == 0 { write_library_index(folder) }
 	runtime = read_bytes(runtime_file)
@@ -347,6 +353,7 @@ modules_planned(folder: text) := {
 first_lines_of_definitions(source: text): text := definition_slices(source).map(slice => slice#2.split("\n")#1).join("\n")
 # what a caught refusal says: a text raised, else the message of the error caught (a trap under the try)
 refusal_said(refusal: any): text := {
+	global said
 	if refusal is text { return refusal }
 	said = "" + refusal.message
 	if said == "" then "an error without a message" else said

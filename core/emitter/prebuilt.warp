@@ -523,6 +523,7 @@ def read_linked_reaches() {
 # linking the module brings what the words it reaches need, a body being declared only there (`str(6.0 ± 0.3)` the
 # Interval its ± makes); a closure's under its own name, which its word's body says
 word_reaches(functions: list, classes: list): map := {
+	global said
 	own = reaching_words(functions)
 	known = word_set(classes + module.linked_class_names.keys)
 	makes = made_classes(known.keys)

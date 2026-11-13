@@ -238,8 +238,9 @@ install_native() {
 	# after-push-stage: 677282ce44's reals.warp on b5eb834c40's compilers made π / 2 'no field coefficient' for 30 min)
 	if [ -n "$early" ]; then
 		local installed
+		# (and the tip's wasmtime C API, which its native warp may call more of)
 		installed=$(installed_folder) && rsync -aL --exclude /warp "$installed/" "$folder.new/" &&
-			rsync -aL "$TREE/lib/compiler/native/" "$folder.new/compiler/native/"
+			rsync -aL "$TREE/lib/compiler/native/" "$folder.new/compiler/native/" && cp "$TREE/lib"/libwarp_wasmtime.* "$folder.new/"
 	else
 		rsync -aL --exclude /data "$TREE/lib/" "$folder.new/"
 	fi && cp "$TREE/scripts/warp-crate" "$folder.new/" || { "${failed[@]}" "native warp: lib/ did not copy" --urgent; rm -rf "$folder.new"; return 1; }
@@ -299,9 +300,9 @@ watch() {
 	# every stage builds with the installed native warp: without one, nothing installs (relink ~/dev/bin/warp by hand)
 	local missing
 	missing=$(installed_folder 2>&1 >/dev/null) || { red "$missing" --urgent; return 1; }
-	# warp's wasmtime C API in the user's lib/ too, where native builds link it from (card wasmtime-bundled); the tree's
-	# lib/ gets it from rebuild.sh
-	"$scripts/wasmtime-c-api.sh" "$MAIN_CHECKOUT/lib" ||
+	# warp's wasmtime C API of the tip, in the user's lib/, where native builds link it from (card wasmtime-bundled), and
+	# in the tree's, which stage one's native warp links before rebuild.sh runs
+	"$scripts/wasmtime-c-api.sh" --from "$TREE" "$MAIN_CHECKOUT/lib" "$TREE/lib" ||
 		red "wasmtime C API: scripts/wasmtime-c-api.sh failed" --urgent
 	# stage one: the native warp at once, when the tip's compilers are not in the store yet
 	local early=

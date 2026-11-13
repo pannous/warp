@@ -82,6 +82,7 @@ def call_values(f: Function, values: list): TypedCode {
 # one goes on to find the others (module.widened_now): it is read again anyway, and stopping at the second call of a
 # widened parameter took a reading of the whole compiler for each (card speed-parallel-emit)
 def passed(f: Function, i: int, value: TypedCode): list {
+	global link_refused
 	slot = parameter_key(f.name, i)
 	declared = if i < #f.signature.parameters then aliased_type(f.signature.parameters[i].type_name) else ""
 	if is_union(declared) and not fits_union(declared, value.kind) { refuse("a " + kind_spelling(value.kind) + " where a " + declared + " is needed") }
