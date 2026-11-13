@@ -45,7 +45,7 @@ use_of(module: Node): Node := plain_node(parsed("use " + (if module is text then
 # `read(module_directory + "/data/x")`: module_directory is the folder of the file it is written in
 with_module_directory(n: Node, folder: text): Node := bottom_up(n, x => if x == symbol(module_directory_word) then folder else x)
 used_in(program: Node, folder: text): any := {
-	written = included(flat_statements(program), folder)
+	written = flat_statements(program)
 	statements = with_scope_declarations(written, folder)
 	modules = written.map(use_target).filter(target => target is symbol and not names_no_module(name_of(target))).map(name_of)
 	for statement in written { warn_replaced(statement, modules) }
@@ -54,11 +54,6 @@ used_in(program: Node, folder: text): any := {
 	kept = statements.filter(s => file_used(s, folder) == ø)
 	separated(bracketed(brought#1 + kept, ""), ";")
 }
-# `include file`: the file's statements in its place, run there each time (wiki/use.md: "in place, as they are")
-included(statements: list, folder: text): list := statements.flat_map(statement => {
-	file = if is_group(statement) and #statement == 2 and statement#1 == symbol("include") then file_used(statement, folder) else ø
-	if file is text and file.ends_with(module_extension) then included(flat_statements(with_module_directory(file_parsed(file), folder_of(file))), folder_of(file)) else [statement]
-})
 
 # `use folder`, `use package`, `use project` (decision D15, wiki/use.md): a name the program binds nowhere itself comes
 # from the files of that scope, together with the definitions it needs and its file's uses; a file is parsed only when
