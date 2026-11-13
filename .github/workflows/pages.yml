@@ -78,6 +78,9 @@ jobs:
     # the registry's packages, which samples use by path (scripts/link-packages.sh locally)
     - name: The packages
       run: git clone -q --depth 1 https://github.com/pannous/warp-packages.git packages
+    # the samples' generated assets, which git ignores: ez_forest's and tree_study's tree meshes and atlas
+    - name: The samples' assets
+      run: scripts/sample-assets.sh fetch
     - name: Build the compiler folder and samples.js
       run: web/playground/build.sh --lib "$PWD/lib"
     # the same collection as scripts/browser-dry-run.sh's (build.sh collect_site)

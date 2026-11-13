@@ -1,5 +1,5 @@
 // The standard module timers (card registers-page): `on every 500ms {…}` and `on every 2 seconds {…}` run their block at
-// each period, `at 9:30 {…}` once at that time of day, `on every day at 9:30 {…}` each day at it. A page runs them (web/playground/host-timers.js): the program tells the host each timer by the host word
+// each period, `at 9:30 {…}` once at that time of day, `on every day at 9:30 {…}` each day at it, `on every friday at 17:00 {…}` each Friday. A page runs them (web/playground/host-timers.js): the program tells the host each timer by the host word
 // signal_listen(kind, id, argument) and the page calls back the exported timer_fired(id) at each firing; the native warp
 // the same, once main returned (core/native/driver.warp events): an `every` timer keeps the run going until exit()
 use units
@@ -9,8 +9,16 @@ TIMER_CLOCK = 2
 WEEKDAYS_SHIFT = 10000
 EVERY_DAY = 127
 ONCE = 0
-rewrite on every day at $time $body: block => timer_at($time, EVERY_DAY, () => $body)
-rewrite on every day at $time {} => timer_at($time, EVERY_DAY, () => ø)
+// the days `on every friday at 17:00 {…}` names, in the mask's order; `on every day at 9:30 {…}` is each of them
+WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+weekdays_of(day: any): int := {
+	if name_of(day) == "day" { return EVERY_DAY }
+	at = WEEKDAYS.index_of(name_of(day))
+	if at == 0 { raise "on every ${day} at …: ${day} is no day of the week" }
+	1 << (at - 1)
+}
+rewrite on every $day at $time $body: block => timer_at($time, weekdays_of(data $day), () => $body) where $day is symbol
+rewrite on every $day at $time {} => timer_at($time, weekdays_of(data $day), () => ø) where $day is symbol
 // a bare `at` only of a clock time, hours:minutes: sound's `at bars(0) {…}` places its block on the beat clock (card
 // wasm-trap: taken as a clock time, it trapped)
 rewrite at $hour:$minute $body: block => timer_at($hour:$minute, ONCE, () => $body)
