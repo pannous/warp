@@ -979,9 +979,11 @@ def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 # `n: nat = v`, `r: rational = v`: a whole number of any size, an exact number, held boxed (decision nat-and-int)
 admitted_numbers = {nat: "nat_admitted", rational: "rational_admitted"}
 declared_kinds = {int: ValueKind.Int, float: ValueKind.Float, text: ValueKind.Text, list: ValueKind.List, bool: ValueKind.Bool, char: ValueKind.Char}
+# a variable whose type admits an Error, `r: int?`, `r: int or error`, keeps one (decision errors-one-rule)
+kept_if_admitting_errors(body: Body, name: text, type_name: text) := { if union_members(type_name).any(member => member.ends_with("?") or member == "error") { body.kept[name] = yes } }
 def declaration(body: Body, name: text, written_type: text, value: TypedCode): TypedCode {
 	type_name = aliased_type(written_type)
-	if union_members(type_name).any(member => member.ends_with("?") or member == "error") { body.kept[name] = yes }
+	kept_if_admitting_errors(body, name, type_name)
 	# `x: any = v` admits every value: the plain assignment; `t: type = int`, `m: map = {}` too, a node like any
 	if type_name in node_annotations { return assignment(body, symbol(name), value) }
 	if type_name in admitted_numbers { return assignment(body, symbol(name), runtime_call(admitted_numbers[type_name], [TypedCode(ValueKind.Node, boxed(value))])) }
@@ -1005,6 +1007,7 @@ def typed_declaration(body: Body, name: text, type_name: text, value: TypedCode)
 }
 # `x: int or text = v` (decision union-or): x holds a node, a value of a kind no member takes is refused
 def union_declaration(body: Body, name: text, type_name: text, value: TypedCode): TypedCode {
+	kept_if_admitting_errors(body, name, type_name)
 	if not fits_union(type_name, value.kind) { return refuse("a " + kind_spelling(value.kind) + " given to a variable declared " + type_name) }
 	# an int only where every member is one: `x: int|float = 1.5` holds a float; with any int member its boxed whole
 	# number is that int still, `x: int|text = 3; type(x)` int, not nat (decision nat-and-int)
