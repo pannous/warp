@@ -1125,7 +1125,6 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			// operator word, starts its subject
 			glued_sign = (op#1 == "-" or op#1 == "#") and not is_blank(char_ahead(p, 1))
 			if (glued_sign or is_alpha(c)) and ends_with_clause_word(left) { break }
-			if op#1.contains("≈") or op#2.contains("≈") or op#2.contains("approx") { raise "§OP " + op#1 + " | " + op#2 + " | " + text(powers) + " | min " + text(min_power) + " | compared " + compared }
 			compared = compared_after(compared, op#1, powers)
 			took_own_then = owns and powers#1 < min_power and op#2 == "then"
 			operator_start = p.at
