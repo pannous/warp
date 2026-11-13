@@ -60,13 +60,37 @@ paint_size(program: Node): list := {
 	if main_level_value("width", program) != ø and main_level_value("height", program) != ø { return [symbol("width"), symbol("height")] }
 	[call_of("shown_width", []), call_of("shown_height", [])]
 }
-shader_holes_added(s: Node, entries: list, program: Node): any := {
+# (the fields of a list of shaders, `$dye(at)`, are no holes: lib/gpu_passes.warp reads them)
+shader_holes_added(s: Node, entries: list, program: Node, fields: list = []): any := {
 	shader = main_level_value(name_of(s), program)
 	if shader == ø or not (shader is text) { return ø }
 	given = entries.filter(entry => is_key(entry, Op.Colon)).map(entry => "${key_of(entry)}")
-	added = shader_holes("${shader}").filter(name => name not in given and name != SHADER_FRAME_HOLE and (name not in SHADER_BUILTIN_HOLES or main_level_value(name, program) != ø))
+	added = shader_holes("${shader}").filter(name => name not in given and name not in fields and name != SHADER_FRAME_HOLE and (name not in SHADER_BUILTIN_HOLES or main_level_value(name, program) != ø))
 	if #added == 0 { return ø }
 	List(entries + added.map(name => Key(symbol(name), Op.Colon, symbol(name))), Bracket.Curly, Separator.Comma)
+}
+# paint([advect, pressure, show]) (wiki/graphics.md "Fields and passes", decision shader-value (c)): each item, a shader
+# the program assigns, or one `poisson with {which: 1}` with values of its own, as [its name, its shader words, its
+# values] (lib/gpu_passes.warp paint_passes); the names are the fields, never holes. ø where an item is anything else
+PASS_VALUES_WORD = "with"
+shader_passes(items: list, program: Node, source: text): any := {
+	shaders = items.map(passed_shader)
+	if shaders.any(s => s == ø or not (main_level_value(name_of(s), program) is text)) { return ø }
+	fields = shaders.map(name_of)
+	passes = []
+	for at in 1 to #items {
+		s = shaders#at
+		entries = if items#at is symbol then [] else items_of(value_of((items#at)#2))
+		values = shader_holes_added(s, entries, program, fields) ?? List(entries, Bracket.Curly, Separator.Comma)
+		passes += [listed(Bracket.Square, Separator.Comma, [Text(name_of(s)), shader_words_of(s, program, source), values])]
+	}
+	passes
+}
+# the shader an item of the list names: `show`, `poisson with {which: 1}`
+passed_shader(item: Node): any := {
+	if item is symbol { return item }
+	if is_group(item) and #item == 2 and item#1 is symbol and item#2 is key and key_of(item#2) == symbol(PASS_VALUES_WORD) and is_group(value_of(item#2)) { return item#1 }
+	ø
 }
 # shader_words(s) (lib/prelude.warp) of a shader the program assigns, given its place in the program where a shader
 # block wrote it: the GPU compiles it placed so, its errors at their place (card wgsl-error)

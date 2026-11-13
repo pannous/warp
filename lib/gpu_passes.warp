@@ -19,3 +19,39 @@ gpu_pass(shader: node, fields: int, into: node, values: node): int := {
 	if recorded < 0 { raise "no field " + text(into) }
 	recorded
 }
+
+// --- paint([advect, pressure, show]) (wiki/graphics.md "Fields and passes"): the rule (extensions/rules/modules/gpu_passes.warp)
+// gives each pass as [its name, its shader, its values]. Each pass but the last draws into the field of its name, kept
+// from frame to frame at the painting's size; the last shows, in the window, else as the painting of its pixels, which it gives. A
+// shader reads a field as `$name(at)`, at the pixel `at`: the latest written earlier in the frame, else last frame's,
+// so a shader reading its own name reads what it drew the frame before
+global painted_fields = {}
+paint_passes(passes: list, width: int, height: int) := {
+	names = passes.map(pass => pass#1)
+	shown = passes.last
+	// (a last shader whose field is read draws into it too, then shows it)
+	drawn = if passes.any(pass => reads_field(pass#2, shown#1)) then passes else passes[.. #passes - 2]
+	fields = fields_kept(drawn.map(pass => pass#1), width, height)
+	for pass in drawn { gpu_pass(fields_placed(pass#2, names), fields, pass#1, pass#3) }
+	if drawn != passes { shown = [shown#1, fields_placed(shown#2, names), shown#3] } else { shown = [shown#1, FIELD_SHOWN.replace(FIELD_HOLE, shown#1), {}] }
+	if painting_in_window() { return gpu_show_sized(shown#2, fields, width, height, shown#3) }
+	pixels = gpu_picture_sized(shown#2, fields, width, height, shown#3)
+	paint(pixels, width, height)
+	pixels
+}
+// the fields of these names at this size, made once
+fields_kept(names: list, width: int, height: int): int := {
+	key = names.join(" ") + " " + width + "×" + height
+	if not painted_fields.has(key) { painted_fields[key] = gpu_fields(width, height, names) }
+	painted_fields[key]
+}
+// a shader's reads of the fields, `values.dye(at)` as its `$dye(at)` was written, as reads of the field at that pixel
+FIELD_HOLE = "NAME"
+FIELD_AT = "\nfn field_NAME_at(at: vec2f) -> vec4f { return field_NAME(at / values.size); }\n"
+FIELD_SHOWN = "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return field_NAME(at.xy / values.size); }"
+reads_field(shader: text, name: text): bool := shader.contains("values." + name + "(")
+fields_placed(shader: text, names: list): text := {
+	placed = shader
+	for name in names.filter(name => reads_field(shader, name)) { placed = placed.replace("values." + name + "(", "field_" + name + "_at(") + FIELD_AT.replace(FIELD_HOLE, name) }
+	placed
+}
