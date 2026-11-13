@@ -1,16 +1,7 @@
 // The C functions a primitive program imports (`import getenv from "c"`), in a native build: each import wasm2c calls
 // is written by extensions/primitive.warp c_function_glue, which finds the function by name in the process and
 // passes the module's values over with these. Included behind lib/native/wasi.c.
-#include <errno.h>
-#include <dlfcn.h>
-#include <signal.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/ioctl.h>
-#include <time.h>
-#include <unistd.h>
+#include "system.h"
 
 enum { ARENA_ALIGNMENT = 8, TEXT_RECORD = 8, PAGE_BYTES = 65536 }; // primitive.warp ARENA_ALIGNMENT, text_layout's size
 
