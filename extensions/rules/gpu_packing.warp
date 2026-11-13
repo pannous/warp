@@ -29,7 +29,7 @@ gpu_use_added(name: text, at: int) := {
 }
 gpu_uses_counted(n: Node) := {
 	if n is symbol { return gpu_use_added(name_of(n), 2) }
-	if is_key(n, Op.Assign) and key_of(n) is symbol and is_key(value_of(n), Op.Add) and key_of(value_of(n)) == key_of(n) {
+	if is_key(n, Op.Assign) and key_of(n) is symbol and is_key(value_of(n), Op.Add) and key_of(value_of(n)) is symbol and name_of(key_of(value_of(n))) == name_of(key_of(n)) {
 		gpu_use_added(name_of(key_of(n)), 1)
 		gpu_use_added(name_of(key_of(n)), 4)
 		return gpu_uses_counted(value_of(value_of(n)))
