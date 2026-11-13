@@ -399,7 +399,8 @@ typedef bool (*preopen_t)(void* config, const char* host, const char* guest, boo
 static bool wasi_config_preopen_dir(void* config, const char* host, const char* guest, bool mutable) {
 	static preopen_t preopened;
 	if (!preopened) preopened = (preopen_t)modules_symbol("wasi_config_preopen_dir");
-	if (strcmp(host, "/") || strcmp(guest, "/")) return preopened(config, host, guest, mutable);
+	char buffer[MAX_PATH];
+	if (strcmp(host, "/") || strcmp(guest, "/")) return preopened(config, windows_path(host, buffer), guest, mutable);
 	bool any = false;
 	DWORD drives = GetLogicalDrives();
 	for (int letter = 0; letter < 26; letter++) {
@@ -408,6 +409,22 @@ static bool wasi_config_preopen_dir(void* config, const char* host, const char* 
 		any |= preopened(config, drive, name, mutable);
 	}
 	return any;
+}
+
+// wasmtime's calls of a file path, the path given as Windows takes it
+#define CONFIG_PATH_CALL(result, name) static result name(void* config, const char* path) { \
+	static result (*called)(void*, const char*); \
+	if (!called) called = (result (*)(void*, const char*))modules_symbol(#name); \
+	char buffer[MAX_PATH]; \
+	return called(config, windows_path(path, buffer)); }
+CONFIG_PATH_CALL(bool, wasi_config_set_stdout_file)
+CONFIG_PATH_CALL(bool, wasi_config_set_stderr_file)
+CONFIG_PATH_CALL(void*, wasmtime_config_cache_config_load)
+static void* wasmtime_module_deserialize_file(void* engine, const char* path, void* module) {
+	static void* (*called)(void*, const char*, void*);
+	if (!called) called = (void* (*)(void*, const char*, void*))modules_symbol("wasmtime_module_deserialize_file");
+	char buffer[MAX_PATH];
+	return called(engine, windows_path(path, buffer), module);
 }
 
 #define POSIX_CALL(name) {#name, (void*)posix_##name}
@@ -421,7 +438,8 @@ static const struct { const char* name; void* function; } POSIX_CALLS[] = {
 	POSIX_NAMED(posix_spawn_file_actions_adddup2), POSIX_NAMED(posix_spawn_file_actions_addclose), POSIX_NAMED(posix_spawnp),
 	POSIX_CALL(waitpid), POSIX_CALL(popen), POSIX_CALL(pclose), POSIX_CALL(access), POSIX_CALL(chdir), POSIX_CALL(creat),
 	POSIX_CALL(fopen), POSIX_CALL(mkdir), POSIX_CALL(rmdir), POSIX_CALL(unlink), POSIX_CALL(rename),
-	POSIX_NAMED(wasi_config_preopen_dir), POSIX_NAMED(posix_spawn_file_actions_addchdir_np), POSIX_CALL(kill),
+	POSIX_NAMED(wasi_config_preopen_dir), POSIX_NAMED(wasi_config_set_stdout_file), POSIX_NAMED(wasi_config_set_stderr_file),
+	POSIX_NAMED(wasmtime_config_cache_config_load), POSIX_NAMED(wasmtime_module_deserialize_file), POSIX_NAMED(posix_spawn_file_actions_addchdir_np), POSIX_CALL(kill),
 };
 
 // ## dlopen and dlsym, which find them
