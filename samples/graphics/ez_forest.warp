@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
 # A million trees on a 4 km square, the near ones EZ Tree meshes (million_trees.warp is the same woods as billboards,
-# which runs anywhere; these meshes and textures are generated locally, samples/graphics/ez_trees/NOTICE.md). The camera stands on the south edge, looking north, and the draw
+# which runs anywhere; these meshes and textures are not in git: scripts/sample-assets.sh fetch, samples/graphics/ez_trees/NOTICE.md). The camera stands on the south edge, looking north, and the draw
 # reaches the horizon: near trees are whole, farther chunks keep enough of their own trees to read as
 # a canopy, and haze takes the last of them. The opening value is
 # [total, candidate, submitted, scenery, meshed, triangles].
