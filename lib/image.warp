@@ -30,6 +30,14 @@ starts_with_bytes(bytes: list, start: list): bool := count(bytes) >= count(start
 image(width: int, height: int, pixel: function): Image := Image(width, height, [pixel(i % width, i /! width) as Color for i in 0 ..< width * height])
 image(width: int, height: int, fill: Color): Image := Image(width, height, filled_list(width * height, fill))
 
+// the changes said as commands too (the playground's postcard: photo.crop(20, 10, 120, 90).mirror.tint(orange, 0.3));
+// `gray` stays the color of lib/color.warp
+alias flip => flipped
+alias mirror => mirrored
+alias crop => cropped
+alias tint => tinted
+alias blur => blurred
+
 // the pixel at the column and row, counted from 0 at the top left
 pixel_at(picture: Image, x: int, y: int): Color := picture.pixels[y * picture.width + x]
 
