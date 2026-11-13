@@ -134,7 +134,7 @@ def intrinsic_of(body: Body, name: text, values: list): TypedCode {
 		"meta_column": TypedCode(ValueKind.Int, values#1.code + gc_code(gc_ops.ref_cast_null, [gc_type(gc.meta_node)]) + gc_code(gc_ops.struct_get, [gc_type(gc.meta_node), 4]))
 		"is_null": TypedCode(ValueKind.Bool, values#1.code + [op.ref_is_null])
 		# trap_place(): the position of the program's statement running last, line * columns_per_line + column (position_code)
-		"trap_place": TypedCode(ValueKind.Int, [op.global_get] + relocatable(relocated.globals, declared_global("trap_position", ValueKind.I32)#1) + [op.i64_extend_i32_s])
+		"trap_place": TypedCode(ValueKind.Int, [op.global_get] + relocatable(relocated.globals, declared_global("trap_position", ValueKind.Int)#1))
 		"same": same_code(values#1, values#2)
 		# the error is the word's: a variant of it by arity is named `word·arity`
 		"fail": TypedCode(pending, error_throw(body.function.name.split("·")#1) + [op.unreachable])

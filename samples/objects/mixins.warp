@@ -1,0 +1,9 @@
+#!/usr/bin/env warp
+# Mixins: fields and methods a class takes in; what the class writes itself wins
+mixin Walker { steps: int = 0; walk() := name + " walks" }
+mixin Swimmer { swim() := name + " swims" }
+class Duck with Walker, Swimmer { name }
+class Penguin with Walker { name; walk() := name + " waddles" }
+print Duck("Don").walk()       # Don walks
+print Duck("Don").swim()       # Don swims
+print Penguin("Pingu").walk()  # Pingu waddles
