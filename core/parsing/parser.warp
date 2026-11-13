@@ -1125,10 +1125,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			// (none while the table is still bare, every operator at the default power as the extension rows are read)
 			equality = alias_spellings().powers.get("==")
 			equality_level = equality != ø and powers#1 == equality#1
-			if equality_level and compared != "" {
-				print "§CHAIN " + compared + " " + op#1 + " in: " + p.code[max(0, p.at - 80) ..< min(#p.code, p.at + 40)]
-				raise comparisons_chained(compared, op#1)
-			}
+			if equality_level and compared != "" { raise comparisons_chained(compared, op#1) }
 			compared = if equality_level then op#1 else ""
 			took_own_then = owns and powers#1 < min_power and op#2 == "then"
 			operator_start = p.at
