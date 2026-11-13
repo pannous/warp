@@ -57,7 +57,7 @@ def render() {
 	}
 }
 
-main:={
+main := {
 	# Main loop: a few generations instead of forever; each one is drawn over the last:
 	# clear() clears the terminal and puts the cursor back at its top left (the playground shows frames alike)
 	for generation in 0 to generations {

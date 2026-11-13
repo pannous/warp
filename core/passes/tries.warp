@@ -65,8 +65,9 @@ kept_raise(v: Node): Node := {
 	number = fresh_number()
 	guarded_try(v, try_name("error", number), try_name("error", number), number)
 }
-# a value that can raise as it is worked out: anything but a name or a literal (a call, a method or member, an index)
-may_raise(v: Node): bool := not (v == ø or is_name(v) or is_literal(v))
+# a value that can raise as it is worked out: anything but a name, a literal or a list of those (a call, a method or
+# member, an index)
+may_raise(v: Node): bool := not (v == ø or is_name(v) or is_literal(v) or (is_group(v) and bracket_of(v) == "[" and not items_of(v).any(may_raise)))
 # where an Error stops the run no more (decision errors-one-rule): an optional place `r: T? = v` keeps it (a value's
 # `a or b`, emitter.warp logical, too)
 handled_form(n: Node): Node := match n {

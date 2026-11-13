@@ -188,8 +188,18 @@ function applySizes() {
 	editor.setOption("viewportMargin", fitted ? Infinity : DEFAULT_VIEWPORT_MARGIN);
 	editor.getWrapperElement().style.height = fitted ? "auto" : sizes.editor ? `${clamp(sizes.editor, EDITOR_HEIGHT_RANGE, innerHeight)}px` : "";
 	$("fit-code").setAttribute("aria-pressed", fitted);
+	for (const pane of FOLDABLE) {
+		const folded = Boolean(sizes[foldedSize(pane)]);
+		$(`collapse-${pane}`).parentElement.classList.toggle("collapsed", folded);
+		$(`collapse-${pane}`).setAttribute("aria-pressed", folded);
+	}
 	editor.refresh();
 }
+
+// ▾ beside ⛶ over the code and over the result (card code-result-parity): the pane folded to its bar, or back
+const FOLDABLE = ["code", "output"];
+const foldedSize = pane => `folded_${pane}`;
+const toggleFolded = pane => setSize(foldedSize(pane), sizes[foldedSize(pane)] ? undefined : 1);
 
 // ⛶ over the code (card fullscreen-toggle-icon): the editor as tall as its code, no scrolling inside it; again: the
 // height the resizer left
@@ -1659,6 +1669,7 @@ function initialize() {
 	$("full-screen").onclick = toggleFullScreen;
 	$("fit-code").append($("full-screen").firstElementChild.cloneNode(true));
 	$("fit-code").onclick = toggleFitsCode;
+	for (const pane of FOLDABLE) $(`collapse-${pane}`).onclick = () => toggleFolded(pane);
 	$("shown-from").value = stored(SHOWN_FROM_KEY) ?? (stored(HINTS_KEY) === "off" ? "weak" : "hint");
 	store(HINTS_KEY, null);
 	$("shown-from").onchange = () => {

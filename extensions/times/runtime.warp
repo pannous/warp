@@ -51,6 +51,8 @@ time_form_name(form: int): text := {
 	if form == TimeFormCode.Zoned { return "zoned time" }
 	"time of day"
 }
+# type(t) of a time: its form's name, `type(2024-06-01)` is date
+time_type_word(n: Node): text := time_form_name(time_form(n))
 # the runtime error of time_holds, naming both kinds
 times_of_different_kinds_have_no_order(left: text, right: text) := {
 	returned_error("a " + left + " and a " + right + " have no order; fix: compare its time of day, e.g. ref.time >= 6h")

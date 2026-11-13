@@ -5,13 +5,15 @@
 # `#(1 … 5)` has no list and counts
 rewrite $xs#($a … $b) => $xs[($a - 1) .. $b] where $xs is not missing
 rewrite $xs#($a .. $b) => $xs[($a - 1) .. ($b - 1)] where $xs is not missing
-rewrite int#$n => zero_fill($n - 1, 0)
-rewrite float#$n => zero_fill($n - 1, 0 as float)
-rewrite text#$n => zero_fill($n - 1, "")
-# `640000*int`, `n*int`: the count times the type, n zeros of it; `x : 1000 int` declares x so
-rewrite $n * int => zero_fill($n, 0)
-rewrite $n * float => zero_fill($n, 0 as float)
-rewrite $x : $n int => $x = zero_fill($n, 0)
+rewrite $t#$n => zero_fill($n - 1, $zero) where $zero = type_zero($t)
+# `640000*int`, `26 * char`, `100 * ints`, `16 int`: the count times the type (singular or plural), n zeros of it;
+# `x : 100 numbers`, `x : int[100]` declare x so
+rewrite $x : $n * $t => $x = zero_fill($n, $zero) where $zero = type_zero($t)
+rewrite $x : $t#$n => $x = zero_fill($n - 1, $zero) where $zero = type_zero($t)
+rewrite $x : $n $t => $x = zero_fill($n, $zero) where $zero = type_zero($t)
+rewrite $n * $t => zero_fill($n, $zero) where $zero = type_zero($t)
+rewrite $n $t => zero_fill($n, $zero) where $n is number and $zero = type_zero($t)
+rewrite $n $t => zero_fill($n, $zero) where $n is value and $zero = type_zero($t)
 
 # The type forms of a list (card list-type-forms, wiki/list.md "Typed lists"): `x = int[]` (the parser's `x = [int]`)
 # and `x = list of numbers` (or `list of number`) are the empty list of the type, as `int[0]`
