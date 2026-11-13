@@ -369,7 +369,9 @@ nested_phrase(words: list, lowering: Lowering): list? := {
 }
 
 # `x.f(a)`: of a field the program gives a function value (callable_fields), the function it holds called,
-# `closure_call_1(x.f, a)`; else a method call, its name kept
+# `closure_call_1(x.f, a)`; else a method call, its name kept. Where f is also a word, the program's or the library's,
+# the receiver decides as it runs: one holding the field f calls it, any other the word, so a `{click: e => …}` leaves
+# `button.click(5)` and `xs.reverse()` their methods (decision fields-are-functions: own fields first)
 dotted_lowered(left: Node, right: Node, locals: Locals, lowering: Lowering): Node := {
 	receiver = lowered_lambdas(left, locals, lowering)
 	# `3.g`, `x.g(a)` of a local variable or parameter holding a function: the function it holds called, g(x, a), where
@@ -385,13 +387,21 @@ dotted_lowered(left: Node, right: Node, locals: Locals, lowering: Lowering): Nod
 		return Key(receiver, Op.Dot, lowered_method(right, locals, lowering))
 	}
 	arguments = arguments_of(called).map(argument => lowered_lambdas(argument, locals, lowering))
-	call_node(symbol(closure_call_word + #arguments), [Key(receiver, Op.Dot, called#1)] + arguments)
+	name = name_of(called#1)
+	if not names_word(name, #arguments + 1, lowering) { return call_node(symbol(closure_call_word + #arguments), [Key(receiver, Op.Dot, called#1)] + arguments) }
+	held = if receiver is symbol then receiver else fresh_name("receiver", fresh_number())
+	field_call = call_node(symbol(closure_call_word + #arguments), [Key(held, Op.Dot, called#1)] + arguments)
+	either = chosen(call_of(HiddenWord.FieldHeld as text, [held, name]), field_call, Key(held, Op.Dot, lowered_method(right, locals, lowering)))
+	if receiver is symbol then either else statements([set_to(held, receiver), either])
 }
+# a function of that name taking count arguments: the program's, the prelude's or a built-in word
+names_word(name: text, count: int, lowering: Lowering): bool := lowering.arities.get(name) == count or lines_of(typed_lines + foreign_math_lines, unaliased(name)).any(line => #line.signature.parameters == count)
 
 # the names the program gives a function value by op, named unlike any of its functions: the fields (Op.Colon)
 # `{answer: answer}` of a parameter `answer: function`, `{d: x => x + 1}`, `{f: square}` of a function with parameters;
 # the variables (Op.Assign) `sq = x => x*x`
-callable_names_of(program: Node, op: Op, arities: map, function_parameters: map): map := keyed_names(program, op, n => not arities.has(name_of(key_of(n))) and gives_function(value_of(n), arities, function_parameters))
+# (a field may share a function's name, the receiver choosing at run time, dotted_lowered; a variable may not)
+callable_names_of(program: Node, op: Op, arities: map, function_parameters: map): map := keyed_names(program, op, n => not (op == Op.Assign and arities.has(name_of(key_of(n)))) and gives_function(value_of(n), arities, function_parameters))
 # the names the program keys by op whose key holds: by Op.Colon its objects' fields, `{a: 1}`, `class T { a: int }`
 keyed_names(program: Node, op: Op, holds: function): map := {
 	names = {}
