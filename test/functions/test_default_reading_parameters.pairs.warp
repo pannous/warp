@@ -1,0 +1,7 @@
+# a parameter's default may read the parameters before it (test_call_arity.pairs.warp, test_default_parameters.pairs.warp;
+# card param-default-reference)
+'g(x, y = x + 1, z = y * 2) := z; g(1)'	4
+'g(x, y = x + 1, z = y * 2) := z; g(1, 5)'	10
+'g(x, y = x + 1, z = y * 2) := z; g(1, 5, 7)'	7
+'def painted(x, y, from_x = x) { from_x + y }; painted(1, 2)'	2
+'f(a: int, b: int = a * 2): int := a + b; f(3)'	9
