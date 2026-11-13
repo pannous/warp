@@ -16,8 +16,8 @@
 MODULE_MAGIC = 7886754537481982551
 TRAILER_BYTES = 16
 # how deep a program may recurse, a million calls and more: the stack of the thread it runs on (lib/native/wasi.c
-# PROGRAM_STACK_BYTES) is larger by the host's frames beneath it
-WASM_STACK_BYTES = 240 * 1024 * 1024
+# PROGRAM_STACK_BYTES) is larger by the host's frames beneath it; 240 MB
+WASM_STACK_BYTES = 251658240
 # 64-bit Mach-O: its header, the count of load commands in it, and LC_CODE_SIGNATURE's command, data offset 8 bytes in
 MACHO_MAGIC = 4277009103
 MACHO_HEADER = 32
