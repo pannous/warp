@@ -68,4 +68,11 @@ count = field(1, 2, 1)
 grow(x, y) := count(x, y) + 0.25
 show(x, y) := [count(x, y), 0, 0]
 paint([grow, show])' | grep -o 'fix: name it')" "fix: name it"
+check "a field smaller than the painting is read at its own cells" "$(last_line cells 'width = 8
+height = 4
+ink = field(1, 4, 2)
+drop(x, y) := if x == 1 and y == 0 then 1 else 0.5
+show(x, y) := [ink(floor(x / 2), floor(y / 2)), 0, 0]
+pixels = paint([ink: drop, show])
+print [0, 1, 2, 3, 4, 5, 6, 7].map(i => int(pixels#(i + 1) / 65536) % 256)')" "[128, 128, 255, 255, 128, 128, 128, 128]"
 exit $((failures > 0))

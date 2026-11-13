@@ -36,8 +36,8 @@ paint_passes(passes: list, width: int, height: int) := {
 	// (a last shader whose field is read draws into it too, then shows it)
 	drawn = if passes.any(pass => reads_field(pass#2, shown#1)) then passes else [passes#i for i in 1 ..< #passes]
 	fields = fields_kept(drawn.map(pass => pass#1), size#1, size#2)
-	for pass in drawn { gpu_pass(fields_placed(pass#2, names, read_scale(pass)), fields, pass#1, pass#3) }
-	if drawn != passes { shown = [shown#1, fields_placed(shown#2, names, read_scale(shown)), shown#3] } else { shown = [shown#1, FIELD_SHOWN.replace(FIELD_HOLE, shown#1), {}] }
+	for pass in drawn { gpu_pass(fields_placed(pass#2, names, read_scale(pass, size)), fields, pass#1, pass#3) }
+	if drawn != passes { shown = [shown#1, fields_placed(shown#2, names, read_scale(shown, size)), shown#3] } else { shown = [shown#1, FIELD_SHOWN.replace(FIELD_HOLE, shown#1), {}] }
 	if window_open() or window_possible() { return gpu_show_sized(shown#2, fields, width, height, shown#3) }
 	pixels = gpu_picture_sized(shown#2, fields, width, height, shown#3)
 	paint(pixels, width, height)
@@ -60,8 +60,8 @@ fields_size(passes: list, width: int, height: int): list := {
 	declared#1
 }
 // what a pixel `at` is divided by to sample a field: a text shader's `$dye(at)` reads at a pixel of the painting, a
-// function's `dye(x, y)` at a cell of the field
-read_scale(pass: list): text := if #pass > 3 and pass#4 != ø then "vec2f(${pass#4#1}.0, ${pass#4#2}.0)" else "values.size"
+// function's `dye(x, y)` (a pass of four items) at a cell of the fields
+read_scale(pass: list, size: list): text := if #pass > 3 then "vec2f(${size#1}.0, ${size#2}.0)" else "values.size"
 // a shader's reads of the fields, `values.dye(at)` as its `$dye(at)` was written, as reads of the field at that pixel
 FIELD_HOLE = "NAME"
 FIELD_SCALE = "SCALE"
