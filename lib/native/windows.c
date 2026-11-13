@@ -81,16 +81,18 @@ static const char* windows_path(const char* path, char buffer[MAX_PATH]) {
 	snprintf(buffer, MAX_PATH, "%c:%s", toupper((unsigned char)path[1]), path[2] ? path + 2 : "/");
 	return buffer;
 }
-// the C runtime's calls of one path, the path given as Windows takes it
+// a POSIX file mode as the C runtime takes it: the owner's read and write bits alone (any other bit is EINVAL there)
+static int windows_mode(int mode) { return mode & (_S_IREAD | _S_IWRITE); }
+// the C runtime's calls of one path, the path given as Windows takes it; files in binary, as POSIX knows them
 #define ON_WINDOWS_PATH(result, name, call, ...) static result posix_##name(const char* path, ##__VA_ARGS__) { char buffer[MAX_PATH]; path = windows_path(path, buffer); return call; }
 ON_WINDOWS_PATH(int, access, _access(path, mode), int mode)
 ON_WINDOWS_PATH(int, chdir, _chdir(path))
-ON_WINDOWS_PATH(int, creat, _creat(path, mode), int mode)
+ON_WINDOWS_PATH(int, creat, _open(path, _O_WRONLY | _O_CREAT | _O_TRUNC | _O_BINARY, windows_mode(mode)), int mode)
 ON_WINDOWS_PATH(FILE*, fopen, fopen(path, mode), const char* mode)
 ON_WINDOWS_PATH(int, mkdir, _mkdir(path), int mode)
 ON_WINDOWS_PATH(int, rmdir, _rmdir(path))
 ON_WINDOWS_PATH(int, unlink, _unlink(path))
-ON_WINDOWS_PATH(int, open_path, _open(path, flags, mode), int flags, int mode)
+ON_WINDOWS_PATH(int, open_path, _open(path, flags | _O_BINARY, windows_mode(mode)), int flags, int mode)
 static int posix_rename(const char* from, const char* to) {
 	char from_buffer[MAX_PATH], to_buffer[MAX_PATH];
 	return rename(windows_path(from, from_buffer), windows_path(to, to_buffer));
