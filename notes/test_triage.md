@@ -656,3 +656,8 @@ Triage (judge the form before building it):
 - :9 and :10, a warp function called back by JS that calls JS itself (`Array.from(xs, x => Math.max(x, 2))`), are
   refused natively: the web view's one JS thread waits for the callback's answer. In the page (its own phase) they can work; natively a
   second view or JavaScriptCore in process would (option B on the card, waits for the user).
+
+## Singular field of a list (card item-field-access, parked 2026-11-13)
+- test/control/test_call_result_reflection.warp:4, 5 expect `people().name` and `name of people()` to read every
+  item's name, ['a', 'b']. Only the plural, `people().names` (:6), reads every item; whether the singular does too
+  is a parked decision (it reads two ways: the list's own field or each item's). Left red and untouched until decided.
