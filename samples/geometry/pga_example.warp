@@ -1,11 +1,12 @@
 #!/usr/bin/env warp
 # Projective geometric algebra of space: the meet of two planes, a double reflection and a quarter turn (cards geometric-algebra, pga-glyphs)
-# this file is named pga.warp, so `use pga` would take it instead of the library
-use "../../lib/pga.warp"
+# Todo get rid of the cards once they're implemented 
+# Todo Give more illustrative examples in here. Can we create a little visualizer here somehow? 
+use pga
 p = point(1, 2, 3)
 m = plane(1, 0, 0, 0)
 [
 	plane(0, 1, 0, 0) ⋏ plane(0, 0, 1, 0) == point(0, 0, 0) ⋎ point(1, 0, 0),
 	m.reflect(m.reflect(p)) == p,
-	[round(c) for c in coordinates(rotor(pi / 2, 0, 0, 1).apply(point(1, 0, 0)))]
+	round each coordinates(rotor(π/2, 0, 0, 1).apply(point(1, 0, 0)))
 ]
