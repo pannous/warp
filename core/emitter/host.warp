@@ -149,8 +149,10 @@ def exported_shown_at(): any {
 def exported_trap_message() {
 	f = exported_function("trap_message", [ValueKind.Int], ValueKind.Int)
 	position = if is_compiler_source(module.program_file) then [op.i64_const, 0] else [op.global_get] + relocatable(relocated.globals, declared_global("trap_position", ValueKind.Int)#1)
-	# the files a position names, a line each, the program's first (positions.warp source_files)
-	files = ([module.program_file] + source_files[1 ..]).join("\n")
+	# the files a position names, a line each, the program's first (positions.warp source_files): those this compile
+	# named and the linked modules', the others' lines left empty
+	linked = module.linked_images.map(image => shown_file(std_module_path(image.name)))
+	files = ([module.program_file] + source_files[1 ..].map(path => if named_files.has(path) or path in linked then path else "")).join("\n")
 	f.code = runtime_call("trap_sentence_at", [TypedCode(ValueKind.Text, text_bytes(files)), TypedCode(ValueKind.Int, position), TypedCode(ValueKind.Int, [op.local_get, 0])]).code
 }
 def is_compiler_source(file: text): bool := file.starts_with("core/") or "/core/" in file or "lib/compiler/" in file

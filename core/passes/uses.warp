@@ -338,6 +338,8 @@ call_head(n: Node): any := {
 # library-zero-bake-plan 1b). It stays a module: brought in as its own file, its words reached, as from lib/ (an
 # include of it as the compiler's own code typed the emitter's values anew: shown_text refused), or lib/host/<name>.warp,
 # a module the native driver links itself (decision host-folder)
+# the standard modules' files in positions.warp source_files, after the program's, numbered alike in every compile
+numbered_module_files() := { if #source_files == 1 { source_files += std_module_names.map(name => shown_file(std_module_path(name))) } }
 std_module_path(name: text): text := own_module_files.get(name) ?? run_library() + module_folder(name) + name + module_extension
 module_folder(name: text): text := if modules_in(COMPILER_MODULES).has(name) then COMPILER_MODULES else if is_host_module(name) then HOST_MODULES else if is_runtime_module(name) then "/extensions/" + name + "/" else "/"
 # a standard module of runtime words, built apart from runtime.wasm (extension.warp runtime_modules)
