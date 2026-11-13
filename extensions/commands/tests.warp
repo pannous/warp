@@ -30,13 +30,52 @@ SLOW_FOLDER = "slow"
 SLOW_FLAG = "--slow"
 use "../serializer.warp"
 
-class TestCase { file: text, line: int, code: text, expected: any }
+class TestCase { file: text, line: int, code: text, expected: any, needs: list }
+
+# What a test needs of its platform (card test-env-needs): `// needs: js gpu` in the first lines of a test file for all
+# its cases, or `needs: js` opening a pair's note column for that one. A case whose need this machine lacks is
+# skipped, said with the need (`⊘ file: 3 cases skipped, need js`), never dropped: the Mac has them all and runs it.
+# Each need is one shell probe, its exit status 0 where the machine has it
+NEEDS_MARK = "needs:"
+HEADER_LINES = 8
+MACHINE_PROBES = {
+	"macos": "[ \"$(uname)\" = Darwin ]",
+	"js": "[ \"$(uname)\" = Darwin ]",
+	"gpu": "[ \"$(uname)\" = Darwin ]",
+	"display": "[ \"$(uname)\" = Darwin ]",
+	"cargo": "command -v cargo",
+	"network": "curl -sSf -m 5 -o /dev/null https://github.com",
+	"raylib": "ls /opt/homebrew/lib/libraylib* /usr/local/lib/libraylib* /usr/lib/*/libraylib* /usr/lib64/libraylib*"
+}
+global machine_has = {}
+has_need(need: text): bool := {
+	if not MACHINE_PROBES.has(need) { raise "test needs: unknown need " + need + " (known: " + MACHINE_PROBES.keys().join(" ") + ")" }
+	if not machine_has.has(need) {
+		answer = std_io("os", "command", [MACHINE_PROBES[need] + " >/dev/null 2>&1 && echo yes || echo no"])
+		machine_has[need] = answer.trim() == "yes"
+	}
+	machine_has[need]
+}
+# the needs a text states, the words after `needs:`: of a line comment in a file's first lines, or of a pair's note
+needs_in(remark: text): list := {
+	parts = remark.split(NEEDS_MARK)
+	if #parts < 2 then [] else parts#2.split(" ").filter(word => word != "")
+}
+header_needs(source: text): list := {
+	lines = source.split("\n")
+	lines[0 ..< min(HEADER_LINES, #lines)].filter(line => line.trim().starts_with("//") or line.trim().starts_with("#")).flat_map(needs_in)
+}
+
 
 # `warp test-list <work folder> [--each] [folder or file…]`: the skipped pairs said, the runs written
 test_listed(work: text, words: list) := {
 	runs = []
 	for file in test_files_of(words) {
 		for skip in skipped_pairs(read(file)) { print "⊘ " + file + ": skipped " + skip }
+	}
+	for file in test_files_of(words) {
+		lacking = skipped_for_needs([file])
+		if #lacking > 0 { print "⊘ " + file + ": " + #lacking + " cases skipped, need " + lacking.flat_map(case => case.needs.filter(need => not has_need(need))).unique().join(" ") }
 	}
 	cases = test_cases_of(words)
 	for n in 0 ..< #cases {
@@ -92,7 +131,7 @@ test_verdicts(work: text, words: list) := {
 	unread = test_files_of(words).flat_map(file => unread_lines(file, cases).map(line => file + ":" + line))
 	for place in unread { print "✗ " + place + ": " + UNREAD_PAIR }
 	failed += #unread
-	skipped = test_files_of(words).map(file => #skipped_pairs(read(file))).sum()
+	skipped = test_files_of(words).map(file => #skipped_pairs(read(file))).sum() + #skipped_for_needs(words)
 	total = if failed > 0 then "" + failed + " of " + (#cases + #unread) + " failed" else "✓ " + (#cases - timed) + " tests passed"
 	print total + " in " + #test_files_of(words) + " files" + (if skipped > 0 then ", " + skipped + " skipped" else "") + (if timed > 0 then ", " + timed + " hit a time limit" else "")
 	write(work + "/failed", "" + failed)
@@ -172,12 +211,18 @@ is_test_file(path: text): bool := {
 }
 
 # every case of the test files, in file order
-test_cases_of(words: list): list := test_files_of(words).flat_map(file => cases_in(file, read(file)))
+all_cases_of(words: list): list := test_files_of(words).flat_map(file => cases_in(file, read(file)))
+# the cases this machine can run: those whose needs it has
+test_cases_of(words: list): list := all_cases_of(words).filter(case => case.needs.all(has_need))
+# the cases skipped for a need this machine lacks, each file's said once with the needs
+skipped_for_needs(words: list): list := all_cases_of(words).filter(case => not case.needs.all(has_need))
 cases_in(file: text, source: text): list := {
 	cases = []
+	whole_file = header_needs(source)
 	for statement in statements_in(plain_node(parsed(source))) {
-		parts = pair_parts(view_of(plain_node(statement))) ?? check_parts(view_of(plain_node(statement)))
-		if parts != ø { cases += [TestCase(file, statement_line(statement), parts#1, parts#2)] }
+		view = view_of(plain_node(statement))
+		parts = pair_parts(view) ?? check_parts(view)
+		if parts != ø { cases += [TestCase(file, statement_line(statement), parts#1, parts#2, whole_file + pair_needs(view))] }
 	}
 	cases
 }
@@ -211,6 +256,8 @@ first_leaf(n: Node): Node := {
 	}
 	ø
 }
+# the needs a pair's note column states
+pair_needs(view: any): list := if kind(view) == "list" and view#3 == "\t" and #view == 6 and kind(view#6) == "text" then needs_in(view#6#2) else []
 # a pair `'1+1'⇥2` (a third column a remark): its code and expected value
 pair_parts(view: any): any := {
 	if kind(view) != "list" or view#3 != "\t" or #view < 5 or #view > 6 { return ø }
