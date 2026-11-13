@@ -222,6 +222,8 @@ jobs:
         lib/warp.exe --version
         lib/warp.exe samples/hello/hello.warp | grep Hello
         [ "$(lib/warp.exe 'window_possible()')" = no ]
+        # warp test's slots, children and files: the cases started anew by posix_spawnp, as Windows has no fork
+        lib/warp.exe test test/modules/test_exec_sh_runs.pairs.warp
 
   packages:
     # the tarballs repackaged: PyPI wheels of warp-language, .deb and .rpm of warp-lang, attached to the release
