@@ -56,7 +56,7 @@ modules_of_files() {
 MODULE_WAIT=0.2  # seconds a worker waits when no module is ready
 digest() { { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-64; }
 modules_built() {
-	local warp=$1 lib=$2 compiler=$3 folder=$4 runtime=$5 count_file=$6 work=$4/.modules-step name texts waits slot workers kept counted_file
+	local warp=$1 lib=$2 compiler=$3 folder=$4 runtime=$5 count_file=${6-} work=$4/.modules-step name texts waits slot workers kept counted_file
 	set -- "$1" "$2" "$3" "$4" "$5"
 	# (a killed step's claims go: they'd leave its modules unclaimable)
 	rm -rf "$work" && mkdir -p "$work" || return 1
