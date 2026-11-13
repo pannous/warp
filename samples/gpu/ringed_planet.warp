@@ -4,6 +4,7 @@
 # Move the pointer to fly around the planet and tilt the rings; the wheel zooms in and out.
 # Full HD, so each star is one pixel.
 use compute_toys
+use shown_frames
 width = 1920
 height = 1080
 planet = compute_toy(shader {
@@ -98,9 +99,5 @@ planet = compute_toy(shader {
 		textureStore(screen, id.xy, float4(color, 1.0));
 	}
 })
-# run for ten seconds
-started = clock()
-while clock() - started < 10000 {
-	paint(planet)
-	sleep(1 / 60)
-}
+# ten seconds in a window; without one, one still (shown_frames, decision on-frame-headless)
+shown_frames(() => paint(planet), 10000)

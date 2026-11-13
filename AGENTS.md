@@ -22,7 +22,7 @@ warp: a data format and wasm-first language, the successor of wasp (C++, ~/wasp/
 ## Three layers (decision core-is-self: keeps the core from bloating)
 - **core/**: only what the compiler needs to compile itself. Aim: about 30% of the compiler, and shrinking.
 - **extensions/**: every other language feature, baked in through one static hook table.
-- **lib/**: modules programs import. A new feature goes into an extension or a library, never into the core;
+- **lib/**: the standard library, modules any program may use; code a few samples share stays in samples/. A new feature goes into an extension or a library, never into the core;
   the language is never simplified to shrink the core (scripts/vitals.py measures the split).
 - Everything else has its own place: demos and examples in samples/, tests in test/, tools in scripts/. Never a
   demo, sample or test fixture in core/, extensions/ or lib/ (an aquarium demo is a sample, not an extension).
@@ -208,7 +208,7 @@ before asking a question). After a context swap, this file and your role file be
   plain warp can say it (`on Key.escape {…}` is a call of `on(event, handler: block)`, no rule). A `rewrite` rule
   only for a spelling plain warp cannot parse or mean; its commit names why a function would not do.
 - Wording: a rewrite rule that gives the language a new spelling is a compiler extension, never "library" (its
-  file sits in extensions/sugar/); "library" means only modules programs import.
+  file sits in extensions/sugar/); "library" means only the standard library in lib/.
 - Core and extensions: every change to core/ or extensions/ (small fixes included), any new syntax, pass, keyword or
   sugar rule goes to warp-interviewer BEFORE the work (root cause, files, size); only the user's OK starts it, not the
   Supervisor's. Sugar goes to extensions/sugar/*.warp, a capability to extensions/<name>.warp. Ask with the smallest
