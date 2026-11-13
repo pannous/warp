@@ -323,12 +323,14 @@ ocean(x, y) := {
 fly(step) := {
 	turn = yaw
 	way = flying_speed * step
-	if held_key == "w" { camera_x += sine(turn) * way; camera_z += cosine(turn) * way }
-	if held_key == "s" { camera_x -= sine(turn) * way; camera_z -= cosine(turn) * way }
-	if held_key == "d" { camera_x += cosine(turn) * way; camera_z -= sine(turn) * way }
-	if held_key == "a" { camera_x -= cosine(turn) * way; camera_z += sine(turn) * way }
-	if held_key == space or held_key == "e" { camera_height += way }
-	if held_key == "q" or held_key == "c" { camera_height = max(camera_height - way, lowest) }
+	# every key held counts, so W and A together go diagonally, no faster than straight
+	ahead = (if held(Key.w) then 1 else 0) - (if held(Key.s) then 1 else 0)
+	aside = (if held(Key.d) then 1 else 0) - (if held(Key.a) then 1 else 0)
+	along = way / max(√(ahead * ahead + aside * aside), 1)
+	camera_x += (sine(turn) * ahead + cosine(turn) * aside) * along
+	camera_z += (cosine(turn) * ahead - sine(turn) * aside) * along
+	if held(space) or held(Key.e) { camera_height += way }
+	if held(Key.q) or held(Key.c) { camera_height = max(camera_height - way, lowest) }
 }
 
 started = clock()
