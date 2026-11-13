@@ -30,8 +30,8 @@ diagnose(fact: Node, about: Node): Node := diagnosed_at(fact, written_at(about))
 # the fact about the place [line, column] of the source, for a check of its text (a comment holds no node)
 # (once: a source the compiler parses twice says each fact once)
 diagnosed_at(fact: Node, place: list?): Node := {
-	said = said_fact(fact) + [place, fact_key(fact)]
-	if said not in diagnosed { diagnosed += [said] }
+	fact_said = said_fact(fact) + [place, fact_key(fact)]
+	if fact_said not in diagnosed { diagnosed += [fact_said] }
 	fact
 }
 
