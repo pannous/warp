@@ -15,6 +15,7 @@ use "record_classes.warp"
 use "radix_numbers.warp"
 use "time_literals.warp"
 use "version_literals.warp"
+use "mixins.warp"
 use "event_phrases.warp"
 use "float_suffixes.warp"
 use "durations.warp"
@@ -81,6 +82,7 @@ EXTENSIONS = [
 	circumfixes_extension
 	index_positions_extension
 	# before property_accessors, which would read `P.scaled(k) := …` as a property setter
+	mixins_extension
 	class_extensions_extension
 	property_accessors_extension
 	attributes_extension
