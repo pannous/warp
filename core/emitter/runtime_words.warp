@@ -192,7 +192,7 @@ def intrinsic_of(body: Body, name: text, values: list): TypedCode {
 # the intrinsics a program calls too, byte_at(text, offset), memory_byte(address),
 # memory_set_byte(address, value) and same(a, b), each at its own arity (a program's `same(y)` stays its own)
 program_intrinsics = ["byte_at", "memory_byte", "memory_set_byte", "same", "trap_place"]
-intrinsics = {with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
+intrinsics = {with_kind: 2, new_text: 1, new_ascii_text: 1, is_ascii_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
 	output_byte: 2, write_output: 1, output_address: 0, memory_byte: 1, memory_set_byte: 2, memory_f32: 1, memory_set_f32: 2, memory_i32: 1, memory_u32: 1, memory_set_i32: 2, memory_i64: 1, memory_f64: 1, memory_grown: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, is_plain_int: 1, made_case: 2, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1, ratio_of_parts: 2, numerator_part: 1, denominator_part: 1, has_plain_parts: 1,
