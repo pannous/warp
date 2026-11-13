@@ -81,12 +81,12 @@ one() {
 	# what a sample keeps (lib/storage.warp, <sample>.database.sqlite beside it) starts anew each run, as the page's
 	# storage does: a counter prints its first run's value, not the sweep count's
 	rm -f "$tree/${1%.warp}.database.sqlite"
-	# from its own folder, as a shell runs it (./photo.jpg beside it); the files the run leaves there go, since one left
+	# from its own folder, as a shell runs it (./photo.jpg beside it); the files the run leaves there move to data/, since one left
 	# untracked blocked after-push's checkout once someone committed it (native/files' greeting.txt, 11-09)
 	local folder left
 	folder=$tree/$(dirname "$1")
 	left=$(untracked_in "$folder")
-	trap 'written_removed "$folder" "$left"; trap - RETURN' RETURN
+	trap 'written_moved "$folder" "$left" "$results/left/${1%.warp}"; trap - RETURN' RETURN
 	(cd "$folder" && ulimit -t "$CPU_SECONDS" && WARP_WINDOW=0 WARP_SOUND=0 timeout "$wall" "$WARP" --events-for $EVENTS_MILLISECONDS "$tree/$1" "${arguments[@]}" </dev/null >"$out.txt" 2>"$out.err")
 	local status=$? first verdict=FAIL
 	[ $status -eq 124 ] && grep -aq "$SERVING" "$out.txt" && { echo "SRV  $1"; return; }
@@ -104,10 +104,15 @@ one() {
 	grep -q "$EXPECTED_FAILURE" "$tree/$1" && verdict=EXP
 	printf '%-4s %s: %s\n' "$verdict" "$1" "${first:-exit $status, nothing on stderr}"
 }
-# the untracked files of a folder, one a line; written_removed deletes those a run added to the list it was given
+# the untracked files of a folder, one a line; written_moved moves those a run added to the list it was given into
+# data/samples/left/<sample>/, nothing lost (a file saved there meanwhile by hand or by a parallel sample is kept too)
 untracked_in() { git -C "$1" ls-files --others --exclude-standard -- . ; }
-written_removed() { comm -13 <(printf '%s\n' "$2" | sort) <(untracked_in "$1" | sort) | while IFS= read -r file; do [ -n "$file" ] && rm -f -- "$1/$file"; done; }
-export -f one wall_seconds ended_by untracked_in written_removed
+written_moved() {
+	comm -13 <(printf '%s\n' "$2" | sort) <(untracked_in "$1" | sort) | while IFS= read -r file; do
+		[ -n "$file" ] && mkdir -p "$(dirname "$3/$file")" && mv -- "$1/$file" "$3/$file"
+	done
+}
+export -f one wall_seconds ended_by untracked_in written_moved
 export tree results WARP CPU_SECONDS WALL_SECONDS CPU_LIMIT_HIT WINDOW_LIBRARIES SERVING EVENTS_MILLISECONDS EXPECTED_FAILURE CHECK_LINE HOST_LINE
 if [ $# -gt 0 ]; then
 	for sample in "$@"; do one "$sample"; done
