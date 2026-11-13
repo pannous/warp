@@ -844,8 +844,8 @@ boundary_kind(type: text): ValueKind := if mvp_is_float(type) then ValueKind.Flo
 ## the native build's C (extensions/commands/build.warp build_native)
 # the main.c of a native build: wasm2c's header of the module, lib/native/wasi.c and lib/native/foreign.c, each C
 # function the module imports, the instantiation and run_main, which prints what main gives
-native_main(header: text, library: text): text := {
-	includes = ["<stdio.h>", "\"" + header + "\"", "\"" + library + "/native/wasi.c\"", "\"" + library + "/native/foreign.c\""]
+native_main(header: text): text := {
+	includes = ["<stdio.h>", "\"" + header + "\"", "\"native/wasi.c\"", "\"native/foreign.c\""]
 	foreign = c_functions_imported()
 	libraries = c_libraries(foreign)
 	# wasm2c's instantiate takes the imported modules' instances sorted by module name (its std::set), the C ones
