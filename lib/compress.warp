@@ -1,10 +1,9 @@
 // The standard library module compress: `use compress`, DEFLATE (RFC 1951) and its gzip (RFC 1952) and zlib
 // (RFC 1950) wrappers in pure warp. inflate(bytes) reads stored, fixed and dynamic Huffman blocks; deflate(bytes)
 // writes fixed Huffman blocks of LZ77 matches (hash chains over a 32 KB window), or stored blocks when those are
-// smaller, so gzip and zlib read it. A subject is text (its UTF-8) or a list of bytes; compress/decompress results
-// are byte lists. A `_text` sibling means the same as the bytes form, then decoded as UTF-8 text — the pairs are
-// inflate_text / inflate, gunzip_text / gunzip, zlib_decompress_text / zlib_decompress: gunzip_text(gzip("hello"))
-// is "hello". Corrupt input raises, saying what is wrong.
+// smaller, so gzip and zlib read it; compress and decompress are zlib's, as most languages' zlib modules name them.
+// A subject is text (its UTF-8) or a list of bytes; every result is a list of bytes, which from_utf8 reads as text:
+// from_utf8(gunzip(gzip("hello"))) is "hello". Corrupt input raises, saying what is wrong.
 // CRC-32 is lib/hash's crc32 (through the host); Adler-32 is offset
 use hash
 
@@ -14,8 +13,8 @@ COMPRESS_DISTANCE_BASE = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 
 COMPRESS_DISTANCE_EXTRA = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13]
 COMPRESS_CODE_ORDER = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]
 
-compress_bytes(subject: text or list): list := if subject is list then subject else to_utf8(subject)
-adler32(subject: text or list): int := { a = 1; b = 0; for x in compress_bytes(subject) { a = (a + x) % 65521; b = (b + a) % 65521 }; b * 65536 + a }
+subject_bytes(subject: text or list): list := if subject is list then subject else to_utf8(subject)
+adler32(subject: text or list): int := { a = 1; b = 0; for x in subject_bytes(subject) { a = (a + x) % 65521; b = (b + a) % 65521 }; b * 65536 + a }
 
 // --- reading bits (least significant first) and canonical Huffman codes (as in zlib's puff)
 class BitReader { input: list; pos: int; buf: int; left: int; out: list }
@@ -122,8 +121,7 @@ def inflate_from(input: list, start: int): BitReader {
 	r.left = 0
 	r
 }
-inflate(subject: text or list): list := inflate_from(compress_bytes(subject), 0).out
-inflate_text(subject: text or list): text := from_utf8(inflate(subject))
+inflate(subject: text or list): list := inflate_from(subject_bytes(subject), 0).out
 
 // --- deflate
 class BitWriter { out: list; buf: int; used: int }
@@ -204,12 +202,12 @@ def deflate_stored(input: list): list {
 	}
 	out
 }
-deflate(subject: text or list): list := { input = compress_bytes(subject); fixed = deflate_fixed(input); if count(fixed) <= count(input) + 5 * (count(input) /! 65535 + 1) then fixed else deflate_stored(input) }
+deflate(subject: text or list): list := { input = subject_bytes(subject); fixed = deflate_fixed(input); if count(fixed) <= count(input) + 5 * (count(input) /! 65535 + 1) then fixed else deflate_stored(input) }
 
 // --- zlib (RFC 1950)
-zlib_compress(subject: text or list): list := { input = compress_bytes(subject); [120, 156] + deflate(input) + big_endian(adler32(input), 4) }
-def zlib_decompress(subject: text or list): list {
-	input = compress_bytes(subject)
+compress(subject: text or list): list := { input = subject_bytes(subject); [120, 156] + deflate(input) + big_endian(adler32(input), 4) }
+def decompress(subject: text or list): list {
+	input = subject_bytes(subject)
 	if count(input) < 6 { raise "zlib: the input is too short for a zlib stream" }
 	if input[0] % 16 != 8 or input[0] /! 16 > 7 { raise "zlib: compression method " + text(input[0] % 16) + " is not deflate" }
 	if (input[0] * 256 + input[1]) % 31 != 0 { raise "zlib: the header check fails" }
@@ -219,10 +217,9 @@ def zlib_decompress(subject: text or list): list {
 	if from_big_endian(input[r.pos ..< r.pos + 4]) != adler32(r.out) { raise "zlib: the Adler-32 check fails" }
 	r.out
 }
-zlib_decompress_text(subject: text or list): text := from_utf8(zlib_decompress(subject))
 
 // --- gzip (RFC 1952)
-gzip(subject: text or list): list := { input = compress_bytes(subject); [31, 139, 8, 0, 0, 0, 0, 0, 0, 255] + deflate(input) + little_endian(crc32(input), 4) + little_endian(count(input) % 4294967296, 4) }
+gzip(subject: text or list): list := { input = subject_bytes(subject); [31, 139, 8, 0, 0, 0, 0, 0, 0, 255] + deflate(input) + little_endian(crc32(input), 4) + little_endian(count(input) % 4294967296, 4) }
 def gzip_skip_text(input: list, offset: int): int {
 	p = offset
 	while p < count(input) and input[p] != 0 { p = p + 1 }
@@ -235,7 +232,7 @@ def zeros_from(xs: list, begin: int): bool {
 }
 // every member's data, one after another; trailing zero padding is allowed
 def gunzip(subject: text or list): list {
-	input = compress_bytes(subject)
+	input = subject_bytes(subject)
 	out = []
 	offset = 0
 	while offset < count(input) {
@@ -262,4 +259,3 @@ def gunzip(subject: text or list): list {
 	}
 	out
 }
-gunzip_text(subject: text or list): text := from_utf8(gunzip(subject))
