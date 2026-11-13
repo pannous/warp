@@ -31,12 +31,12 @@ base=$(git -C "$tree" merge-base origin/main HEAD) || exit 2
 changed=$({ git -C "$tree" diff --name-only "$base" HEAD; git -C "$tree" diff --name-only HEAD; } | sort -u)
 code_changed=$(echo "$changed" | grep -E "$CODE_PATHS" | grep -v '^core/native/')  # the native warp is no compiler input (compiler-inputs.sh)
 # the native driver's sources (card smoke-sh): a change here cannot be seen by the installed driver
-native_changed=$(echo "$changed" | grep '^core/native/' || true)
-# 16 hex digits of the tree's core/native/*.warp, the way compiler-inputs.sh hashes a compiler's inputs
+native_changed=$(echo "$changed" | grep -E '^(core/native/|lib/native/.*\.c$|crates/wasmtime-capi/)' || true)
+# 16 hex digits of the tree's core/native/*.warp, lib/native/*.c (the C main every native build has) and the wasmtime C API's sources, the way compiler-inputs.sh hashes a compiler's inputs
 native_inputs_hash() {
 	local tree=$1
 	{
-		(cd "$tree" && find core/native -type f -name '*.warp' | env LC_ALL=C sort) | while IFS= read -r file; do
+		(cd "$tree" && { find core/native -type f -name '*.warp'; find lib/native -type f -name '*.c'; find crates/wasmtime-capi/src -type f; } | env LC_ALL=C sort) | while IFS= read -r file; do
 			printf '%s\0' "$file"
 			cat "$tree/$file"
 			printf '\0'
@@ -73,6 +73,11 @@ else
 	done
 	for library in "$installed"/lib*warp_*.* "$installed"/libwgpu_native.*; do clone "$library" "$tree/lib/" 2>/dev/null; done
 fi
+# warp's wasmtime C API changed (crates/wasmtime-capi): the tree's own, built in the tree's data/ (the shared target
+# stays main's, which a branch's sources would rebuild back and forth)
+if echo "$changed" | grep -q '^crates/wasmtime-capi/'; then
+	WARP_WASMTIME_TARGET=$tree/data/wasmtime "$scripts/wasmtime-c-api.sh" "$tree/lib" >/dev/null || { echo "smoke: scripts/wasmtime-c-api.sh failed for the tree's crates/wasmtime-capi" >&2; exit 1; }
+fi
 # a failed build prints its step, the step's output and the log's path in the store (and so does a hash failed before)
 built=$("$scripts/rebuild.sh" pure "$tree" 2>&1) || { echo "smoke: rebuild failed:" >&2; echo "$built" >&2; exit 1; }
 way=$(echo "$built" | grep -v "not prebuilt, compiled from source" | tail -1)
@@ -106,7 +111,8 @@ if [ -n "$native_changed" ]; then
 		[ -x "$tree/core/native/warp" ] || { echo "smoke: warp build native wrote no executable: ${made:0:160}" >&2; exit 1; }
 		rm -rf "$cached.new" && mkdir -p "$cached.new" || exit 1
 		cp "$tree/core/native/warp" "$cached.new/warp" && chmod +x "$cached.new/warp" || exit 1
-		for library in "$tree/lib"/libwarp_wasmtime.* "$installed"/libwarp_wasmtime.*; do
+		# the tree's own library last: a branch's crates/wasmtime-capi wins over the installed one
+		for library in "$installed"/libwarp_wasmtime.* "$tree/lib"/libwarp_wasmtime.*; do
 			[ -f "$library" ] && cp "$library" "$cached.new/"
 		done
 		rm -rf "$cached" && mv "$cached.new" "$cached" || exit 1
