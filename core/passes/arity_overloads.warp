@@ -481,6 +481,13 @@ static_kind(n: Node): list? := {
 	if is_lambda(n) or is_block_argument(n) { return ["function", ø] }
 	ø
 }
+# whether a variant of the name may take the receiver as its one argument: any, unless the receiver's kind is known; a
+# time literal only a variant taking a time or any value
+may_take(name: text, receiver: Node, overloaded: map, judge: ArgumentJudge): bool := {
+	kind = known_kind(receiver, judge)
+	takes = type => if is_time_view(receiver) then type == any_word or base_type(type) in time_test_types else kind == ø or argument_fit(kind, type) != ø
+	(1 to #overloaded[name]).any(at => judge.least[name]#at <= 1 and #overloaded[name]#at >= 1 and takes(overloaded[name]#at#1))
+}
 
 # variable → the static_kind of the values assigned to it in this scope, [] where they differ; a definition inside is
 # its own scope (within), a lambda shares this one, so another function's `x = "a"` leaves this x's kind alone
@@ -772,8 +779,9 @@ typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 		receivers = if receiver is symbol and qualifies_by_module(name_of(receiver), judge.program) then [] else [receiver]
 		return typed_resolved(group_like(method, [method#1] + receivers + items_of(method)[1 ..]), overloaded, judge)
 	}
-	# `red.hex_text`, no parentheses: the word's call of the receiver, where no class names a field so
-	if method != ø and method is symbol and name_of(method) in overloaded and not names_a_field(name_of(method), judge.program) and not (key_of(n) is symbol and qualifies_by_module(name_of(key_of(n)), judge.program)) {
+	# `red.hex_text`, no parentheses: the word's call of the receiver, where no class names a field so and a variant may
+	# take it: `2026-10-14T22:27.time` reads the time's field, as no time(n: number) or time(b: block) takes a time
+	if method != ø and method is symbol and name_of(method) in overloaded and not names_a_field(name_of(method), judge.program) and not (key_of(n) is symbol and qualifies_by_module(name_of(key_of(n)), judge.program)) and may_take(name_of(method), key_of(n), overloaded, judge) {
 		return typed_resolved(call_of(name_of(method), [key_of(n)]), overloaded, judge)
 	}
 	# a one-line block's words are its phrase already, `{ thrice {n += 1} }` (phrase_blocks.warp)
