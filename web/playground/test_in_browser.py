@@ -310,6 +310,14 @@ FRAME_SHADERS = "(the on frame shader samples keep painting)"
 FRAME_SHADER_SAMPLES = ["shader_brush", "shader_trails"]
 FRAME_SHADER_FIRST_MS = 15000  # the first frame's canvas: a software GPU takes long for a 1280×800 frame
 FRAME_SHADER_LOOK_AGAIN_MS = 3000
+# card gpu-canvas-duplicate: a program paints its shaders into one view; painted at a new size (an `on frame` painting
+# at the pane's size, which moves once the first canvas shows), the new canvas replaces the old: a bee per run, not two
+SHADER_ONE_VIEW = "(a shader painted at a new size replaces its canvas)"
+SHADER_ONE_VIEW_CODE = """red = shader {
+	@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }
+}
+for wide in [8, 9, 8] { paint(red, wide, 8) }"""
+SHADER_ONE_VIEW_SHOWN = "8×8"
 THROUGH_PIXELS = "through pixels, not into the page's canvas"  # Chrome's SwiftShader drops the page canvas
 # card shader-read: $previous(at) reads the frame the shader left before, as natively (tests/programs/
 # test_shader_builtins.rs a_shader_reads_its_previous_frame): three renders of a quarter red more give 192 red
@@ -1270,6 +1278,21 @@ def fingers_wrong():
 	return [] if "painted" in shown else [f"a finger {dragged} over samples/{FINGERS_SAMPLE}: its middle shows {shown}, expected a stroke"]
 
 
+def shader_one_view_wrong():
+	"""a shader painted at three sizes in turn shows one canvas, the last; skipped loudly where shaders paint through
+	pixels"""
+	painted, shown = red_shader_shown()
+	if NO_GPU in painted or "gpu true" not in shown:
+		print(f"skip {SHADER_ONE_VIEW}: this browser paints shaders {THROUGH_PIXELS} ({painted!r}, {shown!r})")
+		return []
+	run_code(SHADER_ONE_VIEW_CODE)
+	canvases = browser("eval", f"""(async () => {{
+		await new Promise(done => setTimeout(done, {CANVAS_SETTLE_MS}));
+		return [...document.querySelectorAll("#paintings canvas")].map(canvas => `${{canvas.width}}×${{canvas.height}}`).join(" ");
+	}})()""")
+	return [] if canvases.strip('"') == SHADER_ONE_VIEW_SHOWN else [f"canvases {canvases}, expected {SHADER_ONE_VIEW_SHOWN!r} alone"]
+
+
 def frame_shaders_wrong():
 	"""each `on frame` shader sample still paints a few seconds in: its canvas changes between two looks; skipped loudly
 	where shaders don't paint into the page's canvas (the bug was there), whose 1280×800 pixel frames keep the page
@@ -1565,7 +1588,7 @@ def check_examples(names, page_url=None, site=None):
 	snippets = guide_snippets() if GUIDE in names else []
 	for line, code, value, printed in snippets:
 		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed, page_url))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (KEPT_OUTPUT, kept_output_wrong), (GUIDE_PARTS, guide_parts_wrong), (GUIDE_ADDRESS, guide_address_wrong), (GUIDE_PLACES, guide_places_wrong), (EXAMPLE_SWITCH, example_switch_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), (STALE_DEPLOY, stale_deploy_wrong), (DEFINED_NAMES, defined_names_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (KEPT_OUTPUT, kept_output_wrong), (GUIDE_PARTS, guide_parts_wrong), (GUIDE_ADDRESS, guide_address_wrong), (GUIDE_PLACES, guide_places_wrong), (EXAMPLE_SWITCH, example_switch_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (SHADER_ONE_VIEW, shader_one_view_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), (STALE_DEPLOY, stale_deploy_wrong), (DEFINED_NAMES, defined_names_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
