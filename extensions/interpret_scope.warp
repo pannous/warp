@@ -1,0 +1,26 @@
+# `interpret x` of data or a block written in the program sees the names where it is written, as a closure does; eval of a
+# text sees only what its `with:` names (user 11-13 via warp-interviewer, cluster runtime-eval-scope). Each call
+# `interpret(x)` passes the variables the program's data reads that it can see, interpret(x, with: {a: a}), which
+# lib/interpret.warp binds as eval's `with:` does
+
+interpret_scope(program: Node): Node := {
+	read = data_names(program)
+	if #read == 0 { return program }
+	main = statements_in(program).filter(statement => definition_call(without_mark(statement)) == ø).flat_map(names_assigned)
+	statements_as(program, statements_in(program).map(statement => scoped_statement(statement, read, main)))
+}
+scoped_statement(statement: Node, read: list, main: list): Node := {
+	plain = without_mark(statement)
+	call = definition_call(plain)
+	if call == ø { return scoped_calls(statement, read, main) }
+	own = items_of(call)[1 ..].map(parameter => name_of(leftmost_symbol(parameter))) + names_assigned(value_of(plain))
+	Key(key_of(plain), Op.Define, scoped_calls(value_of(plain), read, main + own))
+}
+data_names(program: Node): list := nodes_in(program).filter(is_quote).flat_map(quote => nodes_in(quote#2).filter(n => n is symbol).map(name_of))
+scoped_calls(n: Node, read: list, visible: list): Node := {
+	seen = read.filter(name => name in visible).unique()
+	if #seen == 0 then n else bottom_up(n, part => if is_call_form(part) and #part == 2 and part#1 == symbol("interpret") then with_names(part, seen) else part)
+}
+with_names(call: Node, names: list): Node := group_like(call, [call#1, call#2, Key(symbol("with"), Op.Colon, List(names.map(name => Key(symbol(name), Op.Colon, symbol(name))), Bracket.Curly, Separator.Comma))])
+
+interpret_scope_extension = Extension{name: "interpret_scope", passes: {"spaced_prefix_calls": interpret_scope}}
