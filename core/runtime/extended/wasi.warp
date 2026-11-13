@@ -123,15 +123,9 @@ file_failure(word: text, path: text, error: int): Node := {
 	failure_of(word + " " + path + " failed: " + wasi_reason(error))
 }
 
-# the host's std_io (analysis/host_words.warp), for a URL's text: net.get, as fetch reads it
-std_io(module: Node, member: Node, arguments: Node): Node from runtime
-# a path that is a URL, `https://…`, `http://…` or `://host/…` (over https), as core/host_io.warp is_url says for
-# read_bytes: every word that reads a path reads a URL too
-is_url_path(t: text): bool := text_starts_with(t, "https://") or text_starts_with(t, "http://") or text_starts_with(t, "://")
-# `read(path)`: the file's text, a URL's over HTTP, or the Error of why not
+# `read(path)`: the file's text, or the Error of why not
 read_file(path: Node): Node := {
 	t = text_of_textual(path)
-	if is_url_path(t) { return std_io("net", "get", list_node(Kind.List, [path])) }
 	fd = opened_file(t, 0)
 	if fd < 0 { return file_failure("read", t, 0 - fd) }
 	answer = ""
@@ -153,6 +147,8 @@ read_file(path: Node): Node := {
 	answer
 }
 
+# std_io("file", "read", [path]): core/host_io.warp read, as read_file
+std_file_read(path: Node): Node := read_file(path)
 # `use file; read_bytes(path)`: the file's bytes, ints 0 to 255; the Error of why not
 std_file_read_bytes(path: Node): Node := {
 	content = read_file(path)
