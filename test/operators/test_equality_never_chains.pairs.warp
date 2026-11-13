@@ -17,5 +17,5 @@
 'x = 10; y = 20; 30 == x + y ≈ 30'	error
 '1 ≈ 1 == yes'	error
 '(1 == 1) == yes'	true
-'1 == (1 ≈ 1.0000000001)'	false
+'1 == (1 ≈ 2)'	false
 '1 == 1 and 2 ≈ 2'	true

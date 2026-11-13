@@ -1122,7 +1122,9 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			// operator word, starts its subject
 			glued_sign = (op#1 == "-" or op#1 == "#") and not is_blank(char_ahead(p, 1))
 			if (glued_sign or is_alpha(c)) and ends_with_clause_word(left) { break }
-			equality_level = powers#1 == binding_powers("==")#1
+			// (none while the table is still bare, every operator at the default power as the extension rows are read)
+			equality = alias_spellings().powers.get("==")
+			equality_level = equality != ø and powers#1 == equality#1
 			if equality_level and compared != "" { raise comparisons_chained(compared, op#1) }
 			compared = if equality_level then op#1 else ""
 			took_own_then = owns and powers#1 < min_power and op#2 == "then"
