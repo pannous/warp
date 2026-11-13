@@ -24,9 +24,19 @@ is_subject_block(n: Node): bool := match n {
 grouped_in(n: Node, parts: list): Node := if parts.any(part => part == match_symbol) then group_like(n, matches_grouped(parts)) else n
 # each `match x {…}` among the parts as one phrase; a `match` before no block stays a word
 matches_grouped(parts: list): list := {
-	if #parts < 3 { return parts }
-	if parts#1 == match_symbol and is_curly_group(parts#3) { return [List(parts[0 ..< 3], Bracket.None, Separator.Space)] + matches_grouped(parts[3 ..]) }
+	if #parts < 2 { return parts }
+	if parts#1 == match_symbol and #parts > 2 and is_curly_group(parts#3) { return [List(parts[0 ..< 3], Bracket.None, Separator.Space)] + matches_grouped(parts[3 ..]) }
+	matched = if parts#1 == match_symbol then operand_matched(parts#2) else ø
+	if matched != ø { return [matched] + matches_grouped(parts[2 ..]) }
 	[parts#1] + matches_grouped(parts[1 ..])
+}
+# `(match x {…} == y)`, which reads `match ((x {…}) == y)`: the match is the operator's leftmost operand,
+# `(match x {…}) == y`; ø where the leftmost operand is no subject and its block
+operand_matched(n: Node): Node? := {
+	if is_subject_block(n) { return List([match_symbol] + items_of(n), Bracket.None, Separator.Space) }
+	if not (n is key) or key_of(n) == ø { return ø }
+	left = operand_matched(key_of(n))
+	if left == ø then ø else Key(left, op_of(n), value_of(n))
 }
 
 match_phrases_extension = Extension{name: "match_phrases", passes_before: {"node_matches": match_phrases}}
