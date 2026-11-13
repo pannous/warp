@@ -32,6 +32,9 @@ cp "$folder/warp-seed-unicode.wasm" "$tree/lib/modules/unicode.wasm"
 cd "$tree" && "$folder/warp" --lib "$tree/lib" rebuild pure
 # the native warp of this tree itself, built with the compilers just made: the runner above came from the source the
 # previous release could emit (scripts/bootstrap-native.ref), and lacks the host words this tree imports
-# it links the runner's wasmtime C API from <tree>/lib ("cannot find -lwarp_wasmtime")
-cp "$folder"/libwarp_wasmtime.* "$tree/lib/"
-(cd "$tree/core/native" && "$folder/warp" --lib "$tree/lib" build native warp.warp) && mv "$tree/core/native/warp" "$folder/warp"
+# it links the tree's own wasmtime C API from <tree>/lib, built there first by the release workflow (its setters the
+# runner's lacks: warp_config_wasm_stack_set after v1.11.0), else the runner's ("cannot find -lwarp_wasmtime"); and
+# finds it beside itself, where the runner's lay
+ls "$tree/lib"/libwarp_wasmtime.* >/dev/null 2>&1 || cp "$folder"/libwarp_wasmtime.* "$tree/lib/"
+(cd "$tree/core/native" && "$folder/warp" --lib "$tree/lib" build native warp.warp) && mv "$tree/core/native/warp" "$folder/warp" &&
+  cp "$tree/lib"/libwarp_wasmtime.* "$folder/"
