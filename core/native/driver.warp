@@ -480,6 +480,7 @@ path_found(named: text): text := {
 	""
 }
 contains_byte(t: text, byte: int): bool := field_count(t, byte) > 1
+chdir(path: pointer): i32 from "c"
 current_folder(): text := {
 	folder = allocate(PATH_BYTES)
 	getcwd(folder, PATH_BYTES)
@@ -1526,6 +1527,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	member = shown(caller, context, given + VALUE_BYTES)
 	listed = given + 2 * VALUE_BYTES
 	if same_text(module, "os") and same_text(member, "command") { return os_command(caller, context, listed, results) }
+	if same_text(module, "os") and same_text(member, "cd") { return os_cd(caller, context, listed, results) }
 	if same_text(module, "os") and same_text(member, "exec") { return os_exec(caller, context, listed, results) }
 	if same_text(module, "os") and same_text(member, "run") { return os_run(caller, context, listed, results) }
 	if same_text(module, "os") and same_text(member, "compile_wasm") { return os_wasm_compiled(caller, context, listed, results) }
@@ -1578,6 +1580,15 @@ guest_result(caller: handle, context: handle, name: text, value: pointer): point
 COMMAND_OUTPUT_BYTES = 4096
 # os.command(line): the line run by sh, what it printed, its trailing newlines left off; else the Error naming its exit
 # status and what it said on stderr
+# os.cd(folder) (lib/shell.warp cd): the process's working folder changed, which the program's relative paths follow
+# (real_path, the runtime's cwd) and the commands it runs inherit; the new folder, else the Error naming the one missing
+os_cd(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
+	folder = shown(caller, context, item_of(caller, context, listed, 1))
+	if chdir(c_string(folder)) != 0 { return guest_error(caller, context, joined("cd: no folder ", folder), result) }
+	now = current_folder()
+	setenv(c_string("PWD"), c_string(now), 1)
+	guest_text_of(caller, context, now, result)
+}
 os_command(caller: handle, context: handle, listed: pointer, result: pointer): nothing := line_run(caller, context, shown(caller, context, item_of(caller, context, listed, 1)), result)
 # os.exec(words): the argument vector (`exec sh "crontab -l"`, lib/os.warp) run as that command, each word a word of
 # its own however it reads (quoted for sh, no expansion), what it printed; else the Error naming the command (card
