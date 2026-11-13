@@ -30,6 +30,10 @@ use "tests.warp"
 getline(line: pointer, capacity: pointer, stream: handle): i64 from "c"
 isatty(descriptor: i32): i32 from "c"
 read(descriptor: i32, data: pointer, size: i64): i64 from "c"
+poll(descriptors: pointer, count: i64, milliseconds: i32): i32 from "c"
+# how often the console, waiting for a key, lets a window a line painted take its events in
+WINDOW_EVENTS_EVERY_MS = 20
+POLL_INPUT = 1
 STDIN = 0
 STDOUT = 1
 DASH = 45
@@ -325,7 +329,7 @@ console(compiler: text): nothing := {
 		fd_write(STDOUT, prompt(), 1, allocate(4))
 		line = ""
 		if editing {
-			line = edited_line(history, lines)
+			line = edited_line(session, history, lines)
 			if same_text(line, input_ended()) then break
 		} else {
 			length = getline(line_cell, capacity, input)
@@ -373,13 +377,14 @@ line_count(lines: text): i64 := {
 # the character under the cursor, Alt+Delete the word after it and Alt+⌫ the word before it (card repl-editing-keys);
 # Alt+←/→ move a word back and on (card alt-arrow-navigation), and ↑ reaches the earlier consoles' lines (history_path, card repl-alt-arrows).
 # The cursor steps over a character's UTF-8 bytes whole
-edited_line(history: text, lines: i64): text := {
+edited_line(session: pointer, history: text, lines: i64): text := {
 	settings = command_output("stty -g")
 	command_output("stty -icanon -echo min 1")
 	line = ""
 	at = 0
 	back = 0
 	while yes {
+		key_awaited(session)
 		c = key()
 		if c < 0 or (c == KEY_END_OF_INPUT and line.length == 0) {
 			line = input_ended()
@@ -431,6 +436,15 @@ byte_text(value: i32): text := {
 }
 # a terminal control sequence: ESC [ and the rest
 control(rest: text): text := joined(joined(byte_text(KEY_ESCAPE), "["), rest)
+# until the terminal gives a key, the window a console line painted takes its events in (driver.warp session_waited)
+key_awaited(session: pointer): nothing := {
+	descriptor = allocate(8)
+	word_at(descriptor).value = STDIN
+	# (a pollfd: the descriptor, then the events asked and those that came as two 16-bit halves, these none yet)
+	word_at(descriptor + 4).value = POLL_INPUT
+	window_linked = yes
+	while window_linked and poll(descriptor, 1, WINDOW_EVENTS_EVERY_MS) == 0 { window_linked = session_waited(session) }
+}
 # the next byte the terminal gives, -1 at its end
 key(): i32 := {
 	cell = allocate(1)
