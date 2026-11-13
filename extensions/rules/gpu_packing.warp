@@ -6,11 +6,12 @@ use rule_words
 # packed as f32 cells from its creation, which the GPU's library reads and writes where they are. lib/prelude.warp's
 # rule packs the creating forms of the program's (extensions/rules/rule_words.warp gpu_lists_packed), `xs: [f32] = …` asks for one outright
 GPU_LIST_WORDS = ["gpu_compute", "paint", "gpu_render"]
-# the names found once a program: name → [GPU uses, assignments, other mentions, its creating form or ø]
+# the names found once a program: name → [GPU uses, assignments, other mentions, its creating form or ø, growths]
 class GpuLists { program: Node; uses: map }
 gpu_lists = GpuLists(Node.Empty, {})
 # whether xs is made for the GPU (a GPU word takes it: gpu_compute's arrays, itself or a map's value), made once by a
-# form gpu_packed packs, and mentioned otherwise only as a GPU list serves it: #xs, xs#i, xs#i = v, for x in xs, print xs
+# form gpu_packed packs and else only grown, `xs = xs + more`, and mentioned otherwise only as a GPU list serves it:
+# #xs, xs#i, xs#i = v, for x in xs, print xs
 gpu_bound(xs: Node, program: Node): bool := {
 	if not (xs is symbol) { return no }
 	if not same(program, gpu_lists.program) {
@@ -19,15 +20,20 @@ gpu_bound(xs: Node, program: Node): bool := {
 		gpu_uses_counted(program)
 	}
 	uses = gpu_lists.uses.get(name_of(xs))
-	uses != ø and uses#1 > 0 and uses#2 == 1 and uses#3 == 0 and uses#4 != ø
+	uses != ø and uses#1 > 0 and uses#2 == 1 + uses#5 and uses#3 == 0 and uses#4 != ø
 }
 gpu_use_added(name: text, at: int) := {
-	uses = gpu_lists.uses.get(name) ?? [0, 0, 0, ø]
+	uses = gpu_lists.uses.get(name) ?? [0, 0, 0, ø, 0]
 	uses[at] = uses[at] + 1
 	gpu_lists.uses[name] = uses
 }
 gpu_uses_counted(n: Node) := {
 	if n is symbol { return gpu_use_added(name_of(n), 2) }
+	if is_key(n, Op.Assign) and key_of(n) is symbol and is_key(value_of(n), Op.Add) and key_of(value_of(n)) is symbol and name_of(key_of(value_of(n))) == name_of(key_of(n)) {
+		gpu_use_added(name_of(key_of(n)), 1)
+		gpu_use_added(name_of(key_of(n)), 4)
+		return gpu_uses_counted(value_of(value_of(n)))
+	}
 	if is_key(n, Op.Assign) and key_of(n) is symbol {
 		gpu_use_added(name_of(key_of(n)), 1)
 		uses = gpu_lists.uses[name_of(key_of(n))]
