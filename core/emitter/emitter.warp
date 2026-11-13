@@ -1734,6 +1734,8 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.runtime_types = 0
 	if module.prebuilding or prepended() { canonical_type_entries() }
 	if module.prebuilding { for kind in Made.keys { module.made[kind] = yes } }
+	# a linked module's values reach the program's code: `now.time + 2 hours` adds lib/time's time
+	for image in module.linked_images { for kind in image.made { module.made[kind] = yes } }
 	module.global_marks = {}
 	if prepended() { behind_runtime() }
 	module.aliases = type_synonyms()
