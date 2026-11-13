@@ -84,12 +84,8 @@ listed_in_place(method: text, arguments: list, operation: Node): Node := {
 # alone, which a module's text() method left `m.text` of a map
 keyed_first(method: text, arguments: list, otherwise: Node): Node := {
 	if #arguments != 1 or method in position_words { return otherwise }
-	converted_or(method, Key(arguments#1, Op.Dot, symbol(method)), otherwise)
+	Key(arguments#1, Op.Dot, symbol(method))
 }
-# every value converts to a text or a float: an instance whose class has no such method, one of a module the dispatcher
-# never saw (lib/complex's Complex meeting reals' text(), `use complex; text(3+4ⅈ); pi`), converts by the builtin, which
-# shows it by its own module's `format as text`
-converted_or(method: text, asked: Node, builtin: Node?): Node := if builtin != ø and method in conversion_methods.map(conversion => conversion#1) then Key(asked, Op.Coalesce, builtin) else asked
 # the dispatcher a call `x.sum()` of a method named like a function or a library word calls
 routed_name(method: text): text := method + "·method"
 # a method named by a type word or a word of the syntax, `float()`, `in(u)`, is routed: lifted as itself it would change
@@ -766,7 +762,7 @@ foreign_first(method: text, call_arguments: list, fallback: Node?, operated: boo
 	if module_written == "" or operated { return fallback }
 	foreign = call_of(foreign_method_word, [call_arguments#1, Text(method), List(call_arguments[1..], Bracket.Square, Separator.Comma)])
 	if fallback == ø { return foreign }
-	Key(Key(Key(ø, Op.If, call_of(instance_test_word, [call_arguments#1])), Op.Then, converted_or(method, foreign, fallback)), Op.Else, fallback)
+	Key(Key(Key(ø, Op.If, call_of(instance_test_word, [call_arguments#1])), Op.Then, foreign), Op.Else, fallback)
 }
 # the runtime's words a dispatcher calls so, by names no program spells
 foreign_method_word = "instance·method"
