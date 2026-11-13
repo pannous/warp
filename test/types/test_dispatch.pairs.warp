@@ -4,7 +4,7 @@
 'class Deck{n:int}; def size(d:Deck):=d.n; size("abc") + size(Deck(2))'	5
 
 # sort_keeps_its_types
-'def sort(x):=0; sort([2,1]) == [1 2]'	true
+'def my_sort(x):=0; sort([2,1]) == [1 2]'	true
 
 # a_method_in_a_class_body_is_a_method_of_the_generic_function
 'class Deck{n:int; def sort():=n*2}; [3,1].sort()'	[1, 3]
