@@ -128,12 +128,15 @@ modules_made() {
 	shift 5
 	log=$work/$1.log
 	for name; do rm -f "$folder/$name.wasm" "$folder/$name.wasm.built-of"; done
-	if "${instruction_counter[@]}" "$log.count" "$warp" --no-window --lib "$lib" "$compiler" modules "$folder" "$runtime" "$@" >"$log" 2>&1; then
+	local status=0
+	"${instruction_counter[@]}" "$log.count" "$warp" --no-window --lib "$lib" "$compiler" modules "$folder" "$runtime" "$@" >"$log" 2>&1 || status=$?
+	if [ $status = 0 ]; then
 		cat "$log"
 		# (a lib/ module refusing to prebuild leaves no file: compiled from its source with each program, said again next step)
 		for name; do [ ! -f "$folder/$name.wasm" ] || module_key "$work/$name.key" "$folder/$name.wasm" >"$folder/$name.wasm.built-of"; done
 	else
-		cat "$log" >>"$work/refused"
+		# (a process dying without a word, a crash, still says which modules it was building)
+		{ cat "$log"; echo "modules: building $* exited $status"; } >>"$work/refused"
 	fi
 	for name; do touch "$work/$name.done"; done
 }
