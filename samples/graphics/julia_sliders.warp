@@ -7,9 +7,9 @@ use math
 use ui
 width = 1600
 height = 900
-c_re = slider(-2 to 2, -.8)
-c_im = slider(-2 to 2, .16)
-zoom = slider(0.5 to 8, 1)
+c_re = slider(-1 to 1, -.8)
+c_im = slider(-1 to 1, .16)
+zoom = slider(0.5 to 40, 1)
 c = c_re + c_im * ⅈ
 span = 3 # the plane's width the picture shows at zoom 1
 center_x = 0.0 # the plane's point the picture centers on
