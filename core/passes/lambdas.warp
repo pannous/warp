@@ -820,7 +820,8 @@ aliased_definitions(statements: list, bound: map): list := {
 	arities = {}
 	aliased = []
 	for statement in statements {
-		lambda = if is_key(statement, Op.Define) and key_of(statement) is symbol then function_named(value_of(statement), arities, bound) else ø
+		# (a name a variable holds too, math's `arctan = &arc_tangent`, stays the value it names)
+		lambda = if is_key(statement, Op.Define) and key_of(statement) is symbol and not bound.has(name_of(key_of(statement))) then function_named(value_of(statement), arities, bound) else ø
 		written = if lambda == ø then statement else lambda_definition(key_of(statement), lambda)
 		parts = definition_of(written)
 		if parts != ø { arities[parts.name] = #parts.parameters }
