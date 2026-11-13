@@ -29,6 +29,8 @@ rewrite $c.methods => [$functions...] where $c is symbol and $functions = class_
 # instance_members)
 rewrite $p.$w => [$names...] where $p is symbol and $f = field_word($w, $program) and $names = instance_members($p, $f, $source)
 rewrite $p.methods => [$names...] where $p is symbol and $names = instance_members($p, methods, $source)
+# `p.class`, as p.type (wiki/reflection.md)
+rewrite $p.class => type($p) where $p is instance
 # `functions` is a synonym of methods (decision methods-declared); a type word's or alias's methods, `text.methods`
 # (extensions/rules/rule_words.warp type_methods)
 rewrite $c.functions => [$functions...] where $c is symbol and $functions = class_methods_listed($c, $program, $source)
@@ -55,6 +57,7 @@ rewrite $f.dump => $refused where $f is symbol and $f is function and $refused =
 rewrite dir $x => dir($x)
 rewrite dir($m) => [$names...] where $m is symbol and $names = dir_words($m, $program)
 rewrite dir($p) => [$names...] where $p is symbol and $names = instance_members($p, dir, $source)
+rewrite dir($c) => [$names...] where $c is symbol and $names = class_dir($c, $program, $source)
 rewrite dir($x) => dir_of_value($x, $words...) where $words = value_dir_words($program)
 # the views of a module's words besides dir (card dir-filters): `time.functions`, `time.attributes`, `time.classes`,
 # `list.operators` (the operators it declares, `∪`, which dir leaves out) (extensions/rules/rule_words.warp module_view)

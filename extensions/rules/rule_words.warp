@@ -1039,11 +1039,19 @@ class_fields_listed(name: Node, program: Node, source: text): any := {
 	texts_list(lineage_fields(lineage, source))
 }
 # the field names of a class's lineage, those of the class it extends first
-lineage_fields(lineage: list, source: text): list := lineage.reverse().flat_map(owner => (class_members(owner, source) ?? [[], []])#1.map(field => "${field}"))
+lineage_fields(lineage: list, source: text): list := lineage.reverse().flat_map(owner => owner_members(owner, source)#1.map(field => "${field}"))
+owner_members(owner: text, source: text): list := class_members(owner, source) ?? [[], []]
+# `dir(P)` of a class the program declares: its fields, then its methods, those of the classes it extends among them;
+# ø where the program has its own dir or declares no class of that name
+class_dir(name: Node, program: Node, source: text): any := {
+	lineage = written_lineage(name, source)
+	if owns_dir(program) or #lineage == 0 { return ø }
+	texts_list(lineage_fields(lineage, source) + lineage.flat_map(owner => owner_members(owner, source)#2))
+}
 class_methods_listed(name: Node, program: Node, source: text): any := {
 	lineage = written_lineage(name, source)
 	if owns_word("methods", program) or #lineage == 0 { return ø }
-	own = lineage.flat_map(owner => (class_members(owner, source) ?? [[], []])#2)
+	own = lineage.flat_map(owner => owner_members(owner, source)#2)
 	outside = first_parameter_types.keys.filter(function => lineage.contains(first_parameter_types[function]) and not own.contains(function))
 	List((own + outside).map(symbol), Bracket.Square, Separator.Comma)
 }
@@ -1107,7 +1115,7 @@ class_setter(variable: Node, word: Node, source: text): any := {
 	made = class_made_as(spelled(variable), source)
 	if made == ø { return ø }
 	lineage = class_lineage(made, plain_node(parsed(source)))
-	if lineage.any(owner => spelled(word) in (class_members(owner, source) ?? [[], []])#1.map(field => "${field}")) { return ø }
+	if spelled(word) in lineage_fields(lineage, source) { return ø }
 	if lineage.contains(first_parameter_types.get(spelled(word))) then yes else ø
 }
 # `area.full`: what printing area shows, its doc as comment lines above its definition as written
@@ -1355,6 +1363,7 @@ rule_words = {
 	gpu_packed: gpu_packed,
 	gpu_packed_as: gpu_packed_as,
 	instance_members: instance_members,
+	class_dir: class_dir,
 	field_word: field_word,
 	class_fields_listed: class_fields_listed,
 	class_methods_listed: class_methods_listed,
