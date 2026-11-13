@@ -58,7 +58,6 @@ SLASH = 47
 SPACE = 32
 SEMICOLON = 59
 TEXT_SHIFT = 4294967296
-# the exit status of a child whose exec failed (words_run): the command is not found
 # posix_spawn_file_actions_t's bytes, at most: 80 on glibc, a pointer on macOS
 SPAWN_ACTIONS_BYTES = 128
 # the most bytes shown_from gives at once: the output area past its scratch (runtime/text.warp output_room, c_text_at)
