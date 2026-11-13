@@ -56,21 +56,23 @@ modules_of_files() {
 	done | sort -u
 }
 
-# modules_built <warp> <lib> <compiler> <folder> <runtime>: `warp rebuild`'s modules step in parallel (user 11-11, card
+# modules_built <warp> <lib> <compiler> <folder> <runtime> [<count file>]: `warp rebuild`'s modules step in parallel (user 11-11, card
 # lazy-module-prebuild). The compiler's plan (modules-plan) writes the library index and names each module with the
 # modules it waits for; each module is then built by a process of its own (`modules <folder> <runtime> <name>`) once
 # those are written. Run in a build slot (scripts/build-slot.sh), it adds a worker for each other slot free right now,
 # never waiting for one. A module whose key (the native warp running the build, the compiler, the runtime, the index
 # and sugar rules, what the plan says it is built of, its waited-for modules' keys) is its file's, <m>.wasm.built-of,
 # is kept as it is. A refused lib/ module leaves no file, as the sequential step does; a refused lib/host/ one
-# fails the step once every module is done
+# fails the step once every module is done. The instructions its processes retired, summed, go to the count file as
+# /usr/bin/time -l says them, for the build's record (a timer counts only the process it runs, not its children)
 MODULE_WAIT=0.2  # seconds a worker waits when no module is ready
 digest() { { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-64; }
 modules_built() {
-	local warp=$1 lib=$2 compiler=$3 folder=$4 runtime=$5 work=$4/.modules-step name texts waits slot workers kept
+	local warp=$1 lib=$2 compiler=$3 folder=$4 runtime=$5 count_file=$6 work=$4/.modules-step name texts waits slot workers kept counted_file
+	set -- "$1" "$2" "$3" "$4" "$5"
 	# (a killed step's claims go: they'd leave its modules unclaimable)
 	rm -rf "$work" && mkdir -p "$work" || return 1
-	"$warp" --no-window --lib "$lib" "$compiler" modules-plan "$folder" >"$work/plan" || return 1
+	"${instruction_counter[@]}" "$work/plan.count" "$warp" --no-window --lib "$lib" "$compiler" modules-plan "$folder" >"$work/plan" || return 1
 	{ cat "$warp" "$compiler" "$runtime" "$folder/sugar_rules.packed"; grep -v -e '^hash	' -e '^slice	' "$folder/index.tsv"; grep '^library	' "$work/plan"; } | digest >"$work/common"
 	while IFS=$'\t' read -r name texts waits; do
 		[ "$name" = library ] && continue
@@ -86,6 +88,7 @@ modules_built() {
 	workers=$(ls "$work" | grep -c '^worker-')
 	kept=$(ls "$work" | grep -c '\.kept$')
 	echo "modules: $(($(grep -vc '^library	' "$work/plan") - kept)) built by $workers worker$([ "$workers" = 1 ] || echo s)$(command -v lockf >/dev/null || echo ' (no lockf: one)'), $kept kept as they were"
+	[ -z "$count_file" ] || for counted_file in "$work"/*.count; do instructions_counted "$counted_file"; done | awk '{ total += $1 } END { printf "%d  instructions retired\n", total }' >"$count_file"
 	[ ! -e "$work/refused" ] || { cat "$work/refused" >&2; return 1; }
 	rm -rf "$work"
 }
@@ -137,7 +140,7 @@ modules_made() {
 	shift 5
 	log=$work/$1.log
 	for name; do rm -f "$folder/$name.wasm" "$folder/$name.wasm.built-of"; done
-	if "$warp" --no-window --lib "$lib" "$compiler" modules "$folder" "$runtime" "$@" >"$log" 2>&1; then
+	if "${instruction_counter[@]}" "$log.count" "$warp" --no-window --lib "$lib" "$compiler" modules "$folder" "$runtime" "$@" >"$log" 2>&1; then
 		cat "$log"
 		# (a lib/ module refusing to prebuild leaves no file: compiled from its source with each program, said again next step)
 		for name; do [ ! -f "$folder/$name.wasm" ] || module_key "$work/$name.key" "$folder/$name.wasm" >"$folder/$name.wasm.built-of"; done
