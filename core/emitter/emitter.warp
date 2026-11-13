@@ -224,7 +224,8 @@ def member_read(body: Body, receiver: Node, name: text): TypedCode {
 	held_name = scratch_name(body)
 	held = local_index(body, held_name, value.kind)
 	called = called_on(body, word, symbol(held_name))
-	by_call = given => field_or_word(body, given, word, x => TypedCode(called.kind, x.code + [op.local_set] + uleb(held) + called.code, called.mark))
+	# (a map's entry of the name written comes first, `m.average`, the alias's word only without one)
+	by_call = given => field_or_word(body, given, name, x => TypedCode(called.kind, x.code + [op.local_set] + uleb(held) + called.code, called.mark))
 	if value.kind == ValueKind.Node and time_fields.has(word) and module.functions.has(time_field_word) then node_time_field(body, value, word, by_call) else by_call(value)
 }
 # whether something takes x alone as w: the program's function (of a name overloaded by arity the variant taking x),
