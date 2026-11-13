@@ -5,7 +5,7 @@ use rule_words
 # --- GPU lists (decision gpu-bound-floats; extensions/gpu_lists/runtime.warp): a list the program makes for the GPU is
 # packed as f32 cells from its creation, which the GPU's library reads and writes where they are. lib/prelude.warp's
 # rule packs the creating forms of the program's (extensions/rules/rule_words.warp gpu_lists_packed), `xs: [f32] = …` asks for one outright
-GPU_LIST_WORDS = ["gpu_compute"]
+GPU_LIST_WORDS = ["gpu_compute", "paint", "gpu_render"]
 # the names found once a program: name → [GPU uses, assignments, other mentions, its creating form or ø]
 class GpuLists { program: Node; uses: map }
 gpu_lists = GpuLists(Node.Empty, {})
@@ -76,8 +76,6 @@ gpu_literal(v: Node): bool := is_group(v) and bracket_of(v) == "[" and not gpu_c
 # the cells a GPU list holds, `xs: [i32] = …` (extensions/gpu_lists/gpu_lists.warp GpuCell): f32 unless the program says so
 GPU_CELLS = {f32: 0, i32: 1, u32: 2, f16: 3, bf16: 4, vec2: 5, vec3: 6, vec4: 7}
 gpu_packed(v: Node): Node := plain_node(parsed(gpu_packed_code(v, "f32")))
-# `xs: [i32] = …`, `xs: [u32] = …`: the value made as a GPU list of those cells; ø for a list type of no GPU cell
-gpu_packed_as(cell: Node, v: Node): any := if cell is symbol and name_of(cell) in GPU_CELLS then plain_node(parsed(gpu_packed_code(v, name_of(cell)))) else ø
 gpu_packed_code(v: Node, cell: text): text := {
 	code = GPU_CELLS[cell]
 	if not gpu_creating(v) { return "gpu_list_of(" + as_code(v) + ", " + code + ")" }
@@ -92,3 +90,57 @@ gpu_packed_code(v: Node, cell: text): text := {
 	for i in 1 to #v { written = "gpu_put(" + written + ", " + i + ", " + as_code(v#i) + ")" }
 	written
 }
+
+# --- the cell type of a GPU list, written or inferred: `xs: [vec4] = …` declares it, and every later `xs = …` of its
+# scope makes a GPU list of those cells too (a declared global's in every function); a main-level list made for the GPU
+# alone (gpu_bound) is inferred: [vec4] where each item is four numbers, [f32] for numbers, no GPU list where its items
+# are lists of another width (the slow path's note then says how to make it)
+# [name, cell] of `xs: [vec4] = v`, else ø
+gpu_declared(n: Node): list? := {
+	target = if is_key(n, Op.Colon) and key_of(n) == symbol("global") then value_of(n) else n
+	if not (is_key(target, Op.Assign) and is_key(key_of(target), Op.Colon) and key_of(key_of(target)) is symbol) { return ø }
+	type = value_of(key_of(target))
+	if is_group(type) and bracket_of(type) == "[" and #type == 1 and type#1 is symbol and name_of(type#1) in GPU_CELLS then [name_of(key_of(key_of(target))), name_of(type#1)] else ø
+}
+is_global_declared(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == symbol("global") and gpu_declared(n) != ø
+# the cells a creating form's items fill: vec4 for four numbers each, f32 for numbers, ø for lists of another width
+gpu_inferred_cell(v: Node): text? := {
+	if gpu_zeros_count(v) != ø { return "f32" }
+	items = if gpu_comprehension(v) then [v#1] else items_of(v)
+	if #items > 0 and items.all(item => is_number_list(item) and #item == 4) { return "vec4" }
+	if items.any(is_number_list) then ø else "f32"
+}
+is_number_list(item: Node): bool := is_group(item) and bracket_of(item) == "["
+# the cells declared by a scope's statements, a map of name → cell
+gpu_declared_cells(parts: list): map := {
+	cells = {}
+	for part in parts {
+		declared = gpu_declared(part)
+		if declared != ø { cells[declared#1] = declared#2 }
+	}
+	cells
+}
+# the program's statements with each assignment of a name of a GPU cell type made as a GPU list of it: the main level
+# by the cells declared or inferred there, a function's body by its own and the declared globals'
+gpu_cells_packed(statements: list, program: Node): list := {
+	inferred = {}
+	for statement in statements {
+		if is_key(statement, Op.Assign) and gpu_bound(key_of(statement), program) {
+			cell = gpu_inferred_cell(value_of(statement))
+			if cell != ø { inferred[name_of(key_of(statement))] = cell }
+		}
+	}
+	main_level = statements.filter(statement => not is_key(statement, Op.Define))
+	outer = entries_of_both(gpu_declared_cells(concatenated(main_level.map(nodes_in))), inferred)
+	globals = gpu_declared_cells(statements.filter(is_global_declared))
+	statements.map(statement => if is_key(statement, Op.Define) then gpu_scope_packed(statement, entries_of_both(globals, gpu_declared_cells(nodes_in(value_of(statement))))) else gpu_scope_packed(statement, outer))
+}
+gpu_scope_packed(n: Node, cells: map): Node := if #cells == 0 then n else bottom_up(n, part => gpu_assignment_packed(part, cells))
+# `xs: [vec4] = v` and `xs = v` of a name of a cell type: xs made as a GPU list of those cells
+gpu_assignment_packed(n: Node, cells: map): Node := {
+	declared = if is_key(n, Op.Assign) then gpu_declared(n) else ø
+	if declared != ø { return gpu_packed_assignment(declared#1, value_of(n), declared#2) }
+	if is_key(n, Op.Assign) and key_of(n) is symbol and cells.has(name_of(key_of(n))) { return gpu_packed_assignment(name_of(key_of(n)), value_of(n), cells[name_of(key_of(n))]) }
+	n
+}
+gpu_packed_assignment(name: text, v: Node, cell: text): Node := plain_node(parsed(name + " = " + gpu_packed_code(v, cell)))
