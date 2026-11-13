@@ -368,7 +368,10 @@ def type_value_of(body: Body, n: Node): TypedCode {
 		return TypedCode(ValueKind.Node, value.code + [op.local_set] + held[1..] + described_type(body, named.code, held))
 	}
 	listed = if value.kind == ValueKind.List then analyzed_list_type(body, n) else ø
-	if value.kind == ValueKind.List and listed == ø { return runtime_call("node_type_name", [TypedCode(ValueKind.Node, boxed(value)), list_value(body, module.classes.keys)]) }
+	named = () => runtime_call("node_type_name", [TypedCode(ValueKind.Node, boxed(value)), list_value(body, module.classes.keys)])
+	if value.kind == ValueKind.List and listed == ø { return named() }
+	# a time's type is its form's, `type(2024-06-01)` date, which only the run time reads
+	if value.kind == ValueKind.Time { return made_by("Time", named()) }
 	word = if value.kind == ValueKind.Int and not fast_int(body, n) then "nat" else if value.kind == ValueKind.List then listed else static_type_word(value.kind)
 	# a marked text held unboxed, `type(./a)`: its type's word
 	marked = marked_text_types.keys.filter(name => marked_text_types[name] == value.mark)
