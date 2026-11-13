@@ -395,7 +395,7 @@ use_target(statement: Node): any := {
 	if not (is_group(statement) and #statement == 2 and statement#1 is symbol and name_of(statement#1) in import_keywords) { return ø }
 	target = path_text(statement#2)
 	# a quoted name without an extension is the bare one: `use "list"` is `use list`, a file of the folder or a std module
-	if target is text and not target.contains(".") { return symbol(target) }
+	if target is text and not target.contains(".") and not target.contains("/") { return symbol(target) }
 	target
 }
 # the text a path literal marks, `./x.warp` parsed as `"./x.warp" as path` (core/parsing/parser.warp), so `use ./x.warp`
@@ -405,7 +405,7 @@ path_text(n: Node): Node := if is_key(n, Op.As) and value_of(n) == symbol("path"
 # the path of the file of the folder a `use` statement names, ø for another statement or a module of no such file
 file_used(statement: Node, folder: text): any := {
 	module = use_target(statement)
-	if module is text { return rooted(module, folder) }
+	if module is text { return with_module_extension(rooted(module, folder)) }
 	# (a runtime module a build compiles in is its root file, whose own uses of the files beside it it brings)
 	if module is symbol and name_of(module) in compiled_runtime_modules() { return std_module_path(name_of(module)) }
 	if not (module is symbol) or name_of(module) in implicitly_used { return ø }
@@ -439,6 +439,8 @@ rooted(name: text, folder: text): text := {
 	if root == ø { raise name + ": no folder above " + working_relative(folder) + " holds .git; run `git init` at the project root or use a relative path" }
 	without_steps_up(root + "/" + name[#marker#1 ..< #name])
 }
+# a path naming its file without the extension, `use •/test/fixtures/counter`: that .warp file when there is one
+with_module_extension(path: text): text := if file_text(path) == ø and file_text(path + module_extension) != ø then path + module_extension else path
 project_root(folder: text): any := {
 	# from the absolute folder: a relative one (`samples/wasm` of `warp samples/wasm/x.warp`) ran out before the
 	# working folder that holds .git
