@@ -47,14 +47,17 @@ option_help = [
 	["--strict", "A library's slow fallback (slow(reason, fix) in lib/os.warp) is an error, not a note on standard error"],
 	["--backtrace", "An error shows the wasm backtrace beside its sentence"],
 	["--profile", "Each compiled function's address range in /tmp/perf-<pid>.map, for perf"],
-	["fuel <steps>", "The program counts steps, out of fuel after them"]
+	["fuel <steps>", "The program counts steps, out of fuel after them"],
+	["debug|release|fast|small", "The build mode, a word before the program: debug (the default) names each error's file:line, release and small drop those places (small also trims a built module hardest), fast drops them and the runtime checks too: ints wrap at 64 bits"]
 ]
+# the build modes, each a word before the program (core/compiler.warp build_mode)
+build_modes = ["debug", "release", "fast", "small"]
 # warp's two environment variables, its machine switches (decision no-bash-exports), in `warp help options`
 environment_help = [["WARP_WINDOW=0", "No window, for the run and the warps it starts (warp --no-window)"],
 	["WARP_SOUND=0", "No sound, for the run and the warps it starts (warp --mute)"]]
 # the commands that run what they compile: plain WASI cannot instantiate the module
 # TODO (card commands-reduce) Drastically reduce all these internal commands, none of which are used by the user
-running_commands = ["run", "eval", "test", "verify", "fuel", "fast", "console"]
+running_commands = ["run", "eval", "test", "verify", "fuel", "console"] + build_modes
 # the commands that need the native warp's host: a server, a window, the network, the Lean model, the build files
 # TODO (card commands-reduce) Drastically reduce all these internal commands, none of which are used by the user
 native_commands = ["pure", "self", "rebuild", "tool", "fetch", "dev", "serve", "deploy", "link", "app", "docs", "wiki",
@@ -73,7 +76,7 @@ command_name(entry: list): text := entry#1.split(" ")#1
 host_commands = ["repl-step", "test-list", "test-verdicts"]
 # the commands it answers that help leaves out, the user-facing list kept short: the shown stages, the REPL, and
 # parse-code, which parse_code and eval call (core/native/driver.warp, web/playground/driver.js)
-hidden_commands = ["repl", "parse", "signature", "data", "parse-code", "lower", "uses", "debug"]
+hidden_commands = ["repl", "parse", "signature", "data", "parse-code", "lower", "uses", "inspect"]
 # the commands this extension answers (its Extension row, extensions/extensions.warp)
 command_words(): list := command_help.map(command_name).filter(word => not word.starts_with("<")) + host_commands + hidden_commands + running_commands + native_commands
 
@@ -143,7 +146,7 @@ show_data() := print plain_node(parsed(source_or_code(1)))
 show_lowered() := print serialize(view_of(lowered_program(source_or_code(1), ".", prelude_text())))
 show_uses() := { for module in implicit_modules_of(source_or_code(1)) { print module } }
 # `warp debug`: the views above, one after the other under their names (card help-menu)
-show_debug() := {
+show_inspected() := {
 	print "parsed:"
 	show_parsed()
 	print "uses: " + implicit_modules_of(source_or_code(1)).join(" ")
@@ -219,7 +222,7 @@ extension_command(command: text) := match command {
 	"data": show_data()
 	"lower": show_lowered()
 	"uses": show_uses()
-	"debug": show_debug()
+	"inspect": show_inspected()
 	"parse-code": write_parse_code(args#2, args#3)
 	"build": build(args[1 ..< #args])
 	"repl": repl()
