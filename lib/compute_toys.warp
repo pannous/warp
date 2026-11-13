@@ -145,8 +145,12 @@ compute_toys_pixel(color: any): list := {
 	[parts#1, parts#2, parts#3, 1.0]
 }
 
-// the picture's pixels in row-major order, each a vec4, for paint's values.channel0
-compute_toys_pixels(picture: any): list := [compute_toys_pixel(color) for color in picture.pixels]
+// the picture's pixels in row-major order, each a vec4, for paint's values.channel0: a GPU list, which the GPU reads
+// where it is (decision gpu-bound-floats)
+compute_toys_pixels(picture: any): list := {
+	pixels: [f32] = picture.pixels.flat_map(compute_toys_pixel)
+	pixels
+}
 
 compute_toys_channel_wgsl(name: text): text := "
 fn warp_" + name + "_texel(p: vec2i) -> vec4f {
