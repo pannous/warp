@@ -1,0 +1,4 @@
+#!/usr/bin/env warp
+use math
+stripes(x, y) :=  [sin x , cos y, 1] 
+paint(stripes, 64, 32)

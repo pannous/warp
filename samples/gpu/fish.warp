@@ -6,7 +6,7 @@
 use graphics
 use math
 use file
-use fish_mesh
+use fish_mesh # Some experiments only, can be replaced with the real import And note deleted!
 
 # the camera turns around the fish, which stays at the origin, heading along its own +X
 frame_width = 320
