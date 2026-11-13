@@ -1142,6 +1142,32 @@ module_help(name: Node, program: Node): any := {
 # `help(lowpass)` of a used module's word: each of its definitions' heads as the module writes them, then the comment
 # above the first (wiki/reflection.md "Modules"); ø when the program has its own help or no used module defines it
 module_word_help(name: Node, program: Node, source: text): any := if owns_word("help", program) then ø else used_word_help(spelled(name), source)
+# `help(dorian)` of an enum's case, `help(Scale)` of the enum: its declaration as the program or a used module writes
+# it, with the comment above, so every name a program can say has a help (card symbol-minimum-requirement); ø where none
+# declares it
+enum_help(name: Node, program: Node, source: text): any := {
+	if owns_word("help", program) { return ø }
+	for module_text in [source] + used_modules(source).map(used_module_text) {
+		help = enum_help_in(module_text, spelled(name))
+		if help != ø { return help }
+	}
+	ø
+}
+enum_help_in(module_text: text, word: text): any := {
+	start = 0
+	for line in module_text.split("\n") {
+		declared = enum_line(line.trim())
+		if declared != ø and (declared#1 == word or word in declared#2) {
+			doc = comment_before(module_text, start)
+			case_of = if declared#1 == word then "" else word + ": a case of " + declared#1 + "\n"
+			return case_of + line.trim() + (if doc == "" then "" else "\n" + doc)
+		}
+		start += #line + 1
+	}
+	ø
+}
+# `enum Scale { major, minor }`: [Scale, [major, minor]], else ø
+enum_line(line: text): list? := if line.starts_with(enum_word + " ") and line.contains("{") then declared_enum(parsed(line)) else ø
 # `help(draw.save)`: the word's help as the module the program uses through that name writes it, else ø
 qualified_word_help(module: Node, word: Node, program: Node): any := if owns_word("help", program) or not qualifies_by_module(spelled(module), program) then ø else word_help_in(used_module_text(spelled(module).lower()), spelled(word))
 used_word_help(word: text, source: text): any := {
