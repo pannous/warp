@@ -296,6 +296,9 @@ library_lines_of(name: text): list := lines_of(typed_lines + math_runtime_lines 
 # parameter counts (arity_overloads: `low() := …` beside a used module's `low(g: Gaussian)`), where its bare name is
 # that variant's call
 passed_value(argument: Node, at: int, callee: Node, locals: Locals, lowering: Lowering): Node := {
+	# (a word only the compiler's passes write takes a name as written, extremes.warp's `empty_extremum(min)`: never the
+	# library word's function value)
+	if argument is symbol and callee is symbol and #lines_of(compiler_lines, name_of(callee)) > 0 { return argument }
 	takes_function = callee is symbol and function_named_at(lowering.function_positions, name_of(callee), at) != ""
 	target = if argument is symbol and not is_local(name_of(argument), locals) then parameterless_function(name_of(argument), lowering) else ""
 	if takes_function and target != "" then call_node(symbol("closure_new"), [symbol(target)]) else lowered_lambdas(argument, locals, lowering)
