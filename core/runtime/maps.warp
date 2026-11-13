@@ -162,6 +162,7 @@ map_get(m: Node, name: text): Node := {
 	if is_entry(m) and same_bytes(name, "key") { return entry_key(m) }
 	if is_entry(m) and same_bytes(name, "value") { return key_value(m) }
 	if is_entry(m) and same_bytes(name, "op") { return key_operator(m) }
+	if is_plural_field(m, name) { return plural_field(m, name) }
 	at = if has_fields(m) then map_index(m, name) else 0
 	if at == 0 { missing_field(name) }
 	value_at(m, at)
