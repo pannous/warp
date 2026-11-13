@@ -27,6 +27,12 @@ path_parameter(part: text): text := {
 
 # `users` → "users": a name as the text it is spelled by, a program's own word as written (twice·own → "twice")
 spelled(name: Node): text := "${name}".remove_suffix(own_mark)
+# `x`, `p.age`: the name or field path a signal listens to, as text; ø for anything else (lib/signals.warp `on set`)
+watched_path(n: Node): any := {
+	if n is symbol { return spelled(n) }
+	if is_key(n, Op.Dot) and value_of(n) is symbol and watched_path(key_of(n)) != ø { return watched_path(key_of(n)) + "." + spelled(value_of(n)) }
+	ø
+}
 
 # `x > 1500` and m → `x > 1500 * m`: a unit after an expression multiplies its last amount, through the operators
 # a unit binds tighter than (lib/units.warp's rules); ø when the expression ends in no amount, or starts with a unit
@@ -623,11 +629,14 @@ notifying(n: Node, names: list, derived: map): Node := {
 	old = symbol(signal_old)
 	dependents = names.filter(d => derived.has(d) and name_of(name) in derived[d])
 	own = name_of(name) in names
-	if not own and #dependents == 0 { return n }
+	# the watched fields the write may change, `p.age` of `p = …`, `p.age = 7` or `p.age.n = 1`, never `p.name = "b"`
+	path = written_path(key_of(n)) ?? name_of(name)
+	fields = names.filter(watched => "." in watched and (path_within(watched, path) or path_within(path, watched)))
+	if not own and #dependents == 0 and #fields == 0 { return n }
 	# an item's write changes the list itself: the old one a copy, `[] + xs`
 	kept = if key_of(n) is symbol then name else Key(List([], Bracket.Square, Separator.Comma), Op.Add, name)
-	before = [Key(old, Op.Assign, kept)] + dependents.map(d => Key(symbol(signal_old_of(d)), Op.Assign, symbol(d)))
-	notified = (if own then [call_of("signal_notify", [name_of(name), name, old])] else []) + dependents.map(d => Key(Key(ø, Op.If, Key(name, Op.Ne, old)), Op.Then, call_of("signal_notify", [d, symbol(d), symbol(signal_old_of(d))])))
+	before = [Key(old, Op.Assign, kept)] + dependents.map(d => Key(symbol(signal_old_of(d)), Op.Assign, symbol(d))) + fields.map(field => Key(symbol(signal_old_of(field)), Op.Assign, path_read(field)))
+	notified = (if own then [call_of("signal_notify", [name_of(name), name, old])] else []) + fields.map(field => call_of("signal_notify", [field, path_read(field), symbol(signal_old_of(field))])) + dependents.map(d => Key(Key(ø, Op.If, Key(name, Op.Ne, old)), Op.Then, call_of("signal_notify", [d, symbol(d), symbol(signal_old_of(d))])))
 	# `x--` gives the value before the step
 	result = if op_of(n) in stepping_ops then [old] else []
 	separated(bracketed(before + [n] + notified + result, "("), ";")
@@ -654,8 +663,15 @@ written_target(target: Node): Node := {
 	if target is key and (op_of(target) == Op.Hash or op_of(target) == Op.Dot) { return written_target(key_of(target)) }
 	target
 }
+# the field path a write's target names, `p.age` of `p.age = 7`, that of the list of an item's `p.tags#1`; ø where it is no
+# path of names
+written_path(target: Node): any := if is_key(target, Op.Hash) then written_path(key_of(target)) else watched_path(target)
+# whether the path is the field or one within it: `p.age` within `p`, never `p.agent`
+path_within(path: text, field: text): bool := path == field or path.starts_with(field + ".")
+# the code reading a field path, `p.age`
+path_read(path: text): Node := plain_node(parsed(path))
 stepping_ops = [Op.Inc, Op.Dec]
-signal_old_of(name: text): text := "signal·" + name
+signal_old_of(name: text): text := "signal·" + name.replace(".", "·")
 writing_ops = [Op.Assign, Op.AddAssign, Op.SubAssign, Op.MulAssign, Op.DivAssign, Op.FloorDivAssign, Op.ModAssign, Op.PowAssign, Op.AndAssign, Op.OrAssign, Op.XorAssign]
 
 # `count(2 in xs)`: a yes/no question is no count, the compile refused with the count it means
@@ -1400,6 +1416,7 @@ rule_words = {
 	signature_text: signature_text,
 	signatures_listed: signatures_listed,
 	spelled: spelled,
+	watched_path: watched_path,
 	hyphen_difference: hyphen_difference,
 	tables_kept: tables_kept,
 	task_steps: task_steps,
