@@ -1477,6 +1477,7 @@ rule_words = {
 	gpu_list_made: gpu_list_made,
 	gpu_lists_packed: gpu_lists_packed,
 	gpu_packed: gpu_packed,
+	gpu_packed_as: gpu_packed_as,
 	instance_members: instance_members,
 	class_dir: class_dir,
 	field_word: field_word,
