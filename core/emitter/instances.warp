@@ -445,7 +445,7 @@ def is_class_instance_code(f: Function) {
 # instance_show(m), instance_float(m): m as its class's show() or float() gives it (decision show-hook), ø without one
 def instance_show_code(f: Function) { f.code = optional_slot_call("show") }
 def instance_float_code(f: Function) { f.code = optional_slot_call("float") }
-# instance_operated(m, a, b, operator): a + b, a - b, a * b or a / b (operator 0 to 3) by the operator of m's class, m
+# instance_operated(m, a, b, operator): a + b, a - b, a * b, a / b or a ^ b (operator 0 to 4) by the operator of m's class, m
 # being a or b; ø when its module declares none (decision class-operators-generic: sum([5km, 1500m]) keeps km)
 def instance_operated_code(f: Function) { f.code = optional_slot_call("operate", 4) }
 def optional_slot_call(slot: text, values: int = 1): list {
@@ -453,7 +453,7 @@ def optional_slot_call(slot: text, values: int = 1): list {
 	not_described([ref_null, gc_type(gc.node)]) + word + [op.ref_is_null, op.if, no_value, ref_null, gc_type(gc.node), op.return, op.end] + entered_node(slot_call(slot, parameters_code(values)))
 }
 # the operators a class word operates by, in instance_operated's order, each with its module's dispatcher (ø: none)
-operated_glyphs = ["+", "-", "*", "/"]
+operated_glyphs = ["+", "-", "*", "/", "^"]
 operated_dispatchers(): list := operated_glyphs.filter(glyph => module.functions.has(glyph + "·operator"))
 # the module's operate word: the dispatcher of the operator given (parameter 3, a boxed int) on a and b, ø for none
 def class_operate_code(): list {

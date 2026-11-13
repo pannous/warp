@@ -20,7 +20,7 @@ node_plus(a: Node, b: Node): Node := {
 	if is_null(operated) then node_add(a, b) else operated
 }
 # a op b by a's class when a is an instance, else by b's, ø when that class defines no such operator; `operator` the
-# place of the operator in + - * /, counted from 0
+# place of the operator in + - * / ^, counted from 0
 class_operated(a: Node, b: Node, operator: int): Node := if is_class_instance(a) then instance_operated(a, a, b, int_node(operator)) else if is_class_instance(b) then instance_operated(b, a, b, int_node(operator)) else ø
 # n holds a plain whole number with no type mark (no yes/no, hex or unit): the emitter's int-first operations take it
 # as the i64 it is (card untyped-counter-boxes)

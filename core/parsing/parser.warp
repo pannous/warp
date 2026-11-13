@@ -1990,9 +1990,9 @@ def group_items(declared: Node): list {
 	if parts != ø and parts#1 == "(" then parts#3 else [declared]
 }
 
-// The operators a class defines as methods by their glyph: `+(o) := …` is its plus, `#(n) := …` its index, `==(o)` its
-// equality (lib/aliases.warp names == equal)
-METHOD_OPERATORS = ["+", "-", "*", "/", "%", "<", ">", "==", "≈", "~", "#"]
+// The operators a class defines as methods by their glyph: `+(o) := …` is its plus, `^(n)` its power, `#(n) := …` its
+// index, `==(o)` its equality (lib/aliases.warp names == equal)
+METHOD_OPERATORS = ["+", "-", "*", "/", "%", "^", "<", ">", "==", "≈", "~", "#"]
 
 // `+(o) := …` defines a class's method of an operator by its glyph (its plus): the head is the call `+(o)`, no unary
 // plus, no count `#`; ø where no `:=` follows the parentheses. After the keyword (`infix operator |(x: any, g:
