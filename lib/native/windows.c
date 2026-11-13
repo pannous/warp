@@ -3,9 +3,11 @@
 // has no answer for is missing here on purpose: a program calling it stops loudly ("no C function fork …")
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <ctype.h>
 #include <direct.h>
 #include <io.h>
 #include <psapi.h>
+#include <sys/stat.h>
 
 // ## the calls lib/native/*.c make itself
 
@@ -63,14 +65,41 @@ __attribute__((constructor)) static void files_in_bytes(void) {
 // answered here before any module's: Windows's C runtime lacks them, or has them by another layout (its timespec's
 // nanoseconds are 32 bits, its POSIX names carry an underscore)
 
-// a path as POSIX writes it: forward slashes, which Windows takes as well as backslashes and warp's path words split
-// on, and on the current drive no drive letter, "/a/b" as Windows reads it too: the folder the native warp preopens as
-// "/" for its modules (core/native/driver.warp) is that drive's root, so the module's WASI reaches the path (another
-// drive's "C:/x" it does not yet: card windows-native-modules)
+// a path as POSIX writes it, Git Bash's (MSYS's) way: forward slashes, a drive as a folder of the root ("D:\a\b" is
+// "/d/a/b"), so a path warp shows works in the sh lines it runs (popen) and in WASI, where the native warp's root
+// preopen is each drive's under that name (posix_wasi_config_preopen_dir); and back for the C runtime
 static void posix_path(char* path) {
 	for (char* c = path; *c; c++) if (*c == '\\') *c = '/';
-	if (path[0] && path[1] == ':' && path[2] == '/' && (path[0] | 0x20) - 'a' + 1 == _getdrive()) memmove(path, path + 2, strlen(path + 2) + 1);
+	if (isalpha((unsigned char)path[0]) && path[1] == ':') {
+		path[1] = (char)tolower((unsigned char)path[0]);
+		path[0] = '/';
+	}
 }
+static int is_drive_path(const char* path) { return path[0] == '/' && isalpha((unsigned char)path[1]) && (path[2] == '/' || !path[2]); }
+// the path as Windows takes it, in the buffer when it changes: "/d/a/b" is "D:/a/b", "/d" "D:/"
+static const char* windows_path(const char* path, char buffer[MAX_PATH]) {
+	if (!path || !is_drive_path(path)) return path;
+	snprintf(buffer, MAX_PATH, "%c:%s", toupper((unsigned char)path[1]), path[2] ? path + 2 : "/");
+	return buffer;
+}
+// a POSIX file mode as the C runtime takes it: the owner's read and write bits alone (any other bit is EINVAL there)
+static int windows_mode(int mode) { return mode & (_S_IREAD | _S_IWRITE); }
+// the C runtime's calls of one path, the path given as Windows takes it; files in binary, as POSIX knows them
+#define ON_WINDOWS_PATH(result, name, call, ...) static result posix_##name(const char* path, ##__VA_ARGS__) { char buffer[MAX_PATH]; path = windows_path(path, buffer); return call; }
+ON_WINDOWS_PATH(int, access, _access(path, mode), int mode)
+ON_WINDOWS_PATH(int, chdir, _chdir(path))
+ON_WINDOWS_PATH(int, creat, _open(path, _O_WRONLY | _O_CREAT | _O_TRUNC | _O_BINARY, windows_mode(mode)), int mode)
+ON_WINDOWS_PATH(FILE*, fopen, fopen(path, mode), const char* mode)
+ON_WINDOWS_PATH(int, mkdir, _mkdir(path), int mode)
+ON_WINDOWS_PATH(int, rmdir, _rmdir(path))
+ON_WINDOWS_PATH(int, unlink, _unlink(path))
+ON_WINDOWS_PATH(int, open_path, _open(path, flags | _O_BINARY, windows_mode(mode)), int flags, int mode)
+static int posix_rename(const char* from, const char* to) {
+	char from_buffer[MAX_PATH], to_buffer[MAX_PATH];
+	return rename(windows_path(from, from_buffer), windows_path(to, to_buffer));
+}
+// lib/native/wasi.c's own open
+#define open posix_open_path
 // the one link a Windows program can read: Linux's /proc/self/exe, this executable
 static const char SELF_LINK[] = "/proc/self/exe";
 static ssize_t posix_readlink(const char* path, char* buffer, size_t size) {
@@ -89,6 +118,8 @@ static ssize_t posix_readlink(const char* path, char* buffer, size_t size) {
 }
 // a path made absolute, NULL for one that names nothing; resolved NULL: a copy the caller frees
 static char* posix_realpath(const char* path, char* resolved) {
+	char buffer[MAX_PATH];
+	path = windows_path(path, buffer);
 	if (GetFileAttributesA(path) == INVALID_FILE_ATTRIBUTES) {
 		errno = ENOENT;
 		return NULL;
@@ -194,13 +225,14 @@ enum { PIPE_BYTES = 65536 };
 static int posix_pipe(int ends[2]) { return _pipe(ends, PIPE_BYTES, _O_BINARY); }
 // a spawn's file actions, as many as warp gives (core/native/driver.warp words_run: two dup2s and a close), in the
 // bytes warp allocates for posix_spawn_file_actions_t (SPAWN_ACTIONS_BYTES)
-enum { MOST_ACTIONS = 8, ACTION_DUP2 = 1, ACTION_CLOSE = 2, STANDARD_STREAMS = 3 };
-struct spawn_actions { int count; struct { int kind, from, to; } actions[MOST_ACTIONS]; };
-static int action_added(struct spawn_actions* actions, int kind, int from, int to) {
+enum { MOST_ACTIONS = 4, ACTION_DUP2 = 1, ACTION_CLOSE = 2, ACTION_CHDIR = 3, STANDARD_STREAMS = 3 };
+struct spawn_actions { int count; struct { int kind, from, to; const char* folder; } actions[MOST_ACTIONS]; };
+static int action_added(struct spawn_actions* actions, int kind, int from, int to, const char* folder) {
 	if (actions->count == MOST_ACTIONS) return ENOMEM;
 	actions->actions[actions->count].kind = kind;
 	actions->actions[actions->count].from = from;
 	actions->actions[actions->count].to = to;
+	actions->actions[actions->count].folder = folder;
 	actions->count++;
 	return 0;
 }
@@ -209,9 +241,11 @@ static int posix_spawn_file_actions_init(struct spawn_actions* actions) {
 	return 0;
 }
 static int posix_spawn_file_actions_destroy(struct spawn_actions* actions) { return posix_spawn_file_actions_init(actions); }
-static int posix_spawn_file_actions_adddup2(struct spawn_actions* actions, int from, int to) { return action_added(actions, ACTION_DUP2, from, to); }
+static int posix_spawn_file_actions_adddup2(struct spawn_actions* actions, int from, int to) { return action_added(actions, ACTION_DUP2, from, to, NULL); }
 // (a handle the child should not hold: Windows hands a child only the standard handles it is given)
-static int posix_spawn_file_actions_addclose(struct spawn_actions* actions, int fd) { return action_added(actions, ACTION_CLOSE, fd, fd); }
+static int posix_spawn_file_actions_addclose(struct spawn_actions* actions, int fd) { return action_added(actions, ACTION_CLOSE, fd, fd, NULL); }
+// (the folder the child starts in, which the caller keeps until the spawn)
+static int posix_spawn_file_actions_addchdir_np(struct spawn_actions* actions, const char* folder) { return action_added(actions, ACTION_CHDIR, 0, 0, folder); }
 
 // the processes started and not yet waited for, by id
 enum { MOST_CHILDREN = 64 };
@@ -251,9 +285,10 @@ static char* command_line(char* const words[]) {
 	for (int i = 0; words[i]; i++) room += 2 * strlen(words[i]) + 3;
 	char* line = malloc(room);
 	size_t at = 0;
+	char program[MAX_PATH];
 	for (int i = 0; words[i]; i++) {
 		if (i) line[at++] = ' ';
-		at += argument_quoted(line + at, words[i]);
+		at += argument_quoted(line + at, i ? words[i] : windows_path(words[i], program));
 	}
 	line[at] = 0;
 	return line;
@@ -276,7 +311,11 @@ static int posix_spawnp(int* child, const char* file, const struct spawn_actions
 	startup.hStdError = standard_handle(actions, 2);
 	PROCESS_INFORMATION started;
 	char* line = command_line(words);
-	BOOL ran = CreateProcessA(NULL, line, NULL, NULL, TRUE, 0, NULL, NULL, &startup, &started);
+	const char* folder = NULL;
+	char folder_buffer[MAX_PATH];
+	for (int i = 0; actions && i < actions->count; i++)
+		if (actions->actions[i].kind == ACTION_CHDIR) folder = windows_path(actions->actions[i].folder, folder_buffer);
+	BOOL ran = CreateProcessA(NULL, line, NULL, NULL, TRUE, 0, NULL, folder, &startup, &started);
 	free(line);
 	if (!ran) return ENOENT;
 	CloseHandle(started.hThread);
@@ -306,6 +345,14 @@ static int posix_waitpid(int id, int* status, int options) {
 	children[place].process = NULL;
 	return (int)children[place].id;
 }
+// a child ended at once, as a signal ends it on POSIX: its exit code 128 and the signal
+enum { SIGNALED = 128 };
+static int posix_kill(int id, int signal_number) {
+	for (int i = 0; i < MOST_CHILDREN; i++)
+		if (children[i].process && children[i].id == (DWORD)id) return TerminateProcess(children[i].process, (UINT)(SIGNALED + signal_number)) ? 0 : -1;
+	errno = ESRCH;
+	return -1;
+}
 // a sh line run with its output (mode "r") or input ("w") a stream: by the POSIX sh on PATH (Git for Windows'), as
 // macOS and Linux run /bin/sh; none there, NULL (warp says "cannot run sh for …")
 enum { MOST_STREAMS = 16 };
@@ -320,7 +367,7 @@ static FILE* posix_popen(const char* line, const char* mode) {
 	if (posix_pipe(ends)) return NULL;
 	int reading = mode[0] == 'r';
 	struct spawn_actions actions = {0};
-	action_added(&actions, ACTION_DUP2, ends[reading ? 1 : 0], reading ? 1 : 0);
+	action_added(&actions, ACTION_DUP2, ends[reading ? 1 : 0], reading ? 1 : 0, NULL);
 	char* words[] = {sh, "-c", (char*)line, NULL};
 	int child;
 	int failed = posix_spawnp(&child, sh, &actions, NULL, words, NULL);
@@ -348,6 +395,41 @@ static int posix_pclose(FILE* stream) {
 	return status;
 }
 
+// the root a module's WASI reaches (core/native/driver.warp preopens "/" as "/"): each drive under its POSIX name,
+// "C:/" as "/c", wasmtime's own preopen called for each
+static void* modules_symbol(const char* name);
+typedef bool (*preopen_t)(void* config, const char* host, const char* guest, bool mutable);
+static bool wasi_config_preopen_dir(void* config, const char* host, const char* guest, bool mutable) {
+	static preopen_t preopened;
+	if (!preopened) preopened = (preopen_t)modules_symbol("wasi_config_preopen_dir");
+	char buffer[MAX_PATH];
+	if (strcmp(host, "/") || strcmp(guest, "/")) return preopened(config, windows_path(host, buffer), guest, mutable);
+	bool any = false;
+	DWORD drives = GetLogicalDrives();
+	for (int letter = 0; letter < 26; letter++) {
+		if (!(drives & (1u << letter))) continue;
+		char drive[] = {(char)('A' + letter), ':', '/', 0}, name[] = {'/', (char)('a' + letter), 0};
+		any |= preopened(config, drive, name, mutable);
+	}
+	return any;
+}
+
+// wasmtime's calls of a file path, the path given as Windows takes it
+#define CONFIG_PATH_CALL(result, name) static result name(void* config, const char* path) { \
+	static result (*called)(void*, const char*); \
+	if (!called) called = (result (*)(void*, const char*))modules_symbol(#name); \
+	char buffer[MAX_PATH]; \
+	return called(config, windows_path(path, buffer)); }
+CONFIG_PATH_CALL(bool, wasi_config_set_stdout_file)
+CONFIG_PATH_CALL(bool, wasi_config_set_stderr_file)
+CONFIG_PATH_CALL(void*, wasmtime_config_cache_config_load)
+static void* wasmtime_module_deserialize_file(void* engine, const char* path, void* module) {
+	static void* (*called)(void*, const char*, void*);
+	if (!called) called = (void* (*)(void*, const char*, void*))modules_symbol("wasmtime_module_deserialize_file");
+	char buffer[MAX_PATH];
+	return called(engine, windows_path(path, buffer), module);
+}
+
 #define POSIX_CALL(name) {#name, (void*)posix_##name}
 // (POSIX's own posix_ calls, under their names)
 #define POSIX_NAMED(name) {#name, (void*)name}
@@ -357,7 +439,10 @@ static const struct { const char* name; void* function; } POSIX_CALLS[] = {
 	POSIX_CALL(nanosleep), POSIX_CALL(usleep), POSIX_CALL(localtime_r), POSIX_CALL(getloadavg), POSIX_CALL(flock),
 	POSIX_CALL(pipe), POSIX_NAMED(posix_spawn_file_actions_init), POSIX_NAMED(posix_spawn_file_actions_destroy),
 	POSIX_NAMED(posix_spawn_file_actions_adddup2), POSIX_NAMED(posix_spawn_file_actions_addclose), POSIX_NAMED(posix_spawnp),
-	POSIX_CALL(waitpid), POSIX_CALL(popen), POSIX_CALL(pclose),
+	POSIX_CALL(waitpid), POSIX_CALL(popen), POSIX_CALL(pclose), POSIX_CALL(access), POSIX_CALL(chdir), POSIX_CALL(creat),
+	POSIX_CALL(fopen), POSIX_CALL(mkdir), POSIX_CALL(rmdir), POSIX_CALL(unlink), POSIX_CALL(rename),
+	POSIX_NAMED(wasi_config_preopen_dir), POSIX_NAMED(wasi_config_set_stdout_file), POSIX_NAMED(wasi_config_set_stderr_file),
+	POSIX_NAMED(wasmtime_config_cache_config_load), POSIX_NAMED(wasmtime_module_deserialize_file), POSIX_NAMED(posix_spawn_file_actions_addchdir_np), POSIX_CALL(kill),
 };
 
 // ## dlopen and dlsym, which find them
@@ -371,7 +456,8 @@ enum { RTLD_LAZY = 1, RTLD_NOW = 2, RTLD_GLOBAL = 0x100 };
 static char process_handle;
 static void* dlopen(const char* path, int flags) {
 	(void)flags;
-	return path ? (void*)LoadLibraryA(path) : (void*)&process_handle;
+	char buffer[MAX_PATH];
+	return path ? (void*)LoadLibraryA(windows_path(path, buffer)) : (void*)&process_handle;
 }
 static void* module_symbol(HMODULE module, const char* name) {
 	char runtime_name[256];
@@ -380,10 +466,8 @@ static void* module_symbol(HMODULE module, const char* name) {
 	snprintf(runtime_name, sizeof runtime_name, "%s%s", CRT_PREFIX, name);
 	return (void*)GetProcAddress(module, runtime_name);
 }
-static void* dlsym(void* handle, const char* name) {
-	if (handle != &process_handle) return module_symbol((HMODULE)handle, name);
-	for (size_t i = 0; i < sizeof POSIX_CALLS / sizeof *POSIX_CALLS; i++)
-		if (!strcmp(name, POSIX_CALLS[i].name)) return POSIX_CALLS[i].function;
+// a symbol of a module loaded, the executable first
+static void* modules_symbol(const char* name) {
 	HMODULE modules[1024];
 	DWORD bytes;
 	if (!K32EnumProcessModules(GetCurrentProcess(), modules, sizeof modules, &bytes)) return NULL;
@@ -392,4 +476,10 @@ static void* dlsym(void* handle, const char* name) {
 		if (found) return found;
 	}
 	return NULL;
+}
+static void* dlsym(void* handle, const char* name) {
+	if (handle != &process_handle) return module_symbol((HMODULE)handle, name);
+	for (size_t i = 0; i < sizeof POSIX_CALLS / sizeof *POSIX_CALLS; i++)
+		if (!strcmp(name, POSIX_CALLS[i].name)) return POSIX_CALLS[i].function;
+	return modules_symbol(name);
 }
