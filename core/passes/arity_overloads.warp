@@ -503,6 +503,11 @@ parameters_bound(n: Node): list := {
 	call = definition_call(n)
 	if call == ø then [] else items_of(call)[1 ..].map(parameter_name)
 }
+# a definition's parameters typed with one kind, `name: text`; a `number` is an int or a float only the run time tells
+declared_parameters(n: Node): list := {
+	call = definition_call(n)
+	if call == ø then [] else signature_of(items_of(call)).parameters.filter(parameter => parameter.type_name in overload_kinds and overload_kinds[parameter.type_name] != "number")
+}
 
 # what the compile knows of an argument's kind (card number-computed-float): a literal's, a variable's assigned
 # values', the result a builtin declares (`floor(x)` a float), `-x`, `√x` and `a + b`, `a - b`, `a * b` of known numbers
@@ -754,6 +759,8 @@ within(judge: ArgumentJudge, n: Node): ArgumentJudge := {
 	own = if definition_call(n) != ø then without_keys(assigned_kinds(value_of(n)), parameters) else {}
 	variables = without_keys(judge.variables, parameters)
 	for name in own.keys { variables[name] = own[name] }
+	# a parameter declaring its type has that kind: `make(db: any, name: text) := run(db, name)` passes a text
+	for parameter in declared_parameters(n) { variables[parameter.name] = [overload_kinds[parameter.type_name], ø] }
 	ArgumentJudge(variables, judge.own, judge.least, judge.program)
 }
 # top-down, so a definition is renamed by its own parameter types
