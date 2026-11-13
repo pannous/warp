@@ -5,8 +5,9 @@
 // which every program's prelude reads before this file (decision core-takes-what-it-uses).
 // The builtins, the words no warp definition gives, are the core's: core/analysis/builtins.warp and math_builtins.warp.
 
-// the call form of xs.add(x), which extensions/sugar/methods.warp appends in place (the emitter has no call add)
-add(xs, x) := { xs.add(x); xs }
+// the call form of xs.add(x), appended in place; written `+=`, since inside this file, which defines add, xs.add(x)
+// is this call again (extensions/sugar/methods.warp leaves a method the program defines to the program)
+add(xs, x) := { xs += [x]; xs }
 // xs.insert(x, at: i) at the 0-based position i, in place; of a map Rust's HashMap::insert (card rust-map-insert): the
 // key at set to x in place, the map back. One definition, so a call names its arguments (`at:`) as written (an
 // overload set by type passes them by position, card library-labelled-args)
@@ -394,8 +395,9 @@ shader_floats(values) := {
 	plain
 }
 // a text is kept: a storage array may be a file the host reads straight into the
-// GPU buffer (the baked atlas), which a float list of its bytes would rebuild
-shader_value(value) := if value is list then value.map(shader_value) else if value is text then value else float(value)
+// GPU buffer (the baked atlas), which a float list of its bytes would rebuild; a GPU list too, which the host binds
+// where its cells are (a copy would walk its numbers on every paint)
+shader_value(value) := if gpu_list_place(value) >= 0 or value is text then value else if value is list then value.map(shader_value) else float(value)
 // the words warp gives every shader, as WGSL: hash(cell), a number 0 ..< 1 that stays the same for a cell (decision
 // shader-hash); the cell taken modulo 289 keeps the sine's argument small enough for f32
 SHADER_WORDS_WGSL = {hash: "fn hash(cell: vec2f) -> f32 {\n\tlet wrapped = cell - 289.0 * floor(cell / 289.0);\n\treturn fract(sin(dot(wrapped, vec2f(127.1, 311.7))) * 43758.5453);\n}"}
@@ -523,6 +525,9 @@ window.height(new_height) := set_system_value("window_height", new_height)
 window_fullscreen() := system_value("window_fullscreen") != 0
 window.fullscreen := window_fullscreen
 window.fullscreen(full) := set_system_value("window_fullscreen", if full then 1 else 0)
+// fullscreen(): the window fills the screen, fullscreen(no) back; in the page only right after the viewer's run key or
+// click, as the browser allows
+fullscreen(full = yes) := window.fullscreen(full)
 // a program cannot resize the display: set window.width or canvas.width instead
 // The fields of a time at run time (card time-fields-warp, wiki/time.md), called late by the emitter's
 // time_field with the time's form (TimeForm: 1 a date, its position in days; else nanoseconds since 1970), its

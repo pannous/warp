@@ -17,4 +17,8 @@ extended_text(n: Node): text := {
 	made_case(Made.Time, time_text(n))
 	fail()
 }
+extended_type_word(n: Node): text := {
+	made_case(Made.Time, time_type_word(n))
+	fail()
+}
 extended_warned(message: text): Node := warned(message)

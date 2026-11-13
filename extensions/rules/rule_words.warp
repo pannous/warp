@@ -788,6 +788,16 @@ unit_list_word(variable: Node, iterable: Node): any := {
 }
 # the unit `v as list of T` walks a text by: T's own (codepoint, byte, char), else its characters, each converted to T
 unit_of_type(type: Node): Node := Text(if type is symbol then unit_lists.get(name_of(type)) ?? "chars" else "chars")
+# `int`, `ints`, `numbers`, `string`: the value a list of the type word fills with (0, 0 as float, "", ' ' for a char),
+# singular or plural, as code or as the data a number before it makes of it (`16 int` reads as the list [16, "int"], as
+# a rule's own words match it); ø for any other code, a word the program binds a value to too (`floats#i` of a list)
+type_zero(type: Node): any := {
+	if not (type is symbol or type is text) { return ø }
+	word = "${type}"
+	if binds_value(rule_scope, word) { return ø }
+	kind = type_kinds.get(word) ?? type_kinds.get(word.remove_suffix("s"))
+	if kind == "int" then 0 else if kind == "float" then Key(0, Op.As, symbol("float")) else if kind == "text" then "" else if kind == "codepoint" then ' ' else ø
+}
 # `when x {1 -> "a"; else -> "b"}`: a block of match arms only, each `pattern -> value`
 are_arms(body: Node): bool := #items_of(body) > 0 and items_of(body).all(item => is_key(item, Op.Arrow))
 # `for p in ps where it > 2`: the condition's `it` read as the loop's variable
@@ -1507,6 +1517,7 @@ rule_words = {
 	call_bound: call_bound,
 	unit_list_word: unit_list_word,
 	unit_of_type: unit_of_type,
+	type_zero: type_zero,
 	unit_led: unit_led,
 	unit_regrouped: unit_regrouped,
 	unit_beside_variables: unit_beside_variables,

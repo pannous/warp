@@ -54,10 +54,10 @@ use "js_globals/webidl.warp"
 # as foreign calls
 foreign_globals(program: Node): Node := {
 	uses = foreign_uses(program)
-	names = uses.map(used => used#2)
 	scopes = markup_scopes(program)
 	markup = #scopes > 0
-	if markup { names += page_globals_read(program, names) }
+	if markup { uses += page_globals_read(program, uses.map(used => used#2)).map(name => [JS_RUNTIME, name, no]) }
+	names = uses.map(used => used#2)
 	ids = page_ids(scopes, names_bound_in(program))
 	elements = page_elements(program, ids)
 	if #names == 0 and #ids == 0 and #elements == 0 { return program }
