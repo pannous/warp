@@ -10,4 +10,4 @@ rewrite shader_of($f) => shader_of($reached) where $f is symbol and $reached = d
 // a shader the program assigns in compute.toys' dialect, its entry point fn main_image (decision: the dialect is read off
 // the entry point, notes/gpu.md "One shader"), paints and renders as lib/shaders.warp's compute_toy makes it a fragment
 // shader, the pictures among its values (channel0, channel1) sampled as textures
-rewrite $f($s, $w, $h, $v) => $f($made, $w, $h, pictured_values($v)) where $f in [paint, gpu_render] and $made = compute_toys_made($s, $program)
+rewrite $f($s, $w, $h, $v) => $f($made, $w, $h, pictured_values($v, $s)) where $f in [paint, gpu_render] and $made = compute_toys_made($s, $program)

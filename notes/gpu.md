@@ -346,4 +346,4 @@ Core cost: none in core/; extensions/shader_blocks and the hole rules shrink; li
   `fn main_image` without `@fragment` becomes compute_toy(s); compute_toy of a fragment shader is that shader. The
   block itself stays the kernel as written. compute_toy lives in lib/shaders.warp (card compute-toys-own): no `use`;
   the pictures channel0/channel1 are paint values, `paint(toy, w, h, {channel0: picture})`, made [vec4] GPU lists by
-  pictured_values, which the dialect rule wraps around the values.
+  pictured_values, which the dialect rule wraps around the values (refusing a channel the shader samples that they lack).

@@ -1037,9 +1037,12 @@ compute_toy(code: text) := {
 	keeper = if kept == "" then "" else "\nfn warp_channels_kept() {\n" + kept + "}\n"
 	compute_toys_prelude + helpers + keeper + kernel + main
 }
-# paint's values with each picture among them (an Image: width, height and pixels) as the shader samples it: its
-# pixels a GPU list of vec4 in row-major order, 0 to 1, and its size as <name>_size
-pictured_values(values: any) := {
+# paint's values with each picture among them (an Image: width, height and pixels) as the compute.toys shader `code`
+# samples it: its pixels a GPU list of vec4 in row-major order, 0 to 1, and its size as <name>_size; a channel the
+# code samples that the values lack is refused
+pictured_values(values: any, code: text) := {
+	missing = COMPUTE_TOY_CHANNELS.filter(channel => code contains channel and not (values is map and values.has(channel)))
+	if #missing > 0 { raise "the shader samples ${missing.join(" and ")}, which paint's values do not give: paint(shader, width, height, {${missing#1}: picture})" }
 	if not (values is map) { return values }
 	given = {}
 	for name in values.keys {
