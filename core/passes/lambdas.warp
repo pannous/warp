@@ -369,7 +369,9 @@ nested_phrase(words: list, lowering: Lowering): list? := {
 }
 
 # `x.f(a)`: of a field the program gives a function value (callable_fields), the function it holds called,
-# `closure_call_1(x.f, a)`; else a method call, its name kept
+# `closure_call_1(x.f, a)`; else a method call, its name kept. Where f is also a word, the program's or the library's,
+# the receiver decides as it runs: one holding the field f calls it, any other the word, so a `{click: e => …}` leaves
+# `button.click(5)` and `xs.reverse()` their methods (decision fields-are-functions: own fields first)
 dotted_lowered(left: Node, right: Node, locals: Locals, lowering: Lowering): Node := {
 	receiver = lowered_lambdas(left, locals, lowering)
 	# `3.g`, `x.g(a)` of a local variable or parameter holding a function: the function it holds called, g(x, a), where
@@ -385,8 +387,15 @@ dotted_lowered(left: Node, right: Node, locals: Locals, lowering: Lowering): Nod
 		return Key(receiver, Op.Dot, lowered_method(right, locals, lowering))
 	}
 	arguments = arguments_of(called).map(argument => lowered_lambdas(argument, locals, lowering))
-	call_node(symbol(closure_call_word + #arguments), [Key(receiver, Op.Dot, called#1)] + arguments)
+	name = name_of(called#1)
+	if not names_word(name, lowering) { return call_node(symbol(closure_call_word + #arguments), [Key(receiver, Op.Dot, called#1)] + arguments) }
+	held = if receiver is symbol then receiver else fresh_name("receiver", fresh_number())
+	field_call = call_node(symbol(closure_call_word + #arguments), [Key(held, Op.Dot, called#1)] + arguments)
+	chosen = Key(Key(Key(ø, Op.If, call_of(HiddenWord.FieldHeld as text, [held, name])), Op.Then, field_call), Op.Else, Key(held, Op.Dot, lowered_method(right, locals, lowering)))
+	if receiver is symbol then chosen else statements([set_to(held, receiver), chosen])
 }
+# a function of that name: the program's, the prelude's or a built-in word, or a standard module's
+names_word(name: text, lowering: Lowering): bool := lowering.arities.has(name) or has_meaning(name) or #defining_modules(name) > 0
 
 # the names the program gives a function value by op, named unlike any of its functions: the fields (Op.Colon)
 # `{answer: answer}` of a parameter `answer: function`, `{d: x => x + 1}`, `{f: square}` of a function with parameters;
