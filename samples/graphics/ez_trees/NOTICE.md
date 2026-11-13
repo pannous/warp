@@ -37,8 +37,9 @@ is a premultiplied Lanczos resize, so the alpha stays soft. `atlas.bin` is the t
 zlib-compressed (RFC 1950), so a run uploads the bytes instead
 of rebuilding a float per byte. `atlas.txt` is the stamp: magic `EZAT`, version 1, the source hash, then each
 entry's id, width and height. Id 1 is the grove atlas, id 2 the ash atlas, id 3 the near atlas. The hash is the sha256 of the
-per-file sha256 hex lines of `atlas.sources`, joined by newlines. A run hashes those files and uses the bin
-only when the stamp matches; otherwise it builds the floats from the `.rgba` files. Regenerate both with
+per-file sha256 hex lines of `atlas.sources`, joined by newlines. A run trusts the stamp (it is baked with the
+bin and shipped in one archive) and builds the floats from the `.rgba` files only without a bin of its version.
+After changing a texture, regenerate both with
 `python3 scripts/ez_tree/atlas.py samples/graphics/ez_trees`. The pixels are the leaf images (MIT, above) and
 the bark photographs (CC0, below), packed by that script.
 
