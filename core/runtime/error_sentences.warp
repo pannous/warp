@@ -87,17 +87,32 @@ engine_trap_words(code: int): text := {
 	words = ["call stack exhausted", "out of bounds memory access", "misaligned memory access", "undefined element: out of bounds table access", "uninitialized element", "indirect call type mismatch", "integer overflow", "integer divide by zero", "invalid conversion to integer", "wasm `unreachable` instruction executed", "interrupt", "all fuel consumed by WebAssembly", "atomic wait on non-shared memory", "null reference", "out of bounds array access", "allocation size too large", "cast failure"]
 	if code < 0 or code >= #words then "" else "wasm trap: " + words#(code + 1)
 }
-# the sentence of the runtime error the run failed in, at `position` (line * 4096 + column, 0 before the first
-# statement or in the compiler's own source) in `file`, before its fix: the runtime word's it failed in, else the
-# engine's trap of `code`; "" for neither (an error of the host's own tells)
-trap_sentence(file: text, position: int, code: int): text := {
+# the sentence of the runtime error the run failed in, at `position` (line * 4096 + column, its line holding the
+# file's index as a node's does, fields.warp line_span; 0 before the first statement or in the compiler's own source)
+# in that line of `files` (the program's first), before its fix: the runtime word's it failed in, else the engine's
+# trap of `code`; "" for neither (an error of the host's own tells)
+trap_sentence(files: text, position: int, code: int): text := {
 	global trap_name
 	sentence = if textual_node(trap_name) then error_sentence(unboxed_text(trap_name)) else engine_trap_words(code)
 	if sentence == "" or position == 0 or names_place(sentence) { return sentence }
-	place = int_text(int_quotient(position, 4096)) + ":" + int_text(int_remainder(position, 4096))
-	at = " at " + (if file == "" then place else file + ":" + place)
+	held = int_quotient(position, 4096)
+	place = int_text(int_remainder(held, line_span())) + ":" + int_text(int_remainder(position, 4096))
+	named = line_of_text(files, int_quotient(held, line_span()))
+	at = " at " + (if named == "" then place else named + ":" + place)
 	fix = text_find(sentence, "; fix: ")
 	if fix == 0 then sentence + at else text_slice(sentence, 1, fix - 1) + at + text_slice(sentence, fix, text_count(sentence))
+}
+# the line `index` (from 0) of a text of lines, "" past its last
+line_of_text(lines: text, index: int): text := {
+	start = 0
+	for passed in 0..<index {
+		while start < byte_count(lines) and byte_at(lines, start) != 10 { start += 1 }
+		if start >= byte_count(lines) { return "" }
+		start += 1
+	}
+	end = start
+	while end < byte_count(lines) and byte_at(lines, end) != 10 { end += 1 }
+	bytes_between(lines, start, end)
 }
 # whether a sentence says its place already, ` at 1:6` or ` at file.warp:2:1` (a raised compile error's)
 names_place(sentence: text): bool := {
@@ -120,4 +135,4 @@ is_place(word: text): bool := {
 	digits < end and digits >= 2 and byte_at(word, digits - 1) == Ascii.Colon and digit_of(byte_at(word, digits - 2)) >= 0
 }
 # that sentence where shown_at puts a text for a host to read
-trap_sentence_at(file: text, position: int, code: int): int := shown_at(held(trap_sentence(file, position, code)))
+trap_sentence_at(files: text, position: int, code: int): int := shown_at(held(trap_sentence(files, position, code)))

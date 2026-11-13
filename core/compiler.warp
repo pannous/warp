@@ -62,6 +62,7 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	global whole_module_wanted
 	global used_c_functions
 	fresh_module()
+	numbered_module_files()
 	module.relocating = library_runtime != ø
 	if is_primitive_file(source) { return primitive_module(source, folder) }
 	known = #diagnosed

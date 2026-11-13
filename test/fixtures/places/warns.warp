@@ -1,0 +1,5 @@
+// a used file with a warning (test/errors/test_used_file_places.sh)
+
+half(x): int := {
+	if x > 0 { return x }
+}

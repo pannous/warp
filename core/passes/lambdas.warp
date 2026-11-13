@@ -780,7 +780,7 @@ linked_definitions(program: Node): list := {
 	for part in nodes_in(program) { if part is symbol { mentioned[name_of(part)] = yes } }
 	found = []
 	for image in module.linked_images {
-		for slice in linked_signature(image.name).slices.filter(slice => mentioned.has(slice#1)) { found += statements_in(unpack(slice#3)) }
+		for slice in linked_signature(image.name).slices.filter(slice => mentioned.has(slice#1)) { found += statements_in(slice_tree(slice#3, slice#4)) }
 	}
 	found
 }
