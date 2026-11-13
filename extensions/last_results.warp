@@ -48,8 +48,9 @@ last_assigned(n: Node): Node? := match n {
 # `def mk(k){ {it + k} }` gives a closure
 parameter_its(program: Node): Node := bottom_up(program, n => {
 	definition = definition_of(n)
-	# (a body that assigns `it` itself, `it = symbol(…)`, keeps it as its local)
-	if definition == ø or #definition.parameters == 0 or "it" in names_bound(value_of(n), []) { return n }
+	# (a body that assigns `it` itself, `it = symbol(…)`, keeps it as its local; a conversion `P as text := it.name`,
+	# read as the phrase P(as, text), keeps it as the value converted, extensions/conversions.warp)
+	if definition == ø or #definition.parameters == 0 or "it" in names_bound(value_of(n), []) or is_key(as_phrase_read(key_of(n)), Op.As) { return n }
 	first = symbol(parameter_of(definition.parameters#1).name)
 	body = value_of(n)
 	named = if is_curly_group(body) then children(body, part => it_named(part, first)) else it_named(body, first)
