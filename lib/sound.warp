@@ -853,7 +853,7 @@ BITS_PER_SAMPLE = 16
 class Sound {
 	number: int
 	duration: float
-	format as text := "♪ " + duration + " s"
+	format as text := "♪ " + round(duration * 100) / 100 + " s"
 }
 sounded(speakers, rate, channels) := {
 	sounds_made = sounds_made + 1
