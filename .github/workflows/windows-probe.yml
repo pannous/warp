@@ -1,0 +1,61 @@
+name: windows probe
+# the first Windows warp while it is made (card windows-build): the C of core/native/warp.warp and the compilers, from
+# the scratch release windows-probe, compiled by llvm-mingw's clang against our wasmtime C API, then hello. Goes once
+# the job sits in release.yml
+on:
+  push:
+    branches: [windows-phase]
+    paths: [.github/workflows/windows-probe.yml, lib/native/**, scripts/wasmtime-c-api.sh, crates/wasmtime-capi/**]
+  workflow_dispatch:
+env:
+  WABT: 1.0.42
+  LLVM_MINGW: 20261104
+  WARP_WINDOW: 0
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+    - run: git config --global core.autocrlf false
+    - uses: actions/checkout@v7
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: actions/cache/restore@v4
+      with:
+        path: crates/wasmtime-capi/target
+        key: wasmtime-windows-${{ hashFiles('crates/wasmtime-capi/**', 'scripts/wasmtime-c-api.sh') }}
+    - name: the C and the compilers
+      run: gh release download windows-probe --pattern warp-c.tar.gz && tar -xzf warp-c.tar.gz && ls core/native lib/*.wasm
+    - name: wabt and llvm-mingw
+      run: |
+        mkdir -p ../tools && cd ../tools
+        gh release download "$WABT" --repo WebAssembly/wabt --pattern "wabt-$WABT-windows-x64.tar.gz"
+        tar -xzf "wabt-$WABT-windows-x64.tar.gz"
+        gh release download "$LLVM_MINGW" --repo mstorsjo/llvm-mingw --pattern "llvm-mingw-$LLVM_MINGW-ucrt-x86_64.zip"
+        unzip -q "llvm-mingw-$LLVM_MINGW-ucrt-x86_64.zip"
+        ls "wabt-$WABT" "wabt-$WABT/share/wabt/wasm2c" || true
+        echo "$PWD/llvm-mingw-$LLVM_MINGW-ucrt-x86_64/bin" >>"$GITHUB_PATH"
+    - name: our wasmtime C API
+      run: WARP_WASMTIME_TARGET=$PWD/crates/wasmtime-capi/target scripts/wasmtime-c-api.sh lib && ls crates/wasmtime-capi/target/release/ lib/*.dll
+    - name: the native warp
+      run: |
+        wabt=../tools/wabt-$WABT
+        runtime=$wabt/share/wabt/wasm2c
+        clang -O2 -I"$runtime" -I"$wabt/include" -Ilib -o lib/warp.exe core/native/warp.native.c core/native/warp.native.main.c \
+          "$runtime/wasm-rt-impl.c" "$runtime/wasm-rt-mem-impl.c" crates/wasmtime-capi/target/release/warp_wasmtime.dll.lib \
+          -static -pthread -Wl,--export-all-symbols -Wl,--stack,0x10000000
+    - name: hello
+      run: lib/warp.exe --version && lib/warp.exe samples/hello/hello.warp | grep Hello
+    - name: what runs
+      if: always()
+      run: |
+        set +e
+        tried() { echo "== warp $*"; timeout 300 lib/warp.exe "$@" 2>&1 | tail -15; echo "exit $?"; }
+        tried 'size(text(fetch("https://example.com"))) > 100'
+        tried 'exec sh "echo hi"'
+        tried 'exec(sh "echo a b")'
+        tried test test/modules/test_exec_sh_runs.pairs.warp
+        tried test test/gate
