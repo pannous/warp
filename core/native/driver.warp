@@ -1047,7 +1047,7 @@ session_line_run(session: pointer, path: text): i32 := {
 		error = started(context, instance, "_start", trap)
 		# (its message is read by running the store's code again: past a Ctrl+C, to the next epoch)
 		wasmtime_context_set_epoch_deadline(context, 1)
-		if error != 0 or long_at(trap).value != 0 { failure = failure_said(error, trap, raised_message(context, instance, trap)) }
+		if error != 0 or long_at(trap).value != 0 { failure = failure_said(error, trap, raised_message(0, context, instance, trap)) }
 	}
 	keep_value(RUN_SLOT, outer_run)
 	status = allocate(4)
@@ -1233,8 +1233,9 @@ channel_sent(caller: handle, context: handle, given: pointer): nothing := {
 }
 # what the run failed in, as every host says it: the module's trap_message (core/runtime/error_sentences.warp) of the
 # engine's trap code (-1 for none), the runtime error's or that trap's sentence at its place; empty for neither (the
-# error's own message tells then)
-raised_message(context: handle, instance: pointer, failed: pointer): text := {
+# error's own message tells then). The module is the instance's, or with none the one exported() finds: a host
+# module's, whose runtime error is said too, not its trap (card native-host)
+raised_message(caller: handle, context: handle, instance: pointer, failed: pointer): text := {
 	function = allocate(EXTERN_BYTES)
 	memory = allocate(EXTERN_BYTES)
 	code = allocate(8)
@@ -1244,7 +1245,7 @@ raised_message(context: handle, instance: pointer, failed: pointer): text := {
 	result = allocate(VALUE_BYTES)
 	trap = allocate(8)
 	long_at(trap).value = 0
-	if not wasmtime_instance_export_get(context, instance, "trap_message", 12, function) or not wasmtime_instance_export_get(context, instance, "memory", 6, memory) { "" } else {
+	if not module_export(caller, context, instance, "trap_message", function) or not module_export(caller, context, instance, "memory", memory) { "" } else {
 		# a compiler the seed built before trap_message took the code exports it without one
 		taken = native_long(wasm_functype_params(wasmtime_func_type(context, function + 8)))
 		checked(wasmtime_func_call(context, function + 8, argument, taken, result, 1, trap), trap)
@@ -1841,8 +1842,8 @@ timer_fired(context: handle, instance: pointer, fired: pointer, id: i64, output:
 # what a call of the module failed in, empty when it ran; a run without an output file ends there, saying so
 call_failure(context: handle, instance: pointer, error: handle, trap: pointer, output: text): text := {
 	if error == 0 and long_at(trap).value == 0 { return "" }
-	if output.length == 0 { failed_raising(error, trap, raised_message(context, instance, trap)) }
-	failure_said(error, trap, raised_message(context, instance, trap))
+	if output.length == 0 { failed_raising(error, trap, raised_message(0, context, instance, trap)) }
+	failure_said(error, trap, raised_message(0, context, instance, trap))
 }
 # the options table, made at its first option
 options_table(): pointer := {
@@ -2777,7 +2778,10 @@ exported(caller: handle, context: handle, name: text, into: pointer): bool := {
 	if guest.length == 0 { return host_export(context, name, into) }
 	wasmtime_linker_get(long_at(kept_value(RUN_SLOT) as i32).value, context, guest, guest.length, name, name.length, into)
 }
-# the module's export `name` called on the values, its result into `result`
+# the export `name` of the instance, or with none of the module exported() finds
+module_export(caller: handle, context: handle, instance: pointer, name: text, into: pointer): bool := if instance != 0 then wasmtime_instance_export_get(context, instance, name, name.length, into) else exported(caller, context, name, into)
+# the module's export `name` called on the values, its result into `result`; a failing one ends the run saying the
+# module's runtime error where it raised one
 guest_call(caller: handle, context: handle, name: text, values: pointer, count: i64, result: pointer): nothing := {
 	function = allocate(EXTERN_BYTES)
 	if not exported(caller, context, name, function) {
@@ -2786,7 +2790,8 @@ guest_call(caller: handle, context: handle, name: text, values: pointer, count: 
 	}
 	trap = allocate(8)
 	long_at(trap).value = 0
-	checked(wasmtime_func_call(context, function + 8, values, count, result, 1, trap), trap)
+	error = wasmtime_func_call(context, function + 8, values, count, result, 1, trap)
+	if error != 0 or long_at(trap).value != 0 { failed_raising(error, trap, raised_message(caller, context, 0, trap)) }
 }
 # where the module's memory starts, for the driver
 guest_memory(caller: handle, context: handle): handle := {
