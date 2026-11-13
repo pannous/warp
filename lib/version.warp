@@ -1,0 +1,27 @@
+// The standard library module version (wiki/use.md): a version number as written, `1.2.3`, `version 1.10`, compared
+// part by part as whole numbers, so 1.9 < 1.10 and 1.2.3 < 1.10.0, missing parts zero, so 1.2.0 == 1.2. The literal
+// with two dots or more and `version` before a number are this module's calls (extensions/version_literals.warp)
+
+VERSION_SEPARATOR = "."
+
+class Version {
+	written: text
+	// a number below, at or above 0 as the other version is greater, equal or smaller: <, <=, > and >=
+	compare(o: any): int := parts_compared(version_parts(written), version_parts(version(o).written))
+	equals(o: any): bool := (o is Version or o is number or o is text) and compare(o) == 0
+	format as text := written
+}
+
+// the version written so, "1.2.3"; a number reads by its digits as shown, version(1.5) is 1.5
+version(written: any): Version := if written is Version then written else Version("${written}".remove_prefix("v"))
+
+// the whole numbers of "1.10.0", [1, 10, 0]
+version_parts(written: text): list := written.split(VERSION_SEPARATOR).map(part => int(part))
+// the first part that differs decides, a missing part counting as 0
+parts_compared(a: list, b: list): int := {
+	for i in 1 to max(#a, #b) {
+		difference = (if i <= #a then a#i else 0) - (if i <= #b then b#i else 0)
+		if difference != 0 { return difference }
+	}
+	0
+}

@@ -14,6 +14,7 @@ use "sum_types.warp"
 use "record_classes.warp"
 use "radix_numbers.warp"
 use "time_literals.warp"
+use "version_literals.warp"
 use "event_phrases.warp"
 use "float_suffixes.warp"
 use "durations.warp"
@@ -87,6 +88,7 @@ EXTENSIONS = [
 	record_classes_extension
 	radix_numbers_extension
 	time_literals_extension
+	version_literals_extension
 	event_phrases_extension
 	float_suffixes_extension
 	durations_extension
