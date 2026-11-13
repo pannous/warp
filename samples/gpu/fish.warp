@@ -11,7 +11,7 @@ use fish_mesh
 # the camera turns around the fish, which stays at the origin, heading along its own +X
 frame_width = 320
 frame_height = 180
-angle = 0.9
+view_angle = 0.9
 fish = ø
 started = clock()
 
@@ -31,8 +31,8 @@ fish_view(v, turn) := {
 fish_color(x, y) := {
 	uvx = (x + 0.5) / frame_width - 0.5
 	uvy = 0.5 - (y + 0.5) / frame_height
-	origin = fish_view([0.0, 0.04, 0.95], angle)
-	ray = fish_view([uvx * 0.85, uvy * 0.85, -1.0], angle)
+	origin = fish_view([0.0, 0.04, 0.95], view_angle)
+	ray = fish_view([uvx * 0.85, uvy * 0.85, -1.0], view_angle)
 	ray = ray ./ norm(ray)
 	hit = fish_nearest(origin, ray)
 	if hit#2 < 0 { return [0.05, 0.18, 0.28 + 0.15 * uvy] }
@@ -44,11 +44,11 @@ fish_color(x, y) := {
 
 # `use` brings the functions, not this frame. Headless, one still; in a window, the fish swims
 on frame {
-	global fish, angle
+	global fish, view_angle
 	if no fish { fish = fish_mesh(read(fish_beside(program_folder()))) }
 	seconds = float(clock() - started) / 1000 + 0.35
 	posed = fish_pose(fish, seconds)
 	fish_show(posed.corners, posed.colors, [[0.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 0.0]], fish_radius(posed.corners))
-	angle = 0.9 + seconds * 0.45
+	view_angle = 0.9 + seconds * 0.45
 	paint(fish_color, frame_width, frame_height)
 }

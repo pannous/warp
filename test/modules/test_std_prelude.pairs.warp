@@ -18,7 +18,7 @@
 'use list; "\\(zip([1], [2]))"'	'[[1, 2]]'
 
 # a_prelude_word_keeps_its_types
-'first(x) := 7; first([1])'	1
+'my_first(x) := 7; first([1])'	1
 
 # dir_lists_the_prelude
 '"first" in dir(prelude)'	yes

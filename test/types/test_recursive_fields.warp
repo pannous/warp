@@ -5,14 +5,14 @@ is! 'class T { v: int; left: T?; right: T? }; t = T{v: 1 left: T{v: 2 left: ø r
 is! 'class Person { name: text; friend: Person? }; b = Person{name:"bo" friend: ø}; a = Person{name:"al" friend: b}; a.friend.name' 'bo'
 
 # gc_struct_and_ref_are_wasm_spellings
-is! 'type N: gc struct { tag: i32 value: i64 }; n = N { tag: 1 value: 42 }; n.value' 42
-is! 'type N: gc struct { tag: i32 left: ref N? }; n = N { tag: 7 left: ø }; n.tag' 7
+is! 'struct N { tag: i32 value: i64 }; n = N { tag: 1 value: 42 }; n.value' 42
+is! 'struct N { tag: i32 left: N? }; n = N { tag: 7 left: ø }; n.tag' 7
 
 # ref_fields_on_their_own_lines
-is! 'type Node: gc struct {
+is! 'struct Node {
     tag: i32
-    left: ref Node?
-    right: ref Node?
+    left: Node?
+    right: Node?
 }
 tree = Node {
     tag: 5
