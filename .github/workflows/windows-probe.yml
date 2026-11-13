@@ -4,7 +4,7 @@ name: windows probe
 # the job sits in release.yml
 on:
   push:
-    branches: [windows-phase]
+    branches: [windows-build-check]
     paths: [.github/workflows/windows-probe.yml, lib/native/**, scripts/wasmtime-c-api.sh, crates/wasmtime-capi/**]
   workflow_dispatch:
 env:
