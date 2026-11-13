@@ -2169,8 +2169,11 @@ system_value_set(name: text, value: i64): nothing := {
 ## and the system's decoders): its system values, the layer a painting shows in, the host words it answers as
 ## host_<word>, the run's end (a still picture held open, the sounds heard out)
 # (primitive mode has no text constants: its name `warp/native_host` and the prefix `host_` are written where read)
-# whether the run linked the native host module
-host_linked(): bool := long_at(kept_value(RUN_SLOT) as i32 + HOST_LINKED_AT as i32).value != 0
+# whether the run linked the native host module: for a host word (host_export) or for the program's imports
+host_linked(): bool := {
+	run = kept_value(RUN_SLOT) as i32
+	long_at(run + HOST_LINKED_AT as i32).value != 0 or contains_line(cell_text(long_at(run + 16).value as i32), "warp/native_host")
+}
 host_export(context: handle, name: text, function: pointer): bool := lazily_linked(context, "warp/native_host", HOST_LINKED_AT, name, function)
 # the run's end told the native host module, when the run linked it: a still picture stays shown till its window
 # closes, the sounds play out
