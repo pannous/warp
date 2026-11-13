@@ -214,8 +214,6 @@ rewrite sum($first .. $end) => (if $end <= $first then 0 else if ($end - $first)
 // `ys = 2 floats`: a list of 2 floats, as `ys = float[2]` (warp fix writes the count first, card fix-in-lib)
 rewrite $n floats => float[$n]
 rewrite $n ints => int[$n]
-// `xs: [f32] = …`, `[i32]`, `[vec4]` …: made as a GPU list of those cells (extensions/rules/gpu_packing.warp GPU_CELLS)
-rewrite ($xs: [$cell] = $v) => ($xs = $packed) where $cell in [f32, i32, u32, f16, bf16, vec2, vec3, vec4] and $packed = gpu_packed_as($cell, $v)
 // the arithmetic mean, also spelled average
 mean(xs) := if count(xs) == 0 then raise "mean of an empty list" else sum(xs) / count(xs)
 // x↑n, Knuth's up arrow, is the power and x↓b the log of x to base b (card easy-add): operators of numbers only, so
