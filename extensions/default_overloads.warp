@@ -9,7 +9,7 @@ default_overloads(program: Node): Node := {
 	statements_as(program, statements.flat_map(statement => if first_reading_default(statement) == ø then [statement] else overloads_of(without_mark(statement))))
 }
 # the definition's parameters, ø for no definition
-defined_parameters(statement: Node): list? := {
+head_parameters(statement: Node): list? := {
 	plain = without_mark(statement)
 	if not is_key(plain, Op.Define) { return ø }
 	call = target_call(key_of(plain))
@@ -17,7 +17,7 @@ defined_parameters(statement: Node): list? := {
 }
 # where the first parameter whose default reads an earlier one stands, ø for none
 first_reading_default(statement: Node): int? := {
-	parameters = defined_parameters(statement)
+	parameters = head_parameters(statement)
 	if parameters == ø { return ø }
 	for at in 0 ..< #parameters {
 		parameter = parameters[at]
