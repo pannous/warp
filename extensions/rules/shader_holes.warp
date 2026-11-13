@@ -76,7 +76,9 @@ PASS_VALUES_WORD = "with"
 shader_passes(items: list, program: Node, source: text): any := {
 	shaders = items.map(passed_shader)
 	if shaders.any(s => s == ø or not (main_level_value(name_of(s), program) is text)) { return ø }
-	fields = shaders.map(name_of)
+	# (and every `$name(at)`, a field read, which lib/gpu_passes.warp refuses where no shader of the list draws it)
+	codes = shaders.map(s => "${main_level_value(name_of(s), program)}")
+	fields = shaders.map(name_of) + codes.flat_map(code => shader_holes(code).filter(name => code.contains(VALUES_NAME + "." + name + "(")))
 	passes = []
 	for at in 1 to #items {
 		s = shaders#at

@@ -50,8 +50,18 @@ FIELD_HOLE = "NAME"
 FIELD_AT = "\nfn field_NAME_at(at: vec2f) -> vec4f { return field_NAME(at / values.size); }\n"
 FIELD_SHOWN = "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return field_NAME(at.xy / values.size); }"
 reads_field(shader: text, name: text): bool := shader.contains("values." + name + "(")
+// a read of a field no shader of the list draws is refused, naming the shader to put before it
 fields_placed(shader: text, names: list): text := {
 	placed = shader
 	for name in names.filter(name => reads_field(shader, name)) { placed = placed.replace("values." + name + "(", "field_" + name + "_at(") + FIELD_AT.replace(FIELD_HOLE, name) }
+	for rest in placed.split("values.")[1 ..] {
+		name = leading_word(rest)
+		if name != "" and rest[#name ..].starts_with("(") { raise "$" + name + "(at) reads a field no shader of paint's list draws: fix: put " + name + " in the list before the shader reading it" }
+	}
 	placed
+}
+leading_word(t: text): text := {
+	end = 0
+	while end < #t and is_word_char(t[end]) { end += 1 }
+	t[.. end]
 }

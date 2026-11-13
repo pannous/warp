@@ -34,4 +34,15 @@ show = shader {
 }
 pixels = paint([glow with {level: 1.0}, show])
 print int(pixels#1 / 65536) % 256')" "255"
+check "a shader block without an entry line is a fragment body, at its pixel" "$(last_line body 'width = 2
+height = 1
+level = shader { return vec4f(at.x / 2.0, 0.0, 0.0, 1.0); }
+show = shader { return $level(at.xy); }
+pixels = paint([level, show])
+print int(pixels#2 / 65536) % 256')" "191"
+check "a read of a field no shader draws is refused" "$(last_line unwritten 'width = 2
+height = 1
+show = shader { return $dye(at.xy); }
+other = shader { return vec4f(1.0); }
+paint([other, show])' | grep -o 'fix: put dye in the list')" "fix: put dye in the list"
 exit $((failures > 0))
