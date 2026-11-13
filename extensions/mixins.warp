@@ -33,7 +33,7 @@ with_mixins_taken(statement: Node, mixins: map): Node := {
 		match declared {
 			Key(left, key_op, right): {
 				own = view_of(value_of(statement#3))[3..]
-				return Key(left, key_op, ["type", right#2, class_body(own, names_listed(key_of(statement#3)), mixins)])
+				return Key(left, key_op, ["type", right#2, mixed_body(own, names_listed(key_of(statement#3)), mixins)])
 			}
 			_: return statement
 		}
@@ -44,16 +44,16 @@ with_mixins_taken(statement: Node, mixins: map): Node := {
 	included = view#3[3..].map(included_mixin).filter(name => name != ø)
 	if #included == 0 { return statement }
 	match statement {
-		Key(left, key_op, right): Key(left, key_op, [view#1, view#2, class_body(own, included, mixins)])
+		Key(left, key_op, right): Key(left, key_op, [view#1, view#2, mixed_body(own, included, mixins)])
 		_: statement
 	}
 }
 
 # a class body's view: its own members, then each mixin's the class doesn't write itself
-class_body(own: list, taken: list, mixins: map): list := {
+mixed_body(own: list, taken: list, mixins: map): list := {
 	for name in taken { if not mixins.has(name) { raise "`" + name + "` is no mixin the program declares" } }
-	written = own.map(member_name)
-	mixed = concatenated(taken.map(name => mixins[name])).filter(member => member_name(member) not in written)
+	written = own.map(mixed_member_word)
+	mixed = concatenated(taken.map(name => mixins[name])).filter(member => mixed_member_word(member) not in written)
 	["list", '{', ';'] + own + mixed
 }
 
@@ -67,7 +67,7 @@ included_mixin(member: list): text? := {
 names_listed(names: Node): list := if names is symbol then [name_of(names)] else items_of(names).map(name => name_of(name))
 
 # the word a member defines, a method's or a field's
-member_name(member: list): text := {
+mixed_member_word(member: list): text := {
 	n = member_read(member)
 	defined_word(n) ?? field_name(n)
 }
