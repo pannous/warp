@@ -14,7 +14,7 @@ pattern; Wasp (C++) has its own tap pannous/homebrew-wasp).
   from the C the compilers job writes (`warp build native --c core/native/warp.warp`: no warp runs on Windows to build
   it there) with llvm-mingw's clang, against our wasmtime C API built there (warp_wasmtime.dll), and runs hello and
   smoke's checks. lib/native/windows.c answers the POSIX calls (lib/native/system.h includes it, the one place the C
-  asks the system): paths as Git Bash writes them (`D:\\a` is `/d/a`), each drive preopened for the modules under
+  asks the system): paths as Git Bash writes them (`D:\a` is `/d/a`), each drive preopened for the modules under
   that name, sh lines by the sh on PATH, commands by posix_spawnp over CreateProcess. Still missing: `warp test`'s
   fork, `warp build native` there (card windows-build-check), CRLF sources (card crlf-line-endings).
 - PyPI, .deb/.rpm (license fields `AGPL-3.0-or-later AND MIT`: the compiler AGPL, warp-runtime MIT). Both repackage the release tarballs, jobs `packages`, `pypi`
