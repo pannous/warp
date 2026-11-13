@@ -1,0 +1,32 @@
+# Version literals (wiki/use.md): `1.2.3`, a number of two dots or more, and `version 1.10`, the number after the word
+# as written, are lib/version.warp's version("1.2.3"), compared part by part (1.9 < 1.10). `version` stays a name
+# wherever no number follows it (`version = 2`)
+VERSION_WORD = "version"
+# `1.2.3` at a digit: its parts as written, ø for a number of one dot or none
+read_version_literal(p: Parser): Node := {
+	end = version_end(p, p.at)
+	written = p.code[p.at .. end]
+	if written.split(".").length < 3 { return ø }
+	p.at = end
+	version_call(written)
+}
+# `version 1.10`: the number after the word, its digits kept, ø unmoved before anything else
+read_version_word(p: Parser, word: text): Node := {
+	start = p.at + word.length
+	while peek(p.code, start, p.n) == " " { start += 1 }
+	end = version_end(p, start)
+	if end == start { return ø }
+	written = p.code[start .. end]
+	p.at = end
+	version_call(written)
+}
+# where the digits and the dots between them, from at, end
+version_end(p: Parser, at: int): int := {
+	end = at
+	while is_digit(peek(p.code, end, p.n)) or (peek(p.code, end, p.n) == "." and is_digit(peek(p.code, end + 1, p.n)) and end > at) { end += 1 }
+	end
+}
+version_call(written: text): Node := call_of(VERSION_WORD, ["" + written])
+# a version literal brings lib/version along, which the source names nowhere (`1.2.3 < 1.10.0`)
+version_uses(source: text, tree: Node, folder: text = "."): list := if nodes_in(tree).any(n => is_call(n) and n#1 == symbol(VERSION_WORD)) then [VERSION_WORD] else []
+version_literals_extension = Extension{name: "version_literals", number_readers: [read_version_literal], keyword_readers: reading_rows([VERSION_WORD], read_version_word), implicit_uses: [version_uses]}

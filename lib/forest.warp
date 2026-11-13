@@ -630,7 +630,7 @@ atlas_source_hash(folder: text): text := {
 	if folder == atlas_hash_folder and atlas_hash_kept != "" { return atlas_hash_kept }
 	list = folder + "/atlas.sources"
 	names = [name.trim() for name in read(list).split("\n") if name.trim() != ""]
-	digest = sha256(join([sha256(read(folder + "/" + name)) for name in names], "\n"))
+	digest = sha256(join([sha256(read_bytes(folder + "/" + name)) for name in names], "\n"))
 	atlas_hash_folder = folder
 	atlas_hash_kept = digest
 	digest
