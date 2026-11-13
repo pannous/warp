@@ -156,7 +156,7 @@ build(words: list) := {
 	compile_written(source, stem + ".full.wasm", if is_file then source_folder(target) else ".")
 	# a primitive module imports no runtime: its separate form is itself
 	write_bytes(stem + ".mod.wasm", if is_primitive_file(source) then read_bytes(stem + ".full.wasm") else linked_bytes(module.order))
-	trim(stem + ".full.wasm", stem + ".wasm", option_of(options, "trim") ?? DEFAULT_TRIM)
+	trim(stem + ".full.wasm", stem + ".wasm", option_of(options, "trim") ?? (if build_mode == "small" then "small" else DEFAULT_TRIM))
 	modules = [stem + ".full.wasm", stem + ".mod.wasm", stem + ".wasm"]
 	if wagi { return wagi_built(stem, modules) }
 	if not (WASM_ONLY in options) {

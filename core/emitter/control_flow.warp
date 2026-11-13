@@ -187,15 +187,15 @@ def field_or_word(body: Body, value: TypedCode, name: text, word: function): Typ
 	TypedCode(ValueKind.Node, value.code + [op.local_set] + held + has_it + [op.if] + value_type(ValueKind.Node) + read + [op.else] + boxed(word(receiver)) + [op.end])
 }
 # the program's statement n about to run, its position in trap_position: a runtime error names it;
-# a runtime word's statements leave it, and so does every statement of a --fast build; a library function's and a linked module's name their own file, which
+# a runtime word's statements leave it, and so does every statement of a build in another mode than debug; a library function's and a linked module's name their own file, which
 # has the same number in every compile (positions.warp source_files, card positions-always)
 def position_code(body: Body, n: Node): list {
 	# `x = 2.5` to a declared int converts, so it can fail and names itself (card int-reports)
 	if stores_constant_data(n) and name_of(key_of(n)) not in body.declared { return [] }
 	# a catch's `e = placed_at(…, trap_place())` reads the failed statement's place, so it keeps it (passes/tries.warp)
 	if mentions(n, "trap_place") { return [] }
-	# (a --fast build drops them, the compiler's own build too: no error of it names a place)
-	at = if body.intrinsics or fast_build then ø else written_at(n)
+	# (a build in another mode than debug drops them, the compiler's own fast build too: no error of it names a place)
+	at = if body.intrinsics or positions_dropped then ø else written_at(n)
 	if not at { return [] }
 	[op.i64_const] + sleb(packed_place(at)) + [op.global_set] + relocatable(relocated.globals, declared_global("trap_position", ValueKind.Int)#1)
 }

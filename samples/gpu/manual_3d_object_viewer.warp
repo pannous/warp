@@ -53,7 +53,7 @@ def triangles(obj) {
 	corners
 }
 
-mesh = triangles(house)
+mesh: [vec3] = triangles(house)
 size = 256
 viewer = shader {
 @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
