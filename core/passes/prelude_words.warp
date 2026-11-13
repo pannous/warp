@@ -484,9 +484,6 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	if #reached == 0 { return program }
 	brought = []
 	for slice in slices { if slice#5 in reached { brought += reached[slice#5] } }
-	# a used module's definitions get the rules their words call for, as the module's own build gives them: lib/splats.warp's
-	# `centres: [f32] = float[n]` a GPU list as the same line in the program is one; the prelude's are written plain
-	if in_front { brought = statements_in(own_rules_applied(separated(bracketed(brought, ""), ";"), "")) }
 	# a value the program reaches, `online := system_value("online") != 0`, holds before the program reads it; a
 	# function goes where the module wants its definitions (card prelude-definition-reachability)
 	values = brought.filter(goes_in_front)
