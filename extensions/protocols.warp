@@ -5,7 +5,7 @@
 #   class methods route a method named like a function: extensions/class_methods/methods.warp)
 # - conformance is structural: a class conforms when it, or a class it extends, has each required word as a method or
 #   a function of it, `area(q: sq) := …`; `x is shape` tests x against the conforming classes
-# - a place typed by the protocol, `f(x: shape)`, takes any value
+# - a place typed by the protocol, `f(x: shape)`, takes a value of a conforming class and refuses any other
 protocols_extension = Extension{name: "protocols", keyword_readers: {"protocol": read_protocol, "trait": read_protocol}, passes_before: {"definition_heads": protocols_applied}}
 
 protocol_mark = "protocol"
@@ -165,9 +165,11 @@ word_and_first_type(statement: Node): list? := {
 	if is_key(first, Op.Colon) and value_of(first) is symbol then [name_of(key_of(statement)#1), name_of(value_of(first))] else ø
 }
 
-# `x is shape`: x is one of the conforming classes; `x: shape`, a place the protocol types, takes any value
+# `x is shape`: x is one of the conforming classes; `x: shape`, a place the protocol types, takes a value of one
 # `x is C` of a class, the built-in protocol's own test of its name
 instance_or_built_in(subject: Node, name: text): Node := if built_in_module(name) != "" then call_of(helper_name(name, "is"), [subject]) else Key(subject, Op.Is, symbol(name))
+# `sq or circle` of the classes
+union_of(classes: list): Node := classes[1..].fold(symbol(classes#1), (union, name) => Key(union, Op.Or, symbol(name)))
 protocol_resolved(n: Node, conforming: map, converted: map, defined: list): Node := {
 	# a call of a word of a built-in protocol's module: each argument the default implementation, a function the
 	# program defines passed as it is (`matrix(2, 4, weight)`)
@@ -182,6 +184,8 @@ protocol_resolved(n: Node, conforming: map, converted: map, defined: list): Node
 		for name in classes[1..] { test = Key(test, Op.Or, instance_or_built_in(key_of(n), name)) }
 		return test
 	}
-	if is_key(n, Op.Colon) { return Key(key_of(n), Op.Colon, symbol("any")) }
+	# (a declared protocol's place takes its conforming classes, refusing any other value; a built-in one's, listed
+	# first among them, or one no class conforms to, any value)
+	if is_key(n, Op.Colon) { return Key(key_of(n), Op.Colon, if #classes == 0 or classes#1 == name_of(value_of(n)) then symbol("any") else union_of(classes)) }
 	n
 }

@@ -206,8 +206,8 @@ converted_arguments(n: Node, places: Places, known: map): Node := {
 	call = definition_call(n)
 	if call != ø { return Key(key_of(n), Op.Define, converted_arguments(value_of(n), unshadowed(places, bound_at(n)), parameters_typed(call))) }
 	walked = children(called_values(n, places), x => converted_arguments(x, places, known))
-	if is_key(walked, Op.Assign) and is_key(key_of(walked), Op.Colon) and key_of(key_of(walked)) is symbol and value_of(key_of(walked)) is symbol {
-		return Key(key_of(walked), Op.Assign, passed(value_of(walked), name_of(value_of(key_of(walked))), name_of(key_of(key_of(walked))), places, known))
+	if is_declaration(walked) {
+		return Key(key_of(walked), Op.Assign, passed(value_of(walked), place_type(value_of(key_of(walked))), name_of(key_of(key_of(walked))), places, known))
 	}
 	types = positional_types(walked, places.typed)
 	if types == ø and is_call(walked) and makes_converting_class(walked#1, places) { return named_fields_passed(walked, places, known) }
@@ -297,7 +297,10 @@ bare_result_name(statement: Node): text := {
 }
 nullary_head(definition: Node): Node := Key(Key(call_node(key_of(key_of(definition)), []), Op.Colon, value_of(key_of(definition))), Op.Define, value_of(definition))
 # the types of the program's `x: T = v`
-declared_types(program: Node): list := nodes_in(program).filter(n => is_key(n, Op.Assign) and is_key(key_of(n), Op.Colon) and key_of(key_of(n)) is symbol and value_of(key_of(n)) is symbol).map(n => name_of(value_of(key_of(n))))
+declared_types(program: Node): list := nodes_in(program).filter(is_declaration).map(n => place_type(value_of(key_of(n))))
+# `x: T = v`, `x: A or B = v`: a variable declared with a type word or a union of them
+is_declaration(n: Node): bool := is_key(n, Op.Assign) and is_key(key_of(n), Op.Colon) and key_of(key_of(n)) is symbol and place_type(value_of(key_of(n))) != ø
+place_type(type: Node): text? := if type is symbol then name_of(type) else union_spelling(type)
 
 # the program with its conversions as functions, before its statements (its last one stays its value), and their uses
 # as calls
