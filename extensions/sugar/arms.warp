@@ -2,6 +2,9 @@
 # lower_match_arms): `k => v` is the arm `k: v` (of several patterns too, `1, 2 => v`), `_ => v` and `else -> v` the arm `default: v`, Swift's `case .north: 1`
 # and `.north: 1` the arm of the case north, `case 1: v` the arm `1: v`. `switch` is match's other word.
 # a match over the cases of one enum that leaves one out is refused naming it (card pure-lane-def)
+# an arm whose value assigns, `switch n {1: x = 5 2: x = 7}`, arrives as `(1: x) = 5`, the colon binding tighter than
+# `=`: the assignment is the arm's value
+rewrite match $s {$arms...} => match $s {($k: ($v = $w)) for (($k: $v) = $w) in $arms...}
 rewrite match $s $arms => $refused where $refused = missed_cases($arms, $program)
 rewrite match $s {$arms...} => match $s {($k: $v) for ($k => $v) in $arms...}
 rewrite match $s {$arms...} => match $s {($ks..., $k: $v) for ($ks..., $k => $v) in $arms...}
