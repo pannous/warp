@@ -4,7 +4,7 @@
 # a match over the cases of one enum that leaves one out is refused naming it (card pure-lane-def)
 # an arm whose value assigns, `switch n {1: x = 5 2: x = 7}`, arrives as `(1: x) = 5`, the colon binding tighter than
 # `=`: the assignment is the arm's value
-rewrite match $s {$arms...} => match $s {($k: ($v = $w)) for (($k: $v) = $w) in $arms...}
+rewrite match $s {$arms...} => match $s {($k: ($v = $w)) for ($k: $v = $w) in $arms...}
 rewrite match $s $arms => $refused where $refused = missed_cases($arms, $program)
 rewrite match $s {$arms...} => match $s {($k: $v) for ($k => $v) in $arms...}
 rewrite match $s {$arms...} => match $s {($ks..., $k: $v) for ($ks..., $k => $v) in $arms...}
