@@ -17,6 +17,9 @@ CRATE_TOOL_PLACES = ["/warp-crate", "/../scripts/warp-crate"]
 CRATE_NEEDS = {python3: "brew install python, or python.org", cargo: "curl https://sh.rustup.rs -sSf | sh, or rustup.rs"}
 WASM2C_MODULE = "program"
 C_COMPILER = "cc -O2"
+# macOS: the main thread's stack, as deep as lib/native/wasi.c PROGRAM_STACK_BYTES, so the program runs on the main
+# thread, where alone macOS opens windows (SDL finds "no available video device" on any other)
+MAIN_STACK = " -Wl,-stack_size,0x10000000"
 # wasm2c's runtime and headers, in these folders of the wabt whose wasm2c runs
 WASM2C_RUNTIME = "/share/wabt/wasm2c"
 # the oldest wasm2c writing the w2c_ names and taking -n (an old /usr/local/bin/wasm2c 1.0.13 before Homebrew's 1.0.42
@@ -37,7 +40,7 @@ build_native(source_file: text, library: text) := {
 	runtime = wabt + WASM2C_RUNTIME
 	shell(quoted_path(wasm2c) + " " + quoted_path(stem + ".wasm") + " -n " + WASM2C_MODULE + " -o " + quoted_path(stem + ".c"))
 	files = [stem + ".c", stem + ".main.c", runtime + "/wasm-rt-impl.c", runtime + "/wasm-rt-mem-impl.c"].map(quoted_path).join(" ")
-	shell(C_COMPILER + " -I" + quoted_path(runtime) + " -I" + quoted_path(wabt + WABT_HEADERS) + " -o " + quoted_path(executable) + " " + files + " -lm" + exported_symbols() + native_links(wabt, library))
+	shell(C_COMPILER + " -I" + quoted_path(runtime) + " -I" + quoted_path(wabt + WABT_HEADERS) + " -o " + quoted_path(executable) + " " + files + " -lm" + (if is_macos() then MAIN_STACK else "") + exported_symbols() + native_links(wabt, library))
 	shell("rm -f " + [".wasm", ".c", ".h", ".main.c"].map(suffix => quoted_path(stem + suffix)).join(" "))
 	print "built " + executable
 }

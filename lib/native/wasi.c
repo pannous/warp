@@ -153,9 +153,10 @@ static void crash_reported(void) {
 	for (size_t i = 0; i < sizeof CRASH_SIGNALS / sizeof *CRASH_SIGNALS; i++) signal(CRASH_SIGNALS[i], crashed_by);
 }
 
-// the stack the program runs on: a thread's, as deep as wasm's own limit (core/native/driver.warp WASM_STACK_BYTES) and
-// room for the host's frames beneath it; a process's main thread has 8 MB, wasm's limit then a few thousand calls deep
-// (card linux-deep-recursion)
+// the stack the program runs on, as deep as wasm's own limit (core/native/driver.warp WASM_STACK_BYTES) and room for
+// the host's frames beneath it: the main thread's where the link made it that deep (macOS, extensions/commands/build.warp
+// MAIN_STACK; there windows open on the main thread alone), else a thread's; a main thread's 8 MB would hold wasm's
+// limit to a few thousand calls deep (card linux-deep-recursion)
 enum { PROGRAM_STACK_BYTES = 256 << 20 };
 static int program_argc;
 static char** program_argv;
@@ -185,6 +186,12 @@ static void* program_ran(void* unused) {
 int main(int argc, char** argv) {
 	program_argc = argc;
 	program_argv = argv;
+#ifdef __APPLE__
+	if (pthread_get_stacksize_np(pthread_self()) >= PROGRAM_STACK_BYTES) {
+		program_ran(NULL);
+		return 0;
+	}
+#endif
 	pthread_attr_t attributes;
 	pthread_t thread;
 	pthread_attr_init(&attributes);
