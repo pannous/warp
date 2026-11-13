@@ -341,10 +341,10 @@ passes = "
 @compute @workgroup_size(1) fn first() { steps[0] = steps[0] + 0.25; }
 @compute @workgroup_size(1) fn second() { steps[1] = steps[0] * 2.0; }
 "
-render() := gpu_render("@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(values.steps[0], values.steps[1] / 2.0, 0.0, 1.0); }", 2, 2, {compute: passes})
-render()
-render()
-render()#2"""
+s = "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(values.steps[0], values.steps[1] / 2.0, 0.0, 1.0); }"
+gpu_render(s, 2, 2, {compute: passes})
+gpu_render(s, 2, 2, {compute: passes})
+gpu_render(s, 2, 2, {compute: passes})#2"""
 FIELD_PASSES_SHOWN = str(0xFFBF_BF00)
 # card playground-stale-value: a run started without the Run button (an example chosen, auto-run, runCode) clears the
 # last run's value as Run does: an animation running long showed the value before it above itself
