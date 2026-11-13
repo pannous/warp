@@ -1,0 +1,30 @@
+#!/usr/bin/env warp
+# Shaders that pass fields to each other: paint of a list runs them in order each frame, each but the last drawing the
+# field of its name, which any of them reads as $name(at). ink keeps the strokes the pointer draws: it reads spread,
+# which comes after it, so it sees last frame's. spread blurs this frame's ink a little, and show colors it.
+# Press to draw darker.
+ink = shader {
+	@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+		let away = distance(at.xy, $mouse);
+		let dab = exp(-away * away / 200.0) * select(0.05, 0.4, $mouse_down > 0.5);
+		return vec4f(min($spread(at.xy).r * 0.997 + dab, 1.0), 0.0, 0.0, 1.0);
+	}
+}
+spread = shader {
+	@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+		let around = $ink(at.xy + vec2f(1.0, 0.0)) + $ink(at.xy - vec2f(1.0, 0.0)) + $ink(at.xy + vec2f(0.0, 1.0)) + $ink(at.xy - vec2f(0.0, 1.0));
+		return mix($ink(at.xy), around / 4.0, 0.5);
+	}
+}
+show = shader {
+	@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+		return vec4f(mix(vec3f(0.98, 0.97, 0.94), vec3f(0.1, 0.2, 0.6), $spread(at.xy).r), 1.0);
+	}
+}
+on key {
+	exit()
+}
+# each frame of the window, until it closes (headless: one frame, as a PNG)
+on frame {
+	paint([ink, spread, show])
+}

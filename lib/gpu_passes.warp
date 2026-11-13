@@ -34,7 +34,7 @@ paint_passes(passes: list, width: int, height: int) := {
 	fields = fields_kept(drawn.map(pass => pass#1), width, height)
 	for pass in drawn { gpu_pass(fields_placed(pass#2, names), fields, pass#1, pass#3) }
 	if drawn != passes { shown = [shown#1, fields_placed(shown#2, names), shown#3] } else { shown = [shown#1, FIELD_SHOWN.replace(FIELD_HOLE, shown#1), {}] }
-	if painting_in_window() { return gpu_show_sized(shown#2, fields, width, height, shown#3) }
+	if window_open() or window_possible() { return gpu_show_sized(shown#2, fields, width, height, shown#3) }
 	pixels = gpu_picture_sized(shown#2, fields, width, height, shown#3)
 	paint(pixels, width, height)
 	pixels
