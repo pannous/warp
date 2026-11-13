@@ -17,6 +17,10 @@
 #include "windows.c"
 #else
 #include <dlfcn.h>
+#include <spawn.h>
 #include <sys/ioctl.h>
+#include <sys/wait.h>
+// the process's environment, which a child posix_spawnp starts gets (glibc declares it only under _GNU_SOURCE)
+extern char** environ;
 #endif
 #endif

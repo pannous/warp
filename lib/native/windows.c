@@ -188,11 +188,176 @@ static int posix_flock(int fd, int operation) {
 	errno = EWOULDBLOCK;
 	return -1;
 }
+// ### processes: pipes, posix_spawnp, waitpid, popen; Windows starts a process whole (CreateProcess), no fork
+
+enum { PIPE_BYTES = 65536 };
+static int posix_pipe(int ends[2]) { return _pipe(ends, PIPE_BYTES, _O_BINARY); }
+// a spawn's file actions, as many as warp gives (core/native/driver.warp words_run: two dup2s and a close), in the
+// bytes warp allocates for posix_spawn_file_actions_t (SPAWN_ACTIONS_BYTES)
+enum { MOST_ACTIONS = 8, ACTION_DUP2 = 1, ACTION_CLOSE = 2, STANDARD_STREAMS = 3 };
+struct spawn_actions { int count; struct { int kind, from, to; } actions[MOST_ACTIONS]; };
+static int action_added(struct spawn_actions* actions, int kind, int from, int to) {
+	if (actions->count == MOST_ACTIONS) return ENOMEM;
+	actions->actions[actions->count].kind = kind;
+	actions->actions[actions->count].from = from;
+	actions->actions[actions->count].to = to;
+	actions->count++;
+	return 0;
+}
+static int posix_spawn_file_actions_init(struct spawn_actions* actions) {
+	actions->count = 0;
+	return 0;
+}
+static int posix_spawn_file_actions_destroy(struct spawn_actions* actions) { return posix_spawn_file_actions_init(actions); }
+static int posix_spawn_file_actions_adddup2(struct spawn_actions* actions, int from, int to) { return action_added(actions, ACTION_DUP2, from, to); }
+// (a handle the child should not hold: Windows hands a child only the standard handles it is given)
+static int posix_spawn_file_actions_addclose(struct spawn_actions* actions, int fd) { return action_added(actions, ACTION_CLOSE, fd, fd); }
+
+// the processes started and not yet waited for, by id
+enum { MOST_CHILDREN = 64 };
+static struct { DWORD id; HANDLE process; } children[MOST_CHILDREN];
+static void child_kept(DWORD id, HANDLE process) {
+	for (int i = 0; i < MOST_CHILDREN; i++)
+		if (!children[i].process) {
+			children[i].id = id;
+			children[i].process = process;
+			return;
+		}
+	CloseHandle(process); // (more children at once than this: never waited for, its status lost)
+}
+// an argument on Windows's one command line, as the C runtime splits it back: quoted, its quotes and the backslashes
+// before them escaped
+static size_t argument_quoted(char* line, const char* word) {
+	size_t at = 0;
+	line[at++] = '"';
+	for (const char* c = word;; c++) {
+		size_t backslashes = 0;
+		while (*c == '\\') backslashes++, c++;
+		if (!*c || *c == '"') {
+			size_t doubled = backslashes * 2 + (*c == '"');
+			while (doubled--) line[at++] = '\\';
+			if (!*c) break;
+			line[at++] = '"';
+		} else {
+			while (backslashes--) line[at++] = '\\';
+			line[at++] = *c;
+		}
+	}
+	line[at++] = '"';
+	return at;
+}
+static char* command_line(char* const words[]) {
+	size_t room = 1;
+	for (int i = 0; words[i]; i++) room += 2 * strlen(words[i]) + 3;
+	char* line = malloc(room);
+	size_t at = 0;
+	for (int i = 0; words[i]; i++) {
+		if (i) line[at++] = ' ';
+		at += argument_quoted(line + at, words[i]);
+	}
+	line[at] = 0;
+	return line;
+}
+// the child's standard handles, the parent's unless an action gives one, each inheritable
+static HANDLE standard_handle(const struct spawn_actions* actions, int stream) {
+	static const DWORD STANDARD[STANDARD_STREAMS] = {STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE};
+	HANDLE handle = GetStdHandle(STANDARD[stream]);
+	for (int i = 0; actions && i < actions->count; i++)
+		if (actions->actions[i].kind == ACTION_DUP2 && actions->actions[i].to == stream) handle = (HANDLE)_get_osfhandle(actions->actions[i].from);
+	SetHandleInformation(handle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+	return handle;
+}
+// the file found on PATH as CreateProcess finds it (".exe" added); the environment is this process's
+static int posix_spawnp(int* child, const char* file, const struct spawn_actions* actions, const void* attributes, char* const words[], char* const environment[]) {
+	(void)file, (void)attributes, (void)environment;
+	STARTUPINFOA startup = {.cb = sizeof startup, .dwFlags = STARTF_USESTDHANDLES};
+	startup.hStdInput = standard_handle(actions, 0);
+	startup.hStdOutput = standard_handle(actions, 1);
+	startup.hStdError = standard_handle(actions, 2);
+	PROCESS_INFORMATION started;
+	char* line = command_line(words);
+	BOOL ran = CreateProcessA(NULL, line, NULL, NULL, TRUE, 0, NULL, NULL, &startup, &started);
+	free(line);
+	if (!ran) return ENOENT;
+	CloseHandle(started.hThread);
+	child_kept(started.dwProcessId, started.hProcess);
+	*child = (int)started.dwProcessId;
+	return 0;
+}
+// a child's end: its exit code as POSIX's status (code << 8); -1 waits for any child, WNOHANG for none that runs on
+enum { WNOHANG = 1, EXIT_CODE_SHIFT = 8 };
+static int posix_waitpid(int id, int* status, int options) {
+	HANDLE waited[MOST_CHILDREN];
+	int places[MOST_CHILDREN], count = 0;
+	for (int i = 0; i < MOST_CHILDREN; i++)
+		if (children[i].process && (id == -1 || children[i].id == (DWORD)id)) places[count] = i, waited[count++] = children[i].process;
+	if (count == 0) {
+		errno = ECHILD;
+		return -1;
+	}
+	DWORD ended = WaitForMultipleObjects((DWORD)count, waited, FALSE, (options & WNOHANG) ? 0 : INFINITE);
+	if (ended == WAIT_TIMEOUT) return 0;
+	if (ended >= WAIT_OBJECT_0 + (DWORD)count) return -1;
+	int place = places[ended - WAIT_OBJECT_0];
+	DWORD code = 0;
+	GetExitCodeProcess(children[place].process, &code);
+	if (status) *status = (int)((code & 0xFF) << EXIT_CODE_SHIFT);
+	CloseHandle(children[place].process);
+	children[place].process = NULL;
+	return (int)children[place].id;
+}
+// a sh line run with its output (mode "r") or input ("w") a stream: by the POSIX sh on PATH (Git for Windows'), as
+// macOS and Linux run /bin/sh; none there, NULL (warp says "cannot run sh for …")
+enum { MOST_STREAMS = 16 };
+static struct { FILE* stream; int child; } streams[MOST_STREAMS];
+static FILE* posix_popen(const char* line, const char* mode) {
+	char sh[MAX_PATH];
+	if (!SearchPathA(NULL, "sh.exe", NULL, MAX_PATH, sh, NULL)) {
+		errno = ENOENT;
+		return NULL;
+	}
+	int ends[2];
+	if (posix_pipe(ends)) return NULL;
+	int reading = mode[0] == 'r';
+	struct spawn_actions actions = {0};
+	action_added(&actions, ACTION_DUP2, ends[reading ? 1 : 0], reading ? 1 : 0);
+	char* words[] = {sh, "-c", (char*)line, NULL};
+	int child;
+	int failed = posix_spawnp(&child, sh, &actions, NULL, words, NULL);
+	close(ends[reading ? 1 : 0]);
+	if (failed) {
+		close(ends[reading ? 0 : 1]);
+		errno = failed;
+		return NULL;
+	}
+	FILE* stream = _fdopen(ends[reading ? 0 : 1], reading ? "rb" : "wb");
+	for (int i = 0; i < MOST_STREAMS; i++)
+		if (!streams[i].stream) {
+			streams[i].stream = stream;
+			streams[i].child = child;
+			break;
+		}
+	return stream;
+}
+static int posix_pclose(FILE* stream) {
+	int child = -1, status = -1;
+	for (int i = 0; i < MOST_STREAMS; i++)
+		if (streams[i].stream == stream) child = streams[i].child, streams[i].stream = NULL;
+	fclose(stream);
+	if (child < 0 || posix_waitpid(child, &status, 0) < 0) return -1;
+	return status;
+}
+
 #define POSIX_CALL(name) {#name, (void*)posix_##name}
+// (POSIX's own posix_ calls, under their names)
+#define POSIX_NAMED(name) {#name, (void*)name}
 static const struct { const char* name; void* function; } POSIX_CALLS[] = {
 	POSIX_CALL(readlink), POSIX_CALL(realpath), POSIX_CALL(getcwd), POSIX_CALL(uname), POSIX_CALL(setenv),
 	POSIX_CALL(unsetenv), POSIX_CALL(srand48), POSIX_CALL(drand48), POSIX_CALL(getline), POSIX_CALL(clock_gettime),
 	POSIX_CALL(nanosleep), POSIX_CALL(usleep), POSIX_CALL(localtime_r), POSIX_CALL(getloadavg), POSIX_CALL(flock),
+	POSIX_CALL(pipe), POSIX_NAMED(posix_spawn_file_actions_init), POSIX_NAMED(posix_spawn_file_actions_destroy),
+	POSIX_NAMED(posix_spawn_file_actions_adddup2), POSIX_NAMED(posix_spawn_file_actions_addclose), POSIX_NAMED(posix_spawnp),
+	POSIX_CALL(waitpid), POSIX_CALL(popen), POSIX_CALL(pclose),
 };
 
 // ## dlopen and dlsym, which find them
