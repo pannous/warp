@@ -54,9 +54,15 @@ typed_definition_held(n: Node): Node := {
 # other forms a type word, collection, class or any (`f(x): y = e` assigns y)
 # `void`, which the parser reads as ø
 is_no_result(n: Node): bool := n == Node.Empty
+# `f(x) as T` as `f(x): T`; `f(x) as int or error`, which reads `(f(x) as int) or error`, as `f(x): int or error`
+as_result(target: Node): Node? := match target {
+	Key(head, Op.As, type): if is_call(head) and type is symbol then Key(head, Op.Colon, type) else ø
+	Key(left, Op.Or, other): { typed = as_result(left); if typed == ø then ø else Key(key_of(typed), Op.Colon, Key(value_of(typed), Op.Or, other)) }
+	_: ø
+}
 declared_result_form(n: Node): Node := match n {
 	# `f(x) as pdf := e`: in a definition's head `as` names the result, any type the program has, as `:` does
-	Key(target, Op.Define, body): if is_key(target, Op.Colon) then n else if is_key(target, Op.As) and is_call(key_of(target)) and value_of(target) is symbol then Key(Key(key_of(target), Op.Colon, value_of(target)), Op.Define, body) else typed_by_word(target, body)
+	Key(target, Op.Define, body): if is_key(target, Op.Colon) then n else if as_result(target) != ø then Key(as_result(target), Op.Define, body) else typed_by_word(target, body)
 	Key(target, Op.Assign, body): typed_by_word(target, body)
 	List(parts, Bracket.None, Separator.Space): {
 		if #parts != 2 or not (is_result_type(parts#1) or is_no_result(parts#1)) or name_of(parts#1) in function_keywords { return ø }
