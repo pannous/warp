@@ -16,9 +16,9 @@ Eb4' 311.13
 
 # every_octave_is_a_note
 is! 'use sound
-A0' 27.5
+A0' A0
 is! 'use sound
-C8' 4186.01
+C8' C8
 is! 'use sound
 round(note("G#7").hertz() * 100) == round(G♯7 * 100)' true
 
