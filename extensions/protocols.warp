@@ -76,29 +76,35 @@ protocols_applied(program: Node): Node := {
 		named = default_named(statement)
 		if named != ø { defaults[named#1] = named#2 }
 	}
-	written = statements.filter(statement => protocol_of(statement) == ø and default_named(statement) == ø)
+	written = undeclared(statements_in(program))
 	kept = written.map(statement => default_class_built(statement, defaults))
+	flat = kept.flat_map(flat_statements)
 	functions = []
 	conforming = {}
 	for declared in declared_protocols {
 		functions += declared.default_members.map(member => default_function(member, declared))
-		conforming[declared.name] = conforming_classes(kept, declared)
+		conforming[declared.name] = conforming_classes(flat, declared)
 	}
 	# a built-in protocol only where a class conforms to it or its module is used: else its type stays the built-in one
 	converted = {}
 	for built_in in built_in_protocols() {
-		classes = conforming_classes(kept, built_in)
-		words = if built_in_module(built_in.name) == "" then ø else module_words(built_in_module(built_in.name), kept)
+		classes = conforming_classes(flat, built_in)
+		words = if built_in_module(built_in.name) == "" then ø else module_words(built_in_module(built_in.name), flat)
 		if #classes > 0 or words != ø { conforming[built_in.name] = [built_in.name] + classes }
 		if words != ø {
 			functions += helper_functions(built_in.name, conforming[built_in.name])
 			if #classes > 0 { converted[built_in.name] = words.filter(word => word not in built_in.required) }
 		}
 	}
-	if #conforming == 0 and #defaults == 0 and kept == written { return program }
-	defined = kept.map(definition_head_of).filter(head => head != ø and head#1 is symbol).map(head => name_of(head#1))
+	if #conforming == 0 and #defaults == 0 and kept == statements_in(program) { return program }
+	defined = flat.map(definition_head_of).filter(head => head != ø and head#1 is symbol).map(head => name_of(head#1))
 	resolved = (kept + functions).map(statement => bottom_up(statement, n => protocol_resolved(n, conforming, converted, defined)))
 	separated(bracketed(resolved, ""), ";")
+}
+# the statements without the protocol and `map default` declarations, those of a `;` line among them, each line kept
+undeclared(statements: list): list := {
+	kept = statements.filter(statement => protocol_of(statement) == ø and default_named(statement) == ø)
+	kept.map(statement => if is_statement_sequence(statement) then group_like(statement, undeclared(items_of(statement))) else statement)
 }
 
 # `map default ListMap` of a built-in protocol: [map, ListMap], the protocol and the class its Map{…} builds from
