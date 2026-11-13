@@ -2,12 +2,7 @@
 // notes/primitive.md "Native build"), and the executable's main. Included behind the header wasm2c wrote for the module
 // "program" and the definitions of instantiate, which hands wasm2c the instance of each module the program imports, and
 // run_main, which calls the program's main and prints what it gives (extensions/primitive.warp native_main).
-#include <fcntl.h>
-#include <pthread.h>
-#include <signal.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
+#include "system.h"
 
 #include "wasm-rt-impl.h"
 

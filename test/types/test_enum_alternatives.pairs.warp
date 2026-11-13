@@ -1,0 +1,5 @@
+# enum written as alternatives, as after type (wiki/enum.md: an enum with a case carrying values is a tagged union; the user's playground card allow)
+'enum Color: red | green | blue | rgb(int, int, int); Color.green'	green
+'enum Color: red | green | blue | rgb(int, int, int); c = rgb(1, 2, 3); match c { red => 0; rgb(r, g, b) => r + g + b }'	6
+'enum Color = red | green | rgb(int, int, int); c = green; match c { red => 1; green => 2; rgb(r, g, b) => 3 }'	2
+'enum Coin: penny | nickel | dime; Coin.dime'	dime

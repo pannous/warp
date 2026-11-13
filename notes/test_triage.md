@@ -589,7 +589,7 @@ changed; most test files are Rust-era (`# from test_….rs`) with no wiki page b
 | 9 | function types shown: `type of f` "function: (x) -> int", `type(int)` "type" (type_of_consistency 4 5 8, type_of_lambda_variable 4-6, type_values 11) | type() of a function shows "function" only | Interviewer: is the signature wanted in type()? |
 | 8 | type calls as casts: `hex(123)` 123 (gets the Color 0xFF00007B), `decimal(1/4)`, `byte(65)`, `char(0x41)`, `text(hex(255))` (type_calls 4-14, text_of_text 10, types 34) | `T(x)` ≡ `x as T` is no core rule; lib/color's hex takes the call | Interviewer: `T(x)` as the cast, a general rule; `char(code)` alone could be a prelude function |
 | 7 | one dispatch: `p.first()` of a map field, `width(canvas)`, `first(x) := …` shadowing the library's, setter `set w(v)` (one_dispatch 5-87) | a program's own definition and a field call read the same; mixed cases | split: each line a decision (decision one-dispatch?) |
-| 6 | records with untyped fields: `class contact {name email}; contact("Joe" "j@x")` (records_classes 4-16) | a class of bare names takes a list as its first field | core constructor |
+| 6 | records with untyped fields: `class contact {name email}; contact("Joe" "j@x")` (records_classes 4-16) | a class of bare names takes a list as its first field | unpinned: f(a b) with several parameters, whatever the compiler does (user 11-13 via Interviewer); the lines dropped |
 | 5 | typed JSON: init effects and guards (typed_parse_constructor_effect 2-4, _guard 2, _flat_guards 2) | extensions/rules/rule_words.warp:1385 refuses or skips | extension |
 | 4 | `nat`: `type(3)` "nat", `type(x) == nat` (type_static 9, type_values 7 15, type_compared_with_text 5) | int is canonical now | wrong expectation? Interviewer |
 | 3 | `gc struct` types (recursive_fields 8 9 12) | wasm-level struct spelling | esoteric |
@@ -662,6 +662,26 @@ Triage (judge the form before building it):
 - test/control/test_call_result_reflection.warp:4, 5 expect `people().name` and `name of people()` to read every
   item's name, ['a', 'b']. Only the plural, `people().names` (:6), reads every item; whether the singular does too
   is a parked decision (it reads two ways: the list's own field or each item's). Left red and untouched until decided.
+
+## eval of a text sees only its with: names (card interpret-data, user 2026-11-13 via warp-interviewer)
+- test/node/test_eval_word.pairs.warp:6 `x = 5; eval("x*2")` → 10 is obsolete: eval of a text runs as a program of
+  its own and refuses x as unknown; the name goes in by `with:`, `eval("x*2", with: {x: x})` (wiki/evaluation.md,
+  wiki/full-evaluation.md). Data and blocks, `interpret(data a+1)`, do see the names where they are written.
+
+## Events and signals, cluster 11 (warp-interviewer 2026-11-13)
+Dropped, old Rust-era lines no wiki page backs:
+- test/control/test_reactive_ports.pairs.warp `value - was`, `value - before` and test_reactive_ports.warp
+  `previous`: `old` is the one word for the value before a write; more names would take ordinary names in every
+  listener block.
+- test/control/test_on.pairs.warp `y = x--` → 2 with `on set x`: x-- gives the value before the step, 3, as everywhere.
+- test/control/test_broadcast.pairs.warp `broadcast {…} on "test-nobody"` and test_named_broadcast.pairs.warp
+  `send stop the machine{…} to: "test-nobody"`: an event sent to a channel named by a string is no form; `send … to:`
+  is lib/channels' call.
+Rewritten to today's values: test_print.pairs.warp:5 (3), test_change_of_expression.pairs.warp:6 (the test summary);
+test/modules/test_keys.pairs.warp:2 `key_name(65)` is "a", key names lowercase as the Key enum's cases.
+Parked: test_colon_handlers.warp:10 `at 9pm:` on the time library's card.
+Key names (warp-interviewer 2026-11-13): test_key_names.warp `key == ArrowDown` dropped (the browser's spelling, the
+Key case is down); test/modules/test_keys.pairs.warp:4 `[held_key == ESC, LEFT]` is [no, Key.left], the Key case.
 
 ## Error values and try (cluster error-values-try, decided by the user via warp-interviewer 2026-11-13)
 
