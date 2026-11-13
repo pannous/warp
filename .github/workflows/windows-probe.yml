@@ -56,13 +56,17 @@ jobs:
           "$runtime/wasm-rt-impl.c" "$runtime/wasm-rt-mem-impl.c" crates/wasmtime-capi/target/release/warp_wasmtime.dll.lib \
           -static -pthread -Wl,--export-all-symbols -Wl,--stack,0x10000000
     - name: hello
-      run: lib/warp.exe --version && lib/warp.exe samples/hello/hello.warp
+      run: lib/warp.exe --version && lib/warp.exe samples/hello/hello.warp | grep Hello
+    - name: smoke
+      # scripts/smoke.sh's checks of a built warp: hello above, and the native host module answers
+      run: '[ "$(lib/warp.exe "window_possible()")" = no ]'
     - name: what runs
       if: always()
       run: |
         set +e
-        cp samples/hello/hello.warp hello.warp
-        for words in "print 6*7" "6*7" hello.warp ./hello.warp "$PWD/hello.warp" "$(cygpath -m "$PWD")/hello.warp"; do
-          echo "== warp $words"; lib/warp.exe "$words"; echo "exit $?"
-        done
-        cd samples/hello && echo "== in samples/hello" && ../../lib/warp.exe hello.warp; echo "exit $?"
+        tried() { echo "== warp $*"; timeout 300 lib/warp.exe "$@" 2>&1 | tail -15; echo "exit $?"; }
+        tried test test/gate
+        tried build samples/hello/hello.warp && ls samples/hello
+        tried 'use os; run(compile("6*7"))'
+        tried 'sqrt(2)^2'
+        tried 'use time; now()'
