@@ -7,10 +7,15 @@
 # after-push.sh installs them beside warp and into the main checkout's lib/, rebuild.sh into a tree's lib/, the library
 # folder a native build links from and its executables find them in (rpath); the release workflow runs it for lib/
 set -eu -o pipefail
+# the tree whose native warp links it (rebuild.sh, after-push.sh) builds it with its own copy of this script: the
+# checkout of the script running may lag that tree, its sources (card after-push-native-warp-1113) and how they are
+# built alike (an older copy applied the tree's patches to the wrong folder, card after-push-wasmtime-c-api-1113)
+if [ "${1-}" = --from ]; then
+  tree_script=$(cd "$2" && pwd)/scripts/wasmtime-c-api.sh
+  shift 2
+  [ "$tree_script" -ef "$0" ] || exec "$tree_script" "$@"
+fi
 checkout=$(cd "$(dirname "$0")/.." && pwd)
-# the sources of the tree whose native warp links it (rebuild.sh, after-push.sh): the checkout of the script running
-# may lag that tree, and its library then lacks what the tree's driver calls (card after-push-native-warp-1113)
-if [ "${1-}" = --from ]; then checkout=$(cd "$2" && pwd); shift 2; fi
 [ $# -gt 0 ] || set -- "$(dirname "$(readlink -f "$(command -v warp)")")"
 export CARGO_TARGET_DIR=${WARP_WASMTIME_TARGET:-/opt/cargo/warp-wasmtime}
 WGPU_VERSION=29.0.1.1
