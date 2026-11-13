@@ -312,7 +312,10 @@ write_modules(folder: text, runtime_file: text, named: list) := {
 	if #named == 0 { write_library_index(folder) }
 	runtime = read_bytes(runtime_file)
 	refused = []
+	# (each module's made names numbered from the same start: built alone or after others, the same bytes)
+	names_before = names_made
 	for name in (if #named > 0 then named else modules_in_build_order()) {
+		names_made = names_before
 		file = folder + "/" + name + ".wasm"
 		try { module_written_behind(name, runtime, file) } catch refusal {
 			said = refusal_said(refusal)
