@@ -28,12 +28,9 @@ rewrite remove $h from listeners of $e => unlisten(data $e, $h) where $e is symb
 # `remove alarm`: a listener knows its event (lib/prelude.warp Listener), short for `remove alarm from listeners of t`;
 # a rule, as a function remove(listener) would take every `m.remove(k)` of the built-in method (card listener-address)
 rewrite remove $h => listener_removed($h) where $h is symbol and not shadowed
-# `remove h from alarm`, `listeners of alarm -= h` (wiki Footguns "Event handlers"); an event is a name the program
+# `remove h from alarm` (wiki Footguns "Event handlers"); an event is a name the program
 # never binds, so `remove 3 from xs` of a list stays the list's
 rewrite remove $h from $e => unlisten(data $e, $h) where $e is symbol and $e is unbound
-# (`listeners of alarm` reads as alarm.listeners, so the write is one of that field; in parentheses, as `=>` binds
-# tighter than `-=`; raw, before `listeners of $e` takes alarm.listeners inside it)
-rewrite ($e.listeners -= $h) => unlisten(data $e, $h) where $e is symbol and $e is unbound and raw
 rewrite clear listeners of $e => listeners_cleared(data $e) where $e is symbol
 rewrite count listeners of $e => count(listeners_of(data $e)) where $e is symbol
 rewrite listeners of $e => listeners_of(data $e) where $e is symbol
