@@ -673,3 +673,4 @@ Triage (judge the form before building it):
 | test/control/test_try.pairs.warp:31, 34 | 7 | refused at compile time | same: `def f(m){ m#1 }; try f(3) else 7`, `m.a` of an int |
 | test/control/test_error_words.pairs.warp:9 | "ab" | "aøb" | `warn(…)` gives ø, which text shows as ø like any other ø |
 | test/welcoming/test_warning_mode.pairs.warp:4 | "ab" | "aøb" | same: `warning(…)` |
+| test/control/test_error_not_in_data.pairs.warp:18 | 1 | Error("divide by zero") | `a, b = e, 2` binds a plain variable a, which holds no Error (decision errors held only by optional variables); its own header says the write raises |
