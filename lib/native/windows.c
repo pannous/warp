@@ -66,7 +66,7 @@ __attribute__((constructor)) static void files_in_bytes(void) {
 // a path as POSIX writes it: forward slashes, which Windows takes as well as backslashes and warp's path words split
 // on, and on the current drive no drive letter, "/a/b" as Windows reads it too: the folder the native warp preopens as
 // "/" for its modules (core/native/driver.warp) is that drive's root, so the module's WASI reaches the path (another
-// drive's "C:/x" it does not yet: card windows-drives)
+// drive's "C:/x" it does not yet: card windows-native-modules)
 static void posix_path(char* path) {
 	for (char* c = path; *c; c++) if (*c == '\\') *c = '/';
 	if (path[0] && path[1] == ':' && path[2] == '/' && (path[0] | 0x20) - 'a' + 1 == _getdrive()) memmove(path, path + 2, strlen(path + 2) + 1);
