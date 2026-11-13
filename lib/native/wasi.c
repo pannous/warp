@@ -154,9 +154,10 @@ static void crash_reported(void) {
 }
 
 // the stack the program runs on, as deep as wasm's own limit (core/native/driver.warp WASM_STACK_BYTES) and room for
-// the host's frames beneath it: the main thread's where the link made it that deep (macOS, extensions/commands/build.warp
-// MAIN_STACK; there windows open on the main thread alone), else a thread's; a main thread's 8 MB would hold wasm's
-// limit to a few thousand calls deep (card linux-deep-recursion)
+// the host's frames beneath it (card linux-deep-recursion): Linux's main thread has 8 MB, wasm's limit then a few
+// thousand calls deep, so the program runs on a thread of its own; macOS's main thread has it from the linker
+// (extensions/commands/build.warp MACOS_STACK) and the program stays there: a process with a second thread that forks
+// (warp test's lines) aborts in the child when a library starting Objective-C loads (card abort-trap)
 enum { PROGRAM_STACK_BYTES = 256 << 20 };
 static int program_argc;
 static char** program_argv;
@@ -187,10 +188,8 @@ int main(int argc, char** argv) {
 	program_argc = argc;
 	program_argv = argv;
 #ifdef __APPLE__
-	if (pthread_get_stacksize_np(pthread_self()) >= PROGRAM_STACK_BYTES) {
-		program_ran(NULL);
-		return 0;
-	}
+	program_ran(NULL);
+	return 0;
 #endif
 	pthread_attr_t attributes;
 	pthread_t thread;

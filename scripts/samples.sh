@@ -64,6 +64,12 @@ wall_seconds() {
 	awk -v wall="$WALL_SECONDS" -v load="$load" -v cores="$cores" 'BEGIN { share = load / cores; printf "%d", wall * (share > 1 ? share : 1) }'
 }
 # one <sample>: its line of the results
+# how a command that printed nothing ended: its exit, a signal's name where one killed it (a kill prints nothing itself)
+ended_by() {
+	local signal=
+	[ "$2" -gt 128 ] && signal=", killed by SIG$(kill -l $(($2 - 128)) 2>/dev/null || echo $(($2 - 128)))"
+	echo "$1 printed nothing (exit $2$signal)"
+}
 one() {
 	local out=$results/out/$(echo "$1" | tr / _) wall
 	local host
@@ -82,8 +88,10 @@ one() {
 	local status=$? first verdict=FAIL
 	[ $status -eq 124 ] && grep -aq "$SERVING" "$out.txt" && { echo "SRV  $1"; return; }
 	if [ $status -eq 0 ] && grep -q "$CHECK_LINE" "$tree/$1"; then
-		(cd "$run_folder" && WARP_WINDOW=0 WARP_SOUND=0 timeout "$wall" "$WARP" app check "$tree/$1" </dev/null >"$out.checks" 2>&1) || status=1
-		[ $status -ne 0 ] && { printf 'FAIL %s: %s\n' "$1" "$(grep -av '^ok ' "$out.checks" | grep -am1 . | cut -c1-200)"; return; }
+		(cd "$run_folder" && WARP_WINDOW=0 WARP_SOUND=0 timeout "$wall" "$WARP" app check "$tree/$1" </dev/null >"$out.checks" 2>&1) || status=$?
+		# what failed, else how the check ended: a check killed before it printed a line (a web view off AppKit's thread,
+		# card since-e9aa527261) said nothing at all
+		[ $status -ne 0 ] && { printf 'FAIL %s: %s\n' "$1" "$(grep -av '^ok ' "$out.checks" | grep -am1 . | cut -c1-200 | grep . || ended_by "warp app check" $status)"; return; }
 	fi
 	[ $status -eq 0 ] && { echo "ok   $1"; return; }
 	# (a position names the sample by its full path now: shown as before, from the tree's root)
@@ -93,7 +101,7 @@ one() {
 	grep -q "$EXPECTED_FAILURE" "$tree/$1" && verdict=EXP
 	printf '%-4s %s: %s\n' "$verdict" "$1" "${first:-exit $status, nothing on stderr}"
 }
-export -f one wall_seconds
+export -f one wall_seconds ended_by
 export tree results run_folder WARP CPU_SECONDS WALL_SECONDS CPU_LIMIT_HIT WINDOW_LIBRARIES SERVING EVENTS_MILLISECONDS EXPECTED_FAILURE CHECK_LINE HOST_LINE
 if [ $# -gt 0 ]; then
 	for sample in "$@"; do one "$sample"; done

@@ -107,7 +107,12 @@ release=seed-$(date +%Y-%m-%d)-$(shasum -a 256 "$seed" | cut -c1-8)
 # the release's tag on the very commit the seed was built from, and seed.lock committed beside it, so every later commit
 # names its seed and any commit's compiler can be built again (scripts/seed.sh)
 source_commit=$(git -C "$tree" rev-parse HEAD)
-gh release create "$release" "$seed" --repo pannous/warp --prerelease --title "$release" --target "$source_commit" \
+# the pair the seed builds of its own source goes with it: the seed compares texts by NFC, so where no installed lib/
+# lies (a CI runner, scripts/ci-compilers.sh) it links these until its rebuild writes the tree's own
+pair=("$scratch/warp-seed-runtime.wasm" "$scratch/warp-seed-unicode.wasm")
+"$warp" "$seed" runtime "${pair[0]}" && "$warp" "$seed" module unicode "${pair[0]}" "${pair[1]}" ||
+  { echo "refresh-seed: the new seed built no runtime.wasm and unicode.wasm to publish beside it" >&2; exit 1; }
+gh release create "$release" "$seed" "${pair[@]}" --repo pannous/warp --prerelease --title "$release" --target "$source_commit" \
   --notes "The seed compiler: core/compiler.warp of ${source_commit:0:10} compiled by a stage that compiles itself once more." &&
   echo "refresh-seed: published $release"
 echo "$release $(shasum -a 256 "$seed" | cut -d' ' -f1)" >"$tree/seed.lock"
