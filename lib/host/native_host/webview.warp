@@ -25,10 +25,10 @@ APP_WINDOW_WIDTH = 900.0
 APP_WINDOW_HEIGHT = 700.0
 APP_WINDOW_FRAME = [0.0, 0.0, APP_WINDOW_WIDTH, APP_WINDOW_HEIGHT]
 JS_RUNTIME = "js"
-// web/playground/js-members.js (jsMember), markup.js (listenToElements, morphChildren) and markup-forms.js (submit),
-// shared with the page, and webview_bridge.js (warpForeignCall, the page's events), put into each page; read when the
-// module is built
-PAGE_BRIDGE = [module_source("../web/playground/js-members.js"), module_source("../web/playground/markup.js"), module_source("../web/playground/markup-forms.js"), module_source("host/native_host/webview_bridge.js")].join("\n")
+// js-members.js (jsMember), markup.js (listenToElements, morphChildren) and markup-forms.js (submit), the page's own
+// (links to web/playground/, so an installed lib/ carries them: card native-host-prebuild), and webview_bridge.js
+// (warpForeignCall, the page's events), put into each page; read when the module is built
+PAGE_BRIDGE = [module_source("host/native_host/js-members.js"), module_source("host/native_host/markup.js"), module_source("host/native_host/markup-forms.js"), module_source("host/native_host/webview_bridge.js")].join("\n")
 // the module `use js` calls answered here, not in the page: the run's window, `show` it, the `next` event of its page
 APP_WINDOW = "warpWindow"
 // what warpWindow.next answers once its time is over without an event (lib/markup.warp page_window_run)

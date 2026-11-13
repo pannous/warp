@@ -11,6 +11,6 @@
 'b = byte 65; text(b)'	'0x41'
 'b = byte 65; b == byte(65)'	true
 'decimal 1/4'	'0.25'
-'x = 255; h = hex x; text(h)'	'0xFF'
+'x = 255; h = hex x; text(h)'	'0xff'
 'int 3.7'	3
 'text 5'	'5'
