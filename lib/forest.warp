@@ -7,7 +7,6 @@
 // world bound and cone per draw, so a GPU cull can drop clusters. notes/forest.md.
 use file
 use geometry
-use hash
 use math
 use meshlets
 
@@ -616,34 +615,20 @@ grove_lod(grove: Grove, kits: list, eye: list): list := {
 
 // The baked EZ Tree atlas (samples/graphics/ez_trees/atlas.bin). Grove is entry 1,
 // the ash close-up is entry 2. The stamp names the version, the source hash and
-// each entry's size. The hash is sha256 of the per-file sha256 hex lines in
-// atlas.sources, joined by newlines. A missing file, a different version or a
-// hash that is not the sources now is none: the caller builds the atlas itself.
+// each entry's size. A missing file or a different version is none: the caller
+// builds the atlas itself. The stamp is trusted to match its sources: atlas.py
+// bakes them together and sample-assets.sh ships them in one archive, so a run
+// never reads and hashes the 11 MB of textures (it took the page past its 30 s).
 ATLAS_VERSION = 1
 GROVE_ATLAS = 1
 ASH_ATLAS = 2
 // Four full-size leaves plus the bark row. The grove atlas stays 512-wide for the tests.
 NEAR_ATLAS = 3
-global atlas_hash_folder = ""
-global atlas_hash_kept = ""
-
-atlas_source_hash(folder: text): text := {
-	if folder == atlas_hash_folder and atlas_hash_kept != "" { return atlas_hash_kept }
-	list = folder + "/atlas.sources"
-	names = [name.trim() for name in read(list).split("\n") if name.trim() != ""]
-	digest = sha256(join([sha256(read_bytes(folder + "/" + name)) for name in names], "\n"))
-	atlas_hash_folder = folder
-	atlas_hash_kept = digest
-	digest
-}
-
 baked_atlas(folder: text, id: int): any := {
 	if not exists(folder + "/atlas.txt") or not exists(folder + "/atlas.bin") { return ø }
-	if not exists(folder + "/atlas.sources") { return ø }
 	parts = [part.trim() for part in read(folder + "/atlas.txt").split(" ") if part.trim() != ""]
 	if count(parts) < 6 or parts[0] != "EZAT" { return ø }
 	if (parts[1] as int) != ATLAS_VERSION { return ø }
-	if parts[2] != atlas_source_hash(folder) { return ø }
 	i = 3
 	while i + 2 < count(parts) {
 		if (parts[i] as int) == id {

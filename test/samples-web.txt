@@ -1,11 +1,11 @@
-# 5db760a1b6 2026-11-14 00:31 280/286 97.9%
+# b94552a9df 2026-11-13 23:13 284/284 100.0%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
 ok   samples/acceleration/gpu_million.warp
-FAIL samples/advanced/circle.warp
-FAIL samples/advanced/filled_circle.warp
-FAIL samples/advanced/mandelbrot_canvas.warp
+ok   samples/advanced/circle.warp
+ok   samples/advanced/filled_circle.warp
+ok   samples/advanced/mandelbrot_canvas.warp
 ok   samples/advanced/neural_net.warp
 ok   samples/advanced/particles.warp
 ok   samples/advanced/raytracer.warp
@@ -26,7 +26,7 @@ ok   samples/apps/name_matcher.warp
 ok   samples/apps/open_hours.warp
 ok   samples/apps/recipe_scaler.warp
 ok   samples/apps/settings_cli.warp
-FAIL samples/apps/site_generator.warp
+ok   samples/apps/site_generator.warp
 ok   samples/apps/todo_cli.warp
 ok   samples/apps/url_report.warp
 ok   samples/clustering/emeans.warp
@@ -103,7 +103,6 @@ ok   samples/gpu/lava_lamp.warp
 ok   samples/gpu/manual_3d_object_viewer.warp
 ok   samples/gpu/northern_lights.warp
 ok   samples/gpu/ocean.warp
-ok   samples/gpu/ocean_sunset.warp
 ok   samples/gpu/ringed_planet.warp
 ok   samples/gpu/rings.warp
 ok   samples/gpu/scene_3d.warp
@@ -115,7 +114,6 @@ ok   samples/graphics/color_swatches.warp
 ok   samples/graphics/ez_forest.warp
 ok   samples/graphics/finger_paint.warp
 ok   samples/graphics/fluid_25d.warp
-ok   samples/graphics/fluid_flame_mouse.warp
 ok   samples/graphics/function_fields.warp
 ok   samples/graphics/gaussian_splats.warp
 ok   samples/graphics/julia_sliders.warp
@@ -136,7 +134,7 @@ ok   samples/graphics/shader.warp
 ok   samples/graphics/shader_brush.warp
 ok   samples/graphics/shader_fields.warp
 ok   samples/graphics/shader_trails.warp
-DIFF samples/graphics/tree_study.warp
+ok   samples/graphics/tree_study.warp
 ok   samples/graphics/webgpu.warp
 ok   samples/graphics/window_size.warp
 ok   samples/hello/comments.warp
@@ -255,8 +253,8 @@ ok   samples/text/levenshtein_idiomatic.warp
 ok   samples/text/palindrome.warp
 ok   samples/text/regexes.warp
 ok   samples/text/replace_word.warp
-FAIL samples/text/sort_words.warp
-ran  samples/text/uniscript_text.warp
+ok   samples/text/sort_words.warp
+ok   samples/text/uniscript_text.warp
 ok   samples/text/word_count.warp
 ok   samples/text/word_lengths.warp
 ok   samples/types/dispatch.warp
