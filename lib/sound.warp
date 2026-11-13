@@ -336,8 +336,11 @@ class Note {
 	minus(semitones) := moved(-semitones)
 	// times a number is its frequency times it (C4 * 100 is 26163); the frequency itself hertz(C4)
 	times(factor) := hertz() * factor
-	// a Note equals its name text (decision class-text): note("C#4") == "C#4"
-	equals(o) := (o is Note and key == o.key and cents == o.cents) or (o is text and o == text())
+	// a Note is a number, its frequency, that shows by name (decision notes-not-frequencies, as a Color is a number):
+	// A4 as float is 440, A4 == 440
+	float() := hertz()
+	// a Note equals its name text (decision class-text): note("C#4") == "C#4", and its frequency
+	equals(o) := (o is Note and key == o.key and cents == o.cents) or (o is text and o == text()) or (o is number and hertz() == o)
 }
 // notes sounding together (decision notes-are-notes): C4 + E4, and a note more, chord + G4; a number moves every note
 // that many semitones. It plays its notes together, play(C4+E4, 1s), and shows as written, C4+E4+G4
