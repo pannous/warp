@@ -1,6 +1,6 @@
 // The interactive console in pure warp (card pure-repl), run by the native warp: `warp lib/repl.warp`, or the native warp
 // alone on a terminal. An entry is compiled together with the session's kept entries and run in this process
-// (compile_wasm, run_wasm), so `a = 7` then `a` gives 7. The session keeps uses and definitions as written, and an
+// (os's compile and run), so `a = 7` then `a` gives 7. The session keeps uses and definitions as written, and an
 // assignment as its value (`x = command("date")` kept as `x = "Fri …"`), so later entries never run its effects again;
 // a value without a literal (a list holding what text_form can't write back) keeps the assignment as written.
 // `:symbolic` keeps assignments symbolic and shows an evaluation step by step (lib/symbolic.warp, wiki/shell.md),
@@ -98,18 +98,18 @@ editor_source() := {
 line_editor() := {
 	if isatty(0) != 1 { return ø }
 	setlocale(0, "")
-	editor = compile_wasm(editor_source())
+	editor = compile(editor_source())
 	if is_error(editor) { return ø }
 	history = text(env("HOME")) + "/.warp_history"
-	loaded = try run_wasm(editor, ["history", history]) catch e { e }
+	loaded = try run(Wasm(editor.bytes, ["history", history])) catch e { e }
 	if is_error(loaded) { return ø }
-	{bytes: editor, history: history}
+	{module: editor, history: history}
 }
 
 // a line typed after the prompt, by the editor if there is one, ø at the input's end
 typed(prompt: text, editor: any) := {
 	if editor == ø { return input(prompt) }
-	line = try run_wasm(editor.bytes, [prompt, editor.history]) catch e { e }
+	line = try run(Wasm(editor.module.bytes, [prompt, editor.history])) catch e { e }
 	if is_error(line) { return input(prompt) }
 	line
 }
@@ -142,7 +142,7 @@ mentions_symbol(entry: text, symbols: any) := symbolic_names(entry).any(name => 
 // a symbolic entry shown: each step on a line of its own, or only the value of `interpret z` (full evaluation, decision
 // blocks-run-by-call: `z!` only unwraps); its Error after the steps it got to
 interpret_prefix = "interpret "
-show_steps(entry: text, symbols: any, session: text, kept: int) := {
+step_through(entry: text, symbols: any, session: text, kept: int) := {
 	final = entry.starts_with(interpret_prefix)
 	expression = if final then trim(entry.remove_prefix(interpret_prefix)) else entry
 	shown = symbolic_steps(expression, symbols, e => evaluated(session + e))
@@ -152,12 +152,12 @@ show_steps(entry: text, symbols: any, session: text, kept: int) := {
 	if shown.error != "" { print "Error: " + message(shown.error, kept) }
 }
 
-// the value of a program, else its Error: the compiler's refusal (compile_wasm answers it, raising nothing), the run's
+// the value of a program, else its Error: the compiler's refusal (compile answers it, raising nothing), the run's
 // raise or trap
 evaluated(source: text) := {
-	bytes = compile_wasm(source)
-	if is_error(bytes) { return bytes }
-	try run_wasm(bytes) catch e { e }
+	module = compile(source)
+	if is_error(module) { return module }
+	try run(module) catch e { e }
 }
 
 // an Error's message as the entry's: without the os.compile_wasm prefix and the scratch file the compiler read, its
@@ -223,7 +223,7 @@ repl() := {
 			assigned = try symbolic_assigned(symbols, assigned_name(entry), assigned_expression(entry)) catch e { e }
 			if is_error(assigned) { print "Error: " + text(assigned) } else { symbols = assigned }
 		}
-		else if symbolic and mentions_symbol(entry, symbols) { show_steps(entry, symbols, session, kept) }
+		else if symbolic and mentions_symbol(entry, symbols) { step_through(entry, symbols, session, kept) }
 		else if entry != "" {
 			value = evaluated(session + entry)
 			if is_error(value) { print "Error: " + message(value, kept) }

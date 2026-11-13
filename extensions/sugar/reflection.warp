@@ -65,13 +65,16 @@ rewrite $m.operators => [$names...] where $m is symbol and $names = module_view(
 # `help(Point)`, `help(area)`, `help(sound)`, `help(draw.save)`: what a class, a function or a module is, as text (extensions/rules/rule_words.warp
 # class_help, function_help, module_help, module_word_help; wiki/reflection.md); a program's own help wins
 rewrite help $x => help($x)
-rewrite help($m.$w) => $t where $m is symbol and $w is symbol and $t = qualified_word_help($m, $w, $program)
-rewrite help($c) => $t where $c is symbol and $t = class_help($c, $program, $source)
-rewrite help($f) => $t where $f is symbol and $t = function_help($f, $program, $source)
-rewrite help($m) => $t where $m is symbol and $t = module_help($m, $program)
-rewrite help($w) => $t where $w is symbol and $t = module_word_help($w, $program, $source)
+# each help's text marked help_line: help_lines_printed (extensions/rules/rule_words.warp) prints one on its own line,
+# as Python's help (user decision help-statement), unless it is the value of a block or of the program
+rewrite $p => $q where program and $q = help_lines_printed($p)
+rewrite help($m.$w) => help_line($t) where $m is symbol and $w is symbol and $t = qualified_word_help($m, $w, $program)
+rewrite help($c) => help_line($t) where $c is symbol and $t = class_help($c, $program, $source)
+rewrite help($f) => help_line($t) where $f is symbol and $t = function_help($f, $program, $source)
+rewrite help($m) => help_line($t) where $m is symbol and $t = module_help($m, $program)
+rewrite help($w) => help_line($t) where $w is symbol and $t = module_word_help($w, $program, $source)
 # `help(trick)` of a name or an instance only the run knows: looked up at run time among the program's and its
 # modules' words (extensions/rules/rule_words.warp value_helps, lib/prelude.warp looked_up_word)
-rewrite help($x) => looked_up_word($x, "help", $helps...) where $helps = value_helps($program, $source)
+rewrite help($x) => help_line(looked_up_word($x, "help", $helps...)) where $helps = value_helps($program, $source)
 # `function(trick).definition`: the definition, as written, of the word a name only the run knows names
 rewrite function($x).definition => looked_up_word($x, "function", $definitions...) where $definitions = value_definitions($program, $source)
