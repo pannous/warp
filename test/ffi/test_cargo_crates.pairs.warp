@@ -1,4 +1,5 @@
 # from test_cargo_crates.rs: edit the Rust test, then run the script again
+// needs: cargo
 
 # test_cargo_crate_free_functions
 'use cargo strsim; strsim.levenshtein("kitten", "sitting")'	3

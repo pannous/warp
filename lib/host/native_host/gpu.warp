@@ -862,7 +862,8 @@ previous_kept(image: int) := {
 
 // --- a drawing: the shader's pipeline for a target format, its values bound; corners and instances: a full image's
 // triangle once, or the quads of a shader with its own vertex stage
-class Drawing { pipeline: int, bindings: int, previous: int, reads_previous: bool, corners: int, instances: int, depth: bool, index_buffer: int, index_count: int, width: int, height: int, named: list, compute: text, workgroups: list, indirect_buffer: int, indirect_words: int, compute_pipelines: list, compute_bindings: int }
+// (a drawing without compute passes, the window's picture, leaves the compute fields out)
+class Drawing { pipeline: int, bindings: int, previous: int, reads_previous: bool, corners: int, instances: int, depth: bool, index_buffer: int, index_count: int, width: int, height: int, named: list = [], compute: text = "", workgroups: list = [1, 1, 1], indirect_buffer: int = 0, indirect_words: int = 0, compute_pipelines: list = [], compute_bindings: int = 0 }
 drawing_made(shader: text, values: map, width: int, height: int): any := {
 	gpu_failure = ""
 	if not device_ready() { return ø }
@@ -1404,7 +1405,7 @@ picture_presented(encoder: int, picture: int, layer: int, width: int, height: in
 		return no
 	}
 	texture_view = wgpuTextureCreateView(picture, 0)
-	drawing = Drawing(picture_pipeline, bindings_of(wgpuRenderPipelineGetBindGroupLayout(picture_pipeline, 0), [[0, 0, 0, texture_view]]), 0, no, TRIANGLE_CORNERS, 1, no, 0, 0, 0, 0, [], "", [1, 1, 1], 0, 0, 0, 0)
+	drawing = Drawing(picture_pipeline, bindings_of(wgpuRenderPipelineGetBindGroupLayout(picture_pipeline, 0), [[0, 0, 0, texture_view]]), 0, no, TRIANGLE_CORNERS, 1, no, 0, 0, 0, 0)
 	shown = presented(encoder, drawing, letterboxed(width, height))
 	wgpuBindGroupRelease(drawing.bindings)
 	wgpuTextureViewRelease(texture_view)
