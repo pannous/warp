@@ -109,9 +109,9 @@ gpu_list_set(n: Node, index: int, value: Node): Node := {
 	memory_set_i32(address, number)
 	value
 }
-# a number's float for a float or vector cell, anything else refused
+# a number's float for a float or vector cell, an exact one's (a real, √9.25) included, anything else refused
 number_checked(cell: int, value: Node): float := {
-	if kind_code(value) != Kind.Int and kind_code(value) != Kind.Float { gpu_list_refused("a GPU list [" + gpu_cell_name(cell) + "] holds numbers only") }
+	if kind_code(value) != Kind.Int and kind_code(value) != Kind.Float and not is_class_instance(value) { gpu_list_refused("a GPU list [" + gpu_cell_name(cell) + "] holds numbers only") }
 	float_of_node(value)
 }
 # a two-byte cell: its half of the aligned word holding it
