@@ -686,7 +686,11 @@ field_check(kind: ValueKind): text? := match kind {
 # a field typed with no value kind of the core, `year: date?`, checked as `v is date` (decision typed-places-check)
 def checked_by_test(written_type: text?, field_type: text?, kind: ValueKind): bool { written_type != ø and field_kind(written_type) == ValueKind.Instance and base_type(written_type) not in module.classes and has_type_test(base_type(written_type)) and not admits(field_type, kind) }
 def checked_at_run_time(field_type: text?, kind: ValueKind): bool { not admits(field_type, kind) and field_check(field_kind(field_type)) != ø }
-def field_value(field_type: text?, value: TypedCode): TypedCode { if checked_at_run_time(field_type, value.kind) then runtime_call(field_check(field_kind(field_type)), [value]) else value }
+def field_value(field_type: text?, value: TypedCode): TypedCode {
+	checked = if checked_at_run_time(field_type, value.kind) then runtime_call(field_check(field_kind(field_type)), [value]) else value
+	# a float field holds a float, as a float parameter does: S(3/4).d is 0.75, not the exact 3/4
+	if field_kind(field_type) == ValueKind.Float and checked.kind != ValueKind.Float then TypedCode(ValueKind.Float, converted(checked, ValueKind.Float)) else checked
+}
 
 # `m.x = v`, also `m#("x"+1) = v`: the assignment gives v
 def map_assignment(body: Body, target: Node, name: text, value: TypedCode): TypedCode {
