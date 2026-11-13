@@ -33,7 +33,7 @@ pattern; Wasp (C++) has its own tap pannous/homebrew-wasp).
 
 ## At a release
 1. Bump `VERSION` in extensions/commands/commands.warp, write notes/releases/v<version>.md, commit, push main.
-   Then a dry run of that commit, green before the tag: `gh workflow run release.yml -f tag=<sha> -f dry=true`. It alone
+   Then a dry run of that commit, green before the tag: `gh workflow run release.yml -f tag=$(git rev-parse <commit>) -f dry=true` (the full SHA: checkout takes a short one for a branch name). It alone
    compiles lib/native's C on the release's own runners (ubuntu-22.04 x64 and arm, the old glibc and gcc the tarballs
    must run on); pages.yml's bootstrap compiles it only on ubuntu-latest (v1.8.0's Linux jobs failed on what 24.04
    accepted: RTLD_DEFAULT undeclared, card release-linux-bootstrap).

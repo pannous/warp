@@ -66,6 +66,9 @@ jobs:
     - uses: actions/checkout@v7 # the workflow's own commit, whose release-bootstrap.sh fits any older tag
       with:
         path: .workflow
+    - name: our wasmtime C API
+      # the tag's, which the tag's native warp built in the next step calls (scripts/ci-compilers.sh)
+      run: WARP_WASMTIME_TARGET=$PWD/crates/wasmtime-capi/target WARP_GPU_TARGET="$RUNNER_TEMP/warp-gpu" scripts/wasmtime-c-api.sh lib
     - name: build
       # wabt and binaryen, the previous release's native warp brought up to the tag's host words, the newest seed
       run: .workflow/scripts/ci-compilers.sh . "$RUNNER_TEMP/bootstrap"

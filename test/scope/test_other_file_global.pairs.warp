@@ -1,0 +1,5 @@
+# a used module's `name = …` is refused when the program declared `global name`; `let name = …` in the module is its own;
+# a program's plain `name = …` (not `global`) does not clash (decision loop-locals)
+'use "../fixtures/jaw_angle.warp"; global angle = 0.9; jaw_point()'	error
+'use "../fixtures/jaw_angle.warp"; angle = 0.9; jaw_point()'	1
+'use "../fixtures/jaw_angle_let.warp"; global angle = 0.9; jaw_point_let()'	1

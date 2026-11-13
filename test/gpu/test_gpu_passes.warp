@@ -1,5 +1,6 @@
 # GPU-resident passes (notes/gpu.md "Several passes", card gpu-multipass): float targets keep a small
 # addition, which rgba8 would round to nothing, and a linear sample of a step is the value between the texels.
+// needs: gpu
 is! 'use gpu_passes
 format = gpu_fields_format()
 format == "rgba16float" or format == "rgba32float" or format == "rgba8unorm"' yes

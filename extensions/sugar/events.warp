@@ -37,6 +37,8 @@ rewrite ($e.listeners -= $h) => unlisten(data $e, $h) where $e is symbol and $e 
 rewrite clear listeners of $e => listeners_cleared(data $e) where $e is symbol
 rewrite count listeners of $e => count(listeners_of(data $e)) where $e is symbol
 rewrite listeners of $e => listeners_of(data $e) where $e is symbol
+# `alarm.listeners` of an event no variable names (wiki/keyword.md)
+rewrite $e.listeners => listeners_of(data $e) where $e is symbol and $e is unbound
 rewrite emit $e: $v => emitted(data $e, $v)
 rewrite emit $e $v => emitted(data $e, $v) where $e is symbol
 rewrite emit $e => emitted(data $e, ø) where $e is symbol

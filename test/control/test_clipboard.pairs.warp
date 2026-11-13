@@ -4,7 +4,7 @@
 'clipboard = 3; clipboard'	3
 
 # the_change_count_is_read_without_the_content
-'c = clipboard count; c > 0'	true
+'c = clipboard count; c > 0'	true	needs: display
 
 # writing_the_clipboard_is_the_std_word
 'clipboard = {write: 3}; clipboard.write'	3
