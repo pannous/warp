@@ -92,7 +92,7 @@ filled_lambda(word: text, count: int): Node := {
 extended_count(program: Node, word: text, owner: text): int? := {
 	definitions = statements_in(program)
 	for image in module.linked_images.filter(image => image.name != owner) {
-		for slice in linked_signature(image.name).slices.filter(slice => slice#1 == word) { definitions += statements_in(unpack(slice#3)) }
+		for slice in linked_signature(image.name).slices.filter(slice => slice#1 == word) { definitions += statements_in(slice_tree(slice#3, slice#4)) }
 	}
 	for statement in definitions {
 		call = definition_call(statement)

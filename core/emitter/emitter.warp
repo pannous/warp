@@ -52,10 +52,11 @@ CHECKS_DROPPED = "checks_dropped"
 # longer needs that word's frame on the stack, which Cranelift's inlining takes away); and checks_dropped, which a
 # --fast program sets in the runtime it links
 exported_globals = ["trap_detail", "text_heap", "trap_position", "trap_name", CHECKS_DROPPED]
-# trap_position holds line * columns_per_line + column
+# trap_position (an i64) holds line * columns_per_line + column, its line holding the file as a node's does
+# (positions.warp file_line: a library's statement names its own file)
 columns_per_line = 4096
-# a place [line, column] as one int, its column 0 (unknown) past columns_per_line rather than a plausible wrong one
-packed_place(at: list): int := at#1 * columns_per_line + (if at#2 < columns_per_line then at#2 else 0)
+# a place [line, column, file] as one int, its column 0 (unknown) past columns_per_line rather than a plausible wrong one
+packed_place(at: list): int := file_line(if #at > 2 then at#3 else 0, at#1) * columns_per_line + (if at#2 < columns_per_line then at#2 else 0)
 import_function_byte = 0
 # the export WASI hosts run a module by
 wasi_start = "_start"
@@ -364,16 +365,10 @@ is_linked_word(f: Function): bool := f.body == Node.Empty and f.name in module.l
 # the file the program comes from, which a refusal names
 def emitting_file(file: text) { module.program_file = file }
 
-# a node of the program (no runtime word's) written somewhere: the place a later refusal names; in a function a library
-# file brought, that file, its definition's line and the function's name, as the slice it was parsed from keeps no
-# line of the file (prelude_words.warp defined_origins)
+# a node of the program (no runtime word's) written somewhere: the place a later refusal names, in the file it was
+# written in (a library's too: its positions carry their file)
 def note_emitting(body: Body, n: Node) {
 	if body.intrinsics { return }
-	if defined_origins.has(body.function.name) {
-		origin = defined_origins[body.function.name]
-		module.emitting_at = " at " + origin#1 + ":" + origin#2 + " (in " + body.function.name + ")"
-		return
-	}
 	at = written_at(n)
 	if at { module.emitting_at = place_text(at, module.program_file) }
 }
@@ -546,11 +541,12 @@ def defined_arities(program: Node): map {
 # a runtime word's body may use the intrinsics
 # function: the one compiled, returned: the kinds its `return`s give, declared: the kind of each `x: T = v` local
 # depth: the blocks, loops and ifs around the code read now; exits: the depth of each enclosing loop's exit block,
-# continuable: whether each takes a continue (continued_safely)
+# continuable: whether each takes a continue (continued_safely); tries: the tries open around the code read now,
+# exit_tries: those open around each enclosing loop, so a jump out of a try closes the ones it leaves
 # unshared: the locals whose list nobody else holds yet (sequence keeps them), which `xs = xs + [x]` grows in place
 # globals: the names the body declares `global`, which it assigns as the module's variables, never as its own locals
 # marks: the marked kind of each local holding a number of a marked type unboxed (`a: Angle`, `b = a * 2`)
-class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map; boxed_ints: map = {}; int_members: map = {}; marks: map = {}; kept: map = {}; counters: any = ø }
+class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map; boxed_ints: map = {}; int_members: map = {}; marks: map = {}; kept: map = {}; counters: any = ø; tries: int = 0; exit_tries: list = [] }
 
 local_index(body: Body, name: text, kind: ValueKind): int := {
 	if name in body.names { return body.names[name] }
@@ -982,9 +978,11 @@ def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 # `n: nat = v`, `r: rational = v`: a whole number of any size, an exact number, held boxed (decision nat-and-int)
 admitted_numbers = {nat: "nat_admitted", rational: "rational_admitted"}
 declared_kinds = {int: ValueKind.Int, float: ValueKind.Float, text: ValueKind.Text, list: ValueKind.List, bool: ValueKind.Bool, char: ValueKind.Char}
+# a variable whose type admits an Error, `r: int?`, `r: int or error`, keeps one (decision errors-one-rule)
+kept_if_admitting_errors(body: Body, name: text, type_name: text) := { if union_members(type_name).any(member => member.ends_with("?") or member == "error") { body.kept[name] = yes } }
 def declaration(body: Body, name: text, written_type: text, value: TypedCode): TypedCode {
 	type_name = aliased_type(written_type)
-	if type_name.ends_with("?") or type_name == "error" { body.kept[name] = yes }
+	kept_if_admitting_errors(body, name, type_name)
 	# `x: any = v` admits every value: the plain assignment; `t: type = int`, `m: map = {}` too, a node like any
 	if type_name in node_annotations { return assignment(body, symbol(name), value) }
 	if type_name in admitted_numbers { return assignment(body, symbol(name), runtime_call(admitted_numbers[type_name], [TypedCode(ValueKind.Node, boxed(value))])) }
@@ -1008,6 +1006,7 @@ def typed_declaration(body: Body, name: text, type_name: text, value: TypedCode)
 }
 # `x: int or text = v` (decision union-or): x holds a node, a value of a kind no member takes is refused
 def union_declaration(body: Body, name: text, type_name: text, value: TypedCode): TypedCode {
+	kept_if_admitting_errors(body, name, type_name)
 	if not fits_union(type_name, value.kind) { return refuse("a " + kind_spelling(value.kind) + " given to a variable declared " + type_name) }
 	# an int only where every member is one: `x: int|float = 1.5` holds a float; with any int member its boxed whole
 	# number is that int still, `x: int|text = 3; type(x)` int, not nat (decision nat-and-int)
@@ -1172,7 +1171,7 @@ def return_value(body: Body, value: TypedCode): TypedCode {
 	body.returned += [value.kind]
 	result = body.function.result
 	code = if result == pending then value.code else converted(value, result)
-	TypedCode(pending, code + [op.return])
+	TypedCode(pending, code + tries_closed(body.tries) + [op.return])
 }
 
 def expression_code(body: Body, n: Node): TypedCode {

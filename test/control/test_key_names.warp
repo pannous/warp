@@ -13,11 +13,6 @@ emit key{key:"Escape"}
 emit key{key:"q"}
 n' 1
 is! 'n = 0
-on key { if key == UP or key == ArrowDown { n += 1 } }
-emit key{key:"ArrowUp"}
-emit key{key:"ArrowDown"}
-n' 2
-is! 'n = 0
 on key { if key == RETURN { n += 1 } }
 emit key{key:"Enter"}
 n' 1

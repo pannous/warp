@@ -2,4 +2,4 @@
 # svelte_vue_solid_derivations
 is! 'x = 0; n = 0; s = on set x {n += 1}; x = 1; remove s from listeners of x; x = 2; n' 1
 is! 'x = 0; n = 0; h = on set x {n += 1}; x = 1; listeners of x -= h; x = 2; n' 1
-is! 'n = 0; h = on stop the machine {n += 1}; emit stop the machine; remove h from listeners of stop the machine; emit stop the machine; n' 1
+is! 'event stop the machine; n = 0; h = on stop the machine {n += 1}; emit stop the machine; remove h from listeners of stop the machine; emit stop the machine; n' 1

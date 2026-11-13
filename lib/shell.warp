@@ -10,12 +10,13 @@ use list
 SHELL_FALLBACK_REFUSAL = "unknown name"
 SHELL_MARK = "\e[2m(sh) "
 SHELL_MARK_END = "\e[0m"
+SHELL_CD = "cd"
 // the names in a folder, the working directory by default, sorted and without the hidden ones, as ls shows them
 ls(folder: text = ".") := [name for name in list_files(folder) if not name.starts_with(".")]
 // the working directory, as cwd gives it
-pwd := cwd
+pwd() := cwd
 // `cd ~/projects`: the working directory changes, for this program and the commands it runs; the new one
-cd(folder: text = "~") := std_io("os", "cd", [folder])
+cd(folder: text = "~") := std_io("os", "cd", [home_expanded(folder)])
 // a file's text
 cat(path: text) := read(home_expanded(path))
 // prints its value, as print does
@@ -84,7 +85,12 @@ which(name: text): text? := {
 // on PATH runs by sh, marked dim `(sh) git status` on stderr first, what it printed shown; any other line keeps warp's
 // refusal, so a type error such as `date + 1` stays warp's. The console only, never a file (extensions/commands
 // repl_step, user 11-11, card repl-bash-commands)
+// `cd samples` changes the console's own folder: a builtin of the shell, which a child sh would change for itself alone
 shell_line(line: text, refusal: text) := {
+	if words(line)#1 == SHELL_CD {
+		folder = line.trim().remove_prefix(SHELL_CD).trim()
+		return cd(if folder then folder else "~")
+	}
 	if not refusal.contains(SHELL_FALLBACK_REFUSAL) or which(words(line)#1) == ø { raise refusal }
 	eprint(SHELL_MARK + line + SHELL_MARK_END)
 	ran = run(["sh", "-c", line])

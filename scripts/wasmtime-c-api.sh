@@ -21,6 +21,9 @@ export CARGO_TARGET_DIR=${WARP_WASMTIME_TARGET:-/opt/cargo/warp-wasmtime}
 WGPU_VERSION=29.0.1.1
 gpu_build=${WARP_GPU_TARGET:-/opt/cargo/warp-gpu}
 WASMTIME_VERSION=50.0.0
+# sha256 sums: macOS has shasum, Git Bash on Windows only coreutils' sha256sum
+SHA256=(shasum -a 256)
+command -v shasum >/dev/null || SHA256=(sha256sum)
 # the crates warp patches (crates/wasmtime-capi/patches/, its Cargo.toml [patch.crates-io]), each with its sha256
 PATCHED_CRATES="wasmtime:2d93539aae382faee7b19650fd966f1f8185599b9cc4adc0a5a8b8f768c11ba9
 wasmtime-environ:34fd44c205ef29cc3c254253dceb916be586887602e0e380361ed022776cfc10
@@ -31,7 +34,7 @@ fetched() {
   [ -f "$1" ] && return
   mkdir -p "$(dirname "$1")"
   curl -sSfL -o "$1.new" "$2"
-  echo "$3  $1.new" | shasum -a 256 -c - >/dev/null
+  echo "$3  $1.new" | "${SHA256[@]}" -c - >/dev/null
   mv "$1.new" "$1"
 }
 
@@ -41,7 +44,7 @@ fetched() {
 patched_wasmtime() {
   local crate=$checkout/crates/wasmtime-capi stamp name sha256 archive
   local patched=$crate/patched
-  stamp=$(cat "$crate"/patches/*.patch | shasum -a 256 | cut -d' ' -f1)
+  stamp=$(cat "$crate"/patches/*.patch | "${SHA256[@]}" | cut -d' ' -f1)
   [ "$(cat "$patched/.patches" 2>/dev/null)" = "$stamp" ] && return
   rm -rf "$patched" && mkdir -p "$patched"
   for entry in $PATCHED_CRATES; do
@@ -56,7 +59,7 @@ patched_wasmtime() {
 }
 # the C API built once per set of inputs: a fresh worktree unpacks wasmtime at a new path, which cargo takes for a
 # new crate and rebuilds all of wasmtime from scratch (a rustc in every landing's rebuild)
-wasmtime_inputs=$( (echo "$WASMTIME_VERSION"; cd "$checkout/crates/wasmtime-capi" && cat Cargo.toml Cargo.lock build.rs patches/*.patch $(find src -type f | sort)) | shasum -a 256 | cut -d' ' -f1)
+wasmtime_inputs=$( (echo "$WASMTIME_VERSION"; cd "$checkout/crates/wasmtime-capi" && cat Cargo.toml Cargo.lock build.rs patches/*.patch $(find src -type f | sort)) | "${SHA256[@]}" | cut -d' ' -f1)
 wasmtime_stamp=$CARGO_TARGET_DIR/release/warp_wasmtime.inputs
 if [ "$(cat "$wasmtime_stamp" 2>/dev/null)" != "$wasmtime_inputs" ] || ! ls "$CARGO_TARGET_DIR"/release/*warp_wasmtime.* >/dev/null 2>&1; then
   patched_wasmtime

@@ -18,6 +18,8 @@ main_level_assignment(word: text, program: Node): any := {
 wgsl_declared(statement: Node): Node := if is_key(statement, Op.Colon) and key_of(statement) == symbol("global") then value_of(statement) else statement
 wgsl_assigned_name(target: Node): text := {
 	if target is symbol { return name_of(target) }
+	# a typed one, `cells: [f32] = …`
+	if is_key(target, Op.Colon) { return wgsl_assigned_name(key_of(target)) }
 	if is_group(target) and #target > 0 and target.last is symbol then name_of(target.last) else ""
 }
 
