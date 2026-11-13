@@ -700,6 +700,8 @@ fits_key(value: any, pattern: any, bound: map, code: bool): bool := {
 	right = value_of(pattern)
 	if is_text_cut(pattern) and not code { return fits_text_cut(value, text_pieces(pattern), bound) }
 	// `x: int`, `$k: int`, `$n: > 0`: the part fits the condition, and the name takes it
+	// `Point{x, y}`, `Point{x: 0, y}`: an instance of that class whose fields fit the braces, as a map's keys do
+	if op == ":" and is_type(left, "symbol") and bracket_of(right) == "{" and not code and class_name(value) == name_of(left) { return fits_map(value, right, bound, yes) }
 	if op == ":" and is_type(left, "symbol") { return fits_pattern(value, right, bound, no) and fits_name(value, name_of(left), bound, code) }
 	if op == "|" or op == "or" { return fits_alternative(value, left, bound, code) or fits_pattern(value, right, bound, code) }
 	// `Shape::Circle(r)`, `Shape.Circle(r)`: the case of its enum
@@ -819,8 +821,8 @@ field_pattern_names(pattern: any): list := {
 }
 // `{status: 200, data: {user: {name}}}`: the fields it names, the others ignored; `{name}` binds the field to its name;
 // `debug?: bool` (read `debug ?: bool`) may be missing
-fits_map(value: any, pattern: any, bound: map): bool := {
-	if not is_type(value, "map") { return no }
+fits_map(value: any, pattern: any, bound: map, instance: bool = no): bool := {
+	if not instance and not is_type(value, "map") { return no }
 	for i in 0..<#pattern {
 		field = pattern#(i + 1)
 		if is_type(field, "symbol") {
