@@ -1,4 +1,5 @@
 # from test_foreign_js.rs: edit the Rust test, then run the script again
+// needs: js
 
 # test_js_globals
 'use js Math; Math.max(1, 5)'	5
