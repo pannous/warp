@@ -14,6 +14,7 @@ error_word = "error"
 # the program, each check's facts diagnosed; `prelude` names the other spellings of the words (`uppercase`)
 source_checks(program: Node, prelude: text): Node := {
 	aliases = module_aliases(prelude)
+	own_names = statements_in(program).map(declared_name)
 	library_constant_assignments(program)
 	for n in nodes_in(program) {
 		located_error(n)
@@ -26,6 +27,7 @@ source_checks(program: Node, prelude: text): Node := {
 		spaced_operand(n, program)
 		assigned_mutation(n, aliases)
 		literal_targets(n)
+		foreign_spelling(n, own_names)
 		lints_of(without_mark(n))
 		if is_group(n) and separator_of(n) in statement_separators {
 			listed_statements = items_of(n)
@@ -35,6 +37,13 @@ source_checks(program: Node, prelude: text): Node := {
 		}
 	}
 	program
+}
+
+# `len(xs)`: another language's spelling of a word (lib/aliases.warp's foreign), the hint naming warp's, count; not of
+# a name the program defines itself
+foreign_spelling(n: Node, own_names: list) := {
+	word = if n is symbol then alias_spellings().foreign.get(name_of(n)) else ø
+	if word != ø and name_of(n) not in own_names { diagnose(call_of("alias_word", [symbol(name_of(n)), symbol(word)]), n) }
 }
 
 # P71 (wiki/charged.md): `z := 6` is charged, evaluated at each use, so assigning it afterwards in its block, `z = 7`,

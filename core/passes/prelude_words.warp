@@ -444,7 +444,6 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	foreign = foreign_types(module)
 	for signature in linked_signatures.values { for type in signature.foreign.keys { foreign[type] = signature.foreign[type] } }
 	if program_words.any(word => word in foreign) { hint_foreign_types(program, foreign, own_names) }
-	hint_foreign_words(program, program_words, alias_spellings().foreign, own_names)
 	exported = slices.filter(is_exported_slice).map(slice => slice#1)
 	for name in exported { exported_names[name] = yes }
 	# (an alias the program writes where the sugar makes its call later, `3 squared`, wants its word: square)
@@ -642,24 +641,6 @@ hint_foreign_types(program: Node, foreign: map, own_names: list) := {
 			diagnose(call_of("foreign_type", [symbol(name), symbol(foreign[name])]), written#2)
 		}
 	}
-}
-# `len(xs)`: the hint naming warp's word, count, once a spelling, unless the program defines the spelling itself
-hint_foreign_words(program: Node, program_words: list, foreign: map, own_names: list) := {
-	for name in program_words.filter(word => word in foreign and word not in own_names) {
-		diagnose(call_of("alias_word", [symbol(name), symbol(foreign[name])]), symbol_named(program, name) ?? program)
-	}
-}
-# the first symbol of the name within the node, ø when it names none
-symbol_named(n: Node, name: text): Node? := {
-	waiting = [n]
-	at = 1
-	while at <= #waiting {
-		part = waiting#at
-		at += 1
-		if part is symbol and name_of(part) == name { return part }
-		if part is key or is_group(part) { waiting += parts_within(part) }
-	}
-	ø
 }
 # aliases with the call form of each word operator the names define: `divides(3, 12)` calls operator_divides unless
 # a function divides is defined
