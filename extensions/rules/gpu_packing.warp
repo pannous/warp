@@ -119,12 +119,12 @@ gpu_cells_packed(statements: list, program: Node): list := {
 	globals = {}
 	main_level = {}
 	for statement in statements {
-		global = is_key(statement, Op.Colon) and key_of(statement) == symbol("global")
-		assigned = if global then value_of(statement) else statement
+		is_global = is_key(statement, Op.Colon) and key_of(statement) == symbol("global")
+		assigned = if is_global then value_of(statement) else statement
 		if is_key(assigned, Op.Assign) and key_of(assigned) is symbol {
 			name = name_of(key_of(assigned))
-			if declared.has(name) { if global { globals[name] = declared[name] } else { main_level[name] = declared[name] } }
-			else if not global and gpu_bound(key_of(assigned), program) {
+			if declared.has(name) { if is_global { globals[name] = declared[name] } else { main_level[name] = declared[name] } }
+			else if not is_global and gpu_bound(key_of(assigned), program) {
 				cell = gpu_inferred_cell(value_of(assigned))
 				if cell != ø { main_level[name] = cell }
 			}
