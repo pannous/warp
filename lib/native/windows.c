@@ -150,6 +150,16 @@ static int posix_setenv(const char* name, const char* value, int overwrite) {
 	return _putenv_s(name, value) ? -1 : 0;
 }
 static int posix_unsetenv(const char* name) { return _putenv_s(name, "") ? -1 : 0; }
+// POSIX's HOME, which a program started outside a POSIX shell (cmd, PowerShell, scoop's shim) lacks: the user's profile
+// folder, written as the layer's paths are
+__attribute__((constructor)) static void posix_home(void) {
+	const char* profile = getenv("USERPROFILE");
+	if (getenv("HOME") || !profile) return;
+	char home[MAX_PATH];
+	snprintf(home, sizeof home, "%s", profile);
+	posix_path(home);
+	posix_setenv("HOME", home, 0);
+}
 // POSIX's 48-bit generator, its numbers the same as on macOS and Linux for a seed
 static uint64_t random48 = 0x1234ABCD330EULL;
 enum { RANDOM48_BITS = 48 };
