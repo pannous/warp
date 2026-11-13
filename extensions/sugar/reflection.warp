@@ -44,7 +44,8 @@ rewrite functions($c) => [$functions...] where $c is symbol and $functions = cla
 rewrite $w($p) => [$names...] where $f = field_word($w, $program) and $p is symbol and $names = instance_members($p, $f, $source)
 # `functions()`: the program's own functions as function values (extensions/rules/rule_words.warp program_functions)
 rewrite functions() => [$functions...] where not method and $functions = program_functions($program, $source)
-# `type(sqrt)`: a library word's signature, `builtin: (x:number) -> number` (extensions/rules/rule_words.warp builtin_type)
+# `type(sqrt)`: a library word's signature, `builtin: (x:number) -> number`; `type(area)` of a function the program
+# or a module defines, `function: (w: int) -> int` (extensions/rules/rule_words.warp builtin_type)
 rewrite type($f) => $t where $f is symbol and $t = builtin_type($f, $program)
 rewrite $f.dump => $refused where $f is symbol and $f is function and $refused = misnamed($f, dump, definition)
 

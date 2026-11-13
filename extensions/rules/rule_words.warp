@@ -852,8 +852,10 @@ foreign_shown(name: text): any := {
 	"(" + range_list(#types).map(i => names[i] + ": " + types[i]).join(", ") + ") -> " + d#5
 }
 # `type(sqrt)` of a library word the program neither defines nor binds: "builtin: (x:number) -> number", its first typed
-# line (`sqrt(x: number): number from warp`, lib/math.warp); ø for any other name (card function-signatures)
-builtin_type(name: Node, program: Node): any := builtin_shown(name, program, "builtin: ")
+# line (`sqrt(x: number): number from warp`, lib/math.warp); `type(area)` of a function the program or a module it uses
+# defines: "function: (width: int, height: int) -> int", its signature; ø for any other name (card function-signatures)
+builtin_type(name: Node, program: Node): any := builtin_shown(name, program, "builtin: ") ?? defined_type(signature_text(name, program))
+defined_type(signature: text?): any := if signature == ø then ø else "function: " + signature
 builtin_shown(name: Node, program: Node, before: text): any := {
 	signature = builtin_signature(name, program)
 	if signature == ø { return ø }
@@ -1034,8 +1036,10 @@ class_members(class_name: text, source: text): any := {
 class_fields_listed(name: Node, program: Node, source: text): any := {
 	lineage = written_lineage(name, source)
 	if owns_word("fields", program) or #lineage == 0 { return ø }
-	texts_list(lineage.reverse().flat_map(owner => (class_members(owner, source) ?? [[], []])#1.map(field => "${field}")))
+	texts_list(lineage_fields(lineage, source))
 }
+# the field names of a class's lineage, those of the class it extends first
+lineage_fields(lineage: list, source: text): list := lineage.reverse().flat_map(owner => (class_members(owner, source) ?? [[], []])#1.map(field => "${field}"))
 class_methods_listed(name: Node, program: Node, source: text): any := {
 	lineage = written_lineage(name, source)
 	if owns_word("methods", program) or #lineage == 0 { return ø }
@@ -1080,7 +1084,7 @@ instance_members(variable: Node, part: Node, source: text): any := {
 	made = class_made_as(spelled(variable), source)
 	members = if made == ø then ø else class_members(made, source)
 	if members == ø or spelled(part) in members#1 + members#2 { return ø }
-	fields = members#1.map(field => "${field}")
+	fields = lineage_fields(written_lineage(symbol(made), source), source)
 	texts_list(if spelled(part) in field_words then fields else if spelled(part) == "methods" then members#2 else fields + members#2)
 }
 # `fields` and the words that say it (decision synonyms-are-aliases): the word, else ø, also where the program has its
