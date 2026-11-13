@@ -17,19 +17,19 @@ labelled(1 + 1, x + 1)' '2x+1'
 # bound_names_in_data_are_their_values
 is! «theme = 'blue'
 written(code: data) := text(code)
-written(color: theme)» '{color:"blue"}'
+written(color: theme)» 'color: "blue"'
 is! «theme = 'blue'
 written(code: data) := text(code)
-written{ li{ color: theme } }» '{li:{color:"blue"}}'
+written{ li{ color: theme } }» '{li: {color: "blue"}}'
 is! 'blue = 1
 written(code: data) := text(code)
-written(color: "blue")' '{color:"blue"}'
+written(color: "blue")' 'color: "blue"'
 is! 'n = 2
 written(code: data) := text(code)
 written("count " + n)' 'count 2'
 is! «written(code: data) := text(code)
 shown(x) := written(color: x)
-shown('blue')» '{color:"blue"}'
+shown('blue')» 'color: "blue"'
 
 # names_assigned_in_data_stay_written
 is! 'written(code: data) := text(code)

@@ -16,7 +16,7 @@
 
 # random_between_two_numbers
 'all([random(1, 6) for i in 1 to 50], x => x >= 1 and x <= 6)'	true
-'type random(1, 6)'	'int'
+'type random(1, 6)'	'nat'
 'x = random(0.5, 2); x >= 0.5 and x < 2'	true
 'type random(0.5, 2)'	'float'
 'random(3, 3)'	3
