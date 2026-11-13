@@ -3,6 +3,7 @@
 // has no answer for is missing here on purpose: a program calling it stops loudly ("no C function fork …")
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <direct.h>
 #include <io.h>
 #include <psapi.h>
 
@@ -60,11 +61,15 @@ __attribute__((constructor)) static void files_in_bytes(void) {
 
 // ## the calls programs and the native warp import by name (`readlink(…): i32 from "c"`)
 // answered here before any module's: Windows's C runtime lacks them, or has them by another layout (its timespec's
-// nanoseconds are 32 bits, its POSIX names carry an underscore). Paths come back with forward slashes, which Windows
-// takes as well as backslashes and warp's path words split on
+// nanoseconds are 32 bits, its POSIX names carry an underscore)
 
-static void forward_slashes(char* path) {
+// a path as POSIX writes it: forward slashes, which Windows takes as well as backslashes and warp's path words split
+// on, and on the current drive no drive letter, "/a/b" as Windows reads it too: the folder the native warp preopens as
+// "/" for its modules (core/native/driver.warp) is that drive's root, so the module's WASI reaches the path (another
+// drive's "C:/x" it does not yet: card windows-drives)
+static void posix_path(char* path) {
 	for (char* c = path; *c; c++) if (*c == '\\') *c = '/';
+	if (path[0] && path[1] == ':' && path[2] == '/' && (path[0] | 0x20) - 'a' + 1 == _getdrive()) memmove(path, path + 2, strlen(path + 2) + 1);
 }
 // the one link a Windows program can read: Linux's /proc/self/exe, this executable
 static const char SELF_LINK[] = "/proc/self/exe";
@@ -79,8 +84,8 @@ static ssize_t posix_readlink(const char* path, char* buffer, size_t size) {
 		return -1;
 	}
 	buffer[length] = 0;
-	forward_slashes(buffer);
-	return (ssize_t)length;
+	posix_path(buffer);
+	return (ssize_t)strlen(buffer);
 }
 // a path made absolute, NULL for one that names nothing; resolved NULL: a copy the caller frees
 static char* posix_realpath(const char* path, char* resolved) {
@@ -89,12 +94,12 @@ static char* posix_realpath(const char* path, char* resolved) {
 		return NULL;
 	}
 	char* full = _fullpath(resolved, path, MAX_PATH);
-	if (full) forward_slashes(full);
+	if (full) posix_path(full);
 	return full;
 }
 static char* posix_getcwd(char* buffer, size_t size) {
 	char* folder = _getcwd(buffer, (int)size);
-	if (folder) forward_slashes(folder);
+	if (folder) posix_path(folder);
 	return folder;
 }
 // the system's name, the first field: "Windows"
