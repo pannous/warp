@@ -1393,6 +1393,7 @@ rule_words = {
 	served: served,
 	compute_toys_made: compute_toys_made,
 	shader_values: shader_values,
+	shader_passes: shader_passes,
 	shader_words_of: shader_words_of,
 	shader_place_of: shader_place_of,
 	shorthand_closure: shorthand_closure,
