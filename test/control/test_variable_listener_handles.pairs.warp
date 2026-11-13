@@ -1,2 +1,5 @@
 # a variable's listener is numbered as an event's: kept in a name, listed and removed by it (card whenever-parse-fix)
 't = 0; h = (whenever t > 30 { print 1 }); remove h from listeners of t; t = 40; count listeners of t'	0
+# two change listeners, the first removed: one is left, and the kept handle shows beside the count (card change-twice)
+'t = 0; a = on change t {1}; b = on change t {2}; remove a from listeners of t; count listeners of t'	1
+'t = 0; a = on change t {1}; b = on change t {2}; remove a from listeners of t; [a.number, count listeners of t]'	[1, 1]

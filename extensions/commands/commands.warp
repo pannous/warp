@@ -5,7 +5,7 @@
 # executables, tests.warp lists and judges `warp test`'s cases. compiler.warp runs each command it does not know
 # itself through this extension's row (extensions/extensions.warp): extension_command below
 # warp's version, the one place a release bumps (Cargo.toml follows it for the harness)
-VERSION = "1.10.0"
+VERSION = "1.11.0"
 REPL_PROMPT = "warp> "
 NATIVE = "the native warp"
 HELP_COLUMN = 38
@@ -44,6 +44,7 @@ option_help = [
 	["--no-hints", "Warnings from weak up, no hints"],
 	["--lib <folder>", "Compile with this lib/ (a worktree's)"],
 	["--slots <n>", "warp test runs at most n cases at once"],
+	["--strict", "A library's slow fallback (slow(reason, fix) in lib/os.warp) is an error, not a note on standard error"],
 	["--backtrace", "An error shows the wasm backtrace beside its sentence"],
 	["--profile", "Each compiled function's address range in /tmp/perf-<pid>.map, for perf"],
 	["fuel <steps>", "The program counts steps, out of fuel after them"]

@@ -194,9 +194,7 @@ def position_code(body: Body, n: Node): list {
 	# (a console line's module is the user's own code: its places are kept, `date + 1` fails at 1:1)
 	at = if body.intrinsics or (module_written != "" and not line_module) or defined_origins.has(body.function.name) then ø else written_at(n)
 	if not at { return [] }
-	line: int = at#1
-	column: int = min(at#2, columns_per_line - 1)
-	[op.i32_const] + sleb(line * columns_per_line + column) + [op.global_set] + relocatable(relocated.globals, declared_global("trap_position", ValueKind.I32)#1)
+	[op.i32_const] + sleb(packed_place(at)) + [op.global_set] + relocatable(relocated.globals, declared_global("trap_position", ValueKind.I32)#1)
 }
 # `x = data`, a statement that cannot fail, so no runtime error names it: what it stores is written without a call that
 # can, a number, a text and lists, maps and pairs of them (card main-constant-tables). A number past 64 bits or 18
@@ -224,6 +222,7 @@ appended(body: Body, target_name: Node, addition: Node): TypedCode? := {
 	# beside a class's `+` a list held as a node still grows in place, so `xs += [o]` reaches the caller's list: decided
 	# by the value at run time, any other value added by the class's `+`
 	if target.kind == ValueKind.Node and adds_by_dispatcher(body) { return if target_name is symbol then appended_or_added(body, target_name, addition) else ø }
+	if target.kind == ValueKind.Node and int_firsts(body, "+", target, added) { return assignment(body, target_name, int_first(body, "+", target, added, (left, right) => runtime_call("node_append", [left, right]))) }
 	if target.kind == ValueKind.Node { return assignment(body, target_name, runtime_call("node_append", [target, added])) }
 	ø
 }

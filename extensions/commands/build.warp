@@ -7,6 +7,14 @@
 use "separate_module.warp"
 use "site.warp"
 NATIVE_WORD = "native"
+# `warp build crate lib/crates/regex.warp …`: a Rust crate's library for `use crate` by warp-crate's build, `--wasm` the
+# crate as a WebAssembly module for `use cargo` by its wasm (notes/crate_adapter.md). Transitional: warp-crate is a
+# Python tool beside the native warp (after-push.sh, packaging/native_dist.sh), in a checkout its scripts/, until it is
+# warp itself (card crate-file)
+CRATE_WORD = "crate"
+CRATE_TOOL_PLACES = ["/warp-crate", "/../scripts/warp-crate"]
+# what warp-crate runs with, each with how to get it
+CRATE_NEEDS = {python3: "brew install python, or python.org", cargo: "curl https://sh.rustup.rs -sSf | sh, or rustup.rs"}
 WASM2C_MODULE = "program"
 C_COMPILER = "cc -O2"
 # wasm2c's runtime and headers, in these folders of the wabt whose wasm2c runs
@@ -94,12 +102,17 @@ WAGI_ENDING = "routes_wagi"
 DEFAULT_TRIM = "optimize"
 
 build(words: list) := {
+	global routes_end_word
+	global runtime_held
+	global modules_linked
+	global separate_module_wanted
 	options = words.filter(word => word.starts_with(OPTION_MARK))
 	targets = words.filter(word => not word.starts_with(OPTION_MARK))
 	# (what it builds stands alone: the modules it uses compiled in, none linked at load time)
 	modules_linked = no
 	for option in options { if option in UNBUILT_OPTIONS { raise "warp build " + option + ": not in the warp compiler yet" } }
 	if targets#1 == NATIVE_WORD { return build_native(targets#2, library_folder) }
+	if targets#1 == CRATE_WORD { return crate_built(targets[1 ..], options) }
 	if targets#1 == APP_WORD { return build_app(targets#2, options) }
 	if options.any(option => option == OPTION_MARK + SITE_OPTION or option.starts_with(OPTION_MARK + SITE_OPTION + "=")) { return site_built(targets#1, options) }
 	wagi = targets#1 == WAGI_WORD or WAGI_OPTION in options
@@ -166,6 +179,15 @@ option_of(options: list, name: text): any := {
 # its markup in the system's web view, is card page-app-build
 APP_WORD = "app"
 APP_SUFFIX = ".app"
+# the crate tool run on the manifests, once what it needs is there: refused naming what is missing and how to get it
+crate_built(manifests: list, options: list) := {
+	missing = CRATE_NEEDS.keys.filter(tool => shell("command -v " + tool + " || true").trim() == "")
+	if #missing > 0 { raise "warp build crate needs " + missing.join(" and ") + ": " + missing.map(tool => tool + ": " + CRATE_NEEDS[tool]).join("; ") }
+	if #manifests == 0 { raise "warp build crate <manifest.warp>…: which crates, e.g. lib/crates/regex.warp" }
+	tool = CRATE_TOOL_PLACES.map(place => library_folder + place).find(exists)
+	if tool == ø { raise "warp build crate: no warp-crate beside this warp, in " + library_folder }
+	print shell(quoted_path(tool) + " " + (if WASM_ONLY in options then "wasm" else "build") + " " + manifests.map(quoted_path).join(" "))
+}
 build_app(target: text, options: list) := {
 	if not exists(target) or not target.ends_with(".warp") { raise "warp build app builds a program file, app.warp, into app.app" }
 	build([target, EXE_ONLY] + options.filter(option => option != WASM_ONLY and option != EXE_ONLY))
@@ -236,9 +258,12 @@ write_executable(module: text, executable: text) := {
 # each module the native driver links at a host word's first call whose word the program imports (unicode's
 # canonical_text), the modules these import in turn, and the runtime.wasm they link; none for a program importing none
 LINKED_ON_DEMAND = ["unicode", "native_host"]
+# the prefix of the native host module's export answering a host word (core/native/driver.warp host_word_answered:
+# `sound_played` is its `host_sound_played`)
+HOST_EXPORT_PREFIX = "host_"
 modules_beside(module: text, executable: text) := {
 	imported = wasm_imported(read_bytes(module)).names.filter(name => name#1 == host_module).map(name => name#2)
-	wanted = LINKED_ON_DEMAND.filter(name => wasm_export_names(read_bytes(library_module(name))).any(word => word in imported))
+	wanted = LINKED_ON_DEMAND.filter(name => wasm_export_names(read_bytes(library_module(name))).any(word => word.remove_prefix(HOST_EXPORT_PREFIX) in imported))
 	needed = modules_imported_by(wanted)
 	if #needed > 0 {
 		# (a write into a missing folder makes it)

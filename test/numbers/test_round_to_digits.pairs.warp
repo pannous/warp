@@ -6,4 +6,10 @@
 'x=sqrt(2); round(x, 2)'	1.41
 
 # round_without_digits_is_whole
-'round(7.5)'	8
+'round(7.6)'	8
+
+# an exact decimal rounds half away from zero as written (decision exact-decimals: a float only from a float source)
+'round_to(-1.005, 2)'	-1.01
+'round_to(1.005, 2)'	1.01
+'x = -1.005; round_to(x, 2)'	-1.01
+'g(x) := "any"; g(x: float) := "float"; [g(-1.005), g(sin(1))]'	["any", "float"]

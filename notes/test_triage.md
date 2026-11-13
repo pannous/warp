@@ -35,6 +35,7 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 
 | file:line | reason | verdict |
 |---|---|---|
+| test/modules/test_wasm_modules.pairs.warp:34, 35 | a C module's out-pointer as the result: `strtol("42 apples", 10)` expected ' apples', `strtol("ff!", 16)` '!'; main gives the C meaning, 42 / 255 | keep for now: the user expects 42 (11-11 via warp-interviewer); the out-pointer form is card strtol-out-pointer (Later) |
 | test/text/test_count_in.pairs.warp:4-9; test/text/test_counts_in_warp.pairs.warp:4, 5, 10; test/functions/test_words_in_phrases.pairs.warp:11, 12 | `count x in y`, `count(x in y)`: the count of a membership's yes/no, refused with did-you-mean `y.count(x)` | delete: the refusal with its fix `y.count(x)` is the behaviour |
 | test/welcoming/test_footguns.pairs.warp:383 | `fast` floats that reassociate math | keep: wiki Footguns.md:764 promises `fast x=3.3` / `as fast`; gap |
 | test/welcoming/test_footguns.pairs.warp:395 | C float32 suffix `.1f` | keep: wiki Footguns.md:772, number.md:28 promise `0.1f`; gap |
@@ -564,7 +565,7 @@ Unchanged since the earlier triage: ∞ 7, divide by zero 7, `x as text?` 6, Col
 Wrong expectations (approve to correct):
 | file:line | expected now | proposed | why |
 |---|---|---|---|
-| test/numbers/test_rounding_in_functions.pairs.warp:6 | 2 | 3 | decision round-halves: round rounds halves away from zero (banker's is round_even) |
+| test/numbers/test_rounding_in_functions.pairs.warp:6 | 2 | f(2.7) → 3 | decision round-halves: a half may round either way; tests never pin it |
 | test/numbers/test_unbounded_int.pairs.warp:57 | "too big for int: 9223372037000250000" | "too big for int; fix: `x as! int` keeps its low 64 bits" | the refusal now names the fix-it (decision checked-forced-conversions) |
 | test/numbers/test_unit_prefix_lines.pairs.warp:19 | `'a'   todo: …` (spaces, read as the expected) | a tab before the note | got "a" already; the note is glued to the expected value |
 | test/numbers/test_units_after_numbers.warp:30 | `s = 3; str(440Hz)` "440/s" | "440Hz" | Hz shows as written (canonical-output); Rust-era form |
@@ -650,3 +651,13 @@ Triage (judge the form before building it):
 - test_system_values:26, 27 `mouse_x`, `mouse_down` need a mocked mouse (1207); harness, not language.
 - test_test_line_after_tasks:2 expects ø where the runner prints "✓ 1 tests passed".
 - test_relational_arms:4 `sorted(xs, >)` (card sorted-comparator-syntax).
+
+## test/ffi/test_js_callbacks.warp natively (card js-array-from-callback, night decision 2026-11-12)
+- :9 and :10, a warp function called back by JS that calls JS itself (`Array.from(xs, x => Math.max(x, 2))`), are
+  refused natively: the web view's one JS thread waits for the callback's answer. In the page (its own phase) they can work; natively a
+  second view or JavaScriptCore in process would (option B on the card, waits for the user).
+
+## Singular field of a list (card item-field-access, parked 2026-11-13)
+- test/control/test_call_result_reflection.warp:4, 5 expect `people().name` and `name of people()` to read every
+  item's name, ['a', 'b']. Only the plural, `people().names` (:6), reads every item; whether the singular does too
+  is a parked decision (it reads two ways: the list's own field or each item's). Left red and untouched until decided.

@@ -12,4 +12,11 @@
 'use markup; bars: html = [div{l} for l in [1, 2]]; to_html(html{ div{ bars } })'	'<html><div><div>1</div><div>2</div></div></html>'
 # a conversion to html makes markup, as a place typed html does (user OK 11-11, card html-output-fix)
 'use markup; to_html(p{"hello"} as html)'	'<p>hello</p>'
-'p{"hello"} as html'	'<p>hello</p>'
+'text(p{"hello"} as html)'	'<p>hello</p>'
+# a text as html is the page's own HTML, written as it is (user OK 11-11, card read-tags-html)
+'page = "<h1>Tags</h1>"; to_html(page as html)'	"<h1>Tags</h1>"
+'to_html("<b>a & b</b>" as html)'	"<b>a & b</b>"
+'to_html(div{ "<b>" })'	"<div>&lt;b&gt;</div>"
+# a text as html beside a module that uses html (lib/template.warp): markup's html, as without it (user OK 11-11, card read-tags-html)
+'use template; to_html("<b>x</b>" as html)'	"<b>x</b>"
+'use markup; to_html(html{ for x in [1, 2] { p{x} } })'	'<html><p>1</p><p>2</p></html>'

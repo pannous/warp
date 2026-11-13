@@ -10,10 +10,10 @@ check() { # check <code> <expected shown result>
 	if [ "$got" = "$2" ]; then echo "✓ $1"; else echo "✗ $1: got $got, expected $2"; failures=$((failures + 1)); fi
 }
 check 'use color; red' red
-check 'use color; color(0xFF8000)' '#FF8000'
-check 'use color; with_alpha(red, 0.5)' '#FF000080'
+check 'use color; color(0xFF8000)' '#ff8000'
+check 'use color; with_alpha(red, 0.5)' '#ff000080'
 check 'type Kolor < int; format Kolor c as text := "K"; 5 as Kolor' K
-check 'use color; hex(red)' 4294901760
+check 'use color; argb_hex(red)' 0xffff0000
 check 'use color; "red"' '"red"'
 check 'class P{x:int; format as text := "P!"}; P(1)' 'P!'
 [ $failures = 0 ]

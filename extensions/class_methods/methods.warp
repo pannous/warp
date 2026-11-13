@@ -130,6 +130,7 @@ linked_class_names(): list := concatenated(linked_signatures.values.map(signatur
 # (`for v in ch {…}` a `.next()`, extensions/sugar/iteration.warp), and those the kept methods say in turn
 # (toString·real calls text·method)
 def linked_methods_called(classes: map, linked: list, top_statements: list, operator_table: map) {
+	global said
 	own = top_statements.filter(statement => not is_linked_class(statement, linked))
 	said = word_set(own.flat_map(tokens_within) + sugar_words_of(separated(bracketed(own, ""), ";")))
 	kept = {}
@@ -162,6 +163,49 @@ method_said(word: text, said: map, operator_table: map): bool := {
 # no word only the whole program's passes read: an overloaded one, whose variants they tell apart (`sum` of the
 # prelude's), or a class's name, which their scope holds (`o is Quantity` of a promotion, `duration: Duration`)
 is_deferrable(definition: Node, program_words: map): bool := (declared_name(definition) ?? "").contains("·") and not words_within(definition).any(word => program_words.has(word))
+# each dispatcher's name → the classes it reaches: those its instance tests name (value_dispatch), those whose methods
+# it calls (`abs·Complex`, which a dispatcher of one class calls untested) and those of the dispatchers it calls,
+# `!=·operator`'s of `==·operator`
+covered_classes(dispatchers: list, classes: map): map := {
+	global said
+	said = dispatchers.map(words_within)
+	tested = {}
+	for i in 0..<#dispatchers { tested[defined_word(dispatchers[i])] = (tested.get(defined_word(dispatchers[i])) ?? []) + dispatched_classes(dispatchers[i], said[i], classes) }
+	covered = {}
+	for i in 0..<#dispatchers { covered[defined_word(dispatchers[i])] = word_set((covered.get(defined_word(dispatchers[i])) ?? []) + tested[defined_word(dispatchers[i])] + said[i].filter(word => tested.has(word)).flat_map(word => tested[word])).keys }
+	covered
+}
+# (a module's dispatcher handing another class's instance to that class's own module, foreign_first, says so by the
+# word that tests for one: it answers ø where the program's own falls back)
+dispatched_classes(dispatcher: Node, words: list, classes: map): list := {
+	owners = words.map(word => word.split("·")).filter(parts => #parts == 2 and classes.has(parts#2)).map(parts => parts#2)
+	nodes_in(dispatcher).filter(is_instance_test).map(test => "${test#3}") + owners + (if instance_test_word in words then [instance_test_word] else [])
+}
+is_instance_test(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(HiddenWord.InstanceOf as text) and n#3 is text
+# each dispatcher name bound to the first linked module whose dispatcher of the name covers its classes, when no
+# dispatcher of the name calls a word of the program's own: a name's arities (`-x` beside `a - b`) bind together or not;
+# a name reaching no class known stays the program's own; each counted under --times
+stand_in_images(dispatchers: list, covered: map, own: map, every_class: list) := {
+	calling_own = {}
+	for dispatcher in dispatchers { for word in words_within(dispatcher).filter(word => own.has(word)) { calling_own[defined_word(dispatcher)] = word } }
+	for name in covered.keys {
+		image = if calling_own.has(name) or #covered[name] == 0 then ø else covering_image(name, covered[name], every_class)
+		if image != ø { module.dispatcher_images[name] = image }
+		if TIMES { print "§D " + (if image != ø then "linked dispatcher " + name + " of " + image else "own dispatcher " + name + " (" + (if calling_own.has(name) then "calls " + calling_own[name] else "classes " + covered[name].join(" ")) + ")") }
+	}
+}
+# (a module's dispatcher answering another class's instance by that class's module, instance·tested in its classes,
+# only when every class the program knows is one it covers)
+covering_image(name: text, classes: list, every_class: list): text? := {
+	for image in by_precedence(module.linked_images) {
+		signature = linked_signature(image.name)
+		linked_covered = if signature == ø or signature.dispatched == ø then ø else signature.dispatched.get(name)
+		if linked_covered != ø and classes.all(class_name => class_name in linked_covered) and (instance_test_word not in linked_covered or every_class.all(class_name => class_name in classes)) { return image.name }
+	}
+	ø
+}
+# the dispatcher declared only when its name is bound to a linked module's, else itself
+linked_stand_in(dispatcher: Node): Node := if module.dispatcher_images.has(defined_word(dispatcher)) then declared_only(dispatcher) else dispatcher
 # the words defined more than once
 repeated_words(words: list): map := {
 	seen = {}
@@ -175,6 +219,7 @@ is_linked_class(statement: Node, linked: list): bool := {
 }
 # the program with the methods of its classes lifted out as functions
 methods_lifted(program: Node): Node := {
+	global deferred_definitions
 	# (a one-line program, `class P{…}; P(1) + P(5)`, is one `;` statement among the linked modules' definitions)
 	top_statements = flat_statements(program)
 	classes = {}
@@ -276,16 +321,16 @@ methods_lifted(program: Node): Node := {
 	}
 	spelled_ordering = {}
 	for word in entry_words {
-		spellings = operator_methods.filter(method => spelled_operator(operator_table, method)#1 == word)
+		word_methods = operator_methods.filter(method => spelled_operator(operator_table, method)#1 == word)
 		owners = []
 		owned_spellings = []
-		for spelling in spellings {
+		for spelling in word_methods {
 			for owning_class in owners_taking(classes, liftable, spelling, 1) {
 				owners += [owning_class]
 				owned_spellings += [spelling]
 			}
 		}
-		operator = spelled_operator(operator_table, spellings#1)
+		operator = spelled_operator(operator_table, word_methods#1)
 		# a class's own `<` (its less(o)) beside another's compare(o): the one dispatcher of the glyph orders each class
 		# by its own (derived_dispatchers)
 		if operator#2 in ordering_operators and #orderers_of(classes, liftable) > 0 {
@@ -321,7 +366,16 @@ methods_lifted(program: Node): Node := {
 		dispatchers = dispatchers.map(dispatcher => declared_fallback(dispatcher, glyph))
 		deferred_dispatchers = deferred_dispatchers.map(dispatcher => declared_fallback(dispatcher, glyph))
 	}
-	own_words_unlinked((dispatchers + deferred_dispatchers).map(defined_word))
+	covered = covered_classes(dispatchers + deferred_dispatchers, classes)
+	for name in covered.keys { module.class_dispatchers[name] = covered[name] }
+	# (a program adding no class of its own declares a dispatcher a linked module made over the same classes or more, bound
+	# to that module's, so neither the dispatcher nor the methods only it calls go through the passes)
+	if not module.relocating and liftable.all(name => name in linked) {
+		stand_in_images(dispatchers + deferred_dispatchers, covered, word_set(functions.filter(name => not module.linked_words.has(name))), classes.keys)
+		dispatchers = dispatchers.map(linked_stand_in)
+		deferred_dispatchers = deferred_dispatchers.map(linked_stand_in)
+	}
+	own_words_unlinked((dispatchers + deferred_dispatchers).map(defined_word).filter(name => not module.dispatcher_images.has(name)))
 	deferred_definitions += deferred_dispatchers
 	group_like(program, rewritten + dispatchers)
 }
@@ -543,13 +597,19 @@ equality_derived(class_name: text, methods: list, operator_table: map): list := 
 	methods + [Key(call_of(equality_method, [other]), Op.Define, Key(instance_test(other, class_name), Op.And, compared))]
 }
 # a class giving only one of two methods that may answer for each other, approximately(o) or similar(o), answers both
-# operators by it: `similar(o) := approximately(o)` (test_rough_similarity: a class method serves ≈ and ~)
-stand_ins = {"approximately": "similar", "similar": "approximately"}
+# operators by it: `similar(o) := approximately(o)` (test_rough_similarity: a class method serves ≈ and ~); text() and
+# `format as text` are one text form, a list showing its items by it too (user 11-11)
+stand_in_pairs = [["approximately", "similar"], [showing_method, form_method]]
+# the method that answers for this one, ø for none
+stand_in(word: text?): text? := {
+	for pair in stand_in_pairs { if word == pair#1 { return pair#2 } else if word == pair#2 { return pair#1 } }
+	ø
+}
 stand_ins_derived(methods: list): list := {
 	words = methods.map(defined_word)
 	derived = []
-	for method in methods.filter(method => stand_ins.has(defined_word(method) ?? "") and stand_ins[defined_word(method)] not in words) {
-		derived += [forwarding(stand_ins[defined_word(method)], method)]
+	for method in methods.filter(method => stand_in(defined_word(method)) != ø and stand_in(defined_word(method)) not in words) {
+		derived += [forwarding(stand_in(defined_word(method)), method)]
 	}
 	methods + derived
 }

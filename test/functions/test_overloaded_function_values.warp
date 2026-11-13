@@ -25,7 +25,7 @@ chord(t) := {
   for i in 1 to #block { block#i = 0.1 }
   0
 }
-play_blocks(chord, linear_address(block), 0.1s)
+play(chord, linear_address(block), 0.1s)
 file = "chord_blocks_" + text(getpid()) + ".wav"
 duration = round(save(sound, file) * 100)
 if unlink(file) == 0 then duration else 0' 10

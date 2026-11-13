@@ -1,10 +1,11 @@
 // The standard library module wasm (card warp-host-wasm-load, core/native/driver.warp): `use wasm`, other WebAssembly
 // modules and components loaded into the running program, through the adapter std_io. The native warp serves it; the browser
 // doesn't yet.
-// `m = load_wasm(./lib.wasm)`: a core module (instantiated beside the program, with the same imports) or a component
+use os
+// `m = load(./lib.wasm)`: a core module (instantiated beside the program, with the same imports) or a component
 // (by its header, WIT types), its handle {wasm: 1, path: "./lib.wasm", kind: "module"}; a path is loaded once per run,
-// bytes (read_bytes, compile_wasm) each time anew
-load_wasm(module: any) := std_io("wasm", "load", [module])
+// a Wasm (os's compile, Wasm(read_bytes(…))) each time anew
+load(module: any) := std_io("wasm", "load", [if module is Wasm then module.bytes else module])
 // `wasm_call(m, "twice", [21])`: an export called, the arguments as its types want them, its result a warp value;
 // m may be a handle or a path. Numbers cross as numbers, a component's strings, lists, records, options, results and
 // enums by its WIT types; a trap or a result's err is an Error

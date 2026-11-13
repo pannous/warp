@@ -14,7 +14,14 @@ const SETTER_PREFIX = "set "; // src/modules/wasm_modules.rs SETTER_PREFIX: the 
 // (core/emitter/c_functions.warp, read as core/native/driver.warp foreign_of reads it)
 const C_FUNCTIONS_SECTION = "warp.c_functions";
 const IMPORTED_MEMORY_PAGES = 1; // src/wasm_emitter/mod.rs MEMORY: one page at least
-const PROMISE_REFUSAL = "gives a promise, which a program in the page cannot wait for; natively (the warp CLI) node awaits it";
+// JSPI: a run whose module waits for promises runs main through WebAssembly.promising, and foreign_await suspends it
+// until the promise foreign_call kept settles. Its module imports foreign_await, or foreign_settled (lib/prelude.warp)
+// from the prelude module linked beside it, which imports foreign_await itself
+const JSPI = typeof WebAssembly.Suspending === "function" && typeof WebAssembly.promising === "function";
+const AWAIT_WORD = "foreign_await";
+const WAITING_WORDS = [AWAIT_WORD, "foreign_settled"];
+const PROMISE_REFUSAL = JSPI ? "gives a promise, which this run cannot wait for (an eval while compiling, a built site): only the page's own run waits"
+	: "gives a promise, which this browser cannot wait for (it has no WebAssembly JSPI); Chrome and the warp CLI wait for it";
 
 // the runtimes foreign_call reaches in the page, by their name in `use <runtime> …`: call(module, member, arguments,
 // hooks) gives the member's plain value (arguments null: a read, no call); prepare(code), when given, readies the runtime
@@ -100,6 +107,36 @@ function callOnPage(receiver, memberName, argumentValues) {
 	return fromPage(value);
 }
 
+// a function of the program ({$callback: slot}, lib/callbacks.warp js_function) as a JS function calling it back
+// directly through the export js_called_back, its arguments and result crossing as plain values. One living function
+// a slot a run; once it is collected the run hears which handing of the slot it let go of (js_released), as
+// webview_bridge.js does natively
+const programFunctions = new WeakMap(); // the run's exports → slot → WeakRef(function)
+const programHandings = new WeakMap(); // function → { program, slot, handed }, the last handing it stands for
+const programReleased = new FinalizationRegistry(({ program, slot, handed }) => {
+	const functions = programFunctions.get(program);
+	if (!functions?.get(slot)?.deref()) functions?.delete(slot);
+	program.js_released(BigInt(slot), BigInt(handed));
+});
+function calledBack(program, value) {
+	if (value === null || typeof value !== "object" || !("$callback" in value)) return value;
+	const slot = Number(value.$callback);
+	const handed = Number(value.handed);
+	if (!programFunctions.has(program)) programFunctions.set(program, new Map());
+	const functions = programFunctions.get(program);
+	const living = functions.get(slot)?.deref();
+	if (living) {
+		programHandings.get(living).handed = handed;
+		return living;
+	}
+	const called = (...given) => guestPlain(program, program.js_called_back(BigInt(slot), newGuestValue(program, given)));
+	const handing = { program, slot, handed };
+	functions.set(slot, new WeakRef(called));
+	programHandings.set(called, handing);
+	programReleased.register(called, handing);
+	return called;
+}
+
 // the NUL-terminated bytes at `address` of a linear memory
 function cText(memory, address) {
 	const bytes = new Uint8Array(memory.buffer, address);
@@ -124,7 +161,11 @@ function cCalls(run) {
 // text or list of bytes (bytes) its bytes and their count for a following length, the first out-pointer a NULL slot
 // there, all freed after the call; a text result (text, owned_text) is read back as a text of the program (NULL is ø)
 const NULL_POINTER = 0;
-function callC(holder, exports, member, call, values, what) {
+// the length a call adds after bytes, a size_t: an i64 of a library natively shared (libc.wasm takes it so), an i32 of
+// a wasm32 module the program imports (driver.warp c_called and wasm_called)
+const SHARED_LIBRARY_LENGTH = BigInt;
+const WASM_MODULE_LENGTH = Number;
+function callC(holder, exports, member, call, values, what, lengthOf) {
 	const program = holder.exports;
 	const blocks = [];
 	const malloc = bytes => {
@@ -140,7 +181,7 @@ function callC(holder, exports, member, call, values, what) {
 	const remaining = [...values];
 	const moduleArguments = (call?.parameters ?? values.map(() => "i64")).map(kind => {
 		if (kind === "out") return out === undefined ? out = malloc(new Uint8Array(4)) : NULL_POINTER; // a later out-pointer NULL
-		if (kind === "length") return BigInt(bytesLength);
+		if (kind === "length") return lengthOf(bytesLength);
 		const value = remaining.shift();
 		if (kind === "ptr") return textBlock(value);
 		if (kind === "texts") {
@@ -284,7 +325,7 @@ function wasmLibraryImports(holder, library, exportsOf, missing = "") {
 			const exports = exportsOf();
 			const member = exports[name];
 			if (typeof member !== "function") throw new Error(`${library}.${name} is not available in the browser${missing && ` (${missing})`}`);
-			return callC(holder, exports, member, cCalls(holder.run).get(`${library}\t${name}`), values, `${library}.${name}`);
+			return callC(holder, exports, member, cCalls(holder.run).get(`${library}\t${name}`), values, `${library}.${name}`, SHARED_LIBRARY_LENGTH);
 		},
 	});
 }
@@ -352,7 +393,7 @@ function exportedParameters(bytes) {
 // one file however the path is spelled; a path in the compiler's repository folder (a `use cargo` crate in
 // /warp/web/playground/warp-lib/crates) is that file of the served repository
 function servedModuleUrl(path) {
-	const served = path.startsWith(REPOSITORY_DIRECTORY + "/") ? path.slice(REPOSITORY_DIRECTORY.length + 1) : path;
+	const served = path.startsWith(REPOSITORY_DIRECTORY + "/") ? path.slice(REPOSITORY_DIRECTORY.length + 1) : withoutProjectMark(path);
 	return new URL(served, FILE_ROOT).href;
 }
 function moduleImports(holder, hooks, path) {
@@ -376,19 +417,20 @@ function moduleImports(holder, hooks, path) {
 			if (member instanceof WebAssembly.Global) return member.value;
 			if (!member) throw new Error(`${path} exports no ${name}`);
 			const call = cCalls(holder.run).get(`${path}\t${name}`);
-			if (call) return callC(holder, exports, member, call, values, `${path} ${name}`);
+			if (call) return callC(holder, exports, member, call, values, `${path} ${name}`, WASM_MODULE_LENGTH);
 			return member(...values);
 		},
 	});
 }
 
-// a promise a foreign call gave: refused, as no run here waits (core/native/driver.warp's node awaits it)
+// a promise a foreign call gave where the run cannot wait for it (PROMISE_REFUSAL says why): refused
 function refusedPromise(called, promise) {
 	promise.then(undefined, () => {}); // its failure is not the program's: no unhandled rejection
 	throw new Error(`${called}: ${PROMISE_REFUSAL}`);
 }
 
 addHostPart({
+	started: run => { run.awaits = JSPI && importDescriptors(run.bytes).some(entry => WAITING_WORDS.includes(entry.name)); },
 	words: (holder, hooks, { program }) => {
 		// a module of another runtime (src/modules/foreign.rs), run by the runtime registered under its name
 		const foreignCall = (runtime, module, member, call, argumentList) => {
@@ -397,14 +439,24 @@ addHostPart({
 			const foreign = foreignRuntimes.get(runtimeName);
 			if (!foreign) throw new Error(`${runtimeName} ${moduleName}.${memberName}: ${runtimeName} runs only in the native host (the warp CLI)`);
 			const given = guestPlain(program_, call) === 1 ? guestPlain(program_, argumentList) : undefined;
-			const argumentValues = given === undefined ? null : given === null ? [] : Array.isArray(given) ? given : [given];
+			const argumentValues = given === undefined ? null : (given === null ? [] : Array.isArray(given) ? given : [given]).map(value => calledBack(program_, value));
 			const valueOf = result => newGuestValue(program_, result);
 			const result = foreign.call(moduleName, memberName, argumentValues, hooks);
 			const called = `${runtimeName} ${typeof moduleName === "string" ? moduleName : "value"}.${memberName}`;
-			return typeof result?.then === "function" ? refusedPromise(called, result) : valueOf(result);
+			if (typeof result?.then !== "function") return valueOf(result);
+			if (!holder.run.awaits) return refusedPromise(called, result);
+			holder.pending = result; // foreign_settled waits for it
+			return null;
+		};
+		const awaited = async () => {
+			const promise = holder.pending;
+			holder.pending = undefined;
+			return newGuestValue(program(), await promise);
 		};
 		return {
 			foreign_call: foreignCall,
+			foreign_pending: () => holder.pending ? 1n : 0n,
+			[AWAIT_WORD]: JSPI ? new WebAssembly.Suspending(awaited) : awaited,
 		};
 	},
 	imports: (holder, hooks) => ({

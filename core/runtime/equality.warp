@@ -13,8 +13,11 @@ use "types.warp"
 node_equal(a: Node, b: Node): bool := {
 	if is_null(a) or is_null(b) { return is_null(a) == is_null(b) }
 	if same(a, b) { return yes }
+	if exact_ints(a, b) { return unboxed_int(a) == unboxed_int(b) }
 	# two texts, the common case of a match on spellings (`Op·case`): equal as texts (equal_texts), past none of the other kinds' tests
 	if kind_code(a) == Kind.Text and kind_code(b) == Kind.Text { return equal_texts(unboxed_text(a), unboxed_text(b)) }
+	# a number's subtype as its number, `hex(123) == 123` (user 11-11)
+	if is_number_subtype(a) or is_number_subtype(b) { return node_equal(subtype_number(a), subtype_number(b)) }
 	# two instances: of one class, their fields equal (each read from its struct as a map)
 	if marked_kind(a) == Marked.Instance and marked_kind(b) == Marked.Instance and not is_null(instance_entries(a)) and not is_null(instance_entries(b)) { return same_bytes(key_name(a), key_name(b)) and node_equal(instance_entries(a), instance_entries(b)) }
 	if kind_code(a) == Kind.Key or kind_code(b) == Kind.Key {

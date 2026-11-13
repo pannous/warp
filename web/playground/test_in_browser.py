@@ -132,13 +132,21 @@ PAGE_LOAD = "(loading the page)"
 # `--examples --guide`: every guide.md snippet's `=> value` and ```printed lines in the page (guide.js SNIPPET_FENCE)
 GUIDE = "--guide"
 GUIDE_FILE = "web/playground/guide.md"
+# the page skips reloadWhenStale under this query (playground.js noStaleReload), so a version.js
+# poll cannot drop the playground API mid-sweep (card guide-sweep-crash)
+NO_STALE_RELOAD = "no_stale_reload"
 SNIPPET_FENCE = re.compile(r"^```warp(?: => (.*))?$")
 PRINTED_FENCE = "```printed"
 # a snippet run in the page (%s: its code as JSON, the milliseconds it may take): its value and stdout, or {stuck}
 RUN_SNIPPET = """(async () => {
-	const report = await Promise.race([playground.evaluate(%s), new Promise(done => setTimeout(() => done({ stuck: true }), %d))]);
-	// (markup shows rendered, its » value line hidden: playground.js showValue)
-	return JSON.stringify(report.stuck ? report : { value: report.html || report.value, printed: (report.printed || []).filter(part => part.stream !== 2).map(part => part.text).join("") });
+	if (typeof playground !== "object") return JSON.stringify({ value: "playground is not defined", printed: "" });
+	try {
+		const report = await Promise.race([playground.evaluate(%s), new Promise(done => setTimeout(() => done({ stuck: true }), %d))]);
+		// (markup shows rendered, its » value line hidden: playground.js showValue)
+		return JSON.stringify(report.stuck ? report : { value: report.html || report.value, printed: (report.printed || []).filter(part => part.stream !== 2).map(part => part.text).join("") });
+	} catch (failure) {
+		return JSON.stringify({ value: String(failure), printed: "" });
+	}
 })()"""
 TEXT_HOLE = "(a computed text between children changes alone)"  # card web-fine-text-nodes: markup.rs text_holes
 TEXT_HOLE_CODE = 'use web\nn = 0\ndiv{ section{ h1{ "Counter" } button{ on click { n += 1 }, "add" } "clicked " + n + " times" } }'
@@ -302,6 +310,14 @@ FRAME_SHADERS = "(the on frame shader samples keep painting)"
 FRAME_SHADER_SAMPLES = ["shader_brush", "shader_trails"]
 FRAME_SHADER_FIRST_MS = 15000  # the first frame's canvas: a software GPU takes long for a 1280×800 frame
 FRAME_SHADER_LOOK_AGAIN_MS = 3000
+# card gpu-canvas-duplicate: a program paints its shaders into one view; painted at a new size (an `on frame` painting
+# at the pane's size, which moves once the first canvas shows), the new canvas replaces the old: a bee per run, not two
+SHADER_ONE_VIEW = "(a shader painted at a new size replaces its canvas)"
+SHADER_ONE_VIEW_CODE = """red = shader {
+	@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }
+}
+for wide in [8, 9, 8] { paint(red, wide, 8) }"""
+SHADER_ONE_VIEW_SHOWN = "8×8"
 THROUGH_PIXELS = "through pixels, not into the page's canvas"  # Chrome's SwiftShader drops the page canvas
 # card shader-read: $previous(at) reads the frame the shader left before, as natively (tests/programs/
 # test_shader_builtins.rs a_shader_reads_its_previous_frame): three renders of a quarter red more give 192 red
@@ -1262,6 +1278,21 @@ def fingers_wrong():
 	return [] if "painted" in shown else [f"a finger {dragged} over samples/{FINGERS_SAMPLE}: its middle shows {shown}, expected a stroke"]
 
 
+def shader_one_view_wrong():
+	"""a shader painted at three sizes in turn shows one canvas, the last; skipped loudly where shaders paint through
+	pixels"""
+	painted, shown = red_shader_shown()
+	if NO_GPU in painted or "gpu true" not in shown:
+		print(f"skip {SHADER_ONE_VIEW}: this browser paints shaders {THROUGH_PIXELS} ({painted!r}, {shown!r})")
+		return []
+	run_code(SHADER_ONE_VIEW_CODE)
+	canvases = browser("eval", f"""(async () => {{
+		await new Promise(done => setTimeout(done, {CANVAS_SETTLE_MS}));
+		return [...document.querySelectorAll("#paintings canvas")].map(canvas => `${{canvas.width}}×${{canvas.height}}`).join(" ");
+	}})()""")
+	return [] if canvases.strip('"') == SHADER_ONE_VIEW_SHOWN else [f"canvases {canvases}, expected {SHADER_ONE_VIEW_SHOWN!r} alone"]
+
+
 def frame_shaders_wrong():
 	"""each `on frame` shader sample still paints a few seconds in: its canvas changes between two looks; skipped loudly
 	where shaders don't paint into the page's canvas (the bug was there), whose 1280×800 pixel frames keep the page
@@ -1424,6 +1455,13 @@ class MemoryWatch:
 					resident = next((int(line.split()[1]) for line in status if line.startswith("VmRSS:")), 0)
 				with open(f"/proc/{pid}/cmdline") as command:
 					words = command.read().replace("\0", " ").split()  # Chrome rewrites its arguments as one
+				if not words:
+					# kernel threads and zombies have an empty cmdline; use the comm name
+					with open(f"/proc/{pid}/comm") as comm:
+						name = comm.read().strip()
+					if not name:
+						continue
+					words = [name]
 			except OSError:
 				continue  # ended meanwhile
 			kind = next((word.split("=", 1)[1] for word in words if word.startswith("--type=")), os.path.basename(words[0]))
@@ -1458,9 +1496,32 @@ def guide_snippets(path=os.path.join(REPOSITORY, GUIDE_FILE)):
 	return snippets
 
 
-def snippet_wrong(code, value, printed):
+def playground_lost(answer):
+	"""whether the eval met no playground API (a mid-sweep reload or a crashed renderer)"""
+	return PAGE_LOST in f"{answer or ''} {browser_complaint}"
+
+
+def recover_playground(page_url):
+	"""the playground API after a mid-sweep reload, opening the page anew if the reload did not bring it back"""
+	why = browser("eval", "JSON.stringify({ stale: self.PLAYGROUND_STALE || null, nav: performance.getEntriesByType('navigation')[0] && performance.getEntriesByType('navigation')[0].type, href: location.href, ready: document.readyState, playground: typeof playground })")
+	print(f"     the page lost its API ({why or browser_complaint or 'no answer'}); waiting for playground")
+	if not wait_for_playground():
+		open_samples_page(page_url)
+	if not wait_for_playground():
+		return False
+	stop_running()
+	return True
+
+
+def snippet_wrong(code, value, printed, page_url=None):
 	"""what the page shows otherwise than the guide says of a snippet: its value and printed lines"""
-	answer = browser("eval", RUN_SNIPPET % (json.dumps(code), SAMPLE_ANSWER_SECONDS * 1000))
+	script = RUN_SNIPPET % (json.dumps(code), SAMPLE_ANSWER_SECONDS * 1000)
+	answer = browser("eval", script)
+	if page_url and playground_lost(answer):
+		if recover_playground(page_url):
+			answer = browser("eval", script)
+		else:
+			return [f"the page lost its API ({PAGE_LOST})"]
 	shown = json.loads(json.loads(answer)) if answer.startswith('"') else {"value": f"(page gave no answer: {answer or browser_complaint})", "printed": ""}
 	if shown.get("stuck"):
 		return [f"no answer after {SAMPLE_ANSWER_SECONDS} s"]
@@ -1487,6 +1548,9 @@ def check_examples(names, page_url=None, site=None):
 	open_page("about:blank")
 	console = WebDriverConsole() if webdriver else ConsoleWatch()  # before the page, so its loading is watched too
 	page_url = f"{page_url}{'&' if '?' in page_url else '?'}slow_start={SLOW_START_MS}"
+	# a guide sweep must not reload mid-batch when version.js is polled (card guide-sweep-crash)
+	if GUIDE in names:
+		page_url = f"{page_url}&{NO_STALE_RELOAD}=1"
 	open_page(page_url)
 	wait_for_isolation()
 	wait_for_first_run()
@@ -1523,8 +1587,8 @@ def check_examples(names, page_url=None, site=None):
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
 	snippets = guide_snippets() if GUIDE in names else []
 	for line, code, value, printed in snippets:
-		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (KEPT_OUTPUT, kept_output_wrong), (GUIDE_PARTS, guide_parts_wrong), (GUIDE_ADDRESS, guide_address_wrong), (GUIDE_PLACES, guide_places_wrong), (EXAMPLE_SWITCH, example_switch_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), (STALE_DEPLOY, stale_deploy_wrong), (DEFINED_NAMES, defined_names_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
+		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed, page_url))
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (KEPT_OUTPUT, kept_output_wrong), (GUIDE_PARTS, guide_parts_wrong), (GUIDE_ADDRESS, guide_address_wrong), (GUIDE_PLACES, guide_places_wrong), (EXAMPLE_SWITCH, example_switch_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (SHADER_ONE_VIEW, shader_one_view_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), (STALE_DEPLOY, stale_deploy_wrong), (DEFINED_NAMES, defined_names_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
@@ -1864,6 +1928,8 @@ def tests_judged(paths, tree):
 
 
 WEBDRIVERS = {"--firefox": FirefoxDriver, "--safari": SafariDriver}
+# where --examples runs: a deployed URL, a collected site folder (each followed by its value)
+PLACE_OPTIONS = ("--url", "--site")
 
 
 def chrome_allowed():
@@ -1905,12 +1971,16 @@ def main():
 		return
 	if sys.argv[1:2] == ["--examples"]:
 		global webdriver
-		names = [name for name in sys.argv[2:] if name not in WEBDRIVERS]
+		given = [name for name in sys.argv[2:] if name not in WEBDRIVERS]
 		chosen = [WEBDRIVERS[name] for name in sys.argv[2:] if name in WEBDRIVERS]
 		webdriver = chosen[0]() if chosen else None
-		place = {}
-		while names[:1] in (["--url"], ["--site"]):
-			place[names[0]], names = names[1], names[2:]
+		# --url and --site, each with its value, anywhere among the example names
+		place, names = {}, []
+		while given:
+			if given[0] in PLACE_OPTIONS:
+				place[given[0]], given = given[1], given[2:]
+			else:
+				names, given = names + [given[0]], given[1:]
 		if "--url" in place and "--site" in place:
 			wait_until_deployed(place["--url"], place.pop("--site"))
 		check_examples(names, place.get("--url"), place.get("--site"))

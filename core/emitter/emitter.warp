@@ -54,6 +54,8 @@ CHECKS_DROPPED = "checks_dropped"
 exported_globals = ["trap_detail", "text_heap", "trap_position", "trap_name", CHECKS_DROPPED]
 # trap_position holds line * columns_per_line + column
 columns_per_line = 4096
+# a place [line, column] as one int, its column 0 (unknown) past columns_per_line rather than a plausible wrong one
+packed_place(at: list): int := at#1 * columns_per_line + (if at#2 < columns_per_line then at#2 else 0)
 import_function_byte = 0
 # the export WASI hosts run a module by
 wasi_start = "_start"
@@ -326,7 +328,7 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # program defines itself, never the module's; linked_words: each linked module word by name, its kinds and result,
 # which the program declares (prelude_words.warp declared_only) and the analyzer takes as they are
 # Every compile starts with a fresh Module (fresh_module): nothing of one compile reaches the next
-class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; runtime_bound: bool = no; texts: map = {}; first_text_segment: int = 0; globals: map = {}; global_order: list = []; global_firsts: map = {}; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; case_spellings: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: map = {}; class_words: map = {}; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; main_globals: map = {}; early_globals: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; literal_texts: map = {}; literal_inits: list = []; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; relocating: bool = no; relocations: list = []; own_from: list = []; left_out: map = {}; runtime_types: int = 0; runtime_image: any = ø; runtime_calls: any = ø; runtime_sites: any = ø; relocates_program: bool = no; shakes_runtime: bool = no; shaking: any = ø; linked_images: list = []; linked_places: map = {}; linked_own_names: list = []; linked_words: map = {}; linked_class_names: map = {}; linked_reach: map = {}; linked_owners: map = {}; marks: map = {}; global_marks: map = {}; int_globals: map = {}; warned: map = {} }
+class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; runtime_bound: bool = no; texts: map = {}; first_text_segment: int = 0; globals: map = {}; global_order: list = []; global_firsts: map = {}; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; case_spellings: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: map = {}; class_words: map = {}; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; main_globals: map = {}; early_globals: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; literal_texts: map = {}; literal_inits: list = []; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; relocating: bool = no; relocations: list = []; own_from: list = []; left_out: map = {}; runtime_types: int = 0; runtime_image: any = ø; runtime_calls: any = ø; runtime_sites: any = ø; relocates_program: bool = no; shakes_runtime: bool = no; shaking: any = ø; linked_images: list = []; linked_places: map = {}; linked_own_names: list = []; linked_words: map = {}; linked_class_names: map = {}; linked_reach: map = {}; linked_owners: map = {}; class_dispatchers: map = {}; dispatcher_images: map = {}; marks: map = {}; global_marks: map = {}; declared_globals: map = {}; warned: map = {} }
 
 module = Module({}, [])
 # a new compile's module, emitting the same file
@@ -391,7 +393,7 @@ opaque_form(view: View): text := {
 	"a " + kind
 }
 opening_of(bracket: text): text := if bracket == "" then "(" else bracket
-bracket_pair(bracket: text): text := {"(": "()", "[": "[]", "{": "{}"}[opening_of(bracket)] ?? "()"
+bracket_pair(bracket: text): text := {"(": "()", "[": "[]", "{": "{}"}.get(opening_of(bracket)) ?? "()"
 
 # a function made with no parameters, its body given later or its code written by the caller
 # `: any` until card class-named
@@ -462,7 +464,9 @@ shared_names(statements: list) := {
 	declared = main_global_names(statements)
 	assigned = {}
 	for s in statements {
-		if type(s) is key and op_of(s) in assignment_operators and key_of(s) is symbol and name_of(key_of(s)) not in declared { assigned[name_of(key_of(s))] = yes }
+		# (a typed one too, `level: int = 0`)
+		target = if type(s) is key and op_of(s) in assignment_operators then assigned_variable(key_of(s)) else ø
+		if target is symbol and name_of(target) not in declared { assigned[name_of(target)] = yes }
 	}
 	if line_module { return assigned }
 	read_free = {}
@@ -840,12 +844,16 @@ is_global(body: Body, name: text): bool := name not in body.names and global_key
 names_a_type_value(name: text): bool := is_tested_type_word(name) or name == "type" or name in module.classes
 # a name with its first letter capitalized, `later` → Later, the case a lowercase bare name may mean
 folded_case(name: text): text := if name == "" then name else name[0 ..< 1].upper() + name[1 ..]
+# a main-level value a function meets before main's statement declares it: its global, declared then
+def declared_before_main(body: Body, name: text) {
+	if name not in body.names and name not in body.globals and body.function.name != "main" { declared_early(global_key(body, name)) }
+}
 def local_value(body: Body, n: Node): TypedCode {
 	name = name_of(n)
 	# a main-level value read by a function compiled before main's assignment declares it, one an earlier value's
 	# call reaches (`cells = int[cell_count(3, 4)]` in front of reals' largest_exact_radicand): its global, a node
 	# until a reading learns its kind (later_kinds), which main's assignment then sets
-	if name not in body.names and is_main_value(name) and name not in body.globals and body.function.name != "main" { declared_early(global_key(body, name)) }
+	if is_main_value(name) { declared_before_main(body, name) }
 	if is_global(body, name) {
 		entry = module.globals[global_key(body, name)]
 		return TypedCode(entry#2, [op.global_get] + relocatable(relocated.globals, entry#1), module.global_marks.get(global_key(body, name)) ?? 0)
@@ -930,6 +938,8 @@ def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	# a shared main-level variable is main's to assign: a function's assignment of that name makes its own local,
 	# unless the function declared it `global`
 	is_shared = name in module.shared and name not in body.globals
+	# (a global main declares, assigned by a function compiled first: task_stepped's running_task, never a local)
+	if name in module.main_globals { declared_before_main(body, name) }
 	if name not in body.names and is_shared and body.function.name == "main" { return declare_global(global_key(body, name), value) }
 	if is_global(body, name) and not is_shared { return global_assignment(global_key(body, name), value) }
 	if name not in body.names and name in body.function.widened { kind = body.function.widened[name] }
@@ -1064,7 +1074,7 @@ def global_declaration_code(body: Body, declaration: Node): TypedCode {
 	kind = if written == ø then ø else declared_kinds.get(aliased_type(written))
 	body.globals[name_of(name)] = yes
 	# `global w: int = 1280` wraps as a declared int local does: `r * w` of fast ints stays an i64 (card untyped-local)
-	if kind == ValueKind.Int { module.int_globals[global_key(body, name_of(name))] = yes }
+	if kind != ø { module.declared_globals[global_key(body, name_of(name))] = kind }
 	declare_global(global_key(body, name_of(name)), if kind == ø then value else admitted(settled(value, kind), kind))
 }
 def declare_global(name: text, value: TypedCode): TypedCode {
@@ -1095,6 +1105,10 @@ def declared_global(name: text, kind: ValueKind): list {
 	module.globals[name]
 }
 def global_assignment(name: text, value: TypedCode): TypedCode {
+	# a typed global keeps its type as a typed local does: `canvas_width = width` of an untyped width is checked as an int,
+	# never widening it to a node whose every product then grows boxed (card inside-linked)
+	declared = module.declared_globals.get(name)
+	if declared != ø { value = admitted(value, declared) }
 	entry = module.globals[name]
 	index = relocatable(relocated.globals, entry#1)
 	if global_widens(name, entry#2, value.kind) and widens_later(global_slot(name), joint_kind(entry#2, value.kind)) { return TypedCode(entry#2, [op.unreachable]) }
@@ -1182,6 +1196,8 @@ is_spaced_call(body: Body, n: Node): bool := {
 	if not (bracket_of(n) == "" and separator_of(n) == " " and #n > 1 and n#1 is symbol) { return no }
 	name = name_of(n#1)
 	if name in body.names { return no }
+	# a class's name before a value makes one, `hex 255`, `P 3`; before a block it is the class's literal, `P {x: 1}`
+	if name in module.classes { return not (is_group(n#2) and bracket_of(n#2) == "{") }
 	if name in module.functions { return takes_arguments(module.functions[name], items_of(n)[1..]) }
 	lines_of(typed_lines, unaliased(name)).any(line => takes(line.signature, #n - 1))
 }
@@ -1312,7 +1328,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 	if is_curly_list(n) { return curly_list_value(body, items_of(n)) }
 	# a call of a program's function it can't take: refused naming the count
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.functions { return call(body, module.functions[name_of(n#1)], items_of(n)[1..]) }
-	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) not in body.names and is_unknown_word(name_of(n#1)) { return program_error("no function " + name_of(n#1), unknown_word_fix(name_of(n#1))) }
+	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) not in body.names and not has_meaning(name_of(n#1)) { return program_error("no function " + name_of(n#1), unknown_word_fix(name_of(n#1))) }
 	if not (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { refuse(form_of(n)) }
 	# `div { p{"x"} }`, a word nothing knows before a block, once every word the emitter knows (return, global …) is
 	# taken: the data tag `div{…}`, one form with it
@@ -1400,7 +1416,8 @@ def key_expression(body: Body, n: Node): TypedCode {
 	if operator == Op.Hash and left != ø and subscript_name(right) != ø { return field_read(body, expression_code(body, left), subscript_name(right)) }
 	if operator == Op.Hash and left != ø and is_shifted_index(right) {
 		target = expression_code(body, left)
-		if target.kind == ValueKind.Node { return runtime_call("node_get", [target, TypedCode(ValueKind.Node, boxed(expression_code(body, key_of(right))))]) }
+		# (a recursive call's result not yet known, pending, as the node it may be, as length_code counts it)
+		if target.kind == ValueKind.Node or target.kind == pending { return runtime_call("node_get", [target, TypedCode(ValueKind.Node, boxed(expression_code(body, key_of(right))))]) }
 	}
 	if operator == Op.AddAssign {
 		target = expression_code(body, left)

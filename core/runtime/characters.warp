@@ -106,6 +106,9 @@ text_char(t: text, index: int): Node := {
 # (`src[start..i]`) takes linear time. A short text walks from its start and leaves
 # the walks to the long ones (card text-cache-lru)
 character_start(t: text, index: int): int := {
+	global walked_index
+	global walked_at
+	global walked_before
 	if is_ascii_text(t) { return ascii_offset(t, index) }
 	if byte_count(t) < short_text() { return character_from_start(t, index) }
 	if walk_reaches(t, index) == 0 { swap_walks() }
@@ -139,6 +142,9 @@ back_reach(): int := 256
 # character: nothing joins an ASCII character to what precedes it, \r\n aside) and the characters counted from there;
 # a walk over another text, or none within back_reach, starts over at t's start
 walk_back(t: text, index: int): int := {
+	global walked_index
+	global walked_at
+	global walked_before
 	if not same(t, walked_text) and same(t, other_text) { swap_walks() }
 	if not same(t, walked_text) or byte_count(t) < walked_bytes { return walk_from_start(t) }
 	while walked_index > index {
@@ -156,6 +162,11 @@ walk_back(t: text, index: int): int := {
 	0
 }
 walk_from_start(t: text): int := {
+	global walked_text
+	global walked_bytes
+	global walked_index
+	global walked_at
+	global walked_before
 	walked_text = t
 	walked_bytes = byte_count(t)
 	walked_index = 1
@@ -171,6 +182,16 @@ walk_reaches(t: text, index: int): int := {
 	1
 }
 swap_walks(): int := {
+	global walked_text
+	global other_text
+	global walked_bytes
+	global other_bytes
+	global walked_index
+	global other_index
+	global walked_at
+	global other_at
+	global walked_before
+	global other_before
 	text = walked_text
 	walked_text = other_text
 	other_text = text

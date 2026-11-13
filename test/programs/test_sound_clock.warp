@@ -13,3 +13,10 @@ at(0) { play(C4, 5ms) }
 silence(0.01)
 at(0.05) { play(E4, 5ms) }
 save(sound, "sound_clock_mix.wav") > 0' true
+
+# rest_is_the_musicians_word (card rest-keyword; silence says the same)
+is! 'use sound
+at(0) { play(C4, 5ms) }
+rest(0.01)
+at(0.05) { play(E4, 5ms) }
+save(sound, "sound_clock_rest.wav") > 0' true

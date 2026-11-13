@@ -25,6 +25,12 @@ MEMBER_SUFFIX = "_member"
 USE_WORD = "use"
 FROM_WORD = "from"
 FOREIGN_CALL = "foreign_call"
+# each js call's value goes through it: a promise the page keeps is waited for (lib/prelude.warp)
+FOREIGN_SETTLED = "foreign_settled"
+# a function handed to js with its parameters' count, and the module that keeps it for js to call back
+# (lib/callbacks.warp js_function)
+JS_FUNCTION = "js_function"
+CALLBACKS_MODULE = "callbacks"
 SETTER_PREFIX = "set "
 GLOBAL_SCOPE = "globalThis"
 # the page's window itself, which WebIDL declares as no attribute
@@ -38,6 +44,8 @@ PAGE_ELEMENT_TYPE = "HTMLElement"
 GLOBAL_INTERFACES = ["Window", "WindowOrWorkerGlobalScope", "WorkerGlobalScope", "WindowLocalStorage", "WindowSessionStorage"]
 # read from lib/ the first time a program reaches the page's js (load on demand)
 WEBIDL = "web.webidl"
+# ECMAScript's own globals (Math, JSON, Reflect), written as WebIDL beside the web's
+ECMASCRIPT_WEBIDL = "ecmascript.webidl"
 use "js_globals/webidl.warp"
 
 # --- the program ---
@@ -53,17 +61,18 @@ foreign_globals(program: Node): Node := {
 	ids = page_ids(scopes, names_bound_in(program))
 	elements = page_elements(program, ids)
 	if #names == 0 and #ids == 0 and #elements == 0 { return program }
-	scope = JsScope()
+	scope = JsScope(arities: function_arities(program))
 	for used in uses { scope.globals[used#2] = if used#1 == JS_RUNTIME then js_global_type(used#2) else used#1 }
 	for id in ids { scope.elements[id] = yes }
 	for id in elements { scope.dollar_elements[PAGE_MARK + id] = id }
 	lowered = bottom_up(program, n => js_lowered(n, scope))
-	if markup then page_shown_first(lowered) else lowered
+	if scope.hands_functions { lowered = first_statement(lowered, use_statements([CALLBACKS_MODULE])#1) }
+	if markup then first_statement(lowered, call_node(symbol(PAGE_SHOWN_IN_JS), [])) else lowered
 }
 # a page reaching the page's js has its markup in the js runtime's document (lib/markup.warp page_in_js): natively
 # the hidden web view then holds `who` for `who.focus()`
 PAGE_SHOWN_IN_JS = "page_shown_in_js"
-page_shown_first(program: Node): Node := separated(bracketed([call_node(symbol(PAGE_SHOWN_IN_JS), [])] + statements_in(program), ""), ";")
+first_statement(program: Node, statement: Node): Node := separated(bracketed([statement] + statements_in(program), ""), ";")
 # A program with markup reads the page's own globals without `use js` (decision page-globals-implicit): `window` and
 # the global scope's attributes holding an object (document, location, localStorage, navigator …), typed as with
 # `use js`; a name the program binds itself is its own. Natively they are the webview's, else foreign_call's error
@@ -128,6 +137,26 @@ class JsScope {
 	calls: map = {}
 	elements: map = {}
 	dollar_elements: map = {}
+	arities: map = {}
+	hands_functions: bool = no
+}
+# the parameters' count of each function the program defines, `f(x) := …` or `f = x => …`, by its name
+function_arities(program: Node): map := {
+	arities = {}
+	for statement in flat_statements(program) {
+		if is_key(statement, Op.Define) and is_group(key_of(statement)) { arities[head_word(key_of(statement))] = #parameters_in(items_of(key_of(statement))[1 ..]) }
+		if is_key(statement, Op.Assign) and key_of(statement) is symbol and is_lambda(value_of(statement)) { arities[name_of(key_of(statement))] = lambda_arity(value_of(statement)) }
+	}
+	arities
+}
+lambda_arity(n: Node): int := #parameters_of(arrow_parameters(n))
+# a function given to js, a lambda or one the program defines, as js_function(f, its parameters' count); any other
+# argument as it is (a function whose parameters the lowering can't see is refused where it crosses)
+handed_to_js(argument: Node, scope: JsScope): Node := {
+	arity = if is_lambda(argument) then lambda_arity(argument) else if argument is symbol and scope.arities.has(name_of(argument)) then scope.arities[name_of(argument)] else -1
+	if arity < 0 { return argument }
+	scope.hands_functions = yes
+	call_of(JS_FUNCTION, [argument, arity])
 }
 # [runtime, name, aliased] of `use js Math`, `use js "path"`, `use python json`, `use json from python` (the alias);
 # ø for another statement
@@ -183,22 +212,25 @@ js_receiver(n: Node, scope: JsScope): list? := {
 # the foreign call of a member checked by its interface, the interface it gives noted when it is one
 js_call(receiver: list, member: text, called: int, arguments: list, scope: JsScope): Node := {
 	given = js_member_type(receiver#2, member)
-	given_arguments = [receiver#1, member, called, bracketed(arguments, "[")]
-	call = if is_library_runtime(receiver#2) then call_of(receiver#2 + MEMBER_SUFFIX, given_arguments) else call_of(FOREIGN_CALL, [JS_RUNTIME] + given_arguments)
+	library = is_library_runtime(receiver#2)
+	given_arguments = [receiver#1, member, called, bracketed(if library then arguments else arguments.map(argument => handed_to_js(argument, scope)), "[")]
+	call = if library then call_of(receiver#2 + MEMBER_SUFFIX, given_arguments) else call_of(FOREIGN_SETTLED, [call_of(FOREIGN_CALL, [JS_RUNTIME] + given_arguments)])
 	if given != UNCHECKED { scope.calls["${call}"] = given }
 	call
 }
 # `x = <a js value>` makes x a js variable of its interface; `receiver.member = v` sets the member
 js_assigned(n: Node, scope: JsScope): Node := {
-	target = key_of(n)
+	target = foreign_called(key_of(n))
 	value = value_of(n)
 	if is_group(target) and #target == 6 and target#1 == symbol(FOREIGN_CALL) and target#5 == 0 {
-		return call_of(FOREIGN_CALL, [JS_RUNTIME, target#3, SETTER_PREFIX + target#4, 1, bracketed([value], "[")])
+		return call_of(FOREIGN_CALL, [JS_RUNTIME, target#3, SETTER_PREFIX + target#4, 1, bracketed([handed_to_js(value, scope)], "[")])
 	}
 	written = "${value}"
 	if target is symbol and scope.calls.has(written) { scope.variables[name_of(target)] = scope.calls[written] }
 	n
 }
+# the foreign_call a lowered js call settles (js_call), the node itself else
+foreign_called(n: Node): Node := if is_group(n) and #n == 2 and n#1 == symbol(FOREIGN_SETTLED) then n#2 else n
 
 # [receiver, interface] of a global: a library runtime's is its import, a js global its name as foreign_call takes it
 global_receiver(name: text, interface: text): list := [if is_library_runtime(interface) then call_of(interface + IMPORT_SUFFIX, [Text(name)]) else Text(name), interface]
@@ -231,7 +263,7 @@ js_member_type(interface: text, member: text): text := {
 	if interface == UNCHECKED or is_library_runtime(interface) { return interface }
 	found = webidl_member_of(interface, member)
 	if member == CONSTRUCTOR_MEMBER and found != ø { return interface }
-	if found == ø { raise "js: " + interface + " has no " + (if member == CONSTRUCTOR_MEMBER then "constructor" else member) + " (lib/web.webidl)" }
+	if found == ø { raise "js: " + interface + " has no " + (if member == CONSTRUCTOR_MEMBER then "constructor" else member) + " (lib/*.webidl)" }
 	if webidl().has(found.type) then found.type else UNCHECKED
 }
 # the member of a definition, its parents' and its mixins' included
@@ -249,6 +281,6 @@ webidl_member_of(name: text, member: text): WebIdlMember? := {
 # name → WebIdlDefinition: the interfaces, mixins, namespaces and dictionaries with their partials, read once
 global webidl_definitions = ø
 webidl(): map := {
-	if webidl_definitions == ø { webidl_definitions = webidl_read(library_data(WEBIDL)) }
+	if webidl_definitions == ø { webidl_definitions = webidl_read(library_data(WEBIDL) + library_data(ECMASCRIPT_WEBIDL)) }
 	webidl_definitions
 }

@@ -4,6 +4,7 @@ use "../analysis/kinds.warp"
 use "maps.warp"
 use "nodes.warp"
 use "text.warp"
+use "text_words.warp"
 use "types.warp"
 use "../emitter/byte_codes.warp"
 # whether `m.name` reads a field: m a map, an instance or a list of entries (a tag's `{…}`) with an entry so
@@ -15,10 +16,24 @@ has_field(m: Node, name: text): bool := {
 	if kind_code(m) == Kind.Symbol or kind_code(m) == Kind.Function { return same_bytes(name, "name") }
 	if node_is_error(m) { return is_error_message(m, name) }
 	if is_entry(m) { return same_bytes(key_name(m), name) or is_tagged_field(m, name) or same_bytes(name, "key") or same_bytes(name, "value") or same_bytes(name, "name") or same_bytes(name, "op") }
+	if is_plural_field(m, name) { return yes }
 	# (only a tag's `{…}`: the entries of `f(length: int)`'s parameters never hide its .length, card compiler-built)
 	if marked_kind(m) != Marked.Map and marked_kind(m) != Marked.Instance and not is_entry_block(m) { return no }
 	map_index(m, name) > 0
 }
+# `people.names`, `names of people` (wiki/operator.md): a plain list read by the plural of its items' field `name`,
+# each item's name; an empty list's is empty
+is_plural_field(m: Node, name: text): bool := {
+	if not is_plain_list(m) or not text_ends_with(name, "s") { return no }
+	items = unboxed_list(m)
+	#items == 0 or has_field(items#1, singular_of(name))
+}
+plural_field(m: Node, name: text): list := {
+	out = new_list(0)
+	for item in unboxed_list(m) { out += [map_get(item, singular_of(name))] }
+	out
+}
+singular_of(plural: text): text := text_slice(plural, 0, byte_count(plural) - 1)
 # `positioned(n, line, column)`: n where it was written, a $MetaNode, as `n.line` and `n.column` read it;
 # any other node without a field of that name has no field line
 positioned_node(n: Node, line: int, column: int): Node := meta_node(n, line, column)
@@ -39,7 +54,9 @@ is_position_part(m: Node, name: text): bool := {
 }
 position_part(m: Node, name: text): int := if same_bytes(name, "line") then meta_line(m) else meta_column(m)
 # a key that is no instance: `x#2` of a map `{a: 1, b: 2}`
-is_entry(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Key and marked_kind(n) != Marked.Instance
+# a key node, ø (a block's written `ø`) none: the walks over a list's items for a named entry pass it
+is_keyed(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Key
+is_entry(n: Node): bool := is_keyed(n) and marked_kind(n) != Marked.Instance
 # `n.bracket`, `n.separator` of any node: a list's own, ø of any other node; a map's entry or a
 # key's name of that name wins
 is_list_part(m: Node, name: text): bool := {

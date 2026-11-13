@@ -173,9 +173,19 @@ into a new texture and keeps it per shader text (native gpu.warp previous_kept; 
 previousFrames); a canvas paint then copies it into the canvas texture (configured COPY_DST). Kept as 8 bits per
 channel, so small fades round: subtract a step (≥ 1/255) rather than multiply by 0.99, which stalls at ~33/255.
 
-## Several passes (card gpu-multipass, design, not built)
+## Several passes (card gpu-multipass)
 web-ocean renders its sea in passes (FFT spectra, a height-field texture, then the sea that samples it); one fragment
-shader per paint covers only the last pass. The plan, in warp's words, with $previous as the model:
+shader per paint covers only the last pass. The host half is built, as library words in lib/gpu_passes.warp (no new
+syntax): `gpu_fields(width, height, names)` keeps a pair of rgba16float targets per name (rgba32float, then
+rgba8unorm, where that format cannot be a target), `gpu_pass(shader, fields, into, values)` draws the shader into
+that field and swaps the pair, and `gpu_show` / `gpu_picture` draw the shading pass at the fields' size.
+`gpu_show_sized` / `gpu_picture_sized` draw that same pass at another size (a window, a picture), the fields still
+sampled in 0..1, so a coarse grid can shade at the drawable. `gpu_show_sized` opens the window at the given point
+size and shades the drawable itself when that is a larger image of the same aspect. The passes of one frame share
+one command encoder and nothing is read back until `gpu_picture`. A shader reads a field as `field_<name>(uv)` with
+uv in 0..1, linearly when the format filters. `gpu_fields_format()` says which format. The `render()` / `waves(p.xz)`
+spelling below stays a design: it needs the compiler to see an image value, and that is not built.
+The plan, in warp's words, with $previous as the model:
 - **A pass is a painted function whose image stays on the GPU.** `waves = render(height_field, 256, 256)` (decision
   gpu-multipass: render, alias texture) gives an image value: a texture handle, no readback, never shown. Calling it again each frame renders into the same texture (kept by name like the previous frames).
 - **Another painted function reads it** as a function of a position (decision gpu-multipass): `waves(p.xz)` in
@@ -297,3 +307,42 @@ animation needs nothing: its next frame shows. SDL_RaiseWindow/SyncWindow don't 
 Checking a window by eye: capture it by window id (Quartz CGWindowList by the run's pid, screencapture -l), bring it
 to the front with System Events `set frontmost of (first process whose unix id is <pid>)`; SIGTERM does not end a
 held still picture, kill -9 by pid.
+
+## One shader (card shader-value, plan 2026-11-12)
+Today six ways write GPU code: shader blocks with `$holes`, warp functions translated by lib/shaders.warp,
+compute_toy kernels, raw gpu_compute, GPU lists, gpu_fields/gpu_pass multipass (and `@gpu` maps, broken since the
+Rust emitter left). They all end in one place: WGSL text plus a values map handed to a host. The plan makes that the
+one shape: **one Shader value, one hole table, one resource model, two words.**
+1. Shader value: every form yields one. Its sources are a warp function (canonical: `paint(julia)`) or a
+   `shader { … }` block (the WGSL escape hatch). The block reader detects the dialect by its entry point: `@fragment
+   fn main` WGSL, `main_image` compute.toys (compute_toy becomes an identity alias), later `mainImage` Shadertoy.
+2. One hole table in lib/shaders.warp: time, frame, width, height, size, mouse, mouse_down, mouse_wheel, key, with
+   their aliases (u_time, Time, iTime …) as aliases in the same table. One compile-time scanner; the hosts receive
+   the hole list and stop keeping their own (gpu.warp hole_value, host-gpu.js builtinValues, compute_toys Time/Mouse).
+   One rule fills the holes of any call whose argument is a Shader, instead of one rule per entry word.
+3. Fields are the one resource (Taichi's field, Halide's Func): shape, element type, lifetime. The compiler picks
+   buffer or texture from the use (sampled or drawn into → texture; atomics, structs, scatter → buffer) and refuses
+   loudly where uses conflict. A list of shaders runs in list order, as a list of notes is a melody:
+   `paint([advect, pressure, show])`; the reads/writes graph is only checked (a read nobody wrote this frame or last
+   is refused with a fix-it), never used to reorder. Shadertoy's rule: a read sees the latest write earlier in the
+   frame, else last frame's value; so `$previous` is just a read-before-write, persistence follows from the dataflow,
+   and a pass reading and writing one field gets two copies swapped (never read_write textures, which core WebGPU
+   allows only for r32 formats). gpu_fields/gpu_pass/gpu_show go into it. Culling, aliasing, async can come later
+   behind the same list. Sources: Frostbite FrameGraph GDC 2017, shadertoy.com/howto, docs.isf.video multipass,
+   docs.taichi-lang.org, usegpu.live.
+4. Two words: `paint(s)` draws; computing is `xs.map/reduce/scan(f)` (Futhark's forms, neighbours may fuse) on a GPU list or under `@gpu`, through the same translator
+   grown to compute kernels (this brings back the broken `@gpu` maps, wiki/graphics.md:95); a raw WGSL kernel runs
+   with `run(kernel, lists)`. gpu_compute, gpu_render, gpu_pass, gpu_show become aliases, then leave.
+5. The values layout is written down once (here) and both hosts implement it.
+Phases, each landing alone: (a) hole table + one scanner + one rule; (b) dialect detection, compute_toy alias;
+(c) fields subsume $previous and gpu_passes, paint(list); (d) compute kernels from warp functions, @gpu maps;
+(e) remove the duplicates, samples written the canonical way, wiki graphics.md (wiki text to the Interviewer).
+Core cost: none in core/; extensions/shader_blocks and the hole rules shrink; lib/shaders.warp grows.
+- (a) done: the table is SHADER_HOLES in extensions/rules/shader_holes.warp, not lib/shaders.warp: the block reader
+  and the rule both run inside the compiler, which uses no lib module. The block reader keeps no hole list of its own;
+  one rule `$f($s, $w, $h, $v...)` for paint and gpu_render fills the holes (gpu_render(s, w, h, values) did not).
+  The hosts still list the built-in holes they fill; that list goes when (c) changes what they receive.
+- (b) done: a rule reads the dialect off the entry point where a shader the program assigns is painted or rendered:
+  `fn main_image` without `@fragment` becomes compute_toy(s); compute_toy of a fragment shader is that shader. The
+  block itself stays the kernel as written, which compute_toy(code, picture) needs. The program still says `use
+  compute_toys` (a word a rule writes brings no module; without it the compile says "fix: use compute_toys").

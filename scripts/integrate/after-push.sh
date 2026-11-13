@@ -242,7 +242,7 @@ install_native() {
 			rsync -aL "$TREE/lib/compiler/native/" "$folder.new/compiler/native/"
 	else
 		rsync -aL --exclude /data "$TREE/lib/" "$folder.new/"
-	fi || { "${failed[@]}" "native warp: lib/ did not copy" --urgent; rm -rf "$folder.new"; return 1; }
+	fi && cp "$TREE/scripts/warp-crate" "$folder.new/" || { "${failed[@]}" "native warp: lib/ did not copy" --urgent; rm -rf "$folder.new"; return 1; }
 	native_built "$folder.new" "$MAIN_WARP" ||
 		{ "${failed[@]}" "native warp: warp build native core/native/warp.warp failed" --urgent; rm -rf "$folder.new"; return 1; }
 	# a folder of this tip already there (the installed one, a second install of one tip) is set aside and put back when
@@ -276,6 +276,16 @@ gate_failures() {
 	{ grep -a '^FAIL' "$1" || grep -a '^tier .*: RED' "$1"; } | head -3 | tr -s ' ' | paste -sd ';' -
 }
 
+# the cards the cloud merge queue landed since the last tip (.github/workflows/land.yml): it has no board, so each closes
+# here at its merge commit "Merge branch 'land/<card>' (card <card>)"; a card closed already (a Mac landing) stays as is
+closed_landed_cards() {
+	local key commit
+	git -C "$TREE" log --merges --format='%H %s' "$since..$tip" | sed -n "s|^\([0-9a-f]*\) Merge branch 'land/[^']*' (card \([^)]*\)).*|\2 \1|p" |
+		while read -r key commit; do
+			todo show "$key" 2>/dev/null | head -1 | grep -q '^\[Done\]' || todo done "$key" "$commit" >/dev/null || say "card $key did not close"
+		done
+}
+
 # watch <commit>: install its compilers, then (unless main moved on meanwhile) the slow tiers
 watch() {
 	tip=$1
@@ -285,6 +295,7 @@ watch() {
 	# the repeats main still holds, listed for cards (card repeated-code-check)
 	"$scripts/repeated-code.sh" "$TREE" --report
 	echo "$tip" >"$state/handled"
+	[ -z "$slow" ] && closed_landed_cards
 	# every stage builds with the installed native warp: without one, nothing installs (relink ~/dev/bin/warp by hand)
 	local missing
 	missing=$(installed_folder 2>&1 >/dev/null) || { red "$missing" --urgent; return 1; }
@@ -316,13 +327,16 @@ watch() {
 
 # the user's playground (web/playground/warp-lib) runs the compilers of the tip just installed, not the ones of its last
 # manual build (card after-push-refresh): built in the tree at that tip, so main moving meanwhile cannot make build.sh
-# refuse it, kept in the installed folder (pruned with it) and linked from the user's checkout
+# refuse it, kept in the installed folder (pruned with it) and linked from the user's checkout, whose served-files.js is
+# written anew: a lib file newer than its last full build was unserved, "the library … has no ecmascript.webidl" (card
+# after-push-page-smoke-1112)
 playground_refreshed() {
 	local folder log=$state/playground-build.log built=$TREE/web/playground/warp-lib page=$MAIN_CHECKOUT/web/playground/warp-lib
 	folder=$(installed_folder) || return 1
 	"$TREE/web/playground/build.sh" --lib "$TREE/lib" compiler >"$log" 2>&1 &&
 		rm -rf "$folder/playground-lib" && mv "$built" "$folder/playground-lib" &&
 		{ [ -L "$page" ] || rm -rf "$page"; } && linked "$folder/playground-lib" "$page" &&
+		"$MAIN_CHECKOUT/web/playground/build.sh" served >>"$log" 2>&1 &&
 		page_smoked ||
 		say "the user's playground not refreshed: $(tail -1 "$log" | cut -c1-160)"
 }

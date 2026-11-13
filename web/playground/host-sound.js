@@ -5,7 +5,7 @@
 const SAMPLE_OFFSET = 32768;
 const DEFAULT_SAMPLE_RATE = 22050;
 const WAV_HEADER_BYTES = 44;
-// play of a signal (src/sound/mod.rs play_signal): computed this many samples at a time
+// play of a signal (lib/sound.warp, play(hum, 2s)): computed this many samples at a time
 const SIGNAL_BLOCK = 512;
 const FULL_SCALE = 32767;
 // a published site has no page that decodes a sound file
@@ -14,8 +14,6 @@ const WITHOUT_PLAYGROUND = "decoded in the playground and by the warp CLI, not o
 // checked every SIGNAL_POLL_MS (src/sound/mod.rs SIGNAL_AHEAD, SIGNAL_POLL)
 const SIGNAL_AHEAD_SECONDS = 0.1;
 const SIGNAL_POLL_MS = 10;
-// heard, a voice queues at most this far ahead of the speaker before its next sound waits (src/sound/mod.rs PLAY_AHEAD)
-const PLAY_AHEAD_SECONDS = 0.5;
 // a linear float array's block: [count: i64][count f64 cells] (src/wasm_emitter/lists/linear_arrays.rs)
 const LINEAR_CELL_BYTES = 8;
 
@@ -181,7 +179,7 @@ function pageDecoded(name) {
 }
 
 // lib/sound.warp's host words in the page (natively lib/host/native_host/sound.warp; card sound-direct): samples go to the
-// run's voice as sound_samples' do, a file plays on the page as play_file's, a decoded file's 16-bit values come from
+// run's voice as sound_samples' do, a file plays on the page as play's, a decoded file's 16-bit values come from
 // wavFrames or the page's decoder, at the rate and channel count asked (0: the file's), linearly resampled. A sound
 // played answers 0 as natively; MIDI goes to the page's Web MIDI on the voice's clock, the device lists stay the page's
 function soundWords(holder, program) {
@@ -192,6 +190,9 @@ function soundWords(holder, program) {
 			holder.sounded(Array.from({ length: bytes.length >> 1 }, (_, at) => view.getInt16(2 * at, true) + SAMPLE_OFFSET), Number(rate), Number(channels));
 			return 0n;
 		},
+		// the page's voice kept around a task and set again (host-tasks.js keptVoice, lib/sound.warp voice_kept)
+		sound_voice_kept: () => BigInt(self.keptVoice?.() ?? 0),
+		sound_voice_back: voice => { self.voiceBack?.(Number(voice)); return 0n; },
 		sound_file_played: path => {
 			STD_ADAPTERS.sound.play_file.call({ holder }, guestText(program(), path));
 			return 0n;
@@ -246,13 +247,12 @@ function resampled({ rate: own, channels, values }, rate) {
 addHostPart({
 	words: (holder, hooks, { program }) => {
 		// samples (amplitude + SAMPLE_OFFSET, stereo interleaved) queued on the voice, for the page and save sound; a
-		// signal's blocks keep its first one's handle. Heard, once the voice is within PLAY_AHEAD_SECONDS of the speaker
-		// (but in an `at`, which places its sounds itself). The handle
+		// signal's blocks keep its first one's handle. lib/sound.warp paces them (waited_till), main only, as a task's
+		// wait would hold main. The handle
 		holder.sounded = (samples, rate, channels, handle) => {
-			while (self.pageSystemValues?.heard && !self.insideAt?.() && (self.soundsQueued?.() ?? 0) > PLAY_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
 			const { place, at } = self.voiceSounded?.(samples.length / channels / rate) ?? {};
 			const sound = { samples, rate, channels };
-			hooks.sound?.({ ...sound, at, handle, loop: self.currentVoice?.().loop }); // a live loop's (card playground-live)
+			hooks.sound?.({ ...sound, at, place, handle, loop: self.currentVoice?.().loop }); // a live loop's (card playground-live)
 			const own = handle ?? self.lastSoundHandle?.() ?? 0;
 			(holder.run.unrenderedSounds ??= []).push({ ...sound, place, handle: own });
 			return own;
@@ -281,7 +281,7 @@ addHostPart({
 			inputs: () => { throw new Error("midi.inputs: the playground's page owns the MIDI devices and a program cannot wait for their list"); },
 			receive: () => { throw new Error("midi.receive: MIDI input does not reach a playground program yet (Web MIDI answers on the page, not in the program's Worker)"); },
 		},
-		// `play ./song.mp3`, `stop_sound` (lib/sound.warp, card sound-library): the page plays it with an <audio>
+		// `play ./song.mp3`, `stop(sound)` (lib/sound.warp, card sound-library): the page plays it with an <audio>
 		// (worker.js self.playSoundFile, playground.js); a run without a page (tests, node) stays silent, as natively
 		sound: {
 			// a written file (a rendered WAV) goes to the page as its bytes, a served or remote one by its URL; a local file
@@ -293,16 +293,16 @@ addHostPart({
 				self.playSoundFile?.(fileUrl(name), written ? readBytes(name) : undefined);
 				return self.lastSoundHandle?.() ?? 0;
 			},
-			// stop_sound(handle) the sound play gave that handle (card sound-pro), handle 0 all of them
+			// stop(h) the sound play gave that handle (card sound-pro), handle 0 all of them
 			stop: handle => { Number(handle) ? self.stopSound?.(Number(handle)) : self.stopSoundFiles?.(); return null; },
 			last: () => self.lastSoundHandle?.() ?? 0,
-			// fade_sound(handle, gain, seconds) (src/sound/mod.rs fade): the page ramps the playing sound, save sound from where
+			// fade(h, gain, seconds) (src/sound/mod.rs fade): the page ramps the playing sound, save sound from where
 			// the speaker stood on this voice
 			fade(handle, gain, seconds) {
 				[handle, gain, seconds] = [handle, gain, seconds].map(Number);
 				const last = self.lastSoundHandle?.() ?? 0;
-				if (handle > last) throw new Error(`fade_sound(${handle}): no sound ${handle} in this run, which played ${last}`);
-				if (!(gain >= 0 && gain <= 1) || seconds < 0) throw new Error(`fade_sound(${handle}, ${gain}, ${seconds}): the gain is 0…1 and the seconds not negative`);
+				if (handle > last) throw new Error(`fade(${handle}): no sound ${handle} in this run, which played ${last}`);
+				if (!(gain >= 0 && gain <= 1) || seconds < 0) throw new Error(`fade(${handle}, ${gain}, ${seconds}): the gain is 0…1 and the seconds not negative`);
 				const place = (self.currentVoice?.().seconds ?? 0) - (self.soundsQueued?.() ?? 0);
 				(this.holder.run.soundFades ??= []).push({ handle, place, gain, seconds });
 				self.fadeSound?.(handle, gain, seconds);
@@ -333,7 +333,7 @@ addHostPart({
 					return blocks;
 				});
 			},
-			// play_blocks(fill, addresses, 2s) (lib/sound.warp): the program's fill(t)
+			// play(fill, addresses, 2s) (lib/sound.warp): the program's fill(t)
 			// fills the linear float arrays at `addresses` (one, or left and right), read from its memory; a
 			// fill(block: samples, t) is handed its block, the Int naming it
 			blocks(caller, addresses, seconds, rate) {

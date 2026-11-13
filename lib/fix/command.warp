@@ -5,6 +5,7 @@
 # skipped; the end of the input answers no.
 use os
 use file
+use diff
 use "fix.warp"
 
 check_word = "check"
@@ -57,51 +58,27 @@ warp_files(path: text): list := {
 # a name that means a file, never code: `x.warp`, `samples/hello/hello`
 looks_like_path(argument: text): bool := has_warp_extension(argument) or (argument.contains("/") and not argument.contains(" "))
 
-# the changed lines of old → new as `-`/`+` lines under `@@ <file>:<line>`, by their longest common subsequence
-print_diff(shown: text, old: text, new: text) := {
-	a = old.split("\n")
-	b = new.split("\n")
-	if old.ends_with("\n") { a = a[0 ..< #a - 1] }
-	if new.ends_with("\n") { b = b[0 ..< #b - 1] }
-	# common[i * width + j]: the length of the longest common subsequence of a[i..] and b[j..]
-	width = #b + 1
-	common = [0 for k in 0 ..< (#a + 1) * width]
-	i = #a - 1
-	while i >= 0 {
-		j = #b - 1
-		while j >= 0 {
-			common[i * width + j] = if a[i] == b[j] then common[(i + 1) * width + j + 1] + 1 else max(common[(i + 1) * width + j], common[i * width + j + 1])
-			j -= 1
-		}
-		i -= 1
-	}
-	i = 0
-	j = 0
+# the changed lines of old → new as `-`/`+` lines under `@@ <file>:<line>`
+shown_changes(shown: text, old: text, new: text): list := {
+	found = []
+	line = 1
 	in_hunk = no
-	while i < #a or j < #b {
-		if i < #a and j < #b and a[i] == b[j] {
-			i += 1
-			j += 1
-			in_hunk = no
-		} else {
-			if not in_hunk {
-				print "@@ " + shown + ":" + (i + 1)
-				in_hunk = yes
-			}
-			if j == #b or (i < #a and common[(i + 1) * width + j] >= common[i * width + j + 1]) {
-				print "-" + a[i]
-				i += 1
-			} else {
-				print "+" + b[j]
-				j += 1
-			}
+	for edit in diff(text_lines(old.remove_suffix("\n")), text_lines(new.remove_suffix("\n"))) {
+		if edit#1 == "keep" { in_hunk = no } else if not in_hunk {
+			found += ["@@ " + shown + ":" + line]
+			in_hunk = yes
+		}
+		if edit#1 == "insert" { found += ["+" + edit#2] } else {
+			if edit#1 == "delete" { found += ["-" + edit#2] }
+			line += 1
 		}
 	}
+	found
 }
 
 # shows the diff and asks; the next line of the input answers, its end is no
 confirmed(shown: text, old: text, new: text): bool := {
-	print_diff(shown, old, new)
+	for line in shown_changes(shown, old, new) { print line }
 	answer = input("apply? y/n ")
 	if answer == ø { print "" }
 	answer != ø and (answer.trim() == "y" or answer.trim() == "yes")

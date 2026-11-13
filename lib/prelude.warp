@@ -121,16 +121,18 @@ text_with_at(t: text, i: int, c: any): text := {
 // Python's `list(x)`: the list itself, a text's characters
 as_list(x) := x as list
 // `count x in y`, `y.count(x)`: how often x occurs as an item of a list or a character of a text, and how often part
-// occurs in a text, not overlapping: count_of("banana", "an") is 2; # counts, so a program's own count leaves them be
-count_item(xs, x) := #filter(xs, item => item == x)
-// (a walk over the bytes, nothing allocated: split made a list of every piece only to count them, card count-of-split)
-count_of(t, part) := {
-	size = byte_size(part)
+// occurs in a text, not overlapping: count("banana", "an") is 2; # counts, so a program's own count leaves them be
+occurrences(xs, x) := #filter(xs, item => item == x)
+// (a walk over the bytes, nothing allocated: split made a list of every piece only to count them, card count-of-split;
+// its counters are declared int, an untyped `at = 0` is an unbounded nat and walked 70x slower, card byte-walk)
+occurrences(t: text, part: text): int := {
+	size: int = byte_size(part)
 	if size == 0 { return #split(t, part) - 1 }
-	found = 0
-	at = 0
-	while at + size <= byte_size(t) {
-		matched = 0
+	last: int = byte_size(t) - size
+	found: int = 0
+	at: int = 0
+	while at <= last {
+		matched: int = 0
 		while matched < size and byte_at(t, at + matched) == byte_at(part, matched) { matched += 1 }
 		if matched == size { found += 1; at += size } else { at += 1 }
 	}
@@ -139,14 +141,12 @@ count_of(t, part) := {
 // the count of x in y, written `count(y, x)` or `y.count(x)` (arity_variants; `count x in y` counts a yes/no, refused): of a text its parts,
 // else its items, and of a function the items it holds for, `xs.count { |x| x > 1 }`; its own name, so `count xs`
 // stays the emitter's count
-count_in(y, x) := if y is text then count_of(y, "" + x) else if x is function then #filter(y, x) else count_item(y, x)
+count_in(y, x) := if y is text then occurrences(y, "" + x) else if x is function then #filter(y, x) else occurrences(y, x)
 // the first or last n items (fewer when xs has fewer): `xs.first(3)`, `first 3 of xs`
 first_items(xs, n) := xs[0: min(n, count(xs))]
 last_items(xs, n) := xs[max(count(xs) - n, 0): count(xs)]
 // `sort(words, {it.length})`: the items ordered by the key the function gives each (extensions/sugar/calls.warp)
 sorted_by_key(xs: list, key: function): list := list_sorted_by(xs, xs.map(key))
-// `people.sort_by(p => -p.age)`
-sort_by(xs: list, key: function): list := sorted_by_key(xs, key)
 // `sort(xs, (a, b) => a > b)`: the items in the order the function of two gives, yes where a goes before b; equal
 // items keep their order (a merge sort)
 sorted_in_order(xs: list, before: function): list := {
@@ -162,10 +162,11 @@ sorted_in_order(xs: list, before: function): list := {
 	}
 	out
 }
-// x rounded to that many digits after the point, `round(x, 2)` (core/passes/prelude_words.warp arity_variants)
-round_to(x, places) := round(x * repeated_product(10, places)) / repeated_product(10, places)
+// x rounded to that many digits after the point, `round(x, decimals: 2)` or `round(x, 2)` (core/passes/prelude_words.warp
+// arity_variants: a prelude word can't overload the runtime's round(x) yet)
+round_to(x, decimals) := round(x * repeated_product(10, decimals)) / repeated_product(10, decimals)
 // (a float's own, unboxed: the prelude is linked, its untyped words take nodes)
-round_to(x: float, places: int): float := round(x * repeated_product(10, places)) / repeated_product(10, places)
+round_to(x: float, decimals: int): float := round(x * repeated_product(10, decimals)) / repeated_product(10, decimals)
 // xⁿ of a whole n, exact, by multiplying (1/x⁻ⁿ of a negative n): the prelude writes no `^`, whose spellings link
 // big_numbers (card runtime-bridge-slots), which every program would then link. Squared and multiplied in a loop, so
 // n costs about log₂ n products and no stack (`2 ↑ 100000`); the last square is never taken, it could pass 64 bits
@@ -271,14 +272,18 @@ text_holes(t, pieces: [text], types: [text]) := {
 // symbols, which needs the grapheme runtime
 to_base(n: int, base: int, upper = false) := { if base < 2 or base > 36 { raise "to_base: the base " + text(base) + " is not 2 to 36" }; if n == 0 { return "0" }; out = ""; rest = abs(n); while rest > 0 { digit = rest % base; out = (digit + (if digit < 10 then 48 else if upper then 55 else 87)) as char + out; rest = rest /! base }; if n < 0 then "-" + out else out }
 from_base(t: text, base: int) := { if base < 2 or base > 36 { raise "from_base: the base " + text(base) + " is not 2 to 36" }; if t == "" { raise "from_base of an empty text" }; out = 0; for c in lower(t) { code = ord(c); digit = if code >= 48 and code < 58 then code - 48 else if code >= 97 and code <= 122 then code - 87 else 99; if digit >= base { raise "from_base: " + c + " is not a base-" + text(base) + " digit in " + t }; out = out * base + digit }; out }
-// how an int shown in hex or binary prints (cards hex-printing, binary-int): hex_text(255) is "0xFF", binary_text(-5)
+// how an int shown in hex or binary prints (cards hex-printing, binary-int): hex_text(255) is "0xff", binary_text(-5)
 // "-0b101"; the printer of such values calls them (wasm_emitter/numbers/radix.rs)
-radix_text(n: int, base: int, prefix: text) := (if n < 0 then "-" else "") + prefix + to_base(abs(n), base, upper: true)
+radix_text(n: int, base: int, prefix: text) := (if n < 0 then "-" else "") + prefix + to_base(abs(n), base)
 hex_text(n: int) := radix_text(n, 16, "0x")
+// a number shown in hex: hex(123), `123 as hex` and `[1, 256].map hex` show 0x7b, 0x1, 0x100, read back as the literals
+// they show; arithmetic on one gives a plain int (user 11-11)
+type hex < int
+format hex h as text := hex_text(h)
 binary_text(n: int) := radix_text(n, 2, "0b")
 // n copies of value, ø for none (list.warp fill): `n times [x]` and `int[n]` where no typed array holds them; the
 // compiler calls it (wasm_emitter/lists/list_emitter.rs), so a fractional count is the error the runtime gives
-filled_list(n, value: any) := { if n > floor(n) { raise "count must be an integer; fix: compute it with /! (floor division) or `… as int`" }; out = []; for i in 1 to n { out = out + [value] }; out }
+filled_list(n, value: any) := { if n > floor(n) { raise "count must be an integer; fix: compute it with /! (floor division) or `… as int`" }; [value for i in 1 to n] }
 // `n times {…}` runs the block n times, a plain library function (decision language-layers); `n times [x]` is n
 // copies of x, `n times "ab"` the text n times, `n times x` of a number their product
 infix operator times(n: int, body: block) := for i in 1 to n { body() }
@@ -330,14 +335,14 @@ dict(pairs) := { out = {}; for pair in pairs { out[pair#1] = pair#2 }; out }
 // copy(x), clone(x): a value of its own that a change to x no longer reaches (decisions P205-P207): deep, each
 // field, item and entry copied too; copy(x, shallow: yes) is a new one sharing what x holds. A copy keeps its class
 copy(x, shallow: bool = no) := {
-	if x is list { return x.map(item => copy_item(item, shallow)) }
+	if x is list { return x.map(item => copied(item, shallow)) }
 	made = if x is map then {} else instance_copy(x)
 	# (neither a map nor an instance: a number, a text, … is a value of its own)
 	if made === x { return x }
-	for name in keys(x) { made[name] = copy_item(x[name], shallow) }
+	for name in keys(x) { made[name] = copied(x[name], shallow) }
 	made
 }
-copy_item(item, shallow: bool) := if shallow then item else copy(item)
+copied(item, shallow: bool) := if shallow then item else copy(item)
 // Python's dict.fromkeys(ks, value) (card python-aliases): a map of each key with the one value
 fromkeys(ks, value) := { out = {}; for k in ks { out[k] = value }; out }
 // Python's xs.pop(i) and m.pop(k) (card python-aliases, declaration_lowering removed_key): the element at the 0-based
@@ -381,7 +386,9 @@ shader_floats(values) := {
 	for name in values.keys { plain[name] = shader_value(values[name]) }
 	plain
 }
-shader_value(value) := if value is list then value.map(shader_value) else float(value)
+// a text is kept: a storage array may be a file the host reads straight into the
+// GPU buffer (the baked atlas), which a float list of its bytes would rebuild
+shader_value(value) := if value is list then value.map(shader_value) else if value is text then value else float(value)
 // the words warp gives every shader, as WGSL: hash(cell), a number 0 ..< 1 that stays the same for a cell (decision
 // shader-hash); the cell taken modulo 289 keeps the sine's argument small enough for f32
 SHADER_WORDS_WGSL = {hash: "fn hash(cell: vec2f) -> f32 {\n\tlet wrapped = cell - 289.0 * floor(cell / 289.0);\n\treturn fract(sin(dot(wrapped, vec2f(127.1, 311.7))) * 43758.5453);\n}"}
@@ -416,6 +423,8 @@ sleep(amount) := slept(amount * 1000)
 
 // the wait of a sleep, ms: the tasks module's runs the tasks due meanwhile, which replaces this
 slept(ms) := sleep_ms(ms)
+// a `use js` call's value (extensions/foreign_globals.warp): a promise it gave, which the host keeps, waited for
+foreign_settled(value: any?): any? := if foreign_pending() != 0 then foreign_await() else value
 // what a module holds per task, kept around a task and given back after it (extensions/sugar/tasks.warp): nothing here, a
 // module holding some (sound's voice) defines both, which replace these
 task_context() := ø
@@ -463,6 +472,8 @@ random_codepoint() := { n = random_below(0x110000 - 0x800); if n >= 0xD800 then 
 // random(x), random(a, b): the dispatch above; random() itself is the host's float in [0, 1)
 random(x: list or number) := random_of(x)
 random(a, b) := random_between(a, b)
+// asked as a float, `x: float = random(50, 550)`, a fraction from a up to b however a and b are written (decision default-variant)
+random(a, b): float := random_fraction(a, b)
 // the machine's readings, read now by the host word system_value (Rust: lowering/signals/system_values.rs,
 // rust-harness:crates/warp-runtime host_words.rs SYSTEM_VALUES): a yes/no one is a reading other than 0, the mouse's place a float; a
 // program's own name of the same word wins
@@ -504,23 +515,6 @@ window_fullscreen() := system_value("window_fullscreen") != 0
 window.fullscreen := window_fullscreen
 window.fullscreen(full) := set_system_value("window_fullscreen", if full then 1 else 0)
 // a program cannot resize the display: set window.width or canvas.width instead
-display.width := display_width
-display.height := display_height
-// the device pixels per length (decision display-names, other names display.dpi and display.ppi), a quantity in dpi
-// that turns lengths into px, `3 cm * display.density`; a program sets it in dpi, `display.density = 300 dpi`
-display.density := display_dpi * 1dpi
-display.density(density) := set_system_value("display_dpi", density / 1dpi)
-// its other names repeat its body: a dotted definition cannot name another (`display.dpi := display.density` reads
-// display as a value) and alias takes no dotted name (card dotted-definition-naming)
-display.dpi := display_dpi * 1dpi
-display.dpi(density) := set_system_value("display_dpi", density / 1dpi)
-display.ppi := display_dpi * 1dpi
-display.ppi(density) := set_system_value("display_dpi", density / 1dpi)
-// width × height in px (other names display.dimensions and display.resolution)
-display.size := [display_width, display_height] px
-// the diagonal as a length: its nearest whole px at the density (quantities run as exact amounts, a run-time hypot is
-// a float; the prelude writes no power, which would link big_numbers into every program)
-display.diagonal := round(hypot(display_width, display_height)) * 1px / (display_dpi * 1dpi)
 // The fields of a time at run time (card time-fields-warp, wiki/time.md), called late by the emitter's
 // time_field with the time's form (TimeForm: 1 a date, its position in days; else nanoseconds since 1970), its
 // position, its zone's seconds east of UTC (a zoned time's, else 0; not `offset`: the index type's synonym) and the
@@ -644,6 +638,9 @@ convert!(value, to) := {
 class Error { message: text }
 # a value that lambdas share, the variable they change (core/passes/lambdas.warp shared captures, P124)
 class Cell { value: any }
+// a pattern written as text, which the words given it read: play(Pattern("c4 e4")) its steps (sound), format(t,
+// Pattern("yyyy-MM-dd")) a date's fields (time)
+class Pattern { written: text }
 
 // Pattern matching (wiki/pattern-matching.md): the names a pattern binds in a value as a map, ø when it doesn't fit.
 // The pattern is an arm's code quoted (core/passes/node_matches.warp asks for an arm of a list, tuple, map, text cut or
@@ -1016,7 +1013,12 @@ global event_listeners = {}
 global listener_numbers = {}
 global listening_once = {}
 global listener_counts = {}
-listen(name: any, listener: function, once: bool): int := {
+// a listener as a value: the event it listens to and its number there, so it is removed by itself, `h = on alarm {…}`
+// … `remove h`, short for `remove h from listeners of alarm` (card listener-address)
+class Listener { event: text; number: int }
+// `remove alarm` (extensions/sugar/events.warp): the listener removed from the event it listens to
+listener_removed(listener: Listener) := unlisten(listener.event, listener)
+listen(name: any, listener: function, once: bool): Listener := {
 	key = name_of(name)
 	if not (key in event_listeners) {
 		event_listeners[key] = []
@@ -1028,7 +1030,7 @@ listen(name: any, listener: function, once: bool): int := {
 	event_listeners[key] += [listener]
 	listener_numbers[key] += [listener_counts[key]]
 	listening_once[key] += [once]
-	listener_counts[key]
+	Listener(event: key, number: listener_counts[key])
 }
 emitted(name: any, data: any): any := {
 	key = name_of(name)
@@ -1040,8 +1042,10 @@ emitted(name: any, data: any): any := {
 	result
 }
 listeners_of(name: any): list := if name_of(name) in listener_numbers then listener_numbers[name_of(name)] else []
-unlisten(name: any, number: int): any := {
+// a listener by itself or by its number within the event, `remove 2 from listeners of tick`
+unlisten(name: any, listener: any): any := {
 	key = name_of(name)
+	number = if listener is Listener then listener.number else listener
 	if key in event_listeners { kept_listeners(key, i => listener_numbers[key]#i != number) }
 	ø
 }

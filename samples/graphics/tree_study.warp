@@ -1,0 +1,319 @@
+#!/usr/bin/env warp
+# One Ash Medium tree, the tree the EZ Tree demo opens on, with that preset's bark and leaf textures.
+# Textures and the mesh: samples/graphics/ez_trees/NOTICE.md. `still` paints the ash close-up at
+# 1280×720 with no window. `still grove` paints pine, oak, ash and aspen medium together.
+# `still pine hd` and `still aspen hd` fill a 1920×1080 frame with that one tree.
+# The camera matches the demo frame: eye (70, 28, 46), look (0, 22, 0), field of view 50 degrees,
+# divided by the tree's own height so the normalised mesh (height 1) sits where the demo's does.
+use bits
+use file
+use forest
+use math
+use meshlets
+use os
+
+ASH_HEIGHT = 83.6902
+PINE_HEIGHT = 52.3259
+ASPEN_HEIGHT = 72.6549
+DEMO_EYE = [70.0, 28.0, 46.0]
+DEMO_LOOK = [0.0, 22.0, 0.0]
+STUDY_FOV = 50.0 * 3.141592653589793 / 180.0
+ATLAS_PIXELS = 1024 * 512
+
+study = shader {
+struct Corner {
+	@builtin(position) at: vec4f,
+	@location(0) spot: vec2f,
+	@location(1) world: vec3f,
+	@location(2) mark: vec3f,
+	@location(3) normal: vec3f,
+}
+
+const SUN = vec3f(-0.424, 0.848, 0.318);
+const SKY = vec3f(0.620, 0.765, 0.918);
+const GROUND = vec3f(0.435, 0.561, 0.271);
+
+fn to_linear(c: vec3f) -> vec3f {
+	return pow(max(c, vec3f(0.0)), vec3f(2.2));
+}
+
+fn to_display(c: vec3f) -> vec3f {
+	return pow(clamp(c, vec3f(0.0), vec3f(1.0)), vec3f(0.4545));
+}
+
+fn ray(spot: vec2f) -> vec3f {
+	let px = spot.x * $width;
+	let py = (1.0 - spot.y) * $height;
+	return normalize($forward + $right * ((px - $centre.x) / $focal) + $up * (($centre.y - py) / $focal));
+}
+
+fn project(p: vec3f) -> vec4f {
+	let d = p - $eye;
+	let z = dot(d, $forward);
+	if (z < 0.05) {
+		return vec4f(0.0, 2.0, 0.0, 1.0);
+	}
+	let px = $centre.x + dot(d, $right) / z * $focal;
+	let py = $centre.y - dot(d, $up) / z * $focal;
+	let depth = clamp((z - $near) / ($far - $near), 0.0, 1.0);
+	return vec4f(px / $width * 2.0 - 1.0, 1.0 - py / $height * 2.0, depth, 1.0);
+}
+
+fn texel(x: i32, y: i32) -> vec4f {
+	let xx = clamp(x, 0, i32($atlas_w) - 1);
+	let yy = clamp(y, 0, i32($atlas_h) - 1);
+	let pixel = u32(yy) * u32($atlas_w) + u32(xx);
+	if ($atlas_packed < 0.5) {
+		return $atlas[pixel];
+	}
+	let v = $atlas[pixel >> 2u];
+	let lane = pixel & 3u;
+	let bits = select(select(bitcast<u32>(v.x), bitcast<u32>(v.y), lane == 1u), select(bitcast<u32>(v.z), bitcast<u32>(v.w), lane == 3u), lane > 1u);
+	return vec4f(f32(bits & 255u), f32((bits >> 8u) & 255u), f32((bits >> 16u) & 255u), f32(bits >> 24u)) / 255.0;
+}
+
+fn tree_of(tri: u32) -> u32 {
+	if (tri >= u32($spans.z)) { return 3u; }
+	if (tri >= u32($spans.y)) { return 2u; }
+	if (tri >= u32($spans.x)) { return 1u; }
+	return 0u;
+}
+
+fn sample_rect(uv: vec2f, origin: vec2f, size: vec2f) -> vec4f {
+	let u = fract(uv.x);
+	let v = fract(uv.y);
+	let px = origin.x + u * (size.x - 1.0);
+	let py = origin.y + (1.0 - v) * (size.y - 1.0);
+	let x = i32(floor(px));
+	let y = i32(floor(py));
+	let fx = fract(px);
+	let fy = fract(py);
+	let x1 = min(x + 1, i32(origin.x + size.x) - 1);
+	let y1 = min(y + 1, i32(origin.y + size.y) - 1);
+	let a = texel(x, y);
+	let b = texel(x1, y);
+	let c = texel(x, y1);
+	let d = texel(x1, y1);
+	return mix(mix(a, b, fx), mix(c, d, fx), fy);
+}
+
+fn sample_leaf(uv: vec2f, origin: vec2f, size: vec2f) -> vec4f {
+	let span = max(length(dpdx(uv)), length(dpdy(uv))) * max(size.x, size.y);
+	if (span <= 1.5) { return sample_rect(uv, origin, size); }
+	let step = span / (2.0 * max(size.x, size.y));
+	let a = sample_rect(uv + vec2f(-step, -step), origin, size);
+	let b = sample_rect(uv + vec2f(step, -step), origin, size);
+	let c = sample_rect(uv + vec2f(-step, step), origin, size);
+	let d = sample_rect(uv + vec2f(step, step), origin, size);
+	return (a + b + c + d) * 0.25;
+}
+
+fn keeps_leaf(alpha: f32, limit: f32) -> bool {
+	let band = max(fwidth(alpha), 0.02);
+	return smoothstep(limit - band, limit + band, alpha) >= 0.5;
+}
+
+fn lit(albedo: vec3f, n: vec3f, reach: f32) -> vec3f {
+	let sun = normalize(SUN);
+	let ndl = max(dot(n, sun), 0.0);
+	let hemi = mix(vec3f(0.20, 0.22, 0.14), vec3f(0.62, 0.70, 0.82), n.y * 0.5 + 0.5);
+	let direct = vec3f(1.05, 0.98, 0.86) * ndl;
+	// MeshStandard's diffuse is divided by pi; this scale is that, matched to the demo frame
+	let color = to_display(albedo * (hemi * 0.85 + direct) * 0.40);
+	let haze = 1.0 - exp(-reach * 0.08);
+	return mix(color, SKY, clamp(haze, 0.0, 0.35));
+}
+
+fn backdrop(spot: vec2f) -> vec4f {
+	let look = ray(spot);
+	if (look.y < -0.001) {
+		let reach = -$eye.y / look.y;
+		let hit = $eye + look * reach;
+		let radial = length(hit.xz);
+		if (radial < $ground) {
+			let edge = smoothstep($ground * 0.72, $ground, radial);
+			let n = normalize(vec3f(hit.x, $ground * 1.6, hit.z));
+			var green = to_linear(GROUND) * mix(1.0, 0.62, edge);
+			return vec4f(lit(green, n, reach), 1.0);
+		}
+	}
+	return vec4f(SKY, 1.0);
+}
+
+@vertex fn study_quad(@builtin(vertex_index) corner: u32, @builtin(instance_index) drawn: u32) -> Corner {
+	var out: Corner;
+	out.spot = vec2f(0.0);
+	out.world = vec3f(0.0);
+	out.mark = vec3f(0.0);
+	out.normal = vec3f(0.0, 1.0, 0.0);
+	out.at = vec4f(0.0, 2.0, 0.0, 1.0);
+	if (drawn == 0u) {
+		let uv = vec2f(f32(corner & 1u), f32((corner >> 1u) & 1u));
+		out.spot = uv;
+		out.at = vec4f(uv * 2.0 - 1.0, 1.0, 1.0);
+		return out;
+	}
+	if (drawn > u32($mesh_count)) { return out; }
+	let tri_i = drawn - 1u;
+	let tri = $triangles[tri_i];
+	let tree = tree_of(tri_i);
+	var index = u32(tri.z);
+	if (corner == 0u) { index = u32(tri.x); }
+	if (corner == 1u) { index = u32(tri.y); }
+	let place = $places[tree];
+	let c = cos(place.z);
+	let s = sin(place.z);
+	let vertex = $vertices[index].xyz;
+	let spun = vec3f(c * vertex.x - s * vertex.z, vertex.y, s * vertex.x + c * vertex.z);
+	let world = spun * place.w + vec3f(place.x, 0.0, place.y);
+	let nrm = $normals[index].xyz;
+	out.at = project(world);
+	out.world = world;
+	out.spot = vec2f($vertices[index].w, $texels[index].x);
+	out.mark = vec3f(1.0, tri.w, f32(tree));
+	out.normal = vec3f(c * nrm.x - s * nrm.z, nrm.y, s * nrm.x + c * nrm.z);
+	return out;
+}
+
+@fragment fn main(here: Corner) -> @location(0) vec4f {
+	if (here.mark.x < 0.5) { return backdrop(here.spot); }
+	let reach = length(here.world - $eye);
+	var n = normalize(here.normal);
+	let toward = normalize($eye - here.world);
+	if (dot(n, toward) < 0.0) { n = -n; }
+	let tree = u32(here.mark.z);
+	let bark = $shades[tree * 2u];
+	let leaf_shade = $shades[tree * 2u + 1u];
+	var albedo: vec3f;
+	if (here.mark.y < 0.5) {
+		let uv = vec2f(here.spot.x, here.spot.y * bark.w);
+		let tile = $tiles[tree * 3u + 1u];
+		let color = sample_rect(uv, tile.xy, tile.zw);
+		let ntile = $tiles[tree * 3u + 2u];
+		let mapped = sample_rect(uv, ntile.xy, ntile.zw).xyz * 2.0 - 1.0;
+		let q1 = dpdx(here.world);
+		let q2 = dpdy(here.world);
+		let st1 = dpdx(here.spot);
+		let st2 = dpdy(here.spot);
+		let t = normalize(q1 * st2.y - q2 * st1.y);
+		let b = normalize(cross(n, t));
+		n = normalize(t * mapped.x + b * mapped.y + n * mapped.z);
+		albedo = to_linear(color.rgb * bark.rgb);
+	} else {
+		let tile = $tiles[tree * 3u];
+		let leaf = sample_leaf(here.spot, tile.xy, tile.zw);
+		if (!keeps_leaf(leaf.a, leaf_shade.w)) { discard; }
+		albedo = to_linear(leaf.rgb * leaf_shade.rgb);
+	}
+	return vec4f(lit(albedo, n, reach), 1.0);
+}
+}
+
+folder = program_folder() + "/ez_trees/hero/"
+grove = "grove" in args
+portrait = ""
+if "pine" in args { portrait = "pine" }
+if "aspen" in args { portrait = "aspen" }
+names = if grove then ["pine_medium", "oak_medium", "ash_medium", "aspen_medium"] else if portrait == "pine" then ["pine_medium"] else if portrait == "aspen" then ["aspen_medium"] else ["ash_medium"]
+meshes = [tree_mesh(folder + name + ".eztree") for name in names]
+packed = pack_tree_meshes(meshes)
+global vertices = packed.vertices
+global texels = packed.texels
+global triangles = packed.triangles
+global mesh_count = count(packed.triangles)
+
+global normals = []
+for name in names {
+	normal_bytes = read_bytes(folder + name + ".nrm")
+	i = 0
+	while i < count(normal_bytes) {
+		normals.add([f32_at(normal_bytes, i), f32_at(normal_bytes, i + 4), f32_at(normal_bytes, i + 8), 0.0])
+		i = i + 12
+	}
+}
+
+global atlas = ""
+global atlas_w = if grove then 2048.0 else if portrait == "" then 1280.0 else 4096.0
+global atlas_h = if portrait == "" or grove then 1024.0 else 1536.0
+global atlas_packed = 0.0
+atlas_id = if grove then GROVE_ATLAS else if portrait == "" then ASH_ATLAS else NEAR_ATLAS
+baked = baked_atlas(program_folder() + "/ez_trees", atlas_id)
+if baked == ø {
+	rgba_name = if grove then "grove.rgba" else if portrait == "" then "ash.rgba" else "near.rgba"
+	eprint("no baked atlas.bin, reading " + folder + rgba_name + " (python3 scripts/ez_tree/atlas.py bakes it)")
+	rgba = read_bytes(folder + rgba_name)
+	atlas = [(0.0 + rgba[i]) / 255.0 for i in 0 ..< count(rgba)]
+} else {
+	atlas = baked[0]
+	atlas_w = baked[1]
+	atlas_h = baked[2]
+	atlas_packed = 1.0
+}
+
+global tiles = [[0.0, 0.0, 1024.0, 1024.0], [1024.0, 0.0, 256.0, 512.0], [1024.0, 512.0, 256.0, 512.0]]
+global shades = [[0.808, 0.800, 0.745, 0.2], [1.0, 1.0, 1.0, 0.5]]
+global places = [[0.0, 0.0, 0.0, 1.0]]
+global spans = [1000000.0, 1000000.0, 1000000.0, 1000000.0]
+if grove {
+	tiles = [
+		[0.0, 0.0, 512.0, 512.0], [1024.0, 512.0, 256.0, 512.0], [1280.0, 512.0, 256.0, 512.0],
+		[512.0, 0.0, 512.0, 512.0], [0.0, 512.0, 256.0, 512.0], [256.0, 512.0, 256.0, 512.0],
+		[1024.0, 0.0, 512.0, 512.0], [0.0, 512.0, 256.0, 512.0], [256.0, 512.0, 256.0, 512.0],
+		[1536.0, 0.0, 512.0, 512.0], [512.0, 512.0, 256.0, 512.0], [768.0, 512.0, 256.0, 512.0]
+	]
+	shades = [
+		[1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 0.3],
+		[1.0, 0.953, 0.820, 0.1], [0.835, 0.835, 0.804, 0.5],
+		[0.808, 0.800, 0.745, 0.2], [1.0, 1.0, 1.0, 0.5],
+		[1.0, 1.0, 1.0, 1.0], [1.0, 0.980, 0.384, 0.5]
+	]
+	pine_s = PINE_HEIGHT / ASH_HEIGHT
+	oak_s = 71.6882 / ASH_HEIGHT
+	aspen_s = ASPEN_HEIGHT / ASH_HEIGHT
+	places = [[-1.65, 0.05, 0.5, pine_s], [-0.55, -0.08, -0.2, oak_s], [0.55, 0.02, 0.25, 1.0], [1.7, 0.08, -0.4, aspen_s]]
+	at = 0.0
+	starts = []
+	for mesh in meshes {
+		starts.add(at)
+		at = at + count(mesh.levels#1.indices)
+	}
+	spans = [starts#2, starts#3, starts#4, 1000000.0]
+}
+if portrait == "pine" {
+	tiles = [[0.0, 0.0, 1024.0, 1024.0], [1024.0, 1024.0, 256.0, 512.0], [1280.0, 1024.0, 256.0, 512.0]]
+	shades = [[1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 0.3]]
+}
+if portrait == "aspen" {
+	tiles = [[3072.0, 0.0, 1024.0, 1024.0], [512.0, 1024.0, 256.0, 512.0], [768.0, 1024.0, 256.0, 512.0]]
+	shades = [[1.0, 1.0, 1.0, 1.0], [1.0, 0.980, 0.384, 0.5]]
+}
+
+frame = if portrait == "pine" then PINE_HEIGHT else if portrait == "aspen" then ASPEN_HEIGHT else ASH_HEIGHT
+eye_at = [DEMO_EYE#1 / frame, DEMO_EYE#2 / frame, DEMO_EYE#3 / frame]
+look_at = [DEMO_LOOK#1 / frame, DEMO_LOOK#2 / frame, DEMO_LOOK#3 / frame]
+if grove {
+	eye_at = [0.05, 0.62, 2.65]
+	look_at = [0.05, 0.40, 0.0]
+}
+global eye = eye_at
+global forward = normalize([look_at#1 - eye_at#1, look_at#2 - eye_at#2, look_at#3 - eye_at#3])
+global right = normalize(cross(forward, [0.0, 1.0, 0.0]))
+global up = cross(right, forward)
+global near = 0.02
+global far = if grove then 24.0 else 6.0
+global ground = if grove then 8.0 else 80.0 / frame
+global focal = 1.0
+global centre = [640.0, 360.0]
+
+width = 1280.0
+height = 720.0
+if "hd" in args {
+	width = 1920.0
+	height = 1080.0
+}
+focal = (height / 2.0) / tangent(STUDY_FOV / 2.0)
+centre = [width / 2.0, height / 2.0]
+if "still" in args or window_possible() {
+	paint(study, {depth: 1, instances: 1 + mesh_count})
+}
+[mesh_count, count(vertices), count(atlas) / 4]

@@ -6,9 +6,10 @@
 # parser.warp keeps no WrittenIndex: a number index on such a map, `d#2`, reads as the subscript `d[1]` it lowers to.
 use "walk.warp"
 use "scope.warp"
+use "definitions.warp"
 
 # the word that makes a key of a value known only at run time
-key_text_word = "string"
+key_text_word = "lookup_name"
 # the words `word(map, key, …)` that find an entry by its key
 key_words = ["collection_contains", "collection_position", "map_get_or", "map_without", "removed_value"]
 # the declared types a map variable may carry, `m: map = {}`
@@ -38,9 +39,9 @@ assigned_name(target: Node): any := match target {
 }
 
 # the name a map literal with number keys, or a map already known, is assigned to, else ø: a map stays a map through a
-# binding, `y = x`
+# binding, `y = x`; a variable declared a map, `m: map = f()`, is one whatever its value
 map_assigned(n: Node, maps: list): any := match n {
-	Key(target, Op.Assign, value): { if is_number_keyed(value) or is_map(value, maps) then assigned_name(target) else ø }
+	Key(target, Op.Assign, value): { if is_number_keyed(value) or is_map(value, maps) or is_key(target, Op.Colon) then assigned_name(target) else ø }
 	_: ø
 }
 
@@ -89,9 +90,20 @@ seen_in(parts: list, maps: list): list := {
 	map_variables(parts#2, maps.filter(name => name not in own) + parts#3)
 }
 
+# a map variable, or a call of a function declared to give a map, `f(): map := …`
 is_map(n: Node, maps: list): bool := match n {
 	Symbol(name): name in maps
+	List(items, Bracket.Round, separator): #items > 0 and items#1 is symbol and called_mark(name_of(items#1)) in maps
 	_: no
+}
+# how the map variables list a function declared to give a map
+called_mark(name: text): text := name + "()"
+# the functions a program declares to give a map, `f(): map := …`, as map_variables lists them
+map_functions(program: Node): list := statements_in(program).map(map_function).filter(name => name != ø)
+# (definitions.warp result_held has made `f(): map := e` into `f() := {the result: map = e; the result}`)
+map_function(n: Node): any := match n {
+	Key(called, Op.Define, body): { if is_round(called) and #called > 0 and called#1 is symbol and is_curly_group(body) and #body > 0 and map_assigned(body#1, []) == result_word then called_mark(name_of(called#1)) else ø }
+	_: ø
 }
 
 # the key a value names: a written text or character as it is, a number its digits, anything else its text
@@ -149,10 +161,13 @@ number_keyed(n: Node, maps: list): Node := {
 			if name != ø and name in maps and is_number_keyed(value) then Key(target, Op.Assign, text_keyed(value)) else children(n, x => number_keyed(x, maps))
 		}
 		List(items, Bracket.Round, separator): {
-			if keyed_word_call(items, maps) then List(word_call_keyed(items, maps), Bracket.Round, separator) else children(n, x => number_keyed(x, maps))
+			if keyed_word_call(items, maps) then List(word_call_keyed(items, maps), Bracket.Round, separator) else List(items.map(item => number_keyed(argument_keyed(item), maps)), Bracket.Round, separator)
 		}
 		_: children(n, x => number_keyed(x, maps))
 	}
 }
 
-number_keys(program: Node): Node := number_keyed(program, map_variables(program, []))
+# a literal with number keys given as an argument, `f({2: yes})`, is a map keyed by texts as an assigned one is
+argument_keyed(item: Node): Node := if not is_empty_map(item) and is_number_keyed(item) then text_keyed(item) else item
+
+number_keys(program: Node): Node := number_keyed(program, map_variables(program, map_functions(program)))

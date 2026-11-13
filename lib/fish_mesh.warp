@@ -1,0 +1,325 @@
+# A .fish mesh: positions, part ids and a colour a vertex, posed on the CPU and ray-tested as one mesh
+# many fish can share (notes/fish.md). Part ids are the Fish Kit's: 0 body, 1 dorsal, 2 anal, 3 tail,
+# 4 pectoral, 5 pelvic, 6 eye, 7 gill, 8 lower jaw, 9 upper jaw. paint has no vertex stage, so a frame
+# poses a few phases once and each fish is a scale, a place and a heading: the ray goes into that
+# fish's space, a bounding sphere skips the rest, and every fish tests that one posed mesh.
+# The aquarium and samples/gpu/fish.warp both call these words. The module is fish_mesh, not fish:
+# samples/gpu/fish.warp sits beside the aquarium, and `use fish` would take that sample.
+use math
+use file
+
+BODY = 0
+DORSAL = 1
+ANAL = 2
+TAIL = 3
+PECTORAL = 4
+PELVIC = 5
+EYE = 6
+GILL = 7
+JAW = 8
+UPPER = 9
+
+# the kit's cruise for this species: 0.4 m/s, a breath and a mouth at 0.8 Hz. The glb's amplitude cancels
+# against the tail swing, so the wave uses the swing. The mouth hinge is the kit's, in metres.
+CRUISE_SPEED = 0.4
+BREATH = 0.8
+GILL_MOST = 0.35
+MOUTH_MOST = 0.21
+MOUTH_JOINT = [0.19, -0.034]
+UPPER_SLIDE = 0.00542
+TURN = 6.283185307179586
+
+# `v` lines are corners, `f` lines triangles from 1, `swim` the kit's body wave
+fish_mesh(text) := {
+	positions = []
+	normals = []
+	parts = []
+	weights = []
+	folds = []
+	pivots = []
+	colors = []
+	jaws = []
+	triangles = []
+	snout = 0.0
+	reach = 1.0
+	wavelength = 1.0
+	frequency = 1.0
+	amplitude = 1.0
+	envelope = [0.0, 0.0, 0.0]
+	for line in text.split("\n") {
+		words = line.split(" ").filter(word => word)
+		if #words == 0 or words#1.starts_with("#") { continue }
+		if words#1 == "swim" {
+			snout = float(words#2)
+			reach = float(words#3)
+			wavelength = float(words#4)
+			frequency = float(words#5)
+			amplitude = float(words#6)
+			envelope = [float(words#7), float(words#8), float(words#9)]
+		}
+		if words#1 == "v" {
+			positions = positions + [[float(words#2), float(words#3), float(words#4)]]
+			normals = normals + [[float(words#5), float(words#6), float(words#7)]]
+			parts = parts + [int(words#8)]
+			weights = weights + [float(words#9)]
+			folds = folds + [float(words#10)]
+			pivots = pivots + [[float(words#11), float(words#12), float(words#13)]]
+			colors = colors + [[float(words#14), float(words#15), float(words#16), float(words#17)]]
+			jaws = jaws + [float(words#18)]
+		}
+		if words#1 == "f" { triangles = triangles + [[int(words#2), int(words#3), int(words#4)]] }
+	}
+	{
+		positions: positions, normals: normals, parts: parts, weights: weights, folds: folds, pivots: pivots,
+		colors: colors, jaws: jaws, triangles: triangles, snout: snout, reach: reach, wavelength: wavelength,
+		frequency: frequency, amplitude: amplitude, envelope: envelope
+	}
+}
+
+swim_envelope(envelope, along) := envelope#1 + envelope#2 * along + envelope#3 * along * along
+
+# tail swing and how much the fins rest open, at the species' cruise
+cruise(fish, time) := {
+	tail = 0.035 + min(CRUISE_SPEED / fish.reach / 6, 1) * 0.09
+	{cycle: fish.frequency * time, wave: tail / swim_envelope(fish.envelope, 1), slow: clamp(1 - (tail - 0.04) / 0.06, 0, 1)}
+}
+
+# rotate about a unit axis through the pivot (the kit's fin hinges)
+fish_turned(point, pivot, axis, angle) := {
+	if angle == 0 { return point }
+	c = cosine(angle)
+	s = sine(angle)
+	bend = 1 - c
+	x = axis#1
+	y = axis#2
+	z = axis#3
+	arm = point .- pivot
+	row1 = [c + x * x * bend, x * y * bend - z * s, x * z * bend + y * s]
+	row2 = [y * x * bend + z * s, c + y * y * bend, y * z * bend - x * s]
+	row3 = [z * x * bend - y * s, z * y * bend + x * s, c + z * z * bend]
+	pivot .+ [dot(row1, arm), dot(row2, arm), dot(row3, arm)]
+}
+
+# a fin, an eye, about its pivot. A pivot at the origin is none, which is this mesh's dorsal fin: it rides the wave
+fin_point(point, part, weight, fold, pivot, pose, time) := {
+	if norm(pivot) <= 0.0000001 { return point }
+	if part == DORSAL or part == ANAL { return fish_turned(point, pivot, [0, 0, 1], fold * (1 - (0.15 + pose.slow * 0.6))) }
+	if part == TAIL { return fish_turned(point, pivot, [0, 0, 1], fold * 0.22 * (1 - clamp(pose.wave * 1.5, 0, 1))) }
+	if part == PECTORAL {
+		beat = 0.5 - 0.5 * cosine(TURN * pose.cycle - weight * 0.9)
+		angle = max(0.03 + pose.slow * 0.08 + pose.slow * 0.3 * beat, 0)
+		return fish_turned(point, pivot, normalize([0.2, 1, 0]), sign(pivot#3) * weight * angle)
+	}
+	if part == PELVIC {
+		angle = -0.12 + 0.67 * pose.slow * 0.5 + 0.04 * sine(4.4 * time)
+		return fish_turned(point, pivot, [1, 0, 0], -sign(pivot#3) * weight * angle)
+	}
+	if part == EYE {
+		side = sign(pivot#3)
+		looked = fish_turned(point, pivot, [0, 1, 0], side * 0.35 * sine(time * 1.7))
+		return fish_turned(looked, pivot, [1, 0, 0], -side * 0.18 * sine(time * 2.3 + 1.1))
+	}
+	point
+}
+
+gill_open(time) := GILL_MOST * (0.5 - 0.5 * cosine(TURN * BREATH * time))
+mouth_open(time) := MOUTH_MOST * (0.5 - 0.5 * cosine(TURN * BREATH * time + 1.4))
+
+# the cover swings out. The weight is small: these are the head's own vertices, not a plate cut from the photo
+gill_point(point, part, weight, time) := {
+	if part != GILL { return point }
+	opened = gill_open(time)
+	[point#1 + weight * (1 - cosine(opened)), point#2, point#3 + sign(point#3) * weight * sine(opened)]
+}
+
+# the lower jaw, and a body vertex that carries a jaw weight, about the mouth hinge
+jaw_point(point, part, jaw, time) := {
+	amount = if part == JAW then 1 else if part == BODY then jaw else 0
+	if amount == 0 { return point }
+	angle = -mouth_open(time) * amount
+	c = cosine(angle)
+	s = sine(angle)
+	hinge = [point#1 - MOUTH_JOINT#1, point#2 - MOUTH_JOINT#2]
+	[MOUTH_JOINT#1 + hinge#1 * c - hinge#2 * s, MOUTH_JOINT#2 + hinge#1 * s + hinge#2 * c, point#3]
+}
+
+# the upper jaw slides forward as the mouth opens. This low mesh has none; the motion is the kit's
+upper_point(point, part, time) := {
+	if part != UPPER { return point }
+	opened = clamp(mouth_open(time) / 0.4, 0, 1)
+	slide = UPPER_SLIDE * opened * opened
+	[point#1 + 0.94 * slide, point#2 - 0.34 * slide, point#3]
+}
+
+# the body wave, sideways, growing toward the tail. `along` is 0 at the snout and 1 at the tail
+waved(fish, point, pose) := {
+	along = (fish.snout - point#1) / fish.reach
+	offset = fish.reach * pose.wave * swim_envelope(fish.envelope, along) * sine(TURN * (along / fish.wavelength - pose.cycle))
+	[point#1, point#2, point#3 + offset]
+}
+
+# one posed vertex. Fins and eyes first, then the mouth, then the wave, which is the kit's order
+fish_point(fish, index, time) := {
+	pose = cruise(fish, time)
+	point = fish.positions#index
+	part = fish.parts#index
+	weight = fish.weights#index
+	point = fin_point(point, part, weight, fish.folds#index, fish.pivots#index, pose, time)
+	point = gill_point(point, part, weight, time)
+	point = jaw_point(point, part, fish.jaws#index, time)
+	waved(fish, upper_point(point, part, time), pose)
+}
+
+# corners and a colour a triangle, dropping a triangle whose average alpha is below the kit's cutout
+fish_pose(fish, time) := {
+	posed = []
+	for i in 1 to #fish.positions { posed = posed + [fish_point(fish, i, time)] }
+	corners = []
+	colors = []
+	for tri in fish.triangles {
+		color = (fish.colors#(tri#1) .+ fish.colors#(tri#2) .+ fish.colors#(tri#3)) ./ 3
+		if color#4 >= 0.5 {
+			corners = corners + [posed#(tri#1), posed#(tri#2), posed#(tri#3)]
+			colors = colors + [[color#1, color#2, color#3]]
+		}
+	}
+	{corners: corners, colors: colors}
+}
+
+
+# one posed mesh, shared. corners are three a triangle, variants laid end to end; colors one a triangle,
+# the same for every phase. frames are two vec4 a fish: place and scale, then heading and phase slot.
+# fish_shown 0 draws none. The sphere radius is the posed mesh's, plus a little for the wave.
+fish_miss = 1000000000.0
+global fish_corners = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
+global fish_colors = [[1.0, 1.0, 1.0]]
+global fish_frames = [[0.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 0.0]]
+global fish_shown = 0.0
+global fish_tris = 1.0
+global fish_bound = 0.32
+
+fish_beside(folder) := {
+	path = folder + "/madai.fish"
+	if exists(path) then path else "madai.fish"
+}
+
+fish_show(corners, colors, frames, bound) := {
+	global fish_corners, fish_colors, fish_frames, fish_tris, fish_shown, fish_bound
+	fish_corners = corners
+	fish_colors = colors
+	fish_frames = frames
+	fish_tris = #colors
+	fish_shown = #frames / 2
+	fish_bound = bound
+}
+
+# the farthest posed corner from the mesh origin, plus a margin so the wave still sits in the sphere
+fish_radius(corners) := {
+	bound = 0.0
+	for p in corners { bound = max(bound, norm(p)) }
+	bound + 0.02
+}
+
+# mesh +X is the heading, mesh +Y is up, mesh +Z is to the right. A heading along +X leaves the mesh unturned.
+# Straight up has no right; this swim stays level.
+heading_right(heading) := {
+	side = cross(heading, [0.0, 1.0, 0.0])
+	length = norm(side)
+	if length < 0.0001 { return [1.0, 0.0, 0.0] }
+	side ./ length
+}
+fish_up(heading) := cross(heading_right(heading), heading)
+fish_vec3(v) := [v#1, v#2, v#3]
+
+# a world point in the fish's space. Mesh +X is the heading, +Y up, +Z to the right, then the scale.
+fish_local(point, place, heading, up, right, scale) := {
+	delta = point .- place
+	[dot(delta, heading), dot(delta, up), dot(delta, right)] ./ scale
+}
+
+# Möller–Trumbore. t is the ray parameter, -1 a miss. A non-unit direction keeps that same parameter.
+triangle_hit(origin, direction, a, b, c) := {
+	ab = b .- a
+	ac = c .- a
+	pvec = cross(direction, ac)
+	det = dot(ab, pvec)
+	if abs(det) < 0.000001 { return -1.0 }
+	s = origin .- a
+	u = dot(s, pvec) / det
+	qvec = cross(s, ab)
+	v = dot(direction, qvec) / det
+	t = dot(ac, qvec) / det
+	if u < 0 or v < 0 or u + v > 1 or t <= 0 { return -1.0 }
+	t
+}
+
+# near and far t against a sphere at the origin. A miss is negative far.
+ray_sphere(origin, direction, radius) := {
+	a = dot(direction, direction)
+	half = dot(origin, direction)
+	c = dot(origin, origin) - radius * radius
+	disc = half * half - a * c
+	if disc < 0 or a == 0 { return [-1.0, -1.0] }
+	root = sqrt(disc)
+	[(-half - root) / a, (-half + root) / a]
+}
+
+# the nearest triangle among the shown fish. [t, fish, triangle, phase], fish -1 when the ray misses.
+# A fish whose sphere sits behind the ray, or farther than a hit already found, tests no triangles.
+fish_nearest(origin, direction) := {
+	best = fish_miss
+	which = -1.0
+	tri = 0.0
+	slot = 0.0
+	for i in 0..fish_shown {
+		placed = fish_frames#(i * 2 + 1)
+		aim = fish_frames#(i * 2 + 2)
+		place = fish_vec3(placed)
+		heading = fish_vec3(aim)
+		scale = placed#4
+		right = heading_right(heading)
+		up = fish_up(heading)
+		local_o = fish_local(origin, place, heading, up, right, scale)
+		local_d = fish_local(origin .+ direction, place, heading, up, right, scale) .- local_o
+		span = ray_sphere(local_o, local_d, fish_bound)
+		if span#2 >= 0 and span#1 < best {
+			base = aim#4 * fish_tris
+			for index in 0..fish_tris {
+				at = (base + index) * 3
+				t = triangle_hit(local_o, local_d, fish_corners#(at + 1), fish_corners#(at + 2), fish_corners#(at + 3))
+				if t > 0 and t < best {
+					best = t
+					which = i
+					tri = index
+					slot = aim#4
+				}
+			}
+		}
+	}
+	[best, which, tri, slot]
+}
+
+# the hit triangle's normal, turned to face the ray, then into the world. Uniform scale keeps the rotation.
+fish_normal(origin, direction, hit) := {
+	i = hit#2
+	placed = fish_frames#(i * 2 + 1)
+	aim = fish_frames#(i * 2 + 2)
+	place = fish_vec3(placed)
+	heading = fish_vec3(aim)
+	right = heading_right(heading)
+	up = fish_up(heading)
+	local_d = fish_local(origin .+ direction, place, heading, up, right, placed#4) .- fish_local(origin, place, heading, up, right, placed#4)
+	at = (hit#4 * fish_tris + hit#3) * 3
+	a = fish_corners#(at + 1)
+	b = fish_corners#(at + 2)
+	c = fish_corners#(at + 3)
+	n = cross(b .- a, c .- a)
+	length = norm(n)
+	if length < 0.000001 { return [0.0, 1.0, 0.0] }
+	n = n ./ length
+	if dot(n, local_d) > 0 { n = [0.0, 0.0, 0.0] .- n }
+	heading .* n#1 .+ up .* n#2 .+ right .* n#3
+}
+
+# the hit triangle's baked colour. Phases share it: the cutout does not move.
+fish_tint(hit) := fish_colors#(hit#3 + 1)

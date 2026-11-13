@@ -1,0 +1,29 @@
+// Indexed meshes and the fps figure (notes/meshlets.md "GPU path").
+// grid_indexed is the same triangles as grid_triangles. Floats are not compared here: the positions are the grid's own.
+
+// a 2 by 2 grid is 9 vertices and 24 indices, and each indexed corner is that triangle's point
+'use meshlets; mesh = grid_indexed(2, 2, flat_heights(2, 2)); soup = grid_triangles(2, 2, flat_heights(2, 2)); n = count(soup); same = yes; t = 0; while t < n { tri = soup#(t + 1); k = 1; while k <= 3 { at = mesh#2#(t * 3 + k); p = mesh#1#(at + 1); q = tri#k; if p#1 != q#1 or p#2 != q#2 or p#3 != q#3 { same = no }; k = k + 1 }; t = t + 1 }; [count(mesh#1), count(mesh#2), n * 3, same]'	[9, 24, 24, yes]
+
+// the peaked center is a vertex, one above the ground
+'use meshlets; grid_indexed(2, 2, [0, 0, 0, 0, 1, 0, 0, 0, 0])#1#5#3'	1
+
+// triangle records lose the part and stay in order
+'use meshlets; mesh_draw_indices([[0, 1, 2, 0], [2, 1, 3, 1]])'	[0, 1, 2, 2, 1, 3]
+
+// 30 frames in half a second is 60
+'use meshlets; use math; abs(frame_rate(30, 500) - 60) < 0.000000001'	yes
+
+// a placed cluster's bound is that center, and the radius grows with the scale
+'use meshlets; use math; cs = grid_levels(2, 2, flat_heights(2, 2))#1.clusters; place = [4.0, 6.0, 1.2, 2.0]; b = placed_bounds(cs#1, place); p = placed_point(cs#1.sphere.center, place); abs(b#1 - p#1) < 0.000000001 and abs(b#2 - p#2) < 0.000000001 and abs(b#3 - p#3) < 0.000000001 and abs(b#4 - cs#1.sphere.radius * 2.0) < 0.000000001'	yes
+
+// world culling keeps the same clusters as culling in the tree's own frame
+'use meshlets; cs = grid_levels(2, 2, flat_heights(2, 2))#1.clusters; place = [4.0, 6.0, 1.2, 2.0]; camera = [1.0, 2.0, 8.0]; planes = [[0.0, 1.0, 0.0, 1.0]]; view = local_view(planes, camera, place); placed_visible(cs, planes, camera, place) == count(visible_clusters(cs, view#1, view#2))'	yes
+
+// the first cluster's index range starts where it does, three indices a triangle
+'use meshlets; cs = grid_levels(2, 2, flat_heights(2, 2))#1.clusters; ranges = cluster_ranges(cs); count(ranges) == count(cs) and ranges#1#1 == 0.0 and ranges#1#2 == count(cs#1.triangles) * 3 and placed_cone(cs#1, [0.0, 0.0, 0.0, 1.0])#4 == cs#1.cone.cutoff'	yes
+
+// the GPU's level rule is chosen_level's: fine at distance 2, coarse at 40
+'use meshlets; oak = tree_mesh("../../samples/graphics/ez_trees/oak.eztree"); meshes = [level.mesh for level in oak.levels]; errors = [mesh.error for mesh in meshes]; [lod_picked(errors, 2, 1, 135, 1) == chosen_level(meshes, 2, 1, 135, 1), lod_picked(errors, 40, 1, 135, 1) == chosen_level(meshes, 40, 1, 135, 1)]'	[yes, yes]
+
+// refusals, rather than a guess
+'use meshlets; attempt(f: function) := try { text(f()) } catch e { "" + e }; [attempt(() -> grid_indexed(3, 2, flat_heights(2, 2))), attempt(() -> mesh_draw_indices([])), attempt(() -> mesh_draw_indices([[0, 1]])), attempt(() -> frame_rate(0, 1)), attempt(() -> frame_rate(1, 0))]'	["meshlets: a grid needs even cell counts of at least 2, not 3 by 2", "meshlets: indices are empty", "meshlets: an index triple is three numbers, not [0, 1]", "meshlets: frames must be a positive int, not 0", "meshlets: the measured time must be positive, not 0"]

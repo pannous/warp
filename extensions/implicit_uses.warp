@@ -72,9 +72,11 @@ implicit_modules(source: text, tree: Node, folder: text = "."): list := {
 	providers = type_module_providers()
 	free = free_words(program)
 	modules = []
-	# (the module a `use` names is no word of it: `use hash` beside color's hash)
+	# (the module a `use` of its own names is no word of it: `use hash` beside color's hash; a module used through
+	# another names none, `x as html` beside `use template`, which uses html, is markup's html)
+	named_uses = flat_statements(program).map(use_target).filter(target => target is symbol).map(name_of)
 	defined = name => own.has(name) or name in bound or name in prelude_names or index.has(name) or known.has(name) or globals.has(name) or has_meaning(name)
-	for word in candidates.filter(word => word not in used and word not in own and word not in bound and word not in prelude_names and word not in known and not is_declared_word(word) and word not in runtime_words_of_math and ((word in free and not only_rules_lead(word, defining_modules(word))) or leads_statement(program, word, defining_modules(word)))) {
+	for word in candidates.filter(word => word not in named_uses and word not in own and word not in bound and word not in prelude_names and word not in known and not is_declared_word(word) and word not in runtime_words_of_math and ((word in free and not only_rules_lead(word, defining_modules(word))) or leads_statement(program, word, defining_modules(word)))) {
 		named = word in free and not only_rules_lead(word, defining_modules(word)) and not only_phrases_lead(program, word, defined)
 		definers = if word in globals then [globals[word]] else if word in providers then [providers[word]] else defining_modules(word)
 		# a word only leading a statement brings the module whose rule goes on with it, else none: `on alarm {…}` is the
@@ -168,6 +170,7 @@ definition_arities(module: text, word: text): list := {
 # the statement's own, `on every 1 second {…}` timers' rule, `on change x {…}` signals'; a hole with a member after it
 # goes on only as a member of that name, `on job.stop {…}` tasks' `on $x.stop`, never as `on alarm {…}`
 rule_fits(module: text, word: text, program: Node): bool := {
+	global said
 	seconds = flat_statements(program).filter(n => is_group(n) and #n > 1 and n#1 == symbol(word)).map(n => said_second(n#2))
 	module_patterns(module).filter(pattern => leading_word(pattern) == word).any(pattern => {
 		said = hole_dropped(second_word(pattern))

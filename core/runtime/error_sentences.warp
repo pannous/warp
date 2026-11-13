@@ -55,7 +55,8 @@ overflow_words(type: text): text := {
 	type + " overflow"
 }
 # a value a runtime error names as its message reads: an error's own message, a text as it is, else as print shows it
-detail_text(detail: Node): text := if node_is_error(detail) then unboxed_text(detail) else node_text(detail)
+# (a raised instance of an error class says its message: `raise Error("bad")` is "bad")
+detail_text(detail: Node): text := if node_is_error(detail) then unboxed_text(detail) else if is_class_instance(detail) and instance_place(detail, "message") > 0 then node_text(instance_field_at(detail, instance_place(detail, "message"))) else node_text(detail)
 # what the runtime error of the word `name` says, the value it names taken in (what a try's `catch e` holds is the
 # words alone, but a raise's and a missing field's)
 error_sentence(name: text): text := {
@@ -81,6 +82,8 @@ error_sentence(name: text): text := {
 # runtime word named: `2^70 | 1` casts a big int to a bool; "" for no trap (-1) or a code not known
 engine_trap_words(code: int): text := {
 	if code == 7 { return "divide by zero" }
+	# (the console's Ctrl+C is the only interrupt: lib/native/foreign.c interrupts_engine)
+	if code == 10 { return "stopped by Ctrl+C" }
 	words = ["call stack exhausted", "out of bounds memory access", "misaligned memory access", "undefined element: out of bounds table access", "uninitialized element", "indirect call type mismatch", "integer overflow", "integer divide by zero", "invalid conversion to integer", "wasm `unreachable` instruction executed", "interrupt", "all fuel consumed by WebAssembly", "atomic wait on non-shared memory", "null reference", "out of bounds array access", "allocation size too large", "cast failure"]
 	if code < 0 or code >= #words then "" else "wasm trap: " + words#(code + 1)
 }

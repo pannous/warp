@@ -1,0 +1,16 @@
+# slider (card slider-ui): a UI value; its start is the middle of the range, a value outside is refused
+
+is! 'use ui
+slider(-2 to 2)' 0
+
+is! 'use ui
+slider(-2, 2)' 0
+
+is! 'use ui
+slider(-2 to 2, -.8)' (-0.8)
+
+is! 'use ui
+try { slider(-2 to 2, 3) } catch e { e.message }' "slider: 3 is outside -2 to 2"
+
+is! 'use ui
+try { slider(-2, 2, 3) } catch e { e.message }' "slider: 3 is outside -2 to 2"

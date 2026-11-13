@@ -18,15 +18,18 @@ has_fields(value, names: list): bool := names.all(name => value.has(name))
 last(xs: list or text) := xs#(count(xs))
 find(t: text, part: text) := count(split(t, present_part(t, part))#1) + 1
 present_part(t: text, part: text) := { if not (part in t) { raise "ValueError: \"" + part + "\" is not in \"" + t + "\"" }; part }
-// the sum of the items, a fold like any other: a program's own sum replaces it (the Rust compiler still expands its
-// own sum: rust-harness:src/lowering/words/library_words.rs)
+// the sum of the items, an index loop (a fold of the copied rest through a + closure took 2.8 times as long, card
+// sum-list-fold): a program's own sum replaces it (the Rust compiler still expands its own sum:
+// rust-harness:src/lowering/words/library_words.rs)
 // `list or number`, not `list`: a list parameter gets the items as a $list, so a range would make all of them first;
 // not `any`, which takes a yes/no: `sum xs == 3` would be sum(xs == 3) (card xs-sum). Of one number that number, as max
 // A list sums from its first item, so a class's own + adds its items (decision class-operators-generic):
 // `sum([5km, 1500m])` is 6.5km; an empty list sums to 0
-sum(xs: list or number) := if is_range(xs) then range_sum(xs) else if xs is number then xs else if count(xs) == 0 then 0 else fold(xs[1 ..], xs#1, +)
-// the UTF-8 bytes of a text, `t.bytes` (decision text-unit-plurals)
-bytes(t: text) := (0..byte_size(t)).map(at => byte_at(t, at))
+sum(xs: list or number) := if is_range(xs) then range_sum(xs) else if xs is number then xs else if count(xs) == 0 then 0 else {
+	total = xs#1
+	for k in 2...count(xs) { total = total + xs#k }
+	total
+}
 // `for byte in t` (decision loop-variable): the value walked by that unit when its type has one, a text's bytes,
 // chars or code points, a map's [key, value] pairs; else by its own items, a map's keys, a list's items (a list of bytes
 // stays one), so the loop needs no type at the sugar

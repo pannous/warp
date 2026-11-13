@@ -43,6 +43,8 @@ is_class_instance(m: Node): bool from runtime
 instance_show(m: Node): Node from runtime
 # m as its class's float() gives it, ø when it gives none (`sin(2km)`)
 instance_float(m: Node): Node from runtime
+# a op b by m's class, the operator's place in + - * / (a boxed int), ø when its class defines none
+instance_operated(m: Node, a: Node, b: Node, operator: Node): Node from runtime
 # m's method of that name called with the arguments' items, ø when its module has none (card reals-prebuilt)
 instance_method(m: Node, name: Node, arguments: Node): Node from runtime
 # exact rationals

@@ -60,10 +60,11 @@ built_error(message: Node): Node := error_of(node_text(message))
 node_encoding(n: Node): text := {
 	if is_null(n) { return "e" }
 	if node_is_error(n) { return encoded_part("x", unboxed_text(n)) }
+	# (a number ahead of yes and no, as node_text has it: the case True takes 1 too, bool as int)
 	match n {
+		Number(_): encoded_part(if kind_code(n) == Kind.Int then "i" else "f", number_text(n))
 		True: "T"
 		False: "F"
-		Number(_): encoded_part(if kind_code(n) == Kind.Int then "i" else "f", number_text(n))
 		Char(_): encoded_part("c", int_text(code_of(unboxed_char(n))))
 		Symbol(_): encoded_part("s", unboxed_text(n))
 		Text(_): encoded_part("t", unboxed_text(n))

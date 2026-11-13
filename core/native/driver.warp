@@ -26,6 +26,15 @@ STDERR = 2
 READABLE = 4
 WRITABLE = 2
 EXECUTABLE = 1
+# socket()'s AF_INET and SOCK_DGRAM; sockaddr_in's size; the public resolver's DNS port (53, its low byte, big-endian)
+INTERNET = 2
+DATAGRAM = 2
+SOCKET_ADDRESS_BYTES = 16
+RESOLVER_PORT = 53
+# struct utsname at its largest (macOS: 5 fields of 256 bytes)
+UNAME_BYTES = 1280
+# the framework that tells the main display's extent (a function: a primitive file's constants are numbers)
+core_graphics(): text := "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics"
 COLON = 58
 # wasmtime_val_t's kinds, its value 8 bytes in; the sizes of the C structs the calls fill
 KIND_I32 = 0
@@ -99,16 +108,19 @@ OPTIONS_BYTES = 2056
 # whether the run linked unicode (canonical_text), the native host module (host_export), at these places of its block
 UNICODE_LINKED_AT = 32
 HOST_LINKED_AT = 40
-# the GC heap the run's engine starts with: a module it links keeps its machine code for that heap (instance_defined)
-HEAP_BYTES_AT = 48
+# the kind of machine code the run's engine makes (its heap, its fuel): a module it links keeps its machine code of
+# that kind (instance_defined)
+MACHINE_CODE_KIND_AT = 48
 # its argument vector, the first its module's file (a compiler's path: compiler_library)
 ARGUMENTS_AT = 56
 # the module a host word without a caller works in, a text (address, length): module_word's lib module while it
 # builds there, else empty for the native host module (exported)
 GUEST_AT = 64
+# the compiler's caller while one of its module_word calls runs, the module's rule_word asking it, else 0
+ASKER_AT = 80
 # a run's channel listeners (lib/channels.warp), in its block past those: how many, then each one's
 # id, the bytes of its channel's file read so far, its name's length and the name
-LISTENERS_AT = 80
+LISTENERS_AT = 88
 LISTENERS_MAX = 32
 LISTENER_BYTES = 128
 LISTENER_NAME_BYTES = 104
@@ -131,6 +143,8 @@ wasmtime_config_parallel_compilation_set(config: handle, enabled: bool) from "wa
 wasmtime_config_profiler_set(config: handle, strategy: i32) from "warp_wasmtime"
 wasmtime_config_macos_use_mach_ports_set(config: handle, enabled: bool) from "warp_wasmtime"
 wasmtime_context_set_fuel(context: handle, fuel: i64): handle from "warp_wasmtime"
+wasmtime_config_epoch_interruption_set(config: handle, enabled: bool) from "warp_wasmtime"
+wasmtime_context_set_epoch_deadline(context: handle, ticks: i64) from "warp_wasmtime"
 wasmtime_trap_code(trap: handle, code: pointer): bool from "warp_wasmtime"
 wasmtime_config_cache_config_load(config: handle, path: handle): handle from "warp_wasmtime"
 wasm_engine_new_with_config(config: handle): handle from "warp_wasmtime"
@@ -151,6 +165,7 @@ wasi_config_new(): handle from "warp_wasmtime"
 wasi_config_set_argv(config: handle, count: i64, arguments: pointer): bool from "warp_wasmtime"
 # what a crash says the process was running (lib/native/wasi.c): a module's arguments while it runs
 crash_context_running(arguments: pointer, count: i32): handle from "c"
+interrupts_engine(engine: handle): nothing from "c"
 crash_context_restored(outer: handle): nothing from "c"
 # the command line the executable reads from now on (lib/native/wasi.c): a forked child's own
 arguments_replaced(arguments: pointer, count: i32): nothing from "c"
@@ -186,17 +201,72 @@ wasmtime_memory_data_size(context: handle, memory: pointer): i64 from "warp_wasm
 wasmtime_memory_grow(context: handle, memory: pointer, delta: i64, previous: pointer): handle from "warp_wasmtime"
 library_function(library: pointer, name: pointer): handle from "c"
 native_call(function: handle, integers: pointer, floats: pointer, float_result: i32): i64 from "c"
+native_call_struct(function: handle, integers: pointer, count: i32, bytes: handle, size: i32): i64 from "c"
 handle_id(pointer: handle): i32 from "c"
 terminal_size(rows: i32): i32 from "c"
-kept_value(slot: i64): i64 from "c"
-keep_value(slot: i64, value: i64) from "c"
-route_online(): i32 from "c"
-display_extent(height: i32): i64 from "c"
-next_painting(): i32 from "c"
 last_error(): i32 from "c"
 strerror(code: i32): handle from "c"
-gpu_paints(): i32 from "c"
 arena_kept(): nothing from "c"
+socket(domain: i32, kind: i32, protocol: i32): i32 from "c"
+connect(socket: i32, address: pointer, length: i32): i32 from "c"
+uname(names: pointer): i32 from "c"
+
+# what the driver keeps between host calls, by slot (the *_SLOT constants: the system values a program set), 0 unset
+global kept_values = i64[8]
+kept_value(slot: i64): i64 := kept_values[slot]
+keep_value(slot: i64, value: i64): nothing := {
+	kept_values[slot] = value
+}
+# paint's count in this run, from 1: its PNG's number (painted)
+global paintings = 0
+next_painting(): i32 := {
+	paintings += 1
+	paintings as i32
+}
+# whether a shader paints on the GPU: libwgpu_native beside warp (lib/host/native_host/gpu.warp paints through it),
+# else its function on the CPU (lib/prelude.warp paint_shader; a program says `paint_on_gpu = no`, lib/shaders.warp);
+# looked up once
+global gpu_asked = 0
+global gpu_present = 0
+gpu_paints(): i32 := {
+	if gpu_asked == 0 {
+		gpu_asked = 1
+		gpu_present = if library_function(c_string("wgpu_native"), c_string("wgpuCreateInstance")) != 0 then 1 else 0
+	}
+	gpu_present as i32
+}
+# whether a route to the internet exists: a UDP connect to a public resolver, which sends nothing. sockaddr_in leads
+# with its length and family bytes on macOS, with a 16-bit family on Linux
+route_online(): i32 := {
+	udp = socket(INTERNET, DATAGRAM, 0)
+	if udp < 0 { return 0 }
+	address = allocate(SOCKET_ADDRESS_BYTES)
+	for i in 0..SOCKET_ADDRESS_BYTES { byte_at(address + i).value = 0 }
+	darwin = on_darwin()
+	byte_at(address).value = if darwin then SOCKET_ADDRESS_BYTES else INTERNET
+	if darwin { byte_at(address + 1).value = INTERNET }
+	byte_at(address + 3).value = RESOLVER_PORT
+	for i in 0..4 { byte_at(address + 4 + i).value = 8 }
+	routed = connect(udp, address, SOCKET_ADDRESS_BYTES) == 0
+	close(udp)
+	if routed then 1 else 0
+}
+# whether this is macOS: uname's system name, the first of its fields on every system
+on_darwin(): bool := {
+	names = allocate(UNAME_BYTES)
+	uname(names) == 0 and memcmp(names, c_string("Darwin"), 7) == 0
+}
+# the main screen's width, else its height, in points; 0 where none shows (a headless Mac, Linux without CoreGraphics)
+display_extent(height: i32): i64 := {
+	main_display = library_function(c_string(core_graphics()), c_string("CGMainDisplayID"))
+	extent = library_function(c_string(core_graphics()), c_string(if height != 0 then "CGDisplayPixelsHigh" else "CGDisplayPixelsWide"))
+	if main_display == 0 or extent == 0 { return 0 }
+	integers = allocate(REGISTERS * 8)
+	floats = allocate(REGISTERS * 8)
+	# (CGDirectDisplayID is 32 bits wide, the register's upper half undefined)
+	long_at(integers).value = native_call(main_display, integers, floats, 0) as u32
+	native_call(extent, integers, floats, 0)
+}
 mkdir(path: pointer, mode: i32): i32 from "c"
 atoll(digits: text): i64 from "c"
 atof(digits: pointer): f64 from "c"
@@ -644,15 +714,16 @@ out_of_fuel(trap: pointer, fuel: i64): nothing := {
 # --profile writes each compiled function's address range to /tmp/perf-<pid>.map, which
 # scripts/profile.sh maps `sample`'s addresses through (notes/compile_speed.md)
 warp_config(fuel: bool, heap_bytes: i64): handle := {
-	config = uncached_config(fuel, heap_bytes)
+	config = uncached_config(fuel, heap_bytes, no)
 	wasmtime_config_cache_config_load(config, 0)
 	config
 }
 # so without wasmtime's cache, whose worker thread a forked child lacks (its first compile crashed waking it): the
 # resident engine's (resident_loaded)
-uncached_config(fuel: bool, heap_bytes: i64): handle := {
+uncached_config(fuel: bool, heap_bytes: i64, interruptible: bool): handle := {
 	config = wasm_config_new()
 	wasmtime_config_consume_fuel_set(config, fuel)
+	wasmtime_config_epoch_interruption_set(config, interruptible)
 	wasmtime_config_parallel_compilation_set(config, not has_option("one-thread"))
 	warp_config_gc_heap_initial_size_set(config, heap_bytes)
 	wasmtime_config_wasm_gc_set(config, yes)
@@ -737,6 +808,13 @@ unanswered_word(name: text): i64 := {
 	word_at(cell).value = name.address as u32
 	word_at(cell + 4).value = name.length
 	0 - (cell as i64)
+}
+# where the program's memory starts, as a GPU list's upload reads it (lib/host/native_host/gpu.warp gpu_storage)
+# whichever word reaches the host, the driver's paint word too; wasmtime reserves a 32-bit memory whole, so growing it
+# never moves it
+program_memory_kept(context: handle, instance: pointer): nothing := {
+	memory = allocate(EXTERN_BYTES)
+	keep_value(PROGRAM_MEMORY_SLOT, if wasmtime_instance_export_get(context, instance, "memory", 6, memory) then wasmtime_memory_data(context, memory + 8) else 0)
 }
 # a host word the driver doesn't answer, answered by the native host module's
 # host_<word> (host_text_coverage) with the values as they are; one it lacks ends the run naming it
@@ -833,7 +911,7 @@ instance_defined(linker: handle, engine: handle, context: handle, name: text, pa
 		complain(joined(joined(joined("the program links ", name), ", but there is no "), path))
 		exit(1)
 	}
-	compiled = compiled_module(engine, module, machine_code_file(path, run_heap_bytes()), trap)
+	compiled = compiled_module(engine, module, machine_code_at(path, machine_code_suffix_of(run_machine_code_kind())), trap)
 	instances_linked(linker, engine, context, compiled, linked, library, trap)
 	host_words_defined(linker, engine, context, compiled, module, guarded, trap)
 	checked(wasmtime_linker_define_unknown_imports_as_traps(linker, compiled), trap)
@@ -871,10 +949,12 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	text_kept(linked, "")
 	outer_run = kept_value(RUN_SLOT)
 	if outer_run == 0 { timers_forgotten() }
-	keep_value(RUN_SLOT, run_state(linker, engine, linked, context, heap_bytes, given) as i64)
+	keep_value(RUN_SLOT, run_state(linker, engine, linked, context, machine_code_kind(heap_bytes, fuel > 0), given) as i64)
 	checked(imports_defined(linker, engine, context, compiled, module, linked, trap), trap)
 	instance = allocate(INSTANCE_BYTES)
 	checked(wasmtime_linker_instantiate(linker, context, compiled, instance, trap), trap)
+	outer_memory = kept_value(PROGRAM_MEMORY_SLOT)
+	program_memory_kept(context, instance)
 	entry = allocate(EXTERN_BYTES)
 	# a GC program's _start runs main and prints its value itself (the stub's ENTRY_POINTS), a primitive one has main
 	if not wasmtime_instance_export_get(context, instance, "_start", 6, entry) and not wasmtime_instance_export_get(context, instance, "main", 4, entry) {
@@ -892,6 +972,7 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	if failure.length == 0 and outer_run == 0 { host_run_ended(context) }
 	crash_context_restored(outer)
 	keep_value(RUN_SLOT, outer_run)
+	keep_value(PROGRAM_MEMORY_SLOT, outer_memory)
 	# the run's GC heap, instance and machine code given back: `warp rebuild` runs four compilers in one process, each
 	# behind the last (it peaked at 4.8 GB with all of them kept)
 	wasmtime_store_delete(store)
@@ -905,6 +986,8 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 # a store of the engine, WASI set up for it: the arguments, what it prints written to the file `output` when one is named
 opened_store(engine: handle, given: Arguments, output: text, trap: pointer): handle := {
 	store = wasmtime_store_new(engine, 0, 0)
+	# (an epoch engine's store traps at once at its first deadline, 0; a store runs to the next epoch, a Ctrl+C)
+	wasmtime_context_set_epoch_deadline(wasmtime_store_context(store), 1)
 	config = wasi_config_new()
 	wasi_config_set_argv(config, given.count, given.pointers)
 	wasi_config_inherit_stdin(config)
@@ -942,7 +1025,7 @@ session_opened(): pointer := {
 	linked = allocate(16)
 	text_kept(linked, "")
 	timers_forgotten()
-	run_state(opened_linker(engine, trap), engine, linked, wasmtime_store_context(store), RUN_GC_HEAP_BYTES, given)
+	run_state(opened_linker(engine, trap), engine, linked, wasmtime_store_context(store), machine_code_kind(RUN_GC_HEAP_BYTES, no), given)
 }
 # the line's module at `path` run in the session: linked, its instance defined, its _start run (it prints its value);
 # a failure said, the session going on. The status of the exit() it called, which ends the session, else -1
@@ -956,7 +1039,11 @@ session_line_run(session: pointer, path: text): i32 := {
 	error = session_line_linked(session, path, instance, trap)
 	failure = ""
 	if error != 0 or long_at(trap).value != 0 { failure = failure_said(error, trap, "") } else {
+		# (a Ctrl+C moves the epoch on: this line, never the console, stops at the next one)
+		wasmtime_context_set_epoch_deadline(context, 1)
 		error = started(context, instance, "_start", trap)
+		# (its message is read by running the store's code again: past a Ctrl+C, to the next epoch)
+		wasmtime_context_set_epoch_deadline(context, 1)
 		if error != 0 or long_at(trap).value != 0 { failure = failure_said(error, trap, raised_message(context, instance, trap)) }
 	}
 	keep_value(RUN_SLOT, outer_run)
@@ -991,7 +1078,7 @@ imports_defined(linker: handle, engine: handle, context: handle, compiled: handl
 # a run's linker, engine, linked-instances cell, store context and GC heap size, and whether it linked unicode and the native host
 # module yet, kept in the run's block: what a host word allocates is given back when it returns (foreign.c
 # warp_host_callback)
-run_state(linker: handle, engine: handle, linked: pointer, context: handle, heap_bytes: i64, given: Arguments): pointer := {
+run_state(linker: handle, engine: handle, linked: pointer, context: handle, machine_code: i64, given: Arguments): pointer := {
 	run = allocate((LISTENERS_AT + 8 + LISTENERS_MAX * LISTENER_BYTES) as i32)
 	long_at(run + LISTENERS_AT as i32).value = 0
 	long_at(run).value = linker
@@ -1000,13 +1087,14 @@ run_state(linker: handle, engine: handle, linked: pointer, context: handle, heap
 	long_at(run + 24).value = context
 	long_at(run + UNICODE_LINKED_AT as i32).value = 0
 	long_at(run + HOST_LINKED_AT as i32).value = 0
-	long_at(run + HEAP_BYTES_AT as i32).value = heap_bytes
+	long_at(run + MACHINE_CODE_KIND_AT as i32).value = machine_code
 	text_kept(run + GUEST_AT as i32, "")
+	long_at(run + ASKER_AT as i32).value = 0
 	long_at(run + ARGUMENTS_AT as i32).value = given.pointers as i64
 	run
 }
 run_context(): handle := long_at(kept_value(RUN_SLOT) as i32 + 24).value
-run_heap_bytes(): i64 := long_at(kept_value(RUN_SLOT) as i32 + HEAP_BYTES_AT as i32).value
+run_machine_code_kind(): i64 := long_at(kept_value(RUN_SLOT) as i32 + MACHINE_CODE_KIND_AT as i32).value
 # the export `name` of the standard module `module_name` into `function`, no when it has none: the module linked into
 # the run at the first ask, never at its start, so a run that never asks links none; whether it did is kept at `flag`
 # of the run's block. A program linked to a runtime gets the module of that runtime's library; a module without one
@@ -1280,8 +1368,11 @@ loaded_module(engine: handle, module: text, machine_code: text, trap: pointer): 
 # One engine and the machine code of warp.wasm, runtime.wasm and the prebuilt modules, loaded once and shared by every
 # run of the process that fits them (no fuel, the compiler's heap: a compile and its program alike): `warp test` loads
 # them before its cases fork, so a case starts no process, engine or machine code of its own (0.10 s a case before).
-# The block: the engine, the count of modules, then each module's machine code file (a cell) and handle
+# Only the console's engine checks epochs, by which Ctrl+C stops a line: they cost `warp test` 7% of its instructions.
+# The block: the engine, the count of modules, whether it checks epochs, then each module's machine code file (a cell)
+# and handle
 RESIDENT_SLOT = 6
+RESIDENT_HEADER_BYTES = 24
 RESIDENT_MAX = 256
 RESIDENT_ENTRY_BYTES = 24
 resident_block(): pointer := kept_value(RESIDENT_SLOT) as i32
@@ -1293,11 +1384,12 @@ run_engine(fuel: bool, heap_bytes: i64): handle := {
 }
 # the resident engine made, with the machine code of the compiler and of every module of the library folder a program
 # may link; what runs later loads anything else itself, never adding to the block (a host word's allocations end with it)
-resident_loaded(compiler: text): nothing := {
-	block = allocate((16 + RESIDENT_MAX * RESIDENT_ENTRY_BYTES) as i32)
-	engine = wasm_engine_new_with_config(uncached_config(no, RUN_GC_HEAP_BYTES))
+resident_loaded(compiler: text, interruptible: bool): nothing := {
+	block = allocate((RESIDENT_HEADER_BYTES + RESIDENT_MAX * RESIDENT_ENTRY_BYTES) as i32)
+	engine = wasm_engine_new_with_config(uncached_config(no, RUN_GC_HEAP_BYTES, interruptible))
 	long_at(block).value = engine
 	long_at(block + 8).value = 0
+	long_at(block + 16).value = interruptible as i64
 	trap = allocate(8)
 	library = library_folder()
 	paths = joined(joined(joined(joined(compiler, "\n"), library), "/runtime.wasm\n"), command_output(joined(joined(joined(joined("ls '", library), "/modules' | grep -E '^[^.]+[.]wasm$' | sed 's|^|"), library), "/modules/|'")))
@@ -1305,24 +1397,25 @@ resident_loaded(compiler: text): nothing := {
 		path = field(paths, i, NEWLINE)
 		count = long_at(block + 8).value as i32
 		if path.length > 0 and count < RESIDENT_MAX {
-			entry = block + 16 + count * RESIDENT_ENTRY_BYTES
-			machine_code = machine_code_file(path, RUN_GC_HEAP_BYTES)
-			text_kept(entry, machine_code)
-			long_at(entry + 16).value = loaded_module(engine, read_file(path), machine_code, trap)
+			entry = block + RESIDENT_HEADER_BYTES + count * RESIDENT_ENTRY_BYTES
+			# (found by a run's machine code name, loaded from the resident engine's own)
+			text_kept(entry, machine_code_file(path, RUN_GC_HEAP_BYTES))
+			long_at(entry + 16).value = loaded_module(engine, read_file(path), machine_code_at(path, machine_code_suffix_of(if interruptible then RESIDENT_MACHINE_CODE else 0)), trap)
 			long_at(block + 8).value = (count + 1) as i64
 		}
 	}
 	keep_value(RESIDENT_SLOT, block as i64)
 }
-# a module's resident machine code, else the module loaded
+# a module's resident machine code, else the module compiled: kept as a run's when the engine checks no epochs, else
+# never (a run's machine code has no epoch checks, and a console line's module is new each line)
 resident_module(engine: handle, module: text, machine_code: text, trap: pointer): handle := {
 	block = resident_block()
 	count = long_at(block + 8).value as i32
 	for k in 0..count {
-		entry = block + 16 + k * RESIDENT_ENTRY_BYTES
+		entry = block + RESIDENT_HEADER_BYTES + k * RESIDENT_ENTRY_BYTES
 		if same_text(cell_text(entry), machine_code) { return long_at(entry + 16).value }
 	}
-	loaded_module(engine, module, machine_code, trap)
+	loaded_module(engine, module, if long_at(block + 16).value != 0 then "" else machine_code, trap)
 }
 
 # the machine code of the module at `path` kept beside it, current for this wasmtime, nothing run
@@ -1334,15 +1427,24 @@ machine_code_kept(path: text): nothing := {
 # where a module's machine code is kept: beside it, else (an installed lib/ this user can't write) in the user's cache
 # folder under the module's whole path; "" when neither can be written: compiled anew each run, never failing. A
 # builder's heap has its own (machine code holds the heap size)
-machine_code_file(path: text, heap_bytes: i64): text := {
-	suffix = machine_code_suffix(heap_bytes)
+machine_code_file(path: text, heap_bytes: i64): text := machine_code_at(path, machine_code_suffix(heap_bytes))
+machine_code_at(path: text, suffix: text): text := {
 	if access(c_string(folder_of(path)), WRITABLE) == 0 { return joined(path, suffix) }
 	cache = cache_folder()
 	if cache.length == 0 { return "" }
 	joined(joined(cache, flattened(resolved_path(path))), suffix)
 }
-# a compiler's machine code beside it, and a builder's (primitive mode has no text constants)
-machine_code_suffix(heap_bytes: i64): text := if heap_bytes == BUILDER_GC_HEAP_BYTES then ".driver.build.cwasm" else ".driver.cwasm"
+# the kinds of machine code, each a file of its own beside the module: a run's, a builder's (the heap size is in the
+# code), the resident engine's (its epoch checks, by which Ctrl+C stops a console line), a run counting its steps
+# (warp fuel: its fuel checks); primitive mode has no text constants
+MACHINE_CODE_KINDS = 4
+BUILDER_MACHINE_CODE = 1
+RESIDENT_MACHINE_CODE = 2
+FUEL_MACHINE_CODE = 3
+machine_code_suffix_of(kind: i64): text := if kind == BUILDER_MACHINE_CODE then ".driver.build.cwasm" else if kind == RESIDENT_MACHINE_CODE then ".driver.resident.cwasm" else if kind == FUEL_MACHINE_CODE then ".driver.fuel.cwasm" else ".driver.cwasm"
+machine_code_suffix(heap_bytes: i64): text := machine_code_suffix_of(machine_code_kind(heap_bytes, no))
+# the kind of machine code an engine with that heap and fuel makes
+machine_code_kind(heap_bytes: i64, fuel: bool): i64 := if fuel then FUEL_MACHINE_CODE else if heap_bytes == BUILDER_GC_HEAP_BYTES then BUILDER_MACHINE_CODE else 0
 
 # $XDG_CACHE_HOME/warp, else ~/Library/Caches/warp (macOS), else ~/.cache/warp, made when missing, ending in a slash;
 # "" when it can't be written
@@ -1435,6 +1537,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if same_text(module, "net") and same_text(member, "get") { return url_got(caller, context, shown(caller, context, item_of(caller, context, listed, 1)), results) }
 	if same_text(module, "warp") and same_text(member, "option") { return option_answered(caller, context, listed, results) }
 	if same_text(module, "warp") and same_text(member, "module_word") { return module_word_answered(caller, context, listed, results) }
+	if same_text(module, "warp") and same_text(member, "rule_word") { return rule_word_answered(caller, context, listed, results) }
 	if same_text(module, "regex") { return regex_answered(caller, context, member, listed, results) }
 	if same_text(module, "hash") { return hash_answered(caller, context, member, listed, results) }
 	# a live loop's cycle starts: only the playground hands loops over between runs; a fade or stop save sound applies
@@ -1891,33 +1994,56 @@ code_parsed_from(caller: handle, context: handle, code: text, result: pointer): 
 	code_built(caller, context, encoding, at, result)
 }
 # warp.module_word(module, word, arguments) (card module-rule-words): the compiler's call of a rule word the lib module
-# defines, its three values the items of `listed`. The module is linked into the run at its first call; the arguments, a list the caller's node_encoding
-# encodes (runtime/builders.warp), are built there, its export `word` is called on them, and its result, encoded by
-# the module's node_encoding, is built again in the caller
+# defines, its three values the items of `listed`. The module is linked into the run at its first call, the word called
+# there (encoded_call), its result built again in the caller
 module_word_answered(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
 	module = joined("warp/", shown(caller, context, item_of(caller, context, listed, 1)))
 	word = shown(caller, context, item_of(caller, context, listed, 2))
-	encoded = allocate(VALUE_BYTES)
-	guest_call(caller, context, "node_encoding", item_of(caller, context, listed, 3), 1, encoded)
-	encoding = shown(caller, context, encoded)
+	encoding = node_encoded(caller, context, item_of(caller, context, listed, 3))
 	run_linked(context, module, library_folder())
-	guest = kept_value(RUN_SLOT) as i32 + GUEST_AT as i32
-	text_kept(guest, module)
-	at = allocate(8)
-	long_at(at).value = 1
+	run = kept_value(RUN_SLOT) as i32
+	outer_guest = cell_text(run + GUEST_AT as i32)
+	outer_asker = long_at(run + ASKER_AT as i32).value
+	text_kept(run + GUEST_AT as i32, module)
+	long_at(run + ASKER_AT as i32).value = caller
+	answer = encoded_call(0, context, word, encoding)
+	long_at(run + ASKER_AT as i32).value = outer_asker
+	text_kept(run + GUEST_AT as i32, outer_guest)
+	code_built(caller, context, answer, counter_at(0), result)
+}
+# warp.rule_word(word, arguments): a module's rule word asking the compiler running it for one of its rule words
+# (rewrites.warp asked_rule_word), called there on the values, its result built again in the module. Each call encodes
+# its values both ways: pass small ones
+rule_word_answered(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
+	compiler = long_at(kept_value(RUN_SLOT) as i32 + ASKER_AT as i32).value
+	if compiler == 0 { return guest_error(caller, context, "warp.rule_word answers only inside a module's rule word", result) }
+	code_built(caller, context, encoded_call(compiler, context, "asked_rule_word", node_encoded(caller, context, listed)), counter_at(0), result)
+}
+# the caller's value in the parse-code encoding (runtime/builders.warp node_encoding)
+node_encoded(caller: handle, context: handle, value: pointer): text := {
+	encoded = allocate(VALUE_BYTES)
+	guest_call(caller, context, "node_encoding", value, 1, encoded)
+	shown(caller, context, encoded)
+}
+# a cell counting through an encoding, at `at`
+counter_at(at: i64): pointer := {
+	counter = allocate(8)
+	long_at(counter).value = at
+	counter
+}
+# the word of the module `called` names (exported) on the arguments the encoding lists, each built there, its
+# result's encoding
+encoded_call(called: handle, context: handle, word: text, encoding: text): text := {
+	at = counter_at(1)
 	count = atoll(encoded_field(encoding, at))
 	# (the list's bracket and separator)
 	encoded_field(encoding, at)
 	encoded_field(encoding, at)
 	values = allocate((count as i32 + 1) * VALUE_BYTES)
-	for i in 0..count { code_built(0, context, encoding, at, values + (i as i32) * VALUE_BYTES) }
+	for i in 0..count { code_built(called, context, encoding, at, values + (i as i32) * VALUE_BYTES) }
 	returned = allocate(VALUE_BYTES)
-	guest_call(0, context, word, values, count, returned)
-	guest_call(0, context, "node_encoding", returned, 1, returned)
-	answer = shown(0, context, returned)
-	text_kept(guest, "")
-	long_at(at).value = 0
-	code_built(caller, context, answer, at, result)
+	guest_call(called, context, word, values, count, returned)
+	node_encoded(called, context, returned)
 }
 # the node encoded at `at` (advanced past it) built in the module into `result`
 code_built(caller: handle, context: handle, encoding: text, at: pointer, result: pointer): nothing := {
@@ -1952,6 +2078,12 @@ code_built(caller: handle, context: handle, encoding: text, at: pointer, result:
 		return guest_call(caller, context, "new_spelled_key", parts, 3, result)
 	}
 	if tag == 108 { return code_list_built(caller, context, encoding, at, atoll(field), result) }
+	if tag == 112 {
+		parts = allocate(2 * VALUE_BYTES)
+		code_built(caller, context, encoding, at, parts)
+		int_result(atoll(field), parts + VALUE_BYTES)
+		return guest_call(caller, context, "new_placed", parts, 2, result)
+	}
 	guest_text_of(caller, context, field, result)
 }
 # a list of `count` items encoded after its bracket and separator: its items a square list built from the last one
@@ -2684,14 +2816,17 @@ guest_error(caller: handle, context: handle, message: text, result: pointer): no
 ## C calls
 # a module calling C describes each C function in its warp.c_functions section, a line of tab-separated fields each:
 # import module, library, name, parameters, C result register, what the result
-# crosses as, the first out-pointer's pointee, struct layouts, how a failure shows. One the driver can't make (bytes,
-# structs) stops the run saying so
+# crosses as, the first out-pointer's pointee, struct layouts, how a failure shows. A struct the compile already
+# refused, or one passed into a wasm module, stops the run saying so
 WASM_HEADER = 8
 CUSTOM_SECTION = 0
 TAB = 9
 NEWLINE = 10
 COMMA = 44
 REGISTERS = 8
+# a parameter `bytesN`: N bytes at a handle, passed as one aggregate after the integer arguments. The compile
+# (extensions/c_imports) refused every other placement, native_call_struct a size it cannot place
+STRUCT_BASE = 32
 WASM_PAGE_BYTES = 65536
 # the section `name` of a wasm module, else the empty text
 custom_section(module: text, name: text): text := {
@@ -2788,6 +2923,18 @@ CROSSING_BYTES = 8
 FAILURE_NONE = 1
 FAILURE_NOT_NULL = 2
 FAILURE_FALSE = 3
+# `bytes40` is 40, another `bytes` and digits too; 0 when it is not that spelling (plain `bytes` is a text's bytes)
+struct_prefix(): text := "bytes"
+struct_size(name: text): i32 := {
+	if name.length <= struct_prefix().length or not starts_with(name, struct_prefix()) { return 0 }
+	n = 0
+	for i in struct_prefix().length..name.length {
+		digit = byte_at(name.address + i).value
+		if digit < ZERO or digit > ZERO + 9 { return 0 }
+		n = n * 10 + (digit - ZERO)
+	}
+	n as i32
+}
 parameter_kind(name: text): i32 := {
 	if same_text(name, "i32") { return PARAMETER_I32 }
 	if same_text(name, "i64") { return PARAMETER_I64 }
@@ -2847,13 +2994,16 @@ foreign_of(line: text, wasm: pointer): i64 := {
 	count = field_count(parameters, COMMA)
 	kinds = allocate(count as i32)
 	floats = 0
+	integers = 0
 	for p in 0..count {
 		type = field(parameters, p, COMMA)
-		kind = known(parameter_kind(type), name, "a parameter ", type)
+		size = struct_size(type)
+		kind = if size > 0 then STRUCT_BASE + size else known(parameter_kind(type), name, "a parameter ", type)
 		byte_at(kinds + p).value = kind as u8
 		if kind == PARAMETER_F32 or kind == PARAMETER_F64 { floats = floats + 1 }
+		if kind < STRUCT_BASE and kind != PARAMETER_F32 and kind != PARAMETER_F64 { integers = integers + 1 }
 	}
-	if floats > REGISTERS or count - floats > REGISTERS { failed_call(joined(name, ": more than 8 integer or float parameters, not in the native driver yet")) }
+	if floats > REGISTERS or integers > REGISTERS { failed_call(joined(name, ": more than 8 integer or float parameters, not in the native driver yet")) }
 	register = known(register_of(field(line, 4, TAB)), name, "a result register ", field(line, 4, TAB))
 	crossing = known(crossing_of(field(line, 5, TAB)), name, "a result crossing as ", field(line, 5, TAB))
 	failure = known(failure_of(field(line, 8, TAB)), name, "a failure shown as ", field(line, 8, TAB))
@@ -2885,10 +3035,15 @@ library_called(c: Foreign, caller: handle, context: handle, given: pointer, resu
 	passed = 0
 	outs = 0
 	bytes_length = 0
+	memory = 0 as i64
+	memory_size = 0
 	for p in 0..c.count {
 		kind = byte_at(c.kinds + p).value as i32
 		value = given + passed * VALUE_BYTES + VALUE_OFFSET
-		if kind == PARAMETER_F32 or kind == PARAMETER_F64 {
+		if kind >= STRUCT_BASE {
+			memory_size = kind - STRUCT_BASE
+			memory = c_argument(caller, context, name, PARAMETER_HANDLE, value, 0)
+		} else if kind == PARAMETER_F32 or kind == PARAMETER_F64 {
 			long_at(floats + float_count * 8).value = if kind == PARAMETER_F64 then long_at(value).value else word_at(value).value as i64
 			float_count = float_count + 1
 		} else {
@@ -2899,7 +3054,7 @@ library_called(c: Foreign, caller: handle, context: handle, given: pointer, resu
 		if kind == PARAMETER_OUT { outs = outs + 1 }
 		passed = passed + program_argument(kind)
 	}
-	returned = native_call(c.function, integers, floats, if c.register == REGISTER_F32 or c.register == REGISTER_F64 then 1 else 0)
+	returned = if memory_size != 0 then native_call_struct(c.function, integers, integer_count as i32, memory, memory_size as i32) else native_call(c.function, integers, floats, if c.register == REGISTER_F32 or c.register == REGISTER_F64 then 1 else 0)
 	c_finished(c, caller, context, returned, long_at(out).value, results, results_count)
 }
 ## C functions of a wasm module (card wasm-instance-c-calls)
@@ -2986,6 +3141,7 @@ wasm_called(c: Foreign, caller: handle, context: handle, given: pointer, results
 		kind = byte_at(c.kinds + p).value as i32
 		value = given + passed * VALUE_BYTES + VALUE_OFFSET
 		argument = arguments + p * VALUE_BYTES
+		if kind >= STRUCT_BASE { failed_call(joined(name, ": a struct by value into a wasm module, not in the native driver yet")) }
 		if kind == PARAMETER_HANDLE or kind == PARAMETER_TEXTS { failed_call(joined(name, ": a handle or a list of texts into a wasm module, not in the native driver yet")) }
 		if kind == PARAMETER_TEXT or is_array(kind) or kind == PARAMETER_OUT {
 			# (a later out-pointer is NULL, as for a C library)

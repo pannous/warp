@@ -47,6 +47,8 @@ with_module_directory(n: Node, folder: text): Node := bottom_up(n, x => if x == 
 used_in(program: Node, folder: text): any := {
 	written = flat_statements(program)
 	statements = with_scope_declarations(written, folder)
+	modules = written.map(use_target).filter(target => target is symbol and not names_no_module(name_of(target))).map(name_of)
+	for statement in written { warn_replaced(statement, modules) }
 	brought = declarations_used(statements, folder, [], {})
 	if #brought#1 == 0 and not written.any(s => scope_used(s) != ø) { return program }
 	kept = statements.filter(s => file_used(s, folder) == ø)
@@ -239,10 +241,15 @@ declarations_used(statements: list, folder: text, seen: list, claimed: map): lis
 }
 
 # a used file's parse, parsed again each compile: keeping parses across runs saved about 1 % (card kept-values-retire)
+# (each file parsed once for all its readers, kept with the text it was parsed from: a host compiling again after an
+# edit, the repl or the page, parses the new text)
+global file_trees = {}
 file_parsed(file: text): Node := {
 	source = file_text(file)
 	if source is ø { raise working_relative(file) + ": no such file to use" }
-	with_imports_as_uses(checked_parse(file, without_primitive_mark(source)))
+	kept = file_trees.get(file)
+	if kept == ø or kept#1 != source { file_trees[file] = [source, with_imports_as_uses(checked_parse(file, without_primitive_mark(source)))] }
+	file_trees[file]#2
 }
 # a used file's tree; one that does not parse is the error naming the file, never a file of no declarations (card
 # unclosed-core: an unclosed ( in a core file hid its later definitions)
@@ -256,6 +263,25 @@ checked_parse(file: text, source: text): Node := {
 	timed("after parsing")
 	tree
 }
+
+# `use sound; play(x) := …`: a function of the program with the name and argument count of a module it uses replaces
+# that module's in the program, and says so (wiki/use.md "your own function of the same name"); another count adds to
+# the module's word, and a module the program needs without a `use` never warns
+warn_replaced(statement: Node, modules: list) := {
+	head = declared_head(statement)
+	if head == ø { return }
+	name = declared_name(statement)
+	for module in modules {
+		replaced = module_definitions(module, name).filter(definition => declared_head(definition) != ø and #declared_head(definition) == #head)
+		if #replaced > 0 {
+			diagnose(call_of(REPLACED_FACT, [name, module, written_head(declared_head(replaced#1))]), statement)
+			return
+		}
+	}
+}
+REPLACED_FACT = "replaces_module_word"
+# `(play tone)` as its definition writes it, play(tone)
+written_head(head: Node): text := name_of(head#1) + "(" + items_of(head)[1..].map(parameter => "${parameter}").join(", ") + ")"
 
 # A used file's declarations claim their signatures: another file declaring one already, differently, is the error
 # naming both, since the later would silently replace the earlier (card module-name-clash); the same declaration in
@@ -279,7 +305,7 @@ claim_signatures(declarations: list, file: text, claimed: map) := {
 # `f(x: int, y)` → "f(int, any)", the name and parameter types a declaration claims; a value's name alone, ø for
 # another statement
 declared_signature(statement: Node): any := {
-	conversion = declared_conversion(statement)
+	conversion = declared_conversion(statement) ?? shown_conversion(statement)
 	if conversion != ø { return name_of(key_of(conversion)) + " as " + name_of(value_of(conversion)) }
 	name = declared_name(statement)
 	if name == ø { return ø }
@@ -379,7 +405,7 @@ path_text(n: Node): Node := if is_key(n, Op.As) and value_of(n) == symbol("path"
 # the path of the file of the folder a `use` statement names, ø for another statement or a module of no such file
 file_used(statement: Node, folder: text): any := {
 	module = use_target(statement)
-	if module is text { return path_in(folder, rooted(module, folder)) }
+	if module is text { return rooted(module, folder) }
 	# (a runtime module a build compiles in is its root file, whose own uses of the files beside it it brings)
 	if module is symbol and name_of(module) in compiled_runtime_modules() { return std_module_path(name_of(module)) }
 	if not (module is symbol) or name_of(module) in implicitly_used { return ø }
@@ -403,22 +429,25 @@ working_relative(file: text): text := {
 	if file.starts_with(below) then file.replace(below, "") else file
 }
 # `use "•/lib/x.warp"` (alias `@/`): the project root, the nearest folder above `folder` holding `.git`, plus the
-# rest; no such folder refuses (decision project-root-paths)
+# rest; no such folder refuses (decision project-root-paths). Any other name is relative to `folder`: a relative root
+# (the page's `.`) is never joined to it
 root_markers = ["•/", "@/"]
 rooted(name: text, folder: text): text := {
 	marker = root_markers.filter(m => name.starts_with(m))
-	if #marker == 0 { return name }
+	if #marker == 0 { return path_in(folder, name) }
 	root = project_root(folder)
 	if root == ø { raise name + ": no folder above " + working_relative(folder) + " holds .git; run `git init` at the project root or use a relative path" }
-	root + "/" + name[#marker#1 ..< #name]
+	without_steps_up(root + "/" + name[#marker#1 ..< #name])
 }
 project_root(folder: text): any := {
 	# from the absolute folder: a relative one (`samples/wasm` of `warp samples/wasm/x.warp`) ran out before the
 	# working folder that holds .git
-	for at in folders_upward(without_steps_up(absolute_folder(folder))) {
+	start = without_steps_up(absolute_folder(folder))
+	for at in folders_upward(start) {
 		if file_text(at + "/.git") != ø or file_text(at + "/.git/HEAD") != ø { return at }
 	}
-	ø
+	# a relative working folder (the page's `.`, the served repository) is its own project when the climb ends at it
+	if start == "." or start.starts_with("./") then "." else ø
 }
 # the folder and each above it: an absolute one up to /, a relative one up to its top, as the page's working folder
 # is `.` (`./samples/wasm`, `./samples`), never on past it into `./..`
@@ -485,6 +514,12 @@ declared_conversion(statement: Node): any := {
 # `Person as text` heading a definition, which the parser reads as a phrase of three words (`fib i as int := …` names a
 # result so), as the conversion `Person as text`; any other head as it is
 as_phrase_read(head: Node): Node := if is_group(head) and #head == 3 and head#2 == symbol("as") then Key(head#1, Op.As, head#3) else head
+# `format Color c as text := …`: the conversion `Color as text` it claims, one per type, so two modules each formatting
+# their own type don't clash; else ø
+shown_conversion(statement: Node): any := {
+	head = if is_key(statement, Op.Define) then key_of(statement) else ø
+	if is_group(head) and #head == 5 and head#1 == symbol("format") and head#4 == symbol("as") then Key(head#2, Op.As, head#5) else ø
+}
 # `sqrt(x: f64): f64 from "c"`: a foreign line, whose word is the program's own (a library's sqrt is not the one called)
 is_foreign_line(n: Node): bool := is_group(n) and bracket_of(n) == "" and #n == 3 and n#2 == symbol("from")
 # `type View = list or int`: the alias's name, View (its left side is the opaque view ["type", name, ø]), else ø

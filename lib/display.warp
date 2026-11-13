@@ -1,0 +1,30 @@
+// The standard module display (decision display-names, card display-density): density, size and
+// diagonal as quantities, without the program writing `use units`. window stays in the prelude; a
+// program cannot resize the display (set window.width or canvas.width instead).
+use units
+
+display.width := display_width
+display.height := display_height
+
+// the device pixels per length (decision display-names, other names display.dpi and display.ppi), a quantity in dpi
+// that turns lengths into px, `3 cm * display.density`; a program sets it in dpi, `display.density = 300 dpi`
+// the quantity math stays in this module so a property use does not mention dpi in the program
+display_density_of() := display_dpi * 1dpi
+set_display_density(density) := set_system_value("display_dpi", density / 1dpi)
+display.density := display_density_of
+display.density(density) := set_display_density(density)
+// its other names repeat its body: a dotted definition cannot name another (`display.dpi := display.density` reads
+// display as a value) and alias takes no dotted name (card dotted-definition-naming)
+display.dpi := display_density_of
+display.dpi(density) := set_display_density(density)
+display.ppi := display_density_of
+display.ppi(density) := set_display_density(density)
+
+// width × height in px (other names display.dimensions and display.resolution)
+display_size_of() := [display_width, display_height] px
+display.size := display_size_of
+
+// the diagonal as a length: its nearest whole px at the density (quantities run as exact amounts, a run-time hypot is
+// a float; this module writes no power, which would link big_numbers)
+display_diagonal_of() := round(hypot(display_width, display_height)) * 1px / (display_dpi * 1dpi)
+display.diagonal := display_diagonal_of

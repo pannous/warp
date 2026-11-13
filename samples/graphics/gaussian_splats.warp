@@ -8,6 +8,7 @@
 # (a shader with its own vertex stage: one quad an instance; the scene a storage array each of its parts).
 # The camera orbits a little every frame; drag the mouse to turn it yourself. The sort runs every frame, orbit included.
 # --times prints each frame's sort, in milliseconds, before paint (the host adds upload and draw when it can).
+# Pass --times after the program name; warp eats it as a compiler flag when it comes first.
 use math
 use file
 use os
@@ -19,8 +20,12 @@ timing = no
 for arg in args {
 	if arg == "--times" { timing = yes }
 	else if arg == "--full" { capture = program.folder + "/../../data/splat-speed/bee-full.splat" }
+	else if arg == "--no-window" or arg == "--mute" { }
+	else if text(arg).starts_with("--") { raise "gaussian_splats: unknown option " + text(arg) }
 	else { capture = arg }
 }
+if not exists(capture) { raise "gaussian_splats: no capture at " + text(capture) }
+if not gpu_paints() { raise "gaussian_splats: no GPU (libwgpu_native is not beside warp)" }
 zoom = 1.5 # the focal length, in picture heights
 backed_off = 3.0 # the camera's distance from the scene's middle, in the scene's sizes
 nearest = 0.05 # what is nearer the camera, in the scene's sizes, is not seen
@@ -33,11 +38,12 @@ orbit_step = 0.01 # radians a frame
 # the scene as the shader reads it, straight from the file's bytes: four floats a Gaussian, a vec4f each, its centre
 # and opacity, then the six numbers of its covariance and its color's 24 bits. GPU lists [f32], so the host can hand
 # the GPU those bytes in one copy. No Splat is built
-frame = read_splat_frame(capture)
-n = frame.count
-centres: [f32] = frame.centres
-shapes: [f32] = frame.shapes
-shades: [f32] = frame.shades
+# named scene, not frame: `frame = …` would steal the `on frame` event (card gaussian-splats-sample)
+scene = splat_frame(capture)
+n = scene.count
+centres = scene.centres
+shapes = scene.shapes
+shades = scene.shades
 # its middle and its size, both of the bulk of it: a capture's stray Gaussians far out do not count
 axis_at(k: int): list := [centres#(4 * (i - 1) + k) for i in 1 to n]
 middle = if n == 0 then [0.0, 0.0, 0.0] else [median(axis_at(k)) for k in 1 to 3]
@@ -72,8 +78,9 @@ look(yaw: float, pitch: float, width: float, height: float) := {
 	up = cross(right, forward)
 	focal = zoom * height
 	centre = [width / 2, height / 2]
-	# every frame, including a small orbit: the 16-bit order, nearest first. The shader draws that list back to front
-	drawn = view_order_into(centres, eye, forward, nearest * size, order)
+	# every frame, including a small orbit: nearest first. The shader draws that list back to front
+	# (lib/splats.warp order_by_depth: view_order_into in gpu_lists currently refuses, card gaussian-splats-sample)
+	drawn = order_by_depth(centres, eye, forward, nearest * size, order)
 	instances = 1 + drawn
 }
 
@@ -125,9 +132,7 @@ yaw = 0.0
 pitch = 0.35
 last_x = mouse_x
 last_y = mouse_y
-# one host word records this program's memory, which a GPU-list upload reads. The driver's paint word does not.
-# A dot at 8px is enough; its raster is thrown away. --times asks the host to print upload and draw.
-text_coverage(".", 8, "")
+# --times asks the host to print upload and draw
 if timing { set_system_value("paint timing", 1) }
 # each frame of the window, until it closes (headless: one frame, as a PNG)
 on frame {

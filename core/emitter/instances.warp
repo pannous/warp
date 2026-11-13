@@ -509,7 +509,8 @@ def field_of(body: Body, value: TypedCode, name: text, class_name: text = ""): T
 	# (a time held as a node has its fields too, `m.hour` of a top-level m beside a linked module)
 	if (value.kind == ValueKind.Node or value.kind == pending) and class_name == "" and time_fields.has(name) and module.functions.has(time_field_word) { return node_time_field(body, value, name, held => field_read(body, held, name, class_name)) }
 	if value.kind == ValueKind.Node or value.kind == pending { return field_read(body, TypedCode(ValueKind.Node, value.code), name, class_name) }
-	if value.kind == ValueKind.List and is_swizzle(name) { return field_read(body, TypedCode(ValueKind.Node, boxed(value)), name, class_name) }
+	# (a list reads a swizzle, or the plural of its items' field: `people.names`, runtime fields.warp)
+	if value.kind == ValueKind.List { return field_read(body, TypedCode(ValueKind.Node, boxed(value)), name, class_name) }
 	if value.kind == ValueKind.Time and time_fields.has(name) and module.functions.has(time_field_word) { return time_field(value, name) }
 	refuse("the field " + name + " of a " + kind_spelling(value.kind))
 }

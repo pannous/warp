@@ -56,15 +56,26 @@ overloaded_arities(program: Node): map := {
 	}
 	overloaded = {}
 	for name in arities.keys {
-		if #arities[name] > 1 and all_distinct(arities[name].map(span => span#2)) { overloaded[name] = arities[name] }
+		if #arities[name] > 1 and all_distinct(arities[name].map(span => span#2)) and spans_apart(arities[name]) { overloaded[name] = arities[name] }
 	}
 	overloaded
 }
+# no count two spans both take: `f(d: D, long = no, iso = no)` (1 to 3) beside `f(t: text, v)` (2) stays one name,
+# whose definitions its typed overloads tell apart, as a variant per count could not
+spans_apart(spans: list): bool := spans.all(a => spans.all(b => a == b or starts_after(a, b) or starts_after(b, a)))
+# whether span a starts past the end of span b (-1: b takes any more)
+starts_after(a: list, b: list): bool := b#2 >= 0 and a#1 > b#2
 
+# each variant's name → the name programs write it by, `twice·2` → `twice`, of the compile at hand (prebuilt.warp
+# word_reaches files a linked word under it)
+global variant_written_names = {}
 # the definition's target naming its variant: `twice(a, b): int` as `twice·2(a, b): int`
 renamed_target(target: Node, name: text): Node := match target {
 	Key(head, op, result): Key(renamed_target(head, name), op, result)
-	_: group_like(target, [symbol(name)] + items_of(target)[1 ..])
+	_: {
+		variant_written_names[name] = name_of(target#1)
+		group_like(target, [symbol(name)] + items_of(target)[1 ..])
+	}
 }
 
 # `f(a, b)` or the words side by side, `play C4`
@@ -265,6 +276,9 @@ and_listed(words: list): text := if #words < 2 then words.join("") else words[0 
 # how well a value fits `any`: worse than every typed fit; a list of known elements fits a plain `list` worse than a
 # list of its elements
 any_fit = 100
+# how well an exact number fits a float: worse than `any` in every other argument together (variant_fit sums them),
+# so it turns float only where no variant keeps it exact
+float_from_exact_fit = any_fit * any_fit
 list_fit = 2
 # the kind each type word an overload tells apart stands for
 overload_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", float: "float", double: "float",
@@ -454,7 +468,8 @@ library_word_named(name: text): text := if word_lines().has(name) then name else
 static_kind(n: Node): list? := {
 	if n is bool { return ["bool", ø] }
 	if n is int { return ["int", ø] }
-	if n is float { return ["float", ø] }
+	# a decimal literal is exact (wiki/number.md), a float only past 15 digits
+	if n is number { return [if number_kind(n) == ValueKind.Int then "rational" else "float", ø] }
 	if n is codepoint { return ["codepoint", ø] }
 	if n is text { return ["text", ø] }
 	# `./a` is `"./a" as path`
@@ -477,9 +492,6 @@ assigned_kinds(program: Node): map := {
 			kind = static_kind(value_of(n))
 			kinds[name] = if kind == ø or (name in kinds and kinds[name] != kind) then [] else kind
 		}
-		# a parameter takes any value, whatever a variable of its name is given: the `e` of `e -> tan(e)` beside the
-		# case `e = "e"` of keys.warp
-		for name in parameters_bound(n) { kinds[name] = [] }
 	}
 	kinds
 }
@@ -507,7 +519,7 @@ magnitude_kind(word: text, number: list?): list? := {
 	if word == "sqrt" { return if number != ø and number#1 == "float" then number else ø }
 	if number != ø then ["float", ø] else ø
 }
-numeric_kinds = ["int", "float"]
+numeric_kinds = ["int", "rational", "float"]
 known_kind(n: Node, judge: ArgumentJudge): list? := {
 	# a name assigned is a variable, its kind known only when all its values agree: the `rest = value` of the prelude's
 	# fits_text_cut beside text's Cursor.rest() is no function
@@ -530,10 +542,10 @@ declared_result(word: text, count: int): list? := {
 	[overload_kinds[results#1], ø]
 }
 numeric(kind: list?): list? := if kind != ø and kind#1 in numeric_kinds then kind else ø
-# an int with an int stays an int, a float makes a float
+# an int with an int stays an int, a rational makes a rational, a float a float
 joined_numbers(a: list?, b: list?): list? := {
 	if numeric(a) == ø or numeric(b) == ø { return ø }
-	[if a#1 == "float" or b#1 == "float" then "float" else "int", ø]
+	[numeric_kinds.filter(kind => kind == a#1 or kind == b#1).last, ø]
 }
 
 # the kind all the items share, ø when they differ, are lists or are not known
@@ -551,9 +563,10 @@ fit(kind: text, type: text): int? := {
 	if type in overload_classes { return class_distance(kind, type) }
 	# (a value the compile knows is never marked: only the run time tells a Color)
 	if type in overload_marks { return ø }
-	if type == "number" { return if kind == "int" or kind == "float" then 1 else ø }
+	if type == "number" { return if kind in numeric_kinds then 1 else ø }
 	wanted = overload_kind(type)
 	if kind == wanted { return 0 }
+	if kind == "rational" and wanted == "float" { return float_from_exact_fit }
 	if (kind == "int" and wanted == "float") or (kind == "codepoint" and wanted == "text") or marked_text_of(kind, type) then 1 else ø
 }
 
@@ -731,14 +744,17 @@ names_a_field(name: text, program: Node): bool := {
 	if statements_in(program).any(statement => class_view(statement) != ø and class_declared(statement, class_view(statement)).fields.any(field => field == name)) { return yes }
 	nodes_in(program).any(n => is_key(n, Op.Colon) and key_of(n) == symbol(name))
 }
+# inside a definition or a lambda its parameters take any value, whatever a variable of their name is given elsewhere
+# (the `e` of `e -> tan(e)` beside the case `e = "e"` of keys.warp); outside they hide no variable's kind
+within(judge: ArgumentJudge, n: Node): ArgumentJudge := ArgumentJudge(without_keys(judge.variables, parameters_bound(n)), judge.own, judge.least, judge.program)
 # top-down, so a definition is renamed by its own parameter types
 typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	call = definition_call(n)
 	if call != ø {
 		head = if name_of(call#1) in overloaded then renamed_target(key_of(n), typed_variant(name_of(call#1), parameter_types(call))) else key_of(n)
-		return Key(head, Op.Define, typed_resolved(value_of(n), shadowed(overloaded, bound_at(n)), judge))
+		return Key(head, Op.Define, typed_resolved(value_of(n), shadowed(overloaded, bound_at(n)), within(judge, n)))
 	}
-	if is_key(n, Op.Arrow) { return Key(key_of(n), Op.Arrow, typed_resolved(value_of(n), shadowed(overloaded, bound_at(n)), judge)) }
+	if is_key(n, Op.Arrow) { return Key(key_of(n), Op.Arrow, typed_resolved(value_of(n), shadowed(overloaded, bound_at(n)), within(judge, n))) }
 	# a method call `xs.find(f)` is the call find(xs, f), its receiver the first argument; a module's word called through
 	# its name, `memory.copy(bytes, at)`, the word's own call, copy(bytes, at)
 	method = if is_key(n, Op.Dot) then value_of(n) else ø
@@ -779,7 +795,8 @@ typed_overloads(program: Node): Node := {
 # `pdf` of `f(t) as pdf := …` and `f(t): pdf := …`, which definitions.warp holds as `{the result: pdf = …; the result}`;
 # ø of a definition declaring no result
 written_result(n: Node): text? := {
-	held = held_result(n)
+	# (a linked word's declaration holds none: its head says it, `random(a, b): float`)
+	held = held_result(n) ?? (if is_key(n, Op.Define) and is_key(key_of(n), Op.Colon) then value_of(key_of(n)) else ø)
 	if definition_call(n) != ø and held is symbol then required_type(name_of(held)) else ø
 }
 
@@ -851,7 +868,10 @@ result_resolved(n: Node, overloaded: map, parameters: map): Node := {
 	if call != ø {
 		name = name_of(call#1)
 		# the default keeps the plain name: a call no expected type tells apart stays as written
-		target = if name in overloaded and written_result(n) != ø then renamed_target(key_of(n), result_variant(name, written_result(n))) else key_of(n)
+		# (a linked module's variant, declared without its body, binds to the module's word by its name alone, which says
+		# its result: random·2·float)
+		head = if value_of(n) == Node.Empty and is_key(key_of(n), Op.Colon) then key_of(key_of(n)) else key_of(n)
+		target = if name in overloaded and written_result(n) != ø then renamed_target(head, result_variant(name, written_result(n))) else head
 		return Key(target, Op.Define, result_resolved(value_of(n), overloaded, parameters))
 	}
 	if is_key(n, Op.As) and overloaded_call(key_of(n), overloaded) != ø and returning(key_of(n), value_of(n), overloaded) != key_of(n) {

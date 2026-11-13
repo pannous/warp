@@ -119,7 +119,7 @@ comprehension_sugar_module_names = sugar_files(["comprehensions"])
 # the sugar of declarations (extensions/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
 declaration_sugar_module_names = sugar_files(["declarations"])
 # the standard modules: those with `rewrite` lines lend their rules to the programs mentioning them
-std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "host_io", "integers", "uncertain", "web", "storage", "frames", "native_host", "callbacks", "signals", "timers", "tasks", "shaders", "unicode_data", "unicode", "exact_values", "reals", "complex", "big_numbers"]
+std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "slugs", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "host_io", "integers", "uncertain", "web", "storage", "frames", "native_host", "callbacks", "signals", "timers", "tasks", "shaders", "unicode_data", "unicode", "exact_values", "reals", "complex", "big_numbers"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # the declarations sugar strips it, and the function keyword's rule rewrites the rest)
@@ -555,13 +555,20 @@ sugar_at_place(n: Node, place: Place, rules: list): Node := {
 early_sugared(program: Node): Node := {
 	rules = early_module_rules()
 	words = phrase_words(program, early_pair_keys())
-	if not rules.any(rule => needed_words(rule).any(word => words.has(word))) { return program }
+	if not early_needed_words().keys.any(word => words.has(word)) { return program }
 	kept = unbound_rules(rules, program)
 	once = sugared(program, kept)
 	# a rule a pair's key starts may write a variable later, `bind: name`'s setter: the items reading it are live, so
 	# once more; only then, as the two looks for later writes cost as much as the pass (self-compile 1.8 T → 12.9 T)
 	if not early_pair_keys().keys.any(key => words.has(key)) { return once }
 	if written_later(once, no).any(name => name not in written_later(program, no)) then sugared(once, kept) else once
+}
+# the words the early rules need, made once as the rules are (asked per class member and reached definition, each
+# rule's needed_words scanned the library's typed constants: 12% of a `100ms` compile)
+global early_words = ø
+early_needed_words(): map := {
+	if early_words == ø { early_words = word_set(early_module_rules().flat_map(needed_words)) }
+	early_words
 }
 # the keys of the early rules that rewrite a pair into code writing a variable later, `bind: $v`'s setter, read once:
 # such a key starts the early pass and its second run; any other key is a field name (`once: yes` in lib/prelude.warp)
@@ -1171,11 +1178,21 @@ computed(call: Node, bound: map): any := {
 	name = name_of(call#1)
 	given = items_of(call)[1 ..].map(argument => if argument == symbol(program_hole) then rule_program else if argument == symbol(source_hole) then rule_source else rule_spliced(argument, bound, argument))
 	if not rule_words.has(name) { return if is_module_rule_word(name) then module_word(rule_module, name, List(given, Bracket.Round, Separator.Comma)) else skipped_rule_word(name) }
+	rule_word_called(name, given)
+}
+rule_word_called(name: text, given: list): any := {
 	word = rule_words[name]
 	if #given == 0 { return word() }
 	if #given == 1 { return word(given#1) }
 	if #given == 2 { return word(given#1, given#2) }
 	word(given#1, given#2, given#3)
+}
+# a module's rule word asking for one of the compiler's (warp.rule_word, core/native/driver.warp rule_word_answered):
+# its walkers and tables, as its own rules compute them
+asked_rule_word(word: Node, arguments: Node): Node := {
+	name = "${word}"
+	if not rule_words.has(name) { raise "no rule word " + name + " for a module to ask" }
+	rule_word_called(name, items_of(arguments))
 }
 # `$f takes value`, `$f takes int`
 is_takes(condition: Node): bool := is_group(condition) and bracket_of(condition) == "" and separator_of(condition) == " " and #condition == 3 and rule_hole(condition#1) != ø and condition#2 == symbol(takes_word) and condition#3 is symbol
@@ -1211,8 +1228,9 @@ prelude_foreign_types(): map := {
 	if prelude_foreign_names == ø { prelude_foreign_names = foreign_types(prelude_text()) }
 	prelude_foreign_names
 }
-# how many arguments the call the rule matched passes the word, ø when it matched no call of it
-matched_arity(word: Node): int? := if rule_matched != ø and is_round(rule_matched) and #rule_matched > 0 and rule_matched#1 == word then #rule_matched - 1 else ø
+# how many arguments the call the rule matched passes the word, round or spaced (`max xs` passes max one, as max(xs)
+# does), ø when it matched no call of it
+matched_arity(word: Node): int? := if rule_matched != ø and (is_round(rule_matched) or is_word_phrase(rule_matched)) and #rule_matched > 0 and rule_matched#1 == word then #rule_matched - 1 else ø
 
 # what a type word converts, unless the program binds it: a value of another type (`int 3.7 == 3` is int(3.7) == 3),
 # yes or no for the yes/no type's own (`bool x == y` stays bool(x == y)), decision function-words-consume

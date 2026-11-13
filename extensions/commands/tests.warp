@@ -103,7 +103,7 @@ case_failure(case: TestCase, got: any, expected_run: text): text := {
 	if got is text { return got }
 	failed = kind(got) == "error"
 	expected = case.expected
-	if expects_error(expected) { return if failed then "" else "got " + serialize(got) }
+	if expects_error(expected) { return if failed and carries_key(got, expected_error_key(expected)) then "" else "got " + serialize(got) }
 	if needs_run(expected) {
 		ran = run_result(expected_run, "")
 		# (a bare name no program of its own binds, `High` of the case's own enum, is that name)
@@ -154,6 +154,7 @@ common_divisor(a: int, b: int): int := if b == 0 then a else common_divisor(b, a
 test_files_of(words: list): list := {
 	named = words.filter(word => not word.starts_with("--"))
 	slow = SLOW_FLAG in words or EACH_FLAG in words
+	for path in named { if not exists(path) { raise "warp test: no such test folder or file: " + path } }
 	(if #named == 0 then [TEST_FOLDER] else named).flat_map(path => test_files_in(path, slow))
 }
 # a path ending in .warp is a file (listing one is no error a try catches), any other a folder; a slow folder inside
@@ -243,7 +244,15 @@ skipped_pairs(source: text): list := {
 	skipped
 }
 
-expects_error(expected: any): bool := expected == ["symbol", EXPECTED_ERROR]
+expects_error(expected: any): bool := expected == ["symbol", EXPECTED_ERROR] or expected_error_key(expected) != ø
+# the key of an expected `error(charged_assignment)`, a row of core/analysis/errors.data: the run fails with that error,
+# whatever its wording; ø for any other expected value
+expected_error_key(expected: any): text? := {
+	if kind(expected) != "list" or #expected != 5 or expected#4 != ["symbol", EXPECTED_ERROR] or kind(expected#5) != "symbol" { return ø }
+	expected#5#2
+}
+# whether a failed run's error is the one of that key, as the compiler leads it under --value-as-data; any error for none
+carries_key(got: any, key: text?): bool := key == ø or got#2#2.starts_with(EXPECTED_ERROR + "(" + key + ")")
 # an expected value written as data, compared as it is; anything else (`π`, `(-1)`, `1 + pi`) is code to run
 is_data_expected(view: any): bool := {
 	if view == ø or view is bool or view is number { return yes }

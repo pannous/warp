@@ -27,6 +27,9 @@ scalars = {i8: signed_byte, int8: signed_byte, u8: unsigned_byte, uint8: unsigne
 	u64: unsigned_long, uint64: unsigned_long, f32: single_float, float32: single_float, f64: double_float,
 	float: double_float, double: double_float, number: double_float}
 NO_VALUE = ""
+# the GC program's checked cast (extensions/sugar/calls.warp), which the sugar makes of a @primitive function's
+# `x as u8` and of its fixed-width declarations, `the result: u8 = e` its result too
+FITTED_INT_WORD = "fitted_int"
 INT_TYPE = "int"
 FLOAT_TYPE = "float"
 BOOL_TYPE = "bool"
@@ -69,8 +72,6 @@ ARENA_EXPORT = "arena"
 load_codes = {"i32 1": [44, 45], "i32 2": [46, 47], "i32 4": [40, 40], "i64 8": [41, 41], "f32 4": [42, 42], "f64 8": [43, 43]}
 store_codes = {"i32 1": 58, "i32 2": 59, "i32 4": 54, "i64 8": 55, "f32 4": 56, "f64 8": 57}
 alignment_exponents = {1: 0, 2: 1, 4: 2, 8: 3}
-global_get = 35
-global_set = 36
 import_function_kind = 0
 # a text is the address of its (address, length) pair, the $String layout of the host edge: a WASI iovec as it is
 TEXT_TYPE = "text"
@@ -102,6 +103,9 @@ global primitive_functions = {}
 # whether primitive functions are compiled into a GC program (else a primitive file is the module)
 global primitive_hosted = no
 global primitive_structs = {}
+# each fixed array type made, by its name `i64[8]`, as a struct type is named: its item type and count
+class ArrayLayout { item: text; count: int }
+global primitive_arrays = {}
 global primitive_place = ""
 # the bytes of the text literals from DATA_START on, and each text's address there
 global primitive_data = []
@@ -109,6 +113,9 @@ global text_addresses = {}
 # the file's constants: each top-level name given a number literal once, which every function and main read as that
 # literal
 global primitive_constants = {}
+# the file's `global count = 0`: [name → [index, type, initial value's code]], each a mutable wasm global behind the
+# arena's, read and written by every function as `global` names one in a GC program
+global primitive_globals = {}
 
 # a source whose leading header, its `#!` line, comments and blank lines before the code, holds the mark builds whole
 # in primitive mode; the mark on its own line below the code is refused, the file would compile as GC warp unmarked
@@ -144,6 +151,7 @@ primitive_module(source: text, folder: text): list := {
 	primitive_functions = {}
 	primitive_hosted = no
 	primitive_structs = {text: text_layout}
+	primitive_arrays = {}
 	primitive_data = []
 	text_addresses = {}
 	statements = statements_in(program)
@@ -155,8 +163,10 @@ primitive_module(source: text, folder: text): list := {
 	}
 	for imported in c_functions { declare_c_function(imported#1, imported#2) }
 	primitive_constants = constants_of(statements)
+	primitive_globals = {}
+	for n in statements.filter(n => declared_global_name(n) != ø) { declare_primitive_global(n) }
 	main_statements = []
-	for n in statements.filter(n => not struct_declared(n) and foreign_import(n) == ø) {
+	for n in statements.filter(n => not struct_declared(n) and foreign_import(n) == ø and declared_global_name(n) == ø) {
 		head = function_head(n)
 		if head == ø { if not defines_constant(n) { main_statements += [n] } } else if not forwards_to_library(name_of(head#1), value_of(n)) { declare_primitive(head, value_of(n)) }
 	}
@@ -175,6 +185,15 @@ constants_of(statements: list): map := {
 		if is_key(n, Op.Assign) and key_of(n) is symbol and (value_of(n) is int or value_of(n) is float) and #assigned.filter(name => name == name_of(key_of(n))) == 1 { found[name_of(key_of(n))] = value_of(n) }
 	}
 	found
+}
+# `global count = 0`: a global of its number's type, as a local given it takes
+declare_primitive_global(n: Node) := {
+	declaration = if is_group(n) then n#2 else value_of(n)
+	value = if is_key(declaration, Op.Assign) then value_of(declaration) else ø
+	made = if is_key(value, Op.Hash) then array_made(key_of(value), value_of(value)) else ø
+	if made == ø and not (value is int or value is float) { primitive_refusal(n, "a global not given a number or an array") }
+	initial = if made then PrimitiveCode(made, [op.i32_const] + sleb(zeros_reserved(array_bytes(made)))) else mvp_literal(value, "")
+	primitive_globals[declared_global_name(n)] = [ARENA_TOP + 1 + #primitive_globals, initial.type, initial.code]
 }
 defines_constant(n: Node): bool := is_key(n, Op.Assign) and key_of(n) is symbol and name_of(key_of(n)) in primitive_constants
 # the body with each constant read as its literal, but where a parameter of that name hides it
@@ -380,6 +399,7 @@ as_i32(n: int): int := if n >= 1 << 31 then n - (1 << 32) else n
 mvp_variable(f: PrimitiveFunction, n: Node): PrimitiveCode := {
 	name = name_of(n)
 	if name == "break" { return mvp_breaking(f, n) }
+	if name not in f.locals and name in primitive_globals { return PrimitiveCode(primitive_globals[name]#2, [op.global_get] + uleb(primitive_globals[name]#1)) }
 	if name not in f.locals { primitive_refusal(n, "the unknown name " + name) }
 	PrimitiveCode(f.locals[name]#2, [op.local_get] + uleb(f.locals[name]#1))
 }
@@ -456,6 +476,7 @@ mvp_keyed(f: PrimitiveFunction, left: Node, operator: Op, right: Node, n: Node, 
 	if operator == Op.Then or operator == Op.Else { return mvp_conditional(f, n, expected) }
 	if operator == Op.Do and is_key(left, Op.While) { return mvp_looped(f, value_of(left), right) }
 	if operator == Op.Dot { return mvp_field_read(f, left, right) }
+	if operator == Op.Hash { return mvp_hashed(f, left, right) }
 	if operator == Op.As { return mvp_cast_as(f, left, right) }
 	if operator == Op.And or operator == Op.Or { return mvp_logical(f, left, operator, right) }
 	if operator == Op.Not { return PrimitiveCode(BOOL_TYPE, mvp_condition(f, right) + [op.i32_eqz]) }
@@ -507,9 +528,11 @@ mvp_assigned_operation(op: Op): any := match op {
 mvp_assigned(f: PrimitiveFunction, target: Node, value: Node, n: Node): PrimitiveCode := {
 	if is_key(target, Op.Colon) { return mvp_declared(f, key_of(target), value_of(target), n, value) }
 	if is_key(target, Op.Dot) { return mvp_field_written(f, key_of(target), value_of(target), value) }
+	if is_key(target, Op.Hash) { return mvp_stored_at(f, mvp_item(f, key_of(target), value_of(target)), value) }
 	if not (target is symbol) { primitive_refusal(n, "an assignment to " + form_of(target)) }
 	name = name_of(target)
 	if name in f.locals { return PrimitiveCode(NO_VALUE, mvp_typed(f, value, f.locals[name]#2) + [op.local_set] + uleb(f.locals[name]#1)) }
+	if name in primitive_globals { return PrimitiveCode(NO_VALUE, mvp_typed(f, value, primitive_globals[name]#2) + [op.global_set] + uleb(primitive_globals[name]#1)) }
 	given = mvp_emitted(f, value, "")
 	if given.type == NO_VALUE { primitive_refusal(n, "an assignment of a statement") }
 	PrimitiveCode(NO_VALUE, given.code + [op.local_set] + uleb(mvp_local_of(f, name, given.type)))
@@ -629,13 +652,14 @@ def primitive_bytes(functions: list): list {
 	imports = vector(imported.map(f => name_bytes(f.library) + name_bytes(written_name(f.name)) + [import_function_kind] + uleb(f.index)))
 	declared = vector(defined.map(f => uleb(f.index)))
 	memory = vector([[0] + uleb(MEMORY_PAGES)])
-	arena = vector([[value_bytes.i32, 1, op.i32_const] + sleb(aligned(DATA_START + #primitive_data, ARENA_ALIGNMENT)) + [op.end]])
+	declared_globals = primitive_globals.keys.map(name => [value_bytes[mvp_wasm_of(primitive_globals[name]#2)], 1] + primitive_globals[name]#3 + [op.end])
+	globals = vector([[value_bytes.i32, 1, op.i32_const] + sleb(aligned(DATA_START + #primitive_data, ARENA_ALIGNMENT)) + [op.end]] + declared_globals)
 	exports = vector([name_bytes("memory") + [export_memory_byte, 0], name_bytes(ARENA_EXPORT) + [export_global_byte, ARENA_TOP]] + defined.map(f => name_bytes(export_name(f)) + [export_function_byte] + uleb(f.index)))
 	code = vector(defined.map(primitive_body))
 	data = vector([[0, op.i32_const] + sleb(DATA_START) + [op.end] + vector(primitive_data.map(b => [b]))])
 	c_lines = imported.filter(f => f.library != WASI_LIBRARY).map(c_function_line).join("")
 	c_functions = if c_lines == "" then [] else section(section_ids.custom, name_bytes(PRIMITIVE_C_SECTION) + c_lines.bytes)
-	wasm_header + section(section_ids.type, vector(types)) + section(section_ids.import, imports) + section(section_ids.function, declared) + section(section_ids.memory, memory) + section(section_ids.globals, arena) + section(section_ids.export, exports) + section(section_ids.code, code) + section(section_ids.data, data) + c_functions
+	wasm_header + section(section_ids.type, vector(types)) + section(section_ids.import, imports) + section(section_ids.function, declared) + section(section_ids.memory, memory) + section(section_ids.globals, globals) + section(section_ids.export, exports) + section(section_ids.code, code) + section(section_ids.data, data) + c_functions
 }
 # the C functions a module imports, for the native driver to call under wasmtime as a native build's glue does
 # (c_function_glue; decision primitive-c-in-driver): a line each of the fields driver.warp reads of a GC module's
@@ -678,16 +702,50 @@ mvp_field(f: PrimitiveFunction, owner: Node, field: Node): list := {
 	if not (field is symbol and name_of(field) in layout.fields) { primitive_refusal(field, value.type + " has no field " + form_of(field)) }
 	[value.code, layout.fields[name_of(field)]]
 }
-mvp_field_read(f: PrimitiveFunction, owner: Node, field: Node): PrimitiveCode := {
-	found = mvp_field(f, owner, field)
-	type = found#2#2
-	scalar = mvp_scalar(type)
+mvp_field_read(f: PrimitiveFunction, owner: Node, field: Node): PrimitiveCode := mvp_loaded(mvp_field(f, owner, field))
+mvp_field_written(f: PrimitiveFunction, owner: Node, field: Node, value: Node): PrimitiveCode := mvp_stored_at(f, mvp_field(f, owner, field), value)
+# [address code, [offset, type]]: the value there, read; `value` stored there
+mvp_loaded(found: list): PrimitiveCode := {
+	scalar = mvp_scalar(found#2#2)
 	codes = load_codes[scalar.wasm + " " + scalar.width]
-	PrimitiveCode(type, found#1 + [if scalar.signed then codes#1 else codes#2] + memory_argument(found#2))
+	PrimitiveCode(found#2#2, found#1 + [if scalar.signed then codes#1 else codes#2] + memory_argument(found#2))
 }
-mvp_field_written(f: PrimitiveFunction, owner: Node, field: Node, value: Node): PrimitiveCode := {
-	found = mvp_field(f, owner, field)
-	PrimitiveCode(NO_VALUE, found#1 + mvp_stored(f, found#2, value))
+mvp_stored_at(f: PrimitiveFunction, found: list, value: Node): PrimitiveCode := PrimitiveCode(NO_VALUE, found#1 + mvp_stored(f, found#2, value))
+
+# a fixed array `i64[8]` (wiki/array.md; the parser reads it as `i64#9`): its items' type and count in its type, its
+# items in memory one after another, zeros at first: a global's in the data, any other taken from the arena
+# (a size known only as it runs is refused: the array's place is fixed when it is compiled)
+array_made(type: Node, counted: Node): text? := {
+	if not (type is symbol and name_of(type) in scalars) { return ø }
+	if not (counted is int) { primitive_refusal(type, "an array of a size known only as it runs: write `" + name_of(type) + "[8]`") }
+	name = name_of(type) + "[" + (counted - 1) + "]"
+	primitive_arrays[name] = ArrayLayout(name_of(type), counted - 1)
+	name
+}
+array_bytes(type: text): int := primitive_arrays[type].count * mvp_scalar(primitive_arrays[type].item).width
+# the address and [0, item type] of an array's item counted from 1 (`kept#3`, the parser's `kept[2]`), trapping outside it
+mvp_item(f: PrimitiveFunction, array: Node, index: Node): list := {
+	held = mvp_emitted(f, array, "")
+	layout = primitive_arrays.get(held.type)
+	if layout == ø { primitive_refusal(array, "an item of a " + (held.type or "statement") + ", not an array") }
+	item = layout.item
+	f.scratch += 1
+	at = uleb(mvp_local_of(f, "·item" + f.scratch, "i32"))
+	outside = [op.local_tee] + at + [op.i32_const] + sleb(layout.count) + [comparison_codes.i32 + integer_comparisons.ge + 1, op.if, empty_block_type, op.unreachable, op.end]
+	offset = mvp_cast(mvp_emitted(f, index, "i32"), "i32").code + [op.i32_const, 1, arithmetic_codes.i32 + integer_arithmetic.sub] + outside
+	[offset + held.code + [op.local_get] + at + [op.i32_const] + sleb(mvp_scalar(item).width) + [arithmetic_codes.i32 + integer_arithmetic.mul, op.i32_add], [0, item]]
+}
+# `i64#9`, the parser's `i64[8]`: a local array taken from the arena; `kept#3`: an item read
+mvp_hashed(f: PrimitiveFunction, left: Node, right: Node): PrimitiveCode := {
+	made = array_made(left, right)
+	if made { return PrimitiveCode(made, arena_taken([op.i32_const] + sleb(array_bytes(made)))) }
+	mvp_loaded(mvp_item(f, left, right))
+}
+# the address of `count` zero bytes in the data, at a multiple of ARENA_ALIGNMENT
+zeros_reserved(count: int): int := {
+	start = aligned(DATA_START + #primitive_data, ARENA_ALIGNMENT)
+	primitive_data += range_list(start - DATA_START - #primitive_data + count).map(i => 0)
+	start
 }
 # with the address on the stack: the value stored into the field [offset, type]
 mvp_stored(f: PrimitiveFunction, field: list, value: Node): list := {
@@ -700,13 +758,13 @@ memory_argument(field: list): list := uleb(alignment_exponents[mvp_scalar(field#
 # to ARENA_ALIGNMENT
 arena_taken(size: list): list := {
 	rounded = size + [op.i32_const] + sleb(ARENA_ALIGNMENT - 1) + [op.i32_add, op.i32_const] + sleb(-ARENA_ALIGNMENT) + [op.i32_and]
-	[global_get, ARENA_TOP, global_get, ARENA_TOP] + rounded + [op.i32_add, global_set, ARENA_TOP] + arena_grown()
+	[op.global_get, ARENA_TOP, op.global_get, ARENA_TOP] + rounded + [op.i32_add, op.global_set, ARENA_TOP] + arena_grown()
 }
 # the memory grown by the pages it lacks when the arena's top passed its end (a failed grow traps at the next store)
 arena_grown(): list := {
 	memory_end = [memory_size, 0, op.i32_const, WASM_PAGE_BITS, arithmetic_codes.i32 + integer_arithmetic.shl]
-	missing = [global_get, ARENA_TOP] + memory_end + [op.i32_sub, op.i32_const] + sleb(WASM_PAGE_BYTES - 1) + [op.i32_add, op.i32_const, WASM_PAGE_BITS, arithmetic_codes.i32 + integer_arithmetic.shr + 1]
-	[global_get, ARENA_TOP] + memory_end + [comparison_codes.i32 + integer_comparisons.gt + 1, op.if, empty_block_type] + missing + [memory_grow, 0, op.drop, op.end]
+	missing = [op.global_get, ARENA_TOP] + memory_end + [op.i32_sub, op.i32_const] + sleb(WASM_PAGE_BYTES - 1) + [op.i32_add, op.i32_const, WASM_PAGE_BITS, arithmetic_codes.i32 + integer_arithmetic.shr + 1]
+	[op.global_get, ARENA_TOP] + memory_end + [comparison_codes.i32 + integer_comparisons.gt + 1, op.if, empty_block_type] + missing + [memory_grow, 0, op.drop, op.end]
 }
 
 # the address of a text literal's (address, length) pair in the data, its bytes in front of it; each text once
@@ -742,7 +800,8 @@ primitive_compiled(f: Function) := {
 	parameters = f.signature.parameters
 	types = parameters.map(p => primitive_type_name(symbol(if p.type_name then p.type_name else "?")))
 	inner = added_function(f.name + "·primitive", types.map(hosted_kind), ValueKind.Int, [])
-	primitive = PrimitiveFunction(f.name, parameters.map(p => p.name), types, primitive_result(f.body), giving_body(f.body), inner.index)
+	body = unchecked_casts(f.body)
+	primitive = PrimitiveFunction(f.name, parameters.map(p => p.name), types, primitive_result(body), giving_body(body), inner.index)
 	primitive_functions[f.name] = primitive
 	f.kinds = types.map(boundary_kind)
 	f.locals = []
@@ -760,6 +819,17 @@ primitive_compiled(f: Function) := {
 	called = passed + call_code(inner.index)
 	f.code = if f.gives_nothing then called + [ref_null, gc_type(gc.node)] else mvp_cast(PrimitiveCode(primitive.result, called), if primitive.result == BOOL_TYPE then BOOL_TYPE else result).code
 }
+# a primitive function's code as written, before the GC program's sugar checked its casts: `x: int = fitted_int(e, "u8")`
+# is `x: u8 = e` again, `fitted_int(e, "u8")` the plain `e as u8`, as a primitive file has them (the rules' widened_to_int)
+unchecked_casts(n: Node): Node := {
+	if is_key(n, Op.Assign) and is_key(key_of(n), Op.Colon) and value_of(key_of(n)) == symbol(INT_TYPE) and is_fitted(unparenthesized(value_of(n))) {
+		fitted = unparenthesized(value_of(n))
+		return Key(Key(key_of(key_of(n)), Op.Colon, fitted_type(fitted)), Op.Assign, unchecked_casts(fitted#2))
+	}
+	if is_fitted(n) then Key(unchecked_casts(n#2), Op.As, fitted_type(n)) else children(n, unchecked_casts)
+}
+is_fitted(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(FITTED_INT_WORD)
+fitted_type(fitted: Node): Node := symbol("${fitted#3}")
 # the kind a primitive type is held as inside the GC module; f32 has none there yet
 hosted_kind(type: text): ValueKind := match mvp_wasm_of(type) {
 	"i32": ValueKind.I32

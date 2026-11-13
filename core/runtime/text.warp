@@ -1,5 +1,6 @@
 # Texts byte by byte: joining, counting characters, code points, order, search, printing
 use "intrinsics.warp"
+use "instructions.warp"
 use "characters.warp"
 use "walks.warp"
 use "../emitter/byte_codes.warp"
@@ -9,6 +10,7 @@ made_text(length: int, ascii: bool): text := if ascii then new_ascii_text(length
 # the byte offset of an $AsciiText's index-th character, counted from 1: its byte, the byte count past the last
 ascii_offset(t: text, index: int): int := if index < 1 then 0 else if index > byte_count(t) then byte_count(t) else index - 1
 text_join(a: text, b: text): text := {
+	global walked_text
 	out = made_text(byte_count(a) + byte_count(b), ascii_joined(a, b))
 	copy_text(out, 0, a, 0, byte_count(a))
 	copy_text(out, byte_count(a), b, 0, byte_count(b))
@@ -59,6 +61,9 @@ meets_newline(last: int, t: text): bool := last == Ascii.Return and byte_count(t
 # the characters (grapheme clusters) of a text; a short one stays out of the count kept, so a lexer's words leave its
 # source's count (card text-cache-lru)
 text_count(t: text): int := {
+	global counted_text
+	global counted_bytes
+	global counted
 	if is_ascii_text(t) { return byte_count(t) }
 	if byte_count(t) < short_text() { return characters_counted(t) }
 	if same(t, counted_text) and byte_count(t) == counted_bytes { return counted }
@@ -88,16 +93,26 @@ code_point_count(t: text): int := {
 }
 # the bytes the output area of linear memory holds at once (one page, past fd_write's iovec)
 output_room(): int := 65520
-# the bytes of t from start until stop into the output area, from its beginning
-output_bytes(t: text, start: int, stop: int) := {
-	for i in start..stop { output_byte(i - start, byte_at(t, i)) }
+# the bytes of t from start until stop into the output area at offset `at`, the memory grown to hold them and the
+# byte after them (a C string's 0): the one place a text goes into linear memory
+output_bytes(at: int, t: text, start: int, stop: int) := {
+	memory_holding(at + stop - start + 1)
+	for i in start..<stop { output_byte(at + i - start, byte_at(t, i)) }
 }
+# linear memory grown until the output area holds that many bytes (a long program argument, a big C text)
+memory_holding(bytes: int) := {
+	missing = pages_holding(output_address() + bytes) - memory_grown(0)
+	if missing > 0 { memory_grown(missing) }
+}
+# the pages of linear memory that many bytes take
+pages_holding(bytes: int): int := int_quotient(bytes + page_bytes() - 1, page_bytes())
+page_bytes(): int := 65536
 # where a text goes as a C string for a host word: past the output area's scratch bytes (runtime/extended/wasi.warp
 # scratch_bytes)
 c_text_at(): int := 32
 # t as the C string a host word reads, its bytes and a 0 in linear memory: its address
 c_text(t: text): int := {
-	for i in 0..<byte_count(t) { output_byte(c_text_at() + i, byte_at(t, i)) }
+	output_bytes(c_text_at(), t, 0, byte_count(t))
 	output_byte(c_text_at() + byte_count(t), 0)
 	output_address() + c_text_at()
 }
@@ -107,13 +122,13 @@ print_line(t: text): int := {
 	output_byte(0, Ascii.Newline)
 	write_output(1)
 }
-# t to stdout, through the output bytes of linear memory a chunk at a time: the one place a text goes into memory
+# t to stdout, through the output bytes of linear memory a chunk at a time
 print_text(t: text) := {
 	start = 0
 	while start < byte_count(t) {
 		stop = start + output_room()
 		if stop > byte_count(t) { stop = byte_count(t) }
-		output_bytes(t, start, stop)
+		output_bytes(0, t, start, stop)
 		write_output(stop - start)
 		start = stop
 	}

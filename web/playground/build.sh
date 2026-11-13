@@ -4,10 +4,11 @@
 # the example menu), keywords.js (the editor's hard and soft keywords) and version.js (the commit built, shown in the ⋯
 # menu). Serve the repository root and open the page:
 #   web/playground/build.sh && python3 -m http.server 8000   →   http://localhost:8000/web/playground/
-# Usage: build.sh [--lib <folder>] [compiler|served <site>|site <site>]   (all when omitted)
+# Usage: build.sh [--lib <folder>] [compiler|served [<site>]|site <site>]   (all when omitted)
 #   compiler  → warp-lib/: the installed lib/ (its warp.wasm, runtime.wasm, modules/ and sources), no machine code
 #   site <site> → collects the built page into a fresh <site> folder, as deployed (pages.yml, scripts/browser-dry-run.sh)
 #   served <site> → <site>/served-files.js for a collected site; every build writes the repository's
+#   served → the repository's served-files.js alone, for a warp-lib/ linked in from elsewhere (after-push.sh)
 set -euo pipefail
 
 page="$(cd "$(dirname "$0")" && pwd)"
@@ -18,8 +19,9 @@ source "$repository/scripts/lib/packages.sh"
 INSTALLED_LIBRARY="$repository/lib"
 [ -f "$INSTALLED_LIBRARY/warp.wasm.inputs" ] || INSTALLED_LIBRARY="$(dirname "$(command -v warp)")/lib"
 if [ "${1:-}" = --lib ]; then INSTALLED_LIBRARY=$2; shift 2; fi
-# the sources a compiler bakes in: one built from a commit where they differ ships its lag to the page
-COMPILER_SOURCES=(core 'lib/*.warp')
+# the sources a compiler bakes in (scripts/compiler-inputs.sh: core/ and extensions/ but not core/native/, the native
+# warp's own, and lib/'s modules): one built from a commit where they differ ships its lag to the page
+COMPILER_SOURCES=(core extensions ':(exclude)core/native' 'lib/*.warp')
 # what the browser cannot use of it: wasmtime's machine code, native libraries, kept values, stale compilers
 NOT_FOR_THE_BROWSER=(--exclude='*.cwasm' --exclude='*.cwasm.key' --exclude='*.dylib' --exclude='*.so' --exclude='*.kept'
 	--exclude='*.stale' --exclude='*.inputs' --exclude='warp-self.wasm*' --exclude='data/')
@@ -39,7 +41,7 @@ PRELOADED_SOURCES=('*.warp' 'extensions/sugar/*.warp' 'modules/index.tsv' 'modul
 COMPILER_EXPORTS=(main _start memory text_heap trap_detail trap_position trap_name show trap_message shown_at shown_from returned_error
 	error_of new_empty new_int new_bool new_float new_codepoint new_text new_symbol new_key new_list new_type new_bytes new_ints
 	new_floats new_spelled_key new_spelled_list item_count item_at int_item_at float_item_at gpu_list_place gpu_list_cell
-	is_textual)
+	is_textual node_encoding asked_rule_word)
 # core/commands/commands.warp WASM_OPT's features: Binaryen's -all would add exact references Firefox refuses
 WASM_OPT_FEATURES=(--enable-gc --enable-reference-types --enable-bulk-memory --enable-multivalue --enable-sign-ext
 	--enable-nontrapping-float-to-int --enable-mutable-globals --enable-tail-call --enable-simd --enable-extended-const
@@ -183,7 +185,7 @@ print("// made by build.sh: the files the server has (host-files.js isUnserved)\
 # the repository's files, as the dev server and test_in_browser.py serve them from the repository root
 write_repository_served_files() {
 	# plus the compiler's lib/ and the packages, which git ignores
-	{ git -c core.quotepath=off ls-files --cached --others --exclude-standard; linked_folder_files; find web/playground/warp-lib -type f 2>/dev/null || true; package_files; find web/playground/lib -name '*.wasm'; } | write_served_files "$page/served-files.js"
+	{ git -c core.quotepath=off ls-files --cached --others --exclude-standard; linked_folder_files; find -L web/playground/warp-lib -type f -not -name .DS_Store 2>/dev/null || true; package_files; find web/playground/lib -name '*.wasm'; } | write_served_files "$page/served-files.js"
 }
 
 # the files under each tracked link to a folder, by the link's path: lib/compiler -> ../core serves
@@ -259,16 +261,18 @@ stamp_assets() {
 }
 
 case "${1:-all}" in
-	served) write_site_served_files "$2"; exit ;;
+	served) if [ -n "${2:-}" ]; then write_site_served_files "$2"; else write_repository_served_files; fi; exit ;;
 	site) collect_site "$2"; exit ;;
 	compiler) build_compiler ;;
 	all) build_compiler ;;
-	*) echo "usage: $0 [compiler|served <site>|site <site>]" >&2; exit 2 ;;
+	*) echo "usage: $0 [compiler|served [<site>]|site <site>]" >&2; exit 2 ;;
 esac
 
-# the compiled module samples/wasm/import_compiled.warp links (samples/wasm/shapes.wasm, a link to it), built behind the
-# page's runtime.wasm, as scripts/samples.sh builds it natively
-warp --lib "$INSTALLED_LIBRARY" build --module test/fixtures/compiled/shapes.warp || echo "warning: no test/fixtures/compiled/shapes.wasm: wasm/import_compiled fails in the page" >&2
+# the compiled modules of test/fixtures/compiled (samples/wasm/import_compiled.warp links shapes.wasm, a link to it),
+# built behind the page's runtime.wasm, as scripts/samples.sh builds them natively
+for fixture in test/fixtures/compiled/*.warp; do
+	warp --lib "$INSTALLED_LIBRARY" build --module "$fixture" || echo "warning: no ${fixture%.warp}.wasm: the samples and tests importing it fail in the page" >&2
+done
 write_repository_served_files
 
 # a folder per guide chapter (notes/samples.md); golf/ and wit/ hold no menu samples, native/ only natively built ones

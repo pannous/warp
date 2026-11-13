@@ -30,6 +30,7 @@ CHECKOUT_SCRIPTS = "/../web/playground"
 site_files(): list := PAGE_SCRIPTS + WORKER_SCRIPTS.filter(script => script not in PAGE_SCRIPTS) + [ISOLATION_SCRIPT]
 
 site_built(target: text, options: list) := {
+	global dev_build
 	if not (exists(target) and target.ends_with(".warp")) { raise "warp build --site builds a program file, app.warp, into a site/ beside it" }
 	stem = target.remove_suffix(".warp")
 	folder = option_of(options, SITE_OPTION) ?? (source_folder(target) + "/" + SITE_FOLDER)

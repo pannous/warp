@@ -50,6 +50,16 @@ rename(from: text, to: text): i32 from 'c'
 rmdir(path: text): i32 from 'c'
 mkdir(path: text, mode: i32): i32 from 'c'
 global delete_file(path: any): bool := unlink(home_expanded(path)) == 0
+// `delete(path)` (card file-delete-word): the file removed, through the host word std_io("file", "remove") (the
+// page: host-files.js forgetWritten). Natively the driver has no file.remove yet, so C unlink as delete_file uses.
+// A missing file is refused, naming the path.
+global delete(path: any) := {
+	expanded = home_expanded(path)
+	if not exists(expanded) { raise "delete: no " + text(expanded) }
+	try { std_io("file", "remove", [expanded]) } catch e {
+		if unlink(text(expanded)) != 0 { raise "delete: cannot remove " + text(expanded) }
+	}
+}
 // the program file this run was started from (the program option), "" when none (inline code / some playground snippets)
 program_file(): text := run_option("program") ?? ""
 // the folder holding the program file (decision play-mozart-mp3, source-dir-words): same place $dir and ^/ name
@@ -71,7 +81,7 @@ global remove_file(path: any) := {
 	if raw.contains("*") or raw.contains("?") { raise "file.remove: refusing a pattern " + raw }
 	expanded = text(home_expanded(raw))
 	absolute = absolute_path(expanded)
-	why = remove_refused(absolute)
+	why = removal_refusal(absolute)
 	if why != "" { raise why }
 	if folder_path(absolute) {
 		if count(list_files(absolute)) > 0 { raise "file.remove: " + absolute + ": Directory not empty" }
@@ -80,7 +90,7 @@ global remove_file(path: any) := {
 		trashed(absolute, no)
 	}
 }
-remove_refused(path: text): text := {
+removal_refusal(path: text): text := {
 	trimmed = path_trimmed(path)
 	if trimmed == "" or trimmed == "/" { return "file.remove: refusing to remove " + (if trimmed == "" then "an empty path" else trimmed) }
 	home = path_trimmed(text(std_io("os", "env", ["HOME"]) ?? ""))

@@ -149,12 +149,23 @@ global kept_comprehension_sugar = []
 # bring their definitions; the source tells a rule's `·` from `*`; the early sugar before all of them, the function keywords gone). The sugar rules the program keeps are chosen here,
 # by its own bindings, before the definitions it reaches join it.
 with_used(program: Node, source: text, folder: text, prelude: text): Node := {
+	global brought_names
+	global brought_value_names
+	global exported_names
+	global linked_reached
+	global linked_classes_reached
+	global linked_variants_waiting
+	global variant_written_names
+	global defined_origins
+	global local_declarations
+	global writes_templates
 	brought_names = {}
 	brought_value_names = {}
 	exported_names = {}
 	linked_reached = {}
 	linked_classes_reached = {}
 	linked_variants_waiting = {}
+	variant_written_names = {}
 	defined_origins = {}
 	local_declarations = {}
 	timed("with_uses")
@@ -222,6 +233,7 @@ comprehension_sugar(program: Node): Node := sugared(program, kept_comprehension_
 # those of the lowered program; what they find goes to `diagnosed` (diagnostics.warp)
 checked_program(source: text, folder: text, prelude: text): Node := {
 	lowering_from(prelude)
+	floor_division_comments(source)
 	program = plain_node(source_checks(parsed(rules_ended(source)), prelude), passes_read_marks)
 	own_names = statements_in(program).map(declared_name)
 	main_globals(kind_changes(lowered_reached(program, source, folder, prelude)), own_names)

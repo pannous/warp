@@ -1,6 +1,6 @@
 # a named int type is a cheap class: it prints as its type says in lists too, and its operators are a module's (decisions int-types-are-classes, color-light-adding)
 'use color; "${[red, blue]}"'	"[red, blue]"
-'use color; "${red + blue}"'	"#FF00FF"
+'use color; "${red + blue}"'	"#ff00ff"
 'use color; "${red - red}"'	"black"
 'use color; "${gray * 2}"'	"white"
 'use color; red + blue == color("#ff00ff")'	yes

@@ -112,7 +112,7 @@ is_letter_byte(b: int): bool := b >= Ascii.LowerA and b <= Ascii.LowerZ
 shown_at(n: Node): int := {
 	t = node_text(n)
 	if c_text_at() + byte_count(t) > output_room() { return -1 }
-	for i in 0..<byte_count(t) { output_byte(c_text_at() + i, byte_at(t, i)) }
+	output_bytes(c_text_at(), t, 0, byte_count(t))
 	(output_address() + c_text_at()) * 4294967296 + byte_count(t)
 }
 # the text of the value a host reads part by part, and where its next part starts (shown_from)
@@ -127,7 +127,7 @@ shown_from(n: Node, start: int): int := {
 	t = shown_whole
 	count = byte_count(t) - start
 	if count > output_room() - c_text_at() { count = output_room() - c_text_at() }
-	for i in 0..<count { output_byte(c_text_at() + i, byte_at(t, start + i)) }
+	output_bytes(c_text_at(), t, start, start + count)
 	shown_next = start + count
 	if shown_next >= byte_count(t) { shown_whole = "" }
 	(output_address() + c_text_at()) * 4294967296 + count

@@ -16,7 +16,7 @@ message_files = [["errors.data", Level.Error, module_source("compiler/analysis/e
 quoting_word = "data"
 hole_mark = "$"
 
-# [level, message, fix, topic@expression, [line, column] or ø] of each fact diagnosed so far ("" when it names none),
+# [level, message, fix, topic@expression, [line, column] or ø, key] of each fact diagnosed so far ("" when it names none),
 # the place where the program wrote the node the fact is about
 global diagnosed = []
 # [level, pattern, message] of every row of the message files, read at the first fact
@@ -26,10 +26,15 @@ global message_rows = ø
 is_operator(n: any, op: text): bool := n is key and op_of(n) == op
 
 # the fact about the program's node `about`, which names where it is written
-diagnose(fact: Node, about: Node): Node := {
-	diagnosed += [said_fact(fact) + [written_at(about)]]
+diagnose(fact: Node, about: Node): Node := diagnosed_at(fact, written_at(about))
+# the fact about the place [line, column] of the source, for a check of its text (a comment holds no node)
+diagnosed_at(fact: Node, place: list?): Node := {
+	diagnosed += [said_fact(fact) + [place, fact_key(fact)]]
 	fact
 }
+
+# the name of the fact, its message row's key (`charged_assignment` of `charged_assignment(z)`)
+fact_key(fact: Node): text := if fact is symbol then name_of(fact) else head_name(fact)
 
 # [level, message, fix, topic@expression] of the first row the fact matches; a fact no row matches is an error
 # naming it, loudly
@@ -93,11 +98,12 @@ diagnosed_since(known: int): list := diagnosed[known ..]
 
 # the first error among the diagnosed in the program's file; ø when none is an error
 # todo (card diagnostics-list-of-what) list of what?
-first_error(found: list, file: text): text? := {
+# (`keyed`: led by `error(<key>)`, the row's key, for `warp test` to tell errors apart by; never shown to people)
+first_error(found: list, file: text, keyed: bool): text? := {
 	# todo (card said-field-names) BIG refactor said#1 =>  said.name Or whatever the number one here and everywhere applies to 
 	failing = found.find(said => said#1 == Level.Error)
 	if not failing { return ø }
-	said_text(failing, file)
+	(if keyed then "error(" + failing#6 + ") " else "") + said_text(failing, file)
 }
 
 # the diagnosed of a level in the program's file: its warnings, its hints
