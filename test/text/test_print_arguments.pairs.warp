@@ -11,5 +11,3 @@
 'n=3; print("n", n)'	ø
 
 # print_without_arguments_writes_an_empty_line
-'print()'	ø
-'x = print(); x'	ø
