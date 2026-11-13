@@ -22,7 +22,7 @@ note_name(27.5)' 'A0'
 
 # transposing_moves_notes_by_semitones
 is! 'use sound
-transpose(A4, 12)' A5
+transpose(A4, 12)' 880
 is! 'use sound
 transpose(C4, 12) == C5' true
 is! 'use sound
