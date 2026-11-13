@@ -686,9 +686,10 @@ function joinedWords(arrays) {
 	return words;
 }
 
-// a GPU list's cells by gpu_list_cell (extensions/gpu_lists/runtime.warp GpuCell): f32, i32, u32, f16 (as raw bits)
-const GPU_LIST_CELLS = [Float32Array, Int32Array, Uint32Array, Uint16Array, Uint16Array];
-const GPU_CELL_NAMES = ["f32", "i32", "u32", "f16", "bf16"];
+// a GPU list's cells by gpu_list_cell (extensions/gpu_lists/runtime.warp GpuCell): f32, i32, u32, f16 (as raw bits),
+// a vector's f32 lanes
+const GPU_LIST_CELLS = [Float32Array, Int32Array, Uint32Array, Uint16Array, Uint16Array, Float32Array, Float32Array, Float32Array];
+const GPU_CELL_NAMES = ["f32", "i32", "u32", "f16", "bf16", "vec2", "vec3", "vec4"];
 const plainArrays = arrays => Object.fromEntries(Object.entries(arrays).map(([name, array]) => [name, Array.from(array)]));
 // gpu_compute's {values} as a list; a kernel's floats and an image's pixels as {words}, given back as raw bytes
 // (writeSharedWords), not as JSON
@@ -1100,8 +1101,8 @@ addHostPart({
 		const gpuCells = value => {
 			const place = program().gpu_list_place ? program().gpu_list_place(value) : -1n;
 			if (place < 0n) return undefined;
-			const Cells = GPU_LIST_CELLS[Number(program().gpu_list_cell?.(value) ?? 0n)];
-			return new Cells(program().memory.buffer, Number(place >> 32n), Number(place & 0xFFFFFFFFn));
+			const Cells = GPU_LIST_CELLS[Number(program().gpu_list_cell(value))];
+			return new Cells(program().memory.buffer, Number(place >> 32n), Number(program().gpu_list_bytes(value)) / Cells.BYTES_PER_ELEMENT);
 		};
 		// gpu_compute of a map holding GPU lists: those changed where they are and given back themselves, the other
 		// arrays as new lists, all bound and read back in one job without a text of them
@@ -1136,6 +1137,7 @@ addHostPart({
 				const array = declared.find(array => array.name === name), cell = gpuCellName(value);
 				if (!array) continue;
 				if (cell === "bf16") throw new Error(`the GPU list [bf16] ${name} has no WGSL array type to bind as yet`);
+				if (cell?.startsWith("vec")) throw new Error(`the GPU list [${cell}] ${name} binds in paint's values; gpu_compute's arrays take lists of numbers`);
 				if ((array.element === "f16") === (cell === "f16")) continue;
 				throw new Error(array.element === "f16" ? `the shader's array<f16> ${name} takes a GPU list [f16]: make it as ${name}: [f16] = …` : `the GPU list [f16] ${name} needs the shader's array<f16>, not array<${array.element}>`);
 			}

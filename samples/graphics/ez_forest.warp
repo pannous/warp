@@ -540,18 +540,11 @@ for stem in stems {
 	kits.add(fine)
 }
 packed = pack_tree_meshes(kits)
-global vertices = packed.vertices
-global triangles = packed.triangles
+// the meshes' arrays as GPU lists, which paint uploads in one copy
+global vertices: [vec4] = packed.vertices
+global triangles: [vec4] = packed.triangles
 if count(norms) != count(packed.texels) { raise "ez_forest: normals and vertices differ" }
-global texels = []
-vert_at = 0
-while vert_at < count(packed.texels) {
-	if vert_at < count(norms) {
-		norm = norms#(vert_at + 1)
-		texels.add([packed.texels#(vert_at + 1)#1, norm#1, norm#2, norm#3])
-	} else { texels.add([packed.texels#(vert_at + 1)#1, 0.0, 0.0, 0.0]) }
-	vert_at = vert_at + 1
-}
+global texels: [vec4] = [[packed.texels#i#1, norms#i#1, norms#i#2, norms#i#3] for i in 1 to count(norms)]
 global atlas = ""
 global atlas_w = 4096.0
 global atlas_h = 1536.0
@@ -569,7 +562,7 @@ if baked == ø {
 	atlas_packed = 1.0
 }
 // pine, oak, aspen, ash. Eight tints, then each kind's leaf, bark and normal rect.
-global shades = [
+global shades: [vec4] = [
 	[1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 0.3],
 	[1.0, 0.953, 0.820, 0.1], [0.835, 0.835, 0.804, 0.5],
 	[1.0, 1.0, 1.0, 1.0], [1.0, 0.980, 0.384, 0.5],
