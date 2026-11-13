@@ -1429,6 +1429,7 @@ rule_words = {
 	module_view: module_view,
 	type_methods: type_methods,
 	module_word_help: module_word_help,
+	enum_help: enum_help,
 	qualified_word_help: qualified_word_help,
 	once_listens: once_listens,
 	listening_program: listening_program,
