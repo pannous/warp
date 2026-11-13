@@ -1,0 +1,381 @@
+#!/usr/bin/env warp
+# A torch, and the fog that drifts around a pillar (samples/graphics/fluid_25d.warp). The picture follows a visual
+# idea by @r4nM4_64; nothing here was copied. The fluid is Stam's stable fluids, on the GPU.
+# Every pass is a warp function drawing one field, `velocity: drift` in paint's list, which a function reads at a cell,
+# velocity(p) (wiki/graphics.md "Fields and passes"). Density is sharpened with one MacCormack step. Pressure is two
+# separable convolutions, the rank-1 Jacobi kernel of Rabbani and Khiat, instead of a Jacobi loop. The picture
+# ray-marches a slab: density is a thickness about the plane, and a short march accumulates emission, absorption and a
+# few light samples. A detail field holds four value-noise octaves, and the shade samples it. Window y grows downward,
+# so a rising flame is a negative v. The grid is 384 by 216, the picture 960 by 540. Mode 1, torch: a narrow licking
+# flame and grey smoke where the fire cools. Mode 2, fog: a soft veil. The detail field is periodic (each octave's
+# period divides the grid and the hash wraps on that period, so the tile closes); the fog samples it with a wrapped
+# filter. The shade slides that detail by a two-phase flow map, so it moves with the wind and resets before it can
+# stretch. Billows are lit from above with a short self-shadow. A soft hole sits on the pillar. The camera leans toward
+# the mouse: the backdrop slides behind the smoke, the embers in front of it. f, 1, 2 or a click
+# switches. Headless: an argument fog, torch or detail. short stops at 80 frames, snap paints the first frame, movie
+# writes every second frame, --times prints each frame's upload and draw in milliseconds.
+use os
+use keys
+use math
+
+mode = 1
+timing = no
+steps = 240
+movie = no
+showing_detail = 0
+for arg in args {
+	if arg == "--times" { timing = yes }
+	else if arg == "fog" or arg == "2" { mode = 2 }
+	else if arg == "torch" or arg == "1" { mode = 1 }
+	else if arg == "detail" { showing_detail = 1; mode = 2; steps = 1 }
+	else if arg == "short" { steps = 80 }
+	else if arg == "snap" { steps = 1 }
+	else if arg == "movie" { movie = yes }
+}
+if timing { set_system_value("paint timing", 1) }
+
+width = 960
+height = 540
+grid = [384, 216]
+view = [width, height]
+aspect = grid#1 / grid#2
+frame_i = 0
+global pointer_at = [0, 0]
+global stir_force = 0
+# the camera leans toward the pointer: [-0.5 … 0.5] each way, eased; what lies behind the slab shifts against it,
+# the embers in front with it, by these shares of the view (headless it stays centred, so snapshots keep their framing)
+global camera = [0, 0]
+camera_ease = 0.06
+behind_reach = 0.05
+embers_reach = 0.03
+velocity = field(2, grid#1, grid#2)
+density = field(1, grid#1, grid#2)
+temperature = field(1, grid#1, grid#2)
+pressure = field(1, grid#1, grid#2)
+divergence = field(1, grid#1, grid#2)
+detail = field(4, grid#1, grid#2)
+
+# --- what the passes share: a cell p of the grid at its uv in 0..1, the scene's shapes and noise ---
+torch() := mode == 1
+seconds() := frame_i / 60
+uv_of(p) := (p .+ 0.5) ./ grid
+cell_of(uv) := uv .* grid .- 0.5
+noise(p) := {
+	i = floor(p)
+	f = fract(p)
+	u = f .* f .* (3 .- 2 .* f)
+	mix(mix(hash(i), hash(i .+ [1, 0]), u.x), mix(hash(i .+ [0, 1]), hash(i .+ [1, 1]), u.x), u.y)
+}
+wobble() := [sin(seconds() * 3.1) * 0.008, cos(seconds() * 2.4) * 0.004]
+pillar_q(uv) := (uv .- [0.5, 0.48]) .* [aspect, 1]
+flame_q(uv) := (uv .- [0.5, 0.62] .- wobble()) .* [aspect, 1]
+tongue(uv) := {
+	q = flame_q(uv) .+ [0, 0.03]
+	wag = sin(seconds() * 7.4) * 0.06 + sin(seconds() * 3.1) * 0.03
+	flick = 0.7 + 0.3 * hash([floor(seconds() * 11), 2])
+	body = (q .- [wag * max(-q.y, 0), 0]) ./ [0.58, 1.05]
+	side = (q .- [sin(seconds() * 9) * 0.09, -0.05]) ./ [0.28, 0.62]
+	(exp(-dot(body, body) / 0.0048) + exp(-dot(side, side) / 0.0032) * 0.75) * flick
+}
+wall(uv) := torch() and (uv.x < 0.008 or uv.x > 0.992 or uv.y > 0.992)
+thin(uv) := if torch() then mix(0.92, 1, smoothstep(0.06, 0.38, uv.y)) else 1
+curl_noise(uv, scale, drift) := {
+	p = uv .* scale .+ drift
+	dx = noise(p .+ [0.15, 0]) - noise(p .- [0.15, 0])
+	dy = noise(p .+ [0, 0.15]) - noise(p .- [0, 0.15])
+	[dy, -dx]
+}
+# a cell the flow carries a value from: kept inside the torch's box, mirrored at the fog's edges
+mirrored(w) := if w > 1 then 2 - w else w
+placed(p) := {
+	uv = uv_of(p)
+	if torch() { return cell_of(clamp(uv, 0, 1)) }
+	q = abs(uv)
+	w = q .- 2 .* floor(q .* 0.5)
+	cell_of([mirrored(w.x), mirrored(w.y)])
+}
+# where the wind of cell p carries it from, back a step, or ahead
+carried(p, ahead) := placed(p .+ velocity(p) .* grid .* ahead)
+
+# --- the velocity: advected, lifted by heat, its swirls kept, stirred, then made divergence free ---
+velocity_keep() := if torch() then 0.97 else 0.99
+drift(x, y) := {
+	p = [x, y]
+	if wall(uv_of(p)) { return [0, 0] }
+	around = (velocity(placed(p .+ [1, 0])) .+ velocity(placed(p .- [1, 0])) .+ velocity(placed(p .+ [0, 1])) .+ velocity(placed(p .- [0, 1]))) .* 0.25
+	mix(velocity(carried(p, -1)), around, 0.16) .* velocity_keep()
+}
+lift() := if torch() then 0.00055 else 0
+rise(x, y) := {
+	p = [x, y]
+	if wall(uv_of(p)) { return [0, 0] }
+	v = velocity(p)
+	[v.x, v.y - max(temperature(p) - 0.05, 0) * lift()]
+}
+curl_at(p) := 0.5 * ((velocity(p .+ [1, 0]).y - velocity(p .- [1, 0]).y) - (velocity(p .+ [0, 1]).x - velocity(p .- [0, 1]).x))
+confinement() := if torch() then 0.05 else 0.02
+swirl(x, y) := {
+	p = [x, y]
+	if wall(uv_of(p)) { return [0, 0] }
+	dx = abs(curl_at(p .+ [1, 0])) - abs(curl_at(p .- [1, 0]))
+	dy = abs(curl_at(p .+ [0, 1])) - abs(curl_at(p .- [0, 1]))
+	velocity(p) .+ [dy, -dx] .* (curl_at(p) * confinement() / max(norm([dx, dy]), 0.0001))
+}
+gust() := if torch() then 0.0016 else 0.003
+push(x, y) := {
+	p = [x, y]
+	uv = uv_of(p)
+	if wall(uv) { return [0, 0] }
+	v = velocity(p) .+ curl_noise(uv, [5, 4], [seconds() * 0.07, -seconds() * 0.05]) .* gust()
+	if torch() {
+		near = tongue(uv)
+		puff = curl_noise(uv, [30, 42], [1, -seconds() * 0.9])
+		wag = sin(seconds() * 6.5) * 0.45 + sin(seconds() * 2.7) * 0.2
+		v = v .+ [0, -0.0005] .+ puff .* (0.006 + near * 0.02) .+ [wag, -1] .* (near * 0.00105)
+	}
+	away = (uv .- pointer_at ./ view) .* [aspect, 1]
+	spin = [-away.y, away.x] ./ [aspect, 1]
+	clamp(v .+ spin .* (exp(-dot(away, away) / 0.012) * stir_force), -0.08, 0.08)
+}
+outflow(x, y) := {
+	p = [x, y]
+	if wall(uv_of(p)) { return 0 }
+	0.5 * (velocity(p .+ [1, 0]).x - velocity(p .- [1, 0]).x + velocity(p .+ [0, 1]).y - velocity(p .- [0, 1]).y)
+}
+# the pressure: the divergence convolved across, then down, by the rank-1 kernel
+KERNEL = [0.057610, 0.097961, 0.161440, 0.257644, 0.405773, 0.642708, 0.405773, 0.257644, 0.161440, 0.097961, 0.057610]
+inside(p) := if p.x >= -0.5 and p.x <= grid.x - 0.5 and p.y >= -0.5 and p.y <= grid.y - 0.5 then 1 else 0
+across(x, y) := {
+	total = 0
+	for i in 0 ..< 11 { total += KERNEL#(i + 1) * divergence(x + i - 5, y) * inside([x + i - 5, y]) }
+	total
+}
+down(x, y) := {
+	total = 0
+	for i in 0 ..< 11 { total -= KERNEL#(i + 1) * pressure(x, y + i - 5) * inside([x, y + i - 5]) }
+	total
+}
+settle(x, y) := {
+	p = [x, y]
+	if wall(uv_of(p)) { return [0, 0] }
+	slope = [pressure(p .+ [1, 0]) - pressure(p .- [1, 0]), pressure(p .+ [0, 1]) - pressure(p .- [0, 1])]
+	clamp(velocity(p) .- slope .* 0.5, -0.08, 0.08)
+}
+
+# --- the dye, carried by MacCormack: stashed, carried back, carried ahead again, corrected by the difference ---
+stash(x, y) := density(x, y)
+carry_back(x, y) := if wall(uv_of([x, y])) then 0 else max(density(carried([x, y], -1)), 0)
+carry_ahead(x, y) := if wall(uv_of([x, y])) then 0 else max(density(carried([x, y], 1)), 0)
+dye_keep() := if torch() then 0.996 else 0.998
+correct(x, y) := {
+	p = [x, y]
+	uv = uv_of(p)
+	if wall(uv) { return 0 }
+	hat = density(p)
+	before = divergence(p)
+	gain = if torch() then 0.5 else 0
+	clamp(hat + gain * (before - pressure(p)), 0, max(hat, before)) * dye_keep() * thin(uv)
+}
+heat_keep() := if torch() then 0.88 else 0.99
+cool(x, y) := if wall(uv_of([x, y])) then 0 else max(temperature(carried([x, y], -1)), 0) * heat_keep()
+# the torch feeds dye where its flame cools and heat where it burns; the fog sets its coarse veil, a hole at the pillar
+feed(x, y) := {
+	p = [x, y]
+	uv = uv_of(p)
+	if torch() {
+		if wall(uv) { return 0 }
+		heat = temperature(p)
+		cooling = smoothstep(0.05, 0.22, heat) * (1 - smoothstep(0.38, 0.8, heat))
+		return min(density(p) + tongue(uv) * 0.018 + cooling * 0.034, 0.58)
+	}
+	q = pillar_q(uv)
+	base = mix(max(density(p), 0), 0.94, 0.07)
+	edge = min(min(uv.x, 1 - uv.x), min(uv.y, 1 - uv.y))
+	mix(base, 0.94, 1 - smoothstep(0, 0.02, edge)) * (1 - 0.46 * exp(-dot(q, q) / 0.0013))
+}
+burn(x, y) := {
+	p = [x, y]
+	uv = uv_of(p)
+	if not torch() { return temperature(p) }
+	if wall(uv) then 0 else min(temperature(p) + tongue(uv) * 0.3, 1.35)
+}
+
+# --- the detail: four octaves of value noise, each periodic on the grid ---
+wrapped(p, period) := p .- period .* floor(p ./ period)
+fade(t) := t .* t .* t .* (t .* (t .* 6 .- 15) .+ 10)
+tiled(uv, period) := {
+	p = uv .* period
+	i = floor(p)
+	u = fade(fract(p))
+	a = hash(wrapped(i, period))
+	b = hash(wrapped(i .+ [1, 0], period))
+	c = hash(wrapped(i .+ [0, 1], period))
+	d = hash(wrapped(i .+ [1, 1], period))
+	mix(mix(a, b, u.x), mix(c, d, u.x), u.y)
+}
+octaves(x, y) := {
+	uv = uv_of([x, y])
+	[tiled(uv, [4, 3]), tiled(uv, [6, 4]), tiled(uv, [12, 9]), tiled(uv, [24, 18])]
+}
+
+# --- the picture: a slab ray-marched at each pixel of the view ---
+rho(uv) := max(density(cell_of(uv)), 0)
+ramp(heat) := {
+	fire = mix([0.55, 0.05, 0.08], [0.95, 0.22, 0.05], smoothstep(0.15, 0.4, heat))
+	fire = mix(fire, [1, 0.62, 0.12], smoothstep(0.38, 0.7, heat))
+	mix(fire, [1, 0.96, 0.82], smoothstep(0.68, 1.05, heat))
+}
+profile(z, h) := {
+	u = z / max(h, 0.001)
+	max(1 - u * u, 0)
+}
+wrap_index(i, size) := i - size * floor(i / size)
+# the detail at uv p, tiling: the torch filters it, the fog wraps the filter's four cells itself
+detail_at(p) := {
+	if torch() { return detail(cell_of(fract(p))) }
+	at = fract(p) .* grid .- 0.5
+	low = floor(at)
+	u = at .- low
+	x0 = wrap_index(low.x, grid.x)
+	y0 = wrap_index(low.y, grid.y)
+	x1 = wrap_index(low.x + 1, grid.x)
+	y1 = wrap_index(low.y + 1, grid.y)
+	mix(mix(detail(x0, y0), detail(x1, y0), u.x), mix(detail(x0, y1), detail(x1, y1), u.x), u.y)
+}
+billow(p) := {
+	broad = detail_at(p).x * 0.64 + detail_at(p .+ [0.13, 0.07]).y * 0.36
+	broad + (detail_at(p .+ [0.29, 0.17]).z - 0.5) * 0.2 + (detail_at(p .+ [0.05, 0.23]).w - 0.5) * 0.12
+}
+veil(uv, flow) := {
+	t = fract(seconds() / 2.5)
+	reach = flow .* 4
+	billows = mix(billow(uv .+ reach .* fract(t + 0.5)), billow(uv .+ reach .* t), abs(1 - 2 * t))
+	u = clamp(0.5 + (billows - 0.5) * 1.15, 0, 1)
+	mix(0.38, 1.05, u * u * (3 - 2 * u))
+}
+ground(uv) := mix([0.22, 0.16, 0.09], [0.15, 0.26, 0.11], smoothstep(0.34, 0.66, detail_at(uv).y))
+# behind the torch's smoke: a dark sky with a warm pool (at sky_uv, far behind), the striped shaft and its cup (at uv,
+# where the flame is)
+torch_behind(uv, sky_uv) := {
+	px = (uv.x - 0.5) * aspect
+	pool_q = [(sky_uv.x - 0.5) * aspect * 0.8, (sky_uv.y - 0.8) * 2.4]
+	behind = [0.1, 0.064, 0.07] .+ [0.18, 0.07, 0.02] .* exp(-dot(pool_q, pool_q) / 0.09)
+	if abs(px) < 0.026 and uv.y > 0.64 {
+		metal = 0.25 + 0.75 * smoothstep(-0.026, 0.026, px)
+		behind = [0.025, 0.018, 0.014] .* metal
+		if fract((uv.y - 0.64) * 14) > 0.72 and uv.y < 0.92 { behind = [0.45, 0.14, 0.05] .* metal }
+	}
+	cup = [px, uv.y - 0.635]
+	if abs(norm(cup ./ [0.055, 0.016]) - 1) < 0.18 and abs(cup.y) < 0.02 { behind = [0.1, 0.07, 0.05] }
+	behind
+}
+# the column of light and shadow one pixel looks through, then what lies behind it
+shade(x, y) := {
+	uv = ([x, y] .+ 0.5) ./ view
+	if showing_detail == 1 { return detail_at(fract(uv .* 2)).xyz }
+	t = 2.2 ./ grid
+	d = (rho(uv) * 2 + rho(uv .+ [t.x, 0]) + rho(uv .- [t.x, 0]) + rho(uv .+ [0, t.y]) + rho(uv .- [0, t.y])) / 6
+	heat = max(temperature(cell_of(uv)), 0)
+	amount = if torch() then d else d * veil(uv, velocity(cell_of(uv)))
+	h = mix(0.24, 1, smoothstep(0, 0.75, amount))
+	sigma = if torch() then 1.2 else 1.48
+	light = if torch() then normalize([0.06, 0.74, 0.55]) else normalize([0.15, -0.78, 0.52])
+	dz = 2 * h / 8
+	z = h - dz * 0.5
+	transmittance = 1
+	rgb = [0, 0, 0]
+	for i in 0 ..< 8 {
+		shape = profile(z, h)
+		shadow = 1
+		suv = uv
+		sz = z
+		for j in 0 ..< 2 {
+			suv = suv .+ light.xy .* 0.02
+			sz = sz + light.z * 0.07
+			shadow = shadow * exp(-rho(suv) * profile(sz, h) * (if torch() then 0.1 else detail_at(suv).x * 0.28))
+		}
+		smoke = [0.32, 0.3, 0.28] .+ [0.5, 0.18, 0.05] .* smoothstep(0.28, 0.62, heat)
+		face = clamp(0.9 + (detail_at(uv).x - detail_at(uv .+ light.xy .* 0.04).x) * 1.6, 0.84, 1.05)
+		fog = [0.72, 0.8, 0.82] .* (face * clamp(0.92 + 0.1 * shadow, 0.86, 1.02))
+		absorb = 1 - exp(-amount * shape * sigma * dz)
+		flame = ramp(heat) .* (max(heat * shape - 0.2, 0) * dz * 5.6 * mix(1, transmittance, 0.22))
+		rgb = rgb .+ flame .+ (if torch() then smoke else fog) .* (transmittance * absorb)
+		transmittance = transmittance * (1 - absorb)
+		z = z - dz
+	}
+	behind_uv = uv .- camera .* behind_reach
+	color = (if torch() then torch_behind(uv, behind_uv) else ground(behind_uv)) .* transmittance .+ rgb
+	if torch() {
+		spark = (uv .+ camera .* embers_reach) .* [18, 42] .+ [0, -frame_i * 0.95]
+		ember = step(0.984, hash(floor(spark))) * smoothstep(0.42, 0, norm(fract(spark) .- 0.5))
+		plume = smoothstep(0.16, 0, abs((uv.x - 0.5) * aspect))
+		color = color .+ [1, 0.62, 0.22] .* (ember * plume * smoothstep(0.68, 0.12, uv.y) * 0.85)
+	}
+	q = pillar_q(uv)
+	capsule = norm([q.x, q.y - clamp(q.y, -0.026, 0.026)]) - 0.024
+	if not torch() and capsule < 0.02 {
+		lit = 0.62 + 0.38 * clamp(0.15 + q.x * 16, 0, 1)
+		color = mix(color, [0.8, 0.82, 0.8] .* lit, smoothstep(0.02, 0, capsule))
+	}
+	color .+ (hash([x, y] .+ [frame_i, 0]) - 0.5) / 255
+}
+
+# --- each frame: the pointer and the stirring, every pass in order, then the picture ---
+pointer() := {
+	if windowless() and mode == 2 {
+		if frame_i < 28 { return [width * 0.84, height * 0.62] }
+		if frame_i < 150 {
+			u = (frame_i - 28) / 122.0
+			return [width * (0.16 + 0.68 * u), height * (0.5 + 0.06 * sin(u * 6.2832))]
+		}
+		angle = (frame_i - 150) * 0.08
+		return [width * (0.5 + 0.16 * cos(angle)), height * (0.48 + 0.12 * sin(angle))]
+	}
+	[system_value("mouse_x"), system_value("mouse_y")]
+}
+stirring() := {
+	if mode != 2 or windowless() { return 0.0 }
+	if system_value("mouse_down") == 1 { return 0.002 }
+	0.00035
+}
+simulate() := {
+	pointer_at = pointer()
+	stir_force = stirring()
+	if not windowless() { camera = camera .+ (pointer_at ./ view .- 0.5 .- camera) .* camera_ease }
+	paint([detail: octaves, velocity: drift, velocity: rise, velocity: swirl, velocity: push, divergence: outflow, pressure: across, pressure: down, velocity: settle, divergence: stash, density: carry_back, pressure: carry_ahead, density: correct, temperature: cool, density: feed, temperature: burn])
+}
+shot(n) := {
+	if not windowless() { return no }
+	if movie and n % 2 == 0 { return yes }
+	n == steps or n == 60 or n == 120 or n == 240
+}
+
+if not windowless() {
+	set_system_value("window_width", width)
+	set_system_value("window_height", height)
+}
+if showing_detail == 1 {
+	paint([detail: octaves])
+	paint([shade])
+} else if windowless() {
+	n = 0
+	while n < steps {
+		n = n + 1
+		frame_i = n
+		simulate()
+		if shot(n) { paint([shade]) }
+	}
+}
+on frame {
+	if not windowless() {
+		name = key_name(system_value("key code pressed"))
+		if name == "f" or name == "F" { mode = 3 - mode }
+		else if name == "1" or name == "t" or name == "T" { mode = 1 }
+		else if name == "2" { mode = 2 }
+		else if name == "Escape" or name == "q" or name == "Q" { exit() }
+		frame_i = frame_i + 1
+		simulate()
+		paint([shade])
+	}
+}
+on click { mode = 3 - mode }

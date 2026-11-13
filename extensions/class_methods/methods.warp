@@ -152,12 +152,13 @@ def linked_methods_called(classes: map, linked: list, top_statements: list, oper
 }
 method_key(class_name: text, method: Node): text := class_name + " " + defined_word(method) + " " + #method_parameters(method)
 # whether code saying these words and operators may call a method of that name: by it, by its operator, `<` by
-# compare, `==` by equal; a position word by any `b#i`, `b[i]` or `#b`, which the passes after write as its call
+# compare, `==` by equal; a position word by any `b#i`, `b[i]` or `#b`, a map word by any `m[k]`, `m[k] = v`, `k in m`
+# or `for k in m`, which the passes after write as its call
 method_said(word: text, said: map, operator_table: map): bool := {
 	spelled = spelled_operator(operator_table, word)
 	# (a declared operator is said as its function's call, `a ≈ b` operator_≈(a, b))
 	operated = glyph => said.has(key_head(Key(ø, glyph as Op, ø))) or said.has(OPERATOR_FUNCTION_PREFIX + glyph)
-	said.has(word) or word in position_words or (spelled != ø and operated(spelled#2)) or (word == ordering_method and ordering_operators.any(operated)) or (word == equality_method and (operated("==") or operated("!=")))
+	said.has(word) or word in position_words or is_map_protocol_word(word) or (spelled != ø and operated(spelled#2)) or (word == ordering_method and ordering_operators.any(operated)) or (word == equality_method and (operated("==") or operated("!=")))
 }
 # a definition lowered on its own once called: of a name no program writes, `text·Interval`, `hertz·method`, saying
 # no word only the whole program's passes read: an overloaded one, whose variants they tell apart (`sum` of the

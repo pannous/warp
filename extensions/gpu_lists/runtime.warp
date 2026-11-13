@@ -12,6 +12,7 @@ use "../../compiler/runtime/errors.warp"
 use "../../compiler/runtime/conversions.warp"
 use "../../compiler/runtime/instructions.warp"
 use "../../compiler/runtime/lists.warp"
+use "../../compiler/runtime/arithmetic.warp"
 word_bytes(): int := 4
 # the bytes of a cell of that type: a vector's lanes, a vec3 padded to four as WGSL's array<vec3f> holds it
 cell_bytes(cell: int): int := if is_vector_cell(cell) then word_bytes() * vector_slots(cell) else if is_narrow_cell(cell) then 2 else word_bytes()
@@ -109,9 +110,9 @@ gpu_list_set(n: Node, index: int, value: Node): Node := {
 	memory_set_i32(address, number)
 	value
 }
-# a number's float for a float or vector cell, anything else refused
+# a number's float for a float or vector cell, an exact one's (a real, √9.25) included, anything else refused
 number_checked(cell: int, value: Node): float := {
-	if kind_code(value) != Kind.Int and kind_code(value) != Kind.Float { gpu_list_refused("a GPU list [" + gpu_cell_name(cell) + "] holds numbers only") }
+	if not summable(value) { gpu_list_refused("a GPU list [" + gpu_cell_name(cell) + "] holds numbers only") }
 	float_of_node(value)
 }
 # a two-byte cell: its half of the aligned word holding it
@@ -165,6 +166,15 @@ narrow_float(bits: int, exponent_bits: int, fraction_bits: int): float := {
 # 2 to the k, exactly, for k from -1022 to 1023
 power_of_two(k: int): float := float_of_bits(shifted_left(k + 1023, 52))
 # the numbers as a list, for the list words that read a list
+# `a + b` of two GPU lists of one cell type: a GPU list of both, ø for two of different cells
+gpu_lists_joined(a: Node, b: Node): Node := {
+	cell = gpu_list_cell(a)
+	if gpu_list_cell(b) != cell { return ø }
+	out = gpu_zeros(gpu_list_count(a) + gpu_list_count(b), cell)
+	for i in 1 to gpu_list_count(a) { gpu_list_set(out, i, gpu_list_at(a, i)) }
+	for i in 1 to gpu_list_count(b) { gpu_list_set(out, gpu_list_count(a) + i, gpu_list_at(b, i)) }
+	out
+}
 gpu_list_items(n: Node): list := {
 	out = new_list(gpu_list_count(n))
 	for i in 1 to #out { out#i = gpu_list_at(n, i) }

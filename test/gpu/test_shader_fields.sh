@@ -75,4 +75,22 @@ drop(x, y) := if x == 1 and y == 0 then 1 else 0.5
 show(x, y) := [ink(floor(x / 2), floor(y / 2)), 0, 0]
 pixels = paint([ink: drop, show])
 print [0, 1, 2, 3, 4, 5, 6, 7].map(i => int(pixels#(i + 1) / 65536) % 256)')" "[128, 128, 255, 255, 128, 128, 128, 128]"
+check "lists of functions share the declared fields; one whose last function draws paints nothing" "$(last_line shared 'width = 2
+height = 1
+count = field(1, 2, 1)
+grow(x, y) := count([x, y]) + 0.25
+show(x, y) := [count([x, y]), 0, 0]
+paint([count: grow])
+paint([count: grow])
+pixels = paint([show])
+red = int(pixels#1 / 65536) % 256
+print red > 120 and red < 135')" "yes"
+check "a field of four numbers, drawn by a function reading a long list" "$(last_line listed 'width = 2
+height = 1
+levels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.75]
+glow = field(4, 2, 1)
+fill(x, y) := [levels#6, 0, 0, 1]
+show(x, y) := [glow(x, y).x, 0, 0]
+pixels = paint([glow: fill, show])
+print int(pixels#1 / 65536) % 256')" "191"
 exit $((failures > 0))
