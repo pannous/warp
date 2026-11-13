@@ -55,3 +55,12 @@ jobs:
           -static -pthread -Wl,--export-all-symbols -Wl,--stack,0x10000000
     - name: hello
       run: lib/warp.exe --version && lib/warp.exe samples/hello/hello.warp
+    - name: what runs
+      if: always()
+      run: |
+        set +e
+        cp samples/hello/hello.warp hello.warp
+        for words in "print 6*7" "6*7" hello.warp ./hello.warp "$PWD/hello.warp" "$(cygpath -m "$PWD")/hello.warp"; do
+          echo "== warp $words"; lib/warp.exe "$words"; echo "exit $?"
+        done
+        cd samples/hello && echo "== in samples/hello" && ../../lib/warp.exe hello.warp; echo "exit $?"
