@@ -64,6 +64,21 @@ once per program, never per node or call site. Cheap `where` guards don't save a
   is_subtype 8.5% → 1.4%, 254.6 → 242.2 s CPU. The rest is the cast to the open $Node of a $MetaNode or an instance
   (node_equal, node_text). Measure an emitter change at stage 3: stage 2 runs the seed's code, and the store's
   warp-self.wasm is a copy of warp.wasm.
+- The libcall's cost was the exit from JIT code, not the check (the store kept a hash cache over an O(1) display).
+  crates/wasmtime-capi/patches/subtype-display.patch (card subtype-inline; upstream FIXME #13484) moves the display
+  where compiled code reads it: the store keeps 8 u32 per VMSharedTypeIndex (the type's supertypes by depth, itself
+  at its own, then a filled flag), VMStoreContext points at them, and ref.test/ref.cast against an open type of
+  depth < 7 emit `row(a)[depth(b)] == b` inline (depth(b) is known when compiling); only an unfilled row leaves for
+  the libcall, which fills it. Patches wasmtime, wasmtime-environ, wasmtime-internal-cranelift; machine code is kept
+  under version 50.0.0+warp-subtype-display, so code from another wasmtime is compiled anew, loudly, once.
+  A one-entry cache per call site was weighed and not built: it needs per-site storage in each module's VMContext
+  and still calls out on every miss; the display answers misses inline too.
+  Measured 11-13 (instructions retired, lowest of 2-3, data/bench in the card's worktree): stage 3 self build main
+  3.369 → 3.108 T (−7.7%); 'use units; 1' −3.1%, bytes.warp −2.0%, chars.warp −1.2%. AsciiText step 3
+  (asciitext-compile-3 on main) stage 3 3.288 → 3.126 T, so +0.6% over main once both run on the patch (inside the 3%
+  gate it was parked at); its chars.warp 1.192 G vs main's 1.686 G (−29%).
+  Pitfall when comparing two wasmtimes on one lib/: each rewrites the other's .cwasm files (version mismatch), so
+  interleaved runs all compile cold; run one library's repetitions together.
 - 19% is the copying collector (gc_alloc_raw → do_gc → collect_increment, CopyingHeap::forward/scan_field): a bigger
   initial GC heap (warp_config_gc_heap_initial_size_set) for the compiler may cut it, card wasmtime-copying-collector.
 - The emitter's own top paths: compile_function → statement → effects → joint_kind → instance_of_fields →
