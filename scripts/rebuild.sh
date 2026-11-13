@@ -302,18 +302,26 @@ modules_step() {
 	echo "rebuild step modules" >>"$log"
 	# (run by the name of a compiler: the native warp takes any other file for warp source)
 	compiler_moved "$new" "$building"
-	(cd "$tree" && "$scripts/build-slot.sh" "$log" /usr/bin/time -p -o "$record/modules.time" bash "$scripts/lib/modules.sh" modules_built "$warp" "$lib" "$building" "$compilers/modules" "$compilers/runtime.wasm")
+	(cd "$tree" && "$scripts/build-slot.sh" "$log" /usr/bin/time -p -o "$record/modules.time" bash "$scripts/lib/modules.sh" modules_built "$warp" "$lib" "$building" "$compilers/modules" "$compilers/runtime.wasm" "$record/modules.counted")
 	status=$?
 	[ $status = 0 ] || { compiler_moved "$building" "$new"; return $status; }
+	# (the step's instructions, which its timer misses: they were retired by the processes it started)
+	[ ! -f "$record/modules.counted" ] || { cat "$record/modules.counted" >>"$record/modules.time"; rm -f "$record/modules.counted"; }
 	step_recorded "$record" "$record/modules.time"
 	compiler_moved "$building"
 }
-# step_recorded <record> <its time>: a step run after the measured build added to its record: its time and CPU to the
-# build's (time), and its start (steps), which the vitals page's build times read
+# step_recorded <record> <its time>: a step run after the measured build added to its record: its time, CPU and
+# instructions to the build's (time: `name value` lines of time -p, `value name` ones of time -l), and its start
+# (steps), which the vitals page's build times read
 step_recorded() {
 	local record=$1 timed=$2 end
 	[ -f "$record/time" ] && [ -f "$record/steps" ] && [ -f "$timed" ] || return 0
-	awk 'NR == FNR { added[$1] = $2; next } $1 in added { printf "%s %.2f\n", $1, $2 + added[$1]; next } { print }' "$timed" "$record/time" >"$record/time.new" && mv "$record/time.new" "$record/time"
+	awk 'function counted() { return $1 ~ /^[0-9]+$/ }
+		function name() { if (!counted()) return $1; n = $2; for (i = 3; i <= NF; i++) n = n " " $i; return n }
+		NR == FNR { added[name()] = counted() ? $1 : $2; next }
+		!(name() in added) { print; next }
+		counted() { printf "%20d  %s\n", $1 + added[name()], name(); next }
+		{ printf "%s %.2f\n", $1, $2 + added[$1] }' "$timed" "$record/time" >"$record/time.new" && mv "$record/time.new" "$record/time"
 	end=$(awk '$1 == "end" { print $2 }' "$record/steps")
 	sed_in_place '/^end /d' "$record/steps"
 	printf 'modules %s\nend %s\n' "$end" "$(awk -v end="$end" '$1 == "real" { printf "%d", end + $2 }' "$timed")" >>"$record/steps"
