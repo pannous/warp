@@ -40,10 +40,11 @@ source_checks(program: Node, prelude: text): Node := {
 }
 
 # `len(xs)`: another language's spelling of a word (lib/aliases.warp's foreign), the hint naming warp's, count; not of
-# a name the program defines itself
+# a name the program defines itself; said at the call, whose head the parser places nowhere, else at the name
 foreign_spelling(n: Node, own_names: list) := {
-	word = if n is symbol then alias_spellings().foreign.get(name_of(n)) else ø
-	if word != ø and name_of(n) not in own_names { diagnose(call_of("alias_word", [symbol(name_of(n)), symbol(word)]), n) }
+	spelled = if is_group(n) and #n > 0 and n#1 is symbol then n#1 else if n is symbol and is_positioned(n) then n else ø
+	word = if spelled != ø then alias_spellings().foreign.get(name_of(spelled)) else ø
+	if word != ø and name_of(spelled) not in own_names { diagnose(call_of("alias_word", [symbol(name_of(spelled)), symbol(word)]), n) }
 }
 
 # P71 (wiki/charged.md): `z := 6` is charged, evaluated at each use, so assigning it afterwards in its block, `z = 7`,
