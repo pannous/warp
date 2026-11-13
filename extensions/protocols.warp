@@ -176,6 +176,11 @@ protocol_resolved(n: Node, conforming: map, converted: map, defined: list): Node
 	if is_called_name(n) and #n > 1 {
 		for protocol in converted.keys { if name_of(n#1) in converted[protocol] { return call_of(name_of(n#1), items_of(n)[1..].map(argument => if argument is symbol and name_of(argument) in defined then argument else call_of(helper_name(protocol, "listed"), [argument]))) } }
 	}
+	# `x: shape = v` reads as `x: (shape = v)` here: its type the protocol's too
+	if is_key(n, Op.Colon) and is_key(value_of(n), Op.Assign) {
+		typed = protocol_resolved(Key(key_of(n), Op.Colon, key_of(value_of(n))), conforming, converted, defined)
+		return Key(key_of(n), Op.Colon, Key(value_of(typed), Op.Assign, value_of(value_of(n))))
+	}
 	if not (n is key and value_of(n) is symbol and name_of(value_of(n)) in conforming) { return n }
 	classes = conforming[name_of(value_of(n))]
 	if is_key(n, Op.Is) {
