@@ -20,6 +20,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
+    # the sources as written, LF: Git for Windows checks text out with CRLF (card crlf-line-endings)
+    - run: git config --global core.autocrlf false
     - uses: actions/checkout@v7
     - uses: dtolnay/rust-toolchain@stable
     - uses: actions/cache/restore@v4
