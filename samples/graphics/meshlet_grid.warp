@@ -84,20 +84,17 @@ coarse = oak.levels#2
 fine_src = mesh_draw_indices(fine.indices)
 shift = count(fine.vertices)
 source = fine_src + [i + shift for i in mesh_draw_indices(coarse.indices)]
-vertices = fine.vertices + coarse.vertices
+// the shader reads a vertex's first four numbers, its place and the fifth's texel left out
+vertices: [vec4] = [[v#1, v#2, v#3, v#4] for v in fine.vertices + coarse.vertices]
 fine_n = count(fine.mesh.clusters)
 coarse_n = count(coarse.mesh.clusters)
 base = count(fine_src)
-ranges = cluster_ranges(fine.mesh.clusters) + [[r#1 + base, r#2, 0.0, 0.0] for r in cluster_ranges(coarse.mesh.clusters)]
+ranges: [vec4] = cluster_ranges(fine.mesh.clusters) + [[r#1 + base, r#2, 0.0, 0.0] for r in cluster_ranges(coarse.mesh.clusters)]
 blank = [0 for i in 1 to count(source)]
 distance = sqrt(0.5 * 0.5 + 3.0 * 3.0)
-seen = [[0.0, 0.5, 3.0, distance], [1.0, 135.0, 1.0, 0.0 + count(half)]]
-for plane in half { seen.add(plane) }
-seen.add([0.0, 0.0 + fine_n, fine.mesh.error, 0.0])
-seen.add([0.0 + fine_n, 0.0 + coarse_n, coarse.mesh.error, 0.0])
-seen.add([160.0, 90.0, 0.0, 0.0])
-bounds = cluster_bounds(fine.mesh.clusters) + cluster_bounds(coarse.mesh.clusters)
-cones = cluster_cones(fine.mesh.clusters) + cluster_cones(coarse.mesh.clusters)
+seen: [vec4] = [[0.0, 0.5, 3.0, distance], [1.0, 135.0, 1.0, 0.0 + count(half)]] + half + [[0.0, 0.0 + fine_n, fine.mesh.error, 0.0], [0.0 + fine_n, 0.0 + coarse_n, coarse.mesh.error, 0.0], [160.0, 90.0, 0.0, 0.0]]
+bounds: [vec4] = cluster_bounds(fine.mesh.clusters) + cluster_bounds(coarse.mesh.clusters)
+cones: [vec4] = cluster_cones(fine.mesh.clusters) + cluster_cones(coarse.mesh.clusters)
 paint_oak(blank, seen, ranges, source, bounds, cones)
 paint_oak(blank, seen, ranges, source, bounds, cones)
 

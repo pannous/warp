@@ -886,15 +886,18 @@ definitions_reached(f: Node, program: Node): any := {
 }
 # paint([velocity: advect, show]) of program functions (wiki/graphics.md "Fields and passes"): each pass the run-time
 # function_pass (lib/shaders.warp) of the function quoted with what it reaches and, before the last, the field it draws
-# by name and value; ø where an item is no such function (a list of shaders is shader_passes')
+# by name and value, and the fields the program declares, which every such list shares; ø where an item is no such
+# function (a list of shaders is shader_passes')
+FIELD_MAKER = "field"
 function_passes(items: list, program: Node): any := {
+	declared = List(level_statements(program).filter(statement => is_key(statement, Op.Assign) and key_of(statement) is symbol and is_call_named(value_of(statement), FIELD_MAKER)).map(statement => Key(key_of(statement), Op.Colon, key_of(statement))), Bracket.Curly, Separator.Comma)
 	passes = []
 	for item in items {
 		into = field_drawn(item)
 		f = if into == ø then item else value_of(item)
 		reached = if f is symbol then definitions_reached(f, program) else ø
 		if reached == ø { return ø }
-		passes += [call_of("function_pass", if into == ø then [reached] else [reached, Text(name_of(into)), into])]
+		passes += [call_of("function_pass", [reached, declared] + (if into == ø then [] else [Text(name_of(into)), into]))]
 	}
 	passes
 }
