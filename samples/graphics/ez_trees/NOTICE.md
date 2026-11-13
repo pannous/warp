@@ -10,6 +10,10 @@ Ash Small and Bush 2 with their own seeds. Pine, oak, ash and bush keep that ske
 preset, so the two levels stay small (the exporter's overrides). Meshed by Tree.createGeometry at the details of
 Tree.defaultLODLevels[1] and [2]. EZ Tree Pro is not used.
 
+`hero/`, `canopy/`, `textures/` and `atlas.bin` are not in git: `scripts/sample-assets.sh fetch` unpacks the
+published archive (the GitHub release `assets`, which the page's build fetches too), and
+`scripts/sample-assets.sh publish` replaces it after a regeneration.
+
 `canopy/` is a second geometry set from the same presets and seeds, with more of each preset's leaves and four
 details (scripts/ez_tree/export.mjs, the `canopy` argument). The two-level files above stay as the meshlet tests
 pin them.

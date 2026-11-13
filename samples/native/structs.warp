@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
 @primitive
-# a struct in a primitive file is a fixed (auto-padded!) layout in linear memory, 
+# a struct in a primitive file is a fixed (auto-padded!) layout in linear memory,
 # as in C: len at 0, tag at 4, total at 8
 struct Header { len: u32; tag: u8; total: i64 }
 
