@@ -22,7 +22,8 @@ jobs:
     steps:
     - uses: actions/checkout@v7
     - uses: dtolnay/rust-toolchain@stable
-    - uses: actions/cache@v4
+    - uses: actions/cache/restore@v4
+      id: wasmtime
       with:
         path: crates/wasmtime-capi/target
         key: wasmtime-windows-${{ hashFiles('crates/wasmtime-capi/**', 'scripts/wasmtime-c-api.sh') }}
@@ -39,12 +40,18 @@ jobs:
         echo "$PWD/llvm-mingw-$LLVM_MINGW-ucrt-x86_64/bin" >>"$GITHUB_PATH"
     - name: our wasmtime C API
       run: WARP_WASMTIME_TARGET=$PWD/crates/wasmtime-capi/target scripts/wasmtime-c-api.sh lib && ls crates/wasmtime-capi/target/release/ lib/*.dll
+    - uses: actions/cache/save@v4
+      # kept whether or not the later steps pass
+      if: steps.wasmtime.outputs.cache-hit != 'true'
+      with:
+        path: crates/wasmtime-capi/target
+        key: wasmtime-windows-${{ hashFiles('crates/wasmtime-capi/**', 'scripts/wasmtime-c-api.sh') }}
     - name: the native warp
       run: |
         wabt=../tools/wabt-$WABT
         runtime=$wabt/share/wabt/wasm2c
         clang -O2 -I"$runtime" -I"$wabt/include" -Ilib -o lib/warp.exe core/native/warp.native.c core/native/warp.native.main.c \
           "$runtime/wasm-rt-impl.c" "$runtime/wasm-rt-mem-impl.c" crates/wasmtime-capi/target/release/warp_wasmtime.dll.lib \
-          -static -Wl,--export-all-symbols -Wl,--stack,0x10000000
+          -static -pthread -Wl,--export-all-symbols -Wl,--stack,0x10000000
     - name: hello
       run: lib/warp.exe --version && lib/warp.exe samples/hello/hello.warp
