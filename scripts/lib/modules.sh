@@ -14,18 +14,6 @@ modules_kept_only() {
 		grep -qxF "$(basename "$file")" <<<"$kept" || grep -qxF "$(module_of "$file")" <<<"$kept" || rm -rf "$file"
 	done
 }
-# companion_files <compiler file name>: the library a compiler links its NFC from, beside it (core/native/driver.warp
-# compiler_library): the runtime and unicode module its builder made, of the GC types it has (card asciitext-compile)
-companion_files() { echo "$1.library/runtime.wasm $1.library/modules/unicode.wasm"; }
-# companion_copied <from compiler> <to compiler>: that library, when the first has one, beside the second
-# each file moved into place whole (a run beside this finds the old or the new one)
-companion_copied() {
-	local file
-	for file in $(companion_files ""); do
-		[ -f "$1$file" ] || continue
-		mkdir -p "$(dirname "$2$file")" && cp "$1$file" "$2$file.new-$$" && mv -f "$2$file.new-$$" "$2$file" || return 1
-	done
-}
 # standard_module_files <tree>: the standard module entry files, relative to the tree. The same list modules_in
 # walks in uses.warp: a .warp file of lib/ or of lib/host/ (decision host-folder)
 standard_module_files() {
@@ -68,7 +56,7 @@ modules_of_files() {
 MODULE_WAIT=0.2  # seconds a worker waits when no module is ready
 digest() { { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-64; }
 modules_built() {
-	local warp=$1 lib=$2 compiler=$3 folder=$4 runtime=$5 count_file=$6 work=$4/.modules-step name texts waits slot workers kept counted_file
+	local warp=$1 lib=$2 compiler=$3 folder=$4 runtime=$5 count_file=${6-} work=$4/.modules-step name texts waits slot workers kept counted_file
 	set -- "$1" "$2" "$3" "$4" "$5"
 	# (a killed step's claims go: they'd leave its modules unclaimable)
 	rm -rf "$work" && mkdir -p "$work" || return 1
