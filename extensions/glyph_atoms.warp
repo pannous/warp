@@ -83,6 +83,12 @@ read_repeating_decimal(p: Parser, written: text, literal: text): Node := {
 	period = overlined_digits(p)
 	if period != "" and written.contains(".") then repeating_decimal(written, period) else ø
 }
+# `2ε`, `3ω²`: a glyph word glued after a number multiplies it, as a glued name does (parser.warp with_glued_factor)
+read_glued_glyph_word(p: Parser, written: text, literal: text): Node := {
+	if not GLYPH_WORDS.has(char_here(p)) or name_end(p.code, p.at, p.n) > p.at + 1 { return ø }
+	factor = glyph_word_call(p)
+	Key(written_number(written), Op.Mul, read_suffix(p, factor, 0) ?? factor)
+}
 # `ε`, `ω` as words: the glyph word's call, unless the word names a case (`E::ε`, `.ε`, an enum's)
 read_glyph_word(p: Parser, word: text): Node := {
 	p.at += word.length
@@ -96,4 +102,4 @@ read_mixed_number(p: Parser, written: text, literal: text): Node := {
 	if literal.contains(".") or literal.contains("e") { raise "`" + literal + char_here(p) + "` at " + line_and_column(p.code, p.at) + ": a mixed number is whole before its fraction, 2½" }
 	Key(written_number(written), Op.Add, fraction_glyph(p))
 }
-glyph_atoms_extension = Extension{name: "glyph_atoms", atom_readers: joined_maps([reading_rows(VULGAR_FRACTIONS.keys, vulgar_fraction), {"\\": unknown_entity}, reading_rows(TRUTH_GLYPH_STARTS.keys, truth_atom), reading_rows(GLYPH_WORDS.keys, glyph_word_call)]), number_suffix_readers: [read_repeating_decimal, read_mixed_number], keyword_readers: reading_rows(["ε", "ω"], read_glyph_word)}
+glyph_atoms_extension = Extension{name: "glyph_atoms", atom_readers: joined_maps([reading_rows(VULGAR_FRACTIONS.keys, vulgar_fraction), {"\\": unknown_entity}, reading_rows(TRUTH_GLYPH_STARTS.keys, truth_atom), reading_rows(GLYPH_WORDS.keys, glyph_word_call)]), number_suffix_readers: [read_repeating_decimal, read_mixed_number, read_glued_glyph_word], keyword_readers: reading_rows(["ε", "ω"], read_glyph_word)}

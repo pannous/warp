@@ -28,13 +28,10 @@ mixin_view(statement: Node): list? := {
 # `class Duck with Walker {…}`, parsed as the bodiless class, `with` and `Walker: {…}`: the class with its body and the
 # mixins' members; a class including a mixin in its body, `include Walker`, the same; any other statement as it is
 with_mixins_taken(statement: Node, mixins: map): Node := {
-	if is_group(statement) and #statement == 3 and statement#2 == symbol(WITH_WORD) and is_key(statement#3, Op.Colon) {
-		declared = statement#1
-		match declared {
-			Key(left, key_op, right): {
-				own = view_of(value_of(statement#3))[3..]
-				return Key(left, key_op, ["type", right#2, mixed_body(own, names_listed(key_of(statement#3)), mixins)])
-			}
+	clause = with_clause(statement)
+	if clause != ø {
+		match clause#1 {
+			Key(left, key_op, right): return Key(left, key_op, ["type", right#2, mixed_body(view_of(clause#3)[3..], clause#2, mixins)])
 			_: return statement
 		}
 	}
@@ -57,14 +54,28 @@ mixed_body(own: list, taken: list, mixins: map): list := {
 	["list", '{', ';'] + own + mixed
 }
 
+# [the bodiless class, the mixins' names, the body] of `class Duck with Walker {…}`, which parses as the group
+# `class Duck`, `with`, `Walker: {…}`, and with more mixins as the comma list of the group `class Duck with Walker`, the
+# names after it, the last `Swimmer: {…}`; else ø
+with_clause(statement: Node): list? := {
+	parts = match statement {
+		List(items, Bracket.None, Separator.Comma): items
+		_: [statement]
+	}
+	head = parts#1
+	if not (is_group(head) and #head == 3 and head#2 == symbol(WITH_WORD)) { return ø }
+	named = [head#3] + parts[1 ..]
+	last = named#(#named)
+	listed = named[0 ..< #named - 1]
+	if not (is_key(last, Op.Colon) and key_of(last) is symbol and listed.all(name => name is symbol)) { return ø }
+	[head#1, (listed + [key_of(last)]).map(name => name_of(name)), value_of(last)]
+}
+
 # the mixin a body member `include Walker` names, else ø
 included_mixin(member: list): text? := {
 	n = node_of(member)
 	if is_group(n) and #n == 2 and n#1 == symbol(INCLUDE_WORD) and n#2 is symbol then name_of(n#2) else ø
 }
-
-# `Walker`, `Walker, Swimmer`: the names listed
-names_listed(names: Node): list := if names is symbol then [name_of(names)] else items_of(names).map(name => name_of(name))
 
 # the word a member defines, a method's or a field's
 mixed_member_word(member: list): text := {

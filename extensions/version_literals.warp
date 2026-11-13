@@ -27,4 +27,6 @@ version_end(p: Parser, at: int): int := {
 	end
 }
 version_call(written: text): Node := call_of(VERSION_WORD, ["" + written])
-version_literals_extension = Extension{name: "version_literals", number_readers: [read_version_literal], keyword_readers: {VERSION_WORD: read_version_word}}
+# a version literal brings lib/version along, which the source names nowhere (`1.2.3 < 1.10.0`)
+version_uses(source: text, tree: Node, folder: text = "."): list := if nodes_in(tree).any(n => is_call(n) and n#1 == symbol(VERSION_WORD)) then [VERSION_WORD] else []
+version_literals_extension = Extension{name: "version_literals", number_readers: [read_version_literal], keyword_readers: reading_rows([VERSION_WORD], read_version_word), implicit_uses: [version_uses]}
