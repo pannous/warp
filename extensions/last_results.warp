@@ -3,8 +3,10 @@
 # kept under a hidden name; after an assignment `x = 5` that is x. In a block or a lambda, `{it * it}`, and in a
 # charged definition, `twice := it * 2`, `it` stays the argument; at the start, or after a definition, `it` is unbound
 # as before.
-last_results_extension = Extension{name: "last_results", passes_before: {"tries": program => last_results(parameter_its(program))}}
+last_results_extension = Extension{name: "last_results", passes_before: {"tries": resolved_its}}
 LAST_RESULT = symbol("it·last")
+# a definition's `it` first (its parameter), then the program's (the last result)
+resolved_its(program: Node): Node := last_results(parameter_its(program))
 IT = symbol("it")
 
 last_results(program: Node): Node := {
