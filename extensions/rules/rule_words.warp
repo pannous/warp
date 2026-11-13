@@ -220,10 +220,9 @@ error_handler(statement: Node): any := {
 	handled = if #words == 4 and (is_key(words#4, Op.Colon) or is_key(words#4, Op.Do)) then [key_of(words#4), value_of(words#4)] else words[3 ..]
 	if #handled == 2 and handled#1 is symbol then [name_of(handled#1), handled#2] else ø
 }
-# `event stop the machine` declares an event of several words (decision multi-word-events): the declaration leaves
-# no code but `()`, declared_named reads it (ø, as nothing_statement is, would leave the rule unfired); ø for
-# anything but two words or more
-event_declared(words: list): any := if #words > 1 and words.all(word => word is symbol) then bracketed([], "(") else ø
+# `event stop the machine` declares an event of several words (decision multi-word-events): its one name, which
+# declared_named reads it as; ø for anything but two words or more
+event_declared(words: list): any := if #words > 1 and words.all(word => word is symbol) then symbol(words.map(spelled).join(" ")) else ø
 # the words of a phrase with each event of several words the program declares as its one name, `[stop, the,
 # machine: {…}]` as `[«stop the machine»: {…}]`; ø where they name none
 declared_named(words: list, program: Node): any := {
