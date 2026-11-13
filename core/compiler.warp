@@ -314,6 +314,7 @@ MODULE_START = "warp/start"
 write_modules(folder: text, runtime_file: text, named: list) := {
 	global modules_rewritten
 	global said
+	global names_made
 	modules_rewritten = yes
 	if #named == 0 { write_library_index(folder) }
 	runtime = read_bytes(runtime_file)
