@@ -663,6 +663,11 @@ Triage (judge the form before building it):
   item's name, ['a', 'b']. Only the plural, `people().names` (:6), reads every item; whether the singular does too
   is a parked decision (it reads two ways: the list's own field or each item's). Left red and untouched until decided.
 
+## eval of a text sees only its with: names (card interpret-data, user 2026-11-13 via warp-interviewer)
+- test/node/test_eval_word.pairs.warp:6 `x = 5; eval("x*2")` → 10 is obsolete: eval of a text runs as a program of
+  its own and refuses x as unknown; the name goes in by `with:`, `eval("x*2", with: {x: x})` (wiki/evaluation.md,
+  wiki/full-evaluation.md). Data and blocks, `interpret(data a+1)`, do see the names where they are written.
+
 ## Events and signals, cluster 11 (warp-interviewer 2026-11-13)
 Dropped, old Rust-era lines no wiki page backs:
 - test/control/test_reactive_ports.pairs.warp `value - was`, `value - before` and test_reactive_ports.warp
