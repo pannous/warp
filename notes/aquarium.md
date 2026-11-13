@@ -2,7 +2,7 @@
 
 Fragment-based aquarium approximation. Not a faithful WebGPU port. No GPU frame has been shown.
 
-The picture is `samples/gpu/aquarium.warp`. The reef is that file; the fish mesh and its swim are `lib/fish_mesh.warp`, shared with `samples/gpu/fish.warp`. There is no `lib/aquarium.warp`. `test/aquarium/test_aquarium.warp` imports the sample file, which brings the functions and not the `on frame` paint.
+The picture is `samples/gpu/aquarium.warp`. The reef is that file; the fish mesh and its swim are `samples/gpu/fish_mesh.warp`, shared with `samples/gpu/fish.warp`. There is no `lib/aquarium.warp`. `test/aquarium/test_aquarium.warp` imports the sample file, which brings the functions and not the `on frame` paint.
 
 ## Reference
 

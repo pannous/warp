@@ -661,8 +661,25 @@ Triage (judge the form before building it):
 - test/control/test_call_result_reflection.warp:4, 5 expect `people().name` and `name of people()` to read every
   item's name, ['a', 'b']. Only the plural, `people().names` (:6), reads every item; whether the singular does too
   is a parked decision (it reads two ways: the list's own field or each item's). Left red and untouched until decided.
+<<<<<<< HEAD
 
 ## eval of a text sees only its with: names (card interpret-data, user 2026-11-13 via warp-interviewer)
 - test/node/test_eval_word.pairs.warp:6 `x = 5; eval("x*2")` → 10 is obsolete: eval of a text runs as a program of
   its own and refuses x as unknown; the name goes in by `with:`, `eval("x*2", with: {x: x})` (wiki/evaluation.md,
   wiki/full-evaluation.md). Data and blocks, `interpret(data a+1)`, do see the names where they are written.
+||||||| 1370708a1a
+=======
+
+## Error values and try (cluster error-values-try, decided by the user via warp-interviewer 2026-11-13)
+
+| file:line | expected now | proposed | why |
+|---|---|---|---|
+| test/welcoming/test_welcoming_print.pairs.warp:18, 19 | "a∞" / "aNaN" | Error("divide by zero") | decimal literals are exact: `1.0/0.0` raises; only `x as float` keeps IEEE (wiki/Footguns.md "NaN and infinity") |
+| test/numbers/test_nan_observed.pairs.warp:4, 5 | "aNaN" / "NaN" | Error("divide by zero") | same: `-0.0/0.0`, `0.0/0.0` are exact |
+| test/welcoming/test_footguns.pairs.warp:321 | true | Error("divide by zero") | same: `1.0/0.0` |
+| test/control/test_try_index_and_float.pairs.warp:5 | 7 | refused at compile time | `n = 5; try n#1 else 7`: `#` on a known int can never work, so the compiler refuses, try or not |
+| test/control/test_try.pairs.warp:31, 34 | 7 | refused at compile time | same: `def f(m){ m#1 }; try f(3) else 7`, `m.a` of an int |
+| test/control/test_error_words.pairs.warp:9 | "ab" | "aøb" | `warn(…)` gives ø, which text shows as ø like any other ø |
+| test/welcoming/test_warning_mode.pairs.warp:4 | "ab" | "aøb" | same: `warning(…)` |
+| test/control/test_error_not_in_data.pairs.warp:18 | 1 | Error("divide by zero") | `a, b = e, 2` binds a plain variable a, which holds no Error (decision errors held only by optional variables); its own header says the write raises |
+>>>>>>> origin/main
