@@ -17,6 +17,9 @@ CRATE_TOOL_PLACES = ["/warp-crate", "/../scripts/warp-crate"]
 CRATE_NEEDS = {python3: "brew install python, or python.org", cargo: "curl https://sh.rustup.rs -sSf | sh, or rustup.rs"}
 WASM2C_MODULE = "program"
 C_COMPILER = "cc -O2"
+# a macOS executable's main thread stack, where the program runs: wasm's own limit and the host's frames beneath it
+# (lib/native/wasi.c PROGRAM_STACK_BYTES; Linux's program gets it from a thread of its own)
+MACOS_STACK = " -Wl,-stack_size,0x10000000"
 # wasm2c's runtime and headers, in these folders of the wabt whose wasm2c runs
 WASM2C_RUNTIME = "/share/wabt/wasm2c"
 # the oldest wasm2c writing the w2c_ names and taking -n (an old /usr/local/bin/wasm2c 1.0.13 before Homebrew's 1.0.42
@@ -37,7 +40,7 @@ build_native(source_file: text, library: text) := {
 	runtime = wabt + WASM2C_RUNTIME
 	shell(quoted_path(wasm2c) + " " + quoted_path(stem + ".wasm") + " -n " + WASM2C_MODULE + " -o " + quoted_path(stem + ".c"))
 	files = [stem + ".c", stem + ".main.c", runtime + "/wasm-rt-impl.c", runtime + "/wasm-rt-mem-impl.c"].map(quoted_path).join(" ")
-	shell(C_COMPILER + " -I" + quoted_path(runtime) + " -I" + quoted_path(wabt + WABT_HEADERS) + " -o " + quoted_path(executable) + " " + files + " -lm" + exported_symbols() + native_links(wabt, library))
+	shell(C_COMPILER + " -I" + quoted_path(runtime) + " -I" + quoted_path(wabt + WABT_HEADERS) + " -o " + quoted_path(executable) + " " + files + " -lm" + exported_symbols() + main_stack() + native_links(wabt, library))
 	shell("rm -f " + [".wasm", ".c", ".h", ".main.c"].map(suffix => quoted_path(stem + suffix)).join(" "))
 	print "built " + executable
 }
@@ -74,6 +77,7 @@ native_links(wabt: text, library: text): text := {
 # a native build's own C functions (foreign.c's native_pointer, the glue's) are found by name at run time (dlsym):
 # Linux executables export them only when told; macOS's always do
 exported_symbols(): text := if is_macos() then "" else " -rdynamic"
+main_stack(): text := if is_macos() then MACOS_STACK else ""
 is_macos(): bool := shell("uname") == "Darwin"
 # the folder a file's uses are read from: "." for a file named without one
 source_folder(file: text): text := if folder_of(file) == "" then "." else folder_of(file)
