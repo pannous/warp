@@ -1176,8 +1176,8 @@ enum_help_in(module_text: text, word: text): any := {
 	}
 	ø
 }
-# `enum Scale { major, minor }`: [Scale, [major, minor]], else ø
-enum_line(line: text): list? := if line.starts_with(enum_word + " ") and line.contains("{") then declared_enum(parsed(line)) else ø
+# `enum Scale { major, minor }`, up to its closing brace: [Scale, [major, minor]], else ø
+enum_line(line: text): list? := if line.starts_with(enum_word + " ") and line.contains("}") then declared_enum(parsed(line.split("}")#1 + "}")) else ø
 # `help(draw.save)`: the word's help as the module the program uses through that name writes it, else ø
 qualified_word_help(module: Node, word: Node, program: Node): any := if owns_word("help", program) or not qualifies_by_module(spelled(module), program) then ø else word_help_in(used_module_text(spelled(module).lower()), spelled(word))
 used_word_help(word: text, source: text): any := {
