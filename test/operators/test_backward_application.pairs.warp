@@ -3,3 +3,8 @@
 '-7 abs'	7
 'x = -3; y = x abs; y + 1'	4
 'sqrt 16'	4
+# the program's own word of one value too, binding tighter than any operator as a unit does (interviewer decision postfix 2026-11-13)
+'bars(n: int) := n * 10; 2 bars'	20
+'bars(n: int) := n * 10; 1 + 2 bars'	21
+'bars(n: int) := n * 10; 3 * 2 bars'	60
+'bars(n: int) := n * 10; x: int = 2 bars; x'	20

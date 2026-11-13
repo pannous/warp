@@ -118,14 +118,6 @@ rebuilt(first: text, last: text): nothing := {
 	start = step_number(first)
 	end = step_number(last)
 	seed = seed_path()
-	# the seed builds warp.wasm.new, which runs the later steps with the library the seed makes (driver
-	# compiler_library), whose GC types the seed's emitter gave it: a seed that compiled itself makes its own library's
-	# (copied: a published seed is older than the sources and can't compile today's lib/unicode); a stage its library
-	# marks as built by other emitter code (refresh-seed's stage A, built by the old seed) makes it anew
-	if start < step_number("native") {
-		own = seed_library(seed)
-		if access(c_string(other_types_mark(own)), READABLE) == 0 { library_made(seed, companion_library(built)) } else { companion_copied(own, companion_library(built)) }
-	}
 	if step_runs("seed", start, end) {
 		# the seed's runtime in a folder of its own: a compile links the modules beside its runtime, and lib/modules/
 		# were built behind lib/runtime.wasm, whose words may sit elsewhere (an old seed checks only their counts)
@@ -157,7 +149,6 @@ rebuilt(first: text, last: text): nothing := {
 	# (a rebuild stopped before the modules leaves warp.wasm.new for the one that goes on: scripts/rebuild.sh)
 	if compiled and end >= step_number("modules") {
 		machine_code_moved(built, compiler_path())
-		companion_moved(companion_library(built), companion_library(compiler_path()))
 		rename(c_string(built), c_string(compiler_path()))
 		print(joined("rebuilt ", compiler_path()))
 	}
@@ -222,7 +213,6 @@ promoted(): nothing := {
 	unlink(next)
 	promoted_file = joined(library, "/warp-self.wasm")
 	copied(compiler, promoted_file)
-	companion_copied(companion_library(compiler), companion_library(promoted_file))
 	for kind in 0..MACHINE_CODE_KINDS { machine_code_copied(compiler, promoted_file, machine_code_suffix_of(kind)) }
 	said = if fixpoint then " compiles compiler.warp once more (to its own bytes, a fixpoint), promoted to " else " compiles compiler.warp once more (to other bytes, no fixpoint), promoted to "
 	print(joined(joined(compiler, said), promoted_file))
@@ -234,45 +224,6 @@ seed_shipped(): nothing := {
 	seed = seed_path()
 	machine_code_kept(seed)
 	print(joined("precompiled ", seed))
-	print(joined("its library ", seed_library(seed)))
-}
-# the empty file refresh-seed puts in a stage's library: the compiler beside it makes GC types other than the library's
-other_types_mark(library: text): text := joined(library, "/makes-other-types")
-# the seed's own runtime and unicode module, <seed>.library/, made once when missing (the published seed brings its own):
-# by the seed itself, so taken for a stage that compiled itself, whose output has its GC types
-seed_library(seed: text): text := {
-	folder = companion_library(seed)
-	if not holds_companion(folder) { library_made(seed, folder) }
-	folder
-}
-# the runtime and unicode module `maker` makes, into `folder` anew: the library of every compiler it builds. Made aside
-# and moved in whole, a rebuild beside this one never reads half of it
-library_made(maker: text, folder: text): nothing := {
-	aside = joined(joined(folder, ".new-"), text_of(getpid()))
-	companion_folders_made(aside)
-	runtime = joined(aside, companion_file(0))
-	file_ran(maker, words(maker, "runtime", runtime, "", "", ""))
-	file_ran(maker, words(maker, "module", "unicode", runtime, joined(aside, companion_file(1)), ""))
-	companion_moved(aside, folder)
-}
-# a compiler's library copied beside another compiler of the same builder
-companion_copied(from: text, to: text): nothing := {
-	if holds_companion(from) {
-		companion_folders_made(to)
-		for i in 0..COMPANION_FILES { copied(joined(from, companion_file(i)), joined(to, companion_file(i))) }
-	}
-}
-# … moved, the machine code made beside it with it
-companion_moved(from: text, to: text): nothing := {
-	folder_removed(to)
-	rename(c_string(from), c_string(to))
-}
-folder_removed(folder: text): nothing := {
-	command_output(joined(joined("rm -rf '", folder), "'"))
-}
-companion_folders_made(folder: text): nothing := {
-	mkdir(c_string(folder), FOLDER_MODE)
-	mkdir(c_string(joined(folder, "/modules")), FOLDER_MODE)
 }
 # a build's machine code (the driver's .cwasm and its key) moved to another build file of the same bytes
 machine_code_moved(from: text, to: text): nothing := {

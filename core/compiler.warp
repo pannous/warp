@@ -302,7 +302,7 @@ module_compiled_behind(name: text, source: text, runtime, file: text) := {
 	write_bytes(file, with_signature(written, name, image_fields(module.order) + [links_field(written)]))
 }
 MODULE_START = "warp/start"
-# every module of lib/ (library.warp library_modules) as <name>.wasm in the folder, each after the modules it uses
+# every prebuilt module (library.warp prebuilt_module_names) as <name>.wasm in the folder, each after the modules it uses
 # (it links them), all behind the one runtime read once. One refusing to prebuild leaves no file, as a module never
 # prebuilt has none (scripts/lib/modules.sh removes an older build first; an empty one failed every run that preloads
 # the folder): it is said here and in rebuild.sh's summary, and compiled from its source with the
@@ -314,11 +314,15 @@ MODULE_START = "warp/start"
 write_modules(folder: text, runtime_file: text, named: list) := {
 	global modules_rewritten
 	global said
+	global names_made
 	modules_rewritten = yes
 	if #named == 0 { write_library_index(folder) }
 	runtime = read_bytes(runtime_file)
 	refused = []
+	# (each module's made names numbered from the same start: built alone or after others, the same bytes)
+	names_before = names_made
 	for name in (if #named > 0 then named else modules_in_build_order()) {
+		names_made = names_before
 		file = folder + "/" + name + ".wasm"
 		try { module_written_behind(name, runtime, file) } catch refusal {
 			said = refusal_said(refusal)
@@ -330,7 +334,7 @@ write_modules(folder: text, runtime_file: text, named: list) := {
 # (the prelude first, every module links it; then the runtime modules: any module's power links big_numbers, though
 # it writes no `use` of it)
 built_first(): list := [PRELUDE_MODULE] + hooks().runtime_modules
-modules_in_build_order(): list := in_dependency_order(built_first() + library_modules().filter(name => name not in built_first()))
+modules_in_build_order(): list := in_dependency_order(built_first() + prebuilt_module_names().filter(name => name not in built_first()))
 # the modules step as a plan, for scripts/lib/modules.sh to build the modules in parallel (user OK 11-11,
 # lazy-module-prebuild): the library index written into the folder, then `library ⇥ <hash>` of what each module's
 # build reads of every other (each definition's head: open_words extended_elsewhere), then each module in build order,

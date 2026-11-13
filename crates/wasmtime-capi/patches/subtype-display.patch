@@ -1,0 +1,369 @@
+--- a/wasmtime/src/config.rs
++++ b/wasmtime/src/config.rs
+@@ -96,6 +96,10 @@
+     None,
+ }
+ 
++/// warp: the version machine code is kept under: warp's patches change what compiled code reads
++/// (`VMStoreContext::subtype_display`), so code compiled by another wasmtime 50 never runs here
++const WARP_VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), "+warp-subtype-display");
++
+ impl Default for ModuleVersionStrategy {
+     fn default() -> Self {
+         ModuleVersionStrategy::WasmtimeVersion
+@@ -105,7 +109,7 @@
+ impl core::hash::Hash for ModuleVersionStrategy {
+     fn hash<H: core::hash::Hasher>(&self, hasher: &mut H) {
+         match self {
+-            Self::WasmtimeVersion => env!("CARGO_PKG_VERSION").hash(hasher),
++            Self::WasmtimeVersion => WARP_VERSION.hash(hasher),
+             Self::Custom(s) => s.hash(hasher),
+             Self::None => {}
+         };
+@@ -116,7 +120,7 @@
+     /// Get the string-encoding version of the module.
+     pub fn as_str(&self) -> &str {
+         match &self {
+-            Self::WasmtimeVersion => env!("CARGO_PKG_VERSION_MAJOR"),
++            Self::WasmtimeVersion => WARP_VERSION,
+             Self::Custom(c) => c,
+             Self::None => "",
+         }
+--- a/wasmtime/src/runtime/store/gc.rs
++++ b/wasmtime/src/runtime/store/gc.rs
+@@ -2,15 +2,15 @@
+ 
+ use crate::RootSet;
+ use crate::error::{Context, ensure};
+-use crate::hash_map::HashMap;
+ use crate::module::ModuleRegistry;
++use crate::prelude::*;
+ use crate::store::{
+     Asyncness, AutoAssertNoGc, InstanceId, StoreOpaque, StoreResourceLimiter, yield_now,
+ };
+ use crate::type_registry::RegisteredType;
+ use crate::vm::{
+-    self, Backtrace, Frame, GcRootsList, GcStore, InstanceAllocationRequest, NopHasher,
+-    SendSyncPtr, StoreGcHostAllocTypes, TraceInfo, VMGcRef,
++    self, Backtrace, Frame, GcRootsList, GcStore, InstanceAllocationRequest, SendSyncPtr,
++    StoreGcHostAllocTypes, TraceInfo, VMGcRef,
+ };
+ use crate::{
+     Engine, ExnRef, GcHeapOutOfMemory, Result, Rooted, Store, StoreContextMut, Tag,
+@@ -45,26 +45,12 @@
+     /// work with that directly so this is stored as `VMGcRef` instead.
+     pending_exception: Option<VMGcRef>,
+ 
+-    /// A store-local cache of engine-level subtype checks.
+-    ///
+-    /// Dynamic subtype checks (e.g. for `ref.cast` instructions) consult the
+-    /// engine's type registry, which is protected by a read-write lock.
+-    /// Testing locally shows that parallel readers take a significant
+-    /// performance hit when using this lock (as measured with `wasmtime
+-    /// serve`). Thus this cache is intended to serve as a fast path where the
+-    /// lock need not be hit at all.
+-    ///
+-    /// Note that the size of this cache is currently bounded to a fixed size.
+-    /// Once this cache is full then all future consultations which aren't in
+-    /// the cache go upstream to the engine itself (slow). In the future
+-    /// this'll either be removed entirely (see #13484) or will have some sort
+-    /// of LRU-like behavior.
+-    ///
+-    /// FIXME(#13484) this field is a temporary workaround for a "true
+-    /// solution" where supertypes are stored inline in a compiled-code-visible
+-    /// location which means that a libcall isn't needed at all (nor
+-    /// synchronization) to determine subtype/supertype relationships.
+-    subtype_check_cache: HashMap<u64, bool, NopHasher>,
++    /// warp: the store's subtype display, the rows that `VMStoreContext::subtype_display`
++    /// points compiled code at (`SUBTYPE_DISPLAY_STRIDE` words per `VMSharedTypeIndex`,
++    /// filled on demand by `is_subtype_cached`): compiled code tests `a <: b` inline as
++    /// `row(a)[depth(b)] == b` and leaves for the `is_subtype` libcall only while `a`'s row is
++    /// unfilled. Upstream's FIXME(#13484) asks for this in place of a hash cache.
++    subtype_display: Vec<u32>,
+ }
+ 
+ impl<T> Store<T> {
+@@ -1078,32 +1064,48 @@
+ 
+     /// Is type `sub` a subtype of `sup`?
+     ///
+-    /// Equivalent to `self.engine().signatures().is_subtype(sub, sup)` but
+-    /// caches results store-locally to avoid contention on the engine's type
+-    /// registry lock. See the documentation of the `subtype_check_cache` field
+-    /// for details.
++    /// Equivalent to `self.engine().signatures().is_subtype(sub, sup)`, answered from the
++    /// store's subtype display (filled here on demand) without the engine registry's lock.
+     pub(crate) fn is_subtype_cached(
+         &mut self,
+         sub: wasmtime_environ::VMSharedTypeIndex,
+         sup: wasmtime_environ::VMSharedTypeIndex,
+     ) -> bool {
+-        const MAX_SIZE: usize = 1 << 16; // 64k entries
++        let sup_word = sup.as_u32();
++        match self
++            .subtype_display_row(sup)
++            .iter()
++            .position(|&t| t == sup_word)
++        {
++            Some(depth) => self.subtype_display_row(sub)[depth] == sup_word,
++            None => self.engine.signatures().is_subtype(sub, sup),
++        }
++    }
+ 
+-        let key = (u64::from(sub.as_u32()) << 32) | u64::from(sup.as_u32());
+-        let engine_answer = || self.engine.signatures().is_subtype(sub, sup);
+-        if self.gc_data.subtype_check_cache.len() < MAX_SIZE {
+-            *self
+-                .gc_data
+-                .subtype_check_cache
+-                .entry(key)
+-                .or_insert_with(engine_answer)
+-        } else {
+-            self.gc_data
+-                .subtype_check_cache
+-                .get(&key)
+-                .copied()
+-                .unwrap_or_else(engine_answer)
++    /// `ty`'s row of the subtype display, filled (and the display grown) on first use.
++    fn subtype_display_row(&mut self, ty: wasmtime_environ::VMSharedTypeIndex) -> &[u32] {
++        use wasmtime_environ::SUBTYPE_DISPLAY_STRIDE;
++        let stride = SUBTYPE_DISPLAY_STRIDE as usize;
++        let start = ty.as_u32() as usize * stride;
++        if self.gc_data.subtype_display.len() < start + stride {
++            let rows = (ty.as_u32() as usize + 1).next_power_of_two().max(64);
++            self.gc_data.subtype_display.resize(rows * stride, u32::MAX);
++            let display = &self.gc_data.subtype_display;
++            let (base, rows) = (display.as_ptr() as usize, display.len() / stride);
++            let context = self.vm_store_context_mut();
++            *context.subtype_display.get_mut() = base;
++            *context.subtype_display_rows.get_mut() = rows;
++        }
++        let filled = start + stride - 1;
++        if self.gc_data.subtype_display[filled] != 1 {
++            let path = self.engine.signatures().display_path(ty);
++            let row = &mut self.gc_data.subtype_display[start..filled];
++            for (slot, t) in row.iter_mut().zip(path) {
++                *slot = t.as_u32();
++            }
++            self.gc_data.subtype_display[filled] = 1;
+         }
++        &self.gc_data.subtype_display[start..start + stride]
+     }
+ }
+ 
+--- a/wasmtime/src/runtime/type_registry.rs
++++ b/wasmtime/src/runtime/type_registry.rs
+@@ -1778,6 +1778,14 @@
+         self.is_subtype_slow(sub, sup)
+     }
+ 
++    /// warp: `ty`'s path from its root down to `ty` itself: its supertype at each depth.
++    pub(crate) fn display_path(&self, ty: VMSharedTypeIndex) -> Vec<VMSharedTypeIndex> {
++        let inner = self.0.read();
++        let mut path = inner.supertypes(ty).to_vec();
++        path.push(ty);
++        path
++    }
++
+     fn is_subtype_slow(&self, sub: VMSharedTypeIndex, sup: VMSharedTypeIndex) -> bool {
+         // Do the O(1) subtype checking trick:
+         //
+--- a/wasmtime/src/runtime/vm/vmcontext.rs
++++ b/wasmtime/src/runtime/vm/vmcontext.rs
+@@ -839,6 +839,8 @@
+             store_data: VmPtr::dangling(),
+             component_context: UnsafeCell::new([0; NUM_COMPONENT_CONTEXT_SLOTS]),
+             current_thread: UnsafeCell::new(VMLazyThread::none()),
++            subtype_display: UnsafeCell::new(0),
++            subtype_display_rows: UnsafeCell::new(0),
+         }
+     }
+ }
+--- a/wasmtime-environ/src/vmoffsets.rs
++++ b/wasmtime-environ/src/vmoffsets.rs
+@@ -16,6 +16,10 @@
+ /// defined by the component model's `context.{get,set}` intrinsics.
+ pub const NUM_COMPONENT_CONTEXT_SLOTS: usize = 2;
+ 
++/// warp: u32 words per type in `VMStoreContext::subtype_display`: the supertypes at depths
++/// `0..SUBTYPE_DISPLAY_STRIDE - 1`, then the row's filled flag.
++pub const SUBTYPE_DISPLAY_STRIDE: u32 = 8;
++
+ #[cfg(target_pointer_width = "32")]
+ fn cast_to_u32(sz: usize) -> u32 {
+     u32::try_from(sz).unwrap()
+--- a/wasmtime-environ/src/vmtypes.rs
++++ b/wasmtime-environ/src/vmtypes.rs
+@@ -483,6 +483,17 @@
+                 ///
+                 /// NB: `UnsafeCell` because JIT code writes to this field.
+                 pub current_thread: UnsafeCell<VMLazyThread>,
++
++                /// warp: the store's subtype display, `SUBTYPE_DISPLAY_STRIDE` u32s per
++                /// `VMSharedTypeIndex` (the type's supertypes from its root down, the type
++                /// itself at its own depth, `u32::MAX` past it, the last word 1 once the row
++                /// is filled), so that compiled code tests `a <: b` inline as
++                /// `row(a)[depth(b)] == b` and calls the `is_subtype` libcall only for an
++                /// unfilled row, which the libcall then fills.
++                pub subtype_display: UnsafeCell<usize>,
++
++                /// warp: how many rows `subtype_display` has.
++                pub subtype_display_rows: UnsafeCell<usize>,
+             }
+ 
+             /// JIT-visible representation of the store's current thread for the component
+--- a/wasmtime-internal-cranelift/src/alias_region.rs
++++ b/wasmtime-internal-cranelift/src/alias_region.rs
+@@ -184,6 +184,9 @@
+     /// An access of the bytes inside a data segment.
+     DataSegment,
+ 
++    /// warp: an access of the store's subtype display (`VMStoreContext::subtype_display`).
++    SubtypeDisplay,
++
+     /// An access of an exception object's tag-instance word.
+     GcExnTagInstance,
+ 
+@@ -1461,6 +1464,11 @@
+     pub fn data_segment_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
+         self.region(func, AliasRegionKey::DataSegment)
+     }
++
++    /// warp: the alias region of the store's subtype display rows.
++    pub fn subtype_display_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
++        self.region(func, AliasRegionKey::SubtypeDisplay)
++    }
+ }
+ 
+ /// Unsafe intrinsic-related methods.
+--- a/wasmtime-internal-cranelift/src/func_environ/gc.rs
++++ b/wasmtime-internal-cranelift/src/func_environ/gc.rs
+@@ -19,9 +19,9 @@
+ use smallvec::{SmallVec, smallvec};
+ use wasmtime_environ::{
+     Collector, GcArrayLayout, GcLayout, GcStructLayout, GcTypeLayouts, I31_DISCRIMINANT,
+-    ModuleInternedTypeIndex, PtrSize, TagIndex, TypeIndex, VMGcKind, WasmCompositeInnerType,
+-    WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType,
+-    wasm_unsupported,
++    ModuleInternedTypeIndex, PtrSize, SUBTYPE_DISPLAY_STRIDE, TagIndex, TypeIndex, VMGcKind,
++    WasmCompositeInnerType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
++    WasmStorageType, WasmValType, wasm_unsupported,
+ };
+ 
+ /// A trait for different collectors to emit any GC barriers they might require.
+@@ -1920,6 +1920,7 @@
+         }
+ 
+         let diff_tys_block = builder.create_block();
++        let libcall_block = builder.create_block();
+         let continue_block = builder.create_block();
+ 
+         builder.ins().brif(
+@@ -1930,8 +1931,20 @@
+             &[],
+         );
+ 
+-        // Different types block: fall back to the `is_subtype` libcall.
++        // warp: different types: `a <: b` iff `a`'s row of the store's subtype display holds
++        // `b` at `b`'s depth; an unfilled (or missing) row leaves for the libcall, which fills it.
+         builder.switch_to_block(diff_tys_block);
++        match self.display_depth(b_ty) {
++            Some(depth) => {
++                self.inline_display_check(builder, a, b, depth, continue_block, libcall_block)
++            }
++            None => {
++                builder.ins().jump(libcall_block, &[]);
++            }
++        }
++
++        // Unfilled row: fall back to the `is_subtype` libcall.
++        builder.switch_to_block(libcall_block);
+         log::trace!("is_subtype: slow path to do full `is_subtype` libcall");
+         let is_subtype = self.builtin_functions.is_subtype(builder.func);
+         let vmctx = self.vmctx_val(&mut builder.cursor());
+@@ -1945,10 +1958,85 @@
+         log::trace!("is_subtype(..) -> {result:?}");
+ 
+         builder.seal_block(diff_tys_block);
++        builder.seal_block(libcall_block);
+         builder.seal_block(continue_block);
+ 
+         result
+     }
++
++    /// warp: `ty`'s depth in its subtype tree (its number of supertypes), when the store's
++    /// subtype display has a column for it.
++    fn display_depth(&self, ty: ModuleInternedTypeIndex) -> Option<u32> {
++        let mut depth = 0;
++        let mut supertype = self.types[ty].supertype;
++        while let Some(parent) = supertype {
++            depth += 1;
++            supertype = self.types[parent.as_module_type_index()?].supertype;
++        }
++        (depth < SUBTYPE_DISPLAY_STRIDE - 1).then_some(depth)
++    }
++
++    /// warp: jumps to `continue_block` with whether `a`'s display row holds `b` at `depth`, or to
++    /// `libcall_block` when that row is not filled yet.
++    fn inline_display_check(
++        &mut self,
++        builder: &mut FunctionBuilder<'_>,
++        a: ir::Value,
++        b: ir::Value,
++        depth: u32,
++        continue_block: ir::Block,
++        libcall_block: ir::Block,
++    ) {
++        const WORD: i64 = 4;
++        let pointer_type = self.pointer_type();
++        let row_block = builder.create_block();
++        let miss_block = builder.create_block();
++        let store = self.get_vmstore_context_ptr(builder);
++        let rows = self
++            .alias_regions
++            .vm_store_context()
++            .subtype_display_rows()
++            .load(&mut builder.cursor(), store);
++        let index = uextend_i32_to_pointer_type(builder, pointer_type, a);
++        let in_display = builder.ins().icmp(IntCC::UnsignedLessThan, index, rows);
++        builder
++            .ins()
++            .brif(in_display, row_block, &[], libcall_block, &[]);
++
++        builder.switch_to_block(row_block);
++        let display = self
++            .alias_regions
++            .vm_store_context()
++            .subtype_display()
++            .load(&mut builder.cursor(), store);
++        let row_offset = builder
++            .ins()
++            .imul_imm_u(index, i64::from(SUBTYPE_DISPLAY_STRIDE) * WORD);
++        let row = builder.ins().iadd(display, row_offset);
++        let region = self.alias_regions.subtype_display_region(builder.func);
++        let flags = ir::MemFlagsData::trusted().with_alias_region(Some(region));
++        let at_depth =
++            builder
++                .ins()
++                .load(ir::types::I32, flags, row, (i64::from(depth) * WORD) as i32);
++        let hit = builder.ins().icmp(IntCC::Equal, at_depth, b);
++        let hit = builder.ins().uextend(ir::types::I32, hit);
++        builder
++            .ins()
++            .brif(hit, continue_block, &[hit.into()], miss_block, &[]);
++
++        builder.switch_to_block(miss_block);
++        let filled_flag = (i64::from(SUBTYPE_DISPLAY_STRIDE - 1) * WORD) as i32;
++        let filled = builder.ins().load(ir::types::I32, flags, row, filled_flag);
++        let filled = builder.ins().icmp_imm_u(IntCC::Equal, filled, 1);
++        let no = builder.ins().iconst(ir::types::I32, 0);
++        builder
++            .ins()
++            .brif(filled, continue_block, &[no.into()], libcall_block, &[]);
++
++        builder.seal_block(row_block);
++        builder.seal_block(miss_block);
++    }
+ }
+ 
+ fn stack_switching_unsupported<T>() -> WasmResult<T> {
