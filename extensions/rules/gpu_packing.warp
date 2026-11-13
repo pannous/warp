@@ -5,7 +5,10 @@ use rule_words
 # --- GPU lists (decision gpu-bound-floats; extensions/gpu_lists/runtime.warp): a list the program makes for the GPU is
 # packed as f32 cells from its creation, which the GPU's library reads and writes where they are. lib/prelude.warp's
 # rule packs the creating forms of the program's (extensions/rules/rule_words.warp gpu_lists_packed), `xs: [f32] = …` asks for one outright
-GPU_LIST_WORDS = ["gpu_compute", "paint", "gpu_render"]
+GPU_LIST_WORDS = ["gpu_compute", "paint", "gpu_render", "paint_function"]
+# the entry of a function painted on the GPU (extensions/rules/rule_words.warp definitions_reached) naming the values
+# its shader reads
+REACHED_VALUES = "values"
 # the names found once a program: name → [GPU uses, assignments, other mentions, its creating form or ø, growths]
 class GpuLists { program: Node; uses: map }
 gpu_lists = GpuLists(Node.Empty, {})
@@ -54,11 +57,17 @@ gpu_uses_counted(n: Node) := {
 	if head == "for" and #items == 5 and items#4 is symbol { return gpu_uses_counted(items#5) }
 	# a GPU word's first argument is its shader, or paint's pixels, which the CPU reads: its other arguments are the GPU's
 	if head in GPU_LIST_WORDS {
-		if #items > 1 { gpu_uses_counted(items#2) }
+		if #items > 1 { gpu_shader_counted(items#2) }
 		for argument in items[2..] { gpu_sink_counted(argument) }
 		return ø
 	}
 	for item in items { gpu_uses_counted(item) }
+}
+# a GPU word's shader: a function painted on the GPU (paint_function's quoted definitions) hands the values it reads
+# to the GPU; a shader text or paint's pixels are no GPU use
+gpu_shader_counted(shader: Node) := {
+	if not (is_group(shader) and bracket_of(shader) == "{") { return gpu_uses_counted(shader) }
+	for entry in items_of(shader) { if is_key(entry, Op.Colon) and key_of(entry) == symbol(REACHED_VALUES) { gpu_sink_counted(value_of(entry)) } else { gpu_uses_counted(entry) } }
 }
 gpu_uses_both(a: Node, b: Node) := {
 	gpu_uses_counted(a)
