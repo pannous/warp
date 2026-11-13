@@ -796,8 +796,6 @@ statements_ruled(statements: list, module: text, source: text): list := {
 	}
 	[rules, kept]
 }
-# whether a statement is one statements_ruled takes for a rule: a rewrite rule or an operator's overload
-is_rule_statement(statement: Node): bool := operator_overload(statement) != ø or rule_of(statement, "", "") != ø
 
 # Overloads of a built-in operator by its operands' kinds (decision rules-to-typed-operators):
 # `infix operator |(x: any, g: function) := g(x)` is the rule `$x | $g => $g($x)`, its parameter types its conditions
