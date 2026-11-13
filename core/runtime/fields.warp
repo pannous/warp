@@ -37,19 +37,19 @@ singular_of(plural: text): text := text_slice(plural, 0, byte_count(plural) - 1)
 # `positioned(n, line, column)`: n where it was written, a $MetaNode, as `n.line` and `n.column` read it;
 # any other node without a field of that name has no field line
 positioned_node(n: Node, line: int, column: int): Node := meta_node(n, line, column)
-# a position's line carries its file too (card positions-always): the file's index in the compile's source files
-# (core/parsing/positions.warp source_files, 0 the program's own) times LINE_SPAN, plus the line
-LINE_SPAN = 1048576
+# a node's line holds its file too (card positions-always): the file's index in the compile's source files
+# (core/parsing/positions.warp source_files, 0 the program's own) times line_span(), plus the line
+line_span(): int := 1048576
 # `positioned_in(n, file, line, column)`: n written at that line and column of the source file of that index
-positioned_in(n: Node, file: int, line: int, column: int): Node := meta_node(n, file * LINE_SPAN + line, column)
+positioned_in(n: Node, file: int, line: int, column: int): Node := meta_node(n, file * line_span() + line, column)
 # `placed_like(made, at)`: made where at was written, its file kept; made itself when at has no position
 placed_like(made: Node, at: Node): Node := if is_meta(at) and meta_line(at) > 0 then meta_node(made, meta_line(at), meta_column(at)) else made
 # `line_of(n)`, `column_of(n)`: where n was written, ø for a node without a position, which a field never shadows
 # (`.line` of the code `line = 1` is 1; card node-part-clash)
 # (line 0: a node marked by a pass but never written anywhere, with_attribute)
-node_line(n: Node): Node := if is_meta(n) and meta_line(n) > 0 then meta_line(n) % LINE_SPAN else ø
+node_line(n: Node): Node := if is_meta(n) and meta_line(n) > 0 then int_remainder(meta_line(n), line_span()) else ø
 # `file_of(n)`: the index of the source file n was written in (0 the program's own), ø without a position
-node_file(n: Node): Node := if is_meta(n) and meta_line(n) > 0 then meta_line(n) ÷ LINE_SPAN else ø
+node_file(n: Node): Node := if is_meta(n) and meta_line(n) > 0 then int_quotient(meta_line(n), line_span()) else ø
 node_column(n: Node): Node := if is_meta(n) and meta_line(n) > 0 then meta_column(n) else ø
 # the words a pass marked n with, `let` of a name declared inside a lambda (passes lambdas.warp): carried on the node
 # itself, as its position is, through every pass that keeps the node
@@ -61,7 +61,7 @@ is_position_part(m: Node, name: text): bool := {
 	if not same_bytes(name, "line") and not same_bytes(name, "column") { return no }
 	not ((marked_kind(m) == Marked.Map or marked_kind(m) == Marked.Instance) and map_index(m, name) > 0)
 }
-position_part(m: Node, name: text): int := if same_bytes(name, "line") then meta_line(m) % LINE_SPAN else meta_column(m)
+position_part(m: Node, name: text): int := if same_bytes(name, "line") then int_remainder(meta_line(m), line_span()) else meta_column(m)
 # a key that is no instance: `x#2` of a map `{a: 1, b: 2}`
 # a key node, ø (a block's written `ø`) none: the walks over a list's items for a named entry pass it
 is_keyed(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Key
