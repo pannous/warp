@@ -3,6 +3,9 @@
 // passes the module's values over with these. Included behind lib/native/wasi.c.
 #include "system.h"
 
+// the libraries native_function looks in: the process's own (libc, the executable's), warp's wasmtime C API
+static const char PROCESS[] = "c";
+static const char WASMTIME[] = "warp_wasmtime";
 enum { ARENA_ALIGNMENT = 8, TEXT_RECORD = 8, PAGE_BYTES = 65536 }; // primitive.warp ARENA_ALIGNMENT, text_layout's size
 
 // a symbol of the process: the executable's, a library's it links or one opened RTLD_GLOBAL. POSIX's dlopen(NULL)
@@ -13,11 +16,14 @@ static void* process_symbol(const char* name) {
 	if (!process) process = dlopen(NULL, RTLD_LAZY);
 	return dlsym(process, name);
 }
-// the C function of that name the executable or a library it links has; a program calling one it lacks stops here
-static void* native_function(const char* name) {
+void* library_function(const char* library, const char* name);
+// the C function of that name the executable or a library it links has, else the library's own, loaded now (Windows
+// loads no library the executable names but never calls by its import table); a program calling one none has stops here
+static void* native_function(const char* library, const char* name) {
 	void* found = process_symbol(name);
+	if (!found) found = library_function(library, name);
 	if (!found) {
-		fprintf(stderr, "no C function %s in this executable or the libraries it links\n", name);
+		fprintf(stderr, "no C function %s in this executable or the libraries it links (%s)\n", name, library);
 		exit(1);
 	}
 	return found;
@@ -38,7 +44,7 @@ void* pointer_handle(int64_t address) { return (void*)(intptr_t)address; }
 typedef uint64_t (*callback_answer_t)(w2c_program*, u64, u64, u64, u64, u64, u64, u64);
 static uint64_t callback_answered(uint64_t slot, uint64_t a, uint64_t b, uint64_t c, uint64_t d, uint64_t e, uint64_t f) {
 	static callback_answer_t answer;
-	if (!answer) answer = (callback_answer_t)native_function("w2c_program_c_callback_answered");
+	if (!answer) answer = (callback_answer_t)native_function(PROCESS, "w2c_program_c_callback_answered");
 	return answer(running_wasi->program, slot, a, b, c, d, e, f);
 }
 #define TRAMPOLINE(n) static uint64_t trampoline_##n(uint64_t a, uint64_t b, uint64_t c, uint64_t d, uint64_t e, uint64_t f) { return callback_answered(n, a, b, c, d, e, f); }
@@ -87,7 +93,7 @@ static uint32_t module_text(struct w2c_wasi__snapshot__preview1* wasi, const cha
 }
 
 // a C function's address by its name, for a program to hand to a C library as a callback
-void* c_function(char* name) { return native_function(name); }
+void* c_function(char* name) { return native_function(PROCESS, name); }
 
 // The C calls of a module the driver runs (core/native/driver.warp c_called), as the Rust stub makes them (c_calls.rs)
 // where a library lies by the name a program imports it under (`sqlite3`); libc's and libm's are the process's
@@ -98,6 +104,7 @@ void* c_function(char* name) { return native_function(name); }
 // .so.6; odd ones like libpython3.13.so.1.0 still
 // need a symlink, WARP path, or a computed `from`). Windows: LoadLibrary System32+PATH (not this dlopen list).
 static const char* LIBRARY_PATHS[] = {
+	"%s.dll",
 	"@executable_path/lib%s.dylib",
 	"$ORIGIN/lib%s.so",
 	"lib%s.dylib",
@@ -130,7 +137,7 @@ static const char* LIBRARY_PATHS[] = {
 };
 static const char* PROCESS_LIBRARIES[] = {"c", "m", "libc", "libm"};
 // a library's function, NULL when the library has none of that name: never another library's
-void* library_function(char* library, char* name) {
+void* library_function(const char* library, const char* name) {
 	for (size_t i = 0; i < sizeof PROCESS_LIBRARIES / sizeof *PROCESS_LIBRARIES; i++)
 		if (!strcmp(library, PROCESS_LIBRARIES[i])) return process_symbol(name);
 	// global: a library's own plugins (python's extension modules) find its symbols; dlsym on the handle still answers
@@ -277,7 +284,7 @@ enum { VALUE_BYTES = 32 };
 typedef void (*host_word_t)(w2c_program*, u64, u64, u32, u64, u32, u64);
 void* warp_host_callback(void* word, void* caller, const void* values, size_t count, void* results, size_t results_count) {
 	static host_word_t answer;
-	if (!answer) answer = (host_word_t)native_function("w2c_program_host_word");
+	if (!answer) answer = (host_word_t)native_function(PROCESS, "w2c_program_host_word");
 	struct w2c_wasi__snapshot__preview1* wasi = running_wasi;
 	uint32_t* top = w2c_program_arena(wasi->program);
 	uint32_t before = *top;
@@ -302,7 +309,7 @@ static void engine_interrupted(int signal) {
 void interrupts_engine(void* engine) {
 	struct sigaction action = { 0 };
 	interrupted_engine = engine;
-	epoch_increment = (void (*)(void*))native_function("wasmtime_engine_increment_epoch");
+	epoch_increment = (void (*)(void*))native_function(WASMTIME, "wasmtime_engine_increment_epoch");
 	action.sa_handler = engine_interrupted;
 	action.sa_flags = SA_RESTART;
 	sigemptyset(&action.sa_mask);

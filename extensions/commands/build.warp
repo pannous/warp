@@ -39,12 +39,14 @@ build_native(source_file: text, library: text, options: list) := {
 	wabt = folder_of(folder_of(wasm2c))
 	runtime = wabt + WASM2C_RUNTIME
 	shell(quoted_path(wasm2c) + " " + quoted_path(stem + ".wasm") + " -n " + WASM2C_MODULE + " -o " + quoted_path(stem + ".c"))
-	if C_ONLY in options { print "wrote " + [".c", ".h", ".main.c"].map(suffix => stem + suffix).join(", ") + ", the C of " + executable + " for a C compiler with wasm2c's runtime and -I <warp's lib>" } else {
+	if C_ONLY in options {
+		print "wrote " + C_FILES.map(suffix => stem + suffix).join(", ") + ", the C of " + executable + " for a C compiler with wasm2c's runtime and -I <warp's lib>"
+	} else {
 		files = [stem + ".c", stem + ".main.c", runtime + "/wasm-rt-impl.c", runtime + "/wasm-rt-mem-impl.c"].map(quoted_path).join(" ")
 		shell(C_COMPILER + " -I" + quoted_path(runtime) + " -I" + quoted_path(wabt + WABT_HEADERS) + " -I" + quoted_path(library) + " -o " + quoted_path(executable) + " " + files + " -lm" + exported_symbols() + main_stack() + native_links(wabt, library))
-		shell("rm -f " + [".wasm", ".c", ".h", ".main.c"].map(suffix => quoted_path(stem + suffix)).join(" "))
 		print "built " + executable
 	}
+	shell("rm -f " + ([".wasm"] + (if C_ONLY in options then [] else C_FILES)).map(suffix => quoted_path(stem + suffix)).join(" "))
 }
 # the first wasm2c on the PATH at least WASM2C_OLDEST, loudly none
 supported_wasm2c(): text := {
@@ -96,6 +98,8 @@ EXE_ONLY = "--exe"
 # a primitive file's C alone, unbuilt (wasm2c's module and the main.c of native_main): for a machine with a C compiler
 # but no warp yet, the first Windows warp (card windows-build)
 C_ONLY = "--c"
+# what a native build writes for the C compiler beside the program: wasm2c's module and header, native_main's main.c
+C_FILES = [".c", ".h", ".main.c"]
 # what a build of inline code is called: out.wasm, the executable out
 INLINE_STEM = "out"
 # what the Rust compiler built and the warp one doesn't yet: a page's module, WIT, a component

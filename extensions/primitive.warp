@@ -889,7 +889,7 @@ c_function_glue(f: PrimitiveFunction): text := {
 	call = "function(" + arguments.join(", ") + ")"
 	result = if f.result == NO_VALUE then "void" else c_type_of_primitive(f.result)
 	body = ["static " + result + " (*function)(" + (if #f.types == 0 then "void" else f.types.map(c_type_of_primitive).join(", ")) + ")",
-		"if (!function) function = native_function(\"" + written_name(f.name) + "\")"] +
+		"if (!function) function = native_function(\"" + f.library + "\", \"" + written_name(f.name) + "\")"] +
 		texts.map(i => "char* text" + i + " = native_text(&library->wasi, value" + i + ")") +
 		[if f.result == NO_VALUE then call else result + " result = " + call] + texts.map(i => "free(text" + i + ")") +
 		(if f.result == NO_VALUE then [] else ["return " + module_value(f.result, "result")])
