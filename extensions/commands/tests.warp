@@ -39,10 +39,10 @@ class TestCase { file: text, line: int, code: text, expected: any, needs: list }
 NEEDS_MARK = "needs:"
 HEADER_LINES = 8
 MACHINE_PROBES = {
-	"macos": "[ \"$(uname)\" = Darwin ]",
-	"js": "[ \"$(uname)\" = Darwin ]",
-	"gpu": "[ \"$(uname)\" = Darwin ]",
-	"display": "[ \"$(uname)\" = Darwin ]",
+	"macos": "uname | grep -q Darwin",
+	"js": "uname | grep -q Darwin",
+	"gpu": "uname | grep -q Darwin",
+	"display": "uname | grep -q Darwin",
 	"cargo": "command -v cargo",
 	"packages": "[ -d packages/colors ]",
 	"uniscript": "[ -d packages/uniscript ]",
