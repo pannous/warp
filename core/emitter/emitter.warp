@@ -215,6 +215,8 @@ def member_read(body: Body, receiver: Node, name: text): TypedCode {
 	value = expression_code(body, receiver)
 	if value.kind == ValueKind.Time and time_fields.has(name) and module.functions.has(time_field_word) { return time_field(value, name) }
 	if holds_entry(body, receiver, name) { return field_read(body, value, name) }
+	# `photo.mirror` of lib/image's `alias mirror => mirrored`: a module's alias of the word taking x, as photo.mirror() says
+	if not takes_receiver(body, name, receiver) and member_aliases.has(name) and takes_receiver(body, member_aliases[name], receiver) { name = member_aliases[name] }
 	if not takes_receiver(body, name, receiver) { return field_of(body, value, name, receiver_class(body, receiver)) }
 	held_name = scratch_name(body)
 	held = local_index(body, held_name, value.kind)
