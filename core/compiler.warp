@@ -277,11 +277,16 @@ global module_written_folder = ""
 global line_module = no
 # whether a compile links the modules it uses: a `warp build` compiles them in, what it builds stands alone
 global modules_linked = yes
-# a compile with --fast (decision fast-mode, card fast-int-wrap; the compiler's own build is one): the run drops its
+# the build mode the run gives, `warp debug|release|fast|small <program>` (core/native/warp.warp default_mode, card
+# build-modes): debug keeps each statement's place, so every error names its file:line; release, fast and small drop
+# them; fast also drops the runtime checks (fast_build), small also trims a built module hardest (build.warp)
+global build_mode = run_option("mode") ?? "debug"
+global positions_dropped = build_mode != "debug"
+# a compile in fast mode (decision fast-mode, card fast-int-wrap; the compiler's own build is one): the run drops its
 # runtime checks, the program's code and every runtime word of the run alike (checks_dropped): every int + - * wraps at
 # 64 bits, no overflow check, as in a fast function. A value already big (a literal past 64 bits, a ratio) keeps its
 # exact arithmetic; only the promotion on overflow goes. Bounds and the other checks are to follow
-global fast_build = run_option("fast") != ø
+global fast_build = build_mode == "fast"
 write_module(name: text, runtime_file: text, file: text) := module_written_behind(name, read_bytes(runtime_file), file)
 module_written_behind(name: text, runtime, file: text) := module_compiled_behind(name, "", runtime, file)
 # so, compiled from the source given: a console line's own text (extensions/commands repl_step), whose `_start` runs its

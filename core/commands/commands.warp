@@ -15,7 +15,7 @@ shell(line: text): text := {
 	if printed is text then printed else raise "`" + line + "` failed: " + printed
 }
 # `warp build --trim=<way>` and `warp optimize`, which `warp rebuild` optimizes the compiler with
-TRIM_WAYS = {none: "", unused: "--remove-unused-module-elements", optimize: "-O2"}
+TRIM_WAYS = {none: "", unused: "--remove-unused-module-elements", optimize: "-O2", small: "-Oz"}
 # what wasmtime runs; Binaryen's -all would add custom descriptors, whose exact references wasmtime refuses. The name
 # section stays (--debuginfo), so traps and results still name their functions.
 # `warp rebuild` optimizes the compiler with it

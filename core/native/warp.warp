@@ -8,7 +8,7 @@
 #   warp app.wasm args…   the module run
 #   warp app.warp args…   compiled by warp.wasm, then run with the arguments (a `--` before them left out)
 #   warp run app.…        the same; `warp pure …` and `warp eval <code>` too (warp.wasm is the pure compiler);
-#                         `warp fast …` at full precision yet; `warp fuel <steps> …` counting steps
+#                         `warp debug|release|fast|small …` in that build mode (default_mode); `warp fuel <steps> …` counting steps
 #   warp self …           the same by warp-self.wasm, warp.wasm's build of itself
 #   warp                  on a terminal the version, the help and the console; a piped program run, its value shown
 #   warp beautify|fix …   lib/fix/command.warp with the words; warp format|lint … too, the layout only
@@ -26,6 +26,10 @@
 # are not the core binary's (decision libraries-not-core) and say so
 use "driver.warp"
 use "tests.warp"
+
+# the build mode of a run that names none (core/compiler.warp build_mode): debug, release, fast or small (a word, as
+# primitive mode keeps no text constant)
+default_mode(): text := "debug"
 
 getline(line: pointer, capacity: pointer, stream: handle): i64 from "c"
 isatty(descriptor: i32): i32 from "c"
@@ -611,7 +615,9 @@ is_warp_file(name: text): bool := ends_with(name, ".warp") or read_file(name).le
 
 # the words that only say how to run what follows: `run`, `pure` and `eval` what the bare words do, `self` by
 # warp-self.wasm, `fast` (lib/fast_math.warp) at full precision yet
-is_prefix(word: text): bool := same_text(word, "run") or same_text(word, "pure") or same_text(word, "eval") or same_text(word, "self") or same_text(word, "fast")
+is_prefix(word: text): bool := same_text(word, "run") or same_text(word, "pure") or same_text(word, "eval") or same_text(word, "self") or is_mode(word)
+# the build modes (core/compiler.warp build_mode), each a word before the program: `warp release app.warp`
+is_mode(word: text): bool := same_text(word, "debug") or same_text(word, "release") or same_text(word, "fast") or same_text(word, "small")
 self_named(compiler: text): bool := ends_with(compiler, "/warp-self.wasm")
 # what the words from `first` on ask for, by the compiler: a command the native warp runs itself, a module, a file,
 # else warp.wasm's command or code
@@ -716,11 +722,9 @@ command_ran(): nothing := {
 	option_given("host", "the native warp")
 	# and where it is, so a command runs a program by this warp (`warp build --site` prerenders its page, warp_command)
 	option_given("executable", executable_path())
-	# `warp fast <program>` is `warp --fast <program>`: untyped whole numbers as i64, wrapping, with no overflow checks
-	if prefixed and same_text(arg(start), "fast") {
-		option_given("fast", "")
-		complain("note: warp fast is written warp --fast; untyped whole numbers wrap as i64")
-	}
+	# the build mode: `warp release <program>`, `--fast` the same as `warp fast`, else default_mode()
+	if has_option("fast") and not (prefixed and is_mode(arg(start))) { complain("note: warp --fast is written warp fast") }
+	option_given("mode", if prefixed and is_mode(arg(start)) then arg(start) else if has_option("fast") then "fast" else default_mode())
 	dispatched(if prefixed and same_text(arg(start), "self") then joined(library_folder(), "/warp-self.wasm") else compiler_path(), prefixed, first)
 }
 command_ran()
