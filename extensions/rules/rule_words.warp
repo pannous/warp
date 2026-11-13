@@ -1166,18 +1166,19 @@ enum_help(name: Node, program: Node, source: text): any := {
 enum_help_in(module_text: text, word: text): any := {
 	start = 0
 	for line in module_text.split("\n") {
-		declared = enum_line(line.trim())
+		declaration = enum_declaration(line.trim())
+		declared = if declaration == ø then ø else declared_enum(parsed(declaration))
 		if declared != ø and (declared#1 == word or word in declared#2) {
 			doc = comment_before(module_text, start)
 			case_of = if declared#1 == word then "" else word + ": a case of " + declared#1 + "\n"
-			return case_of + line.trim() + (if doc == "" then "" else "\n" + doc)
+			return case_of + declaration + (if doc == "" then "" else "\n" + doc)
 		}
 		start += #line + 1
 	}
 	ø
 }
-# `enum Scale { major, minor }`, up to its closing brace: [Scale, [major, minor]], else ø
-enum_line(line: text): list? := if line.starts_with(enum_word + " ") and line.contains("}") then declared_enum(parsed(line.split("}")#1 + "}")) else ø
+# `enum Scale { major, minor }` of a line starting so, up to its closing brace, else ø
+enum_declaration(line: text): text? := if line.starts_with(enum_word + " ") and line.contains("}") then line.split("}")#1 + "}" else ø
 # `help(draw.save)`: the word's help as the module the program uses through that name writes it, else ø
 qualified_word_help(module: Node, word: Node, program: Node): any := if owns_word("help", program) or not qualifies_by_module(spelled(module), program) then ø else word_help_in(used_module_text(spelled(module).lower()), spelled(word))
 used_word_help(word: text, source: text): any := {
