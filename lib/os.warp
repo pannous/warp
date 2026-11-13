@@ -17,15 +17,15 @@ exec(command: any) := std_io("os", "exec", [command])
 // `run(["sh" "-c" "make"])`: the command run without a shell, its {status, out, err} (trailing newlines dropped); a
 // failing command is no error, its status says so. The native warp runs it (core/native/driver.warp)
 run(command: any) := std_io("os", "run", [command])
-// a WebAssembly module's bytes (a list of bytes, or a text): Wasm(read_bytes(./m.wasm)), or compile's
-class Wasm { bytes: any }
+// a WebAssembly module's bytes (a list of bytes, or a text): Wasm(read_bytes(./m.wasm)), or compile's; with arguments,
+// Wasm(bytes, ["a", "b"]), the module sees those as its args, not the program's
+class Wasm { bytes: any; arguments: list? }
 // `run(Wasm(read_bytes(./m.wasm)))`: the module run in this process with the same imports as a program, its main's
 // value; a trap is an Error. compile(code) is the Wasm of a program of the current folder, or the compiler's refusal
 // as an Error (raising nothing), so `run(compile("6*7"))` evaluates code. The native warp runs them
 // (core/native/driver.warp)
-run(module: Wasm) := std_io("os", "run_wasm", [module.bytes])
-// `run(module, ["a", "b"])`: the module sees those arguments as its args, not the program's
-run(module: Wasm, arguments: list) := std_io("os", "run_wasm", [module.bytes, arguments])
+// (one parameter: sqlite's run(db, query) takes two, which a module using both, storage, calls)
+run(module: Wasm) := std_io("os", "run_wasm", if module.arguments == ø then [module.bytes] else [module.bytes, module.arguments])
 compile(code: any) := {
 	compiled = std_io("os", "compile_wasm", [code])
 	if is_error(compiled) then compiled else Wasm(compiled)
