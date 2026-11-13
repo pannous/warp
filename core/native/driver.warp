@@ -144,7 +144,7 @@ warp_config_gc_heap_initial_size_set(config: handle, bytes: i64) from "warp_wasm
 wasmtime_config_consume_fuel_set(config: handle, enabled: bool) from "warp_wasmtime"
 wasmtime_config_parallel_compilation_set(config: handle, enabled: bool) from "warp_wasmtime"
 wasmtime_config_profiler_set(config: handle, strategy: i32) from "warp_wasmtime"
-wasmtime_config_max_wasm_stack_set(config: handle, bytes: i64) from "warp_wasmtime"
+warp_config_wasm_stack_set(config: handle, bytes: i64) from "warp_wasmtime"
 wasmtime_config_macos_use_mach_ports_set(config: handle, enabled: bool) from "warp_wasmtime"
 wasmtime_context_set_fuel(context: handle, fuel: i64): handle from "warp_wasmtime"
 wasmtime_config_epoch_interruption_set(config: handle, enabled: bool) from "warp_wasmtime"
@@ -733,7 +733,7 @@ uncached_config(fuel: bool, heap_bytes: i64, interruptible: bool): handle := {
 	wasmtime_config_wasm_gc_set(config, yes)
 	wasmtime_config_wasm_function_references_set(config, yes)
 	wasmtime_config_wasm_exceptions_set(config, yes)
-	wasmtime_config_max_wasm_stack_set(config, WASM_STACK_BYTES)
+	warp_config_wasm_stack_set(config, WASM_STACK_BYTES)
 	# traps caught by signal handlers, which a forked child inherits (a `warp test` case, resident_loaded), never by
 	# mach ports, whose thread fork leaves behind; one choice for every engine of the process (wasmtime asserts it)
 	wasmtime_config_macos_use_mach_ports_set(config, no)
