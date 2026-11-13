@@ -80,19 +80,20 @@ shader_passes(items: list, program: Node, source: text): any := {
 	passes = []
 	for at in 1 to #items {
 		s = shaders#at
-		entries = if items#at is symbol then [] else items_of(value_of(items#at))
+		entries = if items#at is symbol then [] else items_of(pass_parts(items#at)#3)
 		values = shader_holes_added(s, entries, program, fields) ?? List(entries, Bracket.Curly, Separator.Comma)
 		passes += [listed(Bracket.Square, Separator.Comma, [Text(name_of(s)), shader_words_of(s, program, source), values])]
 	}
 	passes
 }
-# the shader an item of the list names: `show`, `poisson with {which: 1}` (parsed as the tag `poisson with: {…}`)
+# the shader an item of the list names: `show`, `poisson with {which: 1}` (three items, or the tag `poisson with: {…}`
+# the sugar may make of them)
 passed_shader(item: Node): any := {
 	if item is symbol { return item }
-	head = if item is key then key_of(item) else ø
-	if head != ø and is_group(head) and #head == 2 and head#1 is symbol and head#2 == symbol(PASS_VALUES_WORD) and is_group(value_of(item)) { return head#1 }
-	ø
+	parts = pass_parts(item)
+	if #parts == 3 and parts#1 is symbol and parts#2 == symbol(PASS_VALUES_WORD) and is_group(parts#3) then parts#1 else ø
 }
+pass_parts(item: Node): list := if is_group(item) then items_of(item) else if item is key and is_group(key_of(item)) then items_of(key_of(item)) + [value_of(item)] else []
 # shader_words(s) (lib/prelude.warp) of a shader the program assigns, given its place in the program where a shader
 # block wrote it: the GPU compiles it placed so, its errors at their place (card wgsl-error)
 shader_words_of(s: Node, program: Node, source: text): Node := {
