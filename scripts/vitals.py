@@ -326,9 +326,11 @@ def pushes_since():
 
 
 def commits_brought(before, after):
-    """How many commits a push brought to main: those reachable from its new tip and not from the old one (0 where git
-    lacks either, a force push's lost tip)"""
-    counted = subprocess.run(["git", "-C", REPO, "rev-list", "--count", f"{before}..{after}"], capture_output=True, text=True)
+    """How many commits of work a push brought to main: those reachable from its new tip and not from the old one, merges
+    left out (a branch's "Merge origin/main into …" syncs and the landing merges were 338 of 792 in a day, 11-13); 0
+    where git lacks either tip, a force push's lost one"""
+    counted = subprocess.run(["git", "-C", REPO, "rev-list", "--count", "--no-merges", f"{before}..{after}"],
+                             capture_output=True, text=True)
     return int(counted.stdout) if counted.returncode == 0 else 0
 
 
