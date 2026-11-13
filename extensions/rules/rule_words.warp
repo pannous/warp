@@ -1455,6 +1455,18 @@ it_as_lambda(expression: Node): any := {
 	Key(symbol("it"), Op.Arrow, expression)
 }
 
+# `add(1, _, _)` (wiki function "Partial application"): a call given `_` for arguments is the function of those, in
+# order, `(a, b) => add(1, a, b)`; ø without a hole so the rule misses
+holes_as_lambda(function: Node, arguments: Node): any := {
+	hole = symbol("_")
+	given = items_of(arguments)
+	parameters = lambda_parameters(#given.filter(argument => argument == hole))
+	if #parameters == 0 { return ø }
+	filled = []
+	for argument in given { filled += [if argument == hole then parameters#(#filled.filter(f => f in parameters) + 1) else argument] }
+	lambda_over(parameters, bracketed([function] + filled, "("))
+}
+
 # the words by name, as a rule's `where` calls them: one a line, sorted, so branches adding words merge cleanly
 
 # whether a name is assigned only text literals in the program (card text-element-assign; same idea as
@@ -1512,6 +1524,7 @@ rule_words = {
 	widened_to_int: widened_to_int,
 	it_read_as: it_read_as,
 	it_as_lambda: it_as_lambda,
+	holes_as_lambda: holes_as_lambda,
 	leading_unit: leading_unit,
 	list_valued: list_valued,
 	misnamed: misnamed,
