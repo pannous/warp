@@ -1196,7 +1196,9 @@ value_definitions(program: Node, source: text): any := {
 }
 dir_words(name: Node, program: Node): any := if owns_dir(program) or "${name}" in names_bound_in_kept(program) then ø else module_dir("${name}")
 owns_dir(program: Node): bool := owns_word("dir", program)
-owns_word(word: text, program: Node): bool := function_definition(symbol(word), program) != ø
+# a word the program defines itself; the prelude's reflection words (`fields(x) := keys(x)`) leave the declared
+# classes' and modules' rules alone
+owns_word(word: text, program: Node): bool := function_definition(symbol(word), program) != ø and word not in prelude_definitions()
 module_dir(word: text): any := {
 	source = used_module_text(word)
 	if source == "" { return ø }
