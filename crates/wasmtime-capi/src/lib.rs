@@ -21,3 +21,9 @@ pub extern "C" fn warp_config_collector_set(config: &mut wasm_config_t, collecto
 	};
 	config_of(config).collector(chosen);
 }
+
+/// How deep wasm may recurse (Config::max_wasm_stack), the async stack as deep, which wasmtime requires of it
+#[unsafe(no_mangle)]
+pub extern "C" fn warp_config_wasm_stack_set(config: &mut wasm_config_t, bytes: usize) {
+	config_of(config).async_stack_size(bytes).max_wasm_stack(bytes);
+}

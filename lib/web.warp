@@ -165,6 +165,7 @@ http_answer(value: any) := {
 	answer
 }
 http_failure(message: text) := {
+	global answer_status
 	answer_status = if message.starts_with("no route answers") then 404 else 500
 	http_answer(message)
 }

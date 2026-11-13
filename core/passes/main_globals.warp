@@ -29,8 +29,12 @@ reads_made_name(n: Node): bool := if n is symbol then is_made_name(name_of(n)) e
 main_globals(program: Node, own_names: list): any := {
 	main_names = main_variables(program)
 	global_names = global_variables(program)
+	# (the globals main declares, which a function's assignment writes; one a function declares is its own)
+	main_declared = global_variables(List(statements_in(program).filter(statement => not is_define_statement(statement)), Bracket.None, Separator.Semicolon))
 	for function_definition in nodes_in(program).filter(is_define_statement) {
 		defined_function = define_statement_name(function_definition)
+		other = other_file_global(function_definition, defined_function, own_names, main_declared)
+		if other != ø { return diagnose(call_of("other_file_global", [other#1, defined_function, other#2]), function_definition) }
 		if defined_function in own_names {
 			body = value_of(function_definition)
 			own = parameter_names(key_of(function_definition))
@@ -47,6 +51,25 @@ main_globals(program: Node, own_names: list): any := {
 	}
 	program
 }
+
+# A global one file declares is changed from another file's function only where that function declares it `global`
+# too: `view = …` in gpu.warp could mean its own local or window.warp's view (decision loop-locals)
+# [name, file] of the first such global the definition assigns, else ø; nothing where either file is unknown
+other_file_global(definition: Node, function: text, own_names: list, main_declared: map): any := {
+	home = written_file(function, own_names)
+	if home == ø { return ø }
+	for name in rebound_names(value_of(definition)) {
+		file = written_file(name, own_names)
+		if main_declared.has(name) and file != ø and file != home and not declares_global(value_of(definition), name) { return [name, file] }
+	}
+	ø
+}
+# the file a definition or a main-level global was written in: the program's own, else the used file it came from
+# (prelude_words.warp defined_origins)
+written_file(name: text, own_names: list): text? := if name in own_names then module.program_file else (defined_origins.get(name) ?? [ø])#1
+# the names the body binds anew, `n = …`, `n: int = …`, `n += 1`, `n++`; never a part changed in place, `xs#i = …`
+rebound_names(body: Node): list := nodes_in(body).filter(n => n is key and (op_of(n) in assigning_operators or op_of(n) in counting_operators)).map(n => rebound_name(key_of(n))).filter(name => name != ø)
+rebound_name(target: Node): text? := if target is symbol then name_of(target) else if is_operator(target, ":") and key_of(target) is symbol then name_of(key_of(target)) else ø
 
 # the variables main assigns, outside the function definitions; a loop's or comprehension's variable belongs to its
 # loop, a function binding that name is its own: an item variable the lowering binds from made names
@@ -107,7 +130,10 @@ changed_root(target: Node): any := {
 
 # `let n = 5`, `var n = []` in the body: n is explicitly the function's own, also once the sugar dropped the word (it
 # noted where, lambdas.warp declared_locally)
-declares_local(body: Node, name: text): bool := name in declared_locally(body) or nodes_in(body).any(n => is_group(n) and #n == 2 and n#1 is symbol and name_of(n#1) in local_declaration_keywords and leftmost_name(n#2) == name)
+declares_local(body: Node, name: text): bool := name in declared_locally(body) or declares_as(body, name, local_declaration_keywords)
+# `global n` in the body, as written or as the sugar reads it
+declares_global(body: Node, name: text): bool := global_variables(body).has(name) or declares_as(body, name, global_declaration_keywords)
+declares_as(body: Node, name: text, keywords: list): bool := nodes_in(body).any(n => is_group(n) and #n == 2 and n#1 is symbol and name_of(n#1) in keywords and leftmost_name(n#2) == name)
 
 # how the body first mentions the name: binding it fresh (`primes = []`, the function's own local, as in Python),
 # reading or updating it (main's variable), or not at all ("")

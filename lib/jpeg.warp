@@ -32,7 +32,7 @@ cosines = [(if u == 0 then sqrt(0.5) else 1.0) / 2 * cos((2 * x + 1) * u * pi / 
 class JpegComponent { id: int; horizontal: int; vertical: int; quantization: int; dc_table: int; ac_table: int; previous_dc: int; plane_width: int; samples: list }
 // a Huffman table as the decoder walks it (JPEG F.2.2.3): per code length the lowest and highest code and where its
 // symbols start
-class Huffman { lowest: list; highest: list; first: list; symbols: list }
+class JpegHuffman { lowest: list; highest: list; first: list; symbols: list }
 // the entropy-coded bytes read a bit at a time, a 0xFF byte followed by 0x00 being one 0xFF
 class JpegBits { bytes: list; at: int; byte: int; left: int }
 
@@ -98,7 +98,7 @@ huffman_read(segment: list, tables: list) := {
 		at += 17 + count(symbols)
 	}
 }
-huffman_table(counts: list, symbols: list): Huffman := {
+huffman_table(counts: list, symbols: list): JpegHuffman := {
 	lowest = []
 	highest = []
 	first = []
@@ -112,7 +112,7 @@ huffman_table(counts: list, symbols: list): Huffman := {
 		highest += [if counts[length] > 0 then code - 1 else -1]
 		code *= 2
 	}
-	Huffman(lowest, highest, first, symbols)
+	JpegHuffman(lowest, highest, first, symbols)
 }
 
 // the scan's blocks into each component's samples, minimum coded unit by unit, left to right and top down
@@ -180,7 +180,7 @@ inverse_dct(coefficients: list): list := {
 }
 
 // the next symbol of the Huffman code: the code read bit by bit until it is one of its length
-decoded(bits: JpegBits, table: Huffman): int := {
+decoded(bits: JpegBits, table: JpegHuffman): int := {
 	code = 0
 	for length in 0 ..< 16 {
 		code = code * 2 + scan_bit(bits)

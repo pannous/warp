@@ -1,5 +1,5 @@
 // The standard library module image: pictures as pixels you can load, change, make and save. `image(./photo.jpg)`
-// reads a BMP or a baseline JPEG; `image(64, 48, pixel)` makes one from a function of the column and row. An Image's
+// reads a BMP, a baseline JPEG or a PNG (a file or a URL); `image(64, 48, pixel)` makes one from a function of the column and row. An Image's
 // pixels are Colors (lib/color.warp, 0xAARRGGBB), row by row from the top left. Its changes give a new Image:
 // flipped, mirrored, cropped, tinted, grayed, blurred, each_pixel; show() paints it, save writes a .bmp itself and any
 // other name as a PNG (natively the file, in the playground a download).
@@ -7,20 +7,22 @@ use bits
 use color
 use file
 use jpeg
+use png
 use math
 
 class Image { width: int; height: int; pixels: list }
 
-// the BMP's and JPEG's first bytes, which say what a file holds
+// the BMP's and JPEG's first bytes, which say what a file holds (lib/png.warp has PNG's)
 bmp_signature = [66, 77]
 jpeg_signature = [255, 216]
 
-// the picture in the file, a BMP or a JPEG by its first bytes, never by its name
+// the picture in the file, a BMP, a JPEG or a PNG by its first bytes, never by its name
 image(path: any): Image := image_of(read_bytes(path), "${path}")
 image_of(bytes: list, name: text): Image := {
 	if starts_with_bytes(bytes, bmp_signature) { return bmp_image(bytes) }
-	if starts_with_bytes(bytes, jpeg_signature) { return jpeg_image(bytes) }
-	raise name + " is no BMP or JPEG: image reads those two"
+	if starts_with_bytes(bytes, jpeg_signature) { return pixels_image(jpeg_pixels(bytes)) }
+	if starts_with_bytes(bytes, png_signature) { return pixels_image(png_pixels(bytes)) }
+	raise name + " is no BMP, JPEG or PNG: image reads those three"
 }
 starts_with_bytes(bytes: list, start: list): bool := count(bytes) >= count(start) and bytes[0 ..< count(start)] == start
 
@@ -107,11 +109,8 @@ bmp_bytes(picture: Image): list := {
 }
 bmp_channels(color: Color): list := [0, 8, 16].map(shift => channel_byte(color, shift))
 
-// a JPEG by lib/jpeg.warp
-jpeg_image(bytes: list): Image := {
-	read = jpeg_pixels(bytes)
-	Image(read[0], read[1], read[2])
-}
+// a picture of [width, height, pixels], as lib/jpeg.warp and lib/png.warp read it
+pixels_image(read: list): Image := Image(read[0], read[1], read[2])
 
 // the host words of this module (natively core/native/driver.warp, the playground its JS)
 paint(picture: node, width: int, height: int, values: node) from host
