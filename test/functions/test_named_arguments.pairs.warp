@@ -14,8 +14,7 @@
 # triage-held 2026-11-06: a block called with named values, `{x*y}(x:2 y:3)` :: 'g={x*y}; g(x:2 y:3)'	6
 'v=10; f(y) := y+v; f(y=1) + f(y=1, v=2)'	14
 
-# a_bare_flag_name_in_a_call_sets_it
-'a = {x: {y: 1}}; b = a.copy(shallow); b.x.y = 5; a.x.y'	5
-'f(a, loud = false) := if loud then a * 10 else a; f(3, loud)'	30
+# a_flag_parameter_takes_its_default
+# (a bare flag name, `f(3, loud)` for `f(3, loud: yes)`, is unpinned: it would read an unknown name as a flag, a guess;
+# warp-interviewer 11-13)
 'f(a, loud = false) := if loud then a * 10 else a; f(3)'	3
-'f(a, loud: false) := if loud then a * 10 else a; f(3, loud)'	30
