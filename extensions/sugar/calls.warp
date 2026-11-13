@@ -98,7 +98,8 @@ rewrite sort($xs, $f) => sorted_by_key($xs, $f) where $f is function
 # An `it` argument where a function is taken is extensions/function_arguments.warp, read from the callee's signature;
 # sort's key is no parameter of sort, so its `it` key is made here, named `by:` too
 rewrite sort($xs, by: $e) => sort($xs, $e)
-rewrite $xs.sort(by: $e) => sort($xs, $e)
+# the method spelling is the call, whatever it is given: `xs.sort{$0 > $1}`, `xs.sort(by: it.length)`
+rewrite $xs.sort($e) => sort($xs, $e)
 rewrite sort($xs, $e) => sorted_by_key($xs, $f) where $f = it_as_lambda($e)
 
 # `increment = add(1, _)`: a call given `_` for its first or last argument is the function of that argument, the
