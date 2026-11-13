@@ -207,6 +207,9 @@ entry_name(entry: Node): text := if key_of(entry) is symbol then name_of(key_of(
 # whatever takes x; of a value known only at run time its entry w when it has one (field_or_word), else that call. A
 # time's fields are its own, ahead of a word of that name (lib/time's weekday(ms: int); decision time-fields-before-ufcs),
 # also of a time held as a node (`d: date? = …; d.year`)
+# `photo.mirror` of lib/image's `alias mirror => mirrored`: the word a module's alias means when it takes the receiver, as
+# photo.mirror() says, unless some class declares a field of that name (read first); else the name
+def member_word(body: Body, receiver: Node, name: text): text := if not declares_field(name) and not takes_receiver(body, name, receiver) and member_aliases.has(name) and takes_receiver(body, member_aliases[name], receiver) then member_aliases[name] else name
 def member_read(body: Body, receiver: Node, name: text): TypedCode {
 	# own methods first, then fields, then functions (decision dot-call answers): the map protocol's methods, the words
 	# declared with a map first (`m.keys`, `m.values`), ahead of an entry of that name, whose keys are data (`m["keys"]`
@@ -215,14 +218,13 @@ def member_read(body: Body, receiver: Node, name: text): TypedCode {
 	value = expression_code(body, receiver)
 	if value.kind == ValueKind.Time and time_fields.has(name) and module.functions.has(time_field_word) { return time_field(value, name) }
 	if holds_entry(body, receiver, name) { return field_read(body, value, name) }
-	# `photo.mirror` of lib/image's `alias mirror => mirrored`: a module's alias of the word taking x, as photo.mirror() says
-	if not takes_receiver(body, name, receiver) and member_aliases.has(name) and takes_receiver(body, member_aliases[name], receiver) { name = member_aliases[name] }
-	if not takes_receiver(body, name, receiver) { return field_of(body, value, name, receiver_class(body, receiver)) }
+	word = member_word(body, receiver, name)
+	if not takes_receiver(body, word, receiver) { return field_of(body, value, word, receiver_class(body, receiver)) }
 	held_name = scratch_name(body)
 	held = local_index(body, held_name, value.kind)
-	called = called_on(body, name, symbol(held_name))
-	by_call = given => field_or_word(body, given, name, x => TypedCode(called.kind, x.code + [op.local_set] + uleb(held) + called.code, called.mark))
-	if value.kind == ValueKind.Node and time_fields.has(name) and module.functions.has(time_field_word) then node_time_field(body, value, name, by_call) else by_call(value)
+	called = called_on(body, word, symbol(held_name))
+	by_call = given => field_or_word(body, given, word, x => TypedCode(called.kind, x.code + [op.local_set] + uleb(held) + called.code, called.mark))
+	if value.kind == ValueKind.Node and time_fields.has(word) and module.functions.has(time_field_word) then node_time_field(body, value, word, by_call) else by_call(value)
 }
 # whether something takes x alone as w: the program's function (of a name overloaded by arity the variant taking x),
 # a library word, their other parameters defaulted, or the emitter's own word
