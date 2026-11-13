@@ -14,7 +14,9 @@
 // the trap signal Windows has no number for: signal() refuses it, the crash lines go without it
 #define SIGTRAP 5
 
-static char* strndup(const char* text, size_t most) {
+// strndup by a name of its own: some mingw headers declare it, some don't
+#define strndup posix_strndup
+static char* posix_strndup(const char* text, size_t most) {
 	size_t length = strnlen(text, most);
 	char* copy = malloc(length + 1);
 	if (!copy) return NULL;
