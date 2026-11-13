@@ -1,6 +1,6 @@
-# card more-use: run gives {status, out, err} natively, env reads what setenv set
+# card more-use: run gives {status, out, err} natively, env reads what set_env set
 
 # — native only: a page runs no process or shell (decision page-host-lines)
 'use os; run(["echo", "hi"])'	{status: 0, out: "hi", err: ""}
 'use os; r = run(["sh", "-c", "echo out; echo err >&2; exit 3"]); [r.out, r.err, r.status]'	["out", "err", 3]
-'use os; setenv("WARP_SET", "1"); env("WARP_SET")'	"1"
+'use os; set_env("WARP_SET", "1"); env("WARP_SET")'	"1"

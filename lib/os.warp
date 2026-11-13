@@ -2,7 +2,7 @@
 # todo (card browser-env) the browser has no environment (env gives ø) (use local storage?)
 # and no command line (args gives [], or a playground sample's <name>.args)
 use host_io
-// `env("HOME")`: the variable as the program set it (setenv), else as its environment started with it
+// `env("HOME")`: the variable as the program set it (set_env), else as its environment started with it
 env(name: any) := variables_set.get(text(name)) ?? started_env(name)
 // warp's two machine switches (decision no-bash-exports), which the processes a run starts inherit: a windowless run
 // (`warp --no-window`, WARP_WINDOW=0: a test, an agent's, a CI machine's) opens no window, a muted one (`warp --mute`,
@@ -17,19 +17,13 @@ exec(command: any) := std_io("os", "exec", [command])
 // `run(["sh" "-c" "make"])`: the command run without a shell, its {status, out, err} (trailing newlines dropped); a
 // failing command is no error, its status says so. The native warp runs it (core/native/driver.warp)
 run(command: any) := std_io("os", "run", [command])
-// a WebAssembly module's bytes (a list of bytes, or a text): Wasm(read_bytes(./m.wasm)), or compile's
-class Wasm { bytes: any }
-// `run(Wasm(read_bytes(./m.wasm)))`: the module run in this process with the same imports as a program, its main's
-// value; a trap is an Error. compile(code) is the Wasm of a program of the current folder, or the compiler's refusal
-// as an Error (raising nothing), so `run(compile("6*7"))` evaluates code. The native warp runs them
-// (core/native/driver.warp)
-run(module: Wasm) := std_io("os", "run_wasm", [module.bytes])
-// `run(module, ["a", "b"])`: the module sees those arguments as its args, not the program's
-run(module: Wasm, arguments: list) := std_io("os", "run_wasm", [module.bytes, arguments])
-compile(code: any) := {
-	compiled = std_io("os", "compile_wasm", [code])
-	if is_error(compiled) then compiled else Wasm(compiled)
-}
+// `run_wasm(read_bytes(./m.wasm))`: a module's bytes (a list of bytes, or a text) run in this process with the same
+// imports as a program, its main's value; a trap is an Error. compile_wasm(code) gives the bytes of a program of the
+// current folder, so `run_wasm(compile_wasm("6*7"))` evaluates code. The native warp runs them (core/native/driver.warp)
+run_wasm(bytes: any) := std_io("os", "run_wasm", [bytes])
+// `run_wasm(bytes, ["a", "b"])`: the module sees those arguments as its args, not the program's
+run_wasm(bytes: any, arguments: any) := std_io("os", "run_wasm", [bytes, arguments])
+compile_wasm(code: any) := std_io("os", "compile_wasm", [code])
 // The scripting words (decision use-script, all of them in `use script`):
 
 // the command line arguments, as args gives them
@@ -45,12 +39,12 @@ input() := std_io("os", "input", [])
 input(prompt: any) := std_io("os", "input", [prompt])
 // all of standard input as one text: `cat notes.txt | warp count.warp`
 stdin() := std_io("os", "stdin", [])
-// `setenv("MODE", "fast")`: the variable set for the commands the program runs, yes when it was; natively C's
+// `set_env("MODE", "fast")`: the variable set for the commands the program runs, yes when it was; natively C's
 // setenv through the 'c' library (lib/c.warp), so a page has none. env reads it at once: WASI's environment is the
 // one the program started with
 setenv(name: text, value: text, overwrite: i32): i32 from 'c'
 global variables_set = {}
-setenv(name: any, value: any): bool := {
+set_env(name: any, value: any): bool := {
 	variables_set[text(name)] = text(value)
 	setenv(text(name), text(value), 1) == 0
 }
