@@ -4,10 +4,6 @@
 # position, the value computed once. The bare `q, r = …` is extensions/multiple_assignments.warp's.
 rewrite ($head := ($a, $b, $rest...)) => ($head := [$a, $b, $rest...])
 rewrite (return ($a, $b, $rest...)) => (return [$a, $b, $rest...])
-# unbracketed, the comma reads loosest, `f() := return 1, 2` arriving as `(f() := return 1), 2`: the values after
-# the return's first are its too (decision P2 tuple returns)
-rewrite (($head := return $a), $b, $rest...) => ($head := return [$a, $b, $rest...])
-rewrite ((return $a), $b, $rest...) => (return [$a, $b, $rest...])
 rewrite ($x = ($a, $b, $rest...)) => ($x = [$a, $b, $rest...]) where $x is symbol
 rewrite (($a, $b, $rest...) = $value) => ([$a, $b, $rest...] = $value)
 rewrite ([$names...] = $value) => ($t = $value; ($n = $t#$i) for $n at $i in $names...)
