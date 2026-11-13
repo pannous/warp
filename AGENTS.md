@@ -337,9 +337,12 @@ main and the playground. The worker does not land it, push it to main, or publis
   the branch (a real merge, its message summing up the change); on that merge the smoke test (core/ or extensions/:
   + `scripts/self-check.sh` + `scripts/gate.sh --tiers 1 <worktree>`); hand the branch and a patch to
   warp-integrator, who lands it (notes/agents/integrator.md "Landing"). Then `todo done <card> <commit>`.
-- Express mode: a phase is handed to the integrator as soon as its smoke (+ self-check and gate for core/) is green;
-  never wait for slower tests. The next phase starts at once, branched from that tip; what the slower tests find is
-  fixed forward as new commits, never by rewriting the landed phase. Only a red smoke on the merge stops the next phase.
+- Express is the default: a phase is handed to the integrator as soon as its smoke (+ self-check and gate for core/) is
+  green; never wait for slower tests. The next phase starts at once, branched from that tip; what the slower tests
+  find is fixed forward as new commits, never by rewriting the landed phase. Only a red smoke on the merge stops the
+  next phase.
+- Super express (urgent and user 🐞 cards, or any small change by the worker's choice): hand off on the smoke alone,
+  core/ included; self-check and gate run after the push, and their reds are fixed forward at once.
 - Results the user can try get a try line (`/Users/me/dev/bin/warp <full path>`) to warp-interviewer.
 - Never retire holding a card: done, or `todo release <card> "done: …; left: …; branch: …"`.
 - After the push remove your worktree and branches (local and remote). Deleting merged/stale things needs no
