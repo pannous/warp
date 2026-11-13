@@ -17,6 +17,9 @@ rewrite $e => live(() => $e) where item and $e is varying
 rewrite when $e $body: block => on $e $body where not yes_or_no($e) and not are_arms($body) and alias
 rewrite when $c $body: block => $refused where yes_or_no($c) and $refused = when_readings($c)
 rewrite when $c: $body => $refused where yes_or_no($c) and $refused = when_readings($c)
+# a phrase naming an event of several words the program declares, `event stop the machine` (decision
+# multi-word-events), with the event's one name: `on stop the machine {…}`, `emit stop the machine{reason: "x"}`
+rewrite $head $words... => $head $named... where $head in [on, once, emit, remove, count, listeners] and $named = declared_named($words, $program)
 rewrite on $e $body: block => listen(data $e, event => $body, no) where $e is symbol
 rewrite on $e: $body => listen(data $e, event => $body, no) where $e is symbol
 rewrite once $e $body: block => listen(data $e, event => $body, yes) where $e is symbol and $e is unbound
@@ -27,7 +30,8 @@ rewrite remove $h => listener_removed($h) where $h is symbol and not shadowed
 # `remove h from alarm`, `listeners of alarm -= h` (wiki Footguns "Event handlers"); an event is a name the program
 # never binds, so `remove 3 from xs` of a list stays the list's
 rewrite remove $h from $e => unlisten(data $e, $h) where $e is symbol and $e is unbound
-rewrite listeners of $e -= $h => unlisten(data $e, $h) where $e is symbol
+# (raw: the rules inside would take `alarm -= h` for a subtraction first)
+rewrite listeners of ($e -= $h) => unlisten(data $e, $h) where $e is symbol and raw
 rewrite clear listeners of $e => listeners_cleared(data $e) where $e is symbol
 rewrite count listeners of $e => count(listeners_of(data $e)) where $e is symbol
 rewrite listeners of $e => listeners_of(data $e) where $e is symbol

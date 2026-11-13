@@ -217,13 +217,23 @@ error_handler(statement: Node): any := {
 	if not (is_group(statement) and bracket_of(statement) == "") { return ø }
 	words = items_of(statement)
 	if #words < 4 or words[0 ..< 3] != [symbol("on"), symbol("error"), symbol("of")] { return ø }
-	handled = if #words == 4 and is_key(words#4, Op.Colon) then [key_of(words#4), value_of(words#4)] else if #words == 6 and words#5 == symbol("do") then [words#4, words#6] else words[3 ..]
+	handled = if #words == 4 and (is_key(words#4, Op.Colon) or is_key(words#4, Op.Do)) then [key_of(words#4), value_of(words#4)] else words[3 ..]
 	if #handled == 2 and handled#1 is symbol then [name_of(handled#1), handled#2] else ø
 }
 # `event stop the machine` declares an event of several words (decision multi-word-events): the declaration marked,
 # declared_event("stop the machine"), for events_declared to take out; ø for anything but two words or more
 DECLARED_EVENT_WORD = "declared_event"
 event_marked(words: list): any := if #words > 1 and words.all(word => word is symbol) then call_of(DECLARED_EVENT_WORD, [Text(words.map(spelled).join(" "))]) else ø
+# the words of a phrase with each event of several words the program declares as its one name, `[stop, the,
+# machine: {…}]` as `[«stop the machine»: {…}]`; ø where they name none
+declared_named(words: list, program: Node): any := {
+	declarations = level_statements(program).filter(s => is_group(s) and bracket_of(s) == "" and #s > 2 and s#1 == symbol(EVENT_WORD))
+	if #declarations == 0 { return ø }
+	phrase = bracketed(words, "")
+	named = declarations.map(s => items_of(s)[1 ..]).fold(phrase, phrase_named)
+	if named == phrase then ø else items_of(named)
+}
+EVENT_WORD = "event"
 # the program without its event declarations, each declared phrase one name wherever it stands: `on stop the machine
 # {…}` as `on «stop the machine» {…}`, so the event rules take it as any event's name; ø without a declaration
 events_declared(program: Node): any := {
@@ -1460,6 +1470,7 @@ rule_words = {
 	listening_program: listening_program,
 	errors_handled: errors_handled,
 	event_marked: event_marked,
+	declared_named: declared_named,
 	events_declared: events_declared,
 	help_lines_printed: help_lines_printed,
 	paint_size: paint_size,
