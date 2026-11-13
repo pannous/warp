@@ -3056,7 +3056,8 @@ def starts_path_at(p: Parser, at: int): bool {
 	// `cd ~` alone; `a ~ b` stays the comparison
 	if c == '~' { return char_at(p, at + 1) == '/' or not operand_follows_at(p, at + 1) }
 	if c == '/' { return starts_path_name(char_at(p, at + 1)) }
-	false
+	// the project root, `•/test/x.warp` (`@/` too: core/passes/uses.warp root_markers)
+	(c == '•' or c == '@') and char_at(p, at + 1) == '/'
 }
 
 // The path at the parser's position, up to a blank, a closer or a separator, as a text
