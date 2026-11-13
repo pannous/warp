@@ -54,6 +54,18 @@ SHADER_FRAME_HOLE = "previous"
 # the values of a paint or render of shader s with the given map, if any (the rule's rest hole: [] or [map]): its
 # entries, then the holes it lacks; ø where s is no shader the program assigns or the map has every hole
 shader_values(s: Node, given: list, program: Node): any := shader_holes_added(s, if #given == 1 and is_group(given#1) then items_of(given#1) else [], program)
+# a field of the values' compute shader (wiki graphics.md "Fields and passes"), `var<storage, read_write> steps: array<f32, 2>`:
+# the host keeps it from frame to frame, no variable fills its hole
+COMPUTE_NAME = "compute"
+FIELD_DECLARATION = "var<storage, read_write> "
+# the code of the values' compute shader, a text or a name the program assigns one; "" where there is none
+compute_code(entries: list, program: Node): text := {
+	found = entries.filter(entry => is_key(entry, Op.Colon) and "${key_of(entry)}" == COMPUTE_NAME)
+	if #found == 0 { return "" }
+	code = value_of(found#1)
+	if code is symbol { code = main_level_value(name_of(code), program) }
+	if code is text then "${code}" else ""
+}
 # the size paint(s) paints at (wiki/graphics.md): the program's width and height where its main level assigns both,
 # else the size of where it shows (prelude.warp shown_width: a window's, else the view's)
 paint_size(program: Node): list := {
@@ -65,7 +77,8 @@ shader_holes_added(s: Node, entries: list, program: Node, fields: list = []): an
 	shader = main_level_value(name_of(s), program)
 	if shader == ø or not (shader is text) { return ø }
 	given = entries.filter(entry => is_key(entry, Op.Colon)).map(entry => "${key_of(entry)}")
-	added = shader_holes("${shader}").filter(name => name not in given and name not in fields and name != SHADER_FRAME_HOLE and (name not in SHADER_BUILTIN_HOLES or main_level_value(name, program) != ø))
+	declared = compute_code(entries, program)
+	added = shader_holes("${shader}").filter(name => name not in given and name not in fields and not declared.contains(FIELD_DECLARATION + name + ":") and name != SHADER_FRAME_HOLE and (name not in SHADER_BUILTIN_HOLES or main_level_value(name, program) != ø))
 	if #added == 0 { return ø }
 	List(entries + added.map(name => Key(symbol(name), Op.Colon, symbol(name))), Bracket.Curly, Separator.Comma)
 }
