@@ -981,7 +981,7 @@ admitted_numbers = {nat: "nat_admitted", rational: "rational_admitted"}
 declared_kinds = {int: ValueKind.Int, float: ValueKind.Float, text: ValueKind.Text, list: ValueKind.List, bool: ValueKind.Bool, char: ValueKind.Char}
 def declaration(body: Body, name: text, written_type: text, value: TypedCode): TypedCode {
 	type_name = aliased_type(written_type)
-	if type_name.ends_with("?") or type_name == "error" { body.kept[name] = yes }
+	if union_members(type_name).any(member => member.ends_with("?") or member == "error") { body.kept[name] = yes }
 	# `x: any = v` admits every value: the plain assignment; `t: type = int`, `m: map = {}` too, a node like any
 	if type_name in node_annotations { return assignment(body, symbol(name), value) }
 	if type_name in admitted_numbers { return assignment(body, symbol(name), runtime_call(admitted_numbers[type_name], [TypedCode(ValueKind.Node, boxed(value))])) }
