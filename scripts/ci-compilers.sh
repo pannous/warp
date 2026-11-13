@@ -24,7 +24,6 @@ echo "$tools/wabt-$WABT/bin" >>"${GITHUB_PATH:-/dev/null}"
 "$(dirname "$0")/release-bootstrap.sh" "$TARGET" "$folder" "$tree"
 seed=$(gh release list --repo pannous/warp --limit 100 --json tagName -q '[.[] | select(.tagName | startswith("seed-"))][0].tagName')
 gh release download "$seed" --repo pannous/warp --pattern 'warp-seed.wasm' --dir "$folder" --clobber
-"$(dirname "$0")/seed-bootstrap.sh" "$folder/warp" "$folder/warp-seed.wasm" "$tree/lib"
 cd "$tree" && "$folder/warp" --lib "$tree/lib" rebuild pure
 # the native warp of this tree itself, built with the compilers just made: the runner above came from the source the
 # previous release could emit (scripts/bootstrap-native.ref), and lacks the host words this tree imports

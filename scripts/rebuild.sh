@@ -370,7 +370,6 @@ one() {
 	fi
 	local lane=(pure) from log=$store/$hash/$name.building/log record=$store/$hash/$name.building/record
 	recorded_inputs "$record"
-	"$scripts/seed-bootstrap.sh" "$warp" "${WARP_SEED:-$(seed_beside)}" "$lib"
 	# a stored compiler of this code reused, else this tree compiles it, else it waits for the tree compiling it
 	while [ -z "$force" ] && [ "$name" = warp ]; do
 		reused_stored "$log"
