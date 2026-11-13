@@ -84,7 +84,7 @@ operator ⋀ := and
 operator ∨ := or
 operator ⋁ := or
 operator ⊻ := xor
-operator ± := +- # confidence range 
+operator ± := +- // confidence range
 // A prefix glyph spelling a function calls it: √9 is sqrt(9), the plain function (decision prefix-symbols-alias-functions)
 prefix operator √ := sqrt
 prefix operator ∛ := cbrt
