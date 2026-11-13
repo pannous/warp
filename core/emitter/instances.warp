@@ -46,6 +46,9 @@ def instance_of_fields(body: Body, class_name: text, field_names: list, field_va
 		if field_names[i] not in declared { return refuse("a field " + class_name + " does not declare") }
 		given[field_names[i]] = field_values[i]
 	}
+	left_out = declared.keys.filter(name => name not in field_names)
+	required = left_out.filter(name => #(module.class_defaults[class_name].get(name) ?? [ø]) == 0)
+	if #required > 0 { return program_error(class_name + " leaves out its required field " + required#1, class_name + "{" + required#1 + ": …}") }
 	# the fields in the order the class declares them, each its struct field (class_struct); those left out take their
 	# defaults
 	instance_made(class_name, declared.keys.map(name => field_code(body, class_name, name, if name in field_names then given[name] else field_default(class_name, name))))
@@ -55,7 +58,7 @@ instance_made(class_name: text, codes: list): TypedCode := TypedCode(ValueKind.N
 # a field left out: its default, else its type's zero
 def field_default(class_name: text, name: text): any {
 	defaults = module.class_defaults[class_name]
-	if name in defaults then stage_node(defaults[name]#1) else field_zero(module.classes[class_name][name])
+	if name in defaults and #defaults[name] > 0 then stage_node(defaults[name]#1) else field_zero(module.classes[class_name][name])
 }
 # the code of the field's value as its struct holds it, checked against the field's type
 def field_code(body: Body, class_name: text, name: text, given: any): list {
@@ -629,10 +632,18 @@ declared_members(body: any): list := if kind_of(body) == "list" then body[3..].m
 declared_fields(body: any): list := declared_members(body).filter(field => field != ø)
 # a field's name as the view holds it: `x`, `"my field"`, `pi` (a constant's word)
 field_name_kinds = ["symbol", "text", "number"]
+# the default of a required field, `name!`: none at all, the construction leaving it out refused
+REQUIRED = []
+# the call view `word(x)` of one field name
+is_word_call(view: any, word: text): bool := kind_of(view) == "list" and view#2 == "(" and #view == 5 and kind_of(view#4) == "symbol" and view#4#2 == word and kind_of(view#5) in field_name_kinds
 without_optional_mark(name: text): text := name[0..<(#name - 1)]
 declared_field(field: any): any := {
 	kind = kind_of(field)
 	if kind in field_name_kinds and field#2.ends_with("?") { return [without_optional_mark(field#2), ø, [ø]] }
+	# `name!` (wiki constructor.md), parsed as unwrap(name): untyped, and every construction gives it
+	if is_word_call(field, "unwrap") { return [field#5#2, ø, REQUIRED] }
+	# `address { street city }`: an untyped field holding the record given
+	if kind == "list" and #field == 5 and kind_of(field#4) in field_name_kinds and kind_of(field#5) == "list" and field#5#2 == "{" { return [field#4#2, ø, ø] }
 	if kind in field_name_kinds { return [field#2, ø, ø] }
 	if kind != "key" { return ø }
 	if field#2 == ":" and kind_of(field#3) in field_name_kinds {

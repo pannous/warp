@@ -5,10 +5,9 @@
 use graphics
 use scene
 placed = scene("{car, tree, tree, house, person, tree}")
-mesh = scene_triangles(placed)
+mesh: [vec3] = scene_triangles(placed)
 # one color a triangle: a thing's color for each of its boxes' twelve triangles
-colors = []
-for thing in placed { for b in scene_boxes(thing) { for i in 1 to 12 { colors = colors + [thing.color] } } }
+colors: [vec3] = placed.flat_map(thing => [thing.color for i in 1 to 12 * #scene_boxes(thing)])
 eye = scene_camera(placed)
 size = 384
 render = shader {

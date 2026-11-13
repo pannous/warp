@@ -556,12 +556,12 @@ signaled(program: Node): any := {
 	}
 	separated(bracketed(written, ""), ";")
 }
-# the program with each list it makes for the GPU (extensions/rules/gpu_packing.warp gpu_bound) or declares of a GPU
-# cell type made as a GPU list, else ø (decision gpu-bound-floats)
+# the program with each list it makes for the GPU alone (extensions/rules/gpu_packing.warp gpu_bound) declared of the
+# GPU cell type its items take, which the gpu_lists pass makes it of; ø where it makes none (decision gpu-bound-floats)
 gpu_lists_packed(program: Node): any := {
 	statements = level_statements(program)
-	packed = gpu_cells_packed(statements, program)
-	if packed == statements then ø else separated(bracketed(packed, ""), ";")
+	typed = statements.map(statement => gpu_inferred_declaration(statement, program))
+	if typed == statements then ø else separated(bracketed(typed, ""), ";")
 }
 # a list made right in a GPU word's call made as a GPU list, else ø
 gpu_list_made(v: Node): any := if gpu_creating(v) then gpu_packed(v) else ø
@@ -884,15 +884,18 @@ definitions_reached(f: Node, program: Node): any := {
 }
 # paint([velocity: advect, show]) of program functions (wiki/graphics.md "Fields and passes"): each pass the run-time
 # function_pass (lib/shaders.warp) of the function quoted with what it reaches and, before the last, the field it draws
-# by name and value; ø where an item is no such function (a list of shaders is shader_passes')
+# by name and value, and the fields the program declares, which every such list shares; ø where an item is no such
+# function (a list of shaders is shader_passes')
+FIELD_MAKER = "field"
 function_passes(items: list, program: Node): any := {
+	declared = List(level_statements(program).filter(statement => is_key(statement, Op.Assign) and key_of(statement) is symbol and is_call_named(value_of(statement), FIELD_MAKER)).map(statement => Key(key_of(statement), Op.Colon, key_of(statement))), Bracket.Curly, Separator.Comma)
 	passes = []
 	for item in items {
 		into = field_drawn(item)
 		f = if into == ø then item else value_of(item)
 		reached = if f is symbol then definitions_reached(f, program) else ø
 		if reached == ø { return ø }
-		passes += [call_of("function_pass", if into == ø then [reached] else [reached, Text(name_of(into)), into])]
+		passes += [call_of("function_pass", [reached, declared] + (if into == ø then [] else [Text(name_of(into)), into]))]
 	}
 	passes
 }
