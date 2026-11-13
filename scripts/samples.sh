@@ -51,6 +51,8 @@ mkdir -p "$results/out" "$run_folder"
 [ -f "$tree/lib/warp.wasm" ] && WARP=$(launcher_of "$results" "$WARP" --lib "$tree/lib")
 # the registry's packages the package samples use by path (modules/packages, text/uniscript_text), as full-suite.sh links them
 "$tree/scripts/link-packages.sh" "$tree" >/dev/null || echo "samples: no packages linked: the package samples fail" >&2
+# the generated assets git ignores (ez_forest's tree meshes), published beside the release
+"$tree/scripts/sample-assets.sh" fetch >/dev/null || echo "samples: no assets fetched: ez_forest and tree_study fail" >&2
 # the compiled modules of test/fixtures/compiled (wasm/import_compiled links shapes.wasm, samples/wasm/shapes.wasm a
 # link to it), built behind this runtime.wasm
 for fixture in "$tree"/test/fixtures/compiled/*.warp; do
