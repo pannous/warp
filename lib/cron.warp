@@ -63,7 +63,7 @@ def cron_parse(expression: text): map {
 cron_of(expression: any): map := if expression is text then cron_parse(expression) else expression
 
 // a time as seconds since 1970: an Instant, milliseconds, or a UTC text "yyyy-MM-dd HH:mm"
-cron_seconds(time: any): int := if time is Instant then time.ms /! 1000 else if time is text then parse_pattern(time, "yyyy-MM-dd HH:mm") /! 1000 else time /! 1000
+cron_seconds(time: any): int := if time is Instant then time.ms /! 1000 else if time is text then pattern_ms(time, "yyyy-MM-dd HH:mm") /! 1000 else time /! 1000
 cron_zone(zone: any): Zone := if zone is Zone then zone else if zone is text then zone_named(zone) else Zone("UTC" + text(zone), zone, Dst.Never)
 zone_offsets(zone: Zone): list := if zone.dst == Dst.Never then [zone.standard] else [zone.standard, zone.standard + 3600]
 

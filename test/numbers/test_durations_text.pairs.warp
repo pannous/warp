@@ -1,37 +1,37 @@
-# parse_duration, format_duration(_long), ISO 8601 durations and relative_time (card lib-durations)
-'use time; parse_duration("1h30m")'	5400000
-'use time; parse_duration("2d 4h")'	187200000
-'use time; parse_duration("45s")'	45000
-'use time; parse_duration("500ms")'	500
-'use time; parse_duration("1m 1s 1ms")'	61001
-'use time; parse_duration("0s")'	0
-'use time; format_duration(parse_duration("1h30m"))'	"1h 30m"
-'use time; format_duration(5400000)'	"1h 30m"
-'use time; parse_duration(format_duration(187245000)) == 187245000'	yes
-'use time; try parse_duration("") else "refused"'	"refused"
-'use time; try parse_duration("1x") else "refused"'	"refused"
-'use time; try parse_duration("h") else "refused"'	"refused"
-'use time; try parse_duration("1h30") else "refused"'	"refused"
-'use time; format_duration_long(5400000)'	"1 hour 30 minutes"
-'use time; format_duration_long(86401000)'	"1 day 1 second"
-'use time; format_duration_long(0)'	"0 seconds"
-'use time; parse_iso_duration("PT1H30M")'	5400000
-'use time; parse_iso_duration("P2DT4H")'	187200000
-'use time; parse_iso_duration("P1W")'	604800000
-'use time; parse_iso_duration("PT0.5S")'	500
-'use time; parse_iso_duration("PT0S")'	0
-'use time; format_iso_duration(5400000)'	"PT1H30M"
-'use time; format_iso_duration(187200000)'	"P2DT4H"
-'use time; format_iso_duration(86400000)'	"P1D"
-'use time; format_iso_duration(500)'	"PT0.5S"
-'use time; format_iso_duration(0)'	"PT0S"
-'use time; parse_iso_duration(format_iso_duration(90061500)) == 90061500'	yes
-'use time; try parse_iso_duration("P1Y") else "refused"'	"refused"
-'use time; try parse_iso_duration("P1M") else "refused"'	"refused"
-'use time; try parse_iso_duration("PT") else "refused"'	"refused"
-'use time; try parse_iso_duration("P") else "refused"'	"refused"
-'use time; try parse_iso_duration("1H") else "refused"'	"refused"
-'use time; try parse_iso_duration("P1H") else "refused"'	"refused"
+# parse_duration, text(Duration(_long)), ISO 8601 durations and relative_time (card lib-durations)
+'use time; ("1h30m" as Duration).ms'	5400000
+'use time; ("2d 4h" as Duration).ms'	187200000
+'use time; ("45s" as Duration).ms'	45000
+'use time; ("500ms" as Duration).ms'	500
+'use time; ("1m 1s 1ms" as Duration).ms'	61001
+'use time; ("0s" as Duration).ms'	0
+'use time; text("1h30m" as Duration)'	"1h 30m"
+'use time; text(Duration(5400000))'	"1h 30m"
+'use time; (text(Duration(187245000)) as Duration).ms == 187245000'	yes
+'use time; try ("" as Duration).ms else "refused"'	"refused"
+'use time; try ("1x" as Duration).ms else "refused"'	"refused"
+'use time; try ("h" as Duration).ms else "refused"'	"refused"
+'use time; try ("1h30" as Duration).ms else "refused"'	"refused"
+'use time; format(Duration(5400000), long: yes)'	"1 hour 30 minutes"
+'use time; format(Duration(86401000), long: yes)'	"1 day 1 second"
+'use time; format(Duration(0), long: yes)'	"0 seconds"
+'use time; ("PT1H30M" as Duration).ms'	5400000
+'use time; ("P2DT4H" as Duration).ms'	187200000
+'use time; ("P1W" as Duration).ms'	604800000
+'use time; ("PT0.5S" as Duration).ms'	500
+'use time; ("PT0S" as Duration).ms'	0
+'use time; format(Duration(5400000), iso: yes)'	"PT1H30M"
+'use time; format(Duration(187200000), iso: yes)'	"P2DT4H"
+'use time; format(Duration(86400000), iso: yes)'	"P1D"
+'use time; format(Duration(500), iso: yes)'	"PT0.5S"
+'use time; format(Duration(0), iso: yes)'	"PT0S"
+'use time; (format(Duration(90061500), iso: yes) as Duration).ms == 90061500'	yes
+'use time; try ("P1Y" as Duration).ms else "refused"'	"refused"
+'use time; try ("P1M" as Duration).ms else "refused"'	"refused"
+'use time; try ("PT" as Duration).ms else "refused"'	"refused"
+'use time; try ("P" as Duration).ms else "refused"'	"refused"
+'use time; try ("1H" as Duration).ms else "refused"'	"refused"
+'use time; try ("P1H" as Duration).ms else "refused"'	"refused"
 'use time; relative_time(1000000, 1002000)'	"just now"
 'use time; relative_time(0, 180000)'	"3 minutes ago"
 'use time; relative_time(0, 60000)'	"1 minute ago"

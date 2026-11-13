@@ -961,7 +961,7 @@ analyze(program: Node): Node := {
 	results = {}
 	result_types = {}
 	scopes = {}
-	scopes[""] = Scope()
+	scopes[""] = Scope(kinds: linked_global_kinds())
 	for statement in flat_statements(program) {
 		if is_definition(statement) {
 			defined_functions[defined_name(statement)] = statement

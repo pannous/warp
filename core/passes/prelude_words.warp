@@ -556,6 +556,15 @@ linked_declared_only(n: Node, module_name: text, typed: bool): Node := {
 	if is_statement_sequence(n) { return children(n, statement => linked_declared_only(statement, module_name, typed)) }
 	if is_value_definition(n) and linked_global(module_name, declared_name(n)) then Node.Empty else declared_only(n, typed)
 }
+# the kinds of the globals the linked modules hold, by the program's name of each: the program binds them so, though
+# it never declares them again (use draw; for p in canvas_pixels reads ints, not an unknown name's text)
+linked_global_kinds(): map := {
+	kinds = {}
+	for image in module.linked_images {
+		for entry in image.globals { if entry#1.starts_with(program_global_prefix) { kinds[entry#1[#program_global_prefix ..]] = entry#2 } }
+	}
+	kinds
+}
 linked_global(module_name: text, name: any): bool := name is text and module.linked_images.any(image => image.name == module_name and image.global_names.has(program_global_prefix + name))
 takes_block(head: Node): bool := items_of(head)[1 ..].any(parameter => parameter_type(parameter) == "block")
 # `name := …`, `name = …`, `global name = …`: a value's definition, no function's
