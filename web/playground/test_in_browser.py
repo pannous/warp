@@ -752,7 +752,7 @@ def text_hole_wrong(code=TEXT_HOLE_CODE, root="section", expected_text=TEXT_HOLE
 
 def bug_button_wrong(page_url):
 	"""?bug_token=… is stored and leaves the address; the report holds comment, program and output; pannous.com refuses
-	the wrong token, which the page then forgets"""
+	the wrong token, which the page keeps, marked rejected, never sending as a visitor instead (d600a7499e)"""
 	open_page(f"{page_url}{'&' if '?' in page_url else '?'}bug_token={BUG_TOKEN}")
 	wait_for_isolation()
 	stop_running()
@@ -766,7 +766,7 @@ def bug_button_wrong(page_url):
 		document.getElementById("bug-form").requestSubmit();
 		const status = document.getElementById("bug-status");
 		for (let waited = 0; !status.textContent.startsWith("not sent") && waited < 15000; waited += 100) await new Promise(done => setTimeout(done, 100));
-		return JSON.stringify({{ address, report, status: status.textContent, forgotten: localStorage.getItem("warp-playground-bug-token") === null }});
+		return JSON.stringify({{ address, report, status: status.textContent, kept: localStorage.getItem("warp-playground-bug-token") !== null }});
 	}})()""")
 	shown = json.loads(json.loads(shown)) if shown.startswith('"') else {"report": {}, "status": f"(page gave no answer: {shown or browser_complaint})"}
 	open_page(page_url)
@@ -776,8 +776,8 @@ def bug_button_wrong(page_url):
 	wrong = [f"bug report {name}: {report.get(name)!r}, expected {value!r}" for name, value in expected.items() if report.get(name) != value]
 	wrong += [] if REPORT_PRINTED in report.get("output", "") else [f"bug report without the program's output: {report.get('output')!r}"]
 	wrong += [] if BUG_TOKEN not in shown.get("address", "") else [f"bug token left in the address: {shown['address']}"]
-	wrong += [] if "wrong token" in shown["status"] else [f"wrong bug token not refused: {shown['status']!r}"]
-	return wrong + ([] if shown.get("forgotten") else ["refused bug token still stored"])
+	wrong += [] if "refused" in shown["status"] else [f"wrong bug token not refused: {shown['status']!r}"]
+	return wrong + ([] if shown.get("kept") else ["refused bug token forgotten: the next report would go out as a visitor's"])
 
 
 def defined_names_wrong():
