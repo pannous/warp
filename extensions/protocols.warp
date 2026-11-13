@@ -132,15 +132,19 @@ built_by_default(protocol: Node, value: Node, defaults: map): Node := {
 holds_entries(n: Node): bool := is_group(n) and bracket_of(n) == "{" and #n > 0 and items_of(n).all(item => is_key(item, Op.Colon))
 
 # `perimeter() := 2 * area()` of a protocol: `perimeter(self) := 2 * self.area()`, each word of the protocol its
-# value's
+# value's; `describe(s) := area(s) * 2` as it is
 default_function(member: Node, protocol: Protocol): Node := {
 	head = key_of(member)
 	parameters = if is_called_name(head) then items_of(head)[1..] else []
 	words = protocol.required + protocol.default_members.map(defined_word)
+	if passes_value_first(parameters, value_of(member), words) { return member }
 	shadowed = parameters.map(parameter => if parameter is symbol then name_of(parameter) else "")
 	body = bottom_up(value_of(member), n => own_word_called(n, words.filter(word => word not in shadowed)))
 	Key(call_of(defined_word(member), [symbol(protocol_self)] + parameters), Op.Define, body)
 }
+# `describe(s) := area(s) * 2` (wiki trait.md): a default word handing its first parameter to the protocol's words is
+# a function of the value as written, its first parameter the value
+passes_value_first(parameters: list, body: Node, words: list): bool := #parameters > 0 and parameters#1 is symbol and nodes_in(body).any(n => is_called_name(n) and name_of(n#1) in words and #n > 1 and n#2 == parameters#1)
 # `area()` of a protocol's own word: `self.area()`; a bare `area` too
 own_word_called(n: Node, words: list): Node := {
 	if is_called_name(n) and name_of(n#1) in words { return Key(symbol(protocol_self), Op.Dot, n) }
