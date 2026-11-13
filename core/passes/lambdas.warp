@@ -176,7 +176,15 @@ names_bound(n: Node, found: list): list := {
 }
 newly_bound(n: Node, found: list): list := match n {
 	Key(target, Op.Assign, value): bound_target(target, found)
+	List(parts, Bracket.None, Separator.Space): found + arm_names(parts).filter(name => name not in found)
 	_: found
+}
+# the names the arms of `match x { List(items, bracket, separator): … }` bind, before node_matches lowers it: items,
+# bracket and separator there are the arm's, not a function of the program
+arm_names(parts: list): list := {
+	if #parts < 2 or not is_curly_group(parts#(#parts)) { return [] }
+	if not ((#parts == 3 and parts#1 == symbol("match")) or (#parts == 2 and is_match_head(parts#1))) { return [] }
+	items_of(parts#(#parts)).filter(arm => is_key(arm, Op.Colon)).flat_map(arm => case_pattern_names(key_of(arm)))
 }
 # [x] of `for x in xs {…}`, else none; a comprehension `[x * 2 for x in xs]` holds its loop as an item, whose x is the
 # whole comprehension's

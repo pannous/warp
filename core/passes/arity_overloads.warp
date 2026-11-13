@@ -214,17 +214,11 @@ defined_more_than_once(program: Node): map := {
 	for name in counts.keys { if counts[name] > 1 { twice[name] = yes } }
 	twice
 }
-# the names n binds for its parts: a definition's parameters and variables, a lambda's, a loop's, a match's arms'
+# the names n binds for its parts: a definition's parameters and variables, a lambda's, a loop's
 bound_at(n: Node): list := {
 	call = definition_call(n)
 	bound = if call != ø then items_of(call)[1 ..].map(parameter_name) + names_bound(value_of(n), []) else if is_key(n, Op.Arrow) then parameters_of(key_of(n)) + pattern_names(key_of(n)) + names_bound(value_of(n), []) else []
-	bound + loop_variables(n) + arm_names(n)
-}
-# the names the arms of `match x { List(items, bracket, separator): … }` bind, before node_matches lowers it: items,
-# bracket and separator there are the arm's, not a function of the program
-arm_names(n: Node): list := match n {
-	List(parts, Bracket.None, Separator.Space): { if is_curly_group(parts#(#parts)) and ((#parts == 3 and parts#1 == symbol("match")) or (#parts == 2 and is_match_head(parts#1))) then items_of(parts#(#parts)).filter(arm => is_key(arm, Op.Colon)).flat_map(arm => case_pattern_names(key_of(arm))) else [] }
-	_: []
+	bound + loop_variables(n)
 }
 
 # A function defined more than once named as a value, `xs.map(quoted)`, `g = quoted`: its definitions are variants by
