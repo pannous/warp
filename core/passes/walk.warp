@@ -93,7 +93,9 @@ is_empty_list(n: Node): bool := empty_group_bracket(n) == "["
 # ø stays ø, as a rule's `() => $e` makes its `()`
 placed(made: Node, at: Node): Node := {
 	if made === ø { return made }
-	placed_like(made, at)
+	line = line_of(at)
+	column = column_of(at)
+	if line is int and column is int then positioned(made, line, column) else made
 }
 
 # n without its attributes, opaque empty groups and characters, keeping the place it was written at: the parser places a
@@ -336,13 +338,14 @@ global said = []
 # `line = 1` answers `.line` with its value, not a position
 is_positioned(n: Node): bool := line_of(n) != ø
 report(n: T, message: text, preferred: any): T := {
-	said += [[line_of(n), column_of(n), message, preferred]]
+	held = line_of(n)
+	said += [[if held is int then line_within(held) else held, column_of(n), message, preferred]]
 	n
 }
 # where n was written, [line, column, file] (file: its index in positions.warp source_files): its own position, else
 # its first positioned part's (only atoms carry one), ø for a node a pass made of none
 written_at(n: Node): list? := {
-	if is_positioned(n) { return [line_of(n), column_of(n), file_of(n)] }
+	if is_positioned(n) { return [line_within(line_of(n)), column_of(n), file_within(line_of(n))] }
 	for part in parts_of(n) {
 		found = written_at(part)
 		if found { return found }

@@ -5,6 +5,12 @@
 // every source file a compile parses, by the index its positions carry (core/runtime/fields.warp node_file): 0 the
 // program's own, whose name the compile knows (card positions-always)
 global source_files = [""]
+// a node's line holds its file: file * LINE_SPAN + line (core/runtime/fields.warp line_span, the same number)
+LINE_SPAN = 1048576
+def file_line(file: int, line: int): int := file * LINE_SPAN + line
+// the line and the file's index of a line a node holds (line_of)
+def line_within(held: int): int := held % LINE_SPAN
+def file_within(held: int): int := held ÷ LINE_SPAN
 // the index of a source file, its first parse registering it
 def file_index(path: text): int {
 	for i in 0 ..< #source_files { if source_files[i] == path { return i } }
