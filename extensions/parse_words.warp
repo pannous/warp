@@ -32,8 +32,8 @@ parse_call(n: Node): Node := {
 
 parse_words(program: Node): Node := {
 	words = [parse_word]
-	# the program's own `parse(t) := …`, `parse = …`
-	if statements_in(program).any(statement => declared_name(statement) in words) { return program }
+	# the program's own `parse(t) := …`, `parse = …`; one of more parameters (time's parse(t, pattern)) leaves parse(t) the code's
+	if statements_in(program).any(statement => declared_name(statement) in words and #(definition_head_of(statement) ?? [ø]) <= 2) { return program }
 	words_rewritten(program, parse_call, words)
 }
 

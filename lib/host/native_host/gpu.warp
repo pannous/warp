@@ -780,6 +780,7 @@ stored_array(name: text, value: any, usage: int): any := {
 	}
 	listed = gpu_storage(name, value)
 	if listed != 0 { return [listed, #value * 4] }
+	slow("the storage array " + name + " is not a GPU list: its numbers are walked to f32 bits on every upload", "make it as " + name + ": [f32] = …")
 	cells = f32_cells(value)
 	[cells_kept(name, cells, usage), #cells * 4]
 }
@@ -1438,6 +1439,7 @@ array_buffer(array: StorageArray): int := {
 		wgpuQueueWriteBuffer(queue, buffer, 0, program_cells(array.place), size)
 		return buffer
 	}
+	slow("the storage array " + array.name + " is not a GPU list: each number is walked to its bits on every upload", "make it as " + array.name + ": [" + array.element + "] = …")
 	cells_kept(array.name, [cell_bits(array.element, x) for x in array.given], usage)
 }
 // why an array cannot bind what it is given, ø where it can (as host-gpu.js cellsUnfit says it): an array<f16> takes

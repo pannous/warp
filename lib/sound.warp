@@ -853,7 +853,7 @@ BITS_PER_SAMPLE = 16
 class Sound {
 	number: int
 	duration: float
-	format as text := "♪ " + duration + " s"
+	format as text := "♪ " + round(duration * 100) / 100 + " s"
 }
 sounded(speakers, rate, channels) := {
 	sounds_made = sounds_made + 1
@@ -1277,7 +1277,7 @@ pattern_end(text: text, from: int, stops: text) := {
 }
 global pattern_stops = " []<>*(?@_"
 // the steps from `from` to the closing bracket (or the end), and the place after it
-def parse_pattern(steps: text, from: int) {
+def pattern_steps(steps: text, from: int) {
 	items = []
 	i = from
 	while i < count(steps) {
@@ -1291,7 +1291,7 @@ def parse_pattern(steps: text, from: int) {
 		} else {
 			item = pattern_item(1, [])
 			if c == "[" or c == "<" {
-				inner = parse_pattern(steps, i + 1)
+				inner = pattern_steps(steps, i + 1)
 				item = pattern_item(if c == "[" then 0 else 2, inner[0])
 				i = inner[1]
 			} else {
@@ -1375,8 +1375,7 @@ def pattern_samples(events) {
 	samples
 }
 // a pattern is a value play plays (decision one-play): play(Pattern("~ g4 ~ g4*2"), 1 bar), a bar without the length
-class Pattern { steps: text }
-play(cycle: Pattern, for duration) := sound(pattern_samples(pattern_events(parse_pattern(cycle.steps, 0)[0], si_amount(duration), pattern_cycle(cycle.steps), 0, 1.0 as float)))
+play(cycle: Pattern, for duration) := sound(pattern_samples(pattern_events(pattern_steps(cycle.written, 0)[0], si_amount(duration), pattern_cycle(cycle.written), 0, 1.0 as float)))
 play(cycle: Pattern) := play(cycle, bar_seconds(1))
 // the old word plays it too, said once: pattern("c4 e4", 2 bars) is play(Pattern("c4 e4"), 2 bars)
 global pattern_word_said = no
