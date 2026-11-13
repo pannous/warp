@@ -1,0 +1,8 @@
+# a place typed by a protocol takes a value of a class that has its words and refuses any other (wiki/trait.md
+# "Declaring a trait"; card trait-conformance)
+'trait Shape { area() }; class Sq { side: int; area() := side * side }; x: Shape = Sq(3); x.area()'	9
+'protocol shape { area() }; class Sq { side: int; area() := side * side }; class C { r: int; area() := 3 * r }; f(s: shape) := s.area(); [f(Sq(2)), f(C(1))]'	[4, 3]
+'trait Shape { area() }; class Sq { side: int; area() := side * side }; class P { x: int }; y: Shape = P(3); y'	error
+'protocol shape { area() }; class Sq { side: int; area() := side * side }; class P { x: int }; f(s: shape) := s.area(); f(P(1))'	error
+'class Sq { side: int }; class P { x: int }; s: Sq or int = P(3); s'	error
+'class Sq { side: int }; s: Sq or int = 4; s'	4

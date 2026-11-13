@@ -1,0 +1,5 @@
+# a node case `n is Key(h, op, b)` binds its parts as the function's own and names the core's Node form: its parts are
+# no library words (units' h) and Key is no keys' Key (test_is_node_case.pairs.warp; card node-case)
+'describe(n: Node): text := if n is Key(h, op, b) then text(h) else "other"\ndescribe(parse("g := 1"))'	"g"
+'describe(n: Node): text := if n is Key(h, op, b) then text(h) else "other"\ndescribe(parse("3"))'	"other"
+'is_pair(n: Node): bool := n is Key(s, Op.Colon, m)\nis_pair(parse("a: 1"))'	yes
