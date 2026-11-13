@@ -1,5 +1,6 @@
 # compute_toy binds a warp image as channel0 (card compute-toys-textures):
 # the shader sees the texture's size, sampled through bilinear_repeat.
+// needs: gpu
 is! 'use compute_toys
 use image
 picture = image(8, 4, (x, y) => rgb(x * 32, y * 64, 0))

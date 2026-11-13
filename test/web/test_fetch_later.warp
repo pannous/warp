@@ -2,10 +2,10 @@
 # task that does not wait; extensions/fetch_signals.warp): a failed fetch leaves it ø and says why in name.error
 
 is! 'config := fetch "://warp.pannous.com/assistant.json"
-[config.loading, config.error, config.about.starts_with("What the assistant")]' [no, ø, yes]
+[config.loading, config.error, config.about.starts_with("What the assistant")]' [no, ø, yes]  // needs: network
 
 is! 'missing := fetch "://warp.pannous.com/no-such-file.json"
-[missing, missing.loading, missing.error.contains("404")]' [ø, no, yes]
+[missing, missing.loading, missing.error.contains("404")]' [ø, no, yes]  // needs: network
 
 is! 'people := fetch "://warp.pannous.com/assistant.json"
 to_html(html{ p{ if people.loading then "Loading…" else "loaded" } })' '<html><p aria-live="polite">loaded</p></html>'
@@ -13,9 +13,9 @@ to_html(html{ p{ if people.loading then "Loading…" else "loaded" } })' '<html>
 # go fetch is the fetch that does not wait: a task, its answer awaited (wiki/async.md)
 is! 'job = go fetch("://warp.pannous.com/assistant.json")
 answer = await job
-answer.about.starts_with("What the assistant")' yes
+answer.about.starts_with("What the assistant")' yes  // needs: network
 
 # a `;` separates statements as a newline does, a `;` line among lines too (card missing-fetch)
-is! 'missing := fetch "://warp.pannous.com/no-such-file.json"; [missing, missing.loading, missing.error.contains("404")]' [ø, no, yes]
+is! 'missing := fetch "://warp.pannous.com/no-such-file.json"; [missing, missing.loading, missing.error.contains("404")]' [ø, no, yes]  // needs: network
 is! 'n = 1
 gone := fetch "://warp.pannous.com/no-such-file.json"; [gone, n]' [ø, 1]

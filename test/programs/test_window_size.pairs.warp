@@ -1,4 +1,5 @@
 # from test_window_size.rs: edit the Rust test, then run the script again
+// needs: display
 
 # the_display_is_read_only
 'display.width > 100 and display.height > 100'	true
