@@ -26,7 +26,7 @@ select_unique(records: list): list := {
 	seen
 }
 // Sort-Object CPU [-Descending]: by a property's value, ties in their order (descending: reversed, as without -Stable)
-sort_object(records: list, property: text): list := records.sort_by(record => record[property])
+sort_object(records: list, property: text): list := sort(records, by: record => record[property])
 sort_object_descending(records: list, property: text): list := sort_object(records, property).reverse()
 // Group-Object Country: one record a value, in order of appearance: {name, count, group}, as PowerShell's GroupInfo
 group_object(records: list, property: text): list := {
