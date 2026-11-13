@@ -1,0 +1,5 @@
+# a plural field reads the field of every item of a list (wiki/operator.md "A plural field"; card item-field-access)
+'class Person{name: text; age: int}; people = [Person("Bo", 30), Person("Al", 12)]; (people where age > 18).names'	["Bo"]
+'class P{name: text}; ps = [P("a"), P("b")]; names of ps'	["a", "b"]
+'xs = [{n: 1}, {n: 2}]; xs.ns'	[1, 2]
+'class P{name: text}; ps: [P] = []; ps.names'	[]
