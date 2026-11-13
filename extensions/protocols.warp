@@ -66,10 +66,10 @@ protocol_of(statement: Node): Protocol? := {
 # the word a required member names: `area`, `area()`, `area() := pass`
 required_word(member: Node): text := if member is symbol then name_of(member) else if is_called_name(member) then name_of(member#1) else defined_word(member)
 
-# the program with its protocols applied: their declarations taken out, their default words functions of the
-# program, their tests and typed places resolved
+# the program with its protocols applied (its statements and those of its `;` lines): their declarations taken out,
+# their default words functions of the program, their tests and typed places resolved
 protocols_applied(program: Node): Node := {
-	statements = statements_in(program)
+	statements = flat_statements(program)
 	declared_protocols = statements.map(protocol_of).filter(found => found != ø)
 	defaults = {}
 	for statement in statements {
