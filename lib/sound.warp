@@ -386,8 +386,8 @@ chord_intervals = {major: [0, 4, 7], minor: [0, 3, 7], diminished: [0, 3, 6], au
 scale_intervals = {major: [0, 2, 4, 5, 7, 9, 11, 12], minor: [0, 2, 3, 5, 7, 8, 10, 12], ionian: [0, 2, 4, 5, 7, 9, 11, 12], dorian: [0, 2, 3, 5, 7, 9, 10, 12], phrygian: [0, 1, 3, 5, 7, 8, 10, 12], lydian: [0, 2, 4, 6, 7, 9, 11, 12], mixolydian: [0, 2, 4, 5, 7, 9, 10, 12], aeolian: [0, 2, 3, 5, 7, 8, 10, 12], locrian: [0, 1, 3, 5, 6, 8, 10, 12], pentatonic: [0, 2, 4, 7, 9, 12], minor_pentatonic: [0, 3, 5, 7, 10, 12], blues: [0, 3, 5, 6, 7, 10, 12], chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]}
 // chord(C4, major) the Chord of that kind on C4; the notes sounding together are play(C4+E4+G4, 3000ms)
 // (cards rename-play, play-c4). One definition: an enum-typed parameter beside a list one is no overload the
-// dispatch tells apart yet (card enum-overload-dispatch)
-chord(root, kind) := if root is list then play(Chord(root), kind) else if kind is Note then hinted_chord([root, kind]) else Chord(transpose_each(root, chord_intervals[kind]))
+// dispatch tells apart yet (card enum-overload-dispatch); `ChordKind or any` names the kinds bare, chord(C4, major7)
+chord(root, kind: ChordKind or any) := if root is list then play(Chord(root), kind) else if kind is Note then hinted_chord([root, kind]) else Chord(transpose_each(root, chord_intervals[kind]))
 // chord([C4 E4 G4]), chord(C4, E4, G4, B4, D5), `chord C4 E4 G4`: the Chord of those notes, as many as given (decision
 // gathering), with a note that the word isn't needed (decision chord-word-hint): C4+E4+G4 is that Chord
 chord(notes: [Note]) := hinted_chord(notes)
@@ -853,7 +853,7 @@ BITS_PER_SAMPLE = 16
 class Sound {
 	number: int
 	duration: float
-	format as text := "♪ " + duration + " s"
+	format as text := "♪ " + round(duration * 100) / 100 + " s"
 }
 sounded(speakers, rate, channels) := {
 	sounds_made = sounds_made + 1
@@ -1186,7 +1186,7 @@ live_cycle_started(name) := std_io("sound", "live_cycle", [name])
 // live_loop(drums, 4)` is the voice to await
 // (the name read before the go: inside it cycle.name is read as a Note's, card go-function-type)
 live_loop(cycle: function, cycles) := { name = cycle.name; go { for counted in 0..cycles { live_cycle_started(name); cycle() } } }
-live_loop(cycle: function) := { name = cycle.name; go { for counted in 0.. { live_cycle_started(name); cycle() } } }
+live_loop(cycle: function) := { name = cycle.name; go { while true { live_cycle_started(name); cycle() } } }
 // an audio file's samples to play (card sound-samples): kick = sample(./kick.wav) (wav, mp3, ogg, flac, aiff, m4a; the
 // playground reads wav), play(kick); play(kick, 2) twice as fast and an octave up, as a sampler plays it;
 // sample_slice(kick, 0.1s, 0.3s) the part between, sample_slices(kick, 4) four equal parts, sample_looped(kick, 4s, 0.5s,
@@ -1277,7 +1277,7 @@ pattern_end(text: text, from: int, stops: text) := {
 }
 global pattern_stops = " []<>*(?@_"
 // the steps from `from` to the closing bracket (or the end), and the place after it
-def parse_pattern(steps: text, from: int) {
+def pattern_steps(steps: text, from: int) {
 	items = []
 	i = from
 	while i < count(steps) {
@@ -1291,7 +1291,7 @@ def parse_pattern(steps: text, from: int) {
 		} else {
 			item = pattern_item(1, [])
 			if c == "[" or c == "<" {
-				inner = parse_pattern(steps, i + 1)
+				inner = pattern_steps(steps, i + 1)
 				item = pattern_item(if c == "[" then 0 else 2, inner[0])
 				i = inner[1]
 			} else {
@@ -1375,8 +1375,7 @@ def pattern_samples(events) {
 	samples
 }
 // a pattern is a value play plays (decision one-play): play(Pattern("~ g4 ~ g4*2"), 1 bar), a bar without the length
-class Pattern { steps: text }
-play(cycle: Pattern, for duration) := sound(pattern_samples(pattern_events(parse_pattern(cycle.steps, 0)[0], si_amount(duration), pattern_cycle(cycle.steps), 0, 1.0 as float)))
+play(cycle: Pattern, for duration) := sound(pattern_samples(pattern_events(pattern_steps(cycle.written, 0)[0], si_amount(duration), pattern_cycle(cycle.written), 0, 1.0 as float)))
 play(cycle: Pattern) := play(cycle, bar_seconds(1))
 // the old word plays it too, said once: pattern("c4 e4", 2 bars) is play(Pattern("c4 e4"), 2 bars)
 global pattern_word_said = no
@@ -1422,11 +1421,12 @@ midi_inputs() := midi_devices(midi_ports(1))
 // waits that long at most, then ø (card midi-receive); the input stays open, so no message between two calls is lost
 midi_receive(port = "", seconds = 0) := std_io("midi", "receive", [port, seconds])
 // a Standard MIDI File of notes [start, pitch, length, velocity] (seconds, frequency or note, seconds, 1 to 127) at
-// 120 beats a minute, and the notes of such a file the same way: write_midi("tune.mid", [[0, C4, 0.5, 100]])
+// 120 beats a minute: save(MidiFile([[0, C4, 0.5, 100]]), "tune.mid"), and midi_file("tune.mid").notes read the same way.
 // The file is made and read in warp, the same on every host: format 0, one track, MIDI_TICKS_PER_QUARTER ticks a
 // quarter note at MIDI_MICROSECONDS_PER_QUARTER (120 beats a minute)
-public write_midi(path, notes) := write_bytes(path, midi_file(notes))
-public read_midi(path) := midi_notes(read_bytes(path))
+class MidiFile { notes: list }
+public save(tune: MidiFile, as file) := write_bytes(file, midi_bytes(tune.notes))
+public midi_file(path: any): MidiFile := MidiFile(midi_notes(read_bytes(path)))
 MIDI_TICKS_PER_QUARTER = 480
 MIDI_MICROSECONDS_PER_QUARTER = 500000
 MIDI_NOTE_ON = 144
@@ -1449,7 +1449,7 @@ midi_variable_length(n) := {
 }
 midi_chunk(kind, body) := codes(kind) + big_endian(count(body), 4) + body
 // the bytes of a Standard MIDI File of notes [start, pitch, length, velocity]
-midi_file(notes) := {
+midi_bytes(notes) := {
 	events = []
 	for note in notes {
 		key = midi(note#2)

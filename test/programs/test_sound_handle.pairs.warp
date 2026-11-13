@@ -3,3 +3,4 @@
 'use sound; h = play(C4, 1s); fade(h, 0, 0.5); stop(h); h.duration'	1
 'use sound; play(C4, 50ms); h = play(E4, 50ms); h.number'	2
 'use sound; h = play(C4, 50ms); stop(sound); 3'	3
+'use sound; text(play(C4, (1/3)s))'	"♪ 0.33 s"

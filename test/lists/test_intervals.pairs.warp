@@ -32,6 +32,6 @@
 'use intervals; interval_set([extent(0, 10), extent(5, 20), closed_extent(8, 8)]).stabbing(8).map(e => e.text())'	["[0, 10)", "[5, 20)", "[8, 8]"]
 'use intervals; interval_set([extent(0, 10), extent(5, 20)]).stabbing(20)'	[]
 'use intervals; interval_set([extent(0, 3), extent(2, 6)]).merged().map(e => e.text())'	["[0, 6)"]
-'use intervals; use time; h = 3600000; day = extent(Instant(9 * h), Instant(17 * h)); busy = [extent(Instant(13 * h), Instant(14 * h)), extent(Instant(10 * h), Instant(11 * h)), extent(Instant(10 * h + h / 2), Instant(12 * h))]; subtract_intervals(day, busy).map(e => format_time(e.lo.ms) + "-" + format_time(e.hi.ms))'	["09:00:00-10:00:00", "12:00:00-13:00:00", "14:00:00-17:00:00"]
+'use intervals; use time; h = 3600000; day = extent(Instant(9 * h), Instant(17 * h)); busy = [extent(Instant(13 * h), Instant(14 * h)), extent(Instant(10 * h), Instant(11 * h)), extent(Instant(10 * h + h / 2), Instant(12 * h))]; subtract_intervals(day, busy).map(e => text(Instant(e.lo.ms).time) + "-" + text(Instant(e.hi.ms).time))'	["09:00:00-10:00:00", "12:00:00-13:00:00", "14:00:00-17:00:00"]
 'use intervals; use time; extents_overlap(extent(Instant(0), Instant(1000)), extent(Instant(1000), Instant(2000)))'	no
 'use intervals; use time; total_length([extent(Instant(0), Instant(60000)), extent(Instant(30000), Instant(90000))])'	90000
