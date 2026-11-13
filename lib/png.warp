@@ -1,0 +1,112 @@
+// The standard library module png: a PNG file's pixels, in plain warp (lib/image.warp reads pictures with it).
+// png_pixels(bytes) is [width, height, pixels], the pixels Colors row by row from the top left. It reads every
+// non-interlaced PNG: gray, gray with alpha, RGB, RGBA and palette pictures (a palette's transparency too), 1 to 16
+// bits a sample, a 16-bit sample kept to its high byte. An interlaced (Adam7) one is refused, saying so.
+use bits
+use color
+use compress
+
+png_signature = [137, 80, 78, 71, 13, 10, 26, 10]
+// the color types: the samples of a pixel are gray, red green blue, a palette index, gray and alpha, or all four
+gray_type = 0
+rgb_type = 2
+palette_type = 3
+gray_alpha_type = 4
+rgba_type = 6
+// the chunks this reader acts on
+header_chunk = "IHDR"
+palette_chunk = "PLTE"
+transparency_chunk = "tRNS"
+data_chunk = "IDAT"
+// a row's filters (PNG's filter types): none, sub, up, average, Paeth
+sub_filter = 1
+up_filter = 2
+average_filter = 3
+paeth_filter = 4
+
+png_pixels(bytes: list): list := {
+	chunks = png_chunks(bytes)
+	header = chunk_data(chunks, header_chunk)
+	width = from_big_endian(header[0 ..< 4])
+	height = from_big_endian(header[4 ..< 8])
+	depth = header[8]
+	color_type = header[9]
+	if header[12] != 0 { raise "an interlaced (Adam7) PNG: image reads non-interlaced ones, saved without interlacing" }
+	bits = png_channels(color_type) * depth
+	stride = (width * bits + 7) /! 8
+	step = max(1, bits /! 8)
+	data = decompress(chunks.filter(chunk => chunk[0] == data_chunk).flat_map(chunk => chunk[1]))
+	palette = chunk_data(chunks, palette_chunk) ?? []
+	alphas = chunk_data(chunks, transparency_chunk) ?? []
+	pixels = []
+	above = filled_list(stride, 0)
+	for y in 0 ..< height {
+		start = y * (stride + 1)
+		row = unfiltered(data[start], data[start + 1 ..< start + 1 + stride], above, step)
+		pixels += [png_color(row, x, depth, color_type, palette, alphas) for x in 0 ..< width]
+		above = row
+	}
+	[width, height, pixels]
+}
+// [type, data] of each chunk after the signature, in order
+png_chunks(bytes: list): list := {
+	chunks = []
+	at = count(png_signature)
+	while at + 8 <= count(bytes) {
+		size = from_big_endian(bytes[at ..< at + 4])
+		chunks += [[from_utf8(bytes[at + 4 ..< at + 8]), bytes[at + 8 ..< at + 8 + size]]]
+		at = at + 12 + size
+	}
+	chunks
+}
+// the data of the first chunk of that type, ø for none
+chunk_data(chunks: list, kind: text): any := {
+	found = chunks.find(chunk => chunk[0] == kind)
+	if found == ø then ø else found[1]
+}
+png_channels(color_type: int): int := if color_type == rgb_type then 3 else if color_type == gray_alpha_type then 2 else if color_type == rgba_type then 4 else 1
+
+// the row with its filter undone, each byte plus what the bytes before it and above it predict (step: the bytes of a
+// pixel, at least one)
+unfiltered(filter: int, row: list, above: list, step: int): list := {
+	out = filled_list(count(row), 0)
+	for i in 0 ..< count(row) {
+		left = if i >= step then out[i - step] else 0
+		corner = if i >= step then above[i - step] else 0
+		predicted = if filter == sub_filter then left else if filter == up_filter then above[i] else if filter == average_filter then (left + above[i]) /! 2 else if filter == paeth_filter then paeth(left, above[i], corner) else 0
+		out[i] = (row[i] + predicted) % 256
+	}
+	out
+}
+// of the left, upper and upper-left bytes, the one nearest left + up - corner
+paeth(left: int, up: int, corner: int): int := {
+	guess = left + up - corner
+	to_left = abs(guess - left)
+	to_up = abs(guess - up)
+	if to_left <= to_up and to_left <= abs(guess - corner) then left else if to_up <= abs(guess - corner) then up else corner
+}
+
+// the pixel at column x of an unfiltered row
+png_color(row: list, x: int, depth: int, color_type: int, palette: list, alphas: list): Color := {
+	if color_type == palette_type {
+		index = png_bits(row, x, depth)
+		alpha = if index < count(alphas) then alphas[index] else 255
+		return with_alpha(rgb(palette[3 * index], palette[3 * index + 1], palette[3 * index + 2]), alpha / 255)
+	}
+	channels = png_channels(color_type)
+	level = i => png_level(row, x * channels + i, depth)
+	if color_type == gray_type { return rgb(level(0), level(0), level(0)) }
+	if color_type == gray_alpha_type { return with_alpha(rgb(level(0), level(0), level(0)), level(1) / 255) }
+	if color_type == rgb_type { return rgb(level(0), level(1), level(2)) }
+	with_alpha(rgb(level(0), level(1), level(2)), level(3) / 255)
+}
+// sample n of a row as a level 0 to 255: a 16-bit one its high byte, a 1-, 2- or 4-bit one scaled up
+png_level(row: list, n: int, depth: int): int := {
+	if depth == 16 { return row[2 * n] }
+	png_bits(row, n, depth) * 255 /! (2 ** depth - 1)
+}
+// sample n of a row as written: a byte, else depth bits of one, the first sample in the highest bits
+png_bits(row: list, n: int, depth: int): int := {
+	if depth >= 8 { return row[n] }
+	(row[n * depth /! 8] /! 2 ** (8 - depth - n * depth % 8)) % 2 ** depth
+}

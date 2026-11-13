@@ -250,10 +250,10 @@ ALIAS_TARGET_NAMES = {"approximately": "≈", "<-": STORE_OPERATOR}
 // entry's fields read off once by `warp rebuild` (alias_rows): parsing the table at every run was a sixth of a small
 // program's compile (card speed-module-rules)
 // operator symbols and words: [spelling, operator] pairs, the symbols longest first; forms: keyword_form's; canonical:
-// each alias with its entry's word (`plus` → add); infix words: the table's (`mod`, `upto`)
+// each alias with its entry's word (`plus` → add); foreign: those of another language (`len` → count); infix words: the table's (`mod`, `upto`)
 // powers: each operator's [left, right] binding power, its row's `power` (binding_powers); declared: the operators a
 // declaration gives their meaning, `declared: yes` (`2 ↑ 3` is operator_↑(2, 3))
-class Spellings { operator_symbols: list; operator_words: list; forms: map; canonical: map; infix_words: list; powers: map; declared: list }
+class Spellings { operator_symbols: list; operator_words: list; forms: map; canonical: map; foreign: map; infix_words: list; powers: map; declared: list }
 global spelling_tables = ø
 def alias_spellings(): Spellings := {
 	if spelling_tables == ø {
@@ -295,7 +295,7 @@ def alias_fields_read(written: text): map {
 }
 def own_spellings(): Spellings := {
 	symbols = pairs_of(SYMBOL_OPERATORS)
-	Spellings{operator_symbols: symbols, operator_words: pairs_of(WORD_OPERATORS), forms: copied(KEYWORD_FORMS), canonical: {}, infix_words: [], powers: copied(STRUCTURE_POWERS), declared: []}
+	Spellings{operator_symbols: symbols, operator_words: pairs_of(WORD_OPERATORS), forms: copied(KEYWORD_FORMS), canonical: {}, foreign: {}, infix_words: [], powers: copied(STRUCTURE_POWERS), declared: []}
 }
 def aliased_spellings(): Spellings := {
 	tables = own_spellings()
@@ -318,7 +318,8 @@ def add_alias_entry(tables: Spellings, word: text, fields: map) {
 		# operators-named) or by the symbol itself (an extension's `"±" { power: … }`)
 		if not is_name_start(target#1) and spelled_by(tables.operator_symbols, target) == ø { tables.operator_symbols += [[target, target]] }
 	}
-	for spelling in fields.get("aliases") ?? [] {
+	for spelling in fields.get("foreign") ?? [] { tables.foreign[spelling] = word }
+	for spelling in (fields.get("aliases") ?? []) + (fields.get("foreign") ?? []) {
 		tables.canonical[spelling] = word
 		if not is_name_start(spelling#1) { tables.operator_symbols += [[spelling, target]] }
 		else if spelled_infix(infix, spelling) { add_infix_word(tables, spelling, target) }
