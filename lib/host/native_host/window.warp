@@ -22,7 +22,11 @@ WARP_KEYS = [63232, 63233, 63234, 63235, 63312, 63312, 63313, 63313, 63314, 6331
 POINTER_VALUES = ["mouse_x", "mouse_y", "mouse_down_x", "mouse_down_y"]
 // (the window's sides only while it is open: before, the size the program set, which the driver keeps)
 SIDES = ["window_width", "window_height"]
-OWNED_VALUES = ["window_open", "window_possible", "window_fullscreen", "key_down", "key code held", "keys pressed", "key code pressed", "mouse_down", "mouse_wheel", "gpu_drawing", "dark mode"] + POINTER_VALUES
+// "held 0" … the codes of the keys held, the first pressed first, as the playground names them (canvas.js
+// KEYS_HELD_KEPT), so lib/keys.warp held(key) tells W and A held together: a diagonal
+KEYS_HELD_KEPT = 8
+HELD_NAMES = ["held ${at}" for at in 0 ..< KEYS_HELD_KEPT]
+OWNED_VALUES = ["window_open", "window_possible", "window_fullscreen", "key_down", "key code held", "keys pressed", "key code pressed", "mouse_down", "mouse_wheel", "gpu_drawing", "dark mode"] + POINTER_VALUES + HELD_NAMES
 
 global sdl_window = 0
 global view = 0
@@ -202,6 +206,10 @@ value_of(name: text): int := {
 	if name in SIDES { return window_side(name == "window_width") }
 	if name == "window_possible" { return if windows_refused() then 0 else 1 }
 	if name == "key_down" { return if open_now and count(held) > 0 then 1 else 0 }
+	if name in HELD_NAMES {
+		at = HELD_NAMES.index_of(name)
+		return if open_now and at <= count(held) then held#at else 0
+	}
 	if name == "key code held" { return if open_now and count(held) > 0 then held.last() else 0 }
 	if name == "keys pressed" { return presses }
 	if name == "key code pressed" { return last_pressed }

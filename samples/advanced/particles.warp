@@ -72,8 +72,7 @@ clear(canvas)
 spawn(30, 40, 25)
 spawn(60, 25, 25)
 spawn(90, 45, 25)
-for frame in 1 to 60 {
+on frame{
 	update()
-	if frame % 6 == 0 { render() }
 }
 count(particles)

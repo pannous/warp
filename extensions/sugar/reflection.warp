@@ -47,8 +47,9 @@ rewrite $w($p) => [$names...] where $f = field_word($w, $program) and $p is symb
 # `functions()`: the program's own functions as function values (extensions/rules/rule_words.warp program_functions)
 rewrite functions() => [$functions...] where not method and $functions = program_functions($program, $source)
 # `type(sqrt)`: a library word's signature, `builtin: (x:number) -> number`; `type(area)` of a function the program
-# or a module defines, `function: (w: int) -> int` (extensions/rules/rule_words.warp builtin_type)
-rewrite type($f) => $t where $f is symbol and $t = builtin_type($f, $program)
+# or a module defines, `function: (w: int) -> int` (extensions/rules/rule_words.warp builtin_type); never a parameter or
+# local of that name, `type(value)` in `f(value)` beside a method value()
+rewrite type($f) => $t where $f is symbol and $f is function and $t = builtin_type($f, $program)
 rewrite $f.dump => $refused where $f is symbol and $f is function and $refused = misnamed($f, dump, definition)
 
 # `dir(time)`, `dir text`: the words of a module or type named as written (extensions/rules/rule_words.warp dir_words); `dir(v)` of
