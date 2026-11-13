@@ -26,17 +26,21 @@ gpu_pass(shader: node, fields: int, into: node, values: node): int := {
 // shader reads a field as `$name(at)`, at the pixel `at`: the latest written earlier in the frame, else last frame's,
 // so a shader reading its own name reads what it drew the frame before.
 // Passes of program functions, `paint([velocity: advect, show])` (lib/shaders.warp function_pass), give a fourth item, the
-// size of the field they draw: the fields are made at it, and its functions read them at a cell, `velocity(x, y)`
+// fields the program declares by name: every list of them shares these, made at their size, which its functions read at
+// a cell, `velocity(x, y)`; a list whose last function draws a field too shows nothing
 global painted_fields = {}
 paint_passes(passes: list, width: int, height: int) := {
 	names = passes.map(pass => pass#1)
 	shown = passes.last
 	if names[.. #names - 1].any(name => name == "") { raise "each pass before the last draws into a field: fix: name it, `velocity: advect`" }
-	size = fields_size(passes, width, height)
+	size = fields_size(shown, width, height)
+	declared = #shown > 3
+	if declared { names = shown#4.keys }
+	if declared and shown#1 != "" { return run_passes(passes, names, fields_kept(names, size#1, size#2), size) }
 	// (a last shader whose field is read draws into it too, then shows it)
 	drawn = if passes.any(pass => reads_field(pass#2, shown#1)) then passes else [passes#i for i in 1 ..< #passes]
-	fields = fields_kept(drawn.map(pass => pass#1), size#1, size#2)
-	for pass in drawn { gpu_pass(fields_placed(pass#2, names, read_scale(pass, size)), fields, pass#1, pass#3) }
+	fields = fields_kept(if declared then names else drawn.map(pass => pass#1), size#1, size#2)
+	run_passes(drawn, names, fields, size)
 	if drawn != passes { shown = [shown#1, fields_placed(shown#2, names, read_scale(shown, size)), shown#3] } else { shown = [shown#1, FIELD_SHOWN.replace(FIELD_HOLE, shown#1), {}] }
 	if window_open() or window_possible() { return gpu_show_sized(shown#2, fields, width, height, shown#3) }
 	pixels = gpu_picture_sized(shown#2, fields, width, height, shown#3)
@@ -49,15 +53,20 @@ fields_kept(names: list, width: int, height: int): int := {
 	if not painted_fields.has(key) { painted_fields[key] = gpu_fields(width, height, names) }
 	painted_fields[key]
 }
-// the size the fields are made at: the one their functions' passes declare, else the painting's. Declared fields keep
-// numbers beyond 0..1, which a GPU storing 8 bits a channel cannot
+// each pass drawn into its field, its reads of the fields (of these names) placed
+run_passes(passes: list, names: list, fields: int, size: list) := {
+	for pass in passes { gpu_pass(fields_placed(pass#2, names, read_scale(pass, size)), fields, pass#1, pass#3) }
+}
+// the size the fields are made at: the one the program's declared fields share, else the painting's. Declared fields
+// keep numbers beyond 0..1, which a GPU storing 8 bits a channel cannot
 NARROW_FORMAT = "rgba8unorm"
-fields_size(passes: list, width: int, height: int): list := {
-	declared = passes.filter(pass => #pass > 3 and pass#4 != ø).map(pass => pass#4)
-	if #declared == 0 { return [width, height] }
-	if declared.any(size => size != declared#1) { raise "paint's fields share one size; these declare " + declared.map(size => "${size#1}×${size#2}").join(", ") }
+fields_size(pass: list, width: int, height: int): list := {
+	if #pass < 4 { return [width, height] }
+	sizes = pass#4.values.map(field => [field.columns, field.rows])
+	if #sizes == 0 { raise "functions in paint's list draw fields the program declares: fix: declare one, `ink = field(1, columns, rows)`" }
+	if sizes.any(size => size != sizes#1) { raise "paint's fields share one size; these declare " + sizes.map(size => "${size#1}×${size#2}").join(", ") }
 	if text(gpu_fields_format()) == NARROW_FORMAT { raise "this GPU keeps a field in 8 bits a channel, too few for numbers beyond 0..1" }
-	declared#1
+	sizes#1
 }
 // what a pixel `at` is divided by to sample a field: a text shader's `$dye(at)` reads at a pixel of the painting, a
 // function's `dye(x, y)` (a pass of four items) at a cell of the fields
