@@ -171,6 +171,22 @@ listening_program(program: Node): any := {
 	unshown = registration_unshown(program)
 	page_valued(unshown ?? program) ?? unshown
 }
+# the program with each `help_line(text)` of reflection.warp's help rules printed, but one whose value is used: the
+# last statement of the program or of a block, but its `use`s and definitions (the prelude's functions follow the
+# program's own statements); a loop's body has no value, its last prints too. ø when it has none
+help_line_word = "help_line"
+help_lines_printed(program: Node): any := if nodes_in(program).any(n => is_call_named(n, help_line_word)) then help_lines_shown(program, no) else ø
+help_lines_shown(n: Node, unused: bool): Node := {
+	if is_call_named(n, help_line_word) { return if unused then call_of("print", [n#2]) else n#2 }
+	if not is_group(n) { return children(n, part => help_lines_shown(part, no)) }
+	items = items_of(n)
+	statements = is_statement_sequence(n) or bracket_of(n) == "{"
+	ending = (0 ..< #items).filter(i => use_target(items[i]) == ø and not defines(items[i]))
+	valued = if statements and #ending > 0 then ending.last() else #items - 1
+	group_like(n, (0 ..< #items).map(i => help_lines_shown(items[i], if statements then i != valued or unused else is_loop(n) and i == valued)))
+}
+# a definition, `f(x) := …`, `def f(x) …`, a class: no value of the program's
+defines(statement: Node): bool := is_declaration(statement) and not is_key(statement, Op.Assign)
 # `f(x) := 10/x; on error of f { 7 }`: each such statement gone, the definition of f `f(x) := try 10/x else { 7 }`, a
 # failing call giving the handler's value (card charged-field-values, a rule, no `.` on a function); before or after it
 errors_handled(program: Node): any := {
@@ -1361,6 +1377,7 @@ rule_words = {
 	once_listens: once_listens,
 	listening_program: listening_program,
 	errors_handled: errors_handled,
+	help_lines_printed: help_lines_printed,
 	paint_size: paint_size,
 	parameters_named: parameters_named,
 	polled_word: polled_word,

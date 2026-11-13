@@ -482,11 +482,11 @@ static_kind(n: Node): list? := {
 	ø
 }
 
-# variable → the static_kind of the values assigned to it, [] where they differ: by name across the program,
-# so an `xs` of other values in another function leaves both to the run-time test
-assigned_kinds(program: Node): map := {
+# variable → the static_kind of the values assigned to it in this scope, [] where they differ; a definition inside is
+# its own scope (within), a lambda shares this one, so another function's `x = "a"` leaves this x's kind alone
+assigned_kinds(scope: Node): map := {
 	kinds = {}
-	for n in nodes_in(program) {
+	for n in scope_nodes(scope) {
 		if is_key(n, Op.Assign) and key_of(n) is symbol {
 			name = name_of(key_of(n))
 			kind = static_kind(value_of(n))
@@ -495,6 +495,8 @@ assigned_kinds(program: Node): map := {
 	}
 	kinds
 }
+# n and its parts but those of a definition inside it
+scope_nodes(n: Node): list := if definition_call(n) != ø then [] else [n] + parts_of(n).flat_map(scope_nodes)
 # the names a lambda or a definition binds as its parameters
 parameters_bound(n: Node): list := {
 	if is_key(n, Op.Arrow) { return parameters_of(key_of(n)) }
@@ -745,8 +747,15 @@ names_a_field(name: text, program: Node): bool := {
 	nodes_in(program).any(n => is_key(n, Op.Colon) and key_of(n) == symbol(name))
 }
 # inside a definition or a lambda its parameters take any value, whatever a variable of their name is given elsewhere
-# (the `e` of `e -> tan(e)` beside the case `e = "e"` of keys.warp); outside they hide no variable's kind
-within(judge: ArgumentJudge, n: Node): ArgumentJudge := ArgumentJudge(without_keys(judge.variables, parameters_bound(n)), judge.own, judge.least, judge.program)
+# (the `e` of `e -> tan(e)` beside the case `e = "e"` of keys.warp); outside they hide no variable's kind. A
+# definition's own variables have the kinds its body assigns them, a lambda's are the scope's around it
+within(judge: ArgumentJudge, n: Node): ArgumentJudge := {
+	parameters = parameters_bound(n)
+	own = if definition_call(n) != ø then without_keys(assigned_kinds(value_of(n)), parameters) else {}
+	variables = without_keys(judge.variables, parameters)
+	for name in own.keys { variables[name] = own[name] }
+	ArgumentJudge(variables, judge.own, judge.least, judge.program)
+}
 # top-down, so a definition is renamed by its own parameter types
 typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	call = definition_call(n)

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/wasmtime-c-api.sh [<folder>…]: warp's native libraries built for this machine into /opt/cargo (a no-op when
+# scripts/wasmtime-c-api.sh [--from <tree>] [<folder>…]: warp's native libraries built for this machine into /opt/cargo (a no-op when
 # current), and copied into each folder, default the one beside the warp binary on PATH: warp's wasmtime C API
 # (crates/wasmtime-capi, card wasmtime-bundled) and wgpu-native's release (libwgpu_native, card gpu-functions). The
 # window, the sound, the web view and the GPU are warp's own (lib/host/native_host.warp, over SDL3, WebKit, wgpu-native and
@@ -8,6 +8,9 @@
 # folder a native build links from and its executables find them in (rpath); the release workflow runs it for lib/
 set -eu -o pipefail
 checkout=$(cd "$(dirname "$0")/.." && pwd)
+# the sources of the tree whose native warp links it (rebuild.sh, after-push.sh): the checkout of the script running
+# may lag that tree, and its library then lacks what the tree's driver calls (card after-push-native-warp-1113)
+if [ "${1-}" = --from ]; then checkout=$(cd "$2" && pwd); shift 2; fi
 [ $# -gt 0 ] || set -- "$(dirname "$(readlink -f "$(command -v warp)")")"
 export CARGO_TARGET_DIR=${WARP_WASMTIME_TARGET:-/opt/cargo/warp-wasmtime}
 WGPU_VERSION=29.0.1.1
