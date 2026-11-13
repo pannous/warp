@@ -3,3 +3,5 @@
 'use image; p = image("https://warp.pannous.com/samples/graphics/picture.bmp"); [p.width, p.height]'	[128, 96]
 'use image; p = image("://warp.pannous.com/samples/graphics/photo.jpg"); [p.width, p.height]'	[160, 120]
 'read_bytes("https://warp.pannous.com/no-such-file.jpg") failed'	yes
+# image reads PNGs too (user, card image-url): gray, RGB, palette, with alpha
+'use image; p = image("https://pannous.com/assets/pannous-logo.png"); [p.width, p.height, p.pixels[0]]'	[785, 146, #ffffff00]
