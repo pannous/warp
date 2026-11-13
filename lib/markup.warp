@@ -460,7 +460,7 @@ html_page_fact(name: any, value: any) := {
 
 // does a block of pairs name any of `names`
 html_names_any(value: any, names: any): bool := {
-	for item in html_items(value) { if item is pair and contains(names, html_name(item)) { return true } }
+	for item in html_items(value) { if html_pair(item) is pair and contains(names, html_name(item)) { return true } }
 	false
 }
 
@@ -499,9 +499,10 @@ html_is_dotted_name(value: any): bool := value is pair and text(value.op) == "."
 // shown as its text (card quantity-element)
 html_is_nested(value: any): bool := value is pair and class_name(value) == "key"
 
-// `class:["btn" "btn-info"]` is an attribute, `style{ ".card": {…} }` an element: its items are rules
+// `class:["btn" "btn-info"]` is an attribute, `style{ ".card": {…} }` an element: its items are rules, `label{ "Name " b{…} }`
+// one too, its child element an Html (a class's instance, no pair)
 html_holds_pairs(value: any): bool := {
-	for item in value { if item is pair { return true } }
+	for item in value { if html_pair(item) is pair { return true } }
 	false
 }
 
