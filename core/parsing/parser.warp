@@ -39,6 +39,22 @@ def with_field(holder: any, field: text, value: any, reader: function): any := {
 // The view of a source's tree, as the pipeline hands it on
 def tree(source: text): View := view_of(parsed(source))
 
+// the file a parse reads (its index in positions.warp source_files, 0 the program's own) and the line of that file its
+// source starts on, which every position it gives carries (card positions-always)
+global parsing_file = 0
+global parsing_first_line = 1
+// the tree of a source that is the text of `file` from its line `first_line` on: a used file, a library's definition
+def parsed_from(source: text, file: text, first_line: int, uses: text = ""): Node := {
+	outer_file = parsing_file
+	outer_line = parsing_first_line
+	parsing_file = file_index(file)
+	parsing_first_line = first_line
+	tree = parsed(source, uses)
+	parsing_file = outer_file
+	parsing_first_line = outer_line
+	tree
+}
+
 // The tree of a source: one statement as itself, several as a list
 def parsed(source: text, uses: text = ""): Node := {
 	try {
@@ -1620,9 +1636,10 @@ def spaced_operand_in_list(p: Parser, glyph: text, glued: bool, right: Node): bo
 EVENLY_SPACED_OPERATORS = ["*", "/", "%", "^", "==", "!=", "<", ">", "<=", ">="]
 // the source written from the node's place to the offset `end`, "" for a node of no place
 def written_before(p: Parser, n: Node, end: int): text := {
-	line = line_of(n)
+	held = line_of(n)
 	column = column_of(n)
-	if not (line is int and column is int) { return if is_group(n) and #n > 0 then written_before(p, n#1, end) else "" }
+	if not (held is int and column is int) { return if is_group(n) and #n > 0 then written_before(p, n#1, end) else "" }
+	line = line_within(held) - parsing_first_line + 1
 	p.code[code_offset(p, p.line_starts[line - 1], column) ..< end].trim()
 }
 
@@ -2850,7 +2867,7 @@ def atom(p: Parser): Node := {
 def placed_at(p: Parser, n: Node, start: int): Node := {
 	line = line_at(p, start)
 	line_start = p.line_starts[line - 1]
-	positioned(n, line, start - line_start + 1 + shifted(p, line_start, start))
+	positioned(n, file_line(parsing_file, line + parsing_first_line - 1), start - line_start + 1 + shifted(p, line_start, start))
 }
 
 // How many columns a source pass took out of the line from `line_start` before `at` (`\:alpha` written, α read), so
@@ -3056,7 +3073,8 @@ def starts_path_at(p: Parser, at: int): bool {
 	// `cd ~` alone; `a ~ b` stays the comparison
 	if c == '~' { return char_at(p, at + 1) == '/' or not operand_follows_at(p, at + 1) }
 	if c == '/' { return starts_path_name(char_at(p, at + 1)) }
-	false
+	// the project root, `•/test/x.warp` (`@/` too: core/passes/uses.warp root_markers)
+	(c == '•' or c == '@') and char_at(p, at + 1) == '/'
 }
 
 // The path at the parser's position, up to a blank, a closer or a separator, as a text

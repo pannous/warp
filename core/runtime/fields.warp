@@ -37,6 +37,10 @@ singular_of(plural: text): text := text_slice(plural, 0, byte_count(plural) - 1)
 # `positioned(n, line, column)`: n where it was written, a $MetaNode, as `n.line` and `n.column` read it;
 # any other node without a field of that name has no field line
 positioned_node(n: Node, line: int, column: int): Node := meta_node(n, line, column)
+# a node's line holds its file too (card positions-always): the file's index in the compile's source files
+# (core/parsing/positions.warp source_files, 0 the program's own) times line_span(), plus the line; as
+# core/parsing/positions.warp LINE_SPAN, which the compiler reads (the seed compiling it knows no newer runtime word)
+line_span(): int := 1048576
 # `line_of(n)`, `column_of(n)`: where n was written, ø for a node without a position, which a field never shadows
 # (`.line` of the code `line = 1` is 1; card node-part-clash)
 # (line 0: a node marked by a pass but never written anywhere, with_attribute)
@@ -52,7 +56,7 @@ is_position_part(m: Node, name: text): bool := {
 	if not same_bytes(name, "line") and not same_bytes(name, "column") { return no }
 	not ((marked_kind(m) == Marked.Map or marked_kind(m) == Marked.Instance) and map_index(m, name) > 0)
 }
-position_part(m: Node, name: text): int := if same_bytes(name, "line") then meta_line(m) else meta_column(m)
+position_part(m: Node, name: text): int := if same_bytes(name, "line") then int_remainder(meta_line(m), line_span()) else meta_column(m)
 # a key that is no instance: `x#2` of a map `{a: 1, b: 2}`
 # a key node, ø (a block's written `ø`) none: the walks over a list's items for a named entry pass it
 is_keyed(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Key
