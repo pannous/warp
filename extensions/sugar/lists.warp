@@ -13,7 +13,7 @@ rewrite $x : $t#$n => $x = zero_fill($n - 1, $zero) where $zero = type_zero($t)
 rewrite $x : $n $t => $x = zero_fill($n, $zero) where $zero = type_zero($t)
 rewrite $n * $t => zero_fill($n, $zero) where $zero = type_zero($t)
 rewrite $n $t => zero_fill($n, $zero) where $n is number and $zero = type_zero($t)
-rewrite $n $t => zero_fill($n, $zero) where $n is value and $zero = type_zero($t)
+rewrite $n $t => zero_fill($n, $zero) where $n is value and not $n is function and $zero = type_zero($t)
 
 # The type forms of a list (card list-type-forms, wiki/list.md "Typed lists"): `x = int[]` (the parser's `x = [int]`)
 # and `x = list of numbers` (or `list of number`) are the empty list of the type, as `int[0]`

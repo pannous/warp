@@ -59,6 +59,8 @@ void* c_callback_pointer(int64_t slot) {
 	}
 	return trampolines[slot];
 }
+// the process's environment, for the children it starts (core/native/driver.warp words_run)
+char** process_environment(void) { return environ; }
 // the error number of the C call that failed last (core/native/driver.warp os_failure)
 int32_t last_error(void) { return errno; }
 // the terminal's rows, else its columns, on standard output; 0 outside a terminal (ioctl is variadic: called here, not

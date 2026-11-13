@@ -58,8 +58,8 @@ SLASH = 47
 SPACE = 32
 SEMICOLON = 59
 TEXT_SHIFT = 4294967296
-# the exit status of a child whose exec failed (words_run): the command is not found
-EXEC_FAILED_STATUS = 127
+# posix_spawn_file_actions_t's bytes, at most: 80 on glibc, a pointer on macOS
+SPAWN_ACTIONS_BYTES = 128
 # the most bytes shown_from gives at once: the output area past its scratch (runtime/text.warp output_room, c_text_at)
 SHOWN_PART = 65488
 # the host words the driver answers, the number its callback is defined with (answered_word); exit(code) ends the run
@@ -293,11 +293,13 @@ memmove(destination: handle, source: handle, size: i64): handle from "c"
 memset(destination: handle, value: i32, size: i64): handle from "c"
 memcmp(a: pointer, b: pointer, size: i64): i32 from "c"
 realpath(path: pointer, resolved: pointer): handle from "c"
-fork(): i32 from "c"
-execvp(file: pointer, arguments: pointer): i32 from "c"
-_exit(code: i32) from "c"
+posix_spawnp(child: pointer, file: pointer, actions: pointer, attributes: i64, arguments: pointer, environment: handle): i32 from "c"
+posix_spawn_file_actions_init(actions: pointer): i32 from "c"
+posix_spawn_file_actions_adddup2(actions: pointer, from: i32, to: i32): i32 from "c"
+posix_spawn_file_actions_addclose(actions: pointer, descriptor: i32): i32 from "c"
+posix_spawn_file_actions_destroy(actions: pointer): i32 from "c"
+process_environment(): handle from "c"
 pipe(ends: pointer): i32 from "c"
-dup2(from: i32, to: i32): i32 from "c"
 close(descriptor: i32): i32 from "c"
 fileno(stream: handle): i32 from "c"
 fdopen(descriptor: i32, mode: pointer): handle from "c"
@@ -1655,7 +1657,8 @@ url_got(caller: handle, context: handle, url: text, result: pointer): nothing :=
 	words_run(caller, context, "curl", words, result)
 }
 # a command run by its argument vector, without a shell: what it printed, else the Error naming its exit status
-# (EXEC_FAILED_STATUS: not found) and what it said on stderr
+# and what it said on stderr; one not found on PATH said so. Started by posix_spawnp, which Windows answers too
+# (lib/native/windows.c), its outputs rewired by file actions
 words_run(caller: handle, context: handle, command: text, words: Arguments, result: pointer): nothing := {
 	said = joined(compiled_path(), ".stderr")
 	ends = allocate(8)
@@ -1663,30 +1666,27 @@ words_run(caller: handle, context: handle, command: text, words: Arguments, resu
 	if pipe(ends) != 0 or errors == 0 { return guest_error(caller, context, joined("cannot run ", command), result) }
 	reading = word_at(ends).value as i32
 	writing = word_at(ends + 4).value as i32
-	file = c_string(command)
-	# (the child only rewires its outputs and execs: no allocation between fork and exec)
-	child = fork()
-	if child == 0 {
-		dup2(writing, 1)
-		dup2(fileno(errors), 2)
-		close(reading)
-		execvp(file, words.pointers)
-		_exit(EXEC_FAILED_STATUS)
-	}
+	actions = allocate(SPAWN_ACTIONS_BYTES)
+	posix_spawn_file_actions_init(actions)
+	posix_spawn_file_actions_adddup2(actions, writing, 1)
+	posix_spawn_file_actions_adddup2(actions, fileno(errors), 2)
+	posix_spawn_file_actions_addclose(actions, reading)
+	child_at = allocate(4)
+	failed = posix_spawnp(child_at, c_string(command), actions, 0, words.pointers, process_environment())
+	posix_spawn_file_actions_destroy(actions)
 	close(writing)
 	fclose(errors)
+	if failed != 0 {
+		close(reading)
+		unlink(said)
+		return guest_error(caller, context, joined(joined("cannot run ", command), ": not found on PATH"), result)
+	}
 	stream = fdopen(reading, c_string("r"))
 	printed = piped(stream)
 	fclose(stream)
 	status = allocate(4)
-	waitpid(child, status, 0)
-	exit_status = (word_at(status).value as i32) / 256
-	if exit_status == EXEC_FAILED_STATUS {
-		unlink(said)
-		free(printed.at)
-		return guest_error(caller, context, joined(joined("cannot run ", command), ": not found on PATH"), result)
-	}
-	answered(caller, context, command, printed, exit_status, said, result)
+	waitpid(word_at(child_at).value as i32, status, 0)
+	answered(caller, context, command, printed, (word_at(status).value as i32) / 256, said, result)
 }
 line_run(caller: handle, context: handle, line: text, result: pointer): nothing := line_ran(caller, context, line, false, result)
 # the sh line run, what it said on stderr kept in a file: recorded its {status, out, err}, else what it printed
