@@ -6,4 +6,5 @@ rewrite $a otherwise $b => $a default $b where alias
 rewrite $a failing $b => $a default $b where alias
 rewrite $a except $b => $a default $b where alias
 rewrite $a rescue $b => $a default $b where alias
-rewrite $a default $b => try $a except $b
+# (a type on the left is a protocol naming its default class, `matrix default Dense`, extensions/protocols.warp)
+rewrite $a default $b => try $a except $b where not $a is type
