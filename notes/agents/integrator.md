@@ -110,7 +110,6 @@ skipped the question is refused and goes to warp-interviewer; there is no FYI pa
 
 ## Landing
 
-- A handoff lands on the sweep's smoke alone; only one that may break the core for everyone (AGENTS.md "Done") brings its self-check + gate tier 1.
 - Landing checks, then the handoff (Handoff, above). The worker does not push to main: `warp format yes <files>` on the .warp files you
   wrote; merge origin/main into the branch (real merges, you resolve conflicts) with a merge message summing up the
   change; on that merge run the smoke test (`scripts/smoke.sh <worktree>`; core/ changes: it + `scripts/self-check.sh` + the gate probes, `scripts/gate.sh --tiers 1 <worktree>`, seconds; "Testing" above);
@@ -128,7 +127,6 @@ skipped the question is refused and goes to warp-interviewer; there is no FYI pa
 - Reds with a path forward (user 11-11): a core change may land with some test and sample lines red when a card names
   the owner, the red lines and how they get adjusted, and the merge message says `reds: <card>`. Smoke, self-check,
   hello and the playground deploy stay green; tier 2 and the page samples don't refuse such a landing.
-- Super-express (user 11-13): every handoff carries only a green smoke, and lands on the sweep's smoke
-  (`merge.sh --smoke-only`). Only a change that may break the core for everyone (parser, emitter, value layout, self
-  build, seed or rebuild steps) also passes self-check + gate tier 1 before its handoff, which says so. Reds found after
-  the push go to the branch owner to fix forward at once.
+- Express (the default, AGENTS.md "Done"): a handoff lands on the sweep's smoke (`merge.sh --smoke-only`); a normal
+  or careful handoff says so and has passed its checks. Reds found after the push go to the branch owner to fix
+  forward at once.
