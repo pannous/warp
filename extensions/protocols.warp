@@ -54,15 +54,15 @@ instance_tests(subject: Node, classes: list): Node := {
 read_protocol(p: Parser, word: text): Node := {
 	if not starts_statement(p) or not block_after_name(p, word) { return ø }
 	# (`protocol` and `interface` mean the same, the note naming warp's word where the word is written)
-	if word != protocol_word { diagnosed_at(call_of("alias_word", [symbol(word), symbol(protocol_word)]), place_before(p.code, p.at, word)) }
+	if word != protocol_word { diagnosed_at(call_of("alias_word", [symbol(word), symbol(protocol_word)]), place_at(p.code, p.at)) }
 	view = value_of(type_declaration(p, word))
 	opaque(["type", ["attribute", protocol_mark, view_of(true), view#2], view#3])
 }
-# [line, column] of the word written just before the offset
-place_before(code: text, at: int, word: text): list := {
+# [line, column] of the offset in the code
+place_at(code: text, at: int): list := {
 	lines = code[0 ..< at].split("\n")
 	last = lines[#lines - 1]
-	[#lines, #last - #word + 1]
+	[#lines, #last + 1]
 }
 
 # the protocol a top statement declares, else ø
