@@ -359,6 +359,12 @@ place_text(at: list?, file: text): text := {
 	named = if #at > 2 and at#3 > 0 then source_files[at#3] else file
 	" at " + (if named then named + ":" else "") + at#1 + ":" + at#2
 }
+# n with the positions of file 0 in the source file of index `file` instead (positions.warp source_files)
+refiled(n: Node, file: int): Node := {
+	moved = children(n, child => refiled(child, file))
+	held = line_of(n)
+	if held is int and file_within(held) == 0 then positioned(moved, file_line(file, held), column_of(n)) else moved
+}
 # whether the symbol `word` occurs anywhere in n, inside an opaque layer too
 mentions(n: Node, word: text): bool := match n {
 	Symbol(name): name == word
