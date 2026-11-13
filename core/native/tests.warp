@@ -28,6 +28,12 @@ RLIMIT_CPU = 0
 case_options(): text := "--no-window --mute --no-hints --value-as-data --one-thread"
 # 128 + SIGXCPU
 CPU_LIMIT_HIT = 152
+# a forked case runs with the option `forked`: a host that cannot run in a process forked without exec (macOS's WebKit,
+# whose helper processes never answer one: lib/host/native_host/webview.warp) exits with this status, and the case runs
+# again in a process of its own, exec'd (EX_TEMPFAIL)
+FRESH_PROCESS_WANTED = 75
+# the shell's status for a command it could not run
+EXEC_FAILED = 127
 FILE_MODE = 420
 # flock's LOCK_EX | LOCK_NB
 LOCKED_NOW = 6
@@ -42,8 +48,8 @@ PROGRESS_MILLISECONDS = 60000
 MAX_SLOTS = 256
 # how often a run counts the compiler builds again, its slots following them (slot_count)
 SLOT_RECOUNT_MILLISECONDS = 3000
-# a slot's child: its pid (0 for a free slot), its run's line, when it started, its slot's lock
-struct Child { pid: i32; run: i64; started: i64; lock: i32 }
+# a slot's child: its pid (0 for a free slot), its run's line, when it started, its slot's lock, 1 when exec'd
+struct Child { pid: i32; run: i64; started: i64; lock: i32; fresh: i32 }
 CHILD_BYTES = 32
 
 tests_run(compiler: text, by_self: bool, first: int): nothing := {
@@ -119,16 +125,10 @@ all_ran(work: text, runs: text, prefix: text): nothing := {
 			if child.pid == 0 and next < total and running_count(children, capacity) < slots {
 				lock = taken_slot(pool, slots)
 				if lock >= 0 {
-					child.pid = started_run(work, field(runs, next, NEWLINE), prefix, children, capacity)
 					child.run = next
-					child.started = milliseconds_now()
 					child.lock = lock
+					done = done + started(work, runs, prefix, children, capacity, child, no)
 					next = next + 1
-					# a failed fork's -1 is no child: kill(-1) would end every process of the user
-					if child.pid < 0 {
-						run_ended(work, field(runs, child.run, NEWLINE), "fork failed", child)
-						done = done + 1
-					}
 				}
 			}
 		}
@@ -136,8 +136,12 @@ all_ran(work: text, runs: text, prefix: text): nothing := {
 		for k in 0..capacity {
 			child = child_at(children + k * CHILD_BYTES)
 			if child.pid > 0 and child.pid == ended {
-				run_ended(work, field(runs, child.run, NEWLINE), status_said(exit_code(word_at(status).value as i32)), child)
-				done = done + 1
+				code = exit_code(word_at(status).value as i32)
+				if code == FRESH_PROCESS_WANTED and child.fresh == 0 { done = done + started(work, runs, prefix, children, capacity, child, yes) }
+				else {
+					run_ended(work, field(runs, child.run, NEWLINE), status_said(code), child)
+					done = done + 1
+				}
 			}
 			if child.pid > 0 and milliseconds_now() - child.started > WALL_SECONDS * 1000 and milliseconds_now() - child.started > wall_seconds(cores, loads) * 1000 {
 				kill(child.pid, KILLED)
@@ -179,9 +183,20 @@ time_status(before: text, seconds: int, after: text): text := joined(joined(join
 # waitpid's status as the exit code, 128 and the signal for a child a signal ended
 exit_code(status: i32): i32 := if status % 256 == 0 then status / 256 % 256 else 128 + status % 128
 
+# the child's run started, forked or, `fresh`, exec'd: 1 when it ended at once, a failed fork's -1 being no child (kill(-1)
+# would end every process of the user)
+started(work: text, runs: text, prefix: text, children: pointer, slots: i32, child: Child, fresh: bool): int := {
+	child.pid = started_run(work, field(runs, child.run, NEWLINE), prefix, children, slots, fresh)
+	child.started = milliseconds_now()
+	child.fresh = if fresh then 1 else 0
+	if child.pid >= 0 { return 0 }
+	run_ended(work, field(runs, child.run, NEWLINE), "fork failed", child)
+	1
+}
 # a child running the run `<id>\t<folder>`: this warp's command `run` (or `self`) with the code, in the folder, its
-# output and errors into the run's files; the locks of the other slots closed in it
-started_run(work: text, run: text, prefix: text, children: pointer, slots: i32): i32 := {
+# output and errors into the run's files; the locks of the other slots closed in it. Forked, it runs in this process's
+# loaded engine and compilers; `fresh`, it is this warp exec'd anew
+started_run(work: text, run: text, prefix: text, children: pointer, slots: i32, fresh: bool): i32 := {
 	id = joined(joined(work, "/"), field(run, 0, TAB))
 	folder = c_string(field(run, 1, TAB))
 	given = arguments()
@@ -211,7 +226,12 @@ started_run(work: text, run: text, prefix: text, children: pointer, slots: i32):
 		chdir(folder)
 		dup2(creat(output, FILE_MODE), 1)
 		dup2(creat(errors, FILE_MODE), 2)
+		if fresh {
+			execvp(c_string(executable_path()), given.pointers)
+			exit(EXEC_FAILED)
+		}
 		arguments_replaced(given.pointers, given.count)
+		option_given("forked", "")
 		command_ran()
 		exit(0)
 	}

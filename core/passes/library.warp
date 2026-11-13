@@ -35,8 +35,15 @@ def library_text(within: text): text := file_source(run_library() + "/" + within
 # a data file of lib/ an extension reads the first time a program needs it (lib/entities.tsv, lib/web.webidl)
 def library_data(within: text): text := file_source(run_library() + "/" + within) ?? raise("the library " + run_library() + " has no " + within)
 # a standard module's text, wherever in lib/ it lies (uses.warp std_module_path: lib/host/native_host.warp too); the
-# prelude's begins with its core part, the words the compiler itself is written with
-def std_module_text(name: text): text := (if name == PRELUDE_MODULE then prelude_core_text else "") + (file_source(std_module_path(name)) ?? "")
+# prelude's begins with its core part, the words the compiler itself is written with. Joined once a compile, so the
+# memos keyed by a text (prelude_words.warp definition_slices) find it as the same text, not a fresh copy compared whole
+def std_module_text(name: text): text {
+	if not std_module_texts.has(name) {
+		std_module_texts[name] = (if name == PRELUDE_MODULE then prelude_core_text else "") + (file_source(std_module_path(name)) ?? "")
+	}
+	std_module_texts[name]
+}
+global std_module_texts = {}
 prelude_core_text = module_source("compiler/prelude_core.warp")
 prelude_core_path(): text := module_source_path("compiler/prelude_core.warp")
 # the files of the prelude's text, in its order (where its words' positions point)

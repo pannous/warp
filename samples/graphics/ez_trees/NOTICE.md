@@ -1,6 +1,6 @@
 # ez_trees
 
-Seeded tree meshes read by lib/meshlets.warp (`read_tree_mesh`) for samples/graphics/ez_forest.warp and
+Seeded tree meshes read by lib/meshlets.warp (`tree_mesh`) for samples/graphics/ez_forest.warp and
 samples/graphics/meshlet_grid.warp: pine, oak, birch, autumn and bush, each two levels of detail in the .eztree layout
 (notes/meshlets.md "Tree meshes"). One tree height is 1; the base is at the origin, y up. The trunk stays on x = 0, z = 0.
 
