@@ -149,11 +149,11 @@ RUN_SNIPPET = """(async () => {
 	}
 })()"""
 TEXT_HOLE = "(a computed text between children changes alone)"  # card web-fine-text-nodes: markup.rs text_holes
-TEXT_HOLE_CODE = 'use web\nn = 0\ndiv{ section{ h1{ "Counter" } button{ on click { n += 1 }, "add" } "clicked " + n + " times" } }'
+TEXT_HOLE_CODE = 'use web\nn = 0\nhtml{ div{ section{ h1{ "Counter" } button{ on click { n += 1 }, "add" } "clicked " + n + " times" } } }'
 TEXT_HOLE_CLICKS = 3
 TEXT_HOLE_SHOWN = "Counteraddclicked 3 times"
 COMPONENT_HOLE = "(a component instance's text changes alone)"  # card web-fine-components: component_state.rs hole_bindings
-COMPONENT_HOLE_CODE = 'use web\ndef Tally(start) {\n\tn = start\n\tsection{ button{ on click { n += 1 }, "add" } "clicked " + n + " times" }\n}\ndiv{ Tally(2) Tally(7) }'
+COMPONENT_HOLE_CODE = 'use web\ndef Tally(start): html {\n\tn = start\n\tsection{ button{ on click { n += 1 }, "add" } "clicked " + n + " times" }\n}\nhtml{ div{ Tally(2) Tally(7) } }'
 COMPONENT_HOLE_SHOWN = "addclicked 2 timesaddclicked 10 times"
 REPORT = "(?report shows the report button, which drafts an issue with the program)"  # card report-button
 REPORT_CODE = 'print "reported"'
@@ -199,13 +199,13 @@ MEMBERS_LISTED = ["count", "sum", "map", "unique"]
 MEMBERS_WAIT_MS = 10000
 ASSISTANT_PAUSE_MS = 1500  # assistant.js PAUSE_BEFORE_COMPLETION_MS and a margin
 PAGE_ELEMENTS = "(a handler reads the value of the page's element of an id: $who)"  # card page-ids: host-foreign.js callOnPage
-PAGE_ELEMENTS_CODE = 'use web\ngreeting = "-"\ndiv{ input{ id: "who" } button{ on click { greeting = "Hello " + $who }, "Greet" } p{ greeting } }'
+PAGE_ELEMENTS_CODE = 'use web\ngreeting = "-"\nhtml{ div{ input{ id: "who" } button{ on click { greeting = "Hello " + $who }, "Greet" } p{ greeting } } }'
 PAGE_ELEMENTS_NAME = "Ada"
 PAGE_ELEMENTS_SHOWN = "Hello Ada"
 # `warp build --site`: a markup program built as a static site, its page loaded and its button clicked (cards
 # blockcompiler-entries, build-site: built sites on page_render/page_event); checked last, it leaves the playground's page
 BUILT_SITE = "(a site warp build --site built shows its page and runs its handlers)"
-BUILT_SITE_CODE = 'use web\ncount = 0\ndiv{ h1{ "Count " + count } button{ on click { count += 1 }, "add" } }\n'
+BUILT_SITE_CODE = 'use web\ncount = 0\nhtml{ div{ h1{ "Count " + count } button{ on click { count += 1 }, "add" } } }\n'
 BUILT_SITE_FOLDER = "data/site-check"
 BUILT_SITE_SHOWN = ["Count 0", "Count 1"]  # the heading after main, after the click
 BUILT_SITE_WAIT_MS = 20000

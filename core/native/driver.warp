@@ -1311,13 +1311,14 @@ compiler_arguments(compiler: text): Arguments := {
 }
 # the module of a file (a compiler) run with the arguments, its machine code kept beside it (compiled_module)
 file_ran(path: text, given: Arguments): nothing := heap_file_ran(path, given, RUN_GC_HEAP_BYTES)
-# the compiler at `path` run to build the compiler (warp rebuild), with the builder's heap and machine code: a --fast
-# compile, so the compiler's own ints wrap and it links no big int (compiler.warp fast_ints); the later steps, the
-# runtime and the modules programs link, without it
+# the compiler at `path` run to build the compiler (warp rebuild), with the builder's heap and machine code: a compile
+# in fast mode, so the compiler's own ints wrap and it links no big int (compiler.warp fast_ints); the later steps, the
+# runtime and the modules programs link, in the run's own mode
 builder_ran(path: text, given: Arguments): nothing := {
-	option_given("fast", "")
+	mode = option_of("mode")
+	option_given("mode", "fast")
 	heap_file_ran(path, given, BUILDER_GC_HEAP_BYTES)
-	option_dropped("fast")
+	option_given("mode", mode)
 }
 heap_file_ran(path: text, given: Arguments, heap_bytes: i64): nothing := {
 	module = read_file(path)

@@ -120,11 +120,13 @@ undeclared(statements: list): list := {
 
 # `map default ListMap` of a built-in protocol: [map, ListMap], the protocol and the class its Map{…} builds from
 # then on (decision lowercase-protocols: a protocol's capitalized name is its default class); else ø
-# (the early sugar has made it `map ?? ListMap`, extensions/sugar/defaults.warp, which as a statement means nothing else)
+# (the phrase as written: the early sugar's fallback `x default y` leaves a class on its right alone,
+# extensions/sugar/defaults.warp)
 default_named(statement: Node): list? := {
-	if not (is_key(statement, Op.Coalesce) and built_in_named(key_of(statement)) and value_of(statement) is symbol) { return ø }
-	[name_of(key_of(statement)).lower(), name_of(value_of(statement))]
+	if not (is_spaced(statement) and #statement == 3 and statement#2 == symbol(DEFAULT_WORD) and built_in_named(statement#1) and statement#3 is symbol) { return ø }
+	[name_of(statement#1).lower(), name_of(statement#3)]
 }
+DEFAULT_WORD = "default"
 built_in_named(n: Node): bool := n is symbol and built_in_protocols().any(built_in => built_in.name == name_of(n).lower())
 # `Map{a: 1}` and `map{a: 1}`: the protocol's default class built of the entries, the hashed map itself unless a
 # `map default` names a class, which is then called with it (`ListMap({a: 1})`); `Map x = v` the same of v. An entry
