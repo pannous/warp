@@ -9,10 +9,9 @@
 # triage-held 2026-11-06: Python-style def …: return, foreign syntax :: 'def g(a, b, c): return a*100+b*10+c; g(1, c=9, b=2)'	129
 # triage-held 2026-11-06: Python-style def …: return, foreign syntax :: 'def g(a, b=5, c=7): return a*100+b*10+c; g(1, c=9)'	159
 
-# named_arguments_set_free_variables_of_the_body
-'f y := y*y+v; f(y=2, v=3)'	7
+# (a named argument setting a free variable of the body, `f y := y*y+v; f(y=2, v=3)`, is unpinned: dynamic scoping;
+# `f(y, v = 10)` says it; warp-interviewer 11-13)
 # triage-held 2026-11-06: a block called with named values, `{x*y}(x:2 y:3)` :: 'g={x*y}; g(x:2 y:3)'	6
-'v=10; f(y) := y+v; f(y=1) + f(y=1, v=2)'	14
 
 # a_flag_parameter_takes_its_default
 # (a bare flag name, `f(3, loud)` for `f(3, loud: yes)`, is unpinned: it would read an unknown name as a flag, a guess;
