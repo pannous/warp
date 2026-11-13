@@ -5,8 +5,8 @@
 # as before.
 last_results_extension = Extension{name: "last_results", passes_before: {"tries": resolved_its}}
 LAST_RESULT = symbol("it·last")
-# a definition's `it` first (its parameter), then the program's (the last result)
-resolved_its(program: Node): Node := last_results(parameter_its(program))
+# a returned block's `it` first (its own), then a definition's (its parameter), then the program's (the last result)
+resolved_its(program: Node): Node := last_results(parameter_its(returned_closures(program)))
 IT = symbol("it")
 
 last_results(program: Node): Node := {
@@ -56,3 +56,15 @@ parameter_its(program: Node): Node := bottom_up(program, n => {
 	if same(named, body) then n else Key(key_of(n), Op.Define, named)
 })
 it_named(n: Node, name: Node): Node := if n == IT then name else if binds_it(n) then n else children(n, part => it_named(part, name))
+
+# `def mk(k){ {it + k} }`, `return {it * k}`: a block a function gives back that reads its own `it` is a closure of one
+# parameter, it => {it + k} (wiki/it.md: a block using it is a one-parameter closure)
+returned_closures(program: Node): Node := bottom_up(program, n => {
+	if is_spaced(n) and #n == 2 and n#1 == RETURN { return group_like(n, [RETURN, closure_of(n#2)]) }
+	if definition_of(n) == ø or not is_curly_group(value_of(n)) or #value_of(n) == 0 { return n }
+	body = value_of(n)
+	last = body#(#body)
+	if same(closure_of(last), last) then n else Key(key_of(n), Op.Define, group_like(body, items_of(body)[0 ..< #body - 1] + [closure_of(last)]))
+})
+RETURN = symbol("return")
+closure_of(block: Node): Node := if is_curly_group(block) and items_of(block).any(reads_last_result) then Key(IT, Op.Arrow, block) else block
