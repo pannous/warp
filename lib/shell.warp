@@ -14,7 +14,7 @@ SHELL_CD = "cd"
 // the names in a folder, the working directory by default, sorted and without the hidden ones, as ls shows them
 ls(folder: text = ".") := [name for name in list_files(folder) if not name.starts_with(".")]
 // the working directory, as cwd gives it
-pwd := cwd
+pwd() := cwd
 // `cd ~/projects`: the working directory changes, for this program and the commands it runs; the new one
 cd(folder: text = "~") := std_io("os", "cd", [home_expanded(folder)])
 // a file's text
