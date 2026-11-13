@@ -5,7 +5,7 @@ name: windows probe
 on:
   push:
     branches: [windows-build-check]
-    paths: [.github/workflows/windows-probe.yml, lib/native/**, scripts/wasmtime-c-api.sh, crates/wasmtime-capi/**]
+    paths: [.github/workflows/windows-probe.yml, .github/windows-layer-probe.c, lib/native/**, scripts/wasmtime-c-api.sh, crates/wasmtime-capi/**]
   workflow_dispatch:
 env:
   WABT: 1.0.42
@@ -49,6 +49,9 @@ jobs:
           -static -pthread -Wl,--export-all-symbols -Wl,--stack,0x10000000
     - name: hello
       run: lib/warp.exe --version && lib/warp.exe samples/hello/hello.warp | grep Hello
+    - name: the layer's calls
+      if: always()
+      run: clang -Ilib -o layer.exe .github/windows-layer-probe.c && ./layer.exe
     - name: what runs
       if: always()
       run: |
