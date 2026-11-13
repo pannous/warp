@@ -1,12 +1,12 @@
 #!/usr/bin/env warp
-# A red sea bream swimming. The mesh, the pose and the ray test live in lib/fish_mesh.warp (notes/fish.md).
+# A red sea bream swimming. The mesh, the pose and the ray test live in samples/gpu/fish_mesh.warp (notes/fish.md).
 # samples/gpu/madai.fish is the Fish Kit's low mesh with a colour baked on each vertex. There is no vertex
 # stage, so this frame poses the mesh once and the shader ray-tests those triangles. Part ids are the kit's:
 # 0 body, 1 dorsal, 2 anal, 3 tail, 4 pectoral, 5 pelvic, 6 eye, 7 gill, 8 lower jaw, 9 upper jaw.
 use graphics
 use math
 use file
-use fish_mesh
+use "fish_mesh.warp"
 
 # the camera turns around the fish, which stays at the origin, heading along its own +X
 frame_width = 320
