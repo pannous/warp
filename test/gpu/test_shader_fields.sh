@@ -45,4 +45,27 @@ height = 1
 show = shader { return $dye(at.xy); }
 other = shader { return vec4f(1.0); }
 paint([other, show])' | grep -o 'fix: put dye in the list')" "fix: put dye in the list"
+# fields declared as values, drawn by program functions: `velocity: advect` draws the field velocity, which a function
+# reads at a cell, velocity(x, y) (card fluid-25d-dsl)
+check "a declared field keeps what its function drew the frame before" "$(last_line declared 'width = 2
+height = 1
+count = field(1, 2, 1)
+grow(x, y) := count(x, y) + 0.25
+show(x, y) := [count(x, y), 0, 0]
+paint([count: grow, show])
+pixels = paint([count: grow, show])
+red = int(pixels#1 / 65536) % 256
+print red > 120 and red < 135')" "yes"
+check "a function giving another width than its field holds is refused" "$(last_line wide 'width = 2
+height = 1
+count = field(1, 2, 1)
+grow(x, y) := [count(x, y), 1]
+show(x, y) := [count(x, y), 0, 0]
+paint([count: grow, show])' | grep -o 'gives vec2f, but the field it draws holds f32')" "gives vec2f, but the field it draws holds f32"
+check "a function before the last names the field it draws" "$(last_line unnamed 'width = 2
+height = 1
+count = field(1, 2, 1)
+grow(x, y) := count(x, y) + 0.25
+show(x, y) := [count(x, y), 0, 0]
+paint([grow, show])' | grep -o 'fix: name it')" "fix: name it"
 exit $((failures > 0))

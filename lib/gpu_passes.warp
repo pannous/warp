@@ -24,16 +24,20 @@ gpu_pass(shader: node, fields: int, into: node, values: node): int := {
 // gives each pass as [its name, its shader, its values]. Each pass but the last draws into the field of its name, kept
 // from frame to frame at the painting's size; the last shows, in the window, else as the painting of its pixels, which it gives. A
 // shader reads a field as `$name(at)`, at the pixel `at`: the latest written earlier in the frame, else last frame's,
-// so a shader reading its own name reads what it drew the frame before
+// so a shader reading its own name reads what it drew the frame before.
+// Passes of program functions, `paint([velocity: advect, show])` (lib/shaders.warp function_pass), give a fourth item, the
+// size of the field they draw: the fields are made at it, and its functions read them at a cell, `velocity(x, y)`
 global painted_fields = {}
 paint_passes(passes: list, width: int, height: int) := {
 	names = passes.map(pass => pass#1)
 	shown = passes.last
+	if names[.. #names - 1].any(name => name == "") { raise "each pass before the last draws into a field: fix: name it, `velocity: advect`" }
+	size = fields_size(passes, width, height)
 	// (a last shader whose field is read draws into it too, then shows it)
 	drawn = if passes.any(pass => reads_field(pass#2, shown#1)) then passes else [passes#i for i in 1 ..< #passes]
-	fields = fields_kept(drawn.map(pass => pass#1), width, height)
-	for pass in drawn { gpu_pass(fields_placed(pass#2, names), fields, pass#1, pass#3) }
-	if drawn != passes { shown = [shown#1, fields_placed(shown#2, names), shown#3] } else { shown = [shown#1, FIELD_SHOWN.replace(FIELD_HOLE, shown#1), {}] }
+	fields = fields_kept(drawn.map(pass => pass#1), size#1, size#2)
+	for pass in drawn { gpu_pass(fields_placed(pass#2, names, read_scale(pass)), fields, pass#1, pass#3) }
+	if drawn != passes { shown = [shown#1, fields_placed(shown#2, names, read_scale(shown)), shown#3] } else { shown = [shown#1, FIELD_SHOWN.replace(FIELD_HOLE, shown#1), {}] }
 	if window_open() or window_possible() { return gpu_show_sized(shown#2, fields, width, height, shown#3) }
 	pixels = gpu_picture_sized(shown#2, fields, width, height, shown#3)
 	paint(pixels, width, height)
@@ -45,15 +49,29 @@ fields_kept(names: list, width: int, height: int): int := {
 	if not painted_fields.has(key) { painted_fields[key] = gpu_fields(width, height, names) }
 	painted_fields[key]
 }
+// the size the fields are made at: the one their functions' passes declare, else the painting's. Declared fields keep
+// numbers beyond 0..1, which a GPU storing 8 bits a channel cannot
+NARROW_FORMAT = "rgba8unorm"
+fields_size(passes: list, width: int, height: int): list := {
+	declared = passes.filter(pass => #pass > 3 and pass#4 != ø).map(pass => pass#4)
+	if #declared == 0 { return [width, height] }
+	if declared.any(size => size != declared#1) { raise "paint's fields share one size; these declare " + declared.map(size => "${size#1}×${size#2}").join(", ") }
+	if text(gpu_fields_format()) == NARROW_FORMAT { raise "this GPU keeps a field in 8 bits a channel, too few for numbers beyond 0..1" }
+	declared#1
+}
+// what a pixel `at` is divided by to sample a field: a text shader's `$dye(at)` reads at a pixel of the painting, a
+// function's `dye(x, y)` at a cell of the field
+read_scale(pass: list): text := if #pass > 3 and pass#4 != ø then "vec2f(${pass#4#1}.0, ${pass#4#2}.0)" else "values.size"
 // a shader's reads of the fields, `values.dye(at)` as its `$dye(at)` was written, as reads of the field at that pixel
 FIELD_HOLE = "NAME"
-FIELD_AT = "\nfn field_NAME_at(at: vec2f) -> vec4f { return field_NAME(at / values.size); }\n"
+FIELD_SCALE = "SCALE"
+FIELD_AT = "\nfn field_NAME_at(at: vec2f) -> vec4f { return field_NAME(at / SCALE); }\n"
 FIELD_SHOWN = "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return field_NAME(at.xy / values.size); }"
 reads_field(shader: text, name: text): bool := shader.contains("values." + name + "(")
 // a read of a field no shader of the list draws is refused, naming the shader to put before it
-fields_placed(shader: text, names: list): text := {
+fields_placed(shader: text, names: list, scale: text): text := {
 	placed = shader
-	for name in names.filter(name => reads_field(shader, name)) { placed = placed.replace("values." + name + "(", "field_" + name + "_at(") + FIELD_AT.replace(FIELD_HOLE, name) }
+	for name in names.filter(name => reads_field(shader, name)) { placed = placed.replace("values." + name + "(", "field_" + name + "_at(") + FIELD_AT.replace(FIELD_HOLE, name).replace(FIELD_SCALE, scale) }
 	for rest in placed.split("values.")[1 ..] {
 		name = leading_word(rest)
 		if name != "" and rest[#name ..].starts_with("(") { raise "$" + name + "(at) reads a field no shader of paint's list draws: fix: put " + name + " in the list before the shader reading it" }
