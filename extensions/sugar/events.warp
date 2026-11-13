@@ -19,12 +19,16 @@ rewrite when $c $body: block => $refused where yes_or_no($c) and $refused = when
 rewrite when $c: $body => $refused where yes_or_no($c) and $refused = when_readings($c)
 rewrite on $e $body: block => listen(data $e, event => $body, no) where $e is symbol
 rewrite on $e: $body => listen(data $e, event => $body, no) where $e is symbol
-rewrite once $e $body: block => listen(data $e, event => $body, yes) where $e is symbol
+rewrite once $e $body: block => listen(data $e, event => $body, yes) where $e is symbol and $e is unbound
 rewrite remove $h from listeners of $e => unlisten(data $e, $h) where $e is symbol
 # `remove alarm`: a listener knows its event (lib/prelude.warp Listener), short for `remove alarm from listeners of t`;
 # a rule, as a function remove(listener) would take every `m.remove(k)` of the built-in method (card listener-address)
 rewrite remove $h => listener_removed($h) where $h is symbol and not shadowed
-rewrite listeners of ($e -= $h) => unlisten(data $e, $h) where $e is symbol
+# `remove h from alarm`, `listeners of alarm -= h` (wiki Footguns "Event handlers"); an event is a name the program
+# never binds, so `remove 3 from xs` of a list stays the list's
+rewrite remove $h from $e => unlisten(data $e, $h) where $e is symbol and $e is unbound
+rewrite listeners of $e -= $h => unlisten(data $e, $h) where $e is symbol
+rewrite clear listeners of $e => listeners_cleared(data $e) where $e is symbol
 rewrite count listeners of $e => count(listeners_of(data $e)) where $e is symbol
 rewrite listeners of $e => listeners_of(data $e) where $e is symbol
 rewrite emit $e: $v => emitted(data $e, $v)

@@ -1049,6 +1049,11 @@ unlisten(name: any, listener: any): any := {
 	if key in event_listeners { kept_listeners(key, i => listener_numbers[key]#i != number) }
 	ø
 }
+// `clear listeners of alarm`: none listen any more
+listeners_cleared(name: any): any := {
+	if name_of(name) in event_listeners { kept_listeners(name_of(name), i => no) }
+	ø
+}
 // the listeners of an event at the positions keep holds for
 kept_listeners(key: text, keep: function): any := {
 	listeners = []
