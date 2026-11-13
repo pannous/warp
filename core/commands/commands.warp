@@ -5,7 +5,7 @@
 # the refusals of what plain WASI cannot run)
 use "../host_io.warp"
 
-core_commands = ["compile", "runtime", "module", "modules", "optimize", "baked-current"]
+core_commands = ["compile", "runtime", "module", "modules", "modules-plan", "optimize", "baked-current"]
 is_command(word: text): bool := word in core_commands or word in extension_command_words()
 
 quoted_path(path: text): text := "\"" + path + "\""
