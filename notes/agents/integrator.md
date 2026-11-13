@@ -110,7 +110,7 @@ skipped the question is refused and goes to warp-interviewer; there is no FYI pa
 
 ## Landing
 
-- A super-express handoff (AGENTS.md "Done") lands on the sweep's smoke alone; its self-check and gate run after the push.
+- A handoff lands on the sweep's smoke alone; only one that may break the core for everyone (AGENTS.md "Done") brings its self-check + gate tier 1.
 - Landing checks, then the handoff (Handoff, above). The worker does not push to main: `warp format yes <files>` on the .warp files you
   wrote; merge origin/main into the branch (real merges, you resolve conflicts) with a merge message summing up the
   change; on that merge run the smoke test (`scripts/smoke.sh <worktree>`; core/ changes: it + `scripts/self-check.sh` + the gate probes, `scripts/gate.sh --tiers 1 <worktree>`, seconds; "Testing" above);

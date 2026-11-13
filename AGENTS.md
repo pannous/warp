@@ -334,15 +334,13 @@ main and the playground. The worker does not land it, push it to main, or publis
 ## Done
 - A major feature ships with samples/<topic>.warp (chmod +x) and its wiki page updated in the same task.
 - Landing checks, then the handoff: `warp format yes <files>` on the .warp files you wrote; merge origin/main into
-  the branch (a real merge, its message summing up the change); on that merge the smoke test (core/ or extensions/:
-  + `scripts/self-check.sh` + `scripts/gate.sh --tiers 1 <worktree>`); hand the branch and a patch to
+  the branch (a real merge, its message summing up the change); on that merge the smoke test (and, for a change that
+  may break the core, `scripts/self-check.sh` + `scripts/gate.sh --tiers 1 <worktree>`); hand the branch and a patch to
   warp-integrator, who lands it (notes/agents/integrator.md "Landing"). Then `todo done <card> <commit>`.
-- Express is the default: a phase is handed to the integrator as soon as its smoke (+ self-check and gate for core/) is
-  green; never wait for slower tests. The next phase starts at once, branched from that tip; what the slower tests
-  find is fixed forward as new commits, never by rewriting the landed phase. Only a red smoke on the merge stops the
-  next phase.
-- Super express (urgent and user 🐞 cards, or any small change by the worker's choice): hand off on the smoke alone,
-  core/ included; self-check and gate run after the push, and their reds are fixed forward at once.
+- Handoff on a green smoke (the compiler builds and says Hello); a change that may break the core for everyone
+  (parser, emitter, value layout, self build, seed or rebuild steps) also passes self-check + gate tier 1 first.
+  Phases go as soon as they are green, the next one branched from that tip; what later tests find is fixed forward,
+  never by rewriting a landed phase.
 - Results the user can try get a try line (`/Users/me/dev/bin/warp <full path>`) to warp-interviewer.
 - Never retire holding a card: done, or `todo release <card> "done: …; left: …; branch: …"`.
 - After the push remove your worktree and branches (local and remote). Deleting merged/stale things needs no
