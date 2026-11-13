@@ -228,3 +228,32 @@ dropped_errors(statement: Node): list := {
 	if is_group(n) and #n > 0 and (bracket_of(n) == "{" or separator_of(n) in statement_separators) { return dropped_errors(n#(#n)) }
 	[]
 }
+
+# `7//2`, `x//=3` meant as floor division (decision floor-division): `//` glued after an operand, before one or `=`,
+# starts a comment all the same, so the line ends before it; the warning names `/!`. `x = 7 // note` stays quiet
+floor_division_comments(source: text) := {
+	n = source.length
+	line_starts = line_starts_of(source)
+	at = 0
+	while at < n {
+		end = skipped_end(source, at, n)
+		if end > at and divides_glued(source, at, end) { floor_division_comment(source, at, end, line_starts) }
+		at = if end > at then end else at + 1
+	}
+}
+# a `//` comment from at to end, glued after an operand and followed by one or by `=`
+divides_glued(source: text, at: int, end: int): bool := {
+	if at == 0 or end - at < 3 or source[at ..< at + 2] != "//" { return no }
+	after = source[at + 2]
+	ends_operand(source[at - 1]) and (is_name_char(after) or after == '(' or after == '=')
+}
+ends_operand(c: text): bool := is_name_char(c) or c == ')' or c == ']'
+# the line as written and as floor division: `x = 7//2` is `x = 7 /! 2`, `x//=3` `x /!= 3`
+floor_division_comment(source: text, at: int, end: int, line_starts: list) := {
+	line = line_starts.filter(start => start <= at).length
+	start = line_starts#line
+	before = source[start ..< at].trim()
+	comment = source[at + 2 ..< end]
+	divided = if comment.starts_with("=") then before + " /!= " + comment[1 ..].trim() else before + " /! " + comment.trim()
+	diagnosed_at(call_of("floor_division_comment", [source[start ..< end].trim(), divided]), [line, at - start + 1])
+}

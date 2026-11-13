@@ -33,3 +33,14 @@
 'f() := { text = 3; t = Text("a"); [text, t] }; f()'	[3, 'a']
 '[Number(3) + 1, Text("b") + "c"]'	[4, 'bc']
 'n = List([1, 2], Bracket.Square, Separator.Comma); [#n, n.bracket]'	[2, '[']
+
+# a match arm's pattern names are its own, a function of the program with that name is not called there (card match-pattern)
+'separator(m: hex) := 7
+f(n) := match n { List(items, bracket, separator): separator as text, _: "none" }
+f(parse("(a, b)"))'	","
+'separator(m: hex) := 7
+f(n) := match n { List(items, bracket, s): text(separator(5)), _: "none" }
+f(parse("(a, b)"))'	"7"
+'width(m: hex) := 7
+f(n) := match n { Key(key, op, width): width as text, _: "none" }
+f(parse("a: 3"))'	"3"

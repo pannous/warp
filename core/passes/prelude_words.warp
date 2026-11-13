@@ -484,6 +484,9 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	if #reached == 0 { return program }
 	brought = []
 	for slice in slices { if slice#5 in reached { brought += reached[slice#5] } }
+	# a used module's definitions get the rules their words call for, as the module's own build gives them: lib/splats.warp's
+	# `centres: [f32] = float[n]` a GPU list as the same line in the program is one; the prelude's are written plain
+	if in_front { brought = statements_in(own_rules_applied(separated(bracketed(brought, ""), ";"), "")) }
 	# a value the program reaches, `online := system_value("online") != 0`, holds before the program reads it; a
 	# function goes where the module wants its definitions (card prelude-definition-reachability)
 	values = brought.filter(goes_in_front)
@@ -512,6 +515,7 @@ slices_by_name(slices: list): map := {
 # prelude's hex_text(n: int) too (decision int-type-overloads); a definition of another parameter count replaces it, which a
 # name passed as a function could no longer tell (the compiler's shader_values(s, given, program))
 overloads_brought(slice: list, program: Node): bool := {
+	global overload_marks
 	if not brought_names.has(slice#1) { return no }
 	heads = statements_in(program).filter(statement => declared_name(statement) == slice#1).map(definition_head_of)
 	if heads.any(head => head == ø) { return no }
