@@ -400,7 +400,8 @@ names_word(name: text, count: int, lowering: Lowering): bool := lowering.arities
 # the names the program gives a function value by op, named unlike any of its functions: the fields (Op.Colon)
 # `{answer: answer}` of a parameter `answer: function`, `{d: x => x + 1}`, `{f: square}` of a function with parameters;
 # the variables (Op.Assign) `sq = x => x*x`
-callable_names_of(program: Node, op: Op, arities: map, function_parameters: map): map := keyed_names(program, op, n => not arities.has(name_of(key_of(n))) and gives_function(value_of(n), arities, function_parameters))
+# (a field may share a function's name, the receiver choosing at run time, dotted_lowered; a variable may not)
+callable_names_of(program: Node, op: Op, arities: map, function_parameters: map): map := keyed_names(program, op, n => not (op == Op.Assign and arities.has(name_of(key_of(n)))) and gives_function(value_of(n), arities, function_parameters))
 # the names the program keys by op whose key holds: by Op.Colon its objects' fields, `{a: 1}`, `class T { a: int }`
 keyed_names(program: Node, op: Op, holds: function): map := {
 	names = {}
