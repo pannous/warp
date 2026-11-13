@@ -10,7 +10,7 @@
 # compared, also > <= >= == !=), `$f takes value` (f's first parameter is typed, not yes/no: of a function of the
 # program or a typed library word), `$f takes int` (typed int), `$f takes number` (typed a number: int, float…), `$x is
 # vector` (code that may give a list: extensions/sugar/broadcasting.warp) and `$f takes one` (a library word the program leaves
-# free, of exactly one typed value); `$e is enum` (a name or text of an enum the program declares), `$c is case` (a
+# free, of exactly one typed value), `$f takes amount` (that, or the program's own function of one value); `$e is enum` (a name or text of an enum the program declares), `$c is case` (a
 # case of the one enum declaring it) and `$c is case of $e` (of the enum $e names; $e unbound, the condition binds it
 # to that enum), whose cases `cases of $e` lists among a template's items. A place word among them, `statement`, `condition`
 # (of an if or while), `member` (of a class body), `key` or `value` (of `k: v`), `parameter` (of a definition's head,
@@ -93,6 +93,9 @@ number_word = "number"
 numeric_parameter_types = ["number", "int", "float", "i32", "i64", "f32", "f64", "u8", "u32", "Real", "real"]
 # `where $f takes one`: a library word the program leaves free whose first line takes exactly one typed value
 one_word = "one"
+# `where $f takes amount`: such a word, or a function of the program's own of exactly one value, `bars(n: int)`, called
+# backward on the amount before it (`2 bars`); the prefix rules keep `one`, so `apply sq 3` still gives apply both
+amount_word = "amount"
 # the sugar of the language (notes/layers.md), extensions/sugar/<name>.warp: rewrite lines only, whose rules apply to every
 # program as a standard module's do, bringing no `use` along; a rule of no word (`$a ?? $b`) applies everywhere.
 # Four steps of the passes apply them (passes.warp): the first sugar before the passes that would read its forms as
@@ -1203,8 +1206,8 @@ first_parameter_fits(code: Node, wanted: text): bool := {
 	if given != ø { return wanted == number_word and takes_numbers(given.parameters) }
 	if not (code is symbol) or locally_bound(code) { return no }
 	word = name_of(code)
-	# a library word the program leaves free, or a function of the program's own of exactly one value, `bars(n: int)`
-	if wanted == one_word { return if rule_scope.has(word) then binds_as(rule_scope, word, Meaning.Function) and (rule_signatures.get(word) ?? []).any(signature => #signature.parameters == 1 and not signature.parameters#1.rest) else takes_one_typed_value(unaliased(word)) }
+	if wanted == one_word { return not rule_scope.has(word) and takes_one_typed_value(unaliased(word)) }
+	if wanted == amount_word { return if rule_scope.has(word) then binds_as(rule_scope, word, Meaning.Function) and (rule_signatures.get(word) ?? []).any(signature => #signature.parameters == 1 and not signature.parameters#1.rest) else takes_one_typed_value(unaliased(word)) }
 	if wanted == number_word { return takes_only_numbers(word, matched_arity(code)) }
 	typed = if first_parameter_types.has(word) then first_parameter_types[word] else library_first_type(word)
 	if typed == ø or typed == "" { typed = conversion_type(word) }
@@ -1372,7 +1375,7 @@ condition_holds(condition: Node, bound: map): bool := {
 		if rule_in_attribute and bound[hole] is symbol and not program_word(name_of(bound[hole])) { return no }
 		if not first_parameter_fits(bound[hole], name_of(condition#3)) { return no }
 		# `$f takes one` binds the word the synonym calls: `size xs` is count(xs)
-		if name_of(condition#3) == one_word { bound[hole] = placed(symbol(synonym_word(name_of(bound[hole]))), bound[hole]) }
+		if name_of(condition#3) in [one_word, amount_word] { bound[hole] = placed(symbol(synonym_word(name_of(bound[hole]))), bound[hole]) }
 		return yes
 	}
 	if is_context_word(condition) { return context_holds(rule_matched, name_of(condition)) }

@@ -20,10 +20,11 @@ rewrite $c then $v => $refused where $refused = then_without_if($c, $v)
 # a method of more than its receiver keeps the function after it as its argument: `xs.map length` is xs.map(length),
 # while `xs.first abs` applies backward below, abs(xs.first)
 rewrite ($x.$m $f) => $x.$m($f) where $f is function and $m is function and not $m takes one
-# backward application (decision postfix-words): a phrase of exactly two items, a value then a library word of one
-# typed value, is its call, `16 sqrt` is sqrt(16), `-7 abs` abs(-7); a function first keeps the prefix meaning above,
-# and a use line is none: `use keys` names the module, never keys(use)
-rewrite ($x $f) => $bound where not $x is function and $f takes one and $bound = call_bound($x, $f)
+# backward application (decision postfix-words): a value then a word of one value, a library word or the program's
+# own, is its call, `16 sqrt` is sqrt(16), `-7 abs` abs(-7); the word binds tighter than any operator, as a unit does,
+# `1 + 2 bars` is 1 + bars(2); a function first keeps the prefix meaning above, and a use line is none: `use keys`
+# names the module, never keys(use)
+rewrite ($x $f) => $bound where not $x is function and $f takes amount and $bound = call_bound($x, $f)
 # before several words it takes the phrase they make: `reverse sort xs` is `reverse(sort xs)`, then `reverse(sort(xs))`
 rewrite ($f $x $more...) => $f(($x $more...)) where $f takes one
 # a function of the library written in warp (`first`, `last`, `sum`: no typed `from` line) before such a word and its
