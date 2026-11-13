@@ -461,20 +461,23 @@ member_laid_out(layout: Layout, name: text, value: any): text := {
 		return ""
 	}
 	if value is list {
-		# a GPU list [f32] whose length is a whole number of vec4f, or one [vec4], is already the storage array's bytes
-		if gpu_list_place(value) >= 0 and GPU_CELLS[gpu_list_cell(value)] in VEC4F_CELLS and #value > 0 and gpu_list_bytes(value) % VEC4F_BYTES == 0 {
+		# a GPU list [f32] of a vec4f or more, or one [vec4], is already the storage array's bytes, its tail padded to a
+		# whole vec4f (storage_bytes)
+		if gpu_list_place(value) >= 0 and GPU_CELLS[gpu_list_cell(value)] in VEC4F_CELLS and (#value >= VECTOR_FLOATS or gpu_list_cell(value) > 0) {
 			return array_laid(layout, name, value)
 		}
-		vectors = value.any(item => item is list)
-		if vectors or #value > VECTOR_FLOATS {
+		# (any other GPU list read once as a for reads it: it takes no list word)
+		items = if gpu_list_place(value) >= 0 then [item for item in value] else value
+		vectors = items.any(item => item is list)
+		if vectors or #items > VECTOR_FLOATS {
 			array_walked(name, value, vectors)
-			numbers = if vectors then [if i < #item then float(item[i]) else 0.0 for item in value for i in 0 ..< VECTOR_FLOATS] else [float(x) for x in value]
+			numbers = if vectors then [if i < #item then float(item[i]) else 0.0 for item in items for i in 0 ..< VECTOR_FLOATS] else [float(x) for x in items]
 			padded(numbers, VECTOR_FLOATS)
 			if #numbers == 0 { numbers = [0.0, 0.0, 0.0, 0.0] }
 			return array_laid(layout, name, numbers)
 		}
-		if #value < 1 { return "is one number or a list of two to four" }
-		return uniform_member(layout, name, [float(x) for x in value])
+		if #items < 1 { return "is one number or a list of two to four" }
+		return uniform_member(layout, name, [float(x) for x in items])
 	}
 	if name == COMPUTE_NAME {
 		layout.compute = text(value)
@@ -493,7 +496,7 @@ member_laid_out(layout: Layout, name: text, value: any): text := {
 // numbers becomes a GPU list [f32], a list of vectors one [vec4]
 array_walked(name: text, value: list, vectors: bool) := {
 	walked = "its numbers are walked to f32 bits on every upload"
-	if gpu_list_place(value) >= 0 { slow("the GPU list " + name + " [" + GPU_CELLS[gpu_list_cell(value)] + "] is no whole number of vec4f: " + walked, "make it as " + name + ": [vec4] = …") }
+	if gpu_list_place(value) >= 0 { slow("the GPU list " + name + " [" + GPU_CELLS[gpu_list_cell(value)] + "] is no array<vec4f>: " + walked, "make it as " + name + ": [f32] = … or [vec4] = …") }
 	else if vectors { slow("the storage array " + name + " is a list of vectors: " + walked, "make it as " + name + ": [vec4] = …") }
 	else { slow("the storage array " + name + " is not a GPU list: " + walked, "make it as " + name + ": [f32] = …") }
 }
@@ -669,11 +672,12 @@ kept_buffer(name: text, bytes: int, usage: int): int := {
 gpu_storage(name: text, cells: any): int := {
 	place = gpu_list_place(cells)
 	if place < 0 { return 0 }
-	bytes = gpu_list_bytes(cells)
-	buffer = kept_buffer(name, bytes, BUFFER_STORAGE)
-	wgpuQueueWriteBuffer(queue, buffer, 0, program_cells(place), bytes)
+	buffer = kept_buffer(name, storage_bytes(cells), BUFFER_STORAGE)
+	wgpuQueueWriteBuffer(queue, buffer, 0, program_cells(place), gpu_list_bytes(cells))
 	buffer
 }
+// a GPU list's bytes as a storage array<vec4f> binds them: rounded up to a whole vec4f, the tail zero
+storage_bytes(cells: any): int := (gpu_list_bytes(cells) + VEC4F_BYTES - 1) /! VEC4F_BYTES * VEC4F_BYTES
 // where a GPU list's cells start in the program's memory, as C sees them; never a walk number by number where the
 // driver recorded no memory (the run's start records it)
 program_cells(place: int): int := {
@@ -806,7 +810,7 @@ stored_array(name: text, value: any, usage: int): any := {
 		return [buffer, atlas_span]
 	}
 	listed = gpu_storage(name, value)
-	if listed != 0 { return [listed, gpu_list_bytes(value)] }
+	if listed != 0 { return [listed, storage_bytes(value)] }
 	cells = f32_cells(value)
 	[cells_kept(name, cells, usage), #cells * 4]
 }
