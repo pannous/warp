@@ -10,10 +10,10 @@
 # travelling cosines whose Jacobian focuses light, tropical absorption, and a
 # leader whose followers hold hashed slots in its heading frame.
 # The fish are the Fish Kit's madai mesh (CC0, なちゃっと), one posed mesh shared
-# by every fish (lib/fish_mesh.warp, notes/aquarium.md). paint() is one fragment shader.
+# by every fish (samples/gpu/fish_mesh.warp, notes/aquarium.md). paint() is one fragment shader.
 use math
 use file
-use "fish_mesh2.warp"
+use "fish_mesh.warp"
 
 # the clock the sample advances; a still is second 0
 global aquarium_time = 0.0
