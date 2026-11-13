@@ -167,9 +167,8 @@ mark_main() {
 # the files `warp rebuild` writes beside a compiler, kept and fetched with it, as found in the folder: runtime.wasm
 # beside warp.wasm (card runtime-prebuilt) with its machine code, which linked runs load (card runtime-cwasm-shipped),
 # the standard modules in modules/ (card modules-prebuilt) and the library index, which a compile reads
-# (library.warp LIBRARY_INDEX; card store-hit-words-index) with the sugar's rules packed (rewrites.warp SUGAR_RULES_FILE);
-# and each compiler's own library, its builder's runtime and unicode module (modules.sh companion_files)
-companions() { (cd "$2" && ls $(companion_files "$1.wasm") $([ "$1" = warp ] && echo runtime.wasm.cwasm runtime.wasm 'modules/*.wasm' modules/index.tsv modules/sugar_rules.packed) 2>/dev/null); }
+# (library.warp LIBRARY_INDEX; card store-hit-words-index) with the sugar's rules packed (rewrites.warp SUGAR_RULES_FILE)
+companions() { [ "$1" = warp ] && (cd "$2" && ls runtime.wasm.cwasm runtime.wasm modules/*.wasm modules/index.tsv modules/sugar_rules.packed 2>/dev/null); }
 # an entry stored or fetched before index.tsv was kept with its modules gets it once, as `warp rebuild` writes it:
 # the modules step of its own compiler into a scratch folder, only the index taken (store-hit-words-index)
 words_kept() {
@@ -202,7 +201,6 @@ promoted_untested() {
 	for part in "" .driver.cwasm .driver.cwasm.key .driver.build.cwasm .driver.build.cwasm.key; do
 		[ -f "$compilers/warp.wasm$part" ] && copied "$compilers/warp.wasm$part" "$file$part"
 	done
-	companion_copied "$compilers/warp.wasm" "$file"
 	inputs_line >"$file.inputs"
 	published warp-self
 }
@@ -275,7 +273,7 @@ reused_stored() {
 	local log=$1 stored=$store/code/$code_hash/warp.wasm new=$compilers/reusing-$$.wasm
 	[ -f "$stored" ] || return 1
 	logged warp "miss-reusing-$(basename "$(readlink "$store/code/$code_hash")")"
-	copied "$stored" "$new" && companion_copied "$stored" "$new" || return 1
+	copied "$stored" "$new" || return 1
 	echo "rebuild step runtime" >"$log"
 	modules_step_starts "$store/code/$code_hash"
 	if ! (cd "$tree" && rm -f "$compilers/runtime.wasm.cwasm" && "$warp" --lib "$lib" "$new" runtime "$compilers/runtime.wasm" &&
@@ -288,13 +286,12 @@ reused_stored() {
 	inputs_line >"$file.inputs"
 	code_kept
 }
-# compiler_moved <from> [<to>]: a compiler, with its machine code and library, moved (to lib/warp.wasm)
+# compiler_moved <from> [<to>]: a compiler, with its machine code, moved (to lib/warp.wasm)
 compiler_moved() {
 	local part to=${2:-$file}
 	for part in "" .driver.cwasm .driver.cwasm.key .driver.build.cwasm .driver.build.cwasm.key; do
 		[ -f "$1$part" ] && mv -f "$1$part" "$to$part"
 	done
-	companion_copied "$1" "$to" && rm -rf "$1.library"
 }
 # the modules step of a build stopped after the runtime (`warp rebuild pure … to runtime`), on its warp.wasm.new: the
 # modules built in parallel in build slots (modules_built), then that compiler moved into place; failed, it stays

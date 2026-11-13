@@ -114,8 +114,6 @@ HOST_LINKED_AT = 40
 # the kind of machine code the run's engine makes (its heap, its fuel): a module it links keeps its machine code of
 # that kind (instance_defined)
 MACHINE_CODE_KIND_AT = 48
-# its argument vector, the first its module's file (a compiler's path: compiler_library)
-ARGUMENTS_AT = 56
 # the module a host word without a caller works in, a text (address, length): module_word's lib module while it
 # builds there, else empty for the native host module (exported)
 GUEST_AT = 64
@@ -1095,7 +1093,6 @@ run_state(linker: handle, engine: handle, linked: pointer, context: handle, mach
 	long_at(run + MACHINE_CODE_KIND_AT as i32).value = machine_code
 	text_kept(run + GUEST_AT as i32, "")
 	long_at(run + ASKER_AT as i32).value = 0
-	long_at(run + ARGUMENTS_AT as i32).value = given.pointers as i64
 	run
 }
 run_context(): handle := long_at(kept_value(RUN_SLOT) as i32 + 24).value
@@ -1103,7 +1100,7 @@ run_machine_code_kind(): i64 := long_at(kept_value(RUN_SLOT) as i32 + MACHINE_CO
 # the export `name` of the standard module `module_name` into `function`, no when it has none: the module linked into
 # the run at the first ask, never at its start, so a run that never asks links none; whether it did is kept at `flag`
 # of the run's block. A program linked to a runtime gets the module of that runtime's library; a module without one
-# (a compiler) its compiler_library, never the lib/ a `warp rebuild` is writing, whose runtime.wasm and modules/ do not
+# (a compiler) the installed one, never the lib/ a `warp rebuild` is writing, whose runtime.wasm and modules/ do not
 # fit together until it ends. A library folder without the module ends the run naming the file (instance_defined)
 lazily_linked(context: handle, module_name: text, flag: i64, name: text, function: pointer): bool := {
 	run = kept_value(RUN_SLOT) as i32
@@ -1126,23 +1123,9 @@ run_linked(context: handle, module_name: text, library: text): nothing := {
 		arena_kept()
 	}
 }
-# a compiler's library: <compiler>.library/ beside it, the runtime and unicode module made by the compiler that built
-# it, whose GC types it has (a new $Text type: card asciitext-compile); else, a compiler of the types its own lib/
-# writes, the installed warp's
-lazy_library(run: pointer): text := if contains_line(cell_text(long_at(run + 16).value as i32), "warp_runtime") then library_folder() else compiler_library(run)
-compiler_library(run: pointer): text := {
-	module = long_at(long_at(run + ARGUMENTS_AT as i32).value as i32).value
-	own = companion_library(native_copy(module, strlen(module)))
-	if holds_companion(own) then own else installed_library()
-}
-# the folder beside a compiler holding its builder's runtime and unicode module, these files of it
-companion_library(compiler: text): text := joined(compiler, ".library")
-COMPANION_FILES = 2
-companion_file(i: int): text := if i == 0 then "/runtime.wasm" else "/modules/unicode.wasm"
-holds_companion(folder: text): bool := {
-	for i in 0..COMPANION_FILES { if access(c_string(joined(folder, companion_file(i))), READABLE) != 0 { return false } }
-	true
-}
+# the library a run links its lazy modules from: its runtime's, else (a compiler, whose own texts never need NFC: the
+# build runs without modules/unicode.wasm) the installed one
+lazy_library(run: pointer): text := if contains_line(cell_text(long_at(run + 16).value as i32), "warp_runtime") then library_folder() else installed_library()
 # `"é" == "e◌́"` (decisions nfc-tables, nfc-slot; core/runtime/text.warp equal_texts): the runtime's canonical_text, a text's
 # NFC by lib/unicode, whose module (modules/unicode.wasm) the run links on this first call (lazily_linked), never a
 # silent byte compare
@@ -1158,7 +1141,7 @@ canonical_text_answered(context: handle, given: pointer, result: pointer): nothi
 	long_at(trap).value = 0
 	error = wasmtime_func_call(context, function + 8, given, 1, result, 1, trap)
 	# a module of other GC types than the run's traps 'cast failure' deep inside: named, never silent
-	if error != 0 or long_at(trap).value != 0 { complain(joined(joined("warp: canonical_text of ", library), "/modules/unicode.wasm failed; a compiler links the runtime and unicode module of the compiler that built it, <compiler>.library/ (`warp rebuild seed` makes the seed's, `warp rebuild` warp.wasm's)")) }
+	if error != 0 or long_at(trap).value != 0 { complain(joined(joined("warp: canonical_text of ", library), "/modules/unicode.wasm failed: a compiler of other GC types than that library's compared a text by NFC; `warp rebuild` makes the library anew")) }
 	checked(error, trap)
 }
 ## machine-wide channels (lib/channels.warp; the page's are BroadcastChannels, web/playground/host-tasks.js): every
