@@ -244,7 +244,7 @@ built_driver(): text := {
 	if not (exists(built_from) and read(built_from) == source) {
 		shell("mkdir -p " + quoted_path(folder))
 		write(folder + "/driver.warp", source)
-		build_native(folder + "/driver.warp", library_folder)
+		build_native(folder + "/driver.warp", library_folder, [])
 		write(built_from, source)
 	}
 	folder + "/driver"
