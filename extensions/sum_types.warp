@@ -2,8 +2,8 @@
 # `enum Shape { Circle(r), Rect(w, h), Dot }`: the type, its variants without payload by name, a class extending it
 # for each variant with one
 # `= Some(T) | None`, `: red | rgb(int, int, int)`, Elm's `= Failure HttpError | …` on lines of their own: the position
-# after the `=` or `:` when the declaration lists alternatives one of which carries a payload, else -1
-variants_start(p: Parser): int := {
+# after the `=` or `:` when the declaration lists alternatives one of which carries a payload (any, after `enum`), else -1
+variants_start(p: Parser, payload_needed: bool = yes): int := {
 	at = space_end(p.code, p.at, p.n)
 	sign = char_at(p, at)
 	next = char_at(p, at + 1)
@@ -35,7 +35,7 @@ variants_start(p: Parser): int := {
 		}
 		at += 1
 	}
-	if alternatives and payload then start else -1
+	if alternatives and (payload or not payload_needed) then start else -1
 }
 # The sum type `Name = A(T) | B | C(x: int)` (card sum-types): the type without fields, its variants without payload
 # by name, then a class extending it for each variant with a payload
@@ -145,7 +145,8 @@ read_sum_type(p: Parser, name: Node, parameters: list): Node := {
 	start = variants_start(p)
 	if start < 0 then ø else sum_type(p, name, start, parameters)
 }
-# `enum Shape { Circle(r), … }` with a case carrying values, else ø with the parser where it was; Kotlin's
+# `enum Shape { Circle(r), … }` with a case carrying values, `enum Color: red | rgb(int, int, int)` the sum type as
+# after `type`, else ø with the parser where it was; Kotlin's
 # `enum class Color {…}` is the plain enum `enum Color {…}`: the word `class` is skipped
 read_enum_with_values(p: Parser, word: text): Node := {
 	keyword = class_keyword_after(p, word)
@@ -156,6 +157,14 @@ read_enum_with_values(p: Parser, word: text): Node := {
 	start = p.at
 	p.at += word.length
 	if enum_values_ahead(p) { return enum_with_values(p) }
+	p.at = blank_end(p, p.at)
+	end = name_end(p.code, p.at, p.n)
+	if end > p.at {
+		name = symbol(p.code[p.at .. end])
+		p.at = end
+		variants = variants_start(p, no)
+		if variants >= 0 { return sum_type(p, name, variants, []) }
+	}
 	p.at = start
 	ø
 }
