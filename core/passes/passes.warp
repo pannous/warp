@@ -233,6 +233,7 @@ comprehension_sugar(program: Node): Node := sugared(program, kept_comprehension_
 # those of the lowered program; what they find goes to `diagnosed` (diagnostics.warp)
 checked_program(source: text, folder: text, prelude: text): Node := {
 	lowering_from(prelude)
+	floor_division_comments(source)
 	program = plain_node(source_checks(parsed(rules_ended(source)), prelude), passes_read_marks)
 	own_names = statements_in(program).map(declared_name)
 	main_globals(kind_changes(lowered_reached(program, source, folder, prelude)), own_names)
