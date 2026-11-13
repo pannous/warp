@@ -27,3 +27,7 @@ rewrite gpu_compute($s, $v, $n) => gpu_compute($s, $made, $n) where $made = gpu_
 rewrite paint($s, $w, $h, $v) => paint($words, $w, $h, $v) where $s is symbol and not $s is function and $words = shader_words_of($s, $program, $source)
 rewrite gpu_render($s, $w, $h, $v) => gpu_render($words, $w, $h, $v) where $s is symbol and $words = shader_words_of($s, $program, $source)
 rewrite gpu_compute($s, $v, $n) => gpu_compute($words, $v, $n) where $s is symbol and $words = shader_words_of($s, $program, $source)
+// `event stop the machine`, an event of several words declared (decision multi-word-events): after it the phrase is the
+// event's one name, `on stop the machine {…}`, `emit stop the machine{reason: "human"}` (rule_words.warp events_declared)
+rewrite event $words... => $marked where $marked = event_marked($words)
+rewrite $p => $q where program and $q = events_declared($p)

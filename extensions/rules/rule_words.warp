@@ -220,6 +220,40 @@ error_handler(statement: Node): any := {
 	handled = if #words == 4 and is_key(words#4, Op.Colon) then [key_of(words#4), value_of(words#4)] else if #words == 6 and words#5 == symbol("do") then [words#4, words#6] else words[3 ..]
 	if #handled == 2 and handled#1 is symbol then [name_of(handled#1), handled#2] else ø
 }
+# `event stop the machine` declares an event of several words (decision multi-word-events): the declaration marked,
+# declared_event("stop the machine"), for events_declared to take out; ø for anything but two words or more
+DECLARED_EVENT_WORD = "declared_event"
+event_marked(words: list): any := if #words > 1 and words.all(word => word is symbol) then call_of(DECLARED_EVENT_WORD, [Text(words.map(spelled).join(" "))]) else ø
+# the program without its event declarations, each declared phrase one name wherever it stands: `on stop the machine
+# {…}` as `on «stop the machine» {…}`, so the event rules take it as any event's name; ø without a declaration
+events_declared(program: Node): any := {
+	statements = level_statements(program)
+	declared = statements.filter(s => is_call_named(s, DECLARED_EVENT_WORD))
+	if #declared == 0 { return ø }
+	phrases = declared.map(s => "${s#2}".split(" ").map(word => symbol(word)))
+	kept = statements.filter(s => not is_call_named(s, DECLARED_EVENT_WORD)).map(s => bottom_up(s, part => phrases.fold(part, phrase_named)))
+	separated(bracketed(kept, ""), ";")
+}
+# a run of the phrase's words among n's items as one name, its last word glued to the event's data too
+# (`machine{reason: "x"}`, a key); a leading phrase that held the name spliced in, `(emit stop the machine) {…}`
+phrase_named(n: Node, phrase: list): Node := match n {
+	List(items, bracket, separator): {
+		if bracket != Bracket.None { return n }
+		name = symbol(phrase.map(spelled).join(" "))
+		size = #phrase
+		named = []
+		at = 0
+		while at < #items {
+			whole = at + size <= #items and items[at ..< at + size] == phrase
+			glued = not whole and at + size <= #items and items[at ..< at + size - 1] == phrase[.. size - 1] and is_key(items[at + size - 1], Op.Colon) and key_of(items[at + size - 1]) == phrase.last()
+			named += if whole then [name] else if glued then [Key(name, Op.Colon, value_of(items[at + size - 1]))] else [items[at]]
+			at += if whole or glued then size else 1
+		}
+		if #named > 0 and is_group(named[0]) and bracket_of(named[0]) == "" and name in items_of(named[0]) { named = items_of(named[0]) + named[1 ..] }
+		List(named, bracket, separator)
+	}
+	_: n
+}
 # a definition of a handled function, its body tried
 error_guarded(statement: Node, handlers: map): Node := {
 	if not (is_key(statement, Op.Define) and is_call(key_of(statement))) { return statement }
@@ -1425,6 +1459,8 @@ rule_words = {
 	once_listens: once_listens,
 	listening_program: listening_program,
 	errors_handled: errors_handled,
+	event_marked: event_marked,
+	events_declared: events_declared,
 	help_lines_printed: help_lines_printed,
 	paint_size: paint_size,
 	parameters_named: parameters_named,
