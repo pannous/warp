@@ -24,8 +24,5 @@ print gpu_render(s, 2, 2, {xs: xs})#1")" 4278190335
 # paint's first argument is pixels the CPU paints: a list painted so stays a list (samples/advanced/filled_circle.warp)
 check "a list of pixels painted stays a list" "$(WARP_WINDOW=0 "$warp" --mute --lib "$lib" 'surface = int[6]; paint(surface, 3, 2); print gpu_list_place(surface)' 2>&1 | tail -1)" -1
 # a list read only by a function painted on the GPU is made for the GPU (samples/graphics/color_swatches.warp)
-check "a list a painted function reads is a GPU list" "$(strict 'levels = []
-for i in 1 to 4 { levels = levels + [i / 4.0] }
-ink(x, y) := [levels#(x % 4 + 1), 0.0, 0.0]
-paint(ink, 4, 1)' | grep -c 'slow path')" 0
+check "a list a painted function reads is a GPU list" "$(WARP_WINDOW=0 "$warp" --strict --mute --lib "$lib" "$(dirname "$0")/../../samples/graphics/color_swatches.warp" 2>&1 | grep -c 'slow path')" 0
 [ "$failures" = 0 ] || exit 1
