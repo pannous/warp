@@ -5,8 +5,9 @@
 // which every program's prelude reads before this file (decision core-takes-what-it-uses).
 // The builtins, the words no warp definition gives, are the core's: core/analysis/builtins.warp and math_builtins.warp.
 
-// the call form of xs.add(x), which extensions/sugar/methods.warp appends in place (the emitter has no call add)
-add(xs, x) := { xs.add(x); xs }
+// the call form of xs.add(x), appended in place; written `+=`, since inside this file, which defines add, xs.add(x)
+// is this call again (extensions/sugar/methods.warp leaves a method the program defines to the program)
+add(xs, x) := { xs += [x]; xs }
 // xs.insert(x, at: i) at the 0-based position i, in place; of a map Rust's HashMap::insert (card rust-map-insert): the
 // key at set to x in place, the map back. One definition, so a call names its arguments (`at:`) as written (an
 // overload set by type passes them by position, card library-labelled-args)
