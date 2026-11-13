@@ -80,7 +80,7 @@ once per program, never per node or call site. Cheap `where` guards don't save a
   Pitfall when comparing two wasmtimes on one lib/: each rewrites the other's .cwasm files (version mismatch), so
   interleaved runs all compile cold; run one library's repetitions together.
 - 19% is the copying collector (gc_alloc_raw → do_gc → collect_increment, CopyingHeap::forward/scan_field): a bigger
-  initial GC heap (warp_config_gc_heap_initial_size_set) for the compiler may cut it, card wasmtime-copying-collector.
+  initial GC heap (warp_config_gc_heap_initial_size_set) for the compiler may cut it, card wasmtime-copying-collector. Measured 11-13: 2 GiB cuts stage 3 by 4.2% of its instructions (card builder-heap-2g); the rest of wasmtime's costs and what to patch next: notes/wasmtime_tweaks.md.
 - The emitter's own top paths: compile_function → statement → effects → joint_kind → instance_of_fields →
   forwarded_kinds → no_field_unshared → call_values (60%), field·class_defaults 44%, emitter_kind 46%; one widening
   round only. By markers: 2975 functions, median 4.4 ms; a one-line function ~1.5 ms, a lambda ~0.3 ms.
