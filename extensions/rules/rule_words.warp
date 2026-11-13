@@ -604,8 +604,9 @@ is_signal_loop(n: Node): bool := is_group(n) and #n >= 5 and n#1 == symbol("for"
 # variable's value; a call of a taker with a list literal of names there passing those variables' signals; else n
 signal_lists_passed(statement: Node, takers: map): Node := {
 	taking = is_key(statement, Op.Define) and takers.has(defined_word(statement) ?? "")
-	passed = bottom_up(statement, part => signal_list_part(part, takers, taking))
-	if not taking { return passed }
+	if not taking { return bottom_up(statement, part => signal_list_part(part, takers, taking)) }
+	# (the definition's head stays as written: only its body passes signals)
+	passed = Key(key_of(statement), op_of(statement), bottom_up(value_of(statement), part => signal_list_part(part, takers, taking)))
 	# a parameter listened to directly is the signal itself in the body
 	listened = names_listened(value_of(statement))
 	direct = method_parameters(statement).map(parameter_name).filter(parameter => listens_to(listened, parameter))
@@ -640,7 +641,7 @@ signal_named(name: Node, item: text): Node := {
 	if not (name is text) { return name }
 	if "${name}" == item { return symbol(item) }
 	if not "${name}".starts_with(item + ".") { return name }
-	Key(Key(symbol(item), Op.Dot, symbol("name")), Op.Add, Text("${name}"[#item ..]))
+	plain_node(parsed(item + ".name + \"" + "${name}"[#item ..] + "\""))
 }
 # each derived value's name, `total := a * 2`, and the names it reads: a derived signal, set anew when one of them
 # changes
