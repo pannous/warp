@@ -290,7 +290,7 @@ reused_stored() {
 compiler_moved() {
 	local part to=${2:-$file}
 	for part in "" .driver.cwasm .driver.cwasm.key .driver.build.cwasm .driver.build.cwasm.key; do
-		[ -f "$1$part" ] && mv -f "$1$part" "$to$part"
+		[ ! -f "$1$part" ] || mv -f "$1$part" "$to$part" || return 1
 	done
 }
 # the modules step of a build stopped after the runtime (`warp rebuild pure … to runtime`), on its warp.wasm.new: the
