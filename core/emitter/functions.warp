@@ -167,10 +167,12 @@ analyzed_parameter_kind(f: Function, i: int): any := {
 	if found == ø or i >= #found["params"] { return ø }
 	kept_kind(found["params"][i])
 }
-# the number a word's whole body is, `-128` of `small_int_low(): int := -128` (lowered `-128 as int`), else ø
+# the number a word's whole body is, `-128` of `small_int_low(): int := -128` (lowered `{the result: int = -128; the
+# result}` or `-128 as int`), else ø
 constant_body(f: Function): Node? := {
-	if f.body == ø { return ø }
-	value = if is_key(f.body, Op.As) then key_of(f.body) else f.body
+	body = f.body
+	if body == ø { return ø }
+	value = if is_key(body, Op.As) then key_of(body) else if is_group(body) and #body == 2 and held_result_type(body#1) != ø then value_of(body#1) else body
 	if value is number or is_negative_literal(value) then value else ø
 }
 # the kind a definition declares it gives, `f(x): text := …`: once lowered its body, or a block's last statement, is
