@@ -464,6 +464,7 @@ member_laid_out(layout: Layout, name: text, value: any): text := {
 		}
 		vectors = value.any(item => item is list)
 		if vectors or #value > VECTOR_FLOATS {
+			array_walked(name, value, vectors)
 			numbers = if vectors then [if i < #item then float(item[i]) else 0.0 for item in value for i in 0 ..< VECTOR_FLOATS] else [float(x) for x in value]
 			padded(numbers, VECTOR_FLOATS)
 			if #numbers == 0 { numbers = [0.0, 0.0, 0.0, 0.0] }
@@ -484,6 +485,14 @@ member_laid_out(layout: Layout, name: text, value: any): text := {
 		return ""
 	}
 	uniform_member(layout, name, [float(value)])
+}
+// a storage array whose numbers are walked to f32 bits on every upload, said with the fix its shape takes: a list of
+// numbers becomes a GPU list [f32]; a list of vectors has none yet, since a GPU list holds numbers
+array_walked(name: text, value: list, vectors: bool) := {
+	walked = "its numbers are walked to f32 bits on every upload"
+	if vectors { slow("the storage array " + name + " is a list of vectors: " + walked, "none yet: a GPU list holds numbers, not vectors") }
+	else if gpu_list_place(value) >= 0 { slow("the GPU list " + name + " is no whole number of vec4f in f32: " + walked, "give it f32 cells, four numbers a vector") }
+	else { slow("the storage array " + name + " is not a GPU list: " + walked, "make it as " + name + ": [f32] = …") }
 }
 array_laid(layout: Layout, name: text, cells: any): text := {
 	why = array_room(layout)
@@ -795,7 +804,6 @@ stored_array(name: text, value: any, usage: int): any := {
 	}
 	listed = gpu_storage(name, value)
 	if listed != 0 { return [listed, #value * 4] }
-	slow("the storage array " + name + " is not a GPU list: its numbers are walked to f32 bits on every upload", "make it as " + name + ": [f32] = …")
 	cells = f32_cells(value)
 	[cells_kept(name, cells, usage), #cells * 4]
 }
