@@ -3,8 +3,10 @@
 # kept under a hidden name; after an assignment `x = 5` that is x. In a block or a lambda, `{it * it}`, and in a
 # charged definition, `twice := it * 2`, `it` stays the argument; at the start, or after a definition, `it` is unbound
 # as before.
-last_results_extension = Extension{name: "last_results", passes_before: {"tries": last_results}}
+last_results_extension = Extension{name: "last_results", passes_before: {"tries": resolved_its}}
 LAST_RESULT = symbol("it·last")
+# a definition's `it` first (its parameter), then the program's (the last result)
+resolved_its(program: Node): Node := last_results(parameter_its(program))
 IT = symbol("it")
 
 last_results(program: Node): Node := {
@@ -27,9 +29,9 @@ last_results(program: Node): Node := {
 }
 
 # where `it` names something else: a definition, a lambda, a block, quoted code, and a phrase or call of a word that
-# gives `it` each item, `xs where it > 1`, `xs.filter(it > 2)`, `xs each it * 2`
+# gives `it` each item, `xs where it > 1`, `xs.filter(it > 2)`, `xs each it * 2`, `for 1..4: s += it`
 binds_it(n: Node): bool := is_key(n, Op.Define) or is_key(n, Op.Arrow) or is_curly_group(n) or is_quote(n) or (n is list and items_of(n).any(item => item is symbol and name_of(item) in ITEM_IT_WORDS))
-ITEM_IT_WORDS = ["where", "each", "by", "filter", "map", "select", "every", "any", "all", "find", "sort", "sorted", "having", "until", "while", "when"]
+ITEM_IT_WORDS = ["where", "each", "by", "filter", "map", "select", "every", "any", "all", "find", "sort", "sorted", "having", "until", "while", "when", "for"]
 # the statement reads the last result: `it` outside what binds it
 reads_last_result(n: Node): bool := n == IT or (not binds_it(n) and parts_of(n).any(reads_last_result))
 with_last_result(n: Node): Node := if n == IT then LAST_RESULT else if binds_it(n) then n else children(n, with_last_result)
@@ -40,3 +42,17 @@ last_assigned(n: Node): Node? := match n {
 	Key(target, Op.Assign, value): if target is symbol then target else ø
 	_: ø
 }
+
+# `def f(x){ it * 2 }`, `twice x := it * 2`: in a definition of parameters `it` is its first one, as in a charged
+# definition (`twice := it * 2`, wiki/it.md); a block, a lambda or an item word inside keeps its own `it`, so
+# `def mk(k){ {it + k} }` gives a closure
+parameter_its(program: Node): Node := bottom_up(program, n => {
+	definition = definition_of(n)
+	# (a body that assigns `it` itself, `it = symbol(…)`, keeps it as its local)
+	if definition == ø or #definition.parameters == 0 or "it" in names_bound(value_of(n), []) { return n }
+	first = symbol(parameter_of(definition.parameters#1).name)
+	body = value_of(n)
+	named = if is_curly_group(body) then children(body, part => it_named(part, first)) else it_named(body, first)
+	if same(named, body) then n else Key(key_of(n), Op.Define, named)
+})
+it_named(n: Node, name: Node): Node := if n == IT then name else if binds_it(n) then n else children(n, part => it_named(part, name))
