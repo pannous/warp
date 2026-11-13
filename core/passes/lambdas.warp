@@ -819,9 +819,10 @@ explicit_definition(statement: Node): Node := {
 aliased_definitions(statements: list, bound: map): list := {
 	arities = {}
 	aliased = []
+	# (a name a variable holds too, math's `arctan = &arc_tangent`, stays the value it names)
+	variables = word_set(statements.flat_map(nodes_in).filter(n => is_key(n, Op.Assign) and key_of(n) is symbol).map(n => name_of(key_of(n))))
 	for statement in statements {
-		# (a name a variable holds too, math's `arctan = &arc_tangent`, stays the value it names)
-		lambda = if is_key(statement, Op.Define) and key_of(statement) is symbol and not bound.has(name_of(key_of(statement))) then function_named(value_of(statement), arities, bound) else ø
+		lambda = if is_key(statement, Op.Define) and key_of(statement) is symbol and not variables.has(name_of(key_of(statement))) then function_named(value_of(statement), arities, bound) else ø
 		written = if lambda == ø then statement else lambda_definition(key_of(statement), lambda)
 		parts = definition_of(written)
 		if parts != ø { arities[parts.name] = #parts.parameters }
