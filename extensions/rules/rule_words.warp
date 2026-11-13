@@ -1388,6 +1388,7 @@ rule_words = {
 	tests_ended: tests_ended,
 	units_shown: units_shown,
 	unit_bound: unit_bound,
+	call_bound: call_bound,
 	unit_list_word: unit_list_word,
 	unit_of_type: unit_of_type,
 	unit_led: unit_led,
