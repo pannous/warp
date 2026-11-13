@@ -1,0 +1,9 @@
+#!/usr/bin/env warp
+# Hyperreal numbers: ε is bigger than 0 and smaller than every positive real, ω = 1/ε bigger than every real
+print ε * ω            # 1
+print (1 + ε)^2        # 1+2ε+ε²
+print ε < 0.0001       # yes
+print ω - 1000 < ω     # yes
+# the derivative of x² at 3: the real part of the slope over an infinitesimal step
+f(x) := x * x
+print (f(3 + ε) - f(3)) / ε   # 6+ε

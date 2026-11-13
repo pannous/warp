@@ -54,21 +54,27 @@ mixed_body(own: list, taken: list, mixins: map): list := {
 	["list", '{', ';'] + own + mixed
 }
 
-# [the bodiless class, the mixins' names, the body] of `class Duck with Walker {…}`, which parses as the group
-# `class Duck`, `with`, `Walker: {…}`, and with more mixins as the comma list of the group `class Duck with Walker`, the
-# names after it, the last `Swimmer: {…}`; else ø
+# [the bodiless class, the mixins' names, the body] of `class Duck with Walker, Swimmer {…}`, which parses as the
+# bodiless class, `with` and the rest: the names and the body, `Walker {…}` or glued `Walker: {…}`, a comma list's last
+# item when more names come; else ø
 with_clause(statement: Node): list? := {
 	parts = match statement {
 		List(items, Bracket.None, Separator.Comma): items
 		_: [statement]
 	}
 	head = parts#1
-	if not (is_group(head) and #head == 3 and head#2 == symbol(WITH_WORD)) { return ø }
-	named = [head#3] + parts[1 ..]
-	last = named#(#named)
-	listed = named[0 ..< #named - 1]
-	if not (is_key(last, Op.Colon) and key_of(last) is symbol and listed.all(name => name is symbol)) { return ø }
-	[head#1, (listed + [key_of(last)]).map(name => name_of(name)), value_of(last)]
+	if not (is_group(head) and #head >= 3 and head#2 == symbol(WITH_WORD)) { return ø }
+	words = concatenated((items_of(head)[2 ..] + parts[1 ..]).map(clause_words))
+	body = words#(#words)
+	names = words[0 ..< #words - 1]
+	if not (is_braced(body) and #names > 0 and names.all(name => name is symbol)) { return ø }
+	[head#1, names.map(name => name_of(name)), body]
+}
+# the words of a with clause's part: `Walker: {…}` and `Walker {…}` the name and the body, any other part itself
+clause_words(part: Node): list := {
+	if is_key(part, Op.Colon) { return [key_of(part), value_of(part)] }
+	if is_group(part) and bracket_of(part) != "{" { return items_of(part) }
+	[part]
 }
 
 # the mixin a body member `include Walker` names, else ø
