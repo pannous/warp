@@ -55,7 +55,8 @@ These samples need specific features to be implemented:
 - **webgpu.warp** - WebGPU integration
 - **visualizer.warp** - Winamp-style spectrum bars while a tune plays
 - **gpu_visualizer.warp** - the same spectrum driving a raymarched WGSL tunnel with a pulsing gem (WebGPU)
-- **gpu/lava_lamp.warp**, **gpu/northern_lights.warp**, **gpu/ringed_planet.warp** - compute.toys kernels of our own run through `compute_toy` (`use compute_toys`); the pointer turns the planet
+- **gpu/lava_lamp.warp**, **gpu/northern_lights.warp**, **gpu/ringed_planet.warp** - WGSL fragment shaders of our own (`shader {…}` reading `$time`, `$mouse`, `$mouse_wheel`); the pointer turns the planet
+- **gpu/rings.warp** - a shader pasted from compute.toys as it is, its two channel images generated in warp
 - **gpu/kaleidoscope.warp** - a WGSL fragment shader: the pointer sets mirrors and zoom, a press lights the glass
 
 Shaders by other authors (compute.toys and Shadertoy ports, which keep their authors' licenses) live in
