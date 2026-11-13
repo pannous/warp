@@ -222,13 +222,14 @@ enum { PIPE_BYTES = 65536 };
 static int posix_pipe(int ends[2]) { return _pipe(ends, PIPE_BYTES, _O_BINARY); }
 // a spawn's file actions, as many as warp gives (core/native/driver.warp words_run: two dup2s and a close), in the
 // bytes warp allocates for posix_spawn_file_actions_t (SPAWN_ACTIONS_BYTES)
-enum { MOST_ACTIONS = 8, ACTION_DUP2 = 1, ACTION_CLOSE = 2, STANDARD_STREAMS = 3 };
-struct spawn_actions { int count; struct { int kind, from, to; } actions[MOST_ACTIONS]; };
-static int action_added(struct spawn_actions* actions, int kind, int from, int to) {
+enum { MOST_ACTIONS = 4, ACTION_DUP2 = 1, ACTION_CLOSE = 2, ACTION_CHDIR = 3, STANDARD_STREAMS = 3 };
+struct spawn_actions { int count; struct { int kind, from, to; const char* folder; } actions[MOST_ACTIONS]; };
+static int action_added(struct spawn_actions* actions, int kind, int from, int to, const char* folder) {
 	if (actions->count == MOST_ACTIONS) return ENOMEM;
 	actions->actions[actions->count].kind = kind;
 	actions->actions[actions->count].from = from;
 	actions->actions[actions->count].to = to;
+	actions->actions[actions->count].folder = folder;
 	actions->count++;
 	return 0;
 }
@@ -237,9 +238,11 @@ static int posix_spawn_file_actions_init(struct spawn_actions* actions) {
 	return 0;
 }
 static int posix_spawn_file_actions_destroy(struct spawn_actions* actions) { return posix_spawn_file_actions_init(actions); }
-static int posix_spawn_file_actions_adddup2(struct spawn_actions* actions, int from, int to) { return action_added(actions, ACTION_DUP2, from, to); }
+static int posix_spawn_file_actions_adddup2(struct spawn_actions* actions, int from, int to) { return action_added(actions, ACTION_DUP2, from, to, NULL); }
 // (a handle the child should not hold: Windows hands a child only the standard handles it is given)
-static int posix_spawn_file_actions_addclose(struct spawn_actions* actions, int fd) { return action_added(actions, ACTION_CLOSE, fd, fd); }
+static int posix_spawn_file_actions_addclose(struct spawn_actions* actions, int fd) { return action_added(actions, ACTION_CLOSE, fd, fd, NULL); }
+// (the folder the child starts in, which the caller keeps until the spawn)
+static int posix_spawn_file_actions_addchdir_np(struct spawn_actions* actions, const char* folder) { return action_added(actions, ACTION_CHDIR, 0, 0, folder); }
 
 // the processes started and not yet waited for, by id
 enum { MOST_CHILDREN = 64 };
@@ -305,7 +308,11 @@ static int posix_spawnp(int* child, const char* file, const struct spawn_actions
 	startup.hStdError = standard_handle(actions, 2);
 	PROCESS_INFORMATION started;
 	char* line = command_line(words);
-	BOOL ran = CreateProcessA(NULL, line, NULL, NULL, TRUE, 0, NULL, NULL, &startup, &started);
+	const char* folder = NULL;
+	char folder_buffer[MAX_PATH];
+	for (int i = 0; actions && i < actions->count; i++)
+		if (actions->actions[i].kind == ACTION_CHDIR) folder = windows_path(actions->actions[i].folder, folder_buffer);
+	BOOL ran = CreateProcessA(NULL, line, NULL, NULL, TRUE, 0, NULL, folder, &startup, &started);
 	free(line);
 	if (!ran) return ENOENT;
 	CloseHandle(started.hThread);
@@ -335,6 +342,14 @@ static int posix_waitpid(int id, int* status, int options) {
 	children[place].process = NULL;
 	return (int)children[place].id;
 }
+// a child ended at once, as a signal ends it on POSIX: its exit code 128 and the signal
+enum { SIGNALED = 128 };
+static int posix_kill(int id, int signal_number) {
+	for (int i = 0; i < MOST_CHILDREN; i++)
+		if (children[i].process && children[i].id == (DWORD)id) return TerminateProcess(children[i].process, (UINT)(SIGNALED + signal_number)) ? 0 : -1;
+	errno = ESRCH;
+	return -1;
+}
 // a sh line run with its output (mode "r") or input ("w") a stream: by the POSIX sh on PATH (Git for Windows'), as
 // macOS and Linux run /bin/sh; none there, NULL (warp says "cannot run sh for …")
 enum { MOST_STREAMS = 16 };
@@ -349,7 +364,7 @@ static FILE* posix_popen(const char* line, const char* mode) {
 	if (posix_pipe(ends)) return NULL;
 	int reading = mode[0] == 'r';
 	struct spawn_actions actions = {0};
-	action_added(&actions, ACTION_DUP2, ends[reading ? 1 : 0], reading ? 1 : 0);
+	action_added(&actions, ACTION_DUP2, ends[reading ? 1 : 0], reading ? 1 : 0, NULL);
 	char* words[] = {sh, "-c", (char*)line, NULL};
 	int child;
 	int failed = posix_spawnp(&child, sh, &actions, NULL, words, NULL);
@@ -406,7 +421,7 @@ static const struct { const char* name; void* function; } POSIX_CALLS[] = {
 	POSIX_NAMED(posix_spawn_file_actions_adddup2), POSIX_NAMED(posix_spawn_file_actions_addclose), POSIX_NAMED(posix_spawnp),
 	POSIX_CALL(waitpid), POSIX_CALL(popen), POSIX_CALL(pclose), POSIX_CALL(access), POSIX_CALL(chdir), POSIX_CALL(creat),
 	POSIX_CALL(fopen), POSIX_CALL(mkdir), POSIX_CALL(rmdir), POSIX_CALL(unlink), POSIX_CALL(rename),
-	POSIX_NAMED(wasi_config_preopen_dir),
+	POSIX_NAMED(wasi_config_preopen_dir), POSIX_NAMED(posix_spawn_file_actions_addchdir_np), POSIX_CALL(kill),
 };
 
 // ## dlopen and dlsym, which find them
