@@ -1080,11 +1080,14 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 		} else {
 			op = operator_at(p)
 			if op.length == 0 and free_infix_at(p, left) {
-				if fixity_level(Fixity.Infix) < min_power { break }
 				glyph = "$(c)"
+				// a declared operator binds as its row says, `≈` as `==`; else as the built-ins it resembles
+				powers = alias_spellings().powers.get(glyph) ?? [fixity_level(Fixity.Infix), fixity_level(Fixity.Infix) + 1]
+				if powers#1 < min_power { break }
+				compared = compared_after(compared, glyph, powers)
 				advance(p)
 				skip_blanks(p)
-				left = operator_call(glyph, [left, expression(p, fixity_level(Fixity.Infix) + 1)])
+				left = operator_call(glyph, [left, expression(p, powers#2)])
 				continue
 			}
 			signed = signed_item_at(p)
@@ -1122,11 +1125,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			// operator word, starts its subject
 			glued_sign = (op#1 == "-" or op#1 == "#") and not is_blank(char_ahead(p, 1))
 			if (glued_sign or is_alpha(c)) and ends_with_clause_word(left) { break }
-			// (none while the table is still bare, every operator at the default power as the extension rows are read)
-			equality = alias_spellings().powers.get("==")
-			equality_level = equality != ø and powers#1 == equality#1
-			if equality_level and compared != "" { raise comparisons_chained(compared, op#1) }
-			compared = if equality_level then op#1 else ""
+			compared = compared_after(compared, op#1, powers)
 			took_own_then = owns and powers#1 < min_power and op#2 == "then"
 			operator_start = p.at
 			p.at += op#1.length
@@ -1646,6 +1645,15 @@ def is_dotted(op: list): bool := op#1.length > 1 and op#1#1 == '.' and op#1[1 ..
 // and `each` applies any other to every item
 // `1 == 1 == 1`, `30 == x + y ≈ 30`: two equality-level comparisons in a row read two ways, refused (wiki/Footguns.md
 // "Chained comparison"); only `<` `<=` `>` `>=` chain
+// the comparison an operator of these powers leaves for the next one to meet: its glyph at the level of `==`, else "";
+// refused after another such (none while the table is still bare, every operator at the default power as the
+// extension rows are read)
+def compared_after(compared: text, glyph: text, powers: list): text {
+	equality = alias_spellings().powers.get("==")
+	if equality == ø or powers#1 != equality#1 { return "" }
+	if compared != "" { raise comparisons_chained(compared, glyph) }
+	glyph
+}
 def comparisons_chained(first: text, second: text): text := "`a ${first} b ${second} c` reads two ways: group one, `(a ${first} b) ${second} c` or `a ${first} (b ${second} c)`; only < <= > >= chain"
 def dot_call_refused(f: Node): text {
 	name = if f is symbol then name_of(f) else "f"
