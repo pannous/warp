@@ -38,7 +38,7 @@ SHADER_HOLES = {"width": [], "height": [], "size": ["u_resolution"], "time": ["u
 # how the shader reads the hole a `$name` names: the hole an alias stands for, else the name itself
 hole_read(written: text): text := SHADER_HOLES.keys.find(read => written in SHADER_HOLES[read]) ?? written
 
-# the entry point of a shader written in compute.toys' dialect (lib/compute_toys.warp), and of one already a WGSL
+# the entry point of a shader written in compute.toys' dialect (lib/shaders.warp compute_toy), and of one already a WGSL
 # fragment shader
 COMPUTE_TOYS_ENTRY = "fn main_image"
 FRAGMENT_ENTRY = "@fragment"
