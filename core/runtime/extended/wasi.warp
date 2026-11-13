@@ -233,9 +233,14 @@ std_os_env(name: Node): Node := {
 	}
 	ø
 }
-# `use os; cwd`: the folder the program started in, as its environment's PWD says; "." without one (WASI has no
-# working folder of its own, relative paths are the preopened "."'s)
-std_os_cwd(): Node := std_os_env("PWD") ?? "."
+# `use os; cwd`: the working folder, as its environment's PWD says while that is where "." is (WASI has no working
+# folder of its own, relative paths are the preopened "."'s); where a host moved it (the native os.cd), the real path
+# of "." the host gives; "." without either
+std_os_cwd(): Node := {
+	started = std_os_env("PWD")
+	here = real_file_path(".")
+	if started != ø and real_file_path(text_of_textual(started)) == here then started else if here != "." then here else started ?? "."
+}
 # `use os; input(prompt)`: the prompt written, then a line of stdin without its newline; ø at the end of the input. A
 # byte a read, so no byte of the next line is taken. `input()` gives no prompt: os.warp's input() calls this with none
 std_os_input(prompt: Node = ø): Node := {
