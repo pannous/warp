@@ -35,6 +35,7 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 
 | file:line | reason | verdict |
 |---|---|---|
+| test/types/test_time_now.pairs.warp:4-6 | `type(time.now)` 'time of day', `time.now is time`, `time.now.hour == now.hour` (old Rust test, no wiki line) | dropped 2026-11-13 via warp-interviewer: `now.time` (lines 10-11) covers it |
 | test/modules/test_wasm_modules.pairs.warp:34, 35 | a C module's out-pointer as the result: `strtol("42 apples", 10)` expected ' apples', `strtol("ff!", 16)` '!'; main gives the C meaning, 42 / 255 | keep for now: the user expects 42 (11-11 via warp-interviewer); the out-pointer form is card strtol-out-pointer (Later) |
 | test/text/test_count_in.pairs.warp:4-9; test/text/test_counts_in_warp.pairs.warp:4, 5, 10; test/functions/test_words_in_phrases.pairs.warp:11, 12 | `count x in y`, `count(x in y)`: the count of a membership's yes/no, refused with did-you-mean `y.count(x)` | delete: the refusal with its fix `y.count(x)` is the behaviour |
 | test/welcoming/test_footguns.pairs.warp:383 | `fast` floats that reassociate math | keep: wiki Footguns.md:764 promises `fast x=3.3` / `as fast`; gap |
@@ -661,3 +662,31 @@ Triage (judge the form before building it):
 - test/control/test_call_result_reflection.warp:4, 5 expect `people().name` and `name of people()` to read every
   item's name, ['a', 'b']. Only the plural, `people().names` (:6), reads every item; whether the singular does too
   is a parked decision (it reads two ways: the list's own field or each item's). Left red and untouched until decided.
+
+## Events and signals, cluster 11 (warp-interviewer 2026-11-13)
+Dropped, old Rust-era lines no wiki page backs:
+- test/control/test_reactive_ports.pairs.warp `value - was`, `value - before` and test_reactive_ports.warp
+  `previous`: `old` is the one word for the value before a write; more names would take ordinary names in every
+  listener block.
+- test/control/test_on.pairs.warp `y = x--` → 2 with `on set x`: x-- gives the value before the step, 3, as everywhere.
+- test/control/test_broadcast.pairs.warp `broadcast {…} on "test-nobody"` and test_named_broadcast.pairs.warp
+  `send stop the machine{…} to: "test-nobody"`: an event sent to a channel named by a string is no form; `send … to:`
+  is lib/channels' call.
+Rewritten to today's values: test_print.pairs.warp:5 (3), test_change_of_expression.pairs.warp:6 (the test summary);
+test/modules/test_keys.pairs.warp:2 `key_name(65)` is "a", key names lowercase as the Key enum's cases.
+Parked: test_colon_handlers.warp:10 `at 9pm:` on the time library's card.
+Key names (warp-interviewer 2026-11-13): test_key_names.warp `key == ArrowDown` dropped (the browser's spelling, the
+Key case is down); test/modules/test_keys.pairs.warp:4 `[held_key == ESC, LEFT]` is [no, Key.left], the Key case.
+
+## Error values and try (cluster error-values-try, decided by the user via warp-interviewer 2026-11-13)
+
+| file:line | expected now | proposed | why |
+|---|---|---|---|
+| test/welcoming/test_welcoming_print.pairs.warp:18, 19 | "a∞" / "aNaN" | Error("divide by zero") | decimal literals are exact: `1.0/0.0` raises; only `x as float` keeps IEEE (wiki/Footguns.md "NaN and infinity") |
+| test/numbers/test_nan_observed.pairs.warp:4, 5 | "aNaN" / "NaN" | Error("divide by zero") | same: `-0.0/0.0`, `0.0/0.0` are exact |
+| test/welcoming/test_footguns.pairs.warp:321 | true | Error("divide by zero") | same: `1.0/0.0` |
+| test/control/test_try_index_and_float.pairs.warp:5 | 7 | refused at compile time | `n = 5; try n#1 else 7`: `#` on a known int can never work, so the compiler refuses, try or not |
+| test/control/test_try.pairs.warp:31, 34 | 7 | refused at compile time | same: `def f(m){ m#1 }; try f(3) else 7`, `m.a` of an int |
+| test/control/test_error_words.pairs.warp:9 | "ab" | "aøb" | `warn(…)` gives ø, which text shows as ø like any other ø |
+| test/welcoming/test_warning_mode.pairs.warp:4 | "ab" | "aøb" | same: `warning(…)` |
+| test/control/test_error_not_in_data.pairs.warp:18 | 1 | Error("divide by zero") | `a, b = e, 2` binds a plain variable a, which holds no Error (decision errors held only by optional variables); its own header says the write raises |

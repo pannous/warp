@@ -23,14 +23,17 @@ operator ≡ := ===
 operator ﹦ := ==
 // `a ≈ b` within tolerance 1e-9 (alike below); `a ~ b` (also `a ~~ b`) the looser, within rough_tolerance 0.01; a
 // program sets either: `tolerance = 0.1; 1 ≈ 1.05` holds (decision approx-zero)
-global tolerance = 0.000000001
 global rough_tolerance = 0.01
+global tolerance = 0.000000001
+global low_tolerance = 0.000000000001
+infix operator ~(a: any, b: any) := alike(a, b, rough_tolerance, yes) # `similar` / 'roughly'
 infix operator ≈(a: any, b: any) := alike(a, b, tolerance, no)
-infix operator ~(a: any, b: any) := alike(a, b, rough_tolerance, yes)
-infix operator ⋍(a: any, b: any) := alike(a, b, tolerance, no)
-// `a ≈ b`, and `a ~ b` when rough (wiki/operator.md): `{…}` maps key by key in any order, other lists item by item,
-// instances of one class field by field, pairs part by part, each with the same comparison again; two
-// other values by the runtime's values_similar or values_rough. Two plain numbers never get here: they compare inline
+infix operator ⋍(a: any, b: any) := alike(a, b, low_tolerance, no)
+// alike seems to be an internal helper function for things that are called ~ `similar` and ≈ `approximately` in user space 
+// `a ≈ b`, and rougher `a ~ b` (wiki/operator.md): 
+// {a:1} ≈ {a:1.0} ...  `{…}` maps key by key in any order, other lists item by item,
+// person1≈person2  instances of one class field by field, pairs part by part, each with the same comparison again; 
+// two other values by the runtime's values_similar or values_rough. Two plain numbers never get here: they compare inline
 alike(a: any, b: any, tolerance: float, rough: bool) := {
 	if bracket_of(a) == "{" and bracket_of(b) == "{" {
 		return #a == #b and keys(a).all(k => b has k and alike(a[k], b[k], tolerance, rough))
@@ -56,6 +59,7 @@ values_alike(a: any, b: any, tolerance: float, rough: bool): bool := {
 	# real: an exact value too, π or 2π, which `is number` leaves out
 	if a is real and b is real { return numbers_alike(a as float, b as float, tolerance) }
 	if (a is text or a is char) and (b is text or b is char) { return text_alike(text(a), rough) == text_alike(text(b), rough) }
+	# todo: define more elegantly alike(a:text, b:any)
 	a == b
 }
 numbers_alike(a: float, b: float, tolerance: float): bool := {
@@ -80,6 +84,7 @@ operator ⋀ := and
 operator ∨ := or
 operator ⋁ := or
 operator ⊻ := xor
+// confidence range
 operator ± := +-
 // A prefix glyph spelling a function calls it: √9 is sqrt(9), the plain function (decision prefix-symbols-alias-functions)
 prefix operator √ := sqrt

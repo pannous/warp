@@ -27,6 +27,12 @@ path_parameter(part: text): text := {
 
 # `users` → "users": a name as the text it is spelled by, a program's own word as written (twice·own → "twice")
 spelled(name: Node): text := "${name}".remove_suffix(own_mark)
+# `x`, `p.age`: the name or field path a signal listens to, as text; ø for anything else (lib/signals.warp `on set`)
+watched_path(n: Node): any := {
+	if n is symbol { return spelled(n) }
+	if is_key(n, Op.Dot) and value_of(n) is symbol and watched_path(key_of(n)) != ø { return watched_path(key_of(n)) + "." + spelled(value_of(n)) }
+	ø
+}
 
 # `x > 1500` and m → `x > 1500 * m`: a unit after an expression multiplies its last amount, through the operators
 # a unit binds tighter than (lib/units.warp's rules); ø when the expression ends in no amount, or starts with a unit
@@ -205,12 +211,46 @@ errors_handled(program: Node): any := {
 	kept = statements.filter(statement => error_handler(statement) == ø).map(statement => error_guarded(statement, handlers))
 	separated(bracketed(kept, ""), ";")
 }
-# [the function's name, the handler] of `on error of f {…}`, else ø
+# [the function's name, the handler] of `on error of f {…}`, `on error of f: 0` or `on error of f do 0` (wiki Error.md),
+# else ø
 error_handler(statement: Node): any := {
-	if not (is_group(statement) and bracket_of(statement) == "" and #statement == 5) { return ø }
+	if not (is_group(statement) and bracket_of(statement) == "") { return ø }
 	words = items_of(statement)
-	if words[0 ..< 3] != [symbol("on"), symbol("error"), symbol("of")] or not (words#4 is symbol) { return ø }
-	[name_of(words#4), words#5]
+	if #words < 4 or words[0 ..< 3] != [symbol("on"), symbol("error"), symbol("of")] { return ø }
+	handled = if #words == 4 and (is_key(words#4, Op.Colon) or is_key(words#4, Op.Do)) then [key_of(words#4), value_of(words#4)] else words[3 ..]
+	if #handled == 2 and handled#1 is symbol then [name_of(handled#1), handled#2] else ø
+}
+# `event stop the machine` declares an event of several words (decision multi-word-events): its one name, which
+# declared_named reads it as; ø for anything but two words or more
+event_declared(words: list): any := if #words > 1 and words.all(word => word is symbol) then symbol(words.map(spelled).join(" ")) else ø
+# the words of a phrase with each event of several words the program declares as its one name, `[stop, the,
+# machine: {…}]` as `[«stop the machine»: {…}]`; ø where they name none
+declared_named(words: list, program: Node): any := {
+	declarations = level_statements(program).filter(s => is_group(s) and bracket_of(s) == "" and #s > 2 and s#1 == symbol(EVENT_WORD))
+	if #declarations == 0 { return ø }
+	phrase = bracketed(words, "")
+	named = declarations.map(s => items_of(s)[1 ..]).fold(phrase, phrase_named)
+	if named == phrase then ø else items_of(named)
+}
+EVENT_WORD = "event"
+# a run of the phrase's words among n's items as one name, its last word glued to the event's data too
+# (`machine{reason: "x"}`, a key)
+phrase_named(n: Node, phrase: list): Node := match n {
+	List(items, bracket, separator): {
+		if bracket != Bracket.None { return n }
+		name = symbol(phrase.map(spelled).join(" "))
+		size = #phrase
+		named = []
+		at = 0
+		while at < #items {
+			whole = at + size <= #items and items[at ..< at + size] == phrase
+			glued = not whole and at + size <= #items and items[at ..< at + size - 1] == phrase[.. size - 1] and is_key(items[at + size - 1], Op.Colon) and key_of(items[at + size - 1]) == phrase.last()
+			named += if whole then [name] else if glued then [Key(name, Op.Colon, value_of(items[at + size - 1]))] else [items[at]]
+			at += if whole or glued then size else 1
+		}
+		List(named, bracket, separator)
+	}
+	_: n
 }
 # a definition of a handled function, its body tried
 error_guarded(statement: Node, handlers: map): Node := {
@@ -529,14 +569,16 @@ gpu_lists_packed(program: Node): any := {
 gpu_list_made(v: Node): any := if gpu_creating(v) then gpu_packed(v) else ø
 # each name once, in the order first named: two listeners of total notify its listeners once a write
 distinct(names: list): list := names.fold([], (kept, name) => if name in kept then kept else kept + [name])
-# the names the statement's variable_listen calls listen to
-names_listened(statement: Node): list := nodes_in(statement).filter(n => is_call_named(n, variable_listen_word) and #n > 1 and is_group(n#2)).flat_map(n => items_of(n#2).filter(name => name is text).map(name => "${name}")) + nodes_in(statement).filter(n => is_call_named(n, signal_word) and #n > 1).map(n => "${n#2}")
+# the names the statement's variable_listen calls listen to, and those its signals passed name with their fields,
+# `Signal("person", person, [".age"])` person and person.age
+names_listened(statement: Node): list := nodes_in(statement).filter(n => is_call_named(n, variable_listen_word) and #n > 1 and is_group(n#2)).flat_map(n => items_of(n#2).filter(name => name is text).map(name => "${name}")) + nodes_in(statement).filter(n => is_call_named(n, signal_word) and #n > 1).flat_map(n => ["${n#2}"] + (if #n > 3 then items_of(n#4).map(field => "${n#2}${field}") else []))
 
 # --- lists of signals (notes/signals.md "Lists of signals") ---
 
 signal_word = "Signal"
-# each function subscribing to the loop variable of `for s in xs {…}` over its parameter xs, by name: the positions of
-# those parameters (from 1), which take a list of signals
+# each function subscribing to its parameters, by name: to the loop variable of `for s in xs {…}` over its parameter
+# xs, which takes a list of signals, or to the parameter itself, `watch(p) := on set p.age {…}`, which takes a signal;
+# by the position of each such parameter (from 1), the fields of it listened to, [".age"]
 signal_list_takers(statements: list): map := {
 	takers = {}
 	for statement in statements {
@@ -544,8 +586,13 @@ signal_list_takers(statements: list): map := {
 		if name != ø {
 			parameters = method_parameters(statement).map(parameter_name)
 			looped = signal_loops(value_of(statement)).map(loop => "${loop#4}")
-			positions = (1 to #parameters).filter(at => parameters#at in looped)
-			if #positions > 0 { takers[name] = positions }
+			listened = names_listened(value_of(statement))
+			taken = {}
+			for at in 1 to #parameters {
+				parameter = parameters#at
+				if parameter in looped or listens_to(listened, parameter) { taken["${at}"] = listened.filter(path => path.starts_with(parameter + ".")).map(path => path[#parameter ..]) }
+			}
+			if #taken.keys > 0 { takers[name] = taken }
 		}
 	}
 	takers
@@ -557,25 +604,44 @@ is_signal_loop(n: Node): bool := is_group(n) and #n >= 5 and n#1 == symbol("for"
 # variable's value; a call of a taker with a list literal of names there passing those variables' signals; else n
 signal_lists_passed(statement: Node, takers: map): Node := {
 	taking = is_key(statement, Op.Define) and takers.has(defined_word(statement) ?? "")
-	bottom_up(statement, part => signal_list_part(part, takers, taking))
+	if not taking { return bottom_up(statement, part => signal_list_part(part, takers, taking)) }
+	# (the definition's head stays as written: only its body passes signals)
+	passed = Key(key_of(statement), op_of(statement), bottom_up(value_of(statement), part => signal_list_part(part, takers, taking)))
+	# a parameter listened to directly is the signal itself in the body
+	listened = names_listened(value_of(statement))
+	direct = method_parameters(statement).map(parameter_name).filter(parameter => listens_to(listened, parameter))
+	Key(key_of(passed), op_of(passed), direct.fold(value_of(passed), (body, parameter) => item_listened(body, parameter)))
 }
 signal_list_part(n: Node, takers: map, taking: bool): Node := match n {
 	List(items, bracket, separator): {
 		if taking and is_signal_loop(n) { return List(items[.. 4] + items[4 ..].map(part => item_listened(part, "${items#2}")), bracket, separator) }
 		if not (bracket == Bracket.Round and #items > 1 and items#1 is symbol and takers.has("${items#1}")) { return n }
-		positions = takers["${items#1}"]
-		List([items#1] + (2 to #items).map(at => if (at - 1) in positions then signals_of(items#at) else items#at), bracket, separator)
+		taken = takers["${items#1}"]
+		List([items#1] + (2 to #items).map(at => if taken.has("${at - 1}") then signals_of(items#at, taken["${at - 1}"]) else items#at), bracket, separator)
 	}
 	_: n
 }
-# a list literal of names as their signals, `[a, b]` as `[Signal("a", a), Signal("b", b)]`; anything else as it is
-signals_of(n: Node): Node := if is_group(n) and bracket_of(n) == "[" and items_of(n).all(item => item is symbol) then List(items_of(n).map(item => call_of(signal_word, ["${item}", item])), Bracket.Square, Separator.Comma) else n
+# a name as its signal, with the fields listened to, `person` as `Signal("person", person, [".age"])`; a list literal of
+# names as their signals, `[a, b]` as `[Signal("a", a, []), Signal("b", b, [])]`; anything else as it is
+signals_of(n: Node, fields: list): Node := {
+	if n is symbol { return call_of(signal_word, ["${n}", n, square_list(fields.map(field => Text(field)))]) }
+	if is_group(n) and bracket_of(n) == "[" and items_of(n).all(item => item is symbol) then List(items_of(n).map(item => signals_of(item, fields)), Bracket.Square, Separator.Comma) else n
+}
 # the loop's part with a bare read of the item its variable's value, and a listener of the item's name listening to
 # the item, the Signal
 item_listened(n: Node, item: text): Node := bottom_up(renamed(n, item, call_of("signal_value", [symbol(item)])), part => if is_call_named(part, variable_listen_word) and is_group(part#2) then listening_item(part, item) else part)
 listening_item(call: Node, item: text): Node := match call {
-	List(items, bracket, separator): List([items#1, List(items_of(items#2).map(name => if name is text and "${name}" == item then symbol(item) else name), Bracket.Square, Separator.Comma)] + items[2 ..], bracket, separator)
+	List(items, bracket, separator): List([items#1, List(items_of(items#2).map(name => signal_named(name, item)), Bracket.Square, Separator.Comma)] + items[2 ..], bracket, separator)
 	_: call
+}
+# whether the names listened to are the name or a field of it
+listens_to(listened: list, name: text): bool := name in listened or listened.any(path => path.starts_with(name + "."))
+# a listened name naming the item, the signal: `s` the signal itself, `p.age` the name of its field, `p.name + ".age"`
+signal_named(name: Node, item: text): Node := {
+	if not (name is text) { return name }
+	if "${name}" == item { return symbol(item) }
+	if not "${name}".starts_with(item + ".") { return name }
+	plain_node(parsed(item + ".name + \"" + "${name}"[#item ..] + "\""))
 }
 # each derived value's name, `total := a * 2`, and the names it reads: a derived signal, set anew when one of them
 # changes
@@ -623,11 +689,16 @@ notifying(n: Node, names: list, derived: map): Node := {
 	old = symbol(signal_old)
 	dependents = names.filter(d => derived.has(d) and name_of(name) in derived[d])
 	own = name_of(name) in names
-	if not own and #dependents == 0 { return n }
+	# the watched fields the write may change, `p.age` of `p = …`, `p.age = 7` or `p.age.n = 1`, never `p.name = "b"`
+	path = written_path(key_of(n)) ?? name_of(name)
+	fields = names.filter(watched => "." in watched and (path_within(watched, path) or path_within(path, watched)))
+	if not own and #dependents == 0 and #fields == 0 { return n }
 	# an item's write changes the list itself: the old one a copy, `[] + xs`
 	kept = if key_of(n) is symbol then name else Key(List([], Bracket.Square, Separator.Comma), Op.Add, name)
-	before = [Key(old, Op.Assign, kept)] + dependents.map(d => Key(symbol(signal_old_of(d)), Op.Assign, symbol(d)))
-	notified = (if own then [call_of("signal_notify", [name_of(name), name, old])] else []) + dependents.map(d => Key(Key(ø, Op.If, Key(name, Op.Ne, old)), Op.Then, call_of("signal_notify", [d, symbol(d), symbol(signal_old_of(d))])))
+	# the variable's old value where its listeners, its dependents or a step read it; a watched field alone needs none
+	reads_old = own or #dependents > 0 or op_of(n) in stepping_ops
+	before = (if reads_old then [Key(old, Op.Assign, kept)] else []) + dependents.map(d => Key(symbol(signal_old_of(d)), Op.Assign, symbol(d))) + fields.map(field => Key(symbol(signal_old_of(field)), Op.Assign, path_read(field)))
+	notified = (if own then [call_of("signal_notify", [name_of(name), name, old])] else []) + fields.map(field => call_of("signal_notify", [field, path_read(field), symbol(signal_old_of(field))])) + dependents.map(d => Key(Key(ø, Op.If, Key(name, Op.Ne, old)), Op.Then, call_of("signal_notify", [d, symbol(d), symbol(signal_old_of(d))])))
 	# `x--` gives the value before the step
 	result = if op_of(n) in stepping_ops then [old] else []
 	separated(bracketed(before + [n] + notified + result, "("), ";")
@@ -654,8 +725,15 @@ written_target(target: Node): Node := {
 	if target is key and (op_of(target) == Op.Hash or op_of(target) == Op.Dot) { return written_target(key_of(target)) }
 	target
 }
+# the field path a write's target names, `p.age` of `p.age = 7`, that of the list of an item's `p.tags#1`; ø where it is no
+# path of names
+written_path(target: Node): any := if is_key(target, Op.Hash) then written_path(key_of(target)) else watched_path(target)
+# whether the path is the field or one within it: `p.age` within `p`, never `p.agent`
+path_within(path: text, field: text): bool := path == field or path.starts_with(field + ".")
+# the code reading a field path, `p.age`
+path_read(path: text): Node := plain_node(parsed(path))
 stepping_ops = [Op.Inc, Op.Dec]
-signal_old_of(name: text): text := "signal·" + name
+signal_old_of(name: text): text := "signal·" + name.replace(".", "·")
 writing_ops = [Op.Assign, Op.AddAssign, Op.SubAssign, Op.MulAssign, Op.DivAssign, Op.FloorDivAssign, Op.ModAssign, Op.PowAssign, Op.AndAssign, Op.OrAssign, Op.XorAssign]
 
 # `count(2 in xs)`: a yes/no question is no count, the compile refused with the count it means
@@ -710,6 +788,17 @@ unit_list_word(variable: Node, iterable: Node): any := {
 }
 # the unit `v as list of T` walks a text by: T's own (codepoint, byte, char), else its characters, each converted to T
 unit_of_type(type: Node): Node := Text(if type is symbol then unit_lists.get(name_of(type)) ?? "chars" else "chars")
+# `int`, `ints`, `numbers`, `string`: the value a list of the type word fills with (0, 0 as float, "", ' ' for a char),
+# singular or plural, as code or as the data a number before it makes of it (`16 int` reads as the list [16, "int"], as
+# a rule's own words match it); ø for any other code, a word the program binds a value to too (`floats#i` of a list),
+# and a machine type (`i64[8]` is a wasm array, primitive code's own)
+type_zero(type: Node): any := {
+	if not (type is symbol or type is text) { return ø }
+	word = "${type}"
+	if binds_value(rule_scope, word) or c_primitive_types.get(word) == word { return ø }
+	kind = type_kinds.get(word) ?? type_kinds.get(word.remove_suffix("s"))
+	if kind == "int" then 0 else if kind == "float" then Key(0, Op.As, symbol("float")) else if kind == "text" then "" else if kind == "codepoint" then ' ' else ø
+}
 # `when x {1 -> "a"; else -> "b"}`: a block of match arms only, each `pattern -> value`
 are_arms(body: Node): bool := #items_of(body) > 0 and items_of(body).all(item => is_key(item, Op.Arrow))
 # `for p in ps where it > 2`: the condition's `it` read as the loop's variable
@@ -1397,6 +1486,8 @@ rule_words = {
 	once_listens: once_listens,
 	listening_program: listening_program,
 	errors_handled: errors_handled,
+	event_declared: event_declared,
+	declared_named: declared_named,
 	help_lines_printed: help_lines_printed,
 	paint_size: paint_size,
 	parameters_named: parameters_named,
@@ -1416,6 +1507,7 @@ rule_words = {
 	signature_text: signature_text,
 	signatures_listed: signatures_listed,
 	spelled: spelled,
+	watched_path: watched_path,
 	hyphen_difference: hyphen_difference,
 	tables_kept: tables_kept,
 	task_steps: task_steps,
@@ -1426,6 +1518,7 @@ rule_words = {
 	call_bound: call_bound,
 	unit_list_word: unit_list_word,
 	unit_of_type: unit_of_type,
+	type_zero: type_zero,
 	unit_led: unit_led,
 	unit_regrouped: unit_regrouped,
 	unit_beside_variables: unit_beside_variables,
