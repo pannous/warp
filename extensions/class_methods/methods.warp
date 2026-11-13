@@ -726,7 +726,8 @@ is_operator_dispatcher(name: text): bool := name.ends_with(OPERATOR_DISPATCHER_M
 # the negation's of `-`
 operator_tokens(name: text): list := {
 	glyph = name.split(OPERATOR_DISPATCHER_MARK)#1
-	glyphs = [glyph] + (if glyph in operated_glyphs then [glyph + "="] else [])
+	# (a compound one only where the parser has it: `^=` is none)
+	glyphs = [glyph] + (if glyph in operated_glyphs and SYMBOL_OPERATORS.has(glyph + "=") then [glyph + "="] else [])
 	glyphs.map(spelled => key_head(Key(ø, spelled as Op, ø))) + (if glyph == "-" then [key_head(Key(ø, Op.Neg, ø))] else [])
 }
 method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls_back: bool, reads_field: bool, operator: list?, promotions: list, floaters: list, reflected_owners: list = []): Node := {
