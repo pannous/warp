@@ -514,9 +514,9 @@ stems = ["pine_medium", "oak_medium", "aspen_medium", "ash_medium"]
 kits = []
 norms = []
 for stem in stems {
-	fine = read_tree_mesh(tree_folder + stem + ".eztree")
-	coarse = read_tree_mesh(tree_folder + stem + "_coarse.eztree")
-	far = read_tree_mesh(tree_folder + stem + "_far.eztree")
+	fine = tree_mesh(tree_folder + stem + ".eztree")
+	coarse = tree_mesh(tree_folder + stem + "_coarse.eztree")
+	far = tree_mesh(tree_folder + stem + "_far.eztree")
 	// Both stay inside one pixel, so the last level (the far stride) is the one the draw picks.
 	coarse.levels#1.mesh.error = 0.0001
 	far.levels#1.mesh.error = 0.0001

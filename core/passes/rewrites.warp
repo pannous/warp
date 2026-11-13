@@ -1229,8 +1229,9 @@ prelude_foreign_types(): map := {
 	if prelude_foreign_names == ø { prelude_foreign_names = foreign_types(prelude_text()) }
 	prelude_foreign_names
 }
-# how many arguments the call the rule matched passes the word, ø when it matched no call of it
-matched_arity(word: Node): int? := if rule_matched != ø and is_round(rule_matched) and #rule_matched > 0 and rule_matched#1 == word then #rule_matched - 1 else ø
+# how many arguments the call the rule matched passes the word, round or spaced (`max xs` passes max one, as max(xs)
+# does), ø when it matched no call of it
+matched_arity(word: Node): int? := if rule_matched != ø and (is_round(rule_matched) or is_word_phrase(rule_matched)) and #rule_matched > 0 and rule_matched#1 == word then #rule_matched - 1 else ø
 
 # what a type word converts, unless the program binds it: a value of another type (`int 3.7 == 3` is int(3.7) == 3),
 # yes or no for the yes/no type's own (`bool x == y` stays bool(x == y)), decision function-words-consume
