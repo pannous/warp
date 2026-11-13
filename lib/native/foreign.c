@@ -61,7 +61,6 @@ void* c_callback_pointer(int64_t slot) {
 }
 // the error number of the C call that failed last (core/native/driver.warp os_failure)
 int32_t last_error(void) { return errno; }
-void* library_function(char* library, char* name);
 // the terminal's rows, else its columns, on standard output; 0 outside a terminal (ioctl is variadic: called here, not
 // through native_call)
 int32_t terminal_size(int32_t rows) {
