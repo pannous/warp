@@ -101,7 +101,7 @@ line_editor() := {
 	editor = compile(editor_source())
 	if is_error(editor) { return ø }
 	history = text(env("HOME")) + "/.warp_history"
-	loaded = try run(editor, ["history", history]) catch e { e }
+	loaded = try run(Wasm(editor.bytes, ["history", history])) catch e { e }
 	if is_error(loaded) { return ø }
 	{module: editor, history: history}
 }
@@ -109,7 +109,7 @@ line_editor() := {
 // a line typed after the prompt, by the editor if there is one, ø at the input's end
 typed(prompt: text, editor: any) := {
 	if editor == ø { return input(prompt) }
-	line = try run(editor.module, [prompt, editor.history]) catch e { e }
+	line = try run(Wasm(editor.module.bytes, [prompt, editor.history])) catch e { e }
 	if is_error(line) { return input(prompt) }
 	line
 }
