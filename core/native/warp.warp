@@ -391,7 +391,7 @@ edited_line(history: text, lines: i64): text := {
 			break
 		}
 		if c == KEY_INTERRUPT {
-			fd_write(STDOUT, if line.length == 0 then "\n(Ctrl+C again or Ctrl+D to exit)\n" else "^C\n", 1, allocate(4))
+			if line.length == 0 { fd_write(STDOUT, "\n(Ctrl+C again or Ctrl+D to exit)\n", 1, allocate(4)) } else { fd_write(STDOUT, "^C\n", 1, allocate(4)) }
 			interrupted = line.length == 0
 			line = ""
 			at = 0
