@@ -409,7 +409,7 @@ one() {
 
 # warp's wasmtime C API in lib/, which `warp build native` links the driver from (card wasmtime-bundled); a no-op when current;
 # first, so a failed build's last line is its step and log
-"$scripts/wasmtime-c-api.sh" "$lib" || echo "rebuild.sh: warp's wasmtime C API did not build (scripts/wasmtime-c-api.sh): native builds of the driver fail" >&2
+"$scripts/wasmtime-c-api.sh" --from "$tree" "$lib" || echo "rebuild.sh: warp's wasmtime C API did not build (scripts/wasmtime-c-api.sh): native builds of the driver fail" >&2
 result=0
 case $which in
 	pure) one warp || result=$? ;;

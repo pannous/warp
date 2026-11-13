@@ -73,11 +73,6 @@ else
 	done
 	for library in "$installed"/lib*warp_*.* "$installed"/libwgpu_native.*; do clone "$library" "$tree/lib/" 2>/dev/null; done
 fi
-# warp's wasmtime C API changed (crates/wasmtime-capi): the tree's own, built in the tree's data/ (the shared target
-# stays main's, which a branch's sources would rebuild back and forth)
-if echo "$changed" | grep -q '^crates/wasmtime-capi/'; then
-	WARP_WASMTIME_TARGET=$tree/data/wasmtime "$scripts/wasmtime-c-api.sh" "$tree/lib" >/dev/null || { echo "smoke: scripts/wasmtime-c-api.sh failed for the tree's crates/wasmtime-capi" >&2; exit 1; }
-fi
 # a failed build prints its step, the step's output and the log's path in the store (and so does a hash failed before)
 built=$("$scripts/rebuild.sh" pure "$tree" 2>&1) || { echo "smoke: rebuild failed:" >&2; echo "$built" >&2; exit 1; }
 way=$(echo "$built" | grep -v "not prebuilt, compiled from source" | tail -1)
