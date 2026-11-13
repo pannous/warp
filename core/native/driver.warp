@@ -2175,6 +2175,16 @@ host_export(context: handle, name: text, function: pointer): bool := lazily_link
 host_run_ended(context: handle): nothing := {
 	if long_at(kept_value(RUN_SLOT) as i32 + HOST_LINKED_AT as i32).value != 0 { guest_call(0, context, "host_run_ended", 0, 0, allocate(VALUE_BYTES)) }
 }
+# the console's session waiting for a key: the native host module, when a line linked it, takes the window's events in,
+# so a picture a line painted shows and closes as after a run (card image-import-fix); whether it is linked
+session_waited(session: pointer): bool := {
+	if long_at(session + HOST_LINKED_AT as i32).value == 0 { return no }
+	outer_run = kept_value(RUN_SLOT)
+	keep_value(RUN_SLOT, session as i64)
+	guest_call(0, long_at(session + 24).value, "host_waited", 0, 0, allocate(VALUE_BYTES))
+	keep_value(RUN_SLOT, outer_run)
+	yes
+}
 # its export `export` of a system value's name, its number; host_told also of a number after it (`numbers`: 1)
 host_asked(export: text, name: text): i64 := host_told(export, name, 0, 0)
 host_told(export: text, name: text, value: i64, numbers: i64): i64 := {
