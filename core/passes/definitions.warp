@@ -30,7 +30,7 @@ is_parameter(n: Node): bool := match n {
 }
 
 definition(n: Node): Node := if is_runtime_declaration(n) then Node.Empty else match n {
-	List(parts, Bracket.None, Separator.Space): typed_definition_held(n)
+	List(parts, Bracket.None, Separator.Space): typed_definition_held(union_definition(n) ?? n)
 	Key(head, Op.Assign, body): { if is_head(head) or is_function_block(head, body) then Key(phrased_head(head), Op.Define, body) else typed_definition_held(n) }
 	Key(head, Op.Define, body): typed_definition_held(Key(phrased_head(head), Op.Define, body))
 	_: n
@@ -57,8 +57,29 @@ is_no_result(n: Node): bool := n == Node.Empty
 # `f(x) as T` as `f(x): T`; `f(x) as int or error`, which reads `(f(x) as int) or error`, as `f(x): int or error`
 as_result(target: Node): Node? := match target {
 	Key(head, Op.As, type): if is_call(head) and type is symbol then Key(head, Op.Colon, type) else ø
-	Key(left, Op.Or, other): { typed = as_result(left); if typed == ø then ø else Key(key_of(typed), Op.Colon, Key(value_of(typed), Op.Or, other)) }
+	Key(left, op, other): {
+		if op != Op.Or and op != Op.BitOr { return ø }
+		typed = as_result(left)
+		if typed == ø then ø else Key(key_of(typed), Op.Colon, Key(value_of(typed), op, other))
+	}
 	_: ø
+}
+# `def f(x) as int or text { … }`, `def f(x): int | text = e` (wiki/return.md): a union result type takes the body glued
+# to its last word, or the `=`, so no function keyword's rule matched; the definition with its result and body apart
+union_definition(n: Node): Node? := {
+	if not (is_group(n) and #n == 2 and n#1 is symbol and name_of(n#1) in function_keywords) { return ø }
+	written = n#2
+	parts = if is_key(written, Op.Assign) then [key_of(written), value_of(written)] else unglued_body(written)
+	if parts == ø { return ø }
+	target = as_result(parts#1) ?? parts#1
+	if is_key(target, Op.Colon) and is_call(key_of(target)) then Key(target, Op.Define, parts#2) else ø
+}
+# [the type phrase without it, the block] of a type phrase whose last word took the body, `int or text {…}`; else ø
+unglued_body(n: Node): list? := {
+	if is_group(n) and separator_of(n) == " " and #n == 2 and is_curly_group(n#2) { return [n#1, n#2] }
+	if not (is_key(n, Op.Or) or is_key(n, Op.BitOr) or is_key(n, Op.Colon) or is_key(n, Op.As)) { return ø }
+	inner = unglued_body(value_of(n))
+	if inner == ø then ø else [Key(key_of(n), op_of(n), inner#1), inner#2]
 }
 declared_result_form(n: Node): Node := match n {
 	# `f(x) as pdf := e`: in a definition's head `as` names the result, any type the program has, as `:` does
