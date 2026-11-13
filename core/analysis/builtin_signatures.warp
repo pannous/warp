@@ -102,6 +102,8 @@ compiler_lines = [
 # Todo (card builtin-signatures-review) bring all of these for discussion And explanation to the interviewer 
 	"ran·without·error(statement): bool from emitter",
 	"positioned(n, line, column): any from emitter",
+	"positioned_in(n, file, line, column): any from emitter",
+	"placed_like(made, at): any from emitter",
 	"closure_new(values...): function from emitter",
 	"cell_get(cell): any from emitter",
 	"cell_set(cell, value): any from emitter",

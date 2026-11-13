@@ -255,7 +255,7 @@ file_parsed(file: text): Node := {
 # unclosed-core: an unclosed ( in a core file hid its later definitions)
 checked_parse(file: text, source: text): Node := {
 	timed("parse " + working_relative(file))
-	tree = plain_node(parsed(source))
+	tree = plain_node(parsed_from(source, working_relative(file), 1))
 	for n in nodes_in(tree) {
 		message = parse_error_message(n)
 		if message != ø { raise working_relative(file) + ": " + message }

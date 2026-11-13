@@ -39,6 +39,22 @@ def with_field(holder: any, field: text, value: any, reader: function): any := {
 // The view of a source's tree, as the pipeline hands it on
 def tree(source: text): View := view_of(parsed(source))
 
+// the file a parse reads (its index in positions.warp source_files, 0 the program's own) and the line of that file its
+// source starts on, which every position it gives carries (card positions-always)
+global parsing_file = 0
+global parsing_first_line = 1
+// the tree of a source that is the text of `file` from its line `first_line` on: a used file, a library's definition
+def parsed_from(source: text, file: text, first_line: int, uses: text = ""): Node := {
+	outer_file = parsing_file
+	outer_line = parsing_first_line
+	parsing_file = file_index(file)
+	parsing_first_line = first_line
+	tree = parsed(source, uses)
+	parsing_file = outer_file
+	parsing_first_line = outer_line
+	tree
+}
+
 // The tree of a source: one statement as itself, several as a list
 def parsed(source: text, uses: text = ""): Node := {
 	try {
@@ -2850,7 +2866,7 @@ def atom(p: Parser): Node := {
 def placed_at(p: Parser, n: Node, start: int): Node := {
 	line = line_at(p, start)
 	line_start = p.line_starts[line - 1]
-	positioned(n, line, start - line_start + 1 + shifted(p, line_start, start))
+	positioned_in(n, parsing_file, line + parsing_first_line - 1, start - line_start + 1 + shifted(p, line_start, start))
 }
 
 // How many columns a source pass took out of the line from `line_start` before `at` (`\:alpha` written, α read), so

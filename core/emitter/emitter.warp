@@ -360,16 +360,10 @@ is_linked_word(f: Function): bool := f.body == Node.Empty and f.name in module.l
 # the file the program comes from, which a refusal names
 def emitting_file(file: text) { module.program_file = file }
 
-# a node of the program (no runtime word's) written somewhere: the place a later refusal names; in a function a library
-# file brought, that file, its definition's line and the function's name, as the slice it was parsed from keeps no
-# line of the file (prelude_words.warp defined_origins)
+# a node of the program (no runtime word's) written somewhere: the place a later refusal names, in the file it was
+# written in (a library's too: its positions carry their file)
 def note_emitting(body: Body, n: Node) {
 	if body.intrinsics { return }
-	if defined_origins.has(body.function.name) {
-		origin = defined_origins[body.function.name]
-		module.emitting_at = " at " + origin#1 + ":" + origin#2 + " (in " + body.function.name + ")"
-		return
-	}
 	at = written_at(n)
 	if at { module.emitting_at = place_text(at, module.program_file) }
 }

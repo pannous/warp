@@ -2,6 +2,16 @@
 // DONE code_points(line) These are probably calculated elsewhere too and can be optimized? (card code-points-once)
 // (line_widths is gone; each caller takes a source's code points once, the parser a single grapheme's)
 
+// every source file a compile parses, by the index its positions carry (core/runtime/fields.warp node_file): 0 the
+// program's own, whose name the compile knows (card positions-always)
+global source_files = [""]
+// the index of a source file, its first parse registering it
+def file_index(path: text): int {
+	for i in 0 ..< #source_files { if source_files[i] == path { return i } }
+	source_files += [path]
+	#source_files - 1
+}
+
 // The code points of a text as a list
 def code_points(text: text): list := [point for point in text.codepoints]
 

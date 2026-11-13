@@ -1,6 +1,7 @@
 # The tree walk every lowering pass shares (notes/self_hosting.md step 10), and the bridge between a node and its
 # plain-data view (the form serializer.warp documents). A pass is a word from node to node.
 use "../analysis/words.warp"
+use "../parsing/positions.warp"
 
 # a view kind with no node of its own in warp (an error, a type, sealed data): kept as written, behind this word
 opaque_word = HiddenWord.ViewOpaque as text
@@ -92,9 +93,7 @@ is_empty_list(n: Node): bool := empty_group_bracket(n) == "["
 # ø stays ø, as a rule's `() => $e` makes its `()`
 placed(made: Node, at: Node): Node := {
 	if made === ø { return made }
-	line = line_of(at)
-	column = column_of(at)
-	if line is int and column is int then positioned(made, line, column) else made
+	placed_like(made, at)
 }
 
 # n without its attributes, opaque empty groups and characters, keeping the place it was written at: the parser places a
@@ -340,21 +339,22 @@ report(n: T, message: text, preferred: any): T := {
 	said += [[line_of(n), column_of(n), message, preferred]]
 	n
 }
-# where n was written, [line, column]: its own position, else its first positioned part's (only atoms carry one), ø
-# for a node a pass made of none
+# where n was written, [line, column, file] (file: its index in positions.warp source_files): its own position, else
+# its first positioned part's (only atoms carry one), ø for a node a pass made of none
 written_at(n: Node): list? := {
-	if is_positioned(n) { return [line_of(n), column_of(n)] }
+	if is_positioned(n) { return [line_of(n), column_of(n), file_of(n)] }
 	for part in parts_of(n) {
 		found = written_at(part)
 		if found { return found }
 	}
 	ø
 }
-# ` at file:line:column` of a place written_at found; ` at line:column` without a file,
-# "" without a place
+# ` at file:line:column` of a place written_at found, the file it names else `file`; ` at line:column` without a
+# file, "" without a place
 place_text(at: list?, file: text): text := {
 	if not at { return "" }
-	" at " + (if file then file + ":" else "") + at#1 + ":" + at#2
+	named = if #at > 2 and at#3 > 0 then source_files[at#3] else file
+	" at " + (if named then named + ":" else "") + at#1 + ":" + at#2
 }
 # whether the symbol `word` occurs anywhere in n, inside an opaque layer too
 mentions(n: Node, word: text): bool := match n {
