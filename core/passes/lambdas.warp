@@ -270,7 +270,8 @@ lowered_lambdas(n: Node, locals: Locals, lowering: Lowering): Node := {
 # `sqrt`, the lambda calling it (library_word_value)
 function_value(name: text, n: Node, locals: Locals, lowering: Lowering): Node := {
 	if is_local(name, locals) { return n }
-	word = if name in lowering.arities then name else unaliased(name)
+	# (a name the program binds, a parameter `size` too, is its own: never an alias's word, count)
+	word = if name in lowering.arities or lowering.bound.has(name) then name else unaliased(name)
 	if word not in lowering.arities {
 		lambda = library_word_value(name, lowering.bound)
 		return if lambda == ø then n else lowered_lambdas(lambda, locals, lowering)
