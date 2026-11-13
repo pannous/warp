@@ -898,21 +898,16 @@ drawing_made(shader: text, values: map, width: int, height: int): any := {
 	body = if drawing.reads_previous then renamed(shader, PREVIOUS_HOLE, PREVIOUS_FUNCTION) else shader
 	fields = compute_fields(layout.compute, values)
 	if fields is bool { return ø }
-	// each storage array the shader reads: `values.mesh` its own array warp_values_mesh
-	read_arrays = []
-	for name in layout.arrays.map(array => array[0]) + fields.map(field => field.name) {
-		hole = VALUES_NAME + "." + name
-		if not names(body, hole) { continue }
-		body = renamed(body, hole, STORAGE_PREFIX + name)
-		read_arrays.add(name)
-	}
+	renaming = arrays_renamed(body, layout.arrays.map(array => array[0]) + fields.map(field => field.name))
+	body = renaming[0]
+	read_arrays = renaming[1]
 	if #read_arrays > MOST_COMPUTE_ARRAYS {
 		failed("a paint binds at most 8 arrays")
 		return ø
 	}
 	code = body + (if own_vertex_stage(shader) != "" then "" else FULL_IMAGE_VERTICES)
 	if #layout.declarations > 0 { code += "\nstruct WarpValues { " + layout.declarations.join(", ") + " }\n@group(0) @binding(" + VALUES_BINDING + ") var<uniform> " + VALUES_NAME + ": WarpValues;" }
-	for i in 0 ..< #read_arrays { code += "\n@group(0) @binding(" + (STORAGE_BINDING + i) + ") var<storage, read> " + STORAGE_PREFIX + read_arrays[i] + ": " + read_type(read_arrays[i], fields) + ";" }
+	for i in 0 ..< #read_arrays { code += storage_declared(STORAGE_BINDING + i, read_arrays[i], read_type(read_arrays[i], fields)) }
 	if drawing.reads_previous { code += PREVIOUS_FRAME }
 	drawing.pipeline = pipeline_of(code, FORMAT_RGBA8, drawing.depth, indexed)
 	if drawing.pipeline == 0 { return ø }
@@ -1031,6 +1026,20 @@ field_length(type: text): int := {
 	if digits == "" then 0 else int(digits)
 }
 // how the draw declares an array it reads: a field its own type, an atomic read as its plain number; a value's vec4fs
+// each storage array of these names the shader reads, `values.mesh` its own array warp_values_mesh: [the shader so
+// renamed, the names it reads]
+arrays_renamed(shader: text, candidates: list): list := {
+	body = shader
+	read = []
+	for name in candidates {
+		hole = VALUES_NAME + "." + name
+		if not names(body, hole) { continue }
+		body = renamed(body, hole, STORAGE_PREFIX + name)
+		read.add(name)
+	}
+	[body, read]
+}
+storage_declared(binding: int, name: text, type: text): text := "\n@group(0) @binding(" + binding + ") var<storage, read> " + STORAGE_PREFIX + name + ": " + type + ";"
 read_type(name: text, fields: list): text := {
 	found = fields.filter(field => field.name == name)
 	if #found == 0 then "array<vec4f>" else found[0].type.replace("atomic<u32>", "u32").replace("atomic<i32>", "i32")
@@ -1823,10 +1832,14 @@ pass_drawn(shader: text, given: any, width: int, height: int, reads: list, targe
 	values = values_copied(shader, given, width, height)
 	layout = values_laid_out(values)
 	if layout is bool { return no }
-	if #layout.arrays > 0 { return failed("gpu_pass takes numbers and short vectors, not a long list") }
+	// (a list it reads is a storage array, bound after the fields as paint binds its own)
+	renaming = arrays_renamed(shader, layout.arrays.map(array => array[0]))
+	read_arrays = layout.arrays.filter(array => array[0] in renaming[1])
 	decl = ""
 	if #layout.declarations > 0 { decl = "\nstruct WarpValues { " + layout.declarations.join(", ") + " }\n@group(0) @binding(" + VALUES_BINDING + ") var<uniform> " + VALUES_NAME + ": WarpValues;" }
-	code = pass_code(shader, decl, reads)
+	code = pass_code(renaming[0], decl, reads)
+	first_array = (if fields_filterable and #reads > 0 then 2 else 1) + #reads
+	for i in 0 ..< #read_arrays { code += storage_declared(first_array + i, read_arrays[i][0], read_type(read_arrays[i][0], [])) }
 	pipeline = pass_pipeline(code, format)
 	if pipeline == 0 { return no }
 	entries = []
@@ -1844,6 +1857,12 @@ pass_drawn(shader: text, given: any, width: int, height: int, reads: list, targe
 		texture_view = wgpuTextureCreateView(field.front, 0)
 		pass_views.add(texture_view)
 		entries.add([binding, 0, 0, texture_view])
+		binding += 1
+	}
+	for array in read_arrays {
+		made = stored_array(array[0], array[1], BUFFER_STORAGE)
+		if made == ø { return no }
+		entries.add([binding, made[0], made[1], 0])
 		binding += 1
 	}
 	group = 0

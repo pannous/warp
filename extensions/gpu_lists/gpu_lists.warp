@@ -6,5 +6,16 @@
 GpuCell = {F32: 0, I32: 1, U32: 2, F16: 3, BF16: 4, VEC2: 5, VEC3: 6, VEC4: 7}
 # its row in a list's kind field (core/analysis/kinds.warp ListKind; runtime.warp gpu_list_row)
 GpuListKind = {Row: 2}
-gpu_lists_extension = Extension{name: "gpu_lists", library_words: {gpu_zeros: "gpu_zeros", gpu_put: "gpu_put", gpu_list_of: "gpu_list_of", gpu_list_place: "gpu_list_place", gpu_list_cell: "gpu_list_cell", gpu_list_bytes: "gpu_list_bytes", view_order_into: "view_order_into"},
+# `xs: [f32] = …`, `xs: [vec4] = …`: the value made as a GPU list of those cells (extensions/rules/gpu_packing.warp
+# gpu_packed_as), a pass over the program and the library modules it uses alike: lib/splats.warp's `centres: [f32]`
+# is a GPU list as the same line in the program is one
+gpu_lists_declared(n: Node): Node := bottom_up(n, declared_packed)
+declared_packed(n: Node): Node := {
+	if not (is_key(n, Op.Assign) and is_key(key_of(n), Op.Colon)) { return n }
+	cells = value_of(key_of(n))
+	if not (is_group(cells) and bracket_of(cells) == "[" and #cells == 1) { return n }
+	packed = gpu_packed_as(cells#1, value_of(n))
+	if packed == ø then n else Key(key_of(key_of(n)), Op.Assign, packed)
+}
+gpu_lists_extension = Extension{name: "gpu_lists", passes_before: {"tries": gpu_lists_declared}, library_words: {gpu_zeros: "gpu_zeros", gpu_put: "gpu_put", gpu_list_of: "gpu_list_of", gpu_list_place: "gpu_list_place", gpu_list_cell: "gpu_list_cell", gpu_list_bytes: "gpu_list_bytes", view_order_into: "view_order_into"},
 	host_exports: ["gpu_list_place", "gpu_list_cell", "gpu_list_bytes"], constant_tables: {GpuCell: GpuCell}}

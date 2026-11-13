@@ -7,6 +7,8 @@ use timers
 SYSTEM_VALUE_POLL = 250ms
 // `on change online {…}`, `on change dark mode {…}`: a system value is a word without arguments the program does not
 // define, read every SYSTEM_VALUE_POLL by a timer (lib/timers.warp: the page runs it, natively none starts)
+// (the prelude's `dark mode` rule can't see the phrase here: the block binds to its last word, `mode {…}`)
+rewrite on change dark mode $body: block => on change dark_mode $body
 rewrite on set $x $body: block => variable_listen([$n], no, (value, old) => $body) where $n = watched_path($x)
 rewrite on change $x $body: block => variable_listen([$n], yes, (value, old) => $body) where $x is symbol and not polled_word($x, $program, $source) and $n = spelled($x)
 // `on change b + c {…}`: the block runs when a write of a name it reads changed the expression's value

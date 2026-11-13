@@ -162,22 +162,23 @@ global shaders_made = {}
 
 # a field the passes of paint([velocity: advect, …, show]) draw and read on the GPU (wiki/graphics.md "Fields and
 # passes"): `width` numbers at each of its columns × rows cells, kept from frame to frame. A function a pass runs reads
-# it at a cell, `velocity(x, y)`, filtered between cells (the GPU's 0.5 is a cell's center); the CPU never holds one
-FIELD_WIDTHS = 1 .. 4
+# it at a cell, `velocity(x, y)` or `velocity(p)` of a vector p, filtered between cells (the GPU's 0.5 is a cell's center); the CPU never holds one
+MOST_FIELD_NUMBERS = 4
 class GpuField {
 	width: int; columns: int; rows: int
-	call(x, y) := raise "a field lives on the GPU: read it in a function a pass of paint([…]) runs"
+	call(x, y = 0) := raise "a field lives on the GPU: read it in a function a pass of paint([…]) runs"
 }
 field(width: int, columns: int, rows: int): GpuField := {
-	if width not in FIELD_WIDTHS { raise "a field holds 1 to 4 numbers at each cell, not ${width}" }
+	if width < 1 or width > MOST_FIELD_NUMBERS { raise "a field holds 1 to 4 numbers at each cell, not ${width}" }
 	GpuField(width, columns, rows)
 }
 # a pass of paint([velocity: advect, …, show]) (lib/gpu_passes.warp paint_passes): [the name of the field it draws,
-# its shader, the values it reads now, the field's size]; the last, `show`, draws into none and paints as paint(f)
-function_pass(reached: map, name: text = "", into: any = ø): list := {
+# its shader, the values it reads now, the fields the program declares by name]; the last, `show`, draws into none and
+# paints as paint(f)
+function_pass(reached: map, fields: map, name: text = "", into: any = ø): list := {
 	if not (paint_on_gpu and gpu_paints()) { raise "paint's fields live on the GPU, and none paints here" }
 	made = shader_made(reached, name, into)
-	[name, made#1, shader_floats(values_named(reached, made#2)) ?? {}, if into == ø then ø else [into.columns, into.rows]]
+	[name, made#1, shader_floats(values_named(reached, made#2)) ?? {}, fields]
 }
 
 # paint(f, width, height) of a program function: its shader on the GPU, the values it reads as they are now; else f of
@@ -598,12 +599,13 @@ wgsl_program_value(n: Node): list := {
 	return [VALUES_NAME + "." + word, width]
 }
 wgsl_is_field(word: text): bool := shading.values.has(word) and shading.values[word] is GpuField
-# `velocity(x, y)`: the field's numbers at that cell, as `values.velocity(at)` reads them at the pixel `at`
-# (lib/gpu_passes.warp fields_placed)
+# `velocity(x, y)`, `velocity(p)`: the field's numbers at that cell, as `values.velocity(at)` reads them at the pixel
+# `at` (lib/gpu_passes.warp fields_placed)
 wgsl_field_read(word: text, at: list, n: Node): list := {
-	if #at != 2 or at.any(value => value#2 != 1) { return wgsl_refused(n, "a field is read at a cell, ${word}(x, y)") }
+	cell = if #at == 1 and at#1#2 == 2 then at#1#1 else if #at == 2 and at.all(value => value#2 == 1) then "vec2f(" + at#1#1 + ", " + at#2#1 + ")" else ""
+	if cell == "" { return wgsl_refused(n, "a field is read at a cell, ${word}(x, y) or ${word}(p) of a vector p") }
 	width = shading.values[word].width
-	read = VALUES_NAME + "." + word + "(vec2f(" + at#1#1 + ", " + at#2#1 + ") + 0.5)"
+	read = VALUES_NAME + "." + word + "(" + cell + " + 0.5)"
 	[if width == 4 then read else read + "." + COMPONENTS[.. width].join(""), width]
 }
 # the width of a value the shader reads: 1 a number, 2 to 4 a vector of as many numbers; an array of numbers or

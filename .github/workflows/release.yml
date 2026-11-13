@@ -204,6 +204,7 @@ jobs:
         tar -xzf "wabt-$WABT-windows-x64.tar.gz"
         gh release download "$LLVM_MINGW" --repo mstorsjo/llvm-mingw --pattern "llvm-mingw-$LLVM_MINGW-ucrt-x86_64.zip"
         unzip -q "llvm-mingw-$LLVM_MINGW-ucrt-x86_64.zip"
+        echo "$PWD/wabt-$WABT/bin" >>"$GITHUB_PATH"
         echo "$PWD/llvm-mingw-$LLVM_MINGW-ucrt-x86_64/bin" >>"$GITHUB_PATH"
     - name: our wasmtime C API
       run: WARP_WASMTIME_TARGET=$PWD/crates/wasmtime-capi/target scripts/wasmtime-c-api.sh lib
@@ -222,6 +223,13 @@ jobs:
         lib/warp.exe --version
         lib/warp.exe samples/hello/hello.warp | grep Hello
         [ "$(lib/warp.exe 'window_possible()')" = no ]
+        # warp test's slots, children and files: the cases started anew by posix_spawnp, as Windows has no fork
+        lib/warp.exe test test/modules/test_exec_sh_runs.pairs.warp
+    - name: a native build
+      # warp build native on Windows: wasm2c and clang from the PATH, the program's C functions and WASI by lib/native
+      run: |
+        lib/warp.exe build native samples/native/files.warp
+        cd samples/native && [ "$(./files)" = "Hello from a file" ]
 
   packages:
     # the tarballs repackaged: PyPI wheels of warp-language, .deb and .rpm of warp-lang, attached to the release

@@ -14,9 +14,11 @@ pattern; Wasp (C++) has its own tap pannous/homebrew-wasp).
   from the C the compilers job writes (`warp build native --c core/native/warp.warp`: no warp runs on Windows to build
   it there) with llvm-mingw's clang, against our wasmtime C API built there (warp_wasmtime.dll), and runs hello and
   smoke's checks. lib/native/windows.c answers the POSIX calls (lib/native/system.h includes it, the one place the C
-  asks the system): paths with forward slashes and no drive letter on the current drive, whose root the modules see
-  as /. Still missing: fork, popen's shell (`warp test`, `warp build`), other drives (cards windows-native-modules,
-  crlf-line-endings).
+  asks the system): paths as Git Bash writes them (`D:\a` is `/d/a`), each drive preopened for the modules under
+  that name, sh lines by the sh on PATH, commands by posix_spawnp over CreateProcess. The job also runs a `warp test`
+  file (no fork there: each case is this warp spawned anew) and `warp build native` of a sample (build.warp's
+  NATIVE_SYSTEMS: clang, exported symbols, the stack, no rpath). Still missing: CRLF sources (card crlf-line-endings),
+  window, sound and GPU, the archive and a scoop or winget manifest.
 - PyPI, .deb/.rpm (license fields `AGPL-3.0-or-later AND MIT`: the compiler AGPL, warp-runtime MIT). Both repackage the release tarballs, jobs `packages`, `pypi`
   of release.yml after `binaries`; `gh workflow run release.yml -f tag=v<version> -f repackage=true` reruns only them
   from the existing tarballs (their sha256 stay, so the formula stays valid).
