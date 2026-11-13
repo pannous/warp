@@ -446,7 +446,7 @@ linked_word_types(name: text): list := {
 		signature = linked_signature(image.name)
 		if signature == ø { continue }
 		for slice in signature.slices.filter(slice => slice#1 == name) {
-			for statement in statements_in(unpack(slice#3)) {
+			for statement in statements_in(slice_tree(slice#3, slice#4)) {
 				call = definition_call(statement)
 				if call != ø { found += [parameter_types(call)] }
 			}

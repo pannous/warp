@@ -9,8 +9,8 @@
 # fine clusters kept by the plane x >= 0.05, and how many of those fine clusters can be cone-culled.
 # The coarse grid is every other vertex of this grid. The oak's coarse level is EZ Tree's own LOD.
 # It is not a general simplifier and not Nanite.
-# `gpu` (or a window) paints the oak twice: the second frame can drop clusters the first frame's
-# depth already covered. `fps` prints a CPU rate on stderr. Neither changes the value.
+# It paints the oak twice: the second frame can drop clusters the first frame's depth already covered.
+# `fps` prints a CPU rate on stderr. Neither changes the value.
 use file
 use math
 use meshlets
@@ -79,29 +79,27 @@ if "fps" in args {
 	eprint("fps " + text(frame_rate(frames, wall_clock_ms() - started)))
 }
 
-if window_possible() or ("gpu" in args) {
-	fine = oak.levels#1
-	coarse = oak.levels#2
-	fine_src = mesh_draw_indices(fine.indices)
-	shift = count(fine.vertices)
-	source = fine_src + [i + shift for i in mesh_draw_indices(coarse.indices)]
-	vertices = fine.vertices + coarse.vertices
-	fine_n = count(fine.mesh.clusters)
-	coarse_n = count(coarse.mesh.clusters)
-	base = count(fine_src)
-	ranges = cluster_ranges(fine.mesh.clusters) + [[r#1 + base, r#2, 0.0, 0.0] for r in cluster_ranges(coarse.mesh.clusters)]
-	blank = [0 for i in 1 to count(source)]
-	distance = sqrt(0.5 * 0.5 + 3.0 * 3.0)
-	seen = [[0.0, 0.5, 3.0, distance], [1.0, 135.0, 1.0, 0.0 + count(half)]]
-	for plane in half { seen.add(plane) }
-	seen.add([0.0, 0.0 + fine_n, fine.mesh.error, 0.0])
-	seen.add([0.0 + fine_n, 0.0 + coarse_n, coarse.mesh.error, 0.0])
-	seen.add([160.0, 90.0, 0.0, 0.0])
-	bounds = cluster_bounds(fine.mesh.clusters) + cluster_bounds(coarse.mesh.clusters)
-	cones = cluster_cones(fine.mesh.clusters) + cluster_cones(coarse.mesh.clusters)
-	paint_oak(blank, seen, ranges, source, bounds, cones)
-	paint_oak(blank, seen, ranges, source, bounds, cones)
-}
+fine = oak.levels#1
+coarse = oak.levels#2
+fine_src = mesh_draw_indices(fine.indices)
+shift = count(fine.vertices)
+source = fine_src + [i + shift for i in mesh_draw_indices(coarse.indices)]
+vertices = fine.vertices + coarse.vertices
+fine_n = count(fine.mesh.clusters)
+coarse_n = count(coarse.mesh.clusters)
+base = count(fine_src)
+ranges = cluster_ranges(fine.mesh.clusters) + [[r#1 + base, r#2, 0.0, 0.0] for r in cluster_ranges(coarse.mesh.clusters)]
+blank = [0 for i in 1 to count(source)]
+distance = sqrt(0.5 * 0.5 + 3.0 * 3.0)
+seen = [[0.0, 0.5, 3.0, distance], [1.0, 135.0, 1.0, 0.0 + count(half)]]
+for plane in half { seen.add(plane) }
+seen.add([0.0, 0.0 + fine_n, fine.mesh.error, 0.0])
+seen.add([0.0 + fine_n, 0.0 + coarse_n, coarse.mesh.error, 0.0])
+seen.add([160.0, 90.0, 0.0, 0.0])
+bounds = cluster_bounds(fine.mesh.clusters) + cluster_bounds(coarse.mesh.clusters)
+cones = cluster_cones(fine.mesh.clusters) + cluster_cones(coarse.mesh.clusters)
+paint_oak(blank, seen, ranges, source, bounds, cones)
+paint_oak(blank, seen, ranges, source, bounds, cones)
 
 paint_oak(indices, view, ranges, source, bounds, cones) := paint(grid_shader, 160, 90, {indices: indices, depth: 1, compute: LOD_INDEX, workgroups: [1], indirect: [0, 1, 0, 0, 0], bounds: bounds, cones: cones, ranges: ranges, source: source, view: view})
 

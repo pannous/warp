@@ -214,11 +214,8 @@ rewrite sum($first .. $end) => (if $end <= $first then 0 else if ($end - $first)
 // `ys = 2 floats`: a list of 2 floats, as `ys = float[2]` (warp fix writes the count first, card fix-in-lib)
 rewrite $n floats => float[$n]
 rewrite $n ints => int[$n]
-rewrite ($xs: [f32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(f32, $v)
-rewrite ($xs: [i32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(i32, $v)
-rewrite ($xs: [u32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(u32, $v)
-rewrite ($xs: [f16] = $v) => ($xs = $packed) where $packed = gpu_packed_as(f16, $v)
-rewrite ($xs: [bf16] = $v) => ($xs = $packed) where $packed = gpu_packed_as(bf16, $v)
+// `xs: [f32] = …`, `[i32]`, `[vec4]` …: made as a GPU list of those cells (extensions/rules/gpu_packing.warp GPU_CELLS)
+rewrite ($xs: [$cell] = $v) => ($xs = $packed) where $cell in [f32, i32, u32, f16, bf16, vec2, vec3, vec4] and $packed = gpu_packed_as($cell, $v)
 // the arithmetic mean, also spelled average
 mean(xs) := if count(xs) == 0 then raise "mean of an empty list" else sum(xs) / count(xs)
 // x↑n, Knuth's up arrow, is the power and x↓b the log of x to base b (card easy-add): operators of numbers only, so
@@ -492,6 +489,8 @@ online() := system_value("online") != 0
 // whether the system shows dark mode (the page: the browser's prefers-color-scheme; natively the window library asks
 // the system); `on change dark mode {…}` hears it switch (lib/signals.warp)
 dark_mode() := system_value("dark mode") != 0
+// the system value as said, `whenever dark mode {…}`, `not dark mode`
+rewrite dark mode => dark_mode
 mouse_x() := system_value("mouse_x") as float
 mouse_y() := system_value("mouse_y") as float
 mouse_down() := system_value("mouse_down") != 0
@@ -1028,6 +1027,9 @@ global listener_counts = {}
 // a listener as a value: the event it listens to and its number there, so it is removed by itself, `h = on alarm {…}`
 // … `remove h`, short for `remove h from listeners of alarm` (card listener-address)
 class Listener { event: text; number: int }
+// `listeners of alarm -= h` (wiki Footguns "Event handlers"), in parentheses, as `=>` binds tighter than `-=`; a rule
+// of the prelude, as the event sugar's walk never takes such a write
+rewrite (listeners of $e -= $h) => unlisten(data $e, $h) where $e is symbol
 // `remove alarm` (extensions/sugar/events.warp): the listener removed from the event it listens to
 listener_removed(listener: Listener) := unlisten(listener.event, listener)
 listen(name: any, listener: function, once: bool): Listener := {
@@ -1059,6 +1061,11 @@ unlisten(name: any, listener: any): any := {
 	key = name_of(name)
 	number = if listener is Listener then listener.number else listener
 	if key in event_listeners { kept_listeners(key, i => listener_numbers[key]#i != number) }
+	ø
+}
+// `clear listeners of alarm`: none listen any more
+listeners_cleared(name: any): any := {
+	if name_of(name) in event_listeners { kept_listeners(name_of(name), i => no) }
 	ø
 }
 // the listeners of an event at the positions keep holds for

@@ -17,6 +17,7 @@ enum Key {
 // the bare words of the keys, aliases of its cases
 ESC = Key.escape
 ESCAPE = Key.escape
+esc = Key.escape
 ENTER = Key.enter
 RETURN = Key.enter
 TAB = Key.tab

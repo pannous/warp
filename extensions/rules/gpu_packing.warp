@@ -74,7 +74,7 @@ gpu_literal(v: Node): bool := is_group(v) and bracket_of(v) == "[" and not gpu_c
 # the creating form written to make the GPU list itself (any other value copied into one, gpu_list_of): `float[n]` its zeros, a literal its items written into them
 # one by one, a comprehension each item as it is computed, counted by a first loop (`#(0..n)` makes the range a list)
 # the cells a GPU list holds, `xs: [i32] = …` (extensions/gpu_lists/gpu_lists.warp GpuCell): f32 unless the program says so
-GPU_CELLS = {f32: 0, i32: 1, u32: 2, f16: 3, bf16: 4}
+GPU_CELLS = {f32: 0, i32: 1, u32: 2, f16: 3, bf16: 4, vec2: 5, vec3: 6, vec4: 7}
 gpu_packed(v: Node): Node := plain_node(parsed(gpu_packed_code(v, "f32")))
 # `xs: [i32] = …`, `xs: [u32] = …`: the value made as a GPU list of those cells; ø for a list type of no GPU cell
 gpu_packed_as(cell: Node, v: Node): any := if cell is symbol and name_of(cell) in GPU_CELLS then plain_node(parsed(gpu_packed_code(v, name_of(cell)))) else ø
