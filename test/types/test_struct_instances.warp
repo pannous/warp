@@ -10,7 +10,7 @@ is! 'class Point{x:int; y:int; sum() := x + y}; f(p:Point) := p.sum() * 2; f(Poi
 
 # a_field_write_of_a_struct_variable_sets_the_field
 is! 'class Point{x:int; y:int}; p = Point(3, 4); p.x = 7; p.y += 1; p.x * p.y' 35
-is! 'class Point{x:int; y:int}; p = Point(3, 4); i=0; while i<3 { p.x += i; i++ }; string(p)' 'Point{x:6 y:4}'
+is! 'class Point{x:int; y:int}; p = Point(3, 4); i=0; while i<3 { p.x += i; i++ }; string(p)' 'Point{x: 6, y: 4}'
 
 # a_method_changing_its_struct_variable_keeps_the_struct
 is! 'class Counter{n:int; inc() := n += 1}; c = Counter(0); i=0; while i<5 { c.inc(); i++ }; c.n' 5
