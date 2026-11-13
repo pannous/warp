@@ -35,7 +35,7 @@ png_pixels(bytes: list): list := {
 	bits = png_channels(color_type) * depth
 	stride = (width * bits + 7) /! 8
 	step = max(1, bits /! 8)
-	data = zlib_decompress(chunks.filter(chunk => chunk[0] == data_chunk).flat_map(chunk => chunk[1]))
+	data = decompress(chunks.filter(chunk => chunk[0] == data_chunk).flat_map(chunk => chunk[1]))
 	palette = chunk_data(chunks, palette_chunk) ?? []
 	alphas = chunk_data(chunks, transparency_chunk) ?? []
 	pixels = []
