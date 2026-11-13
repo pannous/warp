@@ -3,6 +3,13 @@ def call(body: Body, f: Function, arguments: list): TypedCode {
 	parameters = f.signature.parameters
 	if gathers(f.signature, #arguments) { return rest_call(body, f, arguments) }
 	if #arguments > #parameters { return refuse_arguments(f, #arguments) }
+	# a word that is one number, `small_int_low(): int := -128`, is that number where it is called, no call (card
+	# constant-words-inline: 7.7% of a loop's own time went to such calls)
+	literal = if #arguments == 0 and #parameters == 0 then constant_body(f) else ø
+	if literal != ø {
+		constant = expression_code(body, literal)
+		if constant.kind == (declared_result(f) ?? constant.kind) { return constant }
+	}
 	slots = placed_arguments(taken_names(f.signature), arguments, f.signature.parameters.map(p => p.label))
 	if slots == ø { return refuse_arguments(f, #arguments) }
 	given = range_list(#slots).map(i => if slots[i] == ø then default_value(body, f, i, #arguments) else expression_code(body, slots[i]#1))
@@ -159,6 +166,12 @@ analyzed_parameter_kind(f: Function, i: int): any := {
 	found = analyzed_function(f)
 	if found == ø or i >= #found["params"] { return ø }
 	kept_kind(found["params"][i])
+}
+# the number a word's whole body is, `-128` of `small_int_low(): int := -128` (lowered `-128 as int`), else ø
+constant_body(f: Function): Node? := {
+	if f.body == ø { return ø }
+	value = if is_key(f.body, Op.As) then key_of(f.body) else f.body
+	if value is number or is_negative_literal(value) then value else ø
 }
 # the kind a definition declares it gives, `f(x): text := …`: once lowered its body, or a block's last statement, is
 # `… as text`, or the block `{the result: text = …; the result}` (definitions.warp result_held)
