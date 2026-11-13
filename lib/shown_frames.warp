@@ -1,0 +1,12 @@
+// run `f` each frame of the window for up to `milliseconds`, or once when none opens (--no-window, no video
+// device; decision on-frame-headless). A paint loop that ignores this writes a PNG every frame into $TMPDIR/warp-paint
+use os
+shown_frames(f: function, milliseconds: int = 10000) := {
+	f()
+	if windowless() or not window_open() { return }
+	started = clock()
+	while window_open() and clock() - started < milliseconds {
+		f()
+		sleep(1 / 60)
+	}
+}

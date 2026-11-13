@@ -56,9 +56,11 @@ global event = 0
 global rectangle = 0
 global points_wide = 0
 global points_high = 0
+// SDL video or CreateWindow failed this run: do not retry or reprint "No available video device"
+global window_failed = no
 
-// no window under --no-window or CI, nor without SDL3
-windows_refused() := windowless() or library_function("SDL3", "SDL_Init") == 0
+// no window under --no-window or CI, nor without SDL3, nor after a failed open
+windows_refused() := windowless() or window_failed or library_function("SDL3", "SDL_Init") == 0
 // the keycode SDL tells as the code warp gives the key; 0 for a key without one
 key_code(key: int): int := {
 	for i in 0 ..< count(SDL_KEYS) { if SDL_KEYS[i] == key { return WARP_KEYS[i] } }
@@ -81,14 +83,20 @@ enlarged(): int := {
 }
 window_opened() := {
 	if open_now or windows_refused() { return ø }
-	if not sdl_started(SDL_INIT_VIDEO) { return eprint("window: " + SDL_GetError()) }
+	if not sdl_started(SDL_INIT_VIDEO) {
+		window_failed = yes
+		return eprint("window: " + SDL_GetError())
+	}
 	event = calloc(1, SDL_EVENT_BYTES)
 	rectangle = calloc(1, SDL_RECT_BYTES)
 	points_wide = calloc(1, 4)
 	points_high = calloc(1, 4)
 	times = enlarged()
 	sdl_window = SDL_CreateWindow(WINDOW_TITLE, width * times, height * times, SDL_WINDOW_METAL + SDL_WINDOW_RESIZABLE)
-	if sdl_window == 0 { return eprint("window: " + SDL_GetError()) }
+	if sdl_window == 0 {
+		window_failed = yes
+		return eprint("window: " + SDL_GetError())
+	}
 	view = SDL_Metal_CreateView(sdl_window)
 	open_now = yes
 	title_ns = SDL_GetTicksNS()

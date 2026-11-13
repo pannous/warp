@@ -4,6 +4,7 @@
 # compute_toy runs a shader from compute.toys as it is: its main_image colors each pixel with textureStore.
 # More of them: https://github.com/pannous/shaders (folder warp/compute_toys)
 use compute_toys
+use shown_frames
 lamp = compute_toy(shader {
 	const BLOBS = 7;
 
@@ -55,9 +56,5 @@ lamp = compute_toy(shader {
 		textureStore(screen, id.xy, float4(color, 1.0));
 	}
 })
-# run for ten seconds
-started = clock()
-while clock() - started < 10000 {
-	paint(lamp)
-	sleep(1 / 60)
-}
+# ten seconds in a window; without one, one still (shown_frames, decision on-frame-headless)
+shown_frames(() => paint(lamp), 10000)

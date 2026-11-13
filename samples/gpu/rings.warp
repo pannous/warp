@@ -1,11 +1,11 @@
 #!/usr/bin/env warp
 # Concentric rings from the distance to the centre, sliding outward with time.
 # Their colour is sampled from two generated textures bound as channel0 and channel1.
-# Move the window, or run a few frames with --no-window.
+# Move the window, or paint one still with --no-window.
 # More of them: https://github.com/pannous/shaders (folder warp/compute_toys)
 use compute_toys
 use image
-use os
+use shown_frames
 
 # channel0: a hashed colour field the rings pick from as they travel
 noise_at(x: int, y: int): Color := {
@@ -52,10 +52,5 @@ rings = compute_toy(shader {
 		textureStore(screen, id.xy, float4(color, 1.0));
 	}
 }, noise, tint)
-# a few frames with --no-window; otherwise run for ten seconds, as the other compute_toys samples do
-started = clock()
-limit = if windowless() then 2000 else 10000
-while clock() - started < limit {
-	paint(rings.shader, shown_width(), shown_height(), rings.values)
-	sleep(1 / 60)
-}
+# ten seconds in a window; without one (--no-window, no device), one still (shown_frames, decision on-frame-headless)
+shown_frames(() => paint(rings.shader, shown_width(), shown_height(), rings.values), 10000)

@@ -852,8 +852,10 @@ foreign_shown(name: text): any := {
 	"(" + range_list(#types).map(i => names[i] + ": " + types[i]).join(", ") + ") -> " + d#5
 }
 # `type(sqrt)` of a library word the program neither defines nor binds: "builtin: (x:number) -> number", its first typed
-# line (`sqrt(x: number): number from warp`, lib/math.warp); ø for any other name (card function-signatures)
-builtin_type(name: Node, program: Node): any := builtin_shown(name, program, "builtin: ")
+# line (`sqrt(x: number): number from warp`, lib/math.warp); `type(area)` of a function the program or a module it uses
+# defines: "function: (width: int, height: int) -> int", its signature; ø for any other name (card function-signatures)
+builtin_type(name: Node, program: Node): any := builtin_shown(name, program, "builtin: ") ?? defined_type(signature_text(name, program))
+defined_type(signature: text?): any := if signature == ø then ø else "function: " + signature
 builtin_shown(name: Node, program: Node, before: text): any := {
 	signature = builtin_signature(name, program)
 	if signature == ø { return ø }
@@ -1034,12 +1036,22 @@ class_members(class_name: text, source: text): any := {
 class_fields_listed(name: Node, program: Node, source: text): any := {
 	lineage = written_lineage(name, source)
 	if owns_word("fields", program) or #lineage == 0 { return ø }
-	texts_list(lineage.reverse().flat_map(owner => (class_members(owner, source) ?? [[], []])#1.map(field => "${field}")))
+	texts_list(lineage_fields(lineage, source))
+}
+# the field names of a class's lineage, those of the class it extends first
+lineage_fields(lineage: list, source: text): list := lineage.reverse().flat_map(owner => owner_members(owner, source)#1.map(field => "${field}"))
+owner_members(owner: text, source: text): list := class_members(owner, source) ?? [[], []]
+# `dir(P)` of a class the program declares: its fields, then its methods, those of the classes it extends among them;
+# ø where the program has its own dir or declares no class of that name
+class_dir(name: Node, program: Node, source: text): any := {
+	lineage = written_lineage(name, source)
+	if owns_dir(program) or #lineage == 0 { return ø }
+	texts_list(lineage_fields(lineage, source) + lineage.flat_map(owner => owner_members(owner, source)#2))
 }
 class_methods_listed(name: Node, program: Node, source: text): any := {
 	lineage = written_lineage(name, source)
 	if owns_word("methods", program) or #lineage == 0 { return ø }
-	own = lineage.flat_map(owner => (class_members(owner, source) ?? [[], []])#2)
+	own = lineage.flat_map(owner => owner_members(owner, source)#2)
 	outside = first_parameter_types.keys.filter(function => lineage.contains(first_parameter_types[function]) and not own.contains(function))
 	List((own + outside).map(symbol), Bracket.Square, Separator.Comma)
 }
@@ -1080,7 +1092,7 @@ instance_members(variable: Node, part: Node, source: text): any := {
 	made = class_made_as(spelled(variable), source)
 	members = if made == ø then ø else class_members(made, source)
 	if members == ø or spelled(part) in members#1 + members#2 { return ø }
-	fields = members#1.map(field => "${field}")
+	fields = lineage_fields(written_lineage(symbol(made), source), source)
 	texts_list(if spelled(part) in field_words then fields else if spelled(part) == "methods" then members#2 else fields + members#2)
 }
 # `fields` and the words that say it (decision synonyms-are-aliases): the word, else ø, also where the program has its
@@ -1103,7 +1115,7 @@ class_setter(variable: Node, word: Node, source: text): any := {
 	made = class_made_as(spelled(variable), source)
 	if made == ø { return ø }
 	lineage = class_lineage(made, plain_node(parsed(source)))
-	if lineage.any(owner => spelled(word) in (class_members(owner, source) ?? [[], []])#1.map(field => "${field}")) { return ø }
+	if spelled(word) in lineage_fields(lineage, source) { return ø }
 	if lineage.contains(first_parameter_types.get(spelled(word))) then yes else ø
 }
 # `area.full`: what printing area shows, its doc as comment lines above its definition as written
@@ -1184,7 +1196,9 @@ value_definitions(program: Node, source: text): any := {
 }
 dir_words(name: Node, program: Node): any := if owns_dir(program) or "${name}" in names_bound_in_kept(program) then ø else module_dir("${name}")
 owns_dir(program: Node): bool := owns_word("dir", program)
-owns_word(word: text, program: Node): bool := function_definition(symbol(word), program) != ø
+# a word the program defines itself; the prelude's reflection words (`fields(x) := keys(x)`) leave the declared
+# classes' and modules' rules alone
+owns_word(word: text, program: Node): bool := function_definition(symbol(word), program) != ø and word not in prelude_definitions()
 module_dir(word: text): any := {
 	source = used_module_text(word)
 	if source == "" { return ø }
@@ -1351,6 +1365,7 @@ rule_words = {
 	gpu_packed: gpu_packed,
 	gpu_packed_as: gpu_packed_as,
 	instance_members: instance_members,
+	class_dir: class_dir,
 	field_word: field_word,
 	class_fields_listed: class_fields_listed,
 	class_methods_listed: class_methods_listed,
@@ -1393,6 +1408,7 @@ rule_words = {
 	served: served,
 	compute_toys_made: compute_toys_made,
 	shader_values: shader_values,
+	shader_passes: shader_passes,
 	shader_words_of: shader_words_of,
 	shader_place_of: shader_place_of,
 	shorthand_closure: shorthand_closure,

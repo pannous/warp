@@ -38,6 +38,7 @@ use "match_patterns.warp"
 use "protocols.warp"
 use "conversions.warp"
 use "called_blocks.warp"
+use "default_overloads.warp"
 use "implicit_uses.warp"
 use "test_lines.warp"
 use "scoped_words.warp"
@@ -113,6 +114,7 @@ EXTENSIONS = [
 	Extension{name: "class_methods", passes: {"definition_heads": classes_rewritten}, library_words: foreign_instance_words}
 	Extension{name: "int_types", passes_before: {"rules_rewritten": subtype_tests, "definition_heads": classed_definitions}, passes: {"definition_heads": int_types}}
 	called_blocks_extension
+	default_overloads_extension
 	conversions_extension
 	# (after conversions: its `as` of a C enum reach plain_enums)
 	c_enums_extension
