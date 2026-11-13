@@ -5,12 +5,8 @@
 # triage-held 2026-11-06: record keyword :: 'record point{x:int y:int}; p=point(1,2); p.x+p.y'	3
 
 # a_class_has_untyped_fields
-# triage-held 2026-11-13: spaced values in parentheses are one list, the fix-it names contact("Joe", "j@x") (user via Interviewer) :: 'class contact {name email}; c=contact("Joe" "j@x"); c.name'	'Joe'
-# triage-held 2026-11-13: spaced values in parentheses are one list, the fix-it names contact("Joe", "j@x") (user via Interviewer) :: 'class contact {name email}; contact("Joe" "j@x").email'	'j@x'
-# triage-held 2026-11-13: spaced values in parentheses are one list, the fix-it names contact("Joe", "j@x") (user via Interviewer) :: 'class pair {a b}; p=pair(1 2); p.a+p.b'	3
 
 # an_optional_field_defaults_to_null
-# triage-held 2026-11-13: spaced values in parentheses are one list, the fix-it names contact("Joe", "j@x") (user via Interviewer) :: 'class contact {name email?}; contact("Joe" "j@x").email'	'j@x'
 'class contact {name email?}; contact("Joe").name'	'Joe'
 
 # an_enum_names_its_cases_by_index
