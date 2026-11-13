@@ -160,16 +160,35 @@ shading = WgslTranslation({}, {}, [], {}, {}, [], {}, "", [])
 # each painted function's [shader, the names of the program values it reads], made at its first paint
 global shaders_made = {}
 
+# a field the passes of paint([velocity: advect, …, show]) draw and read on the GPU (wiki/graphics.md "Fields and
+# passes"): `width` numbers at each of its columns × rows cells, kept from frame to frame. A function a pass runs reads
+# it at a cell, `velocity(x, y)`, filtered between cells (the GPU's 0.5 is a cell's center); the CPU never holds one
+FIELD_WIDTHS = 1 .. 4
+class GpuField {
+	width: int; columns: int; rows: int
+	call(x, y) := raise "a field lives on the GPU: read it in a function a pass of paint([…]) runs"
+}
+field(width: int, columns: int, rows: int): GpuField := {
+	if width not in FIELD_WIDTHS { raise "a field holds 1 to 4 numbers at each cell, not ${width}" }
+	GpuField(width, columns, rows)
+}
+# a pass of paint([velocity: advect, …, show]) (lib/gpu_passes.warp paint_passes): [the name of the field it draws,
+# its shader, the values it reads now, the field's size]; the last, `show`, draws into none and paints as paint(f)
+function_pass(reached: map, name: text = "", into: any = ø): list := {
+	if not (paint_on_gpu and gpu_paints()) { raise "paint's fields live on the GPU, and none paints here" }
+	made = shader_made(reached, name, into)
+	[name, made#1, shader_floats(values_named(reached, made#2)) ?? {}, if into == ø then ø else [into.columns, into.rows]]
+}
+
 # paint(f, width, height) of a program function: its shader on the GPU, the values it reads as they are now; else f of
 # each pixel on the CPU (lib/prelude.warp paint_each)
 # hash(cell) on the CPU, as the shader word computes it (lib/prelude.warp SHADER_WORDS_WGSL), for a painting without a GPU
 hash(cell: list) := fract(sine(dot(cell .- 289 .* floor(cell ./ 289), [127.1, 311.7])) * 43758.5453)
 // a program paints on the CPU, exact in f64, with `paint_on_gpu = no`
 global paint_on_gpu = yes
-paint_function(reached: map, width, height, f) := if paint_on_gpu and gpu_paints() then paint(shader_of(reached), width, height, shader_floats(values_read(reached))) else paint_each(f, width, height)
-# the program values the function's shader reads, as they are now; ø for none
-values_read(reached: map): any := {
-	names = shader_made(reached)#2
+paint_function(reached: map, width, height, f) := if paint_on_gpu and gpu_paints() then paint(shader_of(reached), width, height, shader_floats(values_named(reached, shader_made(reached)#2))) else paint_each(f, width, height)
+# the program values of these names the function's shader reads, as they are now; ø for none
+values_named(reached: map, names: list): any := {
 	if #names == 0 { return ø }
 	read = {}
 	for name in names { read[name] = painted_value(reached.values[name]) }
@@ -182,18 +201,35 @@ painted_value(value) := if is_color(value) then channels(value) else if value is
 is_color(value): bool := value is Color and not (value is int)
 # `shader_of(f)`: the WGSL fragment shader that paints f(column, row) at every pixel, as a text
 shader_of(reached: map): text := shader_made(reached)#1
-shader_made(reached: map): list := {
-	if not shaders_made.has(reached.name) { shaders_made[reached.name] = [wgsl_shader(reached), shading.read_values] }
-	shaders_made[reached.name]
+# (a pass drawing into a field, `into`, gives its value as it is, not as a color)
+shader_made(reached: map, name: text = "", into: any = ø): list := {
+	key = reached.name + " " + name
+	if not shaders_made.has(key) { shaders_made[key] = [wgsl_shader(reached, into), shading.read_values] }
+	shaders_made[key]
 }
-wgsl_shader(reached: map): text := {
-	painted = wgsl_painted_call(reached)
+wgsl_shader(reached: map, into: any = ø): text := {
+	given = if into == ø then "vec4f(" + wgsl_painted_call(reached) + ", 1.0)" else wgsl_stored_call(reached, into)
 	if shading.refusal != "" { raise "shader_of(${reached.name}): ${shading.refusal}" }
 	shader_functions = shading.written_functions.join("\n\n")
-	shader_words(shader_functions + "\n\n@fragment fn main(@builtin(position) position: vec4f) -> @location(0) vec4f {\n\treturn vec4f(" + painted + ", 1.0);\n}\n")
+	shader_words(shader_functions + "\n\n@fragment fn main(@builtin(position) position: vec4f) -> @location(0) vec4f {\n\treturn " + given + ";\n}\n")
 }
-# f called at the pixel's column and row (WGSL's position is the pixel's center)
+# f's value at the cell as the field `into` stores it, padded to the 4 numbers of a cell
+wgsl_stored_call(reached: map, into: GpuField): text := {
+	called = wgsl_called(reached)
+	if shading.refusal == "" and called#2 != into.width { wgsl_refused(symbol(reached.name), "${reached.name} gives ${wgsl_type(called#2)}, but the field it draws holds " + wgsl_type(into.width)) }
+	if called#2 == 4 then called#1 else "vec4f(" + called#1 + ", 0.0" * (4 - called#2) + ")"
+}
+# f called at the pixel's column and row (WGSL's position is the pixel's center), as a color
 wgsl_painted_call(reached: map): text := {
+	f = symbol(reached.name)
+	called = wgsl_called(reached)
+	if called#2 == 0 { return "select(" + painted_grays() + ", " + called#1 + ")" }
+	if called#2 == 1 { return "select(" + painted_grays() + ", " + called#1 + " != 0.0)" }
+	if shading.refusal == "" and called#2 != COLOR_WIDTH { wgsl_refused(f, "a painted function gives a color [r, g, b], a number or yes/no; ${f} gives " + wgsl_type(called#2)) }
+	called#1
+}
+# f called at the pixel's column and row, translated afresh: [its WGSL, its width]
+wgsl_called(reached: map): list := {
 	shading.definitions = {}
 	for definition in reached.code { shading.definitions[definition_name(definition)] = definition }
 	shading.values = reached.values ?? {}
@@ -205,11 +241,7 @@ wgsl_painted_call(reached: map): text := {
 	shading.value_widths = {}
 	shading.refusal = ""
 	shading.calling = []
-	called = wgsl_program_call(name_of(f), [["position.x - 0.5", 1], ["position.y - 0.5", 1]], f)
-	if called#2 == 0 { return "select(" + painted_grays() + ", " + called#1 + ")" }
-	if called#2 == 1 { return "select(" + painted_grays() + ", " + called#1 + " != 0.0)" }
-	if shading.refusal == "" and called#2 != COLOR_WIDTH { wgsl_refused(f, "a painted function gives a color [r, g, b], a number or yes/no; ${f} gives " + wgsl_type(called#2)) }
-	called#1
+	wgsl_program_call(name_of(f), [["position.x - 0.5", 1], ["position.y - 0.5", 1]], f)
 }
 
 wgsl_refused(n: Node, why: text): list := {
@@ -455,6 +487,7 @@ wgsl_call(name: Node, arguments: list, n: Node, scope: WgslScope): list := {
 	if scope.widths.has(word) {
 		return wgsl_refused(n, "${word} is a value, not a function")
 	}
+	if wgsl_is_field(word) { return wgsl_field_read(word, arguments.map(argument => wgsl_expression(argument, scope)), n) }
 	# a word WGSL has wins over its library definition (lib/math's cosine is each_any of cos)
 	if word in SAME_VALUE_WORDS and #arguments == 1 { return wgsl_expression(arguments#1, scope) }
 	if WGSL_MEANINGS.has(word) { return wgsl_meant(word, arguments.map(argument => wgsl_expression(argument, scope)), n) }
@@ -555,6 +588,7 @@ wgsl_program_value(n: Node): list := {
 	if wgsl_name(word) != word {
 		return wgsl_refused(n, "a value named ${word} has no name in WGSL")
 	}
+	if wgsl_is_field(word) { return wgsl_refused(n, "${word} is a field: read it at a cell, ${word}(x, y)") }
 	width = wgsl_value_width(shading.values[word])
 	if width == 0 {
 		return wgsl_refused(n, "${word} is no number, no vector of 2 to 4, nor a list of either")
@@ -562,6 +596,15 @@ wgsl_program_value(n: Node): list := {
 	shading.value_widths[word] = width
 	shading.read_values += [word]
 	return [VALUES_NAME + "." + word, width]
+}
+wgsl_is_field(word: text): bool := shading.values.has(word) and shading.values[word] is GpuField
+# `velocity(x, y)`: the field's numbers at that cell, as `values.velocity(at)` reads them at the pixel `at`
+# (lib/gpu_passes.warp fields_placed)
+wgsl_field_read(word: text, at: list, n: Node): list := {
+	if #at != 2 or at.any(value => value#2 != 1) { return wgsl_refused(n, "a field is read at a cell, ${word}(x, y)") }
+	width = shading.values[word].width
+	read = VALUES_NAME + "." + word + "(vec2f(" + at#1#1 + ", " + at#2#1 + ") + 0.5)"
+	[if width == 4 then read else read + "." + COMPONENTS[.. width].join(""), width]
 }
 # the width of a value the shader reads: 1 a number, 2 to 4 a vector of as many numbers; an array of numbers or
 # vectors (a list of more than four, or of lists) its items' width negated, `levels#b` reads an item; 0 for any other
