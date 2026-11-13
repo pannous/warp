@@ -1144,6 +1144,8 @@ names_bound_in(n: Node): any := {
 			}
 			if is_key(part, Op.Colon) and left is symbol and left != symbol("global") { found[name_of(left)] = yes }
 			if is_key(part, Op.Arrow) { for name in pattern_names(left) { found[name] = yes } }
+			# a node case, `n is Key(h, op, b)`: its parts, never units' h
+			if is_key(part, Op.Is) and case_pattern(value_of(part)) != ø { for name in case_pattern_names(value_of(part)) { found[name] = yes } }
 			# a ternary's `then : else` is its two branches, no `pi: 4` binding pi
 			branches = value_of(part)
 			waiting += if is_key(part, Op.Question) and is_key(branches, Op.Colon) then [key_of(part), key_of(branches), value_of(branches)] else [key_of(part), branches]
