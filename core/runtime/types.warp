@@ -140,6 +140,7 @@ held_kind_word(n: any): text := {
 	if kind == Kind.Int and is_ratio(n) { return "rational" }
 	if marked_kind(n) == Marked.Map { return "map" }
 	if marked_kind(n) == Kind.Text + KindUnit.Info { return "path" }
+	if kind == Kind.Time { return extended_type_word(n) }
 	kind_word(kind)
 }
 # the type word of a kind by its code, data for the others: a match, as reading
