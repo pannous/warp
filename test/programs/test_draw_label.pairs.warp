@@ -1,4 +1,5 @@
 # from test_draw_label.rs: edit the Rust test, then run the script again
+// needs: display
 
 # text_coverage_grows_with_the_size_and_the_words
 'text_coverage("Hi", 32)[0] > text_coverage("Hi", 16)[0]'	true

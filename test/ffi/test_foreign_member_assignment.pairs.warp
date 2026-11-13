@@ -2,4 +2,4 @@
 
 # a_js_member_is_set
 'use js Math; Math.answer = 42; Math.answer'	42
-'use js Map; m = Map(); m.answer = "yes"; m.answer'	'yes'
+'use js Map; m = Map(); m.answer = "yes"; m.answer'	'yes'	needs: js

@@ -93,10 +93,12 @@ is_runtime_declaration(n: Node): bool := {
 
 # `f(x): T := e`: `f(x) := {the result: T = e; the result}`, the result held as a T
 result_word = "the result"
+# a linked module's word declared without its body (random(a, b): float of the prelude): its module answers for its
+# result, so it holds none here and never answers ø for being empty
+is_brought_declaration(head: Node, body: Node): bool := body == Node.Empty and brought_names.has(name_of(head#1))
 result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
 	Key(head, Op.Colon, result_type): {
-		# (a declaration, a linked module's word without its body, holds no result: random(a, b): float of the prelude)
-		if not is_call(head) or (body == Node.Empty and brought_names.has(name_of(head#1))) { return n }
+		if not is_call(head) or is_brought_declaration(head, body) { return n }
 		# a changing (bang) function returns nothing (decision answer-or-act)
 		if name_of(head#1).ends_with("!") { diagnose(call_of("bang_result", [name_of(head#1)]), result_type) }
 		result = symbol(result_word)
@@ -180,7 +182,7 @@ typed_definitions(n: Node): list := {
 	if typed then [typed] + inner else inner
 }
 typed_definition(n: Node): list? := match n {
-	Key(Key(head, Op.Colon, result_type), Op.Define, body): { if is_call(head) then [name_of(head#1), name_of(result_type), body] else ø }
+	Key(Key(head, Op.Colon, result_type), Op.Define, body): { if is_call(head) and not is_brought_declaration(head, body) then [name_of(head#1), name_of(result_type), body] else ø }
 	Key(head, Op.Colon, typed_body): {
 		if not is_call(head) or separator_of(typed_body) != " " or #typed_body != 2 or bracket_of(typed_body#2) != "{" { return ø }
 		[name_of(head#1), name_of(typed_body#1), typed_body#2]
