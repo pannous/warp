@@ -332,6 +332,20 @@ gpu_render(s, 2, 2)
 gpu_render(s, 2, 2)
 gpu_render(s, 2, 2)#2"""
 PREVIOUS_FRAME_SHOWN = str(0xFFC0_0000)
+# wiki graphics.md "Fields and passes" (card compute-toys-passes): each @compute pass in source order before the draw, a
+# field kept from frame to frame: after three renders first left 0.75 and second 1.5, red and green 0.75 each
+FIELD_PASSES = "(compute passes step a field kept across frames)"
+FIELD_PASSES_CODE = """use graphics
+passes = "
+@group(0) @binding(0) var<storage, read_write> steps: array<f32, 2>;
+@compute @workgroup_size(1) fn first() { steps[0] = steps[0] + 0.25; }
+@compute @workgroup_size(1) fn second() { steps[1] = steps[0] * 2.0; }
+"
+s = "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(values.steps[0], values.steps[1] / 2.0, 0.0, 1.0); }"
+gpu_render(s, 2, 2, {compute: passes})
+gpu_render(s, 2, 2, {compute: passes})
+gpu_render(s, 2, 2, {compute: passes})#2"""
+FIELD_PASSES_SHOWN = str(0xFFBF_BF00)
 # card playground-stale-value: a run started without the Run button (an example chosen, auto-run, runCode) clears the
 # last run's value as Run does: an animation running long showed the value before it above itself
 STALE_VALUE = "(a run started without Run leaves no old value above an animation)"
@@ -1167,6 +1181,15 @@ def previous_frame_wrong():
 	return [] if PREVIOUS_FRAME_SHOWN in rendered else [f"third render: {rendered!r}, expected {PREVIOUS_FRAME_SHOWN} in it"]
 
 
+def field_passes_wrong():
+	"""compute passes run in order each frame and step a field the draw reads; skipped loudly without WebGPU"""
+	rendered = run_code(FIELD_PASSES_CODE)
+	if NO_GPU in rendered:
+		print(f"skip {FIELD_PASSES}: this browser {NO_GPU}")
+		return []
+	return [] if FIELD_PASSES_SHOWN in rendered else [f"third render: {rendered!r}, expected {FIELD_PASSES_SHOWN} in it"]
+
+
 def view_steady_wrong():
 	"""runs painting at the view's size, one after the other, see the same view once the first painting is shown"""
 	shown = [run_code(VIEW_STEADY_CODE) for _ in range(VIEW_STEADY_RUNS)]
@@ -1588,7 +1611,7 @@ def check_examples(names, page_url=None, site=None):
 	snippets = guide_snippets() if GUIDE in names else []
 	for line, code, value, printed in snippets:
 		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed, page_url))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (STALE_VALUE, stale_value_wrong), (KEPT_OUTPUT, kept_output_wrong), (GUIDE_PARTS, guide_parts_wrong), (GUIDE_ADDRESS, guide_address_wrong), (GUIDE_PLACES, guide_places_wrong), (EXAMPLE_SWITCH, example_switch_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (SHADER_ONE_VIEW, shader_one_view_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), (STALE_DEPLOY, stale_deploy_wrong), (DEFINED_NAMES, defined_names_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (FIELD_PASSES, field_passes_wrong), (STALE_VALUE, stale_value_wrong), (KEPT_OUTPUT, kept_output_wrong), (GUIDE_PARTS, guide_parts_wrong), (GUIDE_ADDRESS, guide_address_wrong), (GUIDE_PLACES, guide_places_wrong), (EXAMPLE_SWITCH, example_switch_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (SHADER_ONE_VIEW, shader_one_view_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), (STALE_DEPLOY, stale_deploy_wrong), (DEFINED_NAMES, defined_names_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
