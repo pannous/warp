@@ -104,6 +104,7 @@ red() {
 # neither compared nor kept as a baseline. Clean builds of one stretch stay within ±3%.
 COST_JUMP_PERCENT=10
 COST_HISTORY=10
+COST_SINCE=f1de0e5d93  # a record before it counts no instructions of the modules step (card module-prebuild-step): no baseline
 cost_watched() {
 	local record=$1 hash timing now lowest history
 	history=$state/cost-$record
@@ -112,11 +113,19 @@ cost_watched() {
 	now=$(awk '/instructions retired/ {print $1}' "$timing" 2>/dev/null)
 	[ -n "$now" ] || return
 	grep -q '^commit .*+dirty' "$warp_store/$hash/$record/inputs.txt" 2>/dev/null && return
-	lowest=$(sort -n "$history" 2>/dev/null | head -1 | cut -d' ' -f1)
+	lowest=$(cost_comparable "$history" | sort -n | head -1)
 	{ echo "$now ${tip:0:10}"; head -n $((COST_HISTORY - 1)) "$history" 2>/dev/null; true; } >"$history.new" && mv "$history.new" "$history"
 	if [ -n "${lowest:-}" ] && [ $((now * 100)) -gt $((lowest * (100 + COST_JUMP_PERCENT))) ]; then
 		red "build cost: $record $(cost_in_tera "$lowest") T (lowest of the last $COST_HISTORY) → $(cost_in_tera "$now") T at ${tip:0:10} (+$(((now - lowest) * 100 / lowest))%)" --urgent
 	fi
+}
+# cost_comparable <history>: the counts of its builds of COST_SINCE or later
+cost_comparable() {
+	local count commit
+	[ -f "$1" ] || return 0
+	while read -r count commit; do
+		git -C "$TREE" merge-base --is-ancestor "$COST_SINCE" "$commit" 2>/dev/null && echo "$count"
+	done <"$1"
 }
 cost_in_tera() { awk -v n="$1" 'BEGIN {printf "%.2f", n / 1e12}'; }
 
