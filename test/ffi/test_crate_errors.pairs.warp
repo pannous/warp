@@ -1,4 +1,5 @@
 # from test_crate_errors.rs: edit the Rust test, then run the script again
+// needs: cargo
 
 # try_catches_a_crate_error
 'use cargo semver; try semver.Version.parse("x") else 0'	0
