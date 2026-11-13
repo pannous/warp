@@ -11,7 +11,7 @@
 
 # a_text_in_runtime_kind_arithmetic_is_not_a_number
 'def f(m){ m.a * 2 }; try f({a:"x"}) else 7'	7
-'def f(m){ m.a + m.b }; f({a:2.5, b:sqrt(2)})'	3.914213562373095
+'def f(m){ m.a + m.b }; f({a:2.5, b:sqrt(2)})'	2.5 + √2
 
 # as_float_of_a_runtime_value
 'def f(m){ m.a as float }; f({a:2.5})'	2.5
