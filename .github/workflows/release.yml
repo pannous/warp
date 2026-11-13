@@ -172,7 +172,7 @@ jobs:
   windows:
     # the native warp on Windows (card windows-build): the compilers job's C of core/native/warp.warp compiled by
     # llvm-mingw's clang against our wasmtime C API, lib/native/windows.c answering its POSIX calls; hello and smoke's
-    # checks. The release archive comes once `warp test` and `warp build` run there too
+    # checks, a `warp test` file, a native build; the release folder (packaging/native_dist.sh) as a zip
     needs: compilers
     if: ${{ !cancelled() && needs.compilers.result == 'success' }}
     runs-on: windows-latest
@@ -181,6 +181,7 @@ jobs:
         shell: bash
     env:
       GH_TOKEN: ${{ github.token }}
+      ARCHIVE: warp-${{ inputs.tag || github.ref_name }}-x86_64-pc-windows-gnu.zip
     steps:
     # the sources as written, LF: Git for Windows checks text out with CRLF (card crlf-line-endings)
     - run: git config --global core.autocrlf false
@@ -230,6 +231,17 @@ jobs:
       run: |
         lib/warp.exe build native samples/native/files.warp
         cd samples/native && [ "$(./files)" = "Hello from a file" ]
+    - name: the release folder, gated, zipped
+      run: |
+        packaging/native_dist.sh dist lib/warp.exe
+        (cd dist && 7z a -tzip -bd "../$ARCHIVE" . >/dev/null)
+    - uses: actions/upload-artifact@v7
+      with:
+        name: zip-windows
+        path: ${{ env.ARCHIVE }}
+    - name: upload
+      if: ${{ !inputs.dry }}
+      run: gh release upload "$TAG" "$ARCHIVE" --clobber
 
   packages:
     # the tarballs repackaged: PyPI wheels of warp-language, .deb and .rpm of warp-lang, attached to the release
