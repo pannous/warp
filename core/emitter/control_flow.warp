@@ -3,19 +3,22 @@
 # the dispatcher of the classes' `+` (class_methods.warp), which `x += y` of an instance adds by
 plus_dispatcher = "+·operator"
 # `ran·without·error{statement}`, what `try` lowers to: 1 when the statement finished, 0 when a runtime error was thrown
-# in it; the depth goes up for the statement and back down on both paths (a jump out of it would skip that: refused)
+# in it; the depth goes up for the statement and back down on both paths, and on a jump out of it (tries_closed)
 def ran_without_error(body: Body, statement: Node): TypedCode {
-	for jump in ["return", "break", "continue"] { if mentions(statement, jump) { return refuse("a " + jump + " out of a try") } }
+	body.tries += 1
 	guarded = [op.try_table, no_value] + uleb(1) + [catch_clause_byte, 0, 0] + nested_effect(body, statement, 3) + [op.end]
-	finished = try_depth_step(op.i64_sub) + [op.i64_const, 1, op.br, 1, op.end]
-	caught = [op.drop] + try_depth_step(op.i64_sub) + [op.i64_const, 0]
+	body.tries -= 1
+	finished = try_depth_step(op.i64_sub, 1) + [op.i64_const, 1, op.br, 1, op.end]
+	caught = [op.drop] + try_depth_step(op.i64_sub, 1) + [op.i64_const, 0]
 	# the inner block's value: the thrown error's id, an i32
-	TypedCode(ValueKind.Int, try_depth_step(op.i64_add) + [op.block] + value_type(ValueKind.Int) + [op.block] + value_type(ValueKind.Bool) + guarded + finished + caught + [op.end])
+	TypedCode(ValueKind.Int, try_depth_step(op.i64_add, 1) + [op.block] + value_type(ValueKind.Int) + [op.block] + value_type(ValueKind.Bool) + guarded + finished + caught + [op.end])
 }
-def try_depth_step(instruction: int): list {
+def try_depth_step(instruction: int, tries: int): list {
 	depth = relocatable(relocated.globals, module.globals[try_depth_name]#1)
-	[op.global_get] + depth + [op.i64_const, 1, instruction, op.global_set] + depth
+	[op.global_get] + depth + [op.i64_const] + sleb(tries) + [instruction, op.global_set] + depth
 }
+# a return, break or continue leaving `tries` open tries: the depth goes down by them
+tries_closed(tries: int): list := if tries == 0 then [] else try_depth_step(op.i64_sub, tries)
 # a runtime error ahead of its trap: the global trap_name names `name`, the function it fails in, whose words the
 # run's error says (runtime/error_sentences.warp); while a try runs, it throws for `catch e` (runtime.warp caught_error)
 def error_throw(name: text): list {
@@ -82,11 +85,13 @@ def loop_code(body: Body, test: Node, block: Node, last: int): list {
 	again = if has_step then dropped(nested(body, value_of(parts.last), 2)) + [op.br, 0] else [op.br, 0]
 	if has_step { parts = parts[0..<(#parts - 1)] }
 	body.exits += [body.depth + 1]
+	body.exit_tries += [body.tries]
 	body.continuable += [has_step or continued_safely(test, parts)]
 	body.depth += 3
 	looped = if #parts == 0 then TypedCode(no_kind, []) else if last < 0 then TypedCode(no_kind, effects(body, parts)) else sequence(body, parts)
 	body.depth -= 3
 	body.exits = body.exits[0..<(#body.exits - 1)]
+	body.exit_tries = body.exit_tries[0..<(#body.exit_tries - 1)]
 	body.continuable = body.continuable[0..<(#body.continuable - 1)]
 	kept = if looped.kind == no_kind then looped.code else boxed(looped) + [op.local_set] + uleb(last)
 	[op.block, no_value, op.loop, no_value] + exit_unless + [op.block, no_value] + kept + [op.end] + again + [op.end, op.end]
@@ -161,14 +166,14 @@ def nested(body: Body, n: Node, blocks: int): TypedCode {
 # `break`: to the end of the innermost loop's block
 def loop_exit(body: Body): TypedCode {
 	if #body.exits == 0 { return refuse("a break outside a loop") }
-	TypedCode(no_kind, [op.br] + uleb(body.depth - body.exits.last))
+	TypedCode(no_kind, tries_closed(body.tries - body.exit_tries.last) + [op.br] + uleb(body.depth - body.exits.last))
 }
 
 # `continue`: to the end of the block around the innermost loop's body, before its step
 def loop_again(body: Body): TypedCode {
 	if #body.exits == 0 { return refuse("a continue outside a loop") }
 	if not body.continuable.last { return refuse("a continue in a loop whose last statement may be its step") }
-	TypedCode(no_kind, [op.br] + uleb(body.depth - body.exits.last - 2))
+	TypedCode(no_kind, tries_closed(body.tries - body.exit_tries.last) + [op.br] + uleb(body.depth - body.exits.last - 2))
 }
 
 # a statement's code, its value dropped

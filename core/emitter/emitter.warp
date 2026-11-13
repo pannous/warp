@@ -542,11 +542,12 @@ def defined_arities(program: Node): map {
 # a runtime word's body may use the intrinsics
 # function: the one compiled, returned: the kinds its `return`s give, declared: the kind of each `x: T = v` local
 # depth: the blocks, loops and ifs around the code read now; exits: the depth of each enclosing loop's exit block,
-# continuable: whether each takes a continue (continued_safely)
+# continuable: whether each takes a continue (continued_safely); tries: the tries open around the code read now,
+# exit_tries: those open around each enclosing loop, so a jump out of a try closes the ones it leaves
 # unshared: the locals whose list nobody else holds yet (sequence keeps them), which `xs = xs + [x]` grows in place
 # globals: the names the body declares `global`, which it assigns as the module's variables, never as its own locals
 # marks: the marked kind of each local holding a number of a marked type unboxed (`a: Angle`, `b = a * 2`)
-class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map; boxed_ints: map = {}; int_members: map = {}; marks: map = {}; kept: map = {}; counters: any = ø }
+class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map; boxed_ints: map = {}; int_members: map = {}; marks: map = {}; kept: map = {}; counters: any = ø; tries: int = 0; exit_tries: list = [] }
 
 local_index(body: Body, name: text, kind: ValueKind): int := {
 	if name in body.names { return body.names[name] }
@@ -1168,7 +1169,7 @@ def return_value(body: Body, value: TypedCode): TypedCode {
 	body.returned += [value.kind]
 	result = body.function.result
 	code = if result == pending then value.code else converted(value, result)
-	TypedCode(pending, code + [op.return])
+	TypedCode(pending, code + tries_closed(body.tries) + [op.return])
 }
 
 def expression_code(body: Body, n: Node): TypedCode {
