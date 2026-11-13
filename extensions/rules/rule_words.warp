@@ -695,7 +695,9 @@ notifying(n: Node, names: list, derived: map): Node := {
 	if not own and #dependents == 0 and #fields == 0 { return n }
 	# an item's write changes the list itself: the old one a copy, `[] + xs`
 	kept = if key_of(n) is symbol then name else Key(List([], Bracket.Square, Separator.Comma), Op.Add, name)
-	before = [Key(old, Op.Assign, kept)] + dependents.map(d => Key(symbol(signal_old_of(d)), Op.Assign, symbol(d))) + fields.map(field => Key(symbol(signal_old_of(field)), Op.Assign, path_read(field)))
+	# the variable's old value where its listeners, its dependents or a step read it; a watched field alone needs none
+	reads_old = own or #dependents > 0 or op_of(n) in stepping_ops
+	before = (if reads_old then [Key(old, Op.Assign, kept)] else []) + dependents.map(d => Key(symbol(signal_old_of(d)), Op.Assign, symbol(d))) + fields.map(field => Key(symbol(signal_old_of(field)), Op.Assign, path_read(field)))
 	notified = (if own then [call_of("signal_notify", [name_of(name), name, old])] else []) + fields.map(field => call_of("signal_notify", [field, path_read(field), symbol(signal_old_of(field))])) + dependents.map(d => Key(Key(ø, Op.If, Key(name, Op.Ne, old)), Op.Then, call_of("signal_notify", [d, symbol(d), symbol(signal_old_of(d))])))
 	# `x--` gives the value before the step
 	result = if op_of(n) in stepping_ops then [old] else []

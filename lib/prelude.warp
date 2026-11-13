@@ -1028,7 +1028,7 @@ class Listener { event: text; number: int }
 // `listeners of alarm -= h` (wiki Footguns "Event handlers"): `listeners of alarm` reads as alarm.listeners, so the
 // write is one of that field (in parentheses, as `=>` binds tighter than `-=`); a rule of the prelude, as the event
 // sugar's walk never takes such a write
-rewrite ($e.listeners -= $h) => unlisten(data $e, $h) where $e is symbol and $e is unbound
+rewrite ($e.listeners -= $h) => unlisten(data $e, $h) where $e is symbol
 // `remove alarm` (extensions/sugar/events.warp): the listener removed from the event it listens to
 listener_removed(listener: Listener) := unlisten(listener.event, listener)
 listen(name: any, listener: function, once: bool): Listener := {
