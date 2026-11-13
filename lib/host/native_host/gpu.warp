@@ -437,10 +437,11 @@ member_laid_out(layout: Layout, name: text, value: any): text := {
 		return ""
 	}
 	if name == WORKGROUPS_NAME {
-		if not (value is list) or value.any(item => item is list) { return "is one to three counts" }
-		if #value < 1 or #value > 3 { return "is one to three counts" }
+		// a count alone is one count, as the page reads it (host-gpu.js [asked].flat())
+		counts = if value is list then value else [value]
+		if counts.any(item => item is list) or #counts < 1 or #counts > 3 { return "is one to three counts" }
 		groups = []
-		for x in value {
+		for x in counts {
 			if not (x is int) or x < 1 { return "needs positive ints" }
 			groups.add(x)
 		}
