@@ -56,10 +56,15 @@ overloaded_arities(program: Node): map := {
 	}
 	overloaded = {}
 	for name in arities.keys {
-		if #arities[name] > 1 and all_distinct(arities[name].map(span => span#2)) { overloaded[name] = arities[name] }
+		if #arities[name] > 1 and all_distinct(arities[name].map(span => span#2)) and spans_apart(arities[name]) { overloaded[name] = arities[name] }
 	}
 	overloaded
 }
+# no count two spans both take: `f(d: D, long = no, iso = no)` (1 to 3) beside `f(t: text, v)` (2) stays one name,
+# whose definitions its typed overloads tell apart, as a variant per count could not
+spans_apart(spans: list): bool := spans.all(a => spans.all(b => a == b or starts_after(a, b) or starts_after(b, a)))
+# whether span a starts past the end of span b (-1: b takes any more)
+starts_after(a: list, b: list): bool := b#2 >= 0 and a#1 > b#2
 
 # each variant's name → the name programs write it by, `twice·2` → `twice`, of the compile at hand (prebuilt.warp
 # word_reaches files a linked word under it)

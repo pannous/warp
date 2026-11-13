@@ -75,7 +75,8 @@ else
 fi
 # a failed build prints its step, the step's output and the log's path in the store (and so does a hash failed before)
 built=$("$scripts/rebuild.sh" pure "$tree" 2>&1) || { echo "smoke: rebuild failed:" >&2; echo "$built" >&2; exit 1; }
-way=$(echo "$built" | tail -1)
+way=$(echo "$built" | grep -v "not prebuilt, compiled from source" | tail -1)
+echo "$built" | grep "not prebuilt, compiled from source" >&2
 # a lib/ change the compiler doesn't bake keeps the installed prebuilt modules, built of main's lib/: the standard
 # modules are built anew of this lib/ and taken, so a change that breaks a module's prebuild fails here (card
 # smoke-misses-prebuild: units.warp broke time.wasm past every smoke). All of them, in one run: a module reaches

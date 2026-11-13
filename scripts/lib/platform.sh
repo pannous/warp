@@ -42,6 +42,11 @@ packages_linked() {
 if [ $warp_platform = mac ]; then warp_store=${WARP_COMPILER_STORE:-/Volumes/Build/compilers}
 elif [ -d /workspace/warp-store ]; then warp_store=${WARP_COMPILER_STORE:-/workspace/warp-store}  # the box's, shared by its agents
 else warp_store=${WARP_COMPILER_STORE:-$HOME/.cache/warp/compilers}; fi
+DAY_BUILD_SLOTS=3  # user 2026-11-01: four warps at once, 3 builds plus 1 test run (warp test while building, core/native/tests.warp WHILE_BUILDING); 5 drove the load to ~460
+# how many compiler builds run at once machine-wide (scripts/build-slot.sh): <store>/build-slots/count, when present,
+# sets the slots for every session at once (at night as many as the load allows; the Supervisor raises and lowers it
+# watching the load, notes/agents/night.md)
+build_slots() { echo "${WARP_BUILD_SLOTS:-$(cat "$warp_store/build-slots/count" 2>/dev/null || echo "$DAY_BUILD_SLOTS")}"; }
 # a native warp copied into <folder> finds its wasmtime beside itself: put the folder on the loader's path (the Mac's
 # rpath already looks there; Linux's loader needs LD_LIBRARY_PATH)
 libraries_beside() { eval "export $warp_library_path_variable=\"$1\${$warp_library_path_variable:+:\$$warp_library_path_variable}\""; }

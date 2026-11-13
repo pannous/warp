@@ -540,7 +540,7 @@ tree_mesh_of(bytes: list): TreeMesh := {
 }
 
 // a tree file that is not there names what makes it: the larger EZ Tree meshes are kept out of git
-read_tree_mesh(path: any): TreeMesh := {
+tree_mesh(path: any): TreeMesh := {
 	if not exists(path) { raise "meshlets: no tree mesh " + text(path) + ": " + TREE_MESH_SOURCE }
 	tree_mesh_of(read_bytes(path))
 }
