@@ -192,7 +192,7 @@ def intrinsic_of(body: Body, name: text, values: list): TypedCode {
 # the intrinsics a program calls too, byte_at(text, offset), memory_byte(address),
 # memory_set_byte(address, value) and same(a, b), each at its own arity (a program's `same(y)` stays its own)
 program_intrinsics = ["byte_at", "memory_byte", "memory_set_byte", "same", "trap_place"]
-intrinsics = {with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
+intrinsics = {with_kind: 2, new_text: 1, new_ascii_text: 1, is_ascii_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
 	output_byte: 2, write_output: 1, output_address: 0, memory_byte: 1, memory_set_byte: 2, memory_f32: 1, memory_set_f32: 2, memory_i32: 1, memory_u32: 1, memory_set_i32: 2, memory_i64: 1, memory_f64: 1, memory_grown: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, is_plain_int: 1, made_case: 2, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1, ratio_of_parts: 2, numerator_part: 1, denominator_part: 1, has_plain_parts: 1,
@@ -206,13 +206,13 @@ library_words = extended_library_words({numerator: "numerator", denominator: "de
 	bracket_of: "list_bracket", separator_of: "list_separator", line_of: "node_line", column_of: "node_column", attributes_of: "attributes_of", with_attribute: "with_attribute", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
 	slice: "node_slice", copy: "node_copy", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
-	trim: "node_trim", as_code: "code_node", map_get_or: "map_get_or", lookup_name: "lookup_name", removed_value: "removed_value", map_without: "map_without", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error", caught_instance: "caught_instance", placed_at: "placed_at", ord: "first_code_point", bytes: "text_byte_list", byte_size: "node_bytes", pack: "packed_node", unpack: "unpacked_node", byte_at: "text_byte", byte_slice: "bytes_between", float_bits: "bits_of_float", wasi_environment: "wasi_environment", said_on_stderr: "said_on_stderr"})
+	trim: "node_trim", as_code: "code_node", map_get_or: "map_get_or", "field·held": "has_field", lookup_name: "lookup_name", removed_value: "removed_value", map_without: "map_without", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error", caught_instance: "caught_instance", placed_at: "placed_at", ord: "first_code_point", bytes: "text_byte_list", byte_size: "node_bytes", pack: "packed_node", unpack: "unpacked_node", byte_at: "text_byte", byte_slice: "bytes_between", float_bits: "bits_of_float", wasi_environment: "wasi_environment", said_on_stderr: "said_on_stderr"})
 # `x is spec`: the built-in type words the core holds, by their
 # canonical name, and the kinds of the core each covers; an untyped value asks runtime.warp node_is_type
 core_type_words = {int: "int", nat: "nat", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational",
 	exact: "rational", precise: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
 	number: "number", text: "text", string: "text", path: "path", codepoint: "char", char: "char", character: "char",
-	bool: "bool", boolean: "bool", list: "list", key: "key", pair: "key", symbol: "symbol", map: "map", error: "error", code: "code",
+	bool: "bool", boolean: "bool", list: "list", key: "key", pair: "pair", symbol: "symbol", map: "map", error: "error", code: "code",
 	function: "function", block: "function"}
 # the marked texts by their type word: `x as path` marks a text, `x is path` tests the mark
 marked_text_types = {path: Marked.Path}
@@ -222,10 +222,10 @@ marked_text_types = {path: Marked.Path}
 numeric_held_kinds = [Kind.Int, HeldBit.Rational, Kind.Float]
 passing_kinds = {int: [Kind.Int], nat: [Kind.Int], rational: numeric_held_kinds, float: [Kind.Float],
 	number: numeric_held_kinds, text: [Kind.Text, Kind.Codepoint, HeldBit.Path], path: [HeldBit.Path], char: [Kind.Codepoint],
-	bool: [HeldBit.Bool], list: [Kind.List, Kind.Block], key: [Kind.Key], symbol: [Kind.Symbol], map: [HeldBit.Map],
+	bool: [HeldBit.Bool], list: [Kind.List, Kind.Block], key: [Kind.Key], pair: [Kind.Key], symbol: [Kind.Symbol], map: [HeldBit.Map],
 	error: [Kind.Error], code: [], function: [Kind.Function]}
 covered_kinds = {int: [ValueKind.Int], nat: [ValueKind.Int], rational: [ValueKind.Int], float: [ValueKind.Float], number: [ValueKind.Int, ValueKind.Float], text: [ValueKind.Text, ValueKind.Char], path: [],
-	char: [ValueKind.Char], bool: [ValueKind.Bool], list: [ValueKind.List], key: [], symbol: [], map: [], error: [], code: [], function: []}
+	char: [ValueKind.Char], bool: [ValueKind.Bool], list: [ValueKind.List], key: [], pair: [], symbol: [], map: [], error: [], code: [], function: []}
 kind_bit(kind: int): int := 1 << kind
 # whether the class is the ancestor or extends it
 descends(name: text, ancestor: text): bool := name == ancestor or (name in module.parents and descends(module.parents[name], ancestor))

@@ -1,0 +1,5 @@
+# a module local named angle (test/scope/test_other_file_global.pairs.warp, decision loop-locals)
+jaw_point() := {
+	angle = 1
+	angle
+}

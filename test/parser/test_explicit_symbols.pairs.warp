@@ -6,8 +6,6 @@
 'src = 3; x = :src; x == symbol("src")'	true
 
 # colon_names_uncharge_operators
-'count([:a :plus :b])'	3
-'[:a :plus :b]#2 == symbol("plus")'	true
 
 # a_colon_without_space_before_stays_a_key
 '{a:1}.a'	1

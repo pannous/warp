@@ -257,7 +257,7 @@ def collect_literal_arguments(n: Node) {
 # (an int or a float), an exact number (`real`, `exact`: a ratio of ints), a symbol or a key (node_cases.warp holds a
 # written case `Key` as any); an optional `text?` is one too, ø or the value
 time_type_words = ["time", "instant", "date", "duration"]
-node_annotations = ["any", "Node", "function", "type", "map", "number", "rational", "symbol", "Symbol", "key", "data", "error"]
+node_annotations = ["any", "Node", "function", "type", "map", "number", "rational", "symbol", "Symbol", "key", "pair", "data", "error"]
 # the kind a parameter annotated `word` holds: a type alias's type's, a node for a class, a list for a type word's
 # plural (`ints`, `texts`, `Points`)
 annotated_kind(written: text): ValueKind := {

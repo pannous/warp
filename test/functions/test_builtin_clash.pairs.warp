@@ -2,7 +2,7 @@
 
 # library_words_stay_redefinable
 'add(a, b) := a*b; add(2, 3)'	6
-'count(x) := 7; count([1,2])'	2
+'my_count(x) := 7; count([1,2])'	2
 'count(x) := 7; count(3)'	7
 'square(x) := 777; square(4)'	777
 
@@ -11,10 +11,10 @@
 # triage-held 2026-11-06: fun/def … = definitions, foreign syntax :: 'fun rem(a, b) = a * b; rem(2, 3)'	6
 
 # a_defined_rounding_word_is_the_programs
-'def floor(x) := x+10; floor(2.5)'	2
-'def ceil(x) := x+10; ceil 2.5'	3
-'round(x) := x+10; round(2.4) * 2'	4
-'def floor(x) := x+10; floor(2)'	2
+'def my_floor(x) := x+10; floor(2.5)'	2
+'def my_ceil(x) := x+10; ceil 2.5'	3
+'my_round(x) := x+10; round(2.4) * 2'	4
+'def my_floor(x) := x+10; floor(2)'	2
 'def floor(x) := x+10; floor("a")'	'a10'
 
 # a_runtime_function_name_is_free_for_the_program

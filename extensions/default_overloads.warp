@@ -1,0 +1,54 @@
+# A parameter's default reading an earlier parameter, `g(x, y = x + 1, z = y * 2) := z` (card param-default-reference):
+# a call leaving it out has no value of x where it stands, so the definition takes every parameter from the first such
+# default on, and a definition taking one fewer fills each in by calling the next, `g(x, y) := g(x, y, y * 2)`,
+# `g(x) := g(x, x + 1)`, where the names it reads are parameters; arity_overloads calls the one the argument count fits
+
+default_overloads(program: Node): Node := {
+	statements = statements_in(program)
+	if not statements.any(statement => first_reading_default(statement) != ø) { return program }
+	statements_as(program, statements.flat_map(statement => if first_reading_default(statement) == ø then [statement] else overloads_of(without_mark(statement))))
+}
+# the definition's parameters, ø for no definition
+head_parameters(statement: Node): list? := {
+	plain = without_mark(statement)
+	if not is_key(plain, Op.Define) { return ø }
+	call = target_call(key_of(plain))
+	if call == ø then ø else items_of(call)[1 ..]
+}
+# where the first parameter whose default reads an earlier one stands, ø for none
+first_reading_default(statement: Node): int? := {
+	parameters = head_parameters(statement)
+	if parameters == ø { return ø }
+	for at in 0 ..< #parameters {
+		parameter = parameters[at]
+		if is_key(parameter, Op.Assign) and parameters[0 ..< at].any(earlier => mentions(value_of(parameter), parameter_word(earlier))) { return at }
+	}
+	ø
+}
+parameter_word(parameter: Node): text := name_of(leftmost_symbol(parameter))
+# `y` of `y = x + 1`, `y: int` of `y: int = x + 1`
+undefaulted(parameter: Node): Node := if is_key(parameter, Op.Assign) then key_of(parameter) else parameter
+# the definition taking every parameter, then one for each count from the first reading default on
+overloads_of(definition: Node): list := {
+	target = key_of(definition)
+	call = target_call(target)
+	name = call#1
+	parameters = items_of(call)[1 ..]
+	first = first_reading_default(definition)
+	taken = range_list(#parameters).map(at => if at < first then parameters[at] else undefaulted(parameters[at]))
+	full = Key(with_call(target, group_like(call, [name] + taken)), Op.Define, value_of(definition))
+	fewer = range_list(#parameters - first).map(left => {
+		count = first + left
+		given = taken[0 ..< count]
+		passed = given.map(parameter => symbol(parameter_word(parameter))) + [value_of(parameters[count])]
+		Key(with_call(target, group_like(call, [name] + given)), Op.Define, group_like(call, [name] + passed))
+	})
+	[full] + fewer
+}
+# a definition's target with another call, its result type kept: `f(a): T`, `f(a) as T`
+with_call(target: Node, call: Node): Node := match target {
+	Key(head, op, result): if op == Op.Colon or op == Op.As then Key(with_call(head, call), op, result) else call
+	_: call
+}
+
+default_overloads_extension = Extension{name: "default_overloads", passes_before: {"arity_overloads": default_overloads}}

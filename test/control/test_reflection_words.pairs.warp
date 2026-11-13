@@ -19,7 +19,7 @@
 # dir_of_an_instance_a_class_and_a_map
 'class P{x:int; y:int; sq() := x*x+y*y}; p = P(1, 2); dir(p)'	['x', 'y', 'sq']
 'class P{x:int; y:int; sq() := x*x+y*y}; p = P(1, 2); dir P'	['x', 'y', 'sq']
-'m = {a:1, b:2}; dir(m)'	['a', 'b']
+'m = {a:1, b:2}; d = dir(m); [d#1, d#2, "count" in d]'	['a', 'b', yes]
 'm = {a:1, b:2}; m.fields'	['a', 'b']
 
 # a_real_field_named_fields_wins
