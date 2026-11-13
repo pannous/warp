@@ -269,13 +269,16 @@ window_pixels(): list := {
 }
 // a run that painted one picture leaves it in the window until the window is closed (or Escape), shown again as the
 // window comes into sight (it opens behind the app in front) or changes size; an animation's window closes with its run
-window_run_ended() := {
-	while open_now and frames == 1 and SDL_WaitEvent(event) {
-		type = field_u32(event, SDL_EVENT_TYPE_AT)
-		escaped = type == SDL_EVENT_KEY_DOWN and field_u32(event, SDL_KEY_AT) == SDLK_ESCAPE
-		if type == SDL_EVENT_QUIT or type == SDL_EVENT_WINDOW_CLOSE_REQUESTED or escaped { window_closed() }
-		else if type == SDL_EVENT_WINDOW_EXPOSED or type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED { shown_again() }
-	}
+window_run_ended() := { while open_now and frames == 1 and SDL_WaitEvent(event) { still_event_taken() } }
+// the console waiting for its next line: the events that came in taken, so the picture a line painted shows as after a
+// run, and closes the same way (card image-import-fix)
+window_waited() := { while open_now and SDL_PollEvent(event) { still_event_taken() } }
+// an event of a window showing a still picture: closing it, or the picture shown again
+still_event_taken() := {
+	type = field_u32(event, SDL_EVENT_TYPE_AT)
+	escaped = type == SDL_EVENT_KEY_DOWN and field_u32(event, SDL_KEY_AT) == SDLK_ESCAPE
+	if type == SDL_EVENT_QUIT or type == SDL_EVENT_WINDOW_CLOSE_REQUESTED or escaped { window_closed() }
+	else if type == SDL_EVENT_WINDOW_EXPOSED or type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED { shown_again() }
 }
 
 // text_coverage(words, size) (label of use draw): the words set `size` pixels per em on one line in the system's
