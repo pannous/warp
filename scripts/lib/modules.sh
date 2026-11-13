@@ -133,7 +133,8 @@ modules_made() {
 		# (a lib/ module refusing to prebuild leaves no file: compiled from its source with each program, said again next step)
 		for name; do [ ! -f "$folder/$name.wasm" ] || module_key "$work/$name.key" "$folder/$name.wasm" >"$folder/$name.wasm.built-of"; done
 	else
-		cat "$log" >>"$work/refused"
+		# (said even when the process left no output: a killed or crashed batch failed the step silently, 11-13)
+		{ echo "modules: the batch $* exited $?"; cat "$log"; } >>"$work/refused"
 	fi
 	for name; do touch "$work/$name.done"; done
 }
