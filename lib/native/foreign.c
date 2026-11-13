@@ -301,12 +301,18 @@ void* warp_host_callback(void* word, void* caller, const void* values, size_t co
 
 // Ctrl+C in the console (core/native/warp.warp console): a SIGINT ends the running line, never the console. It moves
 // the engine's epoch on, and the line's store, whose deadline is the next epoch, traps with an interrupt. The handler
-// only calls wasmtime_engine_increment_epoch, found before (dlsym is not safe in a signal handler)
+// only calls wasmtime_engine_increment_epoch, found before (dlsym is not safe in a signal handler). With no line
+// running it leaves the epoch alone, so no Ctrl+C is kept for the next line (the prompt's own Ctrl+C is a key there)
 static void* interrupted_engine;
 static void (*epoch_increment)(void*);
+static volatile sig_atomic_t line_running;
 static void engine_interrupted(int signal) {
 	(void)signal;
-	epoch_increment(interrupted_engine);
+	if (line_running) epoch_increment(interrupted_engine);
+}
+// whether a console line (its compile or its run) is running, which a Ctrl+C then stops
+void interrupts_running(int32_t running) {
+	line_running = running;
 }
 void interrupts_engine(void* engine) {
 	struct sigaction action = { 0 };

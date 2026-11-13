@@ -42,6 +42,7 @@ ARROW_LEFT = 68
 KEY_DELETE = 127
 KEY_BACKSPACE = 8
 KEY_END_OF_INPUT = 4
+KEY_INTERRUPT = 3
 KEY_RETURN = 13
 KEY_SPACE = 32
 KEY_LINE_START = 1
@@ -338,7 +339,9 @@ console(compiler: text): nothing := {
 			if editing { write_file(history_path(), history) }
 			number = number + 1
 			module = joined(joined(joined(folder, "/line_"), text_of(number)), ".wasm")
+			interrupts_running(yes)
 			if line_compiled(compiler, folder, line, module) { ended = session_line_run(session, module) }
+			interrupts_running(no)
 			if ended >= 0 then break
 		}
 	}
@@ -369,22 +372,31 @@ line_count(lines: text): i64 := {
 }
 # The console's line on a terminal (card repl-arrow-escape): the terminal reads a key at a time without echo while
 # the line is edited, ←/→ move the cursor, ↑/↓ step through the earlier lines, ⌫ deletes before the cursor, Ctrl+D on
-# an empty line ends the console (input_ended). Home/End (or Ctrl+A/E) go to the line's start and end, Delete removes
+# an empty line ends the console (input_ended), Ctrl+C drops the line, and on an empty line a second Ctrl+C ends it. Home/End (or Ctrl+A/E) go to the line's start and end, Delete removes
 # the character under the cursor, Alt+Delete the word after it and Alt+⌫ the word before it (card repl-editing-keys);
 # Alt+←/→ move a word back and on (card alt-arrow-navigation), and ↑ reaches the earlier consoles' lines (history_path, card repl-alt-arrows).
 # The cursor steps over a character's UTF-8 bytes whole
 edited_line(history: text, lines: i64): text := {
 	settings = command_output("stty -g")
-	command_output("stty -icanon -echo min 1")
+	# (-isig: Ctrl+C is a key while the line is edited, a SIGINT only while a line runs)
+	command_output("stty -icanon -echo -isig min 1")
 	line = ""
 	at = 0
 	back = 0
+	interrupted = no
 	while yes {
 		c = key()
-		if c < 0 or (c == KEY_END_OF_INPUT and line.length == 0) {
+		if c < 0 or (c == KEY_END_OF_INPUT and line.length == 0) or (c == KEY_INTERRUPT and interrupted) {
 			line = input_ended()
 			break
 		}
+		if c == KEY_INTERRUPT {
+			fd_write(STDOUT, if line.length == 0 then "\n(Ctrl+C again or Ctrl+D to exit)\n" else "^C\n", 1, allocate(4))
+			interrupted = line.length == 0
+			line = ""
+			at = 0
+			back = 0
+		} else { interrupted = no }
 		if c == KEY_RETURN or c == NEWLINE then break
 		edit = edit_of(c)
 		if edit == EDIT_LEFT and at > 0 { at = character_before(line, at) }
