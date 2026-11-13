@@ -170,21 +170,31 @@ fish_point(fish, index, time) := {
 	waved(fish, upper_point(point, part, time), pose)
 }
 
-# corners and a colour a triangle, dropping a triangle whose average alpha is below the kit's cutout
-fish_pose(fish, time) := {
-	posed = []
-	for i in 1 to #fish.positions { posed = posed + [fish_point(fish, i, time)] }
-	corners = []
-	colors = []
-	for tri in fish.triangles {
-		color = (fish.colors#(tri#1) .+ fish.colors#(tri#2) .+ fish.colors#(tri#3)) ./ 3
-		if color#4 >= 0.5 {
-			corners = corners + [posed#(tri#1), posed#(tri#2), posed#(tri#3)]
-			colors = colors + [[color#1, color#2, color#3]]
+# the mesh posed at each of the times, laid end to end: three corners a triangle, and a colour a triangle, the same at
+# every time. A triangle whose average alpha is below the kit's cutout is dropped. Both are GPU lists, which paint
+# binds as they are
+class FishPose { corners: list; colors: list }
+fish_pose(fish, times) := {
+	kept = fish.triangles.filter(tri => triangle_color(fish, tri)#4 >= 0.5)
+	corners: [vec3] = float[3 * #kept * #times]
+	colors: [vec3] = float[#kept]
+	for k in 1 to #kept {
+		color = triangle_color(fish, kept#k)
+		colors#k = [color#1, color#2, color#3]
+	}
+	at = 0
+	for time in times {
+		posed = [fish_point(fish, i, time) for i in 1 to #fish.positions]
+		for tri in kept {
+			for corner in tri {
+				at += 1
+				corners#at = posed#corner
+			}
 		}
 	}
-	{corners: corners, colors: colors}
+	FishPose(corners, colors)
 }
+triangle_color(fish, tri) := (fish.colors#(tri#1) .+ fish.colors#(tri#2) .+ fish.colors#(tri#3)) ./ 3
 
 # one posed mesh, shared. corners are three a triangle, variants laid end to end; colors one a triangle,
 # the same for every phase. frames are two vec4 a fish: place and scale, then heading and phase slot.
