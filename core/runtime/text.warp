@@ -5,6 +5,7 @@ use "characters.warp"
 use "walks.warp"
 use "../emitter/byte_codes.warp"
 text_join(a: text, b: text): text := {
+	global walked_text
 	out = new_text(byte_count(a) + byte_count(b))
 	copy_text(out, 0, a, 0, byte_count(a))
 	copy_text(out, byte_count(a), b, 0, byte_count(b))
@@ -38,6 +39,9 @@ global other_before = -1
 # the characters (grapheme clusters) of a text; a short one stays out of the count kept, so a lexer's words leave its
 # source's count (card text-cache-lru)
 text_count(t: text): int := {
+	global counted_text
+	global counted_bytes
+	global counted
 	if byte_count(t) < short_text() { return characters_counted(t) }
 	if same(t, counted_text) and byte_count(t) == counted_bytes { return counted }
 	count = characters_counted(t)

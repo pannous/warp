@@ -643,6 +643,13 @@ local_function(statement: Node): Node := {
 lowered_statement(statement: Node, main_names: map, seen_by_functions: map, lowering: Lowering): Node := {
 	parts = definition_of(statement)
 	if parts == ø { return lowered_lambdas(statement, locals_of([], main_names), lowering) }
+	# a loop variable and a `let n = …` are the function's own, never the main-level global of that name (decision
+	# loop-locals): renamed apart as a module's own locals are
+	own = (nodes_in(statement).flat_map(loop_variables) + declared_locally(statement)).filter(name => lowering.main_globals.has(name))
+	if #own > 0 {
+		statement = with_own_locals(statement, own)
+		parts = definition_of(statement)
+	}
 	# (a main-level global the body assigns stays the global: `flag = no; turned(() => flag)` reads it, never a copy
 	# of then)
 	locals = locals_of(parts.parameters.map(parameter_name) + names_bound(parts.body, []).filter(name => name not in lowering.main_globals), seen_by_functions)
