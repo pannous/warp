@@ -367,6 +367,8 @@ called_only(program: Node): Node := {
 	if pending.any(word => word.starts_with(closure_call_word)) { pending += [callable_word] }
 	settlers = extension_value_settlers()
 	pending += pending.filter(word => settlers.has(word)).map(word => settlers[word])
+	# `photo.mirror`, a member read naming a module's alias, calls the word it means (emitter.warp member_read)
+	pending += pending.filter(word => member_aliases.has(word)).map(word => member_aliases[word])
 	called = {}
 	at = 0
 	while at < #pending {
