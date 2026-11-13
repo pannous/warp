@@ -17,8 +17,13 @@ def shader_block(p: Parser, word: text): Node := {
 	braces = shader_braces(p.code, p.at, word)
 	if braces == ø { return ø }
 	p.at = braces#2 + 1
-	shader_text(dedented(p.code[braces#1 + 1 .. braces#2]))
+	shader_text(fragment_body_entered(dedented(p.code[braces#1 + 1 .. braces#2])))
 }
+# a block that defines no function of its own is the body of a fragment shader, `at` its pixel's position (wiki/graphics.md
+# "Fields and passes"): given that entry, on its first line so the GPU's errors keep their lines
+FRAGMENT_BODY_ENTRY = "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { "
+FUNCTION_WORD = "fn "
+def fragment_body_entered(code: text): text := if code.contains(FUNCTION_WORD) then code else FRAGMENT_BODY_ENTRY + code + "\n}"
 # where the braces of `shader { … }` written at `at` are, [open, end]; ø where no `{` follows the word
 # the shader word written at `at`, ø for none
 def shader_word_at(code: text, at: int): any := SHADER_WORDS.find(word => at + #word <= #code and code[at .. at + #word] == word)

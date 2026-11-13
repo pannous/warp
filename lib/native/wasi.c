@@ -153,9 +153,11 @@ static void crash_reported(void) {
 	for (size_t i = 0; i < sizeof CRASH_SIGNALS / sizeof *CRASH_SIGNALS; i++) signal(CRASH_SIGNALS[i], crashed_by);
 }
 
-// the stack the program runs on: a thread's, as deep as wasm's own limit (core/native/driver.warp WASM_STACK_BYTES) and
-// room for the host's frames beneath it; a process's main thread has 8 MB, wasm's limit then a few thousand calls deep
-// (card linux-deep-recursion)
+// the stack the program runs on, as deep as wasm's own limit (core/native/driver.warp WASM_STACK_BYTES) and room for
+// the host's frames beneath it (card linux-deep-recursion): Linux's main thread has 8 MB, wasm's limit then a few
+// thousand calls deep, so the program runs on a thread of its own; macOS's main thread has it from the linker
+// (extensions/commands/build.warp MACOS_STACK) and the program stays there: a process with a second thread that forks
+// (warp test's lines) aborts in the child when a library starting Objective-C loads (card abort-trap)
 enum { PROGRAM_STACK_BYTES = 256 << 20 };
 static int program_argc;
 static char** program_argv;
@@ -185,6 +187,10 @@ static void* program_ran(void* unused) {
 int main(int argc, char** argv) {
 	program_argc = argc;
 	program_argv = argv;
+#ifdef __APPLE__
+	program_ran(NULL);
+	return 0;
+#endif
 	pthread_attr_t attributes;
 	pthread_t thread;
 	pthread_attr_init(&attributes);
