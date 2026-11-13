@@ -800,7 +800,7 @@ primitive_compiled(f: Function) := {
 	parameters = f.signature.parameters
 	types = parameters.map(p => primitive_type_name(symbol(if p.type_name then p.type_name else "?")))
 	inner = added_function(f.name + "·primitive", types.map(hosted_kind), ValueKind.Int, [])
-	body = bottom_up(f.body, unchecked_cast)
+	body = unchecked_casts(f.body)
 	primitive = PrimitiveFunction(f.name, parameters.map(p => p.name), types, primitive_result(body), giving_body(body), inner.index)
 	primitive_functions[f.name] = primitive
 	f.kinds = types.map(boundary_kind)
@@ -821,9 +821,12 @@ primitive_compiled(f: Function) := {
 }
 # a primitive function's code as written, before the GC program's sugar checked its casts: `x: int = fitted_int(e, "u8")`
 # is `x: u8 = e` again, `fitted_int(e, "u8")` the plain `e as u8`, as a primitive file has them (the rules' widened_to_int)
-unchecked_cast(n: Node): Node := {
-	if is_key(n, Op.Assign) and is_key(key_of(n), Op.Colon) and value_of(key_of(n)) == symbol(INT_TYPE) and is_fitted(value_of(n)) { return Key(Key(key_of(key_of(n)), Op.Colon, fitted_type(value_of(n))), Op.Assign, value_of(n)#2) }
-	if is_fitted(n) then Key(n#2, Op.As, fitted_type(n)) else n
+unchecked_casts(n: Node): Node := {
+	if is_key(n, Op.Assign) and is_key(key_of(n), Op.Colon) and value_of(key_of(n)) == symbol(INT_TYPE) and is_fitted(unparenthesized(value_of(n))) {
+		fitted = unparenthesized(value_of(n))
+		return Key(Key(key_of(key_of(n)), Op.Colon, fitted_type(fitted)), Op.Assign, unchecked_casts(fitted#2))
+	}
+	if is_fitted(n) then Key(unchecked_casts(n#2), Op.As, fitted_type(n)) else children(n, unchecked_casts)
 }
 is_fitted(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(FITTED_INT_WORD)
 fitted_type(fitted: Node): Node := symbol("${fitted#3}")
