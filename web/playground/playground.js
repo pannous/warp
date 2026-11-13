@@ -79,6 +79,8 @@ const REPORT_LIMITS = { code: 6000, output: 1500 }; // characters: an issue addr
 const BUG_REPORT_URL = "https://pannous.com/warp-bug-report";
 const BUG_TOKEN_PARAMETER = "bug_token";
 const BUG_TOKEN_KEY = "warp-playground-bug-token";
+// the cards this browser sent as a visitor, which the owner's next report claims (scripts/bug_report.py claimed_cards)
+const VISITOR_CARDS_KEY = "warp-playground-visitor-cards";
 const BUG_TOKEN = "ON4YlqHqAtviYPgPzSeqx3QS_gSPFlY5";
 const FORBIDDEN = 403; // a wrong token: the field asks for the right one, the report is not sent
 // how the owner gets the token that files reports as theirs (bug_report.py token prints the address that stores it)
@@ -1489,7 +1491,7 @@ function bugReport() {
 	const run = reportedRun();
 	const source = $("bug-source").checked ? { code: run.code, output: run.output } : { code: "", output: "" };
 	return { ...run, ...source, comment: $("bug-comment").value, express: $("bug-express").checked, quick: $("bug-quick").checked, console: consoleReport(),
-		token: $("bug-token").value.trim() || stored(BUG_TOKEN_KEY) || BUG_TOKEN };
+		token: $("bug-token").value.trim() || stored(BUG_TOKEN_KEY) || BUG_TOKEN, claimed: storedJson(VISITOR_CARDS_KEY) ?? [] };
 }
 
 // who the report goes out as, said before it is sent: a browser without the owner token files a visitor's ticket
@@ -1502,7 +1504,7 @@ async function sendBugReport() {
 	showBugStatus("sending…");
 	try {
 		const answer = await serviceFetch(BUG_REPORT_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report) });
-		const { card, board, queued, error } = await answer.json();
+		const { card, board, queued, error, claimed } = await answer.json();
 		// a refused owner token stays refused until a new one is pasted: never quietly the shared token, which files the
 		// owner's report as a visitor's ticket
 		if (answer.status === FORBIDDEN && report.token !== BUG_TOKEN) {
@@ -1518,7 +1520,8 @@ async function sendBugReport() {
 		}
 		$("bug-comment").value = "";
 		$("bug-express").checked = $("bug-quick").checked = false;
-		if (card) showBugStatus("card made: ", false, card, board);
+		keepVisitorCards(report.token === BUG_TOKEN, card, claimed);
+		if (card) showBugStatus(error ?? (claimed?.length ? `card made, and ${claimed.length} sent before as a visitor now yours: ` : "card made: "), Boolean(error), card, board);
 		else showBugStatus(`sent (${queued}): a card within minutes`);
 	} catch (failure) {
 		showBugStatus(`not sent: ${failure.message}`, true);
@@ -1527,6 +1530,12 @@ async function sendBugReport() {
 
 // after the text, `issue #1762 · card`: the issue the report became (card card-made) and its card on the board (`board`
 // of scripts/bug_report.py, card card-made-issue), each a link named, no raw address
+// a visitor's card kept for the owner to claim; once the owner's report claimed them, none kept
+function keepVisitorCards(visitor, card, claimed) {
+	if (visitor && card) store(VISITOR_CARDS_KEY, JSON.stringify([...(storedJson(VISITOR_CARDS_KEY) ?? []), card]));
+	if (!visitor && claimed) store(VISITOR_CARDS_KEY, JSON.stringify([]));
+}
+
 function showBugStatus(text, failed = false, card = null, board = null) {
 	const status = Object.assign($("bug-status"), { textContent: text, className: failed ? "failed" : "" });
 	const link = (href, name) => Object.assign(document.createElement("a"), { href, target: "_blank", rel: "noopener", textContent: name });

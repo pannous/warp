@@ -69,6 +69,14 @@ CREATE_ISSUE = """mutation($repository: ID!, $title: String!, $body: String, $la
   createIssue(input: {repositoryId: $repository, title: $title, body: $body, labelIds: $labels}) { issue { id url } } }"""
 ADD_ITEM = """mutation($project: ID!, $content: ID!) {
   addProjectV2ItemById(input: {projectId: $project, contentId: $content}) { item { id databaseId } } }"""
+# the cards a browser sent as a visitor before it had the owner token, claimed by the owner's report (card
+# owner-visitor-tokens): each gets OWNER_LABEL and the user's first line; at most MAX_CLAIMED, only this board's issues
+MAX_CLAIMED = 50
+CLAIMABLE = re.compile(rf"^https://github\.com/{OWNER}/{REPOSITORY_NAME}/issues/\d+$")
+VISITOR_SENT = re.compile(r"^\(visitor, public bug button (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d): ")
+ISSUE_AT = """query($url: URI!) { resource(url: $url) { ... on Issue { id body } } }"""
+LABEL_ADDED = """mutation($issue: ID!, $label: ID!) { addLabelsToLabelable(input: {labelableId: $issue, labelIds: [$label]}) {
+  clientMutationId } }"""
 UPDATE_BODY = """mutation($issue: ID!, $body: String!) { updateIssue(input: {id: $issue, body: $body}) { issue { id } } }"""
 BOARD_CARD_URL = f"https://github.com/users/{OWNER}/projects/{BOARD_NUMBER}?pane=issue&itemId=%s"  # as todo's link
 SET_COLUMN = """mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
@@ -129,6 +137,25 @@ def make_card(report):
     option = next(option["id"] for option in status["options"] if option["name"] == column_of(report))
     graphql(SET_COLUMN, project=project, item=item["id"], field=status["id"], option=option)
     return {"card": issue["url"], "board": board_card}
+
+
+def claimed_cards(urls):
+    """the visitor cards among <urls> made the owner's: OWNER_LABEL added, the first line the user's; their urls"""
+    wanted = [url for url in urls if isinstance(url, str) and CLAIMABLE.match(url)][:MAX_CLAIMED] if isinstance(urls, list) else []
+    if not wanted:
+        return []
+    label = graphql(BOARD_QUERY, owner=OWNER, name=REPOSITORY_NAME, number=BOARD_NUMBER)["repository"]["label"]["id"]
+    claimed = []
+    for url in wanted:
+        issue = graphql(ISSUE_AT, url=url)["resource"]
+        sent = VISITOR_SENT.match(issue["body"]) if issue else None
+        if not sent:
+            continue
+        rest = issue["body"].partition("\n")[2]
+        graphql(UPDATE_BODY, issue=issue["id"], body=f"(user, bug button {sent[1]}, sent before this browser had the owner token)\n{rest}")
+        graphql(LABEL_ADDED, issue=issue["id"], label=label)
+        claimed.append(url)
+    return claimed
 
 
 def kept_report(fields, owner):
@@ -229,6 +256,11 @@ class ReportHandler(BaseHTTPRequestHandler):
             print(f"{report_id}: no card ({failure}); queued for the Mac's pull", file=sys.stderr, flush=True)
             return self.reply(200, {"queued": report_id})
         (STATE / DONE / f"{report_id}.json").write_text(json.dumps(report))
+        if owner:
+            try:
+                urls["claimed"] = claimed_cards(fields.get("claimed"))
+            except Exception as failure:
+                urls["error"] = f"the card is made, but the visitor cards were not claimed: {failure}"
         self.reply(200, urls)
 
 
