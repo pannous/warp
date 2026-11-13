@@ -13,7 +13,7 @@
 # by every fish (lib/fish_mesh.warp, notes/aquarium.md). paint() is one fragment shader.
 use math
 use file
-use fish_mesh
+use "fish_mesh2.warp"
 
 # the clock the sample advances; a still is second 0
 global aquarium_time = 0.0
