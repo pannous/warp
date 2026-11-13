@@ -61,9 +61,9 @@ converting_uses(n: Node, targets: map): Node := {
 # trying them in order by the value's type, then the built-in conversion, `as·text(it: any)`
 conversion_functions(target: text, written: list, targets: map, scope: map): list := {
 	it = symbol(converted_value)
-	# a value of no source type is refused: no built-in conversion makes one
+	# a class's own instance stays itself, a value of no source type is refused: no built-in conversion makes one
 	refused = call_of(raise_word, ["no conversion to " + target + " of that value"])
-	tried = if not declared_target(target, scope) then Key(it, Op.As, symbol(target)) else refused
+	tried = if not declared_target(target, scope) then Key(it, Op.As, symbol(target)) else chosen(Key(it, Op.Is, symbol(target)), it, refused)
 	functions = []
 	for conversion in class_first(written).reverse() {
 		name = conversion_name(target) + "·" + conversion#1
@@ -72,8 +72,6 @@ conversion_functions(target: text, written: list, targets: map, scope: map): lis
 		functions += [Key(call_of(name, [Key(it, Op.Colon, symbol(conversion#1))]), Op.Define, body)]
 		tried = chosen(Key(it, Op.Is, symbol(conversion#1)), call_of(name, [it]), tried)
 	}
-	# a class's own instance stays itself before any source type is asked: a Color is an int too (`type Color < int`)
-	if declared_target(target, scope) { tried = chosen(Key(it, Op.Is, symbol(target)), it, tried) }
 	functions + [Key(call_of(conversion_name(target), [Key(it, Op.Colon, symbol(any_word))]), Op.Define, tried)]
 }
 # a target the program declares, a class, not a built-in type word: text stays one where a prelude in front binds it
