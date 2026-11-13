@@ -46,8 +46,10 @@ gpu_uses_counted(n: Node) := {
 	head = if #items > 0 and items#1 is symbol then name_of(items#1) else ""
 	if head == "print" and #items == 2 and items#2 is symbol { return ø }
 	if head == "for" and #items == 5 and items#4 is symbol { return gpu_uses_counted(items#5) }
+	# a GPU word's first argument is its shader, or paint's pixels, which the CPU reads: its other arguments are the GPU's
 	if head in GPU_LIST_WORDS {
-		for argument in items[1..] { gpu_sink_counted(argument) }
+		if #items > 1 { gpu_uses_counted(items#2) }
+		for argument in items[2..] { gpu_sink_counted(argument) }
 		return ø
 	}
 	for item in items { gpu_uses_counted(item) }
@@ -98,7 +100,8 @@ gpu_packed_code(v: Node, cell: text): text := {
 # (extensions/gpu_lists/gpu_lists.warp): [vec4] where each item is four numbers, [f32] for numbers, no GPU list where
 # its items are lists of another width (the slow path's note then says how to make it)
 gpu_inferred_cell(v: Node): text? := {
-	if gpu_zeros_count(v) != ø { return "f32" }
+	# `float[n]` f32 zeros, `int[n]` no floats at all
+	if gpu_zeros_count(v) != ø { return if name_of(key_of(v)) == "float" then "f32" else ø }
 	items = if gpu_comprehension(v) then [v#1] else items_of(v)
 	if #items > 0 and items.all(item => is_number_list(item) and #item == 4) { return "vec4" }
 	if items.any(is_number_list) then ø else "f32"
