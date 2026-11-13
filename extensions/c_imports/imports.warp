@@ -407,6 +407,7 @@ c_functions_of(written: text, library_folder: text, folder: text = "."): list :=
 	for module in reached_within(with_parts) {
 		for d in module_c_functions(module) { if not functions.has(d#1) and not c_warps(own, d#1, d#2) { functions[d#1] = d } }
 	}
+	timed("DEBUG c reached=" + reached_within(with_parts).join(",") + " cos=" + text(functions.has("cos")))
 	replaced = {}
 	for statement in wasm_uses.keys {
 		for d in wasm_uses[statement].functions { functions[d#1] = d }
