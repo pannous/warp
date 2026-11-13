@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# paint of a list of shaders: each draws into the field of its name, which a shader reads as $name(at), last frame's
+# where nothing wrote it earlier in the frame; the last shows, headless as the pixels paint gives (wiki/graphics.md
+# "Fields and passes"; decision shader-value (c)). Paints run outside `warp test`, as test_paint_sizes.sh does.
+# Run it with bash test/gpu/test_shader_fields.sh; the warp under test is WARP (default the warp on PATH)
+source "$(dirname "$0")/../native/checks.sh"
+stage=$(mktemp -d) || exit 1
+trap 'rm -rf "$stage"' EXIT
+
+last_line() { # last_line <name> <code>: the code as a file, run, the last line it printed
+	printf '%s\n' "$2" >"$stage/$1.warp"
+	"$warp" --mute "$stage/$1.warp" 2>&1 | tail -1
+}
+
+check "a field keeps what its shader drew the frame before" "$(last_line kept 'width = 2
+height = 1
+count = shader {
+@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return $count(at.xy) + vec4f(0.25, 0.0, 0.0, 0.0); }
+}
+show = shader {
+@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f($count(at.xy).r, 0.0, 0.0, 1.0); }
+}
+paint([count, show])
+pixels = paint([count, show])
+red = int(pixels#1 / 65536) % 256
+print red > 120 and red < 135')" "yes"
+check "a pass with values of its own" "$(last_line valued 'width = 2
+height = 1
+glow = shader {
+@fragment fn main() -> @location(0) vec4f { return vec4f($level, 0.0, 0.0, 1.0); }
+}
+show = shader {
+@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return $glow(at.xy); }
+}
+pixels = paint([glow with {level: 1.0}, show])
+print int(pixels#1 / 65536) % 256')" "255"
+check "a shader block without an entry line is a fragment body, at its pixel" "$(last_line body 'width = 2
+height = 1
+level = shader { return vec4f(at.x / 2.0, 0.0, 0.0, 1.0); }
+show = shader { return $level(at.xy); }
+pixels = paint([level, show])
+print int(pixels#2 / 65536) % 256')" "191"
+check "a read of a field no shader draws is refused" "$(last_line unwritten 'width = 2
+height = 1
+show = shader { return $dye(at.xy); }
+other = shader { return vec4f(1.0); }
+paint([other, show])' | grep -o 'fix: put dye in the list')" "fix: put dye in the list"
+exit $((failures > 0))
