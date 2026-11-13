@@ -1000,6 +1000,8 @@ def index_expression(p: Parser): Node := {
 def continued(p: Parser, left: Node, min_power: int): Node := {
 	// a prefix `if` inside a tighter operand took its own `then` (owns_branches), so its `else` too
 	took_own_then = false
+	// the equality-level operator (`==`, `≈`, `is` …) that made left in this round, "" for none: such ones never chain
+	compared = ""
 	// left is the phrase an implicit application made in the round before
 	applied = false
 	while true {
@@ -1120,6 +1122,9 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			// operator word, starts its subject
 			glued_sign = (op#1 == "-" or op#1 == "#") and not is_blank(char_ahead(p, 1))
 			if (glued_sign or is_alpha(c)) and ends_with_clause_word(left) { break }
+			equality_level = powers#1 == binding_powers("==")#1
+			if equality_level and compared != "" { raise comparisons_chained(compared, op#1) }
+			compared = if equality_level then op#1 else ""
 			took_own_then = owns and powers#1 < min_power and op#2 == "then"
 			operator_start = p.at
 			p.at += op#1.length
@@ -1637,6 +1642,9 @@ def is_phrase_operator(op: list): bool := PHRASE_OPERATORS.contains(op#1) or op#
 def is_dotted(op: list): bool := op#1.length > 1 and op#1#1 == '.' and op#1[1 ..] == op#2
 // `abs.(xs)`, Julia's dot call: warp has none (decision no-dot-call-broadcast), a function of numbers broadcasts by itself
 // and `each` applies any other to every item
+// `1 == 1 == 1`, `30 == x + y ≈ 30`: two equality-level comparisons in a row read two ways, refused (wiki/Footguns.md
+// "Chained comparison"); only `<` `<=` `>` `>=` chain
+def comparisons_chained(first: text, second: text): text := "`a ${first} b ${second} c` reads two ways: group one, `(a ${first} b) ${second} c` or `a ${first} (b ${second} c)`; only < <= > >= chain"
 def dot_call_refused(f: Node): text {
 	name = if f is symbol then name_of(f) else "f"
 	"no dot call " + name + ".(…): did you mean `" + name + " xs`, or `" + name + " each xs` for a function taking a list?"
