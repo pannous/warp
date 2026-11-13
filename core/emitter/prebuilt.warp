@@ -418,7 +418,7 @@ def folded_bytes(bytes: list): int {
 ## module's, at its index, of its kinds: never compiled again
 # a module's warp.module read back: its own functions (index, kinds, result, signature), globals [name, kind], text
 # segments, what it was built behind, and where each kind of its items lands here (base: placed, type, text)
-class LibraryImage { name: text; functions: list; globals: list; classes: list; builders: list; base: list; global_names: map; made: list = [] }
+class LibraryImage { name: text; functions: list; globals: list; classes: list; builders: list; base: list; global_names: map }
 def link_libraries(images: list, own_names: list) {
 	module.linked_images = images
 	module.linked_places = linked_places_of(images)
@@ -577,9 +577,7 @@ def image_fields(functions: list): list {
 		field_node("runtime", square_list(runtime_behind().map(n => Number(n)))),
 		field_node("reaches", texts_node(word_reaches(functions, own_class_names))),
 		field_node("owners", texts_node(word_owners(functions, own_class_names))),
-		field_node("dispatched", texts_node(dispatched_written(functions))),
-		# the kinds of values its code makes (a time by time_of): a program linking it compiles their arms (made_case)
-		field_node("made", square_list(module.made.keys.map(kind => Text(kind))))]
+		field_node("dispatched", texts_node(dispatched_written(functions)))]
 }
 # the classes each dispatcher the module exports tells apart (methods.warp covered_classes), each list one text: a
 # program binds its own dispatcher of the name to it when these cover its classes (linked_stand_in)
@@ -597,7 +595,7 @@ def library_image_of(name: text, signature: ModuleSignature): any {
 	classes = signature.classes.map(entry => [text_read(entry#1), text_read(entry#2)])
 	global_names = {}
 	for entry in globals { global_names[entry#1] = yes }
-	LibraryImage(name, functions, globals, classes, signature.builders.map(text_read), [], global_names, signature.made ?? [])
+	LibraryImage(name, functions, globals, classes, signature.builders.map(text_read), [], global_names)
 }
 def image_word(entry: Node): Function {
 	word = Function(text_read(entry#1), ø, ø)
