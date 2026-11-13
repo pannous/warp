@@ -1236,6 +1236,11 @@ channel_sent(caller: handle, context: handle, given: pointer): nothing := {
 # error's own message tells then). The module is the instance's, or with none the one exported() finds: a host
 # module's, whose runtime error is said too, not its trap (card native-host)
 raised_message(caller: handle, context: handle, instance: pointer, failed: pointer): text := {
+	own = module_raised(caller, context, instance, failed)
+	# a host word the program called raised in the native host module: its sentence
+	if own.length == 0 and instance != 0 and host_linked() { module_raised(0, context, 0, failed) } else { own }
+}
+module_raised(caller: handle, context: handle, instance: pointer, failed: pointer): text := {
 	function = allocate(EXTERN_BYTES)
 	memory = allocate(EXTERN_BYTES)
 	code = allocate(8)
@@ -2164,11 +2169,13 @@ system_value_set(name: text, value: i64): nothing := {
 ## and the system's decoders): its system values, the layer a painting shows in, the host words it answers as
 ## host_<word>, the run's end (a still picture held open, the sounds heard out)
 # (primitive mode has no text constants: its name `warp/native_host` and the prefix `host_` are written where read)
+# whether the run linked the native host module
+host_linked(): bool := long_at(kept_value(RUN_SLOT) as i32 + HOST_LINKED_AT as i32).value != 0
 host_export(context: handle, name: text, function: pointer): bool := lazily_linked(context, "warp/native_host", HOST_LINKED_AT, name, function)
 # the run's end told the native host module, when the run linked it: a still picture stays shown till its window
 # closes, the sounds play out
 host_run_ended(context: handle): nothing := {
-	if long_at(kept_value(RUN_SLOT) as i32 + HOST_LINKED_AT as i32).value != 0 { guest_call(0, context, "host_run_ended", 0, 0, allocate(VALUE_BYTES)) }
+	if host_linked() { guest_call(0, context, "host_run_ended", 0, 0, allocate(VALUE_BYTES)) }
 }
 # its export `export` of a system value's name, its number; host_told also of a number after it (`numbers`: 1)
 host_asked(export: text, name: text): i64 := host_told(export, name, 0, 0)
