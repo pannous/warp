@@ -168,6 +168,7 @@ wasi_config_set_argv(config: handle, count: i64, arguments: pointer): bool from 
 # what a crash says the process was running (lib/native/wasi.c): a module's arguments while it runs
 crash_context_running(arguments: pointer, count: i32): handle from "c"
 interrupts_engine(engine: handle): nothing from "c"
+interrupts_running(running: bool): nothing from "c"
 crash_context_restored(outer: handle): nothing from "c"
 # the command line the executable reads from now on (lib/native/wasi.c): a forked child's own
 arguments_replaced(arguments: pointer, count: i32): nothing from "c"
@@ -1848,6 +1849,8 @@ timer_fired(context: handle, instance: pointer, fired: pointer, id: i64, output:
 # what a call of the module failed in, empty when it ran; a run without an output file ends there, saying so
 call_failure(context: handle, instance: pointer, error: handle, trap: pointer, output: text): text := {
 	if error == 0 and long_at(trap).value == 0 { return "" }
+	# (a stopped run's message is read by its code again, which a passed deadline would stop too)
+	wasmtime_context_set_epoch_deadline(context, 1)
 	if output.length == 0 { failed_raising(error, trap, raised_message(0, context, instance, trap)) }
 	failure_said(error, trap, raised_message(0, context, instance, trap))
 }
