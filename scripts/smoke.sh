@@ -31,12 +31,12 @@ base=$(git -C "$tree" merge-base origin/main HEAD) || exit 2
 changed=$({ git -C "$tree" diff --name-only "$base" HEAD; git -C "$tree" diff --name-only HEAD; } | sort -u)
 code_changed=$(echo "$changed" | grep -E "$CODE_PATHS" | grep -v '^core/native/')  # the native warp is no compiler input (compiler-inputs.sh)
 # the native driver's sources (card smoke-sh): a change here cannot be seen by the installed driver
-native_changed=$(echo "$changed" | grep -E '^(core/native/|lib/native/.*\.c$|crates/wasmtime-capi/)' || true)
-# 16 hex digits of the tree's core/native/*.warp, lib/native/*.c (the C main every native build has) and the wasmtime C API's sources, the way compiler-inputs.sh hashes a compiler's inputs
+native_changed=$(echo "$changed" | grep -E '^(core/native/|lib/native/.*\.[ch]$|crates/wasmtime-capi/)' || true)
+# 16 hex digits of the tree's core/native/*.warp, lib/native/*.[ch] (the C main every native build has) and the wasmtime C API's sources, the way compiler-inputs.sh hashes a compiler's inputs
 native_inputs_hash() {
 	local tree=$1
 	{
-		(cd "$tree" && { find core/native -type f -name '*.warp'; find lib/native -type f -name '*.c'; find crates/wasmtime-capi/src -type f; } | env LC_ALL=C sort) | while IFS= read -r file; do
+		(cd "$tree" && { find core/native -type f -name '*.warp'; find lib/native -type f -name '*.[ch]'; find crates/wasmtime-capi/src -type f; } | env LC_ALL=C sort) | while IFS= read -r file; do
 			printf '%s\0' "$file"
 			cat "$tree/$file"
 			printf '\0'

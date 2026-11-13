@@ -47,8 +47,9 @@ on frame {
 	global fish, view_angle
 	if no fish { fish = fish_mesh(read(fish_beside(program_folder()))) }
 	seconds = float(clock() - started) / 1000 + 0.35
-	posed = fish_pose(fish, seconds)
-	fish_show(posed.corners, posed.colors, [[0.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 0.0]], fish_radius(posed.corners))
+	posed = fish_pose(fish, [seconds])
+	frames: [vec4] = [[0.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 0.0]]
+	fish_show(posed.corners, posed.colors, frames, fish_radius(posed.corners))
 	view_angle = 0.9 + seconds * 0.45
 	paint(fish_color, frame_width, frame_height)
 }

@@ -1,7 +1,8 @@
 #!/usr/bin/env warp
 # The Julia set z → z² + c until |z| > 2, colored by the escape count through a cosine palette;
 # c (real and imaginary parts) and zoom are sliders (card slider-ui). The playground shows the
-# controls and reruns with the new value; natively the start values paint one frame.
+# controls and reruns with the new value; natively the start values paint the window, headless one frame.
+# Drag the mouse to move the picture, the point under the pointer staying under it (card mouse-drag-center).
 use math
 use ui
 width = 1600
@@ -10,8 +11,12 @@ c_re = slider(-2 to 2, -.8)
 c_im = slider(-2 to 2, .16)
 zoom = slider(0.5 to 8, 1)
 c = c_re + c_im * ⅈ
+span = 3 # the plane's width the picture shows at zoom 1
+center_x = 0.0 # the plane's point the picture centers on
+center_y = 0.0
+pixel = span / zoom / width # the plane's length one pixel spans
 julia(x, y) := {
-	z = ((x / width - ½) * 3 + (y / height - ½) * 2 * ⅈ) / zoom
+	z = center_x + (x - width / 2) * pixel + (center_y + (y - height / 2) * pixel) * ⅈ
 	n = 0
 	while n < 200 and ‖z‖ < 2 {
 		z = z² + c
@@ -20,4 +25,14 @@ julia(x, y) := {
 	t = n / 200
 	½ .+ ½ .* cosine([3, 3.6, 4] .+ t * 20) # palette
 }
-paint(julia, width, height)
+last_x = mouse_x
+last_y = mouse_y
+on frame {
+	if mouse_down {
+		center_x -= (mouse_x - last_x) * pixel
+		center_y -= (mouse_y - last_y) * pixel
+	}
+	last_x = mouse_x
+	last_y = mouse_y
+	paint(julia, width, height)
+}
