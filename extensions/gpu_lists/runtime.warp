@@ -93,7 +93,7 @@ gpu_list_set(n: Node, index: int, value: Node): Node := {
 	address = cell_address(n, index)
 	if is_vector_cell(cell) {
 		lanes = if kind_code(value) == Kind.List then listed_numbers(value) else new_list(0)
-		if #lanes != vector_width(cell) { gpu_list_refused("a GPU list [" + gpu_cell_name(cell) + "] holds lists of " + gpu_cell_name(cell) + "'s numbers only") }
+		if #lanes != vector_width(cell) { gpu_list_refused("a GPU list [" + gpu_cell_name(cell) + "] holds vectors of its width only") }
 		for k in 1 to #lanes { memory_set_f32(address + (k - 1) * word_bytes(), number_checked(cell, lanes#k)) }
 		return value
 	}
