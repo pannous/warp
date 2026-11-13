@@ -13,7 +13,10 @@ export CARGO_TARGET_DIR=${WARP_WASMTIME_TARGET:-/opt/cargo/warp-wasmtime}
 WGPU_VERSION=29.0.1.1
 gpu_build=${WARP_GPU_TARGET:-/opt/cargo/warp-gpu}
 WASMTIME_VERSION=50.0.0
-WASMTIME_SHA256=2d93539aae382faee7b19650fd966f1f8185599b9cc4adc0a5a8b8f768c11ba9
+# the crates warp patches (crates/wasmtime-capi/patches/, its Cargo.toml [patch.crates-io]), each with its sha256
+PATCHED_CRATES="wasmtime:2d93539aae382faee7b19650fd966f1f8185599b9cc4adc0a5a8b8f768c11ba9
+wasmtime-environ:34fd44c205ef29cc3c254253dceb916be586887602e0e380361ed022776cfc10
+wasmtime-internal-cranelift:1f496bf29d3f2a1d060e0a497a20bfba2a36befe80bdf3e640ba8d3dcab7df35"
 
 # fetched <file> <url> <sha256>: the file downloaded once and checked
 fetched() {
@@ -24,19 +27,24 @@ fetched() {
   mv "$1.new" "$1"
 }
 
-# wasmtime with warp's patches (crates/wasmtime-capi/patches/, its Cargo.toml [patch.crates-io]): the crate from
-# crates.io, unpacked into crates/wasmtime-capi/patched/wasmtime and patched anew whenever the patches change
+# wasmtime with warp's patches (crates/wasmtime-capi/patches/, paths from the folder holding the crates): each
+# patched crate from crates.io, unpacked into crates/wasmtime-capi/patched/<crate> and patched anew whenever the
+# patches change
 patched_wasmtime() {
-  local crate=$checkout/crates/wasmtime-capi stamp
+  local crate=$checkout/crates/wasmtime-capi stamp name sha256 archive
   local patched=$crate/patched
   stamp=$(cat "$crate"/patches/*.patch | shasum -a 256 | cut -d' ' -f1)
-  [ "$(cat "$patched/wasmtime/.patches" 2>/dev/null)" = "$stamp" ] && return
-  fetched "$CARGO_TARGET_DIR/wasmtime-$WASMTIME_VERSION.crate" "https://static.crates.io/crates/wasmtime/wasmtime-$WASMTIME_VERSION.crate" "$WASMTIME_SHA256"
-  rm -rf "$patched/wasmtime" "$patched/wasmtime-$WASMTIME_VERSION" && mkdir -p "$patched"
-  tar -xzf "$CARGO_TARGET_DIR/wasmtime-$WASMTIME_VERSION.crate" -C "$patched"
-  mv "$patched/wasmtime-$WASMTIME_VERSION" "$patched/wasmtime"
-  for patch in "$crate"/patches/*.patch; do patch -s -p1 -d "$patched/wasmtime" <"$patch"; done
-  echo "$stamp" >"$patched/wasmtime/.patches"
+  [ "$(cat "$patched/.patches" 2>/dev/null)" = "$stamp" ] && return
+  rm -rf "$patched" && mkdir -p "$patched"
+  for entry in $PATCHED_CRATES; do
+    name=${entry%%:*} sha256=${entry#*:}
+    archive=$CARGO_TARGET_DIR/$name-$WASMTIME_VERSION.crate
+    fetched "$archive" "https://static.crates.io/crates/$name/$name-$WASMTIME_VERSION.crate" "$sha256"
+    tar -xzf "$archive" -C "$patched"
+    mv "$patched/$name-$WASMTIME_VERSION" "$patched/$name"
+  done
+  for patch in "$crate"/patches/*.patch; do patch -s -p1 -d "$patched" <"$patch"; done
+  echo "$stamp" >"$patched/.patches"
 }
 # the C API built once per set of inputs: a fresh worktree unpacks wasmtime at a new path, which cargo takes for a
 # new crate and rebuilds all of wasmtime from scratch (a rustc in every landing's rebuild)
