@@ -89,22 +89,24 @@ modules_built() {
 	[ ! -e "$work/refused" ] || { cat "$work/refused" >&2; return 1; }
 	rm -rf "$work"
 }
-# a worker of modules_built: the first module in the plan whose waited-for ones are written, claimed and built, until
-# every module is
+# a worker of modules_built: the modules in the plan whose waited-for ones are written or claimed before them in the
+# same batch, claimed and built by one process (a process of its own each cost ~0.45 s, +30 s a build), until every
+# module is; a batch stops at MODULE_BATCH, so a worker joining later finds modules left to build
+MODULE_BATCH=16
 modules_worker() {
-	local warp=$1 lib=$2 compiler=$3 folder=$4 runtime=$5 work=$4/.modules-step name texts waits waited left stalled=
+	local warp=$1 lib=$2 compiler=$3 folder=$4 runtime=$5 work=$4/.modules-step name texts waits waited left batch stalled=
 	touch "$work/worker-$$"
 	while :; do
-		left=
+		left= batch=
 		while IFS=$'\t' read -r name texts waits; do
 			[ "$name" = library ] || [ -e "$work/$name.done" ] && continue
 			left=yes
-			for waited in $waits; do [ -e "$work/$waited.done" ] || continue 2; done
+			for waited in $waits; do [ -e "$work/$waited.done" ] || [[ " $batch " == *" $waited "* ]] || continue 2; done
 			mkdir "$work/$name.claimed" 2>/dev/null || continue
-			module_made "$@" "$name"
-			stalled=
-			continue 2
+			if module_kept "$folder" "$work" "$name"; then touch "$work/$name.done"; else batch+="$name "; fi
+			[ "$(wc -w <<<"$batch")" -lt $MODULE_BATCH ] || break
 		done <"$work/plan"
+		if [ -n "$batch" ]; then modules_made "$@" $batch; stalled=; continue; fi
 		[ -n "$left" ] || return 0
 		# (twice: a module done between the scan and this check makes another ready)
 		if modules_in_flight "$work"; then stalled=; elif [ -z "$stalled" ]; then stalled=yes; continue; else
@@ -123,18 +125,26 @@ modules_in_flight() {
 # (a module's key file holds its key and its own file's sha: one written by anything else, a store hit, a sequential
 # `warp rebuild`, is never taken for the key's)
 module_key() { cat "$1"; digest <"$2"; }
-module_made() {
-	local warp=$1 lib=$2 compiler=$3 folder=$4 runtime=$5 name=$6 work=$4/.modules-step file=$4/$6.wasm
-	if [ -f "$file" ] && [ "$(cat "$file.built-of" 2>/dev/null)" = "$(module_key "$work/$name.key" "$file")" ]; then
-		touch "$file" "$file.built-of" "$work/$name.kept"
-	elif rm -f "$file" "$file.built-of" && "$warp" --no-window --lib "$lib" "$compiler" modules "$folder" "$runtime" "$name" >"$work/$name.log" 2>&1; then
-		cat "$work/$name.log"
+# module_kept <folder> <work> <name>: its file is the one its key built, so it stays as it is
+module_kept() {
+	local file=$1/$3.wasm
+	[ -f "$file" ] && [ "$(cat "$file.built-of" 2>/dev/null)" = "$(module_key "$2/$3.key" "$file")" ] || return 1
+	touch "$file" "$file.built-of" "$2/$3.kept"
+}
+# modules_made <warp> <lib> <compiler> <folder> <runtime> <name>…: the modules built in order by one process
+modules_made() {
+	local warp=$1 lib=$2 compiler=$3 folder=$4 runtime=$5 work=$4/.modules-step name log
+	shift 5
+	log=$work/$1.log
+	for name; do rm -f "$folder/$name.wasm" "$folder/$name.wasm.built-of"; done
+	if "$warp" --no-window --lib "$lib" "$compiler" modules "$folder" "$runtime" "$@" >"$log" 2>&1; then
+		cat "$log"
 		# (a lib/ module refusing to prebuild leaves no file: compiled from its source with each program, said again next step)
-		[ ! -f "$file" ] || module_key "$work/$name.key" "$file" >"$file.built-of"
+		for name; do [ ! -f "$folder/$name.wasm" ] || module_key "$work/$name.key" "$folder/$name.wasm" >"$folder/$name.wasm.built-of"; done
 	else
-		cat "$work/$name.log" >>"$work/refused"
+		cat "$log" >>"$work/refused"
 	fi
-	touch "$work/$name.done"
+	for name; do touch "$work/$name.done"; done
 }
 # run, not sourced: the function named (a worker in another build slot, modules_built)
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then source "$(dirname "$0")/platform.sh"; "$@"; fi
