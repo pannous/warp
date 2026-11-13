@@ -49,7 +49,7 @@ memory from the arena. A function declared `: nothing` gives no value.
 makes it C with wasm2c (module "program"), writes app.native.main.c (primitive.warp native_main: the C calls' glue, instantiate, run_main printing main's value by its type) and
 compiles both with cc -O2, wasm2c's runtime (beside the wasm2c on the PATH) and lib/native/wasi.c: libc answering
 fd_write, fd_read, fd_seek, fd_close, path_open (paths of the current folder), args_sizes_get, args_get, proc_exit,
-and main (instantiate and run_main are main.c's). The executable is `app` beside the file; the intermediate files are removed. Samples: samples/native/ hello,
+and main (instantiate and run_main are main.c's). The executable is `app` beside the file; the intermediate files are removed. `--c` stops before cc, leaving app.native.c, .h and .main.c for a C compiler elsewhere (the first Windows warp: notes/packaging.md); main.c includes lib/native/wasi.c and foreign.c as `native/…` from -I <lib>, and those include lib/native/system.h, POSIX's headers or on Windows lib/native/windows.c. Samples: samples/native/ hello,
 arguments, files, fib, structs; test/native/test_native.sh. Under wasmtime (`warp app.warp`) the files sample finds
 no opened folder, so it runs natively only.
 
