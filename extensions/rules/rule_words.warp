@@ -211,12 +211,14 @@ errors_handled(program: Node): any := {
 	kept = statements.filter(statement => error_handler(statement) == ø).map(statement => error_guarded(statement, handlers))
 	separated(bracketed(kept, ""), ";")
 }
-# [the function's name, the handler] of `on error of f {…}`, else ø
+# [the function's name, the handler] of `on error of f {…}`, `on error of f: 0` or `on error of f do 0` (wiki Error.md),
+# else ø
 error_handler(statement: Node): any := {
-	if not (is_group(statement) and bracket_of(statement) == "" and #statement == 5) { return ø }
+	if not (is_group(statement) and bracket_of(statement) == "") { return ø }
 	words = items_of(statement)
-	if words[0 ..< 3] != [symbol("on"), symbol("error"), symbol("of")] or not (words#4 is symbol) { return ø }
-	[name_of(words#4), words#5]
+	if #words < 4 or words[0 ..< 3] != [symbol("on"), symbol("error"), symbol("of")] { return ø }
+	handled = if #words == 4 and is_key(words#4, Op.Colon) then [key_of(words#4), value_of(words#4)] else if #words == 6 and words#5 == symbol("do") then [words#4, words#6] else words[3 ..]
+	if #handled == 2 and handled#1 is symbol then [name_of(handled#1), handled#2] else ø
 }
 # a definition of a handled function, its body tried
 error_guarded(statement: Node, handlers: map): Node := {
