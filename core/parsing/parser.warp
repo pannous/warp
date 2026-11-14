@@ -1195,7 +1195,7 @@ def continued(p: Parser, left: Node, min_power: int) as Node := {
 // any other target as it is (`n: number as Real`, `int as Real` are conversions)
 def result_typed(target: Node) as Node := match target {
 	Key(head, Op.Arrow, result): { if calls_by_name(head) then Key(head, Op.Colon, result) else target }
-	Key(head, Op.As, result): { if calls_by_name(head) and result is symbol then Key(head, Op.Colon, result) else target }
+	Key(head, Op.As, result): { if calls_by_name(head) then Key(head, Op.Colon, result) else target }
 	_: target
 }
 def calls_by_name(n: Node) as bool := match n {
