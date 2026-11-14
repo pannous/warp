@@ -251,6 +251,9 @@ RUNTIME_WASM = "runtime.wasm"
 write_runtime(file: text) := {
 	# the library index first: a runtime's host words are lib/'s as it lies now, never an earlier build's
 	write_library_index(folder_of(file) + "/" + MODULES_FOLDER)
+	# (its words' places name the standard modules' files by the numbers every compile gives them, never by the order
+	# this build parses them in: the prelude's defaults packed in warp.runtime differed between two builds' runtimes)
+	numbered_module_files()
 	made = runtime_wasm_module(lowered_runtime_words(), host_words())
 	if made is text { raise made }
 	write_bytes(file, with_call_sites(made))

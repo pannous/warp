@@ -52,5 +52,7 @@ rings = shader {
 		textureStore(screen, id.xy, float4(color, 1.0));
 	}
 }
+
+on frame{paint(rings, shown_width(), shown_height(), {channel0: noise, channel1: tint})} # higher fps, but whiteout bug after 5 sec!
+# shown_frames(() => paint(rings, shown_width(), shown_height(), {channel0: noise, channel1: tint}), 10000)
 # ten seconds in a window; without one (--no-window, no device), one still (shown_frames, decision on-frame-headless)
-shown_frames(() => paint(rings, shown_width(), shown_height(), {channel0: noise, channel1: tint}), 10000)

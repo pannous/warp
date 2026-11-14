@@ -32,8 +32,8 @@ node_sum(a: Node, b: Node): Node := {
 	# sum or a text, which says where to start (decisions xs-ys, empty-plus-text)
 	if is_null(a) and is_null(b) { return a }
 	if is_null(a) and not is_null(b) and kind_code(b) == Kind.List { return list_join(unboxed_list(b), new_list(0)) }
-	# two GPU lists of one cell type: a GPU list of both (an extension's list kind joins its own)
-	if is_extended_list(a) and is_extended_list(b) and list_kind(a) == list_kind(b) {
+	# a GPU list and a list: a GPU list of both (an extension's list kind joins a list to its own)
+	if is_extended_list(a) and not is_null(b) and kind_code(b) == Kind.List {
 		joined = extended_list_joined(a, b)
 		if not is_null(joined) { return joined }
 	}
