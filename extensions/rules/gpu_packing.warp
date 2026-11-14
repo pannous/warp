@@ -9,7 +9,7 @@ GPU_LIST_WORDS = ["gpu_compute", "paint", "gpu_render"]
 # the GPU words that write the lists they are given: the program reads back what the GPU made, f32 already
 GPU_WRITING_WORDS = ["gpu_compute"]
 # the names found once a program: name → [GPU uses, assignments, other mentions, its creating form or ø, growths,
-# item reads, GPU writes]
+# item reads, GPU writes, the values its growths add]
 class GpuLists { program: Node; uses: map }
 gpu_lists = GpuLists(Node.Empty, {})
 # whether xs is made for the GPU (a GPU word takes it: gpu_compute's arrays, itself or a map's value), made once by a
@@ -27,7 +27,7 @@ gpu_bound(xs: Node, program: Node): bool := {
 	uses != ø and uses#1 > 0 and uses#2 == 1 + uses#5 and uses#3 == 0 and uses#4 != ø and (uses#6 == 0 or uses#7 > 0)
 }
 gpu_use_added(name: text, at: int) := {
-	uses = gpu_lists.uses.get(name) ?? [0, 0, 0, ø, 0, 0, 0]
+	uses = gpu_lists.uses.get(name) ?? [0, 0, 0, ø, 0, 0, 0, []]
 	uses[at] = uses[at] + 1
 	gpu_lists.uses[name] = uses
 }
@@ -36,6 +36,9 @@ gpu_uses_counted(n: Node) := {
 	if is_key(n, Op.Assign) and key_of(n) is symbol and is_key(value_of(n), Op.Add) and key_of(value_of(n)) is symbol and name_of(key_of(value_of(n))) == name_of(key_of(n)) {
 		gpu_use_added(name_of(key_of(n)), 1)
 		gpu_use_added(name_of(key_of(n)), 4)
+		grown = gpu_lists.uses[name_of(key_of(n))]
+		grown[7] = grown[7] + [value_of(value_of(n))]
+		gpu_lists.uses[name_of(key_of(n))] = grown
 		return gpu_uses_counted(value_of(value_of(n)))
 	}
 	if is_key(n, Op.Assign) and key_of(n) is symbol {
@@ -127,15 +130,21 @@ gpu_packed_code(v: Node, cell: text): text := {
 gpu_inferred_cell(v: Node): text? := {
 	# `float[n]` f32 zeros, `int[n]` no floats at all
 	if gpu_zeros_count(v) != ø { return if name_of(key_of(v)) == "float" then "f32" else ø }
-	if is_empty_list(v) { return "f32" }
 	items = if gpu_comprehension(v) then [v#1] else items_of(v)
 	if #items > 0 and items.all(item => is_number_list(item) and #item == 4) { return "vec4" }
 	if items.any(is_number_list) then ø else "f32"
+}
+# the one cell the made list and the lists its growths add agree on, ø where they differ; growths by other values
+# convert at run time and don't vote, and a list nothing votes for (grown from [] by such values) is f32
+gpu_cell_of_all(values: list): text? := {
+	cells = distinct(values.filter(v => gpu_creating(v) and not is_empty_list(v)).map(v => gpu_inferred_cell(v) ?? ""))
+	if #cells == 0 { return "f32" }
+	if #cells == 1 and cells#1 != "" then cells#1 else ø
 }
 is_number_list(item: Node): bool := is_group(item) and bracket_of(item) == "["
 # a main-level `xs = v` made for the GPU alone as `xs: [vec4] = v`, any other statement as it is
 gpu_inferred_declaration(statement: Node, program: Node): Node := {
 	if not (is_key(statement, Op.Assign) and gpu_bound(key_of(statement), program)) { return statement }
-	cell = gpu_inferred_cell(value_of(statement))
+	cell = gpu_cell_of_all([value_of(statement)] + gpu_lists.uses[name_of(key_of(statement))]#8)
 	if cell == ø then statement else Key(Key(key_of(statement), Op.Colon, bracketed([symbol(cell)], "[")), Op.Assign, value_of(statement))
 }
