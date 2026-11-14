@@ -48,8 +48,9 @@ SAMPLES_WEB_DATA = "data/samples-web"  # report.txt (each difference's first lin
 SAMPLE_RUN_SECONDS = 30
 SAMPLE_ANSWER_SECONDS = SAMPLE_RUN_SECONDS + 10
 SHOWN_DIFFERENCE = 300  # characters of each side in report.txt
-# a duration a sample measures (`painted in 53 ms`) differs on every run: both sides compare with it masked
-MEASURED_TIME = re.compile(r"\b\d+(\.\d+)? ?(ms|µs|ns)\b")
+# a duration a sample measures (`painted in 53 ms`, `swirled for 5.016s`) differs on every run: both sides compare with
+# it masked
+MEASURED_TIME = re.compile(r"\b\d+(\.\d+)? ?(ms|µs|ns|s)\b")
 # --tests (scripts/tests-web.sh): every case of test/ in the page, its verdict against the native baseline's
 TESTS_WEB_RESULTS = "test/tests-web.txt"  # tracked: status and case, one a line
 TESTS_WEB_DATA = "data/tests-web"  # work/ (the native test work folder, its runs' results written by the page), report.txt
@@ -149,11 +150,11 @@ RUN_SNIPPET = """(async () => {
 	}
 })()"""
 TEXT_HOLE = "(a computed text between children changes alone)"  # card web-fine-text-nodes: markup.rs text_holes
-TEXT_HOLE_CODE = 'use web\nn = 0\ndiv{ section{ h1{ "Counter" } button{ on click { n += 1 }, "add" } "clicked " + n + " times" } }'
+TEXT_HOLE_CODE = 'use web\nn = 0\nhtml{ div{ section{ h1{ "Counter" } button{ on click { n += 1 }, "add" } "clicked " + n + " times" } } }'
 TEXT_HOLE_CLICKS = 3
 TEXT_HOLE_SHOWN = "Counteraddclicked 3 times"
 COMPONENT_HOLE = "(a component instance's text changes alone)"  # card web-fine-components: component_state.rs hole_bindings
-COMPONENT_HOLE_CODE = 'use web\ndef Tally(start) {\n\tn = start\n\tsection{ button{ on click { n += 1 }, "add" } "clicked " + n + " times" }\n}\ndiv{ Tally(2) Tally(7) }'
+COMPONENT_HOLE_CODE = 'use web\ndef Tally(start): html {\n\tn = start\n\tsection{ button{ on click { n += 1 }, "add" } "clicked " + n + " times" }\n}\nhtml{ div{ Tally(2) Tally(7) } }'
 COMPONENT_HOLE_SHOWN = "addclicked 2 timesaddclicked 10 times"
 REPORT = "(?report shows the report button, which drafts an issue with the program)"  # card report-button
 REPORT_CODE = 'print "reported"'
@@ -199,13 +200,13 @@ MEMBERS_LISTED = ["count", "sum", "map", "unique"]
 MEMBERS_WAIT_MS = 10000
 ASSISTANT_PAUSE_MS = 1500  # assistant.js PAUSE_BEFORE_COMPLETION_MS and a margin
 PAGE_ELEMENTS = "(a handler reads the value of the page's element of an id: $who)"  # card page-ids: host-foreign.js callOnPage
-PAGE_ELEMENTS_CODE = 'use web\ngreeting = "-"\ndiv{ input{ id: "who" } button{ on click { greeting = "Hello " + $who }, "Greet" } p{ greeting } }'
+PAGE_ELEMENTS_CODE = 'use web\ngreeting = "-"\nhtml{ div{ input{ id: "who" } button{ on click { greeting = "Hello " + $who }, "Greet" } p{ greeting } } }'
 PAGE_ELEMENTS_NAME = "Ada"
 PAGE_ELEMENTS_SHOWN = "Hello Ada"
 # `warp build --site`: a markup program built as a static site, its page loaded and its button clicked (cards
 # blockcompiler-entries, build-site: built sites on page_render/page_event); checked last, it leaves the playground's page
 BUILT_SITE = "(a site warp build --site built shows its page and runs its handlers)"
-BUILT_SITE_CODE = 'use web\ncount = 0\ndiv{ h1{ "Count " + count } button{ on click { count += 1 }, "add" } }\n'
+BUILT_SITE_CODE = 'use web\ncount = 0\nhtml{ div{ h1{ "Count " + count } button{ on click { count += 1 }, "add" } } }\n'
 BUILT_SITE_FOLDER = "data/site-check"
 BUILT_SITE_SHOWN = ["Count 0", "Count 1"]  # the heading after main, after the click
 BUILT_SITE_WAIT_MS = 20000
@@ -346,6 +347,14 @@ gpu_render(s, 2, 2, {compute: passes})
 gpu_render(s, 2, 2, {compute: passes})
 gpu_render(s, 2, 2, {compute: passes})#2"""
 FIELD_PASSES_SHOWN = str(0xFFBF_BF00)
+# a field of atomics: every invocation counts into it, the draw reads the count; 2 renders of 2 workgroups of 64, 256
+FIELD_ATOMICS = "(a field of atomics counts every invocation)"
+FIELD_ATOMICS_CODE = """use graphics
+passes = "@group(0) @binding(0) var<storage, read_write> hits: array<atomic<u32>, 1>; @compute @workgroup_size(64) fn count() { atomicAdd(&hits[0], 1u); }"
+s = "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(f32(values.hits[0]) / 256.0, 0.0, 0.0, 1.0); }"
+gpu_render(s, 2, 2, {compute: passes, workgroups: 2})
+gpu_render(s, 2, 2, {compute: passes, workgroups: 2})#2"""
+FIELD_ATOMICS_SHOWN = str(0xFFFF_0000)
 # card playground-stale-value: a run started without the Run button (an example chosen, auto-run, runCode) clears the
 # last run's value as Run does: an animation running long showed the value before it above itself
 STALE_VALUE = "(a run started without Run leaves no old value above an animation)"
@@ -744,7 +753,7 @@ def text_hole_wrong(code=TEXT_HOLE_CODE, root="section", expected_text=TEXT_HOLE
 
 def bug_button_wrong(page_url):
 	"""?bug_token=… is stored and leaves the address; the report holds comment, program and output; pannous.com refuses
-	the wrong token, which the page then forgets"""
+	the wrong token, which the page keeps, marked rejected, never sending as a visitor instead (d600a7499e)"""
 	open_page(f"{page_url}{'&' if '?' in page_url else '?'}bug_token={BUG_TOKEN}")
 	wait_for_isolation()
 	stop_running()
@@ -758,7 +767,7 @@ def bug_button_wrong(page_url):
 		document.getElementById("bug-form").requestSubmit();
 		const status = document.getElementById("bug-status");
 		for (let waited = 0; !status.textContent.startsWith("not sent") && waited < 15000; waited += 100) await new Promise(done => setTimeout(done, 100));
-		return JSON.stringify({{ address, report, status: status.textContent, forgotten: localStorage.getItem("warp-playground-bug-token") === null }});
+		return JSON.stringify({{ address, report, status: status.textContent, kept: localStorage.getItem("warp-playground-bug-token") !== null }});
 	}})()""")
 	shown = json.loads(json.loads(shown)) if shown.startswith('"') else {"report": {}, "status": f"(page gave no answer: {shown or browser_complaint})"}
 	open_page(page_url)
@@ -768,8 +777,8 @@ def bug_button_wrong(page_url):
 	wrong = [f"bug report {name}: {report.get(name)!r}, expected {value!r}" for name, value in expected.items() if report.get(name) != value]
 	wrong += [] if REPORT_PRINTED in report.get("output", "") else [f"bug report without the program's output: {report.get('output')!r}"]
 	wrong += [] if BUG_TOKEN not in shown.get("address", "") else [f"bug token left in the address: {shown['address']}"]
-	wrong += [] if "wrong token" in shown["status"] else [f"wrong bug token not refused: {shown['status']!r}"]
-	return wrong + ([] if shown.get("forgotten") else ["refused bug token still stored"])
+	wrong += [] if "refused" in shown["status"] else [f"wrong bug token not refused: {shown['status']!r}"]
+	return wrong + ([] if shown.get("kept") else ["refused bug token forgotten: the next report would go out as a visitor's"])
 
 
 def defined_names_wrong():
@@ -1181,13 +1190,13 @@ def previous_frame_wrong():
 	return [] if PREVIOUS_FRAME_SHOWN in rendered else [f"third render: {rendered!r}, expected {PREVIOUS_FRAME_SHOWN} in it"]
 
 
-def field_passes_wrong():
+def field_passes_wrong(check=FIELD_PASSES, code=FIELD_PASSES_CODE, shown=FIELD_PASSES_SHOWN):
 	"""compute passes run in order each frame and step a field the draw reads; skipped loudly without WebGPU"""
-	rendered = run_code(FIELD_PASSES_CODE)
+	rendered = run_code(code)
 	if NO_GPU in rendered:
-		print(f"skip {FIELD_PASSES}: this browser {NO_GPU}")
+		print(f"skip {check}: this browser {NO_GPU}")
 		return []
-	return [] if FIELD_PASSES_SHOWN in rendered else [f"third render: {rendered!r}, expected {FIELD_PASSES_SHOWN} in it"]
+	return [] if shown in rendered else [f"last render: {rendered!r}, expected {shown} in it"]
 
 
 def view_steady_wrong():
@@ -1611,7 +1620,7 @@ def check_examples(names, page_url=None, site=None):
 	snippets = guide_snippets() if GUIDE in names else []
 	for line, code, value, printed in snippets:
 		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed, page_url))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (FIELD_PASSES, field_passes_wrong), (STALE_VALUE, stale_value_wrong), (KEPT_OUTPUT, kept_output_wrong), (GUIDE_PARTS, guide_parts_wrong), (GUIDE_ADDRESS, guide_address_wrong), (GUIDE_PLACES, guide_places_wrong), (EXAMPLE_SWITCH, example_switch_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (SHADER_ONE_VIEW, shader_one_view_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), (STALE_DEPLOY, stale_deploy_wrong), (DEFINED_NAMES, defined_names_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (FIELD_PASSES, field_passes_wrong), (FIELD_ATOMICS, lambda: field_passes_wrong(FIELD_ATOMICS, FIELD_ATOMICS_CODE, FIELD_ATOMICS_SHOWN)), (STALE_VALUE, stale_value_wrong), (KEPT_OUTPUT, kept_output_wrong), (GUIDE_PARTS, guide_parts_wrong), (GUIDE_ADDRESS, guide_address_wrong), (GUIDE_PLACES, guide_places_wrong), (EXAMPLE_SWITCH, example_switch_wrong), (STOP_WHILE_LOADING, lambda: stop_while_loading_wrong(page_url)), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (SHADER_ONE_VIEW, shader_one_view_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), (REPORT_PAGE, report_page_wrong), (STALE_DEPLOY, stale_deploy_wrong), (DEFINED_NAMES, defined_names_wrong), *([(BUILT_SITE, built_site_wrong), (DEV_VALUES, lambda: built_site_wrong(DEV_VALUES_FOLDER, ["--dev"], True, DEV_VALUES_SHOWN))] if serves_repository else [])) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()

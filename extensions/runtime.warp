@@ -24,3 +24,8 @@ extended_list_unlisted(n: Node): list := {
 	if is_gpu_list(n) { return gpu_list_unlisted(n) }
 	fail()
 }
+# `a + b` of a list of an extension's kind and a list: its own list of both, ø where it makes none (a plain list then)
+extended_list_joined(a: Node, b: Node): Node := {
+	if is_gpu_list(a) { return gpu_lists_joined(a, b) }
+	ø
+}

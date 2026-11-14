@@ -171,6 +171,31 @@ pga3_coordinates(p: Multivector): list := {
 	pga_refuse_ideal(w)
 	[-p.parts#14 / w, p.parts#12 / w, -p.parts#8 / w]
 }
+// space's basis blades by their bivector.net names (blade m with a sign where the name orders its vectors otherwise)
+e0 = blade(PGA3, 1, 1)
+e1 = blade(PGA3, 2, 1)
+e2 = blade(PGA3, 4, 1)
+e3 = blade(PGA3, 8, 1)
+e01 = blade(PGA3, 3, 1)
+e02 = blade(PGA3, 5, 1)
+e03 = blade(PGA3, 9, 1)
+e12 = blade(PGA3, 6, 1)
+e31 = blade(PGA3, 10, -1)
+e23 = blade(PGA3, 12, 1)
+e021 = blade(PGA3, 7, -1)
+e013 = blade(PGA3, 11, 1)
+e032 = blade(PGA3, 13, -1)
+e123 = blade(PGA3, 14, 1)
+e0123 = blade(PGA3, 15, 1)
+// the same blades named by what they are: the directions (ideal points), so that
+// point(x, y, z) == origin + x·ẋ + y·ẏ + z·ż; the origin; the pseudoscalar
+// TODO (card standard-module) x̅ y̅ z̅ for the planes e1 e2 e3, x⃑ y⃑ z⃑ for the ideal lines e01 e02 e03, x⃗ y⃗ z⃗ for the axes
+// e23 e31 e12, once a standard module's names may carry combining marks (z with one: card value-variable)
+ẋ = e032
+ẏ = e013
+ż = e021
+origin = e123
+I = e0123
 
 // one verb each, overloads of the plane and of space (the pga2_ and pga3_ words above)
 point(x: number, y: number): Multivector := pga2_point(x, y)

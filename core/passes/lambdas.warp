@@ -223,7 +223,7 @@ locals_of(names: list, outer: map = {}): Locals := Locals{own: word_set(names), 
 with_locals(scope: Locals, names: list): Locals := if #names == 0 then scope else Locals{own: word_set(scope.own.keys + names), outer: scope.outer}
 is_local(name: text, scope: Locals): bool := scope.own.has(name) or scope.outer.has(name)
 
-class Lowering { arities: map; defaulted: map = {}; lambdas_lifted: list; callable_fields: map = {}; function_values: map = {}; field_names: map = {}; globals: map = {}; main_globals: map = {}; function_positions: map = {} }
+class Lowering { arities: map; bound: map = {}; data_depth: int = 0; defaulted: map = {}; lambdas_lifted: list; callable_fields: map = {}; function_values: map = {}; field_names: map = {}; globals: map = {}; main_globals: map = {}; function_positions: map = {} }
 
 ## the walk
 
@@ -236,7 +236,10 @@ lowered_branches(branches: Node, locals: Locals, lowering: Lowering): Node := {
 # n with its lambdas lifted, its iterations looped, its function names as values and its calls of variables as
 # closures; `locals` the variables and parameters in scope; quoted code stays as written
 lowered_lambdas(n: Node, locals: Locals, lowering: Lowering): Node := {
-	if is_quote(n) { return n }
+	# (`use log` names a library or a C function, never a value: no lambda calling log)
+	if is_quote(n) or use_target(n) != ø { return n }
+	if is_spliced_quote(n) { return lowered_at_depth(n#2, lowering.data_depth + 1, locals, lowering, n) }
+	if lowering.data_depth > 0 and is_code_in_data(n) { return lowered_at_depth(n, 0, locals, lowering, ø) }
 	iteration = iteration_of(n)
 	if iteration != ø {
 		looped = iteration_over(iteration, locals, lowering)
@@ -265,18 +268,53 @@ lowered_lambdas(n: Node, locals: Locals, lowering: Lowering): Node := {
 	}
 }
 
-# a function of the program with parameters, named where a value goes: its closure; one without, or with each
-# defaulted, stays its bare call (decision defaults-bare-call)
+# a function of the program with parameters, named where a value goes (by an alias too, `is_letter` of is_alpha): its
+# closure; one without, or with each defaulted, stays its bare call (decision defaults-bare-call); a library word,
+# `sqrt`, the lambda calling it (library_word_value)
 function_value(name: text, n: Node, locals: Locals, lowering: Lowering): Node := {
-	if is_local(name, locals) or name not in lowering.arities or lowering.arities[name] == 0 or lowering.defaulted.has(name) { return n }
-	call_node(symbol("closure_new"), [n])
+	if is_local(name, locals) { return n }
+	# (a name the program binds, a parameter `size` too, is its own: never an alias's word, count)
+	word = if name in lowering.arities or lowering.bound.has(name) then name else unaliased(name)
+	if word not in lowering.arities {
+		lambda = if lowering.data_depth > 0 then ø else library_word_value(name, lowering.bound)
+		return if lambda == ø then n else lowered_lambdas(lambda, locals, lowering)
+	}
+	if lowering.arities[word] == 0 or lowering.defaulted.has(word) { return n }
+	call_node(symbol("closure_new"), [symbol(word)])
 }
+# data spliced into a call (data_blocks.warp): its words the program's values or as written, never a library word's
+# function value, `li{ … reverse item }` keeps CSS's reverse (decision tag-items-calls); a call, a member, a lambda or
+# a loop in it is code again, `p{ xs.map(upper) }`
+is_code_in_data(n: Node): bool := iteration_of(n) != ø or is_lambda(n) or is_key(n, Op.Dot) or (is_group(n) and bracket_of(n) == "(" and separator_of(n) == "")
+# n lowered at that data depth; the spliced quote `quoted` around it rebuilt, when given
+lowered_at_depth(n: Node, depth: int, locals: Locals, lowering: Lowering, quoted: Node?): Node := {
+	kept = lowering.data_depth
+	lowering.data_depth = depth
+	lowered = lowered_lambdas(n, locals, lowering)
+	lowering.data_depth = kept
+	if quoted == ø then lowered else group_like(quoted, [quoted#1, lowered])
+}
+# a library word named as a value, `f = sqrt`, `xs.map(upper)`, `f(is_letter)`: the lambda calling it with as many
+# arguments as its declarations agree on (card library-word-value); ø for a name the program binds itself, a type
+# word (`any` too, beside the word any(xs, f)), a linked module's global, or a word declared with no parameters or several
+# counts
+library_word_value(name: text, bound: map): Node? := {
+	if bound.has(name) or is_linked_global(name) or is_tested_type_word(name) or name == any_word { return ø }
+	counts = library_lines_of(name).map(line => #line.signature.parameters)
+	if #counts == 0 or counts#1 == 0 or counts.any(count => count != counts#1) { return ø }
+	lambda_calling(unaliased(name), counts#1)
+}
+# the declarations of the library word a name says: the runtime's, the emitter's and libm's
+library_lines_of(name: text): list := lines_of(typed_lines + math_runtime_lines + foreign_math_lines, unaliased(name))
 
 # an argument as passed: a function without parameters given for a parameter declared a function, `g(d)` of
 # `g(c: function)`, is its closure, not its call; so is the parameterless variant of a name defined with several
 # parameter counts (arity_overloads: `low() := …` beside a used module's `low(g: Gaussian)`), where its bare name is
 # that variant's call
 passed_value(argument: Node, at: int, callee: Node, locals: Locals, lowering: Lowering): Node := {
+	# (a word only the compiler's passes write takes a name as written, extremes.warp's `empty_extremum(min)`: never the
+	# library word's function value)
+	if argument is symbol and callee is symbol and #lines_of(compiler_lines, name_of(callee)) > 0 { return argument }
 	takes_function = callee is symbol and function_named_at(lowering.function_positions, name_of(callee), at) != ""
 	target = if argument is symbol and not is_local(name_of(argument), locals) then parameterless_function(name_of(argument), lowering) else ""
 	if takes_function and target != "" then call_node(symbol("closure_new"), [symbol(target)]) else lowered_lambdas(argument, locals, lowering)
@@ -369,7 +407,9 @@ nested_phrase(words: list, lowering: Lowering): list? := {
 }
 
 # `x.f(a)`: of a field the program gives a function value (callable_fields), the function it holds called,
-# `closure_call_1(x.f, a)`; else a method call, its name kept
+# `closure_call_1(x.f, a)`; else a method call, its name kept. Where f is also a word, the program's or the library's,
+# the receiver decides as it runs: one holding the field f calls it, any other the word, so a `{click: e => …}` leaves
+# `button.click(5)` and `xs.reverse()` their methods (decision fields-are-functions: own fields first)
 dotted_lowered(left: Node, right: Node, locals: Locals, lowering: Lowering): Node := {
 	receiver = lowered_lambdas(left, locals, lowering)
 	# `3.g`, `x.g(a)` of a local variable or parameter holding a function: the function it holds called, g(x, a), where
@@ -385,13 +425,21 @@ dotted_lowered(left: Node, right: Node, locals: Locals, lowering: Lowering): Nod
 		return Key(receiver, Op.Dot, lowered_method(right, locals, lowering))
 	}
 	arguments = arguments_of(called).map(argument => lowered_lambdas(argument, locals, lowering))
-	call_node(symbol(closure_call_word + #arguments), [Key(receiver, Op.Dot, called#1)] + arguments)
+	name = name_of(called#1)
+	if not names_word(name, #arguments + 1, lowering) { return call_node(symbol(closure_call_word + #arguments), [Key(receiver, Op.Dot, called#1)] + arguments) }
+	held = if receiver is symbol then receiver else fresh_name("receiver", fresh_number())
+	field_call = call_node(symbol(closure_call_word + #arguments), [Key(held, Op.Dot, called#1)] + arguments)
+	either = chosen(call_of(HiddenWord.FieldHeld as text, [held, name]), field_call, Key(held, Op.Dot, lowered_method(right, locals, lowering)))
+	if receiver is symbol then either else statements([set_to(held, receiver), either])
 }
+# a function of that name taking count arguments: the program's, the prelude's or a built-in word
+names_word(name: text, count: int, lowering: Lowering): bool := lowering.arities.get(name) == count or library_lines_of(name).any(line => #line.signature.parameters == count)
 
 # the names the program gives a function value by op, named unlike any of its functions: the fields (Op.Colon)
 # `{answer: answer}` of a parameter `answer: function`, `{d: x => x + 1}`, `{f: square}` of a function with parameters;
 # the variables (Op.Assign) `sq = x => x*x`
-callable_names_of(program: Node, op: Op, arities: map, function_parameters: map): map := keyed_names(program, op, n => not arities.has(name_of(key_of(n))) and gives_function(value_of(n), arities, function_parameters))
+# (a field may share a function's name, the receiver choosing at run time, dotted_lowered; a variable may not)
+callable_names_of(program: Node, op: Op, arities: map, function_parameters: map, bound: map): map := keyed_names(program, op, n => not (op == Op.Assign and arities.has(name_of(key_of(n)))) and gives_function(value_of(n), arities, function_parameters, bound))
 # the names the program keys by op whose key holds: by Op.Colon its objects' fields, `{a: 1}`, `class T { a: int }`
 keyed_names(program: Node, op: Op, holds: function): map := {
 	names = {}
@@ -400,10 +448,10 @@ keyed_names(program: Node, op: Op, holds: function): map := {
 	}
 	names
 }
-gives_function(value: Node, arities: map, function_parameters: map): bool := {
+gives_function(value: Node, arities: map, function_parameters: map, bound: map): bool := {
 	if is_lambda(value) { return yes }
 	if not (value is symbol) { return no }
-	function_parameters.has(name_of(value)) or (arities.has(name_of(value)) and arities[name_of(value)] > 0)
+	function_parameters.has(name_of(value)) or (arities.has(name_of(value)) and arities[name_of(value)] > 0) or library_word_value(name_of(value), bound) != ø
 }
 # the parameters declared functions, `answer: function`, of the program's definitions
 function_parameters_of(written: list): map := {
@@ -419,7 +467,7 @@ function_parameters_of(written: list): map := {
 
 # the parameters declared functions (found) and those a call of their function is given one for: `f` of
 # `apply(f, x) := f x` in `apply(inc, 1)`
-parameters_given_functions(written: list, arities: map, found: map): map := {
+parameters_given_functions(written: list, arities: map, found: map, bound: map): map := {
 	# (by name, each call looking up its own: a filter of every definition for every call was 4 % of the self compile)
 	definitions = {}
 	for statement in written {
@@ -430,7 +478,7 @@ parameters_given_functions(written: list, arities: map, found: map): map := {
 		if not (is_round(n) and #n > 1 and n#1 is symbol and definitions.has(name_of(n#1))) { continue }
 		for parts in definitions[name_of(n#1)] {
 			given = arguments_of(items_of(n))
-			for i in 1 to min(#given, #parts.parameters) { if gives_function(given#i, arities, {}) { found[parameter_name(parts.parameters#i)] = yes } }
+			for i in 1 to min(#given, #parts.parameters) { if gives_function(given#i, arities, {}, bound) { found[parameter_name(parts.parameters#i)] = yes } }
 		}
 	}
 	found
@@ -770,7 +818,7 @@ linked_definitions(program: Node): list := {
 	for part in nodes_in(program) { if part is symbol { mentioned[name_of(part)] = yes } }
 	found = []
 	for image in module.linked_images {
-		for slice in linked_signature(image.name).slices.filter(slice => mentioned.has(slice#1)) { found += statements_in(unpack(slice#3)) }
+		for slice in linked_signature(image.name).slices.filter(slice => mentioned.has(slice#1)) { found += statements_in(slice_tree(slice#3, slice#4)) }
 	}
 	found
 }
@@ -781,15 +829,40 @@ explicit_definition(statement: Node): Node := {
 	call = implicit_call(statement)
 	if call == ø then statement else Key(call, Op.Define, value_of(statement))
 }
+# `twice := doubled`, `inc := add(1, _)`, `h := g` of such a g: a name defined as a function value, the definition
+# `twice(x) := doubled(x)` it is, so a call, `map(twice)` and an alias of it work as the function's own (wiki function
+# "Partial application"); each statement's arity known to those after it
+aliased_definitions(statements: list, bound: map): list := {
+	arities = {}
+	aliased = []
+	# (a name a variable holds too, math's `arctan = &arc_tangent`, stays the value it names)
+	variables = word_set(statements.flat_map(nodes_in).filter(n => is_key(n, Op.Assign) and key_of(n) is symbol).map(n => name_of(key_of(n))))
+	for statement in statements {
+		lambda = if is_key(statement, Op.Define) and key_of(statement) is symbol and not variables.has(name_of(key_of(statement))) then function_named(value_of(statement), arities, bound) else ø
+		written = if lambda == ø then statement else lambda_definition(key_of(statement), lambda)
+		parts = definition_of(written)
+		if parts != ø { arities[parts.name] = #parts.parameters }
+		aliased += [written]
+	}
+	aliased
+}
+# the lambda a definition's body names: a lambda as written, a function of the program by its name, a library word's
+function_named(value: Node, arities: map, bound: map): Node? := {
+	if is_lambda(value) { return lambda_of(value) }
+	if not (value is symbol) { return ø }
+	if arities.has(name_of(value)) { return if arities[name_of(value)] > 0 then lambda_calling(name_of(value), arities[name_of(value)]) else ø }
+	library_word_value(name_of(value), bound)
+}
+# the definition `name(parameters) := result` of a lambda named so
+lambda_definition(name: Node, lambda: Node): Node := Key(call_node(name, written_parameters(arrow_parameters(lambda))), Op.Define, arrow_result(lambda))
 # `f = (a, b = 1) => a + b`, f written once, as the definition `f(a, b = 1) := a + b` it is, so a call leaving out b
 # takes its default as a definition's does (a lambda is a definition, card lambda-own); a result type after its
 # parentheses is dropped, as a lifted lambda's is (arrow_parameters)
 defaulted_lambda_definition(statement: Node, statements: list): Node := {
 	if not (is_key(statement, Op.Assign) and key_of(statement) is symbol and is_lambda(lambda_of(value_of(statement)))) { return statement }
 	arrow = lambda_of(value_of(statement))
-	parameters = written_parameters(arrow_parameters(arrow))
-	if not parameters.any(parameter => parameter_of(parameter).defaulted_to != ø) or writes_of(key_of(statement), statements) != 1 { return statement }
-	Key(call_node(key_of(statement), parameters), Op.Define, arrow_result(arrow))
+	if not written_parameters(arrow_parameters(arrow)).any(parameter => parameter_of(parameter).defaulted_to != ø) or writes_of(key_of(statement), statements) != 1 { return statement }
+	lambda_definition(key_of(statement), arrow)
 }
 writes_of(name: Node, statements: list): int := #statements.flat_map(nodes_in).filter(n => n is key and op_of(n) in [Op.Assign, Op.AddAssign, Op.SubAssign] and key_of(n) == name)
 
@@ -816,7 +889,7 @@ defaulted_functions(statements: list): map := {
 }
 lambdas(program: Node): Node := {
 	given = statements_in(program)
-	statements = given.map(statement => defaulted_lambda_definition(explicit_definition(statement), given))
+	statements = aliased_definitions(given.map(statement => defaulted_lambda_definition(explicit_definition(statement), given)), names_bound_in(program))
 	positions = function_positions_of(statements + linked_definitions(program))
 	written = statements.map(statement => with_function_parameters(celled_definition(statement, positions)))
 	main_statements = written.filter(statement => definition_of(statement) == ø)
@@ -827,10 +900,10 @@ lambdas(program: Node): Node := {
 		parts = definition_of(statement)
 		if parts != ø { arities[parts.name] = #parts.parameters }
 	}
-	lowering = Lowering{arities: arities, lambdas_lifted: [], function_positions: positions, defaulted: defaulted_functions(written)}
-	function_parameters = parameters_given_functions(written, arities, function_parameters_of(written))
-	lowering.callable_fields = callable_names_of(program, Op.Colon, arities, function_parameters)
-	lowering.function_values = callable_names_of(program, Op.Assign, arities, function_parameters)
+	lowering = Lowering{arities: arities, bound: names_bound_in(program), lambdas_lifted: [], function_positions: positions, defaulted: defaulted_functions(written)}
+	function_parameters = parameters_given_functions(written, arities, function_parameters_of(written), lowering.bound)
+	lowering.callable_fields = callable_names_of(program, Op.Colon, arities, function_parameters, lowering.bound)
+	lowering.function_values = callable_names_of(program, Op.Assign, arities, function_parameters, lowering.bound)
 	# (a parameter declared `f: function` is no field)
 	lowering.field_names = keyed_names(program, Op.Colon, n => value_of(n) != symbol("function"))
 	# a parameter holding a function, declared so or given one, is called spaced too: `f x` as `f(x)`

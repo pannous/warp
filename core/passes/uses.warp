@@ -232,13 +232,18 @@ declarations_used(statements: list, folder: text, seen: list, claimed: map): lis
 			seen = inner#2
 			# a primitive file's foreign lines are its imports, declared as its functions are (primitive.warp declare_import)
 			primitive = is_primitive_file(file_text(file))
-			own = used.filter(s => (is_declaration(s) or use_target(s) is symbol or (primitive and foreign_import(s) != ø)) and file_used(s, folder_of(file)) == ø)
+			# `include` brings the whole file, its statements run as written (wiki/use.md "in place, as they are"); `use`
+			# its declarations
+			own = used.filter(s => (is_include(statement) or is_declaration(s) or use_target(s) is symbol or (primitive and foreign_import(s) != ø)) and file_used(s, folder_of(file)) == ø)
 			claim_signatures(own, working_relative(file), claimed)
 			declarations += inner#1 + own
 		}
 	}
 	[declarations, seen]
 }
+
+INCLUDE_WORD = "include"
+is_include(statement: Node): bool := is_group(statement) and #statement == 2 and statement#1 == symbol(INCLUDE_WORD)
 
 # a used file's parse, parsed again each compile: keeping parses across runs saved about 1 % (card kept-values-retire)
 # (each file parsed once for all its readers, kept with the text it was parsed from: a host compiling again after an
@@ -255,7 +260,7 @@ file_parsed(file: text): Node := {
 # unclosed-core: an unclosed ( in a core file hid its later definitions)
 checked_parse(file: text, source: text): Node := {
 	timed("parse " + working_relative(file))
-	tree = plain_node(parsed(source))
+	tree = plain_node(parsed_from(source, shown_file(file), 1))
 	for n in nodes_in(tree) {
 		message = parse_error_message(n)
 		if message != ø { raise working_relative(file) + ": " + message }
@@ -338,6 +343,8 @@ call_head(n: Node): any := {
 # library-zero-bake-plan 1b). It stays a module: brought in as its own file, its words reached, as from lib/ (an
 # include of it as the compiler's own code typed the emitter's values anew: shown_text refused), or lib/host/<name>.warp,
 # a module the native driver links itself (decision host-folder)
+# the standard modules' files in positions.warp source_files, after the program's, numbered alike in every compile
+numbered_module_files() := { global source_files; if #source_files == 1 { source_files += std_module_names.map(name => shown_file(std_module_path(name))) } }
 std_module_path(name: text): text := own_module_files.get(name) ?? run_library() + module_folder(name) + name + module_extension
 module_folder(name: text): text := if modules_in(COMPILER_MODULES).has(name) then COMPILER_MODULES else if is_host_module(name) then HOST_MODULES else if is_runtime_module(name) then "/extensions/" + name + "/" else "/"
 # a standard module of runtime words, built apart from runtime.wasm (extension.warp runtime_modules)
@@ -395,7 +402,7 @@ use_target(statement: Node): any := {
 	if not (is_group(statement) and #statement == 2 and statement#1 is symbol and name_of(statement#1) in import_keywords) { return ø }
 	target = path_text(statement#2)
 	# a quoted name without an extension is the bare one: `use "list"` is `use list`, a file of the folder or a std module
-	if target is text and not target.contains(".") { return symbol(target) }
+	if target is text and not target.contains(".") and not target.contains("/") { return symbol(target) }
 	target
 }
 # the text a path literal marks, `./x.warp` parsed as `"./x.warp" as path` (core/parsing/parser.warp), so `use ./x.warp`
@@ -405,7 +412,7 @@ path_text(n: Node): Node := if is_key(n, Op.As) and value_of(n) == symbol("path"
 # the path of the file of the folder a `use` statement names, ø for another statement or a module of no such file
 file_used(statement: Node, folder: text): any := {
 	module = use_target(statement)
-	if module is text { return rooted(module, folder) }
+	if module is text { return with_module_extension(rooted(module, folder)) }
 	# (a runtime module a build compiles in is its root file, whose own uses of the files beside it it brings)
 	if module is symbol and name_of(module) in compiled_runtime_modules() { return std_module_path(name_of(module)) }
 	if not (module is symbol) or name_of(module) in implicitly_used { return ø }
@@ -428,6 +435,13 @@ working_relative(file: text): text := {
 	below = cwd + "/"
 	if file.starts_with(below) then file.replace(below, "") else file
 }
+# a source file as a message names it: below the library folder `lib/…`, else working_relative, without `./` steps
+shown_file(file: text): text := {
+	library = run_library() + "/"
+	if file.starts_with(library) { return "lib/" + file[#library ..] }
+	shown = working_relative(file).replace("/./", "/")
+	if shown.starts_with("./") then shown[2 ..] else shown
+}
 # `use "•/lib/x.warp"` (alias `@/`): the project root, the nearest folder above `folder` holding `.git`, plus the
 # rest; no such folder refuses (decision project-root-paths). Any other name is relative to `folder`: a relative root
 # (the page's `.`) is never joined to it
@@ -439,6 +453,8 @@ rooted(name: text, folder: text): text := {
 	if root == ø { raise name + ": no folder above " + working_relative(folder) + " holds .git; run `git init` at the project root or use a relative path" }
 	without_steps_up(root + "/" + name[#marker#1 ..< #name])
 }
+# a path naming its file without the extension, `use •/test/fixtures/counter`: that .warp file when there is one
+with_module_extension(path: text): text := if file_text(path) == ø and file_text(path + module_extension) != ø then path + module_extension else path
 project_root(folder: text): any := {
 	# from the absolute folder: a relative one (`samples/wasm` of `warp samples/wasm/x.warp`) ran out before the
 	# working folder that holds .git

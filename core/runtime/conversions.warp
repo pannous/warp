@@ -107,7 +107,9 @@ text_checked(n: Node): Node := {
 holds_bool(n: Node): bool := not is_null(n) and (marked_kind(n) == Marked.Bool or (kind_code(n) == Kind.Int and not is_ratio(n) and unboxed_int(n) >= 0 and unboxed_int(n) <= 1))
 bool_checked(n: Node): Node := {
 	if not holds_bool(n) { returned_error("not a bool") }
-	n
+	if marked_kind(n) == Marked.Bool { return n }
+	held: Node = unboxed_int(n) == 1
+	held
 }
 # an instance that converts itself to a float, an exact root √3, is one too: a run-time value checked so stays itself
 float_checked(n: Node): Node := {
@@ -141,7 +143,10 @@ bool_of_node(n: Node): bool := {
 	if not holds_bool(n) { fail() }
 	unboxed_int(n) != 0
 }
+# a character known only at run time: a character, a one-character text (`s[1]`), or a code point (`[65, 66]#2`)
 char_of_node(n: Node): char := {
+	if not is_null(n) and kind_code(n) == Kind.Text and one_character(unboxed_text(n)) { return char_of(first_code_point(unboxed_text(n))) }
+	if not is_null(n) and is_plain_int(n) { return char_of(unboxed_int(n)) }
 	if is_null(n) or kind_code(n) != Kind.Codepoint { not_a_character() }
 	unboxed_char(n)
 }
@@ -175,6 +180,15 @@ spells(t: text, word: text): bool := {
 }
 # a value known only at run time as a condition: ø and errors are no, a
 # list or map yes when it has items, a key when its key or value is, a number, character or text when not 0 or empty
+# m's method of that name called with the arguments' list: its answer, ø where m is no instance of a class declaring
+# it; instance_method answers [answer], so an answer of [] is told from none (core/runtime/maps.warp protocol_answer)
+method_called(m: Node, name: Node, arguments: Node): Node := {
+	answered = instance_method(m, name, arguments)
+	if is_null(answered) then answered else answer_of(answered)
+}
+answer_of(answered: Node): Node := unboxed_list(answered)#1
+# [the answer] of a class's method, as instance_method gives it
+answered(answer: Node): Node := list_node(Kind.List, [answer])
 node_truthy(n: Node): bool := {
 	if is_null(n) { return no }
 	kind = kind_code(n)

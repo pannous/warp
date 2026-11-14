@@ -101,5 +101,8 @@ with_function_arguments(n: Node, defined: map): Node := match n {
 		if #items < 1 or not (items#1 is symbol) { return n }
 		method_call(receiver, items#1, items[1..], defined) ?? n
 	}
+	# a block glued to the method word, `xs.map{ it * 2 }`, `xs.sort{$0 > $1}`, read as a tag, is its last argument
+	# whatever the method's signature (test_glued_method_block); the signature says whether its `it` makes a function
+	Key(receiver, Op.Dot, Key(word, Op.Colon, block)): if word is symbol and is_block_argument(block) then method_call(receiver, word, [block], defined) ?? Key(receiver, Op.Dot, List([word, block], Bracket.Round, Separator.None)) else n
 	_: n
 }

@@ -193,9 +193,12 @@ lambda_arguments(call: Node, names: map, called: map, receivers: int): Node := {
 }
 lambda_argument(argument: Node, names: map, count: int?): Node := if argument is symbol and names.has(name_of(argument)) and count != ø then lambda_calling(name_of(argument), count) else argument
 lambda_calling(name: text, count: int): Node := {
-	parameters = (1 to count).map(index => symbol("argument" + name_joiner + "${index}"))
-	Key(if count == 1 then parameters#1 else List(parameters, Bracket.Round, Separator.Comma), Op.Arrow, call_of(name, parameters))
+	parameters = written_arguments(count)
+	lambda_over(parameters, call_of(name, parameters))
 }
+# the compiler's own parameter names of a lambda it writes, `argument·1` …: no program's name
+written_arguments(count: int): list := (1 to count).map(index => symbol("argument" + name_joiner + "${index}"))
+lambda_over(parameters: list, body: Node): Node := Key(if #parameters == 1 then parameters#1 else List(parameters, Bracket.Round, Separator.Comma), Op.Arrow, body)
 # how many arguments the callee calls its parameter at `index` with: its body's calls (called_parameters), or the
 # parameter's function type, `f: (any) -> any` of the library's map
 passed_count(callee: text, index: int, called: map): int? := called.get(parameter_key(callee, index)) ?? declared_arity(unaliased(callee), index)
@@ -246,8 +249,8 @@ without_bare_calls(overloaded: map): map := without_keys(overloaded, overloaded.
 builtin_takes_nothing(name: text): bool := lines_of(typed_lines + foreign_math_lines, unaliased(name)).any(line => #line.signature.parameters == 0) or (host_words().has(name) and #host_words()[name]#1 == 0)
 # the parts of n where a value is demanded: the bare name assigned, `g = twice`, an argument of a call no call fixes
 # the arity of (passed_lambdas took the others), an element of a list or a value of a map literal; a name anywhere
-# else (a phrase, a `use`, a condition, the name `help(save)` asks about) is left alone
-naming_words = ["help"]
+# else (a phrase, a `use`, a condition, the name `help(save)` or `dir(time)` asks about) is left alone
+naming_words = ["help", "dir"]
 value_parts(n: Node): list := match n {
 	Key(left, Op.Assign, right): [right]
 	Key(left, Op.Define, right): { if left is symbol then [right] else [] }
@@ -446,7 +449,7 @@ linked_word_types(name: text): list := {
 		signature = linked_signature(image.name)
 		if signature == ø { continue }
 		for slice in signature.slices.filter(slice => slice#1 == name) {
-			for statement in statements_in(unpack(slice#3)) {
+			for statement in statements_in(slice_tree(slice#3, slice#4)) {
 				call = definition_call(statement)
 				if call != ø { found += [parameter_types(call)] }
 			}
@@ -481,6 +484,13 @@ static_kind(n: Node): list? := {
 	if is_lambda(n) or is_block_argument(n) { return ["function", ø] }
 	ø
 }
+# whether a variant of the name may take the receiver as its one argument: any, unless the receiver's kind is known; a
+# time literal only a variant taking a time or any value
+may_take(name: text, receiver: Node, overloaded: map, judge: ArgumentJudge): bool := {
+	kind = known_kind(receiver, judge)
+	takes = type => if is_time_view(receiver) then type == any_word or base_type(type) in time_test_types else kind == ø or argument_fit(kind, type) != ø
+	(1 to #overloaded[name]).any(at => judge.least[name]#at <= 1 and #overloaded[name]#at >= 1 and takes(overloaded[name]#at#1))
+}
 
 # variable → the static_kind of the values assigned to it in this scope, [] where they differ; a definition inside is
 # its own scope (within), a lambda shares this one, so another function's `x = "a"` leaves this x's kind alone
@@ -502,6 +512,11 @@ parameters_bound(n: Node): list := {
 	if is_key(n, Op.Arrow) { return parameters_of(key_of(n)) }
 	call = definition_call(n)
 	if call == ø then [] else items_of(call)[1 ..].map(parameter_name)
+}
+# a definition's parameters typed with one kind, `name: text`; a `number` is an int or a float only the run time tells
+declared_parameters(n: Node): list := {
+	call = definition_call(n)
+	if call == ø then [] else signature_of(items_of(call)).parameters.filter(parameter => parameter.type_name in overload_kinds and overload_kinds[parameter.type_name] != "number")
 }
 
 # what the compile knows of an argument's kind (card number-computed-float): a literal's, a variable's assigned
@@ -534,6 +549,8 @@ known_kind(n: Node, judge: ArgumentJudge): list? := {
 	if n is key and is_empty(key_of(n)) { return if op_of(n) == Op.Sub or op_of(n) == Op.Neg then numeric(known_kind(value_of(n), judge)) else ø }
 	if is_group(n) and #n == 2 and n#1 is symbol and name_of(n#1) in magnitude_words and name_of(n#1) not in judge.own { return magnitude_kind(name_of(n#1), numeric(known_kind(n#2, judge))) }
 	if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) not in judge.own { return declared_result(name_of(n#1), #n - 1) }
+	# `"create " + name` joins a text
+	if is_key(n, Op.Add) and not is_empty(key_of(n)) and known_kind(key_of(n), judge) == ["text", ø] { return ["text", ø] }
 	if n is key and not is_empty(key_of(n)) and keeps_numbers(op_of(n)) { return joined_numbers(known_kind(key_of(n), judge), known_kind(value_of(n), judge)) }
 	static_kind(n)
 }
@@ -754,6 +771,8 @@ within(judge: ArgumentJudge, n: Node): ArgumentJudge := {
 	own = if definition_call(n) != ø then without_keys(assigned_kinds(value_of(n)), parameters) else {}
 	variables = without_keys(judge.variables, parameters)
 	for name in own.keys { variables[name] = own[name] }
+	# a parameter declaring its type has that kind: `make(db: any, name: text) := run(db, name)` passes a text
+	for parameter in declared_parameters(n) { variables[parameter.name] = [overload_kinds[parameter.type_name], ø] }
 	ArgumentJudge(variables, judge.own, judge.least, judge.program)
 }
 # top-down, so a definition is renamed by its own parameter types
@@ -772,8 +791,9 @@ typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 		receivers = if receiver is symbol and qualifies_by_module(name_of(receiver), judge.program) then [] else [receiver]
 		return typed_resolved(group_like(method, [method#1] + receivers + items_of(method)[1 ..]), overloaded, judge)
 	}
-	# `red.hex_text`, no parentheses: the word's call of the receiver, where no class names a field so
-	if method != ø and method is symbol and name_of(method) in overloaded and not names_a_field(name_of(method), judge.program) and not (key_of(n) is symbol and qualifies_by_module(name_of(key_of(n)), judge.program)) {
+	# `red.hex_text`, no parentheses: the word's call of the receiver, where no class names a field so and a variant may
+	# take it: `2026-10-14T22:27.time` reads the time's field, as no time(n: number) or time(b: block) takes a time
+	if method != ø and method is symbol and name_of(method) in overloaded and not names_a_field(name_of(method), judge.program) and not (key_of(n) is symbol and qualifies_by_module(name_of(key_of(n)), judge.program)) and may_take(name_of(method), key_of(n), overloaded, judge) {
 		return typed_resolved(call_of(name_of(method), [key_of(n)]), overloaded, judge)
 	}
 	# a one-line block's words are its phrase already, `{ thrice {n += 1} }` (phrase_blocks.warp)

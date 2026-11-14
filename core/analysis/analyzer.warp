@@ -565,8 +565,13 @@ record_usages(n: Node, used: Usages) := {
 	for part in node_parts(n) { record_usages(part, used) }
 }
 
-# `is_type(x, "list")`, what `x is list` lowers to: the name whose kind is tested, else ""
-kind_tested(n: Node): Name := if is_group(n) and #n == 3 and head_name(n) == "is_type" and n#2 is symbol then name_of(n#2) else ""
+# `is_type(x, "list")`, what `x is list` lowers to, or a match arm's `kind·tested(match·kinds, x, "list")`: the name
+# whose kind is tested, else ""
+kind_tested(n: Node): Name := {
+	if is_group(n) and #n == 3 and head_name(n) == "is_type" and n#2 is symbol { return name_of(n#2) }
+	if is_group(n) and #n == 4 and head_name(n) == HiddenWord.KindTested as text and n#3 is symbol { return name_of(n#3) }
+	""
+}
 
 # `closure_call_2(f, a, b)`: the function value called
 called_closure(n: Node): Name := if is_group(n) and #n >= 2 and head_name(n).starts_with("closure_call_") and n#2 is symbol then name_of(n#2) else ""

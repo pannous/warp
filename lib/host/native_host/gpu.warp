@@ -21,6 +21,10 @@ VALUES_NAME = "values"
 VALUES_BINDING = 0
 PREVIOUS_FRAME_BINDING = 1
 STORAGE_BINDING = 2
+// a picture among the values (an image: width, height, pixels) binds as a texture from here on, a sampler the shader
+// names from SAMPLER_BINDING on
+PICTURE_BINDING = 16
+SAMPLER_BINDING = 24
 TRIANGLE_CORNERS = 3
 QUAD_CORNERS = 4
 PIXEL_BYTES = 4
@@ -34,6 +38,7 @@ VECTOR_FLOATS = 4
 // 64 KB, the uniform every WebGPU device binds (maxUniformBufferBindingSize), as the playground's
 MOST_FLOATS = 16384
 MOST_STORAGE_ARRAYS = 12
+MOST_PICTURES = 8
 MOST_COMPUTE_ARRAYS = 8
 // values.indices: a uint32 index buffer, not a vec4 storage array. values.depth: a depth32float attachment.
 // values.indirect: 4 uints (DrawIndirect) or 5 (DrawIndexedIndirect). values.compute: a compute shader run
@@ -60,7 +65,10 @@ DEPTH_ATTACHMENT_AT = 40
 VALUE_TYPES = ["f32", "vec2f", "vec3f", "vec4f"]
 VALUE_ALIGNMENTS = [1, 2, 4, 4]
 // a GPU list's cell types, by extensions/gpu_lists GpuCell
-GPU_CELLS = ["f32", "i32", "u32", "f16", "bf16"]
+GPU_CELLS = ["f32", "i32", "u32", "f16", "bf16", "vec2", "vec3", "vec4"]
+// the GPU lists whose cells are already a values array<vec4f>'s bytes: f32 ones, vec3 (padded to four) and vec4
+VEC4F_CELLS = ["f32", "vec3", "vec4"]
+VEC4F_BYTES = 16
 // WGSL's 16-bit float, a device feature (webgpu.h WGPUFeatureName_ShaderF16): an array<f16> holds two to a word
 HALF = "f16"
 BRAIN = "bf16"
@@ -71,6 +79,7 @@ NO_HALVES = "this GPU offers no f16 (WebGPU's shader-f16), which the shader's en
 WORD_BYTES = 4
 // paint's values.mesh, read in the shader as the storage array warp_values_mesh
 STORAGE_PREFIX = "warp_values_"
+PICTURE_PREFIX = "warp_picture_"
 // `values.previous(at)` (card shader-read): the color the shader left at pixel `at` in its previous frame of this size
 PREVIOUS_HOLE = "values.previous"
 PREVIOUS_FUNCTION = "warp_previous"
@@ -93,6 +102,7 @@ ERROR_NONE = 1
 ERROR_FILTER_VALIDATION = 1
 STYPE_WGSL = 2
 STYPE_METAL_LAYER = 4
+STYPE_WINDOWS_HWND = 5
 FORMAT_RGBA8 = 22
 FORMAT_BGRA8 = 27
 BUFFER_MAP_READ = 1
@@ -146,6 +156,7 @@ COPY_BUFFER = 24
 COPY_LAYOUT = 16
 EXTENT = 12
 METAL_SOURCE = 24
+WINDOWS_SOURCE = 32
 SURFACE_DESCRIPTOR = 24
 SURFACE_CONFIGURATION = 64
 SURFACE_TEXTURE = 24
@@ -400,10 +411,64 @@ leading(t: text, allowed: text): text := {
 	start
 }
 
+// --- pictures: an image among paint's values (anything with width, height and pixels, 0xAARRGGBB each, a pixel
+// without an alpha byte opaque) is a texture_2d<f32> the shader reads as `values.<name>`: textureSampleLevel(
+// values.channel0, bilinear_repeat, uv, 0.0), textureDimensions(values.channel0). Its pixels, a GPU list [u32], are
+// written into the texture where they are; any other list is walked to bytes on every upload
+is_picture(value: any): bool := not (value is number or value is text or value is list or value is bool) and value != ø and value has "pixels"
+// bgra8unorm: a 0xAARRGGBB word is its bytes B, G, R, A in memory, so the pixels go in as they are
+PICTURE_FORMAT = FORMAT_BGRA8
+ALPHA_FROM = 16777216
+OPAQUE_ALPHA = 4278190080
+class KeptPicture { texture: int, width: int, height: int }
+global kept_pictures = {}
+// the texture kept for this name, at this size, its pixels written anew; 0 and why where they do not fit
+picture_texture(name: text, picture: any): int := {
+	picture_width = int(picture.width)
+	picture_height = int(picture.height)
+	pixels = picture.pixels
+	if picture_width < 1 or picture_height < 1 or #pixels != picture_width * picture_height {
+		failed(VALUES_NAME + "." + name + " is a picture of width × height pixels")
+		return 0
+	}
+	kept = kept_pictures.get(name)
+	if kept == ø or kept.width != picture_width or kept.height != picture_height {
+		if kept != ø { wgpuTextureRelease(kept.texture) }
+		kept = KeptPicture(texture_made(picture_width, picture_height, TEXTURE_BINDING + TEXTURE_COPY_DST, PICTURE_FORMAT), picture_width, picture_height)
+		kept_pictures[name] = kept
+	}
+	place = gpu_list_place(pixels)
+	listed = place >= 0 and GPU_CELLS[gpu_list_cell(pixels)] == "u32"
+	staged = if listed then program_cells(place) else picture_staged(name, pixels)
+	into = struct_of(COPY_TEXTURE)
+	set_field_pointer(into, 0, kept.texture)
+	set_field_i32(into, 24, ASPECT_ALL)
+	rows = struct_of(COPY_LAYOUT)
+	set_field_i32(rows, 8, picture_width * PIXEL_BYTES)
+	set_field_i32(rows, 12, picture_height)
+	wgpuQueueWriteTexture(queue, into, staged, picture_width * picture_height * PIXEL_BYTES, rows, extent_of(picture_width, picture_height))
+	free(into)
+	free(rows)
+	if not listed { free(staged) }
+	kept.texture
+}
+// a picture's pixels that are no GPU list [u32], walked into bytes, each opaque that has no alpha byte
+picture_staged(name: text, pixels: list): int := {
+	slow("the picture " + name + "'s pixels are not a GPU list: they are walked to bytes on every upload", "make them as pixels: [u32] = …")
+	staged = calloc(#pixels, PIXEL_BYTES)
+	for i in 0 ..< #pixels {
+		pixel = int(pixels[i])
+		set_field_i32(staged, i * PIXEL_BYTES, if pixel >= ALPHA_FROM then pixel else pixel + OPAQUE_ALPHA)
+	}
+	staged
+}
+// whether the shader declares the name itself (fn, var, let, const), so warp's sampler of that name stays out
+declares(shader: text, name: text): bool := ["fn ", "var ", "let ", "const "].any(head => names(shader, head + name))
+
 // --- the values: `{name: number, name: [numbers], name: [[numbers], …]}`, laid out as WGSL aligns them (host-gpu.js
 // valuesLayout): numbers and short vectors a uniform struct's members, each list of more (of vectors, one vec4f an
 // item, or of more than 4 numbers) a read-only storage array of its own, as long as it is
-class Layout { floats: list, declarations: list, instances: int, arrays: list, depth: bool, indices: list, indirect: list, compute: text, workgroups: list }
+class Layout { floats: list, declarations: list, instances: int, arrays: list, depth: bool, indices: list, indirect: list, compute: text, workgroups: list, pictures: list = [] }
 values_laid_out(values: map): any := {
 	layout = Layout([], [], 1, [], no, [], [], "", [1, 1, 1])
 	for name in values.keys {
@@ -437,15 +502,21 @@ member_laid_out(layout: Layout, name: text, value: any): text := {
 		return ""
 	}
 	if name == WORKGROUPS_NAME {
-		if not (value is list) or value.any(item => item is list) { return "is one to three counts" }
-		if #value < 1 or #value > 3 { return "is one to three counts" }
+		// a count alone is one count, as the page reads it (host-gpu.js [asked].flat())
+		counts = if value is list then value else [value]
+		if counts.any(item => item is list) or #counts < 1 or #counts > 3 { return "is one to three counts" }
 		groups = []
-		for x in value {
+		for x in counts {
 			if not (x is int) or x < 1 { return "needs positive ints" }
 			groups.add(x)
 		}
 		while #groups < 3 { groups.add(1) }
 		layout.workgroups = groups
+		return ""
+	}
+	if is_picture(value) {
+		if #layout.pictures == MOST_PICTURES { return "is one picture too many: paint's values hold at most 8" }
+		layout.pictures.add([name, value])
 		return ""
 	}
 	// a text other than the compute shader is a file the host reads into the
@@ -457,19 +528,23 @@ member_laid_out(layout: Layout, name: text, value: any): text := {
 		return ""
 	}
 	if value is list {
-		# a GPU list [f32] whose length is a whole number of vec4f is already the storage array's bytes
-		if gpu_list_place(value) >= 0 and gpu_list_cell(value) == 0 and #value >= 4 and #value % 4 == 0 {
+		# a GPU list [f32] longer than a vec4f, or one [vec4], is already the storage array's bytes, its tail padded to a
+		# whole vec4f (storage_bytes); a shorter one is a uniform, as a list of as many numbers is
+		if gpu_list_place(value) >= 0 and GPU_CELLS[gpu_list_cell(value)] in VEC4F_CELLS and (#value > VECTOR_FLOATS or gpu_list_cell(value) > 0) {
 			return array_laid(layout, name, value)
 		}
-		vectors = value.any(item => item is list)
-		if vectors or #value > VECTOR_FLOATS {
-			numbers = if vectors then [if i < #item then float(item[i]) else 0.0 for item in value for i in 0 ..< VECTOR_FLOATS] else [float(x) for x in value]
+		# (any other GPU list read once as a for reads it: it takes no list word)
+		items = if gpu_list_place(value) >= 0 then [item for item in value] else value
+		vectors = items.any(item => item is list)
+		if vectors or #items > VECTOR_FLOATS {
+			array_walked(name, value, vectors)
+			numbers = if vectors then [if i < #item then float(item[i]) else 0.0 for item in items for i in 0 ..< VECTOR_FLOATS] else [float(x) for x in items]
 			padded(numbers, VECTOR_FLOATS)
 			if #numbers == 0 { numbers = [0.0, 0.0, 0.0, 0.0] }
 			return array_laid(layout, name, numbers)
 		}
-		if #value < 1 { return "is one number or a list of two to four" }
-		return uniform_member(layout, name, [float(x) for x in value])
+		if #items < 1 { return "is one number or a list of two to four" }
+		return uniform_member(layout, name, [float(x) for x in items])
 	}
 	if name == COMPUTE_NAME {
 		layout.compute = text(value)
@@ -483,6 +558,14 @@ member_laid_out(layout: Layout, name: text, value: any): text := {
 		return ""
 	}
 	uniform_member(layout, name, [float(value)])
+}
+// a storage array whose numbers are walked to f32 bits on every upload, said with the fix its shape takes: a list of
+// numbers becomes a GPU list [f32], a list of vectors one [vec4]
+array_walked(name: text, value: list, vectors: bool) := {
+	walked = "its numbers are walked to f32 bits on every upload"
+	if gpu_list_place(value) >= 0 { slow("the GPU list " + name + " [" + GPU_CELLS[gpu_list_cell(value)] + "] is no array<vec4f>: " + walked, "make it as " + name + ": [f32] = … or [vec4] = …") }
+	else if vectors { slow("the storage array " + name + " is a list of vectors: " + walked, "make it as " + name + ": [vec4] = …") }
+	else { slow("the storage array " + name + " is not a GPU list: " + walked, "make it as " + name + ": [f32] = …") }
 }
 array_laid(layout: Layout, name: text, cells: any): text := {
 	why = array_room(layout)
@@ -528,6 +611,17 @@ hole_value(hole: text, width: int, height: int): any := {
 
 // --- the shader's text: whole names in it, renamed
 is_name_char(c: text): bool := NAME_BYTES.contains(c)
+// the shader without its comments, each line where it was: a name only a comment says (`bilinear taps`) binds
+// nothing, as the pipeline's layout, which follows the code, binds nothing for it
+uncommented(shader: text): text := {
+	blocks = shader.split("/*")
+	code = blocks[0]
+	for block in blocks[1 ..] {
+		closed = block.split("*/")
+		code += "\n" * (#closed[0].split("\n") - 1) + closed[1 ..].join("*/")
+	}
+	code.split("\n").map(line => line.split("//")[0]).join("\n")
+}
 // whether the shader names `name` whole, not as the start or end of a longer name
 names(shader: text, name: text): bool := {
 	parts = shader.split(name)
@@ -651,16 +745,17 @@ kept_buffer(name: text, bytes: int, usage: int): int := {
 	stored_buffers[key] = StoredBuffer(buffer, bytes)
 	buffer
 }
-// a GPU list [f32] copied from the program's memory in one write, 0 where this value is not one (the caller walks
+// a GPU list copied from the program's memory in one write, 0 where this value is not one (the caller walks
 // its numbers)
 gpu_storage(name: text, cells: any): int := {
 	place = gpu_list_place(cells)
 	if place < 0 { return 0 }
-	bytes = #cells * 4
-	buffer = kept_buffer(name, bytes, BUFFER_STORAGE)
-	wgpuQueueWriteBuffer(queue, buffer, 0, program_cells(place), bytes)
+	buffer = kept_buffer(name, storage_bytes(cells), BUFFER_STORAGE)
+	wgpuQueueWriteBuffer(queue, buffer, 0, program_cells(place), gpu_list_bytes(cells))
 	buffer
 }
+// a GPU list's bytes as a storage array<vec4f> binds them: rounded up to a whole vec4f, the tail zero
+storage_bytes(cells: any): int := (gpu_list_bytes(cells) + VEC4F_BYTES - 1) /! VEC4F_BYTES * VEC4F_BYTES
 // where a GPU list's cells start in the program's memory, as C sees them; never a walk number by number where the
 // driver recorded no memory (the run's start records it)
 program_cells(place: int): int := {
@@ -793,8 +888,7 @@ stored_array(name: text, value: any, usage: int): any := {
 		return [buffer, atlas_span]
 	}
 	listed = gpu_storage(name, value)
-	if listed != 0 { return [listed, #value * 4] }
-	slow("the storage array " + name + " is not a GPU list: its numbers are walked to f32 bits on every upload", "make it as " + name + ": [f32] = …")
+	if listed != 0 { return [listed, storage_bytes(value)] }
 	cells = f32_cells(value)
 	[cells_kept(name, cells, usage), #cells * 4]
 }
@@ -861,8 +955,10 @@ previous_kept(image: int) := {
 
 // --- a drawing: the shader's pipeline for a target format, its values bound; corners and instances: a full image's
 // triangle once, or the quads of a shader with its own vertex stage
-class Drawing { pipeline: int, bindings: int, previous: int, reads_previous: bool, corners: int, instances: int, depth: bool, index_buffer: int, index_count: int, width: int, height: int, named: list, compute: text, workgroups: list, indirect_buffer: int, indirect_words: int, compute_pipelines: list, compute_bindings: int }
-drawing_made(shader: text, values: map, width: int, height: int): any := {
+// (a drawing without compute passes, the window's picture, leaves the compute fields out)
+class Drawing { pipeline: int, bindings: int, previous: int, reads_previous: bool, corners: int, instances: int, depth: bool, index_buffer: int, index_count: int, width: int, height: int, named: list = [], compute: text = "", workgroups: list = [1, 1, 1], indirect_buffer: int = 0, indirect_words: int = 0, compute_pipelines: list = [], compute_bindings: int = 0, views: list = [] }
+drawing_made(written: text, values: map, width: int, height: int): any := {
+	shader = uncommented(written)
 	gpu_failure = ""
 	if not device_ready() { return ø }
 	layout = values_laid_out(values)
@@ -885,22 +981,27 @@ drawing_made(shader: text, values: map, width: int, height: int): any := {
 	body = if drawing.reads_previous then renamed(shader, PREVIOUS_HOLE, PREVIOUS_FUNCTION) else shader
 	fields = compute_fields(layout.compute, values)
 	if fields is bool { return ø }
-	// each storage array the shader reads: `values.mesh` its own array warp_values_mesh
-	read_arrays = []
-	for name in layout.arrays.map(array => array[0]) + fields.map(field => field.name) {
-		hole = VALUES_NAME + "." + name
-		if not names(body, hole) { continue }
-		body = renamed(body, hole, STORAGE_PREFIX + name)
-		read_arrays.add(name)
-	}
+	renaming = arrays_renamed(body, layout.arrays.map(array => array[0]) + fields.map(field => field.name))
+	body = renaming[0]
+	read_arrays = renaming[1]
 	if #read_arrays > MOST_COMPUTE_ARRAYS {
 		failed("a paint binds at most 8 arrays")
 		return ø
 	}
+	picturing = holes_renamed(body, layout.pictures.map(picture => picture[0]), PICTURE_PREFIX)
+	body = picturing[0]
+	read_pictures = layout.pictures.filter(picture => picture[0] in picturing[1])
+	if TRILINEAR_SAMPLERS.any(name => names(body, name)) {
+		failed("a trilinear sampler needs mipmaps, which a picture among paint's values has none of: sample it bilinear or bilinear_repeat")
+		return ø
+	}
+	samplers = SAMPLERS.filter(sampler => names(body, sampler.name) and not declares(body, sampler.name))
 	code = body + (if own_vertex_stage(shader) != "" then "" else FULL_IMAGE_VERTICES)
 	if #layout.declarations > 0 { code += "\nstruct WarpValues { " + layout.declarations.join(", ") + " }\n@group(0) @binding(" + VALUES_BINDING + ") var<uniform> " + VALUES_NAME + ": WarpValues;" }
-	for i in 0 ..< #read_arrays { code += "\n@group(0) @binding(" + (STORAGE_BINDING + i) + ") var<storage, read> " + STORAGE_PREFIX + read_arrays[i] + ": " + read_type(read_arrays[i], fields) + ";" }
+	for i in 0 ..< #read_arrays { code += storage_declared(STORAGE_BINDING + i, read_arrays[i], read_type(read_arrays[i], fields)) }
 	if drawing.reads_previous { code += PREVIOUS_FRAME }
+	for i in 0 ..< #read_pictures { code += "\n@group(0) @binding(" + (PICTURE_BINDING + i) + ") var " + PICTURE_PREFIX + read_pictures[i][0] + ": texture_2d<f32>;" }
+	for j in 0 ..< #samplers { code += "\n@group(0) @binding(" + (SAMPLER_BINDING + j) + ") var " + samplers[j].name + ": sampler;" }
 	drawing.pipeline = pipeline_of(code, FORMAT_RGBA8, drawing.depth, indexed)
 	if drawing.pipeline == 0 { return ø }
 	entries = []
@@ -912,6 +1013,17 @@ drawing_made(shader: text, values: map, width: int, height: int): any := {
 		drawing.previous = wgpuTextureCreateView(previous_frame(code, width, height), 0)
 		entries.add([PREVIOUS_FRAME_BINDING, 0, 0, drawing.previous])
 	}
+	for i in 0 ..< #read_pictures {
+		texture = picture_texture(read_pictures[i][0], read_pictures[i][1])
+		if texture == 0 {
+			drawing_released(drawing)
+			return ø
+		}
+		picture_view = wgpuTextureCreateView(texture, 0)
+		drawing.views.add(picture_view)
+		entries.add([PICTURE_BINDING + i, 0, 0, picture_view])
+	}
+	for j in 0 ..< #samplers { entries.add([SAMPLER_BINDING + j, 0, 0, 0, sampler_made(samplers[j])]) }
 	stored = {}
 	for array in layout.arrays {
 		made = stored_array(array[0], array[1], BUFFER_STORAGE)
@@ -949,6 +1061,7 @@ drawing_released(drawing: Drawing) := {
 	if drawing.compute_bindings != 0 { wgpuBindGroupRelease(drawing.compute_bindings) }
 	for pipeline in drawing.compute_pipelines { wgpuComputePipelineRelease(pipeline) }
 	if drawing.previous != 0 { wgpuTextureViewRelease(drawing.previous) }
+	for view in drawing.views { wgpuTextureViewRelease(view) }
 }
 // the pipeline of one entry point, laid out as `layout` says (0: as the shader's bindings say, gpu_compute's `main`)
 compute_pipeline_made(compiled: int, layout: int, entry_point: text): int := {
@@ -1018,6 +1131,22 @@ field_length(type: text): int := {
 	if digits == "" then 0 else int(digits)
 }
 // how the draw declares an array it reads: a field its own type, an atomic read as its plain number; a value's vec4fs
+// each storage array of these names the shader reads, `values.mesh` its own array warp_values_mesh: [the shader so
+// renamed, the names it reads]
+arrays_renamed(shader: text, candidates: list): list := holes_renamed(shader, candidates, STORAGE_PREFIX)
+// [the shader with each `values.<name>` it reads written <prefix><name>, the names it reads]
+holes_renamed(shader: text, candidates: list, prefix: text): list := {
+	body = shader
+	read = []
+	for name in candidates {
+		hole = VALUES_NAME + "." + name
+		if not names(body, hole) { continue }
+		body = renamed(body, hole, prefix + name)
+		read.add(name)
+	}
+	[body, read]
+}
+storage_declared(binding: int, name: text, type: text): text := "\n@group(0) @binding(" + binding + ") var<storage, read> " + STORAGE_PREFIX + name + ": " + type + ";"
 read_type(name: text, fields: list): text := {
 	found = fields.filter(field => field.name == name)
 	if #found == 0 then "array<vec4f>" else found[0].type.replace("atomic<u32>", "u32").replace("atomic<i32>", "i32")
@@ -1312,6 +1441,15 @@ said_failed(what: text): int := {
 	-1
 }
 
+// what a surface is made for: the window's Metal layer on macOS; on Windows its HWND, with the program's module
+window_source(layer: int): int := {
+	windows = on_windows()
+	source = struct_of(if windows then WINDOWS_SOURCE else METAL_SOURCE)
+	set_field_i32(source, 8, if windows then STYPE_WINDOWS_HWND else STYPE_METAL_LAYER)
+	if windows { set_field_pointer(source, 16, GetModuleHandleA(0)) }
+	set_field_pointer(source, if windows then 24 else 16, layer)
+	source
+}
 // --- the window's surface (window.warp's Metal layer): what is shown there stays on the GPU. As big as the window's
 // pixels; the painting, drawn at its own size, scaled into it whole, its aspect kept, the rest black. A format
 // without sRGB, so the window shows the colors a PNG of the same painting holds
@@ -1323,9 +1461,7 @@ surface_ready(layer: int): bool := {
 		surface = 0
 	}
 	if surface == 0 {
-		source = struct_of(METAL_SOURCE)
-		set_field_i32(source, 8, STYPE_METAL_LAYER)
-		set_field_pointer(source, 16, layer)
+		source = window_source(layer)
 		descriptor = struct_of(SURFACE_DESCRIPTOR)
 		set_field_pointer(descriptor, 0, source)
 		surface = wgpuInstanceCreateSurface(instance, descriptor)
@@ -1403,7 +1539,7 @@ picture_presented(encoder: int, picture: int, layer: int, width: int, height: in
 		return no
 	}
 	texture_view = wgpuTextureCreateView(picture, 0)
-	drawing = Drawing(picture_pipeline, bindings_of(wgpuRenderPipelineGetBindGroupLayout(picture_pipeline, 0), [[0, 0, 0, texture_view]]), 0, no, TRIANGLE_CORNERS, 1, no, 0, 0, 0, 0, [], "", [1, 1, 1], 0, 0, 0, 0)
+	drawing = Drawing(picture_pipeline, bindings_of(wgpuRenderPipelineGetBindGroupLayout(picture_pipeline, 0), [[0, 0, 0, texture_view]]), 0, no, TRIANGLE_CORNERS, 1, no, 0, 0, 0, 0)
 	shown = presented(encoder, drawing, letterboxed(width, height))
 	wgpuBindGroupRelease(drawing.bindings)
 	wgpuTextureViewRelease(texture_view)
@@ -1537,6 +1673,7 @@ array_buffer(array: StorageArray): int := {
 // WGSL array type yet (card gpu-lists)
 cells_unfit(array: StorageArray): text? := {
 	if array.cell == BRAIN { return "the GPU list [bf16] " + array.name + " has no WGSL array type to bind as yet" }
+	if array.cell.starts_with("vec") { return "the GPU list [" + array.cell + "] " + array.name + " binds in paint's values; gpu_compute's arrays take lists of numbers" }
 	if (array.element == HALF) == (array.cell == HALF) { return ø }
 	if array.element == HALF then "the shader's array<f16> " + array.name + " takes a GPU list [f16]: make it as " + array.name + ": [f16] = …" else "the GPU list [f16] " + array.name + " needs the shader's array<f16>, not array<" + array.element + ">"
 }
@@ -1616,12 +1753,33 @@ FORMAT_RGBA32_FLOAT = 41
 FILTER_NEAREST = 1
 FILTER_LINEAR = 2
 SAMPLER_DESCRIPTOR = 64
+ADDRESS_CLAMP = 1
+ADDRESS_REPEAT = 2
+// the samplers a shader reading a picture names, as compute.toys names them: nearest or bilinear, clamped at the edge or
+// repeating; trilinear needs mipmaps, which no picture has
+class Sampler { name: text, filter: int, address: int }
+SAMPLERS = [Sampler("nearest", FILTER_NEAREST, ADDRESS_CLAMP), Sampler("bilinear", FILTER_LINEAR, ADDRESS_CLAMP), Sampler("nearest_repeat", FILTER_NEAREST, ADDRESS_REPEAT), Sampler("bilinear_repeat", FILTER_LINEAR, ADDRESS_REPEAT)]
+TRILINEAR_SAMPLERS = ["trilinear", "trilinear_repeat"]
+global samplers_made = {}
+sampler_made(kind: Sampler): int := {
+	made = samplers_made.get(kind.name)
+	if made != ø { return made }
+	descriptor = struct_of(SAMPLER_DESCRIPTOR)
+	for at in [24, 28, 32] { set_field_i32(descriptor, at, kind.address) }
+	set_field_i32(descriptor, 36, kind.filter)
+	set_field_i32(descriptor, 40, kind.filter)
+	set_field_i32(descriptor, 44, FILTER_NEAREST)
+	set_field_i32(descriptor, 60, 1)
+	sampler = wgpuDeviceCreateSampler(device, descriptor)
+	free(descriptor)
+	samplers_made[kind.name] = sampler
+	sampler
+}
 MOST_FIELDS = 8
 FIELD_PREFIX = "field_"
 global fields_format = 0
 global fields_filterable = no
 global fields_format_name = ""
-global field_sampler = 0
 global field_sets = []
 global pass_encoder = 0
 global pass_pipelines = {}
@@ -1694,19 +1852,8 @@ fields_format_chosen(): bool := {
 	fields_format_name = "rgba8unorm"
 	yes
 }
-field_sampler_made(): int := {
-	if field_sampler != 0 { return field_sampler }
-	descriptor = struct_of(SAMPLER_DESCRIPTOR)
-	mode = if fields_filterable then FILTER_LINEAR else FILTER_NEAREST
-	for at in [24, 28, 32] { set_field_i32(descriptor, at, 1) }
-	set_field_i32(descriptor, 36, mode)
-	set_field_i32(descriptor, 40, mode)
-	set_field_i32(descriptor, 44, FILTER_NEAREST)
-	set_field_i32(descriptor, 60, 1)
-	field_sampler = wgpuDeviceCreateSampler(device, descriptor)
-	free(descriptor)
-	field_sampler
-}
+// the fields' sampler: linear where their format filters, clamped at the edge
+field_sampler_made(): int := sampler_made(Sampler("field_sampler", if fields_filterable then FILTER_LINEAR else FILTER_NEAREST, ADDRESS_CLAMP))
 // field_<name>(uv), linearly sampled where the format filters, else the same blend from the four texels
 field_sample(name: text, binding: int, filterable: bool): text := {
 	tex = FIELD_PREFIX + name + "_tex"
@@ -1809,10 +1956,14 @@ pass_drawn(shader: text, given: any, width: int, height: int, reads: list, targe
 	values = values_copied(shader, given, width, height)
 	layout = values_laid_out(values)
 	if layout is bool { return no }
-	if #layout.arrays > 0 { return failed("gpu_pass takes numbers and short vectors, not a long list") }
+	// (a list it reads is a storage array, bound after the fields as paint binds its own)
+	renaming = arrays_renamed(shader, layout.arrays.map(array => array[0]))
+	read_arrays = layout.arrays.filter(array => array[0] in renaming[1])
 	decl = ""
 	if #layout.declarations > 0 { decl = "\nstruct WarpValues { " + layout.declarations.join(", ") + " }\n@group(0) @binding(" + VALUES_BINDING + ") var<uniform> " + VALUES_NAME + ": WarpValues;" }
-	code = pass_code(shader, decl, reads)
+	code = pass_code(renaming[0], decl, reads)
+	first_array = (if fields_filterable and #reads > 0 then 2 else 1) + #reads
+	for i in 0 ..< #read_arrays { code += storage_declared(first_array + i, read_arrays[i][0], read_type(read_arrays[i][0], [])) }
 	pipeline = pass_pipeline(code, format)
 	if pipeline == 0 { return no }
 	entries = []
@@ -1830,6 +1981,12 @@ pass_drawn(shader: text, given: any, width: int, height: int, reads: list, targe
 		texture_view = wgpuTextureCreateView(field.front, 0)
 		pass_views.add(texture_view)
 		entries.add([binding, 0, 0, texture_view])
+		binding += 1
+	}
+	for array in read_arrays {
+		made = stored_array(array[0], array[1], BUFFER_STORAGE)
+		if made == ø { return no }
+		entries.add([binding, made[0], made[1], 0])
 		binding += 1
 	}
 	group = 0

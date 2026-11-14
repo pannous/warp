@@ -33,8 +33,9 @@ JS_FUNCTION = "js_function"
 CALLBACKS_MODULE = "callbacks"
 SETTER_PREFIX = "set "
 GLOBAL_SCOPE = "globalThis"
-# the page's window itself, which WebIDL declares as no attribute
+# the page's window itself, which WebIDL declares as no attribute: the global scope, of interface Window
 PAGE_WINDOW = "window"
+# the types WebIDL names that are another's: a WindowProxy (defaultView, contentWindow) is its Window (HTML 7.2.3)
 # an element of the page by its id (decision page-ids): `who.focus()` is document.getElementById("who").focus()
 ID_ATTRIBUTE = "id"
 PAGE_DOCUMENT = "document"
@@ -54,10 +55,10 @@ use "js_globals/webidl.warp"
 # as foreign calls
 foreign_globals(program: Node): Node := {
 	uses = foreign_uses(program)
-	names = uses.map(used => used#2)
 	scopes = markup_scopes(program)
 	markup = #scopes > 0
-	if markup { names += page_globals_read(program, names) }
+	if markup { uses += page_globals_read(program, uses.map(used => used#2)).map(name => [JS_RUNTIME, name, no]) }
+	names = uses.map(used => used#2)
 	ids = page_ids(scopes, names_bound_in(program))
 	elements = page_elements(program, ids)
 	if #names == 0 and #ids == 0 and #elements == 0 { return program }
@@ -243,6 +244,7 @@ is_js_global(name: text, scope: JsScope): bool := scope.globals.has(name) and no
 # that name (crypto: Crypto), else UNCHECKED
 js_global_type(name: text): text := {
 	if webidl().has(name) { return name }
+	if name == PAGE_WINDOW { return GLOBAL_INTERFACES#1 }
 	member = webidl_global_member(name)
 	if member == ø then UNCHECKED else member.type
 }
@@ -264,7 +266,8 @@ js_member_type(interface: text, member: text): text := {
 	found = webidl_member_of(interface, member)
 	if member == CONSTRUCTOR_MEMBER and found != ø { return interface }
 	if found == ø { raise "js: " + interface + " has no " + (if member == CONSTRUCTOR_MEMBER then "constructor" else member) + " (lib/*.webidl)" }
-	if webidl().has(found.type) then found.type else UNCHECKED
+	given = found.type
+	if webidl().has(given) then given else UNCHECKED
 }
 # the member of a definition, its parents' and its mixins' included
 webidl_member_of(name: text, member: text): WebIdlMember? := {

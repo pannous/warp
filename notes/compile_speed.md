@@ -31,6 +31,11 @@
   hello's, averaged over a few runs, and read its §R lines: a linked module whose .warp source shows up there is
   being read twice (use-units-cost: `use units; 1` +128 ms over hello, mostly implicit uses' signature reads).
   profile.sh takes the run's own options after `--`: `scripts/profile.sh -- --one-thread test <folder>`.
+- Stage 3 by hand, for a change to how the compiler emits code (a pass, the emitter): only a compiler the changed
+  compiler emitted shows it. The store's warp.wasm and warp-self.wasm both run the seed's code (warp-self.wasm is a
+  copy). `warp --lib <tree>/lib --seed <store>/<hash>/warp.wasm rebuild pure to seed` in each tree (main's and the
+  branch's) leaves its stage-2 compiler as lib/warp.wasm.new; move it aside, then time both under `/usr/bin/time -l`
+  as `--seed` compiling the same tree, a few runs each (the first is cold). node-kind-bits, 11-14: 3.171 → 3.079 T.
 - Exact call counts per function aren't measurable today: wasmtime counts nothing, and binaryen's --log-execution
   needs an import the driver doesn't answer. Summed samples over many runs stand in.
 
@@ -80,7 +85,7 @@ once per program, never per node or call site. Cheap `where` guards don't save a
   Pitfall when comparing two wasmtimes on one lib/: each rewrites the other's .cwasm files (version mismatch), so
   interleaved runs all compile cold; run one library's repetitions together.
 - 19% is the copying collector (gc_alloc_raw → do_gc → collect_increment, CopyingHeap::forward/scan_field): a bigger
-  initial GC heap (warp_config_gc_heap_initial_size_set) for the compiler may cut it, card wasmtime-copying-collector.
+  initial GC heap (warp_config_gc_heap_initial_size_set) for the compiler may cut it, card wasmtime-copying-collector. Measured 11-13: 2 GiB cuts stage 3 by 4.2% of its instructions (card builder-heap-2g); the rest of wasmtime's costs and what to patch next: notes/wasmtime_tweaks.md.
 - The emitter's own top paths: compile_function → statement → effects → joint_kind → instance_of_fields →
   forwarded_kinds → no_field_unshared → call_values (60%), field·class_defaults 44%, emitter_kind 46%; one widening
   round only. By markers: 2975 functions, median 4.4 ms; a one-line function ~1.5 ms, a lambda ~0.3 ms.

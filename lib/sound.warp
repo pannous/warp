@@ -323,30 +323,42 @@ note_hertz(name) := {
 class Note {
 	key: int
 	cents: int
+	// how many times the play's duration it holds: C4 ~ 2 twice as long, C4 ~ ½ half (decision note-frequency-duration)
+	length: number = 1
 	hertz() := midi_hertz(key) * 2 ^ (cents / 1200.0)
 	octave() := floor(key / 12) as int - 1
 	name() := note_names[key % 12]
-	text() := name() + string(octave()) + cents_text(cents)
+	text() := name() + string(octave()) + cents_text(cents) + length_text(length)
 	// a run's value shows as written, E4 or C#4 (decision show-hook)
 	format as text := text()
 	// a note added sounds with it (decision notes-are-notes): C4 + E4 is a Chord, C4 + chord a bigger one; a number moves
 	// it up that many semitones, a part of one the cents: C4 + 4 is E4, note(C4) + 2.25 is D4+25c
 	plus(other) := if other is Note then Chord([this, other]) else if other is Chord then Chord([this] + other.notes) else moved(other)
-	moved(semitones) := if semitones is int then Note(key + semitones, cents) else nearest_note(hertz() * 2 ^ (semitones / 12.0))
+	moved(semitones) := if semitones is int then Note(key + semitones, cents, length) else nearest_note(hertz() * 2 ^ (semitones / 12.0))
+	// the tie: C4 ~ 2 holds twice as long. `~` also spells ≈, which a note answers by its frequency: the same nearest
+	// key, C4 ≈ C4+20c
+	similar(factor) := Note(key, cents, length * factor)
+	approximately(other) := midi(other) == key
 	minus(semitones) := moved(-semitones)
 	// times a number is its frequency times it (C4 * 100 is 26163); the frequency itself hertz(C4)
 	times(factor) := hertz() * factor
-	// a Note equals its name text (decision class-text): note("C#4") == "C#4"
-	equals(o) := (o is Note and key == o.key and cents == o.cents) or (o is text and o == text())
+	// a Note is a number, its frequency, that shows by name (decision notes-not-frequencies, as a Color is a number):
+	// A4 as float is 440, A4 == 440
+	float() := hertz()
+	// a Note equals its name text (decision class-text): note("C#4") == "C#4", and its frequency
+	equals(o) := (o is Note and key == o.key and cents == o.cents and length == o.length) or (o is text and o == text()) or (o is number and hertz() == o)
 }
 // notes sounding together (decision notes-are-notes): C4 + E4, and a note more, chord + G4; a number moves every note
 // that many semitones. It plays its notes together, play(C4+E4, 1s), and shows as written, C4+E4+G4
 class Chord {
 	notes: list
+	length: number = 1
 	count() := count(notes)
 	plus(other) := if other is Note then Chord(notes + [other]) else if other is Chord then Chord(notes + other.notes) else Chord(notes.map(note => note + other))
-	format as text := notes.map(note => "" + note).join("+")
-	equals(o) := (o is Chord and notes == o.notes) or o == notes
+	format as text := if length == 1 then notes.map(note => "" + note).join("+") else "(" + notes.map(note => "" + note).join("+") + ")" + length_text(length)
+	equals(o) := (o is Chord and notes == o.notes and length == o.length) or o == notes
+	similar(factor) := Chord(notes, length * factor)
+	approximately(other) := other is Chord and notes.map(midi) == other.notes.map(midi)
 }
 // the frequency of a note or of any pitch, in Hz: hertz(C4) + 1 is frequency math (decision notes-are-notes)
 public hertz(pitch) := hertz_of(pitch)
@@ -362,6 +374,9 @@ F = PitchClass(5)
 G = PitchClass(7)
 A = PitchClass(9)
 B = PitchClass(11)
+length_text(length) := if length == 1 then "" else "~" + text(length)
+// how many times the play's duration a note or chord holds, 1 for a plain pitch
+held_length(pitch) := if pitch is Note or pitch is Chord then pitch.length else 1
 cents_text(cents) := if cents == 0 then "" else if cents > 0 then "+" + string(cents) + "c" else string(cents) + "c"
 note(pitch) := nearest_note(hertz_of(pitch))
 nearest_note(frequency) := {
@@ -1237,10 +1252,13 @@ play(clip: Sample, rate) := sample_played(clip, rate)
 sample_played(clip: Sample, rate) := {
 	sounded(clip.frames, round(clip.rate * rate) as int, clip.channels)
 }
-// plain seconds: the unit check reads a quantity parameter in a loop as unsupported (wiki/unit.md)
+// plain seconds: the unit check reads a quantity parameter in a loop as unsupported (wiki/unit.md). A note or chord tied
+// longer holds that many times the seconds: play([C4, E4 ~ 2, (C4+E4+G4) ~ 4], 100ms)
 public melody_samples(notes, seconds, shape = wave_shape) := {
 	samples = []
-	for pitch in notes { samples = samples + chord_samples(pitches_of(pitch), seconds, shape) }
+	for item in notes {
+		samples = samples + chord_samples(pitches_of(item), seconds * held_length(item), shape)
+	}
 	samples
 }
 // music as plain data, no parser syntax (card music-data-dsl, decision self-parser-drops): play { c4 e4 [c4 g4] } is

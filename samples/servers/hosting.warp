@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# A program to host: in the playground's ⋯ menu, Deploy (log in with GitHub) 
+# A program to host: in the playground's ⋯ menu, Deploy (log in with GitHub)
 # https://warp-<name>.pannous.workers.dev or "Deploy to my Cloudflare".
 # On this machine: warp samples/servers/hosting.warp
 fib(n) := if n < 2 then n else fib(n-1) + fib(n-2)

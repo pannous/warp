@@ -134,7 +134,7 @@ def intrinsic_of(body: Body, name: text, values: list): TypedCode {
 		"meta_column": TypedCode(ValueKind.Int, values#1.code + gc_code(gc_ops.ref_cast_null, [gc_type(gc.meta_node)]) + gc_code(gc_ops.struct_get, [gc_type(gc.meta_node), 4]))
 		"is_null": TypedCode(ValueKind.Bool, values#1.code + [op.ref_is_null])
 		# trap_place(): the position of the program's statement running last, line * columns_per_line + column (position_code)
-		"trap_place": TypedCode(ValueKind.Int, [op.global_get] + relocatable(relocated.globals, declared_global("trap_position", ValueKind.I32)#1) + [op.i64_extend_i32_s])
+		"trap_place": TypedCode(ValueKind.Int, [op.global_get] + relocatable(relocated.globals, declared_global("trap_position", ValueKind.Int)#1))
 		"same": same_code(values#1, values#2)
 		# the error is the word's: a variant of it by arity is named `word·arity`
 		"fail": TypedCode(pending, error_throw(body.function.name.split("·")#1) + [op.unreachable])
@@ -206,13 +206,13 @@ library_words = extended_library_words({numerator: "numerator", denominator: "de
 	bracket_of: "list_bracket", separator_of: "list_separator", line_of: "node_line", column_of: "node_column", attributes_of: "attributes_of", with_attribute: "with_attribute", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
 	slice: "node_slice", copy: "node_copy", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
-	trim: "node_trim", as_code: "code_node", map_get_or: "map_get_or", lookup_name: "lookup_name", removed_value: "removed_value", map_without: "map_without", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error", caught_instance: "caught_instance", placed_at: "placed_at", ord: "first_code_point", bytes: "text_byte_list", byte_size: "node_bytes", pack: "packed_node", unpack: "unpacked_node", byte_at: "text_byte", byte_slice: "bytes_between", float_bits: "bits_of_float", wasi_environment: "wasi_environment", said_on_stderr: "said_on_stderr"})
+	trim: "node_trim", as_code: "code_node", map_get_or: "map_get_or", "field·held": "has_field", lookup_name: "lookup_name", removed_value: "removed_value", map_without: "map_without", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error", caught_instance: "caught_instance", placed_at: "placed_at", ord: "first_code_point", bytes: "text_byte_list", byte_size: "node_bytes", pack: "packed_node", unpack: "unpacked_node", byte_at: "text_byte", byte_slice: "bytes_between", float_bits: "bits_of_float", wasi_environment: "wasi_environment", said_on_stderr: "said_on_stderr"})
 # `x is spec`: the built-in type words the core holds, by their
 # canonical name, and the kinds of the core each covers; an untyped value asks runtime.warp node_is_type
 core_type_words = {int: "int", nat: "nat", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational",
 	exact: "rational", precise: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
 	number: "number", text: "text", string: "text", path: "path", codepoint: "char", char: "char", character: "char",
-	bool: "bool", boolean: "bool", list: "list", key: "key", pair: "key", symbol: "symbol", map: "map", error: "error", code: "code",
+	bool: "bool", boolean: "bool", list: "list", key: "key", pair: "pair", symbol: "symbol", map: "map", error: "error", code: "code",
 	function: "function", block: "function"}
 # the marked texts by their type word: `x as path` marks a text, `x is path` tests the mark
 marked_text_types = {path: Marked.Path}
@@ -222,10 +222,10 @@ marked_text_types = {path: Marked.Path}
 numeric_held_kinds = [Kind.Int, HeldBit.Rational, Kind.Float]
 passing_kinds = {int: [Kind.Int], nat: [Kind.Int], rational: numeric_held_kinds, float: [Kind.Float],
 	number: numeric_held_kinds, text: [Kind.Text, Kind.Codepoint, HeldBit.Path], path: [HeldBit.Path], char: [Kind.Codepoint],
-	bool: [HeldBit.Bool], list: [Kind.List, Kind.Block], key: [Kind.Key], symbol: [Kind.Symbol], map: [HeldBit.Map],
+	bool: [HeldBit.Bool], list: [Kind.List, Kind.Block], key: [Kind.Key], pair: [Kind.Key], symbol: [Kind.Symbol], map: [HeldBit.Map],
 	error: [Kind.Error], code: [], function: [Kind.Function]}
 covered_kinds = {int: [ValueKind.Int], nat: [ValueKind.Int], rational: [ValueKind.Int], float: [ValueKind.Float], number: [ValueKind.Int, ValueKind.Float], text: [ValueKind.Text, ValueKind.Char], path: [],
-	char: [ValueKind.Char], bool: [ValueKind.Bool], list: [ValueKind.List], key: [], symbol: [], map: [], error: [], code: [], function: []}
+	char: [ValueKind.Char], bool: [ValueKind.Bool], list: [ValueKind.List], key: [], pair: [], symbol: [], map: [], error: [], code: [], function: []}
 kind_bit(kind: int): int := 1 << kind
 # whether the class is the ancestor or extends it
 descends(name: text, ancestor: text): bool := name == ancestor or (name in module.parents and descends(module.parents[name], ancestor))
@@ -234,7 +234,8 @@ def class_test_code(body: Body, value: TypedCode, spec: text, word: text): Typed
 	runtime_call(word, [TypedCode(ValueKind.Node, boxed(value)), list_value(body, module.classes.keys.filter(name => descends(name, spec)))])
 }
 def type_test_code(body: Body, subject: Node, written: text): TypedCode { value_type_test(body, expression_code(body, subject), written) }
-def value_type_test(body: Body, value: TypedCode, written: text): TypedCode {
+# `kinds`: code reading the value's kind bits where a match read them once (kinds·of), else none
+def value_type_test(body: Body, value: TypedCode, written: text, kinds: list = []): TypedCode {
 	# `x is Q` of `type Q = P` tests a P
 	spec = aliased_type(written)
 	# `x is any`, also through an alias (`x is html` of `type html = any`): yes, as `x as any` is x
@@ -248,7 +249,7 @@ def value_type_test(body: Body, value: TypedCode, written: text): TypedCode {
 	type = core_type_words[spec]
 	# a pair `a: b` is no class's instance, though a Key holds both (runtime fields.warp is_entry); `is key` and a Key arm take both
 	if value.kind == ValueKind.Node and spec == "pair" { return TypedCode(ValueKind.Bool, runtime_call("is_entry", [value]).code) }
-	if value.kind == ValueKind.Node { return node_type_test(body, value, type) }
+	if value.kind == ValueKind.Node { return node_type_test(body, value, type, kinds) }
 	# a text held unboxed carries its mark statically: `p is path` of a path in a local
 	passes = if type in marked_text_types then value.mark == marked_text_types[type] else covered_kinds[type].any(kind => same_kind(kind, value.kind))
 	TypedCode(ValueKind.Bool, [op.i32_const, if passes then 1 else 0])
@@ -288,16 +289,38 @@ quantity_time_specs = ["time", "duration"]
 same_kind(a: ValueKind, b: ValueKind): bool := a == b
 # `x is type` of a value known only at run time: its held kind bit against the kinds passing the type, inline;
 # a type value (`int is number`) and `is code` ask runtime node_is_type
-def node_type_test(body: Body, value: TypedCode, type: text): TypedCode {
-	kinds = 0
-	for kind in passing_kinds[type] { kinds = bits_or(kinds, kind_bit(kind)) }
-	if kinds == 0 { return runtime_call("node_is_type", [value, text_value(type), number_value(kinds)]) }
+def node_type_test(body: Body, value: TypedCode, type: text, kinds: list = []): TypedCode {
+	if passing_mask(type) == 0 { return runtime_call("node_is_type", [value, text_value(type), number_value(0)]) }
+	if #kinds > 0 { return bits_type_test(value, kinds, kinds, type) }
 	held = fresh_node_local(body)
 	bits = [op.local_get] + uleb(fresh_local(body, ValueKind.Int))
 	read = value.code + [op.local_set] + held[1..] + held_kind_bit_code(body, held) + [op.local_tee] + bits[1..]
+	bits_type_test(TypedCode(ValueKind.Node, held), bits, read, type)
+}
+# the kind bits a type test passes, 0 for a type a node's held kind alone cannot tell
+def passing_mask(type: text): int {
+	kinds = 0
+	for kind in passing_kinds[type] { kinds = bits_or(kinds, kind_bit(kind)) }
+	kinds
+}
+# `n is T` of a node held in `held` whose kind bits `bits` reads, `read` leaving them first: a type value asks
+# node_is_type, any other node passes by its bits
+def bits_type_test(held: TypedCode, bits: list, read: list, type: text): TypedCode {
+	kinds = passing_mask(type)
 	type_value = read + [op.i64_const] + sleb(kind_bit(HeldBit.TypeValue)) + [op.i64_and, op.i64_eqz, op.i32_eqz]
 	passes = TypedCode(ValueKind.Bool, bits + [op.i64_const] + sleb(kinds) + [op.i64_and, op.i64_eqz, op.i32_eqz])
-	TypedCode(ValueKind.Bool, type_value + if_else_code(ValueKind.Bool, runtime_call("node_is_type", [TypedCode(ValueKind.Node, held), text_value(type), number_value(kinds)]), passes))
+	TypedCode(ValueKind.Bool, type_value + if_else_code(ValueKind.Bool, runtime_call("node_is_type", [held, text_value(type), number_value(kinds)]), passes))
+}
+# `kinds·of(n)`: the kind bits of a node, read once for a match's arms (node_matches.warp); 0 for a value of another kind
+def kinds_of_code(body: Body, subject: Node): TypedCode {
+	value = expression_code(body, subject)
+	if value.kind != ValueKind.Node { return TypedCode(ValueKind.Int, [op.i64_const, 0]) }
+	held = fresh_node_local(body)
+	TypedCode(ValueKind.Int, value.code + [op.local_set] + held[1..] + held_kind_bit_code(body, held))
+}
+# `kind·tested(match·kinds, n, "text")`: `n is text` by the kind bits kinds·of read
+def kind_tested_code(body: Body, kinds: Node, subject: Node, type: text): TypedCode {
+	value_type_test(body, expression_code(body, subject), type, expression_code(body, kinds).code)
 }
 # the held kind of the node `held` as one bit, as runtime held_kind_bit places it: 1 << its Kind, a yes/no, type value,
 # the i64 shift and bit opcodes the kind words are built with

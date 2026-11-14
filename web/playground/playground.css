@@ -65,7 +65,7 @@ h1 span { color: var(--accent); font-weight: 500; }
 /* the bug button's form (card bug-report), opening below it on the left, where the toolbar starts */
 .bug-form { left: 0; right: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; }
 #bug-status.failed { color: var(--error); }
-.bug-sender { color: var(--muted); }
+.bug-sender { color: var(--muted); cursor: pointer; }
 .bug-form textarea, .bug-form input[type=password] { flex: 1 1 100%; box-sizing: border-box; font: inherit; color: var(--ink); background: var(--ground); border: 1px solid var(--line); border-radius: 6px; padding: 6px; }
 
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
@@ -111,6 +111,12 @@ main { display: grid; grid-template-columns: var(--guide-width, minmax(16rem, 26
 
 .fit-code { top: 4px !important; right: 16px  !important; z-index: 7; }
 .fit-code[aria-pressed="true"] { opacity: 1; color: var(--ink); }
+/* ▾ beside ⛶ (playground.js FOLDABLE): the code or the result folded to its bar, ▸ to unfold */
+.collapse { top: 4px !important; right: 40px !important; z-index: 7; }
+.output-pane > .collapse { right: 8px !important; }
+.collapsed > :not(.collapse) { display: none !important; }
+.collapsed { min-height: 2rem !important; }
+.collapsed > .collapse { right: 8px !important; transform: rotate(-90deg); opacity: 1; }
 .CodeMirror { height: 44vh; min-height: 120px; font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace; background: var(--panel); color: var(--ink); }
 .CodeMirror-gutters { background: var(--panel); border-right: 1px solid var(--line); }
 .CodeMirror-cursor { border-left-color: var(--ink); }
@@ -124,7 +130,7 @@ main { display: grid; grid-template-columns: var(--guide-width, minmax(16rem, 26
 .cm-s-default .cm-type { color: var(--hint); }
 @media (prefers-color-scheme: dark) { .cm-s-default .cm-string { color: #8bd17c; } .cm-s-default .cm-number, .cm-s-default .cm-atom { color: #f0a54a; } .cm-s-default .cm-variable { color: var(--ink); } .cm-s-default .cm-call { color: #dcdcaa; } }
 
-.output-pane { padding: 12px 14px; overflow-x: auto; min-height: 10rem; }
+.output-pane { position: relative; padding: 12px 14px; overflow-x: auto; min-height: 10rem; }
 code, .result, .printed { font-family: ui-monospace, Menlo, Consolas, monospace; }
 /* a markup value shown as DOM (playground.js showRendered) */
 .address { box-sizing: border-box; width: 100%; margin: 10px 0 0; padding: 4px 8px; font-family: ui-monospace, Menlo, Consolas, monospace; border: 1px solid var(--line); border-radius: 6px; }

@@ -39,6 +39,22 @@ def with_field(holder: any, field: text, value: any, reader: function): any := {
 // The view of a source's tree, as the pipeline hands it on
 def tree(source: text): View := view_of(parsed(source))
 
+// the file a parse reads (its index in positions.warp source_files, 0 the program's own) and the line of that file its
+// source starts on, which every position it gives carries (card positions-always)
+global parsing_file = 0
+global parsing_first_line = 1
+// the tree of a source that is the text of `file` from its line `first_line` on: a used file, a library's definition
+def parsed_from(source: text, file: text, first_line: int, uses: text = ""): Node := {
+	outer_file = parsing_file
+	outer_line = parsing_first_line
+	parsing_file = file_index(file)
+	parsing_first_line = first_line
+	tree = parsed(source, uses)
+	parsing_file = outer_file
+	parsing_first_line = outer_line
+	tree
+}
+
 // The tree of a source: one statement as itself, several as a list
 def parsed(source: text, uses: text = ""): Node := {
 	try {
@@ -1005,6 +1021,8 @@ def index_expression(p: Parser): Node := {
 def continued(p: Parser, left: Node, min_power: int): Node := {
 	// a prefix `if` inside a tighter operand took its own `then` (owns_branches), so its `else` too
 	took_own_then = false
+	// the equality-level operator (`==`, `≈`, `is` …) that made left in this round, "" for none: such ones never chain
+	compared = ""
 	// left is the phrase an implicit application made in the round before
 	applied = false
 	while true {
@@ -1018,6 +1036,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 		continued = read_infix(p, left, min_power)
 		if continued != ø {
 			if continued == OPERAND_ENDS { break }
+			compared = compared_after(compared, declared_glyph(continued), binding_powers(declared_glyph(continued)))
 			left = continued
 			continue
 		}
@@ -1083,11 +1102,14 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 		} else {
 			op = operator_at(p)
 			if op.length == 0 and free_infix_at(p, left) {
-				if fixity_level(Fixity.Infix) < min_power { break }
 				glyph = "$(c)"
+				// a declared operator binds as its row says, `≈` as `==`; else as the built-ins it resembles
+				powers = alias_spellings().powers.get(glyph) ?? [fixity_level(Fixity.Infix), fixity_level(Fixity.Infix) + 1]
+				if powers#1 < min_power { break }
+				compared = compared_after(compared, glyph, powers)
 				advance(p)
 				skip_blanks(p)
-				left = operator_call(glyph, [left, expression(p, fixity_level(Fixity.Infix) + 1)])
+				left = operator_call(glyph, [left, expression(p, powers#2)])
 				continue
 			}
 			signed = signed_item_at(p)
@@ -1125,6 +1147,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			// operator word, starts its subject
 			glued_sign = (op#1 == "-" or op#1 == "#") and not is_blank(char_ahead(p, 1))
 			if (glued_sign or is_alpha(c)) and ends_with_clause_word(left) { break }
+			compared = compared_after(compared, op#1, powers)
 			took_own_then = owns and powers#1 < min_power and op#2 == "then"
 			operator_start = p.at
 			p.at += op#1.length
@@ -1620,9 +1643,10 @@ def spaced_operand_in_list(p: Parser, glyph: text, glued: bool, right: Node): bo
 EVENLY_SPACED_OPERATORS = ["*", "/", "%", "^", "==", "!=", "<", ">", "<=", ">="]
 // the source written from the node's place to the offset `end`, "" for a node of no place
 def written_before(p: Parser, n: Node, end: int): text := {
-	line = line_of(n)
+	held = line_of(n)
 	column = column_of(n)
-	if not (line is int and column is int) { return if is_group(n) and #n > 0 then written_before(p, n#1, end) else "" }
+	if not (held is int and column is int) { return if is_group(n) and #n > 0 then written_before(p, n#1, end) else "" }
+	line = line_within(held) - parsing_first_line + 1
 	p.code[code_offset(p, p.line_starts[line - 1], column) ..< end].trim()
 }
 
@@ -1642,6 +1666,18 @@ def is_phrase_operator(op: list): bool := PHRASE_OPERATORS.contains(op#1) or op#
 def is_dotted(op: list): bool := op#1.length > 1 and op#1#1 == '.' and op#1[1 ..] == op#2
 // `abs.(xs)`, Julia's dot call: warp has none (decision no-dot-call-broadcast), a function of numbers broadcasts by itself
 // and `each` applies any other to every item
+// `1 == 1 == 1`, `30 == x + y ≈ 30`: two equality-level comparisons in a row read two ways, refused (wiki/Footguns.md
+// "Chained comparison"); only `<` `<=` `>` `>=` chain
+// the comparison an operator of these powers leaves for the next one to meet: its glyph at the level of `==`, else "";
+// refused after another such (none while the table is still bare, every operator at the default power as the
+// extension rows are read)
+def compared_after(compared: text, glyph: text, powers: list): text {
+	equality = alias_spellings().powers.get("==")
+	if equality == ø or powers#1 != equality#1 { return "" }
+	if compared != "" { raise comparisons_chained(compared, glyph) }
+	glyph
+}
+def comparisons_chained(first: text, second: text): text := "`a ${first} b ${second} c` reads two ways: group one, `(a ${first} b) ${second} c` or `a ${first} (b ${second} c)`; only < <= > >= chain"
 def dot_call_refused(f: Node): text {
 	name = if f is symbol then name_of(f) else "f"
 	"no dot call " + name + ".(…): did you mean `" + name + " xs`, or `" + name + " each xs` for a function taking a list?"
@@ -1800,6 +1836,8 @@ def fixity_level(fixity: Fixity): int := match fixity {
 
 // The call of a declared operator's function: `2 ⊕ 3` is operator_⊕(2, 3)
 def operator_call(glyph: text, arguments: list): Node := call_of([symbol(OPERATOR_FUNCTION_PREFIX + glyph)] + arguments)
+// the glyph of a declared operator's call, operator_call's inverse: `2 ⊕ 3` gives "⊕", any other node ""
+def declared_glyph(n: Node): text := if is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1).starts_with(OPERATOR_FUNCTION_PREFIX) then name_of(n#1)[#OPERATOR_FUNCTION_PREFIX ..] else ""
 
 // A glyph a declaration may define: one beyond ASCII, or one the aliases leave to a declaration (`~`, `declared: yes`)
 def is_definable_glyph(glyph: text): bool := is_operator_glyph(glyph) or alias_spellings().declared contains glyph
@@ -1954,14 +1992,16 @@ def code_statements(source: text): list {
 	statements
 }
 
-def declared_of(glyph: text, fixity: Fixity): DeclaredOperator := DeclaredOperator{glyph: glyph, fixity: fixity, level: fixity_level(fixity)}
+// its level from its row's power when the aliases give one, `≈` binds as `==`
+def declared_of(glyph: text, fixity: Fixity): DeclaredOperator := DeclaredOperator{glyph: glyph, fixity: fixity, level: (alias_spellings().powers.get(glyph) ?? [fixity_level(fixity)])#1}
 // `square x := x*x`, `add a b := a + b` (decision spaced-definition-head): at a statement's start, plain names before
 // `:=` are a definition's head without its parentheses, square(x) := x*x; `f x` elsewhere stays a call
 def spaced_definition(p: Parser): Node {
 	if not at_statement_start(p) { return ø }
 	line = p.code[p.at .. statement_end(p)]
-	if not line.contains(" := ") { return ø }
-	head = line.split(" := ")#1
+	// (`:=` spaced or glued: `add1 x:=x+1` too)
+	if not line.contains(":=") { return ø }
+	head = line.split(":=")#1
 	names = blank_words(head)
 	// (no keyword: `def f x := …` stays the def rule's)
 	if names.length < 2 or not names.all(name => is_plain_name(name) and keyword_form(name) == "") or names#1 == "def" { return ø }
@@ -1969,7 +2009,7 @@ def spaced_definition(p: Parser): Node {
 	if names.any(name => phrase_prepositions.contains(name)) { return ø }
 	// (nor is a pronoun: `twice it := it * 2` is `twice := it * 2`)
 	defined = names.filter(name => not phrase_pronouns.contains(name)).map(name => symbol(name))
-	p.at += head.length + 4
+	p.at += head.length + 2
 	skip_spaces(p)
 	Key(if defined.length == 1 then defined#1 else call_of(defined), Op.Define, expression(p, 0))
 }
@@ -1990,9 +2030,9 @@ def group_items(declared: Node): list {
 	if parts != ø and parts#1 == "(" then parts#3 else [declared]
 }
 
-// The operators a class defines as methods by their glyph: `+(o) := …` is its plus, `#(n) := …` its index, `==(o)` its
-// equality (lib/aliases.warp names == equal)
-METHOD_OPERATORS = ["+", "-", "*", "/", "%", "<", ">", "==", "≈", "~", "#"]
+// The operators a class defines as methods by their glyph: `+(o) := …` is its plus, `^(n)` its power, `#(n) := …` its
+// index, `==(o)` its equality (lib/aliases.warp names == equal)
+METHOD_OPERATORS = ["+", "-", "*", "/", "%", "^", "<", ">", "==", "≈", "~", "#"]
 
 // `+(o) := …` defines a class's method of an operator by its glyph (its plus): the head is the call `+(o)`, no unary
 // plus, no count `#`; ø where no `:=` follows the parentheses. After the keyword (`infix operator |(x: any, g:
@@ -2850,7 +2890,7 @@ def atom(p: Parser): Node := {
 def placed_at(p: Parser, n: Node, start: int): Node := {
 	line = line_at(p, start)
 	line_start = p.line_starts[line - 1]
-	positioned(n, line, start - line_start + 1 + shifted(p, line_start, start))
+	positioned(n, file_line(parsing_file, line + parsing_first_line - 1), start - line_start + 1 + shifted(p, line_start, start))
 }
 
 // How many columns a source pass took out of the line from `line_start` before `at` (`\:alpha` written, α read), so
@@ -3056,7 +3096,8 @@ def starts_path_at(p: Parser, at: int): bool {
 	// `cd ~` alone; `a ~ b` stays the comparison
 	if c == '~' { return char_at(p, at + 1) == '/' or not operand_follows_at(p, at + 1) }
 	if c == '/' { return starts_path_name(char_at(p, at + 1)) }
-	false
+	// the project root, `•/test/x.warp` (`@/` too: core/passes/uses.warp root_markers)
+	(c == '•' or c == '@') and char_at(p, at + 1) == '/'
 }
 
 // The path at the parser's position, up to a blank, a closer or a separator, as a text

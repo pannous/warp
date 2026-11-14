@@ -49,8 +49,8 @@ not_equal { operator: "!=", symbol: Op.Ne, aliases: ["≠"], power: [115, 116], 
 "is" { power: [115, 116] }
 identical { operator: "===", power: [115, 116] }
 not_identical { operator: "!==", power: [115, 116] }
-approximately { operator: "≈", declared: yes, power: [115, 116], names: [almost_equal_to] }
-similar { operator: "~", declared: yes, aliases: ["~~", circa], power: [115, 116], names: [tilde] }
+approximately { operator: "≈", declared: yes, aliases: [circa], infix: yes, power: [115, 116], names: [almost_equal_to] }
+similar { operator: "~", declared: yes, aliases: ["~~"], power: [115, 116], names: [tilde] }
 "and" { symbol: Op.And, aliases: ["&&", "&"], power: [100, 101] }
 "xor" { symbol: Op.Xor, aliases: ["^^"], power: [95, 96] }
 "or" { symbol: Op.Or, aliases: ["||", "|"], power: [90, 91] }
@@ -73,6 +73,9 @@ pipe { operator: "|>", power: [127, 128] }
 maps_to { operator: "->", symbol: Op.Arrow, aliases: ["=>"], power: [70, 69] }
 # a rule's or a match arm's `=>` takes less after it than a lambda's `->`
 rule { operator: "=>", power: [70, 58] }
+
+# definitions: `x be 3` is `x := 3`
+define { operator: ":=", aliases: [be], infix: [be] }
 
 # conditionals: the ternary `c ? a : b`, `a ?: b`, `if c then a else b`, `while c do …`
 # `?` with its `:` is one operator, the whole `if c then a else b` written in symbols

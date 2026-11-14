@@ -180,17 +180,17 @@ def int_first(body: Body, symbol: text, a: TypedCode, b: TypedCode, general: fun
 exact_int_test(value: TypedCode): list := runtime_call("exact_int", [value]).code
 # an int as it is, a node's int out of its box
 int_read(value: TypedCode): TypedCode := if value.kind == ValueKind.Int then value else TypedCode(ValueKind.Int, unboxed(value.code, gc_type(gc.int_box)))
-# `a + b`, `a - b`, `a * b`, `a / b` of a class instance: its class's own operator through its descriptor
-# (decision class-operators-generic: the prelude's sum of quantities keeps their unit), else the code given
-class_operator_numbers = {"+": 0, "-": 1, "*": 2, "/": 3}
+# `a + b`, `a - b`, `a * b`, `a / b`, `a ^ b` of a class instance: its class's own operator through its descriptor
+# (decision class-operators-generic: the prelude's sum of quantities keeps their unit; reals' √3^2 is 3), else the
+# code given
 # a new local of the function holding a node, as its read
 def fresh_node_local(body: Body): list := [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
 def by_class(body: Body, symbol: text, left: TypedCode, right: TypedCode, kind: ValueKind, otherwise: list): list {
-	if not class_operator_numbers.has(symbol) { return otherwise }
+	if symbol not in operated_glyphs { return otherwise }
 	held = fresh_node_local(body)
 	# a's class, else b's (the right one's too: `x * q` in a module that never saw q's class, reals' `float() * other`,
 	# card reals-prebuilt), the runtime's class_operated
-	tested = runtime_call("class_operated", [left, right, TypedCode(ValueKind.Int, [op.i64_const] + sleb(class_operator_numbers[symbol]))]).code
+	tested = runtime_call("class_operated", [left, right, TypedCode(ValueKind.Int, [op.i64_const] + sleb(operated_glyphs.index_of(symbol) - 1))]).code
 	tested + [op.local_set] + held[1..] + held + [op.ref_is_null] + if_else_code(kind, TypedCode(kind, otherwise), TypedCode(ValueKind.Node, held))
 }
 # `x == ø`, `x === ø` and their negations (a match's `ø:` case): x is ø itself, missing; an empty list, text or map
@@ -224,7 +224,7 @@ immutable_type(kind: ValueKind): text := match kind {
 	_: ""
 }
 # two operands as the runtime words take them, boxed as nodes
-def as_nodes(a: TypedCode, b: TypedCode): list := [TypedCode(ValueKind.Node, boxed(a)), TypedCode(ValueKind.Node, boxed(b))]
+def as_nodes(a: TypedCode, b: TypedCode): list := [as_node(a), as_node(b)]
 # the bool test as `==`, `===` ask it, negated for `!=`, `!==`
 def tested_as(symbol: text, test: TypedCode): TypedCode := if symbol.starts_with("!") then TypedCode(ValueKind.Bool, condition(test) + [op.i32_eqz]) else test
 # an operator on two Int $Nodes, one an exact rational: the bridge hook of the extended runtime (bridge.warp), a comparison by extended_order; the
@@ -368,7 +368,10 @@ def type_value_of(body: Body, n: Node): TypedCode {
 		return TypedCode(ValueKind.Node, value.code + [op.local_set] + held[1..] + described_type(body, named.code, held))
 	}
 	listed = if value.kind == ValueKind.List then analyzed_list_type(body, n) else ø
-	if value.kind == ValueKind.List and listed == ø { return runtime_call("node_type_name", [TypedCode(ValueKind.Node, boxed(value)), list_value(body, module.classes.keys)]) }
+	named = () => runtime_call("node_type_name", [TypedCode(ValueKind.Node, boxed(value)), list_value(body, module.classes.keys)])
+	if value.kind == ValueKind.List and listed == ø { return named() }
+	# a time's type is its form's, `type(2024-06-01)` date, which only the run time reads
+	if value.kind == ValueKind.Time { return made_by("Time", named()) }
 	word = if value.kind == ValueKind.Int and not fast_int(body, n) then "nat" else if value.kind == ValueKind.List then listed else static_type_word(value.kind)
 	# a marked text held unboxed, `type(./a)`: its type's word
 	marked = marked_text_types.keys.filter(name => marked_text_types[name] == value.mark)

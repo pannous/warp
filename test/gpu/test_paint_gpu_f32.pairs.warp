@@ -1,0 +1,7 @@
+# paint and gpu_render of a GPU list [f32]: a short one is a uniform, a longer one a storage array (cards paint-gpu-f32, gpu-list-inference)
+'c: [f32] = [1.0, 0.0, 0.0, 1.0]; gpu_render("@fragment fn main() -> @location(0) vec4f { return values.c; }", 2, 1, {c: c})'	[4294901760, 4294901760]
+'c: [f32] = [0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0]; gpu_render("@fragment fn main() -> @location(0) vec4f { return values.c[1]; }", 2, 1, {c: c})'	[4294901760, 4294901760]
+'c: [f32] = [0.0, 1.0, 0.0, 1.0, 0.0]; gpu_render("@fragment fn main() -> @location(0) vec4f { return values.c[0]; }", 1, 1, {c: c})'	[4278255360]
+'c: [i32] = [1, 2, 3, 4, 5, 6, 7, 8]; gpu_render("@fragment fn main() -> @location(0) vec4f { return values.c[0]; }", 1, 1, {c: c})'	error	copy it to a list
+# a list of four numbers made for the GPU alone, inferred a GPU list [f32] (card gpu-list-inference), is the same uniform
+'c = [1.0, 0.0, 0.0, 1.0]; gpu_render("@fragment fn main() -> @location(0) vec4f { return values.c; }", 2, 1, {c: c})'	[4294901760, 4294901760]
