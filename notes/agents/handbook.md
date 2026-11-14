@@ -60,10 +60,11 @@ differ and holds every rule; this file holds only the procedures behind them.
   branch merged with origin/main. While main's own self build is red, a branch passes when its pure lane is green and
   its self check fails no worse than main's. The tree it checks is a cowtree worktree under /Volumes/Worktrees or a
   throwaway lib/ copy under /Volumes/Junk, never inside the main checkout (the script refuses it).
-- No Chrome, Chromium or Firefox on the Mac, headless included: browser runs happen only in CI. To check the
-  playground: first the dry run on pannous.com, `scripts/browser-dry-run.sh` in your worktree (`--tours [example…]`,
-  `--chrome`, `--firefox`, `--suite [filter…]`, `--samples [sample…]`, `--again`) until green; then dispatch the
-  Playground workflow on your branch once (`gh workflow run pages.yml --ref <branch>`), the final check plus Safari.
+- No visible browser on the Mac; a single headless page check is fine (agent-browser, nice, one at a time), whole
+  tours stay in CI. To check the playground beyond one page: first the dry run on pannous.com,
+  `scripts/browser-dry-run.sh` in your worktree (`--tours [example…]`, `--chrome`, `--firefox`, `--suite [filter…]`,
+  `--samples [sample…]`, `--again`) until green; then dispatch the Playground workflow on your branch once
+  (`gh workflow run pages.yml --ref <branch>`), the final check plus Safari.
 - A single headless page check on the Mac (AGENTS.md "Testing") names its own agent-browser session,
   `agent-browser --session warp-<role> …` on every call: the `default` session is every session's, and another's
   `open` or `close` takes your page to about:blank seconds later (card headless-agent; test_in_browser.py does so).
