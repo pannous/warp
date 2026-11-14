@@ -11,8 +11,9 @@ use "words.warp"
 # the message files in the order a fact is looked up, each with the level of its messages and its text, built into the
 # compiler when it is compiled, never read from a lib/ when it runs 
 # how much a diagnostic matters, spelled as `diagnosed` holds it
-enum Level { Error = "error", Warning = "warning", Hint = "hint" }
-message_files = [["errors.data", Level.Error, module_source("compiler/analysis/errors.data")], ["warnings.data", Level.Warning, module_source("compiler/analysis/warnings.data")], ["hints.data", Level.Hint, module_source("compiler/analysis/hints.data")]]
+# (a reading: what the compiler chose where the program left it unwritten, never said on a run; `warp format` writes it)
+enum Level { Error = "error", Warning = "warning", Hint = "hint", Reading = "reading" }
+message_files = [["errors.data", Level.Error, module_source("compiler/analysis/errors.data")], ["warnings.data", Level.Warning, module_source("compiler/analysis/warnings.data")], ["hints.data", Level.Hint, module_source("compiler/analysis/hints.data")], ["readings.data", Level.Reading, module_source("compiler/analysis/readings.data")]]
 quoting_word = "data"
 hole_mark = "$"
 

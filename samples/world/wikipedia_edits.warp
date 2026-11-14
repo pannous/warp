@@ -1,0 +1,9 @@
+#!/usr/bin/env warp
+# Wikipedia as it is written: the recent changes of English Wikipedia, live from Wikimedia's public event stream
+# (server-sent events, no key). A feed gives its events one at a time; take(n) the next n
+use wikipedia
+
+for edit in changes("enwiki").take(5) {
+	who = if edit.bot then "🤖 " + edit.user else edit.user
+	print edit.type + ": " + edit.title + " (" + who + ")"
+}

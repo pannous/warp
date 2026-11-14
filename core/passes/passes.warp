@@ -169,7 +169,7 @@ with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 	defined_origins = {}
 	local_declarations = {}
 	timed("with_uses")
-	used = with_uses(program, folder)
+	used = with_uses(flat_program(program), folder)
 	timed("interpolation, early sugar")
 	own = with_result_word(early_sugared(interpolation(used)))
 	writes_templates = writes_template_in(own)

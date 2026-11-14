@@ -34,7 +34,7 @@ cp "$checkout/samples/native/doubling.warp" "$stage/"
 native uses $'42\n7'
 
 # the native runner core/native/driver.warp (notes/primitive.md "Driver"): a sample's module run through wasmtime's C API,
-# given on the command line or appended to the driver
+# given on the command line (the lib/ warp runs with beside it: its runtime.wasm) or appended to the driver
 cp "$checkout/core/native/driver.warp" "$stage/"
 (cd "$stage" && "$warp" build native driver.warp >"$stage/build.log" 2>&1)
 module() { # module <sample>: the sample's wasm module in the stage
@@ -45,7 +45,7 @@ driven() { # driven <sample> <expected> [arguments…]: the driver runs the samp
 	sample=$1 expected=$2
 	shift 2
 	module "$sample"
-	check "$sample by the driver" "$(cd "$stage" && ./driver "$sample.wasm" "$@")" "$expected"
+	check "$sample by the driver" "$(cd "$stage" && WARP_LIB="$library" ./driver "$sample.wasm" "$@")" "$expected"
 }
 if [ -x "$stage/driver" ]; then
 	driven hello Hello
@@ -56,14 +56,14 @@ if [ -x "$stage/driver" ]; then
 	cp "$stage/driver" "$stage/app" && cat "$stage/arguments.wasm" >>"$stage/app"
 	python3 -c 'import os, struct, sys; open(sys.argv[1], "ab").write(struct.pack("<Q", os.path.getsize(sys.argv[2])) + b"WRPMwasm")' "$stage/app" "$stage/arguments.wasm"
 	check "arguments appended to the driver" "$(cd "$stage" && ./app eins zwei)" $'eins\nzwei'
-	# a GC program's std_io through the driver's callback: the Error saying the driver lacks the word
-	printf 'use os\nprint run("ls")\n' >"$stage/run.warp"
+	# a GC program's std_io through the driver's callback: os.run's output
+	printf 'use os\nprint run(["echo", "ran"]).out\n' >"$stage/run.warp"
 	(cd "$stage" && "$warp" build --wasm run.warp >/dev/null 2>&1)
-	check "std_io by the driver" "$(cd "$stage" && ./driver run.wasm)" 'the host word os.run is not in warp yet'
+	check "std_io by the driver" "$(cd "$stage" && WARP_LIB="$library" ./driver run.wasm)" ran
 	# a GC program's C calls by the driver, as its warp.c_functions section describes them: texts, numbers, handles
 	printf 'use c\nprint getenv("HOME")\nprint atof("2.5")\nabs(-7)\n' >"$stage/c_texts.warp"
 	(cd "$stage" && "$warp" build --wasm c_texts.warp >/dev/null 2>&1)
-	check "C calls by the driver" "$(cd "$stage" && ./driver c_texts.wasm)" "$HOME"$'\n2.5\n7'
+	check "C calls by the driver" "$(cd "$stage" && WARP_LIB="$library" ./driver c_texts.wasm)" "$HOME"$'\n2.5\n7'
 else
 	echo "✗ driver: no executable"; head -5 "$stage/build.log"; failures=$((failures + 1))
 fi

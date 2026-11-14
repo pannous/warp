@@ -264,6 +264,9 @@ statements_in(program: Node): list := if is_statement_sequence(program) then ite
 # the statements of a program, those of its nested sequences among them: a `;` line among lines (`use os; x = 1⏎…`
 # uses os), an included module
 flat_statements(program: Node): list := if is_statement_sequence(program) then items_of(program).flat_map(flat_statements) else [program]
+# the program with the statements of its nested sequences in line: `use json; parse(t) := 5⏎use regex` defines parse
+# among its lines, as it would written one a line
+flat_program(program: Node): Node := if statements_in(program).any(is_statement_sequence) then separated(bracketed(flat_statements(program), ""), ";") else program
 
 # a node with f applied to each of its children; n itself when every child came back the very same node, so a pass
 # makes new nodes only on the path from a change to the root (decision shared-subtrees)
