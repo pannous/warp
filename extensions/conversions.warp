@@ -260,14 +260,16 @@ parameters_typed(call: Node): map := {
 	for parameter in signature_of(items_of(call)).parameters { if parameter.type_name != "" { typed[parameter.name] = parameter.type_name } }
 	typed
 }
-# whether the value is known to be of a member class of the type, or of one extending it, made one, `x as T`, or is the
-# call of a function declaring a member its result, or of a function of several results, which the place picks
+# whether the value is known to be of a member class of the type, or of one extending it, made one, `x as T` (a
+# subtype's made·T, a conversion's as·T), or is the call of a function declaring a member its result, or of a function
+# of several results, which the place picks
 known_as(value: Node, type: text, places: Places, known: map): bool := {
 	plain = unparenthesized(without_mark(value))
 	members = union_members(type)
 	if is_key(plain, Op.As) and value_of(plain) is symbol and name_of(value_of(plain)) in members { return yes }
 	head = if is_group(plain) and #plain > 0 and plain#1 is symbol then name_of(plain#1) else ""
 	if places.results.has(head) or places.declared.get(head) in members { return yes }
+	if members.any(member => head == made_word(member) or head == conversion_name(member) or head.starts_with(conversion_name(member) + "·")) { return yes }
 	given = if plain is symbol and known.has(name_of(plain)) then known[name_of(plain)] else if is_call(plain) and places.classes.has(head) then head else ""
 	given != "" and union_members(type).any(member => places.classes.has(member) and descends_from(given, member, places.classes))
 }
