@@ -163,6 +163,13 @@ time_text(ms): text := {
 }
 // the day number of a proleptic Gregorian date (lib/prelude.warp days_from_civil)
 days_from_date(year, month, day): int := days_from_civil(year, month, day)
+// the date of its fields, date(2024, 2, 29) as the literal 2024-02-29; a field outside its calendar is an error, never
+// rolled over into the next month (wiki/Footguns.md "Dates")
+public date(year: int, month: int, day: int) := {
+	if month < 1 or month > 12 { raise "month out of range: " + text(month) + " (1 to 12)" }
+	if day < 1 or day > days_in_month(year, month) { raise "day out of range: " + padded(year, 4) + "-" + two_digits(month) + "-" + two_digits(day) }
+	time_of(date_form, days_from_date(year, month, day))
+}
 // "2026-10-07" → milliseconds since 1970 at midnight UTC
 // strict (card lib-audit-bugfixes-2): YYYY-MM-DD of digits (a 4-digit year; 1970-1-1 too), the month 1-12 and the day within it, else a raise
 // naming the text, no silent roll-over into the next month or year. An RFC 3339 date-time is read too (card
