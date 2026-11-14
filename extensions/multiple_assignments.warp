@@ -55,9 +55,9 @@ one_name_list(parts: list): any := match parts#1 {
 	Key(target, Op.Assign, first): { if is_name(target) and not starts_with_name(first) and not parts[1..].any(part => is_key(part, Op.Assign) or is_postfix_word(part)) then Key(target, Op.Assign, List([first] + parts[1..], Bracket.Square, Separator.Comma)) else ø }
 	_: ø
 }
-# `x = 7 squared`, `xs = [3, 1, 2] sorted`: a word taking the value before it (`$f takes amount`,
+# `x = 7 squared`, `x = 7 squared + 1`, `xs = [3, 1, 2] sorted`: a word taking the value before it (`$f takes amount`,
 # extensions/sugar/calls.warp) calls it, so the values are no list (decision postfix-words)
-is_postfix_word(part: Node): bool := part is symbol and first_parameter_fits(part, amount_word)
+is_postfix_word(part: Node): bool := leftmost_operand(part) is symbol and first_parameter_fits(leftmost_operand(part), amount_word)
 # `left right = f(x) g(y)`, Bend's parallel let (decision M5): as many names before the `=` as values after it, each
 # value evaluated before any name is assigned
 is_parallel_let(parts: list): bool := #parts > 2 and #parts % 2 == 1 and is_key(parts#((#parts + 1) ÷ 2), Op.Assign)

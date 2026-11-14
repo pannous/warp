@@ -627,6 +627,10 @@ sugar_rewritten(n: Node, rules: list): Node := {
 		if rule.place == Place.Anywhere and fits_head(rule, heads) {
 			result = rule_applied(rule, {}, n)
 			if not changes(result, n) and written != ø { result = regrouped(rule_applied(rule, {}, written), n) }
+			# a phrase of a run rule's length meets an operand or a binding as the program's rules do (run_at):
+			# `x squared + 1` is (x squared) + 1, `x = 7 squared + 1` assigns 50
+			ran = if not changes(result, n) and matches_runs(rule) and is_spaced(n) and #n == #rule.pattern then run_at(items_of(n), [rule], [{}]) else ø
+			if ran != ø { result = ran#2 }
 			if changes(result, n) { return rewritten_inside_item(result, rules) }
 		}
 	}
