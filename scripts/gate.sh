@@ -32,8 +32,8 @@ tree=$(cd "${args[0]:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 source "$(dirname "$0")/lib/platform.sh"
 source "$(dirname "$0")/lib/compile-cost.sh"
 binary=${args[1]:-${WARP_GATE_BINARY:-$warp_binary}}
-# the installed native warp's folder: its lib/, whose compiler is main's
-installed=$(dirname "$(readlink -f "$binary")")
+# main's installed native warp's folder: its lib/, whose compiler is main's, whatever binary runs the tree
+installed=$(dirname "$(readlink -f "$installed_warp")")
 wants() { # wants <tier>: the tier is in --tiers (a range a-b or a list a,b)
 	local t
 	for t in ${tiers//,/ }; do
@@ -106,7 +106,7 @@ if wants 1; then
 	done
 	# the compile cost against main's installed compiler's (scripts/lib/compile-cost.sh), each kept in its store record
 	if ! compile_cost_counter; then echo "compile cost: not measured (no instruction counter here)"
-	elif ! costs=$(compile_costs "$tree/lib" "$warp") || ! main_costs=$(compile_costs "$installed" "$binary"); then
+	elif ! costs=$(compile_costs "$tree/lib" "$warp") || ! main_costs=$(compile_costs "$installed" "$installed_warp"); then
 		echo "FAIL compile cost: not measured (see the compile-cost lines above)"; ok=0
 	else
 		slower=$(compile_costs_slower "$costs" "$main_costs")

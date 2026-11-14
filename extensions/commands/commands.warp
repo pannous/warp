@@ -76,7 +76,7 @@ command_name(entry: list): text := entry#1.split(" ")#1
 host_commands = ["repl-step", "test-list", "test-verdicts"]
 # the commands it answers that help leaves out, the user-facing list kept short: the shown stages, the REPL, and
 # parse-code, which parse_code and eval call (core/native/driver.warp, web/playground/driver.js)
-hidden_commands = ["repl", "parse", "signature", "data", "parse-code", "lower", "uses", "inspect"]
+hidden_commands = ["repl", "parse", "signature", "data", "parse-code", "lower", "uses", "readings", "inspect"]
 # the commands this extension answers (its Extension row, extensions/extensions.warp)
 command_words(): list := command_help.map(command_name).filter(word => not word.starts_with("<")) + host_commands + hidden_commands + running_commands + native_commands
 
@@ -145,6 +145,13 @@ show_data() := print plain_node(parsed(source_or_code(1)))
 # written so it parses back to the same node (extensions/serializer.warp): `print(-42)`, `#a + #b`, "b" in quotes
 show_lowered() := print serialize(view_of(lowered_program(source_or_code(1), ".", prelude_text())))
 show_uses() := { for module in implicit_modules_of(source_or_code(1)) { print module } }
+# `warp readings`: what the compiler chose where the program's own text left it unwritten, `line column fix` a line,
+# the fix to write over the word there (warp format writes them)
+show_readings() := {
+	known = #diagnosed
+	lowered_program(source_or_code(1), ".", prelude_text())
+	for said in diagnosed_since(known).filter(said => said#1 == Level.Reading and said#5 and (#said#5 < 3 or said#5#3 == 0)) { print "${said#5#1} ${said#5#2} ${said#3}" }
+}
 # `warp debug`: the views above, one after the other under their names (card help-menu)
 show_inspected() := {
 	print "parsed:"
@@ -222,6 +229,7 @@ extension_command(command: text) := match command {
 	"data": show_data()
 	"lower": show_lowered()
 	"uses": show_uses()
+	"readings": show_readings()
 	"inspect": show_inspected()
 	"parse-code": write_parse_code(args#2, args#3)
 	"build": build(args[1 ..< #args])

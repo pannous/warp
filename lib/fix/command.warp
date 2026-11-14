@@ -25,7 +25,10 @@ skipped_folder_reason = "code golf counts bytes"
 not_warp_reason = "not a warp file"
 code_label = "code"
 # the compiler's answer to which standard modules a file uses without their `use` (warp uses, the implicit_use hint)
-uses_command = "warp uses "
+uses_command = "uses "
+# the compiler's readings of what the code leaves unwritten (warp readings): `line column fix` a line
+readings_command = "readings "
+reading_rule = "reading"
 
 is_folder(path: text): bool := (try list_files(path) else ø) != ø
 name_of_path(path: text): text := last(path.split("/"))
@@ -87,7 +90,7 @@ confirmed(shown: text, old: text, new: text): bool := {
 # the fix with a `use` line of each standard module the file uses without saying it, after its leading comments and
 # uses (beautify only: warp format lays out)
 with_uses_written(result: list, file: text): list := {
-	modules = command(uses_command + quoted_path(file)).split("\n").filter(module => module.trim() != "")
+	modules = command(warp_command(uses_command + quoted_path(file))).split("\n").filter(module => module.trim() != "")
 	if #modules == 0 { return result }
 	lines = result[0].split("\n")
 	at = 0
@@ -96,15 +99,44 @@ with_uses_written(result: list, file: text): list := {
 	[(lines[0 ..< at] + uses + lines[at ..]).join("\n"), result[1] + uses.map(line => "" + (at + 1) + " " + line)]
 }
 
+# the code with each reading of the compiler's written over the word at its place, `xs = …` made a GPU list [vec4] as
+# `xs: [vec4] = …`, and the changes; `source` the file or the code itself, as warp readings takes it
+with_readings_written(code: text, source: text): list := {
+	lines = code.split("\n")
+	changes = []
+	for reading in command(warp_command(readings_command + quoted_path(source))).split("\n") {
+		parts = reading.split(" ")
+		if #parts >= 3 and is_digits(parts[0]) and is_digits(parts[1]) {
+			at = int(parts[0]) - 1
+			column = int(parts[1]) - 1
+			fix = parts[2 ..].join(" ")
+			word = fix.split(":")[0]
+			line = lines[at]
+			if line[column ..].starts_with(word) and not line[column + #word ..].trim().starts_with(":") {
+				lines[at] = line[0 ..< column] + fix + line[column + #word ..]
+				changes += ["" + (at + 1) + " " + reading_rule]
+			}
+		}
+	}
+	[lines.join("\n"), changes]
+}
+
 # a change "<line> <rule>" as check lists it
 listed_change(shown: text, change: text): text := {
 	parts = change.split(" ")
 	shown + ":" + parts[0] + ": layout: " + change[(#parts[0] + 1) ..]
 }
 
+# the code fixed (fix.warp fixed) after the compiler's readings are written, and every change
+fixed_with_readings(code: text, source: text, rules: list, rewriting: bool): list := {
+	read = with_readings_written(code, source)
+	result = fixed(read[0], rules, rewriting)
+	[result[0], read[1] + result[1]]
+}
+
 # code given instead of files: printed fixed; in check, its changes listed, 1 when there are some
 fixed_code(code: text, checking: bool, rules: list, rewriting: bool): int := {
-	result = fixed(code, rules, rewriting)
+	result = fixed_with_readings(code, code, rules, rewriting)
 	if not checking { print result[0] }
 	if checking { for change in result[1] { print listed_change(code_label, change) } }
 	if checking and #result[1] > 0 then 1 else 0
@@ -145,7 +177,7 @@ fix_command(command: text, arguments: list): int := {
 			print file + ": not formatted: it cannot be read"
 			failed += 1
 		} else {
-			result = fixed(code, rules, rewriting)
+			result = fixed_with_readings(code, file, rules, rewriting)
 			if rewriting { result = with_uses_written(result, file) }
 			lines = #result[1]
 			if result[0] != code {
