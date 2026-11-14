@@ -171,6 +171,10 @@ global rule_enum_aliases = {}
 global rule_instances = {}
 # the program's classes, whose construction `Counter(3)` is an instance (`where $o is instance`)
 global rule_classes = {}
+# the classes a value may be an instance of, the program's and the library's, and the functions declaring they give one,
+# `changes(wiki: text): WikiChanges` (card for-over-iterator: `for e in changes()` walks it by next())
+global rule_instance_classes = {}
+global rule_results = {}
 # the words taking a block as data, lib/markup's style(sheet: data): `style: {…}` holds data, no structure's items
 global rule_data_words = {}
 # the program being rewritten, and its varying values (`where $h is varying`), worked out when a rule first asks
@@ -368,8 +372,10 @@ sugar_walked(program: Node, rules: list): Node := {
 	first_parameter_types = typed_first_parameters_in(nodes)
 	rule_signatures = definitions_signatures_in(nodes)
 	rule_case_holders = case_holders_in(nodes)
-	rule_instances = instance_names_in(program, outer_nodes_in(program))
 	rule_classes = class_names_of(program)
+	rule_instance_classes = entries_of_both(rule_classes, declared_classes_modules())
+	rule_results = entries_of_both(result_classes(statements_in(program), rule_instance_classes), linked_results(rule_instance_classes))
+	rule_instances = instances_assigned(outer_nodes_in(program), rule_instance_classes, rule_results)
 	rule_data_words = data_positions_called(program)
 	rule_program = program
 	rule_types = ø
@@ -1407,7 +1413,7 @@ has_property(code: Node, property: text): bool := {
 	if property == "function_block" { return bracket_of(code) == "{" and mentions(code, implicit_parameter) }
 	# `x -> x * 2`, `(x -> x * 2)`: a lambda is a function too
 	if property == "function" and (is_lambda(code) or (is_round(code) and #code == 1 and is_lambda(code#1))) { return yes }
-	if property == "instance" and is_group(code) and bracket_of(code) == "(" and #code > 0 and code#1 is symbol { return rule_classes.has(name_of(code#1)) }
+	if property == "instance" and is_group(code) and bracket_of(code) == "(" and #code > 0 and code#1 is symbol { return rule_instance_classes.has(name_of(code#1)) or rule_results.has(name_of(code#1)) }
 	# `p{ "count: " + count }`, `p{ greeting }`: a structure's item reading, where it runs, a varying value or a variable
 	# code running later writes, a sum or the bare name alike (card bare-name). Only an item: the head `f(a: int)` of
 	# heads.warp's `$h := $e` is no varying code
@@ -1533,13 +1539,26 @@ class_names_of(program: Node): map := {
 	}
 	classes
 }
+# the linked modules' functions declaring they give an instance of one of the classes, by their signature lines
+# (`changes(wiki: text = ""): WikiChanges` of wikipedia), each line parsed only when it ends in such a class
+linked_results(classes: map): map := {
+	heads = []
+	for signature in linked_signatures.values {
+		for slice in signature.slices {
+			head = slice#2.split("\n")#1.split(":=")#1.trim()
+			declared = head.split("): ")
+			if #declared > 1 and declared.last in classes { heads += statements_in(plain_node(parsed(head))) }
+		}
+	}
+	result_classes(heads, classes)
+}
 # the names the program assigns only instances of its classes, `s = Stack()` (classes.warp written_type), of its
 # nodes as the caller listed them
 instance_names_in(program: Node, nodes: list): map := instances_assigned(nodes, class_names_of(program))
-instances_assigned(nodes: list, classes: map): map := {
+instances_assigned(nodes: list, classes: map, results: map = {}): map := {
 	found = {}
 	if #classes == 0 { return found }
-	types = assigned_types_in(nodes, classes)
+	types = assigned_types_in(nodes, classes, results)
 	# self, a constructor's `self = A()`, also names a dispatcher's value, any value, whose in-place fallback
 	# `self.remove(k)` the list and map rules lower (card set-method)
 	for name in types.keys { if types[name] in classes and name != "self" { found[name] = yes } }

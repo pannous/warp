@@ -1069,20 +1069,6 @@ static_type(n: Node, routing: Routing): text? := {
 	if is_time_view(n) { return time_type }
 	written_type(n, routing.classes, routing.results)
 }
-# function → the class it declares it gives, `now(): Instant`
-result_classes(statements: list, classes: map): map := {
-	found = {}
-	for statement in statements {
-		result = written_result(statement)
-		if result != ø and result in classes { found[defined_word(statement)] = result }
-		# (`now(): Instant := …` as written, before definitions.warp holds its result)
-		if is_key(statement, Op.Define) and is_key(key_of(statement), Op.Colon) and value_of(key_of(statement)) is symbol and name_of(value_of(key_of(statement))) in classes {
-			head = key_of(key_of(statement))
-			if head is symbol or is_called_name(head) { found[if head is symbol then name_of(head) else name_of(head#1)] = name_of(value_of(key_of(statement))) }
-		}
-	}
-	found
-}
 field_type(classes: map, owning_class: text, field: text): text? := {
 	for ancestor in lineage(classes, owning_class) { if field in classes[ancestor].field_types { return classes[ancestor].field_types[field] } }
 	ø

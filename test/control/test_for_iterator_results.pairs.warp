@@ -1,0 +1,4 @@
+# a call of a function declaring it gives an iterator's class is walked by next() too, as its constructor's call is
+# (decision for-over-iterator, cards for-over-iterator and object-iterator-loop)
+'class C{n:int; next() := { if n <= 0 { return ø }; n -= 1; n + 1 }}; countdown(n: int): C := C(n); out = []; for x in countdown(3) { out += [x] }; out'	[3, 2, 1]
+'class C{n:int; next() := { if n <= 0 { return ø }; n -= 1; n + 1 }}; countdown(n: int): C := C(n); c = countdown(4); s = 0; for x in c { s += x }; s'	10

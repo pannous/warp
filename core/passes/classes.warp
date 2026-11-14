@@ -166,6 +166,19 @@ written_type(n: Node, classes: map, results: map = {}): text? := {
 		_: ø
 	}
 }
+# function → the class it declares it gives, `now(): Instant`: its definition, or its head alone (a linked module's
+# signature line)
+result_classes(statements: list, classes: map): map := {
+	found = {}
+	for statement in statements {
+		result = written_result(statement)
+		if result != ø and result in classes { found[defined_word(statement)] = result }
+		# (`now(): Instant := …` as written, before definitions.warp holds its result)
+		head = if is_key(statement, Op.Define) then key_of(statement) else statement
+		if is_key(head, Op.Colon) and value_of(head) is symbol and name_of(value_of(head)) in classes and is_called_name(key_of(head)) { found[name_of(key_of(head)#1)] = name_of(value_of(head)) }
+	}
+	found
+}
 # the type a field member declares or is given: `n: int`, `xs: [int]` (a list), `names = []`
 member_type(member: Node): text? := match member {
 	Key(left, Op.Assign, right): { if left is symbol then written_type(right, {}) else member_type(left) }
