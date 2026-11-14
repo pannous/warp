@@ -750,9 +750,13 @@ fits_group(value: any, pattern: any, bound: map, code: bool): bool := {
 	if is_case_with_fields(pattern) and not code and class_name(value) == name_of(pattern#1) { return fits_fields(value, pattern, bound) }
 	if code and is_type(value, "key") and is_operator_hole(pattern) { return fits_operation(value, pattern, bound) }
 	if code and bracket_of(value) != bracket_of(pattern) { return no }
+	if code and is_phrase_hole(value, pattern) { return bound_as(phrase_of(value), name_of(pattern#1)[1 ..], bound) }
 	if not code and not is_type(value, "list") { return no }
 	fits_items(value, pattern, bound, code)
 }
+// `{ $body }` of `{ print x }`: a hole alone in a group takes its one phrase, whose words the group holds spaced
+is_phrase_hole(value: any, pattern: any): bool := #pattern == 1 and is_type(pattern#1, "symbol") and name_of(pattern#1).starts_with("$") and separator_of(value) == " " and #value > 1
+phrase_of(group: any): any := separated(bracketed([part for part in group], ""), " ")
 // `data($l $op $r)`: a hole between two parts takes any operator, its spelling bound: `-` of `a - b`
 is_operator_hole(pattern: any): bool := bracket_of(pattern) == "" and #pattern == 3 and is_type(pattern#2, "symbol") and name_of(pattern#2).starts_with("$")
 fits_operation(value: any, pattern: any, bound: map): bool := fits_pattern(key_of(value), pattern#1, bound, yes) and bound_as(op_of(value), name_of(pattern#2)[1 ..], bound) and fits_pattern(value_of(value), pattern#3, bound, yes)
