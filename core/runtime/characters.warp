@@ -7,9 +7,9 @@ use "walks.warp"
 use "conversions.warp"
 use "../emitter/byte_codes.warp"
 # the bytes of the code point whose UTF-8 starts with the byte lead
-code_point_width(lead: int): int := if lead < Utf8.Continuation then 1 else if lead < Utf8.ThreeByte then 2 else if lead < Utf8.FourByte then 3 else 4
+code_point_width(lead: int) as int := if lead < Utf8.Continuation then 1 else if lead < Utf8.ThreeByte then 2 else if lead < Utf8.FourByte then 3 else 4
 # the code point whose UTF-8 bytes start at byte `at` of t
-code_point_at(t: text, at: int): int := {
+code_point_at(t: text, at: int) as int := {
 	lead = byte_at(t, at)
 	n = if lead < Utf8.Continuation then lead else if lead < Utf8.ThreeByte then lead - Utf8.TwoByte else if lead < Utf8.FourByte then lead - Utf8.ThreeByte else lead - Utf8.FourByte
 	for k in 1 to code_point_width(lead) - 1 { n = n * Utf8.ContinuationUnit + byte_at(t, at + k) - Utf8.Continuation }
@@ -17,27 +17,27 @@ code_point_at(t: text, at: int): int := {
 }
 # `c++`, `c--` of a character held as a text: the character of the next (or previous) code point, as `'a' to 'e'`
 # counts; a text of more or less than one code point is not a character
-stepped_character(t: text, step: int): text := {
+stepped_character(t: text, step: int) as text := {
 	if byte_count(t) == 0 or byte_count(t) != code_point_width(byte_at(t, 0)) { not_a_character() }
 	code_point_text(code_point_at(t, 0) + step)
 }
 # `ord(c)`: the code point of the character c (a text of one)
-first_code_point(t: text): int := code_point_at(t, 0)
-within(c: int, low: int, high: int): bool := c >= low and c <= high
+first_code_point(t: text) as int := code_point_at(t, 0)
+within(c: int, low: int, high: int) as bool := c >= low and c <= high
 # a byte 10xxxxxx that continues a code point's UTF-8
-is_continuation_byte(b: int): bool := b >= Utf8.Continuation and b < Utf8.TwoByte
+is_continuation_byte(b: int) as bool := b >= Utf8.Continuation and b < Utf8.TwoByte
 # `n as char`, `n as codepoint` (decision digit-as-char): a digit 0…9 is its digit
 # character, as '5' as int is 5; another number the character of that code point, one no character has (beyond
 # U+10FFFF, a surrogate) the error invalid_code_point
-cast_code_point(n: int): int := {
+cast_code_point(n: int) as int := {
 	if within(n, 0, 9) { return n + Ascii.Zero }
 	if n < 0 or n > Unicode.Highest or within(n, Unicode.SurrogateFirst, Unicode.SurrogateLast) { invalid_code_point() }
 	n
 }
 # `x as char` of a value known only at run time: a whole number cast as cast_code_point casts it, a character itself
-node_code_point(n: Node): int := if is_null(n) or kind_code(n) != Kind.Int or is_ratio(n) then code_of(char_of_node(n)) else cast_code_point(whole_int(n))
+node_code_point(n: Node) as int := if is_null(n) or kind_code(n) != Kind.Int or is_ratio(n) then code_of(char_of_node(n)) else cast_code_point(whole_int(n))
 # a code point that continues the character before it: combining marks, variation selectors, skin tones, ZWJ …
-extends_character(c: int): bool := {
+extends_character(c: int) as bool := {
 	if c < 768 { return no }
 	if within(c, 768, 879) { return yes }
 	if within(c, 1155, 1161) { return yes }
@@ -68,11 +68,11 @@ extends_character(c: int): bool := {
 	within(c, 917760, 917999)
 }
 # after a ZWJ these join the character (emoji ZWJ sequences, GRAPHEME_PICTOGRAPHIC)
-pictographic(c: int): bool := within(c, 9728, 10175) or within(c, 126976, 129791)
+pictographic(c: int) as bool := within(c, 9728, 10175) or within(c, 126976, 129791)
 # a flag is a pair of these
-regional_indicator(c: int): bool := within(c, 127462, 127487)
+regional_indicator(c: int) as bool := within(c, 127462, 127487)
 # the byte after the character (grapheme cluster) starting at byte `at` of t: controls stand alone but CR LF, a flag pairs two regional indicators
-character_end(t: text, at: int): int := {
+character_end(t: text, at: int) as int := {
 	# an ASCII byte but CR before another ASCII byte (or the end) is a character of its own: no code point to decode
 	if byte_at(t, at) < Utf8.Continuation and byte_at(t, at) != Ascii.Return and (at + 1 == byte_count(t) or byte_at(t, at + 1) < Utf8.Continuation) { return at + 1 }
 	previous = code_point_at(t, at)
@@ -90,12 +90,12 @@ character_end(t: text, at: int): int := {
 	end
 }
 # the character of t from byte `at` to end: a character value for one code point, else a text
-character_between(t: text, at: int, end: int): Node := {
+character_between(t: text, at: int, end: int) as Node := {
 	if end - at == code_point_width(byte_at(t, at)) { return char_of(code_point_at(t, at)) }
 	bytes_between(t, at, end)
 }
 # the index-th character of t, counted from 1; an index outside 1…count fails as "index out of range"
-text_char(t: text, index: int): Node := {
+text_char(t: text, index: int) as Node := {
 	if index < 1 { index_out_of_range_of(index, text_count(t)) }
 	at = character_start(t, index)
 	if at >= byte_count(t) { index_out_of_range_of(index, text_count(t)) }
@@ -105,7 +105,7 @@ text_char(t: text, index: int): Node := {
 # over t at or before index, else back from one past it (walk_back), else from the start: a scan with look backs
 # (`src[start..i]`) takes linear time. A short text walks from its start and leaves
 # the walks to the long ones (card text-cache-lru)
-character_start(t: text, index: int): int := {
+character_start(t: text, index: int) as int := {
 	global walked_index
 	global walked_at
 	global walked_before
@@ -125,7 +125,7 @@ character_start(t: text, index: int): int := {
 	}
 	walked_at
 }
-character_from_start(t: text, index: int): int := {
+character_from_start(t: text, index: int) as int := {
 	at = 0
 	walked = 1
 	while walked < index and at < byte_count(t) {
@@ -135,13 +135,13 @@ character_from_start(t: text, index: int): int := {
 	at
 }
 # Texts below this many bytes stay out of the count kept and the walks
-short_text(): int := 64
+short_text() as int := 64
 # How far (bytes) walk_back looks back from a walk; further back, an index walks from the start
-back_reach(): int := 256
+back_reach() as int := 256
 # the walk over t moved back to a character at or before index by the ASCII bytes before it (each but \n starts a
 # character: nothing joins an ASCII character to what precedes it, \r\n aside) and the characters counted from there;
 # a walk over another text, or none within back_reach, starts over at t's start
-walk_back(t: text, index: int): int := {
+walk_back(t: text, index: int) as int := {
 	global walked_index
 	global walked_at
 	global walked_before
@@ -161,7 +161,7 @@ walk_back(t: text, index: int): int := {
 	walked_before = -1
 	0
 }
-walk_from_start(t: text): int := {
+walk_from_start(t: text) as int := {
 	global walked_text
 	global walked_bytes
 	global walked_index
@@ -176,12 +176,12 @@ walk_from_start(t: text): int := {
 }
 # 1 when the current walk is over t, or over the start of t that t grew from, and stands at index, before it or one
 # past it
-walk_reaches(t: text, index: int): int := {
+walk_reaches(t: text, index: int) as int := {
 	if not same(t, walked_text) or byte_count(t) < walked_bytes or index < walked_index - 1 { return 0 }
 	if index == walked_index - 1 and walked_before < 0 { return 0 }
 	1
 }
-swap_walks(): int := {
+swap_walks() as int := {
 	global walked_text
 	global other_text
 	global walked_bytes

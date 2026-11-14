@@ -16,15 +16,16 @@ STATEMENT_ENDS = ['\n', ';', '}']
 COMPARISON_FIRSTS = ['=', '!', '<', '>']
 
 # the code fixed and what changed: [text, changes], each change "<line> <rule>", the line in the code as given; by
-# the layout rules given, after the hints' replacements when rewriting (warp format lays out only)
-fixed(code: text, rules: list = layout_rules, rewriting: bool = yes): list := {
-	markup = markup_of_inline_html(code, no, typed_element)
+# the layout rules given, after the hints' replacements when rewriting (warp format lays out only); with a rule named
+# by only, that rule's hints alone (`warp fix only "result type"`), the markup and layout left as written
+fixed(code: text, rules: list = layout_rules, rewriting: bool = yes, only: text = "") as list := {
+	markup = if only == "" then markup_of_inline_html(code, no, typed_element) else [code, ø, []]
 	changes = markup#3.map(found => "" + found#2#1 + " " + inline_html_rule)
 	lines = markup#1.split("\n")
 	if code.ends_with("\n") { lines = lines[0 ..< #lines - 1] }
 	numbers = []
 	for k in 0 ..< #lines { numbers += [k + 1] }
-	hints = if rewriting then hints_of(scanned(lines)) else []
+	hints = if rewriting then hints_of(scanned(lines)).filter(hint => hint.rule.contains(only)) else []
 	for hint in hints { changes += ["" + hint.line_number + " " + hint.rule] }
 	lines = with_hints_applied(lines, hints)
 	for rule in rules {
@@ -60,7 +61,7 @@ fixed(code: text, rules: list = layout_rules, rewriting: bool = yes): list := {
 # (decision html-value, card inline-div-format) an element that is a place's whole value, `p = <p>Hi</p>` or
 # `f() := <div/>`, written as the markup it reads as with its place typed html, `p: html = p{ "Hi" }`, so that it stays
 # markup; any other inline element as written (literal HTML is markup wherever it stands)
-typed_element(points: list, at: int, read: list): list? := {
+typed_element(points: list, at: int, read: list) as list? := {
 	n = points.length
 	after = read#2 + blanks_after(points, read#2)
 	if after < n and not (points[after] in STATEMENT_ENDS) { return ø }
@@ -77,7 +78,7 @@ typed_element(points: list, at: int, read: list): list? := {
 	if head.ends_with(HTML_TYPE) then [at, read#1] else ø
 }
 # `x: int`, `f(a): text`: a head giving its type, a colon outside its parentheses
-is_typed_head(head: text): bool := {
+is_typed_head(head: text) as bool := {
 	depth = 0
 	for c in code_points(head) {
 		if c == '(' or c == '[' { depth += 1 }

@@ -2,7 +2,7 @@
 # (`enum Key { A = 65 }`) the case of that number, `Key(65)` A as `65 as Key` is. Runs after conversions, before
 # plain_enums takes a valued enum's `as` (extensions/sugar/enums.warp's rule of the same form comes after it)
 
-enum_calls(program: Node): Node := {
+enum_calls(program: Node) as Node := {
 	enums = declarations_found(program, declared_enum, {})
 	if #enums.keys == 0 then program else bottom_up(program, n => if is_call(n) and #n == 2 and n#1 is symbol and enums.has(name_of(n#1)) then Key(n#2, Op.As, n#1) else n)
 }

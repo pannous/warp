@@ -2,7 +2,7 @@
 // maps: csv_rows("a,b\n1,\"x,y\"") is [["a", "b"], ["1", "x,y"]]; quoted fields keep commas, doubled quotes and line
 // breaks; lines end in LF or CRLF; a leading UTF-8 BOM is dropped; csv_text quotes a field only when it holds a comma, a quote, CR or LF
 
-def csv_rows(t: text): list {
+def csv_rows(t: text) as list {
 	if t.starts_with(chr(0xFEFF)) { t = t[1..<#t] } // a UTF-8 byte order mark is no part of the first field
 	rows = []
 	row = []
@@ -47,7 +47,7 @@ def csv_rows(t: text): list {
 }
 
 // the rows after the header, each a map of header field to value
-def csv_maps(t: text): list {
+def csv_maps(t: text) as list {
 	rows = csv_rows(t)
 	out = []
 	for r in 1 ..< count(rows) {
@@ -58,10 +58,10 @@ def csv_maps(t: text): list {
 	out
 }
 
-csv_needs_quotes(f: text): bool := f.contains(",") or f.contains("\"") or f.contains("\n") or f.contains("\r")
-csv_field(value: any): text := { f = text(value); if f.contains("\"") then "\"" + replace(f, "\"", "\"\"") + "\"" else if f.contains(",") or f.contains("\n") or f.contains("\r") then "\"" + f + "\"" else f }
-csv_line(row: list): text := join([csv_field(f) for f in row], ",")
+csv_needs_quotes(f: text) as bool := f.contains(",") or f.contains("\"") or f.contains("\n") or f.contains("\r")
+csv_field(value: any) as text := { f = text(value); if f.contains("\"") then "\"" + replace(f, "\"", "\"\"") + "\"" else if f.contains(",") or f.contains("\n") or f.contains("\r") then "\"" + f + "\"" else f }
+csv_line(row: list) as text := join([csv_field(f) for f in row], ",")
 // rows of values as CSV text, lines ending in CRLF (RFC 4180)
-csv_text(rows: list): text := if rows.count == 0 then "" else join([csv_line(row) for row in rows], "\r\n") + "\r\n"
+csv_text(rows: list) as text := if rows.count == 0 then "" else join([csv_line(row) for row in rows], "\r\n") + "\r\n"
 // maps as CSV text under the header row
-csv_text(maps: list, header: list): text := csv_text([header] + [[m[k] for k in header] for m in maps])
+csv_text(maps: list, header: list) as text := csv_text([header] + [[m[k] for k in header] for m in maps])

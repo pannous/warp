@@ -424,7 +424,7 @@ SINE_TABLE = 2048
 sine_table = [sin(2 * pi * (i as float) / (SINE_TABLE as float)) for i in 0 ..< SINE_TABLE]
 // (typed, as are wave and the envelope: each runs once a sample, and untyped a 4-note bar took 3 s to make, card
 // timing-second-play)
-sine_at(p: float): float := sine_table[(p * SINE_TABLE) as int % SINE_TABLE]
+sine_at(p: float) as float := sine_table[(p * SINE_TABLE) as int % SINE_TABLE]
 public wave(shape: text, p: float, dt: float = 0.0): float := if shape == "square" then (if p < 0.5 then 1.0 else - 1.0) + step_smoothing(p, dt) - step_smoothing((p + 0.5) % 1, dt)
 else if shape == "triangle" then 1 - 4 * abs(p - 0.5)
 else if shape == "sawtooth" then 2 * p - 1 - step_smoothing(p, dt)
@@ -432,20 +432,20 @@ else if shape == "noise" then 2 * random() - 1
 else sine_at(p)
 // the correction of a wave's upward jump of 2 at phase 0 within a sample of it (PolyBLEP): a sharp jump has harmonics
 // above half the sample rate, which fold back as an inharmonic buzz (880 Hz beep at 22050 samples a second)
-step_smoothing(p: float, dt: float): float := if p < dt then (p / dt) * (2 - p / dt) - 1
+step_smoothing(p: float, dt: float) as float := if p < dt then (p / dt) * (2 - p / dt) - 1
 else if p > 1 - dt then ((p - 1) / dt) * ((p - 1) / dt + 2) + 1
 else 0.0
 // the seconds at sample i: a float source (decision exact-decimals), so the samples' math runs in f64, not in ratios
 sample_time(i) := i / (sample_rate as float)
 // how far a ramp of that many samples has come after steps: 0 to 1
-ramp(steps: float, samples: float): float := if samples <= 0 then 1.0 else min(1.0, steps / samples)
+ramp(steps: float, samples: float) as float := if samples <= 0 then 1.0 else min(1.0, steps / samples)
 // the level of sample i of n (ADSR): 0 at both ends
 public envelope(i, n) := envelope_at(float(i), float(n), attack_samples(), decay_samples(), release_samples(), float(sustain))
 // the envelope's attack, decay and release in samples, read once a sound
-attack_samples(): float := float(attack) * sample_rate
-decay_samples(): float := float(decay) * sample_rate
-release_samples(): float := float(release) * sample_rate
-envelope_at(i: float, n: float, rise: float, fall: float, end: float, kept: float): float := {
+attack_samples() as float := float(attack) * sample_rate
+decay_samples() as float := float(decay) * sample_rate
+release_samples() as float := float(release) * sample_rate
+envelope_at(i: float, n: float, rise: float, fall: float, end: float, kept: float) as float := {
 	held = if i < rise then 1.0 else 1 - (1 - kept) * ramp(i - rise, fall)
 	ramp(i, rise) * held * ramp(n - 1 - i, end)
 }
@@ -1022,7 +1022,7 @@ wav_bytes(speakers, rate, channels) := {
 }
 pcm_bytes(speakers) := [byte for sample in speakers for byte in little_endian(pcm_sample(sample), 2)]
 // a sample crossing as amplitude + 32768, as the 16 bits of the signed amplitude, low byte first (typed: once a sample)
-pcm_sample(sample: int): int := (min(max(sample - sample_offset, -32768), 32767) + 65536) % 65536
+pcm_sample(sample: int) as int := (min(max(sample - sample_offset, -32768), 32767) + 65536) % 65536
 codes(t) := [ord(c) for c in t]
 hundredths(x) := {
 	n = round(x * 100) as int
@@ -1101,14 +1101,14 @@ class samples {
 // nullary words: a class method reaches no module value
 cell_bytes() := 8
 page_bytes() := 65536
-cell_at(address: int): float := wasm f64.load
+cell_at(address: int) as float := wasm f64.load
 set_cell(address: int, value: float) := wasm f64.store
-count_at(address: int): int := wasm i64.load
+count_at(address: int) as int := wasm i64.load
 set_count_at(address: int, count: int) := wasm i64.store
-memory_pages(): int := wasm memory.size
-grown_pages(pages: int): int := wasm memory.grow
+memory_pages() as int := wasm memory.size
+grown_pages(pages: int) as int := wasm memory.grow
 // n zeroed samples (grown memory is zeroed), never freed
-new_samples(n: int): samples := {
+new_samples(n: int) as samples := {
 	address = memory_pages() * page_bytes
 	grown_pages(cell_bytes * (n + 1) /! page_bytes + 1)
 	set_count_at(address, n)

@@ -3,7 +3,7 @@
 # the words raising an event, `emit tax_rate` and its aliases (Rust twin: words.rs EMIT_WORDS, EMIT_ALIASES)
 emit_words = ["emit", "send", "fire", "trigger", "signal", "ask"]
 # each of them read by event_phrase
-event_readers(): map := {
+event_readers() as map := {
 	readers = {}
 	for word in emit_words { readers[word] = event_phrase }
 	readers
@@ -14,7 +14,7 @@ event_phrases_extension = Extension{name: "event_phrases", keyword_readers: even
 # binding like the operand of a unary minus (`emit missing` raises missing, no test word); ø where an operator
 # follows, the word is then a name (`send alarm{} to "x"`)
 # Rust twin: jumps.rs try_parse_emit
-def event_phrase(p: Parser, word: text): Node := {
+def event_phrase(p: Parser, word: text) as Node := {
 	before = p.at
 	p.at += word.length
 	skip_spaces(p)

@@ -25,7 +25,7 @@ global_word = "global"
 nonlocal_word = "nonlocal"
 
 # the program, its first kind change diagnosed
-kind_changes(program: Node): Node := {
+kind_changes(program: Node) as Node := {
 	results = evident_results(program)
 	global_names = global_variables(program)
 	change = first_kind_change(program, linked_kinds(), results, global_names)
@@ -34,7 +34,7 @@ kind_changes(program: Node): Node := {
 }
 # the kinds of the globals the modules it links hold, as the program had given them: a console's earlier line said
 # `x = 1`, so this line's `x = "a"` is a change (card warp-repl-instance)
-linked_kinds(): map := {
+linked_kinds() as map := {
 	kinds = {}
 	for image in module.linked_images {
 		for entry in image.globals {
@@ -46,16 +46,16 @@ linked_kinds(): map := {
 # the kinds a linked global is checked for, each shown by its own name
 linked_kinds_checked = [ValueKind.Int, ValueKind.Float, ValueKind.Text, ValueKind.List, ValueKind.Bool]
 
-is_define_statement(n: Node): bool := is_operator(n, ":=")
+is_define_statement(n: Node) as bool := is_operator(n, ":=")
 # `(f x) := …`: the name it defines, else ""
-define_statement_name(n: Node): text := {
+define_statement_name(n: Node) as text := {
 	head = key_of(n)
 	if is_group(head) and #head > 0 and head#1 is symbol then name_of(head#1) else ""
 }
-definition_bodies(program: Node): list := nodes_in(program).filter(is_define_statement).map(value_of)
+definition_bodies(program: Node) as list := nodes_in(program).filter(is_define_statement).map(value_of)
 
 # the variables declared `global: y`
-global_variables(program: Node): map := {
+global_variables(program: Node) as map := {
 	found = {}
 	for part in nodes_in(program) {
 		if is_operator(part, ":") and key_of(part) == symbol(global_word) {
@@ -69,7 +69,7 @@ global_variables(program: Node): map := {
 	found
 }
 # `nonlocal: y` and `nonlocal: a, b` among a body's statements
-declared_nonlocals(body: Node): any := {
+declared_nonlocals(body: Node) as any := {
 	found = {}
 	for statement in statements_in(body) {
 		if is_operator(statement, ":") and key_of(statement) == symbol(nonlocal_word) {
@@ -84,7 +84,7 @@ declared_nonlocals(body: Node): any := {
 
 # the kind a value evidently has as written: a literal, a list literal, `v as T`, arithmetic of numbers, or a name or
 # call whose kind `known` gives; "" for anything else
-evident_kind(value: Node, known: map): text := {
+evident_kind(value: Node, known: map) as text := {
 	if value is int { return "Int" }
 	if value is number { return "Float" }
 	if value is text { return "Text" }
@@ -103,12 +103,12 @@ evident_kind(value: Node, known: map): text := {
 }
 
 # the kind of a type word as messages name it, "" for another type
-type_kind(type_name: any): text := if type_name is symbol then entry(shown_kinds, entry(type_kinds, name_of(type_name).lower())) else ""
+type_kind(type_name: any) as text := if type_name is symbol then entry(shown_kinds, entry(type_kinds, name_of(type_name).lower())) else ""
 # the map's entry of the key, "" when it has none (an empty map is ø)
-entry(map: map, key: text): text := if key in map then map[key] else ""
+entry(map: map, key: text) as text := if key in map then map[key] else ""
 
 # the evident kind for kind changes, bools and functions apart (card bool-assign)
-given_kind_of(value: Node, results: map): text := {
+given_kind_of(value: Node, results: map) as text := {
 	if value is bool { return bool_kind }
 	if value is key and op_of(value) in bool_operators { return bool_kind }
 	if is_operator(value, "as") and value_of(value) is symbol and name_of(value_of(value)).lower() in bool_types { return bool_kind }
@@ -117,7 +117,7 @@ given_kind_of(value: Node, results: map): text := {
 }
 
 # the kind a variable that was `was` holds after it is given `becomes`, "" when they do not mix
-mixed_kind(was: text, becomes: text): text := {
+mixed_kind(was: text, becomes: text) as text := {
 	if was == becomes { return was }
 	if was in number_kinds and becomes == bool_kind { return was }
 	if was in number_kinds and becomes in number_kinds { return "Float" }
@@ -126,7 +126,7 @@ mixed_kind(was: text, becomes: text): text := {
 
 # the result kind of variable function whose last expression's kind is evident, its declared parameters known:
 # `f(x: int) := x + 1` gives an Int
-evident_results(program: Node): any := {
+evident_results(program: Node) as any := {
 	results = {}
 	for written in nodes_in(program).filter(is_define_statement) {
 		name = define_statement_name(written)
@@ -145,7 +145,7 @@ evident_results(program: Node): any := {
 	results
 }
 # a `{a; b}` or `a; b` body's last statement, a `{a}` body's only one
-last_expression(body: Node): any := {
+last_expression(body: Node) as any := {
 	if not is_group(body) or #body == 0 { return body }
 	if (bracket_of(body) == "{" or bracket_of(body) == "") and separator_of(body) in statement_separators { return last_expression(body#(#body)) }
 	if bracket_of(body) == "{" and #body == 1 { return last_expression(body#1) }
@@ -154,7 +154,7 @@ last_expression(body: Node): any := {
 
 # the first kind change of the assignments in program order, not into function definitions (their own scopes):
 # `kinds` holds variable variable's evident kind, "" once it was given a value of no evident kind
-first_kind_change(n: Node, kinds: map, results: map, global_names: map): any := {
+first_kind_change(n: Node, kinds: map, results: map, global_names: map) as any := {
 	if is_define_statement(n) {
 		name = define_statement_name(n)
 		if count(name) == 0 { return ø }
@@ -187,7 +187,7 @@ first_kind_change(n: Node, kinds: map, results: map, global_names: map): any := 
 }
 
 # the variable `name` is given `value` of the evident kind `given`: the change as a fact, else ø, its kind noted
-given_kind(name: text, given: text, value: Node, kinds: map): any := {
+given_kind(name: text, given: text, value: Node, kinds: map) as any := {
 	was = if name in kinds then kinds[name] else ø
 	kind = given
 	if was and given {

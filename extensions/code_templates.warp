@@ -11,9 +11,9 @@ computed_mark = "·"
 
 # whether the program's own code (with_used, before the prelude joins it) writes a template: no walk at all without one
 global writes_templates = no
-code_templates(program: Node): Node := if writes_templates then templated(program) else program
+code_templates(program: Node) as Node := if writes_templates then templated(program) else program
 
-templated(n: Node): Node := {
+templated(n: Node) as Node := {
 	if is_quote(n) { return template_of(n) }
 	if is_matcher_call(n) { return n }
 	if is_key(n, Op.Eq) and is_quote(value_of(n)) { return Key(templated(key_of(n)), Op.Eq, value_of(n)) }
@@ -23,7 +23,7 @@ templated(n: Node): Node := {
 
 # `match c { data($a - $b) => data($b - $a) }`, before node_matches binds the names a result mentions: each arm's key
 # a pattern, its result a template
-matched_items(items: list): list := {
+matched_items(items: list) as list := {
 	made = []
 	for at in 1 to #items {
 		block = items#at
@@ -32,23 +32,23 @@ matched_items(items: list): list := {
 	made
 }
 # the block after `match subject` (or after the head `(match subject)`)
-is_arms_block(items: list, at: int): bool := is_curly_group(items#at) and ((at > 2 and items#(at - 2) == symbol("match")) or (at > 1 and is_match_head(items#(at - 1))))
-templated_arm(arm: Node): Node := match arm {
+is_arms_block(items: list, at: int) as bool := is_curly_group(items#at) and ((at > 2 and items#(at - 2) == symbol("match")) or (at > 1 and is_match_head(items#(at - 1))))
+templated_arm(arm: Node) as Node := match arm {
 	Key(pattern, op, result): Key(pattern, op, templated(result))
 	_: templated(arm)
 }
 
-is_matcher_call(n: Node): bool := is_round(n) and #n > 0 and n#1 == symbol(matcher_word)
+is_matcher_call(n: Node) as bool := is_round(n) and #n > 0 and n#1 == symbol(matcher_word)
 
 # `$a` (not `$0`, a function's first parameter): the name a
-hole_name(n: Node): text? := {
+hole_name(n: Node) as text? := {
 	if not (n is symbol) { return ø }
 	name = name_of(n)
 	if #name > 1 and name.starts_with(hole_mark) and not is_digit(name#2) then name[1 ..] else ø
 }
 
 # the `$` of `$(expr)`, which the parser reads as the character
-is_computed_hole_mark(n: Node): bool := match n {
+is_computed_hole_mark(n: Node) as bool := match n {
 	Char(c): "" + c == hole_mark
 	Text(t): t == hole_mark
 	Symbol(name): name == hole_mark
@@ -56,7 +56,7 @@ is_computed_hole_mark(n: Node): bool := match n {
 }
 # the holes of a quote found so far, name → the code of its value
 global template_holes = {}
-template_of(quote: Node): Node := {
+template_of(quote: Node) as Node := {
 	template_holes = {}
 	content = holed(quote#2)
 	if #template_holes.keys == 0 { return quote }
@@ -65,7 +65,7 @@ template_of(quote: Node): Node := {
 }
 
 # the content with each `$(expr)` a numbered hole, every hole remembered; a quote within stays sealed
-holed(n: Node): Node := {
+holed(n: Node) as Node := {
 	if is_quote(n) { return n }
 	name = hole_name(n)
 	if name != ø {
@@ -79,7 +79,7 @@ holed(n: Node): Node := {
 	}
 }
 
-holed_items(items: list): list := {
+holed_items(items: list) as list := {
 	made = []
 	at = 1
 	while at <= #items {
@@ -97,6 +97,6 @@ holed_items(items: list): list := {
 }
 
 # a quote with a hole anywhere, whose filling the prelude gives (prelude_words.warp lowering_words)
-writes_template_in(own: Node): bool := nodes_in(own).any(is_template)
-has_holes(n: Node): bool := hole_name(n) != ø or is_computed_hole_mark(n) or (not is_quote(n) and parts_within(n).any(has_holes))
-is_template(n: Node): bool := is_quote(n) and has_holes(n#2)
+writes_template_in(own: Node) as bool := nodes_in(own).any(is_template)
+has_holes(n: Node) as bool := hole_name(n) != ø or is_computed_hole_mark(n) or (not is_quote(n) and parts_within(n).any(has_holes))
+is_template(n: Node) as bool := is_quote(n) and has_holes(n#2)

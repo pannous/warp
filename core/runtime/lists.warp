@@ -7,7 +7,7 @@ use "errors.warp"
 use "text.warp"
 use "bridge.warp"
 use "instructions.warp"
-list_join(a: list, b: list): list := {
+list_join(a: list, b: list) as list := {
 	out = new_list(#a + #b)
 	copy_items(out, 0, a, 0, #a)
 	copy_items(out, #a, b, 0, #b)
@@ -15,7 +15,7 @@ list_join(a: list, b: list): list := {
 }
 # `a += b`: b's items after a's in a itself, so every alias of a sees them; a full array is replaced by one twice
 # as large, so appending one item at a time copies each item a bounded number of times
-list_append(a: list, b: list): list := {
+list_append(a: list, b: list) as list := {
 	start = #a
 	added = #b
 	if start + added > item_room(a) {
@@ -29,7 +29,7 @@ list_append(a: list, b: list): list := {
 }
 # `n#i` of a value known only at run time, counted from 1: a list's item, a text's character; ø has none ("1 not in
 # an empty list"), any other value fails as "not a list"
-node_at(n: Node, index: int): Node := {
+node_at(n: Node, index: int) as Node := {
 	if is_null(n) { index_out_of_range_of(index, 0) }
 	if is_extended_list(n) { return extended_list_at(n, index) }
 	if is_range(n) { return range_at(n, index) }
@@ -46,9 +46,9 @@ node_at(n: Node, index: int): Node := {
 # a class instance's default position function: its fields in the order its class declares them, `P(2, 3)#1` is 2
 # (card p1-default-position), read from its struct; its extra fields after them, also a declared field
 # holding ø, from its entries. A class's own position function is to come (card class-position-index)
-instance_position(instance: Node, index: int): Node := instance_field_at(instance, index) ?? key_value(unboxed_list(fields_of(instance))#index)
+instance_position(instance: Node, index: int) as Node := instance_field_at(instance, index) ?? key_value(unboxed_list(fields_of(instance))#index)
 # `#n` of a value known only at run time: a list's items, a text's characters, one of a character ("d" of a list)
-node_length(n: Node): int := {
+node_length(n: Node) as int := {
 	# ø, also an empty list `[]` in the lowered program, holds nothing
 	if is_null(n) { return 0 }
 	if is_extended_list(n) { return extended_list_count(n) }
@@ -61,7 +61,7 @@ node_length(n: Node): int := {
 }
 # `xs.pop()`: the last item, dropped from xs in place by lowering its count, so every alias
 # sees the shorter list
-list_pop(xs: list): any := {
+list_pop(xs: list) as any := {
 	last = xs#(#xs)
 	forget_map_index(xs)
 	set_count(xs, #xs - 1)
@@ -69,7 +69,7 @@ list_pop(xs: list): any := {
 }
 # `xs.insert(i, v)`: v at the 0-based position i of xs itself, the items from there one further, so every alias sees
 # it; a position past the end or before 0 appends
-list_insert(xs: list, at: int, value: Node): list := {
+list_insert(xs: list, at: int, value: Node) as list := {
 	one = new_list(1)
 	one#1 = value
 	list_append(xs, one)
@@ -80,7 +80,7 @@ list_insert(xs: list, at: int, value: Node): list := {
 	xs
 }
 # `n#i = value` of a list known only at run time, in the list itself, so every alias sees it
-node_set_at(n: Node, index: int, value: Node): Node := {
+node_set_at(n: Node, index: int, value: Node) as Node := {
 	if kind_code(n) != Kind.List { fail() }
 	if is_extended_list(n) { return extended_list_set(n, index, value) }
 	items = unboxed_list(n)
@@ -89,20 +89,20 @@ node_set_at(n: Node, index: int, value: Node): Node := {
 	value
 }
 # `int[n]`: a list of count zeros
-zero_fill(count: int, filler: Node): list := {
+zero_fill(count: int, filler: Node) as list := {
 	out = new_list(count)
 	for i in 1 to count { out#i = filler }
 	out
 }
 # `sum(xs)` as `list_sum(xs, loop)`: the loop the lowering wrote gives it
-list_sum(xs: list, computed: Node): Node := computed
+list_sum(xs: list, computed: Node) as Node := computed
 # The indexes of the big maps looked up last (maps.warp map_index; card rebuild-speed), one per slot: the entries
 # indexed and the table (each wrapped as a list's node), how many entries the table covers (ø or -1: the slot is free)
 # and whether it was looked up since the clock hand last passed it (1, else 0). An index stays right while entries are only added at
 # the end (the next lookup takes them on) or replaced by one of the same name (field_with); any other change in place
 # (map_without, node_set_at, list_pop) forgets that index alone. Four slots were too few: the emitter looks up more big
 # maps (its functions, runtime words, globals, kinds) between two lookups of its texts, whose index was made anew each time
-index_slots(): int := 64
+index_slots() as int := 64
 # (a runtime global list starts empty, whatever it is given: the slots are made at the first lookup, index_slot)
 global index_entries = []
 global index_tables = []
@@ -116,10 +116,10 @@ global index_hand = 0
 # and forth (10% of map_index)
 global index_last = 0
 global index_previous = 0
-slot_free(slot: int): bool := is_null(index_covered#slot) or unboxed_int(index_covered#slot) < 0
-holds_entries(slot: int, entries: list): bool := not is_null(index_entries#slot) and same(unboxed_list(index_entries#slot), entries) and not slot_free(slot)
+slot_free(slot: int) as bool := is_null(index_covered#slot) or unboxed_int(index_covered#slot) < 0
+holds_entries(slot: int, entries: list) as bool := not is_null(index_entries#slot) and same(unboxed_list(index_entries#slot), entries) and not slot_free(slot)
 # the slot holding these entries' index, 0 for none
-index_slot(entries: list): int := {
+index_slot(entries: list) as int := {
 	if index_last > 0 and holds_entries(index_last, entries) {
 		# marked again only when the clock hand cleared it: a write at every lookup boxed the mark anew
 		if unboxed_int(index_used#index_last) == 0 { index_used#index_last = 1 }
@@ -138,7 +138,7 @@ index_slot(entries: list): int := {
 	0
 }
 # the slot found, now the last, marked looked up for least_recent_slot
-found_slot(slot: int): int := {
+found_slot(slot: int) as int := {
 	if slot != index_last { index_previous = index_last }
 	index_last = slot
 	index_used#slot = 1
@@ -146,7 +146,7 @@ found_slot(slot: int): int := {
 }
 # a slot found by the search swapped halfway to the front, so the maps looked up most sit where the search starts
 # (it compared each slot in turn: 5% of compiling compiler.warp); its new place
-slot_moved_forward(slot: int): int := {
+slot_moved_forward(slot: int) as int := {
 	to = max_int(int_quotient(slot, 2), 1)
 	swapped(index_entries, slot, to)
 	swapped(index_tables, slot, to)
@@ -157,7 +157,7 @@ slot_moved_forward(slot: int): int := {
 	if index_previous == to { index_previous = slot }
 	to
 }
-swapped(items: list, a: int, b: int): int := {
+swapped(items: list, a: int, b: int) as int := {
 	held = items#a
 	items#a = items#b
 	items#b = held
@@ -165,7 +165,7 @@ swapped(items: list, a: int, b: int): int := {
 }
 # the slot a new map's index takes: the next free one or one not looked up since the hand last passed it, the hand
 # clearing the mark of each it passes (within two turns one is found)
-least_recent_slot(): int := {
+least_recent_slot() as int := {
 	for turn in 1 to 2 * index_slots() {
 		index_hand = int_remainder(index_hand, index_slots()) + 1
 		if slot_free(index_hand) or unboxed_int(index_used#index_hand) == 0 { return index_hand }
@@ -173,11 +173,11 @@ least_recent_slot(): int := {
 	}
 	index_hand
 }
-slot_table(slot: int): list := unboxed_list(index_tables#slot)
-slot_covered(slot: int): int := unboxed_int(index_covered#slot)
+slot_table(slot: int) as list := unboxed_list(index_tables#slot)
+slot_covered(slot: int) as int := unboxed_int(index_covered#slot)
 # a slot holding the entries' index, marked looked up; written only when it changed: a lookup that found the index
 # as it was wrapped the lists anew at every lookup
-hold_index(slot: int, entries: list, covered: int, table: list): int := {
+hold_index(slot: int, entries: list, covered: int, table: list) as int := {
 	found_slot(slot)
 	if not holds_entries(slot, entries) or slot_covered(slot) != covered or not same(slot_table(slot), table) {
 		index_entries#slot = list_node(Kind.List, entries)
@@ -187,41 +187,41 @@ hold_index(slot: int, entries: list, covered: int, table: list): int := {
 	0
 }
 # the index of these entries forgotten, after a change in place an index cannot follow; the other maps keep theirs
-forget_map_index(entries: list): int := {
+forget_map_index(entries: list) as int := {
 	slot = index_slot(entries)
 	if slot > 0 { index_covered#slot = -1 }
 	0
 }
 # a list node's kind (kinds.warp ListKind): 0 of a list holding its $list, else the row of a range or an extension's list
-list_kind(n: Node): int := if is_null(n) or kind_code(n) != Kind.List then 0 else int_remainder(int_quotient(marked_kind(n), list_kind_unit()), 4)
+list_kind(n: Node) as int := if is_null(n) or kind_code(n) != Kind.List then 0 else int_remainder(int_quotient(marked_kind(n), list_kind_unit()), 4)
 # kinds.warp's KindUnit.ListKind, KindUnit.ListCell and ListKind.Range as numbers: the seed that builds the runtime
 # first knows only its own tables' keys (card once-refreshed)
-list_kind_unit(): int := 4503599627370496
-list_cell_unit(): int := 144115188075855872
-range_kind(): int := 1
+list_kind_unit() as int := 4503599627370496
+list_cell_unit() as int := 144115188075855872
+range_kind() as int := 1
 # a list of an extension's kind, whose words runtime/bridge.warp's list hooks reach (a GPU list: extensions/gpu_lists)
-is_extended_list(n: Node): bool := list_kind(n) > range_kind()
+is_extended_list(n: Node) as bool := list_kind(n) > range_kind()
 # A range `1 to n`, `1..n` (decision lazy-range-value): a list node of ListKind.Range holding its two ends and no
 # items; #, xs#i and sum answer from the ends, any other list word makes its items (unlisted_items)
-range_value(first: int, last: int): Node := keyed(Kind.List + BracketCode.Square * KindUnit.Info + range_kind() * list_kind_unit(), fresh_int_node(first), fresh_int_node(last))
-is_range(n: Node): bool := list_kind(n) == range_kind()
-range_first(n: Node): int := unboxed_int(entry_key(n))
-range_count(n: Node): int := max_int(unboxed_int(key_value(n)) - range_first(n) + 1, 0)
-range_at(n: Node, index: int): Node := {
+range_value(first: int, last: int) as Node := keyed(Kind.List + BracketCode.Square * KindUnit.Info + range_kind() * list_kind_unit(), fresh_int_node(first), fresh_int_node(last))
+is_range(n: Node) as bool := list_kind(n) == range_kind()
+range_first(n: Node) as int := unboxed_int(entry_key(n))
+range_count(n: Node) as int := max_int(unboxed_int(key_value(n)) - range_first(n) + 1, 0)
+range_at(n: Node, index: int) as Node := {
 	if index < 1 or index > range_count(n) { index_out_of_range_of(index, range_count(n)) }
 	fresh_int_node(range_first(n) + index - 1)
 }
-range_items(n: Node): list := {
+range_items(n: Node) as list := {
 	out = new_list(range_count(n))
 	for i in 1 to #out { out#i = range_at(n, i) }
 	out
 }
 # Gauss's sum, count · (first + last) / 2, halving whichever of the two is even
-range_sum(n: Node): Node := {
+range_sum(n: Node) as Node := {
 	count = range_count(n)
 	ends = range_first(n) + unboxed_int(key_value(n))
 	if int_remainder(count, 2) == 0 then grown_product(int_quotient(count, 2), ends) else grown_product(count, int_quotient(ends, 2))
 }
 # the items of a list node whose data is no $list (emitter unboxed_list_code): a range's made, an extension's as its
 # kind gives them (a GPU list refuses)
-unlisted_items(n: Node): list := if is_range(n) then range_items(n) else extended_list_unlisted(n)
+unlisted_items(n: Node) as list := if is_range(n) then range_items(n) else extended_list_unlisted(n)

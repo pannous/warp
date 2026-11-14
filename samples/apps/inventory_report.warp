@@ -12,7 +12,7 @@ B-201,Duct tape,Shelf B,25,349,10
 C-300,Pallet wrap,Dock,4,1899,6
 C-301,Cardboard box L,Dock,150,120,50"
 
-def cents(n: int): text {
+def cents(n: int) as text {
 	t = text(n)
 	while #t < 3 { t = "0" + t }
 	t[0..<#t - 2] + "." + t[#t - 2..<#t]

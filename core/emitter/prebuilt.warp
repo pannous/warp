@@ -3,7 +3,7 @@ PRELUDE_MODULE = "prelude"
 # runtime.wasm (emitter.warp's part; card runtime-prebuilt, notes/runtime_linking.md "runtime.wasm format"): every
 # runtime word compiled once, no program deciding its kinds or what it makes, and the hooks a program gives the code of
 # the module of the runtime words alone, its bytes: read again while a reading leaves out a word more
-runtime_wasm_module(runtime: Node, host: map): any := {
+runtime_wasm_module(runtime: Node, host: map) as any := {
 	module.prebuilding = yes
 	module.relocating = yes
 	module.left_out = {}
@@ -18,12 +18,12 @@ runtime_wasm_module(runtime: Node, host: map): any := {
 # runtime.wasm: any other word left out would vanish from every program built on it, as an older seed's runtime of
 # newer sources lost read_file (a word reaching a new enum case it does not know; card seed-compiles), the build
 # failing much later as "no field read_file". Refused, saying why
-is_programs_method(name: text): bool := {
+is_programs_method(name: text) as bool := {
 	owner = name.split("·")#1
 	name.contains("·") and not module.enum_cases.has(owner) and not module.classes.has(owner)
 }
 # (the first few words and why: one cause usually drops hundreds of callers, a table case named by the first)
-dropped_words_refusal(dropped: list): text := {
+dropped_words_refusal(dropped: list) as text := {
 	why = dropped[0 ..< min(3, #dropped)].map(name => name + " (" + module.left_out[name] + ")").join(", ")
 	more = if #dropped > 3 then " and " + (#dropped - 3) + " more words" else ""
 	"runtime.wasm would leave out " + why + more + ": this compiler cannot compile the runtime it builds; an older seed than its sources? scripts/refresh-seed.sh makes a newer one"
@@ -31,7 +31,7 @@ dropped_words_refusal(dropped: list): text := {
 # every word compiled in name order, but those outside the core on their own (an enum's method naming the program's
 # enum): left out, and named in warp.runtime, for a program to compile as today; then the closure calls of each arity
 # up to hook_arities and the late words, which call through a closure's entry or an instance's descriptor
-def prebuilt_runtime(): any {
+def prebuilt_runtime() as any {
 	left = #module.left_out.keys
 	for name in module.runtime.keys {
 		f = module.runtime[name]
@@ -69,14 +69,14 @@ def prepend_runtime(wasm: any) {
 	raisers_read = ø
 	fingerprint_read = ø
 }
-def prepended(): bool { module.runtime_image != ø and not module.prebuilding }
+def prepended() as bool { module.runtime_image != ø and not module.prebuilding }
 # whether the code's index operands are emitted relocatable (padded, marked): in a prebuilt module (relocating), and
 # in a program that is also written as a separate module (relocates_program; linked_bytes moves them to its numbering)
 def relocate_program(wanted: bool) { module.relocates_program = wanted }
-def relocates(): bool { module.relocating or module.relocates_program or module.shakes_runtime }
+def relocates() as bool { module.relocating or module.relocates_program or module.shakes_runtime }
 # its layout, the binary warp.runtime: the counts, the left words' names, each global's name and kind, each
 # word's name, index, parameter kinds and result kind
-def runtime_image_of(wasm: list): any {
+def runtime_image_of(wasm: list) as any {
 	place = section_place(wasm, section_ids.custom, runtime_section)
 	if place == ø { throw "runtime.wasm without its " + runtime_section + " section: warp rebuild writes it anew" }
 	layout = ByteReader(wasm, place#1)
@@ -103,7 +103,7 @@ def runtime_image_of(wasm: list): any {
 	RuntimeImage(wasm, types, imports, functions, segments, globals, {}, entries, places, {})
 }
 # a word's entry after its name, as runtime_image_of writes it: its index, parameter kinds, result kind and signature
-def word_read(reader: ByteReader): list {
+def word_read(reader: ByteReader) as list {
 	index = read_number(reader)
 	kinds = []
 	for j in 0..<read_number(reader) { kinds += [read_kind(reader)] }
@@ -127,10 +127,10 @@ def skipped_name(reader: ByteReader) {
 	reader.offset += count
 }
 # a name's bucket of runtime_image_of's places: its length, first and last byte, of the `count` bytes from `at`
-def word_key(bytes: list, at: int, count: int): int := if count == 0 then 0 else count * 65536 + bytes[at] * 256 + bytes[at + count - 1]
+def word_key(bytes: list, at: int, count: int) as int := if count == 0 then 0 else count * 65536 + bytes[at] * 256 + bytes[at + count - 1]
 # runtime.wasm's word of the name, [index, parameter kinds, result kind, signature], read at its first asking; ø
 # where it has none
-def runtime_word_entry(name: text): any {
+def runtime_word_entry(name: text) as any {
 	image = module.runtime_image
 	if image.words.has(name) { return image.words[name] }
 	if image.missing.has(name) { return ø }
@@ -144,25 +144,25 @@ def runtime_word_entry(name: text): any {
 }
 # a reading of bytes from a place on: LEB128 numbers, names (a length and UTF-8 bytes), kinds (held_kinds' places)
 class ByteReader { bytes: list; offset: int }
-def read_number(reader: ByteReader): int {
+def read_number(reader: ByteReader) as int {
 	read = uleb_read(reader.bytes, reader.offset)
 	reader.offset = read#2
 	read#1
 }
-def read_name(reader: ByteReader): text {
+def read_name(reader: ByteReader) as text {
 	count = read_number(reader)
 	name = utf8_text(reader.bytes[reader.offset ..< reader.offset + count])
 	reader.offset += count
 	name
 }
-def read_names(reader: ByteReader): list {
+def read_names(reader: ByteReader) as list {
 	names = []
 	for i in 0..<read_number(reader) { names += [read_name(reader)] }
 	names
 }
-def read_kind(reader: ByteReader): ValueKind { held_kinds[read_number(reader)] }
+def read_kind(reader: ByteReader) as ValueKind { held_kinds[read_number(reader)] }
 # a global of warp.runtime or warp.module: [name, kind, mark]
-def read_global(reader: ByteReader): list := [read_name(reader), read_kind(reader), read_number(reader)]
+def read_global(reader: ByteReader) as list := [read_name(reader), read_kind(reader), read_number(reader)]
 # a prebuilt global declared, its int type's mark kept, as the module that built it held it; a typed one keeps its type
 # where a program uses it too, `canvas_width * canvas_height` of draw's ints staying i64 (card inside-linked)
 def declared_linked_global(entry: list) {
@@ -170,7 +170,7 @@ def declared_linked_global(entry: list) {
 	if entry#3 != 0 { module.global_marks[entry#1] = entry#3 }
 	if #entry > 3 and entry#4 { module.declared_globals[entry#1] = entry#2 }
 }
-def read_signature(reader: ByteReader): any {
+def read_signature(reader: ByteReader) as any {
 	parameters = []
 	for i in 0..<read_number(reader) {
 		name = read_name(reader)
@@ -183,12 +183,12 @@ def read_signature(reader: ByteReader): any {
 }
 # the kinds a function or global of runtime.wasm holds, each written as its place here
 held_kinds = [ValueKind.Int, ValueKind.Float, ValueKind.Bool, ValueKind.Char, ValueKind.I32, ValueKind.Text, ValueKind.List, ValueKind.Node, ValueKind.Time, ValueKind.Nothing]
-def held_code(kind: ValueKind): int {
+def held_code(kind: ValueKind) as int {
 	for i in 0..<#held_kinds { if held_kinds[i] == kind { return i } }
 	throw "runtime.wasm holds no " + kind + " value"
 }
 # UTF-8 bytes as their text, a code point at a time
-def utf8_text(bytes: list): text {
+def utf8_text(bytes: list) as text {
 	characters = []
 	i = 0
 	while i < #bytes {
@@ -216,7 +216,7 @@ def behind_runtime() {
 }
 # the runtime's imports, as runtime_wasm_module declared them: WASI's fd_write, then every host word
 # then the program's C functions, which move the runtime's functions up by their count (runtime_shift)
-def runtime_imports(host: map): list {
+def runtime_imports(host: map) as list {
 	held = module.host
 	module.host = host
 	imports = imported_words(host.keys.filter(name => not is_c_function(host[name])), yes)
@@ -225,7 +225,7 @@ def runtime_imports(host: map): list {
 	module.host = held
 	imports
 }
-def runtime_shift(): int := #module.imports - module.runtime_image.imports
+def runtime_shift() as int := #module.imports - module.runtime_image.imports
 # the runtime words a program calls: runtime.wasm's, each at its index, of its kinds and signature; none is lowered or
 # compiled again (the runtime's sources are read only to build runtime.wasm). Each is made at its first asking
 # (runtime_word), once its index is known: from here on, the imports placed
@@ -245,20 +245,20 @@ def runtime_word(name: text): Function? {
 	module.runtime[name] = f
 	f
 }
-def has_runtime_word(name: text): bool := runtime_word(name) != ø
+def has_runtime_word(name: text) as bool := runtime_word(name) != ø
 
 # the content of runtime.wasm's section of this id, a custom one by its name; the vector it holds with more entries
-def runtime_part(id: int, name: text = ""): list {
+def runtime_part(id: int, name: text = "") as list {
 	place = section_place(module.runtime_image.wasm, id, name)
 	module.runtime_image.wasm[place#1 ..< place#2]
 }
-def with_section_entries(content: list, more: list): list {
+def with_section_entries(content: list, more: list) as list {
 	count = uleb_read(content, 0)
 	uleb(count#1 + #more) + content[count#2 ..] + concatenated(more)
 }
 # the runtime's code, each call of a runtime function moved by the C functions' imports (not those of host words); a
 # call of a host word too when some are dropped
-def rebased_runtime_code(): list {
+def rebased_runtime_code() as list {
 	content = runtime_part(section_ids.code)
 	if runtime_shift() == 0 and not drops_imports() { return content }
 	sites = if drops_imports() then operand_sites(relocated.calls) else runtime_call_sites()
@@ -266,7 +266,7 @@ def rebased_runtime_code(): list {
 }
 # the code section's content: the runtime's functions, then the program's functions, each body knowing where it starts
 # (its relocations' offsets)
-def prepended_code(functions: list): list {
+def prepended_code(functions: list) as list {
 	if shaken() {
 		moves = shaken_moves()
 		bodies = shaken_runtime_code(moves) + functions.map(f => moved_body(f, moves))
@@ -283,7 +283,7 @@ def prepended_code(functions: list): list {
 	content
 }
 # a subsection of runtime.wasm's names by its id, its content (an empty vector when it has none); with more entries
-def runtime_subsection(id: int): list {
+def runtime_subsection(id: int) as list {
 	content = runtime_part(section_ids.custom, "name")
 	at = 0
 	while at < #content {
@@ -293,9 +293,9 @@ def runtime_subsection(id: int): list {
 	}
 	uleb(0)
 }
-def runtime_names(id: int, more: list): list { subsection(id, with_section_entries(runtime_subsection(id), more)) }
+def runtime_names(id: int, more: list) as list { subsection(id, with_section_entries(runtime_subsection(id), more)) }
 # the runtime's local names, each function's moved by runtime_shift, then more
-def shifted_locals(content: list, more: list): list {
+def shifted_locals(content: list, more: list) as list {
 	if runtime_shift() == 0 and not shaken() and not drops_imports() { return with_section_entries(content, more) }
 	count = uleb_read(content, 0)
 	at = count#2
@@ -310,7 +310,7 @@ def shifted_locals(content: list, more: list): list {
 	uleb(#entries + #more) + concatenated(entries) + concatenated(more)
 }
 # where a name map (a vector of index and name) that starts at `at` ends
-def name_map_end(content: list, at: int): int {
+def name_map_end(content: list, at: int) as int {
 	count = uleb_read(content, at)
 	at = count#2
 	for i in 0..<count#1 {
@@ -320,8 +320,8 @@ def name_map_end(content: list, at: int): int {
 	}
 	at
 }
-def own_function_type(f: Function): int := module.runtime_image.types + #module.gc_order - #gc_names + f.index - #module.imports - module.runtime_image.functions
-def prepended_bytes(functions: list): list {
+def own_function_type(f: Function) as int := module.runtime_image.types + #module.gc_order - #gc_names + f.index - #module.imports - module.runtime_image.functions
+def prepended_bytes(functions: list) as list {
 	if module.shakes_runtime and not module.relocating { module.shaking = shaking_of(functions) }
 	forget_import_drop()
 	if relocates() and not module.relocating and not shaken() { drop_imports(functions) }
@@ -347,21 +347,21 @@ def prepended_bytes(functions: list): list {
 	made
 }
 # the program's C functions, imported behind the runtime's host words; their types after every other: no runtime type moves
-def c_imports(): list { module.imports[module.runtime_image.imports ..] }
-def c_import_types(): list { c_imports().map(entry => entry#3) }
-def c_import_entries(first_type: int): list {
+def c_imports() as list { module.imports[module.runtime_image.imports ..] }
+def c_import_types() as list { c_imports().map(entry => entry#3) }
+def c_import_entries(first_type: int) as list {
 	imports = c_imports()
 	range_list(#imports).map(k => name_bytes(imports[k]#1) + name_bytes(imports[k]#2) + [import_function_byte] + uleb(first_type + k))
 }
 # what the harness reads of a program: whether it counts fuel, its C functions
-def program_marks(): list {
+def program_marks() as list {
 	fuel = if module.counts_fuel then section(section_ids.custom, name_bytes(fuel_section)) else []
 	fuel + c_functions_custom_section()
 }
 # runtime.wasm's names and the program's behind them
 # each runtime word kept, its index and name as warp.runtime holds the name (its length and UTF-8 bytes, as
 # module_layout.warp index_name writes it), no text made of it
-def runtime_word_names(): list {
+def runtime_word_names() as list {
 	wasm = module.runtime_image.wasm
 	names = []
 	for at in module.runtime_image.entries {
@@ -371,7 +371,7 @@ def runtime_word_names(): list {
 	}
 	names
 }
-def prepended_names(functions: list, classes: list, own_globals: list): list {
+def prepended_names(functions: list, classes: list, own_globals: list) as list {
 	imported = range_list(#module.imports).filter(i => import_kept(i)).map(i => index_name(import_place(i), module.imports#(i + 1)#2)) + stub_names()
 	words = runtime_word_names()
 	content = subsection(names_subsections.functions, vector(imported + words + functions.map(f => index_name(f.index, f.name))))
@@ -389,23 +389,23 @@ def prepended_names(functions: list, classes: list, own_globals: list): list {
 # where the module's own items start in each index space (relocated): behind the runtime's imports and functions,
 # types, globals and text segments
 # (its functions behind its C imports too, which follow the runtime's)
-def own_items_from(): list := [runtime_counts()#1 + #c_imports()] + runtime_counts()[1 ..]
-def runtime_counts(): list := [module.runtime_image.imports + module.runtime_image.functions, module.runtime_image.types, #module.runtime_image.globals, module.runtime_image.data]
+def own_items_from() as list := [runtime_counts()#1 + #c_imports()] + runtime_counts()[1 ..]
+def runtime_counts() as list := [module.runtime_image.imports + module.runtime_image.functions, module.runtime_image.types, #module.runtime_image.globals, module.runtime_image.data]
 # what a module was built behind: where its items start, and runtime.wasm itself by its fingerprint; a runtime of the
 # same counts in another order (the seed's own beside lib/'s) moves its words, so a module of another one is refused
-def runtime_behind(): list := runtime_counts() + [runtime_fingerprint()]
+def runtime_behind() as list := runtime_counts() + [runtime_fingerprint()]
 # runtime.wasm's code folded to one number, as `warp runtime` wrote it in its warp.fingerprint (folding its bytes at
 # every compile linking a module was ~6 % of hello's); once per runtime (prepend_runtime forgets it)
 global fingerprint_read = ø
 fingerprint_section = "warp.fingerprint"
-def runtime_fingerprint(): int {
+def runtime_fingerprint() as int {
 	if fingerprint_read != ø { return fingerprint_read }
 	place = section_place(module.runtime_image.wasm, section_ids.custom, fingerprint_section)
 	if place == ø { throw "runtime.wasm without its " + fingerprint_section + " section: warp rebuild writes it anew" }
 	fingerprint_read = uleb_read(module.runtime_image.wasm, place#1)#1
 	fingerprint_read
 }
-def folded_bytes(bytes: list): int {
+def folded_bytes(bytes: list) as int {
 	folded = 0
 	# `part`, not `byte`: `for byte in xs` walks xs.bytes (decision text-unit-plurals)
 	for part in bytes { folded = (folded * 257 + part) % 1000000007 }
@@ -452,31 +452,31 @@ def link_libraries(images: list, own_names: list) {
 global linked_extended = {}
 # the words a linked module wrote, by name: its definitions, never what its compile generated (each class's
 # +·operator dispatcher, its _start)
-written_words(name: text): map := {
+written_words(name: text) as map := {
 	words = {}
 	signature = linked_signature(name)
 	if signature != ø { for slice in signature.slices { words["${slice#1}"] = yes } }
 	words
 }
 # the images, the prelude's last: a word is bound to the first of them defining it
-by_precedence(images: list): list := images.filter(image => image.name != PRELUDE_MODULE) + images.filter(image => image.name == PRELUDE_MODULE)
+by_precedence(images: list) as list := images.filter(image => image.name != PRELUDE_MODULE) + images.filter(image => image.name == PRELUDE_MODULE)
 # a module's word a program may call: not one of the builders it exports for the host (its show(x) is the host's,
 # beside draw's own show()), which a program linking it exports its own of, nor a runtime module's, which only the
 # emitter calls (linked_word), as it calls runtime.wasm's: big_numbers' two_to(power: int) is no word of machine_math's
-linkable(image: LibraryImage, word: Function): bool := word.name not in image.builders and not is_runtime_module(image.name)
+linkable(image: LibraryImage, word: Function) as bool := word.name not in image.builders and not is_runtime_module(image.name)
 # the variant of a linked name that takes that many values (card module-export-arity), ø for none
-linked_variant(name: text, parameters: int): any := {
+linked_variant(name: text, parameters: int) as any := {
 	fitting = (module.linked_words.get(name) ?? []).filter(word => #word.kinds == parameters)
 	if #fitting == 0 then ø else fitting#1
 }
 # whether the module's word is the one the program's declaration binds to: the dispatcher's covering module's
 # (methods.warp linked_stand_in), else the first variant taking as many values
-binds_variant(image: LibraryImage, word: Function, f: Function): bool := {
+binds_variant(image: LibraryImage, word: Function, f: Function) as bool := {
 	chosen = module.dispatcher_images.get(word.name)
 	if chosen != ø then chosen == image.name and #word.kinds == #f.signature.parameters else linked_variant(word.name, #f.signature.parameters) == word
 }
 # a call of a linked name with a count of values none of its variants takes: refused naming theirs, never another's
-linked_arity_refusal(name: text, parameters: int): text := name + " of " + parameters + " values is no word of its linked module, whose " + name + " takes " + module.linked_words[name].map(word => "" + #word.kinds).join(" or ") + " values"
+linked_arity_refusal(name: text, parameters: int) as text := name + " of " + parameters + " values is no word of its linked module, whose " + name + " takes " + module.linked_words[name].map(word => "" + #word.kinds).join(" or ") + " values"
 # the program's own definitions, as parsed (a line holding several, `use units; m(x) := 7; m(1)`, the source's slices
 # miss): never a linked module's word
 def own_words_unlinked(names: list) {
@@ -490,25 +490,25 @@ def own_words_unlinked(names: list) {
 # the names the program needs of a linked module even when it never says them: all its classes, of a module built
 # before its words' reaches were recorded; of any other only what the words the program reaches reach (linked_reaches,
 # decision link-modules-lazily: `use units; 1` brings none of units' 37 classes)
-def linked_needs(): list {
+def linked_needs() as list {
 	names = []
 	# (never its globals: each is imported from the module, whose warp/start ran its initializer; brought, every
 	# program ran the prelude's tables again, half of hello's compile)
 	for image in module.linked_images.filter(image => not records_reaches(image.name)) { names += image_class_names(image) }
 	names
 }
-records_reaches(module_name: text): bool := {
+records_reaches(module_name: text) as bool := {
 	signature = linked_signature(module_name)
 	signature != ø and signature.reaches != ø
 }
-image_class_names(image: LibraryImage): list := image.classes.map(entry => entry#1[#instance_struct_prefix ..])
+image_class_names(image: LibraryImage) as list := image.classes.map(entry => entry#1[#instance_struct_prefix ..])
 # the classes of the linked modules by name; what each of their words reaches, by each name a program says it by
 # (word_reaches), all modules' merged; and the class each method belongs to (word_owners), which with_reached waits for:
 # read once a link
 # (read where a parameter named module hides the module: prelude_words.warp with_reached)
-linked_class_set(): map := module.linked_class_names
-linked_reaches(): map := module.linked_reach
-linked_owner(word: text): text? := module.linked_owners.get(word)
+linked_class_set() as map := module.linked_class_names
+linked_reaches() as map := module.linked_reach
+linked_owner(word: text) as text? := module.linked_owners.get(word)
 def read_linked_reaches() {
 	module.linked_class_names = word_set(concatenated(module.linked_images.map(image_class_names)))
 	module.linked_reach = {}
@@ -522,7 +522,7 @@ def read_linked_reaches() {
 # constructor's class too (Graph·new says Graph), under each name the program reaches it by (word_names), so a program
 # linking the module brings what the words it reaches need, a body being declared only there (`str(6.0 ± 0.3)` the
 # Interval its ± makes); a closure's under its own name, which its word's body says
-word_reaches(functions: list, classes: list): map := {
+word_reaches(functions: list, classes: list) as map := {
 	global said
 	own = reaching_words(functions)
 	known = word_set(classes + module.linked_class_names.keys)
@@ -539,7 +539,7 @@ word_reaches(functions: list, classes: list): map := {
 }
 # the class each method of the module being built belongs to, its receiver's (pop·Stack, Stack; format·text·Quantity,
 # Quantity): a program's dispatcher reaches that variant only once it reaches the class
-word_owners(functions: list, classes: list): map := {
+word_owners(functions: list, classes: list) as map := {
 	known = word_set(classes + module.linked_class_names.keys)
 	owners = {}
 	for f in reaching_words(functions) {
@@ -548,15 +548,15 @@ word_owners(functions: list, classes: list): map := {
 	}
 	owners
 }
-reaching_words(functions: list): list := functions[1 ..].filter(f => not f.is_runtime and f.body != ø)
+reaching_words(functions: list) as list := functions[1 ..].filter(f => not f.is_runtime and f.body != ø)
 # the names a program reaches a word by: its own, the word it was written as (graph_of of the arity overload
 # graph_of·2, operator_± of the typed one operator_±·number·number: arity_overloads.warp variant_written_names), and
 # its class's, a method's or a constructor's (next·Channel and Graph·new under Channel and Graph)
-word_names(f: Function, known: map, makes: map): list := [f.name, written_word(f), method_class(f, known) ?? makes.get(f.name)].filter(name => name != ø and name != "")
-written_word(f: Function): text? := variant_written_names.get(f.name)
-method_class(f: Function, known: map): text? := if #f.signature.parameters > 0 and known.has(f.signature.parameters#1.type_name) then f.signature.parameters#1.type_name else ø
+word_names(f: Function, known: map, makes: map) as list := [f.name, written_word(f), method_class(f, known) ?? makes.get(f.name)].filter(name => name != ø and name != "")
+written_word(f: Function) as text? := variant_written_names.get(f.name)
+method_class(f: Function, known: map) as text? := if #f.signature.parameters > 0 and known.has(f.signature.parameters#1.type_name) then f.signature.parameters#1.type_name else ø
 # each class by the names that make one (classes.warp constructor_name, made_name, a struct made in place)
-made_classes(classes: list): map := {
+made_classes(classes: list) as map := {
 	makes = {}
 	for name in classes { for made in [constructor_name(name), made_name(name), instance_struct_prefix + name] { makes[made] = name } }
 	makes
@@ -564,7 +564,7 @@ made_classes(classes: list): map := {
 # a linked module's image, the part of its warp.signature (signature.warp) its linked form's compile writes: its
 # words (each name, parameter kinds, result kind), its globals [name, kind, mark], its own class structs [name,
 # definition written], the host's builders it exports (by name) and the runtime it was built behind
-def image_fields(functions: list): list {
+def image_fields(functions: list) as list {
 	images_classes = concatenated(module.linked_images.map(image => image.classes.map(entry => entry#1)))
 	own_classes = module.gc_order[#gc_names ..].filter(name => name not in images_classes)
 	own_class_names = own_classes.map(name => name[#instance_struct_prefix ..])
@@ -581,13 +581,13 @@ def image_fields(functions: list): list {
 }
 # the classes each dispatcher the module exports tells apart (methods.warp covered_classes), each list one text: a
 # program binds its own dispatcher of the name to it when these cover its classes (linked_stand_in)
-dispatched_written(functions: list): map := {
+dispatched_written(functions: list) as map := {
 	written = {}
 	for f in functions.filter(f => module.class_dispatchers.has(f.name)) { written[f.name] = module.class_dispatchers[f.name].join(" ") }
 	written
 }
 # the image of a linked module read back from its signature; why it is not linkable behind this runtime, a text
-def library_image_of(name: text, signature: ModuleSignature): any {
+def library_image_of(name: text, signature: ModuleSignature) as any {
 	if #signature.words == 0 { return "no words in its " + SIGNATURE_SECTION + " (built before L5e)" }
 	if signature.runtime.map(number_read) != runtime_behind() { return "built behind another runtime.wasm (warp rebuild writes it anew)" }
 	functions = signature.words.map(entry => image_word(entry))
@@ -597,14 +597,14 @@ def library_image_of(name: text, signature: ModuleSignature): any {
 	for entry in globals { global_names[entry#1] = yes }
 	LibraryImage(name, functions, globals, classes, signature.builders.map(text_read), [], global_names)
 }
-def image_word(entry: Node): Function {
+def image_word(entry: Node) as Function {
 	word = Function(text_read(entry#1), ø, ø)
 	word.kinds = items_of(entry#2).map(code => held_kinds[number_read(code)])
 	word.result = held_kinds[number_read(entry#3)]
 	word
 }
-def text_read(n: Node): text := "${n}"
-def number_read(n: Node): int := int("${n}")
+def text_read(n: Node) as text := "${n}"
+def number_read(n: Node) as int := int("${n}")
 # each linked module's place: its functions numbered behind those placed so far (the program imports those it calls),
 # its globals declared by name (one the runtime or a module before it declares is theirs)
 def behind_libraries() {
@@ -683,10 +683,10 @@ def bind_written_variants(image: LibraryImage) {
 # a slice of a class's head line, `class Instant {…}`: its text tested whole only when it starts so (leading_name counts
 # a text's characters at each of its own)
 class_head = "class"
-class_slice_reached(slice: list): bool := building_a_module() or linked_classes_reached.has("${slice#1}")
-is_class_slice(text: text): bool := text.starts_with(class_head) and leading_name(text) == class_head
+class_slice_reached(slice: list) as bool := building_a_module() or linked_classes_reached.has("${slice#1}")
+is_class_slice(text: text) as bool := text.starts_with(class_head) and leading_name(text) == class_head
 # [name, parameter types] of each definition a module's statement writes, a class's methods with their receiver first
-written_definitions(code: Node): list := {
+written_definitions(code: Node) as list := {
 	found = []
 	for statement in statements_in(code) {
 		call = definition_call(statement)
@@ -714,7 +714,7 @@ def linked_word(name: text): Function? {
 }
 # each linked function's name → [its image, its place there], the first image's of a name (one walk a link, never one
 # a lookup)
-linked_places_of(images: list): map := {
+linked_places_of(images: list) as map := {
 	places = {}
 	for image in images {
 		for k in 0..<#image.functions {
@@ -727,19 +727,19 @@ linked_places_of(images: list): map := {
 # a word the program declares (prelude_words.warp declared_only: its body ø, or kept for a block it takes) and binds
 # to no module's yet; a definition of its own stays its own though a module writes the name too: money's Money.compare,
 # compiled from its source, never reals' compare, which calls an instance's compare back
-unbound_declaration(f: any): bool := f != ø and f.kinds == ø and (is_declared_body(f.body) or takes_block_parameter(f))
+unbound_declaration(f: any) as bool := f != ø and f.kinds == ø and (is_declared_body(f.body) or takes_block_parameter(f))
 # a word written in a library file the linked module uses too, compiled into it already: web's url words, wagi's
 # (a word the compile generates, a class's method dispatcher, has no file and stays its own)
-held_by(f: any, files: list): bool := f != ø and f.kinds == ø and defined_origins.has(f.name) and module_of_path(defined_origins[f.name]#1) in files
-is_declared_body(body: any): bool := body == Node.Empty or (is_group(body) and #body == 1 and body#1 == Node.Empty)
-takes_block_parameter(f: Function): bool := f.signature.parameters.any(parameter => parameter.type_name == "block")
+held_by(f: any, files: list) as bool := f != ø and f.kinds == ø and defined_origins.has(f.name) and module_of_path(defined_origins[f.name]#1) in files
+is_declared_body(body: any) as bool := body == Node.Empty or (is_group(body) and #body == 1 and body#1 == Node.Empty)
+takes_block_parameter(f: Function) as bool := f.signature.parameters.any(parameter => parameter.type_name == "block")
 def bound_to(f: Function, image: LibraryImage, k: int) {
 	f.index = linked_index(image, k)
 	f.kinds = image.functions[k].kinds
 	f.result = image.functions[k].result
 }
 # the typed variant a program names a module's word by, of its written parameter types: `milliseconds_of·Quantity`
-typed_variant_written(module_name: text, word: Function): text := {
+typed_variant_written(module_name: text, word: Function) as text := {
 	for slice in linked_signature(module_name).slices.filter(slice => slice#1 == word.name) {
 		for statement in statements_in(unpack(slice#3)) {
 			call = definition_call(statement)
@@ -749,13 +749,13 @@ typed_variant_written(module_name: text, word: Function): text := {
 	word.name
 }
 # the program's index of a linked module's k-th function
-def linked_index(image: LibraryImage, k: int): int := #module.imports + image.base#1 + k - dropped()
+def linked_index(image: LibraryImage, k: int) as int := #module.imports + image.base#1 + k - dropped()
 # the host's builders, exported once main is placed (the first function, which a program's exports name), for a
 # linked module that calls them
 def linked_builders() { if module.linked_images.any(image => #image.builders > 0) { exported_builders() } }
 # a section's entries after the first `skip` (those of the runtime it was built behind), each its bytes: a code
 # section's, each its size first, or a data section's passive segments, a flag byte before the size
-def entries_after(content: list, skip: int, flagged: bool): list {
+def entries_after(content: list, skip: int, flagged: bool) as list {
 	count = uleb_read(content, 0)
 	at = count#2
 	entries = []
@@ -769,10 +769,10 @@ def entries_after(content: list, skip: int, flagged: bool): list {
 }
 # a class struct's definition from its written form (module_layout.warp struct_written): numbers, and the types it
 # names by their names
-def struct_read(written: text): list := written.split(" ").map(part => if is_digits(part) then int(part) else part)
+def struct_read(written: text) as list := written.split(" ").map(part => if is_digits(part) then int(part) else part)
 
 # each of runtime.wasm's imports (host words, every one a function): its entry's bytes up to its type, and its type
-def runtime_import_entries(): list {
+def runtime_import_entries() as list {
 	content = runtime_part(section_ids.import)
 	count = uleb_read(content, 0)
 	at = count#2
@@ -790,7 +790,7 @@ def runtime_import_entries(): list {
 	entries
 }
 # the operands of one kind (relocated) the functions' code holds, each a key
-def relocated_operands(functions: list, kind: int): map {
+def relocated_operands(functions: list, kind: int) as map {
 	found = {}
 	for f in functions {
 		code = f.code
@@ -806,7 +806,7 @@ def relocated_operands(functions: list, kind: int): map {
 	found
 }
 # the runtime positions reached from these: the functions they call, through the runtime
-def runtime_reach(called: list): map {
+def runtime_reach(called: list) as map {
 	graph = runtime_call_graph()
 	reached = {}
 	pending = called
@@ -822,7 +822,7 @@ def runtime_reach(called: list): map {
 	reached
 }
 # the runtime functions these functions call, by their position among the runtime's functions
-def runtime_positions_called(functions: list): list {
+def runtime_positions_called(functions: list) as list {
 	called = relocated_operands(functions, relocated.calls)
 	positions = []
 	for p in 0..<module.runtime_image.functions { if called.has(#module.imports + p) { positions += [p] } }
@@ -830,7 +830,7 @@ def runtime_positions_called(functions: list): list {
 }
 # each runtime function's position → the positions of the runtime functions it calls, read from its relocations once
 # (module.runtime_calls)
-def runtime_call_graph(): map {
+def runtime_call_graph() as map {
 	if module.runtime_calls != ø { return module.runtime_calls }
 	graph = {}
 	for site in runtime_call_sites() {
@@ -843,7 +843,7 @@ def runtime_call_graph(): map {
 # [relocation, caller position, callee position] of each call of a runtime function in runtime.wasm's code, read once
 # (module.runtime_sites) from its warp.calls section, which write_runtime bakes in (card measure: worked out from the
 # relocations on each compile it took ~20 ms)
-def runtime_call_sites(): list {
+def runtime_call_sites() as list {
 	if module.runtime_sites != ø { return module.runtime_sites }
 	place = section_place(module.runtime_image.wasm, section_ids.custom, call_sites_section)
 	if place == ø { throw "runtime.wasm without its " + call_sites_section + " section: warp rebuild writes it anew" }
@@ -867,7 +867,7 @@ def runtime_call_sites(): list {
 # raisers, a warp.raises section of their positions
 call_sites_section = "warp.calls"
 raisers_section = "warp.raises"
-def with_call_sites(wasm: list): list {
+def with_call_sites(wasm: list) as list {
 	prepend_runtime(wasm)
 	sites = worked_out_call_sites().map(site => concatenated([site#1#1, site#2, site#3].map(uleb)))
 	raisers = worked_out_raisers().map(uleb)
@@ -875,13 +875,13 @@ def with_call_sites(wasm: list): list {
 	wasm + section(section_ids.custom, name_bytes(call_sites_section) + vector(sites)) + section(section_ids.custom, name_bytes(raisers_section) + vector(raisers)) + fingerprint
 }
 # the call sites read off runtime.wasm's relocations and code
-def worked_out_call_sites(): list {
+def worked_out_call_sites() as list {
 	sites = operand_sites(relocated.calls).filter(site => site#3 >= module.runtime_image.imports)
 	sites.map(site => [site#1, site#2, site#3 - module.runtime_image.imports])
 }
 # the runtime functions that raise, by position: those setting a global a host reads after a run failed in a runtime
 # error (raising_globals), once each
-def worked_out_raisers(): list {
+def worked_out_raisers() as list {
 	content = runtime_part(section_ids.code)
 	names = module.runtime_image.globals.map(entry => entry#1)
 	raisers = []
@@ -889,7 +889,7 @@ def worked_out_raisers(): list {
 	raisers
 }
 # [relocation, caller position, operand] of each relocated operand of this kind in runtime.wasm's code
-def operand_sites(kind: int): list {
+def operand_sites(kind: int) as list {
 	content = runtime_part(section_ids.code)
 	ends = body_ranges(content).map(range => range#2)
 	sites = []
@@ -907,7 +907,7 @@ def operand_sites(kind: int): list {
 # the positions of runtime.wasm's raisers, read once per runtime (prepend_runtime forgets them) from its warp.raises
 # section; a global, as a Module field more fails the seed's compile (index out of range)
 global raisers_read = ø
-def runtime_raisers(): list {
+def runtime_raisers() as list {
 	if raisers_read != ø { return raisers_read }
 	place = section_place(module.runtime_image.wasm, section_ids.custom, raisers_section)
 	if place == ø { throw "runtime.wasm without its " + raisers_section + " section: warp rebuild writes it anew" }
@@ -923,7 +923,7 @@ def runtime_raisers(): list {
 	raisers
 }
 # whether the functions can fail in a runtime error: their code or a runtime function they reach sets a raising global
-def can_raise(functions: list): bool {
+def can_raise(functions: list) as bool {
 	raising = raising_globals.map(name => module.globals.get(name)).filter(entry => entry != ø).map(entry => entry#1)
 	own = exports_reach(functions)
 	if sets_global(own, raising) { return yes }
@@ -932,7 +932,7 @@ def can_raise(functions: list): bool {
 }
 # the functions the module's exports reach (main, _start, the builders, the program's own words), through the calls
 # of their code (a closure's entry by its ref.func): a prelude word compiled but never called raises in no run
-def exports_reach(functions: list): list {
+def exports_reach(functions: list) as list {
 	at = {}
 	for f in functions { at[f.index] = f }
 	builders = module.builders.map(f => f.name)
@@ -952,7 +952,7 @@ def exports_reach(functions: list): list {
 	found
 }
 # whether the functions' code sets one of these globals (relocatable code: a marked operand behind global.set)
-def sets_global(functions: list, indices: list): bool {
+def sets_global(functions: list, indices: list) as bool {
 	for f in functions {
 		code = f.code
 		at = 0
@@ -967,7 +967,7 @@ def sets_global(functions: list, indices: list): bool {
 	no
 }
 # [start, end] of each function's entry in a code section's content, its size included
-def body_ranges(content: list): list {
+def body_ranges(content: list) as list {
 	ranges = []
 	count = uleb_read(content, 0)
 	at = count#2
@@ -1003,10 +1003,10 @@ def cut_runtime_words(names: list) {
 	}
 }
 # a function body that only traps
-def trapping_body(): list := uleb(3) + [0, op.unreachable, op.end]
-def shaken(): bool := module.shaking != ø
-def dropped(): int := if shaken() then module.shaking.dropped else imports_dropped()
-def shaking_of(functions: list): any {
+def trapping_body() as list := uleb(3) + [0, op.unreachable, op.end]
+def shaken() as bool := module.shaking != ø
+def dropped() as int := if shaken() then module.shaking.dropped else imports_dropped()
+def shaking_of(functions: list) as any {
 	reached = runtime_reach(runtime_positions_called(functions))
 	kept = range_list(module.runtime_image.functions).filter(p => reached.has(p))
 	places = range_list(module.runtime_image.functions).map(p => -1)
@@ -1014,7 +1014,7 @@ def shaking_of(functions: list): any {
 	Shaking(kept, places, module.runtime_image.functions - #kept)
 }
 # where a call of runtime function `first + p` goes: a kept one to its place; a dropped one is the gap
-def kept_calls(first: int, more: map): Move {
+def kept_calls(first: int, more: map) as Move {
 	table = {}
 	for i in more.keys { table[i] = more[i] }
 	places: list = module.shaking.places
@@ -1024,14 +1024,14 @@ def kept_calls(first: int, more: map): Move {
 }
 # where the program's operands go: its calls by kept_calls, an import's in place, a function behind the runtime's down
 # by the dropped; the other kinds stay
-def shaken_moves(): list {
+def shaken_moves() as list {
 	imports = {}
 	for i in 0..<#module.imports { imports[i] = i }
 	calls = kept_calls(#module.imports, imports)
 	[Move(-module.shaking.dropped, calls.table, calls.gap)] + range_list(#relocated.keys - 1).map(k => shifted(0))
 }
 # the kept runtime functions' entries of the code section, their calls moved
-def shaken_runtime_code(moves: list): list {
+def shaken_runtime_code(moves: list) as list {
 	content = runtime_part(section_ids.code)
 	ranges = body_ranges(content)
 	kept = {}
@@ -1041,7 +1041,7 @@ def shaken_runtime_code(moves: list): list {
 	module.shaking.kept.map(p => if cut_positions.has(p) then trapping_body() else moved[ranges[p]#1 ..< ranges[p]#2])
 }
 # the types runtime.wasm declares its kept functions with
-def shaken_function_types(): list {
+def shaken_function_types() as list {
 	types = runtime_part(section_ids.function)
 	at = uleb_read(types, 0)#2
 	declared = []
@@ -1072,8 +1072,8 @@ global kept_imports = {}
 global stub_type_list = []
 global first_stub = 0
 global imports_gone = 0
-def drops_imports(): bool := imports_gone > 0
-def imports_dropped(): int := imports_gone
+def drops_imports() as bool := imports_gone > 0
+def imports_dropped() as int := imports_gone
 def forget_import_drop() {
 	import_places = []
 	kept_imports = {}
@@ -1106,7 +1106,7 @@ def drop_imports(functions: list) {
 	imports_gone = gone
 }
 # the host words called by the program's own code and the runtime functions it reaches
-def host_words_called(functions: list): map {
+def host_words_called(functions: list) as map {
 	own = exports_reach(functions)
 	reached = runtime_reach(runtime_positions_called(own))
 	called = {}
@@ -1117,28 +1117,28 @@ def host_words_called(functions: list): map {
 }
 # where a function index goes, as behind the whole runtime: a host word to its place, one in more to its entry there,
 # every other by shift, all behind the host words moved down by the count dropped
-def import_move(shift: int, more: map): Move {
+def import_move(shift: int, more: map) as Move {
 	table = {}
 	for i in more.keys { table[i] = more[i] - imports_dropped() }
 	if drops_imports() { for i in 0..<#import_places { table[i] = import_places[i] } }
 	Move(shift - imports_dropped(), table)
 }
 # a program function's entry of the code section, its calls moved past the host words dropped
-def own_body(f: Function, at: int): list {
+def own_body(f: Function, at: int) as list {
 	if not drops_imports() { return function_body(f, at) }
 	moved_body(f, [import_move(0, {})] + range_list(#relocated.keys - 1).map(k => shifted(0)))
 }
 # the import section's content: the host words kept, then the program's C functions
-def host_imports(c_entries: list): list {
+def host_imports(c_entries: list) as list {
 	if not drops_imports() { return with_section_entries(runtime_part(section_ids.import), c_entries) }
 	entries = runtime_import_entries()
 	kept = range_list(#entries).filter(i => kept_imports.has(i)).map(i => entries[i]#1 + uleb(entries[i]#2))
 	uleb(#kept + #c_entries) + concatenated(kept) + concatenated(c_entries)
 }
-def import_kept(i: int): bool := not drops_imports() or i >= module.runtime_image.imports or kept_imports.has(i)
-def import_place(i: int): int := if drops_imports() and i < module.runtime_image.imports then import_places[i] else i - imports_dropped()
-def stub_types(): list := if drops_imports() then stub_type_list.map(typed => uleb(typed)) else []
-def stub_names(): list := if drops_imports() then range_list(#stub_type_list).map(k => index_name(first_stub + k, unreached_import)) else []
+def import_kept(i: int) as bool := not drops_imports() or i >= module.runtime_image.imports or kept_imports.has(i)
+def import_place(i: int) as int := if drops_imports() and i < module.runtime_image.imports then import_places[i] else i - imports_dropped()
+def stub_types() as list := if drops_imports() then stub_type_list.map(typed => uleb(typed)) else []
+def stub_names() as list := if drops_imports() then range_list(#stub_type_list).map(k => index_name(first_stub + k, unreached_import)) else []
 unreached_import = "unreached_import"
 # a stub's entry of the code section: no locals, a trap
-def unreached_import_stubs(): list := if drops_imports() then stub_type_list.map(typed => trapping_body()) else []
+def unreached_import_stubs() as list := if drops_imports() then stub_type_list.map(typed => trapping_body()) else []

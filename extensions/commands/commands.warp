@@ -67,21 +67,21 @@ native_commands = ["pure", "self", "rebuild", "tool", "fetch", "dev", "serve", "
 # TODO (card commands-reduce) Drastically reduce all these internal commands, none of which are used by the user
 native_warp_commands = ["run", "pure", "self", "eval", "fast", "fuel", "rebuild", "test", "repl", "console", "start", "version", "beautify", "fix", "format", "lint", "docs", "wiki", "home", "app", "dev"]
 # set by the native warp for the compiler it hosts: the host's name
-natively_hosted(): bool := run_option("host") != ø
+natively_hosted() as bool := run_option("host") != ø
 # what no host of these commands has yet: under the native warp, the commands it lacks
 NOT_YET = " is not in warp yet"
 
-command_name(entry: list): text := entry#1.split(" ")#1
+command_name(entry: list) as text := entry#1.split(" ")#1
 # the commands only a native host calls, never shown in help: a console line's step, `warp test`'s listing and verdicts
 host_commands = ["repl-step", "test-list", "test-verdicts"]
 # the commands it answers that help leaves out, the user-facing list kept short: the shown stages, the REPL, and
 # parse-code, which parse_code and eval call (core/native/driver.warp, web/playground/driver.js)
 hidden_commands = ["repl", "parse", "signature", "data", "parse-code", "lower", "uses", "readings", "inspect"]
 # the commands this extension answers (its Extension row, extensions/extensions.warp)
-command_words(): list := command_help.map(command_name).filter(word => not word.starts_with("<")) + host_commands + hidden_commands + running_commands + native_commands
+command_words() as list := command_help.map(command_name).filter(word => not word.starts_with("<")) + host_commands + hidden_commands + running_commands + native_commands
 
 # the text of the file `target` names, else `target` itself as code
-source_of(target: text): text := try read(target) else target
+source_of(target: text) as text := try read(target) else target
 
 show_help() := if #args > 1 and args#2 == "options" then show_options() else show_commands()
 show_commands() := {
@@ -105,24 +105,24 @@ show_options() := {
 # each entry of a help table on its line: its words after the prefix, then what it does
 help_lines(entries: list, prefix: text) := { for entry in entries { print "  " + padded(prefix + entry#1, HELP_COLUMN) + entry#2 } }
 # words, then spaces up to width, at least one
-padded(words: text, width: int): text := {
+padded(words: text, width: int) as text := {
 	line = words + " "
 	while #line < width { line = line + " " }
 	line
 }
 
 # the version, and the lib/ the compiler reads
-version_text(library: text): text := "🌀 Warp " + VERSION + " (compiler.warp of " + library + ")"
+version_text(library: text) as text := "🌀 Warp " + VERSION + " (compiler.warp of " + library + ")"
 
 # the parsed program as `warp parse` shows it, each operation a prefix group: 1+2*x as (+ 1 (* 2 x)) (Rust twin:
 # rust-harness:src/cli/display.rs structure)
-structure(n: Node): text := match n {
+structure(n: Node) as text := match n {
 	Key(left, op, right): "(" + (op as text) + " " + structure(left) + " " + structure(right) + ")"
 	List(items, bracket, separator): grouped_structure(items.map(structure), bracket as text, separator as text)
 	_: "${n}"
 }
 # the items' texts in their brackets, between them the separator ("⏎" for a line break)
-grouped_structure(items: list, bracket: text, separator: text): text := {
+grouped_structure(items: list, bracket: text, separator: text) as text := {
 	joiner = if separator == "\n" then "⏎ " else if separator == "" or separator == " " then " " else separator + " "
 	if #bracket == 2 { return bracket#1 + items.join(joiner) + bracket#2 }
 	closing = {"{": "}", "[": "]", "(": ")", "<": ">", "": ""}
@@ -138,7 +138,7 @@ refuse_native(command: text) := {
 	raise "warp " + command + " needs " + NATIVE + "'s host: run `warp " + command + "`"
 }
 
-source_or_code(position: int): text := if #args > position then source_of(args#(position + 1)) else ""
+source_or_code(position: int) as text := if #args > position then source_of(args#(position + 1)) else ""
 show_version() := print version_text(library_folder)
 show_parsed() := print structure(plain_node(parsed(source_or_code(1))))
 show_data() := print plain_node(parsed(source_or_code(1)))
@@ -164,7 +164,7 @@ show_inspected() := {
 # the REPL (`warp repl`): each line a module of its own in the session's folder (the console keeps its instance),
 # linked to the lines before it that declared something or used a module: their names in the folder's KEPT_LINES
 KEPT_LINES = "kept_lines.txt"
-staying_lines(line: text): text := {
+staying_lines(line: text) as text := {
 	statements = statements_in(plain_node(parsed(line)))
 	staying = statements.filter(statement => is_declaration(statement) or is_import(statement))
 	staying.map(statement => "${statement}").join("\n")
@@ -186,7 +186,7 @@ repl_step(folder: text, line: text, wasm_file: text) := {
 	if not refusal and staying_lines(line) { write(path_in(folder, KEPT_LINES), (kept + [name]).join("\n")) }
 }
 # the line's module written from its source lines, its text kept beside it: "", else the compiler's refusal
-line_module_refusal(folder: text, name: text, lines: list, wasm_file: text): text := {
+line_module_refusal(folder: text, name: text, lines: list, wasm_file: text) as text := {
 	source = lines.join("\n")
 	write(line_text_file(folder, name), source)
 	own_module(name, line_text_file(folder, name), wasm_file)
@@ -195,13 +195,13 @@ line_module_refusal(folder: text, name: text, lines: list, wasm_file: text): tex
 	refusal
 }
 # the functions and classes a text defines, by name: no variable, which a later line may set
-defined_words(source: text): list := definition_slices(source).filter(slice => not statements_in(plain_node(parsed(slice#2))).any(is_value_definition)).map(slice => slice#1)
+defined_words(source: text) as list := definition_slices(source).filter(slice => not statements_in(plain_node(parsed(slice#2))).any(is_value_definition)).map(slice => slice#1)
 # where a line's text is kept: never as <name>.warp, which would take a later line's `use <name>` as a file to compile
 # in, not the module to link (prelude_words.warp taken_as_file), its instance's state then not the one read
-line_text_file(folder: text, name: text): text := path_in(folder, name + ".line" + module_extension)
-lines_kept(folder: text): list := (try read(path_in(folder, KEPT_LINES)) else "").split("\n").filter(name => name != "")
+line_text_file(folder: text, name: text) as text := path_in(folder, name + ".line" + module_extension)
+lines_kept(folder: text) as list := (try read(path_in(folder, KEPT_LINES)) else "").split("\n").filter(name => name != "")
 # a text as a warp literal that reads back as itself: quoted, its $ no hole
-source_text(t: text): text := quoted(t).replace("$", "\\$")
+source_text(t: text) as text := quoted(t).replace("$", "\\$")
 # `warp repl` under plain WASI: each line compiled, its declarations kept; running it needs the native warp
 REPL_FOLDER = ".warp-repl"
 LINE_PREFIX = "line_"

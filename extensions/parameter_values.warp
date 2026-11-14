@@ -9,13 +9,13 @@ parameter_value(n: Node, program: Node) := {
 	diagnose(call_of("parameter_value", [name_of(key_of(valued)), written_value(value_of(valued))]), valued)
 }
 # the definition a statement is, `def f(a, b: 2) {…}` too as written before the def sugar reads it
-written_definition(n: Node): Definition? := {
+written_definition(n: Node) as Definition? := {
 	if is_group(n) and #n == 2 and n#1 is symbol and name_of(n#1) in function_keywords and is_group(n#2) and #n#2 == 2 and is_curly_group(n#2#2) { return definition_of(Key(n#2#1, Op.Define, n#2#2)) }
 	definition_of(n)
 }
-is_literal_value(n: Node): bool := n is number or n is text
+is_literal_value(n: Node) as bool := n is number or n is text
 # the value as code, a text in its quotes: `as = "x"`
-written_value(n: Node): text := if n is text then "\"${n}\"" else "${n}"
+written_value(n: Node) as text := if n is text then "\"${n}\"" else "${n}"
 
 # A body after a definition's head colon, `def f(x): x * 2`, is refused with its fix `def f(x) := x * 2`: the colon
 # names the result type, `def f(x): int := x * 2` (decision def-colon-body). Only after `def`: `f(x): x * 2` without it is
@@ -35,9 +35,9 @@ head_body(n: Node, program: Node) := {
 	diagnose(call_of("head_body", [head_code(key_of(defined)), written_value(value_of(defined))]), defined)
 }
 # a definition's head as written: `f(x, y)`
-head_code(head: Node): text := "${head#1}(" + items_of(head)[1 ..].map(parameter => "${parameter}").join(", ") + ")"
+head_code(head: Node) as text := "${head#1}(" + items_of(head)[1 ..].map(parameter => "${parameter}").join(", ") + ")"
 # code no type is written as: a literal or an operation, `x * 2`, `n > 0`
 BODY_OPERATORS = [Op.Add, Op.Sub, Op.Mul, Op.Div, Op.Mod, Op.Pow, Op.Eq, Op.Ne, Op.Lt, Op.Gt, Op.Le, Op.Ge]
-is_body_value(n: Node): bool := is_literal_value(n) or BODY_OPERATORS.any(op => is_key(n, op))
+is_body_value(n: Node) as bool := is_literal_value(n) or BODY_OPERATORS.any(op => is_key(n, op))
 
 parameter_values_extension = Extension{name: "parameter_values", lints: [parameter_value, head_body]}

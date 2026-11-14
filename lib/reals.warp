@@ -56,7 +56,7 @@ class real_sum {
 	digits(count: int) := decimal_digits(this, count)
 }
 # whether x is a value kept exact: a whole number or a fraction, a real, a sum of them; never a float
-exact_value_is(x: any): bool := (x is number and not (x is float)) or exact_real(x) or x is real_sum
+exact_value_is(x: any) as bool := (x is number and not (x is float)) or exact_real(x) or x is real_sum
 # x to a whole power, exact by squaring as an int's (√3^2 is 3, π² is π², √π² is π, √2^100 is 2^50); to any other
 # power, or of an exact base to a real one (2^π), the float's
 exact_power(x: any, n: any) := {
@@ -72,8 +72,8 @@ exact_power(x: any, n: any) := {
 	}
 	power
 }
-terms_of(x: any): list := if x is real_sum then x.terms else [x]
-negated_terms(x: any): list := terms_of(x).map(term => term * -1)
+terms_of(x: any) as list := if x is real_sum then x.terms else [x]
+negated_terms(x: any) as list := terms_of(x).map(term => term * -1)
 # the terms summed: alike ones merged, zeros dropped; a single term is itself, none 0
 real_sum_of(terms: list) := {
 	kept = []
@@ -96,9 +96,9 @@ real_sum_of(terms: list) := {
 # `s = s + √i`, would grow its sum a term a step, each step slower
 largest_exact_terms = 32
 simplest_term(term: any) := if exact_real(term) then real_of(term.coefficient, term.pi_power, term.radicand) else term
-alike_terms(a: any, b: any): bool := if exact_real(a) then a.alike(b) else not exact_real(b)
+alike_terms(a: any, b: any) as bool := if exact_real(a) then a.alike(b) else not exact_real(b)
 # 2 + 2π, √2 - π/2: a negative term after the first written with a minus
-sum_text(terms: list): text := {
+sum_text(terms: list) as text := {
 	shown = text(terms#1)
 	for term in terms[1 ..] { shown += if term < 0 then " - " + text(term * -1) else " + " + text(term) }
 	shown
@@ -107,7 +107,7 @@ sum_text(terms: list): text := {
 # the first count significant digits of an exact value, rounded: π, √2 and their sums in exact whole-number arithmetic
 # at a scale of guard digits beyond them, π by Machin's formula (π = 16·atan(1/5) - 4·atan(1/239))
 guard_digits = 20
-decimal_digits(x: any, count: int): text := {
+decimal_digits(x: any, count: int) as text := {
 	approximate = real_float(x) as float
 	if approximate == 0.0 { return "0" }
 	magnitude = decimal_magnitude(abs(approximate))
@@ -121,14 +121,14 @@ decimal_digits(x: any, count: int): text := {
 	sign + (if decimals > 0 then point_placed(shown, decimals) else text(shown * 10 ^ (-decimals)))
 }
 # the power of ten of a positive float's leading digit: 8.28 is 0, 0.05 is -2, 314.1 is 2
-decimal_magnitude(f: float): int := {
+decimal_magnitude(f: float) as int := {
 	power = 0
 	while f >= 10.0 { f = f / 10.0; power += 1 }
 	while f < 1.0 { f = f * 10.0; power -= 1 }
 	power
 }
 # atan(1/inverse) times the scale, in whole numbers: the series 1/x - 1/(3x³) + 1/(5x⁵) - …
-atan_scaled(inverse: int, scale: number): number := {
+atan_scaled(inverse: int, scale: number) as number := {
 	power = scale /! inverse
 	total = power
 	n = 1
@@ -140,7 +140,7 @@ atan_scaled(inverse: int, scale: number): number := {
 	total
 }
 # a term times the scale: its coefficient, root and power of π each in whole numbers at that scale
-term_scaled(term: any, scale: number, pi_scaled: number): number := {
+term_scaled(term: any, scale: number, pi_scaled: number) as number := {
 	if not exact_real(term) { return term_times(term, scale) }
 	root = whole_root(term.radicand * scale * scale)
 	whole_power = floor(term.pi_power) as int
@@ -150,20 +150,20 @@ term_scaled(term: any, scale: number, pi_scaled: number): number := {
 	term_times(term.coefficient, root * powered /! scale)
 }
 # a rational times a whole number, rounded down
-term_times(rational: number, whole: number): number := numerator(rational) * whole /! denominator(rational)
+term_times(rational: number, whole: number) as number := numerator(rational) * whole /! denominator(rational)
 # ⌊√n⌋ of a whole number, by Newton's steps from above
-whole_root(n: number): number := {
+whole_root(n: number) as number := {
 	if n < 2 { return n }
 	guess = 10 ^ ((#text(n) + 1) /! 2)
 	next = newton_step(guess, n)
 	while next < guess { guess = next; next = newton_step(guess, n) }
 	guess
 }
-newton_step(guess: number, n: number): number := (guess + n /! guess) /! 2
+newton_step(guess: number, n: number) as number := (guess + n /! guess) /! 2
 # n / 10^shift rounded half up, a whole number
-rounded_shifted(n: number, shift: int): number := if shift <= 0 then n * 10 ^ (-shift) else (n + 5 * 10 ^ (shift - 1)) /! 10 ^ shift
+rounded_shifted(n: number, shift: int) as number := if shift <= 0 then n * 10 ^ (-shift) else (n + 5 * 10 ^ (shift - 1)) /! 10 ^ shift
 # the digits of n with a decimal point before its last `decimals`: 828318 with 5 is 8.28318
-point_placed(n: number, decimals: int): text := {
+point_placed(n: number, decimals: int) as text := {
 	written = text(n)
 	while #written <= decimals { written = "0" + written }
 	written[0 ..< #written - decimals] + "." + written[#written - decimals ..]
@@ -193,7 +193,7 @@ exact_real(x) := x is real and not (x is number)
 largest_exact_radicand = 1000000000000
 # [s, r] of n = s²·r, the square factors of the primes up to largest_square_factor taken out, a perfect square whole
 largest_square_factor = 100
-square_parts(n: int): list := {
+square_parts(n: int) as list := {
 	whole = floor(√(n as float)) as int
 	if whole * whole == n { return [whole, 1] }
 	outside = 1
@@ -227,17 +227,17 @@ pi_power_text(pi_power: int) := power_text("π", pi_power)
 # a base raised to a power as written, in superscript digits: π, π², m⁻¹ (lib/units.warp shows its units so too)
 power_text(base: text, power: int) := if power == 1 then base else base + superscript(power)
 superscript_digits = "⁰¹²³⁴⁵⁶⁷⁸⁹"
-superscript(n: int): text := if n < 0 then "⁻" + superscript(-n) else if n < 10 then superscript_digits#(n + 1) else superscript(n /! 10) + superscript(n % 10)
+superscript(n: int) as text := if n < 0 then "⁻" + superscript(-n) else if n < 10 then superscript_digits#(n + 1) else superscript(n /! 10) + superscript(n % 10)
 # the superscripts' raised marks, and the int they write: "²" 2, "⁻¹" -1, "" 1 (a factor written without one)
 raised_marks = superscript_digits + "⁻"
-superscript_value(raised: text): int := {
+superscript_value(raised: text) as int := {
 	if raised is empty { return 1 }
 	if raised.starts_with("⁻") { return 0 - superscript_value(raised.chars()[1 ..].join("")) }
 	value = 0
 	for c in raised { value = value * 10 + superscript_digit(c) }
 	value
 }
-superscript_digit(c: any): int := {
+superscript_digit(c: any) as int := {
 	for digit in 0 to 9 { if superscript_digits#(digit + 1) == c { return digit } }
 	0
 }

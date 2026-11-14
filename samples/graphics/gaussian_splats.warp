@@ -45,9 +45,9 @@ centres = scene.centres
 shapes = scene.shapes
 shades = scene.shades
 # its middle and its size, both of the bulk of it: a capture's stray Gaussians far out do not count
-axis_at(k: int): list := [centres#(4 * (i - 1) + k) for i in 1 to n]
+axis_at(k: int) as list := [centres#(4 * (i - 1) + k) for i in 1 to n]
 middle = if n == 0 then [0.0, 0.0, 0.0] else [median(axis_at(k)) for k in 1 to 3]
-reach(i: int): float := {
+reach(i: int) as float := {
 	b = 4 * (i - 1)
 	dx = centres#(b + 1) - middle#1
 	dy = centres#(b + 2) - middle#2

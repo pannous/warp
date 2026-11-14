@@ -5,13 +5,13 @@
 use "shapes.warp"
 
 // `name: value` of the program, no opaque view or attribute layer
-is_pair(entry: Node): bool := match entry {
+is_pair(entry: Node) as bool := match entry {
 	Key(name, Op.Colon, value): is_pair_key(entry)
 	_: no
 }
 
 // The parameters of `f(a, b: int) := …`: a and b
-parameter_names(target: Node): list := {
+parameter_names(target: Node) as list := {
 	names = []
 	if not is_call_head(target) { return names }
 	for parameter in items_of(target)[1:] {
@@ -26,7 +26,7 @@ parameter_names(target: Node): list := {
 // so a variable named slice stays a value (`slice = "abc"; slice[1 ..]`)
 // A negative index is an error that names the way to the last element: warp never wraps around (Footguns.md)
 // offset: the `1` added to a non-number index, the parser's marked one for code as written (walk.warp subscript_offset_mark)
-subscript(target: Node, index: Node, offset: Node = 1): Node := {
+subscript(target: Node, index: Node, offset: Node = 1) as Node := {
 	bounds = slice_bounds(index)
 	for bound in subscript_positions(index) {
 		if counts_from_the_end(bound) { return error_node("index out of range: negative index " + negated_form(bound) + " does not wrap around, the last element is last(${target})") }
@@ -36,7 +36,7 @@ subscript(target: Node, index: Node, offset: Node = 1): Node := {
 }
 
 // The 0-based start and exclusive end of a slice index (ø where omitted, `xs[1:]`), else ø; `a...last` ends after last
-slice_bounds(written: Node): list? := match written {
+slice_bounds(written: Node) as list? := match written {
 	// an opaque view (a template `"k\(i)"`) or attribute layer is a key too, but no slice
 	Key(start, Op.Colon, end): { if is_pair_key(written) then [start, end] else ø }
 	Key(start, Op.Range, end): [start, end]
@@ -45,26 +45,26 @@ slice_bounds(written: Node): list? := match written {
 }
 
 // The bounds of a slice index, else the index itself
-subscript_positions(index: Node): list := slice_bounds(index) ?? [index]
+subscript_positions(index: Node) as list := slice_bounds(index) ?? [index]
 
 // A negative number or a negated expression: `-1`, `-k`
-counts_from_the_end(bound: Node): bool := if bound is number then bound < 0 else type(bound) is key and op_of(bound) == "-" and key_of(bound) == ø
+counts_from_the_end(bound: Node) as bool := if bound is number then bound < 0 else type(bound) is key and op_of(bound) == "-" and key_of(bound) == ø
 
 // `-1`, `-k` as written
-negated_form(bound: Node): text := if bound is number then "${bound}" else "-${value_of(bound)}"
+negated_form(bound: Node) as text := if bound is number then "${bound}" else "-${value_of(bound)}"
 
 // `xs[i]` is `xs#(i+1)`: a written number counts on, any other index gets 1 added
 // A number index keeps the number written in an attribute layer on `d#2`: a map
 // keyed by numbers reads it; plain_node drops the layer, number_keys.warp reads `d#2` itself
-one_based(index: Node, offset: Node = 1): Node := if index is number then attributed(written_index_mark, index, index + 1) else Key(index, Op.Add, offset)
+one_based(index: Node, offset: Node = 1) as Node := if index is number then attributed(written_index_mark, index, index + 1) else Key(index, Op.Add, offset)
 // the offset of a subscript written in code, which index_positions reads
-written_offset(): Node := attributed(subscript_offset_mark, yes, 1)
+written_offset() as Node := attributed(subscript_offset_mark, yes, 1)
 
 // The words that start a member with code, no field types: `def scaled(k) {…}`, `get`, `override`
 CODE_MEMBER_WORDS = function_keywords + ["get", "set", "mutating", "override", "public", "private", "protected", "internal", "fileprivate", "open", "final", "async", "operator"]
 
 // A class body's fields with their types, `x: int` holding the type int; a method keeps its code
-typed_fields(node: Node): Node := match node {
+typed_fields(node: Node) as Node := match node {
 	Key(name, Op.Define, value): node
 	Key(name, op, value): { if is_pair_key(node) then Key(name, op, if value is symbol then type_node(value, ø) else value) else node }
 	List(members, bracket, separator): { if starts_code(members#1) then node else typed_members(bracket as text, separator as text, with_type_phrases(items_of(node)).map(typed_fields)) }
@@ -73,7 +73,7 @@ typed_fields(node: Node): Node := match node {
 
 // `items: list of text`: the words `of text` after a field's type continue it, the one type `list of text` (as
 // `list<text>` is read); `list of list of int` too
-with_type_phrases(items: list): list := {
+with_type_phrases(items: list) as list := {
 	fields = []
 	at = 1
 	while at <= #items {
@@ -90,7 +90,7 @@ with_type_phrases(items: list): list := {
 }
 
 // `items: list` and `text`: the field `items: list of text`, ø unless both are words
-of_phrase(field: Node, element: Node): any := match field {
+of_phrase(field: Node, element: Node) as any := match field {
 	Key(name, Op.Colon, kind): { if kind is symbol and element is symbol then Key(name, Op.Colon, symbol(name_of(kind) + " of " + name_of(element))) else ø }
 	_: ø
 }
@@ -98,18 +98,18 @@ of_phrase(field: Node, element: Node): any := match field {
 // `{f: x => x * 2}`: `:` binds tighter than `=>`, so the entry reads as the lambda `(f: x) => x * 2`; a lowercase
 // word that is no type after the key is the lambda's parameter, so the entry f holds `x => x * 2`, in any bracket and
 // in a call's named argument `Holder(d: x => x + 1)`; a typed lambda `x: int => x * 2` stays one
-field_holding_lambda(item: Node): Node := match item {
+field_holding_lambda(item: Node) as Node := match item {
 	Key(lambda_head, Op.Arrow, lambda_body): entry_of_lambda(lambda_head, lambda_body, item)
 	_: item
 }
 
-entry_of_lambda(lambda_head: Node, lambda_body: Node, item: Node): Node := match lambda_head {
+entry_of_lambda(lambda_head: Node, lambda_body: Node, item: Node) as Node := match lambda_head {
 	Key(entry_name, Op.Colon, entry_value): { if is_pair_key(lambda_head) and entry_name is symbol and is_parameter_word(entry_value) then Key(entry_name, Op.Colon, Key(entry_value, Op.Arrow, lambda_body)) else item }
 	_: item
 }
 
 // a lambda's parameter after a key: a lowercase word that is no type, or a parenthesized group
-is_parameter_word(node: Node): bool := {
+is_parameter_word(node: Node) as bool := {
 	if is_list_of(node, "(") { return yes }
 	if not (node is symbol) { return no }
 	first = name_of(node)#1
@@ -117,16 +117,16 @@ is_parameter_word(node: Node): bool := {
 }
 
 // A key of the program, no opaque view or attribute layer
-is_pair_key(node: Node): bool := key_of(node) != opaque_symbol and key_of(node) != symbol(attribute_word)
+is_pair_key(node: Node) as bool := key_of(node) != opaque_symbol and key_of(node) != symbol(attribute_word)
 
 // A class body's members, typed; the line `left: Node` is the one field
-typed_members(bracket: text, separator: text, members: list): Node := {
+typed_members(bracket: text, separator: text, members: list) as Node := {
 	if bracket == "" and #members == 1 and is_pair(members#1) { return members#1 }
 	listed(bracket as Bracket, separator as Separator, members)
 }
 
 // `def scaled(k) {…}`, `get`, `init(n) {…}`: a member that starts with code
-starts_code(first: Node): bool := {
+starts_code(first: Node) as bool := {
 	if first is symbol { return CODE_MEMBER_WORDS contains name_of(first) }
 	is_call_head(first) and first#1 is symbol
 }

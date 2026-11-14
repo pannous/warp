@@ -14,7 +14,7 @@ gpu_show_sized(shader: node, fields: int, width: int, height: int, values: node)
 gpu_picture_sized(shader: node, fields: int, width: int, height: int, values: node): node from host
 gpu_fields_format(): node from host
 // the pass, or a catchable "no field" where `into` is not one of the fields
-gpu_pass(shader: node, fields: int, into: node, values: node): int := {
+gpu_pass(shader: node, fields: int, into: node, values: node) as int := {
 	recorded = gpu_pass_recorded(shader, fields, into, values)
 	if recorded < 0 { raise "no field " + text(into) }
 	recorded
@@ -48,7 +48,7 @@ paint_passes(passes: list, width: int, height: int) := {
 	pixels
 }
 // the fields of these names at this size, made once
-fields_kept(names: list, width: int, height: int): int := {
+fields_kept(names: list, width: int, height: int) as int := {
 	key = names.join(" ") + " " + width + "×" + height
 	if not painted_fields.has(key) { painted_fields[key] = gpu_fields(width, height, names) }
 	painted_fields[key]
@@ -60,7 +60,7 @@ run_passes(passes: list, names: list, fields: int, size: list) := {
 // the size the fields are made at: the one the program's declared fields share, else the painting's. Declared fields
 // keep numbers beyond 0..1, which a GPU storing 8 bits a channel cannot
 NARROW_FORMAT = "rgba8unorm"
-fields_size(pass: list, width: int, height: int): list := {
+fields_size(pass: list, width: int, height: int) as list := {
 	if #pass < 4 { return [width, height] }
 	sizes = pass#4.values.map(field => [field.columns, field.rows])
 	if #sizes == 0 { raise "functions in paint's list draw fields the program declares: fix: declare one, `ink = field(1, columns, rows)`" }
@@ -70,15 +70,15 @@ fields_size(pass: list, width: int, height: int): list := {
 }
 // what a pixel `at` is divided by to sample a field: a text shader's `$dye(at)` reads at a pixel of the painting, a
 // function's `dye(x, y)` (a pass of four items) at a cell of the fields
-read_scale(pass: list, size: list): text := if #pass > 3 then "vec2f(${size#1}.0, ${size#2}.0)" else "values.size"
+read_scale(pass: list, size: list) as text := if #pass > 3 then "vec2f(${size#1}.0, ${size#2}.0)" else "values.size"
 // a shader's reads of the fields, `values.dye(at)` as its `$dye(at)` was written, as reads of the field at that pixel
 FIELD_HOLE = "NAME"
 FIELD_SCALE = "SCALE"
 FIELD_AT = "\nfn field_NAME_at(at: vec2f) -> vec4f { return field_NAME(at / SCALE); }\n"
 FIELD_SHOWN = "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return field_NAME(at.xy / values.size); }"
-reads_field(shader: text, name: text): bool := shader.contains("values." + name + "(")
+reads_field(shader: text, name: text) as bool := shader.contains("values." + name + "(")
 // a read of a field no shader of the list draws is refused, naming the shader to put before it
-fields_placed(shader: text, names: list, scale: text): text := {
+fields_placed(shader: text, names: list, scale: text) as text := {
 	placed = shader
 	for name in names.filter(name => reads_field(shader, name)) { placed = placed.replace("values." + name + "(", "field_" + name + "_at(") + FIELD_AT.replace(FIELD_HOLE, name).replace(FIELD_SCALE, scale) }
 	for rest in placed.split("values.")[1 ..] {
@@ -87,7 +87,7 @@ fields_placed(shader: text, names: list, scale: text): text := {
 	}
 	placed
 }
-leading_word(t: text): text := {
+leading_word(t: text) as text := {
 	end = 0
 	while end < #t and is_word_char(t[end]) { end += 1 }
 	t[.. end]

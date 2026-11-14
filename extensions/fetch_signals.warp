@@ -16,7 +16,7 @@ FETCH_INTO = "fetch_into"
 ANSWER = "answer"
 SIGNAL_SEPARATOR = "·"
 
-fetch_signals(program: Node): Node := {
+fetch_signals(program: Node) as Node := {
 	fetched = flat_statements(program).map(fetched_name).filter(name => name != "")
 	if #fetched == 0 { return program }
 	held = flat_statements(program).map(held_fetch_name).filter(name => name != "")
@@ -25,17 +25,17 @@ fetch_signals(program: Node): Node := {
 	separated(bracketed(flat_statements(read).flat_map(fetched_at_once), ""), ";")
 }
 # the library word the lowering calls, which the program never writes (core/passes/prelude_words.warp extension_writes)
-fetch_into_words(program: Node): list := if flat_statements(program).any(statement => held_url(statement) != ø) then [FETCH_INTO] else []
+fetch_into_words(program: Node) as list := if flat_statements(program).any(statement => held_url(statement) != ø) then [FETCH_INTO] else []
 # the name of `name := fetch url` at the main level, held as a variable with its error beside it, else ""
-held_fetch_name(statement: Node): text := if held_url(statement) == ø then "" else name_of(key_of(statement))
-held_url(statement: Node): Node? := match statement {
+held_fetch_name(statement: Node) as text := if held_url(statement) == ø then "" else name_of(key_of(statement))
+held_url(statement: Node) as Node? := match statement {
 	Key(Symbol(name), Op.Define, value): if head_name(value) == FETCH_WORD and #value == 2 then value#2 else ø
 	_: ø
 }
-fetch_signal(name: text, field: text): Node := symbol(name + SIGNAL_SEPARATOR + field)
+fetch_signal(name: text, field: text) as Node := symbol(name + SIGNAL_SEPARATOR + field)
 # `users := fetch url`: `users = ø; users·error = ø; fetch_into(url, answer => {…})`, the answer setting users or
 # users·error (lib/net.warp fetch_into gives it at once)
-fetched_at_once(statement: Node): list := {
+fetched_at_once(statement: Node) as list := {
 	url = held_url(statement)
 	if url == ø { return [statement] }
 	name = name_of(key_of(statement))
@@ -44,12 +44,12 @@ fetched_at_once(statement: Node): list := {
 	[set_to(symbol(name), Node.Empty), set_to(fetch_signal(name, ERROR_FIELD), Node.Empty), call_of(FETCH_INTO, [url, Key(answer, Op.Arrow, settled)])]
 }
 # the name `name := …fetch…` defines, else ""
-fetched_name(statement: Node): text := match statement {
+fetched_name(statement: Node) as text := match statement {
 	Key(Symbol(name), Op.Define, value): if mentions(value, FETCH_WORD) then name else ""
 	_: ""
 }
 # `users.loading` is no, `users.error` the failure's text; of a held fetched value its users·error
-signal_read(n: Node, fetched: list, held: list): Node := match n {
+signal_read(n: Node, fetched: list, held: list) as Node := match n {
 	Key(Symbol(name), Op.Dot, Symbol(field)): {
 		if not (name in fetched) { return n }
 		if field == LOADING_FIELD { return Node.False }
@@ -59,7 +59,7 @@ signal_read(n: Node, fetched: list, held: list): Node := match n {
 	_: n
 }
 # each outermost markup element whose own content reads a fetched value, with aria-live="polite"
-live_regions(n: Node, fetched: list): Node := {
+live_regions(n: Node, fetched: list) as Node := {
 	if not is_markup_block(n) { return children(n, child => live_regions(child, fetched)) }
 	items = items_of(value_of(n))
 	if not items.any(item => not is_markup_block(item) and fetched.any(name => mentions(item, name))) {
@@ -69,4 +69,4 @@ live_regions(n: Node, fetched: list): Node := {
 	Key(key_of(n), Op.Colon, List([Key(Text(LIVE_ATTRIBUTE), Op.Colon, Text(LIVE_POLITENESS))] + items, Bracket.Curly, Separator.Comma))
 }
 # `users.error`: `if users is error then str(users) else ø`
-failure_text(fetched: Node): Node := chosen(Key(fetched, Op.Is, symbol(ERROR_TYPE)), call_of("text", [fetched]), Node.Empty)
+failure_text(fetched: Node) as Node := chosen(Key(fetched, Op.Is, symbol(ERROR_TYPE)), call_of("text", [fetched]), Node.Empty)

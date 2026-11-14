@@ -4,11 +4,11 @@ ENTITY_MARK = "\\:"
 # `name TAB characters` lines, read from lib/ the first time a program writes an entity (load on demand)
 ENTITY_TABLE = "entities.tsv"
 # the escape `\:name` in a text at `at`, ø where no letter follows the `:`
-entity_escape(source: any, at: int, n: int): list? := if source[at + 1] == ':' and at + 2 < n and is_alpha(source[at + 2]) then entity_read(source, at, n) else ø
+entity_escape(source: any, at: int, n: int) as list? := if source[at + 1] == ':' and at + 2 < n and is_alpha(source[at + 2]) then entity_read(source, at, n) else ø
 entities_extension = Extension{name: "entities", source_passes: [expanded_entities], text_escape_readers: {":": entity_escape}}
 
 global entity_table = ø
-def entities(): map {
+def entities() as map {
 	if entity_table == ø {
 		entity_table = {}
 		lines = library_data(ENTITY_TABLE).split("\n")
@@ -22,7 +22,7 @@ def entities(): map {
 # The source with each known entity outside texts and comments as its characters, and where it got shorter
 # (core/extension.warp source_passes); `\alpha` written for `\:alpha` is refused. Only a source where a `\` stands
 # before a known name is walked
-def expanded_entities(source: text): list {
+def expanded_entities(source: text) as list {
 	if not names_an_entity(source) { return [source, []] }
 	points = code_points(source)
 	n = points.length
@@ -57,7 +57,7 @@ def expanded_entities(source: text): list {
 }
 # whether a `\` stands before a name, `\:alpha` or `\alpha`, anywhere in the source: the table is read only once the walk
 # meets one outside texts and comments (`"a\nb"` reads none)
-def names_an_entity(source: text): bool {
+def names_an_entity(source: text) as bool {
 	if not source.contains("\\") { return false }
 	for piece in source.split("\\")[1 ..] {
 		start = if piece.starts_with(":") then 1 else 0
@@ -75,7 +75,7 @@ def refuse_bare_entity(points: list, at: int, n: int) {
 }
 # The known entity name written at `at` (`\:name`), else "": its run of ASCII letters, or a longer known name with
 # hyphenated parts (`\:fracture-A`)
-def entity_name_at(source: text or list, at: int, n: int): text {
+def entity_name_at(source: text or list, at: int, n: int) as text {
 	if not (source[at] == '\\' and peek(source, at + 1, n) == ':') { return "" }
 	letters = at + 2
 	while letters < n and is_alpha(source[letters]) { letters = letters + 1 }
@@ -94,9 +94,9 @@ def entity_name_at(source: text or list, at: int, n: int): text {
 	if name in entities() then name else ""
 }
 # The characters from `from` to `to` of a text or of its code points
-def text_between(source: text or list, from: int, to: int): text := if source is text then source[from .. to] else join(source[from .. to], "")
+def text_between(source: text or list, from: int, to: int) as text := if source is text then source[from .. to] else join(source[from .. to], "")
 # `\:name` inside a text at `at`: [its characters, the length read]; an unknown one stays as written
-def entity_read(source: text or list, at: int, n: int): list {
+def entity_read(source: text or list, at: int, n: int) as list {
 	name = entity_name_at(source, at, n)
 	if name == "" then [ENTITY_MARK, 2] else [entities()[name], 2 + name.length]
 }

@@ -1,5 +1,5 @@
 # Functions (emitter.warp's part): calls and their arguments, each function's kinds and code, analyzer.warp's kinds
-def call(body: Body, f: Function, arguments: list): TypedCode {
+def call(body: Body, f: Function, arguments: list) as TypedCode {
 	parameters = f.signature.parameters
 	if gathers(f.signature, #arguments) { return rest_call(body, f, arguments) }
 	if #arguments > #parameters { return refuse_call([f], arguments) }
@@ -16,7 +16,7 @@ def call(body: Body, f: Function, arguments: list): TypedCode {
 	call_values(f, defaulted(body, f, as_written(body, slots, given), #arguments))
 }
 # `f(1, 2, 3)` of `f(a, *xs)`: the arguments after the fixed ones go as one list, a lone spread `f(1, *ys)` as ys
-def rest_call(body: Body, f: Function, arguments: list): TypedCode {
+def rest_call(body: Body, f: Function, arguments: list) as TypedCode {
 	fixed = #f.signature.parameters - 1
 	if #arguments < fixed { return refuse_arguments(f, #arguments) }
 	extra = arguments[fixed..]
@@ -25,18 +25,18 @@ def rest_call(body: Body, f: Function, arguments: list): TypedCode {
 	call_values(f, arguments[..fixed].map(argument => expression_code(body, argument)) + [rest])
 }
 # the values given, then the defaults of the parameters after them
-def defaulted(body: Body, f: Function, given: list, count: int): list {
+def defaulted(body: Body, f: Function, given: list, count: int) as list {
 	given + range_list(#f.signature.parameters - #given).map(i => default_value(body, f, #given + i, count))
 }
 # `name = value` or `name: value` naming one of `names` (P37): calls and constructors take both
-is_named_argument(argument: Node, names: list): bool := type(argument) is key and (op_of(argument) == Op.Assign or op_of(argument) == Op.Colon) and key_of(argument) is symbol and name_of(key_of(argument)) in names
+is_named_argument(argument: Node, names: list) as bool := type(argument) is key and (op_of(argument) == Op.Assign or op_of(argument) == Op.Colon) and key_of(argument) is symbol and name_of(key_of(argument)) in names
 # the place a named argument names, by a parameter's name or its label (`with: "coffee"` of `with new`)
-named_place(name: text, names: list, labels: list): int := range_list(#names).filter(i => names[i] == name or (labels and labels[i] == name))#1
+named_place(name: text, names: list, labels: list) as int := range_list(#names).filter(i => names[i] == name or (labels and labels[i] == name))#1
 # the arguments in the places of `names`: the positional ones first, each named one (`f(b=2, a=7)`) in its name's place,
 # [argument] each, ø for a place left out; ø when a name is given twice or more are given than places (test
 # `slots == ø`: `ø is list` holds, so a nullary f took `m.f`'s receiver; card member-read). (The values are computed in the places'
 # order; as_written computes a call's as written, P216). Each slot is [the value, its place in the call as written]
-placed_arguments(names: list, arguments: list, labels: list = []): any := {
+placed_arguments(names: list, arguments: list, labels: list = []) as any := {
 	slots = []
 	for written in range_list(#arguments) {
 		argument = arguments[written]
@@ -54,7 +54,7 @@ placed_arguments(names: list, arguments: list, labels: list = []): any := {
 }
 # `f(b=h(), a=g())`: the values computed as written, h() first, each held in a local the call reads in its place
 # (P216); the given codes as they are when the call is written in its places' order
-def as_written(body: Body, slots: list, given: list): list {
+def as_written(body: Body, slots: list, given: list) as list {
 	places = range_list(#slots).filter(i => slots[i] != ø)
 	written = range_list(#places).map(k => places.filter(i => slots[i]#2 == k)#1)
 	if written == places { return given }
@@ -69,10 +69,10 @@ def as_written(body: Body, slots: list, given: list): list {
 	held
 }
 # a call of f with arguments it does not take: the program's error naming the call f takes, `beat(n)`
-refuse_arguments(f: Function, count: int): any := refuse_count([f], count)
+refuse_arguments(f: Function, count: int) as any := refuse_count([f], count)
 # a call of these arguments none of the functions takes; `f 5 for 2` of `f(x, for y)` names the call with the label's
 # colon, `f 5 for: 2` (wiki/argument.md: in a call a label always takes one)
-refuse_call(functions: list, arguments: list): any := {
+refuse_call(functions: list, arguments: list) as any := {
 	labels = functions.flat_map(f => f.signature.parameters.map(p => p.label)).filter(label => label != "")
 	if arguments.any(argument => is_bare_label(argument, labels)) {
 		written = arguments.map(argument => if is_bare_label(argument, labels) then name_of(argument) + ":" else "${argument}")
@@ -80,23 +80,23 @@ refuse_call(functions: list, arguments: list): any := {
 	}
 	refuse_count(functions, #arguments)
 }
-is_bare_label(argument: Node, labels: list): bool := argument is symbol and name_of(argument) in labels
-refuse_count(functions: list, count: int): any := {
+is_bare_label(argument: Node, labels: list) as bool := argument is symbol and name_of(argument) in labels
+refuse_count(functions: list, count: int) as any := {
 	shapes = functions.map(call_shape).join(" or ")
 	program_error(shapes + " is called with " + count + (if count == 1 then " argument" else " arguments"), shapes)
 }
 # the program's functions of a name, each of its parameter counts (`low·0`, `low·1`)
-functions_named(name: text): list := module.functions.keys.filter(key => without_arity(key) == name).map(key => module.functions[key]).filter(f => not f.is_runtime)
+functions_named(name: text) as list := module.functions.keys.filter(key => without_arity(key) == name).map(key => module.functions[key]).filter(f => not f.is_runtime)
 # the call a function takes as its definition writes it: `beat(n)`, `f(x, y = …)`, `g(xs...)`
-call_shape(f: Function): text := without_arity(f.name) + "(" + f.signature.parameters.map(p => if p.rest then p.name + "..." else if p.defaulted_to != ø then p.name + " = …" else p.name).join(", ") + ")"
+call_shape(f: Function) as text := without_arity(f.name) + "(" + f.signature.parameters.map(p => if p.rest then p.name + "..." else if p.defaulted_to != ø then p.name + " = …" else p.name).join(", ") + ")"
 # the default of f's parameter i a call leaves out, compiled where the call is: refused when it reads a parameter
-def default_value(body: Body, f: Function, i: int, count: int): TypedCode {
+def default_value(body: Body, f: Function, i: int, count: int) as TypedCode {
 	default = f.signature.parameters[i].defaulted_to
 	if default == ø { return refuse_arguments(f, count) }
 	for name in taken_names(f.signature) { if mentions(default#1, name) { return refuse("a default of " + f.name + " reading " + name) } }
 	expression_code(body, default#1)
 }
-def call_values(f: Function, values: list): TypedCode {
+def call_values(f: Function, values: list) as TypedCode {
 	# a marked number given an unannotated parameter is given boxed, where its static mark runs out (decision
 	# marks-unboxed-first): `k(x) := x` of an Angle keeps it an Angle
 	values = range_list(#values).map(i => if values[i].mark != 0 and i < #f.signature.parameters and f.signature.parameters[i].type_name == "" then TypedCode(ValueKind.Node, boxed(values[i])) else values[i])
@@ -116,7 +116,7 @@ def call_values(f: Function, values: list): TypedCode {
 # again, the parameter of their joint kind from the start (module.later_kinds, typed_wasm_module). A reading that widened
 # one goes on to find the others (module.widened_now): it is read again anyway, and stopping at the second call of a
 # widened parameter took a reading of the whole compiler for each (card speed-parallel-emit)
-def passed(f: Function, i: int, value: TypedCode): list {
+def passed(f: Function, i: int, value: TypedCode) as list {
 	global link_refused
 	slot = parameter_key(f.name, i)
 	declared = if i < #f.signature.parameters then aliased_type(f.signature.parameters[i].type_name) else ""
@@ -136,7 +136,7 @@ def passed(f: Function, i: int, value: TypedCode): list {
 }
 # whether a slot (an unannotated parameter, a global) takes the joint kind of its own and a value it cannot hold from
 # the module's next reading on: no when the joint kind is no value's, or this reading already holds it so
-def widens_later(slot: text, joint: ValueKind): bool {
+def widens_later(slot: text, joint: ValueKind) as bool {
 	if not (is_held_kind(joint)) { return no }
 	known = module.later_kinds.get(slot) == joint
 	if known and slot not in module.widened_now { return no }
@@ -159,7 +159,7 @@ widen_parameter(f: Function, i: int, kind: ValueKind) := {
 ## functions
 # the locals of f's body, its parameters first
 # (a function whose first parameter is a class sees that class's fields bare: its locals are named apart)
-new_body(f: Function): Body := {
+new_body(f: Function) as Body := {
 	scope = Body({}, [], [], 0, f.is_runtime or is_runtime_module_word(f.name), f, [], {}, 0, [], [], [], {})
 	for i in 0..<#f.signature.parameters {
 		parameter = f.signature.parameters[i]
@@ -171,18 +171,18 @@ new_body(f: Function): Body := {
 	scope
 }
 # every parameter has a local of its own: a name given twice, `middle(_, value, _)`, names only the first
-parameter_local_name(scope: Body, name: text, i: int): text := if name in scope.names then "·parameter" + i else name
+parameter_local_name(scope: Body, name: text, i: int) as text := if name in scope.names then "·parameter" + i else name
 
 # is the program analyzed: then a node meeting a list or text holds one, as analyzer.warp found
-analyzed_program(): bool := module.kinds != ø and "value" in module.kinds
+analyzed_program() as bool := module.kinds != ø and "value" in module.kinds
 # the kinds analyzer.warp finds that the emitter holds as found; a node stays the emitter's own reading of the value
 # not int: analyzer.warp's int is warp's unbounded one, a node holding a big number would trap as an i64
-kept_kind(kind: ValueKind?): ValueKind? := if kind == ValueKind.Float or kind == ValueKind.Char or kind == ValueKind.Text or kind == ValueKind.List then kind else ø
+kept_kind(kind: ValueKind?) as ValueKind? := if kind == ValueKind.Float or kind == ValueKind.Char or kind == ValueKind.Text or kind == ValueKind.List then kind else ø
 # whether a value of the emitter's kind `from` is held as the analyzed kind `to` without loss: a character as a text, an
 # int as a float; a node the emitter boxed (`if c then "a" else 2`, analyzer.warp's text) stays one
-held_as(from: ValueKind, to: ValueKind): bool := from == to or (from == ValueKind.Char and to == ValueKind.Text) or (from == ValueKind.Int and to == ValueKind.Float)
+held_as(from: ValueKind, to: ValueKind) as bool := from == to or (from == ValueKind.Char and to == ValueKind.Text) or (from == ValueKind.Int and to == ValueKind.Float)
 # what analyzer.warp found for the program's function f, main's being the program's variables and value; ø if nothing
-analyzed_function(f: Function): any := {
+analyzed_function(f: Function) as any := {
 	if f.is_runtime or not analyzed_program() { return ø }
 	if f.name == "main" { return {params: [], result: module.kinds["value"], locals: module.kinds["variables"], elements: module.kinds["elements"]} }
 	functions = module.kinds["functions"]
@@ -190,14 +190,14 @@ analyzed_function(f: Function): any := {
 	functions[f.name]
 }
 # the kind analyzer.warp found for f's i-th parameter (counted from 0), its result, a local, if the emitter holds it
-analyzed_parameter_kind(f: Function, i: int): any := {
+analyzed_parameter_kind(f: Function, i: int) as any := {
 	found = analyzed_function(f)
 	if found == ø or i >= #found["params"] { return ø }
 	kept_kind(found["params"][i])
 }
 # the number a word's whole body is, `-128` of `small_int_low(): int := -128` (lowered `{the result: int = -128; the
 # result}` or `-128 as int`), else ø
-constant_body(f: Function): Node? := {
+constant_body(f: Function) as Node? := {
 	body = f.body
 	if body == ø { return ø }
 	value = if is_key(body, Op.As) then key_of(body) else if is_group(body) and #body == 2 and held_result_type(body#1) != ø then value_of(body#1) else body
@@ -205,7 +205,7 @@ constant_body(f: Function): Node? := {
 }
 # the kind a definition declares it gives, `f(x): text := …`: once lowered its body, or a block's last statement, is
 # `… as text`, or the block `{the result: text = …; the result}` (definitions.warp result_held)
-declared_result(f: Function): any := {
+declared_result(f: Function) as any := {
 	declaration = result_declared(f.body)
 	if declaration == ø { return ø }
 	if is_key(declaration, Op.As) {
@@ -216,51 +216,51 @@ declared_result(f: Function): any := {
 }
 # the mark of a number type the definition declares it gives, `f(c: Color): Color := c`, so its caller holds the
 # result unboxed with its mark; 0 for any other result
-declared_mark(f: Function): int := module.marks.get(declared_result_word(f) ?? "") ?? 0
+declared_mark(f: Function) as int := module.marks.get(declared_result_word(f) ?? "") ?? 0
 # the type word a definition declares it gives, `int` of `f(): int := …`; ø when it declares none
-declared_result_word(f: Function): text? := {
+declared_result_word(f: Function) as text? := {
 	declaration = result_declared(f.body)
 	if declaration == ø { return ø }
 	if is_key(declaration, Op.As) then name_of(value_of(declaration)) else held_result_type(declaration)
 }
 # the part of a body that declares its result: `… as T`, or `the result: T = …` of a block, ø when none does
-result_declared(n: Node): Node? := {
+result_declared(n: Node) as Node? := {
 	if is_key(n, Op.As) and value_of(n) is symbol { return n }
 	if not (is_group(n) and #n > 0 and (bracket_of(n) == "{" or separator_of(n) == ";")) { return ø }
 	if held_result_type(n#1) != ø { return n#1 }
 	result_declared(n#(#n))
 }
 # `T` of `the result: T = …`, else ø
-held_result_type(n: Node): any := {
+held_result_type(n: Node) as any := {
 	if not (is_key(n, Op.Assign) and is_key(key_of(n), Op.Colon)) { return ø }
 	declared = key_of(n)
 	if key_of(declared) == symbol("the result") and value_of(declared) is symbol then name_of(value_of(declared)) else ø
 }
 # the kind a result declared `T` is held as: an instance or `any` a node; ø for a type word the core holds no kind of
-result_type_kind(type_name: text): any := {
+result_type_kind(type_name: text) as any := {
 	word = aliased_type(type_name)
 	if word in declared_kinds then declared_kinds[word] else if type_name == "any" or type_name in module.classes then ValueKind.Node else ø
 }
-analyzed_result_kind(f: Function): any := {
+analyzed_result_kind(f: Function) as any := {
 	found = analyzed_function(f)
 	if found == ø { return ø }
 	kept_kind(found["result"])
 }
 # (an empty map of locals comes as null: card lib-json)
-analyzed_local_kind(f: Function, name: text): any := {
+analyzed_local_kind(f: Function, name: text) as any := {
 	found = analyzed_function(f)
 	if found == ø or found["locals"] == ø or name not in found["locals"] { return ø }
 	kept_kind(found["locals"][name])
 }
 # the kind of the elements analyzer.warp found for f's list `name`, if the emitter unboxes it from a node
-analyzed_element_kind(f: Function, name: text): any := {
+analyzed_element_kind(f: Function, name: text) as any := {
 	found = analyzed_function(f)
 	if found == ø or found["elements"] == ø or name not in found["elements"] { return ø }
 	kind = found["elements"][name]
 	if kind == ValueKind.Float or kind == ValueKind.Text or kind == ValueKind.List then kind else ø
 }
 
-compile_function(f: Function, argument_kinds: list): any := {
+compile_function(f: Function, argument_kinds: list) as any := {
 	outer = module.saw_pending
 	if not module.surveying { function_compiled(f, argument_kinds) } else {
 		try { function_compiled(f, argument_kinds) } catch refusal {
@@ -274,8 +274,8 @@ compile_function(f: Function, argument_kinds: list): any := {
 }
 # an unannotated parameter takes the kind of its first call's argument joined with those of every literal any call
 # passes it: `binding_powers("=")` (a char) and `binding_powers("to")` make a text parameter, which a node converts to
-parameter_joint(a: ValueKind, b: ValueKind): ValueKind := if (a == ValueKind.Char and b == ValueKind.Text) or (a == ValueKind.Text and b == ValueKind.Char) then ValueKind.Text else joint_kind(a, b)
-literal_kind(n: Node): any := {
+parameter_joint(a: ValueKind, b: ValueKind) as ValueKind := if (a == ValueKind.Char and b == ValueKind.Text) or (a == ValueKind.Text and b == ValueKind.Char) then ValueKind.Text else joint_kind(a, b)
+literal_kind(n: Node) as any := {
 	if n is bool { return ValueKind.Bool }
 	if n is text { return if #n == 1 then ValueKind.Char else ValueKind.Text }
 	if n is int { return ValueKind.Int }
@@ -303,7 +303,7 @@ time_type_words = ["time", "instant", "date", "duration"]
 node_annotations = ["any", "Node", "function", "type", "map", "number", "rational", "symbol", "Symbol", "key", "pair", "data", "error"]
 # the kind a parameter annotated `word` holds: a type alias's type's, a node for a class, a list for a type word's
 # plural (`ints`, `texts`, `Points`)
-annotated_kind(written: text): ValueKind := {
+annotated_kind(written: text) as ValueKind := {
 	# `(samples, float) -> any`: a function, held as a node
 	if written.contains(" -> ") { return ValueKind.Node }
 	if written.starts_with("[") { return ValueKind.List }
@@ -326,32 +326,32 @@ annotated_kind(written: text): ValueKind := {
 	kind
 }
 # the kind every member holds, else a node, which holds any of them
-shared_kind(kinds: list): ValueKind := if kinds.all(kind => kind == kinds#1) then kinds#1 else ValueKind.Node
+shared_kind(kinds: list) as ValueKind := if kinds.all(kind => kind == kinds#1) then kinds#1 else ValueKind.Node
 # whether `converted` takes a value of kind `from` where `to` is needed: as it is, boxed into a node, read from a node,
 # an int as a float or bool, a bool as an int, a character as a text
-converts(from: ValueKind, to: ValueKind): bool := from == to or from == ValueKind.Node or to == ValueKind.Node or (from == ValueKind.Int and (to == ValueKind.Float or to == ValueKind.Bool)) or (from == ValueKind.Bool and to == ValueKind.Int) or (from == ValueKind.Char and to == ValueKind.Text)
+converts(from: ValueKind, to: ValueKind) as bool := from == to or from == ValueKind.Node or to == ValueKind.Node or (from == ValueKind.Int and (to == ValueKind.Float or to == ValueKind.Bool)) or (from == ValueKind.Bool and to == ValueKind.Int) or (from == ValueKind.Char and to == ValueKind.Text)
 # whether a value of the kind is one of the union's members, as far as the compile knows it: a node is checked when it
 # runs, ø among them; an optional member `text?` takes a text
-fits_union(type: text, kind: ValueKind): bool := union_members(type).any(member => converts(kind, annotated_kind(member.remove_suffix("?"))))
+fits_union(type: text, kind: ValueKind) as bool := union_members(type).any(member => converts(kind, annotated_kind(member.remove_suffix("?"))))
 # the type a type alias names in the end, `Years?` of `type Years = Age; type Age = int` gives `int?`, the core's word of
 # a type word's other spelling (`string`, `integer`: type_synonyms); any other word itself
-aliased_type(word: text): text := {
+aliased_type(word: text) as text := {
 	optional = word.ends_with("?")
 	resolved = if optional then word[0..<(#word - 1)] else word
 	while resolved in module.aliases { resolved = module.aliases[resolved] }
 	if optional then resolved + "?" else resolved
 }
 # the type words' other spellings as the aliases every program starts with, so aliased_type resolves them in its one loop
-type_synonyms(): map := {
+type_synonyms() as map := {
 	found = {}
 	for word in core_type_words.keys { if core_type_words.get(word) != word { found[word] = core_type_words.get(word) } }
 	found
 }
 # a type word is a name; a shape `p{name}` or a default `b: 2` reaches annotated_kind too and is no type word
-spells_a_name(word: text): bool := #word > 0 and is_letter(word[0..<1]) and #word.chars().filter(c => is_letter(c) or is_digits(c) or c == "_") == #word
-is_letter(c: text): bool := (c >= "a" and c <= "z") or (c >= "A" and c <= "Z")
-names_a_type(word: text): bool := is_held_kind(word) or word in node_annotations or word in module.classes or word in module.aliases
-function_compiled(f: Function, argument_kinds: list): any := {
+spells_a_name(word: text) as bool := #word > 0 and is_letter(word[0..<1]) and #word.chars().filter(c => is_letter(c) or is_digits(c) or c == "_") == #word
+is_letter(c: text) as bool := (c >= "a" and c <= "z") or (c >= "A" and c <= "Z")
+names_a_type(word: text) as bool := is_held_kind(word) or word in node_annotations or word in module.classes or word in module.aliases
+function_compiled(f: Function, argument_kinds: list) as any := {
 	# a linked module's word the program only declares (no body): its code is the module's (bind_library_words)
 	if is_linked_word(f) { return link_refusal(linked_arity_refusal(f.name, #f.signature.parameters)) }
 	placed(f)

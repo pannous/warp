@@ -14,7 +14,7 @@ use "../emitter/byte_codes.warp"
 # the library words of core on values known only at run time
 # `slice(x, from, to)`: x's items (a text's characters) from..<to, counted from 0; from ø starts at 0 (`xs[:k]`), to ø
 # or beyond the end stops at the end, a negative from or to fails, "index out of range"
-node_slice(x: Node, start: Node, to: Node = ø): Node := {
+node_slice(x: Node, start: Node, to: Node = ø) as Node := {
 	from = if is_null(start) then 0 else index_of_node(start)
 	stop = if is_null(to) then node_length(x) else index_of_node(to)
 	if from < 0 or stop < 0 { index_out_of_range() }
@@ -25,14 +25,14 @@ node_slice(x: Node, start: Node, to: Node = ø): Node := {
 	not_a_list()
 }
 # `xs.copy()`: a list of the same items that a change to xs no longer reaches (a text, which nothing changes, as it is)
-node_copy(x: Node): Node := node_slice(x, ø)
-character_slice(t: text, from: int, to: int): text := {
+node_copy(x: Node) as Node := node_slice(x, ø)
+character_slice(t: text, from: int, to: int) as text := {
 	start = character_start(t, from + 1)
 	stop = character_start(t, to + 1)
 	if stop <= start { return "" }
 	bytes_between(t, start, stop)
 }
-items_slice(items: list, from: int, to: int): list := {
+items_slice(items: list, from: int, to: int) as list := {
 	count = min_int(to, #items) - from
 	if count < 0 { count = 0 }
 	out = new_list(count)
@@ -40,24 +40,24 @@ items_slice(items: list, from: int, to: int): list := {
 	out
 }
 # `starts_with(t, part)`, `ends_with(t, part)`: 1 when part's bytes begin or end t, else 0, an int
-node_starts_with(t: Node, part: Node): bool := text_starts_with(text_of_textual(t), text_of_textual(part))
-node_ends_with(t: Node, part: Node): bool := text_ends_with(text_of_textual(t), text_of_textual(part))
-node_trim(t: Node): text := text_trim(text_of_textual(t))
+node_starts_with(t: Node, part: Node) as bool := text_starts_with(text_of_textual(t), text_of_textual(part))
+node_ends_with(t: Node, part: Node) as bool := text_ends_with(text_of_textual(t), text_of_textual(part))
+node_trim(t: Node) as text := text_trim(text_of_textual(t))
 # a text or a character as its text; anything else fails
-text_of_textual(n: Node): text := {
+text_of_textual(n: Node) as text := {
 	if not textual_node(n) { not_a_text() }
 	node_text(n)
 }
 # a space, a tab, a line feed or a carriage return
-is_space_byte(b: int): bool := b == Ascii.Space or b == Ascii.Tab or b == Ascii.Newline or b == Ascii.Return
+is_space_byte(b: int) as bool := b == Ascii.Space or b == Ascii.Tab or b == Ascii.Newline or b == Ascii.Return
 # the bytes start..<stop of t
-bytes_between(t: text, start: int, stop: int): text := {
+bytes_between(t: text, start: int, stop: int) as text := {
 	out = made_text(stop - start, is_ascii_text(t))
 	copy_text(out, 0, t, start, stop - start)
 	out
 }
 # `xs.join(separator)`: the texts of xs's items with separator between them; texts and numbers only
-joined(xs: list, separator: Node): text := {
+joined(xs: list, separator: Node) as text := {
 	between = node_text(separator)
 	parts = []
 	for x in xs {
@@ -67,16 +67,16 @@ joined(xs: list, separator: Node): text := {
 	texts_joined(parts, between)
 }
 # `n times "ab"`: t n times over
-repeated_text(n: int, t: Node): text := {
+repeated_text(n: int, t: Node) as text := {
 	piece = node_text(t)
 	out = made_text(n * byte_count(piece), ascii_joined(piece, piece))
 	for i in 0..<n { copy_text(out, i * byte_count(piece), piece, 0, byte_count(piece)) }
 	out
 }
 # `a * b` of values known only at run time, one of them a text: the text repeated, as `"ab" * 2` and `2 * "ab"` are
-repeated_node(a: Node, b: Node): text := if textual_node(a) then repeated_text(int_of_node(b), a) else repeated_text(int_of_node(a), b)
+repeated_node(a: Node, b: Node) as text := if textual_node(a) then repeated_text(int_of_node(b), a) else repeated_text(int_of_node(a), b)
 # `t.split(separator)`: the texts between separator's places in t; `t.split` the words between runs of whitespace
-split_text(t: text, separator: Node = ø): list := {
+split_text(t: text, separator: Node = ø) as list := {
 	if is_null(separator) { return text_words(t) }
 	between = node_text(separator)
 	out = new_list(0)
@@ -95,7 +95,7 @@ split_text(t: text, separator: Node = ø): list := {
 	out
 }
 # the parts of t between runs of whitespace, none empty (decision sample-word-functions)
-text_words(t: text): list := {
+text_words(t: text) as list := {
 	out = new_list(0)
 	start = 0
 	for at in 0 ..< byte_count(t) + 1 {
@@ -107,7 +107,7 @@ text_words(t: text): list := {
 	out
 }
 # `t.chars`: t's characters (grapheme clusters)
-text_graphemes(t: text): list := {
+text_graphemes(t: text) as list := {
 	out = new_list(text_count(t))
 	at = 0
 	for i in 1 to #out {
@@ -118,7 +118,7 @@ text_graphemes(t: text): list := {
 	out
 }
 # `for each codepoint in t`: t's code points
-text_chars(t: text): list := {
+text_chars(t: text) as list := {
 	out = new_list(code_point_count(t))
 	at = 0
 	for i in 1 to #out {
@@ -128,14 +128,14 @@ text_chars(t: text): list := {
 	out
 }
 # `t.bytes`: t's UTF-8 bytes, ints (decision text-unit-plurals); `for b in t.bytes` reads them one by one, `byte_at(t, i)`
-text_byte_list(t: text): list := {
+text_byte_list(t: text) as list := {
 	out = new_list(byte_count(t))
 	for i in 1 to #out { out#i = byte_at(t, i - 1) }
 	out
 }
-text_byte(t: text, at: int): int := byte_at(t, at)
+text_byte(t: text, at: int) as int := byte_at(t, at)
 # `xs.reverse`: a list's items or a text's characters the other way round
-reversed(n: Node): Node := {
+reversed(n: Node) as Node := {
 	if kind_code(n) == Kind.Codepoint { return char_text(unboxed_char(n)) }
 	if kind_code(n) == Kind.Text {
 		t = unboxed_text(n)
@@ -150,7 +150,7 @@ reversed(n: Node): Node := {
 	}
 	reversed_items(unboxed_list(n))
 }
-reversed_items(items: list): list := {
+reversed_items(items: list) as list := {
 	turned = new_list(#items)
 	for i in 1 to #items { turned#i = items#(#items + 1 - i) }
 	turned

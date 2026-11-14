@@ -57,7 +57,7 @@ pass_owners = {"foreign C call": "c_imports", "runtime declaration": "definition
 	"comprehension": "comprehensions", "lambda": "lambdas", "number word": "number_words (extensions/number_words.warp)", "fallback": "sugar (extensions/sugar/fallbacks.warp)"}
 
 # the emitter's refusal naming its form and owner pass: `form` one of pass_owners, ø for a form no pass owns
-owned_refusal(refusal: text, form: text?): text := {
+owned_refusal(refusal: text, form: text?) as text := {
 	# the program's own error (emitter.warp program_error) is no gap a pass owns
 	if not refusal.starts_with(outside_the_core) { return refusal }
 	if form == ø { return refusal + " (no owner)" }
@@ -70,14 +70,14 @@ pure_passes = [tries, components, definition_heads, definitions, arity_overloads
 # the pure passes with the extensions' between them (core/extension.warp with_extension_passes), made once
 global lowering_passes = ø
 # a node after every pure pass, in order, with the deferred definitions it calls
-lowered_node(n: Node): Node := {
+lowered_node(n: Node) as Node := {
 	deferred_definitions = []
 	deferred_triggers = {}
 	lowered = passed(n)
 	timed("deferred definitions")
 	with_called_deferred(lowered)
 }
-passed(n: Node): Node := {
+passed(n: Node) as Node := {
 	if lowering_passes == ø { lowering_passes = with_extension_passes(pure_passes, every_pass) }
 	for pass in lowering_passes {
 		timed("pass " + "${pass}")
@@ -94,7 +94,7 @@ global deferred_definitions = []
 # the tokens beside its name that call a deferred definition, by name: the operator keys whose emitted code calls an
 # operator dispatcher, `a < b` <·operator (tokens_within)
 global deferred_triggers = {}
-with_called_deferred(program: Node): Node := {
+with_called_deferred(program: Node) as Node := {
 	waiting = {}
 	for definition in deferred_definitions { waiting[declared_name(definition)] = (waiting.get(declared_name(definition)) ?? []) + [definition] }
 	deferred_definitions = []
@@ -112,7 +112,7 @@ with_called_deferred(program: Node): Node := {
 	if #reached == 0 { return program }
 	separated(bracketed(statements_in(program) + reached, ""), ";")
 }
-map_without_all(m: map, names: list): map := {
+map_without_all(m: map, names: list) as map := {
 	kept = {}
 	for name in m.keys.filter(name => name not in names) { kept[name] = m[name] }
 	kept
@@ -129,12 +129,12 @@ def read_traced(path: text) := { if run_option("times") != ø { print "§R " + p
 # the program as the passes leave it, from parser.warp's nodes (card rest-node), with the declarations of the files
 # it uses from `folder` (uses.warp) and the definitions they reach of the standard modules they use and of the
 # prelude (prelude_words.warp)
-lowered_program(source: text, folder: text, prelude: text): Node := {
+lowered_program(source: text, folder: text, prelude: text) as Node := {
 	lowering_from(prelude)
 	lowered_reached(plain_node(parsed(rules_ended(source)), passes_read_marks), source, folder, prelude)
 }
 # the program with the definitions it reaches, after every pure pass, those it doesn't call after all dropped
-lowered_reached(program: Node, source: text, folder: text, prelude: text): Node := called_only(lowered_node(with_used(program, source, folder, prelude)))
+lowered_reached(program: Node, source: text, folder: text, prelude: text) as Node := called_only(lowered_node(with_used(program, source, folder, prelude)))
 # the sugar rules the program at hand keeps (with_used), of each sugar step
 global kept_first_sugar = []
 global kept_sugar = []
@@ -148,7 +148,7 @@ global kept_comprehension_sugar = []
 # prelude is reached, so the words index_positions answers with, `byte_index_of` for a `byte index b = t.find(part)`,
 # bring their definitions; the source tells a rule's `·` from `*`; the early sugar before all of them, the function keywords gone). The sugar rules the program keeps are chosen here,
 # by its own bindings, before the definitions it reaches join it.
-with_used(program: Node, source: text, folder: text, prelude: text): Node := {
+with_used(program: Node, source: text, folder: text, prelude: text) as Node := {
 	global brought_names
 	global brought_value_names
 	global exported_names
@@ -205,33 +205,33 @@ global used_prelude = ""
 # the used stage's passes, in order: the program's rewrite rules, the type modules, the expected types and the modules it
 # uses; extensions place theirs between them as between the pure passes (index_positions, property_accessors)
 used_passes = [rules_rewritten, with_type_module_uses, expected_types_used, modules_used]
-rules_rewritten(program: Node): Node := rewritten_program(program, used_source)
-expected_types_used(program: Node): Node := with_expected_type_uses(program, used_prelude)
-modules_used(program: Node): Node := with_used_modules(program, used_folder)
+rules_rewritten(program: Node) as Node := rewritten_program(program, used_source)
+expected_types_used(program: Node) as Node := with_expected_type_uses(program, used_prelude)
+modules_used(program: Node) as Node := with_used_modules(program, used_folder)
 # every stage's passes: the names an extension's pass is placed by
 every_pass = pure_passes + used_passes
 global used_lowering = ø
 # the words code will say once the sugar the program keeps rewrote it: `twice {…}` says the prelude's times, a module's
 # `a .+ b` element_wise_any
-sugar_words_of(code: Node): list := reaching_template_words(code, kept_first_sugar + kept_sugar + kept_iteration_sugar + kept_late_sugar + kept_comprehension_sugar)
+sugar_words_of(code: Node) as list := reaching_template_words(code, kept_first_sugar + kept_sugar + kept_iteration_sugar + kept_late_sugar + kept_comprehension_sugar)
 
 # the sugar rules (extensions/sugar/) the program keeps, over it and the definitions it reached: the first before the passes
 # that would read its forms as something else (rewrites.warp first_sugar_module_names), the others where the passes
 # before them have made their forms (definitions' `?? []` of a list result) and read the written ones (data_items
 # `xs.add(x)`, of_lookups `keys in m`)
-first_sugar(program: Node): Node := sugared(program, kept_first_sugar)
-sugar(program: Node): Node := sugared(program, kept_sugar)
+first_sugar(program: Node) as Node := sugared(program, kept_first_sugar)
+sugar(program: Node) as Node := sugared(program, kept_sugar)
 # the iteration sugar rules, which lower the `for` loops the passes before them made and loop_heads.warp read, while a
 # range in a loop's head is not yet a list
-iteration_sugar(program: Node): Node := sugared(program, kept_iteration_sugar)
+iteration_sugar(program: Node) as Node := sugared(program, kept_iteration_sugar)
 # the late sugar rules, after the iteration sugar took the loops over a range
-late_sugar(program: Node): Node := sugared(program, kept_late_sugar)
+late_sugar(program: Node) as Node := sugared(program, kept_late_sugar)
 # the comprehension rules, where the comprehensions pass ran
-comprehension_sugar(program: Node): Node := sugared(program, kept_comprehension_sugar)
+comprehension_sugar(program: Node) as Node := sugared(program, kept_comprehension_sugar)
 
 # the program as the passes leave it, its checks run (card pure-diagnostics): those of the program as written, then
 # those of the lowered program; what they find goes to `diagnosed` (diagnostics.warp)
-checked_program(source: text, folder: text, prelude: text): Node := {
+checked_program(source: text, folder: text, prelude: text) as Node := {
 	lowering_from(prelude)
 	floor_division_comments(source)
 	program = plain_node(source_checks(parsed(rules_ended(source)), prelude), passes_read_marks)

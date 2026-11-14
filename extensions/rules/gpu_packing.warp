@@ -17,7 +17,7 @@ gpu_lists = GpuLists(Node.Empty, {}, {})
 # form gpu_packed packs and else only grown, `xs = xs + more`, and mentioned otherwise only as a GPU list serves it:
 # #xs, xs#i, xs#i = v, for x in xs, print xs. Its items read by the program (xs#i, for, print) would be rounded to f32,
 # so only a list a GPU word writes is read so (decision gpu-bound-floats: nothing else sees a rounded value)
-gpu_bound(xs: Node, program: Node): bool := {
+gpu_bound(xs: Node, program: Node) as bool := {
 	if not (xs is symbol) { return no }
 	if not same(program, gpu_lists.program) {
 		gpu_lists.program = program
@@ -28,7 +28,7 @@ gpu_bound(xs: Node, program: Node): bool := {
 	uses = gpu_lists.uses.get(name_of(xs))
 	uses != ø and uses#1 > 0 and uses#2 == 1 + uses#5 and uses#3 == 0 and uses#4 != ø and (uses#6 == 0 or uses#7 > 0)
 }
-gpu_no_uses(): list := [0, 0, 0, ø, 0, 0, 0, []]
+gpu_no_uses() as list := [0, 0, 0, ø, 0, 0, 0, []]
 gpu_use_added(name: text, at: int) := {
 	uses = gpu_lists.uses.get(name) ?? gpu_no_uses()
 	uses[at] = uses[at] + 1
@@ -95,7 +95,7 @@ gpu_definition_counted(definition: Node) := {
 }
 # the program's functions `f(…) := body` with a parameter body hands to the GPU alone (no other mention, assignment
 # or item read): f → the places of those parameters
-gpu_takers(program: Node): map := {
+gpu_takers(program: Node) as map := {
 	takers = {}
 	for statement in level_statements(program) {
 		if is_key(statement, Op.Define) and is_group(key_of(statement)) {
@@ -109,7 +109,7 @@ gpu_takers(program: Node): map := {
 	}
 	takers
 }
-gpu_taken(uses: list?): bool := uses != ø and uses#1 > 0 and uses#2 == 0 and uses#3 == 0 and uses#6 == 0
+gpu_taken(uses: list?) as bool := uses != ø and uses#1 > 0 and uses#2 == 0 and uses#3 == 0 and uses#6 == 0
 gpu_uses_both(a: Node, b: Node) := {
 	gpu_uses_counted(a)
 	gpu_uses_counted(b)
@@ -129,26 +129,26 @@ gpu_sink_added(name: text, writes: bool) := {
 }
 # the forms a GPU list is made by: `float[n]`, a list literal of items, a comprehension `[e for x in r]`
 # a list joined of parts, `a + [e for x in r]`: its parts, which the creating ones among give its cells
-gpu_made_parts(v: Node): list := if is_key(v, Op.Add) then gpu_made_parts(key_of(v)) + gpu_made_parts(value_of(v)) else [v]
-gpu_creating(v: Node): bool := gpu_zeros_count(v) != ø or gpu_comprehension(v) or gpu_literal(v)
+gpu_made_parts(v: Node) as list := if is_key(v, Op.Add) then gpu_made_parts(key_of(v)) + gpu_made_parts(value_of(v)) else [v]
+gpu_creating(v: Node) as bool := gpu_zeros_count(v) != ø or gpu_comprehension(v) or gpu_literal(v)
 # `float[n]` (`int[n]` for integer cells), which the parser reads as float#(n + 1): that shifted count
-gpu_zeros_count(v: Node): Node := if is_key(v, Op.Hash) and key_of(v) is symbol and name_of(key_of(v)) in ["float", "int"] then value_of(v) else ø
-gpu_comprehension(v: Node): bool := is_group(v) and bracket_of(v) == "[" and #v == 2 and is_group(v#2) and #(v#2) == 5 and v#2#1 is symbol and name_of(v#2#1) == "for"
-gpu_literal(v: Node): bool := (is_group(v) and bracket_of(v) == "[" and not gpu_comprehension(v)) or is_empty_list(v)
+gpu_zeros_count(v: Node) as Node := if is_key(v, Op.Hash) and key_of(v) is symbol and name_of(key_of(v)) in ["float", "int"] then value_of(v) else ø
+gpu_comprehension(v: Node) as bool := is_group(v) and bracket_of(v) == "[" and #v == 2 and is_group(v#2) and #(v#2) == 5 and v#2#1 is symbol and name_of(v#2#1) == "for"
+gpu_literal(v: Node) as bool := (is_group(v) and bracket_of(v) == "[" and not gpu_comprehension(v)) or is_empty_list(v)
 # `[]`, the empty list a growth starts from, which the rules hold as an opaque view of no items
 EMPTY_LIST_VIEW = ["list", "[", ""]
-is_empty_list(v: Node): bool := is_opaque(v) and value_of(v) == EMPTY_LIST_VIEW
+is_empty_list(v: Node) as bool := is_opaque(v) and value_of(v) == EMPTY_LIST_VIEW
 # the creating form written to make the GPU list itself (any other value copied into one, gpu_list_of): `float[n]` its zeros, a literal its items written into them
 # one by one, a comprehension each item as it is computed, counted by a first loop (`#(0..n)` makes the range a list)
 # the cells a GPU list holds, `xs: [i32] = …` (extensions/gpu_lists/gpu_lists.warp GpuCell): f32 unless the program says so
 GPU_CELLS = {f32: 0, i32: 1, u32: 2, f16: 3, bf16: 4, vec2: 5, vec3: 6, vec4: 7}
-gpu_packed(v: Node): Node := gpu_made(v, "f32")
+gpu_packed(v: Node) as Node := gpu_made(v, "f32")
 # `xs: [i32] = …`, `xs: [u32] = …`: the value made as a GPU list of those cells; ø for a list type of no GPU cell
-gpu_packed_as(cell: Node, v: Node): any := if cell is symbol and name_of(cell) in GPU_CELLS then gpu_made(v, name_of(cell)) else ø
+gpu_packed_as(cell: Node, v: Node) as any := if cell is symbol and name_of(cell) in GPU_CELLS then gpu_made(v, name_of(cell)) else ø
 # a creating form written to make the GPU list itself, any other value copied into one as it is (never written out as
 # code and read again, which a lambda's comprehension would not survive)
-gpu_made(v: Node, cell: text): Node := if gpu_creating(v) then plain_node(parsed(gpu_packed_code(v, cell))) else call_of("gpu_list_of", [v, GPU_CELLS[cell]])
-gpu_packed_code(v: Node, cell: text): text := {
+gpu_made(v: Node, cell: text) as Node := if gpu_creating(v) then plain_node(parsed(gpu_packed_code(v, cell))) else call_of("gpu_list_of", [v, GPU_CELLS[cell]])
+gpu_packed_code(v: Node, cell: text) as text := {
 	code = GPU_CELLS[cell]
 	shifted = gpu_zeros_count(v)
 	if shifted != ø { return "gpu_zeros((" + as_code(shifted) + ") - 1, " + code + ")" }
@@ -165,7 +165,7 @@ gpu_packed_code(v: Node, cell: text): text := {
 # --- a list made for the GPU alone (gpu_bound) declares its cells, which the gpu_lists pass makes it of
 # (extensions/gpu_lists/gpu_lists.warp): [vec4] where each item is four numbers, [f32] for numbers, no GPU list where
 # its items are lists of another width (the slow path's note then says how to make it)
-gpu_inferred_cell(v: Node): text? := {
+gpu_inferred_cell(v: Node) as text? := {
 	# `float[n]` f32 zeros, `int[n]` no floats at all
 	if gpu_zeros_count(v) != ø { return if name_of(key_of(v)) == "float" then "f32" else ø }
 	items = if gpu_comprehension(v) then [v#1] else items_of(v)
@@ -174,14 +174,14 @@ gpu_inferred_cell(v: Node): text? := {
 }
 # the one cell the made list and the lists its growths add agree on, ø where they differ; growths by other values
 # convert at run time and don't vote, and a list nothing votes for (grown from [] by such values) is f32
-gpu_cell_of_all(values: list): text? := {
+gpu_cell_of_all(values: list) as text? := {
 	cells = distinct(values.filter(v => gpu_creating(v) and not is_empty_list(v)).map(v => gpu_inferred_cell(v) ?? ""))
 	if #cells == 0 { return "f32" }
 	if #cells == 1 and cells#1 != "" then cells#1 else ø
 }
-is_number_list(item: Node): bool := is_group(item) and bracket_of(item) == "["
+is_number_list(item: Node) as bool := is_group(item) and bracket_of(item) == "["
 # a main-level `xs = v` made for the GPU alone as `xs: [vec4] = v`, any other statement as it is
-gpu_inferred_declaration(statement: Node, program: Node): Node := {
+gpu_inferred_declaration(statement: Node, program: Node) as Node := {
 	if not (is_key(statement, Op.Assign) and key_of(statement) is symbol) { return statement }
 	bound = gpu_bound(key_of(statement), program)
 	uses = gpu_lists.uses.get(name_of(key_of(statement)))
@@ -196,7 +196,7 @@ gpu_inferred_declaration(statement: Node, program: Node): Node := {
 }
 # why a list the program makes and a GPU word takes stays a list, said where it is made (its upload then walks its
 # numbers, the slow path); ø for any other list
-gpu_kept_why(uses: list?, bound: bool): text? := {
+gpu_kept_why(uses: list?, bound: bool) as text? := {
 	if uses == ø or uses#1 == 0 or uses#4 == ø { return ø }
 	if bound { return "its items are lists of another width than four" }
 	if uses#3 > 0 { return "the program hands it on elsewhere too" }

@@ -9,7 +9,7 @@ use "../parsing/phrase_blocks.warp"
 case_word = "case"
 
 # the cases of an enum body, a line of several cases `Penny, Nickel` among lines of cases each a case
-enum_rows(cases: list): list := {
+enum_rows(cases: list) as list := {
 	rows = []
 	for case in cases {
 		rows += match case {
@@ -21,7 +21,7 @@ enum_rows(cases: list): list := {
 }
 
 # a case of an enum, `north` of Swift's `case north`, `Error` of a spelled `Error = "error"`, else ø
-enum_case_name(case: Node): any := match case {
+enum_case_name(case: Node) as any := match case {
 	Symbol(name): name
 	Key(name, Op.Assign, _): if is_name(name) then name_of(name) else ø
 	List(words, Bracket.None, Separator.Space): if #words == 2 and words#1 == symbol(case_word) and is_name(words#2) then name_of(words#2) else ø
@@ -29,7 +29,7 @@ enum_case_name(case: Node): any := match case {
 }
 
 # `{Red, Green}`: the names of the cases, else ø
-case_names(block: Node): any := match block {
+case_names(block: Node) as any := match block {
 	List(cases, Bracket.Curly, separator): {
 		names = enum_rows(cases).map(enum_case_name)
 		if names.all(name => name != ø) then names else ø
@@ -38,7 +38,7 @@ case_names(block: Node): any := match block {
 }
 
 # `enum Color {Red, Green}`: [the enum's name, its case names], else ø
-declared_enum(n: Node): any := match n {
+declared_enum(n: Node) as any := match n {
 	List(parts, Bracket.None, Separator.Space): {
 		if #parts != 3 or parts#1 != symbol(enum_word) or not is_name(parts#2) { return ø }
 		cases = case_names(parts#3)
@@ -48,7 +48,7 @@ declared_enum(n: Node): any := match n {
 }
 
 # the cases of those enums, each name once
-case_names_of(enums: map): map := {
+case_names_of(enums: map) as map := {
 	variants = {}
 	for name in enums.keys { for case in enums[name] { variants[case] = yes } }
 	variants

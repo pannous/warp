@@ -4,29 +4,29 @@
 use "../analysis/words.warp"
 use "walk.warp"
 
-def listed(bracket: Bracket, separator: Separator, nodes: list): Node := {
+def listed(bracket: Bracket, separator: Separator, nodes: list) as Node := {
 	if #nodes == 0 { return opaque(["list", bracket as text, separator as text]) }
 	List(nodes, bracket, separator)
 }
 
 // `f(a, b)` as the node (f a b) that calls f
-def call_of(nodes: list): Node := listed(Bracket.Round, Separator.None, nodes)
+def call_of(nodes: list) as Node := listed(Bracket.Round, Separator.None, nodes)
 
 // Words side by side without brackets: `print x`
-def spaced(nodes: list): Node := listed(Bracket.None, Separator.Space, nodes)
+def spaced(nodes: list) as Node := listed(Bracket.None, Separator.Space, nodes)
 
 // The key of an operator given by its spelling: `keyed("+", a, b)` is a+b
-def keyed(op: text, left: Node, right: Node): Node := Key(left, op as Op, right)
+def keyed(op: text, left: Node, right: Node) as Node := Key(left, op as Op, right)
 
-def opaque(view: list): Node := Key(symbol(opaque_word), Op.Colon, view)
-def type_node(name: Node, body: Node): Node := opaque(["type", view_of(name), view_of(body)])
-def error_node(message: text): Node := opaque(["error", ["text", message]])
+def opaque(view: list) as Node := Key(symbol(opaque_word), Op.Colon, view)
+def type_node(name: Node, body: Node) as Node := opaque(["type", view_of(name), view_of(body)])
+def error_node(message: text) as Node := opaque(["error", ["text", message]])
 // the message of an error a parse wrote into the tree as error_node did, ø of any other node
-def parse_error_message(n: Node): text? := if n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "error" then value_of(n)#2#2 else ø
-def template_node(holed: text): Node := opaque(["template", holed])
-def attributed(name: text, value: Node, node: Node): Node := Key(symbol(attribute_word), Op.Colon, [name, value, node])
+def parse_error_message(n: Node) as text? := if n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "error" then value_of(n)#2#2 else ø
+def template_node(holed: text) as Node := opaque(["template", holed])
+def attributed(name: text, value: Node, node: Node) as Node := Key(symbol(attribute_word), Op.Colon, [name, value, node])
 // the node under its attributes, `square` of `@parallel square`
-def attribute_marked(n: Node): Node := if n is key and key_of(n) == symbol(attribute_word) then attribute_marked(value_of(n)#3) else n
+def attribute_marked(n: Node) as Node := if n is key and key_of(n) == symbol(attribute_word) then attribute_marked(value_of(n)#3) else n
 # the mark of a signed item after a space, `+1` of `1 +1`: [what was written before it, it as written] (parser.warp spaced_sign_marked)
 SPACED_SIGN_MARK = "spaced_sign"
 # `width /height`: a path after an operand, which a bound name reads as a division (decision path-after-operand)
@@ -37,7 +37,7 @@ UNEVEN_SPACING_MARK = "uneven_spacing"
 SPACED_OPERAND_MARK = "spaced_operand"
 
 // [bracket, separator, items] of a group, an empty one too; ø for any other node
-def group_parts(node: Node): list? := match node {
+def group_parts(node: Node) as list? := match node {
 	List(items, bracket, separator): [bracket as text, separator as text, items_of(node)]
 	Key(word, Op.Colon, view): { if word == opaque_symbol and kind_of(view) == "list" then [view#2, view#3, []] else ø }
 	_: ø
@@ -45,7 +45,7 @@ def group_parts(node: Node): list? := match node {
 
 // `value |> f(args)` is `f(value, args)`, `value |> f` is `f(value)`; a braceless call is grouped, one argument:
 // `square xs |> filter(p)` is `filter((square xs), p)`
-def piped(operand: Node, receiver: Node): Node := {
+def piped(operand: Node, receiver: Node) as Node := {
 	parts = group_parts(operand)
 	if parts != ø and parts#1 == "" and parts#2 == " " { operand = call_of(parts#3) }
 	receiver_parts = group_parts(receiver)
@@ -56,14 +56,14 @@ def piped(operand: Node, receiver: Node): Node := {
 	call_of([receiver, operand])
 }
 
-def is_list_of(node: Node, bracket: text): bool {
+def is_list_of(node: Node, bracket: text) as bool {
 	parts = group_parts(node)
 	parts != ø and parts#1 == bracket
 }
 
-def is_block(node: Node): bool := is_list_of(node, "{")
-def is_symbol(node: Node): bool := node is symbol
-def is_call_head(node: Node): bool {
+def is_block(node: Node) as bool := is_list_of(node, "{")
+def is_symbol(node: Node) as bool := node is symbol
+def is_call_head(node: Node) as bool {
 	parts = group_parts(node)
 	parts != ø and parts#1 == "(" and #parts#3 > 0
 }

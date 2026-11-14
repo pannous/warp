@@ -31,9 +31,9 @@ HANGUL_T_COUNT = 28
 HANGUL_N_COUNT = 588
 HANGUL_S_COUNT = 11172
 
-unicode_numbers(t: text, separator: text): list := [int(x) for x in split(t, separator) if x != ""]
+unicode_numbers(t: text, separator: text) as list := [int(x) for x in split(t, separator) if x != ""]
 // the tables, read from lib/unicode_data.warp's texts the first time any function needs them
-def unicode_load(): bool {
+def unicode_load() as bool {
 	if "loaded" in UNICODE_STATE { return yes }
 	nums = unicode_numbers(unicode_ccc_text(), " ")
 	edge = 0
@@ -75,13 +75,13 @@ def unicode_load(): bool {
 	UNICODE_STATE["loaded"] = yes
 	yes
 }
-combining_class(n: int): int := { unicode_load(); if n in UNICODE_CCC then UNICODE_CCC[n] else 0 }
+combining_class(n: int) as int := { unicode_load(); if n in UNICODE_CCC then UNICODE_CCC[n] else 0 }
 
-codepoint_numbers(t: text): list := [ord(c) for c in t.codepoints]
-text_of_codepoints(ns: list): text := join([text(chr(n)) for n in ns], "")
+codepoint_numbers(t: text) as list := [ord(c) for c in t.codepoints]
+text_of_codepoints(ns: list) as text := join([text(chr(n)) for n in ns], "")
 
 // the full decomposition of one code point, memoized
-def unicode_full(n: int, compat: bool): list {
+def unicode_full(n: int, compat: bool) as list {
 	if compat and n in UNICODE_COMPATIBLE_FULL { return UNICODE_COMPATIBLE_FULL[n] }
 	if not compat and n in UNICODE_CANONICAL_FULL { return UNICODE_CANONICAL_FULL[n] }
 	result = [n]
@@ -97,7 +97,7 @@ def unicode_full(n: int, compat: bool): list {
 	result
 }
 // decomposed and in canonical order: each run of marks stably sorted by combining class
-def unicode_decomposed(ns: list, compat: bool): list {
+def unicode_decomposed(ns: list, compat: bool) as list {
 	unicode_load()
 	classes = UNICODE_CCC
 	out = []
@@ -113,7 +113,7 @@ def unicode_decomposed(ns: list, compat: bool): list {
 	}
 	out
 }
-def unicode_pair(a: int, b: int): int {
+def unicode_pair(a: int, b: int) as int {
 	unicode_load()
 	if a >= HANGUL_L and a < HANGUL_L + 19 and b >= HANGUL_V and b < HANGUL_V + HANGUL_V_COUNT { return HANGUL_S + ((a - HANGUL_L) * HANGUL_V_COUNT + b - HANGUL_V) * HANGUL_T_COUNT }
 	if a >= HANGUL_S and a < HANGUL_S + HANGUL_S_COUNT and (a - HANGUL_S) % HANGUL_T_COUNT == 0 and b > HANGUL_T and b < HANGUL_T + HANGUL_T_COUNT { return a + b - HANGUL_T }
@@ -122,7 +122,7 @@ def unicode_pair(a: int, b: int): int {
 }
 // canonical composition of a decomposed, ordered sequence: a mark joins the last starter unless a mark of the same
 // or a higher class, or a starter, stands between them
-def unicode_composed(ns: list): list {
+def unicode_composed(ns: list) as list {
 	unicode_load()
 	classes = UNICODE_CCC
 	out = []
@@ -140,13 +140,13 @@ def unicode_composed(ns: list): list {
 	}
 	out
 }
-nfd(t: text): text := text_of_codepoints(unicode_decomposed(codepoint_numbers(t), no))
-nfkd(t: text): text := text_of_codepoints(unicode_decomposed(codepoint_numbers(t), yes))
-nfc(t: text): text := text_of_codepoints(unicode_composed(unicode_decomposed(codepoint_numbers(t), no)))
+nfd(t: text) as text := text_of_codepoints(unicode_decomposed(codepoint_numbers(t), no))
+nfkd(t: text) as text := text_of_codepoints(unicode_decomposed(codepoint_numbers(t), yes))
+nfc(t: text) as text := text_of_codepoints(unicode_composed(unicode_decomposed(codepoint_numbers(t), no)))
 // the word the hosts call for text == (decision nfc-slot, core/runtime/text.warp equal_texts): a text node's NFC
-canonical_text(t: any): any := nfc(t)
-nfkc(t: text): text := text_of_codepoints(unicode_composed(unicode_decomposed(codepoint_numbers(t), yes)))
-def unicode_normalize(t: text, form: text): text {
+canonical_text(t: any) as any := nfc(t)
+nfkc(t: text) as text := text_of_codepoints(unicode_composed(unicode_decomposed(codepoint_numbers(t), yes)))
+def unicode_normalize(t: text, form: text) as text {
 	f = upper(form)
 	if f == "NFC" { return nfc(t) }
 	if f == "NFD" { return nfd(t) }
@@ -154,8 +154,8 @@ def unicode_normalize(t: text, form: text): text {
 	if f == "NFKD" { return nfkd(t) }
 	raise "unicode_normalize: the form is NFC, NFD, NFKC or NFKD, not " + form
 }
-is_normalized(t: text, form: text): bool := codepoint_numbers(unicode_normalize(t, form)) == codepoint_numbers(t)
-def casefold(t: text): text {
+is_normalized(t: text, form: text) as bool := codepoint_numbers(unicode_normalize(t, form)) == codepoint_numbers(t)
+def casefold(t: text) as text {
 	unicode_load()
 	out = []
 	for n in codepoint_numbers(t) { if n in UNICODE_FOLDING { for m in UNICODE_FOLDING[n] { out.add(m) } } else { out.add(n) } }
@@ -163,7 +163,7 @@ def casefold(t: text): text {
 }
 // the NormalizationTest.txt invariants of one line's five columns (lists of code point numbers): the ones that
 // fail, by name, so [] when the line holds
-def normalization_check(columns: list): list {
+def normalization_check(columns: list) as list {
 	c = columns
 	failed = []
 	forms = [["NFC", no, yes], ["NFD", no, no], ["NFKC", yes, yes], ["NFKD", yes, no]]

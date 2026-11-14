@@ -29,14 +29,14 @@ RIGHT = Key.right
 space = Key.space
 SPACE = Key.space
 KEY_NAMES = {27: "Escape", 13: "Enter", 9: "Tab", 8: "Backspace", 127: "Delete", 63232: "ArrowUp", 63233: "ArrowDown", 63234: "ArrowLeft", 63235: "ArrowRight", 63312: "Shift", 63313: "Control", 63314: "Alt", 63315: "Meta"}
-key_name(code): text := if code == 0 then "" else KEY_NAMES.get(code) ?? chr(code).lower()
+key_name(code) as text := if code == 0 then "" else KEY_NAMES.get(code) ?? chr(code).lower()
 // the key held now, Key.none for none (headless always)
-held_key(): Key := key_name(system_value("key code held")) as Key
+held_key() as Key := key_name(system_value("key code held")) as Key
 // every key held now, the first pressed first, as many as the window keeps (headless none): `held(Key.w)` and
 // `held(Key.a)` together move diagonally, where held_key is only the last one
 KEYS_HELD_KEPT = 8
-keys_held(): list := [key_name(system_value("held ${at}")) as Key for at in 0 ..< KEYS_HELD_KEPT].filter(key => key != Key.none)
-held(key: Key): bool := key in keys_held()
+keys_held() as list := [key_name(system_value("held ${at}")) as Key for at in 0 ..< KEYS_HELD_KEPT].filter(key => key != Key.none)
+held(key: Key) as bool := key in keys_held()
 // `on Key.escape {…}`, `on ESC {…}`: the block runs once as that key goes down, never each frame it is held (card
 // key-press-on; a held key is `whenever held_key == LEFT`)
 on(key: Key, body: block) := key_listened(pressed => if key_of_press(pressed) == key then body() else ø)
@@ -48,8 +48,8 @@ rewrite listen(data key, $listener, $once) => key_listened($listener)
 KEY_EVENT = "key"
 global pressed_key = Key.none
 global presses_seen = 0
-key(): Key := pressed_key
-key_listened(listener: function): Listener := {
+key() as Key := pressed_key
+key_listened(listener: function) as Listener := {
 	// the presses before the program listened (the page counts them across runs) are not its own
 	if count(listeners_of(KEY_EVENT)) == 0 {
 		presses_seen = system_value("keys pressed")
@@ -58,7 +58,7 @@ key_listened(listener: function): Listener := {
 	listen(KEY_EVENT, pressed => { pressed_key = key_of_press(pressed); listener(pressed) }, no)
 }
 // a press as the frames tell it, a Key, or as `emit key{key: "q"}` does, the key's name in its data
-key_of_press(pressed): Key := if pressed is Key then pressed else pressed.key as Key
+key_of_press(pressed) as Key := if pressed is Key then pressed else pressed.key as Key
 // a press counts though the key is up again before the frame looks: the host counts the keys that went down
 keys_went_down() := {
 	presses = system_value("keys pressed")

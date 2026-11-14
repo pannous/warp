@@ -17,7 +17,7 @@ use "../../extensions/components.warp"
 # inside it names (emitter.warp note_emitting): its slice was parsed alone, its nodes keep no line of the file
 global defined_origins = {}
 # [file, line] of each definition slice of the files, by the slice's text
-slice_origins(files: list): map := {
+slice_origins(files: list) as map := {
 	found = {}
 	for path in files {
 		lines = slice_lines(file_text(path) ?? "")
@@ -26,7 +26,7 @@ slice_origins(files: list): map := {
 	found
 }
 # the line each definition slice of a source starts on, by the slice's text
-slice_lines(source: text): map := {
+slice_lines(source: text) as map := {
 	found = {}
 	line = 1
 	at = 0
@@ -39,7 +39,7 @@ slice_lines(source: text): map := {
 }
 # a linked module's definition as its signature packed it (positions of file 0, its own: signature.warp), placed in the
 # module's file
-slice_tree(packed: text, module: text): Node := refiled(unpack(packed), file_index(shown_file(used_module_file(module))))
+slice_tree(packed: text, module: text) as Node := refiled(unpack(packed), file_index(shown_file(used_module_file(module))))
 # the place of each definition of a used file, as brought from it
 note_file_origins(file: text, source: text) := {
 	origins = slice_origins([file])
@@ -47,14 +47,14 @@ note_file_origins(file: text, source: text) := {
 }
 # `file:line` of each definition named `name`, in the program's source and the files its brought definitions came from:
 # defined_origins keeps one place a name, a clash between two files needs both (lambdas.warp)
-written_places(name: text, source: text): list := {
+written_places(name: text, source: text) as list := {
 	files = word_set(defined_origins.values.map(origin => origin#1)).keys.filter(file => file != module.program_file).sort()
 	named_lines(source, module.program_file, name) + files.flat_map(file => named_lines(file_text(file) ?? "", file.remove_prefix("./"), name))
 }
-named_lines(source: text, file: text, name: text): list := spans_of(source).filter(span => span#1 == name).map(span => (if file then file + ":" else "line ") + "${#source[0 ..< span#2].split("\n")}")
+named_lines(source: text, file: text, name: text) as list := spans_of(source).filter(span => span#1 == name).map(span => (if file then file + ":" else "line ") + "${#source[0 ..< span#2].split("\n")}")
 # source → its slices: the passes ask for each library module's slices per call and argument, cut once
 global source_slices = {}
-definition_slices(source: text): list := {
+definition_slices(source: text) as list := {
 	if not source_slices.has(source) { source_slices[source] = spans_of(source).map(span => [span#1, source[span#2 ..< span#3]]) }
 	source_slices[source]
 }
@@ -62,7 +62,7 @@ definition_slices(source: text): list := {
 # library index while source is its text as the index was written, cut otherwise: cutting the prelude and the type
 # modules was ~70 ms of a small compile (notes/library_zero_bake.md L4)
 global source_spans = {}
-spans_of(source: text): list := {
+spans_of(source: text) as list := {
 	if not source_spans.has(source) {
 		module = indexed_module(source)
 		source_spans[source] = if module != ø then indexed_spans(library_index_section("slice").get(module) ?? "") else slice_spans(source)
@@ -70,21 +70,21 @@ spans_of(source: text): list := {
 	source_spans[source]
 }
 # the module of sliced_texts the source is; ø for any other text
-indexed_module(source: text): text? := sliced_modules().find(module => source == sliced_texts()[module])
+indexed_module(source: text) as text? := sliced_modules().find(module => source == sliced_texts()[module])
 # the texts every compile cuts, by the library index's cuts: the prelude and lib/math.warp beside it, both built in
 # (builtin_signatures.warp; decision no-lib-reads)
-sliced_texts(): map := {prelude: prelude_text(), math: math_text()}
-sliced_modules(): list := sliced_texts().keys
+sliced_texts() as map := {prelude: prelude_text(), math: math_text()}
+sliced_modules() as list := sliced_texts().keys
 # each sliced module's cut as the index holds it, `name start end` of each slice joined by ";"
-sliced_modules_scanned(): map := {
+sliced_modules_scanned() as map := {
 	found = {}
 	for module in sliced_modules() { found[module] = slice_spans(sliced_texts()[module]).map(span => "${span#1} ${span#2} ${span#3}").join(";") }
 	found
 }
-indexed_spans(spans: text): list := spans.split(";").filter(span => span != "").map(span => span.split(" ")).map(span => [span#1, span#2 as int, span#3 as int])
+indexed_spans(spans: text) as list := spans.split(";").filter(span => span != "").map(span => span.split(" ")).map(span => [span#1, span#2 as int, span#3 as int])
 # [name, start, end] of each definition in source, by code point: a line starting with a name and its parameters,
 # with the indented or closing lines below it
-slice_spans(source: text): list := {
+slice_spans(source: text) as list := {
 	spans = []
 	name = ""
 	written = ""
@@ -107,14 +107,14 @@ slice_spans(source: text): list := {
 # `export f(…) := …` in a library: a word a host calls back (timers' timer_fired), kept whenever the module is used and
 # exported under its name (decision host-callback-exports)
 export_word = "export"
-is_exported_slice(slice: list): bool := leading_name(slice#2) == export_word
+is_exported_slice(slice: list) as bool := leading_name(slice#2) == export_word
 # `public f(x) := …`: an untyped library word its importers may call (decision library-word-visibility), no host export
 public_word = "public"
 # the words that start a definition of the name after them: `def f(x) …`, `const X = 1`, `class Table {…}`
 defining_keywords = function_keywords + declaration_keywords + ["class", "enum", "struct", "trait", "type"]
 # `f` of `f(x) := …`, a value `f = …`, `def f(x)`, `enum F {…}` (a defining keyword's name), operator_↑ of
 # `infix operator ↑(x: number, n: number) := …`, else ""
-name_defined_in(line: text): text := {
+name_defined_in(line: text) as text := {
 	declared = operator_declared(operator_statement(blank_words(line)))
 	if #declared > 0 { return OPERATOR_FUNCTION_PREFIX + declared#1.glyph }
 	leading = leading_name(line)
@@ -135,7 +135,7 @@ name_defined_in(line: text): text := {
 }
 # the type a conversion converts to, of the line's rest after its first name: `n: number as Real := …` and
 # `int as Real := …` are Real's slices, reached with the class; "" of any other line
-conversion_target(following: text): text := {
+conversion_target(following: text) as text := {
 	if not following.contains(":=") or not (following.starts_with(":") or following.starts_with("as ")) { return "" }
 	parts = (" " + following.split(":=")#1).split(" as ")
 	if #parts != 2 { return "" }
@@ -145,7 +145,7 @@ conversion_target(following: text): text := {
 # the name a line starts with, "" when it starts with another character; one beyond ASCII is a name's, `π() := …`
 # (one walk over its bytes, as is_name_part reads them: a byte above `~` is one of a character above it; a text's
 # length or its n-th character would count its characters from its start at each step)
-leading_name(line: text): text := {
+leading_name(line: text) as text := {
 	characters = 0
 	for byte in line.bytes {
 		if not is_name_byte(byte) { break }
@@ -153,15 +153,15 @@ leading_name(line: text): text := {
 	}
 	line[0 ..< characters]
 }
-is_name_byte(byte: int): bool := (byte >= 97 and byte <= 122) or (byte >= 65 and byte <= 90) or (byte >= 48 and byte <= 57) or byte == 95 or byte > 126
-is_name_part(c: char): bool := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or (c >= '0' and c <= '9') or c == '_' or c > '~'
+is_name_byte(byte: int) as bool := (byte >= 97 and byte <= 122) or (byte >= 65 and byte <= 90) or (byte >= 48 and byte <= 57) or byte == 95 or byte > 126
+is_name_part(c: char) as bool := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or (c >= '0' and c <= '9') or c == '_' or c > '~'
 # a line inside the definition above it: indented, the brace closing it, or a word no statement starts with, `else if …`
 # of an if over several lines
-continues(line: text): bool := #line > 0 and (line#1 == '\t' or line#1 == ' ' or line#1 == '}' or leading_name(line) in continuing_words)
+continues(line: text) as bool := #line > 0 and (line#1 == '\t' or line#1 == ' ' or line#1 == '}' or leading_name(line) in continuing_words)
 continuing_words = ["else", "then", "and", "or"]
 # a definition so far leaves a bracket, a text or a shader block open: the lines below go on with it, unindented ones
 # too (a value `[` … `]`, a text over lines)
-is_open(written: text): bool := {
+is_open(written: text) as bool := {
 	source = written + "\n"
 	n = source.length
 	depth = 0
@@ -182,7 +182,7 @@ is_open(written: text): bool := {
 # the words a node mentions as symbols, each once (a map as the set: an 89 KB program has tens of thousands); a map
 # literal's key, `{reduce: 1}`, names no word, so it brings no library word or module of the name, but a key glued to
 # a block, `if yes { twice{n+=1} }`, may be the word's call (phrase_blocks.warp glued_block_call)
-symbol_words(n: Node): list := {
+symbol_words(n: Node) as list := {
 	found = {}
 	waiting = [n]
 	at = 1
@@ -201,10 +201,10 @@ symbol_words(n: Node): list := {
 
 # the words a class's body mentions but its own fields and methods: `class C{pi = 3; f() := pi * r}` names no library pi
 # a type named with no body, a field's `x: Int` (sugar.warp typed_fields): it uses the type, as a prelude alias
-is_named_type(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "type" and value_of(n)#3 == ø
+is_named_type(n: Node) as bool := is_key(n, Op.Colon) and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "type" and value_of(n)#3 == ø
 # (a method's parameters and locals are its own too: ListMap's init(m = {}) names no unit m; a field binds only its
 # name, its type `d: km` a word it uses, which brings lib/units' type km)
-class_words(view: Node): list := {
+class_words(view: Node) as list := {
 	parts = parts_within(view)
 	members = parts.flat_map(part => if is_group(part) then items_of(part) else [part])
 	own = members.map(member_name) + members.filter(member => is_key(member, Op.Define)).flat_map(member => names_bound_in(member).keys)
@@ -213,7 +213,7 @@ class_words(view: Node): list := {
 
 # the field `r: int` or `pi = 3`, the method `f() := …`, one read as the class reads it, `int bar(){ 42 }`: a
 # method's name is the class's own, never a module's word (sound's bar)
-member_name(statement: Node): any := match statement {
+member_name(statement: Node) as any := match statement {
 	Symbol(name): name
 	Key(Symbol(name), op, value): name
 	_: declared_name(statement) ?? defined_word(member_node_read(statement))
@@ -221,10 +221,10 @@ member_name(statement: Node): any := match statement {
 
 # the words a slice mentions, those inside a class's methods too (the opaque view of `class Instant { … text() :=
 # format_date(ms) }` holds its body as nodes, parts_within): a module's class brings the functions its methods call
-words_within(n: Node): list := names_within(n, no)
+words_within(n: Node) as list := names_within(n, no)
 # its words and the heads of its keys ("key =="), what a rule needs and gives (rewrites.warp rules_reaching)
-tokens_within(n: Node): list := names_within(n, yes)
-names_within(n: Node, with_keys: bool): list := {
+tokens_within(n: Node) as list := names_within(n, yes)
+names_within(n: Node, with_keys: bool) as list := {
 	found = {}
 	waiting = [n]
 	at = 1
@@ -249,12 +249,12 @@ names_within(n: Node, with_keys: bool): list := {
 	found.keys
 }
 # the part of an inner node that names words: a key of a map literal names nothing, `{random: […]}` reaches only its value
-free_part(outer: Node, inner: Node, with_keys: bool): Node := if not with_keys and is_map_literal(outer) and key_of(inner) is symbol then value_of(inner) else inner
+free_part(outer: Node, inner: Node, with_keys: bool) as Node := if not with_keys and is_map_literal(outer) and key_of(inner) is symbol then value_of(inner) else inner
 
 # the operator inside an element-wise one or a compound assignment, which a rule makes it into: `/!` of `x /!= 2`,
 # `max` of `x max= 5` (its library word), `*` of `.*=`
 # (`div` of `x div= 2` and its operator, `/!`; a few too many, `<` of `<=`, cost nothing)
-operated_within(name: text): list := {
+operated_within(name: text) as list := {
 	inner = if #name > 1 and name.ends_with("=") then name[0 ..< #name - 1] else if #name > 1 and name#1 == '.' and name#2 != '.' then name[1 ..] else ""
 	if inner == "" then [] else [inner, canonical_operator(inner)] + operated_within(inner)
 }
@@ -262,24 +262,24 @@ operated_within(name: text): list := {
 # the words a later step writes: the cell of a shared capture, for a lambda or a block given to a parameter (lambdas.warp),
 # the matcher of a structural match arm (node_matches.warp)
 function_types = [symbol("function"), symbol("block")]
-lowering_words(program: Node): list := {
+lowering_words(program: Node) as list := {
 	nodes = nodes_in(program)
 	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_quoted_arm(n) or (is_key(n, Op.Is) and is_shape_pattern(value_of(n)))) then [matcher_word] else []) + (if nodes.any(is_pattern_definition) then [matcher_word, pattern_converter_word, kept_pattern_word] else []) + (if writes_templates then [template_word] else []) + emitted_words(program)
 }
 # `data($a * 1) => a`, an arm of quoted code wherever a sugar word holds it (`rules {…}`, extensions/sugar/arms.warp): its
 # match is written only once the sugar fires
-is_quoted_arm(n: Node): bool := is_key(n, Op.Arrow) and is_quote(key_of(n))
+is_quoted_arm(n: Node) as bool := is_key(n, Op.Arrow) and is_quote(key_of(n))
 # the words the emitter calls itself, kept though no statement does: of a program writing a time literal (the parser's
 # data view) a time's fields (extensions/time_values.warp time_field), its + - * where the program writes one
 # (time_operation_call); the exact root of a program taking one (root_words); the library words the extension passes
 # write calls of (extension_writes)
-emitted_words(program: Node): list := time_literal_words(program) + time_test_words(program) + root_words(program) + extension_writes.flat_map(writes => writes(program))
+emitted_words(program: Node) as list := time_literal_words(program) + time_test_words(program) + root_words(program) + extension_writes.flat_map(writes => writes(program))
 # each extension pass that writes calls of library words the program may never write declares them here, by its
 # function of the program giving them: the next such pass is one entry, no other edit
 # `x as! T` is a call of convert! written by extensions/conversions.warp, so the prelude's overloads are reached
 # though the program never writes the word. A program whose forced casts are only the 64-bit int wrap needs none
-is_forced_as(n: Node): bool := is_key(n, Op.As) and is_key(value_of(n), Op.Not) and key_of(value_of(n)) == ø
-forced_cast_words(program: Node): list := {
+is_forced_as(n: Node) as bool := is_key(n, Op.As) and is_key(value_of(n), Op.Not) and key_of(value_of(n)) == ø
+forced_cast_words(program: Node) as list := {
 	for n in nodes_in(program) {
 		if is_forced_as(n) and value_of(value_of(n)) is symbol {
 			word = name_of(value_of(value_of(n)))
@@ -292,11 +292,11 @@ extension_writes = [component_words, forced_cast_words, fetch_into_words, class_
 # a value called, `room(signal)` (closure_call_1 once lowered), may be an instance its class's `call` takes (emitter
 # closures.warp instance_calls): the module's call is reached and kept for it
 callable_word = "call"
-calls_a_value(program: Node): bool := {
+calls_a_value(program: Node) as bool := {
 	bound = names_bound_in(program)
 	nodes_in(program).any(n => is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in bound)
 }
-time_literal_words(program: Node): list := {
+time_literal_words(program: Node) as list := {
 	nodes = nodes_in(program)
 	# a time literal, or a name typed time whose fields it reads, `zoned(t: time, …) := … t.form` (lib/time.warp); a
 	# place typed by a time word takes a quantity of time as the duration it lasts, `f(n: duration) := n; f(2 hours)`
@@ -304,17 +304,17 @@ time_literal_words(program: Node): list := {
 	if not nodes.any(n => is_time_view(n) or is_time_typed(n)) { return [] }
 	[time_field_word] + (if nodes.any(n => is_time_typed(n) or time_comparison_symbols.any(symbol => is_operator(n, symbol))) then [quantity_lasting_word] else []) + (if nodes.any(n => time_operator_symbols.any(symbol => is_operator(n, symbol))) then [time_operation_word, time_operand_word, quantity_lasting_word] else [])
 }
-is_time_typed(n: Node): bool := is_operator(n, ":") and value_of(n) is symbol and base_type(name_of(value_of(n))) in time_test_types
+is_time_typed(n: Node) as bool := is_operator(n, ":") and value_of(n) is symbol and base_type(name_of(value_of(n))) in time_test_types
 # `x is time`, `x is duration`: lib/time's word the emitter asks (runtime_words.warp time_test_code)
-time_test_words(program: Node): list := if nodes_in(program).any(is_time_test) or statements_in(program).any(has_time_field) then [time_test_word, quantity_test_word] else []
+time_test_words(program: Node) as list := if nodes_in(program).any(is_time_test) or statements_in(program).any(has_time_field) then [time_test_word, quantity_test_word] else []
 # a class with a field typed so, `class car { year: date? }`, whose instances test it (decision typed-places-check)
-has_time_field(statement: Node): bool := class_view(statement) != ø and words_within(statement).any(word => base_type(word) in time_test_types)
+has_time_field(statement: Node) as bool := class_view(statement) != ø and words_within(statement).any(word => base_type(word) in time_test_types)
 # `x is time` as written, or as the type tests make it, is_type(x, "time") (core/analysis/type_tests.warp)
 # a place typed so, `d: date? = v`, a field `year: date?` (decision typed-places-check), tests it too
-is_time_test(n: Node): bool := ((is_key(n, Op.Is) or is_operator(n, ":")) and value_of(n) is symbol and base_type(name_of(value_of(n))) in time_test_types) or (is_group(n) and #n == 3 and n#1 == symbol("is_type") and n#3 is text and text(n#3) in time_test_types)
+is_time_test(n: Node) as bool := ((is_key(n, Op.Is) or is_operator(n, ":")) and value_of(n) is symbol and base_type(name_of(value_of(n))) in time_test_types) or (is_group(n) and #n == 3 and n#1 == symbol("is_type") and n#3 is text and text(n#3) in time_test_types)
 time_test_types = ["time", "duration", "date", "instant"]
 # the module of the emitted words: lib/time.warp for a time's + - * and for `is time`
-emitted_modules(program: Node): list := if time_operation_word in time_literal_words(program) or #time_test_words(program) > 0 then [time_module] else []
+emitted_modules(program: Node) as list := if time_operation_word in time_literal_words(program) or #time_test_words(program) > 0 then [time_module] else []
 time_module = "time"
 
 # the names of the functions with_reached brought from the prelude and the modules, of the compile at hand
@@ -332,7 +332,7 @@ global linked_classes_reached = {}
 global linked_variants_waiting = {}
 # the linked classes a word reaches through the words its body calls, each followed once a compile: only the classes
 # join the program, the words a linked body calls being its module's (decision link-modules-lazily)
-classes_reached(word: text, reaches: map, linked_classes: map): list := {
+classes_reached(word: text, reaches: map, linked_classes: map) as list := {
 	found = []
 	waiting = [word]
 	at = 0
@@ -354,7 +354,7 @@ classes_reached(word: text, reaches: map, linked_classes: map): list := {
 	found
 }
 # the linked class a variant belongs to, `Quantity` of format·text·Quantity (prebuilt.warp word_owners), while nothing reached it
-unreached_variant_class(word: text, linked_classes: map): text? := {
+unreached_variant_class(word: text, linked_classes: map) as text? := {
 	owner = linked_owner(word)
 	if owner != ø and linked_classes.has(owner) and not linked_classes_reached.has(owner) then owner else ø
 }
@@ -362,7 +362,7 @@ unreached_variant_class(word: text, linked_classes: map): text? := {
 # nothing calls. What a sugar rule might write is brought before it fires (sugar_words_of: `each_any` for any call,
 # `count_in` for any count), and typing and emitting the unused ones cost each compile (card measure). A module being
 # built keeps all of its words
-called_only(program: Node): Node := {
+called_only(program: Node) as Node := {
 	if module.relocating or #brought_names == 0 { return program }
 	statements = statements_in(program)
 	names = statements.map(statement => declared_name(statement) ?? "")
@@ -398,7 +398,7 @@ called_only(program: Node): Node := {
 # those the program doesn't call after all dropped once the passes ran (called_only)
 # the modules' aliases a program reaches, which a member read without parentheses says too (emitter.warp member_read)
 global member_aliases = {}
-with_reached(program: Node, module: text, in_front: bool, files: list = [], linked: list = []): Node := {
+with_reached(program: Node, module: text, in_front: bool, files: list = [], linked: list = []) as Node := {
 	# [name, text, parse, identity, linked module] of each definition: a linked module's from its signature, its head line and parse
 	# (signature.warp), declared only; else a slice of the text, parsed when reached
 	given = linked.map(slice => [slice#1, slice#2, slice#3, slice#4 + " " + slice#1 + " " + slice#2, slice#4]) + definition_slices(module).map(slice => [slice#1, slice#2, ø, slice#2, ø])
@@ -513,7 +513,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	separated(bracketed(parts, ""), ";")
 }
 # each name → its slices, in their order
-slices_by_name(slices: list): map := {
+slices_by_name(slices: list) as map := {
 	named = {}
 	for slice in slices { named[slice#1] = (named.get(slice#1) ?? []) + [slice] }
 	named
@@ -523,7 +523,7 @@ slices_by_name(slices: list): map := {
 # (arity_overloads): as many parameters, one of another dispatchable type, color's hex_text(c: Color) beside the
 # prelude's hex_text(n: int) too (decision int-type-overloads); a definition of another parameter count replaces it, which a
 # name passed as a function could no longer tell (the compiler's shader_values(s, given, program))
-overloads_brought(slice: list, program: Node): bool := {
+overloads_brought(slice: list, program: Node) as bool := {
 	global overload_marks
 	if not brought_names.has(slice#1) { return no }
 	heads = statements_in(program).filter(statement => declared_name(statement) == slice#1).map(definition_head_of)
@@ -539,10 +539,10 @@ overloads_brought(slice: list, program: Node): bool := {
 	overload_marks = declared_marks(program)
 	heads.all(other => not is_group(other) or told_apart(types, parameter_types(other), classes))
 }
-told_apart(types: list, others: list, classes: list): bool := #types == #others and (0 ..< #types).any(at => types[at] != others[at] and is_overload_type(types[at], classes) and is_overload_type(others[at], classes))
+told_apart(types: list, others: list, classes: list) as bool := #types == #others and (0 ..< #types).any(at => types[at] != others[at] and is_overload_type(types[at], classes) and is_overload_type(others[at], classes))
 # a linked module's definition as the program needs it: a function's head, its body left to the module's code, a
 # class with its methods so; a value, whose initializer the program runs, and a field as they are
-declared_only(n: Node, typed: bool = no): Node := {
+declared_only(n: Node, typed: bool = no) as Node := {
 	if is_group(n) { return children(n, part => declared_only(part, typed)) }
 	if class_view(n) != ø { return with_members(n, member => declared_only(member)) }
 	head = if n is key then key_of(n) else ø
@@ -565,37 +565,37 @@ declared_only(n: Node, typed: bool = no): Node := {
 # a linked slice's statements declared: a global its own module declares, which the module's start set, is the one the
 # program reads and sets, never set anew (a console line re-running an earlier line's `count = 41` reset its count, card
 # linked-own); only a statement's, never a case of a declaration (keys' `enum Key { h = "h" }` beside units' h)
-linked_declared_only(n: Node, module_name: text, typed: bool): Node := {
+linked_declared_only(n: Node, module_name: text, typed: bool) as Node := {
 	if is_statement_sequence(n) { return children(n, statement => linked_declared_only(statement, module_name, typed)) }
 	if is_value_definition(n) and linked_global(module_name, declared_name(n)) then Node.Empty else declared_only(n, typed)
 }
 # the kinds of the globals the linked modules hold, by the program's name of each: the program binds them so, though
 # it never declares them again (use draw; for p in canvas_pixels reads ints, not an unknown name's text)
-linked_global_kinds(): map := {
+linked_global_kinds() as map := {
 	kinds = {}
 	for image in module.linked_images {
 		for entry in image.globals { if entry#1.starts_with(program_global_prefix) { kinds[entry#1[#program_global_prefix ..]] = entry#2 } }
 	}
 	kinds
 }
-linked_global(module_name: text, name: any): bool := name is text and module.linked_images.any(image => image.name == module_name and holds_global(image, name))
+linked_global(module_name: text, name: any) as bool := name is text and module.linked_images.any(image => image.name == module_name and holds_global(image, name))
 # a global of some linked module, a console's earlier line's `count = 41` among them
-is_linked_global(name: text): bool := module.linked_images.any(image => holds_global(image, name))
-holds_global(image: LibraryImage, name: text): bool := image.global_names.has(program_global_prefix + name)
-takes_block(head: Node): bool := items_of(head)[1 ..].any(parameter => parameter_type(parameter) == "block")
+is_linked_global(name: text) as bool := module.linked_images.any(image => holds_global(image, name))
+holds_global(image: LibraryImage, name: text) as bool := image.global_names.has(program_global_prefix + name)
+takes_block(head: Node) as bool := items_of(head)[1 ..].any(parameter => parameter_type(parameter) == "block")
 # `name := …`, `name = …`, `global name = …`: a value's definition, no function's
 # a value, and a type the program's declarations name (`type fraction = rational`), whose statement is no program's
 # last
-goes_in_front(statement: Node): bool := is_value_definition(statement) or is_type_naming(statement)
-is_type_naming(statement: Node): bool := is_key(statement, Op.Assign) and is_key(key_of(statement), Op.Colon) and key_of(key_of(statement)) == opaque_symbol
-is_value_definition(statement: Node): bool := {
+goes_in_front(statement: Node) as bool := is_value_definition(statement) or is_type_naming(statement)
+is_type_naming(statement: Node) as bool := is_key(statement, Op.Assign) and is_key(key_of(statement), Op.Colon) and key_of(key_of(statement)) == opaque_symbol
+is_value_definition(statement: Node) as bool := {
 	if is_key(statement, Op.Colon) and key_of(statement) == symbol("global") { return is_value_definition(value_of(statement)) }
 	(is_key(statement, Op.Define) or is_key(statement, Op.Assign)) and key_of(statement) is symbol
 }
 
 # `alias keys => map_keys` of a module: the word by each alias (an alias declares
 # nothing, its calls call the word)
-module_aliases(source: text): any := {
+module_aliases(source: text) as any := {
 	aliases = {}
 	for line in source.split("\n") {
 		if line.starts_with("alias ") {
@@ -608,7 +608,7 @@ module_aliases(source: text): any := {
 # the foreign type names of a module, the `type Int = int` lines of its block under FOREIGN_TYPES_HEADER (the
 # prelude's): each name by warp's type, which a program writing it hears of (foreign_type in hints.data)
 FOREIGN_TYPES_HEADER = "// Foreign type names"
-foreign_types(source: text): map := {
+foreign_types(source: text) as map := {
 	found = {}
 	if not source.contains(FOREIGN_TYPES_HEADER) { return found }
 	inside = no
@@ -624,7 +624,7 @@ foreign_types(source: text): map := {
 }
 # [name, node] of each type the program names in a type's place: `x: Int`, `real x = 3`, `f(n: Int)`, a class field's `w: Int`
 # (not an enum case `Kind.Int`)
-written_types(n: Node): list := {
+written_types(n: Node) as list := {
 	found = []
 	waiting = [n]
 	at = 1
@@ -645,7 +645,7 @@ written_types(n: Node): list := {
 	found
 }
 # `real x = 3`: the type word before a name it binds
-is_type_first_declaration(n: Node): bool := is_group(n) and #n == 2 and n#1 is symbol and is_key(n#2, Op.Assign) and key_of(n#2) is symbol
+is_type_first_declaration(n: Node) as bool := is_group(n) and #n == 2 and n#1 is symbol and is_key(n#2, Op.Assign) and key_of(n#2) is symbol
 # `x: Int`: the hint naming warp's type, once a name, unless the program declares a type of that name itself
 hint_foreign_types(program: Node, foreign: map, own_names: list) := {
 	hinted = {}
@@ -659,7 +659,7 @@ hint_foreign_types(program: Node, foreign: map, own_names: list) := {
 }
 # aliases with the call form of each word operator the names define: `divides(3, 12)` calls operator_divides unless
 # a function divides is defined
-with_call_forms(aliases: map, names: list): any := {
+with_call_forms(aliases: map, names: list) as any := {
 	for name in names {
 		word = if name.starts_with(OPERATOR_FUNCTION_PREFIX) then name[#OPERATOR_FUNCTION_PREFIX ..] else ""
 		if word and is_name_start(word#1) and word not in names { aliases[word] = name }
@@ -669,17 +669,17 @@ with_call_forms(aliases: map, names: list): any := {
 # The program aliased, each definition a used module brought by the aliases its module sees (card module-name-leak):
 # those of the modules it uses, at any depth, and the prelude's, never another used module's (math's
 # `alias log2 => binary_log` stays out of sound's plain_midi). owners: the linked module of each alias
-aliased_in_scope(program: Node, aliases: map, own: map, owners: map): Node := {
+aliased_in_scope(program: Node, aliases: map, own: map, owners: map) as Node := {
 	if not statements_in(program).any(is_brought) { return aliased(program, aliases, own, no) }
 	seen_by = {}
 	children(program, statement => aliased(statement, if is_brought(statement) then aliases_seen(statement, aliases, owners, seen_by) else aliases, own, is_brought(statement)))
 }
-is_brought(statement: Node): bool := {
+is_brought(statement: Node) as bool := {
 	name = declared_name(statement)
 	name != ø and brought_names.has(name) and defined_origins.has(name)
 }
 # the aliases the module of a brought definition sees, once a module (seen_by)
-aliases_seen(statement: Node, aliases: map, owners: map, seen_by: map): map := {
+aliases_seen(statement: Node, aliases: map, owners: map, seen_by: map) as map := {
 	module_name = module_of_path(defined_origins[declared_name(statement)]#1)
 	if not seen_by.has(module_name) {
 		visible = modules_used_by(module_name, ["prelude"])
@@ -689,13 +689,13 @@ aliases_seen(statement: Node, aliases: map, owners: map, seen_by: map): map := {
 	}
 	seen_by[module_name]
 }
-module_of_path(path: text): text := {
+module_of_path(path: text) as text := {
 	parts = path.split("/")
 	file = parts#(#parts)
 	if file.ends_with(module_extension) then file[0 ..< #file - #module_extension] else file
 }
 # the module and the modules it uses, at any depth, beside those seen
-modules_used_by(module_name: text, seen: list): list := {
+modules_used_by(module_name: text, seen: list) as list := {
 	if module_name in seen { return seen }
 	seen += [module_name]
 	for used in module_uses(module_name) { seen = modules_used_by(used, seen) }
@@ -705,23 +705,23 @@ modules_used_by(module_name: text, seen: list): list := {
 # or a function taking as many arguments (shadowing is per arity: a program's
 # `index_of(source, part, from, n)` leaves `"abc".index_of(c)` to the library); top-down, so a method call
 # `x.f(a)` counts its receiver
-aliased(n: Node, aliases: map, own: map, library_code: bool): any := if class_view(n) != ø then with_members(n, member => aliased_member(member, aliases, own, library_code)) else match n {
+aliased(n: Node, aliases: map, own: map, library_code: bool) as any := if class_view(n) != ø then with_members(n, member => aliased_member(member, aliases, own, library_code)) else match n {
 	Key(receiver, Op.Dot, call): Key(aliased(receiver, aliases, own, library_code), Op.Dot, aliased_call(children(call, x => aliased(x, aliases, own, library_code)), aliases, own, 1, library_code))
 	_: children(aliased_call(n, aliases, own, 0, library_code), x => aliased(x, aliases, own, library_code))
 }
 # a method's body aliased, its head named by an alias as a call on its instance is (`has(x)` as collection_contains(x),
 # as `s.has(x)` calls it), but an operator's (`times(k) := …` stays the class's own `*`) or a word another arity
 # varies (`sum()`), never a field (`m: map = {}`)
-aliased_member(member: Node, aliases: map, own: map, library_code: bool): any := if is_key(member, Op.Define) and is_group(key_of(member)) then Key(aliased_head(key_of(member), aliases, own, library_code), Op.Define, aliased(value_of(member), aliases, own, library_code)) else member
-aliased_head(head: Node, aliases: map, own: map, library_code: bool): Node := if head#1 is symbol and name_of(head#1) in aliases and name_of(head#1) not in operator_spellings() then aliased_call(head, aliases, own, 1, library_code) else head
+aliased_member(member: Node, aliases: map, own: map, library_code: bool) as any := if is_key(member, Op.Define) and is_group(key_of(member)) then Key(aliased_head(key_of(member), aliases, own, library_code), Op.Define, aliased(value_of(member), aliases, own, library_code)) else member
+aliased_head(head: Node, aliases: map, own: map, library_code: bool) as Node := if head#1 is symbol and name_of(head#1) in aliases and name_of(head#1) not in operator_spellings() then aliased_call(head, aliases, own, 1, library_code) else head
 # a class declaration with each member, read as the definitions pass reads it, changed by f: a class body is a type
 # view the walks don't enter (`keys.index_of(x)` in a method is aliased so)
-with_members(n: Node, f: function): Node := {
+with_members(n: Node, f: function) as Node := {
 	view = class_view(n)
 	opaque([view#1, view#2, view#3[0 ..< 3] + view#3[3 ..].map(member => changed_member(member, f))] + view[3 ..])
 }
 # a member f leaves as it is stays the very view (read back and viewed anew, a field `m: map = {}` loses its default)
-changed_member(member: any, f: function): any := {
+changed_member(member: any, f: function) as any := {
 	read = member_read(member)
 	changed = f(read)
 	if changed == read then member else view_of(changed)
@@ -730,7 +730,7 @@ changed_member(member: any, f: function): any := {
 # a call, written `melody([C4 E4])` or spaced `melody [C4 E4]` (sound's `alias melody => play`). The program's own
 # alias call means its own definition of the word where that takes the call (`square(x) := x*x*10; 3 squared` is 90,
 # card alias-follows-redefinition); library code's, and an arity variant's, the library's
-aliased_call(n: Node, aliases: map, own: map, receivers: int, library_code: bool): any := {
+aliased_call(n: Node, aliases: map, own: map, receivers: int, library_code: bool) as any := {
 	if not (is_group(n) and (bracket_of(n) == "(" or is_word_phrase(n)) and #n > 0 and n#1 is symbol) { return n }
 	called = name_of(n#1)
 	count = #n - 1 + receivers
@@ -744,9 +744,9 @@ aliased_call(n: Node, aliases: map, own: map, receivers: int, library_code: bool
 	# (a C function is never set aside as a program's definition is: its name stays the alias's word)
 	group_like(n, [symbol(if word in own and not word.starts_with(OPERATOR_FUNCTION_PREFIX) and not used_c_functions.has(word) then library_word(word) else word)] + items_of(n)[1 ..])
 }
-is_global_declaration(statement: Node): bool := is_key(statement, Op.Colon) and key_of(statement) == symbol("global")
+is_global_declaration(statement: Node) as bool := is_key(statement, Op.Colon) and key_of(statement) == symbol("global")
 # a module's definition with each of the program's globals it binds itself renamed apart (card module-hygiene)
-with_own_locals(definition: Node, program_globals: list): Node := {
+with_own_locals(definition: Node, program_globals: list) as Node := {
 	bound = names_bound_in(definition)
 	for name in program_globals.filter(name => name in bound) { definition = renamed(definition, name, symbol(name + name_joiner + "local")) }
 	definition
@@ -754,14 +754,14 @@ with_own_locals(definition: Node, program_globals: list): Node := {
 # the module's own definition of a word the program defines too, which an alias or variant means: `round(x, 2)` calls
 # the prelude's round_to beside a program's round_to (card module-hygiene); an operator's function is overloaded
 # beside the module's, never replaced (with_reached's kept), so its alias calls it as it is (shell's matches)
-library_word(word: text): text := word + name_joiner + "library"
+library_word(word: text) as text := word + name_joiner + "library"
 
 # words that mean another word with that many arguments, the receiver counted: `round(x, 3)` is round_to,
 # `xs.first(3)` first_items
 arity_variants = [["round", 2, "round_to"], ["first", 2, "first_items"], ["count", 2, "count_in"], ["last", 2, "last_items"], ["list", 1, "as_list"], ["tuple", 1, "as_list"]]
 # the variants of the words a program names, which of_lookups may call (`last 2 of xs` is last_items)
-variant_words(words: list): list := arity_variants.filter(variant => variant#1 in words).map(variant => variant#3)
-arity_variant(name: text, count: int): any := {
+variant_words(words: list) as list := arity_variants.filter(variant => variant#1 in words).map(variant => variant#3)
+arity_variant(name: text, count: int) as any := {
 	for variant in arity_variants { if variant#1 == name and variant#2 == count { return variant#3 } }
 	ø
 }
@@ -770,7 +770,7 @@ arity_variant(name: text, count: int): any := {
 # function when it takes them (a parameter `b = 1` may be left out, a rest one takes any more) and no argument written
 # into the call is of a kind its parameter's type refuses: an alias and the program's word are one overload set
 # picked by the arguments' types (decision library-word-visibility: `use c; isdigit('7')` is the prelude's is_digit)
-shadows(own: map, name: text, count: int, arguments: list): bool := {
+shadows(own: map, name: text, count: int, arguments: list) as bool := {
 	if name not in own { return no }
 	head = own[name]
 	if not is_group(head) { return yes }
@@ -781,20 +781,20 @@ shadows(own: map, name: text, count: int, arguments: list): bool := {
 }
 # a value written into a call that a parameter's type refuses: a character or text given a number, a number given a text
 NUMBER_PARAMETER_TYPES = ["i32", "i64", "f32", "f64", "int", "float", "number"]
-refuses_written(type: text, argument: Node): bool := if type in NUMBER_PARAMETER_TYPES then argument is codepoint or argument is text else type == "text" and argument is number
+refuses_written(type: text, argument: Node) as bool := if type in NUMBER_PARAMETER_TYPES then argument is codepoint or argument is text else type == "text" and argument is number
 # the C functions the program's modules declare (`use c`'s `isdigit(c: i32): i32 from 'c'`), own words as the
 # program's are: a library alias of the name (the prelude's isdigit => is_digit) no longer hides them
-with_c_heads(own: map): map := {
+with_c_heads(own: map) as map := {
 	for name in used_c_functions.keys { if not own.has(name) { own[name] = c_head(used_c_functions[name]) } }
 	own
 }
 # the head `isdigit(c: i32)` of a C declaration [name, library, types, names, result]
-c_head(declaration: list): Node := List([symbol(declaration#1)] + (0 ..< #declaration#3).map(at => Key(symbol(declaration#4[at]), Op.Colon, symbol(declaration#3[at]))), Bracket.Round, Separator.Comma)
+c_head(declaration: list) as Node := List([symbol(declaration#1)] + (0 ..< #declaration#3).map(at => Key(symbol(declaration#4[at]), Op.Colon, symbol(declaration#3[at]))), Bracket.Round, Separator.Comma)
 
 # the program with each function it defines named as one of `library` under its own name (name·own): its definitions,
 # one overload set of the program's when it defines the name by several arities, its value and the calls one of them
 # takes; a call none takes keeps the library's word
-with_own_words(program: Node, library: list): Node := {
+with_own_words(program: Node, library: list) as Node := {
 	heads = own_heads(program)
 	owned = heads.keys.filter(name => is_group(heads[name]) and name in library and not brought_names.has(name) and not name.starts_with(OPERATOR_FUNCTION_PREFIX) and not is_typed_overload(name, heads[name]))
 	for name in owned {
@@ -804,38 +804,38 @@ with_own_words(program: Node, library: list): Node := {
 	}
 	program
 }
-own_named(code: Node, name: text, mine: text, arities: list): Node := owned_calls(renamed(code, name, symbol(mine)), name, mine, arities)
+own_named(code: Node, name: text, mine: text, arities: list) as Node := owned_calls(renamed(code, name, symbol(mine)), name, mine, arities)
 # each call of the word the program's own when one of its definitions takes it, else the library's, a method call's
 # receiver counted (`xs.reduce(f, 0)` is reduce(xs, f, 0)), as aliased counts it; renamed leaves a method's name as
 # written, so the call decides it here
-owned_calls(n: Node, name: text, mine: text, arities: list): Node := match n {
+owned_calls(n: Node, name: text, mine: text, arities: list) as Node := match n {
 	Key(receiver, Op.Dot, call): Key(owned_calls(receiver, name, mine, arities), Op.Dot, owned_call(children(call, x => owned_calls(x, name, mine, arities)), name, mine, arities, 1))
 	_: owned_call(children(n, x => owned_calls(x, name, mine, arities)), name, mine, arities, 0)
 }
-owned_call(n: Node, name: text, mine: text, arities: list, receivers: int): Node := {
+owned_call(n: Node, name: text, mine: text, arities: list, receivers: int) as Node := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n > 0 and (n#1 == symbol(mine) or n#1 == symbol(name))) { return n }
 	taken = arities.any(signature => takes(signature, #n - 1 + receivers))
 	group_like(n, [symbol(if taken then mine else name)] + items_of(n)[1 ..])
 }
 # the heads of the program's top-level definitions of the function name, `f(a)` and `f(a, b)`
-heads_defining(program: Node, name: text): list := statements_in(program).filter(statement => declared_name(statement) == name).map(definition_head_of).filter(head => head != ø)
+heads_defining(program: Node, name: text) as list := statements_in(program).filter(statement => declared_name(statement) == name).map(definition_head_of).filter(head => head != ø)
 # a statement binding the name itself, not defining it: a local `handler = page_handlers#n` (lib/markup.warp
 # page_event beside its handler(name, action)), whose uses are that local's
-binds_locally(statement: Node, name: text): bool := declared_name(statement) != name and names_bound_in(statement).has(name)
-own_word(name: text): text := name + name_joiner + "own"
+binds_locally(statement: Node, name: text) as bool := declared_name(statement) != name and names_bound_in(statement).has(name)
+own_word(name: text) as text := name + name_joiner + "own"
 # the name as the program wrote it, of its own word too
-written_word(name: text): text := if name.ends_with(own_word("")) then name.replace(own_word(""), "") else name
+written_word(name: text) as text := if name.ends_with(own_word("")) then name.replace(own_word(""), "") else name
 # whether a library module is being built (prebuilt.warp sets it), not a program
-building_a_module(): bool := module.relocating
+building_a_module() as bool := module.relocating
 # `sin(x: Real) := …`: a definition typing its parameters overloads the library's typed word beside it
 # (arity_overloads.warp library_variants joins the library's lines and a linked module's typed definitions of as many
 # parameters), so a call of another type, `sin(x.float())` in its own body too, reaches the library's; an untyped one,
 # `round(x) := …`, and one with nothing of its parameter count to join, `add(a: int, b: int) := …` beside the prelude's
 # `add(xs, x) := …` or `log(a: text, b: int)` beside only math's log(x: float), is the program's own
-is_typed_overload(name: text, head: Node): bool := #head > 1 and items_of(head)[1 ..].all(parameter => is_key(parameter, Op.Colon) and value_of(parameter) != symbol(any_word)) and #library_variants(name, [parameter_types(head)]) > 0
+is_typed_overload(name: text, head: Node) as bool := #head > 1 and items_of(head)[1 ..].all(parameter => is_key(parameter, Op.Colon) and value_of(parameter) != symbol(any_word)) and #library_variants(name, [parameter_types(head)]) > 0
 
 # name → the head `f(a, b)` of each top-level statement defining a function, `yes` for one defining another name
-own_heads(program: Node): any := {
+own_heads(program: Node) as any := {
 	heads = {}
 	for statement in statements_in(program) {
 		name = declared_name(statement)
@@ -845,7 +845,7 @@ own_heads(program: Node): any := {
 }
 
 # the head of `f(a) := …`, `f(a): int := …`, `def f(a) {…}`; ø for another statement
-definition_head_of(statement: Node): any := {
+definition_head_of(statement: Node) as any := {
 	n = if is_keyword_group(statement) then statement#2 else statement
 	while n is key { n = key_of(n) }
 	if is_group(n) and bracket_of(n) == "(" and #n > 0 then n else ø
@@ -856,7 +856,7 @@ type_modules = ["list", "map", "text", "time", "reals"]
 
 # `xs.flatten()`, `unique(xs)`: a program calling a word of exactly one type module, a word it defines nowhere and no
 # library word, uses that module, a `use` in front of it
-with_type_module_uses(program: Node): Node := {
+with_type_module_uses(program: Node) as Node := {
 	own = own_heads(program)
 	used = flat_statements(program).map(use_target).filter(target => target is symbol).map(name_of)
 	providers = type_module_providers()
@@ -872,7 +872,7 @@ with_type_module_uses(program: Node): Node := {
 # the modules giving the tags a program writes their meaning, `div{…}` markup's (a text of a module's global list,
 # parser.warp declared_tags; decision html-render-mode: its value renders as a page). A tag `div: {…}` reads as
 # binding div, so neither the names bound nor the program's own are a test
-tag_modules(program: Node, used: list): list := {
+tag_modules(program: Node, used: list) as list := {
 	tags = declared_tags()
 	modules = []
 	for n in nodes_in(program) {
@@ -887,7 +887,7 @@ tag_modules(program: Node, used: list): list := {
 }
 # the modules of the global words a program names, or a sugar rule reaching it writes (`x.json` json_text), and binds
 # nothing to, each once
-global_word_modules(program: Node, own: any, used: list): list := {
+global_word_modules(program: Node, own: any, used: list) as list := {
 	bound = names_bound_in(program)
 	words = global_words()
 	modules = []
@@ -902,53 +902,53 @@ runtime_words_of_math = math_runtime_lines.map(line => line.name)
 # the source with a `use` line of each module it uses without saying it, after its last line (no position moves)
 # a used module's file: lib/<module>.warp, else a C library's words, lib/native/<module>.warp (`use sqlite3`'s rows),
 # only for a name no module file has; the place a refusal in its code names
-used_module_file(module: text): text := {
+used_module_file(module: text) as text := {
 	path = std_module_path(module)
 	if exists(path) then path else native_path(run_library(), module) ?? path
 }
 # a used module's source, read once a module: a rule word asks it at each call site it tries
 # (extensions/rules/rule_words.warp module_named)
 global used_module_texts = {}
-used_module_text(module: text): text := {
+used_module_text(module: text) as text := {
 	if not used_module_texts.has(module) { used_module_texts[module] = file_text(used_module_file(module)) ?? "" }
 	used_module_texts[module]
 }
 # whether a module of the name is there to use: a standard module's file (asked of the disk, not read), else a C
 # library's lines
-is_module_name(name: text): bool := exists(std_module_path(name)) or used_module_text(name) != ""
+is_module_name(name: text) as bool := exists(std_module_path(name)) or used_module_text(name) != ""
 # what a module says, by its prebuilt signature (signature.warp prebuilt_signature), else, a program's own module or
 # one not prebuilt, by its text: the modules it uses, its rule patterns (after `rewrite `), whether it defines the
 # word (a definition or an alias), the parses of its definitions of the word
-module_uses(module: text): list := {
+module_uses(module: text) as list := {
 	signature = prebuilt_signature(module)
 	if signature != ø then signature.uses else used_modules(used_module_text(module))
 }
-module_patterns(module: text): list := {
+module_patterns(module: text) as list := {
 	signature = prebuilt_signature(module)
 	if signature != ø then signature.patterns else rule_patterns(used_module_text(module))
 }
-module_defines(module: text, word: text): bool := {
+module_defines(module: text, word: text) as bool := {
 	signature = prebuilt_signature(module)
 	if signature == ø { return definition_slices(used_module_text(module)).any(slice => slice#1 == word) or module_aliases(used_module_text(module)).has(word) }
 	signature.slices.any(slice => slice#1 == word) or signature.aliases.has(word)
 }
-module_definitions(module: text, word: text): list := {
+module_definitions(module: text, word: text) as list := {
 	signature = prebuilt_signature(module)
 	if signature != ø then signature.slices.filter(slice => slice#1 == word).map(slice => slice_tree(slice#3, slice#4)) else definition_slices(used_module_text(module)).filter(slice => slice#1 == word).map(slice => plain_node(parsed(slice#2)))
 }
 # `use strict`, `use m`: a mode (core/passes/modes.data) or a C library, which a `use` names without a module file
 use_modes = module_source("compiler/passes/modes.data").split("\n").filter(line => line != "" and not line.starts_with("#")).map(line => line.split("\t")#1)
-names_no_module(name: text): bool := name in use_modes or is_c_library(name)
+names_no_module(name: text) as bool := name in use_modes or is_c_library(name)
 # the names the prelude defines, read once
 global prelude_definition_names = ø
-prelude_definitions(): list := {
+prelude_definitions() as list := {
 	if prelude_definition_names == ø { prelude_definition_names = definition_slices(prelude_text()).map(slice => slice#1) }
 	prelude_definition_names
 }
 # (an implicit use is always the standard module, never a same-named file beside the program: only an explicit
 # `use x` takes one, decision implicit-use-lib-first)
 global implicitly_used = []
-with_implicit_uses(source: text, folder: text = "."): text := {
+with_implicit_uses(source: text, folder: text = ".") as text := {
 	# (a module's compile has only module_source's stub: its own text is written_source's, scanned here as the
 	# extensions' implicit uses scan a program's)
 	written = written_source(source)
@@ -966,7 +966,7 @@ with_implicit_uses(source: text, folder: text = "."): text := {
 }
 # the runtime modules the modules and files used need, at any depth: units' `^` reached by a program's `3 km²`, the
 # colors package's `^ 2.4` by its `use ../../packages/colors/colors.warp`, link big_numbers
-runtime_modules_reached(uses: list, folder: text): list := {
+runtime_modules_reached(uses: list, folder: text) as list := {
 	needed = []
 	# (a runtime module used is needed already, its own text never read)
 	for used in uses.filter(name => not is_runtime_module(name)) {
@@ -977,7 +977,7 @@ runtime_modules_reached(uses: list, folder: text): list := {
 }
 # (each module's and file's text read once a compile: the prelude's is long)
 global runtime_modules_by_module = {}
-module_runtime_modules(name: text): list := {
+module_runtime_modules(name: text) as list := {
 	if not runtime_modules_by_module.has(name) {
 		runtime_modules_by_module[name] = []
 		# (a prebuilt module's signature says them, the modules it links, those of the files built into it too (units'
@@ -988,9 +988,9 @@ module_runtime_modules(name: text): list := {
 	}
 	runtime_modules_by_module[name]
 }
-text_runtime_modules(source: text): list := runtime_modules_needed(source, parsed(source))
+text_runtime_modules(source: text) as list := runtime_modules_needed(source, parsed(source))
 # a file's and those it uses in turn, beside it (a file using itself is read once)
-file_runtime_modules(file: text): list := {
+file_runtime_modules(file: text) as list := {
 	if not runtime_modules_by_module.has(file) {
 		runtime_modules_by_module[file] = []
 		written = file_text(file)
@@ -1003,19 +1003,19 @@ file_runtime_modules(file: text): list := {
 }
 # the runtime modules of the files a tree uses by path, `use "../../packages/colors/colors.warp"`: used_modules reads
 # code only, its texts blanked, so these come from the parsed uses
-files_runtime_modules(tree: Node, folder: text): list := {
+files_runtime_modules(tree: Node, folder: text) as list := {
 	statements = statements_in(plain_node(tree)).filter(statement => use_target(statement) is text)
 	statements.map(statement => file_used(statement, folder)).filter(file => file != ø).flat_map(file_runtime_modules)
 }
 # the standard modules defining a word, from the library index (library.warp library_index_section "word")
-defining_modules(word: text): list := {
+defining_modules(word: text) as list := {
 	found = library_index_section("word").get(word)
 	if found == ø then [] else found.split(" ")
 }
 # the words each standard module defines (an `alias ln => natural_log` too) but the prelude and lib/host/'s, each with its modules joined by spaces: a word of letters
 # (`red`, `minute`), no operator or made name (an operator's function, operator_·, kept: is_made_name); also the word leading a rule of the module that means nothing else
 # (storage's `stored users: [User]`), never one the core or the prelude gives a meaning (english's `add $x to`)
-module_word_definers(): map := {
+module_word_definers() as map := {
 	definers = {}
 	for module in std_module_names.filter(name => name != "prelude" and not is_host_module(name)) {
 		source = std_module_text(module)
@@ -1032,15 +1032,15 @@ module_word_definers(): map := {
 }
 # the word each `rewrite` line of a source starts its pattern with: `stored` of `rewrite stored $name: [$kind] => …`
 # (none of a pattern starting with a hole, `rewrite $p => …`)
-rule_heads(source: text): list := rule_patterns(source).map(leading_word).filter(word => #word > 0)
-rule_patterns(source: text): list := source.split("\n").filter(line => line.starts_with("rewrite ")).map(line => line[#"rewrite " ..])
-leading_word(pattern: text): text := {
+rule_heads(source: text) as list := rule_patterns(source).map(leading_word).filter(word => #word > 0)
+rule_patterns(source: text) as list := source.split("\n").filter(line => line.starts_with("rewrite ")).map(line => line[#"rewrite " ..])
+leading_word(pattern: text) as text := {
 	start = if pattern.starts_with("(") then 1 else 0
 	pattern[start ..< name_end(pattern, start, #pattern)]
 }
-has_meaning(word: text): bool := is_declared_word(word) or word in prelude_definitions() or is_operator_spelling(word) or keyword_form(word) != ""
+has_meaning(word: text) as bool := is_declared_word(word) or word in prelude_definitions() or is_operator_spelling(word) or keyword_form(word) != ""
 # the program with a `use` of each module in front of it
-with_module_uses(program: Node, modules: list): Node := {
+with_module_uses(program: Node, modules: list) as Node := {
 	if #modules == 0 { return program }
 	use_statements = modules.map(module => plain_node(parsed("use " + module)))
 	separated(bracketed(use_statements + statements_in(program), ""), ";")
@@ -1049,7 +1049,7 @@ with_module_uses(program: Node, modules: list): Node := {
 # `sleep(3ms)`: an argument naming a word nothing defines finds it in the module of the class its parameter is typed
 # with, which the program then uses: `sleep(duration: Time)` names Time, units.warp declares it and defines ms
 # (decision expected-type-names), also as a phrase `sleep 50ms`; `x = 3ms` expects no type and stays an unknown name
-with_expected_type_uses(program: Node, prelude: text): Node := {
+with_expected_type_uses(program: Node, prelude: text) as Node := {
 	own = own_heads(program)
 	bound = names_bound_in(program)
 	prelude_slices = definition_slices(prelude)
@@ -1081,14 +1081,14 @@ with_expected_type_uses(program: Node, prelude: text): Node := {
 # the module that defines a word a program names without using it, as the fix of its unknown name: `x = 3ms` gives
 # ": `use units` defines it" (decision expected-type-names); "" when none or several do. Never the prelude: every
 # program has it, so a `use prelude` fixes nothing (`animation: pop 400ms` names a CSS keyframes, not its pop)
-module_hint(word: text): text := {
+module_hint(word: text) as text := {
 	definers = defining_modules(word)
 	if #definers == 1 then ": `use " + definers#1 + "` defines it" else ""
 }
 # the fix of a word with no meaning where it is called: the use of each module defining it, `use list or use text` (a
 # module states its own uses; a program's are implied), else the known words sharing a part of its name, `from_hex`
 # gives is_hex, hex_text …
-unknown_word_fix(word: text): text := {
+unknown_word_fix(word: text) as text := {
 	definers = defining_modules(word)
 	if #definers > 0 { return definers.map(module => "use " + module).join(" or ") }
 	parts = word.split("_").filter(part => #part >= 3)
@@ -1098,11 +1098,11 @@ unknown_word_fix(word: text): text := {
 }
 # the parses of the word's definitions, the prelude's first, then those of each module defining it (library index),
 # a prebuilt module's from its signature (module_definitions), no text read
-definitions_of(word: text, prelude_slices: list): list := prelude_slices.filter(slice => slice#1 == word).map(slice => plain_node(parsed(slice#2))) + defining_modules(word).flat_map(module => module_definitions(module, word))
+definitions_of(word: text, prelude_slices: list) as list := prelude_slices.filter(slice => slice#1 == word).map(slice => plain_node(parsed(slice#2))) + defining_modules(word).flat_map(module => module_definitions(module, word))
 # the head of a definition's parse, `sleep(duration: Time)` of `sleep(duration: Time) := …`
-definition_parse_head(definition: Node): Node? := definition_head_of(statements_in(definition)#1)
+definition_parse_head(definition: Node) as Node? := definition_head_of(statements_in(definition)#1)
 # the types written for parameter `at` (from 0) of each definition head, `[Time]` of `sleep(duration: Time)`
-parameter_types(heads: list, at: int): list := {
+parameter_types(heads: list, at: int) as list := {
 	types = []
 	for head in heads {
 		parameter = if head != ø and at + 1 < #head then head#(at + 2) else ø
@@ -1111,28 +1111,28 @@ parameter_types(heads: list, at: int): list := {
 	types
 }
 # the words the program names bare that a type module defines as a function taking nothing, `now() := …`
-bare_calls(program: Node, providers: map): list := {
+bare_calls(program: Node, providers: map) as list := {
 	nullary = library_index_section("nullary")
 	bound = names_bound_in(program)
 	symbol_words(program).filter(word => word in nullary and providers[word] != "" and word not in bound)
 }
 # `t.words`: the names read as a member, each a type module's function of one value (words(t)), called so as t.words()
-member_reads(program: Node): list := {
+member_reads(program: Node) as list := {
 	unary = library_index_section("unary")
 	nodes_in(program).filter(n => is_key(n, Op.Dot) and value_of(n) is symbol and name_of(value_of(n)) in unary).map(n => name_of(value_of(n)))
 }
 # `words(t): list := …`: a definition's head of one parameter
-takes_one_value(written: text, name: text): bool := {
+takes_one_value(written: text, name: text) as bool := {
 	if not written.starts_with(name + "(") { return no }
 	parameters = written[#name + 1 ..].split(")")#1
 	parameters.trim() != "" and not parameters.contains(",")
 }
 # a definition's text after the keyword declaring it: `π() := …` of `const π() := …`
-without_keyword(written: text): text := if leading_name(written) in defining_keywords then written[#leading_name(written) ..].trim() else written
+without_keyword(written: text) as text := if leading_name(written) in defining_keywords then written[#leading_name(written) ..].trim() else written
 # the names the program binds anywhere, its own wherever it says them, never a module's word (card module-hygiene):
 # a variable `now = …`, a function and its parameters `f(was, now)`, a key `{g: 5}`, `x: int`, `Person{name: …}`, a
 # lambda's or an arm's pattern `(a, b) => …`, `for now in …`, a class, an enum and its cases
-names_bound_in(n: Node): any := {
+names_bound_in(n: Node) as any := {
 	found = {}
 	waiting = [n]
 	at = 1
@@ -1183,7 +1183,7 @@ names_bound_in(n: Node): any := {
 # (extensions/rules/rule_words.warp module_named at each `xs.f()`), which walked the whole program each time
 global bound_names_node = Node.Empty
 global bound_names_found = {}
-names_bound_in_kept(program: Node): any := {
+names_bound_in_kept(program: Node) as any := {
 	if not same(program, bound_names_node) {
 		bound_names_found = names_bound_in(program)
 		bound_names_node = program
@@ -1192,12 +1192,12 @@ names_bound_in_kept(program: Node): any := {
 }
 # `math` of `math.gcd(4, 6)`: a standard module's name (`Math` math's), or a program's own linked one (`shapes`, its
 # text maybe not beside it), which the program doesn't bind
-qualifies_by_module(name: text, program: Node): bool := name not in names_bound_in_kept(program) and (is_module_name(name.lower()) or own_module_wasm.has(name))
+qualifies_by_module(name: text, program: Node) as bool := name not in names_bound_in_kept(program) and (is_module_name(name.lower()) or own_module_wasm.has(name))
 # the names in a view, `["attribute", "variants", ["list", ["symbol", "red"]], ["symbol", "Color"]]`'s red and Color
-view_symbols(view: any): list := if kind_of(view) == "symbol" then [view#2] else if view is list then view.flat_map(view_symbols) else []
+view_symbols(view: any) as list := if kind_of(view) == "symbol" then [view#2] else if view is list then view.flat_map(view_symbols) else []
 # the names a pattern binds: `x`, `(a, b)`, `x: int`, `[first, rest...]`, `Point{x, y}` (its x and y, not Point), the
 # holes of a text pattern `"/users/" + id: int`
-pattern_names(pattern: Node): list := match pattern {
+pattern_names(pattern: Node) as list := match pattern {
 	Symbol(name): [rest_name(pattern) ?? name]
 	Key(head, Op.Colon, type): pattern_names(head) + names_after_type(type)
 	Key(head, Op.Add, tail): pattern_names(head) + pattern_names(tail)
@@ -1205,57 +1205,57 @@ pattern_names(pattern: Node): list := match pattern {
 	_: if is_group(pattern) then items_of(pattern).flat_map(pattern_names) else []
 }
 # the names a case's pattern binds, `Key(head, Op.Define, body)` its parts', the case itself none
-case_pattern_names(pattern: Node): list := if is_round(pattern) and #pattern > 0 and pattern#1 is symbol then items_of(pattern)[1 ..].flat_map(pattern_names) else pattern_names(pattern)
+case_pattern_names(pattern: Node) as list := if is_round(pattern) and #pattern > 0 and pattern#1 is symbol then items_of(pattern)[1 ..].flat_map(pattern_names) else pattern_names(pattern)
 # a text pattern goes on after a hole's type, `id: int + "/posts/" + post: int` parsing as `id: (int + "/posts/" + post)`
-names_after_type(type: Node): list := match type {
+names_after_type(type: Node) as list := match type {
 	Key(left, Op.Add, right): names_after_type(left) + pattern_names(right)
 	_: []
 }
 # the variables a `for x in …` among the items binds, also inside a comprehension `[x * 2 for x in xs]`
-iteration_variables(items: list): list := {
+iteration_variables(items: list) as list := {
 	found = []
 	for i in 1 .. #items - 2 { if items#i == symbol("for") and items#(i + 2) == symbol("in") { found = bound_target(items#(i + 1), found) } }
 	found
 }
 # `x` of a parameter `x`, `x: int`, `x = 1`
 # `A | E(x) | F`: A, E(x) and F
-alternatives(n: Node): list := if is_key(n, Op.Or) or is_key(n, Op.BitOr) then alternatives(key_of(n)) + alternatives(value_of(n)) else [n]
-leftmost_symbol(n: Node): Node := {
+alternatives(n: Node) as list := if is_key(n, Op.Or) or is_key(n, Op.BitOr) then alternatives(key_of(n)) + alternatives(value_of(n)) else [n]
+leftmost_symbol(n: Node) as Node := {
 	while n is key { n = key_of(n) }
 	if n is symbol then n else symbol("")
 }
 # word → the type module defining it, "" for a word two of them define
-type_module_providers(): map := library_index_section("provider")
+type_module_providers() as map := library_index_section("provider")
 # the type modules' tables of the library index, read off their texts by the build writing it: each word with the
 # type module defining it ("" for two), those defined taking nothing (`now() := …`), those taking one value
 # (`words(t) := …`)
-type_module_slices(): list := type_modules.flat_map(module => definition_slices(std_module_text(module)).map(slice => slice + [module]))
-nullary_words_scanned(): map := words_marked(type_module_slices().filter(slice => without_keyword(slice#2).starts_with(slice#1 + "()")))
-unary_words_scanned(): map := words_marked(type_module_slices().filter(slice => takes_one_value(without_keyword(slice#2), slice#1)))
-words_marked(slices: list): map := {
+type_module_slices() as list := type_modules.flat_map(module => definition_slices(std_module_text(module)).map(slice => slice + [module]))
+nullary_words_scanned() as map := words_marked(type_module_slices().filter(slice => without_keyword(slice#2).starts_with(slice#1 + "()")))
+unary_words_scanned() as map := words_marked(type_module_slices().filter(slice => takes_one_value(without_keyword(slice#2), slice#1)))
+words_marked(slices: list) as map := {
 	marked = {}
 	for slice in slices { marked[slice#1] = "yes" }
 	marked
 }
-type_module_providers_scanned(): map := {
+type_module_providers_scanned() as map := {
 	providers = {}
 	for slice in type_module_slices() { providers[slice#1] = if slice#1 in providers and providers[slice#1] != slice#3 then "" else slice#3 }
 	providers
 }
 # the word of a root, `√2`, sqrt(2), which lib/reals.warp keeps exact (emitter.warp exact_root_word); a program's own
 # sqrt wins, driver.warp's `sqrt(x: f64): f64 from "c"`
-root_words(program: Node): list := if not own_heads(program).has("sqrt") and nodes_in(program).any(n => is_group(n) and #n == 2 and n#1 == symbol("sqrt") and not surely_float(n#2)) then [exact_root_word] else []
+root_words(program: Node) as list := if not own_heads(program).has("sqrt") and nodes_in(program).any(n => is_group(n) and #n == 2 and n#1 == symbol("sqrt") and not surely_float(n#2)) then [exact_root_word] else []
 # `2.5`, `x as f64`, `(n as float)`: a value written a float, whose root is the float's (a primitive program's too)
-surely_float(n: Node): bool := if is_round(n) and #n == 1 then surely_float(n#1) else n is float or (is_key(n, Op.As) and value_of(n) is symbol and type_word_kind(name_of(value_of(n))) == "float")
+surely_float(n: Node) as bool := if is_round(n) and #n == 1 then surely_float(n#1) else n is float or (is_key(n, Op.As) and value_of(n) is symbol and type_word_kind(name_of(value_of(n))) == "float")
 # the classes the program converts to, tests for or types a name with (written_types), `3 as real`, `x is real`, `b: real`: a type
 # module's class comes with its conversions (`x as text` brings no text module)
 type_naming_ops = [Op.As, Op.Is]
-named_types(program: Node): list := {
+named_types(program: Node) as list := {
 	named = nodes_in(program).filter(n => type_naming_ops.any(op => is_key(n, op)) and value_of(n) is symbol).map(n => name_of(value_of(n)))
 	(named + written_types(program).map(written => written#1)).filter(name => is_capitalized(name) or not is_tested_type_word(name))
 }
 # the words the program calls, `f(x)` and `x.f(y)`, each once
-called_words(n: Node): list := {
+called_words(n: Node) as list := {
 	found = {}
 	waiting = [n]
 	at = 1
@@ -1272,7 +1272,7 @@ called_words(n: Node): list := {
 
 # the program with the definitions it reaches of the standard modules it uses, those they use in turn included: `use
 # case_tables` names lib/case_tables.warp when the program's folder has no case_tables.warp (uses.warp brings that)
-with_used_modules(program: Node, folder: text): Node := {
+with_used_modules(program: Node, folder: text) as Node := {
 	sources = used_module_sources(flat_statements(program), folder, [])
 	for source in sources#1 { for d in c_declarations_in(source) { used_c_functions[d#1] = d } }
 	if #sources#1 == 0 and #sources#3 == 0 then program else with_reached(program, sources#1.join("\n"), yes, sources#2.map(used_module_file), sources#3)
@@ -1280,7 +1280,7 @@ with_used_modules(program: Node, folder: text): Node := {
 # [the sources of the standard modules the statements use, each after those it uses, the module names seen, the
 # slices of the linked ones (signature.warp), whose text is never read]; a file in the program's folder takes a use of
 # the program's own, never a standard module's (`within_module`): samples/web/html.warp is no lib/html for markup's `use html`
-used_module_sources(statements: any, folder: text, seen: any, within_module: bool = no): list := {
+used_module_sources(statements: any, folder: text, seen: any, within_module: bool = no) as list := {
 	sources = []
 	linked = []
 	for statement in statements {
@@ -1311,7 +1311,7 @@ used_module_sources(statements: any, folder: text, seen: any, within_module: boo
 }
 # the standard modules the statements use and those these use in turn, by name, as used_module_sources sees them
 # but by their signatures, no text read (a file beside the program taking a use is the program's own)
-used_module_names(statements: list, folder: text): list := {
+used_module_names(statements: list, folder: text) as list := {
 	seen = []
 	for statement in statements {
 		used = use_target(statement)
@@ -1321,10 +1321,10 @@ used_module_names(statements: list, folder: text): list := {
 }
 # whether a file the folder holds takes the use (uses.warp file_used): of the program's own uses any file, of a standard
 # module's uses only the module's own file (a module built in lib/ uses its neighbours so)
-taken_as_file(statement: Node, folder: text, within_module: bool): bool := {
+taken_as_file(statement: Node, folder: text, within_module: bool) as bool := {
 	file = file_used(statement, folder)
 	file != ø and (not within_module or without_steps_up(file) == without_steps_up(std_module_path(name_of(use_target(statement)))))
 }
 # `use <module>` of each module, as a program's statements say them (a module's own read off its use lines, no parse
 # of all of it)
-use_statements(modules: list): list := modules.map(module => plain_node(parsed("use " + module)))
+use_statements(modules: list) as list := modules.map(module => plain_node(parsed("use " + module)))

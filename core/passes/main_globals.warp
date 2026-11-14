@@ -16,17 +16,17 @@ target_operators = ["#", ".", ":"]
 # a name the compiler makes, `match·bound`, `index·3`, which the program never wrote: never the user's to decide; an
 # operator's function, operator_· of `x·y`, the program writes by its glyph
 made_name_mark = "·"
-is_made_name(name: text): bool := name.contains(made_name_mark) and not name.starts_with(OPERATOR_FUNCTION_PREFIX)
+is_made_name(name: text) as bool := name.contains(made_name_mark) and not name.starts_with(OPERATOR_FUNCTION_PREFIX)
 # a name only the compiler binds in the body, a match arm's `t = match·bound#"t"`: each value it gets reads a made name
-bound_by_compiler(body: Node, name: text): bool := {
+bound_by_compiler(body: Node, name: text) as bool := {
 	values = assigned_values(body, name)
 	#values > 0 and values.all(reads_made_name)
 }
-reads_made_name(n: Node): bool := if n is symbol then is_made_name(name_of(n)) else parts_within(n).any(reads_made_name)
+reads_made_name(n: Node) as bool := if n is symbol then is_made_name(name_of(n)) else parts_within(n).any(reads_made_name)
 
 # the lowered program, the first change of a main-level variable from one of the functions `own_names` defines (not a
 # used module's or the prelude's) diagnosed
-main_globals(program: Node, own_names: list): any := {
+main_globals(program: Node, own_names: list) as any := {
 	main_names = main_variables(program)
 	global_names = global_variables(program)
 	# (the globals main declares, which a function's assignment writes; one a function declares is its own)
@@ -55,7 +55,7 @@ main_globals(program: Node, own_names: list): any := {
 # A global one file declares is changed from another file's function only where that function declares it `global`
 # too: `view = …` in gpu.warp could mean its own local or window.warp's view (decision loop-locals)
 # [name, file] of the first such global the definition assigns, else ø; nothing where either file is unknown
-other_file_global(definition: Node, function: text, own_names: list, main_declared: map): any := {
+other_file_global(definition: Node, function: text, own_names: list, main_declared: map) as any := {
 	home = written_file(function, own_names)
 	if home == ø { return ø }
 	for name in rebound_names(value_of(definition)) {
@@ -66,25 +66,25 @@ other_file_global(definition: Node, function: text, own_names: list, main_declar
 }
 # the file a definition or a main-level global was written in: the program's own, else the used file it came from
 # (prelude_words.warp defined_origins)
-written_file(name: text, own_names: list): text? := if name in own_names then module.program_file else (defined_origins.get(name) ?? [ø])#1
+written_file(name: text, own_names: list) as text? := if name in own_names then module.program_file else (defined_origins.get(name) ?? [ø])#1
 # the names the body binds anew, `n = …`, `n: int = …`, `n += 1`, `n++`; never a part changed in place, `xs#i = …`
-rebound_names(body: Node): list := nodes_in(body).filter(n => n is key and (op_of(n) in assigning_operators or op_of(n) in counting_operators)).map(n => rebound_name(key_of(n))).filter(name => name != ø)
-rebound_name(target: Node): text? := if target is symbol then name_of(target) else if is_operator(target, ":") and key_of(target) is symbol then name_of(key_of(target)) else ø
+rebound_names(body: Node) as list := nodes_in(body).filter(n => n is key and (op_of(n) in assigning_operators or op_of(n) in counting_operators)).map(n => rebound_name(key_of(n))).filter(name => name != ø)
+rebound_name(target: Node) as text? := if target is symbol then name_of(target) else if is_operator(target, ":") and key_of(target) is symbol then name_of(key_of(target)) else ø
 
 # the variables main assigns, outside the function definitions; a loop's or comprehension's variable belongs to its
 # loop, a function binding that name is its own: an item variable the lowering binds from made names
 # (reads_made_name), a range's counter it declares, `i: int = a`, and steps (`loop·step: i++`, iteration.warp)
 loop_step_label = "loop·step"
-main_variables(program: Node): any := {
+main_variables(program: Node) as any := {
 	found = {}
 	stepped = stepped_variables(program)
 	for statement in statements_in(program) { add_assigned(statement, found, stepped) }
 	found
 }
-stepped_variables(program: Node): list := nodes_in(program).filter(n => is_operator(n, ":") and key_of(n) == symbol(loop_step_label)).map(n => changed_variable(value_of(n)))
+stepped_variables(program: Node) as list := nodes_in(program).filter(n => is_operator(n, ":") and key_of(n) == symbol(loop_step_label)).map(n => changed_variable(value_of(n)))
 # the variables main assigns before the definition, as written (the lowering may move definitions to the top); a
 # statement without a place counts (decision inner-assignment-refused: only a name main has bound reads two ways)
-main_variables_before(program: Node, definition: Node): any := {
+main_variables_before(program: Node, definition: Node) as any := {
 	found = {}
 	stepped = stepped_variables(program)
 	defined_at = written_at(definition)
@@ -94,7 +94,7 @@ main_variables_before(program: Node, definition: Node): any := {
 	}
 	found
 }
-add_assigned(n: Node, found: map, stepped: list): any := {
+add_assigned(n: Node, found: map, stepped: list) as any := {
 	if is_define_statement(n) { return ø }
 	if is_operator(n, "=") {
 		target = key_of(n)
@@ -108,21 +108,21 @@ add_assigned(n: Node, found: map, stepped: list): any := {
 }
 
 # the variables the body changes, in source order: `n = …`, `n += …`, `n++`, `xs#i = …`, `xs.add(x)`
-changed_names(n: Node): list := {
+changed_names(n: Node) as list := {
 	found = []
 	name = changed_variable(n)
 	if name != ø { found += [name] }
 	for part in parts_of(n) { found += changed_names(part) }
 	found
 }
-changed_variable(n: Node): any := {
+changed_variable(n: Node) as any := {
 	if n is not key { return ø }
 	op = op_of(n)
 	if op in assigning_operators or op in counting_operators { return changed_root(key_of(n)) }
 	if op == "." and key_of(n) is symbol and is_group(value_of(n)) and #value_of(n) > 0 and value_of(n)#1 is symbol and name_of(value_of(n)#1) in in_place_methods { return name_of(key_of(n)) }
 	ø
 }
-changed_root(target: Node): any := {
+changed_root(target: Node) as any := {
 	if target is symbol { return name_of(target) }
 	if target is key and op_of(target) in target_operators { return changed_root(key_of(target)) }
 	ø
@@ -130,16 +130,16 @@ changed_root(target: Node): any := {
 
 # `let n = 5`, `var n = []` in the body: n is explicitly the function's own, also once the sugar dropped the word (it
 # noted where, lambdas.warp declared_locally)
-declares_local(body: Node, name: text): bool := name in declared_locally(body) or declares_as(body, name, local_declaration_keywords)
+declares_local(body: Node, name: text) as bool := name in declared_locally(body) or declares_as(body, name, local_declaration_keywords)
 # `global n` in the body, as written or as the sugar reads it
-declares_global(body: Node, name: text): bool := global_variables(body).has(name) or declares_as(body, name, global_declaration_keywords)
-declares_as(body: Node, name: text, keywords: list): bool := nodes_in(body).any(n => is_group(n) and #n == 2 and n#1 is symbol and name_of(n#1) in keywords and leftmost_name(n#2) == name)
+declares_global(body: Node, name: text) as bool := global_variables(body).has(name) or declares_as(body, name, global_declaration_keywords)
+declares_as(body: Node, name: text, keywords: list) as bool := nodes_in(body).any(n => is_group(n) and #n == 2 and n#1 is symbol and name_of(n#1) in keywords and leftmost_name(n#2) == name)
 
 # how the body first mentions the name: binding it fresh (`primes = []`, the function's own local, as in Python),
 # reading or updating it (main's variable), or not at all ("")
 fresh_mention = "fresh"
 read_mention = "read"
-first_mention(n: Node, name: text): text := {
+first_mention(n: Node, name: text) as text := {
 	# `n: int = 0` declares it as fresh as `n = 0` does (a range loop's counter is declared so)
 	bound = if is_operator(n, "=") and is_operator(key_of(n), ":") then key_of(key_of(n)) else if is_operator(n, "=") then key_of(n) else ø
 	if bound == symbol(name) { return if mentions(value_of(n), name) then read_mention else fresh_mention }

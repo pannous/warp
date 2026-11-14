@@ -16,7 +16,7 @@ class WebIdlDefinition {
 }
 # the statements between `;`, each opening a definition `interface Name : Parent {` before its first member, closing
 # it `}`, a member of the open one, or `Name includes Mixin`
-webidl_read(source: text): map := {
+webidl_read(source: text) as map := {
 	definitions = {}
 	open = ""
 	for written in webidl_code(source).split(";") {
@@ -35,19 +35,19 @@ webidl_read(source: text): map := {
 	definitions
 }
 # where a definition's word stands in a head, -1 where none does
-webidl_definition_word_at(head: list): int := {
+webidl_definition_word_at(head: list) as int := {
 	for at in 0 ..< #head { if head[at] in DEFINITION_WORDS { return at } }
 	-1
 }
 # the name of the definition its head opens, its parent noted: `partial interface mixin Name`, `interface Name : Parent`
-webidl_opened(definitions: map, head: list, kind: int): text := {
+webidl_opened(definitions: map, head: list, kind: int) as text := {
 	at = if #head > kind + 1 and head#(kind + 2) == "mixin" then kind + 3 else kind + 2
 	name = head#at
 	definition = webidl_definition(definitions, name)
 	if #head > at + 1 and head#(at + 1) == ":" { definition.parents += [head#(at + 2)] }
 	name
 }
-webidl_definition(definitions: map, name: text): WebIdlDefinition := {
+webidl_definition(definitions: map, name: text) as WebIdlDefinition := {
 	if not definitions.has(name) { definitions[name] = WebIdlDefinition() }
 	definitions[name]
 }
@@ -68,12 +68,12 @@ webidl_add_member(definition: WebIdlDefinition, written: text) := {
 # a type as the definitions name it: `Document?` is Document, the WindowProxy a page hands out its Window; `Promise<X>`,
 # `(A or B)` none of them
 WEBIDL_ALIASES = {WindowProxy: "Window"}
-webidl_type(written: text): text := {
+webidl_type(written: text) as text := {
 	named = written.replace("?", "").replace(")", "")
 	WEBIDL_ALIASES.get(named) ?? named
 }
 # the words of a statement, its extended attributes `[…]` left out, a `:` a word of its own
-webidl_words(statement: text): list := {
+webidl_words(statement: text) as list := {
 	plain = ""
 	depth = 0
 	for c in statement.chars() {
@@ -84,4 +84,4 @@ webidl_words(statement: text): list := {
 	plain.split(" ").filter(word => word != "")
 }
 # the source without its `//` comments
-webidl_code(source: text): text := source.split("\n").map(line => line.split("//")#1).join("\n")
+webidl_code(source: text) as text := source.split("\n").map(line => line.split("//")#1).join("\n")

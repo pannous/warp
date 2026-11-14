@@ -12,17 +12,17 @@ splat_record_size = 32
 class Splat { position: list; scale: list; rotation: list; color: Color; opacity: float }
 
 // the splats of a .splat file, in its order (a capture puts the biggest, most opaque ones first)
-splats(path: any): list := splats_of(read_bytes(path))
+splats(path: any) as list := splats_of(read_bytes(path))
 save(splats: list, as file) := write_bytes(file, splats_bytes(splats))
 
-splats_of(bytes: list): list := [splat_at(bytes, splat_record_size * i) for i in 0 ..< count(bytes) /! splat_record_size]
-splat_at(bytes: list, at: int): Splat := Splat(record_floats(bytes, at, 0, 3), record_floats(bytes, at, 3, 6), normalize(record_quaternion(bytes, at)), rgb(bytes[at + 24], bytes[at + 25], bytes[at + 26]), bytes[at + 27] / 255.0)
-record_floats(bytes: list, at: int, from: int, to: int): list := [f32_at(bytes, at + 4 * k) for k in from ..< to]
-record_quaternion(bytes: list, at: int): list := [(bytes[at + 28 + k] - 128) / 128.0 for k in 0 ..< 4]
+splats_of(bytes: list) as list := [splat_at(bytes, splat_record_size * i) for i in 0 ..< count(bytes) /! splat_record_size]
+splat_at(bytes: list, at: int) as Splat := Splat(record_floats(bytes, at, 0, 3), record_floats(bytes, at, 3, 6), normalize(record_quaternion(bytes, at)), rgb(bytes[at + 24], bytes[at + 25], bytes[at + 26]), bytes[at + 27] / 255.0)
+record_floats(bytes: list, at: int, from: int, to: int) as list := [f32_at(bytes, at + 4 * k) for k in from ..< to]
+record_quaternion(bytes: list, at: int) as list := [(bytes[at + 28 + k] - 128) / 128.0 for k in 0 ..< 4]
 
 // the six upper-triangle numbers of Σ = R S² Rᵀ, row-major c00 c01 c02 c11 c12 c22. R is the rotation matrix of the
 // unit quaternion [w, x, y, z], S the scales along the Gaussian's own axes
-covariance_terms(rotation: list, scale: list): list := {
+covariance_terms(rotation: list, scale: list) as list := {
 	w = rotation#1; x = rotation#2; y = rotation#3; z = rotation#4
 	r00 = 1 - 2 * (y * y + z * z)
 	r01 = 2 * (x * y - w * z)
@@ -46,7 +46,7 @@ covariance_terms(rotation: list, scale: list): list := {
 
 // one depth per splat, the dot of (position − eye) with forward, written into depths when it already has one cell a
 // splat (a GPU list [f32] included), else into a new list. The list written
-depths_of(scene: list, eye: list, forward: list, depths: list): list := {
+depths_of(scene: list, eye: list, forward: list, depths: list) as list := {
 	ex = eye#1; ey = eye#2; ez = eye#3
 	fx = forward#1; fy = forward#2; fz = forward#3
 	n = #scene
@@ -58,11 +58,11 @@ depths_of(scene: list, eye: list, forward: list, depths: list): list := {
 	out
 }
 // indices 0 ..< #depths of the depths at least nearest, the nearest first
-order_by_depth(depths: list, nearest: float): list := [i - 1 for i in 1 to #depths].filter(i => depths#(i + 1) >= nearest).sort(by: i => depths#(i + 1))
+order_by_depth(depths: list, nearest: float) as list := [i - 1 for i in 1 to #depths].filter(i => depths#(i + 1) >= nearest).sort(by: i => depths#(i + 1))
 // the same order of a GPU list [f32] of centres (xyzw per splat), written into `into` as f32, the count of indices
 // written. The sample uses this because view_order_into (extensions/gpu_lists/runtime.warp:193) currently refuses on
 // the [i32] bin tables it allocates (gpu_list_refused_as at :262; test/modules/test_splat_view_order.pairs.warp)
-order_by_depth(centres, eye, forward, nearest, into): int := {
+order_by_depth(centres, eye, forward, nearest, into) as int := {
 	n = #centres /! 4
 	depths = [0.0 for i in 1 to n]
 	for i in 0 ..< n {
@@ -79,8 +79,8 @@ order_by_depth(centres, eye, forward, nearest, into): int := {
 // from centres. splats(path) is the list of Splats; this is the same bytes for the GPU
 class SplatFrame { count: int; centres: list; shapes: list; shades: list }
 
-splat_frame(path: any): SplatFrame := splat_frame_of(read_bytes(path))
-splat_frame_of(bytes: list): SplatFrame := {
+splat_frame(path: any) as SplatFrame := splat_frame_of(read_bytes(path))
+splat_frame_of(bytes: list) as SplatFrame := {
 	n = #bytes /! splat_record_size
 	centres: [f32] = float[n * 4]
 	shapes: [f32] = float[n * 4]
@@ -105,14 +105,14 @@ splat_frame_of(bytes: list): SplatFrame := {
 	SplatFrame(n, centres, shapes, shades)
 }
 
-splats_bytes(splats: list): list := {
+splats_bytes(splats: list) as list := {
 	bytes = []
 	for s in splats { bytes += splat_bytes(s) }
 	bytes
 }
-splat_bytes(s: Splat): list := {
+splat_bytes(s: Splat) as list := {
 	bytes = []
 	for x in s.position + s.scale { bytes += float_bytes(x, 32, "little") }
 	bytes + [round(c * 255) as int for c in channels(s.color)] + [round(s.opacity * 255) as int] + [quaternion_byte(q) for q in s.rotation]
 }
-quaternion_byte(q: float): int := clamp(round(q * 128 + 128) as int, 0, 255)
+quaternion_byte(q: float) as int := clamp(round(q * 128 + 128) as int, 0, 255)

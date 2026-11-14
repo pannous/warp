@@ -11,22 +11,22 @@ CUBE_ROOT_WORD = "cbrt"
 # (`as rational`, not the type's name: the prelude's `type fraction = rational` converts nothing)
 RATIONAL_WORD = "rational"
 
-big_number_uses(source: text, tree: Node, folder: text = "."): list := if nodes_in(tree).any(needs_big_numbers) then [BIG_NUMBERS_MODULE] else []
+big_number_uses(source: text, tree: Node, folder: text = ".") as list := if nodes_in(tree).any(needs_big_numbers) then [BIG_NUMBERS_MODULE] else []
 # whether the node is one of those forms (a long decimal as the parser keeps its digits, lints.warp is_big_decimal)
-needs_big_numbers(n: Node): bool := {
+needs_big_numbers(n: Node) as bool := {
 	if is_big_decimal(n) { return yes }
 	if n is key { return op_of(n) == Op.Pow or (op_of(n) == Op.As and value_of(n) == symbol(RATIONAL_WORD)) }
 	n is symbol and spelled_operator(name_of(n)) in big_number_words()
 }
 # the operator a symbol spells, as the parser keeps the phrase forms of one (parser.warp operator_at): `^` of the
 # element-wise `.^` and of the compound `^=`, `.^=`; any other name itself
-spelled_operator(name: text): text := {
+spelled_operator(name: text) as text := {
 	undotted = if #name > 1 and name.starts_with(".") then name[1 ..] else name
 	if #undotted > 1 and undotted.ends_with("=") then undotted[0 ..< #undotted - 1] else undotted
 }
 # every spelling of the power, as the alias table gives them (`**`, `power`), and the cube root's word: found once
 global big_number_word_list = ø
-big_number_words(): list := {
+big_number_words() as list := {
 	if big_number_word_list == ø {
 		tables = alias_spellings()
 		symbols = tables.operator_symbols.filter(pair => pair#2 == POWER_OPERATOR).map(pair => pair#1)

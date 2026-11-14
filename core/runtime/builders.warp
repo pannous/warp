@@ -6,58 +6,58 @@ use "lists.warp"
 use "nodes.warp"
 use "show.warp"
 use "../emitter/byte_codes.warp"
-built_empty(): Node := ø
-built_int(n: int): Node := held(n)
-built_bool(truth: int): Node := held(truth != 0)
-built_float(x: float): Node := held(x)
-built_codepoint(code: int): Node := held(char_of(code))
+built_empty() as Node := ø
+built_int(n: int) as Node := held(n)
+built_bool(truth: int) as Node := held(truth != 0)
+built_float(x: float) as Node := held(x)
+built_codepoint(code: int) as Node := held(char_of(code))
 # the bytes the host left in linear memory, as a text of the program's
-text_from_memory(address: int, length: int): text := {
+text_from_memory(address: int, length: int) as text := {
 	ascii = yes
 	for i in 0..<length { ascii = ascii and memory_byte(address + i) < Utf8.Continuation and not (i > 0 and memory_byte(address + i - 1) == Ascii.Return and memory_byte(address + i) == Ascii.Newline) }
 	t = made_text(length, ascii)
 	for i in 0..<length { set_byte(t, i, memory_byte(address + i)) }
 	t
 }
-built_text(address: int, length: int): Node := held(text_from_memory(address, length))
-built_symbol(address: int, length: int): Node := symbol_of(text_from_memory(address, length))
+built_text(address: int, length: int) as Node := held(text_from_memory(address, length))
+built_symbol(address: int, length: int) as Node := symbol_of(text_from_memory(address, length))
 # `operator`: the operator's code, above the kind bits as key_node puts it
-built_key(left: Node, right: Node, operator: int): Node := keyed(operator * KindUnit.Info + Kind.Key, left, right)
+built_key(left: Node, right: Node, operator: int) as Node := keyed(operator * KindUnit.Info + Kind.Key, left, right)
 # the host builds a list from its last item, a cell at a time: first ahead of the items of rest (ø for none); `info`
 # the list's bracket and separator above the kind bits
-built_list(first: Node, rest: Node, info: int): Node := {
+built_list(first: Node, rest: Node, info: int) as Node := {
 	items = if is_null(rest) then [] else unboxed_list(rest)
 	list_node(info * KindUnit.Info + Kind.List, list_join([first], items))
 }
 # a list of bytes the host left in linear memory (`read_bytes`), each an Int: built in one call, not a host call per
 # byte (card compile-reads)
-built_bytes(address: int, length: int, info: int): Node := {
+built_bytes(address: int, length: int, info: int) as Node := {
 	items = []
 	for i in 0..<length { items += [held(memory_byte(address + i))] }
 	list_node(info * KindUnit.Info + Kind.List, items)
 }
 # a list of ints or floats the host left in linear memory, i64 or f64 cells (BigInt64Array, Float64Array): built in one
 # call, where new_list's cell at a time copies the list built so far (card list-cell-build)
-built_ints(address: int, count: int, info: int): Node := list_node(info * KindUnit.Info + Kind.List, [held(memory_i64(address + 8 * i)) for i in 0..<count])
-built_floats(address: int, count: int, info: int): Node := list_node(info * KindUnit.Info + Kind.List, [held(memory_f64(address + 8 * i)) for i in 0..<count])
+built_ints(address: int, count: int, info: int) as Node := list_node(info * KindUnit.Info + Kind.List, [held(memory_i64(address + 8 * i)) for i in 0..<count])
+built_floats(address: int, count: int, info: int) as Node := list_node(info * KindUnit.Info + Kind.List, [held(memory_f64(address + 8 * i)) for i in 0..<count])
 # code's lists the native warp's parse_code rebuilds (core/native/driver.warp code_built): the items, a square list
 # (ø for none), with the bracket and separator their spellings name; its keys take the operator so too, key_node
-built_spelled_list(items: Node, bracket: Node, separator: Node): Node := separated_node(bracketed_node(items, bracket), separator)
+built_spelled_list(items: Node, bracket: Node, separator: Node) as Node := separated_node(bracketed_node(items, bracket), separator)
 # a map of the host's `name: value` keys, a square list of them (ø for none): an object the page gives (an event's
 # detail, a js value) is a map as the program's own `{x: 1}` is
-built_map(keys: Node): Node := map_of(if is_null(keys) then [] else unboxed_list(keys))
+built_map(keys: Node) as Node := map_of(if is_null(keys) then [] else unboxed_list(keys))
 # a type declaration as written, `class P { x: int }`: its name and body
-built_type(name: Node, body: Node): Node := keyed(Kind.TypeDef, name, body)
+built_type(name: Node, body: Node) as Node := keyed(Kind.TypeDef, name, body)
 # the Error of a failure, which raises in a plain variable (decision N19); printing, equality and `is error` see it as
 # any Error
-failure_of(message: text): Node := with_kind(error_of(message), Marked.FailedError)
-is_failure(n: Node): bool := not is_null(n) and marked_kind(n) == Marked.FailedError
+failure_of(message: text) as Node := with_kind(error_of(message), Marked.FailedError)
+is_failure(n: Node) as bool := not is_null(n) and marked_kind(n) == Marked.FailedError
 # a parse failure the program's `try` catches: the Error of the host's message
-built_error(message: Node): Node := error_of(node_text(message))
+built_error(message: Node) as Node := error_of(node_text(message))
 # a node as the parse-code encoding writes it (extensions/parse_words.warp code_encoding), the builders' twin: what
 # the host reads a module's node back by, building it again elsewhere (core/native/driver.warp code_built), as the
 # compiler's call of a lib module's rule word gets its result (card module-rule-words). Each field ends with U+0001
-node_encoding(n: Node): text := {
+node_encoding(n: Node) as text := {
 	if is_null(n) { return "e" }
 	if node_is_error(n) { return encoded_part("x", unboxed_text(n)) }
 	# (a number ahead of yes and no, as node_text has it: the case True takes 1 too, bool as int)
@@ -73,11 +73,11 @@ node_encoding(n: Node): text := {
 	}
 }
 # the export the host reads by: the encoding as a Text node
-encoded_node(n: Node): Node := held(node_encoding(n))
-list_node_encoding(n: Node): text := {
+encoded_node(n: Node) as Node := held(node_encoding(n))
+list_node_encoding(n: Node) as text := {
 	items = unboxed_list(n)
 	encoded = encoded_part("l", int_text(#items)) + encoded_part("", node_text(list_bracket(n))) + encoded_part("", node_text(list_separator(n)))
 	for item in items { encoded = encoded + node_encoding(item) }
 	encoded
 }
-encoded_part(tag: text, field: text): text := tag + field + char_text(char_of(1))
+encoded_part(tag: text, field: text) as text := tag + field + char_text(char_of(1))

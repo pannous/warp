@@ -25,7 +25,7 @@ rewrite once $c: $body => $listens where $listens = once_listens($c, $body)
 // a watched name's listeners are the listeners of the event of that name (lib/prelude.warp listen), so a listener is
 // numbered as an event's: `h = on set x {…}`, `listeners of x`, `remove h from listeners of x`, `remove h`; the
 // listener of the last name it listens to
-variable_listen(names: list, changes_only: bool, listener: function): Listener? := {
+variable_listen(names: list, changes_only: bool, listener: function) as Listener? := {
 	last = ø
 	for name in names { last = listen(if name is Signal then name.name else name, written => if not changes_only or written#1 != written#2 { listener(written#1, written#2) }, no) }
 	last
@@ -34,7 +34,7 @@ variable_listen(names: list, changes_only: bool, listener: function): Listener? 
 // listener writing what it watches (`on change x { x = x + 1 }`) writes it without telling the listeners again, so a
 // write never loops
 global signals_notifying = []
-signal_notify(name: text, value: any, old: any): any := {
+signal_notify(name: text, value: any, old: any) as any := {
 	signal_values[name] = value
 	if name in signals_notifying { return value }
 	signals_notifying = signals_notifying + [name]
@@ -51,12 +51,12 @@ public signal_value(item: any): any := if item is Signal then signal_values.get(
 
 // each polled word's last value, a listener's at its position
 global polled_values = []
-value_listened(read: function, listener: function): int := {
+value_listened(read: function, listener: function) as int := {
 	polled_values.add(read())
 	at = count(polled_values)
 	timer_every(SYSTEM_VALUE_POLL, () => value_polled(at, read, listener))
 }
-value_polled(at: int, read: function, listener: function): any := {
+value_polled(at: int, read: function, listener: function) as any := {
 	value = read()
 	old = polled_values#at
 	if value != old {

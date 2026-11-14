@@ -36,7 +36,7 @@ class JpegHuffman { lowest: list; highest: list; first: list; symbols: list }
 // the entropy-coded bytes read a bit at a time, a 0xFF byte followed by 0x00 being one 0xFF
 class JpegBits { bytes: list; at: int; byte: int; left: int }
 
-jpeg_pixels(bytes: list): list := {
+jpeg_pixels(bytes: list) as list := {
 	quantization = filled_list(4, [])
 	tables = filled_list(8, ø)
 	components = []
@@ -98,7 +98,7 @@ huffman_read(segment: list, tables: list) := {
 		at += 17 + count(symbols)
 	}
 }
-huffman_table(counts: list, symbols: list): JpegHuffman := {
+huffman_table(counts: list, symbols: list) as JpegHuffman := {
 	lowest = []
 	highest = []
 	first = []
@@ -174,13 +174,13 @@ block_decoded(bits: JpegBits, component: JpegComponent, steps: list, tables: lis
 	}
 }
 // the 8×8 samples of a block's coefficients: the rows' inverse DCT, then the columns'
-inverse_dct(coefficients: list): list := {
+inverse_dct(coefficients: list) as list := {
 	rows = [sum([cosines[u * 8 + x] * coefficients[y * 8 + u] for u in 0 ..< 8]) for y in 0 ..< 8 for x in 0 ..< 8]
 	[sum([cosines[v * 8 + y] * rows[v * 8 + x] for v in 0 ..< 8]) for y in 0 ..< 8 for x in 0 ..< 8]
 }
 
 // the next symbol of the Huffman code: the code read bit by bit until it is one of its length
-decoded(bits: JpegBits, table: JpegHuffman): int := {
+decoded(bits: JpegBits, table: JpegHuffman) as int := {
 	code = 0
 	for length in 0 ..< 16 {
 		code = code * 2 + scan_bit(bits)
@@ -188,7 +188,7 @@ decoded(bits: JpegBits, table: JpegHuffman): int := {
 	}
 	raise "a JPEG Huffman code past 16 bits at byte ${bits.at}: the file is damaged"
 }
-scan_bit(bits: JpegBits): int := {
+scan_bit(bits: JpegBits) as int := {
 	if bits.left == 0 {
 		bits.byte = bits.bytes[bits.at]
 		bits.at += if bits.byte == 0xFF and bits.bytes[bits.at + 1] == 0 then 2 else 1
@@ -198,17 +198,17 @@ scan_bit(bits: JpegBits): int := {
 	(bits.byte >> bits.left) % 2
 }
 // the next size bits as a number, the high bit first
-bits_received(bits: JpegBits, size: int): int := {
+bits_received(bits: JpegBits, size: int) as int := {
 	value = 0
 	for i in 0 ..< size { value = value * 2 + scan_bit(bits) }
 	value
 }
 // a size-bit value as the signed number it codes: below half its range a negative one
-extended(value: int, size: int): int := if size == 0 then 0 else if value < 1 << (size - 1) then value - (1 << size) + 1 else value
+extended(value: int, size: int) as int := if size == 0 then 0 else if value < 1 << (size - 1) then value - (1 << size) + 1 else value
 
 // the pixels' colors: gray as it is, YCbCr turned into red, green and blue (JFIF); a component sampled more coarsely
 // is read between its samples, each sample at the center of the pixels it covers (as libjpeg's smooth upsampling)
-colors_of(components: list, width: int, height: int): list := {
+colors_of(components: list, width: int, height: int) as list := {
 	if count(components) == 1 { return [gray_color(sample_at(components[0], x, y, 1, 1)) for y in 0 ..< height for x in 0 ..< width] }
 	widest = max(components.map(c => c.horizontal))
 	tallest = max(components.map(c => c.vertical))
@@ -217,7 +217,7 @@ colors_of(components: list, width: int, height: int): list := {
 }
 // the component's sample under the pixel, its samples each spread over across × down pixels: bilinear between the four
 // nearest, the edges repeated
-sample_at(c: JpegComponent, x: int, y: int, across: float, down: float): float := {
+sample_at(c: JpegComponent, x: int, y: int, across: float, down: float) as float := {
 	if across == 1 and down == 1 { return c.samples[y * c.plane_width + x] }
 	column = max(0.0, (x + 0.5) / across - 0.5)
 	row = max(0.0, (y + 0.5) / down - 0.5)
@@ -230,5 +230,5 @@ sample_at(c: JpegComponent, x: int, y: int, across: float, down: float): float :
 	lower = lerp(at(left, below), at(right, below), column - left)
 	lerp(upper, lower, row - top)
 }
-gray_color(luma: number): Color := rgb(luma, luma, luma)
-ycbcr_color(luma: number, blue: number, red: number): Color := rgb(clamp(luma + 1.402 * red, 0, 255), clamp(luma - 0.344136 * blue - 0.714136 * red, 0, 255), clamp(luma + 1.772 * blue, 0, 255))
+gray_color(luma: number) as Color := rgb(luma, luma, luma)
+ycbcr_color(luma: number, blue: number, red: number) as Color := rgb(clamp(luma + 1.402 * red, 0, 255), clamp(luma - 0.344136 * blue - 0.714136 * red, 0, 255), clamp(luma + 1.772 * blue, 0, 255))

@@ -2,5 +2,5 @@
 @primitive
 # a primitive file: plain MVP wasm, no GC, so wasm2c and cc make it a native program
 # (test/native/test_native.sh)
-fib(n: i64): i64 := if n < 2 then n else fib(n - 1) + fib(n - 2)
+fib(n: i64) as i64 := if n < 2 then n else fib(n - 1) + fib(n - 2)
 fib 30

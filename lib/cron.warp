@@ -16,7 +16,7 @@ CRON_MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "o
 CRON_DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
 
 // a number or (months, days) a name of a field, else it raises
-def cron_number(t: text, field: int): int {
+def cron_number(t: text, field: int) as int {
 	word = lower(t)
 	if field == 3 and word in CRON_MONTHS { return CRON_MONTHS.index_of(word) }
 	if field == 4 and word in CRON_DAYS { return CRON_DAYS.index_of(word) - 1 }
@@ -26,7 +26,7 @@ def cron_number(t: text, field: int): int {
 	n
 }
 // the values one field allows, ascending, day of week 7 as 0
-def cron_values(t: text, field: int): list {
+def cron_values(t: text, field: int) as list {
 	allowed = []
 	for item in split(t, ",") {
 		parts = split(item, "/")
@@ -47,10 +47,10 @@ def cron_values(t: text, field: int): list {
 	}
 	[v for v in CRON_LOW[field] to CRON_HIGH[field] if v in allowed]
 }
-int_step(t: text, field: int): int := { if not is_digits(t) or int(t) == 0 { raise "cron: /" + t + " is no step of the " + CRON_FIELDS[field] }; int(t) }
+int_step(t: text, field: int) as int := { if not is_digits(t) or int(t) == 0 { raise "cron: /" + t + " is no step of the " + CRON_FIELDS[field] }; int(t) }
 
 // an expression as a map: its five lists of values and whether day of month and day of week are unrestricted (*)
-def cron_parse(expression: text): map {
+def cron_parse(expression: text) as map {
 	written = trim(expression)
 	if written.starts_with("@") {
 		if not (lower(written) in keys(CRON_MACROS)) { raise "cron: unknown macro " + written }
@@ -60,32 +60,32 @@ def cron_parse(expression: text): map {
 	if count(fields) != 5 { raise "cron: " + expression + " has " + text(count(fields)) + " fields, not 5 (minute hour day-of-month month day-of-week)" }
 	{minutes: cron_values(fields[0], 0), hours: cron_values(fields[1], 1), days: cron_values(fields[2], 2), months: cron_values(fields[3], 3), weekdays: cron_values(fields[4], 4), any_day: fields[2].starts_with("*"), any_weekday: fields[4].starts_with("*")}
 }
-cron_of(expression: any): map := if expression is text then cron_parse(expression) else expression
+cron_of(expression: any) as map := if expression is text then cron_parse(expression) else expression
 
 // a time as seconds since 1970: an Instant, milliseconds, or a UTC text "yyyy-MM-dd HH:mm"
-cron_seconds(time: any): int := if time is Instant then time.ms /! 1000 else if time is text then pattern_ms(time, "yyyy-MM-dd HH:mm") /! 1000 else time /! 1000
-cron_zone(zone: any): Zone := if zone is Zone then zone else if zone is text then zone_named(zone) else Zone("UTC" + text(zone), zone, Dst.Never)
-zone_offsets(zone: Zone): list := if zone.dst == Dst.Never then [zone.standard] else [zone.standard, zone.standard + 3600]
+cron_seconds(time: any) as int := if time is Instant then time.ms /! 1000 else if time is text then pattern_ms(time, "yyyy-MM-dd HH:mm") /! 1000 else time /! 1000
+cron_zone(zone: any) as Zone := if zone is Zone then zone else if zone is text then zone_named(zone) else Zone("UTC" + text(zone), zone, Dst.Never)
+zone_offsets(zone: Zone) as list := if zone.dst == Dst.Never then [zone.standard] else [zone.standard, zone.standard + 3600]
 
 // whether a day (its day number since 1970) is one of the expression's (the OR of Vixie cron when both are restricted)
-def cron_day_holds(c: map, days: int): bool {
+def cron_day_holds(c: map, days: int) as bool {
 	date = civil_from_days(days)
 	if not (date.month in c.months) { return no }
 	in_month = date.day in c.days
 	in_week = (days + 4) % 7 in c.weekdays
 	if c.any_day or c.any_weekday then in_month and in_week else in_month or in_week
 }
-cron_wall_holds(c: map, wall: int): bool := cron_day_holds(c, wall /! 86400) and (wall % 86400 /! 3600) in c.hours and (wall % 3600 /! 60) in c.minutes
+cron_wall_holds(c: map, wall: int) as bool := cron_day_holds(c, wall /! 86400) and (wall % 86400 /! 3600) in c.hours and (wall % 3600 /! 60) in c.minutes
 // the first instant a wall time means in the zone, nil when a DST change skips it
-wall_instant(zone: Zone, wall: int): any := { found = nil; for o in zone_offsets(zone) { t = wall - o; if zone_offset(zone, t) == o and (found == nil or t < found) { found = t } }; found }
-local_wall(zone: Zone, seconds: int): int := seconds + zone_offset(zone, seconds)
+wall_instant(zone: Zone, wall: int) as any := { found = nil; for o in zone_offsets(zone) { t = wall - o; if zone_offset(zone, t) == o and (found == nil or t < found) { found = t } }; found }
+local_wall(zone: Zone, seconds: int) as int := seconds + zone_offset(zone, seconds)
 
-cron_matches(expression: any, time: any, zone: any): bool := { s = cron_seconds(time) /! 60 * 60; z = cron_zone(zone); w = local_wall(z, s); cron_wall_holds(cron_of(expression), w) and wall_instant(z, w) == s }
-cron_matches(expression: any, time: any): bool := cron_matches(expression, time, "UTC")
+cron_matches(expression: any, time: any, zone: any) as bool := { s = cron_seconds(time) /! 60 * 60; z = cron_zone(zone); w = local_wall(z, s); cron_wall_holds(cron_of(expression), w) and wall_instant(z, w) == s }
+cron_matches(expression: any, time: any) as bool := cron_matches(expression, time, "UTC")
 
 // the first wall minute from wall on (by: 1) or back (by: -1) the expression holds at, skipping whole months, days
 // and hours that cannot; it raises when none comes within 30 years (0 0 31 2 *)
-def cron_scan(c: map, wall: int, by: int): int {
+def cron_scan(c: map, wall: int, by: int) as int {
 	w = wall
 	limit = 30 * 366 * 86400
 	while abs(w - wall) < limit {
@@ -101,7 +101,7 @@ def cron_scan(c: map, wall: int, by: int): int {
 	raise "cron: the expression fires on no day within 30 years"
 }
 // the first time strictly after `after` the expression fires, as an Instant
-def cron_next(expression: any, after: any, zone: any): Instant {
+def cron_next(expression: any, after: any, zone: any) as Instant {
 	c = cron_of(expression)
 	z = cron_zone(zone)
 	start = cron_seconds(after)
@@ -114,9 +114,9 @@ def cron_next(expression: any, after: any, zone: any): Instant {
 	}
 	raise "cron: unreachable"
 }
-cron_next(expression: any, after: any): Instant := cron_next(expression, after, "UTC")
+cron_next(expression: any, after: any) as Instant := cron_next(expression, after, "UTC")
 // the last time strictly before `before` the expression fired, as an Instant
-def cron_previous(expression: any, before: any, zone: any): Instant {
+def cron_previous(expression: any, before: any, zone: any) as Instant {
 	c = cron_of(expression)
 	z = cron_zone(zone)
 	end = cron_seconds(before)
@@ -129,4 +129,4 @@ def cron_previous(expression: any, before: any, zone: any): Instant {
 	}
 	raise "cron: unreachable"
 }
-cron_previous(expression: any, before: any): Instant := cron_previous(expression, before, "UTC")
+cron_previous(expression: any, before: any) as Instant := cron_previous(expression, before, "UTC")

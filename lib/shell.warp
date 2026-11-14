@@ -49,13 +49,13 @@ sort_lines(path: text) := sort(file_lines(path))
 unique_lines(path: text) := unique(file_lines(path))
 // `grep "fn " "main.rs"`: the lines of a file the regular expression matches; `grep("^a", lines)` the texts of a list,
 // so a text's own lines are `grep("^a", text.split("\n"))`
-grep(pattern: text, source: any): list := [line for line in (if source is list then source else file_lines(source)) if line matches pattern]
+grep(pattern: text, source: any) as list := [line for line in (if source is list then source else file_lines(source)) if line matches pattern]
 // whether the path is a folder: one that lists
-is_folder(path: text): bool := list_files(path) is list
+is_folder(path: text) as bool := list_files(path) is list
 // `find_files(~/dev, "*.warp")`: the paths below a folder whose name matches the wildcards * and ?, sorted, hidden
 // folders skipped (find itself searches a list)
-find_files(folder: text, pattern: text): list := sort(paths_named(folder, wildcard_regex(pattern)))
-paths_named(folder: text, wanted: text): list := {
+find_files(folder: text, pattern: text) as list := sort(paths_named(folder, wildcard_regex(pattern)))
+paths_named(folder: text, wanted: text) as list := {
 	found = []
 	for name in list_files(folder) {
 		path = folder.remove_suffix("/") + "/" + name
@@ -65,16 +65,16 @@ paths_named(folder: text, wanted: text): list := {
 	found
 }
 // `*.json` → `^[^/]*\.json$`: a wildcard pattern as the regular expression of the names it matches
-wildcard_regex(pattern: text): text := "^" + [wildcard_piece(c) for c in pattern].join("") + "$"
-wildcard_piece(c: text): text := if c == "*" then "[^/]*" else if c == "?" then "[^/]" else if c in ".+^$()[]{}|\\" then "\\" + c else c
+wildcard_regex(pattern: text) as text := "^" + [wildcard_piece(c) for c in pattern].join("") + "$"
+wildcard_piece(c: text) as text := if c == "*" then "[^/]*" else if c == "?" then "[^/]" else if c in ".+^$()[]{}|\\" then "\\" + c else c
 // the bytes of a file or of all files below a folder, as du counts them (size itself is a list's)
-file_size(path: text): int := if is_folder(path) then sum([file_size(path.remove_suffix("/") + "/" + name) for name in list_files(path)]) else count(read_bytes(path))
+file_size(path: text) as int := if is_folder(path) then sum([file_size(path.remove_suffix("/") + "/" + name) for name in list_files(path)]) else count(read_bytes(path))
 // `info ./a.txt` → {size: 20, modified: 1760536980000, kind: "file"}, modified in milliseconds as clock() counts
 info(path: text) := std_io("file", "info", [path])
 // `open ./photo.png`: the file in its app; natively only
 open(path: text) := std_io("os", "open", [path])
 // the path of the program a command runs, ø when no folder of the PATH has it
-which(name: text): text? := {
+which(name: text) as text? := {
 	if name.contains("/") { return if exists(name) then name else ø }
 	for folder in split(env("PATH") ?? "", ":") {
 		if folder and exists(folder + "/" + name) { return folder + "/" + name }
@@ -99,7 +99,7 @@ shell_line(line: text, refusal: text) := {
 // A path written without quotes is a path (decision path-type), a text marked as one: `sort ./names.txt` sorts the
 // file's lines, `sort [3 1 2]` stays the list's sort, `find ./src "x"` finds files while "abc".find("b") stays the
 // text's; the same for unique and size. Path(t) marks a text computed at run time
-Path(name: text): any := name as path
+Path(name: text) as any := name as path
 sort(file: path) := sort_lines(file)
 unique(file: path) := unique_lines(file)
 find(folder: path, pattern: text) := find_files(folder, pattern)

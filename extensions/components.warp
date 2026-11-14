@@ -14,9 +14,9 @@ instances_word = "component_instances"
 # the program's components by their lower-case plural, `counters` → "Counter", where it binds no such name itself
 global instances_plurals = {}
 # the words of lib/markup.warp the calls this pass writes need, reached though the program writes none (prelude_words.warp)
-component_words(program: Node): list := if statements_in(program).any(statement => component_name(statement) != "") then ["component", "component_state", instances_word, "live"] else []
+component_words(program: Node) as list := if statements_in(program).any(statement => component_name(statement) != "") then ["component", "component_state", instances_word, "live"] else []
 
-components(program: Node): Node := {
+components(program: Node) as Node := {
 	statements = statements_in(program)
 	names = statements.map(component_name).filter(name => name != "")
 	if #names == 0 { return program }
@@ -28,7 +28,7 @@ components(program: Node): Node := {
 }
 
 # the name of the component a statement defines, a function of markup with state, else ""
-component_name(statement: Node): text := {
+component_name(statement: Node) as text := {
 	parts = definition_of(statement)
 	if parts == ø or not is_capitalized(parts.name) or not is_curly_group(parts.body) or #parts.body == 0 { return "" }
 	# (a function of markup without state, `Card(t) := div{…}`, is a plain function)
@@ -37,7 +37,7 @@ component_name(statement: Node): text := {
 }
 
 # `Counter(start) := {…}` as `Counter(start, key) := { this = component("Counter", key); component_state(this, "count", () => start); … }`
-component_defined(statement: Node): Node := {
+component_defined(statement: Node) as Node := {
 	parts = definition_of(statement)
 	state = items_of(parts.body).filter(is_state_assignment).map(assignment => name_of(key_of(assignment)))
 	body = items_of(parts.body).map(item => if is_state_assignment(item) then state_set_once(item) else item)
@@ -49,41 +49,41 @@ component_defined(statement: Node): Node := {
 	signature = if is_key(written, Op.Colon) then Key(called, Op.Colon, value_of(written)) else called
 	Key(signature, Op.Define, group_like(parts.body, [instance] + body))
 }
-is_state_assignment(item: Node): bool := is_key(item, Op.Assign) and key_of(item) is symbol
-state_entry(name: text): Node := Key(this_word, Op.Dot, symbol(name))
+is_state_assignment(item: Node) as bool := is_key(item, Op.Assign) and key_of(item) is symbol
+state_entry(name: text) as Node := Key(this_word, Op.Dot, symbol(name))
 # `count = start` → `component_state(this, "count", () => start)`
-state_set_once(assignment: Node): Node := call_node(symbol("component_state"), [this_word, name_of(key_of(assignment)), deferred(value_of(assignment))])
-deferred(code: Node): Node := Key(Node.Empty, Op.Arrow, code)
+state_set_once(assignment: Node) as Node := call_node(symbol("component_state"), [this_word, name_of(key_of(assignment)), deferred(value_of(assignment))])
+deferred(code: Node) as Node := Key(Node.Empty, Op.Arrow, code)
 
 # a definition's body so, its head kept: `Counter(start, key)` is no call
-with_calls_in(statement: Node, names: list): Node := if is_key(statement, Op.Define) then Key(key_of(statement), Op.Define, with_component_calls(value_of(statement), names)) else with_component_calls(statement, names)
+with_calls_in(statement: Node, names: list) as Node := if is_key(statement, Op.Define) then Key(key_of(statement), Op.Define, with_component_calls(value_of(statement), names)) else with_component_calls(statement, names)
 # every call of a component given its key, `Counter(0)` → `Counter(0, ø)`, `Counter(i, key: i)` → `Counter(i, i)`; one
 # among a tag's items a live part; `Counter.instances` and `counters` the page's instances
-with_component_calls(n: Node, names: list): Node := bottom_up(n, part => with_live_items(keyed_call(instances_named(part, names), names), names))
-keyed_call(n: Node, names: list): Node := {
+with_component_calls(n: Node, names: list) as Node := bottom_up(n, part => with_live_items(keyed_call(instances_named(part, names), names), names))
+keyed_call(n: Node, names: list) as Node := {
 	if not is_component_call(n, names) { return n }
 	arguments = items_of(n)[1..]
 	keys = arguments.filter(is_key_argument)
 	call_node(n#1, arguments.filter(argument => not is_key_argument(argument)) + [if #keys > 0 then value_of(keys#1) else Node.Empty])
 }
-is_component_call(n: Node, names: list): bool := is_group(n) and bracket_of(n) == "(" and separator_of(n) != ";" and #n > 0 and n#1 is symbol and name_of(n#1) in names
-is_key_argument(argument: Node): bool := is_key(argument, Op.Colon) and key_of(argument) == symbol(key_parameter)
-with_live_items(n: Node, names: list): Node := {
+is_component_call(n: Node, names: list) as bool := is_group(n) and bracket_of(n) == "(" and separator_of(n) != ";" and #n > 0 and n#1 is symbol and name_of(n#1) in names
+is_key_argument(argument: Node) as bool := is_key(argument, Op.Colon) and key_of(argument) == symbol(key_parameter)
+with_live_items(n: Node, names: list) as Node := {
 	parts = tag_parts(n)
 	if #parts == 0 { return n }
 	Key(parts#1, Op.Colon, group_like(parts#2, items_of(parts#2).map(item => if calls_component(item, names) then live_part(item) else item)))
 }
 # (reading the instances too, `p{ "sum " + sum(Counter.instances.map(c => c.count)) }`: they change as the page renders)
-calls_component(n: Node, names: list): bool := not is_lambda(n) and #tag_parts(markup_written(n)) == 0 and (is_component_call(n, names + [instances_word]) or parts_of(n).any(part => calls_component(part, names)))
-live_part(item: Node): Node := call_node(symbol("live"), [deferred(item)])
-instances_named(n: Node, names: list): Node := {
+calls_component(n: Node, names: list) as bool := not is_lambda(n) and #tag_parts(markup_written(n)) == 0 and (is_component_call(n, names + [instances_word]) or parts_of(n).any(part => calls_component(part, names)))
+live_part(item: Node) as Node := call_node(symbol("live"), [deferred(item)])
+instances_named(n: Node, names: list) as Node := {
 	if is_key(n, Op.Dot) and key_of(n) is symbol and name_of(key_of(n)) in names and value_of(n) == symbol(instances_field) { return instances_of(name_of(key_of(n))) }
 	if n is symbol and instances_plurals.has(name_of(n)) { return instances_of(instances_plurals[name_of(n)]) }
 	n
 }
 # a component's lower-case plural, its instances' name: Counter → counters, Box → boxes, Match → matches
-instances_plural(name: text): text := {
+instances_plural(name: text) as text := {
 	lower = name[0..<1].lower() + name[1..]
 	if lower.ends_with("s") or lower.ends_with("x") or lower.ends_with("z") or lower.ends_with("ch") or lower.ends_with("sh") then lower + "es" else lower + "s"
 }
-instances_of(name: text): Node := call_node(symbol(instances_word), [name])
+instances_of(name: text) as Node := call_node(symbol(instances_word), [name])

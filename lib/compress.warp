@@ -13,26 +13,26 @@ COMPRESS_DISTANCE_BASE = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 
 COMPRESS_DISTANCE_EXTRA = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13]
 COMPRESS_CODE_ORDER = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]
 
-subject_bytes(subject: text or list): list := if subject is list then subject else to_utf8(subject)
-adler32(subject: text or list): int := { a = 1; b = 0; for x in subject_bytes(subject) { a = (a + x) % 65521; b = (b + a) % 65521 }; b * 65536 + a }
+subject_bytes(subject: text or list) as list := if subject is list then subject else to_utf8(subject)
+adler32(subject: text or list) as int := { a = 1; b = 0; for x in subject_bytes(subject) { a = (a + x) % 65521; b = (b + a) % 65521 }; b * 65536 + a }
 
 // --- reading bits (least significant first) and canonical Huffman codes (as in zlib's puff)
 class BitReader { input: list; pos: int; buf: int; left: int; out: list }
-def next_byte(r: BitReader): int {
+def next_byte(r: BitReader) as int {
 	if r.pos >= count(r.input) { raise "inflate: the input is truncated at byte " + text(r.pos) }
 	r.pos = r.pos + 1
 	r.input[r.pos - 1]
 }
-def next_bit(r: BitReader): int {
+def next_bit(r: BitReader) as int {
 	if r.left == 0 { r.buf = next_byte(r); r.left = 8 }
 	b = r.buf % 2
 	r.buf = r.buf /! 2
 	r.left = r.left - 1
 	b
 }
-take_bits(r: BitReader, n: int): int := { v = 0; weight = 1; for i in 0 ..< n { v = v + next_bit(r) * weight; weight = weight * 2 }; v }
+take_bits(r: BitReader, n: int) as int := { v = 0; weight = 1; for i in 0 ..< n { v = v + next_bit(r) * weight; weight = weight * 2 }; v }
 class Huffman { counts: list; symbols: list }
-def huffman_of(lengths: list): Huffman {
+def huffman_of(lengths: list) as Huffman {
 	counts = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 	for n in lengths { counts[n] = counts[n] + 1 }
 	spare = 1
@@ -41,7 +41,7 @@ def huffman_of(lengths: list): Huffman {
 	for n in 1 to 15 { for s in 0 ..< count(lengths) { if lengths[s] == n { symbols.add(s) } } }
 	Huffman(counts, symbols)
 }
-def decode(r: BitReader, h: Huffman): int {
+def decode(r: BitReader, h: Huffman) as int {
 	code = 0; first = 0; index = 0
 	for n in 1 to 15 {
 		code = code + next_bit(r)
@@ -53,7 +53,7 @@ def decode(r: BitReader, h: Huffman): int {
 	}
 	raise "inflate: a code no Huffman table holds (corrupt input)"
 }
-fixed_lengths(): list := [if s < 144 then 8 else if s < 256 then 9 else if s < 280 then 7 else 8 for s in 0 ..< 288]
+fixed_lengths() as list := [if s < 144 then 8 else if s < 256 then 9 else if s < 280 then 7 else 8 for s in 0 ..< 288]
 
 // --- inflate
 def inflate_codes(r: BitReader, literals: Huffman, distances: Huffman) {
@@ -107,7 +107,7 @@ def inflate_dynamic(r: BitReader) {
 	inflate_codes(r, huffman_of(lengths[0 ..< literal_count]), huffman_of(lengths[literal_count ..< count(lengths)]))
 }
 // inflate the raw DEFLATE stream starting at byte `start`; the reader ends after its final block (byte aligned)
-def inflate_from(input: list, start: int): BitReader {
+def inflate_from(input: list, start: int) as BitReader {
 	r = BitReader(input, start, 0, 0, [])
 	final_block = 0
 	while final_block == 0 {
@@ -121,7 +121,7 @@ def inflate_from(input: list, start: int): BitReader {
 	r.left = 0
 	r
 }
-inflate(subject: text or list): list := inflate_from(subject_bytes(subject), 0).out
+inflate(subject: text or list) as list := inflate_from(subject_bytes(subject), 0).out
 
 // --- deflate
 class BitWriter { out: list; buf: int; used: int }
@@ -132,7 +132,7 @@ def put_bits(w: BitWriter, value: int, n: int) {
 	w.used = w.used + n
 	while w.used >= 8 { w.out.add(w.buf % 256); w.buf = w.buf /! 256; w.used = w.used - 8 }
 }
-reversed_bits(code: int, n: int): int := { r = 0; c = code; for i in 0 ..< n { r = r * 2 + c % 2; c = c /! 2 }; r }
+reversed_bits(code: int, n: int) as int := { r = 0; c = code; for i in 0 ..< n { r = r * 2 + c % 2; c = c /! 2 }; r }
 // a Huffman code goes out most significant bit first
 put_code(w: BitWriter, code: int, n: int) := put_bits(w, reversed_bits(code, n), n)
 def put_literal(w: BitWriter, s: int) {
@@ -152,7 +152,7 @@ def put_match(w: BitWriter, length: int, distance: int) {
 	put_bits(w, distance - COMPRESS_DISTANCE_BASE[d], COMPRESS_DISTANCE_EXTRA[d])
 }
 // one fixed Huffman block of greedy LZ77 matches: hash chains of 3-byte prefixes, 32 KB back, at most 64 tries
-def deflate_fixed(input: list): list {
+def deflate_fixed(input: list) as list {
 	w = BitWriter([], 0, 0)
 	put_bits(w, 3, 3)
 	n = count(input)
@@ -189,7 +189,7 @@ def deflate_fixed(input: list): list {
 	if w.used > 0 { w.out.add(w.buf) }
 	w.out
 }
-def deflate_stored(input: list): list {
+def deflate_stored(input: list) as list {
 	out = []
 	offset = 0
 	while yes {
@@ -202,11 +202,11 @@ def deflate_stored(input: list): list {
 	}
 	out
 }
-deflate(subject: text or list): list := { input = subject_bytes(subject); fixed = deflate_fixed(input); if count(fixed) <= count(input) + 5 * (count(input) /! 65535 + 1) then fixed else deflate_stored(input) }
+deflate(subject: text or list) as list := { input = subject_bytes(subject); fixed = deflate_fixed(input); if count(fixed) <= count(input) + 5 * (count(input) /! 65535 + 1) then fixed else deflate_stored(input) }
 
 // --- zlib (RFC 1950)
-compress(subject: text or list): list := { input = subject_bytes(subject); [120, 156] + deflate(input) + big_endian(adler32(input), 4) }
-def decompress(subject: text or list): list {
+compress(subject: text or list) as list := { input = subject_bytes(subject); [120, 156] + deflate(input) + big_endian(adler32(input), 4) }
+def decompress(subject: text or list) as list {
 	input = subject_bytes(subject)
 	if count(input) < 6 { raise "zlib: the input is too short for a zlib stream" }
 	if input[0] % 16 != 8 or input[0] /! 16 > 7 { raise "zlib: compression method " + text(input[0] % 16) + " is not deflate" }
@@ -219,19 +219,19 @@ def decompress(subject: text or list): list {
 }
 
 // --- gzip (RFC 1952)
-gzip(subject: text or list): list := { input = subject_bytes(subject); [31, 139, 8, 0, 0, 0, 0, 0, 0, 255] + deflate(input) + little_endian(crc32(input), 4) + little_endian(count(input) % 4294967296, 4) }
-def gzip_skip_text(input: list, offset: int): int {
+gzip(subject: text or list) as list := { input = subject_bytes(subject); [31, 139, 8, 0, 0, 0, 0, 0, 0, 255] + deflate(input) + little_endian(crc32(input), 4) + little_endian(count(input) % 4294967296, 4) }
+def gzip_skip_text(input: list, offset: int) as int {
 	p = offset
 	while p < count(input) and input[p] != 0 { p = p + 1 }
 	if p >= count(input) { raise "gunzip: the header is truncated inside a name or comment" }
 	p + 1
 }
-def zeros_from(xs: list, begin: int): bool {
+def zeros_from(xs: list, begin: int) as bool {
 	for k in begin ..< count(xs) { if xs[k] != 0 { return no } }
 	yes
 }
 // every member's data, one after another; trailing zero padding is allowed
-def gunzip(subject: text or list): list {
+def gunzip(subject: text or list) as list {
 	input = subject_bytes(subject)
 	out = []
 	offset = 0

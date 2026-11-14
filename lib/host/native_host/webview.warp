@@ -109,8 +109,8 @@ ns_string(t: text) := {
 	made = handle_pointer(CFStringCreateWithCString(0, t, CF_UTF8))
 	told(made, "autorelease")
 }
-ns_text(string: int): text := if string == 0 then "" else field_text(pointer_handle(told(string, "UTF8String")), 0)
-is_kind(object: int, class_name: text): bool := object != 0 and sent(object, "isKindOfClass:", [class_named(class_name)]) != 0
+ns_text(string: int) as text := if string == 0 then "" else field_text(pointer_handle(told(string, "UTF8String")), 0)
+is_kind(object: int, class_name: text) as bool := object != 0 and sent(object, "isKindOfClass:", [class_named(class_name)]) != 0
 // a class of NSObject made at run time, its methods warp functions: [selector, Objective-C types, function], each
 // taking the receiver, the selector and the selector's arguments as numbers. A class an earlier run in this process
 // made (`warp test` runs each test so) stays, its methods given this run's functions
@@ -130,13 +130,13 @@ class_made(name: text, methods: list) := {
 instance_of(made: int) := told(told(made, "alloc"), "init")
 
 // the run loop turned until done() or the milliseconds are over: no when they were
-spun(done: function, milliseconds: int): bool := turned(done, milliseconds, () => sent(told(class_named("NSRunLoop"), "currentRunLoop"), "runMode:beforeDate:", [framework_object("Foundation", "NSDefaultRunLoopMode"), soon()]))
+spun(done: function, milliseconds: int) as bool := turned(done, milliseconds, () => sent(told(class_named("NSRunLoop"), "currentRunLoop"), "runMode:beforeDate:", [framework_object("Foundation", "NSDefaultRunLoopMode"), soon()]))
 // the app's events (clicks, keys) handed to its windows until done() or the milliseconds are over, as [NSApp run] would
-pumped(done: function, milliseconds: int): bool := turned(done, milliseconds, () => {
+pumped(done: function, milliseconds: int) as bool := turned(done, milliseconds, () => {
 	app_event = sent(application(), "nextEventMatchingMask:untilDate:inMode:dequeue:", [ANY_EVENT, soon(), framework_object("Foundation", "NSDefaultRunLoopMode"), 1])
 	if app_event != 0 { sent(application(), "sendEvent:", [app_event]) }
 })
-turned(done: function, milliseconds: int, turn: function): bool := {
+turned(done: function, milliseconds: int, turn: function) as bool := {
 	deadline = wall_clock_ms() + milliseconds
 	while not done() and wall_clock_ms() < deadline { turn() }
 	done()
@@ -151,7 +151,7 @@ application_made(policy: int) := {
 global page_loading_ended = no
 global page_loading = 0
 // (read through a word: a lambda reading the global would keep its value of when it was made, card prebuilt-module)
-loading_over(): bool := page_loading_ended
+loading_over() as bool := page_loading_ended
 loading_ended(receiver, selector, web_view, navigation) := { page_loading_ended = yes }
 loading_failed(receiver, selector, web_view, navigation, error) := { page_loading_ended = yes }
 // the page's events not yet given to the program, each its {event, detail} as JSON
@@ -199,7 +199,7 @@ view_made(width: float, height: float) := {
 	sent_with_floats(told(class_named("WKWebView"), "alloc"), "initWithFrame:configuration:", [configuration], [0.0, 0.0, width, height])
 }
 // the HTML shown in the view, waited for: no when it did not load in time
-page_loaded(shown_in: int, html: text): bool := {
+page_loaded(shown_in: int, html: text) as bool := {
 	if page_loading == 0 { page_loading = instance_of(class_made("WarpHostLoading", [["webView:didFinishNavigation:", "v@:@@", loading_ended], ["webView:didFailNavigation:withError:", "v@:@@@", loading_failed]])) }
 	page_loading_ended = no
 	sent(shown_in, "setNavigationDelegate:", [page_loading])
@@ -222,7 +222,7 @@ global answer_block = 0
 global answer_heard = no
 global answer_value = 0
 global answer_error = 0
-answer_over(): bool := answer_heard
+answer_over() as bool := answer_heard
 answer_given(block, result, error) := {
 	answer_value = if result == 0 then 0 else told(result, "retain")
 	answer_error = if error == 0 then 0 else told(error, "retain")
@@ -242,7 +242,7 @@ answering_block() := {
 	}
 	answer_block
 }
-answered(shown_in: int, body: text, name: text, value: text): list := {
+answered(shown_in: int, body: text, name: text, value: text) as list := {
 	answer_heard = no
 	given = if name == "" then told(class_named("NSDictionary"), "dictionary") else sent(class_named("NSDictionary"), "dictionaryWithObject:forKey:", [ns_string(value), ns_string(name)])
 	world = told(class_named("WKContentWorld"), "pageWorld")
@@ -259,14 +259,14 @@ answered(shown_in: int, body: text, name: text, value: text): list := {
 	[text, ø]
 }
 
-is_name(name: text): bool := #name > 0 and NAME_STARTS.contains(name[0]) and name.chars().all(c => NAME_GOES_ON.contains(c))
+is_name(name: text) as bool := #name > 0 and NAME_STARTS.contains(name[0]) and name.chars().all(c => NAME_GOES_ON.contains(c))
 // a member `use js` may name: an identifier, or as js-members.js reads it "" (construct), "set x", "a.b"
-member_named(member: text): bool := {
+member_named(member: text) as bool := {
 	name = member.remove_prefix("set ")
 	name == "" or name.split(".").all(is_name)
 }
 // the failure as the page says it: "js Math.nope: ReferenceError: …", the call named once, without WebKit's "Error: "
-failure_said(called: text, failure: text): text := {
+failure_said(called: text, failure: text) as text := {
 	plain = failure.remove_prefix("Error: ")
 	if plain.starts_with(called) then plain else called + ": " + plain
 }
@@ -276,7 +276,7 @@ global app_window = 0
 global app_window_open = no
 window_closing(receiver, selector, notification) := { app_window_open = no }
 // (each state a lambda waits for read through a word: a lambda reading a global keeps its value of when it was made, card prebuilt-module)
-window_event_over(): bool := #page_events > 0 or not app_window_open
+window_event_over() as bool := #page_events > 0 or not app_window_open
 app_window_made(title: text) := {
 	made = sent_with_floats(told(class_named("NSWindow"), "alloc"), "initWithContentRect:styleMask:backing:defer:", [WINDOW_STYLE, BUFFERED, 0], APP_WINDOW_FRAME)
 	sent(made, "setReleasedWhenClosed:", [0])
@@ -295,7 +295,7 @@ window_shown(shown: int, shown_view: int) := {
 // `warpWindow.show()`: the run's view in a window; `warpWindow.next(milliseconds)`: the page's next event,
 // {event, detail, wall}, else {event: "tick", wall} once the milliseconds are over (none or -1: wait for an event), wall
 // the local wall clock's milliseconds since 1970 (lib/timers.warp); ø once the window is closed
-window_answered(called: text, member: text, arguments: any): any? := {
+window_answered(called: text, member: text, arguments: any) as any? := {
 	if member == "show" {
 		if windowless() { return error(called + ": no window under --no-window or CI") }
 		if app_window == 0 {
@@ -324,17 +324,17 @@ window_answered(called: text, member: text, arguments: any): any? := {
 
 // a promise the view gave is awaited there (callAsyncJavaScript), so none is ever pending for the program to wait for
 // (lib/prelude.warp foreign_settled; the page keeps one: host-foreign.js)
-host_foreign_pending(): int := 0
-host_foreign_await(): any? := ø
+host_foreign_pending() as int := 0
+host_foreign_await() as any? := ø
 // foreign_call(runtime, module, member, call, arguments), as the page's host-foreign.js foreignCall answers it
-host_foreign_call(runtime, module, member, call, arguments): any? := {
+host_foreign_call(runtime, module, member, call, arguments) as any? := {
 	pool = objc_autoreleasePoolPush()
 	// (a failure is the call's Error, a value the program may catch, as the page's foreignCall gives it)
 	answer: any? = foreign_answered(text(runtime), module, text(member), call == 1, arguments)
 	objc_autoreleasePoolPop(pool)
 	answer
 }
-foreign_answered(runtime: text, module: any, member: text, call: bool, arguments: any): any? := {
+foreign_answered(runtime: text, module: any, member: text, call: bool, arguments: any) as any? := {
 	named_module = module is text
 	module_name = if named_module then module else "value"
 	called = runtime + " " + module_name + "." + member
@@ -350,7 +350,7 @@ foreign_answered(runtime: text, module: any, member: text, call: bool, arguments
 }
 
 // `warp app check`: the text the page shows, read in the hidden web view
-host_webview_page_text(html): any := {
+host_webview_page_text(html) as any := {
 	pool = objc_autoreleasePoolPush()
 	shown_in = hidden_view()
 	answer = if page_loaded(shown_in, text(html)) then answered(shown_in, "return document.body?.innerText ?? ''", "", "") else [ø, ""]

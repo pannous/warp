@@ -14,13 +14,13 @@ registry = {
 }
 
 # the newest version of a package allowed by every range wanted of it, ø when none is
-newest(name: text, ranges: list): any := {
+newest(name: text, ranges: list) as any := {
 	fitting = [v for v in keys(registry[name]) if all(ranges, r => satisfies(v, r))]
 	if count(fitting) == 0 then ø else semver_sort(fitting)[count(fitting) - 1]
 }
 
 # requirements collected breadth first; a package seen again gets its range added and is picked anew
-resolve(root: text): map := {
+resolve(root: text) as map := {
 	wanted = {}
 	wanted[root] = [">=0.0.0"]
 	picked = {}

@@ -12,14 +12,14 @@
 // - quoted texts are left alone: no name and no group inside quotes
 SYMBOLIC_STEPS = 64
 
-symbolic_starts_name(c: text): bool := c == "_" or (is_alphanumeric(c) and not (c >= "0" and c <= "9"))
-symbolic_in_name(c: text): bool := c == "_" or is_alphanumeric(c)
+symbolic_starts_name(c: text) as bool := c == "_" or (is_alphanumeric(c) and not (c >= "0" and c <= "9"))
+symbolic_in_name(c: text) as bool := c == "_" or is_alphanumeric(c)
 
 // the expression as its characters, one text each
-symbolic_chars(expression: text): list := [c for c in expression]
+symbolic_chars(expression: text) as list := [c for c in expression]
 
 // whether an expression needs no group around it: a number, a name, a quoted text
-symbolic_atomic(expression: text): bool := {
+symbolic_atomic(expression: text) as bool := {
 	e = trim(expression)
 	if e == "" { return yes }
 	chars = symbolic_chars(e)
@@ -31,7 +31,7 @@ symbolic_atomic(expression: text): bool := {
 }
 
 // the names an expression mentions, in order, each once; quoted texts skipped
-symbolic_names(expression: text): list := {
+symbolic_names(expression: text) as list := {
 	chars = symbolic_chars(expression)
 	names = []
 	i = 1
@@ -58,7 +58,7 @@ symbolic_names(expression: text): list := {
 
 // the expression with each name of the table replaced by its expression, grouped unless atomic; a bare name its
 // expression as it is; the name `skipped` stays itself
-symbolic_substituted(expression: text, table: any, skipped: text = ""): text := {
+symbolic_substituted(expression: text, table: any, skipped: text = "") as text := {
 	e = trim(expression)
 	if e in table and e != skipped { return table[e] }
 	chars = symbolic_chars(e)
@@ -97,14 +97,14 @@ symbolic_substituted(expression: text, table: any, skipped: text = ""): text := 
 }
 
 // a value as the text of an expression giving it back: a text quoted, anything else as print shows it
-symbolic_shown(value: any): text := {
+symbolic_shown(value: any) as text := {
 	if value is text { return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"" }
 	text_form(value)
 }
 
 // one step of evaluation: every innermost group, with the name of a call before it, replaced by its value, and a
 // group left holding a value alone unwrapped; an Error when one fails. Without an evaluator (ø) only the unwrapping
-symbolic_reduced(expression: text, evaluate: any): any := {
+symbolic_reduced(expression: text, evaluate: any) as any := {
 	chars = symbolic_chars(expression)
 	out = ""
 	i = 1
@@ -147,7 +147,7 @@ symbolic_reduced(expression: text, evaluate: any): any := {
 // the steps an expression's evaluation shows, {steps: [texts], error: ""}: the names replaced until none is left, the
 // innermost groups evaluated until none is left, then the value; the steps up to a failing one and its message in
 // error when one fails
-symbolic_steps(expression: text, table: any, evaluate: any): any := {
+symbolic_steps(expression: text, table: any, evaluate: any) as any := {
 	steps = []
 	e = trim(expression)
 	n = 0
@@ -175,7 +175,7 @@ symbolic_steps(expression: text, table: any, evaluate: any): any := {
 }
 
 // whether an expression comes back to the name, through the table's expressions, the name's own left out
-symbolic_reaches(expression: text, table: any, name: text): bool := {
+symbolic_reaches(expression: text, table: any, name: text) as bool := {
 	e = expression
 	for n in 1 to SYMBOLIC_STEPS {
 		if name in symbolic_names(e) { return yes }
@@ -188,7 +188,7 @@ symbolic_reaches(expression: text, table: any, name: text): bool := {
 
 // the table after `name = expression`: kept as written, or, when it comes back to the name (`x = x+1`, or through
 // others), with the old expressions taken in until it no longer does; an Error when it still would
-symbolic_assigned(table: any, name: text, expression: text): any := {
+symbolic_assigned(table: any, name: text, expression: text) as any := {
 	e = trim(expression)
 	n = 0
 	while symbolic_reaches(e, table, name) and n < SYMBOLIC_STEPS {

@@ -6,19 +6,19 @@ FAST_WORD = "fast"
 FAST_MATH = {sin: "fast_sin", cos: "fast_cos", exp: "fast_exp", pow: "fast_pow", atan2: "fast_atan2"}
 WHOLE_OPERATORS = [Op.Add, Op.Sub, Op.Mul, Op.Pow]
 
-fast_functions(program: Node): Node := {
+fast_functions(program: Node) as Node := {
 	statements = statements_in(program)
 	if not statements.any(statement => fast_head(statement) != ø) { return program }
 	statements_as(program, statements.map(statement => fast_definition(statement, statements)))
 }
 # the definition `g(n) := …` of `fast g(n) := …` (the word binds looser than `:=`), else ø
-fast_head(statement: Node): any := {
+fast_head(statement: Node) as any := {
 	plain = without_mark(statement)
 	if not (is_group(plain) and #plain == 2 and plain#1 == symbol(FAST_WORD)) { return ø }
 	defined = without_mark(plain#2)
 	if is_key(defined, Op.Define) and is_call(key_of(defined)) then defined else ø
 }
-fast_definition(statement: Node, statements: list): Node := {
+fast_definition(statement: Node, statements: list) as Node := {
 	defined = fast_head(statement)
 	if defined == ø { return statement }
 	call = key_of(defined)
@@ -28,9 +28,9 @@ fast_definition(statement: Node, statements: list): Node := {
 	Key(call_node(call#1, typed), Op.Define, bottom_up(value_of(defined), machine_part))
 }
 # a whole number as written: `10^10`, `2^63 - 1`
-is_whole(n: Node): bool := n is int or WHOLE_OPERATORS.any(op => is_key(n, op) and is_whole(key_of(n)) and is_whole(value_of(n))) or (is_group(n) and #n == 1 and is_whole(n#1))
+is_whole(n: Node) as bool := n is int or WHOLE_OPERATORS.any(op => is_key(n, op) and is_whole(key_of(n)) and is_whole(value_of(n))) or (is_group(n) and #n == 1 and is_whole(n#1))
 # `a / b` as floats, `sin(x)` as fast_sin(x)
-machine_part(n: Node): Node := {
+machine_part(n: Node) as Node := {
 	if is_key(n, Op.Div) { return Key(call_of("float", [key_of(n)]), Op.Div, value_of(n)) }
 	if is_call(n) and n#1 is symbol and FAST_MATH.has(name_of(n#1)) { return call_node(symbol(FAST_MATH[name_of(n#1)]), items_of(n)[1 ..]) }
 	n

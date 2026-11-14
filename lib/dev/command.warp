@@ -19,7 +19,7 @@ OTHER_CONTENT = "application/octet-stream"
 # the page's Workers share memory only cross-origin isolated; and a reloaded page asks anew, never a cached build
 DEV_HEADERS = ["Cross-Origin-Opener-Policy: same-origin", "Cross-Origin-Embedder-Policy: require-corp", "Cache-Control: no-store"]
 
-quoted(path: text): text := "'" + path.replace("'", "'\\''") + "'"
+quoted(path: text) as text := "'" + path.replace("'", "'\\''") + "'"
 
 # the build folders live under one fresh folder, one a version: a failed build leaves the last good one serving
 global builds = ""
@@ -45,20 +45,20 @@ rebuilt() := {
 	}
 }
 # whether a .warp file of the program's folder changed since the last build
-changed(): bool := command("find " + quoted(folder_of_source()) + " -maxdepth 2 -name '*.warp' -newer " + quoted(stamp)).trim() != ""
-folder_of_source(): text := {
+changed() as bool := command("find " + quoted(folder_of_source()) + " -maxdepth 2 -name '*.warp' -newer " + quoted(stamp)).trim() != ""
+folder_of_source() as text := {
 	parts = source.split("/")
 	if #parts > 1 then parts[0 ..< #parts - 1].join("/") else "."
 }
 
-dev_script(): text := {
+dev_script() as text := {
 	library = run_option("lib") ?? ""
 	for folder in SCRIPT_FOLDERS { if exists(library + folder + "/" + DEV_SCRIPT) { return read(library + folder + "/" + DEV_SCRIPT) } }
 	raise "warp dev: no " + DEV_SCRIPT + " in " + library + "/site or a checkout's web/playground beside lib/"
 }
 
 # the answer to a request's path: the state, the page with dev.js, a file of the build, else 404
-answered(path: text): text := {
+answered(path: text) as text := {
 	if path == STATE_PATH or path == "/" or path == INDEX { if changed() { rebuilt() } }
 	if path == STATE_PATH { return http(200, CONTENT_TYPES["json"], to_json({version: version, error: failure})) }
 	file = serving + (if path == "/" then INDEX else path)
@@ -67,11 +67,11 @@ answered(path: text): text := {
 	if path == "/" or path == INDEX { body = body.replace(PAGE_END, "<script>\n" + dev_script() + "\n</script>\n" + PAGE_END) }
 	http(200, content_type(file), body)
 }
-content_type(file: text): text := CONTENT_TYPES.get(file.split(".").last()) ?? OTHER_CONTENT
+content_type(file: text) as text := CONTENT_TYPES.get(file.split(".").last()) ?? OTHER_CONTENT
 # (the dev server answers 200 and 404 only)
-http(status: int, content: text, body: text): text := "HTTP/1.1 " + (if status == 200 then "200 OK" else "404 Not Found") + LINE_END + "Content-Type: " + content + LINE_END + DEV_HEADERS.join(LINE_END) + LINE_END + "Content-Length: " + byte_size(body) + LINE_END + "Connection: close" + HEAD_END + body
+http(status: int, content: text, body: text) as text := "HTTP/1.1 " + (if status == 200 then "200 OK" else "404 Not Found") + LINE_END + "Content-Type: " + content + LINE_END + DEV_HEADERS.join(LINE_END) + LINE_END + "Content-Length: " + byte_size(body) + LINE_END + "Connection: close" + HEAD_END + body
 
-dev_command(arguments: list): int := {
+dev_command(arguments: list) as int := {
 	if #arguments == 0 or not arguments[0].ends_with(".warp") or not exists(arguments[0]) {
 		print usage
 		return 1

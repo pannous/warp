@@ -4,7 +4,7 @@
 use time
 
 // f with its results kept: f runs once per argument (equal arguments share a result; several values: pass a list)
-def memoize(f: function): function {
+def memoize(f: function) as function {
 	arguments = []
 	results = []
 	x => {
@@ -15,7 +15,7 @@ def memoize(f: function): function {
 
 // f() up to attempts times, the first success its value; the waits delay ms, 2 delay, 4 delay …; when every attempt
 // fails, the last one's error is raised again
-def retry(f: function, attempts: int, delay: number): any {
+def retry(f: function, attempts: int, delay: number) as any {
 	wait = delay
 	attempt = 1
 	done = no
@@ -29,7 +29,7 @@ def retry(f: function, attempts: int, delay: number): any {
 // rate limits by the wall clock, natively and in a page: throttle(f, ms) calls f at most once in each ms, debounce(f, ms)
 // only after ms without calls (the leading edge: the first call of a burst runs, the rest of it is dropped); a dropped
 // call answers the last result
-def throttle(f: function, ms: number): function {
+def throttle(f: function, ms: number) as function {
 	last = [-1, ø]
 	x => {
 		at = wall_clock_ms()
@@ -37,7 +37,7 @@ def throttle(f: function, ms: number): function {
 		last#2
 	}
 }
-def debounce(f: function, ms: number): function {
+def debounce(f: function, ms: number) as function {
 	last = [-1, -1, ø]
 	x => {
 		at = wall_clock_ms()

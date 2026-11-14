@@ -8,7 +8,7 @@ use json
 
 folder = temp_folder()
 names = ["readme.txt", "notes.txt", "data.csv"]
-path_of(name: text): text := folder + "/warp_inventory_" + name
+path_of(name: text) as text := folder + "/warp_inventory_" + name
 manifest_path = folder + "/warp_inventory_manifest.json"
 
 files = {
@@ -19,11 +19,11 @@ files = {
 for name in names { write(path_of(name), files[name]) }
 
 # one manifest entry: the size in bytes, its sha256 and crc32
-entry(content: text): map := {size: count(to_utf8(content)), sha256: sha256(content), crc32: crc32(content)}
-short(digest: text): text := digest[0 ..< 12]
+entry(content: text) as map := {size: count(to_utf8(content)), sha256: sha256(content), crc32: crc32(content)}
+short(digest: text) as text := digest[0 ..< 12]
 
 # the manifest of the names that exist now
-def manifest(wanted: list): map {
+def manifest(wanted: list) as map {
 	m = {}
 	for name in wanted { if exists(path_of(name)) { m[name] = entry(read(path_of(name))) } }
 	m
@@ -40,7 +40,7 @@ print("empty text sha256: " + sha256(""))
 print("same content, same digest: " + text(sha256("buy milk\ncall Ada\n") == made["notes.txt"].sha256))
 
 # the verify pass: each name of the saved manifest checked against the file on disk
-def verify(saved: map, present: list): list {
+def verify(saved: map, present: list) as list {
 	out = []
 	for name in keys(saved) {
 		if not exists(path_of(name)) { out = out + ["missing  " + name] }

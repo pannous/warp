@@ -7,7 +7,7 @@ list_operators_extension = Extension{name: "list_operators", infix_readers: [rea
 
 # `left \op right` as the phrase `left .op right` (extensions/sugar/arithmetic.warp gives its meaning), `left /op right`
 # as each item of left `.op` right: map(left, item -> item .op right)
-def read_list_operator(p: Parser, left: Node, min_power: int): Node := {
+def read_list_operator(p: Parser, left: Node, min_power: int) as Node := {
 	c = char_here(p)
 	if c != '\\' and c != '/' { return ø }
 	# `// …` and `/* … */` are comments
@@ -27,7 +27,7 @@ def read_list_operator(p: Parser, left: Node, min_power: int): Node := {
 
 # the operator glued after the `\` or `/` at the parser's position as [written, canonical], one computing a value
 # and followed by a blank, else []
-def list_operator_at(p: Parser): list := {
+def list_operator_at(p: Parser) as list := {
 	# a longer operator of the `/` is that one: `/!`, `/=`, `/!=`
 	if char_here(p) == '/' and spelled_operator_at(p)#1 != "/" { return [] }
 	advance(p)

@@ -53,15 +53,15 @@ global parse_yaml_all(source: text): list := {
 }
 
 // lines
-yaml_line(st: map): text := st["lines"]#(st["i"])
-yaml_fail(st: map, problem: text): any := {
+yaml_line(st: map) as text := st["lines"]#(st["i"])
+yaml_fail(st: map, problem: text) as any := {
 	message = "yaml line " + min(st["i"], #(st["lines"])) + ": " + problem
 	raise (if message.ends_with(" a") or message.ends_with(" at") or message.ends_with(" ") then message + "." else message)
 }
-yaml_is_marker(line: text, marker: text): bool := line.starts_with(marker) and (#line == 3 or line#4 == " " or line#4 == "\t")
-yaml_at_marker(st: map): bool := { line = yaml_line(st); yaml_is_marker(line, "---") or yaml_is_marker(line, "...") }
+yaml_is_marker(line: text, marker: text) as bool := line.starts_with(marker) and (#line == 3 or line#4 == " " or line#4 == "\t")
+yaml_at_marker(st: map) as bool := { line = yaml_line(st); yaml_is_marker(line, "---") or yaml_is_marker(line, "...") }
 // the spaces before a line's content; a tab among them, before content, is refused
-yaml_indent(st: map, line: text): int := {
+yaml_indent(st: map, line: text) as int := {
 	n = 0
 	while n < #line and line#(n + 1) == " " { n += 1 }
 	if n < #line and line#(n + 1) == "\t" {
@@ -70,33 +70,33 @@ yaml_indent(st: map, line: text): int := {
 	}
 	n
 }
-yaml_blank(line: text): bool := { t = line.trim(); t == "" or t.starts_with("#") }
-yaml_skip_blank(st: map): any := { while st["i"] <= #(st["lines"]) and yaml_blank(yaml_line(st)) { st["i"] = st["i"] + 1 }; ø }
+yaml_blank(line: text) as bool := { t = line.trim(); t == "" or t.starts_with("#") }
+yaml_skip_blank(st: map) as any := { while st["i"] <= #(st["lines"]) and yaml_blank(yaml_line(st)) { st["i"] = st["i"] + 1 }; ø }
 // the indentation of the next content line, -1 at the end or a document marker
-yaml_next_indent(st: map): int := {
+yaml_next_indent(st: map) as int := {
 	yaml_skip_blank(st)
 	if st["i"] > #(st["lines"]) or yaml_at_marker(st) { return -1 }
 	yaml_indent(st, yaml_line(st))
 }
-yaml_is_entry(t: text): bool := t == "-" or t.starts_with("- ") or t.starts_with("-\t")
+yaml_is_entry(t: text) as bool := t == "-" or t.starts_with("- ") or t.starts_with("-\t")
 yaml_refuse_complex_key(st: map, content: text) := {
 	if content.starts_with("? ") or content == "?" { yaml_fail(st, "complex keys (? …) are not supported") }
 }
 // the place after an &anchor or *alias name in flow
-yaml_scan_plain_end(source: text, end: int): int := {
+yaml_scan_plain_end(source: text, end: int) as int := {
 	while end <= #source and not (source#end in " \t\n,]}") { end += 1 }
 	end
 }
 yaml_flow_need(st: map, source: text, at: int, open: text) := {
 	if at > #source { yaml_flow_fail(st, source, at, "an unclosed " + open) }
 }
-yaml_skip_space_tab(source: text, at: int): int := {
+yaml_skip_space_tab(source: text, at: int) as int := {
 	while at <= #source and (source#at == " " or source#at == "\t") { at += 1 }
 	at
 }
 
 // a node starting on the current line at indentation indent
-yaml_node(st: map, indent: int): any := {
+yaml_node(st: map, indent: int) as any := {
 	line = yaml_line(st)
 	n = yaml_indent(st, line)
 	content = line[n..<#line]
@@ -107,9 +107,9 @@ yaml_node(st: map, indent: int): any := {
 	// an anchor alone on its line also takes a sequence at the key's own indentation below (yaml-test-suite SKE5)
 	yaml_value(st, content, n - 1, content.starts_with("&") and not content.trim().contains(" "))
 }
-yaml_sequence(st: map, n: int): list := yaml_sequence(st, n, no)
+yaml_sequence(st: map, n: int) as list := yaml_sequence(st, n, no)
 // under_key: the sequence is a mapping value at the key's own indentation, ended by the mapping's next key
-yaml_sequence(st: map, n: int, under_key: bool): list := {
+yaml_sequence(st: map, n: int, under_key: bool) as list := {
 	items = []
 	while yaml_next_indent(st) == n {
 		line = yaml_line(st)
@@ -133,7 +133,7 @@ yaml_sequence(st: map, n: int, under_key: bool): list := {
 	if yaml_next_indent(st) > n { yaml_fail(st, "bad indentation of a sequence entry") }
 	items
 }
-yaml_mapping(st: map, n: int): map := {
+yaml_mapping(st: map, n: int) as map := {
 	out = {}
 	merges = []
 	while yaml_next_indent(st) == n {
@@ -163,7 +163,7 @@ yaml_mapping(st: map, n: int): map := {
 	out
 }
 // the place (from 1) of the colon ending a mapping key on this text, 0 when it holds no key
-yaml_key_end(st: map, t: text): int := {
+yaml_key_end(st: map, t: text) as int := {
 	if t == "" { return 0 }
 	at = 1
 	first = t#1
@@ -190,7 +190,7 @@ yaml_key_end(st: map, t: text): int := {
 	}
 	0
 }
-yaml_key(st: map, raw: text): text := {
+yaml_key(st: map, raw: text) as text := {
 	if raw.starts_with("\"") or raw.starts_with("'") { return "" + yaml_quoted_line(st, raw) }
 	if raw.starts_with("!") { yaml_fail(st, "tags on keys are not supported") }
 	// an alias as a key names a scalar anchored before; an anchor on a key anchors the key's text
@@ -211,8 +211,8 @@ yaml_key(st: map, raw: text): text := {
 	}
 	raw
 }
-yaml_key_text(v: any): text := if v is bool then (if v then "true" else "false") else "" + v
-yaml_quoted_line(st: map, raw: text): text := {
+yaml_key_text(v: any) as text := if v is bool then (if v then "true" else "false") else "" + v
+yaml_quoted_line(st: map, raw: text) as text := {
 	// flow errors count from the line after the current one, as for a value
 	st["i"] = st["i"] + 1
 	r = yaml_flow_text(st, raw, 1)
@@ -223,7 +223,7 @@ yaml_quoted_line(st: map, raw: text): text := {
 
 // the value after "key:" or "- " (t, the rest of its line, already consumed): on this line, or the block below
 // indented more than parent (with same, a mapping's, also a sequence at the key's own indentation)
-yaml_value(st: map, t: text, parent: int, same: bool): any := {
+yaml_value(st: map, t: text, parent: int, same: bool) as any := {
 	t = t.trim()
 	anchor = ""
 	if t.starts_with("&") {
@@ -236,7 +236,7 @@ yaml_value(st: map, t: text, parent: int, same: bool): any := {
 	if anchor != "" { st["anchors"][anchor] = value }
 	value
 }
-yaml_value_read(st: map, t: text, parent: int, same: bool): any := {
+yaml_value_read(st: map, t: text, parent: int, same: bool) as any := {
 	if t.starts_with("!") { st["i"] = st["i"] - 1; yaml_fail(st, "tags (!…) are not supported") }
 	if t.starts_with("*") {
 		name = t[1..<#t].trim()
@@ -260,7 +260,7 @@ yaml_value_read(st: map, t: text, parent: int, same: bool): any := {
 }
 
 // a plain scalar, continued on the lines below that are indented more than parent
-yaml_plain_lines(st: map, t: text, parent: int): any := {
+yaml_plain_lines(st: map, t: text, parent: int) as any := {
 	text = yaml_plain_cut(t)
 	folded = no
 	while true {
@@ -279,12 +279,12 @@ yaml_plain_lines(st: map, t: text, parent: int): any := {
 	if folded then text else yaml_scalar(text)
 }
 // a plain scalar's text before a comment
-yaml_plain_cut(t: text): text := {
+yaml_plain_cut(t: text) as text := {
 	for at in 2 to #t { if t#at == "#" and (t#(at - 1) == " " or t#(at - 1) == "\t") { return t[0..<at - 1].trim() } }
 	t.trim()
 }
 // the core schema of a plain scalar
-yaml_scalar(t: text): any := {
+yaml_scalar(t: text) as any := {
 	if t in YAML_NULLS { return ø }
 	if t in YAML_TRUES { return yes }
 	if t in YAML_FALSES { return no }
@@ -306,10 +306,10 @@ yaml_scalar(t: text): any := {
 	}
 	t
 }
-yaml_all_in(t: text, allowed: text): bool := { for c in t { if not (c in allowed) { return no } }; yes }
-yaml_base(digits: text, base: int): int := { n = 0; for d in digits { n = n * base + YAML_HEX.find(d) - 1 }; n }
+yaml_all_in(t: text, allowed: text) as bool := { for c in t { if not (c in allowed) { return no } }; yes }
+yaml_base(digits: text, base: int) as int := { n = 0; for d in digits { n = n * base + YAML_HEX.find(d) - 1 }; n }
 // (\.[0-9]+ | [0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?
-yaml_is_float(t: text): bool := {
+yaml_is_float(t: text) as bool := {
 	at = 1
 	whole = 0
 	while at <= #t and t#at in YAML_DIGITS { at += 1; whole += 1 }
@@ -329,7 +329,7 @@ yaml_is_float(t: text): bool := {
 }
 
 // | and >: the lines below indented more than parent; - strips the final line breaks, + keeps them all
-yaml_block_scalar(st: map, header: text, parent: int): text := {
+yaml_block_scalar(st: map, header: text, parent: int) as text := {
 	literal = header#1 == "|"
 	chomp = "clip"
 	explicit = 0
@@ -379,7 +379,7 @@ yaml_block_scalar(st: map, header: text, parent: int): text := {
 }
 
 // a flow collection or quoted scalar starting at t and running on over the lines below as needed
-yaml_flow_lines(st: map, t: text): any := {
+yaml_flow_lines(st: map, t: text) as any := {
 	start = st["i"] - 1
 	source = t
 	lines = st["lines"]
@@ -400,13 +400,13 @@ yaml_flow_lines(st: map, t: text): any := {
 	r#1
 }
 // the place of the line holding source's character at (for errors in flow text)
-yaml_flow_fail(st: map, source: text, at: int, problem: text): any := {
+yaml_flow_fail(st: map, source: text, at: int, problem: text) as any := {
 	breaks = 0
 	for k in 1 to min(at - 1, #source) { if source#k == "\n" { breaks += 1 } }
 	st["i"] = st["i"] + breaks - 1
 	yaml_fail(st, problem)
 }
-yaml_flow_space(source: text, at: int): int := {
+yaml_flow_space(source: text, at: int) as int := {
 	while at <= #source {
 		c = source#at
 		if c == " " or c == "\t" or c == "\n" { at += 1 }
@@ -416,7 +416,7 @@ yaml_flow_space(source: text, at: int): int := {
 	at
 }
 // [value, the place after it]
-yaml_flow_value(st: map, source: text, at: int): list := {
+yaml_flow_value(st: map, source: text, at: int) as list := {
 	at = yaml_flow_space(source, at)
 	if at > #source { yaml_flow_fail(st, source, at, "a value expected") }
 	c = source#at
@@ -450,7 +450,7 @@ yaml_flow_value(st: map, source: text, at: int): list := {
 	if anchor != "" { st["anchors"][anchor] = r#1 }
 	r
 }
-yaml_flow_sequence(st: map, source: text, at: int): list := {
+yaml_flow_sequence(st: map, source: text, at: int) as list := {
 	items = []
 	while true {
 		at = yaml_flow_space(source, at)
@@ -474,7 +474,7 @@ yaml_flow_sequence(st: map, source: text, at: int): list := {
 	}
 	[items, at]
 }
-yaml_flow_mapping(st: map, source: text, at: int): list := {
+yaml_flow_mapping(st: map, source: text, at: int) as list := {
 	out = {}
 	while true {
 		at = yaml_flow_space(source, at)
@@ -497,7 +497,7 @@ yaml_flow_mapping(st: map, source: text, at: int): list := {
 	[out, at]
 }
 // '…' or "…" at source's place at: a line break and the spaces around it fold to one space, empty lines to breaks
-yaml_flow_text(st: map, source: text, at: int): list := {
+yaml_flow_text(st: map, source: text, at: int) as list := {
 	quote = "" + source#at
 	at += 1
 	out = ""
@@ -560,7 +560,7 @@ global to_yaml(value: any): text := {
 	if value is list and #value > 0 { return yaml_list_written(value, 0) }
 	yaml_scalar_written(value) + "\n"
 }
-yaml_map_written(m: map, indent: int): text := {
+yaml_map_written(m: map, indent: int) as text := {
 	out = ""
 	pad = " " * indent
 	for k in m.keys {
@@ -572,7 +572,7 @@ yaml_map_written(m: map, indent: int): text := {
 	}
 	out
 }
-yaml_list_written(xs: list, indent: int): text := {
+yaml_list_written(xs: list, indent: int) as text := {
 	out = ""
 	pad = " " * indent
 	for v in xs {
@@ -583,7 +583,7 @@ yaml_list_written(xs: list, indent: int): text := {
 	}
 	out
 }
-yaml_scalar_written(v: any): text := {
+yaml_scalar_written(v: any) as text := {
 	if v == ø { return "null" }
 	if v is bool { return if v then "true" else "false" }
 	if v is map { return "{}" }
@@ -600,8 +600,8 @@ yaml_scalar_written(v: any): text := {
 	yaml_text_written("" + v)
 }
 // plain when it reads back as this same text, else double-quoted with escapes
-yaml_text_written(t: text): text := if yaml_plain_safe(t) then t else yaml_quoted(t)
-yaml_plain_safe(t: text): bool := {
+yaml_text_written(t: text) as text := if yaml_plain_safe(t) then t else yaml_quoted(t)
+yaml_plain_safe(t: text) as bool := {
 	if t == "" or t != t.trim() { return no }
 	if not (yaml_scalar(t) is text) or yaml_scalar(t) != t { return no }
 	if ("" + t#1) in YAML_INDICATORS { return no }
@@ -610,7 +610,7 @@ yaml_plain_safe(t: text): bool := {
 	for c in t { code = ord(c); if code < 32 or code == 127 or c == "," or c == "[" or c == "]" or c == "{" or c == "}" { return no } }
 	yes
 }
-yaml_quoted(t: text): text := {
+yaml_quoted(t: text) as text := {
 	out = "\""
 	for c in t {
 		code = ord(c)
