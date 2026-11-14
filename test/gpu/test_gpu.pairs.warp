@@ -23,3 +23,5 @@
 # a shader block in compute.toys' dialect, read off its entry point fn main_image, renders as compute_toy makes it (found in lib/shaders, no use); compute_toy of a fragment shader is that shader (card shader-value)
 's = shader { @compute @workgroup_size(16, 16) fn main_image(@builtin(global_invocation_id) id: vec3u) { textureStore(screen, id.xy, vec4f(1.0, 0.0, 0.0, 1.0)); } }; gpu_render(s, 1, 1)'	[4294901760]	needs: gpu
 'toy = compute_toy("fn main_image(id: vec3u) {}"); compute_toy(toy) == toy'	yes
+# each picture given as channel0 is sampled as itself, painted again too, however many a program paints (card rings-white-frame: a picture is converted once)
+'use image; s = shader { @compute @workgroup_size(16, 16) fn main_image(@builtin(global_invocation_id) id: vec3u) { textureStore(screen, id.xy, textureSampleLevel(channel0, bilinear_repeat, vec2f(0.5), 0.0)); } }; ps = [image(1, 1, (x, y) => rgb(i * 25, 0, 0)) for i in 0 ..< 10]; r = [gpu_render(s, 1, 1, {channel0: p})#1 for p in ps + ps]; r#2 != r#3 and r[0 ..< 10] == r[10 ..< 20]'	yes	needs: gpu
