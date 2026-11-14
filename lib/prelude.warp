@@ -365,8 +365,9 @@ element_wise_any(left: any, right: any, combined: function) := if left is list a
 // f of a value that may be a list (extensions/sugar/broadcasting.warp): of each item of a list, else of the value itself
 each_any(value: any, f: function) := if value is list then [f(item) for item in value] else f(value)
 // a pixel of paint(f, width, height) on the CPU (gpu_maps painted_functions): a vector of 3 numbers from 0 to 1 is
-// that color as 0xAARRGGBB, as the shader paints it; a number stays itself
-pixel_color(v: any) := if v is list then 0xFF000000 + pixel_channel(v#1) * 65536 + pixel_channel(v#2) * 256 + pixel_channel(v#3) else v
+// that color as 0xAARRGGBB, as the shader paints it; an int stays itself; any other number is refused, as the wiki
+// says a painted function gives three numbers (graphics.md)
+pixel_color(v: any) := if v is list then 0xFF000000 + pixel_channel(v#1) * 65536 + pixel_channel(v#2) * 256 + pixel_channel(v#3) else if v is int then v else raise "a painted function gives three numbers [r, g, b], each 0 … 1, not ${v}; fix: return [v, v, v] for a gray"
 pixel_channel(c) := round(255 * min(max(c, 0), 1)) as int
 pixel_channel(c: float): int := round(255 * min(max(c, 0.0), 1.0)) as int
 // paint(f, width, height) of a warp function on the CPU, where no shader paints it (gpu_maps painted_functions): f(column,
