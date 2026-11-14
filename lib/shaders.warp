@@ -1019,6 +1019,10 @@ compute_toys_refused(code: text) := {
 	if not (code contains "fn main_image") { raise "compute_toy takes a compute.toys shader: its kernel is fn main_image(@builtin(global_invocation_id) id: vec3u)" }
 }
 COMPUTE_TOY_CHANNELS = ["channel0", "channel1"]
+# the pictures last given to a compute.toys shader, each [image, its cells], so a paint on every frame converts each
+# picture once (45 ms for rings' two); the image itself is the key: one changed in place keeps its old cells
+MOST_KEPT_PICTURES = 8
+global kept_pictures = []
 # the WGSL fragment shader of a compute.toys kernel, each channel it reads sampled from paint's values; a shader already
 # a fragment shader as it is (paint and gpu_render read the dialect off the entry point)
 compute_toy(code: text) := {
@@ -1048,12 +1052,19 @@ pictured_values(values: any, code: text) := {
 	for name in values.keys {
 		value = values[name]
 		if value has "pixels" {
-			pixels: [vec4] = [compute_toys_pixel(color) for color in value.pixels]
-			given[name] = pixels
+			given[name] = picture_cells(value)
 			given[name + "_size"] = [float(value.width), float(value.height)]
 		} else { given[name] = value }
 	}
 	given
+}
+# an image's pixels as the GPU list of vec4 a storage array reads, made at its first paint
+picture_cells(image: any) := {
+	for kept in kept_pictures { if same(kept#1, image) { return kept#2 } }
+	cells: [vec4] = [compute_toys_pixel(color) for color in image.pixels]
+	kept_pictures = [[image, cells]] + kept_pictures
+	if #kept_pictures > MOST_KEPT_PICTURES { kept_pictures = kept_pictures[0 ..< MOST_KEPT_PICTURES] }
+	cells
 }
 # one pixel of a warp image as the four floats a storage array stores, 0 to 1
 compute_toys_pixel(color: any): list := {
@@ -1084,4 +1095,3 @@ compute_toys_sampled(code: text, name: text): text := {
 	plain = replace_all(code, "textureDimensions\\(\\s*" + name + "\\s*\\)", "vec2u(u32(values." + name + "_size.x), u32(values." + name + "_size.y))")
 	replace_all(plain, "textureSampleLevel\\(\\s*" + name + "\\s*,\\s*bilinear_repeat\\s*,\\s*(([^,()]|\\(([^()]|\\([^()]*\\))*\\))+)\\s*,\\s*[^)]+\\)", "warp_" + name + "_sample_repeat($1)")
 }
-

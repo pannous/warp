@@ -1,7 +1,7 @@
 // The native warp's window (decision window-in-warp, card window-ffi-replace), a part of lib/host/native_host.warp: what the
 // playground's canvas answers in JavaScript (web/playground/canvas.js), natively over SDL3 by plain FFI: host_owns /
-// host_value (the window's system values), host_value_set, host_window_layer (a painting's Metal layer, which
-// gpu.warp shows it in) and window_run_ended.
+// host_value (the window's system values), host_value_set, host_window_layer (a painting's Metal layer, on Windows
+// the window's HWND, which gpu.warp shows it in) and window_run_ended.
 // `window_open = 1` or the first painting opens it, never under --no-window or CI. Each painting is a frame, its
 // title telling the frame times; each painting and reading of window_open takes the window's events in. Closed, it
 // ends a program painting on; a still picture (a run's one painting) stays shown after the run until it is closed.
@@ -96,17 +96,17 @@ window_opened() := {
 	points_wide = calloc(1, 4)
 	points_high = calloc(1, 4)
 	times = enlarged()
-	sdl_window = SDL_CreateWindow(WINDOW_TITLE, width * times, height * times, SDL_WINDOW_METAL + SDL_WINDOW_RESIZABLE)
+	sdl_window = SDL_CreateWindow(WINDOW_TITLE, width * times, height * times, (if on_mac() then SDL_WINDOW_METAL else 0) + SDL_WINDOW_RESIZABLE)
 	if sdl_window == 0 {
 		window_failed = yes
 		return eprint("window: " + SDL_GetError())
 	}
-	view = SDL_Metal_CreateView(sdl_window)
+	view = if on_mac() then SDL_Metal_CreateView(sdl_window) else SDL_GetPointerProperty(SDL_GetWindowProperties(sdl_window), SDL_PROP_WINDOW_WIN32_HWND_POINTER, 0)
 	open_now = yes
 	title_ns = SDL_GetTicksNS()
 }
 window_closed() := {
-	if view != 0 { SDL_Metal_DestroyView(view) }
+	if view != 0 and on_mac() { SDL_Metal_DestroyView(view) }
 	if sdl_window != 0 { SDL_DestroyWindow(sdl_window) }
 	view = 0
 	sdl_window = 0
@@ -242,7 +242,7 @@ value_set(name: text, value: int): bool := {
 	}
 	no
 }
-// the window's Metal layer for a painting of width × height, the window opened by the first; 0 where none opens. A
+// the window's Metal layer (Windows: its HWND) for a painting of width × height, the window opened by the first; 0 where none opens. A
 // window the program gave no size takes its first painting's. Closed by its user, the run ends
 host_window_layer(painting_width: int, painting_height: int): int := {
 	if closed_by_user { exit(0) }
@@ -265,7 +265,7 @@ host_window_layer(painting_width: int, painting_height: int): int := {
 		times = enlarged()
 		SDL_SetWindowSize(sdl_window, width * times, height * times)
 	}
-	SDL_Metal_GetLayer(view)
+	if on_mac() then SDL_Metal_GetLayer(view) else view
 }
 // the window's size in pixels, which its Metal layer's drawable keeps (gpu.warp shows a painting at it)
 window_pixels(): list := {
