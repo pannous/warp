@@ -1,7 +1,8 @@
 # The `for` heads a rule cannot take yet, made plain for extensions/sugar/iteration.warp's rules, which lower every `for` onto
 # `while`; a bare body becomes a `{…}` block:
-# `for k, v in m` binds the value beside the key: `for k in m { v = m#(k + 1); body }`, whose map the rule `where $m is
-#   map` walks by its keys; a rule's pattern cannot bind two names yet
+# `for k, v in m` binds the two parts of each entry, a map's key and value or a pair's items: `for k·pair in
+#   map_entries(m) { k = k·pair#1; v = k·pair#2; body }` (map_entries gives a list of pairs as it is); a rule's pattern
+#   cannot bind two names yet
 # `for int in xs body` (a type word as the variable) visits only the items of that type, tested as read, before the
 #   variable holds one (a character held by a text variable is a text): `for int·typed in xs { if is_type(int·typed,
 #   "int") { int = int·typed; body } }`
@@ -14,7 +15,7 @@ loop_in_word = "in"
 # the type words whose loop over a text walks a unit instead of filtering
 unit_type_words = ["byte", "codepoint", "char", "character"]
 
-# `k, v` or `(k, v)`: the two names a loop over a map binds
+# `k, v` or `(k, v)`: the two names a loop over entries or pairs binds
 is_name_pair(n: Node): bool := is_group(n) and #n == 2 and is_name(n#1) and is_name(n#2)
 
 # `for int in xs body`: a type word as the loop variable, not one of a text's units
@@ -45,8 +46,9 @@ loop_heads_of(n: Node): Node := match n {
 		iterable = parts#4
 		body = loop_statements(parts#5)
 		if is_name_pair(variable) {
-			lookup = Key(variable#2, Op.Assign, Key(iterable, Op.Hash, Key(variable#1, Op.Add, 1)))
-			return loop_head(variable#1, iterable, loop_block([lookup] + body))
+			entry = symbol(name_of(variable#1) + "·pair")
+			parts = [Key(variable#1, Op.Assign, Key(entry, Op.Hash, 1)), Key(variable#2, Op.Assign, Key(entry, Op.Hash, 2))]
+			return loop_head(entry, call_of("map_entries", [iterable]), loop_block(parts + body))
 		}
 		if filters_by_type(variable) { return type_filtered(variable, iterable, body) }
 		if is_curly_group(parts#5) then n else loop_head(variable, iterable, loop_block(body))
