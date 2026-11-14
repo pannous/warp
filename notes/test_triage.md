@@ -697,3 +697,10 @@ Key case is down); test/modules/test_keys.pairs.warp:4 `[held_key == ESC, LEFT]`
 | test/control/test_error_words.pairs.warp:9 | "ab" | "aøb" | `warn(…)` gives ø, which text shows as ø like any other ø |
 | test/welcoming/test_warning_mode.pairs.warp:4 | "ab" | "aøb" | same: `warning(…)` |
 | test/control/test_error_not_in_data.pairs.warp:18 | 1 | Error("divide by zero") | `a, b = e, 2` binds a plain variable a, which holds no Error (decision errors held only by optional variables); its own header says the write raises |
+
+## Refused forms, dropped as unpinned (user rule 2026-11-14: refusals are never tested)
+| line | form | why refused |
+|---|---|---|
+| test/functions/test_default_parameters.pairs.warp (Ruby style) | `def f(a, b: 2){a+b}; f(1)`, `… f(1, b: 5)` | a literal after a parameter's colon is refused with its fix `b = 2` (night decision parameter-named-fails) |
+| test/functions/test_default_parameters.warp (Ruby style) | `def greet(name, greeting: "Hello"){…}; greet("Ann")` | same |
+| test/functions/test_preposition_calls.warp | `f(x, for y) := x - y; f 5 for 2`, `f(xs, each y) := …; f [1 2 3] each 2` | a label takes its colon in a call, `f 5 for: 2` (wiki/argument.md; warp-interviewer 11-14) |
