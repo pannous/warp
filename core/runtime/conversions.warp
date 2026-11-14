@@ -106,7 +106,9 @@ text_checked(n: Node): Node := {
 holds_bool(n: Node): bool := not is_null(n) and (marked_kind(n) == Marked.Bool or (kind_code(n) == Kind.Int and not is_ratio(n) and unboxed_int(n) >= 0 and unboxed_int(n) <= 1))
 bool_checked(n: Node): Node := {
 	if not holds_bool(n) { returned_error("not a bool") }
-	n
+	if marked_kind(n) == Marked.Bool { return n }
+	held: Node = unboxed_int(n) == 1
+	held
 }
 # an instance that converts itself to a float, an exact root √3, is one too: a run-time value checked so stays itself
 float_checked(n: Node): Node := {
