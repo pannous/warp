@@ -1465,6 +1465,7 @@ function startBugButton() {
 		$("bug-comment").focus();
 	};
 	$("bug-token").oninput = showBugSender;
+	$("bug-sender").onclick = askBugToken;
 	// a press outside an open menu (the bug report, ⋯) closes it, as Escape does; a comment begun stays (card clicking-outside)
 	const openMenus = () => [...document.querySelectorAll("details.tools[open]")];
 	addEventListener("pointerdown", press => openMenus().filter(menu => !menu.contains(press.target)).forEach(menu => menu.open = false));
@@ -1492,9 +1493,15 @@ function bugReport() {
 		token: $("bug-token").value.trim() || stored(BUG_TOKEN_KEY) || BUG_TOKEN };
 }
 
-// who the report goes out as, said before it is sent: a browser without the owner token files a visitor's ticket
+// who the report goes out as, said before it is sent: a browser without the owner token files a visitor's ticket, and
+// a press on that line opens the field to paste the token (Firefox clears it with the site's storage)
 const showBugSender = () => $("bug-sender").textContent = $("bug-token").value.trim() || stored(BUG_TOKEN_KEY)
-	? "as the owner" : "as a visitor: no owner token in this browser";
+	? "as the owner" : "as a visitor: no owner token in this browser (press to paste one)";
+const askBugToken = () => {
+	if (stored(BUG_TOKEN_KEY)) return;
+	$("bug-token").hidden = false;
+	$("bug-token").focus();
+};
 
 async function sendBugReport() {
 	const report = bugReport();
