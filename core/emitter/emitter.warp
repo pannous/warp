@@ -987,8 +987,9 @@ kept_if_admitting_errors(body: Body, name: text, type_name: text) := { if union_
 def declaration(body: Body, name: text, written_type: text, value: TypedCode): TypedCode {
 	type_name = aliased_type(written_type)
 	kept_if_admitting_errors(body, name, type_name)
-	# `x: any = v` admits every value: the plain assignment; `t: type = int`, `m: map = {}` too, a node like any
-	if type_name in node_annotations { return assignment(body, symbol(name), value) }
+	# `x: any = v` admits every value, held as a node: `y: any = 1; b: bool = y` is checked when it runs, as a value
+	# known only then; `t: type = int`, `m: map = {}` too, a node like any
+	if type_name in node_annotations { return assignment(body, symbol(name), as_node(value)) }
 	if type_name in admitted_numbers { return assignment(body, symbol(name), boxed_call(admitted_numbers[type_name], value)) }
 	if type_name.ends_with("?") { return optional_declaration(body, name, without_optional_mark(type_name), value) }
 	if type_name in module.classes { return typed_declaration(body, name, type_name, value) }

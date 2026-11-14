@@ -611,6 +611,17 @@ hole_value(hole: text, width: int, height: int): any := {
 
 // --- the shader's text: whole names in it, renamed
 is_name_char(c: text): bool := NAME_BYTES.contains(c)
+// the shader without its comments, each line where it was: a name only a comment says (`bilinear taps`) binds
+// nothing, as the pipeline's layout, which follows the code, binds nothing for it
+uncommented(shader: text): text := {
+	blocks = shader.split("/*")
+	code = blocks[0]
+	for block in blocks[1 ..] {
+		closed = block.split("*/")
+		code += "\n" * (#closed[0].split("\n") - 1) + closed[1 ..].join("*/")
+	}
+	code.split("\n").map(line => line.split("//")[0]).join("\n")
+}
 // whether the shader names `name` whole, not as the start or end of a longer name
 names(shader: text, name: text): bool := {
 	parts = shader.split(name)
@@ -946,7 +957,8 @@ previous_kept(image: int) := {
 // triangle once, or the quads of a shader with its own vertex stage
 // (a drawing without compute passes, the window's picture, leaves the compute fields out)
 class Drawing { pipeline: int, bindings: int, previous: int, reads_previous: bool, corners: int, instances: int, depth: bool, index_buffer: int, index_count: int, width: int, height: int, named: list = [], compute: text = "", workgroups: list = [1, 1, 1], indirect_buffer: int = 0, indirect_words: int = 0, compute_pipelines: list = [], compute_bindings: int = 0, views: list = [] }
-drawing_made(shader: text, values: map, width: int, height: int): any := {
+drawing_made(written: text, values: map, width: int, height: int): any := {
+	shader = uncommented(written)
 	gpu_failure = ""
 	if not device_ready() { return ø }
 	layout = values_laid_out(values)

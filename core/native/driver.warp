@@ -1537,7 +1537,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if same_text(module, "os") and same_text(member, "run") { return os_run(caller, context, listed, results) }
 	if same_text(module, "os") and same_text(member, "compile_wasm") { return os_wasm_compiled(caller, context, listed, results) }
 	if same_text(module, "os") and same_text(member, "run_wasm") { return os_wasm_ran(caller, context, listed, results) }
-	if same_text(module, "net") and same_text(member, "get") { return url_got(caller, context, shown(caller, context, item_of(caller, context, listed, 1)), results) }
+	if same_text(module, "net") and same_text(member, "get") { return url_got(caller, context, listed, results) }
 	if same_text(module, "warp") and same_text(member, "option") { return option_answered(caller, context, listed, results) }
 	if same_text(module, "warp") and same_text(member, "module_word") { return module_word_answered(caller, context, listed, results) }
 	if same_text(module, "warp") and same_text(member, "rule_word") { return rule_word_answered(caller, context, listed, results) }
@@ -1646,14 +1646,22 @@ sh_quoted(t: text): text := {
 	}
 	joined(joined(quoted, text_from(t.address + start, (t.length - start) as u32)), "'")
 }
-# net.get(url), lib/net.warp's fetch: the answer's text by curl, run by its argument vector (no shell sees the URL),
-# a URL without its scheme (`fetch "://host/x"`) over https; an answer of status 400 or more, or no curl, is the Error
-# with curl's complaint
-url_got(caller: handle, context: handle, url: text, result: pointer): nothing := {
+# net.get(url, as, header lines), lib/net.warp's fetch: the answer's text by curl, run by its argument vector (no
+# shell sees the URL), a URL without its scheme (`fetch "://host/x"`) over https, each "Name: value" line a header;
+# an answer of status 400 or more, or no curl, is the Error with curl's complaint
+url_got(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
+	url = shown(caller, context, item_of(caller, context, listed, 1))
 	words = arguments()
 	added(words, "curl")
 	added(words, "-sSL")
 	added(words, "--fail-with-body")
+	if guest_number(caller, context, "item_count", listed) >= 3 {
+		lines = item_of(caller, context, listed, 3)
+		for i in 1..(guest_number(caller, context, "item_count", lines) + 1) {
+			added(words, "-H")
+			added(words, shown(caller, context, item_of(caller, context, lines, i)))
+		}
+	}
 	added(words, if starts_with(url, "://") then joined("https", url) else url)
 	words_run(caller, context, "curl", words, result)
 }
