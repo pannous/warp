@@ -259,12 +259,10 @@ operated_within(name: text): list := {
 	if inner == "" then [] else [inner, canonical_operator(inner)] + operated_within(inner)
 }
 
-# the words a later step writes: the cell of a shared capture, for a lambda or a block given to a parameter (lambdas.warp),
-# the matcher of a structural match arm (node_matches.warp)
-function_types = [symbol("function"), symbol("block")]
+# the words a later step writes: the matcher of a structural match arm (node_matches.warp)
 lowering_words(program: Node): list := {
 	nodes = nodes_in(program)
-	(if nodes.any(n => is_lambda(n) or n in function_types) then [cell_word()] else []) + (if nodes.any(n => is_structural_match(n) or is_quoted_arm(n) or (is_key(n, Op.Is) and is_shape_pattern(value_of(n)))) then [matcher_word] else []) + (if nodes.any(is_pattern_definition) then [matcher_word, pattern_converter_word, kept_pattern_word] else []) + (if writes_templates then [template_word] else []) + emitted_words(program)
+	(if nodes.any(n => is_structural_match(n) or is_quoted_arm(n) or (is_key(n, Op.Is) and is_shape_pattern(value_of(n)))) then [matcher_word] else []) + (if nodes.any(is_pattern_definition) then [matcher_word, pattern_converter_word, kept_pattern_word] else []) + (if writes_templates then [template_word] else []) + emitted_words(program)
 }
 # `data($a * 1) => a`, an arm of quoted code wherever a sugar word holds it (`rules {…}`, extensions/sugar/arms.warp): its
 # match is written only once the sugar fires
@@ -321,9 +319,6 @@ time_module = "time"
 global brought_names = {}
 # the names of the values it brought, `m = Unit("m")` of lib/units, which go in front of the program
 global brought_value_names = {}
-# the modules' classes a class of the program's own name set aside, brought under their library_word (`class Cell
-# {n: int}` beside the prelude's Cell of shared captures, card prelude-class-shadowing)
-global classes_set_aside = {}
 # those of them a library exports, which called_only keeps uncalled
 global exported_names = {}
 # the words whose recorded reach (prebuilt.warp linked_reaches) with_reached followed, and the linked classes it found,
@@ -448,7 +443,6 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	own_name_set = word_set(own_names)
 	named_as_own_class = slice => slice#1 in own_classes and not brought_names.has(slice#1)
 	replaced = slice => (own_name_set.has(slice#1) and not overloads_brought(slice, program)) or named_as_own_class(slice)
-	for slice in given.filter(named_as_own_class) { if leading_name(slice#2) in defining_keywords { classes_set_aside[slice#1] = yes } }
 	kept = slice => not replaced(slice) or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX) or (slice#2.starts_with("global ") and slice#1 in assigned)
 	# the program's globals, `global hue = 10`, which every function of its own shares, are no module's: hsv's `hue`
 	# stays its local
@@ -459,7 +453,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	# the statements of each reached slice, by its identity
 	reached = {}
 	if in_front { own_words_unlinked(own_names) }
-	# (a linked module's classes and globals, the prelude's Cell of its closures too)
+	# (a linked module's classes and globals)
 	program_words = symbol_words(program)
 	foreign = foreign_types(module)
 	for signature in linked_signatures.values { for type in signature.foreign.keys { foreign[type] = signature.foreign[type] } }
