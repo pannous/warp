@@ -8,8 +8,8 @@ as_code_word = "as_code"
 parse_code_word = "parse_code"
 
 called_word(word: text, arguments: list): Node := List([symbol(word)] + arguments, Bracket.Round, Separator.None)
-# `data e`: e as written
-quoted_code_of(code: Node): Node := List([symbol(quote_word), code], Bracket.None, Separator.Space)
+# `data(e)`: e as written, quoted as `data(…)` writes it (a spaced `data e` let later passes lower a `for` in it)
+quoted_code_of(code: Node): Node := List([symbol(quote_word), code], Bracket.Round, Separator.None)
 
 # `parse "…"`, `parse(t)`, `parse t`: what the word is given, else ø
 word_argument(n: Node, word: text): Node := {
