@@ -75,7 +75,10 @@ use "effects.warp"
 use "optional_unwraps.warp"
 use "object_functions.warp"
 use "primitive.warp"
+use "line_ends.warp"
 EXTENSIONS = [
+	# first: every later source pass reads \n line ends
+	line_ends_extension
 	Extension{name: "uncertain", operator_rows: module_source("extensions/uncertain/operators.warp")}
 	gpu_lists_extension
 	degrees_extension
