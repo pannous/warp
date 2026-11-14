@@ -198,13 +198,19 @@ positional_types(call: Node, typed: map): list? := {
 # where values pass to typed places: name → the parameter types of each function converting some (typed_parameters),
 # the types the program converts to or checks, a class's own [] (decision class-types-checked), each class declared
 # and the functions of several results, whose call a typed place picks one of (arity_overloads.warp result_overloads)
-class Places { typed: map; converting: map; classes: map; results: map }
+class Places { typed: map; converting: map; classes: map; results: map; declared: map }
 # each call of such a function with its arguments for those parameters converted, the function's name the taker a
-# refusal names, and each `x: T = v` so, x the taker; a named argument as it is, and a value known to be a T already:
+# refusal names, and each `x: T = v` so, x the taker, and the value of `f(…): T := …` (no taker: the result's own check
+# says what it takes); a named argument as it is, and a value known to be a T already:
 # a parameter typed so of the definition around it (`g(d: Length) := f(d)`), the instance of a constructor of the class
 converted_arguments(n: Node, places: Places, known: map): Node := {
 	call = definition_call(n)
-	if call != ø { return Key(key_of(n), Op.Define, converted_arguments(value_of(n), unshadowed(places, bound_at(n)), parameters_typed(call))) }
+	if call != ø {
+		known_inside = parameters_typed(call)
+		body = converted_arguments(value_of(n), unshadowed(places, bound_at(n)), known_inside)
+		result = converted_result_type(n)
+		return Key(key_of(n), Op.Define, if result == ø then body else last_value_mapped(body, value => passed(value, result, "", places, known_inside)))
+	}
 	walked = children(called_values(n, places), x => converted_arguments(x, places, known))
 	if is_typed_declaration(walked) {
 		return Key(key_of(walked), Op.Assign, passed(value_of(walked), place_type(value_of(key_of(walked))), name_of(key_of(key_of(walked))), places, known))
@@ -246,7 +252,7 @@ passed(value: Node, type: text, taker: text, places: Places, known: map): Node :
 # the places without the functions a parameter or variable of the definition shadows, `apply: function` called
 # `apply([item])`, `named = (m => …)` called `named(w)` (card local-shadowing)
 unshadowed(places: Places, names: list): Places := {
-	if names.any(name => places.typed.has(name)) then Places(without_keys(places.typed, names), places.converting, places.classes, places.results) else places
+	if names.any(name => places.typed.has(name)) then Places(without_keys(places.typed, names), places.converting, places.classes, places.results, places.declared) else places
 }
 # name → type of each parameter of a definition
 parameters_typed(call: Node): map := {
@@ -254,12 +260,16 @@ parameters_typed(call: Node): map := {
 	for parameter in signature_of(items_of(call)).parameters { if parameter.type_name != "" { typed[parameter.name] = parameter.type_name } }
 	typed
 }
-# whether the value is known to be of a member class of the type, or of one extending it, or is the call of a function
+# whether the value is known to be of a member class of the type, or of one extending it, made one, `x as T` (a
+# subtype's made·T, a conversion's as·T), or is the call of a function declaring a member its result, or of a function
 # of several results, which the place picks
 known_as(value: Node, type: text, places: Places, known: map): bool := {
 	plain = unparenthesized(without_mark(value))
+	members = union_members(type)
+	if is_key(plain, Op.As) and value_of(plain) is symbol and name_of(value_of(plain)) in members { return yes }
 	head = if is_group(plain) and #plain > 0 and plain#1 is symbol then name_of(plain#1) else ""
-	if places.results.has(head) { return yes }
+	if places.results.has(head) or places.declared.get(head) in members { return yes }
+	if members.any(member => head == made_word(member) or head == conversion_name(member) or head.starts_with(conversion_name(member) + "·")) { return yes }
 	given = if plain is symbol and known.has(name_of(plain)) then known[name_of(plain)] else if is_call(plain) and places.classes.has(head) then head else ""
 	given != "" and union_members(type).any(member => places.classes.has(member) and descends_from(given, member, places.classes))
 }
@@ -296,8 +306,31 @@ bare_result_name(statement: Node): text := {
 	if is_key(plain, Op.Define) and is_key(key_of(plain), Op.Colon) and key_of(key_of(plain)) is symbol and value_of(key_of(plain)) is symbol then name_of(key_of(key_of(plain))) else ""
 }
 nullary_head(definition: Node): Node := Key(Key(call_node(key_of(key_of(definition)), []), Op.Colon, value_of(key_of(definition))), Op.Define, value_of(definition))
-# the types of the program's `x: T = v`
-declared_types(program: Node): list := nodes_in(program).filter(is_typed_declaration).map(n => place_type(value_of(key_of(n))))
+# the types of the program's `x: T = v` and `f(…): T := …`
+declared_types(program: Node): list := nodes_in(program).map(n => if is_typed_declaration(n) then place_type(value_of(key_of(n))) else converted_result_type(n)).filter(type => type != ø)
+# T of a definition `f(…): T := …`, ø of any other node
+written_result_type(n: Node): text? := if definition_call(n) != ø and is_key(key_of(n), Op.Colon) then place_type(value_of(key_of(n))) else ø
+# T of a definition whose value converts to it: never a linked module's word, declared without its body (its module
+# made the value), which a body would make a local function shadowing that word
+converted_result_type(n: Node): text? := if definition_call(n) == ø or value_of(n) == Node.Empty then ø else written_result_type(n)
+# the values a body gives, a block's last statement, each branch of an if, as the function makes them
+last_value_mapped(body: Node, make: function): Node := {
+	if is_key(body, Op.Else) and is_key(key_of(body), Op.Then) {
+		chosen_one = key_of(body)
+		return Key(Key(key_of(chosen_one), Op.Then, last_value_mapped(value_of(chosen_one), make)), Op.Else, last_value_mapped(value_of(body), make))
+	}
+	if not (is_curly_group(body) and #body > 0 and separator_of(body) in statement_separators) { return make(body) }
+	group_like(body, items_of(body)[0 ..< #body - 1] + [last_value_mapped(body#(#body), make)])
+}
+# name → the result type its definition declares, `f(…): T := …`
+results_declared(statements: list): map := {
+	declared = {}
+	for statement in statements {
+		result = written_result_type(statement)
+		if result != ø { declared[name_of(definition_call(statement)#1)] = result }
+	}
+	declared
+}
 # `x: T = v`, `x: A or B = v`: a variable declared with a type word or a union of them
 is_typed_declaration(n: Node): bool := is_key(n, Op.Assign) and is_key(key_of(n), Op.Colon) and key_of(key_of(n)) is symbol and place_type(value_of(key_of(n))) != ø
 place_type(type: Node): text? := if type is symbol then name_of(type) else union_spelling(type)
@@ -343,7 +376,7 @@ conversions(program: Node): Node := {
 		converting_to = entries_of_both(targets, {})
 		for name in classes.keys { if not targets.has(name) { converting_to[name] = [] } }
 		typed = typed_parameters(kept, converting_to, aliases)
-		places = Places(entries_of_both(constructor_parameters(classes, targets, aliases, typed), typed), converting_to, classes, several_results(kept))
+		places = Places(entries_of_both(constructor_parameters(classes, targets, aliases, typed), typed), converting_to, classes, several_results(kept), results_declared(kept))
 		converting = {}
 		for type in places.typed.values.flatten() + declared_types(program) { if converts_to(type, places.converting) { converting[type] = yes } }
 		functions += converting.keys.map(type => argument_conversion(type, places.converting, classes))
