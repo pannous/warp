@@ -360,9 +360,9 @@ conversions(program: Node): Node := {
 		converting = {}
 		for type in places.typed.values.flatten() + declared_types(program) { if converts_to(type, places.converting) { converting[type] = yes } }
 		functions += converting.keys.map(type => argument_conversion(type, places.converting, classes))
-		# (a program's conversions are its own, seeing every module's: never a linked module's of the same name, time's
-		# passed·Duration knowing no Quantity)
-		if module_written == "" { own_words_unlinked(functions.map(f => name_of(definition_call(f)#1))) }
+		# (a program's or module's conversions are its own, seeing every used module's: never a linked module's of the
+		# same name, time's passed·Duration knowing no Quantity, another module's passed·Color knowing no int)
+		own_words_unlinked(functions.map(f => name_of(definition_call(f)#1)))
 		converted = kept.map(statement => converted_arguments(converting_uses(statement, targets), places, {}))
 		List(functions + value_entries(places).map(entry => converted_arguments(entry, places, {})) + converted, Bracket.None, Separator.Newline)
 	}
