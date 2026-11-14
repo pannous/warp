@@ -7,7 +7,7 @@
 # defines its own the same way, and an object the program binds as a value keeps its own fields.
 # Runs on the program and the files it uses, before the standard modules and the prelude are reached, so the words a
 # body calls (canvas_width, set_system_value) bring their definitions.
-# Not yet: a bare `width`, `width(canvas)`, other names (display.dpi), the properties of a class's instances.
+# Not yet: a bare `width`, `width(canvas)`, the properties of a class's instances.
 
 # the parameter of a setter written getter-shaped: `canvas.width := canvas(it, canvas_height)`
 setter_word = "it"
@@ -157,11 +157,31 @@ property_accessors(program: Node): Node := {
 	properties_collected(own, "", properties)
 	kept = statements.filter(statement => property_definition(statement) == ø)
 	scope = scope_of(without_dotted_writes(program))
+	bodies_unfolded(properties, scope)
 	# an argument for a parameter typed T reads a free x as the property T.x (card expected-type-names, plain_enums.warp)
 	expectation = Expectation(property_values(properties), parameter_types_of(program), scope, program)
 	rewritten = kept.map(statement => property_accessed(expected_in(statement, expectation), properties, scope))
 	brought = property_modules_needed(program, properties)
 	separated(bracketed(brought.map(module => plain_node(parsed("use " + module))) + rewritten, ""), ";")
+}
+# a body naming another property, `display.dpi := display.density`, reads it as a use does: round after round until
+# none changes, at most one per property, so a chain unfolds and a cycle stops
+def bodies_unfolded(properties: PropertyTable, scope: map) {
+	rounds = #properties.getters + #properties.setters
+	changed = yes
+	while changed and rounds > 0 {
+		changed = no
+		rounds -= 1
+		for bodies in [properties.getters, properties.setters] {
+			for name in bodies.keys {
+				unfolded = property_accessed(bodies[name], properties, scope)
+				if unfolded != bodies[name] {
+					bodies[name] = unfolded
+					changed = yes
+				}
+			}
+		}
+	}
 }
 # the objects the standard properties belong to
 standard_objects = ["window", "display", "canvas"]
