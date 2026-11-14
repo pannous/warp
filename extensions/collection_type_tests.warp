@@ -19,6 +19,6 @@ collection_type_test(n: Node) as Node := {
 }
 
 # a type phrase read as one word, `list of byte` of `type Code < list of byte` (as a field's type reads), as its words
-spelled_phrase(type: Node): Node := if type is symbol and name_of(type).contains(" " + of_word + " ") then List(name_of(type).split(" ").map(symbol), Bracket.None, Separator.Space) else type
+spelled_phrase(type: Node) as Node := if type is symbol and name_of(type).contains(" " + of_word + " ") then List(name_of(type).split(" ").map(symbol), Bracket.None, Separator.Space) else type
 
 collection_type_tests_extension = Extension{name: "collection_type_tests", passes_before: {"type_tests": collection_type_tests}}

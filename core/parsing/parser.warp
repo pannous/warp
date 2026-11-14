@@ -3647,7 +3647,7 @@ def subtype_read(p: Parser, name: Node) as Node {
 	Key(type_node(attributed("extends", narrowed, name), ø), Op.Assign, narrowed)
 }
 // the word at p, read
-def word_read(p: Parser): text {
+def word_read(p: Parser) as text {
 	end = symbol_end(p.code, p.at, p.n)
 	word = p.code[p.at .. end]
 	p.at = end
