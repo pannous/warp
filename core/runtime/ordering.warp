@@ -37,7 +37,7 @@ floats_ordered(x: float, y: float, ordering: int): bool := if ordering == 0 then
 # no order (no_order_of) where its class declares none
 instance_order(a: Node, b: Node): int := {
 	if not is_class_instance(a) { return no_order_of(a, b) }
-	ordered = instance_method(a, "compare", list_node(Kind.List, [b]))
+	ordered = method_called(a, "compare", list_node(Kind.List, [b]))
 	if is_null(ordered) { return no_order_of(a, b) }
 	float_order(float_of_node(ordered), 0.0)
 }

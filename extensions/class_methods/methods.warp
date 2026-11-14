@@ -776,7 +776,7 @@ foreign_first(method: text, call_arguments: list, fallback: Node?, operated: boo
 # the runtime's words a dispatcher calls so, by names no program spells
 foreign_method_word = "instance·method"
 instance_test_word = "instance·tested"
-foreign_instance_words = {"instance·method": "instance_method", "instance·tested": "is_class_instance"}
+foreign_instance_words = {"instance·method": "method_called", "instance·tested": "is_class_instance"}
 # the operators a class's method may define by its English name; one only a declaration gives a meaning (lib/aliases.warp
 # `declared`: lib/math.warp's `≈`, `~`, `↑`) only where the program writes it (`written`), its dispatcher falling back
 # to the declaration's function: a module built, `use uncertain` or `use sound` writing none, pays nothing for
