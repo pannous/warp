@@ -15,10 +15,12 @@ interpret_scope(program: Node): Node := {
 scoped_statement(statement: Node, read: list, main: list): Node := {
 	plain = without_mark(statement)
 	call = definition_call(plain)
-	if call == ø { return scoped_calls(statement, read, main) }
-	own = items_of(call)[1 ..].map(parameter => name_of(leftmost_symbol(parameter))) + names_assigned(value_of(plain))
+	if call == ø { return scoped_calls(statement, read, main + loops_in(plain)) }
+	own = items_of(call)[1 ..].map(parameter => name_of(leftmost_symbol(parameter))) + names_assigned(value_of(plain)) + loops_in(value_of(plain))
 	Key(key_of(plain), Op.Define, scoped_calls(value_of(plain), read, main + own))
 }
+# the variables of the loops in n, `i` of `for i in 1..4 { s += interpret(xs#1) }`, seen by the calls inside them
+loops_in(n: Node): list := nodes_in(n).flat_map(loop_variables)
 data_names(program: Node): list := nodes_in(program).filter(is_quote).flat_map(quote => nodes_in(quote#2).filter(n => n is symbol).map(name_of))
 scoped_calls(n: Node, read: list, visible: list): Node := {
 	seen = read.filter(name => name in visible).unique()
