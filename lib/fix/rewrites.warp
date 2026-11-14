@@ -33,6 +33,11 @@ path_starts = ["/", "./", "../", "~/"]
 # `str(x)` → `text(x)`: we call it text (card fix-rewrites)
 showing_as_text = "text"
 showing_as_text_words = ["str"]
+# `f(x): int := …` → `f(x) as int := …`, `def f(x): text {…}` → `def f(x) as text {…}`: a function head says its
+# result type with `as` (decision result-type-as); the words that may lead a head, and what a head's type may follow
+head_keywords = ["def", "fun", "fn", "function"]
+name_characters = [".", "·"]
+result_type_word = " as "
 
 # every hint of the scanned lines, in the order of the source
 hints_of(lines: list): list := {
@@ -46,6 +51,7 @@ hints_of(lines: list): list := {
 hints_of_line(line: Scanned, number: int): list := {
 	cs = chars(line.text)
 	hints = []
+	head_type = result_type_hint(line, cs, number)
 	depth = 0
 	i = 0
 	while i < #cs {
@@ -58,6 +64,7 @@ hints_of_line(line: Scanned, number: int): list := {
 			if hint != ø { hints += [hint] }
 			i += #word
 		} else {
+			if head_type != ø and i == head_type.column { hints += [head_type] }
 			if i == line.comment {
 				hint = floor_division_hint(cs, i, number)
 				if hint != ø { hints += [hint] }
@@ -66,6 +73,40 @@ hints_of_line(line: Scanned, number: int): list := {
 		}
 	}
 	hints
+}
+
+# the `: T` after a line's function head, `as T` meant; a type `as` cannot say after a head (`[int]`, `list of int`,
+# `T?` before a `{` body) stays, so does a match arm's `Key(a, b): x`
+result_type_hint(line: Scanned, cs: list, number: int) := {
+	start = blanks_after(cs, 0)
+	keyword = word_at(cs, start)
+	keyed = keyword in head_keywords
+	named = if keyed then start + #keyword + blanks_after(cs, start + #keyword) else start
+	open = named
+	while is_word_character(at(cs, open)) or at(cs, open) in name_characters { open += 1 }
+	if open == named or at(cs, open) != "(" or not is_code(line, open) { return ø }
+	close = closing_parenthesis(line, cs, open)
+	if close < 0 or piece(cs, close + 1, 2) != ": " { return ø }
+	type = word_at(cs, close + 3)
+	if #type == 0 { return ø }
+	optional = at(cs, close + 3 + #type) == "?"
+	end = close + 3 + #type + (if optional then 1 else 0)
+	after = end + blanks_after(cs, end)
+	defined = piece(cs, after, 2) == ":=" or (keyed and at(cs, after) == "{" and not optional)
+	if after == end or not defined { return ø }
+	written = piece(cs, close + 1, end - close - 1)
+	Hint(number, close + 1, written, result_type_word + piece(cs, close + 3, end - close - 3), "a function head says its result type with as")
+}
+
+# the index of the `)` closing the `(` at index open, -1 when the line does not close it
+closing_parenthesis(line: Scanned, cs: list, open: int): int := {
+	depth = 0
+	for i in open ..< #cs {
+		if is_code(line, i) and at(cs, i) == "(" { depth += 1 }
+		if is_code(line, i) and at(cs, i) == ")" { depth -= 1 }
+		if depth == 0 { return i }
+	}
+	-1
 }
 
 # the word starting at index i

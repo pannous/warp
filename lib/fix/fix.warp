@@ -16,15 +16,16 @@ STATEMENT_ENDS = ['\n', ';', '}']
 COMPARISON_FIRSTS = ['=', '!', '<', '>']
 
 # the code fixed and what changed: [text, changes], each change "<line> <rule>", the line in the code as given; by
-# the layout rules given, after the hints' replacements when rewriting (warp format lays out only)
-fixed(code: text, rules: list = layout_rules, rewriting: bool = yes): list := {
-	markup = markup_of_inline_html(code, no, typed_element)
+# the layout rules given, after the hints' replacements when rewriting (warp format lays out only); with a rule named
+# by only, that rule's hints alone (`warp fix only "result type"`), the markup and layout left as written
+fixed(code: text, rules: list = layout_rules, rewriting: bool = yes, only: text = ""): list := {
+	markup = if only == "" then markup_of_inline_html(code, no, typed_element) else [code, ø, []]
 	changes = markup#3.map(found => "" + found#2#1 + " " + inline_html_rule)
 	lines = markup#1.split("\n")
 	if code.ends_with("\n") { lines = lines[0 ..< #lines - 1] }
 	numbers = []
 	for k in 0 ..< #lines { numbers += [k + 1] }
-	hints = if rewriting then hints_of(scanned(lines)) else []
+	hints = if rewriting then hints_of(scanned(lines)).filter(hint => hint.rule.contains(only)) else []
 	for hint in hints { changes += ["" + hint.line_number + " " + hint.rule] }
 	lines = with_hints_applied(lines, hints)
 	for rule in rules {

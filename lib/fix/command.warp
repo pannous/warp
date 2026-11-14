@@ -12,8 +12,10 @@ check_word = "check"
 yes_word = "yes"
 # `warp format hash-comments` is accepted as beautify does, which always writes # comments
 option_words = [check_word, yes_word, "hash-comments"]
+# `warp fix yes only "result type" core`: only the hints whose rule says these words, nothing else changed
+only_word = "only"
 help_words = ["help", "--help", "-h"]
-usage = "warp beautify [check|yes] <file|folder|code>…  The layout plus the best-practice rewrites (// comments become #, other languages' words the warp words), shown as a diff and applied after \"apply? y/n\" (yes: without asking; warp fix: the same)"
+usage = "warp beautify [check|yes] [only <rule words>] <file|folder|code>…  The layout plus the best-practice rewrites (// comments become #, other languages' words the warp words), shown as a diff and applied after \"apply? y/n\" (yes: without asking; only: just the rewrites whose rule says these words; warp fix: the same)"
 format_usage = "warp format [check|yes] [hash-comments] <file|folder|code>…  The canonical layout of warp code, only where the meaning stays, shown as a diff and applied after \"apply? y/n\" (check: list what would change, exit 1; hash-comments: // comments become #; warp lint: the same)"
 # the commands that lay out only, never rewriting a word; their // comments stay unless hash-comments
 layout_commands = ["format", "lint"]
@@ -103,8 +105,8 @@ listed_change(shown: text, change: text): text := {
 }
 
 # code given instead of files: printed fixed; in check, its changes listed, 1 when there are some
-fixed_code(code: text, checking: bool, rules: list, rewriting: bool): int := {
-	result = fixed(code, rules, rewriting)
+fixed_code(code: text, checking: bool, rules: list, rewriting: bool, only: text): int := {
+	result = fixed(code, rules, rewriting, only)
 	if not checking { print result[0] }
 	if checking { for change in result[1] { print listed_change(code_label, change) } }
 	if checking and #result[1] > 0 then 1 else 0
@@ -118,14 +120,21 @@ fix_command(command: text, arguments: list): int := {
 		return 0
 	}
 	words = 0
-	while words < #arguments and arguments[words] in option_words { words += 1 }
+	only = ""
+	while words < #arguments and (arguments[words] in option_words or arguments[words] == only_word) {
+		if arguments[words] == only_word and words + 1 < #arguments {
+			words += 1
+			only = arguments[words]
+		}
+		words += 1
+	}
 	options = arguments[0 ..< words]
 	paths = arguments[words ..]
 	checking = check_word in options
 	without_asking = yes_word in options
-	rules = if rewriting or "hash-comments" in options then layout_rules else layout_rules.filter(rule => rule != hash_comment_rule)
+	rules = if only != "" then [] else if rewriting or "hash-comments" in options then layout_rules else layout_rules.filter(rule => rule != hash_comment_rule)
 	if #paths > 0 and paths.all(path => not exists(path) and not looks_like_path(path)) {
-		return fixed_code(paths.join(" "), checking, rules, rewriting)
+		return fixed_code(paths.join(" "), checking, rules, rewriting, only)
 	}
 	files = []
 	for path in paths {
@@ -145,8 +154,8 @@ fix_command(command: text, arguments: list): int := {
 			print file + ": not formatted: it cannot be read"
 			failed += 1
 		} else {
-			result = fixed(code, rules, rewriting)
-			if rewriting { result = with_uses_written(result, file) }
+			result = fixed(code, rules, rewriting, only)
+			if rewriting and only == "" { result = with_uses_written(result, file) }
 			lines = #result[1]
 			if result[0] != code {
 				if checking {
