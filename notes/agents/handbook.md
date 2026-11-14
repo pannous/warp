@@ -63,7 +63,8 @@ differ and holds every rule; this file holds only the procedures behind them.
 - No visible browser on the Mac; a single headless page check is fine (agent-browser, nice, one at a time), whole
   tours stay in CI. To check the playground beyond one page: first the dry run on pannous.com,
   `scripts/browser-dry-run.sh` in your worktree (`--tours [example…]`, `--chrome`, `--firefox`, `--suite [filter…]`,
-  `--samples [sample…]`, `--again`) until green; then dispatch the Playground workflow on your branch once (`gh workflow run pages.yml --ref <branch>`), the final check plus Safari.
+  `--samples [sample…]`, `--again`) until green; then dispatch the Playground workflow on your branch once
+  (`gh workflow run pages.yml --ref <branch>`), the final check plus Safari.
 - A single headless page check on the Mac (AGENTS.md "Testing") names its own agent-browser session,
   `agent-browser --session warp-<role> …` on every call: the `default` session is every session's, and another's
   `open` or `close` takes your page to about:blank seconds later (card headless-agent; test_in_browser.py does so).
