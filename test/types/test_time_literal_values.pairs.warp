@@ -19,3 +19,9 @@
 '2024-01-15 + 1 month == 2024-02-15'	yes
 'a = 2024-03-01; b = 2024-02-01; a - b'	29
 '3 * 1 day'	3 days
+
+# a date outside the calendar is refused, never rolled over (wiki/Footguns.md "Dates")
+'2024-02-30'	error	2024-02 has the days 01 to 29
+'2023-02-29'	error	2023-02 has the days 01 to 28
+'2024-13-01'	error	the months are 01 to 12
+'2024-04-31T10:00Z'	error	2024-04 has the days 01 to 30
