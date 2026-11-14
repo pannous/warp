@@ -13,7 +13,7 @@ use text
 TABLES_WIDE = [[4352, 4447], [8986, 8987], [9001, 9002], [9193, 9196], [9200, 9200], [9203, 9203], [9725, 9726], [9748, 9749], [9800, 9811], [9855, 9855], [9875, 9875], [9889, 9889], [9898, 9899], [9917, 9918], [9924, 9925], [9934, 9934], [9940, 9940], [9962, 9962], [9970, 9971], [9973, 9973], [9978, 9978], [9981, 9981], [9989, 9989], [9994, 9995], [10024, 10024], [10060, 10060], [10062, 10062], [10067, 10069], [10071, 10071], [10133, 10135], [10160, 10160], [10175, 10175], [11035, 11036], [11088, 11088], [11093, 11093], [11904, 12350], [12353, 13311], [13312, 19903], [19968, 40959], [40960, 42191], [43360, 43391], [44032, 55203], [63744, 64255], [65040, 65049], [65072, 65103], [65280, 65376], [65504, 65510], [126980, 126980], [127183, 127183], [127374, 127374], [127377, 127386], [127462, 127487], [127488, 127743], [127744, 128591], [128640, 128767], [128992, 129003], [129292, 129535], [129648, 129791], [131072, 196605], [196608, 262141]]
 TABLES_ZERO = [[0, 31], [127, 159], [768, 879], [1155, 1161], [1425, 1469], [1471, 1471], [1473, 1474], [1476, 1477], [1479, 1479], [1552, 1562], [1611, 1631], [1648, 1648], [1750, 1756], [1759, 1764], [1767, 1768], [1770, 1773], [2304, 2306], [2364, 2364], [2369, 2376], [2381, 2381], [3633, 3633], [3636, 3642], [3655, 3662], [4448, 4607], [6832, 6911], [7616, 7679], [8203, 8207], [8232, 8238], [8288, 8292], [8400, 8447], [65024, 65039], [65056, 65071], [65279, 65279], [917504, 917631], [917760, 917999]]
 
-def tables_in(n: int, ranges: list): bool {
+def tables_in(n: int, ranges: list) as bool {
 	for r in ranges {
 		if n < r[0] { return no }
 		if n <= r[1] { return yes }
@@ -21,7 +21,7 @@ def tables_in(n: int, ranges: list): bool {
 	no
 }
 // the columns one character (grapheme) takes
-def char_width(c: any): int {
+def char_width(c: any) as int {
 	points = [ord(p) for p in c.codepoints]
 	base = points[0]
 	if count(points) == 1 and base >= 32 and base < 127 { return 1 }
@@ -30,13 +30,13 @@ def char_width(c: any): int {
 	if count(visible) == 0 { return 0 }
 	if tables_in(visible[0], TABLES_WIDE) then 2 else 1
 }
-def display_width(t: any): int {
+def display_width(t: any) as int {
 	sum = 0
 	for c in text(t) { sum = sum + char_width(c) }
 	sum
 }
 // t cut to at most `width` columns, ending in … when cut; a wide character never splits
-def truncate_display(t: any, width: int): text {
+def truncate_display(t: any, width: int) as text {
 	written = text(t)
 	if display_width(written) <= width { return written }
 	if width <= 0 { return "" }
@@ -51,7 +51,7 @@ def truncate_display(t: any, width: int): text {
 	out + "…"
 }
 // t padded with spaces to `width` columns: align "left", "right" or "center" (its extra space on the right)
-def pad_display(t: any, width: int, align: text): text {
+def pad_display(t: any, width: int, align: text) as text {
 	written = text(t)
 	gap = width - display_width(written)
 	if gap <= 0 { return written }
@@ -60,49 +60,49 @@ def pad_display(t: any, width: int, align: text): text {
 	if align != "left" { raise "pad_display: align is left, right or center, not " + align }
 	written + repeat(" ", gap)
 }
-pad_display(t: any, width: int): text := pad_display(t, width, "left")
+pad_display(t: any, width: int) as text := pad_display(t, width, "left")
 
 // --- tables
 // a plain line without the spaces padding its end
-def tables_spaceless(t: text): text {
+def tables_spaceless(t: text) as text {
 	n = count(t)
 	while n > 0 and t[n - 1] == " " { n = n - 1 }
 	t[0 ..< n]
 }
-tables_option(options: map, name: text, otherwise: any): any := if name in options then options[name] else otherwise
-tables_number(x: any): bool := x != ø and x is number and not (x is bool)
-tables_cell(x: any): text := if x == ø then "" else replace(replace(text(x), "\r\n", " "), "\n", " ")
+tables_option(options: map, name: text, otherwise: any) as any := if name in options then options[name] else otherwise
+tables_number(x: any) as bool := x != ø and x is number and not (x is bool)
+tables_cell(x: any) as text := if x == ø then "" else replace(replace(text(x), "\r\n", " "), "\n", " ")
 // the headers of map rows: their keys in the order first seen
-def tables_keys(rows: list): list {
+def tables_keys(rows: list) as list {
 	keys = []
 	for row in rows { if row != ø and row is map { for k in row.keys { if not (k in keys) { keys.add(k) } } } }
 	keys
 }
-def tables_row(row: any, headers: list, size: int): list {
+def tables_row(row: any, headers: list, size: int) as list {
 	if row != ø and row is map { return [if h in row then row[h] else ø for h in headers] }
 	values = if row == ø then [] else row
 	[if i < count(values) then values[i] else ø for i in 0 ..< size]
 }
 // a column's alignment: the option (one for all, a list by column, a map by header), else right for numbers
-def tables_align(options: map, i: int, header: any, numeric: bool): text {
+def tables_align(options: map, i: int, header: any, numeric: bool) as text {
 	choice = tables_option(options, "align", ø)
 	picked = if choice == ø then ø else if choice is text then choice else if choice is map then (if header in choice then choice[header] else ø) else (if i < count(choice) then choice[i] else ø)
 	if picked != ø then text(picked) else if numeric then "right" else "left"
 }
-def tables_cap(options: map, i: int): int {
+def tables_cap(options: map, i: int) as int {
 	cap = tables_option(options, "max_width", ø)
 	if cap == ø { return 0 }
 	if cap is list { return if i < count(cap) and cap[i] != ø then cap[i] else 0 }
 	cap
 }
-def tables_line(cells: list, widths: list, aligns: list, left: text, middle: text, right: text): text {
+def tables_line(cells: list, widths: list, aligns: list, left: text, middle: text, right: text) as text {
 	parts = [pad_display(cells[i], widths[i], aligns[i]) for i in 0 ..< count(cells)]
 	left + join(parts, middle) + right
 }
-def tables_rule(widths: list, fill: text, left: text, middle: text, right: text): text {
+def tables_rule(widths: list, fill: text, left: text, middle: text, right: text) as text {
 	left + join([repeat(fill, w) for w in widths], middle) + right
 }
-def tables_markdown_rule(widths: list, aligns: list): text {
+def tables_markdown_rule(widths: list, aligns: list) as text {
 	parts = []
 	for i in 0 ..< count(widths) {
 		w = widths[i]
@@ -111,7 +111,7 @@ def tables_markdown_rule(widths: list, aligns: list): text {
 	}
 	"| " + join(parts, " | ") + " |"
 }
-def table_text(rows: list, options: map): text {
+def table_text(rows: list, options: map) as text {
 	style = tables_option(options, "style", "plain")
 	if not (style in ["plain", "box", "markdown"]) { raise "table_text: style is plain, box or markdown, not " + text(style) }
 	given = tables_option(options, "headers", ø)
@@ -164,4 +164,4 @@ def table_text(rows: list, options: map): text {
 	}
 	join(lines, "\n")
 }
-table_text(rows: list): text := table_text(rows, {})
+table_text(rows: list) as text := table_text(rows, {})

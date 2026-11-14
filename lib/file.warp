@@ -14,7 +14,7 @@ appended_by_writing(path: any, text: any) := write(path, (if exists(path) then r
 glob(pattern: any) := try { std_io("file", "glob", [home_expanded(pattern)]) } catch e { glob_listed(home_expanded(pattern)) }
 // the folder's names matching the pattern's last part, sorted; * and ? match no leading dot unless the part starts with
 // one (python's glob); a folder that isn't there has none
-glob_listed(pattern: text): list := {
+glob_listed(pattern: text) as list := {
 	folder = dirname(pattern)
 	part = basename(pattern)
 	names = try { list_files(folder) } catch e { [] }
@@ -33,16 +33,16 @@ global temp_folder(): text := {
 }
 // `temp_file()`, `temp_dir()`: the path of a new empty file, folder in temp_folder(), named as no file there is yet;
 // made by the file words, so natively and in the page alike
-temp_file(): text := { path = fresh_temp_path(); write(path, ""); path }
-temp_dir(): text := { path = fresh_temp_path(); ensured_folder(path); path }
+temp_file() as text := { path = fresh_temp_path(); write(path, ""); path }
+temp_dir() as text := { path = fresh_temp_path(); ensured_folder(path); path }
 TEMP_PREFIX = "warp-"
 TEMP_NAMES = 1000000000
-fresh_temp_path(): text := {
+fresh_temp_path() as text := {
 	path = temp_named()
 	while exists(path) { path = temp_named() }
 	path
 }
-temp_named(): text := path_join(temp_folder(), TEMP_PREFIX + text(random_below(TEMP_NAMES)))
+temp_named() as text := path_join(temp_folder(), TEMP_PREFIX + text(random_below(TEMP_NAMES)))
 // `delete_file(~/old.txt)`: the file removed, yes when it was there; natively C's unlink through the 'c' library
 // (lib/c.warp), so a page, which has no C library, has no delete_file yet
 unlink(path: text): i32 from 'c'
@@ -61,10 +61,10 @@ global delete(path: any) := {
 	}
 }
 // the program file this run was started from (the program option), "" when none (inline code / some playground snippets)
-program_file(): text := run_option("program") ?? ""
+program_file() as text := run_option("program") ?? ""
 // the folder holding the program file (decision play-mozart-mp3, source-dir-words): same place $dir and ^/ name
 // at compile time; the working folder when there is no program file
-program_folder(): text := {
+program_folder() as text := {
 	file = program_file()
 	if file == "" then std_io("os", "cwd", []) else dirname(file)
 }
@@ -90,7 +90,7 @@ global remove_file(path: any) := {
 		trashed(absolute, no)
 	}
 }
-removal_refusal(path: text): text := {
+removal_refusal(path: text) as text := {
 	trimmed = path_trimmed(path)
 	if trimmed == "" or trimmed == "/" { return "file.remove: refusing to remove " + (if trimmed == "" then "an empty path" else trimmed) }
 	home = path_trimmed(text(std_io("os", "env", ["HOME"]) ?? ""))
@@ -100,15 +100,15 @@ removal_refusal(path: text): text := {
 	if work.starts_with(trimmed + "/") { return "file.remove: refusing to remove a folder above the working directory" }
 	""
 }
-absolute_path(path: text): text := normalize_path(if path.starts_with("/") then path else path_join(text(std_io("os", "cwd", [])), path))
-folder_path(path: text): bool := try { list_files(path) is list } catch e { no }
+absolute_path(path: text) as text := normalize_path(if path.starts_with("/") then path else path_join(text(std_io("os", "cwd", [])), path))
+folder_path(path: text) as bool := try { list_files(path) is list } catch e { no }
 // ~/.Trash on macOS (files go straight in); else the FreeDesktop trash under ~/.local/share/Trash
-trash_files_folder(): text := {
+trash_files_folder() as text := {
 	home = text(std_io("os", "env", ["HOME"]) ?? "")
 	mac = home + "/.Trash"
 	if exists(mac) then mac else home + "/.local/share/Trash/files"
 }
-trash_info_folder(): text := {
+trash_info_folder() as text := {
 	files = trash_files_folder()
 	if files.ends_with("/.Trash") then "" else path_join(dirname(files), "info")
 }
@@ -137,14 +137,14 @@ trashed(path: text, folder: bool) := {
 		write(path_join(info, name + ".trashinfo"), "[Trash Info]\nPath=" + path + "\nDeletionDate=" + trash_deletion_date() + "\n")
 	}
 }
-trash_name(files: text, base: text): text := {
+trash_name(files: text, base: text) as text := {
 	if not exists(path_join(files, base)) { return base }
 	n = 1
 	while exists(path_join(files, base + "." + text(n))) { n = n + 1 }
 	base + "." + text(n)
 }
 // FreeDesktop DeletionDate: UTC YYYY-MM-DDThh:mm:ss from clock() milliseconds
-trash_deletion_date(): text := {
+trash_deletion_date() as text := {
 	ms = clock()
 	secs = ms /! 1000
 	days = secs /! 86400
@@ -156,9 +156,9 @@ trash_deletion_date(): text := {
 	y_m_d = civil_from_days(days)
 	pad(y_m_d#1, 4) + "-" + pad(y_m_d#2, 2) + "-" + pad(y_m_d#3, 2) + "T" + pad(hours, 2) + ":" + pad(mins, 2) + ":" + pad(secs, 2)
 }
-pad(n: int, width: int): text := { t = text(n); while #t < width { t = "0" + t }; t }
+pad(n: int, width: int) as text := { t = text(n); while #t < width { t = "0" + t }; t }
 // Howard Hinnant's civil_from_days: days since 1970-01-01 → [year, month, day]
-civil_from_days(z: int): list := {
+civil_from_days(z: int) as list := {
 	z = z + 719468
 	era = (if z >= 0 then z else z - 146096) /! 146097
 	doe = z - era * 146097

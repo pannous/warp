@@ -53,7 +53,7 @@ shapes = {
 }
 
 // the names a scene mentions: a text `{car, tree, tree}` (or `car tree tree`), or a list of names
-scene_names(things: any): list := {
+scene_names(things: any) as list := {
 	if things is list { return things.map(t => text(t)) }
 	words = parse(if text(things).starts_with("{") then text(things) else "{" + text(things) + "}")
 	out = []
@@ -62,14 +62,14 @@ scene_names(things: any): list := {
 }
 
 // the thing a name stands for: itself, or a family's member picked at random
-scene_kind(name: text): text := {
+scene_kind(name: text) as text := {
 	if name in natural_sizes { return name }
 	if name in families { return choice(families[name]) }
 	raise "scene: no thing named " + name + " (things: " + text(natural_sizes.keys()) + ", families: " + text(families.keys()) + ")"
 }
 
 // every thing of a scene placed: [{name, kind, size, color, position}], side by side along x on the ground
-scene(things: any): list := {
+scene(things: any) as list := {
 	kinds = scene_names(things).map(name => [name, scene_kind(name)])
 	width = 0
 	for k in kinds { width = width + natural_sizes[k#2]#1#1 }
@@ -85,7 +85,7 @@ scene(things: any): list := {
 }
 
 // the corners of the boxes a placed thing is made of: [[low corner], [high corner]] in meters
-scene_boxes(thing: any): list := {
+scene_boxes(thing: any) as list := {
 	parts = if thing.kind in shapes then shapes[thing.kind] else [[-0.5, 0, -0.5, 0.5, 1, 0.5]]
 	s = thing.size
 	p = thing.position
@@ -93,7 +93,7 @@ scene_boxes(thing: any): list := {
 }
 
 // a box's twelve triangles, three corners each, wound counter-clockwise seen from outside
-box_triangles(low: list, high: list): list := {
+box_triangles(low: list, high: list) as list := {
 	c = [low, [high#1, low#2, low#3], [high#1, high#2, low#3], [low#1, high#2, low#3], [low#1, low#2, high#3], [high#1, low#2, high#3], high, [low#1, high#2, high#3]]
 	faces = [[1, 4, 3, 2], [5, 6, 7, 8], [1, 5, 8, 4], [2, 3, 7, 6], [1, 2, 6, 5], [4, 8, 7, 3]]
 	out = []
@@ -102,14 +102,14 @@ box_triangles(low: list, high: list): list := {
 }
 
 // the triangles of a whole scene, three corners [x, y, z] a triangle
-scene_triangles(placed: list): list := {
+scene_triangles(placed: list) as list := {
 	out = []
 	for thing in placed { for b in scene_boxes(thing) { out = out + box_triangles(b#1, b#2) } }
 	out
 }
 
 // [low corner, high corner] around every thing of a scene
-scene_bounds(placed: list): list := {
+scene_bounds(placed: list) as list := {
 	low = [0, 0, 0]
 	high = [0, 0, 0]
 	for thing in placed {
@@ -125,7 +125,7 @@ scene_bounds(placed: list): list := {
 
 // where a camera stands to see the whole scene through a 90° view: in front of it (+z), a little above, looking at its
 // centre
-scene_camera(placed: list): list := {
+scene_camera(placed: list) as list := {
 	b = scene_bounds(placed)
 	span = max(b#2#1 - b#1#1, b#2#2 - b#1#2)
 	[(b#1#1 + b#2#1) / 2, (b#2#2 - b#1#2) / 2 + span * 0.25, b#2#3 + span * 0.75 + 2]

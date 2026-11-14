@@ -10,4 +10,4 @@ class WikiChanges extends Streamed {
 }
 
 // the recent changes of one wiki ("enwiki", "dewiki", "wikidatawiki" …), of all of them by default
-changes(wiki: text = ""): WikiChanges := WikiChanges(url: RECENT_CHANGES, wiki: wiki)
+changes(wiki: text = "") as WikiChanges := WikiChanges(url: RECENT_CHANGES, wiki: wiki)

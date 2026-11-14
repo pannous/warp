@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
 # A bound field inside a component: each Greeter keeps its own name, so typing into one
 # changes only its greeting. Run it in the playground, or `warp samples/web/component_binding.warp` for its HTML.
-def Greeter(start): html {
+def Greeter(start) as html {
 	name = start
 	div{ input{ bind: name aria-label: "name" } p{ "Hi " + name } }
 }

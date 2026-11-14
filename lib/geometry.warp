@@ -159,7 +159,7 @@ global polygon_centroid(polygon: list): list := {
 }
 
 // p on the segment a-b (within the tolerance)
-def geo_on_segment(p: list, a: list, b: list): bool {
+def geo_on_segment(p: list, a: list, b: list) as bool {
 	cr = vec_cross2(vec_sub(b, a), vec_sub(p, a))
 	if abs(cr) > GEO_EPSILON * (1 + vec_norm(vec_sub(b, a))) { return no }
 	p#1 >= min(a#1, b#1) - GEO_EPSILON and p#1 <= max(a#1, b#1) + GEO_EPSILON and p#2 >= min(a#2, b#2) - GEO_EPSILON and p#2 <= max(a#2, b#2) + GEO_EPSILON
@@ -210,9 +210,9 @@ global segment_intersection(a: list, b: list, c: list, d: list): any := {
 	vec_add(a, vec_scale(r, t))
 }
 
-def geo_before(p: list, q: list): bool := p#1 < q#1 or (p#1 == q#1 and p#2 < q#2)
+def geo_before(p: list, q: list) as bool := p#1 < q#1 or (p#1 == q#1 and p#2 < q#2)
 
-def geo_sorted(points: list): list {
+def geo_sorted(points: list) as list {
 	if count(points) <= 1 { return points }
 	half = count(points) /! 2
 	left = geo_sorted(points[0 ..< half])
@@ -227,7 +227,7 @@ def geo_sorted(points: list): list {
 	out
 }
 
-def geo_turn(o: list, a: list, b: list): number := (a#1 - o#1) * (b#2 - o#2) - (a#2 - o#2) * (b#1 - o#1)
+def geo_turn(o: list, a: list, b: list) as number := (a#1 - o#1) * (b#2 - o#2) - (a#2 - o#2) * (b#1 - o#1)
 
 global convex_hull(points: list): list := {
 	for p in points { geo_dims("convex_hull", p, 2) }

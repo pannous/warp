@@ -16,15 +16,15 @@ commands = {
 	clear: {help: "remove every todo", options: []}
 }
 # a mistake on the command line is shown with the help, never a trace
-parsed(argv: list): map := try { parse_commands(options, commands, argv) } catch e { print(e.message); {help: yes, command: ø} }
+parsed(argv: list) as map := try { parse_commands(options, commands, argv) } catch e { print(e.message); {help: yes, command: ø} }
 
 given = if count(args) > 0 then parsed(args) else {help: no, command: ø}
 store = given.get("file") ?? temp_folder() + "/warp_todo_demo.json"
 
-load(): list := if exists(store) then parse_json(read(store)) else []
+load() as list := if exists(store) then parse_json(read(store)) else []
 keep(items: list) := write(store, to_json(items))
 
-next_id(items: list): int := if count(items) == 0 then 1 else max([item.id for item in items]) + 1
+next_id(items: list) as int := if count(items) == 0 then 1 else max([item.id for item in items]) + 1
 
 # (named add_todo: a program word named add breaks lib/json)
 add_todo(title: text) := {

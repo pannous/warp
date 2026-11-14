@@ -18,12 +18,12 @@ commands = {
 	list: {help: "show every key", options: [{name: "format", choices: ["lines", "keys", "json"], default: "lines"}]}
 }
 # a mistake on the command line is shown as its message, never a trace
-parsed(argv: list): map := try { parse_commands(options, commands, argv) } catch e { print(e.message); {help: no, command: ø} }
+parsed(argv: list) as map := try { parse_commands(options, commands, argv) } catch e { print(e.message); {help: no, command: ø} }
 
 given = if count(args) > 0 then parsed(args) else {help: no, command: ø}
 store = given.get("file") ?? temp_folder() + "/warp_settings_demo.json"
 
-load(): map := if exists(store) then parse_json(read(store)) else {user: {}, project: {}}
+load() as map := if exists(store) then parse_json(read(store)) else {user: {}, project: {}}
 keep(all: map) := write(store, to_json(all))
 
 set_key(scope: text, key: text, value: text) := {

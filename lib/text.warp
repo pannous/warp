@@ -14,21 +14,21 @@ public format(template, values) := {
 	result
 }
 // the words between runs of whitespace: spaces, tabs, newlines (Python's split())
-words(t: text): list := [w for w in split(join([if not is_space(c) then c else " " for c in t], ""), " ") if w]
-lines(t: text): list := [remove_suffix(l, chr(13)) for l in split(t, "\n")]
+words(t: text) as list := [w for w in split(join([if not is_space(c) then c else " " for c in t], ""), " ") if w]
+lines(t: text) as list := [remove_suffix(l, chr(13)) for l in split(t, "\n")]
 // the letters of a text, no digits, spaces or punctuation: letters of "a1 b!" is ['a' 'b'] (decision 2026-10-15),
 // of any script: letters of "x، ب٣" is ['x' 'ب']
-letters(t): list := [c for c in chars(t) if is_unicode_letter(c)]
+letters(t) as list := [c for c in chars(t) if is_unicode_letter(c)]
 // whether c is a letter of any script, cased or not (Unicode's letter categories): `q`, `é`, `ا`, `名`; no digit, mark
 // or punctuation. is_alpha stays ASCII's a–z and A–Z
-is_unicode_letter(c): bool := {
+is_unicode_letter(c) as bool := {
 	code = ord(c)
 	if code < 128 { return is_alpha(c) }
 	range_index = letter_range_before(code)
 	range_index >= 0 and code <= letter_ranges[range_index * 2 + 1]
 }
 // the last letter range (lib/letter_ranges.warp) starting at or before code, by halving; -1 when none does
-letter_range_before(code: int): int := {
+letter_range_before(code: int) as int := {
 	low = 0
 	high = count(letter_ranges) /! 2
 	while low < high {
@@ -39,10 +39,10 @@ letter_range_before(code: int): int := {
 }
 public capitalize(t) := if t is empty then t else upper(t[0]) + t[1..]
 public center(t, width) := pad_right(pad_left(t, (width + count(t)) /! 2), width)
-title(t): text := join([capitalize(w) for w in words(t)], " ")
+title(t) as text := join([capitalize(w) for w in words(t)], " ")
 public truncate(t, width) := if width < 1 then raise "truncate needs a width of at least 1, not " + text(width) else if count(t) <= width then t else t[0 ..< width - 1] + "…"
 // UTF-8: a text as its bytes, and bytes back as a text (Rust's String::from_utf8, string.from_utf8)
-def to_utf8(t: text): list {
+def to_utf8(t: text) as list {
 	out = []
 	for c in t.codepoints {
 		n = ord(c)
@@ -55,7 +55,7 @@ def to_utf8(t: text): list {
 }
 
 // bytes → text; UFCS `string.from_utf8(bytes)` arrives as from_utf8(string, bytes) — ignore the owner
-def from_utf8_bytes(bytes: any): text {
+def from_utf8_bytes(bytes: any) as text {
 	out = ""
 	i = 0
 	total = count(bytes)
@@ -80,37 +80,37 @@ def from_utf8_bytes(bytes: any): text {
 from_utf8(bytes) := from_utf8_bytes(bytes)
 from_utf8(owner, bytes) := from_utf8_bytes(bytes)
 // only spaces, tabs and line breaks, or nothing
-is_blank(t): bool := trim(t) is empty
+is_blank(t) as bool := trim(t) is empty
 // has letters, all upper (or lower) case
-is_upper(t): bool := upper(t) == t and lower(t) != t
-is_lower(t): bool := lower(t) == t and upper(t) != t
+is_upper(t) as bool := upper(t) == t and lower(t) != t
+is_lower(t) as bool := lower(t) == t and upper(t) != t
 remove_prefix(t, prefix) := if starts_with(t, prefix) then t[count(prefix):] else t
 remove_suffix(t, suffix) := if ends_with(t, suffix) then t[0: count(t) - count(suffix)] else t
-is_palindrome(t): bool := { s = lower(join([c for c in t if is_alphanumeric(c)], "")); s == reverse(s) }
-word_count(t): int := count(words(t))
+is_palindrome(t) as bool := { s = lower(join([c for c in t if is_alphanumeric(c)], "")); s == reverse(s) }
+word_count(t) as int := count(words(t))
 // each line indented by n spaces
-indent(t, n): text := join([n times " " + line for line in lines(t)], "\n")
+indent(t, n) as text := join([n times " " + line for line in lines(t)], "\n")
 // a whole or decimal number, optionally signed: "12.5", "-3"
-is_numeric(t): bool := { parts = split(remove_prefix(trim(t), "-"), "."); if count(parts) > 2 { return false }; for p in parts { if p is empty { return false }; for c in p { if not is_digit(c) { return false } } }; true }
+is_numeric(t) as bool := { parts = split(remove_prefix(trim(t), "-"), "."); if count(parts) > 2 { return false }; for p in parts { if p is empty { return false }; for c in p { if not is_digit(c) { return false } } }; true }
 // the text between the first opening and the next closing after it, "" when either is missing
 between(t, opening, closing) := { from = index_of(t, opening); if from == 0 { return "" }; rest = t[from - 1 + count(opening):]; to = index_of(rest, closing); if to == 0 then "" else rest[0: to - 1] }
 // the words in lines of at most width characters
-wrap(t, width): text := { out = []; line = ""; for w in words(t) { if line is empty { line = w } else if count(line) + 1 + count(w) <= width { line = line + " " + w } else { out = out + [line]; line = w } }; if line { out = out + [line] }; join(out, "\n") }
+wrap(t, width) as text := { out = []; line = ""; for w in words(t) { if line is empty { line = w } else if count(line) + 1 + count(w) <= width { line = line + " " + w } else { out = out + [line]; line = w } }; if line { out = out + [line] }; join(out, "\n") }
 // a reading position in a text, for scanners and parsers: `c = Cursor("ab12"); c.take_while(is_letter)` is "ab",
 // then `c.peek()` is '1'; `at` counts the characters read (an index)
 class Cursor { source: text; at = 0
-	at_end(): bool := at >= count(source)
+	at_end() as bool := at >= count(source)
 	peek() := source[at]
 	advance() := { taken = source[at]; at += 1; taken }
-	looking_at(part): bool := source[at : min(at + count(part), count(source))] == part
-	skip(part): bool := { if looking_at(part) { at += count(part); return true }; false }
+	looking_at(part) as bool := source[at : min(at + count(part), count(source))] == part
+	skip(part) as bool := { if looking_at(part) { at += count(part); return true }; false }
 	take_while(ok: function) := { start = at; while at < count(source) and ok(source[at]) { at += 1 }; source[start : at] }
-	skip_while(ok): int := count(take_while(ok))
+	skip_while(ok) as int := count(take_while(ok))
 	rest() := source[at : count(source)]
 }
 // the Levenshtein distance: the fewest one-character inserts, deletes and replacements from a to b, by characters:
 // edit_distance("kitten", "sitting") is 3, edit_distance("café", "cafe") is 1
-def edit_distance(a: text, b: text): int {
+def edit_distance(a: text, b: text) as int {
 	xs = [c for c in a]
 	ys = [c for c in b]
 	row = [j for j in 0 to count(ys)]
@@ -125,11 +125,11 @@ def edit_distance(a: text, b: text): int {
 	row[count(ys)]
 }
 // the leading spaces and tabs of a line
-indentation(line: text): text := { n = 0; while n < count(line) and (line[n] == " " or line[n] == "\t") { n = n + 1 }; line[0 ..< n] }
+indentation(line: text) as text := { n = 0; while n < count(line) and (line[n] == " " or line[n] == "\t") { n = n + 1 }; line[0 ..< n] }
 // the longest start two texts share
-common_start(a: text, b: text): text := { n = 0; while n < count(a) and n < count(b) and a[n] == b[n] { n = n + 1 }; a[0 ..< n] }
+common_start(a: text, b: text) as text := { n = 0; while n < count(a) and n < count(b) and a[n] == b[n] { n = n + 1 }; a[0 ..< n] }
 // without the leading whitespace all its non-blank lines share (Python's textwrap.dedent); blank lines become empty
-def dedent(t: text): text {
+def dedent(t: text) as text {
 	margin = nil
 	for line in lines(t) { if not is_blank(line) { margin = if margin == nil then indentation(line) else common_start(margin, indentation(line)) } }
 	cut = if margin == nil then 0 else count(margin)
@@ -139,7 +139,7 @@ def dedent(t: text): text {
 // Number formatting (card lib-stats-format)
 // format_number(1234567.89) is "1,234,567.89": commas between groups of three whole digits, the sign and the fraction kept
 // as text gives them (no rounding); format_number(-1234) is "-1,234"
-format_number(n: any): text := {
+format_number(n: any) as text := {
 	s = "" + n
 	sign = ""
 	whole = ""
@@ -155,7 +155,7 @@ format_number(n: any): text := {
 }
 // ordinalize(n): "1st" "2nd" "3rd" "4th" "11th" "12th" "13th" "21st" "101st" "111th"; a whole number >= 1, else refused.
 // Not named ordinal: the prelude's ordinal is ord, the codepoint of a character
-ordinalize(n: any): text := {
+ordinalize(n: any) as text := {
 	if not (n is int) or n < 1 { raise "ordinalize needs a whole number >= 1" }
 	suffix = "th"
 	if n % 100 < 11 or n % 100 > 13 {
@@ -167,7 +167,7 @@ ordinalize(n: any): text := {
 }
 // human_size(bytes): decimal SI units, 1000 a step (B KB MB GB TB PB), as disks and networks count: 1500000 is "1.5 MB",
 // 1536 is "1.5 KB"; one decimal rounded half up, a .0 dropped ("2 KB"); under 1000 whole bytes ("999 B"); negatives refused
-human_size(bytes: any): text := {
+human_size(bytes: any) as text := {
 	if bytes < 0 { raise "human_size needs bytes >= 0" }
 	units = ["B", "KB", "MB", "GB", "TB", "PB"]
 	if bytes < 1000 { return "" + int(bytes) + " B" }

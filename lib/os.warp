@@ -39,7 +39,7 @@ cwd() := std_io("os", "cwd", [])
 // `command("ls | wc -l")`: a shell command line run by sh, what it printed; the explicit opt-in to text as shell
 command(line: any) := std_io("os", "command", [line])
 // a path as one word of a command line: `command("wc -l " + quoted_path(file))`
-quoted_path(path: text): text := "'" + path.replace("'", "'\\''") + "'"
+quoted_path(path: text) as text := "'" + path.replace("'", "'\\''") + "'"
 // a line typed on standard input (without its line end), ø at the input's end; input("name? ") shows the prompt first
 input() := std_io("os", "input", [])
 input(prompt: any) := std_io("os", "input", [prompt])
@@ -50,7 +50,7 @@ stdin() := std_io("os", "stdin", [])
 // one the program started with
 setenv(name: text, value: text, overwrite: i32): i32 from 'c'
 global variables_set = {}
-setenv(name: any, value: any): bool := {
+setenv(name: any, value: any) as bool := {
 	variables_set[text(name)] = text(value)
 	setenv(text(name), text(value), 1) == 0
 }

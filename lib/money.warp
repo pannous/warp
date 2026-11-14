@@ -14,27 +14,27 @@ use math
 MONEY_CURRENCIES = [["AED", 2, "AED"], ["ARS", 2, "ARS"], ["AUD", 2, "A$"], ["BGN", 2, "BGN"], ["BHD", 3, "BHD"], ["BRL", 2, "R$"], ["CAD", 2, "CA$"], ["CHF", 2, "CHF"], ["CLF", 4, "CLF"], ["CLP", 0, "CLP"], ["CNY", 2, "CN¥"], ["COP", 2, "COP"], ["CZK", 2, "CZK"], ["DKK", 2, "DKK"], ["EGP", 2, "EGP"], ["EUR", 2, "€"], ["GBP", 2, "£"], ["HKD", 2, "HK$"], ["HUF", 2, "HUF"], ["IDR", 2, "IDR"], ["ILS", 2, "₪"], ["INR", 2, "₹"], ["IQD", 3, "IQD"], ["ISK", 0, "ISK"], ["JOD", 3, "JOD"], ["JPY", 0, "¥"], ["KRW", 0, "₩"], ["KWD", 3, "KWD"], ["LYD", 3, "LYD"], ["MXN", 2, "MX$"], ["MYR", 2, "MYR"], ["NGN", 2, "NGN"], ["NOK", 2, "NOK"], ["NZD", 2, "NZ$"], ["OMR", 3, "OMR"], ["PHP", 2, "PHP"], ["PKR", 2, "PKR"], ["PLN", 2, "PLN"], ["RON", 2, "RON"], ["RUB", 2, "RUB"], ["SAR", 2, "SAR"], ["SEK", 2, "SEK"], ["SGD", 2, "SGD"], ["THB", 2, "THB"], ["TND", 3, "TND"], ["TRY", 2, "TRY"], ["TWD", 2, "NT$"], ["UAH", 2, "UAH"], ["USD", 2, "$"], ["UYI", 0, "UYI"], ["UYW", 4, "UYW"], ["VND", 0, "₫"], ["XAF", 0, "FCFA"], ["XOF", 0, "F CFA"], ["ZAR", 2, "ZAR"]]
 MONEY_LIMIT = 4611686018427387904
 
-def currency_info(code: text): list {
+def currency_info(code: text) as list {
 	for c in MONEY_CURRENCIES { if c[0] == upper(code) { return c } }
 	raise "money: " + code + " is no ISO 4217 currency of lib/money.warp"
 }
-currency_minor_units(code: text): int := currency_info(code)[1]
-currency_symbol(code: text): text := currency_info(code)[2]
-money_ten(n: int): int := { p = 1; for i in 0 ..< n { p = p * 10 }; p }
+currency_minor_units(code: text) as int := currency_info(code)[1]
+currency_symbol(code: text) as text := currency_info(code)[2]
+money_ten(n: int) as int := { p = 1; for i in 0 ..< n { p = p * 10 }; p }
 
 // --- exact int arithmetic that refuses to wrap
-def money_sum(a: int, b: int): int {
+def money_sum(a: int, b: int) as int {
 	r = a + b
 	if (a > 0 and b > 0 and r < 0) or (a < 0 and b < 0 and r >= 0) or r >= MONEY_LIMIT or r <= -MONEY_LIMIT { raise "money: " + text(a) + " + " + text(b) + " minor units is too large" }
 	r
 }
-def money_product(a: int, b: int): int {
+def money_product(a: int, b: int) as int {
 	r = a * b
 	if a != 0 and (r /! a != b or r >= MONEY_LIMIT or r <= -MONEY_LIMIT) { raise "money: " + text(a) + " × " + text(b) + " minor units is too large" }
 	r
 }
 // n / d (d > 0) as an int by a rounding mode
-def money_divide(n: int, d: int, mode: text): int {
+def money_divide(n: int, d: int, mode: text) as int {
 	if d <= 0 { raise "money: divide by " + text(d) }
 	if not (mode in ["half_even", "half_up", "down", "up"]) { raise "money: the rounding mode is half_even, half_up, down or up, not " + mode }
 	q = n /! d
@@ -48,25 +48,25 @@ def money_divide(n: int, d: int, mode: text): int {
 	raise "money: the rounding mode is half_even, half_up, down or up, not " + mode
 }
 // a number as [numerator, denominator]: an int or a fraction; a float raises, it is not exact
-def money_ratio(x: any): list {
+def money_ratio(x: any) as list {
 	kind = type(x).name
 	if kind != "rational" and kind != "float" and x is int { return [x, 1] }
 	if kind == "rational" { return [x.numerator, x.denominator] }
 	raise "money: " + text(x) + " is a " + kind + ", not an exact number: write it as an int or a fraction (0.1, 1/3)"
 }
 // an amount as [numerator, denominator]: a decimal text or an exact number
-money_amount_ratio(amount: any): list := if amount is text then money_text_ratio(amount) else money_ratio(amount)
+money_amount_ratio(amount: any) as list := if amount is text then money_text_ratio(amount) else money_ratio(amount)
 
 class Money {
 	minor: int
 	currency: text
-	plus(o: any): Money := Money(money_sum(minor, money_same(currency, o, "+").minor), currency)
-	minus(o: any): Money := Money(money_sum(minor, -money_same(currency, o, "-").minor), currency)
-	times(k: any): Money := money_times(Money(minor, currency), k, "half_even")
-	equals(o: any): bool := o is Money and o.minor == minor and o.currency == currency
+	plus(o: any) as Money := Money(money_sum(minor, money_same(currency, o, "+").minor), currency)
+	minus(o: any) as Money := Money(money_sum(minor, -money_same(currency, o, "-").minor), currency)
+	times(k: any) as Money := money_times(Money(minor, currency), k, "half_even")
+	equals(o: any) as bool := o is Money and o.minor == minor and o.currency == currency
 	# (should this ever clash with a linked module's compare again, core/emitter/prebuilt.warp held_by: rename or drop it)
-	compare(o: any): int := minor - money_same(currency, o, "compared with").minor
-	text(): text := currency + " " + money_decimal(minor, currency_minor_units(currency), ".", "")
+	compare(o: any) as int := minor - money_same(currency, o, "compared with").minor
+	text() as text := currency + " " + money_decimal(minor, currency_minor_units(currency), ".", "")
 }
 def money_same(currency: text, o: any, operation: text) {
 	if not (o is Money) { raise "money: " + operation + " needs two Money amounts, not " + text(o) }
@@ -98,7 +98,7 @@ def money_of(amount: any, code: text) {
 	Money(scaled /! r[1], upper(code))
 }
 // "-12.345" as [-12345, 1000]
-def money_text_ratio(t: text): list {
+def money_text_ratio(t: text) as list {
 	s = trim(t)
 	negative = s.starts_with("-")
 	if negative or s.starts_with("+") { s = s[1 ..< count(s)] }
@@ -119,7 +119,7 @@ def money_round(m: any, places: int, mode: text) {
 // --- sharing
 // the parts of m in proportion to ratios (ints or fractions, none negative), by largest remainders: the floor of each
 // share, then the cents left one each to the largest remainders, the earlier first on a tie
-def money_allocate(m: any, ratios: list): list {
+def money_allocate(m: any, ratios: list) as list {
 	if count(ratios) == 0 { raise "money: allocate needs at least one ratio" }
 	pairs = [money_ratio(r) for r in ratios]
 	common = 1
@@ -149,11 +149,11 @@ def money_allocate(m: any, ratios: list): list {
 	}
 	[Money(s * sign, m.currency) for s in shares]
 }
-money_split(m: any, n: int): list := money_allocate(m, [1 for i in 0 ..< n])
+money_split(m: any, n: int) as list := money_allocate(m, [1 for i in 0 ..< n])
 
 // --- text
 // minor units as a decimal: digits grouped by threes with `group`, the fraction after `point`
-def money_decimal(minor: int, places: int, point: text, group: text): text {
+def money_decimal(minor: int, places: int, point: text, group: text) as text {
 	n = if minor < 0 then -minor else minor
 	step = money_ten(places)
 	whole = text(n /! step)
@@ -167,12 +167,12 @@ def money_decimal(minor: int, places: int, point: text, group: text): text {
 	(if minor < 0 then "-" else "") + grouped + (if places > 0 then point + fraction else "")
 }
 // a symbol of letters only (BHD, FCFA) is written apart from the number, $ and CA$ before it
-def money_word_symbol(symbol: text): bool {
+def money_word_symbol(symbol: text) as bool {
 	for c in symbol { if not (c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ ") { return no } }
 	yes
 }
 // "en": €1,234.56, -€1,234.56, BHD 1,234.567; "de": 1.234,56 €, -1.234,56 €
-def money_format(m: any, style: text): text {
+def money_format(m: any, style: text) as text {
 	places = currency_minor_units(m.currency)
 	symbol = currency_symbol(m.currency)
 	sign = if m.minor < 0 then "-" else ""
@@ -183,10 +183,10 @@ def money_format(m: any, style: text): text {
 	if style == "de" { return money_decimal(m.minor, places, ",", ".") + " " + symbol }
 	raise "money_format: the style is en or de, not " + style
 }
-money_format(m: any): text := money_format(m, "en")
+money_format(m: any) as text := money_format(m, "en")
 
 // the currency an amount text names, longest symbol or code first: [code, the text without it]
-def money_currency_in(t: text): list {
+def money_currency_in(t: text) as list {
 	best = ""
 	code = ""
 	for c in MONEY_CURRENCIES {
@@ -199,7 +199,7 @@ def money_currency_in(t: text): list {
 // separators when not given: both . and , the last is the point; one of them twice or more a grouping; once followed
 // by exactly three digits a grouping unless the currency has three decimals. Options: {style: "en" or "de",
 // currency: "EUR"} for a text naming none
-def money_parse(t: text, options: map): any {
+def money_parse(t: text, options: map) as any {
 	found = money_currency_in(t)
 	code = if found[0] != "" then found[0] else (if "currency" in options then upper(options["currency"]) else raise "money_parse: " + t + " names no currency; pass {currency: …}")
 	places = currency_minor_units(code)
@@ -221,8 +221,8 @@ def money_parse(t: text, options: map): any {
 	n = money_product(int("0" + parts[0]), money_ten(places)) + int("0" + fraction)
 	Money(if negative then -n else n, code)
 }
-money_parse(t: text): any := money_parse(t, {"style_auto": yes})
-def money_style_of(s: text, places: int): text {
+money_parse(t: text) as any := money_parse(t, {"style_auto": yes})
+def money_style_of(s: text, places: int) as text {
 	dot = 0
 	comma = 0
 	last_mark = ""

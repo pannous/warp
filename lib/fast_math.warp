@@ -9,8 +9,8 @@
 //   atan2        3e-12 radians
 use machine_math
 
-sin(x: float): float := fast_sin(x)
-cos(x: float): float := fast_cos(x)
-exp(x: float): float := fast_exp(x)
-pow(base: float, exponent: float): float := fast_pow(base, exponent)
-atan2(y: float, x: float): float := fast_atan2(y, x)
+sin(x: float) as float := fast_sin(x)
+cos(x: float) as float := fast_cos(x)
+exp(x: float) as float := fast_exp(x)
+pow(base: float, exponent: float) as float := fast_pow(base, exponent)
+atan2(y: float, x: float) as float := fast_atan2(y, x)

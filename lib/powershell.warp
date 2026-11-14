@@ -6,48 +6,48 @@
 use tables
 
 // Where-Object: the records the condition keeps
-where_object(records: list, condition: any): list := records.filter(condition)
+where_object(records: list, condition: any) as list := records.filter(condition)
 // ForEach-Object: each record made something else
-foreach_object(records: list, f: any): list := records.map(f)
+foreach_object(records: list, f: any) as list := records.map(f)
 // Select-Object Name, CPU: each record with only these properties, in this order (a missing one ø, as PowerShell's $null)
-select_object(records: list, properties...): list := records.map(record => powershell_selected(record, properties))
-powershell_selected(record: any, properties: list): map := {
+select_object(records: list, properties...) as list := records.map(record => powershell_selected(record, properties))
+powershell_selected(record: any, properties: list) as map := {
 	selected = {}
 	for property in properties { selected[property] = if record.has(property) then record[property] else ø }
 	selected
 }
 // Select-Object -First n, -Last n, -Skip n, -Unique
-select_first(records: list, n: int): list := records[0 ..< min(n, #records)]
-select_last(records: list, n: int): list := records[max(0, #records - n) ..< #records]
-select_skip(records: list, n: int): list := records[min(n, #records) ..< #records]
-select_unique(records: list): list := {
+select_first(records: list, n: int) as list := records[0 ..< min(n, #records)]
+select_last(records: list, n: int) as list := records[max(0, #records - n) ..< #records]
+select_skip(records: list, n: int) as list := records[min(n, #records) ..< #records]
+select_unique(records: list) as list := {
 	seen = []
 	for record in records { if record not in seen { seen += [record] } }
 	seen
 }
 // Sort-Object CPU [-Descending]: by a property's value, ties in their order (descending: reversed, as without -Stable)
-sort_object(records: list, property: text): list := sort(records, by: record => record[property])
-sort_object_descending(records: list, property: text): list := sort_object(records, property).reverse()
+sort_object(records: list, property: text) as list := sort(records, by: record => record[property])
+sort_object_descending(records: list, property: text) as list := sort_object(records, property).reverse()
 // Group-Object Country: one record a value, in order of appearance: {name, count, group}, as PowerShell's GroupInfo
-group_object(records: list, property: text): list := {
+group_object(records: list, property: text) as list := {
 	names = []
 	for record in records { if record[property] not in names { names += [record[property]] } }
 	names.map(name => powershell_group(name, records.filter(record => record[property] == name)))
 }
-powershell_group(name: any, group: list): map := {name: name, count: #group, group: group}
+powershell_group(name: any, group: list) as map := {name: name, count: #group, group: group}
 // Measure-Object CPU -Sum -Average -Minimum -Maximum: all four at once, with the count; no records, no sum
-measure_object(records: list, property: text): map := {
+measure_object(records: list, property: text) as map := {
 	values = records.map(record => record[property])
 	if #values == 0 { return {count: 0} }
 	total = values.sum()
 	{count: #values, sum: total, average: total / #values, minimum: values.min(), maximum: values.max()}
 }
 // Format-Table: the records as an aligned table, the keys of the first its headers (lib/tables.warp)
-format_table(records: list): text := table_text(records)
+format_table(records: list) as text := table_text(records)
 // Format-List: each record's properties one a line, `name : value`, the names padded to the longest; a blank line
 // between records
-format_list(records: list): text := records.map(powershell_listed).join("\n\n")
-powershell_listed(record: any): text := {
+format_list(records: list) as text := records.map(powershell_listed).join("\n\n")
+powershell_listed(record: any) as text := {
 	width = record.keys.map(key => #key).max()
 	record.keys.map(key => pad_display(key, width) + " : " + tables_cell(record[key])).join("\n")
 }

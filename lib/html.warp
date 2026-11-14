@@ -15,10 +15,10 @@ HTML_NAMED = {"amp": "&", "lt": "<", "gt": ">", "quot": "\"", "apos": "'", "nbsp
 	"Dcaron": "Ď", "HilbertSpace": "ℋ", "DifferentialD": "ⅆ", "ClockwiseContourIntegral": "∲", "ngE": "≧̸",
 	"larr": "←", "rarr": "→", "uarr": "↑", "darr": "↓", "harr": "↔", "ne": "≠", "le": "≤", "ge": "≥", "infin": "∞"}
 
-html_escape(t: text): text := replace(replace(replace(replace(replace(t, "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), "\"", "&quot;"), "'", "&#39;")
+html_escape(t: text) as text := replace(replace(replace(replace(replace(t, "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), "\"", "&quot;"), "'", "&#39;")
 
 // the character an entity name names: "lt", "#60", "#x3C"; nil when it names none
-def html_entity(name: text): any {
+def html_entity(name: text) as any {
 	if name.starts_with("#x") or name.starts_with("#X") {
 		n = 0
 		for c in lower(name[2..]) { d = "0123456789abcdef".index_of(c); if d == 0 { return nil }; n = n * 16 + d - 1 }
@@ -33,7 +33,7 @@ def html_entity(name: text): any {
 	html_named(name + ";") ?? html_named(name) ?? HTML_NAMED.get(name)
 }
 
-def html_unescape(t: text): text {
+def html_unescape(t: text) as text {
 	if not t.contains("&") { return t }
 	// by code point: a combining mark after a reference's ; is no part of it
 	cs = ["" + p for p in t.codepoints]
@@ -52,7 +52,7 @@ def html_unescape(t: text): text {
 	join(parts, "")
 }
 // the reference after an & at place k of the code points: [its text, the place after it], [] for none
-def html_reference(cs: list, k: int): list {
+def html_reference(cs: list, k: int) as list {
 	n = count(cs)
 	if k >= n { return [] }
 	if cs[k] == "#" {
@@ -89,13 +89,13 @@ def html_reference(cs: list, k: int): list {
 	[]
 }
 // the characters of a named reference ("amp;", "amp"), nil for none: a search of lib/html_entities.warp's text
-html_named(name: text): any := {
+html_named(name: text) as any := {
 	parts = HTML_ENTITY_CODES.split(" " + name + "=")
 	if count(parts) < 2 { return nil }
 	join([chr(html_hex(h)) for h in parts[1].split(" ")[0].split(",")], "")
 }
-html_hex(h: text): int := { n = 0; for c in h { n = n * 16 + html_digit(c, yes) }; n }
-html_digit(c: text, hex: bool): int := {
+html_hex(h: text) as int := { n = 0; for c in h { n = n * 16 + html_digit(c, yes) }; n }
+html_digit(c: text, hex: bool) as int := {
 	o = ord(c)
 	if o >= 48 and o <= 57 { return o - 48 }
 	if hex and o >= 97 and o <= 102 { return o - 87 }
@@ -103,7 +103,7 @@ html_digit(c: text, hex: bool): int := {
 	-1
 }
 // a numeric reference's character: 0, a surrogate or past U+10FFFF are U+FFFD, 0x80-0x9F as windows-1252 reads them
-html_code_point(v: int): text := {
+html_code_point(v: int) as text := {
 	if v == 0 or v > 0x10FFFF or (v >= 0xD800 and v <= 0xDFFF) { return chr(0xFFFD) }
 	if v >= 0x80 and v <= 0x9F { w = HTML_WINDOWS_1252[v - 0x80]; return chr(if w == 0 then v else w) }
 	chr(v)

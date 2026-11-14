@@ -18,11 +18,11 @@ CHECK_ARROW = " → "
 # the page the program shows after the steps (the page-steps option's lines, markup's page_after_steps), its HTML;
 # the run's Error when it failed
 page_html(file: text, steps: text) := command(warp_command("--page-steps " + quoted_path(steps) + " run " + quoted_path(file)))
-is_page(html: any): bool := html is text and html.trim().starts_with(page_start)
+is_page(html: any) as bool := html is text and html.trim().starts_with(page_start)
 
 # a check's steps as the page-steps option takes them, one a line, the words by tabs: `click "+1", type "name" "Ann"` is
 # click⇥+1⏎type⇥name⇥Ann; a quoted word keeps its commas and spaces
-step_lines(steps: text): text := {
+step_lines(steps: text) as text := {
 	lines = []
 	words = []
 	word = ""
@@ -41,9 +41,9 @@ step_lines(steps: text): text := {
 }
 
 # a text with each run of white space one space, trimmed: the page's lines and an expectation compare so
-spaced(text: text): text := words(text).join(" ")
+spaced(text: text) as text := words(text).join(" ")
 # each check line of the program checked, said ok or FAIL with what the page showed; the number failing
-checks_failed(file: text, lines: list): int := {
+checks_failed(file: text, lines: list) as int := {
 	failed = 0
 	for line in lines {
 		parts = line[#CHECK_PREFIX ..].split(CHECK_ARROW)
@@ -57,7 +57,7 @@ checks_failed(file: text, lines: list): int := {
 	failed
 }
 
-app_command(arguments: list): int := {
+app_command(arguments: list) as int := {
 	checking = #arguments > 0 and arguments[0] == check_word
 	files = if checking then arguments[1 ..] else arguments
 	if #files != 1 {
@@ -78,7 +78,7 @@ app_command(arguments: list): int := {
 	shown = command(warp_command("--app-window " + quoted_path(file) + " run " + quoted_path(file) + " 2>&1 || true"))
 	if is_page(shown) or shown.trim() == "" then 0 else shows_no_page(file, shown)
 }
-shows_no_page(file: text, shown: any): int := {
+shows_no_page(file: text, shown: any) as int := {
 	print "warp app: " + file + " shows no page: " + text(shown).trim()
 	1
 }

@@ -1,2 +1,2 @@
 # a program's own math, beside it: an implicit use of the standard math never takes it
-half(x: int): int := x / 2
+half(x: int) as int := x / 2

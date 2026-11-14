@@ -8,10 +8,10 @@ opaque = 0xFF000000
 // a number as a color, color(0xFF8000) or 0xFF8000 as Color, read as CSS reads hex (decision color-text-css): six
 // digits are opaque, eight end in their alpha (0xFF800080 is half transparent); a fully transparent one is
 // with_alpha(c, 0). A value computed, `(…) as Color`, is already a color's number
-color(n: int): Color := if n <= 0xFFFFFF then (opaque + n) as Color else from_rgba_hex(n)
-rgb(n: int): Color := color(n)
+color(n: int) as Color := if n <= 0xFFFFFF then (opaque + n) as Color else from_rgba_hex(n)
+rgb(n: int) as Color := color(n)
 // a CSS hex text as its color: color("#0000ff"), color("#0000ff80") with its alpha last, the short color("#00f")
-color(css: text): Color := {
+color(css: text) as Color := {
 	digits = if css.starts_with("#") then css[1..] else css
 	if #digits == 3 or #digits == 4 { digits = join([c + c for c in digits], "") }
 	if not is_hex(digits) or not (#digits == 6 or #digits == 8) { raise "not a CSS hex color: " + css }
@@ -38,38 +38,38 @@ format Color c as text := {
 	hex_text(c)
 }
 // the color named so, ø for no named color
-color_named(name: text): any := {
+color_named(name: text) as any := {
 	for pair in named_colors { if pair[1] == name { return pair[0] } }
 	ø
 }
 // [red, green, blue], each from 0 to 1, as a painted pixel takes them (lib/shaders.warp)
-channels(c: Color): list := [16, 8, 0].map(shift => float(channel_byte(c, shift)) / 255)
+channels(c: Color) as list := [16, 8, 0].map(shift => float(channel_byte(c, shift)) / 255)
 // the byte of 0xAARRGGBB at the shift: 24 its alpha, 16 red, 8 green, 0 blue
-channel_byte(c: Color, shift: int): int := ((c as int) >> shift) % 256
+channel_byte(c: Color, shift: int) as int := ((c as int) >> shift) % 256
 channel_shifts = [24, 16, 8, 0]
 // the color t of the way from a to b, each channel and the alpha alike: mix(red, blue) is #800080
-mix(a: Color, b: Color, t: float = 0.5): Color := sum(channel_shifts.map(shift => (round(lerp(channel_byte(a, shift), channel_byte(b, shift), t)) as int) << shift)) as Color
+mix(a: Color, b: Color, t: float = 0.5) as Color := sum(channel_shifts.map(shift => (round(lerp(channel_byte(a, shift), channel_byte(b, shift), t)) as int) << shift)) as Color
 // light adding (decision color-light-adding): red + blue is #ff00ff, each channel summed and capped at 255, `-` floored
 // at 0, a color times a number scales its channels; the left color keeps its alpha
 +(a: Color, b: Color): Color := channels_made(a, shift => channel_byte(a, shift) + channel_byte(b, shift))
 -(a: Color, b: Color): Color := channels_made(a, shift => channel_byte(a, shift) - channel_byte(b, shift))
 *(c: Color, f: number): Color := channels_made(c, shift => round(channel_byte(c, shift) * f) as int)
 // a's alpha and each of red, green and blue the byte gives for its shift, kept from 0 to 255
-channels_made(a: Color, byte: function): Color := ((alpha_of(a) << 24) + sum([16, 8, 0].map(shift => (clamp(byte(shift), 0, 255) as int) << shift))) as Color
+channels_made(a: Color, byte: function) as Color := ((alpha_of(a) << 24) + sum([16, 8, 0].map(shift => (clamp(byte(shift), 0, 255) as int) << shift))) as Color
 // #ff0000, and #ff000080 when not opaque, its alpha last as in CSS (decision color-text-css)
-hex_text(c: Color): text := "#" + padded_hex((c as int) % 16777216, 6) + (if alpha_of(c) == 255 then "" else padded_hex(alpha_of(c), 2))
+hex_text(c: Color) as text := "#" + padded_hex((c as int) % 16777216, 6) + (if alpha_of(c) == 255 then "" else padded_hex(alpha_of(c), 2))
 // a color as a hex number, argb_hex(red) 0xffff0000 with its alpha first as a color holds it, rgba_hex(red) 0xff0000ff
 // with its alpha last as CSS writes it; from_argb_hex and from_rgba_hex read them back (user 11-11)
-argb_hex(c: Color): hex := (c as int) as hex
-rgba_hex(c: Color): hex := (((c as int) % 16777216) * 256 + alpha_of(c)) as hex
-from_argb_hex(h: int): Color := h as Color
-from_rgba_hex(h: int): Color := ((h % 256) * 16777216 + h /! 256) as Color
+argb_hex(c: Color) as hex := (c as int) as hex
+rgba_hex(c: Color) as hex := (((c as int) % 16777216) * 256 + alpha_of(c)) as hex
+from_argb_hex(h: int) as Color := h as Color
+from_rgba_hex(h: int) as Color := ((h % 256) * 16777216 + h /! 256) as Color
 // the low digits of n in lower-case hexadecimal, zeros in front
-padded_hex(n: any, digits: any): text := join([hex_digits[(n >> 4 * (digits - 1 - i)) % 16] for i in 0..digits], "")
+padded_hex(n: any, digits: any) as text := join([hex_digits[(n >> 4 * (digits - 1 - i)) % 16] for i in 0..digits], "")
 // r, g, b from 0 to 255
-rgb(r: any, g: any, b: any): Color := (opaque + (round(r) as int) * 65536 + (round(g) as int) * 256 + (round(b) as int)) as Color
+rgb(r: any, g: any, b: any) as Color := (opaque + (round(r) as int) * 65536 + (round(g) as int) * 256 + (round(b) as int)) as Color
 // hue in degrees, saturation and value from 0 to 1
-hsv(h: any, s: any, v: any): Color := {
+hsv(h: any, s: any, v: any) as Color := {
 	hue = (h % 360) / 60.0
 	c = v * s
 	x = c * (1 - abs(hue % 2 - 1))
@@ -81,5 +81,5 @@ hsv(h: any, s: any, v: any): Color := {
 	rgb((r + m) * 255, (g + m) * 255, (b + m) * 255)
 }
 // alpha from 0 (invisible) to 1 (opaque)
-with_alpha(color: any, alpha: any): Color := ((round(clamp(alpha, 0, 1) * 255) as int) * 16777216 + (color as int) % 16777216) as Color
-alpha_of(color: any): int := (color as int) /! 16777216
+with_alpha(color: any, alpha: any) as Color := ((round(clamp(alpha, 0, 1) * 255) as int) * 16777216 + (color as int) % 16777216) as Color
+alpha_of(color: any) as int := (color as int) /! 16777216

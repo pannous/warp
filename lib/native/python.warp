@@ -97,13 +97,13 @@ python_fail() := {
 }
 
 // the handle, an Error for NULL (the Python call raised)
-python_checked(target: int): int := {
+python_checked(target: int) as int := {
 	if target == 0 { python_fail() }
 	target
 }
 
 // the name of a Python object's type: "int", "str", "module"
-python_type(target: int): text := {
+python_type(target: int) as text := {
 	kind = PyObject_Type(target)
 	name = PyObject_GetAttrString(kind, "__name__")
 	found = PyUnicode_AsUTF8(name)
@@ -113,10 +113,10 @@ python_type(target: int): text := {
 }
 
 // whether a warp value is a reference to a Python object: {python: <handle>, type: …}
-python_is_reference(value: any): bool := value is map and value.has("python")
+python_is_reference(value: any) as bool := value is map and value.has("python")
 
 // a new Python object of the warp value: ø None, yes/no, an Int, a float, a text, a list, a map; a reference its object
-python_object(value: any): int := {
+python_object(value: any) as int := {
 	if value == ø { return Py_GetConstant(PY_CONSTANT_NONE) }
 	if python_is_reference(value) {
 		Py_IncRef(value.get("python"))
@@ -152,7 +152,7 @@ python_object(value: any): int := {
 
 // the warp value of a Python object (which stays the caller's): None ø, bool, int, float, str, list and tuple a list,
 // dict a map; any other object a reference to it
-python_value(target: int): any := {
+python_value(target: int) as any := {
 	kind = python_type(target)
 	if kind == "NoneType" { return ø }
 	if kind == "bool" { return PyObject_IsTrue(target) == 1 }
@@ -212,19 +212,19 @@ python_value(target: int): any := {
 }
 
 // the int a text of decimal digits spells, with an optional -, at any size: "1267650600228229401496703205376" is 2^100
-python_big_int(digits: text): any := {
+python_big_int(digits: text) as any := {
 	whole = 0
 	for c in digits { if c != '-' { whole = whole * 10 + (c as int) } }
 	if digits#1 == '-' then -whole else whole
 }
 
 // the builtins module (a new reference)
-python_builtins(): int := python_checked(PyImport_ImportModule("builtins"))
+python_builtins() as int := python_checked(PyImport_ImportModule("builtins"))
 // __main__'s __dict__ (a new reference)
-python_main_scope(main: int): int := python_checked(PyObject_GetAttrString(main, "__dict__"))
+python_main_scope(main: int) as int := python_checked(PyObject_GetAttrString(main, "__dict__"))
 
 // the builtin function `name` called with the arguments: a new object
-python_builtin_call(name: text, arguments: list): int := {
+python_builtin_call(name: text, arguments: list) as int := {
 	builtins = python_builtins()
 	result = python_call_handle(builtins, name, arguments, {})
 	Py_DecRef(builtins)
@@ -232,7 +232,7 @@ python_builtin_call(name: text, arguments: list): int := {
 }
 
 // whether the target is an instance of the builtin type `name`
-python_instance(target: int, name: text): bool := {
+python_instance(target: int, name: text) as bool := {
 	builtins = python_builtins()
 	kind = python_checked(PyObject_GetAttrString(builtins, name))
 	found = PyObject_IsInstance(target, kind)
@@ -242,7 +242,7 @@ python_instance(target: int, name: text): bool := {
 }
 
 // the warp value of a new Python object, which is released; an Error for NULL
-python_result(target: int): any := {
+python_result(target: int) as any := {
 	python_checked(target)
 	value = python_value(target)
 	Py_DecRef(target)
@@ -251,7 +251,7 @@ python_result(target: int): any := {
 
 // calls the method `name` of the Python object `target` with the arguments and keyword arguments (a map, {} for none):
 // a new object
-python_call_handle(target: int, name: text, arguments: list, keywords: any): int := {
+python_call_handle(target: int, name: text, arguments: list, keywords: any) as int := {
 	method = python_checked(PyObject_GetAttrString(target, name))
 	objects = arguments.map(python_object)
 	tuple = PyTuple_New(#arguments)
@@ -283,19 +283,19 @@ python_copied_back(value: any, twin: int) := {
 
 // the Python object of a call's target, and whether it is a new one to release: a reference's object, else the
 // Python twin of the warp value
-python_target(target: any): list := {
+python_target(target: any) as list := {
 	if python_is_reference(target) { return [target.get("python"), no] }
 	[python_object(target), yes]
 }
 
 // the module `name`, imported: a reference
-python_import(name: text): any := {
+python_import(name: text) as any := {
 	python_start()
 	python_result(PyImport_ImportModule(name))
 }
 
 // the attribute `name` of the target (a reference or a warp value) as a warp value
-python_get(target: any, name: text): any := {
+python_get(target: any, name: text) as any := {
 	python_start()
 	held = python_target(target)
 	found = PyObject_GetAttrString(held#1, name)
@@ -304,7 +304,7 @@ python_get(target: any, name: text): any := {
 }
 
 // calls the method `name` of the target (a reference or a warp value) with the arguments: its result as a warp value
-python_call(target: any, name: text, arguments: list): any := {
+python_call(target: any, name: text, arguments: list) as any := {
 	python_start()
 	held = python_target(target)
 	result = python_call_handle(held#1, name, arguments, {})
@@ -315,13 +315,13 @@ python_call(target: any, name: text, arguments: list): any := {
 // a member of a module or value as `use python json; json.dumps(x)` reaches it (extensions/foreign_globals.warp):
 // called with the arguments, else read
 // a value Python gave, converted, reads as warp's: `m.a.b` of a dict json.loads made
-python_member(target: any, member: text, called: int, arguments: list): any := {
+python_member(target: any, member: text, called: int, arguments: list) as any := {
 	if called == 0 and target is map and not python_is_reference(target) and target.has(member) { return target.get(member) }
 	if called == 1 then python_call(target, member, arguments) else python_get(target, member)
 }
 
 // python_call with keyword arguments: python_call_with(json, "dumps", [data], {indent: 2})
-python_call_with(target: any, name: text, arguments: list, keywords: any): any := {
+python_call_with(target: any, name: text, arguments: list, keywords: any) as any := {
 	python_start()
 	held = python_target(target)
 	result = python_call_handle(held#1, name, arguments, keywords)
@@ -330,13 +330,13 @@ python_call_with(target: any, name: text, arguments: list, keywords: any): any :
 }
 
 // the value of a Python expression, evaluated in __main__
-python_eval(expression: text): any := python_run("eval", expression)
+python_eval(expression: text) as any := python_run("eval", expression)
 
 // runs Python statements in __main__, whose names python_eval then sees
-python_exec(code: text): any := python_run("exec", code)
+python_exec(code: text) as any := python_run("exec", code)
 
 // eval or exec in __main__'s scope
-python_run(word: text, source: text): any := {
+python_run(word: text, source: text) as any := {
 	python_start()
 	main = python_checked(PyImport_ImportModule("__main__"))
 	scope = python_main_scope(main)
@@ -355,7 +355,7 @@ python_release(reference: any) := {
 }
 
 // the target's str(): python_text(python_call(fractions, "Fraction", [3, 4])) is "3/4"
-python_text(target: any): text := {
+python_text(target: any) as text := {
 	python_start()
 	held = python_target(target)
 	said = python_checked(PyObject_Str(held#1))

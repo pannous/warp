@@ -27,14 +27,14 @@ def fraction_check(name: text, x: any) {
 }
 
 // a * b, refused when it leaves the 64-bit range
-def fraction_times(a: int, b: int, name: text): int {
+def fraction_times(a: int, b: int, name: text) as int {
 	if a == 0 or b == 0 { return 0 }
 	p = a * b
 	if p /! b != a or p % b != 0 { fraction_fail(name + ": the result leaves the 64-bit range of the core's ints") }
 	p
 }
 
-def fraction_digits(name: text, source: text, digits: text): int {
+def fraction_digits(name: text, source: text, digits: text) as int {
 	if digits == "" { fraction_fail(name + ": no digits in " + source) }
 	if count(digits) > FRACTION_INT_DIGITS { fraction_fail(name + ": more than " + FRACTION_INT_DIGITS + " digits in " + source + " (the core's ints are 64-bit)") }
 	n = 0
@@ -46,7 +46,7 @@ def fraction_digits(name: text, source: text, digits: text): int {
 }
 
 // "n" or "n/d", n and d unsigned digit runs
-def fraction_simple(name: text, source: text, part: text): list {
+def fraction_simple(name: text, source: text, part: text) as list {
 	slash = part.index_of("/")
 	if slash == 0 { return [fraction_digits(name, source, part.trim()), 1] }
 	n = fraction_digits(name, source, part[0 ..< slash - 1].trim())

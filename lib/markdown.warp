@@ -31,7 +31,7 @@ global markdown_html(source: text): text := {
 }
 
 // lines
-md_expand_tabs(line: text): text := {
+md_expand_tabs(line: text) as text := {
 	if not ("\t" in line) { return line }
 	out = ""
 	column = 0
@@ -48,17 +48,17 @@ md_expand_tabs(line: text): text := {
 // tabs are expanded only in a line's leading run of space and block markers (indentation, > and list markers); a
 // tab after it is content and stays one (spec 1-3, 13); a trailing tab is a space
 MD_TAB_PREFIX = " \t>-*+.)#0123456789"
-md_indent(line: text): int := { n = 0; while n < #line and line#(n + 1) == " " { n += 1 }; n }
-md_blank(line: text): bool := line.trim() == ""
-md_after(line: text, n: int): text := if n >= #line then "" else line[n..<#line]
+md_indent(line: text) as int := { n = 0; while n < #line and line#(n + 1) == " " { n += 1 }; n }
+md_blank(line: text) as bool := line.trim() == ""
+md_after(line: text, n: int) as text := if n >= #line then "" else line[n..<#line]
 // the line without its indentation of up to 3 spaces
-md_unindent(line: text): text := md_after(line, min(md_indent(line), 3))
-md_run(t: text, c: text): int := { n = 0; while n < #t and t#(n + 1) == c { n += 1 }; n }
+md_unindent(line: text) as text := md_after(line, min(md_indent(line), 3))
+md_run(t: text, c: text) as int := { n = 0; while n < #t and t#(n + 1) == c { n += 1 }; n }
 // the run of c at place k of t, counted in place rather than on a slice of the rest
-md_run_at(t: text, k: int, c: text): int := { n = 0; while k + n <= #t and t#(k + n) == c { n += 1 }; n }
+md_run_at(t: text, k: int, c: text) as int := { n = 0; while k + n <= #t and t#(k + n) == c { n += 1 }; n }
 
 // block starts
-md_is_break(line: text): bool := {
+md_is_break(line: text) as bool := {
 	if md_indent(line) > 3 { return no }
 	s = line.trim()
 	if #s < 3 { return no }
@@ -68,7 +68,7 @@ md_is_break(line: text): bool := {
 	for x in s { if x == c { n += 1 } else if x != " " { return no } }
 	n >= 3
 }
-md_atx_level(line: text): int := {
+md_atx_level(line: text) as int := {
 	if md_indent(line) > 3 { return 0 }
 	s = md_unindent(line)
 	n = md_run(s, "#")
@@ -76,7 +76,7 @@ md_atx_level(line: text): int := {
 	if #s > n and s#(n + 1) != " " { return 0 }
 	n
 }
-md_fence(line: text): map := {
+md_fence(line: text) as map := {
 	if md_indent(line) > 3 { return {} }
 	s = md_unindent(line)
 	c = if s.starts_with("```") then "`" else if s.starts_with("~~~") then "~" else ""
@@ -86,9 +86,9 @@ md_fence(line: text): map := {
 	if c == "`" and "`" in info { return {} }
 	{"char": c, "size": n, "indent": md_indent(line), "info": info}
 }
-md_is_quote(line: text): bool := md_indent(line) <= 3 and md_unindent(line).starts_with(">")
+md_is_quote(line: text) as bool := md_indent(line) <= 3 and md_unindent(line).starts_with(">")
 // a list marker: {ordered, mark (bullet or . or )), start, width (where the content starts), empty}; {} for none
-md_list_marker(line: text): map := {
+md_list_marker(line: text) as map := {
 	indent = md_indent(line)
 	if indent > 3 { return {} }
 	s = md_after(line, indent)
@@ -119,7 +119,7 @@ md_list_marker(line: text): map := {
 	{"ordered": ordered, "mark": mark, "start": start, "width": indent + size + spaces, "empty": no}
 }
 // whether a line starts a block that ends a paragraph
-md_interrupts(line: text): bool := {
+md_interrupts(line: text) as bool := {
 	if md_blank(line) or md_is_break(line) or md_atx_level(line) > 0 or md_fence(line).has("char") or md_is_quote(line) { return yes }
 	// HTML blocks types 1–6 interrupt a paragraph; type 7 does not (spec 187)
 	if md_html_block_start(line, no).has("type") { return yes }
@@ -127,7 +127,7 @@ md_interrupts(line: text): bool := {
 	if not m.has("mark") or m["empty"] { return no }
 	not m["ordered"] or m["start"] == 1
 }
-md_setext_level(line: text): int := {
+md_setext_level(line: text) as int := {
 	if md_indent(line) > 3 { return 0 }
 	s = line.trim()
 	if s == "" { return 0 }
@@ -139,13 +139,13 @@ md_setext_level(line: text): int := {
 
 
 // HTML blocks (CommonMark §4.6) and inline raw HTML (§6.8): pass through source text unchanged
-md_html_tag_named(name: text, list_pipe: text): bool := {
+md_html_tag_named(name: text, list_pipe: text) as bool := {
 	n = name.lower()
 	for part in list_pipe.split("|") { if part == n { return yes } }
 	no
 }
 // start of an HTML block on a line: {type: 1..7} or {} ; type 7 only when allow7 (not interrupting a paragraph)
-md_html_block_start(line: text, allow7: bool): map := {
+md_html_block_start(line: text, allow7: bool) as map := {
 	if md_indent(line) > 3 { return {} }
 	s = md_unindent(line)
 	if not s.starts_with("<") { return {} }
@@ -182,13 +182,13 @@ md_html_block_start(line: text, allow7: bool): map := {
 	{}
 }
 // a complete open or close tag as the whole (trimmed) line for type 7, or any inline tag start
-md_html_open_or_close_complete(s: text): bool := {
+md_html_open_or_close_complete(s: text) as bool := {
 	t = s.trim()
 	r = md_raw_html_at(t, 1)
 	#r > 0 and r#2 == #t + 1
 }
 // end condition for HTML block types 1-5 on a line
-md_html_block_end(line: text, typ: int, name: text): bool := {
+md_html_block_end(line: text, typ: int, name: text) as bool := {
 	low = line.lower()
 	if typ == 1 { return ("</" + name + ">") in low }
 	if typ == 2 { return "-->" in line }
@@ -198,7 +198,7 @@ md_html_block_end(line: text, typ: int, name: text): bool := {
 	no
 }
 // consume an HTML block starting at i: [block, next_i]
-md_html_block(lines: list, i: int, start: map): list := {
+md_html_block(lines: list, i: int, start: map) as list := {
 	typ = start["type"]
 	name = if start.has("name") then start["name"] else ""
 	body = []
@@ -227,7 +227,7 @@ md_html_block(lines: list, i: int, start: map): list := {
 }
 
 // the blocks of lines: maps with a kind ("p", "h", "code", "hr", "quote", "list", "table", "html")
-md_blocks(lines: list, st: map): list := {
+md_blocks(lines: list, st: map) as list := {
 	blocks = []
 	i = 1
 	n = #lines
@@ -327,13 +327,13 @@ md_blocks(lines: list, st: map): list := {
 	blocks
 }
 // lazy continuation only into a paragraph: the last inner line is ordinary paragraph text
-md_lazy_ok(inner: list): bool := {
+md_lazy_ok(inner: list) as bool := {
 	last = inner#(#inner)
 	not (md_indent(last) >= 4 or md_fence(last).has("char") or md_atx_level(last) > 0 or md_is_break(last))
 }
 
 // a list from line i: [block, the line after it]
-md_list(lines: list, i: int, st: map): list := {
+md_list(lines: list, i: int, st: map) as list := {
 	first = md_list_marker(lines#i)
 	items = []
 	loose = no
@@ -388,7 +388,7 @@ md_list(lines: list, i: int, st: map): list := {
 	[{"kind": "list", "ordered": first["ordered"], "start": first["start"], "loose": loose, "items": items}, i, ended_blank]
 }
 // a blank line at k separates two of the item's own blocks, not lines inside a code block or a nested list
-md_item_blank_between(content: list, k: int): bool := {
+md_item_blank_between(content: list, k: int) as bool := {
 	after = k + 1
 	while after <= #content and content#after == "" { after += 1 }
 	if after > #content { return no }
@@ -403,7 +403,7 @@ md_item_blank_between(content: list, k: int): bool := {
 }
 
 // GFM tables: a header row, a delimiter row of the same cell count, then rows
-md_cells(line: text): list := {
+md_cells(line: text) as list := {
 	s = line.trim()
 	if s.starts_with("|") { s = s[1..<#s] }
 	if s.ends_with("|") and not s.ends_with("\\|") { s = s[0..<#s - 1] }
@@ -418,7 +418,7 @@ md_cells(line: text): list := {
 	}
 	cells + [cell.trim()]
 }
-md_aligns(line: text): list := {
+md_aligns(line: text) as list := {
 	if not ("-" in line) { return [] }
 	out = []
 	for cell in md_cells(line) {
@@ -430,12 +430,12 @@ md_aligns(line: text): list := {
 	}
 	out
 }
-md_table_starts(lines: list, i: int): bool := {
+md_table_starts(lines: list, i: int) as bool := {
 	if i >= #lines or not ("|" in lines#i) { return no }
 	aligns = md_aligns(lines#(i + 1))
 	#aligns > 0 and #aligns == #(md_cells(lines#i))
 }
-md_table(lines: list, i: int): list := {
+md_table(lines: list, i: int) as list := {
 	head = md_cells(lines#i)
 	aligns = md_aligns(lines#(i + 1))
 	i += 2
@@ -452,7 +452,7 @@ md_table(lines: list, i: int): list := {
 
 // link reference definitions at the start of a paragraph's text: kept in st.refs (the first of a label wins), the rest
 // of the text given back
-md_take_definitions(t: text, st: map): text := {
+md_take_definitions(t: text, st: map) as text := {
 	going = yes
 	while going and t.starts_with("[") {
 		r = md_definition(t)
@@ -466,7 +466,7 @@ md_take_definitions(t: text, st: map): text := {
 	t
 }
 // [label, destination, title or ø, the rest] of a definition at t's start; [] when there is none
-md_definition(t: text): list := {
+md_definition(t: text) as list := {
 	end = md_label_end(t, 1)
 	if end == 0 or end >= #t or t#(end + 1) != ":" { return [] }
 	label = t[1..<end - 1]
@@ -494,16 +494,16 @@ md_definition(t: text): list := {
 	if title == ø and not md_line_rest_blank(t, d#2) { return [] }
 	[label, d#1, title, md_skip_line(t, if title == ø then d#2 else at)]
 }
-md_line_rest_blank(t: text, at: int): bool := {
+md_line_rest_blank(t: text, at: int) as bool := {
 	while at <= #t and t#at != "\n" { if t#at != " " { return no }; at += 1 }
 	yes
 }
-md_skip_line(t: text, at: int): text := {
+md_skip_line(t: text, at: int) as text := {
 	while at <= #t and t#at != "\n" { at += 1 }
 	if at > #t then "" else t[at..<#t]
 }
 // the place of the ] closing a link label opened at at, 0 when none (no unescaped brackets inside, at most 999 chars)
-md_label_end(t: text, at: int): int := {
+md_label_end(t: text, at: int) as int := {
 	k = at + 1
 	while k <= #t {
 		c = t#k
@@ -514,7 +514,7 @@ md_label_end(t: text, at: int): int := {
 	}
 	0
 }
-md_label(t: text): text := {
+md_label(t: text) as text := {
 	out = ""
 	space = no
 	// case folding: ß and ẞ fold to ss (spec 540)
@@ -524,15 +524,15 @@ md_label(t: text): text := {
 	}
 	out
 }
-md_space(t: text, at: int, lines: bool): int := {
+md_space(t: text, at: int, lines: bool) as int := {
 	while at <= #t and (t#at == " " or t#at == "\t" or (lines and t#at == "\n")) { at += 1 }
 	at
 }
 // a tag name character: a letter, or a digit/hyphen after the first character
-md_is_name_char(c: text, name: text): bool := (c.lower() != c.upper()) or (name != "" and (is_digit(c) or c == "-"))
+md_is_name_char(c: text, name: text) as bool := (c.lower() != c.upper()) or (name != "" and (is_digit(c) or c == "-"))
 
 // [destination, place after] or []
-md_destination(t: text, at: int): list := {
+md_destination(t: text, at: int) as list := {
 	if at > #t { return [] }
 	if t#at == "<" {
 		k = at + 1
@@ -561,7 +561,7 @@ md_destination(t: text, at: int): list := {
 	[md_entities(out), k]
 }
 // [title, place after] or []
-md_title(t: text, at: int): list := {
+md_title(t: text, at: int) as list := {
 	open = "" + t#at
 	close = if open == "(" then ")" else open
 	k = at + 1
@@ -575,12 +575,12 @@ md_title(t: text, at: int): list := {
 }
 
 // rendering blocks
-md_render_blocks(blocks: list, st: map, tight: bool): text := {
+md_render_blocks(blocks: list, st: map, tight: bool) as text := {
 	out = ""
 	for b in blocks { out += md_render_block(b, st, tight) }
 	out
 }
-md_render_block(b: map, st: map, tight: bool): text := {
+md_render_block(b: map, st: map, tight: bool) as text := {
 	kind = b["kind"]
 	if kind == "p" { return if tight then md_inline(b["text"], st) + "\n" else "<p>" + md_inline(b["text"], st) + "</p>\n" }
 	if kind == "h" { return "<h" + b["level"] + ">" + md_inline(b["text"], st) + "</h" + b["level"] + ">\n" }
@@ -612,7 +612,7 @@ md_render_block(b: map, st: map, tight: bool): text := {
 	if kind == "html" { return b["text"] }
 	""
 }
-md_render_table(b: map, st: map): text := {
+md_render_table(b: map, st: map) as text := {
 	aligns = b["aligns"]
 	out = "<table>\n<thead>\n<tr>\n"
 	for k in 1 to #aligns { out += md_cell("th", aligns#k, b["head"]#k, st) }
@@ -628,11 +628,11 @@ md_render_table(b: map, st: map): text := {
 	}
 	out + "</table>\n"
 }
-md_cell(tag: text, align: text, content: text, st: map): text := "<" + tag + (if align == "" then "" else " align=\"" + align + "\"") + ">" + md_inline(content, st) + "</" + tag + ">\n"
+md_cell(tag: text, align: text, content: text, st: map) as text := "<" + tag + (if align == "" then "" else " align=\"" + align + "\"") + ">" + md_inline(content, st) + "</" + tag + ">\n"
 
 // text helpers
-md_escape(t: text): text := html_escape(t).replace("&#39;", "'")
-md_unescape(t: text): text := {
+md_escape(t: text) as text := html_escape(t).replace("&#39;", "'")
+md_unescape(t: text) as text := {
 	out = ""
 	k = 1
 	while k <= #t {
@@ -641,7 +641,7 @@ md_unescape(t: text): text := {
 	out
 }
 // entity and numeric character references decoded, the rest as it is
-md_entities(t: text): text := {
+md_entities(t: text) as text := {
 	if not ("&" in t) { return t }
 	out = ""
 	k = 1
@@ -652,7 +652,7 @@ md_entities(t: text): text := {
 	out
 }
 // [the character, place after] of a reference at t's place k, or []
-md_entity_at(t: text, k: int): list := {
+md_entity_at(t: text, k: int) as list := {
 	end = k + 1
 	while end <= #t and end - k <= 33 and t#end != ";" and t#end != "&" and t#end != " " { end += 1 }
 	if end > #t or t#end != ";" or end == k + 1 { return [] }
@@ -676,7 +676,7 @@ md_entity_at(t: text, k: int): list := {
 	["" + c, end + 1]
 }
 // a URL as an attribute: entities read, unsafe characters percent-encoded (UTF-8), then escaped
-md_url(t: text): text := {
+md_url(t: text) as text := {
 	out = ""
 	for c in t {
 		s = "" + c
@@ -685,7 +685,7 @@ md_url(t: text): text := {
 	}
 	md_escape(out)
 }
-md_strip_tags(t: text): text := {
+md_strip_tags(t: text) as text := {
 	out = ""
 	inside = no
 	for c in t { if c == "<" { inside = yes } else if c == ">" and inside { inside = no } else if not inside { out += c } }
@@ -693,7 +693,7 @@ md_strip_tags(t: text): text := {
 }
 
 // inlines: a list of tokens, kind text (literal, escaped when written), html, delim (a run of * _ ~), open ([ or ![)
-md_inline(t: text, st: map): text := {
+md_inline(t: text, st: map) as text := {
 	tokens = []
 	k = 1
 	n = #t
@@ -765,16 +765,16 @@ md_inline(t: text, st: map): text := {
 	md_written(tokens)
 }
 MD_INLINE_SPECIAL = "\\`&<![]*_~\n"
-md_trim_end(t: text): text := { while t.ends_with(" ") { t = t[0..<#t - 1] }; t }
-md_times(c: text, n: int): text := { out = ""; for i in 1 to n { out += c }; out }
-md_white(c: text): bool := c == " " or c == "\n" or c == "\t" or c == chr(0xA0)
+md_trim_end(t: text) as text := { while t.ends_with(" ") { t = t[0..<#t - 1] }; t }
+md_times(c: text, n: int) as text := { out = ""; for i in 1 to n { out += c }; out }
+md_white(c: text) as bool := c == " " or c == "\n" or c == "\t" or c == chr(0xA0)
 // Unicode punctuation and symbols (P and S, spec 354) by their main blocks: Latin-1's, general punctuation,
 // currency, letterlike to dingbats, CJK punctuation, fullwidth ASCII punctuation
-md_punct(c: text): bool := c in MD_PUNCTUATION or md_unicode_punct(ord(c))
-md_unicode_punct(o: int): bool := (o >= 0xA1 and o <= 0xBF and o != 0xAA and o != 0xB2 and o != 0xB3 and o != 0xB5 and o != 0xB9 and o != 0xBA and o != 0xBC and o != 0xBD and o != 0xBE) or o == 0xD7 or o == 0xF7 or (o >= 0x2010 and o <= 0x2027) or (o >= 0x2030 and o <= 0x205E) or (o >= 0x20A0 and o <= 0x20C0) or (o >= 0x2100 and o <= 0x214F and o != 0x2102 and o != 0x2107 and not (o >= 0x210A and o <= 0x2113) and o != 0x2115 and not (o >= 0x2119 and o <= 0x211D) and o != 0x2124 and o != 0x2126 and o != 0x2128 and not (o >= 0x212A and o <= 0x212D) and not (o >= 0x212F and o <= 0x2139) and not (o >= 0x213C and o <= 0x213F) and not (o >= 0x2145 and o <= 0x2149) and o != 0x214E) or (o >= 0x2190 and o <= 0x2BFF) or (o >= 0x3001 and o <= 0x3003) or (o >= 0x3008 and o <= 0x3020) or (o >= 0xFF01 and o <= 0xFF0F) or (o >= 0xFF1A and o <= 0xFF20) or (o >= 0xFF3B and o <= 0xFF40) or (o >= 0xFF5B and o <= 0xFF65)
-md_html(h: text): map := {"kind": "html", "text": h}
-md_flush(tokens: list, plain: text): list := { if plain != "" { tokens.add({"kind": "text", "text": plain}) }; tokens }
-md_code_close(t: text, at: int, run: int): int := {
+md_punct(c: text) as bool := c in MD_PUNCTUATION or md_unicode_punct(ord(c))
+md_unicode_punct(o: int) as bool := (o >= 0xA1 and o <= 0xBF and o != 0xAA and o != 0xB2 and o != 0xB3 and o != 0xB5 and o != 0xB9 and o != 0xBA and o != 0xBC and o != 0xBD and o != 0xBE) or o == 0xD7 or o == 0xF7 or (o >= 0x2010 and o <= 0x2027) or (o >= 0x2030 and o <= 0x205E) or (o >= 0x20A0 and o <= 0x20C0) or (o >= 0x2100 and o <= 0x214F and o != 0x2102 and o != 0x2107 and not (o >= 0x210A and o <= 0x2113) and o != 0x2115 and not (o >= 0x2119 and o <= 0x211D) and o != 0x2124 and o != 0x2126 and o != 0x2128 and not (o >= 0x212A and o <= 0x212D) and not (o >= 0x212F and o <= 0x2139) and not (o >= 0x213C and o <= 0x213F) and not (o >= 0x2145 and o <= 0x2149) and o != 0x214E) or (o >= 0x2190 and o <= 0x2BFF) or (o >= 0x3001 and o <= 0x3003) or (o >= 0x3008 and o <= 0x3020) or (o >= 0xFF01 and o <= 0xFF0F) or (o >= 0xFF1A and o <= 0xFF20) or (o >= 0xFF3B and o <= 0xFF40) or (o >= 0xFF5B and o <= 0xFF65)
+md_html(h: text) as map := {"kind": "html", "text": h}
+md_flush(tokens: list, plain: text) as list := { if plain != "" { tokens.add({"kind": "text", "text": plain}) }; tokens }
+md_code_close(t: text, at: int, run: int) as int := {
 	k = at
 	while k <= #t {
 		if t#k == "`" {
@@ -786,7 +786,7 @@ md_code_close(t: text, at: int, run: int): int := {
 	0
 }
 // <scheme:…> or <email>: [html, place after] or []
-md_autolink(t: text, k: int): list := {
+md_autolink(t: text, k: int) as list := {
 	end = k + 1
 	while end <= #t and t#end != ">" and t#end != "<" and t#end != " " and t#end != "\n" { end += 1 }
 	if end > #t or t#end != ">" { return [] }
@@ -813,7 +813,7 @@ md_autolink(t: text, k: int): list := {
 
 // inline raw HTML at place k: [literal html text, place after] or [] (CommonMark §6.8)
 // open/close tags, comments, processing instructions, declarations, CDATA; source kept as-is
-md_raw_html_at(t: text, k: int): list := {
+md_raw_html_at(t: text, k: int) as list := {
 	if k > #t or t#k != "<" { return [] }
 	n = #t
 	// HTML comment <!-- ... --> ; <!--> and <!---> end at that first >
@@ -922,7 +922,7 @@ md_raw_html_at(t: text, k: int): list := {
 }
 
 // at a ]: a link or image when an opener and a destination fit, else a literal ]: [tokens, place after]
-md_close_bracket(tokens: list, t: text, k: int, st: map): list := {
+md_close_bracket(tokens: list, t: text, k: int, st: map) as list := {
 	opener = 0
 	for j in 1 to #tokens { if tokens#j["kind"] == "open" { opener = j } }
 	if opener == 0 { tokens.add({"kind": "text", "text": "]"}); return [tokens, k + 1] }
@@ -974,14 +974,14 @@ md_close_bracket(tokens: list, t: text, k: int, st: map): list := {
 	kept.add(if o["image"] then {"kind": "html", "text": h, "plain": alt} else md_html(h))
 	[kept, after]
 }
-md_literal_opener(tokens: list, opener: int): list := {
+md_literal_opener(tokens: list, opener: int) as list := {
 	o = tokens#opener
 	out = tokens[0..<opener - 1] + [{"kind": "text", "text": if o["image"] then "![" else "["}]
 	if opener < #tokens { out = out + tokens[opener..<#tokens] }
 	out
 }
 // the delimiter algorithm over tokens from place bottom: matched runs get their tags in before and after
-md_emphasis(tokens: list, bottom: int): any := {
+md_emphasis(tokens: list, bottom: int) as any := {
 	closer = bottom
 	while closer <= #tokens {
 		c = tokens#closer
@@ -1015,7 +1015,7 @@ md_emphasis(tokens: list, bottom: int): any := {
 	}
 	ø
 }
-md_written(tokens: list): text := {
+md_written(tokens: list) as text := {
 	out = ""
 	for x in tokens {
 		kind = x["kind"]

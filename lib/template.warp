@@ -10,7 +10,7 @@ use text
 STANDALONE_KINDS = ["#", "^", "/", "!", ">", "="]
 
 // the template as text pieces and tags, each a map {kind, name, text, indent}
-def template_tokens(t: text): list {
+def template_tokens(t: text) as list {
 	tokens = []
 	open = "{{"
 	close = "}}"
@@ -40,16 +40,16 @@ def template_tokens(t: text): list {
 	tokens
 }
 
-is_blank_run(t: text): bool := all([c for c in t], c => c == " " or c == "\t")
+is_blank_run(t: text) as bool := all([c for c in t], c => c == " " or c == "\t")
 // line breaks, LF or CRLF (a CRLF is one character of a text)
-is_break(c: any): bool := c == "\n" or c == "\r\n"
-has_break(t: text): bool := any([c for c in t], c => is_break(c))
+is_break(c: any) as bool := c == "\n" or c == "\r\n"
+has_break(t: text) as bool := any([c for c in t], c => is_break(c))
 // the 0-based place of the first line break, -1 for none
-first_break(t: text): int := { cs = [c for c in t]; at = -1; for i in 0 ..< count(cs) { if at < 0 and is_break(cs[i]) { at = i } }; at }
+first_break(t: text) as int := { cs = [c for c in t]; at = -1; for i in 0 ..< count(cs) { if at < 0 and is_break(cs[i]) { at = i } }; at }
 // the part of a text after its last line break, the whole text without one
-line_tail(t: text): text := { cs = [c for c in t]; at = -1; for i in 0 ..< count(cs) { if is_break(cs[i]) { at = i } }; join(cs[at + 1..], "") }
+line_tail(t: text) as text := { cs = [c for c in t]; at = -1; for i in 0 ..< count(cs) { if is_break(cs[i]) { at = i } }; join(cs[at + 1..], "") }
 // whether the tag at i is alone on its line, only spaces and tabs beside it
-def is_standalone(tokens: list, i: int): bool {
+def is_standalone(tokens: list, i: int) as bool {
 	if not (tokens[i].kind in STANDALONE_KINDS) { return no }
 	before_ok = i == 0 or (tokens[i - 1].kind == "text" and (has_break(tokens[i - 1].text) or i == 1) and is_blank_run(line_tail(tokens[i - 1].text)))
 	if i + 1 == count(tokens) { return before_ok }
@@ -58,7 +58,7 @@ def is_standalone(tokens: list, i: int): bool {
 }
 // the spec's standalone rule: a section, inverted, closing, comment, partial or delimiter tag with only spaces and tabs
 // beside it on its line loses them and the line break after it; a partial keeps that indentation for its lines
-def standalone_trimmed(tokens: list): list {
+def standalone_trimmed(tokens: list) as list {
 	// decided on the template as written, then applied: a trim never hides the next tag's line
 	standalone = [is_standalone(tokens, i) for i in 0 ..< count(tokens)]
 	out = tokens
@@ -82,7 +82,7 @@ def standalone_trimmed(tokens: list): list {
 }
 
 // the tokens from start as nodes up to the closing tag of name ("" for the end): [nodes, the position after]
-def template_nodes(tokens: list, start: int, name: text): list {
+def template_nodes(tokens: list, start: int, name: text) as list {
 	nodes = []
 	i = start
 	while i < count(tokens) {
@@ -105,7 +105,7 @@ def template_nodes(tokens: list, start: int, name: text): list {
 }
 
 // a name through the stack of contexts, innermost first; its dotted parts inside the first one found; nil for none
-def template_lookup(stack: list, name: text): any {
+def template_lookup(stack: list, name: text) as any {
 	if name == "." { return stack[count(stack) - 1] }
 	parts = split(name, ".")
 	value = nil
@@ -119,15 +119,15 @@ def template_lookup(stack: list, name: text): any {
 	for part in parts[1..] { value = if value is map and part in keys(value) then value[part] else nil }
 	value
 }
-is_falsey(value: any): bool := value == nil or (value is bool and not value) or (value is list and count(value) == 0)
-template_value_text(value: any): text := if value == nil then "" else if value is text then value else text(value)
+is_falsey(value: any) as bool := value == nil or (value is bool and not value) or (value is list and count(value) == 0)
+template_value_text(value: any) as text := if value == nil then "" else if value is text then value else text(value)
 // a partial's lines each after the indentation of its standalone tag
-indented(t: text, indent: text): text := if indent == "" then t else {
+indented(t: text, indent: text) as text := if indent == "" then t else {
 	lines = split(t, "\n")
 	join([if i == count(lines) - 1 and lines[i] == "" then "" else indent + lines[i] for i in 0 ..< count(lines)], "\n")
 }
 
-def template_render(nodes: list, stack: list, partials: map): text {
+def template_render(nodes: list, stack: list, partials: map) as text {
 	out = ""
 	for node in nodes {
 		kind = node.kind
@@ -148,8 +148,8 @@ def template_render(nodes: list, stack: list, partials: map): text {
 	}
 	out
 }
-template_tree(t: text): list := template_nodes(standalone_trimmed(template_tokens(t)), 0, "")[0]
+template_tree(t: text) as list := template_nodes(standalone_trimmed(template_tokens(t)), 0, "")[0]
 
 // the template filled in from the context (a map, or any value for {{.}}), its partials by name
-mustache(t: text, context: any, partials: map): text := template_render(template_tree(t), [context], partials)
-mustache(t: text, context: any): text := mustache(t, context, {})
+mustache(t: text, context: any, partials: map) as text := template_render(template_tree(t), [context], partials)
+mustache(t: text, context: any) as text := mustache(t, context, {})
