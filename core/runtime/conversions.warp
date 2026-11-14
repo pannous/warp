@@ -140,7 +140,10 @@ bool_of_node(n: Node): bool := {
 	if not holds_bool(n) { fail() }
 	unboxed_int(n) != 0
 }
+# a character known only at run time: a character, a one-character text (`s[1]`), or a code point (`[65, 66]#2`)
 char_of_node(n: Node): char := {
+	if not is_null(n) and kind_code(n) == Kind.Text and one_character(unboxed_text(n)) { return char_of(first_code_point(unboxed_text(n))) }
+	if not is_null(n) and is_plain_int(n) { return char_of(unboxed_int(n)) }
 	if is_null(n) or kind_code(n) != Kind.Codepoint { not_a_character() }
 	unboxed_char(n)
 }

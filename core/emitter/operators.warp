@@ -224,7 +224,7 @@ immutable_type(kind: ValueKind): text := match kind {
 	_: ""
 }
 # two operands as the runtime words take them, boxed as nodes
-def as_nodes(a: TypedCode, b: TypedCode): list := [TypedCode(ValueKind.Node, boxed(a)), TypedCode(ValueKind.Node, boxed(b))]
+def as_nodes(a: TypedCode, b: TypedCode): list := [as_node(a), as_node(b)]
 # the bool test as `==`, `===` ask it, negated for `!=`, `!==`
 def tested_as(symbol: text, test: TypedCode): TypedCode := if symbol.starts_with("!") then TypedCode(ValueKind.Bool, condition(test) + [op.i32_eqz]) else test
 # an operator on two Int $Nodes, one an exact rational: the bridge hook of the extended runtime (bridge.warp), a comparison by extended_order; the
