@@ -1191,9 +1191,11 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 // `3 & 5`, `a & 1`: a single `&` between operands that may be whole numbers combines their bits, between others it is
 // and (`yes & no`, `a > 1 & b`); `|` is never the logical or (decision bar-never-or): bits of numbers, a pipe into a
 // function (`xs | sort`), a union of types (`int | text`), as the rules after the parse tell; else `spelled`
-// `x(p: P) -> int` before `:=` or `=`, a call's result arrow, as the typed head `x(p: P): int`; any other target as it is
+// `x(p: P) -> int` before `:=` or `=`, a call's result arrow, and `x(p: P) as int`, as the typed head `x(p: P): int`;
+// any other target as it is (`n: number as Real`, `int as Real` are conversions)
 def result_typed(target: Node): Node := match target {
 	Key(head, Op.Arrow, result): { if calls_by_name(head) then Key(head, Op.Colon, result) else target }
+	Key(head, Op.As, result): { if calls_by_name(head) and result is symbol then Key(head, Op.Colon, result) else target }
 	_: target
 }
 def calls_by_name(n: Node): bool := match n {

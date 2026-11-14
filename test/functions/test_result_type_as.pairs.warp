@@ -2,3 +2,7 @@
 'fun f(a: int, b: float) as float64 { a * b }; f(2, 3)'	6.0
 'def half(n: int) as float { n / 2 }; half(3)'	1.5
 'func scaled(a: int) as float { a * 2.5 }; scaled(2)'	5.0
+# a := head too, its result held as T as `: T` holds it (decision result-type-as)
+'use markup; f() as html := p{"x"}; to_html(f())'	"<p>x</p>"
+'f(x) as int? := if x > 1 then x; f(0) == ø'	yes
+'f(x: int) as text := "n" + x; f(3)'	"n3"
