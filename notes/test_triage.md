@@ -704,3 +704,5 @@ Key case is down); test/modules/test_keys.pairs.warp:4 `[held_key == ESC, LEFT]`
 | test/functions/test_default_parameters.pairs.warp (Ruby style) | `def f(a, b: 2){a+b}; f(1)`, `… f(1, b: 5)` | a literal after a parameter's colon is refused with its fix `b = 2` (night decision parameter-named-fails) |
 | test/functions/test_default_parameters.warp (Ruby style) | `def greet(name, greeting: "Hello"){…}; greet("Ann")` | same |
 | test/functions/test_preposition_calls.warp | `f(x, for y) := x - y; f 5 for 2`, `f(xs, each y) := …; f [1 2 3] each 2` | a label takes its colon in a call, `f 5 for: 2` (wiki/argument.md; warp-interviewer 11-14) |
+| test/operators/test_equality_never_chains.pairs.warp (approx-level) | `1==1==1`, `1 != 2 == yes`, `1 ~ 1 == yes`, `1 ≈ 1 == yes`, `30 == 10 + 20 ≈ 30` | two equality-level comparisons in a row read two ways; parenthesized forms stay pinned |
+| test/types/test_partial_time_comparisons.pairs.warp (cluster-data) | `now > 1970-01-01`, `now < 2999-01-01`, `2999-01-01 > now` | an instant against a date: types never convert implicitly (wiki/Footguns.md "Dates") |
