@@ -6,6 +6,7 @@ read_time_literal(p: Parser): Node := {
 	if length == 0 { return ø }
 	p.at += length
 	written = p.code[p.at - length .. p.at]
+	check_date(written[0 ..< 10])
 	if not written.contains("[") { return opaque(["data", written]) }
 	parts = written.split("[")
 	unzoned = opaque(["data", parts#1])
@@ -15,6 +16,16 @@ read_time_literal(p: Parser): Node := {
 	if #named == 0 then unzoned else List([symbol(zoned_word), unzoned, named#1], Bracket.Round, Separator.None)
 }
 zoned_word = "zoned"
+# a date's month and day lie in the calendar, never rolled over into the next month (wiki/Footguns.md "Dates"):
+# 2024-02-30 is refused, naming the month's days; a month's length is the distance to the next month's first day
+check_date(date: text) := {
+	year = int(date[0 ..< 4])
+	month = int(date[5 ..< 7])
+	day = int(date[8 ..< 10])
+	if month < 1 or month > 12 { raise date + " does not exist: the months are 01 to 12" }
+	last = days_from_civil(year, month + 1, 1) - days_from_civil(year, month, 1)
+	if day < 1 or day > last { raise date + " does not exist: " + date[0 ..< 7] + " has the days 01 to " + text(last) }
+}
 time_literals_extension = Extension{name: "time_literals", number_readers: [read_time_literal], runtime: "times/runtime.warp"}
 
 # The length of the RFC 3339 / RFC 9557 time literal at `at`: `2024-01-31`, `2024-01-31T10:00:30.5+01:00`,
