@@ -112,7 +112,10 @@ is_free_tag(n: Node, scope: map): bool := {
 	# (spaced_tags made a spaced tag a pair before)
 	n is key and word_and_block(n) != ø and is_tag_name(name_of(key_of(n)), scope)
 }
-with_loops_as_items(n: Node, scope: map, positions: map): Node := if is_free_tag(n, scope) then Key(key_of(n), op_of(n), group_like(value_of(n), tag_items(value_of(n), scope).map(item => data_argued(as_call(loop_as_items(item), scope), positions)))) else n
+with_loops_as_items(n: Node, scope: map, positions: map): Node := if is_free_tag(n, scope) then Key(key_of(n), op_of(n), group_like(value_of(n), tag_items(value_of(n), scope).map(item => data_argued(as_call(loop_as_items(as_written(item, scope)), scope), positions)))) else n
+# a word the program does not bind among a tag's items, `li{ reverse }`, `p{ upper }`: the word as written (decision
+# tag-items-calls), never a library word's function value
+as_written(item: Node, scope: map): Node := if item is symbol and not is_own_word(scope, name_of(item)) then spliced(item) else item
 # a tag's items; a block that is one phrase headed by a function, `p{ greet "Ann" }`, is that one item (decision
 # tag-items-calls), not the items greet and "Ann"
 tag_items(block: Node, scope: map): list := if is_call_phrase(block, scope) then [List(items_of(block), Bracket.None, Separator.Space)] else items_of(block)
