@@ -13,6 +13,7 @@ has_field(m: Node, name: text): bool := {
 	if is_null(m) { return no }
 	if is_position_part(m, name) { return is_meta(m) }
 	if is_list_part(m, name) { return yes }
+	if is_group_of_one(m) { return has_field(unboxed_list(m)#1, name) }
 	if kind_code(m) == Kind.Symbol or kind_code(m) == Kind.Function { return same_bytes(name, "name") }
 	if node_is_error(m) { return is_error_message(m, name) }
 	if is_entry(m) { return same_bytes(key_name(m), name) or is_tagged_field(m, name) or same_bytes(name, "key") or same_bytes(name, "value") or same_bytes(name, "name") or same_bytes(name, "op") }
@@ -61,6 +62,8 @@ position_part(m: Node, name: text): int := if same_bytes(name, "line") then int_
 # a key node, ø (a block's written `ø`) none: the walks over a list's items for a named entry pass it
 is_keyed(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Key
 is_entry(n: Node): bool := is_keyed(n) and marked_kind(n) != Marked.Instance
+# `(a * 2)` of code: a group of one shows its item's parts, `.op` and `.value`; its `.bracket` stays its own
+is_group_of_one(n: Node): bool := kind_code(n) == Kind.List and bracket_info(n) == BracketCode.Round and #unboxed_list(n) == 1
 # `n.bracket`, `n.separator` of any node: a list's own, ø of any other node; a map's entry or a
 # key's name of that name wins
 is_list_part(m: Node, name: text): bool := {

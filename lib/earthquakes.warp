@@ -1,0 +1,26 @@
+// The standard library module earthquakes (notes/world_events.md): the world's earthquakes as the USGS reports them
+// (GeoJSON feeds updated each minute, no key). `for quake in quakes(4.5) {…}` gives the last day's quakes of at least
+// that magnitude, then each new one as it is reported. A quake is a map: title, place, mag, time (ms since 1970), url,
+// tsunami, alert …
+use feeds
+use net
+// USGS keeps one feed per magnitude floor: all, 1.0, 2.5, 4.5, significant
+FEEDS = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/"
+FLOORS = [4.5, 2.5, 1.0]
+// how often the feed is asked again: USGS updates it once a minute
+QUAKE_PERIOD = 60s
+
+class Quakes extends Polled {
+	magnitude: number
+	poll() := [feature.properties for feature in fetch(FEEDS + feed_of(magnitude)).features if feature.properties.mag >= magnitude]
+	key(quake) := quake.url
+}
+
+// the feed holding every quake of the magnitude: the highest floor at or below it
+feed_of(magnitude: number): text := {
+	floors = [floor for floor in FLOORS if floor <= magnitude]
+	(if floors is empty then "all" else text(floors#1)) + "_day.geojson"
+}
+
+// the last day's quakes of at least the magnitude, then each new one
+quakes(magnitude: number = 2.5, every: any = QUAKE_PERIOD): Quakes := Quakes(magnitude: magnitude, period: every)

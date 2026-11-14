@@ -578,7 +578,10 @@ linked_global_kinds(): map := {
 	}
 	kinds
 }
-linked_global(module_name: text, name: any): bool := name is text and module.linked_images.any(image => image.name == module_name and image.global_names.has(program_global_prefix + name))
+linked_global(module_name: text, name: any): bool := name is text and module.linked_images.any(image => image.name == module_name and holds_global(image, name))
+# a global of some linked module, a console's earlier line's `count = 41` among them
+is_linked_global(name: text): bool := module.linked_images.any(image => holds_global(image, name))
+holds_global(image: LibraryImage, name: text): bool := image.global_names.has(program_global_prefix + name)
 takes_block(head: Node): bool := items_of(head)[1 ..].any(parameter => parameter_type(parameter) == "block")
 # `name := …`, `name = …`, `global name = …`: a value's definition, no function's
 # a value, and a type the program's declarations name (`type fraction = rational`), whose statement is no program's

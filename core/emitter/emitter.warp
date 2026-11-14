@@ -264,7 +264,10 @@ def own_word_code(body: Body, name: text, x: Node): TypedCode {
 }
 # `t.bytecount`, `t.byte_size`: the bytes of a text's UTF-8, 8 bytes an item of a list
 byte_count_words = {bytecount: yes, byte_size: yes}
-def byte_size_code(value: TypedCode): TypedCode { runtime_call("node_bytes", [TypedCode(ValueKind.Node, boxed(value))]) }
+def byte_size_code(value: TypedCode): TypedCode { boxed_call("node_bytes", value) }
+# the runtime word of one value known only at run time, the value boxed for it
+def boxed_call(word: text, value: TypedCode): TypedCode { runtime_call(word, [as_node(value)]) }
+def as_node(value: TypedCode): TypedCode { TypedCode(ValueKind.Node, boxed(value)) }
 # the kinds `+` joins as texts
 comparisons = {"==": yes, "!=": yes, "<": yes, ">": yes, "<=": yes, ">=": yes} # todo (card comparisons-yes-map) yes??
 equalities = {"==": yes, "!=": yes}
@@ -584,7 +587,7 @@ node_reader(kind: ValueKind): text? := match kind {
 }
 # a value known only at run time as the core duration it lasts when it is a lib/units quantity of time
 # (quantity_lasting, kept where the program has it), else as it is: `f(n: duration) := n; f(2 hours)`, `d + 2 hours`
-lasting(value: TypedCode): TypedCode := if value.kind == ValueKind.Node and module.functions.has(quantity_lasting_word) then TypedCode(ValueKind.Node, boxed(call_values(module.functions[quantity_lasting_word], [value]))) else value
+lasting(value: TypedCode): TypedCode := if value.kind == ValueKind.Node and module.functions.has(quantity_lasting_word) then as_node(call_values(module.functions[quantity_lasting_word], [value])) else value
 def converted(value: TypedCode, to: ValueKind): list {
 	from = value.kind
 	if to == ValueKind.Node { return boxed(value) }
@@ -617,7 +620,7 @@ exact_root_word = "exact_root"
 magnitude(body: Body, word: text, value: TypedCode): TypedCode := {
 	if word == "abs" { return absolute_value(body, value) }
 	if word == "cbrt" { return runtime_call("extended_cube_root", [TypedCode(ValueKind.Float, converted(value, ValueKind.Float))]) }
-	if value.kind != ValueKind.Float and exact_root_word in module.functions { return call_values(module.functions[exact_root_word], [TypedCode(ValueKind.Node, boxed(value))]) }
+	if value.kind != ValueKind.Float and exact_root_word in module.functions { return call_values(module.functions[exact_root_word], [as_node(value)]) }
 	TypedCode(ValueKind.Float, converted(value, ValueKind.Float) + [wasm_instructions["f64.sqrt"]])
 }
 text_reader(kind: ValueKind): text? := match kind { ValueKind.Int: "text_as_int"; ValueKind.Float: "text_as_float"; _: ø }
@@ -673,7 +676,7 @@ def condition(value: TypedCode): list {
 	if kind == ValueKind.Float { return value.code + [op.f64_const] + le64(0) + [op.f64_ne] }
 	if kind == ValueKind.List { return held_count_test(value.code, gc_code(gc_ops.struct_get, [gc_type(gc.list), 0])) }
 	if kind == ValueKind.Text { return held_count_test(value.code, gc_code(gc_ops.array_len, [])) }
-	if kind == ValueKind.Node or is_textual(kind) { return runtime_call("node_truthy", [TypedCode(ValueKind.Node, boxed(value))]).code }
+	if kind == ValueKind.Node or is_textual(kind) { return boxed_call("node_truthy", value).code }
 	# (a recursive call not yet known is taken as yes/no: wasm validation fails the module if it is not)
 	if kind != ValueKind.Bool and kind != pending { refuse("a " + kind_spelling(kind) + " as a condition") }
 	value.code
@@ -772,7 +775,7 @@ def page_printed(start: Function, main: Function, result: TypedCode, shown_kind:
 }
 # _start's printing of main's value, in local 0 as main gives it, as data after VALUE_MARK (value_as_data)
 def value_printed_as_data(result: TypedCode): list {
-	printed(text_value(VALUE_MARK)).code + printed(runtime_call("data_code", [TypedCode(ValueKind.Node, boxed(result))])).code
+	printed(text_value(VALUE_MARK)).code + printed(boxed_call("data_code", result)).code
 }
 # a boxed value: a $Node of the kind code, its data from `payload`, no second value
 def node(kind_code: int, payload: list): list {
@@ -896,10 +899,10 @@ def settled(value: TypedCode, kind: ValueKind): TypedCode {
 	settler = extension_value_settlers().values.find(word => word in module.functions)
 	if settler == ø then value else call_values(module.functions[settler], [value])
 }
-def place_checked(body: Body, name: text, value: TypedCode): TypedCode := if (value.kind == ValueKind.Node or value.kind == ValueKind.Error) and plain_place(body, name) then runtime_call("raised_if_error", [TypedCode(ValueKind.Node, boxed(value))]) else value
+def place_checked(body: Body, name: text, value: TypedCode): TypedCode := if (value.kind == ValueKind.Node or value.kind == ValueKind.Error) and plain_place(body, name) then boxed_call("raised_if_error", value) else value
 def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	# a statement assigned (`x = print "a"`) gives ø
-	if value.kind == no_kind { value = TypedCode(ValueKind.Node, boxed(value)) }
+	if value.kind == no_kind { value = as_node(value) }
 	if is_key(target, Op.Hash) and key_of(target) != ø and subscript_name(value_of(target)) != ø {
 		return map_assignment(body, key_of(target), subscript_name(value_of(target)), value)
 	}
@@ -911,7 +914,7 @@ def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 		held = expression_code(body, key_of(target))
 		if held.kind == ValueKind.Node { return keyed_assignment(body, key_of(target), held, subscript, value) }
 		# a list takes the put in place, its variable keeps the same list (no place to write back: ø)
-		if held.kind == ValueKind.List and subscript.kind == ValueKind.Node { return keyed_assignment(body, ø, TypedCode(ValueKind.Node, boxed(held)), subscript, value) }
+		if held.kind == ValueKind.List and subscript.kind == ValueKind.Node { return keyed_assignment(body, ø, as_node(held), subscript, value) }
 		if subscript.kind == ValueKind.Node { return refuse("a write by a key known only at run time, an index or a name") }
 	}
 	if is_key(target, Op.Dot) and value_of(target) is symbol {
@@ -984,9 +987,10 @@ kept_if_admitting_errors(body: Body, name: text, type_name: text) := { if union_
 def declaration(body: Body, name: text, written_type: text, value: TypedCode): TypedCode {
 	type_name = aliased_type(written_type)
 	kept_if_admitting_errors(body, name, type_name)
-	# `x: any = v` admits every value: the plain assignment; `t: type = int`, `m: map = {}` too, a node like any
-	if type_name in node_annotations { return assignment(body, symbol(name), value) }
-	if type_name in admitted_numbers { return assignment(body, symbol(name), runtime_call(admitted_numbers[type_name], [TypedCode(ValueKind.Node, boxed(value))])) }
+	# `x: any = v` admits every value, held as a node: `y: any = 1; b: bool = y` is checked when it runs, as a value
+	# known only then; `t: type = int`, `m: map = {}` too, a node like any
+	if type_name in node_annotations { return assignment(body, symbol(name), as_node(value)) }
+	if type_name in admitted_numbers { return assignment(body, symbol(name), boxed_call(admitted_numbers[type_name], value)) }
 	if type_name.ends_with("?") { return optional_declaration(body, name, without_optional_mark(type_name), value) }
 	if type_name in module.classes { return typed_declaration(body, name, type_name, value) }
 	if is_union(type_name) { return union_declaration(body, name, type_name, value) }
@@ -1001,7 +1005,7 @@ def declaration(body: Body, name: text, written_type: text, value: TypedCode): T
 # fails with "not a T"), one of another kind refused
 def typed_declaration(body: Body, name: text, type_name: text, value: TypedCode): TypedCode {
 	# `x: real = 1/3` holds any real number, an int and a float as well as an exact real (decision real-canonical)
-	if type_name == REAL_CLASS and value.kind in [ValueKind.Int, ValueKind.Float, ValueKind.Node] { return assignment(body, symbol(name), TypedCode(ValueKind.Node, boxed(value))) }
+	if type_name == REAL_CLASS and value.kind in [ValueKind.Int, ValueKind.Float, ValueKind.Node] { return assignment(body, symbol(name), as_node(value)) }
 	if value.kind != ValueKind.Node and value.kind != pending { return refuse("a " + kind_spelling(value.kind) + " given to a variable declared " + type_name) }
 	assignment(body, symbol(name), runtime_call("object_checked", [value, text_value_of("not " + with_article(type_name))]))
 }
@@ -1014,7 +1018,7 @@ def union_declaration(body: Body, name: text, type_name: text, value: TypedCode)
 	members = union_members(type_name)
 	if members.any(member => is_int_member(member)) { body.int_members[name] = yes }
 	if members.all(member => is_int_member(member)) { body.boxed_ints[name] = yes }
-	assignment(body, symbol(name), TypedCode(ValueKind.Node, boxed(value)))
+	assignment(body, symbol(name), as_node(value))
 }
 is_int_member(member: text): bool := aliased_type(member.remove_suffix("?")) == "int"
 # `x: int? = v` (`line: int? = try n.line else ø`): a T or ø, so x holds a node; a value known
@@ -1031,7 +1035,7 @@ def optional_declaration(body: Body, name: text, type_name: text, value: TypedCo
 	kind = value.kind
 	if kind != ValueKind.Node and kind != pending and kind != declared_kinds[type_name] { return refuse("a " + kind_spelling(kind) + " given to a variable declared " + type_name + "?") }
 	if declared_kinds[type_name] == ValueKind.Int { body.boxed_ints[name] = yes }
-	assignment(body, symbol(name), TypedCode(ValueKind.Node, boxed(value)))
+	assignment(body, symbol(name), as_node(value))
 }
 # a value as the declared kind takes it: an int widened to a float, a char (a one-character text) to a text, a value known only at run time checked (a list
 # one stays a node, keeping ø), else of that kind
@@ -1040,6 +1044,8 @@ def admitted(value: TypedCode, kind: ValueKind): TypedCode {
 	if value.kind == ValueKind.Int and kind == ValueKind.Float { return TypedCode(ValueKind.Float, converted(value, ValueKind.Float)) }
 	if value.kind == ValueKind.Char and kind == ValueKind.Text { return shown_text(value) }
 	if value.kind == ValueKind.Node and field_check(kind) != ø { return runtime_call(field_check(kind), [value]) }
+	# `c: char = s[1]`, a result declared char of a text's item: its character, checked at run time
+	if kind == ValueKind.Char and (value.kind == ValueKind.Node or value.kind == ValueKind.Text) { return boxed_call("char_of_node", value) }
 	# the result of a call still compiling (pending), or a kind guessed from one (`f(x) + g(x)` an int), is held as the
 	# declared kind: the reading is done again once the call's result is known
 	if value.kind == pending or module.saw_pending { return TypedCode(kind, value.code) }
@@ -1251,8 +1257,10 @@ def group_expression(body: Body, n: Node): TypedCode {
 		return call(body, runtime_word(name_of(n#1)), items_of(n)[1..])
 	}
 	if bracket_of(n) == "(" and #n == 3 and n#1 == symbol("is_type") and n#3 is text { return type_test_code(body, n#2, n#3) }
+	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol(HiddenWord.KindsOf as text) { return kinds_of_code(body, n#2) }
+	if bracket_of(n) == "(" and #n == 4 and n#1 == symbol(HiddenWord.KindTested as text) and n#4 is text { return kind_tested_code(body, n#2, n#3, n#4) }
 	if bracket_of(n) == "(" and #n == 3 and n#1 == symbol(HiddenWord.InstanceOf as text) and n#3 is text { return class_test_code(body, expression_code(body, n#2), n#3, "instance_among") }
-	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol(HiddenWord.FloatConvertible as text) { return runtime_call("converts_to_float", [TypedCode(ValueKind.Node, boxed(expression_code(body, n#2)))]) }
+	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol(HiddenWord.FloatConvertible as text) { return runtime_call("converts_to_float", [as_node(expression_code(body, n#2))]) }
 	# a match no case takes: `switch_no_case("label": value)` or `switch_no_case(n)` ends the run in no_case_<label>
 	# holding the value, which the run reports as "no case for n = 4"
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("switch_no_case") {
@@ -1260,7 +1268,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 		# a name the passes made (`match·subject`) is no name the program wrote
 		label = if labelled then key_of(n#2) else if n#2 is symbol and not name_of(n#2).contains("·") then name_of(n#2) else "value"
 		subject = if labelled then value_of(n#2) else n#2
-		held = runtime_call("held_detail", [TypedCode(ValueKind.Node, boxed(expression_code(body, subject)))])
+		held = runtime_call("held_detail", [as_node(expression_code(body, subject))])
 		ended = ended_in(pending, no_case_prefix + label)
 		return TypedCode(ended.kind, held.code + [op.drop] + ended.code)
 	}
@@ -1280,7 +1288,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in library_words {
 		word = library_words[name_of(n#1)]
 		# a late word, made once the module's classes are known (an extension's dispatcher asking a foreign instance)
-		if word in late_words { return intrinsic_of(body, word, n[1..].map(x => TypedCode(ValueKind.Node, boxed(expression_code(body, x))))) }
+		if word in late_words { return intrinsic_of(body, word, n[1..].map(x => as_node(expression_code(body, x)))) }
 		if word == "symbol_node" and #n == 2 and n#2 is text { return interned_symbol(body, n#2) }
 		# `x as Angle`: the number held unboxed as its type's number, an exact 0.5 as the float an Angle is, with its
 		# mark, carried statically (decision marks-unboxed-first)
@@ -1295,7 +1303,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 		# node_floor_quotient; floor_quotient takes ints only
 		if word == "floor_quotient" and #n == 3 {
 			values = n[1..].map(x => expression_code(body, x))
-			if values.any(value => value.kind == ValueKind.Node or value.kind == pending) { return runtime_call("node_floor_quotient", values.map(value => TypedCode(ValueKind.Node, boxed(value)))) }
+			if values.any(value => value.kind == ValueKind.Node or value.kind == pending) { return runtime_call("node_floor_quotient", values.map(value => as_node(value))) }
 			if values.any(value => value.kind != ValueKind.Int) { return floored(operation_code(body, "/", values#1, values#2)) }
 		}
 		return call(body, runtime_word(word), items_of(n)[1..])
@@ -1472,7 +1480,7 @@ def key_expression(body: Body, n: Node): TypedCode {
 	target = if not (right is symbol) then ø else if name_of(right) in core_type_words then core_type_words[name_of(right)] else if name_of(right) in int_spellings then ValueKind.Int else name_of(right)
 	if operator == Op.As and target == "number" { return as_number(expression_code(body, left)) }
 	# `x as any`, also through an alias (`type html = any`): x as it is, held as a node
-	if operator == Op.As and target == "any" { return TypedCode(ValueKind.Node, boxed(expression_code(body, left))) }
+	if operator == Op.As and target == "any" { return as_node(expression_code(body, left)) }
 	# `"./a" as path`: the text marked, held unboxed with its mark (TextMark)
 	if operator == Op.As and target in marked_text_types { return TypedCode(ValueKind.Text, converted(expression_code(body, left), ValueKind.Text), marked_text_types[target]) }
 	if operator == Op.As and (is_held_kind(target)) {
@@ -1486,7 +1494,7 @@ def key_expression(body: Body, n: Node): TypedCode {
 		if target == ValueKind.Char and value.kind == ValueKind.Int { return TypedCode(ValueKind.Char, runtime_call("cast_code_point", [value]).code + [op.i32_wrap_i64]) }
 		# `(d + 87) as char` of a nat, a node at run time
 		if target == ValueKind.Char and value.kind == ValueKind.Node { return TypedCode(ValueKind.Char, runtime_call("node_code_point", [value]).code + [op.i32_wrap_i64]) }
-		if target == ValueKind.Bool and (value.kind == ValueKind.Node or value.kind == ValueKind.Text) { return runtime_call("bool_cast", [TypedCode(ValueKind.Node, boxed(value))]) }
+		if target == ValueKind.Bool and (value.kind == ValueKind.Node or value.kind == ValueKind.Text) { return boxed_call("bool_cast", value) }
 		return TypedCode(target, converted(value, target))
 	}
 	if operator == Op.Not and left == ø { return TypedCode(ValueKind.Bool, condition(expression_code(body, right)) + [op.i32_eqz]) }
@@ -1507,7 +1515,7 @@ def key_expression(body: Body, n: Node): TypedCode {
 	if operator in equalities and (is_case(body, left) or is_case(body, right)) {
 		case = if is_case(body, right) then right else left
 		other = if is_case(body, right) then left else right
-		return tested_as(operator, runtime_call("case_equal", [TypedCode(ValueKind.Node, boxed(expression_code(body, other))), expression_code(body, case)]))
+		return tested_as(operator, runtime_call("case_equal", [as_node(expression_code(body, other)), expression_code(body, case)]))
 	}
 	arithmetic(body, operator, left, right)
 }
@@ -1527,7 +1535,7 @@ int_spellings = ["byte", "int8", "int16", "int32", "int64", "uint8", "u8", "uint
 def as_number(value: TypedCode): TypedCode {
 	if value.kind == ValueKind.Int or value.kind == ValueKind.Float { return value }
 	if is_textual(value.kind) { return runtime_call("text_as_number", [TypedCode(ValueKind.Text, converted(value, ValueKind.Text))]) }
-	runtime_call("number_cast", [TypedCode(ValueKind.Node, boxed(value))])
+	boxed_call("number_cast", value)
 }
 # `x as rational` of a float: the runtime's float_as_exact (decision float-as-rational)
 def as_rational(value: TypedCode): TypedCode {
@@ -1567,8 +1575,8 @@ def bitwise(body: Body, symbol: text, left: Node, right: Node): TypedCode {
 }
 def logical_code(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
 	# `c and print x`: a statement's nothing beside a value is ø, a value known only at run time
-	if a.kind == no_kind { a = TypedCode(ValueKind.Node, boxed(a)) }
-	if b.kind == no_kind { b = TypedCode(ValueKind.Node, boxed(b)) }
+	if a.kind == no_kind { a = as_node(a) }
+	if b.kind == no_kind { b = as_node(b) }
 	# a value whose kind the first reading of a recursive function does not know yet (pending) beside a yes/no is one
 	yes_no = kind => kind == ValueKind.Bool or kind == pending
 	if yes_no(a.kind) and yes_no(b.kind) {

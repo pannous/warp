@@ -234,7 +234,8 @@ def class_test_code(body: Body, value: TypedCode, spec: text, word: text): Typed
 	runtime_call(word, [TypedCode(ValueKind.Node, boxed(value)), list_value(body, module.classes.keys.filter(name => descends(name, spec)))])
 }
 def type_test_code(body: Body, subject: Node, written: text): TypedCode { value_type_test(body, expression_code(body, subject), written) }
-def value_type_test(body: Body, value: TypedCode, written: text): TypedCode {
+# `kinds`: code reading the value's kind bits where a match read them once (kinds·of), else none
+def value_type_test(body: Body, value: TypedCode, written: text, kinds: list = []): TypedCode {
 	# `x is Q` of `type Q = P` tests a P
 	spec = aliased_type(written)
 	# `x is any`, also through an alias (`x is html` of `type html = any`): yes, as `x as any` is x
@@ -248,7 +249,7 @@ def value_type_test(body: Body, value: TypedCode, written: text): TypedCode {
 	type = core_type_words[spec]
 	# a pair `a: b` is no class's instance, though a Key holds both (runtime fields.warp is_entry); `is key` and a Key arm take both
 	if value.kind == ValueKind.Node and spec == "pair" { return TypedCode(ValueKind.Bool, runtime_call("is_entry", [value]).code) }
-	if value.kind == ValueKind.Node { return node_type_test(body, value, type) }
+	if value.kind == ValueKind.Node { return node_type_test(body, value, type, kinds) }
 	# a text held unboxed carries its mark statically: `p is path` of a path in a local
 	passes = if type in marked_text_types then value.mark == marked_text_types[type] else covered_kinds[type].any(kind => same_kind(kind, value.kind))
 	TypedCode(ValueKind.Bool, [op.i32_const, if passes then 1 else 0])
@@ -288,16 +289,38 @@ quantity_time_specs = ["time", "duration"]
 same_kind(a: ValueKind, b: ValueKind): bool := a == b
 # `x is type` of a value known only at run time: its held kind bit against the kinds passing the type, inline;
 # a type value (`int is number`) and `is code` ask runtime node_is_type
-def node_type_test(body: Body, value: TypedCode, type: text): TypedCode {
-	kinds = 0
-	for kind in passing_kinds[type] { kinds = bits_or(kinds, kind_bit(kind)) }
-	if kinds == 0 { return runtime_call("node_is_type", [value, text_value(type), number_value(kinds)]) }
+def node_type_test(body: Body, value: TypedCode, type: text, kinds: list = []): TypedCode {
+	if passing_mask(type) == 0 { return runtime_call("node_is_type", [value, text_value(type), number_value(0)]) }
+	if #kinds > 0 { return bits_type_test(value, kinds, kinds, type) }
 	held = fresh_node_local(body)
 	bits = [op.local_get] + uleb(fresh_local(body, ValueKind.Int))
 	read = value.code + [op.local_set] + held[1..] + held_kind_bit_code(body, held) + [op.local_tee] + bits[1..]
+	bits_type_test(TypedCode(ValueKind.Node, held), bits, read, type)
+}
+# the kind bits a type test passes, 0 for a type a node's held kind alone cannot tell
+def passing_mask(type: text): int {
+	kinds = 0
+	for kind in passing_kinds[type] { kinds = bits_or(kinds, kind_bit(kind)) }
+	kinds
+}
+# `n is T` of a node held in `held` whose kind bits `bits` reads, `read` leaving them first: a type value asks
+# node_is_type, any other node passes by its bits
+def bits_type_test(held: TypedCode, bits: list, read: list, type: text): TypedCode {
+	kinds = passing_mask(type)
 	type_value = read + [op.i64_const] + sleb(kind_bit(HeldBit.TypeValue)) + [op.i64_and, op.i64_eqz, op.i32_eqz]
 	passes = TypedCode(ValueKind.Bool, bits + [op.i64_const] + sleb(kinds) + [op.i64_and, op.i64_eqz, op.i32_eqz])
-	TypedCode(ValueKind.Bool, type_value + if_else_code(ValueKind.Bool, runtime_call("node_is_type", [TypedCode(ValueKind.Node, held), text_value(type), number_value(kinds)]), passes))
+	TypedCode(ValueKind.Bool, type_value + if_else_code(ValueKind.Bool, runtime_call("node_is_type", [held, text_value(type), number_value(kinds)]), passes))
+}
+# `kinds·of(n)`: the kind bits of a node, read once for a match's arms (node_matches.warp); 0 for a value of another kind
+def kinds_of_code(body: Body, subject: Node): TypedCode {
+	value = expression_code(body, subject)
+	if value.kind != ValueKind.Node { return TypedCode(ValueKind.Int, [op.i64_const, 0]) }
+	held = fresh_node_local(body)
+	TypedCode(ValueKind.Int, value.code + [op.local_set] + held[1..] + held_kind_bit_code(body, held))
+}
+# `kind·tested(match·kinds, n, "text")`: `n is text` by the kind bits kinds·of read
+def kind_tested_code(body: Body, kinds: Node, subject: Node, type: text): TypedCode {
+	value_type_test(body, expression_code(body, subject), type, expression_code(body, kinds).code)
 }
 # the held kind of the node `held` as one bit, as runtime held_kind_bit places it: 1 << its Kind, a yes/no, type value,
 # the i64 shift and bit opcodes the kind words are built with

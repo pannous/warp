@@ -35,4 +35,22 @@ $shader
 print gpu_render(s, 2, 2, {xs: xs})#1")" 4278190335
 # paint's pixels the CPU reads are read from a GPU list in place too
 check "a GPU list of pixels paints" "$(WARP_WINDOW=0 "$warp" --mute --lib "$lib" 's: [u32] = int[6]; paint(s, 3, 2)' 2>&1 | grep -c '^painted 3×2')" 1
+check "a list joined of made lists for the GPU alone is a GPU list" "$(strict "plain = [[0.0, 0.0, 1.0, 1.0]]
+xs = plain + [[0.0, 0.0, 1.0, 1.0] for i in 1 to 3]
+$shader
+print gpu_render(s, 2, 2, {xs: xs})#1")" 4278190335
+check "a list a function hands to the GPU alone is a GPU list" "$(strict "$shader
+shown(xs) := gpu_render(s, 2, 2, {xs: xs})
+xs = [[0.0, 0.0, 1.0, 1.0] for i in 1 to 4]
+print count(xs)
+print shown(xs)#1")" 4278190335
+# where the compiler leaves such a list a list, its hint says why at the line that made it
+check "a list the program reads says where it was made why it stays a list" "$(WARP_WINDOW=0 "$warp" --mute --lib "$lib" "xs = [[0.0, 0.0, 1.0, 1.0] for i in 1 to 4]
+$shader
+gpu_render(s, 2, 2, {xs: xs})
+print xs#1" 2>&1 | grep -c 'xs stays a list, not a GPU list: the program reads its items.* at 1:1; fix: xs: \[vec4\]')" 1
+# warp format writes the type the compiler inferred
+check "warp format writes an inferred GPU list's type" "$("$warp" --lib "$lib" format "xs = [[0.0, 0.0, 1.0, 1.0] for i in 1 to 4]
+$shader
+gpu_render(s, 2, 2, {xs: xs})" </dev/null 2>&1 | head -1)" "xs: [vec4] = [[0.0, 0.0, 1.0, 1.0] for i in 1 to 4]"
 [ "$failures" = 0 ] || exit 1

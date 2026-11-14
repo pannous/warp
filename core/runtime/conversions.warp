@@ -106,7 +106,9 @@ text_checked(n: Node): Node := {
 holds_bool(n: Node): bool := not is_null(n) and (marked_kind(n) == Marked.Bool or (kind_code(n) == Kind.Int and not is_ratio(n) and unboxed_int(n) >= 0 and unboxed_int(n) <= 1))
 bool_checked(n: Node): Node := {
 	if not holds_bool(n) { returned_error("not a bool") }
-	n
+	if marked_kind(n) == Marked.Bool { return n }
+	held: Node = unboxed_int(n) == 1
+	held
 }
 # an instance that converts itself to a float, an exact root √3, is one too: a run-time value checked so stays itself
 float_checked(n: Node): Node := {
@@ -140,7 +142,10 @@ bool_of_node(n: Node): bool := {
 	if not holds_bool(n) { fail() }
 	unboxed_int(n) != 0
 }
+# a character known only at run time: a character, a one-character text (`s[1]`), or a code point (`[65, 66]#2`)
 char_of_node(n: Node): char := {
+	if not is_null(n) and kind_code(n) == Kind.Text and one_character(unboxed_text(n)) { return char_of(first_code_point(unboxed_text(n))) }
+	if not is_null(n) and is_plain_int(n) { return char_of(unboxed_int(n)) }
 	if is_null(n) or kind_code(n) != Kind.Codepoint { not_a_character() }
 	unboxed_char(n)
 }

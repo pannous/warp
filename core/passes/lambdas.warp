@@ -296,9 +296,10 @@ lowered_at_depth(n: Node, depth: int, locals: Locals, lowering: Lowering, quoted
 }
 # a library word named as a value, `f = sqrt`, `xs.map(upper)`, `f(is_letter)`: the lambda calling it with as many
 # arguments as its declarations agree on (card library-word-value); ø for a name the program binds itself, a type
-# word (`any` too, beside the word any(xs, f)), or a word declared with no parameters or several counts
+# word (`any` too, beside the word any(xs, f)), a linked module's global, or a word declared with no parameters or several
+# counts
 library_word_value(name: text, bound: map): Node? := {
-	if bound.has(name) or is_tested_type_word(name) or name == any_word { return ø }
+	if bound.has(name) or is_linked_global(name) or is_tested_type_word(name) or name == any_word { return ø }
 	counts = library_lines_of(name).map(line => #line.signature.parameters)
 	if #counts == 0 or counts#1 == 0 or counts.any(count => count != counts#1) { return ø }
 	lambda_calling(unaliased(name), counts#1)

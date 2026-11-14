@@ -1,0 +1,12 @@
+#!/usr/bin/env warp
+# The world's odds: Polymarket's busiest prediction markets, the price of yes being the crowd's probability, from its
+# public Gamma API (no key). prices(slug) watches a market: its price now, then each change
+use polymarket
+
+for market in markets(5) {
+	print text(round(outcome_prices(market)#1 * 100)) + "%  " + market.question
+}
+busiest = markets(1)#1
+for price in prices(busiest.slug, every: 2s).take(1) {
+	print "watching " + busiest.slug + ": " + text(price)
+}
