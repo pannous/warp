@@ -375,8 +375,23 @@ G = PitchClass(7)
 A = PitchClass(9)
 B = PitchClass(11)
 length_text(length) := if length == 1 then "" else "~" + text(length)
-// how many times the play's duration a note or chord holds, 1 for a plain pitch
-held_length(pitch) := if pitch is Note or pitch is Chord then pitch.length else 1
+// a silent step of a melody, tied longer as a note is: [C4, rest, E4, rest ~ 2]
+class Rest {
+	length: number = 1
+	similar(factor) := Rest(length * factor)
+	format as text := "rest" + length_text(length)
+}
+rest = Rest()
+// how many times the play's duration a step holds, 1 for a plain pitch
+held_length(pitch) := if pitch is Note or pitch is Chord or pitch is Rest then pitch.length else 1
+// the melody words on lists: euclid(C5, 3, 8) three C5 spread over eight steps as evenly as they go, the rest rests;
+// alternate([G4, A4]) one of them each time the melody plays, in turn; maybe(C5, 0.3) C5 in about 30 % of the plays,
+// chosen by melody_seed, the same each run
+euclid(step, hits: int, steps: int) := [if (i * hits) % steps < hits then step else rest for i in 0..steps]
+class Alternate { options: list }
+alternate(options: list) := Alternate(options)
+class Maybe { step: any; share: number }
+maybe(step, share = 0.5) := Maybe(step, share)
 cents_text(cents) := if cents == 0 then "" else if cents > 0 then "+" + string(cents) + "c" else string(cents) + "c"
 note(pitch) := nearest_note(hertz_of(pitch))
 nearest_note(frequency) := {
@@ -1058,14 +1073,14 @@ public plain_hertz(pitch) := {
 // sounding together, `play([C4+E4 G4], 250ms)`, `play([[C4 E4] G4], 250ms)`; a score written as data so,
 // `play { c4 e4 [c4 g4] }`; a signal function, `play(hum, 2s)`, or a pair of them [left, right] the signal (user
 // 2026-10-12: no snake case for signals); a Sample the clip; any other text a sound file's path
-global play(tone) := play(tone, note_seconds)
+global play(tone) := play(tone, if tone is text and written_steps(tone) then bar_seconds(1) else note_seconds)
 play(tone, for duration) := music_played(tone, duration, wave_shape)
 play(tone, for duration, shape: text) := music_played(tone, duration, shape)
 // the overloads call it by this name, an untyped music would take play(fill: …) (card overload-untyped-function)
 music_played(music, duration, shape) := {
 	if is_signal(music) { return signal_played(music, duration) }
 	if music is Sample { return sample_played(music, 1) }
-	if music is text and not is_note_name(music) { return file_played(music) }
+	if music is text and not is_note_name(music) { return if written_steps(music) then steps_played(notes_written(music), si_amount(duration), shape) else file_played(music) }
 	if music is list { return sound(melody_samples(music, si_amount(duration), shape)) }
 	sound(chord_samples(pitches_of(music), si_amount(duration), shape))
 }
@@ -1254,12 +1269,47 @@ sample_played(clip: Sample, rate) := {
 }
 // plain seconds: the unit check reads a quantity parameter in a loop as unsupported (wiki/unit.md). A note or chord tied
 // longer holds that many times the seconds: play([C4, E4 ~ 2, (C4+E4+G4) ~ 4], 100ms)
+// each step its seconds, the length it is tied to; swing (0 to 1) delays every second step, 1 to a triplet feel
 public melody_samples(notes, seconds, shape = wave_shape) := {
+	steps = melody_steps(notes, melody_cycle(text(notes)))
 	samples = []
-	for item in notes {
-		samples = samples + chord_samples(pitches_of(item), seconds * held_length(item), shape)
+	elapsed = 0.0
+	done = 0
+	for k in 0..count(steps) {
+		step = steps[k]
+		length = seconds * held_length(step)
+		elapsed = elapsed + length + swing * length / 3 * (if k % 2 == 1 then -1 else if k + 1 < count(steps) then 1 else 0)
+		target = round(elapsed * sample_rate) as int
+		took = (target - done) / sample_rate
+		if target > done { samples = samples + (if step is Rest then silent_samples(target - done) else chord_samples(pitches_of(step), took, shape)) }
+		done = target
 	}
 	samples
+}
+silent_samples(n) := [sample_offset for i in 0..n]
+// a written melody's steps spread over the seconds, its whole cycle
+steps_played(steps, seconds, shape) := sound(melody_samples(steps, seconds / sum(steps.map(held_length)), shape))
+global swing = 0.0 as float
+global melody_seed = 0
+// the steps as this play of the melody sounds them: an alternation's option of this turn, a maybe's step or a rest as long
+melody_steps(notes, cycle) := [for k in 0..count(notes): melody_step(notes[k], cycle, k)]
+melody_step(step, cycle, place) := {
+	if step is Alternate { return melody_step(step.options[cycle % count(step.options)], floor(cycle / count(step.options)) as int, place) }
+	if step is Maybe { return if melody_chance(cycle, place) < step.share then melody_step(step.step, cycle, place) else Rest(held_length(step.step)) }
+	step
+}
+// 0 to 1, the same for the same seed, cycle and place in the melody
+melody_chance(cycle, place) := {
+	h = (melody_seed * 7919 + cycle * 104729 + place * 1299709 + 12345) % 2147483647
+	for round in 0..3 { h = (h * h + 48271) % 2147483647 }
+	(h as float) / 2147483647
+}
+// how often this voice played the same melody before: alternations take turns by it
+global melodies_played = [""]
+melody_cycle(written: text) := {
+	cycle = count([seen for seen in melodies_played if seen == written])
+	melodies_played.push(written)
+	cycle
 }
 // music as plain data, no parser syntax (card music-data-dsl, decision self-parser-drops): play { c4 e4 [c4 g4] } is
 // its notes one after another, a group of them a chord; a note name written in small letters (c4, eb4) reads as C4, Eb4
@@ -1273,29 +1323,23 @@ score_pitch(item) := if item is list then [score_pitch(pitch) for pitch in item]
 // capitalize is text.warp's; letter-range uses range_index so it does not meet this module's at(time, block)
 note_capitalized(name: text) := upper(name[0]) + name[1..]
 
-// patterns in Tidal's mini-notation (card patterns-live): a cycle of steps that share the cycle's seconds evenly.
-// `c4 e4 g4` three steps, `~` a rest, `[g4 b4]` a group sharing one step, `c4*2` twice in its step, `c4,e4,g4` a chord,
-// `c4(3,8)` Euclidean: 3 notes spread over 8 steps. Card pattern-extras: `<c4 e4 g4>` one of them per cycle, in turn;
-// `c4 _ e4` (or `c4@2 e4`) c4 holds two steps; `c4?` sounds in half the cycles (`c4?0.3` in 30 %), chosen by
-// pattern_seed, the same each run. The cycle lasts `for 2 bars` (a bar without), the result is one sound the voice
-// goes on after; `swing` (0 to 1) delays every second step of a group, 1 to a triplet feel
-global swing = 0.0 as float
-global pattern_seed = 0
-// a pattern item is [kind, payload, weight, chance]: kind 0 a group of items, 1 a sound of frequencies (none: a
-// rest), 2 alternatives (`<a b>`); weight its steps (`_`, `@n`), chance the share of cycles it sounds in (`?`)
-pattern_item(kind, payload) := [kind, payload, 1, 1.0 as float]
-pattern_note(word) := if word == "~" then pattern_item(1, []) else pattern_item(1, [note_hertz(upper(word[0]) + word[1..]) for word in split(word, ",")])
-// k notes over n steps as evenly as possible: step i sounds when (i * k) mod n < k
-pattern_euclid(item, k, n) := pattern_item(0, [if (i * k) % n < k then item else pattern_item(1, []) for i in 0..n])
+// a melody written as text (Tidal's mini-notation), read into a list of steps: `c4 e4 g4` three, `~` a rest, `[g4 b4]` a
+// group sharing one step, `c4*2` twice in its step, `c4,e4,g4` a chord, `c4(3,8)` euclid, `<c4 e4>` alternate, `c4?`
+// (`c4?0.3`) maybe, `c4 _ e4` or `c4@2 e4` c4 held two steps. play("c3 ~ [c3 c3]", 1 bar) spreads them over the bar
+// a parsed item is [kind, payload, weight, chance]: kind 0 a group of items, 1 a sound of frequencies (none: a rest),
+// 2 alternatives; weight its steps, chance the share of plays it sounds in
+step_item(kind, payload) := [kind, payload, 1, 1.0 as float]
+step_note(word) := if word == "~" then step_item(1, []) else step_item(1, [note_hertz(upper(word[0]) + word[1..]) for word in split(word, ",")])
+step_euclid(item, k, n) := step_item(0, [if (i * k) % n < k then item else step_item(1, []) for i in 0..n])
 // a parameter `text` is the local here: `text[i]` is its letter, never the rule's i empty texts
-pattern_end(text: text, from: int, stops: text) := {
+step_end(text: text, from: int, stops: text) := {
 	i = from
 	while i < count(text) and not (text[i] in stops) { i = i + 1 }
 	i
 }
-global pattern_stops = " []<>*(?@_"
+global step_stops = " []<>*(?@_"
 // the steps from `from` to the closing bracket (or the end), and the place after it
-def pattern_steps(steps: text, from: int) {
+def written_items(steps: text, from: int) {
 	items = []
 	i = from
 	while i < count(steps) {
@@ -1307,30 +1351,30 @@ def pattern_steps(steps: text, from: int) {
 			if last >= 0 { items[last][2] = items[last][2] + 1 }
 			i = i + 1
 		} else {
-			item = pattern_item(1, [])
+			item = step_item(1, [])
 			if c == "[" or c == "<" {
-				inner = pattern_steps(steps, i + 1)
-				item = pattern_item(if c == "[" then 0 else 2, inner[0])
+				inner = written_items(steps, i + 1)
+				item = step_item(if c == "[" then 0 else 2, inner[0])
 				i = inner[1]
 			} else {
-				stop = pattern_end(steps, i, pattern_stops)
-				item = pattern_note(steps[i..stop])
+				stop = step_end(steps, i, step_stops)
+				item = step_note(steps[i..stop])
 				i = stop
 			}
 			while i < count(steps) and steps[i] in "*(?@" {
 				if steps[i] == "*" {
-					stop = pattern_end(steps, i + 1, pattern_stops)
-					item = pattern_item(0, [item for x in 0..number(steps[i + 1..stop])])
+					stop = step_end(steps, i + 1, step_stops)
+					item = step_item(0, [item for x in 0..number(steps[i + 1..stop])])
 				} else if steps[i] == "(" {
-					stop = pattern_end(steps, i + 1, ")")
+					stop = step_end(steps, i + 1, ")")
 					arguments = split(steps[i + 1..stop], ",")
-					item = pattern_euclid(item, number(arguments[0]), number(arguments[1]))
+					item = step_euclid(item, number(arguments[0]), number(arguments[1]))
 					stop = stop + 1
 				} else if steps[i] == "@" {
-					stop = pattern_end(steps, i + 1, pattern_stops)
+					stop = step_end(steps, i + 1, step_stops)
 					item[2] = number(steps[i + 1..stop])
 				} else {
-					stop = pattern_end(steps, i + 1, pattern_stops)
+					stop = step_end(steps, i + 1, step_stops)
 					item[3] = if stop > i + 1 then float(steps[i + 1..stop]) else 0.5 as float
 				}
 				i = stop
@@ -1340,71 +1384,29 @@ def pattern_steps(steps: text, from: int) {
 	}
 	[items, i]
 }
-// 0 to 1, the same for the same seed, cycle and place in the pattern
-def pattern_chance(cycle, place) {
-	h = (pattern_seed * 7919 + cycle * 104729 + place * 1299709 + 12345) % 2147483647
-	for round in 0..3 { h = (h * h + 48271) % 2147483647 }
-	(h as float) / 2147483647
+// the steps a text writes, each tied to its share of one step: "c4 [e4 g4]" is [C4, E4 ~ ½, G4 ~ ½]
+public notes_written(written: text) := melody_of(written_items(written, 0)[0], 1)
+melody_of(items, length) := {
+	steps = []
+	for item in items { steps = steps + item_steps(item, length * item[2]) }
+	steps
 }
-// [frequencies, seconds] of every sound and rest of the items spread over the seconds in this cycle, the swing applied;
-// place numbers each item for its chance, chance is the share of cycles the enclosing items sound in
-def pattern_events(items, seconds, cycle, place, chance) {
-	steps = 0
-	for item in items { steps = steps + item[2] }
-	step = seconds / steps
-	shift = swing * step / 3
-	events = []
-	for k in 0..count(items) {
-		item = items[k]
-		length = item[2] * step + (if k % 2 == 1 then - shift else if k + 1 < count(items) then shift else 0)
-		turn = cycle
-		while item[0] == 2 {
-			chosen = item[1][turn % count(item[1])]
-			turn = floor(turn / count(item[1])) as int
-			item = [chosen[0], chosen[1], item[2], chosen[3] * item[3]]
-		}
-		here = (place * 31 + k + 1) % 1000003
-		sounds = chance * item[3]
-		if item[0] == 0 { events = events + pattern_events(item[1], length, turn, here, sounds) }
-		else if sounds < 1 and pattern_chance(cycle, here) >= sounds { events.push([[], length]) }
-		else { events.push([item[1], length]) }
-	}
-	events
+item_steps(item, length) := {
+	steps = if item[0] == 0 then melody_of(item[1], length / sum([inner[2] for inner in item[1]])) else if item[0] == 2 then [alternate([single_step(option, length) for option in item[1]])] else [sounded_step(item[1]) ~ length]
+	if item[3] < 1 then steps.map(step => maybe(step, item[3])) else steps
 }
-// the cycle a pattern plays: how often this voice played the same text before
-global patterns_played = [""]
-def pattern_cycle(text) {
-	cycle = count([seen for seen in patterns_played if seen == text])
-	patterns_played.push(text)
-	cycle
+single_step(item, length) := {
+	steps = item_steps(item, length)
+	if count(steps) == 1 then steps[0] else alternate(steps)
 }
-silent_samples(n) := [sample_offset for i in 0..n]
-// the samples of the events one after another, each ending at the sample its cumulated seconds reach: no drift
-def pattern_samples(events) {
-	samples = []
-	elapsed = 0.0
-	done = 0
-	for event in events {
-		elapsed = elapsed + event[1]
-		target = round(elapsed * sample_rate) as int
-		if target > done { samples = samples + (if count(event[0]) == 0 then silent_samples(target - done) else chord_samples(event[0], (target - done) / sample_rate, wave_shape)) }
-		done = target
-	}
-	samples
+sounded_step(frequencies) := if count(frequencies) == 0 then rest else if count(frequencies) == 1 then note(frequencies[0]) else Chord(frequencies.map(note))
+// a text that reads as steps (each word a note name or ~): it plays as a melody; any other text names a sound file
+written_steps(written: text) := {
+	words = split(written.replace("[", " ").replace("]", " ").replace("<", " ").replace(">", " ").replace(",", " "), " ").filter(word => word != "" and word != "_")
+	count(words) > 0 and words.all(word => word == "~" or note_word(word[0 ..< step_end(word, 0, "*(?@")]))
 }
-// a pattern is a value play plays (decision one-play): play(Pattern("~ g4 ~ g4*2"), 1 bar), a bar without the length
-play(cycle: Pattern, for duration) := sound(pattern_samples(pattern_events(pattern_steps(cycle.written, 0)[0], si_amount(duration), pattern_cycle(cycle.written), 0, 1.0 as float)))
-play(cycle: Pattern) := play(cycle, bar_seconds(1))
-// the old word plays it too, said once: pattern("c4 e4", 2 bars) is play(Pattern("c4 e4"), 2 bars)
-global pattern_word_said = no
-pattern(steps, duration) := {
-	if not pattern_word_said {
-		pattern_word_said = yes
-		warning("pattern(…) plays through play: write play(Pattern(\"" + steps + "\"), …)")
-	}
-	play(Pattern(steps), duration)
+note_word(word: text) := count(word) > 0 and is_note_name(upper(word[0]) + word[1..])
 }
-pattern(steps) := pattern(steps, bar_seconds(1))
 
 // MIDI (card midi-out): midi_on C4, midi_off C4, midi_send(144, 60, 100) to the first output device (or the browser's
 // Web MIDI output), midi_outputs() their names; channels count from 1, velocity 1 to 127. The native warp sends over
