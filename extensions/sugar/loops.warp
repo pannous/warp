@@ -7,10 +7,9 @@ rewrite for($start; $condition; $step) {$body...} => ($start; while $condition {
 rewrite (for $xs {$body...}) => (for $item in $xs {it = $item; $body...})
 # its colon body stays bare (`for 1…100: print it`, parser.warp ranged_loop): the block of that one statement
 rewrite (for $xs $body) => (for $item in $xs {it = $item; $body})
-# `each xs {…}` and `xs.each {…}` head that loop too, as statements with a block (inside an expression, `print each
-# xs`, each is the broadcasting word); warp says for
+# `each xs {…}` heads that loop too, as a statement with a block (inside an expression, `print each xs`, each is the
+# broadcasting word; `xs.each {…}` maps, extensions/sugar/broadcasting.warp); warp says for
 rewrite each $xs $body => for $xs $body where statement and $body is block and alias
-rewrite $xs.each $body => for $xs $body where statement and $body is block and alias
 # Inside an expression `each` is the broadcasting word: `print each xs` calls print with each item, the list of the
 # results its value (`xs.map(e -> print(e))`); `each character of t` (`t.character` by then, of_lookups) walks the
 # text's characters

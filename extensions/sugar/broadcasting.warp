@@ -16,6 +16,9 @@ rewrite $f all $xs => $xs.map($e -> $f($e)) where $f is function
 # list's own `xs.count` keeps its meaning
 rewrite $xs.each.$f($a...) => $xs.map($e -> $e.$f($a...)) where $f is symbol
 rewrite $xs.each.$f => $xs.map($e -> $e.$f) where $f is symbol
+# `xs.each {it * 2}`: the block applied to every item, the list of its results ([2, 4, 6] of [1, 2, 3]), as map gives
+# it (decision each-maps)
+rewrite $xs.each $body => $xs.map($body) where $body is block and alias
 # `all xs > 0` (parsed `all (xs > 0)`): whether every element compares so, `any xs > 0` whether one does
 rewrite (all $xs == $y) => all($xs, $e -> $e == $y)
 rewrite (all $xs != $y) => all($xs, $e -> $e != $y)

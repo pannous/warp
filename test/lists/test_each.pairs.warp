@@ -8,3 +8,7 @@
 # the explicit broadcast maps any function, a library word's too (decision each-all-broadcast)
 'xs = ["a", "bb"]; count each xs'	[1, 2]
 'abs all [-1, 2]'	[1, 2]
+
+# `xs.each {…}`: the block applied to every item, the list of its results, as map gives it (decision each-maps)
+'[1, 2, 3].each{it * 2}'	[2, 4, 6]
+'xs = [1, 2, 3]; xs.each {it + 1}'	[2, 3, 4]
