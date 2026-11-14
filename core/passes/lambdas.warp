@@ -237,16 +237,17 @@ lowered_branches(branches: Node, locals: Locals, lowering: Lowering): Node := {
 # closures; `locals` the variables and parameters in scope; quoted code stays as written
 lowered_lambdas(n: Node, locals: Locals, lowering: Lowering): Node := {
 	if is_quote(n) { return n }
-	if is_spliced_quote(n) { return data_lowered(n, locals, lowering) }
+	if is_spliced_quote(n) { return lowered_at_depth(n#2, lowering.data_depth + 1, locals, lowering, n) }
+	if lowering.data_depth > 0 and is_code_in_data(n) { return lowered_at_depth(n, 0, locals, lowering, ø) }
 	iteration = iteration_of(n)
 	if iteration != ø {
 		looped = iteration_over(iteration, locals, lowering)
-		if looped != ø { return as_code(() => lowered_lambdas(looped, with_locals(locals, names_bound(looped, [])), lowering), lowering) }
+		if looped != ø { return lowered_lambdas(looped, with_locals(locals, names_bound(looped, [])), lowering) }
 	}
-	if is_lambda(n) { return as_code(() => lifted(lambda_of(n), locals, lowering), lowering) }
+	if is_lambda(n) { return lifted(lambda_of(n), locals, lowering) }
 	match n {
 		Symbol(name): function_value(name, n, locals, lowering)
-		Key(left, Op.Dot, right): as_code(() => dotted_lowered(left, right, locals, lowering), lowering)
+		Key(left, Op.Dot, right): dotted_lowered(left, right, locals, lowering)
 		Key(condition, Op.Question, branches): Key(lowered_lambdas(condition, locals, lowering), Op.Question, lowered_branches(branches, locals, lowering))
 		Key(left, Op.Colon, right): Key(left, Op.Colon, lowered_lambdas(right, locals, lowering))
 		# `p as text` names a type, also where the program defines a function text()
@@ -256,7 +257,7 @@ lowered_lambdas(n: Node, locals: Locals, lowering: Lowering): Node := {
 		# `x=5; -x 1` parses as -(x 1) (decision negated-call): a value heads no call, the minus negates it alone, [-5, 1]
 		Key(left, Op.Sub, right): if left == ø and are_values(right, locals, lowering) then List([Key(ø, Op.Sub, right#1)] + items_of(right)[1 ..], Bracket.Square, Separator.Comma) else Key(lowered_lambdas(left, locals, lowering), Op.Sub, lowered_lambdas(right, locals, lowering))
 		Key(left, op, right): Key(lowered_lambdas(left, locals, lowering), op, lowered_lambdas(right, locals, lowering))
-		List(items, Bracket.Round, Separator.None): as_code(() => lowered_call(items_of(n), n, locals, lowering), lowering)
+		List(items, Bracket.Round, Separator.None): lowered_call(items_of(n), n, locals, lowering)
 		List(items, Bracket.None, Separator.Space): lowered_phrase(items_of(n), n, with_locals(locals, loop_variables(n)), lowering)
 		List(items, Bracket.Round, Separator.Space): lowered_phrase(items_of(n), n, locals, lowering)
 		List(items, Bracket.None, Separator.Comma): comma_call(n, locals, lowering)
@@ -283,14 +284,14 @@ function_value(name: text, n: Node, locals: Locals, lowering: Lowering): Node :=
 # data spliced into a call (data_blocks.warp): its words the program's values or as written, never a library word's
 # function value, `li{ … reverse item }` keeps CSS's reverse (decision tag-items-calls); a call, a member, a lambda or
 # a loop in it is code again, `p{ xs.map(upper) }`
-data_lowered(n: Node, locals: Locals, lowering: Lowering): Node := within_data(lowering.data_depth + 1, () => group_like(n, [n#1, lowered_lambdas(n#2, locals, lowering)]), lowering)
-as_code(lower: function, lowering: Lowering): Node := within_data(0, lower, lowering)
-within_data(depth: int, lower: function, lowering: Lowering): Node := {
+is_code_in_data(n: Node): bool := iteration_of(n) != ø or is_lambda(n) or is_key(n, Op.Dot) or (is_group(n) and bracket_of(n) == "(" and separator_of(n) == "")
+# n lowered at that data depth; the spliced quote `quoted` around it rebuilt, when given
+lowered_at_depth(n: Node, depth: int, locals: Locals, lowering: Lowering, quoted: Node?): Node := {
 	kept = lowering.data_depth
 	lowering.data_depth = depth
-	lowered = lower()
+	lowered = lowered_lambdas(n, locals, lowering)
 	lowering.data_depth = kept
-	lowered
+	if quoted == ø then lowered else group_like(quoted, [quoted#1, lowered])
 }
 # a library word named as a value, `f = sqrt`, `xs.map(upper)`, `f(is_letter)`: the lambda calling it with as many
 # arguments as its declarations agree on (card library-word-value); ø for a name the program binds itself, a type
