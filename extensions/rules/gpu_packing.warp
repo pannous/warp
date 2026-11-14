@@ -182,7 +182,21 @@ gpu_cell_of_all(values: list): text? := {
 is_number_list(item: Node): bool := is_group(item) and bracket_of(item) == "["
 # a main-level `xs = v` made for the GPU alone as `xs: [vec4] = v`, any other statement as it is
 gpu_inferred_declaration(statement: Node, program: Node): Node := {
-	if not (is_key(statement, Op.Assign) and gpu_bound(key_of(statement), program)) { return statement }
-	cell = gpu_cell_of_all(([value_of(statement)] + gpu_lists.uses[name_of(key_of(statement))]#8).flat_map(gpu_made_parts))
-	if cell == ø then statement else Key(Key(key_of(statement), Op.Colon, bracketed([symbol(cell)], "[")), Op.Assign, value_of(statement))
+	if not (is_key(statement, Op.Assign) and key_of(statement) is symbol) { return statement }
+	bound = gpu_bound(key_of(statement), program)
+	uses = gpu_lists.uses.get(name_of(key_of(statement)))
+	cell = if uses != ø then gpu_cell_of_all(([value_of(statement)] + uses#8).flat_map(gpu_made_parts)) else ø
+	if bound and cell != ø { return Key(Key(key_of(statement), Op.Colon, bracketed([symbol(cell)], "[")), Op.Assign, value_of(statement)) }
+	why = gpu_kept_why(uses, bound)
+	if why != ø { diagnose(call_of("gpu_list_kept", [name_of(key_of(statement)), why, cell ?? "f32"]), statement) }
+	statement
+}
+# why a list the program makes and a GPU word takes stays a list, said where it is made (its upload then walks its
+# numbers, the slow path); ø for any other list
+gpu_kept_why(uses: list?, bound: bool): text? := {
+	if uses == ø or uses#1 == 0 or uses#4 == ø { return ø }
+	if bound { return "its items are lists of another width than four" }
+	if uses#3 > 0 { return "the program hands it on elsewhere too" }
+	if uses#2 != 1 + uses#5 { return "it is assigned again" }
+	"the program reads its items, which f32 cells would round"
 }

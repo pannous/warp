@@ -44,4 +44,9 @@ shown(xs) := gpu_render(s, 2, 2, {xs: xs})
 xs = [[0.0, 0.0, 1.0, 1.0] for i in 1 to 4]
 print count(xs)
 print shown(xs)#1")" 4278190335
+# where the compiler leaves such a list a list, its hint says why at the line that made it
+check "a list the program reads says where it was made why it stays a list" "$(WARP_WINDOW=0 "$warp" --mute --lib "$lib" "xs = [[0.0, 0.0, 1.0, 1.0] for i in 1 to 4]
+$shader
+gpu_render(s, 2, 2, {xs: xs})
+print xs#1" 2>&1 | grep -c 'xs stays a list, not a GPU list: the program reads its items.* at 1:1; fix: xs: \[vec4\]')" 1
 [ "$failures" = 0 ] || exit 1
