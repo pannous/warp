@@ -121,6 +121,5 @@ card for-over-iterator: the iterator rule fires only for a written constructor c
 to the list rule, which walks the object's fields (card object-iterator-loop: it should refuse).
 
 Found on the way (cards): spaced-unit (`30 s` in a module breaks the constant, function or field; `30s` works), a field
-defaulting to a module constant is null, a sample named like a module `use`s itself, a map field named like a
-library function (`edit.title`) read as that function where the loop variable's type is unknown. Gamma's market
+defaulting to a module constant is null, a sample named like a module `use`s itself. Gamma's market
 list can answer from a cache a few seconds old; `price(slug)` asks by slug.
