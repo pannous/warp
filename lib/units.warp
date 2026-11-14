@@ -239,6 +239,7 @@ ml = Unit("ml")
 ha = Unit("ha")
 dpi = Unit("dpi")
 ppi = Unit("ppi")
+mph = Unit("mph")
 // the temperature scales: a scale starts away from zero, so `20°C` is the temperature 20 on it (Quantity's `*` of a
 // plain number and a unit, quantity), not 20 times one degree
 °C = Unit("°C")
