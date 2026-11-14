@@ -3636,10 +3636,20 @@ def declared_type(p: Parser, word: text): Node := {
 def subtype_follows(p: Parser): bool := at_char(p, '<') and " \t".contains(char_at(p, p.at + 1))
 def subtype_read(p: Parser, name: Node): Node {
 	p.at = blank_end(p, p.at + 1)
-	end = symbol_end(p.code, p.at, p.n)
-	narrowed = symbol(p.code[p.at .. end])
-	p.at = end
+	narrowed = symbol(word_read(p))
+	# `type Code < list of byte`: a type phrase, each `of <type>` continuing it, as a field's type reads (sugar.warp with_type_phrases)
+	while keyword_at_position(p, "of", blank_end(p, p.at)) and blank_end(p, p.at) > p.at {
+		p.at = blank_end(p, blank_end(p, p.at) + 2)
+		narrowed = symbol(name_of(narrowed) + " of " + word_read(p))
+	}
 	Key(type_node(attributed("extends", narrowed, name), ø), Op.Assign, narrowed)
+}
+// the word at p, read
+def word_read(p: Parser): text {
+	end = symbol_end(p.code, p.at, p.n)
+	word = p.code[p.at .. end]
+	p.at = end
+	word
 }
 
 def class_body(fields: list, separator: Separator, parameters: list): Node := listed(Bracket.Curly, separator, fields.map(field => untyped(field, parameters)))
