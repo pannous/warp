@@ -2296,7 +2296,7 @@ guest_text_of(caller: handle, context: handle, t: text, result: pointer): nothin
 
 ## paint (card paint-native): the pixels as a PNG in the temporary folder, warp-paint/paint.png, then paint-2.png …
 ## within one run, named on stderr: 0 paper, a value with
-## an alpha byte its color, any other ink. A shader paints on the GPU, which the native warp has not yet
+## an alpha byte its color, any other ink; dark mode swaps paper and ink (lib/draw.warp). A shader paints on the GPU, which the native warp has not yet
 PAPER = 250
 INK = 29
 OPAQUE = 4278190080
@@ -2368,7 +2368,7 @@ painted_pixels(caller: handle, context: handle, given: pointer, width: i64, heig
 		pixels = pixels_of(caller, context, given, width * height)
 		if gpu_paints() == 0 { return pixels }
 		shown = allocate(3 * VALUE_BYTES)
-		int_result(handle_id(native_pointer(shaded(pixels, width * height))) as i64, shown)
+		int_result(handle_id(native_pointer(rgba_shaded(pixels, width * height))) as i64, shown)
 		int_result(width, shown + VALUE_BYTES)
 		int_result(height, shown + 2 * VALUE_BYTES)
 		if in_window(gpu_answered("host_pixels_shown", shown, 3)) then 0 else pixels
@@ -2384,20 +2384,19 @@ gpu_answered(name: text, values: pointer, count: i64): i64 := {
 	guest_call(0, run_context(), name, values, count, result)
 	value_number(result)
 }
-# the pixels as RGBA bytes, as png_written shades them: 0 paper, a value with an alpha byte its color, any other ink
-shaded(pixels: pointer, count: i64): pointer := {
+# the pixels as RGBA bytes, shaded as png_written shades them
+rgba_shaded(pixels: pointer, count: i64): pointer := {
 	bytes = allocate((count * PIXEL_BYTES) as i32)
+	dark = dark_mode()
 	for i in 0..count {
-		value = long_at(pixels + i * 8).value
-		shade = if value == 0 then PAPER else INK
 		at = bytes + i * PIXEL_BYTES
-		byte_at(at).value = (if value >= COLOR_FROM then value / 65536 % 256 else shade) as u8
-		byte_at(at + 1).value = (if value >= COLOR_FROM then value / 256 % 256 else shade) as u8
-		byte_at(at + 2).value = (if value >= COLOR_FROM then value % 256 else shade) as u8
+		shaded(long_at(pixels + i * 8).value, at, yes, dark)
 		byte_at(at + 3).value = 255 as u8
 	}
 	bytes
 }
+# whether the system shows dark mode (the native host module knows), which swaps paper and ink as draw does
+dark_mode(): bool := host_asked("host_owns", "dark mode") != 0 and host_asked("host_value", "dark mode") != 0
 # the first n int items of a list (paint's pixels, a C library's bytes or int32 cells) as 4-byte words, a chunk of
 # PIXEL_CHUNK at a time by the module's pixels_at (4 bytes each in its memory): one call a chunk, not one an item
 # (card native-show-paint: 1280×800 took 360 ms; card host-byte: 3.3 MB of bytes took 1.3 s)
@@ -2432,11 +2431,12 @@ png_written(pixels: pointer, width: i64, height: i64, path: text): text := {
 	colored = no
 	for i in 0..width * height { if long_at(pixels + i * 8).value >= COLOR_FROM { colored = yes } }
 	channels = if colored then 3 else 1
+	dark = dark_mode()
 	row = 1 + width * channels
 	rows = allocate((row * height) as i32)
 	for y in 0..height {
 		byte_at(rows + y * row).value = 0
-		for x in 0..width { shaded(long_at(pixels + (y * width + x) * 8).value, rows + y * row + 1 + x * channels, colored) }
+		for x in 0..width { shaded(long_at(pixels + (y * width + x) * 8).value, rows + y * row + 1 + x * channels, colored, dark) }
 	}
 	header = allocate(13)
 	big_endian(header, width)
@@ -2463,14 +2463,14 @@ os_failure(what: text): text := {
 	reason = strerror(code)
 	joined(joined(joined(joined(joined(what, ": "), native_copy(reason, strlen(reason))), " (os error "), text_of(code as i64)), ")")
 }
-# a pixel's bytes: gray, or red, green and blue
-shaded(value: i64, at: pointer, colored: bool): nothing := {
+# a pixel's bytes: gray, or red, green and blue: 0 paper, a value with an alpha byte its color, any other ink
+shaded(value: i64, at: pointer, colored: bool, dark: bool): nothing := {
 	if value >= COLOR_FROM {
 		byte_at(at).value = ((value >> 16) & 255) as u8
 		if colored { byte_at(at + 1).value = ((value >> 8) & 255) as u8 }
 		if colored { byte_at(at + 2).value = (value & 255) as u8 }
 	} else {
-		shade = if value == 0 then PAPER else INK
+		shade = if (value == 0) != dark then PAPER else INK
 		for c in 0..(if colored then 3 else 1) { byte_at(at + c).value = shade as u8 }
 	}
 }
