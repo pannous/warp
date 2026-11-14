@@ -185,10 +185,10 @@ gpu_inferred_declaration(statement: Node, program: Node): Node := {
 	if not (is_key(statement, Op.Assign) and key_of(statement) is symbol) { return statement }
 	bound = gpu_bound(key_of(statement), program)
 	uses = gpu_lists.uses.get(name_of(key_of(statement)))
-	cell = if bound then gpu_cell_of_all(([value_of(statement)] + uses#8).flat_map(gpu_made_parts)) else ø
-	if cell != ø { return Key(Key(key_of(statement), Op.Colon, bracketed([symbol(cell)], "[")), Op.Assign, value_of(statement)) }
+	cell = if uses != ø then gpu_cell_of_all(([value_of(statement)] + uses#8).flat_map(gpu_made_parts)) else ø
+	if bound and cell != ø { return Key(Key(key_of(statement), Op.Colon, bracketed([symbol(cell)], "[")), Op.Assign, value_of(statement)) }
 	why = gpu_kept_why(uses, bound)
-	if why != ø { diagnose(call_of("gpu_list_kept", [name_of(key_of(statement)), why]), statement) }
+	if why != ø { diagnose(call_of("gpu_list_kept", [name_of(key_of(statement)), why, cell ?? "f32"]), statement) }
 	statement
 }
 # why a list the program makes and a GPU word takes stays a list, said where it is made (its upload then walks its
