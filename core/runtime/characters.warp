@@ -109,6 +109,7 @@ character_start(t: text, index: int): int := {
 	global walked_index
 	global walked_at
 	global walked_before
+	if is_ascii_text(t) { return ascii_offset(t, index) }
 	if byte_count(t) < short_text() { return character_from_start(t, index) }
 	if walk_reaches(t, index) == 0 { swap_walks() }
 	if walk_reaches(t, index) == 0 { walk_back(t, index) }

@@ -180,10 +180,11 @@ op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if:
 # GC instructions, after their prefix 251
 gc_prefix = 251
 gc_ops = {struct_new: 0, struct_get: 2, struct_set: 5, ref_cast: 22, ref_cast_null: 23, array_new_default: 7, array_new_fixed: 8, array_new_data: 9, array_get: 11, array_get_u: 13,
-	array_set: 14, array_len: 15, array_copy: 17, ref_test: 20, ref_i31: 28, i31_get_u: 30}
+	array_set: 14, array_len: 15, array_copy: 17, ref_test: 20, br_on_cast: 24, ref_i31: 28, i31_get_u: 30}
 # the abstract heap type i31 (a character boxed in a $Node), as a cast's immediate: written behind gc_code, no index
 i31_type = 108
 eq_type = 109
+any_type = 110
 ref_null = 208
 int_ops = {"+": 124, "-": 125, "*": 126, "rem": 129, "xor": 133, "<<": 134, ">>": 135, "==": 81, "!=": 82, "<": 83, ">": 85, "<=": 87, ">=": 89}
 # an int is wasm's i64: + - * wrap silently, never checked (decision nat-and-int); a nat that may grow is boxed

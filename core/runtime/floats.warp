@@ -147,7 +147,7 @@ upper_half(v: float): float := {
 }
 # a text of count zero digits
 zeros(count: int): text := {
-	out = new_text(if count > 0 then count else 0)
+	out = new_ascii_text(if count > 0 then count else 0)
 	for i in 0..count { set_byte(out, i, Ascii.Zero) }
 	out
 }

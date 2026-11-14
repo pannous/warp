@@ -29,16 +29,22 @@ with_uses(program: Node, folder: text): Node := {
 	bottom_up(brought, module_text)
 }
 # `from shapes import box`, `from palette import bright, dim` (decision modules-triage): Python's import of named words
-# is warp's `use shapes`, every word of the module visible (extensions/from_imports.warp hints so); a used file's too
+# is warp's `use shapes`, every word of the module visible (extensions/from_imports.warp hints so); a used file's too.
+# `use list, text` is a use of each (warp-interviewer 11-14)
 with_imports_as_uses(program: Node): Node := {
 	statements = flat_statements(program)
-	if not statements.any(statement => from_import(statement) != ø) { return program }
-	separated(bracketed(statements.map(statement => if from_import(statement) == ø then statement else use_of(from_import(statement))), ""), ";")
+	if not statements.any(statement => imported_modules(statement) != ø) { return program }
+	separated(bracketed(statements.flat_map(statement => if imported_modules(statement) == ø then [statement] else imported_modules(statement).map(use_of)), ""), ";")
 }
-# the module of `from shapes import box` (the comma statement `from palette import bright, dim` leads with it), else ø
-from_import(statement: Node): any := {
+# the modules a statement uses in one line, `from palette import bright, dim` (the comma statement leads with it) or
+# `use list, math, text`, else ø
+imported_modules(statement: Node): list? := {
 	line = without_mark(statement)
-	from_line(if is_group(line) and separator_of(line) == "," and #line > 0 then without_mark(line#1) else line)
+	first = if is_group(line) and separator_of(line) == "," and #line > 0 then without_mark(line#1) else line
+	if from_line(first) != ø { return [from_line(first)] }
+	if first == line or not (is_group(first) and #first == 2 and first#1 == symbol("use") and first#2 is symbol) { return ø }
+	rest = items_of(line)[1..].map(without_mark)
+	if rest.all(module => module is symbol) then [first#2] + rest else ø
 }
 from_line(n: Node): any := if is_group(n) and #n >= 4 and n#1 == symbol("from") and n#3 == symbol("import") then n#2 else ø
 use_of(module: Node): Node := plain_node(parsed("use " + (if module is text then "\"" + module + "\"" else name_of(module))))

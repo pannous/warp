@@ -949,8 +949,9 @@ keyed_by(n: Node, word: text, routing: Routing): bool := {
 linked_method(owning_class: text, method: text): bool := (method + "·" + owning_class) in module.linked_words or ((owning_class + "·new") in module.linked_words and linked_taking(method))
 # the module's plain word of that name, a map word's taking its arguments after the instance
 linked_taking(method: text): bool := (module.linked_words.get(method) ?? []).any(word => map_word_arguments(method) < 0 or #word.kinds == map_word_arguments(method) + 1)
+# (a loop of one name: `for k, v in p` walks p's entries, by its keys and get through map_entries)
 walks_keys(n: Node, routing: Routing): bool := {
-	if not (is_group(n) and bracket_of(n) == "" and #n == 5 and n#1 is symbol and name_of(n#1) == "for" and n#3 is symbol and name_of(n#3) == "in") { return no }
+	if not (is_group(n) and bracket_of(n) == "" and #n == 5 and n#1 is symbol and name_of(n#1) == "for" and n#2 is symbol and n#3 is symbol and name_of(n#3) == "in") { return no }
 	walked = static_type(n#4, routing)
 	if walked == ø or walked not in routing.classes { return no }
 	reached = methods_reaching(routing.classes, walked)
