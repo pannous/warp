@@ -49,4 +49,8 @@ check "a list the program reads says where it was made why it stays a list" "$(W
 $shader
 gpu_render(s, 2, 2, {xs: xs})
 print xs#1" 2>&1 | grep -c 'xs stays a list, not a GPU list: the program reads its items.* at 1:1; fix: xs: \[vec4\]')" 1
+# warp format writes the type the compiler inferred
+check "warp format writes an inferred GPU list's type" "$("$warp" --lib "$lib" format "xs = [[0.0, 0.0, 1.0, 1.0] for i in 1 to 4]
+$shader
+gpu_render(s, 2, 2, {xs: xs})" </dev/null 2>&1 | head -1)" "xs: [vec4] = [[0.0, 0.0, 1.0, 1.0] for i in 1 to 4]"
 [ "$failures" = 0 ] || exit 1
