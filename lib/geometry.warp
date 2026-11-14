@@ -9,6 +9,9 @@
 // - vec_cross(u, v) is the 3D cross product (a vector); vec_cross2(u, v) the 2D one, the scalar u.x*v.y - u.y*v.x
 // - vec_angle(u, v): the unsigned angle between two vectors in radians, 0..pi; a zero-length vector is refused
 // - vec_rotate(v, radians): a 2D vector rotated counter-clockwise
+// - rotated_about(v, axis, radians): a 3D vector turned about an axis (of any length) by the right-hand rule,
+//   Rodrigues' formula; unchecked, so a painted function (a shader) may call it, its body translated to WGSL.
+//   GLSL's `p * rotate3D(a, axis)` (a row vector times the matrix) is rotated_about(p, axis, -a)
 // - bounding_box(points): [[min x, min y], [max x, max y]] (any dimension, per coordinate)
 // - polygon_signed_area: the shoelace area, positive for counter-clockwise; polygon_area its absolute value;
 //   polygon_centroid the area centroid (a zero-area polygon is refused); fewer than 3 points are refused
@@ -106,6 +109,12 @@ global vec_rotate(v: any, radians: number): list := {
 	c = cos(radians)
 	s = sin(radians)
 	[v#1 * c - v#2 * s, v#1 * s + v#2 * c]
+}
+
+rotated_about(v, axis, radians) := {
+	k = normalize(axis)
+	c = cos(radians)
+	v .* c .+ cross(k, v) .* sin(radians) .+ k .* (dot(k, v) * (1 - c))
 }
 
 global bounding_box(points: list): list := {
