@@ -239,6 +239,8 @@ ml = Unit("ml")
 ha = Unit("ha")
 dpi = Unit("dpi")
 ppi = Unit("ppi")
+mph = Unit("mph")
+dot = Unit("dot")
 // the temperature scales: a scale starts away from zero, so `20°C` is the temperature 20 on it (Quantity's `*` of a
 // plain number and a unit, quantity), not 20 times one degree
 °C = Unit("°C")
@@ -291,16 +293,18 @@ rewrite $q is $d => measures($q, $name) where $d is symbol and $d in [length, ar
 rewrite $q is $d => (measures($q, $name) or time_valued($q, $name)) where $d is symbol and $d in [duration, time] and not unit_led($q) and $name = spelled($d)
 named_dimensions() := {"length": length_dimension, "area": area_dimension, "volume": volume_dimension, "mass": mass_dimension, "duration": duration_dimension, "time": duration_dimension, "temperature": temperature_dimension, "speed": speed_dimension, "frequency": frequency_dimension, "force": force_dimension, "density": density_dimension}
 measures(q: any, dimension: text) := q is Quantity and q.dims == named_dimensions()[dimension]
-// `unit furlong := 201.168m`: a program's own unit, the quantity of one of it shown by its name (`1km as furlong` waits
-// for card module-rule-unnamed), `quantity(1, "furlong")` (decision unit-definitions); `raw`: the spaced amount
+// `unit furlong := 201.168m`: a program's own unit, a Unit like km, of which `2 furlong` measures and `1km as furlong`
+// converts, `quantity(1, "furlong")` (decision unit-definitions); `raw`: the spaced amount
 // `201.168 m`, whose unit the parser leaves after the definition, joins its value before the definition is rewritten
 rewrite (unit $name := $value $u) => (unit $name := ($value $u)) where raw
 rewrite (unit $name := $value) => $name = defined_unit($written, $value) where $name is symbol and $written = spelled($name)
 global program_units = {}
-defined_unit(name: text, one: Quantity) := {
+defined_unit(name: text, one: Quantity): Unit := {
 	program_units[name] = one
-	measured(one.amount, one.dims, name, one.amount)
+	Unit(name)
 }
+// the quantity of one of a program's unit, shown by its name
+program_unit(name: text, one: Quantity) := measured(one.amount, one.dims, name, one.amount)
 // an angle is a number of radians, as SI's radian is dimensionless (decision degree-constant), marked as an Angle that
 // shows in degrees (decision marks-survive-arithmetic): `60°` is 1.0472 to sine and the GPU and prints 60°,
 // `30° * 2` too
@@ -378,7 +382,7 @@ unit_named(u: text) := {
 	}
 	if u.ends_with("²") or u.ends_with("^2") { return unit_named(u.replace("^2", "").replace("²", "")) ^ 2 }
 	if u.ends_with("³") or u.ends_with("^3") { return unit_named(u.replace("^3", "").replace("³", "")) ^ 3 }
-	if program_units.has(u) { return defined_unit(u, program_units[u]) }
+	if program_units.has(u) { return program_unit(u, program_units[u]) }
 	symbol = unit_symbol(u)
 	if symbol == ø { raise "unknown unit: " + u }
 	known_unit(symbol)
