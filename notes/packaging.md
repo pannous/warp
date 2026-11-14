@@ -21,7 +21,10 @@ pattern; Wasp (C++) has its own tap pannous/homebrew-wasp).
   lib/warp.exe) is the zip warp-<tag>-x86_64-pc-windows-gnu.zip, and packaging/scoop/warp.json filled with its version
   and sha256 is uploaded beside it: `scoop install https://github.com/pannous/warp/releases/latest/download/warp.json`
   (the job installs it so and runs hello from PowerShell, HOME unset: windows.c takes USERPROFILE). Still missing: CRLF
-  sources (card crlf-line-endings), window, sound and GPU, a winget manifest.
+  sources (card crlf-line-endings), a winget manifest. Window, sound and GPU: scripts/wasmtime-c-api.sh puts
+  wgpu-native's and SDL3's Windows DLLs in lib/ (no system SDL3 there); the window's GPU surface is its HWND
+  (native_host gpu.warp window_source). The job runs a compute shader on the runner's software adapter; the window
+  itself is untried in CI (no display).
 - PyPI, .deb/.rpm (license fields `AGPL-3.0-or-later AND MIT`: the compiler AGPL, warp-runtime MIT). Both repackage the release tarballs, jobs `packages`, `pypi`
   of release.yml after `binaries`; `gh workflow run release.yml -f tag=v<version> -f repackage=true` reruns only them
   from the existing tarballs (their sha256 stay, so the formula stays valid).
