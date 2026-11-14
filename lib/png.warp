@@ -1,5 +1,6 @@
-// The standard library module png: a PNG file's pixels, in plain warp (lib/image.warp reads pictures with it).
-// png_pixels(bytes) is [width, height, pixels], the pixels Colors row by row from the top left. It reads every
+// The standard library module png: a PNG file's pixels, in plain warp (lib/image.warp reads and saves pictures with it).
+// png_pixels(bytes) is [width, height, pixels], the pixels Colors row by row from the top left; png_bytes(width,
+// height, pixels) is such pixels as a PNG, RGBA so a transparent pixel stays transparent. It reads every
 // non-interlaced PNG: gray, gray with alpha, RGB, RGBA and palette pictures (a palette's transparency too), 1 to 16
 // bits a sample, a 16-bit sample kept to its high byte. An interlaced (Adam7) one is refused, saying so.
 use bits
@@ -18,6 +19,7 @@ header_chunk = "IHDR"
 palette_chunk = "PLTE"
 transparency_chunk = "tRNS"
 data_chunk = "IDAT"
+end_chunk = "IEND"
 // a row's filters (PNG's filter types): none, sub, up, average, Paeth
 sub_filter = 1
 up_filter = 2
@@ -48,6 +50,19 @@ png_pixels(bytes: list): list := {
 	}
 	[width, height, pixels]
 }
+// the pixels, Colors row by row, as a PNG: RGBA, 8 bits a sample, each row unfiltered, not interlaced
+png_bytes(width: int, height: int, pixels: list): list := {
+	header = big_endian(width, 4) + big_endian(height, 4) + [8, rgba_type, 0, 0, 0]
+	rows = (0 ..< height).flat_map(y => [0] + pixels[y * width ..< (y + 1) * width].flat_map(rgba_bytes))
+	png_signature + png_chunk(header_chunk, header) + png_chunk(data_chunk, compress(rows)) + png_chunk(end_chunk, [])
+}
+// a chunk: its data's length, its type, the data, the CRC-32 of type and data
+png_chunk(kind: text, data: list): list := {
+	typed = to_utf8(kind) + data
+	big_endian(count(data), 4) + typed + big_endian(crc32(typed), 4)
+}
+// a color's bytes in PNG's order: red, green, blue, alpha
+rgba_bytes(c: Color): list := [16, 8, 0, 24].map(shift => channel_byte(c, shift))
 // [type, data] of each chunk after the signature, in order
 png_chunks(bytes: list): list := {
 	chunks = []
