@@ -23,4 +23,16 @@ $shader
 print gpu_render(s, 2, 2, {xs: xs})#1")" 4278190335
 # paint's first argument is pixels the CPU paints: a list painted so stays a list (samples/advanced/filled_circle.warp)
 check "a list of pixels painted stays a list" "$(WARP_WINDOW=0 "$warp" --mute --lib "$lib" 'surface = int[6]; paint(surface, 3, 2); print gpu_list_place(surface)' 2>&1 | tail -1)" -1
+# a list whose items the program reads too would show them rounded to f32: it stays a list, the slow path says so
+check "a list the program reads stays a list" "$(strict "xs = []
+for i in 1 to 4 { xs = xs + [[0.0, 0.0, 1.0 / 3, 1.0]] }
+$shader
+gpu_render(s, 2, 2, {xs: xs})
+print xs#1" | grep -c 'slow path')" 1
+check "a list grown from [] for the GPU alone is a GPU list" "$(strict "xs = []
+for i in 1 to 4 { xs = xs + [[0.0, 0.0, 1.0, 1.0]] }
+$shader
+print gpu_render(s, 2, 2, {xs: xs})#1")" 4278190335
+# paint's pixels the CPU reads are read from a GPU list in place too
+check "a GPU list of pixels paints" "$(WARP_WINDOW=0 "$warp" --mute --lib "$lib" 's: [u32] = int[6]; paint(s, 3, 2)' 2>&1 | grep -c '^painted 3×2')" 1
 [ "$failures" = 0 ] || exit 1
