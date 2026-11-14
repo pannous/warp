@@ -165,7 +165,7 @@ time_text(ms): text := {
 days_from_date(year, month, day): int := days_from_civil(year, month, day)
 // the date of its fields, date(2024, 2, 29) as the literal 2024-02-29; a field outside its calendar is an error, never
 // rolled over into the next month (wiki/Footguns.md "Dates")
-public date(year: int, month: int, day: int) := {
+public date(year: int, month: int, day: int): date := {
 	if month < 1 or month > 12 { raise "month out of range: " + text(month) + " (1 to 12)" }
 	if day < 1 or day > days_in_month(year, month) { raise "day out of range: " + padded(year, 4) + "-" + two_digits(month) + "-" + two_digits(day) }
 	time_of(date_form, days_from_date(year, month, day))
