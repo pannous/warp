@@ -136,7 +136,7 @@ outflow(x, y) := {
 	0.5 * (velocity(p .+ [1, 0]).x - velocity(p .- [1, 0]).x + velocity(p .+ [0, 1]).y - velocity(p .- [0, 1]).y)
 }
 # the pressure: the divergence convolved across, then down, by the rank-1 kernel
-KERNEL = [0.057610, 0.097961, 0.161440, 0.257644, 0.405773, 0.642708, 0.405773, 0.257644, 0.161440, 0.097961, 0.057610]
+KERNEL: [f32] = [0.057610, 0.097961, 0.161440, 0.257644, 0.405773, 0.642708, 0.405773, 0.257644, 0.161440, 0.097961, 0.057610]
 inside(p) := if p.x >= -0.5 and p.x <= grid.x - 0.5 and p.y >= -0.5 and p.y <= grid.y - 0.5 then 1 else 0
 across(x, y) := {
 	total = 0
