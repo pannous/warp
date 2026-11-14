@@ -543,6 +543,8 @@ lifted(arrow: Node, locals: Locals, lowering: Lowering): Node := {
 # is of its scope (decision handler-blocks-share): each name of the scope it assigns is shared. A name only the lambda
 # or block binds stays its own, a `global` one global
 cell_class = "Cell"
+# the class of the cells: the prelude's Cell, under its library_word where the program has a Cell of its own
+cell_word(): text := if classes_set_aside.has(cell_class) then library_word(cell_class) else cell_class
 cell_suffix = "·cell"
 counting_steps = ["++", "--"]
 shared_names(statements: list, locals: list, blocks: list): list := {
@@ -634,7 +636,7 @@ celled_scope(statements: list, parameters: list, positions: map, read_elsewhere:
 	types = {}
 	for name in shared { types[name] = type_declared(statements, name) }
 	celled = statements.map(statement => shared.fold(statement, (part, name) => renamed(typed_through_local(part, name, types[name]), name, cell_of(name))))
-	made = shared.map(name => set_to(symbol(name + cell_suffix), call_node(symbol(cell_class), [if name in parameters then symbol(name) else ø])))
+	made = shared.map(name => set_to(symbol(name + cell_suffix), call_node(symbol(cell_word()), [if name in parameters then symbol(name) else ø])))
 	made + celled.map(statement => with_celled_lambdas(statement, positions))
 }
 # each lambda with a block body a scope of its own, as a definition's body is: `g = () -> { n = 0; thrice { n += 1 };

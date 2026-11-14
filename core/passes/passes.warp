@@ -151,6 +151,7 @@ global kept_comprehension_sugar = []
 with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 	global brought_names
 	global brought_value_names
+	global classes_set_aside
 	global exported_names
 	global linked_reached
 	global linked_classes_reached
@@ -161,6 +162,7 @@ with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 	global writes_templates
 	brought_names = {}
 	brought_value_names = {}
+	classes_set_aside = {}
 	exported_names = {}
 	linked_reached = {}
 	linked_classes_reached = {}
