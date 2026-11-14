@@ -21,4 +21,6 @@ paint_blue() := { xs = [[0.0, 0.0, 1.0, 1.0], [0.0, 0.0, 1.0, 1.0]] }
 paint_blue()
 $shader
 print gpu_render(s, 2, 2, {xs: xs})#1")" 4278190335
+# paint's first argument is pixels the CPU paints: a list painted so stays a list (samples/advanced/filled_circle.warp)
+check "a list of pixels painted stays a list" "$(WARP_WINDOW=0 "$warp" --mute --lib "$lib" 'surface = int[6]; paint(surface, 3, 2); print gpu_list_place(surface)' 2>&1 | tail -1)" -1
 [ "$failures" = 0 ] || exit 1
