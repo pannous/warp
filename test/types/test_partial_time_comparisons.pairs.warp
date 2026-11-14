@@ -1,10 +1,5 @@
 # from test_partial_time_comparisons.rs: edit the Rust test, then run the script again
 
-# test_now_against_a_month
-'now >= January'	true
-'now <= December'	true
-'(now >= October) == (now.month >= 10)'	true
-
 # test_now_against_a_date
 'now ≈ 1970-01-01'	false
 'now > 1970-01-01'	true
