@@ -841,13 +841,18 @@ fits_map(value: any, pattern: any, bound: map): bool := {
 // every part of a value, itself first, then its items' and fields' parts in order
 parts_within(value: any): list := {
 	found = [value]
-	if is_type(value, "list") { for item in value { found += parts_within(item) } }
+	if is_type(value, "key") { found += parts_within(key_of(value)) + parts_within(value_of(value)) }
+	else if is_type(value, "list") { for item in value { found += parts_within(item) } }
 	else if is_type(value, "map") { for key in value.keys { found += parts_within(value[key]) } }
 	found
 }
 // what `value find pattern` gives each match: the one name's value, the part itself, or the map of the names
 found_as(part: any, bound: map, names: list): any := if #names == 1 then bound[names#1] else if #names == 0 then part else bound
-find_matches(value: any, pattern: any): list := {
+// `x replace data($a * 1) with data($a + 10)`: a pattern or template written as code already is that code, not code
+// quoting it (the phrase quotes what it is given)
+written_code(given: any): any := if bracket_of(given) == "(" and count(given) == 2 and is_type(given#1, "symbol") and name_of(given#1) == "data" then given#2 else given
+find_matches(value: any, given: any): list := {
+	pattern = written_code(given)
 	names = pattern_names(pattern)
 	found = []
 	for part in parts_within(value) {
@@ -858,16 +863,22 @@ find_matches(value: any, pattern: any): list := {
 }
 // `value replace pattern with template`: the items, fields and code parts replaced first (`n * 1 + k * 1`'s two
 // products), then the value itself where it fits, the template's names its bindings
-replace_matches(value: any, pattern: any, template: any): any := {
+replace_matches(value: any, given: any, written: any): any := {
+	template = written_code(written)
+	// (a code template's `$holes` are filled as code, a plain one's names by their values)
+	filled = if template != written then (bound => filled_template(template, bound)) else (bound => instantiated(template, bound))
+	replaced(value, written_code(given), filled)
+}
+replaced(value: any, pattern: any, filled: function): any := {
 	inner = value
-	if is_type(value, "key") { inner = key(replace_matches(key_of(value), pattern, template), op_of(value), replace_matches(value_of(value), pattern, template)) }
-	else if is_type(value, "list") { inner = value.map(item => replace_matches(item, pattern, template)) }
+	if is_type(value, "key") { inner = key(replaced(key_of(value), pattern, filled), op_of(value), replaced(value_of(value), pattern, filled)) }
+	else if is_type(value, "list") { inner = value.map(item => replaced(item, pattern, filled)) }
 	else if is_type(value, "map") {
 		inner = {}
-		for field in value.keys { inner[field] = replace_matches(value[field], pattern, template) }
+		for field in value.keys { inner[field] = replaced(value[field], pattern, filled) }
 	}
 	bound = pattern_bindings(inner, pattern)
-	if bound == ø then inner else instantiated(template, bound)
+	if bound == ø then inner else filled(bound)
 }
 // `{port: "80", host: "x"} as Config`: the value with each text field converted to its pattern's type ("80" the int 80),
 // raising when it then does not fit the pattern
