@@ -148,11 +148,10 @@ first_items(xs, n) := xs[0: min(n, count(xs))]
 last_items(xs, n) := xs[max(count(xs) - n, 0): count(xs)]
 // `sort(words, {it.length})`: the items ordered by the key the function gives each (extensions/sugar/calls.warp)
 sorted_by_key(xs: list, key: function): list := list_sorted_by(xs, xs.map(key))
-// sort takes a function, so `xs.sort{$0 > $1}` glued is its call as `xs.map{…}` is; the sugar rules order by it
-sort(xs: list, key: function): list := sorted_by_key(xs, key)
-// and of one value, the runtime's sorted: declared beside it so `sort xs` and `sort split "b a"`, calls without
-// parentheses, find a sort of one argument (card native-samples-rework)
-sort(xs) := sorted(xs)
+// sort takes a function, so `xs.sort{$0 > $1}` glued is its call as `xs.map{…}` is; the sugar rules order by it. The
+// key is optional, so a call without parentheses, `sort xs`, `sort split "b a"`, is the runtime's sorted of a list or a
+// text; one definition, as sort($xs, by: $e) of extensions/sugar/calls.warp reads it (card native-samples-rework)
+sort(xs, key: function = ø) := if key == ø then sorted(xs) else sorted_by_key([x for x in xs], key)
 // `sort(xs, (a, b) => a > b)`: the items in the order the function of two gives, yes where a goes before b; equal
 // items keep their order (a merge sort)
 sorted_in_order(xs: list, before: function): list := {
