@@ -646,6 +646,9 @@ convert!(value, to) := {
 
 // The class of every error (decision error-classes): `class ParseError: Error` declares one, `except Error` catches all
 class Error { message: text }
+# the cell of a shared capture as the seed's compiler writes it (`n·cell = Cell(n)`): the compiler of today writes a
+# list of one item; a program's own class Cell replaces this one (TODO (card seed-drops-cell) remove once the seed is refreshed)
+class Cell { value: any }
 // a pattern written as text, which the words given it read: play(Pattern("c4 e4")) its steps (sound), format(t,
 // Pattern("yyyy-MM-dd")) a date's fields (time)
 class Pattern { written: text }
