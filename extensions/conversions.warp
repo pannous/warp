@@ -208,7 +208,7 @@ converted_arguments(n: Node, places: Places, known: map): Node := {
 	if call != ø {
 		known_inside = parameters_typed(call)
 		body = converted_arguments(value_of(n), unshadowed(places, bound_at(n)), known_inside)
-		result = written_result_type(n)
+		result = converted_result_type(n)
 		return Key(key_of(n), Op.Define, if result == ø then body else last_value_mapped(body, value => passed(value, result, "", places, known_inside)))
 	}
 	walked = children(called_values(n, places), x => converted_arguments(x, places, known))
@@ -307,9 +307,12 @@ bare_result_name(statement: Node): text := {
 }
 nullary_head(definition: Node): Node := Key(Key(call_node(key_of(key_of(definition)), []), Op.Colon, value_of(key_of(definition))), Op.Define, value_of(definition))
 # the types of the program's `x: T = v` and `f(…): T := …`
-declared_types(program: Node): list := nodes_in(program).map(n => if is_typed_declaration(n) then place_type(value_of(key_of(n))) else written_result_type(n)).filter(type => type != ø)
+declared_types(program: Node): list := nodes_in(program).map(n => if is_typed_declaration(n) then place_type(value_of(key_of(n))) else converted_result_type(n)).filter(type => type != ø)
 # T of a definition `f(…): T := …`, ø of any other node
 written_result_type(n: Node): text? := if definition_call(n) != ø and is_key(key_of(n), Op.Colon) then place_type(value_of(key_of(n))) else ø
+# T of a definition whose value converts to it: never a linked module's word, declared without its body (its module
+# made the value), which a body would make a local function shadowing that word
+converted_result_type(n: Node): text? := if value_of(n) == Node.Empty then ø else written_result_type(n)
 # the values a body gives, a block's last statement, each branch of an if, as the function makes them
 last_value_mapped(body: Node, make: function): Node := {
 	if is_key(body, Op.Else) and is_key(key_of(body), Op.Then) {
