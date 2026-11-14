@@ -6,6 +6,8 @@
 # path-type; cards shader-quote-path-uses, colors-package-import)
 'use ./own_mix.warp; mix(1, 3, 0.5)'	2
 'include ./own_mix.warp; mix(1, 3, 0.5)'	2
-'use ../../packages/colors/colors.warp; to_hex(from_hex("f80"))'	'#ff8800'
+'use ../../packages/colors/colors.warp; to_hex(from_hex("f80"))'	'#ff8800'	needs: packages
 # two modules each formatting their own type: both used, each type shows its own text (card two-lib)
 'use ./formatted_a.warp; use ./formatted_b.warp; [text(1 as tag_a), text(2 as tag_b)]'	["a1", "b2"]
+# every key held, not only the last (lib/keys.warp held, card allow-diagonals): none without a window
+'use keys; [keys_held(), held(Key.w)]'	[[], no]

@@ -1,4 +1,4 @@
 'key_name(63234)'	"ArrowLeft"
-'key_name(65)'	"A"
+'key_name(65)'	"a"
 'held_key == ""'	yes
-'[held_key == ESC, LEFT]'	[no "ArrowLeft"]
+'[held_key == ESC, LEFT]'	[no, Key.left]

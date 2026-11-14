@@ -5,8 +5,9 @@
 // which every program's prelude reads before this file (decision core-takes-what-it-uses).
 // The builtins, the words no warp definition gives, are the core's: core/analysis/builtins.warp and math_builtins.warp.
 
-// the call form of xs.add(x), which extensions/sugar/methods.warp appends in place (the emitter has no call add)
-add(xs, x) := { xs.add(x); xs }
+// the call form of xs.add(x), appended in place; written `+=`, since inside this file, which defines add, xs.add(x)
+// is this call again (extensions/sugar/methods.warp leaves a method the program defines to the program)
+add(xs, x) := { xs += [x]; xs }
 // xs.insert(x, at: i) at the 0-based position i, in place; of a map Rust's HashMap::insert (card rust-map-insert): the
 // key at set to x in place, the map back. One definition, so a call names its arguments (`at:`) as written (an
 // overload set by type passes them by position, card library-labelled-args)
@@ -198,6 +199,13 @@ looked_up_word(x, asked, names, texts) := {
 	raise "${asked}: ${name} is no word or class of the program or its modules"
 }
 dir_of_value(x, list_words, text_words, map_words) := if x is map then x.keys + map_words else if x is list then list_words else if x is text then text_words else []
+// `m.fields`, `fields(o)`, `P(3, 4).properties` of a value only the run knows: a map's keys, an instance's fields with
+// those of the classes it extends (extensions/sugar/reflection.warp names a declared class's at compile time); a
+// field of that name wins. properties, attributes and members say the same (decision synonyms-are-aliases)
+fields(x) := keys(x)
+properties(x) := fields(x)
+attributes(x) := fields(x)
+members(x) := fields(x)
 // a range's sum in closed form, Gauss's count · (first + last) / 2, the even factor halved first so the product stays small.
 // The template names no helper word (card after-sum): it lands in the program's code, where a program's own word of
 // that name (`range_sum(a, b) := sum(a..b)`) would be called instead, and every lane emits its arithmetic
@@ -206,11 +214,6 @@ rewrite sum($first .. $end) => (if $end <= $first then 0 else if ($end - $first)
 // `ys = 2 floats`: a list of 2 floats, as `ys = float[2]` (warp fix writes the count first, card fix-in-lib)
 rewrite $n floats => float[$n]
 rewrite $n ints => int[$n]
-rewrite ($xs: [f32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(f32, $v)
-rewrite ($xs: [i32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(i32, $v)
-rewrite ($xs: [u32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(u32, $v)
-rewrite ($xs: [f16] = $v) => ($xs = $packed) where $packed = gpu_packed_as(f16, $v)
-rewrite ($xs: [bf16] = $v) => ($xs = $packed) where $packed = gpu_packed_as(bf16, $v)
 // the arithmetic mean, also spelled average
 mean(xs) := if count(xs) == 0 then raise "mean of an empty list" else sum(xs) / count(xs)
 // x↑n, Knuth's up arrow, is the power and x↓b the log of x to base b (card easy-add): operators of numbers only, so
@@ -362,8 +365,9 @@ element_wise_any(left: any, right: any, combined: function) := if left is list a
 // f of a value that may be a list (extensions/sugar/broadcasting.warp): of each item of a list, else of the value itself
 each_any(value: any, f: function) := if value is list then [f(item) for item in value] else f(value)
 // a pixel of paint(f, width, height) on the CPU (gpu_maps painted_functions): a vector of 3 numbers from 0 to 1 is
-// that color as 0xAARRGGBB, as the shader paints it; a number stays itself
-pixel_color(v: any) := if v is list then 0xFF000000 + pixel_channel(v#1) * 65536 + pixel_channel(v#2) * 256 + pixel_channel(v#3) else v
+// that color as 0xAARRGGBB, as the shader paints it; an int stays itself; any other number is refused, as the wiki
+// says a painted function gives three numbers (graphics.md)
+pixel_color(v: any) := if v is list then 0xFF000000 + pixel_channel(v#1) * 65536 + pixel_channel(v#2) * 256 + pixel_channel(v#3) else if v is int then v else raise "a painted function gives three numbers [r, g, b], each 0 … 1, not ${v}; fix: return [v, v, v] for a gray"
 pixel_channel(c) := round(255 * min(max(c, 0), 1)) as int
 pixel_channel(c: float): int := round(255 * min(max(c, 0.0), 1.0)) as int
 // paint(f, width, height) of a warp function on the CPU, where no shader paints it (gpu_maps painted_functions): f(column,
@@ -387,8 +391,9 @@ shader_floats(values) := {
 	plain
 }
 // a text is kept: a storage array may be a file the host reads straight into the
-// GPU buffer (the baked atlas), which a float list of its bytes would rebuild
-shader_value(value) := if value is list then value.map(shader_value) else if value is text then value else float(value)
+// GPU buffer (the baked atlas), which a float list of its bytes would rebuild; a GPU list too, which the host binds
+// where its cells are (a copy would walk its numbers on every paint)
+shader_value(value) := if gpu_list_place(value) >= 0 or value is text then value else if value is list then value.map(shader_value) else float(value)
 // the words warp gives every shader, as WGSL: hash(cell), a number 0 ..< 1 that stays the same for a cell (decision
 // shader-hash); the cell taken modulo 289 keeps the sine's argument small enough for f32
 SHADER_WORDS_WGSL = {hash: "fn hash(cell: vec2f) -> f32 {\n\tlet wrapped = cell - 289.0 * floor(cell / 289.0);\n\treturn fract(sin(dot(wrapped, vec2f(127.1, 311.7))) * 43758.5453);\n}"}
@@ -483,6 +488,8 @@ online() := system_value("online") != 0
 // whether the system shows dark mode (the page: the browser's prefers-color-scheme; natively the window library asks
 // the system); `on change dark mode {…}` hears it switch (lib/signals.warp)
 dark_mode() := system_value("dark mode") != 0
+// the system value as said, `whenever dark mode {…}`, `not dark mode`
+rewrite dark mode => dark_mode
 mouse_x() := system_value("mouse_x") as float
 mouse_y() := system_value("mouse_y") as float
 mouse_down() := system_value("mouse_down") != 0
@@ -514,6 +521,9 @@ window.height(new_height) := set_system_value("window_height", new_height)
 window_fullscreen() := system_value("window_fullscreen") != 0
 window.fullscreen := window_fullscreen
 window.fullscreen(full) := set_system_value("window_fullscreen", if full then 1 else 0)
+// fullscreen(): the window fills the screen, fullscreen(no) back; in the page only right after the viewer's run key or
+// click, as the browser allows
+fullscreen(full = yes) := window.fullscreen(full)
 // a program cannot resize the display: set window.width or canvas.width instead
 // The fields of a time at run time (card time-fields-warp, wiki/time.md), called late by the emitter's
 // time_field with the time's form (TimeForm: 1 a date, its position in days; else nanoseconds since 1970), its
@@ -831,13 +841,18 @@ fits_map(value: any, pattern: any, bound: map): bool := {
 // every part of a value, itself first, then its items' and fields' parts in order
 parts_within(value: any): list := {
 	found = [value]
-	if is_type(value, "list") { for item in value { found += parts_within(item) } }
+	if is_type(value, "key") { found += parts_within(key_of(value)) + parts_within(value_of(value)) }
+	else if is_type(value, "list") { for item in value { found += parts_within(item) } }
 	else if is_type(value, "map") { for key in value.keys { found += parts_within(value[key]) } }
 	found
 }
 // what `value find pattern` gives each match: the one name's value, the part itself, or the map of the names
 found_as(part: any, bound: map, names: list): any := if #names == 1 then bound[names#1] else if #names == 0 then part else bound
-find_matches(value: any, pattern: any): list := {
+// `x replace data($a * 1) with data($a + 10)`: a pattern or template written as code already is that code, not code
+// quoting it (the phrase quotes what it is given)
+written_code(given: any): any := if bracket_of(given) == "(" and count(given) == 2 and is_type(given#1, "symbol") and name_of(given#1) == "data" then given#2 else given
+find_matches(value: any, given: any): list := {
+	pattern = written_code(given)
 	names = pattern_names(pattern)
 	found = []
 	for part in parts_within(value) {
@@ -848,16 +863,22 @@ find_matches(value: any, pattern: any): list := {
 }
 // `value replace pattern with template`: the items, fields and code parts replaced first (`n * 1 + k * 1`'s two
 // products), then the value itself where it fits, the template's names its bindings
-replace_matches(value: any, pattern: any, template: any): any := {
+replace_matches(value: any, given: any, written: any): any := {
+	template = written_code(written)
+	// (a code template's `$holes` are filled as code, a plain one's names by their values)
+	filled = if template != written then (bound => filled_template(template, bound)) else (bound => instantiated(template, bound))
+	replaced(value, written_code(given), filled)
+}
+replaced(value: any, pattern: any, filled: function): any := {
 	inner = value
-	if is_type(value, "key") { inner = key(replace_matches(key_of(value), pattern, template), op_of(value), replace_matches(value_of(value), pattern, template)) }
-	else if is_type(value, "list") { inner = value.map(item => replace_matches(item, pattern, template)) }
+	if is_type(value, "key") { inner = key(replaced(key_of(value), pattern, filled), op_of(value), replaced(value_of(value), pattern, filled)) }
+	else if is_type(value, "list") { inner = value.map(item => replaced(item, pattern, filled)) }
 	else if is_type(value, "map") {
 		inner = {}
-		for field in value.keys { inner[field] = replace_matches(value[field], pattern, template) }
+		for field in value.keys { inner[field] = replaced(value[field], pattern, filled) }
 	}
 	bound = pattern_bindings(inner, pattern)
-	if bound == ø then inner else instantiated(template, bound)
+	if bound == ø then inner else filled(bound)
 }
 // `{port: "80", host: "x"} as Config`: the value with each text field converted to its pattern's type ("80" the int 80),
 // raising when it then does not fit the pattern
@@ -1016,6 +1037,9 @@ global listener_counts = {}
 // a listener as a value: the event it listens to and its number there, so it is removed by itself, `h = on alarm {…}`
 // … `remove h`, short for `remove h from listeners of alarm` (card listener-address)
 class Listener { event: text; number: int }
+// `listeners of alarm -= h` (wiki Footguns "Event handlers"), in parentheses, as `=>` binds tighter than `-=`; a rule
+// of the prelude, as the event sugar's walk never takes such a write
+rewrite (listeners of $e -= $h) => unlisten(data $e, $h) where $e is symbol
 // `remove alarm` (extensions/sugar/events.warp): the listener removed from the event it listens to
 listener_removed(listener: Listener) := unlisten(listener.event, listener)
 listen(name: any, listener: function, once: bool): Listener := {
@@ -1047,6 +1071,11 @@ unlisten(name: any, listener: any): any := {
 	key = name_of(name)
 	number = if listener is Listener then listener.number else listener
 	if key in event_listeners { kept_listeners(key, i => listener_numbers[key]#i != number) }
+	ø
+}
+// `clear listeners of alarm`: none listen any more
+listeners_cleared(name: any): any := {
+	if name_of(name) in event_listeners { kept_listeners(name_of(name), i => no) }
 	ø
 }
 // the listeners of an event at the positions keep holds for

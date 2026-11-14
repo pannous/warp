@@ -4,6 +4,6 @@
 is! 'use list as l
 count(l.unique([1 1 2]))' 2
 is! 'use square as sq
-sq.square(7)' 49
+sq.square(7)' 49  // needs: packages
 is! 'use math as m
 m.floor(4.5)' 4

@@ -1,0 +1,30 @@
+#!/usr/bin/env warp
+# Warp functions that pass fields to each other on the GPU: a field is declared with the numbers it holds at each cell
+# and its size, `velocity: advect` in paint's list draws it with a function, and any function reads it at a cell,
+# ink(x, y). ink keeps last frame's ink, fading, plus a dab circling the middle; show paints it at the window's size.
+use math
+width = 960
+height = 540
+columns = 320
+rows = 180
+ink = field(1, columns, rows)
+turn = 0
+drop(x, y) := {
+	around = (ink(x - 1, y) + ink(x + 1, y) + ink(x, y - 1) + ink(x, y + 1)) / 4
+	dab_x = columns / 2 + cos(turn / 40) * rows / 3
+	dab_y = rows / 2 + sin(turn / 40) * rows / 3
+	dab = if (x - dab_x)² + (y - dab_y)² < 16 then 1 else 0
+	max(mix(ink(x, y), around, 0.5) * 0.995, dab)
+}
+show(x, y) := {
+	level = ink(x * columns / width, y * rows / height)
+	[0.98, 0.97, 0.94] .+ level .* ([0.1, 0.2, 0.6] .- [0.98, 0.97, 0.94])
+}
+on key {
+	exit()
+}
+# each frame of the window, until it closes (headless: one frame, as a PNG)
+on frame {
+	turn += 1
+	paint([ink: drop, show])
+}

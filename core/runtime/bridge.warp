@@ -10,6 +10,8 @@
 # as it is written (runtime/extended.warp)
 extended_number_text(n: Node): text from runtime
 extended_text(n: Node): text from runtime
+# type(x) of such a value: a time's form, `date`
+extended_type_word(n: Node): text from runtime
 # ordering and equality: -1, 0 or 1 as a is below, equal to or above b, two Int nodes, one an exact ratio
 extended_order(a: Node, b: Node): int from runtime
 # arithmetic: the sum, difference and product of two Int nodes, one an exact ratio or both plain ints past 64 bits
@@ -46,3 +48,4 @@ extended_list_count(n: Node): int from runtime
 extended_list_set(n: Node, index: int, value: Node): Node from runtime
 extended_list_items(n: Node): list from runtime
 extended_list_unlisted(n: Node): list from runtime
+extended_list_joined(a: Node, b: Node): Node from runtime

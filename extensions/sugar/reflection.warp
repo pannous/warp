@@ -29,6 +29,8 @@ rewrite $c.methods => [$functions...] where $c is symbol and $functions = class_
 # instance_members)
 rewrite $p.$w => [$names...] where $p is symbol and $f = field_word($w, $program) and $names = instance_members($p, $f, $source)
 rewrite $p.methods => [$names...] where $p is symbol and $names = instance_members($p, methods, $source)
+# `p.class`, as p.type (wiki/reflection.md)
+rewrite $p.class => type($p) where $p is instance
 # `functions` is a synonym of methods (decision methods-declared); a type word's or alias's methods, `text.methods`
 # (extensions/rules/rule_words.warp type_methods)
 rewrite $c.functions => [$functions...] where $c is symbol and $functions = class_methods_listed($c, $program, $source)
@@ -44,8 +46,10 @@ rewrite functions($c) => [$functions...] where $c is symbol and $functions = cla
 rewrite $w($p) => [$names...] where $f = field_word($w, $program) and $p is symbol and $names = instance_members($p, $f, $source)
 # `functions()`: the program's own functions as function values (extensions/rules/rule_words.warp program_functions)
 rewrite functions() => [$functions...] where not method and $functions = program_functions($program, $source)
-# `type(sqrt)`: a library word's signature, `builtin: (x:number) -> number` (extensions/rules/rule_words.warp builtin_type)
-rewrite type($f) => $t where $f is symbol and $t = builtin_type($f, $program)
+# `type(sqrt)`: a library word's signature, `builtin: (x:number) -> number`; `type(area)` of a function the program
+# or a module defines, `function: (w: int) -> int` (extensions/rules/rule_words.warp builtin_type); never a parameter or
+# local of that name, `type(value)` in `f(value)` beside a method value()
+rewrite type($f) => $t where $f is symbol and $f is function and $t = builtin_type($f, $program)
 rewrite $f.dump => $refused where $f is symbol and $f is function and $refused = misnamed($f, dump, definition)
 
 # `dir(time)`, `dir text`: the words of a module or type named as written (extensions/rules/rule_words.warp dir_words); `dir(v)` of
@@ -54,6 +58,7 @@ rewrite $f.dump => $refused where $f is symbol and $f is function and $refused =
 rewrite dir $x => dir($x)
 rewrite dir($m) => [$names...] where $m is symbol and $names = dir_words($m, $program)
 rewrite dir($p) => [$names...] where $p is symbol and $names = instance_members($p, dir, $source)
+rewrite dir($c) => [$names...] where $c is symbol and $names = class_dir($c, $program, $source)
 rewrite dir($x) => dir_of_value($x, $words...) where $words = value_dir_words($program)
 # the views of a module's words besides dir (card dir-filters): `time.functions`, `time.attributes`, `time.classes`,
 # `list.operators` (the operators it declares, `∪`, which dir leaves out) (extensions/rules/rule_words.warp module_view)
@@ -73,6 +78,7 @@ rewrite help($c) => help_line($t) where $c is symbol and $t = class_help($c, $pr
 rewrite help($f) => help_line($t) where $f is symbol and $t = function_help($f, $program, $source)
 rewrite help($m) => help_line($t) where $m is symbol and $t = module_help($m, $program)
 rewrite help($w) => help_line($t) where $w is symbol and $t = module_word_help($w, $program, $source)
+rewrite help($e) => help_line($t) where $e is symbol and $t = enum_help($e, $program, $source)
 # `help(trick)` of a name or an instance only the run knows: looked up at run time among the program's and its
 # modules' words (extensions/rules/rule_words.warp value_helps, lib/prelude.warp looked_up_word)
 rewrite help($x) => help_line(looked_up_word($x, "help", $helps...)) where $helps = value_helps($program, $source)

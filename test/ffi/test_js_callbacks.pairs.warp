@@ -1,4 +1,5 @@
 # from test_js_callbacks.rs: edit the Rust test, then run the script again
+// needs: js
 
 # a_promise_is_awaited_natively — native only: node awaits it; the page has its own line below
 'use js Promise; Promise.resolve(1)'	1

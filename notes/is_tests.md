@@ -50,6 +50,11 @@ test too. A case over 2 s (the runner marks it ⏱) lives in test/slow/<topic>/,
 (card slow-test-relocation), which a folder's walk passes by: `warp test test/slow`, `--slow` and `--each` (the full
 suite) run it. The verdict lines print in file order after the run, so two runs (pure and self) diff line by line.
 `warp "2+3*4"` / `warp self "…"`: inline code through the warp compiler, `use` reading from the current folder.
+A test that needs what not every machine has (the Mac has all of it, the cloud box little) says so (card
+test-env-needs): `// needs: gpu js` in a file's first 8 lines for all its cases, `needs: gpu` opening a pair's note column
+or ending an `is!` line (`// needs: gpu`) for one. Each need is one shell probe (extensions/commands/tests.warp
+MACHINE_PROBES: macos js gpu display cargo packages uniscript network raylib); a case whose need the machine lacks is
+skipped, said with the need (`⊘ file: 3 cases skipped, need js`), never dropped. An unknown need is an error.
 
 ## Known gaps (cards)
 - eval of code holding π, time literals, nan, inf, complex: "parse_code: π cannot cross to another task yet": card

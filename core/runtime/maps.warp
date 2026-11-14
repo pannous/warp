@@ -2,6 +2,7 @@
 use "intrinsics.warp"
 use "../analysis/kinds.warp"
 use "bridge.warp"
+use "conversions.warp"
 use "equality.warp"
 use "errors.warp"
 use "fields.warp"
@@ -171,6 +172,8 @@ map_get(m: Node, name: text): Node := {
 is_tagged_field(m: Node, name: text): bool := is_entry(m) and not is_null(key_value(m)) and kind_code(key_value(m)) == Kind.List and map_index(key_value(m), name) > 0
 # what `for k, v in x` walks: a map's entries as [name, value] pairs, any other list itself
 map_entries(m: Node): Node := {
+	listed = protocol_answer(m, "map_keys", [])
+	if not is_null(listed) { return protocol_entries(m, listed) }
 	# an instance walks its fields
 	n = fields_of(m)
 	if marked_kind(n) != Marked.Map { return n }
@@ -181,6 +184,8 @@ map_entries(m: Node): Node := {
 map_keys(m: Node): list := {
 	# `{}` is the empty value: its keys are the empty value too
 	if is_null(m) { return m }
+	listed = protocol_answer(m, "map_keys", [])
+	if not is_null(listed) { return keys_answered(listed) }
 	out = new_list(0)
 	if marked_kind(m) != Marked.Map and marked_kind(m) != Marked.Instance { not_a_map() }
 	for entry in unboxed_list(fields_of(m)) { out += [key_name(entry)] }
@@ -190,6 +195,11 @@ map_values(m: Node): list := {
 	# `{}` is the empty value: its values are the empty value too
 	if is_null(m) { return m }
 	out = new_list(0)
+	listed = protocol_answer(m, "map_keys", [])
+	if not is_null(listed) {
+		for entry in protocol_entries(m, listed) { out += [unboxed_list(entry)#2] }
+		return out
+	}
 	if marked_kind(m) != Marked.Map and marked_kind(m) != Marked.Instance { not_a_map() }
 	for entry in unboxed_list(fields_of(m)) { out += [key_value(entry)] }
 	out
@@ -200,6 +210,8 @@ lookup_name(key: Node): text := if is_null(key) then node_text(key) else if kind
 # `x in c`, `c.contains(x)`: a map's entry named x, a list's item equal to x, a text's part x
 collection_contains(c: Node, x: Node): bool := {
 	if is_null(c) { return no } # `[]` is the null node
+	held = protocol_answer(c, "collection_contains", [x])
+	if not is_null(held) { return node_truthy(answer_of(held)) }
 	# ø names no entry: `ø in m` is no (card pure-nil-in-any-map: lookup_name(ø) trapped on the null node)
 	if marked_kind(c) == Marked.Map or kind_code(c) == Kind.Key { return not is_null(x) and map_index(c, lookup_name(x)) > 0 }
 	if kind_code(c) == Kind.Text {
@@ -298,6 +310,27 @@ operator_cases(cases: Node): list := spelled_cases(cases, 1)
 map_get_or(m: Node, key: Node, fallback: Node = ø): Node := {
 	if is_null(m) { return fallback }
 	at = map_index(m, node_text(key))
-	if at == 0 { return fallback }
-	value_at(m, at)
+	if at > 0 { return value_at(m, at) }
+	# no field of that name: a class's own has() and get() (field first, as `p.k` reads)
+	held = protocol_answer(m, "collection_contains", [key])
+	if not is_null(held) and not node_truthy(answer_of(held)) { return fallback }
+	got = protocol_answer(m, "map_get_or", [key])
+	if is_null(got) or is_null(answer_of(got)) then fallback else answer_of(got)
+}
+# A class with the map words is a map at run time too (decision map-protocol): keys(p), p.get(k) where p has no field
+# k, k in p and the entries its keys() and get() give, wherever p goes (lib/map.warp's entries(m: any)). The class's
+# method of the runtime word's name (the prelude's aliases name keys() map_keys), [its answer], so a keys() answering []
+# is told from none; ø for any other value or a class declaring no such method
+protocol_answer(m: Node, word: Node, arguments: list): Node := if is_class_instance(m) then instance_method(m, word, list_node(Kind.List, arguments)) else ø
+# the list a keys() answered, none for an answer of ø
+keys_answered(listed: Node): list := {
+	keys = answer_of(listed)
+	if is_null(keys) { return new_list(0) }
+	unboxed_list(keys)
+}
+# [key, value] of each key a keys() answered, its value by the class's get()
+protocol_entries(m: Node, listed: Node): list := {
+	out = new_list(0)
+	for k in keys_answered(listed) { out += [[k, map_get_or(m, k)]] }
+	out
 }

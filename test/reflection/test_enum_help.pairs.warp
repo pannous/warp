@@ -1,0 +1,5 @@
+# help of an enum or of one of its cases shows the declaration and the comment above it (wiki/reflection.md "Modules";
+# user card symbol-minimum-requirement: every name a program can say has a help)
+'enum E { a, b }; help(b)'	'b: a case of E\nenum E { a, b }'
+'enum E { a, b }; help(E)'	'enum E { a, b }'
+'use sound; help(dorian).starts_with("dorian: a case of Scale")'	true

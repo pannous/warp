@@ -62,6 +62,7 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	global whole_module_wanted
 	global used_c_functions
 	fresh_module()
+	numbered_module_files()
 	module.relocating = library_runtime != ø
 	if is_primitive_file(source) { return primitive_module(source, folder) }
 	known = #diagnosed
@@ -201,7 +202,8 @@ images_of(names: list, folder: text): list := {
 own_module_beside(name: text, program_folder: text) := {
 	wasm = path_in(absolute_folder(program_folder), name + ".wasm")
 	bytes = bytes_if_there(wasm)
-	if #bytes > 0 and section_place(bytes, section_ids.custom, SIGNATURE_SECTION) != ø { own_module(name, wasm.remove_suffix(".wasm") + module_extension, wasm) }
+	# (its text where one is known already: a console line's, kept as line_1.line.warp, extensions/commands repl_step)
+	if #bytes > 0 and section_place(bytes, section_ids.custom, SIGNATURE_SECTION) != ø { own_module(name, own_module_files.get(name) ?? wasm.remove_suffix(".wasm") + module_extension, wasm) }
 }
 # the images, each behind those of the modules it uses
 dependencies_first(images: list): list := in_dependency_order(images.map(image => image.name)).map(name => images.filter(image => image.name == name)#1)
@@ -249,6 +251,9 @@ RUNTIME_WASM = "runtime.wasm"
 write_runtime(file: text) := {
 	# the library index first: a runtime's host words are lib/'s as it lies now, never an earlier build's
 	write_library_index(folder_of(file) + "/" + MODULES_FOLDER)
+	# (its words' places name the standard modules' files by the numbers every compile gives them, never by the order
+	# this build parses them in: the prelude's defaults packed in warp.runtime differed between two builds' runtimes)
+	numbered_module_files()
 	made = runtime_wasm_module(lowered_runtime_words(), host_words())
 	if made is text { raise made }
 	write_bytes(file, with_call_sites(made))
@@ -276,11 +281,16 @@ global module_written_folder = ""
 global line_module = no
 # whether a compile links the modules it uses: a `warp build` compiles them in, what it builds stands alone
 global modules_linked = yes
-# a compile with --fast (decision fast-mode, card fast-int-wrap; the compiler's own build is one): the run drops its
+# the build mode the run gives, `warp debug|release|fast|small <program>` (core/native/warp.warp default_mode, card
+# build-modes): debug keeps each statement's place, so every error names its file:line; release, fast and small drop
+# them; fast also drops the runtime checks (fast_build), small also trims a built module hardest (build.warp)
+global build_mode = run_option("mode") ?? "debug"
+global positions_dropped = build_mode != "debug"
+# a compile in fast mode (decision fast-mode, card fast-int-wrap; the compiler's own build is one): the run drops its
 # runtime checks, the program's code and every runtime word of the run alike (checks_dropped): every int + - * wraps at
 # 64 bits, no overflow check, as in a fast function. A value already big (a literal past 64 bits, a ratio) keeps its
 # exact arithmetic; only the promotion on overflow goes. Bounds and the other checks are to follow
-global fast_build = run_option("fast") != ø
+global fast_build = build_mode == "fast"
 write_module(name: text, runtime_file: text, file: text) := module_written_behind(name, read_bytes(runtime_file), file)
 module_written_behind(name: text, runtime, file: text) := module_compiled_behind(name, "", runtime, file)
 # so, compiled from the source given: a console line's own text (extensions/commands repl_step), whose `_start` runs its

@@ -65,8 +65,13 @@ webidl_add_member(definition: WebIdlDefinition, written: text) := {
 	if #words < 2 { return }
 	definition.members[words#(#words)] = WebIdlMember(webidl_type(words#(#words - 1)), operation)
 }
-# a type as the definitions name it: `Document?` is Document; `Promise<X>`, `(A or B)` none of them
-webidl_type(written: text): text := written.replace("?", "").replace(")", "")
+# a type as the definitions name it: `Document?` is Document, the WindowProxy a page hands out its Window; `Promise<X>`,
+# `(A or B)` none of them
+WEBIDL_ALIASES = {WindowProxy: "Window"}
+webidl_type(written: text): text := {
+	named = written.replace("?", "").replace(")", "")
+	WEBIDL_ALIASES.get(named) ?? named
+}
 # the words of a statement, its extended attributes `[…]` left out, a `:` a word of its own
 webidl_words(statement: text): list := {
 	plain = ""

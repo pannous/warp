@@ -46,6 +46,9 @@ def instance_of_fields(body: Body, class_name: text, field_names: list, field_va
 		if field_names[i] not in declared { return refuse("a field " + class_name + " does not declare") }
 		given[field_names[i]] = field_values[i]
 	}
+	left_out = declared.keys.filter(name => name not in field_names)
+	required = left_out.filter(name => #(module.class_defaults[class_name].get(name) ?? [ø]) == 0)
+	if #required > 0 { return program_error(class_name + " leaves out its required field " + required#1, class_name + "{" + required#1 + ": …}") }
 	# the fields in the order the class declares them, each its struct field (class_struct); those left out take their
 	# defaults
 	instance_made(class_name, declared.keys.map(name => field_code(body, class_name, name, if name in field_names then given[name] else field_default(class_name, name))))
@@ -55,7 +58,7 @@ instance_made(class_name: text, codes: list): TypedCode := TypedCode(ValueKind.N
 # a field left out: its default, else its type's zero
 def field_default(class_name: text, name: text): any {
 	defaults = module.class_defaults[class_name]
-	if name in defaults then stage_node(defaults[name]#1) else field_zero(module.classes[class_name][name])
+	if name in defaults and #defaults[name] > 0 then stage_node(defaults[name]#1) else field_zero(module.classes[class_name][name])
 }
 # the code of the field's value as its struct holds it, checked against the field's type
 def field_code(body: Body, class_name: text, name: text, given: any): list {
@@ -445,7 +448,7 @@ def is_class_instance_code(f: Function) {
 # instance_show(m), instance_float(m): m as its class's show() or float() gives it (decision show-hook), ø without one
 def instance_show_code(f: Function) { f.code = optional_slot_call("show") }
 def instance_float_code(f: Function) { f.code = optional_slot_call("float") }
-# instance_operated(m, a, b, operator): a + b, a - b, a * b or a / b (operator 0 to 3) by the operator of m's class, m
+# instance_operated(m, a, b, operator): a + b, a - b, a * b, a / b or a ^ b (operator 0 to 4) by the operator of m's class, m
 # being a or b; ø when its module declares none (decision class-operators-generic: sum([5km, 1500m]) keeps km)
 def instance_operated_code(f: Function) { f.code = optional_slot_call("operate", 4) }
 def optional_slot_call(slot: text, values: int = 1): list {
@@ -453,7 +456,7 @@ def optional_slot_call(slot: text, values: int = 1): list {
 	not_described([ref_null, gc_type(gc.node)]) + word + [op.ref_is_null, op.if, no_value, ref_null, gc_type(gc.node), op.return, op.end] + entered_node(slot_call(slot, parameters_code(values)))
 }
 # the operators a class word operates by, in instance_operated's order, each with its module's dispatcher (ø: none)
-operated_glyphs = ["+", "-", "*", "/"]
+operated_glyphs = ["+", "-", "*", "/", "^"]
 operated_dispatchers(): list := operated_glyphs.filter(glyph => module.functions.has(glyph + "·operator"))
 # the module's operate word: the dispatcher of the operator given (parameter 3, a boxed int) on a and b, ø for none
 def class_operate_code(): list {
@@ -461,9 +464,9 @@ def class_operate_code(): list {
 	cases = concatenated(range_list(#operated_glyphs).filter(i => module.functions.has(operated_glyphs[i] + "·operator")).map(i => operator + [op.i64_const] + sleb(i) + [op.i64_eq, op.if, no_value] + boxed(call_values(module.functions[operated_glyphs[i] + "·operator"], [TypedCode(ValueKind.Node, [op.local_get, 1]), TypedCode(ValueKind.Node, [op.local_get, 2])])) + [op.return, op.end]))
 	cases + [ref_null, gc_type(gc.node)]
 }
-# instance_method(m, name, arguments): m's method of that name, by the dispatcher of m's own module, for a module
-# that never saw m's class (card reals-prebuilt: reals' √ of uncertain's interval calls its root()); ø when that
-# module has none
+# instance_method(m, name, arguments): [the answer] of m's method of that name, by the dispatcher of m's own module, for
+# a module that never saw m's class (card reals-prebuilt: reals' √ of uncertain's interval calls its root()); ø when
+# that module has none, so a method answering [] or ø is told from none (method_called unwraps it)
 def instance_method_code(f: Function) { f.code = optional_slot_call("method", 3) }
 # [method, its dispatcher] of each method the module's classes lift (`root·real` is real's root, `root` or the routed
 # `root·method` its dispatcher)
@@ -483,11 +486,11 @@ def method_dispatchers(): list {
 method_receiver = "self"
 def takes_instance(f: Function): bool { #f.signature.parameters > 0 and f.signature.parameters[0].name == method_receiver }
 # the module's method word: the dispatcher of the name given (parameter 1) on the instance (parameter 0) and the items
-# of the arguments' list (parameter 2), ø for a name it lacks
+# of the arguments' list (parameter 2), [its answer]; ø for a name it lacks
 def class_method_code(): list {
 	named = (method => runtime_call("node_equal", [TypedCode(ValueKind.Node, [op.local_get, 1]), TypedCode(ValueKind.Node, boxed(text_value_of(method)))]).code)
 	argument = (i => runtime_call("node_at", [TypedCode(ValueKind.Node, [op.local_get, 2]), TypedCode(ValueKind.Int, [op.i64_const] + sleb(i))]))
-	called = (dispatcher => boxed(call_values(dispatcher, [TypedCode(ValueKind.Node, [op.local_get, 0])] + range_list(#dispatcher.signature.parameters - 1).map(i => argument(i + 1)))))
+	called = (dispatcher => runtime_call("answered", [TypedCode(ValueKind.Node, boxed(call_values(dispatcher, [TypedCode(ValueKind.Node, [op.local_get, 0])] + range_list(#dispatcher.signature.parameters - 1).map(i => argument(i + 1)))))]).code)
 	concatenated(method_dispatchers().map(pair => named(pair#1) + [op.if, no_value] + called(pair#2) + [op.return, op.end])) + [ref_null, gc_type(gc.node)]
 }
 # whether a declared class has a field `name`: a read of it may meet an instance (field_value), else only a map
@@ -629,10 +632,18 @@ declared_members(body: any): list := if kind_of(body) == "list" then body[3..].m
 declared_fields(body: any): list := declared_members(body).filter(field => field != ø)
 # a field's name as the view holds it: `x`, `"my field"`, `pi` (a constant's word)
 field_name_kinds = ["symbol", "text", "number"]
+# the default of a required field, `name!`: none at all, the construction leaving it out refused
+REQUIRED = []
+# the call view `word(x)` of one field name
+is_word_call(view: any, word: text): bool := kind_of(view) == "list" and view#2 == "(" and #view == 5 and kind_of(view#4) == "symbol" and view#4#2 == word and kind_of(view#5) in field_name_kinds
 without_optional_mark(name: text): text := name[0..<(#name - 1)]
 declared_field(field: any): any := {
 	kind = kind_of(field)
 	if kind in field_name_kinds and field#2.ends_with("?") { return [without_optional_mark(field#2), ø, [ø]] }
+	# `name!` (wiki constructor.md), parsed as unwrap(name): untyped, and every construction gives it
+	if is_word_call(field, "unwrap") { return [field#5#2, ø, REQUIRED] }
+	# `address { street city }`: an untyped field holding the record given
+	if kind == "list" and #field == 5 and kind_of(field#4) in field_name_kinds and kind_of(field#5) == "list" and field#5#2 == "{" { return [field#4#2, ø, ø] }
 	if kind in field_name_kinds { return [field#2, ø, ø] }
 	if kind != "key" { return ø }
 	if field#2 == ":" and kind_of(field#3) in field_name_kinds {

@@ -10,6 +10,21 @@ pattern; Wasp (C++) has its own tap pannous/homebrew-wasp).
 - GitHub release per tag v<VERSION>: .github/workflows/release.yml attaches warp-<tag>-<target>.tar.gz (the native
   warp, its compilers, lib/ and libwarp_wasmtime, packaging/native_dist.sh) for aarch64/x86_64-apple-darwin and
   x86_64/aarch64-unknown-linux-gnu.
+- Windows (card windows-build, no archive yet): release.yml's `windows` job compiles the native warp on windows-latest
+  from the C the compilers job writes (`warp build native --c core/native/warp.warp`: no warp runs on Windows to build
+  it there) with llvm-mingw's clang, against our wasmtime C API built there (warp_wasmtime.dll), and runs hello and
+  smoke's checks. lib/native/windows.c answers the POSIX calls (lib/native/system.h includes it, the one place the C
+  asks the system): paths as Git Bash writes them (`D:\a` is `/d/a`), each drive preopened for the modules under
+  that name, sh lines by the sh on PATH, commands by posix_spawnp over CreateProcess. The job also runs a `warp test`
+  file (no fork there: each case is this warp spawned anew) and `warp build native` of a sample (build.warp's
+  NATIVE_SYSTEMS: clang, exported symbols, the stack, no rpath, .exe). Its release folder (native_dist.sh with
+  lib/warp.exe) is the zip warp-<tag>-x86_64-pc-windows-gnu.zip, and packaging/scoop/warp.json filled with its version
+  and sha256 is uploaded beside it: `scoop install https://github.com/pannous/warp/releases/latest/download/warp.json`
+  (the job installs it so and runs hello from PowerShell, HOME unset: windows.c takes USERPROFILE). Still missing: CRLF
+  sources (card crlf-line-endings), a winget manifest. Window, sound and GPU: scripts/wasmtime-c-api.sh puts
+  wgpu-native's and SDL3's Windows DLLs in lib/ (no system SDL3 there); the window's GPU surface is its HWND
+  (native_host gpu.warp window_source). The job runs a compute shader on the runner's software adapter; the window
+  itself is untried in CI (no display).
 - PyPI, .deb/.rpm (license fields `AGPL-3.0-or-later AND MIT`: the compiler AGPL, warp-runtime MIT). Both repackage the release tarballs, jobs `packages`, `pypi`
   of release.yml after `binaries`; `gh workflow run release.yml -f tag=v<version> -f repackage=true` reruns only them
   from the existing tarballs (their sha256 stay, so the formula stays valid).
@@ -33,7 +48,7 @@ pattern; Wasp (C++) has its own tap pannous/homebrew-wasp).
 
 ## At a release
 1. Bump `VERSION` in extensions/commands/commands.warp, write notes/releases/v<version>.md, commit, push main.
-   Then a dry run of that commit, green before the tag: `gh workflow run release.yml -f tag=<sha> -f dry=true`. It alone
+   Then a dry run of that commit, green before the tag: `gh workflow run release.yml -f tag=$(git rev-parse <commit>) -f dry=true` (the full SHA: checkout takes a short one for a branch name). It alone
    compiles lib/native's C on the release's own runners (ubuntu-22.04 x64 and arm, the old glibc and gcc the tarballs
    must run on); pages.yml's bootstrap compiles it only on ubuntu-latest (v1.8.0's Linux jobs failed on what 24.04
    accepted: RTLD_DEFAULT undeclared, card release-linux-bootstrap).

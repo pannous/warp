@@ -119,9 +119,11 @@ def exported_builders(): any {
 	f = exported_function("int_item_at", [ValueKind.Node, ValueKind.Int], ValueKind.Int)
 	f.code = runtime_call("int_admitted", [runtime_call("node_at", [TypedCode(ValueKind.Node, [op.local_get, 0]), TypedCode(ValueKind.Int, [op.local_get, 1])])]).code
 	# a chunk of a picture's int items, 4 bytes each in linear memory (runtime/show.warp pixels_at): paint's pixels
-	# copied at once, not one call a pixel
-	f = exported_function("pixels_at", [ValueKind.Node, ValueKind.Int, ValueKind.Int], ValueKind.Int)
-	f.code = runtime_call("pixels_at", [TypedCode(ValueKind.Node, [op.local_get, 0]), TypedCode(ValueKind.Int, [op.local_get, 1]), TypedCode(ValueKind.Int, [op.local_get, 2])]).code
+	# copied at once, not one call a pixel; int32s_at the same of a list of plain ints, -1 for any other list
+	for name in ["pixels_at", "int32s_at"] {
+		f = exported_function(name, [ValueKind.Node, ValueKind.Int, ValueKind.Int], ValueKind.Int)
+		f.code = runtime_call(name, [TypedCode(ValueKind.Node, [op.local_get, 0]), TypedCode(ValueKind.Int, [op.local_get, 1]), TypedCode(ValueKind.Int, [op.local_get, 2])]).code
+	}
 	# a float item, an int's too (gpu_compute's results), without a text of it a host parses
 	f = exported_function("float_item_at", [ValueKind.Node, ValueKind.Int], ValueKind.Float)
 	f.code = runtime_call("float_of_node", [runtime_call("node_at", [TypedCode(ValueKind.Node, [op.local_get, 0]), TypedCode(ValueKind.Int, [op.local_get, 1])])]).code
@@ -148,8 +150,12 @@ def exported_shown_at(): any {
 # engine's trap. The compiler's own source is no place of the user's program: its refusals say theirs
 def exported_trap_message() {
 	f = exported_function("trap_message", [ValueKind.Int], ValueKind.Int)
-	position = if is_compiler_source(module.program_file) then [op.i64_const, 0] else [op.global_get] + relocatable(relocated.globals, declared_global("trap_position", ValueKind.I32)#1) + [op.i64_extend_i32_s]
-	f.code = runtime_call("trap_sentence_at", [TypedCode(ValueKind.Text, text_bytes(module.program_file)), TypedCode(ValueKind.Int, position), TypedCode(ValueKind.Int, [op.local_get, 0])]).code
+	position = if is_compiler_source(module.program_file) then [op.i64_const, 0] else [op.global_get] + relocatable(relocated.globals, declared_global("trap_position", ValueKind.Int)#1)
+	# the files a position names, a line each, the program's first (positions.warp source_files): those this compile
+	# named and the linked modules', the others' lines left empty
+	linked = module.linked_images.map(image => shown_file(std_module_path(image.name)))
+	files = ([module.program_file] + source_files[1 ..].map(path => if named_files.has(path) or path in linked then path else "")).join("\n")
+	f.code = runtime_call("trap_sentence_at", [TypedCode(ValueKind.Text, text_bytes(files)), TypedCode(ValueKind.Int, position), TypedCode(ValueKind.Int, [op.local_get, 0])]).code
 }
 def is_compiler_source(file: text): bool := file.starts_with("core/") or "/core/" in file or "lib/compiler/" in file
 # f at the module's next function index (results `any`: a declared Function result fails, card class-result-type),

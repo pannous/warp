@@ -3,5 +3,5 @@
 width = height = 400
 radius = 50
 center = height / 2
-surface = [(y - center)^2 + (x - center)^2 < radius * radius for y in 0..height for x in 0..width]
+surface = [(y - center)^2 + (x - center)^2 < radius^2 for y in 0..height for x in 0..width]
 paint(surface, width, height)

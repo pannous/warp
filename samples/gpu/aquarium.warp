@@ -10,10 +10,10 @@
 # travelling cosines whose Jacobian focuses light, tropical absorption, and a
 # leader whose followers hold hashed slots in its heading frame.
 # The fish are the Fish Kit's madai mesh (CC0, なちゃっと), one posed mesh shared
-# by every fish (lib/fish_mesh.warp, notes/aquarium.md). paint() is one fragment shader.
+# by every fish (samples/gpu/fish_mesh.warp, notes/aquarium.md). paint() is one fragment shader.
 use math
 use file
-use fish_mesh
+use "fish_mesh.warp"
 
 # the clock the sample advances; a still is second 0
 global aquarium_time = 0.0
@@ -251,20 +251,15 @@ madai_mesh() := {
 show_school(t) := {
 	mesh = madai_mesh()
 	span = (1 / mesh.frequency) / fish_phases
-	corners = []
-	colors = []
-	for k in 0..fish_phases {
-		posed = fish_pose(mesh, t + k * span)
-		corners = corners + posed.corners
-		if k < 1 { colors = posed.colors }
-	}
-	frames = []
+	posed = fish_pose(mesh, [t + k * span for k in 0..fish_phases])
+	frames: [vec4] = float[2 * fish_count]
 	for i in 0..fish_count {
 		place = fish_place(i, t)
 		heading = fish_heading(i, t)
-		frames = frames + [[place#1, place#2, place#3, fish_scale(i)], [heading#1, heading#2, heading#3, fish_slot(i, t, mesh.frequency)]]
+		frames#(2 * i + 1) = [place#1, place#2, place#3, fish_scale(i)]
+		frames#(2 * i + 2) = [heading#1, heading#2, heading#3, fish_slot(i, t, mesh.frequency)]
 	}
-	fish_show(corners, colors, frames, fish_radius(corners))
+	fish_show(posed.corners, posed.colors, frames, fish_radius(posed.corners))
 }
 
 # --- the reef around the school ---

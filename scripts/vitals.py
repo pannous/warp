@@ -33,6 +33,9 @@ BOARD_CARD = "https://github.com/users/pannous/projects/1?pane=issue&itemId=%s"
 RECENTLY_DONE = 8
 FLIPS_SHOWN = 8  # named tests per lane that started or stopped passing
 CARD_SNAPSHOTS = os.path.join(REPO, "data/vitals/cards.jsonl")  # one line per snapshot of the board's columns
+# each commit's change against its first parent per component, kept between runs (a commit never changes): diffing
+# main's 4000 merges again took 27 s a run (card vitals-py-slow)
+CHANGES_CACHE = os.path.join(REPO, "data/vitals/changes.json")
 BUILD_TIMES_SINCE = "2026-11-06"  # rebuild seconds before this date are outliers of the old build steps (user 11-12)
 STORE = os.environ.get("WARP_STORE", "/Volumes/Build/compilers")  # build records (notes/compiler_rebuilds.md)
 # (name, record, whether one compiler, the seed, runs many of them: its first run is cold; warp-self's compiler is the
@@ -92,10 +95,13 @@ def group_sums(counter):
     return [sum(counter.get(c, 0) for c in names) for _, names in CORE_GROUPS]
 
 
-def first_parent_changes(*revisions):
-    """Each commit's change against its first parent, per component, from one git log."""
+def first_parent_changes(shas):
+    """Each commit's change against its first parent, per component, from one git log of them all."""
     changes, sha = {}, None
-    for line in git("log", "--numstat", "--no-renames", "--diff-merges=first-parent", "--format=@%H", *revisions).splitlines():
+    logged = subprocess.run(["git", "-C", REPO, "log", "--no-walk=unsorted", "--stdin", "--numstat", "--no-renames",
+                             "--diff-merges=first-parent", "--format=@%H"], input="\n".join(shas), capture_output=True,
+                            text=True, errors="replace", check=True).stdout
+    for line in logged.splitlines():
         if line.startswith("@"):
             sha = line[1:]
             changes[sha] = collections.Counter()
@@ -126,24 +132,39 @@ def members(bits):
         bits ^= lowest
 
 
+def changes_known(shas):
+    """The whole changes of the commits, those not kept yet read by one git log for all of them (one call a commit took
+    35 s of 105, card vitals-py-slow)"""
+    missing = [sha for sha in shas if sha not in whole_changes]
+    if missing:
+        whole_changes.update(first_parent_changes(missing))
+
+
+whole_changes = {}
+if os.path.exists(CHANGES_CACHE):
+    with open(CHANGES_CACHE) as kept:
+        whole_changes = {sha: collections.Counter(change) for sha, change in json.load(kept).items()}
+
+
 own_changes = {}
 def own_change(sha):
     """What one commit changed itself, per component: a commit against its parent; a merge its whole change against its
     first parent less what the commits it brought in changed (their own changes), so only its resolution."""
     if sha not in own_changes:
-        if sha not in whole_changes:  # a commit from before the base that a later merge brought in
-            whole_changes.update(first_parent_changes("-1", sha))
-        change = whole_changes[sha].copy()
         first_parent, *others = PARENTS[sha]
-        if others:
-            for brought in members(ANCESTORS[sha] & ~ANCESTORS[first_parent] & ~(1 << ORDER_INDEX[sha])):
-                change.subtract(own_change(brought))
+        brought = list(members(ANCESTORS[sha] & ~ANCESTORS[first_parent] & ~(1 << ORDER_INDEX[sha]))) if others else []
+        changes_known([sha] + brought)
+        change = whole_changes[sha].copy()
+        for each in brought:
+            change.subtract(own_change(each))
         own_changes[sha] = change
     return own_changes[sha]
 
 
 ORDER, PARENTS, ANCESTORS = history_graph()
 ORDER_INDEX = {sha: index for index, sha in enumerate(ORDER)}
+# the commits that are no merges, as a bitset of ORDER's indices
+SINGLE_PARENTED = sum(1 << index for index, sha in enumerate(ORDER) if len(PARENTS[sha]) <= 1)
 
 
 # One row per commit by what it changed itself: measured against its first parent, a merge is charged with everything
@@ -152,7 +173,7 @@ ORDER_INDEX = {sha: index for index, sha in enumerate(ORDER)}
 # left out). Every commit since main's first-parent state before SINCE counts once, so the running totals end at the
 # tip's (checked below).
 base = git("rev-list", "-1", "--first-parent", "--before=" + SINCE, TIP).strip()
-whole_changes = first_parent_changes(f"{base}..{TIP}")
+changes_known(git("rev-list", f"{base}..{TIP}").split())
 commits = git("log", "--topo-order", "--reverse", "--format=%H\t%P\t%ad\t%s", "--date=iso-strict",
               f"{base}..{TIP}").splitlines()
 totals = lines_at(base)
@@ -310,30 +331,42 @@ def build_history(record, by_seed, landed):
 
 
 def pushes_since():
-    """Local times of the pushes to main since SINCE, from GitHub's activity record of the branch, newest first.
-    git can't tell: a branch merged with main and pushed fast-forward puts main's own history on its second parent."""
-    times, url = [], f"repos/{GITHUB_REPO}/activity?ref=refs/heads/main&activity_type=push&per_page=100"
+    """The pushes to main since SINCE, from GitHub's activity record of the branch, newest first: each one's local hour
+    and the commits it brought (main's tip before and after it). git can't tell: a branch merged with main and pushed
+    fast-forward puts main's own history on its second parent."""
+    pushes, url = [], f"repos/{GITHUB_REPO}/activity?ref=refs/heads/main&activity_type=push&per_page=100"
     while url:
         response = subprocess.run(["gh", "api", "-i", url], capture_output=True, text=True, check=True).stdout
         head, body = response.split("\r\n\r\n" if "\r\n\r\n" in response else "\n\n", 1)
-        local = [datetime.datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00")).astimezone()
-                 .strftime("%Y-%m-%d %H") for event in json.loads(body)]
-        times += [t for t in local if t >= SINCE]
+        events = [(datetime.datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00")).astimezone()
+                   .strftime("%Y-%m-%d %H"), event["before"], event["after"]) for event in json.loads(body)]
+        pushes += [push for push in events if push[0] >= SINCE]
         following = re.search(r'<https://api\.github\.com/([^>]+)>; rel="next"', head)
-        url = following.group(1) if following and local and min(local) >= SINCE else None
-    return times
+        url = following.group(1) if following and events and min(push[0] for push in events) >= SINCE else None
+    return pushes
+
+
+def commits_brought(before, after):
+    """How many commits of work a push brought to main: those reachable from its new tip and not from the old one, merges
+    left out (a branch's "Merge origin/main into …" syncs and the landing merges were 338 of 792 in a day, 11-13); 0
+    where main's history lacks either tip, a force push's lost one. Counted on the history graph in memory (one git
+    rev-list a push took 42 s of 105, card vitals-py-slow)"""
+    if before not in ANCESTORS or after not in ANCESTORS:
+        return 0
+    return (ANCESTORS[after] & ~ANCESTORS[before] & SINGLE_PARENTED).bit_count()
 
 
 def hourly_pace():
-    """Pushes to main and the commits reaching it (by commit date), per hour, every hour since SINCE."""
-    hour = lambda date: date[:13].replace("T", " ")
-    commits_per_hour = collections.Counter(hour(d) for d in git("log", "--format=%cd", "--date=iso-strict",
-                                                                 "--since=" + SINCE, TIP).split())
-    landings_per_hour = collections.Counter(pushes_since())
-    first = datetime.datetime.strptime(min(commits_per_hour), "%Y-%m-%d %H")
+    """Pushes to main and the commits they brought, per hour of the push, every hour since SINCE: both on one clock,
+    so a commit made on a branch at 10 and landed at 16 counts at 16."""
+    pushes_per_hour, commits_per_hour = collections.Counter(), collections.Counter()
+    for hour, before, after in pushes_since():
+        pushes_per_hour[hour] += 1
+        commits_per_hour[hour] += commits_brought(before, after)
+    first = datetime.datetime.strptime(min(pushes_per_hour), "%Y-%m-%d %H")
     hours = []
-    while (label := first.strftime("%Y-%m-%d %H")) <= max(commits_per_hour):
-        hours.append([label, landings_per_hour[label], commits_per_hour[label]])
+    while (label := first.strftime("%Y-%m-%d %H")) <= max(pushes_per_hour):
+        hours.append([label, pushes_per_hour[label], commits_per_hour[label]])
         first += datetime.timedelta(hours=1)
     return hours
 
@@ -442,6 +475,10 @@ data = {"cards": card_counts(), "hello": hello_track(), "pace": hourly_pace(), "
         "tip": git("log", "-1", "--format=%h%x09%s%x09%ad", "--date=format:%Y-%m-%d %H:%M", TIP).strip().split("\t"),
         "generated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
+os.makedirs(os.path.dirname(CHANGES_CACHE), exist_ok=True)
+with open(CHANGES_CACHE + ".new", "w") as kept:
+    json.dump(whole_changes, kept, separators=(",", ":"))
+os.replace(CHANGES_CACHE + ".new", CHANGES_CACHE)
 with open(TEMPLATE) as template, open(OUT, "w") as page:
     page.write(template.read().replace("__DATA__", json.dumps(data, separators=(",", ":")).replace("</", "<\\/")))
 first, last = rows[0], rows[-1]

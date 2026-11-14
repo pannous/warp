@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/samples.sh [<tree>, default this checkout] [samples/….warp…]: given samples, only their runs, each one's line
 # and its output in data/samples/out/ (the page smoke's native side, never stale; no results file). Else: how many of the tree's samples/ run, the gap to 2.0 (decision
-# release-1-5-tonight). Each samples/**/*.warp runs from the tree's root through the installed warp (--no-window, --mute,
+# release-1-5-tonight). Each samples/**/*.warp runs from its own folder through the installed warp (--no-window, --mute,
 # CPU_SECONDS of CPU each); one fails when the native warp exits other than 0, its error the first line it wrote to
 # stderr, and one that hits a limit is TIME, not FAIL. Writes test/samples.txt, tracked (status, sample and a failure's
 # reason, its positions and quoted texts left out, one a line: after-push commits it when it changed, so git diff and
@@ -42,15 +42,14 @@ HOST_LINE='^# host: '
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 shift $(( $# > 0 ))
 results=$tree/data/samples
-# each sample runs in this folder, never the tree's root: a file a sample writes by a relative path (native/files'
-# greeting.txt) stayed in the tree untracked and blocked after-push's checkout once someone committed it (11-09)
-run_folder=$results/cwd
-mkdir -p "$results/out" "$run_folder"
+mkdir -p "$results/out"
 # the tree's own compilers, else a count names the tree's commit but measures whichever compiler is installed (128 to
 # 122 at 08:12 was the installed one's, the trees' own went 131 to 132)
 [ -f "$tree/lib/warp.wasm" ] && WARP=$(launcher_of "$results" "$WARP" --lib "$tree/lib")
 # the registry's packages the package samples use by path (modules/packages, text/uniscript_text), as full-suite.sh links them
 "$tree/scripts/link-packages.sh" "$tree" >/dev/null || echo "samples: no packages linked: the package samples fail" >&2
+# the generated assets git ignores (ez_forest's tree meshes), published beside the release
+"$tree/scripts/sample-assets.sh" fetch >/dev/null || echo "samples: no assets fetched: ez_forest and tree_study fail" >&2
 # the compiled modules of test/fixtures/compiled (wasm/import_compiled links shapes.wasm, samples/wasm/shapes.wasm a
 # link to it), built behind this runtime.wasm
 for fixture in "$tree"/test/fixtures/compiled/*.warp; do
@@ -64,6 +63,12 @@ wall_seconds() {
 	awk -v wall="$WALL_SECONDS" -v load="$load" -v cores="$cores" 'BEGIN { share = load / cores; printf "%d", wall * (share > 1 ? share : 1) }'
 }
 # one <sample>: its line of the results
+# how a command that printed nothing ended: its exit, a signal's name where one killed it (a kill prints nothing itself)
+ended_by() {
+	local signal=
+	[ "$2" -gt 128 ] && signal=", killed by SIG$(kill -l $(($2 - 128)) 2>/dev/null || echo $(($2 - 128)))"
+	echo "$1 printed nothing (exit $2$signal)"
+}
 one() {
 	local out=$results/out/$(echo "$1" | tr / _) wall
 	local host
@@ -78,12 +83,20 @@ one() {
 	# what a sample keeps (lib/storage.warp, <sample>.database.sqlite beside it) starts anew each run, as the page's
 	# storage does: a counter prints its first run's value, not the sweep count's
 	rm -f "$tree/${1%.warp}.database.sqlite"
-	(cd "$run_folder" && ulimit -t "$CPU_SECONDS" && WARP_WINDOW=0 WARP_SOUND=0 timeout "$wall" "$WARP" --events-for $EVENTS_MILLISECONDS "$tree/$1" "${arguments[@]}" </dev/null >"$out.txt" 2>"$out.err")
+	# from its own folder, as a shell runs it (./photo.jpg beside it); the files the run leaves there move to data/, since one left
+	# untracked blocked after-push's checkout once someone committed it (native/files' greeting.txt, 11-09)
+	local folder left
+	folder=$tree/$(dirname "$1")
+	left=$(untracked_in "$folder")
+	trap 'written_moved "$folder" "$left" "$results/left/${1%.warp}"; trap - RETURN' RETURN
+	(cd "$folder" && ulimit -t "$CPU_SECONDS" && WARP_WINDOW=0 WARP_SOUND=0 timeout "$wall" "$WARP" --events-for $EVENTS_MILLISECONDS "$tree/$1" "${arguments[@]}" </dev/null >"$out.txt" 2>"$out.err")
 	local status=$? first verdict=FAIL
 	[ $status -eq 124 ] && grep -aq "$SERVING" "$out.txt" && { echo "SRV  $1"; return; }
 	if [ $status -eq 0 ] && grep -q "$CHECK_LINE" "$tree/$1"; then
-		(cd "$run_folder" && WARP_WINDOW=0 WARP_SOUND=0 timeout "$wall" "$WARP" app check "$tree/$1" </dev/null >"$out.checks" 2>&1) || status=1
-		[ $status -ne 0 ] && { printf 'FAIL %s: %s\n' "$1" "$(grep -av '^ok ' "$out.checks" | grep -am1 . | cut -c1-200)"; return; }
+		(cd "$folder" && WARP_WINDOW=0 WARP_SOUND=0 timeout "$wall" "$WARP" app check "$tree/$1" </dev/null >"$out.checks" 2>&1) || status=$?
+		# what failed, else how the check ended: a check killed before it printed a line (a web view off AppKit's thread,
+		# card since-e9aa527261) said nothing at all
+		[ $status -ne 0 ] && { printf 'FAIL %s: %s\n' "$1" "$(grep -av '^ok ' "$out.checks" | grep -am1 . | cut -c1-200 | grep . || ended_by "warp app check" $status)"; return; }
 	fi
 	[ $status -eq 0 ] && { echo "ok   $1"; return; }
 	# (a position names the sample by its full path now: shown as before, from the tree's root)
@@ -93,8 +106,16 @@ one() {
 	grep -q "$EXPECTED_FAILURE" "$tree/$1" && verdict=EXP
 	printf '%-4s %s: %s\n' "$verdict" "$1" "${first:-exit $status, nothing on stderr}"
 }
-export -f one wall_seconds
-export tree results run_folder WARP CPU_SECONDS WALL_SECONDS CPU_LIMIT_HIT WINDOW_LIBRARIES SERVING EVENTS_MILLISECONDS EXPECTED_FAILURE CHECK_LINE HOST_LINE
+# the untracked files of a folder, one a line; written_moved moves those a run added to the list it was given into
+# data/samples/left/<sample>/, nothing lost (a file saved there meanwhile by hand or by a parallel sample is kept too)
+untracked_in() { git -C "$1" ls-files --others --exclude-standard -- . ; }
+written_moved() {
+	comm -13 <(printf '%s\n' "$2" | sort) <(untracked_in "$1" | sort) | while IFS= read -r file; do
+		[ -n "$file" ] && mkdir -p "$(dirname "$3/$file")" && mv -- "$1/$file" "$3/$file"
+	done
+}
+export -f one wall_seconds ended_by untracked_in written_moved
+export tree results WARP CPU_SECONDS WALL_SECONDS CPU_LIMIT_HIT WINDOW_LIBRARIES SERVING EVENTS_MILLISECONDS EXPECTED_FAILURE CHECK_LINE HOST_LINE
 if [ $# -gt 0 ]; then
 	for sample in "$@"; do one "$sample"; done
 	exit 0

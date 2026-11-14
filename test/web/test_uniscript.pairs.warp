@@ -1,4 +1,5 @@
 # from test_uniscript.rs: edit the Rust test, then run the script again
+// needs: uniscript
 
 # use_strict_makes_uniscript_warnings_errors
 'use strict; use uniscript; uniscript("<:greek a/>")'	'α'
