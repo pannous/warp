@@ -813,15 +813,40 @@ explicit_definition(statement: Node): Node := {
 	call = implicit_call(statement)
 	if call == ø then statement else Key(call, Op.Define, value_of(statement))
 }
+# `twice := doubled`, `inc := add(1, _)`, `h := g` of such a g: a name defined as a function value, the definition
+# `twice(x) := doubled(x)` it is, so a call, `map(twice)` and an alias of it work as the function's own (wiki function
+# "Partial application"); each statement's arity known to those after it
+aliased_definitions(statements: list, bound: map): list := {
+	arities = {}
+	aliased = []
+	# (a name a variable holds too, math's `arctan = &arc_tangent`, stays the value it names)
+	variables = word_set(statements.flat_map(nodes_in).filter(n => is_key(n, Op.Assign) and key_of(n) is symbol).map(n => name_of(key_of(n))))
+	for statement in statements {
+		lambda = if is_key(statement, Op.Define) and key_of(statement) is symbol and not variables.has(name_of(key_of(statement))) then function_named(value_of(statement), arities, bound) else ø
+		written = if lambda == ø then statement else lambda_definition(key_of(statement), lambda)
+		parts = definition_of(written)
+		if parts != ø { arities[parts.name] = #parts.parameters }
+		aliased += [written]
+	}
+	aliased
+}
+# the lambda a definition's body names: a lambda as written, a function of the program by its name, a library word's
+function_named(value: Node, arities: map, bound: map): Node? := {
+	if is_lambda(value) { return lambda_of(value) }
+	if not (value is symbol) { return ø }
+	if arities.has(name_of(value)) { return if arities[name_of(value)] > 0 then lambda_calling(name_of(value), arities[name_of(value)]) else ø }
+	library_word_value(name_of(value), bound)
+}
+# the definition `name(parameters) := result` of a lambda named so
+lambda_definition(name: Node, lambda: Node): Node := Key(call_node(name, written_parameters(arrow_parameters(lambda))), Op.Define, arrow_result(lambda))
 # `f = (a, b = 1) => a + b`, f written once, as the definition `f(a, b = 1) := a + b` it is, so a call leaving out b
 # takes its default as a definition's does (a lambda is a definition, card lambda-own); a result type after its
 # parentheses is dropped, as a lifted lambda's is (arrow_parameters)
 defaulted_lambda_definition(statement: Node, statements: list): Node := {
 	if not (is_key(statement, Op.Assign) and key_of(statement) is symbol and is_lambda(lambda_of(value_of(statement)))) { return statement }
 	arrow = lambda_of(value_of(statement))
-	parameters = written_parameters(arrow_parameters(arrow))
-	if not parameters.any(parameter => parameter_of(parameter).defaulted_to != ø) or writes_of(key_of(statement), statements) != 1 { return statement }
-	Key(call_node(key_of(statement), parameters), Op.Define, arrow_result(arrow))
+	if not written_parameters(arrow_parameters(arrow)).any(parameter => parameter_of(parameter).defaulted_to != ø) or writes_of(key_of(statement), statements) != 1 { return statement }
+	lambda_definition(key_of(statement), arrow)
 }
 writes_of(name: Node, statements: list): int := #statements.flat_map(nodes_in).filter(n => n is key and op_of(n) in [Op.Assign, Op.AddAssign, Op.SubAssign] and key_of(n) == name)
 
@@ -848,7 +873,7 @@ defaulted_functions(statements: list): map := {
 }
 lambdas(program: Node): Node := {
 	given = statements_in(program)
-	statements = given.map(statement => defaulted_lambda_definition(explicit_definition(statement), given))
+	statements = aliased_definitions(given.map(statement => defaulted_lambda_definition(explicit_definition(statement), given)), names_bound_in(program))
 	positions = function_positions_of(statements + linked_definitions(program))
 	written = statements.map(statement => with_function_parameters(celled_definition(statement, positions)))
 	main_statements = written.filter(statement => definition_of(statement) == ø)

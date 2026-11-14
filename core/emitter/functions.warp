@@ -2,7 +2,7 @@
 def call(body: Body, f: Function, arguments: list): TypedCode {
 	parameters = f.signature.parameters
 	if gathers(f.signature, #arguments) { return rest_call(body, f, arguments) }
-	if #arguments > #parameters { return refuse_arguments(f, #arguments) }
+	if #arguments > #parameters { return refuse_call([f], arguments) }
 	# a word that is one number, `small_int_low(): int := -128`, is that number where it is called, no call (card
 	# constant-words-inline: 7.7% of a loop's own time went to such calls)
 	literal = if #arguments == 0 and #parameters == 0 then constant_body(f) else ø
@@ -11,7 +11,7 @@ def call(body: Body, f: Function, arguments: list): TypedCode {
 		if constant.kind == (declared_result(f) ?? constant.kind) { return constant }
 	}
 	slots = placed_arguments(taken_names(f.signature), arguments, f.signature.parameters.map(p => p.label))
-	if slots == ø { return refuse_arguments(f, #arguments) }
+	if slots == ø { return refuse_call([f], arguments) }
 	given = range_list(#slots).map(i => if slots[i] == ø then default_value(body, f, i, #arguments) else expression_code(body, slots[i]#1))
 	call_values(f, defaulted(body, f, as_written(body, slots, given), #arguments))
 }
@@ -70,6 +70,17 @@ def as_written(body: Body, slots: list, given: list): list {
 }
 # a call of f with arguments it does not take: the program's error naming the call f takes, `beat(n)`
 refuse_arguments(f: Function, count: int): any := refuse_count([f], count)
+# a call of these arguments none of the functions takes; `f 5 for 2` of `f(x, for y)` names the call with the label's
+# colon, `f 5 for: 2` (wiki/argument.md: in a call a label always takes one)
+refuse_call(functions: list, arguments: list): any := {
+	labels = functions.flat_map(f => f.signature.parameters.map(p => p.label)).filter(label => label != "")
+	if arguments.any(argument => is_bare_label(argument, labels)) {
+		written = arguments.map(argument => if is_bare_label(argument, labels) then name_of(argument) + ":" else "${argument}")
+		return program_error("a label takes a colon in a call", without_arity(functions#1.name) + " " + written.join(" "))
+	}
+	refuse_count(functions, #arguments)
+}
+is_bare_label(argument: Node, labels: list): bool := argument is symbol and name_of(argument) in labels
 refuse_count(functions: list, count: int): any := {
 	shapes = functions.map(call_shape).join(" or ")
 	program_error(shapes + " is called with " + count + (if count == 1 then " argument" else " arguments"), shapes)

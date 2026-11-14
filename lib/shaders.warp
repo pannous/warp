@@ -12,6 +12,7 @@
 use color
 use complex
 use math
+use regex
 
 VECTOR_TYPES = ["f32", "vec2f", "vec3f", "vec4f"]
 # a complex number's width: a mark of its own beside the vectors' 2 to 4, a vec2f [re, im] in WGSL
@@ -900,3 +901,187 @@ wgsl_loop(n: Node, scope: WgslScope, depth: int) := {
 	wgsl_block(n#5, scope, depth + 1)
 	scope.wgsl_lines += [wgsl_indent(depth) + "}"]
 }
+
+# --- compute.toys' dialect (card compute-toys-own): a shader whose entry point is compute.toys' kernel
+# `@compute @workgroup_size(16, 16) fn main_image(@builtin(global_invocation_id) id: vec3u)`, ending in
+# textureStore(screen, id.xy, color), paints as the WGSL fragment shader compute_toy makes of it (the rule of
+# extensions/rules/modules/prelude.warp reads the dialect off the entry point). The kernel runs once per pixel as a plain
+# function: id is the pixel (rows from the top, as compute.toys counts them), time, mouse, custom and keyDown read
+# paint's values, and its color goes to the screen sRGB-encoded, as compute.toys shows its screen texture. Passes
+# (#storage, #dispatch, more than one @compute) and the old @stage(compute) syntax are compute.toys' engine, which warp
+# does not have: compute_toy says so. channel0 and channel1 are pictures among paint's values, `paint(toy, w, h,
+# {channel0: picture})`, sampled with bilinear_repeat (pictured_values)
+// compute.toys' prelude (github compute-toys/compute.toys lib/engine/index.ts getPrelude, MIT © 2023 compute.toys):
+# its type aliases, its Time and Mouse, keyDown; each read from paint's built-in values
+compute_toys_prelude = "
+alias int = i32;
+alias uint = u32;
+alias float = f32;
+alias int2 = vec2<i32>;
+alias int3 = vec3<i32>;
+alias int4 = vec4<i32>;
+alias uint2 = vec2<u32>;
+alias uint3 = vec3<u32>;
+alias uint4 = vec4<u32>;
+alias float2 = vec2<f32>;
+alias float3 = vec3<f32>;
+alias float4 = vec4<f32>;
+alias bool2 = vec2<bool>;
+alias bool3 = vec3<bool>;
+alias bool4 = vec4<bool>;
+alias float2x2 = mat2x2<f32>;
+alias float2x3 = mat2x3<f32>;
+alias float2x4 = mat2x4<f32>;
+alias float3x2 = mat3x2<f32>;
+alias float3x3 = mat3x3<f32>;
+alias float3x4 = mat3x4<f32>;
+alias float4x2 = mat4x2<f32>;
+alias float4x3 = mat4x3<f32>;
+alias float4x4 = mat4x4<f32>;
+struct Time {
+	elapsed: f32,
+	delta: f32,
+	frame: u32
+}
+struct Mouse {
+	pos: vec2i,
+	zoom: f32,
+	click: i32,
+	start: vec2i,
+	delta: vec2i
+}
+var<private> time: Time;
+var<private> mouse: Mouse;
+var<private> warp_color: vec4f;
+var<private> warp_where: vec2i;
+var<private> warp_stored: bool;
+var<private> warp_scattered: bool;
+fn warp_store(pixel: vec2i, color: vec4f) {
+	warp_scattered = warp_scattered || (warp_stored && any(pixel != warp_where));
+	warp_stored = true;
+	warp_where = pixel;
+	warp_color = color;
+}
+fn warp_run(id: vec2i) {
+	warp_where = id;
+	warp_stored = false;
+	warp_scattered = false;
+	main_image(vec3u(vec2u(id), 0u));
+}
+fn keyDown(keycode: uint) -> bool {
+	return u32(values.key) == keycode;
+}
+"
+
+# The fragment main: compute.toys' uniforms from paint's values (mouse.zoom from the wheel, 5% a step, as compute.toys
+# zooms on a wheel event), the kernel for this pixel, its color sRGB-encoded.
+# A fragment colors only its own pixel: a kernel storing elsewhere, as a mirror does ((x, height - 1 - y)), runs again
+# from where it stored, which for a mirror is the pixel that stores here. Any other kernel storing elsewhere (an
+# offset, several pixels in a loop) cannot run as a fragment: its pixels are magenta (0xFFFF00FF), loud, not wrong
+compute_toys_main = "
+@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+	time = Time(values.time, 1.0 / 60.0, u32(values.frame));
+	let pointer = vec2i(values.mouse);
+	mouse = Mouse(pointer, pow(1.05, values.mouse_wheel), i32(values.mouse_down), pointer, vec2i(0));
+	let here = vec2i(at.xy);
+	warp_run(here);
+	if (!warp_scattered && any(warp_where != here) && all(warp_where >= vec2i(0))) {
+		warp_run(warp_where);
+	}
+	if (warp_scattered || any(warp_where != here)) {
+		return vec4f(1.0, 0.0, 1.0, 1.0);
+	}
+	return vec4f(pow(clamp(warp_color.rgb, vec3f(0.0), vec3f(1.0)), vec3f(1.0 / 2.2)), 1.0);
+}
+"
+
+# what compute_toy cannot run, the pattern that finds it and why
+compute_toys_engine_only = [
+	["(^|\\n)[ \\t]*#(storage|dispatch|workgroup_count|dispatch_once|dispatch_count)\\b", "it declares storage buffers or passes (#storage, #dispatch …), which need compute.toys' multi-pass engine"],
+	["\\b(pass_in|pass_out|passLoad|passStore|passSampleLevelBilinearRepeat)\\b", "it reads earlier passes (passLoad, passStore …), which warp's paint does not bind"],
+	["@stage\\(compute\\)", "it is written in the WGSL of 2022 (@stage(compute)): write @compute"],
+	["@compute[\\s\\S]*@compute", "it has more than one @compute entry point, each a pass of compute.toys' engine; compute_toy takes single-pass shaders"]
+]
+
+# The kernel as a function: no @compute attributes, the pixel parameter plain, its writes to the screen warp_store's
+compute_toys_kernel(code: text) := {
+	plain = replace_all(code, "@compute\\s*@workgroup_size\\([^)]*\\)\\s*", "")
+	plain = replace_all(plain, "@builtin\\(\\s*global_invocation_id\\s*\\)\\s*", "")
+	plain = replace_all(plain, "textureDimensions\\(\\s*screen\\s*\\)", "vec2u(values.size)")
+	plain = replace_all(plain, "\\bcustom\\.", "values.")
+	// textureStore(screen, where, color), where a vec2i or vec2u with parentheses two deep at most
+	replace_all(plain, "textureStore\\(\\s*screen\\s*,\\s*(([^,()]|\\(([^()]|\\([^()]*\\))*\\))+),", "warp_store(vec2i($1),")
+}
+
+# refuse what only compute.toys' engine runs
+compute_toys_refused(code: text) := {
+	for rule in compute_toys_engine_only { if code matches rule#1 { raise "compute_toy cannot run this shader: " + rule#2 } }
+	if not (code contains "fn main_image") { raise "compute_toy takes a compute.toys shader: its kernel is fn main_image(@builtin(global_invocation_id) id: vec3u)" }
+}
+COMPUTE_TOY_CHANNELS = ["channel0", "channel1"]
+# the WGSL fragment shader of a compute.toys kernel, each channel it reads sampled from paint's values; a shader already
+# a fragment shader as it is (paint and gpu_render read the dialect off the entry point)
+compute_toy(code: text) := {
+	if code contains "@fragment" { return code }
+	compute_toys_refused(code)
+	kernel = compute_toys_kernel(code)
+	helpers = ""
+	kept = ""
+	for channel in COMPUTE_TOY_CHANNELS.filter(channel => code contains channel) {
+		helpers += compute_toys_channel_wgsl(channel)
+		kernel = compute_toys_sampled(kernel, channel)
+		kept += "\tlet _" + channel + " = values." + channel + "[0u];\n"
+	}
+	# naga drops unused helpers, which would leave the bind group with a storage entry the layout lacks
+	main = if kept == "" then compute_toys_main else compute_toys_main.replace("vec4f {\n", "vec4f {\n\twarp_channels_kept();\n")
+	keeper = if kept == "" then "" else "\nfn warp_channels_kept() {\n" + kept + "}\n"
+	compute_toys_prelude + helpers + keeper + kernel + main
+}
+# paint's values with each picture among them (an Image: width, height and pixels) as the compute.toys shader `code`
+# samples it: its pixels a GPU list of vec4 in row-major order, 0 to 1, and its size as <name>_size; a channel the
+# code samples that the values lack is refused
+pictured_values(values: any, code: text) := {
+	missing = COMPUTE_TOY_CHANNELS.filter(channel => code contains channel and not (values is map and values.has(channel)))
+	if #missing > 0 { raise "the shader samples ${missing.join(" and ")}, which paint's values do not give: paint(shader, width, height, {${missing#1}: picture})" }
+	if not (values is map) { return values }
+	given = {}
+	for name in values.keys {
+		value = values[name]
+		if value has "pixels" {
+			pixels: [vec4] = [compute_toys_pixel(color) for color in value.pixels]
+			given[name] = pixels
+			given[name + "_size"] = [float(value.width), float(value.height)]
+		} else { given[name] = value }
+	}
+	given
+}
+# one pixel of a warp image as the four floats a storage array stores, 0 to 1
+compute_toys_pixel(color: any): list := {
+	parts = channels(color)
+	[parts#1, parts#2, parts#3, 1.0]
+}
+compute_toys_channel_wgsl(name: text): text := "
+fn warp_" + name + "_texel(p: vec2i) -> vec4f {
+	let size = vec2i(i32(values." + name + "_size.x), i32(values." + name + "_size.y));
+	let wrapped = ((p % size) + size) % size;
+	return values." + name + "[u32(wrapped.y * size.x + wrapped.x)];
+}
+fn warp_" + name + "_sample_repeat(uv: vec2f) -> vec4f {
+	let size = vec2f(values." + name + "_size);
+	let at = fract(uv) * size - vec2f(0.5);
+	let low = vec2i(floor(at));
+	let f = fract(at);
+	let s00 = warp_" + name + "_texel(low);
+	let s10 = warp_" + name + "_texel(low + vec2i(1, 0));
+	let s01 = warp_" + name + "_texel(low + vec2i(0, 1));
+	let s11 = warp_" + name + "_texel(low + vec2i(1, 1));
+	return mix(mix(s00, s10, f.x), mix(s01, s11, f.x), f.y);
+}
+"
+
+# textureSampleLevel(channel0, bilinear_repeat, coords, lod) and textureDimensions(channel0)
+compute_toys_sampled(code: text, name: text): text := {
+	plain = replace_all(code, "textureDimensions\\(\\s*" + name + "\\s*\\)", "vec2u(u32(values." + name + "_size.x), u32(values." + name + "_size.y))")
+	replace_all(plain, "textureSampleLevel\\(\\s*" + name + "\\s*,\\s*bilinear_repeat\\s*,\\s*(([^,()]|\\(([^()]|\\([^()]*\\))*\\))+)\\s*,\\s*[^)]+\\)", "warp_" + name + "_sample_repeat($1)")
+}
+

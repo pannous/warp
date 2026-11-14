@@ -1,4 +1,4 @@
-# 7a358c9fdf 2026-11-14 01:43 284/286 99.3%
+# 2f0a0af3e8 2026-11-14 02:03 283/286 99.0%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -23,7 +23,6 @@ ok   samples/apps/name_matcher.warp
 ok   samples/apps/open_hours.warp
 ok   samples/apps/recipe_scaler.warp
 ok   samples/apps/settings_cli.warp
-ok   samples/apps/site_generator.warp
 ok   samples/apps/todo_cli.warp
 ok   samples/apps/url_report.warp
 ok   samples/clustering/emeans.warp
@@ -283,5 +282,6 @@ SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
+FAIL samples/apps/site_generator.warp: lib/yaml.warp:74:100 no function set; fix: use english
 FAIL samples/text/sort_words.warp: sort_words.warp:3:1 list of node
 FAIL samples/web/keyframes.warp: lib/markup.warp:272:28 wrong number of arguments

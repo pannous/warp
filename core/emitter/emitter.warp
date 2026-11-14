@@ -1342,7 +1342,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 	# `y 1+1`: values side by side are a list without brackets, a spaced group (only `;` and
 	# lines are statements); its text is the items with a space between
 	# `beat 1 1/2` of beat(n): a function before values it does not take, never a list holding it
-	if separator_of(n) == " " and #n > 1 and n#1 is symbol and name_of(n#1) not in body.names and #functions_named(name_of(n#1)) > 0 { return refuse_count(functions_named(name_of(n#1)), #n - 1) }
+	if separator_of(n) == " " and #n > 1 and n#1 is symbol and name_of(n#1) not in body.names and #functions_named(name_of(n#1)) > 0 { return refuse_call(functions_named(name_of(n#1)), items_of(n)[1..]) }
 	if separator_of(n) == " " and #n > 1 { return TypedCode(ValueKind.Node, node(Marked.UnbracketedList, list_value(body, items_of(n)).code)) }
 	sequence(body, items_of(n))
 }
