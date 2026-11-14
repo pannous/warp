@@ -1,4 +1,4 @@
-# 7a358c9fdf 2026-11-14 01:49 280/283 98.9%
+# 97c8d5feba 2026-11-14 03:33 281/283 99.3%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -252,7 +252,7 @@ ok   samples/text/levenshtein_idiomatic.warp
 ok   samples/text/palindrome.warp
 ok   samples/text/regexes.warp
 ok   samples/text/replace_word.warp
-FAIL samples/text/sort_words.warp
+ok   samples/text/sort_words.warp
 ok   samples/text/uniscript_text.warp
 ok   samples/text/word_count.warp
 ok   samples/text/word_lengths.warp
