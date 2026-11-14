@@ -29,7 +29,7 @@ if [ -x "$stage/warp" ]; then
 	check "the arguments after --" "$(native arguments.warp -- eins zwei)" '["eins", "zwei"]'
 	check "self, code by warp-self.wasm" "$(native self '3 + 4')" 7
 	printf 'raise "boom"\n' >"$stage/raising.warp"
-	check "what a program raised" "$(native raising.warp)" "boom at raising.warp:1:1"
+	check "what a program raised" "$(native raising.warp)" "raising.warp:1:1 boom"
 	check "the console, its lines staying" "$(printf 'a = 7\nx = [1\na * 6\n' | native repl | sed -n 4p)" "🌀42"
 	# a console line warp refuses for an unknown name whose first word is a command on PATH runs by sh, marked dim
 	# `(sh) <line>` first; a typo and a type error keep warp's refusal (card repl-bash-commands, user 11-11)
