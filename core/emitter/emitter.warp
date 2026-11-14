@@ -1040,6 +1040,8 @@ def admitted(value: TypedCode, kind: ValueKind): TypedCode {
 	if value.kind == ValueKind.Int and kind == ValueKind.Float { return TypedCode(ValueKind.Float, converted(value, ValueKind.Float)) }
 	if value.kind == ValueKind.Char and kind == ValueKind.Text { return shown_text(value) }
 	if value.kind == ValueKind.Node and field_check(kind) != ø { return runtime_call(field_check(kind), [value]) }
+	# `c: char = s[1]`, a result declared char of a text's item: its character, checked at run time
+	if kind == ValueKind.Char and (value.kind == ValueKind.Node or value.kind == ValueKind.Text) { return runtime_call("char_of_node", [TypedCode(ValueKind.Node, boxed(value))]) }
 	# the result of a call still compiling (pending), or a kind guessed from one (`f(x) + g(x)` an int), is held as the
 	# declared kind: the reading is done again once the call's result is known
 	if value.kind == pending or module.saw_pending { return TypedCode(kind, value.code) }
