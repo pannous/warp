@@ -200,11 +200,17 @@ positional_types(call: Node, typed: map): list? := {
 # and the functions of several results, whose call a typed place picks one of (arity_overloads.warp result_overloads)
 class Places { typed: map; converting: map; classes: map; results: map }
 # each call of such a function with its arguments for those parameters converted, the function's name the taker a
-# refusal names, and each `x: T = v` so, x the taker; a named argument as it is, and a value known to be a T already:
+# refusal names, and each `x: T = v` so, x the taker, and the value of `f(…): T := …` (no taker: the result's own check
+# says what it takes); a named argument as it is, and a value known to be a T already:
 # a parameter typed so of the definition around it (`g(d: Length) := f(d)`), the instance of a constructor of the class
 converted_arguments(n: Node, places: Places, known: map): Node := {
 	call = definition_call(n)
-	if call != ø { return Key(key_of(n), Op.Define, converted_arguments(value_of(n), unshadowed(places, bound_at(n)), parameters_typed(call))) }
+	if call != ø {
+		known_inside = parameters_typed(call)
+		body = converted_arguments(value_of(n), unshadowed(places, bound_at(n)), known_inside)
+		result = written_result_type(n)
+		return Key(key_of(n), Op.Define, if result == ø then body else last_value_mapped(body, value => passed(value, result, "", places, known_inside)))
+	}
 	walked = children(called_values(n, places), x => converted_arguments(x, places, known))
 	if is_typed_declaration(walked) {
 		return Key(key_of(walked), Op.Assign, passed(value_of(walked), place_type(value_of(key_of(walked))), name_of(key_of(key_of(walked))), places, known))
@@ -296,8 +302,15 @@ bare_result_name(statement: Node): text := {
 	if is_key(plain, Op.Define) and is_key(key_of(plain), Op.Colon) and key_of(key_of(plain)) is symbol and value_of(key_of(plain)) is symbol then name_of(key_of(key_of(plain))) else ""
 }
 nullary_head(definition: Node): Node := Key(Key(call_node(key_of(key_of(definition)), []), Op.Colon, value_of(key_of(definition))), Op.Define, value_of(definition))
-# the types of the program's `x: T = v`
-declared_types(program: Node): list := nodes_in(program).filter(is_typed_declaration).map(n => place_type(value_of(key_of(n))))
+# the types of the program's `x: T = v` and `f(…): T := …`
+declared_types(program: Node): list := nodes_in(program).map(n => if is_typed_declaration(n) then place_type(value_of(key_of(n))) else written_result_type(n)).filter(type => type != ø)
+# T of a definition `f(…): T := …`, ø of any other node
+written_result_type(n: Node): text? := if definition_call(n) != ø and is_key(key_of(n), Op.Colon) then place_type(value_of(key_of(n))) else ø
+# the value a body gives, a block's last statement, as the function makes it
+last_value_mapped(body: Node, make: function): Node := {
+	if not (is_curly_group(body) and #body > 0 and separator_of(body) in statement_separators) { return make(body) }
+	group_like(body, items_of(body)[0 ..< #body - 1] + [last_value_mapped(body#(#body), make)])
+}
 # `x: T = v`, `x: A or B = v`: a variable declared with a type word or a union of them
 is_typed_declaration(n: Node): bool := is_key(n, Op.Assign) and is_key(key_of(n), Op.Colon) and key_of(key_of(n)) is symbol and place_type(value_of(key_of(n))) != ø
 place_type(type: Node): text? := if type is symbol then name_of(type) else union_spelling(type)
