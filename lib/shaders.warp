@@ -22,6 +22,11 @@ COMPLEX_PARTS = {"re": "x", "im": "y"}
 # the WGSL functions a complex product and quotient call, written into the shader that uses them
 COMPLEX_HELPERS = {"complex_times": "fn complex_times(a: vec2f, b: vec2f) -> vec2f {\n\treturn vec2f(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);\n}",
 	"complex_over": "fn complex_over(a: vec2f, b: vec2f) -> vec2f {\n\treturn vec2f(a.x * b.x + a.y * b.y, a.y * b.x - a.x * b.y) / dot(b, b);\n}"}
+# the standard modules' words a shader may call that WGSL lacks (a standard module's bodies are never quoted, so its
+# words are WGSL's or these; another module's function, lib/geometry's rotated_about, translates from its body): each
+# the widths it takes, the width it gives and its WGSL function, of the same meaning as its warp definition, written
+# into the shader that calls it. A function of the program of the same name wins
+LIBRARY_FUNCTIONS = {"hsv_rgb": [[1, 1, 1], 3, "// lib/color hsv_rgb: hue in degrees, saturation free to leave 0…1\nfn hsv_rgb(h: f32, s: f32, v: f32) -> vec3f {\n\tlet turned = abs(fract(vec3f(h / 360.0) + vec3f(1.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - vec3f(3.0));\n\treturn mix(vec3f(1.0), saturate(turned - vec3f(1.0)), s) * v;\n}"]}
 VALUES_NAME = "values"
 # a painted function's color: three numbers from 0 to 1
 COLOR_WIDTH = 3
@@ -344,8 +349,25 @@ wgsl_complex_operation(a: list, op: text, b: list, n: Node) as list := {
 	["(" + wgsl_splat(a, width) + " " + op + " " + wgsl_splat(b, width) + ")", width]
 }
 wgsl_complex_helper_call(helper: text, values: list) as list := {
-	if COMPLEX_HELPERS[helper] not in shading.written_functions { shading.written_functions += [COMPLEX_HELPERS[helper]] }
+	wgsl_written_once(COMPLEX_HELPERS[helper])
 	[helper + "(" + values.map(value => wgsl_splat(value, COMPLEX_WIDTH)).join(", ") + ")", COMPLEX_WIDTH]
+}
+# a helper function written into the shader once, however often it is called
+wgsl_written_once(written: text) := {
+	if written not in shading.written_functions { shading.written_functions += [written] }
+}
+# a word of LIBRARY_FUNCTIONS: each value of the width it takes, a number broadcasting to a vector
+wgsl_library_call(word: text, values: list, n: Node) as list := {
+	library = LIBRARY_FUNCTIONS[word]
+	takes = library#1
+	if #values != #takes { return wgsl_refused(n, "${word} takes ${#takes} values") }
+	for i in 1 to #takes {
+		if values#i#2 != takes#i and values#i#2 != 1 { return wgsl_refused(n, "${word} takes " + (if takes#i == 1 then "a number" else width_named(takes#i)) + " as its value ${i}") }
+	}
+	wgsl_written_once(library#3)
+	arranged = []
+	for i in 1 to #takes { arranged += [wgsl_splat(values#i, takes#i)] }
+	[word + "(" + arranged.join(", ") + ")", library#2]
 }
 # the operators whose meaning on lists is not the element-wise one: refused there, naming the element-wise ones
 LIST_OPERATORS = {"+": yes, "-": yes, "*": yes, "/": yes}
@@ -473,7 +495,7 @@ wgsl_spaced(n: Node, scope: WgslScope) as list := {
 	if #items >= 2 and items#1 is symbol { return wgsl_call(items#1, items[1 ..], n, scope) }
 	wgsl_refused(n, "WGSL has no form for " + form_of(n))
 }
-wgsl_is_function(name: Node) as bool := WGSL_WORDS.has(name_of(name)) or WGSL_MEANINGS.has(name_of(name)) or COMPLEX_MAKERS.has(name_of(name)) or function_definition(name) != ø
+wgsl_is_function(name: Node) as bool := WGSL_WORDS.has(name_of(name)) or WGSL_MEANINGS.has(name_of(name)) or LIBRARY_FUNCTIONS.has(name_of(name)) or COMPLEX_MAKERS.has(name_of(name)) or function_definition(name) != ø
 
 # the words of lib/complex making a complex number: ⅈ (the call imaginary_unit()), Complex(re, im)
 COMPLEX_MAKERS = {"imaginary_unit": 0, "Complex": 2}
@@ -496,6 +518,7 @@ wgsl_call(name: Node, arguments: list, n: Node, scope: WgslScope) as list := {
 	if COMPLEX_MAKERS.has(word) and function_definition(name) == ø { return wgsl_complex_made(word, arguments.map(argument => wgsl_expression(argument, scope)), n) }
 	if not WGSL_WORDS.has(word) {
 		if function_definition(name) != ø { return wgsl_program_call(word, wgsl_arranged(name, arguments).map(argument => wgsl_expression(argument, scope)), n) }
+		if LIBRARY_FUNCTIONS.has(word) { return wgsl_library_call(word, arguments.map(argument => wgsl_expression(argument, scope)), n) }
 		if COUNTING_WORDS.has(word) { return wgsl_refused(n, "${word}(v) counts the numbers of v in warp; a vector's magnitude is norm(v)") }
 		return wgsl_refused(n, "${word} is no word WGSL has, nor a function of the program")
 	}

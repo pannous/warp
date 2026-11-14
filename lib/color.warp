@@ -80,6 +80,12 @@ hsv(h: any, s: any, v: any) as Color := {
 	b = if sector == 3 or sector == 4 then c else if sector == 2 or sector == 5 then x else 0.0
 	rgb((r + m) * 255, (g + m) * 255, (b + m) * 255)
 }
+// hsv as a painted function's color [red, green, blue] from 0 to 1 (what a shader adds up, not a packed Color): hue in
+// degrees, saturation free to leave 0…1 as GLSL's hsv(h, s, v) one-liners (twigl) let it, hsv_rgb(36, s, v) for their hsv(.1, s, v)
+hsv_rgb(h, s, v) := {
+	turned = abs(fract([h / 360 + 1, h / 360 + 2 / 3, h / 360 + 1 / 3]) .* 6 .- 3)
+	mix([1, 1, 1], clamp(turned .- 1, 0, 1), s) .* v
+}
 // alpha from 0 (invisible) to 1 (opaque)
 with_alpha(color: any, alpha: any) as Color := ((round(clamp(alpha, 0, 1) * 255) as int) * 16777216 + (color as int) % 16777216) as Color
 alpha_of(color: any) as int := (color as int) /! 16777216
