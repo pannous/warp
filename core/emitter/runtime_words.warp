@@ -213,7 +213,7 @@ core_type_words = {int: "int", nat: "nat", integer: "int", long: "int", i64: "in
 	exact: "rational", precise: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
 	number: "number", text: "text", string: "text", path: "path", codepoint: "char", char: "char", character: "char",
 	bool: "bool", boolean: "bool", list: "list", key: "key", pair: "pair", symbol: "symbol", map: "map", error: "error", code: "code",
-	function: "function", block: "function"}
+	operation: "operation", expression: "expression", function: "function", block: "function"}
 # the marked texts by their type word: `x as path` marks a text, `x is path` tests the mark
 marked_text_types = {path: Marked.Path}
 # the kinds of a value known only at run time each type passes: an int is a
@@ -223,9 +223,9 @@ numeric_held_kinds = [Kind.Int, HeldBit.Rational, Kind.Float]
 passing_kinds = {int: [Kind.Int], nat: [Kind.Int], rational: numeric_held_kinds, float: [Kind.Float],
 	number: numeric_held_kinds, text: [Kind.Text, Kind.Codepoint, HeldBit.Path], path: [HeldBit.Path], char: [Kind.Codepoint],
 	bool: [HeldBit.Bool], list: [Kind.List, Kind.Block], key: [Kind.Key], pair: [Kind.Key], symbol: [Kind.Symbol], map: [HeldBit.Map],
-	error: [Kind.Error], code: [], function: [Kind.Function]}
+	error: [Kind.Error], code: [], operation: [], expression: [], function: [Kind.Function]}
 covered_kinds = {int: [ValueKind.Int], nat: [ValueKind.Int], rational: [ValueKind.Int], float: [ValueKind.Float], number: [ValueKind.Int, ValueKind.Float], text: [ValueKind.Text, ValueKind.Char], path: [],
-	char: [ValueKind.Char], bool: [ValueKind.Bool], list: [ValueKind.List], key: [], pair: [], symbol: [], map: [], error: [], code: [], function: []}
+	char: [ValueKind.Char], bool: [ValueKind.Bool], list: [ValueKind.List], key: [], pair: [], symbol: [], map: [], error: [], code: [], operation: [], expression: [], function: []}
 kind_bit(kind: int): int := 1 << kind
 # whether the class is the ancestor or extends it
 descends(name: text, ancestor: text): bool := name == ancestor or (name in module.parents and descends(module.parents[name], ancestor))
