@@ -1467,6 +1467,11 @@ holes_as_lambda(function: Node, arguments: Node): any := {
 	lambda_over(parameters, bracketed([function] + filled, "("))
 }
 
+# `ys = xs` of an assignment a phrase follows, `ys = xs replace p with t` as the parser nests it: its name and its
+# value; ø of anything else so the rule misses
+assigned_name(n: Node): any := if is_key(n, Op.Assign) then key_of(n) else ø
+assigned_value(n: Node): any := if is_key(n, Op.Assign) then value_of(n) else ø
+
 # the words by name, as a rule's `where` calls them: one a line, sorted, so branches adding words merge cleanly
 
 # whether a name is assigned only text literals in the program (card text-element-assign; same idea as
@@ -1524,6 +1529,8 @@ rule_words = {
 	widened_to_int: widened_to_int,
 	it_read_as: it_read_as,
 	it_as_lambda: it_as_lambda,
+	assigned_name: assigned_name,
+	assigned_value: assigned_value,
 	holes_as_lambda: holes_as_lambda,
 	leading_unit: leading_unit,
 	list_valued: list_valued,
