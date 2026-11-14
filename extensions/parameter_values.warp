@@ -2,11 +2,16 @@
 # `:` gives a type and `=` a default (night decision parameter-named-fails). Its message is in core/analysis/errors.data
 
 parameter_value(n: Node, program: Node) := {
-	parts = definition_of(without_mark(n))
+	parts = written_definition(without_mark(n))
 	if parts == ø { return ø }
 	valued = parts.parameters.find(parameter => is_key(parameter, Op.Colon) and key_of(parameter) is symbol and is_literal_value(value_of(parameter)))
 	if valued == ø { return ø }
 	diagnose(call_of("parameter_value", [name_of(key_of(valued)), written_value(value_of(valued))]), valued)
+}
+# the definition a statement is, `def f(a, b: 2) {…}` too as written before the def sugar reads it
+written_definition(n: Node): Definition? := {
+	if is_group(n) and #n == 2 and n#1 is symbol and name_of(n#1) in function_keywords and is_group(n#2) and #n#2 == 2 and is_curly_group(n#2#2) { return definition_of(Key(n#2#1, Op.Define, n#2#2)) }
+	definition_of(n)
 }
 is_literal_value(n: Node): bool := n is number or n is text
 # the value as code, a text in its quotes: `as = "x"`

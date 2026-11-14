@@ -77,8 +77,7 @@ s + f 2 each: 3' 9
 # play_names_its_arguments_without_use_sound
 is! 'play tone:440Hz for:0.1s
 1' 1
-is! 'play tone=440Hz for=0.1s
-1' 1
+# (braceless `play tone=440Hz for=0.1s` is unpinned: `=` outside parentheses assigns; warp-interviewer 11-14)
 is! 'play(tone: C4, for: 0.1s)
 1' 1
 
@@ -94,8 +93,8 @@ r' 8
 is! 'f(x, to y) := x - y
 2 * f 9 to: 4' 10
 
-# an_unambiguous_label_without_its_colon_is_a_warning
+# a label without its colon is refused with the call written with it, `f 5 for: 2` (wiki/argument.md; warp-interviewer 11-14)
 is! 'f(x, for y) := x - y
-f 5 for 2' 3
+f 5 for 2' error
 is! 'f(xs, each y) := count(xs) * y
-f [1 2 3] each 2' 6
+f [1 2 3] each 2' error

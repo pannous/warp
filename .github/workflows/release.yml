@@ -207,8 +207,9 @@ jobs:
         unzip -q "llvm-mingw-$LLVM_MINGW-ucrt-x86_64.zip"
         echo "$PWD/wabt-$WABT/bin" >>"$GITHUB_PATH"
         echo "$PWD/llvm-mingw-$LLVM_MINGW-ucrt-x86_64/bin" >>"$GITHUB_PATH"
-    - name: our wasmtime C API
-      run: WARP_WASMTIME_TARGET=$PWD/crates/wasmtime-capi/target scripts/wasmtime-c-api.sh lib
+    - name: our wasmtime C API and native libraries
+      # with wgpu-native's and SDL3's DLLs for the window, the sound and the GPU
+      run: WARP_WASMTIME_TARGET=$PWD/crates/wasmtime-capi/target WARP_GPU_TARGET="$RUNNER_TEMP/warp-gpu" scripts/wasmtime-c-api.sh lib
     - name: the native warp
       # as `warp build native` links on macOS and Linux (extensions/commands/build.warp): the main thread's stack from
       # the linker, the executable's own C functions exported for the lookup by name
@@ -226,6 +227,9 @@ jobs:
         [ "$(lib/warp.exe 'window_possible()')" = no ]
         # warp test's slots, children and files: the cases started anew by posix_spawnp, as Windows has no fork
         lib/warp.exe test test/modules/test_exec_sh_runs.pairs.warp
+        # wgpu-native on the runner's adapter (no GPU there: DirectX's software one), a compute shader's list read back
+        lib/warp.exe "$(sed -n 3p test/gpu/test_gpu_compute_in_place.pairs.warp | cut -f1 | sed "s/^'//;s/'$//")" | tee gpu.txt
+        grep -qx '\[0, 2, 4, 6\]' gpu.txt
     - name: a native build
       # warp build native on Windows: wasm2c and clang from the PATH, the program's C functions and WASI by lib/native
       run: |
