@@ -403,9 +403,9 @@ function valuesLayout(values) {
 		if (name === INDICES_NAME || name === DEPTH_NAME || name === INDIRECT_NAME || name === COMPUTE_NAME || name === WORKGROUPS_NAME) continue;
 		if (isPicture(value)) {
 			if (pictures.length === MOST_PICTURES) throw new Error(`${VALUES_NAME}.${name} is one picture too many: paint's values hold at most ${MOST_PICTURES}`);
-			const width = Number(value.width), height = Number(value.height), pixels = [value.pixels].flat();
+			const width = Number(value.width), height = Number(value.height), pixels = Array.from(value.pixels ?? []);
 			if (!(width >= 1 && height >= 1 && pixels.length === width * height)) throw new Error(`${VALUES_NAME}.${name} is a picture of width × height pixels`);
-			pictures.push({ name, width, height, pixels: Uint32Array.from(pixels, pixel => pixel >= ALPHA_FROM ? pixel : pixel + OPAQUE) });
+			pictures.push({ name, width, height, pixels: Uint32Array.from(pixels, pixel => (pixel >>> 0) >= ALPHA_FROM ? pixel >>> 0 : (pixel >>> 0) + OPAQUE) });
 			continue;
 		}
 		// a file the host reads into the storage buffer (the baked atlas)
@@ -1117,8 +1117,19 @@ addHostPart({
 		const warnOnce = (notice, detail) => {
 			if (!holder.warnings.some(warning => warning.startsWith(notice))) holder.warnings.push(`${notice}: ${detail}`);
 		};
+		// a picture among the values whose pixels are colors (an Image's, shown as color words): its pixels read as the
+		// native warp reads paint's pixels, a chunk of words at a time (pixels_at), its field `pixels` the instance's item
+		const picturesRead = (values, plained) => {
+			for (const [name, node] of guestEntries(program(), values) ?? []) {
+				const value = plained[name];
+				if (!isPicture(value) || typeof value.pixels?.[0] === "number") continue;
+				const pixels = guestItem(program(), node, Object.keys(value).indexOf("pixels"));
+				value.pixels = guestInt32s(program(), pixels, Number(value.width) * Number(value.height), "pixels_at");
+			}
+			return plained;
+		};
 		const renderValues = (shader, width, height, values) =>
-			({ ...builtinValues(shader, width, height), ...(values == null ? {} : plain(values)) });
+			({ ...builtinValues(shader, width, height), ...(values == null ? {} : picturesRead(values, plain(values))) });
 		const renderJob = (shader, width, height, values) =>
 			({ shader, width: Number(width), height: Number(height), values: renderValues(shader, Number(width), Number(height), values) });
 		// the pixels as a Uint32Array, for gpu_render and for paint given a shader (host.js, P234)
