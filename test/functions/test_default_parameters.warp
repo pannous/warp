@@ -6,5 +6,5 @@ is! 'def greet(name, greeting="Hello"){greeting + " " + name}; greet("Bob")' 'He
 # named_arguments_skip_defaults_and_mix_with_positional_ones
 is! 'def greet(name, greeting="Hello"){greeting + " " + name}; greet("Bob", greeting="Hi")' 'Hi Bob'
 
-# a_literal_after_a_colon_is_a_default_as_in_ruby
-is! 'def greet(name, greeting: "Hello"){greeting + " " + name}; greet("Ann")' 'Hello Ann'
+# a literal after a parameter's colon is refused with its fix `greeting = "Hello"` (night decision parameter-named-fails)
+is! 'def greet(name, greeting: "Hello"){greeting + " " + name}; greet("Ann")' error
