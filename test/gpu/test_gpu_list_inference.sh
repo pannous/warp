@@ -25,4 +25,6 @@ print gpu_render(s, 2, 2, {xs: xs})#1")" 4278190335
 check "a list of pixels painted stays a list" "$(WARP_WINDOW=0 "$warp" --mute --lib "$lib" 'surface = int[6]; paint(surface, 3, 2); print gpu_list_place(surface)' 2>&1 | tail -1)" -1
 # a list read only by a function painted on the GPU is made for the GPU (samples/graphics/color_swatches.warp)
 check "a list a painted function reads is a GPU list" "$(WARP_WINDOW=0 "$warp" --strict --mute --lib "$lib" "$(dirname "$0")/../../samples/graphics/color_swatches.warp" 2>&1 | grep -c 'slow path')" 0
+# paint's pixels the CPU reads are read from a GPU list in place too
+check "a GPU list of pixels paints" "$(WARP_WINDOW=0 "$warp" --mute --lib "$lib" 's: [f32] = float[6]; paint(s, 3, 2)' 2>&1 | grep -c '^painted 3×2')" 1
 [ "$failures" = 0 ] || exit 1

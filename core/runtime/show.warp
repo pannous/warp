@@ -137,8 +137,9 @@ shown_from(n: Node, start: int): int := {
 # driver's paint, card native-show-paint): their address; count is at most pixel_chunk()
 pixels_at(picture: Node, from: int, count: int): int := {
 	at = output_address() + c_text_at()
-	if kind_code(picture) == Kind.List {
-		# a plain list's items read straight, not each through node_at's checks of every other kind
+	# a plain list's items read straight, not each through node_at's checks of every other kind; a GPU list's cells in
+	# place, through node_at, as the GPU upload binds them
+	if kind_code(picture) == Kind.List and not is_extended_list(picture) {
 		items = unboxed_list(picture)
 		for i in 0..<count { memory_set_i32(at + 4 * i, int_admitted(items#(from + i))) }
 	} else {
