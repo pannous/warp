@@ -28,7 +28,7 @@
 # a_list_of_quantities_gives_quantities
 'x = [3, 4] cm; max(x) > 3.5 cm'	true
 'x = [3, 4] cm; count x'	2
-'x = [3, 4] cm; type(x)'	'list of length'
+'x = [3, 4] cm; type(x)'	'list of Length'
 
 # a_program_naming_a_dimension_keeps_its_own
 'length = 3; length + 1'	4
