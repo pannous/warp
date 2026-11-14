@@ -186,7 +186,10 @@ gpu_inferred_declaration(statement: Node, program: Node): Node := {
 	bound = gpu_bound(key_of(statement), program)
 	uses = gpu_lists.uses.get(name_of(key_of(statement)))
 	cell = if uses != ø then gpu_cell_of_all(([value_of(statement)] + uses#8).flat_map(gpu_made_parts)) else ø
-	if bound and cell != ø { return Key(Key(key_of(statement), Op.Colon, bracketed([symbol(cell)], "[")), Op.Assign, value_of(statement)) }
+	if bound and cell != ø {
+		diagnose(call_of("gpu_list_inferred", [name_of(key_of(statement)), cell]), key_of(statement))
+		return Key(Key(key_of(statement), Op.Colon, bracketed([symbol(cell)], "[")), Op.Assign, value_of(statement))
+	}
 	why = gpu_kept_why(uses, bound)
 	if why != ø { diagnose(call_of("gpu_list_kept", [name_of(key_of(statement)), why, cell ?? "f32"]), statement) }
 	statement
