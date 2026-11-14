@@ -1,16 +1,15 @@
-# compute_toy binds a warp image as channel0 (card compute-toys-textures):
+# a warp image given among paint's values as channel0 binds as its texture (card compute-toys-textures):
 # the shader sees the texture's size, sampled through bilinear_repeat.
 // needs: gpu
-is! 'use compute_toys
-use image
+is! 'use image
 picture = image(8, 4, (x, y) => rgb(x * 32, y * 64, 0))
-toy = compute_toy(shader {
+toy = shader {
 	@compute @workgroup_size(16, 16)
 	fn main_image(@builtin(global_invocation_id) id: vec3u) {
 		let size = textureDimensions(channel0);
 		let ok = select(0.0, 1.0, size.x == 8u && size.y == 4u);
 		textureStore(screen, id.xy, vec4f(ok, 0.0, 0.0, 1.0));
 	}
-}, picture)
-pixels = gpu_render(toy.shader, 1, 1, toy.values)
+}
+pixels = gpu_render(toy, 1, 1, {channel0: picture})
 pixels[0] == 4294901760' yes
