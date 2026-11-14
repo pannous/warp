@@ -264,7 +264,9 @@ def own_word_code(body: Body, name: text, x: Node): TypedCode {
 }
 # `t.bytecount`, `t.byte_size`: the bytes of a text's UTF-8, 8 bytes an item of a list
 byte_count_words = {bytecount: yes, byte_size: yes}
-def byte_size_code(value: TypedCode): TypedCode { runtime_call("node_bytes", [TypedCode(ValueKind.Node, boxed(value))]) }
+def byte_size_code(value: TypedCode): TypedCode { boxed_call("node_bytes", value) }
+# the runtime word of one value known only at run time, the value boxed for it
+def boxed_call(word: text, value: TypedCode): TypedCode { runtime_call(word, [TypedCode(ValueKind.Node, boxed(value))]) }
 # the kinds `+` joins as texts
 comparisons = {"==": yes, "!=": yes, "<": yes, ">": yes, "<=": yes, ">=": yes} # todo (card comparisons-yes-map) yes??
 equalities = {"==": yes, "!=": yes}
@@ -673,7 +675,7 @@ def condition(value: TypedCode): list {
 	if kind == ValueKind.Float { return value.code + [op.f64_const] + le64(0) + [op.f64_ne] }
 	if kind == ValueKind.List { return held_count_test(value.code, gc_code(gc_ops.struct_get, [gc_type(gc.list), 0])) }
 	if kind == ValueKind.Text { return held_count_test(value.code, gc_code(gc_ops.array_len, [])) }
-	if kind == ValueKind.Node or is_textual(kind) { return runtime_call("node_truthy", [TypedCode(ValueKind.Node, boxed(value))]).code }
+	if kind == ValueKind.Node or is_textual(kind) { return boxed_call("node_truthy", value).code }
 	# (a recursive call not yet known is taken as yes/no: wasm validation fails the module if it is not)
 	if kind != ValueKind.Bool and kind != pending { refuse("a " + kind_spelling(kind) + " as a condition") }
 	value.code
@@ -772,7 +774,7 @@ def page_printed(start: Function, main: Function, result: TypedCode, shown_kind:
 }
 # _start's printing of main's value, in local 0 as main gives it, as data after VALUE_MARK (value_as_data)
 def value_printed_as_data(result: TypedCode): list {
-	printed(text_value(VALUE_MARK)).code + printed(runtime_call("data_code", [TypedCode(ValueKind.Node, boxed(result))])).code
+	printed(text_value(VALUE_MARK)).code + printed(boxed_call("data_code", result)).code
 }
 # a boxed value: a $Node of the kind code, its data from `payload`, no second value
 def node(kind_code: int, payload: list): list {
@@ -896,7 +898,7 @@ def settled(value: TypedCode, kind: ValueKind): TypedCode {
 	settler = extension_value_settlers().values.find(word => word in module.functions)
 	if settler == ø then value else call_values(module.functions[settler], [value])
 }
-def place_checked(body: Body, name: text, value: TypedCode): TypedCode := if (value.kind == ValueKind.Node or value.kind == ValueKind.Error) and plain_place(body, name) then runtime_call("raised_if_error", [TypedCode(ValueKind.Node, boxed(value))]) else value
+def place_checked(body: Body, name: text, value: TypedCode): TypedCode := if (value.kind == ValueKind.Node or value.kind == ValueKind.Error) and plain_place(body, name) then boxed_call("raised_if_error", value) else value
 def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	# a statement assigned (`x = print "a"`) gives ø
 	if value.kind == no_kind { value = TypedCode(ValueKind.Node, boxed(value)) }
@@ -986,7 +988,7 @@ def declaration(body: Body, name: text, written_type: text, value: TypedCode): T
 	kept_if_admitting_errors(body, name, type_name)
 	# `x: any = v` admits every value: the plain assignment; `t: type = int`, `m: map = {}` too, a node like any
 	if type_name in node_annotations { return assignment(body, symbol(name), value) }
-	if type_name in admitted_numbers { return assignment(body, symbol(name), runtime_call(admitted_numbers[type_name], [TypedCode(ValueKind.Node, boxed(value))])) }
+	if type_name in admitted_numbers { return assignment(body, symbol(name), boxed_call(admitted_numbers[type_name], value)) }
 	if type_name.ends_with("?") { return optional_declaration(body, name, without_optional_mark(type_name), value) }
 	if type_name in module.classes { return typed_declaration(body, name, type_name, value) }
 	if is_union(type_name) { return union_declaration(body, name, type_name, value) }
@@ -1041,7 +1043,7 @@ def admitted(value: TypedCode, kind: ValueKind): TypedCode {
 	if value.kind == ValueKind.Char and kind == ValueKind.Text { return shown_text(value) }
 	if value.kind == ValueKind.Node and field_check(kind) != ø { return runtime_call(field_check(kind), [value]) }
 	# `c: char = s[1]`, a result declared char of a text's item: its character, checked at run time
-	if kind == ValueKind.Char and (value.kind == ValueKind.Node or value.kind == ValueKind.Text) { return runtime_call("char_of_node", [TypedCode(ValueKind.Node, boxed(value))]) }
+	if kind == ValueKind.Char and (value.kind == ValueKind.Node or value.kind == ValueKind.Text) { return boxed_call("char_of_node", value) }
 	# the result of a call still compiling (pending), or a kind guessed from one (`f(x) + g(x)` an int), is held as the
 	# declared kind: the reading is done again once the call's result is known
 	if value.kind == pending or module.saw_pending { return TypedCode(kind, value.code) }
@@ -1488,7 +1490,7 @@ def key_expression(body: Body, n: Node): TypedCode {
 		if target == ValueKind.Char and value.kind == ValueKind.Int { return TypedCode(ValueKind.Char, runtime_call("cast_code_point", [value]).code + [op.i32_wrap_i64]) }
 		# `(d + 87) as char` of a nat, a node at run time
 		if target == ValueKind.Char and value.kind == ValueKind.Node { return TypedCode(ValueKind.Char, runtime_call("node_code_point", [value]).code + [op.i32_wrap_i64]) }
-		if target == ValueKind.Bool and (value.kind == ValueKind.Node or value.kind == ValueKind.Text) { return runtime_call("bool_cast", [TypedCode(ValueKind.Node, boxed(value))]) }
+		if target == ValueKind.Bool and (value.kind == ValueKind.Node or value.kind == ValueKind.Text) { return boxed_call("bool_cast", value) }
 		return TypedCode(target, converted(value, target))
 	}
 	if operator == Op.Not and left == ø { return TypedCode(ValueKind.Bool, condition(expression_code(body, right)) + [op.i32_eqz]) }
@@ -1529,7 +1531,7 @@ int_spellings = ["byte", "int8", "int16", "int32", "int64", "uint8", "u8", "uint
 def as_number(value: TypedCode): TypedCode {
 	if value.kind == ValueKind.Int or value.kind == ValueKind.Float { return value }
 	if is_textual(value.kind) { return runtime_call("text_as_number", [TypedCode(ValueKind.Text, converted(value, ValueKind.Text))]) }
-	runtime_call("number_cast", [TypedCode(ValueKind.Node, boxed(value))])
+	boxed_call("number_cast", value)
 }
 # `x as rational` of a float: the runtime's float_as_exact (decision float-as-rational)
 def as_rational(value: TypedCode): TypedCode {
