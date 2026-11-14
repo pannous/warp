@@ -48,8 +48,9 @@ SAMPLES_WEB_DATA = "data/samples-web"  # report.txt (each difference's first lin
 SAMPLE_RUN_SECONDS = 30
 SAMPLE_ANSWER_SECONDS = SAMPLE_RUN_SECONDS + 10
 SHOWN_DIFFERENCE = 300  # characters of each side in report.txt
-# a duration a sample measures (`painted in 53 ms`) differs on every run: both sides compare with it masked
-MEASURED_TIME = re.compile(r"\b\d+(\.\d+)? ?(ms|µs|ns)\b")
+# a duration a sample measures (`painted in 53 ms`, `swirled for 5.016s`) differs on every run: both sides compare with
+# it masked
+MEASURED_TIME = re.compile(r"\b\d+(\.\d+)? ?(ms|µs|ns|s)\b")
 # --tests (scripts/tests-web.sh): every case of test/ in the page, its verdict against the native baseline's
 TESTS_WEB_RESULTS = "test/tests-web.txt"  # tracked: status and case, one a line
 TESTS_WEB_DATA = "data/tests-web"  # work/ (the native test work folder, its runs' results written by the page), report.txt
