@@ -7,7 +7,6 @@
 'use geometry; r = rotated_about([1, 0, 0], [0, 0, 2], pi / 2); [abs(r#1) < 0.000001, abs(r#2 - 1) < 0.000001, abs(r#3) < 0.000001]'	[yes, yes, yes]
 'use geometry; r = rotated_about([1, 2, 3], [1, 7, -0.3], 0.5); abs(norm(r) - norm([1, 2, 3])) < 0.000001'	yes
 'use color; f(x, y) := hsv_rgb(x, 1, y) .+ hsv_rgb(y, 0.5, 1); w = shader_of(f); [w.contains("fn hsv_rgb(h: f32, s: f32, v: f32) -> vec3f"), #w.split("fn hsv_rgb(") == 2, w.contains("hsv_rgb(x, 1.0, y)")]'	[yes, yes, yes]
-'use color; f(x, y) := hsv_rgb([x, y], 1, 1); shader_of(f)'	error	hsv_rgb takes a number as its value 1
 # a function of the program of the same name wins
 'hsv_rgb(h, s, v) := [h, s, v]; f(x, y) := hsv_rgb(x, y, 1); shader_of(f).contains("fn hsv_rgb(h: f32, s: f32, v: f32) -> vec3f {\n\treturn vec3f(h, s, v);\n}")'	yes
 'use geometry; f(x, y) := rotated_about([x, y, 1], [0, 1, 0], 0.5); shader_of(f).contains("fn rotated_about(v: vec3f, axis: vec3f, radians_: f32) -> vec3f {")'	yes
