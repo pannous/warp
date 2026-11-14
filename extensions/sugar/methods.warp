@@ -5,6 +5,9 @@
 # `p.double = 5` of an instance whose class has a setter function double(p: P, v) and no field double (decision
 # setters-declared; extensions/rules/rule_words.warp class_setter); a map or an untyped value keeps its entry write
 rewrite ($x.$w = $v) => $w($x, $v) where $x is instance and $w is symbol and $setter = class_setter($x, $w, $source)
+# a block glued after a dot is the method's call (test_glued_method_block), `xs.sort{$0 > $1}` xs.sort({$0 > $1}),
+# which the parser reads as the tagged block `xs.(sort: {…})`; a function's signature gives `xs.map{…}` this too
+rewrite $x.$m{$body...} => $x.$m({$body...}) where $m is function
 rewrite $xs.push($v...) => $xs += [$v...] where $xs is not instance
 rewrite $xs.add($v...) => $xs += [$v...] where $xs is not instance
 rewrite $xs.append($v...) => $xs += [$v...] where $xs is not instance
