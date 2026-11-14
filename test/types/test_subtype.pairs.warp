@@ -7,3 +7,7 @@
 # a subtype with no format of its own shows as its value: is-a, not has-a (decision subtype-less-than)
 'type Age < int; x: Age = 3; "" + x'	"3"
 'type Age < int; class P { age: Age }; "" + P(3).age'	"3"
+# an int fills a declared result of a subtype as it fills its variable (decision subtype-less-than)
+'type Age < int; f(n: Age): Age := n + 1; f(3)'	4
+'type Age < int; f(): Age := 3; f() is Age'	yes
+'type Age < int; f(n: int): Age := { m = n * 2; m + 1 }; f(3)'	7
