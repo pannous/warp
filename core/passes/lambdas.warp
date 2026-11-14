@@ -223,7 +223,7 @@ locals_of(names: list, outer: map = {}): Locals := Locals{own: word_set(names), 
 with_locals(scope: Locals, names: list): Locals := if #names == 0 then scope else Locals{own: word_set(scope.own.keys + names), outer: scope.outer}
 is_local(name: text, scope: Locals): bool := scope.own.has(name) or scope.outer.has(name)
 
-class Lowering { arities: map; bound: map = {}; defaulted: map = {}; lambdas_lifted: list; callable_fields: map = {}; function_values: map = {}; field_names: map = {}; globals: map = {}; main_globals: map = {}; function_positions: map = {} }
+class Lowering { arities: map; bound: map = {}; data_depth: int = 0; defaulted: map = {}; lambdas_lifted: list; callable_fields: map = {}; function_values: map = {}; field_names: map = {}; globals: map = {}; main_globals: map = {}; function_positions: map = {} }
 
 ## the walk
 
@@ -238,6 +238,8 @@ lowered_branches(branches: Node, locals: Locals, lowering: Lowering): Node := {
 lowered_lambdas(n: Node, locals: Locals, lowering: Lowering): Node := {
 	# (`use log` names a library or a C function, never a value: no lambda calling log)
 	if is_quote(n) or use_target(n) != ø { return n }
+	if is_spliced_quote(n) { return lowered_at_depth(n#2, lowering.data_depth + 1, locals, lowering, n) }
+	if lowering.data_depth > 0 and is_code_in_data(n) { return lowered_at_depth(n, 0, locals, lowering, ø) }
 	iteration = iteration_of(n)
 	if iteration != ø {
 		looped = iteration_over(iteration, locals, lowering)
@@ -274,11 +276,23 @@ function_value(name: text, n: Node, locals: Locals, lowering: Lowering): Node :=
 	# (a name the program binds, a parameter `size` too, is its own: never an alias's word, count)
 	word = if name in lowering.arities or lowering.bound.has(name) then name else unaliased(name)
 	if word not in lowering.arities {
-		lambda = library_word_value(name, lowering.bound)
+		lambda = if lowering.data_depth > 0 then ø else library_word_value(name, lowering.bound)
 		return if lambda == ø then n else lowered_lambdas(lambda, locals, lowering)
 	}
 	if lowering.arities[word] == 0 or lowering.defaulted.has(word) { return n }
 	call_node(symbol("closure_new"), [symbol(word)])
+}
+# data spliced into a call (data_blocks.warp): its words the program's values or as written, never a library word's
+# function value, `li{ … reverse item }` keeps CSS's reverse (decision tag-items-calls); a call, a member, a lambda or
+# a loop in it is code again, `p{ xs.map(upper) }`
+is_code_in_data(n: Node): bool := iteration_of(n) != ø or is_lambda(n) or is_key(n, Op.Dot) or (is_group(n) and bracket_of(n) == "(" and separator_of(n) == "")
+# n lowered at that data depth; the spliced quote `quoted` around it rebuilt, when given
+lowered_at_depth(n: Node, depth: int, locals: Locals, lowering: Lowering, quoted: Node?): Node := {
+	kept = lowering.data_depth
+	lowering.data_depth = depth
+	lowered = lowered_lambdas(n, locals, lowering)
+	lowering.data_depth = kept
+	if quoted == ø then lowered else group_like(quoted, [quoted#1, lowered])
 }
 # a library word named as a value, `f = sqrt`, `xs.map(upper)`, `f(is_letter)`: the lambda calling it with as many
 # arguments as its declarations agree on (card library-word-value); ø for a name the program binds itself, a type
