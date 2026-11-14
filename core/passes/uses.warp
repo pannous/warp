@@ -232,13 +232,18 @@ declarations_used(statements: list, folder: text, seen: list, claimed: map): lis
 			seen = inner#2
 			# a primitive file's foreign lines are its imports, declared as its functions are (primitive.warp declare_import)
 			primitive = is_primitive_file(file_text(file))
-			own = used.filter(s => (is_declaration(s) or use_target(s) is symbol or (primitive and foreign_import(s) != ø)) and file_used(s, folder_of(file)) == ø)
+			# `include` brings the whole file, its statements run as written (wiki/use.md "in place, as they are"); `use`
+			# its declarations
+			own = used.filter(s => (is_include(statement) or is_declaration(s) or use_target(s) is symbol or (primitive and foreign_import(s) != ø)) and file_used(s, folder_of(file)) == ø)
 			claim_signatures(own, working_relative(file), claimed)
 			declarations += inner#1 + own
 		}
 	}
 	[declarations, seen]
 }
+
+INCLUDE_WORD = "include"
+is_include(statement: Node): bool := is_group(statement) and #statement == 2 and statement#1 == symbol(INCLUDE_WORD)
 
 # a used file's parse, parsed again each compile: keeping parses across runs saved about 1 % (card kept-values-retire)
 # (each file parsed once for all its readers, kept with the text it was parsed from: a host compiling again after an
