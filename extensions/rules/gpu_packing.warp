@@ -87,8 +87,9 @@ gpu_creating(v: Node): bool := gpu_zeros_count(v) != ø or gpu_comprehension(v) 
 # `float[n]` (`int[n]` for integer cells), which the parser reads as float#(n + 1): that shifted count
 gpu_zeros_count(v: Node): Node := if is_key(v, Op.Hash) and key_of(v) is symbol and name_of(key_of(v)) in ["float", "int"] then value_of(v) else ø
 gpu_comprehension(v: Node): bool := is_group(v) and bracket_of(v) == "[" and #v == 2 and is_group(v#2) and #(v#2) == 5 and v#2#1 is symbol and name_of(v#2#1) == "for"
-# (`[]`, the empty list a growth starts from, is ø once lowered)
-gpu_literal(v: Node): bool := (is_group(v) and bracket_of(v) == "[" and not gpu_comprehension(v)) or v == Node.Empty
+gpu_literal(v: Node): bool := (is_group(v) and bracket_of(v) == "[" and not gpu_comprehension(v)) or is_empty_list(v)
+# `[]`, the empty list a growth starts from, which the rules hold as no group
+is_empty_list(v: Node): bool := as_code(v) == "[]"
 # the creating form written to make the GPU list itself (any other value copied into one, gpu_list_of): `float[n]` its zeros, a literal its items written into them
 # one by one, a comprehension each item as it is computed, counted by a first loop (`#(0..n)` makes the range a list)
 # the cells a GPU list holds, `xs: [i32] = …` (extensions/gpu_lists/gpu_lists.warp GpuCell): f32 unless the program says so
@@ -108,6 +109,7 @@ gpu_packed_code(v: Node, cell: text): text := {
 		over = "for " + as_code(each#2) + " in " + as_code(each#4)
 		return "{ gpu_count = 0; " + over + " { gpu_count += 1 }; gpu_made = gpu_zeros(gpu_count, " + code + "); gpu_at = 1; " + over + " { gpu_made#gpu_at = " + as_code(v#1) + "; gpu_at += 1 }; gpu_made }"
 	}
+	if is_empty_list(v) { return "gpu_zeros(0, " + code + ")" }
 	written = "gpu_zeros(" + #v + ", " + code + ")"
 	for i in 1 to #v { written = "gpu_put(" + written + ", " + i + ", " + as_code(v#i) + ")" }
 	written
@@ -118,6 +120,7 @@ gpu_packed_code(v: Node, cell: text): text := {
 gpu_inferred_cell(v: Node): text? := {
 	# `float[n]` f32 zeros, `int[n]` no floats at all
 	if gpu_zeros_count(v) != ø { return if name_of(key_of(v)) == "float" then "f32" else ø }
+	if is_empty_list(v) { return "f32" }
 	items = if gpu_comprehension(v) then [v#1] else items_of(v)
 	if #items > 0 and items.all(item => is_number_list(item) and #item == 4) { return "vec4" }
 	if items.any(is_number_list) then ø else "f32"
