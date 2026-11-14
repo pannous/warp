@@ -1036,6 +1036,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 		continued = read_infix(p, left, min_power)
 		if continued != ø {
 			if continued == OPERAND_ENDS { break }
+			compared = compared_after(compared, declared_glyph(continued), binding_powers(declared_glyph(continued)))
 			left = continued
 			continue
 		}
@@ -1835,6 +1836,8 @@ def fixity_level(fixity: Fixity): int := match fixity {
 
 // The call of a declared operator's function: `2 ⊕ 3` is operator_⊕(2, 3)
 def operator_call(glyph: text, arguments: list): Node := call_of([symbol(OPERATOR_FUNCTION_PREFIX + glyph)] + arguments)
+// the glyph of a declared operator's call, operator_call's inverse: `2 ⊕ 3` gives "⊕", any other node ""
+def declared_glyph(n: Node): text := if is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1).starts_with(OPERATOR_FUNCTION_PREFIX) then name_of(n#1)[#OPERATOR_FUNCTION_PREFIX ..] else ""
 
 // A glyph a declaration may define: one beyond ASCII, or one the aliases leave to a declaration (`~`, `declared: yes`)
 def is_definable_glyph(glyph: text): bool := is_operator_glyph(glyph) or alias_spellings().declared contains glyph
@@ -1989,7 +1992,8 @@ def code_statements(source: text): list {
 	statements
 }
 
-def declared_of(glyph: text, fixity: Fixity): DeclaredOperator := DeclaredOperator{glyph: glyph, fixity: fixity, level: fixity_level(fixity)}
+// its level from its row's power when the aliases give one, `≈` binds as `==`
+def declared_of(glyph: text, fixity: Fixity): DeclaredOperator := DeclaredOperator{glyph: glyph, fixity: fixity, level: (alias_spellings().powers.get(glyph) ?? [fixity_level(fixity)])#1}
 // `square x := x*x`, `add a b := a + b` (decision spaced-definition-head): at a statement's start, plain names before
 // `:=` are a definition's head without its parentheses, square(x) := x*x; `f x` elsewhere stays a call
 def spaced_definition(p: Parser): Node {

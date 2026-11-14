@@ -19,3 +19,6 @@
 '(1 == 1) == yes'	true
 '1 == (1 ≈ 2)'	false
 '1 == 1 and 2 ≈ 2'	true
+'1 ≈ 1 == yes'	error
+'30 == 10 + 20 ≈ 30'	error
+'(30 == 10 + 20) ≈ yes'	true
