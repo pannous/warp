@@ -1,8 +1,8 @@
 // The standard library module image: pictures as pixels you can load, change, make and save. `image(./photo.jpg)`
 // reads a BMP, a baseline JPEG or a PNG (a file or a URL); `image(64, 48, pixel)` makes one from a function of the column and row. An Image's
 // pixels are Colors (lib/color.warp, 0xAARRGGBB), row by row from the top left. Its changes give a new Image:
-// flipped, mirrored, cropped, tinted, grayed, blurred, each_pixel; show() paints it, save writes a .bmp itself and any
-// other name as a PNG (natively the file, in the playground a download).
+// flipped, mirrored, cropped, tinted, grayed, blurred, each_pixel; show() paints it, save writes a .bmp or, by any
+// other name, a PNG (lib/png.warp), its transparency kept (natively the file, in the playground a download).
 use bits
 use color
 use file
@@ -74,12 +74,8 @@ square_mean(picture: Image, x: int, y: int, radius: int): Color := {
 
 // shown in the playground's output pane, natively a window (or a PNG without one)
 show(picture: Image) := paint(picture.pixels.map(pixel => pixel as int), picture.width, picture.height)
-// written as the file's name says: a .bmp by this module, any other as a PNG by the host
-save(picture: Image, as file) := {
-	if lower("${file}").ends_with(".bmp") { return write_bytes(file, bmp_bytes(picture)) }
-	failed = save_picture(picture.pixels.map(pixel => pixel as int), picture.width, picture.height, file)
-	if failed { raise failed }
-}
+// written as the file's name says: a .bmp, any other as a PNG, its transparency kept
+save(picture: Image, as file) := write_bytes(file, if lower("${file}").ends_with(".bmp") then bmp_bytes(picture) else png_bytes(picture.width, picture.height, picture.pixels))
 
 // BMP (Windows bitmap): a 14-byte file header, a 40-byte (or longer) info header, then the rows bottom up, 3 or 4 bytes
 // a pixel in blue, green, red order, each row padded to 4 bytes. Uncompressed 24- and 32-bit ones are read
@@ -122,4 +118,3 @@ pixels_image(read: list): Image := Image(read[0], read[1], read[2])
 
 // the host words of this module (natively core/native/driver.warp, the playground its JS)
 paint(picture: node, width: int, height: int, values: node) from host
-save_picture(picture: node, width: int, height: int, file: node): node from host
