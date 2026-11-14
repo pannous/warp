@@ -424,17 +424,17 @@ class KeptPicture { texture: int, width: int, height: int }
 global kept_pictures = {}
 // the texture kept for this name, at this size, its pixels written anew; 0 and why where they do not fit
 picture_texture(name: text, picture: any): int := {
-	width = int(picture.width)
-	height = int(picture.height)
+	picture_width = int(picture.width)
+	picture_height = int(picture.height)
 	pixels = picture.pixels
-	if width < 1 or height < 1 or #pixels != width * height {
+	if picture_width < 1 or picture_height < 1 or #pixels != picture_width * picture_height {
 		failed(VALUES_NAME + "." + name + " is a picture of width × height pixels")
 		return 0
 	}
 	kept = kept_pictures.get(name)
-	if kept == ø or kept.width != width or kept.height != height {
+	if kept == ø or kept.width != picture_width or kept.height != picture_height {
 		if kept != ø { wgpuTextureRelease(kept.texture) }
-		kept = KeptPicture(texture_made(width, height, TEXTURE_BINDING + TEXTURE_COPY_DST, PICTURE_FORMAT), width, height)
+		kept = KeptPicture(texture_made(picture_width, picture_height, TEXTURE_BINDING + TEXTURE_COPY_DST, PICTURE_FORMAT), picture_width, picture_height)
 		kept_pictures[name] = kept
 	}
 	place = gpu_list_place(pixels)
@@ -444,9 +444,9 @@ picture_texture(name: text, picture: any): int := {
 	set_field_pointer(into, 0, kept.texture)
 	set_field_i32(into, 24, ASPECT_ALL)
 	rows = struct_of(COPY_LAYOUT)
-	set_field_i32(rows, 8, width * PIXEL_BYTES)
-	set_field_i32(rows, 12, height)
-	wgpuQueueWriteTexture(queue, into, staged, width * height * PIXEL_BYTES, rows, extent_of(width, height))
+	set_field_i32(rows, 8, picture_width * PIXEL_BYTES)
+	set_field_i32(rows, 12, picture_height)
+	wgpuQueueWriteTexture(queue, into, staged, picture_width * picture_height * PIXEL_BYTES, rows, extent_of(picture_width, picture_height))
 	free(into)
 	free(rows)
 	if not listed { free(staged) }
@@ -1007,9 +1007,9 @@ drawing_made(shader: text, values: map, width: int, height: int): any := {
 			drawing_released(drawing)
 			return ø
 		}
-		view = wgpuTextureCreateView(texture, 0)
-		drawing.views.add(view)
-		entries.add([PICTURE_BINDING + i, 0, 0, view])
+		picture_view = wgpuTextureCreateView(texture, 0)
+		drawing.views.add(picture_view)
+		entries.add([PICTURE_BINDING + i, 0, 0, picture_view])
 	}
 	for j in 0 ..< #samplers { entries.add([SAMPLER_BINDING + j, 0, 0, 0, sampler_made(samplers[j])]) }
 	stored = {}
