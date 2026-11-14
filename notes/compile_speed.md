@@ -31,6 +31,11 @@
   hello's, averaged over a few runs, and read its §R lines: a linked module whose .warp source shows up there is
   being read twice (use-units-cost: `use units; 1` +128 ms over hello, mostly implicit uses' signature reads).
   profile.sh takes the run's own options after `--`: `scripts/profile.sh -- --one-thread test <folder>`.
+- Stage 3 by hand, for a change to how the compiler emits code (a pass, the emitter): only a compiler the changed
+  compiler emitted shows it. The store's warp.wasm and warp-self.wasm both run the seed's code (warp-self.wasm is a
+  copy). `warp --lib <tree>/lib --seed <store>/<hash>/warp.wasm rebuild pure to seed` in each tree (main's and the
+  branch's) leaves its stage-2 compiler as lib/warp.wasm.new; move it aside, then time both under `/usr/bin/time -l`
+  as `--seed` compiling the same tree, a few runs each (the first is cold). node-kind-bits, 11-14: 3.171 → 3.079 T.
 - Exact call counts per function aren't measurable today: wasmtime counts nothing, and binaryen's --log-execution
   needs an import the driver doesn't answer. Summed samples over many runs stand in.
 

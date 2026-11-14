@@ -16,6 +16,10 @@ case_types = {"Number": "number", "Char": "codepoint", "Text": "text", "Symbol":
 case_readers = {"Number": ["itself"], "Char": ["itself"], "Text": ["itself"], "Symbol": ["name_of"],
 	"Key": ["key_of", "op_of", "value_of"], "List": ["itself", "bracket_of", "separator_of"]}
 subject_name = HiddenWord.MatchSubject as text
+# the subject's kind bits, read once before the arms test them: every case arm reading them anew was node_text's whole
+# own time, 7.8% of a self build (card node-kind-bits). No arm is tested after another arm's value runs, so a match
+# inside one may take the name over
+kinds_name = HiddenWord.MatchKinds as text
 match_bound = HiddenWord.MatchBound as text
 # the readers whose part is a case of an enum spelled as the node carries it
 spelled_readers = {"op_of": "Op", "bracket_of": "Bracket", "separator_of": "Separator"}
@@ -154,8 +158,13 @@ marked_name(name: text, quoted: bool): list := {
 }
 
 kind_test(case_name: text, subject: Node): Node := {
-	if case_name in case_types { return List([symbol("is_type"), subject, case_types[case_name]], Bracket.Round, Separator.None) }
+	if case_name in case_types { return type_test_of(subject, case_types[case_name]) }
 	Key(applied("bracket_of", subject), Op.Ne, ø)
+}
+# `subject is type`: by the kind bits the match read where the subject is the match's own
+type_test_of(subject: Node, type: text): Node := {
+	if subject == symbol(subject_name) or subject == matched_subject { return List([symbol(HiddenWord.KindTested as text), symbol(kinds_name), subject, type], Bracket.Round, Separator.None) }
+	List([symbol("is_type"), subject, type], Bracket.Round, Separator.None)
 }
 
 # a part written as a name binds it (`_` binds nothing), a case `Key(…)` matches that part in turn; any other part is
@@ -212,10 +221,7 @@ arm_chain(arms: list, subject: Node, variants: map): Node := {
 	if is_name(pattern) and not is_other_arm(pattern) and not is_type_pattern(pattern) { return chosen(value_test(subject, pattern), arm_result(arms#1), arm_chain(arms[1..], subject, variants)) }
 	if is_other_arm(pattern) { return arm_result(arms#1) }
 	if is_value_pattern(pattern, variants) { return chosen(value_test(subject, pattern), arm_result(arms#1), arm_chain(arms[1..], subject, variants)) }
-	if is_type_pattern(pattern) {
-		test = List([symbol("is_type"), subject, name_of(pattern)], Bracket.Round, Separator.None)
-		return chosen(test, arm_result(arms#1), arm_chain(arms[1..], subject, variants))
-	}
+	if is_type_pattern(pattern) { return chosen(type_test_of(subject, name_of(pattern)), arm_result(arms#1), arm_chain(arms[1..], subject, variants)) }
 	case_parts = case_pattern(pattern)
 	chosen(arm_test(case_parts, subject), arm_value(case_parts, subject, arm_result(arms#1)), arm_chain(arms[1..], subject, variants))
 }
@@ -224,10 +230,19 @@ arm_chain(arms: list, subject: Node, variants: map): Node := {
 # the arms lowered, an extension's past the core's first (extension.warp with_arm_lowerings)
 chained_arms(arms: list, subject: Node, variants: map): Node := arm_chain(with_arm_lowerings(arms, subject, variants), subject, variants)
 
+# the name the arms test, while they are lowered
+global matched_subject = ø
 matched(subject: Node, arms: list, n: Node, variants: map): Node := {
 	if #arms == 0 { return n }
-	if is_name(subject) { return chained_arms(arms, subject, variants) }
-	List([Key(symbol(subject_name), Op.Assign, tuple_as_list(subject)), chained_arms(arms, symbol(subject_name), variants)], Bracket.Round, Separator.Semicolon)
+	named = if is_name(subject) then subject else symbol(subject_name)
+	outer = matched_subject
+	matched_subject = named
+	chain = chained_arms(arms, named, variants)
+	matched_subject = outer
+	held = if is_name(subject) then [] else [Key(named, Op.Assign, tuple_as_list(subject))]
+	# (only arms of cases read the bits: `match op { Op.Colon: … }` reads none)
+	kinds = if mentions(chain, kinds_name) then [Key(symbol(kinds_name), Op.Assign, List([symbol(HiddenWord.KindsOf as text), named], Bracket.Round, Separator.None))] else []
+	if #held + #kinds == 0 then chain else List(held + kinds + [chain], Bracket.Round, Separator.Semicolon)
 }
 
 # `match (1, 2) {…}`: the tuple a list, as `p = (1, 2)` makes it (the passes that do so ran before this one)
