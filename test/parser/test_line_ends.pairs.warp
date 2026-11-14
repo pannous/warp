@@ -1,0 +1,4 @@
+# Windows's line ends: a program written or checked out on Windows ends its lines with \r\n, read as newlines (wiki SPECIFICATION.md "newline", card crlf-line-endings)
+'x = 1\r\nx + 1'	2
+'f(y) := {\r\n\ty * 2\r\n}\r\nf(3)'	6
+'x = 1\r\ny = z + 1'	error

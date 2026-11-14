@@ -20,7 +20,12 @@ Sizes: hello compiles to hello.mod.wasm 3,168 bytes (the program apart, importin
 hello.wasm 39,469 (shaken whole module); hello.full.wasm 217,151. The program module does not carry the runtime.
 A first `warp hello.wasm` costs 1.28 G (Cranelift on the 39 KB whole module), later ones ~50 M.
 
-So the compile itself is ~85% of the hello cost, and inside it the fixed per-pass and per-emit cost on a
+Remeasured 2026-11-14 (card fixed-startup-cost), after compile-setup-overhead, non-sugar-lowering and kb-costs:
+`print "Hello"` retires ~1.03 G instructions in 0.09 s (74 MB footprint), `warp --version` ~146 M in 0.02 s; `--times`
+spans the compile of `"hi"` over ~54 ms wall, no phase above ~10 ms (implicit uses, reading modules/index.tsv and
+parsing the program once more, is the largest).
+
+So the compile itself was ~85% of the hello cost, and inside it the fixed per-pass and per-emit cost on a
 tiny program dominates: about 60 passes each walk the program and the module words it reaches, and emit sets up
 its tables, whatever the program's size. compile-setup-overhead's three fixes cover the prelude link and the sugar
 walks; the per-pass walks of the non-sugar passes, emit setup and engine startup are carded separately.
