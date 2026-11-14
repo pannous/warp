@@ -19,6 +19,10 @@ SDL_SetWindowFullscreen(window: handle, fullscreen: bool): bool from 'SDL3'
 SDL_Metal_CreateView(window: handle): handle from 'SDL3'
 SDL_Metal_DestroyView(view: handle): void from 'SDL3'
 SDL_Metal_GetLayer(view: handle): handle from 'SDL3'
+// a window's properties, its system handles among them (Windows's HWND)
+SDL_GetWindowProperties(window: handle): u32 from 'SDL3'
+SDL_GetPointerProperty(properties: u32, name: text, otherwise: handle): handle from 'SDL3'
+SDL_PROP_WINDOW_WIN32_HWND_POINTER = "SDL.window.win32.hwnd"
 SDL_PollEvent(event: handle): bool from 'SDL3'
 SDL_WaitEvent(event: handle): bool from 'SDL3'
 SDL_free(memory: handle): void from 'SDL3'

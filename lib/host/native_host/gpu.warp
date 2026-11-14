@@ -96,6 +96,7 @@ ERROR_NONE = 1
 ERROR_FILTER_VALIDATION = 1
 STYPE_WGSL = 2
 STYPE_METAL_LAYER = 4
+STYPE_WINDOWS_HWND = 5
 FORMAT_RGBA8 = 22
 FORMAT_BGRA8 = 27
 BUFFER_MAP_READ = 1
@@ -149,6 +150,7 @@ COPY_BUFFER = 24
 COPY_LAYOUT = 16
 EXTENT = 12
 METAL_SOURCE = 24
+WINDOWS_SOURCE = 32
 SURFACE_DESCRIPTOR = 24
 SURFACE_CONFIGURATION = 64
 SURFACE_TEXTURE = 24
@@ -1338,6 +1340,15 @@ said_failed(what: text): int := {
 	-1
 }
 
+// what a surface is made for: the window's Metal layer on macOS; on Windows its HWND, with the program's module
+window_source(layer: int): int := {
+	windows = on_windows()
+	source = struct_of(if windows then WINDOWS_SOURCE else METAL_SOURCE)
+	set_field_i32(source, 8, if windows then STYPE_WINDOWS_HWND else STYPE_METAL_LAYER)
+	if windows { set_field_pointer(source, 16, GetModuleHandleA(0)) }
+	set_field_pointer(source, if windows then 24 else 16, layer)
+	source
+}
 // --- the window's surface (window.warp's Metal layer): what is shown there stays on the GPU. As big as the window's
 // pixels; the painting, drawn at its own size, scaled into it whole, its aspect kept, the rest black. A format
 // without sRGB, so the window shows the colors a PNG of the same painting holds
@@ -1349,9 +1360,7 @@ surface_ready(layer: int): bool := {
 		surface = 0
 	}
 	if surface == 0 {
-		source = struct_of(METAL_SOURCE)
-		set_field_i32(source, 8, STYPE_METAL_LAYER)
-		set_field_pointer(source, 16, layer)
+		source = window_source(layer)
 		descriptor = struct_of(SURFACE_DESCRIPTOR)
 		set_field_pointer(descriptor, 0, source)
 		surface = wgpuInstanceCreateSurface(instance, descriptor)

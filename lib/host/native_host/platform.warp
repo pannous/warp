@@ -11,6 +11,9 @@ sdl_started(flags: int) := {
 // macOS, whose frameworks answer what elsewhere other libraries do (CoreText, AudioToolbox, CoreMIDI)
 CORE_FOUNDATION = "/System/Library/Frameworks/CoreFoundation.framework"
 on_mac() := exists(CORE_FOUNDATION)
+// Windows, whose window a GPU surface is made for by its HWND and the program's module
+on_windows() := library_function("kernel32", "GetModuleHandleA") != 0
+GetModuleHandleA(name: handle): handle from 'kernel32'
 CFStringCreateWithCString(allocator: handle, text: text, encoding: i32): handle from 'CoreFoundation'
 CFStringGetCString(string: handle, buffer: handle, size: i64, encoding: i32): bool from 'CoreFoundation'
 CFRelease(object: handle): void from 'CoreFoundation'
