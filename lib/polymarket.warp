@@ -1,0 +1,31 @@
+// The standard library module polymarket (notes/world_events.md): prediction markets as the world's odds, read from
+// Polymarket's public Gamma API (no key). `markets(5)` the five busiest by the day's volume, `price("slug")` a market's
+// yes price (0 to 1, the crowd's probability), `for p in prices("slug") {…}` each change of it. A market is a map:
+// question, slug, outcomes, volume24hr, endDate …
+use feeds
+use json
+use net
+GAMMA = "https://gamma-api.polymarket.com/markets"
+BUSIEST = "?active=true&closed=false&order=volume24hr&ascending=false&limit="
+// how often a watched price is asked again
+PRICE_PERIOD = 10s
+
+// the n open markets with the most volume today
+markets(n: int = 5): list := fetch(GAMMA + BUSIEST + text(n))
+// the market of a slug (the last part of its polymarket.com address)
+market(slug: text) := {
+	found = fetch(GAMMA + "?slug=" + slug)
+	if found is empty then raise "Polymarket has no market " + slug + ": markets() lists the busiest" else found#1
+}
+// a market's outcome prices, in the order of its outcomes (Gamma gives them as a JSON text)
+outcome_prices(m) := [number(p) for p in json(m.outcomePrices)]
+// the yes price of a market: the crowd's probability of its first outcome
+price(slug: text) := outcome_prices(market(slug))#1
+
+class PriceChanges extends Changes {
+	slug: text
+	current() := price(slug)
+}
+
+// the yes price of a market, at first and then each time it changes
+prices(slug: text, every: any = PRICE_PERIOD): PriceChanges := PriceChanges(slug: slug, period: every)

@@ -1,0 +1,6 @@
+// needs: network
+# fetch(url, headers), the twin of post(url, body, headers) (lib/net.warp; card fetch-url, OK 2026-11-14 via
+# warp-interviewer): the map's pairs are the request's headers, as an echo service sees them
+
+'fetch("https://httpbin.org/headers", {"X-Warp": "yes"}).headers["X-Warp"]'	'yes'
+'h = fetch("https://httpbin.org/headers", {"User-Agent": "warp-test", "Accept": "application/json"}).headers; [h["User-Agent"], h["Accept"]]'	['warp-test', 'application/json']
