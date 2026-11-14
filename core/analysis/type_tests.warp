@@ -47,10 +47,11 @@ tested_type_call(subject: Node, type: Node, scope: map): Node := match type {
 	_: Key(subject, Op.Eq, type)
 }
 
-# `xs is [a, b]`, `"v12" is "v" + n`, `r is {status: s}`: a list, tuple, map or text cut naming what nothing binds yet
-# (or `_`, `...rest`) tests the shape and binds those names, as a match arm does (node_matches.warp, lib/prelude.warp
-# pattern_bindings); one naming only known values still compares, `xs is [a, b]` of a = 1, b = 2
-is_shape_pattern(p: Node): bool := (is_group(p) and (bracket_of(p) == "[" or bracket_of(p) == "{" or (bracket_of(p) == "(" and separator_of(p) == ","))) or is_text_cut_pattern(p)
+# `xs is [a, b]`, `"v12" is "v" + n`, `r is {status: s}`, `x is data($m + 0)`: a list, tuple, map, text cut or code
+# with holes naming what nothing binds yet (or `_`, `...rest`) tests the shape and binds those names, as a match arm
+# does (node_matches.warp, lib/prelude.warp pattern_bindings); one naming only known values still compares, `xs is
+# [a, b]` of a = 1, b = 2, as code without holes does
+is_shape_pattern(p: Node): bool := (is_group(p) and (bracket_of(p) == "[" or bracket_of(p) == "{" or (bracket_of(p) == "(" and separator_of(p) == ","))) or is_text_cut_pattern(p) or (is_quote(p) and #structural_names(p, no) > 0)
 is_text_cut_pattern(p: Node): bool := (is_key(p, Op.Add) and nodes_in(p).any(part => part is text)) or (is_key(p, Op.Colon) and (is_key(key_of(p), Op.Add) or is_key(key_of(p), Op.Colon)))
 new_pattern_names(p: Node, scope: map): list := structural_names(p, no).filter(name => not binds_own_value(scope, name))
 # a value the program binds itself, not a global only a used module brought (units' s, m, px), which a pattern's name
