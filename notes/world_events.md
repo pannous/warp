@@ -105,12 +105,22 @@ needed for either.
 5. Source modules beyond the prototype: bluesky (Jetstream, needs 1), hackernews (SSE), github, earthquakes, rss,
    crypto (ticker), weather, x (token, paid).
 
-## 3. Prototype (lib only, native)
-- lib/feeds.warp: `Feed`, `streamed(url)` and `polled(…)`. Until the stream host words exist, `streamed` pulls the SSE
-  stream in windows of a few seconds with curl (lib/os `run`, the native warp only), resuming each window from the
-  last event id, so it loses nothing; the page refuses it loudly (no `run`). This is the stand-in the stream words
-  replace; the spelling stays.
-- lib/wikipedia.warp: `changes(wiki)`, Wikipedia's recent changes, every wiki or one.
-- lib/polymarket.warp: `markets(n)` (top by 24 h volume), `market(slug)`, `price(slug)`, `prices(slug, every)`.
-- samples/world/wikipedia_edits.warp, samples/world/polymarket_watch.warp; test/world/ against the live services
-  (outcomes that hold whatever the world does: an edit has a title, a price lies between 0 and 1).
+## 3. Prototype (lib only, native; landed with card world-events)
+- lib/feeds.warp: the `Feed` base class (next(), take(n), keeps(e)) and three kinds a source extends: `Streamed`
+  (server-sent events), `Polled` (items asked again each period, each given once by key) and `Changes` (a value asked
+  again, given when it changes). Until the stream host words exist (card open-streams-host), `Streamed` reads the
+  stream in curl windows of 3 s (lib/os `run`, the native warp only), resuming each from the last event id
+  (`Last-Event-ID`), so nothing is lost between windows; the page has no `run` and refuses loudly.
+- lib/wikipedia.warp `changes(wiki)`, lib/polymarket.warp `markets(n)`, `market(slug)`, `price(slug)`,
+  `prices(slug, every)`, `outcome_prices(m)`, lib/earthquakes.warp `quakes(magnitude, every)`.
+- samples/world/wikipedia_edits.warp, polymarket_odds.warp, strong_quakes.warp; test/world/test_world.pairs.warp
+  (`needs: network`, about 7 s a line: each is a live request).
+
+Spelling today: `for edit in changes("enwiki").take(5) {…}`. The endless `for edit in changes("enwiki") {…}` waits on
+card for-over-iterator: the iterator rule fires only for a written constructor call, so a function giving a Feed falls
+to the list rule, which walks the object's fields (card object-iterator-loop: it should refuse).
+
+Found on the way (cards): spaced-unit (`30 s` in a module breaks the constant, function or field; `30s` works), a field
+defaulting to a module constant is null, a sample named like a module `use`s itself, a map field named like a
+library function (`edit.title`) read as that function where the loop variable's type is unknown. Gamma's market
+list can answer from a cache a few seconds old; `price(slug)` asks by slug.

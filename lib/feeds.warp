@@ -1,0 +1,96 @@
+// The standard library module feeds (notes/world_events.md): events from the internet as one kind of value, a Feed.
+// `for e in feed {…}` takes its events one at a time (decision for-over-iterator: next() gives ø at the end); a source
+// module (lib/wikipedia.warp, lib/polymarket.warp) extends Streamed, Polled or Changes and names its URL.
+// Natively a stream is read in windows of curl (lib/os run) until the stream host words exist (card
+// open-streams-host); each window resumes from the last event's id, so nothing is lost between windows
+use os
+use json
+use text
+use units
+// how long one curl window of a server-sent event stream stays open
+STREAM_WINDOW_SECONDS = 3
+// how sources name themselves to the servers they read
+USER_AGENT = "warp-feeds/0.1 (https://warp.pannous.com)"
+// curl ends a window it timed out with this exit status: a normal end, not a failure
+CURL_TIMED_OUT = 28
+SSE_DATA = "data: "
+SSE_ID = "id: "
+
+// a source of events: refill() gives the next batch (a list, maybe empty) or ø once the source has ended; keeps(e)
+// says which events the feed passes on
+class Feed {
+	pending: list = []
+	ended: bool = no
+	refill() := ø
+	keeps(event) := yes
+	next(): any := {
+		while #pending == 0 and not ended {
+			more = refill()
+			if more is ø { ended = yes } else { pending += [e for e in more if keeps(e)] }
+		}
+		if #pending == 0 then ø else {
+			oldest = pending#1
+			pending = pending[1..]
+			oldest
+		}
+	}
+	// the next n events as a list
+	take(n: int) := [next() for i in 1 to n]
+}
+
+// server-sent events (text/event-stream): each event's data, read as JSON
+class Streamed extends Feed {
+	url: text
+	last_id: text = ""
+	refill() := {
+		answer = run(sse_command(url, last_id))
+		if answer.status != 0 and answer.status != CURL_TIMED_OUT { raise "the event stream " + url + " failed: " + answer.err }
+		// the last block is cut off by the window's end unless a blank line closed it; the next window repeats it
+		blocks = answer.out.split("\n\n")
+		complete = blocks[1..<#blocks]
+		events = []
+		for block in complete {
+			lines = block.split("\n")
+			data = [line.remove_prefix(SSE_DATA) for line in lines if line.starts_with(SSE_DATA)]
+			ids = [line.remove_prefix(SSE_ID) for line in lines if line.starts_with(SSE_ID)]
+			if #ids > 0 { last_id = ids#1 }
+			if #data > 0 { events += [json(data.join("\n"))] }
+		}
+		events
+	}
+}
+
+sse_command(url: text, last_id: text): list := {
+	words = ["curl", "-sN", "--max-time", text(STREAM_WINDOW_SECONDS), "-A", USER_AGENT, "-H", "Accept: text/event-stream"]
+	if last_id != "" { words += ["-H", "Last-Event-ID: " + last_id] }
+	words + [url]
+}
+
+// a source asked again each period: poll() gives its current items, key(item) tells them apart; the feed gives each
+// item once, the first poll's included
+class Polled extends Feed {
+	period: any
+	seen: any = {}
+	polls: int = 0
+	poll() := []
+	key(item) := text(item)
+	refill() := {
+		if polls > 0 { sleep(period) }
+		polls += 1
+		fresh = [item for item in poll() if not seen.has(key(item))]
+		for item in fresh { seen[key(item)] = yes }
+		fresh
+	}
+}
+
+// a single value asked again each period: the feed gives it at first and then each time it changes
+class Changes extends Feed {
+	period: any
+	last: any = ø
+	current() := ø
+	refill() := {
+		if last != ø { sleep(period) }
+		now = current()
+		if now == last then [] else { last = now; [now] }
+	}
+}
