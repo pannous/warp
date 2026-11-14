@@ -1999,8 +1999,9 @@ def declared_of(glyph: text, fixity: Fixity): DeclaredOperator := DeclaredOperat
 def spaced_definition(p: Parser): Node {
 	if not at_statement_start(p) { return ø }
 	line = p.code[p.at .. statement_end(p)]
-	if not line.contains(" := ") { return ø }
-	head = line.split(" := ")#1
+	// (`:=` spaced or glued: `add1 x:=x+1` too)
+	if not line.contains(":=") { return ø }
+	head = line.split(":=")#1
 	names = blank_words(head)
 	// (no keyword: `def f x := …` stays the def rule's)
 	if names.length < 2 or not names.all(name => is_plain_name(name) and keyword_form(name) == "") or names#1 == "def" { return ø }
@@ -2008,7 +2009,7 @@ def spaced_definition(p: Parser): Node {
 	if names.any(name => phrase_prepositions.contains(name)) { return ø }
 	// (nor is a pronoun: `twice it := it * 2` is `twice := it * 2`)
 	defined = names.filter(name => not phrase_pronouns.contains(name)).map(name => symbol(name))
-	p.at += head.length + 4
+	p.at += head.length + 2
 	skip_spaces(p)
 	Key(if defined.length == 1 then defined#1 else call_of(defined), Op.Define, expression(p, 0))
 }
