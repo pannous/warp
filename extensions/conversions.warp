@@ -312,7 +312,7 @@ declared_types(program: Node): list := nodes_in(program).map(n => if is_typed_de
 written_result_type(n: Node): text? := if definition_call(n) != ø and is_key(key_of(n), Op.Colon) then place_type(value_of(key_of(n))) else ø
 # T of a definition whose value converts to it: never a linked module's word, declared without its body (its module
 # made the value), which a body would make a local function shadowing that word
-converted_result_type(n: Node): text? := if value_of(n) == Node.Empty then ø else written_result_type(n)
+converted_result_type(n: Node): text? := if definition_call(n) == ø or value_of(n) == Node.Empty then ø else written_result_type(n)
 # the values a body gives, a block's last statement, each branch of an if, as the function makes them
 last_value_mapped(body: Node, make: function): Node := {
 	if is_key(body, Op.Else) and is_key(key_of(body), Op.Then) {
