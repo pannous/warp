@@ -85,7 +85,9 @@ holed_items(items: list): list := {
 	while at <= #items {
 		if is_computed_hole_mark(items#at) and at < #items {
 			name = computed_mark + (#template_holes.keys + 1)
-			template_holes[name] = items#(at + 1)
+			# (`$(text(k))`: the expression in the parentheses, whose value fills the hole, never a group holding it)
+			computed = items#(at + 1)
+			template_holes[name] = if is_group(computed) and bracket_of(computed) == "(" and #computed == 1 then computed#1 else computed
 			made += [symbol(hole_mark + name)]
 			at += 2
 		} else {
