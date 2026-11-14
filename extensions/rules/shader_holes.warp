@@ -38,14 +38,17 @@ SHADER_HOLES = {"width": [], "height": [], "size": ["u_resolution"], "time": ["u
 # how the shader reads the hole a `$name` names: the hole an alias stands for, else the name itself
 hole_read(written: text): text := SHADER_HOLES.keys.find(read => written in SHADER_HOLES[read]) ?? written
 
-# the entry point of a shader written in compute.toys' dialect (lib/compute_toys.warp), and of one already a WGSL
+# the entry point of a shader written in compute.toys' dialect (lib/shaders.warp compute_toy), and of one already a WGSL
 # fragment shader
 COMPUTE_TOYS_ENTRY = "fn main_image"
 FRAGMENT_ENTRY = "@fragment"
 # compute_toy(s) of a shader the program assigns written in compute.toys' dialect (its kernel fn main_image, no
-# fragment entry point of its own), which makes it a fragment shader; ø for any other
+# fragment entry point of its own), which makes it a fragment shader; ø for any other. s is its name, or the name as
+# the prelude's rule gave it the shader words it calls, shader_words(name, place)
 compute_toys_made(s: Node, program: Node): any := {
-	shader = main_level_value(name_of(s), program)
+	named = if is_call(s) and name_of(s#1) == "shader_words" then s#2 else s
+	if not (named is symbol) { return ø }
+	shader = main_level_value(name_of(named), program)
 	if not (shader is text) or not "${shader}".contains(COMPUTE_TOYS_ENTRY) or "${shader}".contains(FRAGMENT_ENTRY) { return ø }
 	call_of("compute_toy", [s])
 }

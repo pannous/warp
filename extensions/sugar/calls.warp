@@ -103,7 +103,6 @@ rewrite sort($xs, by: $e) => sort($xs, $e)
 rewrite $xs.sort($e) => sort($xs, $e)
 rewrite sort($xs, $e) => sorted_by_key($xs, $f) where $f = it_as_lambda($e)
 
-# `increment = add(1, _)`: a call given `_` for its first or last argument is the function of that argument, the
-# partial application `x -> add(1, x)` (decision M3b)
-rewrite $f($a..., _) => ($x -> $f($a..., $x)) where $f is function
-rewrite $f(_, $b...) => ($x -> $f($x, $b...)) where $f is function
+# `increment = add(1, _)`: a call given `_` for arguments is the function of those, the partial application
+# `x -> add(1, x)` (decision M3b); `add(_, 2, _)` takes two, in order
+rewrite $f($a...) => ($l) where $f is function and $l = holes_as_lambda($f, ($a...))

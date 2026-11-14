@@ -464,9 +464,9 @@ def class_operate_code(): list {
 	cases = concatenated(range_list(#operated_glyphs).filter(i => module.functions.has(operated_glyphs[i] + "·operator")).map(i => operator + [op.i64_const] + sleb(i) + [op.i64_eq, op.if, no_value] + boxed(call_values(module.functions[operated_glyphs[i] + "·operator"], [TypedCode(ValueKind.Node, [op.local_get, 1]), TypedCode(ValueKind.Node, [op.local_get, 2])])) + [op.return, op.end]))
 	cases + [ref_null, gc_type(gc.node)]
 }
-# instance_method(m, name, arguments): m's method of that name, by the dispatcher of m's own module, for a module
-# that never saw m's class (card reals-prebuilt: reals' √ of uncertain's interval calls its root()); ø when that
-# module has none
+# instance_method(m, name, arguments): [the answer] of m's method of that name, by the dispatcher of m's own module, for
+# a module that never saw m's class (card reals-prebuilt: reals' √ of uncertain's interval calls its root()); ø when
+# that module has none, so a method answering [] or ø is told from none (method_called unwraps it)
 def instance_method_code(f: Function) { f.code = optional_slot_call("method", 3) }
 # [method, its dispatcher] of each method the module's classes lift (`root·real` is real's root, `root` or the routed
 # `root·method` its dispatcher)
@@ -486,11 +486,11 @@ def method_dispatchers(): list {
 method_receiver = "self"
 def takes_instance(f: Function): bool { #f.signature.parameters > 0 and f.signature.parameters[0].name == method_receiver }
 # the module's method word: the dispatcher of the name given (parameter 1) on the instance (parameter 0) and the items
-# of the arguments' list (parameter 2), ø for a name it lacks
+# of the arguments' list (parameter 2), [its answer]; ø for a name it lacks
 def class_method_code(): list {
 	named = (method => runtime_call("node_equal", [TypedCode(ValueKind.Node, [op.local_get, 1]), TypedCode(ValueKind.Node, boxed(text_value_of(method)))]).code)
 	argument = (i => runtime_call("node_at", [TypedCode(ValueKind.Node, [op.local_get, 2]), TypedCode(ValueKind.Int, [op.i64_const] + sleb(i))]))
-	called = (dispatcher => boxed(call_values(dispatcher, [TypedCode(ValueKind.Node, [op.local_get, 0])] + range_list(#dispatcher.signature.parameters - 1).map(i => argument(i + 1)))))
+	called = (dispatcher => runtime_call("answered", [TypedCode(ValueKind.Node, boxed(call_values(dispatcher, [TypedCode(ValueKind.Node, [op.local_get, 0])] + range_list(#dispatcher.signature.parameters - 1).map(i => argument(i + 1)))))]).code)
 	concatenated(method_dispatchers().map(pair => named(pair#1) + [op.if, no_value] + called(pair#2) + [op.return, op.end])) + [ref_null, gc_type(gc.node)]
 }
 # whether a declared class has a field `name`: a read of it may meet an instance (field_value), else only a map

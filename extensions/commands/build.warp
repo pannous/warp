@@ -20,12 +20,14 @@ WASM2C_MODULE = "program"
 # the flags exporting the build's own C functions (foreign.c's native_pointer, the glue's), found by name at run time
 # (dlsym), which macOS exports always; the main thread's stack, where the program runs: wasm's own limit and the host's
 # frames beneath it (lib/native/wasi.c PROGRAM_STACK_BYTES; Linux's program gets it from a thread of its own); where
-# the executable finds its libraries at run time (rpath; Windows looks beside it and on the PATH); flags keeping a
-# library its C reaches only through dlsym (GNU ld's --as-needed, Debian's default, drops it)
+# the executable finds its libraries at run time (rpath; Windows looks beside it and on the PATH); the flags around the
+# program's own libraries: keeping one its C reaches only through dlsym (GNU ld's --as-needed, Debian's default, drops
+# it), and on Windows linking them as DLLs (their import libraries, lib<name>.dll.a) while the C runtime stays static;
+# the executable's file ending
 NATIVE_SYSTEMS = {
-	Darwin: {compiler: "cc -O2", exported: "", stack: " -Wl,-stack_size,0x10000000", itself: "@executable_path", kept: ""},
-	Linux: {compiler: "cc -O2", exported: " -rdynamic", stack: "", itself: "'$ORIGIN'", kept: " -Wl,--no-as-needed"},
-	Windows: {compiler: "clang -O2 -static -pthread", exported: " -Wl,--export-all-symbols", stack: " -Wl,--stack,0x10000000", itself: "", kept: ""}
+	Darwin: {compiler: "cc -O2", exported: "", stack: " -Wl,-stack_size,0x10000000", itself: "@executable_path", libraries: ["", ""], ending: ""},
+	Linux: {compiler: "cc -O2", exported: " -rdynamic", stack: "", itself: "'$ORIGIN'", libraries: [" -Wl,--no-as-needed", ""], ending: ""},
+	Windows: {compiler: "clang -O2 -static -pthread", exported: " -Wl,--export-all-symbols", stack: " -Wl,--stack,0x10000000", itself: "", libraries: [" -Wl,-Bdynamic", " -Wl,-Bstatic"], ending: ".exe"}
 }
 WINDOWS_UNAMES = ["MINGW", "MSYS", "CYGWIN"]
 # wasm2c's runtime and headers, in these folders of the wabt whose wasm2c runs
@@ -38,8 +40,10 @@ build_native(source_file: text, library: text, options: list) := {
 	source = read(source_file)
 	if not is_primitive_file(source) { raise "warp build native builds a primitive file, whose leading header holds `@primitive` (notes/primitive.md)" }
 	emitting_file(working_relative(source_file))
-	executable = source_file.remove_suffix(".warp")
-	stem = executable + ".native"
+	program = source_file.remove_suffix(".warp")
+	system = native_system()
+	executable = program + system.ending
+	stem = program + ".native"
 	write_bytes(stem + ".wasm", compile(source, source_folder(source_file)))
 	header = stem.split("/").last() + ".h"
 	write(stem + ".main.c", native_main(header))
@@ -52,7 +56,6 @@ build_native(source_file: text, library: text, options: list) := {
 		print "wrote " + C_FILES.map(suffix => stem + suffix).join(", ") + ", the C of " + executable + " for a C compiler with wasm2c's runtime and -I <warp's lib>"
 	} else {
 		files = [stem + ".c", stem + ".main.c", runtime + "/wasm-rt-impl.c", runtime + "/wasm-rt-mem-impl.c"].map(quoted_path).join(" ")
-		system = native_system()
 		shell(system.compiler + " -I" + quoted_path(runtime) + " -I" + quoted_path(wabt + WABT_HEADERS) + " -I" + quoted_path(library) + " -o " + quoted_path(executable) + " " + files + " -lm" + system.exported + system.stack + native_links(wabt, library, system))
 		removed(stem, [".wasm"] + C_FILES)
 		print "built " + executable
@@ -86,7 +89,7 @@ native_links(wabt: text, library: text, system: map): text := {
 	if #libraries == 0 { return "" }
 	itself = system.itself
 	run_paths = if itself == "" then "" else [itself, itself + "/../lib", quoted_path(run_option("lib-link") ?? library)].map(path => " -Wl,-rpath," + path).join("")
-	" -L" + quoted_path(library) + " -L" + quoted_path(wabt + "/lib") + run_paths + system.kept + libraries.map(l => " -l" + l).join("")
+	" -L" + quoted_path(library) + " -L" + quoted_path(wabt + "/lib") + run_paths + system.libraries#1 + libraries.map(l => " -l" + l).join("") + system.libraries#2
 }
 # how this system links a native build (NATIVE_SYSTEMS), loudly none for a system not listed
 native_system(): map := {
@@ -160,7 +163,7 @@ build(words: list) := {
 	modules = [stem + ".full.wasm", stem + ".mod.wasm", stem + ".wasm"]
 	if wagi { return wagi_built(stem, modules) }
 	if not (WASM_ONLY in options) {
-		write_executable(stem + ".wasm", stem)
+		write_executable(stem + ".wasm", stem + native_system().ending)
 		modules_beside(stem + ".wasm", stem)
 	}
 	if routes_seen and not (WASM_ONLY in options) { print stem + " serves its routes at 8080, another port with --port <n>" }
@@ -263,7 +266,7 @@ built_driver(): text := {
 		build_native(folder + "/driver.warp", library_folder, [])
 		write(built_from, source)
 	}
-	folder + "/driver"
+	folder + "/driver" + native_system().ending
 }
 write_executable(module: text, executable: text) := {
 	carried = read_bytes(module)
