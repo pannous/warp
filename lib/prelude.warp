@@ -754,8 +754,9 @@ fits_group(value: any, pattern: any, bound: map, code: bool): bool := {
 	if not code and not is_type(value, "list") { return no }
 	fits_items(value, pattern, bound, code)
 }
-// `{ $body }` of `{ print x }`: a hole alone in a group takes its one phrase, whose words the group holds spaced
-is_phrase_hole(value: any, pattern: any): bool := #pattern == 1 and is_type(pattern#1, "symbol") and name_of(pattern#1).starts_with("$") and separator_of(value) == " " and #value > 1
+// `{ $body }` of `{ print x }`: a hole alone in a block or group takes its one phrase, whose words it holds spaced;
+// a list's items stay items, `[1 2]` is two
+is_phrase_hole(value: any, pattern: any): bool := bracket_of(value) != "[" and #pattern == 1 and is_type(pattern#1, "symbol") and name_of(pattern#1).starts_with("$") and separator_of(value) == " " and #value > 1
 phrase_of(group: any): any := separated(bracketed([part for part in group], ""), " ")
 // `data($l $op $r)`: a hole between two parts takes any operator, its spelling bound: `-` of `a - b`
 is_operator_hole(pattern: any): bool := bracket_of(pattern) == "" and #pattern == 3 and is_type(pattern#2, "symbol") and name_of(pattern#2).starts_with("$")
