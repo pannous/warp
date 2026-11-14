@@ -58,6 +58,8 @@ conversion_methods = [["text", showing_dispatcher, "text_form"], ["float", Hidde
 # same word with the value, position(p, v), lifted as position·assigned; `#b` its count()
 position_method = "position"
 index_method = "index"
+# the map words (decision map-protocol) and how many arguments each takes after the map
+map_word_counts = [["keys", 0], ["get", 1], ["has", 1], ["set", 2], ["remove", 1]]
 assigned_position = HiddenWord.PositionAssigned as text
 assigned_index = HiddenWord.IndexAssigned as text
 position_words = [position_method, index_method, assigned_position, assigned_index]
@@ -878,9 +880,12 @@ routed(n: Node, routing: Routing): Node := {
 # `remove(x)` inside a class with remove(k) stays its own call. The words as the prelude's aliases left them, a
 # class's has() its collection_contains()
 # a word as the user writes it or as the prelude's aliases left it (`keys` or map_keys)
-is_map_protocol_word(word: text): bool := {
-	for protocol_word in ["keys", "get", "has", "set", "remove"] { if unaliased(protocol_word) == unaliased(word) { return yes } }
-	no
+is_map_protocol_word(word: text): bool := map_word_arguments(word) >= 0
+# the arguments a map word takes after the map itself, -1 for any other word: a map form reaches only a method taking
+# them, so markup's Binding.set(entered) never takes a plain map's `m[k] = v`
+map_word_arguments(word: text): int := {
+	for entry in map_word_counts { if unaliased(entry#1) == unaliased(word) { return entry#2 } }
+	-1
 }
 map_form_call(n: Node, routing: Routing): Node := {
 	if is_called_name(n) and #n >= 2 and is_map_protocol_word(name_of(n#1)) and unaliased(name_of(n#1)) in routing.methods and (#n - 2) in taken_counts(routing.classes, routing.names, unaliased(name_of(n#1))) {
@@ -913,7 +918,7 @@ run_time_map_form(n: Node, routing: Routing): list? := {
 instance_call(receiver: Node, word: text, arguments: list, routing: Routing): list? := {
 	method = unaliased(word)
 	if not (receiver is symbol) or static_type(receiver, routing) != ø { return ø }
-	owners = owners_of(routing.classes, routing.names, method)
+	owners = owners_of(routing.classes, routing.names, method).filter(owning_class => methods_named(routing.classes[owning_class], method).any(m => #method_parameters(m) == #arguments))
 	if #owners == 0 { return ø }
 	test = instance_test(receiver, owners#1)
 	for name in owners[1..] { test = Key(test, Op.Or, instance_test(receiver, name)) }
@@ -939,8 +944,11 @@ keyed_by(n: Node, word: text, routing: Routing): bool := {
 	linked_method(owner, unaliased(word))
 }
 # whether a class of a linked library module (`m = ListMap()`, lib/collections.warp) has the method: its lifted word
-# `map_keys·ListMap`, or the module's plain word of that name (a class's set(k, v) is lifted as `set`)
-linked_method(owning_class: text, method: text): bool := (method + "·" + owning_class) in module.linked_words or ((owning_class + "·new") in module.linked_words and method in module.linked_words)
+# `map_keys·ListMap`, or the module's plain word of that name taking the map word's arguments (a class's set(k, v) is
+# lifted as `set`)
+linked_method(owning_class: text, method: text): bool := (method + "·" + owning_class) in module.linked_words or ((owning_class + "·new") in module.linked_words and linked_taking(method))
+# the module's plain word of that name, a map word's taking its arguments after the instance
+linked_taking(method: text): bool := (module.linked_words.get(method) ?? []).any(word => map_word_arguments(method) < 0 or #word.kinds == map_word_arguments(method) + 1)
 walks_keys(n: Node, routing: Routing): bool := {
 	if not (is_group(n) and bracket_of(n) == "" and #n == 5 and n#1 is symbol and name_of(n#1) == "for" and n#3 is symbol and name_of(n#3) == "in") { return no }
 	walked = static_type(n#4, routing)

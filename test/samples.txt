@@ -1,4 +1,4 @@
-# e582d76df0 2026-11-13 22:43 287/287 100.0%
+# 2f0a0af3e8 2026-11-14 02:03 283/286 99.0%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -8,10 +8,7 @@ ok   samples/advanced/filled_circle.warp
 ok   samples/advanced/mandelbrot_canvas.warp
 ok   samples/advanced/neural_net.warp
 ok   samples/advanced/particles.warp
-ok   samples/advanced/raytracer.warp
 ok   samples/advanced/self_parser.warp
-ok   samples/advanced/snake.warp
-ok   samples/advanced/test.warp
 ok   samples/apps/checksum_inventory.warp
 ok   samples/apps/comment_board.warp
 ok   samples/apps/config_validator.warp
@@ -26,7 +23,6 @@ ok   samples/apps/name_matcher.warp
 ok   samples/apps/open_hours.warp
 ok   samples/apps/recipe_scaler.warp
 ok   samples/apps/settings_cli.warp
-ok   samples/apps/site_generator.warp
 ok   samples/apps/todo_cli.warp
 ok   samples/apps/url_report.warp
 ok   samples/clustering/emeans.warp
@@ -101,6 +97,7 @@ ok   samples/gpu/kaleidoscope.warp
 ok   samples/gpu/lava_lamp.warp
 ok   samples/gpu/manual_3d_object_viewer.warp
 ok   samples/gpu/northern_lights.warp
+ok   samples/gpu/ocean_sunset.warp
 ok   samples/gpu/ocean.warp
 ok   samples/gpu/ringed_planet.warp
 ok   samples/gpu/rings.warp
@@ -113,6 +110,7 @@ ok   samples/graphics/color_swatches.warp
 ok   samples/graphics/ez_forest.warp
 ok   samples/graphics/finger_paint.warp
 ok   samples/graphics/fluid_25d.warp
+ok   samples/graphics/fluid_flame_mouse.warp
 ok   samples/graphics/function_fields.warp
 ok   samples/graphics/gaussian_splats.warp
 ok   samples/graphics/julia_sliders.warp
@@ -246,7 +244,6 @@ ok   samples/text/levenshtein.warp
 ok   samples/text/palindrome.warp
 ok   samples/text/regexes.warp
 ok   samples/text/replace_word.warp
-ok   samples/text/sort_words.warp
 ok   samples/text/uniscript_text.warp
 ok   samples/text/word_count.warp
 ok   samples/text/word_lengths.warp
@@ -269,7 +266,6 @@ ok   samples/web/hello_div.warp
 ok   samples/web/html_dsl.warp
 ok   samples/web/html.warp
 ok   samples/web/keyed_counters.warp
-ok   samples/web/keyframes.warp
 ok   samples/web/leaving_list.warp
 ok   samples/web/live_region.warp
 ok   samples/web/page_custom_event.warp
@@ -286,3 +282,6 @@ SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
+FAIL samples/apps/site_generator.warp: lib/yaml.warp:74:100 no function set; fix: use english
+FAIL samples/text/sort_words.warp: sort_words.warp:3:1 list of node
+FAIL samples/web/keyframes.warp: lib/markup.warp:272:28 wrong number of arguments
