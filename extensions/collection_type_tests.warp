@@ -8,7 +8,7 @@ typed_item = symbol("item·typed")
 collection_type_tests(program: Node) as Node := bottom_up(program, collection_type_test)
 collection_type_test(n: Node) as Node := {
 	if not is_key(n, Op.Is) { return n }
-	phrase = value_of(n)
+	phrase = spelled_phrase(value_of(n))
 	if not (is_group(phrase) and bracket_of(phrase) == "" and #phrase >= 3 and phrase#1 is symbol and is_collection_head(name_of(phrase#1)) and phrase#2 == symbol(of_word)) { return n }
 	subject = key_of(n)
 	collection = phrase#1
@@ -17,5 +17,8 @@ collection_type_test(n: Node) as Node := {
 	each_typed = call_of("all", [items, Key(typed_item, Op.Arrow, collection_type_test(Key(typed_item, Op.Is, item_type)))])
 	Key(Key(subject, Op.Is, collection), Op.And, each_typed)
 }
+
+# a type phrase read as one word, `list of byte` of `type Code < list of byte` (as a field's type reads), as its words
+spelled_phrase(type: Node): Node := if type is symbol and name_of(type).contains(" " + of_word + " ") then List(name_of(type).split(" ").map(symbol), Bracket.None, Separator.Space) else type
 
 collection_type_tests_extension = Extension{name: "collection_type_tests", passes_before: {"type_tests": collection_type_tests}}
