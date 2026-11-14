@@ -183,7 +183,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       ARCHIVE: warp-${{ inputs.tag || github.ref_name }}-x86_64-pc-windows-gnu.zip
     steps:
-    # the sources as written, LF: Git for Windows checks text out with CRLF (card crlf-line-endings)
+    # the sources as written, LF: Git for Windows checks text out with CRLF, which bash refuses in the scripts the job
+    # runs (warp itself reads \r\n: extensions/line_ends.warp)
     - run: git config --global core.autocrlf false
     - uses: actions/checkout@v7
       with:
