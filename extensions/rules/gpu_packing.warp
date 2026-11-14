@@ -28,8 +28,9 @@ gpu_bound(xs: Node, program: Node): bool := {
 	uses = gpu_lists.uses.get(name_of(xs))
 	uses != ø and uses#1 > 0 and uses#2 == 1 + uses#5 and uses#3 == 0 and uses#4 != ø and (uses#6 == 0 or uses#7 > 0)
 }
+gpu_no_uses(): list := [0, 0, 0, ø, 0, 0, 0, []]
 gpu_use_added(name: text, at: int) := {
-	uses = gpu_lists.uses.get(name) ?? [0, 0, 0, ø, 0, 0, 0, []]
+	uses = gpu_lists.uses.get(name) ?? gpu_no_uses()
 	uses[at] = uses[at] + 1
 	gpu_lists.uses[name] = uses
 }
@@ -90,7 +91,7 @@ gpu_definition_counted(definition: Node) := {
 	parameters = method_parameters(definition).map(parameter_name)
 	shadowed = parameters.map(name => gpu_lists.uses.get(name))
 	gpu_uses_counted(value_of(definition))
-	for at in 1 to #parameters { if shadowed#at == ø then gpu_lists.uses.remove(parameters#at) else gpu_lists.uses[parameters#at] = shadowed#at }
+	for at in 1 to #parameters { gpu_lists.uses[parameters#at] = shadowed#at ?? gpu_no_uses() }
 }
 # the program's functions `f(…) := body` with a parameter body hands to the GPU alone (no other mention, assignment
 # or item read): f → the places of those parameters
