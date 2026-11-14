@@ -161,9 +161,10 @@ kind_test(case_name: text, subject: Node): Node := {
 	if case_name in case_types { return type_test_of(subject, case_types[case_name]) }
 	Key(applied("bracket_of", subject), Op.Ne, ø)
 }
-# `subject is type`: by the kind bits the match read where the subject is the match's own
+# `subject is type`: by the kind bits the match read where the subject is the match's own (matched_subject, set only
+# while its arms are lowered: `x is Key(…)` outside a match tests by is_type, its match·subject has no kind bits)
 type_test_of(subject: Node, type: text): Node := {
-	if subject == symbol(subject_name) or subject == matched_subject { return List([symbol(HiddenWord.KindTested as text), symbol(kinds_name), subject, type], Bracket.Round, Separator.None) }
+	if subject == matched_subject { return List([symbol(HiddenWord.KindTested as text), symbol(kinds_name), subject, type], Bracket.Round, Separator.None) }
 	List([symbol("is_type"), subject, type], Bracket.Round, Separator.None)
 }
 
