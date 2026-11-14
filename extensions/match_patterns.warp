@@ -27,7 +27,7 @@ guarded_arms(arms: list, subject: Node, variants: map): list := {
 # result with them; `otherwise` what the arms after it give
 guarded_arm(arm: Node, subject: Node, variants: map, otherwise: Node): Node := {
 	guard = guard_of(arm_pattern(arm))
-	pattern = typed_holes_tight(guarded_pattern(arm_pattern(arm)))
+	pattern = quoted_holes_tight(guarded_pattern(arm_pattern(arm)))
 	result = arm_result(arm)
 	# ø: the pattern takes any subject
 	test: Node = ø
@@ -85,7 +85,8 @@ item_bindings(subject: Node, items: list): list := {
 }
 
 # `data($k: int + $x)` reads `$k: (int + $x)`: within a pattern a hole's type binds the hole alone, `($k: int) + $x`,
-# `$a: int * $b: int + $c` as `($a: int) * ($b: int) + $c`
+# `$a: int * $b: int + $c` as `($a: int) * ($b: int) + $c`; any other pattern as written
+quoted_holes_tight(pattern: Node): Node := if is_quote(pattern) then group_like(pattern, [pattern#1, typed_holes_tight(pattern#2)]) else pattern
 typed_holes_tight(n: Node): Node := match n {
 	Key(left, Op.Colon, right): {
 		tight_left = typed_holes_tight(left)
