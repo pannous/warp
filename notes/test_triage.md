@@ -35,6 +35,7 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 
 | file:line | reason | verdict |
 |---|---|---|
+| test/numbers/test_unit_literals.pairs.warp:4, 5, 6, 9, 10, 11; test/numbers/test_unit_definitions.pairs.warp:22, 35; test/numbers/test_unit_prefix_lines.pairs.warp:13 | spelled unit names after a number: `3 kilometers`, `3010 meters`, `2 kilograms`, `3 meter`, `3 feet in inches` | parked: spelled-units-number (user 2026-11-13: `quantity(3, "meters")` is the way; via warp-interviewer 11-14 the lines stay red, not dropped) |
 | test/types/test_time_now.pairs.warp:4-6 | `type(time.now)` 'time of day', `time.now is time`, `time.now.hour == now.hour` (old Rust test, no wiki line) | dropped 2026-11-13 via warp-interviewer: `now.time` (lines 10-11) covers it |
 | test/modules/test_wasm_modules.pairs.warp:34, 35 | a C module's out-pointer as the result: `strtol("42 apples", 10)` expected ' apples', `strtol("ff!", 16)` '!'; main gives the C meaning, 42 / 255 | keep for now: the user expects 42 (11-11 via warp-interviewer); the out-pointer form is card strtol-out-pointer (Later) |
 | test/text/test_count_in.pairs.warp:4-9; test/text/test_counts_in_warp.pairs.warp:4, 5, 10; test/functions/test_words_in_phrases.pairs.warp:11, 12 | `count x in y`, `count(x in y)`: the count of a membership's yes/no, refused with did-you-mean `y.count(x)` | delete: the refusal with its fix `y.count(x)` is the behaviour |
