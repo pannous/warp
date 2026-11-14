@@ -7,7 +7,7 @@
 rewrite $f.name => $n where $f is symbol and $f is function and $n = spelled($f)
 rewrite $f.params => [$names...] where $f is symbol and $names = parameters_named($f, $program)
 rewrite $f.parameters => [$names...] where $f is symbol and $names = parameters_named($f, $program)
-rewrite $f.body => data $b where $f is symbol and $f is function and $b = body_of($f, $program)
+rewrite $f.body => as_code(data $b) where $f is symbol and $f is function and $b = body_of($f, $program)
 rewrite $f.doc => $d where $f is symbol and $f is function and $d = doc_of($f, $program, $source)
 # `square.effects`: what the function does besides giving its value, ["IO"], [] when pure
 # (extensions/effects.warp effects_named, card effects-lists)
