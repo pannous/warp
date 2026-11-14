@@ -5,8 +5,6 @@
 # WARP=<tree>/data/gate/warp
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 source "$(dirname "$0")/checks.sh"
-# the lib/ that warp runs with (its version names it), given to the native warp built here
-library=$("$warp" version 2>/dev/null | sed -n 's/.*(compiler.warp of \(.*\))$/\1/p')
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
 
