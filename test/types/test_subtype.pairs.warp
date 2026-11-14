@@ -7,3 +7,7 @@
 # a subtype with no format of its own shows as its value: is-a, not has-a (decision subtype-less-than)
 'type Age < int; x: Age = 3; "" + x'	"3"
 'type Age < int; class P { age: Age }; "" + P(3).age'	"3"
+# a subtype of a type phrase, type Code < list of int, tests its items as the phrase does (wiki/alias.md, card subtype-of-phrase)
+'type Code < list of int; [1, 2] is Code'	yes
+'type Code < list of int; ["a"] is Code'	no
+'type Grid < list of list of int; [[1], [2, 3]] is Grid'	yes
