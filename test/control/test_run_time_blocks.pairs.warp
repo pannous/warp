@@ -6,7 +6,7 @@
 'n=3; t="ab"; ys = [data n+1, data t+"c"]; interpret(ys#2)'	'abc'
 
 # interpret_of_a_constant_block_runs_it_where_written
-'a=1; x : a+b; b=2; interpret x'	3
+'a=1; x = {a+b}; b=2; interpret x'	3
 
 # a_run_time_block_reads_the_values_where_it_runs
 'xs = [data a, data 0]; a = 1; r = interpret(xs#1); a = 2; r'	1
