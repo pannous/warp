@@ -136,7 +136,7 @@ outflow(x, y) := {
 	0.5 * (velocity(p .+ [1, 0]).x - velocity(p .- [1, 0]).x + velocity(p .+ [0, 1]).y - velocity(p .- [0, 1]).y)
 }
 # the pressure: the divergence convolved across, then down, by the rank-1 kernel
-KERNEL = [0.057610, 0.097961, 0.161440, 0.257644, 0.405773, 0.642708, 0.405773, 0.257644, 0.161440, 0.097961, 0.057610]
+KERNEL: [f32] = [0.057610, 0.097961, 0.161440, 0.257644, 0.405773, 0.642708, 0.405773, 0.257644, 0.161440, 0.097961, 0.057610]
 inside(p) := if p.x >= -0.5 and p.x <= grid.x - 0.5 and p.y >= -0.5 and p.y <= grid.y - 0.5 then 1 else 0
 across(x, y) := {
 	total = 0
@@ -341,8 +341,8 @@ shot(n) := {
 }
 
 if not windowless() {
-	set_system_value("window_width", width)
-	set_system_value("window_height", height)
+	window.width = width
+	window.height = height
 }
 if showing_detail == 1 {
 	paint([detail: octaves])
@@ -358,14 +358,16 @@ if showing_detail == 1 {
 }
 on frame {
 	if not windowless() {
-		name = key_name(system_value("key code pressed"))
-		if name == "f" or name == "F" { mode = 3 - mode }
-		else if name == "1" or name == "t" or name == "T" { mode = 1 }
-		else if name == "2" { mode = 2 }
-		else if name == "Escape" or name == "q" or name == "Q" { exit() }
 		frame_i = frame_i + 1
 		simulate()
 		paint([shade])
 	}
 }
 on click { mode = 3 - mode }
+on ESC { exit }
+on key {
+	if key == Key.q or key == "Q" { exit }
+	else if key == Key.f or key == "F" { mode = 3 - mode }
+	else if key == Key.digit1 or key == Key.t or key == "T" { mode = 1 }
+	else if key == Key.digit2 { mode = 2 }
+}
