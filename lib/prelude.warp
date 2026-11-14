@@ -847,7 +847,11 @@ parts_within(value: any): list := {
 }
 // what `value find pattern` gives each match: the one name's value, the part itself, or the map of the names
 found_as(part: any, bound: map, names: list): any := if #names == 1 then bound[names#1] else if #names == 0 then part else bound
-find_matches(value: any, pattern: any): list := {
+// `x replace data($a * 1) with data($a + 10)`: a pattern or template written as code already is that code, not code
+// quoting it (the phrase quotes what it is given)
+written_code(given: any): any := if bracket_of(given) == "(" and count(given) == 2 and is_type(given#1, "symbol") and name_of(given#1) == "data" then given#2 else given
+find_matches(value: any, given: any): list := {
+	pattern = written_code(given)
 	names = pattern_names(pattern)
 	found = []
 	for part in parts_within(value) {
@@ -858,7 +862,9 @@ find_matches(value: any, pattern: any): list := {
 }
 // `value replace pattern with template`: the items, fields and code parts replaced first (`n * 1 + k * 1`'s two
 // products), then the value itself where it fits, the template's names its bindings
-replace_matches(value: any, pattern: any, template: any): any := {
+replace_matches(value: any, given: any, written: any): any := {
+	pattern = written_code(given)
+	template = written_code(written)
 	inner = value
 	if is_type(value, "key") { inner = key(replace_matches(key_of(value), pattern, template), op_of(value), replace_matches(value_of(value), pattern, template)) }
 	else if is_type(value, "list") { inner = value.map(item => replace_matches(item, pattern, template)) }
@@ -905,7 +911,12 @@ kept_pattern(value, pattern) := {
 field_key(field: any): any := if is_type(key_of(field), "symbol") then name_of(key_of(field)) else key_of(field)
 // the template with each name it binds put in: `{type: "link", href: src}` a map, `[x, y]` a list
 instantiated(template: any, bound: map): any := {
-	if is_type(template, "symbol") { return if name_of(template) in bound then bound[name_of(template)] else template }
+	// a name or a code hole, `x` or `$x`
+	if is_type(template, "symbol") {
+		name = if name_of(template).starts_with("$") then name_of(template)[1 ..] else name_of(template)
+		return if name in bound then bound[name] else template
+	}
+	if is_type(template, "key") { return key(instantiated(key_of(template), bound), op_of(template), instantiated(value_of(template), bound)) }
 	if bracket_of(template) == "{" {
 		made = {}
 		for i in 0..<#template {
