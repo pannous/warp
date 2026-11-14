@@ -102,31 +102,43 @@ static int posix_rename(const char* from, const char* to) {
 #define open posix_open_path
 // the one link a Windows program can read: Linux's /proc/self/exe, this executable
 static const char SELF_LINK[] = "/proc/self/exe";
+// a path with its links and junctions followed (scoop's apps/<app>/current is one, which WASI does not follow), as
+// POSIX writes it: Windows's final name of the file or folder, without its \\?\ prefix; 0 when it is missing
+static int final_path(const char* path, char* resolved, size_t size) {
+	HANDLE file = CreateFileA(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING,
+		FILE_FLAG_BACKUP_SEMANTICS, NULL);
+	if (file == INVALID_HANDLE_VALUE) return 0;
+	char final[MAX_PATH];
+	DWORD length = GetFinalPathNameByHandleA(file, final, sizeof final, FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+	CloseHandle(file);
+	if (length == 0 || length >= sizeof final) return 0;
+	const char* prefix = "\\\\?\\";
+	snprintf(resolved, size, "%s", strncmp(final, prefix, strlen(prefix)) ? final : final + strlen(prefix));
+	posix_path(resolved);
+	return 1;
+}
 static ssize_t posix_readlink(const char* path, char* buffer, size_t size) {
 	if (strcmp(path, SELF_LINK)) {
 		errno = EINVAL;
 		return -1;
 	}
-	DWORD length = GetModuleFileNameA(NULL, buffer, (DWORD)size);
-	if (length == 0 || length >= size) {
+	char module[MAX_PATH];
+	DWORD length = GetModuleFileNameA(NULL, module, sizeof module);
+	if (length == 0 || length >= sizeof module || !final_path(module, buffer, size)) {
 		errno = ENAMETOOLONG;
 		return -1;
 	}
-	buffer[length] = 0;
-	posix_path(buffer);
 	return (ssize_t)strlen(buffer);
 }
 // a path made absolute, NULL for one that names nothing; resolved NULL: a copy the caller frees
 static char* posix_realpath(const char* path, char* resolved) {
 	char buffer[MAX_PATH];
 	path = windows_path(path, buffer);
-	if (GetFileAttributesA(path) == INVALID_FILE_ATTRIBUTES) {
-		errno = ENOENT;
-		return NULL;
-	}
-	char* full = _fullpath(resolved, path, MAX_PATH);
-	if (full) posix_path(full);
-	return full;
+	char* full = resolved ? resolved : malloc(MAX_PATH);
+	if (full && final_path(path, full, MAX_PATH)) return full;
+	if (!resolved) free(full);
+	errno = ENOENT;
+	return NULL;
 }
 static char* posix_getcwd(char* buffer, size_t size) {
 	char* folder = _getcwd(buffer, (int)size);
@@ -150,6 +162,16 @@ static int posix_setenv(const char* name, const char* value, int overwrite) {
 	return _putenv_s(name, value) ? -1 : 0;
 }
 static int posix_unsetenv(const char* name) { return _putenv_s(name, "") ? -1 : 0; }
+// POSIX's HOME, which a program started outside a POSIX shell (cmd, PowerShell, scoop's shim) lacks: the user's profile
+// folder, written as the layer's paths are
+__attribute__((constructor)) static void posix_home(void) {
+	const char* profile = getenv("USERPROFILE");
+	if (getenv("HOME") || !profile) return;
+	char home[MAX_PATH];
+	snprintf(home, sizeof home, "%s", profile);
+	posix_path(home);
+	posix_setenv("HOME", home, 0);
+}
 // POSIX's 48-bit generator, its numbers the same as on macOS and Linux for a seed
 static uint64_t random48 = 0x1234ABCD330EULL;
 enum { RANDOM48_BITS = 48 };

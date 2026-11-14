@@ -17,8 +17,11 @@ pattern; Wasp (C++) has its own tap pannous/homebrew-wasp).
   asks the system): paths as Git Bash writes them (`D:\a` is `/d/a`), each drive preopened for the modules under
   that name, sh lines by the sh on PATH, commands by posix_spawnp over CreateProcess. The job also runs a `warp test`
   file (no fork there: each case is this warp spawned anew) and `warp build native` of a sample (build.warp's
-  NATIVE_SYSTEMS: clang, exported symbols, the stack, no rpath). Still missing: CRLF sources (card crlf-line-endings),
-  window, sound and GPU, the archive and a scoop or winget manifest.
+  NATIVE_SYSTEMS: clang, exported symbols, the stack, no rpath, .exe). Its release folder (native_dist.sh with
+  lib/warp.exe) is the zip warp-<tag>-x86_64-pc-windows-gnu.zip, and packaging/scoop/warp.json filled with its version
+  and sha256 is uploaded beside it: `scoop install https://github.com/pannous/warp/releases/latest/download/warp.json`
+  (the job installs it so and runs hello from PowerShell, HOME unset: windows.c takes USERPROFILE). Still missing: CRLF
+  sources (card crlf-line-endings), window, sound and GPU, a winget manifest.
 - PyPI, .deb/.rpm (license fields `AGPL-3.0-or-later AND MIT`: the compiler AGPL, warp-runtime MIT). Both repackage the release tarballs, jobs `packages`, `pypi`
   of release.yml after `binaries`; `gh workflow run release.yml -f tag=v<version> -f repackage=true` reruns only them
   from the existing tarballs (their sha256 stay, so the formula stays valid).

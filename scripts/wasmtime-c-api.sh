@@ -99,13 +99,16 @@ gpu_built=$(gpu_release)
 
 # each library moved into place whole: a run loading it meanwhile meets the old one or the new one
 installed() {
-  built=$1 folder=$2 name=$(basename "$1")
+  built=$1 folder=$2 name=${3:-$(basename "$1")}
   cmp -s "$built" "$folder/$name" && return
   cp "$built" "$folder/$name.new" && mv -f "$folder/$name.new" "$folder/$name"
   echo "wasmtime-c-api: $folder/$name"
 }
 for folder in "$@"; do
   installed "$CARGO_TARGET_DIR/release/$wasmtime_library" "$folder"
+  # (Windows links a DLL through its import library, which -lwarp_wasmtime finds by MinGW's name for it)
+  import_library=$CARGO_TARGET_DIR/release/$wasmtime_library.lib
+  if [ -f "$import_library" ]; then installed "$import_library" "$folder" "lib$wasmtime_library.a"; fi
   # (a platform wgpu-native ships no release for gets none: its programs paint on the CPU)
   if [ -n "$gpu_built" ]; then installed "$gpu_built" "$folder"; fi
 done
