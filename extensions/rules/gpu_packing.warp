@@ -88,8 +88,8 @@ gpu_creating(v: Node): bool := gpu_zeros_count(v) != ø or gpu_comprehension(v) 
 gpu_zeros_count(v: Node): Node := if is_key(v, Op.Hash) and key_of(v) is symbol and name_of(key_of(v)) in ["float", "int"] then value_of(v) else ø
 gpu_comprehension(v: Node): bool := is_group(v) and bracket_of(v) == "[" and #v == 2 and is_group(v#2) and #(v#2) == 5 and v#2#1 is symbol and name_of(v#2#1) == "for"
 gpu_literal(v: Node): bool := (is_group(v) and bracket_of(v) == "[" and not gpu_comprehension(v)) or is_empty_list(v)
-# `[]`, the empty list a growth starts from, which the rules hold as no group
-is_empty_list(v: Node): bool := as_code(v) == "[]"
+# `[]`, the empty list a growth starts from, which the lowered program holds as ø
+is_empty_list(v: Node): bool := v == ø or v == Node.Empty or as_code(v) == "[]"
 # the creating form written to make the GPU list itself (any other value copied into one, gpu_list_of): `float[n]` its zeros, a literal its items written into them
 # one by one, a comprehension each item as it is computed, counted by a first loop (`#(0..n)` makes the range a list)
 # the cells a GPU list holds, `xs: [i32] = …` (extensions/gpu_lists/gpu_lists.warp GpuCell): f32 unless the program says so
