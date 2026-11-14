@@ -7,3 +7,5 @@
 # a pixel without an alpha byte, rgb(…), is opaque
 'use image; p = image(1, 1, (x, y) => rgb(0, 0, 255)); s = shader { @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(textureSampleLevel(values.p, nearest, vec2f(0.5), 0.0).a, 0.0, 0.0, 1.0); } }; gpu_render(s, 1, 1, {p: p})'	[4294901760]	needs: gpu
 'use image; p = image(1, 1, red); s = shader { @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return textureSampleLevel(values.p, trilinear, vec2f(0.5), 0.0); } }; gpu_render(s, 1, 1, {p: p})'	error	needs: gpu
+# a pixel written after a paint shows at the next: the picture is never an old one (interviewer 11-14)
+'use image; p = image(1, 1, (x, y) => red); toy = shader { @compute @workgroup_size(16, 16) fn main_image(@builtin(global_invocation_id) id: vec3u) { textureStore(screen, id.xy, textureSampleLevel(channel0, nearest, vec2f(0.5), 0.0)); } }; gpu_render(toy, 1, 1, {channel0: p}); p.pixels[0] = blue; gpu_render(toy, 1, 1, {channel0: p})'	[4278190335]	needs: gpu
