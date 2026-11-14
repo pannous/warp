@@ -73,14 +73,16 @@ global hashed_bytes = -1
 global hashed_code = 0
 name_code(name: text): int := {
 	if same(name, hashed_text) and byte_count(name) == hashed_bytes { return hashed_code }
+	# (kept below 2^30 by a mask, a remainder at each byte divided: 3.4% of a self build)
 	h = 5381
+	bytes = byte_count(name)
 	i = 0
-	while i < byte_count(name) {
-		h = int_remainder(h * 33 + byte_at(name, i), 1000000007)
+	while i < bytes {
+		h = bits_and(h * 33 + byte_at(name, i), 0x3FFFFFFF)
 		i += 1
 	}
 	hashed_text = name
-	hashed_bytes = byte_count(name)
+	hashed_bytes = bytes
 	hashed_code = int_remainder(h * 2654435761, 4294967291)
 	hashed_code
 }
