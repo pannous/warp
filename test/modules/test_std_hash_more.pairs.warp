@@ -21,3 +21,6 @@
 'use hash; hmac("Jefe", "what do ya want for nothing?", md5)'	"750c783e6ab0b503eaa86e310a5db738"
 'use hash; hmac([11 for i in 1 to 20], "Hi There", sha1)'	"b617318655057264e28bc0b6fb378c8ef146be00"
 'use hash; hmac("Jefe", "what do ya want for nothing?", sha1)'	"effcdf6ae5eb2fa2d27416d5f184df9c259a7c79"
+
+# bytes_list_longer_than_shown: a list of 100000 bytes, too long to hand over as text, digests as those bytes do
+'use hash; sha256([i % 256 for i in 0 ..< 100000])'	"db8f1d69251d95e2c88268d3c540533cc5182e0e33065a6f3f322f606a574489"

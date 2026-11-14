@@ -193,9 +193,12 @@ lambda_arguments(call: Node, names: map, called: map, receivers: int): Node := {
 }
 lambda_argument(argument: Node, names: map, count: int?): Node := if argument is symbol and names.has(name_of(argument)) and count != ø then lambda_calling(name_of(argument), count) else argument
 lambda_calling(name: text, count: int): Node := {
-	parameters = (1 to count).map(index => symbol("argument" + name_joiner + "${index}"))
-	Key(if count == 1 then parameters#1 else List(parameters, Bracket.Round, Separator.Comma), Op.Arrow, call_of(name, parameters))
+	parameters = written_arguments(count)
+	lambda_over(parameters, call_of(name, parameters))
 }
+# the compiler's own parameter names of a lambda it writes, `argument·1` …: no program's name
+written_arguments(count: int): list := (1 to count).map(index => symbol("argument" + name_joiner + "${index}"))
+lambda_over(parameters: list, body: Node): Node := Key(if #parameters == 1 then parameters#1 else List(parameters, Bracket.Round, Separator.Comma), Op.Arrow, body)
 # how many arguments the callee calls its parameter at `index` with: its body's calls (called_parameters), or the
 # parameter's function type, `f: (any) -> any` of the library's map
 passed_count(callee: text, index: int, called: map): int? := called.get(parameter_key(callee, index)) ?? declared_arity(unaliased(callee), index)

@@ -35,6 +35,20 @@ const guestItems = (program, list) => Array.from({ length: guestCount(program, l
 // the first `count` items of a list of Ints, as numbers
 const guestInts = (program, list, count = guestCount(program, list)) =>
 	Array.from({ length: count }, (_, index) => Number(program.int_item_at(list, BigInt(index + 1))));
+// the first `count` items of a list as 32-bit ints (Int32Array), read a chunk at a time by the module's `word`: pixels_at
+// (paint's pixels, any int item), int32s_at (plain ints of 32 bits only, else undefined): one call a chunk, not one an
+// item (card host-byte: a sha256 of 3 MB of bytes took 8 s), as core/native/driver.warp int_words reads them
+const INT_CHUNK = 16372; // core/runtime/show.warp pixel_chunk(), as core/native/driver.warp PIXEL_CHUNK
+function guestInt32s(program, list, count, word) {
+	const words = new Int32Array(count);
+	for (let from = 0; from < count; from += INT_CHUNK) {
+		const chunk = Math.min(INT_CHUNK, count - from);
+		const address = program[word](list, BigInt(from + 1), BigInt(chunk));
+		if (address < 0n) return undefined;
+		words.set(new Int32Array(program.memory.buffer.slice(Number(address), Number(address) + 4 * chunk)), from);
+	}
+	return words;
+}
 // a list of numbers, as floats
 const guestFloats = (program, list) =>
 	Array.from({ length: guestCount(program, list) }, (_, index) => program.float_item_at(list, BigInt(index + 1)));
@@ -63,8 +77,11 @@ function guestPlain(program, value) {
 	if (isGuestText(program, value)) return guestText(program, value);
 	const shown = shownText(program, value);
 	if (shown !== undefined) return plainOfShown(shown);
-	// too long to show: a map an object of its entries, as plainOfShown reads a shown one (paint's values of a few
-	// thousand vectors, samples/graphics/gaussian_splats.warp), any other list its items
+	// too long to show: a list of plain ints its numbers at once (a file's bytes), a map an object of its entries, as
+	// plainOfShown reads a shown one (paint's values of a few thousand vectors, samples/graphics/gaussian_splats.warp),
+	// any other list its items
+	const ints = program.int32s_at && guestInt32s(program, value, guestCount(program, value), "int32s_at");
+	if (ints) return Array.from(ints);
 	const entries = guestEntries(program, value);
 	return entries ? Object.fromEntries(entries.map(([name, item]) => [name, guestPlain(program, item)])) : guestItems(program, value).map(item => guestPlain(program, item));
 }
