@@ -259,7 +259,9 @@ code_kept() { mkdir -p "$store/code" && ln -sfn "../$hash" "$store/code/$code_ha
 # runtime step itself ("extended list unlisted", main 2026-11-08 06:34-07:29). Before the steps it keeps those of the
 # newest known set, <entry> (the reused compiler's, else main's); the modules step writes every standard module, the
 # library index and the sugar's rules anew, and after it lib/modules keeps only what it wrote, before publishing
-modules_marked() { echo "$compilers/modules-step-$$"; }
+# (dotted: lib/'s walk, library.warp library_texts, takes a name without a dot for a folder, and its failed listing hid
+# a module's trap, card wasm-trap-logging)
+modules_marked() { echo "$compilers/.modules-step-$$"; }
 modules_step_starts() {
 	mkdir -p "$compilers/modules"
 	[ -d "$1/modules" ] && ls "$1/modules" | modules_kept_only "$compilers/modules"

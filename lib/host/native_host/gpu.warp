@@ -528,9 +528,9 @@ member_laid_out(layout: Layout, name: text, value: any): text := {
 		return ""
 	}
 	if value is list {
-		# a GPU list [f32] of a vec4f or more, or one [vec4], is already the storage array's bytes, its tail padded to a
-		# whole vec4f (storage_bytes)
-		if gpu_list_place(value) >= 0 and GPU_CELLS[gpu_list_cell(value)] in VEC4F_CELLS and (#value >= VECTOR_FLOATS or gpu_list_cell(value) > 0) {
+		# a GPU list [f32] longer than a vec4f, or one [vec4], is already the storage array's bytes, its tail padded to a
+		# whole vec4f (storage_bytes); a shorter one is a uniform, as a list of as many numbers is
+		if gpu_list_place(value) >= 0 and GPU_CELLS[gpu_list_cell(value)] in VEC4F_CELLS and (#value > VECTOR_FLOATS or gpu_list_cell(value) > 0) {
 			return array_laid(layout, name, value)
 		}
 		# (any other GPU list read once as a for reads it: it takes no list word)
