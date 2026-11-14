@@ -9,11 +9,11 @@ opaque_word = HiddenWord.ViewOpaque as text
 opaque_symbol = symbol(opaque_word)
 # a time literal as the parser views it, ["data", "2024-02-29"]; the prelude word its fields are read with
 # (extensions/time_values.warp time_field)
-is_time_view(n: Node): bool := n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "data"
+is_time_view(n: Node) as bool := n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "data"
 time_field_word = "time_field_of"
 # a number literal past int64 or past 18 places as the parser views it, ["number", "100000000000000000000"] (parser.warp
 # whole_number, decimal_value): a number to the rules all the same
-is_big_number_view(n: Node): bool := n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "number"
+is_big_number_view(n: Node) as bool := n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "number"
 # `+ - *` of a run-time time: lib/time.warp's word (extensions/time_values.warp time_operation_call)
 time_operation_word = "time_operation"
 # what an operand of those is before its parts are read: a time, or a quantity lib/units moves it by (`t + 1 h`)
@@ -31,31 +31,31 @@ time_comparison_symbols = ["==", "!=", "<", ">", "<=", ">="]
 # the arm of a match any value takes, `_: …`
 other_arm = "_"
 
-kind_of(view: View): text := if view is list and #view > 0 then view#1 else ""
+kind_of(view: View) as text := if view is list and #view > 0 then view#1 else ""
 # a group, whatever its bracket: `{…}` deeper in a tree is a map at run time, `is list` holds only for the others
-is_group(n: Node): bool := bracket_of(n) != ø
+is_group(n: Node) as bool := bracket_of(n) != ø
 # the separators of a group of statements, `a; b` and lines
 statement_separators = [";", "\n"]
-is_curly_group(n: Node): bool := is_group(n) and bracket_of(n) == "{"
+is_curly_group(n: Node) as bool := is_group(n) and bracket_of(n) == "{"
 # [word, block] of a word keying a block, `div{…}`, or written before it, `div {…}` (one form, as `Person { … }` is
 # the class's); [] of other code
-tag_parts(n: Node): list := {
+tag_parts(n: Node) as list := {
 	parts = if is_key(n, Op.Colon) or is_key(n, Op.None) then [key_of(n), value_of(n)] else if is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n == 2 then [n#1, n#2] else []
 	if #parts == 2 and parts#1 is symbol and is_curly_group(parts#2) then parts else []
 }
 # a key of that operator, `is_key(n, Op.Colon)` of `a: 1`
-is_key(n: Node, op: Op): bool := match n {
+is_key(n: Node, op: Op) as bool := match n {
 	Key(_, written, _): written == op
 	_: no
 }
 # every value `name = v` or `name: T = v` assigns in n, outside the definitions and lambdas inside
-assigned_values(n: Node, name: text): list := {
+assigned_values(n: Node, name: text) as list := {
 	if is_key(n, Op.Define) or is_key(n, Op.Arrow) { return [] }
 	inner = parts_of(n).flat_map(part => assigned_values(part, name))
 	if is_key(n, Op.Assign) and assigned_variable(key_of(n)) == symbol(name) { return [value_of(n)] + inner }
 	inner
 }
-assigned_variable(target: Node): Node := match target {
+assigned_variable(target: Node) as Node := match target {
 	Key(variable, Op.Colon, _): variable
 	_: target
 }
@@ -77,21 +77,21 @@ GLUED_FACTOR_MARK = "glued_factor"
 passes_read_marks = [subscript_offset_mark, GLUED_FACTOR_MARK]
 
 # the view of `{}`, `[]`, `()`: no items
-is_empty_group(view: View): bool := kind_of(view) == "list" and #view == 3
+is_empty_group(view: View) as bool := kind_of(view) == "list" and #view == 3
 # the bracket of an empty map `{}` or list `[]` as plain_node keeps it, behind the opaque word; "" for any other node
-empty_group_bracket(n: Node): text := match n {
+empty_group_bracket(n: Node) as text := match n {
 	Key(left, op, right): { if left == opaque_symbol and is_empty_group(right) then right#2 else "" }
 	_: ""
 }
-is_empty_map(n: Node): bool := empty_group_bracket(n) == "{"
-is_empty_list(n: Node): bool := empty_group_bracket(n) == "["
+is_empty_map(n: Node) as bool := empty_group_bracket(n) == "{"
+is_empty_list(n: Node) as bool := empty_group_bracket(n) == "["
 
 # the node parser.warp builds as plain gives its view: no attribute layers but the mark of `x!`, an empty group as ø but
 # the empty map `{}` (number_keys.warp keys a variable that starts as one by texts) and the empty list `[]`,
 # a character as a text, an opaque type or error whole
 # the node made at the place of `at`, where the user wrote the code it stands for (a rewritten form, a rebuilt group);
 # ø stays ø, as a rule's `() => $e` makes its `()`
-placed(made: Node, at: Node): Node := {
+placed(made: Node, at: Node) as Node := {
 	if made === ø { return made }
 	line = line_of(at)
 	column = column_of(at)
@@ -101,15 +101,15 @@ placed(made: Node, at: Node): Node := {
 # n without its attributes, opaque empty groups and characters, keeping the place it was written at: the parser places a
 # call on its group, which a rebuilt group would lose, so a refusal of the call would name the node before it
 # kept: the attributes left in the tree for a later pass to read, the subscript offset of a program's own `xs[i]`
-plain_node(n: Node, kept: list = []): Node := {
+plain_node(n: Node, kept: list = []) as Node := {
 	plain = plain_parts(n, kept)
 	if plain === ø or is_positioned(plain) then plain else placed(plain, n)
 }
 # the attributes the extensions read past plain_node (their rows' attributes), each noting the names it marks:
 # `@primitive add(…) := …` marks add, `@pure f(x) := …` f
-read_attributes(): list := hooks().attributes
+read_attributes() as list := hooks().attributes
 global marked_names = {}
-marked(attribute: any, n: Node): Node := {
+marked(attribute: any, n: Node) as Node := {
 	name = if n is symbol then name_of(n) else if is_group(n) and #n > 0 and n#1 is symbol then name_of(n#1) else ø
 	if attribute in read_attributes() and name != ø { marked_names[attribute] = (marked_names.get(attribute) ?? []) + [name] }
 	n
@@ -118,12 +118,12 @@ function_reference_mark = "function_reference"
 # `(function f)`: the function named alone in a group, its value as `function f` is (parser.warp function_reference),
 # never the call `(f)` the group would make without its mark
 # (a rule's `(function $d)` keeps its group: its hole alone would match anything)
-is_referenced_alone(n: Node): bool := {
+is_referenced_alone(n: Node) as bool := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n == 1 and type(n#1) is key and key_of(n#1) == symbol(attribute_word)) { return no }
 	marking = value_of(n#1)
 	marking#1 == function_reference_mark and marking#3 is symbol and not name_of(marking#3).starts_with("$")
 }
-plain_parts(n: Node, kept: list): Node := match n {
+plain_parts(n: Node, kept: list) as Node := match n {
 	Key(left, op, right): {
 		if left == symbol(attribute_word) {
 			if right#1 in kept { return n }
@@ -139,11 +139,11 @@ plain_parts(n: Node, kept: list): Node := match n {
 }
 
 # the node a view stands for
-node_of(view: View): Node := node_from(view, no)
+node_of(view: View) as Node := node_from(view, no)
 # the node of a view handed to a pass stage: the empty map `{}` behind the opaque word, as plain_node keeps it for
 # number_keys
-stage_node(view: View): Node := node_from(view, yes)
-node_from(view: View, keeps_maps: bool): Node := {
+stage_node(view: View) as Node := node_from(view, yes)
+node_from(view: View, keeps_maps: bool) as Node := {
 	kind = kind_of(view)
 	part = inner => node_from(inner, keeps_maps)
 	if kind == "symbol" { return symbol(view#2) }
@@ -161,10 +161,10 @@ node_from(view: View, keeps_maps: bool): Node := {
 }
 
 # the head of a type declaration, `type P` of `type P = int -> bool`, as the parser views it
-is_type_view(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "type"
+is_type_view(n: Node) as bool := is_key(n, Op.Colon) and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "type"
 # the view of a node (`[]` equals ø but is not ø itself: the empty list, square bracketed as parser.warp's grouped
 # builds it)
-view_of(n: Node): View := if n == ø and n !== ø then ["list", "[", ""] else match n {
+view_of(n: Node) as View := if n == ø and n !== ø then ["list", "[", ""] else match n {
 	Key(left, op, right): key_view(left, op as text, right)
 	Symbol(name): ["symbol", name]
 	Char(c): ["char", c]
@@ -174,27 +174,27 @@ view_of(n: Node): View := if n == ø and n !== ø then ["list", "[", ""] else ma
 }
 
 # the members of a union type, `list or text`, `int | text` (decision union-or); a single type is its own one member
-union_members(type: text): list := type.split(" or ").flat_map(part => part.split("|")).map(member => member.trim())
-is_union(type: text): bool := #union_members(type) > 1
+union_members(type: text) as list := type.split(" or ").flat_map(part => part.split("|")).map(member => member.trim())
+is_union(type: text) as bool := #union_members(type) > 1
 # a union type as written, `int or text` (`int | text` parses so too), its members type words; ø for any other node
-union_spelling(type: Node): text? := {
+union_spelling(type: Node) as text? := {
 	if not (is_key(type, Op.Or) or is_key(type, Op.BitOr)) { return ø }
 	members = [key_of(type), value_of(type)].map(member => if member is symbol then name_of(member) else union_spelling(member))
 	if members.any(member => member == ø) then ø else members.join(" or ")
 }
 # the name of the variant of a word overloaded by arity that takes `total` arguments, `sum·1`, any number from there
 # on `sum·more` (arity_overloads.warp; the emitter's method_function calls it by it)
-overload_variant_name(name: text, total: int): text := name + "·" + (if total < 0 then "more" else "" + total)
+overload_variant_name(name: text, total: int) as text := name + "·" + (if total < 0 then "more" else "" + total)
 # the name of a type declaration's view: `P` of ["symbol", "P"], under the attribute layers of an enum's cases or a
 # base class
-declared_type_name(name: any): text? := {
+declared_type_name(name: any) as text? := {
 	if name#1 == "symbol" { return name#2 }
 	if name#1 == "attribute" { return declared_type_name(name#4) }
 	ø
 }
 
 # the view of a key: an opaque view and an attribute layer as they were written
-key_view(left: Node, op: text, right: Node): View := {
+key_view(left: Node, op: text, right: Node) as View := {
 	if left == opaque_symbol { return right }
 	if left == symbol(attribute_word) { return ["attribute", right#1, view_of(right#2), view_of(right#3)] }
 	["key", op, view_of(left), view_of(right)]
@@ -203,7 +203,7 @@ key_view(left: Node, op: text, right: Node): View := {
 # whether a and b have the same view, compared as they are walked, no view built (the sugar passes ask it of every
 # rule that fired, card sugar-rule-passes); the forms whose view is not their shape, `[]`, an opaque or attribute key,
 # by their views
-same_view(a: Node, b: Node): bool := {
+same_view(a: Node, b: Node) as bool := {
 	if viewed_as_other(a) or viewed_as_other(b) { return view_of(a) == view_of(b) }
 	match a {
 		Key(left, op, right): same_key_view(left, op, right, b)
@@ -212,65 +212,65 @@ same_view(a: Node, b: Node): bool := {
 		_: not (b is key or b is symbol or is_group(b)) and view_of(a) == view_of(b)
 	}
 }
-same_key_view(left: Node, op: Op, right: Node, b: Node): bool := match b {
+same_key_view(left: Node, op: Op, right: Node, b: Node) as bool := match b {
 	Key(other_left, other_op, other_right): op == other_op and same_view(left, other_left) and same_view(right, other_right)
 	_: no
 }
-same_list_view(items: list, bracket: Bracket, separator: Separator, b: Node): bool := match b {
+same_list_view(items: list, bracket: Bracket, separator: Separator, b: Node) as bool := match b {
 	List(others, other_bracket, other_separator): bracket == other_bracket and separator == other_separator and same_items_view(items, others)
 	_: no
 }
-same_items_view(items: list, others: list): bool := {
+same_items_view(items: list, others: list) as bool := {
 	if #items != #others { return no }
 	for i in 0 ..< #items { if not same_view(items[i], others[i]) { return no } }
 	yes
 }
-viewed_as_other(n: Node): bool := (n == ø and n !== ø) or (n is key and (key_of(n) == opaque_symbol or key_of(n) == symbol(attribute_word)))
+viewed_as_other(n: Node) as bool := (n == ø and n !== ø) or (n is key and (key_of(n) == opaque_symbol or key_of(n) == symbol(attribute_word)))
 
 # one node of several juxtaposed words: `upper w`
-words_phrase(words: list): Node := if #words == 1 then words#1 else List(words, Bracket.None, Separator.Space)
+words_phrase(words: list) as Node := if #words == 1 then words#1 else List(words, Bracket.None, Separator.Space)
 
 # a group of the items, bracketed and separated as n
-group_like(n: Node, items: list): Node := match n {
+group_like(n: Node, items: list) as Node := match n {
 	List(_, bracket, separator): List(items, bracket, separator)
 	_: separated(bracketed(items, bracket_of(n)), separator_of(n))
 }
 
 # the symbol `word`
-is_word(n: Node, word: text): bool := n == symbol(word)
+is_word(n: Node, word: text) as bool := n == symbol(word)
 # `pattern Definition = Key(head, Op.Define, body)`, a named pattern (node_matches.warp)
-is_pattern_definition(n: Node): bool := is_group(n) and #n == 2 and is_word(n#1, "pattern") and is_key(n#2, Op.Assign)
+is_pattern_definition(n: Node) as bool := is_group(n) and #n == 2 and is_word(n#1, "pattern") and is_key(n#2, Op.Assign)
 # the call `name(arguments…)` a pass makes: its name is the word, never a local of the program named so (a local
 # `same = …` beside the `same(op, Op.Ne)` an enum's equality became, card implicit-word-binding)
-call_of(name: text, arguments: list): Node := bracketed([word_named(name)] + arguments, "(")
+call_of(name: text, arguments: list) as Node := bracketed([word_named(name)] + arguments, "(")
 INSERTED_WORD = "word"
-word_named(name: text): Node := with_attribute(symbol(name), symbol(INSERTED_WORD))
-is_inserted_word(n: Node): bool := attributes_of(n).any(attribute => attribute == symbol(INSERTED_WORD))
+word_named(name: text) as Node := with_attribute(symbol(name), symbol(INSERTED_WORD))
+is_inserted_word(n: Node) as bool := attributes_of(n).any(attribute => attribute == symbol(INSERTED_WORD))
 # the statements as a block, `{ a; b }`
-block_of(parts: list): Node := List(parts, Bracket.Curly, Separator.Semicolon)
+block_of(parts: list) as Node := List(parts, Bracket.Curly, Separator.Semicolon)
 
 # the numbers of the names the passes make, counted across all of them
 global names_made = 0
-fresh_number(): int := {
+fresh_number() as int := {
 	names_made += 1
 	names_made
 }
 # `item·3`: a name a pass makes, its role and its number
-fresh_name(role: text, number: int): Node := symbol(role + "·" + number)
+fresh_name(role: text, number: int) as Node := symbol(role + "·" + number)
 
 # a program's statements: a sequence's, by `;` or by lines, else the one statement it is
-is_statement_sequence(program: Node): bool := bracket_of(program) == "" and (separator_of(program) == ";" or separator_of(program) == "\n")
-statements_in(program: Node): list := if is_statement_sequence(program) then items_of(program) else [program]
+is_statement_sequence(program: Node) as bool := bracket_of(program) == "" and (separator_of(program) == ";" or separator_of(program) == "\n")
+statements_in(program: Node) as list := if is_statement_sequence(program) then items_of(program) else [program]
 # the statements of a program, those of its nested sequences among them: a `;` line among lines (`use os; x = 1⏎…`
 # uses os), an included module
-flat_statements(program: Node): list := if is_statement_sequence(program) then items_of(program).flat_map(flat_statements) else [program]
+flat_statements(program: Node) as list := if is_statement_sequence(program) then items_of(program).flat_map(flat_statements) else [program]
 # the program with the statements of its nested sequences in line: `use json; parse(t) := 5⏎use regex` defines parse
 # among its lines, as it would written one a line
-flat_program(program: Node): Node := if statements_in(program).any(is_statement_sequence) then separated(bracketed(flat_statements(program), ""), ";") else program
+flat_program(program: Node) as Node := if statements_in(program).any(is_statement_sequence) then separated(bracketed(flat_statements(program), ""), ";") else program
 
 # a node with f applied to each of its children; n itself when every child came back the very same node, so a pass
 # makes new nodes only on the path from a change to the root (decision shared-subtrees)
-children(n: Node, f: function): Node := match n {
+children(n: Node, f: function) as Node := match n {
 	Key(left, op, right): {
 		if left == opaque_symbol { return n }
 		walked_left = f(left)
@@ -285,23 +285,23 @@ children(n: Node, f: function): Node := match n {
 	_: n
 }
 # whether each item is the very same node as the other's at its place
-same_items(items: list, others: list): bool := {
+same_items(items: list, others: list) as bool := {
 	for i in 0..<#items { if not same(items[i], others[i]) { return no } }
 	yes
 }
 
 # the parts of a node, as `children` walks them: a key's two sides, a group's items; none of an opaque view
-parts_of(n: Node): list := match n {
+parts_of(n: Node) as list := match n {
 	Key(left, op, right): { if left == opaque_symbol then [] else [left, right] }
 	List(items, bracket, separator): items
 	_: []
 }
 # the parts of a node, an opaque view's too: a type's name and body as nodes
-parts_within(n: Node): list := match n {
+parts_within(n: Node) as list := match n {
 	Key(left, op, right): { if left == opaque_symbol then opaque_parts(right) else [left, right] }
 	_: parts_of(n)
 }
-opaque_parts(view: View): list := view.filter(part => part is list).map(node_of)
+opaque_parts(view: View) as list := view.filter(part => part is list).map(node_of)
 
 # `data e`, `print data e`, `f(data e)`: in a line or a call the item after the word is code as written, which no
 # pass rewrites
@@ -311,10 +311,10 @@ quote_symbol = symbol(quote_word)
 spliced_quote_symbol = symbol(HiddenWord.DataSpliced as text)
 # `data e`, glued `data(e)`, and its spliced form: what every pass leaves alone (the code they make:
 # extensions/quotes.warp)
-is_quote(n: Node): bool := (is_spaced(n) or (bracket_of(n) == "(" and separator_of(n) == "")) and #n == 2 and n#1 == quote_symbol
-is_spliced_quote(n: Node): bool := bracket_of(n) == "(" and separator_of(n) == "" and #n == 2 and n#1 == spliced_quote_symbol
-is_spaced(n: Node): bool := bracket_of(n) == "" and separator_of(n) == " "
-def items_walked(items: list, quoting_allowed: bool, f: function): list {
+is_quote(n: Node) as bool := (is_spaced(n) or (bracket_of(n) == "(" and separator_of(n) == "")) and #n == 2 and n#1 == quote_symbol
+is_spliced_quote(n: Node) as bool := bracket_of(n) == "(" and separator_of(n) == "" and #n == 2 and n#1 == spliced_quote_symbol
+is_spaced(n: Node) as bool := bracket_of(n) == "" and separator_of(n) == " "
+def items_walked(items: list, quoting_allowed: bool, f: function) as list {
 	walked = []
 	quoting = no
 	for item in items {
@@ -325,10 +325,10 @@ def items_walked(items: list, quoting_allowed: bool, f: function): list {
 }
 
 # f applied to every node, children first: a pass rewriting the forms it knows and leaving the rest
-bottom_up(n: Node, f: function): Node := f(children(n, x => bottom_up(x, f)))
+bottom_up(n: Node, f: function) as Node := f(children(n, x => bottom_up(x, f)))
 
 # a group's items as a list
-items_of(n: Node): list := {
+items_of(n: Node) as list := {
 	gathered = []
 	for item in n { gathered += [item] }
 	gathered
@@ -339,15 +339,15 @@ items_of(n: Node): list := {
 global said = []
 # whether n has where it was written (`line_of(n)`, `column_of(n)`): a node a pass made has none, and the statement
 # `line = 1` answers `.line` with its value, not a position
-is_positioned(n: Node): bool := line_of(n) != ø
-report(n: T, message: text, preferred: any): T := {
+is_positioned(n: Node) as bool := line_of(n) != ø
+report(n: T, message: text, preferred: any) as T := {
 	held = line_of(n)
 	said += [[if held is int then line_within(held) else held, column_of(n), message, preferred]]
 	n
 }
 # where n was written, [line, column, file] (file: its index in positions.warp source_files): its own position, else
 # its first positioned part's (only atoms carry one), ø for a node a pass made of none
-written_at(n: Node): list? := {
+written_at(n: Node) as list? := {
 	if is_positioned(n) { return [line_within(line_of(n)), column_of(n), file_within(line_of(n))] }
 	for part in parts_of(n) {
 		found = written_at(part)
@@ -357,19 +357,19 @@ written_at(n: Node): list? := {
 }
 # ` at file:line:column` of a place written_at found, the file it names else `file`; ` at line:column` without a
 # file, "" without a place
-place_text(at: list?, file: text): text := {
+place_text(at: list?, file: text) as text := {
 	if not at { return "" }
 	named = if #at > 2 and at#3 > 0 then source_files[at#3] else file
 	" at " + (if named then named + ":" else "") + at#1 + ":" + at#2
 }
 # n with the positions of file 0 in the source file of index `file` instead (positions.warp source_files)
-refiled(n: Node, file: int): Node := {
+refiled(n: Node, file: int) as Node := {
 	moved = children(n, child => refiled(child, file))
 	held = line_of(n)
 	if held is int and file_within(held) == 0 then positioned(moved, file_line(file, held), column_of(n)) else moved
 }
 # whether the symbol `word` occurs anywhere in n, inside an opaque layer too
-mentions(n: Node, word: text): bool := match n {
+mentions(n: Node, word: text) as bool := match n {
 	Symbol(name): name == word
 	Key(left, _, right): { if left == opaque_symbol then view_has(right, part => part == ["symbol", word]) else mentions(left, word) or mentions(right, word) }
 	List(items, _, _): items.any(item => mentions(item, word))
@@ -381,7 +381,7 @@ mentions(n: Node, word: text): bool := match n {
 template_kind = "template"
 
 # the end of the hole whose `{` is before `at`: after its closing `}`
-hole_close(template: text, at: int): int := {
+hole_close(template: text, at: int) as int := {
 	depth = 1
 	while at < #template {
 		if template[at] == '{' { depth += 1 }
@@ -395,10 +395,10 @@ hole_close(template: text, at: int): int := {
 }
 
 # the pieces of a template in order: a literal as its text, a hole as [its code]; an empty literal is none
-template_pieces(template: text): list := holed_pieces(template, no)
+template_pieces(template: text) as list := holed_pieces(template, no)
 
 # the end of the hole whose `$` is at `at`, `at` when none starts there; with bare_names a `$name` is one too
-piece_hole_end(template: text, at: int, bare_names: bool): int := {
+piece_hole_end(template: text, at: int, bare_names: bool) as int := {
 	if template[at] != '$' or at + 1 >= #template { return at }
 	next = template[at + 1]
 	if next == '{' { return hole_close(template, at + 2) }
@@ -410,7 +410,7 @@ piece_hole_end(template: text, at: int, bare_names: bool): int := {
 
 # the pieces of a template as template_pieces; with bare_names a `$name` is a hole too, as sql and sh templates
 # read it (a text's holes need braces, decision D1)
-holed_pieces(template: text, bare_names: bool): list := {
+holed_pieces(template: text, bare_names: bool) as list := {
 	found = []
 	literal = ""
 	at = 0
@@ -436,17 +436,17 @@ holed_pieces(template: text, bare_names: bool): list := {
 }
 
 # the code of each hole of a template the parser keeps whole, `"a ${f(x)} b"` → ["f(x)"]; none for any other node
-template_hole_codes(n: Node): list := if n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == template_kind then template_pieces(value_of(n)#2).filter(piece => piece is list).map(piece => piece#1) else []
+template_hole_codes(n: Node) as list := if n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == template_kind then template_pieces(value_of(n)#2).filter(piece => piece is list).map(piece => piece#1) else []
 
 # whether `found` holds for the code of a hole of a template in n, kept whole in an opaque view (`"caught: \(e)"`)
-has_hole(n: Node, found: function): bool := match n {
+has_hole(n: Node, found: function) as bool := match n {
 	Key(left, _, right): { if left == opaque_symbol then view_has(right, part => kind_of(part) == template_kind and template_pieces(part#2).any(piece => piece is list and found(piece#1))) else has_hole(left, found) or has_hole(right, found) }
 	List(items, _, _): items.any(item => has_hole(item, found))
 	_: no
 }
 
 # whether `found` holds for the view or a part of it
-view_has(view: View, found: function): bool := {
+view_has(view: View, found: function) as bool := {
 	if found(view) { return yes }
 	if view is list {
 		for part in view {
@@ -456,17 +456,17 @@ view_has(view: View, found: function): bool := {
 	no
 }
 # a literal a pattern or a declaration may hold: a number, a text, a bool
-is_literal(n: Node): bool := n is number or n is text or n is bool
+is_literal(n: Node) as bool := n is number or n is text or n is bool
 # the conditions joined by `and`, `a and b and c`
-joined(conditions: list): Node := {
+joined(conditions: list) as Node := {
 	condition = conditions#1
 	for more in conditions[1..] { condition = Key(condition, Op.And, more) }
 	condition
 }
 # the statements as one round group, `(a; b; c)`
-statements(list: list): Node := List(list, Bracket.Round, Separator.Semicolon)
+statements(list: list) as Node := List(list, Bracket.Round, Separator.Semicolon)
 # the first answer of asking each item in turn that is not ø, else ø
-first_answer(items: list, asking: function): any := {
+first_answer(items: list, asking: function) as any := {
 	for item in items {
 		answer = asking(item)
 		if answer != ø { return answer }
@@ -474,9 +474,9 @@ first_answer(items: list, asking: function): any := {
 	ø
 }
 # `if test then value else otherwise`, as a node
-chosen(test: Node, value: Node, otherwise: Node): Node := Key(Key(Key(ø, Op.If, test), Op.Then, value), Op.Else, otherwise)
+chosen(test: Node, value: Node, otherwise: Node) as Node := Key(Key(Key(ø, Op.If, test), Op.Then, value), Op.Else, otherwise)
 # whether no item comes twice
-all_distinct(items: list): bool := {
+all_distinct(items: list) as bool := {
 	seen = []
 	for item in items {
 		if item in seen { return no }
@@ -485,14 +485,14 @@ all_distinct(items: list): bool := {
 	yes
 }
 # the map without the entries of these keys
-without_keys(m: map, names: list): map := {
+without_keys(m: map, names: list) as map := {
 	kept = {}
 	for key in m.keys { if key not in names { kept[key] = m[key] } }
 	kept
 }
 # what reading finds in the tree, by name: reading gives [name, value] of a node it finds, else ø, and a found node
 # is not searched further
-declarations_found(n: Node, reading: function, found: map): map := {
+declarations_found(n: Node, reading: function, found: map) as map := {
 	declared = reading(n)
 	if declared != ø { found[declared#1] = declared#2 } else if is_group(n) { for part in items_of(n) { declarations_found(part, reading, found) } }
 	found

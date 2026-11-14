@@ -19,7 +19,7 @@ TRY_HEAD = "ran·without·error"
 failing_words = ["error"] + raise_words.keys
 # the effect a word has by itself, else ø: FFI of a foreign line's word, Fail of a raise or an Error made, IO of a host
 # or emitter word that does IO
-own_effect(word: text, foreign: map): text? := {
+own_effect(word: text, foreign: map) as text? := {
 	if foreign.has(word) { return "FFI" }
 	if word in failing_words { return "Fail" }
 	if word in emitter_io_words or (host_words().has(word) and word not in pure_host_words) { return "IO" }
@@ -27,7 +27,7 @@ own_effect(word: text, foreign: map): text? := {
 }
 
 # name → the marks the program gives it, of each function it marks
-effect_marks_given(): map := {
+effect_marks_given() as map := {
 	given = {}
 	for mark in EFFECT_MARKS.keys {
 		for name in marked_names.get(mark) ?? [] { if mark not in (given.get(name) ?? []) { given[name] = (given.get(name) ?? []) + [mark] } }
@@ -37,7 +37,7 @@ effect_marks_given(): map := {
 
 # the program as it is, once every marked function has only the effects its marks allow; else refused with the first
 # chain of calls to an effect they leave out
-checked_effects(program: Node): Node := {
+checked_effects(program: Node) as Node := {
 	given = effect_marks_given()
 	if #given == 0 { return program }
 	sources = effect_sources(program)
@@ -50,7 +50,7 @@ checked_effects(program: Node): Node := {
 }
 
 # [name → body of each function the program defines, name → yes of each foreign line's word]
-effect_sources(program: Node): list := {
+effect_sources(program: Node) as list := {
 	bodies = {}
 	foreign = {}
 	for statement in statements_in(program) {
@@ -61,7 +61,7 @@ effect_sources(program: Node): list := {
 }
 # `effects of f`, `f.effects` (card effects-lists): what the function does besides giving its value, ["IO"], [] of a
 # pure one, each effect a chain of its calls reaches
-effects_named(function: Node, program: Node): Node := {
+effects_named(function: Node, program: Node) as Node := {
 	sources = effect_sources(program)
 	found = []
 	chain = effect_chain(name_of(function), sources#1, sources#2, found, {})
@@ -73,7 +73,7 @@ effects_named(function: Node, program: Node): Node := {
 }
 
 # the calls from word to an effect not allowed, the effect last: [shout, print, "IO"]; else ø
-effect_chain(word: text, bodies: map, foreign: map, allowed: list, seen: map): list? := {
+effect_chain(word: text, bodies: map, foreign: map, allowed: list, seen: map) as list? := {
 	effect = own_effect(word, foreign)
 	if effect != ø { return if effect in allowed then ø else [word, effect] }
 	if not bodies.has(word) or seen.has(word) { return ø }
@@ -113,7 +113,7 @@ PURE_PREDICATE = "pure?"
 PURELY_WORD = "purely"
 
 # the program without its `purely` words, each definition they lead marked pure, its predicates answered
-purity_read(program: Node): Node := {
+purity_read(program: Node) as Node := {
 	statements = statements_in(program)
 	if not statements.any(statement => purity_lead(statement) == PURELY_WORD) and not mentions_predicate(program) { return program }
 	bodies = function_bodies(statements.map(statement => if purity_lead(statement) == PURELY_WORD then without_first_word(statement) else statement))
@@ -121,7 +121,7 @@ purity_read(program: Node): Node := {
 	bottom_up(plain, n => predicate_answered(n, bodies))
 }
 # the definition `purely` leads, its name marked pure
-purely_marked(statement: Node): Node := {
+purely_marked(statement: Node) as Node := {
 	definition = without_first_word(statement)
 	# (a spaced head, `purely square x = x * x`, is no definition yet where purely is read: its first word names it)
 	name = declared_name(definition) ?? (if purity_lead(definition) != "" then purity_lead(definition) else ø)
@@ -130,28 +130,28 @@ purely_marked(statement: Node): Node := {
 	definition
 }
 # the word n starts with, its first part's first part: `purely` of `purely square x = …`, else ""
-purity_lead(n: Node): text := {
+purity_lead(n: Node) as text := {
 	if n is symbol { return name_of(n) }
 	if n is key { return purity_lead(key_of(n)) }
 	if is_group(n) and #n > 0 { return purity_lead(n#1) }
 	""
 }
 # n without the word it starts with
-without_first_word(n: Node): Node := {
+without_first_word(n: Node) as Node := {
 	if n is key { return Key(without_first_word(key_of(n)), op_of(n), value_of(n)) }
 	if not is_group(n) or #n == 0 { return n }
 	if n#1 is symbol { return if #n == 2 then n#2 else group_like(n, items_of(n)[1..]) }
 	group_like(n, [without_first_word(n#1)] + items_of(n)[1..])
 }
-mentions_predicate(program: Node): bool := nodes_in(program).any(n => n is symbol and (name_of(n) == PURE_PREDICATE or PURITY_PREDICATES.has(name_of(n))))
+mentions_predicate(program: Node) as bool := nodes_in(program).any(n => n is symbol and (name_of(n) == PURE_PREDICATE or PURITY_PREDICATES.has(name_of(n))))
 # name → body of each function the statements define
-function_bodies(statements: list): map := {
+function_bodies(statements: list) as map := {
 	bodies = {}
 	for statement in statements { if is_function_definition(statement) { bodies["${declared_name(statement)}"] = value_of(statement) } }
 	bodies
 }
 # `f.pure?` as yes or no, of a function the program defines; any other node as it is
-predicate_answered(n: Node, bodies: map): Node := {
+predicate_answered(n: Node, bodies: map) as Node := {
 	if not (is_key(n, Op.Dot) and key_of(n) is symbol and value_of(n) is symbol) { return n }
 	name = name_of(key_of(n))
 	predicate = name_of(value_of(n))
@@ -161,9 +161,9 @@ predicate_answered(n: Node, bodies: map): Node := {
 	n
 }
 # whether the function reaches no effect, no input, output or randomness
-is_pure(name: text, bodies: map): bool := effect_chain(name, bodies, {}, [], {}) == ø and not PURITY_PREDICATES.values.any(words => reaches_word(name, bodies, words, {}))
+is_pure(name: text, bodies: map) as bool := effect_chain(name, bodies, {}, [], {}) == ø and not PURITY_PREDICATES.values.any(words => reaches_word(name, bodies, words, {}))
 # whether the calls from word reach one of the words
-reaches_word(word: text, bodies: map, words: list, seen: map): bool := {
+reaches_word(word: text, bodies: map, words: list, seen: map) as bool := {
 	if word in words { return yes }
 	if not bodies.has(word) or seen.has(word) { return no }
 	seen[word] = yes

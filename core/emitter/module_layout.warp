@@ -1,9 +1,9 @@
 # The module's sections in order (emitter.warp's part): types, imports, functions, memory, globals, exports, code, data
 # and the names section
 ## the module
-def value_type(kind: ValueKind): list { if is_reference(kind) then gc_bytes(reference_of(kind)) else [number_byte(kind)] }
+def value_type(kind: ValueKind) as list { if is_reference(kind) then gc_bytes(reference_of(kind)) else [number_byte(kind)] }
 # a global's first value, before its declaration sets it
-def zero_code_of(kind: ValueKind): list {
+def zero_code_of(kind: ValueKind) as list {
 	if kind == ValueKind.Int { return [op.i64_const, 0] }
 	if kind == ValueKind.Float { return [op.f64_const] + le64(0) }
 	# a node global holds 0 until assigned, as `global x; x` gives (struct.new is a constant expression)
@@ -13,14 +13,14 @@ def zero_code_of(kind: ValueKind): list {
 	[op.i32_const, 0]
 }
 # (a first value names only the fixed GC types: no relocation, its marks dropped)
-def global_entry(name: text): list { value_type(module.globals[name]#2) + [mutable] + (module.global_firsts.get(name) ?? zero_code_of(module.globals[name]#2)).filter(byte => byte >= 0) + [op.end] }
-def function_type(f: Function): list { [function_type_byte] + vector(f.kinds.map(value_type)) + (if f.result == no_kind then [0] else [1] + returned_type(f)) }
+def global_entry(name: text) as list { value_type(module.globals[name]#2) + [mutable] + (module.global_firsts.get(name) ?? zero_code_of(module.globals[name]#2)).filter(byte => byte >= 0) + [op.end] }
+def function_type(f: Function) as list { [function_type_byte] + vector(f.kinds.map(value_type)) + (if f.result == no_kind then [0] else [1] + returned_type(f)) }
 # a word called by reference (a closure's entry, a class word) gives an anyref, as the closure call types do
 # (emitter.warp gc_types): a class word's place or set is a small number, an i31
-def returned_type(f: Function): list := if is_referenced_word(f.name) then [any_reference] else value_type(f.result)
+def returned_type(f: Function) as list := if is_referenced_word(f.name) then [any_reference] else value_type(f.result)
 # a function's entry of the code section, which starts at the offset `at` of the section's content: each relocatable
 # operand noted in module.relocations as [offset, kind, space], its mark dropped
-def function_body(f: Function, at: int): list {
+def function_body(f: Function, at: int) as list {
 	locals = vector(f.locals.map(k => [1] + value_type(k)))
 	code = f.code + [op.end]
 	if not relocates() { return uleb(#locals + #code) + locals + code }
@@ -33,24 +33,24 @@ def function_body(f: Function, at: int): list {
 	size + locals + unmarked
 }
 # the code section's content: the functions' entries, each knowing where it starts
-def code_entries(functions: list): list {
+def code_entries(functions: list) as list {
 	content = uleb(#functions)
 	for f in functions { content += function_body(f, #content) }
 	content
 }
-def index_name(i: int, name: text): list { uleb(i) + name_bytes(name) }
-def name_map(names: list): list { vector(range_list(#names).map(i => index_name(i, names#(i + 1)))) }
+def index_name(i: int, name: text) as list { uleb(i) + name_bytes(name) }
+def name_map(names: list) as list { vector(range_list(#names).map(i => index_name(i, names#(i + 1)))) }
 # the globals' names for debuggers, each by its index, a literal's left out: its name only links (the exports), and
 # warp.wasm's 3,700 literal names were 110 KB, more than their globals saved in code
-def global_names(names: list): list := names.filter(name => not name.starts_with(LITERAL_GLOBAL_PREFIX)).map(name => index_name(module.globals[name]#1, name))
-def local_name_map(f: Function): list { uleb(f.index) + name_map(f.local_names) }
-def range_list(n: int): list {
+def global_names(names: list) as list := names.filter(name => not name.starts_with(LITERAL_GLOBAL_PREFIX)).map(name => index_name(module.globals[name]#1, name))
+def local_name_map(f: Function) as list { uleb(f.index) + name_map(f.local_names) }
+def range_list(n: int) as list {
 	out = []
 	for i in 0..n { out += [i] }
 	out
 }
-def subsection(id: int, content: list): list { [id] + uleb(#content) + content }
-def names_section(functions: list): list {
+def subsection(id: int, content: list) as list { [id] + uleb(#content) + content }
+def names_section(functions: list) as list {
 	imported = range_list(#module.imports).map(i => index_name(i, module.imports#(i + 1)#2))
 	function_names = vector(imported + functions.map(f => index_name(f.index, f.name)))
 	locals = vector(functions.map(local_name_map))
@@ -68,14 +68,14 @@ def names_section(functions: list): list {
 # each type its own recursion group, a class's struct too: wasm tells types of two modules apart by their groups, so a
 # class's struct in a group with the module's other classes (lib/time.wasm's Instant beside Duration) was another type
 # than the same class's in a program declaring only it, and an instance made by one failed the other's casts
-def type_entries(): list { module.gc_order.map(name => gc_bytes(gc_definition(name))) }
+def type_entries() as list { module.gc_order.map(name => gc_bytes(gc_definition(name))) }
 # the name a module exports its global under
-def exported_global_name(name: text): text := "global/" + name
+def exported_global_name(name: text) as text := "global/" + name
 # main (a standard module's warp/start), memory, the globals the runner reads after a trap, then the program's functions
 # under the names left free: a module imported compiled calls them. Linked (separate_module.warp linked_bytes): its
 # functions numbered by `linked`, a linked module's word exported only if imported, its own globals exported as
 # `global/<name>` (another module's code reads them; a global may share a function's name: descriptor·<Class>)
-def program_exports(functions: list, entry: text = "main", linked: any = ø, own_globals: list = []): list {
+def program_exports(functions: list, entry: text = "main", linked: any = ø, own_globals: list = []) as list {
 	exports = [name_bytes(entry) + [export_function_byte] + uleb(functions#1.index), name_bytes("memory") + [export_memory_byte, 0]]
 	for name in exported_globals {
 		if name in module.globals { exports += [name_bytes(name) + [export_global_byte] + uleb(module.globals[name]#1)] }
@@ -108,7 +108,7 @@ def program_exports(functions: list, entry: text = "main", linked: any = ø, own
 	for name in own_globals { exports += [name_bytes(exported_global_name(name)) + [export_global_byte] + uleb(module.globals[name]#1)] }
 	exports
 }
-def module_bytes(functions: list): list {
+def module_bytes(functions: list) as list {
 	if prepended() { return prepended_bytes(functions) }
 	# what names a value type first (functions' signatures and locals, globals), so the GC types the module declares
 	# are all known: those its code used, then these (gc_type)
@@ -139,7 +139,7 @@ def module_bytes(functions: list): list {
 	wasm_header + concatenated(parts) + names_section(functions) + marks + c_functions_custom_section() + runtime_sections(functions)
 }
 # runtime.wasm's exports: memory, every function and global by its name, the error tag
-def runtime_exports(functions: list): list {
+def runtime_exports(functions: list) as list {
 	exports = [name_bytes("memory") + [export_memory_byte, 0], name_bytes(error_tag_name) + [export_tag_byte, 0]]
 	taken = ["memory", error_tag_name]
 	for f in functions {
@@ -160,8 +160,8 @@ def runtime_exports(functions: list): list {
 # a vector of [offset in the code section's content, kind, space]): runtime.wasm's (warp.runtime), a library module's
 # own items behind the runtime (warp.module); none in a program's module
 # a class struct's definition as text, the types it names by their names: the same in every module declaring it alike
-def struct_written(name: text): text := gc_definition(name).map(part => "" + part).join(" ")
-def runtime_sections(functions: list): list {
+def struct_written(name: text) as text := gc_definition(name).map(part => "" + part).join(" ")
+def runtime_sections(functions: list) as list {
 	if not module.relocating { return [] }
 	own_globals = module.global_order[(if module.prebuilding then 0 else #module.runtime_image.globals) ..]
 	counts = concatenated([#module.gc_order, #module.imports, #functions, #own_globals, #module.texts].map(uleb))
@@ -181,14 +181,14 @@ def runtime_sections(functions: list): list {
 # result): each parameter's name, type, flags (rest 1, a default 2) and default, packed; the result as written
 rest_flag = 1
 default_flag = 2
-def signature_bytes(signature: any): list {
+def signature_bytes(signature: any) as list {
 	parameters = signature.parameters.map(p => name_bytes(p.name) + name_bytes(p.type_name) + uleb((if p.rest then rest_flag else 0) + (if p.defaulted_to != ø then default_flag else 0)) + (if p.defaulted_to != ø then name_bytes(pack(p.defaulted_to#1)) else []))
 	vector(parameters) + name_bytes(signature.result)
 }
 # A prebuilt module read back for a link (notes/runtime_linking.md "Relocations"): its relocations, and its code
 # section's content with each relocated operand moved by shifts[space][kind], the one rule for every index space (a
 # module appended behind others; the runtime's functions behind a program's C imports); a shift not given is 0
-def relocations_of(wasm: list): list {
+def relocations_of(wasm: list) as list {
 	place = section_place(wasm, section_ids.custom, relocations_section)
 	if place == ø { return [] }
 	entries = []
@@ -206,7 +206,7 @@ def relocations_of(wasm: list): list {
 	}
 	entries
 }
-def rebased(code: list, relocations: list, moves: list): list {
+def rebased(code: list, relocations: list, moves: list) as list {
 	for entry in relocations {
 		space = entry#3
 		if space < #moves and entry#2 < #moves[space] {
@@ -224,15 +224,15 @@ def rebased(code: list, relocations: list, moves: list): list {
 # rebased and moved_body, over every index space: functions, types, globals, texts)
 # gap: [first, end] of indices no longer there (a runtime function shaken out), whose use fails the compile loudly
 class Move { shift: int; table: map; gap: list = [] }
-def moved(move: Move, index: int): int {
+def moved(move: Move, index: int) as int {
 	if move.table.has(index) { return move.table[index] }
 	if #move.gap == 2 and index >= move.gap#1 and index < move.gap#2 { throw "runtime function " + (index - move.gap#1) + " was shaken out of the module but is called" }
 	index + move.shift
 }
-def shifted(shift: int): Move { Move(shift, {}) }
+def shifted(shift: int) as Move { Move(shift, {}) }
 # a function's entry of the code section with each relocatable operand moved by moves[kind], written unpadded; a type
 # signed, as a heap type is read (`ref.cast 100` is [0xE4, 0x00]), which a type index reads the same
-def moved_body(f: Function, moves: list): list {
+def moved_body(f: Function, moves: list) as list {
 	locals = vector(f.locals.map(k => [1] + value_type(k)))
 	code = f.code + [op.end]
 	out = []
@@ -271,15 +271,15 @@ def section_place(wasm: list, id: int, name: text = ""): list? {
 # the functions the code refers to (ref.func: closure entries, class words), of these [name, index]: declared, as wasm
 # wants such a function, in one declarative element segment, none without them
 declarative_segment = 3
-is_referenced_word(name: text): bool := name.starts_with(closure_entry_prefix) or name.starts_with(class_word_prefix)
-def references_declared(functions: list): list {
+is_referenced_word(name: text) as bool := name.starts_with(closure_entry_prefix) or name.starts_with(class_word_prefix)
+def references_declared(functions: list) as list {
 	entries = functions.filter(f => is_referenced_word(f#1))
 	if #entries == 0 then [] else [[declarative_segment, 0] + vector(entries.map(f => uleb(f#2)))]
 }
-def element_section(segments: list): list := if #segments == 0 then [] else section(section_ids.element, vector(segments))
-def text_segments(): list { module.texts.keys.map(t => passive(t.bytes)) }
-def passive(bytes: list): list { [passive_segment] + uleb(#bytes) + bytes }
-def import_entry(i: int): list {
+def element_section(segments: list) as list := if #segments == 0 then [] else section(section_ids.element, vector(segments))
+def text_segments() as list { module.texts.keys.map(t => passive(t.bytes)) }
+def passive(bytes: list) as list { [passive_segment] + uleb(#bytes) + bytes }
+def import_entry(i: int) as list {
 	entry = module.imports#(i + 1)
 	name_bytes(entry#1) + name_bytes(entry#2) + [import_function_byte] + uleb(#module.gc_order + i)
 }

@@ -29,7 +29,7 @@ use "tests.warp"
 
 # the build mode of a run that names none (core/compiler.warp build_mode): debug, release, fast or small (a word, as
 # primitive mode keeps no text constant)
-default_mode(): text := "debug"
+default_mode() as text := "debug"
 
 getline(line: pointer, capacity: pointer, stream: handle): i64 from "c"
 isatty(descriptor: i32): i32 from "c"
@@ -87,22 +87,22 @@ EDIT_WORD_LEFT = 266
 EDIT_WORD_RIGHT = 267
 
 # a compiler with this executable's words from `first` on: a command runs, code is compiled to the run-to option's file and run after
-hosted(compiler: text, first: int): nothing := {
+hosted(compiler: text, first: int) as nothing := {
 	given = compiler_arguments(compiler)
 	for i in first..arg_count() { added(given, reachable_word(arg(i))) }
 	words_ran(compiler, given)
 }
 # a program piped to bare `warp` (no terminal): the whole input one program, run, its value printed
-piped_program(compiler: text): nothing := {
+piped_program(compiler: text) as nothing := {
 	printed = piped(fdopen(STDIN, c_string("r")))
 	given = compiler_arguments(compiler)
 	added(given, native_copy(printed.at, printed.size))
 	words_ran(compiler, given)
 }
 # the option one warp gives its own compiler: the file a program's module goes to (texts are words in primitive code)
-run_to_option(): text := "run-to"
+run_to_option() as text := "run-to"
 # the compiler run with the words; when they were code, the module it wrote to the run-to option run after
-words_ran(compiler: text, given: Arguments): nothing := {
+words_ran(compiler: text, given: Arguments) as nothing := {
 	output = compiled_path()
 	option_given(run_to_option(), output)
 	file_ran(compiler, given)
@@ -118,7 +118,7 @@ words_ran(compiler: text, given: Arguments): nothing := {
 # The last step, native, builds this executable anew (core/native/warp.warp, `warp build native`) by the new warp.wasm,
 # so a failed native build leaves warp.wasm as it was too; `warp rebuild pure` stops before it, the compilers alone
 # (scripts/rebuild.sh, the smoke test: card rebuild-native)
-rebuilt(first: text, last: text): nothing := {
+rebuilt(first: text, last: text) as nothing := {
 	library = library_folder()
 	compiler = real_path(joined(library, "/compiler/compiler.warp"))
 	built = joined(compiler_path(), ".new")
@@ -163,13 +163,13 @@ rebuilt(first: text, last: text): nothing := {
 	}
 }
 # a step of `warp rebuild` from the first one to the last, said before it runs
-step_runs(name: text, start: int, end: int): bool := {
+step_runs(name: text, start: int, end: int) as bool := {
 	if step_number(name) < start or step_number(name) > end { return false }
 	print(joined("rebuild step ", name))
 	true
 }
 # a rebuild step's place in the order; the first step for no name, and an unknown name refused
-step_number(name: text): int := {
+step_number(name: text) as int := {
 	if name.length == 0 or same_text(name, "seed") { return 1 }
 	if same_text(name, "optimize") { return 2 }
 	if same_text(name, "runtime") { return 3 }
@@ -182,7 +182,7 @@ step_number(name: text): int := {
 # the build stamp appended to a build file, a custom section warp.build of lines:
 # lib/, its compiler inputs hash (left empty: no run compares it, decision
 # compilers-delivered), the warp that built it, lib/'s commit, then when it was built. `warp version` shows it
-stamped(file: text, library: text): nothing := {
+stamped(file: text, library: text) as nothing := {
 	commit = command_output(joined(joined("git -C '", library), "' rev-parse HEAD 2>/dev/null"))
 	built = local_minute(milliseconds_now() / 1000)
 	data = joined(joined(joined(joined(library, "\n\nthe native warp\n"), commit), "\n"), built)
@@ -198,7 +198,7 @@ stamped(file: text, library: text): nothing := {
 	fclose(stream)
 }
 # n as unsigned LEB128 at `at`, its byte count
-leb_written(at: pointer, n: i64): i64 := {
+leb_written(at: pointer, n: i64) as i64 := {
 	rest = n
 	count = 0
 	while rest >= 128 {
@@ -212,7 +212,7 @@ leb_written(at: pointer, n: i64): i64 := {
 # `warp rebuild self` (scripts/promote-self.sh): warp.wasm compiles compiler.warp once more, and when it does it is
 # promoted to warp-self.wasm, with its machine code; whether that build is warp.wasm's own bytes (a fixpoint) is said,
 # not required
-promoted(): nothing := {
+promoted() as nothing := {
 	library = library_folder()
 	compiler = compiler_path()
 	source = real_path(joined(library, "/compiler/compiler.warp"))
@@ -229,35 +229,35 @@ promoted(): nothing := {
 # `warp rebuild seed`: the seed's machine code beside it, made when missing, so no build compiles it. Its runtime is
 # no file kept beside it: each rebuild's seed step compiles it from the sources being built, as CI's fresh checkout
 # does (card seed-compiles: a kept one made of older sources hid a seed that no longer compiled them, 16 s a rebuild)
-seed_shipped(): nothing := {
+seed_shipped() as nothing := {
 	seed = seed_path()
 	machine_code_kept(seed)
 	print(joined("precompiled ", seed))
 }
 # a build's machine code (the driver's .cwasm and its key) moved to another build file of the same bytes
-machine_code_moved(from: text, to: text): nothing := {
+machine_code_moved(from: text, to: text) as nothing := {
 	for kind in 0..MACHINE_CODE_KINDS { machine_code_renamed(from, to, machine_code_suffix_of(kind)) }
 }
-machine_code_renamed(from: text, to: text, suffix: text): nothing := {
+machine_code_renamed(from: text, to: text, suffix: text) as nothing := {
 	rename(c_string(joined(from, suffix)), c_string(joined(to, suffix)))
 	rename(c_string(joined(joined(from, suffix), ".key")), c_string(joined(joined(to, suffix), ".key")))
 }
 # a build's machine code of one heap copied beside another build file, when it has that one
-machine_code_copied(from: text, to: text, suffix: text): nothing := {
+machine_code_copied(from: text, to: text, suffix: text) as nothing := {
 	if read_file(joined(joined(from, suffix), ".key")).length > 0 {
 		copied(joined(from, suffix), joined(to, suffix))
 		copied(joined(joined(from, suffix), ".key"), joined(joined(to, suffix), ".key"))
 	}
 }
 # a file's copy, written aside and renamed, so a run beside this one never reads half of it
-copied(from: text, to: text): nothing := {
+copied(from: text, to: text) as nothing := {
 	aside = joined(to, ".new")
 	write_file(aside, read_file(from))
 	rename(c_string(aside), c_string(to))
 }
 # `warp rebuild [pure] [from <step>] | self | seed`, its word at `at`: bare, every step through native; pure, the
 # compilers alone (through modules, or `to <step>`: scripts/rebuild.sh builds the modules itself, in parallel)
-rebuild_command(at: int): nothing := {
+rebuild_command(at: int) as nothing := {
 	which = if arg_count() > at + 1 then arg(at + 1) else ""
 	if which.length == 0 { return rebuilt("", "native") }
 	if same_text(which, "from") { return rebuilt(step_given(at + 2), "native") }
@@ -271,9 +271,9 @@ rebuild_command(at: int): nothing := {
 	exit(1)
 }
 # the step named at `at`, the first one when none is
-step_given(at: int): text := if arg_count() > at then arg(at) else ""
+step_given(at: int) as text := if arg_count() > at then arg(at) else ""
 # the step after the word among the arguments from `at` on (`warp rebuild pure from runtime to runtime`), "" without it
-step_after(word: text, at: int): text := {
+step_after(word: text, at: int) as text := {
 	place = at
 	while place + 1 < arg_count() {
 		if same_text(arg(place), word) { return arg(place + 1) }
@@ -284,7 +284,7 @@ step_after(word: text, at: int): text := {
 # the seed, the compiler that compiles compiler.warp: --seed <file>, else warp-seed.wasm beside this executable (as invoked,
 # then where its links lead), else beside the installed warp, the first on $PATH: a tree's core/native/warp has none
 # beside it (card tree-seed-lookup); none found names the one beside this executable
-seed_path(): text := {
+seed_path() as text := {
 	if has_option("seed") { return option_of("seed") }
 	own = seed_beside(invoked_path())
 	if own.length > 0 { return own }
@@ -293,14 +293,14 @@ seed_path(): text := {
 	if found.length > 0 then found else joined(folder_of(executable_path()), "/warp-seed.wasm")
 }
 # warp-seed.wasm beside an executable as named, else beside the one its links lead to; empty for neither
-seed_beside(executable: text): text := {
+seed_beside(executable: text) as text := {
 	named = joined(folder_of(executable), "/warp-seed.wasm")
 	if access(c_string(named), READABLE) == 0 { return named }
 	linked = joined(folder_of(resolved_path(executable)), "/warp-seed.wasm")
 	if access(c_string(linked), READABLE) == 0 then linked else ""
 }
 # a module's arguments: its path, then the words that are not empty
-words(module: text, a: text, b: text, c: text, d: text, e: text): Arguments := {
+words(module: text, a: text, b: text, c: text, d: text, e: text) as Arguments := {
 	list = arguments()
 	added(list, module)
 	if a.length > 0 { added(list, a) }
@@ -314,7 +314,7 @@ words(module: text, a: text, b: text, c: text, d: text, e: text): Arguments := {
 # linked to the earlier lines' modules, and run in the console's session, which keeps every line's instance: what a
 # line declares and its values stay for the next lines (card warp-repl-instance). A line that fails ends only itself;
 # one that calls exit() ends the console. The engine and the machine code of the compiler and modules load once
-console(compiler: text): nothing := {
+console(compiler: text) as nothing := {
 	print("Interactive console (Ctrl+D to exit)")
 	folder = joined(text_from(compiled_path().address, compiled_path().length - 5), ".repl")
 	mkdir(c_string(folder), FOLDER_MODE)
@@ -358,7 +358,7 @@ console(compiler: text): nothing := {
 	if ended > 0 { exit(ended) }
 }
 # the console's line compiled to `module` by warp.wasm's repl-step, what the compile said shown; whether it compiled
-line_compiled(compiler: text, folder: text, line: text, module: text): bool := {
+line_compiled(compiler: text, folder: text, line: text, module: text) as bool := {
 	said = joined(folder, "/compile.out")
 	given = words(compiler, "repl-step", folder, line, module, joined(library_folder(), "/runtime.wasm"))
 	failure = run_into(read_file(compiler), given, machine_code_file(compiler, RUN_GC_HEAP_BYTES), RUN_GC_HEAP_BYTES, said)
@@ -370,8 +370,8 @@ line_compiled(compiler: text, folder: text, line: text, module: text): bool := {
 }
 # where the lines typed on a terminal stay for the next console, ↑ reaching them as the shells' history does (card
 # repl-alt-arrows): ~/.warp_history
-history_path(): text := joined(getenv("HOME"), "/.warp_history")
-line_count(lines: text): i64 := {
+history_path() as text := joined(getenv("HOME"), "/.warp_history")
+line_count(lines: text) as i64 := {
 	count = 0
 	for i in 0..lines.length {
 		if byte_at(lines.address + i).value == NEWLINE { count = count + 1 }
@@ -384,7 +384,7 @@ line_count(lines: text): i64 := {
 # the character under the cursor, Alt+Delete the word after it and Alt+⌫ the word before it (card repl-editing-keys);
 # Alt+←/→ move a word back and on (card alt-arrow-navigation), and ↑ reaches the earlier consoles' lines (history_path, card repl-alt-arrows).
 # The cursor steps over a character's UTF-8 bytes whole
-edited_line(session: pointer, history: text, lines: i64): text := {
+edited_line(session: pointer, history: text, lines: i64) as text := {
 	settings = command_output("stty -g")
 	# (-isig: Ctrl+C is a key while the line is edited, a SIGINT only while a line runs)
 	command_output("stty -icanon -echo -isig min 1")
@@ -442,18 +442,18 @@ edited_line(session: pointer, history: text, lines: i64): text := {
 	fd_write(STDOUT, "\n", 1, allocate(4))
 	line
 }
-prompt(): text := "🌀"
+prompt() as text := "🌀"
 # what edited_line gives at the input's end: a line no key makes, the one byte Ctrl+D
-input_ended(): text := byte_text(KEY_END_OF_INPUT)
-byte_text(value: i32): text := {
+input_ended() as text := byte_text(KEY_END_OF_INPUT)
+byte_text(value: i32) as text := {
 	cell = allocate(1)
 	byte_at(cell).value = value as u8
 	text_from(cell, 1)
 }
 # a terminal control sequence: ESC [ and the rest
-control(rest: text): text := joined(joined(byte_text(KEY_ESCAPE), "["), rest)
+control(rest: text) as text := joined(joined(byte_text(KEY_ESCAPE), "["), rest)
 # until the terminal gives a key, the window a console line painted takes its events in (driver.warp session_waited)
-key_awaited(session: pointer): nothing := {
+key_awaited(session: pointer) as nothing := {
 	descriptor = allocate(8)
 	word_at(descriptor).value = STDIN
 	# (a pollfd: the descriptor, then the events asked and those that came as two 16-bit halves, these none yet)
@@ -462,12 +462,12 @@ key_awaited(session: pointer): nothing := {
 	while window_linked and poll(descriptor, 1, WINDOW_EVENTS_EVERY_MS) == 0 { window_linked = session_waited(session) }
 }
 # the next byte the terminal gives, -1 at its end
-key(): i32 := {
+key() as i32 := {
 	cell = allocate(1)
 	if read(STDIN, cell, 1) <= 0 then -1 else byte_at(cell).value as i32
 }
 # the edit a key asks for, EDIT_NONE for a typed character
-edit_of(c: i32): i32 := {
+edit_of(c: i32) as i32 := {
 	if c == KEY_ESCAPE { return escaped_edit() }
 	if c == KEY_DELETE or c == KEY_BACKSPACE { return EDIT_BACK }
 	if c == KEY_LINE_START { return EDIT_START }
@@ -477,7 +477,7 @@ edit_of(c: i32): i32 := {
 # the edit of the escape sequence after ESC, as macOS Terminal, iTerm and xterm send them: ESC [ <number>;<modifier>
 # <final> or ESC O <final> (Home ESC[H ESC[1~ ESC OH, End ESC[F ESC[4~ ESC OF, Delete ESC[3~, Alt+Delete ESC[3;3~), or
 # Alt with a key, ESC <key> (Alt+Delete ESC d, Alt+⌫ ESC DEL)
-escaped_edit(): i32 := {
+escaped_edit() as i32 := {
 	c = key()
 	if c == KEY_DELETE or c == KEY_BACKSPACE { return EDIT_WORD_BEFORE }
 	if c == KEY_ALT_D { return EDIT_WORD_AFTER }
@@ -511,7 +511,7 @@ escaped_edit(): i32 := {
 	if number == NUMBERED_DELETE { return EDIT_DELETE }
 	EDIT_NONE
 }
-arrow_edit(c: i32): i32 := {
+arrow_edit(c: i32) as i32 := {
 	if c == ARROW_LEFT { return EDIT_LEFT }
 	if c == ARROW_RIGHT { return EDIT_RIGHT }
 	if c == ARROW_UP { return EDIT_UP }
@@ -519,47 +519,47 @@ arrow_edit(c: i32): i32 := {
 	EDIT_NONE
 }
 # an arrow with Alt: ← a word back, → a word on (user 11-10, card alt-arrow-navigation)
-with_alt(edit: i32): i32 := if edit == EDIT_LEFT then EDIT_WORD_LEFT else if edit == EDIT_RIGHT then EDIT_WORD_RIGHT else edit
+with_alt(edit: i32) as i32 := if edit == EDIT_LEFT then EDIT_WORD_LEFT else if edit == EDIT_RIGHT then EDIT_WORD_RIGHT else edit
 # the line from byte at on
-after(line: text, at: i64): text := text_from(line.address + at, (line.length - at) as u32)
+after(line: text, at: i64) as text := text_from(line.address + at, (line.length - at) as u32)
 # the line without its bytes from start until end
-cut(line: text, start: i64, end: i64): text := joined(text_from(line.address, start as u32), after(line, end))
-blank(line: text, at: i64): bool := byte_at(line.address + at).value == KEY_SPACE
+cut(line: text, start: i64, end: i64) as text := joined(text_from(line.address, start as u32), after(line, end))
+blank(line: text, at: i64) as bool := byte_at(line.address + at).value == KEY_SPACE
 # where the word before the cursor starts, past the blanks right before it
-word_before(line: text, at: i64): i64 := {
+word_before(line: text, at: i64) as i64 := {
 	start = at
 	while start > 0 and blank(line, start - 1) { start = start - 1 }
 	while start > 0 and not blank(line, start - 1) { start = start - 1 }
 	start
 }
 # where the word after the cursor ends, past the blanks right after it
-word_after(line: text, at: i64): i64 := {
+word_after(line: text, at: i64) as i64 := {
 	end = at
 	while end < line.length and blank(line, end) { end = end + 1 }
 	while end < line.length and not blank(line, end) { end = end + 1 }
 	end
 }
 # a UTF-8 byte that continues a character
-continues(line: text, at: i64): bool := byte_at(line.address + at).value / 64 == 2
-character_before(line: text, at: i64): i64 := {
+continues(line: text, at: i64) as bool := byte_at(line.address + at).value / 64 == 2
+character_before(line: text, at: i64) as i64 := {
 	start = at - 1
 	while start > 0 and continues(line, start) { start = start - 1 }
 	start
 }
-character_after(line: text, at: i64): i64 := {
+character_after(line: text, at: i64) as i64 := {
 	end = at + 1
 	while end < line.length and continues(line, end) { end = end + 1 }
 	end
 }
 # the prompt and the line written anew, the cursor moved back over the characters after it
-redrawn(line: text, at: i64): nothing := {
+redrawn(line: text, at: i64) as nothing := {
 	fd_write(STDOUT, joined(joined(joined("\r", prompt()), line), control("K")), 1, allocate(4))
 	after = 0
 	for i in at..line.length { if not continues(line, i) { after = after + 1 } }
 	if after > 0 { fd_write(STDOUT, control(joined(text_of(after), "D")), 1, allocate(4)) }
 }
 # the history's line at that index from 0, its lines each ended by a newline
-history_line(history: text, index: i64): text := {
+history_line(history: text, index: i64) as text := {
 	start = 0
 	seen = 0
 	for i in 0..history.length {
@@ -572,7 +572,7 @@ history_line(history: text, index: i64): text := {
 	""
 }
 # `warp version`: warp.wasm's version line, then when this executable and warp.wasm were built
-versioned(compiler: text): nothing := {
+versioned(compiler: text) as nothing := {
 	given = compiler_arguments(compiler)
 	added(given, "version")
 	file_ran(compiler, given)
@@ -582,7 +582,7 @@ versioned(compiler: text): nothing := {
 # when this executable was built, as `warp build native` baked it (primitive.warp built_function, cc's `Oct 30 2026
 # 12:07:33`), shown as the stamps are: `2026-10-30 12:07`
 warp_built(): text from "c"
-built_minute(): text := {
+built_minute() as text := {
 	said = warp_built()
 	months = "JanFebMarAprMayJunJulAugSepOctNovDec"
 	month = 0
@@ -599,7 +599,7 @@ built_minute(): text := {
 	text_from(shown, 16)
 }
 # a compiler's build stamp (stamped): `warp.wasm of 1792a05d8a · built 2026-10-28 20:25`
-compiler_stamp(file: text, name: text): text := {
+compiler_stamp(file: text, name: text) as text := {
 	wasm = read_file(file)
 	if wasm.length == 0 { return joined(name, " missing (warp rebuild)") }
 	stamp = custom_section(wasm, "warp.build")
@@ -611,17 +611,17 @@ compiler_stamp(file: text, name: text): text := {
 	if built.length > 0 then joined(joined(joined(name, of), " · built "), built) else joined(name, of)
 }
 # a file of warp code: its name ends in .warp, or a file of that name exists
-is_warp_file(name: text): bool := ends_with(name, ".warp") or read_file(name).length > 0
+is_warp_file(name: text) as bool := ends_with(name, ".warp") or read_file(name).length > 0
 
 # the words that only say how to run what follows: `run`, `pure` and `eval` what the bare words do, `self` by
 # warp-self.wasm, `fast` (lib/fast_math.warp) at full precision yet
-is_prefix(word: text): bool := same_text(word, "run") or same_text(word, "pure") or same_text(word, "eval") or same_text(word, "self") or is_mode(word)
+is_prefix(word: text) as bool := same_text(word, "run") or same_text(word, "pure") or same_text(word, "eval") or same_text(word, "self") or is_mode(word)
 # the build modes (core/compiler.warp build_mode), each a word before the program: `warp release app.warp`
-is_mode(word: text): bool := same_text(word, "debug") or same_text(word, "release") or same_text(word, "fast") or same_text(word, "small")
-self_named(compiler: text): bool := ends_with(compiler, "/warp-self.wasm")
+is_mode(word: text) as bool := same_text(word, "debug") or same_text(word, "release") or same_text(word, "fast") or same_text(word, "small")
+self_named(compiler: text) as bool := ends_with(compiler, "/warp-self.wasm")
 # what the words from `first` on ask for, by the compiler: a command the native warp runs itself, a module, a file,
 # else warp.wasm's command or code
-dispatched(compiler: text, prefixed: bool, first: int): nothing := {
+dispatched(compiler: text, prefixed: bool, first: int) as nothing := {
 	if arg_count() <= first {
 		if prefixed { return helped(compiler) }
 		if isatty(STDIN) == 0 { return piped_program(compiler) }
@@ -652,13 +652,13 @@ dispatched(compiler: text, prefixed: bool, first: int): nothing := {
 	hosted(compiler, first)
 }
 # warp.wasm's help
-helped(compiler: text): nothing := {
+helped(compiler: text) as nothing := {
 	given = compiler_arguments(compiler)
 	added(given, "help")
 	file_ran(compiler, given)
 }
 # `warp docs`: where the documentation is, opened in the browser where one opens
-documentation_opened(): nothing := {
+documentation_opened() as nothing := {
 	print("Warp documentation can be found at https://github.com/pannous/warp/wiki")
 	command_output("open https://github.com/pannous/warp/ 2>/dev/null || xdg-open https://github.com/pannous/warp/ 2>/dev/null")
 }
@@ -668,10 +668,10 @@ documentation_opened(): nothing := {
 # flags, and options with a value (--lib <folder>); the ones after the --profile and --slots are the tools' (the test
 # harness, the build scripts, `warp app check`), which `warp help options` leaves out. Words after the file or code are
 # the program's
-is_flag(word: text): bool := same_text(word, "--no-hints") or same_text(word, "--no-window") or same_text(word, "--mute") or same_text(word, "--backtrace") or same_text(word, "--profile") or same_text(word, "--times") or same_text(word, "--value-as-data") or same_text(word, "--one-thread") or same_text(word, "--emit-survey") or same_text(word, "--rules-fired") or same_text(word, "--fast") or same_text(word, "--strict")
-is_valued(word: text): bool := same_text(word, "--lib") or same_text(word, "--slots") or same_text(word, "--seed") or same_text(word, "--events-for") or same_text(word, "--page-steps") or same_text(word, "--app-window")
+is_flag(word: text) as bool := same_text(word, "--no-hints") or same_text(word, "--no-window") or same_text(word, "--mute") or same_text(word, "--backtrace") or same_text(word, "--profile") or same_text(word, "--times") or same_text(word, "--value-as-data") or same_text(word, "--one-thread") or same_text(word, "--emit-survey") or same_text(word, "--rules-fired") or same_text(word, "--fast") or same_text(word, "--strict")
+is_valued(word: text) as bool := same_text(word, "--lib") or same_text(word, "--slots") or same_text(word, "--seed") or same_text(word, "--events-for") or same_text(word, "--page-steps") or same_text(word, "--app-window")
 # the words of the option at `at`, kept: 1 a flag, 2 an option with its value, 0 no option
-option_words(at: int): int := {
+option_words(at: int) as int := {
 	word = arg(at)
 	name = text_from(word.address + 2, word.length - 2)
 	if is_flag(word) {
@@ -684,12 +684,12 @@ option_words(at: int): int := {
 }
 # warp's two machine switches (decision no-bash-exports): --no-window is WARP_WINDOW=0, --mute WARP_SOUND=0, either
 # spelling sets both, so the warps and programs this one starts are switched too (lib/os.warp windowless, muted)
-switched(option: text, variable: text): nothing := {
+switched(option: text, variable: text) as nothing := {
 	if same_text(getenv(variable), "0") { option_given(option, "") }
 	if has_option(option) { setenv(c_string(variable), c_string("0"), 1) }
 }
 # the first word from `at` on that is no option, the options before it kept
-past_options(at: int): int := {
+past_options(at: int) as int := {
 	i = at
 	taken = 1
 	while i < arg_count() and taken > 0 {
@@ -700,7 +700,7 @@ past_options(at: int): int := {
 }
 # what this executable's words ask for, done: the process's own, and each `warp test` case's (tests.warp case_ran).
 # `warp fuel <steps> <file|code…>`: the program counts steps (the run's option fuel), out of fuel after them
-command_ran(): nothing := {
+command_ran() as nothing := {
 	start = past_options(1)
 	# a CI machine runs without windows and sound (its CI variable is the CI system's, not warp's)
 	if getenv("CI").length > 0 {

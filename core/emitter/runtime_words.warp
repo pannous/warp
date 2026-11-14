@@ -2,7 +2,7 @@
 # the exact reals' class (lib/reals.warp), whose `is` takes any number too
 REAL_CLASS = "real"
 # `name(a: float): float := wasm f64.floor`: the parameters in order, then the instruction, which leaves the result
-def wasm_instruction(body: Body, name: text): TypedCode {
+def wasm_instruction(body: Body, name: text) as TypedCode {
 	if name in memory_instructions { return memory_instruction(body, name) }
 	if name not in wasm_instructions { return refuse("wasm " + name) }
 	code = []
@@ -11,7 +11,7 @@ def wasm_instruction(body: Body, name: text): TypedCode {
 }
 # `get(address: int): float := wasm f64.load`: the first parameter, an address or a count of pages, wrapped to i32; a
 # store leaves nothing, memory.size and memory.grow a count of pages (-1 where it can't grow)
-def memory_instruction(body: Body, name: text): TypedCode {
+def memory_instruction(body: Body, name: text) as TypedCode {
 	code = []
 	for i in 0..<#body.function.signature.parameters { code += [op.local_get] + uleb(i) + (if i == 0 then [op.i32_wrap_i64] else []) }
 	code += memory_instructions[name]
@@ -20,12 +20,12 @@ def memory_instruction(body: Body, name: text): TypedCode {
 }
 # a word runtime.warp's own functions call: theirs, even where the program defines a function of that name
 # (shapes.warp's keyed(op, left, right) is no intrinsic keyed(kind, left, right))
-def is_runtime_word(body: Body, name: text): bool {
+def is_runtime_word(body: Body, name: text) as bool {
 	body.intrinsics and (name in intrinsics or name in time_intrinsics or has_runtime_word(name))
 }
 # a call of a function of the program that takes its arguments, not of a runtime word: a call it can't take is a form
 # of the parser's or the lowering's of that name (`wasm f64.floor`, `try x`; emitter.warp compiling itself defines each)
-def is_program_call(body: Body, name: text, arguments: list): bool {
+def is_program_call(body: Body, name: text, arguments: list) as bool {
 	name in module.functions and not is_runtime_word(body, name) and takes_arguments(module.functions[name], arguments)
 }
 # the program's function a member `xs.sum` calls with its receiver: the word itself, or of a word overloaded by arity the
@@ -38,7 +38,7 @@ def method_function(body: Body, name: text, arguments: list): text? {
 }
 # whether f takes these arguments: no more than its parameters (any more after a rest one), a name given once, each
 # place left out defaulted
-def takes_arguments(f: Function, arguments: list): bool {
+def takes_arguments(f: Function, arguments: list) as bool {
 	if gathers(f.signature, #arguments) { return takes(f.signature, #arguments) }
 	slots = placed_arguments(taken_names(f.signature), arguments)
 	parameters = f.signature.parameters
@@ -47,17 +47,17 @@ def takes_arguments(f: Function, arguments: list): bool {
 # same(a, b): the one value (decision same-multi-dispatch), by reference: two texts or two lists as held, the one
 # list and not two of the same items (a map index finds its map so); any other two as nodes, the one node (an enum
 # case made once, decision enum-identity)
-def same_code(a: TypedCode, b: TypedCode): TypedCode {
+def same_code(a: TypedCode, b: TypedCode) as TypedCode {
 	if a.kind == b.kind and (a.kind == ValueKind.Text or a.kind == ValueKind.List) { return TypedCode(ValueKind.Bool, a.code + b.code + [op.ref_eq]) }
 	TypedCode(ValueKind.Bool, boxed(a) + boxed(b) + [op.ref_eq])
 }
 # the words the runtime is written in, each one or two instructions
-def intrinsic(body: Body, name: text, arguments: list): TypedCode {
+def intrinsic(body: Body, name: text, arguments: list) as TypedCode {
 	if name == "made_case" { return made_case(body, arguments) }
 	intrinsic_of(body, name, arguments.map(a => expression_code(body, a)))
 }
 # the word of values already made (quotes.warp's meta_node of a quote)
-def intrinsic_of(body: Body, name: text, values: list): TypedCode {
+def intrinsic_of(body: Body, name: text, values: list) as TypedCode {
 	if name in late_words { return call_values(late_word(name), values) }
 	match name {
 		"new_text": TypedCode(ValueKind.Text, index_code(values#1) + gc_code(gc_ops.array_new_default, [gc_type(gc.text)]))
@@ -226,16 +226,16 @@ passing_kinds = {int: [Kind.Int], nat: [Kind.Int], rational: numeric_held_kinds,
 	error: [Kind.Error], code: [], operation: [], expression: [], function: [Kind.Function]}
 covered_kinds = {int: [ValueKind.Int], nat: [ValueKind.Int], rational: [ValueKind.Int], float: [ValueKind.Float], number: [ValueKind.Int, ValueKind.Float], text: [ValueKind.Text, ValueKind.Char], path: [],
 	char: [ValueKind.Char], bool: [ValueKind.Bool], list: [ValueKind.List], key: [], pair: [], symbol: [], map: [], error: [], code: [], operation: [], expression: [], function: []}
-kind_bit(kind: int): int := 1 << kind
+kind_bit(kind: int) as int := 1 << kind
 # whether the class is the ancestor or extends it
-descends(name: text, ancestor: text): bool := name == ancestor or (name in module.parents and descends(module.parents[name], ancestor))
+descends(name: text, ancestor: text) as bool := name == ancestor or (name in module.parents and descends(module.parents[name], ancestor))
 # the runtime word's test of the value against the class and those extending it
-def class_test_code(body: Body, value: TypedCode, spec: text, word: text): TypedCode {
+def class_test_code(body: Body, value: TypedCode, spec: text, word: text) as TypedCode {
 	runtime_call(word, [TypedCode(ValueKind.Node, boxed(value)), list_value(body, module.classes.keys.filter(name => descends(name, spec)))])
 }
-def type_test_code(body: Body, subject: Node, written: text): TypedCode { value_type_test(body, expression_code(body, subject), written) }
+def type_test_code(body: Body, subject: Node, written: text) as TypedCode { value_type_test(body, expression_code(body, subject), written) }
 # `kinds`: code reading the value's kind bits where a match read them once (kinds·of), else none
-def value_type_test(body: Body, value: TypedCode, written: text, kinds: list = []): TypedCode {
+def value_type_test(body: Body, value: TypedCode, written: text, kinds: list = []) as TypedCode {
 	# `x is Q` of `type Q = P` tests a P
 	spec = aliased_type(written)
 	# `x is any`, also through an alias (`x is html` of `type html = any`): yes, as `x as any` is x
@@ -255,10 +255,10 @@ def value_type_test(body: Body, value: TypedCode, written: text, kinds: list = [
 	TypedCode(ValueKind.Bool, [op.i32_const, if passes then 1 else 0])
 }
 # whether `x is T` tests the type: a class, a type word of the core or of time (aliases too)
-has_type_test(written: text): bool := aliased_type(written) in module.classes or aliased_type(written) in time_test_types or aliased_type(written) in core_type_words
+has_type_test(written: text) as bool := aliased_type(written) in module.classes or aliased_type(written) in time_test_types or aliased_type(written) in core_type_words
 # a place typed T, or T?, with no value kind of the core (`d: date? = v`, a field `year: date?`) holds v as a node
 # and checks it as `v is T` does, ø too for T?: else the run fails with "not a T" (decision typed-places-check)
-def type_checked(body: Body, written: text, value: TypedCode): TypedCode {
+def type_checked(body: Body, written: text, value: TypedCode) as TypedCode {
 	spec = base_type(written)
 	held = fresh_node_local(body)
 	tested = value_type_test(body, TypedCode(ValueKind.Node, held), spec)
@@ -271,14 +271,14 @@ def type_checked(body: Body, written: text, value: TypedCode): TypedCode {
 # duration are times): lib/time's time_valued answers where the program has it (prelude_words.warp time_test_words
 # brings it), else, and in its own body, the core's times answer `is time`: a value known only at run time asks
 # holds_time once the program makes times
-def time_test_code(body: Body, value: TypedCode, spec: text): TypedCode {
+def time_test_code(body: Body, value: TypedCode, spec: text) as TypedCode {
 	if module.functions.has(time_test_word) and body.function.name != time_test_word { return time_valued_code(body, TypedCode(ValueKind.Node, boxed(value)), spec) }
 	if spec != "time" { return refuse("a test of the type " + spec) }
 	if value.kind == ValueKind.Node and "Time" in module.made { return runtime_call(made_tests.Time, [value]) }
 	TypedCode(ValueKind.Bool, [op.i32_const, if value.kind == ValueKind.Time then 1 else 0])
 }
 # lib/time's answer, or lib/units' quantity of time where the program has it, as units' rule reads `x is duration`
-def time_valued_code(body: Body, value: TypedCode, spec: text): TypedCode {
+def time_valued_code(body: Body, value: TypedCode, spec: text) as TypedCode {
 	held = fresh_node_local(body)
 	asked = word => converted(call_values(module.functions[word], [TypedCode(ValueKind.Node, held), text_value(spec)]), ValueKind.Bool)
 	measured = if spec in quantity_time_specs and module.functions.has(quantity_test_word) then asked(quantity_test_word) + [op.i32_or] else []
@@ -286,10 +286,10 @@ def time_valued_code(body: Body, value: TypedCode, spec: text): TypedCode {
 }
 quantity_time_specs = ["time", "duration"]
 # (typed, so a kind from a table and one a cast spelled, `2 as float`, compare as kinds)
-same_kind(a: ValueKind, b: ValueKind): bool := a == b
+same_kind(a: ValueKind, b: ValueKind) as bool := a == b
 # `x is type` of a value known only at run time: its held kind bit against the kinds passing the type, inline;
 # a type value (`int is number`) and `is code` ask runtime node_is_type
-def node_type_test(body: Body, value: TypedCode, type: text, kinds: list = []): TypedCode {
+def node_type_test(body: Body, value: TypedCode, type: text, kinds: list = []) as TypedCode {
 	if passing_mask(type) == 0 { return runtime_call("node_is_type", [value, text_value(type), number_value(0)]) }
 	if #kinds > 0 { return bits_type_test(value, kinds, kinds, type) }
 	held = fresh_node_local(body)
@@ -298,35 +298,35 @@ def node_type_test(body: Body, value: TypedCode, type: text, kinds: list = []): 
 	bits_type_test(TypedCode(ValueKind.Node, held), bits, read, type)
 }
 # the kind bits a type test passes, 0 for a type a node's held kind alone cannot tell
-def passing_mask(type: text): int {
+def passing_mask(type: text) as int {
 	kinds = 0
 	for kind in passing_kinds[type] { kinds = bits_or(kinds, kind_bit(kind)) }
 	kinds
 }
 # `n is T` of a node held in `held` whose kind bits `bits` reads, `read` leaving them first: a type value asks
 # node_is_type, any other node passes by its bits
-def bits_type_test(held: TypedCode, bits: list, read: list, type: text): TypedCode {
+def bits_type_test(held: TypedCode, bits: list, read: list, type: text) as TypedCode {
 	kinds = passing_mask(type)
 	type_value = read + [op.i64_const] + sleb(kind_bit(HeldBit.TypeValue)) + [op.i64_and, op.i64_eqz, op.i32_eqz]
 	passes = TypedCode(ValueKind.Bool, bits + [op.i64_const] + sleb(kinds) + [op.i64_and, op.i64_eqz, op.i32_eqz])
 	TypedCode(ValueKind.Bool, type_value + if_else_code(ValueKind.Bool, runtime_call("node_is_type", [held, text_value(type), number_value(kinds)]), passes))
 }
 # `kinds·of(n)`: the kind bits of a node, read once for a match's arms (node_matches.warp); 0 for a value of another kind
-def kinds_of_code(body: Body, subject: Node): TypedCode {
+def kinds_of_code(body: Body, subject: Node) as TypedCode {
 	value = expression_code(body, subject)
 	if value.kind != ValueKind.Node { return TypedCode(ValueKind.Int, [op.i64_const, 0]) }
 	held = fresh_node_local(body)
 	TypedCode(ValueKind.Int, value.code + [op.local_set] + held[1..] + held_kind_bit_code(body, held))
 }
 # `kind·tested(match·kinds, n, "text")`: `n is text` by the kind bits kinds·of read
-def kind_tested_code(body: Body, kinds: Node, subject: Node, type: text): TypedCode {
+def kind_tested_code(body: Body, kinds: Node, subject: Node, type: text) as TypedCode {
 	value_type_test(body, expression_code(body, subject), type, expression_code(body, kinds).code)
 }
 # the held kind of the node `held` as one bit, as runtime held_kind_bit places it: 1 << its Kind, a yes/no, type value,
 # the i64 shift and bit opcodes the kind words are built with
 shift_ops = {i64_or: 132, i64_shl: 134, i64_shr_s: 135, i64_shr_u: 136, i64_mul: 126}
 # map or exact rational the bit of its HeldBit place, ø a list; no call, each mark picked by a select
-def held_kind_bit_code(body: Body, held: list): list {
+def held_kind_bit_code(body: Body, held: list) as list {
 	field = [op.local_get] + uleb(fresh_local(body, ValueKind.Int))
 	kind = field + [op.i64_const] + sleb(kind_mask) + [op.i64_and]
 	is_field = marked => field + [op.i64_const] + sleb(marked) + [op.i64_eq]
@@ -336,16 +336,16 @@ def held_kind_bit_code(body: Body, held: list): list {
 	marked += unless_held(HeldBit.Map, is_field(Marked.Map)) + unless_held(HeldBit.Rational, ratio) + unless_held(HeldBit.Path, is_field(Marked.Path))
 	held + [op.ref_is_null, op.if] + value_type(ValueKind.Int) + held_bit(Kind.List) + [op.else] + marked + [op.end]
 }
-def held_bit(place: int): list { [op.i64_const] + sleb(kind_bit(place)) }
+def held_bit(place: int) as list { [op.i64_const] + sleb(kind_bit(place)) }
 # the bit on the stack, or the place's bit when the test holds
-def unless_held(place: int, test: list): list { held_bit(place) + test + [op.i32_eqz, op.select] }
+def unless_held(place: int, test: list) as list { held_bit(place) + test + [op.i32_eqz, op.select] }
 # a boxed value's code as a $Node; its Kind without the marks above it; its payload: the value in a box, or a text
 # an anyref entering as a node, a $Node's data or a list's item (every value of kind node is a $Node already, emitter.warp references)
-def entered_node(code: list): list { code + gc_code(gc_ops.ref_cast_null, [gc_type(gc.node)]) }
-def kind_code_of(code: list): list { code + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.i64_const] + sleb(kind_mask) + [op.i64_and] }
+def entered_node(code: list) as list { code + gc_code(gc_ops.ref_cast_null, [gc_type(gc.node)]) }
+def kind_code_of(code: list) as list { code + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.i64_const] + sleb(kind_mask) + [op.i64_and] }
 # a list node's $list; a range's ends and a GPU list's cells are no $list: a range's items are made, a GPU list refuses
 # loudly naming it (runtime/lists.warp unlisted_items) rather than casting
-def unboxed_list_code(body: Body, value: TypedCode): TypedCode {
+def unboxed_list_code(body: Body, value: TypedCode) as TypedCode {
 	held = uleb(fresh_local(body, ValueKind.Node))
 	data = [op.local_get] + held + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1])
 	code = value.code + [op.local_set] + held + data + gc_code(gc_ops.ref_test, [gc_type(gc.list)]) + [op.if] + gc_bytes(references.list)
@@ -353,32 +353,32 @@ def unboxed_list_code(body: Body, value: TypedCode): TypedCode {
 	code += runtime_call("unlisted_items", [TypedCode(ValueKind.Node, [op.local_get] + held)]).code + [op.end]
 	TypedCode(ValueKind.List, code)
 }
-def payload(code: list, held: int): list {
+def payload(code: list, held: int) as list {
 	data = code + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1])
 	if held == gc_type(gc.text) { return exact_text_cast(data) }
 	data + gc_code(gc_ops.ref_cast_null, [held])
 }
 # a text by its exact type, so no cast walks the subtypes (a wasmtime libcall): the final $AsciiText's own cast, else $Text's
-def exact_text_cast(data: list): list {
+def exact_text_cast(data: list) as list {
 	ascii_branch = [gc_prefix] + uleb(gc_ops.br_on_cast) + [3, 0, any_type] + relocatable(relocated.types, gc_type(gc.ascii_text))
 	[op.block] + gc_bytes(references.text) + data + ascii_branch + gc_code(gc_ops.ref_cast_null, [gc_type(gc.text)]) + [op.end]
 }
-def unboxed(code: list, box: int): list { payload(code, box) + gc_code(gc_ops.struct_get, [box, 0]) }
+def unboxed(code: list, box: int) as list { payload(code, box) + gc_code(gc_ops.struct_get, [box, 0]) }
 # an Int node's data, its $i64box or $BigInt, as a $Ratio holds a part
-def node_payload(value: TypedCode): list { boxed(value) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) }
+def node_payload(value: TypedCode) as list { boxed(value) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) }
 # whether an Int $Node holds a $Ratio (an i32); the numerator (0) or denominator (1) of one
 # whether an Int $Node holds its number in an $i64box (an i32), neither a ratio nor a big int
-def plain_int_test(code: list): list { code + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.int_box)]) }
+def plain_int_test(code: list) as list { code + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.int_box)]) }
 # an Int $Node of the $Ratio of the two ints' code, numerator and denominator, the program then making ratios
-def ratio_node(numerator: list, denominator: list): TypedCode {
+def ratio_node(numerator: list, denominator: list) as TypedCode {
 	box = code => code + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)])
 	made_by("Ratio", TypedCode(ValueKind.Node, node(Kind.Int, box(numerator) + box(denominator) + gc_code(gc_ops.struct_new, [gc_type(gc.ratio)]))))
 }
-def ratio_test(code: list): list { code + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.ratio)]) }
-def plain_part_test(code: list, field: int): list { payload(code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), field]) + gc_code(gc_ops.ref_test, [gc_type(gc.int_box)]) }
-def ratio_part(code: list, field: int): list { payload(code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), field]) + gc_code(gc_ops.ref_cast_null, [gc_type(gc.int_box)]) + gc_code(gc_ops.struct_get, [gc_type(gc.int_box), 0]) }
+def ratio_test(code: list) as list { code + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.ratio)]) }
+def plain_part_test(code: list, field: int) as list { payload(code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), field]) + gc_code(gc_ops.ref_test, [gc_type(gc.int_box)]) }
+def ratio_part(code: list, field: int) as list { payload(code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), field]) + gc_code(gc_ops.ref_cast_null, [gc_type(gc.int_box)]) + gc_code(gc_ops.struct_get, [gc_type(gc.int_box), 0]) }
 # the $Limbs array of an Int $Node holding a $BigInt
-def limbs_of(code: list): list { payload(code, gc_type(gc.big_int)) + gc_code(gc_ops.struct_get, [gc_type(gc.big_int), 1]) }
+def limbs_of(code: list) as list { payload(code, gc_type(gc.big_int)) + gc_code(gc_ops.struct_get, [gc_type(gc.big_int), 1]) }
 # `made_case(Made.BigInt, big_int_sum(a, b))` in a runtime word: once the program makes values of that kind
 # (module.made), the return of the call where one of its arguments holds such a value; before that nothing, so a
 # program making none carries neither the call nor the words it reaches (a shown value no time's text). Its function
@@ -387,7 +387,7 @@ def limbs_of(code: list): list { payload(code, gc_type(gc.big_int)) + gc_code(gc
 made_tests = {BigInt: "holds_big_int", Ratio: "holds_ratio", Time: "holds_time"}
 # the words making a value of each kind, compiled into the prepended runtime (made_by, time_values.warp time_node)
 made_makers = {BigInt: ["big_int_of"], Ratio: ["ratio_of_parts"], Time: ["time_of", "instant_at"]}
-def made_case(body: Body, arguments: list): TypedCode {
+def made_case(body: Body, arguments: list) as TypedCode {
 	made = name_of(value_of(arguments#1))
 	if made not in module.made {
 		if not module.made_sites.any(f => f.name == body.function.name) { module.made_sites += [body.function] }
@@ -404,7 +404,7 @@ def made_case(body: Body, arguments: list): TypedCode {
 	TypedCode(no_kind, test + [op.if, no_value] + called.code + [op.end])
 }
 # the code of a value of that kind (a case of kinds.warp Made), the program then making it
-def made_by(made: text, code: TypedCode): TypedCode {
+def made_by(made: text, code: TypedCode) as TypedCode {
 	module.made[made] = yes
 	code
 }

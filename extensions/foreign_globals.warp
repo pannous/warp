@@ -53,7 +53,7 @@ use "js_globals/webidl.warp"
 
 # The program with its `use js` lines taken out (a library runtime's become `use python`) and the uses of their globals
 # as foreign calls
-foreign_globals(program: Node): Node := {
+foreign_globals(program: Node) as Node := {
 	uses = foreign_uses(program)
 	scopes = markup_scopes(program)
 	markup = #scopes > 0
@@ -73,11 +73,11 @@ foreign_globals(program: Node): Node := {
 # a page reaching the page's js has its markup in the js runtime's document (lib/markup.warp page_in_js): natively
 # the hidden web view then holds `who` for `who.focus()`
 PAGE_SHOWN_IN_JS = "page_shown_in_js"
-first_statement(program: Node, statement: Node): Node := separated(bracketed([statement] + statements_in(program), ""), ";")
+first_statement(program: Node, statement: Node) as Node := separated(bracketed([statement] + statements_in(program), ""), ";")
 # A program with markup reads the page's own globals without `use js` (decision page-globals-implicit): `window` and
 # the global scope's attributes holding an object (document, location, localStorage, navigator …), typed as with
 # `use js`; a name the program binds itself is its own. Natively they are the webview's, else foreign_call's error
-page_globals_read(program: Node, used: list): list := {
+page_globals_read(program: Node, used: list) as list := {
 	bound = names_bound_in(program)
 	found = {}
 	for n in nodes_in(program) {
@@ -85,7 +85,7 @@ page_globals_read(program: Node, used: list): list := {
 	}
 	found.keys
 }
-is_page_global(name: text): bool := {
+is_page_global(name: text) as bool := {
 	if name == PAGE_WINDOW { return yes }
 	member = webidl_global_member(name)
 	member != ø and not member.operation and webidl().has(member.type)
@@ -93,7 +93,7 @@ is_page_global(name: text): bool := {
 # The ids of the program's markup, each a name of its element (decision page-ids): `input{ id: "who" }` makes
 # `who.focus()` the page's element; a variable or function of the same name is a compile error naming both. An id with
 # a dash is no name (`$user-name` reads its value)
-page_ids(scopes: list, bound: any): list := {
+page_ids(scopes: list, bound: any) as list := {
 	found = {}
 	for n in scopes.flat_map(nodes_in) {
 		if is_markup_block(n) {
@@ -109,7 +109,7 @@ page_ids(scopes: list, bound: any): list := {
 # `$paintings.className` (decision dollar-any-element): a member of any element of the page by its id; an id of the
 # program's markup and a bare `$who` stay the value typed into its field (page_values.warp), and a rewrite rule's
 # `$holes` are its own
-page_elements(program: Node, ids: list): list := {
+page_elements(program: Node, ids: list) as list := {
 	found = {}
 	for statement in flat_statements(program).filter(statement => not is_rewrite_rule(statement)) {
 		for n in nodes_in(statement) {
@@ -119,14 +119,14 @@ page_elements(program: Node, ids: list): list := {
 	}
 	found.keys
 }
-is_rewrite_rule(statement: Node): bool := is_group(statement) and #statement > 0 and statement#1 == symbol(rewrite_word)
+is_rewrite_rule(statement: Node) as bool := is_group(statement) and #statement > 0 and statement#1 == symbol(rewrite_word)
 # document.getElementById(id), an element of the page
-page_element(id: text, scope: JsScope): Node := {
+page_element(id: text, scope: JsScope) as Node := {
 	call = js_call([PAGE_DOCUMENT, js_global_type(PAGE_DOCUMENT)], ELEMENT_LOOKUP, 1, [Text(id)], scope)
 	scope.calls["${call}"] = PAGE_ELEMENT_TYPE
 	call
 }
-written_id(item: Node): text := match item {
+written_id(item: Node) as text := match item {
 	Key(Symbol(name), Op.Colon, Text(id)): if name == ID_ATTRIBUTE and id != "" and not id.contains("-") then id else ""
 	_: ""
 }
@@ -142,7 +142,7 @@ class JsScope {
 	hands_functions: bool = no
 }
 # the parameters' count of each function the program defines, `f(x) := …` or `f = x => …`, by its name
-function_arities(program: Node): map := {
+function_arities(program: Node) as map := {
 	arities = {}
 	for statement in flat_statements(program) {
 		if is_key(statement, Op.Define) and is_group(key_of(statement)) { arities[head_word(key_of(statement))] = #parameters_in(items_of(key_of(statement))[1 ..]) }
@@ -150,10 +150,10 @@ function_arities(program: Node): map := {
 	}
 	arities
 }
-lambda_arity(n: Node): int := #parameters_of(arrow_parameters(n))
+lambda_arity(n: Node) as int := #parameters_of(arrow_parameters(n))
 # a function given to js, a lambda or one the program defines, as js_function(f, its parameters' count); any other
 # argument as it is (a function whose parameters the lowering can't see is refused where it crosses)
-handed_to_js(argument: Node, scope: JsScope): Node := {
+handed_to_js(argument: Node, scope: JsScope) as Node := {
 	arity = if is_lambda(argument) then lambda_arity(argument) else if argument is symbol and scope.arities.has(name_of(argument)) then scope.arities[name_of(argument)] else -1
 	if arity < 0 { return argument }
 	scope.hands_functions = yes
@@ -161,18 +161,18 @@ handed_to_js(argument: Node, scope: JsScope): Node := {
 }
 # [runtime, name, aliased] of `use js Math`, `use js "path"`, `use python json`, `use json from python` (the alias);
 # ø for another statement
-foreign_use(statement: Node): list? := {
+foreign_use(statement: Node) as list? := {
 	if not is_group(statement) or #statement < 3 or statement#1 != symbol(USE_WORD) { return ø }
 	if #statement == 3 and is_runtime(statement#2) { return [name_of(statement#2), used_name(statement#3), no] }
 	if #statement == 4 and statement#3 == symbol(FROM_WORD) and is_runtime(statement#4) { return [name_of(statement#4), used_name(statement#2), yes] }
 	ø
 }
 # the foreign uses of a program, whose names are its own (implicit_uses.warp)
-foreign_uses(program: Node): list := flat_statements(program).map(foreign_use).filter(used => used != ø)
-is_runtime(n: Node): bool := n is symbol and name_of(n) in FOREIGN_RUNTIMES
-used_name(n: Node): text := if n is symbol then name_of(n) else "" + n
+foreign_uses(program: Node) as list := flat_statements(program).map(foreign_use).filter(used => used != ø)
+is_runtime(n: Node) as bool := n is symbol and name_of(n) in FOREIGN_RUNTIMES
+used_name(n: Node) as text := if n is symbol then name_of(n) else "" + n
 
-js_lowered(n: Node, scope: JsScope): Node := {
+js_lowered(n: Node, scope: JsScope) as Node := {
 	used = foreign_use(n)
 	if used != ø { return use_lowered(n, used) }
 	if is_key(n, Op.Assign) { return js_assigned(n, scope) }
@@ -181,12 +181,12 @@ js_lowered(n: Node, scope: JsScope): Node := {
 	n
 }
 # a foreign use taken out, a library runtime's left as the use of its library (`use python`); the alias said
-use_lowered(n: Node, used: list): Node := {
+use_lowered(n: Node, used: list) as Node := {
 	if used#3 { diagnose(call_of("alias_word", [symbol("${n}"), symbol("use ${used#1} ${used#2}")]), n) }
 	if used#1 == JS_RUNTIME then Node.Empty else use_statements([used#1])#1
 }
 # `receiver.member`, `receiver.member(…)` of a js receiver
-js_member(n: Node, scope: JsScope): Node := {
+js_member(n: Node, scope: JsScope) as Node := {
 	receiver = js_receiver(key_of(n), scope)
 	member = value_of(n)
 	if receiver == ø { return n }
@@ -195,14 +195,14 @@ js_member(n: Node, scope: JsScope): Node := {
 	n
 }
 # `Name(…)`: a function of the global scope called, else the constructor
-js_global_called(n: Node, scope: JsScope): Node := {
+js_global_called(n: Node, scope: JsScope) as Node := {
 	name = name_of(n#1)
 	arguments = items_of(n)[1 ..]
 	if js_global_operation(name) { return js_call([GLOBAL_SCOPE, UNCHECKED], name, 1, arguments, scope) }
 	js_call([name, scope.globals[name]], CONSTRUCTOR_MEMBER, 1, arguments, scope)
 }
 # [the receiver as foreign_call takes it, its interface] of a js value, ø where the node is none
-js_receiver(n: Node, scope: JsScope): list? := {
+js_receiver(n: Node, scope: JsScope) as list? := {
 	if n is symbol and scope.globals.has(name_of(n)) { return global_receiver(name_of(n), scope.globals[name_of(n)]) }
 	if n is symbol and scope.elements.has(name_of(n)) { return [page_element(name_of(n), scope), PAGE_ELEMENT_TYPE] }
 	if n is symbol and scope.dollar_elements.has(name_of(n)) { return [page_element(scope.dollar_elements[name_of(n)], scope), PAGE_ELEMENT_TYPE] }
@@ -211,7 +211,7 @@ js_receiver(n: Node, scope: JsScope): list? := {
 	if scope.calls.has(written) then [n, scope.calls[written]] else ø
 }
 # the foreign call of a member checked by its interface, the interface it gives noted when it is one
-js_call(receiver: list, member: text, called: int, arguments: list, scope: JsScope): Node := {
+js_call(receiver: list, member: text, called: int, arguments: list, scope: JsScope) as Node := {
 	given = js_member_type(receiver#2, member)
 	library = is_library_runtime(receiver#2)
 	given_arguments = [receiver#1, member, called, bracketed(if library then arguments else arguments.map(argument => handed_to_js(argument, scope)), "[")]
@@ -220,7 +220,7 @@ js_call(receiver: list, member: text, called: int, arguments: list, scope: JsSco
 	call
 }
 # `x = <a js value>` makes x a js variable of its interface; `receiver.member = v` sets the member
-js_assigned(n: Node, scope: JsScope): Node := {
+js_assigned(n: Node, scope: JsScope) as Node := {
 	target = foreign_called(key_of(n))
 	value = value_of(n)
 	if is_group(target) and #target == 6 and target#1 == symbol(FOREIGN_CALL) and target#5 == 0 {
@@ -231,28 +231,28 @@ js_assigned(n: Node, scope: JsScope): Node := {
 	n
 }
 # the foreign_call a lowered js call settles (js_call), the node itself else
-foreign_called(n: Node): Node := if is_group(n) and #n == 2 and n#1 == symbol(FOREIGN_SETTLED) then n#2 else n
+foreign_called(n: Node) as Node := if is_group(n) and #n == 2 and n#1 == symbol(FOREIGN_SETTLED) then n#2 else n
 
 # [receiver, interface] of a global: a library runtime's is its import, a js global its name as foreign_call takes it
-global_receiver(name: text, interface: text): list := [if is_library_runtime(interface) then call_of(interface + IMPORT_SUFFIX, [Text(name)]) else Text(name), interface]
-is_library_runtime(interface: text): bool := interface in LIBRARY_RUNTIMES
-is_js_global(name: text, scope: JsScope): bool := scope.globals.has(name) and not is_library_runtime(scope.globals[name])
+global_receiver(name: text, interface: text) as list := [if is_library_runtime(interface) then call_of(interface + IMPORT_SUFFIX, [Text(name)]) else Text(name), interface]
+is_library_runtime(interface: text) as bool := interface in LIBRARY_RUNTIMES
+is_js_global(name: text, scope: JsScope) as bool := scope.globals.has(name) and not is_library_runtime(scope.globals[name])
 
 # --- the types WebIDL gives ---
 
 # the interface a global names: its own definition (URL, console), else the type of the global scope's attribute of
 # that name (crypto: Crypto), else UNCHECKED
-js_global_type(name: text): text := {
+js_global_type(name: text) as text := {
 	if webidl().has(name) { return name }
 	if name == PAGE_WINDOW { return GLOBAL_INTERFACES#1 }
 	member = webidl_global_member(name)
 	if member == ø then UNCHECKED else member.type
 }
-js_global_operation(name: text): bool := {
+js_global_operation(name: text) as bool := {
 	member = webidl_global_member(name)
 	member != ø and member.operation
 }
-webidl_global_member(name: text): WebIdlMember? := {
+webidl_global_member(name: text) as WebIdlMember? := {
 	for scope in GLOBAL_INTERFACES {
 		member = webidl_member_of(scope, name)
 		if member != ø { return member }
@@ -261,7 +261,7 @@ webidl_global_member(name: text): WebIdlMember? := {
 }
 # the interface the member gives (UNCHECKED for a text, a number, a promise or a type WebIDL does not define); a
 # member its interface lacks is refused, naming the interface
-js_member_type(interface: text, member: text): text := {
+js_member_type(interface: text, member: text) as text := {
 	if interface == UNCHECKED or is_library_runtime(interface) { return interface }
 	found = webidl_member_of(interface, member)
 	if member == CONSTRUCTOR_MEMBER and found != ø { return interface }
@@ -270,7 +270,7 @@ js_member_type(interface: text, member: text): text := {
 	if webidl().has(given) then given else UNCHECKED
 }
 # the member of a definition, its parents' and its mixins' included
-webidl_member_of(name: text, member: text): WebIdlMember? := {
+webidl_member_of(name: text, member: text) as WebIdlMember? := {
 	definition = webidl().get(name)
 	if definition == ø { return ø }
 	if definition.members.has(member) { return definition.members[member] }
@@ -283,7 +283,7 @@ webidl_member_of(name: text, member: text): WebIdlMember? := {
 
 # name → WebIdlDefinition: the interfaces, mixins, namespaces and dictionaries with their partials, read once
 global webidl_definitions = ø
-webidl(): map := {
+webidl() as map := {
 	if webidl_definitions == ø { webidl_definitions = webidl_read(library_data(WEBIDL) + library_data(ECMASCRIPT_WEBIDL)) }
 	webidl_definitions
 }

@@ -11,7 +11,7 @@ inline_html_extension = Extension{name: "inline_html", source_passes: [inline_ht
 WARNING_FACT = "inline_html"
 
 # The source pass: each inline element as markup, a warning where each was written
-inline_html_warned(source: text): list := {
+inline_html_warned(source: text) as list := {
 	global diagnosed
 	global said
 	converted = markup_of_inline_html(source, yes, marked_element)

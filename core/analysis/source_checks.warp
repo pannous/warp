@@ -12,7 +12,7 @@ sleep_word = "sleep"
 error_word = "error"
 
 # the program, each check's facts diagnosed; `prelude` names the other spellings of the words (`uppercase`)
-source_checks(program: Node, prelude: text): Node := {
+source_checks(program: Node, prelude: text) as Node := {
 	aliases = module_aliases(prelude)
 	own_names = statements_in(program).map(declared_name)
 	library_constant_assignments(program)
@@ -63,7 +63,7 @@ charged_assignments(block: Node) := {
 # body keeps its own locals (lambda-assign-writes-through); its own value again, `const x=7; x=7`, changes nothing (P159)
 constant_words = ["let", "const", "constant", "final", "val"]
 # the variable a write changes: `x` of `x = …`, and of `x.a.b = …` and `x#i = …` too, which change inside it (const-deep)
-written_root(target: Node): Node := {
+written_root(target: Node) as Node := {
 	plain = without_mark(target)
 	if is_key(plain, Op.Dot) or is_key(plain, Op.Hash) then written_root(key_of(plain)) else plain
 }
@@ -115,7 +115,7 @@ literal_target(n: Node, next: any) := {
 	diagnose(call_of("literal_target", [value, op, if operation then variable + "; or " + operation else variable]), n)
 }
 # the binding `k = 7` of `let k = 7` declaring a constant, else ø
-declared_constant(statement: Node): any := {
+declared_constant(statement: Node) as any := {
 	if not (is_group(statement) and #statement == 2 and statement#1 is symbol and name_of(statement#1) in constant_words) { return ø }
 	bound = statement#2
 	if bound is key and op_of(bound) == "=" and key_of(bound) is symbol then bound else ø
@@ -128,7 +128,7 @@ located_error(n: Node) := {
 }
 
 # a node parser.warp wraps in an attribute layer of that mark, holding the written parts and the node it marks
-marked_with(n: Node, mark: text): bool := n is key and key_of(n) == symbol(attribute_word) and value_of(n)#1 == mark
+marked_with(n: Node, mark: text) as bool := n is key and key_of(n) == symbol(attribute_word) and value_of(n)#1 == mark
 # `.16i`, `2i`: a number glued to an `i` the program never binds means ⅈ, the imaginary unit; the unknown name's error
 # stays and gains this hint
 imaginary_i(n: Node, program: Node) := {
@@ -170,8 +170,8 @@ spaced_operand(n: Node, program: Node) := {
 	if binds_value(scope_of(program), head) { diagnose(call_of("spaced_operand", [written#1, written#2, head, phrase[head.length ..].trim()]), n) }
 }
 # `x!` as parser.warp writes it, `unwrap(x)`, and the node it marks
-has_mutation_mark(n: Node): bool := is_round(n) and #n == 2 and n#1 == symbol(unwrap_word)
-without_mark(n: Node): Node := if has_mutation_mark(n) then without_mark(n#2) else if n is key and key_of(n) == symbol(attribute_word) then without_mark(value_of(n)#3) else n
+has_mutation_mark(n: Node) as bool := is_round(n) and #n == 2 and n#1 == symbol(unwrap_word)
+without_mark(n: Node) as Node := if has_mutation_mark(n) then without_mark(n#2) else if n is key and key_of(n) == symbol(attribute_word) then without_mark(value_of(n)#3) else n
 
 # --- `sleep(1)` needs a unit  ---
 
@@ -200,29 +200,29 @@ assigned_mutation(n: Node, aliases: map) := {
 
 # [word, variable, marked] of a copy word called on a variable as written: `upper x`, `upper(x)`, `x.upper`,
 # `x.upper()`, marked by a `!` on the call or the variable (`x.upper!`, `upper x!`)
-copy_word_call(call: Node, aliases: map): list? := {
+copy_word_call(call: Node, aliases: map) as list? := {
 	parts = word_and_variable(without_mark(call))
 	if #parts != 2 { return ø }
 	copy_word_of(callee_of(parts#1), without_mark(parts#2), has_mutation_mark(call) or has_mutation_mark(parts#2), aliases)
 }
 # [word, variable] of `x.word` and `word x`, else []
-word_and_variable(inner: Node): list := if is_operator(inner, ".") then [value_of(inner), key_of(inner)] else if is_group(inner) and #inner == 2 then items_of(inner) else []
+word_and_variable(inner: Node) as list := if is_operator(inner, ".") then [value_of(inner), key_of(inner)] else if is_group(inner) and #inner == 2 then items_of(inner) else []
 # `upper` of `x.upper()`
-callee_of(word: Node): Node := if is_group(word) and bracket_of(word) == "(" and #word == 1 then word#1 else word
-copy_word_of(callee: Node, variable: Node, marked: bool, aliases: map): list? := {
+callee_of(word: Node) as Node := if is_group(word) and bracket_of(word) == "(" and #word == 1 then word#1 else word
+copy_word_of(callee: Node, variable: Node, marked: bool, aliases: map) as list? := {
 	if not (callee is symbol) or not (variable is symbol) { return ø }
 	called = name_of(callee)
 	canonical = if called in aliases then aliases[called] else called
 	if canonical in copy_words then [called, name_of(variable), marked] else ø
 }
 # [word, variable] of an unmarked copy call
-copy_call(call: Node, aliases: map): list? := {
+copy_call(call: Node, aliases: map) as list? := {
 	found = copy_word_call(call, aliases)
 	if found == ø { return ø }
 	if found#3 then ø else [found#1, found#2]
 }
 # the variable a marked copy call changes
-marked_copy_variable(value: Node, aliases: map): text? := {
+marked_copy_variable(value: Node, aliases: map) as text? := {
 	found = copy_word_call(value, aliases)
 	if found == ø { return ø }
 	if found#3 then found#2 else ø
@@ -230,7 +230,7 @@ marked_copy_variable(value: Node, aliases: map): text? := {
 
 # the messages of the `error "…"` calls a dropped statement drops: the statement itself, the branches of an if, the
 # last statement of a block
-dropped_errors(statement: Node): list := {
+dropped_errors(statement: Node) as list := {
 	n = without_mark(statement)
 	if is_group(n) and #n == 2 and n#1 == symbol(error_word) and separator_of(n) != ";" { return ["" + n#2] }
 	if is_operator(n, "then") { return dropped_errors(value_of(n)) }
@@ -252,12 +252,12 @@ floor_division_comments(source: text) := {
 	}
 }
 # a `//` comment from at to end, glued after an operand and followed by one or by `=`
-divides_glued(source: text, at: int, end: int): bool := {
+divides_glued(source: text, at: int, end: int) as bool := {
 	if at == 0 or end - at < 3 or source[at ..< at + 2] != "//" { return no }
 	after = source[at + 2]
 	ends_operand(source[at - 1]) and (is_name_char(after) or after == '(' or after == '=')
 }
-ends_operand(c: text): bool := is_name_char(c) or c == ')' or c == ']'
+ends_operand(c: text) as bool := is_name_char(c) or c == ')' or c == ']'
 # the line as written and as floor division: `x = 7//2` is `x = 7 /! 2`, `x//=3` `x /!= 3`
 floor_division_comment(source: text, at: int, end: int, line_starts: list) := {
 	line = line_starts.filter(start => start <= at).length

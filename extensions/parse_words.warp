@@ -7,12 +7,12 @@ parse_word = "parse"
 as_code_word = "as_code"
 parse_code_word = "parse_code"
 
-called_word(word: text, arguments: list): Node := List([symbol(word)] + arguments, Bracket.Round, Separator.None)
+called_word(word: text, arguments: list) as Node := List([symbol(word)] + arguments, Bracket.Round, Separator.None)
 # `data(e)`: e as written, quoted as `data(…)` writes it (a spaced `data e` let later passes lower a `for` in it)
-quoted_code_of(code: Node): Node := List([symbol(quote_word), code], Bracket.Round, Separator.None)
+quoted_code_of(code: Node) as Node := List([symbol(quote_word), code], Bracket.Round, Separator.None)
 
 # `parse "…"`, `parse(t)`, `parse t`: what the word is given, else ø
-word_argument(n: Node, word: text): Node := {
+word_argument(n: Node, word: text) as Node := {
 	if not (is_group(n) and #n == 2 and n#1 == symbol(word) and (bracket_of(n) == "(" or bracket_of(n) == "")) { return ø }
 	given = n#2
 	if is_group(given) and bracket_of(given) == "(" and #given == 1 { return given#1 }
@@ -21,16 +21,16 @@ word_argument(n: Node, word: text): Node := {
 
 # a text that fails to parse fails at run time, where `try` catches it; a type declaration is built there too, as
 # written, where a constant's `class P {…}` would read as the program's own type P
-folds(given: Node): bool := given is text and not view_has(view_of(plain_node(parsed(given))), part => kind_of(part) == "error" or kind_of(part) == "type")
+folds(given: Node) as bool := given is text and not view_has(view_of(plain_node(parsed(given))), part => kind_of(part) == "error" or kind_of(part) == "type")
 
-parse_call(n: Node): Node := {
+parse_call(n: Node) as Node := {
 	given = word_argument(n, parse_word)
 	if given == ø { return n }
 	if folds(given) { return called_word(as_code_word, [quoted_code_of(plain_node(parsed(given)))]) }
 	called_word(as_code_word, [called_word(parse_code_word, [given])])
 }
 
-parse_words(program: Node): Node := {
+parse_words(program: Node) as Node := {
 	words = [parse_word]
 	# the program's own `parse(t) := …`, `parse = …`; one of more parameters (time's parse(t, pattern)) leaves parse(t) the code's
 	if statements_in(program).any(statement => declared_name(statement) in words and #(definition_head_of(statement) ?? [ø]) <= 2) { return program }
@@ -45,11 +45,11 @@ parse_words(program: Node): Node := {
 FIELD_END = "${chr(1)}"
 write_parse_code(code: text, file: text) := write(file, code_encoding(plain_node(parsed(code))))
 # placed as a quote written in the program is (quotes.warp quoted_code), so its `.line` and `.column` read the same
-code_encoding(n: Node): text := {
+code_encoding(n: Node) as text := {
 	at = written_at(n)
 	(if at then encoded_field("p", "${packed_place(at)}") else "") + placeless_encoding(n)
 }
-placeless_encoding(n: Node): text := {
+placeless_encoding(n: Node) as text := {
 	if n is bool { return if n then "T" else "F" }
 	if n is int { return encoded_field("i", "${n}") }
 	if n is number { return encoded_field("f", "${float(n)}") }
@@ -67,11 +67,11 @@ placeless_encoding(n: Node): text := {
 		_: encoded_field("t", "${n}")
 	}
 }
-list_encoding(items: list, bracket: text, separator: text): text := {
+list_encoding(items: list, bracket: text, separator: text) as text := {
 	count = #items
 	encoded_field("l", "${count}") + encoded_field("", bracket) + encoded_field("", separator) + items.map(code_encoding).join("")
 }
-encoded_field(tag: text, field: text): text := {
+encoded_field(tag: text, field: text) as text := {
 	if FIELD_END in field { raise "parse_code: the code holds the character U+0001, which its encoding ends fields with" }
 	tag + field + FIELD_END
 }

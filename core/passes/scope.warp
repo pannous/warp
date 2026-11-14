@@ -11,26 +11,26 @@ use "../analysis/words.warp"
 enum Meaning { Function, Variable, Parameter, Loop, Field, Type }
 
 # the name a binding form gives: `x`, `x: int`, `x: int = 1`; ø for anything else
-binding_name(n: Node): any := match n {
+binding_name(n: Node) as any := match n {
 	Symbol(name): name
 	Key(left, op, right): binding_name(left)
 	_: ø
 }
 
 # `x => …`, `(x => …)`: a lambda
-is_lambda(n: Node): bool := match n {
+is_lambda(n: Node) as bool := match n {
 	Key(left, op, right): op == Op.Arrow
 	List(items, bracket, separator): bracket == Bracket.Round and #items == 1 and is_lambda(items#1)
 	_: no
 }
 
-is_round(n: Node): bool := match n {
+is_round(n: Node) as bool := match n {
 	List(_, Bracket.Round, _): yes
 	_: no
 }
 
 # the name of a head `f`, `f(a)`, `f: int`
-head_word(n: Node): text := match n {
+head_word(n: Node) as text := match n {
 	Symbol(name): name
 	Key(left, op, right): head_word(left)
 	List(items, bracket, separator): { if #items > 0 then head_word(items#1) else "" }
@@ -40,37 +40,37 @@ head_word(n: Node): text := match n {
 # the parameters of a lambda's left side `(a, b)`, `a`, or of a head's items after its name; a group of them, `f (a b)`,
 # gives its items
 # (a quoted pattern, a match arm's `data($a) => a`, binds no word: data is no parameter)
-parameters_of(head: Node): list := if is_quote(head) then [] else if is_round(head) then parameters_in(items_of(head)) else bound_names(head)
+parameters_of(head: Node) as list := if is_quote(head) then [] else if is_round(head) then parameters_in(items_of(head)) else bound_names(head)
 
-parameters_in(items: list): list := {
+parameters_in(items: list) as list := {
 	names = []
 	for item in items { names += parameters_of(item) }
 	names
 }
 
 # the name a parameter binds, none for a pattern without one: `f([]) := 0`
-bound_names(n: Node): list := {
+bound_names(n: Node) as list := {
 	name = binding_name(n)
 	if name == ø then [] else [name]
 }
 
 # `def f(a) {…}` arrives as `((f (a)) {…})`: the head `(f (a))`
-definition_head(n: Node): Node := {
+definition_head(n: Node) as Node := {
 	if not is_round(n) { return n }
 	items = items_of(n)
 	if #items > 0 and is_round(items#1) then definition_head(items#1) else n
 }
 
-as_parameters(names: list): list := names.map(name => [name, Meaning.Parameter])
+as_parameters(names: list) as list := names.map(name => [name, Meaning.Parameter])
 
 # `f(a, b)` as a definition's head: the function and its parameters
-function_meanings(head: Node): list := {
+function_meanings(head: Node) as list := {
 	if not is_round(head) { return [[head_word(head), Meaning.Function]] }
 	[[head_word(head), Meaning.Function]] + as_parameters(parameters_in(items_of(head)[1 ..]))
 }
 
 # `x = v`, `f(a) = …`, `f := …`: a variable, or a function when v is a lambda or the head a call
-assignment_meanings(op: Op, target: Node, value: Node): list := {
+assignment_meanings(op: Op, target: Node, value: Node) as list := {
 	if is_round(target) and #items_of(target) > 0 { return function_meanings(target) }
 	# a write of a field or an item, `database.score = 42`, `local["name"] = "Ada"`, binds no name
 	if is_key(target, Op.Dot) or is_key(target, Op.Hash) { return [] }
@@ -78,7 +78,7 @@ assignment_meanings(op: Op, target: Node, value: Node): list := {
 }
 
 # the meanings a word gives the item after it in a phrase: `for x`, `def f(a)`
-word_meanings(word: Node, next: Node): list := match word {
+word_meanings(word: Node, next: Node) as list := match word {
 	Symbol(name): {
 		if name == "for" then [[binding_name(next), Meaning.Loop]]
 		else if function_keywords contains name then function_meanings(definition_head(next))
@@ -89,20 +89,20 @@ word_meanings(word: Node, next: Node): list := match word {
 }
 
 # the meanings the words of a list give
-phrase_meanings(items: list): list := {
+phrase_meanings(items: list) as list := {
 	found = []
 	for at in 1 ..< #items { found += word_meanings(items#at, items#(at + 1)) }
 	found
 }
 
 # the meanings a node gives, [name, meaning] each
-meanings_of(n: Node): list := match n {
+meanings_of(n: Node) as list := match n {
 	Key(target, op, value): key_meanings(target, op, value)
 	List(items, bracket, separator): phrase_meanings(items)
 	_: []
 }
 
-key_meanings(target: Node, op: Op, value: Node): list := {
+key_meanings(target: Node, op: Op, value: Node) as list := {
 	if op == Op.Assign or op == Op.Define { return assignment_meanings(op, target, value) }
 	if op == Op.Arrow { return as_parameters(parameters_of(target)) }
 	if target == opaque_symbol and value#1 == "type" { return [[declared_type_name(value#2), Meaning.Type]] }
@@ -110,26 +110,26 @@ key_meanings(target: Node, op: Op, value: Node): list := {
 }
 
 # `{k: v}`: the field k
-fields_of(n: Node): list := {
+fields_of(n: Node) as list := {
 	found = []
 	if bracket_of(n) != "{" { return found }
 	for item in items_of(n) { found += field_meanings(item) }
 	found
 }
 
-field_meanings(item: Node): list := match item {
+field_meanings(item: Node) as list := match item {
 	Key(name, Op.Colon, value): [[binding_name(name), Meaning.Field]]
 	_: []
 }
 
 # every key and list of a program, the program first; an opaque view's parts (a type's name and body) as nodes
-nodes_in(top: Node): list := nodes_kept(top, n => yes)
+nodes_in(top: Node) as list := nodes_kept(top, n => yes)
 
 # the nodes found so far, a global, which grows in place (a local stack popped and a local list appended to copied them
 # at each node: a seventh of the passes' time in `warp rebuild self`, card speed-symbol-calls)
 global kept_found = []
 # the nodes `kept` accepts, the program first, without the parts of one it refuses
-nodes_kept(top: Node, kept: function): list := {
+nodes_kept(top: Node, kept: function) as list := {
 	kept_found = []
 	keep_nodes(top, kept)
 	found = kept_found
@@ -150,7 +150,7 @@ keep_nodes(n: Node, kept: function) := {
 }
 
 # the scope with each [name, meaning] pair added
-remember(scope: map, pairs: list): map := {
+remember(scope: map, pairs: list) as map := {
 	for pair in pairs {
 		name = pair#1
 		if name { scope[name] = scope.get(name) + [pair#2] }
@@ -159,11 +159,11 @@ remember(scope: map, pairs: list): map := {
 }
 
 # name → its meanings, of the whole program
-scope_of(program: Node): map := scope_with({}, nodes_in(program))
+scope_of(program: Node) as map := scope_with({}, nodes_in(program))
 
 # the scope with the names the nodes give added, in place: a function's scope starts from names_seen, its own copy of
 # what it can ask of the scope around it (copying the whole scope for each function was 2.5% of a self compile)
-scope_with(scope: map, nodes: list): map := {
+scope_with(scope: map, nodes: list) as map := {
 	for n in nodes {
 		scope = remember(remember(scope, meanings_of(n)), fields_of(n))
 	}
@@ -171,31 +171,31 @@ scope_with(scope: map, nodes: list): map := {
 }
 
 # the scope a function's body sees: the names of the scope around it it asks for, and its own parameters and locals
-function_scope(outer: map, definition: Node): map := {
+function_scope(outer: map, definition: Node) as map := {
 	nodes = nodes_in(definition)
 	scope_with(names_seen(outer, nodes), nodes)
 }
 
 # the scope's entries for the names among the nodes: what a function's nodes can ask of the scope around it, without
 # copying all of it (each function copying the whole program's scope was ~10% of compiling compiler.warp)
-names_seen(scope: map, nodes: list): map := {
+names_seen(scope: map, nodes: list) as map := {
 	seen = {}
 	for n in nodes { if n is symbol and scope.has(name_of(n)) { seen[name_of(n)] = scope[name_of(n)] } }
 	seen
 }
 
 # `f(a) := …`, `f(a) = …`: a function's definition, whose parameters and locals no other function sees
-is_function_definition(n: Node): bool := match n {
+is_function_definition(n: Node) as bool := match n {
 	Key(target, op, value): (op == Op.Assign or op == Op.Define) and is_round(target) and #items_of(target) > 0
 	_: no
 }
 
 # the nodes outside the bodies of functions, whose names every function sees
-outer_nodes_in(top: Node): list := nodes_kept(top, n => not is_function_definition(n))
+outer_nodes_in(top: Node) as list := nodes_kept(top, n => not is_function_definition(n))
 
 # name → its meanings where the program's own statements stand: the names outside function bodies and each such
 # function's name, never another function's parameters or locals (a used module's local p beside the program's p{…})
-outer_scope(program: Node): map := {
+outer_scope(program: Node) as map := {
 	outer = outer_nodes_in(program)
 	scope = scope_with({}, outer)
 	for n in outer {
@@ -205,7 +205,7 @@ outer_scope(program: Node): map := {
 }
 
 # n rewritten bottom-up by rewrite(node, scope), each node with the scope where it stands: a function's body its own
-lexical_bottom_up(n: Node, outer: map, rewrite: function): Node := {
+lexical_bottom_up(n: Node, outer: map, rewrite: function) as Node := {
 	if is_function_definition(n) {
 		inner = function_scope(outer, n)
 		return bottom_up(n, x => rewrite(x, inner))
@@ -213,12 +213,12 @@ lexical_bottom_up(n: Node, outer: map, rewrite: function): Node := {
 	rewrite(children(n, x => lexical_bottom_up(x, outer, rewrite)), outer)
 }
 
-binds(scope: map, name: text): bool := scope.has(name)
-binds_as(scope: map, name: text, meaning: Meaning): bool := scope.has(name) and scope[name] contains meaning
+binds(scope: map, name: text) as bool := scope.has(name)
+binds_as(scope: map, name: text, meaning: Meaning) as bool := scope.has(name) and scope[name] contains meaning
 # the meanings that make a name a value where it stands: a variable, a parameter, a loop variable (a field or a function
 # of that name is no value there)
 value_meanings = [Meaning.Variable, Meaning.Parameter, Meaning.Loop]
-binds_value(scope: map, name: text): bool := value_meanings.any(meaning => binds_as(scope, name, meaning))
+binds_value(scope: map, name: text) as bool := value_meanings.any(meaning => binds_as(scope, name, meaning))
 
 # Keyword-triggered local rewrites (decision pass-triggers): each
 # entry [accepts, rewritten] of a table rewrites a node one of whose own words (has_own_word) it accepts,
@@ -226,64 +226,64 @@ binds_value(scope: map, name: text): bool := value_meanings.any(meaning => binds
 # scope of the program as it was before the walk, made once
 global program_before_rewrites = ø
 global scope_before_rewrites = ø
-keyword_rewrites(program: Node, table: list): Node := {
+keyword_rewrites(program: Node, table: list) as Node := {
 	program_before_rewrites = program
 	scope_before_rewrites = ø
 	bottom_up(program, n => rewritten_by(n, table))
 }
-rewritten_bindings(): any := {
+rewritten_bindings() as any := {
 	if scope_before_rewrites == ø { scope_before_rewrites = scope_of(program_before_rewrites) }
 	scope_before_rewrites
 }
-rewritten_by(n: Node, table: list): Node := {
+rewritten_by(n: Node, table: list) as Node := {
 	for entry in table { n = rewritten_if(n, entry#1, entry#2) }
 	n
 }
 # TODO (card function-value-read) a function value in a local, `rewrite = entry#2; rewrite(n)`, once it is called
-rewritten_if(n: Node, accepts: function, rewritten: function): Node := if has_own_word(n, accepts) then rewritten(n) else n
+rewritten_if(n: Node, accepts: function, rewritten: function) as Node := if has_own_word(n, accepts) then rewritten(n) else n
 # a node's own words: its items' words, a key's operator, a declaration head's name (`type of`)
-has_own_word(n: Node, accepts: function): bool := match n {
+has_own_word(n: Node, accepts: function) as bool := match n {
 	List(parts, _, _): parts.any(part => is_word_of_item(part, accepts))
 	Key(left, op, right): { if left == opaque_symbol then is_declaration_word(right, accepts) else accepts(symbol(op as text)) }
 	_: no
 }
 # an item's words: the word itself, a declaration head's name, the words of a phrase the parser grouped inside the
 # phrase (`x = sum of xs` arrives as `sum (of xs)`)
-is_word_of_item(part: Node, accepts: function): bool := match part {
+is_word_of_item(part: Node, accepts: function) as bool := match part {
 	Symbol(name): accepts(part)
 	List(words, Bracket.None, Separator.Space): words.any(word => is_word_of_item(word, accepts))
 	Key(left, op, right): left == opaque_symbol and is_declaration_word(right, accepts)
 	_: no
 }
 # the opaque view of a type whose name is a word accepts takes
-is_declaration_word(view: View, accepts: function): bool := kind_of(view) == "type" and view#2 is list and kind_of(view#2) == "symbol" and accepts(node_of(view#2))
+is_declaration_word(view: View, accepts: function) as bool := kind_of(view) == "type" and view#2 is list and kind_of(view#2) == "symbol" and accepts(node_of(view#2))
 
 # `3+4; result * 2`: the word result reads the value of the statement before it (decision result-keyword): the printed
 # value after a print, the branch's taken after an if, a block's last; a program binding result itself keeps its own
 last_value_word = "result"
-with_result_word(program: Node): Node := {
+with_result_word(program: Node) as Node := {
 	if not reads_last_value(program) or binds_value(scope_of(program), last_value_word) { return program }
 	bottom_up(program, n => if is_statement_sequence(n) then group_like(n, valued_before_result(items_of(n))) else n)
 }
-valued_before_result(statements: list): list := (1 to #statements).map(i => if i < #statements and reads_last_value(statements#(i + 1)) then valued(statements#i) else statements#i)
+valued_before_result(statements: list) as list := (1 to #statements).map(i => if i < #statements and reads_last_value(statements#(i + 1)) then valued(statements#i) else statements#i)
 # a read of the word result, not a field of that name: `p.result`, `{result: 3}`
-reads_last_value(n: Node): bool := match n {
+reads_last_value(n: Node) as bool := match n {
 	Symbol(name): name == last_value_word
 	Key(left, Op.Dot, right): reads_last_value(left)
 	Key(left, Op.Colon, right): reads_last_value(right)
 	_: parts_of(n).any(reads_last_value)
 }
 # the statement s, also keeping its value as result
-valued(s: Node): Node := match s {
+valued(s: Node) as Node := match s {
 	Key(Key(test, Op.Then, yes_branch), Op.Else, no_branch): Key(Key(test, Op.Then, valued(yes_branch)), Op.Else, valued(no_branch))
 	List(items, bracket, separator): valued_group(s, items, bracket)
 	_: kept_result(s)
 }
 # `print e` (spaced or `print(e)`) as `result = e; print result`; a block `{x = 2; print x}` or group `(print "ho")` by
 # its last statement
-valued_group(s: Node, items: list, bracket: Bracket): Node := {
+valued_group(s: Node, items: list, bracket: Bracket) as Node := {
 	if bracket != Bracket.Square and #items == 2 and items#1 == symbol("print") { return List([kept_result(items#2), group_like(s, [items#1, symbol(last_value_word)])], Bracket.Round, Separator.Semicolon) }
 	if #items > 0 and (bracket == Bracket.Curly or (bracket == Bracket.Round and #items == 1)) { return group_like(s, items[0 ..< #items - 1] + [valued(items.last)]) }
 	kept_result(s)
 }
-kept_result(value: Node): Node := Key(symbol(last_value_word), Op.Assign, value)
+kept_result(value: Node) as Node := Key(symbol(last_value_word), Op.Assign, value)

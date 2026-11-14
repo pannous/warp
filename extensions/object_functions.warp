@@ -8,10 +8,10 @@ object_functions_extension = Extension{name: "object_functions", passes_before: 
 
 IMPLICIT_PARAMETER = "it"
 
-object_functions(program: Node): Node := bottom_up(program, with_function_entries)
+object_functions(program: Node) as Node := bottom_up(program, with_function_entries)
 
 # `o = {…}` with its function entries as lambdas
-with_function_entries(n: Node): Node := {
+with_function_entries(n: Node) as Node := {
 	if not (is_key(n, Op.Assign) and key_of(n) is symbol and is_curly_group(value_of(n))) { return n }
 	entries = items_of(value_of(n))
 	if not entries.any(is_function_entry) { return n }
@@ -20,17 +20,17 @@ with_function_entries(n: Node): Node := {
 	Key(key_of(n), Op.Assign, group_like(value_of(n), lambdas))
 }
 
-is_function_entry(entry: Node): bool := (is_key(entry, Op.Define) and function_entry_name(entry) != "") or (is_key(entry, Op.Assign) and key_of(entry) is symbol and is_lambda(value_of(entry)))
+is_function_entry(entry: Node) as bool := (is_key(entry, Op.Define) and function_entry_name(entry) != "") or (is_key(entry, Op.Assign) and key_of(entry) is symbol and is_lambda(value_of(entry)))
 
 # the name an entry defines: `f := …` and `f(x) := …`, else ""
-function_entry_name(entry: Node): text := {
+function_entry_name(entry: Node) as text := {
 	head = key_of(entry)
 	if head is symbol { return name_of(head) }
 	if is_group(head) and bracket_of(head) == "(" and head#1 is symbol then name_of(head#1) else ""
 }
 
 # `name: parameters => body`, the object's fields in the body read off the object
-entry_lambda(entry: Node, object: Node, fields: list): Node := {
+entry_lambda(entry: Node, object: Node, fields: list) as Node := {
 	head = key_of(entry)
 	written = value_of(entry)
 	arrow = if is_lambda(written) then lambda_of(written) else Key(entry_parameters(head), Op.Arrow, written)
@@ -41,7 +41,7 @@ entry_lambda(entry: Node, object: Node, fields: list): Node := {
 }
 
 # the parameters of `f(x, y) :=`, `it` of `f :=`
-entry_parameters(head: Node): Node := {
+entry_parameters(head: Node) as Node := {
 	if head is symbol { return symbol(IMPLICIT_PARAMETER) }
 	parameters = items_of(head)[1 ..]
 	if #parameters == 1 then parameters#1 else List(parameters, Bracket.Round, Separator.Comma)

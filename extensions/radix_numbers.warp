@@ -1,6 +1,6 @@
 # Radix numbers (card parser-rows, decision core-is-self): `0xff` is 255, `0b101` is 5, `_` between digits; the
 # compiler's own source writes none (decision self-source-minimal)
-read_radix_number(p: Parser): Node := {
+read_radix_number(p: Parser) as Node := {
 	if not at_char(p, '0') { return ø }
 	hex = char_ahead(p, 1) == 'x' or char_ahead(p, 1) == 'X'
 	binary = (char_ahead(p, 1) == 'b' or char_ahead(p, 1) == 'B') and p.at + 2 < p.n and digit_value(p.code[p.at + 2]) < 2
@@ -13,7 +13,7 @@ radix_numbers_extension = Extension{name: "radix_numbers", number_readers: [read
 # The digits of a number in `base` (`_` between digits), read as the 64 bits they write: `0xffff_ffff_ffff_ffff` is
 # -1. Each digit's bits are shifted in, so no product grows past 64 bits: the compiler's own build carries no big
 # numbers (decision extension-row-optional) and reads such literals in lib/hash.warp (card wasm-rebake-trap)
-def radix_value(p: Parser, base: int): int {
+def radix_value(p: Parser, base: int) as int {
 	digit_bits = if base == 16 then 4 else 1
 	value = 0
 	while p.at < p.n {
@@ -30,7 +30,7 @@ def radix_value(p: Parser, base: int): int {
 }
 
 # The value of a hex digit, 16 for any other character
-def digit_value(c: text): int {
+def digit_value(c: text) as int {
 	small = "0123456789abcdef"
 	capital = "0123456789ABCDEF"
 	i = 0

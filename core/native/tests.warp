@@ -28,7 +28,7 @@ WALL_SECONDS = 120
 RLIMIT_CPU = 0
 # a case opens no window, sounds nothing, says no hints, prints its value as data and compiles on one thread (its slot
 # is one core)
-case_options(): text := "--no-window --mute --no-hints --value-as-data --one-thread"
+case_options() as text := "--no-window --mute --no-hints --value-as-data --one-thread"
 # 128 + SIGXCPU
 CPU_LIMIT_HIT = 152
 # a forked case runs with the option `forked`: a host that cannot run in a process forked without exec (macOS's WebKit,
@@ -55,7 +55,7 @@ SLOT_RECOUNT_MILLISECONDS = 3000
 struct Child { pid: i32; run: i64; started: i64; lock: i32; fresh: i32 }
 CHILD_BYTES = 32
 
-tests_run(compiler: text, by_self: bool, first: int): nothing := {
+tests_run(compiler: text, by_self: bool, first: int) as nothing := {
 	work = joined(text_from(compiled_path().address, compiled_path().length - 5), ".tests")
 	command_output(joined(joined("rm -rf '", work), "'"))
 	mkdir(c_string(work), FOLDER_MODE)
@@ -76,7 +76,7 @@ tests_run(compiler: text, by_self: bool, first: int): nothing := {
 }
 # the cases listed by the compiler in a child, this process waiting for it, its failure the run's: a module's WASI
 # calls start wasmtime's tokio threads, which a case forked later would wait on forever (they stay behind in a fork)
-listed_apart(compiler: text, given: Arguments): nothing := {
+listed_apart(compiler: text, given: Arguments) as nothing := {
 	# (a machine without fork, Windows, has no such threads to leave behind: listed here)
 	if not forks() { return file_ran(compiler, given) }
 	pid = fork()
@@ -91,7 +91,7 @@ listed_apart(compiler: text, given: Arguments): nothing := {
 }
 # a file the run needs, said missing on stderr with the work folder (kept to look into), status 1: a compiler an
 # install pruned mid-run, verdicts that never got written
-required(path: text, work: text): nothing := {
+required(path: text, work: text) as nothing := {
 	if access(c_string(path), READABLE) != 0 {
 		complain(joined(joined(joined(joined("warp test: ", path), " is missing (the run's work folder: "), work), ")"))
 		exit(1)
@@ -99,14 +99,14 @@ required(path: text, work: text): nothing := {
 }
 # the compiler's arguments for a test command: the command, the work folder, then this warp's words after `test` (at
 # `first`, after a `self` before it)
-test_words(compiler: text, command: text, work: text, first: int): Arguments := {
+test_words(compiler: text, command: text, work: text, first: int) as Arguments := {
 	given = words(compiler, command, work, "", "", "")
 	for i in (first + 1)..arg_count() { added(given, arg(i)) }
 	given
 }
 
 # every run of the work folder's list run by a child, as many at once as the machine's pool has slots
-all_ran(work: text, runs: text, prefix: text): nothing := {
+all_ran(work: text, runs: text, prefix: text) as nothing := {
 	total = if runs.length == 0 then 0 else field_count(runs, NEWLINE)
 	# (the children's table holds the most slots a run can have; how many of them it fills follows the builds)
 	capacity = slot_capacity()
@@ -163,19 +163,19 @@ all_ran(work: text, runs: text, prefix: text): nothing := {
 	}
 }
 # `warp test: 812 of 4561 runs done, 3 running`; none running: every slot of the shared pool is another run's
-progress_line(done: int, total: int, running: i32, slots: i32): text := {
+progress_line(done: int, total: int, running: i32, slots: i32) as text := {
 	line = joined(joined(joined(joined(joined("warp test: ", text_of(done)), " of "), text_of(total)), " runs done, "), joined(text_of(running), " running"))
 	if running > 0 { return line }
 	joined(line, joined(joined(", waiting for one of the ", text_of(slots)), " test slots every `warp test` shares (~/.cache/warp/test-slots)"))
 }
-running_count(children: pointer, slots: i32): i32 := {
+running_count(children: pointer, slots: i32) as i32 := {
 	running = 0 as i32
 	for k in 0..slots { if child_at(children + k * CHILD_BYTES).pid > 0 { running = running + 1 } }
 	running
 }
-child_at(address: pointer): Child := address
+child_at(address: pointer) as Child := address
 # a run's status and milliseconds written, its slot freed
-run_ended(work: text, run: text, status: text, child: Child): nothing := {
+run_ended(work: text, run: text, status: text, child: Child) as nothing := {
 	id = joined(joined(work, "/"), field(run, 0, TAB))
 	write_file(joined(id, ".status"), status)
 	write_file(joined(id, ".ms"), text_of(milliseconds_now() - child.started))
@@ -183,14 +183,14 @@ run_ended(work: text, run: text, status: text, child: Child): nothing := {
 	child.pid = 0
 }
 # a run's exit code as its status, `time` and why for one that used its CPU budget
-status_said(code: i32): text := if code == CPU_LIMIT_HIT then time_status("used its ", CPU_SECONDS, " s of CPU") else text_of(code)
-time_status(before: text, seconds: int, after: text): text := joined(joined(joined("time ", before), text_of(seconds)), after)
+status_said(code: i32) as text := if code == CPU_LIMIT_HIT then time_status("used its ", CPU_SECONDS, " s of CPU") else text_of(code)
+time_status(before: text, seconds: int, after: text) as text := joined(joined(joined("time ", before), text_of(seconds)), after)
 # waitpid's status as the exit code, 128 and the signal for a child a signal ended
-exit_code(status: i32): i32 := if status % 256 == 0 then status / 256 % 256 else 128 + status % 128
+exit_code(status: i32) as i32 := if status % 256 == 0 then status / 256 % 256 else 128 + status % 128
 
 # the child's run started, forked or, `fresh`, exec'd: 1 when it ended at once, a failed fork's -1 being no child (kill(-1)
 # would end every process of the user)
-started(work: text, runs: text, prefix: text, children: pointer, slots: i32, child: Child, fresh: bool): int := {
+started(work: text, runs: text, prefix: text, children: pointer, slots: i32, child: Child, fresh: bool) as int := {
 	child.pid = started_run(work, field(runs, child.run, NEWLINE), prefix, children, slots, fresh)
 	child.started = milliseconds_now()
 	child.fresh = if fresh then 1 else 0
@@ -201,7 +201,7 @@ started(work: text, runs: text, prefix: text, children: pointer, slots: i32, chi
 # a child running the run `<id>\t<folder>`: this warp's command `run` (or `self`) with the code, in the folder, its
 # output and errors into the run's files; the locks of the other slots closed in it. Forked, it runs in this process's
 # loaded engine and compilers; `fresh`, it is this warp exec'd anew
-started_run(work: text, run: text, prefix: text, children: pointer, slots: i32, fresh: bool): i32 := {
+started_run(work: text, run: text, prefix: text, children: pointer, slots: i32, fresh: bool) as i32 := {
 	id = joined(joined(work, "/"), field(run, 0, TAB))
 	folder = c_string(field(run, 1, TAB))
 	given = arguments()
@@ -246,9 +246,9 @@ started_run(work: text, run: text, prefix: text, children: pointer, slots: i32, 
 
 # whether this machine forks: Windows has no fork, its cases are this warp started anew, by posix_spawnp, with no CPU
 # budget (the wall clock still ends one)
-forks(): bool := library_function(c_string("c"), c_string("fork")) != 0
+forks() as bool := library_function(c_string("c"), c_string("fork")) != 0
 # the run started as this warp anew in the case's folder, its output and errors into the run's files: its pid, else -1
-spawned_run(given: Arguments, folder: pointer, output: pointer, errors: pointer): i32 := {
+spawned_run(given: Arguments, folder: pointer, output: pointer, errors: pointer) as i32 := {
 	out = creat(output, FILE_MODE)
 	err = creat(errors, FILE_MODE)
 	actions = allocate(SPAWN_ACTIONS_BYTES)
@@ -270,14 +270,14 @@ spawned_run(given: Arguments, folder: pointer, output: pointer, errors: pointer)
 # them, so the count follows the builds as they start and end)
 BUILD_CORES = 2
 WHILE_BUILDING = 2
-machine_cores(): i32 := number_of(trimmed_end(command_output("getconf _NPROCESSORS_ONLN")))
+machine_cores() as i32 := number_of(trimmed_end(command_output("getconf _NPROCESSORS_ONLN")))
 # the wall clock a case may take: WALL_SECONDS, stretched by the machine's runnable processes per core (loads: room
 # for getloadavg's one double)
-wall_seconds(cores: i32, loads: pointer): i64 := {
+wall_seconds(cores: i32, loads: pointer) as i64 := {
 	share = if getloadavg(loads, 1) == 1 and cores > 0 then float_at(loads).value / (cores as f64) else 1.0
 	(WALL_SECONDS as f64 * (if share > 1.0 then share else 1.0)) as i64
 }
-slot_count(): i32 := {
+slot_count() as i32 := {
 	if has_option("slots") { return within_slots(number_of(option_of("slots"))) }
 	cores = machine_cores()
 	builds = builds_running()
@@ -285,14 +285,14 @@ slot_count(): i32 := {
 	within_slots(if builds == 0 then cores else if beside < WHILE_BUILDING then WHILE_BUILDING else beside)
 }
 # the most slots a run can fill: those it is given, else the cores
-slot_capacity(): i32 := {
+slot_capacity() as i32 := {
 	within_slots(if has_option("slots") then number_of(option_of("slots")) else machine_cores())
 }
-within_slots(count: i32): i32 := if count < 1 then 1 else if count > MAX_SLOTS then MAX_SLOTS else count
+within_slots(count: i32) as i32 := if count < 1 then 1 else if count > MAX_SLOTS then MAX_SLOTS else count
 # the compiler builds running: each holds one of the store's build slots (<store>/build-slots/1 …, the store
 # /Volumes/Build/compilers, else ~/.cache/warp/compilers), its lock taken by another
 MAX_BUILD_SLOTS = 16
-builds_running(): i32 := {
+builds_running() as i32 := {
 	store = if access(c_string("/Volumes/Build/compilers"), READABLE) == 0 then "/Volumes/Build/compilers" else joined(getenv("HOME"), "/.cache/warp/compilers")
 	builds = 0 as i32
 	for slot in 1..MAX_BUILD_SLOTS + 1 {
@@ -306,13 +306,13 @@ builds_running(): i32 := {
 }
 # the folder of the machine's pool of slots (card shared-test-slots: lock files shared by every `warp test` there is),
 # made once a run (a shell made it at each try for a slot: 50 a second while all were taken)
-slots_folder(): text := {
+slots_folder() as text := {
 	folder = joined(getenv("HOME"), "/.cache/warp/test-slots")
 	command_output(joined(joined("mkdir -p '", folder), "'"))
 	folder
 }
 # a free slot of that pool, its lock held until closed; -1 after waiting a while for one
-taken_slot(folder: text, slots: i32): i32 := {
+taken_slot(folder: text, slots: i32) as i32 := {
 	first = getpid() % slots
 	for offset in 0..slots {
 		lock = creat(c_string(joined(joined(folder, "/"), text_of((first + offset) % slots))), FILE_MODE)
@@ -323,7 +323,7 @@ taken_slot(folder: text, slots: i32): i32 := {
 	-1
 }
 # the digits of a text as a number, 0 for none
-number_of(t: text): i32 := {
+number_of(t: text) as i32 := {
 	n = 0 as i32
 	for i in 0..t.length {
 		digit = byte_at(t.address + i).value as i32 - 48
@@ -332,7 +332,7 @@ number_of(t: text): i32 := {
 	n
 }
 # one of this warp's words is the flag
-flagged(flag: text): bool := {
+flagged(flag: text) as bool := {
 	for i in 1..arg_count() { if same_text(arg(i), flag) { return yes } }
 	no
 }

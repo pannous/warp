@@ -24,19 +24,19 @@ match_bound = HiddenWord.MatchBound as text
 # the readers whose part is a case of an enum spelled as the node carries it
 spelled_readers = {"op_of": "Op", "bracket_of": "Bracket", "separator_of": "Separator"}
 # `Op·case(t)`: the case spelled t, `Op·text(c)`: the spelling of a case (node_cases.warp spelling_functions)
-spelled_function(enum_name: text, function: text): text := enum_name + "·" + function
+spelled_function(enum_name: text, function: text) as text := enum_name + "·" + function
 
 # a part as a pattern binds it: a spelled part as its case by its code, `Op·coded(n)` (node_cases.warp coded_functions),
 # a list of the cases by code made once, where `Op·case(op_of(n))` made the part's text and looked it up in Op·cases at
 # every match (5% of a rebuild; Bracket's and Separator's 1.5% of a self compile)
-bound_part(read: Node, reader: text): Node := if reader in spelled_readers then applied(spelled_function(spelled_readers[reader], "coded"), read#2) else read
+bound_part(read: Node, reader: text) as Node := if reader in spelled_readers then applied(spelled_function(spelled_readers[reader], "coded"), read#2) else read
 
-applied(word: text, argument: Node): Node := List([symbol(word), argument], Bracket.Round, Separator.None)
+applied(word: text, argument: Node) as Node := List([symbol(word), argument], Bracket.Round, Separator.None)
 
-part_of(subject: Node, reader: text): Node := if reader == "itself" then subject else applied(reader, subject)
+part_of(subject: Node, reader: text) as Node := if reader == "itself" then subject else applied(reader, subject)
 
 # `Key(left, Op.Colon, right)`: the case's name and its parts, else ø
-case_pattern(pattern: Node): list? := match pattern {
+case_pattern(pattern: Node) as list? := match pattern {
 	List(call, Bracket.Round, Separator.None): {
 		if #call > 1 and is_name(call#1) and name_of(call#1) in case_readers and #call - 1 == #case_readers[name_of(call#1)] { return call }
 		ø
@@ -46,15 +46,15 @@ case_pattern(pattern: Node): list? := match pattern {
 
 # the arm taking any other subject: `_`, `other`, `default`, `else`
 default_arms = [other_arm, "other", "default", "else"]
-is_other_arm(pattern: Node): bool := is_name(pattern) and default_arms contains name_of(pattern)
+is_other_arm(pattern: Node) as bool := is_name(pattern) and default_arms contains name_of(pattern)
 
 # an arm `pattern: result` or `pattern => result` (read as `->`); `n: digits => e`, read `n: (digits => e)` as digits is
 # no type word, is the arm of the pattern `n: digits`, a hole typed by a class of characters (lib/prelude.warp)
 character_class_words = ["digit", "digits", "letter", "letters", "hex"]
-arm_pattern(arm: Node): Node := arm_parts(arm)#1
-arm_result(arm: Node): Node := arm_parts(arm)#2
+arm_pattern(arm: Node) as Node := arm_parts(arm)#1
+arm_result(arm: Node) as Node := arm_parts(arm)#2
 # [pattern, result] of an arm; a bare value is both
-arm_parts(arm: Node): list := match arm {
+arm_parts(arm: Node) as list := match arm {
 	Key(pattern, Op.Colon, Key(Symbol(word), Op.Arrow, result)): if word in character_class_words then [Key(pattern, Op.Colon, symbol(word)), result] else [pattern, value_of(arm)]
 	Key(pattern, Op.Colon, result): [pattern, result]
 	Key(pattern, Op.Arrow, result): [pattern, result]
@@ -64,7 +64,7 @@ arm_parts(arm: Node): list := match arm {
 # `1`, "a", 'c', ø, yes, an enum case `Color.Red` or `Color::Red` (`Op.Colon` is ":" by then), a variant the program declares
 # (`Red` of `enum Color { Red, Green }`), a constant `True`, `no`: an arm the subject equals; `"b" | "c"` (read as
 # `or`): one it equals one of
-is_value_pattern(pattern: Node, variants: map): bool := pattern is bool or match pattern {
+is_value_pattern(pattern: Node, variants: map) as bool := pattern is bool or match pattern {
 	ø: yes
 	# `1 | 2`, read as the bits' or between whole numbers (parser.warp bit_operator), names alternatives too
 	Key(left, Op.BitOr, right): is_value_pattern(left, variants) and is_value_pattern(right, variants)
@@ -83,31 +83,31 @@ is_value_pattern(pattern: Node, variants: map): bool := pattern is bool or match
 }
 
 # the subject equals the value, or one of the alternatives
-value_test(subject: Node, pattern: Node): Node := match pattern {
+value_test(subject: Node, pattern: Node) as Node := match pattern {
 	Key(left, Op.Or, right): Key(value_test(subject, left), Op.Or, value_test(subject, right))
 	Key(left, Op.BitOr, right): Key(value_test(subject, left), Op.Or, value_test(subject, right))
 	_: Key(subject, Op.Eq, pattern)
 }
 
 # `int: e`: an arm of a type word tests the subject's type, `match 3 { int: … }`
-is_type_pattern(pattern: Node): bool := match pattern {
+is_type_pattern(pattern: Node) as bool := match pattern {
 	Symbol(word): is_tested_type_word(word)
 	_: no
 }
 
 # `n if n > 5 => e` (parsed as `if n > 5 then n`): the pattern and its guard, else ø
-guard_of(pattern: Node): Node := match pattern {
+guard_of(pattern: Node) as Node := match pattern {
 	Key(Key(ø, Op.If, guard), Op.Then, arm_body): guard
 	_: ø
 }
 
-guarded_pattern(pattern: Node): Node := if guard_of(pattern) == ø then pattern else value_of(pattern)
+guarded_pattern(pattern: Node) as Node := if guard_of(pattern) == ø then pattern else value_of(pattern)
 
 # `n => "hi " + n`: a bare name its result mentions binds the subject, a guard's name too
-is_name_arm(pattern: Node, result: Node, variants: map): bool := is_name(pattern) and not is_other_arm(pattern) and not is_type_pattern(pattern) and not is_value_pattern(pattern, variants) and mentions(result, name_of(pattern))
+is_name_arm(pattern: Node, result: Node, variants: map) as bool := is_name(pattern) and not is_other_arm(pattern) and not is_type_pattern(pattern) and not is_value_pattern(pattern, variants) and mentions(result, name_of(pattern))
 
 # an arm of today's if-chain tests, else one for the matcher
-is_case_arm(arm: Node, variants: map): bool := {
+is_case_arm(arm: Node, variants: map) as bool := {
 	pattern = guarded_pattern(arm_pattern(arm))
 	is_name(pattern) or is_value_pattern(pattern, variants) or is_type_pattern(pattern) or case_pattern(pattern) != ø
 }
@@ -116,12 +116,12 @@ is_case_arm(arm: Node, variants: map): bool := {
 matcher_word = "pattern_bindings"
 
 # `match v {…}` with an arm for the matcher, its definition brought from the prelude before the match is lowered
-is_structural_match(n: Node): bool := match n {
+is_structural_match(n: Node) as bool := match n {
 	List(parts, Bracket.None, Separator.Space): has_structural_arms(parts)
 	_: no
 }
 
-has_structural_arms(parts: list): bool := {
+has_structural_arms(parts: list) as bool := {
 	for i in 1 ..< #parts {
 		block = if parts#i == symbol("match") and i + 2 <= #parts then parts#(i + 2) else if is_match_head(parts#i) then parts#(i + 1) else ø
 		if block != ø and is_curly_group(block) and items_of(block).any(arm => not is_case_arm(arm, {})) { return yes }
@@ -131,7 +131,7 @@ has_structural_arms(parts: list): bool := {
 
 # the names a structural pattern binds (lib/prelude.warp pattern_names): its names but `_` and the type words, `$x`
 # and `...rest` unmarked; of quoted code only its holes, a map's fields by their patterns
-structural_names(pattern: Node, quoted: bool): list := {
+structural_names(pattern: Node, quoted: bool) as list := {
 	if is_quote(pattern) { return structural_names(pattern#2, yes) }
 	match pattern {
 		Symbol(name): marked_name(name, quoted)
@@ -146,39 +146,39 @@ structural_names(pattern: Node, quoted: bool): list := {
 	}
 }
 
-field_names(field: Node, quoted: bool): list := match field {
+field_names(field: Node, quoted: bool) as list := match field {
 	Key(name, Op.Colon, value): structural_names(value, quoted)
 	_: structural_names(field, quoted)
 }
 
-marked_name(name: text, quoted: bool): list := {
+marked_name(name: text, quoted: bool) as list := {
 	if name.starts_with("$") or name.starts_with("*") { return [name[1..]] }
 	if quoted or name == other_arm or is_tested_type_word(name) { return [] }
 	[name]
 }
 
-kind_test(case_name: text, subject: Node): Node := {
+kind_test(case_name: text, subject: Node) as Node := {
 	if case_name in case_types { return type_test_of(subject, case_types[case_name]) }
 	Key(applied("bracket_of", subject), Op.Ne, ø)
 }
 # `subject is type`: by the kind bits the match read where the subject is the match's own (matched_subject, set only
 # while its arms are lowered: `x is Key(…)` outside a match tests by is_type, its match·subject has no kind bits)
-type_test_of(subject: Node, type: text): Node := {
+type_test_of(subject: Node, type: text) as Node := {
 	if subject == matched_subject { return List([symbol(HiddenWord.KindTested as text), symbol(kinds_name), subject, type], Bracket.Round, Separator.None) }
 	List([symbol("is_type"), subject, type], Bracket.Round, Separator.None)
 }
 
 # a part written as a name binds it (`_` binds nothing), a case `Key(…)` matches that part in turn; any other part is
 # a value the part equals
-is_binding(part: Node): bool := is_name(part)
+is_binding(part: Node) as bool := is_name(part)
 
-arm_test(pattern: list, subject: Node): Node := {
+arm_test(pattern: list, subject: Node) as Node := {
 	tests = part_tests(pattern, subject)
 	conjunction_of(tests#1, tests[1..])
 }
 
 # the kind test of a case, then the tests of its parts, those of a nested case's after the kind test it reads them by
-part_tests(pattern: list, subject: Node): list := {
+part_tests(pattern: list, subject: Node) as list := {
 	readers = case_readers[name_of(pattern#1)]
 	tests = [kind_test(name_of(pattern#1), subject)]
 	for i in 1 to #readers {
@@ -190,18 +190,18 @@ part_tests(pattern: list, subject: Node): list := {
 	tests
 }
 
-conjunction_of(test: Node, equalities: list): Node := if #equalities == 0 then test else conjunction_of(Key(test, Op.And, equalities#1), equalities[1..])
+conjunction_of(test: Node, equalities: list) as Node := if #equalities == 0 then test else conjunction_of(Key(test, Op.And, equalities#1), equalities[1..])
 
 # a part the result never names is not read: `Key(left, op, right): [left, right]` spells no op (an operator's case
 # looked up at every key was a sixth of the sugar passes, card sugar-rule-passes)
-arm_value(pattern: list, subject: Node, result: Node): Node := {
+arm_value(pattern: list, subject: Node, result: Node) as Node := {
 	bound = part_bindings(pattern, subject).filter(binding => mentions(result, name_of(key_of(binding))))
 	if #bound == 0 { return result }
 	List(bound + [result], Bracket.Round, Separator.Semicolon)
 }
 
 # `left = key_of(n)` for each part a case names, a nested case's too
-part_bindings(pattern: list, subject: Node): list := {
+part_bindings(pattern: list, subject: Node) as list := {
 	readers = case_readers[name_of(pattern#1)]
 	bindings = []
 	for i in 1 to #readers {
@@ -214,7 +214,7 @@ part_bindings(pattern: list, subject: Node): list := {
 }
 
 # the arms from the last back: an arm's test chooses its value, else what the arms after it give
-arm_chain(arms: list, subject: Node, variants: map): Node := {
+arm_chain(arms: list, subject: Node, variants: map) as Node := {
 	if #arms == 0 { return applied("switch_no_case", subject) }
 	pattern = arm_pattern(arms#1)
 	if guard_of(pattern) != ø or is_name_arm(pattern, arm_result(arms#1), variants) or not is_case_arm(arms#1, variants) { throw owned_refusal(outside_the_core + "the match arm " + arms#1, "pattern arm") }
@@ -229,11 +229,11 @@ arm_chain(arms: list, subject: Node, variants: map): Node := {
 
 
 # the arms lowered, an extension's past the core's first (extension.warp with_arm_lowerings)
-chained_arms(arms: list, subject: Node, variants: map): Node := arm_chain(with_arm_lowerings(arms, subject, variants), subject, variants)
+chained_arms(arms: list, subject: Node, variants: map) as Node := arm_chain(with_arm_lowerings(arms, subject, variants), subject, variants)
 
 # the name the arms test, while they are lowered
 global matched_subject = ø
-matched(subject: Node, arms: list, n: Node, variants: map): Node := {
+matched(subject: Node, arms: list, n: Node, variants: map) as Node := {
 	if #arms == 0 { return n }
 	named = if is_name(subject) then subject else symbol(subject_name)
 	outer = matched_subject
@@ -247,15 +247,15 @@ matched(subject: Node, arms: list, n: Node, variants: map): Node := {
 }
 
 # `match (1, 2) {…}`: the tuple a list, as `p = (1, 2)` makes it (the passes that do so ran before this one)
-tuple_as_list(subject: Node): Node := if is_round(subject) and separator_of(subject) == "," then List(items_of(subject), Bracket.Square, Separator.Comma) else subject
+tuple_as_list(subject: Node) as Node := if is_round(subject) and separator_of(subject) == "," then List(items_of(subject), Bracket.Square, Separator.Comma) else subject
 
-match_block(subject: Node, block: Node, n: Node, variants: map): Node := match block {
+match_block(subject: Node, block: Node, n: Node, variants: map) as Node := match block {
 	List(arms, Bracket.Curly, separator): matched(subject, joined_arms(arms), n, variants)
 	_: n
 }
 
 # `1, 2 => "small"`: the values written before an arm are its alternatives, `1 or 2 => "small"`
-joined_arms(arms: list): list := {
+joined_arms(arms: list) as list := {
 	joined = []
 	waiting = []
 	for arm in arms.flat_map(comma_items) {
@@ -267,40 +267,40 @@ joined_arms(arms: list): list := {
 	joined + waiting
 }
 
-comma_items(n: Node): list := match n {
+comma_items(n: Node) as list := match n {
 	List(items, Bracket.None, Separator.Comma): items
 	_: [n]
 }
 
-is_arm(n: Node): bool := is_key(n, Op.Colon) or is_key(n, Op.Arrow)
+is_arm(n: Node) as bool := is_key(n, Op.Colon) or is_key(n, Op.Arrow)
 
-with_alternatives(values: list, arm: Node): Node := {
+with_alternatives(values: list, arm: Node) as Node := {
 	if #values == 0 { return arm }
 	pattern = values.reverse().fold(arm_pattern(arm), (alternatives, value) => Key(value, Op.Or, alternatives))
 	if is_arm(arm) then Key(pattern, Op.Colon, arm_result(arm)) else arm
 }
 
 # `match f(x)` of `match f(x) {…}` as a value, the subject a call ending before the block: `((match f(x)) {…})`
-is_match_head(n: Node): bool := match n {
+is_match_head(n: Node) as bool := match n {
 	List(parts, Bracket.None, Separator.Space): #parts == 2 and parts#1 == symbol("match")
 	_: no
 }
 
 # a match among other parts is regrouped as a statement's first (extensions/match_phrases.warp)
-node_match(n: Node, variants: map): Node := match n {
+node_match(n: Node, variants: map) as Node := match n {
 	List(parts, Bracket.None, Separator.Space): spaced_match(parts, n, variants)
 	# a block of the one statement: `{ match word {…} }`
 	List(parts, Bracket.Curly, Separator.Space): spaced_match(parts, n, variants)
 	_: n
 }
 
-spaced_match(parts: list, n: Node, variants: map): Node := {
+spaced_match(parts: list, n: Node, variants: map) as Node := {
 	if #parts == 2 and is_match_head(parts#1) { return match_block(parts#1#2, parts#2, n, variants) }
 	if #parts == 3 and parts#1 == symbol("match") { return match_block(parts#2, parts#3, n, variants) }
 	n
 }
 
-node_matches(program: Node): Node := {
+node_matches(program: Node) as Node := {
 	variants = case_names_of(declarations_found(program, declared_enum, {}))
 	bottom_up(program, n => node_match(n, variants))
 }

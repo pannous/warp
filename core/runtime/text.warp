@@ -6,10 +6,10 @@ use "walks.warp"
 use "../emitter/byte_codes.warp"
 # (runtime words, never intrinsics.warp's: a module using that file would compile them as its own, without intrinsics)
 # a text of that many bytes, an $AsciiText when its maker knows they are all ASCII
-made_text(length: int, ascii: bool): text := if ascii then new_ascii_text(length) else new_text(length)
+made_text(length: int, ascii: bool) as text := if ascii then new_ascii_text(length) else new_text(length)
 # the byte offset of an $AsciiText's index-th character, counted from 1: its byte, the byte count past the last
-ascii_offset(t: text, index: int): int := if index < 1 then 0 else if index > byte_count(t) then byte_count(t) else index - 1
-text_join(a: text, b: text): text := {
+ascii_offset(t: text, index: int) as int := if index < 1 then 0 else if index > byte_count(t) then byte_count(t) else index - 1
+text_join(a: text, b: text) as text := {
 	global walked_text
 	out = made_text(byte_count(a) + byte_count(b), ascii_joined(a, b))
 	copy_text(out, 0, a, 0, byte_count(a))
@@ -21,7 +21,7 @@ text_join(a: text, b: text): text := {
 }
 # the texts joined, `between` between each two: one text made and each byte copied once, where `+=` in a loop copies
 # all bytes so far each time (card list-display-slowness)
-texts_joined(parts: list, between: text): text := {
+texts_joined(parts: list, between: text) as text := {
 	size = 0
 	ascii = is_ascii_text(between)
 	last = -1
@@ -53,14 +53,14 @@ global other_index = 0
 global other_at = 0
 global other_before = -1
 # whether a joined to b stays an $AsciiText: both are, and no CR of a's end meets an LF of b's start
-ascii_joined(a: text, b: text): bool := is_ascii_text(a) and is_ascii_text(b) and not meets_newline(seam_end(-1, a), b)
+ascii_joined(a: text, b: text) as bool := is_ascii_text(a) and is_ascii_text(b) and not meets_newline(seam_end(-1, a), b)
 # the last byte of a text joined so far (-1 for none) once t follows it
-seam_end(last: int, t: text): int := if byte_count(t) > 0 then byte_at(t, byte_count(t) - 1) else last
+seam_end(last: int, t: text) as int := if byte_count(t) > 0 then byte_at(t, byte_count(t) - 1) else last
 # a CR last before t starts with an LF: the two join into one character
-meets_newline(last: int, t: text): bool := last == Ascii.Return and byte_count(t) > 0 and byte_at(t, 0) == Ascii.Newline
+meets_newline(last: int, t: text) as bool := last == Ascii.Return and byte_count(t) > 0 and byte_at(t, 0) == Ascii.Newline
 # the characters (grapheme clusters) of a text; a short one stays out of the count kept, so a lexer's words leave its
 # source's count (card text-cache-lru)
-text_count(t: text): int := {
+text_count(t: text) as int := {
 	global counted_text
 	global counted_bytes
 	global counted
@@ -73,7 +73,7 @@ text_count(t: text): int := {
 	counted = count
 	count
 }
-characters_counted(t: text): int := {
+characters_counted(t: text) as int := {
 	count = 0
 	at = 0
 	while at < byte_count(t) {
@@ -83,7 +83,7 @@ characters_counted(t: text): int := {
 	count
 }
 # the code points of a text: its bytes that start one, all but the continuation bytes 10xxxxxx
-code_point_count(t: text): int := {
+code_point_count(t: text) as int := {
 	count = 0
 	for i in 0..byte_count(t) {
 		b = byte_at(t, i)
@@ -92,7 +92,7 @@ code_point_count(t: text): int := {
 	count
 }
 # the bytes the output area of linear memory holds at once (one page, past fd_write's iovec)
-output_room(): int := 65520
+output_room() as int := 65520
 # the bytes of t from start until stop into the output area at offset `at`, the memory grown to hold them and the
 # byte after them (a C string's 0): the one place a text goes into linear memory
 output_bytes(at: int, t: text, start: int, stop: int) := {
@@ -105,19 +105,19 @@ memory_holding(bytes: int) := {
 	if missing > 0 { memory_grown(missing) }
 }
 # the pages of linear memory that many bytes take
-pages_holding(bytes: int): int := int_quotient(bytes + page_bytes() - 1, page_bytes())
-page_bytes(): int := 65536
+pages_holding(bytes: int) as int := int_quotient(bytes + page_bytes() - 1, page_bytes())
+page_bytes() as int := 65536
 # where a text goes as a C string for a host word: past the output area's scratch bytes (runtime/extended/wasi.warp
 # scratch_bytes)
-c_text_at(): int := 32
+c_text_at() as int := 32
 # t as the C string a host word reads, its bytes and a 0 in linear memory: its address
-c_text(t: text): int := {
+c_text(t: text) as int := {
 	output_bytes(c_text_at(), t, 0, byte_count(t))
 	output_byte(c_text_at() + byte_count(t), 0)
 	output_address() + c_text_at()
 }
 # t and a newline to stdout
-print_line(t: text): int := {
+print_line(t: text) as int := {
 	print_text(t)
 	output_byte(0, Ascii.Newline)
 	write_output(1)
@@ -134,7 +134,7 @@ print_text(t: text) := {
 	}
 }
 # -1, 0 or 1 as a's bytes come before b's, equal them or come after
-text_order(a: text, b: text): int := {
+text_order(a: text, b: text) as int := {
 	i = 0
 	while i < byte_count(a) and i < byte_count(b) {
 		if byte_at(a, i) < byte_at(b, i) { return -1 }
@@ -145,7 +145,7 @@ text_order(a: text, b: text): int := {
 }
 # whether a and b have the same bytes: the one text, or texts of other lengths, without looking at a byte (a map's
 # names are mostly the very texts looked up)
-same_bytes(a: text, b: text): bool := {
+same_bytes(a: text, b: text) as bool := {
 	if same(a, b) { return yes }
 	if byte_count(a) != byte_count(b) { return no }
 	i = 0
@@ -161,7 +161,7 @@ same_bytes(a: text, b: text): bool := {
 # in both NFC forms up to an ASCII byte (nothing composes into an ASCII letter), so only what follows it is looked at,
 # once. NFC reads code points, so a text that is no whole UTF-8 (byte_slice cut a character) compares by its bytes
 # alone; a slice cuts only at its ends, so the shared start is checked at its first byte only
-equal_texts(a: text, b: text): bool := {
+equal_texts(a: text, b: text) as bool := {
 	if same_bytes(a, b) { return yes }
 	if is_ascii_text(a) and is_ascii_text(b) { return no }
 	shared = shared_bytes(a, b)
@@ -175,21 +175,21 @@ equal_texts(a: text, b: text): bool := {
 	(maybe_decomposed(a, first_a) or maybe_decomposed(b, first_b)) and same_bytes(canonical(a), canonical(b))
 }
 # how many bytes the two texts start the same
-shared_bytes(a: text, b: text): int := {
+shared_bytes(a: text, b: text) as int := {
 	i = 0
 	while i < byte_count(a) and i < byte_count(b) and byte_at(a, i) == byte_at(b, i) { i += 1 }
 	i
 }
-ascii_or_end(t: text, at: int): bool := at >= byte_count(t) or byte_at(t, at) < Utf8.Continuation
+ascii_or_end(t: text, at: int) as bool := at >= byte_count(t) or byte_at(t, at) < Utf8.Continuation
 # the last ASCII byte of t before its byte shared, or 0: a place where NFC starts over
-stable_start(t: text, shared: int): int := {
+stable_start(t: text, shared: int) as int := {
 	at = shared - 1
 	while at > 0 and byte_at(t, at) >= Utf8.Continuation { at -= 1 }
 	if at < 0 then 0 else at
 }
 # where t from byte `from` on first holds a lead byte of a code point NFC may change (see maybe_decomposed), its byte
 # count when none; -1 when t is no whole UTF-8: a continuation byte first, or a lead byte without all its continuation bytes
-first_suspect(t: text, from: int): int := {
+first_suspect(t: text, from: int) as int := {
 	if byte_count(t) > 0 and is_continuation_byte(byte_at(t, 0)) { return -1 }
 	suspect = byte_count(t)
 	at = from
@@ -207,7 +207,7 @@ first_suspect(t: text, from: int): int := {
 	suspect
 }
 # whether t from byte `from` on (the lead byte first_suspect found, or the end) holds a code point NFC may change
-maybe_decomposed(t: text, from: int): bool := {
+maybe_decomposed(t: text, from: int) as bool := {
 	at = from
 	before = 0
 	while at < byte_count(t) {
@@ -229,7 +229,7 @@ maybe_decomposed(t: text, from: int): bool := {
 # a combining mark U+0300–036F no composition takes, as the parser's overline `6̅`: between two stable code points
 # nothing composes or reorders it (U+0300–0304, 0306–030C, 030F, 0311, 0313, 0314, 031B, 0323–0328, 032D, 032E, 0330,
 # 0331, 0338, 0340–0345 compose or are replaced)
-lone_mark(c: int): bool := {
+lone_mark(c: int) as bool := {
 	if not within(c, 768, 879) or within(c, 768, 772) or within(c, 774, 780) or within(c, 803, 808) or within(c, 832, 837) { return no }
 	not (c == 783 or c == 785 or c == 787 or c == 788 or c == 795 or c == 813 or c == 814 or c == 816 or c == 817 or c == 824)
 }
@@ -239,7 +239,7 @@ lone_mark(c: int): bool := {
 # arrows, math and shapes U+2100–2BFF; CJK punctuation U+3000–3029; variation selectors U+FE00–FE0F; small forms
 # U+FE30–FE6F; halfwidth and fullwidth forms U+FF00–FFEF; emoji U+1F000–1FAFF. The singletons among them: U+0374,
 # 037E, 0387 (Greek), 2126 Ω, 212A K, 212B Å, 2329, 232A (angle brackets), 2ADC (forking)
-may_change_in_nfc(c: int): bool := {
+may_change_in_nfc(c: int) as bool := {
 	if c < 768 { return no }
 	if c == 884 or c == 894 or c == 903 or c == 8486 or c == 8490 or c == 8491 or c == 9001 or c == 9002 or c == 10972 { return yes }
 	if within(c, 880, 1154) or within(c, 1162, 1327) or within(c, 7424, 7615) or within(c, 7680, 7935) { return no }
@@ -247,11 +247,11 @@ may_change_in_nfc(c: int): bool := {
 	if within(c, 65024, 65039) or within(c, 65072, 65135) or within(c, 65280, 65519) or within(c, 126976, 129791) { return no }
 	yes
 }
-canonical(t: text): text := unboxed_text(canonical_text(t))
+canonical(t: text) as text := unboxed_text(canonical_text(t))
 # a text's NFC form, by lib/unicode.warp's canonical_text, which the host links on its first call
 canonical_text(t: Node): Node from runtime
 # where the bytes of part first start in t, -1 when nowhere
-text_index(t: text, part: text): int := {
+text_index(t: text, part: text) as int := {
 	for start in 0..(byte_count(t) - byte_count(part) + 1) {
 		i = 0
 		while i < byte_count(part) and byte_at(t, start + i) == byte_at(part, i) { i += 1 }

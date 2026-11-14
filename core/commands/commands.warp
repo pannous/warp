@@ -6,11 +6,11 @@
 use "../host_io.warp"
 
 core_commands = ["compile", "runtime", "module", "modules", "modules-plan", "optimize", "baked-current"]
-is_command(word: text): bool := word in core_commands or word in extension_command_words()
+is_command(word: text) as bool := word in core_commands or word in extension_command_words()
 
-quoted_path(path: text): text := "\"" + path + "\""
+quoted_path(path: text) as text := "\"" + path + "\""
 # os's `command(line)`, a shell line run, what it printed; compiler.warp's `command` is its command word
-shell(line: text): text := {
+shell(line: text) as text := {
 	printed = std_io("os", "command", [line])
 	if printed is text then printed else raise "`" + line + "` failed: " + printed
 }
@@ -22,7 +22,7 @@ TRIM_WAYS = {none: "", unused: "--remove-unused-module-elements", optimize: "-O2
 WASM_OPT = "wasm-opt --enable-gc --enable-reference-types --enable-bulk-memory --enable-multivalue --enable-sign-ext --enable-nontrapping-float-to-int --enable-mutable-globals --enable-tail-call --enable-simd --enable-extended-const --enable-multimemory --enable-exception-handling --debuginfo"
 BINARYEN_INSTALL = "brew install binaryen"
 # without Binaryen a build or rebuild keeps the unoptimized module and says so, never fails
-has_wasm_opt(): bool := shell("command -v wasm-opt || true").trim() != ""
+has_wasm_opt() as bool := shell("command -v wasm-opt || true").trim() != ""
 
 # the module trimmed of what its exports never reach, as `way` says (notes/runtime_linking.md "Removing the unused
 # runtime"): by default also optimized (-O2: a third smaller for 30–60 ms more)

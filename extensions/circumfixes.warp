@@ -2,17 +2,17 @@
 # own) makes `⌊x⌋` floor(x), the pair bracketing a whole expression like parentheses
 # `circumfix operator ⌊ ⌋ := floor`: `⌊x⌋` is floor(x)
 class Circumfix { opening: text; closing: text; function: text }
-circumfix_of(statement: OperatorStatement?): Circumfix? := {
+circumfix_of(statement: OperatorStatement?) as Circumfix? := {
 	if statement == ø or not statement.keyword or statement.fixity != Fixity.Circumfix or #statement.head != 2 or #statement.body != 1 { return ø }
 	Circumfix{opening: statement.head#1, closing: statement.head#2, function: statement.body#1}
 }
-circumfixes_among(statements: list): list := statements.map(circumfix_of).filter(circumfix => circumfix != ø)
+circumfixes_among(statements: list) as list := statements.map(circumfix_of).filter(circumfix => circumfix != ø)
 # The circumfix operator opening at the parser's position, else ø
-circumfix_at(p: Parser): Circumfix? := circumfixes_in(p).find(circumfix => at_text(p, circumfix.opening))
+circumfix_at(p: Parser) as Circumfix? := circumfixes_in(p).find(circumfix => at_text(p, circumfix.opening))
 # The glyph opens or closes a circumfix operator: `⌋` is no free symbol
-is_circumfix_glyph(p: Parser, glyph: text): bool := circumfixes_in(p).any(circumfix => circumfix.opening == glyph or circumfix.closing == glyph)
+is_circumfix_glyph(p: Parser, glyph: text) as bool := circumfixes_in(p).any(circumfix => circumfix.opening == glyph or circumfix.closing == glyph)
 # Where the circumfix pair opened before `from` closes, past the pairs nested in it, else n
-circumfix_closing(p: Parser, circumfix: Circumfix, from: int): int := {
+circumfix_closing(p: Parser, circumfix: Circumfix, from: int) as int := {
 	depth = 0
 	for at in from ..< p.n {
 		if starts_at(p.code, circumfix.closing, at, p.n) {
@@ -23,7 +23,7 @@ circumfix_closing(p: Parser, circumfix: Circumfix, from: int): int := {
 	p.n
 }
 # `‖x‖`, `⌊x⌋` bracket a whole expression like parentheses and call their function with it: `‖3-5‖*2` is 4
-circumfixed(p: Parser, circumfix: Circumfix): Node := {
+circumfixed(p: Parser, circumfix: Circumfix) as Node := {
 	opened = p.at + circumfix.opening.length
 	closing = circumfix_closing(p, circumfix, opened)
 	if closing >= p.n { raise "Missing closing " + circumfix.closing }
@@ -36,14 +36,14 @@ circumfixed(p: Parser, circumfix: Circumfix): Node := {
 	call_of([symbol(circumfix.function), inner])
 }
 # the circumfixes a source and lib/math.warp declare, scanned once a parse
-scanned_circumfixes(source: text): list := circumfixes_among(source_operator_statements(source)) + circumfixes_among(math_operator_statements())
+scanned_circumfixes(source: text) as list := circumfixes_among(source_operator_statements(source)) + circumfixes_among(math_operator_statements())
 # the functions of the circumfixes whose opening glyph the source writes: ceil of `⌈x⌉`
-circumfixed_functions(source: text): list := scanned_circumfixes(source).filter(circumfix => source.contains(circumfix.opening)).map(circumfix => circumfix.function)
-circumfixes_in(p: Parser): list := p.scans.get("circumfixes") ?? []
-read_circumfix(p: Parser): Node := {
+circumfixed_functions(source: text) as list := scanned_circumfixes(source).filter(circumfix => source.contains(circumfix.opening)).map(circumfix => circumfix.function)
+circumfixes_in(p: Parser) as list := p.scans.get("circumfixes") ?? []
+read_circumfix(p: Parser) as Node := {
 	circumfix = circumfix_at(p)
 	if circumfix == ø then ø else circumfixed(p, circumfix)
 }
 # a circumfix statement the prescan applied reads as nothing
-skip_circumfix_statement(p: Parser, word: text): Node := if circumfix_of(operator_statement(statement_words_at(p))) == ø then ø else skip_statement(p)
+skip_circumfix_statement(p: Parser, word: text) as Node := if circumfix_of(operator_statement(statement_words_at(p))) == ø then ø else skip_statement(p)
 circumfixes_extension = Extension{name: "circumfixes", prescans: {"circumfixes": scanned_circumfixes}, prefix_readers: [read_circumfix], glyph_owners: [is_circumfix_glyph], keyword_readers: {"circumfix": skip_circumfix_statement}}

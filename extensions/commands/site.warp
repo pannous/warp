@@ -27,7 +27,7 @@ INSTALLED_SCRIPTS = "/site"
 CHECKOUT_SCRIPTS = "/../web/playground"
 
 # every file a site copies from the playground, as named there
-site_files(): list := PAGE_SCRIPTS + WORKER_SCRIPTS.filter(script => script not in PAGE_SCRIPTS) + [ISOLATION_SCRIPT]
+site_files() as list := PAGE_SCRIPTS + WORKER_SCRIPTS.filter(script => script not in PAGE_SCRIPTS) + [ISOLATION_SCRIPT]
 
 site_built(target: text, options: list) := {
 	global dev_build
@@ -49,7 +49,7 @@ site_built(target: text, options: list) := {
 }
 
 # the folder holding the site's scripts, loudly none
-site_scripts(): text := {
+site_scripts() as text := {
 	for folder in [library_folder + INSTALLED_SCRIPTS, library_folder + CHECKOUT_SCRIPTS] {
 		if exists(folder + "/" + PAGE_SCRIPTS.last()) { return folder }
 	}
@@ -58,7 +58,7 @@ site_scripts(): text := {
 
 # the page's first markup: what the program shows once it ran by this warp (`warp run` serves no routes), so the page
 # shows it before its Worker starts, whose first render morphs it in place; none when the program shows no markup
-prerendered(target: text): text := {
+prerendered(target: text) as text := {
 	shown = ""
 	try { shown = shell(warp_command("--no-window run ") + quoted_path(target) + " </dev/null 2>/dev/null | tail -1").trim() } catch failure { shown = "" }
 	if shown.starts_with("<") { return shown }
@@ -66,13 +66,13 @@ prerendered(target: text): text := {
 	""
 }
 
-site_page(title: text, shown: text): text := {
+site_page(title: text, shown: text) as text := {
 	head = "<!doctype html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<link rel=\"icon\" href=\"data:,\">\n<title>" + title + "</title>\n</head>\n<body>\n"
 	scripts = PAGE_SCRIPTS.map(script => "<script src=\"" + SCRIPT_FOLDER + "/" + script + "\"></script>\n").join("")
 	head + "<div id=\"warp-root\">" + shown + "</div>\n" + scripts + "</body>\n</html>\n"
 }
 
-served_files(folder: text): text := {
+served_files(folder: text) as text := {
 	files = shell("cd " + quoted_path(folder) + " && find . -type f ! -name " + SERVED_FILES + " | sort").trim().split("\n").filter(file => file != "")
 	"const SERVED_FILES = new Set([" + files.map(file => "\"" + file.remove_prefix("./") + "\"").join(",") + "]);\n"
 }

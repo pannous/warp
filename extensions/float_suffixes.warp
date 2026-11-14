@@ -1,7 +1,7 @@
 # The float suffix of C, Java and C# (card parser-rows, decision core-is-self): `0.1f`, `3d`, a tight conversion
 # (C's `0.1l` is the litre instead; Rust twin: numbers.rs literal_type_suffix)
 FLOAT_SUFFIXES = "fFdD"
-read_float_suffix(p: Parser, written: text, literal: text): Node := {
+read_float_suffix(p: Parser, written: text, literal: text) as Node := {
 	if not FLOAT_SUFFIXES.contains(char_here(p)) or is_name_char(char_ahead(p, 1)) { return ø }
 	advance(p)
 	Key(written_number(written), Op.As, symbol("float"))

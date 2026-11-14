@@ -3,13 +3,13 @@
 # `sig.parameters`; any other capitalized field stays an ordinary one
 
 # the program with each such field of its classes as the typed list field
-listed_fields(program: Node): Node := {
+listed_fields(program: Node) as Node := {
 	statements = statements_in(program)
 	classes = statements.map(class_view).filter(view => view != ø).map(view => declared_type_name(view#2))
 	group_like(program, statements.map(statement => with_listed_fields(statement, classes)))
 }
 # the class declaration with its listed fields typed, any other statement as it is
-with_listed_fields(statement: Node, classes: list): Node := {
+with_listed_fields(statement: Node, classes: list) as Node := {
 	view = class_view(statement)
 	if view == ø { return statement }
 	members = view#3[3 ..].map(member => {
@@ -22,7 +22,7 @@ with_listed_fields(statement: Node, classes: list): Node := {
 	}
 }
 # `Parameters = []` of a declared class Parameter: `parameters: list[Parameter] = []`, else ø
-listed_field(member: Node, classes: list): Node? := {
+listed_field(member: Node, classes: list) as Node? := {
 	if not (is_key(member, Op.Assign) and key_of(member) is symbol) { return ø }
 	name = name_of(key_of(member))
 	initial = name[0 ..< 1]

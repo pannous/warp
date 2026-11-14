@@ -24,17 +24,17 @@ HEAD_ELEMENT = "head"
 # a dashed name is the page's own element (decision unknown-tag), unless it is one of these attributes
 DASHED_ATTRIBUTES = ["data-", "aria-"]
 
-markup_values(program: Node): Node := {
+markup_values(program: Node) as Node := {
 	# a statement that is an element, `div{"hi"}`, stands outside every markup scope: data, though surely meant as markup
 	for statement in flat_statements(program).filter(statement => is_markup_block(statement) and not is_markup_scope(statement)) { diagnose(call_of(BARE_MARKUP_FACT, [key_of(statement)]), statement) }
 	in_markup(program, scope => marked_markup(loops_as_items(scope), ""))
 }
 # `html{ for x in xs { p{x} } }`: a loop among html's own items makes an item each, as among a tag's
 # (core/passes/data_blocks.warp with_loops_as_items, which leaves html, the markup type, alone)
-loops_as_items(scope: Node): Node := if is_key(scope, Op.Colon) and key_of(scope) == symbol(MARKUP_TYPE) and is_curly_group(value_of(scope)) then Key(key_of(scope), op_of(scope), group_like(value_of(scope), items_of(value_of(scope)).map(loop_as_items))) else scope
+loops_as_items(scope: Node) as Node := if is_key(scope, Op.Colon) and key_of(scope) == symbol(MARKUP_TYPE) and is_curly_group(value_of(scope)) then Key(key_of(scope), op_of(scope), group_like(value_of(scope), items_of(value_of(scope)).map(loop_as_items))) else scope
 # each element of a markup scope an Html, within the element named so; a style sheet's rules (`p: { color: red }`) and
 # a script's text as written
-marked_markup(n: Node, within: text): Node := {
+marked_markup(n: Node, within: text) as Node := {
 	if not (is_markup_element(n) or is_head_entry(n, within)) {
 		walked = children(n, child => marked_markup(child, within))
 		return if is_computed_pair(walked) then as_html(walked) else walked
@@ -43,20 +43,20 @@ marked_markup(n: Node, within: text): Node := {
 	as_html(if tag in RAW_TEXT_ELEMENTS then n else children(n, child => marked_markup(child, tag)))
 }
 # a pair of computed name, `("h" + level): title`, an element when its name is one (lib/markup.warp html_is_element)
-is_computed_pair(n: Node): bool := is_key(n, Op.Colon) and is_group(key_of(n)) and bracket_of(key_of(n)) == "("
-is_head_entry(n: Node, within: text): bool := within == HEAD_ELEMENT and is_key(n, Op.Colon) and key_of(n) is symbol and name_of(key_of(n)) in markup_list(ELEMENTS_LIST)
+is_computed_pair(n: Node) as bool := is_key(n, Op.Colon) and is_group(key_of(n)) and bracket_of(key_of(n)) == "("
+is_head_entry(n: Node, within: text) as bool := within == HEAD_ELEMENT and is_key(n, Op.Colon) and key_of(n) is symbol and name_of(key_of(n)) in markup_list(ELEMENTS_LIST)
 # (a pair in parentheses, the element's value; any other value as it is: `(y)` would call y)
-as_html(n: Node): Node := call_of(MARKUP_CLASS, [Key(symbol(MARKUP_FIELD), Op.Colon, if is_key(n, Op.Colon) then round(n) else n)])
+as_html(n: Node) as Node := call_of(MARKUP_CLASS, [Key(symbol(MARKUP_FIELD), Op.Colon, if is_key(n, Op.Colon) then round(n) else n)])
 # the element an Html holds, `div{…}` of `Html(element: (div{…}))`; another node as it is
-markup_written(n: Node): Node := {
+markup_written(n: Node) as Node := {
 	made = is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol(MARKUP_CLASS) and is_key(n#2, Op.Colon) and key_of(n#2) == symbol(MARKUP_FIELD)
 	if made and is_group(value_of(n#2)) and #value_of(n#2) == 1 then value_of(n#2)#1 else n
 }
-round(n: Node): Node := List([n], Bracket.Round, Separator.None)
+round(n: Node) as Node := List([n], Bracket.Round, Separator.None)
 
 # `div{ … }`, `li: item`: an element of lib/markup.warp (or the page's own, `my-card{…}`), a block unless its name is
 # no attribute's too (`style: { color: red }` is one, `title: "Shop"` a page's fact)
-is_markup_element(n: Node): bool := match n {
+is_markup_element(n: Node) as bool := match n {
 	Key(Symbol(tag), Op.Colon, value): {
 		if tag == SHEET_ELEMENT { return no }
 		block = is_curly_group(value)
@@ -66,10 +66,10 @@ is_markup_element(n: Node): bool := match n {
 	_: no
 }
 # `div{ … }`: an element with its block of items
-is_markup_block(n: Node): bool := is_markup_element(n) and is_curly_group(value_of(n))
+is_markup_block(n: Node) as bool := is_markup_element(n) and is_curly_group(value_of(n))
 
 # a markup scope: html{…}, a definition typed html, a place typed html (the result a typed definition holds, definitions.warp result_held)
-is_markup_scope(n: Node): bool := match n {
+is_markup_scope(n: Node) as bool := match n {
 	Key(Symbol(tag), Op.Colon, List(_, Bracket.Curly, _)): tag == MARKUP_TYPE
 	Key(Key(_, Op.Colon, Symbol(type)), Op.Define, _): type == MARKUP_TYPE
 	Key(Key(_, Op.Colon, Symbol(type)), Op.Assign, _): type == MARKUP_TYPE
@@ -78,8 +78,8 @@ is_markup_scope(n: Node): bool := match n {
 	_: no
 }
 # the program with each markup scope rewritten, the rest as written
-in_markup(program: Node, rewrite: function): Node := markup_walk(program, html_parameters(program), rewrite)
-markup_walk(n: Node, parameters: map, rewrite: function): Node := {
+in_markup(program: Node, rewrite: function) as Node := markup_walk(program, html_parameters(program), rewrite)
+markup_walk(n: Node, parameters: map, rewrite: function) as Node := {
 	# (a typed place's value, its head no markup: `f(): html` is no pair of computed name)
 	# `x as html` an Html holding x, a text the page's own HTML (lib/markup.warp html_now, card read-tags-html)
 	if is_markup_scope(n) and is_key(n, Op.As) { return as_html(rewrite(key_of(n))) }
@@ -90,18 +90,18 @@ markup_walk(n: Node, parameters: map, rewrite: function): Node := {
 	group_like(n, [items[0]] + (1 ..< #items).map(i => if (i - 1) in positions and not is_markup_scope(items[i]) then rewrite(items[i]) else markup_walk(items[i], parameters, rewrite)))
 }
 # each markup scope of the program
-markup_scopes(program: Node): list := {
+markup_scopes(program: Node) as list := {
 	found = []
 	in_markup(program, scope => { found.add(scope); scope })
 	found
 }
 # the positions (from 0) of a call's arguments for parameters typed html, `to_html(div{…})` [0]
-html_argument_positions(n: Node, parameters: map): list := {
+html_argument_positions(n: Node, parameters: map) as list := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n > 1 and n#1 is symbol) { return [] }
 	parameters.get(name_of(n#1)) ?? []
 }
 # word → the positions of its parameters typed html, of the program's own definitions and the modules it uses
-html_parameters(program: Node): map := {
+html_parameters(program: Node) as map := {
 	found = {}
 	modules = flat_statements(program).map(use_target).filter(target => target is symbol).map(name_of)
 	heads = modules.flat_map(module_html_heads) + nodes_in(program).filter(n => is_key(n, Op.Define)).map(definition_head_of).filter(is_named_head)
@@ -111,27 +111,27 @@ html_parameters(program: Node): map := {
 	}
 	found
 }
-html_positions(head: Node): list := (0 ..< #head - 1).filter(i => is_html_parameter(head#(i + 2)))
-is_html_parameter(parameter: Node): bool := is_key(parameter, Op.Colon) and value_of(parameter) == symbol(MARKUP_TYPE)
+html_positions(head: Node) as list := (0 ..< #head - 1).filter(i => is_html_parameter(head#(i + 2)))
+is_html_parameter(parameter: Node) as bool := is_key(parameter, Op.Colon) and value_of(parameter) == symbol(MARKUP_TYPE)
 # the heads of a module's definitions naming html, read once a module (html_positions picks the parameters typed html)
 global module_html_heads_held = {}
-module_html_heads(module: text): list := {
+module_html_heads(module: text) as list := {
 	if not module_html_heads_held.has(module) { module_html_heads_held[module] = html_definitions(module).map(definition_head_of).filter(is_named_head) }
 	module_html_heads_held[module]
 }
 # a module's definitions naming html: off its prebuilt signature, never its source (decision no-lib-reads); parsed
 # from the source only for a module not prebuilt, a program's own
-html_definitions(module: text): list := {
+html_definitions(module: text) as list := {
 	signature = prebuilt_signature(module)
 	if signature != ø { return signature.slices.filter(slice => slice#3.contains(MARKUP_TYPE)).map(slice => statements_in(unpack(slice#3))#1) }
 	definition_slices(used_module_text(module)).filter(slice => slice#2.contains(MARKUP_TYPE)).map(slice => statements_in(plain_node(parsed(slice#2)))#1)
 }
 # `f(a, b)`: a head naming its function
-is_named_head(head: any): bool := head != ø and is_group(head) and #head > 1 and head#1 is symbol
+is_named_head(head: any) as bool := head != ø and is_group(head) and #head > 1 and head#1 is symbol
 
 # a list of lib/markup.warp, `html_elements = [ … ]`, read once
 global markup_lists_held = {}
-markup_list(mark: text): list := {
+markup_list(mark: text) as list := {
 	if not markup_lists_held.has(mark) {
 		source = used_module_text(MARKUP_MODULE)
 		n = source.length

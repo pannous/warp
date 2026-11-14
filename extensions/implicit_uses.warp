@@ -5,7 +5,7 @@
 # (warp uses lists them)
 # how a program writes an indexed word: a glyph operator's function by its glyph, operator_± as ±, also one the
 # aliases declare (lib/aliases.warp `declared: yes`), operator_· as ·; a glyph word's by its glyph, imaginary_unit as ⅈ
-spelling_of(word: text): text := {
+spelling_of(word: text) as text := {
 	for written in GLYPH_WORDS.keys { if GLYPH_WORDS[written] == word { return written } }
 	glyph = word.remove_prefix(OPERATOR_FUNCTION_PREFIX)
 	if glyph != word and (is_operator_glyph(glyph) or glyph in alias_spellings().declared) then glyph else word
@@ -13,13 +13,13 @@ spelling_of(word: text): text := {
 # whether the source writes an indexed word: a glyph wherever it stands, `3·4` and `3∘4` too, or a word spelling the
 # glyph's operator (`circa` of ≈, lib/aliases.warp), a name as a whole word (one of the names it mentions, parser.warp
 # names_mentioned)
-mentions_indexed(source: text, names: map, word: text): bool := {
+mentions_indexed(source: text, names: map, word: text) as bool := {
 	spelled = spelling_of(word)
 	if spelled == word { return names.has(spelled) }
 	source.contains(spelled) or word_operators().any(pair => pair#2 == spelled and names.has(pair#1))
 }
 # the [start, end] of each text literal and comment of the source, in order, by the lexer's own ends of both
-texts_and_comments(source: text): list := {
+texts_and_comments(source: text) as list := {
 	spans = []
 	n = source.length
 	at = 0
@@ -34,7 +34,7 @@ texts_and_comments(source: text): list := {
 	spans
 }
 # the source without its comments: a word only in a comment or the shebang (`#!/usr/bin/env warp`) names nothing
-uncommented(source: text): text := {
+uncommented(source: text) as text := {
 	kept = []
 	from = 0
 	for span in texts_and_comments(source).filter(span => not opens_text(source[span#1])) {
@@ -43,7 +43,7 @@ uncommented(source: text): text := {
 	}
 	(kept + [source[from ..< source.length]]).join("")
 }
-implicit_modules(source: text, tree: Node, folder: text = "."): list := {
+implicit_modules(source: text, tree: Node, folder: text = ".") as list := {
 	index = library_index_section("word")
 	# a foreign line, `posix_spawnp(pid: out, …): i32 from 'c'`, names C's words: its function the program's own
 	foreign = source.split("\n").map(c_declaration).filter(d => d != ø).map(d => d#1)
@@ -98,13 +98,13 @@ implicit_modules(source: text, tree: Node, folder: text = "."): list := {
 	modules
 }
 # whether the program assigns the name itself, `local = 3`, not one of its keys or fields, `local["name"] = "Ada"`
-assigned_whole(program: Node, word: text): bool := nodes_in(program).any(n => is_key(n, Op.Assign) and key_of(n) == symbol(word))
+assigned_whole(program: Node, word: text) as bool := nodes_in(program).any(n => is_key(n, Op.Assign) and key_of(n) == symbol(word))
 # the words only a module's rules name, by module, that the source mentions: the words a rule's hole takes from its
 # list, nothing defining them, `local["name"]` of storage's `$store[$key] where $store in [database, local]` (never a
 # rule word a condition calls, shaders' `shader_values`). The module comes as a use before the program links its
 # modules, so its prebuilt module links instead of its source compiling with the program after the rule fired (card
 # ipad-storage-bug: 5 s a run, and WebKit's Worker ran out of stack)
-rule_named_modules(names: map): map := {
+rule_named_modules(names: map) as map := {
 	found = {}
 	needs = rule_needs_by_module()
 	# (the prelude's rules are always in effect: `xs: [f16] = …` names its f16 and needs no `use prelude`)
@@ -117,7 +117,7 @@ rule_named_modules(names: map): map := {
 }
 # the words the conditions of a module's rules list for a hole, `$store in [database, local]`, read once a module
 global rule_listed_by_module = {}
-rule_listed_words(module: text): list := {
+rule_listed_words(module: text) as list := {
 	if not rule_listed_by_module.has(module) {
 		listed = []
 		rules = rules_of_module(module)
@@ -130,20 +130,20 @@ rule_listed_words(module: text): list := {
 }
 # whether only the modules' rules know the word, no definition: it names them where it leads a statement, never in
 # quoted code (`data(set width of p to 12)` brings no english)
-only_rules_lead(word: text, modules: list): bool := modules.all(module => not module_defines(module, word))
+only_rules_lead(word: text, modules: list) as bool := modules.all(module => not module_defines(module, word))
 # a statement led by a word a module's rule starts with: `stored users: [User]`, whose `stored` declares (sound's
 # `pattern` function never takes `pattern Pair = [_, _]`)
-leads_statement(program: Node, word: text, modules: list): bool := flat_statements(program).any(n => is_group(n) and #n > 0 and n#1 == symbol(word)) and modules.any(module => word in module_rule_heads(module))
+leads_statement(program: Node, word: text, modules: list) as bool := flat_statements(program).any(n => is_group(n) and #n > 0 and n#1 == symbol(word)) and modules.any(module => word in module_rule_heads(module))
 # the words a module's rules start with, read once a module
 global rule_heads_by_module = {}
-module_rule_heads(module: text): list := {
+module_rule_heads(module: text) as list := {
 	if not rule_heads_by_module.has(module) { rule_heads_by_module[module] = module_patterns(module).map(leading_word).filter(word => #word > 0) }
 	rule_heads_by_module[module]
 }
 # whether every statement the word leads goes on with a bare word nothing defines, `on alarm {…}`: a phrase, no call,
 # so the word names a module there only by a rule going on with it (keys' on(key, body) is no `on alarm`, card
 # on-alarm-keys); `words of t` is no phrase but the lookup t.words (extensions/of_lookups.warp), naming words
-only_phrases_lead(program: Node, word: text, defined: function): bool := {
+only_phrases_lead(program: Node, word: text, defined: function) as bool := {
 	led = nodes_in(program).filter(n => is_group(n) and #n > 0 and n#1 == symbol(word))
 	#led > 0 and led.all(n => #n > 1 and n#2 is symbol and not is_word(n#2, of_word) and not defined(name_of(n#2)))
 }
@@ -153,8 +153,8 @@ only_phrases_lead(program: Node, word: text, defined: function): bool := {
 # the defining modules do
 # the definers no other of them builds on: units' ± overloads uncertain's, which it uses, so `6 ± 1` is uncertain's
 # and `5m ± 1cm` brings units by its unit beside it
-base_definers(definers: list): list := definers.filter(module => not module_uses(module).any(used => used in definers))
-definers_taking(word: text, definers: list, program: Node): list := {
+base_definers(definers: list) as list := definers.filter(module => not module_uses(module).any(used => used in definers))
+definers_taking(word: text, definers: list, program: Node) as list := {
 	counts = nodes_in(program).filter(n => is_group(n) and #n > 0 and n#1 == symbol(word) and (bracket_of(n) == "(" or separator_of(n) == " ")).map(n => #n - 1)
 	if not counts { return definers }
 	taking = definers.filter(module => definition_arities(module, word).any(span => counts.all(count => span#1 <= count and count <= span#2)))
@@ -164,14 +164,14 @@ definers_taking(word: text, definers: list, program: Node): list := {
 	if ruled then ruled else definers.filter(module => definition_arities(module, word))
 }
 # [least, most] arguments of each of module's definitions of word, read off its head `word(a, b = 1)`
-definition_arities(module: text, word: text): list := {
+definition_arities(module: text, word: text) as list := {
 	heads = module_definitions(module, word).map(definition => nodes_in(definition).reverse().filter(n => is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol(word)))
 	heads.filter(found => #found > 0).map(found => arity(signature_of(items_of(found#1))))
 }
 # whether one of the module's rules the word leads goes on as a statement it leads does: the word after it a hole or
 # the statement's own, `on every 1 second {…}` timers' rule, `on change x {…}` signals'; a hole with a member after it
 # goes on only as a member of that name, `on job.stop {…}` tasks' `on $x.stop`, never as `on alarm {…}`
-rule_fits(module: text, word: text, program: Node): bool := {
+rule_fits(module: text, word: text, program: Node) as bool := {
 	global said
 	seconds = flat_statements(program).filter(n => is_group(n) and #n > 1 and n#1 == symbol(word)).map(n => said_second(n#2))
 	module_patterns(module).filter(pattern => leading_word(pattern) == word).any(pattern => {
@@ -181,20 +181,20 @@ rule_fits(module: text, word: text, program: Node): bool := {
 }
 # what a statement says after its leading word, as a pattern says it without its holes: `change` of `on change x`,
 # `.stop` of `on job.stop`
-said_second(n: Node): text := if n is symbol then name_of(n) else if is_key(n, Op.Dot) and value_of(n) is symbol then "." + name_of(value_of(n)) else ""
+said_second(n: Node) as text := if n is symbol then name_of(n) else if is_key(n, Op.Dot) and value_of(n) is symbol then "." + name_of(value_of(n)) else ""
 # a pattern's word without its hole and a colon after it: "" of `$e:`, `.stop` of `$x.stop:`, `change` of `change`
-hole_dropped(pattern_word: text): text := {
+hole_dropped(pattern_word: text) as text := {
 	word = if pattern_word.ends_with(":") then pattern_word[0 ..< #pattern_word - 1] else pattern_word
 	if word.starts_with("$") then word[name_end(word, 1, #word) ..] else word
 }
 # the pattern's word after its leading one, "" for none
-second_word(pattern: text): text := {
+second_word(pattern: text) as text := {
 	words = (if pattern.starts_with("(") then pattern[1 ..] else pattern).split(" ")
 	if #words > 1 then words#2 else ""
 }
 # the names a program says, as a value or a call: never a member's, `c.pi` names c, `xs.f(a)` xs and a; what of them it
 # binds itself is names_bound_in's
-free_words(n: Node): map := {
+free_words(n: Node) as map := {
 	found = {}
 	waiting = [n]
 	at = 1
@@ -217,12 +217,12 @@ free_words(n: Node): map := {
 # the words that lead a declaration, `pattern Pair = [_, _]`, `def f(x) …`, `global n = 0`, `use hash`: keywords there,
 # no word of the program, so they never pull in the module defining a word of that name (sound's pattern)
 definition_keywords = import_keywords + declaration_keywords + function_keywords + ["pattern", "class", "enum", "type", "alias"]
-is_definition_keyword(n: Node): bool := n is symbol and name_of(n) in definition_keywords
+is_definition_keyword(n: Node) as bool := n is symbol and name_of(n) in definition_keywords
 # a declaration's words, its keyword first; `pattern("bd sd")` and `pattern "bd sd"` are calls, of a text
-leads_declaration(n: Node): bool := is_group(n) and #n > 1 and is_definition_keyword(n#1) and not is_literal(n#2)
+leads_declaration(n: Node) as bool := is_group(n) and #n > 1 and is_definition_keyword(n#1) and not is_literal(n#2)
 # a tag `div{ id: pwd }`, whose {…} is markup, data: its pwd is no shell word, `style{ color: white }` no color's
-is_tag(n: Node): bool := is_key(n, Op.Colon) and key_of(n) is symbol and is_curly_group(value_of(n))
+is_tag(n: Node) as bool := is_key(n, Op.Colon) and key_of(n) is symbol and is_curly_group(value_of(n))
 # the arguments of a method called on a receiver, `f(a)` of `xs.f(a)`; none of a field `c.pi`
-member_arguments(member: Node): list := if is_group(member) and bracket_of(member) == "(" and #member > 0 then items_of(member)[1 ..] else []
+member_arguments(member: Node) as list := if is_group(member) and bracket_of(member) == "(" and #member > 0 then items_of(member)[1 ..] else []
 
 implicit_uses_extension = Extension{name: "implicit_uses", implicit_uses: [implicit_modules]}

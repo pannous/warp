@@ -5,8 +5,8 @@
 map_word = "map"
 typed_item = symbol("item·typed")
 
-collection_type_tests(program: Node): Node := bottom_up(program, collection_type_test)
-collection_type_test(n: Node): Node := {
+collection_type_tests(program: Node) as Node := bottom_up(program, collection_type_test)
+collection_type_test(n: Node) as Node := {
 	if not is_key(n, Op.Is) { return n }
 	phrase = value_of(n)
 	if not (is_group(phrase) and bracket_of(phrase) == "" and #phrase >= 3 and phrase#1 is symbol and is_collection_head(name_of(phrase#1)) and phrase#2 == symbol(of_word)) { return n }

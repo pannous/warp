@@ -1,13 +1,13 @@
 # Output (emitter.warp's part): the text a value shows as and print writing it to stdout through WASI's fd_write
 # fd_write of the first `count` output bytes, its error code as an int
-def write_output(count: list): list {
+def write_output(count: list) as list {
 	word = [op.i32_store, 2, 0]
 	iovec = [op.i32_const] + sleb(iovec_address) + [op.i32_const] + sleb(output_address) + word
 	iovec += [op.i32_const] + sleb(iovec_address + 4) + count + word
 	arguments = [op.i32_const] + sleb(stdout) + [op.i32_const] + sleb(iovec_address) + [op.i32_const, 1, op.i32_const] + sleb(written_address)
 	iovec + arguments + call_code(import_index(fd_write_import)) + [op.i64_extend_i32_u]
 }
-import_index(entry: list): int := {
+import_index(entry: list) as int := {
 	index = -1
 	for i in 0..<#module.imports { if module.imports[i] == entry { index = i } }
 	if index < 0 { refuse("the import " + entry#2 + ", not declared") }
@@ -17,7 +17,7 @@ import_index(entry: list): int := {
 instance_text_word = HiddenWord.TextShown as text
 instance_show_word = HiddenWord.ShowShown as text
 # a value as the text `+` joins it with and print writes
-def shown_text(value: TypedCode): TypedCode {
+def shown_text(value: TypedCode) as TypedCode {
 	# a number or text of a marked type shows as its type's `format … as text` gives it (extensions/int_types), boxed with
 	# its mark
 	if value.mark != 0 and (value.kind == ValueKind.Int or value.kind == ValueKind.Float or value.kind == ValueKind.Text) { return shown_text(TypedCode(ValueKind.Node, boxed(value))) }
@@ -37,7 +37,7 @@ def shown_text(value: TypedCode): TypedCode {
 # a shown result as warp code that reads back (decision shown-warp-notation): a text quoted, a character in single
 # quotes, an instance by its class's show(), else as its class and fields, `P{n: 3}` (runtime show.warp key_text);
 # `print` writes texts (shown_text)
-def shown_code(value: TypedCode): TypedCode {
+def shown_code(value: TypedCode) as TypedCode {
 	kind = value.kind
 	if kind == ValueKind.Text { return runtime_call("text_code", [value]) }
 	if kind == ValueKind.Node and instance_text_word in module.functions { return marked_or_code(value) }
@@ -46,14 +46,14 @@ def shown_code(value: TypedCode): TypedCode {
 }
 # a number of an int type shown as print writes it, by its type's `format … as text` (`warp 'use color; red'`: red),
 # any other value as warp code; the value, main's result in a local, is read twice
-def marked_or_code(value: TypedCode): TypedCode {
+def marked_or_code(value: TypedCode) as TypedCode {
 	marked = runtime_call("type_marked", [value]).code
 	as_text = converted(call_values(module.functions[instance_text_word], [value]), ValueKind.Text)
 	TypedCode(ValueKind.Text, marked + [op.if] + gc_bytes(references.text) + as_text + [op.else] + runtime_call("value_code", [value]).code + [op.end])
 }
 # what `print` writes: `print a 3` each value as a list shows it, a space between; `print "x is " x "!"`, a text
 # first, the values' texts joined without one (a one-character text is a character)
-def printed_value(body: Body, n: Node): TypedCode {
+def printed_value(body: Body, n: Node) as TypedCode {
 	# `print first xs`: a call of a program function prints its value
 	if is_quote(n) or is_spaced_call(body, n) or not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1) { return expression_code(body, n) }
 	if n#1 is text and text_value(n#1).kind == ValueKind.Text { return texts_joined(body, items_of(n), "") }
@@ -62,7 +62,7 @@ def printed_value(body: Body, n: Node): TypedCode {
 	runtime_call("items_text", [list_value(body, items_of(n))])
 }
 # the texts of the values, the separator between
-def texts_joined(body: Body, values: list, separator: text): TypedCode {
+def texts_joined(body: Body, values: list, separator: text) as TypedCode {
 	printed_text = shown_text(expression_code(body, values#1))
 	for x in values[1..] {
 		if separator != "" { printed_text = runtime_call("text_join", [printed_text, TypedCode(ValueKind.Text, text_bytes(separator))]) }
@@ -71,26 +71,26 @@ def texts_joined(body: Body, values: list, separator: text): TypedCode {
 	printed_text
 }
 spaced_arithmetic = ["+", "-", "*", "/", "%", "^"]
-is_spaced_value(n: Node): bool := {
+is_spaced_value(n: Node) as bool := {
 	if n is number or n is text { return yes }
 	if not (type(n) is key and op_of(n) in spaced_arithmetic) { return no }
 	(key_of(n) == ø or is_spaced_value(key_of(n))) and (value_of(n) == ø or is_spaced_value(value_of(n)))
 }
 # `5 -2`: a glued sign, a value of its own
-is_negative_literal(n: Node): bool := (n is number and n < 0) or (type(n) is key and op_of(n) == Op.Neg and key_of(n) == ø)
+is_negative_literal(n: Node) as bool := (n is number and n < 0) or (type(n) is key and op_of(n) == Op.Neg and key_of(n) == ø)
 # `print x`: x's text and a newline to stdout, a statement: a body ending in it gives ø, and
 # a program ending in it prints nothing more (_start)
-def printed(value: TypedCode): TypedCode { TypedCode(no_kind, dropped(runtime_call("print_line", [shown_text(value)]))) }
+def printed(value: TypedCode) as TypedCode { TypedCode(no_kind, dropped(runtime_call("print_line", [shown_text(value)]))) }
 # the export `show`: the text the host prints main's result as, as print shows it (3.5km by a class's text(), π/2).
 # It takes main's result as main gives it, a boxed node unless an int or float; one main knows to be a text, list,
 # character or bool is shown by that kind's word, so `"hi"` carries no node_text and the texts of every kind
-def shown_result(result: ValueKind): any {
+def shown_result(result: ValueKind) as any {
 	kind = if result == ValueKind.Int or result == ValueKind.Float then result else ValueKind.Node
 	f = exported_function("show", [kind], ValueKind.Text)
 	f.code = shown_code(unboxed_to_show(TypedCode(kind, [op.local_get, 0]), result)).code
 }
 # main's value as given, unboxed when main knows its kind to be one shown by that kind's own word
-def unboxed_to_show(given: TypedCode, result: ValueKind): TypedCode {
+def unboxed_to_show(given: TypedCode, result: ValueKind) as TypedCode {
 	# main's text is a Text node: its bytes taken unchecked, as text_of_node's check can raise (a program that cannot
 	# keeps no error sentences, prebuilt.warp can_raise)
 	if result == ValueKind.Text { return TypedCode(result, payload(given.code, gc_type(gc.text))) }
@@ -100,7 +100,7 @@ def unboxed_to_show(given: TypedCode, result: ValueKind): TypedCode {
 kinds_shown_unboxed = [ValueKind.Text, ValueKind.List, ValueKind.Char, ValueKind.Bool]
 # a runtime word, else a word of a runtime module the program links or compiles with it (extension.warp
 # runtime_modules): `2 ^ 3`'s extended_power
-def runtime_call(name: text, values: list): TypedCode {
+def runtime_call(name: text, values: list) as TypedCode {
 	f = runtime_word(name) ?? linked_word(name) ?? module.functions.get(name)
 	if f == ø { throw name + ": its module isn't linked, nor the program's (extension.warp runtime_modules)" }
 	call_values(f, values)
@@ -109,7 +109,7 @@ def runtime_call(name: text, values: list): TypedCode {
 # build that leaves out its extension, a warning where it is written, as a run that gets there traps (`took / 100` of
 # two ints is an exact ratio: warp test trapped; card after-push-tiers-1-2-1105). Not a refusal: a library the build
 # brings may hold such a word no run of it calls (math.warp percent)
-def needed_call(name: text, values: list): TypedCode {
+def needed_call(name: text, values: list) as TypedCode {
 	warning = name + " traps here, its extension is left out of this build" + module.emitting_at
 	if cut_names.has(name) and not module.warned.has(warning) { module.warned[warning] = yes; warn warning }
 	runtime_call(name, values)

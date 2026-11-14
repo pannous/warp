@@ -21,7 +21,7 @@ module_directory_word = "module_directory"
 
 # the program with the declarations of the files its uses name, read from `folder`, in front of it, and each
 # `module_source("compiler/analysis/errors.data")` the text of that file of the compiler
-with_uses(program: Node, folder: text): Node := {
+with_uses(program: Node, folder: text) as Node := {
 	directed = with_own_aliases(with_module_directory(with_imports_as_uses(program), folder))
 	timed("uses: used files")
 	brought = used_in(directed, folder)
@@ -31,14 +31,14 @@ with_uses(program: Node, folder: text): Node := {
 # `from shapes import box`, `from palette import bright, dim` (decision modules-triage): Python's import of named words
 # is warp's `use shapes`, every word of the module visible (extensions/from_imports.warp hints so); a used file's too.
 # `use list, text` is a use of each (warp-interviewer 11-14)
-with_imports_as_uses(program: Node): Node := {
+with_imports_as_uses(program: Node) as Node := {
 	statements = flat_statements(program)
 	if not statements.any(statement => imported_modules(statement) != ø) { return program }
 	separated(bracketed(statements.flat_map(statement => if imported_modules(statement) == ø then [statement] else imported_modules(statement).map(use_of)), ""), ";")
 }
 # the modules a statement uses in one line, `from palette import bright, dim` (the comma statement leads with it) or
 # `use list, math, text`, else ø
-imported_modules(statement: Node): list? := {
+imported_modules(statement: Node) as list? := {
 	line = without_mark(statement)
 	first = if is_group(line) and separator_of(line) == "," and #line > 0 then without_mark(line#1) else line
 	if from_line(first) != ø { return [from_line(first)] }
@@ -46,11 +46,11 @@ imported_modules(statement: Node): list? := {
 	rest = items_of(line)[1..].map(without_mark)
 	if rest.all(module => module is symbol) then [first#2] + rest else ø
 }
-from_line(n: Node): any := if is_group(n) and #n >= 4 and n#1 == symbol("from") and n#3 == symbol("import") then n#2 else ø
-use_of(module: Node): Node := plain_node(parsed("use " + (if module is text then "\"" + module + "\"" else name_of(module))))
+from_line(n: Node) as any := if is_group(n) and #n >= 4 and n#1 == symbol("from") and n#3 == symbol("import") then n#2 else ø
+use_of(module: Node) as Node := plain_node(parsed("use " + (if module is text then "\"" + module + "\"" else name_of(module))))
 # `read(module_directory + "/data/x")`: module_directory is the folder of the file it is written in
-with_module_directory(n: Node, folder: text): Node := bottom_up(n, x => if x == symbol(module_directory_word) then folder else x)
-used_in(program: Node, folder: text): any := {
+with_module_directory(n: Node, folder: text) as Node := bottom_up(n, x => if x == symbol(module_directory_word) then folder else x)
+used_in(program: Node, folder: text) as any := {
 	written = flat_statements(program)
 	statements = with_scope_declarations(written, folder)
 	modules = written.map(use_target).filter(target => target is symbol and not names_no_module(name_of(target))).map(name_of)
@@ -68,11 +68,11 @@ SCOPE_WORDS = ["folder", "package", "project"]
 # folders below a scope that stay outside it, besides hidden ones and nested repositories
 OUTSIDE_SCOPES = ["packages", "target"]
 # the scope a `use folder|package|project` names, ø for another statement
-scope_used(statement: Node): any := {
+scope_used(statement: Node) as any := {
 	target = use_target(statement)
 	if target is symbol and name_of(target) in SCOPE_WORDS then name_of(target) else ø
 }
-with_scope_declarations(statements: list, folder: text): list := {
+with_scope_declarations(statements: list, folder: text) as list := {
 	scopes = statements.map(scope_used).filter(scope => scope != ø)
 	if #scopes == 0 { return statements }
 	files = []
@@ -98,7 +98,7 @@ with_scope_declarations(statements: list, folder: text): list := {
 }
 # the declarations of `name` in one file of the scope, after that file's uses when it is the first file taken (noted in
 # `taken`); a needed name two files declare differently is refused
-scope_brought(name: text, files: list, parses: map, taken: map): list := {
+scope_brought(name: text, files: list, parses: map, taken: map) as list := {
 	found = scope_declarations(name, files, parses)
 	if #found == 0 { return [] }
 	file = found#1#1
@@ -110,13 +110,13 @@ scope_brought(name: text, files: list, parses: map, taken: map): list := {
 	parses[file].filter(s => use_target(s) != ø).map(s => if file_used(s, folder_of(file)) == ø then s else use_of(file_used(s, folder_of(file)))) + declarations
 }
 # the names a node reads and binds nowhere itself: a parameter, a local or a loop variable is its own
-names_in(n: Node): list := {
+names_in(n: Node) as list := {
 	own = names_bound_in(n)
 	nodes_in(n).filter(x => x is symbol and not own.has(name_of(x))).map(name_of)
 }
 # [file, declaration] of each declaration of `name` in the files, each file parsed once, kept in `parses`; only a file
 # with a line starting with the name, or with a keyword and the name, is parsed (a parameter `x` is in nearly every file)
-scope_declarations(name: text, files: list, parses: map): list := {
+scope_declarations(name: text, files: list, parses: map) as list := {
 	found = []
 	heads = (["", "class ", "enum ", "type "] + function_keywords.map(word => word + " ") + declaration_keywords.map(word => word + " ")).map(word => "\n" + word + name)
 	for file in files {
@@ -128,13 +128,13 @@ scope_declarations(name: text, files: list, parses: map): list := {
 	found
 }
 # the folder a scope covers: the program's own, the nearest above holding <its name>.warp, or the one holding .git
-scope_root(scope: text, folder: text): text := {
+scope_root(scope: text, folder: text) as text := {
 	at = without_steps_up(absolute_folder(folder))
 	root = if scope == "folder" then at else if scope == "project" then project_root(at) else package_root(at)
 	if root == ø { raise "use " + scope + ": no folder above " + working_relative(at) + (if scope == "project" then " holds .git" else " holds a package file, <folder>/<folder>.warp") }
 	root
 }
-package_root(at: text): any := {
+package_root(at: text) as any := {
 	for folder in folders_upward(at) {
 		parts = folder.split("/")
 		if file_text(folder + "/" + parts#(#parts) + module_extension) != ø { return folder }
@@ -142,7 +142,7 @@ package_root(at: text): any := {
 	ø
 }
 # the module files in a folder, and with `deep` those of its folders, nested repositories left out
-files_below(root: text, deep: bool): list := {
+files_below(root: text, deep: bool) as list := {
 	listed = try list_files(root) else []
 	if not (type(listed) is list) { return [] }
 	files = []
@@ -163,7 +163,7 @@ alias_keyword = "alias"
 # `twice => double` or `double <= twice`, an alias line after its keyword: [the new name, the word it names]; a plain
 # `twice = double` says no direction and is refused (decision alias-arrows); [] for any other text, a WGSL `alias int =
 # i32;` in a text (lib/compute_toys.warp)
-alias_pair(written: text): list := {
+alias_pair(written: text) as list := {
 	sides = alias_sides(written, "=>")
 	if #sides == 0 { sides = alias_sides(written, "<=").reverse() }
 	if #sides > 0 { return sides }
@@ -172,12 +172,12 @@ alias_pair(written: text): list := {
 	[]
 }
 # the two plain names an arrow stands between, else []
-alias_sides(written: text, arrow: text): list := {
+alias_sides(written: text, arrow: text) as list := {
 	sides = written.split(arrow).map(side => side.trim())
 	if #sides == 2 and is_plain_name(sides#1) and is_plain_name(sides#2) then sides else []
 }
-alias_direction_fix(name: text, word: text): text := "an alias says its direction with => or <=: alias " + name + " => " + word
-with_own_aliases(program: Node): Node := {
+alias_direction_fix(name: text, word: text) as text := "an alias says its direction with => or <=: alias " + name + " => " + word
+with_own_aliases(program: Node) as Node := {
 	statements = statements_in(program)
 	aliases = statements.map(word_alias).filter(pair => pair != ø)
 	if #aliases == 0 { return program }
@@ -187,14 +187,14 @@ with_own_aliases(program: Node): Node := {
 	bottom_up(separated(bracketed(kept, ""), ";"), n => aliased(n, renamed))
 }
 # [alias, word] of an alias line, ø for another statement
-word_alias(statement: Node): any := {
+word_alias(statement: Node) as any := {
 	if not (is_group(statement) and #statement == 2 and statement#1 == symbol(alias_keyword)) { return ø }
 	match statement#2 {
 		Key(alias, op, word): if op == Op.Assign and alias is symbol and word is symbol then [name_of(alias), name_of(word)] else ø
 		_: ø
 	}
 }
-aliased(n: Node, aliases: list): any := {
+aliased(n: Node, aliases: list) as any := {
 	if not (n is symbol) { return n }
 	for pair in aliases { if name_of(n) == pair#1 { return symbol(pair#2) } }
 	n
@@ -202,7 +202,7 @@ aliased(n: Node, aliases: list): any := {
 
 # `module_source("compiler/analysis/errors.data")`: that file's text, read at compile time: the compiler's own data, never a library's (decision core-takes-what-it-uses); a name with an
 # extension, that file of lib/ (its links compiler/ and extensions/). A compiled compiler reads its own data from nowhere (decision built-in-lib)
-module_text(n: Node): any := {
+module_text(n: Node) as any := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol("module_source") and n#2 is text) { return n }
 	# the file itself, never a bundled copy: the compiler being built carries this tree's lib/
 	path = module_source_path(n#2)
@@ -210,8 +210,8 @@ module_text(n: Node): any := {
 	if source == ø then n else source
 }
 # a table of texts by name packed, as `warp rebuild` writes one beside the modules, and read back
-packed_table(table: map): text := pack(List(table.keys.map(key => keyed(":", key, table[key])), Bracket.Curly, Separator.Comma))
-unpacked_table(body: text): map := {
+packed_table(table: map) as text := pack(List(table.keys.map(key => keyed(":", key, table[key])), Bracket.Curly, Separator.Comma))
+unpacked_table(body: text) as map := {
 	table = {}
 	for entry in items_of(unpack(body)) {
 		key: text = key_of(entry)
@@ -220,11 +220,11 @@ unpacked_table(body: text): map := {
 	table
 }
 # the file module_source names: lib/<name>.warp, or the file within lib/ a name with an extension names
-module_source_path(name: text): text := if name.contains(".") then run_library() + "/" + name else std_module_path(name)
+module_source_path(name: text) as text := if name.contains(".") then run_library() + "/" + name else std_module_path(name)
 
 # [the declarations, the files read]: those of each file the statements use, not yet among `seen`; each file's own
 # declarations claim their signatures in `claimed` (claim_signatures)
-declarations_used(statements: list, folder: text, seen: list, claimed: map): list := {
+declarations_used(statements: list, folder: text, seen: list, claimed: map) as list := {
 	declarations = []
 	for statement in statements {
 		file = file_used(statement, folder)
@@ -249,13 +249,13 @@ declarations_used(statements: list, folder: text, seen: list, claimed: map): lis
 }
 
 INCLUDE_WORD = "include"
-is_include(statement: Node): bool := is_group(statement) and #statement == 2 and statement#1 == symbol(INCLUDE_WORD)
+is_include(statement: Node) as bool := is_group(statement) and #statement == 2 and statement#1 == symbol(INCLUDE_WORD)
 
 # a used file's parse, parsed again each compile: keeping parses across runs saved about 1 % (card kept-values-retire)
 # (each file parsed once for all its readers, kept with the text it was parsed from: a host compiling again after an
 # edit, the repl or the page, parses the new text)
 global file_trees = {}
-file_parsed(file: text): Node := {
+file_parsed(file: text) as Node := {
 	source = file_text(file)
 	if source is ø { raise working_relative(file) + ": no such file to use" }
 	kept = file_trees.get(file)
@@ -264,7 +264,7 @@ file_parsed(file: text): Node := {
 }
 # a used file's tree; one that does not parse is the error naming the file, never a file of no declarations (card
 # unclosed-core: an unclosed ( in a core file hid its later definitions)
-checked_parse(file: text, source: text): Node := {
+checked_parse(file: text, source: text) as Node := {
 	timed("parse " + working_relative(file))
 	tree = plain_node(parsed_from(source, shown_file(file), 1))
 	for n in nodes_in(tree) {
@@ -292,7 +292,7 @@ warn_replaced(statement: Node, modules: list) := {
 }
 REPLACED_FACT = "replaces_module_word"
 # `(play tone)` as its definition writes it, play(tone)
-written_head(head: Node): text := name_of(head#1) + "(" + items_of(head)[1..].map(parameter => "${parameter}").join(", ") + ")"
+written_head(head: Node) as text := name_of(head#1) + "(" + items_of(head)[1..].map(parameter => "${parameter}").join(", ") + ")"
 
 # A used file's declarations claim their signatures: another file declaring one already, differently, is the error
 # naming both, since the later would silently replace the earlier (card module-name-clash); the same declaration in
@@ -315,7 +315,7 @@ claim_signatures(declarations: list, file: text, claimed: map) := {
 
 # `f(x: int, y)` → "f(int, any)", the name and parameter types a declaration claims; a value's name alone, ø for
 # another statement
-declared_signature(statement: Node): any := {
+declared_signature(statement: Node) as any := {
 	conversion = declared_conversion(statement) ?? shown_conversion(statement)
 	if conversion != ø { return name_of(key_of(conversion)) + " as " + name_of(value_of(conversion)) }
 	name = declared_name(statement)
@@ -324,12 +324,12 @@ declared_signature(statement: Node): any := {
 	if head == ø { return name }
 	name + "(" + items_of(head)[1..].map(parameter_type).join(", ") + ")"
 }
-parameter_type(parameter: Node): text := match parameter {
+parameter_type(parameter: Node) as text := match parameter {
 	Key(typed, op, kind): if op == Op.Colon then type_text(kind) else if op == Op.Assign then parameter_type(typed) else "any"
 	_: "any"
 }
 # the head `(f x y)` of a function declaration, as declared_name finds its name; ø for a value
-declared_head(statement: Node): any := match statement {
+declared_head(statement: Node) as any := match statement {
 	Key(left, op, right): {
 		if assigns_or_defines(op) { return call_head(left) }
 		if op != Op.Colon { return ø }
@@ -338,7 +338,7 @@ declared_head(statement: Node): any := match statement {
 	_: if is_keyword_group(statement) then call_head(statement#2) else ø
 }
 # `(f x)`, also typed `f(x): int` or before its block, `(f x) {…}`
-call_head(n: Node): any := {
+call_head(n: Node) as any := {
 	if n is key { return call_head(key_of(n)) }
 	if not (is_group(n) and #n > 0) { return ø }
 	if n#1 is symbol then (if bracket_of(n) == "(" then n else ø) else call_head(n#1)
@@ -351,17 +351,17 @@ call_head(n: Node): any := {
 # a module the native driver links itself (decision host-folder)
 # the standard modules' files in positions.warp source_files, after the program's, numbered alike in every compile
 numbered_module_files() := { global source_files; if #source_files == 1 { source_files += std_module_names.map(name => shown_file(std_module_path(name))) } }
-std_module_path(name: text): text := own_module_files.get(name) ?? run_library() + module_folder(name) + name + module_extension
-module_folder(name: text): text := if modules_in(COMPILER_MODULES).has(name) then COMPILER_MODULES else if is_host_module(name) then HOST_MODULES else if is_runtime_module(name) then "/extensions/" + name + "/" else "/"
+std_module_path(name: text) as text := own_module_files.get(name) ?? run_library() + module_folder(name) + name + module_extension
+module_folder(name: text) as text := if modules_in(COMPILER_MODULES).has(name) then COMPILER_MODULES else if is_host_module(name) then HOST_MODULES else if is_runtime_module(name) then "/extensions/" + name + "/" else "/"
 # a standard module of runtime words, built apart from runtime.wasm (extension.warp runtime_modules)
-is_runtime_module(name: text): bool := name in hooks().runtime_modules
+is_runtime_module(name: text) as bool := name in hooks().runtime_modules
 # the words of the runtime modules a compile brings the source of: their functions compile as runtime words do
 # (intrinsics, the runtime's own words). Only the module being written, or any a `warp build` compiles in: a program
 # links them, and hello reads none of their files
 # (found again only when the compile they depend on changes: the module written, whether modules are linked)
 global runtime_module_words = ø
 global runtime_module_words_for = ø
-is_runtime_module_word(name: text): bool := {
+is_runtime_module_word(name: text) as bool := {
 	compile = [module_written, modules_linked]
 	if runtime_module_words_for != compile {
 		compiled = compiled_runtime_modules()
@@ -370,16 +370,16 @@ is_runtime_module_word(name: text): bool := {
 	}
 	runtime_module_words.has(name)
 }
-compiled_runtime_modules(): list := hooks().runtime_modules.filter(module => module == module_written or not modules_linked)
+compiled_runtime_modules() as list := hooks().runtime_modules.filter(module => module == module_written or not modules_linked)
 # the definitions of a file and of the files beside it that it uses by path (never one above it, the core's runtime)
-file_words(file: text): list := {
+file_words(file: text) as list := {
 	source = file_text(file) ?? ""
 	# (its parse's use statements: used_modules reads module names, a quoted path is no code to it)
 	beside = statements_in(plain_node(parsed(source))).filter(statement => use_target(statement) is text and not use_target(statement).contains(".."))
 	definition_slices(source).map(slice => slice#1) + beside.flat_map(statement => file_words(file_used(statement, folder_of(file))))
 }
 # a module of lib/host/: no program uses it, so none of its words brings it in (prelude_words.warp module_word_definers)
-is_host_module(name: text): bool := modules_in(HOST_MODULES).has(name)
+is_host_module(name: text) as bool := modules_in(HOST_MODULES).has(name)
 # A program's own module, compiled as a standard module is and linked like one (decision samples-modules-wasm:
 # `import shapes` of a shapes.wasm with its warp.signature beside the program, which `warp build --module shapes.warp`
 # writes): name → its .warp file, and name → its .wasm, which a program imports by that path (driver instance_path)
@@ -393,7 +393,7 @@ COMPILER_MODULES = "/extensions/rules/"
 HOST_MODULES = "/host/"
 # the modules each such folder holds, by name, listed once
 global modules_by_folder = {}
-modules_in(folder: text): map := {
+modules_in(folder: text) as map := {
 	if not modules_by_folder.has(folder) {
 		names = {}
 		listed = try list_files(run_library() + folder) else []
@@ -404,7 +404,7 @@ modules_in(folder: text): map := {
 }
 
 # what a `use` statement names, ø for another statement
-use_target(statement: Node): any := {
+use_target(statement: Node) as any := {
 	if not (is_group(statement) and #statement == 2 and statement#1 is symbol and name_of(statement#1) in import_keywords) { return ø }
 	target = path_text(statement#2)
 	# a quoted name without an extension is the bare one: `use "list"` is `use list`, a file of the folder or a std module
@@ -413,10 +413,10 @@ use_target(statement: Node): any := {
 }
 # the text a path literal marks, `./x.warp` parsed as `"./x.warp" as path` (core/parsing/parser.warp), so `use ./x.warp`
 # names the file `use "./x.warp"` does (card colors-package-import); any other node as it is
-path_text(n: Node): Node := if is_key(n, Op.As) and value_of(n) == symbol("path") and key_of(n) is text then key_of(n) else n
+path_text(n: Node) as Node := if is_key(n, Op.As) and value_of(n) == symbol("path") and key_of(n) is text then key_of(n) else n
 
 # the path of the file of the folder a `use` statement names, ø for another statement or a module of no such file
-file_used(statement: Node, folder: text): any := {
+file_used(statement: Node, folder: text) as any := {
 	module = use_target(statement)
 	if module is text { return with_module_extension(rooted(module, folder)) }
 	# (a runtime module a build compiles in is its root file, whose own uses of the files beside it it brings)
@@ -429,7 +429,7 @@ file_used(statement: Node, folder: text): any := {
 # of that name in the project's packages/ (scripts/link-packages.sh links the registry's there), else in the registry's
 # clone; its own files are then beside it (svg's shapes.warp)
 REGISTRY_CLONE = "/.cache/warp/packages/.registry/"
-package_file(name: text, folder: text): any := {
+package_file(name: text, folder: text) as any := {
 	if is_module_name(name) or names_no_module(name) { return ø }
 	root = project_root(folder)
 	places = (if root == ø then [] else [root + "/packages/"]) + [(started_env("HOME") ?? "") + REGISTRY_CLONE]
@@ -437,12 +437,12 @@ package_file(name: text, folder: text): any := {
 	if #found > 0 then found#1 else ø
 }
 # a file as messages name it: below the working folder relative to it, else as found
-working_relative(file: text): text := {
+working_relative(file: text) as text := {
 	below = cwd + "/"
 	if file.starts_with(below) then file.replace(below, "") else file
 }
 # a source file as a message names it: below the library folder `lib/…`, else working_relative, without `./` steps
-shown_file(file: text): text := {
+shown_file(file: text) as text := {
 	library = run_library() + "/"
 	if file.starts_with(library) { return "lib/" + file[#library ..] }
 	shown = working_relative(file).replace("/./", "/")
@@ -452,7 +452,7 @@ shown_file(file: text): text := {
 # rest; no such folder refuses (decision project-root-paths). Any other name is relative to `folder`: a relative root
 # (the page's `.`) is never joined to it
 root_markers = ["•/", "@/"]
-rooted(name: text, folder: text): text := {
+rooted(name: text, folder: text) as text := {
 	marker = root_markers.filter(m => name.starts_with(m))
 	if #marker == 0 { return path_in(folder, name) }
 	root = project_root(folder)
@@ -460,8 +460,8 @@ rooted(name: text, folder: text): text := {
 	without_steps_up(root + "/" + name[#marker#1 ..< #name])
 }
 # a path naming its file without the extension, `use •/test/fixtures/counter`: that .warp file when there is one
-with_module_extension(path: text): text := if file_text(path) == ø and file_text(path + module_extension) != ø then path + module_extension else path
-project_root(folder: text): any := {
+with_module_extension(path: text) as text := if file_text(path) == ø and file_text(path + module_extension) != ø then path + module_extension else path
+project_root(folder: text) as any := {
 	# from the absolute folder: a relative one (`samples/wasm` of `warp samples/wasm/x.warp`) ran out before the
 	# working folder that holds .git
 	start = without_steps_up(absolute_folder(folder))
@@ -473,7 +473,7 @@ project_root(folder: text): any := {
 }
 # the folder and each above it: an absolute one up to /, a relative one up to its top, as the page's working folder
 # is `.` (`./samples/wasm`, `./samples`), never on past it into `./..`
-folders_upward(at: text): list := {
+folders_upward(at: text) as list := {
 	folders = []
 	while at != "" and at != "/" and at != "." and not at.ends_with("..") {
 		folders += [at]
@@ -481,11 +481,11 @@ folders_upward(at: text): list := {
 	}
 	folders
 }
-absolute_folder(folder: text): text := if folder.starts_with("/") then folder else cwd + "/" + folder
-path_in(folder: text, name: text): text := without_steps_up(if name.starts_with("/") then name else folder + "/" + name)
+absolute_folder(folder: text) as text := if folder.starts_with("/") then folder else cwd + "/" + folder
+path_in(folder: text, name: text) as text := without_steps_up(if name.starts_with("/") then name else folder + "/" + name)
 # the path with each `folder/..` and inner `.` taken out, so a file two folders use is one file (runtime/extended/../text.warp is
 # runtime/text.warp, card runtime-split), and `/project/test/./..` walks up to /project (card wasm-fixture-root)
-without_steps_up(path: text): text := {
+without_steps_up(path: text) as text := {
 	kept = []
 	for part in path.split("/") {
 		if part == "." and #kept > 0 { continue }
@@ -494,12 +494,12 @@ without_steps_up(path: text): text := {
 	kept.join("/")
 }
 # a file comes as library.warp file_source gives it: read from the disk once a compile
-file_text(path: text): any := file_source(path)
+file_text(path: text) as any := file_source(path)
 
 # what a used file brings: a class, `x = …`, `f(x) := …`,
 # `global x = 0`, `def f(x) …`, a plain `enum Meaning {…}` (plain_enums.warp lowers it with the program), a named
 # pattern; not its main-level statements
-is_declaration(statement: Node): bool := match statement {
+is_declaration(statement: Node) as bool := match statement {
 	Key(left, op, right): {
 		if left == opaque_symbol { return kind_of(right) == "type" }
 		if assigns_or_defines(op) { return yes }
@@ -508,14 +508,14 @@ is_declaration(statement: Node): bool := match statement {
 	}
 	_: declared_enum(statement) != ø or is_keyword_group(statement) or is_pattern_definition(statement)
 }
-assigns_or_defines(op: Op): bool := op == Op.Assign or op == Op.Define
-is_declaration_keyword(n: Node): bool := n is symbol and name_of(n) in declaration_keywords
+assigns_or_defines(op: Op) as bool := op == Op.Assign or op == Op.Define
+is_declaration_keyword(n: Node) as bool := n is symbol and name_of(n) in declaration_keywords
 # `def f(x) …`, `global x = 0`: a group a function or declaration keyword starts
-is_keyword_group(n: Node): bool := is_group(n) and #n >= 2 and n#1 is symbol and (name_of(n#1) in function_keywords or is_declaration_keyword(n#1))
+is_keyword_group(n: Node) as bool := is_group(n) and #n >= 2 and n#1 is symbol and (name_of(n#1) in function_keywords or is_declaration_keyword(n#1))
 
 # the name a declaration defines: `f(x) := …`, `x = …`,
 # `def f(x) …`, `def f(x): T {…}`, `global x = 0`, a foreign line `f(x): T from "c"`; ø for another statement
-declared_name(statement: Node): any := match statement {
+declared_name(statement: Node) as any := match statement {
 	Key(left, op, right): {
 		if declared_conversion(statement) != ø { return ø }
 		if assigns_or_defines(op) { return aliased_type_name(left) ?? leftmost_name(left) }
@@ -527,7 +527,7 @@ declared_name(statement: Node): any := match statement {
 }
 # `n: number as Real := …`, `int as Real := …`: the conversion `number as Real`; it declares no name, its parameter n
 # is its own (card conversion-name-declare); else ø
-declared_conversion(statement: Node): any := {
+declared_conversion(statement: Node) as any := {
 	if not is_key(statement, Op.Define) { return ø }
 	left = as_phrase_read(key_of(statement))
 	conversion = if is_key(left, Op.Colon) and key_of(left) is symbol then value_of(left) else left
@@ -535,18 +535,18 @@ declared_conversion(statement: Node): any := {
 }
 # `Person as text` heading a definition, which the parser reads as a phrase of three words (`fib i as int := …` names a
 # result so), as the conversion `Person as text`; any other head as it is
-as_phrase_read(head: Node): Node := if is_group(head) and #head == 3 and head#2 == symbol("as") then Key(head#1, Op.As, head#3) else head
+as_phrase_read(head: Node) as Node := if is_group(head) and #head == 3 and head#2 == symbol("as") then Key(head#1, Op.As, head#3) else head
 # `format Color c as text := …`: the conversion `Color as text` it claims, one per type, so two modules each formatting
 # their own type don't clash; else ø
-shown_conversion(statement: Node): any := {
+shown_conversion(statement: Node) as any := {
 	head = if is_key(statement, Op.Define) then key_of(statement) else ø
 	if is_group(head) and #head == 5 and head#1 == symbol("format") and head#4 == symbol("as") then Key(head#2, Op.As, head#5) else ø
 }
 # `sqrt(x: f64): f64 from "c"`: a foreign line, whose word is the program's own (a library's sqrt is not the one called)
-is_foreign_line(n: Node): bool := is_group(n) and bracket_of(n) == "" and #n == 3 and n#2 == symbol("from")
+is_foreign_line(n: Node) as bool := is_group(n) and bracket_of(n) == "" and #n == 3 and n#2 == symbol("from")
 # `type View = list or int`: the alias's name, View (its left side is the opaque view ["type", name, ø]), else ø
-aliased_type_name(left: Node): text? := if is_key(left, Op.Colon) and key_of(left) == opaque_symbol and kind_of(value_of(left)) == "type" then declared_type_name(value_of(left)#2) else ø
-leftmost_name(n: Node): any := {
+aliased_type_name(left: Node) as text? := if is_key(left, Op.Colon) and key_of(left) == opaque_symbol and kind_of(value_of(left)) == "type" then declared_type_name(value_of(left)#2) else ø
+leftmost_name(n: Node) as any := {
 	if n is symbol { return name_of(n) }
 	if n is key { return leftmost_name(key_of(n)) }
 	if is_group(n) and #n > 0 { return leftmost_name(n#1) }

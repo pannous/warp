@@ -20,38 +20,38 @@ class Protocol { name: text; required: list; default_members: list }
 # the protocols every program knows without declaring them, each named like its built-in values: a class with its
 # required words is one too, beside them (decisions map-protocol, matrix-protocol). Their defaults are library words
 # taking any value: lib/map.warp's, lib/matrix.warp's
-built_in_protocols(): list := [Protocol("map", ["keys", "get", "has", "set", "remove"], []), Protocol("matrix", ["rows", "cols", "element"], [])]
+built_in_protocols() as list := [Protocol("map", ["keys", "get", "has", "set", "remove"], []), Protocol("matrix", ["rows", "cols", "element"], [])]
 # A built-in protocol whose words are a library module's (matrix: lib/matrix.warp) gives a program using that module
 # two functions of its own over a value x: `matrix·is(x)`, its built-in values (a list of equally long lists), and
 # `matrix·listed(x)`, a conforming instance as the default implementation, which every argument of the module's words
 # goes through: the module's words compute on lists, its calls never reaching a program's classes. map needs neither,
 # its words being the runtime's, which the class methods route
-built_in_module(protocol: text): text := if protocol == "matrix" then "matrix" else ""
-built_in_values(protocol: text): text := "x is list and count(x) > 0 and x.all(row => row is list and count(row) == count(x#1))"
-built_in_listed(protocol: text): text := "[[x.element(i, j) for j in 1 to x.cols()] for i in 1 to x.rows()]"
-helper_name(protocol: text, word: text): text := protocol + "·" + word
+built_in_module(protocol: text) as text := if protocol == "matrix" then "matrix" else ""
+built_in_values(protocol: text) as text := "x is list and count(x) > 0 and x.all(row => row is list and count(row) == count(x#1))"
+built_in_listed(protocol: text) as text := "[[x.element(i, j) for j in 1 to x.cols()] for i in 1 to x.rows()]"
+helper_name(protocol: text, word: text) as text := protocol + "·" + word
 # the words of the module a statement uses (`use matrix`), linked or brought as source; ø when none does
-module_words(name: text, statements: list): list? := {
+module_words(name: text, statements: list) as list? := {
 	if not statements.any(statement => is_group(statement) and #statement == 2 and statement#1 == symbol("use") and statement#2 == symbol(name)) { return ø }
 	signature = linked_signature(name)
 	if signature == ø then definition_slices(std_module_text(name)).map(slice => slice#1) else signature.slices.map(slice => slice#1)
 }
 # the two functions over x of a protocol whose module the program uses, its conforming classes listed
-helper_functions(protocol: text, classes: list): list := {
+helper_functions(protocol: text, classes: list) as list := {
 	x = symbol("x")
 	conforming = classes.filter(name => name != protocol)
 	listed = statements_in(parsed(built_in_listed(protocol)))#1
 	converted = if #conforming == 0 then x else chosen(instance_tests(x, conforming), listed, x)
 	[Key(call_of(helper_name(protocol, "is"), [x]), Op.Define, statements_in(parsed(built_in_values(protocol)))#1), Key(call_of(helper_name(protocol, "listed"), [x]), Op.Define, converted)]
 }
-instance_tests(subject: Node, classes: list): Node := {
+instance_tests(subject: Node, classes: list) as Node := {
 	test = Key(subject, Op.Is, symbol(classes#1))
 	for name in classes[1..] { test = Key(test, Op.Or, Key(subject, Op.Is, symbol(name))) }
 	test
 }
 
 # `protocol shape {…}` opening a statement: the type declaration of its members, its name marked a protocol's
-read_protocol(p: Parser, word: text): Node := {
+read_protocol(p: Parser, word: text) as Node := {
 	if not starts_statement(p) or not block_after_name(p, word) { return ø }
 	# (`protocol` and `interface` mean the same, the note naming warp's word where the word is written)
 	if word != protocol_word { diagnosed_at(call_of("alias_word", [symbol(word), symbol(protocol_word)]), place_at(p.code, p.at)) }
@@ -59,14 +59,14 @@ read_protocol(p: Parser, word: text): Node := {
 	opaque(["type", ["attribute", protocol_mark, view_of(true), view#2], view#3])
 }
 # [line, column] of the offset in the code
-place_at(code: text, at: int): list := {
+place_at(code: text, at: int) as list := {
 	lines = code[0 ..< at].split("\n")
 	last = lines[#lines - 1]
 	[#lines, #last + 1]
 }
 
 # the protocol a top statement declares, else ø
-protocol_of(statement: Node): Protocol? := {
+protocol_of(statement: Node) as Protocol? := {
 	if not (statement is key and key_of(statement) == opaque_symbol) { return ø }
 	view = value_of(statement)
 	if kind_of(view) != "type" or kind_of(view#2) != "attribute" or view#2#2 != protocol_mark { return ø }
@@ -75,11 +75,11 @@ protocol_of(statement: Node): Protocol? := {
 	Protocol(declared_type_name(view#2), members.filter(member => member not in given).map(required_word), given)
 }
 # the word a required member names: `area`, `area()`, `area() := pass`
-required_word(member: Node): text := if member is symbol then name_of(member) else if is_called_name(member) then name_of(member#1) else defined_word(member)
+required_word(member: Node) as text := if member is symbol then name_of(member) else if is_called_name(member) then name_of(member#1) else defined_word(member)
 
 # the program with its protocols applied (its statements and those of its `;` lines): their declarations taken out,
 # their default words functions of the program, their tests and typed places resolved
-protocols_applied(program: Node): Node := {
+protocols_applied(program: Node) as Node := {
 	statements = flat_statements(program)
 	declared_protocols = statements.map(protocol_of).filter(found => found != ø)
 	defaults = {}
@@ -113,7 +113,7 @@ protocols_applied(program: Node): Node := {
 	separated(bracketed(resolved, ""), ";")
 }
 # the statements without the protocol and `map default` declarations, those of a `;` line among them, each line kept
-undeclared(statements: list): list := {
+undeclared(statements: list) as list := {
 	kept = statements.filter(statement => protocol_of(statement) == ø and default_named(statement) == ø)
 	kept.map(statement => if is_statement_sequence(statement) then group_like(statement, undeclared(items_of(statement))) else statement)
 }
@@ -122,31 +122,31 @@ undeclared(statements: list): list := {
 # then on (decision lowercase-protocols: a protocol's capitalized name is its default class); else ø
 # (the phrase as written: the early sugar's fallback `x default y` leaves a class on its right alone,
 # extensions/sugar/defaults.warp)
-default_named(statement: Node): list? := {
+default_named(statement: Node) as list? := {
 	if not (is_spaced(statement) and #statement == 3 and statement#2 == symbol(DEFAULT_WORD) and built_in_named(statement#1) and statement#3 is symbol) { return ø }
 	[name_of(statement#1).lower(), name_of(statement#3)]
 }
 DEFAULT_WORD = "default"
-built_in_named(n: Node): bool := n is symbol and built_in_protocols().any(built_in => built_in.name == name_of(n).lower())
+built_in_named(n: Node) as bool := n is symbol and built_in_protocols().any(built_in => built_in.name == name_of(n).lower())
 # `Map{a: 1}` and `map{a: 1}`: the protocol's default class built of the entries, the hashed map itself unless a
 # `map default` names a class, which is then called with it (`ListMap({a: 1})`); `Map x = v` the same of v. An entry
 # `map: {…}` of a written map stays one (Map{…} is built there too)
-default_class_built(n: Node, defaults: map): Node := {
+default_class_built(n: Node, defaults: map) as Node := {
 	if is_group(n) and bracket_of(n) == "{" { return children(n, item => if is_key(item, Op.Colon) and key_of(item) is symbol and not is_capitalized(name_of(key_of(item))) then Key(key_of(item), Op.Colon, default_class_built(value_of(item), defaults)) else default_class_built(item, defaults)) }
 	if is_key(n, Op.Colon) and built_in_named(key_of(n)) and holds_entries(value_of(n)) { return built_by_default(key_of(n), default_class_built(value_of(n), defaults), defaults) }
 	if is_group(n) and bracket_of(n) == "" and #n == 2 and built_in_named(n#1) and is_key(n#2, Op.Assign) and key_of(n#2) is symbol { return Key(key_of(n#2), Op.Assign, built_by_default(n#1, default_class_built(value_of(n#2), defaults), defaults)) }
 	children(n, part => default_class_built(part, defaults))
 }
-built_by_default(protocol: Node, value: Node, defaults: map): Node := {
+built_by_default(protocol: Node, value: Node, defaults: map) as Node := {
 	name = name_of(protocol).lower()
 	if name in defaults then call_of(defaults[name], [value]) else value
 }
 # a written map: a curly list of `name: value` entries
-holds_entries(n: Node): bool := is_group(n) and bracket_of(n) == "{" and #n > 0 and items_of(n).all(item => is_key(item, Op.Colon))
+holds_entries(n: Node) as bool := is_group(n) and bracket_of(n) == "{" and #n > 0 and items_of(n).all(item => is_key(item, Op.Colon))
 
 # `perimeter() := 2 * area()` of a protocol: `perimeter(self) := 2 * self.area()`, each word of the protocol its
 # value's; `describe(s) := area(s) * 2` as it is
-default_function(member: Node, protocol: Protocol): Node := {
+default_function(member: Node, protocol: Protocol) as Node := {
 	head = key_of(member)
 	parameters = if is_called_name(head) then items_of(head)[1..] else []
 	words = protocol.required + protocol.default_members.map(defined_word)
@@ -157,9 +157,9 @@ default_function(member: Node, protocol: Protocol): Node := {
 }
 # `describe(s) := area(s) * 2` (wiki trait.md): a default word handing its first parameter to the protocol's words is
 # a function of the value as written, its first parameter the value
-passes_value_first(parameters: list, body: Node, words: list): bool := #parameters > 0 and parameters#1 is symbol and nodes_in(body).any(n => is_called_name(n) and name_of(n#1) in words and #n > 1 and n#2 == parameters#1)
+passes_value_first(parameters: list, body: Node, words: list) as bool := #parameters > 0 and parameters#1 is symbol and nodes_in(body).any(n => is_called_name(n) and name_of(n#1) in words and #n > 1 and n#2 == parameters#1)
 # `area()` of a protocol's own word: `self.area()`; a bare `area` too
-own_word_called(n: Node, words: list): Node := {
+own_word_called(n: Node, words: list) as Node := {
 	if is_called_name(n) and name_of(n#1) in words { return Key(symbol(protocol_self), Op.Dot, n) }
 	if n is symbol and name_of(n) in words { return Key(symbol(protocol_self), Op.Dot, call_of(name_of(n), [])) }
 	n
@@ -167,7 +167,7 @@ own_word_called(n: Node, words: list): Node := {
 
 # the classes of the program conforming to a protocol: each required word a method of the class or of a class it
 # extends, or a function taking the class first
-conforming_classes(statements: list, protocol: Protocol): list := {
+conforming_classes(statements: list, protocol: Protocol) as list := {
 	classes = {}
 	for statement in statements {
 		view = class_view(statement)
@@ -176,13 +176,13 @@ conforming_classes(statements: list, protocol: Protocol): list := {
 	typed = statements.map(word_and_first_type).filter(pair => pair != ø)
 	classes.keys.filter(name => protocol.required.all(word => has_word(classes, name, word, typed)))
 }
-has_word(classes: map, name: text, word: text, typed: list): bool := {
+has_word(classes: map, name: text, word: text, typed: list) as bool := {
 	declared = classes[name]
 	if declared.methods.any(method => unaliased(defined_word(method)) == unaliased(word)) or [word, name] in typed { return yes }
 	declared.parent in classes and has_word(classes, declared.parent, word, typed)
 }
 # [function, type] of a definition whose first parameter is typed, `area(q: sq) := …`, else ø
-word_and_first_type(statement: Node): list? := {
+word_and_first_type(statement: Node) as list? := {
 	if not is_key(statement, Op.Define) or not is_called_name(key_of(statement)) or #key_of(statement) < 2 { return ø }
 	first = key_of(statement)#2
 	if is_key(first, Op.Colon) and value_of(first) is symbol then [name_of(key_of(statement)#1), name_of(value_of(first))] else ø
@@ -190,10 +190,10 @@ word_and_first_type(statement: Node): list? := {
 
 # `x is shape`: x is one of the conforming classes; `x: shape`, a place the protocol types, takes a value of one
 # `x is C` of a class, the built-in protocol's own test of its name
-instance_or_built_in(subject: Node, name: text): Node := if built_in_module(name) != "" then call_of(helper_name(name, "is"), [subject]) else Key(subject, Op.Is, symbol(name))
+instance_or_built_in(subject: Node, name: text) as Node := if built_in_module(name) != "" then call_of(helper_name(name, "is"), [subject]) else Key(subject, Op.Is, symbol(name))
 # `sq or circle` of the classes
-union_of(classes: list): Node := classes[1..].fold(symbol(classes#1), (union, name) => Key(union, Op.Or, symbol(name)))
-protocol_resolved(n: Node, conforming: map, converted: map, defined: list): Node := {
+union_of(classes: list) as Node := classes[1..].fold(symbol(classes#1), (union, name) => Key(union, Op.Or, symbol(name)))
+protocol_resolved(n: Node, conforming: map, converted: map, defined: list) as Node := {
 	# a call of a word of a built-in protocol's module: each argument the default implementation, a function the
 	# program defines passed as it is (`matrix(2, 4, weight)`)
 	if is_called_name(n) and #n > 1 {

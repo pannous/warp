@@ -6,7 +6,7 @@
 # where the body reads them more than once.
 
 class BlockFunction { names: list; at: int; body: Node }
-block_function(parts: Definition): BlockFunction? := {
+block_function(parts: Definition) as BlockFunction? := {
 	names = parts.parameters.map(parameter_name)
 	at = block_parameter_at(parts.parameters)
 	# (a library word linked declared-only, the prelude's, has no body here)
@@ -17,39 +17,39 @@ block_function(parts: Definition): BlockFunction? := {
 }
 
 # the place of the first parameter typed block, 0 for none
-block_parameter_at(parameters: list): int := {
+block_parameter_at(parameters: list) as int := {
 	for i in 1 to #parameters { if parameter_type(parameters#i) == "block" { return i } }
 	0
 }
 
 # how often n calls the block named `block` with no arguments, `body()`
-block_call_count(n: Node, block: text): int := {
+block_call_count(n: Node, block: text) as int := {
 	if is_block_call(n, block) { return 1 }
 	count = 0
 	for part in parts_of(n) { count += block_call_count(part, block) }
 	count
 }
-is_block_call(n: Node, block: text): bool := is_group(n) and bracket_of(n) == "(" and #n == 1 and n#1 == symbol(block)
+is_block_call(n: Node, block: text) as bool := is_group(n) and bracket_of(n) == "(" and #n == 1 and n#1 == symbol(block)
 
 # n with each call of the block parameter as the block's statements
-with_block_inlined(n: Node, block: text, statements_given: Node): Node := {
+with_block_inlined(n: Node, block: text, statements_given: Node) as Node := {
 	if is_block_call(n, block) { return statements_given }
 	children(n, child => with_block_inlined(child, block, statements_given))
 }
 
 # whether a call of the block gives a value its function uses: the function's result, `value = body()`, `g(body())`
-valued_block_call(body: Node, block: text): bool := is_block_call(body, block) or (holds_statements(body) and #body > 0 and is_block_call(body.last, block)) or valued_inside(body, block)
-valued_inside(n: Node, block: text): bool := {
+valued_block_call(body: Node, block: text) as bool := is_block_call(body, block) or (holds_statements(body) and #body > 0 and is_block_call(body.last, block)) or valued_inside(body, block)
+valued_inside(n: Node, block: text) as bool := {
 	if is_block_call(n, block) { return yes }
 	if holds_statements(n) { return items_of(n).any(item => not is_block_call(item, block) and valued_inside(item, block)) }
 	parts_of(n).any(part => valued_inside(part, block))
 }
 
-every_loop_variable(n: Node): list := loop_variables(n) + parts_of(n).flat_map(every_loop_variable)
+every_loop_variable(n: Node) as list := loop_variables(n) + parts_of(n).flat_map(every_loop_variable)
 
 LEAVING_WORDS = ["return", "break", "continue", "it"]
 # the call of such a function on a literal block as its body, else ø
-inlined_block_call(n: Node, functions: map): Node? := {
+inlined_block_call(n: Node, functions: map) as Node? := {
 	if not is_group(n) or bracket_of(n) != "(" or #n == 0 or not (n#1 is symbol) or not functions.has(name_of(n#1)) { return ø }
 	arguments = arguments_of(items_of(n))
 	for overload in functions[name_of(n#1)] {
@@ -58,7 +58,7 @@ inlined_block_call(n: Node, functions: map): Node? := {
 	}
 	ø
 }
-inlined_into(function: BlockFunction, arguments: list): Node? := {
+inlined_into(function: BlockFunction, arguments: list) as Node? := {
 	names = function.names
 	if #arguments != #names { return ø }
 	given = arguments#(function.at)
@@ -78,7 +78,7 @@ inlined_into(function: BlockFunction, arguments: list): Node? := {
 }
 # the body with each variable it binds (`i` of `for i in 1 to n`) freshly named, so the block's names and the
 # caller's never meet them
-with_fresh_locals(body: Node, parameters: list): Node := {
+with_fresh_locals(body: Node, parameters: list) as Node := {
 	number = fresh_number()
 	for name in names_bound(body, []) + every_loop_variable(body) {
 		if name not in parameters { body = renamed(body, name, fresh_name(name, number)) }
@@ -88,7 +88,7 @@ with_fresh_locals(body: Node, parameters: list): Node := {
 
 # the program's functions with a block parameter only called, by name, each overload; none of a top-level variable's
 # name
-block_functions(statements: list): map := {
+block_functions(statements: list) as map := {
 	variables = statements.filter(statement => definition_of(statement) == ø).fold([], (found, statement) => names_bound(statement, found))
 	functions = {}
 	for statement in statements {
@@ -99,14 +99,14 @@ block_functions(statements: list): map := {
 	functions
 }
 
-overloads_of(functions: map, name: text): list := if functions.has(name) then functions[name] else []
+overloads_of(functions: map, name: text) as list := if functions.has(name) then functions[name] else []
 
-block_inlining(program: Node): Node := {
+block_inlining(program: Node) as Node := {
 	functions = block_functions(statements_in(program))
 	if #functions.keys == 0 { return program }
 	words_rewritten(program, part => block_inlined_or_kept(part, functions), functions.keys)
 }
-block_inlined_or_kept(n: Node, functions: map): Node := {
+block_inlined_or_kept(n: Node, functions: map) as Node := {
 	inlined = inlined_block_call(n, functions)
 	if inlined == ø then n else inlined
 }

@@ -1,7 +1,7 @@
 # Time literals (card parser-rows, decision core-is-self): `2024-01-31`, `2024-01-31T10:00Z` read at a digit as the
 # data view Rust's parser gives them; the core's parser asks this extension's number reader first. A zoned one,
 # `2024-01-31T10:00[Europe/Berlin]`, is the call zoned(2024-01-31T10:00, "Europe/Berlin") of lib/time.warp
-read_time_literal(p: Parser): Node := {
+read_time_literal(p: Parser) as Node := {
 	length = time_literal_length(p, p.at)
 	if length == 0 { return ø }
 	p.at += length
@@ -20,7 +20,7 @@ time_literals_extension = Extension{name: "time_literals", number_readers: [read
 # The length of the RFC 3339 / RFC 9557 time literal at `at`: `2024-01-31`, `2024-01-31T10:00:30.5+01:00`,
 # `2024-01-31T10:00[Europe/Berlin]`; 0 if none starts there
 # Rust twin: time/calendar.rs literal_len
-def time_literal_length(p: Parser, at: int): int {
+def time_literal_length(p: Parser, at: int) as int {
 	if not (digits(p.code, at, 4, p.n) and char_at(p, at + 4) == '-' and digits(p.code, at + 5, 2, p.n) and char_at(p, at + 7) == '-' and digits(p.code, at + 8, 2, p.n)) { return 0 }
 	end = at + 10
 	if (char_at(p, end) == 'T' or char_at(p, end) == 't') and clock_at(p.code, end + 1, p.n) {
@@ -49,7 +49,7 @@ def time_literal_length(p: Parser, at: int): int {
 }
 
 # The `]` closing a time literal's suffix whose name starts at `at`, a name of letters, digits and `/_+-=.!`; 0 if none
-def suffix_close(p: Parser, at: int): int {
+def suffix_close(p: Parser, at: int) as int {
 	close = at
 	while close < p.n and p.code[close] != ']' {
 		c = p.code[close]
@@ -59,8 +59,8 @@ def suffix_close(p: Parser, at: int): int {
 	if close >= p.n or close == at then 0 else close
 }
 # `hh:mm` at `at` (from the lexer, card lexer-helpers-to-extensions)
-clock_at(source: text, at: int, n: int): bool := digits(source, at, 2, n) and is_at(source, at + 2, ':', n) and digits(source, at + 3, 2, n)
-digits(source: text, at: int, count: int, n: int): bool := {
+clock_at(source: text, at: int, n: int) as bool := digits(source, at, 2, n) and is_at(source, at + 2, ':', n) and digits(source, at + 3, 2, n)
+digits(source: text, at: int, count: int, n: int) as bool := {
 	i = 0
 	while i < count and at + i < n and is_digit(source[at + i]) { i += 1 }
 	i == count

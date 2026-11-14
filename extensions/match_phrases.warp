@@ -5,27 +5,27 @@ match_symbol = symbol("match")
 # `switch` is match's other word (extensions/sugar/arms.warp), which reaches here where its block is an operand
 match_words = [match_symbol, symbol("switch")]
 
-match_phrases(program: Node): Node := bottom_up(program, regrouped_matches)
+match_phrases(program: Node) as Node := bottom_up(program, regrouped_matches)
 
-regrouped_matches(n: Node): Node := match n {
+regrouped_matches(n: Node) as Node := match n {
 	List(parts, Bracket.None, Separator.Space): spaced_regrouped(n, parts)
 	List(parts, Bracket.Curly, Separator.Space): spaced_regrouped(n, parts)
 	List(parts, bracket, separator): grouped_in(n, parts)
 	_: n
 }
 # a statement `match x {…}` is the core's already; `match (x {…})` becomes one
-spaced_regrouped(n: Node, parts: list): Node := {
+spaced_regrouped(n: Node, parts: list) as Node := {
 	if #parts == 2 and parts#1 == match_symbol and is_subject_block(parts#2) { return group_like(n, [match_symbol] + items_of(parts#2)) }
 	if #parts == 3 and parts#1 == match_symbol { return n }
 	grouped_in(n, parts)
 }
-is_subject_block(n: Node): bool := match n {
+is_subject_block(n: Node) as bool := match n {
 	List(items, Bracket.None, Separator.Space): #items == 2 and is_curly_group(items#2)
 	_: no
 }
-grouped_in(n: Node, parts: list): Node := if parts.any(part => part in match_words) then group_like(n, matches_grouped(parts)) else n
+grouped_in(n: Node, parts: list) as Node := if parts.any(part => part in match_words) then group_like(n, matches_grouped(parts)) else n
 # each `match x {…}` among the parts as one phrase; a `match` before no block stays a word
-matches_grouped(parts: list): list := {
+matches_grouped(parts: list) as list := {
 	if #parts < 3 { return parts }
 	matched = if parts#1 in match_words then operand_matched(parts#2, parts#3) else ø
 	if matched != ø { return [matched] + matches_grouped(parts[3 ..]) }
@@ -34,7 +34,7 @@ matches_grouped(parts: list): list := {
 # the match of subject x and its block, `match x {…}`; in parentheses an operator after the block takes the block,
 # `(match x {…} == y)` reads `match x ({…} == y)`, so the match is the operator's leftmost operand, `(match x {…}) == y`;
 # ø where no block leads
-operand_matched(subject: Node, block: Node): Node? := {
+operand_matched(subject: Node, block: Node) as Node? := {
 	if is_curly_group(block) { return List([match_symbol, subject, block], Bracket.None, Separator.Space) }
 	if not (block is key) or key_of(block) == ø { return ø }
 	left = operand_matched(subject, key_of(block))
