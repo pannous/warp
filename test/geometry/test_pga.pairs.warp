@@ -1,0 +1,42 @@
+# Projective geometric algebra of space (wiki/3d.md Algebra, card geometric-algebra, lib/pga.warp)
+# the meet of two planes is their line
+'use pga; meet(plane(0, 1, 0, 0), plane(0, 0, 1, 0)) == join(point(0, 0, 0), point(1, 0, 0))'	yes
+# reflecting a point twice gives the point back
+'use pga; p = point(1, 2, 3); m = plane(1, 0, 0, 0); m.reflect(m.reflect(p)) == p'	yes
+# a rotor by 90° turns (1,0,0) into (0,1,0)
+'use pga; [round(c) for c in coordinates(apply(rotor(pi / 2, 0, 0, 1), point(1, 0, 0)))]'	[0, 1, 0]
+# each glyph operator has the same value as its word (card pga-glyphs)
+'use pga; p = plane(0, 1, 0, 0); q = plane(0, 0, 1, 0); p ⋏ q == meet(p, q)'	yes
+'use pga; a = point(0, 0, 0); b = point(1, 0, 0); a ⋎ b == join(a, b)'	yes
+'use pga; a = point(0, 0, 0); b = point(1, 0, 0); a ↦ b == arrow(a, b)'	yes
+'use pga; a = point(0, 0, 0); b = point(1, 0, 0); a ↣ b == ray(a, b)'	yes
+'use pga; a = point(0, 0, 0); b = point(1, 0, 0); a ⟇ b == span(a, b)'	yes
+'use pga; a = point(0, 0, 0); b = point(1, 0, 0); a ⊔ b == collection(a, b)'	yes
+# ∧, ∨ and → keep their math meanings when pga is used (they are not these operators)
+'use pga; [true ∧ false, true ∨ false, (x → x + 1)(3)]'	[no, yes, 4]
+# English aliases equal their words (card pga-glyphs)
+'use pga; p = plane(0, 1, 0, 0); q = plane(0, 0, 1, 0); intersect(p, q) == meet(p, q)'	yes
+'use pga; p = plane(0, 1, 0, 0); q = plane(0, 0, 1, 0); intersection(p, q) == meet(p, q)'	yes
+'use pga; p = plane(0, 1, 0, 0); q = plane(0, 0, 1, 0); crossing(p, q) == meet(p, q)'	yes
+'use pga; p = plane(0, 1, 0, 0); q = plane(0, 0, 1, 0); p intersect q == meet(p, q)'	yes
+'use pga; p = plane(0, 1, 0, 0); q = plane(0, 0, 1, 0); p.intersect(q) == meet(p, q)'	yes
+'use pga; a = point(0, 0, 0); b = point(1, 0, 0); connect(a, b) == join(a, b)'	yes
+'use pga; a = point(0, 0, 0); b = point(1, 0, 0); a connect b == join(a, b)'	yes
+'use pga; a = point(0, 0, 0); b = point(1, 0, 0); segment(a, b) == arrow(a, b)'	yes
+'use pga; a = point(0, 0, 0); b = point(1, 0, 0); (segment from: a to: b) == arrow(a, b)'	yes
+'use pga; a = point(0, 0, 0); b = point(1, 0, 0); (path from: a to: b) == arrow(a, b)'	yes
+'use pga; a = point(0, 0, 0); b = point(1, 0, 0); path(a, b) == arrow(a, b)'	yes
+'use pga; a = point(0, 0, 0); b = point(1, 0, 0); (arrow from: a to: b) == arrow(a, b)'	yes
+'use pga; a = point(0, 0, 0); b = point(1, 0, 0); (ray from: a through: b) == ray(a, b)'	yes
+'use pga; a = point(0, 0, 0); b = point(1, 0, 0); halfline(a, b) == ray(a, b)'	yes
+'use pga; a = point(0, 0, 0); b = point(1, 0, 0); (halfline from: a through: b) == ray(a, b)'	yes
+'use pga; a = point(0, 0, 0); b = point(1, 0, 0); subspace(a, b) == span(a, b)'	yes
+'use pga; a = point(0, 0, 0); b = point(1, 0, 0); assembly(a, b) == collection(a, b)'	yes
+# clashing names keep their old meaning when pga is used
+'use pga; use list; intersection([1, 2], [2, 3])'	[2]
+'use pga; [x for x in 1 through 3]'	[1, 2, 3]
+# space's basis blades by name (wiki/3d.md Algebra)
+'use pga; point(1, 2, 3) == origin + ẋ + 2 * ẏ + 3 * ż'	yes
+'use pga; e1 ⋏ e2 == e12'	yes
+'use pga; e3 * e1 == e31'	yes
+'use pga; text(I)'	"e0123"

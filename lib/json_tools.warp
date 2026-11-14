@@ -73,7 +73,8 @@ def json_pointer_walk(doc: any, tokens: list, pointer: text): any {
 	here
 }
 json_pointer_get(doc: any, pointer: text): any := json_pointer_walk(doc, json_pointer_tokens(pointer), pointer)
-json_pointer_has(doc: any, pointer: text): bool := try { json_pointer_get(doc, pointer); yes } catch e { no }
+// core/analysis/analyzer.warp:185 mistypes a curly semicolon block of data as a list, so `{ get(); yes }` does not type as bool
+json_pointer_has(doc: any, pointer: text): bool := not ((try json_pointer_get(doc, pointer)) failed)
 
 // --- JSON Patch (RFC 6902)
 // doc with the place `tokens` names changed by `how` ("add", "remove", "replace"), copied along the way only

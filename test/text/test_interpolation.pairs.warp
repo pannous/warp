@@ -43,6 +43,6 @@
 '"a\\$(b)"'	'a$(b)'
 
 # holes_call_foreign_modules
-'use js Math; "m \\(Math.max(1, 5))"'	'm 5'
-'use js JSON; "j ${JSON.stringify([1])}!"'	'j [1]!'
-'use js crypto; count "id \\(crypto.randomUUID())"'	39
+'use js Math; "m \\(Math.max(1, 5))"'	'm 5'	needs: js
+'use js JSON; "j ${JSON.stringify([1])}!"'	'j [1]!'	needs: js
+'use js crypto; count "id \\(crypto.randomUUID())"'	39	needs: js

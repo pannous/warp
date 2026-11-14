@@ -11,16 +11,32 @@ use "nodes.warp"
 use "errors.warp"
 use "builders.warp"
 # `a + b` of values known only at run time: lists and texts join, numbers add, a marked number's mark kept
-node_add(a: Node, b: Node): Node := marks_kept(node_sum(a, b), a, b)
+node_add(a: Node, b: Node): Node := if exact_ints(a, b) then grown_sum(unboxed_int(a), unboxed_int(b)) else marks_kept(node_sum(a, b), a, b)
+# `a + b` of values known only at run time as the emitter writes it: an instance's class's own + first (decision
+# class-operators-generic), else node_add (card emitter-inlines: one call where the emitter wrote the class test at each)
+node_plus(a: Node, b: Node): Node := {
+	if exact_ints(a, b) { return node_add(a, b) }
+	operated = class_operated(a, b, 0)
+	if is_null(operated) then node_add(a, b) else operated
+}
+# a op b by a's class when a is an instance, else by b's, ø when that class defines no such operator; `operator` the
+# place of the operator in + - * / ^, counted from 0
+class_operated(a: Node, b: Node, operator: int): Node := if is_class_instance(a) then instance_operated(a, a, b, int_node(operator)) else if is_class_instance(b) then instance_operated(b, a, b, int_node(operator)) else ø
 # n holds a plain whole number with no type mark (no yes/no, hex or unit): the emitter's int-first operations take it
 # as the i64 it is (card untyped-counter-boxes)
 exact_int(n: Node): bool := not is_null(n) and marked_kind(n) == Kind.Int and is_plain_int(n)
+exact_ints(a: Node, b: Node): bool := exact_int(a) and exact_int(b)
 node_sum(a: Node, b: Node): Node := {
 	# ø, also `[]` in the lowered program, beside a list is a copy of that list (ø + ø the empty list), so a later
 	# `+=` growing the sum in place leaves the list untouched; a text after it shows ø ("a" + ø); ø is no start of a
 	# sum or a text, which says where to start (decisions xs-ys, empty-plus-text)
 	if is_null(a) and is_null(b) { return a }
 	if is_null(a) and not is_null(b) and kind_code(b) == Kind.List { return list_join(unboxed_list(b), new_list(0)) }
+	# a GPU list and a list: a GPU list of both (an extension's list kind joins a list to its own)
+	if is_extended_list(a) and not is_null(b) and kind_code(b) == Kind.List {
+		joined = extended_list_joined(a, b)
+		if not is_null(joined) { return joined }
+	}
 	if not is_null(a) and kind_code(a) == Kind.List { return list_join(unboxed_list(a), appended_items(b)) }
 	if is_null(a) and textual_node(b) { absent_start("start the text at \"\" (t = \"\")") }
 	if textual_node(a) or textual_node(b) { return node_text(a) + node_text(b) }

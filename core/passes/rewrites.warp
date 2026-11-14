@@ -10,7 +10,7 @@
 # compared, also > <= >= == !=), `$f takes value` (f's first parameter is typed, not yes/no: of a function of the
 # program or a typed library word), `$f takes int` (typed int), `$f takes number` (typed a number: int, float…), `$x is
 # vector` (code that may give a list: extensions/sugar/broadcasting.warp) and `$f takes one` (a library word the program leaves
-# free, of exactly one typed value); `$e is enum` (a name or text of an enum the program declares), `$c is case` (a
+# free, of exactly one typed value), `$f takes amount` (that, or the program's own function of one value); `$e is enum` (a name or text of an enum the program declares), `$c is case` (a
 # case of the one enum declaring it) and `$c is case of $e` (of the enum $e names; $e unbound, the condition binds it
 # to that enum), whose cases `cases of $e` lists among a template's items. A place word among them, `statement`, `condition`
 # (of an if or while), `member` (of a class body), `key` or `value` (of `k: v`), `parameter` (of a definition's head,
@@ -93,6 +93,9 @@ number_word = "number"
 numeric_parameter_types = ["number", "int", "float", "i32", "i64", "f32", "f64", "u8", "u32", "Real", "real"]
 # `where $f takes one`: a library word the program leaves free whose first line takes exactly one typed value
 one_word = "one"
+# `where $f takes amount`: such a word, or a function of the program's own of exactly one value, `bars(n: int)`, called
+# backward on the amount before it (`2 bars`); the prefix rules keep `one`, so `apply sq 3` still gives apply both
+amount_word = "amount"
 # the sugar of the language (notes/layers.md), extensions/sugar/<name>.warp: rewrite lines only, whose rules apply to every
 # program as a standard module's do, bringing no `use` along; a rule of no word (`$a ?? $b`) applies everywhere.
 # Four steps of the passes apply them (passes.warp): the first sugar before the passes that would read its forms as
@@ -119,7 +122,7 @@ comprehension_sugar_module_names = sugar_files(["comprehensions"])
 # the sugar of declarations (extensions/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
 declaration_sugar_module_names = sugar_files(["declarations"])
 # the standard modules: those with `rewrite` lines lend their rules to the programs mentioning them
-std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "host_io", "integers", "uncertain", "web", "storage", "frames", "native_host", "callbacks", "signals", "timers", "tasks", "shaders", "unicode_data", "unicode", "exact_values", "reals", "complex", "big_numbers"]
+std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "slugs", "random", "map", "time", "matrix", "color", "keys", "draw", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "host_io", "integers", "uncertain", "web", "storage", "frames", "native_host", "callbacks", "signals", "timers", "tasks", "shaders", "gpu_passes", "unicode_data", "unicode", "exact_values", "reals", "complex", "hyperreal", "version", "big_numbers"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # the declarations sugar strips it, and the function keyword's rule rewrites the rest)
@@ -624,6 +627,10 @@ sugar_rewritten(n: Node, rules: list): Node := {
 		if rule.place == Place.Anywhere and fits_head(rule, heads) {
 			result = rule_applied(rule, {}, n)
 			if not changes(result, n) and written != ø { result = regrouped(rule_applied(rule, {}, written), n) }
+			# a phrase of a run rule's length meets an operand or a binding as the program's rules do (run_at):
+			# `x squared + 1` is (x squared) + 1, `x = 7 squared + 1` assigns 50
+			ran = if not changes(result, n) and matches_runs(rule) and is_spaced(n) and #n == #rule.pattern then run_at(items_of(n), [rule], [{}]) else ø
+			if ran != ø { result = ran#2 }
 			if changes(result, n) { return rewritten_inside_item(result, rules) }
 		}
 	}
@@ -1204,6 +1211,7 @@ first_parameter_fits(code: Node, wanted: text): bool := {
 	if not (code is symbol) or locally_bound(code) { return no }
 	word = name_of(code)
 	if wanted == one_word { return not rule_scope.has(word) and takes_one_typed_value(unaliased(word)) }
+	if wanted == amount_word { return if rule_scope.has(word) then binds_as(rule_scope, word, Meaning.Function) and (rule_signatures.get(word) ?? []).any(signature => #signature.parameters == 1 and not signature.parameters#1.rest) else takes_one_typed_value(unaliased(word)) }
 	if wanted == number_word { return takes_only_numbers(word, matched_arity(code)) }
 	typed = if first_parameter_types.has(word) then first_parameter_types[word] else library_first_type(word)
 	if typed == ø or typed == "" { typed = conversion_type(word) }
@@ -1228,8 +1236,9 @@ prelude_foreign_types(): map := {
 	if prelude_foreign_names == ø { prelude_foreign_names = foreign_types(prelude_text()) }
 	prelude_foreign_names
 }
-# how many arguments the call the rule matched passes the word, ø when it matched no call of it
-matched_arity(word: Node): int? := if rule_matched != ø and is_round(rule_matched) and #rule_matched > 0 and rule_matched#1 == word then #rule_matched - 1 else ø
+# how many arguments the call the rule matched passes the word, round or spaced (`max xs` passes max one, as max(xs)
+# does), ø when it matched no call of it
+matched_arity(word: Node): int? := if rule_matched != ø and (is_round(rule_matched) or is_word_phrase(rule_matched)) and #rule_matched > 0 and rule_matched#1 == word then #rule_matched - 1 else ø
 
 # what a type word converts, unless the program binds it: a value of another type (`int 3.7 == 3` is int(3.7) == 3),
 # yes or no for the yes/no type's own (`bool x == y` stays bool(x == y)), decision function-words-consume
@@ -1370,7 +1379,7 @@ condition_holds(condition: Node, bound: map): bool := {
 		if rule_in_attribute and bound[hole] is symbol and not program_word(name_of(bound[hole])) { return no }
 		if not first_parameter_fits(bound[hole], name_of(condition#3)) { return no }
 		# `$f takes one` binds the word the synonym calls: `size xs` is count(xs)
-		if name_of(condition#3) == one_word { bound[hole] = placed(symbol(synonym_word(name_of(bound[hole]))), bound[hole]) }
+		if name_of(condition#3) in [one_word, amount_word] { bound[hole] = placed(symbol(synonym_word(name_of(bound[hole]))), bound[hole]) }
 		return yes
 	}
 	if is_context_word(condition) { return context_holds(rule_matched, name_of(condition)) }

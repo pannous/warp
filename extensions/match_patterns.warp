@@ -27,7 +27,7 @@ guarded_arms(arms: list, subject: Node, variants: map): list := {
 # result with them; `otherwise` what the arms after it give
 guarded_arm(arm: Node, subject: Node, variants: map, otherwise: Node): Node := {
 	guard = guard_of(arm_pattern(arm))
-	pattern = guarded_pattern(arm_pattern(arm))
+	pattern = quoted_holes_tight(guarded_pattern(arm_pattern(arm)))
 	result = arm_result(arm)
 	# ø: the pattern takes any subject
 	test: Node = ø
@@ -82,6 +82,38 @@ item_bindings(subject: Node, items: list): list := {
 		if items#at is symbol and name_of(items#at) != other_arm { bound += [Key(items#at, Op.Assign, Key(subject, Op.Hash, at))] }
 	}
 	bound
+}
+
+# `data($k: int + $x)` reads `$k: (int + $x)`: within a pattern a hole's type binds the hole alone, `($k: int) + $x`,
+# `$a: int * $b: int + $c` as `($a: int) * ($b: int) + $c`; any other pattern as written
+quoted_holes_tight(pattern: Node): Node := if is_quote(pattern) then group_like(pattern, [pattern#1, typed_holes_tight(pattern#2)]) else pattern
+typed_holes_tight(n: Node): Node := match n {
+	Key(left, Op.Colon, right): {
+		tight_left = typed_holes_tight(left)
+		tight_right = typed_holes_tight(right)
+		hole = rightmost_part(tight_left)
+		kind = leftmost_part(tight_right)
+		if hole is symbol and name_of(hole).starts_with("$") and kind is symbol and is_tested_type_word(name_of(kind)) then leftmost_replaced(tight_right, rightmost_replaced(tight_left, Key(hole, Op.Colon, kind))) else Key(tight_left, Op.Colon, tight_right)
+	}
+	Key(left, op, right): Key(typed_holes_tight(left), op, typed_holes_tight(right))
+	List(items, bracket, separator): List(items.map(typed_holes_tight), bracket, separator)
+	_: n
+}
+rightmost_part(n: Node): Node := match n {
+	Key(left, op, right): rightmost_part(right)
+	_: n
+}
+leftmost_part(n: Node): Node := match n {
+	Key(left, op, right): leftmost_part(left)
+	_: n
+}
+rightmost_replaced(n: Node, part: Node): Node := match n {
+	Key(left, op, right): Key(left, op, rightmost_replaced(right, part))
+	_: part
+}
+leftmost_replaced(n: Node, part: Node): Node := match n {
+	Key(left, op, right): Key(leftmost_replaced(left, part), op, right)
+	_: part
 }
 
 # the structural pattern fits: what it binds is held in match·bound

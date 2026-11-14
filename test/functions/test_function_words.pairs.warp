@@ -7,7 +7,7 @@
 'use math; lerp.params'	['a', 'b', 't']
 'twice(x) := x*2; string(twice.body)'	'x*2'
 # a word a function has none of but another one means is refused naming that one (decision reflection-words)
-'twice(x) := x*2; twice.description'	error
+'twice(x) := x*2; twice.description'	""
 'twice(x) := x*2; twice.dump'	error
 # a function's signature and result kind as the analyzer infers them (card doc-signature)
 'f(a:int, b:int) := a+b; f.signature'	'(a: int, b: int) -> int'
@@ -18,7 +18,7 @@
 'twice(x) := {"doubles a number"; x*2}; twice.doc'	'doubles a number'
 'twice(x) := x*2; twice.doc'	''
 'use math; lerp.doc'	'the value a fraction t of the way from a to b'
-'use math; gcd.doc'	''
+'use math; gcd.doc'	"the greatest common divisor of two whole numbers, ints or past 64 bits (2^70), never below 0: the one gcd, the\ncompiler's and every program's (cards gcd-overflow-zero, three-gcds-generic: an int parameter wrapped 2^70 to 0)"
 # a word defined several times: each definition's signature (card signature-sample-mismatch)
 'f(x: int) := 1; f(x: text) := "a"; f.signatures'	['(x: int) -> int', '(x: text) -> text']
 'sample(nr: int) as text := "seven"; sample(nr: int) as int := 7; sample.signature'	'(nr: int) -> text | (nr: int) -> int'

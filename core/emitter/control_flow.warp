@@ -3,19 +3,22 @@
 # the dispatcher of the classes' `+` (class_methods.warp), which `x += y` of an instance adds by
 plus_dispatcher = "+·operator"
 # `ran·without·error{statement}`, what `try` lowers to: 1 when the statement finished, 0 when a runtime error was thrown
-# in it; the depth goes up for the statement and back down on both paths (a jump out of it would skip that: refused)
+# in it; the depth goes up for the statement and back down on both paths, and on a jump out of it (tries_closed)
 def ran_without_error(body: Body, statement: Node): TypedCode {
-	for jump in ["return", "break", "continue"] { if mentions(statement, jump) { return refuse("a " + jump + " out of a try") } }
+	body.tries += 1
 	guarded = [op.try_table, no_value] + uleb(1) + [catch_clause_byte, 0, 0] + nested_effect(body, statement, 3) + [op.end]
-	finished = try_depth_step(op.i64_sub) + [op.i64_const, 1, op.br, 1, op.end]
-	caught = [op.drop] + try_depth_step(op.i64_sub) + [op.i64_const, 0]
+	body.tries -= 1
+	finished = try_depth_step(op.i64_sub, 1) + [op.i64_const, 1, op.br, 1, op.end]
+	caught = [op.drop] + try_depth_step(op.i64_sub, 1) + [op.i64_const, 0]
 	# the inner block's value: the thrown error's id, an i32
-	TypedCode(ValueKind.Int, try_depth_step(op.i64_add) + [op.block] + value_type(ValueKind.Int) + [op.block] + value_type(ValueKind.Bool) + guarded + finished + caught + [op.end])
+	TypedCode(ValueKind.Int, try_depth_step(op.i64_add, 1) + [op.block] + value_type(ValueKind.Int) + [op.block] + value_type(ValueKind.Bool) + guarded + finished + caught + [op.end])
 }
-def try_depth_step(instruction: int): list {
+def try_depth_step(instruction: int, tries: int): list {
 	depth = relocatable(relocated.globals, module.globals[try_depth_name]#1)
-	[op.global_get] + depth + [op.i64_const, 1, instruction, op.global_set] + depth
+	[op.global_get] + depth + [op.i64_const] + sleb(tries) + [instruction, op.global_set] + depth
 }
+# a return, break or continue leaving `tries` open tries: the depth goes down by them
+tries_closed(tries: int): list := if tries == 0 then [] else try_depth_step(op.i64_sub, tries)
 # a runtime error ahead of its trap: the global trap_name names `name`, the function it fails in, whose words the
 # run's error says (runtime/error_sentences.warp); while a try runs, it throws for `catch e` (runtime.warp caught_error)
 def error_throw(name: text): list {
@@ -82,11 +85,13 @@ def loop_code(body: Body, test: Node, block: Node, last: int): list {
 	again = if has_step then dropped(nested(body, value_of(parts.last), 2)) + [op.br, 0] else [op.br, 0]
 	if has_step { parts = parts[0..<(#parts - 1)] }
 	body.exits += [body.depth + 1]
+	body.exit_tries += [body.tries]
 	body.continuable += [has_step or continued_safely(test, parts)]
 	body.depth += 3
 	looped = if #parts == 0 then TypedCode(no_kind, []) else if last < 0 then TypedCode(no_kind, effects(body, parts)) else sequence(body, parts)
 	body.depth -= 3
 	body.exits = body.exits[0..<(#body.exits - 1)]
+	body.exit_tries = body.exit_tries[0..<(#body.exit_tries - 1)]
 	body.continuable = body.continuable[0..<(#body.continuable - 1)]
 	kept = if looped.kind == no_kind then looped.code else boxed(looped) + [op.local_set] + uleb(last)
 	[op.block, no_value, op.loop, no_value] + exit_unless + [op.block, no_value] + kept + [op.end] + again + [op.end, op.end]
@@ -161,14 +166,14 @@ def nested(body: Body, n: Node, blocks: int): TypedCode {
 # `break`: to the end of the innermost loop's block
 def loop_exit(body: Body): TypedCode {
 	if #body.exits == 0 { return refuse("a break outside a loop") }
-	TypedCode(no_kind, [op.br] + uleb(body.depth - body.exits.last))
+	TypedCode(no_kind, tries_closed(body.tries - body.exit_tries.last) + [op.br] + uleb(body.depth - body.exits.last))
 }
 
 # `continue`: to the end of the block around the innermost loop's body, before its step
 def loop_again(body: Body): TypedCode {
 	if #body.exits == 0 { return refuse("a continue outside a loop") }
 	if not body.continuable.last { return refuse("a continue in a loop whose last statement may be its step") }
-	TypedCode(no_kind, [op.br] + uleb(body.depth - body.exits.last - 2))
+	TypedCode(no_kind, tries_closed(body.tries - body.exit_tries.last) + [op.br] + uleb(body.depth - body.exits.last - 2))
 }
 
 # a statement's code, its value dropped
@@ -182,19 +187,17 @@ def field_or_word(body: Body, value: TypedCode, name: text, word: function): Typ
 	TypedCode(ValueKind.Node, value.code + [op.local_set] + held + has_it + [op.if] + value_type(ValueKind.Node) + read + [op.else] + boxed(word(receiver)) + [op.end])
 }
 # the program's statement n about to run, its position in trap_position: a runtime error names it;
-# a runtime word's statements leave it, and so do a library function's: its lines are its
-# file's, which the place would give the program's name, so an error in it names the program's calling line (card
-# wasm-trap: arrangement.warp:34:56 was a line of lib/timers.warp); so do a module's own, built to be linked (the
-# page's paint of prelude.wasm named prelude.warp:478:37 under the program's name, card playground-tours-red)
+# a runtime word's statements leave it, and so does every statement of a build in another mode than debug; a library function's and a linked module's name their own file, which
+# has the same number in every compile (positions.warp source_files, card positions-always)
 def position_code(body: Body, n: Node): list {
 	# `x = 2.5` to a declared int converts, so it can fail and names itself (card int-reports)
 	if stores_constant_data(n) and name_of(key_of(n)) not in body.declared { return [] }
 	# a catch's `e = placed_at(…, trap_place())` reads the failed statement's place, so it keeps it (passes/tries.warp)
 	if mentions(n, "trap_place") { return [] }
-	# (a console line's module is the user's own code: its places are kept, `date + 1` fails at 1:1)
-	at = if body.intrinsics or (module_written != "" and not line_module) or defined_origins.has(body.function.name) then ø else written_at(n)
+	# (a build in another mode than debug drops them, the compiler's own fast build too: no error of it names a place)
+	at = if body.intrinsics or positions_dropped then ø else written_at(n)
 	if not at { return [] }
-	[op.i32_const] + sleb(packed_place(at)) + [op.global_set] + relocatable(relocated.globals, declared_global("trap_position", ValueKind.I32)#1)
+	[op.i64_const] + sleb(packed_place(at)) + [op.global_set] + relocatable(relocated.globals, declared_global("trap_position", ValueKind.Int)#1)
 }
 # `x = data`, a statement that cannot fail, so no runtime error names it: what it stores is written without a call that
 # can, a number, a text and lists, maps and pairs of them (card main-constant-tables). A number past 64 bits or 18
@@ -221,7 +224,7 @@ appended(body: Body, target_name: Node, addition: Node): TypedCode? := {
 	# an instance whose class defines `+` adds by it, `total += run.distance` (the compound operators' arithmetic)
 	# beside a class's `+` a list held as a node still grows in place, so `xs += [o]` reaches the caller's list: decided
 	# by the value at run time, any other value added by the class's `+`
-	if target.kind == ValueKind.Node and adds_by_dispatcher(body) { return if target_name is symbol then appended_or_added(body, target_name, addition) else ø }
+	if target.kind == ValueKind.Node and adds_by_dispatcher(body) { return if read_again(target_name) then appended_or_added(body, target_name, addition) else ø }
 	if target.kind == ValueKind.Node and int_firsts(body, "+", target, added) { return assignment(body, target_name, int_first(body, "+", target, added, (left, right) => runtime_call("node_append", [left, right]))) }
 	if target.kind == ValueKind.Node { return assignment(body, target_name, runtime_call("node_append", [target, added])) }
 	ø
@@ -233,6 +236,8 @@ appended_or_added(body: Body, name: Node, addition: Node): TypedCode := {
 	chosen = Key(Key(appends, Op.Then, name), Op.Else, Key(name, Op.Assign, Key(name, Op.Add, added)))
 	expression_code(body, separated(bracketed([Key(added, Op.Assign, addition), chosen], ""), ";"))
 }
+# a name or a field of one, `xs`, `r.out`: read again without an effect, so appended_or_added may read it twice
+read_again(n: Node): bool := n is symbol or (is_key(n, Op.Dot) and read_again(key_of(n)) and value_of(n) is symbol)
 adds_by_dispatcher(body: Body): bool := plus_dispatcher in module.functions and body.function.name != plus_dispatcher
 # the statements in order, the value that of the last
 def sequence(body: Body, items: list): TypedCode {

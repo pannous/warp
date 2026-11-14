@@ -10,12 +10,15 @@
 # prints the verdicts, the cases over a second and the total (test-verdicts), the exit status 1 when one failed
 
 creat(path: pointer, mode: i32): i32 from "c"
-chdir(path: pointer): i32 from "c"
+fork(): i32 from "c"
+execvp(file: pointer, arguments: pointer): i32 from "c"
+dup2(from: i32, to: i32): i32 from "c"
 flock(descriptor: i32, operation: i32): i32 from "c"
 kill(child: i32, signal: i32): i32 from "c"
 usleep(microseconds: i32): i32 from "c"
 setrlimit(resource: i32, limit: pointer): i32 from "c"
 getloadavg(loads: pointer, count: i32): i32 from "c"
+posix_spawn_file_actions_addchdir_np(actions: pointer, folder: pointer): i32 from "c"
 
 # a case's budget is CPU time, which a loaded machine doesn't shrink; the wall clock only ends a case that waits
 # forever, WALL_SECONDS stretched by the runnable processes per core (load 40 on 10 cores gave a case a quarter of one,
@@ -28,6 +31,12 @@ RLIMIT_CPU = 0
 case_options(): text := "--no-window --mute --no-hints --value-as-data --one-thread"
 # 128 + SIGXCPU
 CPU_LIMIT_HIT = 152
+# a forked case runs with the option `forked`: a host that cannot run in a process forked without exec (macOS's WebKit,
+# whose helper processes never answer one: lib/host/native_host/webview.warp) exits with this status, and the case runs
+# again in a process of its own, exec'd (EX_TEMPFAIL)
+FRESH_PROCESS_WANTED = 75
+# the shell's status for a command it could not run
+EXEC_FAILED = 127
 FILE_MODE = 420
 # flock's LOCK_EX | LOCK_NB
 LOCKED_NOW = 6
@@ -42,8 +51,8 @@ PROGRESS_MILLISECONDS = 60000
 MAX_SLOTS = 256
 # how often a run counts the compiler builds again, its slots following them (slot_count)
 SLOT_RECOUNT_MILLISECONDS = 3000
-# a slot's child: its pid (0 for a free slot), its run's line, when it started, its slot's lock
-struct Child { pid: i32; run: i64; started: i64; lock: i32 }
+# a slot's child: its pid (0 for a free slot), its run's line, when it started, its slot's lock, 1 when exec'd
+struct Child { pid: i32; run: i64; started: i64; lock: i32; fresh: i32 }
 CHILD_BYTES = 32
 
 tests_run(compiler: text, by_self: bool, first: int): nothing := {
@@ -68,6 +77,8 @@ tests_run(compiler: text, by_self: bool, first: int): nothing := {
 # the cases listed by the compiler in a child, this process waiting for it, its failure the run's: a module's WASI
 # calls start wasmtime's tokio threads, which a case forked later would wait on forever (they stay behind in a fork)
 listed_apart(compiler: text, given: Arguments): nothing := {
+	# (a machine without fork, Windows, has no such threads to leave behind: listed here)
+	if not forks() { return file_ran(compiler, given) }
 	pid = fork()
 	if pid == 0 {
 		file_ran(compiler, given)
@@ -119,16 +130,10 @@ all_ran(work: text, runs: text, prefix: text): nothing := {
 			if child.pid == 0 and next < total and running_count(children, capacity) < slots {
 				lock = taken_slot(pool, slots)
 				if lock >= 0 {
-					child.pid = started_run(work, field(runs, next, NEWLINE), prefix, children, capacity)
 					child.run = next
-					child.started = milliseconds_now()
 					child.lock = lock
+					done = done + started(work, runs, prefix, children, capacity, child, no)
 					next = next + 1
-					# a failed fork's -1 is no child: kill(-1) would end every process of the user
-					if child.pid < 0 {
-						run_ended(work, field(runs, child.run, NEWLINE), "fork failed", child)
-						done = done + 1
-					}
 				}
 			}
 		}
@@ -136,8 +141,12 @@ all_ran(work: text, runs: text, prefix: text): nothing := {
 		for k in 0..capacity {
 			child = child_at(children + k * CHILD_BYTES)
 			if child.pid > 0 and child.pid == ended {
-				run_ended(work, field(runs, child.run, NEWLINE), status_said(exit_code(word_at(status).value as i32)), child)
-				done = done + 1
+				code = exit_code(word_at(status).value as i32)
+				if code == FRESH_PROCESS_WANTED and child.fresh == 0 { done = done + started(work, runs, prefix, children, capacity, child, yes) }
+				else {
+					run_ended(work, field(runs, child.run, NEWLINE), status_said(code), child)
+					done = done + 1
+				}
 			}
 			if child.pid > 0 and milliseconds_now() - child.started > WALL_SECONDS * 1000 and milliseconds_now() - child.started > wall_seconds(cores, loads) * 1000 {
 				kill(child.pid, KILLED)
@@ -179,9 +188,20 @@ time_status(before: text, seconds: int, after: text): text := joined(joined(join
 # waitpid's status as the exit code, 128 and the signal for a child a signal ended
 exit_code(status: i32): i32 := if status % 256 == 0 then status / 256 % 256 else 128 + status % 128
 
+# the child's run started, forked or, `fresh`, exec'd: 1 when it ended at once, a failed fork's -1 being no child (kill(-1)
+# would end every process of the user)
+started(work: text, runs: text, prefix: text, children: pointer, slots: i32, child: Child, fresh: bool): int := {
+	child.pid = started_run(work, field(runs, child.run, NEWLINE), prefix, children, slots, fresh)
+	child.started = milliseconds_now()
+	child.fresh = if fresh then 1 else 0
+	if child.pid >= 0 { return 0 }
+	run_ended(work, field(runs, child.run, NEWLINE), "fork failed", child)
+	1
+}
 # a child running the run `<id>\t<folder>`: this warp's command `run` (or `self`) with the code, in the folder, its
-# output and errors into the run's files; the locks of the other slots closed in it
-started_run(work: text, run: text, prefix: text, children: pointer, slots: i32): i32 := {
+# output and errors into the run's files; the locks of the other slots closed in it. Forked, it runs in this process's
+# loaded engine and compilers; `fresh`, it is this warp exec'd anew
+started_run(work: text, run: text, prefix: text, children: pointer, slots: i32, fresh: bool): i32 := {
 	id = joined(joined(work, "/"), field(run, 0, TAB))
 	folder = c_string(field(run, 1, TAB))
 	given = arguments()
@@ -198,6 +218,7 @@ started_run(work: text, run: text, prefix: text, children: pointer, slots: i32):
 	added(given, read_file(joined(id, ".code")))
 	output = c_string(joined(id, ".out"))
 	errors = c_string(joined(id, ".err"))
+	if not forks() { return spawned_run(given, folder, output, errors) }
 	budget = allocate(16)
 	long_at(budget).value = CPU_SECONDS
 	long_at(budget + 8).value = CPU_SECONDS
@@ -211,11 +232,36 @@ started_run(work: text, run: text, prefix: text, children: pointer, slots: i32):
 		chdir(folder)
 		dup2(creat(output, FILE_MODE), 1)
 		dup2(creat(errors, FILE_MODE), 2)
+		if fresh {
+			execvp(c_string(executable_path()), given.pointers)
+			exit(EXEC_FAILED)
+		}
 		arguments_replaced(given.pointers, given.count)
+		option_given("forked", "")
 		command_ran()
 		exit(0)
 	}
 	pid
+}
+
+# whether this machine forks: Windows has no fork, its cases are this warp started anew, by posix_spawnp, with no CPU
+# budget (the wall clock still ends one)
+forks(): bool := library_function(c_string("c"), c_string("fork")) != 0
+# the run started as this warp anew in the case's folder, its output and errors into the run's files: its pid, else -1
+spawned_run(given: Arguments, folder: pointer, output: pointer, errors: pointer): i32 := {
+	out = creat(output, FILE_MODE)
+	err = creat(errors, FILE_MODE)
+	actions = allocate(SPAWN_ACTIONS_BYTES)
+	posix_spawn_file_actions_init(actions)
+	posix_spawn_file_actions_adddup2(actions, out, 1)
+	posix_spawn_file_actions_adddup2(actions, err, 2)
+	posix_spawn_file_actions_addchdir_np(actions, folder)
+	child_at = allocate(4)
+	failed = posix_spawnp(child_at, c_string(executable_path()), actions, 0, given.pointers, process_environment())
+	posix_spawn_file_actions_destroy(actions)
+	close(out)
+	close(err)
+	if failed != 0 then -1 else word_at(child_at).value as i32
 }
 
 # the number of slots in the machine's pool: `warp test --slots <n>`, else the cores, each compiler build taking BUILD_CORES

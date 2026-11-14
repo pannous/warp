@@ -9,12 +9,19 @@
 'xs: [f32] = [100000000000000000000, 1]; xs#1 > 9.9e19 and xs#1 < 1.1e20'	yes
 
 # gpu_compute runs a WGSL compute shader over a list; a shader that fails to compile raises with the WGSL error
-'gpu_compute("@group(0) @binding(0) var<storage, read_write> cells: array<f32>; @compute @workgroup_size(1) fn main() { cells[0] = 2.0; }", [1.0], 1)'	[2]
-'try { gpu_compute("@group(0) @binding(0) var<storage, read_write> cells: array<f32>; fn get() {} @compute @workgroup_size(1) fn main() { cells[0] = 2.0; }", [1.0], 1) } catch e { "reserved keyword" in e.message }'	yes
+'gpu_compute("@group(0) @binding(0) var<storage, read_write> cells: array<f32>; @compute @workgroup_size(1) fn main() { cells[0] = 2.0; }", [1.0], 1)'	[2]	needs: gpu
+'try { gpu_compute("@group(0) @binding(0) var<storage, read_write> cells: array<f32>; fn get() {} @compute @workgroup_size(1) fn main() { cells[0] = 2.0; }", [1.0], 1) } catch e { "reserved keyword" in e.message }'	yes	needs: gpu
 'left = gpu_compute("@group(0) @binding(0) var<storage, read_write> cells: array<f32>; fn get() {} @compute @workgroup_size(1) fn main() { cells[0] = 2.0; }", [1.0], 1); 3'	error	a shader that fails to compile raises, as on the page, even when its answer is kept
-'cells = 4; size = 2; one = float[cells * size]; gpu_compute("@group(0) @binding(0) var<storage, read_write> one: array<f32>; @compute @workgroup_size(1) fn main() { one[7] = 3.0; }", {one: one}, 1); one#8'	3
+'cells = 4; size = 2; one = float[cells * size]; gpu_compute("@group(0) @binding(0) var<storage, read_write> one: array<f32>; @compute @workgroup_size(1) fn main() { one[7] = 3.0; }", {one: one}, 1); one#8'	3	needs: gpu
 
 # gpu_render paints a WGSL fragment shader on the GPU: each pixel a color word as int(red) is one (card gpu-native-library; color words: user OK on page-only-test-reds)
-'gpu_render("@fragment fn main() -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }", 2, 1, {})'	[4294901760, 4294901760]
-'#gpu_render("@fragment fn main() -> @location(0) vec4f { return vec4f(0.0, 0.0, 1.0, 1.0); }", 3, 2, {})'	6
+'gpu_render("@fragment fn main() -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }", 2, 1, {})'	[4294901760, 4294901760]	needs: gpu
+'#gpu_render("@fragment fn main() -> @location(0) vec4f { return vec4f(0.0, 0.0, 1.0, 1.0); }", 3, 2, {})'	6	needs: gpu
 'try { gpu_render("@fragment fn main( {", 2, 2, {}) } catch e { 7 }'	7
+# a shader block's holes read the program's values in a render with values of its own too, as in paint's (card shader-value)
+'c = 1.0; s = shader { @fragment fn main() -> @location(0) vec4f { return vec4f($c, 0.0, 0.0, 1.0); } }; gpu_render(s, 1, 1, {})'	[4294901760]	needs: gpu
+# a shader block in compute.toys' dialect, read off its entry point fn main_image, renders as compute_toy makes it (found in lib/shaders, no use); compute_toy of a fragment shader is that shader (card shader-value)
+'s = shader { @compute @workgroup_size(16, 16) fn main_image(@builtin(global_invocation_id) id: vec3u) { textureStore(screen, id.xy, vec4f(1.0, 0.0, 0.0, 1.0)); } }; gpu_render(s, 1, 1)'	[4294901760]	needs: gpu
+'toy = compute_toy("fn main_image(id: vec3u) {}"); compute_toy(toy) == toy'	yes
+# each picture given as channel0 is sampled as itself, painted again too, however many a program paints (card rings-white-frame: a picture is converted once)
+'use image; s = shader { @compute @workgroup_size(16, 16) fn main_image(@builtin(global_invocation_id) id: vec3u) { textureStore(screen, id.xy, textureSampleLevel(channel0, bilinear_repeat, vec2f(0.5), 0.0)); } }; ps = [image(1, 1, (x, y) => rgb(i * 25, 0, 0)) for i in 0 ..< 10]; r = [gpu_render(s, 1, 1, {channel0: p})#1 for p in ps + ps]; r#2 != r#3 and r[0 ..< 10] == r[10 ..< 20]'	yes	needs: gpu

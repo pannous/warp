@@ -30,3 +30,18 @@
 'm = {a:1}; m.merge = 3; m.merge'	3
 # a one-parameter method named like a stored field is refused: field write or setter (card class-setter-ignored)
 'class Box{w:int; w(v) := { w = v * 2 }}; b = Box(1); b.w = 5; b.w'	error
+# a field holding a function and a function of the same name: the receiver chooses at run time (card receiver-aware)
+'class Btn { n: int }
+click(b: Btn, k: int) := b.n + k
+handlers = {click: e => e * 2}
+b = Btn(1); [b.click(5), handlers.click(3)]'	[6, 6]
+'h = {reverse: e => e * 2}
+xs = [3, 1, 2]
+[h.reverse(4), xs.reverse()]'	[8, [2, 1, 3]]
+'h = {click: e => e * 2}
+[h.click(4)]'	[8]
+'class Btn { n: int }
+click(b: Btn, k: int) := b.n + k
+handlers = {click: e => e * 2}
+pick() := handlers
+[pick().click(3), Btn(2).click(1)]'	[6, 3]

@@ -33,6 +33,7 @@ BOARD_CARD = "https://github.com/users/pannous/projects/1?pane=issue&itemId=%s"
 RECENTLY_DONE = 8
 FLIPS_SHOWN = 8  # named tests per lane that started or stopped passing
 CARD_SNAPSHOTS = os.path.join(REPO, "data/vitals/cards.jsonl")  # one line per snapshot of the board's columns
+BUILD_TIMES_SINCE = "2026-11-06"  # rebuild seconds before this date are outliers of the old build steps (user 11-12)
 STORE = os.environ.get("WARP_STORE", "/Volumes/Build/compilers")  # build records (notes/compiler_rebuilds.md)
 # (name, record, whether one compiler, the seed, runs many of them: its first run is cold; warp-self's compiler is the
 # record's own warp.wasm, run once, so its records are alike)
@@ -274,7 +275,7 @@ def build_times(landed):
             continue
         best = leanest.setdefault(commit, [None] * len(parts))
         leanest[commit] = [part if best[i] is None or (part is not None and part < best[i]) else best[i] for i, part in enumerate(parts)]
-    return sorted([landed[commit], commit[:10], *(None if part is None else round(part, 1) for part in parts)] for commit, parts in leanest.items())
+    return sorted([landed[commit], commit[:10], *(None if part is None else round(part, 1) for part in parts)] for commit, parts in leanest.items() if landed[commit] >= BUILD_TIMES_SINCE)
 
 
 def build_history(record, by_seed, landed):
@@ -309,30 +310,41 @@ def build_history(record, by_seed, landed):
 
 
 def pushes_since():
-    """Local times of the pushes to main since SINCE, from GitHub's activity record of the branch, newest first.
-    git can't tell: a branch merged with main and pushed fast-forward puts main's own history on its second parent."""
-    times, url = [], f"repos/{GITHUB_REPO}/activity?ref=refs/heads/main&activity_type=push&per_page=100"
+    """The pushes to main since SINCE, from GitHub's activity record of the branch, newest first: each one's local hour
+    and the commits it brought (main's tip before and after it). git can't tell: a branch merged with main and pushed
+    fast-forward puts main's own history on its second parent."""
+    pushes, url = [], f"repos/{GITHUB_REPO}/activity?ref=refs/heads/main&activity_type=push&per_page=100"
     while url:
         response = subprocess.run(["gh", "api", "-i", url], capture_output=True, text=True, check=True).stdout
         head, body = response.split("\r\n\r\n" if "\r\n\r\n" in response else "\n\n", 1)
-        local = [datetime.datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00")).astimezone()
-                 .strftime("%Y-%m-%d %H") for event in json.loads(body)]
-        times += [t for t in local if t >= SINCE]
+        events = [(datetime.datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00")).astimezone()
+                   .strftime("%Y-%m-%d %H"), event["before"], event["after"]) for event in json.loads(body)]
+        pushes += [push for push in events if push[0] >= SINCE]
         following = re.search(r'<https://api\.github\.com/([^>]+)>; rel="next"', head)
-        url = following.group(1) if following and local and min(local) >= SINCE else None
-    return times
+        url = following.group(1) if following and events and min(push[0] for push in events) >= SINCE else None
+    return pushes
+
+
+def commits_brought(before, after):
+    """How many commits of work a push brought to main: those reachable from its new tip and not from the old one, merges
+    left out (a branch's "Merge origin/main into …" syncs and the landing merges were 338 of 792 in a day, 11-13); 0
+    where git lacks either tip, a force push's lost one"""
+    counted = subprocess.run(["git", "-C", REPO, "rev-list", "--count", "--no-merges", f"{before}..{after}"],
+                             capture_output=True, text=True)
+    return int(counted.stdout) if counted.returncode == 0 else 0
 
 
 def hourly_pace():
-    """Pushes to main and the commits reaching it (by commit date), per hour, every hour since SINCE."""
-    hour = lambda date: date[:13].replace("T", " ")
-    commits_per_hour = collections.Counter(hour(d) for d in git("log", "--format=%cd", "--date=iso-strict",
-                                                                 "--since=" + SINCE, TIP).split())
-    landings_per_hour = collections.Counter(pushes_since())
-    first = datetime.datetime.strptime(min(commits_per_hour), "%Y-%m-%d %H")
+    """Pushes to main and the commits they brought, per hour of the push, every hour since SINCE: both on one clock,
+    so a commit made on a branch at 10 and landed at 16 counts at 16."""
+    pushes_per_hour, commits_per_hour = collections.Counter(), collections.Counter()
+    for hour, before, after in pushes_since():
+        pushes_per_hour[hour] += 1
+        commits_per_hour[hour] += commits_brought(before, after)
+    first = datetime.datetime.strptime(min(pushes_per_hour), "%Y-%m-%d %H")
     hours = []
-    while (label := first.strftime("%Y-%m-%d %H")) <= max(commits_per_hour):
-        hours.append([label, landings_per_hour[label], commits_per_hour[label]])
+    while (label := first.strftime("%Y-%m-%d %H")) <= max(pushes_per_hour):
+        hours.append([label, pushes_per_hour[label], commits_per_hour[label]])
         first += datetime.timedelta(hours=1)
     return hours
 

@@ -2,11 +2,18 @@
 def call(body: Body, f: Function, arguments: list): TypedCode {
 	parameters = f.signature.parameters
 	if gathers(f.signature, #arguments) { return rest_call(body, f, arguments) }
-	if #arguments > #parameters { return refuse_arguments(f, #arguments) }
+	if #arguments > #parameters { return refuse_call([f], arguments) }
+	# a word that is one number, `small_int_low(): int := -128`, is that number where it is called, no call (card
+	# constant-words-inline: 7.7% of a loop's own time went to such calls)
+	literal = if #arguments == 0 and #parameters == 0 then constant_body(f) else ø
+	if literal != ø {
+		constant = expression_code(body, literal)
+		if constant.kind == (declared_result(f) ?? constant.kind) { return constant }
+	}
 	slots = placed_arguments(taken_names(f.signature), arguments, f.signature.parameters.map(p => p.label))
-	if slots == ø { return refuse_arguments(f, #arguments) }
+	if slots == ø { return refuse_call([f], arguments) }
 	given = range_list(#slots).map(i => if slots[i] == ø then default_value(body, f, i, #arguments) else expression_code(body, slots[i]#1))
-	call_values(f, defaulted(body, f, given, #arguments))
+	call_values(f, defaulted(body, f, as_written(body, slots, given), #arguments))
 }
 # `f(1, 2, 3)` of `f(a, *xs)`: the arguments after the fixed ones go as one list, a lone spread `f(1, *ys)` as ys
 def rest_call(body: Body, f: Function, arguments: list): TypedCode {
@@ -28,24 +35,52 @@ named_place(name: text, names: list, labels: list): int := range_list(#names).fi
 # the arguments in the places of `names`: the positional ones first, each named one (`f(b=2, a=7)`) in its name's place,
 # [argument] each, ø for a place left out; ø when a name is given twice or more are given than places (test
 # `slots == ø`: `ø is list` holds, so a nullary f took `m.f`'s receiver; card member-read). (The values are computed in the places'
-# order, not as written: P216 wants written order, which differs only for arguments with effects)
+# order; as_written computes a call's as written, P216). Each slot is [the value, its place in the call as written]
 placed_arguments(names: list, arguments: list, labels: list = []): any := {
 	slots = []
-	for argument in arguments {
+	for written in range_list(#arguments) {
+		argument = arguments[written]
 		if is_named_argument(argument, names + labels.filter(label => label != "")) {
 			at: int = named_place(name_of(key_of(argument)), names, labels)
 			while #slots <= at { slots += [ø] }
 			if slots[at] != ø { return ø }
-			slots[at] = [value_of(argument)]
+			slots[at] = [value_of(argument), written]
 		} else {
 			if #slots >= #names { return ø }
-			slots += [[argument]]
+			slots += [[argument, written]]
 		}
 	}
 	slots
 }
+# `f(b=h(), a=g())`: the values computed as written, h() first, each held in a local the call reads in its place
+# (P216); the given codes as they are when the call is written in its places' order
+def as_written(body: Body, slots: list, given: list): list {
+	places = range_list(#slots).filter(i => slots[i] != ø)
+	written = range_list(#places).map(k => places.filter(i => slots[i]#2 == k)#1)
+	if written == places { return given }
+	held = given.map(code => code)
+	stores = []
+	for i in written {
+		local = uleb(fresh_local(body, given[i].kind))
+		stores += given[i].code + [op.local_set] + local
+		held[i] = TypedCode(given[i].kind, [op.local_get] + local, given[i].mark)
+	}
+	held[0] = TypedCode(held[0].kind, stores + held[0].code, held[0].mark)
+	held
+}
 # a call of f with arguments it does not take: the program's error naming the call f takes, `beat(n)`
 refuse_arguments(f: Function, count: int): any := refuse_count([f], count)
+# a call of these arguments none of the functions takes; `f 5 for 2` of `f(x, for y)` names the call with the label's
+# colon, `f 5 for: 2` (wiki/argument.md: in a call a label always takes one)
+refuse_call(functions: list, arguments: list): any := {
+	labels = functions.flat_map(f => f.signature.parameters.map(p => p.label)).filter(label => label != "")
+	if arguments.any(argument => is_bare_label(argument, labels)) {
+		written = arguments.map(argument => if is_bare_label(argument, labels) then name_of(argument) + ":" else "${argument}")
+		return program_error("a label takes a colon in a call", without_arity(functions#1.name) + " " + written.join(" "))
+	}
+	refuse_count(functions, #arguments)
+}
+is_bare_label(argument: Node, labels: list): bool := argument is symbol and name_of(argument) in labels
 refuse_count(functions: list, count: int): any := {
 	shapes = functions.map(call_shape).join(" or ")
 	program_error(shapes + " is called with " + count + (if count == 1 then " argument" else " arguments"), shapes)
@@ -82,6 +117,7 @@ def call_values(f: Function, values: list): TypedCode {
 # one goes on to find the others (module.widened_now): it is read again anyway, and stopping at the second call of a
 # widened parameter took a reading of the whole compiler for each (card speed-parallel-emit)
 def passed(f: Function, i: int, value: TypedCode): list {
+	global link_refused
 	slot = parameter_key(f.name, i)
 	declared = if i < #f.signature.parameters then aliased_type(f.signature.parameters[i].type_name) else ""
 	if is_union(declared) and not fits_union(declared, value.kind) { refuse("a " + kind_spelling(value.kind) + " where a " + declared + " is needed") }
@@ -158,6 +194,14 @@ analyzed_parameter_kind(f: Function, i: int): any := {
 	found = analyzed_function(f)
 	if found == ø or i >= #found["params"] { return ø }
 	kept_kind(found["params"][i])
+}
+# the number a word's whole body is, `-128` of `small_int_low(): int := -128` (lowered `{the result: int = -128; the
+# result}` or `-128 as int`), else ø
+constant_body(f: Function): Node? := {
+	body = f.body
+	if body == ø { return ø }
+	value = if is_key(body, Op.As) then key_of(body) else if is_group(body) and #body == 2 and held_result_type(body#1) != ø then value_of(body#1) else body
+	if value is number or is_negative_literal(value) then value else ø
 }
 # the kind a definition declares it gives, `f(x): text := …`: once lowered its body, or a block's last statement, is
 # `… as text`, or the block `{the result: text = …; the result}` (definitions.warp result_held)
@@ -256,7 +300,7 @@ def collect_literal_arguments(n: Node) {
 # (an int or a float), an exact number (`real`, `exact`: a ratio of ints), a symbol or a key (node_cases.warp holds a
 # written case `Key` as any); an optional `text?` is one too, ø or the value
 time_type_words = ["time", "instant", "date", "duration"]
-node_annotations = ["any", "Node", "function", "type", "map", "number", "rational", "symbol", "Symbol", "key", "data", "error"]
+node_annotations = ["any", "Node", "function", "type", "map", "number", "rational", "symbol", "Symbol", "key", "pair", "data", "error"]
 # the kind a parameter annotated `word` holds: a type alias's type's, a node for a class, a list for a type word's
 # plural (`ints`, `texts`, `Points`)
 annotated_kind(written: text): ValueKind := {

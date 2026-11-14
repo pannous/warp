@@ -112,7 +112,7 @@ is_letter_byte(b: int): bool := b >= Ascii.LowerA and b <= Ascii.LowerZ
 shown_at(n: Node): int := {
 	t = node_text(n)
 	if c_text_at() + byte_count(t) > output_room() { return -1 }
-	for i in 0..<byte_count(t) { output_byte(c_text_at() + i, byte_at(t, i)) }
+	output_bytes(c_text_at(), t, 0, byte_count(t))
 	(output_address() + c_text_at()) * 4294967296 + byte_count(t)
 }
 # the text of the value a host reads part by part, and where its next part starts (shown_from)
@@ -127,7 +127,7 @@ shown_from(n: Node, start: int): int := {
 	t = shown_whole
 	count = byte_count(t) - start
 	if count > output_room() - c_text_at() { count = output_room() - c_text_at() }
-	for i in 0..<count { output_byte(c_text_at() + i, byte_at(t, start + i)) }
+	output_bytes(c_text_at(), t, start, start + count)
 	shown_next = start + count
 	if shown_next >= byte_count(t) { shown_whole = "" }
 	(output_address() + c_text_at()) * 4294967296 + count
@@ -147,3 +147,20 @@ pixels_at(picture: Node, from: int, count: int): int := {
 	at
 }
 pixel_chunk(): int := (output_room() - c_text_at()) ÷ 4
+# a list's items from item `from` (1-based) on, `count` of them, as pixels_at puts them, while each is a plain int
+# of 32 bits: their address, else -1, and the host reads that list item by item (the page's arguments: a sha256 of
+# 3 MB of bytes took 8 s one shown item at a time, card host-byte); count is at most pixel_chunk()
+int32s_at(list: Node, from: int, count: int): int := {
+	# a range or an extension's list (a GPU list refuses a copy of its items) is read item by item
+	if kind_code(list) != Kind.List or list_kind(list) != 0 { return -1 }
+	at = output_address() + c_text_at()
+	items = unboxed_list(list)
+	for i in 0..<count {
+		item = items#(from + i)
+		if is_null(item) or kind_code(item) != Kind.Int or not is_plain_int(item) { return -1 }
+		n = unboxed_int(item)
+		if n < -2147483648 or n > 2147483647 { return -1 }
+		memory_set_i32(at + 4 * i, n)
+	}
+	at
+}

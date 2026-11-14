@@ -4,15 +4,10 @@
 # warp itself. Run it with bash test/native/test_native.sh; the warp under test is WARP (default the warp on PATH); a tree's:
 # WARP=<tree>/data/gate/warp
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
-warp=${WARP:-warp}
-export WARP_WINDOW=0
+source "$(dirname "$0")/checks.sh"
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
-failures=0
 
-check() { # check <what> <got> <expected>
-	if [ "$2" = "$3" ]; then echo "✓ $1"; else echo "✗ $1: got $2, expected $3"; failures=$((failures + 1)); fi
-}
 native() { # native <sample> <expected> [arguments…]: the sample built natively and run with the arguments prints the expected lines
 	sample=$1 expected=$2
 	shift 2

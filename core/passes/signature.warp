@@ -9,7 +9,7 @@ SIGNATURE_SECTION = "warp.signature"
 # the bytes of a module's header, its first section's id and size and that section's name: where its signature section
 # is placed, read without the rest (a module's whole text as a list of bytes was ~17 % of a one-line compile)
 SIGNATURE_PLACE_BYTES = 32
-class ModuleSignature { source: text; uses: list; slices: list; rules: list; foreign: map; aliases: map; words: list; globals: list; classes: list; builders: list; runtime: list; patterns: list; operators: list; c_lines: list?; c_uses: list?; reaches: map?; owners: map; links: list? }
+class ModuleSignature { source: text; uses: list; slices: list; rules: list; foreign: map; aliases: map; words: list; globals: list; classes: list; builders: list; runtime: list; patterns: list; operators: list; c_lines: list?; c_uses: list?; reaches: map?; owners: map; links: list?; dispatched: map? }
 
 # the signature of the standard module `name` as lib/ lies now, a node; with the fields of its image (prebuilt.warp
 # image_fields) when its compile wrote them
@@ -17,7 +17,9 @@ module_signature_node(name: text, image: list): Node := {
 	path = std_module_path(name)
 	source = std_module_text(name)
 	uses = use_lines(source)
-	slices = definition_slices(source).map(slice => square_list([Text(slice#1), Text(first_line(slice#2)), Text(pack(plain_node(parsed(slice#2, uses))))]))
+	# (each parsed at its line, its positions of file 0: a compile linking the module places them in its file, slice_tree)
+	lines = slice_lines(source)
+	slices = definition_slices(source).map(slice => square_list([Text(slice#1), Text(first_line(slice#2)), Text(pack(plain_node(parsed_from(slice#2, "", lines.get(slice#2) ?? 1, uses))))]))
 	curly_list([
 		field_node("source", Text(texts_hash(built_of_texts(name)))),
 		field_node("uses", square_list(used_modules(source).map(module => Text(module)))),
@@ -48,7 +50,7 @@ module_signature(name: text, wasm: text): ModuleSignature? := {
 	fields = {}
 	for entry in items_of(unpack(byte_slice(wasm, place#1, place#2))) { fields[name_of(key_of(entry))] = value_of(entry) }
 	module_name = name
-	ModuleSignature(source: "${fields["source"]}", uses: items_of(fields["uses"]).map(module => "${module}"), slices: items_of(fields["slices"]).map(slice => ["${slice#1}", "${slice#2}", "${slice#3}", module_name]), rules: items_of(fields["rules"]).map(rule => unpacked_rule(rule, module_name)), foreign: texts_read(fields.get("foreign")), aliases: texts_read(fields.get("aliases")), words: listed(fields, "words"), globals: listed(fields, "globals"), classes: listed(fields, "classes"), builders: listed(fields, "builders"), runtime: listed(fields, "runtime"), patterns: listed(fields, "patterns").map(pattern => "${pattern}"), operators: listed(fields, "operators").map(operator => "${operator}"), c_lines: texts_listed(fields, "c_lines"), c_uses: texts_listed(fields, "c_uses"), reaches: words_read(fields.get("reaches")), owners: texts_read(fields.get("owners")), links: texts_listed(fields, "links"))
+	ModuleSignature(source: "${fields["source"]}", uses: items_of(fields["uses"]).map(module => "${module}"), slices: items_of(fields["slices"]).map(slice => ["${slice#1}", "${slice#2}", "${slice#3}", module_name]), rules: items_of(fields["rules"]).map(rule => unpacked_rule(rule, module_name)), foreign: texts_read(fields.get("foreign")), aliases: texts_read(fields.get("aliases")), words: listed(fields, "words"), globals: listed(fields, "globals"), classes: listed(fields, "classes"), builders: listed(fields, "builders"), runtime: listed(fields, "runtime"), patterns: listed(fields, "patterns").map(pattern => "${pattern}"), operators: listed(fields, "operators").map(operator => "${operator}"), c_lines: texts_listed(fields, "c_lines"), c_uses: texts_listed(fields, "c_uses"), reaches: words_read(fields.get("reaches")), owners: texts_read(fields.get("owners")), links: texts_listed(fields, "links"), dispatched: words_read(fields.get("dispatched")))
 }
 # a map of word lists by name, each written as one text of its words (prebuilt.warp word_reaches); ø for a field an
 # older build left out

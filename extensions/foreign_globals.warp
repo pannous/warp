@@ -25,14 +25,17 @@ MEMBER_SUFFIX = "_member"
 USE_WORD = "use"
 FROM_WORD = "from"
 FOREIGN_CALL = "foreign_call"
+# each js call's value goes through it: a promise the page keeps is waited for (lib/prelude.warp)
+FOREIGN_SETTLED = "foreign_settled"
 # a function handed to js with its parameters' count, and the module that keeps it for js to call back
 # (lib/callbacks.warp js_function)
 JS_FUNCTION = "js_function"
 CALLBACKS_MODULE = "callbacks"
 SETTER_PREFIX = "set "
 GLOBAL_SCOPE = "globalThis"
-# the page's window itself, which WebIDL declares as no attribute
+# the page's window itself, which WebIDL declares as no attribute: the global scope, of interface Window
 PAGE_WINDOW = "window"
+# the types WebIDL names that are another's: a WindowProxy (defaultView, contentWindow) is its Window (HTML 7.2.3)
 # an element of the page by its id (decision page-ids): `who.focus()` is document.getElementById("who").focus()
 ID_ATTRIBUTE = "id"
 PAGE_DOCUMENT = "document"
@@ -42,6 +45,8 @@ PAGE_ELEMENT_TYPE = "HTMLElement"
 GLOBAL_INTERFACES = ["Window", "WindowOrWorkerGlobalScope", "WorkerGlobalScope", "WindowLocalStorage", "WindowSessionStorage"]
 # read from lib/ the first time a program reaches the page's js (load on demand)
 WEBIDL = "web.webidl"
+# ECMAScript's own globals (Math, JSON, Reflect), written as WebIDL beside the web's
+ECMASCRIPT_WEBIDL = "ecmascript.webidl"
 use "js_globals/webidl.warp"
 
 # --- the program ---
@@ -50,10 +55,10 @@ use "js_globals/webidl.warp"
 # as foreign calls
 foreign_globals(program: Node): Node := {
 	uses = foreign_uses(program)
-	names = uses.map(used => used#2)
 	scopes = markup_scopes(program)
 	markup = #scopes > 0
-	if markup { names += page_globals_read(program, names) }
+	if markup { uses += page_globals_read(program, uses.map(used => used#2)).map(name => [JS_RUNTIME, name, no]) }
+	names = uses.map(used => used#2)
 	ids = page_ids(scopes, names_bound_in(program))
 	elements = page_elements(program, ids)
 	if #names == 0 and #ids == 0 and #elements == 0 { return program }
@@ -210,13 +215,13 @@ js_call(receiver: list, member: text, called: int, arguments: list, scope: JsSco
 	given = js_member_type(receiver#2, member)
 	library = is_library_runtime(receiver#2)
 	given_arguments = [receiver#1, member, called, bracketed(if library then arguments else arguments.map(argument => handed_to_js(argument, scope)), "[")]
-	call = if library then call_of(receiver#2 + MEMBER_SUFFIX, given_arguments) else call_of(FOREIGN_CALL, [JS_RUNTIME] + given_arguments)
+	call = if library then call_of(receiver#2 + MEMBER_SUFFIX, given_arguments) else call_of(FOREIGN_SETTLED, [call_of(FOREIGN_CALL, [JS_RUNTIME] + given_arguments)])
 	if given != UNCHECKED { scope.calls["${call}"] = given }
 	call
 }
 # `x = <a js value>` makes x a js variable of its interface; `receiver.member = v` sets the member
 js_assigned(n: Node, scope: JsScope): Node := {
-	target = key_of(n)
+	target = foreign_called(key_of(n))
 	value = value_of(n)
 	if is_group(target) and #target == 6 and target#1 == symbol(FOREIGN_CALL) and target#5 == 0 {
 		return call_of(FOREIGN_CALL, [JS_RUNTIME, target#3, SETTER_PREFIX + target#4, 1, bracketed([handed_to_js(value, scope)], "[")])
@@ -225,6 +230,8 @@ js_assigned(n: Node, scope: JsScope): Node := {
 	if target is symbol and scope.calls.has(written) { scope.variables[name_of(target)] = scope.calls[written] }
 	n
 }
+# the foreign_call a lowered js call settles (js_call), the node itself else
+foreign_called(n: Node): Node := if is_group(n) and #n == 2 and n#1 == symbol(FOREIGN_SETTLED) then n#2 else n
 
 # [receiver, interface] of a global: a library runtime's is its import, a js global its name as foreign_call takes it
 global_receiver(name: text, interface: text): list := [if is_library_runtime(interface) then call_of(interface + IMPORT_SUFFIX, [Text(name)]) else Text(name), interface]
@@ -237,6 +244,7 @@ is_js_global(name: text, scope: JsScope): bool := scope.globals.has(name) and no
 # that name (crypto: Crypto), else UNCHECKED
 js_global_type(name: text): text := {
 	if webidl().has(name) { return name }
+	if name == PAGE_WINDOW { return GLOBAL_INTERFACES#1 }
 	member = webidl_global_member(name)
 	if member == ø then UNCHECKED else member.type
 }
@@ -257,8 +265,9 @@ js_member_type(interface: text, member: text): text := {
 	if interface == UNCHECKED or is_library_runtime(interface) { return interface }
 	found = webidl_member_of(interface, member)
 	if member == CONSTRUCTOR_MEMBER and found != ø { return interface }
-	if found == ø { raise "js: " + interface + " has no " + (if member == CONSTRUCTOR_MEMBER then "constructor" else member) + " (lib/web.webidl)" }
-	if webidl().has(found.type) then found.type else UNCHECKED
+	if found == ø { raise "js: " + interface + " has no " + (if member == CONSTRUCTOR_MEMBER then "constructor" else member) + " (lib/*.webidl)" }
+	given = found.type
+	if webidl().has(given) then given else UNCHECKED
 }
 # the member of a definition, its parents' and its mixins' included
 webidl_member_of(name: text, member: text): WebIdlMember? := {
@@ -275,6 +284,6 @@ webidl_member_of(name: text, member: text): WebIdlMember? := {
 # name → WebIdlDefinition: the interfaces, mixins, namespaces and dictionaries with their partials, read once
 global webidl_definitions = ø
 webidl(): map := {
-	if webidl_definitions == ø { webidl_definitions = webidl_read(library_data(WEBIDL)) }
+	if webidl_definitions == ø { webidl_definitions = webidl_read(library_data(WEBIDL) + library_data(ECMASCRIPT_WEBIDL)) }
 	webidl_definitions
 }

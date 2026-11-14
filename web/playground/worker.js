@@ -48,6 +48,8 @@ self.servingPage = (shared, port) => self.postMessage({ type: "serving", shared,
 self.servedPage = response => self.postMessage({ type: "served", response });
 addPageSoundWords(post); // host-tasks.js
 const hooks = {
+	// a program's main may wait for a JS promise (driver.js programRan): evaluate awaits its run
+	waits: true,
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	// host-media.js paintFrame: its words move to the page, not copied
@@ -96,7 +98,7 @@ async function loadCompiler() {
 async function evaluate(code) {
 	panicMessage = undefined;
 	try {
-		return evaluatedNatively(code, self.programFile, hooks);
+		return await evaluatedNatively(code, self.programFile, hooks);
 	} catch (crash) {
 		compiler = undefined;
 		return { value: `compiler crashed: ${crash.message}`, error: true, crashed: true, warnings: [], runtime_warnings: [], hints: [], notes: [] };
@@ -141,8 +143,9 @@ function loadPython() {
 }
 // the modules a program imports (python_import("numpy")): Pyodide's packages among them loaded before the run, as
 // natively they are installed beside libpython
-const PYTHON_IMPORT = /python_import\("([\w.]+)"\)/g;
-const pythonImports = code => [...code.matchAll(PYTHON_IMPORT)].map(([, name]) => `import ${name}`).join("\n");
+// the Python modules a program names: python_import("numpy"), use python numpy, use numpy from python
+const PYTHON_IMPORT = /python_import\("([\w.]+)"\)|\buse\s+python\s+([\w.]+)|\buse\s+([\w.]+)\s+from\s+python\b/g;
+const pythonImports = code => [...code.matchAll(PYTHON_IMPORT)].map(([, ...names]) => `import ${names.find(Boolean)}`).join("\n");
 registerForeignRuntime("python", {
 	prepare: code => USES_PYTHON.test(code) && loadPython().then(pyodide => pyodide.loadPackagesFromImports(pythonImports(code), { messageCallback: () => {} }))
 		.catch(failure => post({ type: "print", text: `Python could not load: ${failure.message}\n`, stream: 2 })),

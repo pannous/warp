@@ -1,0 +1,4 @@
+# use music and use audio load the sound library (card sound-module-aliases)
+'use music; play(C4, 0.1s); 1'	1
+'use audio; play(C4, 0.1s); 1'	1
+'use sound; play(C4, 0.1s); 1'	1

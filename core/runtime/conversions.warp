@@ -174,6 +174,15 @@ spells(t: text, word: text): bool := {
 }
 # a value known only at run time as a condition: ø and errors are no, a
 # list or map yes when it has items, a key when its key or value is, a number, character or text when not 0 or empty
+# m's method of that name called with the arguments' list: its answer, ø where m is no instance of a class declaring
+# it; instance_method answers [answer], so an answer of [] is told from none (core/runtime/maps.warp protocol_answer)
+method_called(m: Node, name: Node, arguments: Node): Node := {
+	answered = instance_method(m, name, arguments)
+	if is_null(answered) then answered else answer_of(answered)
+}
+answer_of(answered: Node): Node := unboxed_list(answered)#1
+# [the answer] of a class's method, as instance_method gives it
+answered(answer: Node): Node := list_node(Kind.List, [answer])
 node_truthy(n: Node): bool := {
 	if is_null(n) { return no }
 	kind = kind_code(n)

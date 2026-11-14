@@ -48,9 +48,9 @@
 
 # a_library_word_keeps_its_types
 'first(x) := x * 2; first(3)'	6
-'first(x) := x * 2; first([1,2])'	1
+'my_first(x) := x * 2; first([1,2])'	1
 'first(x) := x * 2; g(v) := first(v); g([4,5]) + g(3)'	10
-'upper(t) := "U"; upper("a")'	'A'
+'my_upper(t) := "U"; upper("a")'	'A'
 'count(x) := 7; [1,2].count'	2
 
 # every_library_parameter_type_chooses

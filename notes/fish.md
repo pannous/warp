@@ -1,6 +1,6 @@
 # Fish
 
-A swimming red sea bream, `samples/gpu/fish.warp`. One photo mesh, posed on the CPU. `paint` still has no vertex stage, and a texture binding is still `gpu-multipass`, so the fragment shader ray-tests the posed triangles. The loader, the pose and that ray live in `lib/fish_mesh.warp`, which the aquarium instances too (`notes/aquarium.md`). No compiler or core change.
+A swimming red sea bream, `samples/gpu/fish.warp`. One photo mesh, posed on the CPU. `paint` still has no vertex stage, and a texture binding is still `gpu-multipass`, so the fragment shader ray-tests the posed triangles. The loader, the pose and that ray live in `samples/gpu/fish_mesh.warp`, which the aquarium instances too (`notes/aquarium.md`). No compiler or core change.
 
 ## The mesh
 

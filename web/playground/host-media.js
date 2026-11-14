@@ -25,19 +25,13 @@ function textCoverage(words, size) {
 // the first `room` items of a list of Ints (paint's pixels, sound's samples), their magnitudes as the low and high 32
 // bits of each (Int32Array); undefined for a text, which the caller reads as a shader
 const intHalvesOfList = (program, list, room) => isGuestText(program, list) ? undefined : halvesOf(guestInts(program, list, Math.min(room, guestCount(program, list))));
-// a picture's pixels as intHalvesOfList gives them, read a chunk at a time by the module's pixels_at (4 bytes a pixel in
-// its memory), as the native warp reads them: one call a pixel took 120 to 280 ms a frame of 1280×800 (finger_paint)
-const PIXEL_CHUNK = 16372; // core/runtime/show.warp pixel_chunk(), as core/native/driver.warp PIXEL_CHUNK
+// a picture's pixels as intHalvesOfList gives them, read a chunk at a time (guestInt32s), as the native warp reads them:
+// one call a pixel took 120 to 280 ms a frame of 1280×800 (finger_paint)
 function pictureHalves(program, picture, room) {
 	if (!program.pixels_at || isGuestText(program, picture)) return intHalvesOfList(program, picture, room);
-	const count = Math.min(room, guestCount(program, picture));
-	const halves = new Int32Array(2 * count);
-	for (let from = 0; from < count; from += PIXEL_CHUNK) {
-		const chunk = Math.min(PIXEL_CHUNK, count - from);
-		const address = Number(program.pixels_at(picture, BigInt(from + 1), BigInt(chunk)));
-		const words = new Int32Array(program.memory.buffer.slice(address, address + 4 * chunk));
-		for (let at = 0; at < chunk; at++) halves[2 * (from + at)] = words[at];
-	}
+	const words = guestInt32s(program, picture, Math.min(room, guestCount(program, picture)), "pixels_at");
+	const halves = new Int32Array(2 * words.length);
+	words.forEach((word, at) => { halves[2 * at] = word; });
 	return halves;
 }
 const intsOfList = (program, list, room) => {
@@ -58,7 +52,8 @@ function halvesOf(values) {
 
 // the gray levels of paint: a nonzero pixel, a zero pixel; from PAINT_COLOR_FROM on a value is a color 0xAARRGGBB
 // (src/graphics/pixels.rs, which tests/programs/test_paint_shades.rs holds these to; lib/draw.warp). A pixel shown is
-// one opaque word of ImageData's R, G, B, A bytes read little-endian, a signed 32-bit int like the Int32Array it is kept in
+// one opaque word of ImageData's R, G, B, A bytes read little-endian, a signed 32-bit int like the Int32Array it is kept in.
+// Dark mode swaps paper and ink (host.js darkTheme; lib/draw.warp paper and ink)
 const PAINT_INK = 29;
 const PAINT_PAPER = 250;
 const PAINT_COLOR_FROM = 2 ** 24;
@@ -66,8 +61,9 @@ const OPAQUE_WORD = 0xFF000000;
 const grayWord = level => OPAQUE_WORD | level << 16 | level << 8 | level;
 const PAPER_WORD = grayWord(PAINT_PAPER);
 const INK_WORD = grayWord(PAINT_INK);
-function shadeWord(low, high) {
-	if (high === 0 && low >>> 0 < PAINT_COLOR_FROM) return low === 0 ? PAPER_WORD : INK_WORD;
+const themeWords = () => darkTheme() ? [INK_WORD, PAPER_WORD] : [PAPER_WORD, INK_WORD];
+function shadeWord(low, high, paper, ink) {
+	if (high === 0 && low >>> 0 < PAINT_COLOR_FROM) return low === 0 ? paper : ink;
 	return OPAQUE_WORD | (low & 0xFF) << 16 | low & 0xFF00 | low >>> 16 & 0xFF;
 }
 
@@ -77,8 +73,8 @@ function shadeWord(low, high) {
 // hundreds of milliseconds each in Safari (card abysmally-slow). {x, y, columns, rows, words}, words row by row
 const paintFrame = (holder, halves, width, height) => changedFrame(holder, shadedWords(halves, width * height), width, height);
 function shadedWords(halves, count) {
-	const words = new Int32Array(count);
-	for (let at = 0; at < count; at++) words[at] = shadeWord(halves[2 * at], halves[2 * at + 1]);
+	const words = new Int32Array(count), [paper, ink] = themeWords();
+	for (let at = 0; at < count; at++) words[at] = shadeWord(halves[2 * at], halves[2 * at + 1], paper, ink);
 	return words;
 }
 // the frame of the words shown (a painting's, a window's) against the frame before: whole when the size changed, else

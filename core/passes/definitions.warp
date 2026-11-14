@@ -31,9 +31,9 @@ is_parameter(n: Node): bool := match n {
 
 definition(n: Node): Node := if is_runtime_declaration(n) then Node.Empty else match n {
 	List(parts, Bracket.None, Separator.Space): typed_definition_held(n)
-	Key(head, Op.Assign, body): { if is_head(head) or is_function_block(head, body) then Key(phrased_head(head), Op.Define, body) else typed_definition_held(n) }
+	Key(head, Op.Assign, body): { if as_result(head) != ø then definition(Key(head, Op.Define, body)) else if is_head(head) or is_function_block(head, body) then Key(phrased_head(head), Op.Define, body) else typed_definition_held(n) }
 	Key(head, Op.Define, body): typed_definition_held(Key(phrased_head(head), Op.Define, body))
-	_: n
+	_: union_definition(n) ?? n
 }
 # `f(xs: list of int)`: a parameter's type phrase is one type, as a class field's (sugar.warp with_type_phrases)
 phrased_head(head: Node): Node := {
@@ -54,9 +54,34 @@ typed_definition_held(n: Node): Node := {
 # other forms a type word, collection, class or any (`f(x): y = e` assigns y)
 # `void`, which the parser reads as ø
 is_no_result(n: Node): bool := n == Node.Empty
+# `f(x) as T` as `f(x): T`; `f(x) as int or error`, which reads `(f(x) as int) or error`, as `f(x): int or error`
+as_result(target: Node): Node? := match target {
+	Key(head, Op.As, type): if is_call(head) and type is symbol then Key(head, Op.Colon, type) else ø
+	Key(left, op, other): {
+		if op != Op.Or and op != Op.BitOr { return ø }
+		typed = as_result(left)
+		if typed == ø then ø else Key(key_of(typed), Op.Colon, Key(value_of(typed), Op.Or, other))
+	}
+	_: ø
+}
+# `def f(x) as int or text { … }` (wiki/return.md): the body glued to the union's last word, `text {…}`, so no
+# definition rule matched (sugar functions.warp drops the `def`); the definition with its result and body apart
+union_definition(n: Node): Node? := {
+	parts = unglued_body(n)
+	if parts == ø { return ø }
+	target = as_result(parts#1) ?? parts#1
+	if is_key(target, Op.Colon) and is_call(key_of(target)) then definition(Key(target, Op.Define, parts#2)) else ø
+}
+# [the type phrase without it, the block] of a type phrase whose last word took the body, `int or text {…}`; else ø
+unglued_body(n: Node): list? := {
+	if is_group(n) and separator_of(n) == " " and #n == 2 and is_curly_group(n#2) { return [n#1, n#2] }
+	if not (is_key(n, Op.Or) or is_key(n, Op.BitOr) or is_key(n, Op.Colon) or is_key(n, Op.As)) { return ø }
+	inner = unglued_body(value_of(n))
+	if inner == ø then ø else [Key(key_of(n), op_of(n), inner#1), inner#2]
+}
 declared_result_form(n: Node): Node := match n {
 	# `f(x) as pdf := e`: in a definition's head `as` names the result, any type the program has, as `:` does
-	Key(target, Op.Define, body): if is_key(target, Op.Colon) then n else if is_key(target, Op.As) and is_call(key_of(target)) and value_of(target) is symbol then Key(Key(key_of(target), Op.Colon, value_of(target)), Op.Define, body) else typed_by_word(target, body)
+	Key(target, Op.Define, body): if is_key(target, Op.Colon) then n else if as_result(target) != ø then Key(as_result(target), Op.Define, body) else typed_by_word(target, body)
 	Key(target, Op.Assign, body): typed_by_word(target, body)
 	List(parts, Bracket.None, Separator.Space): {
 		if #parts != 2 or not (is_result_type(parts#1) or is_no_result(parts#1)) or name_of(parts#1) in function_keywords { return ø }
@@ -93,10 +118,14 @@ is_runtime_declaration(n: Node): bool := {
 
 # `f(x): T := e`: `f(x) := {the result: T = e; the result}`, the result held as a T
 result_word = "the result"
+# a linked module's word declared without its body (random(a, b): float of the prelude): its module answers for its
+# result, so it holds none here and never answers ø for being empty
+is_brought_declaration(head: Node, body: Node): bool := body == Node.Empty and brought_names.has(name_of(head#1))
 result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
 	Key(head, Op.Colon, result_type): {
-		# (a declaration, a linked module's word without its body, holds no result: random(a, b): float of the prelude)
-		if not is_call(head) or (body == Node.Empty and brought_names.has(name_of(head#1))) { return n }
+		if not is_call(head) or is_brought_declaration(head, body) { return n }
+		# a changing (bang) function returns nothing (decision answer-or-act)
+		if name_of(head#1).ends_with("!") { diagnose(call_of("bang_result", [name_of(head#1)]), result_type) }
 		result = symbol(result_word)
 		held = optional_when_answering_empty(head, body, result_type)
 		if name_of(held).ends_with("?") { body = with_empty_otherwise(body) }
@@ -178,7 +207,7 @@ typed_definitions(n: Node): list := {
 	if typed then [typed] + inner else inner
 }
 typed_definition(n: Node): list? := match n {
-	Key(Key(head, Op.Colon, result_type), Op.Define, body): { if is_call(head) then [name_of(head#1), name_of(result_type), body] else ø }
+	Key(Key(head, Op.Colon, result_type), Op.Define, body): { if is_call(head) and not is_brought_declaration(head, body) then [name_of(head#1), name_of(result_type), body] else ø }
 	Key(head, Op.Colon, typed_body): {
 		if not is_call(head) or separator_of(typed_body) != " " or #typed_body != 2 or bracket_of(typed_body#2) != "{" { return ø }
 		[name_of(head#1), name_of(typed_body#1), typed_body#2]

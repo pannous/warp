@@ -27,6 +27,9 @@ scalars = {i8: signed_byte, int8: signed_byte, u8: unsigned_byte, uint8: unsigne
 	u64: unsigned_long, uint64: unsigned_long, f32: single_float, float32: single_float, f64: double_float,
 	float: double_float, double: double_float, number: double_float}
 NO_VALUE = ""
+# the GC program's checked cast (extensions/sugar/calls.warp), which the sugar makes of a @primitive function's
+# `x as u8` and of its fixed-width declarations, `the result: u8 = e` its result too
+FITTED_INT_WORD = "fitted_int"
 INT_TYPE = "int"
 FLOAT_TYPE = "float"
 BOOL_TYPE = "bool"
@@ -797,7 +800,8 @@ primitive_compiled(f: Function) := {
 	parameters = f.signature.parameters
 	types = parameters.map(p => primitive_type_name(symbol(if p.type_name then p.type_name else "?")))
 	inner = added_function(f.name + "·primitive", types.map(hosted_kind), ValueKind.Int, [])
-	primitive = PrimitiveFunction(f.name, parameters.map(p => p.name), types, primitive_result(f.body), giving_body(f.body), inner.index)
+	body = unchecked_casts(f.body)
+	primitive = PrimitiveFunction(f.name, parameters.map(p => p.name), types, primitive_result(body), giving_body(body), inner.index)
 	primitive_functions[f.name] = primitive
 	f.kinds = types.map(boundary_kind)
 	f.locals = []
@@ -815,6 +819,17 @@ primitive_compiled(f: Function) := {
 	called = passed + call_code(inner.index)
 	f.code = if f.gives_nothing then called + [ref_null, gc_type(gc.node)] else mvp_cast(PrimitiveCode(primitive.result, called), if primitive.result == BOOL_TYPE then BOOL_TYPE else result).code
 }
+# a primitive function's code as written, before the GC program's sugar checked its casts: `x: int = fitted_int(e, "u8")`
+# is `x: u8 = e` again, `fitted_int(e, "u8")` the plain `e as u8`, as a primitive file has them (the rules' widened_to_int)
+unchecked_casts(n: Node): Node := {
+	if is_key(n, Op.Assign) and is_key(key_of(n), Op.Colon) and value_of(key_of(n)) == symbol(INT_TYPE) and is_fitted(unparenthesized(value_of(n))) {
+		fitted = unparenthesized(value_of(n))
+		return Key(Key(key_of(key_of(n)), Op.Colon, fitted_type(fitted)), Op.Assign, unchecked_casts(fitted#2))
+	}
+	if is_fitted(n) then Key(unchecked_casts(n#2), Op.As, fitted_type(n)) else children(n, unchecked_casts)
+}
+is_fitted(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(FITTED_INT_WORD)
+fitted_type(fitted: Node): Node := symbol("${fitted#3}")
 # the kind a primitive type is held as inside the GC module; f32 has none there yet
 hosted_kind(type: text): ValueKind := match mvp_wasm_of(type) {
 	"i32": ValueKind.I32
@@ -829,8 +844,8 @@ boundary_kind(type: text): ValueKind := if mvp_is_float(type) then ValueKind.Flo
 ## the native build's C (extensions/commands/build.warp build_native)
 # the main.c of a native build: wasm2c's header of the module, lib/native/wasi.c and lib/native/foreign.c, each C
 # function the module imports, the instantiation and run_main, which prints what main gives
-native_main(header: text, library: text): text := {
-	includes = ["<stdio.h>", "\"" + header + "\"", "\"" + library + "/native/wasi.c\"", "\"" + library + "/native/foreign.c\""]
+native_main(header: text): text := {
+	includes = ["<stdio.h>", "\"" + header + "\"", "\"native/wasi.c\"", "\"native/foreign.c\""]
 	foreign = c_functions_imported()
 	libraries = c_libraries(foreign)
 	# wasm2c's instantiate takes the imported modules' instances sorted by module name (its std::set), the C ones
@@ -874,7 +889,7 @@ c_function_glue(f: PrimitiveFunction): text := {
 	call = "function(" + arguments.join(", ") + ")"
 	result = if f.result == NO_VALUE then "void" else c_type_of_primitive(f.result)
 	body = ["static " + result + " (*function)(" + (if #f.types == 0 then "void" else f.types.map(c_type_of_primitive).join(", ")) + ")",
-		"if (!function) function = native_function(\"" + written_name(f.name) + "\")"] +
+		"if (!function) function = native_function(\"" + f.library + "\", \"" + written_name(f.name) + "\")"] +
 		texts.map(i => "char* text" + i + " = native_text(&library->wasi, value" + i + ")") +
 		[if f.result == NO_VALUE then call else result + " result = " + call] + texts.map(i => "free(text" + i + ")") +
 		(if f.result == NO_VALUE then [] else ["return " + module_value(f.result, "result")])

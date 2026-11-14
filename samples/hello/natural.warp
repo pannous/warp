@@ -58,7 +58,7 @@ mail("Hello", "user@example.com")
 
 # General filtering, sorting and slicing compose without a phrase-specific lowering pass
 result = (numbers where it > 0)
-	.sort_by(it => abs(it))
+	.sort(by: it => abs(it))
 	.slice(0, 10)
 
 # Named arguments for clarity

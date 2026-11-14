@@ -18,11 +18,26 @@ node_order(a: Node, b: Node): int := {
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return extended_order(a, b) }
 	float_order(float_of_node(a), float_of_node(b))
 }
+# `a < b`, `a <= b`, `a > b`, `a >= b` of two values known only at run time, the order the operator's place in
+# ORDERINGS: texts and characters by their bytes, ints and exact rationals exactly, anything else as the floats it
+# holds, an instance as its float() (card emitter-inlines: one call where the emitter wrote the whole of it at each)
+node_compared(a: Node, b: Node, ordering: int): bool := {
+	if exact_ints(a, b) { return ordered_as(int_order_of(unboxed_int(a), unboxed_int(b)), ordering) }
+	if textual_node(a) and textual_node(b) { return ordered_as(text_order(node_text(a), node_text(b)), ordering) }
+	x = number_held(a)
+	y = number_held(b)
+	if kind_code(x) == Kind.Int and kind_code(y) == Kind.Int { return ordered_as(if is_plain_int(x) and is_plain_int(y) then int_order_of(unboxed_int(x), unboxed_int(y)) else extended_order(x, y), ordering) }
+	floats_ordered(float_of_node(x), float_of_node(y), ordering)
+}
+# an order, -1, 0 or 1, as the comparison at that place in ORDERINGS takes it
+ordered_as(order: int, ordering: int): bool := floats_ordered(float(order), 0.0, ordering)
+# x and y as the comparison at that place in ORDERINGS takes them (NaN fails every one)
+floats_ordered(x: float, y: float, ordering: int): bool := if ordering == 0 then x < y else if ordering == 1 then x <= y else if ordering == 2 then x > y else x >= y
 # an instance by its class's compare(other), as `<` orders it (decision compare-equal-hooks): `sort [dot(2), dot(1)]`;
 # no order (no_order_of) where its class declares none
 instance_order(a: Node, b: Node): int := {
 	if not is_class_instance(a) { return no_order_of(a, b) }
-	ordered = instance_method(a, "compare", list_node(Kind.List, [b]))
+	ordered = method_called(a, "compare", list_node(Kind.List, [b]))
 	if is_null(ordered) { return no_order_of(a, b) }
 	float_order(float_of_node(ordered), 0.0)
 }

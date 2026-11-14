@@ -4,17 +4,12 @@
 # bash test/native/test_cli_options.sh; the warp that builds it is WARP (default the warp on PATH); a tree's:
 # WARP=<tree>/data/gate/warp
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
-warp=${WARP:-warp}
+source "$(dirname "$0")/checks.sh"
 # the lib/ that warp runs with (its version names it), given to the native warp built here
 library=$("$warp" version 2>/dev/null | sed -n 's/.*(compiler.warp of \(.*\))$/\1/p')
-export WARP_WINDOW=0
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
-failures=0
 
-check() { # check <what> <got> <expected>
-	if [ "$2" = "$3" ]; then echo "✓ $1"; else echo "✗ $1: got $2, expected $3"; failures=$((failures + 1)); fi
-}
 
 cp "$checkout"/core/native/*.warp "$stage/"
 (cd "$stage" && "$warp" build native warp.warp >"$stage/build.log" 2>&1)
@@ -39,4 +34,6 @@ check "--fast wraps a written int" "$(native --fast past.warp)" -922337203685477
 check "--fast wraps a boxed int" "$(native --fast boxed.warp)" -9223372036854775808
 check "without --fast it grows" "$(native boxed.warp)" 9223372036854775808
 check "--fast keeps a big value exact" "$(native --fast big.warp)" 18446744073709551617
+# a misspelt test path is refused, naming it, never a pass of 0 tests
+check "warp test of a missing folder" "$(native test no_such_folder; echo "exit $?")" "$(printf 'warp test: no such test folder or file: no_such_folder\nexit 1')"
 [ $failures = 0 ]

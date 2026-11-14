@@ -12,6 +12,7 @@
 use color
 use complex
 use math
+use regex
 
 VECTOR_TYPES = ["f32", "vec2f", "vec3f", "vec4f"]
 # a complex number's width: a mark of its own beside the vectors' 2 to 4, a vec2f [re, im] in WGSL
@@ -25,9 +26,11 @@ VALUES_NAME = "values"
 # a painted function's color: three numbers from 0 to 1
 COLOR_WIDTH = 3
 # a painted number or yes/no is ink where it is not 0, paper where it is, as the native PNG writer shades it
-# (core/native/driver.warp INK 29, PAPER 250 of 255)
+# (core/native/driver.warp INK 29, PAPER 250 of 255); dark mode swaps them (lib/draw.warp paper and ink)
 INK_GRAY = "vec3f(0.11372549)"
 PAPER_GRAY = "vec3f(0.98039216)"
+# select's two first arguments for a painted number: the paper, then the ink
+painted_grays() := if dark_mode then INK_GRAY + ", " + PAPER_GRAY else PAPER_GRAY + ", " + INK_GRAY
 # translations of a function until its variables' widths settle: one assigned a number, later a vector
 MOST_ATTEMPTS = 3
 # the words WGSL keeps: a program's name among them gets a `_` after it
@@ -158,16 +161,36 @@ shading = WgslTranslation({}, {}, [], {}, {}, [], {}, "", [])
 # each painted function's [shader, the names of the program values it reads], made at its first paint
 global shaders_made = {}
 
+# a field the passes of paint([velocity: advect, …, show]) draw and read on the GPU (wiki/graphics.md "Fields and
+# passes"): `width` numbers at each of its columns × rows cells, kept from frame to frame. A function a pass runs reads
+# it at a cell, `velocity(x, y)` or `velocity(p)` of a vector p, filtered between cells (the GPU's 0.5 is a cell's center); the CPU never holds one
+MOST_FIELD_NUMBERS = 4
+class GpuField {
+	width: int; columns: int; rows: int
+	call(x, y = 0) := raise "a field lives on the GPU: read it in a function a pass of paint([…]) runs"
+}
+field(width: int, columns: int, rows: int): GpuField := {
+	if width < 1 or width > MOST_FIELD_NUMBERS { raise "a field holds 1 to 4 numbers at each cell, not ${width}" }
+	GpuField(width, columns, rows)
+}
+# a pass of paint([velocity: advect, …, show]) (lib/gpu_passes.warp paint_passes): [the name of the field it draws,
+# its shader, the values it reads now, the fields the program declares by name]; the last, `show`, draws into none and
+# paints as paint(f)
+function_pass(reached: map, fields: map, name: text = "", into: any = ø): list := {
+	if not (paint_on_gpu and gpu_paints()) { raise "paint's fields live on the GPU, and none paints here" }
+	made = shader_made(reached, name, into)
+	[name, made#1, shader_floats(values_named(reached, made#2)) ?? {}, fields]
+}
+
 # paint(f, width, height) of a program function: its shader on the GPU, the values it reads as they are now; else f of
 # each pixel on the CPU (lib/prelude.warp paint_each)
 # hash(cell) on the CPU, as the shader word computes it (lib/prelude.warp SHADER_WORDS_WGSL), for a painting without a GPU
 hash(cell: list) := fract(sine(dot(cell .- 289 .* floor(cell ./ 289), [127.1, 311.7])) * 43758.5453)
 // a program paints on the CPU, exact in f64, with `paint_on_gpu = no`
 global paint_on_gpu = yes
-paint_function(reached: map, width, height, f) := if paint_on_gpu and gpu_paints() then paint(shader_of(reached), width, height, shader_floats(values_read(reached))) else paint_each(f, width, height)
-# the program values the function's shader reads, as they are now; ø for none
-values_read(reached: map): any := {
-	names = shader_made(reached)#2
+paint_function(reached: map, width, height, f) := if paint_on_gpu and gpu_paints() then paint(shader_of(reached), width, height, shader_floats(values_named(reached, shader_made(reached)#2))) else paint_each(f, width, height)
+# the program values of these names the function's shader reads, as they are now; ø for none
+values_named(reached: map, names: list): any := {
 	if #names == 0 { return ø }
 	read = {}
 	for name in names { read[name] = painted_value(reached.values[name]) }
@@ -180,18 +203,35 @@ painted_value(value) := if is_color(value) then channels(value) else if value is
 is_color(value): bool := value is Color and not (value is int)
 # `shader_of(f)`: the WGSL fragment shader that paints f(column, row) at every pixel, as a text
 shader_of(reached: map): text := shader_made(reached)#1
-shader_made(reached: map): list := {
-	if not shaders_made.has(reached.name) { shaders_made[reached.name] = [wgsl_shader(reached), shading.read_values] }
-	shaders_made[reached.name]
+# (a pass drawing into a field, `into`, gives its value as it is, not as a color)
+shader_made(reached: map, name: text = "", into: any = ø): list := {
+	key = reached.name + " " + name
+	if not shaders_made.has(key) { shaders_made[key] = [wgsl_shader(reached, into), shading.read_values] }
+	shaders_made[key]
 }
-wgsl_shader(reached: map): text := {
-	painted = wgsl_painted_call(reached)
+wgsl_shader(reached: map, into: any = ø): text := {
+	given = if into == ø then "vec4f(" + wgsl_painted_call(reached) + ", 1.0)" else wgsl_stored_call(reached, into)
 	if shading.refusal != "" { raise "shader_of(${reached.name}): ${shading.refusal}" }
 	shader_functions = shading.written_functions.join("\n\n")
-	shader_words(shader_functions + "\n\n@fragment fn main(@builtin(position) position: vec4f) -> @location(0) vec4f {\n\treturn vec4f(" + painted + ", 1.0);\n}\n")
+	shader_words(shader_functions + "\n\n@fragment fn main(@builtin(position) position: vec4f) -> @location(0) vec4f {\n\treturn " + given + ";\n}\n")
 }
-# f called at the pixel's column and row (WGSL's position is the pixel's center)
+# f's value at the cell as the field `into` stores it, padded to the 4 numbers of a cell
+wgsl_stored_call(reached: map, into: GpuField): text := {
+	called = wgsl_called(reached)
+	if shading.refusal == "" and called#2 != into.width { wgsl_refused(symbol(reached.name), "${reached.name} gives ${wgsl_type(called#2)}, but the field it draws holds " + wgsl_type(into.width)) }
+	if called#2 == 4 then called#1 else "vec4f(" + called#1 + ", 0.0" * (4 - called#2) + ")"
+}
+# f called at the pixel's column and row (WGSL's position is the pixel's center), as a color
 wgsl_painted_call(reached: map): text := {
+	f = symbol(reached.name)
+	called = wgsl_called(reached)
+	if called#2 == 0 { return "select(" + painted_grays() + ", " + called#1 + ")" }
+	if called#2 == 1 { return "select(" + painted_grays() + ", " + called#1 + " != 0.0)" }
+	if shading.refusal == "" and called#2 != COLOR_WIDTH { wgsl_refused(f, "a painted function gives a color [r, g, b], a number or yes/no; ${f} gives " + wgsl_type(called#2)) }
+	called#1
+}
+# f called at the pixel's column and row, translated afresh: [its WGSL, its width]
+wgsl_called(reached: map): list := {
 	shading.definitions = {}
 	for definition in reached.code { shading.definitions[definition_name(definition)] = definition }
 	shading.values = reached.values ?? {}
@@ -203,11 +243,7 @@ wgsl_painted_call(reached: map): text := {
 	shading.value_widths = {}
 	shading.refusal = ""
 	shading.calling = []
-	called = wgsl_program_call(name_of(f), [["position.x - 0.5", 1], ["position.y - 0.5", 1]], f)
-	if called#2 == 0 { return "select(" + PAPER_GRAY + ", " + INK_GRAY + ", " + called#1 + ")" }
-	if called#2 == 1 { return "select(" + PAPER_GRAY + ", " + INK_GRAY + ", " + called#1 + " != 0.0)" }
-	if shading.refusal == "" and called#2 != COLOR_WIDTH { wgsl_refused(f, "a painted function gives a color [r, g, b], a number or yes/no; ${f} gives " + wgsl_type(called#2)) }
-	called#1
+	wgsl_program_call(name_of(f), [["position.x - 0.5", 1], ["position.y - 0.5", 1]], f)
 }
 
 wgsl_refused(n: Node, why: text): list := {
@@ -453,6 +489,7 @@ wgsl_call(name: Node, arguments: list, n: Node, scope: WgslScope): list := {
 	if scope.widths.has(word) {
 		return wgsl_refused(n, "${word} is a value, not a function")
 	}
+	if wgsl_is_field(word) { return wgsl_field_read(word, arguments.map(argument => wgsl_expression(argument, scope)), n) }
 	# a word WGSL has wins over its library definition (lib/math's cosine is each_any of cos)
 	if word in SAME_VALUE_WORDS and #arguments == 1 { return wgsl_expression(arguments#1, scope) }
 	if WGSL_MEANINGS.has(word) { return wgsl_meant(word, arguments.map(argument => wgsl_expression(argument, scope)), n) }
@@ -553,6 +590,7 @@ wgsl_program_value(n: Node): list := {
 	if wgsl_name(word) != word {
 		return wgsl_refused(n, "a value named ${word} has no name in WGSL")
 	}
+	if wgsl_is_field(word) { return wgsl_refused(n, "${word} is a field: read it at a cell, ${word}(x, y)") }
 	width = wgsl_value_width(shading.values[word])
 	if width == 0 {
 		return wgsl_refused(n, "${word} is no number, no vector of 2 to 4, nor a list of either")
@@ -560,6 +598,16 @@ wgsl_program_value(n: Node): list := {
 	shading.value_widths[word] = width
 	shading.read_values += [word]
 	return [VALUES_NAME + "." + word, width]
+}
+wgsl_is_field(word: text): bool := shading.values.has(word) and shading.values[word] is GpuField
+# `velocity(x, y)`, `velocity(p)`: the field's numbers at that cell, as `values.velocity(at)` reads them at the pixel
+# `at` (lib/gpu_passes.warp fields_placed)
+wgsl_field_read(word: text, at: list, n: Node): list := {
+	cell = if #at == 1 and at#1#2 == 2 then at#1#1 else if #at == 2 and at.all(value => value#2 == 1) then "vec2f(" + at#1#1 + ", " + at#2#1 + ")" else ""
+	if cell == "" { return wgsl_refused(n, "a field is read at a cell, ${word}(x, y) or ${word}(p) of a vector p") }
+	width = shading.values[word].width
+	read = VALUES_NAME + "." + word + "(" + cell + " + 0.5)"
+	[if width == 4 then read else read + "." + COMPONENTS[.. width].join(""), width]
 }
 # the width of a value the shader reads: 1 a number, 2 to 4 a vector of as many numbers; an array of numbers or
 # vectors (a list of more than four, or of lists) its items' width negated, `levels#b` reads an item; 0 for any other
@@ -852,4 +900,198 @@ wgsl_loop(n: Node, scope: WgslScope, depth: int) := {
 	scope.wgsl_lines += [wgsl_indent(depth) + "for (var " + name + WGSL_ASSIGNS + start#1 + "; " + name + below + end#1 + "; " + name + " += 1.0) {"]
 	wgsl_block(n#5, scope, depth + 1)
 	scope.wgsl_lines += [wgsl_indent(depth) + "}"]
+}
+
+# --- compute.toys' dialect (card compute-toys-own): a shader whose entry point is compute.toys' kernel
+# `@compute @workgroup_size(16, 16) fn main_image(@builtin(global_invocation_id) id: vec3u)`, ending in
+# textureStore(screen, id.xy, color), paints as the WGSL fragment shader compute_toy makes of it (the rule of
+# extensions/rules/modules/prelude.warp reads the dialect off the entry point). The kernel runs once per pixel as a plain
+# function: id is the pixel (rows from the top, as compute.toys counts them), time, mouse, custom and keyDown read
+# paint's values, and its color goes to the screen sRGB-encoded, as compute.toys shows its screen texture. Passes
+# (#storage, #dispatch, more than one @compute) and the old @stage(compute) syntax are compute.toys' engine, which warp
+# does not have: compute_toy says so. channel0 and channel1 are pictures among paint's values, `paint(toy, w, h,
+# {channel0: picture})`, sampled with bilinear_repeat (pictured_values)
+// compute.toys' prelude (github compute-toys/compute.toys lib/engine/index.ts getPrelude, MIT © 2023 compute.toys):
+# its type aliases, its Time and Mouse, keyDown; each read from paint's built-in values
+compute_toys_prelude = "
+alias int = i32;
+alias uint = u32;
+alias float = f32;
+alias int2 = vec2<i32>;
+alias int3 = vec3<i32>;
+alias int4 = vec4<i32>;
+alias uint2 = vec2<u32>;
+alias uint3 = vec3<u32>;
+alias uint4 = vec4<u32>;
+alias float2 = vec2<f32>;
+alias float3 = vec3<f32>;
+alias float4 = vec4<f32>;
+alias bool2 = vec2<bool>;
+alias bool3 = vec3<bool>;
+alias bool4 = vec4<bool>;
+alias float2x2 = mat2x2<f32>;
+alias float2x3 = mat2x3<f32>;
+alias float2x4 = mat2x4<f32>;
+alias float3x2 = mat3x2<f32>;
+alias float3x3 = mat3x3<f32>;
+alias float3x4 = mat3x4<f32>;
+alias float4x2 = mat4x2<f32>;
+alias float4x3 = mat4x3<f32>;
+alias float4x4 = mat4x4<f32>;
+struct Time {
+	elapsed: f32,
+	delta: f32,
+	frame: u32
+}
+struct Mouse {
+	pos: vec2i,
+	zoom: f32,
+	click: i32,
+	start: vec2i,
+	delta: vec2i
+}
+var<private> time: Time;
+var<private> mouse: Mouse;
+var<private> warp_color: vec4f;
+var<private> warp_where: vec2i;
+var<private> warp_stored: bool;
+var<private> warp_scattered: bool;
+fn warp_store(pixel: vec2i, color: vec4f) {
+	warp_scattered = warp_scattered || (warp_stored && any(pixel != warp_where));
+	warp_stored = true;
+	warp_where = pixel;
+	warp_color = color;
+}
+fn warp_run(id: vec2i) {
+	warp_where = id;
+	warp_stored = false;
+	warp_scattered = false;
+	main_image(vec3u(vec2u(id), 0u));
+}
+fn keyDown(keycode: uint) -> bool {
+	return u32(values.key) == keycode;
+}
+"
+
+# The fragment main: compute.toys' uniforms from paint's values (mouse.zoom from the wheel, 5% a step, as compute.toys
+# zooms on a wheel event), the kernel for this pixel, its color sRGB-encoded.
+# A fragment colors only its own pixel: a kernel storing elsewhere, as a mirror does ((x, height - 1 - y)), runs again
+# from where it stored, which for a mirror is the pixel that stores here. Any other kernel storing elsewhere (an
+# offset, several pixels in a loop) cannot run as a fragment: its pixels are magenta (0xFFFF00FF), loud, not wrong
+compute_toys_main = "
+@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+	time = Time(values.time, 1.0 / 60.0, u32(values.frame));
+	let pointer = vec2i(values.mouse);
+	mouse = Mouse(pointer, pow(1.05, values.mouse_wheel), i32(values.mouse_down), pointer, vec2i(0));
+	let here = vec2i(at.xy);
+	warp_run(here);
+	if (!warp_scattered && any(warp_where != here) && all(warp_where >= vec2i(0))) {
+		warp_run(warp_where);
+	}
+	if (warp_scattered || any(warp_where != here)) {
+		return vec4f(1.0, 0.0, 1.0, 1.0);
+	}
+	return vec4f(pow(clamp(warp_color.rgb, vec3f(0.0), vec3f(1.0)), vec3f(1.0 / 2.2)), 1.0);
+}
+"
+
+# what compute_toy cannot run, the pattern that finds it and why
+compute_toys_engine_only = [
+	["(^|\\n)[ \\t]*#(storage|dispatch|workgroup_count|dispatch_once|dispatch_count)\\b", "it declares storage buffers or passes (#storage, #dispatch …), which need compute.toys' multi-pass engine"],
+	["\\b(pass_in|pass_out|passLoad|passStore|passSampleLevelBilinearRepeat)\\b", "it reads earlier passes (passLoad, passStore …), which warp's paint does not bind"],
+	["@stage\\(compute\\)", "it is written in the WGSL of 2022 (@stage(compute)): write @compute"],
+	["@compute[\\s\\S]*@compute", "it has more than one @compute entry point, each a pass of compute.toys' engine; compute_toy takes single-pass shaders"]
+]
+
+# The kernel as a function: no @compute attributes, the pixel parameter plain, its writes to the screen warp_store's
+compute_toys_kernel(code: text) := {
+	plain = replace_all(code, "@compute\\s*@workgroup_size\\([^)]*\\)\\s*", "")
+	plain = replace_all(plain, "@builtin\\(\\s*global_invocation_id\\s*\\)\\s*", "")
+	plain = replace_all(plain, "textureDimensions\\(\\s*screen\\s*\\)", "vec2u(values.size)")
+	plain = replace_all(plain, "\\bcustom\\.", "values.")
+	// textureStore(screen, where, color), where a vec2i or vec2u with parentheses two deep at most
+	replace_all(plain, "textureStore\\(\\s*screen\\s*,\\s*(([^,()]|\\(([^()]|\\([^()]*\\))*\\))+),", "warp_store(vec2i($1),")
+}
+
+# refuse what only compute.toys' engine runs
+compute_toys_refused(code: text) := {
+	for rule in compute_toys_engine_only { if code matches rule#1 { raise "compute_toy cannot run this shader: " + rule#2 } }
+	if not (code contains "fn main_image") { raise "compute_toy takes a compute.toys shader: its kernel is fn main_image(@builtin(global_invocation_id) id: vec3u)" }
+}
+COMPUTE_TOY_CHANNELS = ["channel0", "channel1"]
+# the pictures last given to a compute.toys shader, each [image, its cells], so a paint on every frame converts each
+# picture once (45 ms for rings' two); the image itself is the key: one changed in place keeps its old cells
+MOST_KEPT_PICTURES = 8
+global kept_pictures = []
+# the WGSL fragment shader of a compute.toys kernel, each channel it reads sampled from paint's values; a shader already
+# a fragment shader as it is (paint and gpu_render read the dialect off the entry point)
+compute_toy(code: text) := {
+	if code contains "@fragment" { return code }
+	compute_toys_refused(code)
+	kernel = compute_toys_kernel(code)
+	helpers = ""
+	kept = ""
+	for channel in COMPUTE_TOY_CHANNELS.filter(channel => code contains channel) {
+		helpers += compute_toys_channel_wgsl(channel)
+		kernel = compute_toys_sampled(kernel, channel)
+		kept += "\tlet _" + channel + " = values." + channel + "[0u];\n"
+	}
+	# naga drops unused helpers, which would leave the bind group with a storage entry the layout lacks
+	main = if kept == "" then compute_toys_main else compute_toys_main.replace("vec4f {\n", "vec4f {\n\twarp_channels_kept();\n")
+	keeper = if kept == "" then "" else "\nfn warp_channels_kept() {\n" + kept + "}\n"
+	compute_toys_prelude + helpers + keeper + kernel + main
+}
+# paint's values with each picture among them (an Image: width, height and pixels) as the compute.toys shader `code`
+# samples it: its pixels a GPU list of vec4 in row-major order, 0 to 1, and its size as <name>_size; a channel the
+# code samples that the values lack is refused
+pictured_values(values: any, code: text) := {
+	missing = COMPUTE_TOY_CHANNELS.filter(channel => code contains channel and not (values is map and values.has(channel)))
+	if #missing > 0 { raise "the shader samples ${missing.join(" and ")}, which paint's values do not give: paint(shader, width, height, {${missing#1}: picture})" }
+	if not (values is map) { return values }
+	given = {}
+	for name in values.keys {
+		value = values[name]
+		if value has "pixels" {
+			given[name] = picture_cells(value)
+			given[name + "_size"] = [float(value.width), float(value.height)]
+		} else { given[name] = value }
+	}
+	given
+}
+# an image's pixels as the GPU list of vec4 a storage array reads, made at its first paint
+picture_cells(image: any) := {
+	for kept in kept_pictures { if same(kept#1, image) { return kept#2 } }
+	cells: [vec4] = [compute_toys_pixel(color) for color in image.pixels]
+	kept_pictures = [[image, cells]] + kept_pictures
+	if #kept_pictures > MOST_KEPT_PICTURES { kept_pictures = kept_pictures[0 ..< MOST_KEPT_PICTURES] }
+	cells
+}
+# one pixel of a warp image as the four floats a storage array stores, 0 to 1
+compute_toys_pixel(color: any): list := {
+	parts = channels(color)
+	[parts#1, parts#2, parts#3, 1.0]
+}
+compute_toys_channel_wgsl(name: text): text := "
+fn warp_" + name + "_texel(p: vec2i) -> vec4f {
+	let size = vec2i(i32(values." + name + "_size.x), i32(values." + name + "_size.y));
+	let wrapped = ((p % size) + size) % size;
+	return values." + name + "[u32(wrapped.y * size.x + wrapped.x)];
+}
+fn warp_" + name + "_sample_repeat(uv: vec2f) -> vec4f {
+	let size = vec2f(values." + name + "_size);
+	let at = fract(uv) * size - vec2f(0.5);
+	let low = vec2i(floor(at));
+	let f = fract(at);
+	let s00 = warp_" + name + "_texel(low);
+	let s10 = warp_" + name + "_texel(low + vec2i(1, 0));
+	let s01 = warp_" + name + "_texel(low + vec2i(0, 1));
+	let s11 = warp_" + name + "_texel(low + vec2i(1, 1));
+	return mix(mix(s00, s10, f.x), mix(s01, s11, f.x), f.y);
+}
+"
+
+# textureSampleLevel(channel0, bilinear_repeat, coords, lod) and textureDimensions(channel0)
+compute_toys_sampled(code: text, name: text): text := {
+	plain = replace_all(code, "textureDimensions\\(\\s*" + name + "\\s*\\)", "vec2u(u32(values." + name + "_size.x), u32(values." + name + "_size.y))")
+	replace_all(plain, "textureSampleLevel\\(\\s*" + name + "\\s*,\\s*bilinear_repeat\\s*,\\s*(([^,()]|\\(([^()]|\\([^()]*\\))*\\))+)\\s*,\\s*[^)]+\\)", "warp_" + name + "_sample_repeat($1)")
 }

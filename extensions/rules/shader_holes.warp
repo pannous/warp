@@ -18,35 +18,102 @@ main_level_assignment(word: text, program: Node): any := {
 wgsl_declared(statement: Node): Node := if is_key(statement, Op.Colon) and key_of(statement) == symbol("global") then value_of(statement) else statement
 wgsl_assigned_name(target: Node): text := {
 	if target is symbol { return name_of(target) }
+	# a typed one, `cells: [f32] = …`
+	if is_key(target, Op.Colon) { return wgsl_assigned_name(key_of(target)) }
 	if is_group(target) and #target > 0 and target.last is symbol then name_of(target.last) else ""
 }
 
 # --- a shader's holes (decision P235b, card shader-holes; Rust twin graphics/shader_holes.rs): each `$name` of a
-# shader block the parser wrote values.name; every paint of a shader the program assigns gets `name: name` in its
-# values for each hole its map lacks, so the variable is read at each paint. A built-in hole (lib/native/foreign.c
-# values_filled, host-gpu.js builtinValues) gets one only where the program assigns that name; $previous never ---
+# shader block the parser wrote values.name; every paint or render of a shader the program assigns gets `name: name`
+# in its values for each hole its map lacks, so the variable is read at each paint. A built-in hole (the table
+# SHADER_HOLES below, filled by the hosts) gets one only where the program assigns that name;
+# $previous never ---
 
-SHADER_BUILTIN_HOLES = ["width", "height", "size", "time", "frame", "mouse", "mouse_down", "mouse_wheel", "key"]
+# The holes every shader has (card shader-value, notes/gpu.md "One shader"): each as the shader reads it, with the
+# other spellings that read it too (wiki/graphics.md; the Book of Shaders' u_ names). The one table: the shader
+# block's `$name` reads it (extensions/shader_blocks.warp), the rule below knows the built-in holes by it, and the hosts fill
+# these (lib/host/native_host/gpu.warp hole_value, web/playground/host-gpu.js builtinValues)
+SHADER_HOLES = {"width": [], "height": [], "size": ["u_resolution"], "time": ["u_time"], "frame": [], "mouse": ["u_mouse"],
+	"mouse.x": ["mouse_x"], "mouse.y": ["mouse_y"], "mouse_down": [], "mouse_wheel": ["wheel"], "key": []}
+# how the shader reads the hole a `$name` names: the hole an alias stands for, else the name itself
+hole_read(written: text): text := SHADER_HOLES.keys.find(read => written in SHADER_HOLES[read]) ?? written
+
+# the entry point of a shader written in compute.toys' dialect (lib/shaders.warp compute_toy), and of one already a WGSL
+# fragment shader
+COMPUTE_TOYS_ENTRY = "fn main_image"
+FRAGMENT_ENTRY = "@fragment"
+# compute_toy(s) of a shader the program assigns written in compute.toys' dialect (its kernel fn main_image, no
+# fragment entry point of its own), which makes it a fragment shader; ø for any other. s is its name, or the name as
+# the prelude's rule gave it the shader words it calls, shader_words(name, place)
+compute_toys_made(s: Node, program: Node): any := {
+	named = if is_call(s) and name_of(s#1) == "shader_words" then s#2 else s
+	if not (named is symbol) { return ø }
+	shader = main_level_value(name_of(named), program)
+	if not (shader is text) or not "${shader}".contains(COMPUTE_TOYS_ENTRY) or "${shader}".contains(FRAGMENT_ENTRY) { return ø }
+	call_of("compute_toy", [s])
+}
+
+# the built-in holes by name: the table's, a component's (mouse.x) its vector's
+SHADER_BUILTIN_HOLES = SHADER_HOLES.keys.filter(read => not read.contains("."))
 SHADER_FRAME_HOLE = "previous"
-# the values of a paint of shader s with the given map: its entries, then the holes it lacks; ø where s is no shader
-# the program assigns or the map has every hole
-shader_values(s: Node, given: Node, program: Node): any := shader_holes_added(s, if is_group(given) then items_of(given) else [], program)
-# the values of a paint of shader s given none
-shader_values_of(s: Node, program: Node): any := shader_holes_added(s, [], program)
+# the values of a paint or render of shader s with the given map, if any (the rule's rest hole: [] or [map]): its
+# entries, then the holes it lacks; ø where s is no shader the program assigns or the map has every hole
+shader_values(s: Node, given: list, program: Node): any := shader_holes_added(s, if #given == 1 and is_group(given#1) then items_of(given#1) else [], program)
+# a field of the values' compute shader (wiki graphics.md "Fields and passes"), `var<storage, read_write> steps: array<f32, 2>`:
+# the host keeps it from frame to frame, no variable fills its hole
+COMPUTE_NAME = "compute"
+FIELD_DECLARATION = "var<storage, read_write> "
+# the code of the values' compute shader, a text or a name the program assigns one; "" where there is none
+compute_code(entries: list, program: Node): text := {
+	found = entries.filter(entry => is_key(entry, Op.Colon) and "${key_of(entry)}" == COMPUTE_NAME)
+	if #found == 0 { return "" }
+	code = value_of(found#1)
+	if code is symbol { code = main_level_value(name_of(code), program) }
+	if code is text then "${code}" else ""
+}
 # the size paint(s) paints at (wiki/graphics.md): the program's width and height where its main level assigns both,
 # else the size of where it shows (prelude.warp shown_width: a window's, else the view's)
 paint_size(program: Node): list := {
 	if main_level_value("width", program) != ø and main_level_value("height", program) != ø { return [symbol("width"), symbol("height")] }
 	[call_of("shown_width", []), call_of("shown_height", [])]
 }
-shader_holes_added(s: Node, entries: list, program: Node): any := {
+# (the fields of a list of shaders, `$dye(at)`, are no holes: lib/gpu_passes.warp reads them)
+shader_holes_added(s: Node, entries: list, program: Node, fields: list = []): any := {
 	shader = main_level_value(name_of(s), program)
 	if shader == ø or not (shader is text) { return ø }
 	given = entries.filter(entry => is_key(entry, Op.Colon)).map(entry => "${key_of(entry)}")
-	added = shader_holes("${shader}").filter(name => name not in given and name != SHADER_FRAME_HOLE and (name not in SHADER_BUILTIN_HOLES or main_level_value(name, program) != ø))
+	declared = compute_code(entries, program)
+	added = shader_holes("${shader}").filter(name => name not in given and name not in fields and not declared.contains(FIELD_DECLARATION + name + ":") and name != SHADER_FRAME_HOLE and (name not in SHADER_BUILTIN_HOLES or main_level_value(name, program) != ø))
 	if #added == 0 { return ø }
 	List(entries + added.map(name => Key(symbol(name), Op.Colon, symbol(name))), Bracket.Curly, Separator.Comma)
 }
+# paint([advect, pressure, show]) (wiki/graphics.md "Fields and passes", decision shader-value (c)): each item, a shader
+# the program assigns, or one `poisson with {which: 1}` with values of its own, as [its name, its shader words, its
+# values] (lib/gpu_passes.warp paint_passes); the names are the fields, never holes. ø where an item is anything else
+PASS_VALUES_WORD = "with"
+shader_passes(items: list, program: Node, source: text): any := {
+	shaders = items.map(passed_shader)
+	if shaders.any(s => s == ø or not (main_level_value(name_of(s), program) is text)) { return ø }
+	# (and every `$name(at)`, a field read, which lib/gpu_passes.warp refuses where no shader of the list draws it)
+	codes = shaders.map(s => "${main_level_value(name_of(s), program)}")
+	fields = shaders.map(name_of) + codes.flat_map(code => shader_holes(code).filter(name => code.contains(VALUES_NAME + "." + name + "(")))
+	passes = []
+	for at in 1 to #items {
+		s = shaders#at
+		entries = if items#at is symbol then [] else items_of(pass_parts(items#at)#3)
+		values = shader_holes_added(s, entries, program, fields) ?? List(entries, Bracket.Curly, Separator.Comma)
+		passes += [listed(Bracket.Square, Separator.Comma, [Text(name_of(s)), shader_words_of(s, program, source), values])]
+	}
+	passes
+}
+# the shader an item of the list names: `show`, `poisson with {which: 1}` (three items, or the tag `poisson with: {…}`
+# the sugar may make of them)
+passed_shader(item: Node): any := {
+	if item is symbol { return item }
+	parts = pass_parts(item)
+	if #parts == 3 and parts#1 is symbol and parts#2 == symbol(PASS_VALUES_WORD) and is_group(parts#3) then parts#1 else ø
+}
+pass_parts(item: Node): list := if is_group(item) then items_of(item) else if item is key and is_group(key_of(item)) then items_of(key_of(item)) + [value_of(item)] else []
 # shader_words(s) (lib/prelude.warp) of a shader the program assigns, given its place in the program where a shader
 # block wrote it: the GPU compiles it placed so, its errors at their place (card wgsl-error)
 shader_words_of(s: Node, program: Node, source: text): Node := {

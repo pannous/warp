@@ -28,7 +28,7 @@ def closure_value(body: Body, target: Node, captured: list): TypedCode {
 	entry = closure_entry(name, #captured, arity)
 	held = [op.i64_const] + sleb(Kind.Data) + [ref_null, any_reference, ref_null, gc_type(gc.node), op.ref_func] + relocatable(relocated.calls, entry#3.index) + text_bytes(entry#4) + gc_code(gc_ops.struct_new, [gc_type(gc.closure)])
 	items = [held] + captured.map(c => boxed(expression_code(body, c)))
-	TypedCode(ValueKind.Node, key_code(Kind.Function, vector_code(items), name_node(symbol(without_arity(written_word(name))))))
+	TypedCode(ValueKind.Node, key_code(Kind.Function, vector_code(items), name_node(symbol(function_name(name)))))
 }
 # the closure entry of a target, the first of its captured values those given: [target, captured count, the entry,
 # the text the closure shows]

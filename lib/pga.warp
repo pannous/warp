@@ -5,6 +5,13 @@
 // + - and * (the geometric product) and == are the class's operator methods and take a Multivector or a plain number
 // on the right; the other products are words: wedge (outer, ∧, a meet in PGA), regressive (∨, a join in PGA),
 // inner (the symmetric inner product), contract (the left contraction).
+// The PGA words are one verb with overloads: point, line, plane, join, meet, reflect (a method: the mirror reflects
+// a point), rotor, translator, motor, apply (a rotor or motor on a point), coordinates, arrow, ray, span, collection.
+// The glyphs ⋏ ⋎ ↦ ↣ ⟇ ⊔ spell meet, join, arrow, ray, span and collection as infix operators (card pga-glyphs). ∧, ∨ and → already
+// mean and, or and maps-to in lib/math.warp, so they are not these operators. English aliases of those words: intersect,
+// intersection and crossing for meet; connect for join; segment and path for an arrow from a to b anchored at a;
+// halfline for a ray from a through b; subspace for span; assembly for collection. The pga2_ and pga3_ names stay as they
+// were.
 // Conventions those of bivector.net: the plane's point (x, y) is x·e20 + y·e01 + e12, its line a·x + b·y + c = 0 is
 // a·e1 + b·e2 + c·e0; space's point is e123 + x·e032 + y·e013 + z·e021, its plane a·e1 + b·e2 + c·e3 + d·e0.
 // The dual is the right complement, e_m ∧ mv_dual(e_m) = I (the pseudoscalar), which needs no metric and so works in the
@@ -19,6 +26,11 @@ class Multivector {
 	times(o: any): Multivector := mv_product(this, as_multivector(o, metric), 0)
 	equals(o: any): bool := (o is Multivector or o is number) and parts == as_multivector(o, metric).parts
 	text(): text := multivector_text(this)
+	// the PGA verbs, also called as meet(a, b) and apply(r, x); reflect stays a method so it does not take math.reflect
+	meet(o: any): Multivector := wedge(this, o)
+	join(o: Multivector): Multivector := regressive(this, o)
+	reflect(x: Multivector): Multivector := sandwich(this, x)
+	apply(x: Multivector): Multivector := sandwich(this, x)
 }
 
 // the bit words blades are made of
@@ -159,6 +171,82 @@ pga3_coordinates(p: Multivector): list := {
 	pga_refuse_ideal(w)
 	[-p.parts#14 / w, p.parts#12 / w, -p.parts#8 / w]
 }
+// space's basis blades by their bivector.net names (blade m with a sign where the name orders its vectors otherwise)
+e0 = blade(PGA3, 1, 1)
+e1 = blade(PGA3, 2, 1)
+e2 = blade(PGA3, 4, 1)
+e3 = blade(PGA3, 8, 1)
+e01 = blade(PGA3, 3, 1)
+e02 = blade(PGA3, 5, 1)
+e03 = blade(PGA3, 9, 1)
+e12 = blade(PGA3, 6, 1)
+e31 = blade(PGA3, 10, -1)
+e23 = blade(PGA3, 12, 1)
+e021 = blade(PGA3, 7, -1)
+e013 = blade(PGA3, 11, 1)
+e032 = blade(PGA3, 13, -1)
+e123 = blade(PGA3, 14, 1)
+e0123 = blade(PGA3, 15, 1)
+// the same blades named by what they are: the directions (ideal points), so that
+// point(x, y, z) == origin + x·ẋ + y·ẏ + z·ż; the origin; the pseudoscalar
+// TODO (card standard-module) x̅ y̅ z̅ for the planes e1 e2 e3, x⃑ y⃑ z⃑ for the ideal lines e01 e02 e03, x⃗ y⃗ z⃗ for the axes
+// e23 e31 e12, once a standard module's names may carry combining marks (z with one: card value-variable)
+ẋ = e032
+ẏ = e013
+ż = e021
+origin = e123
+I = e0123
+
+// one verb each, overloads of the plane and of space (the pga2_ and pga3_ words above)
+point(x: number, y: number): Multivector := pga2_point(x, y)
+point(x: number, y: number, z: number): Multivector := pga3_point(x, y, z)
+// the line a·x + b·y + c = 0 in the plane; a line in space is the join of two points or the meet of two planes
+line(a: number, b: number, c: number): Multivector := pga2_line(a, b, c)
+plane(a: number, b: number, c: number, d: number): Multivector := pga3_plane(a, b, c, d)
+coordinates(p: Multivector): list := if count(p.metric) == 3 then pga2_coordinates(p) else pga3_coordinates(p)
+meet(a: Multivector, b: any): Multivector := wedge(a, b)
+join(a: Multivector, b: Multivector): Multivector := regressive(a, b)
+// an arrow from a to b, anchored at a (wiki/algebra.md: point ↦ point)
+arrow(from a: Multivector, to b: Multivector) := [a, b - a]
+// a ray from a through b: a line with one source (wiki/algebra.md)
+ray(from a: Multivector, through b: Multivector) := [a, join(a, b)]
+// the span of two different objects (wiki/algebra.md: a ⟇ b)
+span(a: Multivector, b: Multivector) := [a, b]
+// an assembly of two objects, not their sum or product (wiki/algebra.md)
+collection(a, b) := [a, b]
+// the glyphs of those words; ⋏ binds tighter than ⋎ as meet does than join
+infix operator ⋏(a: Multivector, b: any) := meet(a, b)
+infix operator ⋎(a: Multivector, b: Multivector) := join(a, b)
+infix operator ↦(a: Multivector, b: Multivector) := arrow(a, b)
+infix operator ↣(a: Multivector, b: Multivector) := ray(a, b)
+infix operator ⟇(a: Multivector, b: Multivector) := span(a, b)
+infix operator ⊔(a, b) := collection(a, b)
+// English aliases of those words (card pga-glyphs). intersect, segment, halfline, subspace and assembly
+// are aliases of the canonical words; intersection, crossing, connect and path are typed overloads so they
+// do not take over list intersection or the everyday words connect and path. Both parameters are Multivector:
+// a second parameter typed any made intersection([1, 2], [2, 3]) ambiguous with use list.
+alias intersect => meet
+intersection(a: Multivector, b: Multivector): Multivector := meet(a, b)
+crossing(a: Multivector, b: Multivector): Multivector := meet(a, b)
+infix operator intersect(a: Multivector, b: Multivector) := meet(a, b)
+connect(a: Multivector, b: Multivector): Multivector := join(a, b)
+infix operator connect(a: Multivector, b: Multivector) := join(a, b)
+alias segment => arrow
+path(from a: Multivector, to b: Multivector) := arrow(a, b)
+alias halfline => ray
+alias subspace => span
+alias assembly => collection
+operator ⋏ has precedence above ⋎
+apply(versor: Multivector, x: Multivector): Multivector := sandwich(versor, x)
+// a rotor around the point (x, y) in the plane, around the line axis in space, or around the direction (x, y, z)
+// through the origin: sandwich(rotor, p) or rotor.apply(p)
+rotor(angle: number, x: number, y: number): Multivector := pga2_rotor(angle, x, y)
+rotor(angle: number, axis: Multivector): Multivector := mv_normalized(axis) * -sin(angle / 2) + cos(angle / 2)
+rotor(angle: number, x: number, y: number, z: number): Multivector := rotor(angle, join(point(0, 0, 0), point(x, y, z)))
+translator(dx: number, dy: number): Multivector := pga2_translator(dx, dy)
+translator(dx: number, dy: number, dz: number): Multivector := blade(PGA3, 0, 1) + blade(PGA3, 3, -dx / 2) + blade(PGA3, 5, -dy / 2) + blade(PGA3, 9, -dz / 2)
+// a motor: the translator after the rotor, applied as sandwich(motor, p) or motor.apply(p)
+motor(r: Multivector, t: Multivector): Multivector := t * r
 
 // the name of the blade of index m: e, then the indices of its vectors, e013; the scalar's is empty
 blade_name(m: int): text := {

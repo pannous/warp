@@ -1,5 +1,5 @@
 // The standard module signals (card signals-lib): a variable's listeners. `on set x {…}` runs its block after each
-// later write of x, the block reading the written value as `value` and the one before as `old`; `on change x {…}`
+// later write of x (a field too, `on set p.age {…}`, after a write of p.age or of p), the block reading the written value as `value` and the one before as `old`; `on change x {…}`
 // only when the write changed it; `whenever x > 1 {…}` each time the condition comes to hold after a write of a name it
 // reads, `once x == 5 {…}` the first time only. The program rule (extensions/rules/rule_words.warp signaled) makes each watched write notify the listeners
 use timers
@@ -7,15 +7,16 @@ use timers
 SYSTEM_VALUE_POLL = 250ms
 // `on change online {…}`, `on change dark mode {…}`: a system value is a word without arguments the program does not
 // define, read every SYSTEM_VALUE_POLL by a timer (lib/timers.warp: the page runs it, natively none starts)
+// (the prelude's `dark mode` rule can't see the phrase here: the block binds to its last word, `mode {…}`)
 rewrite on change dark mode $body: block => on change dark_mode $body
-rewrite on set $x $body: block => variable_listen([$n], no, (value, old) => $body) where $x is symbol and $n = spelled($x)
+rewrite on set $x $body: block => variable_listen([$n], no, (value, old) => $body) where $n = watched_path($x)
 rewrite on change $x $body: block => variable_listen([$n], yes, (value, old) => $body) where $x is symbol and not polled_word($x, $program, $source) and $n = spelled($x)
 // `on change b + c {…}`: the block runs when a write of a name it reads changed the expression's value
 rewrite on change $x $body: block => $listens where not $x is symbol and $listens = change_listens($x, $body)
 rewrite whenever $c $body: block => $listens where $listens = whenever_listens($c, $body)
 rewrite once $c $body: block => $listens where $listens = once_listens($c, $body)
 // the same with the block after a colon, `whenever x > 2: print "big"`
-rewrite on set $x: $body => variable_listen([$n], no, (value, old) => $body) where $x is symbol and $n = spelled($x)
+rewrite on set $x: $body => variable_listen([$n], no, (value, old) => $body) where $n = watched_path($x)
 rewrite on change $x: $body => variable_listen([$n], yes, (value, old) => $body) where $x is symbol and not polled_word($x, $program, $source) and $n = spelled($x)
 rewrite on change $x: $body => $listens where not $x is symbol and $listens = change_listens($x, $body)
 rewrite whenever $c: $body => $listens where $listens = whenever_listens($c, $body)
@@ -44,7 +45,7 @@ signal_notify(name: text, value: any, old: any): any := {
 
 // a variable passed in a list literal to a function listening to its loop variable (notes/signals.md "Lists of
 // signals"): the variable itself, its name and its value as last written, which a bare read of the loop variable gives
-class Signal { name: text; value: any }
+class Signal { name: text; value: any; fields: list = [] }
 global signal_values = {}
 public signal_value(item: any): any := if item is Signal then signal_values.get(item.name) ?? item.value else item
 

@@ -4,7 +4,7 @@
 is! 'play(C4, 5ms)
 7' 7
 is! 'beep()
-wait_sound()
+wait(sound)
 7' 7
 
 # a_rare_sound_word_needs_use_sound

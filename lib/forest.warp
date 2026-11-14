@@ -7,7 +7,6 @@
 // world bound and cone per draw, so a GPU cull can drop clusters. notes/forest.md.
 use file
 use geometry
-use hash
 use math
 use meshlets
 
@@ -209,7 +208,7 @@ forest_fill(cx, cz, detail, room, picked, ex, ez) := {
 		dz = spot#2 - ez
 		found.add([spot, (dx * dx + dz * dz) as float])
 	}
-	found = sort_by(found, item => item#2 as float)
+	found = sort(found, by: item => item#2 as float)
 	for item in found {
 		if room <= 0 { break }
 		room = forest_spend(picked, item#1, detail, room)
@@ -257,7 +256,7 @@ forest_clip(cx, cz, detail, room, picked, planes, ex, ez, take: int = FAR_TAKE) 
 		dz = spot#2 - ez
 		found.add([spot, (dx * dx + dz * dz) as float])
 	}
-	found = sort_by(found, item => item#2 as float)
+	found = sort(found, by: item => item#2 as float)
 	for item in found {
 		if room <= 0 { break }
 		room = forest_spend(picked, item#1, detail, room)
@@ -288,13 +287,12 @@ forest_chunks(glance, side) := {
 			chunks.add([cx, cz, reach, full])
 		}
 	}
-	sort_by(chunks, chunk => (chunk#3 * 100000.0 + chunk#2 * 40.0 + chunk#1) as float)
+	sort(chunks, by: chunk => (chunk#3 * 100000.0 + chunk#2 * 40.0 + chunk#1) as float)
 }
 
 forest_canopy(side, glance, candidate, picked) := {
 	axes = forest_basis(glance)
-	sprites = [[0.0, 0.0, 0.0, 0.0]]
-	for tree in reverse(picked) { sprites.add(tree) }
+	sprites = gpu_vectors([[0.0, 0.0, 0.0, 0.0]] + reverse(picked))
 	nearest = if count(picked) == 0 then -1 else (int(picked#1#4) /! SPRITE_DETAIL) % SPRITE_DETAIL
 	Canopy(side * side, candidate, count(picked), 1, nearest, sprites, [glance.x, glance.y, glance.z], axes#2, axes#3, axes#1)
 }
@@ -452,9 +450,14 @@ grove_emit(visible, camera, scale, place, level, kind, level_index, room, draws,
 
 // Far draws first, so a blend without depth still paints the nearer tree last.
 grove_far_first(draws, spans, bounds, cones, distances) := {
-	if count(draws) < 2 { return [draws, spans, bounds, cones] }
-	order = reverse(sort_by([i for i in 1 to count(draws)], i => distances#i))
-	[[draws#i for i in order], [spans#i for i in order], [bounds#i for i in order], [cones#i for i in order]]
+	order = reverse(sort([i for i in 1 to count(draws)], by: i => distances#i))
+	[draws, spans, bounds, cones].map(rows => gpu_vectors([rows#i for i in order]))
+}
+// the rows as a GPU list of vec4, which paint uploads in one copy (wiki/graphics.md: the graphics libraries are
+// GPU-first)
+gpu_vectors(rows: list) := {
+	cells: [vec4] = rows
+	cells
 }
 
 // kits: the four TreeMesh values in species order, already pack_tree_meshes'd. Near and mid trees become clusters
@@ -502,7 +505,7 @@ forest_grove(canopy: Canopy, glance: Glance, kits: list, screen_height: number, 
 			meshable.add(i)
 		}
 	}
-	if front > 0.0 { meshable = [item#1 for item in sort_by(sized, item => item#2)] }
+	if front > 0.0 { meshable = [item#1 for item in sort(sized, by: item => item#2)] }
 	draws = []
 	spans = []
 	bounds = []
@@ -559,10 +562,7 @@ forest_grove(canopy: Canopy, glance: Glance, kits: list, screen_height: number, 
 		room = added#3
 		meshed = meshed + 1
 	}
-	sprites = []
-	for i in 1 to count(canopy.sprites) {
-		if not grove_dropped(drop, i) { sprites.add(canopy.sprites#i) }
-	}
+	sprites = gpu_vectors([canopy.sprites#i for i in 1 to count(canopy.sprites) if not grove_dropped(drop, i)])
 	ordered = grove_far_first(draws, spans, bounds, cones, distances)
 	Grove(sprites, ordered#1, ordered#2, meshed, kept, culled, tris, ordered#3, ordered#4)
 }
@@ -610,39 +610,25 @@ grove_lod(grove: Grove, kits: list, eye: list): list := {
 		apart = grove_distance(eye, place#1, place#4 * 0.5, place#2) / place#4
 		trees.add([0.0 + first_level, 0.0 + count(kit.levels), apart, 0.0])
 	}
-	[draws, spans, bounds, cones, levels, trees]
+	[draws, spans, bounds, cones].map(gpu_vectors) + [levels, trees]
 }
 
 // The baked EZ Tree atlas (samples/graphics/ez_trees/atlas.bin). Grove is entry 1,
 // the ash close-up is entry 2. The stamp names the version, the source hash and
-// each entry's size. The hash is sha256 of the per-file sha256 hex lines in
-// atlas.sources, joined by newlines. A missing file, a different version or a
-// hash that is not the sources now is none: the caller builds the atlas itself.
+// each entry's size. A missing file or a different version is none: the caller
+// builds the atlas itself. The stamp is trusted to match its sources: atlas.py
+// bakes them together and sample-assets.sh ships them in one archive, so a run
+// never reads and hashes the 11 MB of textures (it took the page past its 30 s).
 ATLAS_VERSION = 1
 GROVE_ATLAS = 1
 ASH_ATLAS = 2
 // Four full-size leaves plus the bark row. The grove atlas stays 512-wide for the tests.
 NEAR_ATLAS = 3
-global atlas_hash_folder = ""
-global atlas_hash_kept = ""
-
-atlas_source_hash(folder: text): text := {
-	if folder == atlas_hash_folder and atlas_hash_kept != "" { return atlas_hash_kept }
-	list = folder + "/atlas.sources"
-	names = [name.trim() for name in read(list).split("\n") if name.trim() != ""]
-	digest = sha256(join([sha256(read(folder + "/" + name)) for name in names], "\n"))
-	atlas_hash_folder = folder
-	atlas_hash_kept = digest
-	digest
-}
-
 baked_atlas(folder: text, id: int): any := {
 	if not exists(folder + "/atlas.txt") or not exists(folder + "/atlas.bin") { return ø }
-	if not exists(folder + "/atlas.sources") { return ø }
 	parts = [part.trim() for part in read(folder + "/atlas.txt").split(" ") if part.trim() != ""]
 	if count(parts) < 6 or parts[0] != "EZAT" { return ø }
 	if (parts[1] as int) != ATLAS_VERSION { return ø }
-	if parts[2] != atlas_source_hash(folder) { return ø }
 	i = 3
 	while i + 2 < count(parts) {
 		if (parts[i] as int) == id {

@@ -17,3 +17,8 @@
 
 # test_extremum_of_a_list_variable_in_float_arithmetic
 'xs=[4 2 9]; 0.5+max(xs)'	9.5
+
+# a spaced call of the extremum of a list, as round (decision juxtaposition: `max xs > 2` is (max xs) > 2; card xs-max)
+'max [1 5 3]'	5
+'xs=[4 2 9]; min xs'	2
+'xs=[1 2 3]; max xs > 2'	true

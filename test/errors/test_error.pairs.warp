@@ -16,3 +16,11 @@
 'class ParseError: Error; ParseError("bad").message'	'bad'
 'class ParseError: Error; ParseError("bad") is Error'	yes
 'class ParseError extends Error {}; try { raise ParseError("bad") } catch e { "caught" }'	'caught'
+# error classes (decision error-classes, card try-raise): a raised instance says its message, except T as e catches a T or a subclass, any other error raises on
+'try { raise Error("bad") } catch e { e.message }'	"bad"
+'class ParseError extends Error {}; class TokenError extends ParseError {}; try { raise TokenError("bad char") } except ParseError as e { e.message }'	"bad char"
+'class ParseError extends Error {}; class IoError extends Error {}; try { raise IoError("disk") } except ParseError as e { 1 }'	error	disk
+'try { raise Error("bad") } except Error as e { e.message }'	"bad"
+# a try block of several statements runs them, its value the last one's (card try-block)
+'f(x: int): bool := try { x / 1; yes } catch e { no }; f(2)'	yes
+'try { n = 2; n + 1 } catch e { 0 }'	3

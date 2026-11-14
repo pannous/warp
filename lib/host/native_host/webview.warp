@@ -25,10 +25,10 @@ APP_WINDOW_WIDTH = 900.0
 APP_WINDOW_HEIGHT = 700.0
 APP_WINDOW_FRAME = [0.0, 0.0, APP_WINDOW_WIDTH, APP_WINDOW_HEIGHT]
 JS_RUNTIME = "js"
-// web/playground/js-members.js (jsMember), markup.js (listenToElements, morphChildren) and markup-forms.js (submit),
-// shared with the page, and webview_bridge.js (warpForeignCall, the page's events), put into each page; read when the
-// module is built
-PAGE_BRIDGE = [module_source("../web/playground/js-members.js"), module_source("../web/playground/markup.js"), module_source("../web/playground/markup-forms.js"), module_source("host/native_host/webview_bridge.js")].join("\n")
+// js-members.js (jsMember), markup.js (listenToElements, morphChildren) and markup-forms.js (submit), the page's own
+// (links to web/playground/, so an installed lib/ carries them: card native-host-prebuild), and webview_bridge.js
+// (warpForeignCall, the page's events), put into each page; read when the module is built
+PAGE_BRIDGE = [module_source("host/native_host/js-members.js"), module_source("host/native_host/markup.js"), module_source("host/native_host/markup-forms.js"), module_source("host/native_host/webview_bridge.js")].join("\n")
 // the module `use js` calls answered here, not in the page: the run's window, `show` it, the `next` event of its page
 APP_WINDOW = "warpWindow"
 // what warpWindow.next answers once its time is over without an event (lib/markup.warp page_window_run)
@@ -133,8 +133,8 @@ instance_of(made: int) := told(told(made, "alloc"), "init")
 spun(done: function, milliseconds: int): bool := turned(done, milliseconds, () => sent(told(class_named("NSRunLoop"), "currentRunLoop"), "runMode:beforeDate:", [framework_object("Foundation", "NSDefaultRunLoopMode"), soon()]))
 // the app's events (clicks, keys) handed to its windows until done() or the milliseconds are over, as [NSApp run] would
 pumped(done: function, milliseconds: int): bool := turned(done, milliseconds, () => {
-	event = sent(application(), "nextEventMatchingMask:untilDate:inMode:dequeue:", [ANY_EVENT, soon(), framework_object("Foundation", "NSDefaultRunLoopMode"), 1])
-	if event != 0 { sent(application(), "sendEvent:", [event]) }
+	app_event = sent(application(), "nextEventMatchingMask:untilDate:inMode:dequeue:", [ANY_EVENT, soon(), framework_object("Foundation", "NSDefaultRunLoopMode"), 1])
+	if app_event != 0 { sent(application(), "sendEvent:", [app_event]) }
 })
 turned(done: function, milliseconds: int, turn: function): bool := {
 	deadline = wall_clock_ms() + milliseconds
@@ -181,7 +181,11 @@ called_back(receiver, selector, view, task) := {
 	sent(task, "didReceiveData:", [sent(ns_string(if failed then text(result) else to_json(result)), "dataUsingEncoding:", [UTF8_ENCODING])])
 	told(task, "didFinish")
 }
+// WebKit's helper processes never answer a process forked without exec (a `warp test` case, run with the option
+// `forked`): such a run asks for a process of its own, in which it runs again (core/native/tests.warp)
+FRESH_PROCESS_WANTED = 75
 view_made(width: float, height: float) := {
+	if run_option("forked") != ø { exit(FRESH_PROCESS_WANTED) }
 	configuration = instance_of(class_named("WKWebViewConfiguration"))
 	contents = told(configuration, "userContentController")
 	bridge = sent(told(class_named("WKUserScript"), "alloc"), "initWithSource:injectionTime:forMainFrameOnly:", [ns_string(PAGE_BRIDGE), DOCUMENT_START, 1])
@@ -318,6 +322,10 @@ window_answered(called: text, member: text, arguments: any): any? := {
 	happened
 }
 
+// a promise the view gave is awaited there (callAsyncJavaScript), so none is ever pending for the program to wait for
+// (lib/prelude.warp foreign_settled; the page keeps one: host-foreign.js)
+host_foreign_pending(): int := 0
+host_foreign_await(): any? := ø
 // foreign_call(runtime, module, member, call, arguments), as the page's host-foreign.js foreignCall answers it
 host_foreign_call(runtime, module, member, call, arguments): any? := {
 	pool = objc_autoreleasePoolPush()

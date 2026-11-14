@@ -5,7 +5,7 @@
 # the refusals of what plain WASI cannot run)
 use "../host_io.warp"
 
-core_commands = ["compile", "runtime", "module", "modules", "optimize", "baked-current"]
+core_commands = ["compile", "runtime", "module", "modules", "modules-plan", "optimize", "baked-current"]
 is_command(word: text): bool := word in core_commands or word in extension_command_words()
 
 quoted_path(path: text): text := "\"" + path + "\""
@@ -15,7 +15,7 @@ shell(line: text): text := {
 	if printed is text then printed else raise "`" + line + "` failed: " + printed
 }
 # `warp build --trim=<way>` and `warp optimize`, which `warp rebuild` optimizes the compiler with
-TRIM_WAYS = {none: "", unused: "--remove-unused-module-elements", optimize: "-O2"}
+TRIM_WAYS = {none: "", unused: "--remove-unused-module-elements", optimize: "-O2", small: "-Oz"}
 # what wasmtime runs; Binaryen's -all would add custom descriptors, whose exact references wasmtime refuses. The name
 # section stays (--debuginfo), so traps and results still name their functions.
 # `warp rebuild` optimizes the compiler with it

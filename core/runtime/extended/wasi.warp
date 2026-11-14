@@ -67,7 +67,7 @@ scratch_word(at: int): int := {
 	address = output_address() + at
 	memory_byte(address) + 256 * (memory_byte(address + 1) + 256 * (memory_byte(address + 2) + 256 * memory_byte(address + 3)))
 }
-put_scratch_bytes(at: int, t: text) := { for i in 0..<byte_count(t) { output_byte(at + i, byte_at(t, i)) } }
+put_scratch_bytes(at: int, t: text) := output_bytes(at, t, 0, byte_count(t))
 scratch_text(at: int, length: int): text := text_from_memory(output_address() + at, length)
 
 # the preopened folders: [fd, name] each
@@ -147,6 +147,8 @@ read_file(path: Node): Node := {
 	answer
 }
 
+# std_io("file", "read", [path]): core/host_io.warp read, as read_file
+std_file_read(path: Node): Node := read_file(path)
 # `use file; read_bytes(path)`: the file's bytes, ints 0 to 255; the Error of why not
 std_file_read_bytes(path: Node): Node := {
 	content = read_file(path)
@@ -201,6 +203,7 @@ wasi_list(environment: bool): list := {
 	size = scratch_word(scratch_pair() + 4)
 	pointers = scratch_bytes()
 	texts = scratch_bytes() + 4 * count
+	memory_holding(texts + size)
 	if environment then environ_get(output_address() + pointers, output_address() + texts) else args_get(output_address() + pointers, output_address() + texts)
 	found = []
 	for i in 0..<count {
@@ -230,9 +233,14 @@ std_os_env(name: Node): Node := {
 	}
 	ø
 }
-# `use os; cwd`: the folder the program started in, as its environment's PWD says; "." without one (WASI has no
-# working folder of its own, relative paths are the preopened "."'s)
-std_os_cwd(): Node := std_os_env("PWD") ?? "."
+# `use os; cwd`: the working folder, as its environment's PWD says while that is where "." is (WASI has no working
+# folder of its own, relative paths are the preopened "."'s); where a host moved it (the native os.cd), the real path
+# of "." the host gives; "." without either
+std_os_cwd(): Node := {
+	started = std_os_env("PWD")
+	here = real_file_path(".")
+	if started != ø and real_file_path(text_of_textual(started)) == here then started else if here != "." then here else started ?? "."
+}
 # `use os; input(prompt)`: the prompt written, then a line of stdin without its newline; ø at the end of the input. A
 # byte a read, so no byte of the next line is taken. `input()` gives no prompt: os.warp's input() calls this with none
 std_os_input(prompt: Node = ø): Node := {
@@ -264,7 +272,7 @@ said_on_stderr(words: text): Node := {
 	start = 0
 	while start < byte_count(t) {
 		stop = if start + wasi_chunk() < byte_count(t) then start + wasi_chunk() else byte_count(t)
-		for i in start..<stop { output_byte(scratch_bytes() + i - start, byte_at(t, i)) }
+		output_bytes(scratch_bytes(), t, start, stop)
 		written_bytes(wasi_stderr(), stop - start)
 		start = stop
 	}
@@ -305,7 +313,7 @@ written_file(path: text, content: text): Node := {
 	start = 0
 	while start < byte_count(content) {
 		count = min_int(wasi_chunk(), byte_count(content) - start)
-		for i in 0..<count { output_byte(scratch_bytes() + i, byte_at(content, start + i)) }
+		output_bytes(scratch_bytes(), content, start, start + count)
 		written_bytes(fd, count)
 		start += count
 	}

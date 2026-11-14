@@ -33,6 +33,7 @@ env:
   TAG: ${{ inputs.tag || github.ref_name }}
   DRY: ${{ inputs.dry && '1' || '' }}
   WABT: 1.0.42     # wasm2c, which `warp build native` runs
+  LLVM_MINGW: 20261104 # clang for Windows, which compiles the first Windows warp's C (card windows-build)
   BINARYEN: 133    # wasm-opt, which `warp build` runs
   WARP_WINDOW: 0
   GLIBC_FLOOR: 2.35 # the oldest glibc the linux binaries run on (card linux-glibc-floor)
@@ -66,6 +67,9 @@ jobs:
     - uses: actions/checkout@v7 # the workflow's own commit, whose release-bootstrap.sh fits any older tag
       with:
         path: .workflow
+    - name: our wasmtime C API
+      # the tag's, which the tag's native warp built in the next step calls (scripts/ci-compilers.sh)
+      run: WARP_WASMTIME_TARGET=$PWD/crates/wasmtime-capi/target WARP_GPU_TARGET="$RUNNER_TEMP/warp-gpu" scripts/wasmtime-c-api.sh lib
     - name: build
       # wabt and binaryen, the previous release's native warp brought up to the tag's host words, the newest seed
       run: .workflow/scripts/ci-compilers.sh . "$RUNNER_TEMP/bootstrap"
@@ -73,6 +77,13 @@ jobs:
       run: |
         "$RUNNER_TEMP/bootstrap/warp" --lib "$PWD/lib" rebuild self
         "$RUNNER_TEMP/bootstrap/warp" --lib "$PWD/lib" samples/hello/hello.warp | grep Hello
+    - name: the native warp's C, for Windows
+      # no warp runs on Windows yet to build the native warp there: its C is made here (card windows-build)
+      run: cd core/native && "$RUNNER_TEMP/bootstrap/warp" --lib "$GITHUB_WORKSPACE/lib" build native --c warp.warp
+    - uses: actions/upload-artifact@v7
+      with:
+        name: windows-c
+        path: core/native/warp.native.*
     - uses: actions/upload-artifact@v7
       with:
         name: compilers
@@ -157,6 +168,106 @@ jobs:
     - name: upload
       if: ${{ !inputs.dry }}
       run: gh release upload "$TAG" "$ARCHIVE" --clobber
+
+  windows:
+    # the native warp on Windows (card windows-build): the compilers job's C of core/native/warp.warp compiled by
+    # llvm-mingw's clang against our wasmtime C API, lib/native/windows.c answering its POSIX calls; hello and smoke's
+    # checks, a `warp test` file, a native build; the release folder (packaging/native_dist.sh) as a zip
+    needs: compilers
+    if: ${{ !cancelled() && needs.compilers.result == 'success' }}
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ARCHIVE: warp-${{ inputs.tag || github.ref_name }}-x86_64-pc-windows-gnu.zip
+    steps:
+    # the sources as written, LF: Git for Windows checks text out with CRLF (card crlf-line-endings)
+    - run: git config --global core.autocrlf false
+    - uses: actions/checkout@v7
+      with:
+        ref: ${{ env.TAG }}
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: actions/download-artifact@v8
+      with:
+        name: compilers
+        path: lib
+    - uses: actions/download-artifact@v8
+      with:
+        name: windows-c
+        path: core/native
+    - name: wabt and llvm-mingw
+      # wasm2c's runtime and headers, and clang
+      run: |
+        mkdir -p "$RUNNER_TEMP/tools" && cd "$RUNNER_TEMP/tools"
+        gh release download "$WABT" --repo WebAssembly/wabt --pattern "wabt-$WABT-windows-x64.tar.gz"
+        tar -xzf "wabt-$WABT-windows-x64.tar.gz"
+        gh release download "$LLVM_MINGW" --repo mstorsjo/llvm-mingw --pattern "llvm-mingw-$LLVM_MINGW-ucrt-x86_64.zip"
+        unzip -q "llvm-mingw-$LLVM_MINGW-ucrt-x86_64.zip"
+        echo "$PWD/wabt-$WABT/bin" >>"$GITHUB_PATH"
+        echo "$PWD/llvm-mingw-$LLVM_MINGW-ucrt-x86_64/bin" >>"$GITHUB_PATH"
+    - name: our wasmtime C API and native libraries
+      # with wgpu-native's and SDL3's DLLs for the window, the sound and the GPU
+      run: WARP_WASMTIME_TARGET=$PWD/crates/wasmtime-capi/target WARP_GPU_TARGET="$RUNNER_TEMP/warp-gpu" scripts/wasmtime-c-api.sh lib
+    - name: the native warp
+      # as `warp build native` links on macOS and Linux (extensions/commands/build.warp): the main thread's stack from
+      # the linker, the executable's own C functions exported for the lookup by name
+      run: |
+        wabt=$RUNNER_TEMP/tools/wabt-$WABT
+        runtime=$wabt/share/wabt/wasm2c
+        clang -O2 -I"$runtime" -I"$wabt/include" -Ilib -o lib/warp.exe core/native/warp.native.c core/native/warp.native.main.c \
+          "$runtime/wasm-rt-impl.c" "$runtime/wasm-rt-mem-impl.c" crates/wasmtime-capi/target/release/warp_wasmtime.dll.lib \
+          -static -pthread -Wl,--export-all-symbols -Wl,--stack,0x10000000
+    - name: hello and smoke
+      # scripts/smoke.sh's checks of a built warp: hello, and the native host module answering
+      run: |
+        lib/warp.exe --version
+        lib/warp.exe samples/hello/hello.warp | grep Hello
+        [ "$(lib/warp.exe 'window_possible()')" = no ]
+        # warp test's slots, children and files: the cases started anew by posix_spawnp, as Windows has no fork
+        lib/warp.exe test test/modules/test_exec_sh_runs.pairs.warp
+        # wgpu-native on the runner's adapter (no GPU there: DirectX's software one), a compute shader's list read back
+        lib/warp.exe "$(sed -n 3p test/gpu/test_gpu_compute_in_place.pairs.warp | cut -f1 | sed "s/^'//;s/'$//")" | tee gpu.txt
+        grep -qx '\[0, 2, 4, 6\]' gpu.txt
+    - name: a native build
+      # warp build native on Windows: wasm2c and clang from the PATH, the program's C functions and WASI by lib/native
+      run: |
+        lib/warp.exe build native samples/native/files.warp
+        cd samples/native && [ "$(./files)" = "Hello from a file" ]
+    - name: the release folder, gated, zipped
+      run: |
+        packaging/native_dist.sh dist lib/warp.exe
+        (cd dist && 7z a -tzip -bd "../$ARCHIVE" . >/dev/null)
+    - uses: actions/upload-artifact@v7
+      with:
+        name: zip-windows
+        path: ${{ env.ARCHIVE }}
+    - name: the scoop manifest
+      # packaging/scoop/warp.json with this release's version and the zip's sha256: `scoop install
+      # https://github.com/pannous/warp/releases/latest/download/warp.json`
+      run: |
+        hash=$(sha256sum "$ARCHIVE" | cut -d' ' -f1)
+        sed -e "s/VERSION/${TAG#v}/g" -e "s/HASH/$hash/" packaging/scoop/warp.json >warp.json
+        cat warp.json
+    - name: installed by scoop, run from PowerShell
+      # the manifest pointed at the zip built here; no POSIX shell around, so HOME comes from USERPROFILE (windows.c)
+      shell: pwsh
+      run: |
+        Invoke-RestMethod get.scoop.sh -OutFile install-scoop.ps1
+        .\install-scoop.ps1 -RunAsAdmin
+        $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
+        $manifest = Get-Content warp.json | ConvertFrom-Json
+        $manifest.url = (Resolve-Path $env:ARCHIVE).Path
+        $manifest | ConvertTo-Json -Depth 5 | Set-Content local-warp.json
+        scoop install .\local-warp.json
+        Remove-Item Env:HOME -ErrorAction Ignore
+        $hello = warp samples/hello/hello.warp
+        $hello
+        if ("$hello" -notmatch "Hello") { exit 1 }
+    - name: upload
+      if: ${{ !inputs.dry }}
+      run: gh release upload "$TAG" "$ARCHIVE" warp.json --clobber
 
   packages:
     # the tarballs repackaged: PyPI wheels of warp-language, .deb and .rpm of warp-lang, attached to the release
