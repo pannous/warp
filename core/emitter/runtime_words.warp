@@ -353,7 +353,16 @@ def unboxed_list_code(body: Body, value: TypedCode): TypedCode {
 	code += runtime_call("unlisted_items", [TypedCode(ValueKind.Node, [op.local_get] + held)]).code + [op.end]
 	TypedCode(ValueKind.List, code)
 }
-def payload(code: list, held: int): list { code + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_cast_null, [held]) }
+def payload(code: list, held: int): list {
+	data = code + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1])
+	if held == gc_type(gc.text) { return exact_text_cast(data) }
+	data + gc_code(gc_ops.ref_cast_null, [held])
+}
+# a text by its exact type, so no cast walks the subtypes (a wasmtime libcall): the final $AsciiText's own cast, else $Text's
+def exact_text_cast(data: list): list {
+	ascii_branch = [gc_prefix] + uleb(gc_ops.br_on_cast) + [3, 0, any_type] + relocatable(relocated.types, gc_type(gc.ascii_text))
+	[op.block] + gc_bytes(references.text) + data + ascii_branch + gc_code(gc_ops.ref_cast_null, [gc_type(gc.text)]) + [op.end]
+}
 def unboxed(code: list, box: int): list { payload(code, box) + gc_code(gc_ops.struct_get, [box, 0]) }
 # an Int node's data, its $i64box or $BigInt, as a $Ratio holds a part
 def node_payload(value: TypedCode): list { boxed(value) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) }

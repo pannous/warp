@@ -6,6 +6,7 @@ use "bridge.warp"
 use "instructions.warp"
 use "lists.warp"
 use "text_numbers.warp"
+use "text.warp"
 use "types.warp"
 use "../emitter/byte_codes.warp"
 # whether n converts itself to a float, an instance whose class gives float() (an exact root √2, 2km): a call
@@ -222,7 +223,7 @@ int_text(n: int): text := {
 		left = int_quotient(left, 10)
 		digits += 1
 	}
-	out = new_text(sign + digits)
+	out = new_ascii_text(sign + digits)
 	if n < 0 { set_byte(out, 0, Ascii.Minus) }
 	left = n
 	for i in sign + digits - 1 down to sign {
@@ -248,7 +249,7 @@ char_text(c: char): text := {
 code_point_text(code: int): text := {
 	n = code
 	count = if n < Utf8.TwoBytesFrom then 1 else if n < Utf8.ThreeBytesFrom then 2 else if n < Utf8.FourBytesFrom then 3 else 4
-	out = new_text(count)
+	out = made_text(count, count == 1)
 	for i in count - 1 down to 1 {
 		set_byte(out, i, Utf8.Continuation + int_remainder(n, Utf8.ContinuationUnit))
 		n = int_quotient(n, Utf8.ContinuationUnit)
