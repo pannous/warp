@@ -133,6 +133,8 @@ function plainOfShown(shown) {
 		}
 		const name = shown.slice(at).match(SHOWN_NAME) ?? fail();
 		at += name[0].length;
+		// an instance of a class, `Image{width: 2, …}`, its fields
+		if (shown[at] === "{") return items("}", true);
 		return name[0] in SHOWN_WORDS ? SHOWN_WORDS[name[0]] : name[0];
 	};
 	// a list's item: a value, or `name: value`
