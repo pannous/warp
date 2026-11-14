@@ -1024,10 +1024,6 @@ COMPUTE_TOY_CHANNELS = ["channel0", "channel1"]
 ALPHA_FROM = 16777216
 OPAQUE_ALPHA = 4278190080
 opaque_pixel(pixel: int): int := if pixel >= ALPHA_FROM then pixel else pixel + OPAQUE_ALPHA
-# the pictures last given to a compute.toys shader, each [image, its pixels as a GPU list], so a paint on every frame
-# converts each picture once; the image itself is the key: one changed in place keeps its old pixels
-MOST_KEPT_PICTURES = 8
-global kept_pictures = []
 # the WGSL fragment shader of a compute.toys kernel, each channel it reads the picture of that name among paint's values,
 # a texture sampled with the sampler it names (bilinear_repeat …); a shader already a fragment shader as it is (paint
 # and gpu_render read the dialect off the entry point)
@@ -1053,11 +1049,9 @@ pictured_values(values: any, code: text) := {
 	given
 }
 is_picture(value: any): bool := not (value is number or value is text or value is list or value is bool) and value != ø and value has "pixels"
-# an image's pixels as the GPU list [u32] its texture is written from, made at its first paint
+# an image's pixels as the GPU list [u32] its texture is written from, made at each paint, so a pixel written since
+# shows (an old picture is a wrong value; kept cells would need a copy to compare, which costs what converting does)
 picture_cells(image: any) := {
-	for kept in kept_pictures { if same(kept#1, image) { return kept#2 } }
 	cells: [u32] = [opaque_pixel(int(color)) for color in image.pixels]
-	kept_pictures = [[image, cells]] + kept_pictures
-	if #kept_pictures > MOST_KEPT_PICTURES { kept_pictures = kept_pictures[0 ..< MOST_KEPT_PICTURES] }
 	cells
 }

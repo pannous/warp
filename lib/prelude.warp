@@ -748,10 +748,14 @@ fits_group(value: any, pattern: any, bound: map, code: bool): bool := {
 	if not code and bracket_of(pattern) == "(" and #pattern == 2 and pattern#1 == symbol("data") { return fits_pattern(value, pattern#2, bound, yes) }
 	if bracket_of(pattern) == "{" and not code { return fits_map(value, pattern, bound) }
 	if is_case_with_fields(pattern) and not code and class_name(value) == name_of(pattern#1) { return fits_fields(value, pattern, bound) }
+	if code and is_type(value, "key") and is_operator_hole(pattern) { return fits_operation(value, pattern, bound) }
 	if code and bracket_of(value) != bracket_of(pattern) { return no }
 	if not code and not is_type(value, "list") { return no }
 	fits_items(value, pattern, bound, code)
 }
+// `data($l $op $r)`: a hole between two parts takes any operator, its spelling bound: `-` of `a - b`
+is_operator_hole(pattern: any): bool := bracket_of(pattern) == "" and #pattern == 3 and is_type(pattern#2, "symbol") and name_of(pattern#2).starts_with("$")
+fits_operation(value: any, pattern: any, bound: map): bool := fits_pattern(key_of(value), pattern#1, bound, yes) and bound_as(op_of(value), name_of(pattern#2)[1 ..], bound) and fits_pattern(value_of(value), pattern#3, bound, yes)
 // `Circle(r)`, `Rect(w, h)`: an enum case carrying data, or a class, with a pattern for each field
 is_case_with_fields(pattern: any): bool := bracket_of(pattern) == "(" and #pattern > 1 and is_type(pattern#1, "symbol")
 // the class of an instance, Circle of `Circle{r: 2}` (its type, shown by its name)
