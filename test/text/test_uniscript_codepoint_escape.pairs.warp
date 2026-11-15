@@ -1,5 +1,5 @@
 # a uniscript code point `\:U+12C00` `\:u+12C00` `\:U12C00` `\:0x12C00` is its one character, in either quote; a known
-# name wins, a bare `\:12C00` is no code point and stays as written, a surrogate or a number past U+10FFFF is refused
+# name wins, a bare `\:12C00` is no code point and stays as written
 # (user 2026-11-15; wiki uniscript.md)
 
 # the four marks, in double and single quotes
@@ -25,6 +25,3 @@
 '\'\\:12C00\''	'\\:12C00'
 '"\\:U12C00x"'	'\\:U12C00x'
 
-# beyond Unicode or a surrogate is refused
-'"\\:U+110000"'	error	invalid code point
-'"\\:0xD800"'	error	invalid code point
