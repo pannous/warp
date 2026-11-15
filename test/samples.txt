@@ -1,4 +1,4 @@
-# 668b01d4c8 2026-11-15 06:40 288/289 99.7%
+# 15bc17c06f 2026-11-15 16:26 287/289 99.3%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -275,7 +275,6 @@ ok   samples/web/page_elements.warp
 ok   samples/web/select_binding.warp
 ok   samples/web/typed_form.warp
 ok   samples/world/polymarket_odds.warp
-ok   samples/world/strong_quakes.warp
 ok   samples/world/wikipedia_edits.warp
 EXP  samples/errors/errors.warp: `]` closes the group opened at 5:9, which needs `}`
 WIN  samples/graphics/raylib_circle.warp
@@ -288,3 +287,4 @@ SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
 FAIL samples/modules/test_ffi_extended.warp: `a ≈ b ≈ c` reads two ways: group one, `(a ≈ b) ≈ c` or `a ≈ (b ≈ c)`; only < <= > >= chain
+TIME samples/world/strong_quakes.warp: still running after 120 s
