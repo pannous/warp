@@ -3,8 +3,32 @@
 ENTITY_MARK = "\\:"
 # `name TAB characters` lines, read from lib/ the first time a program writes an entity (load on demand)
 ENTITY_TABLE = "entities.tsv"
-# the escape `\:name` in a text at `at`, ø where no letter follows the `:`
-entity_escape(source: any, at: int, n: int) as list? := if source[at + 1] == ':' and at + 2 < n and is_alpha(source[at + 2]) then entity_read(source, at, n) else ø
+# the escape `\:name` or `\:U+12C00` in a text at `at`, ø where neither a letter nor a digit follows the `:`; a known
+# name wins over a code point (`\:Uc` is a name, not U+C); `\:12C00` is no code point and stays as written
+entity_escape(source: any, at: int, n: int) as list? := {
+	if not (source[at + 1] == ':' and at + 2 < n and is_alphanumeric(source[at + 2])) { return ø }
+	coded = code_point_escape(source, at, n)
+	if coded != ø then coded else entity_read(source, at, n)
+}
+# the marks before a code point's hex digits, longest first; a bare `U` or `u` takes 4 to 6 digits ending the word
+CODE_POINT_MARKS = ["U+", "u+", "0x", "U", "u"]
+# `\:U+12C00` `\:u+12C00` `\:0x12C00` `\:U12C00` `\:u12C00` at `at`: [the character, the length read], else ø; a
+# surrogate or a number past U+10FFFF is refused
+def code_point_escape(source: text or list, at: int, n: int) as list? := {
+	start = at + 2
+	for mark in CODE_POINT_MARKS {
+		first_digit = start + mark.length
+		if first_digit < n and text_between(source, start, first_digit) == mark {
+			end = first_digit
+			while end < n and is_hex_digit(source[end]) { end = end + 1 }
+			digit_count = end - first_digit
+			letter_mark = mark.length == 1
+			word = letter_mark and (digit_count < 4 or digit_count > 6 or (end < n and is_alphanumeric(source[end])) or text_between(source, start, end) in entities())
+			if digit_count > 0 and not word { return [hex_value(text_between(source, first_digit, end)) as codepoint, end - at] }
+		}
+	}
+	ø
+}
 entities_extension = Extension{name: "entities", source_passes: [expanded_entities], text_escape_readers: {":": entity_escape}}
 
 global entity_table = ø
