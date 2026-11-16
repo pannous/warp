@@ -11,7 +11,6 @@
 // come back (card web-apis-rest).
 
 const GPU_ENTRY_POINT = "main";
-const NO_GPU_DRAWING = "use draw draws through pixels on a page (gpu_drawing is no here), so draw_shape, draw_show and draw_shader never run";
 const GPU_BINDING = 0;
 // what a shader that does not compile is said as, natively too (lib/host/native_host/gpu.warp shader_failure)
 const SHADER_SUBJECT = "the shader: ";
@@ -1041,7 +1040,7 @@ const GPU_JOBS = {
 // again by the next run, and not on every frame of this one); without, paint(f, …) of a warp function paints f on the
 // CPU, as the run's warning says once
 const GPU_PAINTS = "gpu_paints"; // lib/prelude.warp gpu_paints()
-const GPU_DRAWING = "gpu_drawing"; // lib/draw.warp: use draw on the GPU is native only (draw_shape below), so never here
+const GPU_DRAWING = "gpu_drawing"; // lib/draw.warp: use draw draws its shapes on the GPU (gpuDrawing)
 const PAINTS_ON_CPU = "paint: a function paints on the CPU"; // src/graphics/paint.rs
 let gpuPaintsHere = false;
 function gpuPaints(holder) {
@@ -1051,6 +1050,14 @@ function gpuPaints(holder) {
 		gpuPaintsHere = answer === 1;
 		if (!gpuPaintsHere) holder.warnings.push(`${PAINTS_ON_CPU}: ${answer}`);
 	}
+	return gpuPaintsHere;
+}
+
+// gpu_drawing: use draw's shapes drawn on the GPU while the page shows the paintings (a test page, which shows none,
+// reads the CPU's pixels) and a shader paints here; asked without gpuPaints' warning, which is about paint(f, …)
+function gpuDrawing() {
+	if (!self.pageSystemValues?.window_open || !hasTaskWorkers()) return false;
+	gpuPaintsHere ||= gpuJob("gpu_paints", {})[0] === 1;
 	return gpuPaintsHere;
 }
 
@@ -1112,7 +1119,7 @@ function gpuTaskWorker() {
 }
 
 addHostPart({
-	systemValue: (value, holder) => value === GPU_PAINTS ? gpuPaints(holder) : value === GPU_DRAWING ? false : undefined,
+	systemValue: (value, holder) => value === GPU_PAINTS ? gpuPaints(holder) : value === GPU_DRAWING ? gpuDrawing() : undefined,
 	words: (holder, hooks, { program }) => {
 		const plain = node => guestPlain(program(), node);
 		// floats, also the whole ones (newGuestValue would make 3 an Int); ints of an array<i32> or array<u32>
@@ -1319,10 +1326,6 @@ addHostPart({
 			gpu_show_sized: shownSized,
 			gpu_picture_sized: picturedSized,
 			gpu_fields_format: fieldsFormat,
-			// use draw on the GPU (src/graphics/gpu_canvas.rs) is native only: lib/draw.warp asks gpu_drawing first
-			draw_shape: () => { throw new Error(NO_GPU_DRAWING); },
-			draw_show: () => { throw new Error(NO_GPU_DRAWING); },
-			draw_shader: () => { throw new Error(NO_GPU_DRAWING); },
 		};
 	},
 });

@@ -220,6 +220,8 @@ value_of(name: text) as int := {
 	if name == "mouse_wheel" { return if open_now then wheel as int else 0 }
 	if name == "window_fullscreen" { return if full_screen() then 1 else 0 }
 	if name == "dark mode" { return if dark_mode() then 1 else 0 }
+	// use draw's shapes drawn on the GPU (lib/draw.warp shape_shader) where a window can show them
+	if name == "gpu_drawing" { return if not windows_refused() and device_ready() then 1 else 0 }
 	0
 }
 // a system value set: window_open opens (1) or closes (0) the window, window_fullscreen fills the screen, both owned
