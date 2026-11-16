@@ -91,7 +91,7 @@ PREVIOUS_FRAME = "\n@group(0) @binding(1) var warp_previous_frame: texture_2d<f3
 // it (bilinear), so a small painting enlarged to the window shows smooth, not in blocks
 PICTURE_SHADER = "@group(0) @binding(0) var picture: texture_2d<f32>;\nstruct Corner { @builtin(position) position: vec4f, @location(0) across: vec2f }\n@vertex fn warp_full_image(@builtin(vertex_index) corner: u32) -> Corner {\n\tlet at = vec2f(f32(corner / 2u) * 4.0 - 1.0, f32(corner % 2u) * 4.0 - 1.0);\n\treturn Corner(vec4f(at, 0.0, 1.0), vec2f(at.x + 1.0, 1.0 - at.y) * 0.5);\n}\nfn texel(at: vec2i) -> vec4f {\n\tlet last = vec2i(textureDimensions(picture)) - vec2i(1);\n\treturn textureLoad(picture, clamp(at, vec2i(0), last), 0);\n}\n@fragment fn main(corner: Corner) -> @location(0) vec4f {\n\tlet at = corner.across * vec2f(textureDimensions(picture)) - vec2f(0.5);\n\tlet low = vec2i(floor(at));\n\tlet f = fract(at);\n\tlet top = mix(texel(low), texel(low + vec2i(1, 0)), f.x);\n\tlet bottom = mix(texel(low + vec2i(0, 1)), texel(low + vec2i(1, 1)), f.x);\n\treturn mix(top, bottom, f.y);\n}\n"
 // the holes every shader has, filled where it reads them and the program gave none (host-gpu.js builtinValues)
-BUILTIN_HOLES = ["width", "height", "size", "time", "frame", "mouse", "mouse_down", "mouse_wheel", "key"]
+BUILTIN_HOLES = ["width", "height", "size", "pixel_scale", "time", "frame", "mouse", "mouse_down", "mouse_wheel", "key"]
 // naga's report "Shader '' parsing error: why … ┌─ wgsl:4:1 …" said as `the shader: why at 4:1`
 NAGA_CAUSE = "error: "
 NAGA_PLACE = "wgsl:"
@@ -295,6 +295,14 @@ global surface = 0
 global surface_layer = 0
 global surface_width = 0
 global surface_height = 0
+// the most pixels a point a window shades, lowered while its frames are slow (fitted_timed), when it was last shaded
+FITTED_BUDGET_MS = 1000 / 30
+SLOW_FITTED = 3
+global shade_ceiling = 1000.0
+// the pixels a point of the painting being shaded spans: more than 1 only while a window shades it fitted
+global shading_scale = 1.0
+global fitted_at = 0
+global slow_fitted = 0
 // the last picture shown, shown again as the window comes into sight or changes size
 global shown_picture = 0
 global shown_layer = 0
@@ -608,6 +616,7 @@ hole_value(hole: text, width: int, height: int) as any := {
 	if hole == "width" { return width }
 	if hole == "height" { return height }
 	if hole == "size" { return [width, height] }
+	if hole == "pixel_scale" { return shading_scale }
 	if hole == "time" { return (wall_clock_ms() - first_painting_ms) / 1000.0 }
 	if hole == "frame" { return paintings }
 	// the pointer, told in the painting's points, in the pixels shaded (shade_fitted shades more of them)
@@ -1580,7 +1589,9 @@ host_shader_shown(given_shader, width: int, height: int, values: any) as int := 
 	// shaded at the window's own pixels, not scaled up from the painting's size: crisp on a Retina display
 	sides = if surface_ready(layer) then shade_fitted(width, height) else [width, height]
 	t0 = wall_clock_ms()
+	shading_scale = sides[0] / width
 	drawing = drawing_of(shader, values, sides[0], sides[1])
+	shading_scale = 1.0
 	t1 = wall_clock_ms()
 	if drawing == ø { return said_failed("paint into the window") }
 	encoder = wgpuDeviceCreateCommandEncoder(device, 0)
@@ -2080,9 +2091,21 @@ shade_image(shader: text, set: FieldSet, given: any, width: int, height: int) as
 // the drawable's largest same-aspect image of at least width × height, so a Retina surface is shaded one pixel
 // for one pixel. The window's point size stays width × height, which is the pointer's coordinate system
 shade_fitted(width: int, height: int) as list := {
-	scale = surface_scale(width, height)
+	scale = min(surface_scale(width, height), shade_ceiling)
 	if surface_width < width or surface_height < height or scale <= 1.01 { return [width, height] }
+	fitted_timed(scale)
 	[round(width * scale) as int, round(height * scale) as int]
+}
+// a window whose frames come slower than 30 a second shades fewer of its pixels: SLOW_FITTED frames in a row over the
+// budget halve the scale, down to the painting's own size, said once each time as a hint
+fitted_timed(scale: float) := {
+	now = wall_clock_ms()
+	slow_fitted = if fitted_at > 0 and now - fitted_at > FITTED_BUDGET_MS then slow_fitted + 1 else 0
+	fitted_at = now
+	if slow_fitted < SLOW_FITTED { return }
+	shade_ceiling = max(1.0, scale / 2)
+	slow_fitted = 0
+	eprint("hint: frames come slower than 30 a second, so the window shades " + text(shade_ceiling) + " pixels a point")
 }
 host_gpu_show(given_shader, id: int, given: any) as int := {
 	set = fields_set(id)
@@ -2135,7 +2158,9 @@ host_gpu_show_sized(given_shader, id: int, width: int, height: int, given: any) 
 	}
 	started = wall_clock_ms()
 	shader = text(given_shader)
+	shading_scale = shade_w / width
 	image = shade_image(shader, set, given, shade_w, shade_h)
+	shading_scale = 1.0
 	if image == 0 {
 		passes_finished()
 		raise gpu_failure

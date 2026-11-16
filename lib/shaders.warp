@@ -218,7 +218,9 @@ wgsl_shader(reached: map, into: any = ø) as text := {
 	given = if into == ø then "vec4f(" + wgsl_painted_call(reached) + ", 1.0)" else wgsl_stored_call(reached, into)
 	if shading.refusal != "" { raise "shader_of(${reached.name}): ${shading.refusal}" }
 	shader_functions = shading.written_functions.join("\n\n")
-	shader_words(shader_functions + "\n\n@fragment fn main(@builtin(position) position: vec4f) -> @location(0) vec4f {\n\treturn " + given + ";\n}\n")
+	// f reads the pixel in the painting's points: a window shading more pixels than it has (values.pixel_scale) samples
+	// between them, not past its edge
+	shader_words(shader_functions + "\n\n@fragment fn main(@builtin(position) position: vec4f) -> @location(0) vec4f {\n\t{\n\t\tlet position = vec4f(position.xy / values.pixel_scale, position.zw);\n\t\treturn " + given + ";\n\t}\n}\n")
 }
 # f's value at the cell as the field `into` stores it, padded to the 4 numbers of a cell
 wgsl_stored_call(reached: map, into: GpuField) as text := {
