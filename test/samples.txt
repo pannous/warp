@@ -1,4 +1,4 @@
-# 7c3a78f4fc 2026-11-16 09:12 288/289 99.7%
+# 5c089b9926 2026-11-16 13:16 295/295 100.0%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -51,6 +51,12 @@ ok   samples/functions/sudoku.warp
 ok   samples/functions/warp_reads_warp.warp
 ok   samples/functions/y_combinator.warp
 ok   samples/geometry/pga_example.warp
+ok   samples/geometry/pga_point_line_distance.warp
+ok   samples/geometry/pga_ray_plane.warp
+ok   samples/geometry/pga_reflect.warp
+ok   samples/geometry/pga_skew_lines.warp
+ok   samples/geometry/pga_sphere_cut.warp
+ok   samples/geometry/pga_visual.warp
 ok   samples/golf/99-bottles-of-beer.short.warp
 ok   samples/golf/99-bottles-of-beer.warp
 ok   samples/golf/arabic-to-roman.short.warp
@@ -170,6 +176,7 @@ ok   samples/modules/rust_crates.warp
 ok   samples/modules/slug_paths.warp
 ok   samples/modules/square.warp
 ok   samples/modules/test_ffi_comprehensive.warp
+ok   samples/modules/test_ffi_extended.warp
 ok   samples/modules/test_ffi.warp
 ok   samples/native/arguments.warp
 ok   samples/native/c_calls.warp
@@ -287,4 +294,3 @@ SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
-FAIL samples/modules/test_ffi_extended.warp: `a ≈ b ≈ c` reads two ways: group one, `(a ≈ b) ≈ c` or `a ≈ (b ≈ c)`; only < <= > >= chain
