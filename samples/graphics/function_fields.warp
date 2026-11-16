@@ -5,8 +5,8 @@
 use math
 width = 960
 height = 540
-columns = 320
-rows = 180
+columns = width
+rows = height
 ink = field(1, columns, rows)
 turn = 0
 drop(x, y) := {

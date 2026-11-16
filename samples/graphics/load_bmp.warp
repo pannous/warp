@@ -4,7 +4,7 @@ use image
 use color
 
 picture = image(./picture.bmp)
-evening = picture.mirrored().tinted(rgb(255, 120, 60), 0.3)
-evening.save(./evening.bmp)
+evening = mirror picture |> tint(rgb(255, 120, 60), 0.3)
+save evening ./evening.bmp
 print "saved evening.bmp, ${evening.width}×${evening.height}"
-evening.show()
+show evening
