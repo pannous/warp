@@ -353,6 +353,8 @@ asked(callback: text) as int := {
 // the run's one device, asked for at its first painting; no when there is none, gpu_failure saying why
 device_ready() as bool := {
 	if device != 0 { return yes }
+	// Metal's shader compiler never answers a process forked without exec
+	own_process()
 	if instance == 0 { instance = wgpuCreateInstance(0) }
 	if instance == 0 { return failed("no WebGPU instance") }
 	wgpuInstanceRequestAdapter(instance, 0, asked("gave"))
