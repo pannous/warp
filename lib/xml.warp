@@ -35,31 +35,31 @@ def xml_fail(st: map, p: int, message: text) {
 	raise (if full.ends_with(" a") or full.ends_with(" at") or full.ends_with(" ") then full + "." else full)
 }
 
-def xml_ch(st: map, p: int): text {
+def xml_ch(st: map, p: int) as text {
 	if p < st["n"] { return st["t"]#(p + 1) }
 	""
 }
 
-def xml_at(st: map, s: text): bool {
+def xml_at(st: map, s: text) as bool {
 	p = st["p"]
 	k = count(s)
 	p + k <= st["n"] and st["t"][p ..< p + k] == s
 }
 
 // the 0-based position of s at or after from, -1 when absent
-def xml_index(st: map, s: text, from: int): int {
+def xml_index(st: map, s: text, from: int) as int {
 	if from >= st["n"] { return -1 }
 	at = st["t"][from..].index_of(s)
 	if at == 0 { return -1 }
 	from + at - 1
 }
 
-def xml_name_char(c: text): bool {
+def xml_name_char(c: text) as bool {
 	if c == "" { return no }
 	is_digit(c) or c == "_" or c == "-" or c == "." or c == ":" or (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") or ord(c) > 127
 }
 
-def xml_name(st: map): text {
+def xml_name(st: map) as text {
 	start = st["p"]
 	p = start
 	while xml_name_char(xml_ch(st, p)) { p = p + 1 }
@@ -68,7 +68,7 @@ def xml_name(st: map): text {
 	st["t"][start ..< p]
 }
 
-def xml_space(st: map): bool {
+def xml_space(st: map) as bool {
 	p = st["p"]
 	start = p
 	c = xml_ch(st, p)
@@ -77,13 +77,13 @@ def xml_space(st: map): bool {
 	p > start
 }
 
-def xml_blank(t: text): bool {
+def xml_blank(t: text) as bool {
 	for c in t { if not (c == " " or c == "\n" or c == "\t" or c == chr(13)) { return no } }
 	yes
 }
 
 // raw text with entity references decoded; base is raw's position for error columns
-def xml_decode(st: map, raw: text, base: int): text {
+def xml_decode(st: map, raw: text, base: int) as text {
 	if not raw.contains("&") { return raw }
 	out = ""
 	i = 0
@@ -116,7 +116,7 @@ def xml_decode(st: map, raw: text, base: int): text {
 }
 
 // skip one comment or processing instruction at the position; no when there is none
-def xml_skip_markup(st: map): bool {
+def xml_skip_markup(st: map) as bool {
 	p = st["p"]
 	if xml_at(st, "<!--") {
 		e = xml_index(st, "-->", p + 4)
@@ -172,7 +172,7 @@ def xml_misc(st: map, prolog: bool) {
 	}
 }
 
-def xml_resolve(st: map, scope: map, qname: text, p: int, for_attribute: bool): list {
+def xml_resolve(st: map, scope: map, qname: text, p: int, for_attribute: bool) as list {
 	colon = qname.index_of(":")
 	if colon == 0 { return ["", qname, if for_attribute then "" else (scope.get("") ?? "")] }
 	prefix = qname[0 ..< colon - 1]
@@ -183,7 +183,7 @@ def xml_resolve(st: map, scope: map, qname: text, p: int, for_attribute: bool): 
 	[prefix, local, uri]
 }
 
-def xml_element(st: map, outer: map): map {
+def xml_element(st: map, outer: map) as map {
 	start = st["p"]
 	st["p"] = start + 1
 	name = xml_name(st)
@@ -306,7 +306,7 @@ def xml_path_fail(path: text, why: text) {
 }
 
 // steps: [axis ("child" or "deep"), test, predicates text list]
-def xml_path_steps(path: text): list {
+def xml_path_steps(path: text) as list {
 	if path == "" { xml_path_fail("''", "an empty path") }
 	if path.starts_with("/") and not path.starts_with("//") { xml_path_fail(path, "absolute paths are not supported (start with a tag, . or //)") }
 	steps = []
@@ -361,7 +361,7 @@ def xml_path_steps(path: text): list {
 	steps
 }
 
-def xml_matches(e: map, test: text): bool {
+def xml_matches(e: map, test: text) as bool {
 	if test == "*" { return yes }
 	if test.starts_with("{") {
 		close = test.index_of("}")
@@ -371,7 +371,7 @@ def xml_matches(e: map, test: text): bool {
 	e["local"] == test
 }
 
-def xml_predicate_ok(path: text, e: map, predicate: text, position: int): bool {
+def xml_predicate_ok(path: text, e: map, predicate: text, position: int) as bool {
 	p = predicate.trim()
 	if p != "" and is_digit(p#1) {
 		for c in p { if not is_digit(c) { xml_path_fail(path, "unsupported predicate [" + predicate + "]") } }
@@ -454,7 +454,7 @@ global xml_find(element: map, path: text): any := {
 	all#1
 }
 
-def xml_escape(t: text): text := html_escape(t).replace("&#39;", "&apos;")
+def xml_escape(t: text) as text := html_escape(t).replace("&#39;", "&apos;")
 
 global to_xml(node: any): text := {
 	if node is text { return xml_escape(node) }

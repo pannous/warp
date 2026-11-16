@@ -58,7 +58,7 @@ forest_cells(index) := {
 	}
 }
 
-tree_place(index: int): list := {
+tree_place(index: int) as list := {
 	forest_cells(index)
 	cell_place(index % FOREST_SIDE, index /! FOREST_SIDE)
 }
@@ -84,7 +84,7 @@ forest_glance(glance) := {
 	}
 }
 
-picture_focal(height: number): float := {
+picture_focal(height: number) as float := {
 	if height <= 0 { raise "forest: picture height must be positive, not " + text(height) }
 	(height / 2.0) / tan(FOREST_FOV / 2.0)
 }
@@ -167,7 +167,7 @@ forest_chunk(cx, cz) := {
 	}
 }
 
-chunk_seen(cx: int, cz: int, glance: Glance): bool := {
+chunk_seen(cx: int, cz: int, glance: Glance) as bool := {
 	forest_chunk(cx, cz)
 	forest_glance(glance)
 	if chunk_reach(cx, cz, glance) > glance.far { return no }
@@ -179,7 +179,7 @@ tree_box(spot) := {
 	[spot#1 - half, 0.0, spot#2 - half, spot#1 + half, spot#3, spot#2 + half]
 }
 
-tree_seen(index: int, glance: Glance): bool := {
+tree_seen(index: int, glance: Glance) as bool := {
 	forest_glance(glance)
 	spot = tree_place(index)
 	not forest_outside(tree_box(spot), forest_planes(glance))
@@ -309,7 +309,7 @@ horizon_quota(reach, screen) := {
 }
 
 // side: trees along each edge of the square; the woods hold side * side of them.
-forest_view(glance: Glance, side: int = FOREST_SIDE): Canopy := {
+forest_view(glance: Glance, side: int = FOREST_SIDE) as Canopy := {
 	chunks = forest_chunks(glance, side)
 	planes = forest_planes(glance)
 	candidate = 0
@@ -334,7 +334,7 @@ forest_view(glance: Glance, side: int = FOREST_SIDE): Canopy := {
 
 // The same woods, with the budget split so near chunks stay whole and every farther chunk still sends trees.
 // `screen` is the picture height in pixels: it decides how many trees a far chunk is worth.
-forest_horizon(glance: Glance, side: int, budget: int, screen: number): Canopy := {
+forest_horizon(glance: Glance, side: int, budget: int, screen: number) as Canopy := {
 	if budget < 0 { raise "forest: a horizon budget must not be negative, not " + text(budget) }
 	if screen <= 0 { raise "forest: picture height must be positive, not " + text(screen) }
 	chunks = forest_chunks(glance, side)
@@ -464,7 +464,7 @@ gpu_vectors(rows: list) := {
 // until the budget; far trees, and near ones that do not fit, stay in sprites. Draws are far to near.
 // front > 0 meshes every sprite inside that many metres, largest crown first. The level is the one
 // whose error is still inside a pixel, and a level that does not fit steps one coarser.
-forest_grove(canopy: Canopy, glance: Glance, kits: list, screen_height: number, budget: int, cap: int, mesh_far: float = 0.0, front: float = 0.0): Grove := {
+forest_grove(canopy: Canopy, glance: Glance, kits: list, screen_height: number, budget: int, cap: int, mesh_far: float = 0.0, front: float = 0.0) as Grove := {
 	if not (canopy is Canopy) { raise "forest: a grove reads a Canopy, not " + text(canopy) }
 	forest_glance(glance)
 	if screen_height <= 0 { raise "forest: picture height must be positive, not " + text(screen_height) }
@@ -577,7 +577,7 @@ grove_known(seen, place) := {
 // Every level of each meshed tree, so a GPU pass can pick the level. The grove's own counts stay the CPU choice.
 // The list is draws, spans, bounds, cones, levels, trees. A level is first cluster, count, error.
 // A tree is first level, level count, and the local distance chosen_level uses.
-grove_lod(grove: Grove, kits: list, eye: list): list := {
+grove_lod(grove: Grove, kits: list, eye: list) as list := {
 	if not (grove is Grove) { raise "forest: a grove's levels need a Grove, not " + text(grove) }
 	grove_kits(kits)
 	draws = []
@@ -624,7 +624,7 @@ GROVE_ATLAS = 1
 ASH_ATLAS = 2
 // Four full-size leaves plus the bark row. The grove atlas stays 512-wide for the tests.
 NEAR_ATLAS = 3
-baked_atlas(folder: text, id: int): any := {
+baked_atlas(folder: text, id: int) as any := {
 	if not exists(folder + "/atlas.txt") or not exists(folder + "/atlas.bin") { return ø }
 	parts = [part.trim() for part in read(folder + "/atlas.txt").split(" ") if part.trim() != ""]
 	if count(parts) < 6 or parts[0] != "EZAT" { return ø }

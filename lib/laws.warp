@@ -20,7 +20,7 @@ law_tried(shown: text, names: list, proposition: function, chosen: list) := {
 # law shown, its variables and the proposition of their values. A named law, `law name:` with a `for x: int` line each
 # before it, takes those variables, else they are the names the law reads and neither calls nor finds defined, by the
 # program or the compiler
-law_check(law: Node, program: Node): Node := {
+law_check(law: Node, program: Node) as Node := {
 	is_named_law = law is key and op_of(law) == ":" and key_of(law) is symbol
 	lines = if is_named_law then rule_word("statements_in", [value_of(law)]) else [law]
 	if is_named_law and #lines == 1 and lines#1 is list { lines = [line for line in lines#1] }
@@ -34,13 +34,13 @@ law_check(law: Node, program: Node): Node := {
 	bracketed([symbol("law_holds"), text(shown), bracketed(variables.map(text), "["), key(symbol(LAW_VALUES), "->", proposition)], "(")
 }
 # `for x: int` of a named law: x
-law_given(line: Node): text := {
+law_given(line: Node) as text := {
 	written = rule_word("as_code", [line])
 	if not written.starts_with("for ") { return "" }
 	written[4 ..].replace(":", " ").split(" ").filter(word => word != "")#1
 }
 # the names a law reads, in order, each once: none a call's head (`square` of `square(x)`)
-law_variables(n: Node, found: list): list := {
+law_variables(n: Node, found: list) as list := {
 	if n is symbol { return if name_of(n) in found then found else found + [name_of(n)] }
 	if n is key { return law_variables(value_of(n), law_variables(key_of(n), found)) }
 	if not (n is list) { return found }

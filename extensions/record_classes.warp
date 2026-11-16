@@ -6,7 +6,7 @@
 record_class_word = "class"
 
 # the class a record declares, else ø, nothing read
-read_record(p: Parser, word: text): Node := {
+read_record(p: Parser, word: text) as Node := {
 	if not (starts_statement(p) and record_declared(p, word)) { return ø }
 	start = p.at
 	# the class declaration read on from where `record` ends: type_declaration steps over its word by the word's length
@@ -16,7 +16,7 @@ read_record(p: Parser, word: text): Node := {
 	declared
 }
 # a name after the word, then its fields: `{` or `(`
-record_declared(p: Parser, word: text): bool := {
+record_declared(p: Parser, word: text) as bool := {
 	name = name_after_blanks(p, word)
 	if count(name) == 0 { return no }
 	fields = char_at(p, spaces_end(p, spaces_end(p, p.at + word.length) + name.length))

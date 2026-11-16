@@ -17,32 +17,32 @@
 // functions, a value starting with - needs the = form (--name=-x; a negative number needs none), and positionals
 // may come between options (argparse's parse_intermixed_args)
 
-cli_kind(o: map): text := if "kind" in o then o["kind"] else "text"
-cli_is_flag(o: map): bool := cli_kind(o) == "flag"
-cli_is(o: map, key: text): bool := key in o and o[key] == yes
-cli_shown(o: map): text := if cli_is(o, "positional") then o["name"] else "--" + o["name"]
+cli_kind(o: map) as text := if "kind" in o then o["kind"] else "text"
+cli_is_flag(o: map) as bool := cli_kind(o) == "flag"
+cli_is(o: map, key: text) as bool := key in o and o[key] == yes
+cli_shown(o: map) as text := if cli_is(o, "positional") then o["name"] else "--" + o["name"]
 // a flag option refuses --name=…; body is the text after --
 cli_flag_rejects_value(name: text, body: text) := if "=" in body { raise "cli: --" + name + " takes no value" }
-cli_positionals(spec: list): list := [o for o in spec if cli_is(o, "positional")]
+cli_positionals(spec: list) as list := [o for o in spec if cli_is(o, "positional")]
 
 // the option a long name names, ø when none
 // whether an argument is an option, not a value: -x and --x are, - and a negative number (-5, -2.5) are not (argparse)
-cli_dashed(a: text): bool := a.starts_with("-") and a != "-" and not is_digits(replace(a[1..], ".", ""))
-def cli_long(spec: list, name: text): any {
+cli_dashed(a: text) as bool := a.starts_with("-") and a != "-" and not is_digits(replace(a[1..], ".", ""))
+def cli_long(spec: list, name: text) as any {
 	for o in spec { if not cli_is(o, "positional") and o["name"] == name { return o } }
 	ø
 }
-def cli_short(spec: list, letter: text): any {
+def cli_short(spec: list, letter: text) as any {
 	for o in spec { if "short" in o and o["short"] == letter { return o } }
 	ø
 }
 // a value text as the option's kind wants it, one of its choices when it has them
-def cli_value(o: map, t: text): any {
+def cli_value(o: map, t: text) as any {
 	v = cli_converted(o, t)
 	if "choices" in o and not (v in o["choices"]) { raise "cli: " + cli_shown(o) + " is one of " + join([text(c) for c in o["choices"]], ", ") + ", not " + t }
 	v
 }
-def cli_converted(o: map, t: text): any {
+def cli_converted(o: map, t: text) as any {
 	kind = cli_kind(o)
 	if kind == "int" {
 		if not is_digits(if t.starts_with("-") then t[1..] else t) or t == "" or t == "-" { raise "cli: " + cli_shown(o) + " wants an int, not " + t }
@@ -54,7 +54,7 @@ def cli_converted(o: map, t: text): any {
 def cli_set(result: map, o: map, value: any) {
 	if cli_is(o, "many") { result[o["name"]] = result[o["name"]] + [value] } else { result[o["name"]] = value }
 }
-def cli_start(spec: list): map {
+def cli_start(spec: list) as map {
 	result = {help: no}
 	for o in spec {
 		result[o["name"]] = if "default" in o then o["default"] else if cli_is(o, "many") then [] else if cli_is_flag(o) then no else ø
@@ -62,9 +62,9 @@ def cli_start(spec: list): map {
 	result
 }
 
-parse_args(spec: list, argv: list): map := cli_parse(spec, argv, no, [])
+parse_args(spec: list, argv: list) as map := cli_parse(spec, argv, no, [])
 // stop: the options end at the first positional, which with all after it goes into rest (parse_commands)
-def cli_parse(spec: list, argv: list, stop: bool, rest_out: list): map {
+def cli_parse(spec: list, argv: list, stop: bool, rest_out: list) as map {
 	result = cli_start(spec)
 	positionals = []
 	given = []
@@ -156,11 +156,11 @@ def cli_parse(spec: list, argv: list, stop: bool, rest_out: list): map {
 }
 
 // an option's column, its help from column 25 as argparse aligns it (on the next line when the option is long)
-cli_pad(part: text): text := "  " + part + (if count(part) < 22 then " " * (22 - count(part)) else "\n" + " " * 24)
+cli_pad(part: text) as text := "  " + part + (if count(part) < 22 then " " * (22 - count(part)) else "\n" + " " * 24)
 // one help line: the option and its text, no trailing blanks when it has none
-cli_line(part: text, text: text): text := if text == "" then "  " + part else cli_pad(part) + text
+cli_line(part: text, text: text) as text := if text == "" then "  " + part else cli_pad(part) + text
 // the help text: a usage line, then one line per option
-def cli_help(program: text, spec: list): text {
+def cli_help(program: text, spec: list) as text {
 	usage = "usage: " + program + " [-h]"
 	lines = ["", "options:", "  -h, --help            show this help"]
 	for o in spec {
@@ -186,13 +186,13 @@ def cli_help(program: text, spec: list): text {
 
 // --- commands, git style: `prog [globals] command [its options]`
 // commands is a map: name -> its spec (a list), or {help: "one line", options: spec}
-cli_command_spec(c: any): list := if c is list then c else c["options"]
-cli_command_help(c: any): text := if c is map and "help" in c then c["help"] else ""
-cli_names(commands: map): text := join(keys(commands), ", ")
+cli_command_spec(c: any) as list := if c is list then c else c["options"]
+cli_command_help(c: any) as text := if c is map and "help" in c then c["help"] else ""
+cli_names(commands: map) as text := join(keys(commands), ", ")
 
 // parse_commands(globals, {add: spec, list: spec}, argv): the globals' values and the command's, together in one map
 // with "command" its name (ø with help: yes for -h before any command); `prog add -h` is help: yes, command: "add"
-def parse_commands(globals: list, commands: map, argv: list): map {
+def parse_commands(globals: list, commands: map, argv: list) as map {
 	rest = []
 	result = cli_parse(globals, argv, yes, rest)
 	result["command"] = ø
@@ -207,11 +207,11 @@ def parse_commands(globals: list, commands: map, argv: list): map {
 }
 
 // the help of a program with commands: its globals, then each command with its one line
-def cli_commands_help(program: text, globals: list, commands: map): text {
+def cli_commands_help(program: text, globals: list, commands: map) as text {
 	names = "{" + join(keys(commands), ",") + "}"
 	top = cli_help(program, globals).split("\n")
 	lines = [top[0] + " " + names + " ...", "", "commands:"] + [cli_line(n, cli_command_help(commands[n])) for n in keys(commands)]
 	join(lines + top[1..], "\n")
 }
 // the help of one command: `prog add -h`
-cli_command_text(program: text, commands: map, name: text): text := cli_help(program + " " + name, cli_command_spec(commands[name]))
+cli_command_text(program: text, commands: map, name: text) as text := cli_help(program + " " + name, cli_command_spec(commands[name]))

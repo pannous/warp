@@ -4,46 +4,46 @@ use "../../compiler/runtime/intrinsics.warp"
 use "../../compiler/analysis/kinds.warp"
 use "exact.warp"
 use "../../compiler/runtime/instructions.warp"
-exact_neg(x: Node): Node := {
+exact_neg(x: Node) as Node := {
 	made_case(Made.BigInt, big_exact_negated(x))
 	fraction_kept(exact_ratio(-exact_numerator(x), exact_denominator(x)), x, x)
 }
 # -1, 0 or 1 as x is below, equal to or above 0 (a denominator is positive)
-exact_sign(x: Node): int := {
+exact_sign(x: Node) as int := {
 	made_case(Made.BigInt, big_exact_sign(x))
 	n = exact_numerator(x)
 	if n < 0 then -1 else if n > 0 then 1 else 0
 }
-exact_abs(x: Node): Node := {
+exact_abs(x: Node) as Node := {
 	if exact_sign(x) < 0 { return exact_neg(x) }
 	x
 }
 # the integer part, rounded toward 0
-exact_trunc(x: Node): Node := {
+exact_trunc(x: Node) as Node := {
 	if not is_ratio(x) { return x }
 	made_case(Made.BigInt, big_exact_trunc(x))
 	int_quotient(ratio_numerator(x), ratio_denominator(x))
 }
 # a - b * trunc(a / b), the sign of a as i64.rem_s
-exact_rem(a: Node, b: Node): Node := {
+exact_rem(a: Node, b: Node) as Node := {
 	made_case(Made.BigInt, big_exact_remainder(a, b))
 	exact_sub(a, exact_mul(b, exact_trunc(exact_div(a, b))))
 }
 # the Euclidean remainder, 0 <= r < |b|: the truncated one plus |b| when negative
-exact_mod(a: Node, b: Node): Node := {
+exact_mod(a: Node, b: Node) as Node := {
 	rest = exact_rem(a, b)
 	if exact_sign(rest) < 0 { return exact_add(rest, exact_abs(b)) }
 	rest
 }
 # the largest integer <= x, exact beyond the float range: a negative ratio truncates up, so one less
-exact_floor(x: Node): Node := {
+exact_floor(x: Node) as Node := {
 	if not is_ratio(x) { return x }
 	whole = exact_trunc(x)
 	if exact_sign(x) < 0 { return exact_sub(whole, 1) }
 	whole
 }
 # `floor x` of a boxed number: exact for an int or ratio, a float's floor as an int
-floored_node(n: Node): Node := {
+floored_node(n: Node) as Node := {
 	if kind_code(n) != Kind.Int { return truncated(float_floor(unboxed_float(n))) }
 	exact_floor(n)
 }

@@ -24,7 +24,7 @@ use_library(library_folder)
 RUNTIME_ROOTS = ["runtime.warp", "runtime/extended.warp"]
 # a root's text, its `use` paths named from core, where the roots are lowered together: runtime/extended.warp's
 # `use "extended/wasi.warp"` is core/runtime/extended/wasi.warp
-root_text(file: text): text := {
+root_text(file: text) as text := {
 	text = file_text(runtime_folder() + "/" + file)
 	if text == ø { raise "no runtime file " + runtime_folder() + "/" + file }
 	let steps = file.split("/")
@@ -32,17 +32,17 @@ root_text(file: text): text := {
 	text.replace("use \"", "use \"" + steps[0 ..< #steps - 1].join("/") + "/")
 }
 # core, as lib/ links it: the runtime's sources, which only `warp runtime` reads (a compile takes runtime.wasm)
-runtime_folder(): text := library_folder + "/compiler"
+runtime_folder() as text := library_folder + "/compiler"
 
 # the runtime words, lowered by the same passes as a program, only to build runtime.wasm: a compile takes them from it
-lowered_runtime_words(): Node := lowered_program(RUNTIME_ROOTS.map(file => root_text(file)).join("\n"), runtime_folder(), prelude_text())
+lowered_runtime_words() as Node := lowered_program(RUNTIME_ROOTS.map(file => root_text(file)).join("\n"), runtime_folder(), prelude_text())
 
 # the compiler's own build, this library's compiler.warp (by its text): its runtime carries only the rows of
 # COMPILER_BUILD_EXTENSIONS (decision extension-row-optional). Its file as written: file_text may answer the bundle's
 # text, blanked of comments
-own_build(source: text): bool := source == (try read(runtime_folder() + "/compiler.warp") else "")
+own_build(source: text) as bool := source == (try read(runtime_folder() + "/compiler.warp") else "")
 # the runtime words of the extension rows a build leaves out: the definitions of each one's runtime root
-left_out_runtime_words(kept: list): list := {
+left_out_runtime_words(kept: list) as list := {
 	words = []
 	for row in EXTENSIONS {
 		if row.runtime != "" and not kept.any(k => k.name == row.name) {
@@ -57,7 +57,7 @@ left_out_runtime_words(kept: list): list := {
 # the wasm module of the source, as bytes; the refusal, a text, of a program outside the emitter's core. Given a
 # runtime.wasm, a library module behind it, its operands relocatable (write_module), linking the modules it uses when
 # `links`; a program links them unless a `warp build` compiles them in (modules_linked)
-compile(source: text, folder: text, library_runtime: any = ø, links: any = ø): any := {
+compile(source: text, folder: text, library_runtime: any = ø, links: any = ø) as any := {
 	global linked_signatures
 	global whole_module_wanted
 	global used_c_functions
@@ -128,7 +128,7 @@ said_aloud(found: list) := {
 
 # what the checks diagnosed past the first `known` facts; an error among them fails the compile with its text (card
 # pure-self-ignores-errors)
-checked_facts(known: int): list := {
+checked_facts(known: int) as list := {
 	found = diagnosed_since(known)
 	failing = first_error(found, module.program_file, value_as_data)
 	if failing { throw failing }
@@ -143,8 +143,8 @@ MODULES_FOLDER = "modules"
 # section names them, library.warp is_prebuilt_module); "" for a module
 # the rebuild no longer prebuilds, whose file may linger there (reals.wasm after 827309223b: math linked it and was
 # refused, card stale-module-wasm), so it is compiled from its source
-prebuilt_path(name: text, folder: text): text := own_module_wasm.get(name) ?? (if is_prebuilt_module(name) then folder + name + ".wasm" else "")
-linked_libraries(source: text): list := {
+prebuilt_path(name: text, folder: text) as text := own_module_wasm.get(name) ?? (if is_prebuilt_module(name) then folder + name + ".wasm" else "")
+linked_libraries(source: text) as list := {
 	global linked_signatures
 	linked_signatures = {}
 	folder = linked_modules_folder()
@@ -162,7 +162,7 @@ linked_libraries(source: text): list := {
 # linked from its prebuilt image as one its source named, with those it uses, never compiled from its source (decision
 # link-modules-lazily: compiling units in made `str(20°C)` 6.9 s); ø when this compile links nothing or it isn't prebuilt
 global linking_late = no
-linked_late(name: text): ModuleSignature? := {
+linked_late(name: text) as ModuleSignature? := {
 	# (while the build writes the modules anew those on disk are the ones it replaces, built behind another runtime)
 	if not linking_late or modules_rewritten or name == module_written { return ø }
 	images = images_of([name], linked_modules_folder())
@@ -171,7 +171,7 @@ linked_late(name: text): ModuleSignature? := {
 }
 # the prebuilt images of the modules named and of those they use in turn, each signature kept in linked_signatures;
 # one already linked is skipped
-images_of(names: list, folder: text): list := {
+images_of(names: list, folder: text) as list := {
 	images = []
 	at = 0
 	while at < #names {
@@ -206,15 +206,15 @@ own_module_beside(name: text, program_folder: text) := {
 	if #bytes > 0 and section_place(bytes, section_ids.custom, SIGNATURE_SECTION) != ø { own_module(name, own_module_files.get(name) ?? wasm.remove_suffix(".wasm") + module_extension, wasm) }
 }
 # the images, each behind those of the modules it uses
-dependencies_first(images: list): list := in_dependency_order(images.map(image => image.name)).map(name => images.filter(image => image.name == name)#1)
+dependencies_first(images: list) as list := in_dependency_order(images.map(image => image.name)).map(name => images.filter(image => image.name == name)#1)
 # the modules named, each behind those of them it uses
-in_dependency_order(names: list): list := {
+in_dependency_order(names: list) as list := {
 	ordered = []
 	for name in names { ordered = with_dependencies(name, names, ordered, []) }
 	ordered
 }
 # (two modules using each other: the one met first goes first)
-with_dependencies(name: text, names: list, ordered: list, visiting: list): list := {
+with_dependencies(name: text, names: list, ordered: list, visiting: list) as list := {
 	if name in ordered or name in visiting { return ordered }
 	for inner in modules_used_by(name) { if inner in names { ordered = with_dependencies(inner, names, ordered, visiting + [name]) } }
 	ordered + [name]
@@ -241,8 +241,8 @@ RUNTIME_ARGUMENT = 5
 global separate_module_wanted = no
 global runtime_held = ø
 # runtime.wasm: a compile's fifth argument, else lib/'s (the native warp's, core/native/warp.warp)
-runtime_path(): text := if command == "" and #args >= RUNTIME_ARGUMENT and args#RUNTIME_ARGUMENT != "" then args#RUNTIME_ARGUMENT else library_folder + "/" + RUNTIME_WASM
-runtime_bytes(): list := {
+runtime_path() as text := if command == "" and #args >= RUNTIME_ARGUMENT and args#RUNTIME_ARGUMENT != "" then args#RUNTIME_ARGUMENT else library_folder + "/" + RUNTIME_WASM
+runtime_bytes() as list := {
 	if runtime_held == ø { runtime_held = read_bytes(runtime_path()) }
 	runtime_held
 }
@@ -264,15 +264,15 @@ write_runtime(file: text) := {
 # by name, its global initializers the export `warp/start`. Its warp.signature (passes/signature.warp) carries what a
 # compile needs of it: its definitions' parses and its image, the words, globals and classes it exports.
 # The prelude's too, every word of it, its core part's first (its compile reaches no prelude of its own, compile)
-module_source(name: text): text := (if name == PRELUDE_MODULE then "use \"${prelude_core_path()}\"\n" else "") + "use " + name + "\nø"
+module_source(name: text) as text := (if name == PRELUDE_MODULE then "use \"${prelude_core_path()}\"\n" else "") + "use " + name + "\nø"
 # the text a compile defines its words in: the module's own when it writes one (its source is only module_source's
 # stub), else the source
-written_source(source: text): text := if module_written != "" then std_module_text(module_written) else source
+written_source(source: text) as text := if module_written != "" then std_module_text(module_written) else source
 # the scanners finding what the source written uses unsaid: a program's every extension's, a module's only those
 # bringing runtime modules (extension.warp runtime_module_scanners)
-implicit_scanners(): list := if module_written != "" then runtime_module_scanners() else hooks().implicit_uses
+implicit_scanners() as list := if module_written != "" then runtime_module_scanners() else hooks().implicit_uses
 # where the modules a compile links are: beside runtime.wasm, or where the module written goes
-linked_modules_folder(): text := if module_written != "" and not own_module_files.has(module_written) then module_written_folder else folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/"
+linked_modules_folder() as text := if module_written != "" and not own_module_files.has(module_written) then module_written_folder else folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/"
 # the module a compile writes, and the folder of the modules it links: its own never linked
 global module_written = ""
 global module_written_folder = ""
@@ -343,8 +343,8 @@ write_modules(folder: text, runtime_file: text, named: list) := {
 }
 # (the prelude first, every module links it; then the runtime modules: any module's power links big_numbers, though
 # it writes no `use` of it)
-built_first(): list := [PRELUDE_MODULE] + hooks().runtime_modules
-modules_in_build_order(): list := in_dependency_order(built_first() + prebuilt_module_names().filter(name => name not in built_first()))
+built_first() as list := [PRELUDE_MODULE] + hooks().runtime_modules
+modules_in_build_order() as list := in_dependency_order(built_first() + prebuilt_module_names().filter(name => name not in built_first()))
 # the modules step as a plan, for scripts/lib/modules.sh to build the modules in parallel (user OK 11-11,
 # lazy-module-prebuild): the library index written into the folder, then `library ⇥ <hash>` of what each module's
 # build reads of every other (each definition's head: open_words extended_elsewhere), then each module in build order,
@@ -361,9 +361,9 @@ modules_planned(folder: text) := {
 		print name + "\t" + texts_hash(built_of_texts(name)) + "\t" + waits.join(" ")
 	}
 }
-first_lines_of_definitions(source: text): text := definition_slices(source).map(slice => slice#2.split("\n")#1).join("\n")
+first_lines_of_definitions(source: text) as text := definition_slices(source).map(slice => slice#2.split("\n")#1).join("\n")
 # what a caught refusal says: a text raised, else the message of the error caught (a trap under the try)
-refusal_said(refusal: any): text := {
+refusal_said(refusal: any) as text := {
 	global said
 	if refusal is text { return refusal }
 	said = "" + refusal.message

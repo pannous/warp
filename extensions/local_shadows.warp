@@ -4,7 +4,7 @@
 
 # `use name` of each statement naming a standard module that a file or folder beside the program shares its name with,
 # read off the source before its uses are taken (a used file beside it is gone by the passes); it adds no module
-local_shadows(source: text, tree: Node, folder: text): list := {
+local_shadows(source: text, tree: Node, folder: text) as list := {
 	for statement in flat_statements(tree) {
 		used = use_target(without_mark(statement))
 		local = if used is symbol then local_shadow(name_of(used), folder) else ø
@@ -14,7 +14,7 @@ local_shadows(source: text, tree: Node, folder: text): list := {
 }
 # the file or folder beside the program a standard module's name also names, ø for none or no such standard module;
 # a program's own module (`warp build --module shapes.warp`, uses.warp own_module_files) is that file, no standard one
-local_shadow(name: text, folder: text): text? := {
+local_shadow(name: text, folder: text) as text? := {
 	if own_module_files.has(name) or not is_module_name(name) { return ø }
 	[path_in(folder, name + module_extension), path_in(folder, name)].find(path => exists(path))
 }

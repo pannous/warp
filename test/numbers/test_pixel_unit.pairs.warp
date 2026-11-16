@@ -2,7 +2,7 @@
 
 # pixels_are_their_own_dimension
 '3px + 2px == 5px'	true
-'type(3px)'	'pixels'
+'type(3px)'	'Pixels'
 
 # ppi_and_dots_are_dpi_and_pixels
 '3ppi == 3dpi'	true

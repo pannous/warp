@@ -54,7 +54,7 @@ alike(a: any, b: any, tolerance: float, rough: bool) := {
 // two below compare the leaves; tolerance 1e-9 for ≈, 0.01 for ~
 // two leaves alike: a yes/no by truth, numbers within tolerance of either (or 1e-12 near zero), texts and characters
 // folded (lower case without accents), the rough ones trimmed of blanks and punctuation at both ends first
-values_alike(a: any, b: any, tolerance: float, rough: bool): bool := {
+values_alike(a: any, b: any, tolerance: float, rough: bool) as bool := {
 	if a is bool or b is bool { return truthy(a) == truthy(b) }
 	# real: an exact value too, π or 2π, which `is number` leaves out
 	if a is real and b is real { return numbers_alike(a as float, b as float, tolerance) }
@@ -62,23 +62,23 @@ values_alike(a: any, b: any, tolerance: float, rough: bool): bool := {
 	# todo: define more elegantly alike(a:text, b:any)
 	a == b
 }
-numbers_alike(a: float, b: float, tolerance: float): bool := {
+numbers_alike(a: float, b: float, tolerance: float) as bool := {
 	d = abs(a - b)
 	d <= tolerance * abs(a) or d <= tolerance * abs(b) or d <= 0.000000000001
 }
-truthy(x: any): bool := if x then yes else no
+truthy(x: any) as bool := if x then yes else no
 // an instance of a class, a pair of its class name and its fields as a value: P(1), 5km
-is_instance(x: any): bool := type(x) is key and class_name(x) != "key"
-text_alike(t: text, rough: bool): text := case_fold(if rough then rough_trimmed(t) else t)
-rough_trimmed(t: text): text := {
+is_instance(x: any) as bool := type(x) is key and class_name(x) != "key"
+text_alike(t: text, rough: bool) as text := case_fold(if rough then rough_trimmed(t) else t)
+rough_trimmed(t: text) as text := {
 	first = 1; last = #t
 	while first <= last and is_rough_edge(t#first) { first += 1 }
 	while last >= first and is_rough_edge(t#last) { last -= 1 }
 	if first > last then "" else t[first - 1: last]
 }
 // a blank, a control character or ASCII punctuation
-is_rough_edge(c): bool := { code = ord(c); code <= 32 or (code < 127 and not is_ascii_alphanumeric(code)) }
-is_ascii_alphanumeric(code: int): bool := (code >= 48 and code <= 57) or (code >= 65 and code <= 90) or (code >= 97 and code <= 122)
+is_rough_edge(c) as bool := { code = ord(c); code <= 32 or (code < 127 and not is_ascii_alphanumeric(code)) }
+is_ascii_alphanumeric(code: int) as bool := (code >= 48 and code <= 57) or (code >= 65 and code <= 90) or (code >= 97 and code <= 122)
 operator ∧ := and
 operator ⋀ := and
 operator ∨ := or
@@ -120,8 +120,8 @@ operator ∈ := in
 operator ∋ := contains
 
 // the rounding mode named: a half goes up, toward +∞ (`round_half_up(-2.5)` is -2), or to the even neighbour
-round_half_up(x: number): int := floor(x + 1/2) as int
-round_half_even(x: number): int := {
+round_half_up(x: number) as int := floor(x + 1/2) as int
+round_half_even(x: number) as int := {
 	below = floor(x) as int
 	rest = x - below
 	if rest > 1/2 or (rest == 1/2 and below % 2 != 0) then below + 1 else below
@@ -142,7 +142,7 @@ gcd_binary(a, b) := {
 }
 // both arguments positive and at most the largest signed word. Common factors of two come off by
 // trailing_zeros (wasm i64.ctz, lib/bits.warp), then subtract and shift.
-gcd_binary_word(a: int, b: int): int := {
+gcd_binary_word(a: int, b: int) as int := {
 	x = a
 	y = b
 	common = trailing_zeros(x | y)
@@ -185,14 +185,14 @@ magnitude(x: any) := norm(x)
 DOT_LINEAR_FEWEST = 64
 dot_cell_bytes() := 8
 dot_page_bytes() := 65536
-dot_cell_at(address: int): float := wasm f64.load
+dot_cell_at(address: int) as float := wasm f64.load
 dot_set_cell(address: int, value: float) := wasm f64.store
-dot_count_at(address: int): int := wasm i64.load
+dot_count_at(address: int) as int := wasm i64.load
 dot_set_count_at(address: int, count: int) := wasm i64.store
-dot_memory_pages(): int := wasm memory.size
-dot_grown_pages(pages: int): int := wasm memory.grow
+dot_memory_pages() as int := wasm memory.size
+dot_grown_pages(pages: int) as int := wasm memory.grow
 // n zeroed f64 cells behind a count, never freed (as sound's sample blocks)
-dot_new_block(n: int): int := {
+dot_new_block(n: int) as int := {
 	let address = dot_memory_pages() * dot_page_bytes
 	dot_grown_pages(dot_cell_bytes * (n + 1) /! dot_page_bytes + 1)
 	dot_set_count_at(address, n)
@@ -202,7 +202,7 @@ dot_fill_block(list, address) := {
 	let n = count(list)
 	for i in 1 to n { dot_set_cell(address + dot_cell_bytes * i, list#i as float) }
 }
-dot_blocks(au: int, av: int): float := {
+dot_blocks(au: int, av: int) as float := {
 	let n = dot_count_at(au)
 	if n != dot_count_at(av) { raise "dot: the lists differ in length" }
 	var total = 0.0
@@ -255,7 +255,7 @@ is_square(n: int) := n >= 0 and isqrt(n) * isqrt(n) == n
 divisors(n: int) := [d for d in 1..n + 1 if n % d == 0]
 prime_factors(n: int) := { if n < 1 { raise "prime_factors needs a positive whole number, not " + text(n) }; out = []; rest = n; d = 2; while d * d <= rest { while rest % d == 0 { out = out + [d]; rest = rest /! d }; d++ }; if rest > 1 { out = out + [rest] }; out }
 // the primes up to and including n, by the sieve of Eratosthenes: primes(10) is [2, 3, 5, 7]
-primes(n: int): list := {
+primes(n: int) as list := {
 	if n < 2 { return [] }
 	composite = [no for i in 1 to n]
 	p = 2
@@ -266,13 +266,13 @@ primes(n: int): list := {
 	(2 to n).filter(i => not composite#i)
 }
 // the smallest prime greater than n: next_prime(7) is 11
-next_prime(n: int): int := { candidate = max(n + 1, 2); while not is_prime(candidate) { candidate += 1 }; candidate }
+next_prime(n: int) as int := { candidate = max(n + 1, 2); while not is_prime(candidate) { candidate += 1 }; candidate }
 // the one bits of whole numbers ≥ 0 (`&` and `|` are logical, `xor` is bitwise already): bit_count(6) is 2
 bit_count(n: int) := { out = 0; rest = n; while rest > 0 { out = out + rest % 2; rest = rest /! 2 }; out }
 // two's-complement bits of any whole numbers: the wasm instructions, as the runtime's own bits_and and bits_or
 // (decision wasm-instruction-body): bit_and(-129, 127) is 127, bit_or(-128, 1) is -127
-bit_and(a: int, b: int): int := wasm i64.and
-bit_or(a: int, b: int): int := wasm i64.or
+bit_and(a: int, b: int) as int := wasm i64.and
+bit_or(a: int, b: int) as int := wasm i64.or
 // P169/P191: descriptive names; they forward to the C library (use cmath) until warp has its own implementations.
 // The C names still work after `use math`, each with a note naming the word here: the alias lines (wiki/alias.md)
 // Each broadcasts, decided at run time (prelude each_any): binary_log([1, 8]) is [0 3], as a list may reach a word of
@@ -339,7 +339,7 @@ class RatioParts {
 	denominator: int
 }
 // n/d in lowest terms with a positive denominator, as ratio_new keeps every ratio: 6/-4 is -3/2, 5/0 is 1/0 (∞), 0/0 stays
-lowest_terms(n: number, d: number): RatioParts := {
+lowest_terms(n: number, d: number) as RatioParts := {
 	sign = if d < 0 then -1 else 1
 	divisor = gcd(n, d)
 	if divisor > 1 { return RatioParts(sign * n /! divisor, sign * d /! divisor) }
@@ -347,7 +347,7 @@ lowest_terms(n: number, d: number): RatioParts := {
 }
 // a/b of two exact numbers as exact_div divides them: an int whenever b divides a, by 0 the error divide by zero
 // (top and bottom, not a and b: a class-typed parameter types every same-named one, card parameter-typed-class)
-exact_quotient(top: RatioParts, bottom: RatioParts): RatioParts := {
+exact_quotient(top: RatioParts, bottom: RatioParts) as RatioParts := {
 	if bottom.numerator == 0 { raise "divide by zero" }
 	lowest_terms(top.numerator * bottom.denominator, top.denominator * bottom.numerator)
 }

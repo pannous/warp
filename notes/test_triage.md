@@ -35,6 +35,8 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 
 | file:line | reason | verdict |
 |---|---|---|
+| test/functions/test_braceless.pairs.warp (was :5) | `sq(x):=x*x; sq 2 == 5 or yes`: an untyped braceless call in a logical chain, refused as reading two ways | dropped as unpinned 2026-11-14: refusals are never tested (user rule via warp-supervisor); the line had been rewritten to expect the error by 245dc7f2fa |
+| test/numbers/test_unit_literals.pairs.warp:4, 5, 6, 9, 10, 11; test/numbers/test_unit_definitions.pairs.warp:22, 35; test/numbers/test_unit_prefix_lines.pairs.warp:13 | spelled unit names after a number: `3 kilometers`, `3010 meters`, `2 kilograms`, `3 meter`, `3 feet in inches` | parked: spelled-units-number (user 2026-11-13: `quantity(3, "meters")` is the way; via warp-interviewer 11-14 the lines stay red, not dropped) |
 | test/types/test_time_now.pairs.warp:4-6 | `type(time.now)` 'time of day', `time.now is time`, `time.now.hour == now.hour` (old Rust test, no wiki line) | dropped 2026-11-13 via warp-interviewer: `now.time` (lines 10-11) covers it |
 | test/modules/test_wasm_modules.pairs.warp:34, 35 | a C module's out-pointer as the result: `strtol("42 apples", 10)` expected ' apples', `strtol("ff!", 16)` '!'; main gives the C meaning, 42 / 255 | keep for now: the user expects 42 (11-11 via warp-interviewer); the out-pointer form is card strtol-out-pointer (Later) |
 | test/text/test_count_in.pairs.warp:4-9; test/text/test_counts_in_warp.pairs.warp:4, 5, 10; test/functions/test_words_in_phrases.pairs.warp:11, 12 | `count x in y`, `count(x in y)`: the count of a membership's yes/no, refused with did-you-mean `y.count(x)` | delete: the refusal with its fix `y.count(x)` is the behaviour |
@@ -696,3 +698,12 @@ Key case is down); test/modules/test_keys.pairs.warp:4 `[held_key == ESC, LEFT]`
 | test/control/test_error_words.pairs.warp:9 | "ab" | "aøb" | `warn(…)` gives ø, which text shows as ø like any other ø |
 | test/welcoming/test_warning_mode.pairs.warp:4 | "ab" | "aøb" | same: `warning(…)` |
 | test/control/test_error_not_in_data.pairs.warp:18 | 1 | Error("divide by zero") | `a, b = e, 2` binds a plain variable a, which holds no Error (decision errors held only by optional variables); its own header says the write raises |
+
+## Refused forms, dropped as unpinned (user rule 2026-11-14: refusals are never tested)
+| line | form | why refused |
+|---|---|---|
+| test/functions/test_default_parameters.pairs.warp (Ruby style) | `def f(a, b: 2){a+b}; f(1)`, `… f(1, b: 5)` | a literal after a parameter's colon is refused with its fix `b = 2` (night decision parameter-named-fails) |
+| test/functions/test_default_parameters.warp (Ruby style) | `def greet(name, greeting: "Hello"){…}; greet("Ann")` | same |
+| test/functions/test_preposition_calls.warp | `f(x, for y) := x - y; f 5 for 2`, `f(xs, each y) := …; f [1 2 3] each 2` | a label takes its colon in a call, `f 5 for: 2` (wiki/argument.md; warp-interviewer 11-14) |
+| test/operators/test_equality_never_chains.pairs.warp (approx-level) | `1==1==1`, `1 != 2 == yes`, `1 ~ 1 == yes`, `1 ≈ 1 == yes`, `30 == 10 + 20 ≈ 30` | two equality-level comparisons in a row read two ways; parenthesized forms stay pinned |
+| test/types/test_partial_time_comparisons.pairs.warp (cluster-data) | `now > 1970-01-01`, `now < 2999-01-01`, `2999-01-01 > now` | an instant against a date: types never convert implicitly (wiki/Footguns.md "Dates") |
