@@ -186,7 +186,7 @@ def circle_pixels(x: float, y: float, radius: float, color: any) {
 		down = row + 0.5 - center_y
 		for col in cell(center_x - reach - 0.5)..cell(center_x + reach + 0.5) + 1 {
 			across = col + 0.5 - center_x
-			shade(col, row, paint, edge(reach - sqrt(across * across + down * down)))
+			shade(col, row, paint, edge(reach - hypot(across, down)))
 		}
 	}
 }
@@ -215,34 +215,34 @@ def polyline_pixels(corners: list, color: any, width: float) {
 segment_pixels(x1: float, y1: float, x2: float, y2: float, paint: int, width: float, started: bool) := {
 	// walked along its longer side, the pixels across it within reach; steep: x and y swapped while walking
 	steep = abs(y2 - y1) > abs(x2 - x1)
-	// its ends in device pixels, at the centers of the pixels they name: [along the walk, across it]
-	start = device_center(if steep then [y1, x1] else [x1, y1])
-	end = device_center(if steep then [y2, x2] else [x2, y2])
-	ahead: float = end#1 - start#1
-	aside: float = end#2 - start#2
+	// its start in device pixels, at the center of the pixel it names, along the walk and across it; the way to its end
+	from_along: float = ((if steep then y1 else x1) + 0.5) * pixel_scale
+	from_across: float = ((if steep then x1 else y1) + 0.5) * pixel_scale
+	ahead: float = ((if steep then y2 else x2) + 0.5) * pixel_scale - from_along
+	aside: float = ((if steep then x2 else y2) + 0.5) * pixel_scale - from_across
 	length_squared = ahead * ahead + aside * aside
-	slope = if ahead == 0 then 0.0 else aside / ahead
-	half = width * pixel_scale / 2
-	// the pixels across the line that can be in reach of it: half its width over the line's cosine, one more for the edge
-	band = half * sqrt(1 + slope * slope) + 1
-	low = min(start#1, end#1)
-	high = max(start#1, end#1)
-	for major in cell(low - half - 1)..cell(high + half + 1) + 1 {
-		middle = start#2 + (min(max(major + 0.5, low), high) - start#1) * slope
-		for minor in cell(middle - band)..cell(middle + band) + 1 {
+	per_length_squared: float = if length_squared == 0 then 0.0 else 1 / length_squared
+	slope: float = if ahead == 0 then 0.0 else aside / ahead
+	half: float = width * pixel_scale / 2
+	// a pixel is touched within half the width and half a pixel of the line: across the walk, that over its cosine
+	reach: float = half + 0.5
+	band: float = reach * hypot(1, slope)
+	low: float = min(from_along, from_along + ahead)
+	high: float = max(from_along, from_along + ahead)
+	for major in cell(low - reach - 0.5)..cell(high + reach - 0.5) + 1 {
+		x: float = major + 0.5 - from_along
+		middle: float = (min(max(major + 0.5, low), high) - from_along) * slope
+		for minor in cell(from_across + middle - band - 0.5)..cell(from_across + middle + band - 0.5) + 1 {
 			// the pixel's center from the start, and the share of the line to its nearest point
-			x = major + 0.5 - start#1
-			y = minor + 0.5 - start#2
-			projected = if length_squared == 0 then 0.0 else (x * ahead + y * aside) / length_squared
+			y: float = minor + 0.5 - from_across
+			projected: float = (x * ahead + y * aside) * per_length_squared
 			if projected < 0 and not started { continue }
-			share = min(max(projected, 0.0), 1.0)
+			share: float = min(max(projected, 0.0), 1.0)
 			coverage = edge(half - hypot(x - share * ahead, y - share * aside))
 			if steep then shade(minor, major, paint, coverage) else shade(major, minor, paint, coverage)
 		}
 	}
 }
-// the device place of the center of canvas pixel [x, y]
-device_center(at: list) as list := [(at#1 + 0.5) * pixel_scale, (at#2 + 0.5) * pixel_scale]
 
 def show() {
 	size_difference_told()
