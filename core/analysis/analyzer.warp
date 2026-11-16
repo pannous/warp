@@ -357,6 +357,9 @@ element_type_word(n: Node, scope: Scope) as TypeWord := {
 # the one type word all elements fit, ø when they are no common kind
 common_type(words: texts) as TypeWord? := {
 	if #words == 0 { return ø }
+	# node holds every value, ø too: the top of every join, so a list's element `node` never flips to `node?` and back
+	# (joined_word's fallback), which looped the flow fixpoint (`c = [ø]; c[0] = [1]; c[0] = 5`)
+	if any_of(words, w => w == "node" or w == "node?") { return "node" }
 	if any_of(words, w => w == "ø" or w.ends_with("?")) {
 		values = words.filter(w => w != "ø").map(w => w.replace("?", ""))
 		if #values == 0 { return "ø" }
