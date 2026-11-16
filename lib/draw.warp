@@ -264,29 +264,30 @@ def polyline(corners: list, color: any, width: float = 1) {
 	}
 }
 // a function's graph from `from` to `to`, `plot(siren, 0, π)` (card plot-siren-range), its lowest and highest value
-// fitting the canvas within PLOT_MARGIN pixels, on cleared paper in ink, the zero line pale where the graph crosses it,
+// fitting the canvas within a PLOT_MARGIN share of its smaller side, on cleared paper in ink, the zero line pale where the graph crosses it,
 // and shown. Each canvas column is sampled PLOT_SAMPLES times, as a sound's waveform is shown: the line runs through
 // the columns' edges, and a column whose samples spread wider than the line covers their whole span, so a wave too
 // fast for the canvas (a 440 Hz siren over seconds) shows its envelope, never an aliased flat line
-PLOT_MARGIN = 12
+PLOT_MARGIN = 0.05
 PLOT_WIDTH = 2
 PLOT_SAMPLES = 16
 plot(f: function, from: number, to: number) := {
-	columns = canvas_width - 2 * PLOT_MARGIN
+	margin = max(1, round(min(canvas_width, canvas_height) * PLOT_MARGIN) as int)
+	columns = canvas_width - 2 * margin
 	samples = columns * PLOT_SAMPLES
 	ys = [f(from + (to - from) * 1.0 * at / samples) for at in 0 to samples]
 	low = min(ys)
 	high = max(ys)
 	span = if high == low then 1.0 else high - low
-	row = y => PLOT_MARGIN + (high - y) * (canvas_height - 2 * PLOT_MARGIN) / span
+	row = y => margin + (high - y) * (canvas_height - 2 * margin) / span
 	clear(paper)
-	if low < 0 and high > 0 { line_pixels(PLOT_MARGIN, row(0), canvas_width - PLOT_MARGIN, row(0), with_alpha(ink, 0.3), 1) }
-	polyline([[PLOT_MARGIN + column, row(ys[column * PLOT_SAMPLES])] for column in 0 to columns], ink, PLOT_WIDTH)
+	if low < 0 and high > 0 { line_pixels(margin, row(0), canvas_width - margin, row(0), with_alpha(ink, 0.3), 1) }
+	polyline([[margin + column, row(ys[column * PLOT_SAMPLES])] for column in 0 to columns], ink, PLOT_WIDTH)
 	for column in 0 ..< columns {
 		within = ys[column * PLOT_SAMPLES .. (column + 1) * PLOT_SAMPLES + 1]
 		top = row(max(within))
 		bottom = row(min(within))
-		if bottom - top > PLOT_WIDTH { line_pixels(PLOT_MARGIN + column + 0.5, top, PLOT_MARGIN + column + 0.5, bottom, ink, 1) }
+		if bottom - top > PLOT_WIDTH { line_pixels(margin + column + 0.5, top, margin + column + 0.5, bottom, ink, 1) }
 	}
 	show()
 }
