@@ -1776,9 +1776,10 @@ def spelled_operator_at(p: Parser) as list {
 		return aliased_operator_at(p)
 	}
 	if at_text(p, "//") { return [] }
-	// `x = 1  # one` is a comment; a blank before `#` and none after starts the count, `test #letters == 3`, never
-	// the index, which is glued, `xs#1` (decision spaced-hash-count)
-	if c == '#' and (skipped_end(p.code, p.at, p.n) > p.at or (p.at > 0 and is_blank(p.code[p.at - 1]))) { return [] }
+	// `x = 1  # one` is a comment; after an operand a blank before `#` and none after starts the count,
+	// `test #letters == 3`, never the index, which is glued, `xs#1` (decision spaced-hash-count); an item's `#(o) :=`
+	// names the class's method
+	if c == '#' and (skipped_end(p.code, p.at, p.n) > p.at or spaced_after_operand(p)) { return [] }
 	spelled_symbol = symbol_operator_at(p, c)
 	if spelled_symbol.length > 0 then spelled_symbol else aliased_operator_at(p)
 }
@@ -3279,6 +3280,10 @@ def result_body_follows(p: Parser, word: text, at: int) as bool {
 	body = spaces_end(p, at)
 	body > at and char_at(p, body) == '{' and colon > 0 and char_at(p, colon) == ':' and blank_before(p, colon) >= 0 and char_at(p, blank_before(p, colon)) == ')'
 }
+
+// a blank on the line before the parser's position, an operand's end before it: `test #letters`; a keyword heading a
+// definition is none, `operator #(o) := …`
+def spaced_after_operand(p: Parser) as bool := p.at > 0 and (p.code[p.at - 1] == ' ' or p.code[p.at - 1] == '\t') and blank_before(p, p.at) >= 0 and is_operand_end(p.code[blank_before(p, p.at)]) and not (FIXITY_WORDS.has(word_before(p)) or word_before(p) in NAMING_KEYWORDS)
 
 // The position of the last character before `at` that is no blank, -1 at the source's start
 def blank_before(p: Parser, at: int) as int {
