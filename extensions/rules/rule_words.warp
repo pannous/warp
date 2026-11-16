@@ -1104,8 +1104,11 @@ readings_refused(about: Node, written: text, readings: list) as Node := {
 	Node.Empty
 }
 # `a = 1; 5 is a number` (decision article-optional): a program binding the article reads `5 is a number` two ways,
-# the type test or its own `a` applied to the type: refused naming both
-article_readings(subject: Node, article: Node, type: Node) as Node := {
+# the type test or its own `a` applied to the type: refused naming both; ø after a word no article
+# (a rule's `in [a, an]` skips the words a program binds)
+articles = ["a", "an"]
+article_readings(subject: Node, article: Node, type: Node) as Node? := {
+	if not (article is symbol and name_of(article) in articles) { return ø }
 	x = spelled(subject); t = spelled(type); a = spelled(article)
 	readings_refused(subject, "${x} is ${a} ${t}", [["${x} is ${t}", "the type test"], ["${x} is (${a} ${t})", "the program's own ${a}"]])
 }
