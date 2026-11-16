@@ -25,6 +25,12 @@ PIXEL_DPI = 96
 // (measured again as each canvas is made, so `display.dpi = 192 dpi` before canvas.resize draws at twice the pixels)
 display_scale() as int := if drawing_on_gpu then 1 else max(1, round(display_dpi / PIXEL_DPI) as int)
 global pixel_scale: int = display_scale()
+// a frame drawn slower than FRAME_BUDGET_MS from clear to show at more than one pixel a point, SLOW_FRAMES in a row,
+// and the canvas is drawn at one pixel a point from then on (said once): 30 frames a second over sharpness
+FRAME_BUDGET_MS = 1000 / 30
+SLOW_FRAMES = 3
+global cleared_at = -1.0
+global slow_frames = 0
 // the canvas in device pixels
 global device_width: int = view_width * pixel_scale
 global device_height: int = view_height * pixel_scale
@@ -112,6 +118,7 @@ canvas.height(new_height) := canvas(canvas_width, new_height)
 def clear(what) {
 	// converted once: `as int` of a Color inside the loop cost 1 µs a pixel, a second a clear (card finger-paint-demo)
 	color: int = if what is Canvas then blank_color else what as int
+	cleared_at = clock()
 	covered(canvas_pixels, color)
 }
 // the pixels all one color, on the GPU one clear shape; written through the parameter, a local: a global list written
@@ -255,7 +262,27 @@ def show() {
 	else {
 		if pixel_scale != 1 { set_system_value("paint_scale", pixel_scale) }
 		paint(canvas_pixels, device_width, device_height)
+		frame_timed()
 	}
+}
+// the frame's time from clear to show; a slow one at more than one pixel a point counted
+frame_timed() := {
+	took = clock() - cleared_at
+	if cleared_at >= 0 and pixel_scale > 1 {
+		slow_frames = if took > FRAME_BUDGET_MS then slow_frames + 1 else 0
+		if slow_frames >= SLOW_FRAMES { coarsened(took) }
+	}
+	cleared_at = -1.0
+}
+// the canvas at one pixel a point, what it shows kept (each block's first pixel)
+coarsened(took: float) := {
+	hint "frames took ${round(took)} ms at ${pixel_scale} pixels a point: the canvas is drawn at one pixel a point from now on, for 30 frames a second"
+	coarse = int[canvas_width * canvas_height]
+	for row in 0..canvas_height { for col in 0..canvas_width { coarse[row * canvas_width + col] = canvas_pixels[row * pixel_scale * device_width + col * pixel_scale] } }
+	canvas_pixels = coarse
+	pixel_scale = 1
+	device_width = canvas_width
+	device_height = canvas_height
 }
 
 // save canvas as: ./painting.png, save(canvas, ./painting.png) or canvas.save(./painting.png) (card save-painting;
