@@ -21,6 +21,7 @@ const ELEMENT_ARRAYS = { i32: Int32Array, u32: Uint32Array, f16: Uint16Array };
 const HALF_FEATURE = "shader-f16";
 const HALVES_ENABLED = "enable f16";
 // said where the GPU lacks it, as natively (lib/host/native_host/gpu.warp NO_HALVES)
+const VEC4F_BYTES = 16;
 const NO_HALVES = "this GPU offers no f16 (WebGPU's shader-f16), which the shader's enable f16 needs";
 const WORD_BYTES = 4; // WebGPU writes, copies and binds buffers in whole 4-byte words
 // appended to gpu_render's shader (after it, so its line numbers stay the user's): one triangle covering the image
@@ -392,9 +393,12 @@ async function atlasBytes(spec) {
 	if (!found || found.at + found.payload > file.byteLength) throw new Error(`atlas: ${parts[0]} has no RGBA8 entry ${parts[1]}`);
 	const pixels = await inflateZlib(file.subarray(found.at, found.at + found.payload));
 	if (pixels.byteLength !== found.raw) throw new Error(`atlas: ${parts[0]} did not inflate`);
+	// rounded up to a whole vec4f, the least a storage array<vec4f> binds (a one-pixel atlas is 4 bytes)
+	const padded = new Uint8Array(Math.ceil(pixels.byteLength / VEC4F_BYTES) * VEC4F_BYTES);
+	padded.set(pixels);
 	atlasCacheKey = spec;
-	atlasCacheBytes = pixels;
-	return pixels;
+	atlasCacheBytes = padded;
+	return padded;
 }
 
 const isPicture = value => value !== null && typeof value === "object" && !Array.isArray(value) && "pixels" in value;

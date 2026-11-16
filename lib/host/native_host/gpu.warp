@@ -765,7 +765,9 @@ gpu_storage(name: text, cells: any) as int := {
 	buffer
 }
 // a GPU list's bytes as a storage array<vec4f> binds them: rounded up to a whole vec4f, the tail zero
-storage_bytes(cells: any) as int := (gpu_list_bytes(cells) + VEC4F_BYTES - 1) /! VEC4F_BYTES * VEC4F_BYTES
+storage_bytes(cells: any) as int := vec4f_rounded(gpu_list_bytes(cells))
+// bytes rounded up to a whole vec4f, the least a storage array<vec4f> binds (a one-pixel atlas is 4 bytes)
+vec4f_rounded(bytes: int) as int := (bytes + VEC4F_BYTES - 1) /! VEC4F_BYTES * VEC4F_BYTES
 // where a GPU list's cells start in the program's memory, as C sees them; never a walk number by number where the
 // driver recorded no memory (the run's start records it)
 program_cells(place: int) as int := {
@@ -893,9 +895,10 @@ stored_array(name: text, value: any, usage: int) as any := {
 	if value is text {
 		pixels = atlas_pixels(value)
 		if pixels == 0 { return ø }
-		buffer = kept_buffer(name, atlas_span, usage)
+		bytes = vec4f_rounded(atlas_span)
+		buffer = kept_buffer(name, bytes, usage)
 		wgpuQueueWriteBuffer(queue, buffer, 0, pixels, atlas_span)
-		return [buffer, atlas_span]
+		return [buffer, bytes]
 	}
 	listed = gpu_storage(name, value)
 	if listed != 0 { return [listed, storage_bytes(value)] }
