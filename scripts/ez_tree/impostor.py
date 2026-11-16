@@ -7,6 +7,8 @@ is the mesh normal in the tree's own axes (the draw rotates it by the tree's yaw
 
 A view's camera sits on a ring around the trunk. Angle 0 is local +z, and the angle
 grows toward local +x, which is impostor_view in lib/forest.warp.
+
+Needs numpy, numba and Pillow (python3 -m pip install numpy numba pillow).
 """
 import re
 import struct
