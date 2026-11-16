@@ -15,10 +15,6 @@ spread = shader {
 show = shader {
 	return vec4f(mix(vec3f(0.98, 0.97, 0.94), vec3f(0.1, 0.2, 0.6), $spread(at.xy).r), 1.0);
 }
-on key {
-	exit()
-}
+on escape: exit
 # each frame of the window, until it closes (headless: one frame, as a PNG)
-on frame {
-	paint([ink, spread, show])
-}
+on frame:	paint([ink, spread, show])

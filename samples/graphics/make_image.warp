@@ -9,5 +9,5 @@ height = 100
 sun(x, y) := (x - 110) ^ 2 + (y - 40) ^ 2 < 18 ^ 2
 sky(x, y) := mix(rgb(70, 130, 220), rgb(250, 160, 90), y / height)
 picture = image(width, height, (x, y) => if sun(x, y) then rgb(255, 230, 120) else sky(x, y))
-picture.save(./sunset.bmp)
-picture.flipped().show()
+save picture ./sunset.bmp
+flip picture |> show

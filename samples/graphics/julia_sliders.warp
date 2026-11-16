@@ -7,7 +7,7 @@ use math
 use ui
 width = 1600
 height = 900
-c_re = slider(-1 to 1, -.8)
+c_re = slider(-1 to 1, -.8) # todo: native (You may use a web view overlay, Or a simple slider of our own )
 c_im = slider(-1 to 1, .16)
 zoom = slider(0.5 to 40, 1)
 c = c_re + c_im * ⅈ

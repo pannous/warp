@@ -3,5 +3,5 @@
 use sound
 use draw
 siren(t: float) := 0.3 * sin(2π * t * (440 + 200 * sin(2π * t)))
-plot(siren, 0, π)
+plot(siren, 0, π/100)
 play(siren, 2s)

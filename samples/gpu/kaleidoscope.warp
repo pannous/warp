@@ -59,4 +59,5 @@ kaleidoscope = shader {
 	}
 }
 # ten seconds in a window; without one, one still (shown_frames, decision on-frame-headless)
-shown_frames(() => paint(kaleidoscope), 10000)
+on frame: paint(kaleidoscope)
+on key: exit

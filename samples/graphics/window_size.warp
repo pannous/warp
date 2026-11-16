@@ -2,12 +2,16 @@
 # sizes are properties: canvas.width is the picture's pixels, window.width the window showing it (in the playground the
 # frame of its paintings), display.width the screen's, read only. Writing one resizes it; a bare width is canvas.width
 use draw
-canvas.width = 160
-canvas.height = 90
 window.width = 640
 window.height = 360
-clear(canvas)
-circle(canvas.width / 2, canvas.height / 2, 30, purple)
-label(4, 4, "\(canvas.width)×\(canvas.height)", ink)
-label(4, 74, "window \(window.width)×\(window.height)", ink)
-show() // DONE I only see black  (card show-black-native)
+canvas.width = 640/2
+canvas.height = 360/2
+on frame{
+	# canvas.width = int(window.width / 2) todo
+	# canvas.height = int(window.height / 2)
+	clear(canvas)
+	circle(canvas.width / 2, canvas.height / 2, canvas.width / 5, purple)
+	label(4, 4, "canvas \(canvas.width)×\(canvas.height)", ink)
+	label(4, 74, "window \(window.width)×\(window.height)", ink)
+	show 
+}
