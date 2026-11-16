@@ -3189,7 +3189,7 @@ def named(p: Parser) as Node := {
 	name = symbol(word)
 	// `x°`: a name glued to an atom an extension reads multiplies it, as `30°` (core/extension.warp atom_readers)
 	if atom_reader(char_here(p)) != ø and not is_alpha(char_ahead(p, 1)) { return Key(name, Op.Mul, atom(p)) }
-	// a signature's result type, `def hz(xs): Hz {…}`, is no construction: its block is the body
+	// a signature's result type, `def hz(xs): Hz {…}` (or `-> Hz`, `as Hz`), is no construction: its block is the body
 	if result_body_follows(p, word, p.at) { return name }
 	// `Point {x: 1}` with blanks constructs a declared type as the glued one does (open decision 41); a capitalized word
 	// of no declared type before a block of fields is the tagged object `Person:{…}` (card person-name)
@@ -3274,13 +3274,18 @@ def optional_mark_follows(p: Parser, word: text) as bool {
 	ends_optional_type(char_at(p, after), char_at(p, after + 1)) or closes_after_blanks(p, after) or next_field_follows(p, after) or declaration_follows(p, word, after) or result_body_follows(p, word, after)
 }
 
-// `def f(x: int): list? {…}`: `word` follows a signature's `):` and spaces or tabs from `at` lead to a `{`, so it is
-// an optional result type before the body, no ternary (decision optional-result)
+// the words that may name a signature's result type after its `)`: `def hz(xs): Hz {…}`, `-> Hz {…}`, `as Hz {…}`
+RESULT_MARKERS = [":", "->", "as"]
+// `def f(x: int): list? {…}`: `word` follows a signature's `):` (or `->`, `as`) and spaces or tabs from `at` lead to a
+// `{`, so it is a result type before the body, no construction and no ternary (decision optional-result)
 def result_body_follows(p: Parser, word: text, at: int) as bool {
-	colon = blank_before(p, p.at - word.length)
 	body = spaces_end(p, at)
-	body > at and char_at(p, body) == '{' and colon > 0 and char_at(p, colon) == ':' and blank_before(p, colon) >= 0 and char_at(p, blank_before(p, colon)) == ')'
+	if not (body > at and char_at(p, body) == '{') { return false }
+	marker_end = blank_before(p, p.at - word.length) + 1
+	RESULT_MARKERS.any(marker => result_marker_at(p, marker, marker_end - marker.length))
 }
+// the marker of a signature's result type written at `start`, right after the signature's `)`
+def result_marker_at(p: Parser, marker: text, start: int) as bool := start > 0 and starts_at(p.code, marker, start, p.n) and blank_before(p, start) >= 0 and char_at(p, blank_before(p, start)) == ')'
 
 // a blank on the line before the parser's position, an operand's end before it: `test #letters`; a keyword heading a
 // definition is none, `operator #(o) := …`
