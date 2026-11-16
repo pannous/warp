@@ -64,6 +64,12 @@ class Gaussian {
 	text() as text := uncertain_text(value, deviation(), 1)
 }
 
+// a number on the left, `3 - (1 ± 0.1)`: the exact value it is, as an interval or a Gaussian
+infix operator -(a: number, b: Interval) := as_interval(a) - b
+infix operator /(a: number, b: Interval) := as_interval(a) / b
+infix operator -(a: number, b: Gaussian) := as_gaussian(a) - b
+infix operator /(a: number, b: Gaussian) := as_gaussian(a) / b
+
 // each Gaussian made by `gaussian` is independent of all others: its own id
 global gaussian_count = 0
 
