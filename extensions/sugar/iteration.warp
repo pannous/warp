@@ -17,9 +17,9 @@ rewrite for $i in $n {$body...} => for $i in 1 to $n {$body...} where $i is symb
 # (m + n)·(n - m + 1)/2, an empty range sums 0; a range counts from its ends anyway (`#`, count: decision lazy-range-value)
 rewrite sum($a..$b) => ($start = $a; $end = $b - 1; if $end >= $start then ($start + $end) * ($end - $start + 1) div 2 else 0) where $a is int
 rewrite sum($a to $b) => ($start = $a; $end = $b; if $end >= $start then ($start + $end) * ($end - $start + 1) div 2 else 0) where $a is int
-# An object whose class has next() is walked by it until it gives ø: `for x in Countdown(3)` (decision
-# for-over-iterator)
-rewrite for $x in $o {$body...} => ($walked = $o; while yes { $x = $walked.next(); if $x == ø { break }; $body... }) where $x is symbol and $o is instance
+# An object whose class has next() is walked by it until it gives ø: `for x in Countdown(3)`, `for e in changes()` of
+# `changes() as WikiChanges` (decision for-over-iterator, extensions/class_methods/iterators.warp)
+rewrite for $x in $o {$body...} => ($walked = $o; while yes { $x = $walked.next(); if $x == ø { break }; $body... }) where $x is symbol and $iterated = iterated_object($o, $program)
 # A unit word as the loop variable walks the value by that unit when its type has one, else by its own items
 # (decision loop-variable): `for byte in t` a text's bytes, `for pair in m` a map's [key, value] pairs, `for byte in
 # bytes` a list's items
