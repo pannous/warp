@@ -77,6 +77,10 @@ function resizeWindow({ width, height }, paintings) {
 }
 
 const sameSize = (one, other) => one.width === other.width && one.height === other.height;
+// the same size as shown, in CSS pixels: a canvas drawn at one pixel a point after frames too slow at the display's
+// (lib/draw.warp coarsened) is the next frame of the one before
+const shownSize = painting => [painting.width / (painting.scale ?? 1), painting.height / (painting.scale ?? 1)];
+const sameShownSize = (one, other) => shownSize(one).join() === shownSize(other).join();
 
 // a painting drawn into a canvas that shows the one before: what changed, at the screen's pace. An animation's frames may
 // come quicker than the screen shows them; their rectangles are joined and drawn once per screen frame
