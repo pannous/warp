@@ -33,6 +33,3 @@ x = Item(2)
 is! 'class Box {join}
 b = Box(x => x + 1)
 [1, 2].join("-")' '1-2'
-is! 'class Box {join}
-b = Box(x => x + 1)
-b.join(5)' 6

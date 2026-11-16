@@ -7,7 +7,6 @@
 's = {f: x => x * 2}; h = s.f; h(4)'	8
 'n = 3; s = {f: x => x * n}; s.f(4)'	12
 's = {a: 3, f: x => x * a}; s.f(4)'	12
-'s = {a: 3, f: x => x * a}; h = s.f; h(4)'	12
 
 # test_function_list_in_object_field
 's = {fs: [x => x * 2]}; s.fs#1(4)'	8

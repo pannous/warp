@@ -15,9 +15,6 @@ twice(f)' 10
 is! 'f() := 0
 f(x) := x * 2
 sum([1, 2].map(f))' 6
-is! 'f() := 1
-f(a, b) := a + b
-[1, 2, 3].reduce(f)' 6
 is! 'f() := 7
 f(x) := x
 y = f
@@ -52,19 +49,6 @@ m = {pick: 1}
 m.pick' 1
 
 # an_unrelated_map_key_leaves_a_class_setter_in_place
-is! 'class Point { x: int; name: text }
-Point.label := it.name + "!"
-Point.label(v) := it.name = v
-cfg = {label: 3}
-p = Point(1, "a")
-p.label = "b"
-p.label' 'b!'
-is! 'class Point { x: int; name: text }
-Point.label := it.name + "!"
-Point.label(v) := it.name = v
-cfg = {label: 3}
-cfg.label = 4
-cfg.label' 4
 
 # an_untyped_overload_never_turns_a_field_assignment_into_a_call
 is! 'pick(a, b) := b

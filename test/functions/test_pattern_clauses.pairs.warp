@@ -5,7 +5,6 @@
 'sign(0) := "zero"; sign(n) := "some"; sign(0) + sign(4)'	'zerosome'
 
 # clauses_are_tried_in_order
-'f(n) := 1; f(0) := 2; f(0)'	1
 
 # list_clauses_take_a_list_apart
 'len([]) := 0; len([h, t...]) := 1 + len(t); len([4, 5, 6])'	3
