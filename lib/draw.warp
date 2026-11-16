@@ -263,22 +263,31 @@ def polyline(corners: list, color: any, width: float = 1) {
 		segment_pixels(corners#i#1, corners#i#2, corners#(i + 1)#1, corners#(i + 1)#2, paint, width, i == 1 and not closed)
 	}
 }
-// a function's graph from `from` to `to`, `plot(siren, 0, π)` (card plot-siren-range): sampled at each canvas column,
-// its lowest and highest value fitting the canvas within PLOT_MARGIN pixels, on cleared paper in ink, the zero line
-// pale where the graph crosses it, and shown
+// a function's graph from `from` to `to`, `plot(siren, 0, π)` (card plot-siren-range), its lowest and highest value
+// fitting the canvas within PLOT_MARGIN pixels, on cleared paper in ink, the zero line pale where the graph crosses it,
+// and shown. Each canvas column is sampled PLOT_SAMPLES times, as a sound's waveform is shown: the line runs through
+// the columns' edges, and a column whose samples spread wider than the line covers their whole span, so a wave too
+// fast for the canvas (a 440 Hz siren over seconds) shows its envelope, never an aliased flat line
 PLOT_MARGIN = 12
 PLOT_WIDTH = 2
+PLOT_SAMPLES = 16
 plot(f: function, from: number, to: number) := {
 	columns = canvas_width - 2 * PLOT_MARGIN
-	xs = [from + (to - from) * 1.0 * column / columns for column in 0 to columns]
-	ys = xs.map(f)
+	samples = columns * PLOT_SAMPLES
+	ys = [f(from + (to - from) * 1.0 * at / samples) for at in 0 to samples]
 	low = min(ys)
 	high = max(ys)
 	span = if high == low then 1.0 else high - low
 	row = y => PLOT_MARGIN + (high - y) * (canvas_height - 2 * PLOT_MARGIN) / span
 	clear(paper)
 	if low < 0 and high > 0 { line_pixels(PLOT_MARGIN, row(0), canvas_width - PLOT_MARGIN, row(0), with_alpha(ink, 0.3), 1) }
-	polyline([[PLOT_MARGIN + column, row(ys[column])] for column in 0 to columns], ink, PLOT_WIDTH)
+	polyline([[PLOT_MARGIN + column, row(ys[column * PLOT_SAMPLES])] for column in 0 to columns], ink, PLOT_WIDTH)
+	for column in 0 ..< columns {
+		within = ys[column * PLOT_SAMPLES .. (column + 1) * PLOT_SAMPLES + 1]
+		top = row(max(within))
+		bottom = row(min(within))
+		if bottom - top > PLOT_WIDTH { line_pixels(PLOT_MARGIN + column + 0.5, top, PLOT_MARGIN + column + 0.5, bottom, ink, 1) }
+	}
 	show()
 }
 // a line of a polyline: its start's round end only where `started` (the first), else the line before covered it
