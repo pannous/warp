@@ -608,7 +608,8 @@ phrase_words(n: Node, key_words: map = {}) as map := {
 			waiting += [key_of(part), value_of(part)]
 		} else if is_group(part) {
 			# (a word block's spaced items too: `div{ "a" on click {…} }`, whose `on click {…}` is an item, card markup-handler-spacing)
-			phrase = (bracket_of(part) == "" or bracket_of(part) == "{") and separator_of(part) == " " and #part > 1
+			# (and a phrase in parentheses, `(0 default 10)`, which only group it, as flattened_phrase reads them)
+			phrase = (bracket_of(part) == "" or bracket_of(part) == "{" or bracket_of(part) == "(") and separator_of(part) == " " and #part > 1
 			for item in part {
 				if phrase and item is symbol { found[name_of(item)] = yes }
 				waiting += [item]
