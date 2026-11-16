@@ -22,7 +22,9 @@ global drawing_on_gpu = gpu_drawing
 // Retina display 2). Shapes and words are drawn at the screen's own pixels, edges smoothed, while a program keeps its
 // sizes and coordinates; the host shows the painting at the canvas's size (paint_scale). The GPU's shapes are its own
 PIXEL_DPI = 96
-global pixel_scale: int = if drawing_on_gpu then 1 else max(1, round(display_dpi / PIXEL_DPI) as int)
+// (measured again as each canvas is made, so `display.dpi = 192 dpi` before canvas.resize draws at twice the pixels)
+display_scale() as int := if drawing_on_gpu then 1 else max(1, round(display_dpi / PIXEL_DPI) as int)
+global pixel_scale: int = display_scale()
 // the canvas in device pixels
 global device_width: int = view_width * pixel_scale
 global device_height: int = view_height * pixel_scale
@@ -85,6 +87,7 @@ blank_pixels(count: int) := {
 def canvas(width, height) {
 	canvas_width = width
 	canvas_height = height
+	pixel_scale = display_scale()
 	device_width = width * pixel_scale
 	device_height = height * pixel_scale
 	canvas_pixels = blank_pixels(pixels_for(width, height))
