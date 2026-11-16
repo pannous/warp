@@ -388,9 +388,16 @@ held_length(pitch) := if pitch is Note or pitch is Chord or pitch is Rest then p
 // alternate([G4, A4]) one of them each time the melody plays, in turn; maybe(C5, 0.3) C5 in about 30 % of the plays,
 // chosen by melody_seed, the same each run
 euclid(step, hits: int, steps: int) := [if (i * hits) % steps < hits then step else rest for i in 0..steps]
-class Alternate { options: list }
+class Alternate {
+	options: list
+	format as text := "alternate(" + text(options) + ")"
+}
 alternate(options: list) := Alternate(options)
-class Maybe { step: any; share: number }
+class Maybe {
+	step: any
+	share: number
+	format as text := "maybe(" + text(step) + ", " + text(share) + ")"
+}
 maybe(step, share = 0.5) := Maybe(step, share)
 cents_text(cents) := if cents == 0 then "" else if cents > 0 then "+" + string(cents) + "c" else string(cents) + "c"
 note(pitch) := nearest_note(hertz_of(pitch))
@@ -1392,7 +1399,7 @@ melody_of(items, length) := {
 	steps
 }
 item_steps(item, length) := {
-	steps = if item[0] == 0 then melody_of(item[1], length / sum([inner[2] for inner in item[1]])) else if item[0] == 2 then [alternate([single_step(option, length) for option in item[1]])] else [sounded_step(item[1]) ~ length]
+	steps = if item[0] == 0 then melody_of(item[1], length / sum([inner[2] for inner in item[1]])) else if item[0] == 2 then [alternate([single_step(option, length) for option in item[1]])] else [sounded_step(item[1]).similar(length)]
 	if item[3] < 1 then steps.map(step => maybe(step, item[3])) else steps
 }
 single_step(item, length) := {
@@ -1406,7 +1413,6 @@ written_steps(written: text) := {
 	count(words) > 0 and words.all(word => word == "~" or note_word(word[0 ..< step_end(word, 0, "*(?@")]))
 }
 note_word(word: text) := count(word) > 0 and is_note_name(upper(word[0]) + word[1..])
-}
 
 // MIDI (card midi-out): midi_on C4, midi_off C4, midi_send(144, 60, 100) to the first output device (or the browser's
 // Web MIDI output), midi_outputs() their names; channels count from 1, velocity 1 to 127. The native warp sends over
