@@ -1,0 +1,6 @@
+# The phrase `map contacts to its name` (wiki/Features.md "its/their keyword"): the list, then what each item gives,
+# `it` the item; `its name` is `it.name`, `name of it` too, `their name` an alias. Early sugar: the spaced calls pass
+# would read `map contacts to f` as the one-argument call map(contacts to f)
+rewrite map $xs to $f => map($xs, {$f})
+rewrite its $f => it.$f where $f is symbol
+rewrite their $f => its $f where alias

@@ -10,11 +10,6 @@ rewrite (map $f $xs) => map($xs, $f) where $f is function
 # `if xs.empty { … }` stays a condition and its block
 # so round, the function first: `map(floor, xs)` is map(xs, floor)
 rewrite map($f, $xs) => map($xs, $f) where $f is function and not $xs is function
-# the phrase `map contacts to its name` (wiki/Features.md "its/their keyword"): the list, then what each item gives,
-# `it` the item; `its name` is `it.name`, `name of it` too, `their name` an alias
-rewrite map $xs to $f => map($xs, {$f})
-rewrite its $f => it.$f where $f is symbol
-rewrite their $f => its $f where alias
 # a function before an empty `()`, spaced or not, is called with nothing: `f ()` is f() (user decision calls-arguments)
 rewrite ($f ()) => $f() where $f is function
 rewrite ($f $x) => $f($x) where $f takes one
