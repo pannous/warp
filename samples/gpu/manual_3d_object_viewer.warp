@@ -1,8 +1,10 @@
 #!/usr/bin/env warp
 # A 3D model from a Wavefront .obj text, spun and shaded on the GPU. warp reads the model (`v x y z` corners, `f a b c …`
-# faces, a face of more corners split into triangles), the shader casts a ray through every pixel against the
-# triangles, the nearest one hit is lit by its normal. `$mesh` is the list of triangle corners, one vec4f each
+# faces, a face of more corners split into triangles), viewer casts a ray through every pixel against the triangles,
+# the nearest one hit is lit by its normal. viewer is plain warp: paint compiles it to a shader, its lists of 3 numbers
+# to vectors
 use graphics
+use math
 house = "# a house: walls, a gable roof, a chimney
 v -1 -1 -1
 v  1 -1 -1
@@ -55,48 +57,46 @@ def triangles(obj) {
 
 mesh: [vec3] = triangles(house)
 size = 256
-viewer = shader {
-@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
-	let uv = (at.xy / $size - 0.5) * vec2f(1.0, -1.0);
-	// the camera turns around the model instead of the model around itself: same picture, one rotation per pixel
-	let turn = $angle;
-	let tilt = 0.45;
-	let spin = mat3x3f(cos(turn), 0.0, sin(turn), 0.0, 1.0, 0.0, -sin(turn), 0.0, cos(turn));
-	let lean = mat3x3f(1.0, 0.0, 0.0, 0.0, cos(tilt), -sin(tilt), 0.0, sin(tilt), cos(tilt));
-	let view = spin * lean;
-	let origin = view * vec3f(0.0, 0.3, 6.0);
-	let ray = normalize(view * vec3f(uv * 1.1, -1.0));
-	var nearest = 1e9;
-	var normal = vec3f(0.0);
-	for (var i = 0u; i < u32($count); i += 3u) {
-		let a = $mesh[i].xyz;
-		let ab = $mesh[i + 1u].xyz - a;
-		let ac = $mesh[i + 2u].xyz - a;
-		let p = cross(ray, ac);
-		let det = dot(ab, p);
-		if (abs(det) < 1e-6) { continue; }
-		let s = origin - a;
-		let u = dot(s, p) / det;
-		let q = cross(s, ab);
-		let v = dot(ray, q) / det;
-		let t = dot(ac, q) / det;
-		if (u >= 0.0 && v >= 0.0 && u + v <= 1.0 && t > 0.0 && t < nearest) {
-			nearest = t;
-			normal = normalize(cross(ab, ac));
+camera_tilt = 0.45
+global angle = 0.0
+count = #mesh
+
+# the camera turns around the model instead of the model around itself: same picture, one rotation per pixel
+turned(p, turn, tilt) := {
+	leaned = [p.x, cosine(tilt) * p.y + sine(tilt) * p.z, cosine(tilt) * p.z - sine(tilt) * p.y]
+	[cosine(turn) * leaned.x - sine(turn) * leaned.z, leaned.y, sine(turn) * leaned.x + cosine(turn) * leaned.z]
+}
+viewer(x, y) := {
+	uv = [x / size - 0.5, 0.5 - y / size]
+	origin = turned([0, 0.3, 6], angle, camera_tilt)
+	ray = normalize(turned([uv.x * 1.1, uv.y * 1.1, -1], angle, camera_tilt))
+	nearest = 1e9
+	normal = [0, 0, 0]
+	for i in 0 ..< count / 3 {
+		a = mesh#(3 * i + 1)
+		ab = mesh#(3 * i + 2) .- a
+		ac = mesh#(3 * i + 3) .- a
+		p = cross(ray, ac)
+		det = dot(ab, p)
+		s = origin .- a
+		q = cross(s, ab)
+		u = dot(s, p) / det
+		v = dot(ray, q) / det
+		t = dot(ac, q) / det
+		if abs(det) > 1e-6 and u >= 0 and v >= 0 and u + v <= 1 and t > 0 and t < nearest {
+			nearest = t
+			normal = normalize(cross(ab, ac))
 		}
 	}
-	if (nearest > 1e8) { return vec4f(0.10, 0.12, 0.18 + 0.2 * (uv.y + 0.5), 1.0); }
-	let facing = select(normal, -normal, dot(normal, ray) > 0.0);
-	let sun = normalize(vec3f(0.5, 0.8, 0.6));
-	let light = max(dot(facing, sun), 0.0) + 0.35 * max(dot(facing, -sun), 0.0);
-	let base = vec3f(0.95, 0.62, 0.30);
-	return vec4f(base * (0.25 + 0.7 * light), 1.0);
+	if nearest > 1e8 { [0.10, 0.12, 0.18 + 0.2 * uv.y + 0.1] } else {
+		facing = if dot(normal, ray) > 0 then 0 .- normal else normal
+		sun = normalize([0.5, 0.8, 0.6])
+		light = max(dot(facing, sun), 0) + 0.35 * max(-dot(facing, sun), 0)
+		[0.95, 0.62, 0.30] .* (0.25 + 0.7 * light)
 	}
 }
-
-count = #mesh
 for frame in 1..90 {
 	angle = frame * 0.07
-	paint(viewer, size, size, {size: [size, size]})
+	paint(viewer, size, size)
 	sleep(10ms)
 }
