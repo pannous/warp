@@ -175,6 +175,8 @@ global rule_classes = {}
 # `changes(wiki: text): WikiChanges` (card for-over-iterator: `for e in changes()` walks it by next())
 global rule_instance_classes = {}
 global rule_results = {}
+# [the linked modules' names, the results linked_results found among them]: worked out once, not by each sugar pass
+global linked_results_known = ["", {}]
 # the words taking a block as data, lib/markup's style(sheet: data): `style: {…}` holds data, no structure's items
 global rule_data_words = {}
 # the program being rewritten, and its varying values (`where $h is varying`), worked out when a rule first asks
@@ -374,7 +376,7 @@ sugar_walked(program: Node, rules: list) as Node := {
 	rule_case_holders = case_holders_in(nodes)
 	rule_classes = class_names_of(program)
 	rule_instance_classes = entries_of_both(rule_classes, declared_classes_modules())
-	rule_results = entries_of_both(result_classes(statements_in(program), rule_instance_classes), linked_results(rule_instance_classes))
+	rule_results = entries_of_both(result_classes(statements_in(program), rule_instance_classes), library_results())
 	rule_instances = instances_assigned(outer_nodes_in(program), rule_instance_classes, rule_results)
 	rule_data_words = data_positions_called(program)
 	rule_program = program
@@ -1542,6 +1544,11 @@ class_names_of(program: Node) as map := {
 }
 # the linked modules' functions declaring they give an instance of one of the classes, by their signature lines
 # (`changes(wiki: text = "") as WikiChanges` of wikipedia), each line parsed only when it ends in such a class
+library_results() as map := {
+	linked = linked_signatures.keys.join(",")
+	if linked != linked_results_known#1 { linked_results_known = [linked, linked_results(declared_classes_modules())] }
+	linked_results_known#2
+}
 linked_results(classes: map) as map := {
 	heads = []
 	for signature in linked_signatures.values {
