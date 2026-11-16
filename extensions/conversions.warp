@@ -44,6 +44,9 @@ converting_uses(n: Node, targets: map) as Node := {
 	if (is_key(n, Op.Assign) or is_key(n, Op.Define)) and (is_key(key_of(n), Op.As) or as_result(key_of(n)) != ø) {
 		return Key(key_of(n), op_of(n), converting_uses(value_of(n), targets))
 	}
+	# `def f(x) as Circle or Square { … }`, its body glued to the union's last word: the definition it is
+	typed = union_definition(n)
+	if typed != ø { return converting_uses(typed, targets) }
 	walked = children(n, x => converting_uses(x, targets))
 	if is_key(walked, Op.As) and value_of(walked) is symbol and targets.has(name_of(value_of(walked))) {
 		return call_of(conversion_name(name_of(value_of(walked))), [key_of(walked)])
