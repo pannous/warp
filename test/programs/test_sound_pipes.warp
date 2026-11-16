@@ -30,6 +30,10 @@ count(mix(osc(C4, 0.1s), osc(E4, 0.2s)))' 4410
 is! 'use sound
 a = osc(C4, 0.1s)
 max(mix(a, a, a)) == 3 * max(a)' true
+# sound's mix sums signals, math's mix(a, b, t) blends two values: a program may use both (card lib-sound)
+is! 'use sound
+use math
+[mix(2, 4, 0.5), count(mix([0.1], [0.2], [0.3]))]' [3, 1]
 
 # out_plays_a_signal
 is! 'use sound

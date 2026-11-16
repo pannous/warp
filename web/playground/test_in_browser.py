@@ -65,6 +65,9 @@ STOPPED = "stopped after"  # playground.js: the report of a run the page stopped
 # to the next blank line (night decision N20, as the samples' EXPECTED_FAILURE; in the heading, as a line of its own
 # would move the cases' lines the native verdicts are stored by); a sample with such a line is EXP instead of FAIL
 NATIVE_ONLY = re.compile(r"^#.* native only: ", re.M)
+# a sample of live data (world feeds, markets) says so on a line of its own, `# output: live: …`: it prints what the
+# world holds now, so the page's run is never compared with the native one: ran when it ran without an error
+LIVE_OUTPUT = re.compile(r"^# output: live", re.M)
 CASE_PLACE = re.compile(r"^(\S+):(\d+) ")
 PAGE_LOST = "playground is not defined"  # a report of a page that lost its API mid-batch: no verdict, the case runs again
 # a test-verdicts line: its mark, then the case; a failure's ends in what it got (scripts/baseline.sh case_of)
@@ -1784,9 +1787,12 @@ def check_samples(paths, tree):
 			status, detail = window_verdict(report)
 		else:
 			native_file = os.path.join(tree, NATIVE_OUTPUTS, output_name)
-			compared = native.get(path) == "ok" and os.path.isfile(native_file)
+			live = bool(LIVE_OUTPUT.search(source))
+			compared = native.get(path) == "ok" and os.path.isfile(native_file) and not live
 			native_output = open(native_file, encoding="utf-8", errors="replace").read() if compared else None
 			status, detail = sample_verdict(report, native_output)
+			if status == "ran" and live:
+				detail = "live data, never compared (# output: live)"
 		wrong = checks_wrong(os.path.basename(path)[:-len(".warp")], source) if status in ("ok", "ran") and CHECK_LINE.search(source) else []
 		if wrong:
 			status, detail = "DIFF", "; ".join(wrong)
