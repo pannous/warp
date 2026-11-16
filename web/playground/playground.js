@@ -805,6 +805,13 @@ function stopPressed() {
 	listenTo([]);
 	setStatus(STOPPED);
 }
+// ⌘ . (Ctrl . elsewhere) stops the run, as the stop button does (card command-dot-shortcut)
+addEventListener("keydown", key => {
+	if (key.key === "." && (key.metaKey || key.ctrlKey)) {
+		key.preventDefault();
+		stopPressed();
+	}
+}, true);
 
 function finish(run, report) {
 	clearTimeout(run.timer);
