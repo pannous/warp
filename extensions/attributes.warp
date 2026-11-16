@@ -1,7 +1,7 @@
 # Attributes (card parser-forms-to-extensions): `@name`, `@name(value)` mark the atom after them, `@name: value` is a
 # meta entry, `x @parallel` marks the expression before it; `@1` is the node whose @id is 1
 # `@name` marks the atom after it (attribute); `@1` is the node whose @id is 1
-at_atom(p: Parser): Node := {
+at_atom(p: Parser) as Node := {
 	next = char_ahead(p, 1)
 	if is_name_start(next) { return attribute(p) }
 	if not is_digit(next) { return ø }
@@ -13,7 +13,7 @@ at_atom(p: Parser): Node := {
 }
 # `@name` or `@name(value)` marks the atom after it: `@version(2) @draft tee{a:1}`; `@name: value` is the meta entry
 # `@name`, never a field; after a dot, `p.@name` names the meta key itself
-attribute(p: Parser): Node := {
+attribute(p: Parser) as Node := {
 	after_dot = p.at > 0 and p.code[p.at - 1] == '.'
 	end = name_end(p.code, p.at + 1, p.n)
 	key = symbol(p.code[p.at .. end])
@@ -35,7 +35,7 @@ attribute(p: Parser): Node := {
 # `@source("gps") point{x:1 y:2}` is `point{x:1 y:2 @source:"gps"}`, and so on a map `@unit("cm") {x:1}`; a bare `@draft`
 # is `@draft: yes`. The literal keeps them as its own @ keys, so `p.@source` reads "gps"; else ø, the attribute marks
 # the atom
-with_meta_entry(n: Node, entry: Node): Node? := match n {
+with_meta_entry(n: Node, entry: Node) as Node? := match n {
 	List(items, Bracket.Curly, separator): List(items + [entry], Bracket.Curly, separator)
 	Key(tag, Op.Colon, data): {
 		if not (tag is symbol) { return ø }
@@ -45,7 +45,7 @@ with_meta_entry(n: Node, entry: Node): Node? := match n {
 	_: ø
 }
 # The value of `@name(value)`, true for a bare `@name`
-attribute_value(p: Parser): Node := {
+attribute_value(p: Parser) as Node := {
 	if not at_char(p, '(') { return true }
 	group = atom(p)
 	parts = group_parts(group)
@@ -53,7 +53,7 @@ attribute_value(p: Parser): Node := {
 }
 # `ys = xs.map(f) @parallel`: an `@name` or `@name(value)` with nothing after it on the statement marks the
 # expression before it, else ø
-trailing_attribute(p: Parser, marked: Node): Node := {
+trailing_attribute(p: Parser, marked: Node) as Node := {
 	start = p.at
 	if not is_name_start(char_ahead(p, 1)) { return ø }
 	end = name_end(p.code, p.at + 1, p.n)
@@ -68,5 +68,5 @@ trailing_attribute(p: Parser, marked: Node): Node := {
 	attributed(name, value, marked)
 }
 # `ys = xs.map(f) @parallel` after an operand binding no looser than an assignment
-read_trailing_attribute(p: Parser, operand: Node, min_power: int): Node := if operand != ø and at_char(p, '@') and min_power <= binding_powers("=")#2 then trailing_attribute(p, operand) else ø
+read_trailing_attribute(p: Parser, operand: Node, min_power: int) as Node := if operand != ø and at_char(p, '@') and min_power <= binding_powers("=")#2 then trailing_attribute(p, operand) else ø
 attributes_extension = Extension{name: "attributes", atom_readers: {"@": at_atom}, suffix_readers: {"@": read_trailing_attribute}}

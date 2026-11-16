@@ -12,9 +12,9 @@ reduce(xs: list, f: function) := {
 // `f takes a Length, not 5s (a Time)`
 place_refused(value, taker: text, needed: text) := raise taker + " takes " + with_article(needed) + ", not " + value + " (" + with_article(type(value).name) + ")"
 // `a word`, `an item`: the word after its indefinite article (the compiler's messages too)
-with_article(word: text): text := (if "AEIOUaeiou".contains(word#1) then "an " else "a ") + word
+with_article(word: text) as text := (if "AEIOUaeiou".contains(word#1) then "an " else "a ") + word
 // whether an instance or a map has every one of the fields, as a class extending none takes it
-has_fields(value, names: list): bool := names.all(name => value.has(name))
+has_fields(value, names: list) as bool := names.all(name => value.has(name))
 last(xs: list or text) := xs#(count(xs))
 find(t: text, part: text) := count(split(t, present_part(t, part))#1) + 1
 present_part(t: text, part: text) := { if not (part in t) { raise "ValueError: \"" + part + "\" is not in \"" + t + "\"" }; part }
@@ -33,7 +33,7 @@ sum(xs: list or number) := if is_range(xs) then range_sum(xs) else if xs is numb
 // `for byte in t` (decision loop-variable): the value walked by that unit when its type has one, a text's bytes,
 // chars or code points, a map's [key, value] pairs; else by its own items, a map's keys, a list's items (a list of bytes
 // stays one), so the loop needs no type at the sugar
-walked_by(value: any, unit: text): list := {
+walked_by(value: any, unit: text) as list := {
 	if value is text { return if unit == "bytes" then bytes(value) else if unit == "codepoints" then code_point_list(value) else chars(value) }
 	if value is map { return if unit == "pairs" then map_keys(value).map(key => [key, value[key]]) else map_keys(value) }
 	value
@@ -41,12 +41,12 @@ walked_by(value: any, unit: text): list := {
 replace(t, old, with new) := join(split(t, old), new)
 // ASCII character tests; a character compares by its code point
 is_digit(c) := c >= '0' and c <= '9'
-is_digit(c: codepoint): bool := c >= '0' and c <= '9'
+is_digit(c: codepoint) as bool := c >= '0' and c <= '9'
 is_alpha(c) := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')
 is_alphanumeric(c) := is_alpha(c) or is_digit(c)
 is_space(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
 // the day number of a proleptic Gregorian date
-days_from_civil(year: int, month: int, day: int): int := {
+days_from_civil(year: int, month: int, day: int) as int := {
 	march_year = if month <= 2 then year - 1 else year
 	era = march_year /! 400
 	year_of_era = march_year - era * 400

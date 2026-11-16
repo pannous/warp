@@ -64,14 +64,14 @@ build_native(source_file: text, library: text, options: list) := {
 # the build's files of these endings beside the program, gone
 removed(stem: text, endings: list) := shell("rm -f " + endings.map(ending => quoted_path(stem + ending)).join(" "))
 # the first wasm2c on the PATH at least WASM2C_OLDEST, loudly none
-supported_wasm2c(): text := {
+supported_wasm2c() as text := {
 	# (a PATH entry ending in / lists /opt/homebrew/bin//wasm2c: its wabt folder is found from the path without it)
 	found = shell("which -a wasm2c").trim().split("\n").filter(path => path != "").map(path => path.replace("//", "/"))
 	for path in found { if version_at_least(shell(quoted_path(path) + " --version").trim(), WASM2C_OLDEST) { return path } }
 	raise "warp build native needs wasm2c " + WASM2C_OLDEST.join(".") + " or newer (wabt), found " + (if #found == 0 then "none" else found.map(path => path + " " + shell(quoted_path(path) + " --version").trim()).join(", "))
 }
 # whether a dotted version, "1.0.42", is at least the oldest, [1, 0, 33]
-version_at_least(version: text, oldest: list): bool := {
+version_at_least(version: text, oldest: list) as bool := {
 	parts = version.split(".").map(part => int(part) ?? 0)
 	for i in 1 to #oldest {
 		have = if i <= #parts then parts#i else 0
@@ -84,7 +84,7 @@ version_at_least(version: text, oldest: list): bool := {
 # or the system's; the executable finds them at run time beside itself, in ../lib (a package's <prefix>/bin and
 # <prefix>/lib), else in that library folder by its stable name (rpath): the native warp's lib-link option, a link the
 # next install moves to its own build, never the build folder behind it (card native-rpath-builds-folder)
-native_links(wabt: text, library: text, system: map): text := {
+native_links(wabt: text, library: text, system: map) as text := {
 	libraries = c_libraries(c_functions_imported()).filter(l => l not in c_and_m)
 	if #libraries == 0 { return "" }
 	itself = system.itself
@@ -92,14 +92,14 @@ native_links(wabt: text, library: text, system: map): text := {
 	" -L" + quoted_path(library) + " -L" + quoted_path(wabt + "/lib") + run_paths + system.libraries#1 + libraries.map(l => " -l" + l).join("") + system.libraries#2
 }
 # how this system links a native build (NATIVE_SYSTEMS), loudly none for a system not listed
-native_system(): map := {
+native_system() as map := {
 	name = shell("uname")
 	known = if WINDOWS_UNAMES.any(prefix => name.starts_with(prefix)) then "Windows" else name
 	NATIVE_SYSTEMS[known] ?? raise "warp build native knows how to link on " + NATIVE_SYSTEMS.keys().join(", ") + ", not on " + name
 }
-is_macos(): bool := shell("uname") == "Darwin"
+is_macos() as bool := shell("uname") == "Darwin"
 # the folder a file's uses are read from: "." for a file named without one
-source_folder(file: text): text := if folder_of(file) == "" then "." else folder_of(file)
+source_folder(file: text) as text := if folder_of(file) == "" then "." else folder_of(file)
 # `warp build [--wasm|--exe] [--trim=<way>] app.warp` (wiki/cli.md; `warp compile` is build --wasm): a primitive file as a native executable (build_native),
 # with --wasm as its module app.wasm (which core/native/driver.warp runs); any other as the executable app (the native
 # driver carrying app.wasm) with the modules it loads beside it (modules_beside), or with --wasm as app.full.wasm (behind
@@ -193,9 +193,9 @@ wagi_built(stem: text, modules: list) := {
 	ø
 }
 # a file's size in bytes, as text
-size_of(file: text): text := shell("wc -c < " + quoted_path(file)).trim()
+size_of(file: text) as text := shell("wc -c < " + quoted_path(file)).trim()
 # the value of `--name=value` among the options, ø without one
-option_of(options: list, name: text): any := {
+option_of(options: list, name: text) as any := {
 	for option in options { if option.starts_with(OPTION_MARK + name + "=") { return option.remove_prefix(OPTION_MARK + name + "=") } }
 	ø
 }
@@ -234,7 +234,7 @@ build_app(target: text, options: list) := {
 	print "built " + bundle
 }
 # the bundle's Info.plist: its name, executable and identifier (warp.app.<name>, its _ and spaces -)
-info_plist(name: text): text := {
+info_plist(name: text) as text := {
 	entries = [["CFBundleName", name], ["CFBundleDisplayName", name], ["CFBundleExecutable", name],
 		["CFBundleIdentifier", "warp.app." + bundle_identifier(name)], ["CFBundlePackageType", "APPL"],
 		["CFBundleShortVersionString", "1.0"], ["CFBundleVersion", "1"], ["CFBundleInfoDictionaryVersion", "6.0"],
@@ -242,8 +242,8 @@ info_plist(name: text): text := {
 	keys = entries.map(entry => "\t<key>" + entry#1 + "</key>\n\t<string>" + plist_escaped(entry#2) + "</string>\n").join("")
 	"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n" + keys + "\t<key>NSHighResolutionCapable</key>\n\t<true/>\n</dict>\n</plist>\n"
 }
-plist_escaped(t: text): text := t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-bundle_identifier(name: text): text := name.replace("_", "-").replace(" ", "-")
+plist_escaped(t: text) as text := t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+bundle_identifier(name: text) as text := name.replace("_", "-").replace(" ", "-")
 
 # A standalone executable is core/native/driver.warp built natively, carrying the program's module (notes/primitive.md
 # "Driver"), which also makes its C calls: <driver><module><its length, 8 bytes little-endian>WRPMwasm<zeros to a
@@ -256,7 +256,7 @@ TRAILER_ALIGNMENT = 16
 DRIVER_SOURCE = "/compiler/native/driver.warp"
 DRIVER_BUILT = "/data/native"
 
-built_driver(): text := {
+built_driver() as text := {
 	folder = library_folder + DRIVER_BUILT
 	source = read(library_folder + DRIVER_SOURCE)
 	built_from = folder + "/driver.built.warp"
@@ -301,14 +301,14 @@ modules_beside(module: text, executable: text) := {
 	}
 }
 # the modules a prebuilt module links, as its signature records them
-module_links(name: text): list := {
+module_links(name: text) as list := {
 	signature = prebuilt_signature(name)
 	if signature == ø or signature.links == ø { raise library_module(name) + " records no links: built before modules recorded them; warp rebuild" }
 	signature.links
 }
-library_module(name: text): text := folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + name + ".wasm"
+library_module(name: text) as text := folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + name + ".wasm"
 # the modules and those they link (their signature's links), each once
-modules_imported_by(names: list): list := {
+modules_imported_by(names: list) as list := {
 	found = []
 	waiting = names
 	while #waiting > 0 {
@@ -336,7 +336,7 @@ SEGMENT_FILESIZE_AT = 48
 # a segment's memory size is whole pages: arm64's 16 KB, a multiple of x86-64's 4 KB
 PAGE_BYTES = 16384 # 0x4000
 
-extended_to_end(image: list): list := {
+extended_to_end(image: list) as list := {
 	if little_endian(image, 0, 4) != MACHO_MAGIC { return image }
 	at = MACHO_HEADER
 	last = 0
@@ -349,7 +349,7 @@ extended_to_end(image: list): list := {
 	image[0 ..< last + SEGMENT_VMSIZE_AT] + le64(pages) + image[last + SEGMENT_FILEOFF_AT ..< last + SEGMENT_FILESIZE_AT] + le64(size) + image[last + SEGMENT_FILESIZE_AT + 8 ..< #image]
 }
 # the int of `width` bytes at `at`, little-endian
-little_endian(bytes: list, at: int, width: int): int := {
+little_endian(bytes: list, at: int, width: int) as int := {
 	n = 0
 	for i in 0..width { n += bytes[at + i] << (8 * i) }
 	n

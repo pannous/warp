@@ -16,30 +16,30 @@ OMEGA_GLYPH = "ω"
 class Hyperreal {
 	low: int
 	parts: list
-	plus(o: any): any := { b = as_hyperreal(o); summed(this, b, 1) }
-	minus(o: any): any := { b = as_hyperreal(o); summed(this, b, -1) }
-	times(o: any): any := {
+	plus(o: any) as any := { b = as_hyperreal(o); summed(this, b, 1) }
+	minus(o: any) as any := { b = as_hyperreal(o); summed(this, b, -1) }
+	times(o: any) as any := {
 		b = as_hyperreal(o)
 		product = [0 for _ in 0..(#parts + #b.parts - 1)]
 		for i in 0..#parts { for j in 0..#b.parts { product[i + j] += parts[i] * b.parts[j] } }
 		hyperreal(low + b.low, product)
 	}
-	divide(o: any): any := {
+	divide(o: any) as any := {
 		b = as_hyperreal(o)
 		if #b.parts != 1 { raise "hyperreal: dividing by the sum ${b} has no finite result" }
 		divisor = b.parts#1
 		hyperreal(low - b.low, parts.map(part => part / divisor))
 	}
 	// (1+ε)^2, ε^-1: a whole exponent, by repeated multiplication; a negative one divides 1 by it
-	power(o: any): any := {
+	power(o: any) as any := {
 		if not (o is int) { raise "hyperreal: only a whole power of a hyperreal is exact, not ^${o}" }
 		result = as_hyperreal(1)
 		for _ in 0..abs(o) { result = as_hyperreal(result * this) }
 		if o < 0 then 1 / result else result
 	}
-	less(o: any): bool := leading_sign(this - o) < 0
-	greater(o: any): bool := leading_sign(this - o) > 0
-	equals(o: any): bool := (o is Hyperreal or o is number) and leading_sign(this - o) == 0
+	less(o: any) as bool := leading_sign(this - o) < 0
+	greater(o: any) as bool := leading_sign(this - o) > 0
+	equals(o: any) as bool := (o is Hyperreal or o is number) and leading_sign(this - o) == 0
 	format as text := hyperreal_text(this)
 }
 
@@ -48,14 +48,14 @@ infix operator -(a: number, b: Hyperreal) := as_hyperreal(a) - b
 infix operator /(a: number, b: Hyperreal) := as_hyperreal(a) / b
 
 // ε and ω, the glyphs' values
-epsilon(): Hyperreal := Hyperreal(1, [1])
-omega(): Hyperreal := Hyperreal(-1, [1])
+epsilon() as Hyperreal := Hyperreal(1, [1])
+omega() as Hyperreal := Hyperreal(-1, [1])
 
 // a Hyperreal or a plain number as a Hyperreal
-as_hyperreal(x: any): Hyperreal := if x is Hyperreal then x else Hyperreal(0, [x])
+as_hyperreal(x: any) as Hyperreal := if x is Hyperreal then x else Hyperreal(0, [x])
 
 // the sum of parts#i·ε^(low+i) with its zero ends dropped: the plain number when no ε or ω is left
-hyperreal(low: int, parts: list): any := {
+hyperreal(low: int, parts: list) as any := {
 	first = 0
 	while first < #parts and parts[first] == 0 { first += 1 }
 	last = #parts
@@ -65,7 +65,7 @@ hyperreal(low: int, parts: list): any := {
 	Hyperreal(low + first, parts[first .. last])
 }
 // a + factor·b, aligned by their powers of ε
-summed(a: Hyperreal, b: Hyperreal, factor: int): any := {
+summed(a: Hyperreal, b: Hyperreal, factor: int) as any := {
 	low = min(a.low, b.low)
 	high = max(a.low + #a.parts, b.low + #b.parts)
 	sums = [0 for _ in low..high]
@@ -74,12 +74,12 @@ summed(a: Hyperreal, b: Hyperreal, factor: int): any := {
 	hyperreal(low, sums)
 }
 // the sign of its largest term, the one of the lowest power of ε
-leading_sign(x: any): int := {
+leading_sign(x: any) as int := {
 	lead = if x is Hyperreal then x.parts#1 else x
 	if lead > 0 then 1 else if lead < 0 then -1 else 0
 }
 // 1+2ε+ε², 3ω-1: each term with its power of ε or ω, largest first, as it reads back
-hyperreal_text(x: Hyperreal): text := {
+hyperreal_text(x: Hyperreal) as text := {
 	shown = ""
 	for i in 0..#x.parts {
 		part = x.parts[i]
@@ -87,7 +87,7 @@ hyperreal_text(x: Hyperreal): text := {
 	}
 	shown
 }
-term_text(part: any, power: int, leading: bool): text := {
+term_text(part: any, power: int, leading: bool) as text := {
 	glyph = if power < 0 then OMEGA_GLYPH else EPSILON_GLYPH
 	unit = if power == 0 then "" else power_text(glyph, abs(power))
 	sign = if part < 0 then "-" else if leading then "" else "+"

@@ -16,19 +16,19 @@ spelled_number_join(n: Node, program: Node) := {
 	diagnose(call_of("spelled_number_join", [written, spelled, as_sum, as_text]), n)
 }
 # `left + right` with the text side written `spelling`, the number side as a numeral, inside `converter(…)` if any
-sum_written(left: Node, right: Node, spelling: text, converter: text): text := operand_form(left, spelling, converter) + " + " + operand_form(right, spelling, converter)
-operand_form(side: Node, spelling: text, converter: text): text := {
+sum_written(left: Node, right: Node, spelling: text, converter: text) as text := operand_form(left, spelling, converter) + " + " + operand_form(right, spelling, converter)
+operand_form(side: Node, spelling: text, converter: text) as text := {
 	if not (side is number) { return spelling }
 	if count(converter) == 0 then "${side}" else converter + "(${side})"
 }
 # the text side quoted, when it spells a number and the other side is one
-spelled_number(text_side: Node, number_side: Node): text? := {
+spelled_number(text_side: Node, number_side: Node) as text? := {
 	if not (number_side is number) or not (text_side is text or text_side is codepoint) { return ø }
 	digits = ("" + text_side).trim()
 	if is_numeral(digits) then "\"" + digits + "\"" else ø
 }
 # `12`, `-4.5`: an optional sign, digits, at most one decimal point
-is_numeral(t: text): bool := {
+is_numeral(t: text) as bool := {
 	digits = if t.starts_with("-") or t.starts_with("+") then t[1..] else t
 	parts = digits.split(".")
 	#parts <= 2 and #digits > #parts - 1 and parts.all(part => part.chars().all(c => "0123456789".contains(c)))
@@ -44,14 +44,14 @@ text_index_of(n: Node, program: Node) := {
 	ø
 }
 # t of `t.index_of(x)`, `t.index_of x` and `index_of(t, x)`, else ø
-index_of_receiver(n: Node): Node := {
+index_of_receiver(n: Node) as Node := {
 	if is_operator(n, ".") and is_index_of_call(value_of(n), 1) { return key_of(n) }
 	if is_index_of_call(n, 2) { return n#2 }
 	ø
 }
-is_index_of_call(n: Node, receiver_place: int): bool := is_group(n) and #n > receiver_place and n#1 == symbol(index_of_word)
+is_index_of_call(n: Node, receiver_place: int) as bool := is_group(n) and #n > receiver_place and n#1 == symbol(index_of_word)
 # a text written as one, or a name the program assigns only such texts
-is_evident_text(n: Node, program: Node): bool := {
+is_evident_text(n: Node, program: Node) as bool := {
 	if n is text { return yes }
 	if not (n is symbol) { return no }
 	given = assigned_values(program, name_of(n))
@@ -71,9 +71,9 @@ type_word_binding(n: Node, program: Node) := {
 	diagnose(call_of("type_word_binding", [name_of(target)]), n)
 }
 # whether the code tests a value with the word, `x is text`, `x as text`
-tests_with(code: Node, word: Node): bool := nodes_in(code).any(m => (is_key(m, Op.Is) or is_key(m, Op.As)) and value_of(m) == word)
+tests_with(code: Node, word: Node) as bool := nodes_in(code).any(m => (is_key(m, Op.Is) or is_key(m, Op.As)) and value_of(m) == word)
 # the body of the innermost definition holding the binding, else the program
-binding_scope(binding: Node, program: Node): Node := {
+binding_scope(binding: Node, program: Node) as Node := {
 	scope = program
 	size = #nodes_in(program)
 	for m in nodes_in(program) {

@@ -2,7 +2,7 @@
 // natural_sort(["a10", "a2", "a1"]) is ["a1", "a2", "a10"]
 
 // a text as its runs of digits and of other characters: "a10b" is ["a", "10", "b"]
-def natural_runs(t: text): list {
+def natural_runs(t: text) as list {
 	runs = []
 	run = ""
 	for c in t {
@@ -13,7 +13,7 @@ def natural_runs(t: text): list {
 	runs
 }
 // -1, 0 or 1: digit runs by their numbers (then fewer leading zeros first), other runs by their characters
-def natural_compare(a: text, b: text): int {
+def natural_compare(a: text, b: text) as int {
 	xs = natural_runs(a)
 	ys = natural_runs(b)
 	for i in 0 ..< min(count(xs), count(ys)) {
@@ -26,4 +26,4 @@ def natural_compare(a: text, b: text): int {
 	}
 	if count(xs) == count(ys) then 0 else if count(xs) < count(ys) then -1 else 1
 }
-natural_sort(xs: list): list := sorted_in_order(xs, (a, b) => natural_compare(a, b) < 0)
+natural_sort(xs: list) as list := sorted_in_order(xs, (a, b) => natural_compare(a, b) < 0)

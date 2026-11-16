@@ -9,14 +9,14 @@
 global source_files = [""]
 // a node's line holds its file: file * LINE_SPAN + line (core/runtime/fields.warp line_span, the same number)
 LINE_SPAN = 1048576
-def file_line(file: int, line: int): int := file * LINE_SPAN + line
+def file_line(file: int, line: int) as int := file * LINE_SPAN + line
 // the line and the file's index of a line a node holds (line_of)
-def line_within(held: int): int := held % LINE_SPAN
-def file_within(held: int): int := held ÷ LINE_SPAN
+def line_within(held: int) as int := held % LINE_SPAN
+def file_within(held: int) as int := held ÷ LINE_SPAN
 // the files a compile's positions named, so the table a trap reads names only these
 global named_files = {}
 // the index of a source file, its first parse registering it
-def file_index(path: text): int {
+def file_index(path: text) as int {
 	named_files[path] = yes
 	for i in 0 ..< #source_files { if source_files[i] == path { return i } }
 	source_files += [path]
@@ -24,10 +24,10 @@ def file_index(path: text): int {
 }
 
 // The code points of a text as a list
-def code_points(text: text): list := [point for point in text.codepoints]
+def code_points(text: text) as list := [point for point in text.codepoints]
 
 // `line:column` of the character at `at`, both from 1
-def line_and_column(code: text, at: int): text {
+def line_and_column(code: text, at: int) as text {
 	line = 1
 	start = 0
 	for i in 0 ..< at {
@@ -39,4 +39,4 @@ def line_and_column(code: text, at: int): text {
 	"$(line):$(at - start + 1)"
 }
 // a group, text or comment opened at `opener` that `closer` never closes (card missing-quotes-error)
-def missing(closer: text, what: text, code: text, opener: int): text := "`" + closer + "` is missing: the " + what + " opened at " + line_and_column(code, opener) + " runs to the end of the input"
+def missing(closer: text, what: text, code: text, opener: int) as text := "`" + closer + "` is missing: the " + what + " opened at " + line_and_column(code, opener) + " runs to the end of the input"

@@ -10,10 +10,10 @@
 # body, in a test `n is Definition`, and as the type `d: Definition`, any node.
 
 # whether the core lowers the arm itself
-is_core_arm(arm: Node, variants: map): bool := guard_of(arm_pattern(arm)) == ø and not is_name_arm(arm_pattern(arm), arm_result(arm), variants) and is_case_arm(arm, variants)
+is_core_arm(arm: Node, variants: map) as bool := guard_of(arm_pattern(arm)) == ø and not is_name_arm(arm_pattern(arm), arm_result(arm), variants) and is_case_arm(arm, variants)
 
 # the arms, the first the core does not lower and all after it as one arm `_`
-guarded_arms(arms: list, subject: Node, variants: map): list := {
+guarded_arms(arms: list, subject: Node, variants: map) as list := {
 	for at in 0 ..< #arms {
 		if not is_core_arm(arms[at], variants) {
 			rest = chained_arms(arms[at + 1 ..], subject, variants)
@@ -25,7 +25,7 @@ guarded_arms(arms: list, subject: Node, variants: map): list := {
 
 # a guarded, binding or structural arm: the pattern's test and its bindings, then the guard with them in sight, and the
 # result with them; `otherwise` what the arms after it give
-guarded_arm(arm: Node, subject: Node, variants: map, otherwise: Node): Node := {
+guarded_arm(arm: Node, subject: Node, variants: map, otherwise: Node) as Node := {
 	guard = guard_of(arm_pattern(arm))
 	pattern = quoted_holes_tight(guarded_pattern(arm_pattern(arm)))
 	result = arm_result(arm)
@@ -50,11 +50,11 @@ guarded_arm(arm: Node, subject: Node, variants: map, otherwise: Node): Node := {
 # item, with no call of the prelude's matcher (card pattern-direct-tests). Its items are names binding once, `_`, and
 # numbers, texts or characters the item equals; any other list (a rest, a type word, a class of characters, a name
 # twice, a nested pattern) stays pattern_bindings's at run time
-direct_items(pattern: Node, variants: map): list? := match pattern {
+direct_items(pattern: Node, variants: map) as list? := match pattern {
 	List(items, Bracket.Square, separator): if #items > 0 and items.all(item => is_direct_item(item, variants)) and distinct_names(items) then items else ø
 	_: ø
 }
-is_direct_item(item: Node, variants: map): bool := match item {
+is_direct_item(item: Node, variants: map) as bool := match item {
 	Number(value): yes
 	Text(value): yes
 	Char(value): yes
@@ -62,13 +62,13 @@ is_direct_item(item: Node, variants: map): bool := match item {
 	_: no
 }
 # a word binding the item as itself: no hole `$x`, rest `*xs`, type word, class of characters or declared variant
-is_binding_word(name: text, variants: map): bool := not (name.starts_with("$") or name.starts_with("*") or name.starts_with(".")) and not is_tested_type_word(name) and not (name in character_class_words) and not (name in variants)
-distinct_names(items: list): bool := {
+is_binding_word(name: text, variants: map) as bool := not (name.starts_with("$") or name.starts_with("*") or name.starts_with(".")) and not is_tested_type_word(name) and not (name in character_class_words) and not (name in variants)
+distinct_names(items: list) as bool := {
 	names = items.filter(item => item is symbol and name_of(item) != other_arm).map(item => name_of(item))
 	#names == #names.unique()
 }
 # a list of as many items, each literal one equal
-items_test(subject: Node, items: list): Node := {
+items_test(subject: Node, items: list) as Node := {
 	test = Key(List([symbol("is_type"), subject, "list"], Bracket.Round, Separator.None), Op.And, Key(applied("count", subject), Op.Eq, #items))
 	for at in 1 to #items {
 		if not (items#at is symbol) { test = Key(test, Op.And, Key(Key(subject, Op.Hash, at), Op.Eq, items#at)) }
@@ -76,7 +76,7 @@ items_test(subject: Node, items: list): Node := {
 	test
 }
 # each name the item at its place
-item_bindings(subject: Node, items: list): list := {
+item_bindings(subject: Node, items: list) as list := {
 	bound = []
 	for at in 1 to #items {
 		if items#at is symbol and name_of(items#at) != other_arm { bound += [Key(items#at, Op.Assign, Key(subject, Op.Hash, at))] }
@@ -86,8 +86,8 @@ item_bindings(subject: Node, items: list): list := {
 
 # `data($k: int + $x)` reads `$k: (int + $x)`: within a pattern a hole's type binds the hole alone, `($k: int) + $x`,
 # `$a: int * $b: int + $c` as `($a: int) * ($b: int) + $c`; any other pattern as written
-quoted_holes_tight(pattern: Node): Node := if is_quote(pattern) then group_like(pattern, [pattern#1, typed_holes_tight(pattern#2)]) else pattern
-typed_holes_tight(n: Node): Node := match n {
+quoted_holes_tight(pattern: Node) as Node := if is_quote(pattern) then group_like(pattern, [pattern#1, typed_holes_tight(pattern#2)]) else pattern
+typed_holes_tight(n: Node) as Node := match n {
 	Key(left, Op.Colon, right): {
 		tight_left = typed_holes_tight(left)
 		tight_right = typed_holes_tight(right)
@@ -99,48 +99,48 @@ typed_holes_tight(n: Node): Node := match n {
 	List(items, bracket, separator): List(items.map(typed_holes_tight), bracket, separator)
 	_: n
 }
-rightmost_part(n: Node): Node := match n {
+rightmost_part(n: Node) as Node := match n {
 	Key(left, op, right): rightmost_part(right)
 	_: n
 }
-leftmost_part(n: Node): Node := match n {
+leftmost_part(n: Node) as Node := match n {
 	Key(left, op, right): leftmost_part(left)
 	_: n
 }
-rightmost_replaced(n: Node, part: Node): Node := match n {
+rightmost_replaced(n: Node, part: Node) as Node := match n {
 	Key(left, op, right): Key(left, op, rightmost_replaced(right, part))
 	_: part
 }
-leftmost_replaced(n: Node, part: Node): Node := match n {
+leftmost_replaced(n: Node, part: Node) as Node := match n {
 	Key(left, op, right): Key(leftmost_replaced(left, part), op, right)
 	_: part
 }
 
 # the structural pattern fits: what it binds is held in match·bound
-structural_test(subject: Node, pattern: Node): Node := {
+structural_test(subject: Node, pattern: Node) as Node := {
 	fitted = List([symbol(matcher_word), subject, List([quote_symbol, pattern], Bracket.Round, Separator.None)], Bracket.Round, Separator.None)
 	Key(Key(symbol(match_bound), Op.Assign, fitted), Op.Ne, ø)
 }
 
 # the names the result uses of those the pattern binds, each read off match·bound
-structural_bindings(pattern: Node, result: Node): list := structural_names(pattern, no).filter(name => mentions(result, name)).map(name => Key(symbol(name), Op.Assign, subscript(symbol(match_bound), name)))
+structural_bindings(pattern: Node, result: Node) as list := structural_names(pattern, no).filter(name => mentions(result, name)).map(name => Key(symbol(name), Op.Assign, subscript(symbol(match_bound), name)))
 
 # `{port: "80"} as Config`: the prelude's converter of a value field by field to a named pattern's types
 pattern_converter_word = "converted_to_pattern"
 # `{port: "80", extra: 1} as! Config`: the same, after the fields the pattern does not name are dropped
 kept_pattern_word = "kept_pattern"
 # `word(value, data(pattern))`
-pattern_call(word: text, subject: Node, pattern: Node): Node := List([symbol(word), subject, List([quote_symbol, pattern], Bracket.Round, Separator.None)], Bracket.Round, Separator.None)
+pattern_call(word: text, subject: Node, pattern: Node) as Node := List([symbol(word), subject, List([quote_symbol, pattern], Bracket.Round, Separator.None)], Bracket.Round, Separator.None)
 
 # [name, pattern] of `pattern Definition = …`, else ø
-named_pattern(statement: Node): list? := if is_pattern_definition(statement) then named_definition(statement#2) else ø
+named_pattern(statement: Node) as list? := if is_pattern_definition(statement) then named_definition(statement#2) else ø
 
-named_definition(definition: Node): list? := match definition {
+named_definition(definition: Node) as list? := match definition {
 	Key(Symbol(name), Op.Assign, pattern): [name, pattern]
 	_: ø
 }
 
-named_patterns_of(program: Node): map := {
+named_patterns_of(program: Node) as map := {
 	patterns = {}
 	for statement in statements_in(program) {
 		named = named_pattern(statement)
@@ -149,13 +149,13 @@ named_patterns_of(program: Node): map := {
 	patterns
 }
 
-without_named_patterns(program: Node): Node := {
+without_named_patterns(program: Node) as Node := {
 	if not is_statement_sequence(program) { return program }
 	group_like(program, statements_in(program).filter(statement => not named_pattern(statement)))
 }
 
 # a pattern's name where a pattern, a test, a type or a quote goes
-with_named_patterns(n: Node, patterns: map): Node := match n {
+with_named_patterns(n: Node, patterns: map) as Node := match n {
 	# `n is Definition`, an equality by now (type_tests.warp: no type of that name): a pattern's name is no value
 	Key(subject, Op.Eq, Symbol(name)): if name in patterns then pattern_test(subject, patterns[name]) else n
 	Key(subject, Op.Colon, Symbol(name)): if name in patterns then Key(subject, Op.Colon, symbol(any_word)) else n
@@ -171,17 +171,17 @@ with_named_patterns(n: Node, patterns: map): Node := match n {
 }
 
 # `match subject { pattern: yes, _: no }`
-pattern_test(subject: Node, pattern: Node): Node :=
+pattern_test(subject: Node, pattern: Node) as Node :=
 	node_match(List([symbol("match"), subject, List([Key(pattern, Op.Colon, yes), Key(symbol(other_arm), Op.Colon, no)], Bracket.Curly, Separator.Semicolon)], Bracket.None, Separator.Space), {})
 
-named_arm(arm: Node, patterns: map): Node := match arm {
+named_arm(arm: Node, patterns: map) as Node := match arm {
 	Key(Symbol(name), Op.Colon, result): if name in patterns then Key(patterns[name], Op.Colon, result) else arm
 	Key(Symbol(name), Op.Arrow, result): if name in patterns then Key(patterns[name], Op.Arrow, result) else arm
 	_: arm
 }
 
 # the program with its named patterns put where their names stand, right before node_matches lowers the matches
-named_patterns(program: Node): Node := {
+named_patterns(program: Node) as Node := {
 	patterns = named_patterns_of(program)
 	if not patterns { return program }
 	tests = bottom_up(without_named_patterns(program), n => with_subject_carried(n, patterns))
@@ -189,13 +189,13 @@ named_patterns(program: Node): Node := {
 }
 # `it is Pair and StartsAtOne`, read `(it is Pair) and StartsAtOne`: a pattern's name is no value, so the subject of
 # the test before it is tested again, `it is Pair and it is StartsAtOne` (or `or`)
-with_subject_carried(n: Node, patterns: map): Node := {
+with_subject_carried(n: Node, patterns: map) as Node := {
 	if not ((is_key(n, Op.And) or is_key(n, Op.Or)) and value_of(n) is symbol and name_of(value_of(n)) in patterns) { return n }
 	subject = tested_subject(key_of(n), patterns)
 	if subject == ø then n else Key(key_of(n), op_of(n), Key(subject, Op.Eq, value_of(n)))
 }
 # the subject of `x is Pattern`, also of the first of several joined by and/or; ø for any other condition
-tested_subject(test: Node, patterns: map): Node? := {
+tested_subject(test: Node, patterns: map) as Node? := {
 	if is_key(test, Op.Eq) and value_of(test) is symbol and name_of(value_of(test)) in patterns { return key_of(test) }
 	if is_key(test, Op.And) or is_key(test, Op.Or) then tested_subject(key_of(test), patterns) else ø
 }

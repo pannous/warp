@@ -8,14 +8,14 @@ use image
 use shown_frames
 
 # channel0: a hashed colour field the rings pick from as they travel
-noise_at(x: int, y: int): Color := {
+noise_at(x: int, y: int) as Color := {
 	n = (x * 374761393 + y * 668265263) % 2147483647
 	if n < 0 { n = 0 - n }
 	return rgb(n % 256, (n /! 256) % 256, (n /! 65536) % 256)
 }
 
 # channel1: a slower, smoother tint, so the gaps between rings are not the same as the bands
-tint_at(x: int, y: int): Color := {
+tint_at(x: int, y: int) as Color := {
 	return rgb((x * 2) % 256, 40 + (y * 3) % 180, 160 + (x + y) % 80)
 }
 

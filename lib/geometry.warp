@@ -9,6 +9,9 @@
 // - vec_cross(u, v) is the 3D cross product (a vector); vec_cross2(u, v) the 2D one, the scalar u.x*v.y - u.y*v.x
 // - vec_angle(u, v): the unsigned angle between two vectors in radians, 0..pi; a zero-length vector is refused
 // - vec_rotate(v, radians): a 2D vector rotated counter-clockwise
+// - rotated_about(v, axis, radians): a 3D vector turned about an axis (of any length) by the right-hand rule,
+//   Rodrigues' formula; unchecked, so a painted function (a shader) may call it, its body translated to WGSL.
+//   GLSL's `p * rotate3D(a, axis)` (a row vector times the matrix) is rotated_about(p, axis, -a)
 // - bounding_box(points): [[min x, min y], [max x, max y]] (any dimension, per coordinate)
 // - polygon_signed_area: the shoelace area, positive for counter-clockwise; polygon_area its absolute value;
 //   polygon_centroid the area centroid (a zero-area polygon is refused); fewer than 3 points are refused
@@ -108,6 +111,12 @@ global vec_rotate(v: any, radians: number): list := {
 	[v#1 * c - v#2 * s, v#1 * s + v#2 * c]
 }
 
+rotated_about(v, axis, radians) := {
+	k = normalize(axis)
+	c = cos(radians)
+	v .* c .+ cross(k, v) .* sin(radians) .+ k .* (dot(k, v) * (1 - c))
+}
+
 global bounding_box(points: list): list := {
 	if count(points) == 0 { raise "bounding_box of no points" }
 	low = []
@@ -159,7 +168,7 @@ global polygon_centroid(polygon: list): list := {
 }
 
 // p on the segment a-b (within the tolerance)
-def geo_on_segment(p: list, a: list, b: list): bool {
+def geo_on_segment(p: list, a: list, b: list) as bool {
 	cr = vec_cross2(vec_sub(b, a), vec_sub(p, a))
 	if abs(cr) > GEO_EPSILON * (1 + vec_norm(vec_sub(b, a))) { return no }
 	p#1 >= min(a#1, b#1) - GEO_EPSILON and p#1 <= max(a#1, b#1) + GEO_EPSILON and p#2 >= min(a#2, b#2) - GEO_EPSILON and p#2 <= max(a#2, b#2) + GEO_EPSILON
@@ -210,9 +219,9 @@ global segment_intersection(a: list, b: list, c: list, d: list): any := {
 	vec_add(a, vec_scale(r, t))
 }
 
-def geo_before(p: list, q: list): bool := p#1 < q#1 or (p#1 == q#1 and p#2 < q#2)
+def geo_before(p: list, q: list) as bool := p#1 < q#1 or (p#1 == q#1 and p#2 < q#2)
 
-def geo_sorted(points: list): list {
+def geo_sorted(points: list) as list {
 	if count(points) <= 1 { return points }
 	half = count(points) /! 2
 	left = geo_sorted(points[0 ..< half])
@@ -227,7 +236,7 @@ def geo_sorted(points: list): list {
 	out
 }
 
-def geo_turn(o: list, a: list, b: list): number := (a#1 - o#1) * (b#2 - o#2) - (a#2 - o#2) * (b#1 - o#1)
+def geo_turn(o: list, a: list, b: list) as number := (a#1 - o#1) * (b#2 - o#2) - (a#2 - o#2) * (b#1 - o#1)
 
 global convex_hull(points: list): list := {
 	for p in points { geo_dims("convex_hull", p, 2) }

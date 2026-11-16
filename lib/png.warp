@@ -26,7 +26,7 @@ up_filter = 2
 average_filter = 3
 paeth_filter = 4
 
-png_pixels(bytes: list): list := {
+png_pixels(bytes: list) as list := {
 	chunks = png_chunks(bytes)
 	header = chunk_data(chunks, header_chunk)
 	width = from_big_endian(header[0 ..< 4])
@@ -51,20 +51,20 @@ png_pixels(bytes: list): list := {
 	[width, height, pixels]
 }
 // the pixels, Colors row by row, as a PNG: RGBA, 8 bits a sample, each row unfiltered, not interlaced
-png_bytes(width: int, height: int, pixels: list): list := {
+png_bytes(width: int, height: int, pixels: list) as list := {
 	header = big_endian(width, 4) + big_endian(height, 4) + [8, rgba_type, 0, 0, 0]
 	rows = (0 ..< height).flat_map(y => [0] + pixels[y * width ..< (y + 1) * width].flat_map(rgba_bytes))
 	png_signature + png_chunk(header_chunk, header) + png_chunk(data_chunk, compress(rows)) + png_chunk(end_chunk, [])
 }
 // a chunk: its data's length, its type, the data, the CRC-32 of type and data
-png_chunk(kind: text, data: list): list := {
+png_chunk(kind: text, data: list) as list := {
 	typed = to_utf8(kind) + data
 	big_endian(count(data), 4) + typed + big_endian(crc32(typed), 4)
 }
 // a color's bytes in PNG's order: red, green, blue, alpha
-rgba_bytes(c: Color): list := [16, 8, 0, 24].map(shift => channel_byte(c, shift))
+rgba_bytes(c: Color) as list := [16, 8, 0, 24].map(shift => channel_byte(c, shift))
 // [type, data] of each chunk after the signature, in order
-png_chunks(bytes: list): list := {
+png_chunks(bytes: list) as list := {
 	chunks = []
 	at = count(png_signature)
 	while at + 8 <= count(bytes) {
@@ -75,15 +75,15 @@ png_chunks(bytes: list): list := {
 	chunks
 }
 // the data of the first chunk of that type, ø for none
-chunk_data(chunks: list, kind: text): any := {
+chunk_data(chunks: list, kind: text) as any := {
 	found = chunks.find(chunk => chunk[0] == kind)
 	if found == ø then ø else found[1]
 }
-png_channels(color_type: int): int := if color_type == rgb_type then 3 else if color_type == gray_alpha_type then 2 else if color_type == rgba_type then 4 else 1
+png_channels(color_type: int) as int := if color_type == rgb_type then 3 else if color_type == gray_alpha_type then 2 else if color_type == rgba_type then 4 else 1
 
 // the row with its filter undone, each byte plus what the bytes before it and above it predict (step: the bytes of a
 // pixel, at least one)
-unfiltered(filter: int, row: list, above: list, step: int): list := {
+unfiltered(filter: int, row: list, above: list, step: int) as list := {
 	out = filled_list(count(row), 0)
 	for i in 0 ..< count(row) {
 		left = if i >= step then out[i - step] else 0
@@ -94,7 +94,7 @@ unfiltered(filter: int, row: list, above: list, step: int): list := {
 	out
 }
 // of the left, upper and upper-left bytes, the one nearest left + up - corner
-paeth(left: int, up: int, corner: int): int := {
+paeth(left: int, up: int, corner: int) as int := {
 	guess = left + up - corner
 	to_left = abs(guess - left)
 	to_up = abs(guess - up)
@@ -102,7 +102,7 @@ paeth(left: int, up: int, corner: int): int := {
 }
 
 // the pixel at column x of an unfiltered row
-png_color(row: list, x: int, depth: int, color_type: int, palette: list, alphas: list): Color := {
+png_color(row: list, x: int, depth: int, color_type: int, palette: list, alphas: list) as Color := {
 	if color_type == palette_type {
 		index = png_bits(row, x, depth)
 		alpha = if index < count(alphas) then alphas[index] else 255
@@ -116,12 +116,12 @@ png_color(row: list, x: int, depth: int, color_type: int, palette: list, alphas:
 	with_alpha(rgb(level(0), level(1), level(2)), level(3) / 255)
 }
 // sample n of a row as a level 0 to 255: a 16-bit one its high byte, a 1-, 2- or 4-bit one scaled up
-png_level(row: list, n: int, depth: int): int := {
+png_level(row: list, n: int, depth: int) as int := {
 	if depth == 16 { return row[2 * n] }
 	png_bits(row, n, depth) * 255 /! (2 ** depth - 1)
 }
 // sample n of a row as written: a byte, else depth bits of one, the first sample in the highest bits
-png_bits(row: list, n: int, depth: int): int := {
+png_bits(row: list, n: int, depth: int) as int := {
 	if depth >= 8 { return row[n] }
 	(row[n * depth /! 8] /! 2 ** (8 - depth - n * depth % 8)) % 2 ** depth
 }

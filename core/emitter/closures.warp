@@ -16,11 +16,11 @@ name_joiner = "·"
 closure_text_name = "closure_text"
 # the targets the lowering lifts from a lambda
 lambda_prefixes = ["closure_lambda_", "lambda_value_"]
-is_lifted_lambda(name: text): bool := lambda_prefixes.any(prefix => name.starts_with(prefix))
+is_lifted_lambda(name: text) as bool := lambda_prefixes.any(prefix => name.starts_with(prefix))
 # the operators a closure takes part in (node_equal compares closures)
 closure_comparisons = ["==", "!="]
 is_closure_value(n: Node) := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol("closure_new")
-def closure_value(body: Body, target: Node, captured: list): TypedCode {
+def closure_value(body: Body, target: Node, captured: list) as TypedCode {
 	if not (target is symbol and name_of(target) in module.functions) { return refuse("a closure of " + form_of(target)) }
 	name = name_of(target)
 	arity = #module.functions[name].signature.parameters - #captured
@@ -32,7 +32,7 @@ def closure_value(body: Body, target: Node, captured: list): TypedCode {
 }
 # the closure entry of a target, the first of its captured values those given: [target, captured count, the entry,
 # the text the closure shows]
-closure_entry(target: text, captured: int, arity: int): any := {
+closure_entry(target: text, captured: int, arity: int) as any := {
 	name = closure_entry_prefix + target
 	if name not in module.closures {
 		f = added_function(name, range_list(arity + 1).map(i => ValueKind.Node), ValueKind.Node, ["closure"] + range_list(arity).map(dispatcher_argument))
@@ -42,19 +42,19 @@ closure_entry(target: text, captured: int, arity: int): any := {
 	module.closures[name]
 }
 # its code: the target called on the captured values, then the arguments
-closure_entry_code(f: Function): any := {
+closure_entry_code(f: Function) as any := {
 	made = module.closures[f.name]
 	closure = [op.local_get, 0]
 	values = range_list(made#2).map(i => closure_item(closure, i + 1)) + range_list(#f.kinds - 1).map(j => TypedCode(ValueKind.Node, [op.local_get] + uleb(j + 1)))
 	f.code = boxed(call_values(module.functions[made#1], values))
 }
 # a closure's list item i: its entry (0) a $Closure, its captured values (from 1)
-def closure_slot(closure: list, i: int): list { payload(closure, gc_type(gc.list)) + gc_code(gc_ops.struct_get, [gc_type(gc.list), 1]) + [op.i32_const] + sleb(i) + gc_code(gc_ops.array_get, [gc_type(gc.items)]) }
-def closure_item(closure: list, i: int): TypedCode { TypedCode(ValueKind.Node, closure_slot(closure, i)) }
+def closure_slot(closure: list, i: int) as list { payload(closure, gc_type(gc.list)) + gc_code(gc_ops.struct_get, [gc_type(gc.list), 1]) + [op.i32_const] + sleb(i) + gc_code(gc_ops.array_get, [gc_type(gc.items)]) }
+def closure_item(closure: list, i: int) as TypedCode { TypedCode(ValueKind.Node, closure_slot(closure, i)) }
 # a field of a closure's entry: 0 the reference it calls, 1 its text (after the $Node's three)
-def entry_field(closure: list, field: int): list { closure_slot(closure, 0) + gc_code(gc_ops.ref_cast_null, [gc_type(gc.closure)]) + gc_code(gc_ops.struct_get, [gc_type(gc.closure), field + 3]) }
-captured_index(name: text): int := int(name.split(captured_marker)#2) + 1
-def closure_call(body: Body, arity: int, arguments: list): TypedCode {
+def entry_field(closure: list, field: int) as list { closure_slot(closure, 0) + gc_code(gc_ops.ref_cast_null, [gc_type(gc.closure)]) + gc_code(gc_ops.struct_get, [gc_type(gc.closure), field + 3]) }
+captured_index(name: text) as int := int(name.split(captured_marker)#2) + 1
+def closure_call(body: Body, arity: int, arguments: list) as TypedCode {
 	if #arguments != arity + 1 { return refuse("a closure call of " + #arguments + " values") }
 	if arity > hook_arities { return refuse("a closure call of " + arity + " arguments, more than " + hook_arities) }
 	callee = expression_code(body, arguments#1)
@@ -67,7 +67,7 @@ def closure_call(body: Body, arity: int, arguments: list): TypedCode {
 	if result == ValueKind.Node then called else TypedCode(result, converted(called, result))
 }
 # the kind a function-typed parameter's result is declared, a number, a text or a bool; a node for another or none
-def parameter_result(f: Function, name: text): ValueKind {
+def parameter_result(f: Function, name: text) as ValueKind {
 	for i in 0..<#f.signature.parameters {
 		written = aliased_type(f.signature.parameters[i].type_name)
 		if f.signature.parameters[i].name == name and written.contains(" -> ") {
@@ -80,18 +80,18 @@ def parameter_result(f: Function, name: text): ValueKind {
 }
 # `(a + b)`: a sum, difference or product, held boxed where a whole number may grow (operators.warp arithmetic), a
 # number all the same
-grows(n: Node): bool := {
+grows(n: Node) as bool := {
 	inner = if is_group(n) and bracket_of(n) == "(" and #n == 1 then n#1 else n
 	type(inner) is key and op_of(inner) in grown_words and key_of(inner) != ø
 }
 # the name of a dispatcher's argument i, from 0
-dispatcher_argument(i: int): text := "argument" + (i + 1)
-dispatcher(arity: int): any := {
+dispatcher_argument(i: int) as text := "argument" + (i + 1)
+dispatcher(arity: int) as any := {
 	made_late(closure_call_prefix + arity, ValueKind.Node, ["closure"] + range_list(arity).map(dispatcher_argument))
 }
 # a function whose code is written once the module's closures and classes are known, made at its first call; behind
 # runtime.wasm a runtime word of that name is runtime.wasm's (the closure calls and late words, written there once)
-made_late(name: text, result: ValueKind, parameters: list): any := {
+made_late(name: text, result: ValueKind, parameters: list) as any := {
 	if prepended() and has_runtime_word(name) { return runtime_word(name) }
 	# (a list: `name in module.dispatchers` of a map missed the name just set, card emitter-name)
 	for known in module.dispatchers { if known.name == name { return known } }
@@ -106,11 +106,11 @@ late_words = {closure_text: [ValueKind.Text, ["closure"]], instance_set: [ValueK
 	instance_entries: [ValueKind.Node, ["m"]], instance_field_at: [ValueKind.Node, ["m", "index"]], instance_place: [ValueKind.Int, ["m", "name"]],
 	is_class_instance: [ValueKind.Bool, ["m"]], instance_show: [ValueKind.Node, ["m"]], instance_float: [ValueKind.Node, ["m"]],
 	instance_operated: [ValueKind.Node, ["m", "a", "b", "operator"]], instance_method: [ValueKind.Node, ["m", "name", "arguments"]]}
-late_word(name: text): any := made_late(name, late_words[name]#1, late_words[name]#2)
+late_word(name: text) as any := made_late(name, late_words[name]#1, late_words[name]#2)
 # the text its entry holds
-closure_text_code(f: Function): any := { f.code = entry_field([op.local_get, 0], 1) }
+closure_text_code(f: Function) as any := { f.code = entry_field([op.local_get, 0], 1) }
 # a lifted lambda as written, its parameters but the captured ones (`x => x*2`); another target by its name
-closure_shown(name: text, captured: int): text := {
+closure_shown(name: text, captured: int) as text := {
 	if not is_lifted_lambda(name) { return function_name(name) }
 	f = module.functions[name]
 	names = taken_names(f.signature)[captured..]
@@ -118,7 +118,7 @@ closure_shown(name: text, captured: int): text := {
 }
 # the name a function value shows, as written (`twice` of the program's own `twice·own`): `len` of a class's
 # method that became the witness `len·Point`, the last part of a nested `outer·inner`
-function_name(target: text): text := {
+function_name(target: text) as text := {
 	written = without_arity(written_word(target))
 	parts = written.split(name_joiner)
 	if #parts == 1 { return written }
@@ -127,12 +127,12 @@ function_name(target: text): text := {
 }
 # a variant of a name defined with several parameter counts as written: `low` of low·0 (passes/walk.warp
 # overload_variant_name)
-without_arity(name: text): text := {
+without_arity(name: text) as text := {
 	parts = name.split(name_joiner)
 	if #parts > 1 and (is_digits(parts.last) or parts.last == "more") then parts[0..<(#parts - 1)].join(name_joiner) else name
 }
 # the code of a function made late (made_late), once the program's closures and classes are known
-late_code(f: Function): int := {
+late_code(f: Function) as int := {
 	if f.name == closure_text_name { closure_text_code(f) } else if f.name == instance_set_name { instance_set_code(f) } else if f.name == instance_entries_name { instance_entries_code(f) } else if f.name == instance_field_at_name { instance_field_at_code(f) } else if f.name == instance_place_name { instance_place_code(f) } else if f.name == is_class_instance_name { is_class_instance_code(f) } else if f.name == instance_show_name { instance_show_code(f) } else if f.name == instance_float_name { instance_float_code(f) } else if f.name == instance_operated_name { instance_operated_code(f) } else if f.name == instance_method_name { instance_method_code(f) } else if f.name.starts_with(field_getter_prefix) { field_getter_code(f) } else if f.name.starts_with(field_setter_prefix) { field_setter_code(f) } else { dispatcher_code(f) }
 	0
 }
@@ -142,7 +142,7 @@ callable_words = ["call", "call·method"]
 # a value called: a class value, `make(c, xs) := c(xs#1, xs#2)` of `make(P, [3, "a"])`, constructs by its descriptor
 # (`P(3, "a")`); an instance calls its descriptor's call; a closure's entry is called by reference; any other value fails
 # in not_a_function, a closure or instance's call of another arity in wrong_number_of_arguments
-dispatcher_code(f: Function): any := {
+dispatcher_code(f: Function) as any := {
 	arity = #f.kinds - 1
 	closure = [op.local_get, 0]
 	not_a_function = dropped(runtime_call("not_a_function", [])) + [op.unreachable]

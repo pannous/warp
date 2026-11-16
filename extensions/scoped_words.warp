@@ -1,19 +1,19 @@
 # A program's calls of some words rewritten with its scopes respected (wiki/polymorphism.md: shadowing is scoped):
 # everywhere but on the right of `.` and inside a definition or lambda binding the word itself, so
 # `f(t) := { parse = x => 7; parse(t) }` and `parse => parse(t)` call their own
-words_rewritten(n: Node, rewrite: function, words: list): Node := {
+words_rewritten(n: Node, rewrite: function, words: list) as Node := {
 	if is_key(n, Op.Dot) { return Key(words_rewritten(key_of(n), rewrite, words), Op.Dot, member_rewritten(value_of(n), rewrite, words)) }
 	if (is_key(n, Op.Define) or is_key(n, Op.Arrow)) and words.any(word => binds_word(n, word)) { return n }
 	rewrite(children(n, child => words_rewritten(child, rewrite, words)))
 }
 # a method call's arguments rewritten, never its name: `xs.map(x => { t = 0; x times {…}; t })`
-member_rewritten(member: Node, rewrite: function, words: list): Node := match member {
+member_rewritten(member: Node, rewrite: function, words: list) as Node := match member {
 	List(items, bracket, separator): if #items > 1 and items#1 is symbol then List([items#1] + items[1 ..].map(item => words_rewritten(item, rewrite, words)), bracket, separator) else member
 	_: member
 }
 
 # does the definition or lambda bind the word: a parameter of that name, or a definition of it in its body
-binds_word(binder: Node, word: text): bool := {
+binds_word(binder: Node, word: text) as bool := {
 	head = key_of(binder)
 	if is_key(binder, Op.Arrow) and word in parameters_of(head) { return yes }
 	if is_group(head) and items_of(head).any(part => part == symbol(word)) { return yes }

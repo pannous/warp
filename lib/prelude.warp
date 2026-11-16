@@ -12,16 +12,16 @@ add(xs, x) := { xs += [x]; xs }
 // key at set to x in place, the map back. One definition, so a call names its arguments (`at:`) as written (an
 // overload set by type passes them by position, card library-labelled-args)
 insert(xs, at, x) := if xs is map then { xs[at] = x; xs } else list_insert(xs, at, x)
-pop(xs: list): any := list_pop(xs)
+pop(xs: list) as any := list_pop(xs)
 // Python's xs.clear() and m.clear(): x emptied in place, so every alias sees it
-clear(x: any): any := { if x is map { for k in keys(x) { x.remove(k) } } else { while count(x) > 0 { x.pop() } }; x }
+clear(x: any) as any := { if x is map { for k in keys(x) { x.remove(k) } } else { while count(x) > 0 { x.pop() } }; x }
 // clear() the screen: the terminal clear and the cursor home, in the playground a text frame's start, the text shown
 // anew (decision page-text-frames: `loop { clear(); draw_board(); sleep 50ms }`)
 TERMINAL_CLEAR = "\e[2J\e[H"
 clear() := print TERMINAL_CLEAR
 // Python's xs.pop(i) and m.pop(k): the item at the 0-based position i (-1 the last) or the value of the key k, removed
 // from x in place, so every alias sees it
-pop(x: any, k: any): any := {
+pop(x: any, k: any) as any := {
 	if x is map { v = x.get(k); x.remove(k); return v }
 	p = popped_position(x, k)
 	v = x#p
@@ -113,7 +113,7 @@ byte_index_of(t: text, part: text) := byte_size(split(t, present_part(t, part))#
 // `x#i = c` of a text (extensions/sugar/text_elements.warp): the text with its i-th character replaced (1-based, by
 // grapheme), a new text, as texts are values; c a character, a one-character text or a code point (97 → 'a'). A
 // prelude word, as a sugar rule's call brings the prelude's word along and no module (card text-element-assign)
-text_with_at(t: text, i: int, c: any): text := {
+text_with_at(t: text, i: int, c: any) as text := {
 	ch = if c is int then "" + chr(c) else "" + c
 	parts = chars(t)
 	parts#i = ch
@@ -126,7 +126,7 @@ as_list(x) := x as list
 occurrences(xs, x) := #filter(xs, item => item == x)
 // (a walk over the bytes, nothing allocated: split made a list of every piece only to count them, card count-of-split;
 // its counters are declared int, an untyped `at = 0` is an unbounded nat and walked 70x slower, card byte-walk)
-occurrences(t: text, part: text): int := {
+occurrences(t: text, part: text) as int := {
 	size: int = byte_size(part)
 	if size == 0 { return #split(t, part) - 1 }
 	last: int = byte_size(t) - size
@@ -147,10 +147,10 @@ count_in(y, x) := if y is text then occurrences(y, "" + x) else if x is function
 first_items(xs, n) := xs[0: min(n, count(xs))]
 last_items(xs, n) := xs[max(count(xs) - n, 0): count(xs)]
 // `sort(words, {it.length})`: the items ordered by the key the function gives each (extensions/sugar/calls.warp)
-sorted_by_key(xs: list, key: function): list := list_sorted_by(xs, xs.map(key))
+sorted_by_key(xs: list, key: function) as list := list_sorted_by(xs, xs.map(key))
 // `sort(xs, (a, b) => a > b)`: the items in the order the function of two gives, yes where a goes before b; equal
 // items keep their order (a merge sort)
-sorted_in_order(xs: list, before: function): list := {
+sorted_in_order(xs: list, before: function) as list := {
 	if #xs < 2 { return xs }
 	middle = int(#xs / 2)
 	left = sorted_in_order([xs#i for i in 1 to middle], before)
@@ -167,7 +167,7 @@ sorted_in_order(xs: list, before: function): list := {
 // arity_variants: a prelude word can't overload the runtime's round(x) yet)
 round_to(x, decimals) := round(x * repeated_product(10, decimals)) / repeated_product(10, decimals)
 // (a float's own, unboxed: the prelude is linked, its untyped words take nodes)
-round_to(x: float, decimals: int): float := round(x * repeated_product(10, decimals)) / repeated_product(10, decimals)
+round_to(x: float, decimals: int) as float := round(x * repeated_product(10, decimals)) / repeated_product(10, decimals)
 // xⁿ of a whole n, exact, by multiplying (1/x⁻ⁿ of a negative n): the prelude writes no `^`, whose spellings link
 // big_numbers (card runtime-bridge-slots), which every program would then link. Squared and multiplied in a loop, so
 // n costs about log₂ n products and no stack (`2 ↑ 100000`); the last square is never taken, it could pass 64 bits
@@ -187,7 +187,7 @@ repeated_product(x, n: int) := {
 // regroup, fuse and split any fold of it, whatever the word calling it is named, and the identity starts the fold
 operator_laws = {"+": {associative: yes, identity: 0}, "*": {associative: yes, identity: 1}, and: {associative: yes, identity: yes}, or: {associative: yes, identity: no}, max: {associative: yes}, min: {associative: yes}}
 // `sum 1 2 3`, `sum(1, 2, 3)`: the numbers given, as max takes them (lib/extrema.warp)
-sum(a: number, b: number, more...): number := fold([a, b] + more, 0, +)
+sum(a: number, b: number, more...) as number := fold([a, b] + more, 0, +)
 // dir(v) of a value only the run knows (extensions/sugar/reflection.warp gives the words of a list, a text and a map): a map's
 // keys, then its words (decision dir-map-keys-first), a list's or a text's words, none of a number
 // help(x), function(x).definition of a value only the run knows (extensions/sugar/reflection.warp gives the program's and its
@@ -222,15 +222,15 @@ mean(xs) := if count(xs) == 0 then raise "mean of an empty list" else sum(xs) / 
 infix operator ↑(x: number, n: int) := repeated_product(x, n)
 infix operator ↓(x: number, b: number) := log(x, b)
 // the logarithm of x to the base: log(100, 10) is 2
-log(x: number, base: number): float := log(x) / log(base)
+log(x: number, base: number) as float := log(x) / log(base)
 // the natural logarithm, a standard word without `use math`, as sin is (math's alias ln => natural_log maps it over lists)
-ln(x: number): float := log(x)
+ln(x: number) as float := log(x)
 // `3 squared`, `2 cubed` (suffix words, decision postfix-words)
-square(x: number): number := x * x
-cube(x: number): number := x * x * x
+square(x: number) as number := x * x
+cube(x: number) as number := x * x * x
 // ∜x (lib/math.warp prefix operator)
 fourth_root(x) := sqrt(sqrt(x))
-fourth_root(x: float): float := sqrt(sqrt(x))
+fourth_root(x: float) as float := sqrt(sqrt(x))
 is_hex_digit(c) := is_digit(c) or (lower(c) >= 'a' and lower(c) <= 'f')
 is_word_char(c) := is_alphanumeric(c) or c == '_'
 // at least one character, each passing is_class: consists_of("42", is_digit)
@@ -369,7 +369,7 @@ each_any(value: any, f: function) := if value is list then [f(item) for item in 
 // says a painted function gives three numbers (graphics.md)
 pixel_color(v: any) := if v is list then 0xFF000000 + pixel_channel(v#1) * 65536 + pixel_channel(v#2) * 256 + pixel_channel(v#3) else if v is int then v else raise "a painted function gives three numbers [r, g, b], each 0 … 1, not ${v}; fix: return [v, v, v] for a gray"
 pixel_channel(c) := round(255 * min(max(c, 0), 1)) as int
-pixel_channel(c: float): int := round(255 * min(max(c, 0.0), 1.0)) as int
+pixel_channel(c: float) as int := round(255 * min(max(c, 0.0), 1.0)) as int
 // paint(f, width, height) of a warp function on the CPU, where no shader paints it (gpu_maps painted_functions): f(column,
 // row) of every pixel, row by row; in a frame without a window (lib/frames.warp frames_end) at most the window's size,
 // f sampled across the size asked; the coordinates are floats as a fragment shader's are (a mandelbrot's z² + c in exact fractions never ends; decision gpu-first-asap)
@@ -429,7 +429,7 @@ sleep(amount) := slept(amount * 1000)
 // the wait of a sleep, ms: the tasks module's runs the tasks due meanwhile, which replaces this
 slept(ms) := sleep_ms(ms)
 // a `use js` call's value (extensions/foreign_globals.warp): a promise it gave, which the host keeps, waited for
-foreign_settled(value: any?): any? := if foreign_pending() != 0 then foreign_await() else value
+foreign_settled(value: any?) as any? := if foreign_pending() != 0 then foreign_await() else value
 // what a module holds per task, kept around a task and given back after it (extensions/sugar/tasks.warp): nothing here, a
 // module holding some (sound's voice) defines both, which replace these
 task_context() := ø
@@ -454,13 +454,13 @@ random_of_type(x) := {
 }
 // `300 as u8`, `x: u8 = 300` (decision cast-checks): a fixed-width int takes a value that fits it, else a catchable
 // error naming the range; `as! u8` wraps instead
-fitted_int(value: any, type: text): int := {
+fitted_int(value: any, type: text) as int := {
 	n = value as int
 	range = fixed_int_range(type)
 	if n < range#1 or n > range#2 { raise "${value} does not fit ${type} (${range#1}…${range#2})" }
 	n
 }
-fixed_int_range(type: text): list := {
+fixed_int_range(type: text) as list := {
 	if type in ["u8", "uint8", "byte"] { return [0, 255] }
 	if type in ["i8", "int8"] { return [-128, 127] }
 	if type in ["u16", "uint16"] { return [0, 65535] }
@@ -478,7 +478,7 @@ random_codepoint() := { n = random_below(0x110000 - 0x800); if n >= 0xD800 then 
 random(x: list or number) := random_of(x)
 random(a, b) := random_between(a, b)
 // asked as a float, `x: float = random(50, 550)`, a fraction from a up to b however a and b are written (decision default-variant)
-random(a, b): float := random_fraction(a, b)
+random(a, b) as float := random_fraction(a, b)
 // the machine's readings, read now by the host word system_value (Rust: lowering/signals/system_values.rs,
 // rust-harness:crates/warp-runtime host_words.rs SYSTEM_VALUES): a yes/no one is a reading other than 0, the mouse's place a float; a
 // program's own name of the same word wins
@@ -529,7 +529,7 @@ fullscreen(full = yes) := window.fullscreen(full)
 // time_field with the time's form (TimeForm: 1 a date, its position in days; else nanoseconds since 1970), its
 // position, its zone's seconds east of UTC (a zoned time's, else 0; not `offset`: the index type's synonym) and the
 // index of the field in times.rs TIME_FIELDS. A zoned time's fields are those of its wall clock, its epoch seconds the instant's
-time_field_of(form: int, position: int, zone_seconds: int, field: int): int := {
+time_field_of(form: int, position: int, zone_seconds: int, field: int) as int := {
 	wall = if form == 1 then position else position + zone_seconds * 1000000000
 	days = time_days(form, wall)
 	nanos = time_nanos(form, wall)
@@ -553,31 +553,31 @@ time_field_of(form: int, position: int, zone_seconds: int, field: int): int := {
 	}
 }
 // time_parts(form, position): the calendar day of a position and the nanoseconds into it; a date has no clock
-time_days(form: int, position: int): int := if form == 1 then position else position /! 86400000000000
-time_nanos(form: int, position: int): int := if form == 1 then 0 else floor_mod(position, 86400000000000)
+time_days(form: int, position: int) as int := if form == 1 then position else position /! 86400000000000
+time_nanos(form: int, position: int) as int := if form == 1 then 0 else floor_mod(position, 86400000000000)
 // the remainder with the divisor's sign (Python's %): floor_mod(7, -3) is -2, floor_mod(-7, 3) is 2
-floor_mod(n: int, divisor: int): int := { if divisor == 0 { raise "floor_mod by zero" }; r = n - n /! divisor * divisor; if r != 0 and (r < 0) != (divisor < 0) { r = r + divisor }; r }
+floor_mod(n: int, divisor: int) as int := { if divisor == 0 { raise "floor_mod by zero" }; r = n - n /! divisor * divisor; if r != 0 and (r < 0) != (divisor < 0) { r = r + divisor }; r }
 // Howard Hinnant's calendar over day numbers (days since 1970-01-01, proleptic Gregorian), the one warp copy of
 // rust-harness:src/time/calendar.rs days_from_civil / civil_from_days (card civil-days-dup); lib/time.warp builds on it.
 // civil_from_days: eras of 400 years from 0000-03-01, a year from March
-civil_era(days: int): int := (days + 719468) /! 146097
-civil_day_of_era(days: int): int := days + 719468 - civil_era(days) * 146097
-civil_year_of_era(day_of_era: int): int := (day_of_era - day_of_era /! 1460 + day_of_era /! 36524 - day_of_era /! 146096) /! 365
-civil_day_of_year(day_of_era: int): int := {
+civil_era(days: int) as int := (days + 719468) /! 146097
+civil_day_of_era(days: int) as int := days + 719468 - civil_era(days) * 146097
+civil_year_of_era(day_of_era: int) as int := (day_of_era - day_of_era /! 1460 + day_of_era /! 36524 - day_of_era /! 146096) /! 365
+civil_day_of_year(day_of_era: int) as int := {
 	year_of_era = civil_year_of_era(day_of_era)
 	day_of_era - (365 * year_of_era + year_of_era /! 4 - year_of_era /! 100)
 }
 // the month counted from March: months 10 and 11 of the year are January and February
-civil_march_month(day_of_year: int): int := (5 * day_of_year + 2) /! 153
-civil_month(days: int): int := {
+civil_march_month(day_of_year: int) as int := (5 * day_of_year + 2) /! 153
+civil_month(days: int) as int := {
 	march_month = civil_march_month(civil_day_of_year(civil_day_of_era(days)))
 	if march_month < 10 then march_month + 3 else march_month - 9
 }
-civil_day(days: int): int := {
+civil_day(days: int) as int := {
 	day_of_year = civil_day_of_year(civil_day_of_era(days))
 	day_of_year - (153 * civil_march_month(day_of_year) + 2) /! 5 + 1
 }
-civil_year(days: int): int := {
+civil_year(days: int) as int := {
 	year = civil_year_of_era(civil_day_of_era(days)) + civil_era(days) * 400
 	if civil_month(days) <= 2 then year + 1 else year
 }
@@ -657,24 +657,24 @@ class Pattern { written: text }
 // `data(…)` pattern): a name binds, `_` takes anything, a type word tests the type, a value must be equal; a rest
 // `...rest` takes what the other items leave; `>= 18`, `18..65` and `a | b` stand for a part. Inside `data(…)` the
 // code must be the same but for its `$holes`, a hole used twice taking equal code
-pattern_bindings(value: any, pattern: any): any := {
+pattern_bindings(value: any, pattern: any) as any := {
 	bound = {}
 	if fits_pattern(value, pattern, bound, no) then bound else ø
 }
-fits_pattern(value: any, pattern: any, bound: map, code: bool): bool := {
+fits_pattern(value: any, pattern: any, bound: map, code: bool) as bool := {
 	if is_type(pattern, "symbol") { return fits_name(value, name_of(pattern), bound, code) }
 	if is_type(pattern, "key") { return fits_key(value, pattern, bound, code) }
 	if bracket_of(pattern) != ø { return fits_group(value, pattern, bound, code) }
 	value == pattern
 }
 // a hole or name takes the value, the same one again where it is bound already
-bound_as(value: any, name: text, bound: map): bool := {
+bound_as(value: any, name: text, bound: map) as bool := {
 	if name == "_" { return yes }
 	if name in bound { return bound[name] == value }
 	bound[name] = value
 	yes
 }
-fits_name(value: any, name: text, bound: map, code: bool): bool := {
+fits_name(value: any, name: text, bound: map, code: bool) as bool := {
 	if name.starts_with("$") { return bound_as(value, name[1 ..< #name], bound) }
 	if code { return value == symbol(name) }
 	if is_pattern_type(name) { return has_pattern_type(value, name) }
@@ -685,19 +685,19 @@ fits_name(value: any, name: text, bound: map, code: bool): bool := {
 pattern_types = {"int": is_int_value, "float": is_float_value, "number": is_number_value, "text": is_text_value,
 	"bool": is_bool_value, "list": is_list_value, "map": is_map_value, "symbol": is_symbol_value, "key": is_key_value,
 	"block": is_block_value}
-is_int_value(value: any): bool := is_type(value, "int")
-is_float_value(value: any): bool := is_type(value, "number") and not is_type(value, "int")
-is_number_value(value: any): bool := is_type(value, "number")
-is_text_value(value: any): bool := is_type(value, "text")
-is_bool_value(value: any): bool := is_type(value, "bool")
-is_list_value(value: any): bool := is_type(value, "list")
-is_map_value(value: any): bool := is_type(value, "map")
-is_symbol_value(value: any): bool := is_type(value, "symbol")
-is_key_value(value: any): bool := is_type(value, "key")
-is_block_value(value: any): bool := bracket_of(value) == "{"
-is_pattern_type(name: text): bool := name in pattern_types
-has_pattern_type(value: any, name: text): bool := pattern_types[name](value)
-fits_key(value: any, pattern: any, bound: map, code: bool): bool := {
+is_int_value(value: any) as bool := is_type(value, "int")
+is_float_value(value: any) as bool := is_type(value, "number") and not is_type(value, "int")
+is_number_value(value: any) as bool := is_type(value, "number")
+is_text_value(value: any) as bool := is_type(value, "text")
+is_bool_value(value: any) as bool := is_type(value, "bool")
+is_list_value(value: any) as bool := is_type(value, "list")
+is_map_value(value: any) as bool := is_type(value, "map")
+is_symbol_value(value: any) as bool := is_type(value, "symbol")
+is_key_value(value: any) as bool := is_type(value, "key")
+is_block_value(value: any) as bool := bracket_of(value) == "{"
+is_pattern_type(name: text) as bool := name in pattern_types
+has_pattern_type(value: any, name: text) as bool := pattern_types[name](value)
+fits_key(value: any, pattern: any, bound: map, code: bool) as bool := {
 	op = op_of(pattern)
 	left = key_of(pattern)
 	right = value_of(pattern)
@@ -715,7 +715,7 @@ fits_key(value: any, pattern: any, bound: map, code: bool): bool := {
 }
 // an alternative keeps its names only where it fits: `data($x * 2) | data(2 * $x)` of 2 * y binds x = y, never the 2
 // the first one took before it failed
-fits_alternative(value: any, pattern: any, bound: map, code: bool): bool := {
+fits_alternative(value: any, pattern: any, bound: map, code: bool) as bool := {
 	tried = copy(bound, shallow: yes)
 	if not fits_pattern(value, pattern, tried, code) { return no }
 	for name in keys(tried) { bound[name] = tried[name] }
@@ -723,27 +723,27 @@ fits_alternative(value: any, pattern: any, bound: map, code: bool): bool := {
 }
 // `>= 18`, `!= ""`: the comparison of the part with the limit; an order only between two numbers or two texts
 comparisons = {">=": at_least, ">": above, "<=": at_most, "<": below, "!=": unequal, "==": equal}
-compares(value: any, op: text, limit: any): bool := {
+compares(value: any, op: text, limit: any) as bool := {
 	if not (op in comparisons) { raise "a pattern compares by >=, >, <=, <, != or ==, not " + op }
 	if op != "!=" and op != "==" and not are_ordered(value, limit) { return no }
 	comparisons[op](value, limit)
 }
-are_ordered(a: any, b: any): bool := (is_type(a, "number") and is_type(b, "number")) or (is_type(a, "text") and is_type(b, "text"))
-at_least(a: any, b: any): bool := a >= b
-above(a: any, b: any): bool := a > b
-at_most(a: any, b: any): bool := a <= b
-below(a: any, b: any): bool := a < b
-unequal(a: any, b: any): bool := a != b
+are_ordered(a: any, b: any) as bool := (is_type(a, "number") and is_type(b, "number")) or (is_type(a, "text") and is_type(b, "text"))
+at_least(a: any, b: any) as bool := a >= b
+above(a: any, b: any) as bool := a > b
+at_most(a: any, b: any) as bool := a <= b
+below(a: any, b: any) as bool := a < b
+unequal(a: any, b: any) as bool := a != b
 // `13 to 19`, `18..65`, `65..`: the part within the range, an open end unbounded; `to` takes its end, `..` and `..<` stop
 // before it
 range_ops = ["to", "..", "..<"]
-in_range(value: any, op: text, low: any, high: any): bool := {
+in_range(value: any, op: text, low: any, high: any) as bool := {
 	if low != ø and not (are_ordered(value, low) and value >= low) { return no }
 	if high == ø { return yes }
 	are_ordered(value, high) and (if op == "to" then value <= high else value < high)
 }
-equal(a: any, b: any): bool := a == b
-fits_group(value: any, pattern: any, bound: map, code: bool): bool := {
+equal(a: any, b: any) as bool := a == b
+fits_group(value: any, pattern: any, bound: map, code: bool) as bool := {
 	// `data(…)`: the code inside, holes and all
 	if not code and bracket_of(pattern) == "(" and #pattern == 2 and pattern#1 == symbol("data") { return fits_pattern(value, pattern#2, bound, yes) }
 	if bracket_of(pattern) == "{" and not code { return fits_map(value, pattern, bound) }
@@ -756,24 +756,24 @@ fits_group(value: any, pattern: any, bound: map, code: bool): bool := {
 }
 // `{ $body }` of `{ print x }`: a hole alone in a block or group takes its one phrase, whose words it holds spaced;
 // a list's items stay items, `[1 2]` is two
-is_phrase_hole(value: any, pattern: any): bool := bracket_of(value) != "[" and #pattern == 1 and is_type(pattern#1, "symbol") and name_of(pattern#1).starts_with("$") and separator_of(value) == " " and #value > 1
-phrase_of(group: any): any := separated(bracketed([part for part in group], ""), " ")
+is_phrase_hole(value: any, pattern: any) as bool := bracket_of(value) != "[" and #pattern == 1 and is_type(pattern#1, "symbol") and name_of(pattern#1).starts_with("$") and separator_of(value) == " " and #value > 1
+phrase_of(group: any) as any := separated(bracketed([part for part in group], ""), " ")
 // `data($l $op $r)`: a hole between two parts takes any operator, its spelling bound: `-` of `a - b`
-is_operator_hole(pattern: any): bool := bracket_of(pattern) == "" and #pattern == 3 and is_type(pattern#2, "symbol") and name_of(pattern#2).starts_with("$")
-fits_operation(value: any, pattern: any, bound: map): bool := fits_pattern(key_of(value), pattern#1, bound, yes) and bound_as(op_of(value), name_of(pattern#2)[1 ..], bound) and fits_pattern(value_of(value), pattern#3, bound, yes)
+is_operator_hole(pattern: any) as bool := bracket_of(pattern) == "" and #pattern == 3 and is_type(pattern#2, "symbol") and name_of(pattern#2).starts_with("$")
+fits_operation(value: any, pattern: any, bound: map) as bool := fits_pattern(key_of(value), pattern#1, bound, yes) and bound_as(op_of(value), name_of(pattern#2)[1 ..], bound) and fits_pattern(value_of(value), pattern#3, bound, yes)
 // `Circle(r)`, `Rect(w, h)`: an enum case carrying data, or a class, with a pattern for each field
-is_case_with_fields(pattern: any): bool := bracket_of(pattern) == "(" and #pattern > 1 and is_type(pattern#1, "symbol")
+is_case_with_fields(pattern: any) as bool := bracket_of(pattern) == "(" and #pattern > 1 and is_type(pattern#1, "symbol")
 // the class of an instance, Circle of `Circle{r: 2}` (its type, shown by its name)
-class_name(value: any): text := name_of(type(value))
+class_name(value: any) as text := name_of(type(value))
 // the instance's fields in order fit the patterns after the case name
-fits_fields(value: any, pattern: any, bound: map): bool := {
+fits_fields(value: any, pattern: any, bound: map) as bool := {
 	fields = value.keys
 	if #fields != #pattern - 1 { return no }
 	for i in 1 to #fields { if not fits_pattern(value[fields#i], pattern#(i + 1), bound, no) { return no } }
 	yes
 }
 // the items, a rest among them taking those the others leave, the items after it counted from the end
-fits_items(value: any, pattern: any, bound: map, code: bool): bool := {
+fits_items(value: any, pattern: any, bound: map, code: bool) as bool := {
 	rest = 0
 	for i in 0..<#pattern { if rest == 0 and is_rest_item(pattern#(i + 1)) { rest = i + 1 } }
 	if rest == 0 {
@@ -790,11 +790,11 @@ fits_items(value: any, pattern: any, bound: map, code: bool): bool := {
 	fits_rest(taken, pattern#rest, bound, code)
 }
 // `...rest`, `*rest`, `rest...`, `$rest...`, a bare `..`, an item pattern `[n, label]...`
-is_rest_item(item: any): bool := {
+is_rest_item(item: any) as bool := {
 	if is_type(item, "symbol") { return name_of(item).starts_with("*") }
 	is_type(item, "key") and (op_of(item) == "to" or op_of(item) == "..") and value_of(item) == ø
 }
-fits_rest(taken: list, item: any, bound: map, code: bool): bool := {
+fits_rest(taken: list, item: any, bound: map, code: bool) as bool := {
 	if is_type(item, "symbol") { return bound_as(taken, name_of(item)[1 ..< #name_of(item)], bound) }
 	held = key_of(item)
 	if held == ø { return yes }
@@ -810,7 +810,7 @@ fits_rest(taken: list, item: any, bound: map, code: bool): bool := {
 	yes
 }
 // the names a pattern binds, in order; a map's by its fields' patterns, `{name}` its field's name
-pattern_names(pattern: any): list := {
+pattern_names(pattern: any) as list := {
 	if bracket_of(pattern) == "{" { return field_pattern_names(pattern) }
 	if is_type(pattern, "symbol") { return if name_of(pattern) == "_" or is_pattern_type(name_of(pattern)) then [] else [unmarked(unmarked(name_of(pattern), "$"), "*")] }
 	if is_type(pattern, "key") { return pattern_names(key_of(pattern)) + (if op_of(pattern) == ":" then [] else pattern_names(value_of(pattern))) }
@@ -820,8 +820,8 @@ pattern_names(pattern: any): list := {
 	names
 }
 // `debug?: bool`, which a map pattern holds as the phrase [debug, ?:, bool]
-is_optional_field(field: any): bool := is_type(field, "list") and #field == 3 and is_type(field#2, "symbol") and name_of(field#2) == "?:"
-field_pattern_names(pattern: any): list := {
+is_optional_field(field: any) as bool := is_type(field, "list") and #field == 3 and is_type(field#2, "symbol") and name_of(field#2) == "?:"
+field_pattern_names(pattern: any) as list := {
 	names = []
 	for i in 0..<#pattern {
 		field = pattern#(i + 1)
@@ -831,7 +831,7 @@ field_pattern_names(pattern: any): list := {
 }
 // `{status: 200, data: {user: {name}}}`: the fields it names, the others ignored; `{name}` binds the field to its name;
 // `debug?: bool` (read `debug ?: bool`) may be missing
-fits_map(value: any, pattern: any, bound: map): bool := {
+fits_map(value: any, pattern: any, bound: map) as bool := {
 	if not is_type(value, "map") { return no }
 	for i in 0..<#pattern {
 		field = pattern#(i + 1)
@@ -848,7 +848,7 @@ fits_map(value: any, pattern: any, bound: map): bool := {
 	yes
 }
 // every part of a value, itself first, then its items' and fields' parts in order
-parts_within(value: any): list := {
+parts_within(value: any) as list := {
 	found = [value]
 	if is_type(value, "key") { found += parts_within(key_of(value)) + parts_within(value_of(value)) }
 	else if is_type(value, "list") { for item in value { found += parts_within(item) } }
@@ -856,11 +856,11 @@ parts_within(value: any): list := {
 	found
 }
 // what `value find pattern` gives each match: the one name's value, the part itself, or the map of the names
-found_as(part: any, bound: map, names: list): any := if #names == 1 then bound[names#1] else if #names == 0 then part else bound
+found_as(part: any, bound: map, names: list) as any := if #names == 1 then bound[names#1] else if #names == 0 then part else bound
 // `x replace data($a * 1) with data($a + 10)`: a pattern or template written as code already is that code, not code
 // quoting it (the phrase quotes what it is given)
-written_code(given: any): any := if bracket_of(given) == "(" and count(given) == 2 and is_type(given#1, "symbol") and name_of(given#1) == "data" then given#2 else given
-find_matches(value: any, given: any): list := {
+written_code(given: any) as any := if bracket_of(given) == "(" and count(given) == 2 and is_type(given#1, "symbol") and name_of(given#1) == "data" then given#2 else given
+find_matches(value: any, given: any) as list := {
 	pattern = written_code(given)
 	names = pattern_names(pattern)
 	found = []
@@ -872,13 +872,13 @@ find_matches(value: any, given: any): list := {
 }
 // `value replace pattern with template`: the items, fields and code parts replaced first (`n * 1 + k * 1`'s two
 // products), then the value itself where it fits, the template's names its bindings
-replace_matches(value: any, given: any, written: any): any := {
+replace_matches(value: any, given: any, written: any) as any := {
 	template = written_code(written)
 	// (a code template's `$holes` are filled as code, a plain one's names by their values)
 	filled = if template != written then (bound => filled_template(template, bound)) else (bound => instantiated(template, bound))
 	replaced(value, written_code(given), filled)
 }
-replaced(value: any, pattern: any, filled: function): any := {
+replaced(value: any, pattern: any, filled: function) as any := {
 	inner = value
 	if is_type(value, "key") { inner = key(replaced(key_of(value), pattern, filled), op_of(value), replaced(value_of(value), pattern, filled)) }
 	else if is_type(value, "list") { inner = value.map(item => replaced(item, pattern, filled)) }
@@ -891,7 +891,7 @@ replaced(value: any, pattern: any, filled: function): any := {
 }
 // `{port: "80", host: "x"} as Config`: the value with each text field converted to its pattern's type ("80" the int 80),
 // raising when it then does not fit the pattern
-converted_to_pattern(value: any, pattern: any): any := {
+converted_to_pattern(value: any, pattern: any) as any := {
 	if bracket_of(pattern) == "{" and is_type(value, "map") {
 		converted = {}
 		for key in value.keys { converted[key] = value[key] }
@@ -922,9 +922,9 @@ kept_pattern(value, pattern) := {
 	converted_to_pattern(value, pattern)
 }
 // a map pattern's field name: `port` of `port: int`
-field_key(field: any): any := if is_type(key_of(field), "symbol") then name_of(key_of(field)) else key_of(field)
+field_key(field: any) as any := if is_type(key_of(field), "symbol") then name_of(key_of(field)) else key_of(field)
 // the template with each name it binds put in: `{type: "link", href: src}` a map, `[x, y]` a list
-instantiated(template: any, bound: map): any := {
+instantiated(template: any, bound: map) as any := {
 	if is_type(template, "symbol") { return if name_of(template) in bound then bound[name_of(template)] else template }
 	if bracket_of(template) == "{" {
 		made = {}
@@ -944,7 +944,7 @@ instantiated(template: any, bound: map): any := {
 }
 // code with each part rewritten by the rule, then itself again while the rule gives code (ø: no rule fits); a rule
 // set that never settles stops loudly after a thousand steps, naming the rewrite that keeps firing (decision rewrite-rules)
-rewritten_everywhere(code: any, rule: function): any := {
+rewritten_everywhere(code: any, rule: function) as any := {
 	settle_cap = 1000
 	steps = 0
 	while yes {
@@ -959,7 +959,7 @@ rewritten_everywhere(code: any, rule: function): any := {
 	}
 }
 // a code template's holes filled (extensions/code_templates.warp): `$a` by the value of a, `$xs...` by xs's items
-filled_template(code: any, values: map): any := {
+filled_template(code: any, values: map) as any := {
 	if is_type(code, "symbol") { return if name_of(code).starts_with("$") and name_of(code)[1 ..] in values then values[name_of(code)[1 ..]] else code }
 	if is_type(code, "key") { return key(filled_template(key_of(code), values), op_of(code), filled_template(value_of(code), values)) }
 	if bracket_of(code) == ø { return code }
@@ -972,7 +972,7 @@ filled_template(code: any, values: map): any := {
 	separated(bracketed(items, bracket_of(code)), separator_of(code))
 }
 // the pieces of `"/users/" + id: int + "/x"`, texts and holes in order, a typed hole as [name, type]
-text_pieces(pattern: any): list := {
+text_pieces(pattern: any) as list := {
 	if not is_type(pattern, "key") { return [pattern] }
 	if op_of(pattern) == "+" { return text_pieces(key_of(pattern)) + text_pieces(value_of(pattern)) }
 	if op_of(pattern) != ":" { return [pattern] }
@@ -982,13 +982,13 @@ text_pieces(pattern: any): list := {
 	before[0 ..< #before - 1] + [[before#(#before), after#1]] + after[1 ..< #after]
 }
 // `"0x" + h`, `name + ".html"`, `"/u/" + id: int + "/p/"`: a text with holes
-is_text_cut(pattern: any): bool := {
+is_text_cut(pattern: any) as bool := {
 	if op_of(pattern) != "+" and op_of(pattern) != ":" { return no }
 	pieces = text_pieces(pattern)
 	#pieces > 1 and pieces.any(piece => is_type(piece, "text"))
 }
 // the text cut at its literal pieces, each hole taking what lies between, its type converting or testing it
-fits_text_cut(value: any, pieces: list, bound: map): bool := {
+fits_text_cut(value: any, pieces: list, bound: map) as bool := {
 	if not is_type(value, "text") { return no }
 	rest = value
 	for i in 0..<#pieces {
@@ -1013,29 +1013,29 @@ fits_text_cut(value: any, pieces: list, bound: map): bool := {
 // characters tests it; another type is an error
 part_conversions = {"int": int_part, "float": float_part, "number": number_part, "text": text_part}
 character_classes = {"digit": is_digit_text, "digits": is_digits, "letter": is_letter_text, "letters": is_letters, "hex": is_hex}
-converted_part(part: text, type_word: any): any := {
+converted_part(part: text, type_word: any) as any := {
 	name = name_of(type_word)
 	if name in part_conversions { return part_conversions[name](part) }
 	if not (name in character_classes) { raise "a text cut's hole converts to int, float, number or text or is digit(s), letter(s) or hex, not " + name }
 	if character_classes[name](part) then part else ø
 }
-is_digits(t: text): bool := t != "" and t.all(c => c >= '0' and c <= '9')
-is_letters(t: text): bool := t != "" and lower(t).all(c => c >= 'a' and c <= 'z')
-is_hex(t: text): bool := t != "" and lower(t).all(c => (c >= '0' and c <= '9') or (c >= 'a' and c <= 'f'))
-is_digit_text(t: text): bool := #t == 1 and is_digits(t)
-is_letter_text(t: text): bool := #t == 1 and is_letters(t)
+is_digits(t: text) as bool := t != "" and t.all(c => c >= '0' and c <= '9')
+is_letters(t: text) as bool := t != "" and lower(t).all(c => c >= 'a' and c <= 'z')
+is_hex(t: text) as bool := t != "" and lower(t).all(c => (c >= '0' and c <= '9') or (c >= 'a' and c <= 'f'))
+is_digit_text(t: text) as bool := #t == 1 and is_digits(t)
+is_letter_text(t: text) as bool := #t == 1 and is_letters(t)
 # a number's digits after its leading minus, if any: `-3`, `-2.5`
-unsigned(t: text): text := if starts_with(t, "-") then slice(t, 1) else t
-int_part(t: text): any := if is_digits(unsigned(t)) then int(t) else ø
-float_part(t: text): any := {
+unsigned(t: text) as text := if starts_with(t, "-") then slice(t, 1) else t
+int_part(t: text) as any := if is_digits(unsigned(t)) then int(t) else ø
+float_part(t: text) as any := {
 	pieces = unsigned(t).split(".")
 	if #pieces > 2 or not is_digits(pieces#1) or (#pieces == 2 and not is_digits(pieces#2)) { return ø }
 	float(t)
 }
-number_part(t: text): any := if is_digits(unsigned(t)) then int(t) else float_part(t)
-text_part(t: text): any := t
+number_part(t: text) as any := if is_digits(unsigned(t)) then int(t) else float_part(t)
+text_part(t: text) as any := t
 // the name without its mark: `$a` → a, `*rest` → rest
-unmarked(name: text, mark: text): text := if starts_with(name, mark) then slice(name, #mark) else name
+unmarked(name: text, mark: text) as text := if starts_with(name, mark) then slice(name, #mark) else name
 
 // Named events (extensions/sugar/events.warp): each event's listeners in order, with their numbers (counted within the event
 // from 1) and whether they listen once, as three lists of the same length
@@ -1051,7 +1051,7 @@ class Listener { event: text; number: int }
 rewrite (listeners of $e -= $h) => unlisten(data $e, $h) where $e is symbol
 // `remove alarm` (extensions/sugar/events.warp): the listener removed from the event it listens to
 listener_removed(listener: Listener) := unlisten(listener.event, listener)
-listen(name: any, listener: function, once: bool): Listener := {
+listen(name: any, listener: function, once: bool) as Listener := {
 	key = name_of(name)
 	if not (key in event_listeners) {
 		event_listeners[key] = []
@@ -1065,7 +1065,7 @@ listen(name: any, listener: function, once: bool): Listener := {
 	listening_once[key] += [once]
 	Listener(event: key, number: listener_counts[key])
 }
-emitted(name: any, data: any): any := {
+emitted(name: any, data: any) as any := {
 	key = name_of(name)
 	if not (key in event_listeners) { return ø }
 	running = event_listeners[key]
@@ -1074,21 +1074,21 @@ emitted(name: any, data: any): any := {
 	for listener in running { result = listener(data) }
 	result
 }
-listeners_of(name: any): list := if name_of(name) in listener_numbers then listener_numbers[name_of(name)] else []
+listeners_of(name: any) as list := if name_of(name) in listener_numbers then listener_numbers[name_of(name)] else []
 // a listener by itself or by its number within the event, `remove 2 from listeners of tick`
-unlisten(name: any, listener: any): any := {
+unlisten(name: any, listener: any) as any := {
 	key = name_of(name)
 	number = if listener is Listener then listener.number else listener
 	if key in event_listeners { kept_listeners(key, i => listener_numbers[key]#i != number) }
 	ø
 }
 // `clear listeners of alarm`: none listen any more
-listeners_cleared(name: any): any := {
+listeners_cleared(name: any) as any := {
 	if name_of(name) in event_listeners { kept_listeners(name_of(name), i => no) }
 	ø
 }
 // the listeners of an event at the positions keep holds for
-kept_listeners(key: text, keep: function): any := {
+kept_listeners(key: text, keep: function) as any := {
 	listeners = []
 	numbers = []
 	onces = []
@@ -1106,8 +1106,8 @@ kept_listeners(key: text, keep: function): any := {
 }
 
 // Python's range: `range(4)` is [0, 1, 2, 3], `range(1, 4)` [1, 2, 3]
-range(stop: int): list := 0 ..< stop
-range(start: int, stop: int): list := start ..< stop
+range(stop: int) as list := 0 ..< stop
+range(start: int, stop: int) as list := start ..< stop
 // the GPU host words, which a library answers (natively lib/host/native_host/gpu.warp over wgpu-native, the
 // playground's host-gpu.js over WebGPU); the shaders they run are written at compile time by extensions/rules/wgsl.warp
 gpu_computed(shader: node, values: node, count: int): node from host
@@ -1116,14 +1116,14 @@ gpu_render(shader: node, width: int, height: int, values: node): node from host
 // lists), which it changes where they are, as any word writing into a list does: the lists given, the shader's
 // numbers in them, whether or not the program made them GPU lists (card xs-float-xs); a GPU list's cells the host
 // changes itself
-gpu_compute(shader: text, values: any, count: int): any := written_back(gpu_computed(shader, values, count), values)
-written_back(left: any, given: any): any := {
+gpu_compute(shader: text, values: any, count: int) as any := written_back(gpu_computed(shader, values, count), values)
+written_back(left: any, given: any) as any := {
 	if is_error(left) { raise left }
 	if not (given is map) { return items_written(left, given) }
 	for name in given.keys { items_written(left[name], given[name]) }
 	given
 }
-items_written(left: any, given: any): any := {
+items_written(left: any, given: any) as any := {
 	if same(left, given) { return given }
 	for i in 1 to #given { given#i = left#i }
 	given

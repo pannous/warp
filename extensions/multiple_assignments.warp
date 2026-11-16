@@ -3,12 +3,12 @@
 # `a·value = b; b·value = a + b; a = a·value; b = b·value`. One value for several names, `x, y = [1, 2]`, gives its
 # elements in order: `x·values = [1, 2]; x = x·values#1; y = x·values#2`. Tuple returns (`return 1, 2`) are not here yet.
 
-held(name: Node, suffix: text): Node := match name {
+held(name: Node, suffix: text) as Node := match name {
 	Symbol(text): symbol(text + "·" + suffix)
 	_: name
 }
 
-assigned(names: list, values: list): Node := {
+assigned(names: list, values: list) as Node := {
 	places = 1 to #names
 	if #values == 1 {
 		whole = held(names#1, "values")
@@ -18,16 +18,16 @@ assigned(names: list, values: list): Node := {
 	statements(firsts + places.map(i => Key(names#i, Op.Assign, held(names#i, "value"))))
 }
 
-all_names(parts: list): bool := {
+all_names(parts: list) as bool := {
 	for part in parts { if not is_name(part) { return no } }
 	yes
 }
 
 # the names before the `=` and the values after it, when the comma list is a multiple assignment at `parts#at`
-split_at_assignment(parts: list, at: int): Node := assignment_at(parts, at, parts#at)
+split_at_assignment(parts: list, at: int) as Node := assignment_at(parts, at, parts#at)
 
 # (a Node parameter: `match parts#at { Key(…) }` itself never matches, card match-silently)
-assignment_at(parts: list, at: int, candidate: Node): Node := match candidate {
+assignment_at(parts: list, at: int, candidate: Node) as Node := match candidate {
 	Key(target, Op.Assign, given): {
 		names = parts[0..<(at - 1)] + [target]
 		values = [given] + parts[at..]
@@ -37,7 +37,7 @@ assignment_at(parts: list, at: int, candidate: Node): Node := match candidate {
 }
 
 # the comma list regrouped at its first `=`, when names lead up to it; else ø
-regrouped(parts: list): any := {
+regrouped(parts: list) as any := {
 	if not is_name(parts#1) { return ø }
 	for at in 2 to #parts {
 		split = split_at_assignment(parts, at)
@@ -51,19 +51,19 @@ regrouped(parts: list): any := {
 # `x = [1, 2]` (decision reconsider-spaced); ø for another list, and for a phrase first, `x = add 1, 2`, whose function
 # word takes the values after it (lambdas.warp comma_call, decision function-words-consume; the parser gives
 # `x = add 1 2` its phrase already)
-one_name_list(parts: list): any := match parts#1 {
+one_name_list(parts: list) as any := match parts#1 {
 	Key(target, Op.Assign, first): { if is_name(target) and not starts_with_name(first) and not parts[1..].any(part => is_key(part, Op.Assign) or is_postfix_word(part)) then Key(target, Op.Assign, List([first] + parts[1..], Bracket.Square, Separator.Comma)) else ø }
 	_: ø
 }
 # `x = 7 squared`, `x = 7 squared + 1`, `xs = [3, 1, 2] sorted`: a word taking the value before it (`$f takes amount`,
 # extensions/sugar/calls.warp) calls it, so the values are no list (decision postfix-words)
-is_postfix_word(part: Node): bool := leftmost_operand(part) is symbol and first_parameter_fits(leftmost_operand(part), amount_word)
+is_postfix_word(part: Node) as bool := leftmost_operand(part) is symbol and first_parameter_fits(leftmost_operand(part), amount_word)
 # `left right = f(x) g(y)`, Bend's parallel let (decision M5): as many names before the `=` as values after it, each
 # value evaluated before any name is assigned
-is_parallel_let(parts: list): bool := #parts > 2 and #parts % 2 == 1 and is_key(parts#((#parts + 1) ÷ 2), Op.Assign)
-starts_with_name(n: Node): bool := is_group(n) and bracket_of(n) == "" and #n > 1 and n#1 is symbol
+is_parallel_let(parts: list) as bool := #parts > 2 and #parts % 2 == 1 and is_key(parts#((#parts + 1) ÷ 2), Op.Assign)
+starts_with_name(n: Node) as bool := is_group(n) and bracket_of(n) == "" and #n > 1 and n#1 is symbol
 
-multiple_assignment(n: Node): Node := match n {
+multiple_assignment(n: Node) as Node := match n {
 	List(parts, Bracket.None, Separator.Comma): one_name_list(parts) ?? regrouped(parts) ?? n
 	List(parts, Bracket.None, Separator.Space): one_name_list(parts) ?? (if is_parallel_let(parts) then regrouped(parts) else ø) ?? n
 	# `{a, b = b, a + b}`: the braces hold the comma list, a block of the regrouped statements
@@ -75,7 +75,7 @@ multiple_assignment(n: Node): Node := match n {
 }
 
 # an enum's cases are no assignments: `enum Level { Low, Mid = 5 }` numbers Mid (card enum-case)
-multiple_assignments(program: Node): Node := if declared_enum(program) != ø then program else multiple_assignment(children(program, multiple_assignments))
+multiple_assignments(program: Node) as Node := if declared_enum(program) != ø then program else multiple_assignment(children(program, multiple_assignments))
 # the row (card core-extensions-move, decisions core-is-self, extension-passes): after the core's arity_overloads, behind
 # the function clauses' row, as the pass list ran it; its parts name core words without a use of core paths
 multiple_assignments_extension = Extension{name: "multiple_assignments", passes: {"arity_overloads": multiple_assignments}}

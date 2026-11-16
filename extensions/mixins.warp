@@ -7,7 +7,7 @@ WITH_WORD = "with"
 INCLUDE_WORD = "include"
 
 # the program with each mixin's members in the classes taking it in, the mixins themselves gone
-mixins_applied(program: Node): Node := {
+mixins_applied(program: Node) as Node := {
 	statements = flat_statements(program)
 	mixins = {}
 	for statement in statements {
@@ -20,14 +20,14 @@ mixins_applied(program: Node): Node := {
 }
 
 # the view of `mixin Walker {…}`, a class declaration marked mixin, else ø
-mixin_view(statement: Node): list? := {
+mixin_view(statement: Node) as list? := {
 	view = class_view(statement)
 	if view != ø and view#2#1 == "attribute" and view#2#2 == MIXIN_MARK then view else ø
 }
 
 # `class Duck with Walker {…}`, parsed as the bodiless class, `with` and `Walker: {…}`: the class with its body and the
 # mixins' members; a class including a mixin in its body, `include Walker`, the same; any other statement as it is
-with_mixins_taken(statement: Node, mixins: map): Node := {
+with_mixins_taken(statement: Node, mixins: map) as Node := {
 	clause = with_clause(statement)
 	if clause != ø {
 		match clause#1 {
@@ -47,7 +47,7 @@ with_mixins_taken(statement: Node, mixins: map): Node := {
 }
 
 # a class body's view: its own members, then each mixin's the class doesn't write itself
-mixed_body(own: list, taken: list, mixins: map): list := {
+mixed_body(own: list, taken: list, mixins: map) as list := {
 	for name in taken { if not mixins.has(name) { raise "`" + name + "` is no mixin the program declares" } }
 	written = own.map(mixed_member_word)
 	mixed = concatenated(taken.map(name => mixins[name])).filter(member => mixed_member_word(member) not in written)
@@ -57,7 +57,7 @@ mixed_body(own: list, taken: list, mixins: map): list := {
 # [the bodiless class, the mixins' names, the body] of `class Duck with Walker, Swimmer {…}`, which parses as the
 # bodiless class, `with` and the rest: the names and the body, `Walker {…}` or glued `Walker: {…}`, a comma list's last
 # item when more names come; else ø
-with_clause(statement: Node): list? := {
+with_clause(statement: Node) as list? := {
 	parts = match statement {
 		List(items, Bracket.None, Separator.Comma): items
 		_: [statement]
@@ -71,20 +71,20 @@ with_clause(statement: Node): list? := {
 	[head#1, names.map(name => name_of(name)), body]
 }
 # the words of a with clause's part: `Walker: {…}` and `Walker {…}` the name and the body, any other part itself
-clause_words(part: Node): list := {
+clause_words(part: Node) as list := {
 	if is_key(part, Op.Colon) { return [key_of(part), value_of(part)] }
 	if is_group(part) and bracket_of(part) != "{" { return items_of(part) }
 	[part]
 }
 
 # the mixin a body member `include Walker` names, else ø
-included_mixin(member: list): text? := {
+included_mixin(member: list) as text? := {
 	n = node_of(member)
 	if is_group(n) and #n == 2 and n#1 == symbol(INCLUDE_WORD) and n#2 is symbol then name_of(n#2) else ø
 }
 
 # the word a member defines, a method's or a field's
-mixed_member_word(member: list): text := {
+mixed_member_word(member: list) as text := {
 	n = member_read(member)
 	defined_word(n) ?? field_name(n)
 }
