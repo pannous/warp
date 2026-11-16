@@ -1,0 +1,5 @@
+# a curly list of values holds its values, as the square one: {1,2,3} == [1,2,3] (wiki/symbolism.md); a map with keys answers by its keys
+'{1,2,3} has 2'	yes
+'xs = {1,2,3}; 2 in xs'	yes
+'xs = {1,2,3}; xs.contains(5)'	no
+'{a: 1} has 1'	no
