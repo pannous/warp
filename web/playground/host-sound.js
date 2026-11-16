@@ -193,6 +193,7 @@ function soundWords(holder, program) {
 		// the page's voice kept around a task and set again (host-tasks.js keptVoice, lib/sound.warp voice_kept)
 		sound_voice_kept: () => BigInt(self.keptVoice?.() ?? 0),
 		sound_voice_back: voice => { self.voiceBack?.(Number(voice)); return 0n; },
+		sound_voice_joined: voice => { self.voiceJoined?.(Number(voice)); return 0n; },
 		sound_file_played: path => {
 			STD_ADAPTERS.sound.play_file.call({ holder }, guestText(program(), path));
 			return 0n;
