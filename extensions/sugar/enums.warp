@@ -3,10 +3,10 @@
 # `case .red:` the case red of the one enum declaring it
 rewrite $e::$c => $e.$c where $c is case of $e
 # `Shape::Rect(2, 3)`, `Shape.Rect(2, 3)`: the case carrying data, made by its own name, so its data stays; a name
-# holding an instance (`main.result`) stays a member, as does a call on a variable (`parser.word_at(3)`, though word_at
-# gives an instance)
+# holding an instance (`main.result`) stays a member, as does a call through a variable or a module (`parser.word_at(3)`,
+# `json.parse(t)`), though the word may give an instance
 rewrite $e::$c => $c where $c is instance
-rewrite $e.$c => $c where $e is symbol and $e is not value and $c is instance and $c is not symbol
+rewrite $e.$c => $c where $e is symbol and $e is type and $c is instance and $c is not symbol
 rewrite case.$c => $c where $c is case
 
 # `c is Coin` (type_tests.warp's is_type(c, "Coin")) of an enum: c is one of its cases
