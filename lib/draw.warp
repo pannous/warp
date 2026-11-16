@@ -112,7 +112,12 @@ shapes_painted(drawn: list, covered: list) := {
 	scale_told()
 	paint(shader_words(shape_shader), device_width, device_height, shapes_values(drawn, covered))
 }
-shapes_values(drawn: list, covered: list) := {shapes: drawn, coverage: covered, canvas: [canvas_width, canvas_height], instances: count(drawn) /! 3}
+// as GPU lists, laid out once as the shader reads them
+shapes_values(drawn: list, covered: list) := {
+	laid: [vec4] = drawn
+	amounts: [f32] = covered
+	{shapes: laid, coverage: amounts, canvas: [canvas_width, canvas_height], instances: count(drawn) /! 3}
+}
 // the canvas cleared to color on the GPU: the shapes before are covered, so they are dropped
 gpu_cleared(color: int) := {
 	shapes = []
