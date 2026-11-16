@@ -8,18 +8,18 @@
 
 # `as·text`: the function converting to the target, a name no program can write; its parameter, which a body's `it`
 # (or the name `text(p: Person)` gives) is renamed to (lambdas.warp renamed)
-conversion_name(target: text): text := "as·" + target
+conversion_name(target: text) as text := "as·" + target
 converted_value = HiddenWord.ConvertedValue as text
 
 # a word naming a type: a type word, a collection, or a type the program declares (`class Person {…}`)
-names_type(n: Node, scope: map): bool := n is symbol and (is_tested_type_word(name_of(n)) or binds_as(scope, name_of(n), Meaning.Type))
+names_type(n: Node, scope: map) as bool := n is symbol and (is_tested_type_word(name_of(n)) or binds_as(scope, name_of(n), Meaning.Type))
 
 # a class's name as written, declared or not: units' `q: Quantity as Duration` names lib/time's Duration, which a program
 # without lib/time lacks and so leaves the conversion out
-names_class(n: Node): bool := n is symbol and is_capitalized(name_of(n))
+names_class(n: Node) as bool := n is symbol and is_capitalized(name_of(n))
 # [source, target, body, the body's name of the value] of `A as B := body` with A and B types, of `n: A as B := body`
 # naming the value, also of `text(p: A) := body`, else ø
-conversion_of(n: Node, scope: map): list? := {
+conversion_of(n: Node, scope: map) as list? := {
 	if not is_key(n, Op.Define) { return ø }
 	head = as_phrase_read(key_of(n))
 	if is_key(head, Op.Colon) and key_of(head) is symbol and is_key(value_of(head), Op.As) {
@@ -36,11 +36,11 @@ conversion_of(n: Node, scope: map): list? := {
 # the words showing a value as text, which show it through a program's conversion to text
 showing_words = ["print", "text", "text_form"]
 # x as the program's conversion to text shows it; a text as it is
-shown_converted(x: Node): Node := if x is text then x else call_of(conversion_name("text"), [x])
+shown_converted(x: Node) as Node := if x is text then x else call_of(conversion_name("text"), [x])
 
 # every `x as B` of a target B the program converts to as the call of its conversion; `x as B = v` and `f(x) as B := …`
 # declare and stay
-converting_uses(n: Node, targets: map): Node := {
+converting_uses(n: Node, targets: map) as Node := {
 	if (is_key(n, Op.Assign) or is_key(n, Op.Define)) and is_key(key_of(n), Op.As) {
 		return Key(key_of(n), op_of(n), converting_uses(value_of(n), targets))
 	}
@@ -59,7 +59,7 @@ converting_uses(n: Node, targets: map): Node := {
 
 # the conversion to `target`: a typed function of each source type, `as·text·Person(p: Person) := body`, and the one
 # trying them in order by the value's type, then the built-in conversion, `as·text(it: any)`
-conversion_functions(target: text, written: list, targets: map, scope: map): list := {
+conversion_functions(target: text, written: list, targets: map, scope: map) as list := {
 	it = symbol(converted_value)
 	# a class's own instance stays itself, a value of no source type is refused: no built-in conversion makes one
 	refused = call_of(raise_word, ["no conversion to " + target + " of that value"])
@@ -75,11 +75,11 @@ conversion_functions(target: text, written: list, targets: map, scope: map): lis
 	functions + [Key(call_of(conversion_name(target), [Key(it, Op.Colon, symbol(any_word))]), Op.Define, tried)]
 }
 # a target the program declares, a class, not a built-in type word: text stays one where a prelude in front binds it
-declared_target(target: text, scope: map): bool := binds_as(scope, target, Meaning.Type) and not is_tested_type_word(target)
+declared_target(target: text, scope: map) as bool := binds_as(scope, target, Meaning.Type) and not is_tested_type_word(target)
 # a conversion's body giving a number gives the target's amount (night decision length-pixels): `length as pixels :=
 # it.amount * 2` makes 3m 6px, the number as the target class as any number is (lib/units counts its base unit); any
 # other value, and every value of a built-in target (`P as text := it.age`), as the body gives it
-amount_kept(body: Node, target: text): Node := {
+amount_kept(body: Node, target: text) as Node := {
 	given = symbol(given_amount)
 	block_of([Key(given, Op.Assign, body), chosen(Key(given, Op.Is, symbol("number")), Key(given, Op.As, symbol(target)), given)])
 }
@@ -92,15 +92,15 @@ given_amount = "amount·given"
 # the member the value has a conversion to: Instant.minus(other: Instant or Duration) takes an Instant as it is and
 # 2 seconds as a Duration (card instant-typed-duration)
 # (never `to·T`, the compiled name of a method `to` of class T: Quantity.to beside the conversion to Quantity)
-argument_conversion_name(type: text): text := "passed·" + union_members(type).join("_or_")
-converts_to(type: text, targets: map): bool := union_members(type).any(member => targets.has(member))
+argument_conversion_name(type: text) as text := "passed·" + union_members(type).join("_or_")
+converts_to(type: text, targets: map) as bool := union_members(type).any(member => targets.has(member))
 # `passed·T(it: any, taker: text)`: a value of the type (of a member of the union) as it is, one of a source type
 # converted, the first member's conversions first. A class goes before a type word, as a member and as a source: a
 # lib/units quantity also tests as a number, so Instant.compare(other: Instant or number or Duration) takes 9h as a
 # Duration and only a bare 5 as a number. A class place (decision class-types-checked) takes, besides, a value with
 # every field of a member class extending none, and refuses any other value: `f takes a Length, not 5s (a Time)`; a
 # place of type words only takes it as it is, the parameter's own check says what it takes
-argument_conversion(type: text, places: map, classes: map): Node := {
+argument_conversion(type: text, places: map, classes: map) as Node := {
 	it = symbol(converted_value)
 	# (`Duration or any`: a Duration, a value converting to one, else any value as it is)
 	members = union_members(type).filter(member => member != any_word)
@@ -118,11 +118,11 @@ argument_conversion(type: text, places: map, classes: map): Node := {
 taker_name = "taker·named"
 place_refusal_word = "place_refused"
 # whether an instance or a map has every one of the fields (lib/prelude.warp has_fields)
-fields_fit(it: Node, fields: list): Node := Key(Key(call_of(instance_test_word, [it]), Op.Or, Key(it, Op.Is, symbol("map"))), Op.And, call_of("has_fields", [it, List(fields.map(field => Text(field)), Bracket.Square, Separator.Comma)]))
+fields_fit(it: Node, fields: list) as Node := Key(Key(call_of(instance_test_word, [it]), Op.Or, Key(it, Op.Is, symbol("map"))), Op.And, call_of("has_fields", [it, List(fields.map(field => Text(field)), Bracket.Square, Separator.Comma)]))
 # the prelude words a class place's check calls (core/passes/prelude_words.warp extension_writes)
-class_place_words(program: Node): list := if statements_in(program).any(statement => class_view(statement) != ø) then [place_refusal_word, "has_fields", "with_article"] else []
+class_place_words(program: Node) as list := if statements_in(program).any(statement => class_view(statement) != ø) then [place_refusal_word, "has_fields", "with_article"] else []
 # each class the program declares, not an enum: name → its Declared (core/passes/classes.warp)
-class_declarations(program: Node): map := {
+class_declarations(program: Node) as map := {
 	enums = declarations_found(program, declared_enum, {})
 	found = {}
 	for statement in statements_in(program) {
@@ -132,9 +132,9 @@ class_declarations(program: Node): map := {
 	found
 }
 # conversions (or [type, …] steps) from a class first, then from a type word, each in the order written
-class_first(steps: list): list := steps.filter(step => is_capitalized(step#1)) + steps.filter(step => not is_capitalized(step#1))
+class_first(steps: list) as list := steps.filter(step => is_capitalized(step#1)) + steps.filter(step => not is_capitalized(step#1))
 # name → the parameter types of a function defined once, for each one taking a type the program converts to
-typed_parameters(statements: list, targets: map, aliases: map): map := {
+typed_parameters(statements: list, targets: map, aliases: map) as map := {
 	found = {}
 	for statement in statements {
 		call = definition_call(statement)
@@ -148,11 +148,11 @@ typed_parameters(statements: list, targets: map, aliases: map): map := {
 }
 # each parameter type, an alias as the type it names, but a type variable of the signature, `K` of `m: map of K, k: K`,
 # as any
-signature_types(types: list, aliases: map): list := {
+signature_types(types: list, aliases: map) as list := {
 	variables = types.filter(type => type is text).flat_map(type => type.split(" of ")[1..])
 	types.map(type => if type is text and type in variables then any_word else if type is text then alias_resolved(type, aliases) else type)
 }
-alias_resolved(type: text, aliases: map): text := {
+alias_resolved(type: text, aliases: map) as text := {
 	resolved = type
 	steps = 0
 	# (bounded: two aliases naming each other end the walk)
@@ -164,10 +164,10 @@ alias_resolved(type: text, aliases: map): text := {
 }
 # a word the runtime or C also takes, `exp(x: real)` beside math's `exp(x: float)`: the overload passes choose among
 # them by the argument as written, so it stays unconverted
-has_builtin_variant(name: text): bool := #lines_of(typed_lines + foreign_math_lines, unaliased(name)) > 0
+has_builtin_variant(name: text) as bool := #lines_of(typed_lines + foreign_math_lines, unaliased(name)) > 0
 # a class's making as a function of its fields (card class-field-takes): name → its fields' types in order, of each class
 # with a field of a type the program converts a value to, `class P { age: Age }` making P(3) of `type Age < int`
-constructor_parameters(classes: map, targets: map, aliases: map, typed: map): map := {
+constructor_parameters(classes: map, targets: map, aliases: map, typed: map) as map := {
 	found = {}
 	for name in classes.keys.filter(name => not typed.has(name)) {
 		declared = classes[name]
@@ -179,17 +179,17 @@ constructor_parameters(classes: map, targets: map, aliases: map, typed: map): ma
 	found
 }
 # `P(q: 3)`, `P { q: 3 }` of a class taking a converted field: each named field's value passed to its type
-named_fields_passed(call: Node, places: Places, known: map): Node := group_like(call, [call#1] + items_of(call)[1 ..].map(argument => field_passed(argument, name_of(call#1), places, known)))
-braced_fields_passed(made: Node, places: Places, known: map): Node := Key(key_of(made), op_of(made), group_like(value_of(made), items_of(value_of(made)).map(argument => field_passed(argument, name_of(key_of(made)), places, known))))
-field_passed(argument: Node, class_name: text, places: Places, known: map): Node := {
+named_fields_passed(call: Node, places: Places, known: map) as Node := group_like(call, [call#1] + items_of(call)[1 ..].map(argument => field_passed(argument, name_of(call#1), places, known)))
+braced_fields_passed(made: Node, places: Places, known: map) as Node := Key(key_of(made), op_of(made), group_like(value_of(made), items_of(value_of(made)).map(argument => field_passed(argument, name_of(key_of(made)), places, known))))
+field_passed(argument: Node, class_name: text, places: Places, known: map) as Node := {
 	fields = places.classes[class_name].fields
 	if not (is_key(argument, Op.Colon) and key_of(argument) is symbol and name_of(key_of(argument)) in fields) { return argument }
 	Key(key_of(argument), Op.Colon, passed(value_of(argument), places.typed[class_name]#(fields.index_of(name_of(key_of(argument)))), class_name, places, known))
 }
 # whether the node makes an instance of a class taking a converted field
-makes_converting_class(name: Node, places: Places): bool := name is symbol and places.classes.has(name_of(name)) and places.typed.has(name_of(name))
+makes_converting_class(name: Node, places: Places) as bool := name is symbol and places.classes.has(name_of(name)) and places.typed.has(name_of(name))
 # the parameter types a call of such a function passes its arguments to, one each, else ø (a named argument too)
-positional_types(call: Node, typed: map): list? := {
+positional_types(call: Node, typed: map) as list? := {
 	if not (is_call(call) and call#1 is symbol and typed.has(name_of(call#1))) { return ø }
 	types = typed[name_of(call#1)]
 	arguments = items_of(call)[1 ..]
@@ -203,7 +203,7 @@ class Places { typed: map; converting: map; classes: map; results: map; declared
 # refusal names, and each `x: T = v` so, x the taker, and the value of `f(…): T := …` (no taker: the result's own check
 # says what it takes); a named argument as it is, and a value known to be a T already:
 # a parameter typed so of the definition around it (`g(d: Length) := f(d)`), the instance of a constructor of the class
-converted_arguments(n: Node, places: Places, known: map): Node := {
+converted_arguments(n: Node, places: Places, known: map) as Node := {
 	call = definition_call(n)
 	if call != ø {
 		known_inside = parameters_typed(call)
@@ -229,7 +229,7 @@ converted_arguments(n: Node, places: Places, known: map): Node := {
 value_entry_suffix = "·value"
 # the functions called_values named so in this program, a global, which grows in place (no scan of the whole program)
 global named_values = []
-called_values(n: Node, places: Places): Node := {
+called_values(n: Node, places: Places) as Node := {
 	# (the parts looked at first: a node naming no such function, nearly every one, costs one lookup a symbol)
 	if not parts_of(n).any(part => part is symbol and converts_arguments(name_of(part), places)) { return n }
 	named = (value_parts(n) + compared_parts(n)).filter(part => part is symbol and converts_arguments(name_of(part), places))
@@ -237,10 +237,10 @@ called_values(n: Node, places: Places): Node := {
 	children(n, child => if child in named then symbol(name_of(child) + value_entry_suffix) else child)
 }
 # a function, not a class, with a parameter of a type the program has conversions to (a class place only checks)
-converts_arguments(name: text, places: Places): bool := places.typed.has(name) and not places.classes.has(name) and places.typed[name].any(type => type is text and union_members(type).any(member => places.converting.get(member)))
-compared_parts(n: Node): list := if is_key(n, Op.Eq) or is_key(n, Op.Ne) then [key_of(n), value_of(n)] else []
+converts_arguments(name: text, places: Places) as bool := places.typed.has(name) and not places.classes.has(name) and places.typed[name].any(type => type is text and union_members(type).any(member => places.converting.get(member)))
+compared_parts(n: Node) as list := if is_key(n, Op.Eq) or is_key(n, Op.Ne) then [key_of(n), value_of(n)] else []
 # `f·value(argument·1) := f(argument·1)` of each such function the program names as a value
-value_entries(places: Places): list := {
+value_entries(places: Places) as list := {
 	named = named_values
 	named_values = []
 	places.typed.keys.filter(name => name in named).map(name => {
@@ -248,14 +248,14 @@ value_entries(places: Places): list := {
 		Key(call_of(name + value_entry_suffix, parameters_of(key_of(calling)).map(symbol)), Op.Define, value_of(calling))
 	})
 }
-passed(value: Node, type: text, taker: text, places: Places, known: map): Node := if converts_to(type, places.converting) and not known_as(value, type, places, known) then call_of(argument_conversion_name(type), [value, Text(taker)]) else value
+passed(value: Node, type: text, taker: text, places: Places, known: map) as Node := if converts_to(type, places.converting) and not known_as(value, type, places, known) then call_of(argument_conversion_name(type), [value, Text(taker)]) else value
 # the places without the functions a parameter or variable of the definition shadows, `apply: function` called
 # `apply([item])`, `named = (m => …)` called `named(w)` (card local-shadowing)
-unshadowed(places: Places, names: list): Places := {
+unshadowed(places: Places, names: list) as Places := {
 	if names.any(name => places.typed.has(name)) then Places(without_keys(places.typed, names), places.converting, places.classes, places.results, places.declared) else places
 }
 # name → type of each parameter of a definition
-parameters_typed(call: Node): map := {
+parameters_typed(call: Node) as map := {
 	typed = {}
 	for parameter in signature_of(items_of(call)).parameters { if parameter.type_name != "" { typed[parameter.name] = parameter.type_name } }
 	typed
@@ -263,7 +263,7 @@ parameters_typed(call: Node): map := {
 # whether the value is known to be of a member class of the type, or of one extending it, made one, `x as T` (a
 # subtype's made·T, a conversion's as·T), or is the call of a function declaring a member its result, or of a function
 # of several results, which the place picks
-known_as(value: Node, type: text, places: Places, known: map): bool := {
+known_as(value: Node, type: text, places: Places, known: map) as bool := {
 	plain = unparenthesized(without_mark(value))
 	members = union_members(type)
 	if is_key(plain, Op.As) and value_of(plain) is symbol and name_of(value_of(plain)) in members { return yes }
@@ -273,10 +273,10 @@ known_as(value: Node, type: text, places: Places, known: map): bool := {
 	given = if plain is symbol and known.has(name_of(plain)) then known[name_of(plain)] else if is_call(plain) and places.classes.has(head) then head else ""
 	given != "" and union_members(type).any(member => places.classes.has(member) and descends_from(given, member, places.classes))
 }
-descends_from(name: text, ancestor: text, classes: map): bool := name == ancestor or (classes.has(name) and classes[name].parent != "" and descends_from(classes[name].parent, ancestor, classes))
+descends_from(name: text, ancestor: text, classes: map) as bool := name == ancestor or (classes.has(name) and classes[name].parent != "" and descends_from(classes[name].parent, ancestor, classes))
 # the functions defined more than once, each declaring its result, `render(t) as pdf := …` beside `… as docx`: read
 # before the definitions pass normalizes the heads (arity_overloads.warp overloaded_results reads them after)
-several_results(statements: list): map := {
+several_results(statements: list) as map := {
 	found = {}
 	for statement in statements {
 		call = definition_call(statement)
@@ -287,7 +287,7 @@ several_results(statements: list): map := {
 # a name defined bare more than once, each with its result type, `sample: int := 7` beside `sample: text := "seven"`:
 # a function of no parameters of several results, `sample(): int := 7`, the type at its use choosing (card
 # duplicate-function-definitions); a single `x: T := e` stays as written
-result_heads(program: Node): Node := {
+result_heads(program: Node) as Node := {
 	statements = statements_in(program)
 	names = statements.map(bare_result_name).filter(name => name != "")
 	several = names.filter(name => #names.filter(other => other == name) > 1)
@@ -295,26 +295,26 @@ result_heads(program: Node): Node := {
 	statements_as(program, statements.map(statement => if bare_result_name(statement) in several then nullary_head(without_mark(statement)) else name_calls(statement, several)))
 }
 # n with each bare use of the names as their call, `sample` → `sample()`; a call written as one kept
-name_calls(n: Node, names: list): Node := {
+name_calls(n: Node, names: list) as Node := {
 	if n is symbol and name_of(n) in names { return call_node(n, []) }
 	if is_call(n) and n#1 is symbol and name_of(n#1) in names { return call_node(n#1, items_of(n)[1 ..].map(item => name_calls(item, names))) }
 	children(n, child => name_calls(child, names))
 }
 # `name: T := e`'s name, else ""
-bare_result_name(statement: Node): text := {
+bare_result_name(statement: Node) as text := {
 	plain = without_mark(statement)
 	if is_key(plain, Op.Define) and is_key(key_of(plain), Op.Colon) and key_of(key_of(plain)) is symbol and value_of(key_of(plain)) is symbol then name_of(key_of(key_of(plain))) else ""
 }
-nullary_head(definition: Node): Node := Key(Key(call_node(key_of(key_of(definition)), []), Op.Colon, value_of(key_of(definition))), Op.Define, value_of(definition))
+nullary_head(definition: Node) as Node := Key(Key(call_node(key_of(key_of(definition)), []), Op.Colon, value_of(key_of(definition))), Op.Define, value_of(definition))
 # the types of the program's `x: T = v` and `f(…): T := …`
-declared_types(program: Node): list := nodes_in(program).map(n => if is_typed_declaration(n) then place_type(value_of(key_of(n))) else converted_result_type(n)).filter(type => type != ø)
+declared_types(program: Node) as list := nodes_in(program).map(n => if is_typed_declaration(n) then place_type(value_of(key_of(n))) else converted_result_type(n)).filter(type => type != ø)
 # T of a definition `f(…): T := …`, ø of any other node
-written_result_type(n: Node): text? := if definition_call(n) != ø and is_key(key_of(n), Op.Colon) then place_type(value_of(key_of(n))) else ø
+written_result_type(n: Node) as text? := if definition_call(n) != ø and is_key(key_of(n), Op.Colon) then place_type(value_of(key_of(n))) else ø
 # T of a definition whose value converts to it: never a linked module's word, declared without its body (its module
 # made the value), which a body would make a local function shadowing that word
-converted_result_type(n: Node): text? := if definition_call(n) == ø or value_of(n) == Node.Empty then ø else written_result_type(n)
+converted_result_type(n: Node) as text? := if definition_call(n) == ø or value_of(n) == Node.Empty then ø else written_result_type(n)
 # the values a body gives, a block's last statement, each branch of an if, as the function makes them
-last_value_mapped(body: Node, make: function): Node := {
+last_value_mapped(body: Node, make: function) as Node := {
 	if is_key(body, Op.Else) and is_key(key_of(body), Op.Then) {
 		chosen_one = key_of(body)
 		return Key(Key(key_of(chosen_one), Op.Then, last_value_mapped(value_of(chosen_one), make)), Op.Else, last_value_mapped(value_of(body), make))
@@ -323,7 +323,7 @@ last_value_mapped(body: Node, make: function): Node := {
 	group_like(body, items_of(body)[0 ..< #body - 1] + [last_value_mapped(body#(#body), make)])
 }
 # name → the result type its definition declares, `f(…): T := …`
-results_declared(statements: list): map := {
+results_declared(statements: list) as map := {
 	declared = {}
 	for statement in statements {
 		result = written_result_type(statement)
@@ -332,12 +332,12 @@ results_declared(statements: list): map := {
 	declared
 }
 # `x: T = v`, `x: A or B = v`: a variable declared with a type word or a union of them
-is_typed_declaration(n: Node): bool := is_key(n, Op.Assign) and is_key(key_of(n), Op.Colon) and key_of(key_of(n)) is symbol and place_type(value_of(key_of(n))) != ø
-place_type(type: Node): text? := if type is symbol then name_of(type) else union_spelling(type)
+is_typed_declaration(n: Node) as bool := is_key(n, Op.Assign) and is_key(key_of(n), Op.Colon) and key_of(key_of(n)) is symbol and place_type(value_of(key_of(n))) != ø
+place_type(type: Node) as text? := if type is symbol then name_of(type) else union_spelling(type)
 
 # the program with its conversions as functions, before its statements (its last one stays its value), and their uses
 # as calls
-conversions(program: Node): Node := {
+conversions(program: Node) as Node := {
 	aliases = type_aliases(statements_in(program))
 	if aliases { program = List(statements_in(program).map(statement => unaliased_conversions(statement, aliases)), Bracket.None, Separator.Newline) }
 	scope = scope_of(program)
@@ -391,7 +391,7 @@ conversions(program: Node): Node := {
 
 # `render(t) as pdf := …` with no type pdf is refused, never a variable declared pdf (Interviewer screen 11-08, card
 # render-pdf-string): a result's type must be a type, declared `type pdf = text`, a class, or a built-in one
-result_type_checked(statement: Node, scope: map, aliases: map): Node := {
+result_type_checked(statement: Node, scope: map, aliases: map) as Node := {
 	if not (is_key(statement, Op.Define) and is_key(key_of(statement), Op.As)) { return statement }
 	head = key_of(key_of(statement))
 	type = value_of(key_of(statement))
@@ -403,13 +403,13 @@ result_type_checked(statement: Node, scope: map, aliases: map): Node := {
 }
 # the classes the program declares that an `x as P` names, its declarations `x as P = v` too; not its enums, whose
 # `2 as Level` is the case at an index, `66 as Key` the case of that number (plain_enums, extensions/sugar/enums.warp)
-class_targets(program: Node, scope: map): list := {
+class_targets(program: Node, scope: map) as list := {
 	enums = declarations_found(program, declared_enum, {})
 	nodes_in(program).filter(n => is_key(n, Op.As) and value_of(n) is symbol and is_capitalized(name_of(value_of(n))) and binds_as(scope, name_of(value_of(n)), Meaning.Type) and not enums.has(name_of(value_of(n)))).map(n => name_of(value_of(n))).unique()
 }
 
 # `type Q = P`: name → the type it names, Q → P, of each alias the program declares of one type
-type_aliases(statements: list): map := {
+type_aliases(statements: list) as map := {
 	aliases = {}
 	for statement in statements {
 		if is_key(statement, Op.Assign) and value_of(statement) is symbol {
@@ -421,19 +421,19 @@ type_aliases(statements: list): map := {
 }
 # the statement with an alias named as the type it names: the target of every `x as Q`, both types of a conversion's
 # head `q as Q := …` (`n: q as Q := …`); a value's own name, `length as pixels` of a variable length, stays
-unaliased_conversions(statement: Node, aliases: map): Node := {
+unaliased_conversions(statement: Node, aliases: map) as Node := {
 	targets_named = targets_unaliased(statement, aliases)
 	if not is_key(targets_named, Op.Define) { return targets_named }
 	head = as_phrase_read(key_of(targets_named))
 	head = if is_key(head, Op.As) then Key(unaliased_type(key_of(head), aliases), Op.As, value_of(head)) else if is_key(head, Op.Colon) and is_key(value_of(head), Op.As) then Key(key_of(head), Op.Colon, Key(unaliased_type(key_of(value_of(head)), aliases), Op.As, value_of(value_of(head)))) else key_of(targets_named)
 	Key(head, Op.Define, value_of(targets_named))
 }
-targets_unaliased(n: Node, aliases: map): Node := {
+targets_unaliased(n: Node, aliases: map) as Node := {
 	walked = children(n, x => targets_unaliased(x, aliases))
 	if is_group(walked) and #walked == 3 and walked#2 == symbol("as") { return group_like(walked, [walked#1, walked#2, unaliased_type(walked#3, aliases)]) }
 	if is_key(walked, Op.As) then Key(key_of(walked), Op.As, unaliased_type(value_of(walked), aliases)) else walked
 }
-unaliased_type(n: Node, aliases: map): Node := if n is symbol and aliases.has(name_of(n)) then symbol(aliases[name_of(n)]) else n
+unaliased_type(n: Node, aliases: map) as Node := if n is symbol and aliases.has(name_of(n)) then symbol(aliases[name_of(n)]) else n
 
 # --- forced conversions, `x as! T` (decision checked-forced-conversions, convert-bang) ---
 # A library writes `convert!(n: number, to: byte) := …`, the twin of `n: number as byte := …`. `to: T` names the target
@@ -442,7 +442,7 @@ unaliased_type(n: Node, aliases: map): Node := if n is symbol and aliases.has(na
 # for match_patterns. A map forced to a class the program declares, and no convert! of that class, drops unknown fields.
 
 # [source type or "", target, body, the body's name of the value] of `convert!(n: number, to: byte) := body`, else ø
-forced_conversion_of(n: Node): list? := {
+forced_conversion_of(n: Node) as list? := {
 	if not is_key(n, Op.Define) { return ø }
 	head = key_of(n)
 	if not is_call(head) or not (head#1 is symbol) or not is_convert_name(name_of(head#1)) { return ø }
@@ -465,19 +465,19 @@ forced_conversion_of(n: Node): list? := {
 	[source, target, value_of(n), param]
 }
 # the type of `x as! T`, else ø
-forced_type_name(n: Node): text? := {
+forced_type_name(n: Node) as text? := {
 	if not is_forced_as(n) { return ø }
 	type = value_of(value_of(n))
 	if type is symbol then name_of(type) else ø
 }
 # `convert!` as written, and the program's own copy of it once a library defines the same word (`convert!·own`)
 convert_word = "convert!"
-is_convert_name(name: text): bool := name == convert_word or name == own_word(convert_word)
+is_convert_name(name: text) as bool := name == convert_word or name == own_word(convert_word)
 # `convert!·byte`: one function per target, so a linked prelude `convert!` is not what `as! byte` calls when this
 # program adds a target, and a literal `to: T` needs no run-time name test
-clause_name(target: text): text := convert_word + "·" + target
+clause_name(target: text) as text := convert_word + "·" + target
 # the target of `convert!(x, to: byte)` or `convert!(x, to: symbol("tiny"))` when it is written out, else ø
-literal_forced_target(call: Node): text? := {
+literal_forced_target(call: Node) as text? := {
 	if not is_call(call) or not (call#1 is symbol) or not is_convert_name(name_of(call#1)) { return ø }
 	arguments = items_of(call)[1 ..]
 	if #arguments < 2 { return ø }
@@ -491,7 +491,7 @@ literal_forced_target(call: Node): text? := {
 }
 # `x as! T` and a literal `convert!(x, to: T)` call `convert!·T` when this program has that target; a target only the
 # linked prelude converts (`as! byte` with no local clause) stays `convert!(x, to: symbol(T))`
-forced_uses(n: Node, patterns: map, written: map): Node := {
+forced_uses(n: Node, patterns: map, written: map) as Node := {
 	walked = children(n, x => forced_uses(x, patterns, written))
 	literal = literal_forced_target(walked)
 	if literal != ø and written.has(literal) {
@@ -505,9 +505,9 @@ forced_uses(n: Node, patterns: map, written: map): Node := {
 }
 forced_value = symbol("value")
 # `raise "no forced conversion to T of that value"`
-forced_refusal(target: text): Node := call_of(raise_word, ["no forced conversion to " + target + " of that value"])
+forced_refusal(target: text) as Node := call_of(raise_word, ["no forced conversion to " + target + " of that value"])
 # a field's zero when a map omits it: 0, 0.0, "", no, [], and ø for an optional or unknown type
-forced_field_zero(type: text?): Node := {
+forced_field_zero(type: text?) as Node := {
 	if type == ø or type == "" or type != required_type(type) { return ø }
 	if type in ["int", "integer", "long", "i64", "i32", "nat", "byte", "int8", "int16", "int32", "int64", "uint8", "u8", "uint16", "uint32", "uint64", "hex", "binary", "octal"] { return 0 }
 	if type in ["float", "double", "f64", "f32", "float32", "float64"] { return 0.0 }
@@ -517,7 +517,7 @@ forced_field_zero(type: text?): Node := {
 	ø
 }
 # `Person{name: map_get_or(value, "name", ""), …}`: the declared fields, unknown map keys left out
-forced_instance(class_name: text, declared: Declared, value: Node): Node := {
+forced_instance(class_name: text, declared: Declared, value: Node) as Node := {
 	entries = []
 	for name in declared.fields {
 		if name != ø and name != "" {
@@ -530,7 +530,7 @@ forced_instance(class_name: text, declared: Declared, value: Node): Node := {
 }
 # the branch of one target: typed sources in the order written (the last tried first), then an untyped source, then a
 # class built from a map, then the refusal
-forced_branch(target: text, clauses: list, classes: map, patterns: map, written: map): Node := {
+forced_branch(target: text, clauses: list, classes: map, patterns: map, written: map) as Node := {
 	typed = clauses.filter(conversion => conversion#1 != "")
 	untyped = clauses.filter(conversion => conversion#1 == "")
 	branch = if #untyped > 0 then forced_body(untyped.last, patterns, written) else if target in classes then chosen(Key(forced_value, Op.Is, symbol("map")), forced_instance(target, classes[target], forced_value), forced_refusal(target)) else forced_refusal(target)
@@ -539,11 +539,11 @@ forced_branch(target: text, clauses: list, classes: map, patterns: map, written:
 	}
 	branch
 }
-forced_body(conversion: list, patterns: map, written: map): Node := forced_uses(renamed(conversion#3, conversion#4, forced_value), patterns, written)
+forced_body(conversion: list, patterns: map, written: map) as Node := forced_uses(renamed(conversion#3, conversion#4, forced_value), patterns, written)
 # `convert!·T(value)` for each target this program converts by force
-forced_functions(order: list, written: map, classes: map, patterns: map): list := order.map(target => Key(call_of(clause_name(target), [forced_value]), Op.Define, forced_branch(target, written.get(target) ?? [], classes, patterns, written)))
+forced_functions(order: list, written: map, classes: map, patterns: map) as list := order.map(target => Key(call_of(clause_name(target), [forced_value]), Op.Define, forced_branch(target, written.get(target) ?? [], classes, patterns, written)))
 # the classes still declared in these statements, by name
-forced_classes(statements: list): map := {
+forced_classes(statements: list) as map := {
 	classes = {}
 	for statement in statements {
 		view = class_view(statement)
@@ -555,7 +555,7 @@ forced_classes(statements: list): map := {
 	classes
 }
 # the program with its convert! declarations as the one dispatcher, and `x as! T` as calls of it
-forced_conversions(program: Node): Node := {
+forced_conversions(program: Node) as Node := {
 	patterns = named_patterns_of(program)
 	found = []
 	kept = []

@@ -37,7 +37,7 @@ global input = calloc(1, CHUNK_BYTES)
 global documents = {}
 
 # count bytes of standard input; its end ends the server
-input_bytes(count: int): text := {
+input_bytes(count: int) as text := {
 	got = ""
 	while byte_size(got) < count {
 		read_now = read(STANDARD_INPUT, input, min(count - byte_size(got), CHUNK_BYTES))
@@ -47,7 +47,7 @@ input_bytes(count: int): text := {
 	got
 }
 # the next message: its header's lines up to a blank one, then as many bytes as its Content-Length says
-next_message(): map := {
+next_message() as map := {
 	header = ""
 	while not header.ends_with(HEADER_END) { header += input_bytes(1) }
 	length = lines(header).filter(line => line.starts_with(LENGTH_HEADER)).map(line => int(line[#LENGTH_HEADER ..].trim))
@@ -59,7 +59,7 @@ sent(message: map) := {
 	print LENGTH_HEADER + text(byte_size(body) + 1) + HEADER_END + body
 }
 
-answer(message: map): any := {
+answer(message: map) as any := {
 	method = message["method"]
 	parameters = message.get("params") ?? {}
 	if method == "initialize" { return {"capabilities": CAPABILITIES, "serverInfo": {"name": "warp"}} }
@@ -88,7 +88,7 @@ published(uri: text, diagnostics: list) := {
 # resolve from the file's folder, compiled without running (`warp compile`) and removed again. The compiler's first
 # line reads `<file as written>:<line>:<column> <sentence>`, the file named from the folder the compile runs in
 # (a folder with a space in its path makes the compiler word its line the other way round)
-diagnostics_of(uri: text, source: text): list := {
+diagnostics_of(uri: text, source: text) as list := {
 	checked = path_of(uri) + CHECK_SUFFIX
 	write(checked, source)
 	report = command("cd " + quoted_path(dirname(checked)) + " && " + warp_command("compile " + quoted_path(basename(checked)) + " /dev/null 2>&1") + COMPILE_REFUSAL_IS_OUTPUT)
@@ -104,7 +104,7 @@ diagnostics_of(uri: text, source: text): list := {
 }
 
 # the definition of the name at the place `parameters` names, as `shown` gives it; ø when there is none
-found(parameters: map, shown: function): any := {
+found(parameters: map, shown: function) as any := {
 	uri = parameters["textDocument"]["uri"]
 	place = parameters["position"]
 	name = name_at(document_text(uri), place["line"] + 1, place["character"] + 1)
@@ -117,14 +117,14 @@ found(parameters: map, shown: function): any := {
 	}
 	ø
 }
-location_of(uri: text, definition: list): map := {
+location_of(uri: text, definition: list) as map := {
 	start = {"line": definition#2 - 1, "character": definition#3 - 1}
 	{"uri": uri, "range": {"start": start, "end": {"line": start["line"], "character": start["character"] + #definition#1}}}
 }
-hover_of(uri: text, definition: list): map := {"contents": {"kind": "markdown", "value": "```warp\n" + lines(document_text(uri))#(definition#2).trim + "\n```"}}
+hover_of(uri: text, definition: list) as map := {"contents": {"kind": "markdown", "value": "```warp\n" + lines(document_text(uri))#(definition#2).trim + "\n```"}}
 
 # the name written around a column of a line, counted from 1
-name_at(source: text, line: int, column: int): text := {
+name_at(source: text, line: int, column: int) as text := {
 	rows = lines(source)
 	if line > #rows { return "" }
 	characters = [c for c in rows#line]
@@ -134,16 +134,16 @@ name_at(source: text, line: int, column: int): text := {
 	while last < #characters and is_name_character(characters#(last + 1)) { last += 1 }
 	characters[first - 1 ..< last].join("")
 }
-is_name_character(c: text): bool := is_alphanumeric(c) or c in NAME_PUNCTUATION
+is_name_character(c: text) as bool := is_alphanumeric(c) or c in NAME_PUNCTUATION
 
 # a text's statements: a parse of several is their list, of one that statement; a text that does not parse has none
-statements_of(source: text): list := {
+statements_of(source: text) as list := {
 	code = try parse(source) else []
 	if type(code) is list and code.separator in STATEMENT_SEPARATORS then [statement for statement in code] else [code]
 }
 # a file's definitions, parsed again only when its text changed
 global parsed = {}
-definitions_of(uri: text, source: text): list := {
+definitions_of(uri: text, source: text) as list := {
 	kept = parsed.get(uri)
 	if kept and kept#1 == source { return kept#2 }
 	parsed[uri] = [source, definitions(source)]
@@ -151,45 +151,45 @@ definitions_of(uri: text, source: text): list := {
 }
 # the definitions of a text: each top-level statement's [name, line, column], its name the first word of its head,
 # its place the innermost one on the way there (a call's place is its group's, `square(x)`)
-definitions(source: text): list := {
+definitions(source: text) as list := {
 	paths = statements_of(source).map(statement => [statement] + defined_path(statement)).filter(path => #path > 1 and path.last is symbol and path.any(is_placed))
 	paths.map(path => {
 		placed = path.filter(is_placed).last
 		[path.last.name, line_of(placed), column_of(placed)]
 	})
 }
-is_placed(n: any): bool := line_of(n) != ø
+is_placed(n: any) as bool := line_of(n) != ø
 # the nodes from a definition down to its name; a head before a block defines it, `def f(x) {…}`, a call before
 # anything else does not, `print twice(3)`
-defined_path(statement: any): list := {
+defined_path(statement: any) as list := {
 	if type(statement) is key and statement.op in DEFINING_OPERATORS { return named_path(head_path(statement#1), statement#2) }
 	if type(statement) is list and #statement == 2 and statement#2.bracket == BLOCK { return named_path(head_path(statement#1), statement#2) }
 	[]
 }
 # a defining word is followed by the name: `global g = 2`, `def f(x) {…}`
-named_path(path: list, rest: any): list := if path.last is symbol and path.last.name in DEFINING_WORDS then head_path(rest) else path
+named_path(path: list, rest: any) as list := if path.last is symbol and path.last.name in DEFINING_WORDS then head_path(rest) else path
 # a key's first part is its left side, `(square x)` of `square(x) := …`, a list's its first item
-head_path(n: any): list := if (type(n) is key or type(n) is list) and #n > 0 then [n] + head_path(n#1) else [n]
+head_path(n: any) as list := if (type(n) is key or type(n) is list) and #n > 0 then [n] + head_path(n#1) else [n]
 
 # the files a name of `uri` is looked for in: the file, the other files of its folder, then the modules it uses
-searched(uri: text): list := {
+searched(uri: text) as list := {
 	folder = dirname(path_of(uri))
 	neighbours = list_files(folder).filter(name => name.ends_with(WARP_EXTENSION)).map(name => uri_of(path_join(folder, name)))
 	[uri] + neighbours.filter(file => file != uri) + used_modules(document_text(uri), folder)
 }
-used_modules(source: text, folder: text): list := {
+used_modules(source: text, folder: text) as list := {
 	uses = statements_of(source).filter(statement => type(statement) is list and #statement > 1 and statement#1 == data use)
 	names = uses.flat_map(statement => [part.name for part in statement[1 ..] if part is symbol])
 	names.map(name => module_path(name, folder)).filter(path => path != ø).map(uri_of)
 }
 # where the compiler finds `use name`: beside the file, else in lib/
-module_path(name: text, folder: text): text? := [path_join(folder, name + WARP_EXTENSION), path_join(library_folder(), name + WARP_EXTENSION)].find(exists)
-library_folder(): text := run_option("lib") ?? dirname(program_folder())
+module_path(name: text, folder: text) as text? := [path_join(folder, name + WARP_EXTENSION), path_join(library_folder(), name + WARP_EXTENSION)].find(exists)
+library_folder() as text := run_option("lib") ?? dirname(program_folder())
 
 # an open file's text as the editor has it, else as it is on disk
-document_text(uri: text): text := documents.get(uri) ?? (try read(path_of(uri)) else "")
-path_of(uri: text): text := url_decode(if uri.starts_with(FILE_SCHEME) then uri[#FILE_SCHEME ..] else uri)
-uri_of(path: text): text := FILE_SCHEME + path.split("/").map(url_encode).join("/")
+document_text(uri: text) as text := documents.get(uri) ?? (try read(path_of(uri)) else "")
+path_of(uri: text) as text := url_decode(if uri.starts_with(FILE_SCHEME) then uri[#FILE_SCHEME ..] else uri)
+uri_of(path: text) as text := FILE_SCHEME + path.split("/").map(url_encode).join("/")
 
 while yes {
 	message = next_message()

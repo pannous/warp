@@ -4,7 +4,7 @@
 // at "\n", the empty text no lines; unified_diff writes git's format and patched reads it back
 
 // the edits that turn the list a into the list b
-diff(a: list, b: list): list := {
+diff(a: list, b: list) as list := {
 	n = count(a); m = count(b)
 	// longest[i][j]: the longest common subsequence of a from i on and b from j on (1-based, n + 1 / m + 1 past the end)
 	longest = [[0 for j in 1 to m + 1] for i in 1 to n + 1]
@@ -25,13 +25,13 @@ diff(a: list, b: list): list := {
 	edits
 }
 // a text's lines, the empty text none
-text_lines(t: text): list := if t == "" then [] else split(t, "\n")
+text_lines(t: text) as list := if t == "" then [] else split(t, "\n")
 // the edits between the lines of two texts
-line_diff(a: text, b: text): list := diff(text_lines(a), text_lines(b))
+line_diff(a: text, b: text) as list := diff(text_lines(a), text_lines(b))
 // git's unified diff of two texts: "--- a" and "+++ b", then hunks "@@ -start,count +start,count @@" of " " kept,
 // "-" deleted and "+" inserted lines with context lines of kept text around each change; changes closer than twice
 // the context share a hunk. An empty range counts 0 and starts at the line before it. Equal texts give ""
-unified_diff(old: text, new: text, context = 3): text := {
+unified_diff(old: text, new: text, context = 3) as text := {
 	edits = line_diff(old, new)
 	changes = (1 to count(edits)).filter(k => edits#k#1 != "keep")
 	if count(changes) == 0 { return "" }
@@ -65,7 +65,7 @@ unified_diff(old: text, new: text, context = 3): text := {
 }
 // the text with a unified diff applied: each hunk's kept and deleted lines must be the text's lines where its header
 // says, else it raises naming the hunk and the line
-patched(t: text, patch: text): text := {
+patched(t: text, patch: text) as text := {
 	old = text_lines(t)
 	out = []
 	at = 0
@@ -105,7 +105,7 @@ patched(t: text, patch: text): text := {
 }
 // how alike two lists or two texts (as characters) are, from 0 to 1: twice the kept items over both lengths, 1 for
 // two empty ones
-similarity(a: any, b: any): float := {
+similarity(a: any, b: any) as float := {
 	xs = if a is text then [c for c in a] else a
 	ys = if b is text then [c for c in b] else b
 	if count(xs) + count(ys) == 0 { return 1.0 }

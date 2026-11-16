@@ -1,0 +1,27 @@
+# a uniscript code point `\:U+12C00` `\:u+12C00` `\:U12C00` `\:0x12C00` is its one character, in either quote; a known
+# name wins, a bare `\:12C00` is no code point and stays as written
+# (user 2026-11-15; wiki uniscript.md)
+
+# the four marks, in double and single quotes
+'"\\:U+12C00"'	'𒰀'
+'"\\:u+12C00"'	'𒰀'
+'"\\:U12C00"'	'𒰀'
+'"\\:0x12C00"'	'𒰀'
+'\'\\:U+12C00\''	'𒰀'
+'\'\\:u+12C00\''	'𒰀'
+'\'\\:U12C00\''	'𒰀'
+'\'\\:0x12C00\''	'𒰀'
+'#"\\:U+1F600"'	1
+'"caf\\:U+e9 \\:0x41"'	'café A'
+'"\\:u12C00" == "\\u{12C00}"'	1
+
+# names stay names, now in single quotes too
+'"\\:alpha"'	'α'
+'\'\\:alpha\''	'α'
+'"\\:Ua"'	'Ⲩ'
+
+# a bare hex number is no code point, nor is a word after the mark
+'"\\:12C00"'	'\\:12C00'
+'\'\\:12C00\''	'\\:12C00'
+'"\\:U12C00x"'	'\\:U12C00x'
+

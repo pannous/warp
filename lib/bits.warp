@@ -4,56 +4,56 @@
 // An int is a signed 64-bit word here: an unsigned 64-bit value of 2^63 or more reads as its negative twin
 
 // the word instructions themselves (decision wasm-instruction-body)
-popcount(n: int): int := wasm i64.popcnt
-leading_zeros(n: int): int := wasm i64.clz
-trailing_zeros(n: int): int := wasm i64.ctz
+popcount(n: int) as int := wasm i64.popcnt
+leading_zeros(n: int) as int := wasm i64.clz
+trailing_zeros(n: int) as int := wasm i64.ctz
 // the logical shift: zeros come in from the left (`>>` keeps the sign)
-shift_right(n: int, count: int): int := wasm i64.shr_u
-both_bits(a: int, b: int): int := wasm i64.and
-rotate_left(n: int, count: int): int := wasm i64.rotl
-rotate_right(n: int, count: int): int := wasm i64.rotr
+shift_right(n: int, count: int) as int := wasm i64.shr_u
+both_bits(a: int, b: int) as int := wasm i64.and
+rotate_left(n: int, count: int) as int := wasm i64.rotl
+rotate_right(n: int, count: int) as int := wasm i64.rotr
 
 // the low width bits of n
-bit_mask(width: int): int := if width >= 64 then -1 else (1 << width) - 1
-low_bits(n: int, width: int): int := both_bits(n, bit_mask(width))
+bit_mask(width: int) as int := if width >= 64 then -1 else (1 << width) - 1
+low_bits(n: int, width: int) as int := both_bits(n, bit_mask(width))
 // of the low width bits only
-popcount(n: int, width: int): int := popcount(low_bits(n, width))
-leading_zeros(n: int, width: int): int := leading_zeros(low_bits(n, width)) - (64 - width)
-trailing_zeros(n: int, width: int): int := min(trailing_zeros(n), width)
+popcount(n: int, width: int) as int := popcount(low_bits(n, width))
+leading_zeros(n: int, width: int) as int := leading_zeros(low_bits(n, width)) - (64 - width)
+trailing_zeros(n: int, width: int) as int := min(trailing_zeros(n), width)
 // the bits n needs, its highest one bit's place: bit_length(5) is 3, bit_length(0) is 0, a negative number 64
-bit_length(n: int): int := 64 - leading_zeros(n)
-rotate_left(n: int, count: int, width: int): int := if width >= 64 then rotate_left(n, count) else {
+bit_length(n: int) as int := 64 - leading_zeros(n)
+rotate_left(n: int, count: int, width: int) as int := if width >= 64 then rotate_left(n, count) else {
 	x = low_bits(n, width)
 	k = count % width
 	low_bits(x << k, width) + shift_right(x, width - k)
 }
-rotate_right(n: int, count: int, width: int): int := rotate_left(n, width - count % width, width)
+rotate_right(n: int, count: int, width: int) as int := rotate_left(n, width - count % width, width)
 // the low width bits as a signed number: signed(255, 8) is -1
-signed(n: int, width: int): int := { x = low_bits(n, width); if width < 64 and x >= 1 << (width - 1) then x - (1 << width) else x }
+signed(n: int, width: int) as int := { x = low_bits(n, width); if width < 64 and x >= 1 << (width - 1) then x - (1 << width) else x }
 
 // n's low width bits as width / 8 bytes, two's complement for a negative n
-def int_bytes(n: int, width: int, order: text): list {
+def int_bytes(n: int, width: int, order: text) as list {
 	bytes = [both_bits(shift_right(n, 8 * i), 255) for i in 0 ..< width /! 8]
 	if order == "big" then reverse(bytes) else bytes
 }
-int_bytes(n: int, width: int): list := int_bytes(n, width, "big")
+int_bytes(n: int, width: int) as list := int_bytes(n, width, "big")
 // bytes back to their number, unsigned or (signed: yes) two's complement
-def bytes_int(bytes: list, order: text, signed_number: bool): int {
+def bytes_int(bytes: list, order: text, signed_number: bool) as int {
 	ordered = if order == "big" then bytes else reverse(bytes)
 	n = 0
 	for b in ordered { n = (n << 8) + b }
 	if signed_number then signed(n, 8 * count(bytes)) else n
 }
-bytes_int(bytes: list, order: text): int := bytes_int(bytes, order, no)
-bytes_int(bytes: list): int := bytes_int(bytes, "big", no)
+bytes_int(bytes: list, order: text) as int := bytes_int(bytes, order, no)
+bytes_int(bytes: list) as int := bytes_int(bytes, "big", no)
 // a number as its bytes, most significant first (big) or last; size counts bytes
-big_endian(n: int, size: int): list := int_bytes(n, size * 8, "big")
-little_endian(n: int, size: int): list := int_bytes(n, size * 8, "little")
-from_big_endian(bytes: list): int := bytes_int(bytes, "big")
-from_little_endian(bytes: list): int := bytes_int(bytes, "little")
+big_endian(n: int, size: int) as list := int_bytes(n, size * 8, "big")
+little_endian(n: int, size: int) as list := int_bytes(n, size * 8, "little")
+from_big_endian(bytes: list) as int := bytes_int(bytes, "big")
+from_little_endian(bytes: list) as int := bytes_int(bytes, "little")
 
 // an f64's bits rounded to an f32's, to nearest, ties to even; subnormals, ±0, ±infinity and NaN kept
-def f32_bits(x: float): int {
+def f32_bits(x: float) as int {
 	b = float_bits(x)
 	sign = shift_right(b, 63) << 31
 	exponent = both_bits(shift_right(b, 52), 0x7ff)
@@ -74,7 +74,7 @@ def f32_bits(x: float): int {
 	sign + (field << 23) + q - (1 << 23)
 }
 // an f32's bits as the f64 of the same value, exactly
-def f32_float(bits: int): float {
+def f32_float(bits: int) as float {
 	sign = shift_right(both_bits(bits, 0xffffffff), 31)
 	field = both_bits(shift_right(bits, 23), 0xff)
 	fraction = low_bits(bits, 23)
@@ -88,13 +88,13 @@ def f32_float(bits: int): float {
 	bits_float((sign << 63) + ((field - 127 + 1023) << 52) + (fraction << 29))
 }
 // x as its IEEE 754 bytes: width 64 (binary64) or 32 (binary32, rounded to nearest)
-float_bytes(x: float, width: int, order: text): list := int_bytes(if width == 32 then f32_bits(x) else float_bits(x), width, order)
-float_bytes(x: float, width: int): list := float_bytes(x, width, "big")
-float_bytes(x: float): list := float_bytes(x, 64, "big")
+float_bytes(x: float, width: int, order: text) as list := int_bytes(if width == 32 then f32_bits(x) else float_bits(x), width, order)
+float_bytes(x: float, width: int) as list := float_bytes(x, width, "big")
+float_bytes(x: float) as list := float_bytes(x, 64, "big")
 // 4 or 8 bytes back to their float
-bytes_float(bytes: list, order: text): float := { n = bytes_int(bytes, order); if count(bytes) == 4 then f32_float(n) else bits_float(n) }
-bytes_float(bytes: list): float := bytes_float(bytes, "big")
+bytes_float(bytes: list, order: text) as float := { n = bytes_int(bytes, order); if count(bytes) == 4 then f32_float(n) else bits_float(n) }
+bytes_float(bytes: list) as float := bytes_float(bytes, "big")
 // the u16, u32 and f32 at byte `at` of a file's bytes (read_bytes), little-endian as binary files mostly keep it, read in place
-u16_at(bytes: list, at: int): int := bytes[at] + (bytes[at + 1] << 8)
-u32_at(bytes: list, at: int): int := bytes[at] + (bytes[at + 1] << 8) + (bytes[at + 2] << 16) + (bytes[at + 3] << 24)
-f32_at(bytes: list, at: int): float := f32_float(u32_at(bytes, at))
+u16_at(bytes: list, at: int) as int := bytes[at] + (bytes[at + 1] << 8)
+u32_at(bytes: list, at: int) as int := bytes[at] + (bytes[at + 1] << 8) + (bytes[at + 2] << 16) + (bytes[at + 3] << 24)
+f32_at(bytes: list, at: int) as float := f32_float(u32_at(bytes, at))

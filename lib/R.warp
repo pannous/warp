@@ -1,6 +1,6 @@
 // R's words, for programs ported from R: `use R` (foreign-spellings)
 
-sapply(xs: any, f: any): any := map(xs, f)
-lapply(xs: any, f: any): any := map(xs, f)
-vapply(xs: any, f: any): any := map(xs, f)
-c(xs...): list := xs
+sapply(xs: any, f: any) as any := map(xs, f)
+lapply(xs: any, f: any) as any := map(xs, f)
+vapply(xs: any, f: any) as any := map(xs, f)
+c(xs...) as list := xs
