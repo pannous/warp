@@ -215,7 +215,16 @@ collection_contains(c: Node, x: Node) as bool := {
 	held = protocol_answer(c, "collection_contains", [x])
 	if not is_null(held) { return node_truthy(answer_of(held)) }
 	# ø names no entry: `ø in m` is no (card pure-nil-in-any-map: lookup_name(ø) trapped on the null node)
-	if marked_kind(c) == Marked.Map or kind_code(c) == Kind.Key { return not is_null(x) and map_index(c, lookup_name(x)) > 0 }
+	if kind_code(c) == Kind.Key { return not is_null(x) and map_index(c, lookup_name(x)) > 0 }
+	if marked_kind(c) == Marked.Map {
+		if not is_null(x) and map_index(c, lookup_name(x)) > 0 { return yes }
+		# a curly list of values, its first item no key, answers by its items as a square one: `{1,2,3} has 2`
+		# (card curly-list-values); a map with keys keeps its keys, `{a: 1} has 1` is no
+		entries = unboxed_list(fields_of(c))
+		if #entries == 0 or is_keyed(entries#1) { return no }
+		for entry in entries { if node_equal(entry, x) { return yes } }
+		return no
+	}
 	if kind_code(c) == Kind.Text {
 		# a list is never a text's part: each of its items is asked about (decision all-any-in)
 		if kind_code(x) == Kind.List { raised(failure_of("a list is no part of a text: ask about its items, all xs in t, any xs in t or count(xs where it in t)")) }
