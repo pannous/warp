@@ -57,7 +57,7 @@ class Quantity {
 
 # `1900 - 2000 cm`: the closed span as a Quantity whose amount is the ± interval of those ends (SI), shown in qs unit.
 # Same shape as `1950 m ± 50`, so equality and conversion reuse Quantity.equal / to / low / high.
-number_quantity_span(n: number, q: Quantity): Quantity := {
+number_quantity_span(n: number, q: Quantity) as Quantity := {
 	a = measured(n * q.scale + unit_zero(q.unit), q.dims, q.unit, q.scale)
 	lo = if q.amount < a.amount then q.amount else a.amount
 	hi = if q.amount < a.amount then a.amount else q.amount
@@ -160,7 +160,7 @@ unit_combined(first: text, second: text, sign: int) := unit_shown(unit_powers(se
 unit_raised(u: text, exponent: number) := unit_shown(unit_powers(u, exponent, {}))
 // the powers of a unit's factors, each times the exponent, added to powers: `kg·m/s²` gives kg 1, m 1, s -2; the
 // factors after a `/` are all below it (`kg/m·s` is kg/(m·s), as unit_named reads it)
-unit_powers(u: text, exponent: number, powers: map): map := {
+unit_powers(u: text, exponent: number, powers: map) as map := {
 	parts = u.split("/")
 	added(parts#1, exponent, powers)
 	for below in parts[1 ..] { added(below, 0 - exponent, powers) }
@@ -175,10 +175,10 @@ added(factors: text, exponent: number, powers: map) := {
 	}
 }
 // a factor's power written in superscripts, `m²`, `s⁻¹` (lib/reals.warp power_text), or after `^`, `m^1.5`
-factor_base(factor: text): text := factor.split("^")#1.chars().filter(c => not (c in raised_marks)).join("")
-factor_power(factor: text): number := if factor.contains("^") then factor.split("^")#2 as number else superscript_value(factor.chars().filter(c => c in raised_marks).join(""))
+factor_base(factor: text) as text := factor.split("^")#1.chars().filter(c => not (c in raised_marks)).join("")
+factor_power(factor: text) as number := if factor.contains("^") then factor.split("^")#2 as number else superscript_value(factor.chars().filter(c => c in raised_marks).join(""))
 // the factors of positive power, then a `/` and those of negative power: `m/s²`; `/m` of a reciprocal
-unit_shown(powers: map): text := {
+unit_shown(powers: map) as text := {
 	above = powers.keys.filter(k => powers[k] > 0).map(k => unit_power(k, powers[k]))
 	below = powers.keys.filter(k => powers[k] < 0).map(k => unit_power(k, 0 - powers[k]))
 	if below is empty then above.join("·") else above.join("·") + "/" + below.join("·")
@@ -245,7 +245,7 @@ mph = Unit("mph")
 °C = Unit("°C")
 °F = Unit("°F")
 // a unit's symbol, a text naming one as it is: what `q.to(u)` converts to
-unit_text(u: any): text := if u is Unit then u.unit else u
+unit_text(u: any) as text := if u is Unit then u.unit else u
 // `2 hours in minutes`, `100 °C in °F`: `in` is a word of the phrase, so the run is taken whole, before `2 hours` alone
 // (rules try a phrase's runs in their order); `3 km as m`, parsed 3 (km as m), takes its amount first too
 rewrite $e $u in $t => ($e $u) in $t where $e is number and unit_led($u) and $t is Unit

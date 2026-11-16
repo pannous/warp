@@ -1,74 +1,74 @@
 // The standard library module list (notes/stdlib.md): standard functions of every program, `unique(xs)` or `xs.unique()`, no `use` needed (`use list` only for the qualified `list.zip(a, b)`)
 
-unique(xs: any): list := { out = []; for x in xs { if not (x in out) { out = out + [x] } }; out }
-zip(a: any, b: any): list := [[a#i, b#i] for i in 1 to min(count(a), count(b))]
-enumerate(xs: any): list := [[i, xs#i] for i in 1 to count(xs)]
-product(xs: any): any := fold(xs, 1, *)
+unique(xs: any) as list := { out = []; for x in xs { if not (x in out) { out = out + [x] } }; out }
+zip(a: any, b: any) as list := [[a#i, b#i] for i in 1 to min(count(a), count(b))]
+enumerate(xs: any) as list := [[i, xs#i] for i in 1 to count(xs)]
+product(xs: any) as any := fold(xs, 1, *)
 // loops, not slices: the type model's W0 (tests/types/test_type_model.rs) reads take and drop, and has no slices
-take(xs: any, n: any): list := { out = []; for i in 1 to min(n, count(xs)) { out = out + [xs#i] }; out }
-drop(xs: any, n: any): list := { out = []; for i in n + 1 to count(xs) { out = out + [xs#i] }; out }
-flatten(xs: any): list := { out = []; for x in xs { out += x }; out }
-chunk(xs: any, n: any): list := { if n < 1 { raise "chunk needs a size of at least 1, not " + text(n) }; out = []; part = []; for x in xs { part = part + [x]; if count(part) == n { out = out + [part]; part = [] } }; if count(part) > 0 { out = out + [part] }; out }
-window(xs: any, n: any): list := { if n < 1 { raise "window needs a size of at least 1, not " + text(n) }; [xs[i:i + n] for i in 0 to count(xs) - n] }
-median(xs: any): number := { if count(xs) == 0 { raise "median of an empty list" }; s = sort(xs); n = count(s); if n % 2 == 1 then s#(n /! 2 + 1) else (s#(n /! 2) + s#(n /! 2 + 1)) / 2 }
-flat_map(xs: any, f: any): list := { out = []; for x in xs { out += f(x) }; out }
+take(xs: any, n: any) as list := { out = []; for i in 1 to min(n, count(xs)) { out = out + [xs#i] }; out }
+drop(xs: any, n: any) as list := { out = []; for i in n + 1 to count(xs) { out = out + [xs#i] }; out }
+flatten(xs: any) as list := { out = []; for x in xs { out += x }; out }
+chunk(xs: any, n: any) as list := { if n < 1 { raise "chunk needs a size of at least 1, not " + text(n) }; out = []; part = []; for x in xs { part = part + [x]; if count(part) == n { out = out + [part]; part = [] } }; if count(part) > 0 { out = out + [part] }; out }
+window(xs: any, n: any) as list := { if n < 1 { raise "window needs a size of at least 1, not " + text(n) }; [xs[i:i + n] for i in 0 to count(xs) - n] }
+median(xs: any) as number := { if count(xs) == 0 { raise "median of an empty list" }; s = sort(xs); n = count(s); if n % 2 == 1 then s#(n /! 2 + 1) else (s#(n /! 2) + s#(n /! 2 + 1)) / 2 }
+flat_map(xs: any, f: any) as list := { out = []; for x in xs { out += f(x) }; out }
 // [kept, rest]: the elements f holds for, and the others
-partition(xs: any, f: any): list := { kept = []; rest = []; for x in xs { if f(x) { kept = kept + [x] } else { rest = rest + [x] } }; [kept, rest] }
+partition(xs: any, f: any) as list := { kept = []; rest = []; for x in xs { if f(x) { kept = kept + [x] } else { rest = rest + [x] } }; [kept, rest] }
 public max_by(xs: any, f: any): any := { best = xs#1; for x in xs { if f(x) > f(best) { best = x } }; best }
 public min_by(xs: any, f: any): any := { best = xs#1; for x in xs { if f(x) < f(best) { best = x } }; best }
 // {key: [elements]}: the elements by the text of the value `by` gives each: group(words, by: w => w[0])
 public group(xs: list, by: function): any := { out = {}; for x in xs { k = "" + by(x); if out.has(k) { out[k] = out.get(k) + [x] } else { out[k] = [x] } }; out }
 // {element: how often}
-tally(xs: any): any := { out = {}; for x in xs { k = "" + x; if out.has(k) { out[k] = out.get(k) + 1 } else { out[k] = 1 } }; out }
-zip_with(a: any, b: any, f: any): list := [f(a#i, b#i) for i in 1 to min(count(a), count(b))]
+tally(xs: any) as any := { out = {}; for x in xs { k = "" + x; if out.has(k) { out[k] = out.get(k) + 1 } else { out[k] = 1 } }; out }
+zip_with(a: any, b: any, f: any) as list := [f(a#i, b#i) for i in 1 to min(count(a), count(b))]
 public sum_by(xs: any, f: any): any := sum([f(x) for x in xs])
 // the elements moved n places to the left
 public rotate(xs: any, n: any): any := { k = n % count(xs); xs[k:] + xs[:k] }
-interleave(a: any, b: any): list := { out = []; for i in 1 to max(count(a), count(b)) { if i <= count(a) { out = out + [a#i] }; if i <= count(b) { out = out + [b#i] } }; out }
+interleave(a: any, b: any) as list := { out = []; for i in 1 to max(count(a), count(b)) { if i <= count(a) { out = out + [a#i] }; if i <= count(b) { out = out + [b#i] } }; out }
 // without runs of equal neighbours
-dedupe(xs: any): list := { out = []; for x in xs { if count(out) == 0 or last(out) != x { out = out + [x] } }; out }
+dedupe(xs: any) as list := { out = []; for x in xs { if count(out) == 0 or last(out) != x { out = out + [x] } }; out }
 // the running results of f: scan([1, 2, 3], 0, (a, b) => a + b) is [1 3 6]
-scan(xs: any, start: any, f: any): list := { out = []; acc = start; for x in xs { acc = f(acc, x); out = out + [acc] }; out }
+scan(xs: any, start: any, f: any) as list := { out = []; acc = start; for x in xs { acc = f(acc, x); out = out + [acc] }; out }
 // the running sums: cumulative_sum([1, 2, 3]) is [1 3 6]
-cumulative_sum(xs: any): list := scan(xs, 0, (a, b) => a + b)
+cumulative_sum(xs: any) as list := scan(xs, 0, (a, b) => a + b)
 // the q-quantile, q from 0 to 1, interpolating linearly between the sorted neighbours (numpy's default, R's type 7);
 // an element itself when q lands on one, so quantile([1, 2, 3], 0.5) is 2 and quantile([1, 2], 0.5) is 1.5
-quantile(xs: any, q: any): number := { if count(xs) == 0 { raise "quantile of an empty list" }; if q < 0 or q > 1 { raise "quantile " + text(q) + " is not between 0 and 1" }; s = sort(xs); h = q * (count(s) - 1); i = int(h); lo = s#(i + 1); hi = s#min(i + 2, count(s)); lo + (h - i) * (hi - lo) }
+quantile(xs: any, q: any) as number := { if count(xs) == 0 { raise "quantile of an empty list" }; if q < 0 or q > 1 { raise "quantile " + text(q) + " is not between 0 and 1" }; s = sort(xs); h = q * (count(s) - 1); i = int(h); lo = s#(i + 1); hi = s#min(i + 2, count(s)); lo + (h - i) * (hi - lo) }
 // the p-th percentile, p from 0 to 100: percentile(xs, 90) is quantile(xs, 0.9)
-percentile(xs: any, p: any): number := { if count(xs) == 0 { raise "percentile of an empty list" }; if p < 0 or p > 100 { raise "percentile " + text(p) + " is not between 0 and 100" }; quantile(xs, p / 100) }
-take_while(xs: any, f: any): list := { out = []; for x in xs { if not f(x) { break }; out = out + [x] }; out }
-drop_while(xs: any, f: any): list := { out = []; dropping = true; for x in xs { if not (dropping and f(x)) { dropping = false; out = out + [x] } }; out }
+percentile(xs: any, p: any) as number := { if count(xs) == 0 { raise "percentile of an empty list" }; if p < 0 or p > 100 { raise "percentile " + text(p) + " is not between 0 and 100" }; quantile(xs, p / 100) }
+take_while(xs: any, f: any) as list := { out = []; for x in xs { if not f(x) { break }; out = out + [x] }; out }
+drop_while(xs: any, f: any) as list := { out = []; dropping = true; for x in xs { if not (dropping and f(x)) { dropping = false; out = out + [x] } }; out }
 // the index (from 0, like xs[i]) of the greatest element, the first of equal ones
-argmax(xs: any): int := { best = 1; for i in 1 to count(xs) { if xs#i > xs#best { best = i } }; best - 1 }
-argmin(xs: any): int := { best = 1; for i in 1 to count(xs) { if xs#i < xs#best { best = i } }; best - 1 }
+argmax(xs: any) as int := { best = 1; for i in 1 to count(xs) { if xs#i > xs#best { best = i } }; best - 1 }
+argmin(xs: any) as int := { best = 1; for i in 1 to count(xs) { if xs#i < xs#best { best = i } }; best - 1 }
 // the neighbours: pairwise([1, 2, 3]) is [[1 2] [2 3]]
-pairwise(xs: any): list := [[xs#i, xs#(i + 1)] for i in 1 to count(xs) - 1]
+pairwise(xs: any) as list := [[xs#i, xs#(i + 1)] for i in 1 to count(xs) - 1]
 // [the first n, the rest]
-split_at(xs: any, n: any): list := [take(xs, n), drop(xs, n)]
+split_at(xs: any, n: any) as list := [take(xs, n), drop(xs, n)]
 // every pair of an element of a and one of b
-cartesian(a: any, b: any): list := [[x, y] for x in a for y in b]
+cartesian(a: any, b: any) as list := [[x, y] for x in a for y in b]
 // the most frequent element, the first of equally frequent ones
-mode(xs: any): any := { best = xs#1; most = 0; for x in xs { n = count(xs, y => y == x); if n > most { best = x; most = n } }; best }
+mode(xs: any) as any := { best = xs#1; most = 0; for x in xs { n = count(xs, y => y == x); if n > most { best = x; most = n } }; best }
 // the population variance and standard deviation
-variance(xs: any): number := { m = mean(xs); sum_by(xs, x => (x - m) * (x - m)) / count(xs) }
-stdev(xs: any): number := sqrt(variance(xs))
+variance(xs: any) as number := { m = mean(xs); sum_by(xs, x => (x - m) * (x - m)) / count(xs) }
+stdev(xs: any) as number := sqrt(variance(xs))
 // the position (from 1, like index_of) of the first element f holds for, 0 when none does
-index_where(xs: any, f: any): int := { for i in 1 to count(xs) { if f(xs#i) { return i } }; 0 }
-last_n(xs: any, n: any): list := drop(xs, max(count(xs) - n, 0))
+index_where(xs: any, f: any) as int := { for i in 1 to count(xs) { if f(xs#i) { return i } }; 0 }
+last_n(xs: any, n: any) as list := drop(xs, max(count(xs) - n, 0))
 // n copies of value: fill(3, 0) is [0 0 0]
-fill(n: any, value: any): list := filled_list(n, value)
+fill(n: any, value: any) as list := filled_list(n, value)
 // [smallest, greatest]
-minmax(xs: any): list := [min(xs), max(xs)]
+minmax(xs: any) as list := [min(xs), max(xs)]
 // Python's list methods (card python-stdlib): extend appends each of ys in place, index is the position from 0
 public extend(xs: any, ys: any): any := { for y in ys { xs.append(y) }; xs }
 // JavaScript's concat: a new list of xs then ys
 public concat(xs: any, ys: any): any := xs + ys
-index(xs: any, x: any): int := { at = index_of(xs, x); if at == 0 { raise "ValueError: " + text(x) + " is not in the list" }; at - 1 }
+index(xs: any, x: any) as int := { at = index_of(xs, x); if at == 0 { raise "ValueError: " + text(x) + " is not in the list" }; at - 1 }
 // sets of list items (card parse-free): the words and their math glyphs; ⊂ and ⊃ are proper, ⊆ and ⊇ allow equal sets
-union(a: any, b: any): list := unique(a + b)
-intersection(a: any, b: any): list := [x for x in unique(a) if x in b]
-subset(a: any, b: any): bool := { for x in a { if not (x in b) { return false } }; true }
-superset(a: any, b: any): bool := subset(b, a)
+union(a: any, b: any) as list := unique(a + b)
+intersection(a: any, b: any) as list := [x for x in unique(a) if x in b]
+subset(a: any, b: any) as bool := { for x in a { if not (x in b) { return false } }; true }
+superset(a: any, b: any) as bool := subset(b, a)
 infix operator ∪(a, b) := union(a, b)
 infix operator ∩(a, b) := intersection(a, b)
 infix operator ⊆(a, b) := subset(a, b)
@@ -84,7 +84,7 @@ operator ⊃ has precedence below +
 
 // Statistics of paired data and counts (card lib-stats-format); mean is the prelude's, variance and stdev the ones above.
 // the population covariance of two equally long lists of numbers, at least 2 each (the divisor is count, as variance's)
-covariance(xs: any, ys: any): number := {
+covariance(xs: any, ys: any) as number := {
 	if count(xs) != count(ys) { raise "covariance needs lists of the same length" }
 	if count(xs) < 2 { raise "covariance needs at least 2 items" }
 	mx = mean(xs)
@@ -94,7 +94,7 @@ covariance(xs: any, ys: any): number := {
 	total / count(xs)
 }
 // Pearson's correlation, -1…1; refused when either list has no variance (the correlation is undefined there)
-correlation(xs: any, ys: any): number := {
+correlation(xs: any, ys: any) as number := {
 	c = covariance(xs, ys)
 	vx = variance(xs)
 	vy = variance(ys)
@@ -103,10 +103,10 @@ correlation(xs: any, ys: any): number := {
 }
 // a count per distinct value as [value, count] pairs in first-seen order: a list of pairs keeps each value's own type
 // (tally's map keys are texts) and an order, frequencies([3, 1, 3]) is [[3 2] [1 1]]
-frequencies(xs: any): list := [[x, count(xs, y => y == x)] for x in unique(xs)]
+frequencies(xs: any) as list := [[x, count(xs, y => y == x)] for x in unique(xs)]
 // counts of xs in bins equal-width bins from min to max: bin i holds [lo + (i-1)w, lo + iw), the last also the max;
 // all values equal put every one in the first bin. bins <= 0 and an empty list are refused
-histogram(xs: any, bins: any): list := {
+histogram(xs: any, bins: any) as list := {
 	if bins <= 0 { raise "histogram needs bins > 0" }
 	if count(xs) == 0 { raise "histogram of an empty list" }
 	lo = min(xs)
@@ -124,7 +124,7 @@ histogram(xs: any, bins: any): list := {
 // Combinatorics and sorted search (card lib-combinatorics-search). Orders follow input positions lexicographically;
 // equal elements are kept by position (permutations([1, 1]) is [[1 1] [1 1]]). math's choose(n, k) counts combinations.
 // every ordering of xs, n! lists: permutations([1, 2, 3]) is [[1 2 3] [1 3 2] [2 1 3] [2 3 1] [3 1 2] [3 2 1]]
-permutations(xs: any): list := {
+permutations(xs: any) as list := {
 	if count(xs) <= 1 { return [xs] }
 	out = []
 	for i in 1 to count(xs) {
@@ -135,7 +135,7 @@ permutations(xs: any): list := {
 }
 // the k-element subsets of xs, each in input order: combinations([1, 2, 3], 2) is [[1 2] [1 3] [2 3]]; k = 0 gives [[]],
 // k > count(xs) gives [], k < 0 is refused
-combinations(xs: any, k: any): list := {
+combinations(xs: any, k: any) as list := {
 	if k < 0 { raise "combinations needs k >= 0" }
 	if k == 0 { return [[]] }
 	if k > count(xs) { return [] }
@@ -146,13 +146,13 @@ combinations(xs: any, k: any): list := {
 	out
 }
 // every subset of xs, 2^n lists by size then position: powerset([1, 2]) is [[] [1] [2] [1 2]]
-powerset(xs: any): list := { out = []; for k in 0 to count(xs) { out = out + combinations(xs, k) }; out }
+powerset(xs: any) as list := { out = []; for k in 0 to count(xs) { out = out + combinations(xs, k) }; out }
 // the position (from 1, like index_of) of x in the ascending list xs, the first of equal ones; 0 when x is not there
-binary_search(xs: any, x: any): int := { at = lower_bound(xs, x); if at <= count(xs) and xs#at == x then at else 0 }
+binary_search(xs: any, x: any) as int := { at = lower_bound(xs, x); if at <= count(xs) and xs#at == x then at else 0 }
 // the first position (from 1) whose element is not below x, count(xs) + 1 when every one is
-lower_bound(xs: any, x: any): int := { lo = 1; hi = count(xs) + 1; while lo < hi { mid = (lo + hi) / 2 as int; if xs#mid < x { lo = mid + 1 } else { hi = mid } }; lo }
+lower_bound(xs: any, x: any) as int := { lo = 1; hi = count(xs) + 1; while lo < hi { mid = (lo + hi) / 2 as int; if xs#mid < x { lo = mid + 1 } else { hi = mid } }; lo }
 // a new ascending list with x added after the elements equal to it (stable): insert_sorted([1, 3], 2) is [1 2 3]
-insert_sorted(xs: any, x: any): list := {
+insert_sorted(xs: any, x: any) as list := {
 	lo = 1
 	hi = count(xs) + 1
 	while lo < hi { mid = (lo + hi) / 2 as int; if xs#mid <= x { lo = mid + 1 } else { hi = mid } }

@@ -23,7 +23,7 @@ class Feed {
 	ended: bool = no
 	refill() := ø
 	keeps(event) := yes
-	next(): any := {
+	next() as any := {
 		while #pending == 0 and not ended {
 			more = refill()
 			if more is ø { ended = yes } else { pending += [e for e in more if keeps(e)] }
@@ -60,7 +60,7 @@ class Streamed extends Feed {
 	}
 }
 
-sse_command(url: text, last_id: text): list := {
+sse_command(url: text, last_id: text) as list := {
 	words = ["curl", "-sN", "--max-time", text(STREAM_WINDOW_SECONDS), "-A", USER_AGENT, "-H", "Accept: text/event-stream"]
 	if last_id != "" { words += ["-H", "Last-Event-ID: " + last_id] }
 	words + [url]

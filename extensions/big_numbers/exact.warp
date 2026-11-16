@@ -8,7 +8,7 @@ use "../../compiler/runtime/floats.warp"
 use "../../compiler/runtime/instructions.warp"
 use "big_ints.warp"
 use "../../compiler/emitter/byte_codes.warp"
-int_gcd(a: int, b: int): int := {
+int_gcd(a: int, b: int) as int := {
 	if a < 0 { a = -a }
 	if b < 0 { b = -b }
 	while b != 0 {
@@ -23,14 +23,14 @@ int_gcd(a: int, b: int): int := {
 # shows as decimal where it can, 3.5, while its denominator stays below fraction_shown_denominator(); a decimal literal's stays decimal,
 # 0.1 + 0.2 as 0.3. Marked in its kind (fraction_mark(): bit 55 above Kind.Int, free beside TypeValue's 54), as a
 # yes/no is; a whole result is a plain int
-fraction_shown_denominator(): int := 10000
-fraction_mark(): int := 36028797018963969
-is_fraction(n: Node): bool := not is_null(n) and marked_kind(n) == fraction_mark()
-fraction_of(n: Node): Node := if is_ratio(n) then with_kind(n, fraction_mark()) else n
+fraction_shown_denominator() as int := 10000
+fraction_mark() as int := 36028797018963969
+is_fraction(n: Node) as bool := not is_null(n) and marked_kind(n) == fraction_mark()
+fraction_of(n: Node) as Node := if is_ratio(n) then with_kind(n, fraction_mark()) else n
 # the result a fraction when an operand is one
-fraction_kept(result: Node, a: Node, b: Node): Node := if is_fraction(a) or is_fraction(b) then fraction_of(result) else result
+fraction_kept(result: Node, a: Node, b: Node) as Node := if is_fraction(a) or is_fraction(b) then fraction_of(result) else result
 # n/d in lowest terms, an int when d divides n; d 0 traps, as Rust's divide by zero fails
-exact_ratio(n: int, d: int): Node := {
+exact_ratio(n: int, d: int) as Node := {
 	if d == 0 { divide_by_zero() }
 	divisor = int_gcd(n, d)
 	if d < 0 { divisor = -divisor }
@@ -40,46 +40,46 @@ exact_ratio(n: int, d: int): Node := {
 	ratio_of(n, d)
 }
 # the numerator and denominator of an Int $Node, an int its own numerator over 1
-exact_numerator(n: Node): int := if is_ratio(n) then ratio_numerator(n) else unboxed_int(n)
-exact_denominator(n: Node): int := if is_ratio(n) then ratio_denominator(n) else 1
+exact_numerator(n: Node) as int := if is_ratio(n) then ratio_numerator(n) else unboxed_int(n)
+exact_denominator(n: Node) as int := if is_ratio(n) then ratio_denominator(n) else 1
 # whether an Int node holds a big int: as a whole, or as a ratio's part (a decimal past 10^18). The words below hand
 # one to big_ratios.warp by the intrinsic made_case(Made.BigInt, big_exact_sum(a, b)) …: `if holds_big_int(a) or
 # holds_big_int(b) { return big_exact_sum(a, b) }`, compiled only into a program that makes big ints (emitter made_case), so a plain-int
 # program carries none of it
-holds_big_int(n: Node): bool := if is_ratio(n) then not has_plain_parts(n) else not is_plain_int(n)
+holds_big_int(n: Node) as bool := if is_ratio(n) then not has_plain_parts(n) else not is_plain_int(n)
 # what made_case(Made.Ratio, …) tests
-holds_ratio(n: Node): bool := is_ratio(n)
+holds_ratio(n: Node) as bool := is_ratio(n)
 # whether every product of a part of a and a part of b takes below 62 bits, so that a sum of two stays within 64; the
 # words below go on in big_ratios.warp past that, an Int being unbounded (D16): twelve divisions by 1.18 are 59^12
 # over 50^12
-fit_together(a: Node, b: Node): bool := part_bits(a) + part_bits(b) < 63
+fit_together(a: Node, b: Node) as bool := part_bits(a) + part_bits(b) < 63
 # the bits the larger part of an exact number takes
-part_bits(n: Node): int := max_int(bit_length(exact_numerator(n)), bit_length(exact_denominator(n)))
+part_bits(n: Node) as int := max_int(bit_length(exact_numerator(n)), bit_length(exact_denominator(n)))
 # a's numerator times b's denominator
-cross_product(a: Node, b: Node): int := exact_numerator(a) * exact_denominator(b)
-common_product(a: Node, b: Node): int := exact_denominator(a) * exact_denominator(b)
-exact_add(a: Node, b: Node): Node := {
+cross_product(a: Node, b: Node) as int := exact_numerator(a) * exact_denominator(b)
+common_product(a: Node, b: Node) as int := exact_denominator(a) * exact_denominator(b)
+exact_add(a: Node, b: Node) as Node := {
 	made_case(Made.BigInt, big_exact_sum(a, b))
 	if not fit_together(a, b) { return big_exact_sum(a, b) }
 	fraction_kept(exact_ratio(cross_product(a, b) + cross_product(b, a), common_product(a, b)), a, b)
 }
-exact_sub(a: Node, b: Node): Node := {
+exact_sub(a: Node, b: Node) as Node := {
 	made_case(Made.BigInt, big_exact_difference(a, b))
 	if not fit_together(a, b) { return big_exact_difference(a, b) }
 	fraction_kept(exact_ratio(cross_product(a, b) - cross_product(b, a), common_product(a, b)), a, b)
 }
-exact_mul(a: Node, b: Node): Node := {
+exact_mul(a: Node, b: Node) as Node := {
 	made_case(Made.BigInt, big_exact_product(a, b))
 	if not fit_together(a, b) { return big_exact_product(a, b) }
 	fraction_kept(exact_ratio(exact_numerator(a) * exact_numerator(b), common_product(a, b)), a, b)
 }
-exact_div(a: Node, b: Node): Node := {
+exact_div(a: Node, b: Node) as Node := {
 	made_case(Made.BigInt, big_exact_quotient(a, b))
 	if not fit_together(a, b) { return big_exact_quotient(a, b) }
 	fraction_kept(exact_ratio(cross_product(a, b), exact_denominator(a) * exact_numerator(b)), a, b)
 }
 # -1, 0 or 1 as a is below, equal to or above b (denominators are positive)
-exact_order(a: Node, b: Node): int := {
+exact_order(a: Node, b: Node) as int := {
 	made_case(Made.BigInt, big_exact_order(a, b))
 	if not fit_together(a, b) { return big_exact_order(a, b) }
 	left = cross_product(a, b)
@@ -88,7 +88,7 @@ exact_order(a: Node, b: Node): int := {
 }
 # a big int's text by big_ints.warp's big_int_text where the program makes big ints (made_case), else a trap: what
 # prints an int at run time carries no big int code nor GC type unless the program can make one
-shown_big_int(n: Node): text := {
+shown_big_int(n: Node) as text := {
 	made_case(Made.BigInt, big_int_text(n))
 	fail()
 }
@@ -96,7 +96,7 @@ shown_big_int(n: Node): text := {
 # (decision fraction-written-form), as decimal digits: where it terminates (its denominator 2^a·5^b) exactly, 7/2 as
 # 3.5, else with its period overlined as a repeating decimal is written (decision quotient-period), `a / 6` of 37 as
 # 6.16̅
-exact_text(n: Node): text := {
+exact_text(n: Node) as text := {
 	made_case(Made.BigInt, big_exact_text(n))
 	# an Int that is no ratio: a plain int, else a big int, whose text a program without one never compiles (shown_big_int)
 	if not is_ratio(n) { return if is_plain_int(n) then int_text(unboxed_int(n)) else shown_big_int(n) }
@@ -115,8 +115,8 @@ exact_text(n: Node): text := {
 # the digits of numerator/denominator past the point: `lead` of them before the period, then the period, each of its
 # digits overlined, 0.16̅ of 1/6; a period longer than period_digits_shown() shows as the ratio n/d, as the prelude's
 # decimal_text (`x as decimal`) does
-period_digits_shown(): int := 1000
-overline(): text := "̅"
+period_digits_shown() as int := 1000
+overline() as text := "̅"
 periodic_text(numerator: int, denominator: int, lead: int): text := {
 	period = decimal_period(denominator / (int_pow(2, factor_count(denominator, 2)) * int_pow(5, factor_count(denominator, 5))))
 	if period > period_digits_shown() { return int_text(numerator) + "/" + int_text(denominator) }

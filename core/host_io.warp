@@ -11,7 +11,7 @@ global read(path: any) := if is_url(path) then std_io("net", "get", [path]) else
 global read_bytes(path: any) := if is_url(path) then url_bytes(path) else std_io("file", "read_bytes", [home_expanded(path)])
 # a path that is a URL, `https://…`, `http://…` or `://host/…` (over https): read and read_bytes read it over HTTP,
 # as fetch does
-is_url(path: any): bool := path is text and URL_SCHEMES.any(scheme => path.starts_with(scheme))
+is_url(path: any) as bool := path is text and URL_SCHEMES.any(scheme => path.starts_with(scheme))
 # a URL's bytes: the native host answers net.get's bytes as a text, a page's as a list of them
 url_bytes(url: text) := {
 	answer = std_io("net", "get", [url, AS_BYTES])
@@ -23,8 +23,8 @@ list_files(folder: any) := std_io("file", "list", [home_expanded(folder)])
 # `~/notes.txt`: a path's leading ~ is the home folder ($HOME), expanded where the path is used (wiki/script.md),
 # so a quoted "~/x" works too and a program expands it on the machine it runs on; any other value stays as it is
 # a run without one (a browser page) is told so, never handed "ø/…"
-home_expanded(path: any): any := if path is text and (path == "~" or path.starts_with("~/")) then home_folder() + path[1..] else path
-home_folder(): text := started_env("HOME") ?? raise("~ is the home folder, and this run has none ($HOME is unset; a page answers its own files, wasi.js HOME_DIRECTORY)")
+home_expanded(path: any) as any := if path is text and (path == "~" or path.starts_with("~/")) then home_folder() + path[1..] else path
+home_folder() as text := started_env("HOME") ?? raise("~ is the home folder, and this run has none ($HOME is unset; a page answers its own files, wasi.js HOME_DIRECTORY)")
 # `started_env("HOME")`: the variable as the program's environment started with it, ø when unset (os.warp env adds
 # the ones the program set)
 started_env(name: any) := std_io("os", "env", [name])
@@ -32,7 +32,7 @@ started_env(name: any) := std_io("os", "env", [name])
 run_option(name: any) := std_io("warp", "option", [name])
 # a shell line running this warp on the words, with this run's lib/ and, in a windowless run, --no-window: how a
 # command or a program starts warp
-warp_command(words: text): text := {
+warp_command(words: text) as text := {
 	lib = run_option("lib")
 	quiet = if run_option("no-window") == ø then "" else "--no-window "
 	"\"" + (run_option("executable") ?? "warp") + "\" " + (if lib == ø then "" else "--lib \"" + lib + "\" ") + quiet + words

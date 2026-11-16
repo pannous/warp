@@ -4,28 +4,28 @@
 use "big_numbers.warp"
 use "gpu_lists/runtime.warp"
 use "times/runtime.warp"
-extended_list_at(n: Node, index: int): Node := {
+extended_list_at(n: Node, index: int) as Node := {
 	if is_gpu_list(n) { return gpu_list_at(n, index) }
 	fail()
 }
-extended_list_count(n: Node): int := {
+extended_list_count(n: Node) as int := {
 	if is_gpu_list(n) { return gpu_list_count(n) }
 	fail()
 }
-extended_list_set(n: Node, index: int, value: Node): Node := {
+extended_list_set(n: Node, index: int, value: Node) as Node := {
 	if is_gpu_list(n) { return gpu_list_set(n, index, value) }
 	fail()
 }
-extended_list_items(n: Node): list := {
+extended_list_items(n: Node) as list := {
 	if is_gpu_list(n) { return gpu_list_items(n) }
 	fail()
 }
-extended_list_unlisted(n: Node): list := {
+extended_list_unlisted(n: Node) as list := {
 	if is_gpu_list(n) { return gpu_list_unlisted(n) }
 	fail()
 }
 # `a + b` of a list of an extension's kind and a list: its own list of both, ø where it makes none (a plain list then)
-extended_list_joined(a: Node, b: Node): Node := {
+extended_list_joined(a: Node, b: Node) as Node := {
 	if is_gpu_list(a) { return gpu_lists_joined(a, b) }
 	ø
 }

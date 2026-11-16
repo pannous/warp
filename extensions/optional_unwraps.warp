@@ -6,7 +6,7 @@ optional_unwraps_extension = Extension{name: "optional_unwraps", passes_before: 
 OPTIONAL_MARK = "?"
 MISSING = " is missing"
 
-optional_unwraps(program: Node): Node := {
+optional_unwraps(program: Node) as Node := {
 	optionals = OptionalNames()
 	bottom_up(program, n => noted_optional(n, optionals))
 	if #optionals.names == 0 { return program }
@@ -17,7 +17,7 @@ class OptionalNames {
 }
 
 # notes the name of `name: T? = …`
-noted_optional(n: Node, optionals: OptionalNames): Node := {
+noted_optional(n: Node, optionals: OptionalNames) as Node := {
 	if is_key(n, Op.Assign) and is_key(key_of(n), Op.Colon) {
 		declared = key_of(n)
 		if key_of(declared) is symbol and value_of(declared) is symbol and name_of(value_of(declared)).ends_with(OPTIONAL_MARK) { optionals.names[name_of(key_of(declared))] = yes }
@@ -26,7 +26,7 @@ noted_optional(n: Node, optionals: OptionalNames): Node := {
 }
 
 # `(unwrap x)` of an optional x as `x ?? raise "x is missing"`
-unwrapped_optional(n: Node, optionals: OptionalNames): Node := {
+unwrapped_optional(n: Node, optionals: OptionalNames) as Node := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol(unwrap_word)) { return n }
 	x = n#2
 	if not (x is symbol and optionals.names.has(name_of(x))) { return n }

@@ -14,16 +14,16 @@ PUNY_SKEW = 38
 PUNY_DAMP = 700
 PUNY_DIGITS = "abcdefghijklmnopqrstuvwxyz0123456789"
 
-def puny_adapt(delta: int, points: int, first_time: bool): int {
+def puny_adapt(delta: int, points: int, first_time: bool) as int {
 	d = if first_time then delta /! PUNY_DAMP else delta /! 2
 	d = d + d /! points
 	k = 0
 	while d > (PUNY_BASE - PUNY_TMIN) * PUNY_TMAX /! 2 { d = d /! (PUNY_BASE - PUNY_TMIN); k = k + PUNY_BASE }
 	k + (PUNY_BASE - PUNY_TMIN + 1) * d /! (d + PUNY_SKEW)
 }
-puny_threshold(k: int, bias: int): int := if k <= bias then PUNY_TMIN else if k >= bias + PUNY_TMAX then PUNY_TMAX else k - bias
-puny_points(subject: text or list): list := if subject is list then subject else codepoint_numbers(subject)
-def punycode_encode(subject: text or list): text {
+puny_threshold(k: int, bias: int) as int := if k <= bias then PUNY_TMIN else if k >= bias + PUNY_TMAX then PUNY_TMAX else k - bias
+puny_points(subject: text or list) as list := if subject is list then subject else codepoint_numbers(subject)
+def punycode_encode(subject: text or list) as text {
 	input = puny_points(subject)
 	out = join([text(chr(c)) for c in input if c < 128], "")
 	basic = count(out)
@@ -60,7 +60,7 @@ def punycode_encode(subject: text or list): text {
 	}
 	out
 }
-def punycode_decode_points(t: text): list {
+def punycode_decode_points(t: text) as list {
 	split_at = 0
 	for i in 0 ..< count(t) { if t[i] == "-" { split_at = i + 1 } }
 	output = []
@@ -93,11 +93,11 @@ def punycode_decode_points(t: text): list {
 	}
 	output
 }
-punycode_decode(t: text): text := text_of_codepoints(punycode_decode_points(t))
+punycode_decode(t: text) as text := text_of_codepoints(punycode_decode_points(t))
 
 // labels on every dot IDNA counts: . U+3002 U+FF0E U+FF61
-idna_labels(domain: text): list := split(replace(replace(replace(domain, "。", "."), "．", "."), "｡", "."), ".")
-def domain_to_ascii(domain: text): text {
+idna_labels(domain: text) as list := split(replace(replace(replace(domain, "。", "."), "．", "."), "｡", "."), ".")
+def domain_to_ascii(domain: text) as text {
 	out = []
 	for label in idna_labels(domain) {
 		mapped = nfc(lower(label))
@@ -110,7 +110,7 @@ def domain_to_ascii(domain: text): text {
 	}
 	join(out, ".")
 }
-def domain_to_unicode(domain: text): text {
+def domain_to_unicode(domain: text) as text {
 	out = []
 	for label in idna_labels(domain) {
 		low = lower(label)

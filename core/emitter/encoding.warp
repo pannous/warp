@@ -1,6 +1,6 @@
 # The bytes of a wasm module (emitter.warp's part): LEB128 numbers, little-endian ints, vectors, names, sections
 ## bytes
-def uleb(n: int): list {
+def uleb(n: int) as list {
 	out = []
 	while n >= 128 {
 		out += [bits_or(bits_and(n, 127), 128)]
@@ -10,13 +10,13 @@ def uleb(n: int): list {
 }
 # n as a LEB128 of always 5 bytes (a valid non-minimal one), so a link rewrites it in place
 padded_width = 5
-def padded_uleb(n: int): list {
+def padded_uleb(n: int) as list {
 	out = []
 	for i in 0..padded_width { out += [bits_or(bits_and(n >> (7 * i), 127), if i < padded_width - 1 then 128 else 0)] }
 	out
 }
 # [the LEB128 number at `at`, where the bytes after it start]
-def uleb_read(bytes: list, at: int): list {
+def uleb_read(bytes: list, at: int) as list {
 	n = 0
 	shift = 0
 	while bytes[at] >= 128 {
@@ -26,7 +26,7 @@ def uleb_read(bytes: list, at: int): list {
 	}
 	[n + (bytes[at] << shift), at + 1]
 }
-def sleb(n: int): list {
+def sleb(n: int) as list {
 	out = []
 	more = yes
 	while more {
@@ -38,16 +38,16 @@ def sleb(n: int): list {
 	out
 }
 # the 8 little-endian bytes of an int's low 64 bits
-def le64(n: int): list {
+def le64(n: int) as list {
 	out = []
 	for i in 0..8 { out += [bits_and(n >> (8 * i), 255)] }
 	out
 }
-def concatenated(parts: list): list {
+def concatenated(parts: list) as list {
 	out = []
 	for part in parts { out += part }
 	out
 }
-def vector(parts: list): list { uleb(#parts) + concatenated(parts) }
-def name_bytes(name: text): list { vector(name.bytes.map(b => [b])) }
-def section(id: int, content: list): list { [id] + uleb(#content) + content }
+def vector(parts: list) as list { uleb(#parts) + concatenated(parts) }
+def name_bytes(name: text) as list { vector(name.bytes.map(b => [b])) }
+def section(id: int, content: list) as list { [id] + uleb(#content) + content }
