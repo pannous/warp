@@ -112,3 +112,380 @@ go { for k in 1 to 3 { ch.send(k) }; ch.close() }
 received = 0
 for v in ch { received += v }
 test received == 6
+
+# ---- more numbers: radix, digit groups, percent, superscripts, glyph atoms, floor division, bits
+test 0xff == 255
+test 0b101 == 5
+test 1_000_000 == 1000000
+test 80% == 4 / 5
+test 3² == 9
+test 2⁻¹ == 1 / 2
+test ½ + ¼ == 3 / 4
+test 0.3̅ == 1 / 3
+test ✓
+test 7 ÷ 2 == 3
+test 7 modulo 3 == 1
+test (624485 & 127) == 101
+test (101 | 128) == 229
+test yes xor no
+test 3 is not 4
+
+# ---- complex and hyperreal numbers: ⅈ, ε, ω
+test ⅈ * ⅈ == -1
+test (1 + 2ⅈ) * (1 - 2ⅈ) == 5
+test ε * ω == 1
+test ε < 0.0001
+
+# ---- versions, dates and durations
+test 1.9.0 < 1.10.0
+due = 2024-01-31 + 1 day
+test due.month == 2
+
+# ---- units and degrees (use units)
+use units
+test 1 km == 1000 m
+test "" + 30° * 2 == "60°"
+
+# ---- more text: ${} interpolation, entities, lines, split and join, a character replaced, typed sql templates
+planet = "world"
+test "hello ${planet}" == "hello world"
+test "\:alpha\:beta" == "αβ"
+poem = "two
+lines"
+test (#poem.lines) == 2
+test "a,b".split(",").join("-") == "a-b"
+word = "cat"
+word#1 = 'b'
+test word == "bat"
+test 'b' is codepoint
+customer = "Ann"
+query = sql "SELECT * FROM t WHERE name = $customer"
+test query#2 == "Ann"
+
+# ---- regular expressions (use regex)
+use regex
+test "abc" matches "a.c"
+
+# ---- more lists: positions and indexes, slices, it-lambdas, where, sort by, changing methods, typed arrays
+letters = ["a" "b" "c"]
+test letters#1 == "a"
+test letters[0] == "a"
+test [1 2 3 4][1..3] == [2 3]
+test [1 2 3 4].filter(it > 2) == [3 4]
+test [1 2 3].map(it * 10) == [10 20 30]
+evens = [4 2 2]
+test (evens where it == 2) == [2 2]
+test ["bb" "a" "ccc"].sort(by: #it) == ["a" "bb" "ccc"]
+growing = [1 2]
+growing.push(3)
+growing.insert(0, 0)
+test growing == [0 1 2 3]
+zeros = int[3]
+zeros#2 = 5
+test zeros == [0 5 0]
+test 3 in [1 2 3]
+test "ell" in "hello"
+test min(3, 8) == 3
+test max([4 9 2]) == 9
+test (first 2 of [5 6 7]) == [5 6]
+
+# ---- inner and outer operators, broadcasting
+pair = [1 2]
+test pair \+ pair == [2 4]
+test pair /+ pair == [[2 3] [3 4]]
+test sqrt([4 9]) == [2 3]
+
+# ---- maps: iterate keys and values
+stock = {apples: 1, pears: 2}
+fruit = 0
+for fruit_name, amount in stock { fruit += amount }
+test fruit == 3
+test stock.keys == ["apples" "pears"]
+
+# ---- missing values: ø, ??, default, or, safe navigation, optionals and their unwrap
+maybe = ø
+test maybe is ø
+test (maybe ?? 5) == 5
+zero_kept = 0 default 10
+test zero_kept == 0
+test (0 or 7) == 7
+test (yes ? 1 : 2) == 1
+test maybe?.name is ø
+someone = {name: "Ann"}
+test someone?.name == "Ann"
+test name of someone == "Ann"
+amount: int? = 5
+test amount! * 2 == 10
+salute(who: text?) := who ?? "anon"
+test salute(ø) == "anon"
+
+# ---- more functions: named arguments, defaults reading earlier ones, clauses, overloads, several results
+area(w, h) := w * h
+test area(h: 2, w: 5) == 10
+grow(x, y = x + 1, z = y * 2) := z
+test grow(1) == 4
+test grow(1, 5) == 10
+kind(0) := "zero"
+kind(n) := "other"
+test kind(0) == "zero" and kind(4) == "other"
+describe(n: int) := "int"
+describe(t: text) := "text"
+test describe(3) == "int" and describe("a") == "text"
+divmod(p, q) := (p ÷ q, p % q)
+(quotient, remainder) = divmod(17, 5)
+test quotient == 3 and remainder == 2
+lo, hi = 1, 2
+lo, hi = hi, lo + hi
+test [lo hi] == [2 3]
+fact(n) := n <= 1 ? 1 : n * fact(n - 1)
+test fact(5) == 120
+
+# ---- lambdas and blocks: |x| lambdas, do … end, blocks run by a call, block parameters, n times
+cube = |x| x * x * x
+test cube(2) == 8
+doubled = [1 2].map do |v| v * 2 end
+test doubled == [2 4]
+summed = {1 + 2}
+test summed() == 3
+rep(count, body: block) := { for r in 1 to count { body() } }
+steps = 0
+rep(4, { steps += 2 })
+test steps == 8
+laps = 0
+3 times { laps += 1 }
+test laps == 3
+
+# ---- your own syntax: phrase definitions, infix, suffix and circumfix operators, aliases
+to halve a number: number / 2
+test (halve 10) == 5
+infix operator ⊕(l, r) := l + 2 * r
+test 1 ⊕ 2 == 5
+suffix operator ‼(k) := k * 2
+test 3‼ == 6
+test ⌊3.7⌋ == 3
+triple(x) := 3 * x
+alias tripled => triple
+test tripled(2) == 6
+
+# ---- functions as values: reflection, effects, fast arithmetic, result types chosen by the caller
+test area.params == ["w" "h"]
+@pure sqr(x) := x * x
+test sqr(4) == 16
+fast machine_square(k) := k * k
+test machine_square(5) == 25
+sample() as int := 7
+sample() as text := "seven"
+as_number: int = sample()
+as_words: text = sample()
+test as_number == 7 and as_words == "seven"
+3 + 4
+last_doubled = it * 2
+test last_doubled == 14
+
+# ---- more control flow: unless, loop, break and continue, C-style for, raise and catch, assert, failed
+spare = 0
+unless spare > 0 { spare = 9 }
+test spare == 9
+odd_sum = 0
+for z in 1 to 10 { if z % 2 == 0 { continue }; if z > 6 { break }; odd_sum += z }
+test odd_sum == 9
+spins = 0
+loop { spins += 1; if spins == 3 { break } }
+test spins == 3
+c_sum = 0
+for (j = 0; j < 3; j++) { c_sum += j }
+test c_sum == 3
+explode() := raise "boom"
+message = try { explode() } catch e { "caught " + e }
+test message == "caught boom"
+assert 1 + 1 == 2 else "math broke"
+risky = try { 1 / 0 }
+test risky failed
+
+# ---- pattern matching: values, guards, list and text patterns, other languages' arms
+named(n) := match n { 0: "zero"; 1: "one"; _: "many" }
+test named(1) == "one" and named(7) == "many"
+size(n) := match n { large if large > 5 => "big"; _ => "small" }
+test size(9) == "big"
+head(xs) := match xs { [h, ...rest] => h; _ => 0 }
+test head([4 5 6]) == 4
+route(path) := match path {
+	"/users/" + id: int => "user \(id + 1000)"
+	page + ".html" => "page \(page)"
+	_ => "not found"
+}
+test route("/users/7") == "user 1007"
+test route("about.html") == "page about"
+pick = match 2 { case 1 => "a"; case 2 => "b"; _ => "c" }
+test pick == "b"
+
+# ---- scopes: let, global, const, modifiers of other languages
+outer = 1
+shadow() := { let outer = 5; outer }
+test shadow() == 5 and outer == 1
+bumps = 0
+bump() := { global bumps; bumps += 1 }
+bump()
+test bumps == 1
+const LIMIT = 3
+test LIMIT == 3
+public static fun answer() := 42
+private bonus = 8
+test answer() + bonus == 50
+
+# ---- sum types
+type Shape = Circle(r: float) | Dot
+round_one = Circle(2.0)
+test round_one.r == 2.0
+
+# ---- more types: records, mixins, traits, methods added later, shown forms, marked numbers, type tests
+record Point { x: int; y: int }
+corner = Point{x: 1, y: 2}
+test corner.x + corner.y == 3
+mixin Walker { steps: int = 0; walk() := name + " walks" }
+class Robot with Walker { name: "R2" }
+test Robot{}.walk() == "R2 walks"
+trait shape { area(); perimeter() := 2 * area() }
+class Square { side: 3; area() := side * side }
+test Square{side: 3}.perimeter() == 18
+class Counter { v: 2 }
+Counter.twice() := v * 2
+extend Counter { half() := v / 2 }
+tally = Counter{v: 6}
+test tally.twice() == 12 and tally.half() == 3
+text.shout() := upper(self) + "!"
+test "hey".shout() == "HEY!"
+class Badge { owner: text; format as text := "badge of " + owner }
+test "\(Badge("Bo"))" == "badge of Bo"
+test [1 2 3] is list of int
+test not ([1 "a"] is list of int)
+test 5 is an int
+test type("ab").name == "text"
+first_of(xs: list of int) := xs#1
+test first_of([7 8]) == 7
+
+# ---- multiple dispatch: the most specific method wins
+class Beast { name: text }
+class Hound extends Beast {}
+speak(a: Beast) := a.name + " makes a sound"
+speak(d: Hound) := d.name + " barks"
+test speak(Hound("Rex")) == "Rex barks"
+test speak(Beast("Kit")) == "Kit makes a sound"
+
+# ---- objects are shared, copy makes a new one; iterators; with … do
+class Account { owner: text; balance: int }
+mine = Account("Ada", 100)
+ours = mine
+ours.balance = 150
+test mine.balance == 150 and ours === mine
+backup = copy(mine)
+backup.balance = 0
+test mine.balance == 150
+class Countdown {
+	n: int
+	next() := { if n <= 0 { return ø }; n -= 1; n + 1 }
+}
+counted = []
+for left in Countdown(3) { counted.add(left) }
+test counted == [3 2 1]
+class Pen { x: int }
+move(p: Pen, step: int) := { p.x = p.x + step }
+pen = Pen(1)
+with pen do
+	move 3
+end
+test pen.x == 4
+
+# ---- code as data: quotes, parse, eval, interpret, tree patterns
+expression = data(a + 1)
+test text(expression) == "a+1"
+test eval("1 + 2") == 3
+test interpret(data(2 * 3)) == 6
+site = {top: {logo: {type: "image", src: "logo.png"}}, body: [{type: "text"}, {type: "image", src: "cat.jpg"}]}
+test (site find {type: "image", src}) == ["logo.png" "cat.jpg"]
+
+# ---- modules: use math, list, json, markup
+use math
+test gcd(12, 18) == 6
+use list
+test zip([1 2], [3 4]) == [[1 3] [2 4]]
+use json
+test to_json({answer: 42}) == '{"answer":42}'
+use markup
+test to_html(div { p{"x"} }) == "<div><p>x</p></div>"
+
+# ---- more events and signals: once, on set, derived values, stored values
+pings = 0
+once ping { pings += 1 }
+emit ping
+emit ping
+test pings == 1
+level = 0
+sets = 0
+on set level { sets += 1 }
+level = 0
+test sets == 1
+base = 2
+derived := base * 10
+base = 3
+test derived == 30
+stored visits default 0
+visits += 1
+test visits >= 1
+
+# ---- more tasks: finish, await a list, sleep
+times_two(x) := x * 2
+pending = go times_two(3)
+test (finish pending) == 6
+first_job = go { 1 }
+second_job = go { 2 }
+test (await all [first_job, second_job]) == [1 2]
+sleep(1 ms)
+test first_job.done
+
+# ---- broken or not yet working (each fails today; kept here so they come back once fixed)
+# a fallback in parentheses: outside the core: the group (… (no owner)
+# test (0 default 10) == 0
+# an object function reading a field of its object: outside the core: the unknown name settings (no owner)
+# settings = {factor: 10, scaled := it * factor}
+# test settings.scaled(3) == 30
+# a conversion declared with `as text :=` in a program with test lines: text of node
+# class Person { name: text }
+# Person as text := it.name
+# test (Person("Al") as text) == "Al"
+# a fold of a bare operator at the end of a line (it works before a `;`): outside the core: a function value in + (no owner)
+# total_of := fold +
+# test total_of [1 2 3] == 6
+# its and `name of it` in a mapping phrase: outside the core: the call map(…) (no owner)
+# test (map [someone] to its name) == ["Ann"]
+# test (map [someone] to name of it) == ["Ann"]
+# an event raised by its phrase: outside the core: the unknown name emit (no owner)
+# on stop { pings += 1 }
+# send stop the machine
+# a test of a length written without parentheses: outside the core: the unknown name test (no owner)
+# test #letters == 3
+# a phrase definition named like a list method the program calls (jobs.add above): add(xs, x) is called with 1 argument
+# to add a to b: a + b
+# test (add 2 to 3) == 5
+# sort(by: …) in a program with a function of its own taking a parameter named by: sorted_node(xs) is called with 2 arguments
+# move_by(p: Pen, by: int) := { p.x = p.x + by }
+# test [3 1 2].sort(by: x => -x) == [3 2 1]
+# the article a in a program that names a variable a (the loop over (a, b) above): 5 is a number gives no, silently
+# test 5 is a number
+# an entity outside a text: it runs, but `warp format` writes \:alpha as `\: alpha`, the unknown name alpha
+# \:alpha = 4
+# test α + 1 == 5
+# number words, which work in a small program, in this one (with the functions above): a function value in + (no owner)
+# test one plus two == 3
+# arithmetic on a marked number in a program that uses units (this one does): wasm trap: call stack exhausted (shown at 1:116)
+# type Kolor < int
+# test (5 as Kolor) + 1 == 6
+# the shown form of a marked number in a program declaring a trait (the trait shape above): prints 5, not K5
+# format Kolor k as text := "K" + (k as int)
+# test "" + (5 as Kolor) == "K5"
+# enums in a program that starts a task, uses units or a duration (this one does): the unknown name enum
+# enum Color { Red Green Blue }
+# hue = Color.Green
+# test hue == Color.Green and hue != Color.Red
+# enum Key { A = 65 }
+# test Key(65) == Key.A
