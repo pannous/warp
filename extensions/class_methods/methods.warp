@@ -748,8 +748,10 @@ method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls
 	builtin = if operated then promoted(Key(call_arguments#1, operator#2 as Op, call_arguments#2), promotions, name) else ø
 	# a commutative operator of a value and an instance, `5 * q`, is the instance's method with the value, q * 5
 	# any other operator, `3 - q`, has no reading without one the class declares: refused, as the builtin `3 - q` would
-	# hand q back to this dispatcher forever
-	swapped = if operated and operator#2 in commutative_operators then class_dispatch(deepest_first(classes, owners), called, call_arguments.reverse(), builtin, call_arguments#2) else if operated then unreflected(deepest_first(classes, owners), operator#2, call_arguments#2, builtin) else builtin
+	# hand q back to this dispatcher forever; a class promoting the value answers it as its own, `3 / π`, a linked
+	# module's class in its own module, `1 - 2ⅈ`
+	answered = linked_class_names() + promotions.map(promotion => promotion#1)
+	swapped = if operated and operator#2 in commutative_operators then class_dispatch(deepest_first(classes, owners), called, call_arguments.reverse(), builtin, call_arguments#2) else if operated then unreflected(deepest_first(classes, owners.filter(owner => owner not in answered)), operator#2, call_arguments#2, builtin) else builtin
 	# an instance on the right whose class declares the operator with a value on its left, `*(k: number, v: V)`: that,
 	# before the swap
 	reflected = if operated and #reflected_owners > 0 then reflected_dispatch(classes, reflected_owners, operator#2, call_arguments, swapped) else swapped

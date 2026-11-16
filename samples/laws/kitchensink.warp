@@ -170,6 +170,7 @@ test "abc" matches "a.c"
 letters = ["a" "b" "c"]
 test letters#1 == "a"
 test letters[0] == "a"
+test #letters == 3
 test [1 2 3 4][1..3] == [2 3]
 test [1 2 3 4].filter(it > 2) == [3 4]
 test [1 2 3].map(it * 10) == [10 20 30]
@@ -443,34 +444,33 @@ test (await all [first_job, second_job]) == [1 2]
 sleep(1 ms)
 test first_job.done
 
+# ---- a fallback in parentheses, an object function reading its object's field, a fold of a bare operator
+test (0 default 10) == 0
+settings = {factor: 10, scaled := it * factor}
+test settings.scaled(3) == 30
+total_of := fold +
+test total_of([1 2 3]) == 6
+
+# ---- its and `name of it` in a mapping phrase
+test (map [someone] to its name) == ["Ann"]
+test (map [someone] to name of it) == ["Ann"]
+
 # ---- broken or not yet working (each fails today; kept here so they come back once fixed)
-# a fallback in parentheses: outside the core: the group (… (no owner)
-# test (0 default 10) == 0
-# an object function reading a field of its object: outside the core: the unknown name settings (no owner)
-# settings = {factor: 10, scaled := it * factor}
-# test settings.scaled(3) == 30
 # a conversion declared with `as text :=` in a program with test lines: text of node
 # class Person { name: text }
 # Person as text := it.name
 # test (Person("Al") as text) == "Al"
-# a fold of a bare operator at the end of a line (it works before a `;`): outside the core: a function value in + (no owner)
-# total_of := fold +
-# test total_of [1 2 3] == 6
-# its and `name of it` in a mapping phrase: outside the core: the call map(…) (no owner)
-# test (map [someone] to its name) == ["Ann"]
-# test (map [someone] to name of it) == ["Ann"]
 # an event raised by its phrase: outside the core: the unknown name emit (no owner)
 # on stop { pings += 1 }
 # send stop the machine
-# a test of a length written without parentheses: outside the core: the unknown name test (no owner)
-# test #letters == 3
 # a phrase definition named like a list method the program calls (jobs.add above): add(xs, x) is called with 1 argument
 # to add a to b: a + b
 # test (add 2 to 3) == 5
 # sort(by: …) in a program with a function of its own taking a parameter named by: sorted_node(xs) is called with 2 arguments
 # move_by(p: Pen, by: int) := { p.x = p.x + by }
 # test [3 1 2].sort(by: x => -x) == [3 2 1]
-# the article a in a program that names a variable a (the loop over (a, b) above): 5 is a number gives no, silently
+# the article a in a program that names a variable a and has a parameter named number (halve above): 5 is a number gives
+# no, silently, where it should be refused as reading two ways
 # test 5 is a number
 # an entity outside a text: it runs, but `warp format` writes \:alpha as `\: alpha`, the unknown name alpha
 # \:alpha = 4
