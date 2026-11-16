@@ -11,10 +11,10 @@ DARK = 0xFF1D1D1D
 dark_theme = dark_mode
 blank_color = if dark_theme then DARK else PALE
 ink = if dark_theme then PALE else DARK
-// the canvas until canvas.resize(width, height) sizes it: show() alone paints this one, the size of the playground's output pane,
-// natively 640×480
-global canvas_width: int = view_width
-global canvas_height: int = view_height
+// the canvas until canvas.resize(width, height) sizes it: show() alone paints this one, the size it is shown at (the window,
+// the playground's output pane; with neither, the terminal)
+global canvas_width: int = shown_width()
+global canvas_height: int = shown_height()
 // where a window or the page shows the paintings and a GPU draws (gpu_drawing, the host's answer), the shapes are drawn
 // there: no pixels here then, show() sends the shapes drawn since the last one (shape_shader)
 global drawing_on_gpu = gpu_drawing
