@@ -16,6 +16,17 @@
 // a·e1 + b·e2 + c·e0; space's point is e123 + x·e032 + y·e013 + z·e021, its plane a·e1 + b·e2 + c·e3 + d·e0.
 // The dual is the right complement, e_m ∧ mv_dual(e_m) = I (the pseudoscalar), which needs no metric and so works in the
 // degenerate PGA metrics; mv_undual undoes it.
+//
+// On the GPU (card pga-gpu-motors, planned): only a narrow, typed slice goes there, never the generic Multivector.
+// A full multivector of space is 16 floats and a generic geometric product about 256 multiplications, while a motor
+// (rotation and translation, 8 floats) moving a point (4 floats) needs about 21: GPU code wins only when each product is
+// expanded for the grades it actually meets, as ganja.js does when it writes GLSL and klein does by hand. So the shapes
+// that cross over are typed, Motor (two vec4), Point and Plane (a vec4 each), Line, and fit the [vec4] GPU lists; the
+// shader translator writes the specialized product of each typed pair (motor * point, motor * motor, the sandwich).
+// The first use is skinning: a motor is a dual quaternion, the standard way to bend a mesh on the GPU, so fish_pose's
+// per-frame bend on the CPU becomes joint motors uploaded once a frame and applied per vertex; motors also interpolate
+// where 4×4 matrices do not, so poses blend. Construction and exploration (join, meet, duals, any metric) stay here on
+// the CPU, and only their typed results are uploaded.
 use math
 
 class Multivector {

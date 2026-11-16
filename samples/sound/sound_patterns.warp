@@ -1,18 +1,19 @@
 #!/usr/bin/env warp
-# Patterns and live loops on the beat clock: Tidal's mini-notation, one cycle per bar, loops as voices.
+# Melodies and live loops on the beat clock: a melody is a list of steps, written as notes or as text in Tidal's
+# mini-notation, one cycle per bar, each loop a voice of its own.
 
 use sound
 
 tempo = 180
-bass() := play(Pattern("c3 ~ [c3 c3] <~ c3?>"))     # the bass: a bar; the last step alternates
-low() := play(Pattern("c2 _ _ e2"))                 # c2 holds three steps
-offbeat() := play(Pattern("~ g4 ~ g4*2"), bar 1)    # the offbeat chords' root
-euclid() := play(Pattern("c5(3,8) e5(2,8)"), bars 2) # Euclidean rhythms, 3 and 2 of 8
-tune() := play(Pattern("c4 e4 <g4 a4> [b4 c5?]"))   # the swung tune, c5 in about half the cycles (pattern_seed)
-bass_voice = live_loop(bass, 4)                      # each loop a voice of its own, four bars of the bass
+bass() := play("c3 ~ [c3 c3] <~ c3?>")              # the bass: a bar; the last step alternates
+low() := play([C2 ~ 3, E2], beat 1)                  # C2 held three beats
+offbeat() := play([rest, G4, rest, G4 ~ ½, G4 ~ ½], beat 1) # the offbeat chords' root
+spread() := play(euclid(C5, 3, 8) + euclid(E5, 2, 8), beat(1/2)) # Euclidean rhythms, 3 and 2 of 8
+tune() := play([C4, E4, alternate([G4, A4]), B4 ~ ½, maybe(C5 ~ ½)], beat 1) # c5 in about half the plays (melody_seed)
+bass_voice = live_loop(bass, 4)                      # four bars of the bass
 live_loop(low, 4)
 live_loop(offbeat, 4)
-live_loop(euclid, 2)
+live_loop(spread, 2)
 swing = 0.6
 live_loop(tune, 2)
 await bass_voice
