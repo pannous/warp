@@ -5,6 +5,9 @@ Reads the textures named in samples/graphics/ez_trees/atlas.sources and writes
 hero/ash.rgba, hero/grove.rgba, and atlas.bin beside them. The shader's tile
 table is this layout; change both together. atlas.bin is the same pixels,
 zlib-compressed RGBA8, so a run can upload them without rebuilding the floats.
+Entry 4 is the impostor sheet (scripts/ez_tree/impostor.py). Entries 1–3 keep
+the compressed payloads already in atlas.bin when the source hash still matches,
+so a new impostor does not rewrite their pixels.
 
   python3 scripts/ez_tree/atlas.py samples/graphics/ez_trees
 """
@@ -17,12 +20,16 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from impostor import bake_impostors
+
 LEAF = 512
 NEAR_W = 4096
 NEAR_H = 1536
 GROVE_ID = 1
 ASH_ID = 2
 NEAR_ID = 3
+IMPOSTOR_ID = 4
 
 
 def leaf_tile(path: Path, size: int) -> Image.Image:
@@ -69,8 +76,36 @@ def source_hash(root: Path, names: list[str]) -> str:
     return hashlib.sha256("\n".join(parts).encode()).hexdigest()
 
 
-def pack_atlas(images: list[tuple[int, int, int, bytes]], digest: str) -> bytes:
-    payloads = [zlib.compress(raw, 9) for _, _, _, raw in images]
+def kept_payloads(path: Path, digest: str, images: list[tuple[int, int, int, bytes]]) -> list[bytes] | None:
+    """The compressed bytes of entries 1–3, when this bin is the same bake of them."""
+    if not path.exists():
+        return None
+    data = path.read_bytes()
+    if len(data) < HEADER or data[:4] != MAGIC or struct.unpack_from("<I", data, 4)[0] != VERSION:
+        return None
+    count = struct.unpack_from("<I", data, 8)[0]
+    if count < 3 or len(data) < HEADER + count * ENTRY:
+        return None
+    if data[12:44] != bytes.fromhex(digest):
+        return None
+    out = []
+    for index, (ident, width, height, raw) in enumerate(images[:3]):
+        base = HEADER + index * ENTRY
+        got = struct.unpack_from("<7I", data, base)
+        if got[0] != ident or got[1] != width or got[2] != height or got[3] != RGBA8 or got[4] != len(raw):
+            return None
+        start, size = got[6], got[5]
+        if start + size > len(data):
+            return None
+        out.append(data[start:start + size])
+    return out
+
+
+def pack_atlas(images: list[tuple[int, int, int, bytes]], digest: str, payloads: list[bytes] | None = None) -> bytes:
+    if payloads is None:
+        payloads = [zlib.compress(raw, 9) for _, _, _, raw in images]
+    if len(payloads) != len(images):
+        raise SystemExit("atlas: a payload per image")
     directory = HEADER + len(images) * ENTRY
     entries = bytearray()
     blob = bytearray()
@@ -126,15 +161,29 @@ def main() -> None:
         (ASH_ID, ash.size[0], ash.size[1], ash.tobytes()),
         (NEAR_ID, near.size[0], near.size[1], near.tobytes()),
     ]
-    packed = pack_atlas(images, digest)
+    kept = kept_payloads(root / "atlas.bin", digest, images)
+    # The impostor samples the near atlas the shader will upload. When entries 1–3
+    # stay the bytes already on disk, that is the decompressed entry, not a fresh
+    # resize that might differ by a texel.
+    baked_near = near
+    if kept is not None:
+        baked_near = Image.frombytes("RGBA", near.size, zlib.decompress(kept[2]))
+    impostor = bake_impostors(root, baked_near)
+    images.append((IMPOSTOR_ID, impostor.size[0], impostor.size[1], impostor.tobytes()))
+    payloads = None
+    if kept is not None:
+        payloads = kept + [zlib.compress(images[3][3], 9)]
+    packed = pack_atlas(images, digest, payloads)
     (root / "atlas.bin").write_bytes(packed)
     fields = ["EZAT", str(VERSION), digest]
     for ident, width, height, _raw in images:
         fields += [str(ident), str(width), str(height)]
     (root / "atlas.txt").write_text(" ".join(fields) + "\n")
+    same = "entries 1-3 unchanged" if kept is not None else "entries 1-3 rebuilt"
     print(
         f"ash.rgba {ash.size[0]}x{ash.size[1]}  grove.rgba {grove.size[0]}x{grove.size[1]}"
-        f"  near.rgba {near.size[0]}x{near.size[1]}  atlas.bin {len(packed)}  {digest}"
+        f"  near.rgba {near.size[0]}x{near.size[1]}"
+        f"  impostor {impostor.size[0]}x{impostor.size[1]}  atlas.bin {len(packed)}  {digest}  {same}"
     )
 
 
