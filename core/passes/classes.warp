@@ -166,17 +166,20 @@ written_type(n: Node, classes: map, results: map = {}) as text? := {
 		_: ø
 	}
 }
-# function → the class it declares it gives, `now(): Instant`: its definition, or its head alone (a linked module's
-# signature line)
+# function → the class it declares it gives, `now() as Instant`
 result_classes(statements: list, classes: map) as map := {
 	found = {}
 	for statement in statements {
 		result = written_result(statement)
 		if result != ø and result in classes { found[defined_word(statement)] = result }
 		# (`now() as Instant := …` as written, before definitions.warp holds its result)
-		written = if is_key(statement, Op.Define) then key_of(statement) else statement
-		head = as_result(written) ?? written
-		if is_key(head, Op.Colon) and value_of(head) is symbol and name_of(value_of(head)) in classes and is_called_name(key_of(head)) { found[name_of(key_of(head)#1)] = name_of(value_of(head)) }
+		if is_key(statement, Op.Define) {
+			head = as_result(key_of(statement)) ?? key_of(statement)
+			if is_key(head, Op.Colon) and value_of(head) is symbol and name_of(value_of(head)) in classes {
+				named = key_of(head)
+				if named is symbol or is_called_name(named) { found[if named is symbol then name_of(named) else name_of(named#1)] = name_of(value_of(head)) }
+			}
+		}
 	}
 	found
 }

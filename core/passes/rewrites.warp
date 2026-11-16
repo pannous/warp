@@ -1546,7 +1546,8 @@ linked_results(classes: map) as map := {
 	for signature in linked_signatures.values {
 		for slice in signature.slices {
 			head = slice#2.split("\n")#1.split(":=")#1.trim()
-			if head.split(" ").last in classes { heads += statements_in(plain_node(parsed(head))) }
+			# (as a definition, `changes(…) as WikiChanges := ø`, the form result_classes reads)
+			if head.split(" ").last in classes { heads += statements_in(plain_node(parsed(head + " := ø"))) }
 		}
 	}
 	result_classes(heads, classes)
