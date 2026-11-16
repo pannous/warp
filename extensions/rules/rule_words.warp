@@ -1103,6 +1103,12 @@ readings_refused(about: Node, written: text, readings: list) as Node := {
 	diagnose(call_of("readings_refused", [written, either(readings.map(reading => "${reading#1} (${reading#2})")), either(readings.map(reading => reading#1))]), about)
 	Node.Empty
 }
+# `a = 1; 5 is a number` (decision article-optional): a program binding the article reads `5 is a number` two ways,
+# the type test or its own `a` applied to the type: refused naming both
+article_readings(subject: Node, article: Node, type: Node) as Node := {
+	x = spelled(subject); t = spelled(type); a = spelled(article)
+	readings_refused(subject, "${x} is ${a} ${t}", [["${x} is ${t}", "the type test"], ["${x} is (${a} ${t})", "the program's own ${a}"]])
+}
 # `a, b or c`
 either(texts: list) as text := texts[0 ..< #texts - 1].join(", ") + " or " + texts[#texts - 1]
 # `x > 2 then 5` (decision then-not-pipe): a branch needs its `if`, refused naming `if x > 2 then 5`; ø where `if c`
@@ -1549,6 +1555,7 @@ rule_words = {
 	function_value: function_value,
 	then_without_if: then_without_if,
 	when_readings: when_readings,
+	article_readings: article_readings,
 	yes_or_no: yes_or_no,
 	module_help: module_help,
 	module_named: module_named,
