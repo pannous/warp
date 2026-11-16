@@ -19,7 +19,7 @@ rewrite sum($a..$b) => ($start = $a; $end = $b - 1; if $end >= $start then ($sta
 rewrite sum($a to $b) => ($start = $a; $end = $b; if $end >= $start then ($start + $end) * ($end - $start + 1) div 2 else 0) where $a is int
 # An object whose class has next() is walked by it until it gives ø: `for x in Countdown(3)` (decision
 # for-over-iterator)
-rewrite for $x in $o {$body...} => ($walked = $o; while yes { $x = $walked.next(); if $x == ø { break }; $body... }) where $x is symbol and $o is object
+rewrite for $x in $o {$body...} => ($walked = $o; while yes { $x = $walked.next(); if $x == ø { break }; $body... }) where $x is symbol and $o is instance
 # A unit word as the loop variable walks the value by that unit when its type has one, else by its own items
 # (decision loop-variable): `for byte in t` a text's bytes, `for pair in m` a map's [key, value] pairs, `for byte in
 # bytes` a list's items

@@ -48,7 +48,7 @@ rule_word_marks = "_$"
 # the kinds a typed hole `$x: text` names
 hole_kinds = ["text", "symbol", "list", "block", "map", "int", "number"]
 # what `where $x is …` asks of the code a hole binds, besides a hole kind
-code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing", "label", "varying", "definition", "function_block", "instance", "object", "vector", "assignment"]
+code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing", "label", "varying", "definition", "function_block", "instance", "vector", "assignment"]
 # `where not method`, `where not shadowed`: conditions about where the matched code stands, asked of the word it starts
 # with (card engine-rule-conditions)
 context_words = ["method", "shadowed", "item", "raw"]
@@ -1413,10 +1413,8 @@ has_property(code: Node, property: text) as bool := {
 	if property == "function_block" { return bracket_of(code) == "{" and mentions(code, implicit_parameter) }
 	# `x -> x * 2`, `(x -> x * 2)`: a lambda is a function too
 	if property == "function" and (is_lambda(code) or (is_round(code) and #code == 1 and is_lambda(code#1))) { return yes }
-	if property == "instance" and is_group(code) and bracket_of(code) == "(" and #code > 0 and code#1 is symbol { return rule_instance_classes.has(name_of(code#1)) }
-	# `countdown(3)` of `countdown(n) as C`: an object too, though no instance where a dot reads it, `parser.word_at(3)`
-	# being a call of the word, not the enum case enums.warp takes an instance for (card for-over-iterator)
-	if property == "object" { return has_property(code, "instance") or (is_called_name(code) and rule_results.has(name_of(code#1))) }
+	# `Counter(3)`, and `countdown(3)` of `countdown(n) as Counter` (card for-over-iterator)
+	if property == "instance" and is_group(code) and is_called_name(code) { return rule_instance_classes.has(name_of(code#1)) or rule_results.has(name_of(code#1)) }
 	# `p{ "count: " + count }`, `p{ greeting }`: a structure's item reading, where it runs, a varying value or a variable
 	# code running later writes, a sum or the bare name alike (card bare-name). Only an item: the head `f(a: int)` of
 	# heads.warp's `$h := $e` is no varying code
