@@ -11,10 +11,10 @@ DARK = 0xFF1D1D1D
 dark_theme = dark_mode
 blank_color = if dark_theme then DARK else PALE
 ink = if dark_theme then PALE else DARK
-// the canvas until canvas.resize(width, height) sizes it: show() alone paints this one, the size of the playground's output pane,
-// natively 640×480
-global canvas_width: int = view_width
-global canvas_height: int = view_height
+// the canvas until canvas.resize(width, height) sizes it: show() alone paints this one, the size it is shown at (the window,
+// the playground's output pane; with neither, the terminal)
+global canvas_width: int = shown_width()
+global canvas_height: int = shown_height()
 // where a window or the page shows the paintings and a GPU draws (gpu_drawing, the host's answer), the shapes are drawn
 // there: no pixels here then, show() sends the shapes drawn since the last one (shape_shader)
 global drawing_on_gpu = gpu_drawing
@@ -47,13 +47,13 @@ FILL_SHAPE = 1 // the whole canvas one color
 RECT_SHAPE = 2 // x1, y1, x2, y2
 CIRCLE_SHAPE = 3 // center x, y, radius
 SEGMENT_SHAPE = 4 // x1, y1, x2, y2 (pixel centers), half its width, whether its start has a round end
-TEXT_SHAPE = 5 // x, y, columns, rows, where its coverage starts in `coverage`, coverage pixels a canvas pixel
+TEXT_SHAPE = 5 // x, y, columns, rows, where its coverage starts in `words_coverage`, coverage pixels a canvas pixel
 // (a storage array needs more than 4 numbers: coverage starts with that many zeros)
 COVERAGE_START = [0.0, 0.0, 0.0, 0.0, 0.0]
-global shapes = []
+global drawn_shapes = []
 // the shapes since the canvas was last cleared, for save; the coverage of their words
 global kept_shapes = []
-global coverage = COVERAGE_START
+global words_coverage = COVERAGE_START
 shape_shader = shader {
 	struct Shaded { @builtin(position) at: vec4f, @location(0) @interpolate(flat) drawn: u32 }
 	fn edge(inside: f32) -> f32 { return clamp(inside + 0.5, 0.0, 1.0); }
@@ -104,7 +104,7 @@ shape_shader = shader {
 // a shape drawn on the GPU (shape_shader): kind, its six numbers, its color
 shape(kind: int, a: float, b: float, c: float, d: float, e: float, f: float, color: int) := {
 	drawn = [[kind, a, b, c], [d, e, f, 0], [((color >> 16) % 256) / 255, ((color >> 8) % 256) / 255, (color % 256) / 255, alpha_of(color) / 255]]
-	shapes += drawn
+	drawn_shapes += drawn
 	kept_shapes += drawn
 }
 // the shapes drawn so far, painted at the canvas's device pixels (the host's own where it fits them to a window)
@@ -120,9 +120,9 @@ shapes_values(drawn: list, covered: list) := {
 }
 // the canvas cleared to color on the GPU: the shapes before are covered, so they are dropped
 gpu_cleared(color: int) := {
-	shapes = []
+	drawn_shapes = []
 	kept_shapes = []
-	coverage = COVERAGE_START
+	words_coverage = COVERAGE_START
 	shape(FILL_SHAPE, 0, 0, 0, 0, 0, 0, color)
 }
 
@@ -332,8 +332,8 @@ segment_walked(x1: float, y1: float, x2: float, y2: float, paint: int, width: fl
 def show() {
 	size_difference_told()
 	if drawing_on_gpu {
-		shapes_painted(shapes, coverage)
-		shapes = []
+		shapes_painted(drawn_shapes, words_coverage)
+		drawn_shapes = []
 		shape(PREVIOUS_SHAPE, 0, 0, 0, 0, 0, 0, 0)
 	}
 	else {
@@ -382,7 +382,7 @@ class Canvas {
 // its call, is the Canvas
 canvas() := Canvas()
 save(made: Canvas, as file) := {
-	pixels = if drawing_on_gpu then gpu_render(shader_words(shape_shader), device_width, device_height, shapes_values(kept_shapes, coverage)) else canvas_pixels
+	pixels = if drawing_on_gpu then gpu_render(shader_words(shape_shader), device_width, device_height, shapes_values(kept_shapes, words_coverage)) else canvas_pixels
 	failed = save_picture(pixels, device_width, device_height, file)
 	if failed { raise failed }
 }
@@ -405,8 +405,8 @@ text_shaded(x: float, y: float, covered: list, paint: int) := {
 
 // words on the GPU: their coverage among the shapes' (0 to 1), a shape reading it
 text_shape(x: float, y: float, covered: list, color: int) := {
-	at = count(coverage)
-	coverage += [covered[i + 2] / 255 for i in 0 ..< covered[0] * covered[1]]
+	at = count(words_coverage)
+	words_coverage += [covered[i + 2] / 255 for i in 0 ..< covered[0] * covered[1]]
 	shape(TEXT_SHAPE, cell(x), cell(y), covered[0], covered[1], at, pixel_scale, color)
 }
 

@@ -17,10 +17,6 @@ trails = shader {
 	}
 }
 
-on key {
-	exit()
-}
+on escape:	exit
 # each frame of the window, until it closes; the first paint opens it (headless: one frame, as a PNG)
-on frame {
-	paint(trails) # at the view's size: in the playground the screen's in full screen (⛶)
-}
+on frame: paint(trails) # at the view's size: in the playground the screen's in full screen (⛶)
