@@ -712,7 +712,7 @@ function handOver(run) {
 // animates without a sleep; card example-native-mismatch: `on frame` never sleeps, and #ocean was stopped after 10 s).
 // A program paints its shaders into one view: a GPU canvas of another size replaces the last too (an `on frame` painting
 // at the pane's size, which moved once the first canvas showed, left a second bee beside the first)
-const nextFrame = (last, painting) => sameSize(last, painting) || (last.canvas && painting.canvas);
+const nextFrame = (last, painting) => sameShownSize(last, painting) || (last.canvas && painting.canvas);
 function painted(run, painting) {
 	const last = run.paintings.at(-1);
 	if (startsFrame(run, "paintings")) run.paintings = [];

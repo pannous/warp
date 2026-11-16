@@ -124,7 +124,10 @@ addHostPart({
 				if (typeof rendered === "number") return hooks.paint(undefined, width, height, rendered);
 				return hooks.paint(paintFrame(holder, halvesOf(rendered), width, height), width, height, undefined, true);
 			}
-			hooks.paint(paintFrame(holder, halves ?? halvesOf(painted), width, height), width, height);
+			// drawn at the display's pixels (use draw, paint_scale): shown at its size in CSS pixels, pointed at in them
+			const scale = holder.paintScale ?? 1;
+			holder.paintScale = undefined;
+			hooks.paint(paintFrame(holder, halves ?? halvesOf(painted), width, height), width, height, undefined, undefined, scale);
 		},
 		// save_picture(pixels, width, height, file) (src/host.rs, card save-painting): use draw's canvas, shaded as paint
 		// shows it, which the page makes a PNG of and downloads (playground.js savePicture)
