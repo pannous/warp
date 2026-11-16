@@ -3383,8 +3383,13 @@ def names_case(p: Parser, length: int) as bool {
 	scope < start - 2 and p.code[scope].upper() == p.code[scope] and p.code[scope].lower() != p.code[scope]
 }
 
-// The items of a `{…}` group, the parser after its `{`; after `enum Name` they are the enum's cases
-def braced_items(p: Parser) as Node := with_field(p, "enum_cases", p.enum_cases or enum_body_at(p), () => items_until(p, Bracket.Curly, ItemsEnd.Closer))
+// The items of a `{…}` group, the parser after its `{`; after `enum Name` they are the enum's cases, a list however
+// blanks or lines part them (`{red green}` as `{red, green}`), so no rule groups two cases as one phrase
+def braced_items(p: Parser) as Node := {
+	cases = enum_body_at(p)
+	items = with_field(p, "enum_cases", p.enum_cases or cases, () => items_until(p, Bracket.Curly, ItemsEnd.Closer))
+	if cases and is_group(items) then List(items_of(items), Bracket.Curly, Separator.Comma) else items
+}
 
 // The `{` just read follows `enum Name`
 def enum_body_at(p: Parser) as bool {
