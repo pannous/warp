@@ -21,7 +21,8 @@ is! 'use sin;sin π' 0
   nothing. An empty column keeps its place (`'y'⇥ø⇥note`). A text alone is a program, never a pair: an expected ø is
   written `'y'⇥ø`.
 - The code column is a quoted text, so an interpolation inside it is written `\\(x)`: a bare `\(x)` reaches the
-  program as the plain text `(x)` (test_linear_arrays, test_catch_binding). A test file named `*_local*` is ignored
+  program as the plain text `(x)` (test_linear_arrays, test_catch_binding). Likewise an escape meant for a text inside the
+  code: `"a\\r\\nb"`; a bare `\r\n` reaches the program as a raw Windows line end, read as a newline. A test file named `*_local*` is ignored
   by the user's global gitignore (`*_LOCAL*`, case-insensitive here): name it otherwise.
 - A commented-out pair is a skipped test, its note naming the card of the regression that broke it: `warp test` prints
   `⊘ skipped "fib 10" 55: card fib-memo: regression`. So a commit breaking a few lines can land: forward crunch per line.
