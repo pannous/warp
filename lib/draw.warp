@@ -123,30 +123,32 @@ covered(pixels: int[], color: int) := {
 
 // the color over what is there, mixed by its alpha
 def mixed(below: int, color: int) as int {
-	a = alpha_of(color)
+	blended(below, color, alpha_of(color))
+}
+// the color over what is there by alpha a from 0 to 255 (its own, or a share of it at a shape's edge)
+blended(below: int, color: int, a: int) as int := {
 	under = if below == 0 then blank_color else below
 	if a >= 255 { return color }
 	if a <= 0 { return under }
-	0xFF000000 + channel_mix(color, under, a, 65536) * 65536 + channel_mix(color, under, a, 256) * 256 + channel_mix(color, under, a, 1)
+	0xFF000000 + channel_mix(color, under, a, 16) * 65536 + channel_mix(color, under, a, 8) * 256 + channel_mix(color, under, a, 0)
 }
 
-// one channel (its place 65536, 256 or 1) of color over under, by alpha a from 0 to 255
-channel_mix(color: int, under: int, a: int, place: int) as int := ((color /! place % 256) * a + (under /! place % 256) * (255 - a)) /! 255
+// one channel (its bits from `shift` on: 16, 8 or 0) of color over under, by alpha a from 0 to 255
+channel_mix(color: int, under: int, a: int, shift: int) as int := (((color >> shift) % 256) * a + ((under >> shift) % 256) * (255 - a)) /! 255
 
 // the device pixel col, row with color mixed over it
-plot(col: int, row: int, color: int) := {
-	if drawing_on_gpu { draw_shape(rect_shape, col, row, 1, 1, color) }
+plot(col: int, row: int, color: int) := shade(col, row, color, 1.0)
+// the device pixel col, row covered by `coverage` (0 to 1) of a shape of color: an edge's pixel takes that share of it
+shade(col: int, row: int, color: int, coverage: float) := {
+	if coverage <= 0 { return }
+	a: int = if coverage >= 1 then alpha_of(color) else round(alpha_of(color) * coverage) as int
+	if drawing_on_gpu { draw_shape(rect_shape, col, row, 1, 1, color % 16777216 + 16777216 * a) }
 	else if col >= 0 and row >= 0 and col < device_width and row < device_height {
 		// an int, not a number: int * int may grow past 64 bits, and an index of a number runs every write dynamically
 		// (1.8 µs a dot against 0.27, card circle-dot-allocation)
 		at: int = row * device_width + col
-		canvas_pixels[at] = mixed(canvas_pixels[at], color)
+		canvas_pixels[at] = blended(canvas_pixels[at], color, a)
 	}
-}
-// the device pixel col, row covered by `coverage` (0 to 1) of a shape of color: an edge's pixel takes that share of it
-shade(col: int, row: int, color: int, coverage: float) := {
-	if coverage >= 1 { plot(col, row, color) }
-	else if coverage > 0 { plot(col, row, color % 16777216 + 16777216 * round(alpha_of(color) * coverage) as int) }
 }
 // how much of a pixel an edge `inside` pixels away from its center covers (negative: outside), smoothed over one pixel
 edge(inside: float) as float := min(max(inside + 0.5, 0.0), 1.0)
