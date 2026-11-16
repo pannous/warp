@@ -1159,7 +1159,14 @@ def continued(p: Parser, left: Node, min_power: int) as Node := {
 			}
 			if op#1 == "." and char_here(p) == "(" { raise dot_call_refused(left) }
 			glued = glued_at(p, operator_start, op#1)
-			skip_blanks(p)
+			before_blanks = p.at
+			// an operator ending its line continues only onto a line indented deeper, `total := fold +` alone (decision
+			// trailing-operator-indent): the next line at the same indent is the next statement
+			if skip_blanks(p) and line_indent(p) <= p.indent {
+				p.at = before_blanks
+				left = keyed(op#2, left, ø)
+				continue
+			}
 			if is_phrase_operator(op) {
 				left = phrase_operation(left, op#1, expression(p, powers#2))
 			} else if alias_spellings().declared contains op#2 {
