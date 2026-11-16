@@ -12,9 +12,9 @@ public post(url: any, body: any, headers: any) := std_io("net", "post", [url, bo
 global fetch(url: text) := fetched_value(std_io("net", "get", [url]))
 // fetch(url, {"User-Agent": "me", "Accept": "application/json"}): the map's pairs are the request's headers
 global fetch(url: text, headers: map) := fetched_value(std_io("net", "get", [url, "text", header_lines(headers)]))
-header_lines(headers: map): list := [key + ": " + text(headers.get(key)) for key in keys(headers)]
+header_lines(headers: map) as list := [key + ": " + text(headers.get(key)) for key in keys(headers)]
 fetched_value(answer) := if answer is text and is_json_shaped(answer) then json(answer) else answer
-is_json_shaped(answer: text): bool := trim(answer).starts_with("[") or trim(answer).starts_with("{")
+is_json_shaped(answer: text) as bool := trim(answer).starts_with("[") or trim(answer).starts_with("{")
 // `users := fetch url` at the main level (extensions/fetch_signals.warp): the answer given to reply at once, a failure
 // as the Error it is, which reply keeps apart from the value
 global fetch_into(url: text, reply: function) := reply(fetch(url))

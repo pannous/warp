@@ -17,10 +17,10 @@ class Quakes extends Polled {
 }
 
 // the feed holding every quake of the magnitude: the highest floor at or below it
-feed_of(magnitude: number): text := {
+feed_of(magnitude: number) as text := {
 	floors = [floor for floor in FLOORS if floor <= magnitude]
 	(if floors is empty then "all" else text(floors#1)) + "_day.geojson"
 }
 
 // the last day's quakes of at least the magnitude, then each new one
-quakes(magnitude: number = 2.5, every: any = QUAKE_PERIOD): Quakes := Quakes(magnitude: magnitude, period: every)
+quakes(magnitude: number = 2.5, every: any = QUAKE_PERIOD) as Quakes := Quakes(magnitude: magnitude, period: every)

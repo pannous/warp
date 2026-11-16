@@ -23,7 +23,7 @@ sources = [
 ]
 
 # split '---' front matter from the markdown body
-split_page(source: text): map := {
+split_page(source: text) as map := {
 	parts = source.split("---\n")
 	meta = parse_yaml(parts[1])
 	meta["body"] = markdown_html(join(parts[2..], "---\n"))

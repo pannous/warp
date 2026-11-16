@@ -11,7 +11,7 @@ BUSIEST = "?active=true&closed=false&order=volume24hr&ascending=false&limit="
 PRICE_PERIOD = 10s
 
 // the n open markets with the most volume today
-markets(n: int = 5): list := fetch(GAMMA + BUSIEST + text(n))
+markets(n: int = 5) as list := fetch(GAMMA + BUSIEST + text(n))
 // the market of a slug (the last part of its polymarket.com address)
 market(slug: text) := {
 	found = fetch(GAMMA + "?slug=" + slug)
@@ -28,4 +28,4 @@ class PriceChanges extends Changes {
 }
 
 // the yes price of a market, at first and then each time it changes
-prices(slug: text, every: any = PRICE_PERIOD): PriceChanges := PriceChanges(slug: slug, period: every)
+prices(slug: text, every: any = PRICE_PERIOD) as PriceChanges := PriceChanges(slug: slug, period: every)

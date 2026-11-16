@@ -66,7 +66,7 @@ global window_failed = no
 // no window under --no-window or CI, nor without SDL3, nor after a failed open
 windows_refused() := windowless() or window_failed or library_function("SDL3", "SDL_Init") == 0
 // the keycode SDL tells as the code warp gives the key; 0 for a key without one
-key_code(key: int): int := {
+key_code(key: int) as int := {
 	for i in 0 ..< count(SDL_KEYS) { if SDL_KEYS[i] == key { return WARP_KEYS[i] } }
 	if key >= SDLK_SCANCODE_MASK then 0 else key
 }
@@ -80,7 +80,7 @@ key_went_down(code: int, repeated: bool) := {
 key_released(code: int) := { held = held.filter(k => k != code) }
 
 // how many times the painting's size the window opens at: the most that fits SCREEN_SHARE of the screen, at least once
-enlarged(): int := {
+enlarged() as int := {
 	if sized_by_program or not SDL_GetDisplayUsableBounds(SDL_GetPrimaryDisplay(), rectangle) { return 1 }
 	times = floor(min(field_i32(rectangle, SDL_RECT_WIDTH_AT) * SCREEN_SHARE / width, field_i32(rectangle, SDL_RECT_HEIGHT_AT) * SCREEN_SHARE / height)) as int
 	max(times, 1)
@@ -123,7 +123,7 @@ frame_timed() := {
 	title_ns = now
 	frames_since_title = 0
 }
-tenths(x: float): text := {
+tenths(x: float) as text := {
 	whole = round(x * 10) as int
 	"\(whole /! 10).\(whole % 10)"
 }
@@ -156,13 +156,13 @@ event_taken(type: int) := {
 }
 
 // the window's width (across), else its height, in points
-window_side(across: bool): int := {
+window_side(across: bool) as int := {
 	SDL_GetWindowSize(sdl_window, points_wide, points_high)
 	field_i32(if across then points_wide else points_high, 0)
 }
 // a pointer position in the window's points as a pixel of the painting the window shows as large as fits, centered
 // (gpu.warp letterboxed); across or down
-in_painting(point: float, across: bool): int := {
+in_painting(point: float, across: bool) as int := {
 	wide = window_side(yes)
 	high = window_side(no)
 	if painted_width <= 0 or painted_height <= 0 or wide <= 0 or high <= 0 { return floor(point) as int }
@@ -170,7 +170,7 @@ in_painting(point: float, across: bool): int := {
 	margin = if across then (wide - painted_width * scale) / 2 else (high - painted_height * scale) / 2
 	floor((point - margin) / scale) as int
 }
-pointer_value(name: text): int := {
+pointer_value(name: text) as int := {
 	if not open_now { return 0 }
 	across = name == "mouse_x" or name == "mouse_down_x"
 	pressed = name == "mouse_down_x" or name == "mouse_down_y"
@@ -183,7 +183,7 @@ full_screen() := open_now and both_bits(SDL_GetWindowFlags(sdl_window), SDL_WIND
 CFPreferencesCopyAppValue(key: handle, application: handle): handle from 'CoreFoundation'
 CFStringCompare(a: handle, b: handle, options: i64): i64 from 'CoreFoundation'
 CF_CASE_INSENSITIVE = 1
-dark_mode(): bool := {
+dark_mode() as bool := {
 	if not on_mac() or run_option("no-window") != ø { return no }
 	style = CFPreferencesCopyAppValue(cf_text("AppleInterfaceStyle"), cf_text("kCFPreferencesAnyApplication"))
 	if style == 0 { return no }
@@ -193,10 +193,10 @@ dark_mode(): bool := {
 }
 
 // whether a system value is answered here (the driver gives the name as a node)
-host_owns(name): bool := text(name) in OWNED_VALUES or (open_now and text(name) in SIDES)
+host_owns(name) as bool := text(name) in OWNED_VALUES or (open_now and text(name) in SIDES)
 // a system value answered here (host_owns)
-host_value(name): int := value_of(text(name))
-value_of(name: text): int := {
+host_value(name) as int := value_of(text(name))
+value_of(name: text) as int := {
 	if name == "window_open" {
 		if open_now { events_taken() }
 		return if open_now then 1 else 0
@@ -221,8 +221,8 @@ value_of(name: text): int := {
 }
 // a system value set: window_open opens (1) or closes (0) the window, window_fullscreen fills the screen, both owned
 // here (yes); the window's size is the driver's and only followed here (no)
-host_value_set(name, value: int): bool := value_set(text(name), value)
-value_set(name: text, value: int): bool := {
+host_value_set(name, value: int) as bool := value_set(text(name), value)
+value_set(name: text, value: int) as bool := {
 	if name == "window_open" {
 		if value != 0 then window_opened() else window_closed()
 		return yes
@@ -244,7 +244,7 @@ value_set(name: text, value: int): bool := {
 }
 // the window's Metal layer (Windows: its HWND) for a painting of width × height, the window opened by the first; 0 where none opens. A
 // window the program gave no size takes its first painting's. Closed by its user, the run ends
-host_window_layer(painting_width: int, painting_height: int): int := {
+host_window_layer(painting_width: int, painting_height: int) as int := {
 	if closed_by_user { exit(0) }
 	if not open_now {
 		if not sized_by_program {
@@ -268,7 +268,7 @@ host_window_layer(painting_width: int, painting_height: int): int := {
 	if on_mac() then SDL_Metal_GetLayer(view) else view
 }
 // the window's size in pixels, which its Metal layer's drawable keeps (gpu.warp shows a painting at it)
-window_pixels(): list := {
+window_pixels() as list := {
 	sides = calloc(2, 4)
 	SDL_GetWindowSizeInPixels(sdl_window, sides, pointer_handle(handle_pointer(sides) + 4))
 	pixels = [field_i32(sides, 0), field_i32(sides, 4)]
@@ -293,7 +293,7 @@ still_event_taken() := {
 // sans-serif font, as [width, height, then how much each pixel is covered from 0 to 255, row by row], its height the
 // font's ascent and descent, as the playground's canvas sets them (web/playground/host-media.js). On macOS CoreText
 // sets them, as the system shows text; elsewhere, or with `font` naming a font file, FreeType
-host_text_coverage(words, size: int, font): any := if on_mac() and text(font) == "" then core_text_coverage(text(words), size) else free_type_coverage(text(words), size, text(font))
+host_text_coverage(words, size: int, font) as any := if on_mac() and text(font) == "" then core_text_coverage(text(words), size) else free_type_coverage(text(words), size, text(font))
 
 CTFontCreateWithName(name: handle, size: f64, matrix: handle): handle from 'CoreText'
 CTLineCreateWithAttributedString(string: handle): handle from 'CoreText'
@@ -326,8 +326,8 @@ cells_made() := {
 	}
 }
 // the coverage list of a width × height bitmap whose pixel i `covered(i)` gives
-coverage_list(width: int, height: int, coverage: list): list := [width, height] + coverage
-core_text_coverage(words: text, size: int): list := {
+coverage_list(width: int, height: int, coverage: list) as list := [width, height] + coverage
+core_text_coverage(words: text, size: int) as list := {
 	cells_made()
 	string = CFStringCreateWithCString(0, words, CF_UTF8)
 	attributed = CFAttributedStringCreateMutable(0, 0)
@@ -389,7 +389,7 @@ font_face(font: text) := {
 	}
 	faces[font]
 }
-free_type_coverage(words: text, size: int, file: text): list := {
+free_type_coverage(words: text, size: int, file: text) as list := {
 	cells_made()
 	font = font_face(file)
 	FT_Set_Pixel_Sizes(font, 0, size)

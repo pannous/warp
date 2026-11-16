@@ -6,10 +6,10 @@
 last_results_extension = Extension{name: "last_results", passes_before: {"tries": resolved_its}}
 LAST_RESULT = symbol("it·last")
 # a returned block's `it` first (its own), then a definition's (its parameter), then the program's (the last result)
-resolved_its(program: Node): Node := last_results(parameter_its(returned_closures(program)))
+resolved_its(program: Node) as Node := last_results(parameter_its(returned_closures(program)))
 IT = symbol("it")
 
-last_results(program: Node): Node := {
+last_results(program: Node) as Node := {
 	if not is_statement_sequence(program) { return program }
 	statements = items_of(program)
 	out = []
@@ -30,15 +30,15 @@ last_results(program: Node): Node := {
 
 # where `it` names something else: a definition, a lambda, a block, quoted code, and a phrase or call of a word that
 # gives `it` each item, `xs where it > 1`, `xs.filter(it > 2)`, `xs each it * 2`, `for 1..4: s += it`
-binds_it(n: Node): bool := is_key(n, Op.Define) or is_key(n, Op.Arrow) or is_curly_group(n) or is_quote(n) or (n is list and items_of(n).any(item => item is symbol and name_of(item) in ITEM_IT_WORDS))
+binds_it(n: Node) as bool := is_key(n, Op.Define) or is_key(n, Op.Arrow) or is_curly_group(n) or is_quote(n) or (n is list and items_of(n).any(item => item is symbol and name_of(item) in ITEM_IT_WORDS))
 ITEM_IT_WORDS = ["where", "each", "by", "filter", "map", "select", "every", "any", "all", "find", "sort", "sorted", "having", "until", "while", "when", "for"]
 # the statement reads the last result: `it` outside what binds it
-reads_last_result(n: Node): bool := n == IT or (not binds_it(n) and parts_of(n).any(reads_last_result))
-with_last_result(n: Node): Node := if n == IT then LAST_RESULT else if binds_it(n) then n else children(n, with_last_result)
+reads_last_result(n: Node) as bool := n == IT or (not binds_it(n) and parts_of(n).any(reads_last_result))
+with_last_result(n: Node) as Node := if n == IT then LAST_RESULT else if binds_it(n) then n else children(n, with_last_result)
 # a statement with a value to keep: no definition, no `use`
-gives_last_result(n: Node): bool := not is_key(n, Op.Define) and not (is_spaced(n) and #n > 0 and n#1 in [symbol("use"), symbol("import"), symbol("include")])
+gives_last_result(n: Node) as bool := not is_key(n, Op.Define) and not (is_spaced(n) and #n > 0 and n#1 in [symbol("use"), symbol("import"), symbol("include")])
 # the name an assignment `x = 5` gives its value to, else ø
-last_assigned(n: Node): Node? := match n {
+last_assigned(n: Node) as Node? := match n {
 	Key(target, Op.Assign, value): if target is symbol then target else ø
 	_: ø
 }
@@ -46,7 +46,7 @@ last_assigned(n: Node): Node? := match n {
 # `def f(x){ it * 2 }`, `twice x := it * 2`: in a definition of parameters `it` is its first one, as in a charged
 # definition (`twice := it * 2`, wiki/it.md); a block, a lambda or an item word inside keeps its own `it`, so
 # `def mk(k){ {it + k} }` gives a closure
-parameter_its(program: Node): Node := bottom_up(program, n => {
+parameter_its(program: Node) as Node := bottom_up(program, n => {
 	definition = definition_of(n)
 	# (a body that assigns `it` itself, `it = symbol(…)`, keeps it as its local; a conversion `P as text := it.name`,
 	# read as the phrase P(as, text), keeps it as the value converted, extensions/conversions.warp)
@@ -56,11 +56,11 @@ parameter_its(program: Node): Node := bottom_up(program, n => {
 	named = if is_curly_group(body) then children(body, part => it_named(part, first)) else it_named(body, first)
 	if same(named, body) then n else Key(key_of(n), Op.Define, named)
 })
-it_named(n: Node, name: Node): Node := if n == IT then name else if binds_it(n) then n else children(n, part => it_named(part, name))
+it_named(n: Node, name: Node) as Node := if n == IT then name else if binds_it(n) then n else children(n, part => it_named(part, name))
 
 # `def mk(k){ {it + k} }`, `return {it * k}`: a block a function gives back that reads its own `it` is a closure of one
 # parameter, it => {it + k} (wiki/it.md: a block using it is a one-parameter closure)
-returned_closures(program: Node): Node := bottom_up(program, n => {
+returned_closures(program: Node) as Node := bottom_up(program, n => {
 	if is_spaced(n) and #n == 2 and n#1 == RETURN { return group_like(n, [RETURN, closure_of(n#2)]) }
 	if definition_of(n) == ø or not is_curly_group(value_of(n)) or #value_of(n) == 0 { return n }
 	body = value_of(n)
@@ -68,4 +68,4 @@ returned_closures(program: Node): Node := bottom_up(program, n => {
 	if same(closed, body#(#body)) then n else Key(key_of(n), Op.Define, group_like(body, items_of(body)[0 ..< #body - 1] + [closed]))
 })
 RETURN = symbol("return")
-closure_of(block: Node): Node := if is_curly_group(block) and items_of(block).any(reads_last_result) then Key(IT, Op.Arrow, block) else block
+closure_of(block: Node) as Node := if is_curly_group(block) and items_of(block).any(reads_last_result) then Key(IT, Op.Arrow, block) else block

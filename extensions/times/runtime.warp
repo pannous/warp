@@ -11,12 +11,12 @@ use "../../compiler/runtime/nodes.warp"
 use "../../compiler/emitter/byte_codes.warp"
 # durations.warp's duration_text and its nanosecond constants
 use "durations.warp"
-is_time(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Time
-is_duration(t: Node): bool := time_form(t) == TimeFormCode.Duration
+is_time(n: Node) as bool := not is_null(n) and kind_code(n) == Kind.Time
+is_duration(t: Node) as bool := time_form(t) == TimeFormCode.Duration
 # `a < b` (relation 0), `a <= b` (1), `a > b` (2), `a >= b` (3) of two times of one form: two times by their positions;
 # two durations yes when it holds on every date, no when on none, else a failure (`1 month < 28 days` is no,
 # `1 month < 30 days` depends on the month); times of different forms have no order
-time_holds(a: Node, b: Node, relation: int): bool := {
+time_holds(a: Node, b: Node, relation: int) as bool := {
 	clocks = is_clock_of_day_pair(a, b)
 	if time_form(a) != time_form(b) and not clocks { return times_of_different_kinds_have_no_order(time_form_name(time_form(a)), time_form_name(time_form(b))) != 0 }
 	# `a > b` is `b < a`
@@ -31,19 +31,19 @@ time_holds(a: Node, b: Node, relation: int): bool := {
 	durations_compare_differently_on_different_dates() != 0
 }
 # an instant, local time or time of day beside a duration without months or days compares by its time of day, `ref >= 6h`
-is_clock_of_day_pair(a: Node, b: Node): bool := {
+is_clock_of_day_pair(a: Node, b: Node) as bool := {
 	if not is_time(a) or not is_time(b) { return no }
 	(has_clock(a) and is_plain_duration(b)) or (has_clock(b) and is_plain_duration(a))
 }
-has_clock(n: Node): bool := time_form(n) in [TimeFormCode.Instant, TimeFormCode.Local, TimeFormCode.Clock]
-is_plain_duration(n: Node): bool := is_duration(n) and duration_months(n) == 0 and duration_days(n) == 0
+has_clock(n: Node) as bool := time_form(n) in [TimeFormCode.Instant, TimeFormCode.Local, TimeFormCode.Clock]
+is_plain_duration(n: Node) as bool := is_duration(n) and duration_months(n) == 0 and duration_days(n) == 0
 # the nanoseconds since midnight of an instant or local time, a plain duration's own
-nanos_of_day(n: Node): int := {
+nanos_of_day(n: Node) as int := {
 	if is_duration(n) { return duration_nanos(n) }
 	position = time_position(n)
 	position - floor_quotient(position, day_nanos()) * day_nanos()
 }
-time_form_name(form: int): text := {
+time_form_name(form: int) as text := {
 	if form == TimeFormCode.Instant { return "instant" }
 	if form == TimeFormCode.Date { return "date" }
 	if form == TimeFormCode.Local { return "local datetime" }
@@ -52,19 +52,19 @@ time_form_name(form: int): text := {
 	"time of day"
 }
 # type(t) of a time: its form's name, `type(2024-06-01)` is date
-time_type_word(n: Node): text := time_form_name(time_form(n))
+time_type_word(n: Node) as text := time_form_name(time_form(n))
 # the runtime error of time_holds, naming both kinds
 times_of_different_kinds_have_no_order(left: text, right: text) := {
 	returned_error("a " + left + " and a " + right + " have no order; fix: compare its time of day, e.g. ref.time >= 6h")
 }
 # n as it is, unless n and other are durations of the two kinds: a calendar duration (`1 day`) beside an instance
 # (lib/units' `2 hours`), which are one kind only from card dates-times-extraction (decision one-duration)
-one_duration_kind(n: Node, other: Node): Node := {
+one_duration_kind(n: Node, other: Node) as Node := {
 	if (is_calendar_duration(n) and is_instance(other)) or (is_calendar_duration(other) and is_instance(n)) { calendar_and_clock_durations_are_different_kinds() }
 	n
 }
-is_calendar_duration(n: Node): bool := is_time(n) and is_duration(n)
-is_instance(n: Node): bool := not is_null(n) and marked_kind(n) == Marked.Instance
+is_calendar_duration(n: Node) as bool := is_time(n) and is_duration(n)
+is_instance(n: Node) as bool := not is_null(n) and marked_kind(n) == Marked.Instance
 # the runtime error of one_duration_kind, named to read off the trace
 calendar_and_clock_durations_are_different_kinds() := {
 	fail()
@@ -72,19 +72,19 @@ calendar_and_clock_durations_are_different_kinds() := {
 }
 # an operand of a time's + - * as lib/time.warp time_operation takes it: its form, -1 for a whole number,
 # and its position, a whole number's value
-operand_form(n: Node): int := if is_time(n) then time_form(n) else -1
-operand_position(n: Node): int := unboxed_int(n)
+operand_form(n: Node) as int := if is_time(n) then time_form(n) else -1
+operand_position(n: Node) as int := unboxed_int(n)
 
 ## times (card time-text-warp): a $Node
 ## of kind Time, its form in the info bits, its position in an $i64box: days since 1970 for a
 ## date, nanoseconds since 1970 for an instant and a local time, since midnight for a time of day
-time_form(n: Node): int := int_remainder(info_byte(n), TimeInfoUnit.Days)
+time_form(n: Node) as int := int_remainder(info_byte(n), TimeInfoUnit.Days)
 # whether n is a time, what made_case(Made.Time, …) tests
-holds_time(n: Node): bool := kind_code(n) == Kind.Time
+holds_time(n: Node) as bool := kind_code(n) == Kind.Time
 # RFC 3339, `2026-10-10T14:43:33.682Z`: a date has no clock, a time of day no date, a
 # local time no Z; a duration (card duration-warp) as its parts; a zoned time its wall clock and offset only,
 # `2024-07-01T12:00+02:00`, its zone's name being .zone (decisions local-now, zone-literal-dropped)
-time_text(n: Node): text := {
+time_text(n: Node) as text := {
 	form = time_form(n)
 	if form == TimeFormCode.Duration { return duration_text(n) }
 	if form == TimeFormCode.Zoned { return zoned_text(n) }
@@ -97,7 +97,7 @@ time_text(n: Node): text := {
 	date_text(days) + "T" + clock + zone
 }
 # Howard Hinnant's civil_from_days as `2026-10-10`, the proleptic Gregorian date of a day number
-date_text(days: int): text := {
+date_text(days: int) as text := {
 	z = days + 719468
 	era = floor_quotient(z, 146097)
 	day_of_era = z - era * 146097
@@ -111,7 +111,7 @@ date_text(days: int): text := {
 	padded(year, 4) + "-" + padded(month, 2) + "-" + padded(day, 2)
 }
 # `14:43:33.682` of the nanoseconds of a day: the seconds only when there are any or it is a time of day (22:27:46)
-clock_text(nanos: int, form: int): text := {
+clock_text(nanos: int, form: int) as text := {
 	hours = int_quotient(nanos, hour_nanos())
 	minutes = int_remainder(int_quotient(nanos, minute_nanos()), 60)
 	seconds = int_remainder(int_quotient(nanos, second_nanos()), 60)
@@ -121,7 +121,7 @@ clock_text(nanos: int, form: int): text := {
 	out + fraction_text(fraction)
 }
 # `.5` of the nanoseconds below a second, without trailing zeros; "" for none
-fraction_text(fraction: int): text := {
+fraction_text(fraction: int) as text := {
 	if fraction == 0 { return "" }
 	digits = padded(fraction, 9)
 	stop = 9
@@ -129,17 +129,17 @@ fraction_text(fraction: int): text := {
 	"." + bytes_between(digits, 0, stop)
 }
 # n with leading zeros to count digits
-padded(n: int, count: int): text := zeros(count - byte_count(int_text(n))) + int_text(n)
+padded(n: int, count: int) as text := zeros(count - byte_count(int_text(n))) + int_text(n)
 # a zoned time's seconds east of UTC: its offset in minutes above the kind (8 bits), form (3) and zone index (8)
-zone_seconds_of(n: Node): int := floor_quotient(marked_kind(n), power(2, 19)) * 60
-zoned_text(n: Node): text := {
+zone_seconds_of(n: Node) as int := floor_quotient(marked_kind(n), power(2, 19)) * 60
+zoned_text(n: Node) as text := {
 	east = zone_seconds_of(n)
 	wall = unboxed_int(n) + east * second_nanos()
 	day = floor_quotient(wall, day_nanos())
 	date_text(day) + "T" + clock_text(wall - day * day_nanos(), TimeFormCode.Local) + offset_text(east)
 }
 # `+05:30` of seconds east of UTC
-offset_text(east: int): text := {
+offset_text(east: int) as text := {
 	sign = if east < 0 then "-" else "+"
 	whole_minutes = int_quotient(if east < 0 then 0 - east else east, 60)
 	sign + padded(int_quotient(whole_minutes, 60), 2) + ":" + padded(int_remainder(whole_minutes, 60), 2)

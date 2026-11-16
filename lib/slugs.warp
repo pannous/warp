@@ -15,7 +15,7 @@ FOLD_MANY = [["ß", "ss"], ["ẞ", "SS"], ["æ", "ae"], ["Æ", "AE"], ["œ", "oe
 
 // the text with Latin letters folded to ASCII: diacritics stripped (é → e, ø → o), ß → ss, æ → ae, œ → oe, þ → th;
 // other characters kept
-ascii_fold(t: text): text := {
+ascii_fold(t: text) as text := {
 	out = ""
 	for c in t {
 		s = "" + c
@@ -27,7 +27,7 @@ ascii_fold(t: text): text := {
 	out
 }
 // ascii_fold the German way: ä ö ü → ae oe ue (Ä Ö Ü → Ae Oe Ue) first
-ascii_fold_german(t: text): text := {
+ascii_fold_german(t: text) as text := {
 	out = ""
 	for c in t {
 		s = "" + c
@@ -35,10 +35,10 @@ ascii_fold_german(t: text): text := {
 	}
 	ascii_fold(out)
 }
-slug_is_upper(s: text): bool := upper(s) == s and lower(s) != s
-slug_is_lower(s: text): bool := lower(s) == s and upper(s) != s
+slug_is_upper(s: text) as bool := upper(s) == s and lower(s) != s
+slug_is_lower(s: text) as bool := lower(s) == s and upper(s) != s
 // the runs of letters and digits of t
-alphanumeric_runs(t: text): list := {
+alphanumeric_runs(t: text) as list := {
 	runs = []; run = ""
 	for c in t {
 		s = "" + c
@@ -48,9 +48,9 @@ alphanumeric_runs(t: text): list := {
 	runs
 }
 // a URL-safe slug: folded, lower case, each run of other characters one sep, none at the ends
-slugify(t: text, sep = "-"): text := join(alphanumeric_runs(lower(ascii_fold(t))), sep)
+slugify(t: text, sep = "-") as text := join(alphanumeric_runs(lower(ascii_fold(t))), sep)
 // the words of an identifier or phrase, by the rule above
-case_words(t: text): list := {
+case_words(t: text) as list := {
 	out = []
 	for run in alphanumeric_runs(t) {
 		cs = [("" + c) for c in run]
@@ -68,15 +68,15 @@ case_words(t: text): list := {
 	}
 	out
 }
-to_snake(t: text): text := join(case_words(t).map(w => lower(w)), "_")
-to_kebab(t: text): text := join(case_words(t).map(w => lower(w)), "-")
-to_constant(t: text): text := join(case_words(t).map(w => upper(w)), "_")
-to_pascal(t: text): text := join(case_words(t).map(w => upper(w[0:1]) + lower(w[1:])), "")
-to_camel(t: text): text := { p = to_pascal(t); if p == "" then "" else lower(p[0]) + p[1:] }
+to_snake(t: text) as text := join(case_words(t).map(w => lower(w)), "_")
+to_kebab(t: text) as text := join(case_words(t).map(w => lower(w)), "-")
+to_constant(t: text) as text := join(case_words(t).map(w => upper(w)), "_")
+to_pascal(t: text) as text := join(case_words(t).map(w => upper(w[0:1]) + lower(w[1:])), "")
+to_camel(t: text) as text := { p = to_pascal(t); if p == "" then "" else lower(p[0]) + p[1:] }
 // runs of whitespace one space, none at the ends
-normalize_whitespace(t: text): text := join(words(t), " ")
+normalize_whitespace(t: text) as text := join(words(t), " ")
 // the first n words, whitespace normalized, and "…" when words were cut; t itself when it has no more than n
-truncate_words(t: text, n: int): text := {
+truncate_words(t: text, n: int) as text := {
 	ws = words(t)
 	if count(ws) <= n { return t }
 	join(ws[0: n], " ") + "…"

@@ -3,7 +3,7 @@
 # for each variant with one
 # `= Some(T) | None`, `: red | rgb(int, int, int)`, Elm's `= Failure HttpError | …` on lines of their own: the position
 # after the `=` or `:` when the declaration lists alternatives one of which carries a payload (any, after `enum`), else -1
-variants_start(p: Parser, payload_needed: bool = yes): int := {
+variants_start(p: Parser, payload_needed: bool = yes) as int := {
 	at = space_end(p.code, p.at, p.n)
 	sign = char_at(p, at)
 	next = char_at(p, at + 1)
@@ -39,7 +39,7 @@ variants_start(p: Parser, payload_needed: bool = yes): int := {
 }
 # The sum type `Name = A(T) | B | C(x: int)` (card sum-types): the type without fields, its variants without payload
 # by name, then a class extending it for each variant with a payload
-sum_type(p: Parser, name: Node, start: int, parameters: list): Node := {
+sum_type(p: Parser, name: Node, start: int, parameters: list) as Node := {
 	p.at = start
 	bare = []
 	classes = []
@@ -71,9 +71,9 @@ sum_type(p: Parser, name: Node, start: int, parameters: list): Node := {
 	sum_type_of(name, bare, classes)
 }
 # The sum type of its bare variants by name, then the classes of the variants with a payload
-sum_type_of(name: Node, bare: list, classes: list): Node := listed(Bracket.None, Separator.Semicolon, [declared_type_node(attributed("variants", spaced(bare), name), listed(Bracket.Curly, Separator.None, []))] + classes)
+sum_type_of(name: Node, bare: list, classes: list) as Node := listed(Bracket.None, Separator.Semicolon, [declared_type_node(attributed("variants", spaced(bare), name), listed(Bracket.Curly, Separator.None, []))] + classes)
 # `enum Shape { Circle(r), Rect(w, h), Dot }` follows `enum`: its braced cases, one with values
-enum_values_ahead(p: Parser): bool := {
+enum_values_ahead(p: Parser) as bool := {
 	at = name_end(p.code, blank_end(p, p.at), p.n)
 	if at == blank_end(p, p.at) { return false }
 	at = space_end(p.code, at, p.n)
@@ -94,7 +94,7 @@ enum_values_ahead(p: Parser): bool := {
 }
 # `enum Shape { Circle(r), Rect(w, h), Dot }`, Swift's `case circle(radius: Double)` lines: each case with values a
 # class extending Shape, the others its variants by name, as the sum type `Circle(r) | Rect(w, h) | Dot`
-enum_with_values(p: Parser): Node := {
+enum_with_values(p: Parser) as Node := {
 	p.at = blank_end(p, p.at)
 	end = name_end(p.code, p.at, p.n)
 	name = symbol(p.code[p.at .. end])
@@ -118,7 +118,7 @@ enum_with_values(p: Parser): Node := {
 BUILTIN_TYPE_WORDS = DECLARED_TYPE_WORDS + ["list", "map", "any", "real", "rational", "exact", "precise", "long", "double", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"]
 # A variant with a payload: the class extending the sum type, its fields in order (an unnamed one is `value`, several
 # `value1`, `value2`…, a lowercase name that is no type a field of any value)
-variant_class(type_name: Node, variant: text, payload: list, parameters: list): Node := {
+variant_class(type_name: Node, variant: text, payload: list, parameters: list) as Node := {
 	fields = []
 	position = 0
 	for field in payload {
@@ -136,19 +136,19 @@ variant_class(type_name: Node, variant: text, payload: list, parameters: list): 
 	}
 	declared_type_node(attributed("extends", type_name, symbol(variant)), listed(Bracket.Curly, Separator.Semicolon, fields.map(field => untyped(field, parameters))))
 }
-is_typed_field(node: Node): bool := match node {
+is_typed_field(node: Node) as bool := match node {
 	Key(name, Op.Colon, kind): yes
 	_: no
 }
 # the sum type a declaration's head starts, `type Opt = Some(int) | None`, else ø
-read_sum_type(p: Parser, name: Node, parameters: list): Node := {
+read_sum_type(p: Parser, name: Node, parameters: list) as Node := {
 	start = variants_start(p)
 	if start < 0 then ø else sum_type(p, name, start, parameters)
 }
 # `enum Shape { Circle(r), … }` with a case carrying values, `enum Color: red | rgb(int, int, int)` the sum type as
 # after `type`, else ø with the parser where it was; Kotlin's
 # `enum class Color {…}` is the plain enum `enum Color {…}`: the word `class` is skipped
-read_enum_with_values(p: Parser, word: text): Node := {
+read_enum_with_values(p: Parser, word: text) as Node := {
 	keyword = class_keyword_after(p, word)
 	if keyword == "class" {
 		p.at = blank_end(p, p.at + word.length) + keyword.length

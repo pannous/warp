@@ -10,17 +10,17 @@ use "types.warp"
 use "../emitter/byte_codes.warp"
 # an enum's case: a symbol whose info byte holds its enum's number (emitter.warp case_value)
 # (a type value, `class int`, is none: decision type-text)
-is_case_node(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Symbol and code_free_kind(n) != Kind.Symbol and not names_a_type(n)
+is_case_node(n: Node) as bool := not is_null(n) and kind_code(n) == Kind.Symbol and code_free_kind(n) != Kind.Symbol and not names_a_type(n)
 # the text a case is spelled by: the spelling it holds, `A = "a"`, else its name
-case_spelling(case: Node): text := if is_null(key_value(case)) then unboxed_text(case) else unboxed_text(key_value(case))
+case_spelling(case: Node) as text := if is_null(key_value(case)) then unboxed_text(case) else unboxed_text(key_value(case))
 # `x as text`: a case its spelling, any other value its text (decision enum-raw-values)
 # `x as text`: a case as its spelling, any other value as it shows (an instance by its class's text())
-spelled_case(n: Node): Node := if is_case_node(n) and not is_null(key_value(n)) then key_value(n) else n
+spelled_case(n: Node) as Node := if is_case_node(n) and not is_null(key_value(n)) then key_value(n) else n
 # the text of a boxed value of a kind known only at run time (kind codes: analysis/kinds.warp); others trap
 # a type value `int` prints `int`, its name (user 11-10, card real-type-display: no `class ` before it); ahead of the
 # match, as `Symbol(_)` tests it as the type it names. Only the empty value prints ø: a `ø:` case would take an empty
 # list too, which prints [] (it equals ø)
-node_text(n: Node): text := if is_null(n) then char_text("ø") else if names_a_type(n) then unboxed_text(n) else match n {
+node_text(n: Node) as text := if is_null(n) then char_text("ø") else if names_a_type(n) then unboxed_text(n) else match n {
 	Number(_): number_text(n)
 	Char(_): char_text(unboxed_char(n))
 	Text(_): unboxed_text(n)
@@ -30,13 +30,13 @@ node_text(n: Node): text := if is_null(n) then char_text("ø") else if names_a_t
 	False: "no"
 	_: collection_text(n)
 }
-number_text(n: Node): text := {
+number_text(n: Node) as text := {
 	if kind_code(n) != Kind.Int { return float_text(unboxed_float(n)) }
 	# an Int not in an $i64box is an extended one, a ratio or a big int: a plain int's printing names no extended type
 	if is_plain_int(n) then int_text(unboxed_int(n)) else extended_number_text(n)
 }
 # a list between its brackets (a map in braces), a time as time_text shows it, an Error as its message
-collection_text(n: Node): text := {
+collection_text(n: Node) as text := {
 	if kind_code(n) == Kind.List { return list_shown(n) }
 	if node_is_error(n) { return unboxed_text(n) }
 	if kind_code(n) == Kind.Time { return extended_text(n) }
@@ -47,21 +47,21 @@ collection_text(n: Node): text := {
 	fail()
 }
 # a value as a list shows its items: a text in double quotes, a character in single quotes
-node_code(n: Node): text := match n {
+node_code(n: Node) as text := match n {
 	Char(_): "'" + node_text(n) + "'"
 	Text(_): text_code(unboxed_text(n))
 	_: node_text(n)
 }
 # a shown result: as a list shows it, a type value by its name as print shows it (decision type-result-shown), never
 # quoted as the character a type value of kind Char would read as
-value_code(n: Node): text := if names_a_type(n) then node_text(n) else node_code(n)
+value_code(n: Node) as text := if names_a_type(n) then node_text(n) else node_code(n)
 # a value as `warp test` reads it back (--value-as-data): a type value its name quoted, so `list of real` reads back
 # whole, as the text a test line writes, not as code
-data_code(n: Node): text := if names_a_type(n) then quoted_text(unboxed_text(n)) else value_code(n)
+data_code(n: Node) as text := if names_a_type(n) then quoted_text(unboxed_text(n)) else value_code(n)
 # a one-character text reads as the character it is
-text_code(t: text): text := if code_point_count(t) == 1 then "'" + t + "'" else quoted_text(t)
+text_code(t: text) as text := if code_point_count(t) == 1 then "'" + t + "'" else quoted_text(t)
 # a text in double quotes, a `\` before each of its quotes and backslashes, so the printed list reads back (P126)
-quoted_text(t: text): text := {
+quoted_text(t: text) as text := {
 	escapes = 0
 	for i in 0..byte_count(t) { if is_escaped_byte(byte_at(t, i)) { escapes += 1 } }
 	out = made_text(byte_count(t) + escapes + 2, is_ascii_text(t))
@@ -80,18 +80,18 @@ quoted_text(t: text): text := {
 	out
 }
 # the bytes of `"` and `\`, which a quoted text escapes
-is_escaped_byte(b: int): bool := b == Ascii.Quote or b == Ascii.Backslash
+is_escaped_byte(b: int) as bool := b == Ascii.Quote or b == Ascii.Backslash
 # a list as `warp format` writes it, `[1, "ab"]` (decision shown-spaced)
-list_text(xs: list): text := "[" + joined_items(xs, ", ") + "]"
+list_text(xs: list) as text := "[" + joined_items(xs, ", ") + "]"
 # the items of a list as a list shows them, a space between: `print a 3` writes its values so
-items_text(xs: list): text := joined_items(xs, " ")
-joined_items(xs: list, joiner: text): text := {
+items_text(xs: list) as text := joined_items(xs, " ")
+joined_items(xs: list, joiner: text) as text := {
 	parts = []
 	for x in xs { parts += [node_code(x)] }
 	texts_joined(parts, joiner)
 }
 # `a: 1`; a class instance as its class's show() gives it (decision show-hook), else `Point{x: 1, y: 2}`, its fields a map
-key_text(entry: Node): text := {
+key_text(entry: Node) as text := {
 	value = key_value(entry)
 	if marked_kind(entry) == Marked.Instance {
 		shown = instance_show(entry)
@@ -105,11 +105,11 @@ key_text(entry: Node): text := {
 	spaced = if is_letter_byte(byte_at(operator, 0)) then " " + operator + " " else operator
 	node_code(entry_key(entry)) + spaced + node_code(value)
 }
-is_letter_byte(b: int): bool := b >= Ascii.LowerA and b <= Ascii.LowerZ
+is_letter_byte(b: int) as bool := b >= Ascii.LowerA and b <= Ascii.LowerZ
 # n as print shows it, in linear memory for a host to read where c_text puts a C string (the native driver reads a host
 # word's arguments so, core/native/driver.warp): its address times 2^32 plus its length; -1 for a text past the output
 # area
-shown_at(n: Node): int := {
+shown_at(n: Node) as int := {
 	t = node_text(n)
 	if c_text_at() + byte_count(t) > output_room() { return -1 }
 	output_bytes(c_text_at(), t, 0, byte_count(t))
@@ -122,7 +122,7 @@ global shown_next = 0
 # a host reads a text of any length part by part so (the native driver's shown; lib/sound.warp, 67 KB, outgrew one).
 # A read starts at 0 and shows n once; its later parts, asked for in order, are cut from that text, which goes with the
 # last part (card shown-once: paint's 450 KB of values showed 7 times a frame)
-shown_from(n: Node, start: int): int := {
+shown_from(n: Node, start: int) as int := {
 	if start == 0 or start != shown_next or byte_count(shown_whole) == 0 { shown_whole = node_text(n) }
 	t = shown_whole
 	count = byte_count(t) - start
@@ -135,7 +135,7 @@ shown_from(n: Node, start: int): int := {
 # a picture's pixels (paint's int list) from item `from` (1-based) on, `count` of them, each 4 bytes (a color keeps its
 # alpha byte) where shown_at puts its text, for a host to copy a chunk at once instead of one call a pixel (the native
 # driver's paint, card native-show-paint): their address; count is at most pixel_chunk()
-pixels_at(picture: Node, from: int, count: int): int := {
+pixels_at(picture: Node, from: int, count: int) as int := {
 	at = output_address() + c_text_at()
 	# a plain list's items read straight, not each through node_at's checks of every other kind; a GPU list's cells in
 	# place, through node_at, as the GPU upload binds them
@@ -147,11 +147,11 @@ pixels_at(picture: Node, from: int, count: int): int := {
 	}
 	at
 }
-pixel_chunk(): int := (output_room() - c_text_at()) ÷ 4
+pixel_chunk() as int := (output_room() - c_text_at()) ÷ 4
 # a list's items from item `from` (1-based) on, `count` of them, as pixels_at puts them, while each is a plain int
 # of 32 bits: their address, else -1, and the host reads that list item by item (the page's arguments: a sha256 of
 # 3 MB of bytes took 8 s one shown item at a time, card host-byte); count is at most pixel_chunk()
-int32s_at(list: Node, from: int, count: int): int := {
+int32s_at(list: Node, from: int, count: int) as int := {
 	# a range or an extension's list (a GPU list refuses a copy of its items) is read item by item
 	if kind_code(list) != Kind.List or list_kind(list) != 0 { return -1 }
 	at = output_address() + c_text_at()

@@ -4,7 +4,7 @@
 # check: click "apples", click "Reverse" → apples apples 1
 # check: click "bread", click "Drop the first" → bread 1
 use web
-def Counter(name): html {
+def Counter(name) as html {
 	count = 0
 	div{ button{ on click { count += 1 }, name } p{ name + " " + count } }
 }
