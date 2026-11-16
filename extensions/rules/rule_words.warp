@@ -1491,7 +1491,13 @@ iterated_object(object: Node, program: Node) as any := {
 }
 
 # the name when the program or the library declares a class of that name (`Circle{r}` as a pattern), else ø
-class_named(name: Node, program: Node) as any := if class_names_of(program).has(name_of(name)) or declared_classes_modules().has(name_of(name)) then name else ø
+class_named(name: Node, source: text) as any := if name_of(name) in source_class_names(source) or declared_classes_modules().has(name_of(name)) then name else ø
+# [a source, the classes it declares], read once a source
+global class_names_read = ["", []]
+source_class_names(source: text) as list := {
+	if source != class_names_read#1 { class_names_read = [source, class_names(source)] }
+	class_names_read#2
+}
 
 rule_words = {
 	are_arms: are_arms,
