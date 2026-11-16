@@ -644,9 +644,8 @@ rewritten_inside_item(result: Node, rules: list) as Node := {
 	rule_item = ø
 	bottom_up(as_value(result), part => sugar_rewritten(part, rules))
 }
-# a result of a phrase matched in its parentheses, `(match x {…})`, `(0 default 10)`: the parentheses only grouped
-# the phrase, so the result stands for them as one value
-regrouped(result: Node, n: Node) as Node := if result != ø and is_round(n) then as_value(result) else result
+# a result of a phrase matched in its parentheses, `(match x {…})`, back in them
+regrouped(result: Node, n: Node) as Node := if result != ø and is_round(n) then List([as_value(result)], Bracket.Round, separator_of(n)) else result
 
 # whether a rule's result changes the code it rewrote, positions aside: a rule whose result is that code didn't fire (else a rule
 # matching its own result, `match $s {…}` of the arms it left, would rewrite it forever)
