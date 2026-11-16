@@ -1,0 +1,57 @@
+#!/usr/bin/env warp
+# Projective geometric algebra drawn (card pga-visualization, lib/pga_draw.warp): two planes, a line, a sphere and
+# where they meet. The ground and a slope meet in a line; the line meets the ground in a point; the ground cuts the
+# sphere in a circle; the line pierces the sphere in two points. The camera orbits; drag the mouse to turn it yourself.
+use pga_draw
+canvas.resize(640, 480)
+
+ground = plane(0, 0, 1, 0) # z = 0
+slope = plane(1, 0, 1, -2) # x + z = 2
+ball = sphere(point(-0.5, 0, 0.6), 1.2)
+beam = point(-2.5, -0.6, 1.9) ⋎ point(1.5, 1, 0.1)
+
+crease = ground ⋏ slope # plane ⋏ plane: a line
+landing = beam ⋏ ground # line ⋏ plane: a point
+rim = ball ⋏ ground # sphere ⋏ plane: a circle
+holes = ball ⋏ beam # sphere ⋏ line: two points
+
+pink = color(0xE0207A)
+# the legend's line n
+def tell(n, words, color) {
+	label(12, 10 + 18 * n, words, color, 14)
+}
+
+def scene() {
+	clear(paper)
+	sketch(ground, gray)
+	sketch(slope, blue)
+	sketch(ball, purple)
+	sketch(beam, ink)
+	sketch(crease, orange)
+	sketch(rim, green)
+	sketch(landing, red)
+	sketch(holes, pink)
+	tell(0, "ground ⋏ slope: a line", orange)
+	tell(1, "line ⋏ ground: a point", red)
+	tell(2, "sphere ⋏ ground: a circle", green)
+	tell(3, "sphere ⋏ line: two points", pink)
+	show()
+}
+
+yaw = 0.6
+pitch = 0.45
+last_x = mouse_x
+last_y = mouse_y
+# each frame of the window, until it closes (headless: one frame, as a PNG)
+on frame {
+	if mouse_down {
+		yaw -= (mouse_x - last_x) * 0.01
+		pitch = clamp(pitch + (mouse_y - last_y) * 0.01, -1.4, 1.4)
+	} else {
+		yaw += 0.01
+	}
+	last_x = mouse_x
+	last_y = mouse_y
+	orbit(yaw, pitch)
+	scene()
+}
