@@ -1,7 +1,7 @@
 # An object a class-giving function makes is walked by next() too (decision for-over-iterator, cards
 # for-over-iterator and object-iterator-loop): `for e in changes()` of `changes() as WikiChanges`, or a name assigned
 # such a call. The program's and the linked modules' functions declaring a class result, and the names assigned their
-# calls, are noted once before the for loops lower; extensions/sugar/iteration.warp asks the rule word iterated_object (extensions/rules/rule_words.warp) of each loop
+# calls, are noted once before the methods leave their classes; extensions/sugar/iteration.warp asks the rule word iterated_object (extensions/rules/rule_words.warp) of each loop
 
 # the functions declaring they give an instance, `countdown(n) as Counter`, and the names assigned their calls
 global instance_makers = {}
@@ -11,12 +11,29 @@ global made_instances = {}
 global linked_makers_known = ["", [{}, {}]]
 
 noted_instance_makers(program: Node) as Node := {
-	classes = entries_of_both(class_names_of(program), linked_makers()#1)
+	classes = entries_of_both(own_walked_classes(statements_in(program), linked_makers()#1), linked_makers()#1)
 	instance_makers = entries_of_both(result_classes(statements_in(program), classes), linked_makers()#2)
 	types = assigned_types_in(outer_nodes_in(program), classes, instance_makers)
 	made_instances = {}
 	for name in types.keys { if types[name] in classes { made_instances[name] = yes } }
 	program
+}
+
+# the program's classes with a method next(), their own or one a class they extend has (the library's walked ones given)
+own_walked_classes(statements: list, walked: map) as map := {
+	declared = {}
+	for statement in statements {
+		view = class_view(statement)
+		if view != ø { declared[declared_type_name(view#2)] = class_declared(statement, view) }
+	}
+	found = {}
+	for name in declared.keys { if walks_own(declared, walked, name) { found[name] = yes } }
+	found
+}
+walks_own(declared: map, walked: map, name: text) as bool := {
+	if walked.has(name) { return yes }
+	if not declared.has(name) { return no }
+	declared[name].methods.any(method => defined_word(method) == "next") or (declared[name].parent != name and walks_own(declared, walked, declared[name].parent))
 }
 
 # [the library's classes an instance of walks by next(), the linked functions giving one], worked out once a compile
@@ -57,4 +74,5 @@ walks_by_next(class_texts: map, name: text) as bool := {
 	parent != name and walks_by_next(class_texts, parent)
 }
 
-iterators_extension = Extension{name: "iterators", passes_before: {"iteration_sugar": noted_instance_makers}}
+# (before the class_methods extension lifts the methods out of their classes)
+iterators_extension = Extension{name: "iterators", passes_before: {"definition_heads": noted_instance_makers}}
