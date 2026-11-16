@@ -852,7 +852,7 @@ stripes(x, y) := [sine(x / 4), sine(y / 4), 1]
 paint(stripes, 64, 32)
 ```
 
-You've write your shaders in the same language that you write your normal programs. It will be compiled to WGSL for the GPU, the web's shader language, inside `shader { … }`. In there `$name` reads the warp variable `name`.
+You write your shaders in the same language that you write your normal programs. It will be compiled to WGSL for the GPU, the web's shader language, inside `shader { … }`. In there `$name` reads the warp variable `name`.
 
 Examples: shader, "shader mouse"; samples: shader, webgpu, paint_text_gpu, shader_brush, shader_trails, warp_compiled_wgsl_shader, julia, voronoi, sdf_scene, ocean, scene_3d, kaleidoscope, lava_lamp, northern_lights, ringed_planet, manual_3d_object_viewer, gpu_visualizer, aquarium, gaussian_splats, fish, fluid_25d
 
