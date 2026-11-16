@@ -44,9 +44,6 @@ converting_uses(n: Node, targets: map) as Node := {
 	if (is_key(n, Op.Assign) or is_key(n, Op.Define)) and (is_key(key_of(n), Op.As) or as_result(key_of(n)) != ø) {
 		return Key(key_of(n), op_of(n), converting_uses(value_of(n), targets))
 	}
-	# `def f(x) as Circle or Square { … }`, its body glued to the union's last word: the definition it is
-	typed = union_definition(n)
-	if typed != ø { return converting_uses(typed, targets) }
 	walked = children(n, x => converting_uses(x, targets))
 	if is_key(walked, Op.As) and value_of(walked) is symbol and targets.has(name_of(value_of(walked))) {
 		return call_of(conversion_name(name_of(value_of(walked))), [key_of(walked)])
@@ -341,6 +338,9 @@ place_type(type: Node) as text? := if type is symbol then name_of(type) else uni
 # the program with its conversions as functions, before its statements (its last one stays its value), and their uses
 # as calls
 conversions(program: Node) as Node := {
+	# (`def f(x) as Circle or Square { … }`, its body glued to the union's last word: the definition it is, whose
+	# result type names classes, no conversion to Circle; definitions.warp union_definition)
+	if statements_in(program).any(statement => union_definition(statement) != ø) { program = List(statements_in(program).map(statement => union_definition(statement) ?? statement), Bracket.None, Separator.Newline) }
 	aliases = type_aliases(statements_in(program))
 	if aliases { program = List(statements_in(program).map(statement => unaliased_conversions(statement, aliases)), Bracket.None, Separator.Newline) }
 	scope = scope_of(program)
