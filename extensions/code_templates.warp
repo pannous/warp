@@ -74,10 +74,12 @@ holed(n: Node) as Node := {
 	}
 	match n {
 		Key(left, op, right): if left == opaque_symbol then n else Key(holed(left), op, holed(right))
-		List(items, bracket, separator): group_like(n, holed_items(items))
+		List(items, bracket, separator): { if is_spaced(n) and is_computed_hole(items) then holed_items(items)#1 else group_like(n, holed_items(items)) }
 		_: n
 	}
 }
+# `$(text(k))` as the parser groups it, `$` spaced beside its parentheses: the hole itself, never a group holding it
+is_computed_hole(items: list) as bool := #items == 2 and is_computed_hole_mark(items#1)
 
 holed_items(items: list) as list := {
 	made = []
