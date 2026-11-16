@@ -7,7 +7,8 @@
 # submitted still counts every tree the budget kept, including the ones drawn as meshes.
 # Drag the pointer to look. W A S D and the arrows walk.
 # A crown that would be larger than about 40 px is the coarse stride of the medium tree
-# tree_study draws. Mid and far billboards stay the lit clumps and the tiered pines.
+# tree_study draws. Farther EZ sprites are the baked impostor of that mesh when atlas
+# entry 4 is present, and the lit clumps and the tiered pines when it is not.
 # A paint asks for a depth target, and a compute pass picks each tree's level, drops clusters the
 # frustum, the cone, or last frame's depth pyramid rejects, then an indirect draw shows the rest.
 # The frame is painted twice so the second one sees that pyramid.
@@ -73,6 +74,17 @@ const ZENITH = vec3f(0.27, 0.47, 0.80);
 const HAZE_REACH = 240.0;
 // each species' half width against its height: pine, oak, birch, autumn
 const SLENDER = array<f32, 4>(0.30, 0.58, 0.40, 0.56);
+// pine, oak, aspen, ash. Eight tints (bark, then leaf), then each kind's leaf, bark and normal rect.
+const SHADES = array<vec4f, 20>(
+	vec4f(1.0, 1.0, 1.0, 1.0), vec4f(1.0, 1.0, 1.0, 0.3),
+	vec4f(1.0, 0.953, 0.820, 0.1), vec4f(0.835, 0.835, 0.804, 0.5),
+	vec4f(1.0, 1.0, 1.0, 1.0), vec4f(1.0, 0.980, 0.384, 0.5),
+	vec4f(0.808, 0.800, 0.745, 0.2), vec4f(1.0, 1.0, 1.0, 0.5),
+	vec4f(0.0, 0.0, 1024.0, 1024.0), vec4f(1024.0, 1024.0, 256.0, 512.0), vec4f(1280.0, 1024.0, 256.0, 512.0),
+	vec4f(1024.0, 0.0, 1024.0, 1024.0), vec4f(0.0, 1024.0, 256.0, 512.0), vec4f(256.0, 1024.0, 256.0, 512.0),
+	vec4f(3072.0, 0.0, 1024.0, 1024.0), vec4f(512.0, 1024.0, 256.0, 512.0), vec4f(768.0, 1024.0, 256.0, 512.0),
+	vec4f(2048.0, 0.0, 1024.0, 1024.0), vec4f(0.0, 1024.0, 256.0, 512.0), vec4f(256.0, 1024.0, 256.0, 512.0)
+);
 
 fn hash(p: vec2f) -> f32 {
 	return fract(sin(dot(p, vec2f(127.1, 311.7))) * 43758.5453);
@@ -168,6 +180,13 @@ fn mesh_corner(corner: u32, mesh_at: u32) -> Corner {
 	return out;
 }
 
+fn impostor_half(kind: u32) -> f32 {
+	if (kind == 1u) { return $impostor_half.y; }
+	if (kind == 2u) { return $impostor_half.z; }
+	if (kind == 3u) { return $impostor_half.w; }
+	return $impostor_half.x;
+}
+
 @vertex fn forest_quad(@builtin(vertex_index) corner: u32, @builtin(instance_index) drawn: u32) -> Corner {
 	if (drawn >= u32($sprite_count)) {
 		return mesh_corner(corner, drawn - u32($sprite_count));
@@ -191,6 +210,14 @@ fn mesh_corner(corner: u32, mesh_at: u32) -> Corner {
 	}
 	if (part == 0u) {
 		out.at = vec4f(side, 1.0, 1.0);
+		return out;
+	}
+	if ($impostor_on > 0.5) {
+		let scale = s.z * $tree_scale;
+		let p = vec3f(s.x, uv.y * scale, s.y) + $right * side.x * scale * impostor_half(kind);
+		out.at = project(p);
+		out.world = p;
+		out.tree = vec2f(s.x, s.y);
 		return out;
 	}
 	let seed = hash(vec2f(s.x, s.y));
@@ -312,6 +339,14 @@ fn tree(q: vec2f, kind: u32, seed: f32, light: vec3f) -> Paint {
 	return trunk(q, 0.6, bark_color(kind), light);
 }
 
+fn packed_lane(v: vec4f, lane: u32) -> u32 {
+	return select(select(bitcast<u32>(v.x), bitcast<u32>(v.y), lane == 1u), select(bitcast<u32>(v.z), bitcast<u32>(v.w), lane == 3u), lane > 1u);
+}
+
+fn rgba8(bits: u32) -> vec4f {
+	return vec4f(f32(bits & 255u), f32((bits >> 8u) & 255u), f32((bits >> 16u) & 255u), f32(bits >> 24u)) / 255.0;
+}
+
 fn texel(x: i32, y: i32) -> vec4f {
 	let xx = clamp(x, 0, i32($atlas_w) - 1);
 	let yy = clamp(y, 0, i32($atlas_h) - 1);
@@ -319,10 +354,7 @@ fn texel(x: i32, y: i32) -> vec4f {
 	if ($atlas_packed < 0.5) {
 		return $atlas[pixel];
 	}
-	let v = $atlas[pixel >> 2u];
-	let lane = pixel & 3u;
-	let bits = select(select(bitcast<u32>(v.x), bitcast<u32>(v.y), lane == 1u), select(bitcast<u32>(v.z), bitcast<u32>(v.w), lane == 3u), lane > 1u);
-	return vec4f(f32(bits & 255u), f32((bits >> 8u) & 255u), f32((bits >> 16u) & 255u), f32(bits >> 24u)) / 255.0;
+	return rgba8(packed_lane($atlas[pixel >> 2u], pixel & 3u));
 }
 
 fn sample_rect(uv: vec2f, origin: vec2f, size: vec2f) -> vec4f {
@@ -386,6 +418,112 @@ fn study_ground(spot: vec2f) -> vec4f {
 	return vec4f(STUDY_SKY, 1.0);
 }
 
+fn mul_wide(a: u32, b: u32) -> vec2u {
+	let a0 = a & 65535u;
+	let a1 = a >> 16u;
+	let b0 = b & 65535u;
+	let b1 = b >> 16u;
+	let p0 = a0 * b0;
+	let p1 = a0 * b1;
+	let p2 = a1 * b0;
+	let p3 = a1 * b1;
+	let mid = (p0 >> 16u) + (p1 & 65535u) + (p2 & 65535u);
+	let lo = (p0 & 65535u) | ((mid & 65535u) << 16u);
+	let hi = p3 + (p1 >> 16u) + (p2 >> 16u) + (mid >> 16u);
+	return vec2u(lo, hi);
+}
+
+fn add_wide(a: vec2u, b: vec2u) -> vec2u {
+	let lo = a.x + b.x;
+	let carry = select(0u, 1u, lo < a.x);
+	return vec2u(lo, a.y + b.y + carry);
+}
+
+// forest_mix, as an unsigned fold of 2^31 - 1. The products do not fit in 32 bits.
+fn mod_prime(v: vec2u) -> u32 {
+	let low = v.x & 2147483647u;
+	let rest = (v.y << 1u) + (v.x >> 31u);
+	var s = low + rest;
+	s = (s & 2147483647u) + (s >> 31u);
+	if (s >= 2147483647u) { s = s - 2147483647u; }
+	return s;
+}
+
+fn tree_yaw(x: f32, z: f32) -> f32 {
+	let ix = u32(max(i32(x / 4.0), 0));
+	let iz = u32(max(i32(z / 4.0), 0));
+	let step = add_wide(mul_wide(ix, 374761393u), mul_wide(iz, 668265263u));
+	let mixed = mod_prime(add_wide(step, vec2u(1442695041u, 0u)));
+	return f32(mixed % 1000u) / 1000.0 * 6.283185307179586;
+}
+
+fn impostor_origin(kind: u32, view: u32, normal: u32) -> vec2f {
+	return vec2f(f32(view * 2u + normal) * $impostor_tile.x, f32(kind) * $impostor_tile.y);
+}
+
+fn impostor_texel(x: i32, y: i32) -> vec4f {
+	let xx = clamp(x, 0, i32($impostor_w) - 1);
+	let yy = clamp(y, 0, i32($impostor_h) - 1);
+	let pixel = u32(yy) * u32($impostor_w) + u32(xx);
+	return rgba8(packed_lane($impostor[pixel >> 2u], pixel & 3u));
+}
+
+// Clamped to the tile, so a view does not bleed into the normal beside it. uv 1 stays on the last texel.
+fn sample_impostor(uv: vec2f, origin: vec2f) -> vec4f {
+	let u = clamp(uv.x, 0.0, 1.0);
+	let v = clamp(uv.y, 0.0, 1.0);
+	let px = origin.x + u * ($impostor_tile.x - 1.0);
+	let py = origin.y + (1.0 - v) * ($impostor_tile.y - 1.0);
+	let x = i32(floor(px));
+	let y = i32(floor(py));
+	let x1 = min(x + 1, i32(origin.x + $impostor_tile.x) - 1);
+	let y1 = min(y + 1, i32(origin.y + $impostor_tile.y) - 1);
+	return mix(mix(impostor_texel(x, y), impostor_texel(x1, y), fract(px)), mix(impostor_texel(x, y1), impostor_texel(x1, y1), fract(px)), fract(py));
+}
+
+// Angle 0 is the tree's local +z, the view the bake calls 0. The two nearest views share the pixel.
+fn impostor_pick(yaw: f32, tree: vec2f) -> vec3f {
+	let dx = $eye.x - tree.x;
+	let dz = $eye.z - tree.y;
+	let c = cos(yaw);
+	let s = sin(yaw);
+	var angle = atan2(c * dx + s * dz, -s * dx + c * dz);
+	if (angle < 0.0) { angle = angle + 6.283185307179586; }
+	let views = max($impostor_views, 1.0);
+	let slot = angle / 6.283185307179586 * views;
+	let view = u32(floor(slot)) % u32(views);
+	return vec3f(f32(view), f32((view + 1u) % u32(views)), fract(slot));
+}
+
+// A clear texel is rgb 0. Mix the coverage first, or the edge fades toward black.
+fn blend_coverage(a: vec4f, b: vec4f, t: f32) -> vec4f {
+	let alpha = mix(a.a, b.a, t);
+	let rgb = mix(a.rgb * a.a, b.rgb * b.a, t) / max(alpha, 0.001);
+	return vec4f(rgb, alpha);
+}
+
+fn impostor_lit(here: Corner, reach: f32) -> vec4f {
+	let kind = u32(here.mark.y + 0.5);
+	let yaw = tree_yaw(here.tree.x, here.tree.y);
+	let pick = impostor_pick(yaw, here.tree);
+	let c0 = sample_impostor(here.spot, impostor_origin(kind, u32(pick.x), 0u));
+	let c1 = sample_impostor(here.spot, impostor_origin(kind, u32(pick.y), 0u));
+	let color = blend_coverage(c0, c1, pick.z);
+	if (!keeps_leaf(color.a, 0.5)) { discard; }
+	let n0 = sample_impostor(here.spot, impostor_origin(kind, u32(pick.x), 1u)).rgb * 2.0 - 1.0;
+	let n1 = sample_impostor(here.spot, impostor_origin(kind, u32(pick.y), 1u)).rgb * 2.0 - 1.0;
+	let w0 = c0.a * (1.0 - pick.z);
+	let w1 = c1.a * pick.z;
+	var nlocal = n0 * w0 + n1 * w1;
+	let span = length(nlocal);
+	nlocal = select(vec3f(0.0, 1.0, 0.0), nlocal / span, span > 0.001);
+	let c = cos(yaw);
+	let s = sin(yaw);
+	var n = vec3f(c * nlocal.x - s * nlocal.z, nlocal.y, s * nlocal.x + c * nlocal.z);
+	n = normalize(select(-n, n, dot(n, normalize($eye - here.world)) > 0.0));
+	return vec4f(studied(to_linear(color.rgb), n, reach), 1.0);
+}
+
 @fragment fn main(here: Corner) -> @location(0) vec4f {
 	if (here.mark.x < 0.5) {
 		if ($study > 0.5) { return study_ground(here.spot); }
@@ -409,20 +547,20 @@ fn study_ground(spot: vec2f) -> vec4f {
 		}
 		facing = normalize(select(-facing, facing, dot(facing, toward) > 0.0));
 		let kind = u32(here.mark.y + 0.5);
-		let bark = $shades[kind * 2u];
-		let leaf_shade = $shades[kind * 2u + 1u];
+		let bark = SHADES[kind * 2u];
+		let leaf_shade = SHADES[kind * 2u + 1u];
 		let tile_at = 8u + kind * 3u;
 		var albedo: vec3f;
 		if (here.mark.z > 0.5) {
-			let tile = $shades[tile_at];
+			let tile = SHADES[tile_at];
 			let leaf = sample_leaf(here.spot, tile.xy, tile.zw);
 			if (!keeps_leaf(leaf.a, leaf_shade.w)) { discard; }
 			albedo = to_linear(leaf.rgb * leaf_shade.rgb);
 		} else {
 			let uv = vec2f(here.spot.x, here.spot.y * bark.w);
-			let tile = $shades[tile_at + 1u];
+			let tile = SHADES[tile_at + 1u];
 			let color = sample_rect(uv, tile.xy, tile.zw);
-			let ntile = $shades[tile_at + 2u];
+			let ntile = SHADES[tile_at + 2u];
 			let mapped = sample_rect(uv, ntile.xy, ntile.zw).xyz * 2.0 - 1.0;
 			let q1 = dx;
 			let q2 = dy;
@@ -436,6 +574,7 @@ fn study_ground(spot: vec2f) -> vec4f {
 		return vec4f(studied(albedo, facing, length(here.world - $eye)), 1.0);
 	}
 	let reach = length(here.world - $eye);
+	if ($impostor_on > 0.5) { return impostor_lit(here, reach); }
 	let sun = normalize(SUN);
 	let light = normalize(vec3f(dot(sun, $right), sun.y, -dot(sun, $forward)));
 	let q = vec2f((here.spot.x - 0.5) * 2.0 * here.tree.y, here.spot.y);
@@ -561,17 +700,23 @@ if baked == ø {
 	atlas_h = baked[2]
 	atlas_packed = 1.0
 }
-// pine, oak, aspen, ash. Eight tints, then each kind's leaf, bark and normal rect.
-global shades: [vec4] = [
-	[1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 0.3],
-	[1.0, 0.953, 0.820, 0.1], [0.835, 0.835, 0.804, 0.5],
-	[1.0, 1.0, 1.0, 1.0], [1.0, 0.980, 0.384, 0.5],
-	[0.808, 0.800, 0.745, 0.2], [1.0, 1.0, 1.0, 0.5],
-	[0.0, 0.0, 1024.0, 1024.0], [1024.0, 1024.0, 256.0, 512.0], [1280.0, 1024.0, 256.0, 512.0],
-	[1024.0, 0.0, 1024.0, 1024.0], [0.0, 1024.0, 256.0, 512.0], [256.0, 1024.0, 256.0, 512.0],
-	[3072.0, 0.0, 1024.0, 1024.0], [512.0, 1024.0, 256.0, 512.0], [768.0, 1024.0, 256.0, 512.0],
-	[2048.0, 0.0, 1024.0, 1024.0], [0.0, 1024.0, 256.0, 512.0], [256.0, 1024.0, 256.0, 512.0]
-]
+// Far sprites of the four species. The blank sheet keeps the binding a real atlas when entry 4 is absent.
+BLANK_STAMP = "0000000000000000000000000000000000000000000000000000000000000000"
+impostor_baked = baked_atlas(program.folder + "/ez_trees", IMPOSTOR_ATLAS)
+impostor_ready = impostor_baked != ø and atlas_has(program.folder + "/ez_trees", IMPOSTOR_ATLAS)
+global impostor = program.folder + "/ez_trees/blank.at#1#" + BLANK_STAMP
+global impostor_w = 1.0
+global impostor_h = 1.0
+global impostor_on = 0.0
+global impostor_tile = [0.0 + IMPOSTOR_TILE_W, 0.0 + IMPOSTOR_TILE_H]
+global impostor_views = 0.0 + IMPOSTOR_VIEWS
+global impostor_half = [impostor_radius(kits#1), impostor_radius(kits#2), impostor_radius(kits#3), impostor_radius(kits#4)]
+if impostor_ready {
+	impostor = impostor_baked[0]
+	impostor_w = impostor_baked[1]
+	impostor_h = impostor_baked[2]
+	impostor_on = 1.0
+}
 global study = 0.0
 global ground = 1.0
 global tree_scale = FOREST_TREE_SCALE
