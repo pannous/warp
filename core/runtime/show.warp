@@ -80,11 +80,15 @@ quoted_text(t: text) as text := {
 	set_byte(out, at, Ascii.Quote)
 	out
 }
-# the letter a quoted text writes after a `\` for the byte, 0 for a byte written as it is: `"` and `\` themselves, a
-# carriage return `r`, which bare before a line end would read back as a Windows line end (extensions/line_ends.warp)
+# the bytes a quoted text escapes and the letter written after the `\` of each, in the same order: `"` and `\`
+# themselves, a carriage return `r`, which bare before a line end would read back as a Windows line end
+# (extensions/line_ends.warp)
+escaped_bytes() as text := "\"\\\r"
+escape_letters() as text := "\"\\r"
+# the letter written after a `\` for the byte, 0 for a byte written as it is
 escape_letter(b: int) as int := {
-	if b == Ascii.Quote or b == Ascii.Backslash { return b }
-	if b == Ascii.Return then Ascii.LowerR else 0
+	for i in 0..byte_count(escaped_bytes()) { if byte_at(escaped_bytes(), i) == b { return byte_at(escape_letters(), i) } }
+	0
 }
 # a list as `warp format` writes it, `[1, "ab"]` (decision shown-spaced)
 list_text(xs: list) as text := "[" + joined_items(xs, ", ") + "]"
