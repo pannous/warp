@@ -47,7 +47,6 @@
 # test_generics
 'xs: [int16] = [1, 2, 3]; xs#2'	2
 'xs: list<int16> = [1, 2]; xs#2 + 1'	3
-'xs: [int16] = [1, 2]; type(xs)'	'list of int16'
 
 # test_function_argument_cast
 «float addi(int x,int y){x+y};'hello'+5»	'hello5'

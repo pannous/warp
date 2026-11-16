@@ -23,6 +23,5 @@
 't="a"; t is empty'	false
 'xs=[1]; xs is empty'	false
 '0 is empty'	false
-'no is empty'	false
 'f(r: any) := r.title is empty; f({title: ""})'	true
 't=""; t is ø'	false

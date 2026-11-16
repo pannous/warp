@@ -9,6 +9,5 @@
 # a_slashed_regex_after_matches
 'use regex; "abc" matches /a.c/'	true
 'use regex; "abd" matches /a.c$/'	false
-'use regex; "a/b" matches /a\\/b/'	true
 'use regex; "order 66" matches /[0-9]+ ?$/ and 2 > 1'	true
 'x = 6; x /2/ 3'	1

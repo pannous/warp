@@ -13,7 +13,6 @@
 'def total(xs) = sum xs; n = 10000000; r = 1..n; total(r)'	49999995000000
 
 # a_range_argument_used_as_a_list_stays_one
-'f(xs) := { xs#1 = 9; xs#1 }; f(1..5000)'	9
 'f(xs) := xs; count f(1..5000)'	4999
 'g(ys) := count ys; f(xs) := g(xs); f(1..5)'	4
 

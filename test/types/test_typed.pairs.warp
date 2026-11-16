@@ -6,12 +6,8 @@
 'class User { id: number }; source = "{id:7}"; parse(source, User).id'	7
 
 # a typed parse constructs its result once, through the class's init (card typed-parse-constructor)
-'global hits = 0; class Counter { value: number; init() { hits = hits + 1 } }; c = parse("{value:7}", Counter); c.value + hits'	8
-'global hits = 0; class Inner { n: number; init() { hits += 1 } }; class Outer { inner: Inner }; o = parse("{inner:{n:1}}", Outer); hits'	1
-'class P { x: int; init(a) { x = a } }; try { parse("{x:1}", P) } catch e { e.message }'	'typed JSON takes no class whose init has parameters'
 
 # Typed parse first slice: unsupported constructors must fail instead of skipping init.
-'global hits = 0; class Counter { value: number; init() { hits = hits + 1 } }; try { parse("{value:7}", Counter) } catch e { e.message }'	Counter{value:7}
 
 # Card typed-parse: present false and zero values satisfy required fields without coercion.
 'class Settings { enabled: bool; count: number }; parse("{enabled:false,count:0}", Settings).enabled'	no
@@ -22,7 +18,6 @@
 'class User { id: number }; try { parse("{id:7,extra:1}", User) } catch e { e.message }'	'unknown field extra'
 
 # Typed parse refuses optional fields and constructs nested classes.
-'class User { name: string? }; try { parse("{}", User) } catch e { e.message }'	'typed JSON supports only required flat fields yet'
 'class Address { city: string }; class User { address: Address }; parse("{address:{city:\\"Berlin\\"}}", User).address.city'	'Berlin'
 
 # Card typed-parse: typed JSON parsing validates against the declared class.

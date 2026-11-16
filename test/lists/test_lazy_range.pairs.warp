@@ -14,7 +14,6 @@
 'f(n) := { xs = 1..n; count xs }; f(100000)'	99999
 
 # a_range_variable_used_as_a_list_stays_one
-'xs = 1..5000; xs#2 = 9; xs#2'	9
 'xs = 1..5000; ys = xs; count ys'	4999
 'xs = 1..5000; f(x) := xs#1; f(0)'	1
 

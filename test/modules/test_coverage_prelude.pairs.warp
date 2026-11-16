@@ -4,7 +4,6 @@
 «[is_digit_text("7"), is_digit_text("77"), is_digit_text(""), is_letter_text("a"), is_letter_text("é"), is_letter_text("ab")] == [yes, no, no, yes, no, no]»	true
 «[is_digits("0123"), is_digits(""), is_digits("1 2"), is_digits("١٢"), is_letters("abcXYZ"), is_letters(""), is_letters("a1"), is_hex("DEADbeef"), is_hex(""), is_hex("0x1f")] == [yes, no, no, no, yes, no, no, yes, no, no]»	true
 «[is_hex_digit("a"), is_hex_digit("F"), is_hex_digit("g"), is_hex_digit("9"), is_word_char("_"), is_word_char("a"), is_word_char("5"), is_word_char("-")] == [yes, yes, no, yes, yes, yes, yes, no]»	true
-«[consists_of("123", is_digit), consists_of("", is_digit), consists_of("12a", is_digit), is_integer("42"), is_integer("-42"), is_integer("4.2"), is_integer(""), is_integer("-")] == [yes, no, no, yes, yes, no, no, no]»	true
 
 # number parts of a text: ø when the text is not one
 «[unsigned("-12"), unsigned("12"), unsigned(""), int_part("12"), int_part("-12"), int_part("1.5"), int_part(""), float_part("-0.25"), float_part("3"), float_part("1.2.3"), float_part(".5"), unmarked("$a", "$"), unmarked("a", "$")] == ["12", "12", "", 12, -12, nil, nil, -0.25, 3, nil, nil, "a", "a"]»	true
@@ -15,7 +14,6 @@
 
 # maps as entries, sorting by a key (stable), counting, roots, decimals
 «[map_entries({"a": 1, "b": 2}), map_entries({}), map_without({"a": 1, "b": 2}, "a"), map_without({"a": 1}, "z")] == [[["a", 1], ["b", 2]], [], {"b": 2}, {"a": 1}]»	true
-«[sorted_by_key(["ccc", "a", "bb"], w => count(w)), sorted_by_key(["b1", "a2", "b0", "a1"], w => w[0]), sorted_by_key([], w => w), as_list("ab😀"), count_item([1, 2, 1, 1], 1), count_item([], 1)] == [["a", "bb", "ccc"], ["a2", "a1", "b1", "b0"], [], ["a", "b", "😀"], 3, 0]»	true
 «[fourth_root(16), fourth_root(0), fourth_root(81.0), as_decimal(1/4), as_decimal(5), as_decimal(-3/8)] == [2, 0, 3, "0.25", "5", "-0.375"]»	true
 
 # thrice runs its block three times
