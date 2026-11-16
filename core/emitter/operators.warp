@@ -1,20 +1,20 @@
 # Operators (emitter.warp's part): arithmetic and comparisons on numbers and on boxed values, equality, ø tests
 # `30° * 2`: arithmetic keeps a marked operand's mark (decision marks-survive-arithmetic), the left one's, else the
 # right one's, where it marks a number of the result's kind; a boxed operand's by the runtime's marks_kept
-def operation_code(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
+def operation_code(body: Body, symbol: text, a: TypedCode, b: TypedCode) as TypedCode {
 	marked(symbol, unmarked_operation(body, symbol, a, b), a, b)
 }
 # an arithmetic result with the mark of its operands: unboxed, carried statically; boxed (an int's grown or exact
 # result), stamped by the runtime's kept_mark
-def marked(symbol: text, result: TypedCode, a: TypedCode, b: TypedCode): TypedCode {
+def marked(symbol: text, result: TypedCode, a: TypedCode, b: TypedCode) as TypedCode {
 	if symbol in comparisons or (a.mark == 0 and b.mark == 0) or result.mark != 0 { return result }
 	if result.kind == ValueKind.Node and has_runtime_word("kept_mark") { return runtime_call("kept_mark", [result, number_value(if a.mark != 0 then a.mark else b.mark)]) }
 	mark = if marks_kind(a.mark, result.kind) then a.mark else if marks_kind(b.mark, result.kind) then b.mark else 0
 	if mark != 0 { return TypedCode(result.kind, result.code, mark) }
 	result
 }
-marks_kind(mark: int, kind: ValueKind): bool := mark != 0 and ((kind == ValueKind.Int and mark % KindUnit.Info == Kind.Int) or (kind == ValueKind.Float and mark % KindUnit.Info == Kind.Float))
-def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
+marks_kind(mark: int, kind: ValueKind) as bool := mark != 0 and ((kind == ValueKind.Int and mark % KindUnit.Info == Kind.Int) or (kind == ValueKind.Float and mark % KindUnit.Info == Kind.Float))
+def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode) as TypedCode {
 	# an element of a recursive call's result the first reading does not know yet: its index says nothing of its kind
 	if symbol == "#" and a.kind == pending { return element(body, TypedCode(ValueKind.Node, a.code), b) }
 	# a recursive call's result the first reading does not know yet is of the other operand's kind: `[n] + f(n - 1)`
@@ -95,16 +95,16 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 
 # a yes/no is the int 0 or 1 underneath (wiki/bool.md): any operator but equality takes it as that int, `yes + yes`
 # is 2; of two yes/no values an operator that gives 0 or 1 again gives yes/no, `yes xor no` is yes
-number_like(kind: ValueKind): bool := kind == ValueKind.Bool or kind == ValueKind.Int or kind == ValueKind.Float
-as_int(value: TypedCode): TypedCode := if value.kind == ValueKind.Bool then TypedCode(ValueKind.Int, converted(value, ValueKind.Int)) else value
-def bools_as_ints(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
+number_like(kind: ValueKind) as bool := kind == ValueKind.Bool or kind == ValueKind.Int or kind == ValueKind.Float
+as_int(value: TypedCode) as TypedCode := if value.kind == ValueKind.Bool then TypedCode(ValueKind.Int, converted(value, ValueKind.Int)) else value
+def bools_as_ints(body: Body, symbol: text, a: TypedCode, b: TypedCode) as TypedCode {
 	result = operation_code(body, symbol, as_int(a), as_int(b))
 	if a.kind == ValueKind.Bool and b.kind == ValueKind.Bool and symbol in zero_one_operators and result.kind == ValueKind.Int { return TypedCode(ValueKind.Bool, converted(result, ValueKind.Bool)) }
 	result
 }
 
 # base ^ exponent of floats: the runtime word float_pow (extensions/big_numbers/pow.warp, musl's pow); a NaN (a negative base to a fraction) fails as invalid_number
-def float_power(body: Body, base: list, exponent: list): TypedCode {
+def float_power(body: Body, base: list, exponent: list) as TypedCode {
 	held = uleb(fresh_local(body, ValueKind.Float))
 	code = runtime_call("extended_float_power", [TypedCode(ValueKind.Float, base), TypedCode(ValueKind.Float, exponent)]).code + [op.local_tee] + held + [op.local_get] + held
 	checked = [op.f64_ne, op.if, no_value] + dropped(runtime_call("invalid_number", [])) + [op.end]
@@ -115,12 +115,12 @@ def float_power(body: Body, base: list, exponent: list): TypedCode {
 # between two texts or characters orders them as texts; two ints stay ints; an exact rational with an int or another
 # stays exact; any other two are floats
 # a repeat count: an int, or a value known only at run time
-def is_count(n: TypedCode): bool := n.kind == ValueKind.Int or n.kind == ValueKind.Node
-def repeated(piece: TypedCode, count: TypedCode): TypedCode := runtime_call("repeated_text", [TypedCode(ValueKind.Int, converted(count, ValueKind.Int)), TypedCode(ValueKind.Node, boxed(piece))])
+def is_count(n: TypedCode) as bool := n.kind == ValueKind.Int or n.kind == ValueKind.Node
+def repeated(piece: TypedCode, count: TypedCode) as TypedCode := runtime_call("repeated_text", [TypedCode(ValueKind.Int, converted(count, ValueKind.Int)), TypedCode(ValueKind.Node, boxed(piece))])
 
 # the orderings in the place the runtime's node_compared takes them
 ORDERINGS = ["<", "<=", ">", ">="]
-def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
+def node_operation(body: Body, symbol: text, a: list, b: list) as TypedCode {
 	if symbol in ORDERINGS and has_runtime_word("node_compared") { return runtime_call("node_compared", [TypedCode(ValueKind.Node, a), TypedCode(ValueKind.Node, b), number_value(ORDERINGS.index_of(symbol) - 1)]) }
 	if symbol == "+" and has_runtime_word("node_plus") { return runtime_call("node_plus", [TypedCode(ValueKind.Node, a), TypedCode(ValueKind.Node, b)]) }
 	if symbol == "+" {
@@ -164,11 +164,11 @@ def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
 # + - * and the comparisons of a value known only at run time beside an int or another such value: the int first
 # (int_first) when either is one, inline, as a call of the runtime words boxed the int side and the result each time
 # (20% slower loops); not in the runtime's own words, whose values known only at run time are mostly no ints
-int_firsts(body: Body, symbol: text, a: TypedCode, b: TypedCode): bool := not body.function.is_runtime and (symbol in grown_words or symbol in comparisons) and (a.kind == ValueKind.Node or b.kind == ValueKind.Node) and a.kind in [ValueKind.Int, ValueKind.Node] and b.kind in [ValueKind.Int, ValueKind.Node] and has_runtime_word("exact_int")
+int_firsts(body: Body, symbol: text, a: TypedCode, b: TypedCode) as bool := not body.function.is_runtime and (symbol in grown_words or symbol in comparisons) and (a.kind == ValueKind.Node or b.kind == ValueKind.Node) and a.kind in [ValueKind.Int, ValueKind.Node] and b.kind in [ValueKind.Int, ValueKind.Node] and has_runtime_word("exact_int")
 # the operands held in locals; each one known only at run time that holds a plain whole number (exact_int) makes the
 # operation the int one at once: the grown words for + - *, exact past 2^63, an i64 comparison, the int side never
 # boxed; anything else takes `general` of the two as nodes (card untyped-counter-boxes)
-def int_first(body: Body, symbol: text, a: TypedCode, b: TypedCode, general: function): TypedCode {
+def int_first(body: Body, symbol: text, a: TypedCode, b: TypedCode, general: function) as TypedCode {
 	left = TypedCode(a.kind, [op.local_get] + uleb(fresh_local(body, a.kind)))
 	right = TypedCode(b.kind, [op.local_get] + uleb(fresh_local(body, b.kind)))
 	held = a.code + [op.local_set] + left.code[1..] + b.code + [op.local_set] + right.code[1..]
@@ -177,15 +177,15 @@ def int_first(body: Body, symbol: text, a: TypedCode, b: TypedCode, general: fun
 	ints = if symbol in grown_words then runtime_call(grown_words[symbol], [int_read(left), int_read(right)]) else operation_code(body, symbol, int_read(left), int_read(right))
 	TypedCode(kind, held + tested + if_else_code(kind, ints, general(TypedCode(ValueKind.Node, boxed(left)), TypedCode(ValueKind.Node, boxed(right)))))
 }
-exact_int_test(value: TypedCode): list := runtime_call("exact_int", [value]).code
+exact_int_test(value: TypedCode) as list := runtime_call("exact_int", [value]).code
 # an int as it is, a node's int out of its box
-int_read(value: TypedCode): TypedCode := if value.kind == ValueKind.Int then value else TypedCode(ValueKind.Int, unboxed(value.code, gc_type(gc.int_box)))
+int_read(value: TypedCode) as TypedCode := if value.kind == ValueKind.Int then value else TypedCode(ValueKind.Int, unboxed(value.code, gc_type(gc.int_box)))
 # `a + b`, `a - b`, `a * b`, `a / b`, `a ^ b` of a class instance: its class's own operator through its descriptor
 # (decision class-operators-generic: the prelude's sum of quantities keeps their unit; reals' √3^2 is 3), else the
 # code given
 # a new local of the function holding a node, as its read
-def fresh_node_local(body: Body): list := [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
-def by_class(body: Body, symbol: text, left: TypedCode, right: TypedCode, kind: ValueKind, otherwise: list): list {
+def fresh_node_local(body: Body) as list := [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
+def by_class(body: Body, symbol: text, left: TypedCode, right: TypedCode, kind: ValueKind, otherwise: list) as list {
 	if symbol not in operated_glyphs { return otherwise }
 	held = fresh_node_local(body)
 	# a's class, else b's (the right one's too: `x * q` in a module that never saw q's class, reals' `float() * other`,
@@ -195,11 +195,11 @@ def by_class(body: Body, symbol: text, left: TypedCode, right: TypedCode, kind: 
 }
 # `x == ø`, `x === ø` and their negations (a match's `ø:` case): x is ø itself, missing; an empty list, text or map
 # is a value (decision empty-is-not-missing)
-def identity_with_nothing(body: Body, symbol: text, n: Node): TypedCode {
+def identity_with_nothing(body: Body, symbol: text, n: Node) as TypedCode {
 	tested_as(symbol, TypedCode(ValueKind.Bool, boxed(expression_code(body, n)) + [op.ref_is_null]))
 }
 # `a == b`, `a != b` with a list or a boxed value: the runtime word node_equal compares them deeply
-def equality(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
+def equality(body: Body, symbol: text, a: TypedCode, b: TypedCode) as TypedCode {
 	tested_as(symbol, runtime_call("node_equal", as_nodes(a, b)))
 }
 # `a === b`, `a !== b`: identity, built in for every type and never overridden (decision same-multi-dispatch): a list,
@@ -207,13 +207,13 @@ def equality(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
 # two of one type are identical when equal (`1 === 1.0` yes, 1.0 being an int; `1 === 1.5`, `0 === no` and `1 === "1"`
 # no: equality, `==`, is the one across types); a value known only at
 # run time asks the runtime's same_identity
-def identity_code(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
+def identity_code(body: Body, symbol: text, a: TypedCode, b: TypedCode) as TypedCode {
 	if immutable_type(a.kind) != "" and immutable_type(a.kind) == immutable_type(b.kind) { return tested_as(symbol, unmarked_operation(body, "==", a, b)) }
 	if immutable_type(a.kind) != "" or immutable_type(b.kind) != "" or a.kind == ValueKind.Node or b.kind == ValueKind.Node { return tested_as(symbol, runtime_call("same_identity", as_nodes(a, b))) }
 	tested_as(symbol, same_code(a, b))
 }
 # the type two values without identity share when identical, "" for a value with an identity of its own
-immutable_type(kind: ValueKind): text := match kind {
+immutable_type(kind: ValueKind) as text := match kind {
 	ValueKind.Int: "int"
 	ValueKind.Float: "float"
 	ValueKind.Bool: "bool"
@@ -224,16 +224,16 @@ immutable_type(kind: ValueKind): text := match kind {
 	_: ""
 }
 # two operands as the runtime words take them, boxed as nodes
-def as_nodes(a: TypedCode, b: TypedCode): list := [as_node(a), as_node(b)]
+def as_nodes(a: TypedCode, b: TypedCode) as list := [as_node(a), as_node(b)]
 # the bool test as `==`, `===` ask it, negated for `!=`, `!==`
-def tested_as(symbol: text, test: TypedCode): TypedCode := if symbol.starts_with("!") then TypedCode(ValueKind.Bool, condition(test) + [op.i32_eqz]) else test
+def tested_as(symbol: text, test: TypedCode) as TypedCode := if symbol.starts_with("!") then TypedCode(ValueKind.Bool, condition(test) + [op.i32_eqz]) else test
 # an operator on two Int $Nodes, one an exact rational: the bridge hook of the extended runtime (bridge.warp), a comparison by extended_order; the
 # operators without one take the floats
 grown_words = {"+": "grown_sum", "-": "grown_difference", "*": "grown_product"}
 # `a + b`, `a - b`, `a * b` of two ints (decision nat-and-int): a whole number may grow past 64 bits, so the grown
 # words give it boxed, a big int past i64; two fast ints wrap as wasm's i64, as do the runtime's own words and every int
 # of a --fast compile
-def arithmetic(body: Body, symbol: text, left: Node, right: Node): TypedCode {
+def arithmetic(body: Body, symbol: text, left: Node, right: Node) as TypedCode {
 	a = expression_code(body, left)
 	b = expression_code(body, right)
 	if symbol in grown_words and wraps(body, left, right) {
@@ -250,31 +250,31 @@ def arithmetic(body: Body, symbol: text, left: Node, right: Node): TypedCode {
 	operation_code(body, symbol, a, b)
 }
 # an int literal as written, `3` or `-3`, not `3.0`
-written_int(n: Node): bool := n is number and not (n is float)
+written_int(n: Node) as bool := n is number and not (n is float)
 # a number literal with a fractional part: 2.5, not 3.0 (the int 3)
-is_fraction(n: Node): bool := n is float and n != float(int(n))
+is_fraction(n: Node) as bool := n is float and n != float(int(n))
 # a variable declared int in an optional or union slot holds a node, an int still (boxing is the layout, not the type)
-boxed_int_slot(body: Body, n: Node): bool := n is symbol and name_of(n) in body.boxed_ints
+boxed_int_slot(body: Body, n: Node) as bool := n is symbol and name_of(n) in body.boxed_ints
 # a slot whose declared type has an int member: type() names its boxed whole number int
-int_member_slot(body: Body, n: Node): bool := boxed_int_slot(body, n) or (n is symbol and name_of(n) in body.int_members)
-unboxed_int_slot(body: Body, n: Node, value: TypedCode): TypedCode := if value.kind == ValueKind.Node and boxed_int_slot(body, n) then TypedCode(ValueKind.Int, converted(value, ValueKind.Int)) else value
+int_member_slot(body: Body, n: Node) as bool := boxed_int_slot(body, n) or (n is symbol and name_of(n) in body.int_members)
+unboxed_int_slot(body: Body, n: Node, value: TypedCode) as TypedCode := if value.kind == ValueKind.Node and boxed_int_slot(body, n) then TypedCode(ValueKind.Int, converted(value, ValueKind.Int)) else value
 # a literal beside a fast int takes the int side: `i + 1` of a counter wraps
-wraps(body: Body, left: Node, right: Node): bool := body.function.is_runtime or fast_build or (fast_int(body, left) and fast_int(body, right)) or (left is number and fast_int(body, right)) or (right is number and fast_int(body, left))
+wraps(body: Body, left: Node, right: Node) as bool := body.function.is_runtime or fast_build or (fast_int(body, left) and fast_int(body, right)) or (left is number and fast_int(body, right)) or (right is number and fast_int(body, left))
 # a fast int: a variable, parameter or global declared int (a loop's counter is), a call of a function declared int, `#xs`, + - * of fast ints
-fast_int(body: Body, n: Node): bool := {
+fast_int(body: Body, n: Node) as bool := {
 	if n is symbol { return declared_int(body, name_of(n)) }
 	if is_key(n, Op.Hash) and key_of(n) == ø { return yes }
 	if is_round(n) and #n > 0 and n#1 is symbol and name_of(n#1) in module.functions { return gives_declared_int(module.functions[name_of(n#1)]) }
 	type(n) is key and op_of(n) in grown_words and key_of(n) != ø and wraps(body, key_of(n), value_of(n))
 }
 # a call of a function declared to give an int, `f(): int := 3` (decision declared-int-result)
-gives_declared_int(f: Function): bool := declared_kinds.get(aliased_type(declared_result_word(f) ?? "")) == ValueKind.Int
-declared_int(body: Body, name: text): bool := (name in body.declared and body.declared[name] == ValueKind.Int) or name in body.boxed_ints or (is_global(body, name) and module.declared_globals.get(global_key(body, name)) == ValueKind.Int) or body.function.signature.parameters.any(p => p.name == name and p.type_name and declared_kinds.get(aliased_type(p.type_name)) == ValueKind.Int) or name in counters(body)
+gives_declared_int(f: Function) as bool := declared_kinds.get(aliased_type(declared_result_word(f) ?? "")) == ValueKind.Int
+declared_int(body: Body, name: text) as bool := (name in body.declared and body.declared[name] == ValueKind.Int) or name in body.boxed_ints or (is_global(body, name) and module.declared_globals.get(global_key(body, name)) == ValueKind.Int) or body.function.signature.parameters.any(p => p.name == name and p.type_name and declared_kinds.get(aliased_type(p.type_name)) == ValueKind.Int) or name in counters(body)
 # A counter is a whole number proven small, kept as i64 (decision nat-and-int): a local every write of which is a
 # literal up to COUNTER_START, a declared int's value, a counter's, or a counter plus or minus a literal step up to
 # COUNTER_STEP, so it passes 2^63 only after 10^16 steps. `x = x + x` doubles, so a sum of counters is none.
 # The greatest fixpoint: every local written so starts as one, and one losing a write drops out until none does
-counters(body: Body): map := {
+counters(body: Body) as map := {
 	if body.counters != ø { return body.counters }
 	body.counters = {}
 	if body.function.is_runtime { return body.counters }
@@ -302,10 +302,10 @@ def gathered_writes(n: Node, writes: map) {
 	if type(n) is key and key_of(n) is symbol and op_of(n) in assignments { writes[name_of(key_of(n))] = (writes.get(name_of(key_of(n))) ?? []) + [n] }
 	for part in parts_of(n) { gathered_writes(part, writes) }
 }
-small_literal(n: Node, bound: int): bool := n is int and n <= bound and n >= -bound
+small_literal(n: Node, bound: int) as bool := n is int and n <= bound and n >= -bound
 # `i = end` of `end` declared int or the call of a function declared int: an i64 already, whatever the counters are
-declared_int_value(body: Body, write: Node): bool := op_of(write) == Op.Assign and (small_literal(value_of(write), COUNTER_START) or fast_int(body, value_of(write)))
-counted_write(write: Node, held: map): bool := {
+declared_int_value(body: Body, write: Node) as bool := op_of(write) == Op.Assign and (small_literal(value_of(write), COUNTER_START) or fast_int(body, value_of(write)))
+counted_write(write: Node, held: map) as bool := {
 	value = value_of(write)
 	if op_of(write) in counter_steps { return small_literal(value, COUNTER_STEP) }
 	if op_of(write) != Op.Assign { return no }
@@ -314,7 +314,7 @@ counted_write(write: Node, held: map): bool := {
 	stepped and ((key_of(value) is symbol and name_of(key_of(value)) in held and small_literal(value_of(value), COUNTER_STEP)) or (is_key(value, Op.Add) and value_of(value) is symbol and name_of(value_of(value)) in held and small_literal(key_of(value), COUNTER_STEP)))
 }
 exact_words = {"-": "extended_difference", "*": "extended_product", "^": "extended_power", "/": "extended_quotient", "%": "extended_modulo", "rem": "extended_remainder"}
-def exact_operation(body: Body, symbol: text, left: TypedCode, right: TypedCode, floats: TypedCode): TypedCode {
+def exact_operation(body: Body, symbol: text, left: TypedCode, right: TypedCode, floats: TypedCode) as TypedCode {
 	if symbol in exact_words { return runtime_call(exact_words[symbol], [left, right]) }
 	if symbol in comparisons { return operation_code(body, symbol, runtime_call("extended_order", [left, right]), number_value(0)) }
 	floats
@@ -323,7 +323,7 @@ def exact_operation(body: Body, symbol: text, left: TypedCode, right: TypedCode,
 # ratio)
 # `type(x)`: the type value of x's kind, of a value known only at run time the one its kind names there (a list's
 # items unknown here, `list of int`, outside the core)
-static_type_word(kind: ValueKind): text? := match kind {
+static_type_word(kind: ValueKind) as text? := match kind {
 	ValueKind.Int: "int"
 	ValueKind.Float: "float"
 	ValueKind.Text: "text"
@@ -339,7 +339,7 @@ certain_list_calls = ["split", "chars", "map_keys", "zero_fill"]
 # a list written out of items of certain types, `[1/2, 3/4]`: its type as analyzer.warp found them, `list of
 # rational`, items of no common type a plain list, or the fresh list of a certain_list_calls word; ø of any other
 # list, whose items the run time names
-analyzed_list_type(body: Body, n: Node): text? := {
+analyzed_list_type(body: Body, n: Node) as text? := {
 	if "" not in scopes { return ø }
 	scope = scopes.get(body.function.name) ?? scopes[""]
 	if head_name(n) in certain_list_calls { return type_word(n, scope) }
@@ -350,7 +350,7 @@ analyzed_list_type(body: Body, n: Node): text? := {
 }
 # the type value the code gives with the class descriptor of the instance `value` reads, which a call of it constructs
 # by (closures.warp dispatcher_code), so `type(u)()` is `U()`; as it is of any other value
-def described_type(body: Body, type_code: list, value: list): list {
+def described_type(body: Body, type_code: list, value: list) as list {
 	type = fresh_node_local(body)
 	described = fresh_node_local(body)
 	part = i => type + gc_code(gc_ops.struct_get, [gc_type(gc.node), i])
@@ -360,7 +360,7 @@ def described_type(body: Body, type_code: list, value: list): list {
 	code + part(0) + part(1) + described + gc_code(gc_ops.struct_new, [gc_type(gc.node)])
 }
 # a whole number is a nat but where it is a fast int, declared int (decision nat-and-int)
-def type_value_of(body: Body, n: Node): TypedCode {
+def type_value_of(body: Body, n: Node) as TypedCode {
 	value = expression_code(body, n)
 	if value.kind == ValueKind.Node {
 		held = fresh_node_local(body)
@@ -380,28 +380,28 @@ def type_value_of(body: Body, n: Node): TypedCode {
 	refuse("the type of a " + kind_spelling(value.kind))
 }
 # ord(c): the code point of a character, of a text its first; chr(n) the character of the code point n
-def code_point(value: TypedCode): TypedCode {
+def code_point(value: TypedCode) as TypedCode {
 	if value.kind == ValueKind.Text { return runtime_call("code_point_at", [value, TypedCode(ValueKind.Int, [op.i64_const] + sleb(0))]) }
 	TypedCode(ValueKind.Int, converted(value, ValueKind.Char) + [op.i64_extend_i32_u])
 }
 # float_bits(x): the IEEE 754 bits of a float as an int; bits_float(n): the float of those bits
 bit_casts = {float_bits: [ValueKind.Float, ValueKind.Int, "i64.reinterpret_f64"], bits_float: [ValueKind.Int, ValueKind.Float, "f64.reinterpret_i64"]}
-def bit_cast(value: TypedCode, cast: list): TypedCode { TypedCode(cast#2, converted(value, cast#1) + [wasm_instructions[cast#3]]) }
-def floored(value: TypedCode): TypedCode {
+def bit_cast(value: TypedCode, cast: list) as TypedCode { TypedCode(cast#2, converted(value, cast#1) + [wasm_instructions[cast#3]]) }
+def floored(value: TypedCode) as TypedCode {
 	if value.kind == ValueKind.Int { return value }
 	if value.kind == ValueKind.Float { return TypedCode(ValueKind.Int, value.code + [op.f64_floor, op.i64_trunc_f64_s]) }
 	if value.kind == ValueKind.Node or value.kind == pending { return runtime_call("node_floor", [TypedCode(ValueKind.Node, value.code)]) }
 	refuse("floor of a " + kind_spelling(value.kind))
 }
 # `if` on the condition just computed: yes gives a, no gives b, both as kind
-def if_else_code(kind: ValueKind, a: TypedCode, b: TypedCode): list { [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end] }
-def both_of_kind(a: list, b: list, code: int): list {
+def if_else_code(kind: ValueKind, a: TypedCode, b: TypedCode) as list { [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end] }
+def both_of_kind(a: list, b: list, code: int) as list {
 	test = x => kind_code_of(x) + [op.i64_const] + sleb(code) + [op.i64_eq]
 	test(a) + test(b) + [op.i32_and]
 }
 
 # `‖x‖`, abs(x): -x when x < 0, else x
-def absolute_value(body: Body, value: TypedCode): TypedCode {
+def absolute_value(body: Body, value: TypedCode) as TypedCode {
 	if value.kind == ValueKind.Float { return TypedCode(ValueKind.Float, value.code + [op.f64_abs]) }
 	if value.kind != ValueKind.Int and value.kind != ValueKind.Node { return refuse("the absolute value of a " + kind_spelling(value.kind)) }
 	local = uleb(fresh_local(body, value.kind))
@@ -412,7 +412,7 @@ def absolute_value(body: Body, value: TypedCode): TypedCode {
 
 # a % b as in mathematics: never below 0, r + |b| for a negative truncated remainder r; b = 0 fails in divide_by_zero,
 # which names the error (the engine's own trap knows no source position)
-def euclidean_remainder(body: Body, a: TypedCode, b: TypedCode): TypedCode {
+def euclidean_remainder(body: Body, a: TypedCode, b: TypedCode) as TypedCode {
 	divisor = uleb(fresh_local(body, ValueKind.Int))
 	rest = uleb(fresh_local(body, ValueKind.Int))
 	get_divisor = [op.local_get] + divisor
@@ -423,5 +423,5 @@ def euclidean_remainder(body: Body, a: TypedCode, b: TypedCode): TypedCode {
 	code = a.code + b.code + nonzero + [op.i64_rem_s, op.local_set] + rest + get_rest + zero + [op.i64_lt_s]
 	TypedCode(ValueKind.Int, code + [op.if, type_bytes.int] + get_rest + absolute + [op.i64_add, op.else] + get_rest + [op.end])
 }
-as_time(value: TypedCode): TypedCode := if value.kind == ValueKind.Time then value else TypedCode(ValueKind.Time, runtime_call("time_of_node", [value]).code)
-is_time_beside_node(a: TypedCode, b: TypedCode): bool := (a.kind == ValueKind.Time and b.kind == ValueKind.Node) or (a.kind == ValueKind.Node and b.kind == ValueKind.Time)
+as_time(value: TypedCode) as TypedCode := if value.kind == ValueKind.Time then value else TypedCode(ValueKind.Time, runtime_call("time_of_node", [value]).code)
+is_time_beside_node(a: TypedCode, b: TypedCode) as bool := (a.kind == ValueKind.Time and b.kind == ValueKind.Node) or (a.kind == ValueKind.Node and b.kind == ValueKind.Time)

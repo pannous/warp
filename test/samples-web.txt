@@ -1,4 +1,4 @@
-# 97c8d5feba 2026-11-14 03:33 281/283 99.3%
+# 1ebf38a391 2026-11-16 03:29 283/286 99.0%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -51,7 +51,7 @@ ok   samples/functions/queens_idiomatic.warp
 ok   samples/functions/sudoku.warp
 ok   samples/functions/warp_reads_warp.warp
 ok   samples/functions/y_combinator.warp
-ok   samples/geometry/pga.warp
+ok   samples/geometry/pga_example.warp
 ok   samples/golf/99-bottles-of-beer.short.warp
 ok   samples/golf/99-bottles-of-beer.warp
 ok   samples/golf/arabic-to-roman.short.warp
@@ -107,7 +107,7 @@ ok   samples/gpu/scene_3d.warp
 ok   samples/gpu/sdf_scene.warp
 ok   samples/gpu/stripes.warp
 ok   samples/gpu/voronoi.warp
-DIFF samples/gpu/warp_compiled_wgsl_shader.warp
+ok   samples/gpu/warp_compiled_wgsl_shader.warp
 ok   samples/graphics/color_swatches.warp
 ok   samples/graphics/ez_forest.warp
 ok   samples/graphics/finger_paint.warp
@@ -176,7 +176,7 @@ ok   samples/modules/slug_paths.warp
 ok   samples/modules/square.warp
 ok   samples/modules/test_ffi.warp
 ok   samples/modules/test_ffi_comprehensive.warp
-ok   samples/modules/test_ffi_extended.warp
+FAIL samples/modules/test_ffi_extended.warp
 ok   samples/native/arguments.warp
 ok   samples/native/doubling.warp
 ok   samples/native/fib.warp
@@ -275,10 +275,13 @@ ok   samples/web/hello_div.warp
 ok   samples/web/html.warp
 ok   samples/web/html_dsl.warp
 ok   samples/web/keyed_counters.warp
-FAIL samples/web/keyframes.warp
+ok   samples/web/keyframes.warp
 ok   samples/web/leaving_list.warp
 ok   samples/web/live_region.warp
 ok   samples/web/page_custom_event.warp
 ok   samples/web/page_elements.warp
 ok   samples/web/select_binding.warp
 ok   samples/web/typed_form.warp
+DIFF samples/world/polymarket_odds.warp
+ok   samples/world/strong_quakes.warp
+FAIL samples/world/wikipedia_edits.warp

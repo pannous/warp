@@ -23,7 +23,7 @@ NEW_WORD = "new"
 MIXIN_WORD = "mixin"
 
 // The form another language writes with `word` at the parser's position, the parser after it; else ø, nothing read
-def foreign_form(p: Parser, word: text): Node := {
+def foreign_form(p: Parser, word: text) as Node := {
 	if starts_statement(p) {
 		skipped = without_foreign_modifiers(p, word)
 		if skipped != ø { return skipped }
@@ -44,7 +44,7 @@ def foreign_form(p: Parser, word: text): Node := {
 
 // `public export fun f(){…}` (P78): a run of modifiers with one of warp's that ends before a function definition is
 // skipped; the statement after it, marked @static after `static`. A run without warp's is extensions/sugar/declarations.warp's
-def without_foreign_modifiers(p: Parser, first: text): Node := {
+def without_foreign_modifiers(p: Parser, first: text) as Node := {
 	if not is_modifier(first) { return ø }
 	words = [first]
 	at = p.at + first.length
@@ -66,10 +66,10 @@ def without_foreign_modifiers(p: Parser, first: text): Node := {
 	}
 }
 
-def is_modifier(word: text): bool := FOREIGN_MODIFIERS.contains(word) or DEFINITION_MODIFIERS.contains(word)
+def is_modifier(word: text) as bool := FOREIGN_MODIFIERS.contains(word) or DEFINITION_MODIFIERS.contains(word)
 
 // Ruby's `attr_accessor :x, :y` in a class body: the fields x and y, read to the end of the line
-def ruby_fields(p: Parser, word: text): Node := {
+def ruby_fields(p: Parser, word: text) as Node := {
 	start = p.at + word.length
 	end = start
 	while end < p.n and not "\n;}".contains(p.code[end]) { end += 1 }
@@ -79,7 +79,7 @@ def ruby_fields(p: Parser, word: text): Node := {
 	listed(Bracket.None, Separator.Semicolon, names.map(name => symbol(name)))
 }
 
-def without_colon(name: text): text := if name.starts_with(":") then name[1 .. name.length] else name
+def without_colon(name: text) as text := if name.starts_with(":") then name[1 .. name.length] else name
 
 foreign_words = FOREIGN_MODIFIERS + DEFINITION_MODIFIERS + CLASS_MODIFIERS + RUBY_FIELD_WORDS + [NEW_WORD, MIXIN_WORD]
 foreign_declarations_extension = Extension{name: "foreign_declarations", keyword_readers: reading_rows(foreign_words, foreign_form)}

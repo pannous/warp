@@ -18,16 +18,16 @@ int_misfit(n: Node, program: Node) := {
 }
 # the code n puts into an int place: a declared int's value, the arguments of a call a program's function takes as ints,
 # the body of a function declaring an int result
-int_places(n: Node, program: Node): list := {
+int_places(n: Node, program: Node) as list := {
 	if is_key(n, Op.Assign) and declares_int(key_of(n)) { return [value_of(n)] }
 	if is_group(n) and #n == 2 and n#1 == symbol(int_word) and is_key(n#2, Op.Assign) { return [value_of(n#2)] }
 	if is_key(n, Op.Define) and declares_int(key_of(n)) { return [value_of(n)] }
 	if is_group(n) and bracket_of(n) == "(" and #n >= 2 and n#1 is symbol and arguments_of(items_of(n)).any(constant_misfits) { return int_arguments(n, program) }
 	[]
 }
-declares_int(target: Node): bool := is_key(target, Op.Colon) and value_of(target) == symbol(int_word)
+declares_int(target: Node) as bool := is_key(target, Op.Colon) and value_of(target) == symbol(int_word)
 # the arguments of the call the program's function of that name and arity declares int
-int_arguments(call: Node, program: Node): list := {
+int_arguments(call: Node, program: Node) as list := {
 	arguments = arguments_of(items_of(call))
 	for m in nodes_in(program) {
 		head = definition_call(m)
@@ -41,14 +41,14 @@ int_arguments(call: Node, program: Node): list := {
 # whether code of literals alone, `10^30`, `2^63 + 1`, a long numeral, makes a whole number past an int. The code is
 # folded in i64, which is exact modulo 2^64, beside a float estimate of its true value: a fitting result is the true one
 # (`2^63 - 1` wraps on the way and back), a misfit lies a multiple of 2^64 from the estimate
-constant_misfits(code: Node): bool := {
+constant_misfits(code: Node) as bool := {
 	written = unparenthesized(without_mark(code))
 	if is_big_number_view(written) { return not "${value_of(written)#2}".contains(".") }
 	fold = folded(written)
 	fold != ø and abs((fold#1 as float) - fold#2) > wrap_gap
 }
 # [code's value in i64, a float estimate of it] of a whole literal or literals joined by + - * ^, else ø
-folded(code: Node): list? := {
+folded(code: Node) as list? := {
 	written = unparenthesized(without_mark(code))
 	if written is int { return [number_of(written) as int, number_of(written) as float] }
 	if not (is_key(written, Op.Add) or is_key(written, Op.Sub) or is_key(written, Op.Mul) or is_key(written, Op.Pow)) or key_of(written) == ø { return ø }
@@ -72,13 +72,13 @@ folded(code: Node): list? := {
 	[power, estimate]
 }
 # the constant as written: `10^30`, `2^63 + 1`, `(2 + 3)^40`, a long numeral's digits
-written_constant(code: Node): text := {
+written_constant(code: Node) as text := {
 	plain = without_mark(code)
 	if is_group(plain) and bracket_of(plain) == "(" and #plain == 1 { return "(" + written_constant(plain#1) + ")" }
 	if is_big_number_view(plain) { return "${value_of(plain)#2}" }
 	if plain is key and key_of(plain) != ø { return written_constant(key_of(plain)) + spaced_operator(op_of(plain)) + written_constant(value_of(plain)) }
 	"${plain}"
 }
-spaced_operator(op: Op): text := if op == Op.Pow then "^" else " " + (op as text) + " "
+spaced_operator(op: Op) as text := if op == Op.Pow then "^" else " " + (op as text) + " "
 
 int_misfits_extension = Extension{name: "int_misfits", lints: [int_misfit]}

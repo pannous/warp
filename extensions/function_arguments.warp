@@ -6,13 +6,13 @@ function_arguments_extension = Extension{name: "function_arguments", passes_befo
 
 IT_WORD = "it"
 
-function_arguments(program: Node): Node := {
+function_arguments(program: Node) as Node := {
 	defined = own_signatures(program)
 	bottom_up(program, n => with_function_arguments(n, defined))
 }
 
 # the program's definitions by name: [their signatures]
-own_signatures(program: Node): map := {
+own_signatures(program: Node) as map := {
 	found = {}
 	for n in nodes_in(program) {
 		definition = definition_of(plain_node(n))
@@ -23,13 +23,13 @@ own_signatures(program: Node): map := {
 
 # the signatures a call of the word may take: the definitions the program holds (the prelude's it reaches too: text's
 # `find(t, part)`) and the builtins' typed lines (a list's `find(xs, f: function)`)
-signatures_of(word: text, defined: map): list := (defined.get(word) ?? []) + lines_of(typed_lines, unaliased(word)).map(line => line.signature)
+signatures_of(word: text, defined: map) as list := (defined.get(word) ?? []) + lines_of(typed_lines, unaliased(word)).map(line => line.signature)
 
 # `f: function`, `body: block`, a bare `block`, `f: (any) -> bool`
-is_function_typed(parameter: Parameter): bool := parameter.type_name in ["function", "block"] or parameter.type_name.contains("->") or (parameter.name == "block" and parameter.type_name == "")
+is_function_typed(parameter: Parameter) as bool := parameter.type_name in ["function", "block"] or parameter.type_name.contains("->") or (parameter.name == "block" and parameter.type_name == "")
 
 # the parameter an argument at place (from 1) fills: a named argument `by: -it` its own, else the one at its place
-parameter_filled(signature: Signature, place: int, argument: Node): Parameter? := {
+parameter_filled(signature: Signature, place: int, argument: Node) as Parameter? := {
 	if is_key(argument, Op.Colon) and key_of(argument) is symbol {
 		return signature.parameters.find(parameter => parameter.name == name_of(key_of(argument)) or parameter.label == name_of(key_of(argument)))
 	}
@@ -38,7 +38,7 @@ parameter_filled(signature: Signature, place: int, argument: Node): Parameter? :
 
 # a function in a signature that takes as many arguments as the call gives: `find(xs, it > 1)` beside text's
 # `find(t, part)` reads the list's
-is_function_place(signatures: list, place: int, arguments: list): bool := {
+is_function_place(signatures: list, place: int, arguments: list) as bool := {
 	signatures.filter(signature => #signature.parameters >= #arguments).any(signature => {
 		parameter = parameter_filled(signature, place, arguments#place)
 		parameter != ø and is_function_typed(parameter)
@@ -46,21 +46,21 @@ is_function_place(signatures: list, place: int, arguments: list): bool := {
 }
 
 # whether `it` occurs in n outside a function that binds it
-names_free_it(n: Node): bool := n == symbol(IT_WORD) or (not is_lambda(n) and parts_of(n).any(names_free_it))
+names_free_it(n: Node) as bool := n == symbol(IT_WORD) or (not is_lambda(n) and parts_of(n).any(names_free_it))
 
 # `it + 3` → `it => it + 3`; a named argument keeps its name, `by: -it` → `by: it => -it`
-as_function_of_it(argument: Node): Node := {
+as_function_of_it(argument: Node) as Node := {
 	if is_named(argument) { return Key(key_of(argument), Op.Colon, as_function_of_it(value_of(argument))) }
 	if names_free_it(argument) then Key(symbol(IT_WORD), Op.Arrow, argument) else argument
 }
 
-is_named(argument: Node): bool := is_key(argument, Op.Colon) and key_of(argument) is symbol
+is_named(argument: Node) as bool := is_key(argument, Op.Colon) and key_of(argument) is symbol
 
 # an argument that gives a function where one is taken: an `it` expression or a block, `{ $0 * 10 }`, `{ |x| x + 1 }`
-gives_function(argument: Node): bool := if is_named(argument) then gives_function(value_of(argument)) else names_free_it(argument) or is_block_argument(argument)
+gives_function(argument: Node) as bool := if is_named(argument) then gives_function(value_of(argument)) else names_free_it(argument) or is_block_argument(argument)
 
 # the arguments with each one at a function place made the function of `it`; ø when none gives a function there
-with_functions(word: text, arguments: list, defined: map): list? := {
+with_functions(word: text, arguments: list, defined: map) as list? := {
 	signatures = signatures_of(word, defined)
 	given = range_list(#arguments).map(i => is_function_place(signatures, i + 1, arguments) and gives_function(arguments#(i + 1)))
 	if not given.any(place => place) { return ø }
@@ -68,7 +68,7 @@ with_functions(word: text, arguments: list, defined: map): list? := {
 }
 
 # `x.w(a)` with x its first argument: the call of w on the arguments, else ø
-method_call(receiver: Node, word: Node, arguments: list, defined: map): Node? := {
+method_call(receiver: Node, word: Node, arguments: list, defined: map) as Node? := {
 	given = with_functions(name_of(word), [receiver] + arguments, defined)
 	if given == ø then ø else Key(receiver, Op.Dot, List([word] + given[1..], Bracket.Round, Separator.None))
 }
@@ -76,7 +76,7 @@ method_call(receiver: Node, word: Node, arguments: list, defined: map): Node? :=
 # the call a phrase makes when it gives a function: `w(a, b)`, `x.w(a)`, and spaced `w a b`, `x.w a`, `x.w(a) b`:
 # `map [1 2] (it * 10)` is map([1 2], it => (it * 10)), `xs.map { $0 * 10 }` is xs.map({ $0 * 10 }), `xs.fold(0) { … }`
 # is xs.fold(0, { … }); else ø
-call_given_function(items: list, spaced: bool, defined: map): Node? := {
+call_given_function(items: list, spaced: bool, defined: map) as Node? := {
 	head = items#1
 	if head is symbol {
 		given = with_functions(name_of(head), items[1..], defined)
@@ -89,7 +89,7 @@ call_given_function(items: list, spaced: bool, defined: map): Node? := {
 	ø
 }
 
-with_function_arguments(n: Node, defined: map): Node := match n {
+with_function_arguments(n: Node, defined: map) as Node := match n {
 	# a block on one line, `{ it.map { it * 10 } }`, holds its phrase's words itself (core/parsing/phrase_blocks.warp)
 	List(items, Bracket.Curly, Separator.Space): {
 		call = if #items < 2 then ø else call_given_function(items, yes, defined)

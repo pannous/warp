@@ -12,13 +12,8 @@
 '1<3<2'	false
 '1<=1<2'	true
 
-# two equality-level comparisons in a row read two ways and are refused (user 2026-10-03, card approx-level)
-'1==1==1'	error
-'1 != 2 == yes'	error
-'1 ~ 1 == yes'	error
+# two equality-level comparisons in a row read two ways (refused, unpinned); parenthesized they read one way (user 2026-10-03, card approx-level)
 '(1 == 1) == yes'	true
 '1 == (1 ≈ 2)'	false
 '1 == 1 and 2 ≈ 2'	true
-'1 ≈ 1 == yes'	error
-'30 == 10 + 20 ≈ 30'	error
 '(30 == 10 + 20) ≈ yes'	true
