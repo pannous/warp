@@ -1,6 +1,8 @@
 #!/usr/bin/env warp
 # Wikipedia as it is written: the recent changes of English Wikipedia, live from Wikimedia's public event stream
 # (server-sent events, no key). A feed gives its events one at a time; take(n) the next n
+# output: live: the edits of this moment
+# host: native: the page reads no event stream yet (lib/feeds.warp reads it by curl)
 use wikipedia
 
 for edit in changes("enwiki").take(5) {
