@@ -1543,7 +1543,8 @@ class_names_of(program: Node) as map := {
 	classes
 }
 # the linked modules' functions declaring they give an instance of one of the classes, by their signature lines
-# (`changes(wiki: text = "") as WikiChanges` of wikipedia), each line parsed only when it ends in such a class
+# (`changes(wiki: text = "") as WikiChanges` of wikipedia), each line read whole only when it ends in such a class; a
+# word some module defines giving anything else is none: `json.parse(t)` is no time.parse(t, pattern) as Instant
 library_results() as map := {
 	linked = linked_signatures.keys.join(",")
 	if linked != linked_results_known#1 { linked_results_known = [linked, linked_results(declared_classes_modules())] }
@@ -1551,14 +1552,17 @@ library_results() as map := {
 }
 linked_results(classes: map) as map := {
 	heads = []
+	others = {}
 	for signature in linked_signatures.values {
 		for slice in signature.slices {
 			head = slice#2.split("\n")#1.split(":=")#1.trim()
-			# (its packed tree, never parsed anew: a parse here would reset the program's parse marks)
-			if head.split(" ").last in classes { heads += statements_in(slice_tree(slice#3, slice#4)) }
+			if head.split(" ").last in classes { heads += statements_in(slice_tree(slice#3, slice#4)) } else { others[slice#1] = yes }
 		}
 	}
-	result_classes(heads, classes)
+	found = result_classes(heads, classes)
+	kept = {}
+	for word in found.keys { if not others.has(word) { kept[word] = found[word] } }
+	kept
 }
 # the names the program assigns only instances of its classes, `s = Stack()` (classes.warp written_type), of its
 # nodes as the caller listed them
