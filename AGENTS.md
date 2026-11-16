@@ -312,6 +312,8 @@ before asking a question). After a context swap, this file and your role file be
 - Quick cards first: those that never touch core/ or extensions/ (website, samples, lib/). core/ or extensions/ needs a
   compiler build: never quick.
 - A TODO in the code without a card gets one: `# TODO (card <name>) <text>`, card name right after the word TODO.
+- Sprint (user, from 2026-11-16): a new card only when it reduces existing ones (a split that closes others, a
+  shared root cause); features come only from the user.
 - Unrelated problems: `todo add "…"`. Tiny no-choice fixes (typo, stale comment, wrong path) on the spot, own commit.
 - Edge cases never halt progress: a lib fix that needs no rebuild, else a card in Later with the root cause, and
   you take the next card.
