@@ -335,5 +335,5 @@ use wasm ./test/fixtures/components/rust_demo.wasm as demo
 use c
 import test/fixtures/wasm/zlib
 [strstr("haystack", "st"), strchr("a/b/c", 47), crc32(0, "wasp", 4), zlibVersion()]` },
-	"kitchen sink": { value: '"✓ 34 tests passed"', get code() { return SAMPLES.kitchensink; } },
+	"kitchen sink": { value: '"✓ 166 tests passed"', get code() { return SAMPLES.kitchensink; } },
 };
