@@ -44,7 +44,11 @@ global pitch = -0.18
 global last_x = 0.0
 global last_y = 0.0
 global instances = 1
-global sprites = [[0.0, 0.0, 0.0, 0.0]]
+// the GPU lists a frame with no sprites or no meshed clusters still binds
+NO_SPRITES = gpu_vectors([[0.0, 0.0, 0.0, 0.0]])
+NO_DRAWS = gpu_vectors([[0.0, 0.0, 0.0, 1.0]])
+NO_SPANS = gpu_vectors([[0.0, 1.0, 0.0, 0.0]])
+global sprites = NO_SPRITES
 global eye = [80.0, EYE_Y, -22.0]
 global right = [1.0, 0.0, 0.0]
 global up = [0.0, 1.0, 0.0]
@@ -593,7 +597,7 @@ near_first(list) := {
 		if sprite_tree(sprite) { trees.add(sprite) } else { front.add(sprite) }
 	}
 	for sprite in reverse(trees) { front.add(sprite) }
-	front
+	gpu_vectors(front)
 }
 
 show(wide, high) := {
@@ -611,8 +615,8 @@ show(wide, high) := {
 	sprite_count = count(grove.sprites)
 	instances = sprite_count + count(grove.draws) * MESHLET_TRIANGLES
 	sprites = near_first(grove.sprites)
-	draws = if count(grove.draws) == 0 then [[0.0, 0.0, 0.0, 1.0]] else grove.draws
-	spans = if count(grove.spans) == 0 then [[0.0, 1.0, 0.0, 0.0]] else grove.spans
+	draws = if count(grove.draws) == 0 then NO_DRAWS else grove.draws
+	spans = if count(grove.spans) == 0 then NO_SPANS else grove.spans
 	eye = canopy.eye
 	right = canopy.right
 	up = canopy.up
@@ -724,16 +728,16 @@ global near = FOREST_NEAR
 global far = VIEW_FAR
 global meshlet = MESHLET_TRIANGLES
 global sprite_count = 1
-global draws = [[0.0, 0.0, 0.0, 1.0]]
-global spans = [[0.0, 1.0, 0.0, 0.0]]
+global draws = NO_DRAWS
+global spans = NO_SPANS
 global have_grove = no
 global grove_x = 0.0
 global grove_z = 0.0
 global grove_yaw = 0.0
 global grove_pitch = 0.0
 global grove_high = 0.0
-global grove = Grove([[0.0, 0.0, 0.0, 0.0]], [[0.0, 0.0, 0.0, 1.0]], [[0.0, 1.0, 0.0, 0.0]], 0, 0, 0, 0, [], [])
-global canopy = Canopy(0, 0, 0, 0, -1, [[0.0, 0.0, 0.0, 0.0]], [0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0])
+global grove = Grove(NO_SPRITES, NO_DRAWS, NO_SPANS, 0, 0, 0, 0, [], [])
+global canopy = Canopy(0, 0, 0, 0, -1, NO_SPRITES, [0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0])
 
 paint_grove(wide, high) := {
 	width = wide
@@ -771,12 +775,9 @@ paint_match() := {
 	width = 1280.0
 	height = 720.0
 	ash = kits#4.levels#1
-	draws = []
-	spans = []
-	for cluster in ash.mesh.clusters {
-		draws.add([0.0, 0.0, 0.0, 1.0])
-		spans.add([0.0 + ash.base + cluster.at, 0.0 + count(cluster.triangles), 3.0, 0.0])
-	}
+	clusters = ash.mesh.clusters
+	draws = gpu_vectors([[0.0, 0.0, 0.0, 1.0] for cluster in clusters])
+	spans = gpu_vectors([[0.0 + ash.base + cluster.at, 0.0 + count(cluster.triangles), 3.0, 0.0] for cluster in clusters])
 	eye = [70.0 / 83.6902, 28.0 / 83.6902, 46.0 / 83.6902]
 	look = [0.0, 22.0 / 83.6902, 0.0]
 	forward = normalize([look#1 - eye#1, look#2 - eye#2, look#3 - eye#3])
@@ -788,7 +789,7 @@ paint_match() := {
 	focal = (height / 2.0) / tangent(50.0 * 3.141592653589793 / 180.0 / 2.0)
 	centre = [width / 2.0, height / 2.0]
 	sprite_count = 1
-	sprites = [[0.0, 0.0, 0.0, 0.0]]
+	sprites = NO_SPRITES
 	instances = 1 + count(draws) * MESHLET_TRIANGLES
 	paint(woods, {depth: 1, instances: instances})
 	[count(draws), count(ash.indices)]
