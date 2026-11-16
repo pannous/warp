@@ -16,11 +16,6 @@ rim = ball ⋏ ground # sphere ⋏ plane: a circle
 holes = ball ⋏ beam # sphere ⋏ line: two points
 
 pink = color(0xE0207A)
-# the legend's line n
-def tell(n, words, color) {
-	label(12, 10 + 18 * n, words, color, 14)
-}
-
 def scene() {
 	clear(paper)
 	sketch(ground, gray)
@@ -31,10 +26,10 @@ def scene() {
 	sketch(rim, green)
 	sketch(landing, red)
 	sketch(holes, pink)
-	tell(0, "ground ⋏ slope: a line", orange)
-	tell(1, "line ⋏ ground: a point", red)
-	tell(2, "sphere ⋏ ground: a circle", green)
-	tell(3, "sphere ⋏ line: two points", pink)
+	caption(0, "ground ⋏ slope: a line", orange)
+	caption(1, "line ⋏ ground: a point", red)
+	caption(2, "sphere ⋏ ground: a circle", green)
+	caption(3, "sphere ⋏ line: two points", pink)
 	show()
 }
 
