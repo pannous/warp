@@ -17,6 +17,8 @@ rewrite for $i in $n {$body...} => for $i in 1 to $n {$body...} where $i is symb
 # (m + n)·(n - m + 1)/2, an empty range sums 0; a range counts from its ends anyway (`#`, count: decision lazy-range-value)
 rewrite sum($a..$b) => ($start = $a; $end = $b - 1; if $end >= $start then ($start + $end) * ($end - $start + 1) div 2 else 0) where $a is int
 rewrite sum($a to $b) => ($start = $a; $end = $b; if $end >= $start then ($start + $end) * ($end - $start + 1) div 2 else 0) where $a is int
+# An enum is walked by its cases: `for s in Scale { play(scale(D4, s), 150ms) }` (card scales-iterable)
+rewrite for $x in $e {$body...} => for $x in [cases of $e] {$body...} where $x is symbol and $e is enum
 # An object whose class has next() is walked by it until it gives ø: `for x in Countdown(3)`, `for e in changes()` of
 # `changes() as WikiChanges` (decision for-over-iterator, extensions/class_methods/iterators.warp)
 rewrite for $x in $o {$body...} => ($walked = $o; while yes { $x = $walked.next(); if $x == ø { break }; $body... }) where $x is symbol and $iterated = iterated_object($o, $program)

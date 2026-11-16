@@ -848,7 +848,7 @@ A shader is a small program the graphics card (GPU) runs for every pixel at once
 
 ```warp
 use math
-stripes(x, y) := [0.5 + 0.5 * sine(x / 4), 0.5 + 0.5 * sine(y / 4), 0.8]
+stripes(x, y) := [sine(x / 4), sine(y / 4), 1]
 paint(stripes, 64, 32)
 ```
 
