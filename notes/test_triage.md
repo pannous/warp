@@ -922,3 +922,78 @@ No wiki page or sample shows the form, or it is esoteric; removed from the test 
 - test/node/test_trailing_comment.warp: `is! 'x = data [a // first ⏎ b]; (x#1).comment' 'first'` — duplicate trailing comment case
 - test/slow/modules/test_markdown.pairs.warp: `«use markdown; [markdown_html("[foo][ref[bar]]\\n\\n[ref[bar]]: /uri\\n"), markdown_html("[[[foo]]]\\n\\n[[[foo]]]: /url\\n"), markdown_html("[foo][ref\\\\[]\\n` — CommonMark spec reference-link edge cases
 - test/slow/modules/test_markdown.pairs.warp: `«use markdown; [markdown_html("[link *foo **bar** `#`*][ref]\\n\\n[ref]: /uri\\n"), markdown_html("[![moon](moon.jpg)][ref]\\n\\n[ref]: /uri\\n"), markdown_html` — CommonMark spec reference-link edge cases
+
+## Dropped as unpinned 2026-11-16 (card red-test-triage)
+
+No wiki page or sample shows the form, or it is esoteric; removed from the test file.
+
+- test/control/test_clipboard.pairs.warp: `'c = clipboard count; c > 0'	true	needs: display` — clipboard form platform-specific, only in Applescript page
+- test/control/test_colon_handlers.warp: `is! 'n = 1 ⏎ at 9pm: print n ⏎ n + 1' 2` — time-of-day handler form not in wiki
+- test/control/test_empty.pairs.warp: `'xs = [1, 2]; xs.each {}; 3'	3` — empty each block odd phrasing
+- test/control/test_error_not_in_data.pairs.warp: `'e = try 10/0; a, b = e, 2; if a failed then 1 else 2'	1` — contradicts Error.md: errors not stored in data
+- test/control/test_error_not_in_data.warp: `is! 'e = try 10/0; class P{x: int?}; p = P(1); p.x = e; if p.x failed then 1 else 2' 1` — contradicts Error.md: field holds no error
+- test/control/test_error_words.pairs.warp: `'"a" + warn("careful") + "b"'	'ab'` — warn inside text concatenation, odd
+- test/control/test_for_forms.pairs.warp: `'text="hi  you"; s=""; for word in text { s += word + "," }; s'	'hi,you,'` — loop variable name picking text unit, esoteric
+- test/control/test_for_forms.warp: `is! 's=""; for line in "a ⏎ b c" { s += line + "," }; s' 'a,b c,'` — loop variable name picking text unit, esoteric
+- test/control/test_function_objects.warp: `is! '# doubles a number ⏎ twice(x) := x*2 ⏎ fs = [function twice] ⏎ fs#1.description' 'doubles a number'` — description alias not in wiki
+- test/control/test_function_objects.warp: `is! '# doubles a number ⏎ twice(x) := x*2 ⏎ fs = [function twice] ⏎ fs#1.full' '# doubles a number ⏎ twice(x) := x*2'` — full word not in wiki
+- test/control/test_function_objects.warp: `is! 'use math ⏎ fs = math.functions ⏎ fs#1(12, 18)' 6` — math.functions not in wiki; methods is canonical
+- test/control/test_function_objects.warp: `is! '# doubles a number ⏎ twice(x) := x*2 ⏎ fs = [function twice] ⏎ fs#1.representation' 'twice(x) := x*2'` — representation alias not in wiki
+- test/control/test_function_objects.warp: `is! '# doubles a number ⏎ twice(x) := x*2 ⏎ twice.representation' 'twice(x) := x*2'` — representation alias not in wiki
+- test/control/test_function_objects.warp: `is! '# doubles a number ⏎ twice(x) := x*2 ⏎ fs = [function twice] ⏎ fs#1.returns' 'int'` — returns alias not in wiki
+- test/control/test_function_value_words.pairs.warp: `'sqrt.returns'	'number'` — returns alias not in wiki
+- test/control/test_iteration_words.pairs.warp: `'[1 2 3].each(x=>x+1)'	4` — each return value unspecified, odd
+- test/control/test_iteration_words.pairs.warp: `'each [1 2 3] {it*10}'	30` — each return value unspecified, odd
+- test/control/test_library_signatures.pairs.warp: `'f(b) := b == 0; (function f).signature'	'(b) -> bool'` — signature inference duplicate
+- test/control/test_library_signatures.pairs.warp: `'f(b) := b == 0; type(function f)'	'function: (b) -> bool'` — signature inference duplicate
+- test/control/test_library_signatures.pairs.warp: `'g(x) := x > 2; h(x) := g(x); (function h).signature'	'(x) -> bool'` — signature inference duplicate
+- test/control/test_match_type_arms.pairs.warp: `'x = 2.5; x is int or text'	false` — odd type-or test on float
+- test/control/test_object_blocks.pairs.warp: `'help = {print: "there is help"}; help!'	ø` — help object bang form odd
+- test/control/test_one_method_form.pairs.warp: `'class A{n:int}; class B extends A{m:int}; def x(a:A):=n; B(1, 2).x()'	1` — duplicate of kept method-form case
+- test/control/test_plural_field_of_elements.pairs.warp: `'addresses = ["ab" "cd"]; text(upper each address)'	'["AB" "CD"]'` — upper each singular-name form, odd
+- test/control/test_plural_field_of_elements.pairs.warp: `'cities = ["ab" "cd"]; text(upper each city)'	'["AB" "CD"]'` — upper each singular-name form, odd
+- test/control/test_pure_nil_in_map.warp: `is! "f(m: any): bool := { p: any = ø` — duplicate of kept nil-in-map case
+- test/control/test_quasi_quote.pairs.warp: `'data(3 times {print 1}) == parse_code("3 times {print 1}")'	true` — parse tree equality, intermediate
+- test/control/test_quasi_quote.warp: `is! 'f(a) := a ⏎ x = f([1, 2]) where it > 1 ⏎ x' [2]` — where filter phrasing not in wiki
+- test/control/test_reflection_mode.warp: `is! 'use reflection mode ⏎ use math ⏎ gcd.origin' 'math'` — reflection mode not in wiki
+- test/control/test_reflection_mode.warp: `is! 'use reflection ⏎ # doubles a number ⏎ twice(x) := x*2 ⏎ fs = [function twice] ⏎ fs#1.column' 1` — reflection mode not in wiki
+- test/control/test_reflection_mode.warp: `is! 'use reflection ⏎ # doubles a number ⏎ twice(x) := x*2 ⏎ twice.line' 3` — reflection mode not in wiki
+- test/control/test_reflection_mode.warp: `is! 'use reflection ⏎ # doubles a number ⏎ twice(x) := x*2 ⏎ twice.origin' 'program'` — reflection mode not in wiki
+- test/control/test_reflection_mode.warp: `is! 'use reflection ⏎ # doubles a number ⏎ twice(x) := x*2 ⏎ twice.wasm_name' 'twice'` — reflection mode not in wiki
+- test/control/test_reflection_synonyms.warp: `is! 'class P{x:int; y:int; sq() := x*x+y*y}; p = P(1, 2); [m.name for m in functions(P)]' ['sq']` — duplicate of kept functions() case
+- test/control/test_reflection_words.pairs.warp: `'import •/test/fixtures/compiled/reflected; dir(reflected.P)'	['x', 'y', 'sq']` — compiled fixture import internals
+- test/control/test_reflection_words.pairs.warp: `'import •/test/fixtures/compiled/reflected; reflected.P.fields'	['x', 'y']` — compiled fixture import internals
+- test/control/test_reflection_words.pairs.warp: `'import •/test/fixtures/compiled/reflected; reflected.P.methods'	['sq']` — compiled fixture import internals
+- test/control/test_reflection_words.pairs.warp: `'import •/test/fixtures/compiled/reflected; reflected.twice.params'	['a']` — compiled fixture import internals
+- test/control/test_reflection_words.pairs.warp: `'x = 0; on set x {print value}; count x.listeners'	1` — listeners count not in wiki
+- test/control/test_reflection_words.pairs.warp: `'import •/test/fixtures/wasm/fourty_two; fourty_two.exports#1'	'add32'` — wasm fixture import internals
+- test/control/test_reflection_words.warp: `is! 'use comments ⏎ // the answer ⏎ x = 42 ⏎ x.doc' 'the answer'` — doc of a plain binding not in wiki
+- test/control/test_reflection_words.warp: `is! 'def add(left:int) -> int: left ⏎ add.params' ['left']` — refused head form, not a wanted form
+- test/control/test_reflection_words.warp: `is! 'import •/test/fixtures/wasm/fourty_two; ("twice" in fourty_two.exports) > 0' true` — wasm fixture exports internals
+- test/control/test_relational_arms.pairs.warp: `'xs = [3, 1, 2]; sorted(xs, >)#1'	3` — sorted with bare comparator not in wiki
+- test/control/test_run_time_blocks.pairs.warp: `'y = data 0-2^70; z = interpret y; z == 0-2^70'	1` — interpret of data bigint, odd
+- test/control/test_run_time_blocks.pairs.warp: `'y = data 2^70; z = interpret y; z+1 == 2^70+1'	1` — interpret of data bigint, odd
+- test/control/test_run_time_blocks.pairs.warp: `'y = data 7/2; z = interpret y; z == 7/2'	1` — interpret of data exact number, odd
+- test/control/test_run_time_blocks.pairs.warp: `'y = data 7/2; z = interpret y; z*2'	7` — interpret of data exact number, odd
+- test/control/test_run_time_blocks.pairs.warp: `'def twice(x): x*2; y = data twice(21); interpret y'	42` — refused definition form
+- test/control/test_storage.pairs.warp: `'storage["visits_next"]'	3` — cross-run persistence depends on earlier runs
+- test/control/test_store_values.warp: `is! 'session["all_a"] = 1; session["all_b"] = 2; s = session; s["all_a"] + s["all_b"]' 3` — session store not in wiki
+- test/control/test_store_values.warp: `is! 'session["walk_a"] = 1; session["walk_b"] = 2; total = 0; for key, value in session { total += value }; total' 3` — session store not in wiki
+- test/control/test_stored_default.pairs.warp: `'stored visits_default = 0; visits_default'	2` — cross-run persistence duplicate form
+- test/control/test_stored_signals.pairs.warp: `'stored theme_kept = "dark"; theme_kept'	'light'` — cross-run persistence depends on earlier runs
+- test/control/test_stored_signals.pairs.warp: `'stored visits_kept = 0; visits_kept'	2` — cross-run persistence depends on earlier runs
+- test/control/test_structural_patterns.pairs.warp: `'p = [a: 1, b: 2]; switch p { [a: x, b: y]: x + y  _: 0 }'	3` — keyed list pattern form odd
+- test/control/test_system_signals.pairs.warp: `'def stop(){ exit(3) }; stop(); 7'	ø	needs: display` — exit code behavior of harness
+- test/control/test_system_values.pairs.warp: `'n = 1; whenever dark mode { n = 2 }; n'	1` — dark mode signal not in wiki
+- test/control/test_system_values.pairs.warp: `'mouse_x * 100 + mouse_y'	1207	needs: display` — mouse position environment-dependent
+- test/control/test_system_values.pairs.warp: `'if mouse_down { 1 } else { 0 }'	1	needs: display` — mouse state environment-dependent
+- test/control/test_task.pairs.warp: `'f(x) := x; t = go f(2); cancel t; await t'	2` — await of cancelled task odd
+- test/control/test_test_line_after_tasks.pairs.warp: `'n = 0; go { n += 1 }; test 1 == 1'	ø` — test-runner output, not language form
+- test/control/test_test_pairs.warp: `is! «rows = ['a'	1` — test-file tab row format, harness
+- test/control/test_try.pairs.warp: `'def f(m){ m.a }; try f(3) else 7'	7` — duplicate of kept try-else case
+- test/control/test_try_stack_overflow.warp: `is! 'up(n) := 1 + up(n + 1); down(n) := if n == 0 then 0 else 1 + down(n - 1); r = try up(0) else 100; r + down(5)' 105` — stack exhaustion platform quirk
+- test/control/test_try_stack_overflow.warp: `is! 'up(n) := 1 + up(n + 1); try up(0) else 7' 7` — stack exhaustion platform quirk
+- test/control/test_unit_tasks.pairs.warp: `'f() := { 2 m + 1 m }; job = go f(); await job'	3` — duplicate of kept unit task case
+- test/control/test_value_methods_are_functions.pairs.warp: `'fs = methods([1 2]); type(fs#1)'	'function: (xs: list) -> list'` — function signature of builtin method, internal
+- test/control/test_value_methods_are_functions.pairs.warp: `'xs = [1 2]; fs = xs.methods; type(fs#1)'	'function: (xs: list) -> list'` — function signature of builtin method, internal
+- test/slow/control/test_clipboard.pairs.warp: `'n = 1; on clipboard change { n = 2 }; n'	1` — clipboard needs display, not in wiki
