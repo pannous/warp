@@ -842,3 +842,83 @@ No wiki page or sample shows the form, or it is esoteric; removed from the test 
 - test/types/test_variant_payloads.pairs.warp: `'type Color = red | green | rgb(int, int, int); x = blue; x is Color'	false` — positional payload, duplicates, generic variants
 - test/types/test_variant_payloads.pairs.warp: `'type Option[T] = Some(T) | None; a: int = Some(3); a + 1'	4` — positional payload, duplicates, generic variants
 - test/types/test_variant_payloads.warp: `is! 'type Color = red | green | rgb(int, int, int); x = green; (x is Color) or true' true` — duplicate is-Color case
+
+## Dropped as unpinned 2026-11-16 (card red-test-triage)
+
+No wiki page or sample shows the form, or it is esoteric; removed from the test file.
+
+- test/aquarium/test_madai.warp: `is! 'use "../../samples/gpu/aquarium.warp" ⏎ use math ⏎ mesh = fish_mesh(read("../../samples/gpu/madai.fish")) ⏎ posed = fish_pose(mesh, 0.4) ⏎ fish_show(posed.` — internal fish geometry check, intermediate values
+- test/ffi/test_browser_dollar_names.pairs.warp: `'$Math.floor(2.7)'	2` — browser-only globals, platform quirk
+- test/ffi/test_browser_dollar_names.pairs.warp: `'document.title'	'warp tests in the browser'` — browser-only globals, platform quirk
+- test/ffi/test_c_enums.pairs.warp: `'enum KeyboardKey { KEY_NULL = 0, KEY_A = 65 }; GetKeyPressed(): KeyboardKey from "raylib"; "" + GetKeyPressed()'	"KEY_NULL"	needs: raylib` — raylib library absent, platform dependent
+- test/ffi/test_c_enums.pairs.warp: `'enum KeyboardKey { KEY_NULL = 0, KEY_A = 65 }; IsKeyPressed(key: KeyboardKey): bool from "raylib"; IsKeyPressed(KeyboardKey.KEY_A)'	no	needs: raylib` — raylib library absent, platform dependent
+- test/ffi/test_ffi_gaps.pairs.warp: `'use c; isdigit(55)'	1` — libc isdigit return value differs per platform
+- test/ffi/test_ffi_signatures.warp: `# raylib_signatures_without_a_window — native only: raylib, a C library the browser has not ⏎ is! «import IsWindowReady from 'raylib' ⏎ IsWindowReady()» 0 ⏎ is!` — raylib C library not installed, nine duplicates
+- test/ffi/test_foreign_handles.pairs.warp: `'use js Intl; f = Intl.NumberFormat("en"); f.format(1234.5)'	'1,234.5'` — Intl locale formatting
+- test/ffi/test_foreign_lines.warp: `# a_foreign_line_imports_its_function — native only: the last digit of macOS libm's erf, which the browser's musl rounds the other way ⏎ is! «erf(x: float): flo` — last digit of libm erf, platform quirk
+- test/ffi/test_foreign_member_assignment.pairs.warp: `'use js Map; m = Map(); m.answer = "yes"; m.answer'	'yes'	needs: js` — assigning members on foreign objects, esoteric
+- test/ffi/test_foreign_member_assignment.pairs.warp: `'use js Math; Math.answer = 42; Math.answer'	42` — assigning members on foreign objects, esoteric
+- test/ffi/test_foreign_member_assignment.warp: `# a_member_of_a_call_result_is_set ⏎ is! 'use js Map; m = Map(); m.set("k", Map()); m.get("k").answer = 3; m.get("k").answer' 3` — member assignment on foreign call result, esoteric
+- test/ffi/test_foreign_member_assignment.warp: `# a_python_attribute_is_set ⏎ is! 'use python "types"; n = types.SimpleNamespace(); n.answer = 4; n.answer' 4` — python attribute assignment, esoteric
+- test/ffi/test_foreign_operators.pairs.warp: `'use js Buffer; b = Buffer.from("abc"); b#1'	97	needs: js` — operators on foreign values, esoteric duplicate
+- test/ffi/test_foreign_operators.pairs.warp: `'use js Buffer; b = Buffer.from("abc"); count b'	3	needs: js` — operators on foreign values, esoteric duplicate
+- test/ffi/test_foreign_operators.pairs.warp: `'use python "collections"; d = collections.deque([1, 2, 3]); count d'	3` — operators on foreign values, esoteric duplicate
+- test/ffi/test_foreign_operators.pairs.warp: `'use python "collections"; d = collections.deque([1, 2, 3]); d#2'	2` — operators on foreign values, esoteric duplicate
+- test/ffi/test_foreign_operators.warp: `is! 'use python "collections"; d = collections.deque([1, 2, 3]); s = 0; for x in d { s += x }; s' 6` — operators on foreign python values, esoteric
+- test/ffi/test_foreign_operators.warp: `is! 'use python "datetime"; d = datetime.date(2020, 1, 2); e = datetime.date(2020, 1, 5); (e - d).days' 3` — operators on foreign python values, esoteric
+- test/ffi/test_foreign_operators.warp: `is! 'use python "fractions"; f = fractions.Fraction(1, 2); (f * 2).numerator' 1` — operators on foreign python values, esoteric
+- test/ffi/test_foreign_python.pairs.warp: `'use python "sys"; count sys.version_info'	5` — sys.version_info count, platform quirk
+- test/ffi/test_python_roundtrip.pairs.warp: `'use python math; try { math.sqrt(-1) } catch e { e.message }'	"python ValueError: expected a nonnegative input, got -1.0"` — python error message wording
+- test/ffi/test_python_roundtrip.pairs.warp: `'use python builtins; type(builtins.chr(97)).name'	"text"` — python internal type name
+- test/ffi/test_wasi.pairs.warp: `'puti 56'	56` — Rust-era puti word
+- test/ffi/test_wasi.pairs.warp: `'putl 56'	56` — Rust-era putl word
+- test/ffi/test_web_idl.warp: `is! 'use js OffscreenCanvas; c = OffscreenCanvas(4, 4); ctx = c.getContext("2d"); ctx.fillRect(0, 0, 2, 2); c.width' 4` — browser canvas API, needs browser
+- test/gpu/test_gpu.pairs.warp: `'use image; s = shader { @compute @workgroup_size(16, 16) fn main_image(@builtin(global_invocation_id) id: vec3u) { textureStore(screen, id.xy, textureSampleLev` — duplicates paint_pictures image sampling
+- test/gpu/test_gpu.pairs.warp: `'#gpu_render("@fragment fn main() -> @location(0) vec4f { return vec4f(0.0, 0.0, 1.0, 1.0); }", 3, 2, {})'	6	needs: gpu` — odd count-of-render phrasing
+- test/gpu/test_paint_gpu_f32.pairs.warp: `'c = [1.0, 0.0, 0.0, 1.0]; gpu_render("@fragment fn main() -> @location(0) vec4f { return values.c; }", 2, 1, {c: c})'	[4294901760, 4294901760]` — duplicate gpu value upload case or error test
+- test/gpu/test_paint_gpu_f32.pairs.warp: `'c: [f32] = [0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0]; gpu_render("@fragment fn main() -> @location(0) vec4f { return values.c[1]; }", 2, 1, {c: c})'	[4294901760` — duplicate gpu value upload case or error test
+- test/gpu/test_paint_gpu_f32.pairs.warp: `'c: [f32] = [0.0, 1.0, 0.0, 1.0, 0.0]; gpu_render("@fragment fn main() -> @location(0) vec4f { return values.c[0]; }", 1, 1, {c: c})'	[4278255360]` — duplicate gpu value upload case or error test
+- test/gpu/test_paint_gpu_f32.pairs.warp: `'c: [i32] = [1, 2, 3, 4, 5, 6, 7, 8]; gpu_render("@fragment fn main() -> @location(0) vec4f { return values.c[0]; }", 1, 1, {c: c})'	error	copy it to a list` — duplicate gpu value upload case or error test
+- test/gpu/test_paint_pictures.pairs.warp: `'use image; p = image(1, 1, (x, y) => red); s = "// four bilinear taps, values.q too\n@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { re` — duplicate picture sampling case
+- test/gpu/test_paint_pictures.pairs.warp: `'use image; p = image(1, 1, (x, y) => rgb(0, 0, 255)); s = shader { @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(texture` — duplicate picture sampling case
+- test/gpu/test_paint_pictures.pairs.warp: `'use image; p = image(1, 1, red); s = shader { @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return textureSampleLevel(values.p, trili` — duplicate picture sampling case
+- test/gpu/test_paint_pictures.pairs.warp: `'use image; p = image(2, 1, (x, y) => if x == 0 then red else blue); s = shader { @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return` — duplicate picture sampling case
+- test/gpu/test_paint_pictures.pairs.warp: `'use image; p = image(2, 1, (x, y) => if x == 0 then red else blue); s = shader { @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return` — duplicate picture sampling case
+- test/gpu/test_paint_pictures.pairs.warp: `'use image; p = image(3, 2, black); s = shader { @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { let size = textureDimensions(values.p);` — duplicate picture sampling case
+- test/graphics/test_atlas.pairs.warp: `'use forest; n = baked_atlas("../../samples/graphics/ez_trees", NEAR_ATLAS); [n[1], n[2], n[0].contains("atlas.bin#3#")]'	[4096, 1536, yes]` — atlas internals duplicate
+- test/graphics/test_forest_impostor.pairs.warp: `'use forest; [atlas_has("../../samples/graphics/ez_trees", 1), atlas_has("../../samples/graphics/ez_trees", 9), atlas_has("../../samples/graphics/no-such-atlas"` — internal atlas_has API
+- test/modules/test_coverage_prelude.pairs.warp: `«[consists_of("123", is_digit), consists_of("", is_digit), consists_of("12a", is_digit), is_integer("42"), is_integer("-42"), is_integer("4.2"), is_integer(""),` — undocumented helper coverage
+- test/modules/test_coverage_prelude.pairs.warp: `«[sorted_by_key(["ccc", "a", "bb"], w => count(w)), sorted_by_key(["b1", "a2", "b0", "a1"], w => w[0]), sorted_by_key([], w => w), as_list("ab😀"), count_item([1` — undocumented helper coverage
+- test/modules/test_dir_builtin_members.pairs.warp: `'count([function upper, function min])'	2` — function value of builtin, odd
+- test/modules/test_dir_builtin_members.pairs.warp: `'f = function insert; f([1 2], 5, 1)'	[1, 5, 2]` — function value of builtin, odd
+- test/modules/test_dir_builtin_members.warp: `# methods_list_what_dir_lists ⏎ is! 'xs = [1] ⏎ count(xs.methods) == count(dir(xs))' true` — methods field, undocumented
+- test/modules/test_implicit_uses.pairs.warp: `'transpose([[1, 2]])'	error	a word of two modules needs its `use`` — expects an error
+- test/modules/test_js_globals.pairs.warp: `'use js URL; URL("https://wasp.pannous.com/docs?lang=en").hostname'	'wasp.pannous.com'	needs: js` — URL hostname, duplicate js global case
+- test/modules/test_module.pairs.warp: `'b = (no ? 1 : pi) + 1; b'	4.141592653589793` — odd ternary with symbolic pi
+- test/modules/test_module_function_dir.warp: `is! 'use math ⏎ count(dir(is_square))' 4` — dir of a function, internal
+- test/modules/test_module_function_dir.warp: `is! 'use math ⏎ text(type(is_square))' 'function: (n: int) -> bool'` — exact function type text, internal
+- test/modules/test_module_signals.pairs.warp: `'use •/test/fixtures/stored_settings; module_theme'	'light'` — stored settings fixture, odd
+- test/modules/test_runtime_word_lines.pairs.warp: `'split.signature'	'(t:text, separator:text = " ") -> list of text'` — exact signature text, internal
+- test/modules/test_runtime_word_lines.pairs.warp: `'class P { x: int }; p = P(1); q = instance_copy(p, false); q.x'	1` — internal runtime word instance_copy
+- test/modules/test_std_regex.pairs.warp: `'use regex; "a/b" matches /a\\/b/'	true` — escaped slash regex edge
+- test/modules/test_template_comments.pairs.warp: `'use template; mustache("|\r\n{{! Standalone Comment }}\r\n|", {})'	"|\r\n|"` — mustache spec CRLF standalone-line edge
+- test/modules/test_template_delimiters.pairs.warp: `'use template; mustache("|\r\n{{= @ @ =}}\r\n|", {})'	"|\r\n|"` — mustache spec CRLF standalone-line edge
+- test/modules/test_template_inverted.pairs.warp: `'use template; mustache("|\r\n{{^boolean}}\r\n{{/boolean}}\r\n|", {"boolean": no})'	"|\r\n|"` — mustache spec CRLF standalone-line edge
+- test/modules/test_template_partials.pairs.warp: `'use template; mustache("|\r\n{{>partial}}\r\n|", {}, {"partial": ">"})'	"|\r\n>|"` — mustache spec CRLF standalone-line edge
+- test/modules/test_template_sections.pairs.warp: `'use template; mustache("|\r\n{{#boolean}}\r\n{{/boolean}}\r\n|", {"boolean": yes})'	"|\r\n|"` — mustache spec CRLF standalone-line edge
+- test/modules/test_versions.pairs.warp: `'use uniscript >= v1.0.0; uniscript("<:alpha>")'	'α'	needs: packages` — duplicate version-constraint use case
+- test/modules/test_versions.pairs.warp: `'use uniscript version 1.0.10; uniscript("<:alpha>")'	'α'	needs: packages` — duplicate version-constraint use case
+- test/modules/test_versions.pairs.warp: `'use uniscript; use uniscript >= 1.0; uniscript("<:alpha>")'	'α'	needs: packages` — duplicate version-constraint use case
+- test/modules/test_wasm_modules.pairs.warp: `'import •/test/fixtures/wasm/xxhash; XXH32("wasp", 4, 42)'	4089166900` — duplicate fixture library case
+- test/modules/test_wasm_modules.warp: `is! 'import •/test/fixtures/wasm/zlib; crc32(0, compress(64, "hello hello hello"))' 3327255652` — duplicate zlib crc32 case
+- test/node/test_comment_meta.warp: `is! 'use comments ⏎ use strict ⏎ // doc ⏎ x = 1 ⏎ x.@comment' 'doc'` — comment under use strict, odd
+- test/node/test_eval_written_atoms.pairs.warp: `'f(c: text) := eval(c); 6.28 < f("2*π") < 6.29'	true` — duplicate of kept eval atom case
+- test/node/test_parse_positions.warp: `is! 'use comments ⏎ t = "x = 1\\n// note\\n  n * " + "2" ⏎ r = parse(t) ⏎ r#2.comment' 'note' ⏎ is! 'use comments` — duplicate comment-meta case
+- test/node/test_parsed_code_text.warp: `is! 'area(width: int, height: int) := width * height ⏎ t = area.dump + "" ⏎ "\\(parse(t))"' '(area width:int height:int):=width*height' ⏎ is! 't = "a" + "*b"` — area.dump internal
+- test/node/test_parsed_code_text.warp: `is! 'area(width: int, height: int) := width * height ⏎ t = area.dump + "" ⏎ "area: " + parse(t)' 'area: (area width:int height:int):=width*height'` — area.dump internal
+- test/node/test_parsed_node_walks.pairs.warp: `'n = parse("class P { x: int }"); "\\(n)"'	'type P {x:type int ø}'` — printing internal node view
+- test/node/test_parsed_node_walks.pairs.warp: `'n = parse(read("core/parsing/parser.warp")); #n > 50'	true` — printing internal node view
+- test/node/test_parsed_node_walks.pairs.warp: `'t = "class P { x: int }"; n = parse(t); "\\(n)"'	'type P {x:type int ø}'` — printing internal node view
+- test/node/test_trailing_comment.warp: `is! 'x = data [a // first ⏎ b]; (x#1).comment' 'first'` — duplicate trailing comment case
+- test/slow/modules/test_markdown.pairs.warp: `«use markdown; [markdown_html("[foo][ref[bar]]\\n\\n[ref[bar]]: /uri\\n"), markdown_html("[[[foo]]]\\n\\n[[[foo]]]: /url\\n"), markdown_html("[foo][ref\\\\[]\\n` — CommonMark spec reference-link edge cases
+- test/slow/modules/test_markdown.pairs.warp: `«use markdown; [markdown_html("[link *foo **bar** `#`*][ref]\\n\\n[ref]: /uri\\n"), markdown_html("[![moon](moon.jpg)][ref]\\n\\n[ref]: /uri\\n"), markdown_html` — CommonMark spec reference-link edge cases
