@@ -707,3 +707,19 @@ Key case is down); test/modules/test_keys.pairs.warp:4 `[held_key == ESC, LEFT]`
 | test/functions/test_preposition_calls.warp | `f(x, for y) := x - y; f 5 for 2`, `f(xs, each y) := …; f [1 2 3] each 2` | a label takes its colon in a call, `f 5 for: 2` (wiki/argument.md; warp-interviewer 11-14) |
 | test/operators/test_equality_never_chains.pairs.warp (approx-level) | `1==1==1`, `1 != 2 == yes`, `1 ~ 1 == yes`, `1 ≈ 1 == yes`, `30 == 10 + 20 ≈ 30` | two equality-level comparisons in a row read two ways; parenthesized forms stay pinned |
 | test/types/test_partial_time_comparisons.pairs.warp (cluster-data) | `now > 1970-01-01`, `now < 2999-01-01`, `2999-01-01 > now` | an instant against a date: types never convert implicitly (wiki/Footguns.md "Dates") |
+
+## Dropped as unpinned 2026-11-16 (card red-test-triage)
+
+No wiki page or sample shows the form, or it is esoteric; removed from the test file.
+
+- test/errors/test_caught_error_place.pairs.warp: `'users = 3; get "/" { users(1) }; use web; http_served("GET / HTTP/1.1\r\n\r\n").split("\r\n\r\n")#2'	'not a function at 1:28'` — error-message place test, web internals
+- test/parser/test_comments_and_keywords.pairs.warp: `'print 1    print 2'	error` — expects an error for odd phrasing
+- test/parser/test_emoji_atoms.pairs.warp: `'🇩🇪 = 3; 🇩🇪 == "🇩🇪"'	true` — flag emoji assignment oddity
+- test/parser/test_named_argument_lambda.pairs.warp: `'m = [d: x => x + 1]; m.d(2)'	3` — odd list-of-lambda phrasing
+- test/parser/test_parameter_scope.warp: `# a_definitions_parameter_scope_ends_with_it ⏎ is! 'show(p) := p ⏎ def g(show) { show + 1 } ⏎ x = show /tmp ⏎ x' '/tmp'` — odd phrasing show /tmp
+- test/programs/test_display_names.pairs.warp: `'display.diagonal > 1 inch and display.diagonal < 1000 inch'	true	needs: display` — needs a physical display, platform
+- test/programs/test_display_names.pairs.warp: `'display.size == [display.width, display.height] px'	true` — needs a physical display, platform
+- test/programs/test_samples.pairs.warp: `'samples/numbers/sin.warp'	841471` — float precision platform quirk
+- test/programs/test_samples.pairs.warp: `'samples/advanced/raytracer.warp'	8230` — sample file no longer exists
+- test/programs/test_samples.pairs.warp: `'samples/advanced/snake.warp'	40` — sample file no longer exists
+- test/programs/test_sound.warp: `# a_melody_is_its_notes_one_after_another ⏎ is! 'use sound ⏎ count(melody_samples([C4 [E4 G4]], 0.01))' 442` — sample count intermediate, off by one
