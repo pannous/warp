@@ -7,3 +7,5 @@
 'use uncertain; (3 ± 0.5).low'	2.5
 # `a < b` and `a > b` of ± values: certainly, the whole interval beyond the other (P224b)
 'use uncertain; a = 5 ± 1; b = 1 ± 1; [a > b, a < b, b < a, (2 ± 1) > (1 ± 1)]'	[yes, no, yes, no]
+# a number on the left of a ± value (card class-operator-recursion)
+'use uncertain; text(3 - (1 ± 0.1))'	'2.00 ± 0.10'
