@@ -19,8 +19,8 @@ folded_operators(n: Node) as Node := {
 # (the arithmetic ones are already values a fold reads, `fold(xs, 0, +)`)
 ORDERING_OPERATORS = [Op.Lt, Op.Gt, Op.Le, Op.Ge]
 ordering_arguments(n: Node) as Node := {
-	if not is_called_name(n) { return n }
-	call_of([n#1] + items_of(n)[1 ..].map(argument => if op_alone(argument, ORDERING_OPERATORS) != ø then fold_combining(op_alone(argument, ORDERING_OPERATORS)) else argument))
+	if not is_called_name(n) or not items_of(n)[1 ..].any(argument => op_alone(argument, ORDERING_OPERATORS) != ø) { return n }
+	group_like(n, [n#1] + items_of(n)[1 ..].map(argument => if op_alone(argument, ORDERING_OPERATORS) != ø then fold_combining(op_alone(argument, ORDERING_OPERATORS)) else argument))
 }
 
 # the fold the node writes with its operator alone, else ø
