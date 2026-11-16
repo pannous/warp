@@ -45,13 +45,16 @@ function wholePainting(painting) {
 // a canvas of the painting's size, shown scaled up by a whole factor; the GPU's own canvas of a painted shader as it is
 const paintingCanvas = painting => painting.canvas ?? drawnWhole(paintingElement(painting), painting);
 
+// A painting drawn at the display's pixels (paint_scale, lib/draw.warp) shows at its size in CSS pixels and is pointed
+// at in them: `scale` pixels to one across
 function paintingElement(painting) {
 	const canvas = document.createElement("canvas");
-	Object.assign(canvas, { width: painting.width, height: painting.height, className: "painting" });
-	canvas.style.width = `${painting.width * Math.max(1, Math.floor(PAINT_SHOWN_SIDE / Math.max(painting.width, painting.height, 1)))}px`;
+	const scale = painting.scale ?? 1, [width, height] = [painting.width / scale, painting.height / scale];
+	Object.assign(canvas, { width: painting.width, height: painting.height, className: "painting", scale });
+	canvas.style.width = `${width * Math.max(1, Math.floor(PAINT_SHOWN_SIDE / Math.max(width, height, 1)))}px`;
 	// every painting scales smoothly, a shader's render (card make-shader) as pixels painted one by one: no blocks
 	canvas.style.imageRendering = "auto";
-	canvas.style.setProperty("--aspect", painting.width / Math.max(painting.height, 1));
+	canvas.style.setProperty("--aspect", width / Math.max(height, 1));
 	// a finger on it paints instead of scrolling, zooming or selecting the page: else Safari takes the touch over and
 	// cancels its pointer events after the first (card register-fingers)
 	Object.assign(canvas.style, { touchAction: "none", webkitUserSelect: "none", userSelect: "none" });
@@ -171,10 +174,10 @@ function tellKeysHeld() {
 // a key let go outside the page never tells its release here
 const releaseKeys = () => pointer && keysHeld.length && (keysHeld.length = 0, tellKeysHeld());
 
-// where the event is on the element, in a canvas's own pixels
+// where the event is on the element, in a canvas's own pixels, those of a painting at the display's pixels in points
 function pointOn(target, event) {
 	const bounds = target.getBoundingClientRect();
-	const scale = target.width ? target.width / bounds.width : 1;
+	const scale = target.width ? target.width / (target.scale ?? 1) / bounds.width : 1;
 	return { x: Math.floor((event.clientX - bounds.left) * scale), y: Math.floor((event.clientY - bounds.top) * scale) };
 }
 

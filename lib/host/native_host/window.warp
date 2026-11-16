@@ -35,9 +35,12 @@ global sized_by_program = no
 global closed_by_user = no
 global width = DEFAULT_WIDTH
 global height = DEFAULT_HEIGHT
-// the last painting's size: the pointer is told in its pixels
+// the last painting's size in points: the pointer is told in them
 global painted_width = 0
 global painted_height = 0
+// the pixels the next painting has to a point across (system value paint_scale): lib/draw.warp paints at the
+// display's own pixels, a Retina display's two to a point, and is shown and pointed at in points
+global paint_scale = 1
 // the keys held, the last pressed last; the keys that went down so far and the last of them: `on key {…}` runs for a
 // press even when the key is up again before the frame looks (lib/keys.warp)
 global held = []
@@ -236,6 +239,11 @@ value_set(name: text, value: int) as bool := {
 		sized_by_program = yes
 		if open_now { SDL_SetWindowSize(sdl_window, width, height) }
 	}
+	if name == "paint_scale" {
+		if value < 1 { raise "paint_scale: a painting has at least one pixel to a point, not ${value}" }
+		paint_scale = value
+		return yes
+	}
 	if name == "paint timing" {
 		paint_timing = value != 0
 		return yes
@@ -244,7 +252,10 @@ value_set(name: text, value: int) as bool := {
 }
 // the window's Metal layer (Windows: its HWND) for a painting of width × height, the window opened by the first; 0 where none opens. A
 // window the program gave no size takes its first painting's. Closed by its user, the run ends
-host_window_layer(painting_width: int, painting_height: int) as int := {
+host_window_layer(pixels_wide: int, pixels_high: int) as int := {
+	painting_width = pixels_wide /! paint_scale
+	painting_height = pixels_high /! paint_scale
+	paint_scale = 1
 	if closed_by_user { exit(0) }
 	if not open_now {
 		if not sized_by_program {

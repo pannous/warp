@@ -187,6 +187,12 @@ function programImports(holder, hooks) {
 					(self.pageSystemValues ??= {}).window_fullscreen = Number(value !== 0n);
 					return hooks.fullScreen?.(value !== 0n);
 				}
+				// paint_scale = 2: the next painting has two pixels to a CSS pixel across (lib/draw.warp at a Retina display's)
+				if (side === "paint_scale") {
+					if (value < 1n) throw new Error(`paint_scale = ${value}: a painting has at least one pixel to a point`);
+					holder.paintScale = Number(value);
+					return;
+				}
 				if (side === "display_dpi") {
 					if (value <= 0n) throw new Error(`display.dpi = ${value} dpi: a display has a positive number of dots per inch`);
 					holder.displayDpi = Number(value);
