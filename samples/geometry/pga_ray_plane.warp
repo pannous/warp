@@ -1,0 +1,24 @@
+#!/usr/bin/env warp
+# Where does this ray hit the plane? A ray from start through a second point, joined into a line (⋎), meets the
+# ground (⋏) in a point; the ray reaches it when it lies ahead of the start (card pga-visualization, lib/pga_draw.warp)
+use pga_draw
+canvas.resize(480, 360)
+zoom(40)
+
+ground = plane(0, 0, 1, 0) # z = 0
+start = point(-2, -1, 3)
+through = point(0, 0, 1.5)
+hit = (start ⋎ through) ⋏ ground
+ahead = dot(coordinates(hit) .- coordinates(start), coordinates(through) .- coordinates(start)) > 0
+print("the ray hits the ground at " + text(place(hit)) + (if ahead then ", ahead of its start" else ", behind its start: it misses"))
+
+clear(paper)
+sketch(ground, gray)
+sketch(start ⋎ through, with_alpha(ink, 0.3))
+sketch(start, hit, ink)
+sketch(start, blue)
+sketch(hit, red)
+caption(start, "start", blue)
+caption(hit, "hit " + text(place(hit)), red)
+caption(0, "where does the ray hit the plane?", ink)
+show()
