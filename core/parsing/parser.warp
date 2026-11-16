@@ -1769,8 +1769,9 @@ def spelled_operator_at(p: Parser) as list {
 		return aliased_operator_at(p)
 	}
 	if at_text(p, "//") { return [] }
-	// `x = 1  # one` is a comment, `xs #1` the index operator (card parser-parses)
-	if c == '#' and skipped_end(p.code, p.at, p.n) > p.at { return [] }
+	// `x = 1  # one` is a comment; a blank before `#` and none after starts the count, `test #letters == 3`, never
+	// the index, which is glued, `xs#1` (decision spaced-hash-count)
+	if c == '#' and (skipped_end(p.code, p.at, p.n) > p.at or (p.at > 0 and is_blank(p.code[p.at - 1]))) { return [] }
 	spelled_symbol = symbol_operator_at(p, c)
 	if spelled_symbol.length > 0 then spelled_symbol else aliased_operator_at(p)
 }
