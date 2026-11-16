@@ -1490,6 +1490,9 @@ iterated_object(object: Node, program: Node) as any := {
 	if is_group(object) and is_called_name(object) and instance_makers.has(name_of(object#1)) then object else ø
 }
 
+# the name when the program or the library declares a class of that name (`Circle{r}` as a pattern), else ø
+class_named(name: Node, program: Node) as any := if class_names_of(program).has(name_of(name)) or declared_classes_modules().has(name_of(name)) then name else ø
+
 rule_words = {
 	are_arms: are_arms,
 	as_code: as_code,
@@ -1528,6 +1531,7 @@ rule_words = {
 	class_fields_listed: class_fields_listed,
 	class_methods_listed: class_methods_listed,
 	class_setter: class_setter,
+	class_named: class_named,
 	is_declared_word: is_declared_word,
 	iterated_object: iterated_object,
 	level_statements: level_statements,
