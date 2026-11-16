@@ -68,6 +68,9 @@ VALUE_ALIGNMENTS = [1, 2, 4, 4]
 GPU_CELLS = ["f32", "i32", "u32", "f16", "bf16", "vec2", "vec3", "vec4"]
 // the GPU lists whose cells are already a values array<vec4f>'s bytes: f32 ones, vec3 (padded to four) and vec4
 VEC4F_CELLS = ["f32", "vec3", "vec4"]
+// gpu_list_place of a value that is no GPU list: any other place is one, a negative one too, its address past 2 GiB
+// of the program's memory ((address << 32) + count, extensions/gpu_lists/runtime.warp)
+NO_PLACE = -1
 VEC4F_BYTES = 16
 // WGSL's 16-bit float, a device feature (webgpu.h WGPUFeatureName_ShaderF16): an array<f16> holds two to a word
 HALF = "f16"
@@ -440,7 +443,7 @@ picture_texture(name: text, picture: any) as int := {
 		kept_pictures[name] = kept
 	}
 	place = gpu_list_place(pixels)
-	listed = place >= 0 and GPU_CELLS[gpu_list_cell(pixels)] == "u32"
+	listed = place != NO_PLACE and GPU_CELLS[gpu_list_cell(pixels)] == "u32"
 	staged = if listed then program_cells(place) else picture_staged(name, pixels)
 	into = struct_of(COPY_TEXTURE)
 	set_field_pointer(into, 0, kept.texture)
@@ -532,11 +535,11 @@ member_laid_out(layout: Layout, name: text, value: any) as text := {
 	if value is list {
 		# a GPU list [f32] longer than a vec4f, or one [vec4], is already the storage array's bytes, its tail padded to a
 		# whole vec4f (storage_bytes); a shorter one is a uniform, as a list of as many numbers is
-		if gpu_list_place(value) >= 0 and GPU_CELLS[gpu_list_cell(value)] in VEC4F_CELLS and (#value > VECTOR_FLOATS or gpu_list_cell(value) > 0) {
+		if is_gpu_cells(value) and GPU_CELLS[gpu_list_cell(value)] in VEC4F_CELLS and (#value > VECTOR_FLOATS or gpu_list_cell(value) > 0) {
 			return array_laid(layout, name, value)
 		}
 		# (any other GPU list read once as a for reads it: it takes no list word)
-		items = if gpu_list_place(value) >= 0 then [item for item in value] else value
+		items = if is_gpu_cells(value) then [item for item in value] else value
 		vectors = items.any(item => item is list)
 		if vectors or #items > VECTOR_FLOATS {
 			array_walked(name, value, vectors)
@@ -561,11 +564,12 @@ member_laid_out(layout: Layout, name: text, value: any) as text := {
 	}
 	uniform_member(layout, name, [float(value)])
 }
+is_gpu_cells(value: any) as bool := gpu_list_place(value) != NO_PLACE
 // a storage array whose numbers are walked to f32 bits on every upload, said with the fix its shape takes: a list of
 // numbers becomes a GPU list [f32], a list of vectors one [vec4]
 array_walked(name: text, value: list, vectors: bool) := {
 	walked = "its numbers are walked to f32 bits on every upload"
-	if gpu_list_place(value) >= 0 { slow("the GPU list " + name + " [" + GPU_CELLS[gpu_list_cell(value)] + "] is no array<vec4f>: " + walked, "make it as " + name + ": [f32] = … or [vec4] = …") }
+	if is_gpu_cells(value) { slow("the GPU list " + name + " [" + GPU_CELLS[gpu_list_cell(value)] + "] is no array<vec4f>: " + walked, "make it as " + name + ": [f32] = … or [vec4] = …") }
 	else if vectors { slow("the storage array " + name + " is a list of vectors: " + walked, "make it as " + name + ": [vec4] = …") }
 	else { slow("the storage array " + name + " is not a GPU list: " + walked, "make it as " + name + ": [f32] = …") }
 }
@@ -751,7 +755,7 @@ kept_buffer(name: text, bytes: int, usage: int) as int := {
 // its numbers)
 gpu_storage(name: text, cells: any) as int := {
 	place = gpu_list_place(cells)
-	if place < 0 { return 0 }
+	if place == NO_PLACE { return 0 }
 	buffer = kept_buffer(name, storage_bytes(cells), BUFFER_STORAGE)
 	wgpuQueueWriteBuffer(queue, buffer, 0, program_cells(place), gpu_list_bytes(cells))
 	buffer
@@ -1654,7 +1658,7 @@ arrays_given(given: any, declared: list) as any := {
 array_given(array: StorageArray, numbers: any) := {
 	array.given = numbers
 	array.place = gpu_list_place(numbers)
-	array.cell = if array.place < 0 then "" else GPU_CELLS[gpu_list_cell(numbers)]
+	array.cell = if array.place == NO_PLACE then "" else GPU_CELLS[gpu_list_cell(numbers)]
 }
 // a C pointer `by` bytes on
 pointer_moved(pointer: int, by: int) as int := pointer_handle(handle_pointer(pointer) + by)
@@ -1725,7 +1729,7 @@ array_left(array: StorageArray, mapped: int) as any := {
 		return array.given
 	}
 	numbers = [cell_number(array.element, field_u32(mapped, WORD_BYTES * i)) for i in 0 ..< #array.given]
-	if array.place < 0 { return numbers }
+	if array.place == NO_PLACE { return numbers }
 	// (a GPU list of another cell type takes the numbers into its own cells)
 	memcpy(program_cells(array.place), [cell_bits(array.cell, x) for x in numbers])
 	array.given
