@@ -1,6 +1,7 @@
 #!/usr/bin/env warp
 # The world's odds: Polymarket's busiest prediction markets, the price of yes being the crowd's probability, from its
 # public Gamma API (no key). prices(slug) watches a market: its price now, then each change
+# output: live: the markets and their odds change by the minute
 use polymarket
 
 for market in markets(5) {

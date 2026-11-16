@@ -778,9 +778,10 @@ distort(signal, drive = 0.5) := effected(signal, ["distort", drive])
 gain(signal, share) := [share * x for x in signal]
 // two to four signals summed sample by sample, to the longest (a list of signals walked in a loop was quadratic: card
 // list-call-copy)
-mix(a, b) := added(a, b)
-mix(a, b, c) := added(added(a, b), c)
-mix(a, b, c, d) := added(added(a, b), added(c, d))
+// (typed: math's mix(a, b, t) blends two values, and a program may load both)
+mix(a: [float], b: [float]) := added(a, b)
+mix(a: [float], b: [float], c: [float]) := added(added(a, b), c)
+mix(a: [float], b: [float], c: [float], d: [float]) := added(added(a, b), added(c, d))
 // a bus (card shared-buses): one effect chain that every sound sent to it goes through together, from the program and
 // its tasks, processed once on their mix as they play (rust-harness:src/sound/effects.rs), so a reverb rings on after the last:
 // room = bus() |> reverb(0.4) |> delay(0.25), then osc(C4, 1s) |> room (call(b: Bus, signal): out(osc(C4, 1s), room)) or
