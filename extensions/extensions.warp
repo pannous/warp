@@ -120,6 +120,7 @@ EXTENSIONS = [
 	protocols_extension
 	# right after definition_heads, in this order: a class's conversions become the program's before conversions runs
 	Extension{name: "class_methods", passes: {"definition_heads": classes_rewritten}, library_words: foreign_instance_words}
+	iterators_extension
 	Extension{name: "int_types", passes_before: {"rules_rewritten": subtype_tests, "definition_heads": classed_definitions}, passes: {"definition_heads": int_types}}
 	called_blocks_extension
 	default_overloads_extension

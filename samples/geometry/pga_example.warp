@@ -1,7 +1,8 @@
 #!/usr/bin/env warp
 # Projective geometric algebra of space: the meet of two planes, a double reflection and a quarter turn (cards geometric-algebra, pga-glyphs)
 # Todo get rid of the cards once they're implemented 
-# Todo Give more illustrative examples in here. Can we create a little visualizer here somehow? 
+# Todo Give more illustrative examples in here.
+# DONE Can we create a little visualizer here somehow? (samples/geometry/pga_visual.warp, f8ada74f5b) 
 use pga
 p = point(1, 2, 3)
 m = plane(1, 0, 0, 0)

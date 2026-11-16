@@ -1,0 +1,21 @@
+#!/usr/bin/env warp
+# Where is a point's mirror image in a plane? The plane's sandwich m·p·m̃, m.reflect(p), reflects it; the segment
+# between the two is square to the mirror and halved by it (card pga-visualization, lib/pga_draw.warp)
+use pga_draw
+canvas.resize(480, 360)
+orbit(2.1, 0.45) # looking along the mirror, so the two lie either side of it
+
+mirror = plane(1, 1, 0, -2) # x + y = 2
+p = point(3, 2, 1)
+image = mirror.reflect(p)
+print("the reflection of " + text(place(p)) + " is " + text(place(image)))
+
+clear(paper)
+sketch(mirror, blue)
+sketch(p, image, with_alpha(ink, 0.5))
+sketch(p, ink)
+sketch(image, red)
+caption(p, "p " + text(place(p)), ink)
+caption(image, "image " + text(place(image)), red)
+caption(0, "the reflection of a point in a plane", ink)
+show()
