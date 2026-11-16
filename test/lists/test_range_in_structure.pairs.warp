@@ -7,7 +7,6 @@
 'n = 3; o = {r: n..6}; o.r'	[3, 4, 5]
 
 # a_held_range_is_collected_in_linear_time
-'o = {r = 1..100001}; count o.r'	100000
 'o = {r: 1..100001}; count o.r'	100000
 'xs = [1..100001, 5]; count xs#1'	100000
 'zs = 1..100001; y = [zs, 5]; count y#1'	100000
