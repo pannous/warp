@@ -1,7 +1,7 @@
 # An object a class-giving function makes is walked by next() too (decision for-over-iterator, cards
 # for-over-iterator and object-iterator-loop): `for e in changes()` of `changes() as WikiChanges`, or a name assigned
 # such a call. The program's and the linked modules' functions declaring a class result, and the names assigned their
-# calls, are noted once before the for loops lower; extensions/sugar/iteration.warp asks iterated_object of each loop
+# calls, are noted once before the for loops lower; extensions/sugar/iteration.warp asks the rule word iterated_object (extensions/rules/rule_words.warp) of each loop
 
 # the functions declaring they give an instance, `countdown(n) as Counter`, and the names assigned their calls
 global instance_makers = {}
@@ -16,14 +16,6 @@ noted_instance_makers(program: Node) as Node := {
 	made_instances = {}
 	for name in types.keys { if types[name] in classes { made_instances[name] = yes } }
 	program
-}
-
-# the loop's object, when for walks it by next(): an instance the rules know (`Counter(3)`, `c = Counter(3)`), a call of
-# a function giving one, or a name assigned such a call; ø otherwise
-iterated_object(object: Node, program: Node) as any := {
-	if has_property(object, "instance") { return object }
-	if object is symbol { return if made_instances.has(name_of(object)) then object else ø }
-	if is_group(object) and is_called_name(object) and instance_makers.has(name_of(object#1)) then object else ø
 }
 
 linked_makers() as map := {
