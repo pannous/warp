@@ -168,7 +168,7 @@ written_type(n: Node, classes: map, results: map = {}) as text? := {
 }
 # function → the class it declares it gives, `now(): Instant`: its definition, or its head alone (a linked module's
 # signature line)
-result_classes(statements: list, classes: map): map := {
+result_classes(statements: list, classes: map) as map := {
 	found = {}
 	for statement in statements {
 		result = written_result(statement)

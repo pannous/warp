@@ -1070,7 +1070,7 @@ static_type(n: Node, routing: Routing) as text? := {
 	if is_time_view(n) { return time_type }
 	written_type(n, routing.classes, routing.results)
 }
-field_type(classes: map, owning_class: text, field: text): text? := {
+field_type(classes: map, owning_class: text, field: text) as text? := {
 	for ancestor in lineage(classes, owning_class) { if field in classes[ancestor].field_types { return classes[ancestor].field_types[field] } }
 	ø
 }

@@ -1541,7 +1541,7 @@ class_names_of(program: Node) as map := {
 }
 # the linked modules' functions declaring they give an instance of one of the classes, by their signature lines
 # (`changes(wiki: text = "") as WikiChanges` of wikipedia), each line parsed only when it ends in such a class
-linked_results(classes: map): map := {
+linked_results(classes: map) as map := {
 	heads = []
 	for signature in linked_signatures.values {
 		for slice in signature.slices {
@@ -1553,8 +1553,8 @@ linked_results(classes: map): map := {
 }
 # the names the program assigns only instances of its classes, `s = Stack()` (classes.warp written_type), of its
 # nodes as the caller listed them
-instance_names_in(program: Node, nodes: list): map := instances_assigned(nodes, class_names_of(program))
-instances_assigned(nodes: list, classes: map, results: map = {}): map := {
+instance_names_in(program: Node, nodes: list) as map := instances_assigned(nodes, class_names_of(program))
+instances_assigned(nodes: list, classes: map, results: map = {}) as map := {
 	found = {}
 	if #classes == 0 { return found }
 	types = assigned_types_in(nodes, classes, results)
