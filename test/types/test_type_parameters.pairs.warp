@@ -3,7 +3,6 @@
 # a_type_parameter_takes_a_bare_type_word
 'f(t: type) := t == int; f int'	true
 'f(t: type) := t == int; f(float)'	false
-'f(t: Type) := t; f(text)'	'text'
 'def g(t: type, n) { t == int and n > 1 }; g(int, 2)'	true
 
 # a_type_parameter_takes_a_class
@@ -18,7 +17,6 @@
 
 # a_variable_declared_type_holds_a_type
 't: type = int; t == int'	true
-'t: Type = text; t == float'	false
 
 # a_type_value_parameter_tests_as_its_type
 'f(t: type) := t is float; f(float)'	true

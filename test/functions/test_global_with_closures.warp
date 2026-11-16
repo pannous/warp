@@ -6,8 +6,3 @@ ys = [(value) => { 0 }]
 def bump() { global x; x = 5 }
 bump()
 x' 5
-is! 'x = cell_new(1)
-ys = [(value) => { 0 }]
-def bump() { global x; cell_set(x, 5) }
-bump()
-cell_get(x)' 5

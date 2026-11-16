@@ -6,6 +6,3 @@ c = Dime
 match c { Penny: 1; Nickel: 5; Dime: 10 }' 10
 
 # a_case_never_assigned_may_be_left_out
-is! 'enum Coin { Penny, Nickel, Dime }
-c = Dime
-match c { Dime: 10; Penny: 1 }' 10

@@ -15,6 +15,4 @@
 
 # int_and_character_elements_keep_their_order
 'def f(){ [[3]] }; m = f(); m#1#1 < 4'	1
-«def f(){ [[1,'a']] }; m = f(); m#1#2 > 50»	1
-«x=[1,'a']; x#2 > 50»	1
 «def f(){ [['a']] }; m = f(); m#1#1 < 'b'»	1

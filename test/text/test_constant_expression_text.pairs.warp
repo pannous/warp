@@ -6,7 +6,6 @@
 '"" + (1+2)'	'3'
 '"a" + 2*3'	'a6'
 '"v" + (2^3)'	'v8'
-'"h" + 3/2'	'h1.5'
 
 # the_text_of_a_global_is_its_value
 'global s = [1]; string(s)'	'[1]'

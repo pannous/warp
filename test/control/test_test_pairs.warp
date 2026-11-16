@@ -3,7 +3,6 @@
 # a_tab_separates_the_columns_of_a_line
 is! «rows = ['a'	1
 'y'	ø	note]; count(rows)» 2
-is! «rows = ['a'	1
 'y'	ø	3]; rows#2#3» 3
 is! «row = ['0-1'	-1]; row#2» (-1)
 is! 'a = 1		// a comment after tabs

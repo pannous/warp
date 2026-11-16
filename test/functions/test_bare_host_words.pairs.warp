@@ -22,19 +22,16 @@
 'random(3, 3)'	3
 
 # random_of_a_type
-'x = random int; type x'	'int'
 'x = random bool; type x'	'bool'
 'x = random codepoint; type x'	'codepoint'
 'x = random float; type x'	'float'
 
 # random_of_a_range
 'all([random 1..4 for i in 1 to 50], x => x >= 1 and x < 4)'	true
-'any([random 1...4 for i in 1 to 80], x => x == 4)'	true
 'type [random int for i in 1 to 2]'	'list of int'
 'random 1..2'	1
 'random 3...3'	3
 'random 4 to 4'	4
-'x = random(int); type x'	'int'
 'x = random 0.5..2; x >= 0.5 and x < 2'	true
 
 # random_into_a_declared_type

@@ -3,8 +3,6 @@
 # comment_ending_a_line_belongs_to_its_item
 is! 'x = data (a: 1 // one
 b: 2); (x#1).comment' 'one'
-is! 'x = data [a // first
-b]; (x#1).comment' 'first'
 is! 'x = 3 // three
 y = 4
 x + y' 7

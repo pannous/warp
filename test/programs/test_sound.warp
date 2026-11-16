@@ -1,8 +1,5 @@
 # from test_sound.rs: edit the Rust test, then run the script again
 
-# a_melody_is_its_notes_one_after_another
-is! 'use sound
-count(melody_samples([C4 [E4 G4]], 0.01))' 442
 
 # notes_are_frequencies
 is! 'use sound

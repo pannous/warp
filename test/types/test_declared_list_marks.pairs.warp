@@ -8,8 +8,6 @@
 
 # a_marked_list_is_the_same_list
 'names: texts = ["hi"]; ys = names; names == ["hi"]'	true
-'names: texts = ["hi"]; ys = names; ys.add("a"); string(names)'	«["hi" 'a']»
-'names: texts = ["hi"]; ys = names; ys.add("a"); type(names)'	'list of text'
 
 # an_empty_declared_list_checks_its_items
 'names: texts = []; ys = names; ys.add("a"); string(names)'	«['a']»

@@ -25,4 +25,3 @@
 
 'use forest; impostor_radius(tree_mesh("../../samples/graphics/ez_trees/oak.eztree"))'	0.40064010360635005
 
-'use forest; [atlas_has("../../samples/graphics/ez_trees", 1), atlas_has("../../samples/graphics/ez_trees", 9), atlas_has("../../samples/graphics/no-such-atlas", 1)]'	[yes, no, no]

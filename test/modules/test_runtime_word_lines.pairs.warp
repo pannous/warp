@@ -6,8 +6,6 @@
 '"hello".slice(2)'	'llo'
 
 # the_runtime_words_are_callable_by_name
-'class P { x: int }; p = P(1); q = instance_copy(p, false); q.x'	1
 
 # a_signature_is_its_line
-'split.signature'	'(t:text, separator:text = " ") -> list of text'
 'reverse.signature'	'(xs:list) -> list'

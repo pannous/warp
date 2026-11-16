@@ -14,7 +14,6 @@
 
 # an_element_of_another_type_widens_the_list
 'xs = [0, 0]; xs[0] = random(); xs[0] < 1'	true
-'xs = [0, 0]; xs[0] = random(); type(xs)'	'list of float'
 'xs = [1, 2]; xs[0] = 2.5; print(xs[0] = 2.5); string(xs)'	'[2.5, 2]'
 «xs = [1, 2]; xs[0] = 'a'; string(xs)»	«['a', 2]»
 

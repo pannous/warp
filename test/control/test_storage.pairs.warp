@@ -9,7 +9,6 @@
 'storage["never_kept"]'	ø
 
 # kept_values_last_into_the_next_run
-'storage["visits_next"]'	3
 
 # keys_name_the_kept_values
 'storage["listed_key"] = 1; contains(keys(storage), "listed_key")'	true

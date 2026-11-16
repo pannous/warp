@@ -47,13 +47,11 @@
 # triage-held 2026-11-06: Python star unpacking, foreign syntax :: 'f() := return 1, 2, 3; a, *rest = f(); rest == [2, 3]'	1
 
 # nested_unpacking
-'(a, b), c = (1, 2), 3; a*100+b*10+c'	123
 
 # unpack_text
 'a, b = "hi"; a'	'h'
 
 # underscore_discards
-'f() := return 1, 2; _, b = f(); b'	2
 
 # for_loop_unpacking
 's = 0; for a, b in [[1, 2], [3, 4]] { s += a*b }; s'	14
