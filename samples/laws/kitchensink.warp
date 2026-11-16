@@ -451,14 +451,15 @@ test settings.scaled(3) == 30
 total_of := fold +
 test total_of([1 2 3]) == 6
 
+# ---- its and `name of it` in a mapping phrase
+test (map [someone] to its name) == ["Ann"]
+test (map [someone] to name of it) == ["Ann"]
+
 # ---- broken or not yet working (each fails today; kept here so they come back once fixed)
 # a conversion declared with `as text :=` in a program with test lines: text of node
 # class Person { name: text }
 # Person as text := it.name
 # test (Person("Al") as text) == "Al"
-# its and `name of it` in a mapping phrase: outside the core: the call map(…) (no owner)
-# test (map [someone] to its name) == ["Ann"]
-# test (map [someone] to name of it) == ["Ann"]
 # an event raised by its phrase: outside the core: the unknown name emit (no owner)
 # on stop { pings += 1 }
 # send stop the machine
