@@ -1,4 +1,4 @@
-# 5c089b9926 2026-11-16 13:16 295/295 100.0%
+# b03a0c5fe6 2026-11-16 17:43 290/295 98.3%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -95,9 +95,7 @@ ok   samples/golf/rot13.short.warp
 ok   samples/golf/rot13.warp
 ok   samples/golf/sierpiński-triangle.short.warp
 ok   samples/golf/sierpiński-triangle.warp
-ok   samples/gpu/aquarium.warp
 ok   samples/gpu/fish_mesh.warp
-ok   samples/gpu/fish.warp
 ok   samples/gpu/gpu_visualizer.warp
 ok   samples/gpu/julia.warp
 ok   samples/gpu/kaleidoscope.warp
@@ -119,7 +117,6 @@ ok   samples/graphics/finger_paint.warp
 ok   samples/graphics/fluid_25d.warp
 ok   samples/graphics/fluid_flame_mouse.warp
 ok   samples/graphics/function_fields.warp
-ok   samples/graphics/gaussian_splats.warp
 ok   samples/graphics/julia_sliders.warp
 ok   samples/graphics/load_bmp.warp
 ok   samples/graphics/load_jpeg.warp
@@ -176,7 +173,6 @@ ok   samples/modules/rust_crates.warp
 ok   samples/modules/slug_paths.warp
 ok   samples/modules/square.warp
 ok   samples/modules/test_ffi_comprehensive.warp
-ok   samples/modules/test_ffi_extended.warp
 ok   samples/modules/test_ffi.warp
 ok   samples/native/arguments.warp
 ok   samples/native/c_calls.warp
@@ -198,7 +194,6 @@ ok   samples/numbers/measurements.warp
 ok   samples/numbers/power.warp
 ok   samples/numbers/quadratic.warp
 ok   samples/numbers/simple.warp
-ok   samples/numbers/sin.warp
 ok   samples/numbers/sine.warp
 ok   samples/numbers/sum.warp
 ok   samples/numbers/units_dynamic.warp
@@ -294,3 +289,8 @@ SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
+FAIL samples/gpu/aquarium.warp: lib/prelude.warp:364:291 real has no / with a value on its left: declare /(k: number, v: real)
+FAIL samples/gpu/fish.warp: lib/prelude.warp:364:291 real has no / with a value on its left: declare /(k: number, v: real)
+FAIL samples/graphics/gaussian_splats.warp: lib/prelude.warp:364:291 real has no / with a value on its left: declare /(k: number, v: real)
+FAIL samples/modules/test_ffi_extended.warp: test_ffi_extended.warp:20:1 outside the core: the operator else with nothing after it
+FAIL samples/numbers/sin.warp: lib/reals.warp:279:19 real has no - with a value on its left: declare -(k: number, v: real)
