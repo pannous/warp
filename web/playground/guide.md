@@ -844,7 +844,7 @@ Examples: frames; samples: postcard, paint_text, color_swatches, finger_paint, p
 
 ## Shaders
 
-A shader is a small program the graphics card (GPU) runs for every pixel at once. `paint` turns a warp function of the pixel's position into a shader: it returns the pixel's color as red, green and blue between 0 and 1.
+A shader is a small program the graphics card (GPU) runs for every pixel at once. `paint` turns a warp function of the pixel's position into a **shader**: it returns the pixel's color as red, green and blue between 0 and 1.
 
 ```warp
 use math
@@ -852,16 +852,13 @@ stripes(x, y) := [sine(x / 4), sine(y / 4), 1]
 paint(stripes, 64, 32)
 ```
 
-The function may call other functions; `shader_of(stripes)` shows the shader code it becomes. Paint it again in a loop for moving pictures.
-
-You can also write the shader yourself in WGSL, the web's shader language, inside `shader { … }`. In there `$name` reads the warp variable `name`.
-A shader from [compute.toys](https://compute.toys), its kernel `fn main_image`, paints as it is: `paint(toy, width, height)`, its pictures given as `{channel0: picture}`.
+You've write your shaders in the same language that you write your normal programs. It will be compiled to WGSL for the GPU, the web's shader language, inside `shader { … }`. In there `$name` reads the warp variable `name`.
 
 Examples: shader, "shader mouse"; samples: shader, webgpu, paint_text_gpu, shader_brush, shader_trails, warp_compiled_wgsl_shader, julia, voronoi, sdf_scene, ocean, scene_3d, kaleidoscope, lava_lamp, northern_lights, ringed_planet, manual_3d_object_viewer, gpu_visualizer, aquarium, gaussian_splats, fish, fluid_25d
 
 ## GPU
 
-Warp parallelizes bulk operations *automatically*: lists of numbers run as [SIMD](https://en.wikipedia.org/wiki/Single_instruction,_multiple_data) loops, and maps heavy enough to pay for the transfer move to an accelerator such as the graphics card (GPU).
+Warp parallelizes bulk operations *automatically*: lists of numbers run as [SIMD](https://en.wikipedia.org/wiki/Single_instruction,_multiple_data) loops, and big computations may move to an accelerator such as the graphics card (GPU), if it is heavy enough to pay for the transfer.
 
 To tune the performance yourself, ask for the GPU explicitly with `@gpu`:
 
@@ -872,8 +869,9 @@ total = sum(xs.map(x => sin(x) * exp(x) + cos(x * 3)) @gpu)
 
 A heavy `map` over a very long list of floats (sin, exp and the like, from about 300 000 items) runs on the graphics
 card by itself, and says so once. The graphics card computes in single precision, so results are approximate by
-design: a sum of 40 000 cosines may be off by about 40 000 × 2⁻¹¹. Write `@cpu` after the map, before it, or on a
-block or function when every digit counts; `@gpu` asks for the graphics card from about 30 000 items.
+design: a sum of 40 000 cosines may be off by about 40 000 × 2⁻¹¹. Write `@cpu` before or after a map, or on a
+block or function when every digit counts; 
+<!-- `@gpu` asks for the graphics card from about 30 000 items. -->
 
 [[#Shaders]] above shows how to draw directly on the GPU.
 
