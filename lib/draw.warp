@@ -107,7 +107,7 @@ shape(kind: int, a: float, b: float, c: float, d: float, e: float, f: float, col
 }
 // the shapes drawn so far, painted at the canvas's device pixels (the host's own where it fits them to a window)
 shapes_painted(drawn: list, covered: list) := {
-	if pixel_scale != 1 { set_system_value("paint_scale", pixel_scale) }
+	scale_told()
 	paint(shader_words(shape_shader), device_width, device_height, shapes_values(drawn, covered))
 }
 shapes_values(drawn: list, covered: list) := {shapes: drawn, coverage: covered, canvas: [canvas_width, canvas_height], instances: count(drawn) /! 3}
@@ -302,7 +302,7 @@ def show() {
 		shape(PREVIOUS_SHAPE, 0, 0, 0, 0, 0, 0, 0)
 	}
 	else {
-		if pixel_scale != 1 { set_system_value("paint_scale", pixel_scale) }
+		scale_told()
 		paint(canvas_pixels, device_width, device_height)
 		frame_timed()
 	}
@@ -324,6 +324,8 @@ coarsened(took: float) := {
 	canvas_pixels = coarse
 	scaled_to(1)
 }
+// the host told the next painting's pixels to a canvas pixel, where they are more than one
+scale_told() := if pixel_scale != 1 { set_system_value("paint_scale", pixel_scale) }
 // the canvas drawn at `scale` device pixels a canvas pixel across from now on
 scaled_to(scale: int) := {
 	pixel_scale = scale
