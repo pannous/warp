@@ -167,7 +167,7 @@ prebuilt_module_names() as list := {
 	if prebuilt_modules_held == ø {
 		names = []
 		at = 0
-		pending = std_module_names + modules_in(HOST_MODULES).keys + hooks().runtime_modules
+		pending = std_module_names + modules_in("/").keys + modules_in(HOST_MODULES).keys + hooks().runtime_modules
 		while at < #pending {
 			name = pending[at]
 			at += 1
