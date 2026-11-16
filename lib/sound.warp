@@ -381,7 +381,7 @@ class Rest {
 	similar(factor) := Rest(length * factor)
 	format as text := "rest" + length_text(length)
 }
-rest = Rest()
+rest() := Rest()
 // how many times the play's duration a step holds, 1 for a plain pitch
 held_length(pitch) := if pitch is Note or pitch is Chord or pitch is Rest then pitch.length else 1
 // the melody words on lists: euclid(C5, 3, 8) three C5 spread over eight steps as evenly as they go, the rest rests;
@@ -1287,12 +1287,12 @@ public melody_samples(notes, seconds, shape = wave_shape) := {
 	samples
 }
 silent_samples(n) := [sample_offset for i in 0..n]
-// a written melody's steps spread over the seconds, its whole cycle
+// the steps of a written melody spread over the seconds, its whole cycle
 steps_played(steps, seconds, shape) := sound(melody_samples(steps, seconds / sum(steps.map(held_length)), shape))
 global swing = 0.0 as float
 global melody_seed = 0
-// the steps as this play of the melody sounds them: an alternation's option of this turn, a maybe's step or a rest as long
-melody_steps(notes, cycle) := [for k in 0..count(notes): melody_step(notes[k], cycle, k)]
+// the steps as this play of the melody sounds them: the option of an alternation for this turn, the step of a maybe or a rest as long
+melody_steps(notes, cycle) := [melody_step(notes[k], cycle, k) for k in 0..count(notes)]
 melody_step(step, cycle, place) := {
 	if step is Alternate { return melody_step(step.options[cycle % count(step.options)], floor(cycle / count(step.options)) as int, place) }
 	if step is Maybe { return if melody_chance(cycle, place) < step.share then melody_step(step.step, cycle, place) else Rest(held_length(step.step)) }

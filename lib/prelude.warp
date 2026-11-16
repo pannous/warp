@@ -648,8 +648,7 @@ convert!(value, to) := {
 class Error { message: text }
 # a value that lambdas share, the variable they change (core/passes/lambdas.warp shared captures, P124)
 class Cell { value: any }
-// a pattern written as text, which the words given it read: play(Pattern("c4 e4")) its steps (sound), format(t,
-// Pattern("yyyy-MM-dd")) a date's fields (time)
+// a pattern written as text, which the words given it read: format(t, Pattern("yyyy-MM-dd")) a date's fields (time)
 class Pattern { written: text }
 
 // Pattern matching (wiki/pattern-matching.md): the names a pattern binds in a value as a map, ø when it doesn't fit.
