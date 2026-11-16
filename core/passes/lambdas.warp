@@ -576,9 +576,12 @@ captures_assigned_later(statements: list) as list := {
 	shared = []
 	last = last_assignments(statements)
 	for at in 1 to #statements {
+		# the name its own statement assigns counts too: `fact = n => … fact(n - 1)` reads the fact being assigned
+		# (card lambda-self-reference); a name assigned deeper in the statement, a function body's, is that scope's
+		target = if is_key(statements#at, Op.Assign) and key_of(statements#at) is symbol then name_of(key_of(statements#at)) else ""
 		for lambda in nodes_in(statements#at).filter(is_lambda) {
 			own = lambda_parameter_names(lambda_of(lambda))
-			shared += nodes_in(arrow_result(lambda)).filter(part => part is symbol and (last.get(name_of(part)) ?? 0) > at and name_of(part) not in own).map(name_of)
+			shared += nodes_in(arrow_result(lambda)).filter(part => part is symbol and ((last.get(name_of(part)) ?? 0) > at or name_of(part) == target) and name_of(part) not in own).map(name_of)
 		}
 	}
 	shared
