@@ -65,25 +65,21 @@ grade(x: Multivector) as int := {
 	g
 }
 // [x, y, z] scaled and summed: a + k·d
-along(a: list, d: list, k: number) as list := [a#1 + k * d#1, a#2 + k * d#2, a#3 + k * d#3]
-unit(d: list) as list := {
-	n = norm(d)
-	[d#1 / n, d#2 / n, d#3 / n]
-}
+along(a: list, d: list, k: number) as list := a .+ k .* d
 // the way the plane faces, its normal [a, b, c] of a·x + b·y + c·z + d = 0
 facing(p: Multivector) as list := [p.parts#3, p.parts#5, p.parts#9]
 // the direction of a line of space, the ideal point where it meets the plane at infinity
 direction(l: Multivector) as list := {
 	ideal = meet(l, e0)
-	unit([ideal.parts#14, -ideal.parts#12, ideal.parts#8])
+	normalize([ideal.parts#14, -ideal.parts#12, ideal.parts#8])
 }
 // the point of x nearest the point p: the foot of the perpendicular from p (inner(p, x) is the line or plane through
 // p square to x, which meets x there)
 foot(x: Multivector, p: Multivector) as list := coordinates(meet(inner(p, x), x))
 // two directions square to each other and to n
 across(n: list) as list := {
-	u = unit(cross(n, if abs(n#3) < 0.9 then [0, 0, 1] else [1, 0, 0]))
-	[u, unit(cross(n, u))]
+	u = normalize(cross(n, if abs(n#3) < 0.9 then [0, 0, 1] else [1, 0, 0]))
+	[u, normalize(cross(n, u))]
 }
 // the points of a circle around c, square to n
 ring(c: list, n: list, radius: float, steps: int) as list := {
