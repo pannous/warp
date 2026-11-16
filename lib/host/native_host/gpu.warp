@@ -610,7 +610,11 @@ hole_value(hole: text, width: int, height: int) as any := {
 	if hole == "size" { return [width, height] }
 	if hole == "time" { return (wall_clock_ms() - first_painting_ms) / 1000.0 }
 	if hole == "frame" { return paintings }
-	if hole == "mouse" { return [value_of("mouse_x"), value_of("mouse_y")] }
+	// the pointer, told in the painting's points, in the pixels shaded (shade_fitted shades more of them)
+	if hole == "mouse" {
+		shaded_per_point = if painted_width > 0 then width / painted_width else 1
+		return [value_of("mouse_x") * shaded_per_point, value_of("mouse_y") * shaded_per_point]
+	}
 	if hole == "key" { return value_of("key code held") }
 	value_of(hole)
 }
@@ -1570,18 +1574,20 @@ host_shader_shown(given_shader, width: int, height: int, values: any) as int := 
 	shader = text(given_shader)
 	layer = painting_layer(width, height)
 	if layer == 0 { return 0 }
+	// shaded at the window's own pixels, not scaled up from the painting's size: crisp on a Retina display
+	sides = if surface_ready(layer) then shade_fitted(width, height) else [width, height]
 	t0 = wall_clock_ms()
-	drawing = drawing_of(shader, values, width, height)
+	drawing = drawing_of(shader, values, sides[0], sides[1])
 	t1 = wall_clock_ms()
 	if drawing == ø { return said_failed("paint into the window") }
 	encoder = wgpuDeviceCreateCommandEncoder(device, 0)
-	image = image_drawn(encoder, drawing, width, height)
+	image = image_drawn(encoder, drawing, sides[0], sides[1])
 	if image == 0 {
 		drawing_released(drawing)
 		wgpuCommandEncoderRelease(encoder)
 		return said_failed("paint into the window")
 	}
-	shown = picture_presented(encoder, image, layer, width, height)
+	shown = picture_presented(encoder, image, layer, sides[0], sides[1])
 	image_done(drawing, image)
 	drawing_released(drawing)
 	paint_frame_noted(t1 - t0, wall_clock_ms() - t1)
