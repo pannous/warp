@@ -1,0 +1,24 @@
+# Drawing projective geometric algebra (card pga-visualization, lib/pga_draw.warp, samples/geometry/pga_visual.warp)
+# the meets the sample draws: plane ⋏ plane a line, line ⋏ plane a point
+'use pga_draw; plane(0, 0, 1, 0) ⋏ plane(1, 0, 1, -2) == point(2, 0, 0) ⋎ point(2, 1, 0)'	yes
+'use pga_draw; coordinates((point(0, 0, 2) ⋎ point(1, 1, 0)) ⋏ plane(0, 0, 1, 0))'	[1, 1, 0]
+# a sphere cut by a plane is a circle: its center the foot of the sphere's center, its radius √(2² - 1²)
+'use pga_draw; c = sphere(point(0, 0, 0), 2) ⋏ plane(0, 0, 1, -1); [count(c), round(c#1.radius * 1000), coordinates(c#1.center)]'	[1, 1732, [0, 0, 1]]
+# a plane missing the sphere meets it in nothing
+'use pga_draw; sphere(point(0, 0, 0), 1) ⋏ plane(0, 0, 1, -3)'	[]
+# a line through a sphere pierces it in two points, a touching one in one, a missing one in none
+'use pga_draw; (sphere(point(0, 0, 0), 1) ⋏ (point(-2, 0, 0) ⋎ point(2, 0, 0))).map(coordinates)'	[[-1, 0, 0], [1, 0, 0]]
+'use pga_draw; (sphere(point(0, 0, 0), 1) ⋏ (point(-2, 0, 1) ⋎ point(2, 0, 1))).map(coordinates)'	[[0, 0, 1]]
+'use pga_draw; sphere(point(0, 0, 0), 1) ⋏ (point(-2, 0, 3) ⋎ point(2, 0, 3))'	[]
+# a line's direction, the ideal point where it meets the plane at infinity
+'use pga_draw; direction(point(1, 1, 1) ⋎ point(1, 1, 4))'	[0, 0, 1]
+# the camera: looking along y, the point (1, 0, 0) lies pixels_per_unit right of the canvas's middle
+'use pga_draw; canvas.resize(100, 100); orbit(0, 0); seen([1, 0, 0])'	[110, 50, 0]
+# each kind drawn puts ink on the canvas
+'use pga_draw; canvas.resize(100, 100); sketch(point(0, 0, 0), red); count(canvas_pixels.filter(p => p != 0)) > 20'	yes
+'use pga_draw; canvas.resize(100, 100); sketch(point(0, 0, 0) ⋎ point(1, 0, 0), red); count(canvas_pixels.filter(p => p != 0)) > 50'	yes
+'use pga_draw; canvas.resize(100, 100); sketch(plane(0, 0, 1, 0), red); count(canvas_pixels.filter(p => p != 0)) > 300'	yes
+'use pga_draw; canvas.resize(100, 100); sketch(sphere(origin, 1), red); count(canvas_pixels.filter(p => p != 0)) > 300'	yes
+'use pga_draw; canvas.resize(100, 100); sketch(sphere(origin, 1) ⋏ plane(0, 0, 1, 0), red); count(canvas_pixels.filter(p => p != 0)) > 100'	yes
+# nothing met draws nothing
+'use pga_draw; canvas.resize(100, 100); sketch(sphere(origin, 1) ⋏ plane(0, 0, 1, -3), red); count(canvas_pixels.filter(p => p != 0))'	0
