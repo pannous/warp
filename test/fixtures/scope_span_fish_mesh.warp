@@ -1,4 +1,0 @@
-# other_file_global must name lib/fish_mesh.warp:139:2, jaw_point's `angle = …` (test_other_file_global_place.sh)
-use fish_mesh
-global angle = 0.9
-jaw_point([0, 0, 0], 0, 0, 0)
