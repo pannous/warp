@@ -52,5 +52,5 @@ lamp = shader {
 		return vec4f(pow(clamp(color, vec3f(0.0), vec3f(1.0)), vec3f(1.0 / 2.2)), 1.0);
 	}
 }
-# ten seconds in a window; without one, one still (shown_frames, decision on-frame-headless)
-shown_frames(() => paint(lamp), 10000)
+on frame{paint(lamp)}
+on escape:exit
