@@ -116,7 +116,7 @@ def clear(what) {
 }
 // the pixels all one color, on the GPU one clear shape; written through the parameter, a local: a global list written
 // a million times cost 10× (14 against 141 ms)
-covered(pixels, color: int) := {
+covered(pixels: int[], color: int) := {
 	if drawing_on_gpu { draw_shape(clear_shape, 0, 0, 0, 0, color) }
 	else { for i in 0..#pixels { pixels[i] = color } }
 }
