@@ -59,6 +59,11 @@ self.joinVoice = starters => { voice = { ...starters }; keptVoices = []; }; // a
 let keptVoices = [];
 self.keptVoice = () => keptVoices.push(voice);
 self.voiceBack = number => { voice = keptVoices[number - 1] ?? {}; };
+// an awaited task's voice taken into this one (lib/sound.warp voice_joined): it goes on after the later of their sounds
+self.voiceJoined = number => {
+	const awaited = keptVoices[number - 1] ?? {};
+	voice = { ...voice, end: Math.max(voice.end ?? 0, awaited.end ?? 0), seconds: Math.max(voice.seconds ?? 0, awaited.seconds ?? 0) };
+};
 self.currentVoice = () => voice;
 // a sound of that many seconds behind the voice's sounds, never before now: its place and its start on the clock
 self.voiceSounded = seconds => {

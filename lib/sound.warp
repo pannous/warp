@@ -959,13 +959,20 @@ global voice_origin = 0
 // the page keeps a voice clock of its own, which goes along (web/playground/host-tasks.js keptVoice; natively none)
 sound_voice_kept(): int from host
 sound_voice_back(voice: int): int from host
+sound_voice_joined(voice: int): int from host
 voice_kept() := [voice_end, voice_place, sound_voice_kept()]
 voice_back(voice: list) := {
 	voice_end = voice#1
 	voice_place = voice#2
 	sound_voice_back(voice#3)
 }
-global voice_kept_by_tasks = task_part_kept(voice_kept, voice_back)
+// an awaited task's voice taken into this one: it goes on after the later of their queued sounds
+voice_joined(voice: list) := {
+	voice_end = max(voice_end, voice#1)
+	voice_place = max(voice_place, voice#2) as float
+	sound_voice_joined(voice#3)
+}
+global voice_kept_by_tasks = task_part_kept(voice_kept, voice_back, voice_joined)
 global before_at = []
 // the seconds added behind the voice's queued sounds: [their start in real time, their place]
 scheduled(seconds) := {
@@ -1090,6 +1097,8 @@ music_played(music, duration, shape) := {
 	if music is Sample { return sample_played(music, 1) }
 	if music is text and not is_note_name(music) { return if written_steps(music) then steps_played(notes_written(music), si_amount(duration), shape) else file_played(music) }
 	if music is list { return sound(melody_samples(music, si_amount(duration), shape)) }
+	// a rest alone, `play(rest, 1s)`, is the melody of that one silent step
+	if music is Rest { return music_played([music], duration, shape) }
 	sound(chord_samples(pitches_of(music), si_amount(duration), shape))
 }
 // block-wise (decision music-plain-details): hum(block: samples, t) := for i in 1 to #block { block#i = 0.3 * sin(2 * pi *

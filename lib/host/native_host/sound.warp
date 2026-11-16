@@ -59,6 +59,7 @@ host_sound_played(pcm, rate: int, channels: int) as int := {
 // the page's voice clock kept around a task (lib/sound.warp voice_kept): natively the voice is lib/sound.warp's alone
 host_sound_voice_kept() as int := 0
 host_sound_voice_back(voice: int) as int := 0
+host_sound_voice_joined(voice: int) as int := 0
 // an audio file sounding from now on, as decoded at its own rate: 0, else -1
 host_sound_file_played(path) as int := {
 	if muted() { return 0 }
