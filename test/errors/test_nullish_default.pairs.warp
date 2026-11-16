@@ -21,4 +21,4 @@
 'f() := parse_json("{x") rescue 3; f()'	3
 # in parentheses too, alone in the program (kitchen sink, card kitchensink-broken-forms)
 '(0 default 10)'	0
-'x = (1 + (nothing() default 7)); x'	8
+'f() := raise "no"; x = (1 + (f() default 7)); x'	8
