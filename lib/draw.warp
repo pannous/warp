@@ -93,9 +93,7 @@ blank_pixels(count: int) := {
 def canvas(width, height) {
 	canvas_width = width
 	canvas_height = height
-	pixel_scale = display_scale()
-	device_width = width * pixel_scale
-	device_height = height * pixel_scale
+	scaled_to(display_scale())
 	canvas_pixels = blank_pixels(pixels_for(width, height))
 	window.width = width
 	window.height = height
@@ -184,8 +182,7 @@ def circle(x, y, radius, color) {
 	else { circle_pixels(x, y, radius, color) }
 }
 
-// the device pixels a circle covers, its rim smoothed; the distances squared by multiplying: ^ 2 is the general
-// power, its logarithm and exponential (3× slower)
+// the device pixels a circle covers, its rim smoothed
 def circle_pixels(x: float, y: float, radius: float, color: any) {
 	center_x = x * pixel_scale
 	center_y = y * pixel_scale
@@ -200,19 +197,17 @@ def circle_pixels(x: float, y: float, radius: float, color: any) {
 	}
 }
 
-// a line from the canvas pixel x1, y1 to x2, y2 as dot names them, `width` pixels wide with round ends, its edges smoothed
+// a line from the canvas pixel x1, y1 to x2, y2 as dot names them, one pixel wide
 def line(x1, y1, x2, y2, color) {
 	line_pixels(x1, y1, x2, y2, color, 1)
 }
+// the same `width` pixels wide, with round ends, its edges smoothed
 def line_pixels(x1: float, y1: float, x2: float, y2: float, color: any, width: float) {
 	segment_pixels(x1, y1, x2, y2, color as int, width, yes)
 }
-// lines through the canvas places [x, y] one after the other, joined smoothly: no joint covered twice, so a
-// translucent color shows no dots where they meet
-def polyline(corners: list, color: any) {
-	polyline_pixels(corners, color, 1)
-}
-def polyline_pixels(corners: list, color: any, width: float) {
+// lines `width` pixels wide through the canvas places [x, y] one after the other, joined smoothly: no joint covered
+// twice, so a translucent color shows no dots where they meet
+def polyline(corners: list, color: any, width: float = 1) {
 	paint: int = color as int
 	// a closed one (its last corner its first, within a hundredth of a pixel) has no start: its last line ends there
 	closed = abs(corners#1#1 - corners.last()#1) + abs(corners#1#2 - corners.last()#2) < 0.01
@@ -280,9 +275,13 @@ coarsened(took: float) := {
 	coarse = int[canvas_width * canvas_height]
 	for row in 0..canvas_height { for col in 0..canvas_width { coarse[row * canvas_width + col] = canvas_pixels[row * pixel_scale * device_width + col * pixel_scale] } }
 	canvas_pixels = coarse
-	pixel_scale = 1
-	device_width = canvas_width
-	device_height = canvas_height
+	scaled_to(1)
+}
+// the canvas drawn at `scale` device pixels a canvas pixel across from now on
+scaled_to(scale: int) := {
+	pixel_scale = scale
+	device_width = canvas_width * scale
+	device_height = canvas_height * scale
 }
 
 // save canvas as: ./painting.png, save(canvas, ./painting.png) or canvas.save(./painting.png) (card save-painting;
