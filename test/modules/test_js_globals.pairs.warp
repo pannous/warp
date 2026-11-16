@@ -1,5 +1,5 @@
 // use js <global> self-hosted (card js-global-missing): WebIDL crypto / URL / Math via lib/web.warp rewrites
-'use js crypto; id = crypto.randomUUID(); id.length'	36
-'use js Math; Math.floor(2.7)'	2
-'use js URL; URL("https://wasp.pannous.com/docs?lang=en").hostname'	'wasp.pannous.com'
+'use js crypto; id = crypto.randomUUID(); id.length'	36	needs: js
+'use js Math; Math.floor(2.7)'	2	needs: js
+'use js URL; URL("https://wasp.pannous.com/docs?lang=en").hostname'	'wasp.pannous.com'	needs: js
 'use crypto; crypto.randomUUID().length'	36

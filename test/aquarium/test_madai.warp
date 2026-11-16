@@ -1,4 +1,4 @@
-# samples/gpu/aquarium.warp swims the Fish Kit madai (lib/fish_mesh.warp, notes/aquarium.md, notes/fish.md).
+# samples/gpu/aquarium.warp swims the Fish Kit madai (samples/gpu/fish_mesh.warp, notes/aquarium.md, notes/fish.md).
 # The school is several sizes of one posed mesh. A ray through a moved, turned, scaled copy
 # hits at the single mesh's distance times the scale, and takes that triangle's colour.
 

@@ -4,7 +4,7 @@
 #   try [1 2]#i else y  → (try·list = [1 2]; try·index = i; if 1 <= try·index <= count(try·list) then … else {y})
 #   try x = a / b else y → x = (the checked division)
 #   assert c else m     → if c then {1} else {raise m}
-checked_form(n: Node): Node := match n {
+checked_form(n: Node) as Node := match n {
 	List(parts, Bracket.Round, Separator.None): {
 		if #parts == 3 and parts#1 == symbol(HiddenWord.AssertElse as text) { return assertion(parts#2, parts#3) }
 		if #parts != 3 or parts#1 != symbol(HiddenWord.TryElse as text) { return n }
@@ -15,7 +15,7 @@ checked_form(n: Node): Node := match n {
 }
 
 # the checked form of `try value else fallback`, ø where the core's guard serves
-checked_try(value: Node, fallback: Node): Node? := match value {
+checked_try(value: Node, fallback: Node) as Node? := match value {
 	Key(target, Op.Assign, assigned): {
 		if not is_name(target) { return ø }
 		checked = checked_try(assigned, fallback)
@@ -29,17 +29,17 @@ checked_try(value: Node, fallback: Node): Node? := match value {
 	_: ø
 }
 
-is_division(op: Op): bool := op == Op.Div or op == Op.Mod or op == Op.Rem
+is_division(op: Op) as bool := op == Op.Div or op == Op.Mod or op == Op.Rem
 
 # To do give one-line summaries to all functions where the meaning is not immediately clear from the context and name 
 # todo (card checked-tries-numbers) number: int  Generalize to other numbers 
-divided(dividend: Node, op: Op, divisor: Node, fallback: Node): Node := {
+divided(dividend: Node, op: Op, divisor: Node, fallback: Node) as Node := {
 	held = try_name("divisor", fresh_number())
 	quotient = applied_to(HiddenWord.TryElse as text, [Key(dividend, op, held), fallback])
 	statements([try_assigned(held, divisor), chosen(Key(held, Op.Eq, 0), braced(fallback), braced(quotient))])
 }
 
-is_written_list(n: Node): bool := match n {
+is_written_list(n: Node) as bool := match n {
 	List(written, Bracket.Square, separator): yes
 	Text(t): yes
 	_: no
@@ -47,7 +47,7 @@ is_written_list(n: Node): bool := match n {
 
 # the guard of `try xs#i else y`, a sibling of the divisor's: the index syntax itself is extensions/index_positions.warp's
 # (card index-syntax-module), what a try checks before the index stays here
-indexed(written: Node, index: Node, fallback: Node): Node := {
+indexed(written: Node, index: Node, fallback: Node) as Node := {
 	number = fresh_number()
 	held = try_name("list", number)
 	at = try_name("index", number)
@@ -57,8 +57,8 @@ indexed(written: Node, index: Node, fallback: Node): Node := {
 
 # `assert c else m`, `check c`: 1 when c holds, else it raises m; not `asserted`, emitter.warp's, as the compiler's
 # files share one namespace
-assertion(condition: Node, message: Node): Node := chosen(condition, braced(1), braced(applied_to(raise_word, [message])))
+assertion(condition: Node, message: Node) as Node := chosen(condition, braced(1), braced(applied_to(raise_word, [message])))
 
-checked_tries(program: Node): Node := bottom_up(program, checked_form)
+checked_tries(program: Node) as Node := bottom_up(program, checked_form)
 
 checked_tries_extension = Extension{name: "checked_tries", passes_before: {"tries": checked_tries}}

@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# packaging/native_dist.sh <dist>: a release folder of the native warp (decision rust-gone-in-1-5): the checkout's lib/
+# packaging/native_dist.sh <dist> [<native warp>]: a release folder of the native warp (decision rust-gone-in-1-5): the checkout's lib/
 # with the compilers warp.wasm, runtime.wasm, warp-self.wasm, modules/ and libwarp_wasmtime in it, and in that folder
-# core/native/warp (`warp build native core/native/warp.warp`, which finds libwarp_wasmtime beside itself by rpath),
+# core/native/warp (`warp build native core/native/warp.warp`, which finds libwarp_wasmtime beside itself by rpath;
+# Windows's job builds lib/warp.exe from the C instead, and names it),
 # since the native warp's lib/ is its own folder (core/native/driver.warp library_folder; a package links bin/warp to
 # it). The gate makes the compilers' machine code for this platform, and the driver `warp build` puts programs in
 # (data/native/driver), once: the folder's warp prints hello, builds a hello, and that runs. Run from the checkout's root.
 set -euo pipefail
 dist=$1
+native_warp=${2:-core/native/warp}
 EXPECTED=Hello
 in_dist() { (cd "$dist" && sh -c "$1"); }
 
@@ -15,7 +17,7 @@ cp -RL lib "$dist"
 source "$(dirname "$0")/../scripts/lib/site-scripts.sh"
 site_scripts_copied . "$dist"
 rm -rf "$dist/data" "$dist"/*.cwasm "$dist"/*.inputs  # this machine's builds and machine code
-cp core/native/warp "$dist/warp"
+cp "$native_warp" "$dist/$(basename "$native_warp")"
 # `warp build crate` runs it from beside the binary (extensions/commands/build.warp CRATE_TOOL_PLACES)
 cp scripts/warp-crate "$dist/warp-crate"
 

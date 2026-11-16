@@ -19,8 +19,14 @@ checkout=$(cd "$(dirname "$0")/.." && pwd)
 [ $# -gt 0 ] || set -- "$(dirname "$(readlink -f "$(command -v warp)")")"
 export CARGO_TARGET_DIR=${WARP_WASMTIME_TARGET:-/opt/cargo/warp-wasmtime}
 WGPU_VERSION=29.0.1.1
+# SDL3 for Windows, which has no system SDL3 (macOS and Linux take Homebrew's or the distribution's): its DLL beside warp
+SDL_VERSION=3.4.18
+SDL_WINDOWS_SHA256=75c2c0fc74e7d1206aaedc22893a35887332f4f85f5c8b74fddc10d177985f2c
 gpu_build=${WARP_GPU_TARGET:-/opt/cargo/warp-gpu}
 WASMTIME_VERSION=50.0.0
+# sha256 sums: macOS has shasum, Git Bash on Windows only coreutils' sha256sum
+SHA256=(shasum -a 256)
+command -v shasum >/dev/null || SHA256=(sha256sum)
 # the crates warp patches (crates/wasmtime-capi/patches/, its Cargo.toml [patch.crates-io]), each with its sha256
 PATCHED_CRATES="wasmtime:2d93539aae382faee7b19650fd966f1f8185599b9cc4adc0a5a8b8f768c11ba9
 wasmtime-environ:34fd44c205ef29cc3c254253dceb916be586887602e0e380361ed022776cfc10
@@ -31,7 +37,7 @@ fetched() {
   [ -f "$1" ] && return
   mkdir -p "$(dirname "$1")"
   curl -sSfL -o "$1.new" "$2"
-  echo "$3  $1.new" | shasum -a 256 -c - >/dev/null
+  echo "$3  $1.new" | "${SHA256[@]}" -c - >/dev/null
   mv "$1.new" "$1"
 }
 
@@ -41,7 +47,7 @@ fetched() {
 patched_wasmtime() {
   local crate=$checkout/crates/wasmtime-capi stamp name sha256 archive
   local patched=$crate/patched
-  stamp=$(cat "$crate"/patches/*.patch | shasum -a 256 | cut -d' ' -f1)
+  stamp=$(cat "$crate"/patches/*.patch | "${SHA256[@]}" | cut -d' ' -f1)
   [ "$(cat "$patched/.patches" 2>/dev/null)" = "$stamp" ] && return
   rm -rf "$patched" && mkdir -p "$patched"
   for entry in $PATCHED_CRATES; do
@@ -56,7 +62,7 @@ patched_wasmtime() {
 }
 # the C API built once per set of inputs: a fresh worktree unpacks wasmtime at a new path, which cargo takes for a
 # new crate and rebuilds all of wasmtime from scratch (a rustc in every landing's rebuild)
-wasmtime_inputs=$( (echo "$WASMTIME_VERSION"; cd "$checkout/crates/wasmtime-capi" && cat Cargo.toml Cargo.lock build.rs patches/*.patch $(find src -type f | sort)) | shasum -a 256 | cut -d' ' -f1)
+wasmtime_inputs=$( (echo "$WASMTIME_VERSION"; cd "$checkout/crates/wasmtime-capi" && cat Cargo.toml Cargo.lock build.rs patches/*.patch $(find src -type f | sort)) | "${SHA256[@]}" | cut -d' ' -f1)
 wasmtime_stamp=$CARGO_TARGET_DIR/release/warp_wasmtime.inputs
 if [ "$(cat "$wasmtime_stamp" 2>/dev/null)" != "$wasmtime_inputs" ] || ! ls "$CARGO_TARGET_DIR"/release/*warp_wasmtime.* >/dev/null 2>&1; then
   patched_wasmtime
@@ -66,7 +72,7 @@ fi
 case $(uname -s) in
   Darwin) suffix=dylib; prefix=lib ;;
   Linux) suffix=so; prefix=lib ;;
-  *) suffix=dll; prefix="" ;;
+  *) suffix=dll; prefix=""; windows=1 ;;
 esac
 wasmtime_library=${prefix}warp_wasmtime.$suffix
 gpu_library=${prefix}wgpu_native.$suffix
@@ -79,30 +85,42 @@ wgpu_release_sha256() {
     macos-x86_64) echo 8e2f7378548ddd0e2cf21e7d864dda46e953f0af724855a33778b85ead206d41 ;;
     linux-aarch64) echo 015fcdf1dbae82e614a783cc38017e5399ae0927a889fe9b69c9b664bc61b47a ;;
     linux-x86_64) echo 95a4d90c071005a98d03eab348beaa6b07e16eb00d1dcdb9f8348f75eb97ec5a ;;
+    windows-x86_64-gnu) echo d471e3614733c1d4ddd61bfd19868356477d0d37bf531bf8c6cb64a7f579bd2a ;;
   esac
 }
+# released <folder> <url> <sha256> <file in the zip>: a zip released upstream, fetched once into the folder, checked and
+# unpacked; the path of the file wanted from it
+released() {
+  if [ ! -f "$1/$4" ]; then
+    fetched "$1.zip" "$2" "$3"
+    mkdir -p "$1" && (cd "$1" && unzip -oq "$1.zip") && rm "$1.zip"
+  fi
+  echo "$1/$4"
+}
 gpu_release() {
-  platform=$(uname -s | sed 's/Darwin/macos/;s/Linux/linux/')-$(uname -m | sed 's/arm64/aarch64/')
+  platform=$(uname -s | sed 's/Darwin/macos/;s/Linux/linux/;s/^MINGW.*/windows/')-$(uname -m | sed 's/arm64/aarch64/')
+  [ -z "${windows-}" ] || platform=$platform-gnu
   sha256=$(wgpu_release_sha256 "$platform")
   [ -n "$sha256" ] || return 0
-  release=$gpu_build/wgpu-$WGPU_VERSION
-  if [ ! -f "$release/lib/$gpu_library" ]; then
-    fetched "$release.zip" "https://github.com/gfx-rs/wgpu-native/releases/download/v$WGPU_VERSION/wgpu-$platform-release.zip" "$sha256"
-    mkdir -p "$release" && (cd "$release" && unzip -oq "$release.zip") && rm "$release.zip"
-  fi
-  echo "$release/lib/$gpu_library"
+  released "$gpu_build/wgpu-$WGPU_VERSION" "https://github.com/gfx-rs/wgpu-native/releases/download/v$WGPU_VERSION/wgpu-$platform-release.zip" "$sha256" "lib/$gpu_library"
 }
 gpu_built=$(gpu_release)
+sdl_built=
+[ -z "${windows-}" ] || sdl_built=$(released "$gpu_build/SDL3-$SDL_VERSION" "https://github.com/libsdl-org/SDL/releases/download/release-$SDL_VERSION/SDL3-$SDL_VERSION-win32-x64.zip" "$SDL_WINDOWS_SHA256" SDL3.dll)
 
 # each library moved into place whole: a run loading it meanwhile meets the old one or the new one
 installed() {
-  built=$1 folder=$2 name=$(basename "$1")
+  built=$1 folder=$2 name=${3:-$(basename "$1")}
   cmp -s "$built" "$folder/$name" && return
   cp "$built" "$folder/$name.new" && mv -f "$folder/$name.new" "$folder/$name"
   echo "wasmtime-c-api: $folder/$name"
 }
 for folder in "$@"; do
   installed "$CARGO_TARGET_DIR/release/$wasmtime_library" "$folder"
+  # (Windows links a DLL through its import library, which -lwarp_wasmtime finds by MinGW's name for it)
+  import_library=$CARGO_TARGET_DIR/release/$wasmtime_library.lib
+  if [ -f "$import_library" ]; then installed "$import_library" "$folder" "lib$wasmtime_library.a"; fi
   # (a platform wgpu-native ships no release for gets none: its programs paint on the CPU)
   if [ -n "$gpu_built" ]; then installed "$gpu_built" "$folder"; fi
+  if [ -n "$sdl_built" ]; then installed "$sdl_built" "$folder"; fi
 done

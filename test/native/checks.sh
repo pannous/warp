@@ -4,6 +4,8 @@
 warp=${WARP:-warp}
 export WARP_WINDOW=0
 failures=0
+# the lib/ that warp runs with (its version names it): for a native warp or driver a test builds
+library=$("$warp" version 2>/dev/null | sed -n 's/.*(compiler.warp of \(.*\))$/\1/p')
 check() {
 	if [ "$2" = "$3" ]; then echo "✓ $1"; else echo "✗ $1: got $2, expected $3"; failures=$((failures + 1)); fi
 }

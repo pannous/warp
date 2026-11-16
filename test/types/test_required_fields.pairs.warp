@@ -1,0 +1,5 @@
+# a field marked ! is required: a construction leaving it out is refused, as wiki/constructor.md shows
+'class person{name! email?}; person{name: "Jo"}.name'	'Jo'
+'class person{name! email?}; person{email: "j@x"}.email'	error	person leaves out its required field name
+# a field block declares a field holding a record (wiki/constructor.md)
+'class contact { name; address { street; city } }; contact{name: "Ann" address: {street: "Main" city: "X"}}.address.city'	'X'

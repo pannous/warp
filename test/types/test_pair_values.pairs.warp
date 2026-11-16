@@ -3,3 +3,7 @@
 'a = 5; x = a:1; x'	a:1
 'a = 5; x = (a):1; x.key'	5
 'x = 1:4; x.value'	4
+# a class's instance is no pair, though it holds its fields as one (card class-instance, interviewer OK 2026-11-12)
+'class P { n: int }; P(1) is pair'	no
+'class P { n: int }; f(x: any) := x is pair; f(P(1))'	no
+'f(x: any) := x is pair; f(a: 1)'	yes

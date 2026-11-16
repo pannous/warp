@@ -5,5 +5,5 @@
 'enum Level { Low, Mid, High }; abs(x: i32): Level from "c"; "" + abs(-2)'	"High"
 'enum KeyboardKey { KEY_NULL = 0, KEY_APOSTROPHE = 39, KEY_A = 65 }; abs(x: KeyboardKey): i32 from "c"; abs(KeyboardKey.KEY_A)'	65
 'enum KeyboardKey { KEY_NULL = 0, KEY_APOSTROPHE = 39, KEY_A = 65 }; abs(x: i32): KeyboardKey from "c"; "" + abs(-39)'	"KEY_APOSTROPHE"
-'enum KeyboardKey { KEY_NULL = 0, KEY_A = 65 }; IsKeyPressed(key: KeyboardKey): bool from "raylib"; IsKeyPressed(KeyboardKey.KEY_A)'	no
-'enum KeyboardKey { KEY_NULL = 0, KEY_A = 65 }; GetKeyPressed(): KeyboardKey from "raylib"; "" + GetKeyPressed()'	"KEY_NULL"
+'enum KeyboardKey { KEY_NULL = 0, KEY_A = 65 }; IsKeyPressed(key: KeyboardKey): bool from "raylib"; IsKeyPressed(KeyboardKey.KEY_A)'	no	needs: raylib
+'enum KeyboardKey { KEY_NULL = 0, KEY_A = 65 }; GetKeyPressed(): KeyboardKey from "raylib"; "" + GetKeyPressed()'	"KEY_NULL"	needs: raylib

@@ -1,4 +1,5 @@
 # from test_mouse_wheel.rs: edit the Rust test, then run the script again
+// needs: display
 
 # the_wheel_over_the_paint_window_is_mouse_wheel
 'mouse_wheel'	-2

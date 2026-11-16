@@ -2,4 +2,4 @@
 
 # exit_ends_the_run
 'x = 1; exit; x = 2'	ø
-'def stop(){ exit(3) }; stop(); 7'	ø
+'def stop(){ exit(3) }; stop(); 7'	ø	needs: display

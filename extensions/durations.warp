@@ -1,6 +1,6 @@
 # Calendar durations (card parser-rows, decision core-is-self): `1 month`, `24 hours`, `1day`, `1 month 2 days`, an
 # integer followed by a time unit word, read after the number as the data view Rust's parser gives it
-read_duration(p: Parser, written: text, literal: text): Node := {
+read_duration(p: Parser, written: text, literal: text) as Node := {
 	if written.contains(".") or literal.contains("e") or literal.contains("E") { return ø }
 	with_time_unit(p, int(written))
 }
@@ -18,7 +18,7 @@ def time_unit_named(word: text) := TIME_UNITS.get(if word.ends_with("s") then wo
 # `1 month`, `24 hours`, `1day`, `1 month 2 days`: an integer followed by a time unit word is a calendar duration, the
 # data view Rust's parser gives it, ["data", "1 month 2 days"] as the duration prints; else ø, nothing read
 # Rust twin: literals/units.rs with_time_unit, following_duration
-def with_time_unit(p: Parser, count: int): Node := {
+def with_time_unit(p: Parser, count: int) as Node := {
 	unit = time_unit_at(p, p.at)
 	if unit == ø { return ø }
 	length = unit#1.map(part => part * count)
@@ -38,7 +38,7 @@ def with_time_unit(p: Parser, count: int): Node := {
 # The time unit word at `at` after any spaces: [its length, where it ends], else ø; `{year:1970 month:1}`: a word that
 # starts the next entry or assignment is no unit
 # Rust twin: literals/units.rs time_unit_at, time/calendar.rs unit_after
-def time_unit_at(p: Parser, at: int): list? := {
+def time_unit_at(p: Parser, at: int) as list? := {
 	at = run_end(p.code, at, ' ', p.n)
 	end = name_end(p.code, at, p.n)
 	unit = time_unit_named(p.code[at .. end])
@@ -50,7 +50,7 @@ def time_unit_at(p: Parser, at: int): list? := {
 
 # `1 month 2 days`, `3 hours`: a duration's months, days and seconds as Rust's Duration prints them
 # Rust twin: time/calendar.rs Display for Duration
-def duration_text(length: list): text {
+def duration_text(length: list) as text {
 	seconds = length#3
 	amounts = [[length#1, "month"], [length#2, "day"], [seconds ÷ 3600, "hour"], [seconds % 3600 ÷ 60, "minute"], [seconds % 60, "second"]]
 	parts = amounts.filter(amount => amount#1 != 0).map(amount => counted_unit(amount#1, amount#2))
@@ -58,9 +58,9 @@ def duration_text(length: list): text {
 	parts.join(" ")
 }
 
-def counted_unit(amount: int, unit: text): text := if amount == 1 then "1 " + unit else "$(amount) $(unit)s"
+def counted_unit(amount: int, unit: text) as text := if amount == 1 then "1 " + unit else "$(amount) $(unit)s"
 # the end of the digits from `at` on (from the lexer, card lexer-helpers-to-extensions)
-digits_end(source: text, at: int, n: int): int := {
+digits_end(source: text, at: int, n: int) as int := {
 	while at < n and is_digit(source[at]) { at += 1 }
 	at
 }

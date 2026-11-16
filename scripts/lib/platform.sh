@@ -27,10 +27,12 @@ Darwin)
 	command -v perf >/dev/null || instruction_counter=(instructions_uncounted)
 	;;
 esac
-# the shared native warp: WARP_BINARY, else ~/dev/bin/warp (the Mac), else the warp on PATH (the box: ~/bin/warp)
-warp_binary=${WARP_BINARY:-$HOME/dev/bin/warp}
-# (neither there: the path stays, so an error names where the binary was looked for, never an empty one)
-[ -e "$warp_binary" ] || warp_binary=$(command -v warp || echo "$warp_binary")
+# main's installed native warp: ~/dev/bin/warp (the Mac), else the warp on PATH (the box: ~/bin/warp); neither there,
+# the path stays, so an error names where the binary was looked for, never an empty one
+installed_warp=$HOME/dev/bin/warp
+[ -e "$installed_warp" ] || installed_warp=$(command -v warp || echo "$installed_warp")
+# the native warp a script runs: WARP_BINARY (a tree's own, <tree>/core/native/warp), else main's installed one
+warp_binary=${WARP_BINARY:-$installed_warp}
 # launcher_of <folder> <binary> <option…>: <folder>/warp, a warp that runs <binary> with these options first (warp
 # reads no variable for them, decision no-bash-exports: `--lib <tree>/lib --no-hints`), so a script hands its tests
 # one WARP for its tree; prints its path

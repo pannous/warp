@@ -1,0 +1,51 @@
+diff -ru a/wasmtime/src/config.rs b/wasmtime/src/config.rs
+--- a/wasmtime/src/config.rs	2026-11-13 19:38:41.901362177 +0100
++++ b/wasmtime/src/config.rs	2026-11-13 19:38:41.904047129 +0100
+@@ -98,7 +98,7 @@
+ 
+ /// warp: the version machine code is kept under: warp's patches change what compiled code reads
+ /// (`VMStoreContext::subtype_display`), so code compiled by another wasmtime 50 never runs here
+-const WARP_VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), "+warp-subtype-display");
++const WARP_VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), "+warp-subtype-display+ref-func");
+ 
+ impl Default for ModuleVersionStrategy {
+     fn default() -> Self {
+diff -ru a/wasmtime/src/runtime/vm/instance.rs b/wasmtime/src/runtime/vm/instance.rs
+--- a/wasmtime/src/runtime/vm/instance.rs	2026-11-13 19:38:41.888680291 +0100
++++ b/wasmtime/src/runtime/vm/instance.rs	2026-11-13 19:38:41.891185993 +0100
+@@ -223,6 +223,15 @@
+             ret.get_mut().initialize_vmctx(req.store, req.imports);
+         }
+ 
++        // warp: every defined function a ref.func may name gets its VMFuncRef now, so compiled code takes its address
++        // instead of calling ref_func (cranelift func_environ.rs translate_ref_func, card ref-func-inline)
++        let module = ret.get_mut().env_module().clone();
++        for (index, func) in module.functions.iter() {
++            if let (Some(defined), false) = (module.defined_func_index(index), func.func_ref.is_reserved_value()) {
++                ret.get_mut().initialize_defined_funcref(req.store.modules(), defined);
++            }
++        }
++
+         Ok(ret)
+     }
+ 
+diff -ru a/wasmtime-internal-cranelift/src/func_environ.rs b/wasmtime-internal-cranelift/src/func_environ.rs
+--- a/wasmtime-internal-cranelift/src/func_environ.rs	2026-11-13 19:38:41.915228935 +0100
++++ b/wasmtime-internal-cranelift/src/func_environ.rs	2026-11-13 19:38:41.918141387 +0100
+@@ -3356,6 +3356,16 @@
+         mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
+         func_index: FuncIndex,
+     ) -> WasmResult<ir::Value> {
++        // warp: a defined function's VMFuncRef is filled when the instance is made (Instance::new), so ref.func is its
++        // address in the vmctx, no libcall (card ref-func-inline)
++        if self.module.defined_func_index(func_index).is_some() {
++            let func_ref = self.module.functions[func_index].func_ref;
++            if !func_ref.is_reserved_value() {
++                let vmctx = self.vmctx_val(&mut pos);
++                let offset = self.offsets.func_refs().at(func_ref);
++                return Ok(pos.ins().iadd_imm_u(vmctx, i64::from(offset)));
++            }
++        }
+         let func_index = pos.ins().iconst(I32, func_index.as_u32() as i64);
+         let ref_func = self.builtin_functions.ref_func(&mut pos.func);
+         let vmctx = self.vmctx_val(&mut pos);

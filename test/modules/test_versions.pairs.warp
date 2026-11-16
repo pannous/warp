@@ -15,9 +15,9 @@
 'version = 2; version + 1'	3
 
 # use_requires_a_version_of_a_package
-'use uniscript >= 1.0; uniscript("<:alpha>")'	'α'
-'use uniscript from 0.1.5; uniscript("<:alpha>")'	'α'
-'use uniscript version 1.0.10; uniscript("<:alpha>")'	'α'
+'use uniscript >= 1.0; uniscript("<:alpha>")'	'α'	needs: packages
+'use uniscript from 0.1.5; uniscript("<:alpha>")'	'α'	needs: packages
+'use uniscript version 1.0.10; uniscript("<:alpha>")'	'α'	needs: packages
 
 # an_older_version_comes_from_its_git_tag
 'use uniscript version 0.1.0; 42'	42
@@ -26,7 +26,7 @@
 'v1.2.3'	'1.2.3'
 'v1.2.3 < 1.10.0'	true
 'v2 = 7; v2'	7
-'use uniscript >= v1.0.0; uniscript("<:alpha>")'	'α'
+'use uniscript >= v1.0.0; uniscript("<:alpha>")'	'α'	needs: packages
 
 # a_package_used_twice_is_loaded_once
-'use uniscript; use uniscript >= 1.0; uniscript("<:alpha>")'	'α'
+'use uniscript; use uniscript >= 1.0; uniscript("<:alpha>")'	'α'	needs: packages

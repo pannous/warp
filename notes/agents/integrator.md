@@ -127,3 +127,9 @@ skipped the question is refused and goes to warp-interviewer; there is no FYI pa
 - Reds with a path forward (user 11-11): a core change may land with some test and sample lines red when a card names
   the owner, the red lines and how they get adjusted, and the merge message says `reds: <card>`. Smoke, self-check,
   hello and the playground deploy stay green; tier 2 and the page samples don't refuse such a landing.
+- Express (the default, AGENTS.md "Done"): a handoff lands on the sweep's smoke (`merge.sh --smoke-only`); a normal
+  or careful handoff says so and has passed its checks. Reds found after the push go to the branch owner to fix
+  forward at once.
+- No refusal tests (user 11-14): a branch that rewrites a test line to expect an error, or adds a test pinning an
+  error message, goes back to its worker: a line of a refused form is dropped as unpinned and listed in
+  notes/test_triage.md instead. Existing error tests stay.

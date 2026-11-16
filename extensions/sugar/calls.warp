@@ -24,7 +24,8 @@ rewrite ($x.$m $f) => $x.$m($f) where $f is function and $m is function and not 
 # own, is its call, `16 sqrt` is sqrt(16), `-7 abs` abs(-7); the word binds tighter than any operator, as a unit does,
 # `1 + 2 bars` is 1 + bars(2); a function first keeps the prefix meaning above, and a use line is none: `use keys`
 # names the module, never keys(use)
-rewrite ($x $f) => $bound where not $x is function and $f takes amount and $bound = call_bound($x, $f)
+# written as a run, as a unit's rule is (lib/units.warp), so it meets an operand too: `x squared + 1` is (x squared) + 1
+rewrite $x $f => $bound where not $x is function and $f takes amount and $bound = call_bound($x, $f)
 # before several words it takes the phrase they make: `reverse sort xs` is `reverse(sort xs)`, then `reverse(sort(xs))`
 rewrite ($f $x $more...) => $f(($x $more...)) where $f takes one
 # a function of the library written in warp (`first`, `last`, `sum`: no typed `from` line) before such a word and its
@@ -98,10 +99,10 @@ rewrite sort($xs, $f) => sorted_by_key($xs, $f) where $f is function
 # An `it` argument where a function is taken is extensions/function_arguments.warp, read from the callee's signature;
 # sort's key is no parameter of sort, so its `it` key is made here, named `by:` too
 rewrite sort($xs, by: $e) => sort($xs, $e)
-rewrite $xs.sort(by: $e) => sort($xs, $e)
+# the method spelling is the call, whatever it is given: `xs.sort{$0 > $1}`, `xs.sort(by: it.length)`
+rewrite $xs.sort($e) => sort($xs, $e)
 rewrite sort($xs, $e) => sorted_by_key($xs, $f) where $f = it_as_lambda($e)
 
-# `increment = add(1, _)`: a call given `_` for its first or last argument is the function of that argument, the
-# partial application `x -> add(1, x)` (decision M3b)
-rewrite $f($a..., _) => ($x -> $f($a..., $x)) where $f is function
-rewrite $f(_, $b...) => ($x -> $f($x, $b...)) where $f is function
+# `increment = add(1, _)`: a call given `_` for arguments is the function of those, the partial application
+# `x -> add(1, x)` (decision M3b); `add(_, 2, _)` takes two, in order
+rewrite $f($a...) => ($l) where $f is function and $l = holes_as_lambda($f, ($a...))

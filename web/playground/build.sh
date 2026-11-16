@@ -182,10 +182,16 @@ print("// made by build.sh: the files the server has (host-files.js isUnserved)\
 	echo "built $1"
 }
 
+# the samples' generated assets, which git ignores, fetched where missing (scripts/sample-assets.sh: ez_forest's tree
+# meshes), one path a line; a page built without them says so, its tree samples then fail
+sample_assets() {
+	scripts/sample-assets.sh fetch >/dev/null || echo "build.sh: the samples' assets were not fetched: ez_forest and tree_study fail in the page" >&2
+	scripts/sample-assets.sh list
+}
 # the repository's files, as the dev server and test_in_browser.py serve them from the repository root
 write_repository_served_files() {
 	# plus the compiler's lib/ and the packages, which git ignores
-	{ git -c core.quotepath=off ls-files --cached --others --exclude-standard; linked_folder_files; find -L web/playground/warp-lib -type f -not -name .DS_Store 2>/dev/null || true; package_files; find web/playground/lib -name '*.wasm'; } | write_served_files "$page/served-files.js"
+	{ git -c core.quotepath=off ls-files --cached --others --exclude-standard; linked_folder_files; find -L web/playground/warp-lib -type f -not -name .DS_Store 2>/dev/null || true; package_files; sample_assets; find web/playground/lib -name '*.wasm'; } | write_served_files "$page/served-files.js"
 }
 
 # the files under each tracked link to a folder, by the link's path: lib/compiler -> ../core serves
@@ -210,10 +216,16 @@ write_site_served_files() {
 
 # the repository's tracked files of these paths copied into <site> at their paths; the regular ones, not the links
 shipped_tracked() {
-	local site=$1 file
+	local site=$1
 	shift
-	git ls-files -z -- "$@" | while IFS= read -r -d '' file; do
-		[ -L "$file" ] || { mkdir -p "$site/$(dirname "$file")" && cp "$file" "$site/$file"; }
+	git -c core.quotepath=off ls-files -- "$@" | shipped "$site"
+}
+
+# the files named on stdin, one a line, copied into <site> at their paths; the regular ones, not the links
+shipped() {
+	local file
+	while IFS= read -r file; do
+		[ -L "$file" ] || { mkdir -p "$1/$(dirname "$file")" && cp "$file" "$1/$file"; }
 	done
 }
 
@@ -234,6 +246,8 @@ collect_site() {
 	# (card open-mozart; tune.mp3 is our own half-second C-E-G, mozart.mp3 left for its unclear copyright), the files a sample reads, writes over or includes; the regular ones, not the links
 	# (samples/tests, samples/wasm/shapes.wasm)
 	shipped_tracked "$site" samples
+	# and their generated assets, which git ignores
+	sample_assets | shipped "$site"
 	# the files the tour's examples read, at their repository paths too: `use wasm "test/fixtures/…/rust_demo.wasm"`,
 	# `import test/fixtures/wasm/zlib` (its .wasm and .warp), else the page's compile meets an unknown name
 	for named in $(grep -oE '(test|lib|data)/[A-Za-z0-9_./-]+' "$page/examples.js" | sort -u); do

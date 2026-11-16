@@ -24,10 +24,10 @@
 '../warp/module_class/through/main.warp'	41
 
 # a bundled module's definition reaches past an unindented line while a text or bracket of it is open, and reads the
-# operators of the modules it uses (compute_toys: a text over lines, a list over lines, `use regex`'s matches)
+# operators of the modules it uses (shaders: a text over lines, a list over lines, `use regex`'s matches)
 
-'use compute_toys; compute_toy("fn main_image(id: vec3u) {}") contains "struct Time"'	yes
-'use compute_toys; compute_toy("fn main_image(id: vec3u) { let a = channel0; }")'	error
+'use shaders; compute_toy("fn main_image(id: vec3u) {}") contains "struct Time"'	yes
+'s = shader { @compute @workgroup_size(16, 16) fn main_image(@builtin(global_invocation_id) id: vec3u) { textureStore(screen, id.xy, textureSampleLevel(channel0, bilinear_repeat, vec2f(0.0), 0.0)); } }; gpu_render(s, 1, 1)'	error
 'dict([["a", 2]])["a"]'	2
 
 // card pi-unknown-name: a module's word brings its module wherever it stands, also in a ternary's branches

@@ -24,7 +24,8 @@ wasmtime = { version = "=50.0.0", default-features = false, features = ["wat", "
 
 # wasmtime with warp's patches (patches/), unpacked and patched by scripts/wasmtime-c-api.sh: a copying heap grows
 # once half of its active half is live (patches/copying-heap-growth.patch); ref.test and ref.cast test a subtype
-# inline against the store's subtype display (patches/subtype-display.patch, card subtype-inline)
+# inline against the store's subtype display (patches/subtype-display.patch, card subtype-inline); ref.func of a defined
+# function is its VMFuncRef's address, filled when the instance is made (patches/vmctx-ref-func.patch, card ref-func-inline)
 [patch.crates-io]
 wasmtime = { path = "patched/wasmtime" }
 wasmtime-environ = { path = "patched/wasmtime-environ" }

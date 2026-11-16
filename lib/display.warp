@@ -13,12 +13,11 @@ display_density_of() := display_dpi * 1dpi
 set_display_density(density) := set_system_value("display_dpi", density / 1dpi)
 display.density := display_density_of
 display.density(density) := set_display_density(density)
-// its other names repeat its body: a dotted definition cannot name another (`display.dpi := display.density` reads
-// display as a value) and alias takes no dotted name (card dotted-definition-naming)
-display.dpi := display_density_of
-display.dpi(density) := set_display_density(density)
-display.ppi := display_density_of
-display.ppi(density) := set_display_density(density)
+// its other names, each the property display.density (alias takes no dotted name yet)
+display.dpi := display.density
+display.dpi(density) := display.density(density)
+display.ppi := display.density
+display.ppi(density) := display.density(density)
 
 // width × height in px (other names display.dimensions and display.resolution)
 display_size_of() := [display_width, display_height] px

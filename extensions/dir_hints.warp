@@ -10,7 +10,7 @@ dir_views_hint(n: Node, program: Node) := {
 	diagnose(call_of("dir_views", [module]), n)
 }
 # `time` of `dir(time)` and `dir time`, else ø
-dir_module(n: Node): text? := {
+dir_module(n: Node) as text? := {
 	if not (is_group(n) and #n == 2 and n#1 == symbol(dir_word) and (bracket_of(n) == "(" or bracket_of(n) == "")) { return ø }
 	given = if is_group(n#2) and bracket_of(n#2) == "(" and #(n#2) == 1 then n#2#1 else n#2
 	if given is symbol then name_of(given) else ø

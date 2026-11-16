@@ -1,0 +1,4 @@
+# a file beside the program used by its name, `use waves` of waves.warp, calls C as the program does: its libm call
+# compiles as with `use "waves.warp"` (card use-image: a console line's earlier `use image` reached jpeg's cos so)
+'use waves; wave'	0.8775825618903728
+'use "waves.warp"; wave'	0.8775825618903728

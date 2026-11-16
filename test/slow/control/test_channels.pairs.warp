@@ -1,3 +1,4 @@
 # from test_channels.rs: edit the Rust test, then run the script again
 # a_value_sent_in_a_task_is_received
+// needs: network
 'chat = channel "warp-test-p155"; chat.send("hi"); chat.receive()'	'hi'

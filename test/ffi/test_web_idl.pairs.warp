@@ -1,4 +1,5 @@
 # from test_web_idl.rs: edit the Rust test, then run the script again
+// needs: js
 
 # what_the_interface_declares_runs
 'use js crypto; count crypto.randomUUID()'	36

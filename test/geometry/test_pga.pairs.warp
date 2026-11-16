@@ -35,3 +35,8 @@
 # clashing names keep their old meaning when pga is used
 'use pga; use list; intersection([1, 2], [2, 3])'	[2]
 'use pga; [x for x in 1 through 3]'	[1, 2, 3]
+# space's basis blades by name (wiki/3d.md Algebra)
+'use pga; point(1, 2, 3) == origin + ẋ + 2 * ẏ + 3 * ż'	yes
+'use pga; e1 ⋏ e2 == e12'	yes
+'use pga; e3 * e1 == e31'	yes
+'use pga; text(I)'	"e0123"

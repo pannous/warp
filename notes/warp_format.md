@@ -10,6 +10,13 @@ asking, `check` only lists. warp format previews and asks the same way.
 Code given instead of files (`warp lint 'use script; ls'`: no argument exists or looks like a path)
 prints its formatted text; `check` lists the layout changes.
 
+## Readings (lib/fix/command.warp with_readings_written)
+
+Before the layout, warp format asks the compiler what it chose where the code leaves it unwritten (`warp readings
+<file|code>`, the Reading level of core/analysis/diagnostics.warp, rows in core/analysis/readings.data, never said on a
+run) and writes each over the word at its place: a list made for the GPU alone, `xs = [[0.0, 0.0, 1.0, 1.0] for i in
+1 to 4]`, as `xs: [vec4] = …`. A code that does not compile reads nothing.
+
 ## Layout (lib/fix/layout.warp)
 
 - rules in order: `# comment`, trailing whitespace, blank lines, spaces, space after a comma or semicolon, space after

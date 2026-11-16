@@ -1,14 +1,14 @@
 # Phrase definitions (card parser-cold-forms, decision core-is-self, wiki/matching.md): `to add a to b: a + b`,
 # `To square a number: it * it` (an English sentence starts with a capital), read by their word `to` when it opens a
 # statement; the parser keeps at_to_header_end and known_type, which other forms read too
-read_phrase_definition(p: Parser, word: text): Node := if starts_statement(p) then to_definition(p) else ø
+read_phrase_definition(p: Parser, word: text) as Node := if starts_statement(p) then to_definition(p) else ø
 phrase_definitions_extension = Extension{name: "phrase_definitions", keyword_readers: {"to": read_phrase_definition, "To": read_phrase_definition}}
 
 # `to name params: body` (also `{ body }`, `do body`, the lines indented below), after `to` opening a statement: the
 # function `name(params) := body`, its parameters the head's slots (phrase_slots); ø, nothing read, before anything
 # else
 # Rust twin: functions.rs try_parse_to_definition, phrase_result_type, phrase_redefinition
-def to_definition(p: Parser): Node := {
+def to_definition(p: Parser) as Node := {
 	before = p.at
 	p.at += 2
 	skip_spaces(p)
@@ -59,14 +59,14 @@ def to_definition(p: Parser): Node := {
 }
 
 # The word at the parser's position, read
-def header_word(p: Parser): text {
+def header_word(p: Parser) as text {
 	start = p.at
 	p.at = symbol_end(p.code, p.at, p.n)
 	p.code[start .. p.at]
 }
 
 # The type after `as` when it ends the header, read: `to render text as pdf: …`; else "", nothing read
-def phrase_result_type(p: Parser): text {
+def phrase_result_type(p: Parser) as text {
 	after_as = p.at
 	skip_spaces(p)
 	if is_name_start(char_here(p)) {
@@ -80,7 +80,7 @@ def phrase_result_type(p: Parser): text {
 
 # A definition's body: a `{…}` block, the rest of the statement, or the lines indented below
 # Rust twin: blocks.rs parse_definition_body
-def definition_body(p: Parser): Node := {
+def definition_body(p: Parser) as Node := {
 	if at_char(p, '{') { return atom(p) }
 	if not only_blanks_before_newline(p) { return statement_words(p) }
 	block = indented_block(p)
@@ -89,7 +89,7 @@ def definition_body(p: Parser): Node := {
 }
 
 # The parameter with the fields its head glued to it: `person{name?}` is `person: {name?}`
-def shaped(parameter: Node, shapes: list): Node := {
+def shaped(parameter: Node, shapes: list) as Node := {
 	for shape in shapes {
 		if shape#1 == slot_name(parameter) { return Key(parameter, Op.Colon, shape#2) }
 	}
@@ -107,7 +107,7 @@ def shaped(parameter: Node, shapes: list): Node := {
 # - a comma ends a slot as a preposition does, labelling none: `to add number a, number b`
 # - a lone typed slot the body reads as `it` alone is `it`: `to square a number: it*it`
 # Rust twin: type_name_matching.rs parameter_slots (labelled)
-def phrase_slots(words: list, body: Node, types: list): list {
+def phrase_slots(words: list, body: Node, types: list) as list {
 	parameters = []
 	preposition = ""
 	at = 1
@@ -162,12 +162,12 @@ def phrase_slots(words: list, body: Node, types: list): list {
 }
 
 # Whether the head word at `at` belongs to the slot before it: no preposition or comma, not past the end
-def in_slot(words: list, at: int): bool := at <= #words and not phrase_prepositions.contains(words#at) and words#at != slot_comma
+def in_slot(words: list, at: int) as bool := at <= #words and not phrase_prepositions.contains(words#at) and words#at != slot_comma
 slot_comma = ","
 
 # Whether the word at `at` is a type written before its parameter's name (wiki/matching.md "The rule"): a known type, no
 # article, followed in its slot by a name that is no type; an article there is the name only when the slot ends with it
-def type_first(words: list, at: int, types: list): bool {
+def type_first(words: list, at: int, types: list) as bool {
 	word = words#at
 	if phrase_articles.contains(word) or not known_type(word, types) or not in_slot(words, at + 1) { return false }
 	name = words#(at + 1)
@@ -176,7 +176,7 @@ def type_first(words: list, at: int, types: list): bool {
 }
 
 # The name a slot gives its parameter: `a`, `number` of `number: number`, `b` of `to b`
-def slot_name(parameter: Node): text := match parameter {
+def slot_name(parameter: Node) as text := match parameter {
 	Symbol(name): name
 	Key(name, _, _): slot_name(name)
 	List(parts, _, _): slot_name(parts#(parts.length))
@@ -185,7 +185,7 @@ def slot_name(parameter: Node): text := match parameter {
 
 # `to kill a person: …` after `to kill a dog: …`: the same phrase with other untyped nouns, which only types tell apart;
 # else ""
-def phrase_redefinition(p: Parser, name: text, parameters: list): text {
+def phrase_redefinition(p: Parser, name: text, parameters: list) as text {
 	earlier = []
 	for phrase in p.phrases {
 		if phrase#1 == name { earlier = phrase#2 }

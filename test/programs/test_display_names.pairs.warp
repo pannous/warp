@@ -3,4 +3,4 @@
 # the_display_has_a_density_a_size_and_a_diagonal
 'display.density == display.dpi and display.ppi == display.dpi'	true
 'display.size == [display.width, display.height] px'	true
-'display.diagonal > 1 inch and display.diagonal < 1000 inch'	true
+'display.diagonal > 1 inch and display.diagonal < 1000 inch'	true	needs: display

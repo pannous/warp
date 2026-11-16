@@ -4,6 +4,7 @@
 # The pointer runs it: left to right gives 3 to 12 mirrors, up and down zooms; a press holds the tube up to the light,
 # the wheel turns the tube, a quarter wedge a step. $time, $mouse, $mouse_down, $mouse_wheel and $size are paint's
 # values, read at each frame
+use shown_frames
 kaleidoscope = shader {
 	const TAU = 6.2831853;
 
@@ -57,9 +58,5 @@ kaleidoscope = shader {
 		return vec4f(color * window * light, 1.0);
 	}
 }
-# ten seconds by the clock, however long a frame takes
-started = clock()
-while clock() - started < 10000 {
-	paint(kaleidoscope)
-	sleep(1 / 60)
-}
+# ten seconds in a window; without one, one still (shown_frames, decision on-frame-headless)
+shown_frames(() => paint(kaleidoscope), 10000)

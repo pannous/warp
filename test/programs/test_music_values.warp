@@ -3,10 +3,10 @@
 # the_tuning_tunes_every_note
 is! 'tuning = 442
 play(A4, 5ms)
-A4' 442
+A4 == 442' yes
 is! 'tuning = 432
 play(440Hz, 5ms)
-A3' 216
+A3 == 216' yes
 is! 'use sound
 midi_hertz(60)' 261.63
 
@@ -22,7 +22,7 @@ note_name(27.5)' 'A0'
 
 # transposing_moves_notes_by_semitones
 is! 'use sound
-transpose(A4, 12)' 880
+transpose(A4, 12) == 880' yes
 is! 'use sound
 transpose(C4, 12) == C5' true
 is! 'use sound

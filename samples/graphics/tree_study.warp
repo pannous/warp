@@ -18,7 +18,6 @@ ASPEN_HEIGHT = 72.6549
 DEMO_EYE = [70.0, 28.0, 46.0]
 DEMO_LOOK = [0.0, 22.0, 0.0]
 STUDY_FOV = 50.0 * 3.141592653589793 / 180.0
-ATLAS_PIXELS = 1024 * 512
 
 study = shader {
 struct Corner {
@@ -316,4 +315,4 @@ centre = [width / 2.0, height / 2.0]
 if "still" in args or window_possible() {
 	paint(study, {depth: 1, instances: 1 + mesh_count})
 }
-[mesh_count, count(vertices), count(atlas) / 4]
+[mesh_count, count(vertices), atlas_w * atlas_h]

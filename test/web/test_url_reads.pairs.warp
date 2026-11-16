@@ -1,7 +1,7 @@
 # every word that reads a path reads a URL too, over HTTP as fetch does (user, card image-url-read): read_bytes, so image
-'count(read_bytes("https://warp.pannous.com/samples/graphics/photo.jpg"))'	2761
-'use image; p = image("https://warp.pannous.com/samples/graphics/picture.bmp"); [p.width, p.height]'	[128, 96]
-'use image; p = image("://warp.pannous.com/samples/graphics/photo.jpg"); [p.width, p.height]'	[160, 120]
+'count(read_bytes("https://warp.pannous.com/samples/graphics/photo.jpg"))'	2761	needs: network
+'use image; p = image("https://warp.pannous.com/samples/graphics/picture.bmp"); [p.width, p.height]'	[128, 96]	needs: network
+'use image; p = image("://warp.pannous.com/samples/graphics/photo.jpg"); [p.width, p.height]'	[160, 120]	needs: network
 'read_bytes("https://warp.pannous.com/no-such-file.jpg") failed'	yes
 'read("https://warp.pannous.com/assistant.json").contains("What the assistant")'	yes
 'read("://warp.pannous.com/no-such-file.json") failed'	yes

@@ -3,6 +3,9 @@
 # children first (lib/prelude.warp find_matches, replace_matches). Early sugar too: before any pass, so the overload pass
 # never takes `find [1, x]` of `s = page find [1, x]` (the parser nests an assigned phrase) for a call of find; and
 # first sugar again, for `(p replace … with …).a` once the passes made its parentheses a phrase
+# `ys = xs replace p with t`, which the parser reads as the phrase of the assignment: the assigned value's phrase
+rewrite $a find $p => $v = find_matches($x, data($p)) where $v = assigned_name($a) and $x = assigned_value($a)
+rewrite $a replace $p with $t => $v = replace_matches($x, data($p), data($t)) where $v = assigned_name($a) and $x = assigned_value($a)
 rewrite $x find $p => find_matches($x, data($p))
 rewrite $x replace $p with $t => replace_matches($x, data($p), data($t))
 # the phrase as a call's argument, `count(page find {type: "text"})`, which the parser reads as count's four words

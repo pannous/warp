@@ -344,5 +344,12 @@ Core cost: none in core/; extensions/shader_blocks and the hole rules shrink; li
   The hosts still list the built-in holes they fill; that list goes when (c) changes what they receive.
 - (b) done: a rule reads the dialect off the entry point where a shader the program assigns is painted or rendered:
   `fn main_image` without `@fragment` becomes compute_toy(s); compute_toy of a fragment shader is that shader. The
-  block itself stays the kernel as written, which compute_toy(code, picture) needs. The program still says `use
-  compute_toys` (a word a rule writes brings no module; without it the compile says "fix: use compute_toys").
+  block itself stays the kernel as written. compute_toy lives in lib/shaders.warp (card compute-toys-own): no `use`;
+  the pictures channel0/channel1 are paint values, `paint(toy, w, h, {channel0: picture})`: compute_toy reads them as
+  `values.channel0`, and pictured_values, which the dialect rule wraps around the values, gives each its pixels as a
+  GPU list [u32] made once per image (refusing a channel the shader samples that they lack).
+- Pictures among paint's values (card gpu-texture-binds): anything with width, height and pixels binds as a
+  texture_2d<f32>, bgra8unorm (a 0xAARRGGBB word is B, G, R, A in memory), `values.<name>` renamed warp_picture_<name>,
+  from binding 16 on (gpu.warp PICTURE_BINDING, host-gpu.js); the samplers the shader names (nearest, bilinear,
+  nearest_repeat, bilinear_repeat, as compute.toys names them) from binding 24 on, trilinear refused (no mipmaps).
+  A GPU list [u32] of pixels is written into the texture where it is; any other list is walked, with a slow-path note.

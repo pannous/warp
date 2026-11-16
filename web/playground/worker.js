@@ -143,8 +143,9 @@ function loadPython() {
 }
 // the modules a program imports (python_import("numpy")): Pyodide's packages among them loaded before the run, as
 // natively they are installed beside libpython
-const PYTHON_IMPORT = /python_import\("([\w.]+)"\)/g;
-const pythonImports = code => [...code.matchAll(PYTHON_IMPORT)].map(([, name]) => `import ${name}`).join("\n");
+// the Python modules a program names: python_import("numpy"), use python numpy, use numpy from python
+const PYTHON_IMPORT = /python_import\("([\w.]+)"\)|\buse\s+python\s+([\w.]+)|\buse\s+([\w.]+)\s+from\s+python\b/g;
+const pythonImports = code => [...code.matchAll(PYTHON_IMPORT)].map(([, ...names]) => `import ${names.find(Boolean)}`).join("\n");
 registerForeignRuntime("python", {
 	prepare: code => USES_PYTHON.test(code) && loadPython().then(pyodide => pyodide.loadPackagesFromImports(pythonImports(code), { messageCallback: () => {} }))
 		.catch(failure => post({ type: "print", text: `Python could not load: ${failure.message}\n`, stream: 2 })),

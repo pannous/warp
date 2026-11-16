@@ -16,7 +16,7 @@ this line is garbage and gets skipped"
 
 # one request per line: ip, method, path, status, bytes, seconds; ø for a line that is no request
 LINE = "^([0-9.]+) [^[]*\\[([^]]+)\\] \"([A-Z]+) ([^ ]+) [^\"]*\" ([0-9]{3}) ([0-9]+) ([0-9.]+)$"
-parse_line(line: text): any := {
+parse_line(line: text) as any := {
 	g = match_groups(line, LINE)
 	if g == ø then ø else {ip: g[0], time: g[1], method: g[2], path: g[3], status: int(g[4]), bytes: int(g[5]), seconds: float(g[6])}
 }

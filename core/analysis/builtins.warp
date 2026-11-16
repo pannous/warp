@@ -88,6 +88,9 @@ raise(message): same as message from emitter
 error(message): any from emitter
 is_error(x): bool from emitter
 is_type(x, type_name): bool from emitter
+# a match's subject's kind bits read once, each case arm's test by them (core/passes/node_matches.warp)
+kinds·of(x): int from emitter
+kind·tested(kinds: int, x, type_name): bool from emitter
 # a node's parts and a node made of parts (wiki/node.md)
 key_of(n): any from emitter
 value_of(n): any from emitter

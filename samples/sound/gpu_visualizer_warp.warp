@@ -13,6 +13,7 @@ height = 1080
 bands = 16
 # any wav, mp3, ogg, flac, aiff or m4a file plays and lights the bars the same; this one lies beside the program
 tune = "tune.mp3"
+# tune = "mozart.mp3"
 song = program.folder + "/" + tune
 # how much the quiet spectrum is turned up before it lights the bars
 loudness = 15

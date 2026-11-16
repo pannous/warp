@@ -14,6 +14,8 @@ use "sum_types.warp"
 use "record_classes.warp"
 use "radix_numbers.warp"
 use "time_literals.warp"
+use "version_literals.warp"
+use "mixins.warp"
 use "event_phrases.warp"
 use "float_suffixes.warp"
 use "durations.warp"
@@ -38,6 +40,8 @@ use "match_patterns.warp"
 use "protocols.warp"
 use "conversions.warp"
 use "called_blocks.warp"
+use "default_overloads.warp"
+use "interpret_scope.warp"
 use "implicit_uses.warp"
 use "test_lines.warp"
 use "scoped_words.warp"
@@ -71,7 +75,10 @@ use "effects.warp"
 use "optional_unwraps.warp"
 use "object_functions.warp"
 use "primitive.warp"
+use "line_ends.warp"
 EXTENSIONS = [
+	# first: every later source pass reads \n line ends
+	line_ends_extension
 	Extension{name: "uncertain", operator_rows: module_source("extensions/uncertain/operators.warp")}
 	gpu_lists_extension
 	degrees_extension
@@ -80,6 +87,7 @@ EXTENSIONS = [
 	circumfixes_extension
 	index_positions_extension
 	# before property_accessors, which would read `P.scaled(k) := …` as a property setter
+	mixins_extension
 	class_extensions_extension
 	property_accessors_extension
 	attributes_extension
@@ -87,6 +95,7 @@ EXTENSIONS = [
 	record_classes_extension
 	radix_numbers_extension
 	time_literals_extension
+	version_literals_extension
 	event_phrases_extension
 	float_suffixes_extension
 	durations_extension
@@ -113,6 +122,8 @@ EXTENSIONS = [
 	Extension{name: "class_methods", passes: {"definition_heads": classes_rewritten}, library_words: foreign_instance_words}
 	Extension{name: "int_types", passes_before: {"rules_rewritten": subtype_tests, "definition_heads": classed_definitions}, passes: {"definition_heads": int_types}}
 	called_blocks_extension
+	default_overloads_extension
+	interpret_scope_extension
 	conversions_extension
 	# (after conversions: its `as` of a C enum reach plain_enums)
 	c_enums_extension

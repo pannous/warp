@@ -7,8 +7,8 @@ tuning = 442                                  # A4 in Hz, as many orchestras tun
 tempo = 110
 play(scale(D4, dorian), beat(1/4))        # D E F G A B C D
 for kind in [major7, minor7, seventh] {       # a kind is a word, or a text: chord(C4, "major7")
-	play(chord(C4, kind), beat 1)
+	play(chord(C4, kind), 2 beat )
 }
-play(transpose(chord(C4, major), 7), bar 1) # up a fifth: G major
+# play(transpose(chord(C4, major), 7), bar 1) # up a fifth: G major
 print("\(note_name(G4)) is MIDI note \(midi(G4))")
 wait(sound)

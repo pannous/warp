@@ -10,6 +10,10 @@ Ash Small and Bush 2 with their own seeds. Pine, oak, ash and bush keep that ske
 preset, so the two levels stay small (the exporter's overrides). Meshed by Tree.createGeometry at the details of
 Tree.defaultLODLevels[1] and [2]. EZ Tree Pro is not used.
 
+`hero/`, `canopy/`, `textures/` and `atlas.bin` are not in git: `scripts/sample-assets.sh fetch` unpacks the
+published archive (the GitHub release `assets`, which the page's build fetches too), and
+`scripts/sample-assets.sh publish` replaces it after a regeneration.
+
 `canopy/` is a second geometry set from the same presets and seeds, with more of each preset's leaves and four
 details (scripts/ez_tree/export.mjs, the `canopy` argument). The two-level files above stay as the meshlet tests
 pin them.
@@ -33,8 +37,9 @@ is a premultiplied Lanczos resize, so the alpha stays soft. `atlas.bin` is the t
 zlib-compressed (RFC 1950), so a run uploads the bytes instead
 of rebuilding a float per byte. `atlas.txt` is the stamp: magic `EZAT`, version 1, the source hash, then each
 entry's id, width and height. Id 1 is the grove atlas, id 2 the ash atlas, id 3 the near atlas. The hash is the sha256 of the
-per-file sha256 hex lines of `atlas.sources`, joined by newlines. A run hashes those files and uses the bin
-only when the stamp matches; otherwise it builds the floats from the `.rgba` files. Regenerate both with
+per-file sha256 hex lines of `atlas.sources`, joined by newlines. A run trusts the stamp (it is baked with the
+bin and shipped in one archive) and builds the floats from the `.rgba` files only without a bin of its version.
+After changing a texture, regenerate both with
 `python3 scripts/ez_tree/atlas.py samples/graphics/ez_trees`. The pixels are the leaf images (MIT, above) and
 the bark photographs (CC0, below), packed by that script.
 

@@ -5,8 +5,6 @@
 # WARP=<tree>/data/gate/warp
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 source "$(dirname "$0")/checks.sh"
-# the lib/ that warp runs with (its version names it), given to the native warp built here
-library=$("$warp" version 2>/dev/null | sed -n 's/.*(compiler.warp of \(.*\))$/\1/p')
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
 
@@ -29,13 +27,14 @@ if [ -x "$stage/warp" ]; then
 	check "the arguments after --" "$(native arguments.warp -- eins zwei)" '["eins", "zwei"]'
 	check "self, code by warp-self.wasm" "$(native self '3 + 4')" 7
 	printf 'raise "boom"\n' >"$stage/raising.warp"
-	check "what a program raised" "$(native raising.warp)" "boom at raising.warp:1:1"
+	check "what a program raised" "$(native raising.warp)" "raising.warp:1:1 boom"
 	check "the console, its lines staying" "$(printf 'a = 7\nx = [1\na * 6\n' | native repl | sed -n 4p)" "🌀42"
 	# a console line warp refuses for an unknown name whose first word is a command on PATH runs by sh, marked dim
-	# `(sh) <line>` first; a typo and a type error keep warp's refusal (card repl-bash-commands, user 11-11)
+	# `(sh) <line>` first; a typo and a type error keep warp's refusal (card repl-bash-commands, user 11-11);
+	# a typo's refusal follows the spacing warning `lsx -la is two items`, on the next line
 	check "the console runs a shell line" "$(printf 'echo shell-ran | tr a-z A-Z\n' | native repl | sed -n 2,3p)" "$(printf '🌀\033[2m(sh) echo shell-ran | tr a-z A-Z\033[0m\nSHELL-RAN')"
 	check "the console keeps a type error warp's" "$(printf 'date + 1\n' | native repl | sed -n 2p)" "🌀no + between type date and int 1 at 1:1"
-	check "the console keeps a typo's refusal" "$(printf 'lsx -la\n' | native repl | sed -n 2p)" "🌀outside the core: the unknown name lsx at 1:1 (no owner)"
+	check "the console keeps a typo's refusal" "$(printf 'lsx -la\n' | native repl | sed -n 3p)" "outside the core: the unknown name lsx at 1:1 (no owner)"
 	# each console line a module of its own, its instance kept: a function changes an earlier line's variable, a class
 	# and its instance cross lines, a value is made once, exit() ends the console (card warp-repl-instance)
 	check "the console keeps a line's variable for the next lines" "$(printf 'global count = 41\ndef bump() { count += 1; count }\nbump()\nbump()\ncount\n' | native repl | sed -n 5p)" "🌀43"

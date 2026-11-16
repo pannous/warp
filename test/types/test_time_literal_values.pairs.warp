@@ -19,3 +19,8 @@
 '2024-01-15 + 1 month == 2024-02-15'	yes
 'a = 2024-03-01; b = 2024-02-01; a - b'	29
 '3 * 1 day'	3 days
+
+# a month's last day is a date (wiki/Footguns.md "Dates")
+'2023-02-28.day'	28
+'2024-04-30.day'	30
+'2024-12-31.month'	12

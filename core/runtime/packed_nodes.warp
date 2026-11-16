@@ -9,7 +9,7 @@ use "../analysis/kinds.warp"
 use "instructions.warp"
 use "nodes.warp"
 use "maps.warp"
-packed_node(n: Node): text := {
+packed_node(n: Node) as text := {
 	texts_forgotten()
 	whole = new_text(node_written(n, yes, new_text(0), 0))
 	texts_forgotten()
@@ -19,13 +19,13 @@ packed_node(n: Node): text := {
 # the texts a pack wrote so far, in order, and their index by name_hash (maps.warp): each slot 0 or a place among them
 global texts_written = new_list(0)
 global text_places = new_list(0)
-texts_forgotten(): int := {
+texts_forgotten() as int := {
 	texts_written = new_list(0)
 	text_places = new_list(64)
 	0
 }
 # the place of t among the texts written before, 0 when it is new, then noted as the next
-text_place(t: text): int := {
+text_place(t: text) as int := {
 	if 2 * #texts_written >= #text_places { texts_indexed(4 * #text_places) }
 	at = name_hash(t, #text_places)
 	while not is_null(text_places#(at + 1)) {
@@ -37,7 +37,7 @@ text_place(t: text): int := {
 	text_places#(at + 1) = held(#texts_written)
 	0
 }
-texts_indexed(size: int): int := {
+texts_indexed(size: int) as int := {
 	text_places = new_list(size)
 	for place in 1 to #texts_written {
 		at = name_hash(unboxed_text(texts_written#place), size)
@@ -48,7 +48,7 @@ texts_indexed(size: int): int := {
 }
 # n written into `out` from `at`, where its bytes end: a text of no room only measures, so one walk sizes the text and
 # the next fills it
-node_written(n: Node, positioned: bool, out: text, at: int): int := {
+node_written(n: Node, positioned: bool, out: text, at: int) as int := {
 	if is_null(n) { return varint_written(NodeShape.Empty, out, at) }
 	if positioned and is_meta(n) {
 		place = varint_written(meta_line(n), out, varint_written(NodeShape.Meta, out, at))
@@ -81,7 +81,7 @@ node_written(n: Node, positioned: bool, out: text, at: int): int := {
 	at
 }
 # the shape of a node's payload, by its kind; a closure, a pointer or an uncertain value fails
-shape_of(n: Node): int := {
+shape_of(n: Node) as int := {
 	kind = kind_code(n)
 	if kind == Kind.Int { return if is_ratio(n) then NodeShape.Ratio else if is_big_int(n) then NodeShape.BigInt else NodeShape.Int }
 	if kind == Kind.Time { return NodeShape.Int }
@@ -95,7 +95,7 @@ shape_of(n: Node): int := {
 }
 # an int as ASCII bytes from `at` (where a text of no room only measures), where they end: zigzag, so a small negative
 # one is small too, 6 bits a byte, low ones first, 64 marking a byte that more follow
-varint_written(value: int, out: text, at: int): int := {
+varint_written(value: int, out: text, at: int) as int := {
 	rest = bits_xor(shifted_left(value, 1), shifted_right_signed(value, 63))
 	while shifted_right(rest, 6) != 0 {
 		if byte_count(out) > 0 { set_byte(out, at, bits_and(rest, 63) + 64) }
@@ -110,12 +110,12 @@ varint_written(value: int, out: text, at: int): int := {
 global bytes_read = 0
 # the texts read so far, the places packed_node's repeated ones name
 global texts_read = new_list(0)
-unpacked_node(t: text): Node := {
+unpacked_node(t: text) as Node := {
 	bytes_read = 0
 	texts_read = new_list(0)
 	read_node(t)
 }
-read_node(t: text): Node := {
+read_node(t: text) as Node := {
 	shape = read_varint(t)
 	if shape == NodeShape.Empty { return ø }
 	if shape == NodeShape.Meta {
@@ -138,7 +138,7 @@ read_node(t: text): Node := {
 	with_kind(payload_read(t, shape), kind)
 }
 # the value a payload of that shape holds, its kind field set by the caller
-payload_read(t: text, shape: int): Node := {
+payload_read(t: text, shape: int) as Node := {
 	if shape == NodeShape.Int { return held(read_varint(t)) }
 	if shape == NodeShape.Float { return held(float_of_bits(read_varint(t))) }
 	if shape == NodeShape.Codepoint { return held(char_of(read_varint(t))) }
@@ -161,7 +161,7 @@ payload_read(t: text, shape: int): Node := {
 	texts_read += [symbol_of(part)]
 	symbol_of(part)
 }
-read_varint(t: text): int := {
+read_varint(t: text) as int := {
 	rest = 0
 	shift = 0
 	byte = byte_at(t, bytes_read)

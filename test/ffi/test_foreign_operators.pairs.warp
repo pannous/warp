@@ -8,8 +8,8 @@
 'use python "collections"; d = collections.deque([1, 2, 3]); count d'	3
 
 # test_js_indexing_and_counting
-'use js Buffer; b = Buffer.from("abc"); count b'	3
-'use js Buffer; b = Buffer.from("abc"); b#1'	97
+'use js Buffer; b = Buffer.from("abc"); count b'	3	needs: js
+'use js Buffer; b = Buffer.from("abc"); b#1'	97	needs: js
 
 # test_plain_values_keep_their_operators
 'x = 3; -x * 2'	-6

@@ -1,0 +1,6 @@
+# a project-root path is written bare as `./x` is, and names its .warp file without the extension
+# (decision project-root-paths; test_include.pairs.warp; cluster module-imports-fixtures)
+'use •/test/fixtures/counter; counter'	10
+'use •/test/fixtures/counter.warp; counter'	10
+'use @/test/fixtures/counter; counter'	10
+'use "•/test/fixtures/counter"; counter'	10
