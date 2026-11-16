@@ -93,7 +93,9 @@ shape_shader = shader {
 		if kind == 5u {
 			let cell = vec2i(floor((at - head.yz) * more.z));
 			if cell.x < 0 || cell.y < 0 || cell.x >= i32(head.w) || cell.y >= i32(more.x) { discard; }
-			covered = $coverage[i32(more.y) + cell.y * i32(head.w) + cell.x];
+			// (paint's list of numbers, four to a vec4f)
+			let n = u32(i32(more.y) + cell.y * i32(head.w) + cell.x);
+			covered = $coverage[n / 4u][n % 4u];
 		}
 		if covered <= 0.0 { discard; }
 		return vec4f(color.rgb, color.a * covered);
