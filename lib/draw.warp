@@ -196,6 +196,23 @@ def line(x1, y1, x2, y2, color) {
 	line_pixels(x1, y1, x2, y2, color, 1)
 }
 def line_pixels(x1: float, y1: float, x2: float, y2: float, color: any, width: float) {
+	segment_pixels(x1, y1, x2, y2, color as int, width, yes)
+}
+// lines through the canvas places [x, y] one after the other, joined smoothly: no joint covered twice, so a
+// translucent color shows no dots where they meet
+def polyline(corners: list, color: any) {
+	polyline_pixels(corners, color, 1)
+}
+def polyline_pixels(corners: list, color: any, width: float) {
+	paint: int = color as int
+	// a closed one (its last corner its first, within a hundredth of a pixel) has no start: its last line ends there
+	closed = abs(corners#1#1 - corners.last()#1) + abs(corners#1#2 - corners.last()#2) < 0.01
+	for i in 1 ..< count(corners) {
+		segment_pixels(corners#i#1, corners#i#2, corners#(i + 1)#1, corners#(i + 1)#2, paint, width, i == 1 and not closed)
+	}
+}
+// a line of a polyline: its start's round end only where `started` (the first), else the line before covered it
+segment_pixels(x1: float, y1: float, x2: float, y2: float, paint: int, width: float, started: bool) := {
 	// walked along its longer side, the pixels across it within reach; steep: x and y swapped while walking
 	steep = abs(y2 - y1) > abs(x2 - x1)
 	// its ends in device pixels, at the centers of the pixels they name: [along the walk, across it]
@@ -210,14 +227,15 @@ def line_pixels(x1: float, y1: float, x2: float, y2: float, color: any, width: f
 	band = half * sqrt(1 + slope * slope) + 1
 	low = min(start#1, end#1)
 	high = max(start#1, end#1)
-	paint: int = color as int
 	for major in cell(low - half - 1)..cell(high + half + 1) + 1 {
 		middle = start#2 + (min(max(major + 0.5, low), high) - start#1) * slope
 		for minor in cell(middle - band)..cell(middle + band) + 1 {
 			// the pixel's center from the start, and the share of the line to its nearest point
 			x = major + 0.5 - start#1
 			y = minor + 0.5 - start#2
-			share = if length_squared == 0 then 0.0 else min(max((x * ahead + y * aside) / length_squared, 0.0), 1.0)
+			projected = if length_squared == 0 then 0.0 else (x * ahead + y * aside) / length_squared
+			if projected < 0 and not started { continue }
+			share = min(max(projected, 0.0), 1.0)
 			coverage = edge(half - hypot(x - share * ahead, y - share * aside))
 			if steep then shade(minor, major, paint, coverage) else shade(major, minor, paint, coverage)
 		}
