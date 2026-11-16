@@ -300,10 +300,11 @@ time_literal_words(program: Node) as list := {
 	nodes = nodes_in(program)
 	# a time literal, or a name typed time whose fields it reads, `zoned(t: time, …) := … t.form` (lib/time.warp); a
 	# place typed by a time word takes a quantity of time as the duration it lasts, `f(n: duration) := n; f(2 hours)`
-	# (emitter.warp lasting, card duration-hours)
-	if not nodes.any(n => is_time_view(n) or is_time_typed(n)) { return [] }
+	# (emitter.warp lasting, card duration-hours); or a call of a time type word, `date(2024, 2, 29).day` (lib/time)
+	if not nodes.any(n => is_time_view(n) or is_time_typed(n) or calls_time_word(n)) { return [] }
 	[time_field_word] + (if nodes.any(n => is_time_typed(n) or time_comparison_symbols.any(symbol => is_operator(n, symbol))) then [quantity_lasting_word] else []) + (if nodes.any(n => time_operator_symbols.any(symbol => is_operator(n, symbol))) then [time_operation_word, time_operand_word, quantity_lasting_word] else [])
 }
+calls_time_word(n: Node) as bool := is_call(n) and base_type(name_of(n#1)) in time_test_types
 is_time_typed(n: Node) as bool := is_operator(n, ":") and value_of(n) is symbol and base_type(name_of(value_of(n))) in time_test_types
 # `x is time`, `x is duration`: lib/time's word the emitter asks (runtime_words.warp time_test_code)
 time_test_words(program: Node) as list := if nodes_in(program).any(is_time_test) or statements_in(program).any(has_time_field) then [time_test_word, quantity_test_word] else []
