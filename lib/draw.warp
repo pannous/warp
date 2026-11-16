@@ -140,9 +140,9 @@ channel_mix(color: int, under: int, a: int, shift: int) as int := (((color >> sh
 plot(col: int, row: int, color: int) := shade(col, row, color, 1.0)
 // the device pixel col, row covered by `coverage` (0 to 1) of a shape of color: an edge's pixel takes that share of it
 shade(col: int, row: int, color: int, coverage: float) := {
-	if coverage <= 0 { return }
 	a: int = if coverage >= 1 then alpha_of(color) else round(alpha_of(color) * coverage) as int
-	if drawing_on_gpu { draw_shape(rect_shape, col, row, 1, 1, color % 16777216 + 16777216 * a) }
+	if coverage <= 0 { ø }
+	else if drawing_on_gpu { draw_shape(rect_shape, col, row, 1, 1, color % 16777216 + 16777216 * a) }
 	else if col >= 0 and row >= 0 and col < device_width and row < device_height {
 		// an int, not a number: int * int may grow past 64 bits, and an index of a number runs every write dynamically
 		// (1.8 µs a dot against 0.27, card circle-dot-allocation)
@@ -182,13 +182,13 @@ def circle(x, y, radius, color) {
 def circle_pixels(x: float, y: float, radius: float, color: any) {
 	center_x = x * pixel_scale
 	center_y = y * pixel_scale
-	reach = radius * pixel_scale
+	rim = radius * pixel_scale
 	paint: int = color as int
-	for row in cell(center_y - reach - 0.5)..cell(center_y + reach + 0.5) + 1 {
+	for row in cell(center_y - rim - 0.5)..cell(center_y + rim + 0.5) + 1 {
 		down = row + 0.5 - center_y
-		for col in cell(center_x - reach - 0.5)..cell(center_x + reach + 0.5) + 1 {
+		for col in cell(center_x - rim - 0.5)..cell(center_x + rim + 0.5) + 1 {
 			across = col + 0.5 - center_x
-			shade(col, row, paint, edge(reach - hypot(across, down)))
+			shade(col, row, paint, edge(rim - hypot(across, down)))
 		}
 	}
 }
@@ -227,11 +227,11 @@ segment_pixels(x1: float, y1: float, x2: float, y2: float, paint: int, width: fl
 	slope: float = if ahead == 0 then 0.0 else aside / ahead
 	half: float = width * pixel_scale / 2
 	// a pixel is touched within half the width and half a pixel of the line: across the walk, that over its cosine
-	reach: float = half + 0.5
-	band: float = reach * hypot(1, slope)
+	touching: float = half + 0.5
+	band: float = touching * hypot(1, slope)
 	low: float = min(from_along, from_along + ahead)
 	high: float = max(from_along, from_along + ahead)
-	for major in cell(low - reach - 0.5)..cell(high + reach - 0.5) + 1 {
+	for major in cell(low - touching - 0.5)..cell(high + touching - 0.5) + 1 {
 		x: float = major + 0.5 - from_along
 		middle: float = (min(max(major + 0.5, low), high) - from_along) * slope
 		for minor in cell(from_across + middle - band - 0.5)..cell(from_across + middle + band - 0.5) + 1 {
