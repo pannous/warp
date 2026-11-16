@@ -351,10 +351,12 @@ written_at(n: Node): list? := {
 	ø
 }
 # ` at file:line:column` of a place written_at found; ` at line:column` without a file,
-# "" without a place
+# "" without a place. A place [line, column, file] names that file, not the fallback
+# (a refusal in a used module: main_globals.warp brought_place)
 place_text(at: list?, file: text): text := {
 	if not at { return "" }
-	" at " + (if file then file + ":" else "") + at#1 + ":" + at#2
+	named = if #at >= 3 and at#3 then at#3 else file
+	" at " + (if named then named + ":" else "") + at#1 + ":" + at#2
 }
 # whether the symbol `word` occurs anywhere in n, inside an opaque layer too
 mentions(n: Node, word: text): bool := match n {

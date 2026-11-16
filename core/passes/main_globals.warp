@@ -34,7 +34,7 @@ main_globals(program: Node, own_names: list): any := {
 	for function_definition in nodes_in(program).filter(is_define_statement) {
 		defined_function = define_statement_name(function_definition)
 		other = other_file_global(function_definition, defined_function, own_names, main_declared)
-		if other != ø { return diagnose(call_of("other_file_global", [other#1, defined_function, other#2]), function_definition) }
+		if other != ø { return diagnosed_at(call_of("other_file_global", [other#1, defined_function, other#2]), brought_place(other#3, defined_function, function_definition)) }
 		if defined_function in own_names {
 			body = value_of(function_definition)
 			own = parameter_names(key_of(function_definition))
@@ -54,21 +54,39 @@ main_globals(program: Node, own_names: list): any := {
 
 # A global one file declares is changed from another file's function only where that function declares it `global`
 # too: `view = …` in gpu.warp could mean its own local or window.warp's view (decision loop-locals)
-# [name, file] of the first such global the definition assigns, else ø; nothing where either file is unknown
+# [name, file, assignment] of the first such global the definition assigns, else ø; nothing where either file is unknown
 other_file_global(definition: Node, function: text, own_names: list, main_declared: map): any := {
 	home = written_file(function, own_names)
 	if home == ø { return ø }
-	for name in rebound_names(value_of(definition)) {
-		file = written_file(name, own_names)
-		if main_declared.has(name) and file != ø and file != home and not declares_global(value_of(definition), name) { return [name, file] }
+	for n in nodes_in(value_of(definition)) {
+		if n is key and (op_of(n) in assigning_operators or op_of(n) in counting_operators) {
+			name = rebound_name(key_of(n))
+			if name != ø {
+				file = written_file(name, own_names)
+				if main_declared.has(name) and file != ø and file != home and not declares_global(value_of(definition), name) { return [name, file, n] }
+			}
+		}
 	}
 	ø
+}
+# the place a refusal in `function` names. defined_origins holds [file, definition line]
+# (prelude_words.warp). A linked module's slice was parsed alone, so its nodes' lines are relative
+# to the definition (fish_mesh.warp jaw_point). A used file is parsed as a whole (uses.warp
+# file_parsed), so its nodes already name the file's lines; the definition then sits at origin#2.
+brought_place(about: Node, function: text, definition: Node): list? := {
+	at = written_at(about)
+	if defined_origins.has(function) {
+		origin = defined_origins[function]
+		if at == ø { return [origin#2, 1, origin#1] }
+		start = written_at(definition)
+		line = if start != ø and start#1 > 1 and start#1 == origin#2 then at#1 else origin#2 + at#1 - 1
+		[line, at#2, origin#1]
+	} else at
 }
 # the file a definition or a main-level global was written in: the program's own, else the used file it came from
 # (prelude_words.warp defined_origins)
 written_file(name: text, own_names: list): text? := if name in own_names then module.program_file else (defined_origins.get(name) ?? [ø])#1
-# the names the body binds anew, `n = …`, `n: int = …`, `n += 1`, `n++`; never a part changed in place, `xs#i = …`
-rebound_names(body: Node): list := nodes_in(body).filter(n => n is key and (op_of(n) in assigning_operators or op_of(n) in counting_operators)).map(n => rebound_name(key_of(n))).filter(name => name != ø)
+# the name `n = …`, `n: int = …`, `n += 1`, `n++` binds; never a part changed in place, `xs#i = …`
 rebound_name(target: Node): text? := if target is symbol then name_of(target) else if is_operator(target, ":") and key_of(target) is symbol then name_of(key_of(target)) else ø
 
 # the variables main assigns, outside the function definitions; a loop's or comprehension's variable belongs to its
