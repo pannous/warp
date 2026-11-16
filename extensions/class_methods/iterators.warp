@@ -6,27 +6,34 @@
 # the functions declaring they give an instance, `countdown(n) as Counter`, and the names assigned their calls
 global instance_makers = {}
 global made_instances = {}
-# [the linked modules' names, the makers found among them]: worked out once a compile, not by each program pass
-global linked_makers_known = ["", {}]
+# [the linked modules' names, what linked_results found among them]: worked out once a compile, not by each program
+# pass
+global linked_makers_known = ["", [{}, {}]]
 
 noted_instance_makers(program: Node) as Node := {
-	classes = entries_of_both(class_names_of(program), declared_classes_modules())
-	instance_makers = entries_of_both(result_classes(statements_in(program), classes), linked_makers())
+	classes = entries_of_both(class_names_of(program), linked_makers()#1)
+	instance_makers = entries_of_both(result_classes(statements_in(program), classes), linked_makers()#2)
 	types = assigned_types_in(outer_nodes_in(program), classes, instance_makers)
 	made_instances = {}
 	for name in types.keys { if types[name] in classes { made_instances[name] = yes } }
 	program
 }
 
-linked_makers() as map := {
+# [the library's classes an instance of walks by next(), the linked functions giving one], worked out once a compile
+linked_makers() as list := {
 	linked = linked_signatures.keys.join(",")
-	if linked != linked_makers_known#1 { linked_makers_known = [linked, linked_results(declared_classes_modules())] }
+	if linked != linked_makers_known#1 { linked_makers_known = [linked, linked_results()] }
 	linked_makers_known#2
 }
-# the linked modules' functions declaring they give an instance of one of the classes, by their signature lines
-# (`changes(wiki: text = "") as WikiChanges` of wikipedia), each line read whole only when it ends in such a class; a
-# word some module defines giving anything else is none: `json.parse(t)` is no time.parse(t, pattern) as Instant
-linked_results(classes: map) as map := {
+# the linked modules' functions declaring they give an instance of a class with next(), by their signature lines
+# (`changes(wiki: text = "") as WikiChanges` of wikipedia, whose Streamed has next()), each line read whole only when
+# it ends in such a class; a word some module defines giving anything else is none: `json.parse(t)` is no
+# time.parse(t, pattern) as Instant. A library class without next(), `transpose(m) as Matrix`, makes none
+linked_results() as list := {
+	class_texts = {}
+	for signature in linked_signatures.values { for slice in signature.slices { if declared_classes_modules().has(slice#1) { class_texts[slice#1] = slice#2 } } }
+	classes = {}
+	for name in class_texts.keys { if walks_by_next(class_texts, name) { classes[name] = yes } }
 	heads = []
 	others = {}
 	for signature in linked_signatures.values {
@@ -38,7 +45,16 @@ linked_results(classes: map) as map := {
 	found = result_classes(heads, classes)
 	kept = {}
 	for word in found.keys { if not others.has(word) { kept[word] = found[word] } }
-	kept
+	[classes, kept]
+}
+# whether a library class, by its definition's text, or a class it extends has a method next()
+walks_by_next(class_texts: map, name: text) as bool := {
+	if not class_texts.has(name) { return no }
+	written = class_texts[name]
+	if written.contains("\n\tnext(") { return yes }
+	extended = written.split("\n")#1.split(" extends ")
+	parent = if #extended > 1 then extended#2.split(" ")#1 else name
+	parent != name and walks_by_next(class_texts, parent)
 }
 
 iterators_extension = Extension{name: "iterators", passes_before: {"iteration_sugar": noted_instance_makers}}
